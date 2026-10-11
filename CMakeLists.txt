@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
-# The product (display) name is not final; everything user-visible derives
-# from cmake/Branding.cmake. "lumenis" remains the internal code name used
+# Everything user-visible (product name "Cutthulhu") derives from
+# cmake/Branding.cmake. "lumenis" remains the internal code name used
 # for targets, namespaces and source paths.
 include(cmake/Branding.cmake)
 

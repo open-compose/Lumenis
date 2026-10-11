@@ -1,10 +1,10 @@
-# Lumenis — Project Plan and Roadmap
+# Cutthulhu — Project Plan and Roadmap
 
 Status: §2 decisions mostly settled (see each item). Phase 0 is implemented; its CI gates run on every push.
 
 ## 1. Goal and honest scope
 
-Lumenis is a clean-room, cross-platform non-linear editor that works like Avid
+Cutthulhu is a clean-room, cross-platform non-linear editor that works like Avid
 Media Composer. Someone who knows Media Composer should be able to sit down and
 work without help: the same windows, the same edit model (Source/Record, segment
 and trim modes, sync locks), the same default keyboard, and existing projects,
@@ -86,11 +86,12 @@ no debugger. Check that the EULA allows this.
 Proposal: match the **Media Composer 2024.x/2025.x** UI and default keyboard,
 and read bins from versions 8.x and later.
 
-### 2.5 Name — **open**
+### 2.5 Name — **decided: Cutthulhu**
 
-A new name is being chosen. Until then, "Lumenis" is a placeholder.
-`cmake/Branding.cmake` is the only place that sets user-visible names, so
-renaming is a one-file change.
+The owner searched the USPTO and found no conflicting mark. The closest is
+"Cutethulhu", a plush toy in a different class. `cmake/Branding.cmake` is the
+only place that sets user-visible names. The internal code name `lumenis`
+stays in targets, namespaces and the module ABI.
 
 ### 2.6 Licensed and patented technology — **decided**
 
@@ -250,12 +251,12 @@ Shared-storage bin locking (`.lck`-style) comes after that.
 
 **Gates**
 1. A corpus of 100+ bins and projects made with real Media Composer (versions
-   8.x to current) opens in Lumenis. Clip count, names, timecodes, custom
+   8.x to current) opens in Cutthulhu. Clip count, names, timecodes, custom
    columns and sequence structure must be identical. This is checked with a
    structural diff tool.
-2. Bins saved by Lumenis open in Media Composer without errors, with the same
+2. Bins saved by Cutthulhu open in Media Composer without errors, with the same
    checks in reverse **(M → automated by corpus)**.
-3. AAF round-trips (MC→Lumenis→MC and Lumenis→MC→Lumenis) have no structural
+3. AAF round-trips (MC→Cutthulhu→MC and Cutthulhu→MC→Cutthulhu) have no structural
    differences.
 4. Fuzzing the bin and AAF parsers for 24 hours produces no crashes.
 

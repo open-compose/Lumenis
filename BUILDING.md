@@ -1,7 +1,8 @@
 # Building
 
-The product name is not final. Builds are called "Lumenis" until it is
-decided. Every user-visible name comes from `cmake/Branding.cmake`.
+The product is called **Cutthulhu**. Every user-visible name comes from
+`cmake/Branding.cmake`; the internal code name `lumenis` (CMake targets, C++
+namespaces, module ABI symbols) is not user-visible and does not change.
 
 ## Requirements
 
@@ -33,15 +34,15 @@ scripts/build.sh --package
 ```
 
 Output:
-* the app at `build/macos-release/app/Lumenis.app`;
-* the installer at `build/macos-release/lumenis-<version>-macos-arm64.dmg`.
+* the app at `build/macos-release/app/Cutthulhu.app`;
+* the installer at `build/macos-release/cutthulhu-<version>-macos-arm64.dmg`.
 
 The build is ad-hoc signed. That is enough to run it on the machine that built
 it. To distribute it, sign and notarise with a Developer ID:
 
 ```sh
 DEVELOPER_ID="Developer ID Application: … (TEAMID)" NOTARY_PROFILE=… \
-  packaging/macos/sign-and-notarize.sh build/macos-release/app/Lumenis.app Lumenis.dmg
+  packaging/macos/sign-and-notarize.sh build/macos-release/app/Cutthulhu.app Cutthulhu.dmg
 ```
 
 ### Windows x64
@@ -59,7 +60,7 @@ scripts\build.ps1 -Package
 
 Output:
 * the `.msi` and `.zip` installers in `build\release\`;
-* the program at `build\release\bin\lumenis.exe`. Running it from the build
+* the program at `build\release\bin\cutthulhu.exe`. Running it from the build
   tree needs `%QT_ROOT_DIR%\bin` on `PATH`. The installed copy bundles Qt.
 
 ### Linux x64
@@ -71,7 +72,7 @@ scripts/build.sh --package
 
 Output, all in `build/release/`:
 * `.deb` and `.tar.gz`, plus `.rpm` if `rpmbuild` is installed;
-* a self-contained `Lumenis-x86_64.AppImage`.
+* a self-contained `Cutthulhu-x86_64.AppImage`.
 
 The `.deb`/`.rpm` use the distribution's Qt. The AppImage bundles Qt and runs
 on any recent distribution.
@@ -112,7 +113,7 @@ Useful options:
   * `--version`;
   * `--smoke-test`, which opens the main window offscreen and checks it;
   * `--list-providers`, which loads a sample module through
-    `LUMENIS_MODULE_PATH`.
+    `CUTTHULHU_MODULE_PATH`.
 
 The test presets set `QT_QPA_PLATFORM=offscreen`, so tests need no display.
 
@@ -126,7 +127,7 @@ installers are uploaded as workflow artifacts.
 ## Command-line options
 
 ```
-lumenis --version          print the version and exit
-lumenis --list-providers   list loaded modules and extension providers and exit
-lumenis --smoke-test       open the main window, verify it, exit 0 on success
+cutthulhu --version          print the version and exit
+cutthulhu --list-providers   list loaded modules and extension providers and exit
+cutthulhu --smoke-test       open the main window, verify it, exit 0 on success
 ```

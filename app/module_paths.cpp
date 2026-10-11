@@ -1,5 +1,7 @@
 #include "module_paths.h"
 
+#include "lumenis/core/branding.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QStandardPaths>
@@ -20,7 +22,7 @@ std::filesystem::path toPath(const QString& s) {
 std::vector<std::filesystem::path> moduleSearchPaths() {
     std::vector<std::filesystem::path> paths;
 
-    const QString env = qEnvironmentVariable("LUMENIS_MODULE_PATH");
+    const QString env = qEnvironmentVariable(branding::kModulePathVariable);
     for (const QString& entry : env.split(QDir::listSeparator(), Qt::SkipEmptyParts)) {
         paths.push_back(toPath(entry));
     }

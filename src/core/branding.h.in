@@ -12,5 +12,7 @@ inline constexpr const char* kBundleId = "@PRODUCT_BUNDLE_ID@";
 inline constexpr const char* kDescription = "@PRODUCT_DESCRIPTION@";
 inline constexpr const char* kHomepage = "@PRODUCT_HOMEPAGE@";
 inline constexpr const char* kVersion = "@PRODUCT_VERSION@";
+// Lists extra module directories (see app/module_paths.h).
+inline constexpr const char* kModulePathVariable = "@PRODUCT_ENV_PREFIX@_MODULE_PATH";
 
 } // namespace lumenis::branding

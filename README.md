@@ -1,6 +1,6 @@
-# Lumenis
+# Cutthulhu
 
-*(working name — the final product name is still being chosen)*
+*For the editor whose timeline has become an eldritch horror.*
 
 A clean-room, cross-platform professional non-linear video editor that works
 like Avid Media Composer. It is meant to be familiar to experienced editors
@@ -15,6 +15,9 @@ Silicon), Windows x64 and Linux x64. It is written in C++20 with Qt 6.
 * [Extensions](docs/EXTENSIONS.md): codecs, plug-ins, licensed technology and
   hooks.
 * [Roadmap](docs/ROADMAP.md): scope, clean-room rules and milestones.
+
+The source code uses the internal code name `lumenis` for CMake targets, C++
+namespaces and the module ABI. Users never see it.
 
 ## Clean-room policy
 

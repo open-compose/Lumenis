@@ -18,7 +18,7 @@ handle all of these the same way.
 
 ## How the hooks work
 
-* **Providers** (`src/ext/include/lumenis/ext/provider.h`). Every capability
+* **Providers** (`src/ext/include/cutthulhu/ext/provider.h`). Every capability
   is an interface derived from `Provider`. Each provider declares:
   * its `Category`;
   * its `LicenseTier`: `OpenSource`, `OperatingSystem` or `ThirdParty`;
@@ -42,12 +42,12 @@ handle all of these the same way.
   * checks the module's ABI version and C++ toolchain before calling into it;
   * refuses duplicates;
   * never unloads a module, because providers it created may still be in use;
-  * reports every failure. `lumenis --list-providers` shows the reasons.
+  * reports every failure. `cutthulhu --list-providers` shows the reasons.
 
   Module authors compile against the `lumenis::module_sdk` CMake target only.
   `tests/ext/test_module.cpp` is a complete example, and the tests prove it
   loads and works across the library boundary on every platform.
-* **Search paths.** Modules are found in `LUMENIS_MODULE_PATH`, the
+* **Search paths.** Modules are found in `CUTTHULHU_MODULE_PATH`, the
   application's own `modules` directory and the per-user `modules` directory.
   See [INSTALL.md](../INSTALL.md).
 
