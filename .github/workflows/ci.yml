@@ -1,0 +1,166 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  QT_VERSION: '6.8.3'
+
+jobs:
+  linux:
+    name: Linux x64 (system Qt)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: scripts/bootstrap-linux.sh
+
+      - name: Configure
+        run: cmake --preset ci
+
+      - name: Build
+        run: cmake --build --preset ci
+
+      - name: Test
+        run: ctest --preset ci
+
+      - name: Package (.deb, .tar.gz, AppImage)
+        run: |
+          cd build/ci && cpack
+          cd ../.. && packaging/linux/make-appimage.sh build/ci
+
+      - name: Installer gate (install, launch, uninstall)
+        run: |
+          sudo apt-get install -y ./build/ci/*.deb
+          lumenis --version
+          QT_QPA_PLATFORM=offscreen lumenis --smoke-test
+          sudo apt-get remove -y lumenis
+          test ! -e /usr/bin/lumenis
+          QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 ./build/ci/*.AppImage --smoke-test
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-x64
+          path: |
+            build/ci/*.deb
+            build/ci/*.rpm
+            build/ci/*.tar.gz
+            build/ci/*.AppImage
+          if-no-files-found: error
+
+  macos:
+    name: macOS arm64
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: mac
+          target: desktop
+          arch: clang_64
+          cache: true
+
+      - name: Install build tools
+        run: brew install ninja
+
+      - name: Configure
+        run: cmake --preset ci-macos
+
+      - name: Build
+        run: cmake --build --preset ci-macos
+
+      - name: Test
+        run: ctest --preset ci-macos
+
+      - name: Package (.dmg)
+        run: cd build/ci-macos && cpack
+
+      - name: Installer gate (mount, launch, check architecture)
+        run: |
+          dmg=$(ls build/ci-macos/*.dmg)
+          mnt=$(mktemp -d)
+          hdiutil attach "$dmg" -mountpoint "$mnt" -nobrowse
+          app="$mnt/Lumenis.app/Contents/MacOS/Lumenis"
+          lipo -archs "$app" | grep -q arm64
+          codesign --verify --deep "$mnt/Lumenis.app"
+          "$app" --version
+          "$app" --smoke-test
+          hdiutil detach "$mnt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-arm64
+          path: build/ci-macos/*.dmg
+          if-no-files-found: error
+
+  windows:
+    name: Windows x64
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install build tools
+        run: choco install ninja -y --no-progress
+
+      - name: Configure
+        run: cmake --preset ci
+
+      - name: Build
+        run: cmake --build --preset ci
+
+      - name: Test
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
+          ctest --preset ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package (.msi, .zip)
+        run: cd build/ci && cpack
+
+      - name: Installer gate (install, launch, uninstall)
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem build/ci/*.msi | Select-Object -First 1).FullName
+          $p = Start-Process msiexec -ArgumentList '/i', "`"$msi`"", '/qn', '/l*v', 'install.log' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content install.log -Tail 50; exit 1 }
+          $exe = "$env:ProgramFiles\Lumenis\bin\lumenis.exe"
+          if (-not (Test-Path $exe)) { Get-ChildItem -Recurse "$env:ProgramFiles\Lumenis"; Write-Error 'lumenis.exe not installed'; exit 1 }
+          $out = & $exe --smoke-test | Out-String
+          Write-Host $out
+          if ($LASTEXITCODE -ne 0 -or $out -notmatch 'smoke-test: ok') { exit 1 }
+          $p = Start-Process msiexec -ArgumentList '/x', "`"$msi`"", '/qn' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { exit 1 }
+          if (Test-Path $exe) { Write-Error 'uninstall left lumenis.exe behind'; exit 1 }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-x64
+          path: |
+            build/ci/*.msi
+            build/ci/*.zip
+          if-no-files-found: error

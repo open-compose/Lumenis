@@ -1,6 +1,6 @@
 # Lumenis — Project Plan and Roadmap
 
-Status: **proposal**. The decisions in §2 need sign-off before Phase 0 code lands.
+Status: §2 decisions mostly settled (see each item). Phase 0 is implemented; its CI gates run on every push.
 
 ## 1. Goal and honest scope
 
@@ -35,7 +35,7 @@ something usable and testable.
 
 ## 2. Decisions needed now
 
-### 2.1 Language and GUI toolkit — recommendation: C++20 + Qt 6 (Widgets)
+### 2.1 Language and GUI toolkit — **decided: C++20 + Qt 6 (Widgets)**
 
 The brief asks for "native GUI components" *and* for windows that "look the same
 across platforms". Pure native toolkits (AppKit / Win32 or WinUI / GTK) conflict
@@ -58,7 +58,7 @@ and OpenTimelineIO. Rust–Qt bindings are immature for an application this size
 Isolated components may still be written in Rust behind a C ABI where that makes
 sense, such as parsers for untrusted files.
 
-### 2.2 Licence
+### 2.2 Licence — **open**: GPLv3 stays; module exception / CLA still to decide
 
 The repo is currently **GPLv3**. That works for "free build plus paid support"
 (the Red Hat model): anyone can sell binaries and support. Things to know:
@@ -70,22 +70,37 @@ The repo is currently **GPLv3**. That works for "free build plus paid support"
   ownership through a Contributor Licence Agreement (CLA) from day one, or a
   different licence. Decide this **before** outside contributions arrive.
 
-### 2.3 Reference Media Composer seat
+### 2.3 Reference Media Composer seat — **settled**
+
+A contact with a licensed seat will check the files we produce once we have
+any to check.
+
 
 Pass/fail interop tests need a legally licensed copy of Media Composer to
 produce reference bins, AAFs and media, and to confirm that our output opens in
 it. The person who runs it does black-box observation only: no disassembly and
 no debugger. Check that the EULA allows this.
 
-### 2.4 Target version
+### 2.4 Target version — **decided**
 
 Proposal: match the **Media Composer 2024.x/2025.x** UI and default keyboard,
 and read bins from versions 8.x and later.
 
-### 2.5 Name
+### 2.5 Name — **open**
 
-"Lumenis" is a registered trademark of a medical-device company. That is a
-different trade class, but run a trademark search before public release.
+A new name is being chosen. Until then, "Lumenis" is a placeholder.
+`cmake/Branding.cmake` is the only place that sets user-visible names, so
+renaming is a one-file change.
+
+### 2.6 Licensed and patented technology — **decided**
+
+* Use a legal open-source implementation where one exists.
+* Otherwise call what the OS or a driver already licenses.
+* Otherwise define an extension hook now, so the support can be added as a
+  module later.
+
+[EXTENSIONS.md](EXTENSIONS.md) has the capability-by-capability plan and the
+hook design.
 
 ## 3. Clean-room and IP rules
 
@@ -103,10 +118,10 @@ different trade class, but run a trademark search before public release.
    * Core NLE patents from the 1990s and early 2000s have expired.
    * Before implementing a newer feature, run a patent search for it (e.g.
      PhraseFind, Dynamic Media Folders, bin locking schemes).
-   * Codec patents are the real risk. H.264, HEVC and AAC encoding go through
-     OS frameworks: VideoToolbox, Media Foundation, and VA-API or the user's
-     own FFmpeg on Linux. Otherwise we take a pool licence for the paid
-     edition.
+   * Codec patents are the real risk. H.264, HEVC and AAC go through OS
+     frameworks: VideoToolbox, Media Foundation, and VA-API or the user's own
+     FFmpeg on Linux. Otherwise a licensed module plugs into the codec hook.
+     See [EXTENSIONS.md](EXTENSIONS.md).
    * ProRes encode/decode needs a review by legal counsel.
    * DNxHD/VC-3 patent status needs a review by legal counsel.
 6. Avid trademarks are used only descriptively ("opens Avid Media Composer
@@ -117,6 +132,7 @@ different trade class, but run a trademark search before public release.
 ```
 app/                 executable, startup, crash reporting
 src/core/            rational time, timecode, IDs (MOB/UMID), undo, settings, threading
+src/ext/             provider registry, module loader/ABI, extension interfaces (codec, ASR, plug-in hosts)
 src/model/           project, bins, clips, master/sub/group clips, sequences, tracks, effects graph
 src/media/           demux/decode/encode (FFmpeg LGPL build, bmx), media management, MXF writer
 src/playback/        frame scheduler, caches, A/V clock, GPU display (QRhi), audio out (miniaudio/RtAudio)
@@ -130,7 +146,8 @@ packaging/           macos/ (DMG, notarisation), windows/ (WiX MSI), linux/ (App
 scripts/             build.sh, build.ps1, bootstrap, test-corpus fetch
 ```
 
-* Build: CMake with presets, and vcpkg in manifest mode for pinned dependencies.
+* Build: CMake with presets. vcpkg in manifest mode arrives with the first
+  third-party library (Phase 2).
 * CI: GitHub Actions on `macos-14` (arm64), `windows-2022` (x64) and
   `ubuntu-24.04` (x64).
 * Every edit operation is a serialisable command. That one design gives us
@@ -141,7 +158,21 @@ scripts/             build.sh, build.ps1, bootstrap, test-corpus fetch
 Every gate is automated in CI unless it is marked **(M)** for manual. A phase is
 done only when all of its gates pass on **all three platforms**.
 
-### Phase 0 — Foundations (repo, build, CI, packaging)
+### Phase 0 — Foundations (repo, build, CI, packaging) — **implemented**
+
+Delivered:
+* CMake presets and the Qt 6 app.
+* Qt Test unit tests.
+* The provider registry and module loader: the hooks.
+* Rational time and SMPTE timecode.
+* `scripts/build.sh` and `scripts/build.ps1`, plus bootstrap scripts.
+* [BUILDING.md](../BUILDING.md) and [INSTALL.md](../INSTALL.md).
+* Installers: DMG, MSI/ZIP, deb/rpm/tgz and AppImage.
+* A CI workflow that runs gates 1–3 on all three platforms.
+
+Gate 4 (a fresh-VM walk-through of the docs) is still to be done by a person.
+
+Original plan:
 * Set up the CMake/vcpkg skeleton, the Qt 6 app that opens an empty main window,
   and the unit-test framework (Catch2 or GoogleTest).
 * Add `scripts/build.sh` (macOS and Linux) and `scripts/build.ps1` (Windows).
@@ -292,10 +323,9 @@ Features in this phase:
 
 ## 6. Immediate next steps
 
-1. Sign off on §2. The critical decisions are the toolkit, the licence/CLA and
-   the reference seat.
-2. Phase 0 scaffold: CMake/vcpkg, the Qt app, CI for 3 platforms, build
-   scripts, BUILDING/INSTALL docs and installers.
+1. Decide §2.2 (module exception and/or CLA) before accepting outside
+   contributions.
+2. Do Phase 0 gate 4: a person follows BUILDING.md on a fresh VM for each OS.
 3. Start `docs/spec/ui-inventory.md`, a window-by-window and
    menu-by-menu inventory taken from the public Media Composer User Guide.
    It drives Phase 1 gate 2.

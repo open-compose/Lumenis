@@ -1,0 +1,16 @@
+#pragma once
+
+// Generated from cmake/Branding.cmake. Do not edit.
+
+namespace lumenis::branding {
+
+inline constexpr const char* kProductName = "@PRODUCT_NAME@";
+inline constexpr const char* kExecutableName = "@PRODUCT_EXE_NAME@";
+inline constexpr const char* kOrganization = "@PRODUCT_ORGANIZATION@";
+inline constexpr const char* kDomain = "@PRODUCT_DOMAIN@";
+inline constexpr const char* kBundleId = "@PRODUCT_BUNDLE_ID@";
+inline constexpr const char* kDescription = "@PRODUCT_DESCRIPTION@";
+inline constexpr const char* kHomepage = "@PRODUCT_HOMEPAGE@";
+inline constexpr const char* kVersion = "@PRODUCT_VERSION@";
+
+} // namespace lumenis::branding

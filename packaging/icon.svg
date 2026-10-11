@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <!-- Placeholder icon until the product name and branding are settled. -->
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="#1d2330"/>
+  <rect x="40" y="76" width="176" height="104" rx="10" fill="none" stroke="#7fb2ff" stroke-width="12"/>
+  <path d="M112 102 L152 128 L112 154 Z" fill="#7fb2ff"/>
+  <path d="M40 204 H216" stroke="#ff9f43" stroke-width="12" stroke-linecap="round"/>
+</svg>

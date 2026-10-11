@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=@PRODUCT_NAME@
+GenericName=Video Editor
+Comment=@PRODUCT_DESCRIPTION@
+Exec=@PRODUCT_EXE_NAME@ %F
+Icon=@PRODUCT_BUNDLE_ID@
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;
