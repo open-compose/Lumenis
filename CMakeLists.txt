@@ -31,6 +31,17 @@ if(LUMENIS_BUILD_TESTS)
     find_package(Qt6 ${LUMENIS_QT_MIN_VERSION} REQUIRED COMPONENTS Test)
 endif()
 
+# Qt (6.8.3 and earlier) links the long-deprecated AGL framework through
+# WrapOpenGL, but the macOS 26 SDK (Xcode 26) no longer ships it, so linking
+# fails with "framework 'AGL' not found". Nothing uses AGL; drop it.
+if(APPLE AND TARGET WrapOpenGL::WrapOpenGL)
+    get_target_property(_wrap_gl_libs WrapOpenGL::WrapOpenGL INTERFACE_LINK_LIBRARIES)
+    if(_wrap_gl_libs)
+        list(FILTER _wrap_gl_libs EXCLUDE REGEX "AGL")
+        set_target_properties(WrapOpenGL::WrapOpenGL PROPERTIES INTERFACE_LINK_LIBRARIES "${_wrap_gl_libs}")
+    endif()
+endif()
+
 if(Qt6_VERSION VERSION_GREATER_EQUAL 6.5)
     qt_standard_project_setup()
 else()

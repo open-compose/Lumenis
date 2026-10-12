@@ -124,6 +124,30 @@ The test presets set `QT_QPA_PLATFORM=offscreen`, so tests need no display.
 launches the installed program with `--smoke-test`, and uninstalls it. The
 installers are uploaded as workflow artifacts.
 
+## Troubleshooting
+
+**macOS: `fatal error: 'cstdint' file not found`** (or any other standard
+header). The Xcode or Command Line Tools installation is incomplete. This
+often happens after a macOS upgrade. `scripts/build.sh` checks for it and
+stops with the fix. To repair it:
+
+* If Xcode is installed:
+  `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`.
+* If you only have the Command Line Tools:
+  `sudo rm -rf /Library/Developer/CommandLineTools && xcode-select --install`.
+* If neither works, reinstall Xcode.
+
+Then delete `build/` and build again. CMake remembers the compiler it found
+the first time, so the old build folder must go.
+
+**macOS: `ld: framework 'AGL' not found`.** Xcode 26 removed the obsolete AGL
+framework, but Qt 6.8.3 still asks to link it. The project removes that link
+request itself (top-level `CMakeLists.txt`). If you still see this error, you
+are building an older checkout: update it, delete `build/`, and rebuild.
+
+**Any platform: strange errors after changing compilers, Qt or Xcode.** Delete
+the build folder (`build/<preset>`) and configure again.
+
 ## Command-line options
 
 ```

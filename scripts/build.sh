@@ -36,6 +36,22 @@ fi
 
 export QT_ROOT_DIR="$qt_dir"
 
+# A damaged or half-updated Xcode / Command Line Tools install is the most
+# common macOS build failure ("'cstdint' file not found"); catch it up front.
+if [[ "$(uname -s)" == "Darwin" ]]; then
+    if ! printf '#include <cstdint>\nint main() { return 0; }\n' \
+            | xcrun clang++ -std=c++20 -x c++ - -o /dev/null 2>/dev/null; then
+        cat >&2 <<'MSG'
+error: the C++ compiler cannot find the standard library headers.
+Your Xcode or Command Line Tools installation is incomplete. Fix it with ONE of:
+  sudo xcode-select -s /Applications/Xcode.app/Contents/Developer   (Xcode installed)
+  sudo rm -rf /Library/Developer/CommandLineTools && xcode-select --install
+then delete build/ and run this script again. See BUILDING.md, "Troubleshooting".
+MSG
+        exit 1
+    fi
+fi
+
 if [[ $clean -eq 1 ]]; then
     rm -rf "build/$preset"
 fi
