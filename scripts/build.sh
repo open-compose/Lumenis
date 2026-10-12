@@ -63,10 +63,17 @@ if [[ $run_tests -eq 1 ]]; then
     ctest --preset "$preset"
 fi
 
+echo
+exe_name="$(sed -n 's/^PRODUCT_EXE_NAME:STRING=//p' "build/$preset/CMakeCache.txt")"
+echo "Program: $(ls -d "build/$preset"/bin/*.app 2>/dev/null || echo "build/$preset/bin/$exe_name")"
+
 if [[ $package -eq 1 ]]; then
     (cd "build/$preset" && cpack)
     if [[ "$(uname -s)" == "Linux" ]]; then
         packaging/linux/make-appimage.sh "build/$preset"
     fi
-    echo "Packages are in build/$preset"
+    echo "Packages:"
+    ls -1 "build/$preset"/*.{dmg,deb,rpm,tar.gz,AppImage} 2>/dev/null | sed 's/^/  /'
+else
+    echo "Installers were not built; add --package to make them."
 fi

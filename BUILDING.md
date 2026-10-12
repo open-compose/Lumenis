@@ -34,15 +34,19 @@ scripts/build.sh --package
 ```
 
 Output:
-* the app at `build/macos-release/app/Cutthulhu.app`;
-* the installer at `build/macos-release/cutthulhu-<version>-macos-arm64.dmg`.
+* the app at `build/macos-release/bin/Cutthulhu.app`. This copy uses Qt from
+  `QT_ROOT_DIR`, so it only runs on the machine that built it.
+* the installer `build/macos-release/cutthulhu-<version>-macos-arm64.dmg`, made
+  only with `--package`. Its app bundles Qt and runs on any Apple Silicon Mac
+  with macOS 12 or later.
 
 The build is ad-hoc signed. That is enough to run it on the machine that built
 it. To distribute it, sign and notarise with a Developer ID:
 
 ```sh
 DEVELOPER_ID="Developer ID Application: … (TEAMID)" NOTARY_PROFILE=… \
-  packaging/macos/sign-and-notarize.sh build/macos-release/app/Cutthulhu.app Cutthulhu.dmg
+  cmake --install build/macos-release --prefix build/macos-release/dist   # app with Qt bundled
+  packaging/macos/sign-and-notarize.sh build/macos-release/dist/Cutthulhu.app Cutthulhu.dmg
 ```
 
 ### Windows x64
