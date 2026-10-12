@@ -3,6 +3,8 @@ configure_file(branding.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/lumenis/core/
 add_library(lumenis_core STATIC
     rational.cpp
     timecode.cpp
+    project_format.cpp
+    include/lumenis/core/project_format.h
     include/lumenis/core/rational.h
     include/lumenis/core/timecode.h
 )

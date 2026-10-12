@@ -219,7 +219,18 @@ Sub-steps:
   * `--dump-menus` and `--screenshot` test hooks;
   * `tst_menu_inventory` (gate 2);
   * a CI job comparing screenshots across platforms (gate 1).
-* **1.2** Select Project dialog and Project window.
+* **1.2a Select Project — done.**
+  * Projects and New Project pages, What's New, user profiles, and
+    Private/Shared/External locations with Browse.
+  * Text and frame views, a column fast menu, and Delete with confirmation.
+  * Format presets for all 47 formats in guide ch. 35, plus custom raster
+    rules, aspect, colour space, colour depth, stereoscopic, film and
+    Choose for Me.
+  * Startup flow and File > Close Project (Ctrl+Shift+W).
+  * Not yet built: Save/Manage Presets, poster frames, and the fast menu's
+    font option.
+* **1.2b** The paneled main layout: Bin Container, Composer, Timeline, the
+  workspace toolbar, and docking with vertical title bars.
 * **1.3** Bins.
 * **1.4** Composer and Timeline.
 * **1.5** Palettes, tools and Settings dialogs.

@@ -115,6 +115,18 @@ The layout is taken from the screenshots on p.61–64; behaviour from the text.
   blue record bin, and a new sequence. Empty bins and the empty Timeline show
   hints ("Drag … to add clips", "Drag clips here to start editing").
 
+**Implementation status (1.2a).** All of the above is built, except:
+* **Save Preset / Manage Presets:** not yet.
+* **Poster frames:** shown as placeholders until the Composer exists.
+* **The project list's fast menu:** offers column choice; its font option is
+  not yet built.
+* **Colour-space and colour-depth labels:** ours. The guide names the
+  families (709, 2020, DCI-P3, HDR HLG/PQ, ACES; p.520–558) but not the menu
+  text.
+* **Film types:** 16mm, 35mm 3-perf and 35mm 4-perf, from p.107.
+* **Project files:** Cutthulhu's own `.cthproj` (JSON). Media Composer's
+  `.avp` is Phase 3.
+
 ## 3. Panels, docking and workspaces (ch. 4)
 
 * **Default layout (p.74).** Single monitor: Bin Container top left, Composer

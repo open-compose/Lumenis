@@ -6,6 +6,7 @@
 #include "lumenis/ui/menu_builder.h"
 
 #include <QApplication>
+#include <QCloseEvent>
 #include <QMenuBar>
 #include <QMessageBox>
 
@@ -22,6 +23,25 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     setCentralWidget(workspace);
     installHandlers();
     buildBuiltinMenus(menuBar(), commands_);
+}
+
+void MainWindow::setProject(const model::ProjectEntry& project) {
+    project_ = project;
+    setWindowTitle(QStringLiteral("%1 - %2").arg(QString::fromUtf8(branding::kProductName), project.settings.name));
+    commands_.setHandler(QStringLiteral("file.close_project"), [this] { emit closeProjectRequested(); });
+}
+
+void MainWindow::clearProject() {
+    project_.reset();
+    setWindowTitle(QString::fromUtf8(branding::kProductName));
+    commands_.setHandler(QStringLiteral("file.close_project"), {});
+}
+
+void MainWindow::closeEvent(QCloseEvent* event) {
+    QMainWindow::closeEvent(event);
+    if (event->isAccepted()) {
+        emit closed();
+    }
 }
 
 void MainWindow::installHandlers() {

@@ -1,6 +1,10 @@
 #pragma once
 
+#include "lumenis/model/project_store.h"
+
 #include <QMainWindow>
+
+#include <optional>
 
 namespace lumenis::ext {
 class ProviderRegistry;
@@ -19,12 +23,28 @@ public:
     MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& providers,
                QWidget* parent = nullptr);
 
+    // The open project, shown in the title bar. File > Close Project is
+    // available only while a project is open.
+    void setProject(const model::ProjectEntry& project);
+    void clearProject();
+    const std::optional<model::ProjectEntry>& project() const { return project_; }
+
+signals:
+    // File > Close Project: the application returns to Select Project.
+    void closeProjectRequested();
+    // The user closed the window (or chose File > Exit).
+    void closed();
+
+protected:
+    void closeEvent(QCloseEvent* event) override;
+
 private:
     void installHandlers();
     void showAbout();
 
     CommandRegistry& commands_;
     const ext::ProviderRegistry& providers_;
+    std::optional<model::ProjectEntry> project_;
 };
 
 } // namespace lumenis::ui

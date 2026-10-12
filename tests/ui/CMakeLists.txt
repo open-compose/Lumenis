@@ -7,3 +7,5 @@ lumenis_add_test(tst_theme SOURCES tst_theme.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_menu_inventory SOURCES tst_menu_inventory.cpp LIBS ${ui_test_libs})
 target_compile_definitions(tst_menu_inventory PRIVATE
     MENU_INVENTORY="${PROJECT_SOURCE_DIR}/tests/data/menu_inventory.json")
+lumenis_add_test(tst_select_project_dialog SOURCES tst_select_project_dialog.cpp LIBS ${ui_test_libs})
+lumenis_add_test(tst_main_window SOURCES tst_main_window.cpp LIBS ${ui_test_libs})

@@ -63,6 +63,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 add_subdirectory(src/core)
 add_subdirectory(src/ext)
+add_subdirectory(src/model)
 add_subdirectory(src/ui)
 add_subdirectory(app)
 
