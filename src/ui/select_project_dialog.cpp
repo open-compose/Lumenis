@@ -1,6 +1,7 @@
 #include "lumenis/ui/select_project_dialog.h"
 
 #include "lumenis/core/branding.h"
+#include "lumenis/ui/theme.h"
 
 #include <QAction>
 #include <QButtonGroup>
@@ -147,6 +148,7 @@ SelectProjectDialog::SelectProjectDialog(const model::Locations& locations, QWid
         b->setCheckable(true);
         b->setProperty("toggle", true);
         b->setMinimumWidth(110);
+        b->setFixedHeight(kControlHeight);
         tabs_->addButton(b, id);
     }
     tabRow->addStretch();
@@ -229,6 +231,7 @@ QWidget* SelectProjectDialog::buildSidebar() {
         b->setObjectName(id == 0 ? QStringLiteral("selectProjectButton") : QStringLiteral("whatsNewButton"));
         b->setCheckable(true);
         b->setProperty("toggle", true);
+        b->setFixedHeight(kControlHeight);
         sidebar_->addButton(b, id);
         layout->addWidget(b);
     }
@@ -254,13 +257,13 @@ QWidget* SelectProjectDialog::buildProjectsPage() {
     frameSize_->setFixedWidth(100);
     auto* textView = new QToolButton(page);
     textView->setObjectName(QStringLiteral("textView"));
-    textView->setText(QStringLiteral("☰"));
+    textView->setIcon(glyphIcon(GlyphIcon::ListView));
     textView->setToolTip(tr("Text view"));
     textView->setCheckable(true);
     textView->setChecked(true);
     auto* frameView = new QToolButton(page);
     frameView->setObjectName(QStringLiteral("frameView"));
-    frameView->setText(QStringLiteral("▦"));
+    frameView->setIcon(glyphIcon(GlyphIcon::FrameView));
     frameView->setToolTip(tr("Frame view"));
     frameView->setCheckable(true);
     auto* viewGroup = new QButtonGroup(page);
@@ -268,9 +271,15 @@ QWidget* SelectProjectDialog::buildProjectsPage() {
     viewGroup->addButton(frameView, 1);
     auto* fast = new QToolButton(page);
     fast->setObjectName(QStringLiteral("projectsFastMenu"));
-    fast->setText(QStringLiteral("≡"));
+    fast->setIcon(glyphIcon(GlyphIcon::FastMenu));
     fast->setToolTip(tr("Fast menu"));
     fast->setPopupMode(QToolButton::InstantPopup);
+    for (QToolButton* b : {textView, frameView, fast}) {
+        b->setFixedSize(26, kToolButtonHeight);
+        b->setIconSize(QSize(16, 16));
+    }
+    fast->setStyleSheet(QStringLiteral("QToolButton::menu-indicator { image: none; }"));
+    frameSize_->setFixedHeight(kToolButtonHeight);
     tools->addWidget(frameSize_);
     tools->addWidget(textView);
     tools->addWidget(frameView);
@@ -300,6 +309,7 @@ QWidget* SelectProjectDialog::buildProjectsPage() {
     table_->setColumnWidth(Stereo, 95);
     table_->setColumnWidth(Created, 125);
     table_->setColumnWidth(Modified, 125);
+    table_->header()->setFixedHeight(kHeaderHeight);
     table_->installEventFilter(this);
 
     frames_ = new QListWidget(page);
@@ -404,6 +414,7 @@ QWidget* SelectProjectDialog::buildNewProjectPage() {
     for (QSpinBox* s : {rasterWidth_, rasterHeight_}) {
         s->setRange(2, 16384);
         s->setSingleStep(2);
+        s->setFixedWidth(80); // not from digit widths, which vary by font engine
     }
     rasterRow->addWidget(rasterWidth_);
     rasterRow->addWidget(new QLabel(QStringLiteral("x"), settingsPanel_));
@@ -435,6 +446,7 @@ QWidget* SelectProjectDialog::buildNewProjectPage() {
     filmType_->setObjectName(QStringLiteral("filmType"));
     for (const char* t : kFilmTypes) filmType_->addItem(QString::fromLatin1(t));
     filmType_->setCurrentText(QStringLiteral("35mm, 4 perf"));
+    film_->setFixedWidth(70); // keeps the film type menu in place whatever the text width
     filmRow->addWidget(film_);
     filmRow->addWidget(filmType_);
     filmRow->addStretch();
