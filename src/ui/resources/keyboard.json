@@ -1,0 +1,28 @@
+{
+  "comment": "Default keyboard (US English), key -> command id. Only keys the Media Composer guides state in text are mapped; see tests/data/keyboard_inventory.json. Keys use Qt portable text.",
+  "layout": "English (United States)",
+  "keys": [
+    { "key": "`",     "command": "play.play" },
+    { "key": "Tab",   "command": "play.play" },
+    { "key": "5",     "command": "play.play" },
+    { "key": "Space", "command": "play.play" },
+    { "key": "1",     "command": "move.step_backward_10_frames" },
+    { "key": "2",     "command": "move.step_forward_10_frames" },
+    { "key": "3",     "command": "move.step_backward_one_frame" },
+    { "key": "4",     "command": "move.step_forward_one_frame" },
+    { "key": "Left",  "command": "move.step_backward_one_frame" },
+    { "key": "Right", "command": "move.step_forward_one_frame" },
+    { "key": "Home",  "command": "move.go_to_start" },
+    { "key": "End",   "command": "move.go_to_end" },
+    { "key": "J",     "command": "play.play_reverse" },
+    { "key": "K",     "command": "play.pause" },
+    { "key": "L",     "command": "play.play_forward" },
+    { "key": "N",     "command": "play.mouse_jog" },
+    { "key": ";",     "command": "play.mouse_shuttle" },
+    { "key": "I",     "command": "edit.mark_in" },
+    { "key": "O",     "command": "edit.mark_out" },
+    { "key": "Alt+I", "command": "edit.go_to_in_point" },
+    { "key": "V",     "command": "edit.splice_in" },
+    { "key": "B",     "command": "edit.overwrite" }
+  ]
+}

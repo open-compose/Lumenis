@@ -1,0 +1,42 @@
+{
+  "comment": [
+    "The default keyboard (US English) as the Media Composer documentation states it in text.",
+    "tst_keyboard_inventory checks that the built-in keyboard map assigns exactly these keys.",
+    "The Editing Guide's Keyboard Settings illustration (p.1202) shows every key, but as icons only; keys not listed",
+    "here are unverified and stay unmapped until confirmed (e.g. from a licensed seat's Keyboard settings).",
+    "nameVerified false: the guide describes the function but not the command's name.",
+    "Alt means Alt on Windows; the guide gives no macOS equivalent for Alt+I."
+  ],
+  "source": "Avid Media Composer Editing Guide, version 2025.12",
+  "layout": "English (United States)",
+  "keys": [
+    { "key": "`",     "command": "Play", "page": 400 },
+    { "key": "Tab",   "command": "Play", "page": 400 },
+    { "key": "5",     "command": "Play", "page": 400 },
+    { "key": "Space", "command": "Play", "page": 400 },
+    { "key": "1",     "command": "Step Backward 10-frames or 8-frames", "page": 400 },
+    { "key": "2",     "command": "Step Forward 10-frames or 8-frames", "page": 400,
+      "note": "The guide's table says '8 frames backward' for progressive formats; a typo for forward (compare p.398-399)." },
+    { "key": "3",     "command": "Step Backward one frame", "page": 400 },
+    { "key": "4",     "command": "Step Forward one frame", "page": 400 },
+    { "key": "Left",  "command": "Step Backward one frame", "page": 400 },
+    { "key": "Right", "command": "Step Forward one frame", "page": 400 },
+    { "key": "Home",  "command": "Go to Start", "page": 400, "nameVerified": false },
+    { "key": "End",   "command": "Go to End", "page": 400, "nameVerified": false },
+    { "key": "J",     "command": "Play Reverse", "page": 400 },
+    { "key": "K",     "command": "Pause", "page": 401 },
+    { "key": "L",     "command": "Play Forward", "page": 400 },
+    { "key": "N",     "command": "Mouse Jog", "page": 403 },
+    { "key": ";",     "command": "Mouse Shuttle", "page": 403, "nameVerified": false },
+    { "key": "I",     "command": "Mark IN", "page": 405 },
+    { "key": "O",     "command": "Mark OUT", "page": 406 },
+    { "key": "Alt+I", "command": "Go to IN Point", "page": 97 },
+    { "key": "V",     "command": "Splice-in", "page": 624 },
+    { "key": "B",     "command": "Overwrite", "page": 624 }
+  ],
+  "contextual": [
+    { "context": "J-K-L shuttle", "keys": "L repeatedly: 2x, 3x, 5x, 8x; K+L / K+J: slow forward/backward (8 fps NTSC, 6 fps PAL and 24p); hold K and tap J or L: step one frame; Alt+J / Alt+L: one speed step", "page": 400 },
+    { "context": "Capture tool", "keys": "F4: Mark IN, then Mark OUT and Log; F1/F2: subclip IN/OUT while capturing; Esc: stop capture; Tab: move between fields", "page": 117 },
+    { "context": "MultiCamera", "keys": "Numeric keypad 1-9 select the camera angle by its position in the split display", "page": 1132 }
+  ]
+}

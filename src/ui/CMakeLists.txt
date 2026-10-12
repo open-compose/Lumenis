@@ -1,11 +1,13 @@
 add_library(lumenis_ui STATIC
     command_registry.cpp
+    keyboard_map.cpp
     main_window.cpp
     menu_builder.cpp
     select_project_dialog.cpp
     theme.cpp
     workspace.cpp
     include/lumenis/ui/command_registry.h
+    include/lumenis/ui/keyboard_map.h
     include/lumenis/ui/main_window.h
     include/lumenis/ui/menu_builder.h
     include/lumenis/ui/select_project_dialog.h
@@ -19,6 +21,7 @@ qt_add_resources(lumenis_ui lumenis_ui_resources
     BASE resources
     FILES
         resources/commands.json
+        resources/keyboard.json
         resources/menus.json
         resources/whats_new.html
         resources/fonts/Inter-Regular.ttf

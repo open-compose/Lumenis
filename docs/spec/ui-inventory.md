@@ -3,10 +3,15 @@
 This is the specification for Phase 1: every window, menu, command and default
 keyboard shortcut a Media Composer 2024/2025 user expects.
 
-**Source.** Avid Media Composer Editing Guide, version 2025.12 (1,317 pages).
-It is publicly available at
-`https://resources.avid.com/SupportFiles/attach/Media_Composer/Media_Composer_v2025.x_Editing_Guide.pdf`.
-Page numbers below ("p.61") refer to that document.
+**Sources.** Both are publicly available from Avid.
+
+| Short name | Document | URL |
+|---|---|---|
+| Editing Guide (EG) | Media Composer Editing Guide, version 2025.12 (1,317 pages) | `https://resources.avid.com/SupportFiles/attach/Media_Composer/Media_Composer_v2025.x_Editing_Guide.pdf` |
+| FX Guide (FX) | Media Composer Effects Guide, version 2025.12 (762 pages) | `https://resources.avid.com/SupportFiles/attach/Media_Composer/Media_Composer_v2025.x_FX_Guide.pdf` |
+
+A plain page number ("p.61") refers to the Editing Guide. FX Guide pages are
+written "FX p.303".
 
 **Clean-room rules (ROADMAP §3).** Entries record names, behaviour and layout
 only. Avid's artwork, icons and prose are never copied into this project, and
@@ -21,7 +26,7 @@ test contact) and then locked by the tests.
 | Part | File | Test |
 |---|---|---|
 | Menu bar | `tests/data/menu_inventory.json` | `tst_menu_inventory` |
-| Default keyboard | `tests/data/keyboard_inventory.json` (to come) | `tst_keyboard_inventory` (to come) |
+| Default keyboard | `tests/data/keyboard_inventory.json` | `tst_keyboard` |
 | Window appearance | CI screenshots | `ui-consistency` CI job |
 
 ---
@@ -215,6 +220,18 @@ The full inventory, with a page for every item, is
 * **macOS** also has the application menu, which holds Quit and About.
 * **Item order within each menu, and separators:** unverified.
 * **Additions not in Media Composer:** *Help > About Qt* (Qt's LGPL notice).
+* **Renamed:** *Tools > Avid Titler+* (FX p.303) is called *Titler+*, because
+  "Avid" is a trademark.
+* **Where the two guides differ, the Editing Guide's spelling is used:**
+  * "Recreate Title Media" (p.475), not "Re-create" (FX p.374);
+  * "Tools > Background Queue Window" (p.358), not "Background Queue"
+    (FX p.59).
+* **Contextual items, not part of the static menus:**
+  * While the legacy Title Tool is open, the File menu offers *Save Title*,
+    *Save Title As* and *Export Title* (FX p.358–364).
+  * The Windows menu offers *Title Tool* (FX p.327).
+  * The Edit menu's Undo item names the last action, for example *Undo Clear
+    Renders* (FX p.61).
 
 ## 6. Documented shortcuts
 
@@ -227,6 +244,7 @@ default keyboard is still to come (§7).
 | Ctrl+Z | Edit > Undo | 466 |
 | Ctrl+R | Edit > Redo | 466 |
 | Ctrl+C / Ctrl+V | Edit > Copy / Paste | 423 |
+| Ctrl+A | Edit > Select All | FX p.153 |
 | Ctrl+F | Edit > Find | 417 |
 | Ctrl+G | Find next occurrence | 429 |
 | Ctrl+L / Ctrl+K | Edit > Enlarge / Reduce (Frame in bins, Track in the Timeline) | 250, 594 |
@@ -238,9 +256,42 @@ default keyboard is still to come (§7).
 | Ctrl+. (period) | Cancel waveform redraw or render | 678, 805 |
 | Ctrl+X | Cut (segment, script text) | 573, 622 |
 
-## 7. Still to document
+## 7. Default editing keyboard
 
-* The default keyboard layout, key by key.
+**Machine-readable form:** `tests/data/keyboard_inventory.json`, enforced by
+`tst_keyboard`.
+
+**What the guides state.** Every key below is documented in text, US
+English layout:
+
+| Keys | Command | Page |
+|---|---|---|
+| \`, Tab, 5, Space | Play (start/stop) | p.400 |
+| 1 / 2 | Step Backward / Forward 10 frames (8 frames in progressive formats) | p.400 |
+| 3 / 4, Left / Right | Step Backward / Forward one frame | p.400 |
+| Home / End | Go to start / end of clip or sequence | p.400 |
+| J / K / L | Play Reverse / Pause / Play Forward | p.400–401 |
+| N / ; | Mouse jog / mouse shuttle | p.403 |
+| I / O | Mark IN / Mark OUT | p.405–406 |
+| Alt+I | Go to IN Point | p.97 |
+| V / B | Splice-in / Overwrite | p.624 |
+
+**Shuttle and contextual keys (p.400–401, 117–195, 1132):**
+* Pressing L repeatedly plays at 2×, 3×, 5× and 8×.
+* K+L and K+J give slow forward and backward.
+* Holding K and tapping J or L steps one frame.
+* Alt+J and Alt+L change speed one step at a time.
+* In the Capture tool: F4, F1/F2, Esc and Tab.
+* In MultiCamera: keypad 1–9 choose camera angles.
+
+**Not yet confirmed.** The Keyboard settings illustration (p.1202) shows the
+whole default layout, but as icons only. Keys not listed above stay unmapped
+until their functions are confirmed in text or on a licensed seat.
+
+**Other keyboard settings (p.1202).** Media Composer also ships Keyboard
+settings named "MC1 English", "NC English", "Premiere Pro" and "Resolve".
+
+## 8. Still to document
 * The window-by-window details for Bins (ch. 10), the Composer (ch. 13), the
   Timeline (ch. 19), the Audio tools (ch. 21) and Settings (ch. 33).
 * Menu order and separators, confirmed against a licensed seat.

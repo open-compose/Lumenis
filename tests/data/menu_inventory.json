@@ -6,9 +6,13 @@
     "positionVerified: the menu's place in the menu bar is confirmed (Editing Guide p.74 screenshot).",
     "orderVerified: false means the source does not show the menu's item order or separators; the test then checks",
     "the set of items only. Set it to true once the order is confirmed (e.g. screenshots from a licensed seat).",
-    "%PRODUCT% stands for the product name."
+    "%PRODUCT% stands for the product name.",
+    "Where the two guides spell a command differently, the Editing Guide's spelling is used ('Recreate Title Media', 'Background Queue Window')."
   ],
-  "source": "Avid Media Composer Editing Guide, version 2025.12 (1317 pages)",
+  "source": [
+    "Avid Media Composer Editing Guide, version 2025.12 (1317 pages): 'page' without 'doc'",
+    "Avid Media Composer Effects (FX) Guide, version 2025.12 (762 pages): entries with \"doc\": \"fx\""
+  ],
   "excluded": [
     {
       "text": "Avid Link",
@@ -226,6 +230,11 @@
           "page": 59,
           "shortcut": "Ctrl+Q",
           "shortcutSource": "platform convention for Quit; the guide does not document a shortcut"
+        },
+        {
+          "text": "Export Matte PICT",
+          "page": 418,
+          "doc": "fx"
         }
       ]
     },
@@ -269,7 +278,10 @@
         },
         {
           "text": "Select All",
-          "page": 180
+          "page": 180,
+          "shortcut": "Ctrl+A",
+          "shortcutPage": 153,
+          "shortcutDoc": "fx"
         },
         {
           "text": "Select All Tracks",
@@ -297,6 +309,16 @@
         {
           "text": "Reduce HeadFrames",
           "page": 1016
+        },
+        {
+          "text": "Cut",
+          "page": 355,
+          "doc": "fx"
+        },
+        {
+          "text": "Deselect All Keyframes",
+          "page": 112,
+          "doc": "fx"
         }
       ]
     },
@@ -371,6 +393,11 @@
             {
               "text": "Unreferenced Clips",
               "page": 267
+            },
+            {
+              "text": "Unrendered Titles",
+              "page": 359,
+              "doc": "fx"
             }
           ]
         },
@@ -575,6 +602,11 @@
         {
           "text": "Split All Tracks",
           "page": 637
+        },
+        {
+          "text": "New Title",
+          "page": 327,
+          "doc": "fx"
         }
       ]
     },
@@ -621,6 +653,11 @@
             {
               "text": "Data Track",
               "page": 634
+            },
+            {
+              "text": "Title",
+              "page": 343,
+              "doc": "fx"
             }
           ]
         },
@@ -657,6 +694,11 @@
             {
               "text": "Data",
               "page": 982
+            },
+            {
+              "text": "Video",
+              "page": 228,
+              "doc": "fx"
             }
           ]
         },
@@ -671,6 +713,26 @@
             {
               "text": "ExpertRender In/Out",
               "page": 926
+            },
+            {
+              "text": "Render In/Out",
+              "page": 59,
+              "doc": "fx"
+            },
+            {
+              "text": "Render at Position",
+              "page": 58,
+              "doc": "fx"
+            },
+            {
+              "text": "Clear Renders In/Out",
+              "page": 60,
+              "doc": "fx"
+            },
+            {
+              "text": "Clear Renders at Position",
+              "page": 61,
+              "doc": "fx"
             }
           ]
         },
@@ -685,6 +747,11 @@
         {
           "text": "Split All Tracks",
           "page": 736
+        },
+        {
+          "text": "Create Unrendered Title Media",
+          "page": 375,
+          "doc": "fx"
         }
       ]
     },
@@ -714,6 +781,21 @@
         {
           "text": "Sync Point Overwrite",
           "page": 496
+        },
+        {
+          "text": "Freeze Frame",
+          "items": [
+            {
+              "text": "Other",
+              "page": 562,
+              "doc": "fx"
+            }
+          ]
+        },
+        {
+          "text": "Render On-the-Fly",
+          "page": 370,
+          "doc": "fx"
         }
       ]
     },
@@ -835,6 +917,27 @@
         {
           "text": "Video Output Tool",
           "page": 910
+        },
+        {
+          "text": "Titler+",
+          "page": 303,
+          "doc": "fx",
+          "note": "Avid calls it 'Avid Titler+'; renamed because the Avid name is a trademark"
+        },
+        {
+          "text": "Color Info Tool",
+          "page": 697,
+          "doc": "fx"
+        },
+        {
+          "text": "Effect Editor",
+          "page": 54,
+          "doc": "fx"
+        },
+        {
+          "text": "Title Tool Application",
+          "page": 343,
+          "doc": "fx"
         }
       ]
     },

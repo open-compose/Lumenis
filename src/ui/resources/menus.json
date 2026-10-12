@@ -86,7 +86,8 @@
         "file.print_timeline",
         "file.settings",
         "file.open_settings_file",
-        "file.exit"
+        "file.exit",
+        "file.export_matte_pict"
       ]
     },
     {
@@ -106,7 +107,9 @@
         "edit.enlarge_frame",
         "edit.reduce_frame",
         "edit.enlarge_headframes",
-        "edit.reduce_headframes"
+        "edit.reduce_headframes",
+        "edit.cut",
+        "edit.deselect_all_keyframes"
       ]
     },
     {
@@ -136,7 +139,8 @@
             "bin.select.offline_items",
             "bin.select.reverse",
             "bin.select.sources",
-            "bin.select.unreferenced_clips"
+            "bin.select.unreferenced_clips",
+            "bin.select.unrendered_titles"
           ]
         },
         "bin.set_bin_display",
@@ -215,7 +219,8 @@
             "clip.relink.managed_media"
           ]
         },
-        "clip.split_all_tracks"
+        "clip.split_all_tracks",
+        "clip.new_title"
       ]
     },
     {
@@ -238,7 +243,8 @@
                 "timeline.new.audio_track.7_1_surround"
               ]
             },
-            "timeline.new.data_track"
+            "timeline.new.data_track",
+            "timeline.new.title"
           ]
         },
         "timeline.add_filler_at_start",
@@ -256,7 +262,8 @@
                 "timeline.mixdown.audio.multiple_mixes"
               ]
             },
-            "timeline.mixdown.data"
+            "timeline.mixdown.data",
+            "timeline.mixdown.video"
           ]
         },
         "timeline.remove_match_frame_edits",
@@ -264,12 +271,17 @@
           "id": "timeline_render",
           "title": "Render",
           "items": [
-            "timeline.render.expertrender_in_out"
+            "timeline.render.expertrender_in_out",
+            "timeline.render.render_in_out",
+            "timeline.render.render_at_position",
+            "timeline.render.clear_renders_in_out",
+            "timeline.render.clear_renders_at_position"
           ]
         },
         "timeline.restore_default_patch",
         "timeline.show_sequence_map",
-        "timeline.split_all_tracks"
+        "timeline.split_all_tracks",
+        "timeline.create_unrendered_title_media"
       ]
     },
     {
@@ -280,7 +292,15 @@
         "composer.load_filler",
         "composer.remote_play",
         "composer.show_single_dual_monitor",
-        "composer.sync_point_overwrite"
+        "composer.sync_point_overwrite",
+        {
+          "id": "composer_freeze_frame",
+          "title": "Freeze Frame",
+          "items": [
+            "composer.freeze_frame.other"
+          ]
+        },
+        "composer.render_on_the_fly"
       ]
     },
     {
@@ -314,7 +334,11 @@
         "tools.timecode_window",
         "tools.timeline_clip_notes",
         "tools.video_input_tool",
-        "tools.video_output_tool"
+        "tools.video_output_tool",
+        "tools.titler",
+        "tools.color_info_tool",
+        "tools.effect_editor",
+        "tools.title_tool_application"
       ]
     },
     {
