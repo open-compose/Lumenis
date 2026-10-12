@@ -1,4 +1,5 @@
 add_library(lumenis_ui STATIC
+    capture.cpp
     command_registry.cpp
     keyboard_map.cpp
     main_window.cpp
@@ -6,6 +7,7 @@ add_library(lumenis_ui STATIC
     select_project_dialog.cpp
     theme.cpp
     workspace.cpp
+    include/lumenis/ui/capture.h
     include/lumenis/ui/command_registry.h
     include/lumenis/ui/keyboard_map.h
     include/lumenis/ui/main_window.h

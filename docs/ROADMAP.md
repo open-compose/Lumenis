@@ -256,6 +256,10 @@ These windows are built using the Media Composer User Guide layout:
 1. Golden screenshot tests compare every window at 1× and 2× scale. The pixel
    difference between platforms must be ≤ 0.5%, excluding OS text antialiasing
    masks.
+   * How it's implemented: each window is also captured with its text drawn
+     transparent (`*.notext.png`), and those images must match.
+   * For diagnosis, CI also logs the full images' differences and a
+     widget-by-widget layout comparison (`scripts/layoutdiff.py`).
 2. A window/menu inventory, generated from the user guide, has 100% of entries
    present. A test walks the menu tree and diffs it against
    `tests/data/menu_inventory.json`.

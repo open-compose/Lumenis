@@ -5,6 +5,7 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/model/locations.h"
 #include "lumenis/model/project_store.h"
+#include "lumenis/ui/capture.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/select_project_dialog.h"
 #include "lumenis/ui/main_window.h"
@@ -19,6 +20,8 @@
 #include <QTimeZone>
 #include <QFile>
 #include <QJsonDocument>
+#include <QLineEdit>
+#include <QPushButton>
 #include <QMenuBar>
 #include <QSettings>
 #include <QTemporaryDir>
@@ -234,14 +237,19 @@ int main(int argc, char** argv) {
         // menu bar is excluded: on macOS it is not part of the window.
         QTimer::singleShot(0, app.get(), [&] {
             QWidget* content = window.centralWidget() ? window.centralWidget() : &window;
-            bool ok = content->grab().save(dir.filePath(QStringLiteral("main_window.png")));
-            ok = selectProject.grab().save(dir.filePath(QStringLiteral("select_project.png"))) && ok;
+            bool ok = lumenis::ui::capture(content, dir, QStringLiteral("main_window"));
+            ok = lumenis::ui::capture(&selectProject, dir, QStringLiteral("select_project")) && ok;
             selectProject.showPage(lumenis::ui::SelectProjectDialog::Page::NewProject);
             if (auto* toggle = selectProject.findChild<QToolButton*>(QStringLiteral("settingsToggle"))) {
                 toggle->setChecked(true);
             }
+            // No focus: a blinking text cursor would differ between grabs.
+            // Focus on a button: a text field with focus draws a text cursor.
+            if (auto* button = selectProject.findChild<QPushButton*>(QStringLiteral("createButton"))) button->setFocus();
+            // A selection's width depends on the font; text-free images must not show it.
+            for (auto* edit : selectProject.findChildren<QLineEdit*>()) edit->deselect();
             QCoreApplication::processEvents();
-            ok = selectProject.grab().save(dir.filePath(QStringLiteral("new_project.png"))) && ok;
+            ok = lumenis::ui::capture(&selectProject, dir, QStringLiteral("new_project")) && ok;
             std::printf("screenshot: %s\n", ok ? "ok" : "FAILED");
             std::fflush(stdout);
             QCoreApplication::exit(ok ? 0 : 1);

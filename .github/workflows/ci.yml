@@ -241,6 +241,11 @@ jobs:
           path: shots
 
       - name: Compare screenshots with Linux
+        # Gate: the text-free images (*.notext.png) must match within 0.5%,
+        # so layout, sizes, colours and chrome are identical; text itself
+        # differs slightly because each OS has its own font rasteriser.
+        # The full images and the widget layouts are compared for
+        # information, to explain any failure.
         run: |
           pip install --quiet pillow
           status=0
@@ -248,9 +253,16 @@ jobs:
           for platform in shots/screenshots-*; do
             name=${platform#shots/screenshots-}
             [ "$name" = linux ] && continue
-            for ref in $(cd shots/screenshots-linux && find . -name '*.png'); do
+            echo "=== $name"
+            for ref in $(cd shots/screenshots-linux && find . -name '*.png' | sort); do
               out="diffs/$name-$(echo "$ref" | tr '/' '_' | sed 's/^\._//')"
-              python3 scripts/imgdiff.py "shots/screenshots-linux/$ref" "$platform/$ref" --diff "$out" || status=1
+              case "$ref" in
+                *.notext.png) python3 scripts/imgdiff.py "shots/screenshots-linux/$ref" "$platform/$ref" --diff "$out" || status=1 ;;
+                *)            python3 scripts/imgdiff.py "shots/screenshots-linux/$ref" "$platform/$ref" --diff "$out" --max-percent 100 ;;
+              esac
+            done
+            for ref in $(cd shots/screenshots-linux && find . -name '*.layout.json' | sort); do
+              python3 scripts/layoutdiff.py "shots/screenshots-linux/$ref" "$platform/$ref" || true
             done
           done
           exit $status
