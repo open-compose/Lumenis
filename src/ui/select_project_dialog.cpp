@@ -414,7 +414,9 @@ QWidget* SelectProjectDialog::buildNewProjectPage() {
     for (QSpinBox* s : {rasterWidth_, rasterHeight_}) {
         s->setRange(2, 16384);
         s->setSingleStep(2);
-        s->setFixedWidth(80); // not from digit widths, which vary by font engine
+        // Not from digit widths or the spin box's own minimum size, which
+        // vary by font engine and platform.
+        s->setFixedSize(80, kControlHeight);
     }
     rasterRow->addWidget(rasterWidth_);
     rasterRow->addWidget(new QLabel(QStringLiteral("x"), settingsPanel_));

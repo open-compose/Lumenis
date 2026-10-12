@@ -46,6 +46,10 @@ private slots:
         }
     }
 
+    void scrollBarThicknessIsFixed() {
+        QCOMPARE(QApplication::style()->pixelMetric(QStyle::PM_ScrollBarExtent), kScrollBarExtent);
+    }
+
     void glyphIconsAreDrawn() {
         for (const auto which : {GlyphIcon::ListView, GlyphIcon::FrameView, GlyphIcon::FastMenu}) {
             const QIcon icon = glyphIcon(which);

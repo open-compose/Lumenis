@@ -15,6 +15,7 @@ inline constexpr int kToolButtonHeight = 22;
 inline constexpr int kCheckBoxHeight = 21;
 inline constexpr int kHeaderHeight = 20;
 inline constexpr int kRowHeight = 18;       // item views
+inline constexpr int kScrollBarExtent = 14;
 
 // Small interface icons drawn in code, so they look identical everywhere
 // (Unicode symbols fall back to different fonts on each platform).

@@ -50,6 +50,13 @@ public:
         }
         return s;
     }
+
+    int pixelMetric(PixelMetric metric, const QStyleOption* option, const QWidget* widget) const override {
+        if (metric == PM_ScrollBarExtent) {
+            return kScrollBarExtent; // macOS otherwise reports a wider native extent
+        }
+        return QProxyStyle::pixelMetric(metric, option, widget);
+    }
 };
 
 // Neutral greys so that colour judgements on pictures are not skewed by the
