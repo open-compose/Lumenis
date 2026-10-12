@@ -49,6 +49,11 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
 ## Current state
 
 See the status lines in `docs/ROADMAP.md`. Phase 0 is done, except the manual
-Linux check. Phase 1.1 (the UI framework) is done. Phase 1.2 (Select Project
-dialog and Project window) is next. It needs the Editing Guide: first fill in
-`docs/spec/ui-inventory.md` and `tests/data/menu_inventory.json` from it.
+Linux check. Phase 1.1 (the UI framework) is done. The menu inventory and the window
+specs for Select Project, panels, workspaces and the Command Palette are
+entered in `docs/spec/ui-inventory.md`, with page citations. Next is Phase 1.2:
+the Select Project window and the paneled main layout (Bin Container,
+Composer, Timeline, workspace toolbar).
+
+To read the guide, download it into the scratchpad and run `pdftotext`. To see
+a page's layout, render it with `pdftoppm -r 80 -f N -l N`.

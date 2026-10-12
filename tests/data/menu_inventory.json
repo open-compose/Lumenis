@@ -1,13 +1,999 @@
 {
   "comment": [
-    "The menu bar the application must have, taken from the public Media Composer 2024/2025 documentation.",
-    "tst_menu_inventory compares the real menu bar against this file: every menu, item, separator and default shortcut.",
-    "Shortcuts use Qt portable text; Ctrl means Command on macOS.",
-    "STATUS: provisional. Only the Phase 0 menus are listed. The full inventory is entered from the Media Composer",
-    "Editing Guide (docs/spec/ui-inventory.md) and each entry cites its page."
+    "The menu bar the application must have, entered from the public Media Composer documentation.",
+    "tst_menu_inventory compares the real menu bar with this file.",
+    "Each entry cites its page in the source. Shortcuts are only those the source documents; Ctrl means Command on macOS.",
+    "positionVerified: the menu's place in the menu bar is confirmed (Editing Guide p.74 screenshot).",
+    "orderVerified: false means the source does not show the menu's item order or separators; the test then checks",
+    "the set of items only. Set it to true once the order is confirmed (e.g. screenshots from a licensed seat).",
+    "%PRODUCT% stands for the product name."
+  ],
+  "source": "Avid Media Composer Editing Guide, version 2025.12 (1317 pages)",
+  "excluded": [
+    {
+      "text": "Avid Link",
+      "reason": "Avid's own licensing/account service (Editing Guide p.59); not part of a work-alike."
+    }
   ],
   "menus": [
-    { "text": "File", "items": [ { "text": "Exit", "shortcut": "Ctrl+Q" } ] },
-    { "text": "Help", "items": [ { "text": "About %PRODUCT%" }, { "text": "About Qt" } ] }
+    {
+      "text": "File",
+      "page": 74,
+      "positionVerified": true,
+      "orderVerified": false,
+      "items": [
+        {
+          "text": "New",
+          "page": 571,
+          "items": [
+            {
+              "text": "New Script",
+              "page": 571
+            },
+            {
+              "text": "Volume for Export",
+              "page": 902
+            }
+          ]
+        },
+        {
+          "text": "Open Bin",
+          "page": 296
+        },
+        {
+          "text": "Open Selected Bins",
+          "page": 295
+        },
+        {
+          "text": "Open Selected Bins In One Window",
+          "page": 295
+        },
+        {
+          "text": "Close",
+          "page": 571
+        },
+        {
+          "text": "Close Bin",
+          "page": 296
+        },
+        {
+          "text": "Close Project",
+          "page": 69,
+          "shortcut": "Ctrl+Shift+W"
+        },
+        {
+          "text": "Save Bin",
+          "page": 299
+        },
+        {
+          "text": "Save All",
+          "page": 299
+        },
+        {
+          "text": "Save All Bins",
+          "page": 428
+        },
+        {
+          "text": "Save Script",
+          "page": 571
+        },
+        {
+          "text": "Save a Script Copy As",
+          "page": 571
+        },
+        {
+          "text": "Get Position Info",
+          "page": 101
+        },
+        {
+          "text": "Reveal File",
+          "page": 360
+        },
+        {
+          "text": "Input",
+          "page": 214,
+          "items": [
+            {
+              "text": "Source Browser",
+              "page": 132
+            },
+            {
+              "text": "Import Media",
+              "page": 969
+            },
+            {
+              "text": "Link",
+              "page": 328
+            },
+            {
+              "text": "Tape Capture",
+              "page": 115
+            },
+            {
+              "text": "Import EDL",
+              "page": 951
+            }
+          ]
+        },
+        {
+          "text": "Output",
+          "page": 869,
+          "items": [
+            {
+              "text": "Export to File",
+              "page": 129
+            },
+            {
+              "text": "Export Bin",
+              "page": 130
+            },
+            {
+              "text": "Export to Device",
+              "page": 883,
+              "items": [
+                {
+                  "text": "P2",
+                  "page": 901
+                },
+                {
+                  "text": "XDCAM",
+                  "page": 883
+                }
+              ]
+            },
+            {
+              "text": "Digital Cut",
+              "page": 912
+            },
+            {
+              "text": "Insert Edit Export",
+              "page": 506
+            },
+            {
+              "text": "Send To",
+              "page": 865,
+              "items": [
+                {
+                  "text": "Make New",
+                  "page": 866
+                },
+                {
+                  "text": "Make New BXF Template",
+                  "page": 906
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "text": "Media",
+          "page": 137,
+          "items": [
+            {
+              "text": "Media Creation Settings",
+              "page": 137
+            },
+            {
+              "text": "Load Media Database",
+              "page": 104
+            },
+            {
+              "text": "Refresh Media Directories",
+              "page": 359
+            },
+            {
+              "text": "Unmount",
+              "page": 344
+            }
+          ]
+        },
+        {
+          "text": "Interplay Transfer",
+          "page": 1094,
+          "items": [
+            {
+              "text": "Clear Status",
+              "page": 1094
+            }
+          ]
+        },
+        {
+          "text": "Page Setup",
+          "page": 292
+        },
+        {
+          "text": "Print Bin",
+          "page": 288
+        },
+        {
+          "text": "Print Frame",
+          "page": 292
+        },
+        {
+          "text": "Print Timeline",
+          "page": 645
+        },
+        {
+          "text": "Settings",
+          "page": 1136
+        },
+        {
+          "text": "Open Settings File",
+          "page": 1141
+        },
+        {
+          "text": "Exit",
+          "page": 59,
+          "shortcut": "Ctrl+Q",
+          "shortcutSource": "platform convention for Quit; the guide does not document a shortcut"
+        }
+      ]
+    },
+    {
+      "text": "Edit",
+      "page": 74,
+      "positionVerified": true,
+      "orderVerified": false,
+      "items": [
+        {
+          "text": "Undo",
+          "page": 466,
+          "shortcut": "Ctrl+Z"
+        },
+        {
+          "text": "Redo",
+          "page": 466,
+          "shortcut": "Ctrl+R"
+        },
+        {
+          "text": "Undo/Redo List",
+          "page": 466
+        },
+        {
+          "text": "Copy",
+          "page": 423,
+          "shortcut": "Ctrl+C"
+        },
+        {
+          "text": "Paste",
+          "page": 423,
+          "shortcut": "Ctrl+V"
+        },
+        {
+          "text": "Delete",
+          "page": 262
+        },
+        {
+          "text": "Duplicate",
+          "page": 260
+        },
+        {
+          "text": "Select All",
+          "page": 180
+        },
+        {
+          "text": "Select All Tracks",
+          "page": 627
+        },
+        {
+          "text": "Find",
+          "page": 417,
+          "shortcut": "Ctrl+F"
+        },
+        {
+          "text": "Enlarge Frame",
+          "page": 250,
+          "shortcut": "Ctrl+L"
+        },
+        {
+          "text": "Reduce Frame",
+          "page": 250,
+          "shortcut": "Ctrl+K"
+        },
+        {
+          "text": "Enlarge HeadFrames",
+          "page": 1016
+        },
+        {
+          "text": "Reduce HeadFrames",
+          "page": 1016
+        }
+      ]
+    },
+    {
+      "text": "Bin",
+      "page": 74,
+      "positionVerified": true,
+      "orderVerified": false,
+      "items": [
+        {
+          "text": "Add Bin to Favorites",
+          "page": 293
+        },
+        {
+          "text": "Align and Fill",
+          "page": 251,
+          "items": [
+            {
+              "text": "Align",
+              "page": 251
+            },
+            {
+              "text": "Align Selected",
+              "page": 251
+            },
+            {
+              "text": "Fill Sorted",
+              "page": 251
+            },
+            {
+              "text": "Fill Window",
+              "page": 251
+            }
+          ]
+        },
+        {
+          "text": "AutoSequence",
+          "page": 500
+        },
+        {
+          "text": "Choose Columns",
+          "page": 124
+        },
+        {
+          "text": "Hide Column",
+          "page": 268
+        },
+        {
+          "text": "Go To Capture Mode",
+          "page": 146
+        },
+        {
+          "text": "Select",
+          "page": 266,
+          "items": [
+            {
+              "text": "Media Relatives",
+              "page": 267
+            },
+            {
+              "text": "Offline Items",
+              "page": 266
+            },
+            {
+              "text": "Reverse",
+              "page": 260
+            },
+            {
+              "text": "Sources",
+              "page": 267
+            },
+            {
+              "text": "Unreferenced Clips",
+              "page": 267
+            }
+          ]
+        },
+        {
+          "text": "Set Bin Display",
+          "page": 288
+        },
+        {
+          "text": "Show Sidebar Only",
+          "page": 243
+        },
+        {
+          "text": "Sift Bin Contents",
+          "page": 288
+        },
+        {
+          "text": "Sift Selected Items",
+          "page": 289
+        },
+        {
+          "text": "Show Sifted",
+          "page": 289
+        },
+        {
+          "text": "Show Unsifted",
+          "page": 289
+        },
+        {
+          "text": "Sort",
+          "page": 247
+        },
+        {
+          "text": "Sort Again",
+          "page": 247
+        },
+        {
+          "text": "Production Management",
+          "page": 1051,
+          "items": [
+            {
+              "text": "Check In Bin",
+              "page": 1051
+            },
+            {
+              "text": "Check In All Open Bins",
+              "page": 1051
+            },
+            {
+              "text": "Update Bin",
+              "page": 1055
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "text": "Clip",
+      "page": 74,
+      "positionVerified": true,
+      "orderVerified": false,
+      "items": [
+        {
+          "text": "Audio",
+          "page": 216,
+          "items": [
+            {
+              "text": "Apply Gain",
+              "page": 216
+            },
+            {
+              "text": "Center Pan",
+              "page": 714
+            },
+            {
+              "text": "Change Sample Rate",
+              "page": 731
+            },
+            {
+              "text": "Split All Tracks",
+              "page": 736
+            }
+          ]
+        },
+        {
+          "text": "Auto VO",
+          "page": 754
+        },
+        {
+          "text": "AutoSequence",
+          "page": 499
+        },
+        {
+          "text": "AutoSync",
+          "page": 223
+        },
+        {
+          "text": "Batch Capture",
+          "page": 179
+        },
+        {
+          "text": "Batch Import",
+          "page": 1098
+        },
+        {
+          "text": "Batch Re-import",
+          "page": 230
+        },
+        {
+          "text": "Consolidate/Transcode",
+          "page": 350
+        },
+        {
+          "text": "Decompose",
+          "page": 185
+        },
+        {
+          "text": "Extract DNxHD Data",
+          "page": 975
+        },
+        {
+          "text": "Group Clips",
+          "page": 1124
+        },
+        {
+          "text": "MultiGroup",
+          "page": 1125
+        },
+        {
+          "text": "Edit Group",
+          "page": 1125
+        },
+        {
+          "text": "Lock Bin Selection",
+          "page": 265
+        },
+        {
+          "text": "Unlock Bin Selection",
+          "page": 266
+        },
+        {
+          "text": "Lock Tracks",
+          "page": 633
+        },
+        {
+          "text": "Unlock Tracks",
+          "page": 634
+        },
+        {
+          "text": "Loop Selected Clips",
+          "page": 393
+        },
+        {
+          "text": "Modify",
+          "page": 279,
+          "items": [
+            {
+              "text": "Modify Clip",
+              "page": 279
+            },
+            {
+              "text": "Modify Pulldown Phase",
+              "page": 127
+            },
+            {
+              "text": "Unlink Media",
+              "page": 210
+            }
+          ]
+        },
+        {
+          "text": "Read Audio Timecode",
+          "page": 668
+        },
+        {
+          "text": "Recreate Title Media",
+          "page": 475
+        },
+        {
+          "text": "Refresh Sequence",
+          "page": 478,
+          "items": [
+            {
+              "text": "Motion Adapters/Timewarps",
+              "page": 545
+            }
+          ]
+        },
+        {
+          "text": "Relink",
+          "page": 365,
+          "items": [
+            {
+              "text": "Linked Media",
+              "page": 364
+            },
+            {
+              "text": "Managed Media",
+              "page": 361
+            }
+          ]
+        },
+        {
+          "text": "Split All Tracks",
+          "page": 637
+        }
+      ]
+    },
+    {
+      "text": "Timeline",
+      "page": 74,
+      "positionVerified": true,
+      "orderVerified": false,
+      "items": [
+        {
+          "text": "New",
+          "page": 634,
+          "items": [
+            {
+              "text": "Sequence",
+              "page": 457
+            },
+            {
+              "text": "Video Track",
+              "page": 634
+            },
+            {
+              "text": "Audio Track",
+              "page": 634,
+              "items": [
+                {
+                  "text": "Mono",
+                  "page": 634
+                },
+                {
+                  "text": "Stereo",
+                  "page": 634
+                },
+                {
+                  "text": "5.1 Surround",
+                  "page": 634
+                },
+                {
+                  "text": "7.1 Surround",
+                  "page": 634
+                }
+              ]
+            },
+            {
+              "text": "Data Track",
+              "page": 634
+            }
+          ]
+        },
+        {
+          "text": "Add Filler at Start",
+          "page": 462
+        },
+        {
+          "text": "Find Black Hole",
+          "page": 645
+        },
+        {
+          "text": "Find Flash Frame",
+          "page": 645
+        },
+        {
+          "text": "Mixdown",
+          "page": 732,
+          "items": [
+            {
+              "text": "Audio",
+              "page": 732,
+              "items": [
+                {
+                  "text": "To Sequence",
+                  "page": 732
+                },
+                {
+                  "text": "Multiple Mixes",
+                  "page": 732
+                }
+              ]
+            },
+            {
+              "text": "Data",
+              "page": 982
+            }
+          ]
+        },
+        {
+          "text": "Remove Match Frame Edits",
+          "page": 495
+        },
+        {
+          "text": "Render",
+          "page": 926,
+          "items": [
+            {
+              "text": "ExpertRender In/Out",
+              "page": 926
+            }
+          ]
+        },
+        {
+          "text": "Restore Default Patch",
+          "page": 630
+        },
+        {
+          "text": "Show Sequence Map",
+          "page": 606
+        },
+        {
+          "text": "Split All Tracks",
+          "page": 736
+        }
+      ]
+    },
+    {
+      "text": "Composer",
+      "page": 74,
+      "positionVerified": true,
+      "orderVerified": false,
+      "items": [
+        {
+          "text": "Full Screen Playback",
+          "page": 391,
+          "shortcut": "Ctrl+Shift+F"
+        },
+        {
+          "text": "Load Filler",
+          "page": 99
+        },
+        {
+          "text": "Remote Play",
+          "page": 204
+        },
+        {
+          "text": "Show Single/Dual Monitor",
+          "page": 381
+        },
+        {
+          "text": "Sync Point Overwrite",
+          "page": 496
+        }
+      ]
+    },
+    {
+      "text": "Tools",
+      "page": 74,
+      "positionVerified": true,
+      "orderVerified": false,
+      "items": [
+        {
+          "text": "Audio EQ",
+          "page": 736
+        },
+        {
+          "text": "Audio Mixer",
+          "page": 686
+        },
+        {
+          "text": "Audio Punch-In",
+          "page": 750
+        },
+        {
+          "text": "Audio Tool",
+          "page": 703
+        },
+        {
+          "text": "Audio Track Effect",
+          "page": 791
+        },
+        {
+          "text": "AudioSuite",
+          "page": 797
+        },
+        {
+          "text": "Background Queue Window",
+          "page": 358
+        },
+        {
+          "text": "Background Services",
+          "page": 376
+        },
+        {
+          "text": "Calculator",
+          "page": 100
+        },
+        {
+          "text": "Command Palette",
+          "page": 98
+        },
+        {
+          "text": "Console",
+          "page": 101
+        },
+        {
+          "text": "Dynamic Media Folders",
+          "page": 372
+        },
+        {
+          "text": "Effect Palette",
+          "page": 791
+        },
+        {
+          "text": "IMF Window",
+          "page": 335
+        },
+        {
+          "text": "List Tool",
+          "page": 944
+        },
+        {
+          "text": "Markers",
+          "page": 416
+        },
+        {
+          "text": "Media Tool",
+          "page": 346
+        },
+        {
+          "text": "New Deck Controller",
+          "page": 95
+        },
+        {
+          "text": "NRCS Tool",
+          "page": 1006
+        },
+        {
+          "text": "Production Management Window",
+          "page": 1079
+        },
+        {
+          "text": "Project",
+          "page": 243,
+          "shortcut": "Ctrl+9"
+        },
+        {
+          "text": "Remote Assets",
+          "page": 292
+        },
+        {
+          "text": "Restrictions",
+          "page": 292
+        },
+        {
+          "text": "Source Browser",
+          "page": 522
+        },
+        {
+          "text": "Timecode Window",
+          "page": 389
+        },
+        {
+          "text": "Timeline Clip Notes",
+          "page": 484
+        },
+        {
+          "text": "Video Input Tool",
+          "page": 161
+        },
+        {
+          "text": "Video Output Tool",
+          "page": 910
+        }
+      ]
+    },
+    {
+      "text": "Windows",
+      "page": 74,
+      "positionVerified": true,
+      "orderVerified": false,
+      "items": [
+        {
+          "text": "Float All Panels",
+          "page": 78
+        },
+        {
+          "text": "Float Active Panel",
+          "page": 79
+        },
+        {
+          "text": "Add Blank Panel",
+          "page": 83
+        },
+        {
+          "text": "Workspaces",
+          "page": 86,
+          "items": [
+            {
+              "text": "New Workspace",
+              "page": 86
+            },
+            {
+              "text": "Delete Workspace",
+              "page": 87
+            },
+            {
+              "text": "Restore to Saved",
+              "page": 86
+            },
+            {
+              "text": "Restore Current to Default",
+              "page": 86
+            },
+            {
+              "text": "Properties",
+              "page": 93
+            },
+            {
+              "text": "Show Workspace Toolbar",
+              "page": 89
+            }
+          ]
+        },
+        {
+          "text": "Bin Layout",
+          "page": 93,
+          "items": [
+            {
+              "text": "New Bin Layout",
+              "page": 93
+            },
+            {
+              "text": "Save Current",
+              "page": 93
+            },
+            {
+              "text": "Delete Bin Layout",
+              "page": 93
+            }
+          ]
+        },
+        {
+          "text": "Close All But Active",
+          "page": 296
+        },
+        {
+          "text": "Close All Bins But Active",
+          "page": 296
+        },
+        {
+          "text": "Center Current",
+          "page": 601
+        },
+        {
+          "text": "Send Current Home",
+          "page": 601
+        },
+        {
+          "text": "Set Font",
+          "page": 82
+        },
+        {
+          "text": "Site Settings",
+          "page": 1141
+        }
+      ]
+    },
+    {
+      "text": "Script",
+      "page": 74,
+      "positionVerified": true,
+      "orderVerified": false,
+      "items": [
+        {
+          "text": "Add Scene",
+          "page": 574
+        },
+        {
+          "text": "Add Page",
+          "page": 574
+        },
+        {
+          "text": "Hold Slates Onscreen",
+          "page": 578
+        },
+        {
+          "text": "Interpolate Position",
+          "page": 577
+        },
+        {
+          "text": "Manage Transcripts",
+          "page": 454
+        },
+        {
+          "text": "ScriptSync AI",
+          "page": 584
+        },
+        {
+          "text": "Text Layout",
+          "page": 571
+        }
+      ]
+    },
+    {
+      "text": "Extensions",
+      "page": 85,
+      "positionVerified": false,
+      "orderVerified": false,
+      "items": []
+    },
+    {
+      "text": "Help",
+      "page": 74,
+      "positionVerified": true,
+      "orderVerified": false,
+      "items": [
+        {
+          "text": "About %PRODUCT%",
+          "page": 59
+        },
+        {
+          "text": "Shortcuts",
+          "page": 97
+        }
+      ],
+      "additions": [
+        {
+          "text": "About Qt",
+          "reason": "Qt's LGPL licence notice; not in Media Composer."
+        }
+      ]
+    }
   ]
 }

@@ -12,6 +12,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QHash>
 #include <QMenuBar>
 #include <QTest>
 
@@ -70,30 +71,74 @@ private slots:
         lumenis::ui::MainWindow window(commands, providers);
         const QJsonArray actualMenus = lumenis::ui::dumpMenus(window.menuBar());
 
-        QStringList expected;
-        QStringList actual;
-        flatten(expectedMenus, {}, expected);
-        flatten(actualMenus, {}, actual);
+        QHash<QString, QJsonObject> actualByTitle;
+        QStringList actualTitles;
+        for (const QJsonValue& v : actualMenus) {
+            const QJsonObject o = v.toObject();
+            actualTitles << o.value(QStringLiteral("text")).toString();
+            actualByTitle.insert(actualTitles.last(), o);
+        }
 
-        QStringList missing;
-        QStringList extra;
-        for (const QString& e : expected) {
-            if (!actual.contains(e)) missing << e;
+        // Menu bar: every inventory menu exists, nothing else does, and the
+        // menus whose position is confirmed appear in the confirmed order.
+        QStringList expectedTitles;
+        QStringList positioned;
+        for (const QJsonValue& v : expectedMenus) {
+            const QJsonObject o = v.toObject();
+            expectedTitles << o.value(QStringLiteral("text")).toString();
+            if (o.value(QStringLiteral("positionVerified")).toBool()) {
+                positioned << expectedTitles.last();
+            }
         }
-        for (const QString& a : actual) {
-            if (!expected.contains(a)) extra << a;
+        QStringList sortedExpected = expectedTitles;
+        QStringList sortedActual = actualTitles;
+        sortedExpected.sort();
+        sortedActual.sort();
+        QCOMPARE(sortedActual, sortedExpected);
+        QStringList actualPositioned;
+        for (const QString& t : actualTitles) {
+            if (positioned.contains(t)) actualPositioned << t;
         }
-        if (!missing.isEmpty() || !extra.isEmpty()) {
-            qWarning().noquote() << "Missing from the application:\n  " + missing.join(QStringLiteral("\n  "));
-            qWarning().noquote() << "Not in the inventory:\n  " + extra.join(QStringLiteral("\n  "));
-        }
-        QVERIFY(missing.isEmpty());
-        QVERIFY(extra.isEmpty());
-        // Same entries in the same order.
-        QCOMPARE(actual, expected);
+        QCOMPARE(actualPositioned, positioned);
 
-        qInfo("%lld menu entries; %d not yet implemented (disabled)",
-              static_cast<long long>(actual.size()), countDisabled(actualMenus));
+        int entries = 0;
+        int disabled = 0;
+        for (const QJsonValue& v : expectedMenus) {
+            const QJsonObject menu = v.toObject();
+            const QString title = menu.value(QStringLiteral("text")).toString();
+            QJsonArray expectedItems = menu.value(QStringLiteral("items")).toArray();
+            for (const QJsonValue& a : menu.value(QStringLiteral("additions")).toArray()) {
+                expectedItems.append(QJsonObject{{QStringLiteral("text"), a.toObject().value(QStringLiteral("text"))}});
+            }
+            const QJsonArray actualItems = actualByTitle.value(title).value(QStringLiteral("items")).toArray();
+
+            QStringList expected;
+            QStringList actual;
+            flatten(expectedItems, title + QStringLiteral(" > "), expected);
+            flatten(actualItems, title + QStringLiteral(" > "), actual);
+            entries += static_cast<int>(actual.size());
+            disabled += countDisabled(actualItems);
+
+            QStringList missing;
+            QStringList extra;
+            for (const QString& e : expected) {
+                if (!actual.contains(e)) missing << e;
+            }
+            for (const QString& a : actual) {
+                if (!expected.contains(a)) extra << a;
+            }
+            if (!missing.isEmpty()) {
+                qWarning().noquote() << "Missing from the application:\n  " + missing.join(QStringLiteral("\n  "));
+            }
+            if (!extra.isEmpty()) {
+                qWarning().noquote() << "Not in the inventory:\n  " + extra.join(QStringLiteral("\n  "));
+            }
+            QVERIFY2(missing.isEmpty() && extra.isEmpty(), qPrintable(title));
+            if (menu.value(QStringLiteral("orderVerified")).toBool()) {
+                QCOMPARE(actual, expected);
+            }
+        }
+        qInfo("%d menu entries; %d not yet implemented (disabled)", entries, disabled);
     }
 };
 

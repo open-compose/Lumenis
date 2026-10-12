@@ -1,7 +1,384 @@
 {
-  "comment": "Menu bar layout, by command id. '-' is a separator; an object is a submenu.",
+  "comment": "Menu bar layout, by command id. Generated from the inventory, then maintained by hand; '-' is a separator, an object is a submenu.",
   "menus": [
-    { "id": "file", "title": "&File", "items": ["file.exit"] },
-    { "id": "help", "title": "&Help", "items": ["help.about", "help.about_qt"] }
+    {
+      "id": "file",
+      "title": "&File",
+      "items": [
+        {
+          "id": "file_new",
+          "title": "New",
+          "items": [
+            "file.new.new_script",
+            "file.new.volume_for_export"
+          ]
+        },
+        "file.open_bin",
+        "file.open_selected_bins",
+        "file.open_selected_bins_in_one_window",
+        "file.close",
+        "file.close_bin",
+        "file.close_project",
+        "file.save_bin",
+        "file.save_all",
+        "file.save_all_bins",
+        "file.save_script",
+        "file.save_a_script_copy_as",
+        "file.get_position_info",
+        "file.reveal_file",
+        {
+          "id": "file_input",
+          "title": "Input",
+          "items": [
+            "file.input.source_browser",
+            "file.input.import_media",
+            "file.input.link",
+            "file.input.tape_capture",
+            "file.input.import_edl"
+          ]
+        },
+        {
+          "id": "file_output",
+          "title": "Output",
+          "items": [
+            "file.output.export_to_file",
+            "file.output.export_bin",
+            {
+              "id": "file_output_export_to_device",
+              "title": "Export to Device",
+              "items": [
+                "file.output.export_to_device.p2",
+                "file.output.export_to_device.xdcam"
+              ]
+            },
+            "file.output.digital_cut",
+            "file.output.insert_edit_export",
+            {
+              "id": "file_output_send_to",
+              "title": "Send To",
+              "items": [
+                "file.output.send_to.make_new",
+                "file.output.send_to.make_new_bxf_template"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "file_media",
+          "title": "Media",
+          "items": [
+            "file.media.media_creation_settings",
+            "file.media.load_media_database",
+            "file.media.refresh_media_directories",
+            "file.media.unmount"
+          ]
+        },
+        {
+          "id": "file_interplay_transfer",
+          "title": "Interplay Transfer",
+          "items": [
+            "file.interplay_transfer.clear_status"
+          ]
+        },
+        "file.page_setup",
+        "file.print_bin",
+        "file.print_frame",
+        "file.print_timeline",
+        "file.settings",
+        "file.open_settings_file",
+        "file.exit"
+      ]
+    },
+    {
+      "id": "edit",
+      "title": "&Edit",
+      "items": [
+        "edit.undo",
+        "edit.redo",
+        "edit.undo_redo_list",
+        "edit.copy",
+        "edit.paste",
+        "edit.delete",
+        "edit.duplicate",
+        "edit.select_all",
+        "edit.select_all_tracks",
+        "edit.find",
+        "edit.enlarge_frame",
+        "edit.reduce_frame",
+        "edit.enlarge_headframes",
+        "edit.reduce_headframes"
+      ]
+    },
+    {
+      "id": "bin",
+      "title": "&Bin",
+      "items": [
+        "bin.add_bin_to_favorites",
+        {
+          "id": "bin_align_and_fill",
+          "title": "Align and Fill",
+          "items": [
+            "bin.align_and_fill.align",
+            "bin.align_and_fill.align_selected",
+            "bin.align_and_fill.fill_sorted",
+            "bin.align_and_fill.fill_window"
+          ]
+        },
+        "bin.autosequence",
+        "bin.choose_columns",
+        "bin.hide_column",
+        "bin.go_to_capture_mode",
+        {
+          "id": "bin_select",
+          "title": "Select",
+          "items": [
+            "bin.select.media_relatives",
+            "bin.select.offline_items",
+            "bin.select.reverse",
+            "bin.select.sources",
+            "bin.select.unreferenced_clips"
+          ]
+        },
+        "bin.set_bin_display",
+        "bin.show_sidebar_only",
+        "bin.sift_bin_contents",
+        "bin.sift_selected_items",
+        "bin.show_sifted",
+        "bin.show_unsifted",
+        "bin.sort",
+        "bin.sort_again",
+        {
+          "id": "bin_production_management",
+          "title": "Production Management",
+          "items": [
+            "bin.production_management.check_in_bin",
+            "bin.production_management.check_in_all_open_bins",
+            "bin.production_management.update_bin"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "clip",
+      "title": "&Clip",
+      "items": [
+        {
+          "id": "clip_audio",
+          "title": "Audio",
+          "items": [
+            "clip.audio.apply_gain",
+            "clip.audio.center_pan",
+            "clip.audio.change_sample_rate",
+            "clip.audio.split_all_tracks"
+          ]
+        },
+        "clip.auto_vo",
+        "clip.autosequence",
+        "clip.autosync",
+        "clip.batch_capture",
+        "clip.batch_import",
+        "clip.batch_re_import",
+        "clip.consolidate_transcode",
+        "clip.decompose",
+        "clip.extract_dnxhd_data",
+        "clip.group_clips",
+        "clip.multigroup",
+        "clip.edit_group",
+        "clip.lock_bin_selection",
+        "clip.unlock_bin_selection",
+        "clip.lock_tracks",
+        "clip.unlock_tracks",
+        "clip.loop_selected_clips",
+        {
+          "id": "clip_modify",
+          "title": "Modify",
+          "items": [
+            "clip.modify.modify_clip",
+            "clip.modify.modify_pulldown_phase",
+            "clip.modify.unlink_media"
+          ]
+        },
+        "clip.read_audio_timecode",
+        "clip.recreate_title_media",
+        {
+          "id": "clip_refresh_sequence",
+          "title": "Refresh Sequence",
+          "items": [
+            "clip.refresh_sequence.motion_adapters_timewarps"
+          ]
+        },
+        {
+          "id": "clip_relink",
+          "title": "Relink",
+          "items": [
+            "clip.relink.linked_media",
+            "clip.relink.managed_media"
+          ]
+        },
+        "clip.split_all_tracks"
+      ]
+    },
+    {
+      "id": "timeline",
+      "title": "&Timeline",
+      "items": [
+        {
+          "id": "timeline_new",
+          "title": "New",
+          "items": [
+            "timeline.new.sequence",
+            "timeline.new.video_track",
+            {
+              "id": "timeline_new_audio_track",
+              "title": "Audio Track",
+              "items": [
+                "timeline.new.audio_track.mono",
+                "timeline.new.audio_track.stereo",
+                "timeline.new.audio_track.5_1_surround",
+                "timeline.new.audio_track.7_1_surround"
+              ]
+            },
+            "timeline.new.data_track"
+          ]
+        },
+        "timeline.add_filler_at_start",
+        "timeline.find_black_hole",
+        "timeline.find_flash_frame",
+        {
+          "id": "timeline_mixdown",
+          "title": "Mixdown",
+          "items": [
+            {
+              "id": "timeline_mixdown_audio",
+              "title": "Audio",
+              "items": [
+                "timeline.mixdown.audio.to_sequence",
+                "timeline.mixdown.audio.multiple_mixes"
+              ]
+            },
+            "timeline.mixdown.data"
+          ]
+        },
+        "timeline.remove_match_frame_edits",
+        {
+          "id": "timeline_render",
+          "title": "Render",
+          "items": [
+            "timeline.render.expertrender_in_out"
+          ]
+        },
+        "timeline.restore_default_patch",
+        "timeline.show_sequence_map",
+        "timeline.split_all_tracks"
+      ]
+    },
+    {
+      "id": "composer",
+      "title": "&Composer",
+      "items": [
+        "composer.full_screen_playback",
+        "composer.load_filler",
+        "composer.remote_play",
+        "composer.show_single_dual_monitor",
+        "composer.sync_point_overwrite"
+      ]
+    },
+    {
+      "id": "tools",
+      "title": "&Tools",
+      "items": [
+        "tools.audio_eq",
+        "tools.audio_mixer",
+        "tools.audio_punch_in",
+        "tools.audio_tool",
+        "tools.audio_track_effect",
+        "tools.audiosuite",
+        "tools.background_queue_window",
+        "tools.background_services",
+        "tools.calculator",
+        "tools.command_palette",
+        "tools.console",
+        "tools.dynamic_media_folders",
+        "tools.effect_palette",
+        "tools.imf_window",
+        "tools.list_tool",
+        "tools.markers",
+        "tools.media_tool",
+        "tools.new_deck_controller",
+        "tools.nrcs_tool",
+        "tools.production_management_window",
+        "tools.project",
+        "tools.remote_assets",
+        "tools.restrictions",
+        "tools.source_browser",
+        "tools.timecode_window",
+        "tools.timeline_clip_notes",
+        "tools.video_input_tool",
+        "tools.video_output_tool"
+      ]
+    },
+    {
+      "id": "windows",
+      "title": "&Windows",
+      "items": [
+        "windows.float_all_panels",
+        "windows.float_active_panel",
+        "windows.add_blank_panel",
+        {
+          "id": "windows_workspaces",
+          "title": "Workspaces",
+          "items": [
+            "windows.workspaces.new_workspace",
+            "windows.workspaces.delete_workspace",
+            "windows.workspaces.restore_to_saved",
+            "windows.workspaces.restore_current_to_default",
+            "windows.workspaces.properties",
+            "windows.workspaces.show_workspace_toolbar"
+          ]
+        },
+        {
+          "id": "windows_bin_layout",
+          "title": "Bin Layout",
+          "items": [
+            "windows.bin_layout.new_bin_layout",
+            "windows.bin_layout.save_current",
+            "windows.bin_layout.delete_bin_layout"
+          ]
+        },
+        "windows.close_all_but_active",
+        "windows.close_all_bins_but_active",
+        "windows.center_current",
+        "windows.send_current_home",
+        "windows.set_font",
+        "windows.site_settings"
+      ]
+    },
+    {
+      "id": "script",
+      "title": "&Script",
+      "items": [
+        "script.add_scene",
+        "script.add_page",
+        "script.hold_slates_onscreen",
+        "script.interpolate_position",
+        "script.manage_transcripts",
+        "script.scriptsync_ai",
+        "script.text_layout"
+      ]
+    },
+    {
+      "id": "extensions",
+      "title": "&Extensions",
+      "items": []
+    },
+    {
+      "id": "help",
+      "title": "&Help",
+      "items": [
+        "help.about",
+        "help.shortcuts",
+        "help.about_qt"
+      ]
+    }
   ]
 }
