@@ -48,7 +48,24 @@ if(APPLE)
     set(CPACK_DMG_VOLUME_NAME "${PRODUCT_NAME}")
     set(CPACK_SYSTEM_NAME "macos-${CMAKE_SYSTEM_PROCESSOR}")
 elseif(WIN32)
-    set(CPACK_GENERATOR "WIX;ZIP")
+    # The MSI needs WiX Toolset 3.x (candle/light). Look where its installer,
+    # scripts/bootstrap-windows.ps1 and the CI runners put it; without it,
+    # build the portable .zip only rather than failing.
+    set(_pf86 "ProgramFiles(x86)")
+    file(GLOB _wix3_dirs "$ENV{${_pf86}}/WiX Toolset v3*/bin")
+    file(TO_CMAKE_PATH "$ENV{WIX}" _wix_env)
+    file(TO_CMAKE_PATH "$ENV{USERPROFILE}" _home)
+    find_program(LUMENIS_WIX_CANDLE candle
+        HINTS "${_wix_env}" "${_wix_env}/bin" "${_home}/.wix/wix314" ${_wix3_dirs})
+    if(LUMENIS_WIX_CANDLE)
+        get_filename_component(CPACK_WIX_ROOT "${LUMENIS_WIX_CANDLE}" DIRECTORY)
+        set(CPACK_GENERATOR "WIX;ZIP")
+    else()
+        message(WARNING "WiX Toolset 3.x not found: 'cpack' will build the .zip "
+            "package only. Run scripts/bootstrap-windows.ps1 to install WiX and "
+            "get the .msi installer too.")
+        set(CPACK_GENERATOR "ZIP")
+    endif()
     # Never change: Windows uses it to recognise upgrades of the same product.
     set(CPACK_WIX_UPGRADE_GUID "28ED799C-CCE1-4C2B-804E-AC38665844AD")
     set(CPACK_WIX_PRODUCT_ICON "${PROJECT_SOURCE_DIR}/packaging/windows/app.ico")

@@ -13,7 +13,7 @@ namespaces, module ABI symbols) is not user-visible and does not change.
 | CMake | 3.24 or later | 3.24 or later | 3.24 or later |
 | Ninja | yes | yes | yes |
 | Qt | 6.8 LTS | 6.8 LTS | 6.8 LTS, or your distribution's Qt 6.4 or later |
-| Installer tools | (built in) | WiX Toolset 3.14 | dpkg-dev, rpm (optional), curl, file |
+| Installer tools | (built in) | WiX Toolset 3.14 (installed by the bootstrap script) | dpkg-dev, rpm (optional), curl, file |
 
 Qt 6.8 LTS is the version release builds ship with. Qt 6.4 is the oldest
 version supported, because that is the system Qt on Ubuntu 24.04.
@@ -148,6 +148,13 @@ the first time, so the old build folder must go.
 framework, but Qt 6.8.3 still asks to link it. The project removes that link
 request itself (top-level `CMakeLists.txt`). If you still see this error, you
 are building an older checkout: update it, delete `build/`, and rebuild.
+
+**Windows: `Could not find the WiX candle executable`** (or the warning
+"WiX Toolset 3.x not found"). The `.msi` needs WiX Toolset **3.x**. Run
+`scripts\bootstrap-windows.ps1` again: it installs WiX 3.14 into
+`%USERPROFILE%\.wix\wix314` and sets `WIX`. Then delete `build\release`,
+open a new PowerShell window and build again. Without WiX, `-Package` still
+produces the portable `.zip`.
 
 **Any platform: strange errors after changing compilers, Qt or Xcode.** Delete
 the build folder (`build/<preset>`) and configure again.

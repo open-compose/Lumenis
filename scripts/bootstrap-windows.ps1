@@ -36,7 +36,6 @@ function Find-Python {
 Install-WingetPackage Kitware.CMake
 Install-WingetPackage Ninja-build.Ninja
 Install-WingetPackage Python.Python.3.12
-Install-WingetPackage WiXToolset.WiXToolset
 Install-WingetPackage Microsoft.VisualStudio.2022.BuildTools `
     @('--override', '--quiet --wait --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended')
 
@@ -59,6 +58,28 @@ if (Test-Path "C:\Qt\$QtVersion\msvc2022_64\bin\qmake.exe") {
     & $pyExe @pyArgs -m aqt install-qt windows desktop $QtVersion win64_msvc2022_64 -O C:\Qt
     if ($LASTEXITCODE -ne 0) { throw 'Qt download failed' }
 }
+
+# WiX Toolset 3.14 builds the .msi. Use the official binaries zip (no admin
+# rights, no installer) rather than winget, whose package is a different
+# major version that CPack's MSI generator does not use by default.
+$wixDir = Join-Path $env:USERPROFILE '.wix\wix314'
+if (Test-Path (Join-Path $wixDir 'candle.exe')) {
+    Write-Host "== WiX 3.14 already installed in $wixDir"
+} else {
+    Write-Host '== WiX Toolset 3.14'
+    $zip = Join-Path $env:TEMP 'wix314-binaries.zip'
+    Invoke-WebRequest -UseBasicParsing -OutFile $zip `
+        'https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip'
+    $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash
+    if ($hash -ne '6AC824E1642D6F7277D0ED7EA09411A508F6116BA6FAE0AA5F2C7DAA2FF43D31') {
+        throw "WiX download has an unexpected checksum: $hash"
+    }
+    New-Item -ItemType Directory -Force $wixDir | Out-Null
+    Expand-Archive -Force $zip $wixDir
+    Remove-Item $zip
+}
+[Environment]::SetEnvironmentVariable('WIX', $wixDir, 'User')
+$env:WIX = $wixDir
 
 Write-Host ''
 Write-Host 'Done. Open a NEW PowerShell window (so PATH changes apply), then:'
