@@ -11,7 +11,8 @@
   ],
   "source": [
     "Avid Media Composer Editing Guide, version 2025.12 (1317 pages): 'page' without 'doc'",
-    "Avid Media Composer Effects (FX) Guide, version 2025.12 (762 pages): entries with \"doc\": \"fx\""
+    "Avid Media Composer Effects (FX) Guide, version 2025.12 (762 pages): entries with \"doc\": \"fx\"",
+    "'Keyboard Shortcuts for Avid Editors' (Moviola, 2009), hosted by Avid at resources.avid.com/supportfiles/attach/keyboard shortcuts.pdf: shortcuts marked shortcutSource ks2009. A secondary, older source: used only where the 2025 guides name the command and do not contradict it; to be confirmed on a current seat."
   ],
   "excluded": [
     {
@@ -54,7 +55,9 @@
         },
         {
           "text": "Close",
-          "page": 571
+          "page": 571,
+          "shortcut": "Ctrl+W",
+          "shortcutSource": "ks2009"
         },
         {
           "text": "Close Bin",
@@ -111,7 +114,9 @@
             },
             {
               "text": "Tape Capture",
-              "page": 115
+              "page": 115,
+              "shortcut": "Ctrl+7",
+              "shortcutSource": "ks2009"
             },
             {
               "text": "Import EDL",
@@ -175,7 +180,9 @@
           "items": [
             {
               "text": "Media Creation Settings",
-              "page": 137
+              "page": 137,
+              "shortcut": "Ctrl+5",
+              "shortcutSource": "ks2009"
             },
             {
               "text": "Load Media Database",
@@ -207,7 +214,9 @@
         },
         {
           "text": "Print Bin",
-          "page": 288
+          "page": 288,
+          "shortcut": "Ctrl+P",
+          "shortcutSource": "ks2009"
         },
         {
           "text": "Print Frame",
@@ -274,7 +283,9 @@
         },
         {
           "text": "Duplicate",
-          "page": 260
+          "page": 260,
+          "shortcut": "Ctrl+D",
+          "shortcutSource": "ks2009"
         },
         {
           "text": "Select All",
@@ -337,11 +348,13 @@
           "page": 251,
           "items": [
             {
-              "text": "Align",
-              "page": 251
+              "text": "Align to Grid",
+              "page": 251,
+              "shortcut": "Ctrl+T",
+              "shortcutSource": "ks2009"
             },
             {
-              "text": "Align Selected",
+              "text": "Align Selected to Grid",
               "page": 251
             },
             {
@@ -519,7 +532,9 @@
         },
         {
           "text": "Group Clips",
-          "page": 1124
+          "page": 1124,
+          "shortcut": "Ctrl+Shift+G",
+          "shortcutSource": "ks2009"
         },
         {
           "text": "MultiGroup",
@@ -626,7 +641,9 @@
             },
             {
               "text": "Video Track",
-              "page": 634
+              "page": 634,
+              "shortcut": "Ctrl+Y",
+              "shortcutSource": "ks2009"
             },
             {
               "text": "Audio Track",
@@ -819,7 +836,9 @@
         },
         {
           "text": "Audio Tool",
-          "page": 703
+          "page": 703,
+          "shortcut": "Ctrl+1",
+          "shortcutSource": "ks2009"
         },
         {
           "text": "Audio Track Effect",
@@ -839,15 +858,21 @@
         },
         {
           "text": "Calculator",
-          "page": 100
+          "page": 100,
+          "shortcut": "Ctrl+2",
+          "shortcutSource": "ks2009"
         },
         {
           "text": "Command Palette",
-          "page": 98
+          "page": 98,
+          "shortcut": "Ctrl+3",
+          "shortcutSource": "ks2009"
         },
         {
           "text": "Console",
-          "page": 101
+          "page": 101,
+          "shortcut": "Ctrl+6",
+          "shortcutSource": "ks2009"
         },
         {
           "text": "Dynamic Media Folders",
@@ -855,7 +880,9 @@
         },
         {
           "text": "Effect Palette",
-          "page": 791
+          "page": 791,
+          "shortcut": "Ctrl+8",
+          "shortcutSource": "ks2009"
         },
         {
           "text": "IMF Window",
@@ -938,6 +965,12 @@
           "text": "Title Tool Application",
           "page": 343,
           "doc": "fx"
+        },
+        {
+          "text": "Timeline",
+          "page": 766,
+          "shortcut": "Ctrl+0",
+          "shortcutSource": "ks2009"
         }
       ]
     },
@@ -1021,7 +1054,9 @@
         },
         {
           "text": "Send Current Home",
-          "page": 601
+          "page": 601,
+          "shortcut": "Ctrl+'",
+          "shortcutSource": "ks2009"
         },
         {
           "text": "Set Font",

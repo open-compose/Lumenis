@@ -338,7 +338,8 @@
         "tools.titler",
         "tools.color_info_tool",
         "tools.effect_editor",
-        "tools.title_tool_application"
+        "tools.title_tool_application",
+        "tools.timeline"
       ]
     },
     {

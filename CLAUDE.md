@@ -14,6 +14,8 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
   `docs/spec/ui-inventory.md`. Never enter them from memory.
   - Editing Guide: https://resources.avid.com/SupportFiles/attach/Media_Composer/Media_Composer_v2025.x_Editing_Guide.pdf
   - FX Guide (effects, titles, colour correction): https://resources.avid.com/SupportFiles/attach/Media_Composer/Media_Composer_v2025.x_FX_Guide.pdf
+  - Supported video file formats (Phase 2): https://resources.avid.com/SupportFiles/attach/Avid_Supported_Video_File_Formats.pdf (summarised in docs/spec/media-formats.md)
+  - Keyboard shortcuts, 2009, third-party (Moviola). A secondary source; mark entries ks2009: https://resources.avid.com/supportfiles/attach/keyboard%20shortcuts.pdf
   - Download it into the scratchpad only. Never commit Avid documents.
 - **Licensed technology.** Use an open-source implementation if a legal one
   exists. Otherwise use what the OS or a driver licenses. Otherwise add a

@@ -9,6 +9,13 @@ keyboard shortcut a Media Composer 2024/2025 user expects.
 |---|---|---|
 | Editing Guide (EG) | Media Composer Editing Guide, version 2025.12 (1,317 pages) | `https://resources.avid.com/SupportFiles/attach/Media_Composer/Media_Composer_v2025.x_Editing_Guide.pdf` |
 | FX Guide (FX) | Media Composer Effects Guide, version 2025.12 (762 pages) | `https://resources.avid.com/SupportFiles/attach/Media_Composer/Media_Composer_v2025.x_FX_Guide.pdf` |
+| Shortcut sheet (KS2009) | "Keyboard Shortcuts for Avid Editors", Moviola, 2009 (13 pages); hosted by Avid | `https://resources.avid.com/supportfiles/attach/keyboard%20shortcuts.pdf` |
+
+**The 2009 sheet is a secondary source.** It is older and third-party, so it
+is used only where the 2025 guides name the command and do not contradict
+it. Entries taken from it are marked `ks2009` and must be confirmed on a
+current seat. Example of a contradiction: in 2009 Ctrl+I opened the Console,
+but the 2025 guide makes it Get Info (p.388), so the guide wins.
 
 A plain page number ("p.61") refers to the Editing Guide. FX Guide pages are
 written "FX p.303".
@@ -245,6 +252,17 @@ default keyboard is still to come (§7).
 | Ctrl+R | Edit > Redo | 466 |
 | Ctrl+C / Ctrl+V | Edit > Copy / Paste | 423 |
 | Ctrl+A | Edit > Select All | FX p.153 |
+| Ctrl+W | File > Close | KS2009 |
+| Ctrl+P | File > Print Bin | KS2009 |
+| Ctrl+D | Edit > Duplicate | KS2009 |
+| Ctrl+Shift+G | Clip > Group Clips | KS2009 |
+| Ctrl+T | Bin > Align and Fill > Align to Grid | KS2009 ("align to an invisible grid"; EG p.251 names the item) |
+| Ctrl+Y | Timeline > New > Video Track | KS2009 |
+| Ctrl+' | Windows > Send Current Home | KS2009 |
+| Ctrl+0 … Ctrl+8 | Tools > Timeline (0), Audio Tool (1), Calculator (2), Command Palette (3), File > Media > Media Creation Settings (5), Console (6), File > Input > Tape Capture (7), Effect Palette (8) | KS2009 |
+
+Ctrl+4 (the Composer window, KS2009) has no matching menu command in the 2025
+guides, so it is not mapped yet.
 | Ctrl+F | Edit > Find | 417 |
 | Ctrl+G | Find next occurrence | 429 |
 | Ctrl+L / Ctrl+K | Edit > Enlarge / Reduce (Frame in bins, Track in the Timeline) | 250, 594 |
