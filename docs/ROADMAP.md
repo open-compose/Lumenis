@@ -171,7 +171,19 @@ Delivered:
 * Installers: DMG, MSI/ZIP, deb/rpm/tgz and AppImage.
 * A CI workflow that runs gates 1–3 on all three platforms.
 
-Gate 4 (a fresh-VM walk-through of the docs) is still to be done by a person.
+Gate 4 is a person following the docs on a real machine:
+
+| Platform | Built from BUILDING.md | Installer tested by hand |
+|---|---|---|
+| macOS (Xcode 26) | ✅ 2026-10-12 | ✅ DMG installed and ran |
+| Windows x64 | pending | ✅ MSI installed, ran and uninstalled |
+| Linux x64 | pending | pending |
+
+The macOS walk-through found three issues, all fixed:
+* missing standard headers from a damaged Xcode install, which `build.sh` now
+  detects;
+* the AGL link failure with Xcode 26;
+* a wrong output path in BUILDING.md.
 
 Original plan:
 * Set up the CMake/vcpkg skeleton, the Qt 6 app that opens an empty main window,
