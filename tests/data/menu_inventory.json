@@ -1,0 +1,13 @@
+{
+  "comment": [
+    "The menu bar the application must have, taken from the public Media Composer 2024/2025 documentation.",
+    "tst_menu_inventory compares the real menu bar against this file: every menu, item, separator and default shortcut.",
+    "Shortcuts use Qt portable text; Ctrl means Command on macOS.",
+    "STATUS: provisional. Only the Phase 0 menus are listed. The full inventory is entered from the Media Composer",
+    "Editing Guide (docs/spec/ui-inventory.md) and each entry cites its page."
+  ],
+  "menus": [
+    { "text": "File", "items": [ { "text": "Exit", "shortcut": "Ctrl+Q" } ] },
+    { "text": "Help", "items": [ { "text": "About %PRODUCT%" }, { "text": "About Qt" } ] }
+  ]
+}

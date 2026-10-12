@@ -1,0 +1,7 @@
+{
+  "comment": "Menu bar layout, by command id. '-' is a separator; an object is a submenu.",
+  "menus": [
+    { "id": "file", "title": "&File", "items": ["file.exit"] },
+    { "id": "help", "title": "&Help", "items": ["help.about", "help.about_qt"] }
+  ]
+}

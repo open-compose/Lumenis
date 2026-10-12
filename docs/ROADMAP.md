@@ -206,7 +206,28 @@ Original plan:
    `--smoke-test`.
 4. The documented build steps work on a fresh VM for each OS **(M)**.
 
-### Phase 1 — UI shell: every window, no media
+### Phase 1 — UI shell: every window, no media — **in progress**
+
+Sub-steps:
+* **1.1 Framework — done.**
+  * a command registry: every menu item and shortcut is a command with a
+    stable id, and commands without a handler show disabled;
+  * menus built from `resources/menus.json`;
+  * a keyboard map with user overrides;
+  * named workspaces;
+  * the Fusion style with the bundled Inter font for identical rendering;
+  * `--dump-menus` and `--screenshot` test hooks;
+  * `tst_menu_inventory` (gate 2);
+  * a CI job comparing screenshots across platforms (gate 1).
+* **1.2** Select Project dialog and Project window.
+* **1.3** Bins.
+* **1.4** Composer and Timeline.
+* **1.5** Palettes, tools and Settings dialogs.
+* **1.6** Keyboard settings, workspaces and button mapping (gate 3, gate 4).
+
+The detailed inventory lives in [spec/ui-inventory.md](spec/ui-inventory.md).
+It is entered from the Media Composer Editing Guide with page citations.
+
 These windows are built using the Media Composer User Guide layout:
 * Select Project dialog.
 * Project window: Bins, Settings, Format, Usage, Info and Volumes tabs.

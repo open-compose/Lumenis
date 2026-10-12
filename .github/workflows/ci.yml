@@ -32,6 +32,19 @@ jobs:
       - name: Test
         run: ctest --preset ci
 
+      - name: Screenshots
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          build/ci/bin/cutthulhu --screenshot shots/1x
+          QT_SCALE_FACTOR=2 build/ci/bin/cutthulhu --screenshot shots/2x
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-linux
+          path: shots
+          if-no-files-found: error
+
       - name: Package (.deb, .tar.gz, AppImage)
         run: |
           cd build/ci && cpack
@@ -88,6 +101,20 @@ jobs:
 
       - name: Test
         run: ctest --preset ci-macos
+
+      - name: Screenshots
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          app=build/ci-macos/bin/Cutthulhu.app/Contents/MacOS/Cutthulhu
+          "$app" --screenshot shots/1x
+          QT_SCALE_FACTOR=2 "$app" --screenshot shots/2x
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.os }}
+          path: shots
+          if-no-files-found: error
 
       - name: Package (.dmg)
         run: cd build/ci-macos && cpack
@@ -156,6 +183,23 @@ jobs:
           ctest --preset ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Screenshots
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          build\ci\bin\cutthulhu.exe --screenshot shots\1x | Out-Host
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:QT_SCALE_FACTOR = '2'
+          build\ci\bin\cutthulhu.exe --screenshot shots\2x | Out-Host
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-windows
+          path: shots
+          if-no-files-found: error
+
       - name: Package (.msi, .zip)
         run: cd build/ci && cpack
 
@@ -181,3 +225,38 @@ jobs:
             build/ci/*.msi
             build/ci/*.zip
           if-no-files-found: error
+
+  ui-consistency:
+    # Phase 1 gate 1: every window renders the same on every platform.
+    # Linux is the reference; each other platform's screenshots must match it.
+    name: UI looks the same on all platforms
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: screenshots-*
+          path: shots
+
+      - name: Compare screenshots with Linux
+        run: |
+          pip install --quiet pillow
+          status=0
+          mkdir -p diffs
+          for platform in shots/screenshots-*; do
+            name=${platform#shots/screenshots-}
+            [ "$name" = linux ] && continue
+            for ref in $(cd shots/screenshots-linux && find . -name '*.png'); do
+              out="diffs/$name-$(echo "$ref" | tr '/' '_' | sed 's/^\._//')"
+              python3 scripts/imgdiff.py "shots/screenshots-linux/$ref" "$platform/$ref" --diff "$out" || status=1
+            done
+          done
+          exit $status
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshot-diffs
+          path: diffs

@@ -1,0 +1,8 @@
+{
+  "comment": "Every user-invocable command. Shortcuts use Qt portable text; Ctrl is Command on macOS. Text and shortcuts must match docs/spec/ui-inventory.md.",
+  "commands": [
+    { "id": "file.exit",      "text": "E&xit",              "shortcut": "Ctrl+Q", "role": "quit" },
+    { "id": "help.about",     "text": "About %PRODUCT%",                         "role": "about" },
+    { "id": "help.about_qt",  "text": "About Qt",                                "role": "aboutQt" }
+  ]
+}

@@ -3,10 +3,19 @@
 #include "lumenis/core/branding.h"
 #include "lumenis/ext/module_loader.h"
 #include "lumenis/ext/provider.h"
+#include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/main_window.h"
+#include "lumenis/ui/menu_builder.h"
+#include "lumenis/ui/theme.h"
+#include "lumenis/ui/workspace.h"
 
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QDir>
+#include <QFile>
+#include <QJsonDocument>
+#include <QMenuBar>
+#include <QSettings>
 #include <QTimer>
 
 #include <cstdio>
@@ -104,8 +113,19 @@ int main(int argc, char** argv) {
         QStringLiteral("list-providers"), QStringLiteral("List loaded modules and extension providers, then exit."));
     const QCommandLineOption smokeTest(
         QStringLiteral("smoke-test"), QStringLiteral("Open the main window, verify it, and exit (used by CI)."));
+    const QCommandLineOption dumpMenus(
+        QStringLiteral("dump-menus"), QStringLiteral("Write the menu bar as JSON to <file> ('-' for stdout), then exit."),
+        QStringLiteral("file"));
+    const QCommandLineOption screenshot(
+        QStringLiteral("screenshot"), QStringLiteral("Save a PNG of each window into <dir>, then exit."),
+        QStringLiteral("dir"));
+    const QCommandLineOption defaultLayout(
+        QStringLiteral("default-layout"), QStringLiteral("Ignore the saved window layout and keyboard settings."));
     parser.addOption(listProviders);
     parser.addOption(smokeTest);
+    parser.addOption(dumpMenus);
+    parser.addOption(screenshot);
+    parser.addOption(defaultLayout);
     parser.process(*app);
 
     lumenis::ext::ProviderRegistry registry;
@@ -117,8 +137,69 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    lumenis::ui::MainWindow window(registry);
+    auto& guiApp = static_cast<QApplication&>(*app);
+    lumenis::ui::applyTheme(guiApp);
+
+    lumenis::ui::CommandRegistry commands;
+    commands.loadBuiltin();
+
+    lumenis::ui::MainWindow window(commands, registry);
+
+    // Test and tooling modes always start from the defaults so their output
+    // does not depend on the user's saved settings.
+    const bool useSavedSettings = !parser.isSet(defaultLayout) && !parser.isSet(dumpMenus)
+        && !parser.isSet(screenshot) && !parser.isSet(smokeTest);
+    QSettings settings;
+    lumenis::ui::WorkspaceStore workspaces(settings);
+    if (useSavedSettings) {
+        commands.loadShortcuts(settings);
+        workspaces.restore(lumenis::ui::WorkspaceStore::lastUsedName(), window);
+        QObject::connect(&guiApp, &QApplication::aboutToQuit, [&] {
+            workspaces.save(lumenis::ui::WorkspaceStore::lastUsedName(), window);
+            commands.saveShortcuts(settings);
+        });
+    }
+
+    if (parser.isSet(dumpMenus)) {
+        const QByteArray json = QJsonDocument(lumenis::ui::dumpMenus(window.menuBar())).toJson();
+        const QString target = parser.value(dumpMenus);
+        if (target == QLatin1String("-")) {
+            std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
+            return 0;
+        }
+        QFile out(target);
+        if (!out.open(QIODevice::WriteOnly) || out.write(json) != json.size()) {
+            std::fprintf(stderr, "cannot write %s\n", qPrintable(target));
+            return 1;
+        }
+        return 0;
+    }
+
+    if (parser.isSet(screenshot)) {
+        // Same content size on every platform: the macOS menu bar lives
+        // outside the window, elsewhere it takes window height.
+        const int menuHeight = window.menuBar()->isNativeMenuBar() ? 0 : window.menuBar()->sizeHint().height();
+        window.resize(1280, 780 + menuHeight);
+    }
     window.show();
+
+    if (parser.isSet(screenshot)) {
+        const QDir dir(parser.value(screenshot));
+        if (!dir.mkpath(QStringLiteral("."))) {
+            std::fprintf(stderr, "cannot create %s\n", qPrintable(dir.path()));
+            return 1;
+        }
+        // Grab after the first event-loop pass so layouts have settled. The
+        // menu bar is excluded: on macOS it is not part of the window.
+        QTimer::singleShot(0, app.get(), [&window, dir] {
+            QWidget* content = window.centralWidget() ? window.centralWidget() : &window;
+            const bool ok = content->grab().save(dir.filePath(QStringLiteral("main_window.png")));
+            std::printf("screenshot: %s\n", ok ? "ok" : "FAILED");
+            std::fflush(stdout);
+            QCoreApplication::exit(ok ? 0 : 1);
+        });
+        return app->exec();
+    }
 
     if (parser.isSet(smokeTest)) {
         // Fail rather than hang if the event loop never gets going.
