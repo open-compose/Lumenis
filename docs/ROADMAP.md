@@ -176,7 +176,7 @@ Gate 4 is a person following the docs on a real machine:
 | Platform | Built from BUILDING.md | Installer tested by hand |
 |---|---|---|
 | macOS (Xcode 26) | ✅ 2026-10-12 | ✅ DMG installed and ran |
-| Windows x64 | pending | ✅ MSI installed, ran and uninstalled |
+| Windows x64 | ✅ 2026-10-12 | ✅ MSI installed, ran and uninstalled |
 | Linux x64 | pending | pending |
 
 The macOS walk-through found three issues, all fixed:
@@ -184,6 +184,11 @@ The macOS walk-through found three issues, all fixed:
   detects;
 * the AGL link failure with Xcode 26;
 * a wrong output path in BUILDING.md.
+
+The Windows walk-through found two issues, both fixed:
+* the bootstrap script could not find the Python it had just installed;
+* `cpack` could not find WiX 3 (the bootstrap script now installs WiX 3.14
+  itself, and packaging falls back to `.zip` when WiX is missing).
 
 Original plan:
 * Set up the CMake/vcpkg skeleton, the Qt 6 app that opens an empty main window,
