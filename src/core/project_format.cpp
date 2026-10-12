@@ -134,6 +134,10 @@ const std::vector<ProjectFormat>& projectFormatPresets() {
     return presets;
 }
 
+// Guide p.65-66: SD always uses YCC; HD uses YCC 709 or RGB 709; high-res has
+// several. The New Project screenshot on p.522 shows "YCbCr 2020 / SMPTE 2084"
+// and p.558 names "ACES RGB". The other high-res labels follow that pattern
+// but are unverified, as is the order.
 std::vector<std::string> colorSpacesFor(FormatFamily family) {
     switch (family) {
     case FormatFamily::SD:
@@ -141,11 +145,14 @@ std::vector<std::string> colorSpacesFor(FormatFamily family) {
     case FormatFamily::HD:
         return {"YCbCr 709", "RGB 709"};
     case FormatFamily::HighRes:
-        return {"YCbCr 709", "RGB 709", "YCbCr 2020", "RGB 2020", "DCI-P3", "Rec.2020 HLG", "Rec.2020 PQ", "ACES"};
+        return {"YCbCr 709", "RGB 709", "YCbCr 2020", "RGB 2020", "YCbCr 2020 / SMPTE 2084", "YCbCr 2020 / HLG",
+                "DCI-P3", "ACES RGB"};
     }
     return {};
 }
 
+// Guide p.66: "Determines the bit depth at which the media will be stored."
+// The guide does not list the values; these are unverified.
 std::vector<std::string> colorDepths() {
     return {"8 bit", "10 bit", "12 bit", "16 bit float", "32 bit float"};
 }

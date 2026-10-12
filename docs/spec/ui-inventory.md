@@ -114,8 +114,12 @@ The layout is taken from the screenshots on p.61–64; behaviour from the text.
   * **Raster Dimension, Aspect Ratio** (SD 4:3/16:9, HD 16:9, high-res
     computed) and **Frame Rate** (custom: 23.98 to 60 fps).
   * **Color Space:** SD uses YCC; HD uses YCC 709 or RGB 709; high-res has
-    several options.
-  * **Color Depth.**
+    several options (p.65–66). The New Project screenshot on p.522 shows
+    **YCbCr 2020 / SMPTE 2084**. HDR projects choose HLG or SMPTE2084
+    (p.522). ACES projects choose **ACES RGB** (p.558) and switch the
+    Timeline to 32-bit float.
+  * **Color Depth:** "the bit depth at which the media will be stored"
+    (p.66). The guide does not list the values.
   * **Stereoscopic:** Off, Leading Eye, Left Eye Only, Right Eye Only, Side by
     Side, Over/Under, Full.
   * **Film:** for 23.976p, 24p, 25p, 720p and 1080p, with a film gauge type.
@@ -132,9 +136,11 @@ The layout is taken from the screenshots on p.61–64; behaviour from the text.
 * **Poster frames:** shown as placeholders until the Composer exists.
 * **The project list's fast menu:** offers column choice; its font option is
   not yet built.
-* **Colour-space and colour-depth labels:** ours. The guide names the
-  families (709, 2020, DCI-P3, HDR HLG/PQ, ACES; p.520–558) but not the menu
-  text.
+* **Colour-space labels:** *YCbCr 709*, *RGB 709*, *YCbCr 2020 / SMPTE 2084*
+  and *ACES RGB* follow the guide (p.65, p.522, p.558). *YCbCr 601*,
+  *YCbCr 2020*, *RGB 2020*, *YCbCr 2020 / HLG* and *DCI-P3* follow the same
+  pattern but are unverified, as is the order.
+* **Colour-depth values** (8, 10, 12 bit, 16 and 32 bit float): unverified.
 * **Film types:** 16mm, 35mm 3-perf and 35mm 4-perf, from p.107.
 * **Project files:** Cutthulhu's own `.cthproj` (JSON). Media Composer's
   `.avp` is Phase 3.
@@ -309,7 +315,30 @@ until their functions are confirmed in text or on a licensed seat.
 **Other keyboard settings (p.1202).** Media Composer also ships Keyboard
 settings named "MC1 English", "NC English", "Premiere Pro" and "Resolve".
 
-## 8. Still to document
+## 8. Colour menus for later phases
+
+These are recorded now so they are not entered from memory later.
+
+* **Display Color Space** (right-click the Source or Record monitor; p.544).
+  * Settings table (p.1161–1162): the project colour space, **Rec709**,
+    **Rec709 (full range)**, **SRGB**, **DCI P3**, **Rec2020** and
+    **ACESproxy**. The exact menu text is unverified.
+  * In an ACES project the submenu shows (screenshot, p.559): **Output color
+    space**, **ACES sRGB**, **ACES Rec.709**, **ACES Rec.2020 HLG**, **ACES
+    Rec.2020 ST2084**, **ACES P3D65 ST2084**, **ACES P3D65 DCI** and **ACES
+    2065**.
+* **Source color space** (Source Settings, Phase 2). The screenshot on p.522
+  shows **Rec.709 [video levels]** and the transformation "From Rec.709 [video
+  levels] to Rec.2020 [SMPTE 2084]". The colour adapter "Levels scaling (full
+  range to video levels)" also appears there. Colour Adapter Types (p.558):
+  Generic, User Installed LUTs, ACES ADX, ACES Generic, ACES Panasonic, ACES
+  Sony, ACES Arri, ACES Canon, ACES Working Color Space.
+* **Video Quality Menu** (Timeline, p.404): **Full Quality float** (32-bit
+  float), **Full Quality 10bit**, **Full Quality** (8-bit), **Draft Quality**
+  and **Best Performance**. These are playback qualities, not the project's
+  Color Depth.
+
+## 9. Still to document
 * The window-by-window details for Bins (ch. 10), the Composer (ch. 13), the
   Timeline (ch. 19), the Audio tools (ch. 21) and Settings (ch. 33).
 * Menu order and separators, confirmed against a licensed seat.
