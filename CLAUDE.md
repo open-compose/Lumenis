@@ -58,8 +58,9 @@ entered in `docs/spec/ui-inventory.md`, with page citations. Phase 1.2a, the Sel
 done. Phase 1.2b, the paneled main layout and workspaces (`src/ui/panels.*`,
 `panel_manager.cpp`, `workspace*`, `main_window.*`), is done. Phase 1.3a,
 the Bin Container (`src/model/bin.*`, `project_bins.*`, `src/ui/bin_*`), is
-done. Next is 1.3b: Frame and Script views, columns, sort and sift (spec
-section 9 lists what is left).
+done. Phase 1.3b, the bin views, columns, sorting and sifting
+(`bin_view.*`, `bin_dialogs.*`), is done. Next is 1.3c: bin docking, the
+Project Bin Container and Favorite Bins (spec section 9 lists what is left).
 
 Panels are our own framework, not QDockWidget, because Qt cannot draw
 vertical title bars, green drop zones or Alt-drag tabbing. Custom-painted

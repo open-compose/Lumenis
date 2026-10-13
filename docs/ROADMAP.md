@@ -250,8 +250,17 @@ Sub-steps:
     and the Text view.
   * New Sequence, Duplicate and Delete; saving and auto-save.
   * Details and what is left: "Implementation status (1.3a)" in the spec.
-* **1.3b** Frame and Script views, columns, sorting, sift, colours, bin
-  docking, the Project Bin Container and Favorite Bins.
+* **1.3b Bin views, columns, sorting and sifting — done.**
+  * Text, Frame and Script views; the Bin View menu with its built-in views
+    and Save As.
+  * Choose Columns, moving, hiding, aligning and custom columns.
+  * Sorting (double-click, multilevel Sort, Sort Again) and sifting (the
+    Custom Sift dialog, Sift Selected Items, Show Sifted/Unsifted).
+  * Frame sizes, Align and Fill, Snap to Grid; the Script view's text;
+    clip and background colours; locks.
+  * Details and what is left: "Implementation status (1.3b)" in the spec.
+* **1.3c** Bin docking and floating bin containers, the Project Bin
+  Container, Favorite Bins and the rest of chapter 10.
 * **1.4** Composer and Timeline.
 * **1.5** Palettes, tools and Settings dialogs.
 * **1.6** Keyboard settings, workspaces and button mapping (gate 3, gate 4).

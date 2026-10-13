@@ -230,6 +230,39 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
     handle("edit.select_all", [this, bins] {
         if (binsActive()) bins->selectAll();
     });
+
+    // The active bin's views, columns, sorting and sifting (ch. 10).
+    auto view = [bins](const char* id, std::function<void(BinView&)> act) {
+        return std::pair<const char*, std::function<void()>>(id, [bins, act = std::move(act)] {
+            if (BinView* v = bins->activeView()) act(*v);
+        });
+    };
+    using Mode = model::BinViewMode;
+    const std::pair<const char*, std::function<void()>> binCommands[] = {
+        view("bin.choose_columns", [](BinView& v) { v.chooseColumns(); }),
+        view("bin.hide_column", [](BinView& v) { v.hideColumns(v.selectedHeadings()); }),
+        view("bin.sort", [](BinView& v) { v.sortSelected(); }),
+        view("bin.sort_again", [](BinView& v) { v.sortAgain(); }),
+        view("bin.sift_bin_contents", [](BinView& v) { v.siftBinContents(); }),
+        view("bin.sift_selected_items", [](BinView& v) { v.siftSelected(); }),
+        view("bin.show_sifted", [](BinView& v) { v.setSiftShown(true); }),
+        view("bin.show_unsifted", [](BinView& v) { v.setSiftShown(false); }),
+        view("bin.select.reverse", [](BinView& v) { v.reverseSelection(); }),
+        view("bin.align_and_fill.align_columns", [](BinView& v) { v.alignColumns(); }),
+        view("bin.align_and_fill.align", [](BinView& v) { v.frameView()->alignToGrid(false); }),
+        view("bin.align_and_fill.align_selected", [](BinView& v) { v.frameView()->alignToGrid(true); }),
+        view("bin.align_and_fill.fill_window", [](BinView& v) { v.frameView()->fillWindow(); }),
+        view("bin.align_and_fill.fill_sorted", [](BinView& v) { v.frameView()->fillSorted(); }),
+        view("clip.lock_bin_selection", [](BinView& v) { v.setLocked(true); }),
+        view("clip.unlock_bin_selection", [](BinView& v) { v.setLocked(false); }),
+        view("edit.enlarge_frame", [](BinView& v) {
+            if (v.mode() != Mode::Text) v.enlargeFrame();
+        }),
+        view("edit.reduce_frame", [](BinView& v) {
+            if (v.mode() != Mode::Text) v.reduceFrame();
+        }),
+    };
+    for (const auto& [id, handler] : binCommands) handle(id, handler);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

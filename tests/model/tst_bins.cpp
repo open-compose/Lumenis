@@ -42,7 +42,16 @@ private slots:
         bin.display.columns = {QStringLiteral("Duration"), QStringLiteral("Comments")};
         bin.display.widths.insert(QStringLiteral("Duration"), 80);
         bin.display.background = QStringLiteral("#303050");
-        bin.display.frameScale = 3;
+        bin.display.frameSize = 3;
+        bin.display.viewName = QStringLiteral("Capture");
+        bin.display.viewModified = true;
+        bin.display.framePositions.insert(a.id, QPoint(120, 40));
+        bin.display.snap = SnapToGrid::Invisible;
+        bin.display.sort = {{QStringLiteral("Duration"), false}, {QStringLiteral("Name"), true}};
+        bin.display.sift.find = {{QStringLiteral("close"), QStringLiteral("Name")}};
+        bin.display.sift.also = {{QStringLiteral("Red"), QStringLiteral("Color")}};
+        bin.display.sifted = true;
+        bin.items.first().script = QStringLiteral("INT. HOUSE - NIGHT");
         const QString path = dir.filePath(QStringLiteral("Selects.cthbin"));
         QString error;
         QVERIFY2(BinFile::write(path, bin, &error), qPrintable(error));
@@ -65,7 +74,106 @@ private slots:
         QCOMPARE(back->display.columns, bin.display.columns);
         QCOMPARE(back->display.widths.value(QStringLiteral("Duration")), 80);
         QCOMPARE(back->display.background, bin.display.background);
-        QCOMPARE(back->display.frameScale, 3);
+        QCOMPARE(back->display.frameSize, 3);
+        QCOMPARE(back->display.viewName, QStringLiteral("Capture"));
+        QVERIFY(back->display.viewModified);
+        QCOMPARE(back->display.framePositions.value(a.id), QPoint(120, 40));
+        QCOMPARE(back->display.snap, SnapToGrid::Invisible);
+        QCOMPARE(back->display.sort, bin.display.sort);
+        QCOMPARE(back->display.sift, bin.display.sift);
+        QVERIFY(back->display.sifted);
+        QVERIFY(back->isSiftShown());
+        QCOMPARE(b.script, QStringLiteral("INT. HOUSE - NIGHT"));
+    }
+
+    void headingsComeFromTheGuide() {
+        const QStringList& h = binHeadings();
+        QCOMPARE(h.first(), QStringLiteral("Name"));
+        for (const char* name : {"Auxiliary TC5", "Color", "Creation Date", "KN Mark OUT", "TC 25PD", "VITC"}) {
+            QVERIFY2(h.contains(QLatin1String(name)), name);
+        }
+        QCOMPARE(QStringList(h).removeDuplicates(), 0);
+        for (const QString& c : Bin::defaultColumns()) QVERIFY(h.contains(c));
+        for (const BinViewPreset& v : builtInBinViews()) {
+            for (const QString& c : v.columns) QVERIFY2(h.contains(c), qPrintable(c));
+        }
+        QVERIFY(isEditableHeading(QStringLiteral("Comments")));
+        QVERIFY(!isEditableHeading(QStringLiteral("Duration")));
+    }
+
+    void sortsByValueNaturallyAndOnSeveralColumns() {
+        Bin bin;
+        auto add = [&](const QString& name, std::int64_t frames, const QString& scene) {
+            BinItem i;
+            i.id = newItemId();
+            i.name = name;
+            i.durationFrames = frames;
+            i.editRate = Rational(25);
+            i.fields.insert(QStringLiteral("Scene"), scene);
+            bin.items << i;
+        };
+        add(QStringLiteral("Clip 10"), 50, QStringLiteral("2"));
+        add(QStringLiteral("clip 2"), 500, QStringLiteral("1"));
+        add(QStringLiteral("Clip 1"), 100, QStringLiteral("2"));
+        auto order = [&] {
+            QStringList out;
+            for (const BinItem& i : bin.items) out << i.name;
+            return out;
+        };
+        sortItems(bin, {{QStringLiteral("Name"), true}});
+        QCOMPARE(order(), (QStringList{"Clip 1", "clip 2", "Clip 10"}));
+        // By value, not by the text "0:02" < "0:20" < "0:04".
+        sortItems(bin, {{QStringLiteral("Duration"), false}});
+        QCOMPARE(order(), (QStringList{"clip 2", "Clip 1", "Clip 10"}));
+        // The leftmost column has priority (p.247).
+        sortItems(bin, {{QStringLiteral("Scene"), true}, {QStringLiteral("Duration"), true}});
+        QCOMPARE(order(), (QStringList{"clip 2", "Clip 10", "Clip 1"}));
+    }
+
+    void sortsColoursByHue() {
+        Bin bin;
+        for (const char* hex : {"#3264c8", "", "#c83232", "#32a046"}) {
+            BinItem i;
+            i.id = newItemId();
+            i.color = QLatin1String(hex);
+            bin.items << i;
+        }
+        sortItems(bin, {{QStringLiteral("Color"), true}});
+        QStringList names;
+        for (const BinItem& i : bin.items) names << clipColorName(i.color);
+        QCOMPARE(names, (QStringList{"", "Red", "Green", "Blue"}));
+    }
+
+    void siftsOnCriteria() {
+        BinItem a;
+        a.id = QStringLiteral("a");
+        a.name = QStringLiteral("Interview close-up");
+        a.fields.insert(QStringLiteral("Comments"), QStringLiteral("good take"));
+        BinItem b;
+        b.id = QStringLiteral("b");
+        b.name = QStringLiteral("Wide shot");
+        b.color = QStringLiteral("#c83232");
+        const QStringList columns{QStringLiteral("Name"), QStringLiteral("Comments"), QStringLiteral("Color")};
+
+        BinSift sift;
+        QVERIFY(sift.isEmpty());
+        sift.find = {{QStringLiteral("CLOSE"), {}}};
+        QVERIFY(!sift.isEmpty());
+        QVERIFY(siftMatches(a, sift, columns));
+        QVERIFY(!siftMatches(b, sift, columns));
+        // Every criterion of a group must match.
+        sift.find << SiftRow{QStringLiteral("bad"), QStringLiteral("Comments")};
+        QVERIFY(!siftMatches(a, sift, columns));
+        // "Also find" adds items; a colour matches by its exact name (p.289).
+        sift.find.removeLast();
+        sift.also = {{QStringLiteral("Red"), QStringLiteral("Color")}};
+        QVERIFY(siftMatches(b, sift, columns));
+        sift.also = {{QStringLiteral("red"), QStringLiteral("Color")}};
+        QVERIFY(!siftMatches(b, sift, columns));
+        // Sift Selected Items.
+        sift.ids = {QStringLiteral("b")};
+        QVERIFY(!siftMatches(a, sift, columns));
+        QVERIFY(siftMatches(b, sift, columns));
     }
 
     void rejectsOtherFiles() {

@@ -7,6 +7,8 @@
 #include "lumenis/model/project_store.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/project_bins.h"
+#include "lumenis/ui/bin_container.h"
+#include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/capture.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/select_project_dialog.h"
@@ -178,9 +180,11 @@ int main(int argc, char** argv) {
         commands.loadShortcuts(settings);
         window.restoreGeometry(settings.value(QStringLiteral("mainWindow/geometry")).toByteArray());
         window.workspaces().load(settings);
+        lumenis::ui::BinViewLibrary::load(settings);
         QObject::connect(&guiApp, &QApplication::aboutToQuit, [&] {
             settings.setValue(QStringLiteral("mainWindow/geometry"), window.saveGeometry());
             window.workspaces().save(settings);
+            lumenis::ui::BinViewLibrary::save(settings);
             commands.saveShortcuts(settings);
         });
     }
@@ -288,6 +292,16 @@ int main(int argc, char** argv) {
                 }
                 ok = lumenis::ui::capture(content, dir, QStringLiteral("drop_zones")) && ok;
                 panels.cancelDrag();
+            }
+            // The open bin in Frame and Script views (p.249-253).
+            if (lumenis::ui::BinView* bin = window.binContainer().activeView()) {
+                bin->setMode(lumenis::model::BinViewMode::Frame);
+                QCoreApplication::processEvents();
+                ok = lumenis::ui::capture(content, dir, QStringLiteral("bin_frame_view")) && ok;
+                bin->setMode(lumenis::model::BinViewMode::Script);
+                QCoreApplication::processEvents();
+                ok = lumenis::ui::capture(content, dir, QStringLiteral("bin_script_view")) && ok;
+                bin->setMode(lumenis::model::BinViewMode::Text);
             }
             ok = lumenis::ui::capture(&selectProject, dir, QStringLiteral("select_project")) && ok;
             selectProject.showPage(lumenis::ui::SelectProjectDialog::Page::NewProject);

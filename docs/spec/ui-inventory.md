@@ -409,11 +409,51 @@ These are recorded now so they are not entered from memory later.
   * **Text, Frame and Script** buttons; the **Bin View menu**, whose
     defaults are Bin (basic), Capture, Custom, Film, Format, Media Tool and
     Statistics; **Save as** for custom views.
-  * Text view: *Choose Columns* (the Bin Column Selection dialog), sort by
-    double-clicking a heading, multilevel *Sort*, *Sort Again*.
-  * Frame view: *Enlarge/Reduce Frame* (Ctrl+L / Ctrl+K, seven steps),
-    *Align and Fill*, *Snap to Grid*.
-  * Script view: a text box per clip.
+  * The Bin View menu works in Text view only (p.248). The table on p.248
+    describes each view:
+    * Bin (basic default): Name, Duration, Drive, IN-OUT, Creation Date,
+      TapeID, "etc.";
+    * Capture: start and end timecodes, tape, tracks and resolutions;
+    * Custom: Name only;
+    * Film: key number, ink number and pullin;
+    * Format: video formats, resolutions and projects;
+    * Media Tool: the Media tool's headings;
+    * Statistics: start and end timecodes, duration and resolution.
+  * A changed view's name turns italic with ".n" added (p.249). *Save as*
+    opens the View Name dialog. Saved views can be changed in Settings
+    (Bin View dialog).
+  * Text view: *Choose Columns* (the Bin Column Selection dialog: click
+    to select or deselect, All/None, OK; p.246). New columns go to the
+    right of the selected column, otherwise at the far right (p.247).
+  * Sorting (p.247–248):
+    * double-click a heading to sort, and again to reverse;
+    * the heading's right-click menu has *Sort on Column, Ascending* and
+      *Descending*;
+    * *Bin > Sort* sorts on the selected headings, the leftmost first;
+      Ctrl/Cmd+click and Shift+click select headings; *Sort* is dimmed
+      when no heading is selected;
+    * *Sort Again* with no column selected reapplies the last sort;
+    * selected items stay selected;
+    * colours sort by hue, saturation and value.
+  * Frame view (p.249–252):
+    * a frame per clip with its name below, the head frame by default;
+    * a tooltip with Duration, Format and Creation Date;
+    * *Edit > Enlarge Frame* (Ctrl+L) and *Reduce Frame* (Ctrl+K), up to
+      seven times;
+    * frames are dragged anywhere;
+    * *Bin > Align and Fill*: *Align to Grid*, *Align Selected to Grid*,
+      *Fill Window* (evenly spaced) and *Fill Sorted* (in Text view's
+      order);
+    * Bin settings: border colours by object type or clip colour, and
+      icons;
+    * *Snap to Grid* (fast menu or right-click): Disable, Temporary,
+      Enable or Invisible; a dropped clip goes to the nearest grid point.
+  * Script view (p.252–254):
+    * frames down the left, the clip's details above a text box for each;
+    * Page Up and Page Down scroll a long text;
+    * clips can be dragged up or down, and Text view then shows the same
+      order;
+    * sort and sift in Text view first.
 * **Bin status bar (p.254–257):** "Viewing: n/n", the selected count and
   the total duration.
 * **Bin tabs (p.258–259):** an asterisk before an unsaved bin's name, a tab
@@ -426,17 +466,44 @@ These are recorded now so they are not entered from memory later.
   * *Edit > Duplicate* names the copy "name.Copy.n".
   * Alt-drag (Ctrl on Windows, p.261) copies to another bin.
 * **Deleting (p.261–262):** a Delete dialog for clips and their media.
-* **Colours (p.263–264):** the bin background colour, and clip colours via
-  the Color column or *Set Clip Color*.
+* **Colours (p.263–265).**
+  * *Set Background Color* (right-click or fast menu) colours the bin and
+    its tab.
+  * Clip colours: right-click in the Color column, or *Set Clip Color* in
+    the right-click menu of any view; None resets.
+  * The colour palettes have a button for the system colour picker.
 * **Lock (p.265):** *Clip > Lock/Unlock Bin Selection*.
 * **Columns (p.267–278).**
-  * Move, *Align Columns*, resize, *Hide Column*, custom columns
-    (default heading "Untitled") and Bin Left Lock.
+  * Drag a heading to move its column (p.268).
+  * *Bin > Align and Fill > Align Columns* spaces columns by the length of
+    their contents.
+  * Drag a separator to resize; Frame and Color have fixed widths.
+  * *Hide Column* (Bin menu or the heading's right-click menu).
+  * *Edit > Delete* or Delete on a selected heading: a standard column is
+    hidden; deleting a custom column asks, with OK to delete it and its
+    contents or Hide to keep them.
+  * *Add Custom Column* (heading right-click; Text or Script view) adds
+    "Untitled", typed over in the heading; *Rename Column* is for custom
+    columns only (p.269).
+  * *Bin Left Lock* (p.270).
+  * Tab, Shift+Tab, Enter and Shift+Enter move between cells (p.270).
   * The full list of headings is on p.274–278.
-  * Name, Comments, Color, Start, Take, TapeID and the TC columns can be
-    typed into.
-* **Sift (p.288–291):** *Sift Bin Contents* (the Custom Sift dialog, six
-  criteria), *Sift Selected Items*, *Show Sifted*, *Show Unsifted*.
+  * Headings "modifiable after capture with no restrictions" can be typed
+    into: Name, Auxiliary TC1–TC5, Comments, Journalist, Production, Shoot
+    date, Start, Take, TapeID and the TC columns; Frame Count Start also
+    (p.275). Color is set from its menu.
+* **Sift (p.288–291).**
+  * *Bin > Sift Bin Contents* opens the **Custom Sift** dialog (picture on
+    p.289): "Find clips that meet these criteria" and "Also find clips
+    that meet these criteria", each with three rows of Criterion
+    ("Contains:"), Text to Find and Column or Range to Search ("Any");
+    Clear, OK, Cancel and Apply.
+  * A colour is sifted by its exact name, with its capitals.
+  * The sifted bin shows "(sifted)" after its name; *Show Sifted* and
+    *Show Unsifted* switch.
+  * *Sift Selected Items* keeps the selected items.
+  * Timecode and keycode ranges (Start to End Range and others) appear in
+    the column menu when their columns are shown (p.290).
 * **Favorite Bins (p.293)** and **filtering items (p.294).**
 * **The Sidebar list (p.294–299).**
   * A new project gets a bin named after the project.
@@ -487,14 +554,50 @@ These are recorded now so they are not entered from memory later.
   * With no active bin, *New Sequence* asks with a simple list rather than
     the Select dialog with New Bin.
   * Deleting items asks nothing yet: there is no media to delete with them.
-* **Not yet built (1.3b and later).**
-  * Frame and Script views and the Bin View menu's views.
-  * Choose Columns, sorting, sift, custom columns, Align Columns, Bin Left
-    Lock, clip and bin colours from the menus.
+
+**Implementation status (1.3b).**
+* **Built.**
+  * Text, Frame and Script views, with the selection shared between them.
+    The view is saved with the bin.
+  * The Bin View menu: the seven built-in views, Save As (kept in the
+    user's settings), and the italic "<view>.1" for a changed view.
+  * Columns: Choose Columns (the Bin Column Selection dialog), moving,
+    resizing, Hide Column, Align Columns, Add Custom Column, Rename Column,
+    and Delete (hide, or delete a custom column after asking). All headings
+    from p.274–278 can be shown; the modifiable ones can be typed into.
+  * Sorting: double-click a heading, the heading's Sort on Column items,
+    Bin > Sort on selected headings, and Sort Again.
+  * Sifting: the Custom Sift dialog, Sift Selected Items, Show Sifted and
+    Show Unsifted, and "(sifted)" on the bin's tab.
+  * Frame view: Enlarge and Reduce Frame (eight sizes), frames dragged
+    anywhere and kept there, Align to Grid, Align Selected to Grid, Fill
+    Window, Fill Sorted, Snap to Grid, and the tooltip.
+  * Script view: a frame, the name and duration, and a text box per clip;
+    clips dragged up or down.
+  * Set Clip Color, the Color column, Set Background Color, Clip > Lock
+    and Unlock Bin Selection, and Bin > Select > Reverse.
+* **Our choices, unverified.**
+  * The Bin View menu says "Basic" for the basic view, as the picture on
+    p.246 does; the table on p.248 says "Bin (basic default)".
+  * The headings of each built-in view are our reading of p.248. Media
+    Tool uses the basic headings until the Media tool exists.
+  * The colour palette's names and colours (the guide shows no palette),
+    which a colour sift matches.
+  * "Contains" is the only sift criterion, the only one the guide names.
+  * "Any" searches Name and the shown columns.
+  * Frame sizes from 64 to 264 pixels wide, 16:9; the third is the default.
+  * Without media, a frame is black with the object's icon.
+  * New custom columns after the first are "Untitled.1", "Untitled.2", …
+* **Not yet built (1.3c and later).**
   * Bin docking inside the container and floating bin containers.
   * The Project Bin Container (Tools > Project).
   * Favorite Bins, Set Bin Display, Bin Map, Print Bin, the Delete dialog
     with media, and copying between bins by dragging.
+  * Bin Left Lock, moving between cells with Tab and Enter, timecode and
+    keycode range sifts, Duplicate on columns, and Set <column> for
+    selected clips.
+  * Frame view border colours and icons (Bin settings), changing the
+    represented frame, and Faster Thumbnails.
   * The Avid Attic backups.
   * Choose for Me's green and blue bins (p.64).
   * The Sidebar's "Show All" menu, whose options the guide does not give.

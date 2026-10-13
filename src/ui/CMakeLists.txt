@@ -1,5 +1,6 @@
 add_library(lumenis_ui STATIC
     bin_container.cpp
+    bin_dialogs.cpp
     bin_view.cpp
     capture.cpp
     command_registry.cpp
@@ -13,6 +14,7 @@ add_library(lumenis_ui STATIC
     workspace.cpp
     workspace_bar.cpp
     include/lumenis/ui/bin_container.h
+    include/lumenis/ui/bin_dialogs.h
     include/lumenis/ui/bin_view.h
     include/lumenis/ui/capture.h
     include/lumenis/ui/command_registry.h

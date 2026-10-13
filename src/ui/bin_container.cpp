@@ -486,8 +486,11 @@ BinDocument* BinContainer::activeDocument() const {
 
 void BinContainer::updateTab(BinDocument* document) {
     if (BinView* v = viewFor(document)) {
-        // "an asterisk appears before the bin name" (p.258).
-        tabs_->setTabText(tabs_->indexOf(v), (document->isDirty() ? QStringLiteral("* ") : QString()) + document->name());
+        // "an asterisk appears before the bin name" (p.258), and "(sifted)"
+        // after it while it is shown sifted (p.289).
+        QString text = (document->isDirty() ? QStringLiteral("* ") : QString()) + document->name();
+        if (document->bin().isSiftShown()) text += tr(" (sifted)");
+        tabs_->setTabText(tabs_->indexOf(v), text);
     }
 }
 
@@ -774,6 +777,11 @@ QStringList BinContainer::duplicateSelection() {
 int BinContainer::deleteSelection() {
     BinView* view = activeView();
     if (!view) return 0;
+    // With headings selected, Edit > Delete removes columns (p.268).
+    if (view->mode() == model::BinViewMode::Text && !view->selectedHeadings().isEmpty()) {
+        view->deleteColumns(view->selectedHeadings());
+        return 0;
+    }
     QStringList ids;
     for (const QString& id : view->selectedIds()) {
         // Locked items cannot be deleted (p.265).

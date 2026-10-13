@@ -122,7 +122,7 @@
           "title": "Align and Fill",
           "items": [
             "bin.align_and_fill.align",
-            "bin.align_and_fill.align_selected",
+            "bin.align_and_fill.align_selected", "bin.align_and_fill.align_columns",
             "bin.align_and_fill.fill_sorted",
             "bin.align_and_fill.fill_window"
           ]

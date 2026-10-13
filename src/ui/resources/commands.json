@@ -58,6 +58,7 @@
     {"id": "bin.add_bin_to_favorites", "text": "Add Bin to Favorites"},
     {"id": "bin.align_and_fill.align", "text": "Align to Grid", "shortcut": "Ctrl+T"},
     {"id": "bin.align_and_fill.align_selected", "text": "Align Selected to Grid"},
+    {"id": "bin.align_and_fill.align_columns", "text": "Align Columns"},
     {"id": "bin.align_and_fill.fill_sorted", "text": "Fill Sorted"},
     {"id": "bin.align_and_fill.fill_window", "text": "Fill Window"},
     {"id": "bin.autosequence", "text": "AutoSequence"},
