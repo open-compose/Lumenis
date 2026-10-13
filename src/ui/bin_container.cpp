@@ -35,6 +35,8 @@ namespace {
 const QString kNodeMime = QStringLiteral("application/x-cutthulhu-bin-nodes");
 // The Sidebar's share of the Bin Container, from the picture on p.74.
 constexpr int kSidebarPercent = 36;
+constexpr int kMinimumSidebar = 80;
+constexpr int kMinimumBins = 160;
 
 // Moves bins and folders by dragging in the Sidebar (p.242, p.297).
 class SidebarTree : public QTreeView {
@@ -358,6 +360,11 @@ BinContainer::BinContainer(QWidget* parent) : QWidget(parent) {
     split_->setHandleWidth(kSplitterHandle);
     split_->addWidget(sidebar_);
     split_->addWidget(tabs_);
+    // Explicit minimums: otherwise they come from the widgets' contents,
+    // which each Qt version measures differently, and a minimum larger than
+    // the panel's share overrides the layout's proportions.
+    sidebar_->setMinimumWidth(kMinimumSidebar);
+    tabs_->setMinimumWidth(kMinimumBins);
     split_->setStretchFactor(1, 1);
 
     auto* layout = new QHBoxLayout(this);
