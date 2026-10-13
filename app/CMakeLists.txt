@@ -1,4 +1,4 @@
-# The application icon, rendered from packaging/icon.svg by
+# The application icon, made from packaging/icon/icon-1024.png by
 # scripts/make-icons.py.
 set(app_icon_sources)
 if(APPLE)

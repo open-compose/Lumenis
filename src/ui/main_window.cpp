@@ -18,10 +18,12 @@
 #include <QInputDialog>
 #include <QHBoxLayout>
 #include <QJsonArray>
+#include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPainter>
+#include <QPixmap>
 #include <QToolButton>
 
 #include <algorithm>
@@ -373,18 +375,38 @@ void MainWindow::restoreCurrentToDefault() {
     if (answer == QMessageBox::Ok) workspaces_->restoreCurrentToDefault();
 }
 
-void MainWindow::showAbout() {
+QMessageBox* MainWindow::createAboutBox() {
     const QString name = QString::fromUtf8(branding::kProductName);
-    QMessageBox::about(
-        this, tr("About %1").arg(name),
-        tr("<h3>%1 %2</h3><p>%3</p>"
-           "<p>Licensed under the GNU General Public License v3.</p>"
-           "<p>%4 extension providers registered.</p>"
-           "<p>The interface font is Inter, under the SIL Open Font License 1.1.</p>"
-           "<p>Avid and Media Composer are trademarks of Avid Technology, Inc. "
-           "This product is not affiliated with or endorsed by Avid.</p>")
-            .arg(name, QString::fromUtf8(branding::kVersion), QString::fromUtf8(branding::kDescription))
-            .arg(providers_.all().size()));
+    auto* box = new QMessageBox(this);
+    box->setObjectName(QStringLiteral("aboutBox"));
+    box->setWindowTitle(tr("About %1").arg(name));
+    box->setTextFormat(Qt::RichText);
+    box->setText(tr("<h3>%1 %2</h3><p>%3</p>"
+                    "<p>Licensed under the GNU General Public License v3.</p>"
+                    "<p>%4 extension providers registered.</p>"
+                    "<p>The interface font is Inter, under the SIL Open Font License 1.1.</p>"
+                    "<p>Avid and Media Composer are trademarks of Avid Technology, Inc. "
+                    "This product is not affiliated with or endorsed by Avid.</p>")
+                     .arg(name, QString::fromUtf8(branding::kVersion), QString::fromUtf8(branding::kDescription))
+                     .arg(providers_.all().size()));
+    // The application's picture, drawn from the 512 px image so it stays
+    // sharp on high-density screens.
+    QPixmap picture(QStringLiteral(":/lumenis/ui/icons/about.png"));
+    const qreal dpr = devicePixelRatioF();
+    picture = picture.scaled(QSize(kAboutPictureSize, kAboutPictureSize) * dpr, Qt::KeepAspectRatio,
+                             Qt::SmoothTransformation);
+    picture.setDevicePixelRatio(dpr);
+    box->setIconPixmap(picture);
+    box->setStandardButtons(QMessageBox::Ok);
+    // Room for the text beside the picture.
+    if (auto* label = box->findChild<QLabel*>(QStringLiteral("qt_msgbox_label"))) label->setMinimumWidth(360);
+    return box;
+}
+
+void MainWindow::showAbout() {
+    QMessageBox* box = createAboutBox();
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    box->exec();
 }
 
 } // namespace lumenis::ui

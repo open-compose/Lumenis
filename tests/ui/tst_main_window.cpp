@@ -10,10 +10,13 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QMenu>
+#include <QMessageBox>
+#include <QPixmap>
 #include <QMenuBar>
 #include <QToolButton>
 
 #include <functional>
+#include <memory>
 #include <QSignalSpy>
 #include <QTest>
 
@@ -149,6 +152,20 @@ private slots:
         // ...but they are not part of the fixed inventory.
         const QByteArray dumped = QJsonDocument(ui::dumpMenus(window.menuBar())).toJson();
         QVERIFY(!dumped.contains("Logging"));
+    }
+
+    void aboutBoxShowsThePicture() {
+        ext::ProviderRegistry providers;
+        ui::CommandRegistry commands;
+        commands.loadBuiltin();
+        ui::MainWindow window(commands, providers);
+        std::unique_ptr<QMessageBox> box(window.createAboutBox());
+        QVERIFY(box->text().contains(QString::fromUtf8(branding::kProductName)));
+        const QPixmap picture = box->iconPixmap();
+        QVERIFY(!picture.isNull());
+        QCOMPARE(picture.deviceIndependentSize().toSize(),
+                 QSize(ui::MainWindow::kAboutPictureSize, ui::MainWindow::kAboutPictureSize));
+        QVERIFY(commands.action(QStringLiteral("help.about"))->isEnabled());
     }
 
     void closingTheWindowIsReported() {

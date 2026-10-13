@@ -9,6 +9,7 @@
 #include <optional>
 
 class QAction;
+class QMessageBox;
 class QToolButton;
 
 namespace lumenis::ext {
@@ -47,6 +48,11 @@ public:
     // The layout of a new user (p.74): Bin Container top left, Composer to
     // its right, Timeline along the bottom.
     static QJsonObject defaultLayout();
+
+    // Help > About: the product, its licence and the application picture.
+    // The caller owns the box.
+    QMessageBox* createAboutBox();
+    static constexpr int kAboutPictureSize = 240; // logical pixels
 
 signals:
     // File > Close Project: the application returns to Select Project.

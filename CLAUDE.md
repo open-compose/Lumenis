@@ -66,5 +66,9 @@ vertical title bars, green drop zones or Alt-drag tabbing. Custom-painted
 widgets draw text with palette colours (`WindowText`, `BrightText`) so the
 text-free screenshots hide it.
 
+The application icon is a ray-marched scene, `packaging/icon/scene.frag`.
+`scripts/render-icon.js` renders it and `scripts/make-icons.py` makes every
+platform's icon and the About box picture from the render; see `BUILDING.md`.
+
 To read the guide, download it into the scratchpad and run `pdftotext`. To see
 a page's layout, render it with `pdftoppm -r 80 -f N -l N`.

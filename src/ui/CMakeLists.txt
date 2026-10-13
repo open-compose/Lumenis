@@ -36,6 +36,7 @@ qt_add_resources(lumenis_ui lumenis_ui_resources
         resources/menus.json
         resources/whats_new.html
         resources/icons/app.png
+        resources/icons/about.png
         resources/fonts/Inter-Regular.ttf
         resources/fonts/Inter-SemiBold.ttf
 )

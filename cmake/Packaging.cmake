@@ -32,9 +32,11 @@ elseif(UNIX)
         ${PROJECT_BINARY_DIR}/${PRODUCT_BUNDLE_ID}.desktop @ONLY)
     install(FILES ${PROJECT_BINARY_DIR}/${PRODUCT_BUNDLE_ID}.desktop
         DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
-    install(FILES ${PROJECT_SOURCE_DIR}/packaging/icon.svg
-        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps
-        RENAME ${PRODUCT_BUNDLE_ID}.svg)
+    foreach(size 256 512)
+        install(FILES ${PROJECT_SOURCE_DIR}/packaging/linux/icon-${size}.png
+            DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/${size}x${size}/apps
+            RENAME ${PRODUCT_BUNDLE_ID}.png)
+    endforeach()
 endif()
 
 set(CPACK_PACKAGE_NAME "${PRODUCT_EXE_NAME}")

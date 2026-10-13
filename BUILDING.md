@@ -130,13 +130,16 @@ installers are uploaded as workflow artifacts.
 
 ## Application icon
 
-The icon is drawn in `packaging/icon.svg`. The Windows (`.ico`), macOS
-(`.icns`) and window (`.png`) versions are generated from it and committed,
-so a build needs no SVG tools. After changing the SVG, regenerate them:
+The icon is a 3D scene, `packaging/icon/scene.frag`, rendered to
+`packaging/icon/icon-1024.png`. The Windows (`.ico`), macOS (`.icns`), Linux,
+window and About box images are made from that picture. All of them are
+committed, so a build needs none of these tools. After changing the scene:
 
 ```sh
-python3 -m pip install cairosvg pillow   # once; development tools only
-python3 scripts/make-icons.py
+npm install -g playwright && npx playwright install chromium   # once
+NODE_PATH=$(npm root -g) node scripts/render-icon.js           # the 1024 px master
+python3 -m pip install pillow                                  # once
+python3 scripts/make-icons.py                                  # every platform's icon
 ```
 
 ## Troubleshooting

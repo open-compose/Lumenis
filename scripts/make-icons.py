@@ -1,55 +1,62 @@
 #!/usr/bin/env python3
-"""Render the application icon (packaging/icon.svg) for every platform.
+"""Make every platform's application icon from the master image.
 
-Writes, and these files are committed so that builds do not need an SVG
-renderer:
-  packaging/windows/app.ico       Windows executable and installer
-  packaging/macos/app.icns        macOS application bundle
-  src/ui/resources/icons/app.png  window icon (256 px)
+The master, packaging/icon/icon-1024.png, is rendered from
+packaging/icon/scene.frag by scripts/render-icon.js. This script writes, and
+these files are committed so that builds need neither tool:
+  packaging/windows/app.ico          Windows executable and installer
+  packaging/macos/app.icns           macOS application bundle
+  packaging/linux/icon-256.png       Linux desktop icon (hicolor 256x256)
+  packaging/linux/icon-512.png       Linux desktop icon (hicolor 512x512)
+  src/ui/resources/icons/app.png     window icon (256 px)
+  src/ui/resources/icons/about.png   About box picture (512 px)
 
-Linux installs the SVG itself.
-
-Needs CairoSVG and Pillow (development tools only, not shipped):
-  python3 -m pip install cairosvg pillow
+Needs Pillow (a development tool only, not shipped):
+  python3 -m pip install pillow
 """
 
-import io
 import sys
 from pathlib import Path
 
 try:
-    import cairosvg
     from PIL import Image
-except ImportError as e:
-    sys.exit(f"make-icons: {e.name} is missing; run: python3 -m pip install cairosvg pillow")
+except ImportError:
+    sys.exit("make-icons: Pillow is missing; run: python3 -m pip install pillow")
 
 ROOT = Path(__file__).resolve().parent.parent
-SVG = ROOT / "packaging" / "icon.svg"
-
-
-def render(size: int) -> Image.Image:
-    png = cairosvg.svg2png(url=str(SVG), output_width=size, output_height=size)
-    return Image.open(io.BytesIO(png)).convert("RGBA")
+MASTER = ROOT / "packaging" / "icon" / "icon-1024.png"
 
 
 def main() -> int:
-    master = render(1024)
+    if not MASTER.exists():
+        sys.exit(f"make-icons: {MASTER.relative_to(ROOT)} is missing; run: node scripts/render-icon.js")
+    master = Image.open(MASTER).convert("RGBA")
+
+    def scaled(size: int) -> Image.Image:
+        return master.resize((size, size), Image.LANCZOS)
+
+    written = []
 
     ico = ROOT / "packaging" / "windows" / "app.ico"
     sizes = [16, 24, 32, 48, 64, 128, 256]
-    # Each size rendered from the vector, not scaled down from one bitmap.
-    frames = {s: render(s) for s in sizes}
+    frames = {s: scaled(s) for s in sizes}
     frames[256].save(ico, format="ICO", sizes=[(s, s) for s in sizes],
                      append_images=[frames[s] for s in sizes if s != 256])
+    written.append(ico)
 
     icns = ROOT / "packaging" / "macos" / "app.icns"
     master.save(icns, format="ICNS")
+    written.append(icns)
 
-    png = ROOT / "src" / "ui" / "resources" / "icons" / "app.png"
-    png.parent.mkdir(parents=True, exist_ok=True)
-    render(256).save(png, format="PNG", optimize=True)
+    for size, path in [(256, ROOT / "packaging" / "linux" / "icon-256.png"),
+                       (512, ROOT / "packaging" / "linux" / "icon-512.png"),
+                       (256, ROOT / "src" / "ui" / "resources" / "icons" / "app.png"),
+                       (512, ROOT / "src" / "ui" / "resources" / "icons" / "about.png")]:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        scaled(size).save(path, format="PNG", optimize=True)
+        written.append(path)
 
-    for path in (ico, icns, png):
+    for path in written:
         print(f"make-icons: wrote {path.relative_to(ROOT)} ({path.stat().st_size} bytes)")
     return 0
 
