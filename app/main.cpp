@@ -17,6 +17,7 @@
 #include "lumenis/ui/workspace.h"
 
 #include <QApplication>
+#include <QIcon>
 #include <QCommandLineParser>
 #include <QDir>
 #include <QFileInfo>
@@ -159,6 +160,9 @@ int main(int argc, char** argv) {
 
     auto& guiApp = static_cast<QApplication&>(*app);
     lumenis::ui::applyTheme(guiApp);
+    // Title bars, the taskbar and the Dock while running (Linux uses it in
+    // place of the installed SVG when the desktop file is not installed).
+    QApplication::setWindowIcon(QIcon(QStringLiteral(":/lumenis/ui/icons/app.png")));
 
     lumenis::ui::CommandRegistry commands;
     commands.loadBuiltin();

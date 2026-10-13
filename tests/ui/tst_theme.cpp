@@ -3,6 +3,7 @@
 #include <QApplication>
 #include <QComboBox>
 #include <QFontInfo>
+#include <QImage>
 #include <QLineEdit>
 #include <QProxyStyle>
 #include <QPushButton>
@@ -48,6 +49,13 @@ private slots:
 
     void scrollBarThicknessIsFixed() {
         QCOMPARE(QApplication::style()->pixelMetric(QStyle::PM_ScrollBarExtent), kScrollBarExtent);
+    }
+
+    // Rendered from packaging/icon.svg by scripts/make-icons.py.
+    void applicationIconIsBuiltIn() {
+        const QImage icon(QStringLiteral(":/lumenis/ui/icons/app.png"));
+        QVERIFY(!icon.isNull());
+        QCOMPARE(icon.size(), QSize(256, 256));
     }
 
     void glyphIconsAreDrawn() {

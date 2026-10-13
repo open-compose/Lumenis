@@ -128,6 +128,17 @@ The test presets set `QT_QPA_PLATFORM=offscreen`, so tests need no display.
 launches the installed program with `--smoke-test`, and uninstalls it. The
 installers are uploaded as workflow artifacts.
 
+## Application icon
+
+The icon is drawn in `packaging/icon.svg`. The Windows (`.ico`), macOS
+(`.icns`) and window (`.png`) versions are generated from it and committed,
+so a build needs no SVG tools. After changing the SVG, regenerate them:
+
+```sh
+python3 -m pip install cairosvg pillow   # once; development tools only
+python3 scripts/make-icons.py
+```
+
 ## Troubleshooting
 
 **macOS: `fatal error: 'cstdint' file not found`** (or any other standard
