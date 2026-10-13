@@ -57,6 +57,7 @@ QString plainText(QString text) {
 QJsonArray dumpActions(const QList<QAction*>& actions) {
     QJsonArray items;
     for (const QAction* action : actions) {
+        if (action->property(kDynamicMenuItem).toBool()) continue;
         QJsonObject o;
         if (action->isSeparator()) {
             o.insert(QStringLiteral("separator"), true);

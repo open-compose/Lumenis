@@ -1,5 +1,5 @@
 {
-  "comment": "Every user-invocable command. Shortcuts use Qt portable text; Ctrl is Command on macOS. Must agree with tests/data/menu_inventory.json.",
+  "comment": "Every user-invocable command. Shortcuts use Qt portable text; Ctrl is Command on macOS and Meta is Control; shortcutMac overrides shortcut on macOS. Must agree with tests/data/menu_inventory.json.",
   "commands": [
     {"id": "file.new.new_script", "text": "New Script"},
     {"id": "file.new.volume_for_export", "text": "Volume for Export"},
@@ -225,6 +225,10 @@
     {"id": "edit.splice_in", "text": "Splice-in", "palette": "edit"},
     {"id": "edit.overwrite", "text": "Overwrite", "palette": "edit"},
     {"id": "tools.timeline", "text": "Timeline", "shortcut": "Ctrl+0"},
+    {"id": "windows.next_window", "text": "Next Window", "shortcut": "Ctrl+Down"},
+    {"id": "windows.previous_window", "text": "Previous Window", "shortcut": "Ctrl+Up"},
+    {"id": "windows.next_tab", "text": "Next Tab", "shortcut": "Ctrl+Tab", "shortcutMac": "Meta+Tab"},
+    {"id": "windows.workspaces.save_current", "text": "Save Current"},
     {"id": "edit.toggle_source_record", "text": "Toggle Source/Record", "palette": "edit"}
   ]
 }

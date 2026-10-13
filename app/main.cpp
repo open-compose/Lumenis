@@ -10,6 +10,7 @@
 #include "lumenis/ui/select_project_dialog.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/menu_builder.h"
+#include "lumenis/ui/panels.h"
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/workspace.h"
 
@@ -165,12 +166,13 @@ int main(int argc, char** argv) {
     const bool useSavedSettings = !parser.isSet(defaultLayout) && !parser.isSet(dumpMenus)
         && !parser.isSet(screenshot) && !parser.isSet(smokeTest);
     QSettings settings;
-    lumenis::ui::WorkspaceStore workspaces(settings);
     if (useSavedSettings) {
         commands.loadShortcuts(settings);
-        workspaces.restore(lumenis::ui::WorkspaceStore::lastUsedName(), window);
+        window.restoreGeometry(settings.value(QStringLiteral("mainWindow/geometry")).toByteArray());
+        window.workspaces().load(settings);
         QObject::connect(&guiApp, &QApplication::aboutToQuit, [&] {
-            workspaces.save(lumenis::ui::WorkspaceStore::lastUsedName(), window);
+            settings.setValue(QStringLiteral("mainWindow/geometry"), window.saveGeometry());
+            window.workspaces().save(settings);
             commands.saveShortcuts(settings);
         });
     }
@@ -238,6 +240,21 @@ int main(int argc, char** argv) {
         QTimer::singleShot(0, app.get(), [&] {
             QWidget* content = window.centralWidget() ? window.centralWidget() : &window;
             bool ok = lumenis::ui::capture(content, dir, QStringLiteral("main_window"));
+            // The green drop zones while the Composer's title bar is dragged
+            // over the Timeline's upper zone (p.75).
+            {
+                auto& panels = window.panels();
+                lumenis::ui::PanelGroup* composer = panels.panel(QStringLiteral("Composer"))->group();
+                lumenis::ui::PanelGroup* timeline = panels.panel(QStringLiteral("Timeline"))->group();
+                panels.beginDrag(composer, nullptr);
+                for (const auto& zone : panels.dropZones(panels.mainHost(), false)) {
+                    if (zone.group == timeline && zone.side == lumenis::ui::DockSide::Top) {
+                        panels.updateDrag(panels.mainHost()->mapToGlobal(zone.zone.center()), false);
+                    }
+                }
+                ok = lumenis::ui::capture(content, dir, QStringLiteral("drop_zones")) && ok;
+                panels.cancelDrag();
+            }
             ok = lumenis::ui::capture(&selectProject, dir, QStringLiteral("select_project")) && ok;
             selectProject.showPage(lumenis::ui::SelectProjectDialog::Page::NewProject);
             if (auto* toggle = selectProject.findChild<QToolButton*>(QStringLiteral("settingsToggle"))) {

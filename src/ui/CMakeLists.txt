@@ -4,17 +4,22 @@ add_library(lumenis_ui STATIC
     keyboard_map.cpp
     main_window.cpp
     menu_builder.cpp
+    panel_manager.cpp
+    panels.cpp
     select_project_dialog.cpp
     theme.cpp
     workspace.cpp
+    workspace_bar.cpp
     include/lumenis/ui/capture.h
     include/lumenis/ui/command_registry.h
     include/lumenis/ui/keyboard_map.h
     include/lumenis/ui/main_window.h
     include/lumenis/ui/menu_builder.h
+    include/lumenis/ui/panels.h
     include/lumenis/ui/select_project_dialog.h
     include/lumenis/ui/theme.h
     include/lumenis/ui/workspace.h
+    include/lumenis/ui/workspace_bar.h
 )
 add_library(lumenis::ui ALIAS lumenis_ui)
 

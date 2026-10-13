@@ -20,6 +20,11 @@ bool buildMenus(QMenuBar* bar, CommandRegistry& commands, const QByteArray& json
 // Builds from the application's built-in menus.json.
 void buildBuiltinMenus(QMenuBar* bar, CommandRegistry& commands);
 
+// Menu items made at run time (the workspace names in Windows > Workspaces)
+// carry this property; dumpMenus() leaves them out, because the inventory
+// lists only fixed items.
+inline constexpr char kDynamicMenuItem[] = "lumenisDynamic";
+
 // Describes the menu bar as it actually exists, for the inventory test:
 //   [{"text": "File", "items": [{"text": "Exit", "shortcut": "Ctrl+Q",
 //     "enabled": true}, {"separator": true}, {"text": "...", "items": [...]}]}]

@@ -49,8 +49,13 @@ bool CommandRegistry::load(const QByteArray& json, QString* error) {
         CommandSpec spec;
         spec.id = o.value(QStringLiteral("id")).toString();
         spec.text = o.value(QStringLiteral("text")).toString().replace(QStringLiteral("%PRODUCT%"), product);
-        spec.shortcut = QKeySequence::fromString(o.value(QStringLiteral("shortcut")).toString(),
-                                                 QKeySequence::PortableText);
+        QString keys = o.value(QStringLiteral("shortcut")).toString();
+#ifdef Q_OS_MACOS
+        // Where the guide gives a different macOS key, e.g. Control+Tab,
+        // which in Qt's portable text is Meta+Tab.
+        if (o.contains(QStringLiteral("shortcutMac"))) keys = o.value(QStringLiteral("shortcutMac")).toString();
+#endif
+        spec.shortcut = QKeySequence::fromString(keys, QKeySequence::PortableText);
         spec.role = o.value(QStringLiteral("role")).toString();
         if (spec.id.isEmpty() || spec.text.isEmpty()) {
             return fail(QStringLiteral("command without id or text"));

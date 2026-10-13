@@ -197,6 +197,53 @@ The layout is taken from the screenshots on p.61–64; behaviour from the text.
   * Right-click shows icon and text, icon only, or hides the bar. When
     hidden, a workspace icon at the top right brings it back.
 * **Linked settings (p.89).** Settings named like a workspace load with it.
+* **Pictures (p.74–89), for the look.**
+  * Title bar: a hatched grey box at the top, then a dark round tab-menu
+    button. Each tab has a round close button and its name reading upwards.
+    The current tab is purple, the others grey, and grey space sits below.
+  * Toolbar: icons with captions **EDIT, COLOR, EFFECTS, AUDIO**, in that
+    order. Its right-click menu is headed **WORKSPACE BAR** and offers **Icon
+    and Text**, **Icon only** and **Hide**.
+  * Workspace button menu (p.89): the workspaces, then **Save Current**,
+    **Restore Current to Default**, **New Workspace**, **Delete Workspace**,
+    and **Show Workspace Bar**.
+  * The guide's text names the second workspace "Color Correction" (p.85);
+    the 2025 pictures show "COLOR". We follow the pictures.
+
+**Implementation status (1.2b).** Built: the vertical title bars, docking
+with drop zones, tabbing (Alt-drag and Alt-drop), floating windows with
+panels inside, the tab menu (p.94), Float All Panels, Float Active Panel,
+Add Blank Panel, blank panels left on close (p.83), File > Close, Tools >
+Timeline, Ctrl+Up/Down and Ctrl+Tab, and Escape to cancel a drag. Also the
+four default workspaces (up to 12): New Workspace (with Based on Workspace),
+Delete Workspace, Restore to Saved, Restore Current to Default, Save
+Current, Show Workspace Toolbar, the toolbar's three modes, and the
+hidden-bar button. Layouts persist per user.
+
+Our own choices, unverified against Media Composer:
+* **Default settings.** "When moving to a workspace" defaults to *Load the
+  last known state*. "Closing a docked tool will replace it with a blank
+  panel" defaults to off.
+* **New panels.** A new blank panel docks to the right of the active
+  window. A tool reopened with no place to return to floats (p.94 says tools
+  open in their own windows).
+* **Default layouts.** Effects, Color and Audio use the Edit layout until
+  their tools exist (1.5).
+* **The workspace button.** With the toolbar hidden it sits at the top
+  right of the panel area on every platform, because the macOS menu bar is
+  outside the window.
+
+Not yet built:
+* Workspaces > Properties (Workspace View Setting, linked settings: 1.5);
+* Bin Layout (1.3);
+* Host Panels for more monitors, and per-monitor-count workspaces (p.84);
+* reordering tabs by dragging;
+* Set Font, Center Current, Send Current Home, Close All But Active and
+  Close All Bins But Active;
+* Interface settings UI (1.5);
+* workspace buttons in the Command Palette (1.6);
+* the gear at the bottom of the toolbar in the p.74 picture, whose purpose
+  the guide does not give.
 
 ## 4. Tools and the Command Palette (ch. 5)
 

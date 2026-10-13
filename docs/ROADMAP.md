@@ -229,8 +229,20 @@ Sub-steps:
   * Startup flow and File > Close Project (Ctrl+Shift+W).
   * Not yet built: Save/Manage Presets, poster frames, and the fast menu's
     font option.
-* **1.2b** The paneled main layout: Bin Container, Composer, Timeline, the
-  workspace toolbar, and docking with vertical title bars.
+* **1.2b Paneled main layout — done.**
+  * Our own panel framework (`src/ui/panels.*`, `panel_manager.cpp`), not
+    Qt's dock widgets: vertical title bars with tabs, a tab menu and close
+    buttons; green drop zones with a white preview; Alt-drag to tab;
+    floating windows that can hold panels themselves.
+  * The default layout of p.74, with placeholders for the Bin Container,
+    Composer and Timeline until 1.3 and 1.4.
+  * Windows > Float All Panels, Float Active Panel and Add Blank Panel;
+    File > Close; Tools > Timeline; Ctrl+Up/Down and Ctrl+Tab.
+  * Workspaces Edit, Color, Effects and Audio, up to 12 in all: New, Delete,
+    Restore to Saved, Restore Current to Default and Save Current; the
+    workspace toolbar and its hidden-bar button; last known or last saved
+    state.
+  * Not yet built: see "Implementation status (1.2b)" in the spec.
 * **1.3** Bins.
 * **1.4** Composer and Timeline.
 * **1.5** Palettes, tools and Settings dialogs.

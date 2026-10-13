@@ -55,8 +55,14 @@ See the status lines in `docs/ROADMAP.md`. Phase 0 is done, except the manual
 Linux check. Phase 1.1 (the UI framework) is done. The menu inventory and the window
 specs for Select Project, panels, workspaces and the Command Palette are
 entered in `docs/spec/ui-inventory.md`, with page citations. Phase 1.2a, the Select Project window (`src/ui/select_project_dialog.*`, `src/model/`), is
-done. Next is 1.2b: the paneled main layout (Bin Container, Composer,
-Timeline, workspace toolbar) per guide ch. 4.
+done. Phase 1.2b, the paneled main layout and workspaces (`src/ui/panels.*`,
+`panel_manager.cpp`, `workspace*`, `main_window.*`), is done. Next is 1.3:
+Bins (guide ch. 10), filling the Bin Container placeholder.
+
+Panels are our own framework, not QDockWidget, because Qt cannot draw
+vertical title bars, green drop zones or Alt-drag tabbing. Custom-painted
+widgets draw text with palette colours (`WindowText`, `BrightText`) so the
+text-free screenshots hide it.
 
 To read the guide, download it into the scratchpad and run `pdftotext`. To see
 a page's layout, render it with `pdftoppm -r 80 -f N -l N`.

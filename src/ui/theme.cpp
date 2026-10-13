@@ -117,7 +117,7 @@ void applyTheme(QApplication& app) {
     }
 }
 
-QIcon glyphIcon(GlyphIcon which) {
+QIcon glyphIcon(GlyphIcon which, QColor color) {
     // Drawn at 2x and scaled down, so they are crisp on HiDPI screens.
     constexpr int size = 32;
     QPixmap pm(size, size);
@@ -125,7 +125,8 @@ QIcon glyphIcon(GlyphIcon which) {
     QPainter p(&pm);
     p.setRenderHint(QPainter::Antialiasing);
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0xdc, 0xdc, 0xdc));
+    p.setBrush(color);
+    const QPen stroke(color, 3.0, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
     switch (which) {
     case GlyphIcon::ListView: // three rows with bullets
         for (int i = 0; i < 3; ++i) {
@@ -147,6 +148,48 @@ QIcon glyphIcon(GlyphIcon which) {
             arrow.lineTo(24, 27);
             arrow.closeSubpath();
             p.drawPath(arrow);
+        }
+        break;
+    case GlyphIcon::WorkspaceEdit: // two tracks of clips and a position bar
+        p.drawRect(QRectF(4, 9, 11, 5));
+        p.drawRect(QRectF(17, 9, 11, 5));
+        p.drawRect(QRectF(4, 18, 16, 5));
+        p.drawRect(QRectF(22, 18, 6, 5));
+        p.drawRect(QRectF(15, 4, 2, 24));
+        break;
+    case GlyphIcon::WorkspaceColor: // eyedropper
+        p.setPen(stroke);
+        p.drawLine(QPointF(7, 25), QPointF(19, 13));
+        p.setPen(Qt::NoPen);
+        p.drawEllipse(QPointF(22, 10), 5, 5);
+        break;
+    case GlyphIcon::WorkspaceEffects: { // wand with a spark
+        p.setPen(stroke);
+        p.drawLine(QPointF(6, 26), QPointF(19, 13));
+        p.setPen(Qt::NoPen);
+        QPainterPath star;
+        star.moveTo(23, 3);
+        star.lineTo(25, 8);
+        star.lineTo(30, 9);
+        star.lineTo(25, 11);
+        star.lineTo(23, 16);
+        star.lineTo(21, 11);
+        star.lineTo(16, 9);
+        star.lineTo(21, 8);
+        star.closeSubpath();
+        p.drawPath(star);
+        break;
+    }
+    case GlyphIcon::WorkspaceAudio: { // waveform
+        const int heights[] = {6, 12, 20, 14, 24, 10, 16, 8};
+        for (int i = 0; i < 8; ++i) {
+            p.drawRect(QRectF(3 + i * 3.5, 16 - heights[i] / 2.0, 2, heights[i]));
+        }
+        break;
+    }
+    case GlyphIcon::WorkspaceCustom: // four tiles
+        for (int r = 0; r < 2; ++r) {
+            for (int c = 0; c < 2; ++c) p.drawRoundedRect(QRectF(7 + c * 10, 7 + r * 10, 8, 8), 1.5, 1.5);
         }
         break;
     }
