@@ -1,6 +1,10 @@
 add_library(lumenis_model STATIC
+    bin.cpp
+    project_bins.cpp
     project_store.cpp
     locations.cpp
+    include/lumenis/model/bin.h
+    include/lumenis/model/project_bins.h
     include/lumenis/model/project_store.h
     include/lumenis/model/locations.h
 )

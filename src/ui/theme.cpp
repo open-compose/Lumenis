@@ -45,10 +45,22 @@ public:
         case CT_ItemViewItem:
             s.setHeight(kRowHeight);
             break;
+        case CT_TabBarTab:
+            // Tab widths follow the text; rounding them keeps small
+            // differences in text measurement from moving anything.
+            s.setHeight(kTabHeight);
+            s.setWidth((s.width() + 19) / 20 * 20);
+            break;
         default:
             break;
         }
         return s;
+    }
+
+    // Qt's own tab close icon is a red bitmap; ours matches the rest.
+    QIcon standardIcon(StandardPixmap icon, const QStyleOption* option, const QWidget* widget) const override {
+        if (icon == SP_TabCloseButton) return glyphIcon(GlyphIcon::Close, QColor(0xb0, 0xb0, 0xb0));
+        return QProxyStyle::standardIcon(icon, option, widget);
     }
 
     int pixelMetric(PixelMetric metric, const QStyleOption* option, const QWidget* widget) const override {
@@ -187,6 +199,95 @@ QIcon glyphIcon(GlyphIcon which, QColor color) {
         }
         break;
     }
+    case GlyphIcon::ScriptView: // a thumbnail beside lines of text
+        p.drawRect(QRectF(5, 7, 9, 8));
+        p.drawRect(QRectF(5, 18, 9, 8));
+        for (int i = 0; i < 2; ++i) {
+            p.drawRect(QRectF(17, 8 + i * 11, 10, 2.5));
+            p.drawRect(QRectF(17, 12 + i * 11, 7, 2.5));
+        }
+        break;
+    case GlyphIcon::Search: // magnifier
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(QPointF(13, 13), 7, 7);
+        p.drawLine(QPointF(18.5, 18.5), QPointF(26, 26));
+        break;
+    case GlyphIcon::Bin: { // an open box
+        QPainterPath box;
+        box.moveTo(5, 11);
+        box.lineTo(27, 11);
+        box.lineTo(25, 26);
+        box.lineTo(7, 26);
+        box.closeSubpath();
+        p.drawPath(box);
+        p.drawRect(QRectF(4, 7, 24, 3));
+        break;
+    }
+    case GlyphIcon::Folder: {
+        QPainterPath f;
+        f.moveTo(4, 9);
+        f.lineTo(12, 9);
+        f.lineTo(15, 12);
+        f.lineTo(28, 12);
+        f.lineTo(28, 25);
+        f.lineTo(4, 25);
+        f.closeSubpath();
+        p.drawPath(f);
+        break;
+    }
+    case GlyphIcon::Trash:
+        p.drawRect(QRectF(7, 10, 18, 17));
+        p.drawRect(QRectF(5, 6, 22, 3));
+        p.drawRect(QRectF(13, 3, 6, 3));
+        break;
+    case GlyphIcon::ItemClip: // a frame with sprocket holes
+    case GlyphIcon::ItemSubclip:
+    case GlyphIcon::ItemSource: {
+        p.drawRect(QRectF(4, 8, 24, 16));
+        p.setBrush(QColor(0x2a, 0x2a, 0x2a));
+        for (int i = 0; i < 4; ++i) {
+            p.drawRect(QRectF(6 + i * 6, 10, 3, 2.5));
+            p.drawRect(QRectF(6 + i * 6, 19.5, 3, 2.5));
+        }
+        if (which == GlyphIcon::ItemSubclip) p.drawRect(QRectF(11, 13.5, 10, 5));
+        if (which == GlyphIcon::ItemSource) p.drawEllipse(QPointF(16, 16), 2.5, 2.5);
+        break;
+    }
+    case GlyphIcon::ItemAudio: {
+        const int heights[] = {4, 10, 16, 8, 12, 6};
+        for (int i = 0; i < 6; ++i) p.drawRect(QRectF(6 + i * 3.6, 16 - heights[i] / 2.0, 2.2, heights[i]));
+        break;
+    }
+    case GlyphIcon::ItemSequence: // three tracks of clips
+        p.drawRect(QRectF(4, 8, 10, 4));
+        p.drawRect(QRectF(16, 8, 12, 4));
+        p.drawRect(QRectF(4, 14, 16, 4));
+        p.drawRect(QRectF(22, 14, 6, 4));
+        p.drawRect(QRectF(4, 20, 24, 4));
+        break;
+    case GlyphIcon::ItemEffect:
+        p.drawRect(QRectF(4, 8, 24, 16));
+        p.setBrush(QColor(0x2a, 0x2a, 0x2a));
+        p.drawEllipse(QPointF(16, 16), 5, 5);
+        break;
+    case GlyphIcon::ItemGroup:
+        p.drawRect(QRectF(4, 6, 11, 9));
+        p.drawRect(QRectF(17, 6, 11, 9));
+        p.drawRect(QRectF(4, 17, 11, 9));
+        p.drawRect(QRectF(17, 17, 11, 9));
+        break;
+    case GlyphIcon::ItemTitle:
+        p.drawRect(QRectF(4, 8, 24, 16));
+        p.setBrush(QColor(0x2a, 0x2a, 0x2a));
+        p.drawRect(QRectF(9, 11, 14, 3));
+        p.drawRect(QRectF(14.5, 11, 3, 10));
+        break;
+    case GlyphIcon::Close:
+        p.setPen(QPen(color, 2.6, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(QPointF(10, 10), QPointF(22, 22));
+        p.drawLine(QPointF(10, 22), QPointF(22, 10));
+        break;
     case GlyphIcon::WorkspaceCustom: // four tiles
         for (int r = 0; r < 2; ++r) {
             for (int c = 0; c < 2; ++c) p.drawRoundedRect(QRectF(7 + c * 10, 7 + r * 10, 8, 8), 1.5, 1.5);

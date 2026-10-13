@@ -14,3 +14,4 @@ lumenis_add_test(tst_main_window SOURCES tst_main_window.cpp LIBS ${ui_test_libs
 lumenis_add_test(tst_keyboard SOURCES tst_keyboard.cpp LIBS ${ui_test_libs})
 target_compile_definitions(tst_keyboard PRIVATE
     KEYBOARD_INVENTORY="${PROJECT_SOURCE_DIR}/tests/data/keyboard_inventory.json")
+lumenis_add_test(tst_bin_container SOURCES tst_bin_container.cpp LIBS ${ui_test_libs})

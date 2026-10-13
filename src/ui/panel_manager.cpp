@@ -467,7 +467,7 @@ QWidget* PanelManager::nodeFromJson(const QJsonObject& node, QList<Panel*>& plac
         if (built.size() == 1) return built.first();
         QSplitter* split = DockHost::createSplitter(o);
         for (QWidget* w : built) split->addWidget(w);
-        split->setSizes(keptSizes);
+        DockHost::setProportions(split, keptSizes);
         return split;
     }
     return nullptr;

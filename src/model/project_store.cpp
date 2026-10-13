@@ -1,5 +1,7 @@
 #include "lumenis/model/project_store.h"
 
+#include "lumenis/model/project_bins.h"
+
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
@@ -133,6 +135,13 @@ std::optional<ProjectEntry> ProjectStore::create(ProjectSettings settings, QStri
     }
     const QString file = QDir(folder).filePath(settings.name + fileSuffix());
     if (!write(file, settings, error)) {
+        QDir(folder).removeRecursively();
+        return std::nullopt;
+    }
+    // "When you create a project, Media Composer automatically creates a bin
+    // with the name of the new project" (guide p.294).
+    ProjectBins bins(folder, settings.name);
+    if (bins.createInitialBin(error).isEmpty() || !bins.save(error)) {
         QDir(folder).removeRecursively();
         return std::nullopt;
     }

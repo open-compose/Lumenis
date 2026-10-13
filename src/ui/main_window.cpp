@@ -2,6 +2,8 @@
 
 #include "lumenis/core/branding.h"
 #include "lumenis/ext/provider.h"
+#include "lumenis/ui/bin_container.h"
+#include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/menu_builder.h"
 #include "lumenis/ui/panels.h"
@@ -12,6 +14,8 @@
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QFileDialog>
+#include <QInputDialog>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QMenu>
@@ -26,12 +30,11 @@ namespace lumenis::ui {
 
 namespace {
 
-// Stand-ins until the real windows exist (Bins: Phase 1.3; Composer and
-// Timeline: Phase 1.4). They are painted without text, so they look the
+// Stand-ins until the real windows exist (Composer and Timeline: Phase 1.4). They are painted without text, so they look the
 // same on every platform.
 class Placeholder : public QWidget {
 public:
-    enum class Kind { Bins, Composer, Timeline };
+    enum class Kind { Composer, Timeline };
 
     Placeholder(Kind kind, const QString& name) : kind_(kind) { setObjectName(name); }
 
@@ -39,9 +42,6 @@ protected:
     void paintEvent(QPaintEvent*) override {
         QPainter p(this);
         switch (kind_) {
-        case Kind::Bins:
-            p.fillRect(rect(), QColor(0x2a, 0x2a, 0x2a));
-            break;
         case Kind::Timeline:
             p.fillRect(rect(), QColor(0x30, 0x30, 0x30));
             break;
@@ -113,6 +113,8 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     installHandlers();
     buildBuiltinMenus(menuBar(), commands_);
     installPanelHandlers();
+    binContainer_->setBinMenu(menuBar()->findChild<QMenu*>(QStringLiteral("menu:bin")));
+    installProjectHandlers(false);
     panels_->restoreLayout(defaultLayout());
     connect(workspaces_, &WorkspaceManager::changed, this, &MainWindow::syncWorkspaceUi);
     syncWorkspaceUi();
@@ -131,8 +133,9 @@ QJsonObject MainWindow::defaultLayout() {
 }
 
 void MainWindow::createPanels() {
-    panels_->addPanel(new Panel(QStringLiteral("BinContainer"), tr("Bin Container"),
-                                new Placeholder(Placeholder::Kind::Bins, QStringLiteral("binsPlaceholder"))));
+    // Its tab reads "Bins" in the pictures on p.240-242.
+    binContainer_ = new BinContainer;
+    panels_->addPanel(new Panel(QStringLiteral("BinContainer"), tr("Bins"), binContainer_));
     panels_->addPanel(new Panel(QStringLiteral("Composer"), tr("Composer"),
                                 new Placeholder(Placeholder::Kind::Composer, QStringLiteral("composerPlaceholder"))));
     panels_->addPanel(new Panel(QStringLiteral("Timeline"), tr("Timeline"),
@@ -143,12 +146,88 @@ void MainWindow::setProject(const model::ProjectEntry& project) {
     project_ = project;
     setWindowTitle(QStringLiteral("%1 - %2").arg(QString::fromUtf8(branding::kProductName), project.settings.name));
     commands_.setHandler(QStringLiteral("file.close_project"), [this] { emit closeProjectRequested(); });
+    binContainer_->setProject(project.folder, project.settings.name, project.settings.format.editRate);
+    installProjectHandlers(true);
 }
 
 void MainWindow::clearProject() {
     project_.reset();
     setWindowTitle(QString::fromUtf8(branding::kProductName));
     commands_.setHandler(QStringLiteral("file.close_project"), {});
+    binContainer_->setProject({}, {}, Rational(24000, 1001));
+    installProjectHandlers(false);
+}
+
+bool MainWindow::binsActive() const {
+    const Panel* p = panels_->activePanel();
+    return p && p->id() == QLatin1String("BinContainer");
+}
+
+void MainWindow::installProjectHandlers(bool projectOpen) {
+    auto handle = [this, projectOpen](const char* id, std::function<void()> handler) {
+        commands_.setHandler(QString::fromLatin1(id), projectOpen ? std::move(handler) : std::function<void()>());
+    };
+    BinContainer* bins = binContainer_;
+    handle("file.open_bin", [this, bins] {
+        const QString file = QFileDialog::getOpenFileName(this, tr("Open a Bin"), {}, tr("Bins (*.cthbin)"));
+        if (file.isEmpty()) return;
+        QString error;
+        if (bins->openOtherBin(file, &error).isEmpty()) QMessageBox::warning(this, tr("Open Bin"), error);
+    });
+    // Both open the selected bins as tabs; separate Bin Containers come later.
+    handle("file.open_selected_bins", [bins] {
+        for (const QString& id : bins->selectedNodes()) bins->openBin(id);
+    });
+    handle("file.open_selected_bins_in_one_window", [bins] {
+        for (const QString& id : bins->selectedNodes()) bins->openBin(id);
+    });
+    handle("file.close_bin", [bins] { bins->closeBin(bins->activeDocument()); });
+    handle("file.save_bin", [this, bins] {
+        QString error;
+        if (BinDocument* d = bins->activeDocument(); d && !bins->saveBin(d, &error)) {
+            QMessageBox::warning(this, tr("Save Bin"), error);
+        }
+    });
+    auto saveAll = [this, bins] {
+        QString error;
+        if (!bins->saveAll(&error)) QMessageBox::warning(this, tr("Save All"), error);
+    };
+    handle("file.save_all", saveAll);
+    handle("file.save_all_bins", saveAll);
+    QAction* sidebarOnly = commands_.action(QStringLiteral("bin.show_sidebar_only"));
+    sidebarOnly->setCheckable(true);
+    sidebarOnly->setChecked(bins->isSidebarOnly());
+    handle("bin.show_sidebar_only", [bins, sidebarOnly] { bins->setSidebarOnly(sidebarOnly->isChecked()); });
+    handle("windows.close_all_bins_but_active", [bins] { bins->closeAllBinsButActive(); });
+    handle("timeline.new.sequence", [this, bins] {
+        QString target;
+        if (!bins->activeDocument()) {
+            // With no active bin, the Select dialog asks for one (p.457).
+            QStringList names;
+            QStringList ids;
+            for (const model::BinNode* b : bins->bins()->bins()) {
+                names << b->name;
+                ids << b->id;
+            }
+            if (names.isEmpty()) return;
+            bool ok = false;
+            const QString choice = QInputDialog::getItem(this, tr("Select"), tr("Bin:"), names, 0, false, &ok);
+            if (!ok) return;
+            target = ids.value(static_cast<int>(names.indexOf(choice)));
+        }
+        bins->newSequence(target);
+        panels_->showPanel(panels_->panel(QStringLiteral("BinContainer")));
+    });
+    // Edit menu commands act on the bin when the Bin Container is active.
+    handle("edit.duplicate", [this, bins] {
+        if (binsActive()) bins->duplicateSelection();
+    });
+    handle("edit.delete", [this, bins] {
+        if (binsActive()) bins->deleteSelection();
+    });
+    handle("edit.select_all", [this, bins] {
+        if (binsActive()) bins->selectAll();
+    });
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

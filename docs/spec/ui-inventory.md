@@ -385,7 +385,121 @@ These are recorded now so they are not entered from memory later.
   and **Best Performance**. These are playback qualities, not the project's
   Color Depth.
 
-## 9. Still to document
-* The window-by-window details for Bins (ch. 10), the Composer (ch. 13), the
-  Timeline (ch. 19), the Audio tools (ch. 21) and Settings (ch. 33).
+## 9. Bins (ch. 10, p.239–305)
+
+* **Bin Container (p.239–243).**
+  * The Sidebar is on the left and open bins on the right. Its vertical tab
+    reads **Bins** (pictures on p.240–242).
+  * Double-click a bin to open it; more bins open as tabs.
+  * The Sidebar has a bin colour column, and its columns sort.
+  * Bins can be docked within the container: drag a tab to a green edge.
+    Dragged out, a bin floats in a new container with the Sidebar closed
+    (**Show Sidebar** on right-click).
+  * Alt-drag from the Sidebar tabs a bin.
+  * Items dragged onto a bin in the Sidebar move into it; a closed folder
+    opens.
+  * Commands: **Hide Sidebar** (Sidebar fast menu), **File > Close Bin
+    Container**, **Bin > Show Sidebar Only**.
+* **Project Bin Container (p.243):** *Tools > Project* (Ctrl+9). A
+  Sidebar-only container named "Project"; it cannot be renamed.
+* **Object icons (p.243–244):** master clips, subclips, audio clips,
+  sequences, sources, effects, motion effects, rendered effects, groups,
+  titles and more.
+* **Bin views (p.245–254).**
+  * **Text, Frame and Script** buttons; the **Bin View menu**, whose
+    defaults are Bin (basic), Capture, Custom, Film, Format, Media Tool and
+    Statistics; **Save as** for custom views.
+  * Text view: *Choose Columns* (the Bin Column Selection dialog), sort by
+    double-clicking a heading, multilevel *Sort*, *Sort Again*.
+  * Frame view: *Enlarge/Reduce Frame* (Ctrl+L / Ctrl+K, seven steps),
+    *Align and Fill*, *Snap to Grid*.
+  * Script view: a text box per clip.
+* **Bin status bar (p.254–257):** "Viewing: n/n", the selected count and
+  the total duration.
+* **Bin tabs (p.258–259):** an asterisk before an unsaved bin's name, a tab
+  menu listing every open bin, tabs reordered by dragging, a close button
+  on each tab.
+* **Fast menu (p.259):** every Bin menu command.
+* **Selecting (p.259–260):** Ctrl/Cmd+click, Shift+click, lasso,
+  *Select > Reverse*.
+* **Copying and duplicating (p.260).**
+  * *Edit > Duplicate* names the copy "name.Copy.n".
+  * Alt-drag (Ctrl on Windows, p.261) copies to another bin.
+* **Deleting (p.261–262):** a Delete dialog for clips and their media.
+* **Colours (p.263–264):** the bin background colour, and clip colours via
+  the Color column or *Set Clip Color*.
+* **Lock (p.265):** *Clip > Lock/Unlock Bin Selection*.
+* **Columns (p.267–278).**
+  * Move, *Align Columns*, resize, *Hide Column*, custom columns
+    (default heading "Untitled") and Bin Left Lock.
+  * The full list of headings is on p.274–278.
+  * Name, Comments, Color, Start, Take, TapeID and the TC columns can be
+    typed into.
+* **Sift (p.288–291):** *Sift Bin Contents* (the Custom Sift dialog, six
+  criteria), *Sift Selected Items*, *Show Sifted*, *Show Unsifted*.
+* **Favorite Bins (p.293)** and **filtering items (p.294).**
+* **The Sidebar list (p.294–299).**
+  * A new project gets a bin named after the project.
+  * *New Bin* gives "the name of the project ... with a number appended".
+    We use "Project.1", "Project.2", …; the exact form is unverified.
+  * Naming: the project rules, up to 64 characters (p.295).
+  * Open bins are dimmed, and bins from other projects are in italic.
+  * *File > Open Bin* lists a bin from elsewhere under **Other Bins**;
+    deleting it removes only the pointer.
+  * *File > Open Selected Bins (In One Window)*.
+  * *New Folder*, and drag bins into folders.
+  * *Flat View* (fast menu).
+  * Delete moves bins and folders to a **Trash** that appears on the first
+    delete; *Empty Trash* deletes the files.
+  * *File > Save Bin* (dimmed when nothing changed), *Save All*, and
+    auto-save (Bin settings, interval in minutes).
+  * A quick filter shows matching bins as a flat list.
+* **Pictures (p.240–257), for the look.**
+  * Sidebar: a "Show All" menu, a fast menu and a search field above the
+    list; sizes in K.
+  * Bin header row: the Bin View menu ("Untitled" or "Basic"), the three
+    view buttons, search and the fast menu.
+  * Rows show an icon column, then Name.
+
+**Implementation status (1.3a).**
+* **Built.**
+  * Bins as files (`.cthbin`, JSON) and the project's Sidebar tree
+    (`<project>.cthbins`); `src/model/bin.*` and `project_bins.*`.
+  * The Sidebar: list, sizes, dimmed open bins, italic other bins, New Bin,
+    New Folder, rename in place, drag into folders, Delete to the Trash,
+    Empty Trash, Flat View, quick filter, Hide Sidebar and Show Sidebar.
+  * Bin tabs with asterisks, a tab menu and close buttons.
+  * Text view with an icon column, Name and the default headings; Name is
+    editable. Quick filter, an optional status bar, background colour.
+  * Commands: *Timeline > New > Sequence* ("Untitled Sequence.01"),
+    *Edit > Duplicate*, *Edit > Delete* (locked items stay), *Edit > Select
+    All*, *File > Open Bin*, *Open Selected Bins*, *Close Bin*, *Save Bin*,
+    *Save All*, *Bin > Show Sidebar Only* and *Windows > Close All Bins But
+    Active*.
+  * Bins open when a project was closed reopen with it, and changes save
+    when bins close or the project closes, plus auto-save.
+* **Our choices, unverified.**
+  * Auto-save every 15 minutes.
+  * "Untitled Folder" for new folders.
+  * A new project opens its bin in its first session.
+  * Default headings are those named for the Bin view on p.248: Creation
+    Date, Duration, Drive, IN-OUT, TapeID.
+  * With no active bin, *New Sequence* asks with a simple list rather than
+    the Select dialog with New Bin.
+  * Deleting items asks nothing yet: there is no media to delete with them.
+* **Not yet built (1.3b and later).**
+  * Frame and Script views and the Bin View menu's views.
+  * Choose Columns, sorting, sift, custom columns, Align Columns, Bin Left
+    Lock, clip and bin colours from the menus.
+  * Bin docking inside the container and floating bin containers.
+  * The Project Bin Container (Tools > Project).
+  * Favorite Bins, Set Bin Display, Bin Map, Print Bin, the Delete dialog
+    with media, and copying between bins by dragging.
+  * The Avid Attic backups.
+  * Choose for Me's green and blue bins (p.64).
+  * The Sidebar's "Show All" menu, whose options the guide does not give.
+
+## 10. Still to document
+* The window-by-window details for the Composer (ch. 13), the Timeline
+  (ch. 19), the Audio tools (ch. 21) and Settings (ch. 33).
 * Menu order and separators, confirmed against a licensed seat.

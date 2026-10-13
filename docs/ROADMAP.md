@@ -243,7 +243,15 @@ Sub-steps:
     workspace toolbar and its hidden-bar button; last known or last saved
     state.
   * Not yet built: see "Implementation status (1.2b)" in the spec.
-* **1.3** Bins.
+* **1.3a Bin Container and bins — done.**
+  * Bins as files and the project's Sidebar tree with folders, Trash and
+    Other Bins.
+  * The Sidebar (filter, Flat View, rename, drag into folders), bin tabs,
+    and the Text view.
+  * New Sequence, Duplicate and Delete; saving and auto-save.
+  * Details and what is left: "Implementation status (1.3a)" in the spec.
+* **1.3b** Frame and Script views, columns, sorting, sift, colours, bin
+  docking, the Project Bin Container and Favorite Bins.
 * **1.4** Composer and Timeline.
 * **1.5** Palettes, tools and Settings dialogs.
 * **1.6** Keyboard settings, workspaces and button mapping (gate 3, gate 4).

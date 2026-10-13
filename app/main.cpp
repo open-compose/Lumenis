@@ -5,6 +5,8 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/model/locations.h"
 #include "lumenis/model/project_store.h"
+#include "lumenis/model/bin.h"
+#include "lumenis/model/project_bins.h"
 #include "lumenis/ui/capture.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/select_project_dialog.h"
@@ -27,6 +29,8 @@
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QTimer>
+
+#include <optional>
 #include <QToolButton>
 
 #include <cstdio>
@@ -215,6 +219,7 @@ int main(int argc, char** argv) {
         const QDateTime when(QDate(2026, 1, 15), QTime(10, 30), QTimeZone::utc());
         const std::pair<const char*, const char*> samples[] = {
             {"Documentary", "1080p/23.976"}, {"Episode 101", "1080i/59.94"}, {"Music Video", "UHD 25p"}};
+        std::optional<lumenis::model::ProjectEntry> documentary;
         for (const auto& [name, label] : samples) {
             lumenis::model::ProjectSettings s;
             s.name = QString::fromLatin1(name);
@@ -223,7 +228,32 @@ int main(int argc, char** argv) {
             }
             s.created = when;
             s.modified = when;
-            lumenis::model::ProjectStore(sample.privateProjects).create(s);
+            auto entry = lumenis::model::ProjectStore(sample.privateProjects).create(s);
+            if (!documentary) documentary = entry;
+        }
+        // The main window shows the first project with a few bins.
+        if (documentary) {
+            lumenis::model::ProjectBins bins(documentary->folder, documentary->settings.name);
+            bins.load();
+            const QString main = bins.bins().first()->id;
+            const QString folder = bins.createFolder();
+            bins.rename(folder, QStringLiteral("Selects"));
+            bins.move(bins.createBin(), folder);
+            bins.rename(bins.createBin(folder), QStringLiteral("Interviews"));
+            bins.openBins = {main};
+            bins.save();
+            auto bin = lumenis::model::BinFile::read(bins.binPath(main));
+            const lumenis::Rational rate = documentary->settings.format.editRate;
+            const std::pair<const char*, int> sequences[] = {{"Rough Cut", 31 * 60 * 24}, {"Opening", 95 * 24},
+                                                             {"Trailer", 62 * 24}};
+            for (const auto& [name, frames] : sequences) {
+                lumenis::model::BinItem item = lumenis::model::newSequence(*bin, rate, when);
+                item.name = QString::fromLatin1(name);
+                item.durationFrames = frames;
+                bin->items << item;
+            }
+            lumenis::model::BinFile::write(bins.binPath(main), *bin);
+            window.setProject(*documentary);
         }
         lumenis::ui::SelectProjectDialog selectProject(sample);
         // The fixture lives in a temporary folder whose path differs per machine.

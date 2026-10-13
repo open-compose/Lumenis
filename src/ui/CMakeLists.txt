@@ -1,4 +1,6 @@
 add_library(lumenis_ui STATIC
+    bin_container.cpp
+    bin_view.cpp
     capture.cpp
     command_registry.cpp
     keyboard_map.cpp
@@ -10,6 +12,8 @@ add_library(lumenis_ui STATIC
     theme.cpp
     workspace.cpp
     workspace_bar.cpp
+    include/lumenis/ui/bin_container.h
+    include/lumenis/ui/bin_view.h
     include/lumenis/ui/capture.h
     include/lumenis/ui/command_registry.h
     include/lumenis/ui/keyboard_map.h

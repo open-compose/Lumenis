@@ -118,6 +118,9 @@ public:
     PanelManager& manager() const { return manager_; }
 
     static QSplitter* createSplitter(Qt::Orientation orientation);
+    // Sets a splitter's sizes as proportions, applied once it has its real
+    // size (a layout restored before the window is shown has none yet).
+    static void setProportions(QSplitter* splitter, const QList<int>& proportions);
 
 protected:
     void paintEvent(QPaintEvent* event) override;

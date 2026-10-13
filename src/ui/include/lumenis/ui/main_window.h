@@ -17,6 +17,7 @@ class ProviderRegistry;
 
 namespace lumenis::ui {
 
+class BinContainer;
 class CommandRegistry;
 class PanelManager;
 class WorkspaceBar;
@@ -40,6 +41,7 @@ public:
     const std::optional<model::ProjectEntry>& project() const { return project_; }
 
     PanelManager& panels() const { return *panels_; }
+    BinContainer& binContainer() const { return *binContainer_; }
     WorkspaceManager& workspaces() const { return *workspaces_; }
 
     // The layout of a new user (p.74): Bin Container top left, Composer to
@@ -59,6 +61,8 @@ protected:
 private:
     void installHandlers();
     void installPanelHandlers();
+    void installProjectHandlers(bool projectOpen);
+    bool binsActive() const;
     void createPanels();
     void syncWorkspaceUi();
     void placeWorkspaceButton();
@@ -71,6 +75,7 @@ private:
     const ext::ProviderRegistry& providers_;
     std::optional<model::ProjectEntry> project_;
     PanelManager* panels_ = nullptr;
+    BinContainer* binContainer_ = nullptr;
     WorkspaceManager* workspaces_ = nullptr;
     WorkspaceBar* bar_ = nullptr;
     QToolButton* workspaceButton_ = nullptr;

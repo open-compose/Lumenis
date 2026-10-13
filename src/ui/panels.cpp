@@ -246,8 +246,38 @@ public:
         setChildrenCollapsible(false);
     }
 
+    void setProportions(const QList<int>& proportions) {
+        pending_ = proportions;
+        applyPending();
+    }
+
 protected:
     QSplitterHandle* createHandle() override { return new FlatSplitterHandle(orientation(), this); }
+
+    void resizeEvent(QResizeEvent* event) override {
+        QSplitter::resizeEvent(event);
+        applyPending();
+    }
+
+    void showEvent(QShowEvent* event) override {
+        QSplitter::showEvent(event);
+        applyPending();
+    }
+
+private:
+    void applyPending() {
+        const int extent = orientation() == Qt::Horizontal ? width() : height();
+        if (pending_.isEmpty() || extent <= 1) return;
+        const int available = extent - handleWidth() * (count() - 1);
+        long long total = 0;
+        for (int p : pending_) total += p;
+        QList<int> sizes;
+        for (int p : pending_) sizes << static_cast<int>(total > 0 ? available * p / total : 0);
+        pending_.clear();
+        setSizes(sizes);
+    }
+
+    QList<int> pending_;
 };
 
 // Paints the green drop zones and the white preview over a host while a
@@ -390,6 +420,14 @@ DockHost::DockHost(PanelManager& manager, QWidget* parent) : QWidget(parent), ma
 
 QSplitter* DockHost::createSplitter(Qt::Orientation orientation) {
     return new PanelSplitter(orientation);
+}
+
+void DockHost::setProportions(QSplitter* splitter, const QList<int>& proportions) {
+    if (auto* s = dynamic_cast<PanelSplitter*>(splitter)) {
+        s->setProportions(proportions);
+    } else {
+        splitter->setSizes(proportions);
+    }
 }
 
 namespace {

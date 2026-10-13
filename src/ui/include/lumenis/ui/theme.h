@@ -24,6 +24,7 @@ inline constexpr int kTitleBarWidth = 20;      // vertical title bar
 inline constexpr int kSplitterHandle = 3;      // gap between docked panels
 inline constexpr int kWorkspaceBarWide = 60;   // icon and text
 inline constexpr int kWorkspaceBarNarrow = 36; // icon only
+inline constexpr int kTabHeight = 22;          // tab bars (bin tabs)
 inline constexpr QRgb kTitleBarColor = 0xff8a8a8a;
 inline constexpr QRgb kTitleBarActiveColor = 0xffa4a4a4;
 inline constexpr QRgb kTabColor = 0xff5e5e5e;
@@ -45,6 +46,21 @@ enum class GlyphIcon {
     WorkspaceEffects,
     WorkspaceAudio,
     WorkspaceCustom,
+    // Bin Container and bins (guide ch. 10). Our own drawings.
+    ScriptView,
+    Search,
+    Bin,
+    Folder,
+    Trash,
+    ItemClip,
+    ItemSubclip,
+    ItemAudio,
+    ItemSequence,
+    ItemEffect,
+    ItemGroup,
+    ItemTitle,
+    ItemSource,
+    Close, // tab close buttons
 };
 QIcon glyphIcon(GlyphIcon which, QColor color = QColor(0xdc, 0xdc, 0xdc));
 
