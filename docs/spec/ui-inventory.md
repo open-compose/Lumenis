@@ -667,7 +667,124 @@ These are recorded now so they are not entered from memory later.
   * Choose for Me's green and blue bins (p.64).
   * The Sidebar's "Show All" menu, whose options the guide does not give.
 
-## 10. Still to document
-* The window-by-window details for the Composer (ch. 13), the Timeline
-  (ch. 19), the Audio tools (ch. 21) and Settings (ch. 33).
+## 10. Composer (ch. 13, p.378–430)
+
+* **Viewing methods (p.378–379):** bins (Frame and Script views), the
+  Source monitor (clips and sequences), the Record monitor (a sequence),
+  pop-up monitors and the Timeline (Toggle Source/Record in Timeline).
+* **The window (p.379–381).**
+  * Source and Record monitors in the project's aspect ratio: HD 16:9, SD
+    4:3 or 16:9 (p.379). Black letterbox or pillarbox bars as needed.
+  * The picture on p.380 shows, left to right above the monitors: the
+    Source Clip Name menu, a tracking display (e.g. "V1 TC1 01:06:09:11"),
+    the center duration display ("15:28"), the Record tracking display
+    ("Mas TC1 01:00:04:11") and the Record Clip Name menu. Below each
+    monitor: the position bar and two rows of buttons.
+  * Illustrations show two button rows, one information row and the
+    Center Duration display (Composer settings, Window tab, p.380).
+  * Resize by dragging the lower right corner; Flow Data Dynamically puts
+    the data in one or two rows (p.380).
+  * *Composer > Resize Monitor to Image* and the right-click menu (p.381).
+  * *Composer > Show Single/Dual Monitor*, or right-click: a single Record
+    monitor. Alt/Option-click the Source/Record Mode button toggles.
+    *Workspaces > Source/Record Editing* restores the standard size.
+  * Right-click > *Hide Video* (floating Composer only); Button Display at
+    Bottom: Off hides the controls (p.381–382).
+* **Source/Record colours (p.382–383):** Interface settings, Timeline &
+  Viewers: *Show Source/Record colors in Composer* turns the Source
+  position bar green and the Record one blue (pop-ups green); *Show
+  Source/Record colors in Timeline* colours the track enable buttons.
+* **Second row of buttons (p.384):** Composer settings, Button Display at
+  Bottom, Two Rows under.
+* **Tracking information (p.384–387).**
+  * Above the monitors, one or two rows; nothing until a format is chosen,
+    and nothing with no clip loaded. Click the area for the Tracking
+    Information menu (three panes: format; Master, Duration, In/Out,
+    Absolute, Remain; a source track's timecode).
+  * Options (p.387): Master, Duration, In/Out, Absolute, Remain, V1/A1/A2
+    TC (or EC), D1 TC1, TC1/24/25/25PD/30D/30ND (24p and 25p), Clip Name,
+    Timecode, Footage (24p and 25p), Frames.
+  * Abbreviations shown: Mas, Dur, I/O, Abs, Rem (p.386).
+* **Info window (p.387–388):** right-click > *Get Info*, or Ctrl/Cmd+I
+  over a monitor or in a bin. **Timecode window (p.388–389):** *Tools >
+  Timecode Window*, up to 48 lines.
+* **Loading (p.393–395).**
+  * Source/Record mode; double-click in a bin loads into the Source or
+    Record monitor (Bin settings: "Double-click loads clip in" can choose
+    a new pop-up monitor); Alt-double-click the other way; drag to a
+    monitor; Alt-drag clips to the Record monitor for an instant rough cut.
+  * The Clip Name menu lists loaded clips alphabetically (Alt: in load
+    order), with *Clear Monitor* (black, still loaded) and *Clear Menu*
+    (only the shown clip stays).
+* **Playback (p.395–403).**
+  * Position bar and indicator ("blue position indicator", p.396): click
+    or drag; far left or right for start or end; Ctrl/Cmd-click or drag
+    snaps to transitions, marks and markers; Ctrl+Alt snaps to the frame
+    before.
+  * Buttons (p.397–399): Play (Monitors; becomes Stop), Stop, Pause and
+    Play Reverse (Play tab), Go to Next/Previous Event (Monitors), Play
+    Standby, Step Backward/Forward one frame (Monitors; Alt: 10 or 8
+    frames), Step Backward/Forward 10 or 8 frames and by field (Move tab).
+  * Keyboard (p.399–401): see section 7. L again: 2×, 3×, 5×, 8×; hold K
+    and tap J or L to step a frame.
+* **Marking (p.405–407):** Mark IN and Mark OUT buttons "under the
+  monitor" stop playback; I and O keys; sawtooth marks on the IN and OUT
+  frames; Clear IN Mark, Clear OUT Mark, Clear Both Marks; Alt-drag a mark
+  to move it; Mark Clip marks the whole clip or segment (Alt: ignore the
+  track selection).
+* **Buttons named elsewhere:** Match Frame is by default in the second row
+  under the Source monitor (p.433); Gang in the second row under both
+  monitors (p.495; the Record monitor is always ganged); Quick Transition
+  in the second row (p.727); Play In to Out in the Play tab (p.487); Add
+  Marker buttons in the More tab (p.412–414).
+
+**Implementation status (1.4a).**
+* **Built.**
+  * The Composer panel: Clip Name menus, one tracking display per
+    monitor (Master, Duration, In/Out, Absolute, Remain, Clip Name), the
+    center duration display, black monitors in the project's aspect
+    ratio, position bars with the marked span and the indicator, and two
+    button rows per monitor.
+  * Loading by double-click (clips to the Source monitor, sequences to the
+    Record monitor) and by dragging items from a bin; Clear Monitor and
+    Clear Menu.
+  * Play, J-K-L with the shuttle speeds, K+J/L steps, Play In to Out, step
+    one and 10 (8) frames, Go to Start/End and Previous/Next Event, Mark
+    IN/OUT, Mark Clip, Clear IN/OUT/Both, Go to IN/OUT, Gang, Show
+    Single/Dual Monitor. With no media yet, the position moves in real
+    time over a black picture.
+  * The default keyboard (section 7) works while the Composer has the
+    focus.
+  * New sequences get a Start timecode.
+* **Our choices, unverified.**
+  * The button rows follow the picture on p.380 slot by slot. The guide
+    names the functions but does not show which icon is which; we matched
+    them by shape: Step Backward/Forward one frame, Mark OUT ("]"), Play,
+    Mark IN ("["), Mark Clip, Add Marker (red), Splice-in (yellow),
+    Overwrite (red) on the first Source row; Gang, Go to Previous/Next
+    Event, Go to OUT Point, Play In to Out, Go to IN Point, Clear Both
+    Marks on the second. Slots we could not identify (the leftmost
+    buttons, the Record row's film strip, green and second-row tools) are
+    Blank buttons. "Go to OUT Point" is named after Go to IN Point.
+  * Double-click loads sequences into the Record monitor and other items
+    into the Source monitor.
+  * One information row; Source/Record colours off; the center duration
+    shows the active monitor's IN to OUT duration.
+  * Default Starting TC 01:00:00:00 (General settings, p.1191, gives no
+    value).
+  * Go to Previous/Next Event go to the start and end of a clip until
+    sequences have edits (1.4b).
+  * The active monitor has a thin highlight.
+* **Not yet built.**
+  * Splice-in, Overwrite and Add Marker (with the Timeline, 1.4b);
+    Source/Record mode, pop-up monitors, the Info and Timecode windows,
+    the Tracking Information menu's panes and track timecodes, two
+    information rows, Resize Monitor to Image, Hide Video, Play Standby,
+    field steps, snapping on the position bar, moving marks by dragging,
+    Loop Selected Clips, subclips and markers.
+  * Composer settings (1.5).
+
+## 11. Still to document
+* The window-by-window details for the Timeline (ch. 19), the Audio tools
+  (ch. 21) and Settings (ch. 33).
 * Menu order and separators, confirmed against a licensed seat.

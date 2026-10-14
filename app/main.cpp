@@ -11,6 +11,7 @@
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/capture.h"
 #include "lumenis/ui/command_registry.h"
+#include "lumenis/ui/composer.h"
 #include "lumenis/ui/select_project_dialog.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/menu_builder.h"
@@ -279,6 +280,22 @@ int main(int argc, char** argv) {
             }
             lumenis::model::BinFile::write(bins.binPath(main), *bin);
             window.setProject(*documentary);
+            // The Composer with a sequence in each monitor, marked, and
+            // master timecode above them (p.380, p.384).
+            if (const lumenis::ui::BinDocument* doc = window.binContainer().document(main)) {
+                lumenis::ui::Composer& composer = window.composer();
+                const auto& items = doc->bin().items;
+                composer.load(lumenis::ui::MonitorId::Source, main, items.at(1));
+                composer.load(lumenis::ui::MonitorId::Record, main, items.at(0));
+                composer.state(lumenis::ui::MonitorId::Source).setPosition(240);
+                composer.state(lumenis::ui::MonitorId::Source).markIn();
+                composer.state(lumenis::ui::MonitorId::Source).setPosition(1200);
+                composer.state(lumenis::ui::MonitorId::Source).markOut();
+                composer.state(lumenis::ui::MonitorId::Record).setPosition(600 * 24);
+                composer.setTracking(lumenis::ui::MonitorId::Source, lumenis::model::TrackingFormat::Master);
+                composer.setTracking(lumenis::ui::MonitorId::Record, lumenis::model::TrackingFormat::Master);
+                composer.setActiveMonitor(lumenis::ui::MonitorId::Source);
+            }
         }
         lumenis::ui::SelectProjectDialog selectProject(sample);
         // The fixture lives in a temporary folder whose path differs per machine.

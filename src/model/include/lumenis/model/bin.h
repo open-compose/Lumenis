@@ -181,6 +181,11 @@ public:
     static bool write(const QString& path, const Bin& bin, QString* error = nullptr);
 };
 
+// The default starting timecode of a new sequence ("Default Starting TC",
+// General settings, guide p.1191). The guide does not print the value; ours
+// is one hour.
+inline constexpr std::int64_t kDefaultStartHours = 1;
+
 // A new, empty sequence named "Untitled Sequence.NN" (numbered after the
 // highest such name already in the bin; p.457 and the picture on p.255).
 BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& when);

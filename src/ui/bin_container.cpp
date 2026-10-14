@@ -790,6 +790,8 @@ BinDocument* BinContainer::openBin(const QString& requested) {
     });
     connect(doc, &BinDocument::displayChanged, this, [this, doc] { updateTab(doc); });
     connect(view, &BinView::deleteRequested, this, [this] { deleteSelection(); });
+    connect(view, &BinView::itemActivated, this,
+            [this, doc](const QString& itemId) { emit itemActivated(doc->nodeId(), itemId); });
     // Items dragged in from another bin, after the drag has finished.
     connect(view, &BinView::itemsDropped, this,
             [this, doc](const QString& from, const QStringList& ids, bool copy) {

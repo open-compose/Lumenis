@@ -230,6 +230,16 @@
     {"id": "windows.previous_window", "text": "Previous Window", "shortcut": "Ctrl+Up"},
     {"id": "windows.next_tab", "text": "Next Tab", "shortcut": "Ctrl+Tab", "shortcutMac": "Meta+Tab"},
     {"id": "windows.workspaces.save_current", "text": "Save Current"},
-    {"id": "edit.toggle_source_record", "text": "Toggle Source/Record", "palette": "edit"}
+    {"id": "edit.toggle_source_record", "text": "Toggle Source/Record", "palette": "edit"},
+    {"id": "edit.mark_clip", "text": "Mark Clip", "palette": "edit"},
+    {"id": "edit.clear_in_mark", "text": "Clear IN Mark", "palette": "edit"},
+    {"id": "edit.clear_out_mark", "text": "Clear OUT Mark", "palette": "edit"},
+    {"id": "edit.clear_both_marks", "text": "Clear Both Marks", "palette": "edit"},
+    {"id": "edit.go_to_out_point", "text": "Go to OUT Point", "palette": "edit"},
+    {"id": "play.play_in_to_out", "text": "Play In to Out", "palette": "play"},
+    {"id": "move.go_to_previous_event", "text": "Go to Previous Event", "palette": "move"},
+    {"id": "move.go_to_next_event", "text": "Go to Next Event", "palette": "move"},
+    {"id": "other.gang", "text": "Gang", "palette": "other"},
+    {"id": "more.add_marker", "text": "Add Marker", "palette": "more"}
   ]
 }

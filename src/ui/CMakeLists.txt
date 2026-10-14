@@ -4,6 +4,7 @@ add_library(lumenis_ui STATIC
     bin_dock.cpp
     platform_check.cpp
     bin_view.cpp
+    composer.cpp
     capture.cpp
     command_registry.cpp
     keyboard_map.cpp
@@ -20,6 +21,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/bin_dock.h
     include/lumenis/ui/platform_check.h
     include/lumenis/ui/bin_view.h
+    include/lumenis/ui/composer.h
     include/lumenis/ui/capture.h
     include/lumenis/ui/command_registry.h
     include/lumenis/ui/keyboard_map.h

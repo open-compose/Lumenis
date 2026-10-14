@@ -294,6 +294,8 @@ signals:
     // Items dropped here from another bin (p.260): moved, or with the copy
     // modifier copied.
     void itemsDropped(const QString& fromBin, const QStringList& ids, bool copy);
+    // Double-click on an item: it loads into a monitor (p.394).
+    void itemActivated(const QString& itemId);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;

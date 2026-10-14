@@ -1,0 +1,185 @@
+#pragma once
+
+#include "lumenis/core/rational.h"
+#include "lumenis/model/monitor.h"
+
+#include <QElapsedTimer>
+#include <QKeySequence>
+#include <QWidget>
+
+#include <functional>
+#include <optional>
+
+class QLabel;
+class QMenu;
+class QTimer;
+class QToolButton;
+
+namespace lumenis::ui {
+
+class Composer;
+
+// The monitors of the Composer window (guide p.378-381).
+enum class MonitorId { Source, Record };
+
+// The bar under a monitor: the length of the clip, the marks, and the
+// position indicator, which is dragged to move (p.396-397).
+class PositionBar : public QWidget {
+    Q_OBJECT
+
+public:
+    PositionBar(Composer& composer, MonitorId monitor, QWidget* parent = nullptr);
+    QSize sizeHint() const override;
+    // Frame at an x position, and back.
+    std::int64_t frameAt(int x) const;
+    int xFor(std::int64_t frame) const;
+
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+
+private:
+    Composer& composer_;
+    MonitorId monitor_;
+};
+
+// A monitor's picture: black until there is media (Phase 2), in the
+// project's aspect ratio, with the IN and OUT sawtooth marks (p.405-406).
+// Clips are dropped on it from bins (p.394).
+class MonitorPicture : public QWidget {
+    Q_OBJECT
+
+public:
+    MonitorPicture(Composer& composer, MonitorId monitor, QWidget* parent = nullptr);
+    QRect pictureRect() const;
+
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void contextMenuEvent(QContextMenuEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
+
+private:
+    Composer& composer_;
+    MonitorId monitor_;
+};
+
+// The Composer window (p.379-387): the Source and Record monitors, each with
+// its Clip Name menu and tracking display above, the position bar and two
+// rows of buttons below, and the center duration display between them.
+class Composer : public QWidget {
+    Q_OBJECT
+
+public:
+    // A bin item, from the Bin Container: its bin and the item itself.
+    using ItemResolver = std::function<std::optional<model::BinItem>(const QString& binId, const QString& itemId)>;
+    // The command a key runs (the Keyboard settings), or empty.
+    using KeyResolver = std::function<QString(const QKeySequence&)>;
+
+    explicit Composer(QWidget* parent = nullptr);
+    ~Composer() override;
+
+    void setItemResolver(ItemResolver resolver) { resolver_ = std::move(resolver); }
+    void setKeyResolver(KeyResolver resolver) { keys_ = std::move(resolver); }
+    // HD projects are 16:9; SD 4:3 or 16:9 (p.379).
+    void setAspectRatio(const Rational& aspect);
+    Rational aspectRatio() const { return aspect_; }
+
+    model::MonitorState& state(MonitorId monitor);
+    const model::MonitorState& state(MonitorId monitor) const;
+
+    // Loading (p.393-394). By default clips go to the Source monitor and
+    // sequences to the Record monitor.
+    void load(MonitorId monitor, const QString& binId, const model::BinItem& item);
+    void loadDefault(const QString& binId, const model::BinItem& item);
+    void loadFromBin(MonitorId monitor, const QString& binId, const QStringList& itemIds);
+    void clear(); // the project closed
+
+    // The monitor commands act on (the one last clicked).
+    MonitorId activeMonitor() const { return active_; }
+    void setActiveMonitor(MonitorId monitor);
+
+    // Composer > Show Single/Dual Monitor (p.381).
+    void setSingleMonitor(bool single);
+    bool isSingleMonitor() const { return single_; }
+
+    // Tracking displays (p.384-387), one per monitor here (one information
+    // row), and the center duration display (p.380).
+    void setTracking(MonitorId monitor, model::TrackingFormat format);
+    model::TrackingFormat tracking(MonitorId monitor) const;
+    QString trackingText(MonitorId monitor) const;
+    QString centerDuration() const;
+
+    // Show Source/Record colors in Composer (Interface settings, p.383).
+    void setSourceRecordColors(bool on);
+    bool sourceRecordColors() const { return colors_; }
+
+    // Gang (p.495): the Record monitor is always ganged; a ganged Source
+    // monitor moves with it.
+    void setGanged(bool ganged);
+    bool isGanged() const { return ganged_; }
+
+    // Playback without media: the position moves in real time. Speeds are
+    // multiples of normal, negative for reverse (J-K-L, p.400-401).
+    bool isPlaying() const { return speed_ != 0; }
+    int speed() const { return speed_; }
+    void play(int speed);
+    void stop();
+    // Advances playback by `ms` milliseconds (also used by tests).
+    void advance(qint64 ms);
+
+    // Runs a Composer command by id (the buttons, the menus and the
+    // keyboard all come here). Returns false if it is not one.
+    bool perform(const QString& commandId);
+    static bool handles(const QString& commandId);
+
+    // Moves the active monitor, and a ganged one with it.
+    void moveTo(MonitorId monitor, std::int64_t frame);
+
+    QToolButton* button(MonitorId monitor, const QString& commandId) const;
+    QToolButton* clipNameButton(MonitorId monitor) const;
+    QToolButton* trackingButton(MonitorId monitor) const;
+    PositionBar* positionBar(MonitorId monitor) const;
+    MonitorPicture* picture(MonitorId monitor) const;
+    QMenu* clipNameMenu(MonitorId monitor);
+    QMenu* contextMenu();
+
+signals:
+    void changed();
+    void singleMonitorChanged(bool single);
+
+protected:
+    void keyPressEvent(QKeyEvent* event) override;
+    void keyReleaseEvent(QKeyEvent* event) override;
+
+private:
+    struct Column;
+    Column& column(MonitorId monitor) const;
+    QWidget* buildColumn(MonitorId monitor);
+    void refresh();
+    void tick();
+
+    model::MonitorState source_;
+    model::MonitorState record_;
+    model::TrackingFormat sourceTracking_ = model::TrackingFormat::None;
+    model::TrackingFormat recordTracking_ = model::TrackingFormat::None;
+    MonitorId active_ = MonitorId::Source;
+    Rational aspect_{16, 9};
+    bool single_ = false;
+    bool colors_ = false;
+    bool ganged_ = false;
+    bool kHeld_ = false;
+    int speed_ = 0;
+    std::optional<std::int64_t> stopAt_; // Play In to Out
+    double carry_ = 0; // fractional frames between ticks
+    QElapsedTimer clock_;
+    QTimer* timer_ = nullptr;
+    QLabel* center_ = nullptr;
+    Column* columns_[2] = {nullptr, nullptr};
+    ItemResolver resolver_;
+    KeyResolver keys_;
+};
+
+} // namespace lumenis::ui

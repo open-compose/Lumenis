@@ -996,6 +996,11 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
     script_ = new BinScriptView(document_, proxy_, table_->selectionModel(), this);
     script_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(model_, &BinItemModel::itemsDropped, this, &BinView::itemsDropped);
+    for (QAbstractItemView* v : {static_cast<QAbstractItemView*>(table_), static_cast<QAbstractItemView*>(frames_)}) {
+        connect(v, &QAbstractItemView::doubleClicked, this, [this](const QModelIndex& index) {
+            emit itemActivated(index.data(BinItemModel::kIdRole).toString());
+        });
+    }
     connect(script_, &BinScriptView::itemsDropped, this, &BinView::itemsDropped);
 
     stack_ = new QStackedWidget(this);

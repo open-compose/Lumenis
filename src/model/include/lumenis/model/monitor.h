@@ -1,0 +1,94 @@
+#pragma once
+
+#include "lumenis/model/bin.h"
+
+#include <QList>
+#include <QString>
+#include <QStringList>
+
+#include <cstdint>
+#include <optional>
+
+namespace lumenis::model {
+
+// What a tracking display above a monitor shows (guide p.385-387).
+enum class TrackingFormat {
+    None,     // "By default, the tracking information area displays no data"
+    Master,   // master timecode at the present location
+    Duration, // total duration
+    InOut,    // duration between IN and OUT
+    Absolute, // absolute time at the present position
+    Remain,   // time remaining from the present position
+    ClipName, // the clip's name
+};
+
+QString trackingLabel(TrackingFormat format);
+const QList<TrackingFormat>& trackingFormats();
+
+// A clip or sequence loaded into a monitor, with its marks and position.
+struct LoadedClip {
+    QString binId;
+    BinItem item;
+    std::int64_t position = 0;
+    std::optional<std::int64_t> in;
+    std::optional<std::int64_t> out;
+};
+
+// The state of one monitor (Source, Record or pop-up): what is loaded, what
+// is shown, the position and the marks (guide p.393-407).
+class MonitorState {
+public:
+    // Loading a clip already in the menu shows it again, marks and all.
+    void load(const QString& binId, const BinItem& item);
+    bool isEmpty() const { return current() == nullptr; }
+    const LoadedClip* current() const;
+
+    // The Clip Name menu (p.394): every loaded clip, alphabetically, or in
+    // the order loaded (Alt held).
+    QStringList menuNames(bool loadOrder = false) const;
+    // Shows the clip at `index` in menuNames(loadOrder).
+    bool select(int index, bool loadOrder = false);
+    // Clear Monitor: black, the clips stay loaded. Clear Menu: only the shown
+    // clip stays (p.395).
+    void clearMonitor();
+    void clearMenu();
+    int loadedCount() const { return static_cast<int>(loaded_.size()); }
+
+    // Position, 0 to duration - 1.
+    std::int64_t duration() const;
+    std::int64_t position() const;
+    void setPosition(std::int64_t frame);
+    void step(std::int64_t frames);
+    void goToStart() { setPosition(0); }
+    void goToEnd() { setPosition(duration() - 1); }
+
+    // Marks (p.405-407).
+    void markIn();
+    void markOut();
+    void clearIn();
+    void clearOut();
+    void clearBoth();
+    std::optional<std::int64_t> in() const;
+    std::optional<std::int64_t> out() const;
+    bool goToIn();
+    bool goToOut();
+    // Marked material, or the whole clip where a mark is missing.
+    std::int64_t markedStart() const;
+    std::int64_t markedEnd() const; // inclusive
+    std::int64_t inOutDuration() const;
+
+    // The clip's starting timecode in frames (its Start column, or the
+    // sequence default) and what a tracking display shows.
+    std::int64_t startFrame() const;
+    QString tracking(TrackingFormat format) const;
+    // As bins show durations (p.246-255): "0:00", "1:11", "4:24:14".
+    QString durationText(std::int64_t frames) const;
+
+private:
+    LoadedClip* currentMutable();
+
+    QList<LoadedClip> loaded_; // in load order
+    int current_ = -1;         // -1: nothing shown
+};
+
+} // namespace lumenis::model

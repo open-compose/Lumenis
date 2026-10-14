@@ -267,7 +267,15 @@ Sub-steps:
   * Tools > Project; Favorite Bins; Set Bin Display; filtering on selected
     columns; Tab and Enter between cells; timecode range sifts.
   * Details and what is left: "Implementation status (1.3c)" in the spec.
-* **1.4** Composer and Timeline.
+* **1.4a Composer — done.**
+  * Source and Record monitors with Clip Name menus, tracking displays,
+    the center duration, position bars and two button rows.
+  * Loading from bins, J-K-L and the other play, step and mark commands,
+    Gang and Show Single/Dual Monitor; the position moves in real time
+    until there is media (Phase 2).
+  * Details and what is left: "Implementation status (1.4a)" in the spec.
+* **1.4b** Timeline: sequences with tracks, splice-in and overwrite, the
+  track selector panel and patching.
 * **1.5** Palettes, tools and Settings dialogs.
 * **1.6** Keyboard settings, workspaces and button mapping (gate 3, gate 4).
 

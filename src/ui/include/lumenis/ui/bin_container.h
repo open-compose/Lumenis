@@ -252,6 +252,8 @@ signals:
     void activeBinChanged();
     // Something that needs saving, or was saved.
     void dirtyChanged();
+    // An item double-clicked in a bin, to load into a monitor (p.394).
+    void itemActivated(const QString& binId, const QString& itemId);
     // A bin floated into a new Bin Container window.
     void floatingContainerCreated(QWidget* window);
 

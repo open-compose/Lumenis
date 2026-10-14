@@ -666,6 +666,9 @@ BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& w
     s.created = when;
     s.modified = when;
     s.editRate = editRate;
+    const TimecodeFormat format = TimecodeFormat::forRate(editRate, false);
+    s.fields.insert(QStringLiteral("Start"),
+                    QString::fromStdString(Timecode(kDefaultStartHours * 3600 * format.nominalFps, format).toString()));
     return s;
 }
 

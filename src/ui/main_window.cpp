@@ -5,6 +5,8 @@
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
+#include "lumenis/ui/composer.h"
+#include "lumenis/ui/keyboard_map.h"
 #include "lumenis/ui/menu_builder.h"
 #include "lumenis/ui/panels.h"
 #include "lumenis/ui/theme.h"
@@ -141,8 +143,26 @@ void MainWindow::createPanels() {
     // Tools > Project: a Sidebar-only Bin Container named Project (p.243). As
     // a panel it takes part in workspaces, floating or not.
     panels_->addPanel(new Panel(QStringLiteral("Project"), tr("Project"), new BinSidebar(*binContainer_)));
-    panels_->addPanel(new Panel(QStringLiteral("Composer"), tr("Composer"),
-                                new Placeholder(Placeholder::Kind::Composer, QStringLiteral("composerPlaceholder"))));
+    // The Composer window (ch. 13).
+    composer_ = new Composer;
+    composer_->setItemResolver([this](const QString& binId, const QString& itemId) -> std::optional<model::BinItem> {
+        const BinDocument* doc = binContainer_->document(binId);
+        const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr;
+        if (!item) return std::nullopt;
+        return *item;
+    });
+    keyboard_ = std::make_unique<KeyboardMap>();
+    keyboard_->loadBuiltin(commands_);
+    composer_->setKeyResolver([this](const QKeySequence& key) { return keyboard_->commandFor(key); });
+    panels_->addPanel(new Panel(QStringLiteral("Composer"), tr("Composer"), composer_));
+    // Double-click in a bin loads the item (p.394).
+    connect(binContainer_, &BinContainer::itemActivated, this, [this](const QString& binId, const QString& itemId) {
+        const BinDocument* doc = binContainer_->document(binId);
+        if (const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr) {
+            composer_->loadDefault(binId, *item);
+            panels_->showPanel(panels_->panel(QStringLiteral("Composer")));
+        }
+    });
     panels_->addPanel(new Panel(QStringLiteral("Timeline"), tr("Timeline"),
                                 new Placeholder(Placeholder::Kind::Timeline, QStringLiteral("timelinePlaceholder"))));
 }
@@ -152,6 +172,8 @@ void MainWindow::setProject(const model::ProjectEntry& project) {
     setWindowTitle(QStringLiteral("%1 - %2").arg(QString::fromUtf8(branding::kProductName), project.settings.name));
     commands_.setHandler(QStringLiteral("file.close_project"), [this] { emit closeProjectRequested(); });
     binContainer_->setProject(project.folder, project.settings.name, project.settings.format.editRate);
+    composer_->clear();
+    composer_->setAspectRatio(project.settings.aspect);
     installProjectHandlers(true);
 }
 
@@ -160,6 +182,7 @@ void MainWindow::clearProject() {
     setWindowTitle(QString::fromUtf8(branding::kProductName));
     commands_.setHandler(QStringLiteral("file.close_project"), {});
     binContainer_->setProject({}, {}, Rational(24000, 1001));
+    composer_->clear();
     installProjectHandlers(false);
 }
 
@@ -332,6 +355,10 @@ void MainWindow::installPanelHandlers() {
         if (Panel* p = panels_->activePanel()) panels_->closePanel(p);
     });
     handle("tools.timeline", [this] { panels_->showPanel(panels_->panel(QStringLiteral("Timeline"))); });
+    // Playing, moving and marking in the Composer (ch. 13).
+    for (const QString& id : commands_.ids()) {
+        if (Composer::handles(id)) handle(id.toLatin1().constData(), [this, id] { composer_->perform(id); });
+    }
 
     // Keyboard-only commands work wherever the main window is active.
     for (const char* id : {"windows.next_window", "windows.previous_window", "windows.next_tab",

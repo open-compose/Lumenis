@@ -6,6 +6,7 @@
 #include <QList>
 #include <QMainWindow>
 
+#include <memory>
 #include <optional>
 
 class QAction;
@@ -20,6 +21,8 @@ namespace lumenis::ui {
 
 class BinContainer;
 class CommandRegistry;
+class Composer;
+class KeyboardMap;
 class PanelManager;
 class WorkspaceBar;
 class WorkspaceManager;
@@ -43,6 +46,7 @@ public:
 
     PanelManager& panels() const { return *panels_; }
     BinContainer& binContainer() const { return *binContainer_; }
+    Composer& composer() const { return *composer_; }
     WorkspaceManager& workspaces() const { return *workspaces_; }
 
     // The layout of a new user (p.74): Bin Container top left, Composer to
@@ -85,6 +89,8 @@ private:
     std::optional<model::ProjectEntry> project_;
     PanelManager* panels_ = nullptr;
     BinContainer* binContainer_ = nullptr;
+    Composer* composer_ = nullptr;
+    std::unique_ptr<KeyboardMap> keyboard_;
     WorkspaceManager* workspaces_ = nullptr;
     WorkspaceBar* bar_ = nullptr;
     QToolButton* workspaceButton_ = nullptr;
