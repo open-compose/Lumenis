@@ -12,17 +12,21 @@ namespace lumenis::ui {
 struct WaylandSupport {
     bool platformPlugin = false;
     bool shellIntegration = false;
+    QString loadError; // a part that is there but does not load
     bool complete() const { return platformPlugin && shellIntegration; }
 };
 
-// What is installed in a Qt plugins folder.
-WaylandSupport waylandSupport(const QString& pluginsDir);
+// What is installed in a Qt plugins folder. With `tryLoad`, the parts are
+// also loaded (not started): a plugin from a different build of Qt than the
+// libraries it needs is there but unusable, as happens when the package
+// manager holds back part of an update.
+WaylandSupport waylandSupport(const QString& pluginsDir, bool tryLoad = false);
 
 // The platform to ask Qt for before the application starts: "xcb" when this
 // is a Wayland session whose Wayland support is incomplete and X11
 // (XWayland) is there; otherwise empty, leaving Qt's own choice. A platform
 // the user set (QT_QPA_PLATFORM) is never overridden. `why` says what is
-// missing whenever Wayland support is incomplete in a Wayland session, also
+// wrong and what to do whenever Wayland support is incomplete in a Wayland session, also
 // when there is no X11 to fall back to.
 struct PlatformEnvironment {
     bool platformSet = false; // QT_QPA_PLATFORM

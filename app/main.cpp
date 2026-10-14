@@ -119,13 +119,11 @@ int main(int argc, char** argv) {
         QString why;
         const QString platform = lumenis::ui::fallbackPlatformForThisSystem(&why);
         if (!platform.isEmpty()) {
-            std::fprintf(stderr, "%s: %s, so it runs through X11 (XWayland). Install qt6-wayland "
-                                 "(Fedora: qt6-qtwayland) for native Wayland.\n",
+            std::fprintf(stderr, "%s: %s. Running through X11 (XWayland) meanwhile.\n",
                          lumenis::branding::kExecutableName, qPrintable(why));
             qputenv("QT_QPA_PLATFORM", platform.toLatin1());
         } else if (!why.isEmpty()) {
-            std::fprintf(stderr, "%s: %s and there is no X11 (DISPLAY is not set) to use instead. Install "
-                                 "qt6-wayland (Fedora: qt6-qtwayland).\n",
+            std::fprintf(stderr, "%s: %s. There is no X11 (DISPLAY is not set) to use instead.\n",
                          lumenis::branding::kExecutableName, qPrintable(why));
         }
     }

@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QLibraryInfo>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -34,20 +35,36 @@ private slots:
         touch(plugins.filePath(QStringLiteral("wayland-shell-integration/libxdg-shell.so")));
         QVERIFY(waylandSupport(plugins.path()).complete());
 
+        // Files that are not plugins are there but do not load.
+        const WaylandSupport broken = waylandSupport(plugins.path(), true);
+        QVERIFY(!broken.complete());
+        QVERIFY(broken.loadError.contains(QStringLiteral("libqwayland.so")));
+        QString why;
+        QCOMPARE(fallbackPlatform({false, true, true}, broken, &why), QStringLiteral("xcb"));
+        QVERIFY(why.contains(QStringLiteral("does not load")));
+
         // Qt 6.9 and earlier name the plugin differently.
         QTemporaryDir older;
         touch(older.filePath(QStringLiteral("platforms/libqwayland-generic.so")));
         QVERIFY(waylandSupport(older.path()).platformPlugin);
     }
 
+    void loadsTheRealPlugins() {
+        // This machine's Qt, when it has Wayland support: it loads.
+        const QString dir = QLibraryInfo::path(QLibraryInfo::PluginsPath);
+        if (!waylandSupport(dir).complete()) QSKIP("no Wayland support installed here");
+        const WaylandSupport s = waylandSupport(dir, true);
+        QVERIFY2(s.complete(), qPrintable(s.loadError));
+    }
+
     void fallsBackToX11OnlyWhenItShould() {
-        const WaylandSupport incomplete{true, false};
-        const WaylandSupport complete{true, true};
+        const WaylandSupport incomplete{true, false, {}};
+        const WaylandSupport complete{true, true, {}};
         PlatformEnvironment session{false, true, true}; // Wayland session with XWayland
         QString why;
         QCOMPARE(fallbackPlatform(session, incomplete, &why), QStringLiteral("xcb"));
         QVERIFY(why.contains(QStringLiteral("xdg-shell")));
-        QCOMPARE(fallbackPlatform(session, WaylandSupport{false, false}, &why), QStringLiteral("xcb"));
+        QCOMPARE(fallbackPlatform(session, WaylandSupport{false, false, {}}, &why), QStringLiteral("xcb"));
         QVERIFY(why.contains(QStringLiteral("platform plugin")));
         // Complete support: Qt chooses.
         QVERIFY(fallbackPlatform(session, complete).isEmpty());

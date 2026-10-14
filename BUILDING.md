@@ -187,7 +187,18 @@ Until then Cutthulhu notices and says in one line what is missing. If X11
 (XWayland) is there it runs through it, which works but responds more
 slowly; WSLg normally provides it and sets `DISPLAY=:0`.
 
-If the messages stay after installing it, check what Qt sees:
+If the messages stay after installing it, the parts are probably from
+different updates: `apt` says "Not Upgrading: N" when it holds some back
+(Ubuntu phases updates in), and a plugin from one build does not load into
+the libraries of another. Cutthulhu then says "installed but does not load"
+with Qt's reason. Bring them level and rebuild:
+
+```
+sudo apt update && sudo apt full-upgrade
+apt list --upgradable 2>/dev/null | grep -i qt6   # should print nothing
+```
+
+To see what Qt sees:
 
 ```
 echo "WAYLAND_DISPLAY=$WAYLAND_DISPLAY DISPLAY=$DISPLAY QT_QPA_PLATFORM=$QT_QPA_PLATFORM"
