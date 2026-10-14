@@ -95,6 +95,13 @@ struct BinDisplay {
     BinSift sift;
     bool sifted = false;    // Show Sifted / Show Unsifted
     bool statusBar = false; // Show Status Bar (p.254)
+    // Set Bin Display (p.288): object types not shown. By default "all
+    // existing media objects except source clips and rendered effects".
+    QList<BinItemKind> hiddenKinds = defaultHiddenKinds();
+    bool showUserClips = true;       // "Show clips created by user"
+    bool showReferenceClips = false; // "Show reference clips"
+
+    static QList<BinItemKind> defaultHiddenKinds() { return {BinItemKind::Source, BinItemKind::RenderedEffect}; }
 };
 
 // A bin: its objects and how it is displayed. Stored one per file.
@@ -136,6 +143,25 @@ int compareCells(const BinItem& a, const BinItem& b, const QString& heading);
 void sortItems(Bin& bin, const QList<BinSortKey>& keys);
 // Whether an item stays in the sifted bin. "Any" searches `columns`.
 bool siftMatches(const BinItem& item, const BinSift& sift, const QStringList& columns);
+
+// Timecode ranges a sift can search (p.290): explicit ones between two
+// columns (Start to End Range), and implicit ones that run from a column for
+// the clip's Duration (Sound TC Range). A range is offered when its columns
+// are shown. Keycode and ink number ranges come with film support.
+struct SiftRange {
+    QString name;  // the Column or Range to Search menu item
+    QString start; // heading
+    QString end;   // heading, or empty: start + Duration
+};
+const QList<SiftRange>& siftRanges();
+QStringList siftRangesFor(const QStringList& columns);
+// A timecode typed without colons or leading zeros ("3172000") or with
+// them, as frames at `editRate`; nullopt if it is not a timecode.
+std::optional<std::int64_t> timecodeFrames(const QString& text, const Rational& editRate);
+
+// Set Bin Display: the object types the dialog lists (p.243-244, p.288).
+QString kindLabel(BinItemKind kind);
+const QList<BinItemKind>& allKinds();
 
 // Clip colours (p.264). The guide does not list the palette: these names are
 // ours, and a colour sift matches them (p.289).

@@ -5,6 +5,7 @@
 #include <QDialog>
 #include <QList>
 
+class QCheckBox;
 class QComboBox;
 class QLineEdit;
 class QListWidget;
@@ -54,6 +55,25 @@ private:
     };
     QList<Row> find_;
     QList<Row> also_;
+};
+
+// The Set Bin Display dialog (p.288): which object types the bin shows,
+// "Show clips created by user" and "Show reference clips".
+class SetBinDisplayDialog : public QDialog {
+    Q_OBJECT
+
+public:
+    SetBinDisplayDialog(const model::BinDisplay& display, QWidget* parent = nullptr);
+
+    QList<model::BinItemKind> hiddenKinds() const;
+    bool showUserClips() const;
+    bool showReferenceClips() const;
+    QCheckBox* box(model::BinItemKind kind) const;
+
+private:
+    QList<std::pair<model::BinItemKind, QCheckBox*>> kinds_;
+    QCheckBox* userClips_ = nullptr;
+    QCheckBox* referenceClips_ = nullptr;
 };
 
 } // namespace lumenis::ui

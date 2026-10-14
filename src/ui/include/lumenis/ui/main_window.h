@@ -53,6 +53,9 @@ public:
     // The caller owns the box.
     QMessageBox* createAboutBox();
     static constexpr int kAboutPictureSize = 240; // logical pixels
+    // Tools > Project's first size; the guide gives none.
+    static constexpr int kProjectWidth = 300;
+    static constexpr int kProjectHeight = 460;
 
 signals:
     // File > Close Project: the application returns to Select Project.

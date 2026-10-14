@@ -103,6 +103,20 @@ public:
     QVariant headerData(int section, Qt::Orientation orientation, int role) const override;
     Qt::ItemFlags flags(const QModelIndex& index) const override;
 
+    // Items dragged out carry their bin; items from another bin dropped
+    // here are reported, and the Bin Container moves or copies them.
+    Qt::DropActions supportedDragActions() const override;
+    Qt::DropActions supportedDropActions() const override;
+    QStringList mimeTypes() const override;
+    QMimeData* mimeData(const QModelIndexList& indexes) const override;
+    bool canDropMimeData(const QMimeData* data, Qt::DropAction action, int row, int column,
+                         const QModelIndex& parent) const override;
+    bool dropMimeData(const QMimeData* data, Qt::DropAction action, int row, int column,
+                      const QModelIndex& parent) override;
+
+signals:
+    void itemsDropped(const QString& fromBin, const QStringList& ids, bool copy);
+
 private:
     BinDocument& document_;
     QStringList selectedHeadings_;
@@ -114,7 +128,9 @@ class BinFilterModel : public QSortFilterProxyModel {
 
 public:
     BinFilterModel(BinDocument& document, QObject* parent = nullptr);
-    void setQuickFilter(const QString& text);
+    // With headings selected, the quick filter searches them; otherwise
+    // Name (p.294).
+    void setQuickFilter(const QString& text, const QStringList& headings = {});
 
 protected:
     bool filterAcceptsRow(int row, const QModelIndex& parent) const override;
@@ -122,6 +138,7 @@ protected:
 private:
     BinDocument& document_;
     QString quick_;
+    QStringList quickHeadings_;
 };
 
 // Frame view (p.249-252): a frame per clip with its name below, moved
@@ -172,6 +189,10 @@ public:
 
     void rebuild();
     QWidget* rowFor(const QString& id) const;
+
+signals:
+    // Items dropped here from another bin.
+    void itemsDropped(const QString& fromBin, const QStringList& ids, bool copy);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -260,12 +281,19 @@ public:
     void setBackground(const QString& color);
     void setLocked(bool locked);
 
+    // Bin > Set Bin Display (p.288).
+    void setBinDisplay();
+    void setHiddenKinds(const QList<model::BinItemKind>& kinds);
+
     // The bin's right-click menu.
     QMenu* contextMenu(const QPoint& viewportPos, QWidget* view);
 
 signals:
     // Delete or Backspace in the bin.
     void deleteRequested();
+    // Items dropped here from another bin (p.260): moved, or with the copy
+    // modifier copied.
+    void itemsDropped(const QString& fromBin, const QStringList& ids, bool copy);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -294,6 +322,7 @@ private:
     QLabel* status_ = nullptr;
     QStringList selectedHeadings_;
     QStringList keepSelection_;
+    QString quick_;
     bool applying_ = false;
 };
 

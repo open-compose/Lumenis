@@ -181,10 +181,12 @@ int main(int argc, char** argv) {
         window.restoreGeometry(settings.value(QStringLiteral("mainWindow/geometry")).toByteArray());
         window.workspaces().load(settings);
         lumenis::ui::BinViewLibrary::load(settings);
+        lumenis::ui::FavoriteBins::load(settings);
         QObject::connect(&guiApp, &QApplication::aboutToQuit, [&] {
             settings.setValue(QStringLiteral("mainWindow/geometry"), window.saveGeometry());
             window.workspaces().save(settings);
             lumenis::ui::BinViewLibrary::save(settings);
+            lumenis::ui::FavoriteBins::save(settings);
             commands.saveShortcuts(settings);
         });
     }
@@ -302,6 +304,23 @@ int main(int argc, char** argv) {
                 QCoreApplication::processEvents();
                 ok = lumenis::ui::capture(content, dir, QStringLiteral("bin_script_view")) && ok;
                 bin->setMode(lumenis::model::BinViewMode::Text);
+            }
+            // Two bins one above the other, and the green zone for docking a
+            // third beside them (p.241).
+            {
+                lumenis::ui::BinContainer& bins = window.binContainer();
+                const QString interviews = bins.bins()->bins().last()->id;
+                if (lumenis::ui::BinDocument* doc = bins.openBin(interviews)) {
+                    lumenis::ui::BinDockArea* area = bins.binArea();
+                    bins.dockBin(doc, area->groups().first(), lumenis::ui::BinDropSide::Bottom);
+                    QCoreApplication::processEvents();
+                    lumenis::ui::BinTabGroup* top = area->groups().first();
+                    const QRect r(top->mapTo(area, QPoint()), top->size());
+                    area->setHoveredZone(area->zoneAt(QPoint(r.right() - 4, r.center().y()), false));
+                    ok = lumenis::ui::capture(content, dir, QStringLiteral("bin_docking")) && ok;
+                    area->setHoveredZone({});
+                    bins.closeBin(doc);
+                }
             }
             ok = lumenis::ui::capture(&selectProject, dir, QStringLiteral("select_project")) && ok;
             selectProject.showPage(lumenis::ui::SelectProjectDialog::Page::NewProject);

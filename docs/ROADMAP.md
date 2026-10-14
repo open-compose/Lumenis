@@ -259,8 +259,14 @@ Sub-steps:
   * Frame sizes, Align and Fill, Snap to Grid; the Script view's text;
     clip and background colours; locks.
   * Details and what is left: "Implementation status (1.3b)" in the spec.
-* **1.3c** Bin docking and floating bin containers, the Project Bin
-  Container, Favorite Bins and the rest of chapter 10.
+* **1.3c Bin docking, Project Bin Container, Favorite Bins — done.**
+  * Bins docked side by side with green drop zones, and floating Bin
+    Containers.
+  * Items dragged between bins and onto Sidebar bins; Sidebar bins dragged
+    to the bins.
+  * Tools > Project; Favorite Bins; Set Bin Display; filtering on selected
+    columns; Tab and Enter between cells; timecode range sifts.
+  * Details and what is left: "Implementation status (1.3c)" in the spec.
 * **1.4** Composer and Timeline.
 * **1.5** Palettes, tools and Settings dialogs.
 * **1.6** Keyboard settings, workspaces and button mapping (gate 3, gate 4).

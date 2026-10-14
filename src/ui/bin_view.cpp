@@ -1,6 +1,7 @@
 #include "lumenis/ui/bin_view.h"
 
 #include "lumenis/ui/bin_dialogs.h"
+#include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/theme.h"
 
 #include <QAction>
@@ -48,7 +49,6 @@ constexpr int kDateWidth = 160;
 constexpr int kColorWidth = 44;
 constexpr int kFrameMargin = 8;
 constexpr int kScriptTextHeight = 64;
-constexpr auto kItemsMime = "application/x-lumenis-bin-items";
 constexpr int kSaveAsRole = Qt::UserRole + 1; // the Bin View menu's Save As
 
 GlyphIcon iconFor(model::BinItemKind kind) {
@@ -125,6 +125,64 @@ public:
 
 private:
     BinFrameView* view_;
+};
+
+// Moving between cells while typing (p.270): Tab and Shift+Tab along the
+// row, Enter and Shift+Enter down and up the column, wrapping at the ends.
+class CellDelegate : public QStyledItemDelegate {
+public:
+    explicit CellDelegate(QTableView* table) : QStyledItemDelegate(table), table_(table) {}
+
+protected:
+    bool eventFilter(QObject* object, QEvent* event) override {
+        auto* editor = qobject_cast<QWidget*>(object);
+        if (!editor || event->type() != QEvent::KeyPress) return QStyledItemDelegate::eventFilter(object, event);
+        const auto* key = static_cast<QKeyEvent*>(event);
+        const bool shift = key->modifiers() & Qt::ShiftModifier;
+        int dRow = 0;
+        int dColumn = 0;
+        switch (key->key()) {
+        case Qt::Key_Tab: dColumn = shift ? -1 : 1; break;
+        case Qt::Key_Backtab: dColumn = -1; break;
+        case Qt::Key_Return:
+        case Qt::Key_Enter: dRow = shift ? -1 : 1; break;
+        default: return QStyledItemDelegate::eventFilter(object, event);
+        }
+        const QModelIndex at = table_->currentIndex();
+        QAbstractItemModel* m = table_->model();
+        const int rows = m->rowCount();
+        QHeaderView* header = table_->horizontalHeader();
+        // Columns in the order shown, without the icon column.
+        const int first = 1;
+        const int last = header->count() - 1;
+        int row = at.row();
+        int visual = header->visualIndex(at.column());
+        if (dColumn != 0) {
+            visual += dColumn;
+            if (visual > last) visual = first;
+            if (visual < first) visual = last;
+        } else if (rows > 0) {
+            row = (row + dRow + rows) % rows;
+        }
+        const int column = header->logicalIndex(visual);
+        emit commitData(editor);
+        emit closeEditor(editor, QAbstractItemDelegate::NoHint);
+        // The model may have been rebuilt by the change: find the cell again.
+        QTableView* table = table_;
+        QMetaObject::invokeMethod(
+            table,
+            [table, row, column] {
+                const QModelIndex next = table->model()->index(row, column);
+                if (!next.isValid()) return;
+                table->setCurrentIndex(next);
+                if (next.flags() & Qt::ItemIsEditable) table->edit(next);
+            },
+            Qt::QueuedConnection);
+        return true;
+    }
+
+private:
+    QTableView* table_;
 };
 
 } // namespace
@@ -382,13 +440,55 @@ Qt::ItemFlags BinItemModel::flags(const QModelIndex& index) const {
     return f;
 }
 
+Qt::DropActions BinItemModel::supportedDragActions() const {
+    return Qt::MoveAction | Qt::CopyAction;
+}
+
+Qt::DropActions BinItemModel::supportedDropActions() const {
+    return Qt::MoveAction | Qt::CopyAction;
+}
+
+QStringList BinItemModel::mimeTypes() const {
+    return {binItemsMime()};
+}
+
+QMimeData* BinItemModel::mimeData(const QModelIndexList& indexes) const {
+    // The bin first, then the items.
+    QStringList lines{document_.nodeId()};
+    for (const QModelIndex& i : indexes) {
+        const QString id = data(i, kIdRole).toString();
+        if (!id.isEmpty() && !lines.contains(id)) lines << id;
+    }
+    auto* mime = new QMimeData;
+    mime->setData(binItemsMime(), lines.join(QLatin1Char('\n')).toUtf8());
+    return mime;
+}
+
+bool BinItemModel::canDropMimeData(const QMimeData* data, Qt::DropAction, int, int, const QModelIndex&) const {
+    if (!data->hasFormat(binItemsMime())) return false;
+    const QString from = QString::fromUtf8(data->data(binItemsMime())).section(QLatin1Char('\n'), 0, 0);
+    return from != document_.nodeId();
+}
+
+bool BinItemModel::dropMimeData(const QMimeData* data, Qt::DropAction action, int row, int column,
+                                const QModelIndex& parent) {
+    if (!canDropMimeData(data, action, row, column, parent)) return false;
+    QStringList lines = QString::fromUtf8(data->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    const QString from = lines.takeFirst();
+    // Alt/Option (p.260) or Ctrl (p.261, the platform's copy key) copies.
+    const bool copy = action == Qt::CopyAction || (QApplication::keyboardModifiers() & Qt::AltModifier);
+    emit itemsDropped(from, lines, copy);
+    return true;
+}
+
 // ---------------------------------------------------------------- BinFilterModel
 
 BinFilterModel::BinFilterModel(BinDocument& document, QObject* parent)
     : QSortFilterProxyModel(parent), document_(document) {}
 
-void BinFilterModel::setQuickFilter(const QString& text) {
+void BinFilterModel::setQuickFilter(const QString& text, const QStringList& headings) {
     quick_ = text;
+    quickHeadings_ = headings;
     invalidateFilter();
 }
 
@@ -396,7 +496,15 @@ bool BinFilterModel::filterAcceptsRow(int row, const QModelIndex&) const {
     const model::Bin& bin = document_.bin();
     if (row < 0 || row >= bin.items.size()) return false;
     const model::BinItem& item = bin.items.at(row);
-    if (!quick_.isEmpty() && !item.name.contains(quick_, Qt::CaseInsensitive)) return false;
+    // Set Bin Display (p.288).
+    if (bin.display.hiddenKinds.contains(item.kind)) return false;
+    if (!quick_.isEmpty()) {
+        const QStringList searched = quickHeadings_.isEmpty() ? QStringList{QStringLiteral("Name")} : quickHeadings_;
+        const bool found = std::any_of(searched.begin(), searched.end(), [&](const QString& h) {
+            return model::cellText(item, h).contains(quick_, Qt::CaseInsensitive);
+        });
+        if (!found) return false;
+    }
     if (bin.isSiftShown()) {
         return model::siftMatches(item, bin.display.sift, QStringList{QStringLiteral("Name")} + bin.display.columns);
     }
@@ -707,22 +815,31 @@ bool BinScriptView::eventFilter(QObject* watched, QEvent* event) {
         if (ids.isEmpty()) ids << pressId_;
         pressId_.clear();
         auto* mime = new QMimeData;
-        mime->setData(QLatin1String(kItemsMime), ids.join(QLatin1Char('\n')).toUtf8());
+        mime->setData(binItemsMime(), (QStringList{document_.nodeId()} + ids).join(QLatin1Char('\n')).toUtf8());
         auto* drag = new QDrag(this);
         drag->setMimeData(mime);
-        drag->exec(Qt::MoveAction);
+        drag->exec(Qt::MoveAction | Qt::CopyAction, Qt::MoveAction);
         return true;
     }
     if (event->type() == QEvent::MouseButtonRelease) pressId_.clear();
     if (watched == content_ && (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove)) {
         auto* de = static_cast<QDropEvent*>(event);
-        if (de->mimeData()->hasFormat(QLatin1String(kItemsMime))) de->acceptProposedAction();
+        if (de->mimeData()->hasFormat(binItemsMime())) de->acceptProposedAction();
         return true;
     }
     if (watched == content_ && event->type() == QEvent::Drop) {
         auto* de = static_cast<QDropEvent*>(event);
-        const QStringList ids =
-            QString::fromUtf8(de->mimeData()->data(QLatin1String(kItemsMime))).split(QLatin1Char('\n'));
+        QStringList ids =
+            QString::fromUtf8(de->mimeData()->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        if (ids.isEmpty()) return true;
+        const QString from = ids.takeFirst();
+        if (from != document_.nodeId()) {
+            // From another bin.
+            de->acceptProposedAction();
+            emit itemsDropped(from, ids,
+                              de->dropAction() == Qt::CopyAction || (de->modifiers() & Qt::AltModifier));
+            return true;
+        }
         // Before the row under the pointer, or at the end.
         int to = static_cast<int>(document_.bin().items.size());
         const int y = de->position().toPoint().y();
@@ -833,6 +950,12 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
     header->setContextMenuPolicy(Qt::CustomContextMenu);
     table_->setIconSize(QSize(16, 16));
     table_->setContextMenuPolicy(Qt::CustomContextMenu);
+    // Items drag to other bins and to bins in the Sidebar (p.243, p.260).
+    table_->setDragEnabled(true);
+    table_->setDragDropMode(QAbstractItemView::DragDrop);
+    table_->setDefaultDropAction(Qt::MoveAction);
+    table_->setDropIndicatorShown(false);
+    table_->setItemDelegate(new CellDelegate(table_));
     table_->installEventFilter(this);
     table_->viewport()->installEventFilter(this);
     connect(header, &QHeaderView::sectionClicked, this, &BinView::headerClicked);
@@ -858,10 +981,14 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
     frames_->setModelColumn(BinItemModel::kNameColumn);
     frames_->setSelectionModel(table_->selectionModel());
     frames_->setContextMenuPolicy(Qt::CustomContextMenu);
+    frames_->setAcceptDrops(true);
+    frames_->setDefaultDropAction(Qt::MoveAction);
     frames_->installEventFilter(this);
 
     script_ = new BinScriptView(document_, proxy_, table_->selectionModel(), this);
     script_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(model_, &BinItemModel::itemsDropped, this, &BinView::itemsDropped);
+    connect(script_, &BinScriptView::itemsDropped, this, &BinView::itemsDropped);
 
     stack_ = new QStackedWidget(this);
     stack_->addWidget(table_);
@@ -1021,7 +1148,8 @@ void BinView::reverseSelection() {
 }
 
 void BinView::setQuickFilter(const QString& text) {
-    proxy_->setQuickFilter(text);
+    quick_ = text;
+    proxy_->setQuickFilter(text, mode() == model::BinViewMode::Text ? selectedHeadings_ : QStringList());
     updateStatus();
 }
 
@@ -1081,6 +1209,7 @@ void BinView::selectHeadings(const QStringList& headings) {
     selectedHeadings_ = headings;
     selectedHeadings_.removeIf([&](const QString& h) { return model_->columnOf(h) < 0; });
     model_->setSelectedHeadings(selectedHeadings_);
+    if (!quick_.isEmpty()) setQuickFilter(quick_);
 }
 
 void BinView::headerClicked(int logical) {
@@ -1308,7 +1437,9 @@ void BinView::sortAgain() {
 
 void BinView::siftBinContents() {
     const model::BinDisplay& d = document_.bin().display;
-    CustomSiftDialog dialog(QStringList{QStringLiteral("Name")} + d.columns, d.sift, this);
+    // Shown columns, and the timecode ranges they make (p.290).
+    CustomSiftDialog dialog(QStringList{QStringLiteral("Name")} + d.columns + model::siftRangesFor(d.columns), d.sift,
+                            this);
     connect(&dialog, &CustomSiftDialog::applied, this, [this](const model::BinSift& s) { sift(s); });
     if (dialog.exec() == QDialog::Accepted) sift(dialog.sift());
 }
@@ -1332,6 +1463,25 @@ void BinView::setSiftShown(bool shown) {
     model::BinDisplay d = document_.bin().display;
     if (d.sift.isEmpty() || d.sifted == shown) return;
     d.sifted = shown;
+    document_.setDisplay(d);
+}
+
+// ---------------------------------------------------------------- Set Bin Display
+
+void BinView::setBinDisplay() {
+    const model::BinDisplay& d = document_.bin().display;
+    SetBinDisplayDialog dialog(d, this);
+    if (dialog.exec() != QDialog::Accepted) return;
+    model::BinDisplay changed = d;
+    changed.hiddenKinds = dialog.hiddenKinds();
+    changed.showUserClips = dialog.showUserClips();
+    changed.showReferenceClips = dialog.showReferenceClips();
+    document_.setDisplay(changed);
+}
+
+void BinView::setHiddenKinds(const QList<model::BinItemKind>& kinds) {
+    model::BinDisplay d = document_.bin().display;
+    d.hiddenKinds = kinds;
     document_.setDisplay(d);
 }
 

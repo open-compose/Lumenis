@@ -144,6 +144,30 @@ private slots:
         QCOMPARE(names, (QStringList{"", "Red", "Green", "Blue"}));
     }
 
+    void readsTimecodesForRangeSifts() {
+        // Colons and leading zeros may be left out (p.290).
+        const Rational fps25(25);
+        QCOMPARE(timecodeFrames(QStringLiteral("3172000"), fps25), std::optional<std::int64_t>(((3 * 60 + 17) * 60 + 20) * 25));
+        QCOMPARE(timecodeFrames(QStringLiteral("03:17:20:00"), fps25), timecodeFrames(QStringLiteral("3172000"), fps25));
+        QVERIFY(!timecodeFrames(QStringLiteral("abc"), fps25));
+        QVERIFY(!timecodeFrames(QStringLiteral("00:00:00:30"), fps25)); // no frame 30 at 25 fps
+        QVERIFY(!timecodeFrames({}, fps25));
+
+        // An implicit range runs for the clip's Duration.
+        BinItem item;
+        item.editRate = fps25;
+        item.durationFrames = 250;
+        item.fields.insert(QStringLiteral("Sound TC"), QStringLiteral("10:00:00:00"));
+        BinSift sift;
+        sift.find = {{QStringLiteral("10000905"), QStringLiteral("Sound TC Range")}};
+        QVERIFY(siftMatches(item, sift, {}));
+        sift.find = {{QStringLiteral("10001000"), QStringLiteral("Sound TC Range")}};
+        QVERIFY(!siftMatches(item, sift, {}));
+        QCOMPARE(siftRangesFor({QStringLiteral("Start")}), QStringList());
+        QCOMPARE(siftRangesFor({QStringLiteral("Sound TC"), QStringLiteral("Start"), QStringLiteral("End")}),
+                 (QStringList{"Start to End Range", "Sound TC Range"}));
+    }
+
     void siftsOnCriteria() {
         BinItem a;
         a.id = QStringLiteral("a");

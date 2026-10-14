@@ -229,7 +229,7 @@ private slots:
         QCOMPARE(c.activeDocument()->bin().items.size(), 1);
         c.setProject({}, {}, Rational(25));
         QVERIFY(!c.hasProject());
-        QCOMPARE(c.tabs()->count(), 0);
+        QVERIFY(c.binArea()->views().isEmpty());
     }
 
     void opensBinsFromOtherProjectsInItalic() {
@@ -248,11 +248,11 @@ private slots:
         Fixture f;
         f.container.setSidebarOnly(true);
         QVERIFY(f.container.isSidebarOnly());
-        QVERIFY(f.container.tabs()->isHidden());
+        QVERIFY(f.container.binArea()->isHidden());
         f.container.setSidebarOnly(false);
         f.container.setSidebarVisible(false);
         QVERIFY(!f.container.isSidebarVisible());
-        QVERIFY(f.container.tabs()->isVisible());
+        QVERIFY(f.container.binArea()->isVisible());
         f.container.setSidebarVisible(true);
         QVERIFY(f.container.isSidebarVisible());
     }

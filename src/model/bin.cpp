@@ -217,7 +217,28 @@ template <typename T> int threeWay(const T& a, const T& b) {
     return a < b ? -1 : (b < a ? 1 : 0);
 }
 
+bool rangeMatches(const BinItem& item, const SiftRow& row) {
+    for (const SiftRange& r : siftRanges()) {
+        if (r.name != row.column) continue;
+        const auto value = timecodeFrames(row.text, item.editRate);
+        const auto start = timecodeFrames(cellText(item, r.start), item.editRate);
+        if (!value || !start) return false;
+        std::int64_t end = 0;
+        if (r.end.isEmpty()) {
+            end = *start + std::max<std::int64_t>(item.durationFrames - 1, 0);
+        } else {
+            const auto e = timecodeFrames(cellText(item, r.end), item.editRate);
+            if (!e) return false;
+            end = *e;
+        }
+        // "clips that encompass the timecode" (p.291).
+        return *value >= *start && *value <= end;
+    }
+    return false;
+}
+
 bool rowMatches(const BinItem& item, const SiftRow& row, const QStringList& columns) {
+    if (row.column.endsWith(QLatin1String(" Range"))) return rangeMatches(item, row);
     const QStringList searched = row.column.isEmpty() ? columns : QStringList{row.column};
     for (const QString& heading : searched) {
         // Colours are found by their exact name (p.289).
@@ -416,6 +437,78 @@ bool siftMatches(const BinItem& item, const BinSift& sift, const QStringList& co
     return groupMatches(item, sift.find, columns) || groupMatches(item, sift.also, columns);
 }
 
+const QList<SiftRange>& siftRanges() {
+    // The tables on p.290, without keycode and ink number ranges.
+    static const QList<SiftRange> ranges = [] {
+        QList<SiftRange> r{
+            {QStringLiteral("Start to End Range"), QStringLiteral("Start"), QStringLiteral("End")},
+            {QStringLiteral("Mark In to Out Range"), QStringLiteral("Mark IN"), QStringLiteral("Mark OUT")},
+            {QStringLiteral("Film TC Range"), QStringLiteral("Film TC"), {}},
+            {QStringLiteral("Sound TC Range"), QStringLiteral("Sound TC"), {}},
+        };
+        for (int i = 1; i <= 5; ++i) {
+            r.append({QStringLiteral("Auxiliary TC%1 Range").arg(i), QStringLiteral("Auxiliary TC%1").arg(i), {}});
+        }
+        return r;
+    }();
+    return ranges;
+}
+
+QStringList siftRangesFor(const QStringList& columns) {
+    QStringList out;
+    for (const SiftRange& r : siftRanges()) {
+        if (columns.contains(r.start) && (r.end.isEmpty() || columns.contains(r.end))) out << r.name;
+    }
+    return out;
+}
+
+std::optional<std::int64_t> timecodeFrames(const QString& text, const Rational& editRate) {
+    // "you do not need to enter colons or semicolons, and you can omit the
+    // leading zero" (p.290).
+    QString digits;
+    for (const QChar c : text) {
+        if (c.isDigit()) {
+            digits += c;
+        } else if (!QStringLiteral(":;. ").contains(c)) {
+            return std::nullopt;
+        }
+    }
+    if (digits.isEmpty() || digits.size() > 8) return std::nullopt;
+    digits = digits.rightJustified(8, QLatin1Char('0'));
+    TimecodeFields f;
+    f.hours = QStringView(digits).mid(0, 2).toInt();
+    f.minutes = QStringView(digits).mid(2, 2).toInt();
+    f.seconds = QStringView(digits).mid(4, 2).toInt();
+    f.frames = QStringView(digits).mid(6, 2).toInt();
+    const TimecodeFormat format = TimecodeFormat::forRate(editRate, text.contains(QLatin1Char(';')));
+    if (f.minutes > 59 || f.seconds > 59 || f.frames >= format.nominalFps) return std::nullopt;
+    return Timecode::fromFields(f, format).frameCount();
+}
+
+QString kindLabel(BinItemKind kind) {
+    switch (kind) {
+    case BinItemKind::MasterClip: return QStringLiteral("Master Clips");
+    case BinItemKind::Subclip: return QStringLiteral("Subclips");
+    case BinItemKind::AudioClip: return QStringLiteral("Audio Clips");
+    case BinItemKind::Sequence: return QStringLiteral("Sequences");
+    case BinItemKind::Source: return QStringLiteral("Sources");
+    case BinItemKind::Effect: return QStringLiteral("Effects");
+    case BinItemKind::MotionEffect: return QStringLiteral("Motion Effects");
+    case BinItemKind::RenderedEffect: return QStringLiteral("Rendered Effects");
+    case BinItemKind::Group: return QStringLiteral("Groups");
+    case BinItemKind::Title: return QStringLiteral("Titles");
+    }
+    return {};
+}
+
+const QList<BinItemKind>& allKinds() {
+    static const QList<BinItemKind> kinds{
+        BinItemKind::MasterClip, BinItemKind::Subclip, BinItemKind::AudioClip,      BinItemKind::Sequence,
+        BinItemKind::Source,     BinItemKind::Effect,  BinItemKind::MotionEffect,   BinItemKind::RenderedEffect,
+        BinItemKind::Group,      BinItemKind::Title};
+    return kinds;
+}
+
 const QList<ClipColor>& clipColors() {
     static const QList<ClipColor> colors{
         {QStringLiteral("Red"), QStringLiteral("#c83232")},     {QStringLiteral("Orange"), QStringLiteral("#d27828")},
@@ -493,6 +586,14 @@ std::optional<Bin> BinFile::read(const QString& path, QString* error) {
     bin.display.sift.also = siftRowsFromJson(sift.value(QStringLiteral("also")));
     bin.display.sift.ids = fromArray(sift.value(QStringLiteral("ids")));
     bin.display.sifted = d.value(QStringLiteral("sifted")).toBool();
+    if (d.contains(QStringLiteral("hiddenKinds"))) {
+        bin.display.hiddenKinds.clear();
+        for (const QJsonValue& k : d.value(QStringLiteral("hiddenKinds")).toArray()) {
+            if (const auto kind = kindFromName(k.toString())) bin.display.hiddenKinds << *kind;
+        }
+    }
+    bin.display.showUserClips = d.value(QStringLiteral("showUserClips")).toBool(true);
+    bin.display.showReferenceClips = d.value(QStringLiteral("showReferenceClips")).toBool();
     bin.display.statusBar = d.value(QStringLiteral("statusBar")).toBool();
     return bin;
 }
@@ -512,6 +613,8 @@ bool BinFile::write(const QString& path, const Bin& bin, QString* error) {
     for (const BinSortKey& k : bin.display.sort) {
         sort.append(QJsonObject{{QStringLiteral("heading"), k.heading}, {QStringLiteral("ascending"), k.ascending}});
     }
+    QJsonArray hidden;
+    for (BinItemKind k : bin.display.hiddenKinds) hidden.append(kindName(k));
     const QJsonObject sift{
         {QStringLiteral("find"), siftRowsToJson(bin.display.sift.find)},
         {QStringLiteral("also"), siftRowsToJson(bin.display.sift.also)},
@@ -531,6 +634,9 @@ bool BinFile::write(const QString& path, const Bin& bin, QString* error) {
         {QStringLiteral("sort"), sort},
         {QStringLiteral("sift"), sift},
         {QStringLiteral("sifted"), bin.display.sifted},
+        {QStringLiteral("hiddenKinds"), hidden},
+        {QStringLiteral("showUserClips"), bin.display.showUserClips},
+        {QStringLiteral("showReferenceClips"), bin.display.showReferenceClips},
         {QStringLiteral("statusBar"), bin.display.statusBar},
     };
     const QJsonObject o{

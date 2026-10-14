@@ -138,6 +138,9 @@ void MainWindow::createPanels() {
     // Its tab reads "Bins" in the pictures on p.240-242.
     binContainer_ = new BinContainer;
     panels_->addPanel(new Panel(QStringLiteral("BinContainer"), tr("Bins"), binContainer_));
+    // Tools > Project: a Sidebar-only Bin Container named Project (p.243). As
+    // a panel it takes part in workspaces, floating or not.
+    panels_->addPanel(new Panel(QStringLiteral("Project"), tr("Project"), new BinSidebar(*binContainer_)));
     panels_->addPanel(new Panel(QStringLiteral("Composer"), tr("Composer"),
                                 new Placeholder(Placeholder::Kind::Composer, QStringLiteral("composerPlaceholder"))));
     panels_->addPanel(new Panel(QStringLiteral("Timeline"), tr("Timeline"),
@@ -161,8 +164,10 @@ void MainWindow::clearProject() {
 }
 
 bool MainWindow::binsActive() const {
+    // A floating Bin Container (p.241) is a window of its own.
+    if (qobject_cast<FloatingBinContainer*>(QApplication::activeWindow())) return true;
     const Panel* p = panels_->activePanel();
-    return p && p->id() == QLatin1String("BinContainer");
+    return p && (p->id() == QLatin1String("BinContainer") || p->id() == QLatin1String("Project"));
 }
 
 void MainWindow::installProjectHandlers(bool projectOpen) {
@@ -263,6 +268,22 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
         }),
     };
     for (const auto& [id, handler] : binCommands) handle(id, handler);
+    handle("bin.set_bin_display", [bins] {
+        if (BinView* v = bins->activeView()) v->setBinDisplay();
+    });
+    // Bin > Add Bin to Favorites (p.293).
+    handle("bin.add_bin_to_favorites", [bins] { bins->addToFavorites(bins->activeDocument()); });
+    // Tools > Project (p.243).
+    handle("tools.project", [this] {
+        Panel* project = panels_->panel(QStringLiteral("Project"));
+        if (panels_->isOpen(project)) {
+            panels_->showPanel(project);
+            return;
+        }
+        const QPoint at = mapToGlobal(QPoint(40, 60));
+        panels_->floatPanel(project, QRect(at, QSize(kProjectWidth, kProjectHeight)));
+        panels_->activate(project);
+    });
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
@@ -319,9 +340,11 @@ void MainWindow::installPanelHandlers() {
     }
     // Floating windows are separate windows: give them every command so
     // their shortcuts work there too.
-    connect(panels_, &PanelManager::floatingWindowCreated, this, [this](QWidget* window) {
+    auto giveCommands = [this](QWidget* window) {
         for (const QString& id : commands_.ids()) window->addAction(commands_.action(id));
-    });
+    };
+    connect(panels_, &PanelManager::floatingWindowCreated, this, giveCommands);
+    connect(binContainer_, &BinContainer::floatingContainerCreated, this, giveCommands);
 }
 
 void MainWindow::syncWorkspaceUi() {

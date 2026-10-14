@@ -401,7 +401,22 @@ These are recorded now so they are not entered from memory later.
   * Commands: **Hide Sidebar** (Sidebar fast menu), **File > Close Bin
     Container**, **Bin > Show Sidebar Only**.
 * **Project Bin Container (p.243):** *Tools > Project* (Ctrl+9). A
-  Sidebar-only container named "Project"; it cannot be renamed.
+  Sidebar-only container named "Project"; it cannot be renamed. Closing it
+  leaves bins open. It takes part in workspaces even when floating.
+* **Arranging bins (p.241–243).**
+  * Bins can only be tabbed or docked with other bins in a Bin Container.
+  * Drag a bin tab to an eligible edge (green) to subdivide the right
+    panel; bins can be arranged horizontally or vertically, with splitters
+    between them.
+  * Drag a bin out and release it to float it in a new Bin Container,
+    Sidebar closed.
+  * Alt-drag a bin from the Sidebar to the right panel to tab it; release
+    Alt while dragging and the drop zones appear.
+  * Drag bin items onto an open bin in the Sidebar (a count shows while
+    dragging); onto a closed bin, which then opens with the items selected;
+    onto a closed folder, which expands.
+  * A floating Bin Container closes when its last bin is closed or dragged
+    to another Bin Container.
 * **Object icons (p.243–244):** master clips, subclips, audio clips,
   sequences, sources, effects, motion effects, rendered effects, groups,
   titles and more.
@@ -462,9 +477,14 @@ These are recorded now so they are not entered from memory later.
 * **Fast menu (p.259):** every Bin menu command.
 * **Selecting (p.259–260):** Ctrl/Cmd+click, Shift+click, lasso,
   *Select > Reverse*.
-* **Copying and duplicating (p.260).**
+* **Duplicating, copying and moving (p.260–261).**
   * *Edit > Duplicate* names the copy "name.Copy.n".
-  * Alt-drag (Ctrl on Windows, p.261) copies to another bin.
+  * Dragging items to another bin moves them.
+  * With Alt (Windows) or Option (Mac) on p.260, or Ctrl (Windows) or
+    Command/Option (Mac) on p.261, dragging copies: a clone of the same
+    clip, without ".Copy.n". Clips cannot be copied into their own bin.
+  * Custom columns come along to the other bin, in the order they were
+    made.
 * **Deleting (p.261–262):** a Delete dialog for clips and their media.
 * **Colours (p.263–265).**
   * *Set Background Color* (right-click or fast menu) colours the bin and
@@ -486,7 +506,8 @@ These are recorded now so they are not entered from memory later.
     "Untitled", typed over in the heading; *Rename Column* is for custom
     columns only (p.269).
   * *Bin Left Lock* (p.270).
-  * Tab, Shift+Tab, Enter and Shift+Enter move between cells (p.270).
+  * Tab and Shift+Tab move along the row, Enter and Shift+Enter down and
+    up the column, wrapping at the ends (p.270).
   * The full list of headings is on p.274–278.
   * Headings "modifiable after capture with no restrictions" can be typed
     into: Name, Auxiliary TC1–TC5, Comments, Journalist, Production, Shoot
@@ -504,7 +525,18 @@ These are recorded now so they are not entered from memory later.
   * *Sift Selected Items* keeps the selected items.
   * Timecode and keycode ranges (Start to End Range and others) appear in
     the column menu when their columns are shown (p.290).
-* **Favorite Bins (p.293)** and **filtering items (p.294).**
+* **Favorite Bins (p.293).**
+  * A bin reachable from any project, kept in the user's Bin settings.
+  * *Bin > Add Bin to Favorites*, the Bin Fast Menu, or right-click in a
+    bin. The bin appears in the Sidebar's Favorite Bins folder.
+  * Bin settings: "Favorite Bins show at" Top or Bottom of the Bin
+    Container Sidebar (the picture shows Top).
+  * Select a bin in the folder and press Delete to take it off the list.
+* **Filtering items (p.294):** the quick filter searches the selected
+  columns, or Name when none is selected.
+* **Set Bin Display (p.288):** object types to show (by default all but
+  source clips and rendered effects), "Show clips created by user" (on)
+  and "Show reference clips".
 * **The Sidebar list (p.294–299).**
   * A new project gets a bin named after the project.
   * *New Bin* gives "the name of the project ... with a number appended".
@@ -588,16 +620,49 @@ These are recorded now so they are not entered from memory later.
   * Frame sizes from 64 to 264 pixels wide, 16:9; the third is the default.
   * Without media, a frame is black with the object's icon.
   * New custom columns after the first are "Untitled.1", "Untitled.2", …
-* **Not yet built (1.3c and later).**
-  * Bin docking inside the container and floating bin containers.
-  * The Project Bin Container (Tools > Project).
-  * Favorite Bins, Set Bin Display, Bin Map, Print Bin, the Delete dialog
-    with media, and copying between bins by dragging.
-  * Bin Left Lock, moving between cells with Tab and Enter, timecode and
-    keycode range sifts, Duplicate on columns, and Set <column> for
-    selected clips.
-  * Frame view border colours and icons (Bin settings), changing the
-    represented frame, and Faster Thumbnails.
+* **Not yet built.** See "Implementation status (1.3c)".
+
+**Implementation status (1.3c).**
+* **Built.**
+  * Bin docking: bin tabs dragged to green zones at a group's edges split
+    the right panel; splitters between groups; tabbing into a group; Alt
+    for tabbing only.
+  * Floating Bin Containers with their own Sidebar (closed at first, Show
+    Sidebar on the tab bar's right-click), closed when emptied. The bins
+    open in every container reopen with the project (in the main one).
+  * Sidebar bins dragged to the right panel; bin items dragged between
+    bins (move, or copy with Alt or the platform's copy key) and onto bins
+    in the Sidebar, closed ones opening with the items selected; folders
+    expand while dragged over.
+  * The Project Bin Container (Tools > Project, Ctrl+9), a panel holding a
+    Sidebar.
+  * Favorite Bins with the Favorite Bins folder, Add Bin to Favorites,
+    Delete, and top or bottom placement (kept in the user's settings).
+  * Set Bin Display, the quick filter on selected columns, Tab and Enter
+    between cells, and timecode range sifts (Start to End, Mark In to Out,
+    Film TC, Sound TC, Auxiliary TC1–TC5).
+* **Our choices, unverified.**
+  * Drop zones are a group's four edges (a quarter of its size) and its
+    middle for tabbing; the guide shows only "eligible edges".
+  * A bin dragged out of a tab bar starts docking once the pointer leaves
+    the bar by 12 pixels.
+  * The Favorite Bins folder appears once it has a bin.
+  * The Project Bin Container first floats at 300 × 460.
+  * Closing a floating Bin Container's window closes its bins.
+  * Range sifts read timecodes as non-drop-frame unless the text has ";".
+* **Not yet built (later phases).**
+  * The arrangement of docked and floating bins is not saved with the
+    project or with workspaces yet.
+  * The drag count, Bin Left Lock, Bin Map, Print Bin, the Delete dialog
+    with media, keycode and ink number range sifts, Duplicate on columns,
+    Set <column> for selected clips.
+  * The Bin settings dialog (Favorite Bins placement, auto-save interval)
+    comes with Settings in 1.5.
+  * Frame view border colours and icons, changing the represented frame,
+    Faster Thumbnails, and "Show reference clips" (no sequences reference
+    clips until the Timeline).
+  * Copies are clones only in name: a change to one does not yet reach
+    the other.
   * The Avid Attic backups.
   * Choose for Me's green and blue bins (p.64).
   * The Sidebar's "Show All" menu, whose options the guide does not give.

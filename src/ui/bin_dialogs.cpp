@@ -1,5 +1,6 @@
 #include "lumenis/ui/bin_dialogs.h"
 
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QGridLayout>
@@ -135,6 +136,55 @@ void CustomSiftDialog::setRow(bool also, int row, const QString& text, const QSt
     r.text->setText(text);
     const int i = r.column->findData(column);
     r.column->setCurrentIndex(i < 0 ? 0 : i);
+}
+
+// ---------------------------------------------------------------- SetBinDisplayDialog
+
+SetBinDisplayDialog::SetBinDisplayDialog(const model::BinDisplay& display, QWidget* parent) : QDialog(parent) {
+    setObjectName(QStringLiteral("setBinDisplay"));
+    setWindowTitle(tr("Set Bin Display"));
+    auto* layout = new QVBoxLayout(this);
+    // The object types of p.243-244.
+    for (model::BinItemKind k : model::allKinds()) {
+        auto* box = new QCheckBox(model::kindLabel(k), this);
+        box->setChecked(!display.hiddenKinds.contains(k));
+        layout->addWidget(box);
+        kinds_.append({k, box});
+    }
+    layout->addSpacing(6);
+    userClips_ = new QCheckBox(tr("Show clips created by user"), this);
+    userClips_->setChecked(display.showUserClips);
+    referenceClips_ = new QCheckBox(tr("Show reference clips"), this);
+    referenceClips_->setChecked(display.showReferenceClips);
+    layout->addWidget(userClips_);
+    layout->addWidget(referenceClips_);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    layout->addWidget(buttons);
+}
+
+QList<model::BinItemKind> SetBinDisplayDialog::hiddenKinds() const {
+    QList<model::BinItemKind> out;
+    for (const auto& [kind, box] : kinds_) {
+        if (!box->isChecked()) out << kind;
+    }
+    return out;
+}
+
+bool SetBinDisplayDialog::showUserClips() const {
+    return userClips_->isChecked();
+}
+
+bool SetBinDisplayDialog::showReferenceClips() const {
+    return referenceClips_->isChecked();
+}
+
+QCheckBox* SetBinDisplayDialog::box(model::BinItemKind kind) const {
+    for (const auto& [k, b] : kinds_) {
+        if (k == kind) return b;
+    }
+    return nullptr;
 }
 
 } // namespace lumenis::ui
