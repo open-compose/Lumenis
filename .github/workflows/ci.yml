@@ -63,6 +63,13 @@ jobs:
           test ! -e /usr/bin/cutthulhu
           QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 ./build/ci/*.AppImage --smoke-test
 
+      - name: AppImage on Wayland
+        # A real (headless) Wayland compositor: the AppImage must open its
+        # windows natively, with its own xdg-shell plugin (BUILDING.md).
+        run: |
+          sudo apt-get install -y --no-install-recommends weston
+          scripts/check-appimage-wayland.sh build/ci/*.AppImage
+
       - uses: actions/upload-artifact@v4
         with:
           name: linux-x64
@@ -107,6 +114,14 @@ jobs:
 
       - name: Test
         run: ctest --preset ci
+
+      - name: AppImage on Wayland
+        # Qt 6.10 renamed the Wayland plugin; the AppImage must still carry
+        # everything Wayland needs.
+        run: |
+          apt-get install -y --no-install-recommends curl file weston
+          packaging/linux/make-appimage.sh build/ci
+          scripts/check-appimage-wayland.sh build/ci/*.AppImage
 
   macos:
     # macos-14 is the oldest supported toolchain (Xcode 15); macos-26 the

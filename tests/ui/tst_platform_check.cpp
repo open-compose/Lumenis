@@ -57,6 +57,23 @@ private slots:
         QVERIFY2(s.complete(), qPrintable(s.loadError));
     }
 
+    void readsQtConfLikeQt() {
+        // An AppImage: usr/bin/qt.conf points at usr/plugins.
+        QTemporaryDir app;
+        touch(app.filePath(QStringLiteral("usr/bin/cutthulhu")));
+        QFile conf(app.filePath(QStringLiteral("usr/bin/qt.conf")));
+        QVERIFY(conf.open(QIODevice::WriteOnly));
+        conf.write("[Paths]\nPrefix = ../\nPlugins = plugins\n");
+        conf.close();
+        QCOMPARE(qtPluginsDir(app.filePath(QStringLiteral("usr/bin/cutthulhu"))),
+                 QDir::cleanPath(app.filePath(QStringLiteral("usr/plugins"))));
+        // Without one, Qt's own folder.
+        QTemporaryDir plain;
+        touch(plain.filePath(QStringLiteral("cutthulhu")));
+        QCOMPARE(qtPluginsDir(plain.filePath(QStringLiteral("cutthulhu"))),
+                 QLibraryInfo::path(QLibraryInfo::PluginsPath));
+    }
+
     void fallsBackToX11OnlyWhenItShould() {
         const WaylandSupport incomplete{true, false, {}};
         const WaylandSupport complete{true, true, {}};
@@ -68,6 +85,12 @@ private slots:
         QVERIFY(why.contains(QStringLiteral("platform plugin")));
         // Complete support: Qt chooses.
         QVERIFY(fallbackPlatform(session, complete).isEmpty());
+        // In an AppImage, the system's packages are no help.
+        WaylandSupport bundled = incomplete;
+        bundled.bundled = true;
+        QCOMPARE(fallbackPlatform(session, bundled, &why), QStringLiteral("xcb"));
+        QVERIFY(why.contains(QStringLiteral("make-appimage.sh")));
+        QVERIFY(!why.contains(QStringLiteral("Install qt6-wayland")));
         // The user's own choice stays.
         QVERIFY(fallbackPlatform({true, true, true}, incomplete).isEmpty());
         // Not a Wayland session, or no X11 to fall back to.

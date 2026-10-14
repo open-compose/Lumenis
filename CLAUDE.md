@@ -38,7 +38,8 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
 - Push only after a local build and test pass, then check CI. CI covers every
   platform, also builds on the newest Ubuntu (26.04: GCC 15, Qt 6.10) with
   warnings as errors, and checks:
-  - the installers (install, launch, uninstall);
+  - the installers (install, launch, uninstall), and that the AppImage
+    opens natively on a headless Wayland compositor;
   - that PowerShell scripts parse;
   - cross-platform screenshot consistency (`ui-consistency`).
 - Everything the user can invoke is a command declared in

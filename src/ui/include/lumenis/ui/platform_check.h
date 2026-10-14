@@ -13,6 +13,7 @@ struct WaylandSupport {
     bool platformPlugin = false;
     bool shellIntegration = false;
     QString loadError; // a part that is there but does not load
+    bool bundled = false; // the plugins came with the program (an AppImage)
     bool complete() const { return platformPlugin && shellIntegration; }
 };
 
@@ -34,6 +35,12 @@ struct PlatformEnvironment {
     bool x11 = false;         // DISPLAY
 };
 QString fallbackPlatform(const PlatformEnvironment& env, const WaylandSupport& support, QString* why = nullptr);
+
+// The Qt plugins folder this process will use. Before the application object
+// exists Qt has not read the qt.conf next to the executable, so this reads it
+// as Qt will: an AppImage carries its own plugins (usr/plugins), not the
+// system's. `executable` is this program's path.
+QString qtPluginsDir(const QString& executable);
 
 // The two together, from this process's environment and Qt's plugins folder.
 // Call before creating the QApplication.

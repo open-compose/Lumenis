@@ -4,6 +4,7 @@
 #include <QFileInfo>
 #include <QLibraryInfo>
 #include <QPluginLoader>
+#include <QSettings>
 
 namespace lumenis::ui {
 
@@ -37,14 +38,33 @@ QString fallbackPlatform(const PlatformEnvironment& env, const WaylandSupport& s
                                   "probably from different updates: sudo apt update && sudo apt full-upgrade")
                        .arg(support.loadError);
         } else {
-            *why = QStringLiteral("%1 is missing. Install qt6-wayland (Fedora: qt6-qtwayland)")
-                       .arg(support.platformPlugin ? QStringLiteral("Qt's Wayland shell integration (xdg-shell)")
-                                                   : QStringLiteral("Qt's Wayland platform plugin"));
+            const QString part = support.platformPlugin ? QStringLiteral("Qt's Wayland shell integration (xdg-shell)")
+                                                        : QStringLiteral("Qt's Wayland platform plugin");
+            *why = support.bundled
+                       // The system's packages cannot help: the program's own copy of Qt lacks it.
+                       ? QStringLiteral("%1 is missing from this package's own Qt. Make the AppImage again with the "
+                                        "current packaging/linux/make-appimage.sh, or run the built bin/cutthulhu")
+                             .arg(part)
+                       : QStringLiteral("%1 is missing. Install qt6-wayland (Fedora: qt6-qtwayland)").arg(part);
         }
     }
     // Without X11 there is nothing to fall back to; `why` still says what to
     // install.
     return env.x11 ? QStringLiteral("xcb") : QString();
+}
+
+QString qtPluginsDir(const QString& executable) {
+    const QDir bin = QFileInfo(executable).absoluteDir();
+    const QString conf = bin.filePath(QStringLiteral("qt.conf"));
+    if (!executable.isEmpty() && QFileInfo::exists(conf)) {
+        QSettings settings(conf, QSettings::IniFormat);
+        settings.beginGroup(QStringLiteral("Paths"));
+        const QString prefix = settings.value(QStringLiteral("Prefix"), QStringLiteral(".")).toString();
+        const QString plugins = settings.value(QStringLiteral("Plugins"), QStringLiteral("plugins")).toString();
+        const QDir base(QDir::isAbsolutePath(prefix) ? prefix : bin.filePath(prefix));
+        return QDir::cleanPath(QDir::isAbsolutePath(plugins) ? plugins : base.filePath(plugins));
+    }
+    return QLibraryInfo::path(QLibraryInfo::PluginsPath);
 }
 
 QString fallbackPlatformForThisSystem(QString* why) {
@@ -55,7 +75,11 @@ QString fallbackPlatformForThisSystem(QString* why) {
                   qEnvironmentVariable("XDG_SESSION_TYPE") == QLatin1String("wayland");
     env.x11 = qEnvironmentVariableIsSet("DISPLAY");
     if (env.platformSet || !env.wayland) return {};
-    return fallbackPlatform(env, waylandSupport(QLibraryInfo::path(QLibraryInfo::PluginsPath), true), why);
+    const QString executable = QFileInfo(QStringLiteral("/proc/self/exe")).canonicalFilePath();
+    const QString plugins = qtPluginsDir(executable);
+    WaylandSupport support = waylandSupport(plugins, true);
+    support.bundled = QDir(plugins) != QDir(QLibraryInfo::path(QLibraryInfo::PluginsPath));
+    return fallbackPlatform(env, support, why);
 #else
     Q_UNUSED(why);
     return {};

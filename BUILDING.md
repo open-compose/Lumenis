@@ -187,6 +187,15 @@ Until then Cutthulhu notices and says in one line what is missing. If X11
 (XWayland) is there it runs through it, which works but responds more
 slowly; WSLg normally provides it and sets `DISPLAY=:0`.
 
+**The AppImage** carries its own Qt, so the system's packages do not matter
+to it. AppImages made before this was fixed (October 2026) lack the
+`xdg-shell` plugin and show the second message on every Wayland desktop,
+WSLg included; Cutthulhu then says the package's own Qt is missing it. Make
+the AppImage again (`scripts/build.sh --package`, or
+`packaging/linux/make-appimage.sh build/<preset>`), or run the built
+`build/<preset>/bin/cutthulhu` directly. CI starts every AppImage on a
+headless Wayland compositor (`scripts/check-appimage-wayland.sh`).
+
 If the messages stay after installing it, the parts are probably from
 different updates: `apt` says "Not Upgrading: N" when it holds some back
 (Ubuntu phases updates in), and a plugin from one build does not load into

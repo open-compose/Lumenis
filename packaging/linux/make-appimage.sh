@@ -52,5 +52,30 @@ desktop="$(ls "$appdir"/usr/share/applications/*.desktop | head -n1)"
 # The tools are AppImages themselves; CI containers often lack FUSE.
 export APPIMAGE_EXTRACT_AND_RUN=1
 (cd "$build_dir" && PATH="$tools:$PATH" "$tools/linuxdeploy" \
-    --appdir "$appdir" --desktop-file "$desktop" --plugin qt --output appimage)
+    --appdir "$appdir" --desktop-file "$desktop" --plugin qt)
+
+# The Qt plugin bundles the Wayland platform plugin but not the plugins its
+# windows need: the shell integrations (xdg-shell), window decorations and
+# graphics integrations. Without them Qt finds the platform plugin and then
+# fails ("No shell integration named xdg-shell found"; BUILDING.md). Bundle
+# them, with what they link to.
+qt_plugins="$("$QMAKE" -query QT_INSTALL_PLUGINS)"
+deps_only=()
+if compgen -G "$appdir/usr/plugins/platforms/libqwayland*.so" >/dev/null; then
+    for d in wayland-shell-integration wayland-decoration-client wayland-graphics-integration-client; do
+        if [[ -d "$qt_plugins/$d" ]]; then
+            mkdir -p "$appdir/usr/plugins/$d"
+            cp -a "$qt_plugins/$d/." "$appdir/usr/plugins/$d/"
+            deps_only+=(--deploy-deps-only "$appdir/usr/plugins/$d")
+        fi
+    done
+    if [[ ! -f "$appdir/usr/plugins/wayland-shell-integration/libxdg-shell.so" ]]; then
+        echo "make-appimage: Qt's xdg-shell plugin is missing ($qt_plugins/wayland-shell-integration);" \
+             "install qt6-wayland" >&2
+        exit 1
+    fi
+fi
+
+(cd "$build_dir" && PATH="$tools:$PATH" "$tools/linuxdeploy" \
+    --appdir "$appdir" "${deps_only[@]}" --output appimage)
 echo "AppImage written to $build_dir"
