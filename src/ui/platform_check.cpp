@@ -18,12 +18,14 @@ WaylandSupport waylandSupport(const QString& pluginsDir) {
 }
 
 QString fallbackPlatform(const PlatformEnvironment& env, const WaylandSupport& support, QString* why) {
-    if (env.platformSet || !env.wayland || !env.x11 || support.complete()) return {};
+    if (env.platformSet || !env.wayland || support.complete()) return {};
     if (why) {
         *why = support.platformPlugin ? QStringLiteral("Qt's Wayland shell integration (xdg-shell) is missing")
                                       : QStringLiteral("Qt's Wayland platform plugin is missing");
     }
-    return QStringLiteral("xcb");
+    // Without X11 there is nothing to fall back to; `why` still says what to
+    // install.
+    return env.x11 ? QStringLiteral("xcb") : QString();
 }
 
 QString fallbackPlatformForThisSystem(QString* why) {
@@ -33,7 +35,7 @@ QString fallbackPlatformForThisSystem(QString* why) {
     env.wayland = qEnvironmentVariableIsSet("WAYLAND_DISPLAY") ||
                   qEnvironmentVariable("XDG_SESSION_TYPE") == QLatin1String("wayland");
     env.x11 = qEnvironmentVariableIsSet("DISPLAY");
-    if (env.platformSet || !env.wayland || !env.x11) return {};
+    if (env.platformSet || !env.wayland) return {};
     return fallbackPlatform(env, waylandSupport(QLibraryInfo::path(QLibraryInfo::PluginsPath)), why);
 #else
     Q_UNUSED(why);

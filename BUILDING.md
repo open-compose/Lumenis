@@ -183,8 +183,21 @@ the second message. Install the whole of it:
 * Ubuntu/Debian: `sudo apt install qt6-wayland` (it pulls in both parts);
 * Fedora: `sudo dnf install qt6-qtwayland`.
 
-Until then Cutthulhu notices, says in one line what is missing, and runs
-through X11 (XWayland), which works but responds more slowly.
+Until then Cutthulhu notices and says in one line what is missing. If X11
+(XWayland) is there it runs through it, which works but responds more
+slowly; WSLg normally provides it and sets `DISPLAY=:0`.
+
+If the messages stay after installing it, check what Qt sees:
+
+```
+echo "WAYLAND_DISPLAY=$WAYLAND_DISPLAY DISPLAY=$DISPLAY QT_QPA_PLATFORM=$QT_QPA_PLATFORM"
+dpkg -l qt6-wayland libqt6wlshellintegration6 libqt6waylandclient6 | tail -n 3
+ls "$(qtpaths6 --query QT_INSTALL_PLUGINS)/wayland-shell-integration"
+QT_DEBUG_PLUGINS=1 cutthulhu 2>&1 | grep -i -A3 "xdg-shell"
+```
+
+The last line shows why Qt could not load `libxdg-shell.so`, for example a
+Qt built elsewhere (`QT_ROOT_DIR`) looking in its own plugin folder.
 `scripts/bootstrap-linux.sh` installs it, configuring the build warns when
 it is missing, and the `.deb` package recommends it.
 

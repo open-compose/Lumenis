@@ -22,7 +22,8 @@ WaylandSupport waylandSupport(const QString& pluginsDir);
 // is a Wayland session whose Wayland support is incomplete and X11
 // (XWayland) is there; otherwise empty, leaving Qt's own choice. A platform
 // the user set (QT_QPA_PLATFORM) is never overridden. `why` says what is
-// missing.
+// missing whenever Wayland support is incomplete in a Wayland session, also
+// when there is no X11 to fall back to.
 struct PlatformEnvironment {
     bool platformSet = false; // QT_QPA_PLATFORM
     bool wayland = false;     // WAYLAND_DISPLAY, or XDG_SESSION_TYPE=wayland

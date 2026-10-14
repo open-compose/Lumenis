@@ -55,7 +55,10 @@ private slots:
         QVERIFY(fallbackPlatform({true, true, true}, incomplete).isEmpty());
         // Not a Wayland session, or no X11 to fall back to.
         QVERIFY(fallbackPlatform({false, false, true}, incomplete).isEmpty());
-        QVERIFY(fallbackPlatform({false, true, false}, incomplete).isEmpty());
+        why.clear();
+        QVERIFY(fallbackPlatform({false, true, false}, incomplete, &why).isEmpty());
+        // ... but it still says what is missing.
+        QVERIFY(why.contains(QStringLiteral("xdg-shell")));
     }
 };
 

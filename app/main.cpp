@@ -123,6 +123,10 @@ int main(int argc, char** argv) {
                                  "(Fedora: qt6-qtwayland) for native Wayland.\n",
                          lumenis::branding::kExecutableName, qPrintable(why));
             qputenv("QT_QPA_PLATFORM", platform.toLatin1());
+        } else if (!why.isEmpty()) {
+            std::fprintf(stderr, "%s: %s and there is no X11 (DISPLAY is not set) to use instead. Install "
+                                 "qt6-wayland (Fedora: qt6-qtwayland).\n",
+                         lumenis::branding::kExecutableName, qPrintable(why));
         }
     }
     std::unique_ptr<QCoreApplication> app = headless
