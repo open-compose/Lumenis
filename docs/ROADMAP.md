@@ -274,8 +274,18 @@ Sub-steps:
     Gang and Show Single/Dual Monitor; the position moves in real time
     until there is media (Phase 2).
   * Details and what is left: "Implementation status (1.4a)" in the spec.
-* **1.4b** Timeline: sequences with tracks, splice-in and overwrite, the
-  track selector panel and patching.
+* **1.4b Timeline — done.**
+  * Sequences with video, audio and data tracks, stored in their bins.
+  * Splice-in, Overwrite (three-point and single-mark editing), Lift and
+    Extract, and 100 levels of Undo/Redo with the Undo/Redo List.
+  * The Timeline panel: the Track Selector with patching and monitor
+    buttons, the ruler and TC1, segments with clip text, IN to OUT
+    highlighting, the position indicator with snapping, Focus, the scale
+    bar, Zoom In/Back, Toggle Source/Record and the Fast menu.
+  * Details and what is left: "Implementation status (1.4b)" in the spec.
+* **1.4c** Segment mode, trimming and the rest of editing: the segment
+  tools, Trim mode, sync locks, Replace and Sync Point edits, the
+  Clipboard, Top and Tail, Add Edit and markers.
 * **1.5** Palettes, tools and Settings dialogs.
 * **1.6** Keyboard settings, workspaces and button mapping (gate 3, gate 4).
 

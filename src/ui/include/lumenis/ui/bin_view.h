@@ -39,6 +39,8 @@ public:
 
     void addItem(const model::BinItem& item);
     void removeItems(const QStringList& ids);
+    // Replaces the item with the same id. Returns false if there is none.
+    bool replaceItem(const model::BinItem& item);
     // Typing into a cell (p.278): Name, the modifiable headings and custom
     // columns.
     bool setField(const QString& id, const QString& heading, const QString& value);

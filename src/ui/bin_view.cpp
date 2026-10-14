@@ -210,6 +210,15 @@ void BinDocument::addItem(const model::BinItem& item) {
     emit itemsChanged();
 }
 
+bool BinDocument::replaceItem(const model::BinItem& item) {
+    model::BinItem* existing = bin_.item(item.id);
+    if (!existing) return false;
+    *existing = item;
+    touch();
+    emit itemsChanged();
+    return true;
+}
+
 void BinDocument::removeItems(const QStringList& ids) {
     const auto removed = bin_.items.removeIf([&](const model::BinItem& i) { return ids.contains(i.id); });
     if (removed == 0) return;

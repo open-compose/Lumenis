@@ -7,6 +7,7 @@
 #include "lumenis/model/project_store.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/project_bins.h"
+#include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/capture.h"
@@ -18,6 +19,7 @@
 #include "lumenis/ui/panels.h"
 #include "lumenis/ui/platform_check.h"
 #include "lumenis/ui/theme.h"
+#include "lumenis/ui/timeline.h"
 #include "lumenis/ui/workspace.h"
 
 #include <QApplication>
@@ -270,31 +272,89 @@ int main(int argc, char** argv) {
             bins.save();
             auto bin = lumenis::model::BinFile::read(bins.binPath(main));
             const lumenis::Rational rate = documentary->settings.format.editRate;
-            const std::pair<const char*, int> sequences[] = {{"Rough Cut", 31 * 60 * 24}, {"Opening", 95 * 24},
-                                                             {"Trailer", 62 * 24}};
-            for (const auto& [name, frames] : sequences) {
+            // Master clips, and sequences cut from them.
+            const std::int64_t fps = 24;
+            const std::pair<const char*, std::int64_t> clips[] = {
+                {"Interview Harbor", 9 * 60 * fps}, {"Harbor Wide", 4 * 60 * fps}, {"Interview Market", 7 * 60 * fps},
+                {"Market Detail", 3 * 60 * fps}, {"Ferry Arrival", 2 * 60 * fps}};
+            QList<lumenis::model::BinItem> masters;
+            for (const auto& [name, frames] : clips) {
+                lumenis::model::BinItem c;
+                c.id = lumenis::model::newItemId();
+                c.kind = lumenis::model::BinItemKind::MasterClip;
+                c.name = QString::fromLatin1(name);
+                c.created = when;
+                c.modified = when;
+                c.durationFrames = frames;
+                c.editRate = rate;
+                c.fields.insert(QStringLiteral("Tracks"), QStringLiteral("V1 A1-2"));
+                masters << c;
+            }
+            auto cut = [&](const QList<std::pair<int, std::int64_t>>& edits) {
+                // Each edit: a master clip and its length in seconds, on V1,
+                // A1 and A2, with a cutaway on V2 over the second edit.
+                lumenis::model::Sequence seq = lumenis::model::Sequence::withDefaultTracks();
+                std::int64_t at = 0;
+                for (int i = 0; i < edits.size(); ++i) {
+                    const auto& [index, seconds] = edits.at(i);
+                    const lumenis::model::BinItem& c = masters.at(index);
+                    for (const QString& t : {QStringLiteral("V1"), QStringLiteral("A1"), QStringLiteral("A2")}) {
+                        lumenis::model::Segment s;
+                        s.clipId = c.id;
+                        s.binId = main;
+                        s.name = c.name;
+                        s.sourceTrack = t;
+                        s.sourceIn = 30 * fps * i;
+                        s.length = seconds * fps;
+                        seq.splice(t, at, {s});
+                    }
+                    if (i == 1) {
+                        const lumenis::model::BinItem& b = masters.at(3);
+                        seq.ensureTrack(QStringLiteral("V2"));
+                        lumenis::model::Segment s;
+                        s.clipId = b.id;
+                        s.binId = main;
+                        s.name = b.name;
+                        s.sourceTrack = QStringLiteral("V1");
+                        s.length = seconds * fps / 2;
+                        seq.overwrite(QStringLiteral("V2"), at + seconds * fps / 4, {s});
+                    }
+                    at += seconds * fps;
+                }
+                return seq;
+            };
+            const std::pair<const char*, lumenis::model::Sequence> sequences[] = {
+                {"Rough Cut", cut({{0, 95}, {1, 40}, {2, 120}, {4, 35}, {0, 80}, {3, 25}, {2, 140}, {1, 60}})},
+                {"Opening", cut({{4, 30}, {1, 45}, {0, 20}})},
+                {"Trailer", cut({{1, 15}, {3, 10}, {2, 20}, {4, 17}})}};
+            for (const auto& [name, seq] : sequences) {
                 lumenis::model::BinItem item = lumenis::model::newSequence(*bin, rate, when);
                 item.name = QString::fromLatin1(name);
-                item.durationFrames = frames;
+                seq.storeIn(item);
                 bin->items << item;
             }
+            bin->items << masters;
             lumenis::model::BinFile::write(bins.binPath(main), *bin);
             window.setProject(*documentary);
-            // The Composer with a sequence in each monitor, marked, and
-            // master timecode above them (p.380, p.384).
+            // The Composer with a clip in the Source monitor and the rough
+            // cut in the Record monitor, marked, with master timecode above
+            // them (p.380, p.384); the Timeline shows the cut (p.607).
             if (const lumenis::ui::BinDocument* doc = window.binContainer().document(main)) {
                 lumenis::ui::Composer& composer = window.composer();
                 const auto& items = doc->bin().items;
-                composer.load(lumenis::ui::MonitorId::Source, main, items.at(1));
+                composer.load(lumenis::ui::MonitorId::Source, main, items.at(3));
                 composer.load(lumenis::ui::MonitorId::Record, main, items.at(0));
                 composer.state(lumenis::ui::MonitorId::Source).setPosition(240);
                 composer.state(lumenis::ui::MonitorId::Source).markIn();
                 composer.state(lumenis::ui::MonitorId::Source).setPosition(1200);
                 composer.state(lumenis::ui::MonitorId::Source).markOut();
-                composer.state(lumenis::ui::MonitorId::Record).setPosition(600 * 24);
+                composer.state(lumenis::ui::MonitorId::Record).setPosition(150 * fps);
+                composer.state(lumenis::ui::MonitorId::Record).markIn();
+                composer.state(lumenis::ui::MonitorId::Record).setPosition(190 * fps);
                 composer.setTracking(lumenis::ui::MonitorId::Source, lumenis::model::TrackingFormat::Master);
                 composer.setTracking(lumenis::ui::MonitorId::Record, lumenis::model::TrackingFormat::Master);
                 composer.setActiveMonitor(lumenis::ui::MonitorId::Source);
+                window.timeline().patch().setRecordSelected(QStringLiteral("V2"), false);
             }
         }
         lumenis::ui::SelectProjectDialog selectProject(sample);
@@ -311,6 +371,8 @@ int main(int argc, char** argv) {
         // menu bar is excluded: on macOS it is not part of the window.
         QTimer::singleShot(0, app.get(), [&] {
             QWidget* content = window.centralWidget() ? window.centralWidget() : &window;
+            // The Timeline zoomed to the first seven minutes of the cut.
+            window.timeline().zoomTo(0, 7 * 60 * 24);
             bool ok = lumenis::ui::capture(content, dir, QStringLiteral("main_window"));
             // The green drop zones while the Composer's title bar is dragged
             // over the Timeline's upper zone (p.75).

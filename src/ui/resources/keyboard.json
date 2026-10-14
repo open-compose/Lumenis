@@ -93,6 +93,22 @@
     {
       "key": "Esc",
       "command": "edit.toggle_source_record"
+    },
+    {
+      "key": "E",
+      "command": "edit.mark_in"
+    },
+    {
+      "key": "R",
+      "command": "edit.mark_out"
+    },
+    {
+      "key": "T",
+      "command": "edit.mark_clip"
+    },
+    {
+      "key": "X",
+      "command": "edit.extract"
     }
   ]
 }

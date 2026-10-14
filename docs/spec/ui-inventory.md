@@ -346,6 +346,8 @@ English layout:
 | I / O | Mark IN / Mark OUT | p.405–406 |
 | Alt+I | Go to IN Point | p.97 |
 | V / B | Splice-in / Overwrite | p.624 |
+| E / R / T | Mark IN / Mark OUT / Mark Clip (the T-E-X and T-R-X sequences) | p.639 |
+| X | Extract | p.639 |
 
 **Shuttle and contextual keys (p.400–401, 117–195, 1132):**
 * Pressing L repeatedly plays at 2×, 3×, 5× and 8×.
@@ -772,11 +774,11 @@ These are recorded now so they are not entered from memory later.
     shows the active monitor's IN to OUT duration.
   * Default Starting TC 01:00:00:00 (General settings, p.1191, gives no
     value).
-  * Go to Previous/Next Event go to the start and end of a clip until
-    sequences have edits (1.4b).
+  * Go to Previous/Next Event go to the edits on the selected tracks of a
+    sequence (1.4b), and to the start and end of a clip.
   * The active monitor has a thin highlight.
 * **Not yet built.**
-  * Splice-in, Overwrite and Add Marker (with the Timeline, 1.4b);
+  * Add Marker; phantom marks (p.501);
     Source/Record mode, pop-up monitors, the Info and Timecode windows,
     the Tracking Information menu's panes and track timecodes, two
     information rows, Resize Monitor to Image, Hide Video, Play Standby,
@@ -784,7 +786,127 @@ These are recorded now so they are not entered from memory later.
     Loop Selected Clips, subclips and markers.
   * Composer settings (1.5).
 
-## 11. Still to document
-* The window-by-window details for the Timeline (ch. 19), the Audio tools
-  (ch. 21) and Settings (ch. 33).
+## 11. Timeline and editing (ch. 15, p.457–479; ch. 19, p.591–645)
+
+* **Sequences (p.457–464).**
+  * *Timeline > New > Sequence* puts a new sequence in the bin, the Record
+    monitor and the Timeline (p.457). With no active bin, a Select dialog
+    asks for one.
+  * A new sequence has V1, A1, A2 and TC1 (p.459). The guide gives the
+    limits as up to 64 video and 64 audio tracks and one data track
+    (p.624); p.459 says 99. We use 64.
+  * Making a first edit with no sequence creates one (p.463). The Record
+    monitor then "displays the end of the last frame of the new edit"
+    (p.464).
+* **Edits (p.466–468).**
+  * Three-point editing: two marks on one side and one on the other; the
+    fourth is worked out (p.466). With only a source IN, the record IN is
+    the position indicator and both OUTs follow from the clip (p.501).
+    Single-mark editing uses the position indicator for the missing mark
+    (p.468).
+  * Splice-in (yellow) inserts at the record IN or the position; later
+    material moves down (p.466). Overwrite (red) replaces and only
+    lengthens the sequence past its end (p.467). Replace (blue) is on the
+    Command Palette's Edit tab (p.467).
+  * Undo (Ctrl+Z) and Redo (Ctrl+R), 100 levels, and *Edit > Undo/Redo
+    List*, which undoes or redoes back to the chosen command (p.466).
+  * Lift leaves filler and keeps the length; Extract closes the gap. Both
+    act between the marks on the selected tracks and put the material in
+    the Clipboard (p.478–479). Sync locks extract from every track
+    (p.479).
+  * Keyboard: V Splice-in and B Overwrite (p.624); T-R-X (Mark Clip, Mark
+    Out, Extract) and T-E-X (Mark Clip, Mark In, Extract) are "keyboard
+    command sequences" (p.639): T, E, R and X.
+* **Track Selector panel (p.624–630).**
+  * Source tracks on the left, record tracks on the right, with Track
+    Monitor buttons, Sync Lock and Lock buttons (p.625, p.633).
+  * The source side shows only the loaded clip's tracks; the record side
+    shows the sequence's tracks. A selected source track for a track the
+    sequence lacks adds it on the record side when edited (p.626).
+  * A track is edited only when selected on both sides (p.626). *Edit >
+    Select All Tracks* selects all of them (p.627).
+  * Patching: drag a source track to a record track; "a white arrow
+    appears"; audio only to audio, video only to video; tracks of other
+    formats dim; data tracks cannot be patched. The patched source track
+    moves beside its record track. *Timeline > Restore Default Patch*
+    undoes patches (p.629–630).
+  * Track Monitor buttons choose what is seen and heard; Ctrl-click and
+    Solo isolate a track (p.627–628).
+* **The window (p.591–609).**
+  * The picture on p.607: the Timeline Top toolbar, the Track Control
+    panel, the position indicator, and the bottom toolbar: Timeline Fast
+    Menu, Focus, Toggle Source/Record in Timeline, Video Quality, Client
+    Monitor, Step In, Step Out, View Menu, Search in visible timeline
+    text, Find to the left, Find to the right, Zoom Out, Scale bar, Zoom In
+    and the scroll bar.
+  * Rows top to bottom in that picture: D1, V2, V1, TC1, then A1 down to
+    A11. The ruler shows the master timecode (p.598).
+  * The Fast menu's options are listed on p.592–593: Default Setup, View
+    Type, Track Panel, Effect Icons, Render Ranges, Dissolve Icons, Clip
+    Frames, Clip Text (Clip Names, Group Clip Name, Clip Tracks, Source
+    Track Name, Clip Durations, Clip Full Durations, Clip Trans Duration,
+    Timeline Clip Notes, Source Names, Media Full Names, Clip Resolution),
+    Sync Breaks, Dupe Detection, Color Correction, Audio Data, Clip Color,
+    Segment Selection, Mark IO Selection, Track Color, Show Markers, Show
+    Adapters, Show Track, Track Control Panel and Zoom (Zoom In, Zoom Out,
+    Show Entire Sequence, Zoom into Region, Zoom Back to Last View, Show
+    Every Frame).
+  * The scale bar zooms around the position indicator; zoomed in, the
+    indicator gets a dotted "shadow" at the end of the frame. Zoom In:
+    drag over the area. Focus: 90 pixels per second around the position
+    indicator; click again to go back (p.607–608).
+  * Ctrl-drag snaps the indicator to the head of transitions, Ctrl+Alt to
+    the tail (p.609). Page and Scroll movement during play (p.609).
+  * IN to OUT highlighting (p.638).
+
+**Implementation status (1.4b).**
+* **Built.**
+  * Sequences with tracks and segments, stored in their bin item
+    (`src/model/sequence.*`). Timeline > New > Video Track, Audio Track
+    (all four formats) and Data Track; New Sequence loads the sequence.
+  * Splice-in and Overwrite from the Composer buttons, the menus and the
+    keys, three-point and single-mark; Lift and Extract; Undo, Redo and
+    the Undo/Redo List; a first edit makes the sequence in the active
+    bin.
+  * The Timeline panel showing the Record monitor's sequence, or the
+    Source monitor's clip (Toggle Source/Record): the Track Selector with
+    selection, drag patching (the arrow, dimmed tracks), Restore Default
+    Patch and Track Monitor buttons; the ruler and TC1; segments with
+    Clip Names, Clip Tracks and Clip Durations; IN to OUT highlighting;
+    the position indicator with its shadow, click and drag, Ctrl and
+    Ctrl+Alt snapping; Page movement during play.
+  * The bottom toolbar: Fast menu, Focus, Toggle Source/Record, Zoom Out,
+    the scale bar, Zoom In and the scroll bar. The Fast menu's Default
+    Setup, Track Panel, Clip Text, Show Track > TC1 and Zoom items.
+  * Go to Previous/Next Event and Mark Clip use the selected tracks'
+    edits. T, E, R and X keys.
+* **Our choices, unverified.**
+  * Sizes and colours of rows, segments and buttons; the toolbar
+    pictures are our own drawings.
+  * The scale bar runs from the whole sequence (plus 5%, at least ten
+    seconds) to 40 pixels per frame; Zoom In/Out buttons halve or double
+    the scale; Zoom into Region zooms four times.
+  * After an edit the record marks are cleared and the source marks kept.
+    After Lift the marks stay; after Extract only the IN stays.
+  * Lift and Extract need at least one mark; a missing mark is the start
+    or end of the sequence.
+  * Patching a second source track to a record track moves the first one
+    to the second one's old track.
+  * Clips without a Tracks column offer V1, A1 and A2; audio clips A1 and
+    A2.
+  * Undo covers sequence edits and new tracks, not bin changes; the
+    history is cleared when the project closes.
+  * Messages for edits that cannot be made show as a tooltip.
+* **Not yet built.**
+  * Segment mode (the Lift/Overwrite and Extract/Splice-in tools, lasso,
+    dragging), Trim mode, sync locks and Lock, Solo, Replace and Sync
+    Point edits, the Clipboard and Paste, Top and Tail, Add Edit, Match
+    Frame, markers, Add Filler at Start, Load Filler, the Top toolbar and
+    Track Control panel, Timeline views, the Sequence Map, Search,
+    Video Quality, Step In/Out (nesting), clip colours, waveforms and the
+    other Fast menu options (shown disabled).
+
+## 12. Still to document
+* The window-by-window details for the Audio tools (ch. 21) and Settings
+  (ch. 33).
 * Menu order and separators, confirmed against a licensed seat.

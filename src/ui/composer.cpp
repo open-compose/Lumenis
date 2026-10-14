@@ -122,10 +122,9 @@ const QList<QList<ButtonSpec>>& buttonRows(MonitorId monitor) {
     return monitor == MonitorId::Source ? source : record;
 }
 
-// Commands that need the Timeline (1.4b) or markers, shown but not working yet.
+// Commands that need markers, shown but not working yet.
 bool later(const QString& id) {
-    return id == QLatin1String("edit.splice_in") || id == QLatin1String("edit.overwrite") ||
-           id == QLatin1String("more.add_marker");
+    return id == QLatin1String("more.add_marker");
 }
 
 QIcon glyph(Glyph g, const QColor& color) {
@@ -511,7 +510,7 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
                 b->setEnabled(!later(id) && !(id == QLatin1String("other.gang") && !source));
                 connect(b, &QToolButton::clicked, this, [this, monitor, id] {
                     setActiveMonitor(monitor);
-                    perform(id);
+                    if (!perform(id)) emit commandRequested(id);
                 });
             }
             if (i > 0) h->addStretch(1);
@@ -560,6 +559,12 @@ void Composer::loadFromBin(MonitorId monitor, const QString& binId, const QStrin
     for (const QString& id : itemIds) {
         if (const auto item = resolver_(binId, id)) load(monitor, binId, *item);
     }
+}
+
+void Composer::updateItem(const model::BinItem& item) {
+    const bool source = source_.replaceItem(item);
+    const bool record = record_.replaceItem(item);
+    if (source || record) refresh();
 }
 
 void Composer::clear() {
@@ -664,7 +669,7 @@ void Composer::advance(qint64 ms) {
     carry_ -= static_cast<double>(frames);
     if (frames == 0) return;
     const std::int64_t target = s.position() + frames;
-    const std::int64_t end = stopAt_.value_or(s.duration() - 1);
+    const std::int64_t end = stopAt_.value_or(s.lastPosition());
     if (target >= end || target <= 0) {
         moveTo(active_, std::clamp<std::int64_t>(target, 0, end));
         stop();
@@ -750,23 +755,52 @@ bool Composer::perform(const QString& id) {
             moveTo(m, s.position() - big);
         } else if (id == QLatin1String("move.step_forward_10_frames")) {
             moveTo(m, s.position() + big);
-        } else if (id == QLatin1String("move.go_to_start") || id == QLatin1String("move.go_to_previous_event")) {
-            // A clip has no transitions until it is in a sequence (1.4b).
+        } else if (id == QLatin1String("move.go_to_start")) {
             moveTo(m, 0);
-        } else if (id == QLatin1String("move.go_to_end") || id == QLatin1String("move.go_to_next_event")) {
-            moveTo(m, s.duration() - 1);
+        } else if (id == QLatin1String("move.go_to_end")) {
+            moveTo(m, s.lastPosition());
+        } else if (id == QLatin1String("move.go_to_previous_event")) {
+            // The previous edit on the selected tracks (p.398); a clip's
+            // only events are its start and end.
+            std::int64_t to = 0;
+            for (std::int64_t e : events(m)) {
+                if (e < s.position()) to = e;
+            }
+            moveTo(m, to);
+        } else if (id == QLatin1String("move.go_to_next_event")) {
+            std::int64_t to = s.lastPosition();
+            for (std::int64_t e : events(m)) {
+                if (e > s.position()) {
+                    to = std::min(e, to);
+                    break;
+                }
+            }
+            moveTo(m, to);
         } else if (id == QLatin1String("edit.mark_in")) {
             s.markIn(); // "mark an IN point and stop playback" (p.405)
         } else if (id == QLatin1String("edit.mark_out")) {
             s.markOut();
         } else if (id == QLatin1String("edit.mark_clip")) {
-            // The entire clip (p.407).
+            // The entire clip, or in a sequence the segment under the
+            // position on the selected tracks (p.407).
             const std::int64_t at = s.position();
-            s.goToStart();
-            s.markIn();
-            s.goToEnd();
-            s.markOut();
-            s.setPosition(at);
+            std::int64_t from = 0;
+            std::int64_t to = std::max<std::int64_t>(s.duration() - 1, 0);
+            for (std::int64_t e : events(m)) {
+                if (e <= at) {
+                    from = e;
+                } else {
+                    to = std::min(to, e - 1);
+                    break;
+                }
+            }
+            if (!s.isEmpty() && from <= to) {
+                s.setPosition(from);
+                s.markIn();
+                s.setPosition(to);
+                s.markOut();
+                s.setPosition(at);
+            }
         } else if (id == QLatin1String("edit.clear_in_mark")) {
             s.clearIn();
         } else if (id == QLatin1String("edit.clear_out_mark")) {
@@ -780,7 +814,6 @@ bool Composer::perform(const QString& id) {
         }
     }
     refresh();
-    emit changed();
     return true;
 }
 
@@ -795,7 +828,12 @@ void Composer::keyPressEvent(QKeyEvent* event) {
     }
     if (keys_) {
         const QString id = keys_(QKeySequence(event->keyCombination()));
-        if (!id.isEmpty() && perform(id)) return;
+        if (!id.isEmpty()) {
+            // Commands that are not the Composer's (Splice-in, ...) go to
+            // whoever handles them.
+            if (!perform(id)) emit commandRequested(id);
+            return;
+        }
     }
     QWidget::keyPressEvent(event);
 }
@@ -878,6 +916,13 @@ void Composer::refresh() {
         c.bar->update();
     }
     if (center_) center_->setText(centerDuration());
+    emit changed();
+}
+
+QList<std::int64_t> Composer::events(MonitorId monitor) const {
+    if (events_) return events_(monitor);
+    const model::MonitorState& s = state(monitor);
+    return {0, s.duration()};
 }
 
 } // namespace lumenis::ui

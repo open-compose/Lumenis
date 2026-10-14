@@ -14,6 +14,7 @@ add_library(lumenis_ui STATIC
     panels.cpp
     select_project_dialog.cpp
     theme.cpp
+    timeline.cpp
     workspace.cpp
     workspace_bar.cpp
     include/lumenis/ui/bin_container.h
@@ -30,6 +31,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/panels.h
     include/lumenis/ui/select_project_dialog.h
     include/lumenis/ui/theme.h
+    include/lumenis/ui/timeline.h
     include/lumenis/ui/workspace.h
     include/lumenis/ui/workspace_bar.h
 )

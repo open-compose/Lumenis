@@ -240,6 +240,8 @@
     {"id": "move.go_to_previous_event", "text": "Go to Previous Event", "palette": "move"},
     {"id": "move.go_to_next_event", "text": "Go to Next Event", "palette": "move"},
     {"id": "other.gang", "text": "Gang", "palette": "other"},
-    {"id": "more.add_marker", "text": "Add Marker", "palette": "more"}
+    {"id": "more.add_marker", "text": "Add Marker", "palette": "more"},
+    {"id": "edit.lift", "text": "Lift", "palette": "edit"},
+    {"id": "edit.extract", "text": "Extract", "palette": "edit"}
   ]
 }

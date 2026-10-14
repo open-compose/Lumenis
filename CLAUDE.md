@@ -63,8 +63,10 @@ the Bin Container (`src/model/bin.*`, `project_bins.*`, `src/ui/bin_*`), is
 done. Phase 1.3b, the bin views, columns, sorting and sifting
 (`bin_view.*`, `bin_dialogs.*`), is done. Phase 1.3c, bin docking
 (`bin_dock.*`), the Project Bin Container and Favorite Bins, is done. Phase 1.4a, the Composer
-(`src/model/monitor.*`, `src/ui/composer.*`), is done. Next is 1.4b: the
-Timeline (ch. 19; spec section 11).
+(`src/model/monitor.*`, `src/ui/composer.*`), is done. Phase 1.4b, the
+Timeline and editing (`src/model/sequence.*`, `src/ui/timeline.*`), is
+done. Next is 1.4c: segment mode, trimming and the rest of editing (spec
+section 11 lists what is left).
 
 Panels are our own framework, not QDockWidget, because Qt cannot draw
 vertical title bars, green drop zones or Alt-drag tabbing. Custom-painted

@@ -4,6 +4,7 @@
 
 #include <QDateTime>
 #include <QHash>
+#include <QJsonObject>
 #include <QList>
 #include <QPoint>
 #include <QString>
@@ -44,6 +45,7 @@ struct BinItem {
     bool locked = false; // Clip > Lock Bin Selection (p.265)
     QString script;      // the Script view's text box (p.253)
     QHash<QString, QString> fields;
+    QJsonObject composition; // a sequence's tracks (lumenis/model/sequence.h)
 };
 
 // How a bin is shown (p.245-254). Saved with the bin.

@@ -40,6 +40,9 @@ class MonitorState {
 public:
     // Loading a clip already in the menu shows it again, marks and all.
     void load(const QString& binId, const BinItem& item);
+    // The bin changed a loaded item: it is updated wherever it is in the
+    // menu, keeping its marks. Returns false if it is not loaded.
+    bool replaceItem(const BinItem& item);
     bool isEmpty() const { return current() == nullptr; }
     const LoadedClip* current() const;
 
@@ -54,13 +57,15 @@ public:
     void clearMenu();
     int loadedCount() const { return static_cast<int>(loaded_.size()); }
 
-    // Position, 0 to duration - 1.
+    // Position, 0 to lastPosition().
     std::int64_t duration() const;
     std::int64_t position() const;
+    // duration - 1 for clips; for sequences the end, after the last frame.
+    std::int64_t lastPosition() const;
     void setPosition(std::int64_t frame);
     void step(std::int64_t frames);
     void goToStart() { setPosition(0); }
-    void goToEnd() { setPosition(duration() - 1); }
+    void goToEnd() { setPosition(lastPosition()); }
 
     // Marks (p.405-407).
     void markIn();

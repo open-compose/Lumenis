@@ -24,6 +24,7 @@ class CommandRegistry;
 class Composer;
 class KeyboardMap;
 class PanelManager;
+class Timeline;
 class WorkspaceBar;
 class WorkspaceManager;
 
@@ -47,6 +48,7 @@ public:
     PanelManager& panels() const { return *panels_; }
     BinContainer& binContainer() const { return *binContainer_; }
     Composer& composer() const { return *composer_; }
+    Timeline& timeline() const { return *timeline_; }
     WorkspaceManager& workspaces() const { return *workspaces_; }
 
     // The layout of a new user (p.74): Bin Container top left, Composer to
@@ -90,6 +92,7 @@ private:
     PanelManager* panels_ = nullptr;
     BinContainer* binContainer_ = nullptr;
     Composer* composer_ = nullptr;
+    Timeline* timeline_ = nullptr;
     std::unique_ptr<KeyboardMap> keyboard_;
     WorkspaceManager* workspaces_ = nullptr;
     WorkspaceBar* bar_ = nullptr;

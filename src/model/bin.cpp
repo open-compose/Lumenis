@@ -68,6 +68,7 @@ QJsonObject itemToJson(const BinItem& item) {
     if (item.locked) o.insert(QStringLiteral("locked"), true);
     if (!item.script.isEmpty()) o.insert(QStringLiteral("script"), item.script);
     if (!fields.isEmpty()) o.insert(QStringLiteral("fields"), fields);
+    if (!item.composition.isEmpty()) o.insert(QStringLiteral("composition"), item.composition);
     return o;
 }
 
@@ -87,6 +88,7 @@ std::optional<BinItem> itemFromJson(const QJsonObject& o) {
     item.script = o.value(QStringLiteral("script")).toString();
     const QJsonObject fields = o.value(QStringLiteral("fields")).toObject();
     for (auto it = fields.begin(); it != fields.end(); ++it) item.fields.insert(it.key(), it.value().toString());
+    item.composition = o.value(QStringLiteral("composition")).toObject();
     return item;
 }
 

@@ -10,6 +10,7 @@
 #include "lumenis/ui/menu_builder.h"
 #include "lumenis/ui/panels.h"
 #include "lumenis/ui/theme.h"
+#include "lumenis/ui/timeline.h"
 #include "lumenis/ui/workspace.h"
 #include "lumenis/ui/workspace_bar.h"
 
@@ -24,50 +25,15 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QPainter>
 #include <QPixmap>
 #include <QToolButton>
+#include <QToolTip>
 
 #include <algorithm>
 
 namespace lumenis::ui {
 
 namespace {
-
-// Stand-ins until the real windows exist (Composer and Timeline: Phase 1.4). They are painted without text, so they look the
-// same on every platform.
-class Placeholder : public QWidget {
-public:
-    enum class Kind { Composer, Timeline };
-
-    Placeholder(Kind kind, const QString& name) : kind_(kind) { setObjectName(name); }
-
-protected:
-    void paintEvent(QPaintEvent*) override {
-        QPainter p(this);
-        switch (kind_) {
-        case Kind::Timeline:
-            p.fillRect(rect(), QColor(0x30, 0x30, 0x30));
-            break;
-        case Kind::Composer: {
-            // Source and record monitors side by side (p.74).
-            p.fillRect(rect(), QColor(0x26, 0x26, 0x26));
-            const int margin = 6;
-            const int gap = 4;
-            const int w = (width() - 2 * margin - gap) / 2;
-            const int h = std::min(w * 9 / 16, height() - 2 * margin);
-            if (w > 0 && h > 0) {
-                p.fillRect(QRect(margin, margin, w, h), Qt::black);
-                p.fillRect(QRect(margin + w + gap, margin, w, h), Qt::black);
-            }
-            break;
-        }
-        }
-    }
-
-private:
-    Kind kind_;
-};
 
 QJsonObject tabs(const QString& id) {
     return {{QStringLiteral("tabs"), QJsonArray{id}}, {QStringLiteral("current"), 0}};
@@ -163,8 +129,32 @@ void MainWindow::createPanels() {
             panels_->showPanel(panels_->panel(QStringLiteral("Composer")));
         }
     });
-    panels_->addPanel(new Panel(QStringLiteral("Timeline"), tr("Timeline"),
-                                new Placeholder(Placeholder::Kind::Timeline, QStringLiteral("timelinePlaceholder"))));
+    // The Timeline (ch. 19), showing the Record monitor's sequence.
+    timeline_ = new Timeline(*composer_);
+    timeline_->setKeyResolver([this](const QKeySequence& key) { return keyboard_->commandFor(key); });
+    timeline_->setSequenceStore([this](const QString& binId, const model::BinItem& item, bool isNew) {
+        BinDocument* doc = binContainer_->document(binId);
+        if (!doc) doc = binContainer_->openBin(binId);
+        if (!doc) return false;
+        if (isNew) {
+            doc->addItem(item);
+            return true;
+        }
+        return doc->replaceItem(item);
+    });
+    timeline_->setSequenceMaker([this]() -> std::optional<std::pair<QString, model::BinItem>> {
+        // The first edit makes a sequence in the active bin (p.463).
+        BinDocument* doc = binContainer_->activeDocument();
+        if (!doc && !binContainer_->openDocuments().isEmpty()) doc = binContainer_->openDocuments().first();
+        if (!doc || !project_) return std::nullopt;
+        return std::make_pair(doc->nodeId(), model::newSequence(doc->bin(), project_->settings.format.editRate,
+                                                            QDateTime::currentDateTimeUtc()));
+    });
+    connect(timeline_, &Timeline::message, this, [](const QString& text) { QToolTip::showText(QCursor::pos(), text); });
+    connect(composer_, &Composer::commandRequested, this, [this](const QString& id) {
+        if (Timeline::handles(id)) timeline_->perform(id);
+    });
+    panels_->addPanel(new Panel(QStringLiteral("Timeline"), tr("Timeline"), timeline_));
 }
 
 void MainWindow::setProject(const model::ProjectEntry& project) {
@@ -174,6 +164,7 @@ void MainWindow::setProject(const model::ProjectEntry& project) {
     binContainer_->setProject(project.folder, project.settings.name, project.settings.format.editRate);
     composer_->clear();
     composer_->setAspectRatio(project.settings.aspect);
+    timeline_->history().clear();
     installProjectHandlers(true);
 }
 
@@ -183,6 +174,7 @@ void MainWindow::clearProject() {
     commands_.setHandler(QStringLiteral("file.close_project"), {});
     binContainer_->setProject({}, {}, Rational(24000, 1001));
     composer_->clear();
+    timeline_->history().clear();
     installProjectHandlers(false);
 }
 
@@ -245,7 +237,12 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
             if (!ok) return;
             target = ids.value(static_cast<int>(names.indexOf(choice)));
         }
-        bins->newSequence(target);
+        const QString id = bins->newSequence(target);
+        // In the bin, the Record monitor and the Timeline (p.457).
+        BinDocument* doc = target.isEmpty() ? bins->activeDocument() : bins->document(target);
+        if (const model::BinItem* item = doc ? doc->bin().item(id) : nullptr) {
+            composer_->load(MonitorId::Record, doc->nodeId(), *item);
+        }
         panels_->showPanel(panels_->panel(QStringLiteral("BinContainer")));
     });
     // Edit menu commands act on the bin when the Bin Container is active.
@@ -358,6 +355,8 @@ void MainWindow::installPanelHandlers() {
     // Playing, moving and marking in the Composer (ch. 13).
     for (const QString& id : commands_.ids()) {
         if (Composer::handles(id)) handle(id.toLatin1().constData(), [this, id] { composer_->perform(id); });
+        // Editing, tracks and undo (ch. 15, 19).
+        if (Timeline::handles(id)) handle(id.toLatin1().constData(), [this, id] { timeline_->perform(id); });
     }
 
     // Keyboard-only commands work wherever the main window is active.

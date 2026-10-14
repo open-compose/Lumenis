@@ -83,6 +83,12 @@ public:
 
     void setItemResolver(ItemResolver resolver) { resolver_ = std::move(resolver); }
     void setKeyResolver(KeyResolver resolver) { keys_ = std::move(resolver); }
+    // Edit points of what a monitor shows (the Timeline knows a sequence's;
+    // a clip has its start and end), for Go to Previous/Next Event and
+    // Mark Clip.
+    using EventResolver = std::function<QList<std::int64_t>(MonitorId)>;
+    void setEventResolver(EventResolver resolver) { events_ = std::move(resolver); }
+    QList<std::int64_t> events(MonitorId monitor) const;
     // HD projects are 16:9; SD 4:3 or 16:9 (p.379).
     void setAspectRatio(const Rational& aspect);
     Rational aspectRatio() const { return aspect_; }
@@ -96,6 +102,9 @@ public:
     void loadDefault(const QString& binId, const model::BinItem& item);
     void loadFromBin(MonitorId monitor, const QString& binId, const QStringList& itemIds);
     void clear(); // the project closed
+    // A loaded item changed in its bin (an edit, undo): both monitors show
+    // the new version.
+    void updateItem(const model::BinItem& item);
 
     // The monitor commands act on (the one last clicked).
     MonitorId activeMonitor() const { return active_; }
@@ -147,7 +156,11 @@ public:
     QMenu* contextMenu();
 
 signals:
+    // Anything shown changed: what is loaded, positions, marks.
     void changed();
+    // A button or key for a command that is not the Composer's own
+    // (Splice-in, Overwrite).
+    void commandRequested(const QString& commandId);
     void singleMonitorChanged(bool single);
 
 protected:
@@ -180,6 +193,7 @@ private:
     Column* columns_[2] = {nullptr, nullptr};
     ItemResolver resolver_;
     KeyResolver keys_;
+    EventResolver events_;
 };
 
 } // namespace lumenis::ui

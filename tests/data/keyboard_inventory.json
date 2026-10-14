@@ -133,6 +133,30 @@
       "source": "ks2009",
       "nameVerified": false,
       "note": "Moviola 2009 sheet: toggles between making the Source and Record monitors active."
+    },
+    {
+      "key": "E",
+      "command": "Mark IN",
+      "page": 639,
+      "note": "The T-R-X and T-E-X keyboard sequences: Mark Clip, Mark Out (Mark In), Extract."
+    },
+    {
+      "key": "R",
+      "command": "Mark OUT",
+      "page": 639,
+      "note": "The T-R-X and T-E-X keyboard sequences: Mark Clip, Mark Out (Mark In), Extract."
+    },
+    {
+      "key": "T",
+      "command": "Mark Clip",
+      "page": 639,
+      "note": "The T-R-X and T-E-X keyboard sequences: Mark Clip, Mark Out (Mark In), Extract."
+    },
+    {
+      "key": "X",
+      "command": "Extract",
+      "page": 639,
+      "note": "The T-R-X and T-E-X keyboard sequences: Mark Clip, Mark Out (Mark In), Extract."
     }
   ],
   "contextual": [

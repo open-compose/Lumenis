@@ -52,6 +52,20 @@ void MonitorState::load(const QString& binId, const BinItem& item) {
     current_ = static_cast<int>(loaded_.size()) - 1;
 }
 
+bool MonitorState::replaceItem(const BinItem& item) {
+    for (LoadedClip& c : loaded_) {
+        if (c.item.id != item.id) continue;
+        c.item = item;
+        const std::int64_t last = c.item.kind == BinItemKind::Sequence ? c.item.durationFrames
+                                                                        : std::max<std::int64_t>(c.item.durationFrames - 1, 0);
+        c.position = std::clamp<std::int64_t>(c.position, 0, std::max<std::int64_t>(last, 0));
+        if (c.in && *c.in > last) c.in.reset();
+        if (c.out && *c.out > last) c.out.reset();
+        return true;
+    }
+    return false;
+}
+
 const LoadedClip* MonitorState::current() const {
     return current_ >= 0 && current_ < loaded_.size() ? &loaded_.at(current_) : nullptr;
 }
@@ -111,7 +125,16 @@ std::int64_t MonitorState::position() const {
 }
 
 void MonitorState::setPosition(std::int64_t frame) {
-    if (LoadedClip* c = currentMutable()) c->position = std::clamp<std::int64_t>(frame, 0, std::max<std::int64_t>(duration() - 1, 0));
+    if (LoadedClip* c = currentMutable()) c->position = std::clamp<std::int64_t>(frame, 0, lastPosition());
+}
+
+std::int64_t MonitorState::lastPosition() const {
+    const LoadedClip* c = current();
+    if (!c) return 0;
+    // A sequence's position can sit just past its last frame, where the next
+    // edit goes (p.464).
+    if (c->item.kind == BinItemKind::Sequence) return duration();
+    return std::max<std::int64_t>(duration() - 1, 0);
 }
 
 void MonitorState::step(std::int64_t frames) {

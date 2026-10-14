@@ -17,6 +17,7 @@
 #include <QMimeData>
 #include <QTableView>
 #include <QTemporaryDir>
+#include <QSignalSpy>
 #include <QTest>
 #include <QToolButton>
 
@@ -98,8 +99,14 @@ private slots:
         }
         QVERIFY(c.button(MonitorId::Source, QStringLiteral("edit.splice_in")));
         QVERIFY(c.button(MonitorId::Source, QStringLiteral("edit.mark_clip")));
-        // Editing waits for the Timeline.
-        QVERIFY(!c.button(MonitorId::Source, QStringLiteral("edit.overwrite"))->isEnabled());
+        // Editing is the Timeline's: the buttons ask for it.
+        QVERIFY(c.button(MonitorId::Source, QStringLiteral("edit.overwrite"))->isEnabled());
+        QSignalSpy requested(&c, &Composer::commandRequested);
+        c.button(MonitorId::Source, QStringLiteral("edit.overwrite"))->click();
+        QCOMPARE(requested.count(), 1);
+        QCOMPARE(requested.at(0).at(0).toString(), QStringLiteral("edit.overwrite"));
+        // Markers come later.
+        QVERIFY(!c.button(MonitorId::Source, QStringLiteral("more.add_marker"))->isEnabled());
         // The Record monitor is always ganged (p.495): its Gang does nothing.
         QVERIFY(!c.button(MonitorId::Record, QStringLiteral("other.gang"))->isEnabled());
         QVERIFY(!c.findChildren<QToolButton*>(QStringLiteral("blankButton")).isEmpty());
