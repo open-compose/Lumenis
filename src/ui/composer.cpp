@@ -794,6 +794,10 @@ bool Composer::perform(const QString& id) {
                     break;
                 }
             }
+            if (const auto range = marks_ ? marks_(m) : std::nullopt) {
+                from = range->first;
+                to = range->second;
+            }
             if (!s.isEmpty() && from <= to) {
                 s.setPosition(from);
                 s.markIn();
@@ -881,6 +885,9 @@ QMenu* Composer::contextMenu() {
     menu->setAttribute(Qt::WA_DeleteOnClose);
     QAction* single = menu->addAction(tr("Show Single/Dual Monitor"));
     connect(single, &QAction::triggered, this, [this] { perform(QStringLiteral("composer.show_single_dual_monitor")); });
+    // The Clipboard into the Source monitor (p.480).
+    QAction* clipboard = menu->addAction(tr("Clipboard Contents"));
+    connect(clipboard, &QAction::triggered, this, [this] { emit commandRequested(QStringLiteral("edit.clipboard_contents")); });
     return menu;
 }
 

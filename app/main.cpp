@@ -321,6 +321,9 @@ int main(int argc, char** argv) {
                     }
                     at += seconds * fps;
                 }
+                for (const QString& t : {QStringLiteral("V1"), QStringLiteral("A1"), QStringLiteral("A2")}) {
+                    seq.track(t)->syncLocked = true;
+                }
                 return seq;
             };
             const std::pair<const char*, lumenis::model::Sequence> sequences[] = {
@@ -355,6 +358,9 @@ int main(int argc, char** argv) {
                 composer.setTracking(lumenis::ui::MonitorId::Record, lumenis::model::TrackingFormat::Master);
                 composer.setActiveMonitor(lumenis::ui::MonitorId::Source);
                 window.timeline().patch().setRecordSelected(QStringLiteral("V2"), false);
+                // The Lift/Overwrite segment tool with a segment selected (p.611).
+                window.timeline().setSegmentTool(lumenis::model::EditKind::Overwrite, true);
+                window.timeline().setSelection({{QStringLiteral("V1"), 95 * fps}});
             }
         }
         lumenis::ui::SelectProjectDialog selectProject(sample);

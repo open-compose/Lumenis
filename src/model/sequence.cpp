@@ -36,7 +36,10 @@ const std::pair<AudioFormat, const char*> kFormats[] = {
 
 QJsonObject segmentToJson(const Segment& s) {
     QJsonObject o{{QStringLiteral("length"), static_cast<qint64>(s.length)}};
-    if (s.isFiller()) return o;
+    if (s.isFiller()) {
+        if (s.addEdit) o.insert(QStringLiteral("addEdit"), true);
+        return o;
+    }
     o.insert(QStringLiteral("clip"), s.clipId);
     if (!s.binId.isEmpty()) o.insert(QStringLiteral("bin"), s.binId);
     o.insert(QStringLiteral("name"), s.name);
@@ -53,6 +56,7 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.sourceTrack = o.value(QStringLiteral("track")).toString();
     s.sourceIn = o.value(QStringLiteral("in")).toInteger();
     s.length = std::max<std::int64_t>(o.value(QStringLiteral("length")).toInteger(), 0);
+    s.addEdit = s.isFiller() && o.value(QStringLiteral("addEdit")).toBool();
     return s;
 }
 
@@ -153,6 +157,8 @@ QJsonObject Sequence::toJson() const {
         QJsonArray segments;
         for (const Segment& s : t.segments) segments.append(segmentToJson(s));
         QJsonObject o{{QStringLiteral("name"), t.name()}, {QStringLiteral("segments"), segments}};
+        if (t.locked) o.insert(QStringLiteral("locked"), true);
+        if (t.syncLocked) o.insert(QStringLiteral("syncLocked"), true);
         if (t.kind == TrackKind::Audio && t.format != AudioFormat::Mono) {
             for (const auto& [format, text] : kFormats) {
                 if (format == t.format) o.insert(QStringLiteral("format"), QString::fromLatin1(text));
@@ -173,6 +179,8 @@ Sequence Sequence::fromJson(const QJsonObject& o) {
         Track t;
         t.kind = ref->kind;
         t.number = ref->number;
+        t.locked = to.value(QStringLiteral("locked")).toBool();
+        t.syncLocked = to.value(QStringLiteral("syncLocked")).toBool();
         const QString format = to.value(QStringLiteral("format")).toString();
         for (const auto& [f, text] : kFormats) {
             if (format == QLatin1String(text)) t.format = f;
@@ -287,8 +295,9 @@ int Sequence::cut(Track& t, std::int64_t frame) {
     const int i = t.segmentAt(std::max<std::int64_t>(frame, 0), &start);
     if (i < 0 || start == frame) return std::max(i, 0);
     Segment tail = t.segments.at(i);
+    tail.addEdit = false;
     const std::int64_t head = frame - start;
-    tail.sourceIn += head;
+    if (!tail.isFiller()) tail.sourceIn += head;
     tail.length -= head;
     t.segments[i].length = head;
     t.segments.insert(i + 1, tail);
@@ -299,10 +308,12 @@ void Sequence::tidy(Track& t) {
     QList<Segment> out;
     for (const Segment& s : t.segments) {
         if (s.length <= 0) continue;
-        if (s.isFiller() && !out.isEmpty() && out.last().isFiller()) {
+        if (s.isFiller() && !s.addEdit && !out.isEmpty() && out.last().isFiller()) {
             out.last().length += s.length;
         } else {
-            out << (s.isFiller() ? Segment::filler(s.length) : s);
+            Segment kept = s.isFiller() ? Segment::filler(s.length) : s;
+            kept.addEdit = s.isFiller() && s.addEdit && !out.isEmpty() && out.last().isFiller();
+            out << kept;
         }
     }
     t.segments = out;
@@ -512,6 +523,7 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
     const std::optional<Sequence> nested =
         source.kind == BinItemKind::Sequence ? std::optional<Sequence>(Sequence::fromItem(source)) : std::nullopt;
     for (const auto& [from, to] : patch.editPairs(sequence)) {
+        if (const Track* existing = sequence.track(to); existing && existing->locked) continue;
         if (!sequence.ensureTrack(to)) continue;
         QList<Segment> material;
         if (nested) {
@@ -533,18 +545,318 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
         }
         changed << to;
     }
+    // A splice into a sync-locked track puts filler into the other
+    // sync-locked tracks, so they stay in sync (p.493).
+    if (kind == EditKind::SpliceIn) {
+        bool synced = false;
+        for (const QString& name : changed) synced = synced || sequence.track(name)->syncLocked;
+        if (synced) {
+            for (const QString& name : sequence.trackNames()) {
+                const Track* t = sequence.track(name);
+                if (changed.contains(name) || !t->syncLocked || t->locked || plan.recordStart >= t->length()) continue;
+                sequence.splice(name, plan.recordStart, {Segment::filler(plan.length)});
+            }
+        }
+    }
     return changed;
 }
 
 QStringList removeMaterial(Sequence& sequence, bool extract, std::int64_t start, std::int64_t length,
                            const QStringList& tracks) {
     QStringList changed;
+    QStringList targets;
+    bool synced = false;
     for (const QString& name : tracks) {
+        const Track* t = sequence.track(name);
+        if (!t || t->locked) continue;
+        targets << name;
+        synced = synced || t->syncLocked;
+    }
+    if (extract && synced) {
+        for (const Track& t : sequence.tracks()) {
+            if (t.syncLocked && !t.locked && !targets.contains(t.name())) targets << t.name();
+        }
+    }
+    for (const QString& name : targets) {
         const QList<Segment> removed =
             extract ? sequence.extract(name, start, length) : sequence.lift(name, start, length);
         if (!removed.isEmpty()) changed << name;
     }
     return changed;
+}
+
+bool Sequence::removeTrack(const QString& name) {
+    for (qsizetype i = 0; i < tracks_.size(); ++i) {
+        if (tracks_.at(i).name() == name) {
+            tracks_.removeAt(i);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Sequence::addEdit(const QString& name, std::int64_t frame) {
+    Track* t = track(name);
+    if (!t || frame <= 0 || frame >= t->length()) return false;
+    std::int64_t start = 0;
+    t->segmentAt(frame, &start);
+    if (start == frame) return false;
+    const int i = cut(*t, frame);
+    if (t->segments.at(i).isFiller()) t->segments[i].addEdit = true;
+    tidy(*t);
+    return true;
+}
+
+bool Sequence::isMatchFrame(const Segment& before, const Segment& after) {
+    if (before.isFiller() || after.isFiller()) return before.isFiller() && after.isFiller() && after.addEdit;
+    return before.clipId == after.clipId && before.binId == after.binId && before.sourceTrack == after.sourceTrack &&
+           before.sourceIn + before.length == after.sourceIn;
+}
+
+int Sequence::removeMatchFrameEdits(const QStringList& names, std::int64_t start, std::int64_t length) {
+    int removed = 0;
+    const std::int64_t end = start + length;
+    for (Track& t : tracks_) {
+        if (!names.isEmpty() && !names.contains(t.name())) continue;
+        QList<Segment> out;
+        std::int64_t at = 0;
+        for (const Segment& s : t.segments) {
+            // The edit at `at` is inside the range: strictly between its ends.
+            if (!out.isEmpty() && at > start && at < end && isMatchFrame(out.last(), s)) {
+                out.last().length += s.length;
+                ++removed;
+            } else {
+                out << s;
+            }
+            at += s.length;
+        }
+        t.segments = out;
+    }
+    return removed;
+}
+
+Sequence Sequence::excerpt(const QStringList& names, std::int64_t start, std::int64_t length) const {
+    Sequence out;
+    out.timecode_ = timecode_;
+    for (const Track& t : tracks_) {
+        if (!names.contains(t.name())) continue;
+        Track copy = t;
+        copy.locked = false;
+        copy.syncLocked = false;
+        copy.segments = material(t.name(), start, length);
+        tidy(copy);
+        bool empty = true;
+        for (const Segment& s : copy.segments) empty = empty && s.isFiller();
+        if (!empty) out.tracks_ << copy;
+    }
+    return out;
+}
+
+EditPlan planReplace(const Sequence& sequence, const QString& track, const EditMarks& source, const EditMarks& record) {
+    EditPlan plan;
+    if (source.duration <= 0) {
+        plan.error = QStringLiteral("There is no source material to edit.");
+        return plan;
+    }
+    if (record.in && record.out) {
+        // "Replace edits always fill the In to Out portion" (p.468).
+        plan.recordStart = *record.in;
+        plan.length = *record.out - *record.in + 1;
+    } else {
+        const Track* t = sequence.track(track);
+        std::int64_t start = 0;
+        const int i = t ? t->segmentAt(record.position, &start) : -1;
+        if (i < 0) {
+            plan.error = QStringLiteral("There is no clip under the position indicator to replace.");
+            return plan;
+        }
+        plan.recordStart = start;
+        plan.length = t->segments.at(i).length;
+    }
+    // The two positions are the sync frames (p.468).
+    plan.sourceStart = source.position - (record.position - plan.recordStart);
+    if (plan.length <= 0) {
+        plan.error = QStringLiteral("The OUT mark is before the IN mark.");
+    } else if (plan.sourceStart < 0 || plan.sourceStart + plan.length > source.duration) {
+        plan.error = QStringLiteral("Insufficient source material to make this edit.");
+    }
+    return plan;
+}
+
+QStringList paste(Sequence& sequence, const Sequence& clip, std::int64_t at, EditKind kind) {
+    QStringList changed;
+    const std::int64_t length = clip.duration();
+    if (length <= 0) return changed;
+    for (const Track& t : clip.tracks()) {
+        if (const Track* existing = sequence.track(t.name()); existing && existing->locked) continue;
+        if (!sequence.ensureTrack(t.name())) continue;
+        const QList<Segment> material = clip.material(t.name(), 0, length);
+        if (kind == EditKind::SpliceIn) {
+            sequence.splice(t.name(), at, material);
+        } else {
+            sequence.overwrite(t.name(), at, material);
+        }
+        changed << t.name();
+    }
+    return changed;
+}
+
+std::optional<Segment> segmentFor(const Sequence& sequence, const SegmentRef& ref) {
+    const Track* t = sequence.track(ref.track);
+    std::int64_t start = 0;
+    const int i = t ? t->segmentAt(ref.start, &start) : -1;
+    if (i < 0 || start != ref.start) return std::nullopt;
+    return t->segments.at(i);
+}
+
+namespace {
+
+std::optional<QString> shiftedTrack(const QString& name, int by) {
+    const auto ref = parseTrackName(name);
+    if (!ref) return std::nullopt;
+    const int number = ref->number + by;
+    if (number < 1 || number > (ref->kind == TrackKind::Data ? 1 : kMaxTracks)) return std::nullopt;
+    return trackName(ref->kind, number);
+}
+
+} // namespace
+
+QList<SegmentRef> moveSegments(Sequence& sequence, const QList<SegmentRef>& segments, std::int64_t frames, int tracks,
+                               EditKind kind, bool copy, QString* error) {
+    auto failed = [error](const QString& text) {
+        if (error) *error = text;
+        return QList<SegmentRef>();
+    };
+    struct Piece {
+        SegmentRef from;
+        Segment segment;
+        QString to;
+        std::int64_t at = 0;
+    };
+    QList<Piece> pieces;
+    for (const SegmentRef& ref : segments) {
+        const auto seg = segmentFor(sequence, ref);
+        if (!seg) continue;
+        const auto to = shiftedTrack(ref.track, tracks);
+        if (!to) return failed(QStringLiteral("There is no track to move to."));
+        if (const Track* t = sequence.track(*to); t && t->locked) {
+            // "You cannot move segments to locked tracks" (p.619).
+            return failed(QStringLiteral("%1 is locked.").arg(*to));
+        }
+        if (const Track* t = sequence.track(ref.track); !copy && t->locked) {
+            return failed(QStringLiteral("%1 is locked.").arg(ref.track));
+        }
+        if (ref.start + frames < 0) return failed(QStringLiteral("The segment would start before the sequence."));
+        pieces << Piece{ref, *seg, *to, ref.start + frames};
+    }
+    if (pieces.isEmpty()) return failed(QStringLiteral("Select segments to move."));
+    // Remove the originals, the latest first so earlier ones keep their
+    // place; Extract shifts later destinations on the same track.
+    if (!copy) {
+        QList<Piece> order = pieces;
+        std::sort(order.begin(), order.end(), [](const Piece& a, const Piece& b) { return a.from.start > b.from.start; });
+        for (const Piece& p : order) {
+            if (kind == EditKind::SpliceIn) {
+                sequence.extract(p.from.track, p.from.start, p.segment.length);
+                for (Piece& q : pieces) {
+                    if (q.to != p.from.track) continue;
+                    if (q.at >= p.from.start + p.segment.length) {
+                        q.at -= p.segment.length;
+                    } else if (q.at > p.from.start) {
+                        q.at = p.from.start;
+                    }
+                }
+            } else {
+                sequence.lift(p.from.track, p.from.start, p.segment.length);
+            }
+        }
+    }
+    // Put them in, the latest first; a splice pushes the ones already put
+    // in after it on its track.
+    std::sort(pieces.begin(), pieces.end(), [](const Piece& a, const Piece& b) { return a.at > b.at; });
+    QList<SegmentRef> moved;
+    for (const Piece& p : pieces) {
+        if (!sequence.ensureTrack(p.to)) continue;
+        if (kind == EditKind::SpliceIn) {
+            sequence.splice(p.to, p.at, {p.segment});
+            for (SegmentRef& m : moved) {
+                if (m.track == p.to && m.start >= p.at) m.start += p.segment.length;
+            }
+        } else {
+            sequence.overwrite(p.to, p.at, {p.segment});
+        }
+        moved << SegmentRef{p.to, p.at};
+    }
+    std::reverse(moved.begin(), moved.end());
+    return moved;
+}
+
+bool deleteSegments(Sequence& sequence, const QList<SegmentRef>& segments, bool extract) {
+    QList<std::pair<SegmentRef, std::int64_t>> found;
+    for (const SegmentRef& ref : segments) {
+        const auto seg = segmentFor(sequence, ref);
+        const Track* t = sequence.track(ref.track);
+        if (seg && t && !t->locked) found.append({ref, seg->length});
+    }
+    if (found.isEmpty()) return false;
+    std::sort(found.begin(), found.end(), [](const auto& a, const auto& b) { return a.first.start > b.first.start; });
+    for (const auto& [ref, length] : found) {
+        if (extract) {
+            sequence.extract(ref.track, ref.start, length);
+        } else {
+            sequence.lift(ref.track, ref.start, length);
+        }
+    }
+    return true;
+}
+
+Sequence copySegments(const Sequence& sequence, const QList<SegmentRef>& segments, std::int64_t* start) {
+    std::int64_t first = -1;
+    std::int64_t end = 0;
+    QStringList tracks;
+    for (const SegmentRef& ref : segments) {
+        const auto seg = segmentFor(sequence, ref);
+        if (!seg) continue;
+        first = first < 0 ? ref.start : std::min(first, ref.start);
+        end = std::max(end, ref.start + seg->length);
+        if (!tracks.contains(ref.track)) tracks << ref.track;
+    }
+    if (start) *start = std::max<std::int64_t>(first, 0);
+    if (first < 0) return {};
+    // Only the selected segments: the rest of each track is filler.
+    Sequence out = sequence.excerpt(tracks, first, end - first);
+    for (const QString& name : tracks) {
+        const Track* t = sequence.track(name);
+        std::int64_t at = 0;
+        for (const Segment& s : t->segments) {
+            const std::int64_t from = std::max(at, first);
+            const std::int64_t to = std::min(at + s.length, end);
+            if (from < to && !segments.contains(SegmentRef{name, at})) out.lift(name, from - first, to - from);
+            at += s.length;
+        }
+    }
+    return out;
+}
+
+std::optional<MatchedFrame> matchFrame(const Sequence& sequence, const QStringList& tracks, std::int64_t position) {
+    // Video from the top track down, then audio from A1 (p.434).
+    QStringList order;
+    for (auto it = sequence.tracks().crbegin(); it != sequence.tracks().crend(); ++it) {
+        if (it->kind == TrackKind::Video) order << it->name();
+    }
+    for (const Track& t : sequence.tracks()) {
+        if (t.kind == TrackKind::Audio) order << t.name();
+    }
+    for (const QString& name : order) {
+        if (!tracks.isEmpty() && !tracks.contains(name)) continue;
+        const Track* t = sequence.track(name);
+        std::int64_t start = 0;
+        const int i = t->segmentAt(position, &start);
+        if (i < 0 || t->segments.at(i).isFiller()) continue;
+        const Segment& s = t->segments.at(i);
+        return MatchedFrame{s, s.sourceIn + position - start};
+    }
+    return std::nullopt;
 }
 
 void EditHistory::push(EditStep step) {

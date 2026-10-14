@@ -283,9 +283,15 @@ Sub-steps:
     highlighting, the position indicator with snapping, Focus, the scale
     bar, Zoom In/Back, Toggle Source/Record and the Fast menu.
   * Details and what is left: "Implementation status (1.4b)" in the spec.
-* **1.4c** Segment mode, trimming and the rest of editing: the segment
-  tools, Trim mode, sync locks, Replace and Sync Point edits, the
-  Clipboard, Top and Tail, Add Edit and markers.
+* **1.4c Segments, locks and the Clipboard — done.**
+  * The Lift/Overwrite and Extract/Splice-in segment tools: select, lasso,
+    drag, copy, delete, Move Clip Up/Down, Cut, Copy and Paste.
+  * Track Lock and Sync Lock; the Clipboard; Replace Edit, Top, Tail, Add
+    Edit and Remove Match Frame Edits, Match Frame; deleting tracks; the
+    Timeline Top toolbar and right-click menus.
+  * Details and what is left: "Implementation status (1.4c)" in the spec.
+* **1.4d** Trim mode and markers: the trim tools and rollers, single- and
+  dual-roller trims with sync locks, Sync Point editing, markers.
 * **1.5** Palettes, tools and Settings dialogs.
 * **1.6** Keyboard settings, workspaces and button mapping (gate 3, gate 4).
 

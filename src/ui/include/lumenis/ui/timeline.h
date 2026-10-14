@@ -9,6 +9,7 @@
 #include <functional>
 #include <optional>
 
+class QLabel;
 class QLineEdit;
 class QMenu;
 class QScrollBar;
@@ -46,9 +47,16 @@ public:
     double xFor(std::int64_t frame) const;
     QRect sourceButton(const Row& row) const;
     QRect recordButton(const Row& row) const;
+    QRect syncButton(const Row& row) const;
     QRect monitorButton(const Row& row) const;
     // The row under a point, or nullptr.
     std::optional<Row> rowAt(const QPoint& pos) const;
+    // The segment under a point (filler too, but not at the ends of a
+    // track, p.611).
+    std::optional<model::SegmentRef> segmentAt(const QPoint& pos) const;
+    // With both segment tools on, the upper half of a segment is
+    // Lift/Overwrite and the lower half Extract/Splice-in (p.610).
+    model::EditKind segmentModeAt(const QPoint& pos) const;
 
     // Vertical scrolling (p.608).
     void setTopOffset(int offset);
@@ -65,9 +73,14 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void contextMenuEvent(QContextMenuEvent* event) override;
 
 private:
     void moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifiers);
+    // A segment drag: frames and tracks moved so far.
+    std::int64_t dragFrames(Qt::KeyboardModifiers modifiers) const;
+    int dragTracks() const;
+    void selectLasso(const QRect& area);
 
     Timeline& timeline_;
     int top_ = 0;
@@ -77,6 +90,12 @@ private:
     int zoomTo_ = 0;
     QString patchFrom_; // a source track being dragged to a record track
     QPoint patchPos_;
+    std::optional<QPoint> dragFrom_; // a segment drag
+    QPoint dragPos_;
+    bool dragging_ = false;
+    model::EditKind dragKind_ = model::EditKind::Overwrite;
+    std::optional<QPoint> lassoFrom_;
+    QPoint lassoTo_;
 };
 
 // The Timeline window (ch. 19): the Record monitor's sequence, or with
@@ -128,6 +147,33 @@ public:
     bool isMonitored(const QString& track) const { return !unmonitored_.contains(track); }
     void toggleMonitor(const QString& track);
 
+    // Track locks (p.633) and sync locks (p.493).
+    void setTracksLocked(const QStringList& tracks, bool locked);
+    void toggleSyncLock(const QString& track);
+    void toggleSyncLockAll();
+
+    // Segment mode (p.610-623). The two segment tools, each on or off; the
+    // tool used when neither or both apply (Timeline settings, p.623; ours
+    // is Lift/Overwrite, as for a lasso with no tool, p.612).
+    bool isSegmentTool(model::EditKind kind) const;
+    void setSegmentTool(model::EditKind kind, bool on);
+    model::EditKind segmentKind() const;
+    const QList<model::SegmentRef>& selection() const { return selection_; }
+    void setSelection(const QList<model::SegmentRef>& segments);
+    // Click and Shift-click (p.611).
+    void clickSegment(const model::SegmentRef& segment, bool toggle);
+    bool moveSelection(std::int64_t frames, int tracks, model::EditKind kind, bool copy);
+    // The Delete key: selected segments (p.621), or else the selected
+    // tracks after asking (p.636).
+    bool deleteSelection();
+    bool deleteTracks(const QStringList& tracks);
+    // The right-click Select menu (p.613-614).
+    enum class SelectWhere { Left, Right, Reverse };
+    void selectSegments(SelectWhere where);
+
+    // The Clipboard (p.479-480): a sequence that is in no bin.
+    const std::optional<model::BinItem>& clipboard() const { return clipboard_; }
+
     // Zoom (p.607-608). The scale is in pixels per frame.
     double scale() const;
     double fitScale() const;
@@ -158,12 +204,18 @@ public:
     QSlider* scaleBar() const { return scaleBar_; }
     QScrollBar* scrollBar() const { return scroll_; }
     QMenu* fastMenu();
+    // The right-click menu, over a track's button or elsewhere (p.613,
+    // p.633-636). The caller owns it.
+    QMenu* contextMenu(const QString& track = {});
+    QLabel* timecodeDisplay() const { return timecode_; }
     // Edit > Undo/Redo List (p.466): the most recent first.
     QMenu* undoRedoMenu();
 
 signals:
     void changed();
     void message(const QString& text);
+    // A command that is not the Timeline's (New > Sequence).
+    void commandRequested(const QString& commandId);
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -173,6 +225,23 @@ private:
     void syncScrollBars();
     void edit(model::EditKind kind);
     void remove(bool extract);
+    void replaceEdit();
+    void addEdit(bool fillerOnly);
+    void topOrTail(bool top);
+    void matchFrame();
+    void copyToClipboard();
+    void cutOrCopySelection(bool cut);
+    void pasteClipboard();
+    void moveClips(int tracks);
+    void removeMatchFrameEdits();
+    // The record sequence, for changing it; nullptr (and a message) if the
+    // Record monitor has none.
+    const model::LoadedClip* recordSequence();
+    // Fills the Clipboard; with Alt also loads it into the Source monitor
+    // (p.480).
+    void setClipboard(const model::Sequence& material, const QString& from);
+    void loadClipboard(const QString& name);
+    void storeLocks(const model::Sequence& sequence);
     void addTrack(model::TrackKind kind, model::AudioFormat format = model::AudioFormat::Mono);
     // Stores a changed record sequence, with an undo step.
     void commit(const QString& description, const model::BinItem& before, model::BinItem after);
@@ -184,6 +253,8 @@ private:
     Composer& composer_;
     TimelineView* view_ = nullptr;
     QWidget* toolbar_ = nullptr;
+    QWidget* topbar_ = nullptr;
+    QLabel* timecode_ = nullptr;
     QSlider* scaleBar_ = nullptr;
     QScrollBar* scroll_ = nullptr;
     QScrollBar* vscroll_ = nullptr;
@@ -201,6 +272,11 @@ private:
     std::optional<std::pair<double, double>> focusBack_;
     QList<std::pair<double, double>> zoomStack_;
     Display display_;
+    bool liftTool_ = false;
+    bool spliceTool_ = false;
+    QList<model::SegmentRef> selection_;
+    std::optional<model::BinItem> clipboard_;
+    int clipboardCount_ = 0;
     QString message_;
     bool syncing_ = false;
     SequenceStore store_;

@@ -13,6 +13,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QLabel>
 #include <QMenu>
 #include <QScrollBar>
 #include <QSignalSpy>
@@ -380,6 +381,261 @@ private slots:
         QCOMPARE(rig.composer.state(MonitorId::Record).out(), 70);
         QTest::keyClick(rig.timeline.view(), Qt::Key_X);
         QCOMPARE(rig.composer.state(MonitorId::Record).duration(), 79);
+    }
+
+    void segmentToolsSelectAndDrag() {
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(QStringLiteral("Cut"), 100));
+        Timeline& t = rig.timeline;
+        TimelineView* view = t.view();
+        auto rowOf = [&](const QString& track) {
+            for (const auto& r : view->rows()) {
+                if (r.track == track) return r;
+            }
+            return TimelineView::Row{};
+        };
+        const auto v1 = rowOf(QStringLiteral("V1"));
+        const QPoint onB(static_cast<int>(view->xFor(70)), v1.top + v1.height / 2);
+        // Without a segment tool a click moves the position.
+        QTest::mouseClick(view, Qt::LeftButton, {}, onB);
+        QVERIFY(t.selection().isEmpty());
+        // The red Lift/Overwrite tool (p.611).
+        t.toolButton(QStringLiteral("smart.lift_overwrite"))->click();
+        QVERIFY(t.isSegmentTool(model::EditKind::Overwrite));
+        QTest::mouseClick(view, Qt::LeftButton, {}, onB);
+        QCOMPARE(t.selection(), (QList<model::SegmentRef>{{"V1", 50}}));
+        // Shift-click adds (p.611).
+        const auto a1 = rowOf(QStringLiteral("A1"));
+        QTest::mouseClick(view, Qt::LeftButton, Qt::ShiftModifier, QPoint(onB.x(), a1.top + a1.height / 2));
+        QCOMPARE(t.selection().size(), 2);
+        // Drag both 20 frames earlier: they overwrite and leave filler.
+        const QPoint to(static_cast<int>(view->xFor(50)), onB.y());
+        QTest::mousePress(view, Qt::LeftButton, {}, onB);
+        QMouseEvent move(QEvent::MouseMove, QPointF(to), view->mapToGlobal(QPointF(to)), Qt::NoButton, Qt::LeftButton,
+                         Qt::NoModifier);
+        QApplication::sendEvent(view, &move);
+        QTest::mouseRelease(view, Qt::LeftButton, {}, to);
+        const model::Sequence seq = rig.recordSequence();
+        QCOMPARE(seq.track(QStringLiteral("V1"))->segments.at(1).clipId, QStringLiteral("b"));
+        QVERIFY(seq.track(QStringLiteral("V1"))->segments.last().isFiller());
+        QCOMPARE(seq.duration(), 100);
+        QCOMPARE(t.history().descriptions().first(), QStringLiteral("Lift/Overwrite"));
+        QCOMPARE(t.selection().size(), 2); // still selected (p.620)
+        // Delete with the Extract/Splice-in tool closes the gap (p.621).
+        t.setSegmentTool(model::EditKind::Overwrite, false);
+        t.setSegmentTool(model::EditKind::SpliceIn, true);
+        t.setSelection({{"V1", 0}});
+        view->setFocus();
+        QTest::keyClick(view, Qt::Key_Delete);
+        QCOMPARE(rig.recordSequence().track(QStringLiteral("V1"))->segments.first().clipId, QStringLiteral("b"));
+        // Alt-drag draws a lasso; all segments inside are selected.
+        t.setSegmentTool(model::EditKind::SpliceIn, false);
+        QTest::mousePress(view, Qt::LeftButton, Qt::AltModifier, QPoint(static_cast<int>(view->xFor(0)) + 1, v1.top + 2));
+        const QPoint end(static_cast<int>(view->xFor(100)) + 2, a1.top + a1.height - 2);
+        QMouseEvent lasso(QEvent::MouseMove, QPointF(end), view->mapToGlobal(QPointF(end)), Qt::NoButton, Qt::LeftButton,
+                          Qt::AltModifier);
+        QApplication::sendEvent(view, &lasso);
+        QTest::mouseRelease(view, Qt::LeftButton, Qt::AltModifier, end);
+        QVERIFY(t.selection().size() >= 3);
+        QVERIFY(t.isSegmentTool(model::EditKind::Overwrite)); // a lasso turns it on (p.612)
+    }
+
+    void moveClipUpAndDown() {
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(QStringLiteral("Cut"), 100));
+        rig.timeline.setSegmentTool(model::EditKind::Overwrite, true);
+        rig.timeline.setSelection({{"V1", 0}});
+        // Up a track makes V2 (p.613).
+        QVERIFY(rig.timeline.perform(QStringLiteral("edit.move_clip_up")));
+        QCOMPARE(rig.recordSequence().track(QStringLiteral("V2"))->segments.first().clipId, QStringLiteral("a"));
+        QCOMPARE(rig.timeline.selection(), (QList<model::SegmentRef>{{"V2", 0}}));
+        QVERIFY(rig.timeline.perform(QStringLiteral("edit.move_clip_down")));
+        QCOMPARE(rig.recordSequence().track(QStringLiteral("V1"))->segments.first().clipId, QStringLiteral("a"));
+    }
+
+    void locksAndSyncLocks() {
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(QStringLiteral("Cut"), 100));
+        TimelineView* view = rig.timeline.view();
+        TimelineView::Row a2;
+        TimelineView::Row tc;
+        for (const auto& r : view->rows()) {
+            if (r.track == QLatin1String("A2")) a2 = r;
+            if (r.track == QLatin1String("TC1")) tc = r;
+        }
+        // The Sync Lock button, and Sync Lock All next to TC1 (p.493, p.633).
+        QTest::mouseClick(view, Qt::LeftButton, {}, view->syncButton(a2).center());
+        QVERIFY(rig.recordSequence().track(QStringLiteral("A2"))->syncLocked);
+        QTest::mouseClick(view, Qt::LeftButton, {}, view->syncButton(tc).center());
+        const model::Sequence allLocked = rig.recordSequence();
+        for (const auto& t : allLocked.tracks()) QVERIFY(t.syncLocked);
+        rig.timeline.perform(QStringLiteral("edit.sync_lock_all_tracks"));
+        const model::Sequence noneLocked = rig.recordSequence();
+        for (const auto& t : noneLocked.tracks()) QVERIFY(!t.syncLocked);
+        // Lock Track from the track button's menu; a locked track is not
+        // edited (p.633).
+        QMenu* menu = rig.timeline.contextMenu(QStringLiteral("A2"));
+        QCOMPARE(menu->actions().first()->text(), QStringLiteral("Lock Track"));
+        menu->actions().first()->trigger();
+        delete menu;
+        QVERIFY(rig.recordSequence().track(QStringLiteral("A2"))->locked);
+        rig.composer.state(MonitorId::Record).setPosition(10);
+        rig.composer.state(MonitorId::Record).markIn();
+        rig.composer.state(MonitorId::Record).setPosition(19);
+        rig.composer.state(MonitorId::Record).markOut();
+        rig.timeline.perform(QStringLiteral("edit.extract"));
+        QCOMPARE(rig.recordSequence().track(QStringLiteral("A2"))->length(), 100);
+        QCOMPARE(rig.recordSequence().track(QStringLiteral("A1"))->length(), 90);
+        // Clip > Unlock Tracks on the selected tracks.
+        rig.timeline.perform(QStringLiteral("clip.unlock_tracks"));
+        QVERIFY(!rig.recordSequence().track(QStringLiteral("A2"))->locked);
+        // Locks are not undo steps.
+        QCOMPARE(rig.timeline.history().descriptions(), (QStringList{"Extract"}));
+    }
+
+    void clipboard() {
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(QStringLiteral("Cut"), 100));
+        model::MonitorState& rec = rig.composer.state(MonitorId::Record);
+        rig.timeline.perform(QStringLiteral("edit.clipboard_contents"));
+        QVERIFY(!rig.timeline.lastMessage().isEmpty()); // empty
+        rec.setPosition(40);
+        rec.markIn();
+        rec.setPosition(59);
+        rec.markOut();
+        // Copy to Clipboard leaves the sequence alone (p.479).
+        rig.timeline.perform(QStringLiteral("edit.copy_to_clipboard"));
+        QVERIFY(rig.timeline.clipboard());
+        QCOMPARE(rig.timeline.clipboard()->durationFrames, 20);
+        QCOMPARE(rec.duration(), 100);
+        // Clipboard Contents into the Source monitor (p.480).
+        rig.timeline.perform(QStringLiteral("edit.clipboard_contents"));
+        const model::MonitorState& src = rig.composer.state(MonitorId::Source);
+        QCOMPARE(src.current()->item.name, QStringLiteral("Clipboard Contents.1"));
+        // ... and spliced back in at the start.
+        rec.clearBoth();
+        rec.setPosition(0);
+        QVERIFY(rig.timeline.perform(QStringLiteral("edit.splice_in")));
+        QCOMPARE(rec.duration(), 120);
+        const model::Sequence seq = rig.recordSequence();
+        QCOMPARE(seq.track(QStringLiteral("V1"))->segments.first().clipId, QStringLiteral("a"));
+        QCOMPARE(seq.track(QStringLiteral("V1"))->segments.at(1).clipId, QStringLiteral("b"));
+        // Extract fills the Clipboard too.
+        rec.setPosition(0);
+        rec.markIn();
+        rec.setPosition(4);
+        rec.markOut();
+        rig.timeline.perform(QStringLiteral("edit.extract"));
+        QCOMPARE(rig.timeline.clipboard()->durationFrames, 5);
+    }
+
+    void copyAndPasteSegments() {
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(QStringLiteral("Cut"), 100));
+        rig.timeline.setSegmentTool(model::EditKind::SpliceIn, true);
+        rig.timeline.setSelection({{"V1", 50}});
+        // Ctrl+C, then Ctrl+V at the position (p.622-623).
+        rig.timeline.perform(QStringLiteral("edit.copy"));
+        rig.composer.state(MonitorId::Record).setPosition(0);
+        QVERIFY(rig.timeline.perform(QStringLiteral("edit.paste")));
+        QCOMPARE(rig.recordSequence().track(QStringLiteral("V1"))->segments.first().clipId, QStringLiteral("b"));
+        QCOMPARE(rig.recordSequence().track(QStringLiteral("V1"))->length(), 150);
+        QCOMPARE(rig.recordSequence().track(QStringLiteral("A1"))->length(), 100); // only V1 was copied
+        // Ctrl+X cuts with the tool's kind of delete.
+        rig.timeline.setSelection({{"V1", 0}});
+        rig.timeline.perform(QStringLiteral("edit.cut"));
+        QCOMPARE(rig.recordSequence().track(QStringLiteral("V1"))->length(), 100);
+    }
+
+    void replaceAddEditTopTail() {
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(QStringLiteral("Cut"), 100));
+        rig.composer.load(MonitorId::Source, QStringLiteral("bin"), clip(QStringLiteral("Alpha"), 200));
+        model::MonitorState& rec = rig.composer.state(MonitorId::Record);
+        // Replace: the segment under the position, synced on the positions
+        // (p.467-468).
+        rig.composer.state(MonitorId::Source).setPosition(100);
+        rec.setPosition(60);
+        QVERIFY(rig.timeline.perform(QStringLiteral("edit.replace_edit")));
+        QVERIFY2(rig.timeline.lastMessage().isEmpty(), qPrintable(rig.timeline.lastMessage()));
+        model::Segment replaced = rig.recordSequence().track(QStringLiteral("V1"))->segments.at(1);
+        QCOMPARE(replaced.name, QStringLiteral("Alpha"));
+        QCOMPARE(replaced.sourceIn, 90);
+        QCOMPARE(replaced.length, 50);
+        // Add Edit at the position, then Remove Match Frame Edits (p.639-640).
+        rec.setPosition(70);
+        rig.timeline.perform(QStringLiteral("edit.add_edit"));
+        QCOMPARE(rig.recordSequence().track(QStringLiteral("V1"))->segments.size(), 3);
+        QCOMPARE(rig.recordSequence().editPoints({QStringLiteral("A1")}), (QList<std::int64_t>{0, 50, 70, 100}));
+        rig.timeline.perform(QStringLiteral("timeline.remove_match_frame_edits"));
+        QCOMPARE(rig.recordSequence().track(QStringLiteral("V1"))->segments.size(), 2);
+        // Top: from the start of the segment to the position (p.639).
+        rec.setPosition(80);
+        rig.timeline.perform(QStringLiteral("edit.top"));
+        QCOMPARE(rec.duration(), 69);
+        QCOMPARE(rec.position(), 50);
+        // Tail: from the position to the end of the segment.
+        rec.setPosition(10);
+        rig.timeline.perform(QStringLiteral("edit.tail"));
+        QCOMPARE(rec.duration(), 29);
+    }
+
+    void matchFrameLoadsTheSource() {
+        Rig rig;
+        const BinItem a = clip(QStringLiteral("Alpha"), 200);
+        rig.composer.setItemResolver([&](const QString&, const QString& id) -> std::optional<BinItem> {
+            if (id == a.id) return a;
+            return std::nullopt;
+        });
+        rig.composer.load(MonitorId::Source, QStringLiteral("bin"), a);
+        rig.composer.state(MonitorId::Source).setPosition(30);
+        rig.timeline.perform(QStringLiteral("edit.splice_in")); // a new sequence
+        rig.composer.load(MonitorId::Source, QStringLiteral("bin"), clip(QStringLiteral("Other"), 50));
+        rig.composer.state(MonitorId::Record).setPosition(15);
+        rig.composer.setActiveMonitor(MonitorId::Record);
+        // The clip, at the matching frame, marked IN (p.432-433).
+        QVERIFY(rig.timeline.perform(QStringLiteral("other.match_frame")));
+        const model::MonitorState& src = rig.composer.state(MonitorId::Source);
+        QCOMPARE(src.current()->item.id, a.id);
+        QCOMPARE(src.position(), 45);
+        QCOMPARE(src.in(), 45);
+    }
+
+    void topToolbarAndMenus() {
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(QStringLiteral("Cut"), 100));
+        rig.composer.state(MonitorId::Record).setPosition(25);
+        rig.composer.moveTo(MonitorId::Record, 25);
+        // The master timecode above the Track Selector (p.607).
+        QCOMPARE(rig.timeline.timecodeDisplay()->text(), rig.composer.state(MonitorId::Record).tracking(model::TrackingFormat::Master));
+        QVERIFY(!rig.timeline.timecodeDisplay()->text().isEmpty());
+        for (const char* id : {"smart.extract_splice_in", "smart.lift_overwrite", "edit.lift", "edit.extract",
+                               "edit.copy_to_clipboard", "edit.add_edit", "edit.replace_edit", "edit.top", "edit.tail",
+                               "other.match_frame"}) {
+            QVERIFY2(rig.timeline.toolButton(QLatin1String(id)), id);
+        }
+        // The Timeline's right-click menu (p.613, p.635).
+        QMenu* menu = rig.timeline.contextMenu();
+        QStringList texts;
+        for (QAction* a : menu->actions()) texts << a->text();
+        QVERIFY(texts.contains(QStringLiteral("New")));
+        QVERIFY(texts.contains(QStringLiteral("Select")));
+        QVERIFY(texts.contains(QStringLiteral("Lock Tracks")));
+        // New > Sequence is not the Timeline's own.
+        QSignalSpy requested(&rig.timeline, &Timeline::commandRequested);
+        menu->actions().first()->menu()->actions().first()->trigger();
+        QCOMPARE(requested.count(), 1);
+        // Select > To the Right of the position.
+        rig.composer.state(MonitorId::Record).setPosition(50);
+        for (QAction* a : menu->actions()) {
+            if (a->text() == QLatin1String("Select")) {
+                for (QAction* b : a->menu()->actions()) {
+                    if (b->text() == QLatin1String("To the Right")) b->trigger();
+                }
+            }
+        }
+        QCOMPARE(rig.timeline.selection().size(), 3);
+        delete menu;
     }
 
     void mainWindowEdits() {

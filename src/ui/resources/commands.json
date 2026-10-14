@@ -190,7 +190,7 @@
     {"id": "help.about", "text": "About %PRODUCT%", "role": "about"},
     {"id": "help.shortcuts", "text": "Shortcuts"},
     {"id": "help.about_qt", "text": "About Qt", "role": "aboutQt"},
-    {"id": "edit.cut", "text": "Cut"},
+    {"id": "edit.cut", "text": "Cut", "shortcut": "Ctrl+X"},
     {"id": "edit.deselect_all_keyframes", "text": "Deselect All Keyframes"},
     {"id": "bin.select.unrendered_titles", "text": "Unrendered Titles"},
     {"id": "clip.new_title", "text": "New Title"},
@@ -242,6 +242,18 @@
     {"id": "other.gang", "text": "Gang", "palette": "other"},
     {"id": "more.add_marker", "text": "Add Marker", "palette": "more"},
     {"id": "edit.lift", "text": "Lift", "palette": "edit"},
-    {"id": "edit.extract", "text": "Extract", "palette": "edit"}
+    {"id": "edit.extract", "text": "Extract", "palette": "edit"},
+    {"id": "edit.copy_to_clipboard", "text": "Copy to Clipboard", "palette": "edit"},
+    {"id": "edit.clipboard_contents", "text": "Clipboard Contents", "palette": "edit"},
+    {"id": "edit.replace_edit", "text": "Replace Edit", "palette": "edit"},
+    {"id": "edit.add_edit", "text": "Add Edit", "palette": "edit"},
+    {"id": "edit.top", "text": "Top", "palette": "edit"},
+    {"id": "edit.tail", "text": "Tail", "palette": "edit"},
+    {"id": "edit.sync_lock_all_tracks", "text": "Sync Lock All Tracks", "palette": "edit"},
+    {"id": "edit.move_clip_up", "text": "Move Clip Up", "palette": "edit"},
+    {"id": "edit.move_clip_down", "text": "Move Clip Down", "palette": "edit"},
+    {"id": "other.match_frame", "text": "Match Frame", "palette": "other"},
+    {"id": "smart.lift_overwrite", "text": "Lift/Overwrite", "palette": "smart_tool"},
+    {"id": "smart.extract_splice_in", "text": "Extract/Splice-in", "palette": "smart_tool"}
   ]
 }

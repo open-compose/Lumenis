@@ -3,10 +3,13 @@
 #include "lumenis/ui/theme.h"
 
 #include <QApplication>
+#include <QContextMenuEvent>
 #include <QDateTime>
 #include <QHBoxLayout>
 #include <QKeyEvent>
+#include <QLabel>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
@@ -34,9 +37,11 @@ constexpr int kSourceX = 4;
 constexpr int kSourceWidth = 30;
 constexpr int kRecordX = 38;
 constexpr int kRecordWidth = 34;
-constexpr int kMonitorX = 76;
+constexpr int kSyncX = 74;
+constexpr int kSyncWidth = 16;
+constexpr int kMonitorX = 92;
 constexpr int kMonitorWidth = 20;
-constexpr int kHeaderWidth = 100;
+constexpr int kHeaderWidth = 116;
 constexpr int kLabelSpacing = 90; // pixels between ruler labels, at least
 constexpr double kMaxScale = 40;  // pixels per frame, fully zoomed in
 
@@ -58,6 +63,11 @@ constexpr QRgb kIndicator = 0xff33c3ff; // the blue position indicator (p.608)
 constexpr QRgb kPatchArrow = 0xffffffff; // "a white arrow appears" (p.629)
 constexpr QRgb kGlyph = 0xffc8c8c8;
 constexpr QRgb kSourceView = 0xff2fb36b; // the source shown in the Timeline
+constexpr QRgb kSpliceColor = 0xffe6c619;    // Extract/Splice-in is yellow, Lift/Overwrite red (p.611)
+constexpr QRgb kOverwriteColor = 0xffd23a32;
+constexpr QRgb kReplaceColor = 0xff3a7bd2;   // Replace is blue (p.467)
+constexpr QRgb kSelected = 0xffe8e8e8;       // selected segments
+constexpr QRgb kLocked = 0xffd9a13a;
 
 int rowHeight(const QString& track) {
     if (track == QLatin1String("TC1")) return kTimecodeRow;
@@ -87,7 +97,8 @@ int rowOrder(const QString& track) {
 // Toolbar pictures, our own drawings.
 enum class Picture {
     FastMenu, Focus, SourceRecord, VideoQuality, ClientMonitor, StepIn, StepOut,
-    ViewMenu, FindLeft, FindRight, ZoomOut, ZoomIn
+    ViewMenu, FindLeft, FindRight, ZoomOut, ZoomIn,
+    SegmentSplice, SegmentOverwrite, Lift, Extract, CopyClipboard, AddEdit, Replace, Top, Tail, MatchFrame
 };
 
 QIcon picture(Picture which) {
@@ -160,6 +171,56 @@ QIcon picture(Picture which) {
     case Picture::ZoomIn:
         p.drawLine(QPointF(8, 16), QPointF(24, 16));
         p.drawLine(QPointF(16, 8), QPointF(16, 24));
+        break;
+    case Picture::SegmentSplice:
+    case Picture::SegmentOverwrite: {
+        // The yellow and red segment arrows (p.611).
+        const QColor arrow(which == Picture::SegmentSplice ? kSpliceColor : kOverwriteColor);
+        p.setPen(QPen(arrow, 2.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.drawLine(QPointF(5, 16), QPointF(20, 16));
+        p.setBrush(arrow);
+        p.drawPolygon(QPolygonF{QPointF(18, 9), QPointF(27, 16), QPointF(18, 23)});
+        break;
+    }
+    case Picture::Lift:
+        p.drawRect(QRectF(5, 18, 22, 8));
+        p.drawLine(QPointF(16, 15), QPointF(16, 4));
+        triangle({11, 9}, {21, 9}, {16, 3});
+        break;
+    case Picture::Extract:
+        p.drawRect(QRectF(5, 18, 9, 8));
+        p.drawRect(QRectF(18, 18, 9, 8));
+        p.drawLine(QPointF(16, 15), QPointF(16, 4));
+        triangle({11, 9}, {21, 9}, {16, 3});
+        break;
+    case Picture::CopyClipboard:
+        p.drawRect(QRectF(6, 6, 14, 16));
+        p.drawRect(QRectF(12, 11, 14, 16));
+        break;
+    case Picture::AddEdit:
+        p.drawRect(QRectF(4, 9, 24, 14));
+        p.drawLine(QPointF(16, 5), QPointF(16, 27));
+        break;
+    case Picture::Replace:
+        p.setPen(QPen(QColor(kReplaceColor), 2.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.drawRect(QRectF(6, 9, 20, 14));
+        p.drawLine(QPointF(10, 16), QPointF(22, 16));
+        break;
+    case Picture::Top:
+        p.drawLine(QPointF(8, 6), QPointF(8, 26));
+        p.drawLine(QPointF(8, 16), QPointF(24, 16));
+        triangle({14, 10}, {14, 22}, {8, 16});
+        break;
+    case Picture::Tail:
+        p.drawLine(QPointF(24, 6), QPointF(24, 26));
+        p.drawLine(QPointF(8, 16), QPointF(24, 16));
+        triangle({18, 10}, {18, 22}, {24, 16});
+        break;
+    case Picture::MatchFrame:
+        p.drawRect(QRectF(4, 8, 10, 16));
+        p.drawRect(QRectF(18, 8, 10, 16));
+        p.drawLine(QPointF(14, 13), QPointF(18, 13));
+        p.drawLine(QPointF(14, 19), QPointF(18, 19));
         break;
     }
     return QIcon(pm);
@@ -258,6 +319,10 @@ QRect TimelineView::recordButton(const Row& row) const {
     return QRect(kRecordX, row.top + 2, kRecordWidth, std::max(row.height - 4, 12));
 }
 
+QRect TimelineView::syncButton(const Row& row) const {
+    return QRect(kSyncX, row.top + 2, kSyncWidth, std::max(row.height - 4, 12));
+}
+
 QRect TimelineView::monitorButton(const Row& row) const {
     return QRect(kMonitorX, row.top + 2, kMonitorWidth, std::max(row.height - 4, 12));
 }
@@ -318,16 +383,36 @@ void TimelineView::paintEvent(QPaintEvent*) {
             const QColor fill(t->kind == model::TrackKind::Video   ? kVideoSegment
                               : t->kind == model::TrackKind::Audio ? kAudioSegment
                                                                    : kDataSegment);
+            if (t->locked) p.fillRect(rowRect, QColor(kTimecodeRowColor));
             std::int64_t at = 0;
+            const model::Segment* previous = nullptr;
             for (const model::Segment& s : t->segments) {
                 const std::int64_t end = at + s.length;
+                const bool selected = !timeline_.showsSource() &&
+                                      timeline_.selection().contains(model::SegmentRef{r.track, at});
+                if (end >= firstVisible && at <= lastVisible && previous && model::Sequence::isMatchFrame(*previous, s)) {
+                    // A match-frame edit shows an equal sign (p.640).
+                    const double x = xFor(at);
+                    p.setPen(QPen(QColor(kGlyph), 1.5));
+                    p.drawLine(QPointF(x - 3, r.top + r.height / 2.0 - 2), QPointF(x + 3, r.top + r.height / 2.0 - 2));
+                    p.drawLine(QPointF(x - 3, r.top + r.height / 2.0 + 2), QPointF(x + 3, r.top + r.height / 2.0 + 2));
+                }
+                if (s.isFiller() && selected) {
+                    const QRectF box(xFor(at), r.top + 1, xFor(end) - xFor(at), r.height - 2);
+                    p.setPen(QPen(QColor(kSelected), 2));
+                    p.drawRect(box.adjusted(1, 1, -1, -1));
+                }
                 if (!s.isFiller() && end >= firstVisible && at <= lastVisible) {
                     const double x0 = std::max(xFor(at), static_cast<double>(header - 1));
                     const double x1 = std::min(xFor(end), static_cast<double>(width() + 1));
                     const QRectF box(x0, r.top + 1, std::max(x1 - x0, 1.0), r.height - 2);
-                    p.fillRect(box, fill);
+                    p.fillRect(box, selected ? fill.lighter(135) : fill);
                     p.setPen(fill.darker(160));
                     p.drawRect(box.adjusted(0, 0, -1, -1));
+                    if (selected) {
+                        p.setPen(QPen(QColor(kSelected), 2));
+                        p.drawRect(box.adjusted(1, 1, -1, -1));
+                    }
                     // Clip text (Fast menu, p.592).
                     QStringList parts;
                     const auto& d = timeline_.display();
@@ -342,6 +427,7 @@ void TimelineView::paintEvent(QPaintEvent*) {
                                                               static_cast<int>(textBox.width())));
                     }
                 }
+                previous = &s;
                 at = end;
             }
         }
@@ -420,6 +506,44 @@ void TimelineView::paintEvent(QPaintEvent*) {
         p.restore();
     }
 
+    // Segments being dragged: their outlines at the new place (p.612).
+    if (dragging_) {
+        const std::int64_t frames = dragFrames(QApplication::keyboardModifiers());
+        const int tracks = dragTracks();
+        p.save();
+        p.setClipRect(tracksArea);
+        p.setPen(QPen(QColor(dragKind_ == model::EditKind::SpliceIn ? kSpliceColor : kOverwriteColor), 2));
+        p.setBrush(Qt::NoBrush);
+        for (const model::SegmentRef& ref : timeline_.selection()) {
+            const auto seg = model::segmentFor(seq, ref);
+            const auto from = model::parseTrackName(ref.track);
+            if (!seg || !from) continue;
+            const QString to = model::trackName(from->kind, from->number + tracks);
+            int top = -1;
+            int h = 0;
+            for (const Row& r : rowList) {
+                if (r.track == to) {
+                    top = r.top;
+                    h = r.height;
+                }
+            }
+            if (top < 0) {
+                // A new track above or below.
+                top = tracks > 0 ? kRulerHeight : height() - kAudioRow;
+                h = kAudioRow;
+            }
+            p.drawRect(QRectF(xFor(ref.start + frames), top + 2, xFor(ref.start + frames + seg->length) - xFor(ref.start + frames),
+                              h - 4));
+        }
+        p.restore();
+    }
+    // The lasso: a dotted outline (p.611).
+    if (lassoFrom_) {
+        p.setPen(QPen(Qt::white, 1, Qt::DotLine));
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(QRect(*lassoFrom_, lassoTo_).normalized());
+    }
+
     // The zoom area being picked.
     if (zoomFrom_) {
         p.setPen(QPen(Qt::white, 1, Qt::DashLine));
@@ -449,6 +573,14 @@ void TimelineView::paintEvent(QPaintEvent*) {
         for (const Row& r : rowList) {
             if (r.track == QLatin1String("TC1")) {
                 button(recordButton(r), r.track, false, true);
+                // The sync icon next to TC1: Sync Lock All (p.493).
+                bool all = !seq.tracks().isEmpty();
+                for (const model::Track& t : seq.tracks()) all = all && t.syncLocked;
+                const QPointF c = QRectF(syncButton(r)).center();
+                p.setPen(QPen(all ? QColor(kGlyph) : QColor(kButtonOff).lighter(130), 1.5));
+                p.setBrush(Qt::NoBrush);
+                p.drawEllipse(QRectF(c.x() - 5, c.y() - 3, 6, 6));
+                p.drawEllipse(QRectF(c.x() - 1, c.y() - 3, 6, 6));
                 continue;
             }
             // Source tracks sit beside the record track they are patched to
@@ -460,6 +592,26 @@ void TimelineView::paintEvent(QPaintEvent*) {
                 const auto ref = model::parseTrackName(r.track);
                 const bool cannotTake = dragKind && (!ref || ref->kind != *dragKind || ref->kind == model::TrackKind::Data);
                 button(recordButton(r), r.track, patch.isRecordSelected(r.track), cannotTake);
+                const model::Track* t = seq.track(r.track);
+                if (t && t->locked) {
+                    // A padlock on the track button (p.633).
+                    const QRect b = recordButton(r);
+                    const QRectF body(b.left() + 3, b.center().y() - 1, 7, 6);
+                    p.setPen(QPen(QColor(kLocked), 1.2));
+                    p.setBrush(QColor(kLocked));
+                    p.drawRect(body);
+                    p.setBrush(Qt::NoBrush);
+                    p.drawArc(QRectF(body.left() + 1, body.top() - 5, 5, 8), 0, 180 * 16);
+                }
+                // Sync Lock buttons (p.633).
+                if (t) {
+                    const QRect sb = syncButton(r);
+                    const QPointF c = QRectF(sb).center();
+                    p.setPen(QPen(t->syncLocked ? QColor(kGlyph) : QColor(kButtonOff).lighter(130), 1.5));
+                    p.setBrush(Qt::NoBrush);
+                    p.drawEllipse(QRectF(c.x() - 5, c.y() - 3, 6, 6));
+                    p.drawEllipse(QRectF(c.x() - 1, c.y() - 3, 6, 6));
+                }
             }
             // Track Monitor buttons; not for data tracks (p.628).
             if (r.exists && !r.track.startsWith(QLatin1Char('D'))) {
@@ -529,6 +681,89 @@ void TimelineView::moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifi
     composer.moveTo(timeline_.shownMonitor(), frame);
 }
 
+std::optional<model::SegmentRef> TimelineView::segmentAt(const QPoint& pos) const {
+    if (pos.x() < headerWidth() || timeline_.showsSource()) return std::nullopt;
+    const auto row = rowAt(pos);
+    if (!row || !row->exists) return std::nullopt;
+    const model::Track* t = timeline_.shown().track(row->track);
+    std::int64_t start = 0;
+    const int i = t ? t->segmentAt(frameAt(pos.x()), &start) : -1;
+    if (i < 0) return std::nullopt;
+    // Not filler at the head or tail of the track (p.611).
+    if (t->segments.at(i).isFiller() && (i == 0 || i == t->segments.size() - 1)) return std::nullopt;
+    return model::SegmentRef{row->track, start};
+}
+
+model::EditKind TimelineView::segmentModeAt(const QPoint& pos) const {
+    const bool lift = timeline_.isSegmentTool(model::EditKind::Overwrite);
+    const bool splice = timeline_.isSegmentTool(model::EditKind::SpliceIn);
+    if (lift != splice) return lift ? model::EditKind::Overwrite : model::EditKind::SpliceIn;
+    if (lift && splice) {
+        if (const auto row = rowAt(pos)) {
+            return pos.y() < row->top + row->height / 2 ? model::EditKind::Overwrite : model::EditKind::SpliceIn;
+        }
+    }
+    return timeline_.segmentKind();
+}
+
+std::int64_t TimelineView::dragFrames(Qt::KeyboardModifiers modifiers) const {
+    if (!dragFrom_) return 0;
+    std::int64_t frames = frameAt(dragPos_.x()) - frameAt(dragFrom_->x());
+    // Ctrl snaps the selection's head to the nearest edit (p.609).
+    if ((modifiers & Qt::ControlModifier) && !timeline_.selection().isEmpty()) {
+        std::int64_t head = timeline_.selection().first().start;
+        for (const auto& ref : timeline_.selection()) head = std::min(head, ref.start);
+        const std::int64_t target = head + frames;
+        std::int64_t best = target;
+        std::int64_t distance = -1;
+        for (std::int64_t e : timeline_.shown().editPoints()) {
+            if (distance < 0 || std::abs(e - target) < distance) {
+                distance = std::abs(e - target);
+                best = e;
+            }
+        }
+        frames = best - head;
+    }
+    return frames;
+}
+
+int TimelineView::dragTracks() const {
+    if (!dragFrom_) return 0;
+    const auto from = rowAt(*dragFrom_);
+    const auto to = rowAt(dragPos_);
+    if (!from || !to) return 0;
+    const auto a = model::parseTrackName(from->track);
+    const auto b = model::parseTrackName(to->track);
+    if (!a || !b || a->kind != b->kind) return 0;
+    return b->number - a->number;
+}
+
+void TimelineView::selectLasso(const QRect& area) {
+    // Segments wholly inside the lasso's span, on the rows it crosses
+    // (p.611).
+    QList<model::SegmentRef> picked;
+    const std::int64_t from = frameAt(area.left());
+    const std::int64_t to = frameAt(area.right());
+    for (const Row& r : rows()) {
+        if (!r.exists || r.top + r.height < area.top() || r.top > area.bottom()) continue;
+        const model::Track* t = timeline_.shown().track(r.track);
+        if (!t) continue;
+        std::int64_t at = 0;
+        for (int i = 0; i < t->segments.size(); ++i) {
+            const std::int64_t end = at + t->segments.at(i).length;
+            const bool edge = i == 0 || i == t->segments.size() - 1;
+            if (at >= from && end <= to + 1 && !(t->segments.at(i).isFiller() && edge)) picked << model::SegmentRef{r.track, at};
+            at = end;
+        }
+    }
+    // A lasso with no segment tool turns on Lift/Overwrite (p.612).
+    if (!picked.isEmpty() && !timeline_.isSegmentTool(model::EditKind::Overwrite) &&
+        !timeline_.isSegmentTool(model::EditKind::SpliceIn)) {
+        timeline_.setSegmentTool(model::EditKind::Overwrite, true);
+    }
+    timeline_.setSelection(picked);
+}
+
 void TimelineView::mousePressEvent(QMouseEvent* event) {
     if (event->button() != Qt::LeftButton) return;
     const QPoint pos = event->position().toPoint();
@@ -539,6 +774,27 @@ void TimelineView::mousePressEvent(QMouseEvent* event) {
             update();
             return;
         }
+        // Alt-drag in the tracks draws a lasso (p.611).
+        if ((event->modifiers() & Qt::AltModifier) && pos.y() >= kRulerHeight && !timeline_.showsSource()) {
+            lassoFrom_ = pos;
+            lassoTo_ = pos;
+            return;
+        }
+        const bool tools = timeline_.isSegmentTool(model::EditKind::Overwrite) ||
+                           timeline_.isSegmentTool(model::EditKind::SpliceIn);
+        if (tools && pos.y() >= kRulerHeight) {
+            if (const auto seg = segmentAt(pos)) {
+                const bool shift = event->modifiers() & Qt::ShiftModifier;
+                if (shift || !timeline_.selection().contains(*seg)) timeline_.clickSegment(*seg, shift);
+                if (timeline_.selection().contains(*seg)) {
+                    dragFrom_ = pos;
+                    dragPos_ = pos;
+                    dragKind_ = segmentModeAt(pos);
+                }
+                return;
+            }
+        }
+        timeline_.setSelection({});
         scrubbing_ = true;
         moveIndicator(pos, event->modifiers());
         return;
@@ -554,6 +810,12 @@ void TimelineView::mousePressEvent(QMouseEvent* event) {
     } else if (recordButton(*row).contains(pos) && row->exists && !timeline_.showsSource() &&
                row->track != QLatin1String("TC1")) {
         timeline_.toggleRecordTrack(row->track);
+    } else if (syncButton(*row).contains(pos) && !timeline_.showsSource()) {
+        if (row->track == QLatin1String("TC1")) {
+            timeline_.toggleSyncLockAll();
+        } else if (row->exists) {
+            timeline_.toggleSyncLock(row->track);
+        }
     } else if (monitorButton(*row).contains(pos) && row->exists) {
         timeline_.toggleMonitor(row->track);
     }
@@ -563,6 +825,13 @@ void TimelineView::mouseMoveEvent(QMouseEvent* event) {
     const QPoint pos = event->position().toPoint();
     if (zoomFrom_) {
         zoomTo_ = pos.x();
+        update();
+    } else if (lassoFrom_) {
+        lassoTo_ = pos;
+        update();
+    } else if (dragFrom_) {
+        dragPos_ = pos;
+        dragging_ = dragging_ || (pos - *dragFrom_).manhattanLength() >= QApplication::startDragDistance();
         update();
     } else if (scrubbing_) {
         moveIndicator(pos, event->modifiers());
@@ -584,6 +853,27 @@ void TimelineView::mouseReleaseEvent(QMouseEvent* event) {
         update();
         return;
     }
+    if (lassoFrom_) {
+        const QRect area = QRect(*lassoFrom_, pos).normalized();
+        lassoFrom_.reset();
+        selectLasso(area);
+        update();
+        return;
+    }
+    if (dragFrom_) {
+        dragPos_ = pos;
+        const bool moved = dragging_;
+        const std::int64_t frames = dragFrames(event->modifiers());
+        const int tracks = dragTracks();
+        dragFrom_.reset();
+        dragging_ = false;
+        // Dropped outside the Timeline: cancelled (p.620). Alt copies.
+        if (moved && rect().contains(pos) && (frames != 0 || tracks != 0)) {
+            timeline_.moveSelection(frames, tracks, dragKind_, event->modifiers() & Qt::AltModifier);
+        }
+        update();
+        return;
+    }
     scrubbing_ = false;
     if (patchFrom_.isEmpty()) return;
     const QString source = patchFrom_;
@@ -597,6 +887,14 @@ void TimelineView::mouseReleaseEvent(QMouseEvent* event) {
         timeline_.toggleSourceTrack(source);
     }
     update();
+}
+
+void TimelineView::contextMenuEvent(QContextMenuEvent* event) {
+    QString track;
+    if (const auto row = rowAt(event->pos()); row && event->pos().x() < headerWidth()) track = row->track;
+    QMenu* menu = timeline_.contextMenu(track);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    menu->popup(event->globalPos());
 }
 
 void TimelineView::wheelEvent(QWheelEvent* event) {
@@ -684,6 +982,56 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
         if (!syncing_) setFirstFrame(v);
     });
 
+    // The Timeline Top toolbar (p.603, picture on p.607): the master
+    // timecode, then buttons. The guide shows it but does not list its
+    // buttons; ours are the segment tools (p.621) and editing buttons from
+    // the Command Palette's Edit and Other tabs.
+    topbar_ = new QWidget(this);
+    topbar_->setObjectName(QStringLiteral("timelineTopToolbar"));
+    auto* top = new QHBoxLayout(topbar_);
+    top->setContentsMargins(2, 1, 2, 1);
+    top->setSpacing(1);
+    timecode_ = new QLabel(topbar_);
+    timecode_->setObjectName(QStringLiteral("timelineTimecode"));
+    timecode_->setFixedSize(kHeaderWidth - 4, kToolButtonHeight);
+    timecode_->setAlignment(Qt::AlignCenter);
+    timecode_->setAutoFillBackground(true);
+    {
+        QPalette pal = timecode_->palette();
+        pal.setColor(QPalette::Window, Qt::black);
+        pal.setColor(QPalette::WindowText, QColor(0xff4cd98c)); // green, as in the picture
+        timecode_->setPalette(pal);
+    }
+    top->addWidget(timecode_);
+    top->addSpacing(4);
+    auto command = [this, top](const char* id, Picture pic, const QString& tip, bool checkable) {
+        auto* b = new QToolButton(topbar_);
+        b->setObjectName(QString::fromLatin1(id));
+        b->setAutoRaise(true);
+        b->setFixedSize(26, kToolButtonHeight);
+        b->setIcon(picture(pic));
+        b->setIconSize(QSize(16, 16));
+        b->setToolTip(tip);
+        b->setCheckable(checkable);
+        top->addWidget(b);
+        const QString commandId = QString::fromLatin1(id);
+        connect(b, &QToolButton::clicked, this, [this, commandId] { perform(commandId); });
+        return b;
+    };
+    command("smart.extract_splice_in", Picture::SegmentSplice, tr("Extract/Splice-in"), true);
+    command("smart.lift_overwrite", Picture::SegmentOverwrite, tr("Lift/Overwrite"), true);
+    top->addSpacing(8);
+    command("edit.lift", Picture::Lift, tr("Lift"), false);
+    command("edit.extract", Picture::Extract, tr("Extract"), false);
+    command("edit.copy_to_clipboard", Picture::CopyClipboard, tr("Copy to Clipboard"), false);
+    top->addSpacing(8);
+    command("edit.add_edit", Picture::AddEdit, tr("Add Edit"), false);
+    command("edit.replace_edit", Picture::Replace, tr("Replace Edit"), false);
+    command("edit.top", Picture::Top, tr("Top"), false);
+    command("edit.tail", Picture::Tail, tr("Tail"), false);
+    command("other.match_frame", Picture::MatchFrame, tr("Match Frame"), false);
+    top->addStretch(1);
+
     auto* upper = new QHBoxLayout;
     upper->setContentsMargins(0, 0, 0, 0);
     upper->setSpacing(0);
@@ -692,6 +1040,7 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     auto* v = new QVBoxLayout(this);
     v->setContentsMargins(0, 0, 0, 0);
     v->setSpacing(0);
+    v->addWidget(topbar_);
     v->addLayout(upper, 1);
     v->addWidget(toolbar_);
 
@@ -756,9 +1105,14 @@ void Timeline::sync() {
     const model::MonitorState& source = composer_.state(MonitorId::Source);
     patch_.setSourceTracks(source.isEmpty() ? QStringList() : model::sourceTracksOf(source.current()->item));
 
+    // Selected segments that are gone are dropped.
+    selection_.removeIf([this](const model::SegmentRef& ref) { return showSource_ || !model::segmentFor(shown_, ref); });
+    // The master timecode at the position (picture on p.607).
+    timecode_->setText(clip ? s.tracking(model::TrackingFormat::Master) : QString());
     const QString id = clip ? clip->item.id : QString();
     if (id != shownId_) {
         shownId_ = id;
+        selection_.clear();
         scale_ = 0;
         first_ = 0;
         focusBack_.reset();
@@ -895,7 +1249,7 @@ void Timeline::zoomBack() {
 }
 
 QToolButton* Timeline::toolButton(const QString& name) const {
-    return toolbar_->findChild<QToolButton*>(name);
+    return findChild<QToolButton*>(name);
 }
 
 QMenu* Timeline::fastMenu() {
@@ -1035,6 +1389,25 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("timeline.new.audio_track.7_1_surround"),
         QStringLiteral("timeline.new.data_track"),
         QStringLiteral("timeline.restore_default_patch"),
+        QStringLiteral("timeline.remove_match_frame_edits"),
+        QStringLiteral("edit.copy_to_clipboard"),
+        QStringLiteral("edit.clipboard_contents"),
+        QStringLiteral("edit.replace_edit"),
+        QStringLiteral("edit.add_edit"),
+        QStringLiteral("edit.top"),
+        QStringLiteral("edit.tail"),
+        QStringLiteral("edit.sync_lock_all_tracks"),
+        QStringLiteral("edit.move_clip_up"),
+        QStringLiteral("edit.move_clip_down"),
+        QStringLiteral("edit.copy"),
+        QStringLiteral("edit.cut"),
+        QStringLiteral("edit.paste"),
+        QStringLiteral("edit.delete"),
+        QStringLiteral("clip.lock_tracks"),
+        QStringLiteral("clip.unlock_tracks"),
+        QStringLiteral("other.match_frame"),
+        QStringLiteral("smart.lift_overwrite"),
+        QStringLiteral("smart.extract_splice_in"),
     };
     return ids.contains(id);
 }
@@ -1080,6 +1453,45 @@ bool Timeline::perform(const QString& id) {
     } else if (id == QLatin1String("timeline.restore_default_patch")) {
         patch_.restoreDefault();
         view_->update();
+    } else if (id == QLatin1String("timeline.remove_match_frame_edits")) {
+        removeMatchFrameEdits();
+    } else if (id == QLatin1String("edit.copy_to_clipboard")) {
+        copyToClipboard();
+    } else if (id == QLatin1String("edit.clipboard_contents")) {
+        if (!clipboard_) return fail(tr("The Clipboard is empty."));
+        loadClipboard(tr("Clipboard Contents.%1").arg(++clipboardCount_));
+    } else if (id == QLatin1String("edit.replace_edit")) {
+        replaceEdit();
+    } else if (id == QLatin1String("edit.add_edit")) {
+        // Alt: on every track with filler (p.640).
+        addEdit(QApplication::keyboardModifiers() & Qt::AltModifier);
+    } else if (id == QLatin1String("edit.top") || id == QLatin1String("edit.tail")) {
+        topOrTail(id == QLatin1String("edit.top"));
+    } else if (id == QLatin1String("edit.sync_lock_all_tracks")) {
+        toggleSyncLockAll();
+    } else if (id == QLatin1String("edit.move_clip_up") || id == QLatin1String("edit.move_clip_down")) {
+        moveClips(id == QLatin1String("edit.move_clip_up") ? 1 : -1);
+    } else if (id == QLatin1String("edit.copy") || id == QLatin1String("edit.cut")) {
+        if (selection_.isEmpty()) {
+            if (id == QLatin1String("edit.copy")) copyToClipboard();
+        } else {
+            cutOrCopySelection(id == QLatin1String("edit.cut"));
+        }
+    } else if (id == QLatin1String("edit.paste")) {
+        pasteClipboard();
+    } else if (id == QLatin1String("edit.delete")) {
+        deleteSelection();
+    } else if (id == QLatin1String("clip.lock_tracks") || id == QLatin1String("clip.unlock_tracks")) {
+        if (const model::LoadedClip* rec = recordSequence()) {
+            setTracksLocked(patch_.selectedRecordTracks(model::Sequence::fromItem(rec->item)),
+                            id == QLatin1String("clip.lock_tracks"));
+        }
+    } else if (id == QLatin1String("other.match_frame")) {
+        matchFrame();
+    } else if (id == QLatin1String("smart.lift_overwrite")) {
+        setSegmentTool(model::EditKind::Overwrite, !liftTool_);
+    } else if (id == QLatin1String("smart.extract_splice_in")) {
+        setSegmentTool(model::EditKind::SpliceIn, !spliceTool_);
     }
     return true;
 }
@@ -1157,6 +1569,8 @@ void Timeline::remove(bool extract) {
         fail(tr("Select the tracks to remove material from."));
         return;
     }
+    // The removed material goes into the Clipboard (p.479).
+    const model::Sequence removed = seq.excerpt(tracks, start, length);
     if (model::removeMaterial(seq, extract, start, length, tracks).isEmpty()) {
         fail(tr("There is no material between the marks."));
         return;
@@ -1164,6 +1578,7 @@ void Timeline::remove(bool extract) {
     model::BinItem after = before;
     seq.storeIn(after);
     after.modified = QDateTime::currentDateTimeUtc();
+    setClipboard(removed, before.name);
     commit(extract ? tr("Extract") : tr("Lift"), before, after);
     // Lift leaves the marked gap; Extract closes it, so only the IN stays.
     if (extract) record.clearOut();
@@ -1202,7 +1617,454 @@ void Timeline::restore(const QString& binId, const model::BinItem& item) {
     composer_.updateItem(item);
 }
 
+const model::LoadedClip* Timeline::recordSequence() {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) {
+        fail(tr("Load a sequence into the Record monitor first."));
+        return nullptr;
+    }
+    return rec;
+}
+
+void Timeline::storeLocks(const model::Sequence& sequence) {
+    // Locks are part of the sequence but not undo steps.
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec) return;
+    model::BinItem item = rec->item;
+    sequence.storeIn(item);
+    restore(rec->binId, item);
+}
+
+void Timeline::setTracksLocked(const QStringList& tracks, bool locked) {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    for (const QString& name : tracks) {
+        if (model::Track* t = seq.track(name)) t->locked = locked;
+    }
+    storeLocks(seq);
+}
+
+void Timeline::toggleSyncLock(const QString& track) {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    if (model::Track* t = seq.track(track)) t->syncLocked = !t->syncLocked;
+    storeLocks(seq);
+}
+
+void Timeline::toggleSyncLockAll() {
+    // All on, or all off if they all are (p.633).
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    bool all = true;
+    for (const model::Track& t : seq.tracks()) all = all && t.syncLocked;
+    for (const QString& name : seq.trackNames()) seq.track(name)->syncLocked = !all;
+    storeLocks(seq);
+}
+
+bool Timeline::isSegmentTool(model::EditKind kind) const {
+    return kind == model::EditKind::Overwrite ? liftTool_ : spliceTool_;
+}
+
+void Timeline::setSegmentTool(model::EditKind kind, bool on) {
+    (kind == model::EditKind::Overwrite ? liftTool_ : spliceTool_) = on;
+    if (!liftTool_ && !spliceTool_) selection_.clear();
+    if (QToolButton* b = toolButton(QStringLiteral("smart.lift_overwrite"))) b->setChecked(liftTool_);
+    if (QToolButton* b = toolButton(QStringLiteral("smart.extract_splice_in"))) b->setChecked(spliceTool_);
+    view_->update();
+}
+
+model::EditKind Timeline::segmentKind() const {
+    if (liftTool_ != spliceTool_) return liftTool_ ? model::EditKind::Overwrite : model::EditKind::SpliceIn;
+    return model::EditKind::Overwrite;
+}
+
+void Timeline::setSelection(const QList<model::SegmentRef>& segments) {
+    selection_ = segments;
+    view_->update();
+    emit changed();
+}
+
+void Timeline::clickSegment(const model::SegmentRef& segment, bool toggle) {
+    if (!toggle) {
+        selection_ = {segment};
+    } else if (selection_.contains(segment)) {
+        selection_.removeAll(segment);
+    } else {
+        selection_ << segment;
+    }
+    view_->update();
+    emit changed();
+}
+
+void Timeline::selectSegments(SelectWhere where) {
+    // To the Left / To the Right of the position, or Reverse; filler is not
+    // selected (p.614).
+    const std::int64_t pos = composer_.state(MonitorId::Record).position();
+    QList<model::SegmentRef> picked;
+    for (const model::Track& t : shown_.tracks()) {
+        if (!patch_.isRecordSelected(t.name())) continue;
+        std::int64_t at = 0;
+        for (const model::Segment& seg : t.segments) {
+            const model::SegmentRef ref{t.name(), at};
+            const bool take = where == SelectWhere::Left    ? at + seg.length <= pos
+                              : where == SelectWhere::Right ? at >= pos
+                                                            : !selection_.contains(ref);
+            if (take && !seg.isFiller()) picked << ref;
+            at += seg.length;
+        }
+    }
+    if (!liftTool_ && !spliceTool_) setSegmentTool(model::EditKind::Overwrite, true);
+    setSelection(picked);
+}
+
+bool Timeline::moveSelection(std::int64_t frames, int tracks, model::EditKind kind, bool copy) {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec || selection_.isEmpty()) return false;
+    const model::BinItem before = rec->item;
+    model::Sequence seq = model::Sequence::fromItem(before);
+    QString error;
+    const QList<model::SegmentRef> moved = model::moveSegments(seq, selection_, frames, tracks, kind, copy, &error);
+    if (moved.isEmpty()) return fail(error);
+    model::BinItem after = before;
+    seq.storeIn(after);
+    after.modified = QDateTime::currentDateTimeUtc();
+    commit(copy ? tr("Copy Segment") : kind == model::EditKind::SpliceIn ? tr("Extract/Splice-in") : tr("Lift/Overwrite"),
+           before, after);
+    // "After dragging segments up or down, the segments remain selected"
+    // (p.620).
+    selection_ = moved;
+    view_->update();
+    return true;
+}
+
+bool Timeline::deleteSelection() {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    if (selection_.isEmpty()) {
+        // The Delete key with track buttons selected: the Delete Track(s)
+        // dialog (p.636).
+        const QStringList tracks = patch_.selectedRecordTracks(model::Sequence::fromItem(rec->item));
+        if (tracks.isEmpty()) return false;
+        if (QMessageBox::question(this, tr("Delete Track(s)"),
+                                  tr("Delete %1 from the sequence?").arg(tracks.join(QStringLiteral(", "))),
+                                  QMessageBox::Ok | QMessageBox::Cancel) != QMessageBox::Ok) {
+            return false;
+        }
+        return deleteTracks(tracks);
+    }
+    const model::BinItem before = rec->item;
+    model::Sequence seq = model::Sequence::fromItem(before);
+    const bool extract = segmentKind() == model::EditKind::SpliceIn;
+    if (!model::deleteSegments(seq, selection_, extract)) return fail(tr("The selected segments cannot be deleted."));
+    model::BinItem after = before;
+    seq.storeIn(after);
+    after.modified = QDateTime::currentDateTimeUtc();
+    selection_.clear();
+    commit(extract ? tr("Extract") : tr("Lift"), before, after);
+    return true;
+}
+
+bool Timeline::deleteTracks(const QStringList& tracks) {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    const model::BinItem before = rec->item;
+    model::Sequence seq = model::Sequence::fromItem(before);
+    bool any = false;
+    for (const QString& name : tracks) any = seq.removeTrack(name) || any;
+    if (!any) return false;
+    model::BinItem after = before;
+    seq.storeIn(after);
+    after.modified = QDateTime::currentDateTimeUtc();
+    commit(tr("Delete Track"), before, after);
+    return true;
+}
+
+void Timeline::setClipboard(const model::Sequence& material, const QString& from) {
+    model::BinItem clip;
+    clip.id = QStringLiteral("clipboard-") + model::newItemId();
+    clip.kind = model::BinItemKind::Sequence;
+    clip.name = tr("Clipboard Contents");
+    clip.created = QDateTime::currentDateTimeUtc();
+    clip.modified = clip.created;
+    if (const model::LoadedClip* rec = composer_.state(MonitorId::Record).current()) clip.editRate = rec->item.editRate;
+    // The clip starts where the material did in the sequence.
+    material.storeIn(clip);
+    clipboard_ = clip;
+    // With Alt, straight into the Source monitor as "<sequence>.Sub" (p.480).
+    if (QApplication::keyboardModifiers() & Qt::AltModifier) loadClipboard(from + QStringLiteral(".Sub"));
+}
+
+void Timeline::loadClipboard(const QString& name) {
+    if (!clipboard_) return;
+    model::BinItem clip = *clipboard_;
+    clip.id = QStringLiteral("clipboard-") + model::newItemId();
+    clip.name = name;
+    composer_.load(MonitorId::Source, QString(), clip);
+}
+
+void Timeline::copyToClipboard() {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return;
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    if (!record.in() && !record.out()) {
+        fail(tr("Mark an IN and an OUT in the sequence first."));
+        return;
+    }
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const std::int64_t start = record.markedStart();
+    setClipboard(seq.excerpt(patch_.selectedRecordTracks(seq), start, record.markedEnd() - start + 1), rec->item.name);
+}
+
+void Timeline::cutOrCopySelection(bool cut) {
+    // Ctrl+C / Ctrl+X on selected segments (p.622).
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    setClipboard(model::copySegments(seq, selection_), rec->item.name);
+    if (cut) deleteSelection();
+}
+
+void Timeline::pasteClipboard() {
+    // At the IN or the position (p.623), with the segment tool's kind of
+    // edit; onto the tracks it came from.
+    if (!clipboard_) {
+        fail(tr("The Clipboard is empty."));
+        return;
+    }
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return;
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    const std::int64_t at = record.in().value_or(record.position());
+    const model::BinItem before = rec->item;
+    model::Sequence seq = model::Sequence::fromItem(before);
+    const model::Sequence clip = model::Sequence::fromItem(*clipboard_);
+    const model::EditKind kind = segmentKind();
+    if (model::paste(seq, clip, at, kind).isEmpty()) {
+        fail(tr("The tracks the Clipboard came from are locked."));
+        return;
+    }
+    model::BinItem after = before;
+    seq.storeIn(after);
+    after.modified = QDateTime::currentDateTimeUtc();
+    commit(tr("Paste"), before, after);
+    composer_.moveTo(MonitorId::Record, at + clip.duration());
+}
+
+void Timeline::replaceEdit() {
+    composer_.stop();
+    const model::MonitorState& source = composer_.state(MonitorId::Source);
+    if (source.isEmpty()) {
+        fail(tr("Load a clip into the Source monitor first."));
+        return;
+    }
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return;
+    model::MonitorState& record = composer_.state(MonitorId::Record);
+    const model::BinItem before = rec->item;
+    model::Sequence seq = model::Sequence::fromItem(before);
+    const auto pairs = patch_.editPairs(seq);
+    if (pairs.isEmpty()) {
+        fail(tr("Select a source track and a record track to edit."));
+        return;
+    }
+    const model::EditMarks sourceMarks{source.in(), source.out(), source.position(), source.duration()};
+    const model::EditMarks recordMarks{record.in(), record.out(), record.position(), seq.duration()};
+    const model::EditPlan plan = model::planReplace(seq, pairs.first().second, sourceMarks, recordMarks);
+    if (!plan.ok()) {
+        fail(plan.error);
+        return;
+    }
+    const model::LoadedClip* src = source.current();
+    if (model::applyEdit(seq, model::EditKind::Overwrite, plan, src->binId, src->item, patch_).isEmpty()) {
+        fail(tr("The selected tracks are locked."));
+        return;
+    }
+    model::BinItem after = before;
+    seq.storeIn(after);
+    after.modified = QDateTime::currentDateTimeUtc();
+    commit(tr("Replace Edit"), before, after);
+    record.clearBoth();
+}
+
+void Timeline::addEdit(bool fillerOnly) {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return;
+    const std::int64_t pos = composer_.state(MonitorId::Record).position();
+    const model::BinItem before = rec->item;
+    model::Sequence seq = model::Sequence::fromItem(before);
+    const model::Sequence original = seq;
+    bool any = false;
+    for (const model::Track& t : original.tracks()) {
+        if (t.locked) continue;
+        if (fillerOnly) {
+            // Every track with filler there, whatever is selected (p.640).
+            const int i = t.segmentAt(pos);
+            if (i < 0 || !t.segments.at(i).isFiller()) continue;
+        } else if (!patch_.isRecordSelected(t.name())) {
+            continue;
+        }
+        any = seq.addEdit(t.name(), pos) || any;
+    }
+    if (!any) {
+        fail(tr("There is nothing to add an edit to at the position indicator."));
+        return;
+    }
+    model::BinItem after = before;
+    seq.storeIn(after);
+    after.modified = QDateTime::currentDateTimeUtc();
+    commit(tr("Add Edit"), before, after);
+}
+
+void Timeline::removeMatchFrameEdits() {
+    // Between the marks, or in the whole sequence (p.640).
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return;
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    const model::BinItem before = rec->item;
+    model::Sequence seq = model::Sequence::fromItem(before);
+    const bool marked = record.in() || record.out();
+    const std::int64_t start = marked ? record.markedStart() : 0;
+    const std::int64_t length = marked ? record.markedEnd() - start + 1 : seq.duration() + 1;
+    if (seq.removeMatchFrameEdits(patch_.selectedRecordTracks(seq), start, length) == 0) {
+        fail(tr("There are no match-frame edits to remove."));
+        return;
+    }
+    model::BinItem after = before;
+    seq.storeIn(after);
+    after.modified = QDateTime::currentDateTimeUtc();
+    commit(tr("Remove Match Frame Edits"), before, after);
+}
+
+void Timeline::topOrTail(bool top) {
+    // Top: T-R-X, Mark Clip, Mark OUT, Extract. Tail: T-E-X (p.639).
+    if (!recordSequence()) return;
+    composer_.setActiveMonitor(MonitorId::Record);
+    composer_.perform(QStringLiteral("edit.mark_clip"));
+    composer_.perform(top ? QStringLiteral("edit.mark_out") : QStringLiteral("edit.mark_in"));
+    remove(true);
+}
+
+void Timeline::matchFrame() {
+    // From the active monitor's sequence: the clip into the Source monitor
+    // at the matching frame, marked IN; Alt keeps its marks (p.432-433).
+    const MonitorId monitor = composer_.activeMonitor();
+    const model::MonitorState& s = composer_.state(monitor);
+    const model::LoadedClip* loaded = s.current();
+    if (!loaded || loaded->item.kind != model::BinItemKind::Sequence) {
+        fail(tr("Match Frame needs a sequence in the monitor."));
+        return;
+    }
+    const model::Sequence seq = model::Sequence::fromItem(loaded->item);
+    const QStringList tracks = monitor == MonitorId::Record ? patch_.selectedRecordTracks(seq) : seq.trackNames();
+    const auto match = model::matchFrame(seq, tracks, s.position());
+    if (!match) {
+        fail(tr("There is no clip under the position indicator on the selected tracks."));
+        return;
+    }
+    const bool keepMarks = QApplication::keyboardModifiers() & Qt::AltModifier;
+    composer_.loadFromBin(MonitorId::Source, match->segment.binId, {match->segment.clipId});
+    model::MonitorState& source = composer_.state(MonitorId::Source);
+    if (!source.current() || source.current()->item.id != match->segment.clipId) {
+        fail(tr("The clip %1 is not in an open bin.").arg(match->segment.name));
+        return;
+    }
+    if (!keepMarks) source.clearBoth();
+    composer_.moveTo(MonitorId::Source, match->frame);
+    if (!keepMarks) source.markIn();
+    composer_.setActiveMonitor(MonitorId::Source);
+}
+
+void Timeline::moveClips(int tracks) {
+    // Move Clip Up / Down: the selected segments one track (p.613).
+    if (selection_.isEmpty()) {
+        fail(tr("Select the clips to move."));
+        return;
+    }
+    moveSelection(0, tracks, segmentKind(), QApplication::keyboardModifiers() & Qt::AltModifier);
+}
+
+QMenu* Timeline::contextMenu(const QString& track) {
+    auto* menu = new QMenu(this);
+    auto run = [this](QMenu* m, const QString& text, const QString& id) {
+        QAction* a = m->addAction(text);
+        connect(a, &QAction::triggered, this, [this, id] {
+            if (handles(id)) {
+                perform(id);
+            } else {
+                emit commandRequested(id);
+            }
+        });
+        return a;
+    };
+    if (!track.isEmpty() && track != QLatin1String("TC1")) {
+        // On a track button (p.633-636).
+        model::Sequence seq;
+        if (const model::LoadedClip* rec = composer_.state(MonitorId::Record).current()) seq = model::Sequence::fromItem(rec->item);
+        const model::Track* t = seq.track(track);
+        QAction* lock = menu->addAction(t && t->locked ? tr("Unlock Track") : tr("Lock Track"));
+        lock->setEnabled(t);
+        connect(lock, &QAction::triggered, this, [this, track, locked = t && t->locked] { setTracksLocked({track}, !locked); });
+        QAction* del = menu->addAction(tr("Delete Track"));
+        del->setEnabled(t);
+        // No dialog from here (p.636).
+        connect(del, &QAction::triggered, this, [this, track] { deleteTracks({track}); });
+        QAction* match = menu->addAction(tr("Match Frame Track"));
+        match->setEnabled(t);
+        connect(match, &QAction::triggered, this, [this, track] {
+            // Only this track (p.434).
+            const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+            if (!rec) return;
+            const auto m = model::matchFrame(model::Sequence::fromItem(rec->item), {track},
+                                             composer_.state(MonitorId::Record).position());
+            if (!m) {
+                fail(tr("There is no clip under the position indicator on %1.").arg(track));
+                return;
+            }
+            composer_.loadFromBin(MonitorId::Source, m->segment.binId, {m->segment.clipId});
+            model::MonitorState& source = composer_.state(MonitorId::Source);
+            if (!source.current() || source.current()->item.id != m->segment.clipId) return;
+            source.clearBoth();
+            composer_.moveTo(MonitorId::Source, m->frame);
+            source.markIn();
+        });
+        menu->addAction(tr("Rename Track"))->setEnabled(false);
+        return menu;
+    }
+    // In the Timeline (p.613, p.633, p.635).
+    QMenu* add = menu->addMenu(tr("New"));
+    run(add, tr("Sequence"), QStringLiteral("timeline.new.sequence"));
+    run(add, tr("Video Track"), QStringLiteral("timeline.new.video_track"));
+    QMenu* audio = add->addMenu(tr("Audio Track"));
+    run(audio, tr("Mono"), QStringLiteral("timeline.new.audio_track.mono"));
+    run(audio, tr("Stereo"), QStringLiteral("timeline.new.audio_track.stereo"));
+    run(audio, tr("5.1 Surround"), QStringLiteral("timeline.new.audio_track.5_1_surround"));
+    run(audio, tr("7.1 Surround"), QStringLiteral("timeline.new.audio_track.7_1_surround"));
+    run(add, tr("Data Track"), QStringLiteral("timeline.new.data_track"));
+    menu->addSeparator();
+    run(menu, tr("Lock Tracks"), QStringLiteral("clip.lock_tracks"));
+    run(menu, tr("Unlock Tracks"), QStringLiteral("clip.unlock_tracks"));
+    menu->addSeparator();
+    QMenu* select = menu->addMenu(tr("Select"));
+    connect(select->addAction(tr("To the Left")), &QAction::triggered, this, [this] { selectSegments(SelectWhere::Left); });
+    connect(select->addAction(tr("To the Right")), &QAction::triggered, this, [this] { selectSegments(SelectWhere::Right); });
+    for (const QString& t : {tr("Clips with Same Source Clip Color"), tr("Clips With No Source Clip Color"),
+                             tr("Offline Clips"), tr("Clips With Same Local Clip Color")}) {
+        select->addAction(t)->setEnabled(false);
+    }
+    connect(select->addAction(tr("Reverse")), &QAction::triggered, this, [this] { selectSegments(SelectWhere::Reverse); });
+    menu->addAction(tr("Create Sequence Based on Selection"))->setEnabled(false);
+    return menu;
+}
+
 void Timeline::keyPressEvent(QKeyEvent* event) {
+    // The Delete key: segments or tracks (p.621, p.636).
+    if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
+        perform(QStringLiteral("edit.delete"));
+        return;
+    }
     if (keys_) {
         const QString id = keys_(QKeySequence(event->keyCombination()));
         if (!id.isEmpty()) {

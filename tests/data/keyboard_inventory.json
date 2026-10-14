@@ -157,6 +157,16 @@
       "command": "Extract",
       "page": 639,
       "note": "The T-R-X and T-E-X keyboard sequences: Mark Clip, Mark Out (Mark In), Extract."
+    },
+    {
+      "key": "Up",
+      "command": "Move Clip Up",
+      "page": 613
+    },
+    {
+      "key": "Down",
+      "command": "Move Clip Down",
+      "page": 613
     }
   ],
   "contextual": [

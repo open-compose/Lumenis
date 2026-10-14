@@ -53,6 +53,7 @@ class TestSequence : public QObject {
 
 private slots:
     void trackNames() {
+        QVERIFY(parseTrackName(QStringLiteral("V99"))); // up to 99 (p.634)
         QCOMPARE(trackName(TrackKind::Audio, 2), QStringLiteral("A2"));
         QVERIFY(parseTrackName(QStringLiteral("V12")));
         QVERIFY(!parseTrackName(QStringLiteral("TC1")));
@@ -285,6 +286,176 @@ private slots:
         p.setSourceTracks({"V1"});
         applyEdit(s, EditKind::SpliceIn, EditPlan{5, 0, 10, {}}, "bin", seq, p);
         QCOMPARE(layout(s, "V1"), (QStringList{"x:5+5", "y:0+5"}));
+    }
+
+    void locksAndSyncLocks() {
+        Sequence s = Sequence::withDefaultTracks();
+        s.splice("V1", 0, {piece("a", 0, 100)});
+        s.splice("A1", 0, {piece("a", 0, 100, "A1")});
+        s.splice("A2", 0, {piece("a", 0, 100, "A2")});
+        // A locked track takes no edits (p.633).
+        s.track("A2")->locked = true;
+        TrackPatch p;
+        p.setSourceTracks({"V1", "A1", "A2"});
+        QCOMPARE(applyEdit(s, EditKind::Overwrite, EditPlan{0, 10, 5, {}}, "bin", clip("b", 50), p),
+                 (QStringList{"V1", "A1"}));
+        QCOMPARE(removeMaterial(s, true, 0, 10, {"V1", "A1", "A2"}), (QStringList{"V1", "A1"}));
+        QCOMPARE(s.track("A2")->length(), 100);
+        // A splice into a sync-locked track puts filler into the other
+        // sync-locked tracks (p.493).
+        s.track("A2")->locked = false;
+        s.track("V1")->syncLocked = true;
+        s.track("A2")->syncLocked = true;
+        p.setSourceSelected("A1", false);
+        p.setSourceSelected("A2", false);
+        applyEdit(s, EditKind::SpliceIn, EditPlan{0, 20, 7, {}}, "bin", clip("c", 50), p);
+        QCOMPARE(s.track("V1")->length(), 97);
+        QCOMPARE(s.track("A2")->length(), 107);
+        QVERIFY(s.track("A2")->segments.at(1).isFiller());
+        QCOMPARE(s.track("A1")->length(), 90); // not sync-locked
+        // Extract on a sync-locked track extracts from all of them (p.479).
+        QCOMPARE(removeMaterial(s, true, 20, 7, {"V1"}), (QStringList{"V1", "A2"}));
+        QCOMPARE(s.track("A2")->length(), 100);
+        // Locks are saved.
+        BinItem item;
+        item.kind = BinItemKind::Sequence;
+        s.storeIn(item);
+        QVERIFY(Sequence::fromItem(item).track("V1")->syncLocked);
+    }
+
+    void addEditsAndMatchFrames() {
+        Sequence s = Sequence::withDefaultTracks();
+        s.splice("V1", 0, {piece("a", 0, 100)});
+        s.splice("A1", 40, {piece("b", 0, 20, "A1")});
+        // An add edit splits a clip seamlessly (p.639).
+        QVERIFY(s.addEdit("V1", 30));
+        QVERIFY(!s.addEdit("V1", 30));
+        QCOMPARE(layout(s, "V1"), (QStringList{"a:0+30", "a:30+70"}));
+        QVERIFY(Sequence::isMatchFrame(s.track("V1")->segments.at(0), s.track("V1")->segments.at(1)));
+        // Filler keeps its add edit.
+        QVERIFY(s.addEdit("A1", 10));
+        QCOMPARE(layout(s, "A1"), (QStringList{"-:10", "-:30", "b:0+20"}));
+        BinItem item;
+        item.kind = BinItemKind::Sequence;
+        s.storeIn(item);
+        QCOMPARE(Sequence::fromItem(item), s);
+        // Remove Match Frame Edits, only inside the range (p.640).
+        QCOMPARE(s.removeMatchFrameEdits({}, 0, 5), 0);
+        QCOMPARE(s.removeMatchFrameEdits({}, 0, 100), 2);
+        QCOMPARE(layout(s, "V1"), (QStringList{"a:0+100"}));
+        QCOMPARE(layout(s, "A1"), (QStringList{"-:40", "b:0+20"}));
+        // A real cut is not a match frame.
+        QVERIFY(!Sequence::isMatchFrame(piece("a", 0, 10), piece("a", 20, 10)));
+    }
+
+    void clipboardAndPaste() {
+        Sequence s = Sequence::withDefaultTracks();
+        s.splice("V1", 0, {piece("a", 0, 50), piece("b", 0, 50)});
+        s.splice("A1", 0, {piece("c", 0, 20, "A1")});
+        // The Clipboard holds the marked material (p.479).
+        const Sequence clip = s.excerpt({"V1", "A1", "A2"}, 40, 20);
+        QCOMPARE(clip.trackNames(), (QStringList{"V1"})); // A1 and A2 have nothing there
+        QCOMPARE(layout(clip, "V1"), (QStringList{"a:40+10", "b:0+10"}));
+        // Pasted onto the same tracks.
+        QCOMPARE(paste(s, clip, 0, EditKind::SpliceIn), (QStringList{"V1"}));
+        QCOMPARE(s.track("V1")->length(), 120);
+        QCOMPARE(paste(s, clip, 100, EditKind::Overwrite), (QStringList{"V1"}));
+        QCOMPARE(s.track("V1")->length(), 120);
+    }
+
+    void replaceEdits() {
+        Sequence s = Sequence::withDefaultTracks();
+        s.splice("V1", 0, {piece("a", 0, 50), piece("b", 0, 30), piece("c", 0, 20)});
+        // The source position lines up with the record position; the
+        // segment's length is kept (p.467-468).
+        EditPlan plan = planReplace(s, "V1", marks({}, {}, 40, 200), marks({}, {}, 60, 100));
+        QVERIFY2(plan.ok(), qPrintable(plan.error));
+        QCOMPARE(plan.recordStart, 50);
+        QCOMPARE(plan.length, 30);
+        QCOMPARE(plan.sourceStart, 30);
+        // Record IN to OUT instead of the segment.
+        plan = planReplace(s, "V1", marks({}, {}, 40, 200), marks(55, 64, 60, 100));
+        QCOMPARE(plan.recordStart, 55);
+        QCOMPARE(plan.length, 10);
+        QCOMPARE(plan.sourceStart, 35);
+        // Not enough source before the sync frame.
+        QVERIFY(!planReplace(s, "V1", marks({}, {}, 5, 200), marks({}, {}, 60, 100)).ok());
+        QVERIFY(!planReplace(s, "V1", marks({}, {}, 40, 200), marks({}, {}, 150, 100)).ok());
+    }
+
+    void segmentMoves() {
+        Sequence base = Sequence::withDefaultTracks();
+        base.splice("V1", 0, {piece("a", 0, 30), piece("b", 0, 20), piece("c", 0, 50)});
+        // Lift/Overwrite: filler left behind (p.620).
+        Sequence s = base;
+        QString error;
+        auto moved = moveSegments(s, {{"V1", 30}}, 40, 0, EditKind::Overwrite, false, &error);
+        QVERIFY2(!moved.isEmpty(), qPrintable(error));
+        QCOMPARE(moved, (QList<SegmentRef>{{"V1", 70}}));
+        QCOMPARE(layout(s, "V1"), (QStringList{"a:0+30", "-:20", "c:0+20", "b:0+20", "c:40+10"}));
+        // Extract/Splice-in: the gap closes, the segment goes in.
+        s = base;
+        moved = moveSegments(s, {{"V1", 30}}, 40, 0, EditKind::SpliceIn, false);
+        // Dropped 20 frames into c, which moved up 20 frames.
+        QCOMPARE(layout(s, "V1"), (QStringList{"a:0+30", "c:0+20", "b:0+20", "c:20+30"}));
+        QCOMPARE(moved, (QList<SegmentRef>{{"V1", 50}}));
+        // Up a track: a new V2 (p.635). Copy with Alt leaves the original.
+        s = base;
+        moved = moveSegments(s, {{"V1", 0}}, 0, 1, EditKind::Overwrite, true);
+        QCOMPARE(layout(s, "V2"), (QStringList{"a:0+30"}));
+        QCOMPARE(layout(s, "V1"), layout(base, "V1"));
+        // Not onto a locked track, and not below V1.
+        s.track("V2")->locked = true;
+        QVERIFY(moveSegments(s, {{"V1", 30}}, 0, 1, EditKind::Overwrite, false, &error).isEmpty());
+        QVERIFY(!error.isEmpty());
+        QVERIFY(moveSegments(s, {{"V1", 30}}, 0, -1, EditKind::Overwrite, false).isEmpty());
+        QVERIFY(moveSegments(s, {{"V1", 30}}, -100, 0, EditKind::Overwrite, false).isEmpty());
+        // Two segments on one track, spliced earlier.
+        s = base;
+        moved = moveSegments(s, {{"V1", 30}, {"V1", 50}}, -30, 0, EditKind::SpliceIn, false);
+        // c lands 20 frames into a, b at the start.
+        QCOMPARE(layout(s, "V1"), (QStringList{"b:0+20", "a:0+20", "c:0+50", "a:20+10"}));
+        QCOMPARE(moved.size(), 2);
+        QVERIFY(moved.contains(SegmentRef{"V1", 0}));
+        QVERIFY(moved.contains(SegmentRef{"V1", 40}));
+    }
+
+    void deleteAndCopySegments() {
+        Sequence s = Sequence::withDefaultTracks();
+        s.splice("V1", 0, {piece("a", 0, 30), piece("b", 0, 20), piece("c", 0, 50)});
+        s.splice("A1", 0, {piece("d", 0, 100, "A1")});
+        // Copy: only the selected segments, from the first one's start.
+        std::int64_t start = -1;
+        const Sequence copied = copySegments(s, {{"V1", 30}, {"A1", 0}}, &start);
+        QCOMPARE(start, 0);
+        QCOMPARE(layout(copied, "V1"), (QStringList{"-:30", "b:0+20", "-:50"}));
+        QCOMPARE(layout(copied, "A1"), (QStringList{"d:0+100"}));
+        // Delete: Lift leaves filler, Extract closes up (p.621).
+        Sequence lifted = s;
+        QVERIFY(deleteSegments(lifted, {{"V1", 0}, {"V1", 50}}, false));
+        QCOMPARE(layout(lifted, "V1"), (QStringList{"-:30", "b:0+20", "-:50"}));
+        QVERIFY(deleteSegments(s, {{"V1", 0}, {"V1", 50}}, true));
+        QCOMPARE(layout(s, "V1"), (QStringList{"b:0+20"}));
+        QVERIFY(!deleteSegments(s, {{"V1", 7}}, true)); // no segment starts there
+    }
+
+    void matchesFrames() {
+        Sequence s = Sequence::withDefaultTracks();
+        s.addTrack(TrackKind::Video);
+        s.splice("V1", 0, {piece("a", 10, 100)});
+        s.splice("V2", 50, {piece("b", 5, 20, "V1")});
+        s.splice("A1", 0, {piece("c", 0, 100, "A1")});
+        // The top video track first (p.434).
+        auto m = matchFrame(s, {}, 60);
+        QVERIFY(m);
+        QCOMPARE(m->segment.clipId, QStringLiteral("b"));
+        QCOMPARE(m->frame, 15);
+        m = matchFrame(s, {}, 20);
+        QCOMPARE(m->segment.clipId, QStringLiteral("a"));
+        QCOMPARE(m->frame, 30);
+        m = matchFrame(s, {"A1"}, 20);
+        QCOMPARE(m->segment.clipId, QStringLiteral("c"));
+        QVERIFY(!matchFrame(s, {"A2"}, 20));
     }
 
     void undoRedo() {

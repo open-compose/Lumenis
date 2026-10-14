@@ -31,9 +31,9 @@ std::optional<TrackRef> parseTrackName(const QString& name);
 // tracks are left out.
 QStringList parseTrackList(const QString& text);
 
-// Media Composer edits up to 64 video and 64 audio tracks and one data
-// track (p.624; p.459 says 99).
-inline constexpr int kMaxTracks = 64;
+// Up to 99 video and 99 audio tracks and one data track (p.459, p.634;
+// p.624 says 64).
+inline constexpr int kMaxTracks = 99;
 
 // One piece of a track: material from a source clip, or filler (black,
 // silence) where `clipId` is empty.
@@ -44,6 +44,9 @@ struct Segment {
     QString sourceTrack; // the clip's track this came from, e.g. "A2"
     std::int64_t sourceIn = 0; // first frame used, counted from the clip's start
     std::int64_t length = 0;
+    // Filler that starts with an Add Edit (p.640); filler is otherwise
+    // joined to the filler before it.
+    bool addEdit = false;
 
     bool isFiller() const { return clipId.isEmpty(); }
     static Segment filler(std::int64_t length);
@@ -55,6 +58,8 @@ struct Track {
     int number = 1;
     AudioFormat format = AudioFormat::Mono;
     QList<Segment> segments; // back to back from frame 0
+    bool locked = false;     // no edits (p.633)
+    bool syncLocked = false; // kept in sync with other sync-locked tracks (p.493)
 
     QString name() const { return trackName(kind, number); }
     std::int64_t length() const;
@@ -108,6 +113,23 @@ public:
     void overwrite(const QString& track, std::int64_t at, const QList<Segment>& material);
     QList<Segment> lift(const QString& track, std::int64_t start, std::int64_t length);
     QList<Segment> extract(const QString& track, std::int64_t start, std::int64_t length);
+
+    // Deletes a track (p.636).
+    bool removeTrack(const QString& name);
+
+    // Add Edit (p.639-640): an edit point at `frame` on the track. Returns
+    // false if one is already there or the frame is outside the track.
+    bool addEdit(const QString& track, std::int64_t frame);
+    // Timeline > Remove Match Frame Edits (p.640): joins segments that
+    // continue each other within [start, start + length). Returns how many.
+    int removeMatchFrameEdits(const QStringList& tracks, std::int64_t start, std::int64_t length);
+    // Whether the edit between two neighbouring segments is a match frame:
+    // the second continues the first (p.639).
+    static bool isMatchFrame(const Segment& before, const Segment& after);
+
+    // A part of the sequence as a sequence of its own: the Clipboard
+    // (p.479-480). Tracks keep their names; empty tracks are left out.
+    Sequence excerpt(const QStringList& tracks, std::int64_t start, std::int64_t length) const;
 
     bool operator==(const Sequence&) const = default;
 
@@ -193,9 +215,51 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
                       const BinItem& source, const TrackPatch& patch);
 
 // Lift or Extract the frames [start, start + length) on the given tracks.
+// Locked tracks are left alone. Extract also extracts from the other
+// sync-locked tracks when a sync-locked track is among them (p.479).
 // Returns the record tracks changed.
 QStringList removeMaterial(Sequence& sequence, bool extract, std::int64_t start, std::int64_t length,
                            const QStringList& tracks);
+
+// Replace Edit (p.467-468): the segment under the record position on the
+// first edited track (or the record IN to OUT) filled with source
+// material lined up on the two positions.
+EditPlan planReplace(const Sequence& sequence, const QString& track, const EditMarks& source,
+                     const EditMarks& record);
+
+// Pastes a Clipboard sequence onto the tracks it came from (ks2009), at
+// `at`. Returns the tracks changed; locked tracks are left alone.
+QStringList paste(Sequence& sequence, const Sequence& clip, std::int64_t at, EditKind kind);
+
+// A segment, by its track and first frame.
+struct SegmentRef {
+    QString track;
+    std::int64_t start = 0;
+    bool operator==(const SegmentRef&) const = default;
+};
+// The segment a reference names, and its length; nullopt if it is gone.
+std::optional<Segment> segmentFor(const Sequence& sequence, const SegmentRef& ref);
+// Segment editing (p.610-623): moves selected segments `frames` later and
+// `tracks` tracks up (negative: down), Lift/Overwrite or Extract/Splice-in,
+// or copies them (Alt-drag, p.620). Tracks past the last are added
+// (p.635). On failure nothing changes and `error` says why. Returns the
+// moved segments' new references.
+QList<SegmentRef> moveSegments(Sequence& sequence, const QList<SegmentRef>& segments, std::int64_t frames, int tracks,
+                               EditKind kind, bool copy, QString* error = nullptr);
+// Deletes segments: Lift leaves filler, Extract closes the gaps (p.621).
+bool deleteSegments(Sequence& sequence, const QList<SegmentRef>& segments, bool extract);
+// The selected segments as a Clipboard sequence, from the first one's start
+// (p.622), and that start.
+Sequence copySegments(const Sequence& sequence, const QList<SegmentRef>& segments, std::int64_t* start = nullptr);
+
+// Match Frame (p.432-434): the segment under `position` on the first of
+// `tracks` in V1, A1, A2 order that has material there, and the frame of
+// its clip.
+struct MatchedFrame {
+    Segment segment;
+    std::int64_t frame = 0; // counted from the clip's start
+};
+std::optional<MatchedFrame> matchFrame(const Sequence& sequence, const QStringList& tracks, std::int64_t position);
 
 // One step of Edit > Undo/Redo (p.466): a sequence item before and after.
 struct EditStep {

@@ -154,6 +154,9 @@ void MainWindow::createPanels() {
     connect(composer_, &Composer::commandRequested, this, [this](const QString& id) {
         if (Timeline::handles(id)) timeline_->perform(id);
     });
+    connect(timeline_, &Timeline::commandRequested, this, [this](const QString& id) {
+        if (QAction* a = commands_.action(id)) a->trigger();
+    });
     panels_->addPanel(new Panel(QStringLiteral("Timeline"), tr("Timeline"), timeline_));
 }
 
@@ -250,7 +253,12 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
         if (binsActive()) bins->duplicateSelection();
     });
     handle("edit.delete", [this, bins] {
-        if (binsActive()) bins->deleteSelection();
+        if (binsActive()) {
+            bins->deleteSelection();
+        } else if (const Panel* p = panels_->activePanel(); p && p->id() == QLatin1String("Timeline")) {
+            // Segments or tracks in the Timeline (p.621, p.636).
+            timeline_->perform(QStringLiteral("edit.delete"));
+        }
     });
     handle("edit.select_all", [this, bins] {
         if (binsActive()) bins->selectAll();
@@ -356,7 +364,15 @@ void MainWindow::installPanelHandlers() {
     for (const QString& id : commands_.ids()) {
         if (Composer::handles(id)) handle(id.toLatin1().constData(), [this, id] { composer_->perform(id); });
         // Editing, tracks and undo (ch. 15, 19).
-        if (Timeline::handles(id)) handle(id.toLatin1().constData(), [this, id] { timeline_->perform(id); });
+        if (Timeline::handles(id)) {
+            handle(id.toLatin1().constData(), [this, id] {
+                // Copy, Cut and Paste are the Timeline's unless a bin is active.
+                const bool clipboard = id == QLatin1String("edit.copy") || id == QLatin1String("edit.cut") ||
+                                       id == QLatin1String("edit.paste");
+                if (clipboard && binsActive()) return;
+                timeline_->perform(id);
+            });
+        }
     }
 
     // Keyboard-only commands work wherever the main window is active.

@@ -324,7 +324,9 @@
         {
           "text": "Cut",
           "page": 355,
-          "doc": "fx"
+          "doc": "fx",
+          "shortcut": "Ctrl+X",
+          "shortcutPage": 622
         },
         {
           "text": "Deselect All Keyframes",

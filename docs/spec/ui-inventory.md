@@ -348,6 +348,8 @@ English layout:
 | V / B | Splice-in / Overwrite | p.624 |
 | E / R / T | Mark IN / Mark OUT / Mark Clip (the T-E-X and T-R-X sequences) | p.639 |
 | X | Extract | p.639 |
+| Up / Down | Move Clip Up / Move Clip Down | p.613 |
+| Ctrl+X | Cut (Ctrl+C, Ctrl+V: Copy, Paste) | p.622 |
 
 **Shuttle and contextual keys (p.400–401, 117–195, 1132):**
 * Pressing L repeatedly plays at 2×, 3×, 5× and 8×.
@@ -792,9 +794,9 @@ These are recorded now so they are not entered from memory later.
   * *Timeline > New > Sequence* puts a new sequence in the bin, the Record
     monitor and the Timeline (p.457). With no active bin, a Select dialog
     asks for one.
-  * A new sequence has V1, A1, A2 and TC1 (p.459). The guide gives the
-    limits as up to 64 video and 64 audio tracks and one data track
-    (p.624); p.459 says 99. We use 64.
+  * A new sequence has V1, A1, A2 and TC1 (p.459). Up to 99 video and 99
+    audio tracks and one data track (p.459, p.634); p.624 says 64. We use
+    99.
   * Making a first edit with no sequence creates one (p.463). The Record
     monitor then "displays the end of the last frame of the new edit"
     (p.464).
@@ -898,13 +900,98 @@ These are recorded now so they are not entered from memory later.
     history is cleared when the project closes.
   * Messages for edits that cannot be made show as a tooltip.
 * **Not yet built.**
-  * Segment mode (the Lift/Overwrite and Extract/Splice-in tools, lasso,
-    dragging), Trim mode, sync locks and Lock, Solo, Replace and Sync
-    Point edits, the Clipboard and Paste, Top and Tail, Add Edit, Match
-    Frame, markers, Add Filler at Start, Load Filler, the Top toolbar and
-    Track Control panel, Timeline views, the Sequence Map, Search,
+  * Trim mode (1.4d), Solo, Sync Point edits, markers, Add Filler at
+    Start, Load Filler, the Track Control panel, Timeline views, the Sequence Map, Search,
     Video Quality, Step In/Out (nesting), clip colours, waveforms and the
     other Fast menu options (shown disabled).
+
+**Segments, locks and the Clipboard (1.4c; ch. 15 p.479–481, ch. 19
+p.610–640, ch. 13 p.432–434).**
+* **Segment tools (p.610–623).** Lift/Overwrite (red) and Extract/Splice-in
+  (yellow) on the Timeline palette; with both on, the upper half of a
+  segment is Lift/Overwrite and the lower half Extract/Splice-in.
+  * Click selects, Shift-click adds or removes (p.611). Filler can be
+    selected except at the head or tail of a sequence.
+  * A lasso starts above the tracks, or with Alt between them; left to
+    right selects segments. With no tool on, a lasso turns on
+    Lift/Overwrite (p.611–612).
+  * Dragging moves the selection: Lift/Overwrite leaves filler and
+    overwrites; Extract/Splice-in closes the gap and splices (p.620).
+    Alt-drag copies (p.620). Dragging out of the Timeline cancels. Not
+    onto locked tracks (p.619). Dragging past the top or bottom track adds
+    a track (p.635). The segments stay selected (p.620). Ctrl snaps
+    (p.609).
+  * Delete: Lift/Overwrite leaves filler, Extract/Splice-in closes up;
+    with both tools on, the Default Segment Tool decides (p.621).
+  * Mark Clip with selected segments marks their span (p.622).
+  * Ctrl+C, Ctrl+X and Ctrl+V with selected segments; paste goes at the
+    position (p.622–623). Pastes go onto the tracks copied from (ks2009).
+  * Move Clip Up and Move Clip Down on the Edit tab, mapped to the up and
+    down arrows; past the last track a new track is made (p.613).
+  * Right-click > Select: To the Left, To the Right, Clips with Same Source
+    Clip Color, Clips With No Source Clip Color, Offline Clips, Clips With
+    Same Local Clip Color, Reverse; filler is not selected. Create
+    Sequence Based on Selection (p.613–614).
+  * The Timeline Top toolbar holds editing buttons and can be shown in the
+    Timeline settings (p.603); the Lift/Overwrite button is there (p.621).
+    Its picture (p.607) has a master timecode display at its left.
+* **Locks (p.633, p.493).** Clip > Lock Tracks / Unlock Tracks, the
+  Timeline right-click menu, or a track button's right-click Lock Track.
+  Sync Lock buttons per track and Sync Lock All (Edit tab; the sync icon
+  next to TC1). A splice into a sync-locked track puts filler into the
+  other sync-locked tracks (p.493); Extract with sync locks extracts from
+  all of them (p.479).
+* **Tracks (p.634–636).** Right-click > New; the Delete key with track
+  buttons selected opens Delete Track(s); a track button's right-click
+  Delete Track deletes without asking. Rename Track, Add Track dialog
+  (Alt) and track numbering.
+* **Clipboard (p.479–481).** Lift, Extract and Copy to Clipboard fill it;
+  it holds one item. Source monitor right-click > Clipboard Contents, or
+  the Edit tab's Clipboard Contents button, loads it as "Clipboard
+  Contents.n"; with Alt, Lift, Extract or Copy load it as "<sequence>.Sub".
+  Tools > Clipboard Monitor.
+* **Replace Edit (p.467–468):** the positions in the two monitors are the
+  sync frames; the segment's (or the IN to OUT's) length is kept.
+* **Top and Tail (p.639):** the T-R-X and T-E-X key sequences.
+* **Add Edit (p.639–640):** at the position on the selected tracks; Alt on
+  every track with filler. Match-frame edits show an equal sign. Timeline
+  > Remove Match Frame Edits between the marks or in the whole sequence.
+* **Match Frame (p.432–434):** loads the clip under the position into the
+  Source monitor at the matching frame, marked IN, old marks removed (Alt
+  keeps them). The highest selected track wins, "in descending order: V1,
+  A1, A2". Right-click a track button > Match Frame Track.
+
+**Implementation status (1.4c).**
+* **Built.**
+  * Both segment tools, click and Shift-click, Alt lasso, drag with Lift/
+    Overwrite or Extract/Splice-in, Alt-drag copy, snapping, new tracks
+    by dragging up, Delete, Mark Clip on the selection, Ctrl+C/X/V, Move
+    Clip Up/Down (up and down arrows), Select > To the Left/To the
+    Right/Reverse.
+  * Lock and Sync Lock (per track, Sync Lock All, Clip > Lock/Unlock
+    Tracks), with their effects on edits; locks are saved with the
+    sequence.
+  * The Clipboard, Copy to Clipboard and Clipboard Contents (also in the
+    Composer's right-click menu); Replace Edit, Top, Tail, Add Edit (Alt
+    for filler), match-frame equal signs, Remove Match Frame Edits, Match
+    Frame and Match Frame Track; Delete Track(s) with and without the
+    dialog; right-click > New.
+  * The Top toolbar with the master timecode.
+* **Our choices, unverified.**
+  * The Top toolbar is shown, and holds Extract/Splice-in, Lift/Overwrite,
+    Lift, Extract, Copy to Clipboard, Add Edit, Replace Edit, Top, Tail and
+    Match Frame. The guide does not list its default buttons.
+  * The Default Segment Tool is Lift/Overwrite.
+  * A segment dropped inside another splits it there; with Extract/
+    Splice-in the drop point is read before the gap closes.
+  * Match Frame takes video tracks from the top down, then audio from A1.
+  * Lock and Sync Lock changes are not undo steps.
+  * The Clipboard keeps the edit rate of the sequence it came from.
+* **Not yet built.** Trim mode and trim tools, Segment Drag Sync Locks,
+  link selection, the four-frame display, nonadjacent drags across
+  tracks, the Select items that need clip colours, Create Sequence Based
+  on Selection, Rename Track, the Add Track dialog, the Clipboard
+  Monitor, Sync Point editing, Reverse Match Frame, markers (1.4d).
 
 ## 12. Still to document
 * The window-by-window details for the Audio tools (ch. 21) and Settings

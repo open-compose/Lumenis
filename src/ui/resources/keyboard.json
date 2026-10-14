@@ -109,6 +109,14 @@
     {
       "key": "X",
       "command": "edit.extract"
+    },
+    {
+      "key": "Up",
+      "command": "edit.move_clip_up"
+    },
+    {
+      "key": "Down",
+      "command": "edit.move_clip_down"
     }
   ]
 }

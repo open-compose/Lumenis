@@ -89,6 +89,10 @@ public:
     using EventResolver = std::function<QList<std::int64_t>(MonitorId)>;
     void setEventResolver(EventResolver resolver) { events_ = std::move(resolver); }
     QList<std::int64_t> events(MonitorId monitor) const;
+    // What Mark Clip marks when something other than the segment under the
+    // position decides it (segments selected in the Timeline, p.622).
+    using MarkResolver = std::function<std::optional<std::pair<std::int64_t, std::int64_t>>(MonitorId)>;
+    void setMarkResolver(MarkResolver resolver) { marks_ = std::move(resolver); }
     // HD projects are 16:9; SD 4:3 or 16:9 (p.379).
     void setAspectRatio(const Rational& aspect);
     Rational aspectRatio() const { return aspect_; }
@@ -194,6 +198,7 @@ private:
     ItemResolver resolver_;
     KeyResolver keys_;
     EventResolver events_;
+    MarkResolver marks_;
 };
 
 } // namespace lumenis::ui

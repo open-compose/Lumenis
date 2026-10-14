@@ -19,6 +19,7 @@
 #include <QTableView>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTimer>
 #include <QTreeView>
 
 using namespace lumenis;
@@ -296,6 +297,11 @@ private slots:
         QCOMPARE(bins.activeDocument()->bin().items.size(), 2);
         // Edit commands leave bins alone when another window is active.
         window.panels().activate(window.panels().panel(QStringLiteral("Timeline")));
+        // In the Timeline, Delete asks about deleting the selected tracks of
+        // the new sequence (p.636): cancel.
+        QTimer::singleShot(0, qApp, [] {
+            if (QWidget* w = QApplication::activeModalWidget()) w->close();
+        });
         commands.action(QStringLiteral("edit.delete"))->trigger();
         QCOMPARE(bins.activeDocument()->bin().items.size(), 2);
 
