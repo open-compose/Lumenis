@@ -88,11 +88,15 @@ else()
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${PRODUCT_ORGANIZATION}")
     set(CPACK_DEBIAN_PACKAGE_SECTION "video")
     set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+    # Qt loads its Wayland platform plugin at run time, so shlibdeps cannot
+    # see it; without it the app runs through XWayland (BUILDING.md).
+    set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "qt6-wayland")
     set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
     set(CPACK_RPM_PACKAGE_LICENSE "GPL-3.0-or-later")
     set(CPACK_RPM_PACKAGE_GROUP "Applications/Multimedia")
     set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
     set(CPACK_RPM_PACKAGE_AUTOREQ ON)
+    set(CPACK_RPM_PACKAGE_SUGGESTS "qt6-qtwayland")
 endif()
 
 include(CPack)

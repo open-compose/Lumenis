@@ -42,7 +42,8 @@ fi
 # headless smoke tests, when this Qt has them.
 plugin_dir="$("$QMAKE" -query QT_INSTALL_PLUGINS)/platforms"
 extra=()
-for p in libqwayland-egl.so libqwayland-generic.so libqoffscreen.so; do
+# Qt 6.10 replaced libqwayland-egl/-generic with one libqwayland.so.
+for p in libqwayland.so libqwayland-egl.so libqwayland-generic.so libqoffscreen.so; do
     [[ -f "$plugin_dir/$p" ]] && extra+=("$p")
 done
 export EXTRA_PLATFORM_PLUGINS="$(IFS=';'; echo "${extra[*]}")"

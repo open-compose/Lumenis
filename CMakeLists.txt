@@ -31,6 +31,23 @@ if(LUMENIS_BUILD_TESTS)
     find_package(Qt6 ${LUMENIS_QT_MIN_VERSION} REQUIRED COMPONENTS Test)
 endif()
 
+# Linux desktops run Wayland (and so does WSLg). Without Qt's Wayland
+# platform plugin the app still runs, through XWayland, but more slowly and
+# with the startup warning 'Could not find the Qt platform plugin "wayland"'.
+# The plugin is a separate package (qt6-wayland), so say so at configure
+# time; see BUILDING.md.
+if(UNIX AND NOT APPLE AND QT6_INSTALL_PREFIX AND QT6_INSTALL_PLUGINS)
+    set(_qt_platform_plugins "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}/platforms")
+    # libqwayland-egl/-generic.so up to Qt 6.9, libqwayland.so from Qt 6.10.
+    file(GLOB _wayland_plugins "${_qt_platform_plugins}/libqwayland*.so")
+    if(EXISTS "${_qt_platform_plugins}" AND NOT _wayland_plugins)
+        message(WARNING
+            "Qt's Wayland platform plugin is not installed (none in ${_qt_platform_plugins}). "
+            "Cutthulhu will run through XWayland. Install it with: sudo apt install qt6-wayland "
+            "(Fedora: sudo dnf install qt6-qtwayland), or run scripts/bootstrap-linux.sh.")
+    endif()
+endif()
+
 # Qt (6.8.3 and earlier) links the long-deprecated AGL framework through
 # WrapOpenGL, but the macOS 26 SDK (Xcode 26) no longer ships it, so linking
 # fails with "framework 'AGL' not found". Nothing uses AGL; drop it.

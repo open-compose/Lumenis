@@ -170,6 +170,26 @@ are building an older checkout: update it, delete `build/`, and rebuild.
 open a new PowerShell window and build again. Without WiX, `-Package` still
 produces the portable `.zip`.
 
+**Linux (including WSL): `qt.qpa.plugin: Could not find the Qt platform
+plugin "wayland" in ""`.** Qt's Wayland platform plugin is not installed, so
+Cutthulhu falls back to X11 through XWayland: it works, but responds more
+slowly. Install it and run Cutthulhu again:
+
+* Ubuntu/Debian: `sudo apt install qt6-wayland` (on Ubuntu 26.04 this pulls
+  in `libqt6waylandclient6`, which now holds the plugin);
+* Fedora: `sudo dnf install qt6-qtwayland`.
+
+`scripts/bootstrap-linux.sh` installs it, and configuring the build warns
+when it is missing. The `.deb` package recommends it.
+
+**WSL: windows respond slowly.** WSLg draws Linux windows on Windows through
+a remote desktop connection, with software rendering, so every repaint
+costs more than on a Linux desktop. Install the Wayland plugin (above) to
+avoid the extra XWayland step. To compare, start it with
+`QT_QPA_PLATFORM=xcb cutthulhu` or `QT_QPA_PLATFORM=wayland cutthulhu`. For
+real use and for judging speed, build natively on Windows
+(`scripts\build.ps1`).
+
 **Any platform: strange errors after changing compilers, Qt or Xcode.** Delete
 the build folder (`build/<preset>`) and configure again.
 

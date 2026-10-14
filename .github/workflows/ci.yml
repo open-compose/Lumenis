@@ -52,6 +52,10 @@ jobs:
 
       - name: Installer gate (install, launch, uninstall)
         run: |
+          # Qt's Wayland platform plugin is loaded at run time, so the package
+          # must ask for it itself (BUILDING.md, "Could not find the Qt
+          # platform plugin wayland").
+          dpkg-deb -f build/ci/*.deb Recommends | grep -q qt6-wayland
           sudo apt-get install -y ./build/ci/*.deb
           cutthulhu --version
           QT_QPA_PLATFORM=offscreen cutthulhu --smoke-test
