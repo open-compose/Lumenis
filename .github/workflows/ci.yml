@@ -73,6 +73,37 @@ jobs:
             build/ci/*.AppImage
           if-no-files-found: error
 
+  linux-latest:
+    # The newest Ubuntu, with its own compiler and Qt (GCC 15, Qt 6.10):
+    # what someone building on a current distribution gets. New warnings
+    # and Qt deprecations fail here, as warnings are errors.
+    name: Linux x64 (Ubuntu 26.04, newest GCC and Qt)
+    runs-on: ubuntu-24.04
+    container: ubuntu:26.04
+    steps:
+      - name: Install git
+        run: apt-get update && apt-get install -y --no-install-recommends git ca-certificates fonts-dejavu-core
+
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: scripts/bootstrap-linux.sh
+
+      - name: Versions
+        run: |
+          c++ --version | head -n1
+          cmake --version | head -n1
+          dpkg-query -W qt6-base-dev
+
+      - name: Configure
+        run: cmake --preset ci
+
+      - name: Build
+        run: cmake --build --preset ci
+
+      - name: Test
+        run: ctest --preset ci
+
   macos:
     # macos-14 is the oldest supported toolchain (Xcode 15); macos-26 the
     # newest (Xcode 26, which dropped the AGL framework).

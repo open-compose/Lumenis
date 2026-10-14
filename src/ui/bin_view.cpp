@@ -487,9 +487,17 @@ BinFilterModel::BinFilterModel(BinDocument& document, QObject* parent)
     : QSortFilterProxyModel(parent), document_(document) {}
 
 void BinFilterModel::setQuickFilter(const QString& text, const QStringList& headings) {
+    // Qt 6.10 replaced invalidateFilter() with begin/endFilterChange().
+#if QT_VERSION >= QT_VERSION_CHECK(6, 10, 0)
+    beginFilterChange();
+    quick_ = text;
+    quickHeadings_ = headings;
+    endFilterChange(Direction::Rows);
+#else
     quick_ = text;
     quickHeadings_ = headings;
     invalidateFilter();
+#endif
 }
 
 bool BinFilterModel::filterAcceptsRow(int row, const QModelIndex&) const {

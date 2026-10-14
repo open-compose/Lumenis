@@ -182,6 +182,14 @@ slowly. Install it and run Cutthulhu again:
 `scripts/bootstrap-linux.sh` installs it, and configuring the build warns
 when it is missing. The `.deb` package recommends it.
 
+**Linux, newer distributions (Ubuntu 26.04: GCC 15, Qt 6.10): warnings
+such as `potential null pointer dereference` or `'invalidateFilter()' is
+deprecated`.** Newer compilers and Qt versions warn about things older ones
+accept, and the `ci` preset turns warnings into errors. Update your checkout:
+these are fixed, and CI now builds on Ubuntu 26.04 too, so new ones are
+caught there. If you meet one first, report it with the full message; the
+`debug` and `release` presets build anyway.
+
 **WSL: windows respond slowly.** WSLg draws Linux windows on Windows through
 a remote desktop connection, with software rendering, so every repaint
 costs more than on a Linux desktop. Install the Wayland plugin (above) to

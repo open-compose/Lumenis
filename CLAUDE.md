@@ -36,7 +36,8 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
 - Also build once with `-DCMAKE_CXX_COMPILER=clang++`, because CI's macOS
   jobs use Clang.
 - Push only after a local build and test pass, then check CI. CI covers every
-  platform and checks:
+  platform, also builds on the newest Ubuntu (26.04: GCC 15, Qt 6.10) with
+  warnings as errors, and checks:
   - the installers (install, launch, uninstall);
   - that PowerShell scripts parse;
   - cross-platform screenshot consistency (`ui-consistency`).

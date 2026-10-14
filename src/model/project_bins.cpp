@@ -407,14 +407,20 @@ bool ProjectBins::remove(const QString& id, QString* error) {
         return true;
     }
     if (isInTrash(id)) return fail(error, QStringLiteral("already in the Trash"));
-    if (!trash()) {
+    // The Trash appears on the first delete (p.297). Its id is read without
+    // going through a pointer the compiler cannot prove set (GCC 15
+    // -Wnull-dereference).
+    QString trashId;
+    if (const BinNode* existing = trash()) {
+        trashId = existing->id;
+    } else {
         BinNode t;
         t.id = newId();
         t.kind = BinNode::Kind::Trash;
         t.name = QStringLiteral("Trash");
+        trashId = t.id;
         roots_.append(t);
     }
-    const QString trashId = trash()->id;
     BinNode taken;
     takeNode(id, &taken);
     // Bins from other projects inside a deleted folder are only unlisted.
@@ -423,7 +429,12 @@ bool ProjectBins::remove(const QString& id, QString* error) {
         for (BinNode& c : nodes) dropExternal(c.children);
     };
     dropExternal(taken.children);
-    childrenOf(trashId)->append(taken);
+    // Looked up after taking the node out: that moves the list's entries.
+    if (QList<BinNode>* trashContents = childrenOf(trashId)) {
+        trashContents->append(taken);
+    } else {
+        roots_.append(taken);
+    }
     std::function<void(const BinNode&)> close = [&](const BinNode& c) {
         openBins.removeAll(c.id);
         for (const BinNode& g : c.children) close(g);
