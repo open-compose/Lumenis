@@ -2,6 +2,7 @@ add_library(lumenis_ui STATIC
     bin_container.cpp
     bin_dialogs.cpp
     bin_dock.cpp
+    platform_check.cpp
     bin_view.cpp
     capture.cpp
     command_registry.cpp
@@ -17,6 +18,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/bin_container.h
     include/lumenis/ui/bin_dialogs.h
     include/lumenis/ui/bin_dock.h
+    include/lumenis/ui/platform_check.h
     include/lumenis/ui/bin_view.h
     include/lumenis/ui/capture.h
     include/lumenis/ui/command_registry.h

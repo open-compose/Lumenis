@@ -96,7 +96,11 @@ jobs:
           dpkg-query -W qt6-base-dev
 
       - name: Configure
-        run: cmake --preset ci
+        # The bootstrap script must install all of Qt's Wayland support:
+        # Ubuntu 26.04 splits it over several packages (BUILDING.md).
+        run: |
+          cmake --preset ci 2>&1 | tee configure.log
+          ! grep -q "Wayland support is incomplete" configure.log
 
       - name: Build
         run: cmake --build --preset ci

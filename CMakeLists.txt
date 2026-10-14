@@ -34,15 +34,19 @@ endif()
 # Linux desktops run Wayland (and so does WSLg). Without Qt's Wayland
 # platform plugin the app still runs, through XWayland, but more slowly and
 # with the startup warning 'Could not find the Qt platform plugin "wayland"'.
-# The plugin is a separate package (qt6-wayland), so say so at configure
-# time; see BUILDING.md.
+# Its parts are separate packages (qt6-wayland pulls them in), so say so at
+# configure time; see BUILDING.md.
 if(UNIX AND NOT APPLE AND QT6_INSTALL_PREFIX AND QT6_INSTALL_PLUGINS)
-    set(_qt_platform_plugins "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}/platforms")
-    # libqwayland-egl/-generic.so up to Qt 6.9, libqwayland.so from Qt 6.10.
-    file(GLOB _wayland_plugins "${_qt_platform_plugins}/libqwayland*.so")
-    if(EXISTS "${_qt_platform_plugins}" AND NOT _wayland_plugins)
+    set(_qt_plugins "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}")
+    # The platform plugin (libqwayland-egl/-generic.so up to Qt 6.9,
+    # libqwayland.so from 6.10) and the xdg-shell integration windows need.
+    # Ubuntu 26.04 installs the first with the Qt development packages but
+    # not the second (src/ui/platform_check.h).
+    file(GLOB _wayland_platform "${_qt_plugins}/platforms/libqwayland*.so")
+    if(EXISTS "${_qt_plugins}/platforms"
+       AND (NOT _wayland_platform OR NOT EXISTS "${_qt_plugins}/wayland-shell-integration/libxdg-shell.so"))
         message(WARNING
-            "Qt's Wayland platform plugin is not installed (none in ${_qt_platform_plugins}). "
+            "Qt's Wayland support is incomplete (platform plugin or xdg-shell missing in ${_qt_plugins}). "
             "Cutthulhu will run through XWayland. Install it with: sudo apt install qt6-wayland "
             "(Fedora: sudo dnf install qt6-qtwayland), or run scripts/bootstrap-linux.sh.")
     endif()

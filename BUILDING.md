@@ -171,16 +171,22 @@ open a new PowerShell window and build again. Without WiX, `-Package` still
 produces the portable `.zip`.
 
 **Linux (including WSL): `qt.qpa.plugin: Could not find the Qt platform
-plugin "wayland" in ""`.** Qt's Wayland platform plugin is not installed, so
-Cutthulhu falls back to X11 through XWayland: it works, but responds more
-slowly. Install it and run Cutthulhu again:
+plugin "wayland"`, or `qt.qpa.wayland: No shell integration named
+"xdg-shell" found` followed by `Could not load the Qt platform plugin
+"wayland" ... even though it was found`.** Qt's Wayland support is missing
+or incomplete. It comes in parts: the platform plugin and the shell
+integrations (`xdg-shell`) that windows need. Ubuntu 26.04 installs the
+platform plugin with the Qt development packages (`libqt6waylandclient6`)
+but not the shell integrations (`libqt6wlshellintegration6`), which gives
+the second message. Install the whole of it:
 
-* Ubuntu/Debian: `sudo apt install qt6-wayland` (on Ubuntu 26.04 this pulls
-  in `libqt6waylandclient6`, which now holds the plugin);
+* Ubuntu/Debian: `sudo apt install qt6-wayland` (it pulls in both parts);
 * Fedora: `sudo dnf install qt6-qtwayland`.
 
-`scripts/bootstrap-linux.sh` installs it, and configuring the build warns
-when it is missing. The `.deb` package recommends it.
+Until then Cutthulhu notices, says in one line what is missing, and runs
+through X11 (XWayland), which works but responds more slowly.
+`scripts/bootstrap-linux.sh` installs it, configuring the build warns when
+it is missing, and the `.deb` package recommends it.
 
 **Linux, newer distributions (Ubuntu 26.04: GCC 15, Qt 6.10): warnings
 such as `potential null pointer dereference` or `'invalidateFilter()' is

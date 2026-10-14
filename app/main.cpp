@@ -15,6 +15,7 @@
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/menu_builder.h"
 #include "lumenis/ui/panels.h"
+#include "lumenis/ui/platform_check.h"
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/workspace.h"
 
@@ -112,6 +113,18 @@ int main(int argc, char** argv) {
     attachParentConsole();
 
     const bool headless = isHeadlessInvocation(argc, argv);
+    if (!headless) {
+        // Incomplete Wayland support (BUILDING.md): use X11 quietly, with one
+        // line saying what to install, rather than Qt's page of warnings.
+        QString why;
+        const QString platform = lumenis::ui::fallbackPlatformForThisSystem(&why);
+        if (!platform.isEmpty()) {
+            std::fprintf(stderr, "%s: %s, so it runs through X11 (XWayland). Install qt6-wayland "
+                                 "(Fedora: qt6-qtwayland) for native Wayland.\n",
+                         lumenis::branding::kExecutableName, qPrintable(why));
+            qputenv("QT_QPA_PLATFORM", platform.toLatin1());
+        }
+    }
     std::unique_ptr<QCoreApplication> app = headless
         ? std::make_unique<QCoreApplication>(argc, argv)
         : std::make_unique<QApplication>(argc, argv);
