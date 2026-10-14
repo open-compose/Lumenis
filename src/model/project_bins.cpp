@@ -282,7 +282,13 @@ QString ProjectBins::createBin(const QString& parent, QString* error) {
     bin.name = n.name;
     bin.display.columns = Bin::defaultColumns();
     if (!BinFile::write(QDir(folder_).filePath(n.file), bin, error)) return {};
+    // Fetched again: nothing has moved, but the compiler cannot know it
+    // (GCC 15 -Wnull-dereference).
     list = childrenOf(parent);
+    if (!list) {
+        fail(error, QStringLiteral("no such folder"));
+        return {};
+    }
     // Above the Trash and Other Bins at the top level.
     int index = static_cast<int>(list->size());
     if (parent.isEmpty()) {
@@ -389,6 +395,10 @@ bool ProjectBins::move(const QString& id, const QString& parent, int index, QStr
     BinNode taken;
     if (!takeNode(id, &taken)) return false;
     QList<BinNode>* list = childrenOf(parent);
+    if (!list) {
+        roots_.append(taken); // not lost, whatever happened
+        return fail(error, QStringLiteral("no such folder"));
+    }
     if (index < 0 || index > list->size()) index = static_cast<int>(list->size());
     list->insert(index, taken);
     return true;
