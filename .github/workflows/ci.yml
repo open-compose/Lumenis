@@ -219,6 +219,10 @@ jobs:
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
+        # setup-python, which this uses, otherwise installs into
+        # /Users/runner, the GitHub-hosted runners' home.
+        env:
+          AGENT_TOOLSDIRECTORY: ${{ runner.tool_cache }}
         with:
           version: ${{ env.QT_VERSION }}
           host: mac

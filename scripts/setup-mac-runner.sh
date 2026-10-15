@@ -75,11 +75,13 @@ install)
         --name '$(scutil --get LocalHostName)-cutthulhu' --labels cutthulhu --work _work"
 
     # The runner's environment: Homebrew tools first, a limited number of
-    # parallel compile jobs.
+    # parallel compile jobs, and tools such as setup-python installed in the
+    # runner's folder (they otherwise use /Users/runner, as on GitHub's Macs).
     as_runner bash -c "cat > '$RUNNER_DIR/.env'" <<EOF
 LANG=en_US.UTF-8
 PATH=/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 CMAKE_BUILD_PARALLEL_LEVEL=$RUNNER_JOBS
+AGENT_TOOLSDIRECTORY=$RUNNER_DIR/_work/_tool
 EOF
 
     # A launchd daemon (not an agent): it starts at boot without anyone
