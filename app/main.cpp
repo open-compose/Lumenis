@@ -478,6 +478,16 @@ int main(int argc, char** argv) {
                 dialog.setFixedSize(400, 580);
                 dialog.show();
                 QCoreApplication::processEvents();
+                // macOS puts Cancel before OK: no highlighted default or
+                // focused button, so the order does not show in the
+                // text-free image. The button box makes OK the default
+                // when shown, so this comes after show().
+                for (auto* b : dialog.findChildren<QPushButton*>()) {
+                    b->setDefault(false);
+                    b->setAutoDefault(false);
+                    b->clearFocus();
+                }
+                QCoreApplication::processEvents();
                 ok = lumenis::ui::capture(&dialog, dir, QStringLiteral("timeline_settings")) && ok;
                 dialog.hide();
             }
