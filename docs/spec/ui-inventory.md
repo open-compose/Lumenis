@@ -234,14 +234,14 @@ Our own choices, unverified against Media Composer:
   outside the window.
 
 Not yet built:
-* Workspaces > Properties (Workspace View Setting, linked settings: 1.5);
+* Workspaces > Properties: done in 1.6 (below);
 * Bin Layout (1.3);
 * Host Panels for more monitors, and per-monitor-count workspaces (p.84);
 * reordering tabs by dragging;
 * Set Font, Center Current, Send Current Home, Close All But Active and
   Close All Bins But Active;
 * Interface settings UI (1.5);
-* workspace buttons in the Command Palette (1.6);
+* workspace buttons in the Command Palette: done in 1.6;
 * the gear at the bottom of the toolbar in the p.74 picture, whose purpose
   the guide does not give.
 
@@ -460,6 +460,74 @@ until their functions are confirmed in text or on a licensed seat.
 
 **Other keyboard settings (p.1202).** Media Composer also ships Keyboard
 settings named "MC1 English", "NC English", "Premiere Pro" and "Resolve".
+
+**Keyboard settings window (p.1202).**
+* Double-clicking the Keyboard setting opens it. The title is "Keyboard -"
+  followed by the setting's name, e.g. "MC English (United States)".
+* It shows a keyboard: function keys, the main keys, and a block with
+  Home, End, Page Up and Page Down. Keys show button pictures; hover for a
+  key's name.
+* At the bottom: **Standard** and **Map Foreign Keyboard** (for French or
+  German regional settings on Windows).
+* Buttons are mapped onto keys from the Command Palette (p.98). The Add Alt
+  Key button (macOS: Add Control Key, Add Option Key) gives a key its
+  modified function: on I it gives Go to IN Point (p.97).
+* Mapping the keyboard is saved in the Keyboard settings (p.97).
+
+**Workspaces and settings (p.85–92).**
+* Workspace settings are User settings; each user can have 12 (p.86).
+* The Settings list shows a Workspace View for each workspace (picture on
+  p.1136). Double-clicking one, or Windows > Workspaces > Properties, opens
+  the **Workspace View Setting** dialog (p.89–90):
+  * **Link to Named settings**, with a box for the name. Opening the
+    workspace then uses the User settings with that name; with the box
+    empty, the unnamed ones. Only User settings can be linked.
+  * A **Bin Layout** menu.
+* The **Workspaces tab** of the Command Palette (picture, p.91) has buttons
+  W1–W12. Each has a menu of workspaces (and bin layouts below a divider).
+  * A workspace button shows the first two characters of its workspace.
+  * They are shown in italics when the workspace no longer exists (p.90).
+  * Workspace buttons are dragged onto a Tool palette or the Keyboard
+    setting (p.91).
+
+**Implementation status (1.6).**
+* **Built.**
+  * The Keyboard setting and its palette (`src/ui/keyboard_palette.*`):
+    * a US English keyboard with a navigation block;
+    * keys mapped by dragging from the Command Palette, Menu to Button, or
+      Blank;
+    * the modifier key buttons;
+    * holding Shift shows the Shift layer;
+    * the changed keys saved in the user's Keyboard setting; the title
+      shows the setting.
+  * Workspaces are User settings:
+    * one Workspace View version per workspace, its check mark on the
+      active one;
+    * choosing another version switches to it;
+    * saved as they change and on quit, and restored after a restart and
+      when the user changes (gate 4);
+    * each user has their own.
+  * Link to Named settings (Workspace View Setting dialog, also from
+    Windows > Workspaces > Properties).
+  * The Workspaces tab: W1–W12 with their menus. Their pictures show two
+    characters, in italics when the workspace is gone. They can be mapped
+    onto any palette or key.
+  * "Closing a docked tool will replace it with a blank panel" (Interface
+    settings) now works.
+* **Our choices, unverified.**
+  * The key names on the keys, and the navigation block's layout: the
+    p.1202 picture shows icons only.
+  * Holding Shift to see and map the Shift layer.
+  * W1–W4 start as Edit, Color, Effects and Audio.
+  * The workspace toolbar's look is kept in the Interface settings.
+  * The Keyboard setting has one version; we don't know the other
+    layouts' keys.
+* **Not yet.**
+  * Map Foreign Keyboard, and the MC1, NC, Premiere Pro and Resolve
+    keyboards.
+  * Bin layouts and their menu on the Workspaces tab.
+  * Menu shortcuts (Ctrl+...) in the Keyboard setting: they keep their own
+    map.
 
 ## 8. Colour menus for later phases
 
@@ -1279,6 +1347,8 @@ p.610–640, ch. 13 p.432–434).**
       (p.392, added in 1.5b).
     * **Tool Palette** (p.1221): opens the Tool palette, whose mapped
       buttons it keeps (1.5b).
+    * **Keyboard** (p.1202) and **Workspace View** (p.89–90, p.1136):
+      section 7 (1.6).
     * **Timeline:** Show Toolbar; Show Marked Region, including its
       effect on Replace Edit; Movement During Play; Only One Segment
       Tool; Default Segment Tool.

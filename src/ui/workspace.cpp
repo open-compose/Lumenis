@@ -182,6 +182,38 @@ void WorkspaceManager::setBarMode(BarMode mode) {
     emit changed();
 }
 
+QList<WorkspaceManager::Entry> WorkspaceManager::entries() {
+    if (Workspace* w = find(active_)) w->lastKnown = panels_.saveLayout();
+    QList<Entry> out;
+    for (const Workspace& w : workspaces_) out << Entry{w.name, w.basedOn, w.saved, w.lastKnown};
+    return out;
+}
+
+void WorkspaceManager::setEntries(const QList<Entry>& entries, const QString& active) {
+    std::vector<Workspace> loaded;
+    for (const Entry& e : entries) {
+        const QString name = e.name.trimmed();
+        if (name.isEmpty() || static_cast<int>(loaded.size()) >= kMaxWorkspaces) continue;
+        if (std::any_of(loaded.begin(), loaded.end(),
+                        [&](const Workspace& w) { return w.name.compare(name, Qt::CaseInsensitive) == 0; })) {
+            continue;
+        }
+        loaded.push_back({name, e.basedOn, kBuiltins.contains(name), e.saved, e.lastKnown});
+    }
+    for (const QString& name : kBuiltins) {
+        const bool present = std::any_of(loaded.begin(), loaded.end(), [&](const Workspace& w) { return w.name == name; });
+        if (!present) loaded.insert(loaded.begin() + std::min<std::ptrdiff_t>(kBuiltins.indexOf(name), static_cast<std::ptrdiff_t>(loaded.size())), Workspace{name, {}, true, {}, {}});
+    }
+    workspaces_ = std::move(loaded);
+    active_ = find(active) ? find(active)->name : workspaces_.front().name;
+    const Workspace* w = find(active_);
+    QJsonObject layout = w->lastKnown;
+    if (layout.isEmpty()) layout = w->saved;
+    if (layout.isEmpty()) layout = defaultFor(w->name);
+    apply(layout);
+    emit changed();
+}
+
 void WorkspaceManager::load(QSettings& settings) {
     settings.beginGroup(QLatin1String(kGroup));
     if (settings.value(QStringLiteral("version")).toInt() == kStoreVersion) {

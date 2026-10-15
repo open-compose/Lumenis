@@ -94,9 +94,12 @@ Phase 1.4d, Trim mode and markers (`src/model/marker.*`,
 `src/ui/resources/settings.json`), is done. Phase 1.5b, the Command
 Palette and button mapping (`command_palette.*`, `button_mapping.*`,
 `resources/command_palette.json`), the Tool palette, Calculator
-(`src/model/calculator.*`) and Console (`tool_windows.*`), is done. Next
-is 1.6: Keyboard settings, workspaces and button mapping (ROADMAP). Spec
-sections 4, 11 and 12 list details left for later.
+(`src/model/calculator.*`) and Console (`tool_windows.*`), is done. Phase
+1.6, the Keyboard setting (`keyboard_palette.*`), workspaces as User
+settings and the workspace buttons, is done. Phase 1's remaining windows
+(Effect Palette, Effect Editor, Audio Mixer, Audio Tool, Media Tool, the
+Project window's tabs) come next (ROADMAP). Spec sections 3, 4, 7, 11 and
+12 list details left for later.
 
 Panels are our own framework, not QDockWidget, because Qt cannot draw
 vertical title bars, green drop zones or Alt-drag tabbing. Custom-painted

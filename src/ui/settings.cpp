@@ -126,6 +126,7 @@ void Settings::setSiteFolder(const QString& folder) {
 }
 
 void Settings::setUser(const QString& usersRoot, const QString& name) {
+    emit aboutToChangeUser();
     usersRoot_ = usersRoot;
     user_ = name;
     const QString p = path(SettingsScope::User);
@@ -133,6 +134,7 @@ void Settings::setUser(const QString& usersRoot, const QString& name) {
     userFile_ = load(p, SettingsScope::User);
     if (!existed && !p.isEmpty()) userFile_.write(p);
     emit changed();
+    emit userChanged();
 }
 
 void Settings::setProject(const QString& folder) {

@@ -1,5 +1,5 @@
 {
-  "comment": "The Command Palette's tabs and their buttons, column by column (guide p.96-100). The tab names are those in the picture on p.96. The Move and Edit tabs follow the pictures on p.96 and p.100; the other tabs' buttons are our own grouping. \"\" is the Blank button (p.97). A button with \"platforms\" is shown only there (the modifier key buttons, p.97). Tabs whose features come later are empty.",
+  "comment": "The Command Palette's tabs and their buttons, column by column (guide p.96-100). The tab names are those in the picture on p.96. The Move and Edit tabs follow the pictures on p.96 and p.100; the other tabs' buttons are our own grouping. \"\" is the Blank button (p.97). A button with \"platforms\" is shown only there (the modifier key buttons, p.97). Tabs whose features come later are empty. The Workspaces tab (picture on p.91) has a workspace menu beside each button.",
   "tabs": [
     {"name": "Move", "page": 96, "columns": [
       ["move.step_forward_one_frame", "move.step_backward_one_frame", "move.step_forward_10_frames",
@@ -44,7 +44,11 @@
     {"name": "More", "page": 96, "columns": [
       ["more.add_marker", "edit.toggle_source_record"]
     ]},
-    {"name": "Workspaces", "page": 96, "columns": []},
+    {"name": "Workspaces", "page": 91, "workspaceMenus": true, "columns": [
+      ["workspace.w1", "workspace.w2", "workspace.w3", "workspace.w4"],
+      ["workspace.w5", "workspace.w6", "workspace.w7", "workspace.w8"],
+      ["workspace.w9", "workspace.w10", "workspace.w11", "workspace.w12"]
+    ]},
     {"name": "Plug-ins", "page": 96, "columns": []}
   ]
 }

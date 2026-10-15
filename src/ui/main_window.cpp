@@ -9,6 +9,7 @@
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/keyboard_map.h"
+#include "lumenis/ui/keyboard_palette.h"
 #include "lumenis/ui/marker_dialogs.h"
 #include "lumenis/ui/menu_builder.h"
 #include "lumenis/ui/panels.h"
@@ -112,6 +113,13 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     installProjectHandlers(false);
     panels_->restoreLayout(defaultLayout());
     connect(workspaces_, &WorkspaceManager::changed, this, &MainWindow::syncWorkspaceUi);
+    connect(workspaces_, &WorkspaceManager::changed, this, [this] {
+        writeWorkspaces();
+        updateWorkspaceButtons();
+        if (workspaces_->active() != linkedWorkspace_) linkSettings(workspaces_->active());
+    });
+    connect(settings_, &Settings::aboutToChangeUser, this, &MainWindow::writeWorkspaces);
+    connect(settings_, &Settings::userChanged, this, &MainWindow::readWorkspaces);
     syncWorkspaceUi();
 }
 
@@ -367,6 +375,8 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {
+    // Where each workspace was left, for the next session.
+    writeWorkspaces();
     QMainWindow::closeEvent(event);
     if (event->isAccepted()) {
         emit closed();
@@ -378,6 +388,7 @@ SettingsWindow* MainWindow::showSettings() {
         settingsWindow_ = new SettingsWindow(*settings_, this);
         connect(settingsWindow_, &SettingsWindow::toolRequested, this, [this](const QString& tool) {
             if (tool == QLatin1String("toolPalette")) showTool(QStringLiteral("ToolPalette"));
+            if (tool == QLatin1String("keyboard")) showTool(QStringLiteral("Keyboard"));
         });
         // Its own window: give it the commands so Edit's shortcuts work.
         for (const QString& id : commands_.ids()) settingsWindow_->addAction(commands_.action(id));
@@ -407,6 +418,106 @@ SettingsList* MainWindow::activeSettingsList() const {
     return nullptr;
 }
 
+void MainWindow::writeWorkspaces() {
+    if (syncingWorkspaces_) return;
+    syncingWorkspaces_ = true;
+    model::SettingsFile& f = settings_->file(model::SettingsScope::User);
+    const QString kind = QStringLiteral("Workspace View");
+    // Keep each workspace's own options (Link to Named settings).
+    QHash<QString, QJsonObject> kept;
+    for (int i : f.versions(kind)) kept.insert(f.entries.at(i).name.toLower(), f.entries.at(i).values);
+    f.remove(f.versions(kind));
+    const QString active = workspaces_->active();
+    for (const WorkspaceManager::Entry& e : workspaces_->entries()) {
+        QJsonObject v = kept.value(e.name.toLower());
+        v.insert(QStringLiteral("saved"), e.saved);
+        v.insert(QStringLiteral("lastKnown"), e.lastKnown);
+        v.insert(QStringLiteral("basedOn"), e.basedOn);
+        f.entries << model::SettingEntry{kind, e.name, e.name == active, v};
+    }
+    // The workspace toolbar's look goes with them (p.88).
+    if (const int i = f.activeIndex(QStringLiteral("Interface")); i >= 0) {
+        f.entries[i].values.insert(QStringLiteral("workspaceBar"), static_cast<int>(workspaces_->barMode()));
+    }
+    settings_->commit(model::SettingsScope::User);
+    syncingWorkspaces_ = false;
+}
+
+void MainWindow::readWorkspaces() {
+    syncingWorkspaces_ = true;
+    const model::SettingsFile& f = settings_->file(model::SettingsScope::User);
+    QList<WorkspaceManager::Entry> entries;
+    QString active;
+    for (int i : f.versions(QStringLiteral("Workspace View"))) {
+        const model::SettingEntry& e = f.entries.at(i);
+        if (e.name.isEmpty()) continue;
+        entries << WorkspaceManager::Entry{e.name, e.values.value(QStringLiteral("basedOn")).toString(),
+                                           e.values.value(QStringLiteral("saved")).toObject(),
+                                           e.values.value(QStringLiteral("lastKnown")).toObject()};
+        if (e.active) active = e.name;
+    }
+    // A new user starts from the default workspaces.
+    workspaces_->setEntries(entries, active);
+    const int bar = f.activeValues(QStringLiteral("Interface")).value(QStringLiteral("workspaceBar")).toInt();
+    workspaces_->setBarMode(bar == 1   ? WorkspaceManager::BarMode::IconOnly
+                            : bar == 2 ? WorkspaceManager::BarMode::Hidden
+                                       : WorkspaceManager::BarMode::IconAndText);
+    linkedWorkspace_ = workspaces_->active();
+    syncingWorkspaces_ = false;
+    writeWorkspaces();
+}
+
+QStringList MainWindow::workspaceButtons() const {
+    const QJsonValue v = settings_->value(QStringLiteral("Interface"), QStringLiteral("workspaceButtons"));
+    if (!v.isArray()) {
+        // Ours: the built-in workspaces, in toolbar order.
+        return {QStringLiteral("Edit"), QStringLiteral("Color"), QStringLiteral("Effects"), QStringLiteral("Audio")};
+    }
+    QStringList out;
+    for (const QJsonValue& n : v.toArray()) out << n.toString();
+    return out;
+}
+
+void MainWindow::updateWorkspaceButtons() {
+    // A workspace button shows the first two characters of its workspace;
+    // italic if that workspace is gone (p.90).
+    const QStringList buttons = workspaceButtons();
+    for (int i = 0; i < WorkspaceManager::kMaxWorkspaces; ++i) {
+        const QString name = buttons.value(i);
+        registerCommandIcon(QStringLiteral("workspace.w%1").arg(i + 1),
+                            name.isEmpty() ? labelIcon(QStringLiteral("W%1").arg(i + 1))
+                                           : labelIcon(name.left(2), !workspaces_->contains(name)));
+    }
+    ButtonMapper::instance().refreshIcons();
+    commandPalette_->setWorkspaces(workspaces_->names(), buttons);
+}
+
+void MainWindow::linkSettings(const QString& workspace) {
+    linkedWorkspace_ = workspace;
+    model::SettingsFile& f = settings_->file(model::SettingsScope::User);
+    const QString kind = QStringLiteral("Workspace View");
+    QJsonObject values;
+    for (int i : f.versions(kind)) {
+        if (f.entries.at(i).name.compare(workspace, Qt::CaseInsensitive) == 0) values = f.entries.at(i).values;
+    }
+    if (!values.value(QStringLiteral("linkNamed")).toBool()) return;
+    // The settings named in the box; with nothing typed, the unnamed ones
+    // (p.90). Only User settings are linked.
+    const QString target = values.value(QStringLiteral("linkName")).toString().trimmed();
+    bool any = false;
+    for (const QString& k : f.kinds()) {
+        if (k == kind) continue;
+        for (int i : f.versions(k)) {
+            if (f.entries.at(i).name.trimmed().compare(target, Qt::CaseInsensitive) == 0 && !f.entries.at(i).active) {
+                f.setActive(i);
+                any = true;
+                break;
+            }
+        }
+    }
+    if (any) settings_->commit(model::SettingsScope::User);
+}
+
 void MainWindow::createTools() {
     ButtonMapper::instance().setRegistry(&commands_);
     // Menu to Button (p.98): with a target button picked, the next menu
@@ -424,6 +535,20 @@ void MainWindow::createTools() {
     panels_->addPanel(new Panel(QStringLiteral("Calculator"), tr("Calculator"), calculator_));
     console_ = new ConsoleWindow;
     panels_->addPanel(new Panel(QStringLiteral("Console"), tr("Console"), console_));
+    // The Keyboard setting's palette (p.1202).
+    keyboardPalette_ = new KeyboardPalette(*keyboard_);
+    panels_->addPanel(new Panel(QStringLiteral("Keyboard"), tr("Keyboard"), keyboardPalette_));
+    connect(keyboardPalette_, &KeyboardPalette::keyboardChanged, this, [this] {
+        settings_->setValue(QStringLiteral("Keyboard"), QStringLiteral("keys"), keyboard_->differences());
+    });
+    // The Workspaces tab's menus (p.91).
+    connect(commandPalette_, &CommandPalette::workspaceAssigned, this, [this](int index, const QString& name) {
+        QStringList buttons = workspaceButtons();
+        while (buttons.size() <= index) buttons << QString();
+        buttons[index] = name;
+        settings_->setValue(QStringLiteral("Interface"), QStringLiteral("workspaceButtons"),
+                            QJsonArray::fromStringList(buttons));
+    });
 
     connect(toolPalette_, &ToolPalette::commandClicked, this, [this](const QString& id) {
         if (QAction* a = commands_.action(id); a && a->isEnabled()) a->trigger();
@@ -451,6 +576,7 @@ Panel* MainWindow::showTool(const QString& panelId) {
     if (panelId == QLatin1String("CommandPalette")) size = QSize(820, 280);
     if (panelId == QLatin1String("Calculator")) size = QSize(230, 260);
     if (panelId == QLatin1String("Console")) size = QSize(560, 320);
+    if (panelId == QLatin1String("Keyboard")) size = QSize(720, 320);
     const QPoint at = mapToGlobal(QPoint(80, 90));
     panels_->floatPanel(panel, QRect(at, size));
     panels_->activate(panel);
@@ -521,6 +647,16 @@ void MainWindow::applySettings() {
     }
     toolPalette_->setCommands(tools);
     toolPalette_->setShowLabels(s.flag(QStringLiteral("Interface"), QStringLiteral("toolPaletteLabels")));
+    // The Keyboard setting (p.1202): the keys that differ from the default.
+    keyboard_->setDifferences(s.value(QStringLiteral("Keyboard"), QStringLiteral("keys")).toObject());
+    keyboardPalette_->refresh();
+    if (Panel* k = panels_->panel(QStringLiteral("Keyboard"))) {
+        const model::SettingsFile& user = s.file(model::SettingsScope::User);
+        const int i = user.activeIndex(QStringLiteral("Keyboard"));
+        const QString name = i >= 0 && !user.entries.at(i).name.isEmpty() ? user.entries.at(i).name : keyboard_->layoutName();
+        k->setTitle(tr("Keyboard - %1").arg(name));
+    }
+    updateWorkspaceButtons();
 
     // Timeline settings (p.1218-1220), with the Composer's Edit and Move
     // tabs and the Trim settings (p.1223), which the Timeline carries out.
@@ -543,6 +679,18 @@ void MainWindow::applySettings() {
     o.ignoreTrackSelectors = s.flag(composer, QStringLiteral("ignoreTrackSelectors"));
     o.trimAutoFocus = s.flag(QStringLiteral("Trim"), QStringLiteral("autoFocus"));
     timeline_->setOptions(o);
+
+    // Choosing another Workspace View version in the Settings list switches
+    // to that workspace.
+    if (!syncingWorkspaces_) {
+        const model::SettingsFile& user = s.file(model::SettingsScope::User);
+        const int w = user.activeIndex(QStringLiteral("Workspace View"));
+        const QString name = w >= 0 ? user.entries.at(w).name : QString();
+        if (!name.isEmpty() && name != workspaces_->active() && workspaces_->contains(name)) {
+            QMetaObject::invokeMethod(this, [this, name] { workspaces_->activate(name); }, Qt::QueuedConnection);
+        }
+    }
+    panels_->setBlankPanelOnClose(s.flag(QStringLiteral("Interface"), QStringLiteral("closingDockedToolLeavesBlank")));
 
     // Interface settings (p.1200-1201).
     const QString ui = QStringLiteral("Interface");
@@ -570,12 +718,34 @@ void MainWindow::installPanelHandlers() {
     auto handle = [this](const char* id, std::function<void()> handler) {
         commands_.setHandler(QString::fromLatin1(id), std::move(handler));
     };
+    // W1-W12 switch to their workspaces (p.90-91).
+    for (int i = 0; i < WorkspaceManager::kMaxWorkspaces; ++i) {
+        commands_.setHandler(QStringLiteral("workspace.w%1").arg(i + 1), [this, i] {
+            const QString name = workspaceButtons().value(i);
+            if (!name.isEmpty()) workspaces_->activate(name);
+        });
+    }
+    // The modifier key buttons only change keys mapped with them (p.97).
+    for (const char* id : {"other.add_alt_key", "other.add_control_key", "other.add_option_key"}) {
+        commands_.setHandler(QString::fromLatin1(id), [] {});
+    }
     // Tools (ch.5).
     handle("tools.command_palette", [this] { showTool(QStringLiteral("CommandPalette")); });
     handle("tools.calculator", [this] { showTool(QStringLiteral("Calculator")); });
     handle("tools.console", [this] { showTool(QStringLiteral("Console")); });
     // The Tool Palette button (Other tab, p.392).
     handle("other.tool_palette", [this] { showTool(QStringLiteral("ToolPalette")); });
+    // Windows > Workspaces > Properties: the active workspace's Workspace
+    // View setting (p.89-90).
+    handle("windows.workspaces.properties", [this] {
+        writeWorkspaces();
+        const model::SettingsFile& f = settings_->file(model::SettingsScope::User);
+        const int i = f.activeIndex(QStringLiteral("Workspace View"));
+        if (SettingsWindow* w = showSettings(); w && i >= 0) {
+            w->showTab(SettingsWindow::Tab::User);
+            w->list(model::SettingsScope::User)->openEntry(i);
+        }
+    });
     handle("windows.float_all_panels", [this] { panels_->floatAll(); });
     handle("windows.float_active_panel", [this] { panels_->floatActive(); });
     handle("windows.add_blank_panel", [this] { panels_->addBlankPanel(); });

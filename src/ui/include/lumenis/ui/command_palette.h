@@ -7,6 +7,7 @@
 #include <QWidget>
 
 class QButtonGroup;
+class QComboBox;
 class QGridLayout;
 class QLabel;
 class QLineEdit;
@@ -61,6 +62,14 @@ public:
     // Dims the buttons of commands that are not available.
     void refresh();
 
+    // The Workspaces tab (p.91): a workspace menu beside each W button.
+    // `assigned` holds W1's workspace first; "" is None.
+    void setWorkspaces(const QStringList& names, const QStringList& assigned);
+    QComboBox* workspaceMenu(int index) const { return workspaceMenus_.value(index); }
+
+signals:
+    void workspaceAssigned(int index, const QString& name);
+
 protected:
     void showEvent(QShowEvent* event) override;
     void hideEvent(QHideEvent* event) override;
@@ -83,6 +92,8 @@ private:
     QList<Row> rows_;
     QHash<QString, int> tabOf_;
     QStringList tabNames_;
+    QList<QComboBox*> workspaceMenus_;
+    bool fillingMenus_ = false;
 };
 
 // The Tool palette (p.392): mappable buttons for editing and moving, opened

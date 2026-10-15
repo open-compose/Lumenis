@@ -26,6 +26,7 @@ class ConsoleWindow;
 class CommandRegistry;
 class Composer;
 class KeyboardMap;
+class KeyboardPalette;
 class MarkersWindow;
 class Panel;
 class PanelManager;
@@ -75,6 +76,10 @@ public:
     ToolPalette& toolPalette() const { return *toolPalette_; }
     CalculatorWindow& calculator() const { return *calculator_; }
     ConsoleWindow& console() const { return *console_; }
+    KeyboardPalette& keyboardPalette() const { return *keyboardPalette_; }
+    KeyboardMap& keyboard() const { return *keyboard_; }
+    // The workspace each of the W1-W12 buttons switches to (p.90-91).
+    QStringList workspaceButtons() const;
 
     // The layout of a new user (p.74): Bin Container top left, Composer to
     // its right, Timeline along the bottom.
@@ -112,6 +117,14 @@ private:
     void showAbout();
     void applySettings();
     void createTools();
+    // Workspaces are User settings, one Workspace View each (p.86,
+    // p.89-90): written when they change, read when a user's settings load.
+    void writeWorkspaces();
+    void readWorkspaces();
+    // Link to Named settings (p.89-90): the linked workspace's settings
+    // versions become active.
+    void linkSettings(const QString& workspace);
+    void updateWorkspaceButtons();
     // File > Get Position Info (p.101): the Timeline at the position, in the
     // Console.
     void positionInfo();
@@ -129,10 +142,13 @@ private:
     ToolPalette* toolPalette_ = nullptr;
     CalculatorWindow* calculator_ = nullptr;
     ConsoleWindow* console_ = nullptr;
+    KeyboardPalette* keyboardPalette_ = nullptr;
     Settings* settings_ = nullptr;
     SettingsWindow* settingsWindow_ = nullptr;
     SiteSettingsWindow* siteSettingsWindow_ = nullptr;
     ToolTipFilter* toolTips_ = nullptr;
+    bool syncingWorkspaces_ = false;
+    QString linkedWorkspace_;
     std::unique_ptr<KeyboardMap> keyboard_;
     WorkspaceManager* workspaces_ = nullptr;
     WorkspaceBar* bar_ = nullptr;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QHash>
+#include <QJsonObject>
 #include <QKeySequence>
 #include <QList>
 #include <QString>
@@ -39,6 +40,11 @@ public:
 
     void save(QSettings& settings) const;
     void restore(QSettings& settings);
+    // The same differences as JSON, for the Keyboard setting (p.1202):
+    // {"<portable key>": "<command id>", ...}, "" for an unassigned default.
+    QJsonObject differences() const;
+    void setDifferences(const QJsonObject& differences);
+    QString defaultCommandFor(const QKeySequence& key) const { return defaults_.value(key); }
 
 private:
     QString layout_;

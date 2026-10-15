@@ -46,9 +46,14 @@ public:
     // Maps a chosen menu command to the target; false without one.
     bool mapMenuCommand(const QString& commandId);
 
+    // Command pictures changed (a workspace button's name): every button
+    // shows its command's picture again.
+    void refreshIcons() { emit iconsChanged(); }
+
 signals:
     void modeChanged(Mode mode);
     void targetChanged();
+    void iconsChanged();
 
 private:
     Mode mode_ = Mode::ButtonToButton;
@@ -61,6 +66,8 @@ private:
 // initials, as a mapped menu command shows them (p.98-99).
 void registerCommandIcon(const QString& commandId, const QIcon& icon);
 QIcon commandIcon(const QString& commandId);
+// A picture of a few letters (initials, a workspace button's label).
+QIcon labelIcon(const QString& text, bool italic = false);
 // "Load Filler" -> "LF".
 QString commandInitials(const QString& text);
 

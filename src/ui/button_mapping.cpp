@@ -19,7 +19,7 @@ QHash<QString, QIcon>& icons() {
     return all;
 }
 
-QIcon initialsIcon(const QString& initials) {
+QIcon initialsIcon(const QString& initials, bool italic = false) {
     constexpr int size = 32;
     QPixmap pm(size, size);
     pm.fill(Qt::transparent);
@@ -29,6 +29,7 @@ QIcon initialsIcon(const QString& initials) {
     QFont f = p.font();
     f.setPixelSize(initials.size() > 2 ? 11 : 14);
     f.setBold(true);
+    f.setItalic(italic);
     p.setFont(f);
     p.setPen(QColor(0xc8, 0xc8, 0xc8));
     p.drawText(QRect(0, 0, size, size), Qt::AlignCenter, initials);
@@ -86,6 +87,10 @@ bool ButtonMapper::mapMenuCommand(const QString& commandId) {
 
 // ---------------------------------------------------------------- icons
 
+QIcon labelIcon(const QString& text, bool italic) {
+    return initialsIcon(text, italic);
+}
+
 void registerCommandIcon(const QString& commandId, const QIcon& icon) {
     icons().insert(commandId, icon);
 }
@@ -110,6 +115,7 @@ QIcon commandIcon(const QString& commandId) {
 MappableButton::MappableButton(QWidget* parent) : QToolButton(parent) {
     setAutoRaise(true);
     setAcceptDrops(true);
+    connect(&ButtonMapper::instance(), &ButtonMapper::iconsChanged, this, [this] { setIcon(commandIcon(command_)); });
     connect(this, &QToolButton::clicked, this, [this] {
         if (!command_.isEmpty()) emit commandClicked(command_);
     });

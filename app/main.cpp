@@ -205,12 +205,11 @@ int main(int argc, char** argv) {
     if (useSavedSettings) {
         commands.loadShortcuts(settings);
         window.restoreGeometry(settings.value(QStringLiteral("mainWindow/geometry")).toByteArray());
-        window.workspaces().load(settings);
+        // Workspaces are User settings now (p.86), loaded with the user.
         lumenis::ui::BinViewLibrary::load(settings);
         lumenis::ui::FavoriteBins::load(settings);
         QObject::connect(&guiApp, &QApplication::aboutToQuit, [&] {
             settings.setValue(QStringLiteral("mainWindow/geometry"), window.saveGeometry());
-            window.workspaces().save(settings);
             lumenis::ui::BinViewLibrary::save(settings);
             lumenis::ui::FavoriteBins::save(settings);
             commands.saveShortcuts(settings);
@@ -505,6 +504,14 @@ int main(int argc, char** argv) {
                 QCoreApplication::processEvents();
                 ok = lumenis::ui::capture(floating, dir, QStringLiteral("command_palette")) && ok;
                 window.panels().closePanel(palette);
+            }
+            // The Keyboard setting's palette (picture on p.1202), floating.
+            if (lumenis::ui::Panel* keys = window.showTool(QStringLiteral("Keyboard"))) {
+                QWidget* floating = keys->window();
+                floating->resize(720, 320);
+                QCoreApplication::processEvents();
+                ok = lumenis::ui::capture(floating, dir, QStringLiteral("keyboard")) && ok;
+                window.panels().closePanel(keys);
             }
             ok = lumenis::ui::capture(&selectProject, dir, QStringLiteral("select_project")) && ok;
             selectProject.showPage(lumenis::ui::SelectProjectDialog::Page::NewProject);

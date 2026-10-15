@@ -288,6 +288,18 @@
     {"id": "other.tool_palette", "text": "Tool Palette", "palette": "other"},
     {"id": "other.add_alt_key", "text": "Add Alt Key", "palette": "other"},
     {"id": "other.add_control_key", "text": "Add Control Key", "palette": "other"},
-    {"id": "other.add_option_key", "text": "Add Option Key", "palette": "other"}
+    {"id": "other.add_option_key", "text": "Add Option Key", "palette": "other"},
+    {"id": "workspace.w1", "text": "W1", "palette": "workspaces"},
+    {"id": "workspace.w2", "text": "W2", "palette": "workspaces"},
+    {"id": "workspace.w3", "text": "W3", "palette": "workspaces"},
+    {"id": "workspace.w4", "text": "W4", "palette": "workspaces"},
+    {"id": "workspace.w5", "text": "W5", "palette": "workspaces"},
+    {"id": "workspace.w6", "text": "W6", "palette": "workspaces"},
+    {"id": "workspace.w7", "text": "W7", "palette": "workspaces"},
+    {"id": "workspace.w8", "text": "W8", "palette": "workspaces"},
+    {"id": "workspace.w9", "text": "W9", "palette": "workspaces"},
+    {"id": "workspace.w10", "text": "W10", "palette": "workspaces"},
+    {"id": "workspace.w11", "text": "W11", "palette": "workspaces"},
+    {"id": "workspace.w12", "text": "W12", "palette": "workspaces"}
   ]
 }

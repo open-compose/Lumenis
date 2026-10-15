@@ -109,7 +109,7 @@
         {
           "name": "General",
           "options": [
-            {"key": "closingDockedToolLeavesBlank", "type": "bool", "label": "Closing a docked tool will replace it with a blank panel.", "default": false, "page": 1200, "later": true},
+            {"key": "closingDockedToolLeavesBlank", "type": "bool", "label": "Closing a docked tool will replace it with a blank panel.", "default": false, "page": 1200},
             {"key": "showToolTips", "type": "bool", "label": "Show ToolTips", "default": true, "page": 1200},
             {"key": "toolTipDelay", "type": "int", "label": "Delay", "suffix": "seconds before showing", "min": 0, "max": 10, "default": 1, "page": 1200, "later": true},
             {"key": "launchLastProject", "type": "bool", "label": "Automatically Launch Last Project at Startup", "default": false, "page": 1200, "later": true},
@@ -137,6 +137,13 @@
           ]
         }
       ]
+    },
+    {
+      "kind": "Keyboard",
+      "scope": "user",
+      "page": 1202,
+      "opens": "keyboard",
+      "tabs": []
     },
     {
       "kind": "Timeline",
@@ -185,6 +192,21 @@
       "page": 1221,
       "opens": "toolPalette",
       "tabs": []
+    },
+    {
+      "kind": "Workspace View",
+      "scope": "user",
+      "page": 1136,
+      "tabs": [
+        {
+          "name": "",
+          "options": [
+            {"key": "linkNamed", "type": "bool", "label": "Link to Named settings", "default": false, "page": 90},
+            {"key": "linkName", "type": "text", "label": "", "default": "", "page": 90},
+            {"key": "binLayout", "type": "text", "label": "Bin Layout:", "default": "", "page": 90, "later": true}
+          ]
+        }
+      ]
     },
     {
       "kind": "Trim",

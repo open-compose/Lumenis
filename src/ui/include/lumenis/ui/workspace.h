@@ -66,6 +66,20 @@ public:
     void load(QSettings& settings);
     void save(QSettings& settings);
 
+    // The workspaces as kept in the user's settings: one Workspace View
+    // setting each (p.89-90, picture on p.1136).
+    struct Entry {
+        QString name;
+        QString basedOn;
+        QJsonObject saved;
+        QJsonObject lastKnown;
+    };
+    // The active workspace's last known layout is the current one.
+    QList<Entry> entries();
+    // Replaces the workspaces (built-in ones always exist) and shows the
+    // active one where it was left.
+    void setEntries(const QList<Entry>& entries, const QString& active);
+
 signals:
     void changed();
 

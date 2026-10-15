@@ -122,4 +122,23 @@ void KeyboardMap::restore(QSettings& settings) {
     settings.endGroup();
 }
 
+QJsonObject KeyboardMap::differences() const {
+    QJsonObject out;
+    for (auto it = current_.cbegin(); it != current_.cend(); ++it) {
+        if (defaults_.value(it.key()) != it.value()) out.insert(it.key().toString(QKeySequence::PortableText), it.value());
+    }
+    for (auto it = defaults_.cbegin(); it != defaults_.cend(); ++it) {
+        if (!current_.contains(it.key())) out.insert(it.key().toString(QKeySequence::PortableText), QString());
+    }
+    return out;
+}
+
+void KeyboardMap::setDifferences(const QJsonObject& differences) {
+    current_ = defaults_;
+    for (auto it = differences.constBegin(); it != differences.constEnd(); ++it) {
+        const QKeySequence key = QKeySequence::fromString(it.key(), QKeySequence::PortableText);
+        if (!key.isEmpty()) assign(key, it.value().toString());
+    }
+}
+
 } // namespace lumenis::ui

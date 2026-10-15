@@ -314,7 +314,19 @@ Sub-steps:
     palette, saved in the settings.
   * The Tool palette, the Calculator and the Console, as floating panels.
   * Details and what is left: "Implementation status (1.5b)" in the spec.
-* **1.6** Keyboard settings, workspaces and button mapping (gate 3, gate 4).
+* **1.6 Keyboard settings, workspaces and button mapping — done.**
+  * The Keyboard setting and palette: keys mapped from the Command
+    Palette, the modifier key buttons, and the Shift layer; saved per user.
+  * Workspaces are User settings (Workspace View), restored after a restart
+    (gate 4), with Link to Named settings.
+  * Workspace buttons W1–W12.
+  * Gate 3 (the default keys) is `tst_keyboard`; gate 4 is
+    `tst_keyboard_workspaces`.
+  * Details and what is left: "Implementation status (1.6)" in the spec.
+* **1.7** The windows still missing from the list below: the Effect Palette
+  and Effect Editor, the Audio Mixer and Audio Tool, the Media Tool, and the
+  Project window's Format, Usage, Info and Volumes tabs. Then gate 5, the
+  manual checklist.
 
 The detailed inventory lives in [spec/ui-inventory.md](spec/ui-inventory.md).
 It is entered from the Media Composer Editing Guide with page citations.

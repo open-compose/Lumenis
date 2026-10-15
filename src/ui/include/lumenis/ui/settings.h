@@ -101,6 +101,10 @@ public:
 signals:
     // Any setting changed, or other settings were loaded.
     void changed();
+    // Another user's settings are about to be loaded, and were (p.1138):
+    // what lives in the windows (workspaces) is saved first and read after.
+    void aboutToChangeUser();
+    void userChanged();
 
 private:
     model::SettingsFile load(const QString& path, model::SettingsScope scope) const;

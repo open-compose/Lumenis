@@ -6,6 +6,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QButtonGroup>
+#include <QComboBox>
 #include <QCompleter>
 #include <QDrag>
 #include <QFile>
@@ -54,6 +55,7 @@ PaletteButton::PaletteButton(const QString& commandId, QWidget* parent) : QToolB
     setIconSize(QSize(16, 16));
     setIcon(commandIcon(commandId));
     setToolTip(ButtonMapper::instance().text(commandId));
+    connect(&ButtonMapper::instance(), &ButtonMapper::iconsChanged, this, [this] { setIcon(commandIcon(command_)); });
 }
 
 void PaletteButton::mousePressEvent(QMouseEvent* event) {
@@ -98,6 +100,7 @@ CommandPalette::CommandPalette(CommandRegistry& commands, QWidget* parent) : QWi
         auto* columns = new QHBoxLayout(page);
         columns->addStretch(1);
         const int index = static_cast<int>(tabNames_.size());
+        const bool menus = tab.value(QStringLiteral("workspaceMenus")).toBool();
         for (const QJsonValue& c : tab.value(QStringLiteral("columns")).toArray()) {
             auto* grid = new QGridLayout;
             grid->setHorizontalSpacing(4);
@@ -120,6 +123,18 @@ CommandPalette::CommandPalette(CommandRegistry& commands, QWidget* parent) : QWi
                 });
                 grid->addWidget(label, row, 0);
                 grid->addWidget(button, row, 1);
+                if (menus) {
+                    // The workspace the button switches to (p.91).
+                    auto* menu = new QComboBox(page);
+                    const int w = static_cast<int>(workspaceMenus_.size());
+                    menu->setObjectName(QStringLiteral("workspaceMenu:%1").arg(w + 1));
+                    menu->setMinimumWidth(110);
+                    connect(menu, &QComboBox::currentIndexChanged, this, [this, menu, w] {
+                        if (!fillingMenus_) emit workspaceAssigned(w, menu->currentData().toString());
+                    });
+                    grid->addWidget(menu, row, 2);
+                    workspaceMenus_ << menu;
+                }
                 ++row;
                 rows_.append(Row{id, label, button});
                 if (!buttons_.contains(id)) {
@@ -183,6 +198,19 @@ CommandPalette::CommandPalette(CommandRegistry& commands, QWidget* parent) : QWi
     layout->addLayout(top);
     layout->addWidget(tabs_, 1);
     layout->addLayout(modeRow);
+}
+
+void CommandPalette::setWorkspaces(const QStringList& names, const QStringList& assigned) {
+    fillingMenus_ = true;
+    for (int i = 0; i < workspaceMenus_.size(); ++i) {
+        QComboBox* menu = workspaceMenus_.at(i);
+        menu->clear();
+        menu->addItem(tr("None"), QString());
+        for (const QString& n : names) menu->addItem(n, n);
+        const int at = menu->findData(assigned.value(i));
+        menu->setCurrentIndex(std::max(at, 0));
+    }
+    fillingMenus_ = false;
 }
 
 void CommandPalette::refresh() {
