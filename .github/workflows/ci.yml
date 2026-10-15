@@ -127,6 +127,11 @@ jobs:
     # macos-14 is the oldest supported toolchain (Xcode 15); macos-26 the
     # newest (Xcode 26, which dropped the AGL framework).
     name: macOS arm64 (${{ matrix.os }})
+    # macOS minutes cost ten times Linux ones on a private repository, so
+    # development-branch pushes skip it; it runs for main, pull requests and
+    # by hand (Actions > CI > Run workflow, or `gh workflow run ci.yml
+    # --ref <branch>`).
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -285,6 +290,9 @@ jobs:
     # Linux is the reference; each other platform's screenshots must match it.
     name: UI looks the same on all platforms
     needs: [linux, macos, windows]
+    # Runs without macOS when that job was skipped; then only Windows is
+    # compared with Linux.
+    if: ${{ !cancelled() && needs.linux.result == 'success' && needs.windows.result == 'success' && needs.macos.result != 'failure' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

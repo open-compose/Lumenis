@@ -35,6 +35,10 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
   The `ci` preset turns warnings into errors.
 - Also build once with `-DCMAKE_CXX_COMPILER=clang++`, because CI's macOS
   jobs use Clang.
+- Actions minutes are limited (private repository; macOS costs 10×). Pushes
+  to `claude/**` run Linux and Windows only; macOS runs on `main`, pull
+  requests and by hand. Run it by hand (`gh workflow run ci.yml --ref
+  <branch>`) once at the end of each phase, and batch fixes into few pushes.
 - Push only after a local build and test pass, then check CI. CI covers every
   platform, also builds on the newest Ubuntu (26.04: GCC 15, Qt 6.10) with
   warnings as errors, and checks:
