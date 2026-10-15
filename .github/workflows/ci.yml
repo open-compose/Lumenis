@@ -419,7 +419,8 @@ jobs:
           if (-not $dir) { Write-Host 'CUTTHULHU_BUILDS is not set; nothing kept (see BUILDING.md)'; exit 0 }
           if (-not (Test-Path $dir)) { Write-Host "::warning::$dir is missing; run the setup script's builds command"; exit 0 }
           $msi = Get-ChildItem build\ci\*.msi | Select-Object -First 1
-          $sha = (git rev-parse --short HEAD).Trim()
+          # The commit from GitHub: the PC may have no git.
+          $sha = $env:GITHUB_SHA.Substring(0, 7)
           $name = '{0}_{1}_{2}.msi' -f $msi.BaseName, (Get-Date -Format 'yyyy-MM-dd_HHmm'), $sha
           Copy-Item $msi.FullName (Join-Path $dir $name)
           Write-Host "kept $(Join-Path $dir $name)"

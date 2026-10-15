@@ -22,7 +22,8 @@ if [ ! -d "$dir" ] || [ ! -w "$dir" ]; then
 fi
 
 keep=5
-sha=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
+sha="${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
+sha="${sha:0:7}"
 stamp=$(date +%Y-%m-%d_%H%M)
 for f in "$@"; do
     [ -f "$f" ] || { echo "keep-build: no such file: $f" >&2; exit 1; }
