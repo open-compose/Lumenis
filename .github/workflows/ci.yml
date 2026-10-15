@@ -294,11 +294,16 @@ jobs:
     if: vars.WINDOWS_RUNNER == 'on'
     runs-on: [self-hosted, Windows, X64, cutthulhu]
     timeout-minutes: 120
+    # Windows PowerShell 5.1, which every Windows has; PowerShell 7 (pwsh)
+    # may not be installed.
+    defaults:
+      run:
+        shell: powershell
     steps:
       - uses: actions/checkout@v4
 
       - name: Check PowerShell scripts parse
-        shell: pwsh
+        shell: powershell
         run: |
           $failed = $false
           foreach ($f in Get-ChildItem -Recurse -Filter *.ps1 scripts, packaging) {
@@ -309,14 +314,14 @@ jobs:
           if ($failed) { exit 1 }
 
       - name: Qt (installed on the PC)
-        shell: pwsh
+        shell: powershell
         run: |
           $qt = "C:\Qt\$env:QT_VERSION\msvc2022_64"
           if (-not (Test-Path "$qt\bin\qmake.exe")) {
             Write-Host "::error::Qt $env:QT_VERSION is not in C:\Qt: run scripts\setup-windows-runner.ps1 install again"
             exit 1
           }
-          "QT_ROOT_DIR=$qt" >> $env:GITHUB_ENV
+          "QT_ROOT_DIR=$qt" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -329,14 +334,14 @@ jobs:
         run: cmake --build --preset ci
 
       - name: Test
-        shell: pwsh
+        shell: powershell
         run: |
           $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
           ctest --preset ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Screenshots
-        shell: pwsh
+        shell: powershell
         run: |
           Remove-Item -Recurse -Force shots -ErrorAction SilentlyContinue
           $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
@@ -354,7 +359,7 @@ jobs:
           if-no-files-found: error
 
       - name: Package (.msi, .zip)
-        shell: pwsh
+        shell: powershell
         run: |
           Remove-Item -Force build\ci\*.msi, build\ci\*.zip -ErrorAction SilentlyContinue
           cd build\ci
@@ -365,7 +370,7 @@ jobs:
         # The runner's user is not an administrator, so the .msi is unpacked
         # with an administrative install rather than installed; the hosted
         # job installs and uninstalls it.
-        shell: pwsh
+        shell: powershell
         run: |
           $msi = (Get-ChildItem build\ci\*.msi | Select-Object -First 1).FullName
           $target = Join-Path $env:RUNNER_TEMP 'msi'

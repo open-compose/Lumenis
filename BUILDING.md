@@ -266,6 +266,10 @@ python3 scripts/make-icons.py                                  # every platform'
   `scripts\setup-windows-runner.ps1 status` and, in the distribution,
   `sudo scripts/setup-wsl-runner.sh status`; or set `WINDOWS_RUNNER` to
   `off` / take the version out of `LINUX_RUNNERS` until it is back.
+* *"pwsh: command not found":* the self-hosted Windows job uses Windows
+  PowerShell 5.1 (`shell: powershell`), which every Windows has; PowerShell
+  7 (`pwsh`) is only on GitHub's runners. Write to `$env:GITHUB_ENV` with
+  `Out-File -Encoding utf8 -Append` there, not `>>` (UTF-16 in 5.1).
 * *"Qt 6.8.3 is not in C:\Qt":* run `scripts\setup-windows-runner.ps1
   install <token>` again; it installs Qt and keeps the existing runner.
 * *"systemd is not running" from setup-wsl-runner.sh:* add `[boot]` and
