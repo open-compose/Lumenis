@@ -20,6 +20,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Shell scripts parse
+        # Some only run elsewhere (scripts/setup-mac-runner.sh on a Mac).
+        run: for f in scripts/*.sh packaging/*/*.sh; do bash -n "$f" || exit 1; done
+
       - name: Install dependencies
         run: scripts/bootstrap-linux.sh
 
@@ -196,6 +200,75 @@ jobs:
           path: build/ci-macos/*.dmg
           if-no-files-found: error
 
+  macos-local:
+    # The project owner's Apple Silicon Mac, as a self-hosted runner
+    # (scripts/setup-mac-runner.sh): free minutes, so it runs on every push.
+    # Turned on by the repository variable MAC_RUNNER = on; set it to off
+    # while the Mac is away, or jobs wait for it.
+    name: macOS arm64 (self-hosted)
+    if: vars.MAC_RUNNER == 'on'
+    runs-on: [self-hosted, macOS, ARM64, cutthulhu]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          host: mac
+          target: desktop
+          arch: clang_64
+          cache: true
+
+      - name: Check build tools
+        # Installed by an administrator; the runner's user cannot use brew.
+        run: command -v ninja && command -v cmake
+
+      - name: Configure
+        run: cmake --preset ci-macos
+
+      - name: Build
+        run: cmake --build --preset ci-macos
+
+      - name: Test
+        run: ctest --preset ci-macos
+
+      - name: Screenshots
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          rm -rf shots
+          app=build/ci-macos/bin/Cutthulhu.app/Contents/MacOS/Cutthulhu
+          "$app" --screenshot shots/1x
+          QT_SCALE_FACTOR=2 "$app" --screenshot shots/2x
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-macos-self-hosted
+          path: shots
+          if-no-files-found: error
+
+      - name: Package (.dmg)
+        run: |
+          rm -f build/ci-macos/*.dmg
+          cd build/ci-macos && cpack
+
+      - name: Installer gate (mount, launch, check architecture)
+        # The runner has no window server session: no on-screen windows.
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          dmg=$(ls build/ci-macos/*.dmg)
+          mnt=$(mktemp -d)
+          hdiutil attach "$dmg" -mountpoint "$mnt" -nobrowse
+          trap 'hdiutil detach "$mnt" >/dev/null 2>&1 || true' EXIT
+          app="$mnt/Cutthulhu.app/Contents/MacOS/Cutthulhu"
+          lipo -archs "$app" | grep -q arm64
+          codesign --verify --deep "$mnt/Cutthulhu.app"
+          "$app" --version
+          "$app" --smoke-test
+
   windows:
     name: Windows x64
     runs-on: windows-2022
@@ -289,10 +362,10 @@ jobs:
     # Phase 1 gate 1: every window renders the same on every platform.
     # Linux is the reference; each other platform's screenshots must match it.
     name: UI looks the same on all platforms
-    needs: [linux, macos, windows]
-    # Runs without macOS when that job was skipped; then only Windows is
-    # compared with Linux.
-    if: ${{ !cancelled() && needs.linux.result == 'success' && needs.windows.result == 'success' && needs.macos.result != 'failure' }}
+    needs: [linux, macos, macos-local, windows]
+    # Runs without the macOS jobs that were skipped; then only the others
+    # are compared with Linux.
+    if: ${{ !cancelled() && needs.linux.result == 'success' && needs.windows.result == 'success' && needs.macos.result != 'failure' && needs.macos-local.result != 'failure' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

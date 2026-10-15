@@ -123,10 +123,67 @@ The test presets set `QT_QPA_PLATFORM=offscreen`, so tests need no display.
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` builds, tests and packages on `ubuntu-24.04`,
-`macos-14` (arm64) and `windows-2022`. It then installs each package,
-launches the installed program with `--smoke-test`, and uninstalls it. The
-installers are uploaded as workflow artifacts.
+`.github/workflows/ci.yml` builds, tests and packages on `ubuntu-24.04`
+(and Ubuntu 26.04 in a container), `macos-14` and `macos-26` (arm64) and
+`windows-2022`. It then installs each package, launches the installed
+program with `--smoke-test`, and uninstalls it. The installers are uploaded
+as workflow artifacts.
+
+GitHub bills macOS minutes at ten times the Linux rate on a private
+repository. The GitHub-hosted macOS jobs therefore run only for `main`, pull
+requests and manual runs (`gh workflow run ci.yml --ref <branch>`). Pushes
+to other branches build on macOS only through the self-hosted runner below.
+
+### Self-hosted macOS runner
+
+An Apple Silicon Mac can run the macOS job for free. The runner works
+headless: it runs as its own hidden standard user, is started by launchd at
+boot, and needs nobody to log in as that user. It never opens windows (the
+tests and screenshots use Qt's offscreen platform) or takes the keyboard,
+mouse or screen, so you keep using the Mac as usual. Builds run in the
+background QoS class at low priority, mostly on the efficiency cores, so
+your own work comes first.
+
+1. In your administrator account, install the build tools for all users:
+   Xcode (or `xcode-select --install`) and `brew install cmake ninja`.
+2. On GitHub, open the repository's Settings > Actions > Runners > New
+   self-hosted runner, and copy the token from the `./config.sh` line. It
+   is valid for an hour.
+3. From your checkout, run:
+
+   ```sh
+   sudo scripts/setup-mac-runner.sh install <token>
+   ```
+
+   This creates the hidden user `ghrunner`, downloads and registers the
+   runner (labels `self-hosted`, `macOS`, `ARM64`, `cutthulhu`), and
+   installs `/Library/LaunchDaemons/com.open-compose.actions-runner.plist`.
+4. Check that the runner shows as Idle under Settings > Actions > Runners.
+   Then add the repository variable `MAC_RUNNER` with the value `on`
+   (Settings > Secrets and variables > Actions > Variables). The
+   `macOS arm64 (self-hosted)` job then runs on every push.
+
+Day to day:
+
+* `sudo scripts/setup-mac-runner.sh status` shows whether it is running and
+  the end of its log (`/Users/ghrunner/runner.log`).
+* `sudo scripts/setup-mac-runner.sh stop` and `start` pause and resume it.
+  While the Mac is off, asleep or stopped, set `MAC_RUNNER` to `off`;
+  otherwise CI runs wait for the Mac (for up to a day).
+* The Mac must be awake for jobs to run. The display can sleep; to keep the
+  Mac itself awake on power, turn on System Settings > Battery (or Energy) >
+  Options > Prevent automatic sleeping when the display is off, or run
+  `sudo pmset -c sleep 0`.
+* Fewer or more parallel compile jobs: `sudo RUNNER_JOBS=2
+  scripts/setup-mac-runner.sh install <token>` (the default is 4).
+* To remove it: `sudo scripts/setup-mac-runner.sh remove <token>` with a
+  removal token from the runner's page on GitHub, then optionally `sudo
+  sysadminctl -deleteUser ghrunner`.
+
+The runner runs code from this repository's branches. Use it only while the
+repository is private, or restrict it to trusted branches before making the
+repository public: a pull request from a fork could otherwise run code on
+the Mac.
 
 ## Application icon
 
@@ -143,6 +200,18 @@ python3 scripts/make-icons.py                                  # every platform'
 ```
 
 ## Troubleshooting
+
+### The self-hosted macOS job waits or fails
+
+* *Queued for a long time:* the Mac is off or asleep, or the runner is
+  stopped. Run `sudo scripts/setup-mac-runner.sh status`, or set the
+  repository variable `MAC_RUNNER` to `off` until the Mac is back.
+* *"command not found: ninja" (or cmake):* install them from an
+  administrator account with `brew install cmake ninja`. The runner's user
+  cannot run `brew`.
+* *`hdiutil attach` fails in the installer gate:* the runner has no login
+  session. Restart it with `sudo scripts/setup-mac-runner.sh stop` and
+  `start`; if it keeps failing, report it with the job log.
 
 **macOS: `fatal error: 'cstdint' file not found`** (or any other standard
 header). The Xcode or Command Line Tools installation is incomplete. This

@@ -39,6 +39,9 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
   to `claude/**` run Linux and Windows only; macOS runs on `main`, pull
   requests and by hand. Run it by hand (`gh workflow run ci.yml --ref
   <branch>`) once at the end of each phase, and batch fixes into few pushes.
+  The owner's Mac can run macOS jobs as a self-hosted runner
+  (`scripts/setup-mac-runner.sh`, BUILDING.md); the `macos-local` job runs
+  when the repository variable `MAC_RUNNER` is `on`.
 - Push only after a local build and test pass, then check CI. CI covers every
   platform, also builds on the newest Ubuntu (26.04: GCC 15, Qt 6.10) with
   warnings as errors, and checks:
