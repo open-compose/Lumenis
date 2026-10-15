@@ -473,6 +473,9 @@ int main(int argc, char** argv) {
                 sw->hide();
                 const auto* kind = lumenis::ui::SettingsSchema::builtIn().find(QStringLiteral("Timeline"));
                 lumenis::ui::SettingsDialog dialog(*kind, user.entries.at(user.activeIndex(QStringLiteral("Timeline"))), &window);
+                // A fixed size: its natural width follows the font, which
+                // differs between platforms.
+                dialog.setFixedSize(400, 580);
                 dialog.show();
                 QCoreApplication::processEvents();
                 ok = lumenis::ui::capture(&dialog, dir, QStringLiteral("timeline_settings")) && ok;
