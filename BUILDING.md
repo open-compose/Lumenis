@@ -247,6 +247,36 @@ repository is private, or restrict it to trusted branches before making the
 repository public: a pull request from a fork could otherwise run code on
 the Mac.
 
+### Trying the builds from the self-hosted runners
+
+A runner deletes its work folder after each job, and its user cannot write in
+your own folders. Run the setup script's `builds` command once on each
+machine, from your own account. After that, each successful CI run keeps its
+package in a builds folder, named with the date and commit. Only the newest
+five are kept.
+
+| Machine | Command | Package | Where |
+|---|---|---|---|
+| Mac | `sudo scripts/setup-mac-runner.sh builds` | `.dmg` | `/Users/Shared/Cutthulhu Builds`, linked as `Documents/Cutthulhu Builds` |
+| Windows (elevated PowerShell) | `scripts\setup-windows-runner.ps1 builds` | `.msi` | `Documents\Cutthulhu Builds` |
+| WSL Ubuntu | `sudo scripts/setup-wsl-runner.sh builds` | AppImage | `/srv/cutthulhu-builds`, linked as `~/Documents/Cutthulhu Builds` |
+
+From Windows, the AppImages are also under
+`\\wsl$\<distribution>\srv\cutthulhu-builds`. In WSL, run one with
+`./Cutthulhu-*.AppImage`; WSLg shows its window.
+
+The command restarts the runner so that it reads the new setting. A job that
+is running at that moment is cut short.
+
+Notes:
+
+* The self-hosted Windows job builds the `.msi` without WiX's validation
+  (`-sval`), and cannot install it. Installing it yourself is its first real
+  test, so report any installer error.
+* The `.dmg` is not notarized. A copy made on the Mac itself is not marked
+  as downloaded, so it should open directly. If macOS blocks it, open it from
+  Finder with Control-click > Open.
+
 ## Application icon
 
 The icon is a 3D scene, `packaging/icon/scene.frag`, rendered to

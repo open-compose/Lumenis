@@ -17,6 +17,7 @@
       scripts\setup-windows-runner.ps1 remove <removal-token>
       scripts\setup-windows-runner.ps1 keep-wsl <distribution>
       scripts\setup-windows-runner.ps1 unkeep-wsl <distribution>
+      scripts\setup-windows-runner.ps1 builds
 
     The token comes from GitHub: the repository's Settings > Actions > Runners >
     New self-hosted runner (install), or the runner's page there (remove). It is
@@ -25,6 +26,10 @@
     keep-wsl starts a WSL distribution when you log on to Windows and keeps it
     running, so the Linux runner inside it (scripts/setup-wsl-runner.sh) can
     take jobs. WSL only runs while you are logged on.
+
+    builds makes the folder "Cutthulhu Builds" in your Documents and lets the
+    runner's user write in it; CI then keeps each .msi it builds there (the
+    newest five). Run it from your own account (elevated).
 #>
 param(
     [Parameter(Position = 0)][string]$Command,
@@ -160,6 +165,25 @@ function Set-KeepWsl([string]$Distribution) {
     Write-Host "'$name' registered and started; it starts again each time you log on."
 }
 
+function Set-BuildsFolder {
+    $service = Get-RunnerService
+    if (-not $service) { throw 'No runner service: run install first.' }
+    # Your Documents (the elevated PowerShell runs as you). The runner's
+    # user gets Modify on this folder only; it can reach it without access
+    # to the folders above it.
+    $dir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Cutthulhu Builds'
+    New-Item -ItemType Directory -Force $dir | Out-Null
+    icacls $dir /grant "${RunnerUser}:(OI)(CI)M" /Q | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw "icacls failed on $dir" }
+    $envFile = Join-Path $RunnerDir '.env'
+    $lines = @(Get-Content $envFile -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch '^CUTTHULHU_BUILDS=' })
+    $lines += "CUTTHULHU_BUILDS=$dir"
+    $lines | Set-Content -Encoding ascii $envFile
+    # The runner reads .env when it starts (a job running now is cut short).
+    Restart-Service $service.Name
+    Write-Host "CI keeps each .msi in $dir (newest five)."
+}
+
 switch ($Command) {
     'install' { Assert-Admin; Install-Runner $Argument }
     'status' {
@@ -180,6 +204,7 @@ switch ($Command) {
     }
     'remove' { Assert-Admin; Remove-Runner $Argument }
     'keep-wsl' { Assert-Admin; Set-KeepWsl $Argument }
+    'builds' { Assert-Admin; Set-BuildsFolder }
     'unkeep-wsl' {
         Assert-Admin
         Unregister-ScheduledTask -Confirm:$false -TaskName "Keep WSL $Argument running"

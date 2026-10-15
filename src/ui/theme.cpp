@@ -69,6 +69,15 @@ public:
         }
         return QProxyStyle::pixelMetric(metric, option, widget);
     }
+
+    // Disabled text is drawn plainly everywhere: some platforms otherwise
+    // etch it with a light shadow, which looks different on each and shows
+    // in text-free screenshots.
+    int styleHint(StyleHint hint, const QStyleOption* option, const QWidget* widget,
+                  QStyleHintReturn* returnData) const override {
+        if (hint == SH_EtchDisabledText || hint == SH_DitherDisabledText) return 0;
+        return QProxyStyle::styleHint(hint, option, widget, returnData);
+    }
 };
 
 // Neutral greys so that colour judgements on pictures are not skewed by the

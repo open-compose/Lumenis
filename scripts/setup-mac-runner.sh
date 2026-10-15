@@ -12,6 +12,10 @@
 #   sudo scripts/setup-mac-runner.sh status
 #   sudo scripts/setup-mac-runner.sh stop | start
 #   sudo scripts/setup-mac-runner.sh remove <removal-token>
+#   sudo scripts/setup-mac-runner.sh builds
+#
+# builds: CI then keeps each .dmg it builds in /Users/Shared/Cutthulhu
+# Builds, linked from your Documents folder (the newest five).
 #
 # The token comes from GitHub: the repository's Settings > Actions > Runners >
 # New self-hosted runner (install), or the runner's page there (remove). It is
@@ -28,6 +32,8 @@ LABEL="com.open-compose.actions-runner"
 PLIST="/Library/LaunchDaemons/$LABEL.plist"
 HOME_DIR="/Users/$RUNNER_USER"
 RUNNER_DIR="$HOME_DIR/actions-runner"
+
+BUILDS_DIR="/Users/Shared/Cutthulhu Builds"
 
 die() { echo "error: $*" >&2; exit 1; }
 as_runner() { sudo -u "$RUNNER_USER" -H "$@"; }
@@ -137,6 +143,27 @@ start)
     launchctl bootstrap system "$PLIST"
     echo "Started."
     ;;
+builds)
+    # Run with sudo from your own account: the link goes in your Documents.
+    owner="${SUDO_USER:-}"
+    [ -n "$owner" ] && [ "$owner" != root ] || die "run it with sudo from your own account"
+    [ -x "$RUNNER_DIR/config.sh" ] || die "install the runner first"
+    # In /Users/Shared: the runner's user cannot write in your home folder.
+    mkdir -p "$BUILDS_DIR"
+    chown "$RUNNER_USER" "$BUILDS_DIR"
+    chmod 755 "$BUILDS_DIR"
+    link="/Users/$owner/Documents/Cutthulhu Builds"
+    if [ ! -e "$link" ]; then
+        ln -s "$BUILDS_DIR" "$link"
+        chown -h "$owner" "$link"
+    fi
+    as_runner bash -c "grep -v '^CUTTHULHU_BUILDS=' '$RUNNER_DIR/.env' > '$RUNNER_DIR/.env.new' || true
+        echo 'CUTTHULHU_BUILDS=$BUILDS_DIR' >> '$RUNNER_DIR/.env.new'
+        mv '$RUNNER_DIR/.env.new' '$RUNNER_DIR/.env'"
+    # The runner reads .env when it starts (a job running now is cut short).
+    launchctl kickstart -k "system/$LABEL"
+    echo "CI keeps each .dmg in $BUILDS_DIR (newest five), linked from $link."
+    ;;
 remove)
     token="${2:-}"
     [ -n "$token" ] || die "usage: sudo $0 remove <removal-token>"
@@ -147,7 +174,7 @@ remove)
     echo "To delete the user and its files too: sudo sysadminctl -deleteUser $RUNNER_USER"
     ;;
 *)
-    sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,29p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
     ;;
 esac

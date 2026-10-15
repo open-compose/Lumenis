@@ -51,6 +51,12 @@ private slots:
         QCOMPARE(QApplication::style()->pixelMetric(QStyle::PM_ScrollBarExtent), kScrollBarExtent);
     }
 
+    // Disabled text looks the same on every platform (no etched shadow).
+    void disabledTextIsPlain() {
+        QCOMPARE(QApplication::style()->styleHint(QStyle::SH_EtchDisabledText), 0);
+        QCOMPARE(QApplication::style()->styleHint(QStyle::SH_DitherDisabledText), 0);
+    }
+
     // Rendered from packaging/icon.svg by scripts/make-icons.py.
     void applicationIconIsBuiltIn() {
         const QImage icon(QStringLiteral(":/lumenis/ui/icons/app.png"));

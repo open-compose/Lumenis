@@ -11,6 +11,11 @@
 #   sudo scripts/setup-wsl-runner.sh status
 #   sudo scripts/setup-wsl-runner.sh stop | start
 #   sudo scripts/setup-wsl-runner.sh remove <removal-token>
+#   sudo scripts/setup-wsl-runner.sh builds
+#
+# builds: CI then keeps each AppImage it builds in /srv/cutthulhu-builds,
+# linked from your ~/Documents (the newest five). From Windows it is under
+# \\wsl$\<distribution>\srv\cutthulhu-builds.
 #
 # On WSL the distribution must keep running: on Windows, run
 #   scripts\setup-windows-runner.ps1 keep-wsl <distribution>
@@ -24,6 +29,8 @@ RUNNER_JOBS="${RUNNER_JOBS:-4}"
 REPO_URL="${REPO_URL:-https://github.com/open-compose/Lumenis}"
 HOME_DIR="/home/$RUNNER_USER"
 RUNNER_DIR="$HOME_DIR/actions-runner"
+
+BUILDS_DIR=/srv/cutthulhu-builds
 
 die() { echo "error: $*" >&2; exit 1; }
 as_runner() { sudo -u "$RUNNER_USER" -H "$@"; }
@@ -105,6 +112,26 @@ stop)
 start)
     (cd "$RUNNER_DIR" && ./svc.sh start)
     ;;
+builds)
+    # Run with sudo from your own account: the link goes in your Documents.
+    owner="${SUDO_USER:-}"
+    [ -n "$owner" ] && [ "$owner" != root ] || die "run it with sudo from your own account"
+    unit=$(service_name) || die "install the runner first"
+    # Outside your home folder, which the runner's user cannot enter.
+    mkdir -p "$BUILDS_DIR"
+    chown "$RUNNER_USER" "$BUILDS_DIR"
+    chmod 755 "$BUILDS_DIR"
+    home=$(getent passwd "$owner" | cut -d: -f6)
+    sudo -u "$owner" mkdir -p "$home/Documents"
+    link="$home/Documents/Cutthulhu Builds"
+    [ -e "$link" ] || sudo -u "$owner" ln -s "$BUILDS_DIR" "$link"
+    as_runner bash -c "grep -v '^CUTTHULHU_BUILDS=' '$RUNNER_DIR/.env' > '$RUNNER_DIR/.env.new' || true
+        echo 'CUTTHULHU_BUILDS=$BUILDS_DIR' >> '$RUNNER_DIR/.env.new'
+        mv '$RUNNER_DIR/.env.new' '$RUNNER_DIR/.env'"
+    # The runner reads .env when it starts (a job running now is cut short).
+    systemctl restart "$unit"
+    echo "CI keeps each AppImage in $BUILDS_DIR (newest five), linked from $link."
+    ;;
 remove)
     token="${2:-}"
     [ -n "$token" ] || die "usage: sudo $0 remove <removal-token>"
@@ -114,7 +141,7 @@ remove)
     echo "To delete the user and its files too: sudo userdel -r $RUNNER_USER"
     ;;
 *)
-    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
     ;;
 esac

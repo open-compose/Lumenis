@@ -285,6 +285,10 @@ jobs:
           "$app" --version
           "$app" --smoke-test
 
+      - name: Keep the .dmg for the owner to try
+        # In the folder set up by "setup-mac-runner.sh builds" (BUILDING.md).
+        run: scripts/keep-build.sh build/ci-macos/*.dmg
+
   windows-local:
     # The owner's Windows PC as a self-hosted runner (scripts/setup-windows-
     # runner.ps1): a service under its own standard user, with Qt in C:\Qt
@@ -389,6 +393,21 @@ jobs:
           Write-Host $out
           if ($LASTEXITCODE -ne 0 -or $out -notmatch 'smoke-test: ok') { exit 1 }
 
+      - name: Keep the .msi for the owner to try
+        # In the folder set up by "setup-windows-runner.ps1 builds"
+        # (BUILDING.md), named with the date and commit; the newest five.
+        run: |
+          $dir = $env:CUTTHULHU_BUILDS
+          if (-not $dir) { Write-Host 'CUTTHULHU_BUILDS is not set; nothing kept (see BUILDING.md)'; exit 0 }
+          if (-not (Test-Path $dir)) { Write-Host "::warning::$dir is missing; run the setup script's builds command"; exit 0 }
+          $msi = Get-ChildItem build\ci\*.msi | Select-Object -First 1
+          $sha = (git rev-parse --short HEAD).Trim()
+          $name = '{0}_{1}_{2}.msi' -f $msi.BaseName, (Get-Date -Format 'yyyy-MM-dd_HHmm'), $sha
+          Copy-Item $msi.FullName (Join-Path $dir $name)
+          Write-Host "kept $(Join-Path $dir $name)"
+          Get-ChildItem (Join-Path $dir '*.msi') | Sort-Object LastWriteTime -Descending |
+            Select-Object -Skip 5 | Remove-Item -Force
+
   linux-local:
     # Ubuntu in WSL on the owner's PC (scripts/setup-wsl-runner.sh), one
     # runner per version, labelled ubuntu-<version>. The repository variable
@@ -456,6 +475,10 @@ jobs:
 
       - name: AppImage on Wayland
         run: scripts/check-appimage-wayland.sh build/ci/*.AppImage
+
+      - name: Keep the AppImage for the owner to try
+        # In the folder set up by "setup-wsl-runner.sh builds" (BUILDING.md).
+        run: scripts/keep-build.sh build/ci/*.AppImage
 
   windows:
     name: Windows x64
