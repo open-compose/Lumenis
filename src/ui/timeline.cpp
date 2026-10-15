@@ -1,5 +1,6 @@
 #include "lumenis/ui/timeline.h"
 
+#include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/marker_dialogs.h"
 #include "lumenis/ui/theme.h"
 
@@ -1218,6 +1219,8 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
         b->setIconSize(QSize(16, 16));
         b->setToolTip(tip);
         b->setCheckable(checkable);
+        // The same picture on Command Palette and Tool Palette buttons.
+        registerCommandIcon(QString::fromLatin1(id), picture(pic));
         top->addWidget(b);
         const QString commandId = QString::fromLatin1(id);
         connect(b, &QToolButton::clicked, this, [this, commandId] { perform(commandId); });

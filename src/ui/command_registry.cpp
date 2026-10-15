@@ -71,6 +71,7 @@ bool CommandRegistry::load(const QByteArray& json, QString* error) {
         action->setEnabled(false);
         const QString id = spec.id;
         connect(action, &QAction::triggered, this, [this, id] {
+            if (capture_ && capture_(id)) return;
             if (const Entry* e = find(id); e && e->handler) {
                 e->handler();
             }
@@ -106,6 +107,16 @@ QStringList CommandRegistry::ids() const {
 QAction* CommandRegistry::action(const QString& id) const {
     const Entry* e = find(id);
     return e ? e->action : nullptr;
+}
+
+QString CommandRegistry::text(const QString& id) const {
+    const Entry* e = find(id);
+    if (!e) return {};
+    QString t = e->spec.text;
+    t.replace(QStringLiteral("&&"), QStringLiteral("\x01"));
+    t.remove(QLatin1Char('&'));
+    t.replace(QStringLiteral("\x01"), QStringLiteral("&"));
+    return t;
 }
 
 void CommandRegistry::setHandler(const QString& id, std::function<void()> handler) {

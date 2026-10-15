@@ -2,6 +2,7 @@
 
 #include "lumenis/core/timecode.h"
 #include "lumenis/ui/bin_dock.h"
+#include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/theme.h"
 
 #include <QApplication>
@@ -9,6 +10,8 @@
 #include <QHash>
 #include <QDragEnterEvent>
 #include <QHBoxLayout>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMenu>
@@ -485,6 +488,25 @@ Composer::Composer(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("composer"));
     setFocusPolicy(Qt::StrongFocus);
 
+    // The buttons' default commands; their pictures serve every palette
+    // that shows these commands.
+    for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
+        for (const QList<ButtonSpec>& row : buttonRows(m)) {
+            QStringList ids;
+            for (const ButtonSpec& spec : row) {
+                const QString id = QString::fromLatin1(spec.command);
+                ids << id;
+                if (!id.isEmpty()) {
+                    registerCommandIcon(id, glyph(spec.glyph, spec.glyph == Glyph::SpliceIn    ? QColor(kSplice)
+                                                              : spec.glyph == Glyph::Overwrite ? QColor(kOverwrite)
+                                                              : spec.glyph == Glyph::AddMarker ? QColor(kMarker)
+                                                                                               : QColor(0xc8, 0xc8, 0xc8)));
+                }
+            }
+            layout_[m == MonitorId::Source ? 0 : 1] << ids;
+        }
+    }
+
     center_ = new QLabel(this);
     center_->setObjectName(QStringLiteral("centerDuration"));
     center_->setAlignment(Qt::AlignCenter);
@@ -596,30 +618,25 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
         auto* h = new QHBoxLayout(rowWidget);
         h->setContentsMargins(0, 0, 0, 0);
         h->setSpacing(0);
+        const int r = static_cast<int>(c->rows.size());
         for (int i = 0; i < row.size(); ++i) {
-            const ButtonSpec& spec = row.at(i);
-            auto* b = new QToolButton(rowWidget);
-            b->setAutoRaise(true);
+            // A user-selectable button (p.96): the Command Palette maps
+            // other commands, or Blank, onto it.
+            auto* b = new MappableButton(rowWidget);
             b->setFixedSize(kButtonWidth, kToolButtonHeight);
-            b->setIcon(glyph(spec.glyph, spec.glyph == Glyph::SpliceIn    ? QColor(kSplice)
-                                         : spec.glyph == Glyph::Overwrite ? QColor(kOverwrite)
-                                         : spec.glyph == Glyph::AddMarker ? QColor(kMarker)
-                                                                          : QColor(0xc8, 0xc8, 0xc8)));
             b->setIconSize(QSize(16, 16));
-            const QString id = QString::fromLatin1(spec.command);
-            if (id.isEmpty()) {
-                b->setObjectName(QStringLiteral("blankButton"));
-                b->setEnabled(false);
-            } else {
-                b->setObjectName(id);
-                c->buttons.insert(id, b);
-                if (id == QLatin1String("other.gang")) b->setCheckable(true);
-                b->setEnabled(!later(id) && !(id == QLatin1String("other.gang") && !source));
-                connect(b, &QToolButton::clicked, this, [this, monitor, id] {
-                    setActiveMonitor(monitor);
-                    if (!perform(id)) emit commandRequested(id);
-                });
-            }
+            b->setProperty("slot", QPoint(r, i));
+            setupButton(monitor, b, layout_[source ? 0 : 1].value(r).value(i));
+            connect(b, &MappableButton::commandClicked, this, [this, monitor](const QString& id) {
+                setActiveMonitor(monitor);
+                if (!perform(id)) emit commandRequested(id);
+            });
+            connect(b, &MappableButton::commandMapped, this, [this, monitor, b, r, i](const QString& id) {
+                layout_[monitor == MonitorId::Source ? 0 : 1][r][i] = id;
+                setupButton(monitor, b, id);
+                refresh();
+                emit buttonsChanged();
+            });
             if (i > 0) h->addStretch(1);
             h->addWidget(b);
         }
@@ -649,6 +666,76 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
     v->addWidget(c->trimCounter);
     v->addWidget(c->controls);
     return c->widget;
+}
+
+void Composer::setupButton(MonitorId monitor, MappableButton* b, const QString& id) {
+    Column& c = column(monitor);
+    for (auto it = c.buttons.begin(); it != c.buttons.end();) {
+        it = it.value() == b ? c.buttons.erase(it) : std::next(it);
+    }
+    b->setCommand(id);
+    b->setCheckable(id == QLatin1String("other.gang"));
+    if (id.isEmpty()) {
+        // Blank (p.97): does nothing, but takes mapped commands.
+        b->setObjectName(QStringLiteral("blankButton"));
+        b->setEnabled(true);
+        return;
+    }
+    b->setObjectName(id);
+    if (!c.buttons.contains(id)) c.buttons.insert(id, b);
+    // The Record monitor is always ganged (p.495).
+    b->setEnabled(!later(id) && !(id == QLatin1String("other.gang") && monitor == MonitorId::Record));
+}
+
+QJsonObject Composer::buttonLayout() const {
+    QJsonObject out;
+    for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
+        QJsonArray rows;
+        for (const QStringList& row : layout_[m == MonitorId::Source ? 0 : 1]) rows.append(QJsonArray::fromStringList(row));
+        out.insert(m == MonitorId::Source ? QStringLiteral("source") : QStringLiteral("record"), rows);
+    }
+    return out;
+}
+
+QJsonObject Composer::defaultButtonLayout() {
+    QJsonObject out;
+    for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
+        QJsonArray rows;
+        for (const QList<ButtonSpec>& row : buttonRows(m)) {
+            QJsonArray ids;
+            for (const ButtonSpec& spec : row) ids.append(QString::fromLatin1(spec.command));
+            rows.append(ids);
+        }
+        out.insert(m == MonitorId::Source ? QStringLiteral("source") : QStringLiteral("record"), rows);
+    }
+    return out;
+}
+
+void Composer::setButtonLayout(const QJsonObject& layout) {
+    // Every slot keeps its place; slots the layout does not name have their
+    // default command.
+    const QJsonObject defaults = defaultButtonLayout();
+    for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
+        const QString key = m == MonitorId::Source ? QStringLiteral("source") : QStringLiteral("record");
+        const QJsonArray given = layout.value(key).toArray();
+        const QJsonArray fallback = defaults.value(key).toArray();
+        QList<QStringList>& rows = layout_[m == MonitorId::Source ? 0 : 1];
+        rows.clear();
+        for (int r = 0; r < fallback.size(); ++r) {
+            QStringList row;
+            const QJsonArray g = given.at(r).toArray();
+            const QJsonArray f = fallback.at(r).toArray();
+            for (int i = 0; i < f.size(); ++i) row << (g.at(i).isString() ? g.at(i).toString() : f.at(i).toString());
+            rows << row;
+        }
+        if (!columns_[m == MonitorId::Source ? 0 : 1]) continue;
+        for (MappableButton* b : column(m).controls->findChildren<MappableButton*>()) {
+            const QPoint slot = b->property("slot").toPoint();
+            const QString id = rows.value(slot.x()).value(slot.y());
+            if (id != b->command()) setupButton(m, b, id);
+        }
+    }
+    refresh();
 }
 
 void Composer::setDisplay(const Display& display) {

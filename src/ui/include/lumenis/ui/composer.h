@@ -12,6 +12,7 @@
 #include <functional>
 #include <optional>
 
+class QJsonObject;
 class QLabel;
 class QMenu;
 class QTimer;
@@ -20,6 +21,7 @@ class QToolButton;
 namespace lumenis::ui {
 
 class Composer;
+class MappableButton;
 
 // The monitors of the Composer window (guide p.378-381).
 enum class MonitorId { Source, Record };
@@ -164,6 +166,14 @@ public:
     // The markers of a monitor's clip that are shown.
     QList<model::Marker> shownMarkers(MonitorId monitor) const;
 
+    // The commands of the buttons under the monitors, slot by slot:
+    // {"source": [[row 1], [row 2]], "record": [...]}; "" is Blank. The
+    // Command Palette maps others onto them (p.97); they are saved with the
+    // Composer settings.
+    QJsonObject buttonLayout() const;
+    void setButtonLayout(const QJsonObject& layout); // {} for the defaults
+    static QJsonObject defaultButtonLayout();
+
     // Show Source/Record colors in Composer (Interface settings, p.383).
     void setSourceRecordColors(bool on);
     bool sourceRecordColors() const { return colors_; }
@@ -211,6 +221,8 @@ signals:
     // A marker was double-clicked (p.416).
     void markerEditRequested(MonitorId monitor, const QString& markerId);
     void singleMonitorChanged(bool single);
+    // A command was mapped onto one of the buttons.
+    void buttonsChanged();
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -220,6 +232,7 @@ private:
     struct Column;
     Column& column(MonitorId monitor) const;
     QWidget* buildColumn(MonitorId monitor);
+    void setupButton(MonitorId monitor, MappableButton* button, const QString& commandId);
     void refresh();
     void tick();
 
@@ -242,6 +255,7 @@ private:
     QWidget* trimBar_ = nullptr;
     TrimDisplay trim_;
     Display display_;
+    QList<QStringList> layout_[2]; // Source, Record
     Column* columns_[2] = {nullptr, nullptr};
     ItemResolver resolver_;
     KeyResolver keys_;

@@ -20,10 +20,14 @@ class ProviderRegistry;
 namespace lumenis::ui {
 
 class BinContainer;
+class CalculatorWindow;
+class CommandPalette;
+class ConsoleWindow;
 class CommandRegistry;
 class Composer;
 class KeyboardMap;
 class MarkersWindow;
+class Panel;
 class PanelManager;
 class Settings;
 class SettingsList;
@@ -31,6 +35,7 @@ class SettingsWindow;
 class SiteSettingsWindow;
 class ToolTipFilter;
 class Timeline;
+class ToolPalette;
 class WorkspaceBar;
 class WorkspaceManager;
 
@@ -62,6 +67,14 @@ public:
     // File > Settings (p.1136) and Windows > Site Settings (p.1141).
     SettingsWindow* showSettings();
     SiteSettingsWindow* showSiteSettings();
+    // Tools (ch.5) open as floating panels, which can be docked and tabbed
+    // like other panels (p.94): "CommandPalette", "ToolPalette",
+    // "Calculator", "Console".
+    Panel* showTool(const QString& panelId);
+    CommandPalette& commandPalette() const { return *commandPalette_; }
+    ToolPalette& toolPalette() const { return *toolPalette_; }
+    CalculatorWindow& calculator() const { return *calculator_; }
+    ConsoleWindow& console() const { return *console_; }
 
     // The layout of a new user (p.74): Bin Container top left, Composer to
     // its right, Timeline along the bottom.
@@ -98,6 +111,10 @@ private:
     void restoreCurrentToDefault();
     void showAbout();
     void applySettings();
+    void createTools();
+    // File > Get Position Info (p.101): the Timeline at the position, in the
+    // Console.
+    void positionInfo();
     SettingsList* activeSettingsList() const;
 
     CommandRegistry& commands_;
@@ -108,6 +125,10 @@ private:
     Composer* composer_ = nullptr;
     Timeline* timeline_ = nullptr;
     MarkersWindow* markersWindow_ = nullptr;
+    CommandPalette* commandPalette_ = nullptr;
+    ToolPalette* toolPalette_ = nullptr;
+    CalculatorWindow* calculator_ = nullptr;
+    ConsoleWindow* console_ = nullptr;
     Settings* settings_ = nullptr;
     SettingsWindow* settingsWindow_ = nullptr;
     SiteSettingsWindow* siteSettingsWindow_ = nullptr;

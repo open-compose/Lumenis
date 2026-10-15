@@ -428,6 +428,12 @@ bool SettingsList::openEntry(int entry) {
     const SettingEntry e = file().entries.at(entry);
     const SettingKind* kind = SettingsSchema::builtIn().find(e.kind);
     if (!kind) return false;
+    if (!kind->opens.isEmpty()) {
+        // Its version becomes the active one, then the tool opens (p.392).
+        if (!e.active) setActive(entry);
+        emit toolRequested(kind->opens);
+        return false;
+    }
     SettingsDialog dialog(*kind, e, this);
     dialog.setInfo(QStringLiteral("projectFormat"), projectFormat);
     if (dialogHook) dialogHook(dialog);
@@ -593,6 +599,9 @@ SettingsWindow::SettingsWindow(Settings& settings, QWidget* parent) : QWidget(pa
         fillProfiles();
     });
     connect(&settings_, &Settings::changed, this, &SettingsWindow::fillProfiles);
+    for (SettingsList* l : {project_, user_, site_}) {
+        connect(l, &SettingsList::toolRequested, this, &SettingsWindow::toolRequested);
+    }
     fillProfiles();
     setProject(std::nullopt);
 }

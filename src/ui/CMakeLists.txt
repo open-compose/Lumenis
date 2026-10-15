@@ -4,9 +4,11 @@ add_library(lumenis_ui STATIC
     bin_dock.cpp
     platform_check.cpp
     bin_view.cpp
+    button_mapping.cpp
     composer.cpp
     capture.cpp
     command_registry.cpp
+    command_palette.cpp
     keyboard_map.cpp
     marker_dialogs.cpp
     main_window.cpp
@@ -18,6 +20,7 @@ add_library(lumenis_ui STATIC
     settings_window.cpp
     theme.cpp
     timeline.cpp
+    tool_windows.cpp
     workspace.cpp
     workspace_bar.cpp
     include/lumenis/ui/bin_container.h
@@ -25,9 +28,11 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/bin_dock.h
     include/lumenis/ui/platform_check.h
     include/lumenis/ui/bin_view.h
+    include/lumenis/ui/button_mapping.h
     include/lumenis/ui/composer.h
     include/lumenis/ui/capture.h
     include/lumenis/ui/command_registry.h
+    include/lumenis/ui/command_palette.h
     include/lumenis/ui/keyboard_map.h
     include/lumenis/ui/marker_dialogs.h
     include/lumenis/ui/main_window.h
@@ -38,6 +43,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/settings_window.h
     include/lumenis/ui/theme.h
     include/lumenis/ui/timeline.h
+    include/lumenis/ui/tool_windows.h
     include/lumenis/ui/workspace.h
     include/lumenis/ui/workspace_bar.h
 )
@@ -48,6 +54,7 @@ qt_add_resources(lumenis_ui lumenis_ui_resources
     BASE resources
     FILES
         resources/commands.json
+        resources/command_palette.json
         resources/keyboard.json
         resources/menus.json
         resources/settings.json

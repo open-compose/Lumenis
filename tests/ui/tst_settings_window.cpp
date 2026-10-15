@@ -81,15 +81,18 @@ private slots:
         const SettingsSchema& schema = SettingsSchema::builtIn();
         QCOMPARE(schema.kindNames(SettingsScope::Project), QStringList{QStringLiteral("General")});
         QCOMPARE(schema.kindNames(SettingsScope::User),
-                 (QStringList{"Bin", "Composer", "Interface", "Timeline", "Trim"}));
+                 (QStringList{"Bin", "Composer", "Interface", "Timeline", "Tool Palette", "Trim"}));
         QSet<QString> keys;
         for (const SettingKind& k : schema.kinds()) {
             QVERIFY2(k.page >= 1136, qPrintable(k.kind));
-            QVERIFY(!k.tabs.isEmpty());
+            // Without tabs a setting opens a tool instead (the Tool Palette).
+            QVERIFY2(!k.tabs.isEmpty() || !k.opens.isEmpty(), qPrintable(k.kind));
             for (const SettingTab& t : k.tabs) {
                 for (const SettingOption& o : t.options) {
                     const QString where = k.kind + QLatin1Char('.') + o.key;
-                    QVERIFY2(o.page >= k.page && o.page <= k.page + 10, qPrintable(where));
+                    // Its setting's pages, or another chapter (Show Labels in
+                    // Tool Palette is on p.392).
+                    QVERIFY2((o.page >= k.page && o.page <= k.page + 10) || o.page == 392, qPrintable(where));
                     QVERIFY2(!keys.contains(where), qPrintable(where));
                     keys << where;
                     QVERIFY2(QStringList({"bool", "int", "choice", "timecode", "text", "info"}).contains(o.type),
@@ -212,7 +215,7 @@ private slots:
         // Picture on p.1136: one row per setting; versions under it.
         Settings settings;
         SettingsList list(settings, SettingsScope::User);
-        QCOMPARE(list.topLevelItemCount(), 5);
+        QCOMPARE(list.topLevelItemCount(), 6);
         QCOMPARE(list.topLevelItem(0)->text(SettingsList::kSettingColumn), QStringLiteral("Bin"));
         const int timeline = settings.file(SettingsScope::User).activeIndex("Timeline");
         list.selectEntries({timeline});

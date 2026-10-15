@@ -21,3 +21,4 @@ lumenis_add_test(tst_platform_check SOURCES tst_platform_check.cpp LIBS ${ui_tes
 lumenis_add_test(tst_composer SOURCES tst_composer.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_timeline SOURCES tst_timeline.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_settings_window SOURCES tst_settings_window.cpp LIBS ${ui_test_libs})
+lumenis_add_test(tst_tools SOURCES tst_tools.cpp LIBS ${ui_test_libs})

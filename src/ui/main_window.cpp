@@ -4,6 +4,8 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
+#include "lumenis/ui/button_mapping.h"
+#include "lumenis/ui/command_palette.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/keyboard_map.h"
@@ -14,6 +16,7 @@
 #include "lumenis/ui/settings_window.h"
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/tool_windows.h"
 #include "lumenis/ui/workspace.h"
 #include "lumenis/ui/workspace_bar.h"
 
@@ -96,6 +99,7 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     area->installEventFilter(this);
 
     createPanels();
+    createTools();
     settings_ = new Settings(this);
     toolTips_ = new ToolTipFilter(this);
     qApp->installEventFilter(toolTips_);
@@ -111,7 +115,11 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     syncWorkspaceUi();
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow() {
+    // The mapper outlives this window's commands.
+    if (ButtonMapper::instance().registry() == &commands_) ButtonMapper::instance().setRegistry(nullptr);
+    commands_.setCapture({});
+}
 
 QJsonObject MainWindow::defaultLayout() {
     // Proportions measured from the picture on p.74.
@@ -368,6 +376,9 @@ void MainWindow::closeEvent(QCloseEvent* event) {
 SettingsWindow* MainWindow::showSettings() {
     if (!settingsWindow_) {
         settingsWindow_ = new SettingsWindow(*settings_, this);
+        connect(settingsWindow_, &SettingsWindow::toolRequested, this, [this](const QString& tool) {
+            if (tool == QLatin1String("toolPalette")) showTool(QStringLiteral("ToolPalette"));
+        });
         // Its own window: give it the commands so Edit's shortcuts work.
         for (const QString& id : commands_.ids()) settingsWindow_->addAction(commands_.action(id));
     }
@@ -396,6 +407,92 @@ SettingsList* MainWindow::activeSettingsList() const {
     return nullptr;
 }
 
+void MainWindow::createTools() {
+    ButtonMapper::instance().setRegistry(&commands_);
+    // Menu to Button (p.98): with a target button picked, the next menu
+    // command is mapped onto it instead of running.
+    commands_.setCapture([](const QString& id) {
+        ButtonMapper& mapper = ButtonMapper::instance();
+        if (mapper.mode() != ButtonMapper::Mode::MenuToButton || !mapper.target()) return false;
+        return mapper.mapMenuCommand(id);
+    });
+    commandPalette_ = new CommandPalette(commands_);
+    panels_->addPanel(new Panel(QStringLiteral("CommandPalette"), tr("Command Palette"), commandPalette_));
+    toolPalette_ = new ToolPalette;
+    panels_->addPanel(new Panel(QStringLiteral("ToolPalette"), tr("Tool Palette"), toolPalette_));
+    calculator_ = new CalculatorWindow;
+    panels_->addPanel(new Panel(QStringLiteral("Calculator"), tr("Calculator"), calculator_));
+    console_ = new ConsoleWindow;
+    panels_->addPanel(new Panel(QStringLiteral("Console"), tr("Console"), console_));
+
+    connect(toolPalette_, &ToolPalette::commandClicked, this, [this](const QString& id) {
+        if (QAction* a = commands_.action(id); a && a->isEnabled()) a->trigger();
+    });
+    // Mapped buttons are saved in the settings: the Composer's with the
+    // Composer settings, the Tool palette's in its own (p.97, p.1221).
+    connect(toolPalette_, &ToolPalette::commandsChanged, this, [this] {
+        settings_->setValue(QStringLiteral("Tool Palette"), QStringLiteral("buttons"),
+                            QJsonArray::fromStringList(toolPalette_->commands()));
+    });
+    connect(composer_, &Composer::buttonsChanged, this, [this] {
+        settings_->setValue(QStringLiteral("Composer"), QStringLiteral("buttons"), composer_->buttonLayout());
+    });
+}
+
+Panel* MainWindow::showTool(const QString& panelId) {
+    Panel* panel = panels_->panel(panelId);
+    if (!panel) return nullptr;
+    if (panels_->isOpen(panel)) {
+        panels_->showPanel(panel);
+        return panel;
+    }
+    // Their first sizes are ours; the guide gives none.
+    QSize size(260, 220);
+    if (panelId == QLatin1String("CommandPalette")) size = QSize(820, 280);
+    if (panelId == QLatin1String("Calculator")) size = QSize(230, 260);
+    if (panelId == QLatin1String("Console")) size = QSize(560, 320);
+    const QPoint at = mapToGlobal(QPoint(80, 90));
+    panels_->floatPanel(panel, QRect(at, size));
+    panels_->activate(panel);
+    return panel;
+}
+
+void MainWindow::positionInfo() {
+    // The sequence in the Record monitor at its position (p.101).
+    const model::MonitorState& record = composer_->state(MonitorId::Record);
+    ConsoleLog& log = ConsoleLog::instance();
+    if (record.isEmpty() || record.current()->item.kind != model::BinItemKind::Sequence) {
+        log.append(tr("Get Position Info: no sequence in the Record monitor."));
+    } else {
+        const model::BinItem& item = record.current()->item;
+        const model::Sequence seq = model::Sequence::fromItem(item);
+        const std::int64_t at = record.position();
+        log.append(tr("Position Info: %1 at %2 (frame %3)")
+                       .arg(item.name, record.tracking(model::TrackingFormat::Master))
+                       .arg(at));
+        for (const QString& name : seq.trackNames()) {
+            const model::Track* t = seq.track(name);
+            std::int64_t start = 0;
+            const int i = t ? t->segmentAt(at, &start) : -1;
+            if (i < 0) {
+                log.append(QStringLiteral("  %1: -").arg(name));
+                continue;
+            }
+            const model::Segment& seg = t->segments.at(i);
+            if (seg.isFiller()) {
+                log.append(QStringLiteral("  %1: %2").arg(name, tr("Filler")));
+            } else {
+                log.append(tr("  %1: %2, clip frame %3, segment %4 to %5")
+                               .arg(name, seg.name)
+                               .arg(seg.sourceIn + at - start)
+                               .arg(start)
+                               .arg(start + seg.length - 1));
+            }
+        }
+    }
+    showTool(QStringLiteral("Console"));
+}
+
 void MainWindow::applySettings() {
     const Settings& s = *settings_;
     // Bin settings (p.1152-1154).
@@ -416,6 +513,14 @@ void MainWindow::applySettings() {
     d.markers = s.flag(composer, QStringLiteral("showComposerMarkers"));
     d.spannedMarkers = s.flag(composer, QStringLiteral("showSpannedMarkers"));
     composer_->setDisplay(d);
+    // Buttons mapped with the Command Palette (p.97).
+    composer_->setButtonLayout(s.value(composer, QStringLiteral("buttons")).toObject());
+    QStringList tools;
+    for (const QJsonValue& v : s.value(QStringLiteral("Tool Palette"), QStringLiteral("buttons")).toArray()) {
+        tools << v.toString();
+    }
+    toolPalette_->setCommands(tools);
+    toolPalette_->setShowLabels(s.flag(QStringLiteral("Interface"), QStringLiteral("toolPaletteLabels")));
 
     // Timeline settings (p.1218-1220), with the Composer's Edit and Move
     // tabs and the Trim settings (p.1223), which the Timeline carries out.
@@ -465,6 +570,12 @@ void MainWindow::installPanelHandlers() {
     auto handle = [this](const char* id, std::function<void()> handler) {
         commands_.setHandler(QString::fromLatin1(id), std::move(handler));
     };
+    // Tools (ch.5).
+    handle("tools.command_palette", [this] { showTool(QStringLiteral("CommandPalette")); });
+    handle("tools.calculator", [this] { showTool(QStringLiteral("Calculator")); });
+    handle("tools.console", [this] { showTool(QStringLiteral("Console")); });
+    // The Tool Palette button (Other tab, p.392).
+    handle("other.tool_palette", [this] { showTool(QStringLiteral("ToolPalette")); });
     handle("windows.float_all_panels", [this] { panels_->floatAll(); });
     handle("windows.float_active_panel", [this] { panels_->floatActive(); });
     handle("windows.add_blank_panel", [this] { panels_->addBlankPanel(); });
@@ -487,6 +598,7 @@ void MainWindow::installPanelHandlers() {
         if (Panel* p = panels_->activePanel()) panels_->closePanel(p);
     });
     handle("tools.timeline", [this] { panels_->showPanel(panels_->panel(QStringLiteral("Timeline"))); });
+    handle("file.get_position_info", [this] { positionInfo(); });
     // Tools > Markers (p.420), one window, kept.
     handle("tools.markers", [this] {
         if (!markersWindow_) markersWindow_ = new MarkersWindow(*timeline_, this);

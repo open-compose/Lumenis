@@ -1,0 +1,50 @@
+{
+  "comment": "The Command Palette's tabs and their buttons, column by column (guide p.96-100). The tab names are those in the picture on p.96. The Move and Edit tabs follow the pictures on p.96 and p.100; the other tabs' buttons are our own grouping. \"\" is the Blank button (p.97). A button with \"platforms\" is shown only there (the modifier key buttons, p.97). Tabs whose features come later are empty.",
+  "tabs": [
+    {"name": "Move", "page": 96, "columns": [
+      ["move.step_forward_one_frame", "move.step_backward_one_frame", "move.step_forward_10_frames",
+       "move.step_backward_10_frames", "move.step_forward_one_field", "move.step_backward_one_field"],
+      ["edit.go_to_in_point", "edit.go_to_out_point", "move.go_to_audio_mark_in", "move.go_to_audio_mark_out",
+       "move.go_to_start", "move.go_to_end"],
+      ["move.go_to_previous_trim", "move.go_to_next_trim", "move.go_to_previous_event", "move.go_to_next_event",
+       "move.go_to_previous_marker", "move.go_to_next_marker"]
+    ]},
+    {"name": "Play", "page": 96, "columns": [
+      ["play.play", "play.play_reverse", "play.pause", "play.play_forward"],
+      ["play.play_in_to_out", "play.mouse_jog", "play.mouse_shuttle"]
+    ]},
+    {"name": "Edit", "page": 100, "columns": [
+      ["edit.mark_in", "edit.mark_out", "edit.mark_clip", "edit.audio_mark_in", "edit.audio_mark_out"],
+      ["edit.clear_in_mark", "edit.clear_out_mark", "edit.clear_both_marks", "edit.add_edit", "edit.fit_to_fill"],
+      ["edit.splice_in", "edit.overwrite", "edit.replace_edit", "edit.lift", "edit.extract"],
+      ["edit.to_the_left", "edit.to_the_right", "edit.select_in_out", "edit.copy_to_clipboard", "edit.clipboard_contents"],
+      ["edit.top", "edit.tail", "edit.move_clip_up", "edit.move_clip_down", "edit.sync_lock_all_tracks"],
+      ["smart.lift_overwrite", "smart.extract_splice_in", "edit.make_subclip", "edit.mark_markers"]
+    ]},
+    {"name": "Trim", "page": 96, "columns": [
+      ["trim.trim_mode", "trim.cycle_trim_sides", "trim.extend", "trim.slip_left", "trim.slip_right"],
+      ["trim.trim_backward_10_frames", "trim.trim_backward_1_frame", "trim.trim_forward_1_frame", "trim.trim_forward_10_frames"],
+      ["trim.select_nearest_transition", "trim.select_previous_transition", "trim.select_next_transition"]
+    ]},
+    {"name": "FX", "page": 96, "columns": []},
+    {"name": "3D", "page": 96, "columns": []},
+    {"name": "CC", "page": 96, "columns": []},
+    {"name": "MCam", "page": 96, "columns": []},
+    {"name": "Tracks", "page": 96, "columns": []},
+    {"name": "Smart Tools", "page": 96, "columns": [
+      ["smart.lift_overwrite", "smart.extract_splice_in"],
+      ["smart.ripple_trim", "smart.overwrite_trim"]
+    ]},
+    {"name": "Other", "page": 97, "columns": [
+      ["", "other.tool_palette", "other.gang", "other.match_frame"],
+      [{"id": "other.add_alt_key", "platforms": ["windows", "linux"]},
+       {"id": "other.add_control_key", "platforms": ["macos"]},
+       {"id": "other.add_option_key", "platforms": ["macos"]}]
+    ]},
+    {"name": "More", "page": 96, "columns": [
+      ["more.add_marker", "edit.toggle_source_record"]
+    ]},
+    {"name": "Workspaces", "page": 96, "columns": []},
+    {"name": "Plug-ins", "page": 96, "columns": []}
+  ]
+}

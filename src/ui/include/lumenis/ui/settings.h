@@ -40,6 +40,7 @@ struct SettingKind {
     QString kind;
     model::SettingsScope scope = model::SettingsScope::User;
     int page = 0;
+    QString opens; // a tool opened instead of a dialog
     QList<SettingTab> tabs;
 
     const SettingOption* option(const QString& key) const;

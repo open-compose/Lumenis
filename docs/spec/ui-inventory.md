@@ -267,6 +267,100 @@ Not yet built:
 * **Menu to Button.** A mapped menu command shows its initials on the button,
   for example *Composer > Load Filler* shows "LF" (p.98–99). Bin fast menu
   commands can also be mapped to keys.
+* **Tabs in the picture (p.96):** Move, Play, Edit, Trim, FX, 3D, CC, MCam,
+  Tracks, Smart Tools, Other, More, Workspaces, Plug-ins. The text lists
+  fewer; we follow the picture.
+* **Move tab (picture, p.96),** three columns:
+  * Step Forward/Backward 1 Frame, 10 Frames and One Field;
+  * Go to IN, Go to OUT, Go to Audio Mark IN/OUT, Go to Start, Go to End;
+  * Go to Previous/Next Trim, Event and Marker.
+* **Edit tab (picture, p.100):** Mark IN, Mark OUT, Mark Clip, Audio Mark
+  IN/OUT; Clear IN Mark, Clear OUT Mark, Clear Both Marks, Add Edit, Fit To
+  Fill; Splice-in, Overwrite, Replace Edit, Lift, Extract; To the Left, To
+  the Right, Select In/Out, Copy to Clipboard, Clipboard Contents; Top,
+  Tail, Move Clip Up, Move Clip Down, Sync Lock All Tracks; Segment Mode
+  (both), Make Subclip, Mark Markers.
+* **Quick Find (p.99–100):** a field at the top right. As you type, matching
+  buttons are listed under it and only the tabs with matches stay open.
+* **Activating (p.99):** in Active Palette mode, clicking a button performs
+  its command.
+* **Where mappings are saved (p.97):** see above. The Tool palette's changes
+  are saved in the Interface settings (p.97). The Settings list also has a
+  **Tool Palette** setting that opens the palette (p.392, p.1221).
+* **Tool palette (p.392).** It has extra buttons for editing and moving.
+  * Open it from File > Settings > User > Tool Palette, or with the Tool
+    Palette button (Other tab of the Command Palette).
+  * Its buttons can be mapped.
+  * **Show Labels in Tool Palette** (Interface settings) puts the button
+    names under the icons.
+  * Tool palettes can be docked or tabbed and are saved with workspaces;
+    named Tool Palettes are listed in the Tools menu (p.79–80).
+* **Calculator (p.100).** Tools > Calculator.
+  * A **Format** menu with frame code and key number formats.
+  * Type with its own keys, the numeric keypad or the top row of digits; no
+    leading zeros, colons or semicolons are needed.
+  * Choosing another format converts the total. For example, drop-frame
+    and non-drop-frame timecode convert into each other, and 30 fps
+    durations convert to 25 fps.
+* **Console (p.101–102).** Tools > Console.
+  * It shows system information, with a line starting "System ID:", and
+    errors that were logged.
+  * File > Get Position Info writes information about the Timeline at the
+    position; the bin's Get Bin Info does the same for a bin.
+  * A command line takes commands such as `alldrives` and
+    `toggleStatSpace`.
+
+**Implementation status (1.5b).**
+* **Built.**
+  * The Command Palette (`src/ui/command_palette.*`, tabs and buttons in
+    `resources/command_palette.json`):
+    * the fourteen tabs, with the Move and Edit tabs as pictured;
+    * Quick Find, with a list of matches and only the matching tabs left
+      open;
+    * the three modes:
+      * Button to Button: drag a button onto a Composer or Tool palette
+        button, including the Blank button;
+      * Active Palette: a click runs the command;
+      * Menu to Button: click a target button, then choose a menu
+        command; the button shows the command's initials.
+  * Mapped buttons are saved. The Composer's go in the Composer settings
+    and the Tool palette's in its Tool Palette setting. Restore to
+    Default restores them.
+  * The Tool palette (twelve buttons), from the Tool Palette button or the
+    Settings list, with Show Labels in Tool Palette.
+  * The Calculator (`src/model/calculator.*`, `src/ui/tool_windows.*`):
+    * the Format menu, the display and keypad, and the keyboard;
+    * adding and subtracting;
+    * converting between formats: the same frames at the same rate,
+      otherwise the same duration in time.
+  * The Console:
+    * system information, including a System ID derived from the
+      computer's ID;
+    * warnings and errors from the application;
+    * the `help`, `clear`, `sysinfo` and `version` commands;
+    * File > Get Position Info.
+  * Tools open as floating panels (p.94), which can be docked and tabbed.
+* **Our choices, unverified.**
+  * The Play, Trim, Smart Tools, Other and More tabs: which buttons, and
+    in what order.
+  * The Tool palette's twelve default buttons.
+  * Its mapping is saved in the Tool Palette setting rather than in the
+    Interface settings (p.97). This allows several named versions (p.80).
+  * The Calculator's formats and keypad: the guide has no picture.
+  * The Console's commands. The System ID is a hash of the operating
+    system's machine ID.
+  * Initials are at most three letters. Commands without a picture show
+    their initials in the palettes.
+  * Closing the Command Palette in Menu to Button mode returns to Button
+    to Button mode.
+* **Not yet.**
+  * The FX, 3D, CC, MCam, Tracks, Workspaces (1.6) and Plug-ins tabs.
+  * The modifier key buttons, and mapping onto the Keyboard palette (1.6).
+  * What's This? help.
+  * Named Tool Palettes in the Tools menu.
+  * Get Bin Info.
+  * The `alldrives` and `toggleStatSpace` console commands.
+  * The Deck Controller (p.95), Hardware, Usage and Configuration (p.102–105).
 
 ## 5. Menus
 
@@ -1181,7 +1275,10 @@ p.610–640, ch. 13 p.432–434).**
       Show Composer Markers; Show Spanned Markers; the Move tab.
     * **General:** Default Starting TC for new sequences.
     * **Interface:** Show ToolTips; Show Source/Record colors in
-      Composer; When moving to a workspace.
+      Composer; When moving to a workspace; Show Labels in Tool Palette
+      (p.392, added in 1.5b).
+    * **Tool Palette** (p.1221): opens the Tool palette, whose mapped
+      buttons it keeps (1.5b).
     * **Timeline:** Show Toolbar; Show Marked Region, including its
       effect on Replace Edit; Movement During Play; Only One Segment
       Tool; Default Segment Tool.

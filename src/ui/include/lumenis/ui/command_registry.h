@@ -46,6 +46,15 @@ public:
 
     void setHandler(const QString& id, std::function<void()> handler);
     bool hasHandler(const QString& id) const;
+    // The command's text without its '&' mnemonic marks; empty for unknown
+    // ids.
+    QString text(const QString& id) const;
+
+    // While a capture is set, a triggered command is offered to it first;
+    // if it returns true the command does not run. Menu to Button
+    // reassignment (guide p.98) uses it to pick a menu command.
+    using Capture = std::function<bool(const QString& id)>;
+    void setCapture(Capture capture) { capture_ = std::move(capture); }
 
     // Keyboard map: user overrides on top of the declared defaults.
     QKeySequence defaultShortcut(const QString& id) const;
@@ -67,6 +76,7 @@ private:
 
     std::vector<Entry> entries_;
     QHash<QString, std::size_t> index_;
+    Capture capture_;
 };
 
 } // namespace lumenis::ui

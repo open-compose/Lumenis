@@ -271,6 +271,23 @@
     {"id": "trim.slip_right", "text": "Slip Right", "palette": "trim"},
     {"id": "move.go_to_previous_marker", "text": "Go to Previous Marker", "palette": "move"},
     {"id": "move.go_to_next_marker", "text": "Go to Next Marker", "palette": "move"},
-    {"id": "edit.mark_markers", "text": "Mark Markers", "palette": "edit"}
+    {"id": "edit.mark_markers", "text": "Mark Markers", "palette": "edit"},
+    {"id": "move.step_forward_one_field", "text": "Step Forward One Field", "palette": "move"},
+    {"id": "move.step_backward_one_field", "text": "Step Backward One Field", "palette": "move"},
+    {"id": "move.go_to_audio_mark_in", "text": "Go to Audio Mark IN", "palette": "move"},
+    {"id": "move.go_to_audio_mark_out", "text": "Go to Audio Mark OUT", "palette": "move"},
+    {"id": "move.go_to_previous_trim", "text": "Go to Previous Trim", "palette": "move"},
+    {"id": "move.go_to_next_trim", "text": "Go to Next Trim", "palette": "move"},
+    {"id": "edit.audio_mark_in", "text": "Audio Mark IN", "palette": "edit"},
+    {"id": "edit.audio_mark_out", "text": "Audio Mark OUT", "palette": "edit"},
+    {"id": "edit.fit_to_fill", "text": "Fit To Fill", "palette": "edit"},
+    {"id": "edit.to_the_left", "text": "To the Left", "palette": "edit"},
+    {"id": "edit.to_the_right", "text": "To the Right", "palette": "edit"},
+    {"id": "edit.select_in_out", "text": "Select In/Out", "palette": "edit"},
+    {"id": "edit.make_subclip", "text": "Make Subclip", "palette": "edit"},
+    {"id": "other.tool_palette", "text": "Tool Palette", "palette": "other"},
+    {"id": "other.add_alt_key", "text": "Add Alt Key", "palette": "other"},
+    {"id": "other.add_control_key", "text": "Add Control Key", "palette": "other"},
+    {"id": "other.add_option_key", "text": "Add Option Key", "palette": "other"}
   ]
 }

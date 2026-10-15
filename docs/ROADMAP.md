@@ -308,8 +308,12 @@ Sub-steps:
   * The Bin, Composer, General, Interface, Timeline and Trim settings
     dialogs, wired to the features built so far.
   * Details and what is left: "Implementation status (1.5a)" in the spec.
-* **1.5b** The Command Palette, the Tool Palette, the Calculator and the
-  Console (ch.5).
+* **1.5b Palettes and tools — done.**
+  * The Command Palette, with Quick Find and button mapping (Button to
+    Button, Active Palette, Menu to Button) onto the Composer and the Tool
+    palette, saved in the settings.
+  * The Tool palette, the Calculator and the Console, as floating panels.
+  * Details and what is left: "Implementation status (1.5b)" in the spec.
 * **1.6** Keyboard settings, workspaces and button mapping (gate 3, gate 4).
 
 The detailed inventory lives in [spec/ui-inventory.md](spec/ui-inventory.md).

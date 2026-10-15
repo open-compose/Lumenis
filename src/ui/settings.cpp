@@ -39,6 +39,7 @@ SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) 
         const QString scope = ko.value(QStringLiteral("scope")).toString();
         kind.scope = scope == QLatin1String("project") ? SettingsScope::Project : SettingsScope::User;
         kind.page = ko.value(QStringLiteral("page")).toInt();
+        kind.opens = ko.value(QStringLiteral("opens")).toString();
         for (const QJsonValue& t : ko.value(QStringLiteral("tabs")).toArray()) {
             SettingTab tab;
             tab.name = t.toObject().value(QStringLiteral("name")).toString();

@@ -13,6 +13,7 @@
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/capture.h"
 #include "lumenis/ui/command_registry.h"
+#include "lumenis/ui/command_palette.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/select_project_dialog.h"
 #include "lumenis/ui/settings.h"
@@ -23,6 +24,7 @@
 #include "lumenis/ui/platform_check.h"
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/tool_windows.h"
 #include "lumenis/ui/workspace.h"
 
 #include <QApplication>
@@ -184,6 +186,8 @@ int main(int argc, char** argv) {
 
     auto& guiApp = static_cast<QApplication&>(*app);
     lumenis::ui::applyTheme(guiApp);
+    // Warnings and errors also go to Tools > Console (p.101).
+    lumenis::ui::ConsoleLog::installMessageHandler();
     // Title bars, the taskbar and the Dock while running (Linux uses it in
     // place of the installed SVG when the desktop file is not installed).
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/lumenis/ui/icons/app.png")));
@@ -490,6 +494,17 @@ int main(int argc, char** argv) {
                 QCoreApplication::processEvents();
                 ok = lumenis::ui::capture(&dialog, dir, QStringLiteral("timeline_settings")) && ok;
                 dialog.hide();
+            }
+            // Tools > Command Palette, Move tab (picture on p.96), floating.
+            if (lumenis::ui::Panel* palette = window.showTool(QStringLiteral("CommandPalette"))) {
+                QWidget* floating = palette->window();
+                floating->resize(820, 280);
+                QCoreApplication::processEvents();
+                // No text cursor in Quick Find: it blinks between grabs.
+                window.commandPalette().quickFind()->clearFocus();
+                QCoreApplication::processEvents();
+                ok = lumenis::ui::capture(floating, dir, QStringLiteral("command_palette")) && ok;
+                window.panels().closePanel(palette);
             }
             ok = lumenis::ui::capture(&selectProject, dir, QStringLiteral("select_project")) && ok;
             selectProject.showPage(lumenis::ui::SelectProjectDialog::Page::NewProject);

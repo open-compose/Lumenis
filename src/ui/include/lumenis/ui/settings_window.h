@@ -92,6 +92,8 @@ public:
 
 signals:
     void edited();
+    // A setting that opens a tool was opened (the Tool Palette).
+    void toolRequested(const QString& tool);
 
 protected:
     QStringList mimeTypes() const override;
@@ -135,6 +137,10 @@ public:
     bool selectUser(const QString& name);
     bool createUser(const QString& name);
     void refresh();
+
+signals:
+    // A setting that opens a tool was opened (the Tool Palette, p.392).
+    void toolRequested(const QString& tool);
 
 private:
     void fillProfiles();
