@@ -5,12 +5,14 @@ add_library(lumenis_model STATIC
     locations.cpp
     monitor.cpp
     sequence.cpp
+    marker.cpp
     include/lumenis/model/bin.h
     include/lumenis/model/project_bins.h
     include/lumenis/model/project_store.h
     include/lumenis/model/locations.h
     include/lumenis/model/monitor.h
     include/lumenis/model/sequence.h
+    include/lumenis/model/marker.h
 )
 add_library(lumenis::model ALIAS lumenis_model)
 

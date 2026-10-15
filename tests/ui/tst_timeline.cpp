@@ -8,16 +8,21 @@
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/keyboard_map.h"
 #include "lumenis/ui/main_window.h"
+#include "lumenis/ui/marker_dialogs.h"
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QAction>
 #include <QApplication>
+#include <QComboBox>
+#include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QLabel>
 #include <QMenu>
 #include <QScrollBar>
 #include <QSignalSpy>
 #include <QSlider>
+#include <QTableWidget>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QToolButton>
@@ -636,6 +641,209 @@ private slots:
         }
         QCOMPARE(rig.timeline.selection().size(), 3);
         delete menu;
+    }
+
+    void trimMode() {
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(QStringLiteral("Cut"), 100));
+        Timeline& t = rig.timeline;
+        model::MonitorState& rec = rig.composer.state(MonitorId::Record);
+        rec.setPosition(45);
+        // The Trim Mode button: dual rollers at the nearest transition on
+        // every selected track (p.655).
+        t.toolButton(QStringLiteral("trim.trim_mode"))->click();
+        QVERIFY(t.isTrimMode());
+        QCOMPARE(t.rollers().size(), 3);
+        QCOMPARE(t.rollers().first(), (model::TrimRoller{"V1", 50, model::TrimSide::Both}));
+        QCOMPARE(rec.position(), 50);
+        // Big Trim display (p.648).
+        QVERIFY(rig.composer.trimDisplay().on);
+        QVERIFY(rig.composer.trimCounter(MonitorId::Source)->isVisibleTo(&rig.composer));
+        QVERIFY(rig.composer.trimBar()->isVisibleTo(&rig.composer));
+        // Trim buttons (p.656): a dual-roller trim keeps the length.
+        rig.composer.trimBar()->findChild<QToolButton*>(QStringLiteral("trim.trim_forward_1_frame"))->click();
+        QCOMPARE(rig.recordSequence().editPoints({QStringLiteral("V1")}), (QList<std::int64_t>{0, 51, 100}));
+        QCOMPARE(rig.composer.trimDisplay().aFrames, 1);
+        QCOMPARE(rig.composer.trimCounter(MonitorId::Source)->text(), QStringLiteral("1"));
+        // Cycle Trim Sides: the A-side, a ripple trim (p.651, p.654).
+        t.perform(QStringLiteral("trim.cycle_trim_sides"));
+        QCOMPARE(t.rollers().first().side, model::TrimSide::A);
+        QVERIFY(!rig.composer.trimDisplay().bActive);
+        t.perform(QStringLiteral("trim.trim_backward_10_frames"));
+        QCOMPARE(rec.duration(), 90); // 25 fps: 10 frames
+        QCOMPARE(t.rollers().first().frame, 41);
+        // The B counter selects the B-side; Shift both (p.651).
+        emit rig.composer.trimSideRequested(model::TrimSide::B);
+        QCOMPARE(t.rollers().first().side, model::TrimSide::B);
+        // Trims are undo steps.
+        QCOMPARE(t.history().descriptions().first(), QStringLiteral("Trim"));
+        // A frame step leaves Trim mode (p.651).
+        rig.composer.setActiveMonitor(MonitorId::Record);
+        rig.composer.perform(QStringLiteral("move.step_forward_one_frame"));
+        QVERIFY(!t.isTrimMode());
+        QVERIFY(!rig.composer.trimDisplay().on);
+        QVERIFY(!rig.composer.trimBar()->isVisibleTo(&rig.composer));
+        QVERIFY(rig.composer.positionBar(MonitorId::Source)->isVisibleTo(&rig.composer));
+    }
+
+    void transitionKeysAndTools() {
+        Rig rig;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        KeyboardMap keys;
+        keys.loadBuiltin(commands);
+        rig.timeline.setKeyResolver([&](const QKeySequence& k) { return keys.commandFor(k); });
+        BinItem cut = sequence(QStringLiteral("Cut"), 100);
+        model::Sequence seq = model::Sequence::fromItem(cut);
+        for (const QString& tr : seq.trackNames()) seq.addEdit(tr, 80);
+        seq.storeIn(cut);
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), cut);
+        rig.composer.state(MonitorId::Record).setPosition(60);
+        TimelineView* view = rig.timeline.view();
+        view->setFocus();
+        // U, A and S: nearest, previous and next transition (p.651).
+        QTest::keyClick(view, Qt::Key_S);
+        QCOMPARE(rig.timeline.rollers().first().frame, 80);
+        QTest::keyClick(view, Qt::Key_A);
+        QCOMPARE(rig.timeline.rollers().first().frame, 50);
+        QTest::keyClick(view, Qt::Key_Escape);
+        QVERIFY(!rig.timeline.isTrimMode());
+        // The Ripple Trim tool: a click just left of an edit is its A-side
+        // (p.650-654).
+        rig.timeline.toolButton(QStringLiteral("smart.ripple_trim"))->click();
+        TimelineView::Row v1;
+        for (const auto& r : view->rows()) {
+            if (r.track == QLatin1String("V1")) v1 = r;
+        }
+        const QPoint a(static_cast<int>(view->xFor(50)) - 6, v1.top + v1.height / 2);
+        QCOMPARE(view->transitionAt(a)->side, model::TrimSide::A);
+        QTest::mousePress(view, Qt::LeftButton, {}, a);
+        QVERIFY(rig.timeline.isTrimMode());
+        QCOMPARE(rig.timeline.trimKind(), model::TrimKind::Ripple);
+        // Dragging it trims.
+        const QPoint to(static_cast<int>(view->xFor(55)) - 6, a.y());
+        QMouseEvent move(QEvent::MouseMove, QPointF(to), view->mapToGlobal(QPointF(to)), Qt::NoButton, Qt::LeftButton,
+                         Qt::NoModifier);
+        QApplication::sendEvent(view, &move);
+        QTest::mouseRelease(view, Qt::LeftButton, {}, to);
+        QCOMPARE(rig.composer.state(MonitorId::Record).duration(), 105);
+    }
+
+    void slipSlideAndExtend() {
+        Rig rig;
+        BinItem cut = sequence(QStringLiteral("Cut"), 100);
+        model::Sequence seq = model::Sequence::fromItem(cut);
+        seq.addEdit(QStringLiteral("V1"), 80);
+        seq.storeIn(cut);
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), cut);
+        Timeline& t = rig.timeline;
+        // Slip the middle segment: earlier frames are not there (it starts
+        // at frame 0 of its clip), later ones are (p.663).
+        t.setSlip({{"V1", 50}}, false);
+        QVERIFY(t.isTrimMode());
+        t.perform(QStringLiteral("trim.trim_backward_1_frame"));
+        QCOMPARE(rig.recordSequence().track(QStringLiteral("V1"))->segments.at(1).sourceIn, 1);
+        // Slide it: its neighbours are trimmed.
+        t.setSlip({{"V1", 50}}, true);
+        t.perform(QStringLiteral("trim.trim_forward_1_frame"));
+        QCOMPARE(rig.recordSequence().editPoints({QStringLiteral("V1")}), (QList<std::int64_t>{0, 51, 81, 100}));
+        t.exitTrimMode();
+        // Slip Left in Source/Record mode (p.665).
+        rig.composer.state(MonitorId::Record).setPosition(60);
+        t.perform(QStringLiteral("trim.slip_left"));
+        QCOMPARE(rig.recordSequence().track(QStringLiteral("V1"))->segments.at(1).sourceIn, 2);
+        // Extend: the previous edit forward to just after the OUT (p.661).
+        // (Back to an IN would need frames before the clips' starts.)
+        model::MonitorState& rec = rig.composer.state(MonitorId::Record);
+        rec.clearBoth();
+        rec.setPosition(60);
+        rec.markOut();
+        t.perform(QStringLiteral("trim.extend"));
+        QVERIFY(t.lastMessage().isEmpty());
+        QCOMPARE(rig.recordSequence().editPoints({QStringLiteral("A1")}), (QList<std::int64_t>{0, 61, 100}));
+        QCOMPARE(t.history().descriptions().first(), QStringLiteral("Extend"));
+    }
+
+    void markers() {
+        Rig rig;
+        rig.timeline.setMarkerDialogEnabled(false);
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(QStringLiteral("Cut"), 100));
+        rig.composer.setActiveMonitor(MonitorId::Record);
+        model::MonitorState& rec = rig.composer.state(MonitorId::Record);
+        // Add Marker on the frame, on the first selected track (p.413).
+        rec.setPosition(20);
+        QVERIFY(rig.timeline.perform(QStringLiteral("more.add_marker")));
+        rec.setPosition(70);
+        rig.composer.button(MonitorId::Record, QStringLiteral("more.add_marker"));
+        rig.timeline.addMarker(QStringLiteral("Blue"));
+        QList<model::Marker> markers = model::markersOf(rec.current()->item);
+        QCOMPARE(markers.size(), 2);
+        QCOMPARE(markers.first().track, QStringLiteral("V1"));
+        QCOMPARE(markers.first().color, QStringLiteral("Red"));
+        QCOMPARE(rig.stored.value(rec.current()->item.id).markers.size(), 2);
+        // An undo step on a sequence.
+        QCOMPARE(rig.timeline.history().descriptions().first(), QStringLiteral("Add Marker"));
+        // A spanned marker over IN to OUT, on TC1 (p.414-415).
+        rec.setPosition(30);
+        rec.markIn();
+        rec.setPosition(39);
+        rec.markOut();
+        QVERIFY(rig.timeline.addMarker(QStringLiteral("Green"), true));
+        markers = model::markersOf(rec.current()->item);
+        QCOMPARE(markers.at(1).track, QStringLiteral("TC1"));
+        QCOMPARE(markers.at(1).length, 10);
+        // Go to Previous/Next Marker (p.419).
+        rec.setPosition(50);
+        rig.timeline.perform(QStringLiteral("move.go_to_next_marker"));
+        QCOMPARE(rec.position(), 70);
+        rig.timeline.perform(QStringLiteral("move.go_to_previous_marker"));
+        QCOMPARE(rec.position(), 30);
+        // Mark Markers: between the two markers either side (p.419).
+        rec.clearBoth();
+        rec.setPosition(50);
+        rig.timeline.perform(QStringLiteral("edit.mark_markers"));
+        QCOMPARE(rec.in(), 30);
+        QCOMPARE(rec.out(), 69);
+        // The Markers window (p.419-421).
+        MarkersWindow window(rig.timeline);
+        QCOMPARE(window.monitor(), MonitorId::Record);
+        QCOMPARE(window.table()->rowCount(), 3);
+        QCOMPARE(window.table()->item(2, MarkersWindow::TrackColumn)->text(), QStringLiteral("V1"));
+        window.jumpTo(0);
+        QCOMPARE(rec.position(), 20);
+        QMenu* menu = window.contextMenu(0);
+        for (QAction* a : menu->actions()) {
+            if (a->text() == QLatin1String("Change Color")) {
+                for (QAction* c : a->menu()->actions()) {
+                    if (c->text() == QLatin1String("Purple")) c->trigger();
+                }
+            }
+        }
+        delete menu;
+        QCOMPARE(model::markersOf(rec.current()->item).first().color, QStringLiteral("Purple"));
+        window.table()->selectRow(0);
+        window.deleteSelected();
+        QCOMPARE(window.table()->rowCount(), 2);
+    }
+
+    void markerDialog() {
+        model::Marker m;
+        m.frame = 12;
+        m.color = QStringLiteral("Blue");
+        m.track = QStringLiteral("A1");
+        m.user = QStringLiteral("editor");
+        MarkerDialog dialog(m, {QStringLiteral("V1"), QStringLiteral("A1")});
+        QCOMPARE(dialog.colorBox()->count(), 16);
+        QCOMPARE(dialog.colorBox()->currentText(), QStringLiteral("Blue"));
+        QCOMPARE(dialog.trackBox()->currentText(), QStringLiteral("A1"));
+        dialog.nameEdit()->setText(QStringLiteral("Cutaway"));
+        dialog.commentEdit()->setPlainText(QStringLiteral("cover the jump"));
+        dialog.trackBox()->setCurrentText(QStringLiteral("V1"));
+        const model::Marker out = dialog.marker();
+        QCOMPARE(out.name, QStringLiteral("Cutaway"));
+        QCOMPARE(out.comment, QStringLiteral("cover the jump"));
+        QCOMPARE(out.track, QStringLiteral("V1"));
+        QCOMPARE(out.frame, 12);
     }
 
     void mainWindowEdits() {

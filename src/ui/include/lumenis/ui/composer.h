@@ -1,7 +1,9 @@
 #pragma once
 
 #include "lumenis/core/rational.h"
+#include "lumenis/model/marker.h"
 #include "lumenis/model/monitor.h"
+#include "lumenis/model/sequence.h"
 
 #include <QElapsedTimer>
 #include <QKeySequence>
@@ -38,8 +40,11 @@ protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
 
 private:
+    std::optional<model::Marker> markerAt(int x) const;
+
     Composer& composer_;
     MonitorId monitor_;
 };
@@ -82,6 +87,9 @@ public:
     ~Composer() override;
 
     void setItemResolver(ItemResolver resolver) { resolver_ = std::move(resolver); }
+    std::optional<model::BinItem> resolve(const QString& binId, const QString& itemId) const {
+        return resolver_ ? resolver_(binId, itemId) : std::nullopt;
+    }
     void setKeyResolver(KeyResolver resolver) { keys_ = std::move(resolver); }
     // Edit points of what a monitor shows (the Timeline knows a sequence's;
     // a clip has its start and end), for Go to Previous/Next Event and
@@ -125,6 +133,19 @@ public:
     QString trackingText(MonitorId monitor) const;
     QString centerDuration() const;
 
+    // Trim mode's Big Trim display (p.648-651), set by the Timeline.
+    struct TrimDisplay {
+        bool on = false;
+        std::int64_t aFrames = 0; // frames trimmed on each side
+        std::int64_t bFrames = 0;
+        bool aActive = false;
+        bool bActive = false;
+    };
+    void setTrimDisplay(const TrimDisplay& display);
+    const TrimDisplay& trimDisplay() const { return trim_; }
+    QToolButton* trimCounter(MonitorId monitor) const;
+    QWidget* trimBar() const { return trimBar_; }
+
     // Show Source/Record colors in Composer (Interface settings, p.383).
     void setSourceRecordColors(bool on);
     bool sourceRecordColors() const { return colors_; }
@@ -165,6 +186,12 @@ signals:
     // A button or key for a command that is not the Composer's own
     // (Splice-in, Overwrite).
     void commandRequested(const QString& commandId);
+    // A command the Composer carried out, after it did.
+    void performed(const QString& commandId);
+    // A trim counter was clicked: that side, or both with Shift (p.651).
+    void trimSideRequested(model::TrimSide side);
+    // A marker was double-clicked (p.416).
+    void markerEditRequested(MonitorId monitor, const QString& markerId);
     void singleMonitorChanged(bool single);
 
 protected:
@@ -194,6 +221,8 @@ private:
     QElapsedTimer clock_;
     QTimer* timer_ = nullptr;
     QLabel* center_ = nullptr;
+    QWidget* trimBar_ = nullptr;
+    TrimDisplay trim_;
     Column* columns_[2] = {nullptr, nullptr};
     ItemResolver resolver_;
     KeyResolver keys_;

@@ -859,6 +859,328 @@ std::optional<MatchedFrame> matchFrame(const Sequence& sequence, const QStringLi
     return std::nullopt;
 }
 
+void Sequence::normalize(const QString& name) {
+    if (Track* t = track(name)) tidy(*t);
+}
+
+namespace {
+
+constexpr std::int64_t kNoLimit = std::int64_t(1) << 40;
+
+struct EditSides {
+    int a = -1; // the segment ending at the edit
+    int b = -1; // the segment starting there
+};
+
+EditSides sidesAt(const Track& t, std::int64_t frame) {
+    EditSides e;
+    std::int64_t at = 0;
+    for (int i = 0; i < t.segments.size(); ++i) {
+        const std::int64_t end = at + t.segments.at(i).length;
+        if (end == frame) e.a = i;
+        if (at == frame) e.b = i;
+        at = end;
+    }
+    return e;
+}
+
+// Clips keep at least one frame (p.647); filler can be used up.
+std::int64_t minLength(const Segment& s) {
+    return s.isFiller() ? 0 : 1;
+}
+
+// Frames the clip has after the segment's last frame, and before its first.
+std::int64_t tailRoom(const Segment& s, const SourceLength& length) {
+    if (s.isFiller() || !length) return kNoLimit;
+    const auto total = length(s);
+    if (!total) return kNoLimit;
+    return std::max<std::int64_t>(*total - (s.sourceIn + s.length), 0);
+}
+
+std::int64_t headRoom(const Segment& s) {
+    return s.isFiller() ? kNoLimit : std::max<std::int64_t>(s.sourceIn, 0);
+}
+
+// Filler from `frame` on: what a sync-locked track can give up there.
+std::int64_t fillerRun(const Track& t, std::int64_t frame) {
+    if (frame >= t.length()) return kNoLimit;
+    std::int64_t start = 0;
+    int i = t.segmentAt(frame, &start);
+    if (i < 0 || !t.segments.at(i).isFiller()) return 0;
+    std::int64_t run = start + t.segments.at(i).length - frame;
+    for (++i; i < t.segments.size() && t.segments.at(i).isFiller(); ++i) run += t.segments.at(i).length;
+    return i >= t.segments.size() ? kNoLimit : run;
+}
+
+// Filler just before `frame`: what a sync-locked track can give up when an
+// A-side is trimmed back to there.
+std::int64_t fillerRunBefore(const Track& t, std::int64_t frame) {
+    if (frame > t.length()) return kNoLimit;
+    std::int64_t run = 0;
+    std::int64_t at = 0;
+    for (const Segment& s : t.segments) {
+        const std::int64_t end = at + s.length;
+        if (end > frame) break;
+        run = s.isFiller() ? run + s.length : 0;
+        at = end;
+    }
+    return at == frame ? run : 0;
+}
+
+// How a single-roller ripple changes the length of the track after its
+// edit: +frames on the A-side, -frames on the B-side.
+int rippleSign(TrimSide side) {
+    return side == TrimSide::A ? 1 : side == TrimSide::B ? -1 : 0;
+}
+
+QList<TrimRoller> unlocked(const Sequence& seq, const QList<TrimRoller>& rollers) {
+    QList<TrimRoller> out;
+    for (const TrimRoller& r : rollers) {
+        if (const Track* t = seq.track(r.track); t && !t->locked) out << r;
+    }
+    return out;
+}
+
+// The other sync-locked tracks a ripple keeps in sync: only when a trimmed
+// track is sync-locked and all rollers change the length the same way.
+QStringList syncTracks(const Sequence& seq, const QList<TrimRoller>& rollers, TrimKind kind) {
+    if (kind != TrimKind::Ripple || rollers.isEmpty()) return {};
+    bool synced = false;
+    const int sign = rippleSign(rollers.first().side);
+    QSet<QString> trimmed;
+    for (const TrimRoller& r : rollers) {
+        if (rippleSign(r.side) != sign || sign == 0) return {};
+        synced = synced || seq.track(r.track)->syncLocked;
+        trimmed.insert(r.track);
+    }
+    if (!synced) return {};
+    QStringList out;
+    for (const Track& t : seq.tracks()) {
+        if (t.syncLocked && !t.locked && !trimmed.contains(t.name())) out << t.name();
+    }
+    return out;
+}
+
+} // namespace
+
+QList<std::int64_t> trimPoints(const Sequence& sequence, const QString& name) {
+    QList<std::int64_t> out;
+    const Track* t = sequence.track(name);
+    if (!t) return out;
+    std::int64_t at = 0;
+    for (const Segment& s : t->segments) {
+        at += s.length;
+        out << at;
+    }
+    return out;
+}
+
+TrimRange trimRange(const Sequence& sequence, const QList<TrimRoller>& all, TrimKind kind,
+                    const SourceLength& sourceLength) {
+    const QList<TrimRoller> rollers = unlocked(sequence, all);
+    if (rollers.isEmpty()) return {};
+    TrimRange range{-kNoLimit, kNoLimit};
+    for (const TrimRoller& r : rollers) {
+        const Track* t = sequence.track(r.track);
+        const EditSides e = sidesAt(*t, r.frame);
+        const Segment* a = e.a >= 0 ? &t->segments.at(e.a) : nullptr;
+        const Segment* b = e.b >= 0 ? &t->segments.at(e.b) : nullptr;
+        std::int64_t lo = 0;
+        std::int64_t hi = 0;
+        if (r.side == TrimSide::Both) {
+            if (a && b) {
+                hi = std::min(tailRoom(*a, sourceLength), b->length - minLength(*b));
+                lo = -std::min(a->length - minLength(*a), headRoom(*b));
+            }
+        } else if (r.side == TrimSide::A) {
+            if (a) {
+                lo = -(a->length - minLength(*a));
+                hi = tailRoom(*a, sourceLength);
+                if (kind == TrimKind::Overwrite && b) hi = std::min(hi, b->length - minLength(*b));
+            }
+        } else if (b) {
+            hi = b->length - minLength(*b);
+            lo = -headRoom(*b);
+            if (kind == TrimKind::Overwrite) lo = -std::min(headRoom(*b), a ? a->length - minLength(*a) : 0);
+        }
+        range.min = std::max(range.min, lo);
+        range.max = std::min(range.max, hi);
+    }
+    // Sync-locked tracks can only give up filler (p.662).
+    const QStringList synced = syncTracks(sequence, rollers, kind);
+    for (const TrimRoller& r : rollers) {
+        for (const QString& name : synced) {
+            const Track& t = *sequence.track(name);
+            if (rippleSign(r.side) > 0) {
+                // A-side back: the frames before the edit go.
+                range.min = std::max(range.min, -fillerRunBefore(t, r.frame));
+            } else {
+                // B-side on: the frames after it go.
+                range.max = std::min(range.max, fillerRun(t, r.frame));
+            }
+        }
+    }
+    if (range.min > range.max) return {};
+    return range;
+}
+
+QList<TrimRoller> trim(Sequence& sequence, const QList<TrimRoller>& all, TrimKind kind, std::int64_t frames,
+                       const SourceLength& sourceLength, std::int64_t* applied) {
+    const TrimRange range = trimRange(sequence, all, kind, sourceLength);
+    const std::int64_t delta = std::clamp(frames, range.min, range.max);
+    if (applied) *applied = delta;
+    if (delta == 0) return all;
+    const QList<TrimRoller> rollers = unlocked(sequence, all);
+    const QStringList synced = syncTracks(sequence, rollers, kind);
+    // Later edits first, so earlier ones keep their frames.
+    QList<int> order;
+    for (int i = 0; i < rollers.size(); ++i) order << i;
+    std::sort(order.begin(), order.end(), [&](int x, int y) { return rollers.at(x).frame > rollers.at(y).frame; });
+    QList<std::int64_t> moved(rollers.size());
+    QList<std::int64_t> shift(rollers.size(), 0); // how much the track grew at the roller
+    for (int k : order) {
+        const TrimRoller& r = rollers.at(k);
+        Track* t = sequence.track(r.track);
+        const EditSides e = sidesAt(*t, r.frame);
+        Segment* a = e.a >= 0 ? &t->segments[e.a] : nullptr;
+        Segment* b = e.b >= 0 ? &t->segments[e.b] : nullptr;
+        auto trimHead = [](Segment* s, std::int64_t by) {
+            // Takes `by` frames off the start (negative: adds them).
+            if (!s->isFiller()) s->sourceIn += by;
+            s->length -= by;
+        };
+        if (r.side == TrimSide::Both) {
+            a->length += delta;
+            trimHead(b, delta);
+            moved[k] = r.frame + delta;
+        } else if (kind == TrimKind::Ripple) {
+            if (r.side == TrimSide::A) {
+                a->length += delta;
+                moved[k] = r.frame + delta;
+                shift[k] = delta;
+            } else {
+                trimHead(b, delta);
+                moved[k] = r.frame;
+                shift[k] = -delta;
+            }
+        } else if (r.side == TrimSide::A) {
+            a->length += delta;
+            if (delta > 0 && b) trimHead(b, delta);
+            if (delta < 0) t->segments.insert(e.a + 1, Segment::filler(-delta));
+            moved[k] = r.frame + delta;
+        } else {
+            trimHead(b, delta);
+            if (delta > 0) t->segments.insert(e.b, Segment::filler(delta));
+            if (delta < 0 && a) a->length += delta;
+            moved[k] = r.frame + delta;
+        }
+        // The other sync-locked tracks get or lose filler at the edit.
+        for (const QString& name : synced) {
+            if (shift[k] > 0 && r.frame < sequence.track(name)->length()) {
+                sequence.splice(name, r.frame, {Segment::filler(shift[k])});
+            } else if (shift[k] < 0) {
+                const std::int64_t at = r.side == TrimSide::A ? r.frame + shift[k] : r.frame;
+                sequence.extract(name, at, -shift[k]);
+            }
+        }
+        sequence.normalize(r.track);
+    }
+    QList<TrimRoller> out = all;
+    for (int i = 0; i < rollers.size(); ++i) {
+        std::int64_t frame = moved.at(i);
+        for (int j = 0; j < rollers.size(); ++j) {
+            if (rollers.at(j).track == rollers.at(i).track && rollers.at(j).frame < rollers.at(i).frame) frame += shift.at(j);
+        }
+        for (TrimRoller& o : out) {
+            if (o == rollers.at(i)) {
+                o.frame = frame;
+                break;
+            }
+        }
+    }
+    return out;
+}
+
+std::int64_t slipSegments(Sequence& sequence, const QList<SegmentRef>& segments, std::int64_t frames,
+                          const SourceLength& sourceLength) {
+    std::int64_t lo = -kNoLimit;
+    std::int64_t hi = kNoLimit;
+    QList<SegmentRef> clips;
+    for (const SegmentRef& ref : segments) {
+        const auto seg = segmentFor(sequence, ref);
+        if (!seg || seg->isFiller() || sequence.track(ref.track)->locked) continue;
+        lo = std::max(lo, -seg->sourceIn);
+        hi = std::min(hi, tailRoom(*seg, sourceLength));
+        clips << ref;
+    }
+    if (clips.isEmpty() || lo > hi) return 0;
+    const std::int64_t delta = std::clamp(frames, lo, hi);
+    for (const SegmentRef& ref : clips) {
+        Track* t = sequence.track(ref.track);
+        t->segments[t->segmentAt(ref.start)].sourceIn += delta;
+    }
+    return delta;
+}
+
+std::int64_t slideSegments(Sequence& sequence, QList<SegmentRef>& segments, std::int64_t frames,
+                           const SourceLength& sourceLength) {
+    std::int64_t lo = -kNoLimit;
+    std::int64_t hi = kNoLimit;
+    QList<int> usable;
+    for (int k = 0; k < segments.size(); ++k) {
+        const SegmentRef& ref = segments.at(k);
+        const Track* t = sequence.track(ref.track);
+        std::int64_t start = 0;
+        const int i = t ? t->segmentAt(ref.start, &start) : -1;
+        if (i <= 0 || start != ref.start || i + 1 >= t->segments.size() || t->locked) continue;
+        const Segment& prev = t->segments.at(i - 1);
+        const Segment& next = t->segments.at(i + 1);
+        hi = std::min({hi, tailRoom(prev, sourceLength), next.length - minLength(next)});
+        lo = std::max({lo, -(prev.length - minLength(prev)), -headRoom(next)});
+        usable << k;
+    }
+    if (usable.isEmpty() || lo > hi) return 0;
+    const std::int64_t delta = std::clamp(frames, lo, hi);
+    for (int k : usable) {
+        SegmentRef& ref = segments[k];
+        Track* t = sequence.track(ref.track);
+        const int i = t->segmentAt(ref.start);
+        t->segments[i - 1].length += delta;
+        Segment& next = t->segments[i + 1];
+        if (!next.isFiller()) next.sourceIn += delta;
+        next.length -= delta;
+        ref.start += delta;
+        sequence.normalize(ref.track);
+    }
+    return delta;
+}
+
+QStringList extendEdits(Sequence& sequence, const QStringList& tracks, std::int64_t mark, bool toIn,
+                        const SourceLength& sourceLength) {
+    QStringList changed;
+    for (const QString& name : tracks) {
+        const Track* t = sequence.track(name);
+        if (!t || t->locked) continue;
+        // Edits with a segment on both sides.
+        QList<std::int64_t> edits = trimPoints(sequence, name);
+        if (!edits.isEmpty()) edits.removeLast();
+        std::optional<std::int64_t> edit;
+        std::int64_t target = toIn ? mark : mark + 1;
+        for (std::int64_t e : edits) {
+            if (toIn && e > mark && (!edit || e < *edit)) edit = e;
+            if (!toIn && e <= mark && (!edit || e > *edit)) edit = e;
+        }
+        if (!edit || *edit == target) continue;
+        const QList<TrimRoller> roller{{name, *edit, TrimSide::Both}};
+        const TrimRange range = trimRange(sequence, roller, TrimKind::Ripple, sourceLength);
+        const std::int64_t delta = target - *edit;
+        if (delta < range.min || delta > range.max) continue;
+        trim(sequence, roller, TrimKind::Ripple, delta, sourceLength);
+        changed << name;
+    }
+    return changed;
+}
+
 void EditHistory::push(EditStep step) {
     steps_.resize(next_);
     steps_ << std::move(step);

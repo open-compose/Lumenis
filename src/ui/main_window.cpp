@@ -7,6 +7,7 @@
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/keyboard_map.h"
+#include "lumenis/ui/marker_dialogs.h"
 #include "lumenis/ui/menu_builder.h"
 #include "lumenis/ui/panels.h"
 #include "lumenis/ui/theme.h"
@@ -151,8 +152,11 @@ void MainWindow::createPanels() {
                                                             QDateTime::currentDateTimeUtc()));
     });
     connect(timeline_, &Timeline::message, this, [](const QString& text) { QToolTip::showText(QCursor::pos(), text); });
+    // The Timeline takes its own commands from the Composer; the rest are
+    // menu commands.
     connect(composer_, &Composer::commandRequested, this, [this](const QString& id) {
-        if (Timeline::handles(id)) timeline_->perform(id);
+        if (Timeline::handles(id)) return;
+        if (QAction* a = commands_.action(id)) a->trigger();
     });
     connect(timeline_, &Timeline::commandRequested, this, [this](const QString& id) {
         if (QAction* a = commands_.action(id)) a->trigger();
@@ -360,6 +364,13 @@ void MainWindow::installPanelHandlers() {
         if (Panel* p = panels_->activePanel()) panels_->closePanel(p);
     });
     handle("tools.timeline", [this] { panels_->showPanel(panels_->panel(QStringLiteral("Timeline"))); });
+    // Tools > Markers (p.420), one window, kept.
+    handle("tools.markers", [this] {
+        if (!markersWindow_) markersWindow_ = new MarkersWindow(*timeline_, this);
+        markersWindow_->refresh();
+        markersWindow_->show();
+        markersWindow_->raise();
+    });
     // Playing, moving and marking in the Composer (ch. 13).
     for (const QString& id : commands_.ids()) {
         if (Composer::handles(id)) handle(id.toLatin1().constData(), [this, id] { composer_->perform(id); });

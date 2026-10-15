@@ -10,6 +10,7 @@
 #include <QStringList>
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 
 namespace lumenis::model {
@@ -130,6 +131,10 @@ public:
     // A part of the sequence as a sequence of its own: the Clipboard
     // (p.479-480). Tracks keep their names; empty tracks are left out.
     Sequence excerpt(const QStringList& tracks, std::int64_t start, std::int64_t length) const;
+
+    // Merges filler and drops empty segments after a track was changed
+    // through track().
+    void normalize(const QString& track);
 
     bool operator==(const Sequence&) const = default;
 
@@ -260,6 +265,63 @@ struct MatchedFrame {
     std::int64_t frame = 0; // counted from the clip's start
 };
 std::optional<MatchedFrame> matchFrame(const Sequence& sequence, const QStringList& tracks, std::int64_t position);
+
+// ---- Trimming (guide ch. 20, p.647-665)
+
+// Which side of an edit point a trim roller is on: the outgoing segment
+// (A-side), the incoming one (B-side), or both (a dual-roller trim, p.655).
+enum class TrimSide { A, B, Both };
+// Single-roller trims: Ripple moves the rest of the track (p.654);
+// Overwrite keeps the track's length, adding filler or overwriting (p.653).
+enum class TrimKind { Ripple, Overwrite };
+
+// A roller at the edit point `frame` of `track`.
+struct TrimRoller {
+    QString track;
+    std::int64_t frame = 0;
+    TrimSide side = TrimSide::Both;
+    bool operator==(const TrimRoller&) const = default;
+};
+
+// How long a segment's clip is, so trims stop at the end of its media;
+// nullopt when unknown (no limit). Filler has no limit.
+using SourceLength = std::function<std::optional<std::int64_t>(const Segment&)>;
+
+// The frames all the rollers can move together, in unison, [min, max]:
+// no segment shorter than one frame (p.647), no trim past a clip's media,
+// and with sync locks no sync-locked track losing anything but filler
+// (p.662).
+struct TrimRange {
+    std::int64_t min = 0;
+    std::int64_t max = 0;
+};
+TrimRange trimRange(const Sequence& sequence, const QList<TrimRoller>& rollers, TrimKind kind,
+                    const SourceLength& sourceLength = {});
+// Trims by `frames` (positive: later), clamped to trimRange. Ripple trims
+// keep the other sync-locked tracks in sync with filler when a trimmed
+// track is sync-locked (p.662). Locked tracks are not trimmed. Returns the
+// rollers at their new places; `applied` is the frames actually trimmed.
+QList<TrimRoller> trim(Sequence& sequence, const QList<TrimRoller>& rollers, TrimKind kind, std::int64_t frames,
+                       const SourceLength& sourceLength = {}, std::int64_t* applied = nullptr);
+
+// The edit points of a track that rollers can sit on: between two
+// segments, and the end of the track.
+QList<std::int64_t> trimPoints(const Sequence& sequence, const QString& track);
+
+// Slip: the segments show other frames of their clips; positive shows
+// later material (Slip Left, p.665). Slide: the segments move along the
+// track, trimming their neighbours (p.663). Both are clamped; they return
+// the frames applied.
+std::int64_t slipSegments(Sequence& sequence, const QList<SegmentRef>& segments, std::int64_t frames,
+                          const SourceLength& sourceLength = {});
+std::int64_t slideSegments(Sequence& sequence, QList<SegmentRef>& segments, std::int64_t frames,
+                           const SourceLength& sourceLength = {});
+
+// Extend (p.661): on each track, the edit nearest the mark is moved to it
+// with a dual-roller trim: the next edit back to an IN, or the previous edit
+// forward to just after an OUT. Returns the tracks changed.
+QStringList extendEdits(Sequence& sequence, const QStringList& tracks, std::int64_t mark, bool toIn,
+                        const SourceLength& sourceLength = {});
 
 // One step of Edit > Undo/Redo (p.466): a sequence item before and after.
 struct EditStep {

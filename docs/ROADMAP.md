@@ -290,8 +290,17 @@ Sub-steps:
     Edit and Remove Match Frame Edits, Match Frame; deleting tracks; the
     Timeline Top toolbar and right-click menus.
   * Details and what is left: "Implementation status (1.4c)" in the spec.
-* **1.4d** Trim mode and markers: the trim tools and rollers, single- and
-  dual-roller trims with sync locks, Sync Point editing, markers.
+* **1.4d Trim mode and markers — done.**
+  * Overwrite, ripple and dual-roller trims with the trim tools, Trim
+    mode, rollers, the U/A/S keys, sync locks, slip, slide and Extend; the
+    Big Trim display with counters and Trim buttons.
+  * Markers on clips and sequences, spanned markers, the Edit Marker
+    dialog, Go to Previous/Next Marker, Mark Markers and the Markers
+    window.
+  * Details and what is left: "Implementation status (1.4d)" in the spec.
+* **1.4e** Still to come for editing: Sync Point editing, playback-driven
+  tools (Play Loop, Edit Review, J-K-L trimming) once media plays, and
+  the remaining Timeline and marker details listed in the spec.
 * **1.5** Palettes, tools and Settings dialogs.
 * **1.6** Keyboard settings, workspaces and button mapping (gate 3, gate 4).
 

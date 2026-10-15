@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/core/timecode.h"
+#include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
 
@@ -57,6 +58,12 @@ public:
     // With both segment tools on, the upper half of a segment is
     // Lift/Overwrite and the lower half Extract/Splice-in (p.610).
     model::EditKind segmentModeAt(const QPoint& pos) const;
+    // The transition under a point, as a roller: on the edit a dual roller,
+    // just left of it the A-side, just right the B-side (p.650).
+    std::optional<model::TrimRoller> transitionAt(const QPoint& pos) const;
+    // The trim kind a click there picks with the trim tools (p.650): the
+    // upper half Overwrite, the lower half Ripple when both are on.
+    model::TrimKind trimKindAt(const QPoint& pos) const;
 
     // Vertical scrolling (p.608).
     void setTopOffset(int offset);
@@ -96,6 +103,8 @@ private:
     model::EditKind dragKind_ = model::EditKind::Overwrite;
     std::optional<QPoint> lassoFrom_;
     QPoint lassoTo_;
+    std::optional<QPoint> trimFrom_; // a roller or slip drag
+    QPoint trimPos_;
 };
 
 // The Timeline window (ch. 19): the Record monitor's sequence, or with
@@ -171,6 +180,42 @@ public:
     enum class SelectWhere { Left, Right, Reverse };
     void selectSegments(SelectWhere where);
 
+    // Trim mode (ch. 20). Rollers sit on edit points; single-roller trims
+    // are Ripple or Overwrite (the trim tools, p.650).
+    bool isTrimMode() const { return trimMode_; }
+    const QList<model::TrimRoller>& rollers() const { return rollers_; }
+    model::TrimKind trimKind() const { return trimKind_; }
+    // The Trim Mode button: dual rollers at the transition nearest the
+    // position on the selected tracks (p.655); `direction` -1 or 1 takes the
+    // previous or next one (the A and S keys, p.651).
+    bool enterTrimMode(int direction = 0);
+    void exitTrimMode();
+    void setRollers(const QList<model::TrimRoller>& rollers, model::TrimKind kind);
+    // Click and Shift-click on a transition (p.652).
+    void clickTransition(const model::TrimRoller& roller, model::TrimKind kind, bool add);
+    // All rollers to one side, or both (the trim counters and Cycle Trim
+    // Sides, p.651).
+    void setTrimSide(model::TrimSide side);
+    // Trims by frames: Trim buttons, drags, J-K-L later (p.656).
+    bool trimBy(std::int64_t frames);
+    // The Overwrite Trim and Ripple Trim tools (p.650).
+    bool isTrimTool(model::TrimKind kind) const;
+    void setTrimTool(model::TrimKind kind, bool on);
+    // Slip and slide (p.663-665): the segments selected for it.
+    void setSlip(const QList<model::SegmentRef>& segments, bool slide);
+    const QList<model::SegmentRef>& slipSelection() const { return slip_; }
+    bool isSlide() const { return slide_; }
+    // How long the clip a segment comes from is, from its bin.
+    model::SourceLength sourceLength() const;
+
+    // Markers (p.412-424). Add Marker opens the Edit Marker dialog unless
+    // it is disabled (the Markers window's Fast menu, p.416).
+    void setMarkerDialogEnabled(bool on) { markerDialog_ = on; }
+    bool addMarker(const QString& color = QStringLiteral("Red"), bool spanned = false);
+    // The marker in a monitor, changed or deleted.
+    bool changeMarker(MonitorId monitor, const model::Marker& marker);
+    bool deleteMarker(MonitorId monitor, const QString& id);
+
     // The Clipboard (p.479-480): a sequence that is in no bin.
     const std::optional<model::BinItem>& clipboard() const { return clipboard_; }
 
@@ -242,6 +287,13 @@ private:
     void setClipboard(const model::Sequence& material, const QString& from);
     void loadClipboard(const QString& name);
     void storeLocks(const model::Sequence& sequence);
+    void syncTrimDisplay();
+    void slip(std::int64_t frames);
+    void extend();
+    // Changes the item a monitor shows, through the bin; for the Record
+    // monitor's sequence with an undo step.
+    bool changeItem(MonitorId monitor, const QString& description, const std::function<bool(model::BinItem&)>& change);
+    void composerPerformed(const QString& id);
     void addTrack(model::TrackKind kind, model::AudioFormat format = model::AudioFormat::Mono);
     // Stores a changed record sequence, with an undo step.
     void commit(const QString& description, const model::BinItem& before, model::BinItem after);
@@ -275,6 +327,17 @@ private:
     bool liftTool_ = false;
     bool spliceTool_ = false;
     QList<model::SegmentRef> selection_;
+    bool trimMode_ = false;
+    QList<model::TrimRoller> rollers_;
+    QList<model::TrimRoller> lastRollers_;
+    model::TrimKind trimKind_ = model::TrimKind::Ripple;
+    bool overwriteTrimTool_ = false;
+    bool rippleTrimTool_ = false;
+    QList<model::SegmentRef> slip_;
+    bool slide_ = false;
+    std::int64_t trimA_ = 0; // frames trimmed on each side since entering
+    std::int64_t trimB_ = 0;
+    bool markerDialog_ = true;
     std::optional<model::BinItem> clipboard_;
     int clipboardCount_ = 0;
     QString message_;

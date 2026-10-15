@@ -6,6 +6,7 @@
 #include "lumenis/model/locations.h"
 #include "lumenis/model/project_store.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/marker.h"
 #include "lumenis/model/project_bins.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_container.h"
@@ -23,6 +24,7 @@
 #include "lumenis/ui/workspace.h"
 
 #include <QApplication>
+#include <tuple>
 #include <QIcon>
 #include <QCommandLineParser>
 #include <QDir>
@@ -336,6 +338,21 @@ int main(int argc, char** argv) {
                 seq.storeIn(item);
                 bin->items << item;
             }
+            // Markers on the rough cut (p.413-415): two on tracks, one span.
+            {
+                lumenis::model::BinItem& cutItem = bin->items[bin->items.size() - 3];
+                const std::tuple<const char*, const char*, std::int64_t, std::int64_t> marks[] = {
+                    {"Red", "V1", 40 * fps, 1}, {"Blue", "A1", 170 * fps, 1}, {"Green", "TC1", 290 * fps, 30 * fps}};
+                for (const auto& [color, track, frame, length] : marks) {
+                    lumenis::model::Marker m;
+                    m.id = lumenis::model::newItemId();
+                    m.color = QString::fromLatin1(color);
+                    m.track = QString::fromLatin1(track);
+                    m.frame = frame;
+                    m.length = length;
+                    lumenis::model::addMarker(cutItem, m);
+                }
+            }
             bin->items << masters;
             lumenis::model::BinFile::write(bins.binPath(main), *bin);
             window.setProject(*documentary);
@@ -380,6 +397,18 @@ int main(int argc, char** argv) {
             // The Timeline zoomed to the first seven minutes of the cut.
             window.timeline().zoomTo(0, 7 * 60 * 24);
             bool ok = lumenis::ui::capture(content, dir, QStringLiteral("main_window"));
+            // Trim mode: Big Trim display and dual rollers (p.648, p.655).
+            {
+                lumenis::ui::Timeline& timeline = window.timeline();
+                lumenis::ui::Composer& composer = window.composer();
+                const std::int64_t at = composer.state(lumenis::ui::MonitorId::Record).position();
+                timeline.setSelection({});
+                timeline.perform(QStringLiteral("trim.trim_mode"));
+                QCoreApplication::processEvents();
+                ok = lumenis::ui::capture(content, dir, QStringLiteral("trim_mode")) && ok;
+                timeline.exitTrimMode();
+                composer.moveTo(lumenis::ui::MonitorId::Record, at);
+            }
             // The green drop zones while the Composer's title bar is dragged
             // over the Timeline's upper zone (p.75).
             {

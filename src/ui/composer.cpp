@@ -39,6 +39,7 @@ constexpr QRgb kMarkedSpan = 0x60ffffff;
 constexpr QRgb kSplice = 0xffe6c619;     // Splice-in (yellow) and Overwrite (red)
 constexpr QRgb kOverwrite = 0xffd23a32;
 constexpr QRgb kMarker = 0xffd23a32;     // red Add Marker
+constexpr QRgb kTrimActive = 0xffb070f0; // active trim counter, purple (p.651)
 // Shuttle speeds when L or J is pressed again (p.400).
 constexpr int kSpeeds[] = {1, 2, 3, 5, 8};
 
@@ -122,9 +123,29 @@ const QList<QList<ButtonSpec>>& buttonRows(MonitorId monitor) {
     return monitor == MonitorId::Source ? source : record;
 }
 
-// Commands that need markers, shown but not working yet.
-bool later(const QString& id) {
-    return id == QLatin1String("more.add_marker");
+// Commands shown but not working yet.
+bool later(const QString&) {
+    return false;
+}
+
+// Trim buttons: one or two arrowheads pointing back or forward.
+QIcon trimGlyph(const QString& label) {
+    QPixmap pm(48, 32);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0xc8, 0xc8, 0xc8));
+    const bool back = label.startsWith(QLatin1Char('<'));
+    const int count = static_cast<int>(label.size());
+    for (int i = 0; i < count; ++i) {
+        const double x = 24 + (i - (count - 1) / 2.0) * 12;
+        const double dir = back ? -1 : 1;
+        p.drawPolygon(QPolygonF{QPointF(x - 6 * dir, 8), QPointF(x + 6 * dir, 16), QPointF(x - 6 * dir, 24)});
+    }
+    p.setPen(QPen(QColor(0xc8, 0xc8, 0xc8), 2));
+    p.drawLine(QPointF(4, 28), QPointF(44, 28));
+    return QIcon(pm);
 }
 
 QIcon glyph(Glyph g, const QColor& color) {
@@ -274,6 +295,8 @@ QToolButton* infoBox(QWidget* parent, const QString& name) {
 
 struct Composer::Column {
     QWidget* widget = nullptr;
+    QWidget* controls = nullptr;
+    QToolButton* trimCounter = nullptr;
     QToolButton* clipName = nullptr;
     QToolButton* tracking = nullptr;
     MonitorPicture* picture = nullptr;
@@ -324,7 +347,33 @@ void PositionBar::paintEvent(QPaintEvent*) {
     if (s.isEmpty()) return;
     // Marked material, then the indicator.
     if (s.in() || s.out()) p.fillRect(QRect(QPoint(xFor(s.markedStart()), 2), QPoint(xFor(s.markedEnd()), height() - 3)), QColor::fromRgba(kMarkedSpan));
+    // Markers: ovals in their colours (p.413); spanned ones as bars.
+    p.setRenderHint(QPainter::Antialiasing);
+    for (const model::Marker& m : model::markersOf(s.current()->item)) {
+        const QColor c = QColor::fromRgb(model::markerColor(m.color));
+        p.setPen(QPen(c.darker(150), 1));
+        p.setBrush(c);
+        if (m.isSpanned()) {
+            p.drawRoundedRect(QRectF(xFor(m.frame), 2, std::max(xFor(m.end() - 1) - xFor(m.frame), 4), 5), 2, 2);
+        } else {
+            p.drawEllipse(QRectF(xFor(m.frame) - 4, 1, 8, 6));
+        }
+    }
     p.fillRect(QRect(xFor(s.position()) - 1, 0, 2, height()), QColor(kIndicator));
+}
+
+std::optional<model::Marker> PositionBar::markerAt(int x) const {
+    const model::MonitorState& s = composer_.state(monitor_);
+    if (s.isEmpty()) return std::nullopt;
+    for (const model::Marker& m : model::markersOf(s.current()->item)) {
+        if (std::abs(xFor(m.frame) - x) <= 4) return m;
+    }
+    return std::nullopt;
+}
+
+void PositionBar::mouseDoubleClickEvent(QMouseEvent* event) {
+    // Double-clicking a marker opens Edit Marker (p.416).
+    if (const auto m = markerAt(event->position().toPoint().x())) emit composer_.markerEditRequested(monitor_, m->id);
 }
 
 void PositionBar::mousePressEvent(QMouseEvent* event) {
@@ -376,6 +425,17 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
         };
         if (s.in() && *s.in() == s.position()) saw(pic.left() + 6, 1);
         if (s.out() && *s.out() == s.position()) saw(pic.right() - 6, -1);
+        // A marker on this frame: an oval at the bottom of the picture
+        // (p.413).
+        for (const model::Marker& m : model::markersOf(s.current()->item)) {
+            if (s.position() < m.frame || s.position() >= m.end()) continue;
+            p.setRenderHint(QPainter::Antialiasing);
+            const QColor c = QColor::fromRgb(model::markerColor(m.color));
+            p.setPen(QPen(c.darker(150), 1));
+            p.setBrush(c);
+            p.drawEllipse(QRectF(pic.center().x() - 12, pic.bottom() - 18, 24, 12));
+            break;
+        }
     }
     if (composer_.activeMonitor() == monitor_ && !composer_.isSingleMonitor()) {
         p.setPen(QPen(palette().color(QPalette::Highlight), 1));
@@ -383,9 +443,20 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
     }
 }
 
-void MonitorPicture::mousePressEvent(QMouseEvent*) {
+void MonitorPicture::mousePressEvent(QMouseEvent* event) {
     composer_.setActiveMonitor(monitor_);
     composer_.setFocus();
+    // Clicking the oval of a marker opens Edit Marker (p.416).
+    const model::MonitorState& s = composer_.state(monitor_);
+    const QRect pic = pictureRect();
+    const QRectF oval(pic.center().x() - 12, pic.bottom() - 18, 24, 12);
+    if (s.isEmpty() || !oval.contains(event->position())) return;
+    for (const model::Marker& m : model::markersOf(s.current()->item)) {
+        if (s.position() >= m.frame && s.position() < m.end()) {
+            emit composer_.markerEditRequested(monitor_, m.id);
+            return;
+        }
+    }
 }
 
 void MonitorPicture::contextMenuEvent(QContextMenuEvent* event) {
@@ -425,11 +496,40 @@ Composer::Composer(QWidget* parent) : QWidget(parent) {
 
     QWidget* sourceColumn = buildColumn(MonitorId::Source);
     QWidget* recordColumn = buildColumn(MonitorId::Record);
-    auto* layout = new QHBoxLayout(this);
-    layout->setContentsMargins(4, 4, 4, 4);
+    auto* outer = new QVBoxLayout(this);
+    outer->setContentsMargins(4, 4, 4, 4);
+    outer->setSpacing(3);
+    auto* layout = new QHBoxLayout;
+    layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(6);
     layout->addWidget(sourceColumn, 1);
     layout->addWidget(recordColumn, 1);
+    outer->addLayout(layout, 1);
+
+    // The Trim buttons under the trim display (p.656).
+    trimBar_ = new QWidget(this);
+    trimBar_->setObjectName(QStringLiteral("trimBar"));
+    auto* trims = new QHBoxLayout(trimBar_);
+    trims->setContentsMargins(0, 0, 0, 0);
+    trims->setSpacing(2);
+    trims->addStretch(1);
+    const std::pair<const char*, const char*> trimButtons[] = {
+        {"trim.trim_backward_10_frames", "<<"}, {"trim.trim_backward_1_frame", "<"},
+        {"trim.trim_forward_1_frame", ">"}, {"trim.trim_forward_10_frames", ">>"}};
+    for (const auto& [id, label] : trimButtons) {
+        auto* b = new QToolButton(trimBar_);
+        b->setObjectName(QString::fromLatin1(id));
+        b->setAutoRaise(true);
+        b->setFixedSize(2 * kButtonWidth, kToolButtonHeight);
+        b->setIcon(trimGlyph(QString::fromLatin1(label)));
+        b->setIconSize(QSize(24, 16));
+        const QString command = QString::fromLatin1(id);
+        connect(b, &QToolButton::clicked, this, [this, command] { emit commandRequested(command); });
+        trims->addWidget(b);
+    }
+    trims->addStretch(1);
+    trimBar_->hide();
+    outer->addWidget(trimBar_);
 
     timer_ = new QTimer(this);
     timer_->setInterval(kTickInterval);
@@ -484,7 +584,11 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
     c->picture = new MonitorPicture(*this, monitor, c->widget);
     c->bar = new PositionBar(*this, monitor, c->widget);
 
-    auto* rows = new QVBoxLayout;
+    // The button rows sit in one widget, which Trim mode hides.
+    c->controls = new QWidget(c->widget);
+    c->controls->setObjectName(source ? QStringLiteral("sourceControls") : QStringLiteral("recordControls"));
+    auto* rows = new QVBoxLayout(c->controls);
+    rows->setContentsMargins(0, 0, 0, 0);
     rows->setSpacing(1);
     for (const QList<ButtonSpec>& row : buttonRows(monitor)) {
         auto* h = new QHBoxLayout;
@@ -525,7 +629,21 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
     v->addLayout(info);
     v->addWidget(c->picture, 1);
     v->addWidget(c->bar);
-    v->addLayout(rows);
+    // Trim mode: the frame counter of this side of the transition (p.651):
+    // the outgoing (A-side) frames on the left, the incoming on the right.
+    c->trimCounter = new QToolButton(c->widget);
+    c->trimCounter->setObjectName(source ? QStringLiteral("trimCounterA") : QStringLiteral("trimCounterB"));
+    c->trimCounter->setFixedHeight(kInfoHeight);
+    c->trimCounter->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+    c->trimCounter->setAutoRaise(true);
+    c->trimCounter->hide();
+    connect(c->trimCounter, &QToolButton::clicked, this, [this, source] {
+        // Shift-click: both sides, a dual-roller trim.
+        const bool both = QApplication::keyboardModifiers() & Qt::ShiftModifier;
+        emit trimSideRequested(both ? model::TrimSide::Both : source ? model::TrimSide::A : model::TrimSide::B);
+    });
+    v->addWidget(c->trimCounter);
+    v->addWidget(c->controls);
     return c->widget;
 }
 
@@ -589,6 +707,35 @@ void Composer::setSingleMonitor(bool single) {
     if (single) active_ = MonitorId::Record;
     refresh();
     emit singleMonitorChanged(single);
+}
+
+void Composer::setTrimDisplay(const TrimDisplay& display) {
+    // Big Trim display (p.648): both monitors show the transition, the
+    // outgoing frames on the left and the incoming on the right, with their
+    // frame counters and the Trim buttons; the position bars and button rows
+    // give way.
+    trim_ = display;
+    for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
+        Column& c = column(m);
+        c.bar->setVisible(!display.on);
+        c.controls->setVisible(!display.on);
+        c.trimCounter->setVisible(display.on);
+        const bool a = m == MonitorId::Source;
+        const std::int64_t frames = a ? display.aFrames : display.bFrames;
+        c.trimCounter->setText(display.on ? QString::number(frames) : QString());
+        // "The counter is purple when the side is active" (p.651).
+        QPalette pal = c.trimCounter->palette();
+        pal.setColor(QPalette::ButtonText, (a ? display.aActive : display.bActive) ? QColor(kTrimActive) : QColor(kInfoText));
+        c.trimCounter->setPalette(pal);
+        c.trimCounter->setAutoFillBackground(true);
+    }
+    column(MonitorId::Source).widget->setVisible(display.on || !single_);
+    trimBar_->setVisible(display.on);
+    refresh();
+}
+
+QToolButton* Composer::trimCounter(MonitorId monitor) const {
+    return column(monitor).trimCounter;
 }
 
 void Composer::setTracking(MonitorId monitor, model::TrackingFormat format) {
@@ -818,6 +965,7 @@ bool Composer::perform(const QString& id) {
         }
     }
     refresh();
+    emit performed(id);
     return true;
 }
 
@@ -885,6 +1033,9 @@ QMenu* Composer::contextMenu() {
     menu->setAttribute(Qt::WA_DeleteOnClose);
     QAction* single = menu->addAction(tr("Show Single/Dual Monitor"));
     connect(single, &QAction::triggered, this, [this] { perform(QStringLiteral("composer.show_single_dual_monitor")); });
+    // The Markers window (p.420).
+    QAction* markers = menu->addAction(tr("Markers Window"));
+    connect(markers, &QAction::triggered, this, [this] { emit commandRequested(QStringLiteral("tools.markers")); });
     // The Clipboard into the Source monitor (p.480).
     QAction* clipboard = menu->addAction(tr("Clipboard Contents"));
     connect(clipboard, &QAction::triggered, this, [this] { emit commandRequested(QStringLiteral("edit.clipboard_contents")); });

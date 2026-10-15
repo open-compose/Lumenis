@@ -167,6 +167,27 @@
       "key": "Down",
       "command": "Move Clip Down",
       "page": 613
+    },
+    {
+      "key": "U",
+      "command": "Select Nearest Transition",
+      "page": 651,
+      "nameVerified": false,
+      "note": "p.651: selects both sides of the nearest, previous or next transition; the command name is ours."
+    },
+    {
+      "key": "A",
+      "command": "Select Previous Transition",
+      "page": 651,
+      "nameVerified": false,
+      "note": "p.651: selects both sides of the nearest, previous or next transition; the command name is ours."
+    },
+    {
+      "key": "S",
+      "command": "Select Next Transition",
+      "page": 651,
+      "nameVerified": false,
+      "note": "p.651: selects both sides of the nearest, previous or next transition; the command name is ours."
     }
   ],
   "contextual": [

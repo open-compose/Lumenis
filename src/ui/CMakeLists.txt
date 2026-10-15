@@ -8,6 +8,7 @@ add_library(lumenis_ui STATIC
     capture.cpp
     command_registry.cpp
     keyboard_map.cpp
+    marker_dialogs.cpp
     main_window.cpp
     menu_builder.cpp
     panel_manager.cpp
@@ -26,6 +27,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/capture.h
     include/lumenis/ui/command_registry.h
     include/lumenis/ui/keyboard_map.h
+    include/lumenis/ui/marker_dialogs.h
     include/lumenis/ui/main_window.h
     include/lumenis/ui/menu_builder.h
     include/lumenis/ui/panels.h

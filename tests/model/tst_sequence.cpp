@@ -1,3 +1,4 @@
+#include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
 
 #include <QTest>
@@ -456,6 +457,166 @@ private slots:
         m = matchFrame(s, {"A1"}, 20);
         QCOMPARE(m->segment.clipId, QStringLiteral("c"));
         QVERIFY(!matchFrame(s, {"A2"}, 20));
+    }
+
+    void dualRollerTrims() {
+        // a and b back to back; the clips are 100 frames long.
+        Sequence s = Sequence::withDefaultTracks();
+        s.splice("V1", 0, {piece("a", 10, 40), piece("b", 20, 30)});
+        const SourceLength length = [](const Segment&) { return std::optional<std::int64_t>(100); };
+        const QList<TrimRoller> roller{{"V1", 40, TrimSide::Both}};
+        // b can give up 29 frames (one stays, p.647); a can give 39, b has
+        // 20 frames before its start.
+        const TrimRange range = trimRange(s, roller, TrimKind::Ripple, length);
+        QCOMPARE(range.min, -20);
+        QCOMPARE(range.max, 29);
+        std::int64_t applied = 0;
+        const auto moved = trim(s, roller, TrimKind::Ripple, 5, length, &applied);
+        QCOMPARE(applied, 5);
+        QCOMPARE(moved.first().frame, 45);
+        QCOMPARE(layout(s, "V1"), (QStringList{"a:10+45", "b:25+25"}));
+        QCOMPARE(s.duration(), 70); // the same length (p.655)
+        // Clamped at the media.
+        trim(s, moved, TrimKind::Ripple, -100, length, &applied);
+        QCOMPARE(applied, -25);
+        QCOMPARE(layout(s, "V1"), (QStringList{"a:10+20", "b:0+50"}));
+    }
+
+    void rippleTrims() {
+        Sequence s = Sequence::withDefaultTracks();
+        s.splice("V1", 0, {piece("a", 10, 40), piece("b", 20, 30)});
+        // A-side: a gets longer, b moves later (p.654).
+        auto moved = trim(s, {{"V1", 40, TrimSide::A}}, TrimKind::Ripple, 6);
+        QCOMPARE(moved.first().frame, 46);
+        QCOMPARE(layout(s, "V1"), (QStringList{"a:10+46", "b:20+30"}));
+        QCOMPARE(s.duration(), 76);
+        // B-side: frames come off b's head; the edit stays.
+        moved = trim(s, {{"V1", 46, TrimSide::B}}, TrimKind::Ripple, 4);
+        QCOMPARE(moved.first().frame, 46);
+        QCOMPARE(layout(s, "V1"), (QStringList{"a:10+46", "b:24+26"}));
+        QCOMPARE(s.duration(), 72);
+        // The end of a track is an edit too.
+        QCOMPARE(trimPoints(s, "V1"), (QList<std::int64_t>{46, 72}));
+        trim(s, {{"V1", 72, TrimSide::A}}, TrimKind::Ripple, -2);
+        QCOMPARE(s.duration(), 70);
+    }
+
+    void overwriteTrims() {
+        Sequence s = Sequence::withDefaultTracks();
+        s.splice("V1", 0, {piece("a", 10, 40), piece("b", 20, 30)});
+        // A-side back: filler takes its place, nothing moves (p.653).
+        Sequence t = s;
+        trim(t, {{"V1", 40, TrimSide::A}}, TrimKind::Overwrite, -5);
+        QCOMPARE(layout(t, "V1"), (QStringList{"a:10+35", "-:5", "b:20+30"}));
+        QCOMPARE(t.duration(), 70);
+        // A-side on: a overwrites b's head.
+        t = s;
+        trim(t, {{"V1", 40, TrimSide::A}}, TrimKind::Overwrite, 5);
+        QCOMPARE(layout(t, "V1"), (QStringList{"a:10+45", "b:25+25"}));
+        // B-side on: filler before b.
+        t = s;
+        trim(t, {{"V1", 40, TrimSide::B}}, TrimKind::Overwrite, 5);
+        QCOMPARE(layout(t, "V1"), (QStringList{"a:10+40", "-:5", "b:25+25"}));
+        QCOMPARE(t.duration(), 70);
+        // B-side back: b overwrites a's tail.
+        t = s;
+        trim(t, {{"V1", 40, TrimSide::B}}, TrimKind::Overwrite, -5);
+        QCOMPARE(layout(t, "V1"), (QStringList{"a:10+35", "b:15+35"}));
+    }
+
+    void trimsInUnisonAndSyncLocks() {
+        Sequence s = Sequence::withDefaultTracks();
+        s.splice("V1", 0, {piece("a", 0, 40), piece("b", 0, 30)});
+        s.splice("A1", 0, {piece("c", 0, 20, "A1"), piece("d", 0, 50, "A1")});
+        s.splice("A2", 0, {piece("e", 0, 70, "A2")});
+        // Two rollers move together; the shorter limit wins (p.647).
+        const QList<TrimRoller> both{{"V1", 40, TrimSide::A}, {"A1", 20, TrimSide::A}};
+        QCOMPARE(trimRange(s, both, TrimKind::Ripple).min, -19);
+        // A ripple on a sync-locked track: other sync-locked tracks get
+        // filler at the edit, so they stay in sync (p.662).
+        s.track("V1")->syncLocked = true;
+        s.track("A2")->syncLocked = true;
+        trim(s, {{"V1", 40, TrimSide::A}}, TrimKind::Ripple, 10);
+        QCOMPARE(layout(s, "A2"), (QStringList{"e:0+40", "-:10", "e:40+30"}));
+        QCOMPARE(s.track("A1")->length(), 70); // not sync-locked
+        // Back again: A2 gives up its filler, but no more.
+        QCOMPARE(trimRange(s, {{"V1", 50, TrimSide::A}}, TrimKind::Ripple).min, -10);
+        trim(s, {{"V1", 50, TrimSide::A}}, TrimKind::Ripple, -10);
+        QCOMPARE(layout(s, "A2"), (QStringList{"e:0+40", "e:40+30"}));
+        // A locked track is not trimmed.
+        s.track("V1")->locked = true;
+        std::int64_t applied = 1;
+        trim(s, {{"V1", 40, TrimSide::A}}, TrimKind::Ripple, 5, {}, &applied);
+        QCOMPARE(applied, 0);
+    }
+
+    void slipSlideExtend() {
+        Sequence s = Sequence::withDefaultTracks();
+        s.splice("V1", 0, {piece("a", 10, 30), piece("b", 20, 20), piece("c", 30, 30)});
+        const SourceLength length = [](const Segment&) { return std::optional<std::int64_t>(100); };
+        // Slip: other frames of b; the cuts stay (p.663).
+        QCOMPARE(slipSegments(s, {{"V1", 30}}, 5, length), 5);
+        QCOMPARE(layout(s, "V1"), (QStringList{"a:10+30", "b:25+20", "c:30+30"}));
+        QCOMPARE(slipSegments(s, {{"V1", 30}}, -100, length), -25);
+        // Slide: b moves; a and c are trimmed.
+        QList<SegmentRef> sel{{"V1", 30}};
+        QCOMPARE(slideSegments(s, sel, 4, length), 4);
+        QCOMPARE(layout(s, "V1"), (QStringList{"a:10+34", "b:0+20", "c:34+26"}));
+        QCOMPARE(sel.first().start, 34);
+        // Extend the next edit back to an IN (p.661).
+        QCOMPARE(extendEdits(s, {"V1"}, 50, true, length), (QStringList{"V1"}));
+        QCOMPARE(trimPoints(s, "V1").first(), 34);
+        QCOMPARE(trimPoints(s, "V1").at(1), 50);
+        // ... and the previous one forward to after an OUT.
+        QCOMPARE(extendEdits(s, {"V1"}, 39, false, length), (QStringList{"V1"}));
+        QCOMPARE(trimPoints(s, "V1").first(), 40);
+    }
+
+    void markers() {
+        BinItem item;
+        item.kind = BinItemKind::Sequence;
+        QCOMPARE(markerColors().size(), 16); // sixteen colours (p.412)
+        QCOMPARE(markerColors().first().name, QStringLiteral("Red"));
+        Marker m;
+        m.frame = 40;
+        m.track = "V1";
+        m.color = "Blue";
+        QVERIFY(addMarker(item, m));
+        m.id.clear();
+        m.frame = 10;
+        QVERIFY(addMarker(item, m));
+        // A second marker on the same frame and track replaces the first.
+        m.id.clear();
+        m.comment = "again";
+        QVERIFY(addMarker(item, m));
+        QList<Marker> all = markersOf(item);
+        QCOMPARE(all.size(), 2);
+        QCOMPARE(all.first().frame, 10);
+        QCOMPARE(all.first().comment, QStringLiteral("again"));
+        // Spanned markers cannot overlap (p.415).
+        Marker span;
+        span.frame = 20;
+        span.length = 10;
+        span.track = "TC1";
+        QVERIFY(addMarker(item, span));
+        span.id.clear();
+        span.frame = 25;
+        QVERIFY(!addMarker(item, span));
+        // Previous/Next Marker and Mark Markers (p.419).
+        QCOMPARE(nextMarker(item, 10), 20);
+        QCOMPARE(previousMarker(item, 40), 20);
+        QVERIFY(!nextMarker(item, 40));
+        QCOMPARE(markMarkers(item, 30), std::make_pair(std::int64_t(20), std::int64_t(39)));
+        // Saved with the item.
+        BinItem copy;
+        copy.markers = item.markers;
+        QCOMPARE(markersOf(copy), markersOf(item));
+        QVERIFY(removeMarker(item, all.first().id));
+        QCOMPARE(markersOf(item).size(), 2);
+        Marker changed = markersOf(item).last();
+        changed.color = "Green";
+        QVERIFY(updateMarker(item, changed));
+        QCOMPARE(markersOf(item).last().color, QStringLiteral("Green"));
     }
 
     void undoRedo() {

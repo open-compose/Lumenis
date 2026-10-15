@@ -1,5 +1,6 @@
 #include "lumenis/ui/timeline.h"
 
+#include "lumenis/ui/marker_dialogs.h"
 #include "lumenis/ui/theme.h"
 
 #include <QApplication>
@@ -68,6 +69,7 @@ constexpr QRgb kOverwriteColor = 0xffd23a32;
 constexpr QRgb kReplaceColor = 0xff3a7bd2;   // Replace is blue (p.467)
 constexpr QRgb kSelected = 0xffe8e8e8;       // selected segments
 constexpr QRgb kLocked = 0xffd9a13a;
+constexpr QRgb kDualRoller = 0xffe87fb8;     // dual-roller trims are pink (p.651)
 
 int rowHeight(const QString& track) {
     if (track == QLatin1String("TC1")) return kTimecodeRow;
@@ -98,7 +100,8 @@ int rowOrder(const QString& track) {
 enum class Picture {
     FastMenu, Focus, SourceRecord, VideoQuality, ClientMonitor, StepIn, StepOut,
     ViewMenu, FindLeft, FindRight, ZoomOut, ZoomIn,
-    SegmentSplice, SegmentOverwrite, Lift, Extract, CopyClipboard, AddEdit, Replace, Top, Tail, MatchFrame
+    SegmentSplice, SegmentOverwrite, Lift, Extract, CopyClipboard, AddEdit, Replace, Top, Tail, MatchFrame,
+    TrimMode, RippleTrim, OverwriteTrim
 };
 
 QIcon picture(Picture which) {
@@ -216,6 +219,23 @@ QIcon picture(Picture which) {
         p.drawLine(QPointF(8, 16), QPointF(24, 16));
         triangle({18, 10}, {18, 22}, {24, 16});
         break;
+    case Picture::TrimMode:
+    case Picture::RippleTrim:
+    case Picture::OverwriteTrim: {
+        // A roller: a pink pair for Trim mode, a yellow or red single one
+        // for the trim tools (p.651).
+        const QColor rc(which == Picture::TrimMode ? kDualRoller : which == Picture::RippleTrim ? kSpliceColor : kOverwriteColor);
+        p.setPen(QPen(rc, 2.5, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        if (which != Picture::RippleTrim && which != Picture::OverwriteTrim) {
+            p.drawLine(QPointF(13, 6), QPointF(13, 26));
+            p.drawLine(QPointF(13, 6), QPointF(7, 6));
+            p.drawLine(QPointF(13, 26), QPointF(7, 26));
+        }
+        p.drawLine(QPointF(19, 6), QPointF(19, 26));
+        p.drawLine(QPointF(19, 6), QPointF(25, 6));
+        p.drawLine(QPointF(19, 26), QPointF(25, 26));
+        break;
+    }
     case Picture::MatchFrame:
         p.drawRect(QRectF(4, 8, 10, 16));
         p.drawRect(QRectF(18, 8, 10, 16));
@@ -506,6 +526,77 @@ void TimelineView::paintEvent(QPaintEvent*) {
         p.restore();
     }
 
+    // Markers: ovals on their tracks, spanned markers along TC1 (p.413-415).
+    if (!state.isEmpty()) {
+        p.save();
+        p.setClipRect(tracksArea);
+        p.setRenderHint(QPainter::Antialiasing);
+        for (const model::Marker& m : model::markersOf(state.current()->item)) {
+            for (const Row& r : rowList) {
+                if (r.track != m.track) continue;
+                const QColor c = QColor::fromRgb(model::markerColor(m.color));
+                p.setPen(QPen(c.darker(150), 1));
+                p.setBrush(c);
+                if (m.isSpanned()) {
+                    p.drawRoundedRect(QRectF(xFor(m.frame), r.top + 3, xFor(m.end()) - xFor(m.frame), r.height - 6), 3, 3);
+                } else {
+                    const double x = xFor(m.frame) + std::max(scale, 1.0) / 2;
+                    p.drawEllipse(QRectF(x - 5, r.top + 2, 10, 7));
+                }
+            }
+        }
+        p.restore();
+    }
+
+    // Trim rollers (p.650-651): red for Overwrite, yellow for Ripple, pink
+    // for dual-roller trims; slipped segments get rollers at both ends.
+    if (timeline_.isTrimMode()) {
+        p.save();
+        p.setClipRect(tracksArea);
+        const std::int64_t offset = trimFrom_ ? frameAt(trimPos_.x()) - frameAt(trimFrom_->x()) : 0;
+        auto roller = [&](const Row& r, std::int64_t frame, model::TrimSide side, const QColor& c) {
+            const double x = xFor(frame);
+            p.setPen(QPen(c, 2));
+            p.setBrush(Qt::NoBrush);
+            const double top = r.top + 2;
+            const double bottom = r.top + r.height - 3;
+            if (side != model::TrimSide::B) {
+                p.drawLine(QPointF(x - 1, top), QPointF(x - 1, bottom));
+                p.drawLine(QPointF(x - 1, top), QPointF(x - 6, top));
+                p.drawLine(QPointF(x - 1, bottom), QPointF(x - 6, bottom));
+            }
+            if (side != model::TrimSide::A) {
+                p.drawLine(QPointF(x + 1, top), QPointF(x + 1, bottom));
+                p.drawLine(QPointF(x + 1, top), QPointF(x + 6, top));
+                p.drawLine(QPointF(x + 1, bottom), QPointF(x + 6, bottom));
+            }
+        };
+        for (const model::TrimRoller& t : timeline_.rollers()) {
+            const QColor c(t.side == model::TrimSide::Both                 ? kDualRoller
+                           : timeline_.trimKind() == model::TrimKind::Ripple ? kSpliceColor
+                                                                           : kOverwriteColor);
+            for (const Row& r : rowList) {
+                if (r.track != t.track) continue;
+                roller(r, t.frame, t.side, c);
+                if (offset != 0) {
+                    // Where the drag will put it.
+                    p.setPen(QPen(c, 1, Qt::DashLine));
+                    p.drawLine(QPointF(xFor(t.frame + offset), r.top), QPointF(xFor(t.frame + offset), r.top + r.height));
+                }
+            }
+        }
+        for (const model::SegmentRef& ref : timeline_.slipSelection()) {
+            const auto seg = model::segmentFor(seq, ref);
+            if (!seg) continue;
+            for (const Row& r : rowList) {
+                if (r.track != ref.track) continue;
+                roller(r, ref.start, model::TrimSide::B, QColor(kDualRoller));
+                roller(r, ref.start + seg->length, model::TrimSide::A, QColor(kDualRoller));
+            }
+        }
+        p.restore();
+    }
+
     // Segments being dragged: their outlines at the new place (p.612).
     if (dragging_) {
         const std::int64_t frames = dragFrames(QApplication::keyboardModifiers());
@@ -764,6 +855,40 @@ void TimelineView::selectLasso(const QRect& area) {
     timeline_.setSelection(picked);
 }
 
+std::optional<model::TrimRoller> TimelineView::transitionAt(const QPoint& pos) const {
+    if (pos.x() < headerWidth() || timeline_.showsSource()) return std::nullopt;
+    const auto row = rowAt(pos);
+    if (!row || !row->exists) return std::nullopt;
+    // Within a few pixels of an edit: on it a dual roller, either side a
+    // single roller (p.650).
+    constexpr double kNear = 9;
+    constexpr double kOn = 2.5;
+    std::optional<model::TrimRoller> best;
+    double distance = kNear;
+    QList<std::int64_t> points = model::trimPoints(timeline_.shown(), row->track);
+    for (std::int64_t e : points) {
+        const double d = pos.x() - xFor(e);
+        if (std::abs(d) >= distance) continue;
+        distance = std::abs(d);
+        const bool end = e == points.last();
+        const model::TrimSide side = end || d < -kOn ? model::TrimSide::A : d > kOn ? model::TrimSide::B : model::TrimSide::Both;
+        best = model::TrimRoller{row->track, e, side};
+    }
+    return best;
+}
+
+model::TrimKind TimelineView::trimKindAt(const QPoint& pos) const {
+    const bool overwrite = timeline_.isTrimTool(model::TrimKind::Overwrite);
+    const bool ripple = timeline_.isTrimTool(model::TrimKind::Ripple);
+    if (overwrite != ripple) return overwrite ? model::TrimKind::Overwrite : model::TrimKind::Ripple;
+    if (overwrite && ripple) {
+        if (const auto row = rowAt(pos)) {
+            return pos.y() < row->top + row->height / 2 ? model::TrimKind::Overwrite : model::TrimKind::Ripple;
+        }
+    }
+    return timeline_.trimKind();
+}
+
 void TimelineView::mousePressEvent(QMouseEvent* event) {
     if (event->button() != Qt::LeftButton) return;
     const QPoint pos = event->position().toPoint();
@@ -773,6 +898,36 @@ void TimelineView::mousePressEvent(QMouseEvent* event) {
             zoomTo_ = pos.x();
             update();
             return;
+        }
+        // Trim mode, or a trim tool: transitions take rollers (p.650-655).
+        const bool trimming = timeline_.isTrimMode() || timeline_.isTrimTool(model::TrimKind::Overwrite) ||
+                              timeline_.isTrimTool(model::TrimKind::Ripple);
+        if (trimming && pos.y() >= kRulerHeight && !(event->modifiers() & Qt::AltModifier)) {
+            if (const auto roller = transitionAt(pos)) {
+                const bool shift = event->modifiers() & Qt::ShiftModifier;
+                const auto& rollers = timeline_.rollers();
+                const bool selected = std::any_of(rollers.begin(), rollers.end(), [&](const model::TrimRoller& r) {
+                    return r.track == roller->track && r.frame == roller->frame;
+                });
+                if (!selected || shift || !timeline_.isTrimMode()) timeline_.clickTransition(*roller, trimKindAt(pos), shift);
+                trimFrom_ = pos;
+                trimPos_ = pos;
+                return;
+            }
+            if (timeline_.isTrimMode() && !timeline_.slipSelection().isEmpty()) {
+                // Dragging a slipped segment slips it.
+                if (const auto seg = segmentAt(pos); seg && timeline_.slipSelection().contains(*seg)) {
+                    trimFrom_ = pos;
+                    trimPos_ = pos;
+                    return;
+                }
+            }
+            if (timeline_.isTrimMode()) return;
+        }
+        // Clicking the ruler or TC1 leaves Trim mode (p.651).
+        if (timeline_.isTrimMode()) {
+            const auto row = rowAt(pos);
+            if (pos.y() < kRulerHeight || (row && row->track == QLatin1String("TC1"))) timeline_.exitTrimMode();
         }
         // Alt-drag in the tracks draws a lasso (p.611).
         if ((event->modifiers() & Qt::AltModifier) && pos.y() >= kRulerHeight && !timeline_.showsSource()) {
@@ -829,6 +984,9 @@ void TimelineView::mouseMoveEvent(QMouseEvent* event) {
     } else if (lassoFrom_) {
         lassoTo_ = pos;
         update();
+    } else if (trimFrom_) {
+        trimPos_ = pos;
+        update();
     } else if (dragFrom_) {
         dragPos_ = pos;
         dragging_ = dragging_ || (pos - *dragFrom_).manhattanLength() >= QApplication::startDragDistance();
@@ -853,10 +1011,55 @@ void TimelineView::mouseReleaseEvent(QMouseEvent* event) {
         update();
         return;
     }
+    if (trimFrom_) {
+        // A roller or slip drag: the frames moved, Ctrl snapping to edits
+        // (p.656).
+        std::int64_t frames = frameAt(pos.x()) - frameAt(trimFrom_->x());
+        trimFrom_.reset();
+        if (!timeline_.slipSelection().isEmpty()) {
+            if (frames != 0) timeline_.trimBy(frames);
+        } else if (!timeline_.rollers().isEmpty()) {
+            if (event->modifiers() & Qt::ControlModifier) {
+                const std::int64_t at = timeline_.rollers().first().frame + frames;
+                std::int64_t best = at;
+                std::int64_t distance = -1;
+                for (std::int64_t e : timeline_.shown().editPoints()) {
+                    if (e == timeline_.rollers().first().frame) continue;
+                    if (distance < 0 || std::abs(e - at) < distance) {
+                        distance = std::abs(e - at);
+                        best = e;
+                    }
+                }
+                frames = best - timeline_.rollers().first().frame;
+            }
+            if (frames != 0) timeline_.trimBy(frames);
+        }
+        update();
+        return;
+    }
     if (lassoFrom_) {
         const QRect area = QRect(*lassoFrom_, pos).normalized();
+        const bool rightToLeft = pos.x() < lassoFrom_->x();
         lassoFrom_.reset();
         selectLasso(area);
+        if (rightToLeft && !timeline_.selection().isEmpty()) {
+            // Right to left: slip, or slide with Shift+Alt (p.663).
+            const QList<model::SegmentRef> picked = timeline_.selection();
+            timeline_.setSelection({});
+            timeline_.setSlip(picked, event->modifiers() & Qt::ShiftModifier);
+        } else if (timeline_.selection().isEmpty()) {
+            // Only transitions inside: both sides of them (p.651).
+            QList<model::TrimRoller> rollers;
+            for (const Row& r : rows()) {
+                if (!r.exists || r.top + r.height < area.top() || r.top > area.bottom()) continue;
+                const QList<std::int64_t> points = model::trimPoints(timeline_.shown(), r.track);
+                for (int i = 0; i + 1 < points.size(); ++i) {
+                    const double x = xFor(points.at(i));
+                    if (x >= area.left() && x <= area.right()) rollers << model::TrimRoller{r.track, points.at(i), model::TrimSide::Both};
+                }
+            }
+            if (!rollers.isEmpty()) timeline_.setRollers(rollers, timeline_.trimKind());
+        }
         update();
         return;
     }
@@ -1020,6 +1223,11 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     };
     command("smart.extract_splice_in", Picture::SegmentSplice, tr("Extract/Splice-in"), true);
     command("smart.lift_overwrite", Picture::SegmentOverwrite, tr("Lift/Overwrite"), true);
+    command("smart.ripple_trim", Picture::RippleTrim, tr("Ripple Trim"), true);
+    command("smart.overwrite_trim", Picture::OverwriteTrim, tr("Overwrite Trim"), true);
+    top->addSpacing(8);
+    // "The Trim Mode button in the Timeline" (p.644).
+    command("trim.trim_mode", Picture::TrimMode, tr("Trim Mode"), true);
     top->addSpacing(8);
     command("edit.lift", Picture::Lift, tr("Lift"), false);
     command("edit.extract", Picture::Extract, tr("Extract"), false);
@@ -1045,6 +1253,23 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     v->addWidget(toolbar_);
 
     connect(&composer_, &Composer::changed, this, &Timeline::sync);
+    connect(&composer_, &Composer::performed, this, &Timeline::composerPerformed);
+    // The Composer's buttons for the Timeline's commands (Splice-in, the Trim
+    // buttons, Add Marker, ...).
+    connect(&composer_, &Composer::commandRequested, this, [this](const QString& id) {
+        if (handles(id)) perform(id);
+    });
+    connect(&composer_, &Composer::trimSideRequested, this, &Timeline::setTrimSide);
+    connect(&composer_, &Composer::markerEditRequested, this, [this](MonitorId monitor, const QString& id) {
+        const model::LoadedClip* loaded = composer_.state(monitor).current();
+        if (!loaded) return;
+        for (const model::Marker& m : model::markersOf(loaded->item)) {
+            if (m.id != id) continue;
+            MarkerDialog dialog(m, trackChoices(loaded->item), this);
+            if (dialog.exec() == QDialog::Accepted) changeMarker(monitor, dialog.marker());
+            return;
+        }
+    });
     // Go to Previous/Next Event and Mark Clip use the selected tracks'
     // edits (p.398, p.407).
     composer_.setEventResolver([this](MonitorId monitor) -> QList<std::int64_t> {
@@ -1113,6 +1338,13 @@ void Timeline::sync() {
     if (id != shownId_) {
         shownId_ = id;
         selection_.clear();
+        // Another sequence: Trim mode ends.
+        if (trimMode_) {
+            trimMode_ = false;
+            rollers_.clear();
+            slip_.clear();
+            QMetaObject::invokeMethod(this, &Timeline::syncTrimDisplay, Qt::QueuedConnection);
+        }
         scale_ = 0;
         first_ = 0;
         focusBack_.reset();
@@ -1408,6 +1640,24 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("other.match_frame"),
         QStringLiteral("smart.lift_overwrite"),
         QStringLiteral("smart.extract_splice_in"),
+        QStringLiteral("smart.overwrite_trim"),
+        QStringLiteral("smart.ripple_trim"),
+        QStringLiteral("trim.trim_mode"),
+        QStringLiteral("trim.trim_backward_10_frames"),
+        QStringLiteral("trim.trim_backward_1_frame"),
+        QStringLiteral("trim.trim_forward_1_frame"),
+        QStringLiteral("trim.trim_forward_10_frames"),
+        QStringLiteral("trim.cycle_trim_sides"),
+        QStringLiteral("trim.select_nearest_transition"),
+        QStringLiteral("trim.select_previous_transition"),
+        QStringLiteral("trim.select_next_transition"),
+        QStringLiteral("trim.extend"),
+        QStringLiteral("trim.slip_left"),
+        QStringLiteral("trim.slip_right"),
+        QStringLiteral("more.add_marker"),
+        QStringLiteral("move.go_to_previous_marker"),
+        QStringLiteral("move.go_to_next_marker"),
+        QStringLiteral("edit.mark_markers"),
     };
     return ids.contains(id);
 }
@@ -1492,6 +1742,87 @@ bool Timeline::perform(const QString& id) {
         setSegmentTool(model::EditKind::Overwrite, !liftTool_);
     } else if (id == QLatin1String("smart.extract_splice_in")) {
         setSegmentTool(model::EditKind::SpliceIn, !spliceTool_);
+    } else if (id == QLatin1String("smart.overwrite_trim")) {
+        setTrimTool(model::TrimKind::Overwrite, !overwriteTrimTool_);
+    } else if (id == QLatin1String("smart.ripple_trim")) {
+        setTrimTool(model::TrimKind::Ripple, !rippleTrimTool_);
+    } else if (id == QLatin1String("trim.trim_mode")) {
+        if (trimMode_) {
+            exitTrimMode();
+        } else if (QApplication::keyboardModifiers() & Qt::AltModifier && !lastRollers_.isEmpty()) {
+            // Alt: the last roller configuration (p.651).
+            setRollers(lastRollers_, trimKind_);
+        } else {
+            enterTrimMode(0);
+        }
+    } else if (id.startsWith(QLatin1String("trim.trim_"))) {
+        // 10 frames, or 8 in 24-frame formats (p.656).
+        const std::int64_t big = format_.nominalFps == 24 ? 8 : 10;
+        const std::int64_t frames = id.endsWith(QLatin1String("10_frames")) ? big : 1;
+        const bool back = id.contains(QLatin1String("backward"));
+        if (!trimMode_) return fail(tr("Enter Trim mode first."));
+        trimBy(back ? -frames : frames);
+    } else if (id == QLatin1String("trim.cycle_trim_sides")) {
+        // A-side, B-side, both (p.651).
+        if (!trimMode_ || rollers_.isEmpty()) return fail(tr("Enter Trim mode first."));
+        const model::TrimSide now = rollers_.first().side;
+        setTrimSide(now == model::TrimSide::Both ? model::TrimSide::A
+                    : now == model::TrimSide::A  ? model::TrimSide::B
+                                                 : model::TrimSide::Both);
+    } else if (id == QLatin1String("trim.select_nearest_transition")) {
+        enterTrimMode(0);
+    } else if (id == QLatin1String("trim.select_previous_transition")) {
+        enterTrimMode(-1);
+    } else if (id == QLatin1String("trim.select_next_transition")) {
+        enterTrimMode(1);
+    } else if (id == QLatin1String("trim.extend")) {
+        extend();
+    } else if (id == QLatin1String("trim.slip_left") || id == QLatin1String("trim.slip_right")) {
+        // In Source/Record mode: the segment under the position on the
+        // selected tracks; Slip Left shows later material; Alt 10 (8)
+        // frames (p.665).
+        const model::LoadedClip* rec = recordSequence();
+        if (!rec) return false;
+        const model::Sequence seq = model::Sequence::fromItem(rec->item);
+        const std::int64_t pos = composer_.state(MonitorId::Record).position();
+        QList<model::SegmentRef> under;
+        for (const QString& name : patch_.selectedRecordTracks(seq)) {
+            std::int64_t start = 0;
+            const int i = seq.track(name)->segmentAt(pos, &start);
+            if (i >= 0 && !seq.track(name)->segments.at(i).isFiller()) under << model::SegmentRef{name, start};
+        }
+        if (under.isEmpty()) return fail(tr("There is no clip under the position indicator to slip."));
+        const std::int64_t big = format_.nominalFps == 24 ? 8 : 10;
+        const std::int64_t frames = (QApplication::keyboardModifiers() & Qt::AltModifier) ? big : 1;
+        const QList<model::SegmentRef> keep = slip_;
+        const bool keepSlide = slide_;
+        slip_ = under;
+        slide_ = false;
+        slip(id == QLatin1String("trim.slip_left") ? frames : -frames);
+        slip_ = keep;
+        slide_ = keepSlide;
+    } else if (id == QLatin1String("more.add_marker")) {
+        // Alt: a spanned marker over the IN to OUT (p.414).
+        addMarker(QStringLiteral("Red"), QApplication::keyboardModifiers() & Qt::AltModifier);
+    } else if (id == QLatin1String("move.go_to_previous_marker") || id == QLatin1String("move.go_to_next_marker")) {
+        const MonitorId m = composer_.activeMonitor();
+        const model::MonitorState& s = composer_.state(m);
+        if (s.isEmpty()) return fail(tr("There is nothing loaded."));
+        const auto to = id == QLatin1String("move.go_to_next_marker") ? model::nextMarker(s.current()->item, s.position())
+                                                                        : model::previousMarker(s.current()->item, s.position());
+        if (!to) return fail(tr("There is no marker that way."));
+        composer_.moveTo(m, *to);
+    } else if (id == QLatin1String("edit.mark_markers")) {
+        const MonitorId m = composer_.activeMonitor();
+        model::MonitorState& s = composer_.state(m);
+        const auto range = s.isEmpty() ? std::nullopt : model::markMarkers(s.current()->item, s.position());
+        if (!range) return fail(tr("The position indicator must be between two markers."));
+        const std::int64_t at = s.position();
+        s.setPosition(range->first);
+        s.markIn();
+        s.setPosition(range->second);
+        s.markOut();
+        composer_.moveTo(m, at);
     }
     return true;
 }
@@ -2059,7 +2390,305 @@ QMenu* Timeline::contextMenu(const QString& track) {
     return menu;
 }
 
+model::SourceLength Timeline::sourceLength() const {
+    return [this](const model::Segment& seg) -> std::optional<std::int64_t> {
+        const auto item = composer_.resolve(seg.binId, seg.clipId);
+        if (!item) return std::nullopt;
+        return item->durationFrames;
+    };
+}
+
+bool Timeline::isTrimTool(model::TrimKind kind) const {
+    return kind == model::TrimKind::Overwrite ? overwriteTrimTool_ : rippleTrimTool_;
+}
+
+void Timeline::setTrimTool(model::TrimKind kind, bool on) {
+    (kind == model::TrimKind::Overwrite ? overwriteTrimTool_ : rippleTrimTool_) = on;
+    if (QToolButton* b = toolButton(QStringLiteral("smart.overwrite_trim"))) b->setChecked(overwriteTrimTool_);
+    if (QToolButton* b = toolButton(QStringLiteral("smart.ripple_trim"))) b->setChecked(rippleTrimTool_);
+    view_->update();
+}
+
+bool Timeline::enterTrimMode(int direction) {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    composer_.stop();
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const std::int64_t pos = composer_.state(MonitorId::Record).position();
+    // Edits with a segment on both sides, on the selected unlocked tracks.
+    QHash<QString, QList<std::int64_t>> edits;
+    std::optional<std::int64_t> best;
+    for (const QString& name : patch_.selectedRecordTracks(seq)) {
+        if (seq.track(name)->locked) continue;
+        QList<std::int64_t> points = model::trimPoints(seq, name);
+        if (!points.isEmpty()) points.removeLast();
+        edits.insert(name, points);
+        for (std::int64_t e : points) {
+            const bool fits = direction < 0 ? e < pos : direction > 0 ? e > pos : true;
+            if (!fits) continue;
+            const auto score = [&](std::int64_t x) { return direction == 0 ? std::abs(x - pos) : std::abs(x - pos); };
+            if (!best || score(e) < score(*best)) best = e;
+        }
+    }
+    if (!best) return fail(tr("There is no transition to trim on the selected tracks."));
+    // Every selected track with an edit there: a straight cut (p.655).
+    QList<model::TrimRoller> rollers;
+    for (auto it = edits.cbegin(); it != edits.cend(); ++it) {
+        if (it.value().contains(*best)) rollers << model::TrimRoller{it.key(), *best, model::TrimSide::Both};
+    }
+    std::sort(rollers.begin(), rollers.end(), [&](const model::TrimRoller& a, const model::TrimRoller& b) {
+        return seq.trackNames().indexOf(a.track) < seq.trackNames().indexOf(b.track);
+    });
+    setRollers(rollers, trimKind_);
+    composer_.moveTo(MonitorId::Record, *best);
+    return true;
+}
+
+void Timeline::exitTrimMode() {
+    if (!trimMode_) return;
+    if (!rollers_.isEmpty()) lastRollers_ = rollers_;
+    trimMode_ = false;
+    rollers_.clear();
+    slip_.clear();
+    trimA_ = 0;
+    trimB_ = 0;
+    syncTrimDisplay();
+}
+
+void Timeline::setRollers(const QList<model::TrimRoller>& rollers, model::TrimKind kind) {
+    trimMode_ = true;
+    rollers_ = rollers;
+    trimKind_ = kind;
+    slip_.clear();
+    selection_.clear();
+    trimA_ = 0;
+    trimB_ = 0;
+    syncTrimDisplay();
+}
+
+void Timeline::clickTransition(const model::TrimRoller& roller, model::TrimKind kind, bool add) {
+    if (!trimMode_ || !add) {
+        setRollers({roller}, kind);
+        return;
+    }
+    // Shift-click adds or removes; A- and B-sides together trim in two
+    // directions (p.652).
+    QList<model::TrimRoller> rollers = rollers_;
+    const auto same = [&](const model::TrimRoller& r) { return r.track == roller.track && r.frame == roller.frame; };
+    if (std::any_of(rollers.begin(), rollers.end(), same)) {
+        rollers.removeIf(same);
+    } else {
+        rollers << roller;
+    }
+    rollers_ = rollers;
+    slip_.clear();
+    syncTrimDisplay();
+}
+
+void Timeline::setTrimSide(model::TrimSide side) {
+    if (!trimMode_) return;
+    for (model::TrimRoller& r : rollers_) r.side = side;
+    syncTrimDisplay();
+}
+
+bool Timeline::trimBy(std::int64_t frames) {
+    if (trimMode_ && !slip_.isEmpty()) {
+        // Forward (or dragging right) slides the segments right, or slips
+        // in earlier material, like Slip Right (p.665).
+        slip(slide_ ? frames : -frames);
+        return true;
+    }
+    if (!trimMode_ || rollers_.isEmpty()) return fail(tr("Select a transition to trim."));
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    const model::BinItem before = rec->item;
+    model::Sequence seq = model::Sequence::fromItem(before);
+    std::int64_t applied = 0;
+    const QList<model::TrimRoller> moved = model::trim(seq, rollers_, trimKind_, frames, sourceLength(), &applied);
+    if (applied == 0) {
+        // The trim stops at the end of the material (p.659).
+        QApplication::beep();
+        return fail(tr("The trim cannot go further."));
+    }
+    model::BinItem after = before;
+    seq.storeIn(after);
+    after.modified = QDateTime::currentDateTimeUtc();
+    commit(tr("Trim"), before, after);
+    rollers_ = moved;
+    bool a = false;
+    bool b = false;
+    for (const model::TrimRoller& r : rollers_) {
+        a = a || r.side != model::TrimSide::B;
+        b = b || r.side != model::TrimSide::A;
+    }
+    if (a) trimA_ += applied;
+    if (b) trimB_ += applied;
+    if (frames != applied) {
+        QApplication::beep();
+        fail(tr("The trim stopped at the end of the material."));
+    }
+    composer_.moveTo(MonitorId::Record, rollers_.first().frame);
+    syncTrimDisplay();
+    return true;
+}
+
+void Timeline::setSlip(const QList<model::SegmentRef>& segments, bool slide) {
+    trimMode_ = !segments.isEmpty();
+    rollers_.clear();
+    slip_ = segments;
+    slide_ = slide;
+    selection_.clear();
+    trimA_ = 0;
+    trimB_ = 0;
+    syncTrimDisplay();
+}
+
+void Timeline::slip(std::int64_t frames) {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec || slip_.isEmpty()) return;
+    const model::BinItem before = rec->item;
+    model::Sequence seq = model::Sequence::fromItem(before);
+    QList<model::SegmentRef> segments = slip_;
+    const std::int64_t applied = slide_ ? model::slideSegments(seq, segments, frames, sourceLength())
+                                        : model::slipSegments(seq, segments, frames, sourceLength());
+    if (applied == 0) {
+        QApplication::beep();
+        fail(tr("The slip cannot go further."));
+        return;
+    }
+    model::BinItem after = before;
+    seq.storeIn(after);
+    after.modified = QDateTime::currentDateTimeUtc();
+    commit(slide_ ? tr("Slide") : tr("Slip"), before, after);
+    if (trimMode_) slip_ = segments;
+    trimA_ += applied;
+    trimB_ += applied;
+    syncTrimDisplay();
+}
+
+void Timeline::extend() {
+    // The edit nearest the mark moves to it: an IN pulls the next edit back,
+    // an OUT pushes the previous one forward (p.661).
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return;
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    if (!record.in() && !record.out()) {
+        fail(tr("Mark an IN or an OUT to extend the edit to."));
+        return;
+    }
+    const bool toIn = record.in().has_value();
+    const model::BinItem before = rec->item;
+    model::Sequence seq = model::Sequence::fromItem(before);
+    if (model::extendEdits(seq, patch_.selectedRecordTracks(seq), toIn ? *record.in() : *record.out(), toIn,
+                           sourceLength())
+            .isEmpty()) {
+        fail(tr("There is no edit to extend to the mark."));
+        return;
+    }
+    model::BinItem after = before;
+    seq.storeIn(after);
+    after.modified = QDateTime::currentDateTimeUtc();
+    commit(tr("Extend"), before, after);
+}
+
+void Timeline::syncTrimDisplay() {
+    Composer::TrimDisplay d;
+    d.on = trimMode_;
+    d.aFrames = trimA_;
+    d.bFrames = trimB_;
+    for (const model::TrimRoller& r : rollers_) {
+        d.aActive = d.aActive || r.side != model::TrimSide::B;
+        d.bActive = d.bActive || r.side != model::TrimSide::A;
+    }
+    if (!slip_.isEmpty()) d.aActive = d.bActive = true;
+    composer_.setTrimDisplay(d);
+    if (QToolButton* b = toolButton(QStringLiteral("trim.trim_mode"))) b->setChecked(trimMode_);
+    view_->update();
+    emit changed();
+}
+
+void Timeline::composerPerformed(const QString& id) {
+    if (!trimMode_) return;
+    // A frame step leaves Trim mode (p.651); Go to Previous/Next Event
+    // selects the transition there (p.655).
+    if (id.startsWith(QLatin1String("move.step_"))) {
+        exitTrimMode();
+    } else if (id == QLatin1String("move.go_to_previous_event") || id == QLatin1String("move.go_to_next_event")) {
+        enterTrimMode(0);
+    }
+}
+
+bool Timeline::changeItem(MonitorId monitor, const QString& description,
+                          const std::function<bool(model::BinItem&)>& change) {
+    const model::LoadedClip* loaded = composer_.state(monitor).current();
+    if (!loaded) return fail(tr("There is nothing loaded."));
+    const model::BinItem before = loaded->item;
+    model::BinItem after = before;
+    if (!change(after)) return false;
+    after.modified = QDateTime::currentDateTimeUtc();
+    if (monitor == MonitorId::Record && after.kind == model::BinItemKind::Sequence) {
+        commit(description, before, after);
+    } else {
+        restore(loaded->binId, after);
+    }
+    return true;
+}
+
+bool Timeline::addMarker(const QString& color, bool spanned) {
+    // On the active monitor's frame and its first selected track (p.413).
+    const MonitorId m = composer_.activeMonitor();
+    const model::MonitorState& s = composer_.state(m);
+    const model::LoadedClip* loaded = s.current();
+    if (!loaded) return fail(tr("Load a clip or sequence first."));
+    model::Marker marker;
+    marker.color = color;
+    marker.user = qEnvironmentVariable("USER", qEnvironmentVariable("USERNAME"));
+    marker.frame = std::min(s.position(), std::max<std::int64_t>(s.duration() - 1, 0));
+    QStringList tracks;
+    if (m == MonitorId::Record) {
+        tracks = patch_.selectedRecordTracks(model::Sequence::fromItem(loaded->item));
+    } else {
+        for (const QString& t : patch_.sourceTracks()) {
+            if (patch_.isSourceSelected(t)) tracks << t;
+        }
+    }
+    marker.track = tracks.value(0, QStringLiteral("V1"));
+    if (spanned) {
+        // Between the IN and OUT; on TC1 in a sequence (p.414-415).
+        if (!s.in() || !s.out()) return fail(tr("Mark an IN and an OUT for a spanned marker."));
+        marker.frame = *s.in();
+        marker.length = *s.out() - *s.in() + 1;
+        if (loaded->item.kind == model::BinItemKind::Sequence) marker.track = QStringLiteral("TC1");
+    }
+    if (markerDialog_) {
+        MarkerDialog dialog(marker, trackChoices(loaded->item), this);
+        if (dialog.exec() != QDialog::Accepted) return false;
+        marker = dialog.marker();
+    }
+    QString error;
+    const bool ok = changeItem(m, tr("Add Marker"), [&](model::BinItem& item) {
+        if (model::addMarker(item, marker)) return true;
+        error = tr("Spanned markers cannot overlap.");
+        return false;
+    });
+    if (!ok && !error.isEmpty()) return fail(error);
+    return ok;
+}
+
+bool Timeline::changeMarker(MonitorId monitor, const model::Marker& marker) {
+    return changeItem(monitor, tr("Edit Marker"), [&](model::BinItem& item) { return model::updateMarker(item, marker); });
+}
+
+bool Timeline::deleteMarker(MonitorId monitor, const QString& id) {
+    return changeItem(monitor, tr("Delete Marker"), [&](model::BinItem& item) { return model::removeMarker(item, id); });
+}
+
 void Timeline::keyPressEvent(QKeyEvent* event) {
+    // Escape leaves Trim mode and slip (p.664).
+    if (event->key() == Qt::Key_Escape && trimMode_) {
+        exitTrimMode();
+        return;
+    }
     // The Delete key: segments or tracks (p.621, p.636).
     if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
         perform(QStringLiteral("edit.delete"));

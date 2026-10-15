@@ -4,6 +4,7 @@
 
 #include <QDateTime>
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QList>
 #include <QPoint>
@@ -46,6 +47,7 @@ struct BinItem {
     QString script;      // the Script view's text box (p.253)
     QHash<QString, QString> fields;
     QJsonObject composition; // a sequence's tracks (lumenis/model/sequence.h)
+    QJsonArray markers;      // lumenis/model/marker.h
 };
 
 // How a bin is shown (p.245-254). Saved with the bin.

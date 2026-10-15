@@ -350,6 +350,7 @@ English layout:
 | X | Extract | p.639 |
 | Up / Down | Move Clip Up / Move Clip Down | p.613 |
 | Ctrl+X | Cut (Ctrl+C, Ctrl+V: Copy, Paste) | p.622 |
+| U / A / S | Nearest / previous / next transition, both sides (Trim mode) | p.651 |
 
 **Shuttle and contextual keys (p.400–401, 117–195, 1132):**
 * Pressing L repeatedly plays at 2×, 3×, 5× and 8×.
@@ -992,6 +993,106 @@ p.610–640, ch. 13 p.432–434).**
   tracks, the Select items that need clip colours, Create Sequence Based
   on Selection, Rename Track, the Add Track dialog, the Clipboard
   Monitor, Sync Point editing, Reverse Match Frame, markers (1.4d).
+
+**Trim mode and markers (1.4d; ch. 20 p.647–666, ch. 13 p.412–424).**
+* **Trims (p.647–656).**
+  * Overwrite trims (red) add filler or overwrite and keep the length;
+    ripple trims (yellow) move the rest of the track; dual-roller trims
+    (pink) move the cut and keep the length (p.647, p.651, p.653–655).
+  * No clip trimmed to zero frames; trims stop at the next segment and at
+    the end of the media; several transitions move in unison and stop with
+    the first that cannot go on (p.647–648, p.659).
+  * Trim tools on the Timeline palette: Overwrite Trim and Ripple Trim;
+    with both on, the upper corners are overwrite and the lower ripple;
+    over the cut a dual roller (p.650).
+  * The Trim Mode button ("in the Timeline", p.644; also on the Tool
+    palette, p.664) selects the transition nearest the position on the
+    selected tracks for a dual-roller trim; overlap edits take only the
+    topmost track; Alt restores the last rollers (p.651, p.655).
+  * Selecting sides: the A-side or B-side of a transition, Cycle Trim
+    Sides, lasso a transition, the keys U (nearest), A (previous) and S
+    (next transition), the trim counters under the monitors (Shift for
+    both); Shift-click adds transitions; the track buttons add tracks
+    (p.650–653). Go to Previous/Next Event selects the transition there
+    (p.655).
+  * Leaving: the Trim Mode button, Source/Record or Effect Mode, a frame
+    step or the arrow keys, clicking TC1 or the ruler (p.651); Escape for
+    slip (p.664).
+  * Trim displays: Small, Quick and Big Trim (p.648); Big Trim replaces
+    both monitors, outgoing frames left, incoming right; the trim counters
+    are purple when active (p.651).
+  * Refining: Trim Backward 10 (8) Frames, Backward 1, Forward 1, Forward
+    10 (8) Frames buttons; J-K-L; the numeric keypad; Ctrl+Alt one frame
+    at a time; Ctrl snaps (p.656–657).
+  * Play Loop, Edit Review, trimming on the fly, dual-image playback, end
+    of trim indicators (p.657–660).
+  * Sync locks: a single-roller trim on a sync-locked track moves the
+    other sync-locked tracks with filler; a track that would have to lose
+    material stops the trim (p.662).
+  * Slip and slide: lasso a segment right to left (Shift+Alt: slide),
+    double-click a transition; drag a roller, the Trim buttons, J-K-L, the
+    keypad; Slip Left / Slip Right in Source/Record mode, Alt 10 (8)
+    frames (p.663–665).
+  * Extend: the edit nearest a mark moves to it (an IN pulls the next
+    edit back, an OUT pushes the previous one forward), on the selected
+    tracks (p.661).
+* **Markers (p.412–424).**
+  * Sixteen Add Marker buttons, one per colour (the Markers tab p.412, the
+    More tab p.413); colours in priority order, Red the highest (p.414).
+  * A marker is an oval in the Timeline, the position bar and at the
+    bottom of the monitor (p.413). Add Marker opens the Edit Marker dialog
+    (name, user, colour, frame, track, comment; the user name of the
+    system by default, p.413–418). Alt makes a spanned marker over IN to
+    OUT, shown on TC1 in a sequence; spanned markers cannot overlap
+    (p.414–415).
+  * Double-click a marker in the position bar, or click its oval in the
+    monitor, to edit it (p.416, p.418).
+  * Go to Previous/Next Marker (Move tab), Mark Markers (Edit tab), the
+    Delete key on a selected marker (p.419).
+  * Tools > Markers or right-click a monitor > Markers Window: the active
+    monitor's markers; double-click or Jump to Marker; Change Color,
+    Change Track; Delete; Display columns, sorting, columns, Set Font,
+    Quick Find, export and import (p.419–424).
+  * Copy Source Markers (Composer settings, p.414, p.418).
+
+**Implementation status (1.4d).**
+* **Built.**
+  * Overwrite, ripple and dual-roller trims with their limits, several
+    rollers in unison, sync-locked tracks kept in sync, slip and slide,
+    Extend (`src/model/sequence.*`), all undoable.
+  * Trim mode: the Trim Mode button (Alt for the last rollers), U/A/S,
+    Go to Previous/Next Event, the Ripple Trim and Overwrite Trim tools,
+    clicking and Shift-clicking transitions, dragging rollers (Ctrl
+    snaps), right-to-left Alt lasso for slip (Shift for slide), lassoing
+    transitions, Cycle Trim Sides, the trim counters, the four Trim
+    buttons, Slip Left/Right, leaving with the button, Escape, frame steps
+    and the ruler or TC1; rollers drawn red, yellow or pink.
+  * Big Trim display in the Composer: counters and Trim buttons in place
+    of the position bars and button rows.
+  * Markers saved with clips and sequences; the red Add Marker button (Alt
+    for spanned markers), the Edit Marker dialog, markers drawn in the
+    Timeline, position bars and monitors; editing by double-click; Go to
+    Previous/Next Marker, Mark Markers; the Markers window with jump,
+    Edit Marker, Change Color, Change Track and Delete.
+* **Our choices, unverified.**
+  * Without a trim tool, single-roller trims are Ripple trims.
+  * The Trim Mode, Ripple Trim and Overwrite Trim buttons are on the
+    Timeline Top toolbar; their pictures are ours.
+  * The guide names only Red and Blue among the sixteen marker colours;
+    the other fourteen names and all the colour values are ours.
+  * The names of the U, A and S commands ("Select Nearest/Previous/Next
+    Transition") are ours.
+  * Trim mode ends when another sequence is loaded.
+  * Filler next to a cut can be trimmed away entirely; clips keep one
+    frame.
+* **Not yet built.** Small and Quick Trim displays, the outgoing and
+  incoming frames in the trim monitors (they show the loaded clips), Play
+  Loop, Edit Review, J-K-L trimming, the numeric keypad, end of trim
+  indicators, dual-image playback, the Transition Corner Display, link
+  selection, trim settings, the other fifteen Add Marker buttons, deleting
+  a marker selected in the Timeline, the Markers window's columns,
+  sorting, Quick Find, export, import and printing, Find, Copy Source
+  Markers.
 
 ## 12. Still to document
 * The window-by-window details for the Audio tools (ch. 21) and Settings

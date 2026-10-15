@@ -254,6 +254,23 @@
     {"id": "edit.move_clip_down", "text": "Move Clip Down", "palette": "edit"},
     {"id": "other.match_frame", "text": "Match Frame", "palette": "other"},
     {"id": "smart.lift_overwrite", "text": "Lift/Overwrite", "palette": "smart_tool"},
-    {"id": "smart.extract_splice_in", "text": "Extract/Splice-in", "palette": "smart_tool"}
+    {"id": "smart.extract_splice_in", "text": "Extract/Splice-in", "palette": "smart_tool"},
+    {"id": "smart.overwrite_trim", "text": "Overwrite Trim", "palette": "smart_tool"},
+    {"id": "smart.ripple_trim", "text": "Ripple Trim", "palette": "smart_tool"},
+    {"id": "trim.trim_mode", "text": "Trim Mode", "palette": "trim"},
+    {"id": "trim.trim_backward_10_frames", "text": "Trim Backward 10 Frames (or 8 Frames)", "palette": "trim"},
+    {"id": "trim.trim_backward_1_frame", "text": "Trim Backward 1 Frame", "palette": "trim"},
+    {"id": "trim.trim_forward_1_frame", "text": "Trim Forward 1 Frame", "palette": "trim"},
+    {"id": "trim.trim_forward_10_frames", "text": "Trim Forward 10 Frames (or 8 Frames)", "palette": "trim"},
+    {"id": "trim.cycle_trim_sides", "text": "Cycle Trim Sides", "palette": "trim"},
+    {"id": "trim.select_nearest_transition", "text": "Select Nearest Transition", "palette": "trim"},
+    {"id": "trim.select_previous_transition", "text": "Select Previous Transition", "palette": "trim"},
+    {"id": "trim.select_next_transition", "text": "Select Next Transition", "palette": "trim"},
+    {"id": "trim.extend", "text": "Extend", "palette": "trim"},
+    {"id": "trim.slip_left", "text": "Slip Left", "palette": "trim"},
+    {"id": "trim.slip_right", "text": "Slip Right", "palette": "trim"},
+    {"id": "move.go_to_previous_marker", "text": "Go to Previous Marker", "palette": "move"},
+    {"id": "move.go_to_next_marker", "text": "Go to Next Marker", "palette": "move"},
+    {"id": "edit.mark_markers", "text": "Mark Markers", "palette": "edit"}
   ]
 }

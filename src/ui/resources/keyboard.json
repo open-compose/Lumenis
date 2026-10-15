@@ -117,6 +117,18 @@
     {
       "key": "Down",
       "command": "edit.move_clip_down"
+    },
+    {
+      "key": "U",
+      "command": "trim.select_nearest_transition"
+    },
+    {
+      "key": "A",
+      "command": "trim.select_previous_transition"
+    },
+    {
+      "key": "S",
+      "command": "trim.select_next_transition"
     }
   ]
 }

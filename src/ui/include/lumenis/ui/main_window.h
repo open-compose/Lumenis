@@ -23,6 +23,7 @@ class BinContainer;
 class CommandRegistry;
 class Composer;
 class KeyboardMap;
+class MarkersWindow;
 class PanelManager;
 class Timeline;
 class WorkspaceBar;
@@ -93,6 +94,7 @@ private:
     BinContainer* binContainer_ = nullptr;
     Composer* composer_ = nullptr;
     Timeline* timeline_ = nullptr;
+    MarkersWindow* markersWindow_ = nullptr;
     std::unique_ptr<KeyboardMap> keyboard_;
     WorkspaceManager* workspaces_ = nullptr;
     WorkspaceBar* bar_ = nullptr;
