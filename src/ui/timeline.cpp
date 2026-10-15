@@ -3047,6 +3047,38 @@ bool Timeline::setTransitions(const QList<model::TrimRoller>& cuts, std::int64_t
     return commitSequence(tr("Transition Duration"), seq);
 }
 
+bool Timeline::setClipAudio(const QString& track, std::optional<double> gain, std::optional<int> pan, bool onTrack,
+                            const QString& description) {
+    message_.clear();
+    if (!recordSequence()) return false;
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    model::Sequence seq = model::Sequence::fromItem(record.current()->item);
+    std::int64_t start = record.position();
+    std::int64_t length = 1;
+    if (onTrack) {
+        const model::Track* t = seq.track(track);
+        const std::int64_t end = t ? t->length() : 0;
+        start = record.in().value_or(0);
+        length = (record.out() ? *record.out() + 1 : end) - start;
+    }
+    if (model::setClipAudio(seq, track, start, length, gain, pan) == 0) {
+        return fail(tr("There is no audio segment there to adjust."));
+    }
+    return commitSequence(description, seq);
+}
+
+std::optional<model::Segment> Timeline::audioSegmentAt(const QString& track) const {
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    const model::LoadedClip* rec = record.current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(track);
+    if (!t) return std::nullopt;
+    const int i = t->segmentAt(record.position());
+    if (i < 0 || t->segments.at(i).isFiller()) return std::nullopt;
+    return t->segments.at(i);
+}
+
 bool Timeline::changeEffect(const model::EffectRef& ref, const QString& description,
                             const std::function<void(model::Effect&, model::Transition*)>& change) {
     return changeItem(MonitorId::Record, description, [&](model::BinItem& item) {

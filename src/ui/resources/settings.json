@@ -2,6 +2,33 @@
   "comment": "The settings in the Settings window (guide ch.33) and the options of their dialog boxes, with the pages they come from. scope: project, user. Option types: bool, int, choice (style radio or menu), timecode, text, info (read-only). A setting with 'opens' has no dialog: double-clicking it opens that tool (the Tool Palette, p.392, p.1221). 'later' options are shown but cannot be changed yet; their feature comes in a later phase. Defaults the guide does not give are ours.",
   "settings": [
     {
+      "kind": "Audio Project",
+      "scope": "project",
+      "page": 1148,
+      "tabs": [
+        {
+          "name": "Main",
+          "options": [
+            {"key": "sampleRate", "type": "choice", "style": "menu", "label": "Sample Rate", "default": "48000", "page": 1148, "later": true,
+             "choices": [{"value": "44100", "label": "44.1 kHz"}, {"value": "48000", "label": "48 kHz"}, {"value": "96000", "label": "96 kHz"}]},
+            {"key": "bitDepth", "type": "choice", "style": "radio", "label": "Bit Depth", "default": "24", "page": 1148, "later": true,
+             "choices": [{"value": "16", "label": "16 Bit"}, {"value": "24", "label": "24 Bit"}]},
+            {"key": "convertSampleRates", "type": "choice", "style": "menu", "label": "Convert Sample Rates When Playing", "default": "never", "page": 1148, "later": true,
+             "choices": [{"value": "never", "label": "Never"}, {"value": "always", "label": "Always"}]},
+            {"key": "showMismatchedRates", "type": "bool", "label": "Show Mismatched Sample Rates as Different Color", "default": false, "page": 1149, "later": true},
+            {"key": "removeExtraFiller", "type": "bool", "label": "Remove Extra Filler After Punchin", "default": false, "page": 1149, "later": true}
+          ]
+        },
+        {
+          "name": "Output",
+          "options": [
+            {"key": "mixMode", "type": "choice", "style": "menu", "label": "Mix Mode Selection", "default": "stereo", "page": 1150,
+             "choices": [{"value": "stereo", "label": "Stereo"}, {"value": "mono", "label": "Mono"}]}
+          ]
+        }
+      ]
+    },
+    {
       "kind": "Bin",
       "scope": "user",
       "page": 1152,

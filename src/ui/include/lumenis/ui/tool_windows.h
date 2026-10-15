@@ -4,6 +4,7 @@
 
 #include <QObject>
 #include <QStringList>
+#include <QDialog>
 #include <QWidget>
 
 #include <functional>
@@ -12,6 +13,7 @@ class QComboBox;
 class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
+class QTabWidget;
 
 namespace lumenis::ui {
 
@@ -80,6 +82,34 @@ public:
 private:
     QPlainTextEdit* log_ = nullptr;
     QLineEdit* command_ = nullptr;
+};
+
+// What the Usage tab reports for the open project (p.102-104).
+struct ProjectUsage {
+    QString project;
+    qint64 secondsOpen = 0; // "Time Project open"
+    int bins = 0;
+    int clips = 0;
+    int sequences = 0;
+};
+
+// The Configuration, Usage and Hardware information of Help > About
+// (p.94, p.102-105): the version, options, licence and installed
+// plug-ins; the project's statistics; the drives with their free space
+// and the system. Information only; nothing can be changed.
+class AboutInfoDialog : public QDialog {
+    Q_OBJECT
+
+public:
+    AboutInfoDialog(const QStringList& plugins, const ProjectUsage& usage, QWidget* parent = nullptr);
+    QTabWidget* tabs() const { return tabs_; }
+    // "Configuration", "Usage" or "Hardware".
+    void showTab(const QString& name);
+    QTabWidget* hardwareTabs() const { return hardware_; }
+
+private:
+    QTabWidget* tabs_ = nullptr;
+    QTabWidget* hardware_ = nullptr;
 };
 
 } // namespace lumenis::ui

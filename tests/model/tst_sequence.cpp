@@ -753,6 +753,27 @@ private slots:
         QVERIFY(!applyTransition(s, "V1", 50, fitted, length));
         QVERIFY(removeEffect(s, "V1", 10, EffectTarget::Segment).isEmpty());
     }
+
+    void clipGainAndPan() {
+        // p.702, p.711: whole segments, never part of one; up to +36 dB
+        // typed (p.669-670).
+        Sequence s = Sequence::withDefaultTracks();
+        s.overwrite("A1", 0, {piece("a", 0, 50, "A1"), piece("b", 0, 50, "A1")});
+        QCOMPARE(setClipAudio(s, "A1", 10, 1, -6.04, std::nullopt), 1);
+        QCOMPARE(s.track("A1")->segments.at(0).gain, -6.0);
+        QCOMPARE(s.track("A1")->segments.at(1).gain, 0.0);
+        QCOMPARE(setClipAudio(s, "A1", 0, 100, std::nullopt, 300), 2);
+        QCOMPARE(s.track("A1")->segments.at(1).pan, kPanMax);
+        QCOMPARE(setClipAudio(s, "A1", 60, 1, 50.0, std::nullopt), 1);
+        QCOMPARE(s.track("A1")->segments.at(1).gain, kGainMax);
+        QCOMPARE(clampGain(-2000), kGainOff);
+        QCOMPARE(Sequence::fromJson(s.toJson()), s);
+        // Not on video tracks; different levels keep their edit.
+        QCOMPARE(setClipAudio(s, "V1", 0, 100, 3.0, std::nullopt), 0);
+        s.addEdit("A1", 20);
+        setClipAudio(s, "A1", 0, 1, 1.0, std::nullopt);
+        QCOMPARE(s.removeMatchFrameEdits({"A1"}, 0, 50), 0);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestSequence)

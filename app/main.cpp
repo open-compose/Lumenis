@@ -544,6 +544,22 @@ int main(int argc, char** argv) {
                     window.panels().closePanel(editor);
                 }
             }
+            // The Audio Mixer in Clip mode (pictures on p.691 and p.693) and
+            // the Audio Tool (picture on p.158).
+            if (lumenis::ui::Panel* mixer = window.showTool(QStringLiteral("AudioMixer"))) {
+                QWidget* floating = mixer->window();
+                floating->resize(560, 440);
+                QCoreApplication::processEvents();
+                ok = lumenis::ui::capture(floating, dir, QStringLiteral("audio_mixer")) && ok;
+                window.panels().closePanel(mixer);
+            }
+            if (lumenis::ui::Panel* tool = window.showTool(QStringLiteral("AudioTool"))) {
+                QWidget* floating = tool->window();
+                floating->resize(300, 340);
+                QCoreApplication::processEvents();
+                ok = lumenis::ui::capture(floating, dir, QStringLiteral("audio_tool")) && ok;
+                window.panels().closePanel(tool);
+            }
             ok = lumenis::ui::capture(&selectProject, dir, QStringLiteral("select_project")) && ok;
             selectProject.showPage(lumenis::ui::SelectProjectDialog::Page::NewProject);
             if (auto* toggle = selectProject.findChild<QToolButton*>(QStringLiteral("settingsToggle"))) {

@@ -9,7 +9,12 @@
 #include <QDateTime>
 #include <QGridLayout>
 #include <QKeyEvent>
+#include <QDialogButtonBox>
 #include <QLabel>
+#include <QListWidget>
+#include <QProgressBar>
+#include <QStorageInfo>
+#include <QTabWidget>
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QSysInfo>
@@ -228,6 +233,119 @@ void ConsoleWindow::run(const QString& command) {
         log.append(ConsoleLog::systemInfo().constFirst());
     } else {
         log.append(tr("Unknown command: %1. Type help for a list.").arg(name));
+    }
+}
+
+// ---------------------------------------------------------------- AboutInfoDialog
+
+AboutInfoDialog::AboutInfoDialog(const QStringList& plugins, const ProjectUsage& usage, QWidget* parent)
+    : QDialog(parent) {
+    setObjectName(QStringLiteral("aboutInfo"));
+    setWindowTitle(tr("About %1").arg(QString::fromUtf8(branding::kProductName)));
+    tabs_ = new QTabWidget(this);
+    tabs_->setObjectName(QStringLiteral("aboutTabs"));
+
+    // Configuration (p.104-105): version, product options, licensing type,
+    // GPU and the installed plug-ins.
+    auto* config = new QWidget;
+    auto* cl = new QVBoxLayout(config);
+    auto* form = new QGridLayout;
+    const std::pair<QString, QString> rows[] = {
+        {tr("Version"), QString::fromUtf8(branding::kVersion)},
+        {tr("Product Options"), tr("None")},
+        {tr("Licensing Type"), tr("GNU General Public License v3")},
+        {tr("GPU"), tr("Not reported yet")},
+        {tr("System"), QSysInfo::prettyProductName()},
+    };
+    int r = 0;
+    for (const auto& [label, value] : rows) {
+        form->addWidget(new QLabel(label, config), r, 0);
+        auto* v = new QLabel(value, config);
+        v->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        form->addWidget(v, r++, 1);
+    }
+    cl->addLayout(form);
+    cl->addWidget(new QLabel(tr("Installed plug-ins:"), config));
+    auto* list = new QListWidget(config);
+    list->setObjectName(QStringLiteral("aboutPlugins"));
+    list->addItems(plugins);
+    cl->addWidget(list, 1);
+    tabs_->addTab(config, tr("Configuration"));
+
+    // Usage (p.102-104): the project's statistics.
+    auto* use = new QWidget;
+    auto* ul = new QGridLayout(use);
+    const qint64 h = usage.secondsOpen / 3600;
+    const qint64 m = (usage.secondsOpen / 60) % 60;
+    const std::pair<QString, QString> stats[] = {
+        {tr("Project"), usage.project.isEmpty() ? tr("No project open") : usage.project},
+        {tr("Time Project open"), QStringLiteral("%1:%2").arg(h).arg(m, 2, 10, QLatin1Char('0'))},
+        {tr("Bins"), QString::number(usage.bins)},
+        {tr("Clips"), QString::number(usage.clips)},
+        {tr("Sequences"), QString::number(usage.sequences)},
+        {tr("Captured Media bytes used"), tr("0")},
+        {tr("Rendered Effects bytes used"), tr("0")},
+    };
+    r = 0;
+    for (const auto& [label, value] : stats) {
+        ul->addWidget(new QLabel(label, use), r, 0);
+        auto* v = new QLabel(value, use);
+        v->setObjectName(QStringLiteral("usage:") + label);
+        ul->addWidget(v, r++, 1);
+    }
+    ul->setRowStretch(r, 1);
+    tabs_->addTab(use, tr("Usage"));
+
+    // Hardware (p.102): a Drives tab with a bar of each online drive's
+    // filled space and its free space, and a System tab.
+    hardware_ = new QTabWidget;
+    hardware_->setObjectName(QStringLiteral("hardwareTabs"));
+    auto* drives = new QWidget;
+    auto* dl = new QGridLayout(drives);
+    r = 0;
+    for (const QStorageInfo& volume : QStorageInfo::mountedVolumes()) {
+        if (!volume.isValid() || !volume.isReady() || volume.bytesTotal() <= 0) continue;
+        const QString name = volume.displayName().isEmpty() ? volume.rootPath() : volume.displayName();
+        dl->addWidget(new QLabel(name, drives), r, 0);
+        auto* bar = new QProgressBar(drives);
+        bar->setObjectName(QStringLiteral("drive"));
+        bar->setRange(0, 1000);
+        const double used = 1.0 - static_cast<double>(volume.bytesAvailable()) / static_cast<double>(volume.bytesTotal());
+        bar->setValue(static_cast<int>(used * 1000));
+        // The number is the free space (p.102).
+        bar->setFormat(tr("%1 GB free").arg(static_cast<double>(volume.bytesAvailable()) / 1e9, 0, 'f', 1));
+        dl->addWidget(bar, r++, 1);
+    }
+    dl->setRowStretch(r, 1);
+    hardware_->addTab(drives, tr("Drives"));
+    auto* system = new QWidget;
+    auto* sl = new QGridLayout(system);
+    const std::pair<QString, QString> sys[] = {
+        {tr("Operating System"), QSysInfo::prettyProductName()},
+        {tr("Version"), QSysInfo::productVersion()},
+        {tr("Kernel"), QSysInfo::kernelVersion()},
+        {tr("Architecture"), QSysInfo::currentCpuArchitecture()},
+    };
+    r = 0;
+    for (const auto& [label, value] : sys) {
+        sl->addWidget(new QLabel(label, system), r, 0);
+        sl->addWidget(new QLabel(value, system), r++, 1);
+    }
+    sl->setRowStretch(r, 1);
+    hardware_->addTab(system, tr("System"));
+    tabs_->addTab(hardware_, tr("Hardware"));
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok, this);
+    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    auto* layout = new QVBoxLayout(this);
+    layout->addWidget(tabs_, 1);
+    layout->addWidget(buttons);
+    resize(520, 420);
+}
+
+void AboutInfoDialog::showTab(const QString& name) {
+    for (int i = 0; i < tabs_->count(); ++i) {
+        if (tabs_->tabText(i) == name) tabs_->setCurrentIndex(i);
     }
 }
 

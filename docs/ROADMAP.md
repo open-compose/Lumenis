@@ -323,17 +323,29 @@ Sub-steps:
   * Gate 3 (the default keys) is `tst_keyboard`; gate 4 is
     `tst_keyboard_workspaces`.
   * Details and what is left: "Implementation status (1.6)" in the spec.
-* **1.7** The windows still missing from the list below: the Effect Palette
-  and Effect Editor, the Audio Mixer and Audio Tool, the Media Tool, and the
-  Project window's Format, Usage, Info and Volumes tabs. Then gate 5, the
-  manual checklist.
+* **1.7** *Done.* The windows still missing from the list below.
+  * The Effect Palette and Effect Editor. Effects can be applied to segments
+    and transitions in the Timeline, removed and adjusted, and are saved
+    with the sequence (1.7a).
+  * The Audio Mixer and Audio Tool. Clip gain and pan are set per segment
+    (1.7b).
+  * The Media Tool, and Help > About's Configuration, Usage and Hardware
+    (1.7c).
+  * The 2025 guide has no Project window tabs: bins and volumes are in the
+    Bin Container sidebar, the format is in the Settings window, and usage
+    and hardware are in Help > About (spec section 14).
+  * Gate 5, the manual checklist, is next.
+  * Details and what is left: "Implementation status (1.7a)" and "(1.7b and
+    1.7c)" in the spec.
 
 The detailed inventory lives in [spec/ui-inventory.md](spec/ui-inventory.md).
 It is entered from the Media Composer Editing Guide with page citations.
 
 These windows are built using the Media Composer User Guide layout:
 * Select Project dialog.
-* Project window: Bins, Settings, Format, Usage, Info and Volumes tabs.
+* The project's bins (Bin Container sidebar), settings (Settings window) and
+  the About window's Configuration, Usage and Hardware. The 2025 guide has
+  no Project window tabs.
 * Bin views: Frame, Script, Text/Column and the bin map.
 * Composer (Source/Record, single/dual monitor) and the Timeline (tracks,
   patching, track selectors, smart tools).

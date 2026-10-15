@@ -84,6 +84,10 @@ struct Segment {
     std::optional<Effect> effect;
     // The transition effect at the cut where this segment starts.
     std::optional<Transition> transition;
+    // Clip Volume and Pan (p.702): the segment's clip gain in dB and its
+    // pan, -100 (left) to 100 (right).
+    double gain = 0.0;
+    int pan = 0;
 
     bool hasEffects() const { return effect || transition; }
     bool isFiller() const { return clipId.isEmpty(); }
@@ -411,6 +415,22 @@ const Effect* effectFor(const Sequence& sequence, const EffectRef& ref);
 Effect* effectFor(Sequence& sequence, const EffectRef& ref);
 const Transition* transitionFor(const Sequence& sequence, const EffectRef& ref);
 Transition* transitionFor(Sequence& sequence, const EffectRef& ref);
+
+// ---- Audio (ch. 21)
+
+// Clip gain: the fader goes to +12 dB, typed values to +36 dB (p.669-670);
+// the bottom of the fader is -∞, stored as kGainOff.
+inline constexpr double kGainMax = 36.0;
+inline constexpr double kGainFaderMax = 12.0;
+inline constexpr double kGainOff = -1000.0;
+inline constexpr int kPanMax = 100; // ours: the guide gives no range
+double clampGain(double db);
+// Clip Volume and Pan mode (p.702, p.711): sets the gain and/or pan of the
+// whole segments of a track that overlap [start, start + length); never
+// part of a segment. Filler and locked tracks are left alone. Returns how
+// many segments were set.
+int setClipAudio(Sequence& sequence, const QString& track, std::int64_t start, std::int64_t length,
+                 std::optional<double> gain, std::optional<int> pan);
 
 // One step of Edit > Undo/Redo (p.466): a sequence item before and after.
 struct EditStep {

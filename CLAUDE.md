@@ -96,10 +96,16 @@ Palette and button mapping (`command_palette.*`, `button_mapping.*`,
 `resources/command_palette.json`), the Tool palette, Calculator
 (`src/model/calculator.*`) and Console (`tool_windows.*`), is done. Phase
 1.6, the Keyboard setting (`keyboard_palette.*`), workspaces as User
-settings and the workspace buttons, is done. Phase 1's remaining windows
-(Effect Palette, Effect Editor, Audio Mixer, Audio Tool, Media Tool, the
-Project window's tabs) come next (ROADMAP). Spec sections 3, 4, 7, 11 and
-12 list details left for later.
+settings and the workspace buttons, is done. Phase 1.7 is done:
+  - the Effect Palette and Effect Editor (`effect_palette.*`,
+    `effect_editor.*`, `resources/effects.json`,
+    `resources/effect_parameters.json`, with effects in `sequence.*`);
+  - the Audio Mixer and Audio Tool (`audio_tools.*`);
+  - the Media Tool (`media_tool.*`);
+  - Help > About's Configuration, Usage and Hardware (`tool_windows.*`).
+
+Next is gate 5, the manual checklist (ROADMAP). Spec sections 3, 4, 7, 11,
+12, 13 and 14 list details left for later.
 
 Panels are our own framework, not QDockWidget, because Qt cannot draw
 vertical title bars, green drop zones or Alt-drag tabbing. Custom-painted

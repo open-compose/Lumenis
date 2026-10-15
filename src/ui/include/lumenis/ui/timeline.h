@@ -269,6 +269,14 @@ public:
     // of the transitions at the cuts; a Dissolve where there is none.
     bool setTransitions(const QList<model::TrimRoller>& cuts, std::int64_t duration,
                         model::TransitionAlignment alignment, std::int64_t start = 0);
+    // The Audio Mixer in Clip mode (p.702, p.711): the gain and/or pan of
+    // the segment under the Record position; with `onTrack` (Set Level on
+    // Track and the like) of the segments between the marks: IN to OUT, IN
+    // to the end, the start to OUT, or the whole track without marks.
+    bool setClipAudio(const QString& track, std::optional<double> gain, std::optional<int> pan, bool onTrack,
+                      const QString& description);
+    // The segment under the Record position on an audio track, if any.
+    std::optional<model::Segment> audioSegmentAt(const QString& track) const;
     // The Insufficient Source dialog (p.48): `which` is "Media A" or
     // "Media B"; true sizes the effect to fit, false cancels.
     using InsufficientSource = std::function<bool(const QString& which)>;

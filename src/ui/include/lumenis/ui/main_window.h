@@ -1,11 +1,14 @@
 #pragma once
 
+#include "lumenis/model/bin.h"
 #include "lumenis/model/project_store.h"
 
+#include <QDateTime>
 #include <QJsonObject>
 #include <QList>
 #include <QMainWindow>
 
+#include <functional>
 #include <memory>
 #include <optional>
 
@@ -21,7 +24,12 @@ namespace lumenis::ui {
 
 class BinContainer;
 class CalculatorWindow;
+class AboutInfoDialog;
+class AudioMixer;
+class AudioTool;
 class EffectEditor;
+class MediaTool;
+class MediaToolDisplayDialog;
 class EffectPalette;
 class CommandPalette;
 class ConsoleWindow;
@@ -72,7 +80,8 @@ public:
     SiteSettingsWindow* showSiteSettings();
     // Tools (ch.5) open as floating panels, which can be docked and tabbed
     // like other panels (p.94): "CommandPalette", "ToolPalette",
-    // "Calculator", "Console", "EffectPalette", "EffectEditor".
+    // "Calculator", "Console", "EffectPalette", "EffectEditor", "AudioMixer", "AudioTool",
+    // "MediaTool".
     Panel* showTool(const QString& panelId);
     CommandPalette& commandPalette() const { return *commandPalette_; }
     ToolPalette& toolPalette() const { return *toolPalette_; }
@@ -80,6 +89,17 @@ public:
     ConsoleWindow& console() const { return *console_; }
     EffectPalette& effectPalette() const { return *effectPalette_; }
     EffectEditor& effectEditor() const { return *effectEditor_; }
+    AudioMixer& audioMixer() const { return *audioMixer_; }
+    AudioTool& audioTool() const { return *audioTool_; }
+    MediaTool& mediaTool() const { return *mediaTool_; }
+    // Tools > Media Tool: the Media Tool Display dialog, then the tool
+    // (p.346). Tests answer the dialog through the hook (true: OK).
+    void showMediaTool();
+    void setMediaToolDisplayHook(std::function<bool(MediaToolDisplayDialog&)> hook) {
+        mediaToolDisplay_ = std::move(hook);
+    }
+    // Help > About's Configuration, Usage and Hardware (p.102-105).
+    AboutInfoDialog* createAboutInfo();
     KeyboardPalette& keyboardPalette() const { return *keyboardPalette_; }
     KeyboardMap& keyboard() const { return *keyboard_; }
     // The workspace each of the W1-W12 buttons switches to (p.90-91).
@@ -147,6 +167,13 @@ private:
     CalculatorWindow* calculator_ = nullptr;
     EffectPalette* effectPalette_ = nullptr;
     EffectEditor* effectEditor_ = nullptr;
+    AudioMixer* audioMixer_ = nullptr;
+    AudioTool* audioTool_ = nullptr;
+    MediaTool* mediaTool_ = nullptr;
+    std::function<bool(MediaToolDisplayDialog&)> mediaToolDisplay_;
+    QString appliedMixerMode_;
+    QDateTime projectOpened_;
+    QList<model::BinItem> projectItems(int* binCount = nullptr) const;
     ConsoleWindow* console_ = nullptr;
     KeyboardPalette* keyboardPalette_ = nullptr;
     Settings* settings_ = nullptr;

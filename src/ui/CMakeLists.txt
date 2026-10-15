@@ -1,4 +1,5 @@
 add_library(lumenis_ui STATIC
+    audio_tools.cpp
     bin_container.cpp
     bin_dialogs.cpp
     bin_dock.cpp
@@ -14,6 +15,7 @@ add_library(lumenis_ui STATIC
     keyboard_map.cpp
     keyboard_palette.cpp
     marker_dialogs.cpp
+    media_tool.cpp
     main_window.cpp
     menu_builder.cpp
     panel_manager.cpp
@@ -26,6 +28,7 @@ add_library(lumenis_ui STATIC
     tool_windows.cpp
     workspace.cpp
     workspace_bar.cpp
+    include/lumenis/ui/audio_tools.h
     include/lumenis/ui/bin_container.h
     include/lumenis/ui/bin_dialogs.h
     include/lumenis/ui/bin_dock.h
@@ -41,6 +44,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/keyboard_map.h
     include/lumenis/ui/keyboard_palette.h
     include/lumenis/ui/marker_dialogs.h
+    include/lumenis/ui/media_tool.h
     include/lumenis/ui/main_window.h
     include/lumenis/ui/menu_builder.h
     include/lumenis/ui/panels.h

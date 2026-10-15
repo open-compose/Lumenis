@@ -5,9 +5,11 @@
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/button_mapping.h"
+#include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/command_palette.h"
 #include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/effect_palette.h"
+#include "lumenis/ui/media_tool.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/keyboard_map.h"
@@ -34,6 +36,8 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPushButton>
+#include <QStorageInfo>
 #include <QPixmap>
 #include <QToolButton>
 #include <QToolTip>
@@ -214,7 +218,60 @@ void MainWindow::setProject(const model::ProjectEntry& project) {
     composer_->clear();
     composer_->setAspectRatio(project.settings.aspect);
     timeline_->history().clear();
+    projectOpened_ = QDateTime::currentDateTimeUtc();
     installProjectHandlers(true);
+}
+
+QList<model::BinItem> MainWindow::projectItems(int* binCount) const {
+    QList<model::BinItem> items;
+    int count = 0;
+    if (const model::ProjectBins* bins = binContainer_->bins()) {
+        for (const model::BinNode* node : bins->bins()) {
+            ++count;
+            if (const auto bin = model::BinFile::read(bins->binPath(node->id))) items += bin->items;
+        }
+    }
+    if (binCount) *binCount = count;
+    return items;
+}
+
+void MainWindow::showMediaTool() {
+    if (!project_) return;
+    // The Media Tool Display dialog first (p.346). The drives are the
+    // mounted volumes; media drives come with Phase 2.
+    QStringList drives;
+    for (const QStorageInfo& v : QStorageInfo::mountedVolumes()) {
+        if (v.isValid() && v.isReady() && !v.isReadOnly()) drives << (v.displayName().isEmpty() ? v.rootPath() : v.displayName());
+    }
+    MediaToolDisplayDialog dialog(project_->settings.name, drives, mediaTool_->display(), this);
+    if (mediaToolDisplay_) {
+        if (!mediaToolDisplay_(dialog)) return;
+    } else if (dialog.exec() != QDialog::Accepted) {
+        return;
+    }
+    mediaTool_->setItems(projectItems(), dialog.display());
+    showTool(QStringLiteral("MediaTool"));
+}
+
+AboutInfoDialog* MainWindow::createAboutInfo() {
+    QStringList plugins;
+    for (const auto& p : providers_.all()) {
+        const ext::ProviderInfo info = p->info();
+        plugins << QString::fromStdString(info.displayName + " " + info.version);
+    }
+    ProjectUsage usage;
+    if (project_) {
+        usage.project = project_->settings.name;
+        usage.secondsOpen = projectOpened_.secsTo(QDateTime::currentDateTimeUtc());
+        for (const model::BinItem& item : projectItems(&usage.bins)) {
+            if (item.kind == model::BinItemKind::Sequence) {
+                ++usage.sequences;
+            } else {
+                ++usage.clips;
+            }
+        }
+    }
+    return new AboutInfoDialog(plugins, usage, this);
 }
 
 void MainWindow::clearProject() {
@@ -544,6 +601,22 @@ void MainWindow::createTools() {
             [this](const EffectInfo& effect) { timeline_->applyEffectToSelection(effect); });
     effectEditor_ = new EffectEditor(*timeline_);
     panels_->addPanel(new Panel(QStringLiteral("EffectEditor"), tr("Effect Editor"), effectEditor_));
+    // Audio (ch. 21) and media (p.344-348).
+    audioMixer_ = new AudioMixer(*timeline_);
+    panels_->addPanel(new Panel(QStringLiteral("AudioMixer"), tr("Audio Mixer"), audioMixer_));
+    // The mode and mix are Audio Project settings; Live Mix is not saved
+    // (p.692).
+    connect(audioMixer_, &AudioMixer::modeChanged, this, [this](AudioMixer::Mode mode) {
+        if (mode == AudioMixer::Mode::Live) return;
+        settings_->setValue(QStringLiteral("Audio Project"), QStringLiteral("mixerMode"), AudioMixer::modeName(mode));
+    });
+    connect(audioMixer_, &AudioMixer::mixModeChanged, this, [this](const QString& value) {
+        settings_->setValue(QStringLiteral("Audio Project"), QStringLiteral("mixMode"), value);
+    });
+    audioTool_ = new AudioTool;
+    panels_->addPanel(new Panel(QStringLiteral("AudioTool"), tr("Audio Tool"), audioTool_));
+    mediaTool_ = new MediaTool;
+    panels_->addPanel(new Panel(QStringLiteral("MediaTool"), tr("Media Tool"), mediaTool_));
     // The Keyboard setting's palette (p.1202).
     keyboardPalette_ = new KeyboardPalette(*keyboard_);
     panels_->addPanel(new Panel(QStringLiteral("Keyboard"), tr("Keyboard"), keyboardPalette_));
@@ -588,6 +661,9 @@ Panel* MainWindow::showTool(const QString& panelId) {
     if (panelId == QLatin1String("Keyboard")) size = QSize(720, 320);
     if (panelId == QLatin1String("EffectPalette")) size = QSize(480, 420);
     if (panelId == QLatin1String("EffectEditor")) size = QSize(340, 520);
+    if (panelId == QLatin1String("AudioMixer")) size = QSize(560, 440);
+    if (panelId == QLatin1String("AudioTool")) size = QSize(300, 340);
+    if (panelId == QLatin1String("MediaTool")) size = QSize(640, 320);
     const QPoint at = mapToGlobal(QPoint(80, 90));
     panels_->floatPanel(panel, QRect(at, size));
     panels_->activate(panel);
@@ -637,6 +713,14 @@ void MainWindow::applySettings() {
     binContainer_->setFavoritesAtTop(s.text(QStringLiteral("Bin"), QStringLiteral("favoritesAt")) != QLatin1String("bottom"));
     binContainer_->setOpenBinsFloating(s.text(QStringLiteral("Bin"), QStringLiteral("openBin")) == QLatin1String("float"));
     binContainer_->setQuickFilterAllColumns(s.text(QStringLiteral("Bin"), QStringLiteral("quickFilter")) == QLatin1String("all"));
+    // Audio Project settings (p.692, p.1150).
+    const QString mixerMode = s.text(QStringLiteral("Audio Project"), QStringLiteral("mixerMode"));
+    if (const auto mode = AudioMixer::modeFromName(mixerMode); mode && mixerMode != appliedMixerMode_) {
+        appliedMixerMode_ = mixerMode;
+        audioMixer_->setMode(*mode);
+    }
+    const QString mix = s.text(QStringLiteral("Audio Project"), QStringLiteral("mixMode"));
+    if (!mix.isEmpty()) audioMixer_->setMixMode(mix);
     // General settings (p.1192).
     binContainer_->setDefaultStartTimecode(s.text(QStringLiteral("General"), QStringLiteral("defaultStartTc")));
 
@@ -746,6 +830,9 @@ void MainWindow::installPanelHandlers() {
     handle("tools.console", [this] { showTool(QStringLiteral("Console")); });
     handle("tools.effect_palette", [this] { showTool(QStringLiteral("EffectPalette")); });
     handle("tools.effect_editor", [this] { showTool(QStringLiteral("EffectEditor")); });
+    handle("tools.audio_mixer", [this] { showTool(QStringLiteral("AudioMixer")); });
+    handle("tools.audio_tool", [this] { showTool(QStringLiteral("AudioTool")); });
+    handle("tools.media_tool", [this] { showMediaTool(); });
     // The Tool Palette button (Other tab, p.392).
     handle("other.tool_palette", [this] { showTool(QStringLiteral("ToolPalette")); });
     // Windows > Workspaces > Properties: the active workspace's Workspace
@@ -925,6 +1012,17 @@ QMessageBox* MainWindow::createAboutBox() {
     picture.setDevicePixelRatio(dpr);
     box->setIconPixmap(picture);
     box->setStandardButtons(QMessageBox::Ok);
+    // Configuration, Usage and Hardware (p.94, p.102-105).
+    for (const QString& tab : {tr("Configuration"), tr("Usage"), tr("Hardware")}) {
+        QPushButton* b = box->addButton(tab, QMessageBox::ActionRole);
+        b->setObjectName(QStringLiteral("about") + tab);
+        connect(b, &QPushButton::clicked, this, [this, tab] {
+            AboutInfoDialog* info = createAboutInfo();
+            info->setAttribute(Qt::WA_DeleteOnClose);
+            info->showTab(tab);
+            info->show();
+        });
+    }
     // Room for the text beside the picture.
     if (auto* label = box->findChild<QLabel*>(QStringLiteral("qt_msgbox_label"))) label->setMinimumWidth(360);
     return box;

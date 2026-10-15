@@ -4,6 +4,7 @@
 #include <QRegularExpression>
 
 #include <algorithm>
+#include <cmath>
 
 namespace lumenis::model {
 
@@ -64,6 +65,8 @@ Transition transitionFromJson(const QJsonObject& o) {
 }
 
 void effectsToJson(const Segment& s, QJsonObject& o) {
+    if (s.gain != 0.0) o.insert(QStringLiteral("gain"), s.gain);
+    if (s.pan != 0) o.insert(QStringLiteral("pan"), s.pan);
     if (s.effect) o.insert(QStringLiteral("effect"), s.effect->toJson());
     if (s.transition) o.insert(QStringLiteral("transition"), transitionToJson(*s.transition));
 }
@@ -92,6 +95,8 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.sourceIn = o.value(QStringLiteral("in")).toInteger();
     s.length = std::max<std::int64_t>(o.value(QStringLiteral("length")).toInteger(), 0);
     s.addEdit = s.isFiller() && o.value(QStringLiteral("addEdit")).toBool();
+    s.gain = clampGain(o.value(QStringLiteral("gain")).toDouble());
+    s.pan = std::clamp(o.value(QStringLiteral("pan")).toInt(), -kPanMax, kPanMax);
     if (o.contains(QStringLiteral("effect"))) s.effect = Effect::fromJson(o.value(QStringLiteral("effect")).toObject());
     if (o.contains(QStringLiteral("transition"))) {
         s.transition = transitionFromJson(o.value(QStringLiteral("transition")).toObject());
@@ -678,6 +683,7 @@ bool Sequence::addEdit(const QString& name, std::int64_t frame) {
 bool Sequence::isMatchFrame(const Segment& before, const Segment& after) {
     // An edit with a transition, or between different effects, is kept.
     if (after.transition || before.effect != after.effect) return false;
+    if (before.gain != after.gain || before.pan != after.pan) return false;
     if (before.isFiller() || after.isFiller()) return before.isFiller() && after.isFiller() && after.addEdit;
     return before.clipId == after.clipId && before.binId == after.binId && before.sourceTrack == after.sourceTrack &&
            before.sourceIn + before.length == after.sourceIn;
@@ -1440,6 +1446,31 @@ const Transition* transitionFor(const Sequence& sequence, const EffectRef& ref) 
 
 Transition* transitionFor(Sequence& sequence, const EffectRef& ref) {
     return const_cast<Transition*>(transitionFor(std::as_const(sequence), ref));
+}
+
+// ---------------------------------------------------------------- audio
+
+double clampGain(double db) {
+    if (db <= kGainOff + 1) return kGainOff;
+    return std::min(std::round(db * 10) / 10, kGainMax);
+}
+
+int setClipAudio(Sequence& sequence, const QString& name, std::int64_t start, std::int64_t length,
+                 std::optional<double> gain, std::optional<int> pan) {
+    Track* t = sequence.track(name);
+    if (!t || t->locked || t->kind != TrackKind::Audio) return 0;
+    int changed = 0;
+    std::int64_t at = 0;
+    for (Segment& s : t->segments) {
+        const std::int64_t end = at + s.length;
+        if (!s.isFiller() && end > start && at < start + length) {
+            if (gain) s.gain = clampGain(*gain);
+            if (pan) s.pan = std::clamp(*pan, -kPanMax, kPanMax);
+            ++changed;
+        }
+        at = end;
+    }
+    return changed;
 }
 
 } // namespace lumenis::model

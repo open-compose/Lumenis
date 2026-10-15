@@ -1505,6 +1505,144 @@ p.610–640, ch. 13 p.432–434).**
   * Audio effects.
   * Applying effects to clips in the Source monitor.
 
-## 14. Still to document
-* The window-by-window details for the Audio tools (ch. 21).
+## 14. Audio tools (ch. 21) and the Media Tool (p.344–348)
+
+### Audio Mixer (p.690–726)
+* **Opening:** Tools > Audio Mixer (p.690). The guide prints no shortcut.
+* **Modes (p.690, p.692):**
+  * Clip (Clip Volume and Pan), Auto (Volume and Pan Automation) and Live
+    (Live Mix), shown as a three-part button.
+  * Clip is the default.
+  * The mode is saved in the Audio Project setting. Live Mix is not saved
+    there.
+* **Top bar (picture and table on p.691–693):**
+  * Show Track Sidebar (">>").
+  * The Mix Mode Selection menu: Stereo and Mono. The surround and Direct
+    Out mixes need output hardware (p.691–692, p.1150).
+  * The three mode buttons.
+  * Bypass, hidden in Live mode (p.692).
+  * Audio Loop Play, Render Effect and the Fast menu.
+  * The Sequence Mix Format button at the top of the Master strip (p.693).
+* **Strips (picture and table on p.693–694):**
+  * One strip per audio track of the sequence in the Record monitor, and the
+    Master strip on the right. The strips scroll sideways (p.694–696).
+  * Each strip has, top down: the gang button, the pan knob and Pan Value
+    display, the effect insert "+", S and M, and the fader with its scale.
+    Below the fader are the Volume Level display and the track button.
+  * The scale is +12, +9, +6, +3, 0, −3, −7, −11, −15, −30, −45, −∞. The
+    marks are equally spaced, as pictured.
+  * The track button selects the Timeline track, and the reverse (p.698).
+  * Solo and mute stay through mode changes and closing the mixer (p.694,
+    p.699).
+  * Right-click the gang button to choose a gang, A to J. Ganged faders move
+    together (p.704).
+* **Values:**
+  * The fader goes to +12 dB. Typed values go to +36 dB and show yellow
+    (p.669–670).
+  * The default is 0 dB (p.702).
+  * Alt-click (Option-click) the fader for 0 dB, and the Pan Value display
+    for MID (p.703).
+  * The pan shows as L57, MID or R57 (picture on p.693). The guide gives no
+    range; ours is L100 to R100.
+* **Clip mode (p.702, p.711):**
+  * The fader and pan set the clip gain and pan of the whole segment under
+    the position, never part of a segment. Each change is undoable.
+  * Clip gain and pan are saved with the segment.
+  * An edit between segments with different levels is not a match-frame
+    edit.
+* **Auto mode (p.701, p.714):** keyframes come with Phase 5. The faders are
+  off. The Volume Level display shows "Clip" when the segment has clip
+  volume (p.694).
+* **Live mode (p.723–725):** values are temporary and are not saved. The
+  fader areas turn red.
+* **Fast menu (p.710–711, p.719–720, p.725–726):**
+  * The items depend on the mode. They are dimmed until a track is
+    selected.
+  * They act on the selected tracks: IN to OUT, IN to the end, the start to
+    OUT, or the whole track when there are no marks.
+  * Clip mode, working: Set Level on Track, Set Pan on Track, Remove Clip
+    Gain on Track, Remove Pan on Track, Remove Pan/Vols on Track.
+  * Clip mode, not yet: Adjust Pan/Vols on Track, Remove and Commit Default
+    Clip Pan, Disable Track Monitoring, Set Display Options.
+  * Auto mode: all its items are listed and off.
+  * Live mode: Set Live Mix to Default works. Set Live Mix to Automation and
+    Set Live Mix as Automation are off.
+
+### Audio Tool (p.157–159)
+* **Opening:** Tools > Audio Tool. Ctrl+1 comes from ks2009 p.12; the 2025
+  guide prints no shortcut.
+* **Layout (picture on p.158):**
+  * RP (Reset Peak), an In/Out button per channel, and the PH (Peak Hold)
+    menu.
+  * Meters for 2 to 16 channels; we show 8.
+  * The digital scale (0 to −90 dB) on the left. The VU scale on the right
+    puts 0 VU at the −20 dB reference.
+* **Meter colours (p.157):** green below the reference level, yellow up to
+  −3 dB, red above.
+* **Reset Peak** resets the peaks (p.157).
+* **PH menu:**
+  * Peak Hold and Infinite Hold (p.712, p.753).
+  * Set Calibration Tone: level and frequency, −20 dB and 1000 Hz by
+    default (p.920).
+  * Play Calibration Tone and Create Tone Media (p.158–159) come with audio
+    and media.
+
+### Media Tool (p.344–348)
+* **Opening:** Tools > Media Tool. The Media Tool Display dialog opens first
+  (picture on p.346):
+  * The media drives, with All Drives.
+  * The projects, with Current Project and All Projects.
+  * Checkboxes: Master Clips, Linked Master Clips, Precompute Clips -
+    Rendered Effects, Precompute Clips - Titles and Matte Keys, Media Files.
+    The first two are ticked by default.
+* **The window (picture on p.347):** a bin-like list with the columns Color,
+  Name, Duration, Drive, IN-OUT and Creation Date. It shows master clips,
+  never sequences or subclips (p.345).
+* **Not yet (Phase 2):**
+  * Media files, precompute clips, and drives holding media.
+  * Delete Media (p.347–348).
+  * The bin views and the Fast menu.
+
+### Help > About: Configuration, Usage and Hardware (p.94, p.102–105)
+* The 2025 guide has no Project window with Format, Usage, Info and Volumes
+  tabs. That information is now found in these places:
+  * Bins and volumes: the Bin Container's sidebar (p.240), or Tools >
+    Project (p.243).
+  * The format: the Format tab of the Settings window (p.1146). Our
+    General settings show the project format.
+  * Usage, Hardware and Configuration: buttons of Help > About (p.94).
+* **Configuration (p.104–105):** the version, product options, licensing
+  type, GPU and the installed plug-ins. This is information only.
+* **Usage (p.102–104):** the project's statistics, such as the time the
+  project has been open. *Not yet:* the Statistics files.
+* **Hardware (p.102):**
+  * A Drives tab with a bar for each online drive, showing the space used
+    and the number of GB free.
+  * A System tab with the operating system and its version.
+  * *Not yet:* physical memory and Clear Memory.
+
+### Audio Project setting (p.1148–1150)
+* **Main tab:** Sample Rate, Bit Depth (24 Bit by default), Convert Sample
+  Rates When Playing, Show Mismatched Sample Rates as Different Color, and
+  Remove Extra Filler After Punchin. These come with audio (Phase 5).
+* **Output tab:** Mix Mode Selection (Stereo or Mono). It is the same as the
+  mixer's menu.
+* **Mixer mode:** the mixer saves it here (p.692). It is not shown in the
+  dialog.
+
+### Implementation status (1.7b and 1.7c)
+* **Done:**
+  * The Audio Mixer: Clip mode works, Live mode is temporary, and Auto mode
+    is shown.
+  * The Audio Tool.
+  * The Media Tool and its display dialog.
+  * Help > About's Configuration, Usage and Hardware.
+  * The Audio Project setting.
+* **Not yet:**
+  * Sound, meters that move, and volume automation (Phase 5).
+  * Media files and Delete Media (Phase 2).
+  * Surround panning, the track sidebar, the groups pane, and display
+    options.
+
+## 15. Still to document
 * Menu order and separators, confirmed against a licensed seat.

@@ -79,7 +79,7 @@ private slots:
         // Every setting has a scope and a page, every option a page, and a
         // choice's default is one of its choices (guide ch.33).
         const SettingsSchema& schema = SettingsSchema::builtIn();
-        QCOMPARE(schema.kindNames(SettingsScope::Project), QStringList{QStringLiteral("General")});
+        QCOMPARE(schema.kindNames(SettingsScope::Project), (QStringList{"Audio Project", "General"}));
         QCOMPARE(schema.kindNames(SettingsScope::User),
                  (QStringList{"Bin", "Composer", "Interface", "Keyboard", "Timeline", "Tool Palette", "Workspace View",
                               "Trim"}));
