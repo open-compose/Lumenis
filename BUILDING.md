@@ -206,10 +206,11 @@ python3 scripts/make-icons.py                                  # every platform'
 * *Queued for a long time:* the Mac is off or asleep, or the runner is
   stopped. Run `sudo scripts/setup-mac-runner.sh status`, or set the
   repository variable `MAC_RUNNER` to `off` until the Mac is back.
-* *"mkdir: /Users/runner: Permission denied" in Install Qt:* `setup-python`
-  installs into the GitHub-hosted runners' home unless `AGENT_TOOLSDIRECTORY`
-  is set. The workflow sets it for the self-hosted job, and the setup
-  script writes it into the runner's `.env`.
+* *"mkdir: /Users/runner: Permission denied":* `actions/setup-python` (used
+  by `install-qt-action`) only installs Python under `/Users/runner`, the
+  GitHub-hosted runners' home. The self-hosted job therefore installs Qt
+  itself, once, into `/Users/ghrunner/Qt` with aqtinstall in a virtual
+  environment. Delete that folder to make it reinstall.
 * *"command not found: ninja" (or cmake):* install them from an
   administrator account with `brew install cmake ninja`. The runner's user
   cannot run `brew`.

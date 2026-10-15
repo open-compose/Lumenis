@@ -217,18 +217,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        # setup-python, which this uses, otherwise installs into
-        # /Users/runner, the GitHub-hosted runners' home.
-        env:
-          AGENT_TOOLSDIRECTORY: ${{ runner.tool_cache }}
-        with:
-          version: ${{ env.QT_VERSION }}
-          host: mac
-          target: desktop
-          arch: clang_64
-          cache: true
+      - name: Install Qt (once, kept in the runner's home)
+        # Not install-qt-action: the Python it sets up only installs under
+        # /Users/runner, the GitHub-hosted runners' home. aqtinstall runs in
+        # its own virtual environment instead.
+        run: |
+          qt="$HOME/Qt/$QT_VERSION/macos"
+          if [ ! -d "$qt" ]; then
+            python3 -m venv "$HOME/.aqt-venv"
+            "$HOME/.aqt-venv/bin/pip" install --quiet --upgrade aqtinstall
+            "$HOME/.aqt-venv/bin/aqt" install-qt mac desktop "$QT_VERSION" clang_64 -O "$HOME/Qt"
+          fi
+          echo "QT_ROOT_DIR=$qt" >> "$GITHUB_ENV"
+          echo "$qt/bin" >> "$GITHUB_PATH"
 
       - name: Check build tools
         # Installed by an administrator; the runner's user cannot use brew.
