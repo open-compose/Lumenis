@@ -372,17 +372,17 @@ jobs:
             exit $LASTEXITCODE
           }
 
-      - name: Installer gate (unpack, launch)
-        # The runner's user is not an administrator, so the .msi is unpacked
-        # with an administrative install rather than installed; the hosted
-        # job installs and uninstalls it.
-        shell: powershell
+      - name: Package gate (.zip, launch)
+        # The runner's user may not use the Windows Installer service (error
+        # 0x80070005), so the .msi cannot be installed or even unpacked here.
+        # The .zip has the same files: unpack it and launch the app. The
+        # GitHub-hosted job installs and uninstalls the .msi.
         run: |
-          $msi = (Get-ChildItem build\ci\*.msi | Select-Object -First 1).FullName
-          $target = Join-Path $env:RUNNER_TEMP 'msi'
+          if (-not (Get-ChildItem build\ci\*.msi)) { Write-Error 'no .msi was built'; exit 1 }
+          $zip = (Get-ChildItem build\ci\*.zip | Select-Object -First 1).FullName
+          $target = Join-Path $env:RUNNER_TEMP 'zip'
           Remove-Item -Recurse -Force $target -ErrorAction SilentlyContinue
-          $p = Start-Process msiexec -ArgumentList '/a', "`"$msi`"", '/qn', "TARGETDIR=`"$target`"", '/l*v', 'unpack.log' -Wait -PassThru
-          if ($p.ExitCode -ne 0) { Get-Content unpack.log -Tail 50; exit 1 }
+          Expand-Archive -Force $zip $target
           $exe = Get-ChildItem -Recurse -Filter cutthulhu.exe $target | Select-Object -First 1
           if (-not $exe) { Write-Error 'cutthulhu.exe is not in the package'; exit 1 }
           $out = & $exe.FullName --smoke-test | Out-String

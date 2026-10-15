@@ -195,8 +195,9 @@ WSL the Linux jobs, for free.
 * **Windows:** the runner is a Windows service under its own hidden
   standard user `ghrunner`, started at boot; nobody logs in as it and it
   never uses the screen, keyboard or mouse. Builds use 4 parallel compile
-  jobs so the PC stays responsive. The installer gate unpacks the .msi
-  (the user is not an administrator) instead of installing it.
+  jobs so the PC stays responsive. The user is not an administrator and
+  cannot use the Windows Installer service, so the package gate launches
+  the app from the .zip; the GitHub-hosted job installs the .msi.
 * **Linux in WSL:** one runner per Ubuntu distribution, labelled
   `ubuntu-<version>`, running as a systemd service under its own user at
   low priority. WSL only runs while you are logged on to Windows, so the
@@ -275,6 +276,10 @@ python3 scripts/make-icons.py                                  # every platform'
   (light.exe error LGHT0217). The self-hosted job configures with
   `-DLUMENIS_WIX_SKIP_VALIDATION=ON` (light `-sval`); the GitHub-hosted job
   still validates. The step prints WiX's log when it fails.
+* *msiexec "Failed to connect to server. Error: 0x80070005":* the same
+  limit: the runner's user may not use the Windows Installer service, not
+  even for `msiexec /a`. The self-hosted job checks the .zip package (the
+  same files) instead; the hosted job installs the .msi.
 * *"Qt 6.8.3 is not in C:\Qt":* run `scripts\setup-windows-runner.ps1
   install <token>` again; it installs Qt and keeps the existing runner.
 * *"systemd is not running" from setup-wsl-runner.sh:* add `[boot]` and
