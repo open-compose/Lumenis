@@ -247,6 +247,18 @@ public:
 
     // Bin settings "Auto-Save interval" (p.299), in minutes; 0 turns it off.
     void setAutoSaveMinutes(int minutes);
+    // Bin settings (p.1153): where Favorite Bins show, whether bins opened
+    // from the sidebar float, and what the quick filter searches.
+    void setFavoritesAtTop(bool top);
+    void setOpenBinsFloating(bool floating) { openFloating_ = floating; }
+    bool opensBinsFloating() const { return openFloating_; }
+    void setQuickFilterAllColumns(bool all);
+    // A bin the user opens or creates: tabbed or floating as the Bin
+    // settings say; Ctrl (Command) inverts that (p.1153).
+    BinDocument* openBinAsSet(const QString& id);
+    // General settings "Default Starting TC" (p.1192) for new sequences.
+    void setDefaultStartTimecode(const QString& tc) { startTimecode_ = tc; }
+    const QString& defaultStartTimecode() const { return startTimecode_; }
 
 signals:
     void activeBinChanged();
@@ -277,6 +289,8 @@ private:
 
     std::unique_ptr<model::ProjectBins> bins_;
     Rational editRate_{24000, 1001};
+    bool openFloating_ = false;
+    QString startTimecode_;
     QList<BinDocument*> documents_;
     QMenu* binMenu_ = nullptr;
     QSplitter* split_ = nullptr;

@@ -86,9 +86,11 @@ done. Phase 1.3b, the bin views, columns, sorting and sifting
 Timeline and editing (`src/model/sequence.*`, `src/ui/timeline.*`), is
 done. Phase 1.4c, segment editing, locks and the Clipboard, is done.
 Phase 1.4d, Trim mode and markers (`src/model/marker.*`,
-`src/ui/marker_dialogs.*`), is done. Next is 1.5: palettes, tools and the
-Settings dialogs (ROADMAP); spec section 11 lists editing details left
-for later.
+`src/ui/marker_dialogs.*`), is done. Phase 1.5a, Settings
+(`src/model/settings.*`, `src/ui/settings*`, options in
+`src/ui/resources/settings.json`), is done. Next is 1.5b: the Command
+Palette, Tool Palette, Calculator and Console (ROADMAP). Spec sections 11
+and 12 list details left for later.
 
 Panels are our own framework, not QDockWidget, because Qt cannot draw
 vertical title bars, green drop zones or Alt-drag tabbing. Custom-painted

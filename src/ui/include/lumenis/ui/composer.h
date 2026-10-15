@@ -97,6 +97,10 @@ public:
     using EventResolver = std::function<QList<std::int64_t>(MonitorId)>;
     void setEventResolver(EventResolver resolver) { events_ = std::move(resolver); }
     QList<std::int64_t> events(MonitorId monitor) const;
+    // Where Go to Previous/Next Event stop (Composer settings, Move tab,
+    // p.1160); the events when nothing else decides.
+    void setStopResolver(EventResolver resolver) { stops_ = std::move(resolver); }
+    QList<std::int64_t> stops(MonitorId monitor) const;
     // What Mark Clip marks when something other than the segment under the
     // position decides it (segments selected in the Timeline, p.622).
     using MarkResolver = std::function<std::optional<std::pair<std::int64_t, std::int64_t>>(MonitorId)>;
@@ -145,6 +149,20 @@ public:
     const TrimDisplay& trimDisplay() const { return trim_; }
     QToolButton* trimCounter(MonitorId monitor) const;
     QWidget* trimBar() const { return trimBar_; }
+
+    // What the Composer shows (Composer settings, Window and Edit tabs,
+    // p.1158-1160).
+    struct Display {
+        bool infoRow = true;       // Data Display at Top: Off, or one row
+        int buttonRows = 2;        // Button Display at Bottom: 0, 1 or 2
+        bool centerDuration = true;
+        bool markers = true;       // Show Composer Markers
+        bool spannedMarkers = true;
+    };
+    void setDisplay(const Display& display);
+    const Display& display() const { return display_; }
+    // The markers of a monitor's clip that are shown.
+    QList<model::Marker> shownMarkers(MonitorId monitor) const;
 
     // Show Source/Record colors in Composer (Interface settings, p.383).
     void setSourceRecordColors(bool on);
@@ -223,10 +241,12 @@ private:
     QLabel* center_ = nullptr;
     QWidget* trimBar_ = nullptr;
     TrimDisplay trim_;
+    Display display_;
     Column* columns_[2] = {nullptr, nullptr};
     ItemResolver resolver_;
     KeyResolver keys_;
     EventResolver events_;
+    EventResolver stops_;
     MarkResolver marks_;
 };
 

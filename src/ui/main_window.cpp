@@ -10,6 +10,8 @@
 #include "lumenis/ui/marker_dialogs.h"
 #include "lumenis/ui/menu_builder.h"
 #include "lumenis/ui/panels.h"
+#include "lumenis/ui/settings.h"
+#include "lumenis/ui/settings_window.h"
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timeline.h"
 #include "lumenis/ui/workspace.h"
@@ -33,6 +35,19 @@
 #include <algorithm>
 
 namespace lumenis::ui {
+
+// Interface settings, Show ToolTips (p.1200): with it off, no tooltips.
+class ToolTipFilter : public QObject {
+public:
+    using QObject::QObject;
+    bool enabled = true;
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (!enabled && event->type() == QEvent::ToolTip) return true;
+        return QObject::eventFilter(watched, event);
+    }
+};
 
 namespace {
 
@@ -81,6 +96,11 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     area->installEventFilter(this);
 
     createPanels();
+    settings_ = new Settings(this);
+    toolTips_ = new ToolTipFilter(this);
+    qApp->installEventFilter(toolTips_);
+    connect(settings_, &Settings::changed, this, &MainWindow::applySettings);
+    applySettings();
     installHandlers();
     buildBuiltinMenus(menuBar(), commands_);
     installPanelHandlers();
@@ -149,7 +169,8 @@ void MainWindow::createPanels() {
         if (!doc && !binContainer_->openDocuments().isEmpty()) doc = binContainer_->openDocuments().first();
         if (!doc || !project_) return std::nullopt;
         return std::make_pair(doc->nodeId(), model::newSequence(doc->bin(), project_->settings.format.editRate,
-                                                            QDateTime::currentDateTimeUtc()));
+                                                            QDateTime::currentDateTimeUtc(),
+                                                            binContainer_->defaultStartTimecode()));
     });
     connect(timeline_, &Timeline::message, this, [](const QString& text) { QToolTip::showText(QCursor::pos(), text); });
     // The Timeline takes its own commands from the Composer; the rest are
@@ -168,6 +189,9 @@ void MainWindow::setProject(const model::ProjectEntry& project) {
     project_ = project;
     setWindowTitle(QStringLiteral("%1 - %2").arg(QString::fromUtf8(branding::kProductName), project.settings.name));
     commands_.setHandler(QStringLiteral("file.close_project"), [this] { emit closeProjectRequested(); });
+    // Project settings first: they include the new-sequence timecode.
+    settings_->setProject(project.folder);
+    if (settingsWindow_) settingsWindow_->setProject(project);
     binContainer_->setProject(project.folder, project.settings.name, project.settings.format.editRate);
     composer_->clear();
     composer_->setAspectRatio(project.settings.aspect);
@@ -182,6 +206,12 @@ void MainWindow::clearProject() {
     binContainer_->setProject({}, {}, Rational(24000, 1001));
     composer_->clear();
     timeline_->history().clear();
+    if (settingsWindow_) {
+        settingsWindow_->hide();
+        settingsWindow_->setProject(std::nullopt);
+    }
+    if (siteSettingsWindow_) siteSettingsWindow_->hide();
+    settings_->setProject({});
     installProjectHandlers(false);
 }
 
@@ -252,12 +282,22 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
         }
         panels_->showPanel(panels_->panel(QStringLiteral("BinContainer")));
     });
-    // Edit menu commands act on the bin when the Bin Container is active.
+    // File > Settings (p.1136) and Windows > Site Settings (p.1141).
+    handle("file.settings", [this] { showSettings(); });
+    handle("windows.site_settings", [this] { showSiteSettings(); });
+    // Edit menu commands act on the bin when the Bin Container is active,
+    // or on the settings in a Settings window (p.1138, p.1140).
     handle("edit.duplicate", [this, bins] {
-        if (binsActive()) bins->duplicateSelection();
+        if (SettingsList* list = activeSettingsList()) {
+            list->duplicateSelection();
+        } else if (binsActive()) {
+            bins->duplicateSelection();
+        }
     });
     handle("edit.delete", [this, bins] {
-        if (binsActive()) {
+        if (SettingsList* list = activeSettingsList()) {
+            list->deleteSelection();
+        } else if (binsActive()) {
             bins->deleteSelection();
         } else if (const Panel* p = panels_->activePanel(); p && p->id() == QLatin1String("Timeline")) {
             // Segments or tracks in the Timeline (p.621, p.636).
@@ -323,6 +363,89 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     if (event->isAccepted()) {
         emit closed();
     }
+}
+
+SettingsWindow* MainWindow::showSettings() {
+    if (!settingsWindow_) {
+        settingsWindow_ = new SettingsWindow(*settings_, this);
+        // Its own window: give it the commands so Edit's shortcuts work.
+        for (const QString& id : commands_.ids()) settingsWindow_->addAction(commands_.action(id));
+    }
+    settingsWindow_->setProject(project_);
+    settingsWindow_->show();
+    settingsWindow_->raise();
+    settingsWindow_->activateWindow();
+    return settingsWindow_;
+}
+
+SiteSettingsWindow* MainWindow::showSiteSettings() {
+    if (!siteSettingsWindow_) {
+        siteSettingsWindow_ = new SiteSettingsWindow(*settings_, this);
+        for (const QString& id : commands_.ids()) siteSettingsWindow_->addAction(commands_.action(id));
+    }
+    siteSettingsWindow_->show();
+    siteSettingsWindow_->raise();
+    siteSettingsWindow_->activateWindow();
+    return siteSettingsWindow_;
+}
+
+SettingsList* MainWindow::activeSettingsList() const {
+    const QWidget* active = QApplication::activeWindow();
+    if (settingsWindow_ && active == settingsWindow_) return settingsWindow_->currentList();
+    if (siteSettingsWindow_ && active == siteSettingsWindow_) return siteSettingsWindow_->list();
+    return nullptr;
+}
+
+void MainWindow::applySettings() {
+    const Settings& s = *settings_;
+    // Bin settings (p.1152-1154).
+    binContainer_->setAutoSaveMinutes(s.number(QStringLiteral("Bin"), QStringLiteral("autoSaveMinutes")));
+    binContainer_->setFavoritesAtTop(s.text(QStringLiteral("Bin"), QStringLiteral("favoritesAt")) != QLatin1String("bottom"));
+    binContainer_->setOpenBinsFloating(s.text(QStringLiteral("Bin"), QStringLiteral("openBin")) == QLatin1String("float"));
+    binContainer_->setQuickFilterAllColumns(s.text(QStringLiteral("Bin"), QStringLiteral("quickFilter")) == QLatin1String("all"));
+    // General settings (p.1192).
+    binContainer_->setDefaultStartTimecode(s.text(QStringLiteral("General"), QStringLiteral("defaultStartTc")));
+
+    // Composer settings (p.1158-1160).
+    const QString composer = QStringLiteral("Composer");
+    Composer::Display d;
+    d.infoRow = s.text(composer, QStringLiteral("dataDisplay")) != QLatin1String("off");
+    const QString rows = s.text(composer, QStringLiteral("buttonDisplay"));
+    d.buttonRows = rows == QLatin1String("off") ? 0 : rows == QLatin1String("one") ? 1 : 2;
+    d.centerDuration = s.flag(composer, QStringLiteral("centerDuration"));
+    d.markers = s.flag(composer, QStringLiteral("showComposerMarkers"));
+    d.spannedMarkers = s.flag(composer, QStringLiteral("showSpannedMarkers"));
+    composer_->setDisplay(d);
+
+    // Timeline settings (p.1218-1220), with the Composer's Edit and Move
+    // tabs and the Trim settings (p.1223), which the Timeline carries out.
+    const QString tl = QStringLiteral("Timeline");
+    Timeline::Options o;
+    o.toolbar = s.flag(tl, QStringLiteral("showToolbar"));
+    o.markedRegion = s.flag(tl, QStringLiteral("showMarkedRegion"));
+    const QString movement = s.text(tl, QStringLiteral("movementDuringPlay"));
+    o.movement = movement == QLatin1String("scroll") ? Timeline::Options::Movement::Scroll
+                 : movement == QLatin1String("none") ? Timeline::Options::Movement::None
+                                                     : Timeline::Options::Movement::Page;
+    o.onlyOneSegmentTool = s.flag(tl, QStringLiteral("onlyOneSegmentTool"));
+    o.defaultSegmentTool = s.text(tl, QStringLiteral("defaultSegmentTool")) == QLatin1String("insert")
+                               ? model::EditKind::SpliceIn
+                               : model::EditKind::Overwrite;
+    o.activateRecordAfterEdit = s.flag(composer, QStringLiteral("activateRecordAfterEdit"));
+    o.stopAtHead = s.flag(composer, QStringLiteral("stopAtHead"));
+    o.stopAtTail = s.flag(composer, QStringLiteral("stopAtTail"));
+    o.stopAtMarkers = s.flag(composer, QStringLiteral("stopAtMarkers"));
+    o.ignoreTrackSelectors = s.flag(composer, QStringLiteral("ignoreTrackSelectors"));
+    o.trimAutoFocus = s.flag(QStringLiteral("Trim"), QStringLiteral("autoFocus"));
+    timeline_->setOptions(o);
+
+    // Interface settings (p.1200-1201).
+    const QString ui = QStringLiteral("Interface");
+    toolTips_->enabled = s.flag(ui, QStringLiteral("showToolTips"));
+    composer_->setSourceRecordColors(s.flag(ui, QStringLiteral("composerColors")));
+    workspaces_->setMoveBehavior(s.text(ui, QStringLiteral("workspaceMove")) == QLatin1String("saved")
+                                     ? WorkspaceManager::MoveBehavior::LastSavedState
+                                     : WorkspaceManager::MoveBehavior::LastKnownState);
 }
 
 bool MainWindow::eventFilter(QObject* watched, QEvent* event) {

@@ -32,6 +32,7 @@ Locations Locations::defaults() {
     l.privateProjects = QDir::cleanPath(l.privateProjects);
     l.sharedProjects = QDir::cleanPath(l.sharedProjects);
     l.users = QDir::cleanPath(l.users);
+    l.siteSettings = QDir::cleanPath(QDir(l.users).filePath(QStringLiteral("../Settings")));
     return l;
 }
 

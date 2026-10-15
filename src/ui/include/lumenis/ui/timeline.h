@@ -126,6 +126,28 @@ public:
     void setSequenceMaker(SequenceMaker maker) { maker_ = std::move(maker); }
     void setKeyResolver(Composer::KeyResolver resolver) { keys_ = std::move(resolver); }
 
+    // Behaviour set in the settings (guide ch.33).
+    struct Options {
+        // Timeline settings (p.1218-1220).
+        bool toolbar = true;           // Show Toolbar
+        bool markedRegion = true;      // Show Marked Region
+        enum class Movement { Page, Scroll, None };
+        Movement movement = Movement::Page; // Movement During Play
+        bool onlyOneSegmentTool = false;
+        model::EditKind defaultSegmentTool = model::EditKind::Overwrite;
+        // Composer settings: Edit tab (p.1160).
+        bool activateRecordAfterEdit = false;
+        // Composer settings: Move tab (p.1160).
+        bool stopAtHead = true;
+        bool stopAtTail = false;
+        bool stopAtMarkers = false;
+        bool ignoreTrackSelectors = false;
+        // Trim settings (p.1223).
+        bool trimAutoFocus = false;
+    };
+    void setOptions(const Options& options);
+    const Options& options() const { return options_; }
+
     Composer& composer() const { return composer_; }
     // Toggle Source/Record in Timeline (p.607).
     void setShowSource(bool on);
@@ -322,6 +344,8 @@ private:
     double scale_ = 0;  // 0: the whole sequence fits
     double first_ = 0;  // first frame shown
     std::optional<std::pair<double, double>> focusBack_;
+    bool trimFocused_ = false; // Trim mode turned Focus on
+    Options options_;
     QList<std::pair<double, double>> zoomStack_;
     Display display_;
     bool liftTool_ = false;

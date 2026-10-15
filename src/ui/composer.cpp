@@ -304,6 +304,7 @@ struct Composer::Column {
     QMenu* clipMenu = nullptr;
     QMenu* trackingMenu = nullptr;
     QHash<QString, QToolButton*> buttons;
+    QList<QWidget*> rows; // the button rows
 };
 
 // ---------------------------------------------------------------- PositionBar
@@ -349,7 +350,7 @@ void PositionBar::paintEvent(QPaintEvent*) {
     if (s.in() || s.out()) p.fillRect(QRect(QPoint(xFor(s.markedStart()), 2), QPoint(xFor(s.markedEnd()), height() - 3)), QColor::fromRgba(kMarkedSpan));
     // Markers: ovals in their colours (p.413); spanned ones as bars.
     p.setRenderHint(QPainter::Antialiasing);
-    for (const model::Marker& m : model::markersOf(s.current()->item)) {
+    for (const model::Marker& m : composer_.shownMarkers(monitor_)) {
         const QColor c = QColor::fromRgb(model::markerColor(m.color));
         p.setPen(QPen(c.darker(150), 1));
         p.setBrush(c);
@@ -365,7 +366,7 @@ void PositionBar::paintEvent(QPaintEvent*) {
 std::optional<model::Marker> PositionBar::markerAt(int x) const {
     const model::MonitorState& s = composer_.state(monitor_);
     if (s.isEmpty()) return std::nullopt;
-    for (const model::Marker& m : model::markersOf(s.current()->item)) {
+    for (const model::Marker& m : composer_.shownMarkers(monitor_)) {
         if (std::abs(xFor(m.frame) - x) <= 4) return m;
     }
     return std::nullopt;
@@ -427,7 +428,7 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
         if (s.out() && *s.out() == s.position()) saw(pic.right() - 6, -1);
         // A marker on this frame: an oval at the bottom of the picture
         // (p.413).
-        for (const model::Marker& m : model::markersOf(s.current()->item)) {
+        for (const model::Marker& m : composer_.shownMarkers(monitor_)) {
             if (s.position() < m.frame || s.position() >= m.end()) continue;
             p.setRenderHint(QPainter::Antialiasing);
             const QColor c = QColor::fromRgb(model::markerColor(m.color));
@@ -451,7 +452,7 @@ void MonitorPicture::mousePressEvent(QMouseEvent* event) {
     const QRect pic = pictureRect();
     const QRectF oval(pic.center().x() - 12, pic.bottom() - 18, 24, 12);
     if (s.isEmpty() || !oval.contains(event->position())) return;
-    for (const model::Marker& m : model::markersOf(s.current()->item)) {
+    for (const model::Marker& m : composer_.shownMarkers(monitor_)) {
         if (s.position() >= m.frame && s.position() < m.end()) {
             emit composer_.markerEditRequested(monitor_, m.id);
             return;
@@ -591,11 +592,13 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
     rows->setContentsMargins(0, 0, 0, 0);
     rows->setSpacing(1);
     for (const QList<ButtonSpec>& row : buttonRows(monitor)) {
-        auto* h = new QHBoxLayout;
+        auto* rowWidget = new QWidget(c->controls);
+        auto* h = new QHBoxLayout(rowWidget);
+        h->setContentsMargins(0, 0, 0, 0);
         h->setSpacing(0);
         for (int i = 0; i < row.size(); ++i) {
             const ButtonSpec& spec = row.at(i);
-            auto* b = new QToolButton(c->widget);
+            auto* b = new QToolButton(rowWidget);
             b->setAutoRaise(true);
             b->setFixedSize(kButtonWidth, kToolButtonHeight);
             b->setIcon(glyph(spec.glyph, spec.glyph == Glyph::SpliceIn    ? QColor(kSplice)
@@ -620,7 +623,8 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
             if (i > 0) h->addStretch(1);
             h->addWidget(b);
         }
-        rows->addLayout(h);
+        rows->addWidget(rowWidget);
+        c->rows << rowWidget;
     }
 
     auto* v = new QVBoxLayout(c->widget);
@@ -645,6 +649,27 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
     v->addWidget(c->trimCounter);
     v->addWidget(c->controls);
     return c->widget;
+}
+
+void Composer::setDisplay(const Display& display) {
+    display_ = display;
+    for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
+        Column& c = column(m);
+        c.clipName->setVisible(display.infoRow);
+        c.tracking->setVisible(display.infoRow);
+        for (int i = 0; i < c.rows.size(); ++i) c.rows.at(i)->setVisible(i < display.buttonRows);
+        c.controls->setVisible(!trim_.on && display.buttonRows > 0);
+    }
+    center_->setVisible(display.infoRow && display.centerDuration);
+    refresh();
+}
+
+QList<model::Marker> Composer::shownMarkers(MonitorId monitor) const {
+    const model::MonitorState& s = state(monitor);
+    if (s.isEmpty() || !display_.markers) return {};
+    QList<model::Marker> out = model::markersOf(s.current()->item);
+    if (!display_.spannedMarkers) out.removeIf([](const model::Marker& m) { return m.isSpanned(); });
+    return out;
 }
 
 model::MonitorState& Composer::state(MonitorId monitor) {
@@ -718,7 +743,7 @@ void Composer::setTrimDisplay(const TrimDisplay& display) {
     for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
         Column& c = column(m);
         c.bar->setVisible(!display.on);
-        c.controls->setVisible(!display.on);
+        c.controls->setVisible(!display.on && display_.buttonRows > 0);
         c.trimCounter->setVisible(display.on);
         const bool a = m == MonitorId::Source;
         const std::int64_t frames = a ? display.aFrames : display.bFrames;
@@ -910,13 +935,13 @@ bool Composer::perform(const QString& id) {
             // The previous edit on the selected tracks (p.398); a clip's
             // only events are its start and end.
             std::int64_t to = 0;
-            for (std::int64_t e : events(m)) {
+            for (std::int64_t e : stops(m)) {
                 if (e < s.position()) to = e;
             }
             moveTo(m, to);
         } else if (id == QLatin1String("move.go_to_next_event")) {
             std::int64_t to = s.lastPosition();
-            for (std::int64_t e : events(m)) {
+            for (std::int64_t e : stops(m)) {
                 if (e > s.position()) {
                     to = std::min(e, to);
                     break;
@@ -1075,6 +1100,10 @@ void Composer::refresh() {
     }
     if (center_) center_->setText(centerDuration());
     emit changed();
+}
+
+QList<std::int64_t> Composer::stops(MonitorId monitor) const {
+    return stops_ ? stops_(monitor) : events(monitor);
 }
 
 QList<std::int64_t> Composer::events(MonitorId monitor) const {

@@ -192,7 +192,10 @@ inline constexpr std::int64_t kDefaultStartHours = 1;
 
 // A new, empty sequence named "Untitled Sequence.NN" (numbered after the
 // highest such name already in the bin; p.457 and the picture on p.255).
-BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& when);
+// `start` is its starting timecode; empty, or not a timecode, means the
+// default.
+BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& when,
+                    const QString& start = {});
 
 // Edit > Duplicate (p.260): a copy named "<name>.Copy.NN".
 BinItem duplicateItem(const Bin& bin, const BinItem& original, const QDateTime& when);

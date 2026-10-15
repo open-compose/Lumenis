@@ -133,6 +133,9 @@ public:
     // With headings selected, the quick filter searches them; otherwise
     // Name (p.294).
     void setQuickFilter(const QString& text, const QStringList& headings = {});
+    // Bin settings (p.1153): with no column selected, search all columns
+    // instead of Name.
+    static bool& searchAllColumns();
 
 protected:
     bool filterAcceptsRow(int row, const QModelIndex& parent) const override;
@@ -235,6 +238,7 @@ public:
     void reverseSelection();
     // Filtering items (p.294): matches the Name column.
     void setQuickFilter(const QString& text);
+    const QString& quickFilter() const { return quick_; }
     int visibleCount() const;
     // Ids in the order shown (sorted and sifted).
     QStringList visibleIds() const;

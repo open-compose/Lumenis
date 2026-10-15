@@ -25,6 +25,11 @@ class Composer;
 class KeyboardMap;
 class MarkersWindow;
 class PanelManager;
+class Settings;
+class SettingsList;
+class SettingsWindow;
+class SiteSettingsWindow;
+class ToolTipFilter;
 class Timeline;
 class WorkspaceBar;
 class WorkspaceManager;
@@ -51,6 +56,12 @@ public:
     Composer& composer() const { return *composer_; }
     Timeline& timeline() const { return *timeline_; }
     WorkspaceManager& workspaces() const { return *workspaces_; }
+    // The user's, project's and site settings (ch.33); the windows apply
+    // them as they change.
+    Settings& settings() const { return *settings_; }
+    // File > Settings (p.1136) and Windows > Site Settings (p.1141).
+    SettingsWindow* showSettings();
+    SiteSettingsWindow* showSiteSettings();
 
     // The layout of a new user (p.74): Bin Container top left, Composer to
     // its right, Timeline along the bottom.
@@ -86,6 +97,8 @@ private:
     void deleteWorkspace();
     void restoreCurrentToDefault();
     void showAbout();
+    void applySettings();
+    SettingsList* activeSettingsList() const;
 
     CommandRegistry& commands_;
     const ext::ProviderRegistry& providers_;
@@ -95,6 +108,10 @@ private:
     Composer* composer_ = nullptr;
     Timeline* timeline_ = nullptr;
     MarkersWindow* markersWindow_ = nullptr;
+    Settings* settings_ = nullptr;
+    SettingsWindow* settingsWindow_ = nullptr;
+    SiteSettingsWindow* siteSettingsWindow_ = nullptr;
+    ToolTipFilter* toolTips_ = nullptr;
     std::unique_ptr<KeyboardMap> keyboard_;
     WorkspaceManager* workspaces_ = nullptr;
     WorkspaceBar* bar_ = nullptr;

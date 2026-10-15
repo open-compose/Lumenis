@@ -454,8 +454,9 @@ void TimelineView::paintEvent(QPaintEvent*) {
         p.setPen(QColor(kRowLine));
         p.drawLine(header, r.top + r.height - 1, width(), r.top + r.height - 1);
     }
-    // IN to OUT highlighting (p.638), on the selected tracks.
-    if (!state.isEmpty() && (state.in() || state.out())) {
+    // IN to OUT highlighting (p.638), on the selected tracks; Show Marked
+    // Region (p.1218) turns it off.
+    if (timeline_.options().markedRegion && !state.isEmpty() && (state.in() || state.out())) {
         const double x0 = xFor(state.markedStart());
         const double x1 = xFor(state.markedEnd() + 1);
         for (const Row& r : rowList) {
@@ -847,10 +848,11 @@ void TimelineView::selectLasso(const QRect& area) {
             at = end;
         }
     }
-    // A lasso with no segment tool turns on Lift/Overwrite (p.612).
+    // A lasso with no segment tool turns on Lift/Overwrite (p.612), or the
+    // Default Segment Tool of the Timeline settings (p.1220).
     if (!picked.isEmpty() && !timeline_.isSegmentTool(model::EditKind::Overwrite) &&
         !timeline_.isSegmentTool(model::EditKind::SpliceIn)) {
-        timeline_.setSegmentTool(model::EditKind::Overwrite, true);
+        timeline_.setSegmentTool(timeline_.options().defaultSegmentTool, true);
     }
     timeline_.setSelection(picked);
 }
@@ -1281,7 +1283,42 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
         if (tracks.isEmpty()) tracks = seq.trackNames();
         return seq.editPoints(tracks);
     });
+    composer_.setStopResolver([this](MonitorId monitor) -> QList<std::int64_t> {
+        const model::MonitorState& s = composer_.state(monitor);
+        if (s.isEmpty()) return {0};
+        const bool sequence = s.current()->item.kind == model::BinItemKind::Sequence;
+        // Composer settings, Move tab (p.1160): head frames, tail frames,
+        // markers, on the selected tracks or all of them.
+        QList<std::int64_t> edits{0, s.duration()};
+        if (sequence) {
+            const model::Sequence seq = model::Sequence::fromItem(s.current()->item);
+            QStringList tracks = monitor == MonitorId::Record && !options_.ignoreTrackSelectors
+                                     ? patch_.selectedRecordTracks(seq)
+                                     : QStringList();
+            if (tracks.isEmpty()) tracks = seq.trackNames();
+            edits = seq.editPoints(tracks);
+        }
+        QList<std::int64_t> out{0};
+        for (std::int64_t e : edits) {
+            if (options_.stopAtHead) out << e;
+            if (options_.stopAtTail && e > 0) out << e - 1;
+        }
+        if (!edits.isEmpty()) out << edits.constLast(); // the end
+        if (options_.stopAtMarkers) {
+            for (const model::Marker& m : model::markersOf(s.current()->item)) out << m.frame;
+        }
+        std::sort(out.begin(), out.end());
+        out.erase(std::unique(out.begin(), out.end()), out.end());
+        return out;
+    });
     sync();
+}
+
+void Timeline::setOptions(const Options& options) {
+    options_ = options;
+    topbar_->setVisible(options.toolbar);
+    if (options.onlyOneSegmentTool && liftTool_ && spliceTool_) setSegmentTool(model::EditKind::SpliceIn, false);
+    view_->update();
 }
 
 bool Timeline::hasShown() const {
@@ -1350,11 +1387,19 @@ void Timeline::sync() {
         focusBack_.reset();
         zoomStack_.clear();
     }
-    // Page mode: the view follows the position indicator (p.609).
+    // Movement During Play (p.1219). Page: the view follows the position
+    // indicator a page at a time (p.609); Scroll: the view moves under the
+    // indicator; None: the view stays while playing.
     if (scale_ > 0 && clip) {
         const double visible = (view_->width() - view_->headerWidth()) / scale_;
         const auto pos = static_cast<double>(s.position());
-        if (pos < first_ || pos >= first_ + visible) first_ = std::max(pos - visible * 0.1, 0.0);
+        const bool playing = composer_.isPlaying();
+        if (playing && options_.movement == Options::Movement::Scroll) {
+            first_ = std::max(pos - visible * 0.5, 0.0);
+        } else if (!(playing && options_.movement == Options::Movement::None) &&
+                   (pos < first_ || pos >= first_ + visible)) {
+            first_ = std::max(pos - visible * 0.1, 0.0);
+        }
     }
     syncScrollBars();
     view_->update();
@@ -1875,6 +1920,7 @@ void Timeline::edit(model::EditKind kind) {
     // sequence's marks are used up.
     record.clearBoth();
     composer_.moveTo(MonitorId::Record, plan.recordStart + plan.length);
+    if (options_.activateRecordAfterEdit) composer_.setActiveMonitor(MonitorId::Record);
 }
 
 void Timeline::remove(bool extract) {
@@ -2001,6 +2047,8 @@ bool Timeline::isSegmentTool(model::EditKind kind) const {
 
 void Timeline::setSegmentTool(model::EditKind kind, bool on) {
     (kind == model::EditKind::Overwrite ? liftTool_ : spliceTool_) = on;
+    // Only One Segment Tool Can Be Enabled At A Time (p.1220).
+    if (on && options_.onlyOneSegmentTool) (kind == model::EditKind::Overwrite ? spliceTool_ : liftTool_) = false;
     if (!liftTool_ && !spliceTool_) selection_.clear();
     if (QToolButton* b = toolButton(QStringLiteral("smart.lift_overwrite"))) b->setChecked(liftTool_);
     if (QToolButton* b = toolButton(QStringLiteral("smart.extract_splice_in"))) b->setChecked(spliceTool_);
@@ -2202,7 +2250,11 @@ void Timeline::replaceEdit() {
         return;
     }
     const model::EditMarks sourceMarks{source.in(), source.out(), source.position(), source.duration()};
-    const model::EditMarks recordMarks{record.in(), record.out(), record.position(), seq.duration()};
+    // Without Show Marked Region, Replace Edit ignores the sequence's marks
+    // (p.1218).
+    const bool marks = options_.markedRegion;
+    const model::EditMarks recordMarks{marks ? record.in() : std::nullopt, marks ? record.out() : std::nullopt,
+                                       record.position(), seq.duration()};
     const model::EditPlan plan = model::planReplace(seq, pairs.first().second, sourceMarks, recordMarks);
     if (!plan.ok()) {
         fail(plan.error);
@@ -2218,6 +2270,7 @@ void Timeline::replaceEdit() {
     after.modified = QDateTime::currentDateTimeUtc();
     commit(tr("Replace Edit"), before, after);
     record.clearBoth();
+    if (options_.activateRecordAfterEdit) composer_.setActiveMonitor(MonitorId::Record);
 }
 
 void Timeline::addEdit(bool fillerOnly) {
@@ -2441,11 +2494,21 @@ bool Timeline::enterTrimMode(int direction) {
     });
     setRollers(rollers, trimKind_);
     composer_.moveTo(MonitorId::Record, *best);
+    // Trim settings, Auto focus when entering Trim mode (p.1223): with no
+    // trim tool on, the Timeline zooms in on the transition.
+    if (options_.trimAutoFocus && !rippleTrimTool_ && !overwriteTrimTool_ && !focusBack_) {
+        toggleFocus();
+        trimFocused_ = true;
+    }
     return true;
 }
 
 void Timeline::exitTrimMode() {
     if (!trimMode_) return;
+    if (trimFocused_) {
+        trimFocused_ = false;
+        if (focusBack_) toggleFocus();
+    }
     if (!rollers_.isEmpty()) lastRollers_ = rollers_;
     trimMode_ = false;
     rollers_.clear();

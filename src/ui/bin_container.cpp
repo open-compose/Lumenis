@@ -391,10 +391,10 @@ BinSidebar::BinSidebar(BinContainer& container, QWidget* parent) : QWidget(paren
         // Double-click a bin to open it (p.240).
         const QString id = model_->idOf(index);
         if (FavoriteBins::isFavoriteId(id)) {
-            container_.openBin(id);
+            container_.openBinAsSet(id);
         } else if (const model::ProjectBins* bins = container_.bins();
                    bins && bins->node(id) && bins->node(id)->kind == model::BinNode::Kind::Bin) {
-            container_.openBin(id);
+            container_.openBinAsSet(id);
         }
     });
 
@@ -604,6 +604,28 @@ void BinContainer::resizeEvent(QResizeEvent* event) {
         const int side = width() * kSidebarPercent / 100;
         split_->setSizes({side, width() - side});
     }
+}
+
+void BinContainer::setFavoritesAtTop(bool top) {
+    if (FavoriteBins::atTop() == top) return;
+    FavoriteBins::atTop() = top;
+    refreshTree();
+}
+
+void BinContainer::setQuickFilterAllColumns(bool all) {
+    if (BinFilterModel::searchAllColumns() == all) return;
+    BinFilterModel::searchAllColumns() = all;
+    for (BinDocument* d : documents_) {
+        if (BinView* v = viewFor(d); v && !v->quickFilter().isEmpty()) v->setQuickFilter(v->quickFilter());
+    }
+}
+
+BinDocument* BinContainer::openBinAsSet(const QString& id) {
+    const bool wasOpen = document(canonicalBin(id)) != nullptr;
+    BinDocument* doc = openBin(id);
+    const bool invert = QApplication::keyboardModifiers() & Qt::ControlModifier;
+    if (doc && !wasOpen && openFloating_ != invert) floatBin(doc);
+    return doc;
 }
 
 void BinContainer::setAutoSaveMinutes(int minutes) {
@@ -973,7 +995,7 @@ QString BinContainer::newBin(const QString& parentFolder) {
     refreshTree();
     sidebar_->expand(parentFolder);
     // "A new (empty) bin opens ... with a default name highlighted" (p.295).
-    openBin(id);
+    openBinAsSet(id);
     const QModelIndex index = treeModel()->indexOf(id);
     tree()->setCurrentIndex(index);
     if (isVisible()) tree()->edit(index);
@@ -1165,7 +1187,8 @@ QMenu* BinContainer::sidebarMenu(QMenu* menu, const QString& id, BinSidebar* sid
 QString BinContainer::newSequence(const QString& targetBin) {
     BinDocument* doc = targetBin.isEmpty() ? activeDocument() : openBin(targetBin);
     if (!doc) return {};
-    const model::BinItem item = model::newSequence(doc->bin(), editRate_, QDateTime::currentDateTimeUtc());
+    const model::BinItem item =
+        model::newSequence(doc->bin(), editRate_, QDateTime::currentDateTimeUtc(), startTimecode_);
     doc->addItem(item);
     if (BinView* v = viewFor(doc)) v->selectIds({item.id});
     return item.id;

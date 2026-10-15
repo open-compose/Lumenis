@@ -509,6 +509,11 @@ void BinFilterModel::setQuickFilter(const QString& text, const QStringList& head
 #endif
 }
 
+bool& BinFilterModel::searchAllColumns() {
+    static bool all = false;
+    return all;
+}
+
 bool BinFilterModel::filterAcceptsRow(int row, const QModelIndex&) const {
     const model::Bin& bin = document_.bin();
     if (row < 0 || row >= bin.items.size()) return false;
@@ -516,7 +521,11 @@ bool BinFilterModel::filterAcceptsRow(int row, const QModelIndex&) const {
     // Set Bin Display (p.288).
     if (bin.display.hiddenKinds.contains(item.kind)) return false;
     if (!quick_.isEmpty()) {
-        const QStringList searched = quickHeadings_.isEmpty() ? QStringList{QStringLiteral("Name")} : quickHeadings_;
+        QStringList searched = quickHeadings_;
+        if (searched.isEmpty()) {
+            searched << QStringLiteral("Name");
+            if (searchAllColumns()) searched << bin.display.columns;
+        }
         const bool found = std::any_of(searched.begin(), searched.end(), [&](const QString& h) {
             return model::cellText(item, h).contains(quick_, Qt::CaseInsensitive);
         });

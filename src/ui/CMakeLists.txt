@@ -14,6 +14,8 @@ add_library(lumenis_ui STATIC
     panel_manager.cpp
     panels.cpp
     select_project_dialog.cpp
+    settings.cpp
+    settings_window.cpp
     theme.cpp
     timeline.cpp
     workspace.cpp
@@ -32,6 +34,8 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/menu_builder.h
     include/lumenis/ui/panels.h
     include/lumenis/ui/select_project_dialog.h
+    include/lumenis/ui/settings.h
+    include/lumenis/ui/settings_window.h
     include/lumenis/ui/theme.h
     include/lumenis/ui/timeline.h
     include/lumenis/ui/workspace.h
@@ -46,6 +50,7 @@ qt_add_resources(lumenis_ui lumenis_ui_resources
         resources/commands.json
         resources/keyboard.json
         resources/menus.json
+        resources/settings.json
         resources/whats_new.html
         resources/icons/app.png
         resources/icons/about.png

@@ -301,7 +301,15 @@ Sub-steps:
 * **1.4e** Still to come for editing: Sync Point editing, playback-driven
   tools (Play Loop, Edit Review, J-K-L trimming) once media plays, and
   the remaining Timeline and marker details listed in the spec.
-* **1.5** Palettes, tools and Settings dialogs.
+* **1.5a Settings — done.**
+  * The Settings window (Format, Project, User and Site tabs), versions,
+    Duplicate, naming, Delete, Restore to Default, dragging between
+    lists, the Site Settings window and user profiles.
+  * The Bin, Composer, General, Interface, Timeline and Trim settings
+    dialogs, wired to the features built so far.
+  * Details and what is left: "Implementation status (1.5a)" in the spec.
+* **1.5b** The Command Palette, the Tool Palette, the Calculator and the
+  Console (ch.5).
 * **1.6** Keyboard settings, workspaces and button mapping (gate 3, gate 4).
 
 The detailed inventory lives in [spec/ui-inventory.md](spec/ui-inventory.md).

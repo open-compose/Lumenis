@@ -661,7 +661,7 @@ QString newItemId() {
     return QUuid::createUuid().toString(QUuid::WithoutBraces);
 }
 
-BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& when) {
+BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& when, const QString& start) {
     const QString base = QStringLiteral("Untitled Sequence");
     BinItem s;
     s.id = newItemId();
@@ -671,8 +671,9 @@ BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& w
     s.modified = when;
     s.editRate = editRate;
     const TimecodeFormat format = TimecodeFormat::forRate(editRate, false);
-    s.fields.insert(QStringLiteral("Start"),
-                    QString::fromStdString(Timecode(kDefaultStartHours * 3600 * format.nominalFps, format).toString()));
+    const auto given = Timecode::parse(start.trimmed().toStdString(), format);
+    const Timecode tc = given ? *given : Timecode(kDefaultStartHours * 3600 * format.nominalFps, format);
+    s.fields.insert(QStringLiteral("Start"), QString::fromStdString(tc.toString()));
     return s;
 }
 

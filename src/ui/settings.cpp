@@ -1,0 +1,208 @@
+#include "lumenis/ui/settings.h"
+
+#include <QDir>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+
+namespace lumenis::ui {
+
+using model::SettingsFile;
+using model::SettingsScope;
+
+const SettingOption* SettingKind::option(const QString& key) const {
+    for (const SettingTab& t : tabs) {
+        for (const SettingOption& o : t.options) {
+            if (o.key == key) return &o;
+        }
+    }
+    return nullptr;
+}
+
+QString SettingKind::title() const {
+    return QObject::tr("%1 Settings").arg(kind);
+}
+
+SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) {
+    SettingsSchema schema;
+    QJsonParseError parseError;
+    const QJsonDocument doc = QJsonDocument::fromJson(json, &parseError);
+    if (parseError.error != QJsonParseError::NoError) {
+        if (error) *error = parseError.errorString();
+        return schema;
+    }
+    for (const QJsonValue& k : doc.object().value(QStringLiteral("settings")).toArray()) {
+        const QJsonObject ko = k.toObject();
+        SettingKind kind;
+        kind.kind = ko.value(QStringLiteral("kind")).toString();
+        const QString scope = ko.value(QStringLiteral("scope")).toString();
+        kind.scope = scope == QLatin1String("project") ? SettingsScope::Project : SettingsScope::User;
+        kind.page = ko.value(QStringLiteral("page")).toInt();
+        for (const QJsonValue& t : ko.value(QStringLiteral("tabs")).toArray()) {
+            SettingTab tab;
+            tab.name = t.toObject().value(QStringLiteral("name")).toString();
+            for (const QJsonValue& o : t.toObject().value(QStringLiteral("options")).toArray()) {
+                const QJsonObject oo = o.toObject();
+                SettingOption option;
+                option.key = oo.value(QStringLiteral("key")).toString();
+                option.type = oo.value(QStringLiteral("type")).toString();
+                option.label = oo.value(QStringLiteral("label")).toString();
+                option.suffix = oo.value(QStringLiteral("suffix")).toString();
+                option.style = oo.value(QStringLiteral("style")).toString();
+                option.defaultValue = oo.value(QStringLiteral("default"));
+                option.min = oo.value(QStringLiteral("min")).toInt();
+                option.max = oo.value(QStringLiteral("max")).toInt();
+                option.page = oo.value(QStringLiteral("page")).toInt();
+                option.later = oo.value(QStringLiteral("later")).toBool();
+                for (const QJsonValue& c : oo.value(QStringLiteral("choices")).toArray()) {
+                    const QJsonObject co = c.toObject();
+                    option.choices << SettingChoice{co.value(QStringLiteral("value")).toString(),
+                                                    co.value(QStringLiteral("label")).toString(),
+                                                    co.value(QStringLiteral("later")).toBool()};
+                }
+                tab.options << option;
+            }
+            kind.tabs << tab;
+        }
+        schema.kinds_ << kind;
+    }
+    return schema;
+}
+
+const SettingsSchema& SettingsSchema::builtIn() {
+    static const SettingsSchema schema = [] {
+        QFile file(QStringLiteral(":/lumenis/ui/settings.json"));
+        if (!file.open(QIODevice::ReadOnly)) qFatal("built-in settings.json is missing");
+        QString error;
+        SettingsSchema s = fromJson(file.readAll(), &error);
+        if (!error.isEmpty()) qFatal("built-in settings.json is invalid: %s", qPrintable(error));
+        return s;
+    }();
+    return schema;
+}
+
+const SettingKind* SettingsSchema::find(const QString& kind) const {
+    for (const SettingKind& k : kinds_) {
+        if (k.kind == kind) return &k;
+    }
+    return nullptr;
+}
+
+QStringList SettingsSchema::kindNames(SettingsScope scope) const {
+    QStringList out;
+    for (const SettingKind& k : kinds_) {
+        if (k.scope == scope) out << k.kind;
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------- Settings
+
+Settings::Settings(QObject* parent) : QObject(parent) {
+    userFile_ = SettingsFile::seeded(SettingsSchema::builtIn().kindNames(SettingsScope::User));
+    project_ = SettingsFile::seeded(SettingsSchema::builtIn().kindNames(SettingsScope::Project));
+}
+
+SettingsFile Settings::load(const QString& path, SettingsScope scope) const {
+    const QStringList kinds = SettingsSchema::builtIn().kindNames(scope);
+    if (!path.isEmpty()) {
+        if (auto f = SettingsFile::read(path)) {
+            // Settings added since the file was written (p.1144).
+            f->ensure(kinds);
+            return *f;
+        }
+    }
+    return SettingsFile::seeded(kinds, &site_);
+}
+
+void Settings::setSiteFolder(const QString& folder) {
+    siteFolder_ = folder;
+    site_ = {};
+    if (const QString p = path(SettingsScope::Site); !p.isEmpty()) {
+        if (auto f = SettingsFile::read(p)) site_ = *f;
+    }
+}
+
+void Settings::setUser(const QString& usersRoot, const QString& name) {
+    usersRoot_ = usersRoot;
+    user_ = name;
+    const QString p = path(SettingsScope::User);
+    const bool existed = !p.isEmpty() && QFile::exists(p);
+    userFile_ = load(p, SettingsScope::User);
+    if (!existed && !p.isEmpty()) userFile_.write(p);
+    emit changed();
+}
+
+void Settings::setProject(const QString& folder) {
+    projectFolder_ = folder;
+    const QString p = path(SettingsScope::Project);
+    const bool existed = !p.isEmpty() && QFile::exists(p);
+    project_ = load(p, SettingsScope::Project);
+    if (!existed && !p.isEmpty()) project_.write(p);
+    emit changed();
+}
+
+SettingsFile& Settings::file(SettingsScope scope) {
+    switch (scope) {
+    case SettingsScope::Project: return project_;
+    case SettingsScope::User: return userFile_;
+    case SettingsScope::Site: return site_;
+    }
+    return userFile_;
+}
+
+const SettingsFile& Settings::file(SettingsScope scope) const {
+    return const_cast<Settings*>(this)->file(scope);
+}
+
+QString Settings::path(SettingsScope scope) const {
+    switch (scope) {
+    case SettingsScope::Project:
+        return projectFolder_.isEmpty() ? QString() : QDir(projectFolder_).filePath(SettingsFile::fileName());
+    case SettingsScope::User:
+        return usersRoot_.isEmpty() || user_.isEmpty()
+                   ? QString()
+                   : QDir(usersRoot_).filePath(user_ + QLatin1Char('/') + SettingsFile::fileName());
+    case SettingsScope::Site:
+        return siteFolder_.isEmpty() ? QString() : QDir(siteFolder_).filePath(SettingsFile::fileName());
+    }
+    return {};
+}
+
+void Settings::commit(SettingsScope scope) {
+    if (const QString p = path(scope); !p.isEmpty()) file(scope).write(p);
+    emit changed();
+}
+
+QJsonValue Settings::value(const QString& kind, const QString& key) const {
+    const SettingKind* k = SettingsSchema::builtIn().find(kind);
+    const SettingOption* o = k ? k->option(key) : nullptr;
+    const QJsonValue fallback = o ? o->defaultValue : QJsonValue();
+    if (!k) return fallback;
+    // Options not available yet keep their default.
+    if (o && o->later) return fallback;
+    const QJsonObject values = file(k->scope).activeValues(kind);
+    const QJsonValue v = values.value(key);
+    if (v.isUndefined() || (o && v.type() != fallback.type() && !fallback.isNull())) return fallback;
+    // A choice that is not available yet counts as the default.
+    if (o && o->type == QLatin1String("choice")) {
+        for (const SettingChoice& c : o->choices) {
+            if (c.value == v.toString()) return c.later ? fallback : v;
+        }
+        return fallback;
+    }
+    return v;
+}
+
+void Settings::setValue(const QString& kind, const QString& key, const QJsonValue& value) {
+    const SettingKind* k = SettingsSchema::builtIn().find(kind);
+    if (!k) return;
+    SettingsFile& f = file(k->scope);
+    int i = f.activeIndex(kind);
+    if (i < 0) i = f.add(model::SettingEntry{kind, {}, true, {}});
+    f.entries[i].values.insert(key, value);
+    commit(k->scope);
+}
+
+} // namespace lumenis::ui

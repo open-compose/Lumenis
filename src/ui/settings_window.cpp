@@ -1,0 +1,743 @@
+#include "lumenis/ui/settings_window.h"
+
+#include "lumenis/core/branding.h"
+#include "lumenis/core/timecode.h"
+
+#include <QButtonGroup>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QContextMenuEvent>
+#include <QDesktopServices>
+#include <QDialogButtonBox>
+#include <QDir>
+#include <QDragEnterEvent>
+#include <QFormLayout>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QHeaderView>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QLabel>
+#include <QLineEdit>
+#include <QMenu>
+#include <QMessageBox>
+#include <QMimeData>
+#include <QPushButton>
+#include <QRadioButton>
+#include <QRegularExpressionValidator>
+#include <QSpinBox>
+#include <QStandardItemModel>
+#include <QStyledItemDelegate>
+#include <QTabWidget>
+#include <QUrl>
+#include <QVBoxLayout>
+
+#include <algorithm>
+
+namespace lumenis::ui {
+
+using model::SettingEntry;
+using model::SettingsFile;
+using model::SettingsScope;
+
+namespace {
+
+QString laterTip() {
+    return QObject::tr("Not available yet");
+}
+
+// Only the Name column is edited in place (p.1139).
+class NameDelegate : public QStyledItemDelegate {
+public:
+    using QStyledItemDelegate::QStyledItemDelegate;
+    QWidget* createEditor(QWidget* parent, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
+        if (index.column() != SettingsList::kNameColumn) return nullptr;
+        return QStyledItemDelegate::createEditor(parent, option, index);
+    }
+};
+
+QJsonArray entriesJson(const QList<SettingEntry>& entries) {
+    SettingsFile f;
+    f.entries = entries;
+    return f.toJson().value(QStringLiteral("settings")).toArray();
+}
+
+QList<SettingEntry> entriesFrom(const QMimeData* mime) {
+    const QJsonDocument doc = QJsonDocument::fromJson(mime->data(SettingsList::mimeType()));
+    QJsonObject o = SettingsFile().toJson();
+    o.insert(QStringLiteral("settings"), doc.object().value(QStringLiteral("settings")));
+    const auto f = SettingsFile::fromJson(o);
+    return f ? f->entries : QList<SettingEntry>{};
+}
+
+} // namespace
+
+// ---------------------------------------------------------------- SettingsDialog
+
+SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entry, QWidget* parent)
+    : QDialog(parent), kind_(kind), values_(entry.values) {
+    setObjectName(QStringLiteral("settingsDialog"));
+    // "Bin Settings - Current" in Media Composer; the custom name here.
+    setWindowTitle(entry.name.isEmpty() ? kind.title() : QStringLiteral("%1 - %2").arg(kind.title(), entry.name));
+
+    auto value = [&](const SettingOption& o) {
+        const QJsonValue v = values_.value(o.key);
+        return v.isUndefined() || o.later ? o.defaultValue : v;
+    };
+    auto page = [&](const SettingTab& tab) {
+        auto* w = new QWidget;
+        auto* v = new QVBoxLayout(w);
+        for (const SettingOption& o : tab.options) {
+            QWidget* editor = nullptr;
+            QWidget* row = nullptr;
+            const QJsonValue current = value(o);
+            if (o.type == QLatin1String("bool")) {
+                auto* box = new QCheckBox(o.label);
+                box->setChecked(current.toBool());
+                editor = row = box;
+            } else if (o.type == QLatin1String("choice") && o.style == QLatin1String("radio")) {
+                QWidget* holder = o.label.isEmpty() ? new QWidget : new QGroupBox(o.label);
+                auto* buttons = new QVBoxLayout(holder);
+                auto* group = new QButtonGroup(holder);
+                group->setObjectName(o.key + QStringLiteral("Group"));
+                for (int i = 0; i < o.choices.size(); ++i) {
+                    const SettingChoice& c = o.choices.at(i);
+                    auto* r = new QRadioButton(c.label, holder);
+                    r->setObjectName(o.key + QLatin1Char(':') + c.value);
+                    r->setChecked(c.value == current.toString());
+                    if (c.later) {
+                        r->setEnabled(false);
+                        r->setToolTip(laterTip());
+                    }
+                    group->addButton(r, i);
+                    buttons->addWidget(r);
+                }
+                if (o.label.isEmpty()) buttons->setContentsMargins(0, 0, 0, 0);
+                editor = row = holder;
+            } else {
+                // A label, the field, and what follows it.
+                row = new QWidget;
+                auto* h = new QHBoxLayout(row);
+                h->setContentsMargins(0, 0, 0, 0);
+                if (!o.label.isEmpty()) h->addWidget(new QLabel(o.label, row));
+                if (o.type == QLatin1String("int")) {
+                    auto* spin = new QSpinBox(row);
+                    spin->setRange(o.min, o.max);
+                    spin->setValue(current.toInt());
+                    editor = spin;
+                } else if (o.type == QLatin1String("choice")) {
+                    auto* menu = new QComboBox(row);
+                    for (const SettingChoice& c : o.choices) {
+                        menu->addItem(c.label, c.value);
+                        if (c.later) {
+                            if (auto* m = qobject_cast<QStandardItemModel*>(menu->model())) {
+                                m->item(menu->count() - 1)->setEnabled(false);
+                            }
+                        }
+                    }
+                    menu->setCurrentIndex(std::max(menu->findData(current.toString()), 0));
+                    editor = menu;
+                } else if (o.type == QLatin1String("info")) {
+                    editor = new QLabel(row);
+                } else {
+                    auto* line = new QLineEdit(current.toString(), row);
+                    if (o.type == QLatin1String("timecode")) {
+                        line->setValidator(new QRegularExpressionValidator(
+                            QRegularExpression(QStringLiteral("\\d{2}[:;.]\\d{2}[:;.]\\d{2}[:;.]\\d{2}")), line));
+                    }
+                    editor = line;
+                }
+                h->addWidget(editor);
+                if (!o.suffix.isEmpty()) h->addWidget(new QLabel(o.suffix, row));
+                h->addStretch(1);
+            }
+            editor->setObjectName(o.key);
+            if (o.later) {
+                row->setEnabled(false);
+                row->setToolTip(laterTip());
+            }
+            editors_.insert(o.key, editor);
+            v->addWidget(row);
+        }
+        v->addStretch(1);
+        return w;
+    };
+
+    auto* layout = new QVBoxLayout(this);
+    if (kind.tabs.size() > 1) {
+        tabs_ = new QTabWidget(this);
+        tabs_->setObjectName(QStringLiteral("settingsTabs"));
+        for (const SettingTab& t : kind.tabs) tabs_->addTab(page(t), t.name);
+        layout->addWidget(tabs_);
+    } else if (!kind.tabs.isEmpty()) {
+        layout->addWidget(page(kind.tabs.constFirst()));
+    }
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    layout->addWidget(buttons);
+}
+
+void SettingsDialog::setInfo(const QString& key, const QString& text) {
+    if (auto* label = qobject_cast<QLabel*>(editors_.value(key))) label->setText(text);
+}
+
+QWidget* SettingsDialog::editor(const QString& key) const {
+    return editors_.value(key);
+}
+
+QJsonObject SettingsDialog::values() const {
+    QJsonObject out = values_;
+    for (const SettingTab& t : kind_.tabs) {
+        for (const SettingOption& o : t.options) {
+            if (o.later || o.type == QLatin1String("info")) continue;
+            QWidget* e = editors_.value(o.key);
+            if (auto* box = qobject_cast<QCheckBox*>(e)) {
+                out.insert(o.key, box->isChecked());
+            } else if (auto* spin = qobject_cast<QSpinBox*>(e)) {
+                out.insert(o.key, spin->value());
+            } else if (auto* menu = qobject_cast<QComboBox*>(e)) {
+                out.insert(o.key, menu->currentData().toString());
+            } else if (auto* line = qobject_cast<QLineEdit*>(e)) {
+                QString text = line->text().trimmed();
+                if (o.type == QLatin1String("timecode") &&
+                    !Timecode::parse(text.toStdString(), TimecodeFormat{30, false})) {
+                    text = o.defaultValue.toString();
+                }
+                out.insert(o.key, text);
+            } else if (e) {
+                if (auto* group = e->findChild<QButtonGroup*>(o.key + QStringLiteral("Group"))) {
+                    const int id = group->checkedId();
+                    if (id >= 0) out.insert(o.key, o.choices.at(id).value);
+                }
+            }
+        }
+    }
+    return out;
+}
+
+// ---------------------------------------------------------------- SettingsList
+
+SettingsList::SettingsList(Settings& settings, SettingsScope scope, QWidget* parent)
+    : QTreeWidget(parent), settings_(settings), scope_(scope) {
+    setObjectName(scope == SettingsScope::Project ? QStringLiteral("projectSettingsList")
+                  : scope == SettingsScope::User  ? QStringLiteral("userSettingsList")
+                                                  : QStringLiteral("siteSettingsList"));
+    setColumnCount(2);
+    setHeaderLabels({tr("Setting"), tr("Name")});
+    header()->setStretchLastSection(true);
+    setColumnWidth(kSettingColumn, 180);
+    setSelectionMode(QAbstractItemView::ExtendedSelection);
+    setEditTriggers(QAbstractItemView::SelectedClicked | QAbstractItemView::EditKeyPressed);
+    setItemDelegate(new NameDelegate(this));
+    setDragEnabled(true);
+    setAcceptDrops(true);
+    setDragDropMode(QAbstractItemView::DragDrop);
+    setDefaultDropAction(Qt::CopyAction);
+    setRootIsDecorated(true);
+
+    connect(this, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* item, int column) {
+        const QVariant entry = item->data(kSettingColumn, kEntryRole);
+        if (!entry.isValid()) return;
+        if (column == kNameColumn) {
+            editItem(item, kNameColumn);
+        } else {
+            openEntry(entry.toInt());
+        }
+    });
+    connect(this, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int column) {
+        if (filling_) return;
+        const QVariant entry = item->data(kSettingColumn, kEntryRole);
+        if (!entry.isValid()) return;
+        // After the signal: the list is rebuilt, and with it this item.
+        const int index = entry.toInt();
+        if (column == kNameColumn) {
+            const QString name = item->text(kNameColumn);
+            QMetaObject::invokeMethod(this, [this, index, name] { rename(index, name); }, Qt::QueuedConnection);
+        } else if (column == kSettingColumn && item->checkState(kSettingColumn) == Qt::Checked) {
+            QMetaObject::invokeMethod(this, [this, index] { setActive(index); }, Qt::QueuedConnection);
+        } else if (column == kSettingColumn) {
+            // The active version cannot be unchecked: choose another.
+            QMetaObject::invokeMethod(this, &SettingsList::refresh, Qt::QueuedConnection);
+        }
+    });
+    connect(&settings_, &Settings::changed, this, &SettingsList::refresh);
+    refresh();
+}
+
+void SettingsList::refresh() {
+    filling_ = true;
+    QSet<QString> expanded;
+    for (int i = 0; i < topLevelItemCount(); ++i) {
+        if (topLevelItem(i)->isExpanded()) expanded << topLevelItem(i)->text(kSettingColumn);
+    }
+    const QList<int> selected = selectedEntries();
+    clear();
+    const SettingsFile& f = file();
+    auto entryItem = [&](int index, QTreeWidgetItem* item) {
+        const SettingEntry& e = f.entries.at(index);
+        item->setText(kSettingColumn, e.kind);
+        item->setText(kNameColumn, e.name);
+        item->setData(kSettingColumn, kEntryRole, index);
+        item->setFlags(item->flags() | Qt::ItemIsEditable | Qt::ItemIsDragEnabled);
+    };
+    for (const QString& kind : f.kinds()) {
+        const QList<int> versions = f.versions(kind);
+        if (versions.size() == 1) {
+            entryItem(versions.constFirst(), new QTreeWidgetItem(this));
+            continue;
+        }
+        // Several versions: under the setting's name, with check boxes for
+        // the active one (picture on p.1136).
+        auto* group = new QTreeWidgetItem(this);
+        group->setText(kSettingColumn, kind);
+        group->setFlags(Qt::ItemIsEnabled);
+        for (int i : versions) {
+            auto* item = new QTreeWidgetItem(group);
+            entryItem(i, item);
+            item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
+            item->setCheckState(kSettingColumn, f.entries.at(i).active ? Qt::Checked : Qt::Unchecked);
+        }
+        group->setExpanded(expanded.contains(kind));
+    }
+    selectEntries(selected);
+    filling_ = false;
+}
+
+QList<int> SettingsList::selectedEntries() const {
+    QList<int> out;
+    for (QTreeWidgetItem* item : selectedItems()) {
+        const QVariant v = item->data(kSettingColumn, kEntryRole);
+        if (v.isValid()) out << v.toInt();
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+QTreeWidgetItem* SettingsList::itemFor(int entry) const {
+    for (QTreeWidgetItemIterator it(const_cast<SettingsList*>(this)); *it; ++it) {
+        const QVariant v = (*it)->data(kSettingColumn, kEntryRole);
+        if (v.isValid() && v.toInt() == entry) return *it;
+    }
+    return nullptr;
+}
+
+void SettingsList::selectEntries(const QList<int>& entries) {
+    clearSelection();
+    for (int e : entries) {
+        if (QTreeWidgetItem* item = itemFor(e)) {
+            item->setSelected(true);
+            if (item->parent()) item->parent()->setExpanded(true);
+            setCurrentItem(item, kSettingColumn, QItemSelectionModel::NoUpdate);
+        }
+    }
+}
+
+void SettingsList::commit() {
+    settings_.commit(scope_);
+    emit edited();
+}
+
+void SettingsList::duplicateSelection() {
+    QList<int> entries = selectedEntries();
+    if (entries.isEmpty()) return;
+    // Later entries first, so earlier indices stay put.
+    std::sort(entries.begin(), entries.end(), std::greater<>());
+    QList<int> copies;
+    for (int e : entries) {
+        const int copy = file().duplicate(e);
+        for (int& c : copies) {
+            if (c >= copy) ++c;
+        }
+        copies << copy;
+    }
+    commit();
+    selectEntries(copies);
+}
+
+void SettingsList::deleteSelection() {
+    const QList<int> entries = selectedEntries();
+    if (entries.isEmpty()) return;
+    file().remove(entries);
+    // Settings this scope needs come back with their defaults.
+    if (scope_ != SettingsScope::Site) file().ensure(SettingsSchema::builtIn().kindNames(scope_));
+    commit();
+}
+
+void SettingsList::restoreSelection(Restore how) {
+    QList<int> entries = selectedEntries();
+    if (entries.isEmpty()) return;
+    if (how == Restore::Ask) {
+        QMessageBox box(QMessageBox::Question, tr("Restore to Default"),
+                        tr("Restore the selected settings to their default values?"), QMessageBox::NoButton, this);
+        QPushButton* copy = box.addButton(tr("Copy && Restore"), QMessageBox::AcceptRole);
+        QPushButton* restore = box.addButton(tr("Restore"), QMessageBox::DestructiveRole);
+        box.addButton(QMessageBox::Cancel);
+        box.exec();
+        if (box.clickedButton() == copy) {
+            how = Restore::CopyAndRestore;
+        } else if (box.clickedButton() == restore) {
+            how = Restore::Restore;
+        } else {
+            return;
+        }
+    }
+    std::sort(entries.begin(), entries.end(), std::greater<>());
+    QList<int> restored;
+    for (int e : entries) {
+        if (how == Restore::CopyAndRestore) {
+            // The copy keeps the current values; it goes after e.
+            const int copy = file().duplicate(e);
+            for (int& r : restored) {
+                if (r >= copy) ++r;
+            }
+        }
+        file().entries[e].values = {};
+        restored << e;
+    }
+    commit();
+    selectEntries(restored);
+}
+
+void SettingsList::setActive(int entry) {
+    if (entry < 0 || entry >= file().entries.size()) return;
+    file().setActive(entry);
+    commit();
+}
+
+void SettingsList::rename(int entry, const QString& name) {
+    if (entry < 0 || entry >= file().entries.size() || file().entries.at(entry).name == name.trimmed()) return;
+    file().entries[entry].name = name.trimmed();
+    commit();
+}
+
+int SettingsList::copyIn(const QList<SettingEntry>& entries, bool replace) {
+    const QStringList kinds = SettingsSchema::builtIn().kindNames(scope_);
+    int copied = 0;
+    for (const SettingEntry& e : entries) {
+        if (scope_ != SettingsScope::Site && !kinds.contains(e.kind)) continue;
+        file().add(e, replace && scope_ != SettingsScope::Site);
+        ++copied;
+    }
+    if (copied) commit();
+    return copied;
+}
+
+bool SettingsList::openEntry(int entry) {
+    if (entry < 0 || entry >= file().entries.size()) return false;
+    const SettingEntry e = file().entries.at(entry);
+    const SettingKind* kind = SettingsSchema::builtIn().find(e.kind);
+    if (!kind) return false;
+    SettingsDialog dialog(*kind, e, this);
+    dialog.setInfo(QStringLiteral("projectFormat"), projectFormat);
+    if (dialogHook) dialogHook(dialog);
+    if (dialog.exec() != QDialog::Accepted) return false;
+    const QJsonObject values = dialog.values();
+    if (values == e.values) return false;
+    file().entries[entry].values = values;
+    commit();
+    return true;
+}
+
+QMenu* SettingsList::contextMenu() {
+    auto* menu = new QMenu(this);
+    menu->setObjectName(QStringLiteral("settingsContextMenu"));
+    const bool any = !selectedEntries().isEmpty();
+    menu->addAction(tr("Duplicate"), this, &SettingsList::duplicateSelection)->setEnabled(any);
+    menu->addAction(tr("Delete"), this, &SettingsList::deleteSelection)->setEnabled(any);
+    menu->addSeparator();
+    menu->addAction(tr("Restore to Default"), this, [this] { restoreSelection(); })->setEnabled(any);
+    return menu;
+}
+
+void SettingsList::contextMenuEvent(QContextMenuEvent* event) {
+    if (QTreeWidgetItem* item = itemAt(event->pos()); item && !item->isSelected()) {
+        clearSelection();
+        item->setSelected(true);
+    }
+    QMenu* menu = contextMenu();
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    menu->popup(event->globalPos());
+}
+
+void SettingsList::keyPressEvent(QKeyEvent* event) {
+    // Enter opens the setting; Delete deletes (p.1138, p.1140).
+    if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) && state() != EditingState) {
+        const QList<int> entries = selectedEntries();
+        if (!entries.isEmpty()) openEntry(entries.constFirst());
+        return;
+    }
+    if ((event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) && state() != EditingState) {
+        deleteSelection();
+        return;
+    }
+    QTreeWidget::keyPressEvent(event);
+}
+
+QStringList SettingsList::mimeTypes() const {
+    return {mimeType()};
+}
+
+QMimeData* SettingsList::mimeData(const QList<QTreeWidgetItem*>& items) const {
+    QList<SettingEntry> entries;
+    for (QTreeWidgetItem* item : items) {
+        const QVariant v = item->data(kSettingColumn, kEntryRole);
+        if (v.isValid()) entries << file().entries.at(v.toInt());
+    }
+    if (entries.isEmpty()) return nullptr;
+    auto* mime = new QMimeData;
+    mime->setData(mimeType(), QJsonDocument(QJsonObject{{QStringLiteral("settings"), entriesJson(entries)}}).toJson());
+    return mime;
+}
+
+bool SettingsList::accepts(const QMimeData* mime) const {
+    return mime && mime->hasFormat(mimeType());
+}
+
+void SettingsList::dragEnterEvent(QDragEnterEvent* event) {
+    if (event->source() != this && accepts(event->mimeData())) {
+        event->setDropAction(Qt::CopyAction);
+        event->accept();
+    } else {
+        event->ignore();
+    }
+}
+
+void SettingsList::dragMoveEvent(QDragMoveEvent* event) {
+    if (event->source() != this && accepts(event->mimeData())) {
+        event->setDropAction(Qt::CopyAction);
+        event->accept();
+    } else {
+        event->ignore();
+    }
+}
+
+void SettingsList::dropEvent(QDropEvent* event) {
+    if (event->source() == this || !accepts(event->mimeData())) {
+        event->ignore();
+        return;
+    }
+    const QList<SettingEntry> entries = entriesFrom(event->mimeData());
+    event->setDropAction(Qt::CopyAction);
+    event->accept();
+    bool replace = false;
+    if (scope_ != SettingsScope::Site) {
+        // p.1141: Add, or Replace the current version.
+        QMessageBox box(QMessageBox::Question, tr("Settings"), tr("Add the settings, or replace the current ones?"),
+                        QMessageBox::NoButton, this);
+        QPushButton* add = box.addButton(tr("Add"), QMessageBox::AcceptRole);
+        QPushButton* rep = box.addButton(tr("Replace"), QMessageBox::DestructiveRole);
+        box.addButton(QMessageBox::Cancel);
+        box.exec();
+        if (box.clickedButton() != add && box.clickedButton() != rep) return;
+        replace = box.clickedButton() == rep;
+    }
+    copyIn(entries, replace);
+}
+
+// ---------------------------------------------------------------- SettingsWindow
+
+SettingsWindow::SettingsWindow(Settings& settings, QWidget* parent) : QWidget(parent, Qt::Tool), settings_(settings) {
+    setObjectName(QStringLiteral("settingsWindow"));
+    setWindowTitle(tr("Settings"));
+    tabs_ = new QTabWidget(this);
+    tabs_->setObjectName(QStringLiteral("settingsWindowTabs"));
+
+    // Format: the project's format, from New Project (p.1146).
+    auto* format = new QWidget;
+    format_ = new QFormLayout(format);
+    tabs_->addTab(format, tr("Format"));
+
+    project_ = new SettingsList(settings, SettingsScope::Project);
+    tabs_->addTab(project_, tr("Project"));
+
+    auto* user = new QWidget;
+    auto* uv = new QVBoxLayout(user);
+    uv->setContentsMargins(0, 4, 0, 0);
+    auto* row = new QHBoxLayout;
+    row->addWidget(new QLabel(tr("User Profile:"), user));
+    profiles_ = new QComboBox(user);
+    profiles_->setObjectName(QStringLiteral("userProfileMenu"));
+    profiles_->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+    row->addWidget(profiles_);
+    row->addStretch(1);
+    uv->addLayout(row);
+    user_ = new SettingsList(settings, SettingsScope::User);
+    uv->addWidget(user_, 1);
+    tabs_->addTab(user, tr("User"));
+
+    site_ = new SettingsList(settings, SettingsScope::Site);
+    tabs_->addTab(site_, tr("Site"));
+
+    auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(4, 4, 4, 4);
+    layout->addWidget(tabs_);
+    resize(380, 520);
+    showTab(Tab::User);
+
+    connect(profiles_, &QComboBox::activated, this, [this](int index) {
+        if (filling_) return;
+        const QString action = profiles_->itemData(index).toString();
+        if (action == QLatin1String("create")) {
+            CreateUserProfileDialog dialog(this);
+            if (dialog.exec() == QDialog::Accepted) createUser(dialog.profileName());
+        } else if (action == QLatin1String("update")) {
+            settings_.file(SettingsScope::User).ensure(SettingsSchema::builtIn().kindNames(SettingsScope::User));
+            settings_.commit(SettingsScope::User);
+        } else if (action == QLatin1String("reveal")) {
+            const QString folder = QDir(settings_.usersRoot()).filePath(settings_.user());
+            QDesktopServices::openUrl(QUrl::fromLocalFile(folder));
+        } else {
+            selectUser(profiles_->itemText(index));
+        }
+        fillProfiles();
+    });
+    connect(&settings_, &Settings::changed, this, &SettingsWindow::fillProfiles);
+    fillProfiles();
+    setProject(std::nullopt);
+}
+
+void SettingsWindow::fillProfiles() {
+    filling_ = true;
+    profiles_->clear();
+    QStringList users;
+    if (!settings_.usersRoot().isEmpty()) users = model::UserProfiles(settings_.usersRoot()).list();
+    if (!settings_.user().isEmpty() && !users.contains(settings_.user())) users << settings_.user();
+    for (const QString& u : users) profiles_->addItem(u);
+    profiles_->insertSeparator(profiles_->count());
+    // The User Profile Selection menu (p.1143-1145).
+    profiles_->addItem(tr("Create User Profile..."), QStringLiteral("create"));
+    profiles_->addItem(tr("Update User Profiles"), QStringLiteral("update"));
+    profiles_->addItem(tr("Reveal User Profile"), QStringLiteral("reveal"));
+    const bool saved = !settings_.usersRoot().isEmpty();
+    for (const char* action : {"create", "reveal"}) {
+        if (auto* m = qobject_cast<QStandardItemModel*>(profiles_->model())) {
+            m->item(profiles_->findData(QString::fromLatin1(action)))->setEnabled(saved);
+        }
+    }
+    profiles_->setCurrentIndex(std::max(static_cast<int>(users.indexOf(settings_.user())), 0));
+    filling_ = false;
+}
+
+bool SettingsWindow::selectUser(const QString& name) {
+    if (name.isEmpty() || name == settings_.user()) return false;
+    // The previous user's settings are saved as they change; load the new
+    // user's (p.1138).
+    settings_.setUser(settings_.usersRoot(), name);
+    return true;
+}
+
+bool SettingsWindow::createUser(const QString& name) {
+    if (settings_.usersRoot().isEmpty()) return false;
+    QString error;
+    if (!model::UserProfiles(settings_.usersRoot()).create(name.trimmed(), &error)) {
+        QMessageBox::warning(this, tr("Create User Profile"), error);
+        return false;
+    }
+    // "The new user profile appears selected in the menu" (p.1143).
+    settings_.setUser(settings_.usersRoot(), name.trimmed());
+    return true;
+}
+
+void SettingsWindow::setProject(const std::optional<model::ProjectEntry>& project) {
+    entry_ = project;
+    while (format_->rowCount() > 0) format_->removeRow(0);
+    tabs_->setTabEnabled(static_cast<int>(Tab::Project), project.has_value());
+    QString formatText;
+    if (project) {
+        const model::ProjectSettings& s = project->settings;
+        formatText = QString::fromStdString(s.format.label());
+        auto add = [this](const QString& label, const QString& value, const char* name) {
+            auto* l = new QLabel(value);
+            l->setObjectName(QString::fromLatin1(name));
+            format_->addRow(label, l);
+        };
+        add(tr("Project Name:"), s.name, "formatProjectName");
+        add(tr("Project Type:"), formatText, "formatProjectType");
+        add(tr("Aspect Ratio:"), QStringLiteral("%1:%2").arg(s.aspect.num()).arg(s.aspect.den()), "formatAspect");
+        add(tr("Raster Dimension:"), QStringLiteral("%1 x %2").arg(s.format.width).arg(s.format.height),
+            "formatRaster");
+        add(tr("Color Space:"), s.colorSpace, "formatColorSpace");
+        add(tr("Color Depth:"), s.colorDepth, "formatColorDepth");
+        add(tr("Stereoscopic:"), s.stereoscopic, "formatStereoscopic");
+    } else {
+        format_->addRow(new QLabel(tr("No project is open.")));
+    }
+    for (SettingsList* l : {project_, user_, site_}) l->projectFormat = formatText;
+}
+
+void SettingsWindow::showTab(Tab tab) {
+    tabs_->setCurrentIndex(static_cast<int>(tab));
+}
+
+SettingsWindow::Tab SettingsWindow::currentTab() const {
+    return static_cast<Tab>(tabs_->currentIndex());
+}
+
+SettingsList* SettingsWindow::list(SettingsScope scope) const {
+    switch (scope) {
+    case SettingsScope::Project: return project_;
+    case SettingsScope::User: return user_;
+    case SettingsScope::Site: return site_;
+    }
+    return nullptr;
+}
+
+SettingsList* SettingsWindow::currentList() const {
+    switch (currentTab()) {
+    case Tab::Project: return project_;
+    case Tab::User: return user_;
+    case Tab::Site: return site_;
+    case Tab::Format: break;
+    }
+    return nullptr;
+}
+
+void SettingsWindow::refresh() {
+    for (SettingsList* l : {project_, user_, site_}) l->refresh();
+    fillProfiles();
+}
+
+// ---------------------------------------------------------------- SiteSettingsWindow
+
+SiteSettingsWindow::SiteSettingsWindow(Settings& settings, QWidget* parent) : QWidget(parent, Qt::Tool) {
+    setObjectName(QStringLiteral("siteSettingsWindow"));
+    setWindowTitle(tr("Site Settings"));
+    list_ = new SettingsList(settings, SettingsScope::Site, this);
+    auto* layout = new QVBoxLayout(this);
+    layout->setContentsMargins(4, 4, 4, 4);
+    layout->addWidget(list_);
+    resize(360, 360);
+}
+
+// ---------------------------------------------------------------- CreateUserProfileDialog
+
+CreateUserProfileDialog::CreateUserProfileDialog(QWidget* parent) : QDialog(parent) {
+    setObjectName(QStringLiteral("createUserProfileDialog"));
+    setWindowTitle(tr("Create User Profile"));
+    auto* form = new QFormLayout;
+    // The profile's default settings (p.1143); this product has one set.
+    auto* defaults = new QComboBox(this);
+    defaults->setObjectName(QStringLiteral("profileDefaults"));
+    defaults->addItem(QString::fromUtf8(branding::kProductName));
+    form->addRow(tr("Default settings:"), defaults);
+    name_ = new QLineEdit(this);
+    name_->setObjectName(QStringLiteral("profileName"));
+    form->addRow(tr("Profile Name:"), name_);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    buttons->button(QDialogButtonBox::Ok)->setEnabled(false);
+    connect(name_, &QLineEdit::textChanged, this, [buttons](const QString& text) {
+        buttons->button(QDialogButtonBox::Ok)->setEnabled(!text.trimmed().isEmpty());
+    });
+    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    auto* layout = new QVBoxLayout(this);
+    layout->addLayout(form);
+    layout->addWidget(buttons);
+}
+
+QString CreateUserProfileDialog::profileName() const {
+    return name_->text().trimmed();
+}
+
+} // namespace lumenis::ui

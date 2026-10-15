@@ -2,3 +2,4 @@ lumenis_add_test(tst_project_store SOURCES tst_project_store.cpp LIBS lumenis::m
 lumenis_add_test(tst_bins SOURCES tst_bins.cpp LIBS lumenis::model)
 lumenis_add_test(tst_monitor SOURCES tst_monitor.cpp LIBS lumenis::model)
 lumenis_add_test(tst_sequence SOURCES tst_sequence.cpp LIBS lumenis::model)
+lumenis_add_test(tst_settings SOURCES tst_settings.cpp LIBS lumenis::model)

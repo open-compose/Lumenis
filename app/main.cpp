@@ -15,6 +15,8 @@
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/select_project_dialog.h"
+#include "lumenis/ui/settings.h"
+#include "lumenis/ui/settings_window.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/menu_builder.h"
 #include "lumenis/ui/panels.h"
@@ -355,6 +357,7 @@ int main(int argc, char** argv) {
             }
             bin->items << masters;
             lumenis::model::BinFile::write(bins.binPath(main), *bin);
+            window.settings().setUser(sample.users, QStringLiteral("editor"));
             window.setProject(*documentary);
             // The Composer with a clip in the Source monitor and the rough
             // cut in the Record monitor, marked, with master timecode above
@@ -451,6 +454,30 @@ int main(int argc, char** argv) {
                     bins.closeBin(doc);
                 }
             }
+            // File > Settings, User tab, with two versions of the Timeline
+            // setting (p.1136-1139), and the Timeline Settings dialog
+            // (p.1218).
+            {
+                lumenis::ui::Settings& userSettings = window.settings();
+                lumenis::model::SettingsFile& user = userSettings.file(lumenis::model::SettingsScope::User);
+                const int timeline = user.activeIndex(QStringLiteral("Timeline"));
+                user.entries[timeline].name = QStringLiteral("Editing");
+                user.duplicate(timeline);
+                userSettings.commit(lumenis::model::SettingsScope::User);
+                lumenis::ui::SettingsWindow* sw = window.showSettings();
+                lumenis::ui::SettingsList* list = sw->list(lumenis::model::SettingsScope::User);
+                list->selectEntries({user.activeIndex(QStringLiteral("Timeline"))});
+                sw->resize(380, 480);
+                QCoreApplication::processEvents();
+                ok = lumenis::ui::capture(sw, dir, QStringLiteral("settings_window")) && ok;
+                sw->hide();
+                const auto* kind = lumenis::ui::SettingsSchema::builtIn().find(QStringLiteral("Timeline"));
+                lumenis::ui::SettingsDialog dialog(*kind, user.entries.at(user.activeIndex(QStringLiteral("Timeline"))), &window);
+                dialog.show();
+                QCoreApplication::processEvents();
+                ok = lumenis::ui::capture(&dialog, dir, QStringLiteral("timeline_settings")) && ok;
+                dialog.hide();
+            }
             ok = lumenis::ui::capture(&selectProject, dir, QStringLiteral("select_project")) && ok;
             selectProject.showPage(lumenis::ui::SelectProjectDialog::Page::NewProject);
             if (auto* toggle = selectProject.findChild<QToolButton*>(QStringLiteral("settingsToggle"))) {
@@ -495,6 +522,9 @@ int main(int argc, char** argv) {
     QApplication::setQuitOnLastWindowClosed(false);
     QObject::connect(&window, &lumenis::ui::MainWindow::closed, &guiApp, &QApplication::quit);
 
+    // Site settings (p.1141), and the user chosen in Select Project
+    // (p.1138).
+    window.settings().setSiteFolder(locations.siteSettings);
     auto openProjectFile = [&window](const QString& file) {
         QString error;
         const auto projectSettings = lumenis::model::ProjectStore::read(file, &error);
@@ -513,6 +543,7 @@ int main(int argc, char** argv) {
         auto* dialog = new lumenis::ui::SelectProjectDialog(locations);
         dialog->setAttribute(Qt::WA_DeleteOnClose);
         QObject::connect(dialog, &QDialog::finished, &guiApp, [&, dialog](int result) {
+            if (result == QDialog::Accepted) window.settings().setUser(locations.users, dialog->userProfile());
             if (result != QDialog::Accepted || !openProjectFile(dialog->selectedProjectFile())) {
                 QApplication::quit();
             }
@@ -522,6 +553,7 @@ int main(int argc, char** argv) {
     QObject::connect(&window, &lumenis::ui::MainWindow::closeProjectRequested, &guiApp, [&] { showSelectProject(); });
 
     if (parser.isSet(openProject)) {
+        window.settings().setUser(locations.users, lumenis::model::UserProfiles::defaultName());
         if (!openProjectFile(parser.value(openProject))) {
             return 1;
         }

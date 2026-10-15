@@ -1094,7 +1094,125 @@ p.610–640, ch. 13 p.432–434).**
   sorting, Quick Find, export, import and printing, Find, Copy Source
   Markers.
 
-## 12. Still to document
-* The window-by-window details for the Audio tools (ch. 21) and Settings
-  (ch. 33).
+## 12. Settings (ch. 33, p.1136–1224)
+
+* **Settings window (p.1136).** Opened with File > Settings. It has four
+  tabs: **Format, Project, User, Site**.
+  * The User tab has a **User Profile** menu above the list.
+  * Columns: **Setting** and **Name**.
+  * A setting with several versions is a row with an arrow. Its versions
+    are listed under it, each with a check box (picture on p.1136).
+* **Types (p.1136–1137).**
+  * User settings are stored in the user's folder.
+  * Project settings are stored in the project folder.
+  * Site settings are stored in a Settings folder of their own. They are
+    the defaults for new users and projects.
+* **Working with settings (p.1137–1141).**
+  * Open a setting by double-clicking it, or by typing its first letter
+    and pressing Enter. Click OK or Cancel; changes are saved in the
+    settings file.
+  * **Edit > Duplicate** copies the selected settings. A custom name gets
+    a period and a version number.
+  * Click the **Name** column to type a custom name, then press Enter.
+  * One version of each setting is **active**: click to the left of a
+    version to check it.
+  * **Delete** key or **Edit > Delete** removes settings; this cannot be
+    undone.
+  * Right-click > **Restore to Default** asks first:
+    * **Copy & Restore** keeps a copy of the current settings;
+    * **Restore** discards them.
+  * Drag settings between settings files. Dropped into the Settings
+    list, a message box offers:
+    * **Add**: a new version; the current one is unchanged.
+    * **Replace**: replaces the current version.
+  * **Windows > Site Settings** opens the Site Settings window. Settings
+    are dragged into it.
+* **User profiles (p.1138, p.1143–1145).**
+  * The User Profile menu lists the users and their profiles, then:
+    **Create User Profile**, **Import User or User Profile**, **Export
+    User or User Profile**, **Update User Profiles** and **Reveal User
+    Profile**.
+  * Choosing another user saves the previous user's settings and loads
+    the new user's.
+  * The **Create User Profile** dialog has the profile's default
+    settings and a **Profile Name** box. The new profile is selected
+    in the menu afterwards.
+* **Format tab (p.1146).** Shows the project's format as chosen in New
+  Project: Project Type, Raster Dimension, color space and so on.
+* **Settings dialogs.** Each setting's options are listed in
+  `src/ui/resources/settings.json`, with the guide page of each option.
+  The labels follow the guide.
+  * **Bin** (p.1152–1154).
+  * **Composer** (p.1158–1161): Window, Edit, Move, MultiCam and Viewer
+    tabs.
+  * **General** (p.1191–1193).
+  * **Interface** (p.1199–1202): General, Bins, and Timeline and Viewers
+    tabs.
+  * **Timeline** (p.1218–1221): Display and Edit tabs.
+  * **Trim** (p.1223–1224): Play Loop and Features tabs.
+
+**Implementation status (1.5a).**
+* **Built.**
+  * Settings files, in `src/model/settings.*`:
+    * versions, the active version, Duplicate with numbered names,
+      Delete, Add and Replace;
+    * new files start from the site settings;
+    * the files: `<user>/Settings.json`, `<project folder>/Settings.json`
+      and `<Settings folder>/Settings.json` beside the Users folder.
+  * The Settings window (`src/ui/settings_window.*`):
+    * the four tabs and the grouped versions with check boxes;
+    * opening a setting by double-click or Enter, naming by clicking
+      the Name column;
+    * Edit > Duplicate, Edit > Delete and the Delete key;
+    * Restore to Default, with Copy & Restore;
+    * dragging settings between the lists and into the Site Settings
+      window, with Add or Replace;
+    * the User Profile menu with Create User Profile, Update User
+      Profiles and Reveal User Profile;
+    * the Format tab.
+  * One dialog type for all settings, made from `settings.json`. Options
+    whose feature is not built yet are shown dimmed and keep their
+    defaults.
+  * Settings that work now:
+    * **Bin:** Auto-Save interval; Favorite Bins show at; the Quick
+      Filter's columns; tabbed or floating bins (Ctrl inverts).
+    * **Composer:** Data Display at Top (Off or one row); Button Display
+      at Bottom; Center Duration; Activate Record Monitor After Edit;
+      Show Composer Markers; Show Spanned Markers; the Move tab.
+    * **General:** Default Starting TC for new sequences.
+    * **Interface:** Show ToolTips; Show Source/Record colors in
+      Composer; When moving to a workspace.
+    * **Timeline:** Show Toolbar; Show Marked Region, including its
+      effect on Replace Edit; Movement During Play; Only One Segment
+      Tool; Default Segment Tool.
+    * **Trim:** Auto focus when entering Trim mode.
+* **Our choices, unverified.**
+  * Which settings are User settings and which are Project settings. The
+    picture on p.1136 shows Interface, Timeline and Trim as User
+    settings, and General absent from the User list. Bin and Composer
+    are not visible in the picture; they are User settings here.
+  * Defaults the guide does not give: Data Display (one row), Button
+    Display (two rows), Center Duration on, Tick Marks off, Single Mark
+    Editing on, Movement During Play (Page), Default Segment Tool
+    (Segment Overwrite), and the Trim Play Loop values (2, 2, 0).
+  * The Quick Filter choices are worded "Search the Name column only" and
+    "Search all columns"; the guide describes them but does not name them.
+  * Create User Profile has one set of default settings, the product's.
+  * The wording of the Restore to Default and Add/Replace message boxes is
+    ours.
+  * The Settings window opens on the User tab.
+* **Not yet.**
+  * Import and Export User Profile, with Personal or Group.
+  * File > New Settings File and File > Open Settings File.
+  * Settings whose tools come later: Audio, Capture, Export, Import, Grid,
+    Keyboard (1.6), Link, Video Display and others.
+  * Options shown dimmed in the dialogs. Their features come with later
+    phases: the attic, pop-up monitors, two information rows, MultiCam and
+    Viewer tabs, colors and fonts, Small Trim mode and others.
+  * The tooltip delay.
+  * The Bin "Set Default Bin View" option, which needs a list of bin
+    views.
+
+## 13. Still to document
+* The window-by-window details for the Audio tools (ch. 21).
 * Menu order and separators, confirmed against a licensed seat.
