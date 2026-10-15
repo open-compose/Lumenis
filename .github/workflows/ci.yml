@@ -5,6 +5,11 @@ on:
     branches: [main, 'claude/**']
   pull_request:
   workflow_dispatch:
+    inputs:
+      hosted_macos:
+        description: Also build on GitHub-hosted macOS (billed at 10x)
+        type: boolean
+        default: true
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -134,8 +139,8 @@ jobs:
     # macOS minutes cost ten times Linux ones on a private repository, so
     # development-branch pushes skip it; it runs for main, pull requests and
     # by hand (Actions > CI > Run workflow, or `gh workflow run ci.yml
-    # --ref <branch>`).
-    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    # --ref <branch>`; `-f hosted_macos=false` runs only the self-hosted Mac).
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.hosted_macos)
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
