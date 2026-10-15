@@ -2,7 +2,6 @@
 
 #include "lumenis/core/timecode.h"
 
-#include <cmath>
 #include <cstdlib>
 
 namespace lumenis::model {
@@ -42,9 +41,15 @@ Calculator::Calculator() {
 
 std::int64_t Calculator::convert(std::int64_t frames, const CalculatorFormat& from, const CalculatorFormat& to) {
     if (from.rate == to.rate) return frames;
-    // Same duration in time: frames / from.rate * to.rate.
-    const long double seconds = static_cast<long double>(frames) * from.rate.den() / from.rate.num();
-    return static_cast<std::int64_t>(std::llround(seconds * to.rate.num() / to.rate.den()));
+    // Same duration in time: frames / from.rate * to.rate, rounded to the
+    // nearest frame, in integers (no floating point: a long double is only
+    // 64 bits on some platforms). Rates are at most 60000/1001, so this does
+    // not overflow for any duration the calculator shows.
+    const std::int64_t num = from.rate.den() * to.rate.num();
+    const std::int64_t den = from.rate.num() * to.rate.den();
+    const std::int64_t n = std::llabs(frames) * num;
+    const std::int64_t rounded = (n + den / 2) / den;
+    return frames < 0 ? -rounded : rounded;
 }
 
 void Calculator::setFormat(int index) {
