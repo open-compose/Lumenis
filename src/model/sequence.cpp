@@ -34,8 +34,43 @@ const std::pair<AudioFormat, const char*> kFormats[] = {
     {AudioFormat::Surround71, "7.1"},
 };
 
+const std::pair<TransitionAlignment, const char*> kAlignments[] = {
+    {TransitionAlignment::EndingAtCut, "ending"},
+    {TransitionAlignment::CenteredOnCut, "centered"},
+    {TransitionAlignment::StartingAtCut, "starting"},
+    {TransitionAlignment::CustomStart, "custom"},
+};
+
+QJsonObject transitionToJson(const Transition& t) {
+    QJsonObject o{{QStringLiteral("effect"), t.effect.toJson()},
+                  {QStringLiteral("duration"), static_cast<qint64>(t.duration)}};
+    for (const auto& [a, text] : kAlignments) {
+        if (a == t.alignment) o.insert(QStringLiteral("alignment"), QString::fromLatin1(text));
+    }
+    if (t.alignment == TransitionAlignment::CustomStart) o.insert(QStringLiteral("start"), static_cast<qint64>(t.start));
+    return o;
+}
+
+Transition transitionFromJson(const QJsonObject& o) {
+    Transition t;
+    t.effect = Effect::fromJson(o.value(QStringLiteral("effect")).toObject());
+    t.duration = std::max<std::int64_t>(o.value(QStringLiteral("duration")).toInteger(), 0);
+    const QString alignment = o.value(QStringLiteral("alignment")).toString();
+    for (const auto& [a, text] : kAlignments) {
+        if (alignment == QLatin1String(text)) t.alignment = a;
+    }
+    t.start = o.value(QStringLiteral("start")).toInteger();
+    return t;
+}
+
+void effectsToJson(const Segment& s, QJsonObject& o) {
+    if (s.effect) o.insert(QStringLiteral("effect"), s.effect->toJson());
+    if (s.transition) o.insert(QStringLiteral("transition"), transitionToJson(*s.transition));
+}
+
 QJsonObject segmentToJson(const Segment& s) {
     QJsonObject o{{QStringLiteral("length"), static_cast<qint64>(s.length)}};
+    effectsToJson(s, o);
     if (s.isFiller()) {
         if (s.addEdit) o.insert(QStringLiteral("addEdit"), true);
         return o;
@@ -57,10 +92,35 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.sourceIn = o.value(QStringLiteral("in")).toInteger();
     s.length = std::max<std::int64_t>(o.value(QStringLiteral("length")).toInteger(), 0);
     s.addEdit = s.isFiller() && o.value(QStringLiteral("addEdit")).toBool();
+    if (o.contains(QStringLiteral("effect"))) s.effect = Effect::fromJson(o.value(QStringLiteral("effect")).toObject());
+    if (o.contains(QStringLiteral("transition"))) {
+        s.transition = transitionFromJson(o.value(QStringLiteral("transition")).toObject());
+    }
     return s;
 }
 
 } // namespace
+
+QJsonObject Effect::toJson() const {
+    QJsonObject o{{QStringLiteral("category"), category}, {QStringLiteral("name"), name}};
+    if (!parameters.isEmpty()) o.insert(QStringLiteral("parameters"), parameters);
+    return o;
+}
+
+Effect Effect::fromJson(const QJsonObject& o) {
+    return Effect{o.value(QStringLiteral("category")).toString(), o.value(QStringLiteral("name")).toString(),
+                  o.value(QStringLiteral("parameters")).toObject()};
+}
+
+std::int64_t Transition::before() const {
+    switch (alignment) {
+    case TransitionAlignment::EndingAtCut: return duration;
+    case TransitionAlignment::CenteredOnCut: return duration / 2;
+    case TransitionAlignment::StartingAtCut: return 0;
+    case TransitionAlignment::CustomStart: return std::clamp<std::int64_t>(start, 0, duration);
+    }
+    return 0;
+}
 
 QString trackName(TrackKind kind, int number) {
     return kindLetter(kind) + QString::number(number);
@@ -296,6 +356,7 @@ int Sequence::cut(Track& t, std::int64_t frame) {
     if (i < 0 || start == frame) return std::max(i, 0);
     Segment tail = t.segments.at(i);
     tail.addEdit = false;
+    tail.transition.reset(); // the cut's transition stays with the head
     const std::int64_t head = frame - start;
     if (!tail.isFiller()) tail.sourceIn += head;
     tail.length -= head;
@@ -308,10 +369,17 @@ void Sequence::tidy(Track& t) {
     QList<Segment> out;
     for (const Segment& s : t.segments) {
         if (s.length <= 0) continue;
-        if (s.isFiller() && !s.addEdit && !out.isEmpty() && out.last().isFiller()) {
+        // Filler joins the filler before it, unless effects tell them apart.
+        if (s.isFiller() && !s.addEdit && !s.hasEffects() && !out.isEmpty() && out.last().isFiller() &&
+            !out.last().effect) {
             out.last().length += s.length;
         } else {
-            Segment kept = s.isFiller() ? Segment::filler(s.length) : s;
+            Segment kept = s;
+            if (s.isFiller()) {
+                kept = Segment::filler(s.length);
+                kept.effect = s.effect;
+                kept.transition = s.transition;
+            }
             kept.addEdit = s.isFiller() && s.addEdit && !out.isEmpty() && out.last().isFiller();
             out << kept;
         }
@@ -608,6 +676,8 @@ bool Sequence::addEdit(const QString& name, std::int64_t frame) {
 }
 
 bool Sequence::isMatchFrame(const Segment& before, const Segment& after) {
+    // An edit with a transition, or between different effects, is kept.
+    if (after.transition || before.effect != after.effect) return false;
     if (before.isFiller() || after.isFiller()) return before.isFiller() && after.isFiller() && after.addEdit;
     return before.clipId == after.clipId && before.binId == after.binId && before.sourceTrack == after.sourceTrack &&
            before.sourceIn + before.length == after.sourceIn;
@@ -1209,6 +1279,167 @@ QStringList EditHistory::descriptions() const {
     QStringList out;
     for (qsizetype i = steps_.size() - 1; i >= 0; --i) out << steps_.at(i).description;
     return out;
+}
+
+// ---------------------------------------------------------------- effects
+
+bool applySegmentEffect(Sequence& sequence, const QString& name, std::int64_t frame, const Effect& effect) {
+    Track* t = sequence.track(name);
+    // Video effects go on video tracks; never on data tracks (FX guide p.44).
+    if (!t || t->kind != TrackKind::Video || t->locked) return false;
+    const int i = t->segmentAt(frame);
+    if (i < 0) return false;
+    t->segments[i].effect = effect;
+    return true;
+}
+
+std::optional<TransitionRoom> transitionRoom(const Sequence& sequence, const QString& name, std::int64_t frame,
+                                             const SourceLength& sourceLength) {
+    const Track* t = sequence.track(name);
+    if (!t || t->kind == TrackKind::Data) return std::nullopt;
+    const EditSides sides = sidesAt(*t, frame);
+    if (sides.b < 0) return std::nullopt;
+    const Segment& b = t->segments.at(sides.b);
+    TransitionRoom room;
+    if (sides.a < 0) {
+        // The start of the track: from black or silence, after the cut only.
+        room.after = b.length;
+        return room;
+    }
+    const Segment& a = t->segments.at(sides.a);
+    // Before the cut the incoming clip shows frames before its start; after
+    // it the outgoing clip shows frames past its end (p.48).
+    room.before = std::min(a.length, headRoom(b));
+    room.after = std::min(b.length, tailRoom(a, sourceLength));
+    return room;
+}
+
+bool transitionFits(const Transition& transition, const TransitionRoom& room, QString* which) {
+    QString shortSide;
+    if (transition.after() > room.after) shortSide = QStringLiteral("Media A");
+    if (transition.before() > room.before) shortSide = QStringLiteral("Media B");
+    if (which) *which = shortSide;
+    return transition.duration > 0 && shortSide.isEmpty();
+}
+
+Transition sizeToFit(const Transition& transition, const TransitionRoom& room) {
+    Transition t = transition;
+    const std::int64_t before = std::min(transition.before(), room.before);
+    const std::int64_t after = std::min(transition.after(), room.after);
+    switch (transition.alignment) {
+    case TransitionAlignment::EndingAtCut:
+        if (before > 0) {
+            t.duration = before;
+            return t;
+        }
+        break;
+    case TransitionAlignment::StartingAtCut:
+        if (after > 0) {
+            t.duration = after;
+            return t;
+        }
+        break;
+    case TransitionAlignment::CenteredOnCut: {
+        const std::int64_t half = std::min(before, after);
+        if (half > 0) {
+            t.duration = 2 * half;
+            return t;
+        }
+        break;
+    }
+    case TransitionAlignment::CustomStart: break;
+    }
+    // The alignment cannot be kept: whatever room there is (p.48).
+    t.duration = before + after;
+    if (before == 0) {
+        t.alignment = TransitionAlignment::StartingAtCut;
+    } else if (after == 0) {
+        t.alignment = TransitionAlignment::EndingAtCut;
+    } else {
+        t.alignment = TransitionAlignment::CustomStart;
+        t.start = before;
+    }
+    return t;
+}
+
+bool applyTransition(Sequence& sequence, const QString& name, std::int64_t frame, const Transition& transition,
+                     const SourceLength& sourceLength) {
+    const auto room = transitionRoom(sequence, name, frame, sourceLength);
+    if (!room || !transitionFits(transition, *room)) return false;
+    Track* t = sequence.track(name);
+    if (t->locked) return false;
+    t->segments[sidesAt(*t, frame).b].transition = transition;
+    return true;
+}
+
+QString removeEffect(Sequence& sequence, const QString& name, std::int64_t frame, EffectTarget target) {
+    Track* t = sequence.track(name);
+    if (!t || t->locked) return {};
+    if (target == EffectTarget::Transition) {
+        const int b = sidesAt(*t, frame).b;
+        if (b < 0 || !t->segments.at(b).transition) return {};
+        const QString removed = t->segments.at(b).transition->effect.name;
+        t->segments[b].transition.reset();
+        return removed;
+    }
+    const int i = t->segmentAt(frame);
+    if (i < 0 || !t->segments.at(i).effect) return {};
+    const QString removed = t->segments.at(i).effect->name;
+    t->segments[i].effect.reset();
+    sequence.normalize(name);
+    return removed;
+}
+
+std::optional<EffectRef> effectAt(const Sequence& sequence, const QStringList& tracks, std::int64_t position) {
+    for (const QString& name : tracks) {
+        const Track* t = sequence.track(name);
+        if (!t) continue;
+        std::int64_t at = 0;
+        for (const Segment& s : t->segments) {
+            if (s.transition && position >= at - s.transition->before() && position < at + s.transition->after()) {
+                return EffectRef{name, at, EffectTarget::Transition};
+            }
+            at += s.length;
+        }
+        std::int64_t start = 0;
+        const int i = t->segmentAt(position, &start);
+        if (i >= 0 && t->segments.at(i).effect) return EffectRef{name, start, EffectTarget::Segment};
+    }
+    return std::nullopt;
+}
+
+namespace {
+
+Segment* segmentForEffect(const Sequence& sequence, const EffectRef& ref) {
+    const Track* t = sequence.track(ref.track);
+    if (!t) return nullptr;
+    std::int64_t start = 0;
+    const int i = t->segmentAt(ref.frame, &start);
+    if (i < 0 || start != ref.frame) return nullptr;
+    return const_cast<Segment*>(&t->segments.at(i));
+}
+
+} // namespace
+
+const Effect* effectFor(const Sequence& sequence, const EffectRef& ref) {
+    const Segment* s = segmentForEffect(sequence, ref);
+    if (!s) return nullptr;
+    if (ref.target == EffectTarget::Transition) return s->transition ? &s->transition->effect : nullptr;
+    return s->effect ? &*s->effect : nullptr;
+}
+
+Effect* effectFor(Sequence& sequence, const EffectRef& ref) {
+    return const_cast<Effect*>(effectFor(std::as_const(sequence), ref));
+}
+
+const Transition* transitionFor(const Sequence& sequence, const EffectRef& ref) {
+    if (ref.target != EffectTarget::Transition) return nullptr;
+    const Segment* s = segmentForEffect(sequence, ref);
+    return s && s->transition ? &*s->transition : nullptr;
+}
+
+Transition* transitionFor(Sequence& sequence, const EffectRef& ref) {
+    return const_cast<Transition*>(transitionFor(std::as_const(sequence), ref));
 }
 
 } // namespace lumenis::model

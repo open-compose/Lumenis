@@ -1380,6 +1380,131 @@ p.610–640, ch. 13 p.432–434).**
   * The Bin "Set Default Bin View" option, which needs a list of bin
     views.
 
-## 13. Still to document
+## 13. Effects (FX Guide ch. 1–3, ch. 17–18)
+
+### Effect Palette (FX p.36–38)
+* **Opening:** Tools > Effect Palette, Ctrl+8 (FX p.38). It is a tool
+  panel, so it floats, docks and tabs like the others.
+* **Layout (picture on FX p.37):**
+  * Tabs: Filters and Transitions (video), Audio Track and Audio Clip
+    (audio). The text calls the audio ones Clip Effects and Track Effects;
+    the tab labels follow the picture.
+  * A Quick Find field. It searches all categories by default, or only the
+    selected one (FX p.37).
+  * The categories on the left, starting with All; the selected category's
+    effects on the right, alphabetically, each with an icon.
+  * Real-time effects have a green dot; non-real-time effects have none
+    (FX p.36).
+  * Bins holding effect templates are listed below the categories (FX p.38).
+    *Not yet:* templates come with Phase 6.
+  * Set Font from the right-click menu (FX p.38).
+* **Categories (picture on FX p.37):** All, Blend, Box Wipe, Color
+  Correction Presets, Conceal, Edge Wipe, Film, Generator, Illusion FX,
+  Image, Key, L-Conceal, Matrix Wipe, Peel, PlasmaWipe Avid Borders, Center,
+  Horiz, Lava, Paint and Techno, Push, Reformat, S3D, Sawtooth Wipe, Shape
+  Wipe, Spin, Squeeze, Timewarp, Title, Xpress 3D Effect.
+* **Effects:** `src/ui/resources/effects.json` lists 159 effects from the
+  Effects Reference (FX p.456–490). For each effect it records the page,
+  where the effect can be applied (its "Apply to" row), whether it is real
+  time, and its parameter categories. The guide's gaps:
+  * Color Correction Presets and S3D list no effects.
+  * The PlasmaWipe presets are not named (FX p.478).
+  * Only 4 of the 15 Squeeze effects are named (FX p.483–484, p.490).
+  * Motion effects (Freeze Frame and others, FX p.476–477) are made from the
+    Source monitor, not from the palette.
+* **Ours:** the Filters tab lists every video effect, because the picture
+  shows Illusion FX transitions under Filters. The Transitions tab lists the
+  effects that apply to transitions. The audio tabs are empty until audio
+  plug-ins (Phase 5). The icons are our own drawings.
+
+### Applying and removing effects (FX p.44–48)
+* **Applying (FX p.44–45):**
+  * Drag an effect's icon onto a transition or a segment in the Timeline.
+    Near a cut, a transition effect goes on the cut. On a segment, a
+    transition effect goes on the segment's nearer cut.
+  * Double-click an effect to apply it to the selected segments.
+  * Double-click an effect to apply it to the selected transitions. We use
+    the transitions that have trim rollers; Effect mode comes in Phase 6.
+  * Effects cannot go on data tracks (FX p.44). The palette's effects are
+    video effects, so they go on video tracks only.
+* **Transitions:**
+  * They default to one second (p.1296), centered on the cut.
+  * Transition Effect Alignment (FX p.500): Ending at Cut, Centered on Cut,
+    Starting at Cut, Custom Start.
+  * Transition Effect Duration is seconds:frames, where 1:00 is one second
+    (FX p.500).
+* **Insufficient Source (FX p.48):** asks when the outgoing clip (Media A)
+  or the incoming clip (Media B) is short of frames.
+  * Size To Fit shortens the effect and keeps its alignment where it can.
+  * Without frames before the cut, it becomes Starting at Cut.
+  * Cancel applies nothing.
+* **Removing (FX p.47):**
+  * Remove Effect removes the effect at the position on the selected track:
+    a transition spanning the position, or else the segment effect.
+  * Remove Effect is one of the effect buttons pictured on p.97. We put it
+    on the Command Palette's FX tab, where the guide puts the Fade Effect
+    button (FX p.46).
+* **Timeline (FX p.36, p.40):**
+  * A transition shades its span and shows its icon on the cut. A segment
+    effect shows its icon in the segment.
+  * The icons have a green dot for real-time effects and a blue dot
+    otherwise.
+  * The Timeline Fast menu's Effect Icons and Dissolve Icons options turn
+    the icons off. Dissolve Icons is dimmed while Effect Icons is off.
+* **Editing:**
+  * Effects are part of the sequence. Applying, changing and removing them
+    are undoable steps.
+  * A segment effect stays with both halves after Add Edit.
+  * A transition stays with its cut.
+  * An edit with a transition is not a match-frame edit.
+
+### Effect Editor (FX p.83–88, p.491–586)
+* **Opening:** Tools > Effect Editor.
+* **What it shows:** the effect at the Record position on the selected
+  tracks, top down. It is blank if the position is not on an effect or the
+  effect's track is not selected (FX p.84).
+* **Layout (picture on FX p.84):**
+  * The effect's name and icon.
+  * Its parameter categories, each with a triangular opener.
+  * Under each category, sliders with their values, checkboxes, colour
+    swatches and menus.
+  * The controls of each parameter category come from the Effects Parameter
+    Reference (FX p.491–586), in `src/ui/resources/effect_parameters.json`:
+    92 categories.
+  * Slider ranges and defaults are used only where the reference states
+    them.
+* **Slider keys (FX p.87):** Left and Right Arrow change a value by 1; with
+  Shift, by 10.
+* **Transition parameters (FX p.63, p.500):**
+  * Transition Effect Alignment button and Transition Effect Duration box.
+    They are active for a transition effect.
+  * In Trim mode, typing a duration for a cut without an effect adds a
+    Dissolve (FX p.63).
+  * With no transition, the alignment icon is a vertical bar (FX p.500).
+* **Not yet (Phase 6):** these buttons and controls are shown but off:
+  * Down the right side: Reduce, Enlarge, Dual Split, Play Loop, Play, HQ,
+    Tracking and Grid.
+  * Along the bottom: Render Effect, Outline/Path, 3D Promote and the
+    keyframe graph.
+  * Controls that need the Effect Preview monitor, such as eyedroppers and
+    tracking.
+
+### Implementation status (1.7a)
+* **Done:**
+  * The Effect Palette.
+  * Applying effects by drag and double-click, with Insufficient Source and
+    Size To Fit.
+  * Remove Effect.
+  * Effect icons in the Timeline, with their Fast menu options.
+  * The Effect Editor's parameters and Transition parameters, all
+    undoable.
+* **Not yet:**
+  * Effect mode and the Effect Preview monitor.
+  * Rendering, keyframes and effect templates.
+  * Quick Transition, Head Fade and Tail Fade.
+  * Audio effects.
+  * Applying effects to clips in the Source monitor.
+
+## 14. Still to document
 * The window-by-window details for the Audio tools (ch. 21).
 * Menu order and separators, confirmed against a licensed seat.

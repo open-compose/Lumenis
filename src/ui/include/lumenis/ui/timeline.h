@@ -4,6 +4,7 @@
 #include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
+#include "lumenis/ui/effect_palette.h"
 
 #include <QWidget>
 
@@ -11,6 +12,7 @@
 #include <optional>
 
 class QLabel;
+class QPainter;
 class QLineEdit;
 class QMenu;
 class QScrollBar;
@@ -81,8 +83,13 @@ protected:
     void wheelEvent(QWheelEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
+    // Effects dragged from the Effect Palette (FX guide p.44).
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
+    void paintEffects(QPainter& p, const Row& r, const model::Track& t) const;
     void moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifiers);
     // A segment drag: frames and tracks moved so far.
     std::int64_t dragFrames(Qt::KeyboardModifiers modifiers) const;
@@ -241,6 +248,34 @@ public:
     // The Clipboard (p.479-480): a sequence that is in no bin.
     const std::optional<model::BinItem>& clipboard() const { return clipboard_; }
 
+    // ---- Effects (FX guide ch. 2-3)
+    // An effect dropped from the Effect Palette (p.44): a transition effect
+    // goes on the cut `cut` if given, else the nearer cut of the segment at
+    // `frame`; a segment effect on that segment. Video tracks only.
+    bool dropEffect(const QString& track, std::int64_t frame, const EffectInfo& effect,
+                    std::optional<std::int64_t> cut = std::nullopt);
+    // An effect double-clicked in the Effect Palette (p.44): on the
+    // selected segments, or on the transitions with trim rollers.
+    bool applyEffectToSelection(const EffectInfo& effect);
+    // Remove Effect (p.47): the effect the Effect Editor would show.
+    bool removeEffectAtPosition();
+    // The effect at the Record monitor's position on the selected tracks,
+    // top down (p.84).
+    std::optional<model::EffectRef> currentEffect() const;
+    // Changes an effect of the record sequence, with an undo step.
+    bool changeEffect(const model::EffectRef& ref, const QString& description,
+                      const std::function<void(model::Effect&, model::Transition*)>& change);
+    // The Transition parameters (p.63, p.500): the duration and alignment
+    // of the transitions at the cuts; a Dissolve where there is none.
+    bool setTransitions(const QList<model::TrimRoller>& cuts, std::int64_t duration,
+                        model::TransitionAlignment alignment, std::int64_t start = 0);
+    // The Insufficient Source dialog (p.48): `which` is "Media A" or
+    // "Media B"; true sizes the effect to fit, false cancels.
+    using InsufficientSource = std::function<bool(const QString& which)>;
+    void setInsufficientSource(InsufficientSource ask) { insufficient_ = std::move(ask); }
+    // Transition effects default to one second (Editing Guide p.1296).
+    std::int64_t defaultTransitionLength() const;
+
     // Zoom (p.607-608). The scale is in pixels per frame.
     double scale() const;
     double fitScale() const;
@@ -263,6 +298,8 @@ public:
         bool clipDurations = false;
         bool clipTracks = false;
         bool timecodeTrack = true; // Show Track > TC1 (p.598)
+        bool effectIcons = true;   // Effect Icons, Dissolve Icons (FX guide p.40)
+        bool dissolveIcons = true;
     };
     const Display& display() const { return display_; }
 
@@ -321,6 +358,9 @@ private:
     void commit(const QString& description, const model::BinItem& before, model::BinItem after);
     void restore(const QString& binId, const model::BinItem& item);
     bool fail(const QString& text);
+    // Puts transitions on cuts of `seq`, asking about insufficient source.
+    bool addTransitions(model::Sequence& seq, const QList<model::TrimRoller>& cuts, const EffectInfo& effect);
+    bool commitSequence(const QString& description, const model::Sequence& seq);
     int sliderFor(double scale) const;
     double scaleFor(int slider) const;
 
@@ -369,6 +409,7 @@ private:
     SequenceStore store_;
     SequenceMaker maker_;
     Composer::KeyResolver keys_;
+    InsufficientSource insufficient_;
 };
 
 } // namespace lumenis::ui

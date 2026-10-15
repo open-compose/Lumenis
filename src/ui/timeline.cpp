@@ -7,15 +7,18 @@
 #include <QApplication>
 #include <QContextMenuEvent>
 #include <QDateTime>
+#include <QDropEvent>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QMenu>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPushButton>
 #include <QScrollBar>
 #include <QSlider>
 #include <QToolButton>
@@ -268,6 +271,7 @@ TimelineView::TimelineView(Timeline& timeline, QWidget* parent) : QWidget(parent
     setMouseTracking(false);
     setFocusPolicy(Qt::StrongFocus);
     setMinimumHeight(kRulerHeight + kVideoRow);
+    setAcceptDrops(true);
 }
 
 int TimelineView::rulerHeight() const {
@@ -451,6 +455,7 @@ void TimelineView::paintEvent(QPaintEvent*) {
                 previous = &s;
                 at = end;
             }
+            if (timeline_.display().effectIcons) paintEffects(p, r, *t);
         }
         p.setPen(QColor(kRowLine));
         p.drawLine(header, r.top + r.height - 1, width(), r.top + r.height - 1);
@@ -772,6 +777,50 @@ void TimelineView::moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifi
     composer.stop();
     composer.setActiveMonitor(timeline_.shownMonitor());
     composer.moveTo(timeline_.shownMonitor(), frame);
+}
+
+void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t) const {
+    // Transitions shade their span with the effect icon on the cut;
+    // segment effects show their icon in the segment. Real-time effects
+    // have a green dot, others a blue one until rendered (FX guide p.36).
+    const int iconHeight = std::min(r.height - 4, 14);
+    if (iconHeight < 8) return;
+    const int iconWidth = iconHeight * 3 / 2;
+    auto icon = [&](double centre, const model::Effect& e, bool transition) {
+        const EffectInfo* info = EffectCatalog::builtin().find(e.category, e.name);
+        const QRectF box(centre - iconWidth / 2.0, r.top + (r.height - iconHeight) / 2.0, iconWidth, iconHeight);
+        p.setPen(QPen(QColor(0xff4b2f72), 1));
+        p.setBrush(QColor(0xff8f5fc8));
+        p.drawRoundedRect(box, 2, 2);
+        p.setBrush(QColor(0xff4b2f72));
+        if (transition) {
+            p.drawPolygon(QPolygonF{box.topRight(), box.bottomRight(), box.bottomLeft() + QPointF(iconWidth / 4.0, 0)});
+        } else {
+            p.drawRect(box.adjusted(iconWidth / 4.0, iconHeight / 4.0, -iconWidth / 4.0, -iconHeight / 4.0));
+        }
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(!info || info->realTime ? 0xff3cc85a : 0xff3c78dc));
+        p.drawEllipse(QRectF(box.left() - 5, box.center().y() - 2, 4, 4));
+    };
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    std::int64_t at = 0;
+    for (const model::Segment& s : t.segments) {
+        if (s.effect) {
+            const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
+            const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));
+            if (x1 - x0 > iconWidth + 8) icon((x0 + x1) / 2, *s.effect, false);
+        }
+        if (s.transition) {
+            const double x0 = xFor(at - s.transition->before());
+            const double x1 = xFor(at + s.transition->after());
+            p.fillRect(QRectF(x0, r.top + 1, std::max(x1 - x0, 1.0), r.height - 2), QColor::fromRgba(0x50000000));
+            const bool dissolve = s.transition->effect.name == QLatin1String("Dissolve");
+            if (!dissolve || timeline_.display().dissolveIcons) icon(xFor(at), s.transition->effect, true);
+        }
+        at += s.length;
+    }
+    p.restore();
 }
 
 std::optional<model::SegmentRef> TimelineView::segmentAt(const QPoint& pos) const {
@@ -1557,9 +1606,16 @@ QMenu* Timeline::fastMenu() {
     });
     laterMenu(m, tr("View Type"));
     check(m, tr("Track Panel"), display_.trackPanel, [this](bool v) { display_.trackPanel = v; });
-    later(tr("Effect Icons"));
+    check(m, tr("Effect Icons"), display_.effectIcons, [this](bool v) {
+        display_.effectIcons = v;
+        // Dissolve Icons is dimmed without them (FX guide p.40).
+        for (QAction* a : fastMenu_->actions()) {
+            if (a->text() == tr("Dissolve Icons")) a->setEnabled(v);
+        }
+    });
     later(tr("Render Ranges"));
-    later(tr("Dissolve Icons"));
+    check(m, tr("Dissolve Icons"), display_.dissolveIcons, [this](bool v) { display_.dissolveIcons = v; });
+    m->actions().constLast()->setEnabled(display_.effectIcons);
     later(tr("Clip Frames"));
     QMenu* clipText = m->addMenu(tr("Clip Text"));
     check(clipText, tr("Clip Names"), display_.clipNames, [this](bool v) { display_.clipNames = v; });
@@ -1654,6 +1710,7 @@ bool Timeline::fail(const QString& text) {
 
 bool Timeline::handles(const QString& id) {
     static const QStringList ids{
+        QStringLiteral("fx.remove_effect"),
         QStringLiteral("edit.splice_in"),
         QStringLiteral("edit.overwrite"),
         QStringLiteral("edit.lift"),
@@ -1715,6 +1772,10 @@ bool Timeline::perform(const QString& id) {
     message_.clear();
     using model::AudioFormat;
     using model::TrackKind;
+    if (id == QLatin1String("fx.remove_effect")) {
+        removeEffectAtPosition();
+        return true;
+    }
     if (id == QLatin1String("edit.splice_in")) {
         edit(model::EditKind::SpliceIn);
     } else if (id == QLatin1String("edit.overwrite")) {
@@ -2774,6 +2835,231 @@ void Timeline::keyPressEvent(QKeyEvent* event) {
         }
     }
     QWidget::keyPressEvent(event);
+}
+
+// ---------------------------------------------------------------- effects
+
+void TimelineView::dragEnterEvent(QDragEnterEvent* event) {
+    if (effectFromMime(event->mimeData()) && !timeline_.showsSource()) event->acceptProposedAction();
+}
+
+void TimelineView::dragMoveEvent(QDragMoveEvent* event) {
+    const auto row = rowAt(event->position().toPoint());
+    const bool video = row && row->exists && row->track.startsWith(QLatin1Char('V'));
+    if (video && effectFromMime(event->mimeData()) && !timeline_.showsSource()) {
+        event->acceptProposedAction();
+    } else {
+        event->ignore();
+    }
+}
+
+void TimelineView::dropEvent(QDropEvent* event) {
+    const auto effect = effectFromMime(event->mimeData());
+    const QPoint pos = event->position().toPoint();
+    const auto row = rowAt(pos);
+    if (!effect || !row || !row->exists || timeline_.showsSource()) return;
+    // Near a cut, a transition effect goes on it; elsewhere on the
+    // segment (p.44).
+    std::optional<std::int64_t> cut;
+    if (const auto roller = transitionAt(pos)) cut = roller->frame;
+    if (timeline_.dropEffect(row->track, frameAt(pos.x()), *effect, cut)) event->acceptProposedAction();
+}
+
+std::int64_t Timeline::defaultTransitionLength() const {
+    return std::max(format_.nominalFps, 1);
+}
+
+bool Timeline::commitSequence(const QString& description, const model::Sequence& seq) {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    const model::BinItem before = rec->item;
+    model::BinItem after = before;
+    seq.storeIn(after);
+    after.modified = QDateTime::currentDateTimeUtc();
+    commit(description, before, after);
+    return true;
+}
+
+bool Timeline::addTransitions(model::Sequence& seq, const QList<model::TrimRoller>& cuts, const EffectInfo& effect) {
+    const model::SourceLength length = sourceLength();
+    model::Transition t{effect.effect(), defaultTransitionLength(), model::TransitionAlignment::CenteredOnCut, 0};
+    bool asked = false;
+    bool fit = false;
+    int applied = 0;
+    for (const model::TrimRoller& cut : cuts) {
+        const auto room = model::transitionRoom(seq, cut.track, cut.frame, length);
+        if (!room) continue;
+        model::Transition here = t;
+        QString which;
+        if (!model::transitionFits(here, *room, &which)) {
+            // The Insufficient Source dialog (p.48), once for all the cuts.
+            if (!asked) {
+                asked = true;
+                if (insufficient_) {
+                    fit = insufficient_(which);
+                } else {
+                    QMessageBox box(QMessageBox::Warning, tr("Insufficient Source"),
+                                    tr("There is not enough source material for the effect (%1).").arg(which),
+                                    QMessageBox::Cancel, this);
+                    QPushButton* size = box.addButton(tr("Size To Fit"), QMessageBox::AcceptRole);
+                    box.exec();
+                    fit = box.clickedButton() == size;
+                }
+            }
+            if (!fit) return false;
+            here = model::sizeToFit(here, *room);
+        }
+        if (model::applyTransition(seq, cut.track, cut.frame, here, length)) ++applied;
+    }
+    if (applied == 0) return fail(tr("There is no room for a transition effect there."));
+    return true;
+}
+
+bool Timeline::dropEffect(const QString& track, std::int64_t frame, const EffectInfo& effect,
+                          std::optional<std::int64_t> cut) {
+    message_.clear();
+    if (showSource_ || !recordSequence()) return false;
+    model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+    const model::Track* t = seq.track(track);
+    if (!t) return false;
+    // Not on data tracks (p.44); the palette's effects are video effects.
+    if (t->kind != model::TrackKind::Video) return fail(tr("Video effects go on video tracks."));
+    if (t->locked) return fail(tr("The track is locked."));
+    std::int64_t start = 0;
+    const int i = t->segmentAt(frame, &start);
+    if (effect.transition && (cut || !effect.segment)) {
+        std::int64_t at = cut.value_or(start);
+        if (!cut && i >= 0) {
+            // The segment's nearer cut that has a segment after it.
+            const std::int64_t end = start + t->segments.at(i).length;
+            if (frame - start > end - frame && i + 1 < t->segments.size()) at = end;
+        }
+        if (!addTransitions(seq, {model::TrimRoller{track, at, model::TrimSide::Both}}, effect)) return false;
+    } else if (effect.segment) {
+        if (i < 0 || !model::applySegmentEffect(seq, track, frame, effect.effect())) {
+            return fail(tr("There is no segment there."));
+        }
+    } else {
+        return fail(tr("This effect cannot be applied there."));
+    }
+    return commitSequence(tr("Apply Effect"), seq);
+}
+
+bool Timeline::applyEffectToSelection(const EffectInfo& effect) {
+    message_.clear();
+    if (!recordSequence()) return false;
+    model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+    auto video = [&](const QString& name) {
+        const model::Track* t = seq.track(name);
+        return t && t->kind == model::TrackKind::Video && !t->locked;
+    };
+    if (trimMode_ && !rollers_.isEmpty()) {
+        // Selected transitions (p.44-45).
+        if (!effect.transition) return fail(tr("This effect cannot be applied to a transition."));
+        QList<model::TrimRoller> cuts;
+        for (const model::TrimRoller& r : rollers_) {
+            if (video(r.track)) cuts << r;
+        }
+        if (cuts.isEmpty() || !addTransitions(seq, cuts, effect)) return false;
+    } else if (!selection_.isEmpty()) {
+        int applied = 0;
+        if (effect.segment) {
+            for (const model::SegmentRef& ref : selection_) {
+                if (video(ref.track) && model::applySegmentEffect(seq, ref.track, ref.start, effect.effect())) ++applied;
+            }
+        } else {
+            // A transition effect goes on the selected segments' head cuts.
+            QList<model::TrimRoller> cuts;
+            for (const model::SegmentRef& ref : selection_) {
+                if (video(ref.track)) cuts << model::TrimRoller{ref.track, ref.start, model::TrimSide::Both};
+            }
+            if (!cuts.isEmpty() && !addTransitions(seq, cuts, effect)) return false;
+            applied = static_cast<int>(cuts.size());
+        }
+        if (applied == 0) return fail(tr("Select segments on video tracks first."));
+    } else {
+        return fail(tr("Select segments or transitions in the Timeline first."));
+    }
+    return commitSequence(tr("Apply Effect"), seq);
+}
+
+std::optional<model::EffectRef> Timeline::currentEffect() const {
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    const model::LoadedClip* rec = record.current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    // Top down: the highest video track first (p.84).
+    QStringList tracks;
+    for (const QString& t : patch_.selectedRecordTracks(seq)) {
+        if (t.startsWith(QLatin1Char('V'))) {
+            tracks.prepend(t);
+        } else {
+            tracks << t;
+        }
+    }
+    return model::effectAt(seq, tracks, record.position());
+}
+
+bool Timeline::removeEffectAtPosition() {
+    message_.clear();
+    const auto ref = currentEffect();
+    if (!ref) return fail(tr("There is no effect at the position on the selected tracks."));
+    model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+    if (model::removeEffect(seq, ref->track, ref->frame, ref->target).isEmpty()) {
+        return fail(tr("The track is locked."));
+    }
+    return commitSequence(tr("Remove Effect"), seq);
+}
+
+bool Timeline::setTransitions(const QList<model::TrimRoller>& cuts, std::int64_t duration,
+                              model::TransitionAlignment alignment, std::int64_t start) {
+    message_.clear();
+    if (!recordSequence()) return false;
+    if (duration <= 0) return fail(tr("Type a duration for the transition."));
+    model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+    const model::SourceLength length = sourceLength();
+    const EffectInfo* dissolve = EffectCatalog::builtin().find(QStringLiteral("Blend"), QStringLiteral("Dissolve"));
+    bool asked = false;
+    bool fit = false;
+    int changed = 0;
+    for (const model::TrimRoller& cut : cuts) {
+        const model::Track* t = seq.track(cut.track);
+        if (!t || t->locked) continue;
+        const auto room = model::transitionRoom(seq, cut.track, cut.frame, length);
+        if (!room) continue;
+        model::Transition transition{dissolve ? dissolve->effect() : model::Effect{}, duration, alignment, start};
+        const model::EffectRef ref{cut.track, cut.frame, model::EffectTarget::Transition};
+        if (const model::Transition* existing = model::transitionFor(seq, ref)) transition.effect = existing->effect;
+        QString which;
+        if (!model::transitionFits(transition, *room, &which)) {
+            if (!asked) {
+                asked = true;
+                fit = insufficient_ ? insufficient_(which) : QMessageBox::question(this, tr("Insufficient Source"),
+                    tr("There is not enough source material for the effect (%1). Size it to fit?").arg(which)) ==
+                    QMessageBox::Yes;
+            }
+            if (!fit) return false;
+            transition = model::sizeToFit(transition, *room);
+        }
+        if (model::applyTransition(seq, cut.track, cut.frame, transition, length)) ++changed;
+    }
+    if (changed == 0) return fail(tr("There is no room for a transition effect there."));
+    return commitSequence(tr("Transition Duration"), seq);
+}
+
+bool Timeline::changeEffect(const model::EffectRef& ref, const QString& description,
+                            const std::function<void(model::Effect&, model::Transition*)>& change) {
+    return changeItem(MonitorId::Record, description, [&](model::BinItem& item) {
+        model::Sequence seq = model::Sequence::fromItem(item);
+        model::Effect* e = model::effectFor(seq, ref);
+        if (!e) return false;
+        const model::Track* t = seq.track(ref.track);
+        if (t && t->locked) return false;
+        model::Transition* transition = model::transitionFor(seq, ref);
+        change(*e, transition);
+        seq.storeIn(item);
+        return true;
+    });
 }
 
 } // namespace lumenis::ui

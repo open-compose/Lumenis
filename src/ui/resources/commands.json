@@ -241,6 +241,7 @@
     {"id": "move.go_to_next_event", "text": "Go to Next Event", "palette": "move"},
     {"id": "other.gang", "text": "Gang", "palette": "other"},
     {"id": "more.add_marker", "text": "Add Marker", "palette": "more"},
+    {"id": "fx.remove_effect", "text": "Remove Effect", "palette": "fx"},
     {"id": "edit.lift", "text": "Lift", "palette": "edit"},
     {"id": "edit.extract", "text": "Extract", "palette": "edit"},
     {"id": "edit.copy_to_clipboard", "text": "Copy to Clipboard", "palette": "edit"},

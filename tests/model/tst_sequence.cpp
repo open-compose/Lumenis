@@ -640,6 +640,119 @@ private slots:
         QVERIFY(!h.canRedo()); // a new edit drops what could be redone
         QCOMPARE(h.descriptions().first(), QStringLiteral("New"));
     }
+
+    void segmentEffects() {
+        // FX guide p.44: segment effects go on video segments; not on data
+        // tracks. They stay with the segment, survive a save, and an Add Edit
+        // leaves both halves with the effect.
+        Sequence s = Sequence::withDefaultTracks();
+        s.overwrite("V1", 0, {piece("a", 10, 50), piece("b", 10, 50)});
+        s.overwrite("A1", 0, {piece("a", 10, 50, "A1")});
+        const Effect blur{"Image", "Blur Effect", {}};
+        QVERIFY(applySegmentEffect(s, "V1", 60, blur));
+        QVERIFY(!applySegmentEffect(s, "A1", 10, blur)); // a video effect
+        QVERIFY(!applySegmentEffect(s, "V1", 500, blur));
+        QCOMPARE(s.track("V1")->segments.at(1).effect->name, QStringLiteral("Blur Effect"));
+        QCOMPARE(Sequence::fromJson(s.toJson()), s);
+        QVERIFY(s.addEdit("V1", 70));
+        QCOMPARE(s.track("V1")->segments.size(), 3);
+        QVERIFY(s.track("V1")->segments.at(2).effect);
+        // An edit between pieces with the same effect is still a match frame.
+        QCOMPARE(s.removeMatchFrameEdits({"V1"}, 0, 100), 1);
+        // Effects on filler keep it apart from the filler around it.
+        s.lift("V1", 0, 50);
+        QVERIFY(applySegmentEffect(s, "V1", 10, blur));
+        s.lift("V1", 50, 50);
+        QCOMPARE(layout(s, "V1"), QStringList({"-:50", "-:50"}));
+        // Remove Effect (p.47).
+        QCOMPARE(removeEffect(s, "V1", 10, EffectTarget::Segment), QStringLiteral("Blur Effect"));
+        QCOMPARE(layout(s, "V1"), QStringList({"-:100"}));
+        QVERIFY(removeEffect(s, "V1", 10, EffectTarget::Segment).isEmpty());
+    }
+
+    void transitionAlignment() {
+        // FX guide p.500.
+        Transition t;
+        t.duration = 30;
+        t.alignment = TransitionAlignment::EndingAtCut;
+        QCOMPARE(t.before(), 30);
+        t.alignment = TransitionAlignment::CenteredOnCut;
+        QCOMPARE(t.before(), 15);
+        QCOMPARE(t.after(), 15);
+        t.alignment = TransitionAlignment::StartingAtCut;
+        QCOMPARE(t.after(), 30);
+        t.alignment = TransitionAlignment::CustomStart;
+        t.start = 10;
+        QCOMPARE(t.before(), 10);
+        QCOMPARE(t.after(), 20);
+    }
+
+    void transitions() {
+        // p.44, p.48: a transition at a cut needs handles; Size To Fit
+        // shortens it, keeping the alignment if it can.
+        const SourceLength length = [](const Segment&) { return std::optional<std::int64_t>(100); };
+        Sequence s = Sequence::withDefaultTracks();
+        // a uses 10..60 (40 frames after it), b uses 4..54 (4 before it).
+        s.overwrite("V1", 0, {piece("a", 10, 50), piece("b", 4, 50)});
+        const auto room = transitionRoom(s, "V1", 50, length);
+        QVERIFY(room);
+        QCOMPARE(room->before, 4);
+        QCOMPARE(room->after, 40);
+        QVERIFY(!transitionRoom(s, "V1", 20, length)); // no cut there
+        Transition dissolve{Effect{"Blend", "Dissolve", {}}, 20, TransitionAlignment::CenteredOnCut, 0};
+        QString which;
+        QVERIFY(!transitionFits(dissolve, *room, &which));
+        QCOMPARE(which, QStringLiteral("Media B"));
+        QVERIFY(!applyTransition(s, "V1", 50, dissolve, length));
+        const Transition fitted = sizeToFit(dissolve, *room);
+        QCOMPARE(fitted.alignment, TransitionAlignment::CenteredOnCut);
+        QCOMPARE(fitted.duration, 8);
+        QVERIFY(applyTransition(s, "V1", 50, fitted, length));
+        // No frames before b's start: the alignment must be Starting at Cut.
+        Sequence t = Sequence::withDefaultTracks();
+        t.overwrite("V1", 0, {piece("a", 10, 50), piece("b", 0, 50)});
+        const Transition starting = sizeToFit(dissolve, *transitionRoom(t, "V1", 50, length));
+        QCOMPARE(starting.alignment, TransitionAlignment::StartingAtCut);
+        QCOMPARE(starting.duration, 10);
+        // A fade from black at the start of a track.
+        Transition fade = dissolve;
+        fade.alignment = TransitionAlignment::StartingAtCut;
+        QVERIFY(applyTransition(t, "V1", 0, fade, length));
+        // Saved with the sequence; the transition stays at its cut when the
+        // incoming segment is cut later.
+        QCOMPARE(Sequence::fromJson(s.toJson()), s);
+        QVERIFY(s.addEdit("V1", 80));
+        QVERIFY(s.track("V1")->segments.at(1).transition);
+        QVERIFY(!s.track("V1")->segments.at(2).transition);
+        // A cut with a transition is not a match frame edit.
+        s.track("V1")->segments[2].transition = fitted;
+        QCOMPARE(s.removeMatchFrameEdits({"V1"}, 0, 100), 0);
+        s.track("V1")->segments[2].transition.reset();
+
+        // The Effect Editor shows the effect under the position (p.84):
+        // the transition spans 46..54; the segment effect elsewhere.
+        QVERIFY(applySegmentEffect(s, "V1", 10, Effect{"Image", "Flop", {}}));
+        auto ref = effectAt(s, {"V1"}, 47);
+        QVERIFY(ref);
+        QCOMPARE(ref->target, EffectTarget::Transition);
+        QCOMPARE(ref->frame, 50);
+        QCOMPARE(transitionFor(s, *ref)->duration, 8);
+        ref = effectAt(s, {"V1"}, 20);
+        QCOMPARE(ref->target, EffectTarget::Segment);
+        QCOMPARE(effectFor(s, *ref)->name, QStringLiteral("Flop"));
+        QVERIFY(!effectAt(s, {"V1"}, 60));
+        QVERIFY(!effectAt(s, {"A1"}, 47)); // only on the given tracks
+        effectFor(s, *ref)->parameters.insert("Grid", QJsonObject{{"Enable", true}});
+        QCOMPARE(Sequence::fromJson(s.toJson()), s);
+        QCOMPARE(removeEffect(s, "V1", 50, EffectTarget::Transition), QStringLiteral("Dissolve"));
+        // Transitions on audio cuts; never on data tracks (p.44).
+        QVERIFY(s.ensureTrack("D1"));
+        QVERIFY(!transitionRoom(s, "D1", 0));
+        // Locked tracks are left alone.
+        s.track("V1")->locked = true;
+        QVERIFY(!applyTransition(s, "V1", 50, fitted, length));
+        QVERIFY(removeEffect(s, "V1", 10, EffectTarget::Segment).isEmpty());
+    }
 };
 
 QTEST_GUILESS_MAIN(TestSequence)

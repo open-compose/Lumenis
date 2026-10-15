@@ -6,6 +6,8 @@ add_library(lumenis_ui STATIC
     bin_view.cpp
     button_mapping.cpp
     composer.cpp
+    effect_editor.cpp
+    effect_palette.cpp
     capture.cpp
     command_registry.cpp
     command_palette.cpp
@@ -31,6 +33,8 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/bin_view.h
     include/lumenis/ui/button_mapping.h
     include/lumenis/ui/composer.h
+    include/lumenis/ui/effect_editor.h
+    include/lumenis/ui/effect_palette.h
     include/lumenis/ui/capture.h
     include/lumenis/ui/command_registry.h
     include/lumenis/ui/command_palette.h
@@ -57,6 +61,8 @@ qt_add_resources(lumenis_ui lumenis_ui_resources
     FILES
         resources/commands.json
         resources/command_palette.json
+        resources/effects.json
+        resources/effect_parameters.json
         resources/keyboard.json
         resources/menus.json
         resources/settings.json

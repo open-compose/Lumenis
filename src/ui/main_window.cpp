@@ -6,6 +6,8 @@
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/command_palette.h"
+#include "lumenis/ui/effect_editor.h"
+#include "lumenis/ui/effect_palette.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/keyboard_map.h"
@@ -535,6 +537,13 @@ void MainWindow::createTools() {
     panels_->addPanel(new Panel(QStringLiteral("Calculator"), tr("Calculator"), calculator_));
     console_ = new ConsoleWindow;
     panels_->addPanel(new Panel(QStringLiteral("Console"), tr("Console"), console_));
+    // Effects (FX guide p.37, p.83).
+    effectPalette_ = new EffectPalette;
+    panels_->addPanel(new Panel(QStringLiteral("EffectPalette"), tr("Effect Palette"), effectPalette_));
+    connect(effectPalette_, &EffectPalette::effectActivated, this,
+            [this](const EffectInfo& effect) { timeline_->applyEffectToSelection(effect); });
+    effectEditor_ = new EffectEditor(*timeline_);
+    panels_->addPanel(new Panel(QStringLiteral("EffectEditor"), tr("Effect Editor"), effectEditor_));
     // The Keyboard setting's palette (p.1202).
     keyboardPalette_ = new KeyboardPalette(*keyboard_);
     panels_->addPanel(new Panel(QStringLiteral("Keyboard"), tr("Keyboard"), keyboardPalette_));
@@ -577,6 +586,8 @@ Panel* MainWindow::showTool(const QString& panelId) {
     if (panelId == QLatin1String("Calculator")) size = QSize(230, 260);
     if (panelId == QLatin1String("Console")) size = QSize(560, 320);
     if (panelId == QLatin1String("Keyboard")) size = QSize(720, 320);
+    if (panelId == QLatin1String("EffectPalette")) size = QSize(480, 420);
+    if (panelId == QLatin1String("EffectEditor")) size = QSize(340, 520);
     const QPoint at = mapToGlobal(QPoint(80, 90));
     panels_->floatPanel(panel, QRect(at, size));
     panels_->activate(panel);
@@ -733,6 +744,8 @@ void MainWindow::installPanelHandlers() {
     handle("tools.command_palette", [this] { showTool(QStringLiteral("CommandPalette")); });
     handle("tools.calculator", [this] { showTool(QStringLiteral("Calculator")); });
     handle("tools.console", [this] { showTool(QStringLiteral("Console")); });
+    handle("tools.effect_palette", [this] { showTool(QStringLiteral("EffectPalette")); });
+    handle("tools.effect_editor", [this] { showTool(QStringLiteral("EffectEditor")); });
     // The Tool Palette button (Other tab, p.392).
     handle("other.tool_palette", [this] { showTool(QStringLiteral("ToolPalette")); });
     // Windows > Workspaces > Properties: the active workspace's Workspace

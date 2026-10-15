@@ -1,5 +1,5 @@
 {
-  "comment": "The Command Palette's tabs and their buttons, column by column (guide p.96-100). The tab names are those in the picture on p.96. The Move and Edit tabs follow the pictures on p.96 and p.100; the other tabs' buttons are our own grouping. \"\" is the Blank button (p.97). A button with \"platforms\" is shown only there (the modifier key buttons, p.97). Tabs whose features come later are empty. The Workspaces tab (picture on p.91) has a workspace menu beside each button.",
+  "comment": "The Command Palette's tabs and their buttons, column by column (guide p.96-100). The tab names are those in the picture on p.96. The Move and Edit tabs follow the pictures on p.96 and p.100; the other tabs' buttons are our own grouping. \"\" is the Blank button (p.97). A button with \"platforms\" is shown only there (the modifier key buttons, p.97). The FX tab holds the effect buttons pictured on p.97 that work so far (the Fade Effect button is on it, FX guide p.46). Tabs whose features come later are empty. The Workspaces tab (picture on p.91) has a workspace menu beside each button.",
   "tabs": [
     {"name": "Move", "page": 96, "columns": [
       ["move.step_forward_one_frame", "move.step_backward_one_frame", "move.step_forward_10_frames",
@@ -26,7 +26,9 @@
       ["trim.trim_backward_10_frames", "trim.trim_backward_1_frame", "trim.trim_forward_1_frame", "trim.trim_forward_10_frames"],
       ["trim.select_nearest_transition", "trim.select_previous_transition", "trim.select_next_transition"]
     ]},
-    {"name": "FX", "page": 96, "columns": []},
+    {"name": "FX", "page": 97, "columns": [
+      ["fx.remove_effect"]
+    ]},
     {"name": "3D", "page": 96, "columns": []},
     {"name": "CC", "page": 96, "columns": []},
     {"name": "MCam", "page": 96, "columns": []},

@@ -36,6 +36,38 @@ QStringList parseTrackList(const QString& text);
 // p.624 says 64).
 inline constexpr int kMaxTracks = 99;
 
+// An effect in a sequence (FX guide ch. 2): its category and name in the
+// Effect Palette (p.37) and the parameter values changed in the Effect
+// Editor (p.83), by parameter category and name.
+struct Effect {
+    QString category; // "Blend"
+    QString name;     // "Dissolve"
+    QJsonObject parameters;
+
+    QJsonObject toJson() const;
+    static Effect fromJson(const QJsonObject& o);
+    bool operator==(const Effect&) const = default;
+};
+
+// Where a transition effect lies relative to its cut (Transition Effect
+// Alignment, FX guide p.500).
+enum class TransitionAlignment { EndingAtCut, CenteredOnCut, StartingAtCut, CustomStart };
+
+// A transition effect at a cut (FX guide p.44, p.500): `duration` frames,
+// `start` of them before the cut (Custom Start; the other alignments work
+// it out).
+struct Transition {
+    Effect effect;
+    std::int64_t duration = 0;
+    TransitionAlignment alignment = TransitionAlignment::CenteredOnCut;
+    std::int64_t start = 0;
+
+    // Frames before and after the cut.
+    std::int64_t before() const;
+    std::int64_t after() const { return duration - before(); }
+    bool operator==(const Transition&) const = default;
+};
+
 // One piece of a track: material from a source clip, or filler (black,
 // silence) where `clipId` is empty.
 struct Segment {
@@ -48,7 +80,12 @@ struct Segment {
     // Filler that starts with an Add Edit (p.640); filler is otherwise
     // joined to the filler before it.
     bool addEdit = false;
+    // A segment effect (FX guide p.44); filler can have one too.
+    std::optional<Effect> effect;
+    // The transition effect at the cut where this segment starts.
+    std::optional<Transition> transition;
 
+    bool hasEffects() const { return effect || transition; }
     bool isFiller() const { return clipId.isEmpty(); }
     static Segment filler(std::int64_t length);
     bool operator==(const Segment&) const = default;
@@ -322,6 +359,58 @@ std::int64_t slideSegments(Sequence& sequence, QList<SegmentRef>& segments, std:
 // forward to just after an OUT. Returns the tracks changed.
 QStringList extendEdits(Sequence& sequence, const QStringList& tracks, std::int64_t mark, bool toIn,
                         const SourceLength& sourceLength = {});
+
+// ---- Effects (FX guide ch. 2-3)
+
+// Where an effect from the Effect Palette can go (FX guide p.456-490).
+// Segment effects go on video segments, transitions on the cuts of
+// video and audio tracks; never on data tracks (p.44).
+enum class EffectTarget { Segment, Transition };
+
+// Puts a segment effect on the segment at `frame`, replacing any there.
+bool applySegmentEffect(Sequence& sequence, const QString& track, std::int64_t frame, const Effect& effect);
+
+// How much material a transition at the cut `frame` may use: frames of
+// the outgoing clip past its end (Media A) and of the incoming clip before
+// its start (Media B), within the two segments (p.48). nullopt: there is
+// no cut there.
+struct TransitionRoom {
+    std::int64_t before = 0; // the most frames before the cut
+    std::int64_t after = 0;  // the most frames after the cut
+};
+std::optional<TransitionRoom> transitionRoom(const Sequence& sequence, const QString& track, std::int64_t frame,
+                                             const SourceLength& sourceLength = {});
+// Whether the transition fits the room; if not, `which` names the side that
+// is short ("Media A", "Media B"; the Insufficient Source dialog, p.48).
+bool transitionFits(const Transition& transition, const TransitionRoom& room, QString* which = nullptr);
+// Size To Fit (p.48): the transition shortened to the room, keeping its
+// alignment where it can.
+Transition sizeToFit(const Transition& transition, const TransitionRoom& room);
+// Puts a transition at the cut `frame`. Returns false if there is no cut
+// there or it does not fit.
+bool applyTransition(Sequence& sequence, const QString& track, std::int64_t frame, const Transition& transition,
+                     const SourceLength& sourceLength = {});
+// Remove Effect (p.47): the transition at the cut `frame`, or else the
+// segment effect of the segment there. Returns what was removed: "", or
+// the effect's name.
+QString removeEffect(Sequence& sequence, const QString& track, std::int64_t frame, EffectTarget target);
+
+// An effect in the sequence and where it is.
+struct EffectRef {
+    QString track;
+    std::int64_t frame = 0; // the cut, or the segment's first frame
+    EffectTarget target = EffectTarget::Segment;
+    bool operator==(const EffectRef&) const = default;
+};
+// The effect the Effect Editor shows at `position` (p.83-84): on the first
+// of `tracks` (selected tracks, top down) with a transition spanning the
+// position or a segment effect under it.
+std::optional<EffectRef> effectAt(const Sequence& sequence, const QStringList& tracks, std::int64_t position);
+// The effect an EffectRef names.
+const Effect* effectFor(const Sequence& sequence, const EffectRef& ref);
+Effect* effectFor(Sequence& sequence, const EffectRef& ref);
+const Transition* transitionFor(const Sequence& sequence, const EffectRef& ref);
+Transition* transitionFor(Sequence& sequence, const EffectRef& ref);
 
 // One step of Edit > Undo/Redo (p.466): a sequence item before and after.
 struct EditStep {

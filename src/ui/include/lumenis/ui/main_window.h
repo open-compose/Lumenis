@@ -21,6 +21,8 @@ namespace lumenis::ui {
 
 class BinContainer;
 class CalculatorWindow;
+class EffectEditor;
+class EffectPalette;
 class CommandPalette;
 class ConsoleWindow;
 class CommandRegistry;
@@ -70,12 +72,14 @@ public:
     SiteSettingsWindow* showSiteSettings();
     // Tools (ch.5) open as floating panels, which can be docked and tabbed
     // like other panels (p.94): "CommandPalette", "ToolPalette",
-    // "Calculator", "Console".
+    // "Calculator", "Console", "EffectPalette", "EffectEditor".
     Panel* showTool(const QString& panelId);
     CommandPalette& commandPalette() const { return *commandPalette_; }
     ToolPalette& toolPalette() const { return *toolPalette_; }
     CalculatorWindow& calculator() const { return *calculator_; }
     ConsoleWindow& console() const { return *console_; }
+    EffectPalette& effectPalette() const { return *effectPalette_; }
+    EffectEditor& effectEditor() const { return *effectEditor_; }
     KeyboardPalette& keyboardPalette() const { return *keyboardPalette_; }
     KeyboardMap& keyboard() const { return *keyboard_; }
     // The workspace each of the W1-W12 buttons switches to (p.90-91).
@@ -141,6 +145,8 @@ private:
     CommandPalette* commandPalette_ = nullptr;
     ToolPalette* toolPalette_ = nullptr;
     CalculatorWindow* calculator_ = nullptr;
+    EffectPalette* effectPalette_ = nullptr;
+    EffectEditor* effectEditor_ = nullptr;
     ConsoleWindow* console_ = nullptr;
     KeyboardPalette* keyboardPalette_ = nullptr;
     Settings* settings_ = nullptr;

@@ -1,0 +1,220 @@
+{
+  "comment": "The Effect Palette (FX guide p.37): its tabs, and the video effect categories in the order of the picture on p.37 with their effects from the Effects Reference (p.456-490). 'transition' and 'segment' say where an effect can be applied ('Apply to' rows); 'realTime': false marks effects without the green dot (p.36); 'parameters' are the parameter categories the Effect Editor shows (p.491). Color Correction Presets and S3D list no effects in the reference; the PlasmaWipe presets (p.478) and 11 of the 15 Squeeze effects (p.483) are not named in the text, so they are left out.",
+  "tabs": [
+    {"name": "Filters", "page": 37, "kind": "video"},
+    {"name": "Transitions", "page": 37, "kind": "transitions"},
+    {"name": "Audio Track", "page": 37, "kind": "audioTrack"},
+    {"name": "Audio Clip", "page": 37, "kind": "audioClip"}
+  ],
+  "categories": [
+    {"name": "Blend", "page": 457, "effects": [
+      {"name": "3D Warp", "page": 457, "transition": true, "segment": true, "parameters": ["Axis", "Background Color", "Border (3D)", "Corner Pin", "Corner Tracking", "Crop (3D)", "Defocus", "Erode/Expand", "Foreground (3D)", "Highlight", "Highlight Color", "Lowlight Color", "Perspective", "Position (3D)", "Rotation", "Scaling (3D)", "Shadow", "Shape", "Skew", "Spill Suppression", "Stamp", "Trail"]},
+      {"name": "Dip to Color", "page": 457, "transition": true, "parameters": ["Foreground", "Background Color", "Grid"]},
+      {"name": "Dissolve", "page": 457, "transition": true, "parameters": ["Foreground", "Background Color", "Grid"]},
+      {"name": "Fade from Color", "page": 457, "transition": true, "parameters": ["Foreground", "Background Color", "Grid"]},
+      {"name": "Fade to Color", "page": 457, "transition": true, "parameters": ["Foreground", "Background Color", "Grid"]},
+      {"name": "Picture-in-Picture", "page": 458, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Scaling", "Position", "Crop", "Grid"]},
+      {"name": "Superimpose", "page": 458, "segment": true, "parameters": ["Foreground", "Grid"]}
+    ]},
+    {"name": "Box Wipe", "page": 458, "effects": [
+      {"name": "Bottom Box", "page": 459, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Bottom Left to Top Right", "page": 459, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Bottom Right to Top Left", "page": 459, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Left Box", "page": 459, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Right Box", "page": 459, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top Box", "page": 459, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top Left to Bottom Right", "page": 459, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top Right to Bottom Left", "page": 459, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]}
+    ]},
+    {"name": "Color Correction Presets", "page": 37, "effects": []},
+    {"name": "Conceal", "page": 459, "effects": [
+      {"name": "Bottom Left to Top Right", "page": 460, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Bottom Right to Top Left", "page": 460, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Bottom to Top", "page": 460, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Left to Right", "page": 460, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Right to Left", "page": 460, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top Left to Bottom Right", "page": 460, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top Right to Bottom Left", "page": 460, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top to Bottom", "page": 460, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]}
+    ]},
+    {"name": "Edge Wipe", "page": 460, "effects": [
+      {"name": "Horizontal", "page": 460, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Border"]},
+      {"name": "Horizontal Open", "page": 460, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Border"]},
+      {"name": "Lower Left Diagonal", "page": 460, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Scaling"]},
+      {"name": "Lower Right Diagonal", "page": 460, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Scaling"]},
+      {"name": "Upper Left Diagonal", "page": 460, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Scaling"]},
+      {"name": "Upper Right Diagonal", "page": 460, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Scaling"]},
+      {"name": "Vertical", "page": 461, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Border"]},
+      {"name": "Vertical Open", "page": 461, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Border"]}
+    ]},
+    {"name": "Film", "page": 461, "effects": [
+      {"name": "1.66 Mask", "page": 461, "segment": true, "parameters": ["Background Color", "Scaling", "Position", "Grid"]},
+      {"name": "1.85 Mask", "page": 461, "segment": true, "parameters": ["Background Color", "Scaling", "Position", "Grid"]},
+      {"name": "16:9 Mask", "page": 461, "segment": true, "parameters": ["Background Color", "Scaling", "Position", "Grid"]},
+      {"name": "Anamorphic Mask", "page": 461, "segment": true, "parameters": ["Background Color", "Scaling", "Position", "Grid"]},
+      {"name": "Blowup", "page": 462, "segment": true, "parameters": ["Background Color", "Film Effects Blowup Parameter", "Crop", "Grid"]},
+      {"name": "Film Dissolve", "page": 462, "transition": true, "parameters": ["Foreground", "Grid"]},
+      {"name": "Film Fade", "page": 462, "transition": true, "parameters": ["Foreground", "Grid"]},
+      {"name": "Mask", "page": 461, "segment": true, "parameters": ["Background Color", "Scaling", "Position", "Grid"]}
+    ]},
+    {"name": "Generator", "page": 463, "effects": [
+      {"name": "SubCap", "page": 463, "segment": true, "parameters": ["SubCap Effect Parameters", "SubCap Effect Global Properties"]},
+      {"name": "Timecode Burn-In", "page": 463, "segment": true, "parameters": ["Timecode Burn-In Effect Parameters"]}
+    ]},
+    {"name": "Illusion FX", "page": 463, "effects": [
+      {"name": "Color Mix", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid"]},
+      {"name": "Crystal", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects"]},
+      {"name": "Film Grain", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid"]},
+      {"name": "Flare", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid"]},
+      {"name": "FluidBlur", "page": 467, "segment": true, "realTime": false, "parameters": ["FluidBlur Effect Input Parameters", "Border Parameter for Illusion FX Effects", "Grid"]},
+      {"name": "FluidColorMap", "page": 467, "segment": true, "realTime": false, "parameters": ["FluidBlur Effect Input Parameters", "Border Parameter for Illusion FX Effects", "Grid"]},
+      {"name": "FluidMorph", "page": 467, "transition": true, "realTime": false, "parameters": ["FluidBlur Effect Input Parameters", "Border Parameter for Illusion FX Effects", "Grid", "FluidMorph Effect Source and Input Parameters"]},
+      {"name": "Iris", "page": 466, "transition": true, "parameters": ["Iris Effect Input Parameters", "Grid"]},
+      {"name": "Kaleidoscope", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects", "Kaleidoscope Effect Input, Center, and Offset Parameters"]},
+      {"name": "Lightning", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid", "Lightning Effect Generation, Core, and Glow Parameters"]},
+      {"name": "Melt", "page": 466, "transition": true, "parameters": ["Iris Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects"]},
+      {"name": "Motion Blur", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid"]},
+      {"name": "Pagecurl", "page": 466, "transition": true, "parameters": ["Iris Effect Input Parameters", "Grid"]},
+      {"name": "Particle Blast", "page": 466, "transition": true, "parameters": ["Iris Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects"]},
+      {"name": "Particle Orbit", "page": 466, "transition": true, "parameters": ["Iris Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects"]},
+      {"name": "Particle Wind", "page": 466, "transition": true, "parameters": ["Iris Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects"]},
+      {"name": "Pattern Generator", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid", "Pattern Generator Effect Background, Number, and Circle Parameters"]},
+      {"name": "Pinch", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects"]},
+      {"name": "Radial Blur", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects"]},
+      {"name": "Random Blend", "page": 466, "transition": true, "parameters": ["Iris Effect Input Parameters", "Grid"]},
+      {"name": "Ripple", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects", "Ripple Effect Motion, Generation, and Illumination Parameters"]},
+      {"name": "Rollup", "page": 466, "transition": true, "parameters": ["Iris Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects"]},
+      {"name": "Shear", "page": 466, "transition": true, "parameters": ["Iris Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects"]},
+      {"name": "Sparkler", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid", "Sparkler Effect Generation, Movement, Core, and Glow Parameters"]},
+      {"name": "Sphere", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects"]},
+      {"name": "Swirl", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects"]},
+      {"name": "Twist", "page": 464, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects"]},
+      {"name": "Wave", "page": 465, "segment": true, "parameters": ["Color Mix Effect Input Parameters", "Grid", "Border Parameter for Illusion FX Effects"]}
+    ]},
+    {"name": "Image", "page": 468, "effects": [
+      {"name": "Avid Pan & Zoom", "page": 468, "segment": true, "parameters": ["Avid Pan & Zoom Effect Parameters", "Grid"]},
+      {"name": "Blur Effect", "page": 468, "segment": true, "parameters": ["Acceleration", "Corner Tracking", "Feathering", "Grid", "Blur Effect Blur Parameters"]},
+      {"name": "Color Correction", "page": 469, "segment": true, "parameters": ["Grid"]},
+      {"name": "Color Effect", "page": 469, "segment": true, "parameters": ["Color Effect Parameters", "Grid"]},
+      {"name": "Field Swap", "page": 469, "segment": true},
+      {"name": "Flip", "page": 469, "segment": true, "parameters": ["Grid"]},
+      {"name": "Flip-Flop", "page": 469, "segment": true, "parameters": ["Grid"]},
+      {"name": "Flop", "page": 469, "segment": true, "parameters": ["Grid"]},
+      {"name": "Mask", "page": 470, "segment": true, "parameters": ["Background Color", "Scaling", "Position", "Grid"]},
+      {"name": "Mosaic Effect", "page": 468, "segment": true, "parameters": ["Acceleration", "Corner Tracking", "Feathering", "Grid", "Mosaic Effect Mosaic Parameters"]},
+      {"name": "Paint Effect", "page": 470, "segment": true, "parameters": ["Acceleration", "Corner Tracking", "Paint Effect Mode Parameters", "Feathering", "Magic Mask", "Paint Effect Color Parameters", "Brush", "Grid"]},
+      {"name": "Resize", "page": 470, "segment": true, "parameters": ["Background Color", "Scaling", "Position", "Crop", "Grid"]},
+      {"name": "Safe Color Limiter", "page": 471, "segment": true, "parameters": ["Safe Color Limiter Parameters", "Grid"]},
+      {"name": "Scratch Removal", "page": 471, "segment": true, "realTime": false, "parameters": ["Acceleration", "Corner Tracking", "Scratch Removal Effect Scratch Parameters", "Feathering", "Brush", "Grid"]},
+      {"name": "Spot Color Correction", "page": 471, "segment": true, "parameters": ["Acceleration", "Corner Tracking", "Color Effect Parameters", "Spot Color Correction Effect Color Match Parameters (Media Composer | Symphony Option Only)", "Feathering", "Magic Mask", "Brush", "Grid"]},
+      {"name": "Stabilize", "page": 472, "segment": true, "parameters": ["Border", "Background Color", "Scaling", "Position", "Crop", "Corner Tracking", "Grid"]},
+      {"name": "Submaster", "page": 472, "segment": true, "parameters": ["Grid"]}
+    ]},
+    {"name": "Key", "page": 472, "effects": [
+      {"name": "AniMatte", "page": 472, "transition": true, "segment": true, "parameters": ["AniMatte Effect Mode Parameters", "Acceleration", "Corner Tracking", "Foreground", "Feathering", "Magic Mask", "Brush", "Grid"]},
+      {"name": "Chroma Key", "page": 473, "transition": true, "segment": true, "parameters": ["Key Effects Key Parameters", "Chroma Key Profile, Secondary Key, and Spill Suppression Parameters", "Foreground", "Acceleration", "Scaling", "Position", "Crop", "Grid"]},
+      {"name": "Luma Key", "page": 473, "segment": true, "parameters": ["Key Effects Key Parameters", "Foreground", "Scaling", "Position", "Crop", "Grid"]},
+      {"name": "Matte Key", "page": 474, "segment": true, "parameters": ["Chroma Key Profile, Secondary Key, and Spill Suppression Parameters", "Foreground", "Acceleration", "Scaling", "Position", "Crop", "Grid"]},
+      {"name": "RGB Keyer", "page": 474, "segment": true, "realTime": false, "parameters": ["RGB Keyer Parameters", "Grid"]},
+      {"name": "SpectraMatte", "page": 474, "segment": true, "parameters": ["SpectraMatte Parameters", "Scaling", "Position", "Crop", "Grid"]}
+    ]},
+    {"name": "L-Conceal", "page": 475, "effects": [
+      {"name": "Bottom Left", "page": 475, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Bottom Right", "page": 475, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top Left", "page": 475, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top Right", "page": 475, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]}
+    ]},
+    {"name": "Matrix Wipe", "page": 475, "effects": [
+      {"name": "Grid", "page": 476, "transition": true, "segment": true, "parameters": ["Custom Grid", "Border", "Foreground", "Grid"]},
+      {"name": "One-WayRow", "page": 476, "transition": true, "segment": true, "parameters": ["Custom Grid", "Border", "Foreground", "Grid"]},
+      {"name": "Speckle", "page": 476, "transition": true, "segment": true, "parameters": ["Custom Grid", "Border", "Foreground", "Grid"]},
+      {"name": "Spiral", "page": 476, "transition": true, "segment": true, "parameters": ["Custom Grid", "Border", "Foreground", "Grid"]},
+      {"name": "Zig-Zag", "page": 476, "transition": true, "segment": true, "parameters": ["Custom Grid", "Border", "Foreground", "Grid"]}
+    ]},
+    {"name": "Peel", "page": 477, "effects": [
+      {"name": "Bottom Left Corner", "page": 477, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Bottom Right Corner", "page": 477, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Bottom to Top", "page": 477, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Left to Right", "page": 477, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Right to Left", "page": 477, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top Left Corner", "page": 477, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top Right Corner", "page": 477, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top to Bottom", "page": 477, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]}
+    ]},
+    {"name": "PlasmaWipe Avid Borders", "page": 478, "effects": []},
+    {"name": "PlasmaWipe Avid Center", "page": 478, "effects": []},
+    {"name": "PlasmaWipe Avid Horiz", "page": 478, "effects": []},
+    {"name": "PlasmaWipe Avid Lava", "page": 478, "effects": []},
+    {"name": "PlasmaWipe Avid Paint", "page": 478, "effects": []},
+    {"name": "PlasmaWipe Avid Techno", "page": 478, "effects": []},
+    {"name": "Push", "page": 479, "effects": [
+      {"name": "Bottom Left to Top Right", "page": 479, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Bottom Right to Top Left", "page": 479, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Bottom to Top", "page": 479, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Left to Right", "page": 479, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Right to Left", "page": 479, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top Left to Bottom Right", "page": 479, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top Right to Bottom Left", "page": 479, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top to Bottom", "page": 479, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]}
+    ]},
+    {"name": "Reformat", "page": 479, "effects": [
+      {"name": "14:9 Letterbox", "page": 480, "segment": true, "parameters": ["Background Color", "14:9 Letterbox Position H Parameter", "Grid"]},
+      {"name": "16:9 Letterbox", "page": 480, "segment": true, "parameters": ["Background Color", "Grid"]},
+      {"name": "4:3 Sidebar", "page": 480, "segment": true, "parameters": ["Background Color", "Grid"]},
+      {"name": "Pan and Scan", "page": 480, "segment": true, "parameters": ["Pan and Scan Aspect Ratios and Actions Parameters", "Scaling", "Position", "Grid"]}
+    ]},
+    {"name": "S3D", "page": 37, "effects": []},
+    {"name": "Sawtooth Wipe", "page": 480, "effects": [
+      {"name": "Horizontal Open Sawtooth", "page": 480, "transition": true, "segment": true, "parameters": ["Custom Grid", "Foreground", "Grid"]},
+      {"name": "Horizontal Sawtooth", "page": 480, "transition": true, "segment": true, "parameters": ["Custom Grid", "Foreground", "Grid"]},
+      {"name": "Vertical Open Sawtooth", "page": 480, "transition": true, "segment": true, "parameters": ["Custom Grid", "Foreground", "Grid"]},
+      {"name": "Vertical Sawtooth", "page": 480, "transition": true, "segment": true, "parameters": ["Custom Grid", "Foreground", "Grid"]}
+    ]},
+    {"name": "Shape Wipe", "page": 481, "effects": [
+      {"name": "4 Corners", "page": 481, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Border"]},
+      {"name": "Center Box", "page": 481, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Border", "Scaling", "Position"]},
+      {"name": "Circle", "page": 481, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Border", "Scaling", "Position"]},
+      {"name": "Clock", "page": 481, "transition": true, "segment": true, "parameters": ["Foreground", "Grid"]},
+      {"name": "Diamond", "page": 481, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Scaling", "Position"]},
+      {"name": "Ellipse", "page": 481, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Border", "Scaling", "Position"]},
+      {"name": "Horizontal Bands", "page": 481, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Border", "Custom Grid"]},
+      {"name": "Horizontal Blinds", "page": 481, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Border", "Custom Grid"]},
+      {"name": "Vertical Blinds", "page": 481, "transition": true, "segment": true, "parameters": ["Foreground", "Grid", "Border", "Custom Grid"]}
+    ]},
+    {"name": "Spin", "page": 482, "effects": [
+      {"name": "X Spin", "page": 482, "transition": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Y Spin", "page": 482, "transition": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Z Spin", "page": 483, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]}
+    ]},
+    {"name": "Squeeze", "page": 483, "effects": [
+      {"name": "Bottom Centered", "page": 484, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Centered Zoom", "page": 484, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Right to Left", "page": 484, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]},
+      {"name": "Top Left", "page": 490, "transition": true, "segment": true, "parameters": ["Border", "Foreground", "Grid"]}
+    ]},
+    {"name": "Timewarp", "page": 484, "effects": [
+      {"name": "0% To 100%", "page": 484, "segment": true},
+      {"name": "100% to 0%", "page": 484, "segment": true},
+      {"name": "FluidFilm 2:3 Cadence", "page": 485, "segment": true, "realTime": false},
+      {"name": "FluidFilm Progressive", "page": 485, "segment": true, "realTime": false},
+      {"name": "Pulldown Insertion", "page": 485, "segment": true},
+      {"name": "Pulldown Removal", "page": 485, "segment": true},
+      {"name": "Reverse Motion", "page": 486, "segment": true},
+      {"name": "Speed Boost", "page": 487, "segment": true},
+      {"name": "Speed Bump", "page": 487, "segment": true},
+      {"name": "Timewarp", "page": 488, "segment": true},
+      {"name": "Trim to Fill", "page": 488, "segment": true}
+    ]},
+    {"name": "Title", "page": 488, "effects": [
+      {"name": "Crawling Title", "page": 488, "segment": true, "realTime": false, "parameters": ["Rolling Title and Crawling Title Effect Parameters", "Foreground", "Grid"]},
+      {"name": "Rolling Title", "page": 488, "segment": true, "realTime": false, "parameters": ["Rolling Title and Crawling Title Effect Parameters", "Foreground", "Grid"]},
+      {"name": "Title", "page": 489, "segment": true, "parameters": ["Foreground", "Scaling", "Position", "Crop", "Grid"]}
+    ]},
+    {"name": "Xpress 3D Effect", "page": 489, "effects": [
+      {"name": "3D Ball", "page": 489, "transition": true, "segment": true, "parameters": ["Shape", "Target", "Border (3D)", "Foreground (3D)", "Background Color (3D)", "Scaling (3D)", "Position (3D)"]},
+      {"name": "3D Page Fold", "page": 489, "transition": true, "segment": true, "parameters": ["Shape", "Target", "Border (3D)", "Foreground (3D)", "Background Color (3D)", "Crop (3D)"]},
+      {"name": "3D PIP", "page": 489, "transition": true, "segment": true, "parameters": ["Shape", "Target", "Border (3D)", "Foreground (3D)", "Background Color (3D)", "Crop (3D)", "Scaling (3D)", "Position (3D)", "Axis", "Rotation", "Shadow", "Trail"]},
+      {"name": "3D Slats", "page": 489, "transition": true, "segment": true, "parameters": ["Shape", "Target", "Border (3D)", "Foreground (3D)", "Background Color (3D)", "Crop (3D)"]}
+    ]}
+  ]
+}

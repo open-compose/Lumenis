@@ -14,6 +14,7 @@
 #include "lumenis/ui/capture.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/command_palette.h"
+#include "lumenis/ui/effect_palette.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/select_project_dialog.h"
 #include "lumenis/ui/settings.h"
@@ -512,6 +513,36 @@ int main(int argc, char** argv) {
                 QCoreApplication::processEvents();
                 ok = lumenis::ui::capture(floating, dir, QStringLiteral("keyboard")) && ok;
                 window.panels().closePanel(keys);
+            }
+            // The Effect Palette, Filters tab, Illusion FX (picture on p.37),
+            // and the Effect Editor showing a Picture-in-Picture effect on
+            // the segment under the position (picture on p.84).
+            {
+                lumenis::ui::Timeline& timeline = window.timeline();
+                const auto& record = window.composer().state(lumenis::ui::MonitorId::Record);
+                timeline.setSelection({});
+                timeline.setInsufficientSource([](const QString&) { return true; });
+                if (const auto* pip = lumenis::ui::EffectCatalog::builtin().find(QStringLiteral("Blend"),
+                                                                                 QStringLiteral("Picture-in-Picture"))) {
+                    timeline.dropEffect(QStringLiteral("V1"), record.position(), *pip);
+                }
+                if (lumenis::ui::Panel* palette = window.showTool(QStringLiteral("EffectPalette"))) {
+                    window.effectPalette().setCategory(QStringLiteral("Illusion FX"));
+                    QWidget* floating = palette->window();
+                    floating->resize(480, 420);
+                    QCoreApplication::processEvents();
+                    window.effectPalette().quickFind()->clearFocus();
+                    QCoreApplication::processEvents();
+                    ok = lumenis::ui::capture(floating, dir, QStringLiteral("effect_palette")) && ok;
+                    window.panels().closePanel(palette);
+                }
+                if (lumenis::ui::Panel* editor = window.showTool(QStringLiteral("EffectEditor"))) {
+                    QWidget* floating = editor->window();
+                    floating->resize(340, 560);
+                    QCoreApplication::processEvents();
+                    ok = lumenis::ui::capture(floating, dir, QStringLiteral("effect_editor")) && ok;
+                    window.panels().closePanel(editor);
+                }
             }
             ok = lumenis::ui::capture(&selectProject, dir, QStringLiteral("select_project")) && ok;
             selectProject.showPage(lumenis::ui::SelectProjectDialog::Page::NewProject);
