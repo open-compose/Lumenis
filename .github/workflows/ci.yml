@@ -21,6 +21,9 @@ env:
 jobs:
   linux:
     name: Linux x64 (system Qt)
+    # GitHub-hosted jobs stop when the repository variable HOSTED_CI is off
+    # (Actions minutes used up); the self-hosted Mac keeps building.
+    if: vars.HOSTED_CI != 'off'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -94,6 +97,7 @@ jobs:
     # what someone building on a current distribution gets. New warnings
     # and Qt deprecations fail here, as warnings are errors.
     name: Linux x64 (Ubuntu 26.04, newest GCC and Qt)
+    if: vars.HOSTED_CI != 'off'
     runs-on: ubuntu-24.04
     container: ubuntu:26.04
     steps:
@@ -140,7 +144,7 @@ jobs:
     # development-branch pushes skip it; it runs for main, pull requests and
     # by hand (Actions > CI > Run workflow, or `gh workflow run ci.yml
     # --ref <branch>`; `-f hosted_macos=false` runs only the self-hosted Mac).
-    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.hosted_macos)
+    if: vars.HOSTED_CI != 'off' && (github.ref == 'refs/heads/main' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && inputs.hosted_macos))
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -283,6 +287,7 @@ jobs:
 
   windows:
     name: Windows x64
+    if: vars.HOSTED_CI != 'off'
     runs-on: windows-2022
     steps:
       - uses: actions/checkout@v4
@@ -377,7 +382,7 @@ jobs:
     needs: [linux, macos, macos-local, windows]
     # Runs without the macOS jobs that were skipped; then only the others
     # are compared with Linux.
-    if: ${{ !cancelled() && needs.linux.result == 'success' && needs.windows.result == 'success' && needs.macos.result != 'failure' && needs.macos-local.result != 'failure' }}
+    if: ${{ !cancelled() && vars.HOSTED_CI != 'off' && needs.linux.result == 'success' && needs.windows.result == 'success' && needs.macos.result != 'failure' && needs.macos-local.result != 'failure' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

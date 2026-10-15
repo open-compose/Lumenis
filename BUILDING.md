@@ -134,6 +134,13 @@ repository. The GitHub-hosted macOS jobs therefore run only for `main`, pull
 requests and manual runs (`gh workflow run ci.yml --ref <branch>`). Pushes
 to other branches build on macOS only through the self-hosted runner below.
 
+When the account's included Actions minutes run out, GitHub refuses the
+hosted jobs (they fail within seconds without running a step). Set the
+repository variable `HOSTED_CI` to `off` (Settings > Secrets and variables >
+Actions > Variables) until the allowance resets: the GitHub-hosted jobs are
+then skipped and the self-hosted Mac still builds and tests every push.
+Delete the variable, or set it to `on`, to bring them back.
+
 ### Self-hosted macOS runner
 
 An Apple Silicon Mac can run the macOS job for free. The runner works
