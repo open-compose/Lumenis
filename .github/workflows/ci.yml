@@ -328,7 +328,9 @@ jobs:
           arch: x64
 
       - name: Configure
-        run: cmake --preset ci
+        # The runner's user cannot reach the Windows Installer service that
+        # validates the .msi (BUILDING.md).
+        run: cmake --preset ci -DLUMENIS_WIX_SKIP_VALIDATION=ON
 
       - name: Build
         run: cmake --build --preset ci
@@ -364,7 +366,11 @@ jobs:
           Remove-Item -Force build\ci\*.msi, build\ci\*.zip -ErrorAction SilentlyContinue
           cd build\ci
           cpack
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($LASTEXITCODE -ne 0) {
+            # WiX's own messages are only in its log.
+            Get-ChildItem -Recurse -Filter wix.log _CPack_Packages | ForEach-Object { Get-Content $_.FullName -Tail 60 }
+            exit $LASTEXITCODE
+          }
 
       - name: Installer gate (unpack, launch)
         # The runner's user is not an administrator, so the .msi is unpacked

@@ -270,6 +270,11 @@ python3 scripts/make-icons.py                                  # every platform'
   PowerShell 5.1 (`shell: powershell`), which every Windows has; PowerShell
   7 (`pwsh`) is only on GitHub's runners. Write to `$env:GITHUB_ENV` with
   `Out-File -Encoding utf8 -Append` there, not `>>` (UTF-16 in 5.1).
+* *"Problem running WiX" in Package:* WiX checks the .msi through the
+  Windows Installer service, which the runner's standard user cannot use
+  (light.exe error LGHT0217). The self-hosted job configures with
+  `-DLUMENIS_WIX_SKIP_VALIDATION=ON` (light `-sval`); the GitHub-hosted job
+  still validates. The step prints WiX's log when it fails.
 * *"Qt 6.8.3 is not in C:\Qt":* run `scripts\setup-windows-runner.ps1
   install <token>` again; it installs Qt and keeps the existing runner.
 * *"systemd is not running" from setup-wsl-runner.sh:* add `[boot]` and

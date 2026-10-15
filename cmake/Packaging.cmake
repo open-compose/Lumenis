@@ -66,6 +66,14 @@ elseif(WIN32)
     if(LUMENIS_WIX_CANDLE)
         get_filename_component(CPACK_WIX_ROOT "${LUMENIS_WIX_CANDLE}" DIRECTORY)
         set(CPACK_GENERATOR "WIX;ZIP")
+        # light.exe validates the .msi (ICE) through the Windows Installer
+        # service, which a service running as a standard user cannot use
+        # (LGHT0217). The self-hosted CI runner skips the validation; the
+        # GitHub-hosted job, an administrator, keeps it.
+        option(LUMENIS_WIX_SKIP_VALIDATION "Do not validate the .msi (light -sval)" OFF)
+        if(LUMENIS_WIX_SKIP_VALIDATION)
+            set(CPACK_WIX_LIGHT_EXTRA_FLAGS "-sval")
+        endif()
     else()
         message(WARNING "WiX Toolset 3.x not found: 'cpack' will build the .zip "
             "package only. Run scripts/bootstrap-windows.ps1 to install WiX and "
