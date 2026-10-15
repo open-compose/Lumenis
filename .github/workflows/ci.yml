@@ -18,6 +18,12 @@ concurrency:
 env:
   QT_VERSION: '6.8.3'
 
+# Artifact storage is limited (a private repository's quota is small). Uploads
+# expire after a few days, and a full quota does not fail a job: the build,
+# tests and packages still run, and the self-hosted jobs keep their package
+# for the owner (scripts/keep-build.sh). Only ui-consistency then has nothing
+# to compare.
+
 jobs:
   linux:
     name: Linux x64 (system Qt)
@@ -52,7 +58,9 @@ jobs:
           QT_SCALE_FACTOR=2 build/ci/bin/cutthulhu --screenshot shots/2x
 
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
+          retention-days: 3
           name: screenshots-linux
           path: shots
           if-no-files-found: error
@@ -83,7 +91,9 @@ jobs:
           scripts/check-appimage-wayland.sh build/ci/*.AppImage
 
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
+          retention-days: 5
           name: linux-x64
           path: |
             build/ci/*.deb
@@ -183,7 +193,9 @@ jobs:
           QT_SCALE_FACTOR=2 "$app" --screenshot shots/2x
 
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
+          retention-days: 3
           name: screenshots-${{ matrix.os }}
           path: shots
           if-no-files-found: error
@@ -205,7 +217,9 @@ jobs:
           hdiutil detach "$mnt"
 
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
+          retention-days: 5
           name: macos-arm64-${{ matrix.os }}
           path: build/ci-macos/*.dmg
           if-no-files-found: error
@@ -259,7 +273,9 @@ jobs:
           QT_SCALE_FACTOR=2 "$app" --screenshot shots/2x
 
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
+          retention-days: 3
           name: screenshots-macos-self-hosted
           path: shots
           if-no-files-found: error
@@ -359,7 +375,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
+          retention-days: 3
           name: screenshots-windows-self-hosted
           path: shots
           if-no-files-found: error
@@ -453,7 +471,9 @@ jobs:
           QT_SCALE_FACTOR=2 build/ci/bin/cutthulhu --screenshot shots/2x
 
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
+          retention-days: 3
           name: screenshots-linux-self-hosted-${{ matrix.ubuntu }}
           path: shots
           if-no-files-found: error
@@ -539,7 +559,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
+          retention-days: 3
           name: screenshots-windows
           path: shots
           if-no-files-found: error
@@ -563,7 +585,9 @@ jobs:
           if (Test-Path $exe) { Write-Error 'uninstall left cutthulhu.exe behind'; exit 1 }
 
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
+          retention-days: 5
           name: windows-x64
           path: |
             build/ci/*.msi
@@ -638,7 +662,9 @@ jobs:
           exit $status
 
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         if: always()
         with:
+          retention-days: 3
           name: screenshot-diffs
           path: diffs

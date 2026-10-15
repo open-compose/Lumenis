@@ -293,6 +293,19 @@ python3 scripts/make-icons.py                                  # every platform'
 
 ## Troubleshooting
 
+### "Artifact storage quota has been hit"
+
+GitHub keeps a private repository's CI artifacts (screenshots, packages) in
+a small storage quota. When the quota is full, uploads fail with this
+message. The jobs still build, test, package and keep their package
+(uploads are `continue-on-error`). Only "UI looks the same on all
+platforms" fails, because it has no screenshots to compare.
+
+Uploads now expire after 3 days (screenshots) or 5 days (packages). Older
+artifacts can be deleted under the repository's Actions page, on each run's
+summary. GitHub recalculates usage every 6 to 12 hours, so space freed now
+counts only after that.
+
 ### The self-hosted Windows or Linux job waits or fails
 
 * *Queued for a long time:* the PC is off or asleep, you are logged off
