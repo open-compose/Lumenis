@@ -44,11 +44,12 @@ install)
     [ "$(ps -p 1 -o comm=)" = systemd ] ||
         die "systemd is not running. Add [boot] systemd=true to /etc/wsl.conf, run 'wsl --shutdown' in Windows, and try again"
 
-    # Everything the CI job needs, installed for all users: the build
-    # dependencies, git, and weston for the Wayland check.
+    # Everything the CI jobs need, installed for all users: the build
+    # dependencies, git, weston for the Wayland check, and Pillow for the
+    # screenshot comparison.
     script_dir=$(cd "$(dirname "$0")" && pwd)
     "$script_dir/bootstrap-linux.sh"
-    apt-get install -y --no-install-recommends git ca-certificates fonts-dejavu-core weston curl file
+    apt-get install -y --no-install-recommends git ca-certificates fonts-dejavu-core weston curl file python3-pil
 
     if ! id "$RUNNER_USER" >/dev/null 2>&1; then
         echo "Creating the user $RUNNER_USER"

@@ -233,6 +233,9 @@ system-Qt platform, and 26.04, the newest):
 4. Set the repository variable `LINUX_RUNNERS` to the versions that have a
    runner, as a JSON list: `["24.04"]`, or `["24.04","26.04"]`.
 
+While `HOSTED_CI` is `off`, the screenshot comparison (`ui-consistency`)
+runs on the WSL runner too, with its screenshots as the reference.
+
 Day to day: `status`, `stop` and `start` work on both scripts. When the PC
 will be off, set `WINDOWS_RUNNER` to `off` and empty `LINUX_RUNNERS`, or CI
 waits for it (for up to a day). `remove <token>` unregisters a runner (a
@@ -282,6 +285,10 @@ python3 scripts/make-icons.py                                  # every platform'
   same files) instead; the hosted job installs the .msi.
 * *"Qt 6.8.3 is not in C:\Qt":* run `scripts\setup-windows-runner.ps1
   install <token>` again; it installs Qt and keeps the existing runner.
+* *"Pillow is missing on this runner":* the screenshot comparison runs on
+  the WSL runner while `HOSTED_CI` is `off` and needs Pillow: in the
+  distribution, `sudo apt-get install -y python3-pil` (newer setup scripts
+  install it).
 * *"systemd is not running" from setup-wsl-runner.sh:* add `[boot]` and
   `systemd=true` to `/etc/wsl.conf`, run `wsl --shutdown` in Windows, and
   open the distribution again.

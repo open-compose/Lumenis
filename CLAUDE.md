@@ -51,6 +51,9 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
   (`scripts/setup-windows-runner.ps1`, variable `WINDOWS_RUNNER` = `on`) and
   Ubuntu in its WSL the Linux jobs (`scripts/setup-wsl-runner.sh`, variable
   `LINUX_RUNNERS`, e.g. `["24.04","26.04"]`); BUILDING.md has the steps.
+  Currently all three self-hosted runners are on (Linux: 26.04 only) and
+  `HOSTED_CI` is off; the screenshot comparison runs on the WSL runner. The
+  .msi install, Ubuntu 24.04 and Xcode 15 wait until minutes reset.
 - Push only after a local build and test pass, then check CI. CI covers every
   platform, also builds on the newest Ubuntu (26.04: GCC 15, Qt 6.10) with
   warnings as errors, and checks:

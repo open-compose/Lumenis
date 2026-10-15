@@ -550,12 +550,17 @@ jobs:
   ui-consistency:
     # Phase 1 gate 1: every window renders the same on every platform.
     # Linux is the reference; each other platform's screenshots must match it.
+    # With HOSTED_CI off it runs on the self-hosted Linux runner in WSL, and
+    # that runner's screenshots are the reference.
     name: UI looks the same on all platforms
     needs: [linux, macos, macos-local, windows, windows-local, linux-local]
-    # Runs without the macOS jobs that were skipped; then only the others
-    # are compared with Linux.
-    if: ${{ !cancelled() && vars.HOSTED_CI != 'off' && needs.linux.result == 'success' && needs.windows.result == 'success' && needs.macos.result != 'failure' && needs.macos-local.result != 'failure' && needs.windows-local.result != 'failure' && needs.linux-local.result != 'failure' }}
-    runs-on: ubuntu-24.04
+    if: >-
+      ${{ !cancelled()
+          && (needs.linux.result == 'success' || needs.linux-local.result == 'success')
+          && needs.linux.result != 'failure' && needs.linux-local.result != 'failure'
+          && needs.windows.result != 'failure' && needs.windows-local.result != 'failure'
+          && needs.macos.result != 'failure' && needs.macos-local.result != 'failure' }}
+    runs-on: ${{ vars.HOSTED_CI == 'off' && fromJSON('["self-hosted","Linux","X64","cutthulhu"]') || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -564,6 +569,20 @@ jobs:
           pattern: screenshots-*
           path: shots
 
+      - name: Pillow
+        # scripts/imgdiff.py needs it. The GitHub-hosted runner installs it
+        # with pip; the self-hosted one has python3-pil
+        # (scripts/setup-wsl-runner.sh).
+        run: |
+          if ! python3 -c 'import PIL' 2>/dev/null; then
+            if [ "$RUNNER_ENVIRONMENT" = github-hosted ]; then
+              pip install --quiet pillow
+            else
+              echo "::error::Pillow is missing on this runner: in WSL run 'sudo apt-get install -y python3-pil'"
+              exit 1
+            fi
+          fi
+
       - name: Compare screenshots with Linux
         # Gate: the text-free images (*.notext.png) must match within 0.5%,
         # so layout, sizes, colours and chrome are identical; text itself
@@ -571,22 +590,26 @@ jobs:
         # The full images and the widget layouts are compared for
         # information, to explain any failure.
         run: |
-          pip install --quiet pillow
-          status=0
+          rm -rf diffs
           mkdir -p diffs
+          # The GitHub-hosted Linux screenshots, or else the self-hosted ones.
+          reference=shots/screenshots-linux
+          [ -d "$reference" ] || reference=$(ls -d shots/screenshots-linux-self-hosted-* | head -n1)
+          echo "Reference: $reference"
+          status=0
           for platform in shots/screenshots-*; do
+            [ "$platform" = "$reference" ] && continue
             name=${platform#shots/screenshots-}
-            [ "$name" = linux ] && continue
             echo "=== $name"
-            for ref in $(cd shots/screenshots-linux && find . -name '*.png' | sort); do
+            for ref in $(cd "$reference" && find . -name '*.png' | sort); do
               out="diffs/$name-$(echo "$ref" | tr '/' '_' | sed 's/^\._//')"
               case "$ref" in
-                *.notext.png) python3 scripts/imgdiff.py "shots/screenshots-linux/$ref" "$platform/$ref" --diff "$out" || status=1 ;;
-                *)            python3 scripts/imgdiff.py "shots/screenshots-linux/$ref" "$platform/$ref" --diff "$out" --max-percent 100 ;;
+                *.notext.png) python3 scripts/imgdiff.py "$reference/$ref" "$platform/$ref" --diff "$out" || status=1 ;;
+                *)            python3 scripts/imgdiff.py "$reference/$ref" "$platform/$ref" --diff "$out" --max-percent 100 ;;
               esac
             done
-            for ref in $(cd shots/screenshots-linux && find . -name '*.layout.json' | sort); do
-              python3 scripts/layoutdiff.py "shots/screenshots-linux/$ref" "$platform/$ref" || true
+            for ref in $(cd "$reference" && find . -name '*.layout.json' | sort); do
+              python3 scripts/layoutdiff.py "$reference/$ref" "$platform/$ref" || true
             done
           done
           exit $status
