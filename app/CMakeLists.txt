@@ -47,3 +47,21 @@ if((APPLE OR WIN32) AND COMMAND qt_generate_deploy_app_script)
         NO_UNSUPPORTED_PLATFORM_ERROR)
     install(SCRIPT ${lumenis_deploy_script})
 endif()
+
+# macdeployqt bundles only the cocoa platform plugin. Add Qt's offscreen one
+# so the installed app runs without a window server: --screenshot and
+# --smoke-test from a launchd service, such as the self-hosted CI runner
+# (BUILDING.md). Its rpath must find the bundle's Frameworks. Packaging.cmake
+# signs the bundle afterwards.
+if(APPLE AND TARGET Qt6::QOffscreenIntegrationPlugin)
+    install(CODE "
+        set(platforms \"\${CMAKE_INSTALL_PREFIX}/${PRODUCT_OUTPUT_NAME}.app/Contents/PlugIns/platforms\")
+        file(COPY \"$<TARGET_FILE:Qt6::QOffscreenIntegrationPlugin>\" DESTINATION \"\${platforms}\")
+        get_filename_component(plugin \"$<TARGET_FILE:Qt6::QOffscreenIntegrationPlugin>\" NAME)
+        execute_process(
+            COMMAND install_name_tool -add_rpath @loader_path/../../Frameworks \"\${platforms}/\${plugin}\"
+            RESULT_VARIABLE rc ERROR_VARIABLE err)
+        if(NOT rc EQUAL 0 AND NOT err MATCHES \"would duplicate path\")
+            message(FATAL_ERROR \"install_name_tool failed: \${err}\")
+        endif()")
+endif()

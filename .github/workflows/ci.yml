@@ -194,6 +194,7 @@ jobs:
           hdiutil attach "$dmg" -mountpoint "$mnt" -nobrowse
           app="$mnt/Cutthulhu.app/Contents/MacOS/Cutthulhu"
           lipo -archs "$app" | grep -q arm64
+          test -f "$mnt/Cutthulhu.app/Contents/PlugIns/platforms/libqoffscreen.dylib"
           codesign --verify --deep "$mnt/Cutthulhu.app"
           "$app" --version
           "$app" --smoke-test
@@ -275,6 +276,7 @@ jobs:
           trap 'hdiutil detach "$mnt" >/dev/null 2>&1 || true' EXIT
           app="$mnt/Cutthulhu.app/Contents/MacOS/Cutthulhu"
           lipo -archs "$app" | grep -q arm64
+          test -f "$mnt/Cutthulhu.app/Contents/PlugIns/platforms/libqoffscreen.dylib"
           codesign --verify --deep "$mnt/Cutthulhu.app"
           "$app" --version
           "$app" --smoke-test

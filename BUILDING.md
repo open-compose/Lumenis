@@ -211,6 +211,10 @@ python3 scripts/make-icons.py                                  # every platform'
   GitHub-hosted runners' home. The self-hosted job therefore installs Qt
   itself, once, into `/Users/ghrunner/Qt` with aqtinstall in a virtual
   environment. Delete that folder to make it reinstall.
+* *"Could not find the Qt platform plugin "offscreen"" in the installer
+  gate:* the runner has no window server, so the installed app must start
+  with Qt's offscreen plugin. The bundle gets it at install time
+  (`app/CMakeLists.txt`); the gate checks that it is there.
 * *"command not found: ninja" (or cmake):* install them from an
   administrator account with `brew install cmake ninja`. The runner's user
   cannot run `brew`.
