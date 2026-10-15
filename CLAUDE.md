@@ -47,7 +47,10 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
   at the end of each phase; `-f hosted_macos=false` skips them. While the
   repository variable `HOSTED_CI` is `off` (minutes used up), only the Mac
   runs: build and test Linux locally (ci preset, clang, GCC 15 check) with
-  extra care, since nothing in CI covers Linux or Windows then.
+  extra care. The owner's Windows PC can run the Windows job
+  (`scripts/setup-windows-runner.ps1`, variable `WINDOWS_RUNNER` = `on`) and
+  Ubuntu in its WSL the Linux jobs (`scripts/setup-wsl-runner.sh`, variable
+  `LINUX_RUNNERS`, e.g. `["24.04","26.04"]`); BUILDING.md has the steps.
 - Push only after a local build and test pass, then check CI. CI covers every
   platform, also builds on the newest Ubuntu (26.04: GCC 15, Qt 6.10) with
   warnings as errors, and checks:

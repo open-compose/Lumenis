@@ -285,6 +285,167 @@ jobs:
           "$app" --version
           "$app" --smoke-test
 
+  windows-local:
+    # The owner's Windows PC as a self-hosted runner (scripts/setup-windows-
+    # runner.ps1): a service under its own standard user, with Qt in C:\Qt
+    # and the Visual Studio Build Tools installed. Turned on by the
+    # repository variable WINDOWS_RUNNER = on.
+    name: Windows x64 (self-hosted)
+    if: vars.WINDOWS_RUNNER == 'on'
+    runs-on: [self-hosted, Windows, X64, cutthulhu]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check PowerShell scripts parse
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($f in Get-ChildItem -Recurse -Filter *.ps1 scripts, packaging) {
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors) | Out-Null
+            foreach ($e in $errors) { Write-Host "::error file=$($f.Name)::$e"; $failed = $true }
+          }
+          if ($failed) { exit 1 }
+
+      - name: Qt (installed on the PC)
+        shell: pwsh
+        run: |
+          $qt = "C:\Qt\$env:QT_VERSION\msvc2022_64"
+          if (-not (Test-Path "$qt\bin\qmake.exe")) {
+            Write-Host "::error::Qt $env:QT_VERSION is not in C:\Qt: run scripts\setup-windows-runner.ps1 install again"
+            exit 1
+          }
+          "QT_ROOT_DIR=$qt" >> $env:GITHUB_ENV
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure
+        run: cmake --preset ci
+
+      - name: Build
+        run: cmake --build --preset ci
+
+      - name: Test
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
+          ctest --preset ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Screenshots
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force shots -ErrorAction SilentlyContinue
+          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          build\ci\bin\cutthulhu.exe --screenshot shots\1x | Out-Host
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:QT_SCALE_FACTOR = '2'
+          build\ci\bin\cutthulhu.exe --screenshot shots\2x | Out-Host
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-windows-self-hosted
+          path: shots
+          if-no-files-found: error
+
+      - name: Package (.msi, .zip)
+        shell: pwsh
+        run: |
+          Remove-Item -Force build\ci\*.msi, build\ci\*.zip -ErrorAction SilentlyContinue
+          cd build\ci
+          cpack
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Installer gate (unpack, launch)
+        # The runner's user is not an administrator, so the .msi is unpacked
+        # with an administrative install rather than installed; the hosted
+        # job installs and uninstalls it.
+        shell: pwsh
+        run: |
+          $msi = (Get-ChildItem build\ci\*.msi | Select-Object -First 1).FullName
+          $target = Join-Path $env:RUNNER_TEMP 'msi'
+          Remove-Item -Recurse -Force $target -ErrorAction SilentlyContinue
+          $p = Start-Process msiexec -ArgumentList '/a', "`"$msi`"", '/qn', "TARGETDIR=`"$target`"", '/l*v', 'unpack.log' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content unpack.log -Tail 50; exit 1 }
+          $exe = Get-ChildItem -Recurse -Filter cutthulhu.exe $target | Select-Object -First 1
+          if (-not $exe) { Write-Error 'cutthulhu.exe is not in the package'; exit 1 }
+          $out = & $exe.FullName --smoke-test | Out-String
+          Write-Host $out
+          if ($LASTEXITCODE -ne 0 -or $out -notmatch 'smoke-test: ok') { exit 1 }
+
+  linux-local:
+    # Ubuntu in WSL on the owner's PC (scripts/setup-wsl-runner.sh), one
+    # runner per version, labelled ubuntu-<version>. The repository variable
+    # LINUX_RUNNERS lists the versions that have one, e.g. ["24.04","26.04"].
+    # The installer gate needs no root: the .deb is unpacked, not installed.
+    name: Linux x64 (self-hosted, Ubuntu ${{ matrix.ubuntu }})
+    if: vars.LINUX_RUNNERS != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        ubuntu: ${{ fromJSON(vars.LINUX_RUNNERS || '[]') }}
+    runs-on: [self-hosted, Linux, X64, cutthulhu, 'ubuntu-${{ matrix.ubuntu }}']
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell scripts parse
+        run: for f in scripts/*.sh packaging/*/*.sh; do bash -n "$f" || exit 1; done
+
+      - name: Versions
+        run: |
+          c++ --version | head -n1
+          cmake --version | head -n1
+          dpkg-query -W qt6-base-dev
+
+      - name: Configure
+        run: |
+          cmake --preset ci 2>&1 | tee configure.log
+          ! grep -q "Wayland support is incomplete" configure.log
+
+      - name: Build
+        run: cmake --build --preset ci
+
+      - name: Test
+        run: ctest --preset ci
+
+      - name: Screenshots
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          rm -rf shots
+          build/ci/bin/cutthulhu --screenshot shots/1x
+          QT_SCALE_FACTOR=2 build/ci/bin/cutthulhu --screenshot shots/2x
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-linux-self-hosted-${{ matrix.ubuntu }}
+          path: shots
+          if-no-files-found: error
+
+      - name: Package (.deb, .tar.gz, AppImage)
+        run: |
+          rm -f build/ci/*.deb build/ci/*.rpm build/ci/*.tar.gz build/ci/*.AppImage
+          cd build/ci && cpack
+          cd ../.. && packaging/linux/make-appimage.sh build/ci
+
+      - name: Installer gate (unpack, launch)
+        run: |
+          dpkg-deb -f build/ci/*.deb Recommends | grep -q qt6-wayland
+          root=$(mktemp -d)
+          dpkg-deb -x build/ci/*.deb "$root"
+          "$root/usr/bin/cutthulhu" --version
+          QT_QPA_PLATFORM=offscreen "$root/usr/bin/cutthulhu" --smoke-test
+          QT_QPA_PLATFORM=offscreen APPIMAGE_EXTRACT_AND_RUN=1 ./build/ci/*.AppImage --smoke-test
+
+      - name: AppImage on Wayland
+        run: scripts/check-appimage-wayland.sh build/ci/*.AppImage
+
   windows:
     name: Windows x64
     if: vars.HOSTED_CI != 'off'
@@ -379,10 +540,10 @@ jobs:
     # Phase 1 gate 1: every window renders the same on every platform.
     # Linux is the reference; each other platform's screenshots must match it.
     name: UI looks the same on all platforms
-    needs: [linux, macos, macos-local, windows]
+    needs: [linux, macos, macos-local, windows, windows-local, linux-local]
     # Runs without the macOS jobs that were skipped; then only the others
     # are compared with Linux.
-    if: ${{ !cancelled() && vars.HOSTED_CI != 'off' && needs.linux.result == 'success' && needs.windows.result == 'success' && needs.macos.result != 'failure' && needs.macos-local.result != 'failure' }}
+    if: ${{ !cancelled() && vars.HOSTED_CI != 'off' && needs.linux.result == 'success' && needs.windows.result == 'success' && needs.macos.result != 'failure' && needs.macos-local.result != 'failure' && needs.windows-local.result != 'failure' && needs.linux-local.result != 'failure' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

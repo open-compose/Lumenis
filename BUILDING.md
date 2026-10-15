@@ -187,7 +187,58 @@ Day to day:
   removal token from the runner's page on GitHub, then optionally `sudo
   sysadminctl -deleteUser ghrunner`.
 
-The runner runs code from this repository's branches. Use it only while the
+### Self-hosted Windows and Linux (WSL) runners
+
+A Windows x64 PC can run the Windows job, and Ubuntu distributions in its
+WSL the Linux jobs, for free.
+
+* **Windows:** the runner is a Windows service under its own hidden
+  standard user `ghrunner`, started at boot; nobody logs in as it and it
+  never uses the screen, keyboard or mouse. Builds use 4 parallel compile
+  jobs so the PC stays responsive. The installer gate unpacks the .msi
+  (the user is not an administrator) instead of installing it.
+* **Linux in WSL:** one runner per Ubuntu distribution, labelled
+  `ubuntu-<version>`, running as a systemd service under its own user at
+  low priority. WSL only runs while you are logged on to Windows, so the
+  Linux jobs run then; a logon task keeps the distribution running.
+
+Windows, from an elevated PowerShell (Run as administrator) in your
+checkout:
+
+1. On GitHub, Settings > Actions > Runners > New self-hosted runner: copy
+   the token from the `config` line (valid for an hour; one token can
+   register several runners).
+2. Run `scripts\setup-windows-runner.ps1 install <token>`. It first runs
+   `bootstrap-windows.ps1` (Visual Studio Build Tools with C++, CMake,
+   Ninja, Python, Qt in `C:\Qt`, WiX), which takes a while the first time;
+   then it creates the user, downloads and registers the runner in
+   `C:\actions-runner` and starts the service.
+3. Check the runner shows as Idle, then add the repository variable
+   `WINDOWS_RUNNER` = `on`.
+
+Linux, for each Ubuntu version you want (for example 24.04, the supported
+system-Qt platform, and 26.04, the newest):
+
+1. In Windows: `wsl --install -d Ubuntu-24.04` (or `Ubuntu-26.04`) if you
+   do not have it, and open it. systemd must be on (the default on current
+   Ubuntu; otherwise add `[boot]` `systemd=true` to `/etc/wsl.conf` and run
+   `wsl --shutdown`).
+2. In the distribution, in a clone of the repository:
+   `sudo scripts/setup-wsl-runner.sh install <token>`. It installs the
+   build dependencies and weston, creates the user and starts the service.
+3. In the elevated PowerShell: `scripts\setup-windows-runner.ps1 keep-wsl
+   Ubuntu-24.04` (the name `wsl --list` shows). This starts the
+   distribution when you log on and keeps it running.
+4. Set the repository variable `LINUX_RUNNERS` to the versions that have a
+   runner, as a JSON list: `["24.04"]`, or `["24.04","26.04"]`.
+
+Day to day: `status`, `stop` and `start` work on both scripts. When the PC
+will be off, set `WINDOWS_RUNNER` to `off` and empty `LINUX_RUNNERS`, or CI
+waits for it (for up to a day). `remove <token>` unregisters a runner (a
+removal token from its page on GitHub); `unkeep-wsl <distribution>` removes
+the logon task.
+
+The runners run code from this repository's branches. Use them only while the
 repository is private, or restrict it to trusted branches before making the
 repository public: a pull request from a fork could otherwise run code on
 the Mac.
@@ -207,6 +258,19 @@ python3 scripts/make-icons.py                                  # every platform'
 ```
 
 ## Troubleshooting
+
+### The self-hosted Windows or Linux job waits or fails
+
+* *Queued for a long time:* the PC is off or asleep, you are logged off
+  (WSL only runs while you are logged on), or a runner is stopped. Check
+  `scripts\setup-windows-runner.ps1 status` and, in the distribution,
+  `sudo scripts/setup-wsl-runner.sh status`; or set `WINDOWS_RUNNER` to
+  `off` / take the version out of `LINUX_RUNNERS` until it is back.
+* *"Qt 6.8.3 is not in C:\Qt":* run `scripts\setup-windows-runner.ps1
+  install <token>` again; it installs Qt and keeps the existing runner.
+* *"systemd is not running" from setup-wsl-runner.sh:* add `[boot]` and
+  `systemd=true` to `/etc/wsl.conf`, run `wsl --shutdown` in Windows, and
+  open the distribution again.
 
 ### The self-hosted macOS job waits or fails
 
