@@ -118,6 +118,9 @@ Useful options:
   * `--smoke-test`, which opens the main window offscreen and checks it;
   * `--list-providers`, which loads a sample module through
     `CUTTHULHU_MODULE_PATH`.
+  * `checklist_current`, when Python 3 is found: the Phase 1 gate 5
+    checklist (`docs/checklists/phase1-gate5.md`) still matches the menu
+    bar.
 
 The test presets set `QT_QPA_PLATFORM=offscreen`, so tests need no display.
 
@@ -306,6 +309,18 @@ artifacts can be deleted under the repository's Actions page, on each run's
 summary. GitHub recalculates usage every 6 to 12 hours, so space freed now
 counts only after that.
 
+### `checklist_current` fails
+
+The menus or commands changed, but the gate 5 checklist was not remade.
+Rebuild, then run:
+
+```
+python3 scripts/make-checklist.py --app build/ci/bin/cutthulhu
+```
+
+Commit the updated `docs/checklists/phase1-gate5.md`. Do not edit it by
+hand.
+
 ### The self-hosted Windows or Linux job waits or fails
 
 * *Queued for a long time:* the PC is off or asleep, you are logged off
@@ -459,4 +474,7 @@ the build folder (`build/<preset>`) and configure again.
 cutthulhu --version          print the version and exit
 cutthulhu --list-providers   list loaded modules and extension providers and exit
 cutthulhu --smoke-test       open the main window, verify it, exit 0 on success
+cutthulhu --dump-menus FILE  write the menu bar as JSON ('-' for stdout) and exit;
+                             with --sample-project, open a temporary project first
+                             and add each command's id and whether it works yet
 ```

@@ -29,7 +29,9 @@ inline constexpr char kDynamicMenuItem[] = "lumenisDynamic";
 //   [{"text": "File", "items": [{"text": "Exit", "shortcut": "Ctrl+Q",
 //     "enabled": true}, {"separator": true}, {"text": "...", "items": [...]}]}]
 // Mnemonic markers are removed and shortcuts use portable text, so the
-// result is the same on every platform.
-QJsonArray dumpMenus(const QMenuBar* bar);
+// result is the same on every platform. With `commands`, each item also
+// has its command "id" and whether the command has a handler ("handled":
+// it works, perhaps only in the right context) or is not built yet.
+QJsonArray dumpMenus(const QMenuBar* bar, const CommandRegistry* commands = nullptr);
 
 } // namespace lumenis::ui

@@ -54,7 +54,7 @@ QString plainText(QString text) {
     return text;
 }
 
-QJsonArray dumpActions(const QList<QAction*>& actions) {
+QJsonArray dumpActions(const QList<QAction*>& actions, const CommandRegistry* commands) {
     QJsonArray items;
     for (const QAction* action : actions) {
         if (action->property(kDynamicMenuItem).toBool()) continue;
@@ -63,7 +63,7 @@ QJsonArray dumpActions(const QList<QAction*>& actions) {
             o.insert(QStringLiteral("separator"), true);
         } else if (const QMenu* sub = action->menu()) {
             o.insert(QStringLiteral("text"), plainText(sub->title()));
-            o.insert(QStringLiteral("items"), dumpActions(sub->actions()));
+            o.insert(QStringLiteral("items"), dumpActions(sub->actions(), commands));
         } else {
             o.insert(QStringLiteral("text"), plainText(action->text()));
             const QString keys = action->shortcut().toString(QKeySequence::PortableText);
@@ -71,6 +71,12 @@ QJsonArray dumpActions(const QList<QAction*>& actions) {
                 o.insert(QStringLiteral("shortcut"), keys);
             }
             o.insert(QStringLiteral("enabled"), action->isEnabled());
+            const QString name = action->objectName();
+            if (commands && name.startsWith(QLatin1String("cmd:"))) {
+                const QString id = name.mid(4);
+                o.insert(QStringLiteral("id"), id);
+                o.insert(QStringLiteral("handled"), commands->hasHandler(id));
+            }
         }
         items.append(o);
     }
@@ -107,8 +113,8 @@ void buildBuiltinMenus(QMenuBar* bar, CommandRegistry& commands) {
     }
 }
 
-QJsonArray dumpMenus(const QMenuBar* bar) {
-    return dumpActions(bar->actions());
+QJsonArray dumpMenus(const QMenuBar* bar, const CommandRegistry* commands) {
+    return dumpActions(bar->actions(), commands);
 }
 
 } // namespace lumenis::ui

@@ -170,7 +170,11 @@ int main(int argc, char** argv) {
         QStringLiteral("default-layout"), QStringLiteral("Ignore the saved window layout and keyboard settings."));
     parser.addOption(listProviders);
     parser.addOption(smokeTest);
+    const QCommandLineOption sampleProject(
+        QStringLiteral("sample-project"),
+        QStringLiteral("With --dump-menus: open a new temporary project first, as an editor would."));
     parser.addOption(dumpMenus);
+    parser.addOption(sampleProject);
     parser.addOption(screenshot);
     parser.addOption(defaultLayout);
     parser.addOption(openProject);
@@ -218,7 +222,23 @@ int main(int argc, char** argv) {
     }
 
     if (parser.isSet(dumpMenus)) {
-        const QByteArray json = QJsonDocument(lumenis::ui::dumpMenus(window.menuBar())).toJson();
+        // The commands an editor has with a project open: the Phase 1
+        // gate 5 checklist is made from this (scripts/make-checklist.py).
+        QTemporaryDir sampleDir;
+        if (parser.isSet(sampleProject)) {
+            lumenis::model::ProjectSettings s;
+            s.name = QStringLiteral("Sample");
+            s.format = lumenis::projectFormatPresets().front();
+            const QString users = sampleDir.filePath(QStringLiteral("Users"));
+            lumenis::model::UserProfiles(users).create(QStringLiteral("editor"));
+            window.settings().setUser(users, QStringLiteral("editor"));
+            if (auto entry = lumenis::model::ProjectStore(sampleDir.filePath(QStringLiteral("Projects"))).create(s)) {
+                window.setProject(*entry);
+            }
+        }
+        const QByteArray json =
+            QJsonDocument(lumenis::ui::dumpMenus(window.menuBar(), parser.isSet(sampleProject) ? &commands : nullptr))
+                .toJson();
         const QString target = parser.value(dumpMenus);
         if (target == QLatin1String("-")) {
             std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);

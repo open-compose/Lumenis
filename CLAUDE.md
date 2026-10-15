@@ -104,8 +104,15 @@ settings and the workspace buttons, is done. Phase 1.7 is done:
   - the Media Tool (`media_tool.*`);
   - Help > About's Configuration, Usage and Hardware (`tool_windows.*`).
 
-Next is gate 5, the manual checklist (ROADMAP). Spec sections 3, 4, 7, 11,
-12, 13 and 14 list details left for later.
+Gate 5's checklist is ready: `docs/checklists/phase1-gate5.md`.
+  - It is made by `scripts/make-checklist.py` from
+    `--dump-menus --sample-project`.
+  - Rerun the script after changing menus or commands; ctest
+    `checklist_current` fails otherwise.
+  - Phase 1 waits on the editor's session and on gate 1's screenshots
+    (ROADMAP gate status).
+
+Spec sections 3, 4, 7, 11, 12, 13 and 14 list details left for later.
 
 Panels are our own framework, not QDockWidget, because Qt cannot draw
 vertical title bars, green drop zones or Alt-drag tabbing. Custom-painted

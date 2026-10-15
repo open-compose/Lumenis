@@ -334,9 +334,24 @@ Sub-steps:
   * The 2025 guide has no Project window tabs: bins and volumes are in the
     Bin Container sidebar, the format is in the Settings window, and usage
     and hardware are in Help > About (spec section 14).
-  * Gate 5, the manual checklist, is next.
   * Details and what is left: "Implementation status (1.7a)" and "(1.7b and
     1.7c)" in the spec.
+* **Gate status.** Phase 1 is done when all five pass on all three platforms.
+
+  | Gate | How | Status |
+  |---|---|---|
+  | 1. Screenshots match across platforms | `ui-consistency` CI job | Automated; recent runs could not upload screenshots (artifact storage quota) |
+  | 2. Every menu entry present | `tst_menu_inventory` | Passes |
+  | 3. Default keyboard | `tst_keyboard` | Passes |
+  | 4. Workspaces survive a restart | `tst_keyboard_workspaces` | Passes |
+  | 5. An editor finds every window and command **(M)** | [checklist](checklists/phase1-gate5.md) | Checklist ready; waiting for a session with an editor |
+
+  * The gate 5 checklist is made from the real menu bar with a project open
+    (`--dump-menus --sample-project`) by `scripts/make-checklist.py`.
+  * It lists the 19 windows and every menu command, with its page and
+    whether it works yet.
+  * `ctest checklist_current` fails when the checklist no longer matches the
+    menu bar.
 
 The detailed inventory lives in [spec/ui-inventory.md](spec/ui-inventory.md).
 It is entered from the Media Composer Editing Guide with page citations.
