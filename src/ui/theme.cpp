@@ -9,6 +9,7 @@
 #include <QPalette>
 #include <QPixmap>
 #include <QProxyStyle>
+#include <QStyleOption>
 #include <QStyleFactory>
 
 namespace lumenis::ui {
@@ -16,6 +17,7 @@ namespace lumenis::ui {
 namespace {
 
 bool g_fontLoaded = false;
+constexpr int kSliderGroove = 7;
 
 } // namespace
 
@@ -55,6 +57,24 @@ int fixedPixelMetric(QStyle::PixelMetric metric) {
     case QStyle::PM_DockWidgetTitleMargin: return 1;
     case QStyle::PM_TabBarTabOverlap: return 1;
     case QStyle::PM_TabBarBaseOverlap: return 2;
+    // Qt's common style scales these the same way.
+    case QStyle::PM_TabBarTabHSpace: return 24;
+    case QStyle::PM_TabBarScrollButtonWidth: return 16;
+    case QStyle::PM_TabBar_ScrollButtonOverlap: return 1;
+    case QStyle::PM_TabBarTabShiftVertical: return 2;
+    case QStyle::PM_TabBarIconSize: return 16;
+    case QStyle::PM_MenuButtonIndicator: return 12;
+    case QStyle::PM_CheckBoxLabelSpacing:
+    case QStyle::PM_RadioButtonLabelSpacing: return 6;
+    case QStyle::PM_ButtonMargin: return 6;
+    case QStyle::PM_ToolBarExtensionExtent: return 12;
+    case QStyle::PM_ToolBarIconSize: return 24;
+    case QStyle::PM_HeaderMarkSize: return 16;
+    case QStyle::PM_LargeIconSize:
+    case QStyle::PM_IconViewIconSize: return 32;
+    case QStyle::PM_TreeViewIndentation: return 20;
+    case QStyle::PM_FocusFrameHMargin:
+    case QStyle::PM_FocusFrameVMargin: return 2;
     default: return kNotFixed;
     }
 }
@@ -113,6 +133,26 @@ public:
         }
         if (const int fixed = fixedPixelMetric(metric); fixed != kNotFixed) return fixed;
         return QProxyStyle::pixelMetric(metric, option, widget);
+    }
+
+    // Fusion's slider groove is 7 px thick at its baseline DPI; it scales
+    // the thickness like the pixel metrics (fixedPixelMetric).
+    QRect subControlRect(ComplexControl control, const QStyleOptionComplex* option, SubControl sub,
+                         const QWidget* widget) const override {
+        QRect r = QProxyStyle::subControlRect(control, option, sub, widget);
+        if (control == CC_Slider && sub == SC_SliderGroove) {
+            if (const auto* slider = qstyleoption_cast<const QStyleOptionSlider*>(option)) {
+                const QPoint centre = slider->rect.center();
+                if (slider->orientation == Qt::Horizontal) {
+                    r.setHeight(kSliderGroove);
+                    r.moveTop(centre.y() - kSliderGroove / 2);
+                } else {
+                    r.setWidth(kSliderGroove);
+                    r.moveLeft(centre.x() - kSliderGroove / 2);
+                }
+            }
+        }
+        return r;
     }
 
     // Disabled text is drawn plainly everywhere: some platforms otherwise

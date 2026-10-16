@@ -9,6 +9,8 @@
 #include <QPushButton>
 #include <QSpinBox>
 #include <QStyle>
+#include <QSlider>
+#include <QStyleOptionSlider>
 #include <QTest>
 
 using namespace lumenis::ui;
@@ -70,6 +72,18 @@ private slots:
         QCOMPARE(style->pixelMetric(QStyle::PM_IndicatorWidth), 14);
         QCOMPARE(style->pixelMetric(QStyle::PM_SliderLength), 15);
         QCOMPARE(style->pixelMetric(QStyle::PM_ScrollBarExtent), kScrollBarExtent);
+        // The slider groove too: 7 px, as Fusion draws it at 96 DPI.
+        QSlider slider(Qt::Horizontal);
+        slider.resize(120, 22);
+        QStyleOptionSlider opt;
+        opt.initFrom(&slider);
+        opt.orientation = Qt::Horizontal;
+        opt.minimum = 0;
+        opt.maximum = 100;
+        QCOMPARE(style->subControlRect(QStyle::CC_Slider, &opt, QStyle::SC_SliderGroove, &slider).height(), 7);
+        opt.orientation = Qt::Vertical;
+        opt.rect = QRect(0, 0, 22, 120);
+        QCOMPARE(style->subControlRect(QStyle::CC_Slider, &opt, QStyle::SC_SliderGroove, &slider).width(), 7);
     }
 
     // Rendered from packaging/icon.svg by scripts/make-icons.py.

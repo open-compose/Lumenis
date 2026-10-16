@@ -344,8 +344,10 @@ check boxes, radio buttons, slider handles and dials a third larger. This
 made "UI looks the same on all platforms" fail for the Effect Editor, the
 Audio Mixer, the Command Palette and Timeline Settings.
 
-The application's style (`src/ui/theme.cpp`, `fixedPixelMetric`) now gives
-these sizes the same values everywhere. `tst_theme` checks them on every
+The application's style (`src/ui/theme.cpp`, `fixedPixelMetric`, and
+`subControlRect` for the slider groove) now gives these sizes the same
+values everywhere. The tab padding of Qt's common style is fixed in the
+same place. `tst_theme` checks them on every
 platform. If a new kind of control shows the same symptom, add its pixel
 metric there.
 
