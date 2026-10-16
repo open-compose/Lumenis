@@ -112,8 +112,9 @@ Gate 5's checklist is ready: `docs/checklists/phase1-gate5.md`.
     `--dump-menus --sample-project`.
   - Rerun the script after changing menus or commands; ctest
     `checklist_current` fails otherwise.
-  - Phase 1 waits on the editor's session and on gate 1's screenshots
-    (ROADMAP gate status).
+  - Phase 1 waits on the editor's session (ROADMAP gate status). Gate 1
+    passes on the self-hosted runners; `fixedPixelMetric` in `theme.cpp`
+    keeps macOS sizes the same as Linux.
 
 Spec sections 3, 4, 7, 11, 12, 13 and 14 list details left for later.
 

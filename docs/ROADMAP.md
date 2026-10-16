@@ -340,7 +340,7 @@ Sub-steps:
 
   | Gate | How | Status |
   |---|---|---|
-  | 1. Screenshots match across platforms | `ui-consistency` CI job | Automated; recent runs could not upload screenshots (artifact storage quota) |
+  | 1. Screenshots match across platforms | `ui-consistency` CI job | Passes on the self-hosted Mac, Windows and Linux runners (2026-10-16); the hosted jobs wait for Actions minutes |
   | 2. Every menu entry present | `tst_menu_inventory` | Passes |
   | 3. Default keyboard | `tst_keyboard` | Passes |
   | 4. Workspaces survive a restart | `tst_keyboard_workspaces` | Passes |
