@@ -52,7 +52,10 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
   Ubuntu in its WSL the Linux jobs (`scripts/setup-wsl-runner.sh`, variable
   `LINUX_RUNNERS`, e.g. `["24.04","26.04"]`); BUILDING.md has the steps.
   Currently all three self-hosted runners are on (Linux: 26.04 only) and
-  `HOSTED_CI` is off; the screenshot comparison runs on the WSL runner. The
+  `HOSTED_CI` is off; the screenshot comparison runs on the WSL runner.
+  Screenshots travel between jobs on `ci-screenshots/<branch>/<platform>`
+  branches (`scripts/ci-screenshots.py`, `.ps1`), not artifacts: the
+  artifact quota is used up. The
   .msi install, Ubuntu 24.04 and Xcode 15 wait until minutes reset. Each
   self-hosted job keeps its package (.dmg, .msi, AppImage) in a builds
   folder linked from the owner's Documents (`scripts/keep-build.sh`; the

@@ -18,11 +18,14 @@ concurrency:
 env:
   QT_VERSION: '6.8.3'
 
-# Artifact storage is limited (a private repository's quota is small). Uploads
-# expire after a few days, and a full quota does not fail a job: the build,
-# tests and packages still run, and the self-hosted jobs keep their package
-# for the owner (scripts/keep-build.sh). Only ui-consistency then has nothing
-# to compare.
+# Artifact storage is limited (a private repository's quota is small), so
+# the screenshots for ui-consistency travel through the repository instead:
+# each job stores them on the branch ci-screenshots/<branch>/<platform>
+# (scripts/ci-screenshots.py, .ps1), which needs write access to contents.
+# Packages are still uploaded where there is room; the self-hosted jobs keep
+# theirs for the owner (scripts/keep-build.sh).
+permissions:
+  contents: write
 
 jobs:
   linux:
@@ -57,13 +60,12 @@ jobs:
           build/ci/bin/cutthulhu --screenshot shots/1x
           QT_SCALE_FACTOR=2 build/ci/bin/cutthulhu --screenshot shots/2x
 
-      - uses: actions/upload-artifact@v4
+      - name: Pass the screenshots to ui-consistency
+        # Through the repository, not artifact storage (scripts/ci-screenshots.py).
         continue-on-error: true
-        with:
-          retention-days: 3
-          name: screenshots-linux
-          path: shots
-          if-no-files-found: error
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci-screenshots.py push --name linux --dir shots
 
       - name: Package (.deb, .tar.gz, AppImage)
         run: |
@@ -192,13 +194,12 @@ jobs:
           "$app" --screenshot shots/1x
           QT_SCALE_FACTOR=2 "$app" --screenshot shots/2x
 
-      - uses: actions/upload-artifact@v4
+      - name: Pass the screenshots to ui-consistency
+        # Through the repository, not artifact storage (scripts/ci-screenshots.py).
         continue-on-error: true
-        with:
-          retention-days: 3
-          name: screenshots-${{ matrix.os }}
-          path: shots
-          if-no-files-found: error
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci-screenshots.py push --name ${{ matrix.os }} --dir shots
 
       - name: Package (.dmg)
         run: cd build/ci-macos && cpack
@@ -272,13 +273,12 @@ jobs:
           "$app" --screenshot shots/1x
           QT_SCALE_FACTOR=2 "$app" --screenshot shots/2x
 
-      - uses: actions/upload-artifact@v4
+      - name: Pass the screenshots to ui-consistency
+        # Through the repository, not artifact storage (scripts/ci-screenshots.py).
         continue-on-error: true
-        with:
-          retention-days: 3
-          name: screenshots-macos-self-hosted
-          path: shots
-          if-no-files-found: error
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci-screenshots.py push --name macos-self-hosted --dir shots
 
       - name: Package (.dmg)
         run: |
@@ -374,13 +374,15 @@ jobs:
           build\ci\bin\cutthulhu.exe --screenshot shots\2x | Out-Host
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - uses: actions/upload-artifact@v4
+      - name: Pass the screenshots to ui-consistency
+        # Through the repository, not artifact storage (scripts/ci-screenshots.ps1).
         continue-on-error: true
-        with:
-          retention-days: 3
-          name: screenshots-windows-self-hosted
-          path: shots
-          if-no-files-found: error
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ci-screenshots.ps1 -Name windows-self-hosted -Dir shots
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Package (.msi, .zip)
         shell: powershell
@@ -471,13 +473,12 @@ jobs:
           build/ci/bin/cutthulhu --screenshot shots/1x
           QT_SCALE_FACTOR=2 build/ci/bin/cutthulhu --screenshot shots/2x
 
-      - uses: actions/upload-artifact@v4
+      - name: Pass the screenshots to ui-consistency
+        # Through the repository, not artifact storage (scripts/ci-screenshots.py).
         continue-on-error: true
-        with:
-          retention-days: 3
-          name: screenshots-linux-self-hosted-${{ matrix.ubuntu }}
-          path: shots
-          if-no-files-found: error
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci-screenshots.py push --name linux-self-hosted-${{ matrix.ubuntu }} --dir shots
 
       - name: Package (.deb, .tar.gz, AppImage)
         run: |
@@ -559,13 +560,15 @@ jobs:
           build\ci\bin\cutthulhu.exe --screenshot shots\2x | Out-Host
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - uses: actions/upload-artifact@v4
+      - name: Pass the screenshots to ui-consistency
+        # Through the repository, not artifact storage (scripts/ci-screenshots.ps1).
         continue-on-error: true
-        with:
-          retention-days: 3
-          name: screenshots-windows
-          path: shots
-          if-no-files-found: error
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ci-screenshots.ps1 -Name windows -Dir shots
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Package (.msi, .zip)
         run: cd build/ci && cpack
@@ -612,10 +615,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: screenshots-*
-          path: shots
+      - name: Fetch this run's screenshots
+        # Each job stored its screenshots on ci-screenshots/<branch>/<platform>
+        # (scripts/ci-screenshots.py); older runs' are left out.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          rm -rf shots
+          python3 scripts/ci-screenshots.py fetch-all --dest shots
 
       - name: Pillow
         # scripts/imgdiff.py needs it. The GitHub-hosted runner installs it
@@ -647,7 +654,7 @@ jobs:
           # must not pass.
           others=$(ls -d shots/screenshots-* 2>/dev/null | grep -vxF "$reference" | wc -l)
           if [ -z "$reference" ] || [ "$others" -eq 0 ]; then
-            echo "::error::No screenshots to compare: the uploads failed (see BUILDING.md, artifact storage quota)"
+            echo "::error::No screenshots to compare: the jobs could not store them (see BUILDING.md, CI screenshots)"
             exit 1
           fi
           echo "Reference: $reference"
@@ -669,10 +676,12 @@ jobs:
           done
           exit $status
 
-      - uses: actions/upload-artifact@v4
+      - name: Keep the differences
+        # On ci-screenshots/<branch>/diffs; BUILDING.md says how to look.
         continue-on-error: true
         if: always()
-        with:
-          retention-days: 3
-          name: screenshot-diffs
-          path: diffs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          [ -n "$(ls -A diffs 2>/dev/null)" ] || exit 0
+          python3 scripts/ci-screenshots.py push --name diffs --dir diffs

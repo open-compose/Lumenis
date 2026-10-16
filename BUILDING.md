@@ -298,16 +298,43 @@ python3 scripts/make-icons.py                                  # every platform'
 
 ### "Artifact storage quota has been hit"
 
-GitHub keeps a private repository's CI artifacts (screenshots, packages) in
-a small storage quota. When the quota is full, uploads fail with this
-message. The jobs still build, test, package and keep their package
-(uploads are `continue-on-error`). Only "UI looks the same on all
-platforms" fails, because it has no screenshots to compare.
+GitHub keeps a private repository's CI artifacts in a small storage quota.
+When it is full, uploads fail with this message. The quota is for the
+billing period, so deleting artifacts does not free it at once.
 
-Uploads now expire after 3 days (screenshots) or 5 days (packages). Older
-artifacts can be deleted under the repository's Actions page, on each run's
-summary. GitHub recalculates usage every 6 to 12 hours, so space freed now
-counts only after that.
+The jobs still build, test, package and keep their package (uploads are
+`continue-on-error`). The screenshots do not use artifacts at all (next
+entry), so the screenshot comparison still runs.
+
+### CI screenshots: where they are and how to look at the differences
+
+"UI looks the same on all platforms" compares each platform's screenshots
+with Linux's. Each job stores its screenshots in the repository, not in
+artifact storage:
+* `scripts/ci-screenshots.py` does this on Linux and macOS, and
+  `scripts/ci-screenshots.ps1` on Windows (GitHub's Git Data API, so the PC
+  needs neither git nor Python).
+* Each job's screenshots go, as one archive, on the branch
+  `ci-screenshots/<branch>/<platform>`, replaced on every run.
+* The commit message names the run, so the comparison never uses an older
+  run's screenshots.
+
+The differences found are kept on `ci-screenshots/<branch>/diffs`. To look
+at them:
+
+```
+git fetch origin ci-screenshots/<branch>/diffs
+mkdir diffs && git show FETCH_HEAD:shots.tar.gz | tar xz -C diffs
+```
+
+The same works for a platform's screenshots. On Windows, use `shots.zip`
+instead, and unpack it with Expand-Archive.
+
+The `ci-screenshots/*` branches hold nothing else, and you can delete them
+at any time. If the comparison says "the jobs could not store them", the
+job's "Pass the screenshots to ui-consistency" step failed. Check that the
+workflow may write to the repository: Settings > Actions > General >
+Workflow permissions must not block it.
 
 ### `checklist_current` fails
 
