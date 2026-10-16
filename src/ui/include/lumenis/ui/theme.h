@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QStyle>
 #include <QColor>
 #include <QIcon>
 
@@ -17,6 +18,10 @@ inline constexpr int kCheckBoxHeight = 21;
 inline constexpr int kHeaderHeight = 20;
 inline constexpr int kRowHeight = 18;       // item views
 inline constexpr int kScrollBarExtent = 14;
+// The size the application's style gives a pixel metric on every platform,
+// or kNotFixed where it is left to Fusion (theme.cpp says why).
+inline constexpr int kNotFixed = -1000;
+int fixedPixelMetric(QStyle::PixelMetric metric);
 
 // Panel chrome (guide p.74-77). The colours are ours; the arrangement
 // follows the guide's pictures.

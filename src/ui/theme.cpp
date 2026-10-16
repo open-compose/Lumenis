@@ -17,6 +17,50 @@ namespace {
 
 bool g_fontLoaded = false;
 
+} // namespace
+
+// Fusion scales its constant sizes by the screen's DPI against a baseline
+// of 96, or 72 on macOS. With the offscreen platform's 96 DPI everything on
+// macOS came out a third larger: 18 px check boxes instead of 14, larger
+// slider handles and dials. The values Fusion gives at its baseline,
+// identical everywhere; high-density screens scale them by the device
+// pixel ratio as usual.
+int fixedPixelMetric(QStyle::PixelMetric metric) {
+    switch (metric) {
+    case QStyle::PM_IndicatorWidth:
+    case QStyle::PM_IndicatorHeight:
+    case QStyle::PM_ExclusiveIndicatorWidth:
+    case QStyle::PM_ExclusiveIndicatorHeight: return 14;
+    case QStyle::PM_SliderThickness:
+    case QStyle::PM_SliderLength: return 15;
+    case QStyle::PM_SliderTickmarkOffset: return 4;
+    case QStyle::PM_ScrollBarSliderMin: return 26;
+    case QStyle::PM_SplitterWidth:
+    case QStyle::PM_DockWidgetHandleExtent: return 4;
+    case QStyle::PM_SmallIconSize:
+    case QStyle::PM_ButtonIconSize: return 16;
+    case QStyle::PM_ListViewIconSize: return 24;
+    case QStyle::PM_MessageBoxIconSize: return 48;
+    case QStyle::PM_TabBarTabVSpace: return 12;
+    case QStyle::PM_TabCloseIndicatorWidth:
+    case QStyle::PM_TabCloseIndicatorHeight: return 20;
+    case QStyle::PM_ToolBarHandleExtent: return 9;
+    case QStyle::PM_ToolBarItemSpacing: return 1;
+    case QStyle::PM_ToolBarItemMargin:
+    case QStyle::PM_ToolBarFrameWidth: return 2;
+    case QStyle::PM_HeaderMargin:
+    case QStyle::PM_ToolTipLabelFrameWidth: return 2;
+    case QStyle::PM_SpinBoxFrameWidth: return 3;
+    case QStyle::PM_MenuBarItemSpacing: return 6;
+    case QStyle::PM_DockWidgetTitleMargin: return 1;
+    case QStyle::PM_TabBarTabOverlap: return 1;
+    case QStyle::PM_TabBarBaseOverlap: return 2;
+    default: return kNotFixed;
+    }
+}
+
+namespace {
+
 // Fusion with control heights fixed rather than derived from the font.
 class LumenisStyle : public QProxyStyle {
 public:
@@ -67,6 +111,7 @@ public:
         if (metric == PM_ScrollBarExtent) {
             return kScrollBarExtent; // macOS otherwise reports a wider native extent
         }
+        if (const int fixed = fixedPixelMetric(metric); fixed != kNotFixed) return fixed;
         return QProxyStyle::pixelMetric(metric, option, widget);
     }
 

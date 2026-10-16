@@ -336,6 +336,19 @@ job's "Pass the screenshots to ui-consistency" step failed. Check that the
 workflow may write to the repository: Settings > Actions > General >
 Workflow permissions must not block it.
 
+### macOS screenshots differ: larger check boxes, sliders or dials
+
+Qt's Fusion style scales its built-in sizes by the screen's DPI. The
+baseline is 96 DPI, or 72 on macOS, so with the offscreen platform macOS drew
+check boxes, radio buttons, slider handles and dials a third larger. This
+made "UI looks the same on all platforms" fail for the Effect Editor, the
+Audio Mixer, the Command Palette and Timeline Settings.
+
+The application's style (`src/ui/theme.cpp`, `fixedPixelMetric`) now gives
+these sizes the same values everywhere. `tst_theme` checks them on every
+platform. If a new kind of control shows the same symptom, add its pixel
+metric there.
+
 ### `checklist_current` fails
 
 The menus or commands changed, but the gate 5 checklist was not remade.

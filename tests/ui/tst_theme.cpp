@@ -57,6 +57,21 @@ private slots:
         QCOMPARE(QApplication::style()->styleHint(QStyle::SH_DitherDisabledText), 0);
     }
 
+    void fusionSizesAreTheSameEverywhere() {
+        // Gate 1: macOS scaled Fusion's sizes by 96/72 (larger check boxes
+        // and slider handles); the style pins them on every platform.
+        QStyle* style = QApplication::style();
+        for (int m = 0; m < static_cast<int>(QStyle::PM_CustomBase); ++m) {
+            const auto metric = static_cast<QStyle::PixelMetric>(m);
+            const int fixed = fixedPixelMetric(metric);
+            if (fixed == kNotFixed) continue;
+            QCOMPARE(style->pixelMetric(metric), fixed);
+        }
+        QCOMPARE(style->pixelMetric(QStyle::PM_IndicatorWidth), 14);
+        QCOMPARE(style->pixelMetric(QStyle::PM_SliderLength), 15);
+        QCOMPARE(style->pixelMetric(QStyle::PM_ScrollBarExtent), kScrollBarExtent);
+    }
+
     // Rendered from packaging/icon.svg by scripts/make-icons.py.
     void applicationIconIsBuiltIn() {
         const QImage icon(QStringLiteral(":/lumenis/ui/icons/app.png"));
