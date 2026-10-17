@@ -1895,5 +1895,106 @@ p.610–640, ch. 13 p.432–434).**
   stereo. Files at other rates are resampled.
 * Without a sound card, its null device keeps time, so CI tests the clock.
 
-## 17. Still to document
+## 17. Managed media (ch. 9, p.211–216; ch. 12, p.348–359)
+
+Media the application makes itself: imported, consolidated or transcoded.
+The guide calls it Managed Media, unlike Linked Media (p.361).
+
+### Where it goes
+* `<drive>/Avid MediaFiles/MXF/<n>/`: the "1" folder when there is none,
+  otherwise the next number for a new set (p.513, p.358). Ours: new media
+  goes in the highest-numbered folder.
+* Video Wrapper Format Avid OP-Atom: "each video and audio track will be a
+  separate file" (p.1209). Ours: MXF OP-Atom through FFmpeg, named
+  `<clip>.<track>.<id>.mxf`, carrying the clip's name, timecode and tape.
+  The files' user comments `lumenis_media` and `lumenis_track` say which
+  clip and track a file is, for the media database.
+* Each media folder holds database files for the media in it (p.358). Ours:
+  `MediaDatabase.json`, rebuilt for the files whose size or time changed.
+* MXF OP-Atom audio is 48 kHz: FFmpeg's muxer writes no other rate. 16 or
+  24 bits, from the Audio Project setting's Bit Depth (p.1148).
+
+### Resolutions (p.1240–1256)
+* Avid DNx LB, SQ, HQ, HQX and 444 (RGB only, p.1241), through FFmpeg's
+  DNxHR encoder at the project's raster.
+* At least 256x120 (p.355).
+* Later: DNxUncompressed, 1:1, the DNxHD bit-rate names, ProRes, XAVC,
+  AVC-Intra, DV, XDCAM, MXF OP1a and OMF.
+
+### Media Creation setting (p.134–136, p.1206–1209)
+* A project setting, from File > Media > Media Creation Settings (Ctrl+5)
+  or the Settings list.
+* Tabs: Capture, Titles, Import, Mixdown & Transcode, Motion Effects,
+  Render, Media Type, Drive Filtering & Indexing (p.1207).
+  * Video Resolution and Video/Audio Drive on Import and Mixdown &
+    Transcode; the rest later.
+  * The drive with the most space is bold and is used when the setting
+    names none (p.135).
+* Ours: drives are the writable volumes, plus the home folder where the top
+  of the system volume cannot be written (macOS, Linux). Folders can be
+  added through `LUMENIS_MEDIA_DRIVES` (BUILDING.md).
+* Later: Apply to All, the Single/Dual Drives Mode button, drive groups and
+  DisabledRes.txt (p.135–136).
+
+### Import (p.211–216, settings p.1194–1199)
+* File > Input > Import Media opens the Source Browser with Import chosen
+  (p.214). Import makes new media at the Resolution beside it; Settings
+  opens the Import setting (p.214). Double-click and Add to Bin import too.
+* Import setting, a user setting with tabs Image, OMFI/AAF, Shot Log, Audio
+  and XDCAM (p.1194–1199). Working now:
+  * Frame Import Duration (default 10 seconds, p.1196);
+  * Autodetect Sequentially Numbered Files (p.1197).
+  The rest is shown and waits.
+* Pictures are fitted to the raster keeping their shape ("Resize image to
+  fit format raster", p.1195). The sound keeps its channels, one track each.
+* Later: Set Multichannel Audio (p.214), gain on import (p.215–216),
+  pullup/pulldown rates (p.216).
+
+### Consolidate/Transcode (p.348–356)
+* Clip > Consolidate/Transcode on the bin's selection. Consolidate or
+  Transcode in the upper left; Target Drive(s); options; the button in the
+  lower right (p.350–355).
+* Master clips are copied whole (p.349).
+  * After Consolidate, the Copying Media Files dialog (p.352): "Keep Master
+    clips linked to media on the original drive" makes `.new.01` clips of
+    the copies. Its other choice, "Relink Master clips to media on the
+    target drive" (our wording), relinks the clips and makes `.old.01`
+    clips of the old media.
+* Sequences: the parts of their clips that they use, with handles, become
+  new `.new.01` master clips, and the sequence uses them (p.349). Create
+  new sequence(s) leaves the sequence alone and makes `<name>.new.01`
+  (our name).
+* Handle length defaults: 60 frames for NTSC rates, 50 for PAL, 24 for film
+  rates (p.351).
+* Options working now:
+  * Video and audio on same drive(s);
+  * Consolidate/Transcode only linked media;
+  * Skip media files already on the target drive;
+  * Target Video Resolution;
+  * Raster Dimensions: project, source, source 1/4, source 1/16 (p.355);
+  * Convert Audio Bit Depth.
+* Consolidate copies the picture without converting it. That works for DNx
+  (managed media, or linked DNx files at the project's rate). Other media
+  is skipped with a note in the Console: transcode it.
+* Later:
+  * Delete original media files;
+  * Relink selected clips before skipping;
+  * group clips;
+  * converting the sample rate and audio format;
+  * Keep Source's Frame Rate;
+  * source transformations;
+  * Background Process and the Background Queue (p.356–357);
+  * Distributed Processing;
+  * subclips.
+
+### Media database (p.358–359)
+* Read when a project opens. File > Media > Load Media Database and
+  Refresh Media Directories read it again. Refresh only rereads the files
+  that changed (p.358–359).
+* Bins opening, and open bins on a reload, point their offline managed
+  clips at their files wherever they now are.
+* Later (2.4b): Relink > Managed Media (p.361–364), and the Media Tool's
+  media files with Delete Media (p.344–348).
+
+## 18. Still to document
 * Menu order and separators, confirmed against a licensed seat.

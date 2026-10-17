@@ -2,6 +2,7 @@
 
 #include "lumenis/core/branding.h"
 #include "lumenis/core/timecode.h"
+#include "lumenis/media/managed.h"
 
 #include <QButtonGroup>
 #include <QCheckBox>
@@ -136,6 +137,23 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                         }
                     }
                     menu->setCurrentIndex(std::max(menu->findData(current.toString()), 0));
+                    editor = menu;
+                } else if (o.type == QLatin1String("drive")) {
+                    // The media drives; the one with the most space in
+                    // bold, and chosen when the setting names none (p.135).
+                    auto* menu = new QComboBox(row);
+                    const QList<media::MediaDrive> drives = media::mediaDrives();
+                    const int best = media::mostSpace(drives);
+                    for (int i = 0; i < drives.size(); ++i) {
+                        menu->addItem(drives.at(i).name, drives.at(i).root);
+                        if (i == best) {
+                            QFont bold = menu->font();
+                            bold.setBold(true);
+                            menu->setItemData(i, bold, Qt::FontRole);
+                        }
+                    }
+                    const QString chosen = media::chooseDrive(current.toString());
+                    menu->setCurrentIndex(std::max(menu->findData(chosen), 0));
                     editor = menu;
                 } else if (o.type == QLatin1String("info")) {
                     editor = new QLabel(row);

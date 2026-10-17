@@ -66,7 +66,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Get Position Info |  | p.101 | works | ☐ | | |
 | Reveal File |  | p.360 | *later* | ☐ | | |
 | Input > Source Browser |  | p.132 | works | ☐ | | |
-| Input > Import Media |  | p.969 | *later* | ☐ | | |
+| Input > Import Media |  | p.969 | works | ☐ | | |
 | Input > Link |  | p.328 | *later* | ☐ | | |
 | Input > Tape Capture | Ctrl+7 | p.115 | *later* | ☐ | | |
 | Input > Import EDL |  | p.951 | *later* | ☐ | | |
@@ -78,9 +78,9 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Output > Insert Edit Export |  | p.506 | *later* | ☐ | | |
 | Output > Send To > Make New |  | p.866 | *later* | ☐ | | |
 | Output > Send To > Make New BXF Template |  | p.906 | *later* | ☐ | | |
-| Media > Media Creation Settings | Ctrl+5 | p.137 | *later* | ☐ | | |
-| Media > Load Media Database |  | p.104 | *later* | ☐ | | |
-| Media > Refresh Media Directories |  | p.359 | *later* | ☐ | | |
+| Media > Media Creation Settings | Ctrl+5 | p.137 | works | ☐ | | |
+| Media > Load Media Database |  | p.104 | works | ☐ | | |
+| Media > Refresh Media Directories |  | p.359 | works | ☐ | | |
 | Media > Unmount |  | p.344 | *later* | ☐ | | |
 | Interplay Transfer > Clear Status |  | p.1094 | *later* | ☐ | | |
 | Page Setup |  | p.292 | *later* | ☐ | | |
@@ -159,7 +159,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Batch Capture |  | p.179 | *later* | ☐ | | |
 | Batch Import |  | p.1098 | *later* | ☐ | | |
 | Batch Re-import |  | p.230 | *later* | ☐ | | |
-| Consolidate/Transcode |  | p.350 | *later* | ☐ | | |
+| Consolidate/Transcode |  | p.350 | works | ☐ | | |
 | Decompose |  | p.185 | *later* | ☐ | | |
 | Extract DNxHD Data |  | p.975 | *later* | ☐ | | |
 | Group Clips | Ctrl+Shift+G | p.1124 | *later* | ☐ | | |
@@ -312,6 +312,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 208 menu commands, 84 of them working with a project open; the
+* 208 menu commands, 89 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

@@ -79,9 +79,10 @@ private slots:
         // Every setting has a scope and a page, every option a page, and a
         // choice's default is one of its choices (guide ch.33).
         const SettingsSchema& schema = SettingsSchema::builtIn();
-        QCOMPARE(schema.kindNames(SettingsScope::Project), (QStringList{"Audio Project", "General", "Video Display"}));
+        QCOMPARE(schema.kindNames(SettingsScope::Project),
+                 (QStringList{"Audio Project", "General", "Media Creation", "Video Display"}));
         QCOMPARE(schema.kindNames(SettingsScope::User),
-                 (QStringList{"Audio", "Bin", "Composer", "Full Screen Playback", "Interface", "Keyboard", "Link",
+                 (QStringList{"Audio", "Bin", "Composer", "Full Screen Playback", "Import", "Interface", "Keyboard", "Link",
                               "Timeline", "Tool Palette", "Workspace View", "Trim"}));
         QSet<QString> keys;
         for (const SettingKind& k : schema.kinds()) {
@@ -97,7 +98,7 @@ private slots:
                              qPrintable(where));
                     QVERIFY2(!keys.contains(where), qPrintable(where));
                     keys << where;
-                    QVERIFY2(QStringList({"bool", "int", "choice", "timecode", "text", "info"}).contains(o.type),
+                    QVERIFY2(QStringList({"bool", "int", "choice", "timecode", "text", "info", "drive"}).contains(o.type),
                              qPrintable(where));
                     if (o.type == QLatin1String("choice")) {
                         bool found = false;
@@ -217,12 +218,12 @@ private slots:
         // Picture on p.1136: one row per setting; versions under it.
         Settings settings;
         SettingsList list(settings, SettingsScope::User);
-        QCOMPARE(list.topLevelItemCount(), 11);
+        QCOMPARE(list.topLevelItemCount(), 12);
         QCOMPARE(list.topLevelItem(0)->text(SettingsList::kSettingColumn), QStringLiteral("Audio"));
         const int timeline = settings.file(SettingsScope::User).activeIndex("Timeline");
         list.selectEntries({timeline});
         list.duplicateSelection();
-        QTreeWidgetItem* group = list.topLevelItem(7);
+        QTreeWidgetItem* group = list.topLevelItem(8);
         QCOMPARE(group->text(0), QStringLiteral("Timeline"));
         QCOMPARE(group->childCount(), 2);
         QVERIFY(!group->data(0, SettingsList::kEntryRole).isValid());

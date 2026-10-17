@@ -597,3 +597,12 @@ cutthulhu --dump-menus FILE  write the menu bar as JSON ('-' for stdout) and exi
                              with --sample-project, open a temporary project first
                              and add each command's id and whether it works yet
 ```
+
+## Environment variables
+
+* `CUTTHULHU_MODULE_PATH`: folders of extra modules (see `--list-providers`).
+* `LUMENIS_MEDIA_DRIVES`: folders to offer as media drives, besides the
+  volumes, for Import, Consolidate/Transcode and the Media Creation setting.
+  Separate them as `PATH` does (`:` on macOS and Linux, `;` on Windows).
+  Each one gets an `Avid MediaFiles/MXF/<n>` folder when media is made on
+  it. Use it to keep test media off the system drive.

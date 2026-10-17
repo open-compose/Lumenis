@@ -156,6 +156,10 @@ QJsonObject Link::toJson() const {
     for (int n : streamChannels) perStream.append(n);
     o.insert(QStringLiteral("streamChannels"), perStream);
     if (unlinked) o.insert(QStringLiteral("unlinked"), true);
+    if (!mediaId.isEmpty()) {
+        o.insert(QStringLiteral("mediaId"), mediaId);
+        o.insert(QStringLiteral("audioPaths"), QJsonArray::fromStringList(audioPaths));
+    }
     return o;
 }
 
@@ -173,6 +177,8 @@ std::optional<Link> Link::fromJson(const QJsonObject& json) {
     // Links made before this was kept: one stream holds every channel.
     if (l.streamChannels.isEmpty() && l.audioStreams.size() == 1) l.streamChannels << l.channels;
     l.unlinked = json.value(QStringLiteral("unlinked")).toBool();
+    l.mediaId = json.value(QStringLiteral("mediaId")).toString();
+    for (const QJsonValue& v : json.value(QStringLiteral("audioPaths")).toArray()) l.audioPaths << v.toString();
     return l;
 }
 
@@ -184,6 +190,28 @@ std::optional<std::pair<int, int>> Link::channelOf(int track) const {
         k -= streamChannels.at(i);
     }
     return std::nullopt;
+}
+
+QString Link::audioFile(int track) const {
+    // The stream that track is in, and that stream's file.
+    int k = track;
+    for (int i = 0; i < audioStreams.size() && i < streamChannels.size(); ++i) {
+        if (k < streamChannels.at(i)) {
+            const QString p = audioPaths.value(i);
+            return p.isEmpty() ? path : p;
+        }
+        k -= streamChannels.at(i);
+    }
+    return {};
+}
+
+QStringList Link::files() const {
+    QStringList out;
+    if (videoStream >= 0 || audioPaths.isEmpty()) out << file();
+    for (const QString& p : audioPaths) {
+        if (!p.isEmpty() && !out.contains(p)) out << p;
+    }
+    return out;
 }
 
 QString Link::file() const {
@@ -545,7 +573,9 @@ QImage FrameCache::frame(const model::BinItem& item, std::int64_t clipFrame, QSi
 
 bool FrameCache::isOnline(const model::BinItem& item) {
     const auto link = linkOf(item);
-    return link && !link->unlinked && QFileInfo::exists(link->file());
+    if (!link || link->unlinked) return false;
+    const QStringList files = link->files();
+    return std::all_of(files.begin(), files.end(), [](const QString& f) { return QFileInfo::exists(f); });
 }
 
 void FrameCache::clear() {

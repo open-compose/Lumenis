@@ -803,6 +803,7 @@ BinDocument* BinContainer::openBin(const QString& requested) {
     auto bin = model::BinFile::read(path);
     if (!bin) return nullptr;
     bin->name = name;
+    if (binLoader_) binLoader_(*bin);
     auto* doc = new BinDocument(id, path, *bin, this);
     documents_ << doc;
     auto* view = new BinView(*doc, binMenu_);

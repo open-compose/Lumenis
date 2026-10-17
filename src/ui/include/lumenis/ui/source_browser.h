@@ -88,7 +88,7 @@ private:
 };
 
 // File > Input > Source Browser (Editing Guide p.312-318): navigate to
-// media, preview it, and link it into a bin. Import comes with Phase 2.4.
+// media, preview it, and link or import it into a bin (p.213-214).
 class SourceBrowser : public QWidget {
     Q_OBJECT
 
@@ -160,6 +160,12 @@ public:
     void linkSelection();
     // The files Link would link.
     QStringList pathsToLink() const;
+    // Link or Import (p.213): Import makes new media at the resolution
+    // chosen beside it.
+    void setImportMode(bool import);
+    bool isImportMode() const;
+    void setImportResolution(const QString& id);
+    QString importResolution() const;
 
     void save(QSettings& settings) const;
     void restore(QSettings& settings);
@@ -172,12 +178,15 @@ public:
 signals:
     // Link these files into the bin (p.317).
     void linkRequested(const QString& binId, const QStringList& paths);
+    // Import these files into the bin at a resolution (p.214).
+    void importRequested(const QString& binId, const QStringList& paths, const QString& resolution);
     // Link every media file in a folder into a new bin named after it
     // ("Add volume Bin", p.318).
     void volumeBinRequested(const QString& folder);
     // Load these files into the Source monitor without a bin (p.315).
     void loadRequested(const QStringList& paths);
-    // The Settings button: Link settings (p.317).
+    // The Settings button: Link settings (p.317), Import settings when
+    // importing (p.214).
     void settingsRequested();
     // "Close Source Browser after Link or Import" (p.315).
     void closeRequested();
@@ -200,6 +209,8 @@ private:
     void activate(const QModelIndex& index);
     void showMenu(QWidget* view, const QPoint& pos);
     QStringList selectedRows(bool mediaOnly) const;
+    void commit(const QStringList& paths);
+    void updateMode();
 
     QString folder_;
     QStringList history_;
@@ -244,6 +255,8 @@ private:
     QLabel* progressLabel_ = nullptr;
     QComboBox* bins_ = nullptr;
     QPushButton* commit_ = nullptr;
+    QLabel* resolutionLabel_ = nullptr;
+    QComboBox* resolution_ = nullptr;
 };
 
 } // namespace lumenis::ui

@@ -1,6 +1,8 @@
 #include "lumenis/ext/codec.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/link.h"
+#include "lumenis/media/consolidate.h"
+#include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
 #include "lumenis/media/playback.h"
 #include "lumenis/model/sequence.h"
@@ -225,6 +227,277 @@ private slots:
         VideoReader reader;
         QVERIFY(reader.open(path));
         for (int n : {9, 0, 4}) QVERIFY2(near(reader.frame(n), colourOf(n), 14), qPrintable(QString::number(n)));
+    }
+
+    void managedMedia() {
+        // Import/Transcode and Consolidate into Avid MediaFiles (p.348-356):
+        // MXF OP-Atom, a file per track.
+        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        const QString source = dir.filePath(QStringLiteral("Dock Interview.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(25);
+        s.audioCodec = QStringLiteral("pcm_s24le");
+        s.sampleRate = 48000;
+        s.channels = 2;
+        s.startTimecode = QStringLiteral("10:00:00:00");
+        {
+            MediaWriter w;
+            QVERIFY(w.open(source, s));
+            // Left 0.5, right -0.25: a constant level is easy to check.
+            std::vector<float> sound;
+            for (int i = 0; i < 1920; ++i) sound.insert(sound.end(), {0.5f, -0.25f});
+            for (int i = 0; i < 12; ++i) {
+                QVERIFY(w.writeVideo(picture(i, 64, 36)));
+                QVERIFY(w.writeAudio(sound.data(), 1920));
+            }
+            QVERIFY(w.finish());
+        }
+        LinkOptions o;
+        o.editRate = Rational(25);
+        const auto clip = linkClip(*probe(source), o);
+        QVERIFY(clip);
+        QCOMPARE(clip->fields.value(QStringLiteral("Tracks")), QStringLiteral("V1 A1-2"));
+
+        const QString drive = dir.filePath(QStringLiteral("Media 1"));
+        QVERIFY(QDir().mkpath(drive));
+        MediaCreation c;
+        c.raster = QSize(256, 144);
+        c.resolution = *findResolution(QStringLiteral("dnx_lb"));
+        c.videoDrive = drive;
+        c.project = QStringLiteral("Harbor");
+        int calls = 0;
+        c.progress = [&](double) {
+            ++calls;
+            return true;
+        };
+        QString error;
+        const auto made = transcodeClip(*clip, 2, 10, c, &error);
+        QVERIFY2(made, qPrintable(error));
+        QVERIFY(calls > 0);
+        QCOMPARE(made->name, clip->name);
+        QCOMPARE(made->kind, model::BinItemKind::MasterClip);
+        QCOMPARE(made->durationFrames, std::int64_t{8});
+        QCOMPARE(made->fields.value(QStringLiteral("Start")), QStringLiteral("10:00:00:02"));
+        QCOMPARE(made->fields.value(QStringLiteral("End")), QStringLiteral("10:00:00:10"));
+        QCOMPARE(made->fields.value(QStringLiteral("Tracks")), QStringLiteral("V1 A1-2"));
+        QCOMPARE(made->fields.value(QStringLiteral("Video")), QStringLiteral("Avid DNx LB"));
+        QCOMPARE(made->fields.value(QStringLiteral("Source File")), QStringLiteral("Dock Interview.mov"));
+        QVERIFY(!made->fields.contains(QStringLiteral("Plug-In")));
+        const auto link = linkOf(*made);
+        QVERIFY(link && link->isManaged());
+        QCOMPARE(link->audioPaths.size(), 2);
+        // In the MXF "1" folder, one file per track.
+        const QString folder = QDir(drive).filePath(QStringLiteral("Avid MediaFiles/MXF/1"));
+        QCOMPARE(QDir(folder).entryList({QStringLiteral("*.mxf")}, QDir::Files).size(), 3);
+        QCOMPARE(QFileInfo(link->path).absolutePath(), QFileInfo(folder).absoluteFilePath());
+        const auto v1 = probe(link->path);
+        QVERIFY(v1);
+        QCOMPARE(v1->format, QStringLiteral("mxf"));
+        QCOMPARE(v1->firstVideo()->width, 256);
+        QCOMPARE(v1->firstVideo()->length, 8);
+        QCOMPARE(v1->startTimecode, QStringLiteral("10:00:00:02"));
+        const auto file = readMediaFile(link->audioPaths.at(1));
+        QVERIFY(file);
+        QCOMPARE(file->mediaId, link->mediaId);
+        QCOMPARE(file->track, QStringLiteral("A2"));
+        QCOMPARE(file->clipName, clip->name);
+        QCOMPARE(file->project, QStringLiteral("Harbor"));
+
+        // The frames and sound of frames 2-9.
+        FrameCache cache;
+        QVERIFY(cache.isOnline(*made));
+        for (int n : {0, 5, 7}) QVERIFY2(near(cache.frame(*made, n), colourOf(n + 2), 14), qPrintable(QString::number(n)));
+        for (int t = 0; t < 2; ++t) {
+            AudioReader a;
+            QVERIFY(a.open(link->audioFile(t)));
+            QCOMPARE(a.channels(), 1);
+            QCOMPARE(a.sampleRate(), 48000);
+            QCOMPARE(a.info().length, 8 * 1920);
+            const std::vector<float> got = a.samples(5000, 10);
+            QCOMPARE(got.size(), std::size_t(10));
+            QVERIFY(std::abs(got[3] - (t == 0 ? 0.5f : -0.25f)) < 1e-4f);
+        }
+
+        // Cancelled: nothing is left behind.
+        c.progress = [](double) { return false; };
+        QVERIFY(!transcodeClip(*clip, 0, -1, c, &error));
+        QCOMPARE(QDir(folder).entryList({QStringLiteral("*.mxf")}, QDir::Files).size(), 3);
+        c.progress = {};
+
+        // Consolidate copies DNx frame for frame; the linked FFV1 must be
+        // transcoded.
+        QVERIFY(!canConsolidate(*clip));
+        QVERIFY(canConsolidate(*made));
+        const QString drive2 = dir.filePath(QStringLiteral("Media 2"));
+        QVERIFY(QDir().mkpath(drive2));
+        c.videoDrive = drive2;
+        const auto copied = consolidateClip(*made, 1, 5, c, &error);
+        QVERIFY2(copied, qPrintable(error));
+        QCOMPARE(copied->durationFrames, std::int64_t{4});
+        QCOMPARE(copied->fields.value(QStringLiteral("Start")), QStringLiteral("10:00:00:03"));
+        QCOMPARE(copied->fields.value(QStringLiteral("Video")), QStringLiteral("Avid DNx LB"));
+        for (int n : {0, 3}) QCOMPARE(cache.frame(*copied, n), cache.frame(*made, n + 1));
+
+        // The media database finds the files where they are now.
+        MediaDatabase db;
+        db.scan({drive, drive2});
+        QCOMPARE(db.fileCount(), 6);
+        QVERIFY(QFileInfo::exists(QDir(folder).filePath(MediaDatabase::indexName())));
+        const QString moved = QDir(drive2).filePath(QStringLiteral("Avid MediaFiles/MXF/2"));
+        QVERIFY(QDir().mkpath(moved));
+        // Closed first: Windows renames no open file.
+        cache.clear();
+        for (const QString& f : link->files()) QVERIFY(QFile::rename(f, QDir(moved).filePath(QFileInfo(f).fileName())));
+        model::BinItem offline = *made;
+        QVERIFY(!cache.isOnline(offline));
+        db.clear();
+        db.scan({drive, drive2});
+        QCOMPARE(db.fileCount(), 6);
+        QVERIFY(db.resolve(offline));
+        QVERIFY(cache.isOnline(offline));
+        QCOMPARE(QFileInfo(linkOf(offline)->path).absolutePath(), QFileInfo(moved).absoluteFilePath());
+        // New media goes in the highest-numbered folder.
+        QCOMPARE(QFileInfo(mxfFolder(drive2)).fileName(), QStringLiteral("2"));
+
+        // Sound at 44.1 kHz becomes 48 kHz, exactly as long as its frames.
+        const QString wav = dir.filePath(QStringLiteral("cd track.wav"));
+        WriterSettings ws;
+        ws.format = QStringLiteral("wav");
+        ws.audioCodec = QStringLiteral("pcm_s16le");
+        ws.sampleRate = 44100;
+        ws.channels = 1;
+        {
+            MediaWriter w;
+            QVERIFY(w.open(wav, ws));
+            const std::vector<float> level(44100, 0.3f);
+            QVERIFY(w.writeAudio(level.data(), 44100));
+            QVERIFY(w.finish());
+        }
+        const auto audioClip = linkClip(*probe(wav), o);
+        QVERIFY(audioClip);
+        c.bitDepth = 16;
+        const auto music = transcodeClip(*audioClip, 0, -1, c, &error);
+        QVERIFY2(music, qPrintable(error));
+        QCOMPARE(music->kind, model::BinItemKind::AudioClip);
+        QCOMPARE(music->fields.value(QStringLiteral("Audio Bit Depth")), QStringLiteral("16 bit"));
+        AudioReader a;
+        QVERIFY(a.open(linkOf(*music)->path));
+        QCOMPARE(a.info().length, music->durationFrames * 1920);
+        QVERIFY(std::abs(a.samples(20000, 1)[0] - 0.3f) < 2e-3f);
+    }
+
+    void consolidateSequences() {
+        // A sequence keeps only the parts of its clips it uses, with handles,
+        // in new ".new.01" master clips; its segments use them (p.349).
+        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        const QString source = dir.filePath(QStringLiteral("Wide.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(25);
+        QVERIFY(writeVideo(source, s, 40));
+        LinkOptions o;
+        o.editRate = Rational(25);
+        const auto clip = linkClip(*probe(source), o);
+        QVERIFY(clip);
+        QCOMPARE(defaultHandles(Rational(25)), std::int64_t{50});
+        QCOMPARE(defaultHandles(Rational(30000, 1001)), std::int64_t{60});
+        QCOMPARE(defaultHandles(Rational(24000, 1001)), std::int64_t{24});
+        QCOMPARE(numberedName(QStringLiteral("Wide"), QStringLiteral(".new"), {QStringLiteral("Wide.new.01")}),
+                 QStringLiteral("Wide.new.02"));
+
+        model::Sequence sequence = model::Sequence::withDefaultTracks();
+        model::Segment a;
+        a.clipId = clip->id;
+        a.binId = QStringLiteral("bin1");
+        a.name = clip->name;
+        a.sourceTrack = QStringLiteral("V1");
+        a.sourceIn = 10;
+        a.length = 5;
+        model::Segment b = a;
+        b.sourceIn = 20;
+        b.length = 4;
+        sequence.track(QStringLiteral("V1"))->segments = {a, b};
+        model::BinItem seq;
+        seq.id = model::newItemId();
+        seq.kind = model::BinItemKind::Sequence;
+        seq.name = QStringLiteral("Cut 1");
+        seq.editRate = Rational(25);
+        sequence.storeIn(seq);
+
+        ConsolidateOptions options;
+        options.mode = ConsolidateOptions::Mode::Transcode;
+        options.handles = 3;
+        options.creation.raster = QSize(256, 144);
+        options.creation.resolution = *findResolution(QStringLiteral("dnx_lb"));
+        options.creation.videoDrive = dir.path();
+        const ClipLookup lookup = [&](const QString&, const QString& id) -> std::optional<model::BinItem> {
+            if (id == clip->id) return *clip;
+            return std::nullopt;
+        };
+        // Consolidate cannot copy FFV1.
+        options.mode = ConsolidateOptions::Mode::Consolidate;
+        ConsolidateResult r = consolidate({seq}, QStringLiteral("bin1"), lookup, {}, options);
+        QVERIFY(r.added.isEmpty());
+        QCOMPARE(r.skipped.size(), 1);
+
+        options.mode = ConsolidateOptions::Mode::Transcode;
+        r = consolidate({seq}, QStringLiteral("bin1"), lookup, {clip->name}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QCOMPARE(r.added.size(), 1);
+        const model::BinItem made = r.added.first();
+        QCOMPARE(made.name, QStringLiteral("Wide.new.01"));
+        // Frames 7 to 27: 10-24 used, 3 frames either side.
+        QCOMPARE(made.durationFrames, std::int64_t{20});
+        QCOMPARE(r.changed.size(), 1);
+        const model::Sequence after = model::Sequence::fromItem(r.changed.first());
+        const auto& segs = after.track(QStringLiteral("V1"))->segments;
+        QCOMPARE(segs.size(), 2);
+        QCOMPARE(segs.at(0).clipId, made.id);
+        QCOMPARE(segs.at(0).sourceIn, std::int64_t{3});
+        QCOMPARE(segs.at(1).sourceIn, std::int64_t{13});
+        FrameCache cache;
+        QVERIFY(near(cache.frame(made, segs.at(1).sourceIn), colourOf(20), 14));
+
+        // Create new sequence(s): the old one is left alone.
+        options.newSequences = true;
+        r = consolidate({seq}, QStringLiteral("bin1"), lookup, {clip->name, made.name}, options);
+        QCOMPARE(r.changed.size(), 0);
+        QCOMPARE(r.added.size(), 2);
+        QCOMPARE(r.added.at(0).name, QStringLiteral("Wide.new.02"));
+        QCOMPARE(r.added.at(1).name, QStringLiteral("Cut 1.new.01"));
+        QCOMPARE(r.added.at(1).kind, model::BinItemKind::Sequence);
+
+        // A master clip consolidated, keeping its media: ".old" keeps the
+        // old, the clip takes the copy.
+        const model::BinItem managed = made;
+        options.keepMastersLinked = false;
+        options.mode = ConsolidateOptions::Mode::Consolidate;
+        const QString other = dir.filePath(QStringLiteral("Other"));
+        QVERIFY(QDir().mkpath(other));
+        options.creation.videoDrive = other;
+        r = consolidate({managed}, QStringLiteral("bin1"), lookup, {managed.name}, options);
+        QVERIFY2(r.error.isEmpty(), qPrintable(r.error));
+        QCOMPARE(r.changed.size(), 1);
+        QCOMPARE(r.added.size(), 1);
+        QCOMPARE(r.added.first().name, QStringLiteral("Wide.new.01.old.01"));
+        QCOMPARE(r.added.first().link, managed.link);
+        QVERIFY(linkOf(r.changed.first())->path.startsWith(other));
+        // Skip media already on the target drive.
+        options.skipOnTarget = true;
+        r = consolidate(r.changed, QStringLiteral("bin1"), lookup, {}, options);
+        QVERIFY(r.added.isEmpty());
+        QCOMPARE(r.skipped.size(), 1);
     }
 
     void provider() {

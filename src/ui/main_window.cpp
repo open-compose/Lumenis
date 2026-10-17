@@ -1,5 +1,6 @@
 #include "lumenis/ui/main_window.h"
 
+#include "lumenis/media/consolidate.h"
 #include "lumenis/media/playback.h"
 
 #include "lumenis/core/branding.h"
@@ -16,6 +17,7 @@
 #include "lumenis/ui/media_tool.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
+#include "lumenis/ui/consolidate_dialog.h"
 #include "lumenis/ui/keyboard_map.h"
 #include "lumenis/ui/keyboard_palette.h"
 #include "lumenis/ui/marker_dialogs.h"
@@ -37,6 +39,7 @@
 #include <QDir>
 #include <QDirIterator>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QInputDialog>
 #include <QHBoxLayout>
 #include <QJsonArray>
@@ -47,6 +50,7 @@
 #include <QPushButton>
 #include <QStorageInfo>
 #include <QPixmap>
+#include <QProgressDialog>
 #include <QTimer>
 #include <QToolButton>
 #include <QToolTip>
@@ -244,6 +248,16 @@ void MainWindow::createPanels() {
     connect(composer_, &Composer::filesDropped, this, [this](MonitorId monitor, const QStringList& paths) {
         loadFiles(paths, monitor == MonitorId::Record);
     });
+    // Bins opening find their managed clips' media in the database (p.358).
+    binContainer_->setBinLoader([this](model::Bin& bin) {
+        for (model::BinItem& item : bin.items) {
+            const auto link = media::linkOf(item);
+            if (!link || !link->isManaged() || link->unlinked) continue;
+            const QStringList files = link->files();
+            if (std::all_of(files.begin(), files.end(), [](const QString& f) { return QFileInfo::exists(f); })) continue;
+            mediaDb_.resolve(item);
+        }
+    });
     connect(binContainer_, &BinContainer::filesDropped, this,
             [this](const QString& binId, const QStringList& paths) { linkFiles(binId, paths); });
     keyboard_ = std::make_unique<KeyboardMap>();
@@ -314,6 +328,8 @@ void MainWindow::setProject(const model::ProjectEntry& project) {
     timeline_->history().clear();
     projectOpened_ = QDateTime::currentDateTimeUtc();
     installProjectHandlers(true);
+    // The media database, read as the project opens (ROADMAP 2.4).
+    loadMediaDatabase();
 }
 
 QList<model::BinItem> MainWindow::projectItems(int* binCount) const {
@@ -717,12 +733,18 @@ void MainWindow::createTools() {
     panels_->addPanel(browserPanel);
     connect(sourceBrowser_, &SourceBrowser::linkRequested, this,
             [this](const QString& binId, const QStringList& paths) { linkFiles(binId, paths); });
+    connect(sourceBrowser_, &SourceBrowser::importRequested, this,
+            [this](const QString& binId, const QStringList& paths, const QString& resolution) {
+                importFiles(binId, paths, resolution);
+            });
     connect(sourceBrowser_, &SourceBrowser::volumeBinRequested, this, [this](const QString& folder) { linkVolume(folder); });
     connect(sourceBrowser_, &SourceBrowser::loadRequested, this, [this](const QStringList& paths) { loadFiles(paths); });
     connect(sourceBrowser_, &SourceBrowser::settingsRequested, this, [this] {
-        // The Settings button opens the Link settings (p.317).
+        // The Settings button opens the Link settings (p.317), or the
+        // Import settings when importing (p.214).
         const model::SettingsFile& f = settings_->file(model::SettingsScope::User);
-        const int i = f.activeIndex(QStringLiteral("Link"));
+        const bool import = sourceBrowser_ && sourceBrowser_->isImportMode();
+        const int i = f.activeIndex(import ? QStringLiteral("Import") : QStringLiteral("Link"));
         if (SettingsWindow* w = showSettings(); w && i >= 0) {
             w->showTab(SettingsWindow::Tab::User);
             w->list(model::SettingsScope::User)->openEntry(i);
@@ -975,7 +997,10 @@ void MainWindow::relinkLinkedMedia() {
     QList<LinkedMediaDialog::Clip> clips;
     auto add = [&](const BinDocument* doc, const QStringList& ids) {
         for (const model::BinItem& item : doc->bin().items) {
-            if (media::isLinked(item) && (ids.isEmpty() || ids.contains(item.id))) clips.append({doc->nodeId(), item});
+            // Linked media only: managed media relinks through its
+            // database (p.361).
+            const auto link = media::linkOf(item);
+            if (link && !link->isManaged() && (ids.isEmpty() || ids.contains(item.id))) clips.append({doc->nodeId(), item});
         }
     };
     if (BinView* view = binContainer_->activeView(); view && !view->selectedIds().isEmpty()) {
@@ -1018,6 +1043,177 @@ int MainWindow::unlinkSelection() {
         ++unlinked;
     }
     return unlinked;
+}
+
+// ---- Managed media (Phase 2.4)
+
+namespace {
+
+// A progress dialog for making media, and the callback that moves it; it
+// returns false when Cancel was clicked.
+std::function<bool(double)> progressOn(QProgressDialog& dialog) {
+    dialog.setWindowModality(Qt::WindowModal);
+    dialog.setMinimumDuration(500);
+    dialog.setRange(0, 1000);
+    dialog.setValue(0);
+    return [&dialog](double done) {
+        dialog.setValue(static_cast<int>(done * 1000));
+        QCoreApplication::processEvents();
+        return !dialog.wasCanceled();
+    };
+}
+
+} // namespace
+
+media::MediaCreation MainWindow::mediaCreation(const QString& tab) const {
+    media::MediaCreation c;
+    const QString kind = QStringLiteral("Media Creation");
+    if (project_) {
+        c.raster = QSize(project_->settings.format.width, project_->settings.format.height);
+        c.project = project_->settings.name;
+    }
+    if (const media::Resolution* r = media::findResolution(settings_->text(kind, tab + QStringLiteral("Resolution")))) {
+        c.resolution = *r;
+    }
+    c.videoDrive = media::chooseDrive(settings_->text(kind, tab + QStringLiteral("VideoDrive")));
+    c.audioDrive = media::chooseDrive(settings_->text(kind, tab + QStringLiteral("AudioDrive")));
+    c.bitDepth = settings_->text(QStringLiteral("Audio Project"), QStringLiteral("bitDepth")).toInt() == 16 ? 16 : 24;
+    c.when = QDateTime::currentDateTimeUtc();
+    return c;
+}
+
+void MainWindow::loadMediaDatabase() {
+    // Every drive's Avid MediaFiles folder (p.358-359).
+    QStringList roots;
+    for (const media::MediaDrive& d : media::mediaDrives()) roots << d.root;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    mediaDb_.clear();
+    mediaDb_.scan(roots);
+    QApplication::restoreOverrideCursor();
+    // Open bins' managed clips that are offline find their files.
+    int found = 0;
+    for (BinDocument* doc : binContainer_->openDocuments()) {
+        for (const model::BinItem& item : doc->bin().items) {
+            const auto link = media::linkOf(item);
+            if (!link || !link->isManaged() || !frames_->isOffline(item)) continue;
+            model::BinItem fixed = item;
+            if (mediaDb_.resolve(fixed) && fixed.link != item.link) {
+                storeClip(doc->nodeId(), fixed);
+                ++found;
+            }
+        }
+    }
+    if (found > 0) frames_->clear();
+    ConsoleLog::instance().append(tr("Media database: %n media file(s) on the drives.", "", mediaDb_.fileCount()));
+}
+
+QStringList MainWindow::importFiles(const QString& binId, const QStringList& paths, const QString& resolution) {
+    BinDocument* doc = binContainer_->document(binId);
+    if (!doc) doc = binContainer_->openBin(binId);
+    if (!doc || paths.isEmpty()) return {};
+    const media::LinkOptions options = linkOptions();
+    // Import settings (p.1196-1197): numbered stills as one clip, and how
+    // long a single picture lasts.
+    QList<model::BinItem> clips;
+    int skipped = 0;
+    if (settings_->flag(QStringLiteral("Import"), QStringLiteral("autodetectSequences"))) {
+        clips = media::linkFiles(paths, options, &skipped);
+    } else {
+        for (const QString& path : paths) {
+            const auto info = media::probe(path);
+            const auto clip = info ? media::linkClip(*info, options) : std::nullopt;
+            if (clip) {
+                clips << *clip;
+            } else {
+                ++skipped;
+            }
+        }
+    }
+    const int seconds = std::max(settings_->number(QStringLiteral("Import"), QStringLiteral("frameImportDuration")), 1);
+    media::MediaCreation creation = mediaCreation(QStringLiteral("import"));
+    if (const media::Resolution* r = media::findResolution(resolution)) creation.resolution = *r;
+    QProgressDialog progress(tr("Importing..."), tr("Cancel"), 0, 1000, this);
+    progress.setObjectName(QStringLiteral("importProgress"));
+    QStringList ids;
+    for (int i = 0; i < clips.size(); ++i) {
+        model::BinItem clip = clips.at(i);
+        const auto link = media::linkOf(clip);
+        if (link && link->videoStream >= 0 && link->channels == 0 && link->frames == 1) {
+            clip.durationFrames = std::max<std::int64_t>(
+                1, seconds * options.editRate.num() / std::max<std::int64_t>(options.editRate.den(), 1));
+        }
+        progress.setLabelText(tr("Importing %1 (%2 of %3)").arg(clip.name).arg(i + 1).arg(clips.size()));
+        const std::function<bool(double)> step = progressOn(progress);
+        creation.progress = [&](double done) { return step((i + done) / static_cast<double>(clips.size())); };
+        QString error;
+        const auto made = media::transcodeClip(clip, 0, -1, creation, &error);
+        if (!made) {
+            ConsoleLog::instance().append(tr("Import: %1: %2").arg(clip.name, error));
+            if (progress.wasCanceled()) break;
+            continue;
+        }
+        doc->addItem(*made);
+        ids << made->id;
+    }
+    progress.reset();
+    if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
+    if (skipped > 0) ConsoleLog::instance().append(tr("Import: %n file(s) are not media that can be imported.", "", skipped));
+    return ids;
+}
+
+void MainWindow::consolidateTranscode() {
+    BinView* view = binContainer_->activeView();
+    if (!view || view->selectedIds().isEmpty() || !project_) return;
+    BinDocument& doc = view->document();
+    QList<model::BinItem> selection;
+    bool sequences = false;
+    bool masters = false;
+    for (const QString& id : view->selectedIds()) {
+        if (const model::BinItem* item = doc.bin().item(id)) {
+            selection << *item;
+            sequences = sequences || item->kind == model::BinItemKind::Sequence;
+            masters = masters || item->kind == model::BinItemKind::MasterClip || item->kind == model::BinItemKind::AudioClip;
+        }
+    }
+    ConsolidateDialog dialog(project_->settings.format.editRate, sequences, this);
+    const media::MediaCreation transcode = mediaCreation(QStringLiteral("transcode"));
+    dialog.setDrive(transcode.videoDrive);
+    dialog.setResolution(transcode.resolution.id);
+    dialog.setBitDepth(transcode.bitDepth);
+    const bool ok = consolidateHook_ ? consolidateHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok) return;
+    media::ConsolidateOptions options = dialog.options();
+    if (options.mode == media::ConsolidateOptions::Mode::Consolidate && masters) {
+        // The Copying Media Files dialog (p.352).
+        const std::optional<bool> keep =
+            copyingMediaHook_ ? copyingMediaHook_() : ConsolidateDialog::askKeepMastersLinked(this);
+        if (!keep) return;
+        options.keepMastersLinked = *keep;
+    }
+    options.creation.raster = transcode.raster;
+    options.creation.project = transcode.project;
+    options.creation.when = QDateTime::currentDateTimeUtc();
+    QProgressDialog progress(dialog.isTranscode() ? tr("Transcoding...") : tr("Consolidating..."), tr("Cancel"), 0, 1000,
+                             this);
+    progress.setObjectName(QStringLiteral("consolidateProgress"));
+    options.creation.progress = progressOn(progress);
+    QStringList taken;
+    for (const model::BinItem& item : doc.bin().items) taken << item.name;
+    const media::ConsolidateResult result =
+        media::consolidate(selection, doc.nodeId(), [this](const QString& binId, const QString& clipId) {
+            return composer_->resolve(binId, clipId);
+        }, taken, options);
+    progress.reset();
+    QStringList ids;
+    for (const model::BinItem& item : result.added) {
+        doc.addItem(item);
+        ids << item.id;
+    }
+    for (const model::BinItem& item : result.changed) storeClip(doc.nodeId(), item);
+    if (!ids.isEmpty()) view->selectIds(ids);
+    for (const QString& why : result.skipped) ConsoleLog::instance().append(tr("Consolidate/Transcode: %1").arg(why));
+    if (!result.error.isEmpty()) ConsoleLog::instance().append(tr("Consolidate/Transcode: %1").arg(result.error));
+    frames_->clear();
 }
 
 QString MainWindow::linkVolume(const QString& folder) {
@@ -1231,6 +1427,22 @@ void MainWindow::installPanelHandlers() {
     // File > Input > Source Browser, Tools > Source Browser (p.315, p.327).
     handle("file.input.source_browser", [this] { showSourceBrowser(); });
     handle("clip.relink.linked_media", [this] { relinkLinkedMedia(); });
+    // Managed media (p.213, p.134, p.348-359).
+    handle("file.input.import_media", [this] {
+        showSourceBrowser();
+        if (SourceBrowser* browser = sourceBrowser_.data()) browser->setImportMode(true);
+    });
+    handle("clip.consolidate_transcode", [this] { consolidateTranscode(); });
+    handle("file.media.load_media_database", [this] { loadMediaDatabase(); });
+    handle("file.media.refresh_media_directories", [this] { loadMediaDatabase(); });
+    handle("file.media.media_creation_settings", [this] {
+        const model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
+        const int i = f.activeIndex(QStringLiteral("Media Creation"));
+        if (SettingsWindow* w = showSettings(); w && i >= 0) {
+            w->showTab(SettingsWindow::Tab::Project);
+            w->list(model::SettingsScope::Project)->openEntry(i);
+        }
+    });
     // Composer > Full Screen Playback (p.391), and again to leave it.
     handle("composer.full_screen_playback", [this] { toggleFullScreen(); });
     // The Digital Audio Scrub button (Play tab, p.676) turns scrubbing on

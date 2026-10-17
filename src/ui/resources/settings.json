@@ -1,5 +1,5 @@
 {
-  "comment": "The settings in the Settings window (guide ch.33) and the options of their dialog boxes, with the pages they come from. scope: project, user. Option types: bool, int, choice (style radio or menu), timecode, text, info (read-only). A setting with 'opens' has no dialog: double-clicking it opens that tool (the Tool Palette, p.392, p.1221). 'later' options are shown but cannot be changed yet; their feature comes in a later phase. Defaults the guide does not give are ours.",
+  "comment": "The settings in the Settings window (guide ch.33) and the options of their dialog boxes, with the pages they come from. scope: project, user. Option types: bool, int, choice (style radio or menu), timecode, text, info (read-only), drive (a media drive, filled in when the dialog opens; empty for the one with the most space). A setting with 'opens' has no dialog: double-clicking it opens that tool (the Tool Palette, p.392, p.1221). 'later' options are shown but cannot be changed yet; their feature comes in a later phase. Defaults the guide does not give are ours.",
   "settings": [
     {
       "kind": "Audio Project",
@@ -11,7 +11,7 @@
           "options": [
             {"key": "sampleRate", "type": "choice", "style": "menu", "label": "Sample Rate", "default": "48000", "page": 1148, "later": true,
              "choices": [{"value": "44100", "label": "44.1 kHz"}, {"value": "48000", "label": "48 kHz"}, {"value": "96000", "label": "96 kHz"}]},
-            {"key": "bitDepth", "type": "choice", "style": "radio", "label": "Bit Depth", "default": "24", "page": 1148, "later": true,
+            {"key": "bitDepth", "type": "choice", "style": "radio", "label": "Bit Depth", "default": "24", "page": 1148,
              "choices": [{"value": "16", "label": "16 Bit"}, {"value": "24", "label": "24 Bit"}]},
             {"key": "convertSampleRates", "type": "choice", "style": "menu", "label": "Convert Sample Rates When Playing", "default": "never", "page": 1148, "later": true,
              "choices": [{"value": "never", "label": "Never"}, {"value": "always", "label": "Always"}]},
@@ -150,6 +150,59 @@
       ]
     },
     {
+      "kind": "Import",
+      "scope": "user",
+      "page": 1194,
+      "tabs": [
+        {
+          "name": "Image",
+          "options": [
+            {"key": "imageSize", "type": "choice", "style": "radio", "label": "Image Size Adjustment", "default": "fit", "page": 1194,
+             "choices": [{"value": "current", "label": "Image sized for current format", "later": true}, {"value": "cropPad", "label": "Crop/Pad for DV scan line difference", "later": true}, {"value": "noResize", "label": "Do not resize smaller images", "later": true}, {"value": "fit", "label": "Resize image to fit format raster"}]},
+            {"key": "colorScaling", "type": "choice", "style": "radio", "label": "Color Scaling", "default": "legal", "page": 1195,
+             "choices": [{"value": "legal", "label": "Do not modify, treat as Legal Range"}, {"value": "full", "label": "Scale from Full Range to Legal Range", "later": true}]},
+            {"key": "alphaChannel", "type": "choice", "style": "radio", "label": "Alpha Channel", "default": "ignore", "page": 1196,
+             "choices": [{"value": "invert", "label": "Invert on import (white = opaque)", "later": true}, {"value": "noInvert", "label": "Do not invert (black = opaque)", "later": true}, {"value": "ignore", "label": "Ignore"}]},
+            {"key": "frameImportDuration", "type": "int", "label": "Frame Import Duration", "suffix": "seconds", "min": 1, "max": 3600, "default": 10, "page": 1196},
+            {"key": "autodetectSequences", "type": "bool", "label": "Autodetect Sequentially Numbered Files", "default": true, "page": 1197}
+          ]
+        },
+        {
+          "name": "OMFI/AAF",
+          "options": [
+            {"key": "omfResolution", "type": "choice", "style": "radio", "label": "Resolution", "default": "source", "page": 1197, "later": true,
+             "choices": [{"value": "source", "label": "Use the source file's resolution."}, {"value": "current", "label": "Use the current import resolution."}, {"value": "ask", "label": "Ask me to set the resolution for each file that is different from the current import resolution setting."}]}
+          ]
+        },
+        {
+          "name": "Shot Log",
+          "options": [
+            {"key": "shotLogEvents", "type": "choice", "style": "radio", "label": "", "default": "asLogged", "page": 1197, "later": true,
+             "choices": [{"value": "asLogged", "label": "Maintain events as logged."}, {"value": "scene", "label": "Combine events based on scene and automatically create subclips."}, {"value": "camroll", "label": "Combine events based on camera roll and automatically create subclips."}, {"value": "sources", "label": "Merge events with known sources and automatically create subclips."}, {"value": "masters", "label": "Merge events with known master clips."}]}
+          ]
+        },
+        {
+          "name": "Audio",
+          "options": [
+            {"key": "convertSampleRate", "type": "bool", "label": "Sample rate convert source sample rate to project sample rate", "default": true, "page": 1198, "later": true},
+            {"key": "skipPullRates", "type": "bool", "label": "Do not convert sources with pullup or pulldown rates", "default": true, "page": 1198, "later": true},
+            {"key": "convertBitDepth", "type": "bool", "label": "Convert source bit depth to project bit depth", "default": false, "page": 1198, "later": true},
+            {"key": "applyGain", "type": "bool", "label": "Apply attenuation/gain effect on import", "default": false, "page": 1198, "later": true},
+            {"key": "centerPanMono", "type": "bool", "label": "Automatically center pan monophonic clips", "default": false, "page": 1198, "later": true},
+            {"key": "autodetectBwfGroups", "type": "bool", "label": "Autodetect Broadcast Wave Monophonic Groups", "default": false, "page": 1199, "later": true},
+            {"key": "bwfAlignment", "type": "bool", "label": "Subframe Alignment to Broadcast WAV Start Time", "default": false, "page": 1199, "later": true}
+          ]
+        },
+        {
+          "name": "XDCAM",
+          "options": [
+            {"key": "xdcamBoth", "type": "bool", "label": "Force import of both Proxy & High-resolution", "default": false, "page": 1199, "later": true},
+            {"key": "xdcamGoodShots", "type": "bool", "label": "Only import clips with Good Shot Flag", "default": false, "page": 1199, "later": true}
+          ]
+        }
+      ]
+    },
+    {
       "kind": "General",
       "scope": "project",
       "page": 1191,
@@ -167,6 +220,84 @@
             {"key": "windowsFileNames", "type": "bool", "label": "Use Windows compatible file names", "default": false, "page": 1192, "later": true},
             {"key": "generateLtc", "type": "bool", "label": "Generate LTC on Playback", "default": false, "page": 1192, "later": true},
             {"key": "lowerEditTimebase", "type": "bool", "label": "Project Default: Use lower edit timebase in high frame rate projects.", "default": false, "page": 1192, "later": true}
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "Media Creation",
+      "scope": "project",
+      "page": 1206,
+      "tabs": [
+        {
+          "name": "Capture",
+          "options": [
+            {"key": "captureResolution", "type": "choice", "style": "menu", "label": "Video Resolution", "default": "dnx_hq", "page": 1207, "later": true,
+             "choices": [{"value": "dnx_lb", "label": "Avid DNx LB"}, {"value": "dnx_sq", "label": "Avid DNx SQ"}, {"value": "dnx_hq", "label": "Avid DNx HQ"}, {"value": "dnx_hqx", "label": "Avid DNx HQX"}, {"value": "dnx_444", "label": "Avid DNx 444"}]},
+            {"key": "captureVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207, "later": true},
+            {"key": "captureAudioDrive", "type": "drive", "label": "Audio Drive", "default": "", "page": 1207, "later": true}
+          ]
+        },
+        {
+          "name": "Titles",
+          "options": [
+            {"key": "titlesResolution", "type": "choice", "style": "menu", "label": "Video Resolution", "default": "dnx_hq", "page": 1207, "later": true,
+             "choices": [{"value": "dnx_lb", "label": "Avid DNx LB"}, {"value": "dnx_sq", "label": "Avid DNx SQ"}, {"value": "dnx_hq", "label": "Avid DNx HQ"}, {"value": "dnx_hqx", "label": "Avid DNx HQX"}, {"value": "dnx_444", "label": "Avid DNx 444"}]},
+            {"key": "titlesVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207, "later": true}
+          ]
+        },
+        {
+          "name": "Import",
+          "options": [
+            {"key": "importResolution", "type": "choice", "style": "menu", "label": "Video Resolution", "default": "dnx_hq", "page": 1207,
+             "choices": [{"value": "dnx_lb", "label": "Avid DNx LB"}, {"value": "dnx_sq", "label": "Avid DNx SQ"}, {"value": "dnx_hq", "label": "Avid DNx HQ"}, {"value": "dnx_hqx", "label": "Avid DNx HQX"}, {"value": "dnx_444", "label": "Avid DNx 444"}]},
+            {"key": "importVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207},
+            {"key": "importAudioDrive", "type": "drive", "label": "Audio Drive", "default": "", "page": 1207}
+          ]
+        },
+        {
+          "name": "Mixdown & Transcode",
+          "options": [
+            {"key": "transcodeResolution", "type": "choice", "style": "menu", "label": "Video Resolution", "default": "dnx_hq", "page": 1207,
+             "choices": [{"value": "dnx_lb", "label": "Avid DNx LB"}, {"value": "dnx_sq", "label": "Avid DNx SQ"}, {"value": "dnx_hq", "label": "Avid DNx HQ"}, {"value": "dnx_hqx", "label": "Avid DNx HQX"}, {"value": "dnx_444", "label": "Avid DNx 444"}]},
+            {"key": "transcodeVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207},
+            {"key": "transcodeAudioDrive", "type": "drive", "label": "Audio Drive", "default": "", "page": 1207}
+          ]
+        },
+        {
+          "name": "Motion Effects",
+          "options": [
+            {"key": "motionEffectsVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207, "later": true}
+          ]
+        },
+        {
+          "name": "Render",
+          "options": [
+            {"key": "renderResolution", "type": "choice", "style": "menu", "label": "Video Resolution", "default": "dnx_hq", "page": 1207, "later": true,
+             "choices": [{"value": "dnx_lb", "label": "Avid DNx LB"}, {"value": "dnx_sq", "label": "Avid DNx SQ"}, {"value": "dnx_hq", "label": "Avid DNx HQ"}, {"value": "dnx_hqx", "label": "Avid DNx HQX"}, {"value": "dnx_444", "label": "Avid DNx 444"}]},
+            {"key": "renderVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207, "later": true},
+            {"key": "renderAudioDrive", "type": "drive", "label": "Audio Drive", "default": "", "page": 1207, "later": true},
+            {"key": "renderEffectsProcessing", "type": "choice", "style": "menu", "label": "Effects Processing", "default": "automatic", "page": 1208, "later": true,
+             "choices": [{"value": "8bit", "label": "8-bit"}, {"value": "16bit", "label": "16-bit"}, {"value": "automatic", "label": "Automatic"}]},
+            {"key": "saveAfterRender", "type": "bool", "label": "Save after Render", "default": false, "page": 1208, "later": true}
+          ]
+        },
+        {
+          "name": "Media Type",
+          "options": [
+            {"key": "videoWrapper", "type": "choice", "style": "radio", "label": "Video Wrapper Format", "default": "opatom", "page": 1209,
+             "choices": [{"value": "op1a", "label": "MXF OP1a", "later": true}, {"value": "opatom", "label": "Avid OP-Atom"}, {"value": "omf", "label": "OMF", "later": true}]},
+            {"key": "audioWrapper", "type": "choice", "style": "radio", "label": "Audio Wrapper Format", "default": "pcmOpatom", "page": 1209,
+             "choices": [{"value": "pcmOp1a", "label": "PCM (MXF OP1a)", "later": true}, {"value": "pcmOpatom", "label": "PCM (Avid OP-Atom)"}, {"value": "wave", "label": "WAVE (OMF)", "later": true}, {"value": "aiff", "label": "AIFF-C (OMF)", "later": true}]}
+          ]
+        },
+        {
+          "name": "Drive Filtering & Indexing",
+          "options": [
+            {"key": "filterNetworkDrives", "type": "bool", "label": "Filter Network Drives Based on Resolution", "default": false, "page": 1207, "later": true},
+            {"key": "filterSystemDrive", "type": "bool", "label": "Filter Out System Drive", "default": false, "page": 1207, "later": true},
+            {"key": "filterLaunchDrive", "type": "bool", "label": "Filter Out Launch Drive", "default": false, "page": 1207, "later": true},
+            {"key": "autoIndex", "type": "bool", "label": "Auto-index local drives as they come online (using filtering rules)", "default": false, "page": 1207, "later": true}
           ]
         }
       ]

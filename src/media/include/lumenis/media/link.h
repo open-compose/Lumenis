@@ -41,11 +41,22 @@ struct Link {
     // Clip > Modify > Unlink Media (p.368): the clip shows Media Offline
     // until it is relinked.
     bool unlinked = false;
+    // Managed media (Avid MediaFiles, Editing Guide ch.12; media/managed.h):
+    // every track its own file. `path` is the picture's (or, without one,
+    // A1's); audioPaths holds each of audioStreams' files. The id is the
+    // clip's in the media files, by which the media database finds them.
+    QStringList audioPaths;
+    QString mediaId;
+    bool isManaged() const { return !mediaId.isEmpty(); }
 
     // The file to look for: the path, or a sequence's first file.
     QString file() const;
+    // Every file the clip's media is in.
+    QStringList files() const;
     // The stream and channel of the clip's audio track `track` (0 for A1).
     std::optional<std::pair<int, int>> channelOf(int track) const;
+    // The file that track is in.
+    QString audioFile(int track) const;
 
     // The file's frame for frame `clipFrame` of a clip at `clipRate`.
     std::int64_t fileFrame(std::int64_t clipFrame, const Rational& clipRate) const;

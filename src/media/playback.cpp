@@ -47,11 +47,12 @@ namespace {
 // A clip's audio track `track` (0 for A1) as a piece, if it has media.
 std::optional<AudioPiece> pieceFor(const model::BinItem& clip, int track) {
     const auto link = linkOf(clip);
-    if (!link || link->unlinked || !QFileInfo::exists(link->file())) return std::nullopt;
+    if (!link || link->unlinked) return std::nullopt;
     const auto channel = link->channelOf(track);
     if (!channel) return std::nullopt;
     AudioPiece p;
-    p.path = link->path;
+    p.path = link->audioFile(track);
+    if (!QFileInfo::exists(p.path)) return std::nullopt;
     p.stream = channel->first;
     p.channel = channel->second;
     return p;

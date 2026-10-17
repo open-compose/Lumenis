@@ -2,9 +2,13 @@ add_library(lumenis_media STATIC
     media.cpp
     link.cpp
     playback.cpp
+    managed.cpp
+    consolidate.cpp
     include/lumenis/media/media.h
     include/lumenis/media/link.h
     include/lumenis/media/playback.h
+    include/lumenis/media/managed.h
+    include/lumenis/media/consolidate.h
 )
 add_library(lumenis::media ALIAS lumenis_media)
 

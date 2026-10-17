@@ -141,10 +141,18 @@ done:
   - the Video Quality Menu button.
 2.3b is done: smooth and digital audio scrub, Full Screen Playback
 (`full_screen.*`), the Audio, Full Screen Playback and Video Display
-settings, dropped-frame counts (`Composer::playStats`). Next is 2.4, Avid
-MediaFiles (ROADMAP).
+settings, dropped-frame counts (`Composer::playStats`).
+2.4a, managed media, is done:
+  - MXF OP-Atom media in `Avid MediaFiles/MXF/<n>/` and the media database
+    (`src/media/managed.*`);
+  - Consolidate/Transcode (`src/media/consolidate.*`,
+    `consolidate_dialog.*`) and Import through the Source Browser;
+  - the Media Creation and Import settings. Test drives come from
+    `media::setExtraMediaDrives` or `LUMENIS_MEDIA_DRIVES`.
+Next is 2.4b: Relink > Managed Media, Media Tool files and Delete Media,
+the Background Queue (ROADMAP).
 
-Spec sections 3, 4, 7, 11, 12, 13, 14 and 15 list details left for later.
+Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 
 Panels are our own framework, not QDockWidget, because Qt cannot draw
 vertical title bars, green drop zones or Alt-drag tabbing. Custom-painted

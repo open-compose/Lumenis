@@ -7,6 +7,7 @@ add_library(lumenis_ui STATIC
     bin_view.cpp
     button_mapping.cpp
     composer.cpp
+    consolidate_dialog.cpp
     effect_editor.cpp
     effect_palette.cpp
     capture.cpp
@@ -40,6 +41,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/bin_view.h
     include/lumenis/ui/button_mapping.h
     include/lumenis/ui/composer.h
+    include/lumenis/ui/consolidate_dialog.h
     include/lumenis/ui/effect_editor.h
     include/lumenis/ui/effect_palette.h
     include/lumenis/ui/capture.h

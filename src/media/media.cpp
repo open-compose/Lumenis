@@ -299,6 +299,9 @@ std::optional<MediaInfo> probe(const QString& path, QString* error) {
     if (in->duration > 0) info.durationSeconds = static_cast<double>(in->duration) / AV_TIME_BASE;
     info.startTimecode = metadata(in->metadata, "timecode");
     info.reelName = metadata(in->metadata, "reel_name");
+    for (const AVDictionaryEntry* e = nullptr; (e = av_dict_get(in->metadata, "", e, AV_DICT_IGNORE_SUFFIX));) {
+        info.metadata.insert(QString::fromUtf8(e->key), QString::fromUtf8(e->value));
+    }
     for (unsigned i = 0; i < in->nb_streams; ++i) {
         const AVStream* st = in->streams[i];
         info.streams.push_back(describe(in.get(), st));
@@ -826,6 +829,10 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
         return failed(QStringLiteral("unknown format %1").arg(s.format));
     }
     if (!s.startTimecode.isEmpty()) av_dict_set(&d.out->metadata, "timecode", s.startTimecode.toUtf8().constData(), 0);
+    if (!s.reelName.isEmpty()) av_dict_set(&d.out->metadata, "reel_name", s.reelName.toUtf8().constData(), 0);
+    for (const auto& [key, value] : s.metadata) {
+        av_dict_set(&d.out->metadata, key.toUtf8().constData(), value.toUtf8().constData(), 0);
+    }
     const bool globalHeader = (d.out->oformat->flags & AVFMT_GLOBALHEADER) != 0;
 
     if (!s.videoCodec.isEmpty()) {
@@ -900,7 +907,12 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
         const int rc = avio_open(&d.out->pb, file.constData(), AVIO_FLAG_WRITE);
         if (rc < 0) return failed(errorText(rc));
     }
-    const int rc = avformat_write_header(d.out, nullptr);
+    AVDictionary* options = nullptr;
+    for (const auto& [key, value] : s.formatOptions) {
+        av_dict_set(&options, key.toUtf8().constData(), value.toUtf8().constData(), 0);
+    }
+    const int rc = avformat_write_header(d.out, &options);
+    av_dict_free(&options);
     if (rc < 0) return failed(QStringLiteral("cannot write the header: %1").arg(errorText(rc)));
     d.headerWritten = true;
     d.packet = av_packet_alloc();
@@ -962,6 +974,147 @@ bool MediaWriter::finish(QString* error) {
     // Close the file now.
     if (d.out && !(d.out->oformat->flags & AVFMT_NOFILE)) avio_closep(&d.out->pb);
     return ok;
+}
+
+// ---------------------------------------------------------------- Resampler
+
+struct Resampler::Impl {
+    SwrContext* swr = nullptr;
+    int channels = 0;
+    int from = 0;
+    int to = 0;
+    ~Impl() { swr_free(&swr); }
+
+    std::vector<float> convert(const float* samples, int count) {
+        std::vector<float> out;
+        if (!swr) return out;
+        const int room = swr_get_out_samples(swr, count);
+        if (room <= 0) return out;
+        out.resize(static_cast<std::size_t>(room) * static_cast<std::size_t>(channels));
+        std::uint8_t* o[1] = {reinterpret_cast<std::uint8_t*>(out.data())};
+        const std::uint8_t* i[1] = {reinterpret_cast<const std::uint8_t*>(samples)};
+        const int got = swr_convert(swr, o, room, samples ? i : nullptr, samples ? count : 0);
+        out.resize(static_cast<std::size_t>(std::max(got, 0)) * static_cast<std::size_t>(channels));
+        return out;
+    }
+};
+
+Resampler::Resampler(int channels, int fromRate, int toRate) : d_(std::make_unique<Impl>()) {
+    d_->channels = channels;
+    d_->from = fromRate;
+    d_->to = toRate;
+    if (channels <= 0 || fromRate <= 0 || toRate <= 0) return;
+    AVChannelLayout layout{};
+    av_channel_layout_default(&layout, channels);
+    if (swr_alloc_set_opts2(&d_->swr, &layout, AV_SAMPLE_FMT_FLT, toRate, &layout, AV_SAMPLE_FMT_FLT, fromRate, 0,
+                            nullptr) < 0 ||
+        swr_init(d_->swr) < 0) {
+        swr_free(&d_->swr);
+    }
+    av_channel_layout_uninit(&layout);
+}
+
+Resampler::~Resampler() = default;
+
+bool Resampler::isValid() const {
+    return d_->swr != nullptr;
+}
+
+std::vector<float> Resampler::push(const float* samples, int count) {
+    if (count <= 0) return {};
+    return d_->convert(samples, count);
+}
+
+std::vector<float> Resampler::flush() {
+    return d_->convert(nullptr, 0);
+}
+
+// ---------------------------------------------------------------- copyVideoFrames
+
+bool copyVideoFrames(const QString& from, int stream, std::int64_t first, std::int64_t count, const QString& to,
+                     const WriterSettings& settings, QString* error) {
+    Input in = openInput(from, error);
+    if (!in) return false;
+    if (stream < 0) stream = av_find_best_stream(in.get(), AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
+    if (stream < 0 || stream >= static_cast<int>(in->nb_streams)) {
+        setError(error, QStringLiteral("%1 has no picture").arg(from));
+        return false;
+    }
+    const AVStream* ist = in->streams[stream];
+    AVFormatContext* out = nullptr;
+    const QByteArray file = to.toUtf8();
+    const QByteArray format = settings.format.toUtf8();
+    if (avformat_alloc_output_context2(&out, nullptr, format.isEmpty() ? nullptr : format.constData(), file.constData()) <
+            0 ||
+        !out) {
+        setError(error, QStringLiteral("unknown format %1").arg(settings.format));
+        return false;
+    }
+    struct Closer {
+        AVFormatContext* out;
+        ~Closer() {
+            if (!(out->oformat->flags & AVFMT_NOFILE)) avio_closep(&out->pb);
+            avformat_free_context(out);
+        }
+    } closer{out};
+    auto failed = [&](const QString& text) {
+        setError(error, text);
+        return false;
+    };
+    if (!settings.startTimecode.isEmpty()) {
+        av_dict_set(&out->metadata, "timecode", settings.startTimecode.toUtf8().constData(), 0);
+    }
+    if (!settings.reelName.isEmpty()) av_dict_set(&out->metadata, "reel_name", settings.reelName.toUtf8().constData(), 0);
+    for (const auto& [key, value] : settings.metadata) {
+        av_dict_set(&out->metadata, key.toUtf8().constData(), value.toUtf8().constData(), 0);
+    }
+    AVStream* ost = avformat_new_stream(out, nullptr);
+    if (!ost || avcodec_parameters_copy(ost->codecpar, ist->codecpar) < 0) return failed(QStringLiteral("out of memory"));
+    ost->codecpar->codec_tag = 0;
+    const AVRational rate = videoRate(ist);
+    ost->time_base = inverse(rate);
+    ost->avg_frame_rate = rate;
+    if (!(out->oformat->flags & AVFMT_NOFILE)) {
+        const int rc = avio_open(&out->pb, file.constData(), AVIO_FLAG_WRITE);
+        if (rc < 0) return failed(errorText(rc));
+    }
+    AVDictionary* options = nullptr;
+    for (const auto& [key, value] : settings.formatOptions) {
+        av_dict_set(&options, key.toUtf8().constData(), value.toUtf8().constData(), 0);
+    }
+    int rc = avformat_write_header(out, &options);
+    av_dict_free(&options);
+    if (rc < 0) return failed(QStringLiteral("cannot write the header: %1").arg(errorText(rc)));
+    // Packets in order, counted: each one is a frame.
+    AVPacket* packet = av_packet_alloc();
+    std::int64_t index = 0;
+    std::int64_t written = 0;
+    bool ok = true;
+    while (written < count) {
+        rc = av_read_frame(in.get(), packet);
+        if (rc < 0) break;
+        if (packet->stream_index == stream) {
+            if (index >= first) {
+                packet->stream_index = ost->index;
+                packet->pts = packet->dts = written;
+                packet->duration = 1;
+                packet->pos = -1;
+                av_packet_rescale_ts(packet, AVRational{rate.den, rate.num}, ost->time_base);
+                if (av_interleaved_write_frame(out, packet) < 0) {
+                    ok = false;
+                    break;
+                }
+                ++written;
+            }
+            ++index;
+        }
+        av_packet_unref(packet);
+    }
+    av_packet_free(&packet);
+    rc = av_write_trailer(out);
+    if (!ok || rc < 0) return failed(QStringLiteral("cannot write %1").arg(to));
+    if (written < count) return failed(QStringLiteral("%1 ends before frame %2").arg(from).arg(first + count));
+    return true;
 }
 
 // ---------------------------------------------------------------- codec provider

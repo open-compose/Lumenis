@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/core/rational.h"
+#include "lumenis/model/bin.h"
 #include "lumenis/model/project_bins.h"
 #include "lumenis/ui/bin_dock.h"
 
@@ -262,6 +263,10 @@ public:
     void setDefaultStartTimecode(const QString& tc) { startTimecode_ = tc; }
     const QString& defaultStartTimecode() const { return startTimecode_; }
 
+    // Called with each bin read from its file, before it opens: the media
+    // database points managed clips at their files (p.358).
+    void setBinLoader(std::function<void(model::Bin&)> loader) { binLoader_ = std::move(loader); }
+
 signals:
     void activeBinChanged();
     // Something that needs saving, or was saved.
@@ -291,6 +296,7 @@ private:
     void registerSidebar(BinSidebar* sidebar);
     QString canonicalBin(const QString& id) const;
 
+    std::function<void(model::Bin&)> binLoader_;
     std::unique_ptr<model::ProjectBins> bins_;
     Rational editRate_{24000, 1001};
     bool openFloating_ = false;

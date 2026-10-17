@@ -3,7 +3,10 @@
 #include "lumenis/core/rational.h"
 
 #include <QImage>
+#include <QHash>
 #include <QJsonObject>
+#include <QList>
+#include <QPair>
 #include <QString>
 
 #include <cstdint>
@@ -63,6 +66,8 @@ struct MediaInfo {
     double durationSeconds = 0;
     QString startTimecode; // "01:00:00:00" when the file records one
     QString reelName;      // tape or reel name metadata, if any
+    // The file's own metadata ("material_package_name", "comment_...").
+    QHash<QString, QString> metadata;
     std::vector<StreamInfo> streams;
 
     const StreamInfo* firstVideo() const;
@@ -156,6 +161,12 @@ struct WriterSettings {
     int sampleRate = 48000;
     int channels = 2;
     QString startTimecode; // written as metadata when the format takes it
+    QString reelName;      // likewise
+    // The file's metadata, e.g. MXF's "material_package_name" and
+    // "comment_<name>" user comments.
+    QList<QPair<QString, QString>> metadata;
+    // The muxer's own options, e.g. mxf_opatom's "mxf_audio_edit_rate".
+    QList<QPair<QString, QString>> formatOptions;
 };
 
 class MediaWriter {
@@ -178,6 +189,33 @@ private:
     struct Impl;
     std::unique_ptr<Impl> d_;
 };
+
+// Converts interleaved float audio from one sample rate to another
+// (FFmpeg's swresample).
+class Resampler {
+public:
+    Resampler(int channels, int fromRate, int toRate);
+    ~Resampler();
+    Resampler(const Resampler&) = delete;
+    Resampler& operator=(const Resampler&) = delete;
+
+    bool isValid() const;
+    // Samples in (`count` per channel), what is ready out.
+    std::vector<float> push(const float* samples, int count);
+    // What is still held, at the end.
+    std::vector<float> flush();
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> d_;
+};
+
+// Copies frames [first, first + count) of a file's video stream into a new
+// file of `format` without decoding them; for codecs whose every frame is a
+// keyframe (DNx, ProRes). `settings` gives the format, metadata and options;
+// its codec fields are ignored.
+bool copyVideoFrames(const QString& from, int stream, std::int64_t first, std::int64_t count, const QString& to,
+                     const WriterSettings& settings, QString* error = nullptr);
 
 // Registers FFmpeg's codec provider ("org.ffmpeg.libavcodec") with the
 // application's provider registry (docs/EXTENSIONS.md).

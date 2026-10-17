@@ -1,5 +1,7 @@
 #include "lumenis/ui/source_browser.h"
 
+#include "lumenis/media/managed.h"
+
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/theme.h"
@@ -529,12 +531,22 @@ QWidget* SourceBrowser::buildLowerPane() {
     linkRadio_->setObjectName(QStringLiteral("linkMode"));
     importRadio_ = new QRadioButton(tr("Import"), box);
     importRadio_->setObjectName(QStringLiteral("importMode"));
-    // Importing creates Avid media files: Phase 2.4.
-    importRadio_->setEnabled(false);
-    importRadio_->setToolTip(tr("Importing comes with Avid media files."));
     linkRadio_->setChecked(true);
     row->addWidget(linkRadio_);
     row->addWidget(importRadio_);
+    // Import's Resolution menu (p.214, step 4).
+    resolutionLabel_ = new QLabel(tr("Resolution:"), box);
+    resolution_ = new QComboBox(box);
+    resolution_->setObjectName(QStringLiteral("importResolution"));
+    for (const media::Resolution& r : media::resolutions()) resolution_->addItem(r.name, r.id);
+    resolution_->setCurrentIndex(resolution_->findData(media::defaultResolution().id));
+    row->addWidget(resolutionLabel_);
+    row->addWidget(resolution_);
+    connect(importRadio_, &QRadioButton::toggled, this, [this] {
+        updateMode();
+        emit stateChanged();
+    });
+    connect(resolution_, &QComboBox::currentIndexChanged, this, &SourceBrowser::stateChanged);
     settingsButton_ = new QPushButton(tr("Settings..."), box);
     settingsButton_->setObjectName(QStringLiteral("linkSettings"));
     connect(settingsButton_, &QPushButton::clicked, this, &SourceBrowser::settingsRequested);
@@ -557,6 +569,7 @@ QWidget* SourceBrowser::buildLowerPane() {
     commit_->setObjectName(QStringLiteral("linkButton"));
     connect(commit_, &QPushButton::clicked, this, &SourceBrowser::linkSelection);
     row->addWidget(commit_);
+    updateMode();
     return box;
 }
 
@@ -866,8 +879,7 @@ void SourceBrowser::activate(const QModelIndex& index) {
     if (doubleClick() == DoubleClick::LoadInSourceMonitor) {
         emit loadRequested({e->path});
     } else if (!targetBin().isEmpty()) {
-        emit linkRequested(targetBin(), {e->path});
-        if (closesAfterLink()) emit closeRequested();
+        commit({e->path});
     }
 }
 
@@ -881,10 +893,7 @@ void SourceBrowser::showMenu(QWidget* view, const QPoint& pos) {
         menu.addAction(tr("Add Volume Bin"), this, [this, path] { emit volumeBinRequested(path); });
     } else {
         const QStringList files = selectedRows(true);
-        QAction* add = menu.addAction(tr("Add to Bin"), this, [this, files] {
-            emit linkRequested(targetBin(), files);
-            if (closesAfterLink()) emit closeRequested();
-        });
+        QAction* add = menu.addAction(tr("Add to Bin"), this, [this, files] { commit(files); });
         add->setEnabled(!files.isEmpty() && !targetBin().isEmpty());
         QAction* load = menu.addAction(tr("Load in Source Monitor"), this, [this, files] { emit loadRequested(files); });
         load->setEnabled(!files.isEmpty());
@@ -973,8 +982,42 @@ QStringList SourceBrowser::pathsToLink() const {
 void SourceBrowser::linkSelection() {
     const QStringList paths = pathsToLink();
     if (paths.isEmpty() || targetBin().isEmpty()) return;
-    emit linkRequested(targetBin(), paths);
+    commit(paths);
+}
+
+void SourceBrowser::commit(const QStringList& paths) {
+    // Link, or Import at the chosen resolution (p.213-214).
+    if (isImportMode()) {
+        emit importRequested(targetBin(), paths, importResolution());
+    } else {
+        emit linkRequested(targetBin(), paths);
+    }
     if (closesAfterLink()) emit closeRequested();
+}
+
+void SourceBrowser::setImportMode(bool import) {
+    (import ? importRadio_ : linkRadio_)->setChecked(true);
+}
+
+bool SourceBrowser::isImportMode() const {
+    return importRadio_->isChecked();
+}
+
+void SourceBrowser::setImportResolution(const QString& id) {
+    const int i = resolution_->findData(id);
+    if (i >= 0) resolution_->setCurrentIndex(i);
+}
+
+QString SourceBrowser::importResolution() const {
+    return resolution_->currentData().toString();
+}
+
+void SourceBrowser::updateMode() {
+    const bool import = isImportMode();
+    commit_->setText(import ? tr("Import") : tr("Link"));
+    resolutionLabel_->setVisible(import);
+    resolution_->setVisible(import);
+    settingsButton_->setToolTip(import ? tr("Import settings") : tr("Link settings"));
 }
 
 void SourceBrowser::save(QSettings& settings) const {
@@ -989,6 +1032,8 @@ void SourceBrowser::save(QSettings& settings) const {
     settings.setValue(QStringLiteral("closeAfterLink"), closesAfterLink());
     settings.setValue(QStringLiteral("clearSourceOnClose"), clearsSourceOnClose());
     settings.setValue(QStringLiteral("settingsCollapsed"), isSettingsCollapsed());
+    settings.setValue(QStringLiteral("import"), isImportMode());
+    settings.setValue(QStringLiteral("importResolution"), importResolution());
     settings.endGroup();
 }
 
@@ -1003,6 +1048,8 @@ void SourceBrowser::restore(QSettings& settings) {
     setCloseAfterLink(settings.value(QStringLiteral("closeAfterLink"), false).toBool());
     setClearSourceOnClose(settings.value(QStringLiteral("clearSourceOnClose"), false).toBool());
     setSettingsCollapsed(settings.value(QStringLiteral("settingsCollapsed"), false).toBool());
+    setImportMode(settings.value(QStringLiteral("import"), false).toBool());
+    setImportResolution(settings.value(QStringLiteral("importResolution")).toString());
     {
         const QSignalBlocker block(volumeButton_);
         volumeButton_->setChecked(settings.value(QStringLiteral("mediaFolderView"), false).toBool());

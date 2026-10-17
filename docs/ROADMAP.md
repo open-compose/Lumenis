@@ -440,10 +440,20 @@ Sub-steps:
   * Composer > Full Screen Playback and its setting.
   * The Audio and Video Display settings.
   * Shown and dropped frame counts for the real-time gate.
-* **2.4 Avid MediaFiles:**
-  * Import, Consolidate and Transcode into `Avid MediaFiles/MXF/<n>/` as MXF
-    OP-Atom (DNx and PCM).
-  * The media database scanned when a project opens, and relinking.
+* **2.4a Managed media — done** (spec §17).
+  * Import, Consolidate and Transcode into `Avid MediaFiles/MXF/<n>/` as
+    MXF OP-Atom, a file per track: Avid DNx LB to 444 (DNxHR) and 48 kHz
+    PCM (`media/managed.h`, `media/consolidate.h`).
+  * Clip > Consolidate/Transcode: master clips whole; sequences, the parts
+    used with handles, relinked to `.new.01` clips.
+  * File > Input > Import Media through the Source Browser.
+  * The Media Creation and Import settings.
+  * The media database, read when a project opens, finds moved media.
+  * `tst_managed_media`.
+* **2.4b:**
+  * Relink > Managed Media (p.361–364).
+  * The Media Tool's media files and Delete Media (p.344–348).
+  * Background Consolidate/Transcode and the Background Queue (p.356).
 * **2.5 The gates below:**
   * The decode corpus with frame MD5s.
   * Real-time playback.

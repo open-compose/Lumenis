@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/media/link.h"
+#include "lumenis/media/managed.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/project_store.h"
 
@@ -36,6 +37,7 @@ namespace lumenis::ui {
 class BinContainer;
 enum class MonitorId;
 class CalculatorWindow;
+class ConsolidateDialog;
 class AboutInfoDialog;
 class AudioMixer;
 class AudioTool;
@@ -127,6 +129,25 @@ public:
     void relinkLinkedMedia();
     void setLinkedMediaHook(std::function<void(LinkedMediaDialog&)> hook) { linkedMediaHook_ = std::move(hook); }
     int unlinkSelection();
+    // Managed media (Phase 2.4, p.348-359). File > Input > Import Media:
+    // the files as new media in a bin (p.213), at the Media Creation
+    // setting's import resolution unless `resolution` names another.
+    QStringList importFiles(const QString& binId, const QStringList& paths, const QString& resolution = {});
+    // Clip > Consolidate/Transcode on the active bin's selection
+    // (p.350-356). The hooks stand in for the dialogs (tests): the first
+    // answers Consolidate/Transcode (true: OK), the second Copying Media
+    // Files (keep master clips linked; nothing: cancel).
+    void consolidateTranscode();
+    void setConsolidateHook(std::function<bool(ConsolidateDialog&)> hook) { consolidateHook_ = std::move(hook); }
+    void setCopyingMediaHook(std::function<std::optional<bool>()> hook) { copyingMediaHook_ = std::move(hook); }
+    // How media is made, from the Media Creation setting's tab ("import",
+    // "transcode") and the project.
+    media::MediaCreation mediaCreation(const QString& tab) const;
+    // The media database (p.358): read when a project opens, again with
+    // File > Media > Load Media Database and Refresh Media Directories.
+    // Managed clips in bins opened after are pointed at their files.
+    void loadMediaDatabase();
+    const media::MediaDatabase& mediaDatabase() const { return mediaDb_; }
     // Playback's sound (2.3): whether it plays, and its clock: the output
     // sample heard now, counted from where play started.
     bool isPlayingSound() const;
@@ -235,6 +256,9 @@ private:
     std::optional<std::pair<model::BinItem, std::int64_t>> frameAt(MonitorId monitor, std::int64_t position) const;
     void startSound(MonitorId monitor, int speed);
     std::function<void(LinkedMediaDialog&)> linkedMediaHook_;
+    std::function<bool(ConsolidateDialog&)> consolidateHook_;
+    std::function<std::optional<bool>()> copyingMediaHook_;
+    media::MediaDatabase mediaDb_;
     // Puts a changed clip back in its bin and the monitors.
     void storeClip(const QString& binId, const model::BinItem& item);
     void refreshSourceBins();
