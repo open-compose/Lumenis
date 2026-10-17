@@ -180,8 +180,9 @@ private slots:
             return true;
         });
         commands.action(QStringLiteral("clip.consolidate_transcode"))->trigger();
-        const model::BinItem* made = named(*bin, QStringLiteral("A001.new.01"));
-        QVERIFY(made);
+        QVERIFY(named(*bin, QStringLiteral("A001.new.01")));
+        const model::BinItem madeItem = *named(*bin, QStringLiteral("A001.new.01"));
+        const model::BinItem* made = &madeItem;
         // Frames 4-7 used, 2 either side.
         QCOMPARE(made->durationFrames, std::int64_t{8});
         QCOMPARE(made->fields.value(QStringLiteral("Video")), QStringLiteral("Avid DNx SQ"));
@@ -282,8 +283,10 @@ private slots:
         window.backgroundQueue().waitForIdle();
         QCOMPARE(window.backgroundQueue().jobs().size(), 1);
         QCOMPARE(window.backgroundQueue().jobs().first().state, BackgroundQueue::State::Completed);
-        const model::BinItem* sq = named(*bin, QStringLiteral("A001.new.01"));
-        QVERIFY(sq);
+        QVERIFY(named(*bin, QStringLiteral("A001.new.01")));
+        // A copy: the bin's list changes below.
+        const model::BinItem sqItem = *named(*bin, QStringLiteral("A001.new.01"));
+        const model::BinItem* sq = &sqItem;
         QCOMPARE(sq->fields.value(QStringLiteral("Video")), QStringLiteral("Avid DNx SQ"));
         window.backgroundQueue().clearInactive();
         QVERIFY(window.backgroundQueue().jobs().isEmpty());

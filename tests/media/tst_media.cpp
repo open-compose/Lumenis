@@ -578,7 +578,9 @@ private slots:
         r.resolution = QStringLiteral("dnx_hq");
         QVERIFY(!findMedia(*part, db, r));
         r.quality = RelinkOptions::Quality::AtMost;
-        QCOMPARE(findMedia(*part, db, r)->mediaId, linkOf(*part)->mediaId);
+        link = findMedia(*part, db, r);
+        QVERIFY(link);
+        QCOMPARE(link->mediaId, linkOf(*part)->mediaId);
         // Another source name matches nothing; ignoring the extension, a
         // differently named file of the same name does.
         model::BinItem other = *part;
@@ -628,7 +630,8 @@ private slots:
                                {QStringLiteral("Cut")});
         QCOMPARE(result.added.size(), 1);
         QCOMPARE(result.added.first().name, QStringLiteral("Cut.relinked"));
-        const auto& segs = model::Sequence::fromItem(result.added.first()).track(QStringLiteral("V1"))->segments;
+        const model::Sequence relinkedCut = model::Sequence::fromItem(result.added.first());
+        const auto& segs = relinkedCut.track(QStringLiteral("V1"))->segments;
         QCOMPARE(segs.first().clipId, part->id);
         QCOMPARE(segs.first().sourceIn, std::int64_t{1});
 
