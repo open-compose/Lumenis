@@ -2,6 +2,8 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
+#include "lumenis/media/playback.h"
+#include "lumenis/model/sequence.h"
 
 #include <QDir>
 #include <QFile>
@@ -425,6 +427,166 @@ private slots:
         QString error;
         QVERIFY(!relinkClip(clip, dir.filePath(QStringLiteral("Oscar.001.png")), &error));
         QVERIFY(!error.isEmpty());
+    }
+
+    void audioMixAndPlayer() {
+        // Playback's mix (2.3): pieces of channels placed, panned and mixed
+        // to stereo at 48 kHz; files at other rates are resampled.
+        QTemporaryDir dir;
+        auto tone = [&](const QString& name, int rate, int channels, auto value, int seconds) {
+            WriterSettings s;
+            s.format = QStringLiteral("wav");
+            s.audioCodec = QStringLiteral("pcm_f32le");
+            s.sampleRate = rate;
+            s.channels = channels;
+            MediaWriter w;
+            QVERIFY(w.open(dir.filePath(name), s));
+            std::vector<float> data;
+            for (int i = 0; i < rate * seconds; ++i) {
+                for (int c = 0; c < channels; ++c) data.push_back(value(c, i));
+            }
+            QVERIFY(w.writeAudio(data.data(), rate * seconds));
+            QVERIFY(w.finish());
+        };
+        // Left channel counts up slowly, right is constant.
+        tone(QStringLiteral("stereo.wav"), 48000, 2, [](int c, int i) { return c == 0 ? static_cast<float>(i % 1000) / 1000.0f : 0.25f; }, 1);
+        tone(QStringLiteral("slow.wav"), 24000, 1, [](int, int) { return 0.5f; }, 1);
+
+        float l = 0;
+        float r = 0;
+        panGains(-100, 0.0, &l, &r);
+        QVERIFY(std::abs(l - 1.0f) < 1e-6f && std::abs(r) < 1e-6f);
+        panGains(0, 0.0, &l, &r);
+        QVERIFY(std::abs(l - r) < 1e-6f && std::abs(l - std::sqrt(0.5f)) < 1e-6f);
+        panGains(100, -6.0, &l, &r);
+        QVERIFY(std::abs(l) < 1e-6f && std::abs(r - 0.5012f) < 1e-3f);
+
+        std::vector<AudioPiece> pieces;
+        AudioPiece a;
+        a.path = dir.filePath(QStringLiteral("stereo.wav"));
+        a.channel = 0;
+        a.sourceStart = 100;
+        a.at = 1000;
+        a.length = 2000;
+        a.left = 1.0f;
+        a.right = 0.0f;
+        pieces.push_back(a);
+        AudioPiece b = a;
+        b.channel = 1;
+        b.left = 0.0f;
+        b.right = 1.0f;
+        pieces.push_back(b);
+        AudioPiece c;
+        c.path = dir.filePath(QStringLiteral("slow.wav"));
+        c.at = 5000;
+        c.length = 4000;
+        pieces.push_back(c);
+        AudioMix mix(pieces);
+        std::vector<float> out(2 * 6000);
+        mix.render(0, 6000, out.data());
+        QCOMPARE(out[2 * 999], 0.0f);                           // before the piece
+        QVERIFY(std::abs(out[2 * 1000] - 0.1f) < 1e-6f);        // sample 100 of the left channel
+        QVERIFY(std::abs(out[2 * 1500] - 0.6f) < 1e-6f);        // sample 600
+        QVERIFY(std::abs(out[2 * 1500 + 1] - 0.25f) < 1e-6f);   // the right channel, panned right
+        QCOMPARE(out[2 * 3000], 0.0f);                          // after it
+        QVERIFY(std::abs(out[2 * 5500] - 0.5f) < 1e-4f);        // 24 kHz, resampled
+        QVERIFY(std::abs(out[2 * 5500 + 1] - 0.5f) < 1e-4f);
+
+        // The player renders ahead; what is taken is the clock.
+        AudioPlayer player;
+        QVERIFY(player.start(std::make_shared<AudioMix>(pieces), 1000, false));
+        std::vector<float> got(2 * 600);
+        int taken = 0;
+        for (int tries = 0; tries < 500 && taken < 600; ++tries) {
+            taken += player.pull(got.data() + 2 * taken, 600 - taken);
+            if (taken < 600) QTest::qWait(2);
+        }
+        QCOMPARE(taken, 600);
+        QCOMPARE(player.played(), std::int64_t{600});
+        QVERIFY(std::abs(got[0] - 0.1f) < 1e-6f);
+        QVERIFY(std::abs(got[2 * 500] - 0.6f) < 1e-6f);
+        player.stop();
+        QVERIFY(!player.isPlaying());
+        // A sound card if there is one; none is fine too.
+        if (player.start(std::make_shared<AudioMix>(pieces), 0)) {
+            qInfo() << "audio output:" << player.deviceName();
+            player.stop();
+        }
+    }
+
+    void audioOfClipsAndSequences() {
+        // What plays (p.395, p.627): a clip's channels as tracks, odd left
+        // and even right; a sequence's monitored audio segments with their
+        // gain and pan.
+        QTemporaryDir dir;
+        const QString wav = dir.filePath(QStringLiteral("two.wav"));
+        {
+            WriterSettings s;
+            s.format = QStringLiteral("wav");
+            s.audioCodec = QStringLiteral("pcm_s16le");
+            s.channels = 2;
+            MediaWriter w;
+            QVERIFY(w.open(wav, s));
+            const std::vector<float> silence(2 * 48000, 0.0f);
+            QVERIFY(w.writeAudio(silence.data(), 48000));
+            QVERIFY(w.finish());
+        }
+        LinkOptions o;
+        o.editRate = Rational(25);
+        const QList<model::BinItem> linked = linkFiles({wav}, o);
+        QCOMPARE(linked.size(), 1);
+        const model::BinItem clip = linked.first();
+        QCOMPARE(framesToSamples(25, Rational(25)), std::int64_t{48000});
+        QCOMPARE(framesToSamples(1, Rational(30000, 1001)), std::int64_t{1601}); // 1601.6, down
+
+        std::vector<AudioPiece> pieces = audioPieces(clip, {});
+        QCOMPARE(pieces.size(), std::size_t{2});
+        QCOMPARE(pieces[0].channel, 0);
+        QCOMPARE(pieces[1].channel, 1);
+        QCOMPARE(pieces[0].length, std::int64_t{48000});
+        QVERIFY(pieces[0].left > 0.99f && pieces[0].right < 0.01f); // A1 left
+        QVERIFY(pieces[1].right > 0.99f && pieces[1].left < 0.01f); // A2 right
+        // Only the monitored tracks play.
+        pieces = audioPieces(clip, {}, [](const QString& t) { return t == QLatin1String("A2"); });
+        QCOMPARE(pieces.size(), std::size_t{1});
+        QCOMPARE(pieces[0].channel, 1);
+
+        // A sequence: A1 holds the clip's A2 from frame 5 for 10 frames,
+        // after 3 frames of filler, at -6 dB panned centre-left.
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        model::Segment seg;
+        seg.clipId = clip.id;
+        seg.binId = QStringLiteral("bin");
+        seg.sourceTrack = QStringLiteral("A2");
+        seg.sourceIn = 5;
+        seg.length = 10;
+        seg.gain = -6.0;
+        seg.pan = -50;
+        seq.splice(QStringLiteral("A1"), 0, {model::Segment::filler(3), seg});
+        model::BinItem item;
+        item.kind = model::BinItemKind::Sequence;
+        item.editRate = Rational(25);
+        seq.storeIn(item);
+        const ClipLookup lookup = [&](const QString&, const QString& id) -> std::optional<model::BinItem> {
+            if (id == clip.id) return clip;
+            return std::nullopt;
+        };
+        pieces = audioPieces(item, lookup);
+        QCOMPARE(pieces.size(), std::size_t{1});
+        QCOMPARE(pieces[0].channel, 1);
+        QCOMPARE(pieces[0].at, framesToSamples(3, Rational(25)));
+        QCOMPARE(pieces[0].length, framesToSamples(10, Rational(25)));
+        QCOMPARE(pieces[0].sourceStart, framesToSamples(5, Rational(25)));
+        float l = 0;
+        float r = 0;
+        panGains(-50, -6.0, &l, &r);
+        QCOMPARE(pieces[0].left, l);
+        QCOMPARE(pieces[0].right, r);
+        // An unmonitored track is silent; an unlinked clip too.
+        QVERIFY(audioPieces(item, lookup, [](const QString&) { return false; }).empty());
+        model::BinItem offline = clip;
+        QVERIFY(unlinkClip(offline));
+        QVERIFY(audioPieces(offline, {}).empty());
     }
 
     void errors() {

@@ -199,8 +199,19 @@ public:
     void setGanged(bool ganged);
     bool isGanged() const { return ganged_; }
 
-    // Playback without media: the position moves in real time. Speeds are
-    // multiples of normal, negative for reverse (J-K-L, p.400-401).
+    // Playback: the position moves in real time. Speeds are multiples of
+    // normal, negative for reverse (J-K-L, p.400-401). At normal speed
+    // forward the play clock, when there is one, keeps the picture with the
+    // sound: it gives the seconds played since play started.
+    using PlayClock = std::function<std::optional<double>()>;
+    void setPlayClock(PlayClock clock) { playClock_ = std::move(clock); }
+    // Video quality for playback (p.403-404): Full Quality, Draft Quality
+    // (half the width and lines) and Best Performance (a quarter of each).
+    enum class VideoQuality { Full, Draft, Best };
+    void setVideoQuality(VideoQuality quality);
+    VideoQuality videoQuality() const { return quality_; }
+    // The share of the picture's width and height decoded at this quality.
+    double qualityScale() const;
     bool isPlaying() const { return speed_ != 0; }
     int speed() const { return speed_; }
     void play(int speed);
@@ -234,6 +245,10 @@ signals:
     void performed(const QString& commandId);
     // A trim counter was clicked: that side, or both with Shift (p.651).
     void trimSideRequested(model::TrimSide side);
+    // Play started or changed speed, and play stopped.
+    void playStarted(MonitorId monitor, int speed);
+    void playStopped();
+    void videoQualityChanged(VideoQuality quality);
     // Media files dropped on a monitor from the Source Browser (p.316).
     void filesDropped(MonitorId monitor, const QStringList& paths);
     // A marker was double-clicked (p.416).
@@ -277,6 +292,9 @@ private:
     Column* columns_[2] = {nullptr, nullptr};
     ItemResolver resolver_;
     PictureResolver pictures_;
+    PlayClock playClock_;
+    std::int64_t playStart_ = 0;
+    VideoQuality quality_ = VideoQuality::Full;
     Committer committer_;
     KeyResolver keys_;
     EventResolver events_;

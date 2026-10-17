@@ -12,10 +12,13 @@ constexpr std::size_t kMaxThumbnails = 2000;
 
 MediaFrames::MediaFrames(QObject* parent) : QObject(parent), cache_(8, 48) {
     pool_.setMaxThreadCount(2);
+    ahead_.setMaxThreadCount(1);
     if (!g_instance) g_instance = this;
 }
 
 MediaFrames::~MediaFrames() {
+    ahead_.clear();
+    ahead_.waitForDone();
     pool_.clear();
     pool_.waitForDone();
     if (g_instance == this) g_instance = nullptr;
@@ -65,11 +68,25 @@ QImage MediaFrames::thumbnail(const model::BinItem& item, std::int64_t clipFrame
     return {};
 }
 
+void MediaFrames::prefetch(const model::BinItem& item, std::int64_t clipFrame, QSize size) {
+    if (!media::isLinked(item) || media::isUnlinked(item) || aheadWaiting_.load() >= 3) return;
+    ++aheadWaiting_;
+    ahead_.start([this, item, clipFrame, size] {
+        // Kept in the frame cache, where frame() finds it.
+        cache_.frame(item, clipFrame, size);
+        --aheadWaiting_;
+    });
+}
+
 void MediaFrames::waitForThumbnails() {
+    ahead_.waitForDone();
     pool_.waitForDone();
 }
 
 void MediaFrames::clear() {
+    ahead_.clear();
+    ahead_.waitForDone();
+    aheadWaiting_ = 0;
     pool_.clear();
     pool_.waitForDone();
     cache_.clear();

@@ -133,7 +133,13 @@ done:
   - frames in the monitors, bins and Timeline (`media_frames.*`);
   - Relink > Linked Media and Unlink (`relink_dialog.*`);
   - the Link setting.
-Next is 2.3, playback (ROADMAP).
+2.3a, playback, is done:
+  - sound through miniaudio (`third_party/miniaudio`, its own target without
+    our warning flags) from `src/media/playback.*`;
+  - the audio clock paces the Composer; frames are decoded ahead
+    (`MediaFrames::prefetch`);
+  - the Video Quality Menu button.
+Next is 2.3b (ROADMAP).
 
 Spec sections 3, 4, 7, 11, 12, 13, 14 and 15 list details left for later.
 

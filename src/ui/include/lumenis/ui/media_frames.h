@@ -8,6 +8,7 @@
 #include <QSize>
 #include <QThreadPool>
 
+#include <atomic>
 #include <cstdint>
 #include <map>
 #include <set>
@@ -38,6 +39,9 @@ public:
     QImage thumbnail(const model::BinItem& item, std::int64_t clipFrame, QSize size);
     // Waits for the thumbnails being decoded (tests).
     void waitForThumbnails();
+    // During playback: decodes a frame on a thread of its own, in order, so
+    // it is ready when shown. Requests beyond a few waiting are dropped.
+    void prefetch(const model::BinItem& item, std::int64_t clipFrame, QSize size);
 
     void clear();
 
@@ -49,6 +53,8 @@ private:
 
     media::FrameCache cache_;
     QThreadPool pool_;
+    QThreadPool ahead_; // one thread: frames in play order
+    std::atomic<int> aheadWaiting_{0};
     std::map<QString, QImage> thumbnails_;
     std::set<QString> pending_;
 };

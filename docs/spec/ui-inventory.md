@@ -1805,5 +1805,62 @@ p.610–640, ch. 13 p.432–434).**
   with the clip text after it.
 * It shows only where the segment is wide enough.
 
-## 16. Still to document
+## 16. Playback (p.389–404, p.627)
+
+### Playing
+* **Speeds (p.400–401):** L and J play at 1x, 2x, 3x, 5x and 8x, forward
+  and backward; K pauses. This existed since 1.4a. The position now
+  shows the media's frames.
+* **What plays (p.395):**
+  * A clip plays its picture and every audio channel; each channel is a
+    track.
+  * A sequence plays its top video track's picture, in the order Match
+    Frame uses (p.434), and the audio tracks monitored in the Track
+    Selector panel.
+* **Panning:**
+  * Mono tracks go odd to the left and even to the right (p.627).
+  * A segment's clip gain and pan apply (p.702). A segment whose pan is
+    centred (MID) keeps its track's side.
+  * A one-channel clip in the Source monitor plays in the middle (ours).
+* **Sound and sync (ours):**
+  * At normal speed forward the sound plays, and the picture follows it:
+    the position is where the samples played so far put it.
+  * At other speeds playback is silent and the picture runs on the wall
+    clock.
+  * Without a sound device, the picture runs on the wall clock too.
+* **Not yet:**
+  * Sound while shuttling faster or backward (p.627 mentions audio at
+    higher play speeds).
+  * Smooth audio scrub (p.675).
+  * Dynamic Play (p.401–402) and mouse jog and shuttle (p.402–403).
+
+### Video Quality Menu (p.403–404)
+* **The button:** at the bottom of the Timeline.
+  * A click moves to the next quality.
+  * Right-click lists them, with Video Display Settings (*later*).
+* **The qualities** of a software-only system (p.404):
+  * Full Quality: the whole picture.
+  * Draft Quality: half the width and half the lines.
+  * Best Performance: a quarter of each.
+* **The icon (ours):** green for Full, green and yellow for Draft, yellow
+  for Best Performance. The guide gives the colours ("yellow/green",
+  p.229); the drawing is ours.
+* **Not yet:**
+  * The Full Quality 10-bit and float options, which come with effects
+    processing.
+  * The Video Display setting (p.1224).
+
+### Client monitor and full screen (p.389–391)
+* **Not yet:**
+  * Composer > Full Screen Playback (Shift+Ctrl+F, p.391) and the Full
+    Screen Playback setting (p.1189).
+  * The Toggle Client Monitor button is gray and disabled in
+    software-only mode (p.390), as ours is.
+
+### Sound output (ours)
+* miniaudio, through Core Audio, WASAPI, PulseAudio or ALSA, at 48 kHz
+  stereo. Files at other rates are resampled.
+* Without a sound card, its null device keeps time, so CI tests the clock.
+
+## 17. Still to document
 * Menu order and separators, confirmed against a licensed seat.

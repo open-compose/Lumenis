@@ -152,6 +152,9 @@ QJsonObject Link::toJson() const {
     QJsonArray audio;
     for (int s : audioStreams) audio.append(s);
     o.insert(QStringLiteral("audioStreams"), audio);
+    QJsonArray perStream;
+    for (int n : streamChannels) perStream.append(n);
+    o.insert(QStringLiteral("streamChannels"), perStream);
     if (unlinked) o.insert(QStringLiteral("unlinked"), true);
     return o;
 }
@@ -166,8 +169,21 @@ std::optional<Link> Link::fromJson(const QJsonObject& json) {
     l.videoStream = json.value(QStringLiteral("videoStream")).toInt(-1);
     l.channels = json.value(QStringLiteral("channels")).toInt();
     for (const QJsonValue& v : json.value(QStringLiteral("audioStreams")).toArray()) l.audioStreams << v.toInt();
+    for (const QJsonValue& v : json.value(QStringLiteral("streamChannels")).toArray()) l.streamChannels << v.toInt();
+    // Links made before this was kept: one stream holds every channel.
+    if (l.streamChannels.isEmpty() && l.audioStreams.size() == 1) l.streamChannels << l.channels;
     l.unlinked = json.value(QStringLiteral("unlinked")).toBool();
     return l;
+}
+
+std::optional<std::pair<int, int>> Link::channelOf(int track) const {
+    // Track A1 is the first channel of the first audio stream, and so on.
+    int k = track;
+    for (int i = 0; i < audioStreams.size() && i < streamChannels.size(); ++i) {
+        if (k < streamChannels.at(i)) return std::make_pair(audioStreams.at(i), k);
+        k -= streamChannels.at(i);
+    }
+    return std::nullopt;
 }
 
 QString Link::file() const {
@@ -220,6 +236,7 @@ std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions&
         if (!a->decodable || a->channels <= 0) continue;
         if (!firstAudio) firstAudio = a;
         link.audioStreams << a->index;
+        link.streamChannels << a->channels;
         link.channels += a->channels;
     }
 

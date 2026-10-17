@@ -421,7 +421,10 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
     const model::MonitorState& s = composer_.state(monitor_);
     if (!s.isEmpty()) {
         bool offline = false;
-        const QImage image = composer_.picture(monitor_, pic.size(), &offline);
+        // Draft Quality and Best Performance decode fewer pixels (p.403).
+        const double q = composer_.qualityScale();
+        const QSize decode(std::max(1, static_cast<int>(pic.width() * q)), std::max(1, static_cast<int>(pic.height() * q)));
+        const QImage image = composer_.picture(monitor_, decode, &offline);
         if (!image.isNull()) {
             // Scaled to fit, centred: other shapes than the project's are
             // letterboxed or pillarboxed.
@@ -957,9 +960,11 @@ void Composer::play(int speed) {
     }
     speed_ = speed;
     carry_ = 0;
+    playStart_ = s.position();
     clock_.restart();
     timer_->start();
     refresh();
+    emit playStarted(active_, speed);
 }
 
 void Composer::stop() {
@@ -968,10 +973,44 @@ void Composer::stop() {
     speed_ = 0;
     timer_->stop();
     refresh();
+    emit playStopped();
 }
 
 void Composer::tick() {
-    advance(clock_.restart());
+    const qint64 ms = clock_.restart();
+    // At normal speed the sound sets the pace (A/V sync); otherwise, or
+    // before any sound has played, the wall clock does.
+    if (speed_ == 1 && playClock_) {
+        if (const auto played = playClock_()) {
+            model::MonitorState& s = state(active_);
+            const auto target = playStart_ + static_cast<std::int64_t>(*played * framesPerSecond(s));
+            const std::int64_t end = stopAt_.value_or(s.lastPosition());
+            if (target >= end) {
+                moveTo(active_, end);
+                stop();
+            } else if (target > s.position()) {
+                moveTo(active_, target);
+            }
+            return;
+        }
+    }
+    advance(ms);
+}
+
+void Composer::setVideoQuality(VideoQuality quality) {
+    if (quality_ == quality) return;
+    quality_ = quality;
+    refresh();
+    emit videoQualityChanged(quality);
+}
+
+double Composer::qualityScale() const {
+    switch (quality_) {
+    case VideoQuality::Full: return 1.0;
+    case VideoQuality::Draft: return 0.5;
+    case VideoQuality::Best: return 0.25;
+    }
+    return 1.0;
 }
 
 void Composer::advance(qint64 ms) {

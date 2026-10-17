@@ -36,6 +36,7 @@ struct Link {
     std::int64_t frames = 0; // the file's video frames; 0 for audio only
     int videoStream = -1;    // -1: no picture
     QList<int> audioStreams;
+    QList<int> streamChannels; // channels in each of audioStreams
     int channels = 0; // audio channels, all streams together
     // Clip > Modify > Unlink Media (p.368): the clip shows Media Offline
     // until it is relinked.
@@ -43,6 +44,8 @@ struct Link {
 
     // The file to look for: the path, or a sequence's first file.
     QString file() const;
+    // The stream and channel of the clip's audio track `track` (0 for A1).
+    std::optional<std::pair<int, int>> channelOf(int track) const;
 
     // The file's frame for frame `clipFrame` of a clip at `clipRate`.
     std::int64_t fileFrame(std::int64_t clipFrame, const Rational& clipRate) const;

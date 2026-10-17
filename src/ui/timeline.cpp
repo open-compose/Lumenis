@@ -109,6 +109,29 @@ enum class Picture {
     TrimMode, RippleTrim, OverwriteTrim
 };
 
+// The Video Quality Menu button's picture for each quality (p.404): green
+// for Full Quality, green and yellow for Draft Quality, yellow for Best
+// Performance. The guide names the colours; the drawing is ours.
+QIcon qualityIcon(Composer::VideoQuality quality) {
+    QPixmap pm(32, 32);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    const QColor green(0x3c, 0xb0, 0x4a);
+    const QColor yellow(0xe6, 0xc6, 0x19);
+    const QRectF circle(6, 6, 20, 20);
+    p.setPen(Qt::NoPen);
+    p.setBrush(quality == Composer::VideoQuality::Best ? yellow : green);
+    p.drawEllipse(circle);
+    if (quality == Composer::VideoQuality::Draft) {
+        p.setBrush(yellow);
+        p.drawPie(circle, -90 * 16, 180 * 16);
+    }
+    p.end();
+    pm.setDevicePixelRatio(2.0);
+    return QIcon(pm);
+}
+
 QIcon picture(Picture which) {
     constexpr int size = 32;
     QPixmap pm(size, size);
@@ -1235,7 +1258,37 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     toggle->setCheckable(true);
     connect(toggle, &QToolButton::clicked, this, [this](bool on) { setShowSource(on); });
     // These need media, effects or the Search feature (later phases).
-    tool("videoQuality", Picture::VideoQuality, tr("Video Quality Menu"), false);
+    // The Video Quality Menu button (p.403-404): a click goes to the next
+    // quality; right-click lists them.
+    QToolButton* quality = tool("videoQuality", Picture::VideoQuality, tr("Video Quality Menu"), true);
+    quality->setIcon(qualityIcon(composer_.videoQuality()));
+    quality->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(quality, &QToolButton::clicked, this, [this] {
+        const auto q = composer_.videoQuality();
+        composer_.setVideoQuality(q == Composer::VideoQuality::Full    ? Composer::VideoQuality::Draft
+                                  : q == Composer::VideoQuality::Draft ? Composer::VideoQuality::Best
+                                                                       : Composer::VideoQuality::Full);
+    });
+    connect(quality, &QWidget::customContextMenuRequested, this, [this, quality](const QPoint& pos) {
+        QMenu menu(quality);
+        const std::pair<Composer::VideoQuality, QString> choices[] = {
+            {Composer::VideoQuality::Full, tr("Full Quality")},
+            {Composer::VideoQuality::Draft, tr("Draft Quality")},
+            {Composer::VideoQuality::Best, tr("Best Performance")},
+        };
+        for (const auto& [q, text] : choices) {
+            QAction* a = menu.addAction(qualityIcon(q), text);
+            a->setCheckable(true);
+            a->setChecked(composer_.videoQuality() == q);
+            connect(a, &QAction::triggered, this, [this, choice = q] { composer_.setVideoQuality(choice); });
+        }
+        menu.addSeparator();
+        // The Video Display setting comes with the client monitor.
+        menu.addAction(tr("Video Display Settings..."))->setEnabled(false);
+        menu.exec(quality->mapToGlobal(pos));
+    });
+    connect(&composer_, &Composer::videoQualityChanged, quality,
+            [quality](Composer::VideoQuality q) { quality->setIcon(qualityIcon(q)); });
     tool("clientMonitor", Picture::ClientMonitor, tr("Client Monitor"), false);
     tool("stepIn", Picture::StepIn, tr("Step In"), false);
     tool("stepOut", Picture::StepOut, tr("Step Out"), false);

@@ -18,6 +18,10 @@ class QAction;
 class QMessageBox;
 class QToolButton;
 
+namespace lumenis::media {
+class AudioPlayer;
+}
+
 namespace lumenis::ext {
 class ProviderRegistry;
 }
@@ -25,6 +29,7 @@ class ProviderRegistry;
 namespace lumenis::ui {
 
 class BinContainer;
+enum class MonitorId;
 class CalculatorWindow;
 class AboutInfoDialog;
 class AudioMixer;
@@ -116,6 +121,10 @@ public:
     void relinkLinkedMedia();
     void setLinkedMediaHook(std::function<void(LinkedMediaDialog&)> hook) { linkedMediaHook_ = std::move(hook); }
     int unlinkSelection();
+    // Playback's sound (2.3): whether it plays, and the output samples it
+    // has played since play started.
+    bool isPlayingSound() const;
+    std::int64_t soundPlayed() const;
     // Tools > Media Tool: the Media Tool Display dialog, then the tool
     // (p.346). Tests answer the dialog through the hook (true: OK).
     void showMediaTool();
@@ -198,6 +207,10 @@ private:
     // Guarded: bins save (and signal) as the window is taken down.
     QPointer<SourceBrowser> sourceBrowser_;
     bool sourceBrowserOpen_ = false;
+    std::unique_ptr<media::AudioPlayer> audio_;
+    // What a monitor shows at a position: a linked clip and its frame.
+    std::optional<std::pair<model::BinItem, std::int64_t>> frameAt(MonitorId monitor, std::int64_t position) const;
+    void startSound(MonitorId monitor, int speed);
     std::function<void(LinkedMediaDialog&)> linkedMediaHook_;
     // Puts a changed clip back in its bin and the monitors.
     void storeClip(const QString& binId, const model::BinItem& item);

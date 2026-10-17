@@ -1,5 +1,7 @@
 #include "lumenis/ui/main_window.h"
 
+#include "lumenis/media/playback.h"
+
 #include "lumenis/core/branding.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/ui/bin_container.h"
@@ -110,8 +112,10 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     workspaceButton_->setMenu(new QMenu(workspaceButton_));
     area->installEventFilter(this);
 
-    // Pictures of linked clips, for the monitors, bins and Source Browser.
+    // Pictures of linked clips, for the monitors, bins and Source Browser;
+    // sound for playback.
     frames_ = new MediaFrames(this);
+    audio_ = std::make_unique<media::AudioPlayer>();
     createPanels();
     createTools();
     settings_ = new Settings(this);
@@ -138,6 +142,16 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
 }
 
 MainWindow::~MainWindow() {
+    // An edit in progress (a bin being named) is committed now, while every
+    // view is alive, not by the focus change as the window comes down.
+    if (QWidget* focused = QApplication::focusWidget(); focused && isAncestorOf(focused)) focused->clearFocus();
+    // The sound goes before the Composer (a child, deleted later): it must
+    // not reach the player as it stops.
+    if (composer_) {
+        disconnect(composer_, nullptr, this, nullptr);
+        composer_->setPlayClock({});
+    }
+    if (audio_) audio_->stop();
     // The mapper outlives this window's commands.
     if (ButtonMapper::instance().registry() == &commands_) ButtonMapper::instance().setRegistry(nullptr);
     commands_.setCapture({});
@@ -172,29 +186,31 @@ void MainWindow::createPanels() {
     // video track's (p.432-434 orders the tracks the same way).
     composer_->setPictureResolver([this](MonitorId monitor, QSize size, bool* offline) -> QImage {
         const model::MonitorState& state = composer_->state(monitor);
-        const model::LoadedClip* loaded = state.current();
-        if (!loaded) return {};
-        model::BinItem item = loaded->item;
-        std::int64_t frame = state.position();
-        if (item.kind == model::BinItemKind::Sequence) {
-            const model::Sequence seq = model::Sequence::fromItem(item);
-            QStringList video;
-            for (const model::Track& t : seq.tracks()) {
-                if (t.kind == model::TrackKind::Video) video << t.name();
-            }
-            if (video.isEmpty()) return {};
-            const auto match = model::matchFrame(seq, video, frame);
-            const auto clip = match ? composer_->resolve(match->segment.binId, match->segment.clipId) : std::nullopt;
-            if (!clip) return {};
-            item = *clip;
-            frame = match->frame;
-        }
-        if (!media::isLinked(item)) return {};
+        const auto shown = frameAt(monitor, state.position());
+        if (!shown) return {};
+        const auto& [item, frame] = *shown;
         if (frames_->isOffline(item)) {
             if (offline) *offline = true;
             return {};
         }
+        // Playing: the next frames are decoded while this one shows.
+        if (composer_->isPlaying() && monitor == composer_->activeMonitor()) {
+            const int step = composer_->speed() > 0 ? 1 : -1;
+            for (int k = 1; k <= 2; ++k) {
+                if (const auto next = frameAt(monitor, state.position() + k * step * std::abs(composer_->speed()))) {
+                    frames_->prefetch(next->first, next->second, size);
+                }
+            }
+        }
         return frames_->frame(item, frame, size);
+    });
+    // Sound: at normal speed forward the monitor's audio plays, and its
+    // progress paces the picture (A/V sync).
+    connect(composer_, &Composer::playStarted, this, [this](MonitorId monitor, int speed) { startSound(monitor, speed); });
+    connect(composer_, &Composer::playStopped, this, [this] { audio_->stop(); });
+    composer_->setPlayClock([this]() -> std::optional<double> {
+        if (!audio_->isPlaying()) return std::nullopt;
+        return static_cast<double>(audio_->played()) / media::kPlaybackRate;
     });
     // A clip loaded from the Source Browser goes into the target bin when it
     // is edited into a sequence (p.316).
@@ -731,6 +747,63 @@ void MainWindow::createTools() {
     connect(composer_, &Composer::buttonsChanged, this, [this] {
         settings_->setValue(QStringLiteral("Composer"), QStringLiteral("buttons"), composer_->buttonLayout());
     });
+}
+
+std::optional<std::pair<model::BinItem, std::int64_t>> MainWindow::frameAt(MonitorId monitor,
+                                                                           std::int64_t position) const {
+    // A clip's own frame; a sequence's from its top video track, in the
+    // order Match Frame uses (p.432-434).
+    const model::LoadedClip* loaded = composer_->state(monitor).current();
+    if (!loaded || position < 0) return std::nullopt;
+    model::BinItem item = loaded->item;
+    std::int64_t frame = position;
+    if (item.kind == model::BinItemKind::Sequence) {
+        const model::Sequence seq = model::Sequence::fromItem(item);
+        QStringList video;
+        for (const model::Track& t : seq.tracks()) {
+            if (t.kind == model::TrackKind::Video) video << t.name();
+        }
+        if (video.isEmpty()) return std::nullopt;
+        const auto match = model::matchFrame(seq, video, frame);
+        const auto clip = match ? composer_->resolve(match->segment.binId, match->segment.clipId) : std::nullopt;
+        if (!clip) return std::nullopt;
+        item = *clip;
+        frame = match->frame;
+    } else if (frame >= item.durationFrames) {
+        return std::nullopt;
+    }
+    if (!media::isLinked(item)) return std::nullopt;
+    return std::make_pair(item, frame);
+}
+
+bool MainWindow::isPlayingSound() const {
+    return audio_ && audio_->isPlaying();
+}
+
+std::int64_t MainWindow::soundPlayed() const {
+    return audio_ ? audio_->played() : 0;
+}
+
+void MainWindow::startSound(MonitorId monitor, int speed) {
+    audio_->stop();
+    // Sound plays at normal speed forward; faster shuttling is silent.
+    if (speed != 1) return;
+    const model::LoadedClip* loaded = composer_->state(monitor).current();
+    if (!loaded) return;
+    // A sequence plays the audio tracks monitored in the Track Selector
+    // panel (p.395).
+    std::function<bool(const QString&)> monitored;
+    if (loaded->item.kind == model::BinItemKind::Sequence) {
+        monitored = [this](const QString& track) { return timeline_->isMonitored(track); };
+    }
+    auto pieces = media::audioPieces(
+        loaded->item, [this](const QString& binId, const QString& clipId) { return composer_->resolve(binId, clipId); },
+        monitored);
+    if (pieces.empty()) return;
+    const std::int64_t at = media::framesToSamples(composer_->state(monitor).position(), loaded->item.editRate);
+    if (!audio_->start(std::make_shared<media::AudioMix>(std::move(pieces)), at)) {
+        ConsoleLog::instance().append(tr("Playback: no audio output could be opened; playing without sound."));
+    }
 }
 
 media::LinkOptions MainWindow::linkOptions() const {

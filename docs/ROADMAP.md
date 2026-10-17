@@ -424,11 +424,19 @@ Sub-steps:
   Unlink Media and Clip > Relink > Linked Media with Locate Media
   (p.364–368); image sequences (DPX, EXR, TIFF, PNG, ...) as one clip,
   grouped as p.325–326 describe (spec §15).
-* **2.3 Playback:**
-  * A decode thread and frame cache, and an audio clock with audio output.
-  * J-K-L at real speeds.
-  * Playing sequences through their segments, with full and draft quality.
-  * The client monitor.
+* **2.3a Playback — done** (spec §16).
+  * Sound through miniaudio (`third_party/miniaudio`), mixed from the
+    monitored tracks with clip gain and pan (`media/playback.h`).
+  * The audio clock paces the picture at 1x (A/V sync). J-K-L speeds run
+    on the wall clock.
+  * Frames decoded ahead on a playback thread; sequences play through
+    their segments.
+  * The Video Quality Menu button: Full, Draft, Best Performance.
+  * `tst_playback`.
+* **2.3b:**
+  * Full Screen Playback.
+  * Sound at shuttle speeds and audio scrub.
+  * Real-time measurements for the gates.
 * **2.4 Avid MediaFiles:**
   * Import, Consolidate and Transcode into `Avid MediaFiles/MXF/<n>/` as MXF
     OP-Atom (DNx and PCM).
