@@ -699,13 +699,13 @@ private slots:
         QVERIFY(clip);
         clip->fields.insert(QStringLiteral("Tape"), QStringLiteral("A007"));
         // The PSNR each resolution keeps at least: ours, measured on this
-        // chart (44.3, 48.6, 50.0, 52.9 and 53.1 dB with FFmpeg 6.1) less
-        // some 3-4 dB for other FFmpeg versions.
+        // chart (44.3, 48.6, 50.0, 52.9 and, RGB, 51.5 dB with FFmpeg 6.1)
+        // less some 3-4 dB for other FFmpeg versions.
         const QList<QPair<QString, double>> expected{{QStringLiteral("dnx_lb"), 40.0},
                                                     {QStringLiteral("dnx_sq"), 45.0},
                                                     {QStringLiteral("dnx_hq"), 46.0},
                                                     {QStringLiteral("dnx_hqx"), 49.0},
-                                                    {QStringLiteral("dnx_444"), 49.0}};
+                                                    {QStringLiteral("dnx_444"), 47.0}};
         double previous = 0;
         VideoReader original;
         QVERIFY(original.open(source));
@@ -728,16 +728,23 @@ private slots:
             VideoReader copy;
             QVERIFY(copy.open(link->path));
             double worst = 1000;
+            Psnr planes{1000, 1000, 1000};
             for (int f = 0; f < kFrames; ++f) {
                 const auto psnr = comparePictures(original, f, copy, f);
                 QVERIFY(psnr);
                 worst = std::min(worst, psnr->worst());
+                planes = {std::min(planes.y, psnr->y), std::min(planes.cb, psnr->cb), std::min(planes.cr, psnr->cr)};
             }
-            qInfo("%s: worst plane PSNR %.2f dB (at least %.1f)", qPrintable(id), worst, minimum);
+            qInfo("%s (%s): worst plane PSNR %.2f dB (at least %.1f); Y' %.2f, Cb %.2f, Cr %.2f", qPrintable(id),
+                  qPrintable(copy.info().pixelFormat), worst, minimum, planes.y, planes.cb, planes.cr);
             QVERIFY2(worst >= minimum, qPrintable(QStringLiteral("%1: %2 dB").arg(id).arg(worst)));
-            // Each resolution up keeps more.
-            QVERIFY2(worst > previous - 0.5, qPrintable(QStringLiteral("%1 is no better than the one below").arg(id)));
-            previous = worst;
+            // Each Y'CbCr resolution up keeps more (444 is RGB: converting
+            // from the 4:2:2 source costs its own rounding).
+            if (!c.resolution.rgb) {
+                QVERIFY2(worst > previous - 0.5,
+                         qPrintable(QStringLiteral("%1 is no better than the one below").arg(id)));
+                previous = worst;
+            }
         }
     }
 

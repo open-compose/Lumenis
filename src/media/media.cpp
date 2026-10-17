@@ -658,6 +658,45 @@ bool VideoReader::planes(std::int64_t number, QSize size, std::vector<std::uint1
     const AVFrame* f = d_->frame;
     const int w = size.isValid() && !size.isEmpty() ? size.width() : f->width;
     const int h = size.isValid() && !size.isEmpty() ? size.height() : f->height;
+    const auto format = static_cast<AVPixelFormat>(f->format);
+    const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(format);
+    if (desc && (desc->flags & AV_PIX_FMT_FLAG_RGB) && (desc->flags & AV_PIX_FMT_FLAG_PLANAR) && !(desc->flags & AV_PIX_FMT_FLAG_FLOAT) &&
+        desc->comp[0].depth > 8 && desc->comp[0].depth <= 16 && w == f->width && h == f->height) {
+        // Planar RGB (DNx 444) becomes Rec. 709 legal-range Y'CbCr here,
+        // exactly, so the comparison does not depend on swscale's RGB
+        // path, which differs between FFmpeg versions.
+        const int depth = desc->comp[0].depth;
+        const double full = static_cast<double>((1 << depth) - 1);
+        const std::size_t n = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+        y->assign(n, 0);
+        cb->assign(n, 0);
+        cr->assign(n, 0);
+        // The descriptor's components are R, G and B, wherever their planes
+        // are (gbrp: G, B, R).
+        const int rPlane = desc->comp[0].plane;
+        const int gPlane = desc->comp[1].plane;
+        const int bPlane = desc->comp[2].plane;
+        auto sample = [&](int plane, int x, int row) {
+            const auto* line = reinterpret_cast<const std::uint16_t*>(f->data[plane] + static_cast<std::ptrdiff_t>(row) * f->linesize[plane]);
+            return static_cast<double>(line[x]) / full;
+        };
+        for (int row = 0; row < h; ++row) {
+            for (int x = 0; x < w; ++x) {
+                const double r = sample(rPlane, x, row);
+                const double g = sample(gPlane, x, row);
+                const double b = sample(bPlane, x, row);
+                const double luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                const double pb = (b - luma) / 1.8556;
+                const double pr = (r - luma) / 1.5748;
+                const std::size_t i = static_cast<std::size_t>(row) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x);
+                // Legal range, 16-bit: 16..235 and 16..240 scaled by 256.
+                (*y)[i] = static_cast<std::uint16_t>(std::lround(std::clamp((16.0 + 219.0 * luma) * 256.0, 0.0, 65535.0)));
+                (*cb)[i] = static_cast<std::uint16_t>(std::lround(std::clamp((128.0 + 224.0 * pb) * 256.0, 0.0, 65535.0)));
+                (*cr)[i] = static_cast<std::uint16_t>(std::lround(std::clamp((128.0 + 224.0 * pr) * 256.0, 0.0, 65535.0)));
+            }
+        }
+        return true;
+    }
     SwsContext* sws = sws_getContext(f->width, f->height, static_cast<AVPixelFormat>(f->format), w, h,
                                      AV_PIX_FMT_YUV444P16LE, SWS_BICUBIC | SWS_ACCURATE_RND | SWS_FULL_CHR_H_INT,
                                      nullptr, nullptr, nullptr);

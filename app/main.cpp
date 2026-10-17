@@ -64,6 +64,10 @@
 #include <string_view>
 
 #if defined(LUMENIS_WIN32_ATTACH_CONSOLE)
+// No min and max macros: they break std::min and std::max.
+#  ifndef NOMINMAX
+#    define NOMINMAX
+#  endif
 #  include <windows.h>
 #endif
 
