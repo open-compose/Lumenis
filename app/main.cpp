@@ -13,6 +13,7 @@
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/capture.h"
 #include "lumenis/media/media.h"
+#include "lumenis/media/playback.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/command_palette.h"
 #include "lumenis/ui/effect_palette.h"
@@ -39,20 +40,27 @@
 #include <QTimeZone>
 #include <QFile>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QMenuBar>
 #include <QSettings>
 #include <QTemporaryDir>
+#include <QElapsedTimer>
 #include <QTimer>
 
 #include <optional>
 #include <QToolButton>
 
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 #include <functional>
 #include <memory>
+#include <vector>
+#include <random>
+#include <numeric>
+#include <algorithm>
 #include <string_view>
 
 #if defined(LUMENIS_WIN32_ATTACH_CONSOLE)
@@ -66,7 +74,7 @@ bool isHeadlessInvocation(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg(argv[i]);
         if (arg == "--version" || arg == "-v" || arg == "--help" || arg == "-h" || arg == "-?"
-            || arg == "--list-providers" || arg == "--probe") {
+            || arg == "--list-providers" || arg == "--probe" || arg == "--framemd5") {
             return true;
         }
     }
@@ -173,8 +181,26 @@ int main(int argc, char** argv) {
     const QCommandLineOption probeMedia(
         QStringLiteral("probe"), QStringLiteral("Print what the media file <file> holds as JSON, then exit."),
         QStringLiteral("file"));
+    const QCommandLineOption frameMd5(
+        QStringLiteral("framemd5"),
+        QStringLiteral("Print the MD5 of each decoded video frame of <file> (or an image sequence spec), then exit."),
+        QStringLiteral("file"));
+    const QCommandLineOption shuffle(
+        QStringLiteral("shuffle"), QStringLiteral("With --framemd5: read the frames in a shuffled order, seeking."));
     parser.addOption(listProviders);
     parser.addOption(probeMedia);
+    parser.addOption(frameMd5);
+    parser.addOption(shuffle);
+    const QCommandLineOption measurePlayback(
+        QStringLiteral("measure-playback"),
+        QStringLiteral("Play the media file <file> in the Source monitor and print the frames shown and dropped and "
+                       "the picture's offset from the sound as JSON, then exit."),
+        QStringLiteral("file"));
+    const QCommandLineOption playSeconds(
+        QStringLiteral("seconds"), QStringLiteral("With --measure-playback: how long to play (default 20)."),
+        QStringLiteral("seconds"), QStringLiteral("20"));
+    parser.addOption(measurePlayback);
+    parser.addOption(playSeconds);
     parser.addOption(smokeTest);
     const QCommandLineOption sampleProject(
         QStringLiteral("sample-project"),
@@ -209,6 +235,33 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    if (parser.isSet(frameMd5)) {
+        // The decode corpus (ROADMAP Phase 2 gate 1): "<frame> <md5>" for
+        // every frame, by frame number, compared with FFmpeg's framemd5
+        // (scripts/decode-corpus.py).
+        lumenis::media::VideoReader reader;
+        QString error;
+        if (!reader.open(parser.value(frameMd5), -1, &error)) {
+            std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(parser.value(frameMd5)), qPrintable(error));
+            return 1;
+        }
+        const std::int64_t count = reader.frameCount();
+        std::vector<std::int64_t> order(static_cast<std::size_t>(std::max<std::int64_t>(count, 0)));
+        std::iota(order.begin(), order.end(), std::int64_t{0});
+        if (parser.isSet(shuffle)) {
+            std::mt19937 random(20240617);
+            std::shuffle(order.begin(), order.end(), random);
+        }
+        std::vector<QString> hashes(order.size());
+        for (const std::int64_t n : order) hashes[static_cast<std::size_t>(n)] = reader.frameMd5(n);
+        int missing = 0;
+        for (std::size_t n = 0; n < hashes.size(); ++n) {
+            if (hashes[n].isEmpty()) ++missing;
+            std::printf("%zu %s\n", n, hashes[n].isEmpty() ? "-" : qPrintable(hashes[n]));
+        }
+        return missing == 0 ? 0 : 2;
+    }
+
     auto& guiApp = static_cast<QApplication&>(*app);
     lumenis::ui::applyTheme(guiApp);
     // Warnings and errors also go to Tools > Console (p.101).
@@ -225,7 +278,7 @@ int main(int argc, char** argv) {
     // Test and tooling modes always start from the defaults so their output
     // does not depend on the user's saved settings.
     const bool useSavedSettings = !parser.isSet(defaultLayout) && !parser.isSet(dumpMenus)
-        && !parser.isSet(screenshot) && !parser.isSet(smokeTest);
+        && !parser.isSet(screenshot) && !parser.isSet(smokeTest) && !parser.isSet(measurePlayback);
     QSettings settings;
     if (useSavedSettings) {
         commands.loadShortcuts(settings);
@@ -271,6 +324,91 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "cannot write %s\n", qPrintable(target));
             return 1;
         }
+        return 0;
+    }
+
+    if (parser.isSet(measurePlayback)) {
+        // Real-time playback and A/V sync (ROADMAP Phase 2 gates 3 and 4):
+        // the file in a project of its own format, played at normal speed.
+        const QString file = parser.value(measurePlayback);
+        const auto info = lumenis::media::probe(file);
+        const lumenis::media::StreamInfo* video = info ? info->firstVideo() : nullptr;
+        if (!video) {
+            std::fprintf(stderr, "%s has no picture\n", qPrintable(file));
+            return 1;
+        }
+        QTemporaryDir dir;
+        lumenis::model::ProjectSettings s;
+        s.name = QStringLiteral("Playback");
+        s.format = lumenis::projectFormatPresets().front();
+        s.format.width = video->width;
+        s.format.height = video->height;
+        if (video->frameRate.num() > 0) s.format.editRate = video->frameRate;
+        const QString users = dir.filePath(QStringLiteral("Users"));
+        lumenis::model::UserProfiles(users).create(QStringLiteral("editor"));
+        window.settings().setUser(users, QStringLiteral("editor"));
+        const auto entry = lumenis::model::ProjectStore(dir.filePath(QStringLiteral("Projects"))).create(s);
+        if (!entry) return 1;
+        window.setProject(*entry);
+        window.resize(1280, 780);
+        window.show();
+        const QString binId = window.binContainer().newBin();
+        lumenis::ui::BinDocument* bin = window.binContainer().openBin(binId);
+        const QStringList ids = bin ? window.linkFiles(binId, {file}) : QStringList{};
+        if (ids.isEmpty()) {
+            std::fprintf(stderr, "cannot link %s\n", qPrintable(file));
+            return 1;
+        }
+        const lumenis::model::BinItem item = *bin->bin().item(ids.first());
+        lumenis::ui::Composer& composer = window.composer();
+        composer.loadDefault(binId, item);
+        composer.setActiveMonitor(lumenis::ui::MonitorId::Source);
+        const int seconds = std::max(parser.value(playSeconds).toInt(), 1);
+        // Every 20 ms: where the picture is against the sound heard, in
+        // frames, after half a second for the output to start.
+        double low = 1e9;
+        double high = -1e9;
+        double sum = 0;
+        std::int64_t samples = 0;
+        QElapsedTimer clock;
+        QTimer sampler;
+        sampler.setInterval(20);
+        QObject::connect(&sampler, &QTimer::timeout, [&] {
+            if (!composer.isPlaying() || !window.isPlayingSound() || clock.elapsed() < 500) return;
+            const double heard = lumenis::media::samplesToFrames(window.soundClock(), item.editRate);
+            const double offset =
+                static_cast<double>(composer.state(lumenis::ui::MonitorId::Source).position()) - heard;
+            low = std::min(low, offset);
+            high = std::max(high, offset);
+            sum += offset;
+            ++samples;
+        });
+        composer.play(1);
+        clock.start();
+        sampler.start();
+        QTimer::singleShot(seconds * 1000, &guiApp, [&] {
+            composer.stop();
+            QApplication::quit();
+        });
+        guiApp.exec();
+        // The picture shows the frame the sound is in: a frame behind the
+        // sound's position at most, so lip sync is the offset's distance
+        // from the middle of that frame.
+        const double mean = samples > 0 ? sum / static_cast<double>(samples) : 0.0;
+        const QJsonObject result{
+            {QStringLiteral("file"), file},
+            {QStringLiteral("seconds"), seconds},
+            {QStringLiteral("rate"), QString::number(item.editRate.toDouble(), 'f', 3)},
+            {QStringLiteral("shown"), static_cast<qint64>(composer.playStats().shown)},
+            {QStringLiteral("dropped"), static_cast<qint64>(composer.playStats().dropped)},
+            {QStringLiteral("sound"), samples > 0},
+            {QStringLiteral("offsetMin"), samples > 0 ? low : 0.0},
+            {QStringLiteral("offsetMax"), samples > 0 ? high : 0.0},
+            {QStringLiteral("offsetMean"), mean},
+            {QStringLiteral("lipSyncError"), samples > 0 ? std::max(std::abs(low + 0.5), std::abs(high + 0.5)) : 0.0},
+        };
+        const QByteArray json = QJsonDocument(result).toJson();
+        std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
         return 0;
     }
 

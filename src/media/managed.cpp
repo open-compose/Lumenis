@@ -169,9 +169,18 @@ public:
         s.height = creation_.raster.height();
         MediaWriter writer;
         if (!writer.open(path, s, error)) return false;
+        // Fitted into the raster keeping its shape, on black, straight from
+        // the decoded picture: no 8-bit step between (10-bit DNx keeps its
+        // depth; ROADMAP Phase 2 gate 5).
+        const QSize picture = QSize(reader.info().width, reader.info().height).scaled(creation_.raster, Qt::KeepAspectRatio);
+        const QRect target(QPoint((creation_.raster.width() - picture.width()) / 2,
+                                  (creation_.raster.height() - picture.height()) / 2),
+                           picture);
         for (std::int64_t f = in_; f < out_; ++f) {
-            const QImage frame = reader.frame(link_.fileFrame(f, clip_.editRate));
-            if (!writer.writeVideo(fitted(frame, creation_.raster))) {
+            bool ok = writer.writeVideoFrom(reader, link_.fileFrame(f, clip_.editRate), target);
+            // A frame that cannot be read is black.
+            if (!ok && writer.lastError().isEmpty()) ok = writer.writeVideo(fitted(QImage(), creation_.raster));
+            if (!ok) {
                 if (error) *error = writer.lastError();
                 return false;
             }

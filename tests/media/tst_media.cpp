@@ -12,6 +12,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QTemporaryDir>
+#include <QPainter>
 #include <QTest>
 
 #include <cmath>
@@ -642,6 +643,102 @@ private slots:
         QVERIFY(QFileInfo::exists(source));
         QCOMPARE(db.fileCount(), 2);
         QVERIFY(!cache.isOnline(*whole));
+    }
+
+    void transcodeRoundTrips() {
+        // ROADMAP Phase 2 gate 5: transcoding keeps the picture to each
+        // resolution's expected PSNR in Y'CbCr, and the timecode and tape.
+        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        // A lossless 10-bit Y'CbCr source with detail: gradients, edges,
+        // circles and fine noise.
+        const QString source = dir.filePath(QStringLiteral("Chart.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("yuv422p10le");
+        s.width = 1280;
+        s.height = 720;
+        s.frameRate = Rational(25);
+        s.startTimecode = QStringLiteral("07:59:50:00");
+        constexpr int kFrames = 4;
+        {
+            MediaWriter w;
+            QVERIFY(w.open(source, s));
+            for (int f = 0; f < kFrames; ++f) {
+                QImage image(1280, 720, QImage::Format_RGBA8888);
+                QPainter p(&image);
+                QLinearGradient g(0, 0, 1280, 720);
+                g.setColorAt(0, QColor(30, 40, 200));
+                g.setColorAt(0.5, QColor(220, 200, 40));
+                g.setColorAt(1, QColor(20, 160, 60));
+                p.fillRect(image.rect(), g);
+                p.setPen(QPen(Qt::white, 3));
+                for (int i = 0; i < 12; ++i) p.drawEllipse(QPoint(100 + i * 95 + f * 4, 360), 40 + i * 4, 40 + i * 4);
+                // Hard edges, as titles have (no fonts in a test without a
+                // GUI application).
+                p.fillRect(QRect(0, 600, 1280, 60), QColor(16, 16, 16));
+                for (int i = 0; i < 40; ++i) p.fillRect(QRect(20 + i * 31 + f, 610, 3 + i % 9, 40), QColor(235, 235, 235));
+                p.end();
+                quint32 seed = 1234u + static_cast<quint32>(f);
+                for (int y = 0; y < 720; y += 2) {
+                    auto* line = reinterpret_cast<quint8*>(image.scanLine(y));
+                    for (int x = 0; x < 1280 * 4; ++x) {
+                        if (x % 4 == 3) continue;
+                        seed = seed * 1664525u + 1013904223u;
+                        line[x] = static_cast<quint8>(std::clamp(static_cast<int>(line[x]) + static_cast<int>(seed >> 29) - 4, 0, 255));
+                    }
+                }
+                QVERIFY(w.writeVideo(image));
+            }
+            QVERIFY(w.finish());
+        }
+        LinkOptions o;
+        o.editRate = Rational(25);
+        auto clip = linkClip(*probe(source), o);
+        QVERIFY(clip);
+        clip->fields.insert(QStringLiteral("Tape"), QStringLiteral("A007"));
+        // The PSNR each resolution keeps at least: ours, measured on this
+        // chart (44.3, 48.6, 50.0, 52.9 and 53.1 dB with FFmpeg 6.1) less
+        // some 3-4 dB for other FFmpeg versions.
+        const QList<QPair<QString, double>> expected{{QStringLiteral("dnx_lb"), 40.0},
+                                                    {QStringLiteral("dnx_sq"), 45.0},
+                                                    {QStringLiteral("dnx_hq"), 46.0},
+                                                    {QStringLiteral("dnx_hqx"), 49.0},
+                                                    {QStringLiteral("dnx_444"), 49.0}};
+        double previous = 0;
+        VideoReader original;
+        QVERIFY(original.open(source));
+        for (const auto& [id, minimum] : expected) {
+            MediaCreation c;
+            c.raster = QSize(1280, 720);
+            c.resolution = *findResolution(id);
+            c.videoDrive = dir.filePath(id);
+            QVERIFY(QDir().mkpath(c.videoDrive));
+            QString error;
+            const auto made = transcodeClip(*clip, 0, -1, c, &error);
+            QVERIFY2(made, qPrintable(error));
+            const auto link = linkOf(*made);
+            const auto info = probe(link->path);
+            QVERIFY(info);
+            QCOMPARE(info->startTimecode, QStringLiteral("07:59:50:00"));
+            QCOMPARE(info->reelName, QStringLiteral("A007"));
+            QCOMPARE(made->fields.value(QStringLiteral("Tape")), QStringLiteral("A007"));
+            QCOMPARE(made->fields.value(QStringLiteral("Start")), QStringLiteral("07:59:50:00"));
+            VideoReader copy;
+            QVERIFY(copy.open(link->path));
+            double worst = 1000;
+            for (int f = 0; f < kFrames; ++f) {
+                const auto psnr = comparePictures(original, f, copy, f);
+                QVERIFY(psnr);
+                worst = std::min(worst, psnr->worst());
+            }
+            qInfo("%s: worst plane PSNR %.2f dB (at least %.1f)", qPrintable(id), worst, minimum);
+            QVERIFY2(worst >= minimum, qPrintable(QStringLiteral("%1: %2 dB").arg(id).arg(worst)));
+            // Each resolution up keeps more.
+            QVERIFY2(worst > previous - 0.5, qPrintable(QStringLiteral("%1 is no better than the one below").arg(id)));
+            previous = worst;
+        }
     }
 
     void provider() {

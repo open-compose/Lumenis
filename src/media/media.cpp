@@ -3,6 +3,7 @@
 #include "lumenis/ext/codec.h"
 #include "lumenis/ext/provider.h"
 
+#include <QCryptographicHash>
 #include <QJsonArray>
 #include <QStringList>
 
@@ -57,9 +58,32 @@ QString metadata(AVDictionary* dict, const char* key) {
     return e ? QString::fromUtf8(e->value) : QString();
 }
 
+bool isRgbFormat(AVPixelFormat format) {
+    const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(format);
+    return desc && (desc->flags & AV_PIX_FMT_FLAG_RGB);
+}
+
+// The colour space a decoded frame is in: what it says, else Rec. 709 for
+// HD and larger, Rec. 601 for SD.
+int colourSpaceOf(const AVFrame* f) {
+    if (f->colorspace == AVCOL_SPC_BT709) return SWS_CS_ITU709;
+    if (f->colorspace == AVCOL_SPC_SMPTE170M || f->colorspace == AVCOL_SPC_BT470BG) return SWS_CS_SMPTE170M;
+    return f->height > 576 ? SWS_CS_ITU709 : SWS_CS_SMPTE170M;
+}
+
+bool fullRange(const AVFrame* f) {
+    return isRgbFormat(static_cast<AVPixelFormat>(f->format)) || f->color_range == AVCOL_RANGE_JPEG ||
+           f->format == AV_PIX_FMT_YUVJ420P || f->format == AV_PIX_FMT_YUVJ422P || f->format == AV_PIX_FMT_YUVJ444P;
+}
+
 // The edit rate of a video stream: its average rate, else its base rate.
 AVRational videoRate(const AVStream* st) {
-    if (st->avg_frame_rate.num > 0 && st->avg_frame_rate.den > 0) return st->avg_frame_rate;
+    // An average guessed from the bit rate can be absurd (raw DV: 60000
+    // fps); the base rate is right then.
+    const bool sane = st->avg_frame_rate.num > 0 && st->avg_frame_rate.den > 0 &&
+                      av_q2d(st->avg_frame_rate) <= 1000.0;
+    if (!sane && st->r_frame_rate.num > 0 && st->r_frame_rate.den > 0) return st->r_frame_rate;
+    if (sane) return st->avg_frame_rate;
     if (st->r_frame_rate.num > 0 && st->r_frame_rate.den > 0) return st->r_frame_rate;
     return AVRational{25, 1};
 }
@@ -103,6 +127,24 @@ Input openInput(const QString& path, QString* error) {
         return nullptr;
     }
     return in;
+}
+
+// Some formats (raw DV, elementary streams) have no index: FFmpeg guesses
+// the length from the bit rate, which can be far off. Their frames are
+// counted instead: a packet each.
+bool lengthIsGuessed(const AVFormatContext* fmt) {
+    return fmt->duration_estimation_method == AVFMT_DURATION_FROM_BITRATE;
+}
+
+std::int64_t countPackets(AVFormatContext* fmt, int stream) {
+    AVPacket* packet = av_packet_alloc();
+    std::int64_t n = 0;
+    while (av_read_frame(fmt, packet) >= 0) {
+        if (packet->stream_index == stream) ++n;
+        av_packet_unref(packet);
+    }
+    av_packet_free(&packet);
+    return n;
 }
 
 StreamInfo describe(const AVFormatContext* fmt, const AVStream* st) {
@@ -305,6 +347,9 @@ std::optional<MediaInfo> probe(const QString& path, QString* error) {
     for (unsigned i = 0; i < in->nb_streams; ++i) {
         const AVStream* st = in->streams[i];
         info.streams.push_back(describe(in.get(), st));
+        if (info.streams.back().kind == StreamKind::Video && lengthIsGuessed(in.get())) {
+            info.streams.back().length = countPackets(in.get(), static_cast<int>(i));
+        }
         // QuickTime keeps the timecode and reel on its timecode track.
         if (info.startTimecode.isEmpty()) info.startTimecode = metadata(st->metadata, "timecode");
         if (info.reelName.isEmpty()) info.reelName = metadata(st->metadata, "reel_name");
@@ -411,11 +456,12 @@ struct VideoReader::Impl {
         avcodec_free_context(&dec);
     }
 
+    std::int64_t first = 0; // the first frame's time
     std::int64_t toPts(std::int64_t n) const {
-        return streamStart(stream) + av_rescale_q(n, inverse(rate), stream->time_base);
+        return first + av_rescale_q(n, inverse(rate), stream->time_base);
     }
     std::int64_t toFrame(std::int64_t pts) const {
-        return av_rescale_q_rnd(pts - streamStart(stream), stream->time_base, inverse(rate),
+        return av_rescale_q_rnd(pts - first, stream->time_base, inverse(rate),
                                 static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
     }
 
@@ -461,6 +507,11 @@ struct VideoReader::Impl {
         }
     }
 
+    // Decodes frame `number` into `frame`.
+    bool locate(std::int64_t number);
+    bool rewind();
+    QString path;
+
     QImage convert(QSize size) {
         const int w = size.isValid() && !size.isEmpty() ? size.width() : frame->width;
         const int h = size.isValid() && !size.isEmpty() ? size.height() : frame->height;
@@ -498,18 +549,34 @@ bool VideoReader::open(const QString& path, int streamIndex, QString* error) {
         setError(error, QStringLiteral("no video stream"));
         return false;
     }
+    d->path = path;
     d->stream = d->fmt->streams[streamIndex];
     d->dec = openDecoder(d->stream, error);
     if (!d->dec) return false;
     d->rate = videoRate(d->stream);
     d->info = describe(d->fmt.get(), d->stream);
+    if (lengthIsGuessed(d->fmt.get())) {
+        // Counted on a file of its own: some demuxers (raw DV) do not read
+        // on properly after reaching the end and seeking back.
+        if (Input counter = openInput(path, nullptr)) d->info.length = countPackets(counter.get(), streamIndex);
+    }
     if (const auto seq = ImageSequence::fromSpec(path)) {
         d->info.length = seq->count; // the run chosen, not every file after it
         d->info.frameRate = seq->rate;
     }
     d->packet = av_packet_alloc();
     d->frame = av_frame_alloc();
-    d->next = 0;
+    // Frame 0 is the first one shown, which can start after the stream
+    // does (B-frames in AVI and MPEG-TS): its time is where counting starts.
+    d->first = streamStart(d->stream);
+    d->next = -1;
+    std::int64_t number = 0;
+    if (d->decodeNext(number)) {
+        const std::int64_t pts = d->frame->best_effort_timestamp != kNoPts ? d->frame->best_effort_timestamp
+                                                                           : d->frame->pts;
+        if (pts != kNoPts) d->first = pts;
+    }
+    d->seek(0);
     d_ = std::move(d);
     return true;
 }
@@ -526,26 +593,114 @@ std::int64_t VideoReader::frameCount() const {
     return d_ ? d_->info.length : 0;
 }
 
-QImage VideoReader::frame(std::int64_t number, QSize size) {
-    if (!d_ || number < 0 || (d_->info.length > 0 && number >= d_->info.length)) return {};
+bool VideoReader::Impl::rewind() {
+    // A fresh start: some formats (MPEG-TS, AVI) do not seek back to their
+    // first frames exactly.
+    const int index = stream->index;
+    Input again = openInput(path, nullptr);
+    if (!again || index >= static_cast<int>(again->nb_streams)) return false;
+    AVCodecContext* fresh = openDecoder(again->streams[index], nullptr);
+    if (!fresh) return false;
+    avcodec_free_context(&dec);
+    dec = fresh;
+    fmt = std::move(again);
+    stream = fmt->streams[index];
+    eof = false;
+    next = -1;
+    return true;
+}
+
+bool VideoReader::Impl::locate(std::int64_t number) {
+    if (number < 0 || (info.length > 0 && number >= info.length)) return false;
     // The next frame continues decoding; anything else seeks first.
-    if (d_->next != number) d_->seek(number);
+    if (next != number) seek(number);
     std::int64_t got = -1;
-    bool retried = false;
-    while (d_->decodeNext(got)) {
-        if (got < number) continue;
-        if (got > number && !retried) {
-            // The seek landed after the frame: decode from the start.
-            retried = true;
-            avcodec_flush_buffers(d_->dec);
-            av_seek_frame(d_->fmt.get(), d_->stream->index, streamStart(d_->stream), AVSEEK_FLAG_BACKWARD);
-            d_->eof = false;
-            continue;
+    bool rewound = false;
+    for (;;) {
+        while (decodeNext(got)) {
+            if (got < number) continue;
+            if (got > number && !rewound) break; // the seek landed after it
+            return true;
         }
-        return d_->convert(size);
+        // Not found where the seek went, or passed: from the start, frame by
+        // frame.
+        if (rewound || !rewind()) break;
+        rewound = true;
     }
-    d_->next = -1;
-    return {};
+    next = -1;
+    return false;
+}
+
+QImage VideoReader::frame(std::int64_t number, QSize size) {
+    if (!d_ || !d_->locate(number)) return {};
+    return d_->convert(size);
+}
+
+QString VideoReader::frameMd5(std::int64_t number) {
+    if (!d_ || !d_->locate(number)) return {};
+    // As FFmpeg's framemd5 muxer hashes a decoded picture: its planes
+    // packed one after another, rows without padding.
+    const AVFrame* f = d_->frame;
+    const auto format = static_cast<AVPixelFormat>(f->format);
+    const int size = av_image_get_buffer_size(format, f->width, f->height, 1);
+    if (size <= 0) return {};
+    QByteArray bytes(size, Qt::Uninitialized);
+    if (av_image_copy_to_buffer(reinterpret_cast<std::uint8_t*>(bytes.data()), size, f->data, f->linesize, format,
+                                f->width, f->height, 1) < 0) {
+        return {};
+    }
+    return QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Md5).toHex());
+}
+
+bool VideoReader::planes(std::int64_t number, QSize size, std::vector<std::uint16_t>* y, std::vector<std::uint16_t>* cb,
+                         std::vector<std::uint16_t>* cr) {
+    if (!d_ || !d_->locate(number)) return false;
+    const AVFrame* f = d_->frame;
+    const int w = size.isValid() && !size.isEmpty() ? size.width() : f->width;
+    const int h = size.isValid() && !size.isEmpty() ? size.height() : f->height;
+    SwsContext* sws = sws_getContext(f->width, f->height, static_cast<AVPixelFormat>(f->format), w, h,
+                                     AV_PIX_FMT_YUV444P16LE, SWS_BICUBIC | SWS_ACCURATE_RND | SWS_FULL_CHR_H_INT,
+                                     nullptr, nullptr, nullptr);
+    if (!sws) return false;
+    // RGB pictures become Rec. 709 Y'CbCr; Y'CbCr ones keep their values.
+    sws_setColorspaceDetails(sws, sws_getCoefficients(SWS_CS_ITU709), fullRange(f) ? 1 : 0,
+                             sws_getCoefficients(SWS_CS_ITU709), 0, 0, 1 << 16, 1 << 16);
+    const std::size_t n = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+    y->assign(n, 0);
+    cb->assign(n, 0);
+    cr->assign(n, 0);
+    std::uint8_t* dst[4] = {reinterpret_cast<std::uint8_t*>(y->data()), reinterpret_cast<std::uint8_t*>(cb->data()),
+                            reinterpret_cast<std::uint8_t*>(cr->data()), nullptr};
+    const int stride[4] = {w * 2, w * 2, w * 2, 0};
+    sws_scale(sws, f->data, f->linesize, 0, f->height, dst, stride);
+    sws_freeContext(sws);
+    return true;
+}
+
+double Psnr::worst() const {
+    return std::min({y, cb, cr});
+}
+
+std::optional<Psnr> comparePictures(VideoReader& a, std::int64_t frameA, VideoReader& b, std::int64_t frameB) {
+    std::vector<std::uint16_t> ay, acb, acr, by, bcb, bcr;
+    if (!a.planes(frameA, {}, &ay, &acb, &acr)) return std::nullopt;
+    const QSize size(a.info().width, a.info().height);
+    if (!b.planes(frameB, size, &by, &bcb, &bcr)) return std::nullopt;
+    auto psnr = [](const std::vector<std::uint16_t>& p, const std::vector<std::uint16_t>& q) {
+        double sum = 0;
+        for (std::size_t i = 0; i < p.size() && i < q.size(); ++i) {
+            const double d = static_cast<double>(p[i]) - static_cast<double>(q[i]);
+            sum += d * d;
+        }
+        const double mse = sum / static_cast<double>(std::max<std::size_t>(p.size(), 1));
+        if (mse <= 0) return 100.0;
+        return 10.0 * std::log10(65535.0 * 65535.0 / mse);
+    };
+    Psnr r;
+    r.y = psnr(ay, by);
+    r.cb = psnr(acb, bcb);
+    r.cr = psnr(acr, bcr);
+    return r;
 }
 
 // ---------------------------------------------------------------- AudioReader
@@ -927,8 +1082,9 @@ bool MediaWriter::writeVideo(const QImage& image) {
                                  d.venc->pix_fmt, SWS_BICUBIC, nullptr, nullptr, nullptr);
     if (!d.sws) return d.fail(QStringLiteral("cannot convert the picture"));
     const int space = d.rec709 ? SWS_CS_ITU709 : SWS_CS_SMPTE170M;
-    sws_setColorspaceDetails(d.sws, sws_getCoefficients(SWS_CS_DEFAULT), 1, sws_getCoefficients(space), 0, 0, 1 << 16,
-                             1 << 16);
+    // RGB is full range; Y'CbCr legal range.
+    sws_setColorspaceDetails(d.sws, sws_getCoefficients(SWS_CS_DEFAULT), 1, sws_getCoefficients(space),
+                             isRgbFormat(d.venc->pix_fmt) ? 1 : 0, 0, 1 << 16, 1 << 16);
     av_frame_make_writable(d.vframe);
     const std::uint8_t* src[4] = {rgba.constBits(), nullptr, nullptr, nullptr};
     const int srcStride[4] = {static_cast<int>(rgba.bytesPerLine()), 0, 0, 0};
@@ -937,6 +1093,55 @@ bool MediaWriter::writeVideo(const QImage& image) {
     d.vframe->color_primaries = d.venc->color_primaries;
     d.vframe->color_trc = d.venc->color_trc;
     d.vframe->color_range = AVCOL_RANGE_MPEG;
+    d.vframe->pts = d.vpts++;
+    return d.encode(d.venc, d.vst, d.vframe);
+}
+
+
+bool MediaWriter::writeVideoFrom(VideoReader& reader, std::int64_t number, QRect target) {
+    Impl& d = *d_;
+    if (!d.venc) return d.fail(QStringLiteral("no video stream"));
+    if (!reader.d_ || !reader.d_->locate(number)) return false;
+    const AVFrame* src = reader.d_->frame;
+    const auto format = d.venc->pix_fmt;
+    const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(format);
+    if (!desc) return d.fail(QStringLiteral("unknown pixel format"));
+    if (target.isEmpty()) target = QRect(0, 0, d.venc->width, d.venc->height);
+    // Even, inside the raster: chroma is shared by pairs of pixels.
+    target = target.intersected(QRect(0, 0, d.venc->width, d.venc->height));
+    target.setRect(target.x() & ~1, target.y() & ~1, target.width() & ~1, target.height() & ~1);
+    if (target.isEmpty()) return d.fail(QStringLiteral("nothing to draw into"));
+    av_frame_make_writable(d.vframe);
+    const bool rgbOut = isRgbFormat(format);
+    std::ptrdiff_t lines[4] = {d.vframe->linesize[0], d.vframe->linesize[1], d.vframe->linesize[2],
+                               d.vframe->linesize[3]};
+    av_image_fill_black(d.vframe->data, lines, format, rgbOut ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG, d.venc->width,
+                        d.venc->height);
+    // Where the target's corner is in each plane.
+    std::uint8_t* dst[4] = {nullptr, nullptr, nullptr, nullptr};
+    for (int plane = 0; plane < 4 && d.vframe->data[plane]; ++plane) {
+        int step = 1;
+        for (int c = 0; c < desc->nb_components; ++c) {
+            if (desc->comp[c].plane == plane) step = desc->comp[c].step;
+        }
+        const bool chroma = !rgbOut && (plane == 1 || plane == 2);
+        const int x = chroma ? target.x() >> desc->log2_chroma_w : target.x();
+        const int y = chroma ? target.y() >> desc->log2_chroma_h : target.y();
+        dst[plane] = d.vframe->data[plane] + static_cast<std::ptrdiff_t>(y) * d.vframe->linesize[plane] +
+                     static_cast<std::ptrdiff_t>(x) * step;
+    }
+    d.sws = sws_getCachedContext(d.sws, src->width, src->height, static_cast<AVPixelFormat>(src->format),
+                                 target.width(), target.height(), format,
+                                 SWS_BICUBIC | SWS_ACCURATE_RND | SWS_FULL_CHR_H_INT, nullptr, nullptr, nullptr);
+    if (!d.sws) return d.fail(QStringLiteral("cannot convert the picture"));
+    sws_setColorspaceDetails(d.sws, sws_getCoefficients(colourSpaceOf(src)), fullRange(src) ? 1 : 0,
+                             sws_getCoefficients(d.rec709 ? SWS_CS_ITU709 : SWS_CS_SMPTE170M), rgbOut ? 1 : 0, 0,
+                             1 << 16, 1 << 16);
+    sws_scale(d.sws, src->data, src->linesize, 0, src->height, dst, d.vframe->linesize);
+    d.vframe->colorspace = d.venc->colorspace;
+    d.vframe->color_primaries = d.venc->color_primaries;
+    d.vframe->color_trc = d.venc->color_trc;
+    d.vframe->color_range = rgbOut ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
     d.vframe->pts = d.vpts++;
     return d.encode(d.venc, d.vst, d.vframe);
 }

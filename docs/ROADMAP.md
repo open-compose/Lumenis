@@ -457,11 +457,29 @@ Sub-steps:
     from a bin can delete their media.
   * Background Consolidate/Transcode and the Background Queue Window
     (`background_queue.*`).
-* **2.5 The gates below:**
-  * The decode corpus with frame MD5s.
-  * Real-time playback.
-  * A/V sync.
-  * Transcode round trips.
+* **2.5 The gates below — automated where they can be** (BUILDING.md,
+  "Phase 2 gates").
+  * Gate 1: `decode_corpus` (ctest, `scripts/decode-corpus.py`): about 150
+    files made by the FFmpeg command for every codec, rate and raster it can
+    encode. Every frame, read by seeking in a shuffled order
+    (`cutthulhu --framemd5 --shuffle`), matches FFmpeg's framemd5. It found
+    and fixed: frames counted from the first one shown (B-frames in AVI and
+    MPEG-TS), a sane frame rate and counted length for files without an
+    index (raw DV), and a reliable rewind when a seek overshoots.
+  * Gate 2: `scripts/check-mxf.py` runs bmx's mxf2raw when installed;
+    linking into Media Composer is by hand **(M)**.
+  * Gates 3 and 4: `cutthulhu --measure-playback` and
+    `scripts/measure-playback.py` (DNxHD 120 1080p25 with a tone; dropped
+    frames and lip sync). The 10- and 60-minute runs on the reference
+    machines are by hand **(M)**.
+  * Gate 5: `tst_media` `transcodeRoundTrips`: each DNx resolution's
+    Y'CbCr PSNR (expected values are ours, measured), timecode and tape.
+    Transcoding now goes straight from the decoded picture to the encoder
+    at full depth (10-bit DNx kept 10 bits; 444 was 33 dB, now 53 dB).
+
+**Gate status (Phase 2):** 1 and 5 pass on Linux (FFmpeg 6.1, 156 files);
+the CI runners run them on every push. 3 and 4 pass short runs here and wait on the reference-machine
+runs; 2 waits on bmx and a Media Composer seat.
 
 * Linking (AMA-style) and Import/Consolidate/Transcode into an Avid MediaFiles
   layout: `Avid MediaFiles/MXF/<n>/`.

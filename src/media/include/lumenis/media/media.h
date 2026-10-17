@@ -117,8 +117,16 @@ public:
     // The frame as RGBA (8 bits per channel), scaled to `size` if given,
     // keeping it otherwise. Empty if the frame is past the end.
     QImage frame(std::int64_t number, QSize size = {});
+    // The MD5 of the frame as decoded, before any conversion, as FFmpeg's
+    // framemd5 gives it (the decode corpus, ROADMAP Phase 2 gate 1).
+    QString frameMd5(std::int64_t number);
+    // The frame as Y'CbCr 4:4:4 16-bit planes at `size` (or its own), for
+    // comparing pictures.
+    bool planes(std::int64_t number, QSize size, std::vector<std::uint16_t>* y, std::vector<std::uint16_t>* cb,
+                std::vector<std::uint16_t>* cr);
 
 private:
+    friend class MediaWriter;
     struct Impl;
     std::unique_ptr<Impl> d_;
 };
@@ -179,6 +187,10 @@ public:
     bool open(const QString& path, const WriterSettings& settings, QString* error = nullptr);
     // The next video frame (any QImage format; converted and scaled).
     bool writeVideo(const QImage& frame);
+    // The next video frame from a reader's frame, straight from its decoded
+    // picture at full depth (transcoding), scaled into `target` (the whole
+    // raster if empty) on black. False if the frame cannot be read.
+    bool writeVideoFrom(VideoReader& reader, std::int64_t frame, QRect target = {});
     // Interleaved float samples, `count` per channel.
     bool writeAudio(const float* samples, int count);
     // Flushes the encoders and writes the trailer.
@@ -189,6 +201,18 @@ private:
     struct Impl;
     std::unique_ptr<Impl> d_;
 };
+
+// How alike two pictures are, plane by plane in Y'CbCr: the PSNR in dB of
+// luma and each chroma plane, 16-bit samples (the transcode round trips,
+// ROADMAP Phase 2 gate 5). Pictures of other sizes or RGB are converted
+// first, as Rec. 709.
+struct Psnr {
+    double y = 0;
+    double cb = 0;
+    double cr = 0;
+    double worst() const;
+};
+std::optional<Psnr> comparePictures(VideoReader& a, std::int64_t frameA, VideoReader& b, std::int64_t frameB);
 
 // Converts interleaved float audio from one sample rate to another
 // (FFmpeg's swresample).

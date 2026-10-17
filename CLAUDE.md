@@ -154,7 +154,14 @@ settings, dropped-frame counts (`Composer::playStats`).
     `relink_dialog.*`);
   - the Media Tool's media files and Delete Media (`media_tool.*`);
   - the Background Queue (`background_queue.*`).
-Next is 2.5, the Phase 2 gates (ROADMAP).
+2.5, the Phase 2 gates, is automated where it can be (ROADMAP gate
+status, BUILDING.md "Phase 2 gates"):
+  - `decode_corpus` (ctest, `scripts/decode-corpus.py`, `--framemd5`);
+  - `transcodeRoundTrips` in `tst_media` (PSNR, timecode, tape);
+  - `--measure-playback`, `scripts/measure-playback.py` and
+    `scripts/check-mxf.py` for the runs done by hand.
+Phase 2 waits on the reference-machine playback runs and Media Composer
+linking (M). Next is Phase 3 (ROADMAP).
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

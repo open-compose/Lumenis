@@ -586,6 +586,27 @@ real use and for judging speed, build natively on Windows
 **Any platform: strange errors after changing compilers, Qt or Xcode.** Delete
 the build folder (`build/<preset>`) and configure again.
 
+## Phase 2 gates
+
+* **Gate 1, the decode corpus:** `ctest --preset ci -R decode_corpus`, or
+  `python3 scripts/decode-corpus.py --app build/ci/bin/cutthulhu`. It needs
+  the `ffmpeg` command (Windows: `$env:FFMPEG_ROOT\bin\ffmpeg.exe`, from
+  `scripts/get-ffmpeg.ps1`). The first run makes the files into the user's
+  cache folder (`CUTTHULHU_DECODE_CORPUS` to choose another) and takes several
+  minutes; later runs about two. Codecs the local FFmpeg cannot encode (the
+  Windows LGPL build has no x264 or x265) are left out; at least 100 files
+  must be made. `report.json` in the folder lists each file.
+* **Gate 2, MXF:** make media (Import or Transcode), then
+  `python3 scripts/check-mxf.py "<drive>/Avid MediaFiles/MXF"`. It needs bmx's
+  `mxf2raw` (https://github.com/bbc/bmx, built from source). Then link the
+  files into Media Composer by hand.
+* **Gates 3 and 4, playback:** on a reference machine with a sound card,
+  `python3 scripts/measure-playback.py --app <cutthulhu> --seconds 600` (gate
+  3) and `--seconds 3600` (gate 4). The file is made once (about 9 GB for 10
+  minutes) into the cache folder.
+* **Gate 5, transcode round trips:** `tst_media` (`transcodeRoundTrips`)
+  prints each resolution's PSNR.
+
 ## Command-line options
 
 ```
@@ -593,6 +614,11 @@ cutthulhu --version          print the version and exit
 cutthulhu --list-providers   list loaded modules and extension providers and exit
 cutthulhu --smoke-test       open the main window, verify it, exit 0 on success
 cutthulhu --probe FILE       print what a media file holds (streams, codecs, timecode) as JSON
+cutthulhu --framemd5 FILE    print each decoded frame's MD5 (as FFmpeg's framemd5); with --shuffle,
+                             read them in a shuffled order, seeking
+cutthulhu --measure-playback FILE [--seconds N]
+                             play FILE at 1x with sound and print frames shown and dropped and
+                             the picture's offset from the sound as JSON
 cutthulhu --dump-menus FILE  write the menu bar as JSON ('-' for stdout) and exit;
                              with --sample-project, open a temporary project first
                              and add each command's id and whether it works yet
