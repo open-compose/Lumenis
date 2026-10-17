@@ -126,6 +126,11 @@ jobs:
           c++ --version | head -n1
           cmake --version | head -n1
           dpkg-query -W qt6-base-dev
+          if ! dpkg-query -W libavcodec-dev libswresample-dev >/dev/null 2>&1; then
+            echo "::error::FFmpeg is missing: run 'sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev' (BUILDING.md)"
+            exit 1
+          fi
+          dpkg-query -W libavcodec-dev
 
       - name: Configure
         # The bootstrap script must install all of Qt's Wayland support:
@@ -175,7 +180,7 @@ jobs:
           cache: true
 
       - name: Install build tools
-        run: brew install ninja
+        run: brew install ninja ffmpeg pkg-config
 
       - name: Configure
         run: cmake --preset ci-macos
@@ -253,7 +258,12 @@ jobs:
 
       - name: Check build tools
         # Installed by an administrator; the runner's user cannot use brew.
-        run: command -v ninja && command -v cmake
+        run: |
+          command -v ninja && command -v cmake
+          if [ ! -f /opt/homebrew/include/libavcodec/avcodec.h ]; then
+            echo "::error::FFmpeg is missing on the Mac: as an administrator run 'brew install ffmpeg pkg-config' (BUILDING.md)"
+            exit 1
+          fi
 
       - name: Configure
         run: cmake --preset ci-macos
@@ -342,6 +352,12 @@ jobs:
             exit 1
           }
           "QT_ROOT_DIR=$qt" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: FFmpeg (downloaded once, kept in the runner's profile)
+        shell: powershell
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\get-ffmpeg.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - uses: ilammy/msvc-dev-cmd@v1
         with:
@@ -453,6 +469,11 @@ jobs:
           c++ --version | head -n1
           cmake --version | head -n1
           dpkg-query -W qt6-base-dev
+          if ! dpkg-query -W libavcodec-dev libswresample-dev >/dev/null 2>&1; then
+            echo "::error::FFmpeg is missing: run 'sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev' (BUILDING.md)"
+            exit 1
+          fi
+          dpkg-query -W libavcodec-dev
 
       - name: Configure
         run: |
@@ -535,6 +556,12 @@ jobs:
 
       - name: Install build tools
         run: choco install ninja -y --no-progress
+
+      - name: FFmpeg
+        shell: powershell
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts\get-ffmpeg.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Configure
         run: cmake --preset ci

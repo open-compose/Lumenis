@@ -10,11 +10,13 @@ if command -v apt-get >/dev/null; then
     $sudo_cmd apt-get install -y --no-install-recommends \
         build-essential cmake ninja-build pkg-config curl file \
         qt6-base-dev qt6-base-dev-tools qt6-wayland libgl-dev \
+        libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev \
         dpkg-dev rpm
 elif command -v dnf >/dev/null; then
     $sudo_cmd dnf install -y \
         gcc-c++ cmake ninja-build pkgconf curl file \
         qt6-qtbase-devel qt6-qtwayland mesa-libGL-devel \
+        ffmpeg-free-devel \
         rpm-build
 else
     echo "Unsupported distribution: install a C++20 compiler, CMake 3.24+, Ninja and Qt 6.4+ manually." >&2

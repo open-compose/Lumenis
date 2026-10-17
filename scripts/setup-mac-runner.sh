@@ -53,6 +53,7 @@ install)
     for tool in cmake ninja; do
         [ -x "/opt/homebrew/bin/$tool" ] || die "install $tool first: brew install cmake ninja"
     done
+    [ -f /opt/homebrew/include/libavcodec/avcodec.h ] || die "install FFmpeg first: brew install ffmpeg pkg-config"
 
     # A hidden standard (not administrator) user. Its password is random and
     # never used: nobody logs in as it.

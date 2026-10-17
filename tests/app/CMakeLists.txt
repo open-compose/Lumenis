@@ -29,3 +29,8 @@ if(Python3_Interpreter_FOUND)
         PASS_REGULAR_EXPRESSION "checklist: current"
         TIMEOUT 60)
 endif()
+
+# FFmpeg is a built-in codec provider (docs/EXTENSIONS.md).
+add_test(NAME app_ffmpeg_provider COMMAND lumenis_app --list-providers)
+set_tests_properties(app_ffmpeg_provider PROPERTIES
+    PASS_REGULAR_EXPRESSION "org\\.ffmpeg\\.libavcodec.*available.*FFmpeg [0-9n]")

@@ -12,6 +12,7 @@
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/capture.h"
+#include "lumenis/media/media.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/command_palette.h"
 #include "lumenis/ui/effect_palette.h"
@@ -64,7 +65,7 @@ bool isHeadlessInvocation(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg(argv[i]);
         if (arg == "--version" || arg == "-v" || arg == "--help" || arg == "-h" || arg == "-?"
-            || arg == "--list-providers") {
+            || arg == "--list-providers" || arg == "--probe") {
             return true;
         }
     }
@@ -168,7 +169,11 @@ int main(int argc, char** argv) {
         QStringLiteral("file"));
     const QCommandLineOption defaultLayout(
         QStringLiteral("default-layout"), QStringLiteral("Ignore the saved window layout and keyboard settings."));
+    const QCommandLineOption probeMedia(
+        QStringLiteral("probe"), QStringLiteral("Print what the media file <file> holds as JSON, then exit."),
+        QStringLiteral("file"));
     parser.addOption(listProviders);
+    parser.addOption(probeMedia);
     parser.addOption(smokeTest);
     const QCommandLineOption sampleProject(
         QStringLiteral("sample-project"),
@@ -181,11 +186,25 @@ int main(int argc, char** argv) {
     parser.process(*app);
 
     lumenis::ext::ProviderRegistry registry;
+    // The built-in providers first, then modules (docs/EXTENSIONS.md).
+    lumenis::media::registerProviders(registry);
     lumenis::ext::ModuleLoader loader(registry);
     loader.loadDirectories(lumenis::app::moduleSearchPaths());
 
     if (parser.isSet(listProviders)) {
         printProviders(registry, loader);
+        std::printf("%s\n", qPrintable(lumenis::media::ffmpegVersion()));
+        return 0;
+    }
+    if (parser.isSet(probeMedia)) {
+        QString error;
+        const auto info = lumenis::media::probe(parser.value(probeMedia), &error);
+        if (!info) {
+            std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(parser.value(probeMedia)), qPrintable(error));
+            return 1;
+        }
+        const QByteArray json = QJsonDocument(info->toJson()).toJson();
+        std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
         return 0;
     }
 

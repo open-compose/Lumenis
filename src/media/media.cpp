@@ -1,0 +1,1001 @@
+#include "lumenis/media/media.h"
+
+#include "lumenis/ext/codec.h"
+#include "lumenis/ext/provider.h"
+
+#include <QJsonArray>
+#include <QStringList>
+
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libavutil/channel_layout.h>
+#include <libavutil/imgutils.h>
+#include <libavutil/opt.h>
+#include <libavutil/pixdesc.h>
+#include <libswresample/swresample.h>
+#include <libswscale/swscale.h>
+}
+
+#include <algorithm>
+#include <cmath>
+#include <cstring>
+#include <limits>
+
+namespace lumenis::media {
+
+namespace {
+
+// AV_NOPTS_VALUE, without the C cast in FFmpeg's macro.
+constexpr std::int64_t kNoPts = std::numeric_limits<std::int64_t>::min();
+
+QString errorText(int code) {
+    char buf[256] = {};
+    av_strerror(code, buf, sizeof buf);
+    return QString::fromUtf8(buf);
+}
+
+void setError(QString* error, const QString& text) {
+    if (error) *error = text;
+}
+
+Rational toRational(AVRational r) {
+    if (r.den == 0) return Rational();
+    return Rational(r.num, r.den);
+}
+
+AVRational toAv(const Rational& r) {
+    return AVRational{static_cast<int>(r.num()), static_cast<int>(r.den())};
+}
+
+AVRational inverse(AVRational r) {
+    return AVRational{r.den, r.num};
+}
+
+QString metadata(AVDictionary* dict, const char* key) {
+    const AVDictionaryEntry* e = av_dict_get(dict, key, nullptr, 0);
+    return e ? QString::fromUtf8(e->value) : QString();
+}
+
+// The edit rate of a video stream: its average rate, else its base rate.
+AVRational videoRate(const AVStream* st) {
+    if (st->avg_frame_rate.num > 0 && st->avg_frame_rate.den > 0) return st->avg_frame_rate;
+    if (st->r_frame_rate.num > 0 && st->r_frame_rate.den > 0) return st->r_frame_rate;
+    return AVRational{25, 1};
+}
+
+std::int64_t streamStart(const AVStream* st) {
+    return st->start_time != kNoPts ? st->start_time : 0;
+}
+
+struct InputCloser {
+    void operator()(AVFormatContext* c) const {
+        if (c) avformat_close_input(&c);
+    }
+};
+using Input = std::unique_ptr<AVFormatContext, InputCloser>;
+
+Input openInput(const QString& path, QString* error) {
+    AVFormatContext* raw = nullptr;
+    const QByteArray file = path.toUtf8();
+    int rc = avformat_open_input(&raw, file.constData(), nullptr, nullptr);
+    if (rc < 0) {
+        setError(error, errorText(rc));
+        return nullptr;
+    }
+    Input in(raw);
+    rc = avformat_find_stream_info(in.get(), nullptr);
+    if (rc < 0) {
+        setError(error, errorText(rc));
+        return nullptr;
+    }
+    return in;
+}
+
+StreamInfo describe(const AVFormatContext* fmt, const AVStream* st) {
+    StreamInfo s;
+    const AVCodecParameters* par = st->codecpar;
+    s.index = st->index;
+    switch (par->codec_type) {
+    case AVMEDIA_TYPE_VIDEO: s.kind = StreamKind::Video; break;
+    case AVMEDIA_TYPE_AUDIO: s.kind = StreamKind::Audio; break;
+    case AVMEDIA_TYPE_DATA: s.kind = StreamKind::Data; break;
+    default: s.kind = StreamKind::Other; break;
+    }
+    const AVCodecDescriptor* desc = avcodec_descriptor_get(par->codec_id);
+    s.codec = desc ? QString::fromUtf8(desc->name) : QString::fromUtf8(avcodec_get_name(par->codec_id));
+    s.codecLongName = desc && desc->long_name ? QString::fromUtf8(desc->long_name) : s.codec;
+    if (const char* profile = avcodec_profile_name(par->codec_id, par->profile)) s.profile = QString::fromUtf8(profile);
+    s.bitsPerSample = par->bits_per_raw_sample > 0 ? par->bits_per_raw_sample : par->bits_per_coded_sample;
+    if (s.kind == StreamKind::Video) {
+        s.width = par->width;
+        s.height = par->height;
+        const AVRational rate = videoRate(st);
+        s.frameRate = toRational(rate);
+        AVRational sar = par->sample_aspect_ratio.num > 0 ? par->sample_aspect_ratio : AVRational{1, 1};
+        int dw = 0;
+        int dh = 0;
+        if (par->width > 0 && par->height > 0) {
+            av_reduce(&dw, &dh, static_cast<std::int64_t>(par->width) * sar.num,
+                      static_cast<std::int64_t>(par->height) * sar.den, 1024 * 1024);
+            s.aspect = Rational(dw, dh);
+        }
+        if (const char* pf = av_get_pix_fmt_name(static_cast<AVPixelFormat>(par->format))) {
+            s.pixelFormat = QString::fromUtf8(pf);
+        }
+        s.interlaced = par->field_order != AV_FIELD_PROGRESSIVE && par->field_order != AV_FIELD_UNKNOWN;
+        if (st->nb_frames > 0) {
+            s.length = st->nb_frames;
+        } else if (st->duration != kNoPts && st->duration > 0) {
+            s.length = av_rescale_q(st->duration, st->time_base, inverse(rate));
+        } else if (fmt->duration > 0) {
+            s.length = av_rescale_q(fmt->duration, AVRational{1, AV_TIME_BASE}, inverse(rate));
+        }
+    } else if (s.kind == StreamKind::Audio) {
+        s.sampleRate = par->sample_rate;
+        s.channels = par->ch_layout.nb_channels;
+        if (const char* sf = av_get_sample_fmt_name(static_cast<AVSampleFormat>(par->format))) {
+            s.sampleFormat = QString::fromUtf8(sf);
+        }
+        if (st->duration != kNoPts && st->duration > 0 && par->sample_rate > 0) {
+            s.length = av_rescale_q(st->duration, st->time_base, AVRational{1, par->sample_rate});
+        } else if (fmt->duration > 0 && par->sample_rate > 0) {
+            s.length = av_rescale_q(fmt->duration, AVRational{1, AV_TIME_BASE}, AVRational{1, par->sample_rate});
+        }
+    }
+    s.decodable = avcodec_find_decoder(par->codec_id) != nullptr && codecAllowed(s.codec);
+    return s;
+}
+
+const char* kindName(StreamKind k) {
+    switch (k) {
+    case StreamKind::Video: return "video";
+    case StreamKind::Audio: return "audio";
+    case StreamKind::Data: return "data";
+    case StreamKind::Other: return "other";
+    }
+    return "other";
+}
+
+int firstStream(const AVFormatContext* fmt, AVMediaType type) {
+    for (unsigned i = 0; i < fmt->nb_streams; ++i) {
+        if (fmt->streams[i]->codecpar->codec_type == type) return static_cast<int>(i);
+    }
+    return -1;
+}
+
+// A decoder for one stream, with FFmpeg's own frame threading.
+AVCodecContext* openDecoder(const AVStream* st, QString* error) {
+    const AVCodec* codec = avcodec_find_decoder(st->codecpar->codec_id);
+    if (!codec) {
+        setError(error, QStringLiteral("no decoder for %1").arg(QString::fromUtf8(avcodec_get_name(st->codecpar->codec_id))));
+        return nullptr;
+    }
+    const AVCodecDescriptor* desc = avcodec_descriptor_get(st->codecpar->codec_id);
+    const QString name = desc ? QString::fromUtf8(desc->name) : QString::fromUtf8(codec->name);
+    if (!codecAllowed(name)) {
+        setError(error, QStringLiteral("%1 is not available in this build (docs/EXTENSIONS.md)").arg(name));
+        return nullptr;
+    }
+    AVCodecContext* ctx = avcodec_alloc_context3(codec);
+    avcodec_parameters_to_context(ctx, st->codecpar);
+    ctx->pkt_timebase = st->time_base;
+    ctx->thread_count = 0; // automatic
+    const int rc = avcodec_open2(ctx, codec, nullptr);
+    if (rc < 0) {
+        setError(error, errorText(rc));
+        avcodec_free_context(&ctx);
+        return nullptr;
+    }
+    return ctx;
+}
+
+} // namespace
+
+// ---------------------------------------------------------------- policy
+
+QString ffmpegVersion() {
+    auto v = [](unsigned version) {
+        return QStringLiteral("%1.%2.%3").arg(version >> 16).arg((version >> 8) & 0xff).arg(version & 0xff);
+    };
+    return QStringLiteral("FFmpeg %1 (libavcodec %2, libavformat %3, libavutil %4)")
+        .arg(QString::fromUtf8(av_version_info()), v(avcodec_version()), v(avformat_version()), v(avutil_version()));
+}
+
+bool isPatentCodec(const QString& codec) {
+    // docs/EXTENSIONS.md: entries marked with a dagger.
+    static const QStringList names{
+        QStringLiteral("h264"),   QStringLiteral("hevc"),     QStringLiteral("prores"),   QStringLiteral("prores_ks"),
+        QStringLiteral("prores_aw"), QStringLiteral("prores_raw"), QStringLiteral("dnxhd"), QStringLiteral("dnxhr"),
+        QStringLiteral("aac"),    QStringLiteral("ac3"),      QStringLiteral("eac3"),     QStringLiteral("mpeg4"),
+        QStringLiteral("vc1"),
+    };
+    return names.contains(codec.toLower());
+}
+
+bool patentCodecsAllowed() {
+#if LUMENIS_PATENT_CODECS
+    return true;
+#else
+    return false;
+#endif
+}
+
+bool codecAllowed(const QString& codec) {
+    return patentCodecsAllowed() || !isPatentCodec(codec);
+}
+
+// ---------------------------------------------------------------- probe
+
+const StreamInfo* MediaInfo::firstVideo() const {
+    for (const StreamInfo& s : streams) {
+        if (s.kind == StreamKind::Video) return &s;
+    }
+    return nullptr;
+}
+
+std::vector<const StreamInfo*> MediaInfo::audio() const {
+    std::vector<const StreamInfo*> out;
+    for (const StreamInfo& s : streams) {
+        if (s.kind == StreamKind::Audio) out.push_back(&s);
+    }
+    return out;
+}
+
+QJsonObject MediaInfo::toJson() const {
+    QJsonArray list;
+    for (const StreamInfo& s : streams) {
+        QJsonObject o{{QStringLiteral("index"), s.index},
+                      {QStringLiteral("kind"), QString::fromLatin1(kindName(s.kind))},
+                      {QStringLiteral("codec"), s.codec},
+                      {QStringLiteral("decodable"), s.decodable}};
+        if (!s.profile.isEmpty()) o.insert(QStringLiteral("profile"), s.profile);
+        if (s.kind == StreamKind::Video) {
+            o.insert(QStringLiteral("width"), s.width);
+            o.insert(QStringLiteral("height"), s.height);
+            o.insert(QStringLiteral("rate"), QStringLiteral("%1/%2").arg(s.frameRate.num()).arg(s.frameRate.den()));
+            o.insert(QStringLiteral("aspect"), QStringLiteral("%1:%2").arg(s.aspect.num()).arg(s.aspect.den()));
+            o.insert(QStringLiteral("pixelFormat"), s.pixelFormat);
+            o.insert(QStringLiteral("interlaced"), s.interlaced);
+            o.insert(QStringLiteral("frames"), static_cast<qint64>(s.length));
+        } else if (s.kind == StreamKind::Audio) {
+            o.insert(QStringLiteral("sampleRate"), s.sampleRate);
+            o.insert(QStringLiteral("channels"), s.channels);
+            o.insert(QStringLiteral("sampleFormat"), s.sampleFormat);
+            if (s.bitsPerSample > 0) o.insert(QStringLiteral("bits"), s.bitsPerSample);
+            o.insert(QStringLiteral("samples"), static_cast<qint64>(s.length));
+        }
+        list.append(o);
+    }
+    QJsonObject o{{QStringLiteral("path"), path},
+                  {QStringLiteral("format"), format},
+                  {QStringLiteral("duration"), durationSeconds},
+                  {QStringLiteral("streams"), list}};
+    if (!startTimecode.isEmpty()) o.insert(QStringLiteral("timecode"), startTimecode);
+    if (!reelName.isEmpty()) o.insert(QStringLiteral("reel"), reelName);
+    return o;
+}
+
+std::optional<MediaInfo> probe(const QString& path, QString* error) {
+    Input in = openInput(path, error);
+    if (!in) return std::nullopt;
+    MediaInfo info;
+    info.path = path;
+    info.format = QString::fromUtf8(in->iformat->name);
+    info.formatLongName = in->iformat->long_name ? QString::fromUtf8(in->iformat->long_name) : info.format;
+    if (in->duration > 0) info.durationSeconds = static_cast<double>(in->duration) / AV_TIME_BASE;
+    info.startTimecode = metadata(in->metadata, "timecode");
+    info.reelName = metadata(in->metadata, "reel_name");
+    for (unsigned i = 0; i < in->nb_streams; ++i) {
+        const AVStream* st = in->streams[i];
+        info.streams.push_back(describe(in.get(), st));
+        // QuickTime keeps the timecode and reel on its timecode track.
+        if (info.startTimecode.isEmpty()) info.startTimecode = metadata(st->metadata, "timecode");
+        if (info.reelName.isEmpty()) info.reelName = metadata(st->metadata, "reel_name");
+    }
+    return info;
+}
+
+// ---------------------------------------------------------------- VideoReader
+
+struct VideoReader::Impl {
+    Input fmt;
+    AVStream* stream = nullptr;
+    AVCodecContext* dec = nullptr;
+    AVPacket* packet = nullptr;
+    AVFrame* frame = nullptr;
+    SwsContext* sws = nullptr;
+    StreamInfo info;
+    AVRational rate{25, 1};
+    std::int64_t next = -1; // the frame the decoder gives next, -1: unknown
+    bool eof = false;
+
+    ~Impl() {
+        sws_freeContext(sws);
+        av_frame_free(&frame);
+        av_packet_free(&packet);
+        avcodec_free_context(&dec);
+    }
+
+    std::int64_t toPts(std::int64_t n) const {
+        return streamStart(stream) + av_rescale_q(n, inverse(rate), stream->time_base);
+    }
+    std::int64_t toFrame(std::int64_t pts) const {
+        return av_rescale_q_rnd(pts - streamStart(stream), stream->time_base, inverse(rate),
+                                static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
+    }
+
+    void seek(std::int64_t n) {
+        avcodec_flush_buffers(dec);
+        if (n <= 0 || av_seek_frame(fmt.get(), stream->index, toPts(n), AVSEEK_FLAG_BACKWARD) < 0) {
+            av_seek_frame(fmt.get(), stream->index, streamStart(stream), AVSEEK_FLAG_BACKWARD);
+        }
+        eof = false;
+        next = -1;
+    }
+
+    // The next decoded frame, its number in `number`; false at the end.
+    bool decodeNext(std::int64_t& number) {
+        for (;;) {
+            const int rc = avcodec_receive_frame(dec, frame);
+            if (rc == 0) {
+                const std::int64_t pts = frame->best_effort_timestamp != kNoPts ? frame->best_effort_timestamp : frame->pts;
+                number = pts != kNoPts ? toFrame(pts) : (next >= 0 ? next : 0);
+                next = number + 1;
+                return true;
+            }
+            if (rc == AVERROR_EOF) return false;
+            if (eof) {
+                avcodec_send_packet(dec, nullptr);
+                continue;
+            }
+            // Feed the decoder.
+            for (;;) {
+                const int read = av_read_frame(fmt.get(), packet);
+                if (read < 0) {
+                    eof = true;
+                    avcodec_send_packet(dec, nullptr);
+                    break;
+                }
+                if (packet->stream_index == stream->index) {
+                    avcodec_send_packet(dec, packet);
+                    av_packet_unref(packet);
+                    break;
+                }
+                av_packet_unref(packet);
+            }
+        }
+    }
+
+    QImage convert(QSize size) {
+        const int w = size.isValid() && !size.isEmpty() ? size.width() : frame->width;
+        const int h = size.isValid() && !size.isEmpty() ? size.height() : frame->height;
+        sws = sws_getCachedContext(sws, frame->width, frame->height, static_cast<AVPixelFormat>(frame->format), w, h,
+                                   AV_PIX_FMT_RGBA, SWS_BICUBIC, nullptr, nullptr, nullptr);
+        if (!sws) return {};
+        // HD and larger is Rec. 709, unless the file says otherwise.
+        int space = SWS_CS_DEFAULT;
+        if (frame->colorspace == AVCOL_SPC_BT709 || (frame->colorspace == AVCOL_SPC_UNSPECIFIED && frame->height > 576)) {
+            space = SWS_CS_ITU709;
+        } else if (frame->colorspace == AVCOL_SPC_SMPTE170M || frame->colorspace == AVCOL_SPC_BT470BG) {
+            space = SWS_CS_SMPTE170M;
+        }
+        const int srcFull = frame->color_range == AVCOL_RANGE_JPEG ? 1 : 0;
+        sws_setColorspaceDetails(sws, sws_getCoefficients(space), srcFull, sws_getCoefficients(SWS_CS_DEFAULT), 1, 0,
+                                 1 << 16, 1 << 16);
+        QImage image(w, h, QImage::Format_RGBA8888);
+        std::uint8_t* dst[4] = {image.bits(), nullptr, nullptr, nullptr};
+        int dstStride[4] = {static_cast<int>(image.bytesPerLine()), 0, 0, 0};
+        sws_scale(sws, frame->data, frame->linesize, 0, frame->height, dst, dstStride);
+        return image;
+    }
+};
+
+VideoReader::VideoReader() = default;
+VideoReader::~VideoReader() = default;
+
+bool VideoReader::open(const QString& path, int streamIndex, QString* error) {
+    auto d = std::make_unique<Impl>();
+    d->fmt = openInput(path, error);
+    if (!d->fmt) return false;
+    if (streamIndex < 0) streamIndex = firstStream(d->fmt.get(), AVMEDIA_TYPE_VIDEO);
+    if (streamIndex < 0 || static_cast<unsigned>(streamIndex) >= d->fmt->nb_streams ||
+        d->fmt->streams[streamIndex]->codecpar->codec_type != AVMEDIA_TYPE_VIDEO) {
+        setError(error, QStringLiteral("no video stream"));
+        return false;
+    }
+    d->stream = d->fmt->streams[streamIndex];
+    d->dec = openDecoder(d->stream, error);
+    if (!d->dec) return false;
+    d->rate = videoRate(d->stream);
+    d->info = describe(d->fmt.get(), d->stream);
+    d->packet = av_packet_alloc();
+    d->frame = av_frame_alloc();
+    d->next = 0;
+    d_ = std::move(d);
+    return true;
+}
+
+bool VideoReader::isOpen() const {
+    return d_ != nullptr;
+}
+
+const StreamInfo& VideoReader::info() const {
+    return d_->info;
+}
+
+std::int64_t VideoReader::frameCount() const {
+    return d_ ? d_->info.length : 0;
+}
+
+QImage VideoReader::frame(std::int64_t number, QSize size) {
+    if (!d_ || number < 0 || (d_->info.length > 0 && number >= d_->info.length)) return {};
+    // The next frame continues decoding; anything else seeks first.
+    if (d_->next != number) d_->seek(number);
+    std::int64_t got = -1;
+    bool retried = false;
+    while (d_->decodeNext(got)) {
+        if (got < number) continue;
+        if (got > number && !retried) {
+            // The seek landed after the frame: decode from the start.
+            retried = true;
+            avcodec_flush_buffers(d_->dec);
+            av_seek_frame(d_->fmt.get(), d_->stream->index, streamStart(d_->stream), AVSEEK_FLAG_BACKWARD);
+            d_->eof = false;
+            continue;
+        }
+        return d_->convert(size);
+    }
+    d_->next = -1;
+    return {};
+}
+
+// ---------------------------------------------------------------- AudioReader
+
+struct AudioReader::Impl {
+    Input fmt;
+    AVStream* stream = nullptr;
+    AVCodecContext* dec = nullptr;
+    AVPacket* packet = nullptr;
+    AVFrame* frame = nullptr;
+    SwrContext* swr = nullptr;
+    StreamInfo info;
+    int channels = 0;
+    int rate = 0;
+    std::vector<float> pending;  // decoded, interleaved
+    std::int64_t pendingStart = -1;
+    bool eof = false;
+
+    ~Impl() {
+        swr_free(&swr);
+        av_frame_free(&frame);
+        av_packet_free(&packet);
+        avcodec_free_context(&dec);
+    }
+
+    std::int64_t pendingEnd() const {
+        return pendingStart + static_cast<std::int64_t>(pending.size()) / channels;
+    }
+
+    void seek(std::int64_t sample) {
+        avcodec_flush_buffers(dec);
+        const std::int64_t pts = streamStart(stream) + av_rescale_q(sample, AVRational{1, rate}, stream->time_base);
+        av_seek_frame(fmt.get(), stream->index, pts, AVSEEK_FLAG_BACKWARD);
+        pending.clear();
+        pendingStart = -1;
+        eof = false;
+    }
+
+    // Decodes one more frame into `pending`; false at the end.
+    bool decodeMore() {
+        for (;;) {
+            const int rc = avcodec_receive_frame(dec, frame);
+            if (rc == 0) {
+                std::int64_t start = pendingStart >= 0 ? pendingEnd() : 0;
+                if (pendingStart < 0 && frame->pts != kNoPts) {
+                    start = av_rescale_q(frame->pts - streamStart(stream), stream->time_base, AVRational{1, rate});
+                }
+                const auto before = pending.size();
+                pending.resize(before + static_cast<std::size_t>(frame->nb_samples) * static_cast<std::size_t>(channels));
+                std::uint8_t* out[1] = {reinterpret_cast<std::uint8_t*>(pending.data() + before)};
+                const int got = swr_convert(swr, out, frame->nb_samples, const_cast<const std::uint8_t**>(frame->extended_data),
+                                            frame->nb_samples);
+                pending.resize(before + static_cast<std::size_t>(std::max(got, 0)) * static_cast<std::size_t>(channels));
+                if (pendingStart < 0) pendingStart = start;
+                return true;
+            }
+            if (rc == AVERROR_EOF) return false;
+            if (eof) {
+                avcodec_send_packet(dec, nullptr);
+                continue;
+            }
+            for (;;) {
+                const int read = av_read_frame(fmt.get(), packet);
+                if (read < 0) {
+                    eof = true;
+                    avcodec_send_packet(dec, nullptr);
+                    break;
+                }
+                if (packet->stream_index == stream->index) {
+                    avcodec_send_packet(dec, packet);
+                    av_packet_unref(packet);
+                    break;
+                }
+                av_packet_unref(packet);
+            }
+        }
+    }
+};
+
+AudioReader::AudioReader() = default;
+AudioReader::~AudioReader() = default;
+
+bool AudioReader::open(const QString& path, int streamIndex, QString* error) {
+    auto d = std::make_unique<Impl>();
+    d->fmt = openInput(path, error);
+    if (!d->fmt) return false;
+    if (streamIndex < 0) streamIndex = firstStream(d->fmt.get(), AVMEDIA_TYPE_AUDIO);
+    if (streamIndex < 0 || static_cast<unsigned>(streamIndex) >= d->fmt->nb_streams ||
+        d->fmt->streams[streamIndex]->codecpar->codec_type != AVMEDIA_TYPE_AUDIO) {
+        setError(error, QStringLiteral("no audio stream"));
+        return false;
+    }
+    d->stream = d->fmt->streams[streamIndex];
+    d->dec = openDecoder(d->stream, error);
+    if (!d->dec) return false;
+    d->channels = d->dec->ch_layout.nb_channels;
+    d->rate = d->dec->sample_rate;
+    if (d->channels <= 0 || d->rate <= 0) {
+        setError(error, QStringLiteral("the audio stream has no channels or rate"));
+        return false;
+    }
+    int rc = swr_alloc_set_opts2(&d->swr, &d->dec->ch_layout, AV_SAMPLE_FMT_FLT, d->rate, &d->dec->ch_layout,
+                                 d->dec->sample_fmt, d->rate, 0, nullptr);
+    if (rc < 0 || swr_init(d->swr) < 0) {
+        setError(error, QStringLiteral("cannot convert the audio samples"));
+        return false;
+    }
+    d->info = describe(d->fmt.get(), d->stream);
+    d->packet = av_packet_alloc();
+    d->frame = av_frame_alloc();
+    d->pendingStart = 0;
+    d_ = std::move(d);
+    return true;
+}
+
+bool AudioReader::isOpen() const {
+    return d_ != nullptr;
+}
+
+const StreamInfo& AudioReader::info() const {
+    return d_->info;
+}
+
+int AudioReader::channels() const {
+    return d_ ? d_->channels : 0;
+}
+
+int AudioReader::sampleRate() const {
+    return d_ ? d_->rate : 0;
+}
+
+std::vector<float> AudioReader::samples(std::int64_t start, int count) {
+    if (!d_ || count <= 0 || start < 0) return {};
+    Impl& d = *d_;
+    // Reuse what is decoded when the request starts inside it.
+    if (d.pendingStart < 0 || start < d.pendingStart || start > d.pendingEnd()) {
+        d.seek(start);
+    }
+    while (d.pendingStart < 0 || d.pendingEnd() < start + count) {
+        if (!d.decodeMore()) break;
+        // Drop what lies before the request, keeping memory small.
+        if (d.pendingStart >= 0 && d.pendingEnd() <= start) {
+            d.pendingStart = d.pendingEnd();
+            d.pending.clear();
+        }
+    }
+    if (d.pendingStart < 0 || start >= d.pendingEnd()) return {};
+    const auto ch = static_cast<std::size_t>(d.channels);
+    const auto from = static_cast<std::size_t>(start - d.pendingStart) * ch;
+    const auto available = d.pending.size() - from;
+    const auto n = std::min(available, static_cast<std::size_t>(count) * ch);
+    std::vector<float> out(d.pending.begin() + static_cast<std::ptrdiff_t>(from),
+                           d.pending.begin() + static_cast<std::ptrdiff_t>(from + n));
+    // Keep what follows for the next request.
+    d.pending.erase(d.pending.begin(), d.pending.begin() + static_cast<std::ptrdiff_t>(from + n));
+    d.pendingStart = start + static_cast<std::int64_t>(n / ch);
+    return out;
+}
+
+// ---------------------------------------------------------------- MediaWriter
+
+namespace {
+
+AVPixelFormat firstPixelFormat(const AVCodec* codec) {
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
+    const void* list = nullptr;
+    int n = 0;
+    if (avcodec_get_supported_config(nullptr, codec, AV_CODEC_CONFIG_PIX_FORMAT, 0, &list, &n) >= 0 && list && n > 0) {
+        return static_cast<const AVPixelFormat*>(list)[0];
+    }
+    return AV_PIX_FMT_YUV420P;
+#else
+    return codec->pix_fmts ? codec->pix_fmts[0] : AV_PIX_FMT_YUV420P;
+#endif
+}
+
+AVSampleFormat firstSampleFormat(const AVCodec* codec) {
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
+    const void* list = nullptr;
+    int n = 0;
+    if (avcodec_get_supported_config(nullptr, codec, AV_CODEC_CONFIG_SAMPLE_FORMAT, 0, &list, &n) >= 0 && list && n > 0) {
+        return static_cast<const AVSampleFormat*>(list)[0];
+    }
+    return AV_SAMPLE_FMT_S16;
+#else
+    return codec->sample_fmts ? codec->sample_fmts[0] : AV_SAMPLE_FMT_S16;
+#endif
+}
+
+} // namespace
+
+struct MediaWriter::Impl {
+    AVFormatContext* out = nullptr;
+    AVCodecContext* venc = nullptr;
+    AVCodecContext* aenc = nullptr;
+    AVStream* vst = nullptr;
+    AVStream* ast = nullptr;
+    SwsContext* sws = nullptr;
+    SwrContext* swr = nullptr;
+    AVFrame* vframe = nullptr;
+    AVFrame* aframe = nullptr;
+    AVPacket* packet = nullptr;
+    std::int64_t vpts = 0;
+    std::int64_t apts = 0;
+    std::vector<float> abuffer; // interleaved, waiting for a full encoder frame
+    int aframeSize = 0;
+    bool headerWritten = false;
+    bool rec709 = false;
+    QString error;
+
+    ~Impl() {
+        sws_freeContext(sws);
+        swr_free(&swr);
+        av_frame_free(&vframe);
+        av_frame_free(&aframe);
+        av_packet_free(&packet);
+        avcodec_free_context(&venc);
+        avcodec_free_context(&aenc);
+        if (out) {
+            if (!(out->oformat->flags & AVFMT_NOFILE)) avio_closep(&out->pb);
+            avformat_free_context(out);
+        }
+    }
+
+    bool fail(const QString& text) {
+        error = text;
+        return false;
+    }
+
+    bool drain(AVCodecContext* enc, AVStream* st) {
+        for (;;) {
+            const int rc = avcodec_receive_packet(enc, packet);
+            if (rc == AVERROR(EAGAIN) || rc == AVERROR_EOF) return true;
+            if (rc < 0) return fail(errorText(rc));
+            av_packet_rescale_ts(packet, enc->time_base, st->time_base);
+            packet->stream_index = st->index;
+            const int w = av_interleaved_write_frame(out, packet);
+            if (w < 0) return fail(errorText(w));
+        }
+    }
+
+    bool encode(AVCodecContext* enc, AVStream* st, AVFrame* f) {
+        const int rc = avcodec_send_frame(enc, f);
+        if (rc < 0 && rc != AVERROR_EOF) return fail(errorText(rc));
+        return drain(enc, st);
+    }
+
+    bool encodeAudio(int n) {
+        av_frame_make_writable(aframe);
+        aframe->nb_samples = n;
+        const std::uint8_t* in[1] = {reinterpret_cast<const std::uint8_t*>(abuffer.data())};
+        const int got = swr_convert(swr, aframe->data, n, in, n);
+        if (got < 0) return fail(QStringLiteral("cannot convert the audio samples"));
+        aframe->nb_samples = got;
+        aframe->pts = apts;
+        apts += got;
+        abuffer.erase(abuffer.begin(), abuffer.begin() + static_cast<std::ptrdiff_t>(n) * aenc->ch_layout.nb_channels);
+        return encode(aenc, ast, aframe);
+    }
+};
+
+MediaWriter::MediaWriter() : d_(std::make_unique<Impl>()) {}
+MediaWriter::~MediaWriter() = default;
+
+QString MediaWriter::lastError() const {
+    return d_->error;
+}
+
+bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* error) {
+    d_ = std::make_unique<Impl>();
+    Impl& d = *d_;
+    auto failed = [&](const QString& text) {
+        d.error = text;
+        setError(error, text);
+        return false;
+    };
+    const QByteArray file = path.toUtf8();
+    const QByteArray format = s.format.toUtf8();
+    if (avformat_alloc_output_context2(&d.out, nullptr, format.isEmpty() ? nullptr : format.constData(), file.constData()) < 0 ||
+        !d.out) {
+        return failed(QStringLiteral("unknown format %1").arg(s.format));
+    }
+    if (!s.startTimecode.isEmpty()) av_dict_set(&d.out->metadata, "timecode", s.startTimecode.toUtf8().constData(), 0);
+    const bool globalHeader = (d.out->oformat->flags & AVFMT_GLOBALHEADER) != 0;
+
+    if (!s.videoCodec.isEmpty()) {
+        if (!codecAllowed(s.videoCodec)) return failed(QStringLiteral("%1 is not available in this build").arg(s.videoCodec));
+        const AVCodec* codec = avcodec_find_encoder_by_name(s.videoCodec.toUtf8().constData());
+        if (!codec) return failed(QStringLiteral("no encoder %1").arg(s.videoCodec));
+        d.venc = avcodec_alloc_context3(codec);
+        d.venc->width = s.width;
+        d.venc->height = s.height;
+        d.venc->time_base = inverse(toAv(s.frameRate));
+        d.venc->framerate = toAv(s.frameRate);
+        d.venc->pix_fmt = s.pixelFormat.isEmpty() ? firstPixelFormat(codec)
+                                                  : av_get_pix_fmt(s.pixelFormat.toUtf8().constData());
+        d.venc->sample_aspect_ratio = AVRational{1, 1};
+        // Rec. 709 for HD and larger, and for DNx, which declares 709 at any
+        // size; Rec. 601 otherwise. The stream says which, so readers agree.
+        d.rec709 = s.height > 576 || s.videoCodec == QLatin1String("dnxhd");
+        d.venc->colorspace = d.rec709 ? AVCOL_SPC_BT709 : AVCOL_SPC_SMPTE170M;
+        d.venc->color_primaries = d.rec709 ? AVCOL_PRI_BT709 : AVCOL_PRI_SMPTE170M;
+        d.venc->color_trc = d.rec709 ? AVCOL_TRC_BT709 : AVCOL_TRC_SMPTE170M;
+        d.venc->color_range = AVCOL_RANGE_MPEG;
+        if (s.bitRate > 0) d.venc->bit_rate = s.bitRate;
+        d.venc->thread_count = 0;
+        if (globalHeader) d.venc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+        if (!s.videoProfile.isEmpty()) av_opt_set(d.venc->priv_data, "profile", s.videoProfile.toUtf8().constData(), 0);
+        const int rc = avcodec_open2(d.venc, codec, nullptr);
+        if (rc < 0) return failed(QStringLiteral("cannot open the %1 encoder: %2").arg(s.videoCodec, errorText(rc)));
+        d.vst = avformat_new_stream(d.out, nullptr);
+        avcodec_parameters_from_context(d.vst->codecpar, d.venc);
+        d.vst->time_base = d.venc->time_base;
+        d.vst->avg_frame_rate = d.venc->framerate;
+        if (!s.startTimecode.isEmpty()) av_dict_set(&d.vst->metadata, "timecode", s.startTimecode.toUtf8().constData(), 0);
+        d.vframe = av_frame_alloc();
+        d.vframe->format = d.venc->pix_fmt;
+        d.vframe->width = s.width;
+        d.vframe->height = s.height;
+        if (av_frame_get_buffer(d.vframe, 0) < 0) return failed(QStringLiteral("out of memory"));
+    }
+    if (!s.audioCodec.isEmpty()) {
+        if (!codecAllowed(s.audioCodec)) return failed(QStringLiteral("%1 is not available in this build").arg(s.audioCodec));
+        const AVCodec* codec = avcodec_find_encoder_by_name(s.audioCodec.toUtf8().constData());
+        if (!codec) return failed(QStringLiteral("no encoder %1").arg(s.audioCodec));
+        d.aenc = avcodec_alloc_context3(codec);
+        d.aenc->sample_rate = s.sampleRate;
+        av_channel_layout_default(&d.aenc->ch_layout, s.channels);
+        d.aenc->sample_fmt = firstSampleFormat(codec);
+        d.aenc->time_base = AVRational{1, s.sampleRate};
+        if (globalHeader) d.aenc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+        const int rc = avcodec_open2(d.aenc, codec, nullptr);
+        if (rc < 0) return failed(QStringLiteral("cannot open the %1 encoder: %2").arg(s.audioCodec, errorText(rc)));
+        d.ast = avformat_new_stream(d.out, nullptr);
+        avcodec_parameters_from_context(d.ast->codecpar, d.aenc);
+        d.ast->time_base = d.aenc->time_base;
+        // PCM takes any frame size; one frame of video at 25 fps otherwise.
+        d.aframeSize = d.aenc->frame_size > 0 ? d.aenc->frame_size : s.sampleRate / 25;
+        AVChannelLayout layout{};
+        av_channel_layout_default(&layout, s.channels);
+        if (swr_alloc_set_opts2(&d.swr, &d.aenc->ch_layout, d.aenc->sample_fmt, s.sampleRate, &layout, AV_SAMPLE_FMT_FLT,
+                                s.sampleRate, 0, nullptr) < 0 ||
+            swr_init(d.swr) < 0) {
+            return failed(QStringLiteral("cannot convert the audio samples"));
+        }
+        d.aframe = av_frame_alloc();
+        d.aframe->format = d.aenc->sample_fmt;
+        av_channel_layout_copy(&d.aframe->ch_layout, &d.aenc->ch_layout);
+        d.aframe->sample_rate = s.sampleRate;
+        d.aframe->nb_samples = d.aframeSize;
+        if (av_frame_get_buffer(d.aframe, 0) < 0) return failed(QStringLiteral("out of memory"));
+    }
+    if (!d.venc && !d.aenc) return failed(QStringLiteral("nothing to write"));
+    if (!(d.out->oformat->flags & AVFMT_NOFILE)) {
+        const int rc = avio_open(&d.out->pb, file.constData(), AVIO_FLAG_WRITE);
+        if (rc < 0) return failed(errorText(rc));
+    }
+    const int rc = avformat_write_header(d.out, nullptr);
+    if (rc < 0) return failed(QStringLiteral("cannot write the header: %1").arg(errorText(rc)));
+    d.headerWritten = true;
+    d.packet = av_packet_alloc();
+    return true;
+}
+
+bool MediaWriter::writeVideo(const QImage& image) {
+    Impl& d = *d_;
+    if (!d.venc) return d.fail(QStringLiteral("no video stream"));
+    const QImage rgba = image.convertToFormat(QImage::Format_RGBA8888);
+    d.sws = sws_getCachedContext(d.sws, rgba.width(), rgba.height(), AV_PIX_FMT_RGBA, d.venc->width, d.venc->height,
+                                 d.venc->pix_fmt, SWS_BICUBIC, nullptr, nullptr, nullptr);
+    if (!d.sws) return d.fail(QStringLiteral("cannot convert the picture"));
+    const int space = d.rec709 ? SWS_CS_ITU709 : SWS_CS_SMPTE170M;
+    sws_setColorspaceDetails(d.sws, sws_getCoefficients(SWS_CS_DEFAULT), 1, sws_getCoefficients(space), 0, 0, 1 << 16,
+                             1 << 16);
+    av_frame_make_writable(d.vframe);
+    const std::uint8_t* src[4] = {rgba.constBits(), nullptr, nullptr, nullptr};
+    const int srcStride[4] = {static_cast<int>(rgba.bytesPerLine()), 0, 0, 0};
+    sws_scale(d.sws, src, srcStride, 0, rgba.height(), d.vframe->data, d.vframe->linesize);
+    d.vframe->colorspace = d.venc->colorspace;
+    d.vframe->color_primaries = d.venc->color_primaries;
+    d.vframe->color_trc = d.venc->color_trc;
+    d.vframe->color_range = AVCOL_RANGE_MPEG;
+    d.vframe->pts = d.vpts++;
+    return d.encode(d.venc, d.vst, d.vframe);
+}
+
+bool MediaWriter::writeAudio(const float* samples, int count) {
+    Impl& d = *d_;
+    if (!d.aenc) return d.fail(QStringLiteral("no audio stream"));
+    const int ch = d.aenc->ch_layout.nb_channels;
+    d.abuffer.insert(d.abuffer.end(), samples, samples + static_cast<std::ptrdiff_t>(count) * ch);
+    while (static_cast<int>(d.abuffer.size() / static_cast<std::size_t>(ch)) >= d.aframeSize) {
+        if (!d.encodeAudio(d.aframeSize)) return false;
+    }
+    return true;
+}
+
+bool MediaWriter::finish(QString* error) {
+    Impl& d = *d_;
+    bool ok = d.headerWritten;
+    if (ok && d.aenc) {
+        const int left = static_cast<int>(d.abuffer.size() / static_cast<std::size_t>(d.aenc->ch_layout.nb_channels));
+        if (left > 0) {
+            // A codec with a fixed frame size gets a last, shorter frame
+            // only if it allows one; PCM always does.
+            ok = d.encodeAudio(left);
+        }
+        ok = ok && d.encode(d.aenc, d.ast, nullptr);
+    }
+    if (ok && d.venc) ok = d.encode(d.venc, d.vst, nullptr);
+    if (d.headerWritten) {
+        const int rc = av_write_trailer(d.out);
+        if (rc < 0 && ok) ok = d.fail(errorText(rc));
+        d.headerWritten = false;
+    }
+    if (!ok) setError(error, d.error);
+    // Close the file now.
+    if (d.out && !(d.out->oformat->flags & AVFMT_NOFILE)) avio_closep(&d.out->pb);
+    return ok;
+}
+
+// ---------------------------------------------------------------- codec provider
+
+namespace {
+
+// The codec names of ext::CodecQuery mapped to FFmpeg's.
+QString ffmpegName(const std::string& name) {
+    const QString n = QString::fromStdString(name).toLower();
+    if (n == QLatin1String("dnxhr")) return QStringLiteral("dnxhd");
+    if (n == QLatin1String("avc-intra") || n == QLatin1String("xavc")) return QStringLiteral("h264");
+    if (n.startsWith(QLatin1String("xdcam"))) return QStringLiteral("mpeg2video");
+    return n;
+}
+
+class FFmpegDecoder : public ext::Decoder {
+public:
+    explicit FFmpegDecoder(AVCodecContext* ctx) : ctx_(ctx), frame_(av_frame_alloc()), packet_(av_packet_alloc()) {}
+    ~FFmpegDecoder() override {
+        av_packet_free(&packet_);
+        av_frame_free(&frame_);
+        avcodec_free_context(&ctx_);
+    }
+    ext::CodecStatus send(const ext::Packet& p) override {
+        av_packet_unref(packet_);
+        if (av_new_packet(packet_, static_cast<int>(p.data.size())) < 0) return ext::CodecStatus::Error;
+        std::memcpy(packet_->data, p.data.data(), p.data.size());
+        packet_->pts = p.pts;
+        if (p.keyframe) packet_->flags |= AV_PKT_FLAG_KEY;
+        const int rc = avcodec_send_packet(ctx_, packet_);
+        if (rc == AVERROR(EAGAIN)) return ext::CodecStatus::NeedMoreInput;
+        return rc < 0 ? ext::CodecStatus::Error : ext::CodecStatus::Ok;
+    }
+    ext::CodecStatus receive(ext::DecodedFrame& out) override {
+        const int rc = avcodec_receive_frame(ctx_, frame_);
+        if (rc == AVERROR(EAGAIN)) return ext::CodecStatus::NeedMoreInput;
+        if (rc == AVERROR_EOF) return ext::CodecStatus::EndOfStream;
+        if (rc < 0) return ext::CodecStatus::Error;
+        out.pts = frame_->pts;
+        out.planes.clear();
+        if (ctx_->codec_type == AVMEDIA_TYPE_VIDEO) {
+            out.kind = ext::MediaKind::Video;
+            out.width = frame_->width;
+            out.height = frame_->height;
+            const auto pf = static_cast<AVPixelFormat>(frame_->format);
+            out.pixelFormat = av_get_pix_fmt_name(pf);
+            const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(pf);
+            const int planes = av_pix_fmt_count_planes(pf);
+            for (int i = 0; i < planes; ++i) {
+                const int h = (i == 1 || i == 2) && desc ? AV_CEIL_RSHIFT(frame_->height, desc->log2_chroma_h) : frame_->height;
+                ext::FramePlane plane;
+                plane.stride = frame_->linesize[i];
+                plane.data.assign(frame_->data[i], frame_->data[i] + static_cast<std::ptrdiff_t>(plane.stride) * h);
+                out.planes.push_back(std::move(plane));
+            }
+        } else {
+            out.kind = ext::MediaKind::Audio;
+            out.sampleCount = frame_->nb_samples;
+            out.pixelFormat = av_get_sample_fmt_name(static_cast<AVSampleFormat>(frame_->format));
+            const int size = av_samples_get_buffer_size(nullptr, frame_->ch_layout.nb_channels, frame_->nb_samples,
+                                                        static_cast<AVSampleFormat>(frame_->format), 1);
+            const bool planar = av_sample_fmt_is_planar(static_cast<AVSampleFormat>(frame_->format)) != 0;
+            const int count = planar ? frame_->ch_layout.nb_channels : 1;
+            for (int i = 0; i < count; ++i) {
+                ext::FramePlane plane;
+                plane.stride = size / count;
+                plane.data.assign(frame_->extended_data[i], frame_->extended_data[i] + plane.stride);
+                out.planes.push_back(std::move(plane));
+            }
+        }
+        av_frame_unref(frame_);
+        return ext::CodecStatus::Ok;
+    }
+    ext::CodecStatus flush() override {
+        avcodec_send_packet(ctx_, nullptr);
+        return ext::CodecStatus::Ok;
+    }
+
+private:
+    AVCodecContext* ctx_;
+    AVFrame* frame_;
+    AVPacket* packet_;
+};
+
+class FFmpegProvider : public ext::CodecProvider {
+public:
+    ext::ProviderInfo info() const override {
+        ext::ProviderInfo i;
+        i.id = "org.ffmpeg.libavcodec";
+        i.displayName = "FFmpeg";
+        i.category = ext::Category::VideoCodec;
+        i.tier = ext::LicenseTier::OpenSource;
+        i.vendor = "FFmpeg";
+        i.version = av_version_info();
+        return i;
+    }
+    bool canDecode(const ext::CodecQuery& q) const override {
+        const QString name = ffmpegName(q.codec);
+        return avcodec_find_decoder_by_name(name.toUtf8().constData()) != nullptr && codecAllowed(name);
+    }
+    bool canEncode(const ext::CodecQuery& q) const override {
+        const QString name = ffmpegName(q.codec);
+        return avcodec_find_encoder_by_name(name.toUtf8().constData()) != nullptr && codecAllowed(name);
+    }
+    std::unique_ptr<ext::Decoder> createDecoder(const ext::CodecQuery& q) override {
+        if (!canDecode(q)) return nullptr;
+        const AVCodec* codec = avcodec_find_decoder_by_name(ffmpegName(q.codec).toUtf8().constData());
+        AVCodecContext* ctx = avcodec_alloc_context3(codec);
+        ctx->width = q.width;
+        ctx->height = q.height;
+        if (q.editRate.num() > 0) ctx->pkt_timebase = inverse(toAv(q.editRate));
+        ctx->thread_count = 0;
+        if (avcodec_open2(ctx, codec, nullptr) < 0) {
+            avcodec_free_context(&ctx);
+            return nullptr;
+        }
+        return std::make_unique<FFmpegDecoder>(ctx);
+    }
+    std::unique_ptr<ext::Encoder> createEncoder(const ext::CodecQuery&) override {
+        // Files are written through MediaWriter; a packet-level encoder
+        // interface comes when a module needs one.
+        return nullptr;
+    }
+};
+
+} // namespace
+
+void registerProviders(ext::ProviderRegistry& registry) {
+    registry.add(std::make_shared<FFmpegProvider>());
+}
+
+} // namespace lumenis::media

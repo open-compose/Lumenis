@@ -9,7 +9,8 @@ configure_file(${PROJECT_SOURCE_DIR}/LICENSE ${PROJECT_BINARY_DIR}/LICENSE.txt C
 set(LUMENIS_LICENSE_FILES
     ${PROJECT_SOURCE_DIR}/LICENSE
     ${PROJECT_SOURCE_DIR}/THIRD-PARTY-NOTICES.md
-    ${PROJECT_SOURCE_DIR}/src/ui/resources/fonts/Inter-LICENSE.txt)
+    ${PROJECT_SOURCE_DIR}/src/ui/resources/fonts/Inter-LICENSE.txt
+    ${PROJECT_SOURCE_DIR}/packaging/licenses/FFmpeg-LGPL-2.1.txt)
 if(APPLE)
     install(FILES ${LUMENIS_LICENSE_FILES} DESTINATION .)
 else()

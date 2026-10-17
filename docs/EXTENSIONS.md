@@ -83,6 +83,11 @@ an official build.
 | Shared storage | Bin locking on any NAS/SAN | — | NEXIS client, MediaCentral |
 
 FFmpeg rules:
+* The build option `LUMENIS_PATENT_CODECS` decides whether the dagger codecs
+  are used (`src/media`, `isPatentCodec`). It is on for development and test
+  builds (the owner's decision, 2026-10-17) and off for official releases
+  until counsel signs off. When it is off, those streams are still probed,
+  but not decoded or encoded.
 * Official builds link FFmpeg dynamically.
 * FFmpeg is configured LGPL-only (`--disable-gpl --disable-nonfree`), with the
   decoders and encoders marked † left out until counsel signs off.

@@ -1,0 +1,165 @@
+#pragma once
+
+#include "lumenis/core/rational.h"
+
+#include <QImage>
+#include <QJsonObject>
+#include <QString>
+
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <vector>
+
+namespace lumenis::ext {
+class ProviderRegistry;
+}
+
+// Reading and writing media files through FFmpeg (ROADMAP Phase 2). Nothing
+// outside this library sees FFmpeg's own types.
+namespace lumenis::media {
+
+// The FFmpeg libraries in use, e.g. "libavcodec 60.31.102, libavformat ...".
+QString ffmpegVersion();
+
+// Codecs that wait for counsel's review (docs/EXTENSIONS.md, marked with a
+// dagger). With LUMENIS_PATENT_CODECS off they are probed but not decoded
+// or encoded.
+bool isPatentCodec(const QString& codec);
+bool patentCodecsAllowed();
+bool codecAllowed(const QString& codec);
+
+enum class StreamKind { Video, Audio, Data, Other };
+
+// One stream of a media file.
+struct StreamInfo {
+    int index = 0;
+    StreamKind kind = StreamKind::Other;
+    QString codec;        // FFmpeg's name: "dnxhd", "prores", "pcm_s24le", ...
+    QString codecLongName;
+    QString profile;      // e.g. "DNXHR HQ", "422 HQ"
+    // Video.
+    int width = 0;
+    int height = 0;
+    Rational frameRate;   // edit rate
+    Rational aspect{1, 1}; // display aspect ratio, e.g. 16:9
+    QString pixelFormat;  // "yuv422p10le", ...
+    bool interlaced = false;
+    // Audio.
+    int sampleRate = 0;
+    int channels = 0;
+    QString sampleFormat; // "s16", "s32", "fltp", ...
+    int bitsPerSample = 0;
+    // Length in frames (video) or samples (audio); 0 if unknown.
+    std::int64_t length = 0;
+    bool decodable = false; // a decoder exists and the codec is allowed
+};
+
+// What a file holds (the Source Browser's columns, Editing Guide ch. 11).
+struct MediaInfo {
+    QString path;
+    QString format;        // "mov,mp4,m4a,3gp,3g2,mj2", "mxf", ...
+    QString formatLongName;
+    double durationSeconds = 0;
+    QString startTimecode; // "01:00:00:00" when the file records one
+    QString reelName;      // tape or reel name metadata, if any
+    std::vector<StreamInfo> streams;
+
+    const StreamInfo* firstVideo() const;
+    std::vector<const StreamInfo*> audio() const;
+    QJsonObject toJson() const;
+};
+
+std::optional<MediaInfo> probe(const QString& path, QString* error = nullptr);
+
+// Reads the frames of one video stream by frame number, from 0. Reading the
+// next frame continues decoding; other frames seek to the keyframe before
+// them and decode forward, so every frame is exact.
+class VideoReader {
+public:
+    VideoReader();
+    ~VideoReader();
+    VideoReader(const VideoReader&) = delete;
+    VideoReader& operator=(const VideoReader&) = delete;
+
+    // The first video stream when `stream` is -1.
+    bool open(const QString& path, int stream = -1, QString* error = nullptr);
+    bool isOpen() const;
+    const StreamInfo& info() const;
+    std::int64_t frameCount() const;
+
+    // The frame as RGBA (8 bits per channel), scaled to `size` if given,
+    // keeping it otherwise. Empty if the frame is past the end.
+    QImage frame(std::int64_t number, QSize size = {});
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> d_;
+};
+
+// Reads one audio stream as 32-bit float samples, interleaved by channel.
+class AudioReader {
+public:
+    AudioReader();
+    ~AudioReader();
+    AudioReader(const AudioReader&) = delete;
+    AudioReader& operator=(const AudioReader&) = delete;
+
+    bool open(const QString& path, int stream = -1, QString* error = nullptr);
+    bool isOpen() const;
+    const StreamInfo& info() const;
+    int channels() const;
+    int sampleRate() const;
+    // `count` samples per channel from sample `start`; fewer at the end.
+    std::vector<float> samples(std::int64_t start, int count);
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> d_;
+};
+
+// Writes a media file: one video stream and/or one audio stream. Used to
+// make media (Phase 2.4: transcode, consolidate) and test files.
+struct WriterSettings {
+    QString format;      // FFmpeg muxer: "mov", "mxf", "mxf_opatom", "wav", "matroska"
+    // Video; empty codec for none.
+    QString videoCodec;  // "dnxhd", "prores_ks", "mpeg2video", "ffv1", ...
+    QString videoProfile; // e.g. "dnxhr_hq"
+    int width = 0;
+    int height = 0;
+    Rational frameRate{25, 1};
+    QString pixelFormat; // empty: the codec's first
+    std::int64_t bitRate = 0;
+    // Audio; empty codec for none.
+    QString audioCodec;  // "pcm_s16le", "pcm_s24le", ...
+    int sampleRate = 48000;
+    int channels = 2;
+    QString startTimecode; // written as metadata when the format takes it
+};
+
+class MediaWriter {
+public:
+    MediaWriter();
+    ~MediaWriter();
+    MediaWriter(const MediaWriter&) = delete;
+    MediaWriter& operator=(const MediaWriter&) = delete;
+
+    bool open(const QString& path, const WriterSettings& settings, QString* error = nullptr);
+    // The next video frame (any QImage format; converted and scaled).
+    bool writeVideo(const QImage& frame);
+    // Interleaved float samples, `count` per channel.
+    bool writeAudio(const float* samples, int count);
+    // Flushes the encoders and writes the trailer.
+    bool finish(QString* error = nullptr);
+    QString lastError() const;
+
+private:
+    struct Impl;
+    std::unique_ptr<Impl> d_;
+};
+
+// Registers FFmpeg's codec provider ("org.ffmpeg.libavcodec") with the
+// application's provider registry (docs/EXTENSIONS.md).
+void registerProviders(ext::ProviderRegistry& registry);
+
+} // namespace lumenis::media

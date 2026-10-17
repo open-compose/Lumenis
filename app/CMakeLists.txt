@@ -25,7 +25,7 @@ set_target_properties(lumenis_app PROPERTIES
     MACOSX_BUNDLE_COPYRIGHT "GPL-3.0-or-later"
     MACOSX_BUNDLE_ICON_FILE app.icns
 )
-target_link_libraries(lumenis_app PRIVATE lumenis::ui lumenis::ext lumenis::core Qt6::Widgets)
+target_link_libraries(lumenis_app PRIVATE lumenis::ui lumenis::media lumenis::ext lumenis::core Qt6::Widgets)
 lumenis_set_warnings(lumenis_app)
 
 if(WIN32)
@@ -34,6 +34,13 @@ if(WIN32)
 endif()
 
 include(GNUInstallDirs)
+# Windows: FFmpeg's DLLs next to the executable, in the build tree (for the
+# tests) and in the packages. macOS (macdeployqt) and Linux (packages,
+# linuxdeploy) find them on their own.
+if(WIN32 AND FFmpeg_RUNTIME_DLLS)
+    file(COPY ${FFmpeg_RUNTIME_DLLS} DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+    install(FILES ${FFmpeg_RUNTIME_DLLS} DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
 install(TARGETS lumenis_app
     BUNDLE DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

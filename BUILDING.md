@@ -14,9 +14,21 @@ namespaces, module ABI symbols) is not user-visible and does not change.
 | Ninja | yes | yes | yes |
 | Qt | 6.8 LTS | 6.8 LTS | 6.8 LTS, or your distribution's Qt 6.4 or later |
 | Installer tools | (built in) | WiX Toolset 3.14 (installed by the bootstrap script) | dpkg-dev, rpm (optional), curl, file |
+| FFmpeg 6.0 or later | Homebrew `ffmpeg` | LGPL shared build from `scripts\get-ffmpeg.ps1` (set `FFMPEG_ROOT`) | `libavcodec-dev` and the other FFmpeg development packages |
 
 Qt 6.8 LTS is the version release builds ship with. Qt 6.4 is the oldest
 version supported, because that is the system Qt on Ubuntu 24.04.
+
+FFmpeg reads and writes media. The bootstrap scripts install it.
+* **Development builds** use the platform's FFmpeg. They include the codecs
+  that wait for legal review (`LUMENIS_PATENT_CODECS`, on by default; see
+  docs/EXTENSIONS.md).
+* **Official releases** turn that option off.
+* **Another FFmpeg:** set `FFMPEG_ROOT` to a folder that holds `include/`
+  and `lib/` (and `bin/` on Windows).
+* **Checking what was found:** `cutthulhu --list-providers` prints the
+  FFmpeg version, and `cutthulhu --probe <file>` shows what a media file
+  holds.
 
 ## Quick start
 
@@ -117,7 +129,7 @@ Useful options:
   * `--version`;
   * `--smoke-test`, which opens the main window offscreen and checks it;
   * `--list-providers`, which loads a sample module through
-    `CUTTHULHU_MODULE_PATH`.
+    `CUTTHULHU_MODULE_PATH` and lists FFmpeg as a provider.
   * `checklist_current`, when Python 3 is found: the Phase 1 gate 5
     checklist (`docs/checklists/phase1-gate5.md`) still matches the menu
     bar.
@@ -367,6 +379,24 @@ This needs reportlab. It writes:
 
 Remake them after the checklist changes.
 
+### "FFmpeg 6.0 or later was not found"
+
+CMake needs FFmpeg's development files.
+
+* **Linux:**
+  `sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev`.
+  Fedora: `sudo dnf install ffmpeg-free-devel`.
+* **macOS:** `brew install ffmpeg pkg-config`.
+* **Windows:** run `scripts\get-ffmpeg.ps1`. It prints a folder; set
+  `FFMPEG_ROOT` to it before configuring.
+
+On the self-hosted runners an administrator installs it once. The CI jobs
+stop with this command in their error:
+* **Mac:** `brew install ffmpeg pkg-config`.
+* **WSL:** `sudo apt-get install -y libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev`.
+* **Windows PC:** nothing is needed. The job downloads the build itself
+  into the runner's profile.
+
 ### `checklist_current` fails
 
 The menus or commands changed, but the gate 5 checklist was not remade.
@@ -532,6 +562,7 @@ the build folder (`build/<preset>`) and configure again.
 cutthulhu --version          print the version and exit
 cutthulhu --list-providers   list loaded modules and extension providers and exit
 cutthulhu --smoke-test       open the main window, verify it, exit 0 on success
+cutthulhu --probe FILE       print what a media file holds (streams, codecs, timecode) as JSON
 cutthulhu --dump-menus FILE  write the menu bar as JSON ('-' for stdout) and exit;
                              with --sample-project, open a temporary project first
                              and add each command's id and whether it works yet

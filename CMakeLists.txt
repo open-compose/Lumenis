@@ -76,6 +76,22 @@ endif()
 
 include(cmake/CompilerWarnings.cmake)
 
+# FFmpeg decodes and encodes media (Phase 2). Development builds use the
+# platform's FFmpeg; BUILDING.md says how to install it.
+list(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+find_package(FFmpeg 60.0)
+if(NOT FFmpeg_FOUND)
+    message(FATAL_ERROR
+        "FFmpeg 6.0 or later was not found (libavcodec, libavformat, libavutil, libswscale, libswresample). "
+        "Linux: sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev. "
+        "macOS: brew install ffmpeg pkg-config. Windows: scripts\\get-ffmpeg.ps1, then set FFMPEG_ROOT. "
+        "Or set FFMPEG_ROOT to a folder with include/ and lib/.")
+endif()
+# Codecs whose patents or licences need counsel's review (docs/EXTENSIONS.md,
+# marked with a dagger): development and test builds include them; official
+# release builds turn this off until counsel signs off.
+option(LUMENIS_PATENT_CODECS "Allow the codecs that await legal review (DNxHD, ProRes, H.264, HEVC, AAC, ...)" ON)
+
 # Put every runtime artefact (executables, shared libraries, loadable
 # modules) in one directory so the app finds its modules in the build tree
 # exactly as it does after installation.
@@ -85,6 +101,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 add_subdirectory(src/core)
 add_subdirectory(src/ext)
 add_subdirectory(src/model)
+add_subdirectory(src/media)
 add_subdirectory(src/ui)
 add_subdirectory(app)
 

@@ -116,6 +116,17 @@ Gate 5's checklist is ready: `docs/checklists/phase1-gate5.md`.
     passes on the self-hosted runners; `fixedPixelMetric` in `theme.cpp`
     keeps macOS sizes the same as Linux.
 
+Phase 2 (media I/O and playback) has started. 2.1, the media library, is
+done:
+  - `src/media`: FFmpeg probe, frame-exact video and audio readers, and a
+    writer; FFmpeg as a codec provider; `--probe`.
+  - FFmpeg comes from the platform for development: the bootstrap scripts,
+    `cmake/FindFFmpeg.cmake`, `scripts/get-ffmpeg.ps1` on Windows.
+  - `LUMENIS_PATENT_CODECS` is on for dev and test builds, off for official
+    releases (owner's decision).
+
+Next is 2.2, linking (ROADMAP).
+
 Spec sections 3, 4, 7, 11, 12, 13 and 14 list details left for later.
 
 Panels are our own framework, not QDockWidget, because Qt cannot draw

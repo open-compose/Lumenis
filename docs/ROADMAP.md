@@ -388,7 +388,45 @@ These windows are built using the Media Composer User Guide layout:
 5. An experienced Media Composer editor finds every window and menu command
    without help **(M)**, using a checklist.
 
-### Phase 2 — Media I/O and playback
+### Phase 2 — Media I/O and playback — **in progress**
+
+Sub-steps:
+* **2.1 Media library — done.**
+  * `src/media`, on FFmpeg 6.0 or later. FFmpeg is the platform's for
+    development builds: distribution packages, Homebrew, or an LGPL shared
+    build on Windows (`scripts/get-ffmpeg.ps1`).
+  * `probe()` reports the container, streams, codecs, profiles, sizes,
+    rates, aspect, lengths, start timecode and reel.
+  * Frame-exact `VideoReader` (seeks to the keyframe before and decodes
+    forward) and sample-exact `AudioReader` (float).
+  * `MediaWriter` for any FFmpeg muxer and encoder: QuickTime, MXF, MXF
+    OP-Atom, WAV; DNxHD/DNxHR, ProRes, MPEG-2, FFV1, PCM. Colour space is
+    declared consistently (Rec. 709 for HD and DNx).
+  * FFmpeg is registered as a codec provider; `--probe <file>`.
+  * `LUMENIS_PATENT_CODECS`: development builds include the codecs awaiting
+    counsel; official releases leave them out (EXTENSIONS.md).
+  * `tst_media` writes its own media and reads it back, with lossless,
+    Long GOP, 24-bit audio and DNxHR in MXF OP-Atom.
+* **2.2 Linking:** File > Input > Source Browser and Link, per Editing Guide
+  ch. 11.
+  * Master clips made from files, with their real metadata in the bin
+    columns.
+  * Frames in Frame view, the Composer and the Timeline.
+* **2.3 Playback:**
+  * A decode thread and frame cache, and an audio clock with audio output.
+  * J-K-L at real speeds.
+  * Playing sequences through their segments, with full and draft quality.
+  * The client monitor.
+* **2.4 Avid MediaFiles:**
+  * Import, Consolidate and Transcode into `Avid MediaFiles/MXF/<n>/` as MXF
+    OP-Atom (DNx and PCM).
+  * The media database scanned when a project opens, and relinking.
+* **2.5 The gates below:**
+  * The decode corpus with frame MD5s.
+  * Real-time playback.
+  * A/V sync.
+  * Transcode round trips.
+
 * Linking (AMA-style) and Import/Consolidate/Transcode into an Avid MediaFiles
   layout: `Avid MediaFiles/MXF/<n>/`.
 * MXF OP-Atom and OP1a read/write. Codecs: DNxHD, DNxHR, DNxUncompressed, XDCAM,

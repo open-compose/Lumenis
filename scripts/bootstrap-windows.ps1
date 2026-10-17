@@ -84,4 +84,7 @@ $env:WIX = $wixDir
 Write-Host ''
 Write-Host 'Done. Open a NEW PowerShell window (so PATH changes apply), then:'
 Write-Host "  `$env:QT_ROOT_DIR = 'C:\Qt\$QtVersion\msvc2022_64'"
+# FFmpeg (an LGPL shared build) for the media library.
+& (Join-Path $PSScriptRoot 'get-ffmpeg.ps1') | Out-Host
+Write-Host "  `$env:FFMPEG_ROOT = '$(Join-Path $env:LOCALAPPDATA 'Cutthulhu\ffmpeg')\ffmpeg-n7.1-latest-win64-lgpl-shared-7.1'"
 Write-Host '  scripts\build.ps1 -Package'

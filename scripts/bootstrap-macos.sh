@@ -10,7 +10,7 @@ if ! command -v brew >/dev/null; then
     echo "Homebrew is required: https://brew.sh" >&2
     exit 1
 fi
-brew install cmake ninja python@3.12
+brew install cmake ninja python@3.12 pkg-config ffmpeg
 
 python3 -m pip install --user --upgrade aqtinstall
 python3 -m aqt install-qt mac desktop "$qt_version" clang_64 -O "$HOME/Qt"
