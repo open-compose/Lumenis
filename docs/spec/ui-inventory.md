@@ -1749,12 +1749,61 @@ p.610–640, ch. 13 p.432–434).**
 * **Not yet:**
   * File > Input > Link to Volume for Export (AS-02, p.328).
   * Automatic linking of mounted volumes (p.311).
-  * Relink and Unlink (p.360–368).
-  * Image sequences as one clip (p.325–328).
   * Multichannel audio mapping (p.330).
   * Live Link (p.319).
   * The Media Cache settings (p.1205).
-  * Clip frames in the Timeline (Phase 2.2b).
+  * The AIS Metadata options for DPX reel names and frame counts
+    (p.1204–1205).
+
+### Image sequences (p.325–328)
+* **Grouping:** numbered stills (DPX, OpenEXR, TIFF, PNG, JPEG, TGA, BMP,
+  Cineon) with the same name, number width and type link as one master
+  clip. Which files go into it depends on the selection:
+  * Linking a folder: one clip for each run of consecutive numbers (p.326).
+  * One file of a run selected: the whole run (p.326).
+  * Several files selected: one clip for each run of consecutive numbers
+    among them, as in the guide's Ernie (1 and 2), Ernie (5 and 6) example
+    (p.326).
+  * A file with no neighbour is a clip of its own.
+* **The clip:**
+  * It is named for the files without their numbers ("Kermit" from
+    Kermit_0001.dpx), or for the folder when the names are only numbers.
+  * It plays at the project's rate.
+  * Source File is the first file.
+
+### Relink and Unlink (p.364–365, p.368)
+* **Clip > Modify > Unlink Media (p.368):**
+  * It unlinks the selected master clips, which then show "Media Offline".
+  * The link is kept, so Relink can find the media again.
+  * Sequences and subclips cannot be unlinked.
+* **Clip > Relink > Linked Media (p.364–365):**
+  * **Which clips:** the linked clips selected in the bin. With none
+    selected, those in the bins selected in the Sidebar, or in every open
+    bin.
+  * **The dialog (picture on p.365):**
+    * At the top: the "Offline only" / "All media" menu (Offline only by
+      default) and a search field.
+    * The list's columns: Color, Name, Source File, Source Path, Format,
+      Duration, Tracks and Creation Date. Offline clips are red.
+    * At the bottom: Locate Media and "Viewing: n/m".
+  * **Locate Media:** asks for a folder and looks through it, and the
+    folders in it, for each clip's source file by name. It works on the
+    selected clips, or on all the clips shown.
+  * **What relinks:** only media with the clip's duration and tracks, as
+    for Relink to File(s) (p.320). A sequence is found by its first file,
+    and its run is moved to that folder.
+  * **Clips not relinked** are named in the Console (p.320). The dialog
+    shows "n relinked, m not found".
+* **Not yet:**
+  * Relink > Managed Media and its Relink dialog (p.361–364), which come
+    with Avid media files (Phase 2.4).
+  * Relink to File(s) on right-click (p.320).
+
+### Timeline Clip Frames (p.592)
+* **Fast menu > Clip Frames:** "switches the display of start frames for
+  each segment". The frame sits at the left end of each video segment,
+  with the clip text after it.
+* It shows only where the segment is wide enough.
 
 ## 16. Still to document
 * Menu order and separators, confirmed against a licensed seat.

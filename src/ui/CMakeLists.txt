@@ -21,6 +21,7 @@ add_library(lumenis_ui STATIC
     menu_builder.cpp
     panel_manager.cpp
     panels.cpp
+    relink_dialog.cpp
     select_project_dialog.cpp
     source_browser.cpp
     settings.cpp
@@ -51,6 +52,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/main_window.h
     include/lumenis/ui/menu_builder.h
     include/lumenis/ui/panels.h
+    include/lumenis/ui/relink_dialog.h
     include/lumenis/ui/select_project_dialog.h
     include/lumenis/ui/source_browser.h
     include/lumenis/ui/settings.h

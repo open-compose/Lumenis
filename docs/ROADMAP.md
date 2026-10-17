@@ -420,8 +420,10 @@ Sub-steps:
   * Files dragged to a bin link; dragged to the Source monitor they load
     without a bin and are committed when cut in.
   * The Link setting; `tst_source_browser`.
-* **2.2b:** clip frames in the Timeline; Relink and Unlink (p.360–368);
-  image sequences as one clip (p.325–328).
+* **2.2b — done.** Clip Frames in the Timeline (p.592); Clip > Modify >
+  Unlink Media and Clip > Relink > Linked Media with Locate Media
+  (p.364–368); image sequences (DPX, EXR, TIFF, PNG, ...) as one clip,
+  grouped as p.325–326 describe (spec §15).
 * **2.3 Playback:**
   * A decode thread and frame cache, and an audio clock with audio output.
   * J-K-L at real speeds.

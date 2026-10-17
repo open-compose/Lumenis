@@ -2,6 +2,7 @@
 
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/marker_dialogs.h"
+#include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/theme.h"
 
 #include <QApplication>
@@ -272,6 +273,12 @@ TimelineView::TimelineView(Timeline& timeline, QWidget* parent) : QWidget(parent
     setFocusPolicy(Qt::StrongFocus);
     setMinimumHeight(kRulerHeight + kVideoRow);
     setAcceptDrops(true);
+    // Clip Frames are decoded off the UI thread and drawn when ready.
+    if (MediaFrames* frames = MediaFrames::instance()) {
+        connect(frames, &MediaFrames::thumbnailReady, this, [this] {
+            if (timeline_.display().clipFrames) update();
+        });
+    }
 }
 
 int TimelineView::rulerHeight() const {
@@ -438,15 +445,38 @@ void TimelineView::paintEvent(QPaintEvent*) {
                         p.setPen(QPen(QColor(kSelected), 2));
                         p.drawRect(box.adjusted(1, 1, -1, -1));
                     }
+                    // Clip Frames (Fast menu, p.592): the start frame of each
+                    // segment on video tracks, at its left end.
+                    QRectF textArea = box;
+                    if (timeline_.display().clipFrames && t->kind == model::TrackKind::Video && xFor(at) >= x0 - 1) {
+                        const int h = std::max(r.height - 4, 8);
+                        const QSize size(h * 16 / 9, h);
+                        if (box.width() > size.width() + 4) {
+                            const QRectF frame(box.left() + 2, box.top() + 1, size.width(), size.height());
+                            p.fillRect(frame, Qt::black);
+                            if (MediaFrames* frames = MediaFrames::instance()) {
+                                const auto clip = timeline_.composer().resolve(s.binId, s.clipId);
+                                const QImage image = clip ? frames->thumbnail(*clip, s.sourceIn, size) : QImage();
+                                if (!image.isNull()) {
+                                    const QSize fit = image.size().scaled(size, Qt::KeepAspectRatio);
+                                    p.drawImage(QRectF(frame.left() + (size.width() - fit.width()) / 2.0,
+                                                       frame.top() + (size.height() - fit.height()) / 2.0, fit.width(),
+                                                       fit.height()),
+                                                image);
+                                }
+                            }
+                            textArea.setLeft(frame.right() + 2);
+                        }
+                    }
                     // Clip text (Fast menu, p.592).
                     QStringList parts;
                     const auto& d = timeline_.display();
                     if (d.clipNames) parts << s.name;
                     if (d.clipTracks) parts << s.sourceTrack;
                     if (d.clipDurations) parts << state.durationText(s.length);
-                    if (!parts.isEmpty() && box.width() > 12) {
+                    if (!parts.isEmpty() && textArea.width() > 12) {
                         p.setPen(bright);
-                        const QRectF textBox = box.adjusted(4, 0, -3, 0);
+                        const QRectF textBox = textArea.adjusted(4, 0, -3, 0);
                         p.drawText(textBox, Qt::AlignVCenter | Qt::AlignLeft,
                                    p.fontMetrics().elidedText(parts.join(QStringLiteral("  ")), Qt::ElideRight,
                                                               static_cast<int>(textBox.width())));
@@ -1616,7 +1646,7 @@ QMenu* Timeline::fastMenu() {
     later(tr("Render Ranges"));
     check(m, tr("Dissolve Icons"), display_.dissolveIcons, [this](bool v) { display_.dissolveIcons = v; });
     m->actions().constLast()->setEnabled(display_.effectIcons);
-    later(tr("Clip Frames"));
+    check(m, tr("Clip Frames"), display_.clipFrames, [this](bool v) { display_.clipFrames = v; });
     QMenu* clipText = m->addMenu(tr("Clip Text"));
     check(clipText, tr("Clip Names"), display_.clipNames, [this](bool v) { display_.clipNames = v; });
     clipText->addAction(tr("Group Clip Name"))->setEnabled(false);

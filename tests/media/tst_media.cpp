@@ -3,6 +3,7 @@
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
 
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QTemporaryDir>
@@ -348,6 +349,82 @@ private slots:
         QCOMPARE(item.fields.value(QStringLiteral("Start")), QStringLiteral("00:00:00:00"));
         FrameCache cache;
         QVERIFY(cache.frame(item, 0).isNull()); // no picture
+    }
+
+    void imageSequences() {
+        // Numbered stills link as one clip (p.325-326): one file brings its
+        // run; several make a clip of each run among them.
+        QTemporaryDir dir;
+        auto still = [&](const QString& name, int n) {
+            QImage image(32, 18, QImage::Format_RGB32);
+            image.fill(colourOf(n));
+            QVERIFY(image.save(dir.filePath(name), "PNG"));
+        };
+        for (int i = 1; i <= 10; ++i) still(QStringLiteral("Kermit_%1.png").arg(i, 4, 10, QLatin1Char('0')), i);
+        for (int i = 1; i <= 3; ++i) still(QStringLiteral("Oscar.%1.png").arg(i, 3, 10, QLatin1Char('0')), i);
+        still(QStringLiteral("Bert_01.png"), 1);
+        still(QStringLiteral("Bert_03.png"), 3);
+        const Rational rate(25);
+        auto k = [&](int n) { return dir.filePath(QStringLiteral("Kermit_%1.png").arg(n, 4, 10, QLatin1Char('0'))); };
+
+        QStringList one = groupStills({k(5)}, rate);
+        QCOMPARE(one.size(), 1);
+        auto seq = ImageSequence::fromSpec(one.first());
+        QVERIFY(seq);
+        QCOMPARE(seq->first, 1);
+        QCOMPARE(seq->count, 10);
+        QCOMPARE(seq->name(), QStringLiteral("Kermit"));
+        QCOMPARE(seq->fileAt(9), k(10));
+
+        const QStringList runs = groupStills({k(2), k(3), k(7), k(8), k(9)}, rate);
+        QCOMPARE(runs.size(), 2);
+        QCOMPARE(ImageSequence::fromSpec(runs.at(1))->first, 7);
+        QCOMPARE(ImageSequence::fromSpec(runs.at(1))->count, 3);
+
+        QStringList all;
+        for (const QFileInfo& fi : QDir(dir.path()).entryInfoList(QDir::Files, QDir::Name)) all << fi.absoluteFilePath();
+        const QStringList grouped = groupStills(all, rate);
+        // Bert_01 and Bert_03 are not a run: two stills.
+        QCOMPARE(grouped.size(), 4);
+        QVERIFY(!isSequenceSpec(grouped.at(0)) && !isSequenceSpec(grouped.at(1)));
+        QCOMPARE(ImageSequence::fromSpec(grouped.at(3))->name(), QStringLiteral("Oscar"));
+
+        LinkOptions o;
+        o.editRate = rate;
+        const QList<model::BinItem> items = linkFiles({k(4)}, o);
+        QCOMPARE(items.size(), 1);
+        model::BinItem clip = items.first();
+        QCOMPARE(clip.name, QStringLiteral("Kermit"));
+        QCOMPARE(clip.durationFrames, std::int64_t{10});
+        QCOMPARE(clip.fields.value(QStringLiteral("Source File")), QStringLiteral("Kermit_0001.png"));
+        FrameCache cache;
+        for (int n : {0, 6, 9}) QVERIFY2(near(cache.frame(clip, n), colourOf(n + 1), 0), qPrintable(QString::number(n)));
+
+        // Unlink Media (p.368): offline until relinked.
+        QVERIFY(unlinkClip(clip));
+        QVERIFY(isUnlinked(clip));
+        QVERIFY(!cache.isOnline(clip));
+        QVERIFY(cache.frame(clip, 0).isNull());
+
+        // Relink > Linked Media (p.364-365): the files moved to another
+        // folder are found by name.
+        QTemporaryDir moved;
+        QDir().mkpath(moved.filePath(QStringLiteral("deep/er")));
+        for (int i = 1; i <= 10; ++i) {
+            QVERIFY(QFile::rename(k(i), moved.filePath(QStringLiteral("deep/er/Kermit_%1.png").arg(i, 4, 10, QLatin1Char('0')))));
+        }
+        const QHash<QString, QString> index = indexFolder(moved.path());
+        const QString found = locateMedia(clip, index);
+        QVERIFY(isSequenceSpec(found));
+        QVERIFY(relinkClip(clip, found));
+        QVERIFY(!isUnlinked(clip));
+        QVERIFY(cache.isOnline(clip));
+        QVERIFY(near(cache.frame(clip, 2), colourOf(3), 0));
+        QCOMPARE(clip.fields.value(QStringLiteral("Source Path")), QFileInfo(moved.filePath(QStringLiteral("deep/er"))).absoluteFilePath());
+        // Media that does not fit the clip is refused.
+        QString error;
+        QVERIFY(!relinkClip(clip, dir.filePath(QStringLiteral("Oscar.001.png")), &error));
+        QVERIFY(!error.isEmpty());
     }
 
     void errors() {

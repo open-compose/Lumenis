@@ -34,15 +34,14 @@ bool MediaFrames::isOffline(const model::BinItem& item) {
 }
 
 QString MediaFrames::key(const model::BinItem& item, std::int64_t clipFrame, QSize size) {
+    // One arg() call: a sequence's path holds a %04d of its own.
     return QStringLiteral("%1|%2|%3x%4")
-        .arg(item.link.value(QStringLiteral("path")).toString())
-        .arg(clipFrame)
-        .arg(size.width())
-        .arg(size.height());
+        .arg(item.link.value(QStringLiteral("path")).toString(), QString::number(clipFrame),
+             QString::number(size.width()), QString::number(size.height()));
 }
 
 QImage MediaFrames::thumbnail(const model::BinItem& item, std::int64_t clipFrame, QSize size) {
-    if (!media::isLinked(item)) return {};
+    if (!media::isLinked(item) || media::isUnlinked(item)) return {};
     const QString k = key(item, clipFrame, size);
     if (const auto it = thumbnails_.find(k); it != thumbnails_.end()) return it->second;
     if (!pending_.insert(k).second) return {};

@@ -18,6 +18,7 @@
 #include "lumenis/ui/marker_dialogs.h"
 #include "lumenis/ui/menu_builder.h"
 #include "lumenis/ui/panels.h"
+#include "lumenis/ui/relink_dialog.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/settings_window.h"
 #include "lumenis/ui/source_browser.h"
@@ -791,6 +792,64 @@ void MainWindow::loadFiles(const QStringList& paths, bool recordMonitor) {
     if (!items.isEmpty()) panels_->showPanel(panels_->panel(QStringLiteral("Composer")));
 }
 
+void MainWindow::storeClip(const QString& binId, const model::BinItem& item) {
+    BinDocument* doc = binContainer_->document(binId);
+    if (doc) doc->replaceItem(item);
+    composer_->updateItem(item);
+}
+
+void MainWindow::relinkLinkedMedia() {
+    // The linked clips selected in the bin; with none selected, those of
+    // the bins selected in the Sidebar, or of every open bin (p.364: "with
+    // or without an item selected").
+    QList<LinkedMediaDialog::Clip> clips;
+    auto add = [&](const BinDocument* doc, const QStringList& ids) {
+        for (const model::BinItem& item : doc->bin().items) {
+            if (media::isLinked(item) && (ids.isEmpty() || ids.contains(item.id))) clips.append({doc->nodeId(), item});
+        }
+    };
+    if (BinView* view = binContainer_->activeView(); view && !view->selectedIds().isEmpty()) {
+        add(&view->document(), view->selectedIds());
+    }
+    if (clips.isEmpty()) {
+        for (const QString& id : binContainer_->selectedNodes()) {
+            if (const BinDocument* doc = binContainer_->document(id)) add(doc, {});
+        }
+    }
+    if (clips.isEmpty()) {
+        for (const BinDocument* doc : binContainer_->openDocuments()) add(doc, {});
+    }
+    LinkedMediaDialog dialog(clips, this);
+    connect(&dialog, &LinkedMediaDialog::relinked, this,
+            [this](const QString& binId, const model::BinItem& item) { storeClip(binId, item); });
+    connect(&dialog, &LinkedMediaDialog::notRelinked, this, [](const QString& name, const QString& reason) {
+        // "Open the Console window to see the name of the file or files
+        // that were not relinked" (p.320).
+        ConsoleLog::instance().append(tr("Relink: %1: %2").arg(name, reason));
+    });
+    if (linkedMediaHook_) {
+        linkedMediaHook_(dialog);
+    } else {
+        dialog.exec();
+    }
+}
+
+int MainWindow::unlinkSelection() {
+    // Clip > Modify > Unlink Media: the selected master clips (p.368).
+    BinView* view = binContainer_->activeView();
+    if (!view) return 0;
+    int unlinked = 0;
+    for (const QString& id : view->selectedIds()) {
+        const model::BinItem* found = view->document().bin().item(id);
+        if (!found) continue;
+        model::BinItem item = *found;
+        if (!media::unlinkClip(item)) continue;
+        storeClip(view->document().nodeId(), item);
+        ++unlinked;
+    }
+    return unlinked;
+}
+
 QString MainWindow::linkVolume(const QString& folder) {
     if (!binContainer_->hasProject()) return {};
     const QString id = binContainer_->newBin();
@@ -995,6 +1054,8 @@ void MainWindow::installPanelHandlers() {
     handle("tools.media_tool", [this] { showMediaTool(); });
     // File > Input > Source Browser, Tools > Source Browser (p.315, p.327).
     handle("file.input.source_browser", [this] { showSourceBrowser(); });
+    handle("clip.relink.linked_media", [this] { relinkLinkedMedia(); });
+    handle("clip.modify.unlink_media", [this] { unlinkSelection(); });
     handle("tools.source_browser", [this] { showSourceBrowser(); });
     // The Tool Palette button (Other tab, p.392).
     handle("other.tool_palette", [this] { showTool(QStringLiteral("ToolPalette")); });

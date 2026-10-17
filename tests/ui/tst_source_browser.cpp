@@ -8,6 +8,7 @@
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/panels.h"
+#include "lumenis/ui/relink_dialog.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/source_browser.h"
 #include "lumenis/ui/theme.h"
@@ -17,6 +18,7 @@
 #include <QDir>
 #include <QFile>
 #include <QListView>
+#include <QMenu>
 #include <QMimeData>
 #include <QSettings>
 #include <QSignalSpy>
@@ -25,6 +27,7 @@
 #include <QTest>
 #include <QToolButton>
 #include <QTreeView>
+#include <QTreeWidget>
 
 using namespace lumenis;
 using namespace lumenis::ui;
@@ -344,6 +347,97 @@ private slots:
         composer.loadDefault(bin->nodeId(), clip);
         QVERIFY(composer.picture(MonitorId::Source, QSize(64, 36), &offline).isNull());
         QVERIFY(offline);
+    }
+    void relinkUnlinkAndClipFrames() {
+        // Clip > Modify > Unlink Media (p.368), Clip > Relink > Linked
+        // Media (p.364-365) and the Timeline's Clip Frames (p.592).
+        MediaFolder f;
+        QTemporaryDir dir;
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        const QStringList ids = window.linkFiles(binId, {f.path("A001.mov"), f.path("A002.mov")});
+        QCOMPARE(ids.size(), 2);
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, *bin->bin().item(ids.at(0)));
+        bool offline = true;
+        QVERIFY(near(composer.picture(MonitorId::Source, QSize(64, 36), &offline), colourOf(0)));
+
+        // Unlink: Media Offline.
+        BinView* view = window.binContainer().viewFor(bin);
+        QVERIFY(view);
+        view->selectIds({ids.at(0)});
+        commands.action(QStringLiteral("clip.modify.unlink_media"))->trigger();
+        QVERIFY(media::isUnlinked(*bin->bin().item(ids.at(0))));
+        QVERIFY(composer.picture(MonitorId::Source, QSize(64, 36), &offline).isNull());
+        QVERIFY(offline);
+
+        // The files move; A002 is offline too now.
+        QTemporaryDir moved;
+        QDir().mkpath(moved.filePath(QStringLiteral("Card A copy")));
+        for (const char* name : {"A001.mov", "A002.mov"}) {
+            QVERIFY(QFile::rename(f.path(name), moved.filePath(QStringLiteral("Card A copy/")) + QString::fromLatin1(name)));
+        }
+        QStringList shown;
+        QString summary;
+        window.setLinkedMediaHook([&](LinkedMediaDialog& dialog) {
+            shown = dialog.shownNames();
+            // Offline only by default (picture on p.365); both are.
+            dialog.setOfflineOnly(false);
+            dialog.setSearch(QStringLiteral("A00"));
+            QCOMPARE(dialog.list()->topLevelItemCount(), 2);
+            dialog.setSearch({});
+            QCOMPARE(dialog.locateMedia(moved.path()), 2);
+            summary = dialog.summary();
+            dialog.setOfflineOnly(true);
+            QCOMPARE(dialog.shownNames(), QStringList());
+        });
+        view->selectIds({});
+        commands.action(QStringLiteral("clip.relink.linked_media"))->trigger();
+        QCOMPARE(shown, (QStringList{"A001", "A002"}));
+        QVERIFY(summary.startsWith(QStringLiteral("2 relinked")));
+        const model::BinItem relinked = *bin->bin().item(ids.at(0));
+        QVERIFY(!media::isUnlinked(relinked));
+        QCOMPARE(relinked.fields.value(QStringLiteral("Source Path")),
+                 QFileInfo(moved.filePath(QStringLiteral("Card A copy"))).absoluteFilePath());
+        QVERIFY(near(composer.picture(MonitorId::Source, QSize(64, 36), &offline), colourOf(0)));
+
+        // Clip Frames: each segment's start frame in the Timeline.
+        composer.state(MonitorId::Source).setPosition(2);
+        composer.state(MonitorId::Source).markIn();
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.splice_in")));
+        QAction* clipFrames = nullptr;
+        QAction* defaultSetup = nullptr;
+        for (QAction* a : window.timeline().fastMenu()->actions()) {
+            if (a->text() == QStringLiteral("Clip Frames")) clipFrames = a;
+            if (a->text() == QStringLiteral("Default Setup")) defaultSetup = a;
+        }
+        // Zoomed in, the segment is wide enough for its frame.
+        QVERIFY(defaultSetup);
+        defaultSetup->trigger();
+        window.timeline().setScale(20, 0);
+        QVERIFY(clipFrames && clipFrames->isEnabled() && clipFrames->isCheckable());
+        clipFrames->setChecked(true);
+        QVERIFY(window.timeline().display().clipFrames);
+        window.timeline().view()->grab();
+        MediaFrames::instance()->waitForThumbnails();
+        QCoreApplication::processEvents();
+        // The segment's start is frame 2 of the clip, at the row's size.
+        QVERIFY(near(MediaFrames::instance()->thumbnail(relinked, 2, QSize(46, 26)), colourOf(2)));
     }
 };
 

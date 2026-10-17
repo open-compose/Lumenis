@@ -308,6 +308,7 @@ public:
         bool timecodeTrack = true; // Show Track > TC1 (p.598)
         bool effectIcons = true;   // Effect Icons, Dissolve Icons (FX guide p.40)
         bool dissolveIcons = true;
+        bool clipFrames = false;   // Clip Frames: each segment's start frame (p.592)
     };
     const Display& display() const { return display_; }
 

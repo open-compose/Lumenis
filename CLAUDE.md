@@ -126,9 +126,14 @@ done:
   - `LUMENIS_PATENT_CODECS` is on for dev and test builds, off for official
     releases (owner's decision).
 
-2.2a, linking, is done: the Source Browser (`source_browser.*`), linked
-clips (`src/media/link.*`), frames in the monitors and bins
-(`media_frames.*`), the Link setting. Next is 2.2b (ROADMAP).
+2.2, linking, is done:
+  - the Source Browser (`source_browser.*`);
+  - linked clips and image sequences (`src/media/link.*`,
+    `ImageSequence` in `media.h`);
+  - frames in the monitors, bins and Timeline (`media_frames.*`);
+  - Relink > Linked Media and Unlink (`relink_dialog.*`);
+  - the Link setting.
+Next is 2.3, playback (ROADMAP).
 
 Spec sections 3, 4, 7, 11, 12, 13, 14 and 15 list details left for later.
 

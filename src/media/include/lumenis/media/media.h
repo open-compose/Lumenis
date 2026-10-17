@@ -70,6 +70,27 @@ struct MediaInfo {
     QJsonObject toJson() const;
 };
 
+// A numbered run of still images (DPX, OpenEXR, TIFF, PNG, ...) read as one
+// clip (Editing Guide p.325-328). Wherever a file path is taken, the
+// sequence's spec() can be given instead.
+struct ImageSequence {
+    QString pattern;         // "/media/Kermit_%04d.dpx": FFmpeg's image2 pattern
+    std::int64_t first = 0;  // the first file's number
+    std::int64_t count = 0;  // files in the run
+    Rational rate{24, 1};    // stills have none: the project's
+
+    QString fileAt(std::int64_t index) const; // index from 0
+    // "Kermit", from "Kermit_0001.dpx".
+    QString name() const;
+    // "seq:<pattern>?first=1&count=40&rate=24/1".
+    QString spec() const;
+    static std::optional<ImageSequence> fromSpec(const QString& spec);
+};
+bool isSequenceSpec(const QString& path);
+// Whether a file name is a numbered still that can be part of a sequence:
+// its stem ends in digits and its extension is an image format.
+bool isNumberedStill(const QString& path);
+
 std::optional<MediaInfo> probe(const QString& path, QString* error = nullptr);
 
 // Reads the frames of one video stream by frame number, from 0. Reading the

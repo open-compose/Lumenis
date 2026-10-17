@@ -77,8 +77,21 @@ using Input = std::unique_ptr<AVFormatContext, InputCloser>;
 
 Input openInput(const QString& path, QString* error) {
     AVFormatContext* raw = nullptr;
-    const QByteArray file = path.toUtf8();
-    int rc = avformat_open_input(&raw, file.constData(), nullptr, nullptr);
+    QByteArray file = path.toUtf8();
+    const AVInputFormat* format = nullptr;
+    AVDictionary* options = nullptr;
+    if (const auto seq = ImageSequence::fromSpec(path)) {
+        // Image sequences through the image2 demuxer, from the run's first
+        // number at the project's rate.
+        file = seq->pattern.toUtf8();
+        format = av_find_input_format("image2");
+        av_dict_set(&options, "pattern_type", "sequence", 0);
+        av_dict_set_int(&options, "start_number", seq->first, 0);
+        av_dict_set(&options, "framerate",
+                    QStringLiteral("%1/%2").arg(seq->rate.num()).arg(seq->rate.den()).toUtf8().constData(), 0);
+    }
+    int rc = avformat_open_input(&raw, file.constData(), format, &options);
+    av_dict_free(&options);
     if (rc < 0) {
         setError(error, errorText(rc));
         return nullptr;
@@ -293,7 +306,85 @@ std::optional<MediaInfo> probe(const QString& path, QString* error) {
         if (info.startTimecode.isEmpty()) info.startTimecode = metadata(st->metadata, "timecode");
         if (info.reelName.isEmpty()) info.reelName = metadata(st->metadata, "reel_name");
     }
+    if (const auto seq = ImageSequence::fromSpec(path)) {
+        // The run is what was chosen, not every numbered file after it.
+        for (StreamInfo& s : info.streams) {
+            if (s.kind != StreamKind::Video) continue;
+            s.length = seq->count;
+            s.frameRate = seq->rate;
+        }
+        info.durationSeconds = static_cast<double>(seq->count) * static_cast<double>(seq->rate.den()) /
+                               static_cast<double>(seq->rate.num());
+    }
     return info;
+}
+
+// ---------------------------------------------------------------- ImageSequence
+
+namespace {
+
+const QStringList& stillExtensions() {
+    static const QStringList e{QStringLiteral("dpx"), QStringLiteral("exr"), QStringLiteral("tif"),
+                               QStringLiteral("tiff"), QStringLiteral("png"), QStringLiteral("jpg"),
+                               QStringLiteral("jpeg"), QStringLiteral("tga"), QStringLiteral("bmp"),
+                               QStringLiteral("cin")};
+    return e;
+}
+
+} // namespace
+
+QString ImageSequence::fileAt(std::int64_t index) const {
+    // The pattern holds one %0Nd.
+    const qsizetype at = pattern.indexOf(QLatin1Char('%'));
+    const qsizetype d = pattern.indexOf(QLatin1Char('d'), at);
+    if (at < 0 || d < 0) return pattern;
+    const int width = pattern.mid(at + 2, d - at - 2).toInt();
+    return pattern.left(at) + QStringLiteral("%1").arg(first + index, width, 10, QLatin1Char('0')) + pattern.mid(d + 1);
+}
+
+QString ImageSequence::name() const {
+    const QString file = pattern.mid(pattern.lastIndexOf(QLatin1Char('/')) + 1);
+    QString stem = file.left(file.indexOf(QLatin1Char('%')));
+    while (!stem.isEmpty() && QStringLiteral("._- ").contains(stem.back())) stem.chop(1);
+    return stem;
+}
+
+QString ImageSequence::spec() const {
+    // Joined, not arg(): the pattern's own %04d would be taken for a marker.
+    return QStringLiteral("seq:") + pattern +
+           QStringLiteral("?first=%1&count=%2&rate=%3/%4").arg(first).arg(count).arg(rate.num()).arg(rate.den());
+}
+
+std::optional<ImageSequence> ImageSequence::fromSpec(const QString& spec) {
+    if (!spec.startsWith(QLatin1String("seq:"))) return std::nullopt;
+    const qsizetype q = spec.lastIndexOf(QLatin1Char('?'));
+    if (q < 0) return std::nullopt;
+    ImageSequence s;
+    s.pattern = spec.mid(4, q - 4);
+    for (const QString& kv : spec.mid(q + 1).split(QLatin1Char('&'))) {
+        const QString key = kv.section(QLatin1Char('='), 0, 0);
+        const QString value = kv.section(QLatin1Char('='), 1);
+        if (key == QLatin1String("first")) s.first = value.toLongLong();
+        if (key == QLatin1String("count")) s.count = value.toLongLong();
+        if (key == QLatin1String("rate")) {
+            const std::int64_t num = value.section(QLatin1Char('/'), 0, 0).toLongLong();
+            const std::int64_t den = value.section(QLatin1Char('/'), 1).toLongLong();
+            if (num > 0 && den > 0) s.rate = Rational(num, den);
+        }
+    }
+    if (s.pattern.isEmpty() || s.count <= 0) return std::nullopt;
+    return s;
+}
+
+bool isSequenceSpec(const QString& path) {
+    return path.startsWith(QLatin1String("seq:"));
+}
+
+bool isNumberedStill(const QString& path) {
+    const QString file = path.mid(path.lastIndexOf(QLatin1Char('/')) + 1);
+    const qsizetype dot = file.lastIndexOf(QLatin1Char('.'));
+    if (dot <= 0 || !stillExtensions().contains(file.mid(dot + 1).toLower())) return false;
+    return file.at(dot - 1).isDigit();
 }
 
 // ---------------------------------------------------------------- VideoReader
@@ -409,6 +500,10 @@ bool VideoReader::open(const QString& path, int streamIndex, QString* error) {
     if (!d->dec) return false;
     d->rate = videoRate(d->stream);
     d->info = describe(d->fmt.get(), d->stream);
+    if (const auto seq = ImageSequence::fromSpec(path)) {
+        d->info.length = seq->count; // the run chosen, not every file after it
+        d->info.frameRate = seq->rate;
+    }
     d->packet = av_packet_alloc();
     d->frame = av_frame_alloc();
     d->next = 0;

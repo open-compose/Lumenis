@@ -30,6 +30,7 @@ class AboutInfoDialog;
 class AudioMixer;
 class AudioTool;
 class EffectEditor;
+class LinkedMediaDialog;
 class MediaFrames;
 class MediaTool;
 class MediaToolDisplayDialog;
@@ -110,6 +111,11 @@ public:
     QString linkVolume(const QString& folder);
     // The project's rate and the Link settings.
     media::LinkOptions linkOptions() const;
+    // Clip > Relink > Linked Media (p.364-365) and Clip > Modify > Unlink
+    // Media (p.368). The hook stands in for showing the dialog (tests).
+    void relinkLinkedMedia();
+    void setLinkedMediaHook(std::function<void(LinkedMediaDialog&)> hook) { linkedMediaHook_ = std::move(hook); }
+    int unlinkSelection();
     // Tools > Media Tool: the Media Tool Display dialog, then the tool
     // (p.346). Tests answer the dialog through the hook (true: OK).
     void showMediaTool();
@@ -192,6 +198,9 @@ private:
     // Guarded: bins save (and signal) as the window is taken down.
     QPointer<SourceBrowser> sourceBrowser_;
     bool sourceBrowserOpen_ = false;
+    std::function<void(LinkedMediaDialog&)> linkedMediaHook_;
+    // Puts a changed clip back in its bin and the monitors.
+    void storeClip(const QString& binId, const model::BinItem& item);
     void refreshSourceBins();
     std::function<bool(MediaToolDisplayDialog&)> mediaToolDisplay_;
     QString appliedMixerMode_;

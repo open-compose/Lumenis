@@ -172,11 +172,11 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Loop Selected Clips |  | p.393 | *later* | ☐ | | |
 | Modify > Modify Clip |  | p.279 | *later* | ☐ | | |
 | Modify > Modify Pulldown Phase |  | p.127 | *later* | ☐ | | |
-| Modify > Unlink Media |  | p.210 | *later* | ☐ | | |
+| Modify > Unlink Media |  | p.210 | works | ☐ | | |
 | Read Audio Timecode |  | p.668 | *later* | ☐ | | |
 | Recreate Title Media |  | p.475 | *later* | ☐ | | |
 | Refresh Sequence > Motion Adapters/Timewarps |  | p.545 | *later* | ☐ | | |
-| Relink > Linked Media |  | p.364 | *later* | ☐ | | |
+| Relink > Linked Media |  | p.364 | works | ☐ | | |
 | Relink > Managed Media |  | p.361 | *later* | ☐ | | |
 | Split All Tracks |  | p.637 | *later* | ☐ | | |
 | New Title |  | p.327 | *later* | ☐ | | |
@@ -312,6 +312,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 208 menu commands, 81 of them working with a project open; the
+* 208 menu commands, 83 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

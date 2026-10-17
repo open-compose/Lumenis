@@ -37,6 +37,12 @@ struct Link {
     int videoStream = -1;    // -1: no picture
     QList<int> audioStreams;
     int channels = 0; // audio channels, all streams together
+    // Clip > Modify > Unlink Media (p.368): the clip shows Media Offline
+    // until it is relinked.
+    bool unlinked = false;
+
+    // The file to look for: the path, or a sequence's first file.
+    QString file() const;
 
     // The file's frame for frame `clipFrame` of a clip at `clipRate`.
     std::int64_t fileFrame(std::int64_t clipFrame, const Rational& clipRate) const;
@@ -47,6 +53,10 @@ struct Link {
 
 std::optional<Link> linkOf(const model::BinItem& item);
 bool isLinked(const model::BinItem& item);
+bool isUnlinked(const model::BinItem& item);
+// Clip > Modify > Unlink Media (p.368): master clips only. False if the
+// item is not a linked clip.
+bool unlinkClip(model::BinItem& item);
 
 struct LinkOptions {
     Rational editRate{24000, 1001}; // the project's
@@ -66,9 +76,21 @@ bool isLinkable(const MediaInfo& info);
 // Format, Source File, Source Path, Drive and Plug-In (p.274-278).
 std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions& options, QString* error = nullptr);
 
-// Probes and links every file; the ones that are not media are skipped and
-// counted in `skipped`.
+// Gathers numbered stills into image sequences (as specs, ImageSequence)
+// as p.325-326 describe, leaving other paths as they are, in order.
+QStringList groupStills(const QStringList& paths, const Rational& rate);
+
+// Probes and links every file, numbered stills as sequences; the ones that
+// are not media are skipped and counted in `skipped`.
 QList<model::BinItem> linkFiles(const QStringList& paths, const LinkOptions& options, int* skipped = nullptr);
+
+// Relink > Linked Media (p.364-365): the files under a folder by name, where
+// a clip's media is among them (its source file; for a sequence, its first
+// file), and pointing the clip at it. The media must fit the clip: the same
+// tracks and duration (p.320). Relinking ends an Unlink.
+QHash<QString, QString> indexFolder(const QString& folder);
+QString locateMedia(const model::BinItem& item, const QHash<QString, QString>& index);
+bool relinkClip(model::BinItem& item, const QString& path, QString* error = nullptr);
 
 // Frames of linked clips, decoded on demand. Keeps a few files open and the
 // frames last asked for; safe to use from several threads.

@@ -2,6 +2,8 @@
 
 #include "lumenis/core/timecode.h"
 
+#include <QDir>
+#include <QDirIterator>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QMutexLocker>
@@ -150,6 +152,7 @@ QJsonObject Link::toJson() const {
     QJsonArray audio;
     for (int s : audioStreams) audio.append(s);
     o.insert(QStringLiteral("audioStreams"), audio);
+    if (unlinked) o.insert(QStringLiteral("unlinked"), true);
     return o;
 }
 
@@ -163,7 +166,13 @@ std::optional<Link> Link::fromJson(const QJsonObject& json) {
     l.videoStream = json.value(QStringLiteral("videoStream")).toInt(-1);
     l.channels = json.value(QStringLiteral("channels")).toInt();
     for (const QJsonValue& v : json.value(QStringLiteral("audioStreams")).toArray()) l.audioStreams << v.toInt();
+    l.unlinked = json.value(QStringLiteral("unlinked")).toBool();
     return l;
+}
+
+QString Link::file() const {
+    if (const auto seq = ImageSequence::fromSpec(path)) return seq->fileAt(0);
+    return path;
 }
 
 std::optional<Link> linkOf(const model::BinItem& item) {
@@ -172,6 +181,19 @@ std::optional<Link> linkOf(const model::BinItem& item) {
 
 bool isLinked(const model::BinItem& item) {
     return !item.link.value(QStringLiteral("path")).toString().isEmpty();
+}
+
+bool isUnlinked(const model::BinItem& item) {
+    return item.link.value(QStringLiteral("unlinked")).toBool();
+}
+
+bool unlinkClip(model::BinItem& item) {
+    // Only master clips point at media (p.368).
+    if (!isLinked(item) || item.kind == model::BinItemKind::Sequence || item.kind == model::BinItemKind::Subclip) {
+        return false;
+    }
+    item.link.insert(QStringLiteral("unlinked"), true);
+    return true;
 }
 
 bool isLinkable(const MediaInfo& info) {
@@ -189,7 +211,10 @@ std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions&
     const StreamInfo* video = info.firstVideo();
     if (video && !video->decodable) video = nullptr;
     Link link;
-    link.path = QFileInfo(info.path).absoluteFilePath();
+    const auto sequence = ImageSequence::fromSpec(info.path);
+    // A sequence's files, else the file itself.
+    const QFileInfo file(sequence ? sequence->fileAt(0) : info.path);
+    link.path = sequence ? info.path : file.absoluteFilePath();
     const StreamInfo* firstAudio = nullptr;
     for (const StreamInfo* a : info.audio()) {
         if (!a->decodable || a->channels <= 0) continue;
@@ -202,7 +227,10 @@ std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions&
     item.id = model::newItemId();
     item.kind = video ? model::BinItemKind::MasterClip : model::BinItemKind::AudioClip;
     // The file name without its extension (p.318).
-    item.name = QFileInfo(info.path).completeBaseName();
+    item.name = file.completeBaseName();
+    // A sequence is named for its files without their numbers (p.326),
+    // or for its folder when they are only numbers.
+    if (sequence) item.name = sequence->name().isEmpty() ? file.absoluteDir().dirName() : sequence->name();
     item.created = options.when.isValid() ? options.when : QDateTime::currentDateTimeUtc();
     item.modified = item.created;
     item.editRate = editRate;
@@ -264,18 +292,122 @@ std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions&
         set("Audio Format", audioName(*firstAudio));
     }
     if (info.format.contains(QLatin1String("mxf"))) set("Video File Format", QStringLiteral("MXF"));
-    set("Source File", QFileInfo(info.path).fileName());
-    set("Source Path", QFileInfo(info.path).absolutePath());
-    const QStorageInfo volume(info.path);
+    set("Source File", file.fileName());
+    set("Source Path", file.absolutePath());
+    const QStorageInfo volume(file.absoluteFilePath());
     set("Drive", volume.isValid() ? (volume.displayName().isEmpty() ? volume.rootPath() : volume.displayName()) : QString());
     set("Plug-In", linkPluginName());
     return item;
 }
 
+namespace {
+
+// A numbered still split up: "/a/Kermit_", 12, 4 digits, ".dpx".
+struct Numbered {
+    QString stem;
+    std::int64_t number = 0;
+    int width = 0;
+    QString suffix;
+    QString key() const { return stem + QLatin1Char('|') + QString::number(width) + QLatin1Char('|') + suffix; }
+};
+
+std::optional<Numbered> numbered(const QString& path) {
+    if (!isNumberedStill(path)) return std::nullopt;
+    const QFileInfo fi(path);
+    const QString file = fi.fileName();
+    const qsizetype dot = file.lastIndexOf(QLatin1Char('.'));
+    qsizetype start = dot;
+    while (start > 0 && file.at(start - 1).isDigit()) --start;
+    Numbered n;
+    n.stem = fi.absolutePath() + QLatin1Char('/') + file.left(start);
+    n.number = file.mid(start, dot - start).toLongLong();
+    n.width = static_cast<int>(dot - start);
+    n.suffix = file.mid(dot);
+    return n;
+}
+
+ImageSequence sequenceOf(const Numbered& n, std::int64_t first, std::int64_t count, const Rational& rate) {
+    ImageSequence s;
+    s.pattern = n.stem + QStringLiteral("%0") + QString::number(n.width) + QLatin1Char('d') + n.suffix;
+    s.first = first;
+    s.count = count;
+    s.rate = rate;
+    return s;
+}
+
+} // namespace
+
+QStringList groupStills(const QStringList& paths, const Rational& rate) {
+    // Numbered stills of one name, number width and type are one sequence
+    // (p.325-326): one file chosen brings its whole run; several chosen
+    // make a clip of each run of consecutive numbers among them.
+    QStringList out;
+    QHash<QString, QList<std::int64_t>> groups;
+    QHash<QString, Numbered> examples;
+    QHash<QString, qsizetype> placeOf; // where each group goes in `out`
+    for (const QString& path : paths) {
+        const auto n = isSequenceSpec(path) ? std::nullopt : numbered(path);
+        if (!n) {
+            out << path;
+            continue;
+        }
+        const QString key = n->key();
+        if (!groups.contains(key)) {
+            placeOf.insert(key, out.size());
+            out << QString(); // filled below
+            examples.insert(key, *n);
+        }
+        groups[key] << n->number;
+    }
+    QHash<qsizetype, QStringList> filled;
+    for (auto it = groups.begin(); it != groups.end(); ++it) {
+        const Numbered& n = examples.value(it.key());
+        QList<std::int64_t> numbers = it.value();
+        if (numbers.size() == 1) {
+            // The whole run around the one chosen.
+            const std::int64_t at = numbers.first();
+            auto exists = [&](std::int64_t k) {
+                return k >= 0 && QFileInfo::exists(n.stem + QStringLiteral("%1").arg(k, n.width, 10, QLatin1Char('0')) + n.suffix);
+            };
+            std::int64_t lo = at;
+            std::int64_t hi = at;
+            while (exists(lo - 1)) --lo;
+            while (exists(hi + 1)) ++hi;
+            numbers.clear();
+            for (std::int64_t k = lo; k <= hi; ++k) numbers << k;
+        }
+        std::sort(numbers.begin(), numbers.end());
+        numbers.erase(std::unique(numbers.begin(), numbers.end()), numbers.end());
+        QStringList runs;
+        for (qsizetype i = 0; i < numbers.size();) {
+            qsizetype j = i;
+            while (j + 1 < numbers.size() && numbers.at(j + 1) == numbers.at(j) + 1) ++j;
+            const std::int64_t count = numbers.at(j) - numbers.at(i) + 1;
+            if (count == 1) {
+                // A lone still is a clip of its own.
+                runs << n.stem + QStringLiteral("%1").arg(numbers.at(i), n.width, 10, QLatin1Char('0')) + n.suffix;
+            } else {
+                runs << sequenceOf(n, numbers.at(i), count, rate).spec();
+            }
+            i = j + 1;
+        }
+        filled.insert(placeOf.value(it.key()), runs);
+    }
+    QStringList result;
+    for (qsizetype i = 0; i < out.size(); ++i) {
+        if (filled.contains(i)) {
+            result << filled.value(i);
+        } else {
+            result << out.at(i);
+        }
+    }
+    return result;
+}
+
 QList<model::BinItem> linkFiles(const QStringList& paths, const LinkOptions& options, int* skipped) {
     QList<model::BinItem> items;
     int missed = 0;
-    for (const QString& path : paths) {
+    for (const QString& path : groupStills(paths, options.editRate)) {
         const auto info = probe(path);
         const auto item = info ? linkClip(*info, options) : std::nullopt;
         if (item) {
@@ -286,6 +418,51 @@ QList<model::BinItem> linkFiles(const QStringList& paths, const LinkOptions& opt
     }
     if (skipped) *skipped = missed;
     return items;
+}
+
+QHash<QString, QString> indexFolder(const QString& folder) {
+    QHash<QString, QString> index;
+    QDirIterator it(folder, QDir::Files | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        const QString path = it.next();
+        const QString name = QFileInfo(path).fileName();
+        if (!index.contains(name)) index.insert(name, path);
+    }
+    return index;
+}
+
+QString locateMedia(const model::BinItem& item, const QHash<QString, QString>& index) {
+    const auto link = linkOf(item);
+    if (!link) return {};
+    const QString found = index.value(QFileInfo(link->file()).fileName());
+    if (found.isEmpty()) return {};
+    if (auto seq = ImageSequence::fromSpec(link->path)) {
+        // The same run in the folder where its first file is now.
+        const QString pattern = seq->pattern.mid(seq->pattern.lastIndexOf(QLatin1Char('/')) + 1);
+        seq->pattern = QFileInfo(found).absolutePath() + QLatin1Char('/') + pattern;
+        return seq->spec();
+    }
+    return found;
+}
+
+bool relinkClip(model::BinItem& item, const QString& path, QString* error) {
+    const auto info = probe(path, error);
+    if (!info) return false;
+    LinkOptions options;
+    options.editRate = item.editRate;
+    const auto fresh = linkClip(*info, options, error);
+    if (!fresh) return false;
+    // Only media that fits the clip (p.320).
+    if (fresh->durationFrames != item.durationFrames ||
+        fresh->fields.value(QStringLiteral("Tracks")) != item.fields.value(QStringLiteral("Tracks"))) {
+        if (error) *error = QObject::tr("%1 does not match the clip's duration or tracks.").arg(path);
+        return false;
+    }
+    item.link = fresh->link;
+    for (const char* heading : {"Source File", "Source Path", "Drive", "Plug-In"}) {
+        item.fields.insert(QString::fromLatin1(heading), fresh->fields.value(QString::fromLatin1(heading)));
+    }
+    return true;
 }
 
 // ---------------------------------------------------------------- FrameCache
@@ -319,9 +496,12 @@ std::shared_ptr<FrameCache::Reader> FrameCache::reader(const Link& link) {
 
 QImage FrameCache::frame(const model::BinItem& item, std::int64_t clipFrame, QSize size) {
     const auto link = linkOf(item);
-    if (!link || link->videoStream < 0) return {};
+    if (!link || link->videoStream < 0 || link->unlinked) return {};
     const std::int64_t n = link->fileFrame(clipFrame, item.editRate);
-    const QString key = QStringLiteral("%1|%2|%3x%4").arg(link->path).arg(n).arg(size.width()).arg(size.height());
+    // One arg() call: a sequence's path holds a %04d of its own.
+    const QString key = QStringLiteral("%1|%2|%3x%4")
+                            .arg(link->path, QString::number(n), QString::number(size.width()),
+                                 QString::number(size.height()));
     std::shared_ptr<Reader> r;
     {
         QMutexLocker lock(&mutex_);
@@ -348,7 +528,7 @@ QImage FrameCache::frame(const model::BinItem& item, std::int64_t clipFrame, QSi
 
 bool FrameCache::isOnline(const model::BinItem& item) {
     const auto link = linkOf(item);
-    return link && QFileInfo::exists(link->path);
+    return link && !link->unlinked && QFileInfo::exists(link->file());
 }
 
 void FrameCache::clear() {
