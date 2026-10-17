@@ -469,9 +469,12 @@ Sub-steps:
   * Gate 2: `scripts/check-mxf.py` runs bmx's mxf2raw when installed;
     linking into Media Composer is by hand **(M)**.
   * Gates 3 and 4: `cutthulhu --measure-playback` and
-    `scripts/measure-playback.py` (DNxHD 120 1080p25 with a tone; dropped
-    frames and lip sync). The 10- and 60-minute runs on the reference
-    machines are by hand **(M)**.
+    `scripts/measure-playback.py` (DNxHD 120 1080p25 with a tone): dropped
+    frames, and lip sync as how far the sound already is into a frame when
+    the picture moves on to it. The Composer steps every 5 ms on a precise
+    timer (macOS coalesced the 20 ms one: the picture fell up to 1.2 frames
+    behind). The self-hosted Mac reports a 30-second run in CI; the 10- and
+    60-minute runs on the reference machines are by hand **(M)**.
   * Gate 5: `tst_media` `transcodeRoundTrips`: each DNx resolution's
     Y'CbCr PSNR (expected values are ours, measured), timecode and tape.
     Transcoding now goes straight from the decoded picture to the encoder

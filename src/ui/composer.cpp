@@ -32,7 +32,10 @@ namespace {
 constexpr int kInfoHeight = 20;      // the information row above a monitor
 constexpr int kBarHeight = 14;       // position bar
 constexpr int kButtonWidth = 24;
-constexpr int kTickInterval = 20;    // ms between playback steps
+// Ms between playback steps. Short and precise: the picture moves to where
+// the sound is at each step, so a late step is a picture behind the sound
+// (macOS coalesces coarse timers; ROADMAP Phase 2 gate 4).
+constexpr int kTickInterval = 5;
 constexpr QRgb kInfoText = 0xff4cd98c;   // tracking and clip names, green as in the pictures (p.380)
 constexpr QRgb kIndicator = 0xff33c3ff;  // the blue position indicator (p.396)
 constexpr QRgb kSourceBar = 0xff2f8a6c;  // Source/Record colours (p.383)
@@ -590,6 +593,7 @@ Composer::Composer(QWidget* parent) : QWidget(parent) {
 
     timer_ = new QTimer(this);
     timer_->setInterval(kTickInterval);
+    timer_->setTimerType(Qt::PreciseTimer);
     connect(timer_, &QTimer::timeout, this, &Composer::tick);
     refresh();
 }

@@ -377,6 +377,7 @@ int main(int argc, char** argv) {
         QElapsedTimer clock;
         QTimer sampler;
         sampler.setInterval(20);
+        sampler.setTimerType(Qt::PreciseTimer);
         QObject::connect(&sampler, &QTimer::timeout, [&] {
             if (!composer.isPlaying() || !window.isPlayingSound() || clock.elapsed() < 500) return;
             const double heard = lumenis::media::samplesToFrames(window.soundClock(), item.editRate);
@@ -387,6 +388,24 @@ int main(int argc, char** argv) {
             sum += offset;
             ++samples;
         });
+        // Lip sync: each time the picture moves on to frame n, how far the
+        // sound already is past n's start, in frames; 0 is perfect, and the
+        // gate is half a frame.
+        double lateMax = 0;
+        double lateSum = 0;
+        std::int64_t changes = 0;
+        std::int64_t lastShown = -1;
+        QObject::connect(&composer, &lumenis::ui::Composer::changed, &guiApp, [&] {
+            const std::int64_t shownNow = composer.state(lumenis::ui::MonitorId::Source).position();
+            if (shownNow == lastShown) return;
+            lastShown = shownNow;
+            if (!composer.isPlaying() || !window.isPlayingSound() || clock.elapsed() < 500) return;
+            const double heard = lumenis::media::samplesToFrames(window.soundClock(), item.editRate);
+            const double late = heard - static_cast<double>(shownNow);
+            lateMax = std::max(lateMax, late);
+            lateSum += late;
+            ++changes;
+        });
         composer.play(1);
         clock.start();
         sampler.start();
@@ -395,9 +414,6 @@ int main(int argc, char** argv) {
             QApplication::quit();
         });
         guiApp.exec();
-        // The picture shows the frame the sound is in: a frame behind the
-        // sound's position at most, so lip sync is the offset's distance
-        // from the middle of that frame.
         const double mean = samples > 0 ? sum / static_cast<double>(samples) : 0.0;
         const QJsonObject result{
             {QStringLiteral("file"), file},
@@ -409,7 +425,9 @@ int main(int argc, char** argv) {
             {QStringLiteral("offsetMin"), samples > 0 ? low : 0.0},
             {QStringLiteral("offsetMax"), samples > 0 ? high : 0.0},
             {QStringLiteral("offsetMean"), mean},
-            {QStringLiteral("lipSyncError"), samples > 0 ? std::max(std::abs(low + 0.5), std::abs(high + 0.5)) : 0.0},
+            // How late the picture changes after the sound enters a frame.
+            {QStringLiteral("lipSyncError"), changes > 0 ? lateMax : 0.0},
+            {QStringLiteral("lipSyncMean"), changes > 0 ? lateSum / static_cast<double>(changes) : 0.0},
         };
         const QByteArray json = QJsonDocument(result).toJson();
         std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);

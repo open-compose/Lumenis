@@ -6,8 +6,8 @@ with the FFmpeg command-line tool, then plays it with
 `cutthulhu --measure-playback` and checks:
 
 * gate 3: no frame dropped;
-* gate 4: lip sync within half a frame: the picture shows the frame the
-  sound is in for the whole run.
+* gate 4: lip sync within half a frame: each time the picture moves on to a
+  frame, the sound is less than half a frame into it.
 
     measure-playback.py --app build/ci/bin/cutthulhu [--seconds 600]
 

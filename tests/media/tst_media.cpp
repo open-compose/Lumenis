@@ -662,9 +662,16 @@ private slots:
         s.frameRate = Rational(25);
         s.startTimecode = QStringLiteral("07:59:50:00");
         constexpr int kFrames = 4;
+        // The same chart as 10-bit RGB, for DNx 444 without a change of
+        // colour space.
+        const QString rgbSource = dir.filePath(QStringLiteral("Chart RGB.mov"));
+        WriterSettings rgb = s;
+        rgb.pixelFormat = QStringLiteral("gbrp10le");
         {
             MediaWriter w;
             QVERIFY(w.open(source, s));
+            MediaWriter wr;
+            QVERIFY(wr.open(rgbSource, rgb));
             for (int f = 0; f < kFrames; ++f) {
                 QImage image(1280, 720, QImage::Format_RGBA8888);
                 QPainter p(&image);
@@ -690,8 +697,10 @@ private slots:
                     }
                 }
                 QVERIFY(w.writeVideo(image));
+                QVERIFY(wr.writeVideo(image));
             }
             QVERIFY(w.finish());
+            QVERIFY(wr.finish());
         }
         LinkOptions o;
         o.editRate = Rational(25);
@@ -745,6 +754,31 @@ private slots:
                          qPrintable(QStringLiteral("%1 is no better than the one below").arg(id)));
                 previous = worst;
             }
+        }
+        // RGB to DNx 444: the codec alone.
+        {
+            auto rgbClip = linkClip(*probe(rgbSource), o);
+            QVERIFY(rgbClip);
+            MediaCreation c;
+            c.raster = QSize(1280, 720);
+            c.resolution = *findResolution(QStringLiteral("dnx_444"));
+            c.videoDrive = dir.filePath(QStringLiteral("rgb"));
+            QVERIFY(QDir().mkpath(c.videoDrive));
+            QString error;
+            const auto made = transcodeClip(*rgbClip, 0, -1, c, &error);
+            QVERIFY2(made, qPrintable(error));
+            VideoReader from;
+            QVERIFY(from.open(rgbSource));
+            VideoReader to;
+            QVERIFY(to.open(linkOf(*made)->path));
+            double worst = 1000;
+            for (int f = 0; f < kFrames; ++f) {
+                const auto psnr = comparePictures(from, f, to, f);
+                QVERIFY(psnr);
+                worst = std::min(worst, psnr->worst());
+            }
+            qInfo("dnx_444 from RGB: worst plane PSNR %.2f dB (at least 49.0)", worst);
+            QVERIFY2(worst >= 49.0, qPrintable(QStringLiteral("dnx_444 from RGB: %1 dB").arg(worst)));
         }
     }
 
