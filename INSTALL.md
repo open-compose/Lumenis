@@ -8,8 +8,12 @@ CI, as artifacts on each workflow run.
 1. Open `cutthulhu-<version>-macos-arm64.dmg`.
 2. Drag **Cutthulhu.app** to **Applications**.
 
-An unsigned development build is blocked by Gatekeeper the first time it runs.
-To open it, right-click the app and choose **Open**, or run:
+A development build is not notarized by Apple, so Gatekeeper blocks it the
+first time it runs:
+* **macOS 15 and later:** open the app once, click **Done**, then go to
+  **System Settings > Privacy & Security** and click **Open Anyway**.
+* **macOS 12 to 14:** Control-click the app and choose **Open**.
+* **Either way,** you can instead run:
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/Cutthulhu.app

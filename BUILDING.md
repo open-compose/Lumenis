@@ -351,6 +351,22 @@ same place. `tst_theme` checks them on every
 platform. If a new kind of control shows the same symptom, add its pixel
 metric there.
 
+### Sending the gate 5 checklist to an editor
+
+The editor gets two PDFs. To make them:
+
+```
+python3 scripts/make-editor-pdfs.py --out out-editor
+```
+
+This needs reportlab. It writes:
+* `Cutthulhu-Mac-setup.pdf`, from `docs/checklists/editor-setup-macos.md`:
+  install, the macOS security step, a test user, the session.
+* `Cutthulhu-checklist.pdf`, from `docs/checklists/phase1-gate5.md`: a
+  fillable form that Preview can tick, type into and save.
+
+Remake them after the checklist changes.
+
 ### `checklist_current` fails
 
 The menus or commands changed, but the gate 5 checklist was not remade.

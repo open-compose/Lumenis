@@ -8,3 +8,4 @@ CMakeUserPresets.json
 .idea/
 *.user
 .DS_Store
+out-editor/
