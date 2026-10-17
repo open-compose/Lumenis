@@ -938,6 +938,8 @@ struct MediaWriter::Impl {
     AVStream* vst = nullptr;
     AVStream* ast = nullptr;
     SwsContext* sws = nullptr;
+    SwsContext* sws444 = nullptr; // to Y'CbCr 4:4:4, for RGB written exactly
+    std::vector<std::uint16_t> yuv444; // its planes
     SwrContext* swr = nullptr;
     AVFrame* vframe = nullptr;
     AVFrame* aframe = nullptr;
@@ -952,6 +954,7 @@ struct MediaWriter::Impl {
 
     ~Impl() {
         sws_freeContext(sws);
+        sws_freeContext(sws444);
         swr_free(&swr);
         av_frame_free(&vframe);
         av_frame_free(&aframe);
@@ -1169,14 +1172,63 @@ bool MediaWriter::writeVideoFrom(VideoReader& reader, std::int64_t number, QRect
         dst[plane] = d.vframe->data[plane] + static_cast<std::ptrdiff_t>(y) * d.vframe->linesize[plane] +
                      static_cast<std::ptrdiff_t>(x) * step;
     }
-    d.sws = sws_getCachedContext(d.sws, src->width, src->height, static_cast<AVPixelFormat>(src->format),
-                                 target.width(), target.height(), format,
-                                 SWS_BICUBIC | SWS_ACCURATE_RND | SWS_FULL_CHR_H_INT, nullptr, nullptr, nullptr);
-    if (!d.sws) return d.fail(QStringLiteral("cannot convert the picture"));
-    sws_setColorspaceDetails(d.sws, sws_getCoefficients(colourSpaceOf(src)), fullRange(src) ? 1 : 0,
-                             sws_getCoefficients(d.rec709 ? SWS_CS_ITU709 : SWS_CS_SMPTE170M), rgbOut ? 1 : 0, 0,
-                             1 << 16, 1 << 16);
-    sws_scale(d.sws, src->data, src->linesize, 0, src->height, dst, d.vframe->linesize);
+    const AVPixFmtDescriptor* srcDesc = av_pix_fmt_desc_get(static_cast<AVPixelFormat>(src->format));
+    const bool exactRgb = rgbOut && srcDesc && !(srcDesc->flags & AV_PIX_FMT_FLAG_RGB) && !fullRange(src) &&
+                          (desc->flags & AV_PIX_FMT_FLAG_PLANAR) && desc->comp[0].depth > 8 && desc->comp[0].depth <= 16;
+    if (exactRgb) {
+        // Y'CbCr to RGB (DNx 444) with the matrix done here: swscale only
+        // scales to 16-bit 4:4:4, which every FFmpeg version does alike,
+        // while its RGB conversion differs between them.
+        const int w = target.width();
+        const int h = target.height();
+        d.sws444 = sws_getCachedContext(d.sws444, src->width, src->height, static_cast<AVPixelFormat>(src->format), w, h,
+                                        AV_PIX_FMT_YUV444P16LE, SWS_BICUBIC | SWS_ACCURATE_RND | SWS_FULL_CHR_H_INT,
+                                        nullptr, nullptr, nullptr);
+        if (!d.sws444) return d.fail(QStringLiteral("cannot convert the picture"));
+        const std::size_t n = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+        d.yuv444.resize(3 * n);
+        std::uint8_t* planes[4] = {reinterpret_cast<std::uint8_t*>(d.yuv444.data()),
+                                   reinterpret_cast<std::uint8_t*>(d.yuv444.data() + n),
+                                   reinterpret_cast<std::uint8_t*>(d.yuv444.data() + 2 * n), nullptr};
+        const int strides[4] = {w * 2, w * 2, w * 2, 0};
+        sws_scale(d.sws444, src->data, src->linesize, 0, src->height, planes, strides);
+        // Rec. 709 or 601, as the encoder declares.
+        const bool bt709 = colourSpaceOf(src) == SWS_CS_ITU709;
+        const double kr = bt709 ? 0.2126 : 0.299;
+        const double kb = bt709 ? 0.0722 : 0.114;
+        const double kg = 1.0 - kr - kb;
+        const double full = static_cast<double>((1 << desc->comp[0].depth) - 1);
+        const int planeOf[3] = {desc->comp[0].plane, desc->comp[1].plane, desc->comp[2].plane}; // R, G, B
+        for (int row = 0; row < h; ++row) {
+            std::uint16_t* out[3];
+            for (int c = 0; c < 3; ++c) {
+                out[c] = reinterpret_cast<std::uint16_t*>(dst[planeOf[c]] +
+                                                          static_cast<std::ptrdiff_t>(row) * d.vframe->linesize[planeOf[c]]);
+            }
+            for (int x = 0; x < w; ++x) {
+                const std::size_t i = static_cast<std::size_t>(row) * static_cast<std::size_t>(w) + static_cast<std::size_t>(x);
+                const double luma = (d.yuv444[i] / 256.0 - 16.0) / 219.0;
+                const double pb = (d.yuv444[n + i] / 256.0 - 128.0) / 224.0;
+                const double pr = (d.yuv444[2 * n + i] / 256.0 - 128.0) / 224.0;
+                const double r = luma + 2.0 * (1.0 - kr) * pr;
+                const double b = luma + 2.0 * (1.0 - kb) * pb;
+                const double g = (luma - kr * r - kb * b) / kg;
+                const double rgb[3] = {r, g, b};
+                for (int c = 0; c < 3; ++c) {
+                    out[c][x] = static_cast<std::uint16_t>(std::lround(std::clamp(rgb[c], 0.0, 1.0) * full));
+                }
+            }
+        }
+    } else {
+        d.sws = sws_getCachedContext(d.sws, src->width, src->height, static_cast<AVPixelFormat>(src->format),
+                                     target.width(), target.height(), format,
+                                     SWS_BICUBIC | SWS_ACCURATE_RND | SWS_FULL_CHR_H_INT, nullptr, nullptr, nullptr);
+        if (!d.sws) return d.fail(QStringLiteral("cannot convert the picture"));
+        sws_setColorspaceDetails(d.sws, sws_getCoefficients(colourSpaceOf(src)), fullRange(src) ? 1 : 0,
+                                 sws_getCoefficients(d.rec709 ? SWS_CS_ITU709 : SWS_CS_SMPTE170M), rgbOut ? 1 : 0, 0,
+                                 1 << 16, 1 << 16);
+        sws_scale(d.sws, src->data, src->linesize, 0, src->height, dst, d.vframe->linesize);
+    }
     d.vframe->colorspace = d.venc->colorspace;
     d.vframe->color_primaries = d.venc->color_primaries;
     d.vframe->color_trc = d.venc->color_trc;

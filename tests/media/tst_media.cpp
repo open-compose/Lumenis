@@ -699,13 +699,13 @@ private slots:
         QVERIFY(clip);
         clip->fields.insert(QStringLiteral("Tape"), QStringLiteral("A007"));
         // The PSNR each resolution keeps at least: ours, measured on this
-        // chart (44.3, 48.6, 50.0, 52.9 and, RGB, 51.5 dB with FFmpeg 6.1)
+        // chart (44.3, 48.6, 50.0, 52.9 and, RGB, 53.0 dB with FFmpeg 6.1)
         // less some 3-4 dB for other FFmpeg versions.
         const QList<QPair<QString, double>> expected{{QStringLiteral("dnx_lb"), 40.0},
                                                     {QStringLiteral("dnx_sq"), 45.0},
                                                     {QStringLiteral("dnx_hq"), 46.0},
                                                     {QStringLiteral("dnx_hqx"), 49.0},
-                                                    {QStringLiteral("dnx_444"), 47.0}};
+                                                    {QStringLiteral("dnx_444"), 49.0}};
         double previous = 0;
         VideoReader original;
         QVERIFY(original.open(source));

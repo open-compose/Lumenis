@@ -298,6 +298,15 @@ jobs:
         if: failure()
         run: grep -l -E "^(FAIL!|QFATAL)" build/ci-macos/test-logs/*.txt 2>/dev/null | xargs -r cat
 
+      - name: Playback measurement (ROADMAP Phase 2 gates 3 and 4; reports only)
+        # A short run on the reference M1; the gate's 10-minute run is by
+        # hand (BUILDING.md, "Phase 2 gates").
+        if: always()
+        continue-on-error: true
+        run: >-
+          python3 scripts/measure-playback.py --offscreen --seconds 30
+          --app build/ci-macos/bin/Cutthulhu.app/Contents/MacOS/Cutthulhu || true
+
       - name: Screenshots
         env:
           QT_QPA_PLATFORM: offscreen
