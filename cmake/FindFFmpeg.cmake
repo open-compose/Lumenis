@@ -19,7 +19,7 @@ endif()
 # Windows paths come with backslashes, which break the generated install
 # scripts ("Invalid character escape '\U'").
 if(_ffmpeg_root)
-    file(TO_CMAKE_PATH "${_ffmpeg_root}" _ffmpeg_root)
+    string(REPLACE "\\" "/" _ffmpeg_root "${_ffmpeg_root}")
 endif()
 
 find_package(PkgConfig QUIET)
