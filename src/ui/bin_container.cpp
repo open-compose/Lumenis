@@ -1229,6 +1229,11 @@ int BinContainer::deleteSelection() {
         // Locked items cannot be deleted (p.265).
         if (const model::BinItem* i = view->document().bin().item(id); i && !i->locked) ids << id;
     }
+    if (deleteFilter_ && !ids.isEmpty()) {
+        const std::optional<QStringList> keep = deleteFilter_(view->document(), ids);
+        if (!keep) return 0;
+        ids = *keep;
+    }
     view->document().removeItems(ids);
     return static_cast<int>(ids.size());
 }

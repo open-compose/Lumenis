@@ -149,8 +149,12 @@ settings, dropped-frame counts (`Composer::playStats`).
     `consolidate_dialog.*`) and Import through the Source Browser;
   - the Media Creation and Import settings. Test drives come from
     `media::setExtraMediaDrives` or `LUMENIS_MEDIA_DRIVES`.
-Next is 2.4b: Relink > Managed Media, Media Tool files and Delete Media,
-the Background Queue (ROADMAP).
+2.4b is done:
+  - Relink > Managed Media (`src/media/relink.*`, `ManagedRelinkDialog` in
+    `relink_dialog.*`);
+  - the Media Tool's media files and Delete Media (`media_tool.*`);
+  - the Background Queue (`background_queue.*`).
+Next is 2.5, the Phase 2 gates (ROADMAP).
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

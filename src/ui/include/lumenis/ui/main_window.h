@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/media/link.h"
+#include "lumenis/media/consolidate.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/project_store.h"
@@ -36,6 +37,8 @@ namespace lumenis::ui {
 
 class BinContainer;
 enum class MonitorId;
+class BackgroundQueue;
+class BackgroundQueueWindow;
 class CalculatorWindow;
 class ConsolidateDialog;
 class AboutInfoDialog;
@@ -44,6 +47,7 @@ class AudioTool;
 class EffectEditor;
 class FullScreenView;
 class LinkedMediaDialog;
+class ManagedRelinkDialog;
 class MediaFrames;
 class MediaTool;
 class MediaToolDisplayDialog;
@@ -129,6 +133,21 @@ public:
     void relinkLinkedMedia();
     void setLinkedMediaHook(std::function<void(LinkedMediaDialog&)> hook) { linkedMediaHook_ = std::move(hook); }
     int unlinkSelection();
+    // Clip > Relink > Managed Media (p.361-364): the selection, or with
+    // "Selected items in ALL open bins" every open bin's. The hook stands in
+    // for the dialog (tests; true: OK).
+    void relinkManagedMedia();
+    // Deleting managed clips from a bin (p.359): the clips, their media
+    // files, or both. The hook answers the Delete dialog (tests; nothing:
+    // Cancel).
+    struct BinDeleteChoice {
+        bool clips = true;
+        bool media = false;
+    };
+    void setBinDeleteHook(std::function<std::optional<BinDeleteChoice>(int clips, int files)> hook) {
+        binDeleteHook_ = std::move(hook);
+    }
+    void setManagedRelinkHook(std::function<bool(ManagedRelinkDialog&)> hook) { managedRelinkHook_ = std::move(hook); }
     // Managed media (Phase 2.4, p.348-359). File > Input > Import Media:
     // the files as new media in a bin (p.213), at the Media Creation
     // setting's import resolution unless `resolution` names another.
@@ -143,6 +162,8 @@ public:
     // How media is made, from the Media Creation setting's tab ("import",
     // "transcode") and the project.
     media::MediaCreation mediaCreation(const QString& tab) const;
+    // Background Consolidate and Transcode (p.356-357).
+    BackgroundQueue& backgroundQueue() const { return *backgroundQueue_; }
     // The media database (p.358): read when a project opens, again with
     // File > Media > Load Media Database and Refresh Media Directories.
     // Managed clips in bins opened after are pointed at their files.
@@ -257,8 +278,13 @@ private:
     void startSound(MonitorId monitor, int speed);
     std::function<void(LinkedMediaDialog&)> linkedMediaHook_;
     std::function<bool(ConsolidateDialog&)> consolidateHook_;
+    std::function<bool(ManagedRelinkDialog&)> managedRelinkHook_;
+    std::function<std::optional<BinDeleteChoice>(int, int)> binDeleteHook_;
     std::function<std::optional<bool>()> copyingMediaHook_;
     media::MediaDatabase mediaDb_;
+    BackgroundQueue* backgroundQueue_ = nullptr;
+    // Puts a finished job's clips and sequences in its bin.
+    void applyConsolidate(const QString& binId, const media::ConsolidateResult& result);
     // Puts a changed clip back in its bin and the monitors.
     void storeClip(const QString& binId, const model::BinItem& item);
     void refreshSourceBins();

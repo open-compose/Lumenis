@@ -47,6 +47,9 @@ struct Link {
     // clip's in the media files, by which the media database finds them.
     QStringList audioPaths;
     QString mediaId;
+    // The file frame (at `rate`) clip frame 0 shows: managed clips relinked
+    // to media that starts earlier (Relink > Managed Media, p.361).
+    std::int64_t first = 0;
     bool isManaged() const { return !mediaId.isEmpty(); }
 
     // The file to look for: the path, or a sequence's first file.

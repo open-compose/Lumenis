@@ -52,6 +52,8 @@ std::optional<AudioPiece> pieceFor(const model::BinItem& clip, int track) {
     if (!channel) return std::nullopt;
     AudioPiece p;
     p.path = link->audioFile(track);
+    // Where the clip starts in its media.
+    p.sourceStart = framesToSamples(link->first, link->rate);
     if (!QFileInfo::exists(p.path)) return std::nullopt;
     p.stream = channel->first;
     p.channel = channel->second;
@@ -78,7 +80,6 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
             auto p = pieceFor(item, t);
             if (!p) continue;
             p->at = 0;
-            p->sourceStart = 0;
             p->length = framesToSamples(item.durationFrames, rate);
             // A single channel plays in the middle; more go odd left, even
             // right.
@@ -103,7 +104,7 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
             if (!p) continue;
             p->at = framesToSamples(start, rate);
             p->length = framesToSamples(start + s.length, rate) - p->at;
-            p->sourceStart = framesToSamples(s.sourceIn, clip->editRate);
+            p->sourceStart += framesToSamples(s.sourceIn, clip->editRate);
             panGains(s.pan != 0 ? s.pan : side(track.number), s.gain, &p->left, &p->right);
             out.push_back(*p);
         }

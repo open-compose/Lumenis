@@ -4,12 +4,16 @@
 #include "lumenis/media/media.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_container.h"
+#include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/consolidate_dialog.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/media_frames.h"
+#include "lumenis/ui/media_tool.h"
+#include "lumenis/ui/panels.h"
+#include "lumenis/ui/relink_dialog.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/settings_window.h"
 #include "lumenis/ui/source_browser.h"
@@ -17,11 +21,14 @@
 #include "lumenis/ui/timeline.h"
 
 #include <QAction>
+#include <QCheckBox>
 #include <QComboBox>
+#include <QTableWidget>
 #include <QDir>
 #include <QFile>
 #include <QListWidget>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QSpinBox>
 #include <QTemporaryDir>
 #include <QTest>
@@ -224,6 +231,119 @@ private slots:
         };
         list->openEntry(i);
         QVERIFY(checked);
+        media::setExtraMediaDrives({});
+    }
+
+    void relinkDeleteAndTheBackgroundQueue() {
+        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        const QString movie = dir.filePath(QStringLiteral("A001.mov"));
+        QVERIFY(writeMovie(movie, 12));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Harbor"));
+        project.settings.name = QStringLiteral("Harbor");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 256;
+        project.settings.format.height = 144;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("importVideoDrive"), drive);
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("transcodeVideoDrive"), drive);
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        QCOMPARE(window.importFiles(binId, {movie}, QStringLiteral("dnx_lb")).size(), 1);
+        const QString clipId = bin->bin().items.first().id;
+        BinView* view = window.binContainer().viewFor(bin);
+        QVERIFY(view);
+
+        // Background Process (p.356): the transcode runs as a job in the
+        // Background Queue Window; its clip comes when it is done.
+        view->selectIds({clipId});
+        window.setConsolidateHook([](ConsolidateDialog& dialog) {
+            dialog.setTranscode(true);
+            dialog.setResolution(QStringLiteral("dnx_sq"));
+            dialog.setBackground(true);
+            return true;
+        });
+        commands.action(QStringLiteral("clip.consolidate_transcode"))->trigger();
+        QVERIFY(window.panels().isOpen(window.panels().panel(QStringLiteral("BackgroundQueue"))));
+        window.backgroundQueue().waitForIdle();
+        QCOMPARE(window.backgroundQueue().jobs().size(), 1);
+        QCOMPARE(window.backgroundQueue().jobs().first().state, BackgroundQueue::State::Completed);
+        const model::BinItem* sq = named(*bin, QStringLiteral("A001.new.01"));
+        QVERIFY(sq);
+        QCOMPARE(sq->fields.value(QStringLiteral("Video")), QStringLiteral("Avid DNx SQ"));
+        window.backgroundQueue().clearInactive();
+        QVERIFY(window.backgroundQueue().jobs().isEmpty());
+
+        // Relink > Managed Media, Highest Quality: the LB clip takes the SQ
+        // media (p.361-363).
+        view->selectIds({clipId});
+        window.setManagedRelinkHook([](ManagedRelinkDialog& dialog) {
+            return dialog.allDrives()->isChecked() && dialog.check(QStringLiteral("newSequences"))->isChecked();
+        });
+        commands.action(QStringLiteral("clip.relink.managed_media"))->trigger();
+        const model::BinItem relinked = *bin->bin().item(clipId);
+        QCOMPARE(relinked.fields.value(QStringLiteral("Video")), QStringLiteral("Avid DNx SQ"));
+        QCOMPARE(media::linkOf(relinked)->mediaId, media::linkOf(*sq)->mediaId);
+
+        // The Media Tool shows the media files; Delete Media deletes the
+        // tracks chosen (p.347-348).
+        window.setMediaToolDisplayHook([](MediaToolDisplayDialog& d) {
+            d.option(QStringLiteral("mediaFiles"))->setChecked(true);
+            return true;
+        });
+        commands.action(QStringLiteral("tools.media_tool"))->trigger();
+        MediaTool& tool = window.mediaTool();
+        QVERIFY(tool.names().contains(QStringLiteral("A001.new.01")));
+        QCOMPARE(tool.names().count(QStringLiteral("A001 V1")), 2);
+        tool.selectNames({QStringLiteral("A001.new.01")});
+        QStringList offered;
+        tool.deleteMediaHook = [&offered](DeleteMediaDialog& d) {
+            offered = QStringList{QStringLiteral("V1"), QStringLiteral("A1"), QStringLiteral("A2")};
+            for (const QString& t : offered) {
+                if (!d.track(t)) offered.removeAll(t);
+            }
+            d.track(QStringLiteral("A1"))->setChecked(false);
+            d.track(QStringLiteral("A2"))->setChecked(false);
+            return true;
+        };
+        int confirmed = 0;
+        tool.confirmHook = [&confirmed](int count) {
+            confirmed = count;
+            return true;
+        };
+        QVERIFY(tool.deleteSelected());
+        QCOMPARE(offered, (QStringList{"V1", "A1", "A2"}));
+        QCOMPARE(confirmed, 1);
+        QCOMPARE(tool.names().count(QStringLiteral("A001 V1")), 1);
+        QVERIFY(MediaFrames::instance()->isOffline(*bin->bin().item(clipId)));
+
+        // Deleting the clip from the bin can delete its media files too
+        // (p.359).
+        view->selectIds({sq->id});
+        int files = 0;
+        window.setBinDeleteHook([&files](int, int count) -> std::optional<MainWindow::BinDeleteChoice> {
+            files = count;
+            return MainWindow::BinDeleteChoice{true, true};
+        });
+        const QStringList left = media::linkOf(*sq)->audioPaths;
+        QCOMPARE(window.binContainer().deleteSelection(), 1);
+        QCOMPARE(files, 3);
+        for (const QString& f : left) QVERIFY(!QFile::exists(f));
+        QVERIFY(!named(*bin, QStringLiteral("A001.new.01")));
         media::setExtraMediaDrives({});
     }
 };

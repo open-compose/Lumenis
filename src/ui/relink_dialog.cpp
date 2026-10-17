@@ -3,7 +3,14 @@
 #include "lumenis/media/link.h"
 #include "lumenis/ui/media_frames.h"
 
+#include <QButtonGroup>
+#include <QCheckBox>
 #include <QComboBox>
+#include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QGroupBox>
+#include <QRadioButton>
+#include <QStandardItemModel>
 #include <QFileDialog>
 #include <QDir>
 #include <QFileInfo>
@@ -162,6 +169,173 @@ int LinkedMediaDialog::locateMedia(const QString& folder) {
 
 QString LinkedMediaDialog::summary() const {
     return result_->text();
+}
+
+// ---------------------------------------------------------------- ManagedRelinkDialog
+
+namespace {
+
+QString laterTip() {
+    return QObject::tr("Not available yet");
+}
+
+QCheckBox* checkBox(QWidget* parent, const QString& text, const QString& name, bool on, bool later = false) {
+    auto* c = new QCheckBox(text, parent);
+    c->setObjectName(name);
+    c->setChecked(on);
+    if (later) {
+        c->setEnabled(false);
+        c->setToolTip(laterTip());
+    }
+    return c;
+}
+
+// A menu whose entries after the first `working` wait for later.
+QComboBox* menuOf(QWidget* parent, const QString& name, const QStringList& items, int working) {
+    auto* m = new QComboBox(parent);
+    m->setObjectName(name);
+    m->addItems(items);
+    if (auto* model = qobject_cast<QStandardItemModel*>(m->model())) {
+        for (int i = working; i < m->count(); ++i) {
+            model->item(i)->setEnabled(false);
+            model->item(i)->setToolTip(laterTip());
+        }
+    }
+    return m;
+}
+
+} // namespace
+
+ManagedRelinkDialog::ManagedRelinkDialog(const QString& project, QWidget* parent) : QDialog(parent), project_(project) {
+    setObjectName(QStringLiteral("relinkDialog"));
+    setWindowTitle(tr("Relink"));
+    auto* layout = new QVBoxLayout(this);
+
+    // Relink selected items to (p.362).
+    auto* to = new QGroupBox(tr("Relink selected items to:"), this);
+    auto* tv = new QVBoxLayout(to);
+    allDrives_ = new QRadioButton(tr("All Available Drives"), to);
+    allDrives_->setObjectName(QStringLiteral("allAvailableDrives"));
+    allDrives_->setChecked(true);
+    oneDrive_ = new QRadioButton(tr("Media on drive:"), to);
+    oneDrive_->setObjectName(QStringLiteral("mediaOnDrive"));
+    drive_ = new QComboBox(to);
+    drive_->setObjectName(QStringLiteral("relinkDrive"));
+    for (const media::MediaDrive& d : media::mediaDrives()) drive_->addItem(d.name, d.root);
+    auto* driveRow = new QHBoxLayout;
+    driveRow->addWidget(oneDrive_);
+    driveRow->addWidget(drive_);
+    driveRow->addStretch();
+    tv->addWidget(allDrives_);
+    tv->addLayout(driveRow);
+    tv->addWidget(checkBox(to, tr("Master clips"), QStringLiteral("masterClips"), true));
+    tv->addWidget(checkBox(to, tr("All other items"), QStringLiteral("otherItems"), true));
+    tv->addWidget(checkBox(to, tr("Relink only to media from the current project"), QStringLiteral("currentProject"),
+                           false));
+    tv->addWidget(checkBox(to, tr("Selected items in ALL open bins"), QStringLiteral("allOpenBins"), false));
+    tv->addWidget(checkBox(to, tr("Allow relinking to offline items"), QStringLiteral("offlineItems"), false, true));
+    layout->addWidget(to);
+
+    // Relink by (p.363).
+    auto* by = new QGroupBox(tr("Relink by:"), this);
+    auto* bf = new QFormLayout(by);
+    bf->addRow(tr("Timecode:"),
+               menuOf(by, QStringLiteral("relinkTimecode"),
+                      {tr("Start"), tr("Aux TC1"), tr("Aux TC2"), tr("Aux TC3"), tr("Aux TC4"), tr("Aux TC5"),
+                       tr("Sound Timecode")},
+                      1));
+    bf->addRow(tr("Source Name:"),
+               menuOf(by, QStringLiteral("relinkSourceName"),
+                      {tr("Tape Name or Source File Name"), tr("Name"), tr("Tape Name or a Source File ID"),
+                       tr("Keynumber"), tr("Camroll"), tr("Labroll"), tr("Disk Label")},
+                      2));
+    bf->addRow(checkBox(by, tr("Ignore extension"), QStringLiteral("ignoreExtension"), false));
+    auto* ignoreRow = new QHBoxLayout;
+    ignoreRow->addWidget(checkBox(by, tr("Ignore characters after last occurrence of"), QStringLiteral("ignoreAfterOn"),
+                                  false));
+    ignoreAfter_ = new QLineEdit(by);
+    ignoreAfter_->setObjectName(QStringLiteral("ignoreAfter"));
+    ignoreRow->addWidget(ignoreAfter_);
+    bf->addRow(ignoreRow);
+    bf->addRow(checkBox(by, tr("Match case when comparing tape and source file names"), QStringLiteral("matchCase"),
+                        false));
+    layout->addWidget(by);
+
+    // Video Relink Parameters (p.363-364).
+    auto* video = new QGroupBox(tr("Video Relink Parameters"), this);
+    auto* vf = new QFormLayout(video);
+    auto* relinkTo = menuOf(video, QStringLiteral("relinkTo"),
+                            {tr("Any video format"), tr("Video format of current project only"),
+                             tr("Any HD video format"), tr("Any SD video format")},
+                            1);
+    vf->addRow(tr("Relink to:"), relinkTo);
+    method_ = menuOf(video, QStringLiteral("relinkMethod"),
+                     {tr("Highest Quality"), tr("Most Compressed"), tr("Specific Resolution")}, 3);
+    vf->addRow(tr("Relink method:"), method_);
+    quality_ = menuOf(video, QStringLiteral("relinkQuality"),
+                      {tr("Is greater than or equal to"), tr("Is equal to"), tr("Is less than or equal to")}, 3);
+    vf->addRow(tr("Relink if quality:"), quality_);
+    resolution_ = new QComboBox(video);
+    resolution_->setObjectName(QStringLiteral("relinkResolution"));
+    for (const media::Resolution& r : media::resolutions()) resolution_->addItem(r.name, r.id);
+    resolution_->setCurrentIndex(resolution_->findData(media::defaultResolution().id));
+    vf->addRow(tr("Resolution:"), resolution_);
+    vf->addRow(tr("If no match is found:"),
+               menuOf(video, QStringLiteral("noMatch"), {tr("Use Existing Media"), tr("Unlink (Take Offline)")}, 2));
+    layout->addWidget(video);
+
+    layout->addWidget(checkBox(this, tr("Tracks to Relink"), QStringLiteral("tracksToRelink"), true, true));
+    layout->addWidget(checkBox(this, tr("Create new sequences"), QStringLiteral("newSequences"), true));
+    layout->addWidget(checkBox(this, tr("Allow relink across rates"), QStringLiteral("acrossRates"), false));
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    layout->addWidget(buttons);
+
+    connect(oneDrive_, &QRadioButton::toggled, this, [this] { update(); });
+    connect(method_, &QComboBox::currentIndexChanged, this, [this] { update(); });
+    update();
+}
+
+void ManagedRelinkDialog::update() {
+    drive_->setEnabled(oneDrive_->isChecked());
+    const bool specific = method_->currentIndex() == 2;
+    quality_->setEnabled(specific);
+    resolution_->setEnabled(specific);
+}
+
+QCheckBox* ManagedRelinkDialog::check(const QString& objectName) const {
+    return findChild<QCheckBox*>(objectName);
+}
+
+QComboBox* ManagedRelinkDialog::menu(const QString& objectName) const {
+    return findChild<QComboBox*>(objectName);
+}
+
+bool ManagedRelinkDialog::allOpenBins() const {
+    return check(QStringLiteral("allOpenBins"))->isChecked();
+}
+
+media::RelinkOptions ManagedRelinkDialog::options() const {
+    media::RelinkOptions o;
+    if (oneDrive_->isChecked() && drive_->currentIndex() >= 0) o.drives << drive_->currentData().toString();
+    o.masterClips = check(QStringLiteral("masterClips"))->isChecked();
+    o.otherItems = check(QStringLiteral("otherItems"))->isChecked();
+    o.currentProjectOnly = check(QStringLiteral("currentProject"))->isChecked();
+    o.project = project_;
+    o.by = menu(QStringLiteral("relinkSourceName"))->currentIndex() == 1 ? media::RelinkOptions::By::Name
+                                                                         : media::RelinkOptions::By::SourceName;
+    o.ignoreExtension = check(QStringLiteral("ignoreExtension"))->isChecked();
+    if (check(QStringLiteral("ignoreAfterOn"))->isChecked()) o.ignoreAfter = ignoreAfter_->text();
+    o.matchCase = check(QStringLiteral("matchCase"))->isChecked();
+    o.method = static_cast<media::RelinkOptions::Method>(method_->currentIndex());
+    o.quality = static_cast<media::RelinkOptions::Quality>(quality_->currentIndex());
+    o.resolution = resolution_->currentData().toString();
+    o.unlinkWithoutMatch = menu(QStringLiteral("noMatch"))->currentIndex() == 1;
+    o.newSequences = check(QStringLiteral("newSequences"))->isChecked();
+    o.acrossRates = check(QStringLiteral("acrossRates"))->isChecked();
+    return o;
 }
 
 } // namespace lumenis::ui

@@ -177,7 +177,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Recreate Title Media |  | p.475 | *later* | ☐ | | |
 | Refresh Sequence > Motion Adapters/Timewarps |  | p.545 | *later* | ☐ | | |
 | Relink > Linked Media |  | p.364 | works | ☐ | | |
-| Relink > Managed Media |  | p.361 | *later* | ☐ | | |
+| Relink > Managed Media |  | p.361 | works | ☐ | | |
 | Split All Tracks |  | p.637 | *later* | ☐ | | |
 | New Title |  | p.327 | *later* | ☐ | | |
 
@@ -233,7 +233,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Audio Tool | Ctrl+1 | p.703 | works | ☐ | | |
 | Audio Track Effect |  | p.791 | *later* | ☐ | | |
 | AudioSuite |  | p.797 | *later* | ☐ | | |
-| Background Queue Window |  | p.358 | *later* | ☐ | | |
+| Background Queue Window |  | p.358 | works | ☐ | | |
 | Background Services |  | p.376 | *later* | ☐ | | |
 | Calculator | Ctrl+2 | p.100 | works | ☐ | | |
 | Command Palette | Ctrl+3 | p.98 | works | ☐ | | |
@@ -312,6 +312,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 208 menu commands, 89 of them working with a project open; the
+* 208 menu commands, 91 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

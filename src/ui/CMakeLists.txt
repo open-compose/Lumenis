@@ -1,5 +1,6 @@
 add_library(lumenis_ui STATIC
     audio_tools.cpp
+    background_queue.cpp
     bin_container.cpp
     bin_dialogs.cpp
     bin_dock.cpp
@@ -34,6 +35,7 @@ add_library(lumenis_ui STATIC
     workspace.cpp
     workspace_bar.cpp
     include/lumenis/ui/audio_tools.h
+    include/lumenis/ui/background_queue.h
     include/lumenis/ui/bin_container.h
     include/lumenis/ui/bin_dialogs.h
     include/lumenis/ui/bin_dock.h

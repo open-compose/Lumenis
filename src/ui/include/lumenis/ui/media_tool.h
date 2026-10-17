@@ -1,9 +1,13 @@
 #pragma once
 
+#include "lumenis/media/managed.h"
 #include "lumenis/model/bin.h"
 
 #include <QDialog>
+#include <QPair>
 #include <QWidget>
+
+#include <functional>
 
 class QCheckBox;
 class QListWidget;
@@ -13,8 +17,9 @@ namespace lumenis::ui {
 
 // What the Media Tool shows (the Media Tool Display dialog, p.346).
 struct MediaToolDisplay {
-    QStringList drives;   // empty: all drives
-    bool allProjects = false;
+    QStringList drives;      // the drives' roots; empty: all drives
+    bool allProjects = false; // else the current project's media only
+    QString project;          // the current project
     bool masterClips = true;
     bool linkedMasterClips = true;
     bool renderedEffects = false;  // Precompute Clips - Rendered Effects
@@ -28,14 +33,17 @@ class MediaToolDisplayDialog : public QDialog {
     Q_OBJECT
 
 public:
-    MediaToolDisplayDialog(const QString& currentProject, const QStringList& drives, const MediaToolDisplay& display,
-                           QWidget* parent = nullptr);
+    // `drives`: name and root. `projects`: those with media on the drives;
+    // the current project comes first (p.346).
+    MediaToolDisplayDialog(const QString& currentProject, const QList<QPair<QString, QString>>& drives,
+                           const QStringList& projects, const MediaToolDisplay& display, QWidget* parent = nullptr);
     MediaToolDisplay display() const;
     QListWidget* driveList() const { return drives_; }
     QListWidget* projectList() const { return projects_; }
     QCheckBox* option(const QString& objectName) const;
 
 private:
+    QString current_;
     QListWidget* drives_ = nullptr;
     QListWidget* projects_ = nullptr;
     QCheckBox* master_ = nullptr;
@@ -45,27 +53,55 @@ private:
     QCheckBox* media_ = nullptr;
 };
 
-// Tools > Media Tool (p.344-348): the project's master clips, precompute
-// clips and media files on the chosen drives, in a bin-like list (picture
-// on p.347: Color, Name, Duration, Drive, IN-OUT, Creation Date). There is
-// no media on disk until Phase 2, so the list holds master clips and
-// deleting media is not available yet.
+// The Delete Media dialog (p.348): which of the selection's media files to
+// delete, by track.
+class DeleteMediaDialog : public QDialog {
+    Q_OBJECT
+
+public:
+    // `tracks`: "V1", "A1", ... that the selection has media for.
+    DeleteMediaDialog(const QStringList& tracks, QWidget* parent = nullptr);
+    QStringList chosenTracks() const;
+    QCheckBox* track(const QString& name) const;
+
+private:
+    QList<QCheckBox*> tracks_;
+};
+
+// Tools > Media Tool (p.344-348): the project's master clips and the media
+// files on the chosen drives, in a bin-like list (picture on p.347: Color,
+// Name, Duration, Drive, IN-OUT, Creation Date).
 class MediaTool : public QWidget {
     Q_OBJECT
 
 public:
     explicit MediaTool(QWidget* parent = nullptr);
 
-    // The project's bins' items, filtered by the display options.
-    void setItems(const QList<model::BinItem>& items, const MediaToolDisplay& display);
+    // The project's bins' items and the media files on the drives, as the
+    // display options say.
+    void setItems(const QList<model::BinItem>& items, const MediaToolDisplay& display,
+                  const QList<media::MediaFileInfo>& files = {});
     const MediaToolDisplay& display() const { return display_; }
     QTableWidget* table() const { return table_; }
     QStringList names() const;
     static QStringList columns();
-    // Edit > Delete in the Media Tool (p.347); false while there are no
-    // media files.
+    // Edit > Delete in the Media Tool (p.347-348): the Delete Media dialog
+    // for the selected rows' media files, a confirmation, then `deleter`.
+    // False when nothing was deleted.
     bool deleteSelected();
     QString lastMessage() const { return message_; }
+    void selectNames(const QStringList& names);
+
+    // Deletes files and returns those deleted (the main window's, with
+    // the media database).
+    std::function<QStringList(const QStringList&)> deleter;
+    // Stand in for the dialogs (tests): the Delete Media dialog (true: OK)
+    // and the confirmation of `count` files (true: Delete).
+    std::function<bool(DeleteMediaDialog&)> deleteMediaHook;
+    std::function<bool(int count)> confirmHook;
+
+signals:
+    void mediaDeleted(const QStringList& paths);
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;

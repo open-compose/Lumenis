@@ -27,6 +27,12 @@ namespace {
 const QString kIdKey = QStringLiteral("comment_lumenis_media");
 const QString kTrackKey = QStringLiteral("comment_lumenis_track");
 const QString kProjectKey = QStringLiteral("comment_lumenis_project");
+const QString kSourceKey = QStringLiteral("comment_lumenis_source");
+const QString kFramesKey = QStringLiteral("comment_lumenis_frames");
+const QString kRateKey = QStringLiteral("comment_lumenis_rate");
+const QString kResolutionKey = QStringLiteral("comment_lumenis_resolution");
+// The index's layout; an index of another version is read again.
+constexpr int kIndexVersion = 2;
 
 // Frames to samples at `sampleRate`, exact in integers (a * b / c).
 std::int64_t samplesAt(std::int64_t frames, const Rational& rate, int sampleRate) {
@@ -134,8 +140,16 @@ public:
                       {kIdKey, id_},
                       {kTrackKey, track}};
         if (!creation_.project.isEmpty()) s.metadata.append({kProjectKey, creation_.project});
+        // What relinking compares (p.362-363): the source, length and rate,
+        // and the resolution.
+        const QString source = clip_.fields.value(QStringLiteral("Source File"));
+        s.metadata.append({kSourceKey, source.isEmpty() ? clip_.name : source});
+        s.metadata.append({kFramesKey, QString::number(out_ - in_)});
+        s.metadata.append({kRateKey, rateText(clip_.editRate)});
+        if (!resolution_.isEmpty()) s.metadata.append({kResolutionKey, resolution_});
         return s;
     }
+    void setResolution(const QString& name) { resolution_ = name; }
 
     // Counts work done; false when cancelled.
     bool step(std::int64_t units = 1) {
@@ -198,8 +212,10 @@ public:
         if (!writer.open(path, s, error)) return false;
         std::unique_ptr<Resampler> resampler;
         if (rate != kManagedSampleRate) resampler = std::make_unique<Resampler>(1, rate, kManagedSampleRate);
-        std::int64_t at = samplesAt(in_, clip_.editRate, rate); // in the file
-        const std::int64_t end = samplesAt(out_, clip_.editRate, rate);
+        // In the file, where the clip starts in it.
+        const std::int64_t offset = samplesAt(link_.first, link_.rate, rate);
+        std::int64_t at = samplesAt(in_, clip_.editRate, rate) + offset;
+        const std::int64_t end = samplesAt(out_, clip_.editRate, rate) + offset;
         std::int64_t written = 0;
         auto put = [&](std::vector<float> mono) {
             const std::int64_t n = std::min<std::int64_t>(static_cast<std::int64_t>(mono.size()), wanted - written);
@@ -247,6 +263,7 @@ private:
     const MediaCreation& creation_;
     QString id_;
     QString startTc_;
+    QString resolution_;
     QStringList made_;
     bool kept_ = false;
     std::int64_t total_ = 1;
@@ -285,6 +302,7 @@ std::optional<model::BinItem> makeMedia(const model::BinItem& clip, std::int64_t
     }
 
     Maker maker(clip, *link, in, out, creation);
+    maker.setResolution(copy ? clip.fields.value(QStringLiteral("Video")) : creation.resolution.name);
     maker.setWork((out - in) * ((video ? 1 : 0) + channels));
     Link made;
     made.rate = clip.editRate;
@@ -518,17 +536,109 @@ std::optional<model::BinItem> consolidateClip(const model::BinItem& clip, std::i
     return makeMedia(clip, in, out, creation, true, error);
 }
 
+namespace {
+
+Rational rateFrom(const QString& text) {
+    const QStringList parts = text.split(QLatin1Char('/'));
+    const std::int64_t num = parts.value(0).toLongLong();
+    const std::int64_t den = parts.size() > 1 ? parts.at(1).toLongLong() : 1;
+    return num > 0 && den > 0 ? Rational(num, den) : Rational(25, 1);
+}
+
+} // namespace
+
+QJsonObject MediaFileInfo::toJson() const {
+    QJsonObject o{{QStringLiteral("id"), mediaId},     {QStringLiteral("track"), track},
+                  {QStringLiteral("clip"), clipName},  {QStringLiteral("project"), project},
+                  {QStringLiteral("source"), source},  {QStringLiteral("tape"), tape},
+                  {QStringLiteral("start"), start},    {QStringLiteral("frames"), static_cast<qint64>(frames)},
+                  {QStringLiteral("rate"), rateText(rate)}, {QStringLiteral("resolution"), resolution},
+                  {QStringLiteral("bytes"), static_cast<qint64>(bytes)}};
+    if (created.isValid()) o.insert(QStringLiteral("created"), created.toString(Qt::ISODate));
+    return o;
+}
+
+MediaFileInfo MediaFileInfo::fromJson(const QJsonObject& o) {
+    MediaFileInfo f;
+    f.mediaId = o.value(QStringLiteral("id")).toString();
+    f.track = o.value(QStringLiteral("track")).toString();
+    f.clipName = o.value(QStringLiteral("clip")).toString();
+    f.project = o.value(QStringLiteral("project")).toString();
+    f.source = o.value(QStringLiteral("source")).toString();
+    f.tape = o.value(QStringLiteral("tape")).toString();
+    f.start = o.value(QStringLiteral("start")).toString();
+    f.frames = o.value(QStringLiteral("frames")).toInteger();
+    f.rate = rateFrom(o.value(QStringLiteral("rate")).toString());
+    f.resolution = o.value(QStringLiteral("resolution")).toString();
+    f.bytes = o.value(QStringLiteral("bytes")).toInteger();
+    f.created = QDateTime::fromString(o.value(QStringLiteral("created")).toString(), Qt::ISODate);
+    return f;
+}
+
 std::optional<MediaFileInfo> readMediaFile(const QString& path) {
     const auto info = probe(path);
     if (!info) return std::nullopt;
     MediaFileInfo f;
     f.path = path;
-    f.mediaId = info->metadata.value(kIdKey);
-    f.track = info->metadata.value(kTrackKey);
-    f.clipName = info->metadata.value(QStringLiteral("material_package_name"));
-    f.project = info->metadata.value(kProjectKey);
+    const auto& m = info->metadata;
+    f.mediaId = m.value(kIdKey);
+    f.track = m.value(kTrackKey);
     if (f.mediaId.isEmpty() || f.track.isEmpty()) return std::nullopt;
+    f.clipName = m.value(QStringLiteral("material_package_name"));
+    f.project = m.value(kProjectKey);
+    f.source = m.value(kSourceKey, f.clipName);
+    f.tape = info->reelName;
+    f.start = info->startTimecode;
+    f.rate = rateFrom(m.value(kRateKey));
+    f.frames = m.value(kFramesKey).toLongLong();
+    f.resolution = m.value(kResolutionKey);
+    if (f.frames <= 0 && !info->streams.empty()) {
+        // Files made before these were written: from the stream.
+        const StreamInfo& st = info->streams.front();
+        if (st.kind == StreamKind::Video) {
+            f.frames = st.length;
+            if (st.frameRate.num() > 0) f.rate = st.frameRate;
+        } else if (st.sampleRate > 0) {
+            f.frames = st.length * f.rate.num() / (static_cast<std::int64_t>(st.sampleRate) * f.rate.den());
+        }
+    }
+    const QFileInfo fi(path);
+    f.bytes = fi.size();
+    f.created = fi.birthTime().isValid() ? fi.birthTime() : fi.lastModified();
     return f;
+}
+
+MediaFileInfo MediaSet::track(const QString& name) const {
+    const auto it = tracks.find(name);
+    return it == tracks.end() ? MediaFileInfo{} : it->second;
+}
+
+int MediaSet::audioTracks() const {
+    int n = 0;
+    while (tracks.contains(QStringLiteral("A%1").arg(n + 1))) ++n;
+    return n;
+}
+
+Link MediaSet::link(std::int64_t first) const {
+    Link l;
+    l.mediaId = mediaId;
+    l.first = first;
+    const MediaFileInfo& f = any();
+    l.rate = f.rate;
+    l.frames = f.frames;
+    if (hasVideo()) {
+        l.path = track(QStringLiteral("V1")).path;
+        l.videoStream = 0;
+    }
+    for (int t = 0; t < audioTracks(); ++t) {
+        const QString a = track(QStringLiteral("A%1").arg(t + 1)).path;
+        if (l.path.isEmpty()) l.path = a;
+        l.audioPaths << a;
+        l.audioStreams << 0;
+        l.streamChannels << 1;
+        l.channels += 1;
+    }
+    return l;
 }
 
 void MediaDatabase::clear() {
@@ -545,7 +655,11 @@ void MediaDatabase::scan(const QStringList& drives) {
             const QString indexPath = folder.filePath(indexName());
             QJsonObject index;
             if (QFile f(indexPath); f.open(QIODevice::ReadOnly)) {
-                index = QJsonDocument::fromJson(f.readAll()).object().value(QStringLiteral("files")).toObject();
+                const QJsonObject doc = QJsonDocument::fromJson(f.readAll()).object();
+                // Older indexes lack what relinking needs: read again.
+                if (doc.value(QStringLiteral("version")).toInt() == kIndexVersion) {
+                    index = doc.value(QStringLiteral("files")).toObject();
+                }
             }
             QJsonObject fresh;
             bool changed = false;
@@ -558,22 +672,22 @@ void MediaDatabase::scan(const QStringList& drives) {
                 if (e.value(QStringLiteral("size")).toInteger() != size ||
                     e.value(QStringLiteral("time")).toInteger() != time) {
                     const auto m = readMediaFile(fi.absoluteFilePath());
-                    e = QJsonObject{{QStringLiteral("size"), size}, {QStringLiteral("time"), time}};
-                    if (m) {
-                        e.insert(QStringLiteral("id"), m->mediaId);
-                        e.insert(QStringLiteral("track"), m->track);
-                        e.insert(QStringLiteral("clip"), m->clipName);
-                    }
+                    e = m ? m->toJson() : QJsonObject{};
+                    e.insert(QStringLiteral("size"), size);
+                    e.insert(QStringLiteral("time"), time);
                     changed = true;
                 }
                 fresh.insert(fi.fileName(), e);
-                const QString id = e.value(QStringLiteral("id")).toString();
-                if (!id.isEmpty()) files_[id].insert(e.value(QStringLiteral("track")).toString(), fi.absoluteFilePath());
+                MediaFileInfo info = MediaFileInfo::fromJson(e);
+                if (info.mediaId.isEmpty()) continue;
+                info.path = fi.absoluteFilePath();
+                files_.insert(info.path, info);
             }
             if (changed || fresh.size() != index.size()) {
                 QFile f(indexPath);
                 if (f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-                    f.write(QJsonDocument(QJsonObject{{QStringLiteral("version"), 1}, {QStringLiteral("files"), fresh}})
+                    f.write(QJsonDocument(QJsonObject{{QStringLiteral("version"), kIndexVersion},
+                                                      {QStringLiteral("files"), fresh}})
                                 .toJson(QJsonDocument::Indented));
                 }
             }
@@ -582,13 +696,60 @@ void MediaDatabase::scan(const QStringList& drives) {
 }
 
 QHash<QString, QString> MediaDatabase::filesOf(const QString& mediaId) const {
-    return files_.value(mediaId);
+    QHash<QString, QString> out;
+    for (const MediaFileInfo& f : files_) {
+        if (f.mediaId == mediaId) out.insert(f.track, f.path);
+    }
+    return out;
 }
 
 int MediaDatabase::fileCount() const {
-    int n = 0;
-    for (const auto& tracks : files_) n += static_cast<int>(tracks.size());
-    return n;
+    return static_cast<int>(files_.size());
+}
+
+QList<MediaFileInfo> MediaDatabase::files() const {
+    QList<MediaFileInfo> out = files_.values();
+    std::sort(out.begin(), out.end(), [](const MediaFileInfo& a, const MediaFileInfo& b) { return a.path < b.path; });
+    return out;
+}
+
+QList<MediaSet> MediaDatabase::sets() const {
+    QHash<QString, MediaSet> byId;
+    QStringList order;
+    for (const MediaFileInfo& f : files()) {
+        MediaSet& set = byId[f.mediaId];
+        if (set.mediaId.isEmpty()) {
+            set.mediaId = f.mediaId;
+            order << f.mediaId;
+        }
+        set.tracks.insert_or_assign(f.track, f);
+    }
+    QList<MediaSet> out;
+    for (const QString& id : order) out << byId.value(id);
+    return out;
+}
+
+std::optional<MediaSet> MediaDatabase::set(const QString& mediaId) const {
+    MediaSet set;
+    set.mediaId = mediaId;
+    for (const MediaFileInfo& f : files_) {
+        if (f.mediaId == mediaId) set.tracks.insert_or_assign(f.track, f);
+    }
+    if (set.tracks.empty()) return std::nullopt;
+    return set;
+}
+
+QStringList MediaDatabase::projects() const {
+    QStringList out;
+    for (const MediaFileInfo& f : files_) {
+        if (!f.project.isEmpty() && !out.contains(f.project)) out << f.project;
+    }
+    out.sort(Qt::CaseInsensitive);
+    return out;
+}
+
+void MediaDatabase::remove(const QString& path) {
+    files_.remove(path);
 }
 
 bool MediaDatabase::resolve(model::BinItem& item) const {
@@ -611,6 +772,19 @@ bool MediaDatabase::resolve(model::BinItem& item) const {
     if (l.path == link->path && l.audioPaths == link->audioPaths) return true;
     item.link = l.toJson();
     return true;
+}
+
+QStringList deleteMediaFiles(const QStringList& paths, MediaDatabase* db) {
+    QStringList deleted;
+    for (const QString& path : paths) {
+        // Managed media only: the file says which clip it is.
+        if (!readMediaFile(path)) continue;
+        if (QFile::remove(path)) {
+            deleted << path;
+            if (db) db->remove(path);
+        }
+    }
+    return deleted;
 }
 
 } // namespace lumenis::media

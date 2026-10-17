@@ -32,6 +32,9 @@ public:
     void setDrive(const QString& drive);
     void setResolution(const QString& id);
     void setBitDepth(int bits);
+    // Processing Options: Background Process (p.352, p.356).
+    void setBackground(bool background);
+    bool isBackground() const;
 
     // Everything but the project's raster and name, and the progress.
     media::ConsolidateOptions options() const;
@@ -65,6 +68,7 @@ private:
     QComboBox* resolution_ = nullptr;
     QComboBox* raster_ = nullptr;
     QPushButton* go_ = nullptr;
+    QRadioButton* background_ = nullptr;
 };
 
 } // namespace lumenis::ui

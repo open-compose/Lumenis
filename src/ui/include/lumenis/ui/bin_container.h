@@ -11,6 +11,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 class QLineEdit;
@@ -266,6 +267,10 @@ public:
     // Called with each bin read from its file, before it opens: the media
     // database points managed clips at their files (p.358).
     void setBinLoader(std::function<void(model::Bin&)> loader) { binLoader_ = std::move(loader); }
+    // Asked before Delete removes items: which of them to remove; nothing
+    // cancels (managed clips' media, p.359).
+    using DeleteFilter = std::function<std::optional<QStringList>(const BinDocument&, const QStringList& ids)>;
+    void setDeleteFilter(DeleteFilter filter) { deleteFilter_ = std::move(filter); }
 
 signals:
     void activeBinChanged();
@@ -297,6 +302,7 @@ private:
     QString canonicalBin(const QString& id) const;
 
     std::function<void(model::Bin&)> binLoader_;
+    DeleteFilter deleteFilter_;
     std::unique_ptr<model::ProjectBins> bins_;
     Rational editRate_{24000, 1001};
     bool openFloating_ = false;

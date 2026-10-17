@@ -5,6 +5,7 @@
 #include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
 #include "lumenis/media/playback.h"
+#include "lumenis/media/relink.h"
 #include "lumenis/model/sequence.h"
 
 #include <QDir>
@@ -498,6 +499,146 @@ private slots:
         r = consolidate(r.changed, QStringLiteral("bin1"), lookup, {}, options);
         QVERIFY(r.added.isEmpty());
         QCOMPARE(r.skipped.size(), 1);
+    }
+
+    void relinkManagedMedia() {
+        // Relink > Managed Media (p.361-364): clips find media of the same
+        // source and timecode, by the relink method.
+        if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        const QString source = dir.filePath(QStringLiteral("Dock.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(25);
+        s.audioCodec = QStringLiteral("pcm_s16le");
+        s.channels = 1;
+        s.startTimecode = QStringLiteral("10:00:00:00");
+        {
+            MediaWriter w;
+            QVERIFY(w.open(source, s));
+            for (int i = 0; i < 20; ++i) {
+                // Each frame's sound is its number, to tell where it starts.
+                const std::vector<float> level(1920, static_cast<float>(i) / 40.0f);
+                QVERIFY(w.writeVideo(picture(i, 64, 36)));
+                QVERIFY(w.writeAudio(level.data(), 1920));
+            }
+            QVERIFY(w.finish());
+        }
+        LinkOptions o;
+        o.editRate = Rational(25);
+        const auto clip = linkClip(*probe(source), o);
+        QVERIFY(clip);
+        MediaCreation c;
+        c.raster = QSize(256, 144);
+        c.videoDrive = dir.path();
+        c.project = QStringLiteral("Harbor");
+        c.resolution = *findResolution(QStringLiteral("dnx_lb"));
+        const auto whole = transcodeClip(*clip, 0, -1, c);
+        QVERIFY(whole);
+        c.resolution = *findResolution(QStringLiteral("dnx_sq"));
+        const auto part = transcodeClip(*clip, 5, 15, c);
+        QVERIFY(part);
+        MediaDatabase db;
+        db.scan({dir.path()});
+        QCOMPARE(db.fileCount(), 4);
+        QCOMPARE(db.sets().size(), 2);
+        QCOMPARE(db.projects(), QStringList{"Harbor"});
+        const auto info = db.set(linkOf(*part)->mediaId);
+        QVERIFY(info);
+        QCOMPARE(info->any().source, QStringLiteral("Dock.mov"));
+        QCOMPARE(info->any().frames, std::int64_t{10});
+        QCOMPARE(info->track(QStringLiteral("V1")).resolution, QStringLiteral("Avid DNx SQ"));
+        QCOMPARE(info->any().start, QStringLiteral("10:00:00:05"));
+
+        // The part's clip: Highest Quality keeps its own (SQ); Most
+        // Compressed takes the whole LB media from frame 5.
+        RelinkOptions r;
+        auto link = findMedia(*part, db, r);
+        QVERIFY(link);
+        QCOMPARE(link->mediaId, linkOf(*part)->mediaId);
+        r.method = RelinkOptions::Method::MostCompressed;
+        link = findMedia(*part, db, r);
+        QVERIFY(link);
+        QCOMPARE(link->mediaId, linkOf(*whole)->mediaId);
+        QCOMPARE(link->first, std::int64_t{5});
+        model::BinItem relinked = *part;
+        relinked.link = link->toJson();
+        FrameCache cache;
+        QVERIFY(near(cache.frame(relinked, 0), colourOf(5), 14));
+        QVERIFY(near(cache.frame(relinked, 9), colourOf(14), 14));
+        const auto pieces = audioPieces(relinked, {});
+        QCOMPARE(pieces.size(), std::size_t(1));
+        QCOMPARE(pieces.front().sourceStart, std::int64_t{5 * 1920});
+        // Specific Resolution: nothing as good as HQ.
+        r.method = RelinkOptions::Method::Specific;
+        r.resolution = QStringLiteral("dnx_hq");
+        QVERIFY(!findMedia(*part, db, r));
+        r.quality = RelinkOptions::Quality::AtMost;
+        QCOMPARE(findMedia(*part, db, r)->mediaId, linkOf(*part)->mediaId);
+        // Another source name matches nothing; ignoring the extension, a
+        // differently named file of the same name does.
+        model::BinItem other = *part;
+        other.fields.insert(QStringLiteral("Source File"), QStringLiteral("Dock.mxf"));
+        r = RelinkOptions{};
+        QVERIFY(!findMedia(other, db, r));
+        r.ignoreExtension = true;
+        QVERIFY(findMedia(other, db, r));
+        r = RelinkOptions{};
+        r.currentProjectOnly = true;
+        r.project = QStringLiteral("Other");
+        QVERIFY(!findMedia(*part, db, r));
+
+        // No match: the clip stays, or is unlinked.
+        r = RelinkOptions{};
+        RelinkResult result = relinkManaged({other}, db, {}, {}, r, {});
+        QCOMPARE(result.notRelinked, QStringList{other.name});
+        QVERIFY(result.changed.isEmpty());
+        r.unlinkWithoutMatch = true;
+        result = relinkManaged({other}, db, {}, {}, r, {});
+        QCOMPARE(result.changed.size(), 1);
+        QVERIFY(isUnlinked(result.changed.first()));
+
+        // A sequence of the LB clip's frames 6-8 relinks to the SQ clip,
+        // as a copy named ".relinked".
+        model::Sequence sequence = model::Sequence::withDefaultTracks();
+        model::Segment seg;
+        seg.clipId = whole->id;
+        seg.binId = QStringLiteral("b");
+        seg.sourceTrack = QStringLiteral("V1");
+        seg.sourceIn = 6;
+        seg.length = 3;
+        sequence.track(QStringLiteral("V1"))->segments = {seg};
+        model::BinItem cut;
+        cut.id = model::newItemId();
+        cut.kind = model::BinItemKind::Sequence;
+        cut.name = QStringLiteral("Cut");
+        cut.editRate = Rational(25);
+        sequence.storeIn(cut);
+        const ClipLookup lookup = [&](const QString&, const QString& id) -> std::optional<model::BinItem> {
+            if (id == whole->id) return *whole;
+            if (id == part->id) return *part;
+            return std::nullopt;
+        };
+        r = RelinkOptions{};
+        result = relinkManaged({cut}, db, {{QStringLiteral("b"), *whole}, {QStringLiteral("b"), *part}}, lookup, r,
+                               {QStringLiteral("Cut")});
+        QCOMPARE(result.added.size(), 1);
+        QCOMPARE(result.added.first().name, QStringLiteral("Cut.relinked"));
+        const auto& segs = model::Sequence::fromItem(result.added.first()).track(QStringLiteral("V1"))->segments;
+        QCOMPARE(segs.first().clipId, part->id);
+        QCOMPARE(segs.first().sourceIn, std::int64_t{1});
+
+        // Delete Media removes managed files only.
+        cache.clear();
+        const QStringList files = linkOf(*whole)->files();
+        QCOMPARE(deleteMediaFiles(files + QStringList{source}, &db), files);
+        QVERIFY(QFileInfo::exists(source));
+        QCOMPARE(db.fileCount(), 2);
+        QVERIFY(!cache.isOnline(*whole));
     }
 
     void provider() {

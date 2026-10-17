@@ -1598,9 +1598,9 @@ p.610–640, ch. 13 p.432–434).**
 * **The window (picture on p.347):** a bin-like list with the columns Color,
   Name, Duration, Drive, IN-OUT and Creation Date. It shows master clips,
   never sequences or subclips (p.345).
-* **Not yet (Phase 2):**
-  * Media files, precompute clips, and drives holding media.
-  * Delete Media (p.347–348).
+* **Media files and Delete Media (2.4b):** see §17.
+* **Not yet:**
+  * Precompute clips (they come with rendering).
   * The bin views and the Fast menu.
 
 ### Help > About: Configuration, Usage and Hardware (p.94, p.102–105)
@@ -1993,8 +1993,66 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
   that changed (p.358–359).
 * Bins opening, and open bins on a reload, point their offline managed
   clips at their files wherever they now are.
-* Later (2.4b): Relink > Managed Media (p.361–364), and the Media Tool's
-  media files with Delete Media (p.344–348).
+* The index keeps what each file is for relinking: clip, track, project,
+  source file, tape, start timecode, length, rate and resolution. These are
+  written into the files as user comments too (ours).
+
+### Relink > Managed Media (p.361–364)
+* Clip > Relink > Managed Media opens the Relink dialog.
+* Working now:
+  * Relink selected items to: All Available Drives, or Media on drive;
+  * Master clips; All other items (sequences);
+  * Relink only to media from the current project;
+  * Selected items in ALL open bins;
+  * Relink by Source Name: Tape Name or Source File Name, or Name;
+  * Ignore extension; Ignore characters after last occurrence; Match case;
+  * Relink method: Highest Quality, Most Compressed, Specific Resolution,
+    with Relink if quality and Resolution;
+  * If no match is found: Use Existing Media, Unlink (Take Offline);
+  * Create new sequences (on by default), Allow relink across rates.
+* Matching:
+  * A master clip relinks to managed media of the same source name whose
+    timecode covers all of the clip's frames and holds its tracks. Media
+    that starts earlier is used from the clip's start (ours: `Link::first`).
+  * A sequence's segments relink to master clips in the open bins holding
+    the same material (p.361). With Create new sequences, the changes go in
+    a copy named `<name>.relinked` (p.364).
+  * Quality order: Avid DNx LB < SQ < HQ < HQX < 444.
+* Later:
+  * Timecode other than Start (Aux TC1–5, Sound Timecode);
+  * the other Source Name choices;
+  * Relink to (format) choices other than Any video format;
+  * Format; Tracks to Relink; Allow relinking to offline items;
+  * Relinking by Resolution and to Selected Clips (p.365–366).
+
+### Media Tool media files and Delete Media (p.344–348)
+* The Media Tool Display dialog lists the media drives and the projects with
+  media on them, the current project first (p.346).
+* With Media Files ticked, each media file is a row, named for its clip and
+  track ("Interview V1", ours). Managed master clips show when Master Clips
+  is ticked, linked ones when Linked Master Clips is.
+* Edit > Delete or the Delete key opens the Delete Media dialog (p.348):
+  * a box for each track the selection has media for: Video media file
+    (V), Audio media file (A1, A2, ...);
+  * then a confirmation, then Delete.
+  * Precompute, Audio mixdown and Linked Delete metadata wait.
+* Only managed media is deleted. Linked clips' files are never touched.
+* Deleting managed clips from a bin opens a Delete dialog with check boxes
+  for the clips and for their media files (p.359). The wording is ours.
+
+### Background Consolidate and Transcode (p.356–357)
+* Processing Options: Background Process makes a job for each selected
+  item. The jobs run one at a time on their own thread while editing goes
+  on, highest priority first.
+* Tools > Background Queue Window lists each job with its name, Cancel
+  button, progress bar and Priority menu (High, Normal (default), Low).
+  Finished jobs show Completed. The Tool menu has Clear Inactive Jobs.
+  * The Priority menu doesn't affect a running job (p.357).
+* When a job finishes, its clips go in the bin as `.new.01` (p.356).
+  Sequences are relinked, as when not in the background.
+* Later:
+  * offline placeholders in the bin while a job runs (p.356);
+  * Resume for suspended jobs; Show Job Groups.
 
 ## 18. Still to document
 * Menu order and separators, confirmed against a licensed seat.

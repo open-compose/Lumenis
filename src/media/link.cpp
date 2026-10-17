@@ -137,6 +137,7 @@ std::int64_t Link::fileFrame(std::int64_t clipFrame, const Rational& clipRate) c
         // The file frame showing at the clip frame's time.
         f = rescaleDown(clipFrame, clipRate.den() * rate.num(), clipRate.num() * rate.den());
     }
+    f += first;
     if (frames > 0) f = std::min(f, frames - 1);
     return std::max<std::int64_t>(f, 0);
 }
@@ -160,6 +161,7 @@ QJsonObject Link::toJson() const {
         o.insert(QStringLiteral("mediaId"), mediaId);
         o.insert(QStringLiteral("audioPaths"), QJsonArray::fromStringList(audioPaths));
     }
+    if (first != 0) o.insert(QStringLiteral("first"), static_cast<qint64>(first));
     return o;
 }
 
@@ -179,6 +181,7 @@ std::optional<Link> Link::fromJson(const QJsonObject& json) {
     l.unlinked = json.value(QStringLiteral("unlinked")).toBool();
     l.mediaId = json.value(QStringLiteral("mediaId")).toString();
     for (const QJsonValue& v : json.value(QStringLiteral("audioPaths")).toArray()) l.audioPaths << v.toString();
+    l.first = json.value(QStringLiteral("first")).toInteger();
     return l;
 }
 

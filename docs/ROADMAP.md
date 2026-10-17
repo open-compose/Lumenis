@@ -450,10 +450,13 @@ Sub-steps:
   * The Media Creation and Import settings.
   * The media database, read when a project opens, finds moved media.
   * `tst_managed_media`.
-* **2.4b:**
-  * Relink > Managed Media (p.361–364).
-  * The Media Tool's media files and Delete Media (p.344–348).
-  * Background Consolidate/Transcode and the Background Queue (p.356).
+* **2.4b — done** (spec §17).
+  * Relink > Managed Media by source name and timecode, with the relink
+    methods (`media/relink.h`); sequences relink to `.relinked` copies.
+  * The Media Tool's media files and Delete Media; deleting managed clips
+    from a bin can delete their media.
+  * Background Consolidate/Transcode and the Background Queue Window
+    (`background_queue.*`).
 * **2.5 The gates below:**
   * The decode corpus with frame MD5s.
   * Real-time playback.

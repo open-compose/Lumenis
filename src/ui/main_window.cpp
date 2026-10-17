@@ -9,6 +9,7 @@
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/audio_tools.h"
+#include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/command_palette.h"
 #include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/effect_palette.h"
@@ -36,6 +37,9 @@
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QVBoxLayout>
+#include <QDialogButtonBox>
+#include <QCheckBox>
 #include <QDir>
 #include <QDirIterator>
 #include <QFileDialog>
@@ -48,6 +52,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QStorageInfo>
 #include <QPixmap>
 #include <QProgressDialog>
@@ -248,6 +253,48 @@ void MainWindow::createPanels() {
     connect(composer_, &Composer::filesDropped, this, [this](MonitorId monitor, const QStringList& paths) {
         loadFiles(paths, monitor == MonitorId::Record);
     });
+    // Deleting managed clips can delete their media files too (p.359).
+    binContainer_->setDeleteFilter([this](const BinDocument& doc, const QStringList& ids) -> std::optional<QStringList> {
+        QStringList files;
+        int clips = 0;
+        for (const QString& id : ids) {
+            const model::BinItem* item = doc.bin().item(id);
+            const auto link = item ? media::linkOf(*item) : std::nullopt;
+            if (!link || !link->isManaged()) continue;
+            ++clips;
+            files += link->files();
+        }
+        files.removeDuplicates();
+        if (files.isEmpty()) return ids;
+        BinDeleteChoice choice;
+        if (binDeleteHook_) {
+            const auto answer = binDeleteHook_(static_cast<int>(ids.size()), static_cast<int>(files.size()));
+            if (!answer) return std::nullopt;
+            choice = *answer;
+        } else {
+            QDialog dialog(this);
+            dialog.setObjectName(QStringLiteral("deleteDialog"));
+            dialog.setWindowTitle(tr("Delete"));
+            auto* layout = new QVBoxLayout(&dialog);
+            auto* clipBox = new QCheckBox(tr("Delete %n clip(s)", "", static_cast<int>(ids.size())), &dialog);
+            clipBox->setChecked(true);
+            auto* mediaBox = new QCheckBox(tr("Delete %n media file(s)", "", static_cast<int>(files.size())), &dialog);
+            layout->addWidget(new QLabel(tr("%n of the clips have media files:", "", clips), &dialog));
+            layout->addWidget(clipBox);
+            layout->addWidget(mediaBox);
+            auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+            connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+            connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+            layout->addWidget(buttons);
+            if (dialog.exec() != QDialog::Accepted) return std::nullopt;
+            choice = {clipBox->isChecked(), mediaBox->isChecked()};
+        }
+        if (choice.media) {
+            frames_->clear();
+            media::deleteMediaFiles(files, &mediaDb_);
+        }
+        return choice.clips ? ids : QStringList{};
+    });
     // Bins opening find their managed clips' media in the database (p.358).
     binContainer_->setBinLoader([this](model::Bin& bin) {
         for (model::BinItem& item : bin.items) {
@@ -338,7 +385,12 @@ QList<model::BinItem> MainWindow::projectItems(int* binCount) const {
     if (const model::ProjectBins* bins = binContainer_->bins()) {
         for (const model::BinNode* node : bins->bins()) {
             ++count;
-            if (const auto bin = model::BinFile::read(bins->binPath(node->id))) items += bin->items;
+            // An open bin as it is now, unsaved changes too.
+            if (const BinDocument* doc = binContainer_->document(node->id)) {
+                items += doc->bin().items;
+            } else if (const auto bin = model::BinFile::read(bins->binPath(node->id))) {
+                items += bin->items;
+            }
         }
     }
     if (binCount) *binCount = count;
@@ -347,19 +399,18 @@ QList<model::BinItem> MainWindow::projectItems(int* binCount) const {
 
 void MainWindow::showMediaTool() {
     if (!project_) return;
-    // The Media Tool Display dialog first (p.346). The drives are the
-    // mounted volumes; media drives come with Phase 2.
-    QStringList drives;
-    for (const QStorageInfo& v : QStorageInfo::mountedVolumes()) {
-        if (v.isValid() && v.isReady() && !v.isReadOnly()) drives << (v.displayName().isEmpty() ? v.rootPath() : v.displayName());
-    }
-    MediaToolDisplayDialog dialog(project_->settings.name, drives, mediaTool_->display(), this);
+    // The Media Tool Display dialog first (p.346): the media drives, and
+    // the projects with media on them.
+    loadMediaDatabase();
+    QList<QPair<QString, QString>> drives;
+    for (const media::MediaDrive& d : media::mediaDrives()) drives.append({d.name, d.root});
+    MediaToolDisplayDialog dialog(project_->settings.name, drives, mediaDb_.projects(), mediaTool_->display(), this);
     if (mediaToolDisplay_) {
         if (!mediaToolDisplay_(dialog)) return;
     } else if (dialog.exec() != QDialog::Accepted) {
         return;
     }
-    mediaTool_->setItems(projectItems(), dialog.display());
+    mediaTool_->setItems(projectItems(), dialog.display(), mediaDb_.files());
     showTool(QStringLiteral("MediaTool"));
 }
 
@@ -484,7 +535,10 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
             list->deleteSelection();
         } else if (binsActive()) {
             bins->deleteSelection();
-        } else if (const Panel* p = panels_->activePanel(); p && p->id() == QLatin1String("Timeline")) {
+        } else if (const Panel* active = panels_->activePanel(); active && active->id() == QLatin1String("MediaTool")) {
+            // Edit > Delete in the Media Tool: the Delete Media dialog (p.347).
+            mediaTool_->deleteSelected();
+        } else if (active && active->id() == QLatin1String("Timeline")) {
             // Segments or tracks in the Timeline (p.621, p.636).
             timeline_->perform(QStringLiteral("edit.delete"));
         }
@@ -725,7 +779,22 @@ void MainWindow::createTools() {
     });
     audioTool_ = new AudioTool;
     panels_->addPanel(new Panel(QStringLiteral("AudioTool"), tr("Audio Tool"), audioTool_));
+    // Tools > Background Queue Window (p.356-357).
+    backgroundQueue_ = new BackgroundQueue(this);
+    panels_->addPanel(new Panel(QStringLiteral("BackgroundQueue"), tr("Background Queue Window"),
+                                new BackgroundQueueWindow(*backgroundQueue_)));
+    connect(backgroundQueue_, &BackgroundQueue::finished, this,
+            [this](const QString& binId, const media::ConsolidateResult& result) { applyConsolidate(binId, result); });
     mediaTool_ = new MediaTool;
+    // Delete Media (p.347-348): managed media files only; clips that used
+    // them show Media Offline.
+    mediaTool_->deleter = [this](const QStringList& paths) {
+        frames_->clear();
+        const QStringList deleted = media::deleteMediaFiles(paths, &mediaDb_);
+        if (project_) mediaTool_->setItems(projectItems(), mediaTool_->display(), mediaDb_.files());
+        ConsoleLog::instance().append(tr("Delete Media: %n file(s) deleted.", "", static_cast<int>(deleted.size())));
+        return deleted;
+    };
     panels_->addPanel(new Panel(QStringLiteral("MediaTool"), tr("Media Tool"), mediaTool_));
     // File > Input > Source Browser (p.312-318).
     sourceBrowser_ = new SourceBrowser;
@@ -1029,6 +1098,56 @@ void MainWindow::relinkLinkedMedia() {
     }
 }
 
+void MainWindow::relinkManagedMedia() {
+    if (!project_) return;
+    ManagedRelinkDialog dialog(project_->settings.name, this);
+    const bool ok = managedRelinkHook_ ? managedRelinkHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok) return;
+    const media::RelinkOptions options = dialog.options();
+    // The selected items: the active bin's, or every open bin's (p.362).
+    QList<std::pair<BinDocument*, QStringList>> selected;
+    if (dialog.allOpenBins()) {
+        for (BinDocument* doc : binContainer_->openDocuments()) {
+            if (BinView* v = binContainer_->viewFor(doc); v && !v->selectedIds().isEmpty()) {
+                selected.append({doc, v->selectedIds()});
+            }
+        }
+    } else if (BinView* v = binContainer_->activeView(); v && !v->selectedIds().isEmpty()) {
+        selected.append({&v->document(), v->selectedIds()});
+    }
+    if (selected.isEmpty()) return;
+    // The media on the drives as they are now, and the open bins' master
+    // clips, which sequences relink to.
+    loadMediaDatabase();
+    QList<media::BinClip> candidates;
+    for (const BinDocument* doc : binContainer_->openDocuments()) {
+        for (const model::BinItem& item : doc->bin().items) candidates.append({doc->nodeId(), item});
+    }
+    const media::ClipLookup lookup = [this](const QString& binId, const QString& clipId) {
+        return composer_->resolve(binId, clipId);
+    };
+    QStringList notRelinked;
+    for (const auto& [doc, ids] : selected) {
+        QList<model::BinItem> items;
+        QStringList taken;
+        for (const model::BinItem& item : doc->bin().items) {
+            taken << item.name;
+            if (ids.contains(item.id)) items << item;
+        }
+        const media::RelinkResult result = media::relinkManaged(items, mediaDb_, candidates, lookup, options, taken);
+        for (const model::BinItem& item : result.changed) storeClip(doc->nodeId(), item);
+        QStringList added;
+        for (const model::BinItem& item : result.added) {
+            doc->addItem(item);
+            added << item.id;
+        }
+        if (BinView* v = binContainer_->viewFor(doc); v && !added.isEmpty()) v->selectIds(added);
+        notRelinked += result.notRelinked;
+    }
+    frames_->clear();
+    for (const QString& name : notRelinked) ConsoleLog::instance().append(tr("Relink: %1: no matching media.").arg(name));
+}
+
 int MainWindow::unlinkSelection() {
     // Clip > Modify > Unlink Media: the selected master clips (p.368).
     BinView* view = binContainer_->activeView();
@@ -1183,6 +1302,7 @@ void MainWindow::consolidateTranscode() {
     const bool ok = consolidateHook_ ? consolidateHook_(dialog) : dialog.exec() == QDialog::Accepted;
     if (!ok) return;
     media::ConsolidateOptions options = dialog.options();
+    const bool background = dialog.isBackground();
     if (options.mode == media::ConsolidateOptions::Mode::Consolidate && masters) {
         // The Copying Media Files dialog (p.352).
         const std::optional<bool> keep =
@@ -1193,24 +1313,66 @@ void MainWindow::consolidateTranscode() {
     options.creation.raster = transcode.raster;
     options.creation.project = transcode.project;
     options.creation.when = QDateTime::currentDateTimeUtc();
+    QStringList taken;
+    for (const model::BinItem& item : doc.bin().items) taken << item.name;
+    if (background) {
+        // A job for each item, run while editing goes on (p.356). The jobs
+        // read the project's clips as they are now.
+        auto clips = std::make_shared<QHash<QString, model::BinItem>>();
+        for (const model::BinItem& item : projectItems()) clips->insert(item.id, item);
+        for (const BinDocument* open : binContainer_->openDocuments()) {
+            for (const model::BinItem& item : open->bin().items) clips->insert(item.id, item);
+        }
+        const QString binId = doc.nodeId();
+        for (const model::BinItem& item : selection) {
+            backgroundQueue_->add(item.name, binId, [item, binId, clips, taken, options](
+                                                       const std::function<bool(double)>& progress) {
+                media::ConsolidateOptions o = options;
+                o.creation.progress = progress;
+                const media::ClipLookup lookup = [clips](const QString&, const QString& id) -> std::optional<model::BinItem> {
+                    const auto it = clips->constFind(id);
+                    if (it == clips->constEnd()) return std::nullopt;
+                    return *it;
+                };
+                return media::consolidate({item}, binId, lookup, taken, o);
+            });
+        }
+        showTool(QStringLiteral("BackgroundQueue"));
+        return;
+    }
     QProgressDialog progress(dialog.isTranscode() ? tr("Transcoding...") : tr("Consolidating..."), tr("Cancel"), 0, 1000,
                              this);
     progress.setObjectName(QStringLiteral("consolidateProgress"));
     options.creation.progress = progressOn(progress);
-    QStringList taken;
-    for (const model::BinItem& item : doc.bin().items) taken << item.name;
     const media::ConsolidateResult result =
         media::consolidate(selection, doc.nodeId(), [this](const QString& binId, const QString& clipId) {
             return composer_->resolve(binId, clipId);
         }, taken, options);
     progress.reset();
+    applyConsolidate(doc.nodeId(), result);
+}
+
+void MainWindow::applyConsolidate(const QString& binId, const media::ConsolidateResult& result) {
+    BinDocument* doc = binContainer_->document(binId);
+    if (!doc) doc = binContainer_->openBin(binId);
+    if (!doc) return;
+    QStringList taken;
+    for (const model::BinItem& item : doc->bin().items) taken << item.name;
     QStringList ids;
-    for (const model::BinItem& item : result.added) {
-        doc.addItem(item);
+    for (model::BinItem item : result.added) {
+        // Jobs that ran apart may have chosen the same ".new.01".
+        static const QRegularExpression numbered(QStringLiteral("^(.*)\\.(new|old)\\.(\\d+)$"));
+        if (taken.contains(item.name)) {
+            if (const auto m = numbered.match(item.name); m.hasMatch()) {
+                item.name = media::numberedName(m.captured(1), QLatin1Char('.') + m.captured(2), taken);
+            }
+        }
+        taken << item.name;
+        doc->addItem(item);
         ids << item.id;
     }
-    for (const model::BinItem& item : result.changed) storeClip(doc.nodeId(), item);
-    if (!ids.isEmpty()) view->selectIds(ids);
+    for (const model::BinItem& item : result.changed) storeClip(binId, item);
+    if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
     for (const QString& why : result.skipped) ConsoleLog::instance().append(tr("Consolidate/Transcode: %1").arg(why));
     if (!result.error.isEmpty()) ConsoleLog::instance().append(tr("Consolidate/Transcode: %1").arg(result.error));
     frames_->clear();
@@ -1427,12 +1589,14 @@ void MainWindow::installPanelHandlers() {
     // File > Input > Source Browser, Tools > Source Browser (p.315, p.327).
     handle("file.input.source_browser", [this] { showSourceBrowser(); });
     handle("clip.relink.linked_media", [this] { relinkLinkedMedia(); });
+    handle("clip.relink.managed_media", [this] { relinkManagedMedia(); });
     // Managed media (p.213, p.134, p.348-359).
     handle("file.input.import_media", [this] {
         showSourceBrowser();
         if (SourceBrowser* browser = sourceBrowser_.data()) browser->setImportMode(true);
     });
     handle("clip.consolidate_transcode", [this] { consolidateTranscode(); });
+    handle("tools.background_queue_window", [this] { showTool(QStringLiteral("BackgroundQueue")); });
     handle("file.media.load_media_database", [this] { loadMediaDatabase(); });
     handle("file.media.refresh_media_directories", [this] { loadMediaDatabase(); });
     handle("file.media.media_creation_settings", [this] {

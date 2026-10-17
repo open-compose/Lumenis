@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lumenis/media/relink.h"
 #include "lumenis/model/bin.h"
 
 #include <QDialog>
@@ -8,7 +9,9 @@
 
 #include <functional>
 
+class QCheckBox;
 class QComboBox;
+class QRadioButton;
 class QLabel;
 class QLineEdit;
 class QPushButton;
@@ -62,6 +65,33 @@ private:
     QLabel* viewing_ = nullptr;
     QLabel* result_ = nullptr;
     QPushButton* locate_ = nullptr;
+};
+
+// Clip > Relink > Managed Media: the Relink dialog (p.361-364).
+class ManagedRelinkDialog : public QDialog {
+    Q_OBJECT
+
+public:
+    explicit ManagedRelinkDialog(const QString& project, QWidget* parent = nullptr);
+
+    media::RelinkOptions options() const;
+    // "Selected items in ALL open bins".
+    bool allOpenBins() const;
+    QCheckBox* check(const QString& objectName) const;
+    QComboBox* menu(const QString& objectName) const;
+    QRadioButton* allDrives() const { return allDrives_; }
+
+private:
+    void update();
+
+    QString project_;
+    QRadioButton* allDrives_ = nullptr;
+    QRadioButton* oneDrive_ = nullptr;
+    QComboBox* drive_ = nullptr;
+    QComboBox* method_ = nullptr;
+    QComboBox* quality_ = nullptr;
+    QComboBox* resolution_ = nullptr;
+    QLineEdit* ignoreAfter_ = nullptr;
 };
 
 } // namespace lumenis::ui

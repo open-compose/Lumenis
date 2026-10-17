@@ -1,10 +1,12 @@
 #pragma once
 
 #include "lumenis/core/rational.h"
+#include "lumenis/media/link.h"
 #include "lumenis/model/bin.h"
 
 #include <QDateTime>
 #include <QHash>
+#include <QJsonObject>
 #include <QList>
 #include <QSize>
 #include <QString>
@@ -12,6 +14,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <optional>
 
 // Managed media (Editing Guide ch.12, p.348-359; ROADMAP Phase 2.4): media
@@ -99,15 +102,40 @@ bool canConsolidate(const model::BinItem& clip);
 std::optional<model::BinItem> consolidateClip(const model::BinItem& clip, std::int64_t in, std::int64_t out,
                                               const MediaCreation& creation, QString* error = nullptr);
 
-// Which clip and track a managed media file holds, from its metadata.
+// Which clip and track a managed media file holds, from its metadata, and
+// what it holds: for relinking by source name and timecode (p.362-363).
 struct MediaFileInfo {
     QString path;
     QString mediaId;
     QString track; // "V1", "A1", ...
     QString clipName;
     QString project;
+    QString source;     // the source file it was made from, or the clip
+    QString tape;
+    QString start;      // starting timecode
+    std::int64_t frames = 0;
+    Rational rate{25, 1};
+    QString resolution; // "Avid DNx HQ", or the copied picture's codec
+    std::int64_t bytes = 0;
+    QDateTime created;
+
+    QJsonObject toJson() const;
+    static MediaFileInfo fromJson(const QJsonObject& o);
 };
 std::optional<MediaFileInfo> readMediaFile(const QString& path);
+
+// The files that make one clip's media, by track.
+struct MediaSet {
+    QString mediaId;
+    std::map<QString, MediaFileInfo> tracks; // "A1", "A2", ..., "V1"; never empty
+    const MediaFileInfo& any() const { return tracks.begin()->second; }
+    // The track's file; empty if there is none.
+    MediaFileInfo track(const QString& name) const;
+    bool hasVideo() const { return tracks.contains(QStringLiteral("V1")); }
+    int audioTracks() const;
+    // A link to it, starting at file frame `first`.
+    Link link(std::int64_t first = 0) const;
+};
 
 // The media database (p.358-359): the managed media files on the drives,
 // by clip. Each MXF folder keeps an index of its files, rebuilt for the
@@ -122,12 +150,24 @@ public:
     // Track ("V1", "A1") to file, for a clip's id.
     QHash<QString, QString> filesOf(const QString& mediaId) const;
     int fileCount() const;
+    QList<MediaFileInfo> files() const;
+    QList<MediaSet> sets() const;
+    std::optional<MediaSet> set(const QString& mediaId) const;
+    // The projects with media on the drives.
+    QStringList projects() const;
     // Points a managed clip at where its files are now. False if it is not
     // a managed clip or a track's file is not found.
     bool resolve(model::BinItem& item) const;
+    // Forgets a file (deleted).
+    void remove(const QString& path);
 
 private:
-    QHash<QString, QHash<QString, QString>> files_;
+    QHash<QString, MediaFileInfo> files_; // by path
 };
+
+// Deletes media files and forgets them (Delete Media, p.347-348). Only
+// managed media: linked media's files are not ours to delete. Returns the
+// files deleted.
+QStringList deleteMediaFiles(const QStringList& paths, MediaDatabase* db = nullptr);
 
 } // namespace lumenis::media

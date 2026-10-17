@@ -206,8 +206,9 @@ ConsolidateDialog::ConsolidateDialog(const Rational& editRate, bool hasSequences
     auto* pv = new QHBoxLayout(processing);
     auto* application = new QRadioButton(tr("Application"), processing);
     application->setChecked(true);
-    auto* background = new QRadioButton(tr("Background Process"), processing);
-    later(background);
+    background_ = new QRadioButton(tr("Background Process"), processing);
+    background_->setObjectName(QStringLiteral("backgroundProcess"));
+    auto* background = background_;
     auto* distributed = new QRadioButton(tr("Distributed Processing"), processing);
     later(distributed);
     pv->addWidget(application);
@@ -248,6 +249,14 @@ void ConsolidateDialog::update() {
 void ConsolidateDialog::setTranscode(bool transcode) {
     (transcode ? transcode_ : consolidate_)->setChecked(true);
     update();
+}
+
+void ConsolidateDialog::setBackground(bool background) {
+    background_->setChecked(background);
+}
+
+bool ConsolidateDialog::isBackground() const {
+    return background_->isChecked();
 }
 
 bool ConsolidateDialog::isTranscode() const {
