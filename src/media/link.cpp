@@ -35,11 +35,20 @@ QString fpsText(double fps) {
     return s;
 }
 
-// a * b / c, rounded to the nearest, for frame counts.
+// a * b / c for frame and sample counts, in integers so it is exact on
+// every platform (long double is a plain double on Apple arm64). The
+// products stay far below 2^63: hours of frames times rate numerators.
 std::int64_t rescale(std::int64_t a, std::int64_t b, std::int64_t c) {
-    if (c == 0) return 0;
-    const long double v = static_cast<long double>(a) * static_cast<long double>(b) / static_cast<long double>(c);
-    return static_cast<std::int64_t>(std::llround(v));
+    if (c <= 0) return 0;
+    return (a * b + c / 2) / c; // rounded to the nearest
+}
+
+std::int64_t rescaleDown(std::int64_t a, std::int64_t b, std::int64_t c) {
+    return c <= 0 ? 0 : a * b / c;
+}
+
+std::int64_t rescaleUp(std::int64_t a, std::int64_t b, std::int64_t c) {
+    return c <= 0 ? 0 : (a * b + c - 1) / c;
 }
 
 // The codec as editors know it.
@@ -124,8 +133,7 @@ std::int64_t Link::fileFrame(std::int64_t clipFrame, const Rational& clipRate) c
     std::int64_t f = clipFrame;
     if (clipRate.num() > 0 && !(rate == clipRate)) {
         // The file frame showing at the clip frame's time.
-        const long double t = static_cast<long double>(clipFrame) * clipRate.den() / clipRate.num();
-        f = static_cast<std::int64_t>(std::floor(t * rate.num() / rate.den() + 1e-6L));
+        f = rescaleDown(clipFrame, clipRate.den() * rate.num(), clipRate.num() * rate.den());
     }
     if (frames > 0) f = std::min(f, frames - 1);
     return std::max<std::int64_t>(f, 0);
@@ -216,9 +224,8 @@ std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions&
         if (samples <= 0) samples = static_cast<std::int64_t>(std::llround(info.durationSeconds * firstAudio->sampleRate));
         // From the frame with the first sample to the frame with the last
         // (p.329).
-        const long double frames = static_cast<long double>(samples) * editRate.num() /
-                                   (static_cast<long double>(firstAudio->sampleRate) * editRate.den());
-        item.durationFrames = std::max<std::int64_t>(static_cast<std::int64_t>(std::ceil(frames - 1e-9L)), 1);
+        item.durationFrames =
+            std::max<std::int64_t>(rescaleUp(samples, editRate.num(), firstAudio->sampleRate * editRate.den()), 1);
     }
     item.link = link.toJson();
 

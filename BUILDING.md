@@ -397,6 +397,16 @@ stop with this command in their error:
 * **Windows PC:** nothing is needed. The job downloads the build itself
   into the runner's profile.
 
+### macOS: "implicit conversion from 'std::int64_t' to 'long double' may lose precision"
+
+On Apple arm64 `long double` is a plain 64-bit `double`, so Apple Clang's
+`-Wimplicit-int-float-conversion` (part of `-Wconversion`, an error in the
+`ci` preset) flags 64-bit integers turned into `long double`. Clang on x86
+Linux has an 80-bit `long double` and says nothing. Use integer arithmetic
+for frame and sample counts, or explicit casts. Before pushing, run
+`scripts/check-apple-conversions.py build/clang`: it compiles every file of
+the Clang build as the Mac would see `long double`.
+
 ### Packaging on Windows: "Invalid character escape '\U'"
 
 CPack stops in `app/cmake_install.cmake` with this error, naming an FFmpeg
