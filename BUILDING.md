@@ -397,6 +397,15 @@ stop with this command in their error:
 * **Windows PC:** nothing is needed. The job downloads the build itself
   into the runner's profile.
 
+### Packaging on Windows: "Invalid character escape '\U'"
+
+CPack stops in `app/cmake_install.cmake` with this error, naming an FFmpeg
+DLL under `C:\Users\...`. CMake took `FFMPEG_ROOT` with backslashes and
+wrote it into the install script. `cmake/FindFFmpeg.cmake` converts the
+path to forward slashes; configure again from a fresh build folder if an
+old cache still holds the backslash path. The CI packaging step runs on
+every Windows build, so the error can't come back silently.
+
 ### `checklist_current` fails
 
 The menus or commands changed, but the gate 5 checklist was not remade.
