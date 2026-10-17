@@ -53,6 +53,12 @@ jobs:
       - name: Test
         run: ctest --preset ci
 
+      - name: Logs of failed tests
+        # QTest's own report, written to a file as well: ctest's capture can
+        # lose it (BUILDING.md).
+        if: failure()
+        run: grep -l -E "^(FAIL!|QFATAL)" build/ci/test-logs/*.txt 2>/dev/null | xargs -r cat
+
       - name: Screenshots
         env:
           QT_QPA_PLATFORM: offscreen
@@ -145,6 +151,12 @@ jobs:
       - name: Test
         run: ctest --preset ci
 
+      - name: Logs of failed tests
+        # QTest's own report, written to a file as well: ctest's capture can
+        # lose it (BUILDING.md).
+        if: failure()
+        run: grep -l -E "^(FAIL!|QFATAL)" build/ci/test-logs/*.txt 2>/dev/null | xargs -r cat
+
       - name: AppImage on Wayland
         # Qt 6.10 renamed the Wayland plugin; the AppImage must still carry
         # everything Wayland needs.
@@ -190,6 +202,12 @@ jobs:
 
       - name: Test
         run: ctest --preset ci-macos
+
+      - name: Logs of failed tests
+        # QTest's own report, written to a file as well: ctest's capture can
+        # lose it (BUILDING.md).
+        if: failure()
+        run: grep -l -E "^(FAIL!|QFATAL)" build/ci-macos/test-logs/*.txt 2>/dev/null | xargs -r cat
 
       - name: Screenshots
         env:
@@ -273,6 +291,12 @@ jobs:
 
       - name: Test
         run: ctest --preset ci-macos
+
+      - name: Logs of failed tests
+        # QTest's own report, written to a file as well: ctest's capture can
+        # lose it (BUILDING.md).
+        if: failure()
+        run: grep -l -E "^(FAIL!|QFATAL)" build/ci-macos/test-logs/*.txt 2>/dev/null | xargs -r cat
 
       - name: Screenshots
         env:
@@ -377,6 +401,16 @@ jobs:
           $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
           ctest --preset ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Logs of failed tests
+        # QTest's own report, written to a file as well: ctest's capture can
+        # lose it (BUILDING.md).
+        if: failure()
+        shell: powershell
+        run: |
+          Get-ChildItem build\ci\test-logs\*.txt -ErrorAction SilentlyContinue |
+            Where-Object { Select-String -Path $_.FullName -Pattern '^(FAIL!|QFATAL)' -Quiet } |
+            ForEach-Object { Write-Host "==== $($_.Name)"; Get-Content $_.FullName }
 
       - name: Screenshots
         shell: powershell
@@ -486,6 +520,12 @@ jobs:
       - name: Test
         run: ctest --preset ci
 
+      - name: Logs of failed tests
+        # QTest's own report, written to a file as well: ctest's capture can
+        # lose it (BUILDING.md).
+        if: failure()
+        run: grep -l -E "^(FAIL!|QFATAL)" build/ci/test-logs/*.txt 2>/dev/null | xargs -r cat
+
       - name: Screenshots
         env:
           QT_QPA_PLATFORM: offscreen
@@ -575,6 +615,16 @@ jobs:
           $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
           ctest --preset ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Logs of failed tests
+        # QTest's own report, written to a file as well: ctest's capture can
+        # lose it (BUILDING.md).
+        if: failure()
+        shell: pwsh
+        run: |
+          Get-ChildItem build\ci\test-logs\*.txt -ErrorAction SilentlyContinue |
+            Where-Object { Select-String -Path $_.FullName -Pattern '^(FAIL!|QFATAL)' -Quiet } |
+            ForEach-Object { Write-Host "==== $($_.Name)"; Get-Content $_.FullName }
 
       - name: Screenshots
         shell: pwsh

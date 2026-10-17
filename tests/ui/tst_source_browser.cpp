@@ -386,7 +386,9 @@ private slots:
         QVERIFY(composer.picture(MonitorId::Source, QSize(64, 36), &offline).isNull());
         QVERIFY(offline);
 
-        // The files move; A002 is offline too now.
+        // The files move; A002 is offline too now. The decoders let go of
+        // them first: Windows does not move open files.
+        MediaFrames::instance()->clear();
         QTemporaryDir moved;
         QDir().mkpath(moved.filePath(QStringLiteral("Card A copy")));
         for (const char* name : {"A001.mov", "A002.mov"}) {

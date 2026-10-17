@@ -397,6 +397,17 @@ stop with this command in their error:
 * **Windows PC:** nothing is needed. The job downloads the build itself
   into the runner's profile.
 
+### A test fails in CI but its report is missing
+
+ctest's capture of a test's output can come back without QTest's FAIL
+lines (seen on Windows). Every QTest test also writes its report to
+`<build>/test-logs/<name>.txt`, and the CI step "Logs of failed tests"
+prints the reports that contain a failure. Locally, look in
+`build/ci/test-logs/`.
+
+Tests that move or delete media files must let go of them first
+(`MediaFrames::clear()`): Windows does not move or delete open files.
+
 ### macOS: "implicit conversion from 'std::int64_t' to 'long double' may lose precision"
 
 On Apple arm64 `long double` is a plain 64-bit `double`, so Apple Clang's
