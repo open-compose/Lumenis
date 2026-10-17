@@ -204,6 +204,25 @@ std::int64_t MonitorState::inOutDuration() const {
     return std::max<std::int64_t>(markedEnd() - markedStart() + 1, 0);
 }
 
+void MonitorState::setCurrentBin(const QString& binId) {
+    if (LoadedClip* c = currentMutable()) c->binId = binId;
+}
+
+int MonitorState::removeUncommitted() {
+    const QString shown = current() ? current()->item.id : QString();
+    int removed = 0;
+    for (int i = static_cast<int>(loaded_.size()) - 1; i >= 0; --i) {
+        if (!loaded_.at(i).binId.isEmpty() || loaded_.at(i).item.link.isEmpty()) continue;
+        loaded_.removeAt(i);
+        ++removed;
+    }
+    current_ = -1;
+    for (int i = 0; i < loaded_.size(); ++i) {
+        if (loaded_.at(i).item.id == shown) current_ = i;
+    }
+    return removed;
+}
+
 std::int64_t MonitorState::startFrame() const {
     const LoadedClip* c = current();
     if (!c) return 0;

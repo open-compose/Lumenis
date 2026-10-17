@@ -6,6 +6,7 @@
 #include "lumenis/model/sequence.h"
 
 #include <QElapsedTimer>
+#include <QImage>
 #include <QKeySequence>
 #include <QWidget>
 
@@ -93,6 +94,21 @@ public:
         return resolver_ ? resolver_(binId, itemId) : std::nullopt;
     }
     void setKeyResolver(KeyResolver resolver) { keys_ = std::move(resolver); }
+    // The picture a monitor shows at its position, scaled to fit `size`:
+    // the clip's frame, or for a sequence the frame of its top video track
+    // there. `offline` is set when the media cannot be read (p.347).
+    using PictureResolver = std::function<QImage(MonitorId, QSize size, bool* offline)>;
+    void setPictureResolver(PictureResolver resolver) { pictures_ = std::move(resolver); }
+    // Puts a clip that is in no bin (loaded from the Source Browser) into
+    // one, returning the bin's id; empty if it cannot.
+    using Committer = std::function<QString(const model::BinItem&)>;
+    void setCommitter(Committer committer) { committer_ = std::move(committer); }
+    // Commits the Source monitor's clip if it is in no bin (p.316). False if
+    // it could not be.
+    bool commitSource();
+    // Removes the clips that are in no bin from both monitors (p.315).
+    void clearUncommitted();
+    QImage picture(MonitorId monitor, QSize size, bool* offline = nullptr) const;
     // Edit points of what a monitor shows (the Timeline knows a sequence's;
     // a clip has its start and end), for Go to Previous/Next Event and
     // Mark Clip.
@@ -218,6 +234,8 @@ signals:
     void performed(const QString& commandId);
     // A trim counter was clicked: that side, or both with Shift (p.651).
     void trimSideRequested(model::TrimSide side);
+    // Media files dropped on a monitor from the Source Browser (p.316).
+    void filesDropped(MonitorId monitor, const QStringList& paths);
     // A marker was double-clicked (p.416).
     void markerEditRequested(MonitorId monitor, const QString& markerId);
     void singleMonitorChanged(bool single);
@@ -258,6 +276,8 @@ private:
     QList<QStringList> layout_[2]; // Source, Record
     Column* columns_[2] = {nullptr, nullptr};
     ItemResolver resolver_;
+    PictureResolver pictures_;
+    Committer committer_;
     KeyResolver keys_;
     EventResolver events_;
     EventResolver stops_;

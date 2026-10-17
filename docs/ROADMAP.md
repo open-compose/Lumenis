@@ -407,11 +407,21 @@ Sub-steps:
     counsel; official releases leave them out (EXTENSIONS.md).
   * `tst_media` writes its own media and reads it back, with lossless,
     Long GOP, 24-bit audio and DNxHR in MXF OP-Atom.
-* **2.2 Linking:** File > Input > Source Browser and Link, per Editing Guide
-  ch. 11.
-  * Master clips made from files, with their real metadata in the bin
-    columns.
-  * Frames in Frame view, the Composer and the Timeline.
+* **2.2a Linking — done.** File > Input > Source Browser and Link, per
+  Editing Guide ch. 11 (spec §15).
+  * The Source Browser panel: navigation, Explore, Favorites and Recent,
+    Text and Frame views with hover preview, Media Folder View, Target Bin,
+    Link, Add Volume Bin, and its settings.
+  * Linked master clips and audio clips (`media/link.h`) with their real
+    metadata in the bin columns; the link is kept in the bin file.
+  * Frames in the monitors (sequences too), Frame view and Script view;
+    "Media Offline" when a file is gone. A frame cache shared between
+    threads; thumbnails decode off the UI thread.
+  * Files dragged to a bin link; dragged to the Source monitor they load
+    without a bin and are committed when cut in.
+  * The Link setting; `tst_source_browser`.
+* **2.2b:** clip frames in the Timeline; Relink and Unlink (p.360–368);
+  image sequences as one clip (p.325–328).
 * **2.3 Playback:**
   * A decode thread and frame cache, and an audio clock with audio output.
   * J-K-L at real speeds.

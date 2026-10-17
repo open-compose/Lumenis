@@ -21,6 +21,7 @@
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/settings_window.h"
 #include "lumenis/ui/main_window.h"
+#include "lumenis/ui/source_browser.h"
 #include "lumenis/ui/menu_builder.h"
 #include "lumenis/ui/panels.h"
 #include "lumenis/ui/platform_check.h"
@@ -232,7 +233,9 @@ int main(int argc, char** argv) {
         // Workspaces are User settings now (p.86), loaded with the user.
         lumenis::ui::BinViewLibrary::load(settings);
         lumenis::ui::FavoriteBins::load(settings);
+        window.sourceBrowser().restore(settings);
         QObject::connect(&guiApp, &QApplication::aboutToQuit, [&] {
+            window.sourceBrowser().save(settings);
             settings.setValue(QStringLiteral("mainWindow/geometry"), window.saveGeometry());
             lumenis::ui::BinViewLibrary::save(settings);
             lumenis::ui::FavoriteBins::save(settings);

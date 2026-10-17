@@ -118,6 +118,8 @@ public:
 
 signals:
     void itemsDropped(const QString& fromBin, const QStringList& ids, bool copy);
+    // Media files dropped from the Source Browser, to link (p.317).
+    void filesDropped(const QStringList& paths);
 
 private:
     BinDocument& document_;
@@ -165,6 +167,8 @@ public:
     void fillWindow();
     void fillSorted();
     QPoint framePosition(const QString& id) const;
+    // A linked clip's head frame at `size` once decoded (p.250).
+    QImage picture(const QString& id, QSize size) const;
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -204,6 +208,8 @@ protected:
 
 private:
     void updateSelection();
+    void updatePictures();
+    QPixmap scriptPicture(const model::BinItem& item, QSize size) const;
     QString idAt(QObject* rowWidget) const;
 
     BinDocument& document_;
@@ -221,6 +227,8 @@ class BinView : public QWidget {
     Q_OBJECT
 
 public:
+    // File > Input, offered in the fast menu and on right-click (p.315).
+    void setInputMenu(QMenu* menu) { inputMenu_ = menu; }
     // `fastMenu` is the Bin menu, also offered from the bin (p.259).
     BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent = nullptr);
 
@@ -300,6 +308,8 @@ signals:
     // Items dropped here from another bin (p.260): moved, or with the copy
     // modifier copied.
     void itemsDropped(const QString& fromBin, const QStringList& ids, bool copy);
+    // Media files dropped from the Source Browser, to link (p.317).
+    void filesDropped(const QStringList& paths);
     // Double-click on an item: it loads into a monitor (p.394).
     void itemActivated(const QString& itemId);
 
@@ -317,6 +327,7 @@ private:
     QMenu* colorMenu(QMenu* parent, const QString& title, bool background);
 
     BinDocument& document_;
+    QMenu* inputMenu_ = nullptr;
     QMenu* fastMenu_ = nullptr;
     BinItemModel* model_ = nullptr;
     BinFilterModel* proxy_ = nullptr;

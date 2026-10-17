@@ -1943,6 +1943,11 @@ void Timeline::edit(model::EditKind kind) {
         fail(tr("Load a clip into the Source monitor first."));
         return;
     }
+    // A clip from the Source Browser goes into a bin as it is cut in (p.316).
+    if (!composer_.commitSource()) {
+        fail(tr("Open a bin for the clip first."));
+        return;
+    }
     model::MonitorState& record = composer_.state(MonitorId::Record);
     if (record.isEmpty()) {
         // The first edit makes the sequence (p.463).
@@ -2301,6 +2306,11 @@ void Timeline::replaceEdit() {
     const model::MonitorState& source = composer_.state(MonitorId::Source);
     if (source.isEmpty()) {
         fail(tr("Load a clip into the Source monitor first."));
+        return;
+    }
+    // A clip from the Source Browser goes into a bin as it is cut in (p.316).
+    if (!composer_.commitSource()) {
+        fail(tr("Open a bin for the clip first."));
         return;
     }
     const model::LoadedClip* rec = recordSequence();

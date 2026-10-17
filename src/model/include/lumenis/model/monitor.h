@@ -44,6 +44,13 @@ public:
     // menu, keeping its marks. Returns false if it is not loaded.
     bool replaceItem(const BinItem& item);
     bool isEmpty() const { return current() == nullptr; }
+    // The shown clip was put into a bin (a clip from the Source Browser,
+    // committed when it is edited into a sequence, p.316).
+    void setCurrentBin(const QString& binId);
+    // Removes linked clips that are in no bin (loaded from the Source
+    // Browser); returns how many (p.315, "Clear Source Monitor Upon
+    // Closing Source Browser").
+    int removeUncommitted();
     const LoadedClip* current() const;
 
     // The Clip Name menu (p.394): every loaded clip, alphabetically, or in

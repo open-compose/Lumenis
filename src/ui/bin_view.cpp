@@ -2,6 +2,7 @@
 
 #include "lumenis/ui/bin_dialogs.h"
 #include "lumenis/ui/bin_dock.h"
+#include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/theme.h"
 
 #include <QAction>
@@ -78,10 +79,17 @@ QToolButton* toolButton(QWidget* parent, const QString& name, const QIcon& icon,
     return b;
 }
 
-// A clip's frame. There is no media yet, so it is black with the object's
-// icon; the head frame takes its place once clips have pictures.
-void paintFrame(QPainter& p, const QRect& frame, model::BinItemKind kind) {
+// A clip's frame: the head frame of a linked clip (p.250), once decoded;
+// otherwise black with the object's icon.
+void paintFrame(QPainter& p, const QRect& frame, model::BinItemKind kind, const QImage& picture = {}) {
     p.fillRect(frame, QColor(12, 12, 12));
+    if (!picture.isNull()) {
+        const QSize fit = picture.size().scaled(frame.size(), Qt::KeepAspectRatio);
+        p.drawImage(QRect(frame.left() + (frame.width() - fit.width()) / 2,
+                          frame.top() + (frame.height() - fit.height()) / 2, fit.width(), fit.height()),
+                    picture);
+        return;
+    }
     p.setPen(QColor(70, 70, 70));
     p.drawRect(frame.adjusted(0, 0, -1, -1));
     const int s = std::max(12, std::min(frame.width(), frame.height()) / 3);
@@ -114,7 +122,8 @@ public:
                           f.height());
         const bool selected = option.state & QStyle::State_Selected;
         if (selected) p->fillRect(frame.adjusted(-3, -3, 3, 3), option.palette.color(QPalette::Highlight));
-        paintFrame(*p, frame, static_cast<model::BinItemKind>(index.data(BinItemModel::kKindRole).toInt()));
+        paintFrame(*p, frame, static_cast<model::BinItemKind>(index.data(BinItemModel::kKindRole).toInt()),
+                   view_->picture(index.data(BinItemModel::kIdRole).toString(), f));
         const QRect text(cell.left() + 2, frame.bottom() + 3, cell.width() - 4, kRowHeight);
         p->setPen(option.palette.color(selected ? QPalette::BrightText : QPalette::WindowText));
         p->drawText(text, Qt::AlignHCenter | Qt::AlignTop,
@@ -458,7 +467,7 @@ Qt::DropActions BinItemModel::supportedDropActions() const {
 }
 
 QStringList BinItemModel::mimeTypes() const {
-    return {binItemsMime()};
+    return {binItemsMime(), mediaFilesMime()};
 }
 
 QMimeData* BinItemModel::mimeData(const QModelIndexList& indexes) const {
@@ -474,6 +483,8 @@ QMimeData* BinItemModel::mimeData(const QModelIndexList& indexes) const {
 }
 
 bool BinItemModel::canDropMimeData(const QMimeData* data, Qt::DropAction, int, int, const QModelIndex&) const {
+    // Files from the Source Browser are linked into the bin (p.317).
+    if (data->hasFormat(mediaFilesMime())) return true;
     if (!data->hasFormat(binItemsMime())) return false;
     const QString from = QString::fromUtf8(data->data(binItemsMime())).section(QLatin1Char('\n'), 0, 0);
     return from != document_.nodeId();
@@ -482,6 +493,10 @@ bool BinItemModel::canDropMimeData(const QMimeData* data, Qt::DropAction, int, i
 bool BinItemModel::dropMimeData(const QMimeData* data, Qt::DropAction action, int row, int column,
                                 const QModelIndex& parent) {
     if (!canDropMimeData(data, action, row, column, parent)) return false;
+    if (data->hasFormat(mediaFilesMime())) {
+        emit filesDropped(QString::fromUtf8(data->data(mediaFilesMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts));
+        return true;
+    }
     QStringList lines = QString::fromUtf8(data->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
     const QString from = lines.takeFirst();
     // Alt/Option (p.260) or Ctrl (p.261, the platform's copy key) copies.
@@ -552,6 +567,15 @@ BinFrameView::BinFrameView(BinDocument& document, QWidget* parent) : QListView(p
     setEditTriggers(QAbstractItemView::NoEditTriggers);
     setItemDelegate(new FrameDelegate(this));
     connect(this, &QListView::indexesMoved, this, &BinFrameView::storePositions);
+    if (MediaFrames* frames = MediaFrames::instance()) {
+        connect(frames, &MediaFrames::thumbnailReady, viewport(), qOverload<>(&QWidget::update));
+    }
+}
+
+QImage BinFrameView::picture(const QString& id, QSize size) const {
+    const model::BinItem* item = document_.bin().item(id);
+    MediaFrames* frames = MediaFrames::instance();
+    return item && frames ? frames->thumbnail(*item, 0, size) : QImage();
 }
 
 QSize BinFrameView::frameSize(int step) {
@@ -729,6 +753,9 @@ BinScriptView::BinScriptView(BinDocument& document, QAbstractItemModel* rows, QI
     connect(rows_, &QAbstractItemModel::rowsInserted, this, &BinScriptView::rebuild);
     connect(rows_, &QAbstractItemModel::rowsRemoved, this, &BinScriptView::rebuild);
     connect(selection_, &QItemSelectionModel::selectionChanged, this, &BinScriptView::updateSelection);
+    if (MediaFrames* frames = MediaFrames::instance()) {
+        connect(frames, &MediaFrames::thumbnailReady, this, &BinScriptView::updatePictures);
+    }
     rebuild();
 }
 
@@ -753,14 +780,10 @@ void BinScriptView::rebuild() {
         row->setAutoFillBackground(true);
         row->installEventFilter(this);
 
-        QPixmap pm(f);
-        pm.fill(Qt::transparent);
-        {
-            QPainter p(&pm);
-            paintFrame(p, QRect(QPoint(0, 0), f), item->kind);
-        }
         auto* frame = new QLabel(row);
-        frame->setPixmap(pm);
+        frame->setObjectName(QStringLiteral("scriptFrame"));
+        frame->setProperty("binItemId", id);
+        frame->setPixmap(scriptPicture(*item, f));
         frame->setFixedSize(f);
         frame->setAttribute(Qt::WA_TransparentForMouseEvents);
 
@@ -790,6 +813,24 @@ void BinScriptView::rebuild() {
     layout->addStretch(1);
     setWidget(content_); // deletes the previous rows
     updateSelection();
+}
+
+QPixmap BinScriptView::scriptPicture(const model::BinItem& item, QSize size) const {
+    QPixmap pm(size);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    MediaFrames* frames = MediaFrames::instance();
+    paintFrame(p, QRect(QPoint(0, 0), size), item.kind, frames ? frames->thumbnail(item, 0, size) : QImage());
+    return pm;
+}
+
+void BinScriptView::updatePictures() {
+    if (!content_) return;
+    for (QLabel* frame : content_->findChildren<QLabel*>(QStringLiteral("scriptFrame"))) {
+        if (const model::BinItem* item = document_.bin().item(frame->property("binItemId").toString())) {
+            frame->setPixmap(scriptPicture(*item, frame->size()));
+        }
+    }
 }
 
 QWidget* BinScriptView::rowFor(const QString& id) const {
@@ -921,7 +962,20 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
     search->setCheckable(true);
     auto* fast = toolButton(this, QStringLiteral("binFastMenu"), glyphIcon(GlyphIcon::FastMenu), tr("Bin Fast Menu"));
     fast->setPopupMode(QToolButton::InstantPopup);
-    if (fastMenu) fast->setMenu(fastMenu);
+    if (fastMenu) {
+        // The Bin menu, and Input > Source Browser (p.315).
+        auto* menu = new QMenu(fast);
+        menu->setObjectName(QStringLiteral("binFastMenuItems"));
+        connect(menu, &QMenu::aboutToShow, this, [this, menu] {
+            menu->clear();
+            for (QAction* a : fastMenu_->actions()) menu->addAction(a);
+            if (inputMenu_) {
+                menu->addSeparator();
+                menu->addMenu(inputMenu_);
+            }
+        });
+        fast->setMenu(menu);
+    }
 
     filter_ = new QLineEdit(this);
     filter_->setObjectName(QStringLiteral("quickFilter"));
@@ -1014,6 +1068,7 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
     script_ = new BinScriptView(document_, proxy_, table_->selectionModel(), this);
     script_->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(model_, &BinItemModel::itemsDropped, this, &BinView::itemsDropped);
+    connect(model_, &BinItemModel::filesDropped, this, &BinView::filesDropped);
     for (QAbstractItemView* v : {static_cast<QAbstractItemView*>(table_), static_cast<QAbstractItemView*>(frames_)}) {
         connect(v, &QAbstractItemView::doubleClicked, this, [this](const QModelIndex& index) {
             emit itemActivated(index.data(BinItemModel::kIdRole).toString());
@@ -1612,6 +1667,11 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
             group->addAction(a);
             connect(a, &QAction::triggered, this, [this, choice = value] { setSnapToGrid(choice); });
         }
+    }
+    // Right-click: Input > Source Browser (p.315).
+    if (inputMenu_) {
+        menu->addSeparator();
+        menu->addMenu(inputMenu_);
     }
     if (fastMenu_) {
         menu->addSeparator();

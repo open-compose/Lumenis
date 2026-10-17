@@ -420,6 +420,25 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
     p.fillRect(pic, Qt::black);
     const model::MonitorState& s = composer_.state(monitor_);
     if (!s.isEmpty()) {
+        bool offline = false;
+        const QImage image = composer_.picture(monitor_, pic.size(), &offline);
+        if (!image.isNull()) {
+            // Scaled to fit, centred: other shapes than the project's are
+            // letterboxed or pillarboxed.
+            const QSize fit = image.size().scaled(pic.size(), Qt::KeepAspectRatio);
+            const QRect at(pic.left() + (pic.width() - fit.width()) / 2, pic.top() + (pic.height() - fit.height()) / 2,
+                           fit.width(), fit.height());
+            p.setRenderHint(QPainter::SmoothPixmapTransform);
+            p.drawImage(at, image);
+        } else if (offline) {
+            // "A black screen appears with the words Media Offline" (p.347).
+            QFont f = font();
+            f.setPointSizeF(std::max(9.0, pic.height() / 14.0));
+            f.setBold(true);
+            p.setFont(f);
+            p.setPen(palette().color(QPalette::BrightText));
+            p.drawText(pic, Qt::AlignCenter, tr("Media Offline"));
+        }
         // The sawtooth marks on the IN and OUT frames (p.405-406).
         p.setPen(QPen(QColor(230, 230, 230), 2));
         auto saw = [&](int x, int dir) {
@@ -469,10 +488,22 @@ void MonitorPicture::contextMenuEvent(QContextMenuEvent* event) {
 }
 
 void MonitorPicture::dragEnterEvent(QDragEnterEvent* event) {
-    if (event->mimeData()->hasFormat(binItemsMime())) event->acceptProposedAction();
+    if (event->mimeData()->hasFormat(binItemsMime()) || event->mimeData()->hasFormat(mediaFilesMime())) {
+        event->acceptProposedAction();
+    }
 }
 
 void MonitorPicture::dropEvent(QDropEvent* event) {
+    if (event->mimeData()->hasFormat(mediaFilesMime())) {
+        // Files from the Source Browser, to review without putting them in
+        // a bin (p.316).
+        const QStringList paths =
+            QString::fromUtf8(event->mimeData()->data(mediaFilesMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        event->setDropAction(Qt::CopyAction);
+        event->accept();
+        emit composer_.filesDropped(monitor_, paths);
+        return;
+    }
     // Clips dragged from a bin (p.394): the bin first, then the items.
     QStringList lines = QString::fromUtf8(event->mimeData()->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
     if (lines.size() < 2) return;
@@ -770,6 +801,29 @@ const model::MonitorState& Composer::state(MonitorId monitor) const {
 void Composer::setAspectRatio(const Rational& aspect) {
     aspect_ = aspect;
     refresh();
+}
+
+bool Composer::commitSource() {
+    const model::LoadedClip* c = source_.current();
+    // Only clips from the Source Browser: they are linked and in no bin
+    // (Clipboard Contents is in no bin either, and stays so, p.480).
+    if (!c || !c->binId.isEmpty() || c->item.link.isEmpty()) return true;
+    const QString bin = committer_ ? committer_(c->item) : QString();
+    if (bin.isEmpty()) return false;
+    source_.setCurrentBin(bin);
+    emit changed();
+    return true;
+}
+
+void Composer::clearUncommitted() {
+    const int removed = source_.removeUncommitted() + record_.removeUncommitted();
+    if (removed > 0) refresh();
+}
+
+QImage Composer::picture(MonitorId monitor, QSize size, bool* offline) const {
+    if (offline) *offline = false;
+    if (!pictures_ || state(monitor).isEmpty()) return {};
+    return pictures_(monitor, size, offline);
 }
 
 void Composer::load(MonitorId monitor, const QString& binId, const model::BinItem& item) {

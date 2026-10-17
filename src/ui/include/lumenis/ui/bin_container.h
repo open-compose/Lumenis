@@ -169,6 +169,8 @@ public:
 
     // The Bin menu, offered as each bin's fast menu (p.259).
     void setBinMenu(QMenu* menu) { binMenu_ = menu; }
+    // File > Input, which bins offer too (p.315).
+    void setInputMenu(QMenu* menu) { inputMenu_ = menu; }
 
     // Open bins.
     QList<BinDocument*> openDocuments() const;
@@ -266,6 +268,8 @@ signals:
     void dirtyChanged();
     // An item double-clicked in a bin, to load into a monitor (p.394).
     void itemActivated(const QString& binId, const QString& itemId);
+    // Media files dropped on a bin from the Source Browser, to link (p.317).
+    void filesDropped(const QString& binId, const QStringList& paths);
     // A bin floated into a new Bin Container window.
     void floatingContainerCreated(QWidget* window);
 
@@ -293,6 +297,7 @@ private:
     QString startTimecode_;
     QList<BinDocument*> documents_;
     QMenu* binMenu_ = nullptr;
+    QMenu* inputMenu_ = nullptr;
     QSplitter* split_ = nullptr;
     BinSidebar* sidebar_ = nullptr;
     QList<BinSidebar*> sidebars_;

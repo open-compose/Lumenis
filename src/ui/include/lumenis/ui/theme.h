@@ -66,6 +66,16 @@ enum class GlyphIcon {
     ItemTitle,
     ItemSource,
     Close, // tab close buttons
+    // Source Browser navigation (guide p.313). Our own drawings.
+    ArrowBack,
+    ArrowForward,
+    ArrowUp,
+    Home,
+    CollapseTree,
+    Star,
+    MediaVolume,
+    ChevronDown,
+    ChevronUp,
 };
 QIcon glyphIcon(GlyphIcon which, QColor color = QColor(0xdc, 0xdc, 0xdc));
 

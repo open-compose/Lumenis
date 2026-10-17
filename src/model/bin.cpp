@@ -70,6 +70,7 @@ QJsonObject itemToJson(const BinItem& item) {
     if (!fields.isEmpty()) o.insert(QStringLiteral("fields"), fields);
     if (!item.composition.isEmpty()) o.insert(QStringLiteral("composition"), item.composition);
     if (!item.markers.isEmpty()) o.insert(QStringLiteral("markers"), item.markers);
+    if (!item.link.isEmpty()) o.insert(QStringLiteral("link"), item.link);
     return o;
 }
 
@@ -91,6 +92,7 @@ std::optional<BinItem> itemFromJson(const QJsonObject& o) {
     for (auto it = fields.begin(); it != fields.end(); ++it) item.fields.insert(it.key(), it.value().toString());
     item.composition = o.value(QStringLiteral("composition")).toObject();
     item.markers = o.value(QStringLiteral("markers")).toArray();
+    item.link = o.value(QStringLiteral("link")).toObject();
     return item;
 }
 

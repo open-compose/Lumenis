@@ -12,6 +12,9 @@
 #include <QStyleOption>
 #include <QStyleFactory>
 
+#include <cmath>
+#include <numbers>
+
 namespace lumenis::ui {
 
 namespace {
@@ -382,6 +385,65 @@ QIcon glyphIcon(GlyphIcon which, QColor color) {
         p.drawLine(QPointF(10, 10), QPointF(22, 22));
         p.drawLine(QPointF(10, 22), QPointF(22, 10));
         break;
+    case GlyphIcon::ArrowBack:
+    case GlyphIcon::ArrowForward:
+    case GlyphIcon::ArrowUp: {
+        // A shaft and a head, pointing left; turned for the others.
+        p.translate(16, 16);
+        p.rotate(which == GlyphIcon::ArrowBack ? 0 : which == GlyphIcon::ArrowForward ? 180 : 90);
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        p.drawLine(QPointF(-9, 0), QPointF(10, 0));
+        p.drawPolyline(QPolygonF({QPointF(-1, -8), QPointF(-9, 0), QPointF(-1, 8)}));
+        break;
+    }
+    case GlyphIcon::Home: {
+        QPainterPath h;
+        h.moveTo(16, 5);
+        h.lineTo(28, 16);
+        h.lineTo(24, 16);
+        h.lineTo(24, 27);
+        h.lineTo(19, 27);
+        h.lineTo(19, 20);
+        h.lineTo(13, 20);
+        h.lineTo(13, 27);
+        h.lineTo(8, 27);
+        h.lineTo(8, 16);
+        h.lineTo(4, 16);
+        h.closeSubpath();
+        p.drawPath(h);
+        break;
+    }
+    case GlyphIcon::CollapseTree: // a parent row and two indented children
+        p.drawRect(QRectF(5, 6, 22, 4));
+        p.drawRect(QRectF(11, 14, 16, 4));
+        p.drawRect(QRectF(11, 22, 16, 4));
+        p.drawRect(QRectF(6, 10, 2, 14));
+        break;
+    case GlyphIcon::Star: {
+        QPolygonF star;
+        for (int i = 0; i < 10; ++i) {
+            const double r = (i % 2) ? 5.0 : 12.0;
+            const double a = -std::numbers::pi / 2 + i * std::numbers::pi / 5;
+            star << QPointF(16 + r * std::cos(a), 17 + r * std::sin(a));
+        }
+        p.drawPolygon(star);
+        break;
+    }
+    case GlyphIcon::MediaVolume: // a drive with a light
+        p.drawRoundedRect(QRectF(4, 10, 24, 12), 3, 3);
+        p.setBrush(QColor(20, 20, 20));
+        p.drawEllipse(QPointF(23, 16), 2, 2);
+        break;
+    case GlyphIcon::ChevronDown:
+    case GlyphIcon::ChevronUp: {
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        const double y0 = which == GlyphIcon::ChevronDown ? 12 : 20;
+        const double y1 = which == GlyphIcon::ChevronDown ? 20 : 12;
+        p.drawPolyline(QPolygonF({QPointF(8, y0), QPointF(16, y1), QPointF(24, y0)}));
+        break;
+    }
     case GlyphIcon::WorkspaceCustom: // four tiles
         for (int r = 0; r < 2; ++r) {
             for (int c = 0; c < 2; ++c) p.drawRoundedRect(QRectF(7 + c * 10, 7 + r * 10, 8, 8), 1.5, 1.5);

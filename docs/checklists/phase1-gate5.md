@@ -65,7 +65,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Save a Script Copy As |  | p.571 | *later* | ☐ | | |
 | Get Position Info |  | p.101 | works | ☐ | | |
 | Reveal File |  | p.360 | *later* | ☐ | | |
-| Input > Source Browser |  | p.132 | *later* | ☐ | | |
+| Input > Source Browser |  | p.132 | works | ☐ | | |
 | Input > Import Media |  | p.969 | *later* | ☐ | | |
 | Input > Link |  | p.328 | *later* | ☐ | | |
 | Input > Tape Capture | Ctrl+7 | p.115 | *later* | ☐ | | |
@@ -250,7 +250,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Project | Ctrl+9 | p.243 | works | ☐ | | |
 | Remote Assets |  | p.292 | *later* | ☐ | | |
 | Restrictions |  | p.292 | *later* | ☐ | | |
-| Source Browser |  | p.522 | *later* | ☐ | | |
+| Source Browser |  | p.522 | works | ☐ | | |
 | Timecode Window |  | p.389 | *later* | ☐ | | |
 | Timeline Clip Notes |  | p.484 | *later* | ☐ | | |
 | Video Input Tool |  | p.161 | *later* | ☐ | | |
@@ -312,6 +312,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 208 menu commands, 79 of them working with a project open; the
+* 208 menu commands, 81 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

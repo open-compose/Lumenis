@@ -30,6 +30,10 @@ QString binItemsMime() {
     return QStringLiteral("application/x-cutthulhu-bin-items");
 }
 
+QString mediaFilesMime() {
+    return QStringLiteral("application/x-cutthulhu-media-files");
+}
+
 namespace {
 
 // Pixels the pointer must leave the tab bar by before a tab is dragged out

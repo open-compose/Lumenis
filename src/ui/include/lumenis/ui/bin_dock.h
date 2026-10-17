@@ -20,6 +20,8 @@ class BinView;
 QString binTabMime();
 QString binNodesMime();
 QString binItemsMime();
+// Media files dragged from the Source Browser (p.316-317), one path a line.
+QString mediaFilesMime();
 
 // Where a dragged bin goes (guide p.241): beside a group of bins, which
 // subdivides the area, or tabbed into it.

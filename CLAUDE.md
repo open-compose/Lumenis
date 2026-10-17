@@ -125,9 +125,11 @@ done:
   - `LUMENIS_PATENT_CODECS` is on for dev and test builds, off for official
     releases (owner's decision).
 
-Next is 2.2, linking (ROADMAP).
+2.2a, linking, is done: the Source Browser (`source_browser.*`), linked
+clips (`src/media/link.*`), frames in the monitors and bins
+(`media_frames.*`), the Link setting. Next is 2.2b (ROADMAP).
 
-Spec sections 3, 4, 7, 11, 12, 13 and 14 list details left for later.
+Spec sections 3, 4, 7, 11, 12, 13, 14 and 15 list details left for later.
 
 Panels are our own framework, not QDockWidget, because Qt cannot draw
 vertical title bars, green drop zones or Alt-drag tabbing. Custom-painted

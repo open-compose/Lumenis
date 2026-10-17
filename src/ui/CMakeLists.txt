@@ -15,12 +15,14 @@ add_library(lumenis_ui STATIC
     keyboard_map.cpp
     keyboard_palette.cpp
     marker_dialogs.cpp
+    media_frames.cpp
     media_tool.cpp
     main_window.cpp
     menu_builder.cpp
     panel_manager.cpp
     panels.cpp
     select_project_dialog.cpp
+    source_browser.cpp
     settings.cpp
     settings_window.cpp
     theme.cpp
@@ -44,11 +46,13 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/keyboard_map.h
     include/lumenis/ui/keyboard_palette.h
     include/lumenis/ui/marker_dialogs.h
+    include/lumenis/ui/media_frames.h
     include/lumenis/ui/media_tool.h
     include/lumenis/ui/main_window.h
     include/lumenis/ui/menu_builder.h
     include/lumenis/ui/panels.h
     include/lumenis/ui/select_project_dialog.h
+    include/lumenis/ui/source_browser.h
     include/lumenis/ui/settings.h
     include/lumenis/ui/settings_window.h
     include/lumenis/ui/theme.h
@@ -78,5 +82,5 @@ qt_add_resources(lumenis_ui lumenis_ui_resources
 )
 
 target_include_directories(lumenis_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(lumenis_ui PUBLIC Qt6::Widgets lumenis::core lumenis::ext lumenis::model)
+target_link_libraries(lumenis_ui PUBLIC Qt6::Widgets lumenis::core lumenis::ext lumenis::model lumenis::media)
 lumenis_set_warnings(lumenis_ui)

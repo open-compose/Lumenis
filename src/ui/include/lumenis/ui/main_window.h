@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lumenis/media/link.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/project_store.h"
 
@@ -7,6 +8,7 @@
 #include <QJsonObject>
 #include <QList>
 #include <QMainWindow>
+#include <QPointer>
 
 #include <functional>
 #include <memory>
@@ -28,6 +30,7 @@ class AboutInfoDialog;
 class AudioMixer;
 class AudioTool;
 class EffectEditor;
+class MediaFrames;
 class MediaTool;
 class MediaToolDisplayDialog;
 class EffectPalette;
@@ -44,6 +47,7 @@ class Settings;
 class SettingsList;
 class SettingsWindow;
 class SiteSettingsWindow;
+class SourceBrowser;
 class ToolTipFilter;
 class Timeline;
 class ToolPalette;
@@ -92,6 +96,20 @@ public:
     AudioMixer& audioMixer() const { return *audioMixer_; }
     AudioTool& audioTool() const { return *audioTool_; }
     MediaTool& mediaTool() const { return *mediaTool_; }
+    // File > Input > Source Browser (p.312-318).
+    SourceBrowser& sourceBrowser() const;
+    void showSourceBrowser();
+    // Links media files into a bin (p.317), returning the new clips' ids.
+    // Files that are not media are left out and named in the Console.
+    QStringList linkFiles(const QString& binId, const QStringList& paths);
+    // Links files without putting them in a bin and loads them into a
+    // monitor, to review (p.315-316).
+    void loadFiles(const QStringList& paths, bool recordMonitor = false);
+    // "Add volume Bin" (p.318): a new bin named after the folder, with every
+    // media file in it and the folders in it. Returns the bin's id.
+    QString linkVolume(const QString& folder);
+    // The project's rate and the Link settings.
+    media::LinkOptions linkOptions() const;
     // Tools > Media Tool: the Media Tool Display dialog, then the tool
     // (p.346). Tests answer the dialog through the hook (true: OK).
     void showMediaTool();
@@ -170,6 +188,11 @@ private:
     AudioMixer* audioMixer_ = nullptr;
     AudioTool* audioTool_ = nullptr;
     MediaTool* mediaTool_ = nullptr;
+    MediaFrames* frames_ = nullptr;
+    // Guarded: bins save (and signal) as the window is taken down.
+    QPointer<SourceBrowser> sourceBrowser_;
+    bool sourceBrowserOpen_ = false;
+    void refreshSourceBins();
     std::function<bool(MediaToolDisplayDialog&)> mediaToolDisplay_;
     QString appliedMixerMode_;
     QDateTime projectOpened_;

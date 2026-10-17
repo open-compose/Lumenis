@@ -48,6 +48,10 @@ struct BinItem {
     QHash<QString, QString> fields;
     QJsonObject composition; // a sequence's tracks (lumenis/model/sequence.h)
     QJsonArray markers;      // lumenis/model/marker.h
+    // A linked clip's media file (Editing Guide ch.11): where it is and how
+    // its frames map onto the clip's (lumenis/media/link.h). Empty for clips
+    // without media.
+    QJsonObject link;
 };
 
 // How a bin is shown (p.245-254). Saved with the bin.

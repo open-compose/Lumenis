@@ -1644,5 +1644,117 @@ p.610–640, ch. 13 p.432–434).**
   * Surround panning, the track sidebar, the groups pane, and display
     options.
 
-## 15. Still to document
+## 15. Linking file-based media (ch. 11, p.310–347)
+
+### Source Browser (p.312–317)
+* **Opening (p.315):**
+  * File > Input > Source Browser.
+  * Right-click in a bin, or the bin's Fast menu: Input > Source Browser.
+  * Tools > Source Browser (p.327).
+  * It is a panel, so it docks, floats and takes part in workspaces. The
+    picture on p.313 shows it with a vertical title bar.
+* **Top: navigation (p.313):** in this order:
+  * Back, Forward and Up.
+  * Home.
+  * Collapse Directories, which collapses the tree to the top levels.
+  * Add or Remove Favorites (the current folder).
+  * Media Folder View.
+  * Breadcrumbs: the path, each folder clickable.
+* **Media Folder View (p.313):** shows a folder as a media volume. Every
+  media file in it, and in the folders below, appears as a clip. "Other
+  structural contents will not be displayed." While files are probed, the
+  display fills in.
+* **Left: places (p.313–314):** tabs Explore, Favorites and Recent. Explore
+  is the tree of drives and folders.
+* **Right: the display (p.314):**
+  * Text view and Frame view buttons.
+  * A search field.
+  * A thumbnail slider (Frame view only).
+  * A scroll bar for more columns.
+* **Text view columns (ours):** Name (the file name), Duration, Start, End,
+  Tracks, Video, FPS, Format, Audio SR, Tape, Plug-In and Source Path. The
+  guide names the Plug-In column (p.322). A file no plug-in reads shows
+  "Not detected" there.
+* **Frame view (p.315–316):**
+  * Thumbnails show the first frame.
+  * Hovering across a thumbnail previews the clip (left edge: first frame;
+    right edge: last). The frame last shown stays.
+  * Ctrl+L (Command+L) enlarges thumbnails. The guide names only Ctrl+L;
+    Ctrl+K reduces them, as it does for bin frames (p.250).
+  * *Not yet:* J-K-L playing in a thumbnail (Phase 2.3).
+* **Source Browser Settings (p.315):**
+  * Double Click to: Link or Import, or Load Clips in Source Monitor.
+  * Close Source Browser after Link or Import.
+  * Clear Source Monitor Upon Closing Source Browser.
+  * A Collapse/Expand button hides this part for more clips (p.316–317).
+    The splitter above it can also be dragged.
+* **Bottom (p.315, p.317):**
+  * Link and Import. Import waits for Avid media files (Phase 2.4).
+  * The Settings button, which opens the Link settings.
+  * The Processing media indicator.
+  * Target Bin, and the Link button.
+  * Linking is allowed while files are still being processed.
+* **Linking (p.317–318):**
+  * Link links the selected files into the Target Bin.
+  * With nothing selected, Link links every media file in the folder. This
+    is "Linking a Volume to a Bin".
+  * Dragging files to a bin also links them.
+  * Right-click > Add to Bin links the selection.
+  * Right-click a folder > Add Volume Bin makes a bin named after the folder
+    with its media (p.318).
+* **Previewing (p.316):**
+  * Dragging a clip to the Source monitor loads it without putting it in a
+    bin.
+  * Cutting it into a sequence commits it to the Target Bin.
+  * "Load in Source Monitor" on right-click is ours; it does the same.
+* **Kept between sessions (ours):** the folder, Favorites, Recent, the view,
+  the thumbnail size and the settings.
+
+### Linked clips (p.310, p.317–330, columns p.274–278)
+* **What a linked clip is:**
+  * A master clip that points at the file where it is.
+  * A file without picture becomes an audio clip.
+  * The clip is named after the file without its extension (p.318).
+* **Columns it fills:**
+  * Start and End.
+  * Tracks: V1, and one mono track per audio channel (A1-2).
+  * Tape (the reel name).
+  * Video: the codec, such as DNxHR LB, ProRes 422 HQ or H.264.
+  * FPS.
+  * Format: lines, p or i, and the rate, for example 1080p/25 or
+    1080i/59.94.
+  * Image and Pixel Aspect Ratio.
+  * Color Space: RGB, or YCbCr 709 or 601.
+  * Audio SR, Audio Bit Depth and Audio Format.
+  * Video File Format (MXF).
+  * Source File, Source Path, Drive.
+  * Plug-In: ours is "FFmpeg".
+* **Rates:**
+  * A clip runs at the project's rate; its frames come from the file at the
+    same time.
+  * The file's start timecode is read as a time in the project's rate, as
+    Sound TC is (p.330).
+  * Audio clips run from the frame with the first sample to the frame with
+    the last (p.329).
+* **Frames:**
+  * The monitors show a linked clip's frames. A sequence shows its top
+    video track's frames, in the order Match Frame uses (p.434). Clips in
+    sequences resolve through open bins.
+  * Bin Frame and Script views show a clip's head frame (p.250).
+* **Offline:** a clip whose file is gone shows "Media Offline" on black
+  (p.347).
+* **Link settings (p.1202–1205):** Quality, Volume Mounting, Link Options
+  and AIS Metadata tabs. Only "Always use 16:9 aspect ratio for SD clips"
+  works now. The rest come with relinking, volumes and multichannel audio.
+* **Not yet:**
+  * File > Input > Link to Volume for Export (AS-02, p.328).
+  * Automatic linking of mounted volumes (p.311).
+  * Relink and Unlink (p.360–368).
+  * Image sequences as one clip (p.325–328).
+  * Multichannel audio mapping (p.330).
+  * Live Link (p.319).
+  * The Media Cache settings (p.1205).
+  * Clip frames in the Timeline (Phase 2.2b).
+
+## 16. Still to document
 * Menu order and separators, confirmed against a licensed seat.

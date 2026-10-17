@@ -806,6 +806,7 @@ BinDocument* BinContainer::openBin(const QString& requested) {
     auto* doc = new BinDocument(id, path, *bin, this);
     documents_ << doc;
     auto* view = new BinView(*doc, binMenu_);
+    view->setInputMenu(inputMenu_);
     connect(doc, &BinDocument::dirtyChanged, this, [this, doc] {
         updateTab(doc);
         emit dirtyChanged();
@@ -820,6 +821,9 @@ BinDocument* BinContainer::openBin(const QString& requested) {
                 transferItems(from, ids, doc->nodeId(), copy);
             },
             Qt::QueuedConnection);
+    connect(
+        view, &BinView::filesDropped, this, [this, doc](const QStringList& paths) { emit filesDropped(doc->nodeId(), paths); },
+        Qt::QueuedConnection);
     connect(view, &QObject::destroyed, this, [this, view] {
         if (active_ == view) active_ = nullptr;
     });

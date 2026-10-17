@@ -9,6 +9,7 @@
 #include "lumenis/ui/command_palette.h"
 #include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/effect_palette.h"
+#include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/media_tool.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
@@ -19,6 +20,7 @@
 #include "lumenis/ui/panels.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/settings_window.h"
+#include "lumenis/ui/source_browser.h"
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timeline.h"
 #include "lumenis/ui/tool_windows.h"
@@ -28,6 +30,8 @@
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QDir>
+#include <QDirIterator>
 #include <QFileDialog>
 #include <QInputDialog>
 #include <QHBoxLayout>
@@ -105,6 +109,8 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     workspaceButton_->setMenu(new QMenu(workspaceButton_));
     area->installEventFilter(this);
 
+    // Pictures of linked clips, for the monitors, bins and Source Browser.
+    frames_ = new MediaFrames(this);
     createPanels();
     createTools();
     settings_ = new Settings(this);
@@ -116,6 +122,7 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     buildBuiltinMenus(menuBar(), commands_);
     installPanelHandlers();
     binContainer_->setBinMenu(menuBar()->findChild<QMenu*>(QStringLiteral("menu:bin")));
+    binContainer_->setInputMenu(menuBar()->findChild<QMenu*>(QStringLiteral("menu:file_input")));
     installProjectHandlers(false);
     panels_->restoreLayout(defaultLayout());
     connect(workspaces_, &WorkspaceManager::changed, this, &MainWindow::syncWorkspaceUi);
@@ -160,6 +167,52 @@ void MainWindow::createPanels() {
         if (!item) return std::nullopt;
         return *item;
     });
+    // The monitors show the frames of linked clips; a sequence shows its top
+    // video track's (p.432-434 orders the tracks the same way).
+    composer_->setPictureResolver([this](MonitorId monitor, QSize size, bool* offline) -> QImage {
+        const model::MonitorState& state = composer_->state(monitor);
+        const model::LoadedClip* loaded = state.current();
+        if (!loaded) return {};
+        model::BinItem item = loaded->item;
+        std::int64_t frame = state.position();
+        if (item.kind == model::BinItemKind::Sequence) {
+            const model::Sequence seq = model::Sequence::fromItem(item);
+            QStringList video;
+            for (const model::Track& t : seq.tracks()) {
+                if (t.kind == model::TrackKind::Video) video << t.name();
+            }
+            if (video.isEmpty()) return {};
+            const auto match = model::matchFrame(seq, video, frame);
+            const auto clip = match ? composer_->resolve(match->segment.binId, match->segment.clipId) : std::nullopt;
+            if (!clip) return {};
+            item = *clip;
+            frame = match->frame;
+        }
+        if (!media::isLinked(item)) return {};
+        if (frames_->isOffline(item)) {
+            if (offline) *offline = true;
+            return {};
+        }
+        return frames_->frame(item, frame, size);
+    });
+    // A clip loaded from the Source Browser goes into the target bin when it
+    // is edited into a sequence (p.316).
+    composer_->setCommitter([this](const model::BinItem& item) -> QString {
+        BinDocument* doc = nullptr;
+        if (sourceBrowser_ && !sourceBrowser_->targetBin().isEmpty()) {
+            doc = binContainer_->document(sourceBrowser_->targetBin());
+            if (!doc) doc = binContainer_->openBin(sourceBrowser_->targetBin());
+        }
+        if (!doc) doc = binContainer_->activeDocument();
+        if (!doc) return {};
+        doc->addItem(item);
+        return doc->nodeId();
+    });
+    connect(composer_, &Composer::filesDropped, this, [this](MonitorId monitor, const QStringList& paths) {
+        loadFiles(paths, monitor == MonitorId::Record);
+    });
+    connect(binContainer_, &BinContainer::filesDropped, this,
+            [this](const QString& binId, const QStringList& paths) { linkFiles(binId, paths); });
     keyboard_ = std::make_unique<KeyboardMap>();
     keyboard_->loadBuiltin(commands_);
     composer_->setKeyResolver([this](const QKeySequence& key) { return keyboard_->commandFor(key); });
@@ -617,6 +670,39 @@ void MainWindow::createTools() {
     panels_->addPanel(new Panel(QStringLiteral("AudioTool"), tr("Audio Tool"), audioTool_));
     mediaTool_ = new MediaTool;
     panels_->addPanel(new Panel(QStringLiteral("MediaTool"), tr("Media Tool"), mediaTool_));
+    // File > Input > Source Browser (p.312-318).
+    sourceBrowser_ = new SourceBrowser;
+    auto* browserPanel = new Panel(QStringLiteral("SourceBrowser"), tr("Source Browser"), sourceBrowser_);
+    panels_->addPanel(browserPanel);
+    connect(sourceBrowser_, &SourceBrowser::linkRequested, this,
+            [this](const QString& binId, const QStringList& paths) { linkFiles(binId, paths); });
+    connect(sourceBrowser_, &SourceBrowser::volumeBinRequested, this, [this](const QString& folder) { linkVolume(folder); });
+    connect(sourceBrowser_, &SourceBrowser::loadRequested, this, [this](const QStringList& paths) { loadFiles(paths); });
+    connect(sourceBrowser_, &SourceBrowser::settingsRequested, this, [this] {
+        // The Settings button opens the Link settings (p.317).
+        const model::SettingsFile& f = settings_->file(model::SettingsScope::User);
+        const int i = f.activeIndex(QStringLiteral("Link"));
+        if (SettingsWindow* w = showSettings(); w && i >= 0) {
+            w->showTab(SettingsWindow::Tab::User);
+            w->list(model::SettingsScope::User)->openEntry(i);
+        }
+    });
+    connect(sourceBrowser_, &SourceBrowser::closeRequested, this, [this, browserPanel] {
+        panels_->closePanel(browserPanel);
+    });
+    // "Clear Source Monitor Upon Closing Source Browser" (p.315): the clips
+    // it loaded without a bin go.
+    QPointer<Composer> composer = composer_;
+    connect(panels_, &PanelManager::layoutChanged, sourceBrowser_, [this, browserPanel, composer] {
+        if (!composer) return;
+        const bool open = panels_->isOpen(browserPanel);
+        if (sourceBrowserOpen_ && !open && sourceBrowser_->clearsSourceOnClose()) {
+            composer->clearUncommitted();
+        }
+        sourceBrowserOpen_ = open;
+    });
+    connect(binContainer_, &BinContainer::activeBinChanged, sourceBrowser_, [this] { refreshSourceBins(); });
+    connect(binContainer_, &BinContainer::dirtyChanged, sourceBrowser_, [this] { refreshSourceBins(); });
     // The Keyboard setting's palette (p.1202).
     keyboardPalette_ = new KeyboardPalette(*keyboard_);
     panels_->addPanel(new Panel(QStringLiteral("Keyboard"), tr("Keyboard"), keyboardPalette_));
@@ -646,6 +732,79 @@ void MainWindow::createTools() {
     });
 }
 
+media::LinkOptions MainWindow::linkOptions() const {
+    media::LinkOptions o;
+    if (project_) o.editRate = project_->settings.format.editRate;
+    o.when = QDateTime::currentDateTimeUtc();
+    o.sdWidescreen = settings_ && settings_->flag(QStringLiteral("Link"), QStringLiteral("sdWidescreen"));
+    return o;
+}
+
+SourceBrowser& MainWindow::sourceBrowser() const {
+    return *sourceBrowser_.data();
+}
+
+void MainWindow::refreshSourceBins() {
+    SourceBrowser* browser = sourceBrowser_.data();
+    if (!browser) return;
+    QList<QPair<QString, QString>> bins;
+    if (model::ProjectBins* project = binContainer_->bins()) {
+        for (const model::BinNode* b : project->bins()) bins.append({b->id, b->name});
+    }
+    // The active bin, unless another was chosen (p.317).
+    const BinDocument* active = binContainer_->activeDocument();
+    const QString keep = browser->targetBin();
+    browser->setBins(bins, keep.isEmpty() && active ? active->nodeId() : keep);
+}
+
+void MainWindow::showSourceBrowser() {
+    refreshSourceBins();
+    if (SourceBrowser* browser = sourceBrowser_.data(); browser && browser->folder().isEmpty()) browser->home();
+    showTool(QStringLiteral("SourceBrowser"));
+}
+
+QStringList MainWindow::linkFiles(const QString& binId, const QStringList& paths) {
+    BinDocument* doc = binContainer_->document(binId);
+    if (!doc) doc = binContainer_->openBin(binId);
+    if (!doc || paths.isEmpty()) return {};
+    int skipped = 0;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const QList<model::BinItem> items = media::linkFiles(paths, linkOptions(), &skipped);
+    QApplication::restoreOverrideCursor();
+    QStringList ids;
+    for (const model::BinItem& item : items) {
+        doc->addItem(item);
+        ids << item.id;
+    }
+    if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
+    if (skipped > 0) {
+        ConsoleLog::instance().append(tr("Link: %n file(s) are not media that can be linked.", "", skipped));
+    }
+    return ids;
+}
+
+void MainWindow::loadFiles(const QStringList& paths, bool recordMonitor) {
+    const QList<model::BinItem> items = media::linkFiles(paths, linkOptions());
+    for (const model::BinItem& item : items) {
+        composer_->load(recordMonitor ? MonitorId::Record : MonitorId::Source, QString(), item);
+    }
+    if (!items.isEmpty()) panels_->showPanel(panels_->panel(QStringLiteral("Composer")));
+}
+
+QString MainWindow::linkVolume(const QString& folder) {
+    if (!binContainer_->hasProject()) return {};
+    const QString id = binContainer_->newBin();
+    if (id.isEmpty()) return {};
+    binContainer_->renameNode(id, QDir(folder).dirName());
+    QStringList files;
+    QDirIterator it(folder, QDir::Files | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    while (it.hasNext()) files << it.next();
+    files.sort();
+    linkFiles(id, files);
+    refreshSourceBins();
+    return id;
+}
+
 Panel* MainWindow::showTool(const QString& panelId) {
     Panel* panel = panels_->panel(panelId);
     if (!panel) return nullptr;
@@ -664,6 +823,7 @@ Panel* MainWindow::showTool(const QString& panelId) {
     if (panelId == QLatin1String("AudioMixer")) size = QSize(560, 440);
     if (panelId == QLatin1String("AudioTool")) size = QSize(300, 340);
     if (panelId == QLatin1String("MediaTool")) size = QSize(640, 320);
+    if (panelId == QLatin1String("SourceBrowser")) size = QSize(960, 600);
     const QPoint at = mapToGlobal(QPoint(80, 90));
     panels_->floatPanel(panel, QRect(at, size));
     panels_->activate(panel);
@@ -833,6 +993,9 @@ void MainWindow::installPanelHandlers() {
     handle("tools.audio_mixer", [this] { showTool(QStringLiteral("AudioMixer")); });
     handle("tools.audio_tool", [this] { showTool(QStringLiteral("AudioTool")); });
     handle("tools.media_tool", [this] { showMediaTool(); });
+    // File > Input > Source Browser, Tools > Source Browser (p.315, p.327).
+    handle("file.input.source_browser", [this] { showSourceBrowser(); });
+    handle("tools.source_browser", [this] { showSourceBrowser(); });
     // The Tool Palette button (Other tab, p.392).
     handle("other.tool_palette", [this] { showTool(QStringLiteral("ToolPalette")); });
     // Windows > Workspaces > Properties: the active workspace's Workspace

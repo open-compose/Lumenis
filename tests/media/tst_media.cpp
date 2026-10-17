@@ -1,7 +1,10 @@
 #include "lumenis/ext/codec.h"
 #include "lumenis/ext/provider.h"
+#include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
 
+#include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -235,6 +238,116 @@ private slots:
         QCOMPARE(codecs.front()->canDecode(q), patentCodecsAllowed());
         q.codec = "no-such-codec";
         QVERIFY(!codecs.front()->canDecode(q));
+    }
+
+    void linkVideoClip() {
+        // A 25 fps QuickTime file linked into a 25 fps project (p.317-318).
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("Harbor Wide.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(25);
+        s.startTimecode = QStringLiteral("10:00:00:00");
+        QVERIFY(writeVideo(path, s, 12));
+        const auto info = probe(path);
+        QVERIFY(info);
+        QVERIFY(isLinkable(*info));
+        LinkOptions o;
+        o.editRate = Rational(25);
+        const auto item = linkClip(*info, o);
+        QVERIFY(item);
+        QCOMPARE(item->kind, model::BinItemKind::MasterClip);
+        QCOMPARE(item->name, QStringLiteral("Harbor Wide"));
+        QCOMPARE(item->durationFrames, std::int64_t{12});
+        QCOMPARE(item->fields.value(QStringLiteral("Start")), QStringLiteral("10:00:00:00"));
+        QCOMPARE(item->fields.value(QStringLiteral("End")), QStringLiteral("10:00:00:12"));
+        QCOMPARE(item->fields.value(QStringLiteral("Tracks")), QStringLiteral("V1"));
+        QCOMPARE(item->fields.value(QStringLiteral("Video")), QStringLiteral("FFV1"));
+        QCOMPARE(item->fields.value(QStringLiteral("FPS")), QStringLiteral("25"));
+        QCOMPARE(item->fields.value(QStringLiteral("Format")), QStringLiteral("36p/25"));
+        QCOMPARE(item->fields.value(QStringLiteral("Color Space")), QStringLiteral("RGB"));
+        QCOMPARE(item->fields.value(QStringLiteral("Source File")), QStringLiteral("Harbor Wide.mov"));
+        QCOMPARE(item->fields.value(QStringLiteral("Plug-In")), linkPluginName());
+        QVERIFY(isLinked(*item));
+
+        // The link survives the bin file.
+        model::Bin bin;
+        bin.items << *item;
+        const QString binPath = dir.filePath(QStringLiteral("b.cthbin"));
+        QVERIFY(model::BinFile::write(binPath, bin));
+        const auto back = model::BinFile::read(binPath);
+        QVERIFY(back);
+        const auto link = linkOf(back->items.first());
+        QVERIFY(link);
+        QCOMPARE(link->path, QFileInfo(path).absoluteFilePath());
+        QCOMPARE(link->frames, std::int64_t{12});
+
+        // Its frames, exactly; past the end, the last one.
+        FrameCache cache;
+        QVERIFY(cache.isOnline(*item));
+        for (int n : {0, 7, 3, 11}) QVERIFY2(near(cache.frame(*item, n), colourOf(n), 0), qPrintable(QString::number(n)));
+        QVERIFY(near(cache.frame(*item, 40), colourOf(11), 0));
+        const QImage small = cache.frame(*item, 5, QSize(32, 32));
+        QCOMPARE(small.size(), QSize(32, 18));
+
+        // The same file in a 50 fps project: each file frame shows twice.
+        o.editRate = Rational(50);
+        const auto fast = linkClip(*info, o);
+        QVERIFY(fast);
+        QCOMPARE(fast->durationFrames, std::int64_t{24});
+        QCOMPARE(fast->fields.value(QStringLiteral("Start")), QStringLiteral("10:00:00:00"));
+        QVERIFY(near(cache.frame(*fast, 9), colourOf(4), 0));
+
+        // Offline once the file is gone.
+        cache.clear();
+        QVERIFY(QFile::remove(path));
+        QVERIFY(!cache.isOnline(*item));
+        QVERIFY(cache.frame(*item, 0).isNull());
+    }
+
+    void linkAudioClip() {
+        // A WAV links as an audio clip that ends on the frame holding its
+        // last sample (p.329): 1.01 s at 25 fps is 26 frames.
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("room tone.wav"));
+        WriterSettings s;
+        s.format = QStringLiteral("wav");
+        s.audioCodec = QStringLiteral("pcm_s24le");
+        s.sampleRate = 48000;
+        s.channels = 2;
+        {
+            MediaWriter w;
+            QVERIFY(w.open(path, s));
+            const std::vector<float> silence(2 * 48480, 0.0f);
+            QVERIFY(w.writeAudio(silence.data(), 48480));
+            QVERIFY(w.finish());
+        }
+        LinkOptions o;
+        o.editRate = Rational(25);
+        int skipped = -1;
+        const QString notMedia = dir.filePath(QStringLiteral("notes.txt"));
+        {
+            QFile f(notMedia);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("not media");
+        }
+        const QList<model::BinItem> items = linkFiles({path, notMedia}, o, &skipped);
+        QCOMPARE(items.size(), 1);
+        QCOMPARE(skipped, 1);
+        const model::BinItem& item = items.first();
+        QCOMPARE(item.kind, model::BinItemKind::AudioClip);
+        QCOMPARE(item.durationFrames, std::int64_t{26});
+        QCOMPARE(item.fields.value(QStringLiteral("Tracks")), QStringLiteral("A1-2"));
+        QCOMPARE(item.fields.value(QStringLiteral("Audio SR")), QStringLiteral("48000"));
+        QCOMPARE(item.fields.value(QStringLiteral("Audio Bit Depth")), QStringLiteral("24 bit"));
+        QCOMPARE(item.fields.value(QStringLiteral("Audio Format")), QStringLiteral("PCM"));
+        QCOMPARE(item.fields.value(QStringLiteral("Start")), QStringLiteral("00:00:00:00"));
+        FrameCache cache;
+        QVERIFY(cache.frame(item, 0).isNull()); // no picture
     }
 
     void errors() {
