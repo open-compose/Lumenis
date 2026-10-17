@@ -494,7 +494,9 @@ private slots:
 
         // The player renders ahead; what is taken is the clock.
         AudioPlayer player;
-        QVERIFY(player.start(std::make_shared<AudioMix>(pieces), 1000, false));
+        AudioPlayer::PlayOptions quiet;
+        quiet.device = false;
+        QVERIFY(player.start(std::make_shared<AudioMix>(pieces), 1000, quiet));
         std::vector<float> got(2 * 600);
         int taken = 0;
         for (int tries = 0; tries < 500 && taken < 600; ++tries) {
@@ -507,6 +509,42 @@ private slots:
         QVERIFY(std::abs(got[2 * 500] - 0.6f) < 1e-6f);
         player.stop();
         QVERIFY(!player.isPlaying());
+        auto take = [&](int count) {
+            std::vector<float> buffer(2 * static_cast<std::size_t>(count));
+            int n = 0;
+            for (int tries = 0; tries < 500 && n < count; ++tries) {
+                n += player.pull(buffer.data() + 2 * n, count - n);
+                if (n < count) QTest::qWait(2);
+            }
+            return buffer;
+        };
+        // Twice normal speed (p.675): every other program sample, averaged:
+        // left samples 100+2i and 101+2i of the ramp.
+        AudioPlayer::PlayOptions fast = quiet;
+        fast.speed = 2;
+        QVERIFY(player.start(std::make_shared<AudioMix>(pieces), 1000, fast));
+        got = take(300);
+        QVERIFY(std::abs(got[0] - 0.1005f) < 1e-5f);
+        QVERIFY(std::abs(got[2 * 200] - 0.5005f) < 1e-5f);
+        player.stop();
+        // Backwards from program sample 1600: samples 699, 698, ... of the
+        // ramp.
+        AudioPlayer::PlayOptions back = quiet;
+        back.speed = -1;
+        QVERIFY(player.start(std::make_shared<AudioMix>(pieces), 1600, back));
+        got = take(300);
+        QVERIFY(std::abs(got[0] - 0.699f) < 1e-6f);
+        QVERIFY(std::abs(got[2 * 99] - 0.6f) < 1e-6f);
+        player.stop();
+        // A digital scrub's burst: 100 samples, then silence.
+        AudioPlayer::PlayOptions burst = quiet;
+        burst.limit = 100;
+        QVERIFY(player.start(std::make_shared<AudioMix>(pieces), 1000, burst));
+        got = take(300);
+        QVERIFY(std::abs(got[2 * 99] - 0.199f) < 1e-6f);
+        QCOMPARE(got[2 * 100], 0.0f);
+        QCOMPARE(got[2 * 250], 0.0f);
+        player.stop();
         // A sound card if there is one; none is fine too.
         if (player.start(std::make_shared<AudioMix>(pieces), 0)) {
             qInfo() << "audio output:" << player.deviceName();
@@ -546,6 +584,10 @@ private slots:
         QCOMPARE(pieces[0].length, std::int64_t{48000});
         QVERIFY(pieces[0].left > 0.99f && pieces[0].right < 0.01f); // A1 left
         QVERIFY(pieces[1].right > 0.99f && pieces[1].left < 0.01f); // A2 right
+        // Default Pan for mono tracks: Centered (p.1147).
+        const std::vector<AudioPiece> centred = audioPieces(clip, {}, {}, false);
+        QVERIFY(std::abs(centred[0].left - centred[0].right) < 1e-6f);
+        QVERIFY(std::abs(centred[1].left - centred[1].right) < 1e-6f);
         // Only the monitored tracks play.
         pieces = audioPieces(clip, {}, [](const QString& t) { return t == QLatin1String("A2"); });
         QCOMPARE(pieces.size(), std::size_t{1});

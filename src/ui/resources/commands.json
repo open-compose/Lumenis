@@ -214,6 +214,7 @@
     {"id": "play.play_forward", "text": "Play Forward", "palette": "play"},
     {"id": "play.mouse_jog", "text": "Mouse Jog", "palette": "play"},
     {"id": "play.mouse_shuttle", "text": "Mouse Shuttle", "palette": "play"},
+    {"id": "play.digital_audio_scrub", "text": "Digital Audio Scrub", "palette": "play"},
     {"id": "move.step_backward_10_frames", "text": "Step Backward 10-frames or 8-frames", "palette": "move"},
     {"id": "move.step_forward_10_frames", "text": "Step Forward 10-frames or 8-frames", "palette": "move"},
     {"id": "move.step_backward_one_frame", "text": "Step Backward one frame", "palette": "move"},

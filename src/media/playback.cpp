@@ -65,7 +65,8 @@ int sidePan(int trackNumber) {
 } // namespace
 
 std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup& clips,
-                                    const std::function<bool(const QString& track)>& monitored) {
+                                    const std::function<bool(const QString& track)>& monitored, bool alternatingPan) {
+    auto side = [alternatingPan](int trackNumber) { return alternatingPan ? sidePan(trackNumber) : 0; };
     std::vector<AudioPiece> out;
     const Rational rate = item.editRate;
     if (item.kind != model::BinItemKind::Sequence) {
@@ -80,7 +81,7 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
             p->length = framesToSamples(item.durationFrames, rate);
             // A single channel plays in the middle; more go odd left, even
             // right.
-            panGains(link->channels == 1 ? 0 : sidePan(t + 1), 0.0, &p->left, &p->right);
+            panGains(link->channels == 1 ? 0 : side(t + 1), 0.0, &p->left, &p->right);
             out.push_back(*p);
         }
         return out;
@@ -102,7 +103,7 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
             p->at = framesToSamples(start, rate);
             p->length = framesToSamples(start + s.length, rate) - p->at;
             p->sourceStart = framesToSamples(s.sourceIn, clip->editRate);
-            panGains(s.pan != 0 ? s.pan : sidePan(track.number), s.gain, &p->left, &p->right);
+            panGains(s.pan != 0 ? s.pan : side(track.number), s.gain, &p->left, &p->right);
             out.push_back(*p);
         }
     }
@@ -195,10 +196,13 @@ AudioPlayer::~AudioPlayer() {
     stop();
 }
 
-bool AudioPlayer::start(std::shared_ptr<AudioMix> mix, std::int64_t start, bool device) {
+bool AudioPlayer::start(std::shared_ptr<AudioMix> mix, std::int64_t start, const PlayOptions& options) {
     stop();
     mix_ = std::move(mix);
     next_ = start;
+    speed_ = std::clamp(options.speed, -3, 3) == 0 ? 1 : std::clamp(options.speed, -3, 3);
+    left_ = options.limit;
+    const bool device = options.device;
     readAt_ = 0;
     writeAt_ = 0;
     played_ = 0;
@@ -258,14 +262,44 @@ QString AudioPlayer::deviceName() const {
 
 void AudioPlayer::feed() {
     std::vector<float> chunk(2 * kChunk);
+    const int step = std::abs(speed_);
+    std::vector<float> wide(2 * static_cast<std::size_t>(kChunk * step));
     while (running_) {
         const std::size_t used = writeAt_.load() - readAt_.load();
         if (kRingFrames - used < kChunk) {
             std::this_thread::sleep_for(std::chrono::milliseconds(2));
             continue;
         }
-        mix_->render(next_, kChunk, chunk.data());
-        next_ += kChunk;
+        if (left_ == 0) {
+            std::fill(chunk.begin(), chunk.end(), 0.0f);
+        } else if (step == 1 && speed_ > 0) {
+            mix_->render(next_, kChunk, chunk.data());
+            next_ += kChunk;
+        } else {
+            // kChunk output samples cover kChunk * step of the program,
+            // forward or backward from where play is.
+            const int span = kChunk * step;
+            const std::int64_t from = speed_ > 0 ? next_ : next_ - span;
+            mix_->render(from, span, wide.data());
+            for (int i = 0; i < kChunk; ++i) {
+                float l = 0.0f;
+                float r = 0.0f;
+                for (int k = 0; k < step; ++k) {
+                    const int src = speed_ > 0 ? i * step + k : span - 1 - (i * step + k);
+                    l += wide[static_cast<std::size_t>(2 * src)];
+                    r += wide[static_cast<std::size_t>(2 * src + 1)];
+                }
+                chunk[static_cast<std::size_t>(2 * i)] = l / static_cast<float>(step);
+                chunk[static_cast<std::size_t>(2 * i + 1)] = r / static_cast<float>(step);
+            }
+            next_ += speed_ > 0 ? span : -span;
+        }
+        if (left_ > 0) {
+            // A digital scrub's samples, then silence.
+            const std::int64_t keep = std::min<std::int64_t>(left_, kChunk);
+            std::fill(chunk.begin() + 2 * keep, chunk.end(), 0.0f);
+            left_ -= keep;
+        }
         std::size_t w = writeAt_.load();
         for (int i = 0; i < kChunk; ++i, ++w) {
             const std::size_t at = 2 * (w % kRingFrames);

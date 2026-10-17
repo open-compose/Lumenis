@@ -139,7 +139,10 @@ done:
   - the audio clock paces the Composer; frames are decoded ahead
     (`MediaFrames::prefetch`);
   - the Video Quality Menu button.
-Next is 2.3b (ROADMAP).
+2.3b is done: smooth and digital audio scrub, Full Screen Playback
+(`full_screen.*`), the Audio, Full Screen Playback and Video Display
+settings, dropped-frame counts (`Composer::playStats`). Next is 2.4, Avid
+MediaFiles (ROADMAP).
 
 Spec sections 3, 4, 7, 11, 12, 13, 14 and 15 list details left for later.
 

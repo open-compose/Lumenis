@@ -327,6 +327,8 @@ public:
 signals:
     void changed();
     void message(const QString& text);
+    // Video Quality Menu > Video Display Settings (p.405).
+    void videoDisplaySettingsRequested();
     // A command that is not the Timeline's (New > Sequence).
     void commandRequested(const QString& commandId);
 

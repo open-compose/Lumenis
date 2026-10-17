@@ -11,7 +11,7 @@
     ]},
     {"name": "Play", "page": 96, "columns": [
       ["play.play", "play.play_reverse", "play.pause", "play.play_forward"],
-      ["play.play_in_to_out", "play.mouse_jog", "play.mouse_shuttle"]
+      ["play.play_in_to_out", "play.mouse_jog", "play.mouse_shuttle", "play.digital_audio_scrub"]
     ]},
     {"name": "Edit", "page": 100, "columns": [
       ["edit.mark_in", "edit.mark_out", "edit.mark_clip", "edit.audio_mark_in", "edit.audio_mark_out"],

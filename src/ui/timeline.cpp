@@ -1283,8 +1283,9 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
             connect(a, &QAction::triggered, this, [this, choice = q] { composer_.setVideoQuality(choice); });
         }
         menu.addSeparator();
-        // The Video Display setting comes with the client monitor.
-        menu.addAction(tr("Video Display Settings..."))->setEnabled(false);
+        // The Project's Video Display setting (p.405).
+        connect(menu.addAction(tr("Video Display Settings...")), &QAction::triggered, this,
+                &Timeline::videoDisplaySettingsRequested);
         menu.exec(quality->mapToGlobal(pos));
     });
     connect(&composer_, &Composer::videoQualityChanged, quality,

@@ -212,6 +212,17 @@ public:
     VideoQuality videoQuality() const { return quality_; }
     // The share of the picture's width and height decoded at this quality.
     double qualityScale() const;
+    // Video Display settings: High-Quality Scaling for Real-Time Decode
+    // (p.1224), for Full Quality only.
+    void setHighQualityScaling(bool on);
+    bool smoothScaling() const { return smoothScaling_ && quality_ == VideoQuality::Full; }
+    // Since play last started from a stop: frames shown, and frames the
+    // picture skipped because it fell behind.
+    struct PlayStats {
+        std::int64_t shown = 0;
+        std::int64_t dropped = 0;
+    };
+    const PlayStats& playStats() const { return stats_; }
     bool isPlaying() const { return speed_ != 0; }
     int speed() const { return speed_; }
     void play(int speed);
@@ -295,6 +306,8 @@ private:
     PlayClock playClock_;
     std::int64_t playStart_ = 0;
     VideoQuality quality_ = VideoQuality::Full;
+    bool smoothScaling_ = true;
+    PlayStats stats_;
     Committer committer_;
     KeyResolver keys_;
     EventResolver events_;

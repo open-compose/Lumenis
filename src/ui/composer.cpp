@@ -431,7 +431,7 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
             const QSize fit = image.size().scaled(pic.size(), Qt::KeepAspectRatio);
             const QRect at(pic.left() + (pic.width() - fit.width()) / 2, pic.top() + (pic.height() - fit.height()) / 2,
                            fit.width(), fit.height());
-            p.setRenderHint(QPainter::SmoothPixmapTransform);
+            p.setRenderHint(QPainter::SmoothPixmapTransform, composer_.smoothScaling());
             p.drawImage(at, image);
         } else if (offline) {
             // "A black screen appears with the words Media Offline" (p.347).
@@ -958,6 +958,7 @@ void Composer::play(int speed) {
         stop();
         return;
     }
+    if (speed_ == 0) stats_ = {};
     speed_ = speed;
     carry_ = 0;
     playStart_ = s.position();
@@ -978,23 +979,36 @@ void Composer::stop() {
 
 void Composer::tick() {
     const qint64 ms = clock_.restart();
-    // At normal speed the sound sets the pace (A/V sync); otherwise, or
-    // before any sound has played, the wall clock does.
-    if (speed_ == 1 && playClock_) {
-        if (const auto played = playClock_()) {
-            model::MonitorState& s = state(active_);
-            const auto target = playStart_ + static_cast<std::int64_t>(*played * framesPerSecond(s));
-            const std::int64_t end = stopAt_.value_or(s.lastPosition());
-            if (target >= end) {
-                moveTo(active_, end);
-                stop();
-            } else if (target > s.position()) {
-                moveTo(active_, target);
-            }
-            return;
+    const std::int64_t before = state(active_).position();
+    const int speed = speed_;
+    // Up to three times normal speed the sound sets the pace (A/V sync,
+    // smooth audio scrub p.675); faster, or with no sound, the wall clock
+    // does.
+    std::optional<double> played;
+    if (std::abs(speed_) <= 3 && playClock_) played = playClock_();
+    if (played) {
+        model::MonitorState& s = state(active_);
+        const auto target = playStart_ + static_cast<std::int64_t>(*played * framesPerSecond(s));
+        const std::int64_t end = stopAt_.value_or(s.lastPosition());
+        if (speed_ > 0 && target >= end) {
+            moveTo(active_, end);
+            stop();
+        } else if (speed_ < 0 && target <= 0) {
+            moveTo(active_, 0);
+            stop();
+        } else if ((speed_ > 0 && target > s.position()) || (speed_ < 0 && target < s.position())) {
+            moveTo(active_, target);
         }
+    } else {
+        advance(ms);
     }
-    advance(ms);
+    // Frames shown and skipped: a tick moves |speed| frames on time; more
+    // means the picture fell behind (the real-time gate, ROADMAP 2.5).
+    const std::int64_t moved = std::abs(state(active_).position() - before);
+    if (moved > 0 && speed != 0) {
+        ++stats_.shown;
+        stats_.dropped += std::max<std::int64_t>(0, moved - std::abs(speed));
+    }
 }
 
 void Composer::setVideoQuality(VideoQuality quality) {
@@ -1002,6 +1016,11 @@ void Composer::setVideoQuality(VideoQuality quality) {
     quality_ = quality;
     refresh();
     emit videoQualityChanged(quality);
+}
+
+void Composer::setHighQualityScaling(bool on) {
+    smoothScaling_ = on;
+    refresh();
 }
 
 double Composer::qualityScale() const {

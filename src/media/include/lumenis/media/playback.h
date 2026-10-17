@@ -51,10 +51,13 @@ double samplesToFrames(std::int64_t samples, const Rational& rate);
 //   the left, even to the right (p.627);
 // - a sequence: the segments of its monitored audio tracks, each with its
 //   clip gain and pan (p.702); a centred pan follows its track's side.
-// Clips without media, unlinked or offline, are silent.
+// Clips without media, unlinked or offline, are silent. Without
+// `alternatingPan` (Audio settings, "Default Pan for mono tracks":
+// Centered, p.1147) mono tracks play in the middle.
 using ClipLookup = std::function<std::optional<model::BinItem>(const QString& binId, const QString& clipId)>;
 std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup& clips,
-                                    const std::function<bool(const QString& track)>& monitored = {});
+                                    const std::function<bool(const QString& track)>& monitored = {},
+                                    bool alternatingPan = true);
 
 // Mixes pieces into interleaved stereo. Reads the files itself, so one mix
 // serves one thread at a time.
@@ -88,10 +91,22 @@ public:
     AudioPlayer(const AudioPlayer&) = delete;
     AudioPlayer& operator=(const AudioPlayer&) = delete;
 
+    struct PlayOptions {
+        // Smooth audio scrub (p.675): up to three times normal speed, either
+        // way. Faster speeds take every n-th sample (averaged), so the pitch
+        // rises as it did on tape; reverse plays backwards.
+        int speed = 1;
+        // Digital audio scrub (p.676): this many output samples, then silence.
+        std::int64_t limit = -1;
+        // Without a device nothing is opened and pull() takes the samples
+        // (tests).
+        bool device = true;
+    };
     // Starts playing from output sample `start`. False if no output could be
-    // opened. Without `device` nothing is opened and pull() takes the
-    // samples (tests).
-    bool start(std::shared_ptr<AudioMix> mix, std::int64_t start, bool device = true);
+    // opened.
+    bool start(std::shared_ptr<AudioMix> mix, std::int64_t start, const PlayOptions& options);
+    bool start(std::shared_ptr<AudioMix> mix, std::int64_t from) { return start(std::move(mix), from, PlayOptions{}); }
+    int speed() const { return speed_; }
     void stop();
     bool isPlaying() const { return playing_; }
     // Output samples the device has taken since start.
@@ -121,6 +136,8 @@ private:
     std::atomic<std::int64_t> pulledAt_{0}; // steady-clock ns of the last pull
     std::int64_t latency_ = 0;             // samples the device holds
     std::int64_t next_ = 0; // the next sample to render
+    int speed_ = 1;
+    std::int64_t left_ = -1; // samples still to render before silence; -1: no limit
 
     // A single-producer, single-consumer ring of stereo samples.
     std::vector<float> ring_;

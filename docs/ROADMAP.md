@@ -433,10 +433,13 @@ Sub-steps:
     their segments.
   * The Video Quality Menu button: Full, Draft, Best Performance.
   * `tst_playback`.
-* **2.3b:**
-  * Full Screen Playback.
-  * Sound at shuttle speeds and audio scrub.
-  * Real-time measurements for the gates.
+* **2.3b — done** (spec §16).
+  * Smooth audio scrub up to 3x either way, with the picture following
+    the sound.
+  * Digital audio scrub with Shift or the Digital Audio Scrub button.
+  * Composer > Full Screen Playback and its setting.
+  * The Audio and Video Display settings.
+  * Shown and dropped frame counts for the real-time gate.
 * **2.4 Avid MediaFiles:**
   * Import, Consolidate and Transcode into `Avid MediaFiles/MXF/<n>/` as MXF
     OP-Atom (DNx and PCM).

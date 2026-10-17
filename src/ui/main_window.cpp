@@ -11,6 +11,7 @@
 #include "lumenis/ui/command_palette.h"
 #include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/effect_palette.h"
+#include "lumenis/ui/full_screen.h"
 #include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/media_tool.h"
 #include "lumenis/ui/command_registry.h"
@@ -46,6 +47,7 @@
 #include <QPushButton>
 #include <QStorageInfo>
 #include <QPixmap>
+#include <QTimer>
 #include <QToolButton>
 #include <QToolTip>
 
@@ -207,11 +209,25 @@ void MainWindow::createPanels() {
     // Sound: at normal speed forward the monitor's audio plays, and its
     // progress paces the picture (A/V sync).
     connect(composer_, &Composer::playStarted, this, [this](MonitorId monitor, int speed) { startSound(monitor, speed); });
-    connect(composer_, &Composer::playStopped, this, [this] { audio_->stop(); });
-    composer_->setPlayClock([this]() -> std::optional<double> {
-        if (!audio_->isPlaying()) return std::nullopt;
-        return static_cast<double>(audio_->clock()) / media::kPlaybackRate;
+    connect(composer_, &Composer::playStopped, this, [this] {
+        audio_->stop();
+        // Frames the picture could not keep up with (the real-time gate).
+        const auto& stats = composer_->playStats();
+        if (stats.dropped > 0) {
+            ConsoleLog::instance().append(
+                tr("Playback: %1 frames shown, %2 dropped.").arg(stats.shown).arg(stats.dropped));
+        }
     });
+    // The sound's clock in program time: faster or backward scrub moves
+    // through the program that many times as fast (p.675).
+    composer_->setPlayClock([this]() -> std::optional<double> {
+        if (!audio_->isPlaying() || scrubbing_) return std::nullopt;
+        return static_cast<double>(audio_->clock()) * audio_->speed() / media::kPlaybackRate;
+    });
+    // Digital audio scrub (p.676): moving the position while stopped plays
+    // the frames around it, with Shift held or the Digital Audio Scrub
+    // button on.
+    connect(composer_, &Composer::changed, this, [this] { scrubIfMoved(); });
     // A clip loaded from the Source Browser goes into the target bin when it
     // is edited into a sequence (p.316).
     composer_->setCommitter([this](const model::BinItem& item) -> QString {
@@ -263,6 +279,14 @@ void MainWindow::createPanels() {
         return std::make_pair(doc->nodeId(), model::newSequence(doc->bin(), project_->settings.format.editRate,
                                                             QDateTime::currentDateTimeUtc(),
                                                             binContainer_->defaultStartTimecode()));
+    });
+    connect(timeline_, &Timeline::videoDisplaySettingsRequested, this, [this] {
+        const model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
+        const int i = f.activeIndex(QStringLiteral("Video Display"));
+        if (SettingsWindow* w = showSettings(); w && i >= 0) {
+            w->showTab(SettingsWindow::Tab::Project);
+            w->list(model::SettingsScope::Project)->openEntry(i);
+        }
     });
     connect(timeline_, &Timeline::message, this, [](const QString& text) { QToolTip::showText(QCursor::pos(), text); });
     // The Timeline takes its own commands from the Composer; the rest are
@@ -776,6 +800,77 @@ std::optional<std::pair<model::BinItem, std::int64_t>> MainWindow::frameAt(Monit
     return std::make_pair(item, frame);
 }
 
+std::vector<media::AudioPiece> MainWindow::soundOf(const model::LoadedClip& loaded,
+                                                  const std::function<bool(const QString&)>& monitored) const {
+    // Audio settings, Default Pan for mono tracks (p.1147).
+    const bool alternating = settings_->text(QStringLiteral("Audio"), QStringLiteral("defaultPan")) != QLatin1String("centered");
+    return media::audioPieces(
+        loaded.item, [this](const QString& binId, const QString& clipId) { return composer_->resolve(binId, clipId); },
+        monitored, alternating);
+}
+
+void MainWindow::toggleFullScreen() {
+    FullScreenView* view = fullScreen_.data();
+    if (view && view->isVisible()) {
+        view->close();
+        return;
+    }
+    if (!view) {
+        view = new FullScreenView(*composer_, this);
+        fullScreen_ = view;
+        connect(view, &FullScreenView::closed, this, [this] { activateWindow(); });
+    }
+    applySettings();
+    view->open(this);
+}
+
+FullScreenView* MainWindow::fullScreenView() const {
+    return fullScreen_.data();
+}
+
+void MainWindow::scrubIfMoved() {
+    const MonitorId monitor = composer_->activeMonitor();
+    const model::LoadedClip* loaded = composer_->state(monitor).current();
+    const std::int64_t position = loaded ? composer_->state(monitor).position() : -1;
+    const QString key = loaded ? loaded->item.id : QString();
+    const bool moved = key == scrubItem_ && position != scrubPosition_;
+    scrubItem_ = key;
+    scrubPosition_ = position;
+    if (!loaded || !moved || composer_->isPlaying()) return;
+    const bool shift = QApplication::keyboardModifiers() & Qt::ShiftModifier;
+    QAction* button = commands_.action(QStringLiteral("play.digital_audio_scrub"));
+    if (!shift && !(button && button->isChecked())) return;
+    // Audio settings: frames before (outgoing) and after (incoming) the
+    // position, per monitor; 0 and 1 by default (p.675, p.1147).
+    const bool source = monitor == MonitorId::Source;
+    const int out = settings_->number(QStringLiteral("Audio"), source ? QStringLiteral("sourceScrubOut") : QStringLiteral("recordScrubOut"));
+    const int in = settings_->number(QStringLiteral("Audio"), source ? QStringLiteral("sourceScrubIn") : QStringLiteral("recordScrubIn"));
+    if (out + in <= 0) return;
+    std::function<bool(const QString&)> monitored;
+    if (loaded->item.kind == model::BinItemKind::Sequence) {
+        monitored = [this](const QString& track) { return timeline_->isMonitored(track); };
+    }
+    auto pieces = soundOf(*loaded, monitored);
+    if (pieces.empty()) return;
+    const Rational rate = loaded->item.editRate;
+    media::AudioPlayer::PlayOptions options;
+    options.limit = media::framesToSamples(out + in, rate);
+    scrubStart_ = media::framesToSamples(position - out, rate);
+    if (!audio_->start(std::make_shared<media::AudioMix>(std::move(pieces)), scrubStart_, options)) return;
+    scrubbing_ = true;
+    // The device is let go once the burst has played.
+    const int token = ++scrubToken_;
+    const int ms = static_cast<int>(1000.0 * (out + in) * static_cast<double>(rate.den()) /
+                                    static_cast<double>(std::max<std::int64_t>(rate.num(), 1))) +
+                   250;
+    QTimer::singleShot(ms, this, [this, token] {
+        if (token == scrubToken_ && scrubbing_ && !composer_->isPlaying()) {
+            audio_->stop();
+            scrubbing_ = false;
+        }
+    });
+}
+
 bool MainWindow::isPlayingSound() const {
     return audio_ && audio_->isPlaying();
 }
@@ -786,8 +881,10 @@ std::int64_t MainWindow::soundClock() const {
 
 void MainWindow::startSound(MonitorId monitor, int speed) {
     audio_->stop();
-    // Sound plays at normal speed forward; faster shuttling is silent.
-    if (speed != 1) return;
+    scrubbing_ = false;
+    // Smooth audio scrub: sound up to three times normal speed, either
+    // way; faster, it cuts out (p.675).
+    if (speed == 0 || std::abs(speed) > 3) return;
     const model::LoadedClip* loaded = composer_->state(monitor).current();
     if (!loaded) return;
     // A sequence plays the audio tracks monitored in the Track Selector
@@ -796,12 +893,12 @@ void MainWindow::startSound(MonitorId monitor, int speed) {
     if (loaded->item.kind == model::BinItemKind::Sequence) {
         monitored = [this](const QString& track) { return timeline_->isMonitored(track); };
     }
-    auto pieces = media::audioPieces(
-        loaded->item, [this](const QString& binId, const QString& clipId) { return composer_->resolve(binId, clipId); },
-        monitored);
+    auto pieces = soundOf(*loaded, monitored);
     if (pieces.empty()) return;
     const std::int64_t at = media::framesToSamples(composer_->state(monitor).position(), loaded->item.editRate);
-    if (!audio_->start(std::make_shared<media::AudioMix>(std::move(pieces)), at)) {
+    media::AudioPlayer::PlayOptions options;
+    options.speed = speed;
+    if (!audio_->start(std::make_shared<media::AudioMix>(std::move(pieces)), at, options)) {
         ConsoleLog::instance().append(tr("Playback: no audio output could be opened; playing without sound."));
     }
 }
@@ -1000,6 +1097,12 @@ void MainWindow::positionInfo() {
 
 void MainWindow::applySettings() {
     const Settings& s = *settings_;
+    // Video Display (p.1224) and Full Screen Playback (p.1190-1191) settings.
+    composer_->setHighQualityScaling(s.flag(QStringLiteral("Video Display"), QStringLiteral("highQualityScaling")));
+    if (FullScreenView* view = fullScreen_.data()) {
+        view->setReformat(FullScreenView::reformatFrom(s.text(QStringLiteral("Full Screen Playback"), QStringLiteral("reformat"))));
+        view->setFullScreenScaling(s.flag(QStringLiteral("Full Screen Playback"), QStringLiteral("fullScreen")));
+    }
     // Bin settings (p.1152-1154).
     binContainer_->setAutoSaveMinutes(s.number(QStringLiteral("Bin"), QStringLiteral("autoSaveMinutes")));
     binContainer_->setFavoritesAtTop(s.text(QStringLiteral("Bin"), QStringLiteral("favoritesAt")) != QLatin1String("bottom"));
@@ -1128,6 +1231,11 @@ void MainWindow::installPanelHandlers() {
     // File > Input > Source Browser, Tools > Source Browser (p.315, p.327).
     handle("file.input.source_browser", [this] { showSourceBrowser(); });
     handle("clip.relink.linked_media", [this] { relinkLinkedMedia(); });
+    // Composer > Full Screen Playback (p.391), and again to leave it.
+    handle("composer.full_screen_playback", [this] { toggleFullScreen(); });
+    // The Digital Audio Scrub button (Play tab, p.676) turns scrubbing on
+    // and off.
+    commands_.action(QStringLiteral("play.digital_audio_scrub"))->setCheckable(true);
     handle("clip.modify.unlink_media", [this] { unlinkSelection(); });
     handle("tools.source_browser", [this] { showSourceBrowser(); });
     // The Tool Palette button (Other tab, p.392).

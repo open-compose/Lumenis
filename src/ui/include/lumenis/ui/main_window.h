@@ -20,6 +20,11 @@ class QToolButton;
 
 namespace lumenis::media {
 class AudioPlayer;
+struct AudioPiece;
+}
+
+namespace lumenis::model {
+struct LoadedClip;
 }
 
 namespace lumenis::ext {
@@ -35,6 +40,7 @@ class AboutInfoDialog;
 class AudioMixer;
 class AudioTool;
 class EffectEditor;
+class FullScreenView;
 class LinkedMediaDialog;
 class MediaFrames;
 class MediaTool;
@@ -124,6 +130,13 @@ public:
     // Playback's sound (2.3): whether it plays, and its clock: the output
     // sample heard now, counted from where play started.
     bool isPlayingSound() const;
+    // Digital audio scrub: whether a burst is playing, and its first output
+    // sample.
+    bool isScrubbing() const { return scrubbing_; }
+    std::int64_t scrubStart() const { return scrubStart_; }
+    // Composer > Full Screen Playback (p.391).
+    void toggleFullScreen();
+    FullScreenView* fullScreenView() const;
     std::int64_t soundClock() const;
     // Tools > Media Tool: the Media Tool Display dialog, then the tool
     // (p.346). Tests answer the dialog through the hook (true: OK).
@@ -208,6 +221,16 @@ private:
     QPointer<SourceBrowser> sourceBrowser_;
     bool sourceBrowserOpen_ = false;
     std::unique_ptr<media::AudioPlayer> audio_;
+    QPointer<FullScreenView> fullScreen_;
+    // Digital audio scrub (p.676): the last position seen, and the burst.
+    QString scrubItem_;
+    std::int64_t scrubPosition_ = -1;
+    std::int64_t scrubStart_ = 0;
+    int scrubToken_ = 0;
+    bool scrubbing_ = false;
+    void scrubIfMoved();
+    std::vector<media::AudioPiece> soundOf(const model::LoadedClip& loaded,
+                                           const std::function<bool(const QString&)>& monitored) const;
     // What a monitor shows at a position: a linked clip and its frame.
     std::optional<std::pair<model::BinItem, std::int64_t>> frameAt(MonitorId monitor, std::int64_t position) const;
     void startSound(MonitorId monitor, int speed);

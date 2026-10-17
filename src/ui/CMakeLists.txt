@@ -12,6 +12,7 @@ add_library(lumenis_ui STATIC
     capture.cpp
     command_registry.cpp
     command_palette.cpp
+    full_screen.cpp
     keyboard_map.cpp
     keyboard_palette.cpp
     marker_dialogs.cpp
@@ -44,6 +45,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/capture.h
     include/lumenis/ui/command_registry.h
     include/lumenis/ui/command_palette.h
+    include/lumenis/ui/full_screen.h
     include/lumenis/ui/keyboard_map.h
     include/lumenis/ui/keyboard_palette.h
     include/lumenis/ui/marker_dialogs.h

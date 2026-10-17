@@ -79,10 +79,10 @@ private slots:
         // Every setting has a scope and a page, every option a page, and a
         // choice's default is one of its choices (guide ch.33).
         const SettingsSchema& schema = SettingsSchema::builtIn();
-        QCOMPARE(schema.kindNames(SettingsScope::Project), (QStringList{"Audio Project", "General"}));
+        QCOMPARE(schema.kindNames(SettingsScope::Project), (QStringList{"Audio Project", "General", "Video Display"}));
         QCOMPARE(schema.kindNames(SettingsScope::User),
-                 (QStringList{"Bin", "Composer", "Interface", "Keyboard", "Link", "Timeline", "Tool Palette",
-                              "Workspace View", "Trim"}));
+                 (QStringList{"Audio", "Bin", "Composer", "Full Screen Playback", "Interface", "Keyboard", "Link",
+                              "Timeline", "Tool Palette", "Workspace View", "Trim"}));
         QSet<QString> keys;
         for (const SettingKind& k : schema.kinds()) {
             QVERIFY2(k.page >= 1136, qPrintable(k.kind));
@@ -217,12 +217,12 @@ private slots:
         // Picture on p.1136: one row per setting; versions under it.
         Settings settings;
         SettingsList list(settings, SettingsScope::User);
-        QCOMPARE(list.topLevelItemCount(), 9);
-        QCOMPARE(list.topLevelItem(0)->text(SettingsList::kSettingColumn), QStringLiteral("Bin"));
+        QCOMPARE(list.topLevelItemCount(), 11);
+        QCOMPARE(list.topLevelItem(0)->text(SettingsList::kSettingColumn), QStringLiteral("Audio"));
         const int timeline = settings.file(SettingsScope::User).activeIndex("Timeline");
         list.selectEntries({timeline});
         list.duplicateSelection();
-        QTreeWidgetItem* group = list.topLevelItem(5);
+        QTreeWidgetItem* group = list.topLevelItem(7);
         QCOMPARE(group->text(0), QStringLiteral("Timeline"));
         QCOMPARE(group->childCount(), 2);
         QVERIFY(!group->data(0, SettingsList::kEntryRole).isValid());

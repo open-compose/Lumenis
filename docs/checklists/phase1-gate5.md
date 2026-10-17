@@ -215,7 +215,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 
 | Command | Shortcut | Guide | Status | Found | Where | Notes |
 |---|---|---|---|---|---|---|
-| Full Screen Playback | Ctrl+Shift+F | p.391 | *later* | ☐ | | |
+| Full Screen Playback | Ctrl+Shift+F | p.391 | works | ☐ | | |
 | Load Filler |  | p.99 | *later* | ☐ | | |
 | Remote Play |  | p.204 | *later* | ☐ | | |
 | Show Single/Dual Monitor |  | p.381 | works | ☐ | | |
@@ -312,6 +312,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 208 menu commands, 83 of them working with a project open; the
+* 208 menu commands, 84 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

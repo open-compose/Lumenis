@@ -1818,26 +1818,48 @@ p.610–640, ch. 13 p.432–434).**
     Frame uses (p.434), and the audio tracks monitored in the Track
     Selector panel.
 * **Panning:**
-  * Mono tracks go odd to the left and even to the right (p.627).
+  * Mono tracks go odd to the left and even to the right (p.627). The
+    Audio setting's Default Pan for mono tracks can centre them instead
+    (p.1147).
   * A segment's clip gain and pan apply (p.702). A segment whose pan is
     centred (MID) keeps its track's side.
   * A one-channel clip in the Source monitor plays in the middle (ours).
-* **Sound and sync (ours):**
-  * At normal speed forward the sound plays, and the picture follows it:
-    the position is where the samples played so far put it.
-  * At other speeds playback is silent and the picture runs on the wall
+* **Smooth audio scrub (p.675):**
+  * Sound plays while shuttling up to three times normal speed, forward
+    or backward. "The audio cuts out at greater than three times the
+    normal speed."
+  * Faster sound takes every n-th sample (averaged), so its pitch rises.
+    Pitch Correction during Shuttle (Audio settings, p.1148) is *later*.
+* **Sync (ours):**
+  * Up to 3x the picture follows the sound. The position is where the
+    samples heard so far put it. Devices take samples in bursts and hold
+    them, so the clock runs smoothly between bursts and leaves out what
+    the device holds.
+  * Faster, or without a sound device, the picture runs on the wall
     clock.
-  * Without a sound device, the picture runs on the wall clock too.
+* **Digital audio scrub (p.676):**
+  * It plays the frames around the position when the position moves
+    while stopped: stepping, dragging, or any other move. It works with
+    Shift held, or with the Digital Audio Scrub button on. The button is
+    in the Play tab of the Command Palette (p.676).
+  * It plays the outgoing frames before the position and the incoming
+    ones after it. The defaults are 0 and 1 (p.675); the Audio setting's
+    Source Monitor Scrub and Record Monitor Scrub change them (p.1147).
+  * *Not yet:* placing the position at the head or tail of the last
+    sampled audio (p.676).
+* **Dropped frames (ours):**
+  * The Composer counts the frames shown and the frames the picture
+    skipped because it fell behind, from play to stop.
+  * Dropped frames are reported in the Console. The real-time gate
+    (2.5) measures with these counts.
 * **Not yet:**
-  * Sound while shuttling faster or backward (p.627 mentions audio at
-    higher play speeds).
-  * Smooth audio scrub (p.675).
   * Dynamic Play (p.401–402) and mouse jog and shuttle (p.402–403).
 
 ### Video Quality Menu (p.403–404)
 * **The button:** at the bottom of the Timeline.
   * A click moves to the next quality.
-  * Right-click lists them, with Video Display Settings (*later*).
+  * Right-click lists them, with Video Display Settings, which opens the
+    Project's Video Display setting (p.405).
 * **The qualities** of a software-only system (p.404):
   * Full Quality: the whole picture.
   * Draft Quality: half the width and half the lines.
@@ -1845,17 +1867,28 @@ p.610–640, ch. 13 p.432–434).**
 * **The icon (ours):** green for Full, green and yellow for Draft, yellow
   for Best Performance. The guide gives the colours ("yellow/green",
   p.229); the drawing is ours.
-* **Not yet:**
-  * The Full Quality 10-bit and float options, which come with effects
-    processing.
-  * The Video Display setting (p.1224).
+* **Video Display setting (Project, p.390, p.1224–1225):**
+  * High-Quality Scaling for Real-Time Decode works: it is smooth scaling
+    of the picture, at Full Quality only.
+  * The other options need graphics or I/O hardware and are shown as
+    *later*.
+* **Not yet:** the Full Quality 10-bit and float options, which come with
+  effects processing.
 
 ### Client monitor and full screen (p.389–391)
-* **Not yet:**
-  * Composer > Full Screen Playback (Shift+Ctrl+F, p.391) and the Full
-    Screen Playback setting (p.1189).
-  * The Toggle Client Monitor button is gray and disabled in
-    software-only mode (p.390), as ours is.
+* **Composer > Full Screen Playback (p.391):**
+  * It shows the active monitor's picture on a whole screen: the second
+    screen when there is one (ours).
+  * Shift+Ctrl+F (Shift+Command+F) leaves it (p.391); so does Esc
+    (ours). Other keys play and stop as in the Composer.
+* **The Full Screen Playback setting (User, p.1189–1191):**
+  * Reformat: Stretch, Pillar/Letterbox (our default), Center Crop,
+    Center Keep Size and Raw Pixel.
+  * Full Screen: off, the picture is shown with as little scaling as
+    possible.
+  * S3D View, Target Mask and Display Both Fields are *later*.
+* The Toggle Client Monitor button is gray and disabled in software-only
+  mode (p.390), as ours is.
 
 ### Sound output (ours)
 * miniaudio, through Core Audio, WASAPI, PulseAudio or ALSA, at 48 kHz
