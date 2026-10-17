@@ -89,15 +89,20 @@ private slots:
         composer.play(1);
         QVERIFY(composer.isPlaying());
         if (!window.isPlayingSound()) QSKIP("no audio output, not even the null device");
-        QTest::qWait(400);
-        // The picture follows the sound: the position is where the samples
-        // played put it (within the ticks between).
-        const auto played = window.soundPlayed();
-        const std::int64_t position = composer.state(MonitorId::Source).position();
-        QVERIFY2(played > 0, "no sound was taken");
-        const double expected = media::samplesToFrames(played, Rational(25));
-        QVERIFY2(std::abs(static_cast<double>(position) - expected) <= 3.0,
-                 qPrintable(QStringLiteral("position %1, sound at %2").arg(position).arg(expected)));
+        QTest::qWait(300);
+        // The picture follows the sound: the position is where the clock
+        // put it at the last tick (every 20 ms). A busy machine can hold a
+        // tick back, so the closest of several looks counts.
+        double closest = 1e9;
+        std::int64_t position = 0;
+        for (int i = 0; i < 10; ++i) {
+            QTest::qWait(25);
+            position = composer.state(MonitorId::Source).position();
+            const double heard = media::samplesToFrames(window.soundClock(), Rational(25));
+            closest = std::min(closest, std::abs(static_cast<double>(position) - heard));
+        }
+        QVERIFY2(window.soundClock() > 0, "no sound was heard");
+        QVERIFY2(closest <= 2.0, qPrintable(QStringLiteral("the picture was %1 frames from the sound").arg(closest)));
         QVERIFY(position > 0);
         // Shuttling faster is silent; stopping stops the sound.
         composer.play(2);

@@ -210,7 +210,7 @@ void MainWindow::createPanels() {
     connect(composer_, &Composer::playStopped, this, [this] { audio_->stop(); });
     composer_->setPlayClock([this]() -> std::optional<double> {
         if (!audio_->isPlaying()) return std::nullopt;
-        return static_cast<double>(audio_->played()) / media::kPlaybackRate;
+        return static_cast<double>(audio_->clock()) / media::kPlaybackRate;
     });
     // A clip loaded from the Source Browser goes into the target bin when it
     // is edited into a sequence (p.316).
@@ -780,8 +780,8 @@ bool MainWindow::isPlayingSound() const {
     return audio_ && audio_->isPlaying();
 }
 
-std::int64_t MainWindow::soundPlayed() const {
-    return audio_ ? audio_->played() : 0;
+std::int64_t MainWindow::soundClock() const {
+    return audio_ ? audio_->clock() : 0;
 }
 
 void MainWindow::startSound(MonitorId monitor, int speed) {

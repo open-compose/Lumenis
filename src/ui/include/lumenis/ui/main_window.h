@@ -121,10 +121,10 @@ public:
     void relinkLinkedMedia();
     void setLinkedMediaHook(std::function<void(LinkedMediaDialog&)> hook) { linkedMediaHook_ = std::move(hook); }
     int unlinkSelection();
-    // Playback's sound (2.3): whether it plays, and the output samples it
-    // has played since play started.
+    // Playback's sound (2.3): whether it plays, and its clock: the output
+    // sample heard now, counted from where play started.
     bool isPlayingSound() const;
-    std::int64_t soundPlayed() const;
+    std::int64_t soundClock() const;
     // Tools > Media Tool: the Media Tool Display dialog, then the tool
     // (p.346). Tests answer the dialog through the hook (true: OK).
     void showMediaTool();

@@ -94,8 +94,12 @@ public:
     bool start(std::shared_ptr<AudioMix> mix, std::int64_t start, bool device = true);
     void stop();
     bool isPlaying() const { return playing_; }
-    // Output samples the device has taken since start: the audio clock.
+    // Output samples the device has taken since start.
     std::int64_t played() const { return played_.load(); }
+    // The audio clock: the sample being heard now. Devices take samples in
+    // bursts and hold them a while (Core Audio especially); the clock runs
+    // smoothly between bursts and leaves out what the device still holds.
+    std::int64_t clock() const;
     // The output in use ("Null" when there is no sound card), for Help >
     // About and the Console.
     QString deviceName() const;
@@ -114,6 +118,8 @@ private:
     std::atomic<bool> running_{false};
     bool playing_ = false;
     std::atomic<std::int64_t> played_{0};
+    std::atomic<std::int64_t> pulledAt_{0}; // steady-clock ns of the last pull
+    std::int64_t latency_ = 0;             // samples the device holds
     std::int64_t next_ = 0; // the next sample to render
 
     // A single-producer, single-consumer ring of stereo samples.

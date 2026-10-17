@@ -202,6 +202,8 @@ bool AudioPlayer::start(std::shared_ptr<AudioMix> mix, std::int64_t start, bool 
     readAt_ = 0;
     writeAt_ = 0;
     played_ = 0;
+    pulledAt_ = 0;
+    latency_ = 0;
     running_ = true;
     feeder_ = std::thread([this] { feed(); });
     if (!device) {
@@ -221,6 +223,12 @@ bool AudioPlayer::start(std::shared_ptr<AudioMix> mix, std::int64_t start, bool 
         return false;
     }
     d->open = true;
+    // What the device buffers, at the output rate.
+    const ma_uint32 internalRate = d->device.playback.internalSampleRate;
+    if (internalRate > 0) {
+        latency_ = static_cast<std::int64_t>(d->device.playback.internalPeriodSizeInFrames) *
+                   static_cast<std::int64_t>(d->device.playback.internalPeriods) * kPlaybackRate / internalRate;
+    }
     if (ma_device_start(&d->device) != MA_SUCCESS) {
         ma_device_uninit(&d->device);
         stop();
@@ -281,7 +289,23 @@ int AudioPlayer::pull(float* out, int count) {
     std::fill(out + 2 * n, out + 2 * std::max(count, 0), 0.0f);
     readAt_.store(r);
     played_ += n;
+    pulledAt_ = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now().time_since_epoch())
+                    .count();
     return n;
+}
+
+std::int64_t AudioPlayer::clock() const {
+    const std::int64_t played = played_.load();
+    const std::int64_t at = pulledAt_.load();
+    if (played <= 0 || at == 0) return 0;
+    // When the device last took samples it held `latency_` of them unheard;
+    // since then it has played on, at the output rate, through those.
+    const std::int64_t now = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                 std::chrono::steady_clock::now().time_since_epoch())
+                                 .count();
+    const std::int64_t since = (now - at) * kPlaybackRate / 1'000'000'000;
+    return std::clamp<std::int64_t>(played - latency_ + since, 0, played);
 }
 
 } // namespace lumenis::media
