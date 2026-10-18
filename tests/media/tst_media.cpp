@@ -23,6 +23,10 @@
 #define NOMINMAX
 #endif
 #include <objbase.h>
+// Old Windows macros that clash with names here.
+#undef near
+#undef far
+#undef small
 #endif
 
 using namespace lumenis;
