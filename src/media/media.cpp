@@ -78,9 +78,9 @@ bool fullRange(const AVFrame* f) {
 
 // A planar, limited-range Y'CbCr picture as 16-bit 4:4:4 at its own size,
 // done here: luma shifted up, chroma interpolated linearly (co-sited
-// horizontally, centred vertically). swscale's results for this differ
-// between FFmpeg versions (FFmpeg 8 on arm64 loses about 10 dB), so
-// comparisons and DNx 444 writing don't use it. False for other pictures.
+// horizontally, centred vertically), so comparisons and DNx 444 writing
+// don't depend on swscale's code for each FFmpeg version and processor.
+// False for other pictures.
 bool planarYuvTo444(const AVFrame* f, std::uint16_t* y, std::uint16_t* cb, std::uint16_t* cr, int stride) {
     const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(static_cast<AVPixelFormat>(f->format));
     if (!desc || (desc->flags & (AV_PIX_FMT_FLAG_RGB | AV_PIX_FMT_FLAG_FLOAT | AV_PIX_FMT_FLAG_BE |
@@ -1236,9 +1236,9 @@ bool MediaWriter::writeVideoFrom(VideoReader& reader, std::int64_t number, QRect
     const bool exactRgb = rgbOut && srcDesc && !(srcDesc->flags & AV_PIX_FMT_FLAG_RGB) && !fullRange(src) &&
                           (desc->flags & AV_PIX_FMT_FLAG_PLANAR) && desc->comp[0].depth > 8 && desc->comp[0].depth <= 16;
     if (exactRgb) {
-        // Y'CbCr to RGB (DNx 444) done here, the 4:4:4 step and the matrix:
-        // swscale's results for both differ between FFmpeg versions. It
-        // is used only to scale.
+        // Y'CbCr to RGB (DNx 444) done here, the 4:4:4 step and the matrix,
+        // the same everywhere: swscale's RGB results differ between FFmpeg
+        // versions. It is used only to scale.
         const int w = target.width();
         const int h = target.height();
         const std::size_t n = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);

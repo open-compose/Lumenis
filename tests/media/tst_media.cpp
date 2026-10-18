@@ -710,11 +710,20 @@ private slots:
         // The PSNR each resolution keeps at least: ours, measured on this
         // chart (44.3, 48.6, 50.0, 52.9 and, RGB, 53.0 dB with FFmpeg 6.1)
         // less some 3-4 dB for other FFmpeg versions.
+        // FFmpeg's arm64 build decodes DNxHR 444 with a less exact IDCT
+        // (the same as x86's idct=int; no option changes it there): the
+        // file is the same byte for byte, but its pictures come back at
+        // about 42 dB on the Mac (BUILDING.md, Troubleshooting).
+#if defined(Q_PROCESSOR_ARM_64)
+        constexpr double k444 = 40.0;
+#else
+        constexpr double k444 = 49.0;
+#endif
         const QList<QPair<QString, double>> expected{{QStringLiteral("dnx_lb"), 40.0},
                                                     {QStringLiteral("dnx_sq"), 45.0},
                                                     {QStringLiteral("dnx_hq"), 46.0},
                                                     {QStringLiteral("dnx_hqx"), 49.0},
-                                                    {QStringLiteral("dnx_444"), 49.0}};
+                                                    {QStringLiteral("dnx_444"), k444}};
         double previous = 0;
         // RGB to DNx 444 first: the codec alone, without a change of colour
         // space.

@@ -410,14 +410,23 @@ Tests that move or delete media files must let go of them first
 
 ### `transcodeRoundTrips`: one platform's PSNR is far below the others
 
-swscale's conversions are not the same in every FFmpeg version. FFmpeg 8
-(Homebrew on the Mac) turned Y'CbCr 4:2:2 10-bit into 16-bit 4:4:4 about
-10 dB worse than FFmpeg 6 and 7, and DNx 444 dropped to 42.6 dB. Our own
-code (`planarYuvTo444` and the matrix in `media.cpp`) now does the
-conversions that the PSNR depends on (Y'CbCr to 4:4:4, and between
-Y'CbCr and RGB), and swscale only scales. The test checks the RGB chart
-to DNx 444 first: a low value there points at the codec, and a low value
-only from Y'CbCr points at a conversion.
+First find out whether the encoder or the decoder differs. Decode the same
+file on both machines (`--framemd5`, or an MD5 of the decoded planes) and
+encode the same frames on both. On the Mac, DNx 444 from the Y'CbCr chart
+came back at 42 dB, against 52.6 dB on Linux. The files were the same byte
+for byte, but FFmpeg's arm64 build decodes DNxHR 444 with a less exact
+IDCT: x86 gives the same pictures with `-idct int`, and on arm64 no option
+changes it. So on arm64 the test accepts 40 dB for DNx 444, and 49 dB
+elsewhere. The RGB chart is checked first: a low value there points at
+the codec, a low value only from Y'CbCr at a conversion or the decoder.
+The conversions the PSNR depends on (Y'CbCr to 4:4:4, and between Y'CbCr
+and RGB) are our own code (`planarYuvTo444` and the matrix in `media.cpp`),
+so swscale's code for each version and processor doesn't change them.
+
+An arm64 FFmpeg can be tried on Linux: unpack an arm64 Ubuntu with
+`debootstrap --foreign --arch=arm64`, extract its python3 debs, unzip the
+aarch64 PyAV and numpy wheels, and run
+`qemu-aarch64 -L <root> <root>/usr/bin/python3.12`.
 
 ### macOS: "implicit conversion from 'std::int64_t' to 'long double' may lose precision"
 
