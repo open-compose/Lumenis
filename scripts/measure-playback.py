@@ -19,9 +19,10 @@ shorter runs are for trying it. The file is kept in the user's cache folder.
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
+
+import find_ffmpeg
 
 
 def cache_folder():
@@ -39,12 +40,15 @@ def cache_folder():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--app", required=True)
-    ap.add_argument("--ffmpeg", default=shutil.which("ffmpeg"))
+    ap.add_argument("--ffmpeg", default=None, help="the ffmpeg command (default: found as find_ffmpeg.py says)")
     ap.add_argument("--seconds", type=int, default=600)
     ap.add_argument("--offscreen", action="store_true", help="no window (CI); playback then paints off screen")
     args = ap.parse_args()
+    explicit = args.ffmpeg
+    args.ffmpeg = find_ffmpeg.find(explicit)
     if not args.ffmpeg:
-        print("measure-playback: no ffmpeg command found. It makes the test file. Install it "
+        print("measure-playback: no ffmpeg command found. Looked in:\n" + find_ffmpeg.explain(explicit))
+        print("measure-playback: ffmpeg makes the test file. Install it "
               "(Ubuntu: sudo apt install ffmpeg; Fedora: sudo dnf install ffmpeg-free; macOS: brew install ffmpeg; "
               "Windows: scripts/get-ffmpeg.ps1), or name it with --ffmpeg.")
         if hasattr(os, "geteuid") and os.geteuid() == 0:

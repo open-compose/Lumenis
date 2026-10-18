@@ -22,6 +22,8 @@ import shutil
 import subprocess
 import sys
 
+import find_ffmpeg
+
 FRAMES = 10
 
 # Raster and rate pairs: (name, width, height, rate).
@@ -124,12 +126,9 @@ def main():
     ap.add_argument("--min", type=int, default=100, help="fewest files that must be made (default 100)")
     args = ap.parse_args()
 
-    ffmpeg = args.ffmpeg or shutil.which("ffmpeg")
-    if not ffmpeg and os.environ.get("FFMPEG_ROOT"):
-        candidate = os.path.join(os.environ["FFMPEG_ROOT"], "bin", "ffmpeg.exe" if os.name == "nt" else "ffmpeg")
-        ffmpeg = candidate if os.path.exists(candidate) else None
+    ffmpeg = find_ffmpeg.find(args.ffmpeg)
     if not ffmpeg:
-        print("decode corpus: no ffmpeg command found; skipped (Ubuntu: sudo apt install ffmpeg)")
+        print("decode corpus: no ffmpeg command found; skipped. Looked in:\n" + find_ffmpeg.explain(args.ffmpeg))
         return 77  # ctest's SKIP_RETURN_CODE
     version = run([ffmpeg, "-version"]).stdout.splitlines()[0]
     encoders = run([ffmpeg, "-hide_banner", "-encoders"]).stdout

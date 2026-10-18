@@ -421,6 +421,15 @@ root's cache folder. CMake now warns when it can't find `ffmpeg` and leaves
 `decode_corpus` out. The self-hosted Linux CI job warns as well. In an
 existing WSL runner, run `sudo apt-get install -y ffmpeg`.
 
+On Windows, `scripts/get-ffmpeg.ps1` unpacks FFmpeg into
+`%LOCALAPPDATA%\Cutthulhu\ffmpeg\<build>\bin` and prints `FFMPEG_ROOT`,
+but it does not change PATH. A PATH changed with `setx` or in System
+Properties only reaches terminals opened after the change. A PATH entry
+that names the build folder instead of its `bin` folder doesn't help
+either. The scripts now look, in order, at `--ffmpeg`, PATH,
+`FFMPEG_ROOT\bin` and the newest build in that folder (`scripts/find_ffmpeg.py`).
+When they find nothing, they list each place they looked.
+
 ### `transcodeRoundTrips`: one platform's PSNR is far below the others
 
 First find out whether the encoder or the decoder differs. Decode the same
