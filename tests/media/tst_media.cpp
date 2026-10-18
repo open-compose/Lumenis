@@ -716,6 +716,32 @@ private slots:
                                                     {QStringLiteral("dnx_hqx"), 49.0},
                                                     {QStringLiteral("dnx_444"), 49.0}};
         double previous = 0;
+        // RGB to DNx 444 first: the codec alone, without a change of colour
+        // space.
+        {
+            auto rgbClip = linkClip(*probe(rgbSource), o);
+            QVERIFY(rgbClip);
+            MediaCreation c;
+            c.raster = QSize(1280, 720);
+            c.resolution = *findResolution(QStringLiteral("dnx_444"));
+            c.videoDrive = dir.filePath(QStringLiteral("rgb"));
+            QVERIFY(QDir().mkpath(c.videoDrive));
+            QString error;
+            const auto made = transcodeClip(*rgbClip, 0, -1, c, &error);
+            QVERIFY2(made, qPrintable(error));
+            VideoReader from;
+            QVERIFY(from.open(rgbSource));
+            VideoReader to;
+            QVERIFY(to.open(linkOf(*made)->path));
+            double worst = 1000;
+            for (int f = 0; f < kFrames; ++f) {
+                const auto psnr = comparePictures(from, f, to, f);
+                QVERIFY(psnr);
+                worst = std::min(worst, psnr->worst());
+            }
+            qInfo("dnx_444 from RGB: worst plane PSNR %.2f dB (at least 49.0)", worst);
+            QVERIFY2(worst >= 49.0, qPrintable(QStringLiteral("dnx_444 from RGB: %1 dB").arg(worst)));
+        }
         VideoReader original;
         QVERIFY(original.open(source));
         for (const auto& [id, minimum] : expected) {
@@ -754,31 +780,6 @@ private slots:
                          qPrintable(QStringLiteral("%1 is no better than the one below").arg(id)));
                 previous = worst;
             }
-        }
-        // RGB to DNx 444: the codec alone.
-        {
-            auto rgbClip = linkClip(*probe(rgbSource), o);
-            QVERIFY(rgbClip);
-            MediaCreation c;
-            c.raster = QSize(1280, 720);
-            c.resolution = *findResolution(QStringLiteral("dnx_444"));
-            c.videoDrive = dir.filePath(QStringLiteral("rgb"));
-            QVERIFY(QDir().mkpath(c.videoDrive));
-            QString error;
-            const auto made = transcodeClip(*rgbClip, 0, -1, c, &error);
-            QVERIFY2(made, qPrintable(error));
-            VideoReader from;
-            QVERIFY(from.open(rgbSource));
-            VideoReader to;
-            QVERIFY(to.open(linkOf(*made)->path));
-            double worst = 1000;
-            for (int f = 0; f < kFrames; ++f) {
-                const auto psnr = comparePictures(from, f, to, f);
-                QVERIFY(psnr);
-                worst = std::min(worst, psnr->worst());
-            }
-            qInfo("dnx_444 from RGB: worst plane PSNR %.2f dB (at least 49.0)", worst);
-            QVERIFY2(worst >= 49.0, qPrintable(QStringLiteral("dnx_444 from RGB: %1 dB").arg(worst)));
         }
     }
 
