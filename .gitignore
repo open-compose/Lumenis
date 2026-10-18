@@ -9,3 +9,7 @@ CMakeUserPresets.json
 *.user
 .DS_Store
 out-editor/
+
+# Python bytecode (scripts/)
+__pycache__/
+*.pyc

@@ -695,7 +695,15 @@ the build folder (`build/<preset>`) and configure again.
   files into Media Composer by hand.
 * **Gates 3 and 4, playback:** on a reference machine with a sound card,
   `python3 scripts/measure-playback.py --app <cutthulhu> --seconds 600` (gate
-  3) and `--seconds 3600` (gate 4). The file is made once (about 9 GB for 10
+  3) and `--seconds 3600` (gate 4). Each run is judged on the gates its
+  length covers. Gate 3 is no dropped frame in the first 10 minutes; drops
+  later are reported with their times but don't fail it. Gate 4 is lip
+  sync over 60 minutes. A shorter run is a trial of the same limits. The
+  result lists when frames dropped (`dropTimes`, seconds into the run) and
+  how many picture changes were over half a frame (`lipSyncOver`, with the
+  99.9th percentile). Stop heavy background work, such as containers and
+  backups, for gate runs. WSL is not a reference Linux, because WSLg sends
+  the sound to Windows over RDP. The file is made once (about 9 GB for 10
   minutes) into the cache folder.
 * **Gate 5, transcode round trips:** `tst_media` (`transcodeRoundTrips`)
   prints each resolution's PSNR.

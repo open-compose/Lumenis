@@ -41,6 +41,7 @@
 #include <QTimeZone>
 #include <QFile>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QLineEdit>
 #include <QPushButton>
@@ -397,6 +398,12 @@ int main(int argc, char** argv) {
         double lateSum = 0;
         std::int64_t changes = 0;
         std::int64_t lastShown = -1;
+        // Each lateness, for how many are over the gate and a percentile,
+        // and when frames were dropped (seconds into the run), to match
+        // against what else the machine was doing.
+        std::vector<double> lates;
+        QJsonArray dropTimes;
+        std::int64_t droppedSoFar = 0;
         const QMetaObject::Connection watch = QObject::connect(&composer, &lumenis::ui::Composer::changed, &guiApp, [&] {
             const std::int64_t shownNow = composer.state(lumenis::ui::MonitorId::Source).position();
             if (shownNow == lastShown) return;
@@ -407,6 +414,11 @@ int main(int argc, char** argv) {
             lateMax = std::max(lateMax, late);
             lateSum += late;
             ++changes;
+            lates.push_back(late);
+            if (composer.playStats().dropped > droppedSoFar) {
+                droppedSoFar = composer.playStats().dropped;
+                dropTimes.append(std::round(static_cast<double>(clock.elapsed()) / 100.0) / 10.0);
+            }
         });
         composer.play(1);
         clock.start();
@@ -421,6 +433,9 @@ int main(int argc, char** argv) {
         QObject::disconnect(watch);
         sampler.stop();
         const double mean = samples > 0 ? sum / static_cast<double>(samples) : 0.0;
+        std::sort(lates.begin(), lates.end());
+        const auto over = static_cast<qint64>(lates.end() - std::upper_bound(lates.begin(), lates.end(), 0.5));
+        const double p999 = lates.empty() ? 0.0 : lates[static_cast<std::size_t>(0.999 * static_cast<double>(lates.size() - 1))];
         const QJsonObject result{
             {QStringLiteral("file"), file},
             {QStringLiteral("seconds"), seconds},
@@ -434,6 +449,11 @@ int main(int argc, char** argv) {
             // How late the picture changes after the sound enters a frame.
             {QStringLiteral("lipSyncError"), changes > 0 ? lateMax : 0.0},
             {QStringLiteral("lipSyncMean"), changes > 0 ? lateSum / static_cast<double>(changes) : 0.0},
+            // How many picture changes were more than half a frame late, and
+            // the 99.9th percentile: one late change or a pattern.
+            {QStringLiteral("lipSyncOver"), over},
+            {QStringLiteral("lipSyncP999"), p999},
+            {QStringLiteral("dropTimes"), dropTimes},
         };
         const QByteArray json = QJsonDocument(result).toJson();
         std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);

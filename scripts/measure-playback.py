@@ -115,17 +115,34 @@ def main():
     print(json.dumps(result, indent=1))
     ok = r.returncode == 0
     expected = args.seconds * 25
-    if result["dropped"] != 0:
-        print(f"gate 3: {result['dropped']} frames dropped of {result['shown']} shown")
+    # Gate 3 is 10 minutes without a dropped frame, gate 4 lip sync over 60
+    # minutes (ROADMAP Phase 2). A run is judged on the gates its length
+    # covers; a shorter one is a trial of the same limits.
+    gate3 = args.seconds >= 600
+    gate4 = args.seconds >= 3600
+    if not gate3:
+        print(f"a {args.seconds}-second trial: gate 3 needs --seconds 600, gate 4 --seconds 3600")
+    drops = result.get("dropTimes", [])
+    early = [t for t in drops if t < 600] if gate3 else drops
+    if result["dropped"] != 0 and (early or not drops):
+        print(f"gate 3: {result['dropped']} frames dropped of {result['shown']} shown"
+              + (f", at {', '.join(f'{t:g}' for t in early)} s" if early else ""))
         ok = False
+    elif result["dropped"] != 0:
+        # After the first 10 minutes: not gate 3's, but worth knowing.
+        print(f"note: {result['dropped']} frames dropped after the first 10 minutes, at "
+              + ", ".join(f"{t:g}" for t in drops) + " s")
     if result["shown"] < expected * 0.95:
         print(f"gate 3: only {result['shown']} of about {expected} frames shown")
         ok = False
+    label = "gate 4" if gate4 or not gate3 else "lip sync (gate 4 needs --seconds 3600)"
     if not result["sound"]:
-        print("gate 4: no sound was heard; is there an audio output?")
+        print(f"{label}: no sound was heard; is there an audio output?")
         ok = False
     elif result["lipSyncError"] > 0.5:
-        print(f"gate 4: lip sync off by {result['lipSyncError']:.2f} frame (at most 0.5)")
+        print(f"{label}: lip sync off by {result['lipSyncError']:.2f} frame (at most 0.5); "
+              f"{result.get('lipSyncOver', '?')} picture changes over 0.5, 99.9% within "
+              f"{result.get('lipSyncP999', 0):.2f}")
         ok = False
     print("playback gates: " + ("passed" if ok else "not passed"))
     if r.returncode != 0:

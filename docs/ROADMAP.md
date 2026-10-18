@@ -481,8 +481,18 @@ Sub-steps:
     at full depth (10-bit DNx keeps 10 bits; RGB 444 rose from 33 to 53 dB, its 4:4:4 step and matrix done by hand as swscale's results differ between FFmpeg versions; FFmpeg's arm64 build decodes DNxHR 444 less exactly, about 42 dB, so arm64 accepts 40 dB).
 
 **Gate status (Phase 2):** 1 and 5 pass on Linux (FFmpeg 6.1, 156 files);
-the CI runners run them on every push. 3 and 4 pass short runs here and wait on the reference-machine
-runs; 2 waits on bmx and a Media Composer seat.
+the CI runners run them on every push. Gate 3 passes the 10-minute run on
+the owner's Windows PC, M1 Mac mini and Ubuntu 26.04 in WSL. Gate 4 passes
+60 minutes on Windows. On the Mac, lip sync held, but 5 frames of 89,996
+dropped after the first 10 minutes, with Docker (Home Assistant) running.
+In WSL, the worst picture change was 0.53 frame late. WSLg's sound goes to
+Windows over RDP, so that machine is not a reference Linux. Still to do:
+a 60-minute run on native Linux and one on the Mac with Docker stopped,
+using the new per-gate report (how many changes were over 0.5 frame, and
+when frames dropped). The "±1 audio sample block" part of gate 4 has no
+measurement of its own yet: the picture is slaved to the audio clock, so
+there is no drift to measure, and lip sync covers the offset. 2 waits on
+bmx and a Media Composer seat.
 
 * Linking (AMA-style) and Import/Consolidate/Transcode into an Avid MediaFiles
   layout: `Avid MediaFiles/MXF/<n>/`.
