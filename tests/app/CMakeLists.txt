@@ -44,6 +44,9 @@ if(Python3_Interpreter_FOUND)
             SKIP_RETURN_CODE 77
             LABELS corpus
             TIMEOUT 3600)
+    else()
+        message(WARNING "The ffmpeg command was not found: the decode_corpus test is left out. "
+                        "Install it (Linux: scripts/bootstrap-linux.sh; BUILDING.md, Phase 2 gates).")
     endif()
 endif()
 

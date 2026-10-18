@@ -129,7 +129,7 @@ def main():
         candidate = os.path.join(os.environ["FFMPEG_ROOT"], "bin", "ffmpeg.exe" if os.name == "nt" else "ffmpeg")
         ffmpeg = candidate if os.path.exists(candidate) else None
     if not ffmpeg:
-        print("decode corpus: no ffmpeg command found; skipped")
+        print("decode corpus: no ffmpeg command found; skipped (Ubuntu: sudo apt install ffmpeg)")
         return 77  # ctest's SKIP_RETURN_CODE
     version = run([ffmpeg, "-version"]).stdout.splitlines()[0]
     encoders = run([ffmpeg, "-hide_banner", "-encoders"]).stdout

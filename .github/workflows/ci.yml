@@ -517,6 +517,9 @@ jobs:
             exit 1
           fi
           dpkg-query -W libavcodec-dev
+          if ! command -v ffmpeg >/dev/null; then
+            echo "::warning::The ffmpeg command is missing, so the decode_corpus test is left out: in WSL run 'sudo apt-get install -y ffmpeg' (BUILDING.md, Phase 2 gates)"
+          fi
 
       - name: Configure
         run: |

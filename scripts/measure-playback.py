@@ -44,8 +44,16 @@ def main():
     ap.add_argument("--offscreen", action="store_true", help="no window (CI); playback then paints off screen")
     args = ap.parse_args()
     if not args.ffmpeg:
-        print("measure-playback: no ffmpeg command found")
+        print("measure-playback: no ffmpeg command found. It makes the test file. Install it "
+              "(Ubuntu: sudo apt install ffmpeg; Fedora: sudo dnf install ffmpeg-free; macOS: brew install ffmpeg; "
+              "Windows: scripts/get-ffmpeg.ps1), or name it with --ffmpeg.")
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            print("measure-playback: also, do not run it with sudo. sudo resets PATH, and root usually has "
+                  "no connection to your sound server.")
         return 77
+    if hasattr(os, "geteuid") and os.geteuid() == 0:
+        print("measure-playback: running as root (sudo). It does not need it; the sound may then go nowhere, "
+              "and the file is kept in root's cache folder.")
     folder = cache_folder()
     os.makedirs(folder, exist_ok=True)
     media = os.path.join(folder, f"dnxhd120_1080p25_{args.seconds}s.mov")

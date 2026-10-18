@@ -408,6 +408,19 @@ prints the reports that contain a failure. Locally, look in
 Tests that move or delete media files must let go of them first
 (`MediaFrames::clear()`): Windows does not move or delete open files.
 
+### "no ffmpeg command found"
+
+`scripts/measure-playback.py` and the `decode_corpus` test need the
+`ffmpeg` program, not only FFmpeg's libraries. Up to now
+`scripts/bootstrap-linux.sh` installed only the libraries. Install it with
+`sudo apt install ffmpeg` (Fedora: `sudo dnf install ffmpeg-free`), or name
+it with `--ffmpeg <path>`. Run the scripts as yourself, not with `sudo`:
+sudo resets PATH, root usually can't reach your sound server (PipeWire or
+PulseAudio), so the run reports no sound, and the test file goes into
+root's cache folder. CMake now warns when it can't find `ffmpeg` and leaves
+`decode_corpus` out. The self-hosted Linux CI job warns as well. In an
+existing WSL runner, run `sudo apt-get install -y ffmpeg`.
+
 ### `transcodeRoundTrips`: one platform's PSNR is far below the others
 
 First find out whether the encoder or the decoder differs. Decode the same

@@ -57,7 +57,7 @@ install)
     script_dir=$(cd "$(dirname "$0")" && pwd)
     "$script_dir/bootstrap-linux.sh"
     apt-get install -y --no-install-recommends git ca-certificates fonts-dejavu-core weston curl file python3-pil \
-        libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev
+        libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libswresample-dev ffmpeg
 
     if ! id "$RUNNER_USER" >/dev/null 2>&1; then
         echo "Creating the user $RUNNER_USER"
