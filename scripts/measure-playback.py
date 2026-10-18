@@ -14,6 +14,9 @@ with the FFmpeg command-line tool, then plays it with
 The gate runs are 10 minutes (gate 3) and 60 minutes (gate 4) on the
 reference machines (M1 Mac, mid-range Windows and Linux), with a sound card;
 shorter runs are for trying it. The file is kept in the user's cache folder.
+
+Exit codes: 0 passed, 1 a gate not passed, 2 the application failed (its
+exit code is printed), 77 no ffmpeg command.
 """
 
 import argparse
@@ -35,6 +38,26 @@ def cache_folder():
     else:
         base = os.environ.get("XDG_CACHE_HOME", os.path.join(os.path.expanduser("~"), ".cache"))
     return os.path.join(base, "cutthulhu", "playback")
+
+
+WINDOWS_CODES = {
+    0xC0000005: "access violation",
+    0xC0000374: "heap corruption",
+    0xC0000409: "stack buffer overrun or abort",
+    0xC000041D: "an exception in a callback",
+    0x40000015: "abort",
+    0x80000003: "breakpoint (assert)",
+}
+
+
+def describe(code):
+    """An exit code as Windows or a POSIX system reports it."""
+    if code < 0:
+        return f"{code} (killed by signal {-code})"
+    if os.name == "nt" and code > 0xFFFF:
+        name = WINDOWS_CODES.get(code & 0xFFFFFFFF, "")
+        return f"0x{code & 0xFFFFFFFF:08X}" + (f" ({name})" if name else "")
+    return str(code)
 
 
 def main():
@@ -75,12 +98,19 @@ def main():
         env["QT_QPA_PLATFORM"] = "offscreen"
     r = subprocess.run([args.app, "--measure-playback", media, "--seconds", str(args.seconds)],
                        stdout=subprocess.PIPE, text=True, env=env)
+    try:
+        result = json.loads(r.stdout) if r.stdout.strip() else None
+    except ValueError:
+        result = None
     if r.returncode != 0:
-        print("measure-playback: the application failed")
-        return 1
-    result = json.loads(r.stdout)
+        print(f"measure-playback: the application failed: exit code {describe(r.returncode)}, "
+              + ("after writing its result" if result else "without a result"))
+        if r.stdout.strip() and not result:
+            print(r.stdout)
+    if not result:
+        return 2
     print(json.dumps(result, indent=1))
-    ok = True
+    ok = r.returncode == 0
     expected = args.seconds * 25
     if result["dropped"] != 0:
         print(f"gate 3: {result['dropped']} frames dropped of {result['shown']} shown")
@@ -95,6 +125,8 @@ def main():
         print(f"gate 4: lip sync off by {result['lipSyncError']:.2f} frame (at most 0.5)")
         ok = False
     print("playback gates: " + ("passed" if ok else "not passed"))
+    if r.returncode != 0:
+        return 2
     return 0 if ok else 1
 
 

@@ -431,6 +431,8 @@ int main(int argc, char** argv) {
         };
         const QByteArray json = QJsonDocument(result).toJson();
         std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
+        // Now, so a failure while closing down still leaves the result.
+        std::fflush(stdout);
         return 0;
     }
 

@@ -411,6 +411,16 @@ jobs:
           ctest --preset ci
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Playback measurement (ROADMAP Phase 2 gates 3 and 4)
+        # A short run: dropped frames or missing sound (the runner is a
+        # service) only report; the application failing (exit 2) fails it.
+        shell: powershell
+        run: |
+          $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
+          python scripts/measure-playback.py --offscreen --seconds 20 --app build\ci\bin\cutthulhu.exe
+          if ($LASTEXITCODE -eq 2) { Write-Host "::error::cutthulhu --measure-playback failed (BUILDING.md, Troubleshooting)"; exit 1 }
+          exit 0
+
       - name: Logs of failed tests
         # QTest's own report, written to a file as well: ctest's capture can
         # lose it (BUILDING.md).
