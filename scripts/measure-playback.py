@@ -97,7 +97,10 @@ def main():
     if args.offscreen:
         env["QT_QPA_PLATFORM"] = "offscreen"
     r = subprocess.run([args.app, "--measure-playback", media, "--seconds", str(args.seconds)],
-                       stdout=subprocess.PIPE, text=True, env=env)
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    # When it fails: its messages, and on Windows a crash report with the stack.
+    if r.returncode != 0 and r.stderr.strip():
+        print(r.stderr.rstrip(), file=sys.stderr)
     try:
         result = json.loads(r.stdout) if r.stdout.strip() else None
     except ValueError:

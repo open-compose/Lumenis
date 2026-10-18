@@ -12,6 +12,8 @@ endif()
 
 qt_add_executable(lumenis_app WIN32 MACOSX_BUNDLE
     main.cpp
+    crash_report.cpp
+    crash_report.h
     module_paths.cpp
     module_paths.h
     ${app_icon_sources}
@@ -31,6 +33,8 @@ lumenis_set_warnings(lumenis_app)
 if(WIN32)
     # Console output for --version / --list-providers when run from a terminal.
     target_compile_definitions(lumenis_app PRIVATE LUMENIS_WIN32_ATTACH_CONSOLE)
+    # The crash report's stack (crash_report.cpp).
+    target_link_libraries(lumenis_app PRIVATE dbghelp)
 endif()
 
 include(GNUInstallDirs)
@@ -44,6 +48,10 @@ endif()
 install(TARGETS lumenis_app
     BUNDLE DESTINATION .
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+if(MSVC)
+    # So a crash report names functions and lines (crash_report.cpp).
+    install(FILES $<TARGET_PDB_FILE:lumenis_app> DESTINATION ${CMAKE_INSTALL_BINDIR} OPTIONAL)
+endif()
 
 # Bundle Qt into the install tree on macOS and Windows. Linux packages use the
 # distribution's Qt (deb/rpm) or linuxdeploy (AppImage).

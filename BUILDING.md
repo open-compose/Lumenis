@@ -441,6 +441,15 @@ fixed:
 * The measurement's callbacks used variables that were gone by the time
   the window closed down. The connection is now cut as soon as playback
   ends.
+* Tools > Console's message handler stayed installed after its log, a
+  static, was destroyed. A warning from Qt after that crashed. The handler
+  is now removed with the log.
+
+If Cutthulhu still crashes on Windows, it prints a crash report: the
+exception and the call stack, with function names and lines from
+`cutthulhu.pdb`, which is installed next to the executable. The script
+shows Cutthulhu's messages and the report when it fails. Send the report
+with the problem.
 
 The self-hosted Windows job runs a 20-second measurement and fails on
 exit 2. It needs Python on the runner. The runner service runs as the

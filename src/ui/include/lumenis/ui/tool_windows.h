@@ -64,6 +64,7 @@ signals:
 
 private:
     ConsoleLog();
+    ~ConsoleLog() override;
     QStringList lines_;
 };
 

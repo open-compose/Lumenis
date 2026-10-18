@@ -1,3 +1,4 @@
+#include "crash_report.h"
 #include "module_paths.h"
 
 #include "lumenis/core/branding.h"
@@ -135,6 +136,7 @@ void printProviders(const lumenis::ext::ProviderRegistry& registry,
 
 int main(int argc, char** argv) {
     attachParentConsole();
+    installCrashReport();
 
     const bool headless = isHeadlessInvocation(argc, argv);
     if (!headless) {

@@ -134,6 +134,11 @@ QtMessageHandler& previousHandler() {
     return previous;
 }
 
+bool& handlerInstalled() {
+    static bool installed = false;
+    return installed;
+}
+
 void consoleHandler(QtMsgType type, const QMessageLogContext& context, const QString& message) {
     if (type != QtDebugMsg && type != QtInfoMsg) {
         const char* kind = type == QtWarningMsg ? "Warning" : type == QtCriticalMsg ? "Error" : "Fatal";
@@ -152,15 +157,26 @@ ConsoleLog::ConsoleLog() {
     lines_ = systemInfo();
 }
 
+// A static: it goes after main() returns, while Qt can still log (its own
+// statics, threads stopping). Messages go back to the handler from before.
+ConsoleLog::~ConsoleLog() {
+    if (handlerInstalled()) {
+        qInstallMessageHandler(previousHandler());
+        handlerInstalled() = false;
+    }
+}
+
 ConsoleLog& ConsoleLog::instance() {
     static ConsoleLog log;
     return log;
 }
 
 void ConsoleLog::installMessageHandler() {
-    static bool installed = false;
-    if (installed) return;
-    installed = true;
+    if (handlerInstalled()) return;
+    handlerInstalled() = true;
+    // Made now, so it is destroyed (and the handler removed) after anything
+    // made later that might log while it goes.
+    instance();
     previousHandler() = qInstallMessageHandler(consoleHandler);
 }
 
