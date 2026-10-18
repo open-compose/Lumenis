@@ -478,7 +478,7 @@ Sub-steps:
   * Gate 5: `tst_media` `transcodeRoundTrips`: each DNx resolution's
     Y'CbCr PSNR (expected values are ours, measured), timecode and tape.
     Transcoding now goes straight from the decoded picture to the encoder
-    at full depth (10-bit DNx keeps 10 bits; RGB 444 rose from 33 to 53 dB, its matrix done by hand as swscale's RGB path differs between FFmpeg versions).
+    at full depth (10-bit DNx keeps 10 bits; RGB 444 rose from 33 to 53 dB, its 4:4:4 step and matrix done by hand as swscale's results differ between FFmpeg versions: FFmpeg 8 lost 10 dB).
 
 **Gate status (Phase 2):** 1 and 5 pass on Linux (FFmpeg 6.1, 156 files);
 the CI runners run them on every push. 3 and 4 pass short runs here and wait on the reference-machine
