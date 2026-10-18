@@ -49,6 +49,7 @@
 #include <QSettings>
 #include <QTemporaryDir>
 #include <QElapsedTimer>
+#include <QEventLoop>
 #include <QTimer>
 
 #include <optional>
@@ -408,6 +409,11 @@ int main(int argc, char** argv) {
             const std::int64_t shownNow = composer.state(lumenis::ui::MonitorId::Source).position();
             if (shownNow == lastShown) return;
             lastShown = shownNow;
+            // From the start: a drop while the sound starts counts too.
+            if (composer.playStats().dropped > droppedSoFar) {
+                droppedSoFar = composer.playStats().dropped;
+                dropTimes.append(static_cast<double>(clock.elapsed()) / 1000.0);
+            }
             if (!composer.isPlaying() || !window.isPlayingSound() || clock.elapsed() < 500) return;
             const double heard = lumenis::media::samplesToFrames(window.soundClock(), item.editRate);
             const double late = heard - static_cast<double>(shownNow);
@@ -415,11 +421,16 @@ int main(int argc, char** argv) {
             lateSum += late;
             ++changes;
             lates.push_back(late);
-            if (composer.playStats().dropped > droppedSoFar) {
-                droppedSoFar = composer.playStats().dropped;
-                dropTimes.append(std::round(static_cast<double>(clock.elapsed()) / 100.0) / 10.0);
-            }
         });
+        // As an editor would: the window drawn and the clip's frame shown
+        // before Play. Played straight after show(), the window's first paint
+        // (on macOS the surface and fonts, 100 ms or more) fell in the first
+        // ticks and the picture skipped frames to catch up.
+        {
+            QEventLoop settle;
+            QTimer::singleShot(1000, &settle, &QEventLoop::quit);
+            settle.exec();
+        }
         composer.play(1);
         clock.start();
         sampler.start();
