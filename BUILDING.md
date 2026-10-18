@@ -702,8 +702,9 @@ the build folder (`build/<preset>`) and configure again.
   result lists when frames dropped (`dropTimes`, seconds into the run) and
   how many picture changes were over half a frame (`lipSyncOver`, with the
   99.9th percentile). Stop heavy background work, such as containers and
-  backups, for gate runs. WSL is not a reference Linux, because WSLg sends
-  the sound to Windows over RDP. The file is made once (about 9 GB for 10
+  backups, for gate runs. On Linux the reference is Ubuntu 26.04 in WSL.
+  WSLg sends the sound to Windows over RDP, which adds some jitter of its
+  own. The file is made once (about 9 GB for 10
   minutes) into the cache folder.
 * **Gate 5, transcode round trips:** `tst_media` (`transcodeRoundTrips`)
   prints each resolution's PSNR.

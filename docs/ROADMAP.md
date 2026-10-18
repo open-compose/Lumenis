@@ -485,11 +485,13 @@ the CI runners run them on every push. Gate 3 passes the 10-minute run on
 the owner's Windows PC, M1 Mac mini and Ubuntu 26.04 in WSL. Gate 4 passes
 60 minutes on Windows. On the Mac, lip sync held, but 5 frames of 89,996
 dropped after the first 10 minutes, with Docker (Home Assistant) running.
-In WSL, the worst picture change was 0.53 frame late. WSLg's sound goes to
-Windows over RDP, so that machine is not a reference Linux. Still to do:
-a 60-minute run on native Linux and one on the Mac with Docker stopped,
+In WSL, the worst picture change was 0.53 frame late. The owner's other
+Linux machines are servers without a GUI, so Ubuntu 26.04 in WSL is the
+reference Linux (owner's decision). WSLg's sound goes to Windows over RDP.
+Still to do: rerun 60 minutes in WSL, and on the Mac with Docker stopped,
 using the new per-gate report (how many changes were over 0.5 frame, and
-when frames dropped). The "±1 audio sample block" part of gate 4 has no
+when frames dropped). Whether a slight overrun in WSL is acceptable is
+decided after that run. The "±1 audio sample block" part of gate 4 has no
 measurement of its own yet: the picture is slaved to the audio clock, so
 there is no drift to measure, and lip sync covers the offset. 2 waits on
 bmx and a Media Composer seat.
