@@ -434,15 +434,25 @@ When they find nothing, they list each place they looked.
 
 The script now prints Cutthulhu's exit code and still checks the result if
 one was written. Exit 2 means the application failed. On Windows a code
-such as `0xC0000005 (access violation)` means it crashed. Two causes are
-fixed:
+such as `0xC0000005 (access violation)` means it crashed.
+
+The crash on a Windows desktop came from miniaudio before 0.11.25. When
+it opened the sound device it called `CoInitializeEx` and then always
+`CoUninitialize`, even when its init had failed. Its init does fail on
+Qt's main thread, which is already in a single-threaded apartment. So
+the uninit took Qt's own COM reference away, and closing the application
+crashed in `qwindows.dll` (`QWinRTFactoryCacheRegistration::clearAllCaches`).
+miniaudio 0.11.25 calls `CoUninitialize` only after a successful init.
+`tst_media` (`soundLeavesComAlone`) checks that COM is still initialised
+after opening and closing the sound device. Three smaller problems are
+fixed too:
 * The result was written without flushing, so a crash while closing down
   lost it.
 * The measurement's callbacks used variables that were gone by the time
   the window closed down. The connection is now cut as soon as playback
   ends.
 * Tools > Console's message handler stayed installed after its log, a
-  static, was destroyed. A warning from Qt after that crashed. The handler
+  static, was destroyed. A warning from Qt after that could crash. The handler
   is now removed with the log.
 
 If Cutthulhu still crashes on Windows, it prints a crash report: the

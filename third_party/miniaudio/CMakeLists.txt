@@ -1,4 +1,4 @@
-# miniaudio 0.11.22 (https://miniaud.io, public domain or MIT-0): audio
+# miniaudio 0.11.25 (https://miniaud.io, public domain or MIT-0): audio
 # output on Core Audio, WASAPI, PulseAudio/ALSA and a null device. The
 # platform libraries are loaded at run time, so nothing needs installing.
 add_library(lumenis_miniaudio STATIC miniaudio.cpp)

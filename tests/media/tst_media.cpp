@@ -18,6 +18,13 @@
 #include <cmath>
 #include <numbers>
 
+#if defined(Q_OS_WIN)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <objbase.h>
+#endif
+
 using namespace lumenis;
 using namespace lumenis::media;
 
@@ -1115,6 +1122,46 @@ private slots:
             qInfo() << "audio output:" << player.deviceName();
             player.stop();
         }
+    }
+
+    void soundLeavesComAlone() {
+        // Qt's Windows platform plugin keeps COM (single-threaded) on the
+        // main thread and releases WinRT objects through it as the
+        // application goes. miniaudio before 0.11.25 called CoUninitialize
+        // after its own CoInitializeEx had failed there, taking Qt's
+        // reference: a crash on exit after any playback (BUILDING.md).
+#if defined(Q_OS_WIN)
+        const HRESULT first = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        QVERIFY(first == S_OK || first == S_FALSE);
+        {
+            QTemporaryDir dir;
+            WriterSettings s;
+            s.format = QStringLiteral("wav");
+            s.audioCodec = QStringLiteral("pcm_f32le");
+            s.sampleRate = 48000;
+            s.channels = 2;
+            MediaWriter w;
+            QVERIFY(w.open(dir.filePath(QStringLiteral("quiet.wav")), s));
+            std::vector<float> silence(2 * 4800, 0.0f);
+            QVERIFY(w.writeAudio(silence.data(), 4800));
+            QVERIFY(w.finish());
+            AudioPiece piece;
+            piece.path = dir.filePath(QStringLiteral("quiet.wav"));
+            piece.length = 4800;
+            AudioPlayer player;
+            // A sound card if there is one; opening none goes through the
+            // same calls.
+            if (player.start(std::make_shared<AudioMix>(std::vector<AudioPiece>{piece}), 0)) player.stop();
+        }
+        // Still initialised: this adds a reference (S_FALSE), not a new
+        // apartment (S_OK).
+        const HRESULT again = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        if (SUCCEEDED(again)) CoUninitialize();
+        CoUninitialize();
+        QCOMPARE(again, S_FALSE);
+#else
+        QSKIP("COM is Windows only");
+#endif
     }
 
     void audioOfClipsAndSequences() {
