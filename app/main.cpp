@@ -395,7 +395,7 @@ int main(int argc, char** argv) {
         double lateSum = 0;
         std::int64_t changes = 0;
         std::int64_t lastShown = -1;
-        QObject::connect(&composer, &lumenis::ui::Composer::changed, &guiApp, [&] {
+        const QMetaObject::Connection watch = QObject::connect(&composer, &lumenis::ui::Composer::changed, &guiApp, [&] {
             const std::int64_t shownNow = composer.state(lumenis::ui::MonitorId::Source).position();
             if (shownNow == lastShown) return;
             lastShown = shownNow;
@@ -414,6 +414,10 @@ int main(int argc, char** argv) {
             QApplication::quit();
         });
         guiApp.exec();
+        // The lambdas above use this block's variables, which go before the
+        // window does: nothing may reach them while it closes down.
+        QObject::disconnect(watch);
+        sampler.stop();
         const double mean = samples > 0 ? sum / static_cast<double>(samples) : 0.0;
         const QJsonObject result{
             {QStringLiteral("file"), file},
@@ -433,6 +437,8 @@ int main(int argc, char** argv) {
         std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
         // Now, so a failure while closing down still leaves the result.
         std::fflush(stdout);
+        // Its files are in dir, which goes first (Windows keeps open files).
+        window.clearProject();
         return 0;
     }
 

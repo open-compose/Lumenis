@@ -417,7 +417,9 @@ jobs:
         shell: powershell
         run: |
           $env:PATH = "$env:QT_ROOT_DIR\bin;$env:PATH"
-          python scripts/measure-playback.py --offscreen --seconds 20 --app build\ci\bin\cutthulhu.exe
+          $py = @('python', 'py') | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } | Select-Object -First 1
+          if (-not $py) { Write-Host "::warning::No Python on this runner: the playback measurement and decode_corpus are left out (BUILDING.md, Phase 2 gates)"; exit 0 }
+          & $py scripts/measure-playback.py --offscreen --seconds 20 --app build\ci\bin\cutthulhu.exe
           if ($LASTEXITCODE -eq 2) { Write-Host "::error::cutthulhu --measure-playback failed (BUILDING.md, Troubleshooting)"; exit 1 }
           exit 0
 

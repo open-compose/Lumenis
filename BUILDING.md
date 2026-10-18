@@ -430,6 +430,24 @@ either. The scripts now look, in order, at `--ffmpeg`, PATH,
 `FFMPEG_ROOT\bin` and the newest build in that folder (`scripts/find_ffmpeg.py`).
 When they find nothing, they list each place they looked.
 
+### "measure-playback: the application failed"
+
+The script now prints Cutthulhu's exit code and still checks the result if
+one was written. Exit 2 means the application failed. On Windows a code
+such as `0xC0000005 (access violation)` means it crashed. Two causes are
+fixed:
+* The result was written without flushing, so a crash while closing down
+  lost it.
+* The measurement's callbacks used variables that were gone by the time
+  the window closed down. The connection is now cut as soon as playback
+  ends.
+
+The self-hosted Windows job runs a 20-second measurement and fails on
+exit 2. It needs Python on the runner. Install Python for all users
+(python.org, or `winget install Python.Python.3.12 --scope machine`) and
+restart the runner service. That also brings back `decode_corpus` on
+Windows.
+
 ### `transcodeRoundTrips`: one platform's PSNR is far below the others
 
 First find out whether the encoder or the decoder differs. Decode the same
