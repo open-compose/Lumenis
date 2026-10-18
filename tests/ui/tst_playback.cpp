@@ -88,6 +88,11 @@ private slots:
         Composer& composer = window.composer();
         composer.loadDefault(binId, *bin->bin().item(ids.first()));
         composer.setActiveMonitor(MonitorId::Source);
+        // The window drawn and the clip's frame shown before Play, as an
+        // editor plays: a first paint in the first ticks holds them back
+        // (on the Mac, 100 ms and more), which is not what this measures.
+        QVERIFY(QTest::qWaitForWindowExposed(&window));
+        QTest::qWait(500);
         composer.play(1);
         QVERIFY(composer.isPlaying());
         if (!window.isPlayingSound()) QSKIP("no audio output, not even the null device");
@@ -104,7 +109,10 @@ private slots:
             closest = std::min(closest, std::abs(static_cast<double>(position) - heard));
         }
         QVERIFY2(window.soundClock() > 0, "no sound was heard");
-        QVERIFY2(closest <= 2.0, qPrintable(QStringLiteral("the picture was %1 frames from the sound").arg(closest)));
+        QVERIFY2(closest <= 2.0, qPrintable(QStringLiteral("the picture was %1 frames from the sound (%2 frames shown, %3 dropped)")
+                                                .arg(closest)
+                                                .arg(composer.playStats().shown)
+                                                .arg(composer.playStats().dropped)));
         QVERIFY(position > 0);
         QVERIFY(composer.playStats().shown > 0);
         // Smooth audio scrub (p.675): sound up to three times normal speed,
