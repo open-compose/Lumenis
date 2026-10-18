@@ -76,6 +76,59 @@ bool fullRange(const AVFrame* f) {
            f->format == AV_PIX_FMT_YUVJ420P || f->format == AV_PIX_FMT_YUVJ422P || f->format == AV_PIX_FMT_YUVJ444P;
 }
 
+// A planar, limited-range Y'CbCr picture as 16-bit 4:4:4 at its own size,
+// done here: luma shifted up, chroma interpolated linearly (co-sited
+// horizontally, centred vertically). swscale's results for this differ
+// between FFmpeg versions (FFmpeg 8 on arm64 loses about 10 dB), so
+// comparisons and DNx 444 writing don't use it. False for other pictures.
+bool planarYuvTo444(const AVFrame* f, std::uint16_t* y, std::uint16_t* cb, std::uint16_t* cr, int stride) {
+    const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(static_cast<AVPixelFormat>(f->format));
+    if (!desc || (desc->flags & (AV_PIX_FMT_FLAG_RGB | AV_PIX_FMT_FLAG_FLOAT | AV_PIX_FMT_FLAG_BE |
+                                 AV_PIX_FMT_FLAG_PAL | AV_PIX_FMT_FLAG_BITSTREAM)) ||
+        !(desc->flags & AV_PIX_FMT_FLAG_PLANAR) || desc->nb_components < 3 || fullRange(f)) {
+        return false;
+    }
+    const int depth = desc->comp[0].depth;
+    if (depth < 8 || depth > 16 || desc->comp[1].depth != depth || desc->comp[2].depth != depth) return false;
+    for (int c = 0; c < 3; ++c) {
+        if (desc->comp[c].plane != c || desc->comp[c].offset != 0 || desc->comp[c].shift != 0) return false;
+    }
+    const int sw = desc->log2_chroma_w;
+    const int sh = desc->log2_chroma_h;
+    const int cw = AV_CEIL_RSHIFT(f->width, sw);
+    const int ch = AV_CEIL_RSHIFT(f->height, sh);
+    const int up = 16 - depth;
+    auto at = [&](int plane, int x, int row) -> std::uint32_t {
+        const std::uint8_t* line = f->data[plane] + static_cast<std::ptrdiff_t>(row) * f->linesize[plane];
+        if (depth == 8) return line[x];
+        return reinterpret_cast<const std::uint16_t*>(line)[x];
+    };
+    for (int row = 0; row < f->height; ++row) {
+        std::uint16_t* out[3] = {y + static_cast<std::ptrdiff_t>(row) * stride, cb + static_cast<std::ptrdiff_t>(row) * stride,
+                                 cr + static_cast<std::ptrdiff_t>(row) * stride};
+        for (int x = 0; x < f->width; ++x) out[0][x] = static_cast<std::uint16_t>(at(0, x, row) << up);
+        // The two chroma rows around this one and the weight of the second.
+        double fy = sh ? (row + 0.5) / (1 << sh) - 0.5 : row;
+        fy = std::clamp(fy, 0.0, static_cast<double>(ch - 1));
+        const int r0 = static_cast<int>(fy);
+        const int r1 = std::min(r0 + 1, ch - 1);
+        const double wy = fy - r0;
+        for (int plane = 1; plane <= 2; ++plane) {
+            for (int x = 0; x < f->width; ++x) {
+                const double fx = std::min(static_cast<double>(x) / (1 << sw), static_cast<double>(cw - 1));
+                const int c0 = static_cast<int>(fx);
+                const int c1 = std::min(c0 + 1, cw - 1);
+                const double wx = fx - c0;
+                const double top = at(plane, c0, r0) * (1 - wx) + at(plane, c1, r0) * wx;
+                const double bottom = at(plane, c0, r1) * (1 - wx) + at(plane, c1, r1) * wx;
+                const double v = (top * (1 - wy) + bottom * wy) * (1 << up);
+                out[plane][x] = static_cast<std::uint16_t>(std::lround(std::clamp(v, 0.0, 65535.0)));
+            }
+        }
+    }
+    return true;
+}
+
 // The edit rate of a video stream: its average rate, else its base rate.
 AVRational videoRate(const AVStream* st) {
     // An average guessed from the bit rate can be absurd (raw DV: 60000
@@ -697,6 +750,13 @@ bool VideoReader::planes(std::int64_t number, QSize size, std::vector<std::uint1
         }
         return true;
     }
+    if (w == f->width && h == f->height) {
+        const std::size_t n = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
+        y->assign(n, 0);
+        cb->assign(n, 0);
+        cr->assign(n, 0);
+        if (planarYuvTo444(f, y->data(), cb->data(), cr->data(), w)) return true;
+    }
     SwsContext* sws = sws_getContext(f->width, f->height, static_cast<AVPixelFormat>(f->format), w, h,
                                      AV_PIX_FMT_YUV444P16LE, SWS_BICUBIC | SWS_ACCURATE_RND | SWS_FULL_CHR_H_INT,
                                      nullptr, nullptr, nullptr);
@@ -1176,22 +1236,26 @@ bool MediaWriter::writeVideoFrom(VideoReader& reader, std::int64_t number, QRect
     const bool exactRgb = rgbOut && srcDesc && !(srcDesc->flags & AV_PIX_FMT_FLAG_RGB) && !fullRange(src) &&
                           (desc->flags & AV_PIX_FMT_FLAG_PLANAR) && desc->comp[0].depth > 8 && desc->comp[0].depth <= 16;
     if (exactRgb) {
-        // Y'CbCr to RGB (DNx 444) with the matrix done here: swscale only
-        // scales to 16-bit 4:4:4, which every FFmpeg version does alike,
-        // while its RGB conversion differs between them.
+        // Y'CbCr to RGB (DNx 444) done here, the 4:4:4 step and the matrix:
+        // swscale's results for both differ between FFmpeg versions. It
+        // is used only to scale.
         const int w = target.width();
         const int h = target.height();
-        d.sws444 = sws_getCachedContext(d.sws444, src->width, src->height, static_cast<AVPixelFormat>(src->format), w, h,
-                                        AV_PIX_FMT_YUV444P16LE, SWS_BICUBIC | SWS_ACCURATE_RND | SWS_FULL_CHR_H_INT,
-                                        nullptr, nullptr, nullptr);
-        if (!d.sws444) return d.fail(QStringLiteral("cannot convert the picture"));
         const std::size_t n = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
         d.yuv444.resize(3 * n);
-        std::uint8_t* planes[4] = {reinterpret_cast<std::uint8_t*>(d.yuv444.data()),
-                                   reinterpret_cast<std::uint8_t*>(d.yuv444.data() + n),
-                                   reinterpret_cast<std::uint8_t*>(d.yuv444.data() + 2 * n), nullptr};
-        const int strides[4] = {w * 2, w * 2, w * 2, 0};
-        sws_scale(d.sws444, src->data, src->linesize, 0, src->height, planes, strides);
+        const bool exact = w == src->width && h == src->height &&
+                           planarYuvTo444(src, d.yuv444.data(), d.yuv444.data() + n, d.yuv444.data() + 2 * n, w);
+        if (!exact) {
+            d.sws444 = sws_getCachedContext(d.sws444, src->width, src->height, static_cast<AVPixelFormat>(src->format), w, h,
+                                            AV_PIX_FMT_YUV444P16LE, SWS_BICUBIC | SWS_ACCURATE_RND | SWS_FULL_CHR_H_INT,
+                                            nullptr, nullptr, nullptr);
+            if (!d.sws444) return d.fail(QStringLiteral("cannot convert the picture"));
+            std::uint8_t* planes[4] = {reinterpret_cast<std::uint8_t*>(d.yuv444.data()),
+                                       reinterpret_cast<std::uint8_t*>(d.yuv444.data() + n),
+                                       reinterpret_cast<std::uint8_t*>(d.yuv444.data() + 2 * n), nullptr};
+            const int strides[4] = {w * 2, w * 2, w * 2, 0};
+            sws_scale(d.sws444, src->data, src->linesize, 0, src->height, planes, strides);
+        }
         // Rec. 709 or 601, as the encoder declares.
         const bool bt709 = colourSpaceOf(src) == SWS_CS_ITU709;
         const double kr = bt709 ? 0.2126 : 0.299;

@@ -408,6 +408,17 @@ prints the reports that contain a failure. Locally, look in
 Tests that move or delete media files must let go of them first
 (`MediaFrames::clear()`): Windows does not move or delete open files.
 
+### `transcodeRoundTrips`: one platform's PSNR is far below the others
+
+swscale's conversions are not the same in every FFmpeg version. FFmpeg 8
+(Homebrew on the Mac) turned Y'CbCr 4:2:2 10-bit into 16-bit 4:4:4 about
+10 dB worse than FFmpeg 6 and 7, and DNx 444 dropped to 42.6 dB. Our own
+code (`planarYuvTo444` and the matrix in `media.cpp`) now does the
+conversions that the PSNR depends on (Y'CbCr to 4:4:4, and between
+Y'CbCr and RGB), and swscale only scales. The test checks the RGB chart
+to DNx 444 first: a low value there points at the codec, and a low value
+only from Y'CbCr points at a conversion.
+
 ### macOS: "implicit conversion from 'std::int64_t' to 'long double' may lose precision"
 
 On Apple arm64 `long double` is a plain 64-bit `double`, so Apple Clang's
