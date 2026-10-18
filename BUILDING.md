@@ -443,10 +443,24 @@ fixed:
   ends.
 
 The self-hosted Windows job runs a 20-second measurement and fails on
-exit 2. It needs Python on the runner. Install Python for all users
-(python.org, or `winget install Python.Python.3.12 --scope machine`) and
-restart the runner service. That also brings back `decode_corpus` on
-Windows.
+exit 2. It needs Python on the runner. The runner service runs as the
+hidden user `ghrunner`, so Python installed for your own account doesn't
+reach it. From an administrator PowerShell, run:
+
+```
+winget install --id Python.Python.3.13 --scope machine --log $env:TEMP\python-install.log
+Restart-Service (Get-Service 'actions.runner.*').Name
+```
+
+Then check with `py -0p`. Exit code 1603 is the Windows Installer's
+general failure; the reason is in the log. The usual causes are:
+* the terminal is not elevated;
+* the same Python version is already installed for your own account
+  (hence 3.13 above, if you have 3.12);
+* a reboot is pending.
+
+A machine-wide install brings back `decode_corpus` on Windows as well:
+CMake finds Python through the registry.
 
 ### `transcodeRoundTrips`: one platform's PSNR is far below the others
 
