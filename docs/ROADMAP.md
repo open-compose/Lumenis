@@ -593,7 +593,12 @@ and pyaaf2's test suites, made with real Media Composer
     Browser (clips online by MobID, p.547), File > Output > Export to File
     with the Export As dialog and the Export setting (p.868-869,
     p.1173-1177).
-  * Next: 3.3, reading Media Composer's `.avb` bins (ROADMAP order).
+  * 3.3, reading Media Composer's `.avb` bins (docs/spec/avb.md), has
+    started. 3.3a, the object reader (`src/interop/avb.*`), is done:
+    every class in the corpus bins is read as pyavb reads it, and all 14
+    bins dump byte for byte the same (`cutthulhu --dump-avb`,
+    `scripts/avb-dump.py --compare`, ctest `avb_pyavb`, tst_avb).
+  * Next: 3.3b, bins into the native model.
 
 ### Phase 4 — Core editing
 Features in this phase:

@@ -61,6 +61,64 @@
    "objects": 2706
   }
  },
+ "avb": {
+  "pyavb/retimes/bezier01.avb": {
+   "dump": "2b81ea032654ddf6437049cb5a9af0725c087292ac1ea61e8e67b3f4a62bfdc0",
+   "objects": 155
+  },
+  "pyavb/retimes/bezier02.avb": {
+   "dump": "4bfccf6c107c421b9a1d9c970693ffe08a7666825550fc23d471bb44032461f1",
+   "objects": 155
+  },
+  "pyavb/retimes/bezier03.avb": {
+   "dump": "5bc32a37bf733be91abe122659dff9e83c47193c5bc3b8305d516143a8a27001",
+   "objects": 155
+  },
+  "pyavb/retimes/linear01.avb": {
+   "dump": "3b977ee9ffe225528f22de923037c2016fd796b28acff8824c0cbae592986e19",
+   "objects": 172
+  },
+  "pyavb/retimes/linear02.avb": {
+   "dump": "c3a29601de481874325d06e8f4de6aae5e852825a1cb69b2e101474a48b77929",
+   "objects": 155
+  },
+  "pyavb/retimes/linear03.avb": {
+   "dump": "3cff44882ec591e1271c0f69b0f744daed993ec1add9c961fc27fca0402c9f24",
+   "objects": 155
+  },
+  "pyavb/retimes/spline01.avb": {
+   "dump": "31e715b70c5b8dfe3b4f367f4f45733a182c75c4e76ca6268c7c2dafe1c9f874",
+   "objects": 155
+  },
+  "pyavb/retimes/spline02.avb": {
+   "dump": "31cc8df624fba3a41a781467427db8983b5cb791a89d1ec1743a05047666bb99",
+   "objects": 155
+  },
+  "pyavb/retimes/spline03.avb": {
+   "dump": "3140f9441268c0b8eb81940e93e1af37c59e1e4802825c34b3e8bae4c100ec03",
+   "objects": 155
+  },
+  "pyavb/retimes/spline04.avb": {
+   "dump": "9b66a4a61f28b5438da7e2454c58a3ae5213f968c6f018cf24808c92b4cca0d6",
+   "objects": 155
+  },
+  "pyavb/retimes/step01.avb": {
+   "dump": "d0f1e8336deb5f86566a3abd85015f77d7723edc1998d867b6e3cca290b81ef6",
+   "objects": 172
+  },
+  "pyavb/retimes/step02.avb": {
+   "dump": "09e7601bad35035fe2a5aed984e1f98ec7e1b0d40653c552386bf674b8e1f080",
+   "objects": 155
+  },
+  "pyavb/retimes/step03.avb": {
+   "dump": "d19901b48acc5362180e0ec1b5d8dc015d1695bb2559a0b70d6d9062261a5a1e",
+   "objects": 155
+  },
+  "pyavb/test_file_01.avb": {
+   "dump": "ddae3b1764bd6c835674cedccc34dc5caebd1e7b53812467ea15304088738502",
+   "objects": 2190
+  }
+ },
  "cfb": {
   "pyaaf2/empty.aaf": {
    "listing": "49806360dce868f102cb957c3a3299eefe5fd0cad4724d99c4b2d6bc1aac0a74",
@@ -138,5 +196,5 @@
    "streams": 4143
   }
  },
- "comment": "Made by scripts/interop-corpus.py manifest with olefile 0.47 and pyaaf2 1.7.1"
+ "comment": "Made by scripts/interop-corpus.py manifest with olefile 0.47, pyaaf2 1.7.1 and pyavb 1.4.0"
 }

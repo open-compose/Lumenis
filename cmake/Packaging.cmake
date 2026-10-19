@@ -12,7 +12,8 @@ set(LUMENIS_LICENSE_FILES
     ${PROJECT_SOURCE_DIR}/src/ui/resources/fonts/Inter-LICENSE.txt
     ${PROJECT_SOURCE_DIR}/packaging/licenses/FFmpeg-LGPL-2.1.txt
     ${PROJECT_SOURCE_DIR}/packaging/licenses/miniaudio-LICENSE.txt
-    ${PROJECT_SOURCE_DIR}/packaging/licenses/pyaaf2-LICENSE.txt)
+    ${PROJECT_SOURCE_DIR}/packaging/licenses/pyaaf2-LICENSE.txt
+    ${PROJECT_SOURCE_DIR}/packaging/licenses/pyavb-LICENSE.txt)
 if(APPLE)
     install(FILES ${LUMENIS_LICENSE_FILES} DESTINATION .)
 else()

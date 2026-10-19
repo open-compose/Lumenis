@@ -7,6 +7,7 @@
 #include "lumenis/interop/aaf.h"
 #include "lumenis/interop/aaf_export.h"
 #include "lumenis/interop/aaf_import.h"
+#include "lumenis/interop/avb.h"
 #include "lumenis/model/structure.h"
 #include "lumenis/model/locations.h"
 #include "lumenis/model/project_store.h"
@@ -100,7 +101,7 @@ bool isHeadlessInvocation(int argc, char** argv) {
         const std::string_view arg(argv[i]);
         if (arg == "--version" || arg == "-v" || arg == "--help" || arg == "-h" || arg == "-?"
             || arg == "--list-providers" || arg == "--probe" || arg == "--framemd5" || arg == "--write-media"
-            || arg == "--dump-structure" || arg == "--dump-aaf" || arg == "--import-aaf" || arg == "--export-aaf") {
+            || arg == "--dump-structure" || arg == "--dump-aaf" || arg == "--dump-avb" || arg == "--import-aaf" || arg == "--export-aaf") {
             return true;
         }
     }
@@ -243,9 +244,16 @@ int main(int argc, char** argv) {
                        "(docs/spec/aaf.md), then exit. With --canonical, compact and sorted, as "
                        "scripts/aaf-dump.py prints it."),
         QStringLiteral("file"));
+    const QCommandLineOption dumpAvb(
+        QStringLiteral("dump-avb"),
+        QStringLiteral("Print a Media Composer bin (.avb) from its root object, with every property and "
+                       "every object it refers to, as JSON (docs/spec/avb.md), then exit. With --canonical, "
+                       "compact and sorted, as scripts/avb-dump.py prints it."),
+        QStringLiteral("file"));
     const QCommandLineOption canonical(QStringLiteral("canonical"),
-                                       QStringLiteral("With --dump-aaf: compact, sorted JSON."));
+                                       QStringLiteral("With --dump-aaf or --dump-avb: compact, sorted JSON."));
     parser.addOption(dumpAaf);
+    parser.addOption(dumpAvb);
     const QCommandLineOption importAaf(
         QStringLiteral("import-aaf"),
         QStringLiteral("Import an AAF file into a bin and print the bin's structure dump "
@@ -395,6 +403,21 @@ int main(int argc, char** argv) {
             return 1;
         }
         const QJsonValue dump = lumenis::interop::aaf::dump(file);
+        const QByteArray json = parser.isSet(canonical) ? lumenis::interop::aaf::canonicalJson(dump) + '\n'
+                                                        : QJsonDocument(dump.toObject()).toJson();
+        std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
+        return 0;
+    }
+
+    if (parser.isSet(dumpAvb)) {
+        // What a bin holds, to compare with pyavb's reading of it.
+        lumenis::interop::avb::File file;
+        QString error;
+        if (!file.open(parser.value(dumpAvb), &error)) {
+            std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(parser.value(dumpAvb)), qPrintable(error));
+            return 1;
+        }
+        const QJsonValue dump = lumenis::interop::avb::dump(file);
         const QByteArray json = parser.isSet(canonical) ? lumenis::interop::aaf::canonicalJson(dump) + '\n'
                                                         : QJsonDocument(dump.toObject()).toJson();
         std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);

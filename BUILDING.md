@@ -744,12 +744,18 @@ the build folder (`build/<preset>`) and configure again.
   reads what Cutthulhu writes with olefile and needs it installed
   (`pip install olefile`, or the distribution's `python3-olefile`); without
   it, it is skipped. After changing the corpus, rewrite the manifest with
-  `python3 scripts/interop-corpus.py manifest` (needs olefile and pyaaf2).
+  `python3 scripts/interop-corpus.py manifest` (needs olefile, pyaaf2 and
+  pyavb).
 * **AAF objects:** `tst_aaf` reads every corpus AAF as pyaaf2 does, compared
   by the digest of a dump. ctest `aaf_pyaaf2` compares the dumps themselves
   and lists any difference; it needs pyaaf2 (`pip install pyaaf2`) and is
   skipped without it. By hand: `python3 scripts/aaf-dump.py --compare --app
   build/ci/bin/cutthulhu FILE.aaf`.
+* **Bins (.avb):** `tst_avb` reads every corpus bin as pyavb does,
+  compared by the digest of a dump. ctest `avb_pyavb` compares the dumps
+  themselves, byte for byte, and lists any difference; it needs pyavb
+  (`pip install pyavb`) and is skipped without it. By hand: `python3
+  scripts/avb-dump.py --compare --app build/ci/bin/cutthulhu BIN.avb`.
 * **AAF import against Media Composer's bins (gate 1 on the corpus):**
   ctest `aaf_import_bins` imports each corpus AAF that has a bin of the same
   material and compares it with the bin's dump in `tests/data/aaf_reference`
@@ -785,6 +791,9 @@ cutthulhu --dump-structure PATH
 cutthulhu --dump-aaf FILE [--canonical]
                              print every object of an AAF file below its Header as JSON, for
                              scripts/aaf-dump.py --compare (docs/spec/aaf.md)
+cutthulhu --dump-avb FILE [--canonical]
+                             print a Media Composer bin (.avb) from its root object as JSON, for
+                             scripts/avb-dump.py --compare (docs/spec/avb.md)
 cutthulhu --import-aaf FILE   import an AAF file into a bin and print the bin as a structure dump
                              (docs/spec/aaf.md, "Import")
 cutthulhu --export-aaf BIN --to FILE

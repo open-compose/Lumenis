@@ -16,11 +16,17 @@ committed here: `fetch` downloads them into a cache folder.
         SHA-256; listing_digest). tst_cfb compares its own reading with this.
         Also a digest of each one's dump as pyaaf2 reads it
         (scripts/aaf-dump.py --canonical), which tst_aaf compares with its
-        own. Needs olefile and pyaaf2.
+        own. And a digest of each bin's dump as pyavb reads it
+        (scripts/avb-dump.py --canonical), for tst_avb. Needs olefile, pyaaf2
+        and pyavb.
     interop-corpus.py check-aaf --app build/ci/bin/cutthulhu [--dir DIR]
         Compare `cutthulhu --dump-aaf` of every AAF file with pyaaf2's
         reading (scripts/aaf-dump.py --compare). Exits 77 without the corpus
         or pyaaf2 (pip install pyaaf2).
+    interop-corpus.py check-avb --app build/ci/bin/cutthulhu [--dir DIR]
+        Compare `cutthulhu --dump-avb` of every bin with pyavb's reading
+        (scripts/avb-dump.py --compare), byte for byte. Exits 77 without the
+        corpus or pyavb (pip install pyavb).
     interop-corpus.py reference [--dir DIR]
         Rewrite tests/data/aaf_reference/: the structure dump of each
         Media Composer bin that has an AAF export of the same material, as
@@ -182,8 +188,22 @@ def listing_digest(entries):
     return hashlib.sha256("\n".join(sorted(lines)).encode("utf-8")).hexdigest()
 
 
+def load_script(name):
+    """A script of this folder as a module (its file name has a hyphen)."""
+    spec = importlib.util.spec_from_file_location(name.replace("-", "_"), os.path.join(ROOT, "scripts", name + ".py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def manifest(folder):
     olefile = olefile_or_skip()
+    try:
+        import avb  # noqa: F401
+        import aaf2  # noqa: F401
+    except ImportError:
+        print("interop-corpus: manifest needs pyaaf2 and pyavb (pip install pyaaf2 pyavb)", file=sys.stderr)
+        return 77
     cfb = {}
     for name, _, _ in files():
         if name.endswith(".aaf"):
@@ -191,16 +211,20 @@ def manifest(folder):
             streams = sum(1 for e in entries.values() if e["type"] == "stream")
             cfb[name] = {"storages": len(entries) - streams, "streams": streams, "listing": listing_digest(entries)}
     # The AAF files as pyaaf2 reads them (scripts/aaf-dump.py), for tst_aaf.
-    spec = importlib.util.spec_from_file_location("aaf_dump", os.path.join(ROOT, "scripts", "aaf-dump.py"))
-    aaf_dump = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(aaf_dump)
+    aaf_dump = load_script("aaf-dump")
     aaf = {}
     for name in cfb:
         text = aaf_dump.canonical(aaf_dump.dump(os.path.join(folder, name)))
         aaf[name] = {"dump": hashlib.sha256(text.encode("utf-8")).hexdigest(), "objects": text.count('"class":')}
-    import aaf2
-    doc = {"comment": f"Made by scripts/interop-corpus.py manifest with olefile {olefile.__version__} "
-                      f"and pyaaf2 {aaf2.__version__}", "cfb": cfb, "aaf": aaf}
+    # The bins as pyavb reads them (scripts/avb-dump.py), for tst_avb.
+    avb_dump = load_script("avb-dump")
+    bins = {}
+    for name, _, _ in files():
+        if name.endswith(".avb"):
+            text = avb_dump.canonical(avb_dump.dump(os.path.join(folder, name)))
+            bins[name] = {"dump": hashlib.sha256(text.encode("utf-8")).hexdigest(), "objects": text.count('"class":')}
+    doc = {"comment": f"Made by scripts/interop-corpus.py manifest with olefile {olefile.__version__}, "
+                      f"pyaaf2 {aaf2.__version__} and pyavb {avb.__version__}", "cfb": cfb, "aaf": aaf, "avb": bins}
     with open(MANIFEST, "w", encoding="utf-8", newline="\n") as f:
         json.dump(doc, f, indent=1, sort_keys=True)
         f.write("\n")
@@ -318,6 +342,16 @@ def check_aaf(app, folder):
     return subprocess.run([sys.executable, script, "--compare", "--app", app] + paths).returncode
 
 
+def check_avb(app, folder):
+    paths = [os.path.join(folder, name) for name, _, _ in files() if name.endswith(".avb")]
+    paths = [p for p in paths if os.path.exists(p)]
+    if not paths:
+        print(f"interop-corpus: no corpus in {folder} (interop-corpus.py fetch)", file=sys.stderr)
+        return 77
+    script = os.path.join(ROOT, "scripts", "avb-dump.py")
+    return subprocess.run([sys.executable, script, "--compare", "--app", app] + paths).returncode
+
+
 def check_written(test, folder):
     olefile = olefile_or_skip()
     with tempfile.TemporaryDirectory() as tmp:
@@ -349,11 +383,11 @@ def check_written(test, folder):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["fetch", "manifest", "reference", "check-aaf", "check-import",
+    ap.add_argument("command", choices=["fetch", "manifest", "reference", "check-aaf", "check-avb", "check-import",
                                         "check-round-trip", "check-written"])
     ap.add_argument("--dir", help="the corpus folder (check-written: where to keep the files written)")
     ap.add_argument("--test", help="tst_cfb, for check-written")
-    ap.add_argument("--app", help="the cutthulhu executable, for check-aaf")
+    ap.add_argument("--app", help="the cutthulhu executable, for the check- commands")
     args = ap.parse_args()
     if args.command == "fetch":
         return fetch(args.dir or default_dir())
@@ -373,6 +407,10 @@ def main():
         if not args.app:
             ap.error("check-aaf needs --app")
         return check_aaf(args.app, args.dir or default_dir())
+    if args.command == "check-avb":
+        if not args.app:
+            ap.error("check-avb needs --app")
+        return check_avb(args.app, args.dir or default_dir())
     if not args.test:
         ap.error("check-written needs --test")
     return check_written(args.test, args.dir)

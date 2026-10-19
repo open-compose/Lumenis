@@ -195,7 +195,10 @@ lays out bins as Media Composer does, `--export-aaf`), is done; ctest
 `aaf_round_trip` checks it. Gate 3's Media Composer halves are deferred.
 3.2e is done: AAF Import through the Source Browser (`MainWindow::importAaf`;
 clips find managed media by MobID) and File > Output > Export to File
-(`export_dialog.*`, the Export setting). Next is 3.3, `.avb` bin read.
+(`export_dialog.*`, the Export setting). 3.3, `.avb` bins (docs/spec/avb.md), has started: 3.3a, the object reader
+(`src/interop/avb.*`, `--dump-avb`, ported from pyavb), is done; ctest
+`avb_pyavb` compares it with pyavb (`scripts/avb-dump.py`). Next is 3.3b,
+bins into the native model.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 
