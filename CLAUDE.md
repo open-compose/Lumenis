@@ -68,6 +68,10 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
     opens natively on a headless Wayland compositor;
   - that PowerShell scripts parse;
   - cross-platform screenshot consistency (`ui-consistency`).
+- Comment the code for contributors (the project will be public; the map
+  is docs/ARCHITECTURE.md): each file starts with what it implements and
+  how it fits; public functions and members say their contract; non-obvious
+  code says why. Keep guide page citations; never invent one.
 - Everything the user can invoke is a command declared in
   `src/ui/resources/commands.json` and placed in `menus.json`.
   `tests/data/menu_inventory.json` is the spec the menu bar is tested against.

@@ -15,6 +15,8 @@ Silicon), Windows x64 and Linux x64. It is written in C++20 with Qt 6.
 * [Extensions](docs/EXTENSIONS.md): codecs, plug-ins, licensed technology and
   hooks.
 * [Roadmap](docs/ROADMAP.md): scope, clean-room rules and milestones.
+* [Architecture](docs/ARCHITECTURE.md): where things are in the source, for
+  contributors.
 
 The source code uses the internal code name `lumenis` for CMake targets, C++
 namespaces and the module ABI. Users never see it.
