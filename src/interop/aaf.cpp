@@ -1,6 +1,7 @@
 #include "lumenis/interop/aaf.h"
 
 #include <QJsonArray>
+#include <QSet>
 #include <QJsonObject>
 #include <QtEndian>
 
@@ -290,6 +291,38 @@ void MetaDictionary::addType(const TypeDef& t) {
         for (auto v = t.extValues.begin(); v != t.extValues.end(); ++v) d.extValues.insert(v.key(), v.value());
     }
     typeNames_.insert(t.name, t.auid);
+}
+
+const PropertyDef* MetaDictionary::propertyByAuid(const QUuid& auid) const {
+    for (const ClassDef& c : classes_) {
+        for (const PropertyDef& p : c.properties) {
+            if (p.auid == auid) return &p;
+        }
+    }
+    return nullptr;
+}
+
+void MetaDictionary::assignDynamicPids() {
+    QSet<int> taken;
+    for (const ClassDef& c : classes_) {
+        for (const PropertyDef& p : c.properties) {
+            if (p.pid >= 0) taken.insert(p.pid);
+        }
+    }
+    // In a stable order (by class, then property AUID), so that the same
+    // model always gets the same pids.
+    QList<QUuid> classes = classes_.keys();
+    std::sort(classes.begin(), classes.end());
+    int next = 0xFFFF;
+    for (const QUuid& id : classes) {
+        ClassDef& c = classes_[id];
+        for (PropertyDef& p : c.properties) {
+            if (p.pid >= 0) continue;
+            while (taken.contains(next)) --next;
+            p.pid = next;
+            taken.insert(next--);
+        }
+    }
 }
 
 const ClassDef* MetaDictionary::classDef(const QUuid& auid) const {

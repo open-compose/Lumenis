@@ -48,4 +48,14 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(aaf_import_bins PROPERTIES
         SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    # Phase 3 gate 3, Cutthulhu's half: every corpus AAF imported, exported
+    # and imported again is the same; pyaaf2, when installed, reads each
+    # export as Cutthulhu does.
+    add_test(NAME aaf_round_trip
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py check-round-trip
+                --app $<TARGET_FILE:lumenis_app> --dir ${LUMENIS_INTEROP_CORPUS})
+    set_tests_properties(aaf_round_trip PROPERTIES
+        SKIP_RETURN_CODE 77 TIMEOUT 900 DEPENDS interop_corpus_fetch
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

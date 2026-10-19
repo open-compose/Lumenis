@@ -583,7 +583,13 @@ and pyaaf2's test suites, made with real Media Composer
     corpus AAF with a Media Composer bin of the same material (13) imports
     the same as that bin (ctest `aaf_import_bins`): gate 1 on the corpus at
     hand, effect names aside.
-  * Next: 3.2d, export and round trips; 3.2e, File > Import and Export.
+  * 3.2d, AAF export (`src/interop/aaf_writer.*`, `aaf_export.*`), is done.
+    Every corpus AAF imported, exported and imported again is the same, and
+    pyaaf2 reads each export as Cutthulhu does (ctest `aaf_round_trip`):
+    gate 3's Cutthulhu→Cutthulhu half. The halves through Media Composer
+    (MC→Cutthulhu→MC, Cutthulhu→MC→Cutthulhu) are DEFERRED with gate 2's
+    Media Composer check until the owner has the seat again.
+  * Next: 3.2e, File > Import and Export of AAF.
 
 ### Phase 4 — Core editing
 Features in this phase:

@@ -5,6 +5,7 @@
 #include "lumenis/ext/module_loader.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/interop/aaf.h"
+#include "lumenis/interop/aaf_export.h"
 #include "lumenis/interop/aaf_import.h"
 #include "lumenis/model/structure.h"
 #include "lumenis/model/locations.h"
@@ -88,7 +89,7 @@ bool isHeadlessInvocation(int argc, char** argv) {
         const std::string_view arg(argv[i]);
         if (arg == "--version" || arg == "-v" || arg == "--help" || arg == "-h" || arg == "-?"
             || arg == "--list-providers" || arg == "--probe" || arg == "--framemd5" || arg == "--write-media"
-            || arg == "--dump-structure" || arg == "--dump-aaf" || arg == "--import-aaf") {
+            || arg == "--dump-structure" || arg == "--dump-aaf" || arg == "--import-aaf" || arg == "--export-aaf") {
             return true;
         }
     }
@@ -234,6 +235,15 @@ int main(int argc, char** argv) {
                        "(docs/spec/structure.md), then exit."),
         QStringLiteral("file"));
     parser.addOption(importAaf);
+    const QCommandLineOption exportAaf(
+        QStringLiteral("export-aaf"),
+        QStringLiteral("Export a bin (.cthbin) as AAF to the file --to names, then exit. An AAF file is "
+                       "imported first: a round trip."),
+        QStringLiteral("bin"));
+    const QCommandLineOption exportTo(QStringLiteral("to"), QStringLiteral("With --export-aaf: the AAF file to write."),
+                                      QStringLiteral("file"));
+    parser.addOption(exportAaf);
+    parser.addOption(exportTo);
     parser.addOption(canonical);
     parser.addOption(writeMedia);
     parser.addOption(mediaDrive);
@@ -297,6 +307,38 @@ int main(int argc, char** argv) {
         }
         const QByteArray json = QJsonDocument(structure).toJson();
         std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
+        return 0;
+    }
+
+    if (parser.isSet(exportAaf)) {
+        QString error;
+        const QString from = parser.value(exportAaf);
+        QList<lumenis::model::BinItem> items;
+        if (from.endsWith(QLatin1String(".aaf"), Qt::CaseInsensitive)) {
+            const auto imported = lumenis::interop::aaf::importFile(from, {}, &error);
+            if (!imported) {
+                std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(from), qPrintable(error));
+                return 1;
+            }
+            items = imported->items;
+        } else {
+            const auto bin = lumenis::model::BinFile::read(from, &error);
+            if (!bin) {
+                std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(from), qPrintable(error));
+                return 1;
+            }
+            items = bin->items;
+        }
+        if (!parser.isSet(exportTo)) {
+            std::fprintf(stderr, "--export-aaf needs --to FILE\n");
+            return 2;
+        }
+        const auto result = lumenis::interop::aaf::exportItems(items, parser.value(exportTo));
+        for (const QString& w : result.warnings) std::fprintf(stderr, "export-aaf: %s\n", qPrintable(w));
+        if (!result.ok) {
+            std::fprintf(stderr, "cannot write %s: %s\n", qPrintable(parser.value(exportTo)), qPrintable(result.error));
+            return 1;
+        }
         return 0;
     }
 

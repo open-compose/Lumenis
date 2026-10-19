@@ -30,6 +30,11 @@ committed here: `fetch` downloads them into a cache folder.
         the result with the bin's reference dump (structdiff.py
         --no-effects): Phase 3 gate 1 on the corpus. Exits 77 without the
         corpus.
+    interop-corpus.py check-round-trip --app build/ci/bin/cutthulhu [--dir DIR]
+        Import each AAF file, export it (`cutthulhu --export-aaf`) and import
+        the export: the two imports must be the same (structdiff.py). With
+        pyaaf2 installed, pyaaf2 must also read each export as Cutthulhu does
+        (aaf-dump.py --compare). Exits 77 without the corpus.
     interop-corpus.py check-written --test build/ci/bin/tst_cfb [--dir DIR]
         Run tst_cfb's forOlefile, which writes compound files with
         Cutthulhu's writer, and read them back with olefile. Exits 77 without
@@ -251,6 +256,58 @@ def check_import(app, folder):
     return 1 if failed else 0
 
 
+def check_round_trip(app, folder):
+    structdiff = os.path.join(ROOT, "scripts", "structdiff.py")
+    dump = os.path.join(ROOT, "scripts", "aaf-dump.py")
+    try:
+        import aaf2  # noqa: F401
+        have_pyaaf2 = True
+    except ImportError:
+        have_pyaaf2 = False
+    failed = 0
+    checked = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, _, _ in files():
+            if not name.endswith(".aaf") or not os.path.exists(os.path.join(folder, name)):
+                continue
+            source = os.path.join(folder, name)
+            # The same file name, so that the bins have the same name.
+            out_dir = os.path.join(tmp, str(checked))
+            os.makedirs(out_dir)
+            exported = os.path.join(out_dir, os.path.basename(name))
+            checked += 1
+            run = subprocess.run([app, "--export-aaf", source, "--to", exported], capture_output=True, text=True)
+            if run.returncode != 0:
+                print(f"{name}: export failed: {run.stderr.strip()}")
+                failed += 1
+                continue
+            dumps = []
+            for path in (source, exported):
+                imp = subprocess.run([app, "--import-aaf", path], capture_output=True, text=True)
+                target = os.path.join(out_dir, f"import{len(dumps)}.json")
+                with open(target, "w", encoding="utf-8") as f:
+                    f.write(imp.stdout)
+                dumps.append(target)
+            diff = subprocess.run([sys.executable, structdiff] + dumps, capture_output=True, text=True)
+            problems = [] if diff.returncode == 0 else [diff.stdout.strip()]
+            if have_pyaaf2:
+                same = subprocess.run([sys.executable, dump, "--compare", "--app", app, exported],
+                                      capture_output=True, text=True)
+                if same.returncode != 0:
+                    problems.append(same.stdout.strip())
+            if problems:
+                failed += 1
+                print(f"{name}: the round trip differs")
+                for p in problems:
+                    print("  " + p.replace("\n", "\n  "))
+            else:
+                print(f"{name}: the same after a round trip" + ("" if have_pyaaf2 else " (pyaaf2 not installed)"))
+    if not checked:
+        print(f"interop-corpus: no corpus in {folder} (interop-corpus.py fetch)", file=sys.stderr)
+        return 77
+    return 1 if failed else 0
+
+
 def check_aaf(app, folder):
     paths = [os.path.join(folder, name) for name, _, _ in files() if name.endswith(".aaf")]
     paths = [p for p in paths if os.path.exists(p)]
@@ -292,7 +349,8 @@ def check_written(test, folder):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["fetch", "manifest", "reference", "check-aaf", "check-import", "check-written"])
+    ap.add_argument("command", choices=["fetch", "manifest", "reference", "check-aaf", "check-import",
+                                        "check-round-trip", "check-written"])
     ap.add_argument("--dir", help="the corpus folder (check-written: where to keep the files written)")
     ap.add_argument("--test", help="tst_cfb, for check-written")
     ap.add_argument("--app", help="the cutthulhu executable, for check-aaf")
@@ -307,6 +365,10 @@ def main():
         if not args.app:
             ap.error("check-import needs --app")
         return check_import(args.app, args.dir or default_dir())
+    if args.command == "check-round-trip":
+        if not args.app:
+            ap.error("check-round-trip needs --app")
+        return check_round_trip(args.app, args.dir or default_dir())
     if args.command == "check-aaf":
         if not args.app:
             ap.error("check-aaf needs --app")

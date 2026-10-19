@@ -1,14 +1,18 @@
 #include "lumenis/interop/aaf.h"
+#include "lumenis/interop/aaf_export.h"
 #include "lumenis/interop/aaf_import.h"
+#include "lumenis/model/structure.h"
 #include "lumenis/model/sequence.h"
 
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRandomGenerator>
 #include <QTemporaryDir>
+#include <QTimeZone>
 #include <QtTest>
 
 using namespace lumenis;
@@ -35,6 +39,7 @@ private slots:
     void corpusDumps();
     void objects();
     void importsBin();
+    void exportRoundTrip();
     void notAaf();
     void damaged();
 };
@@ -226,6 +231,144 @@ void TestAaf::importsBin() {
     QVERIFY(named != result->items.end());
     QCOMPARE(named->mobId, first.sourceMob);
     QCOMPARE(first.sourceTrack, QStringLiteral("V1"));
+}
+
+namespace {
+
+// Items as the structure dump shows them, ids and sources aside.
+QJsonObject structureOf(const QList<model::BinItem>& items, const QStringList& custom = {}) {
+    model::Bin bin;
+    bin.name = QStringLiteral("Round trip");
+    bin.items = items;
+    bin.display.customColumns = custom;
+    QJsonObject o = model::binStructure(bin);
+    // Sources are checked on their own: export can add a tape source for
+    // a Start that had none.
+    QJsonArray stripped;
+    for (const QJsonValue& v : o.value(QStringLiteral("items")).toArray()) {
+        QJsonObject item = v.toObject();
+        item.remove(QStringLiteral("sources"));
+        stripped.append(item);
+    }
+    o.insert(QStringLiteral("items"), stripped);
+    return o;
+}
+
+} // namespace
+
+// A bin made here, exported and imported again, is the same bin: clips with
+// their sources and columns, a subclip, and a sequence with layered video,
+// filler, a transition and effects.
+void TestAaf::exportRoundTrip() {
+    const QDateTime when(QDate(2026, 3, 1), QTime(9, 30), QTimeZone::utc());
+    model::BinItem clip;
+    clip.id = model::newItemId();
+    clip.mobId = MobId::generate();
+    clip.kind = model::BinItemKind::MasterClip;
+    clip.name = QStringLiteral("A001_C002");
+    clip.editRate = Rational(25);
+    clip.durationFrames = 250;
+    clip.created = clip.modified = when;
+    clip.fields = {{QStringLiteral("Tracks"), QStringLiteral("V1 A1-2")},
+                   {QStringLiteral("Start"), QStringLiteral("10:00:00:00")},
+                   {QStringLiteral("End"), QStringLiteral("10:00:10:00")},
+                   {QStringLiteral("Tape"), QStringLiteral("A001")},
+                   {QStringLiteral("Circled"), QStringLiteral("yes")}};
+    model::ClipSource tape{model::ClipSource::Kind::Tape, MobId::generate(), {}, QStringLiteral("A001"), {}, {}, 0, {}};
+    const MobId file = MobId::generate();
+    for (const QString& t : {QStringLiteral("V1"), QStringLiteral("A1"), QStringLiteral("A2")}) {
+        clip.sources << model::ClipSource{model::ClipSource::Kind::File, file, t, QStringLiteral("A001_C002.mxf"),
+                                          QStringLiteral("/media/A001_C002.mxf"), {}, 0, tape.mob};
+    }
+    clip.sources << tape;
+
+    model::BinItem other = clip;
+    other.id = model::newItemId();
+    other.mobId = MobId::generate();
+    other.name = QStringLiteral("A001_C003");
+    other.fields.remove(QStringLiteral("Circled"));
+    other.fields[QStringLiteral("Tracks")] = QStringLiteral("V1");
+    other.sources = {};
+
+    model::Bin bin;
+    bin.items = {clip};
+    const auto sub = model::subclipItem(bin, clip, 50, 150, when);
+    QVERIFY(sub);
+    model::BinItem subclip = *sub;
+    subclip.mobId = MobId::generate();
+
+    model::BinItem sequenceItem;
+    sequenceItem.id = model::newItemId();
+    sequenceItem.mobId = MobId::generate();
+    sequenceItem.kind = model::BinItemKind::Sequence;
+    sequenceItem.name = QStringLiteral("Cut 1");
+    sequenceItem.editRate = Rational(25);
+    sequenceItem.created = sequenceItem.modified = when;
+    sequenceItem.fields = {{QStringLiteral("Start"), QStringLiteral("01:00:00:00")},
+                           {QStringLiteral("End"), QStringLiteral("01:00:05:20")},
+                           {QStringLiteral("Tracks"), QStringLiteral("V1-2 A1 TC1")}};
+    auto segment = [&](const model::BinItem& c, const QString& track, std::int64_t in, std::int64_t length) {
+        model::Segment s;
+        s.clipId = c.id;
+        s.sourceMob = c.mobId;
+        s.name = c.name;
+        s.sourceTrack = track;
+        s.sourceIn = in;
+        s.length = length;
+        return s;
+    };
+    model::Sequence seq;
+    seq.ensureTrack(QStringLiteral("V1"))->segments = {segment(clip, QStringLiteral("V1"), 10, 50),
+                                                       segment(other, QStringLiteral("V1"), 20, 40),
+                                                       model::Segment::filler(25), segment(clip, QStringLiteral("V1"), 100, 30)};
+    model::Track* v1 = seq.track(QStringLiteral("V1"));
+    model::Transition dissolve;
+    dissolve.effect = {QStringLiteral("Blend"), QStringLiteral("Dissolve"), {}};
+    dissolve.duration = 10;
+    dissolve.alignment = model::TransitionAlignment::CenteredOnCut;
+    v1->segments[1].transition = dissolve;
+    v1->segments[3].effect = model::Effect{QStringLiteral("Blend"), QStringLiteral("Superimpose"), {}};
+    seq.ensureTrack(QStringLiteral("V2"))->segments = {model::Segment::filler(60), segment(other, QStringLiteral("V1"), 0, 20)};
+    seq.ensureTrack(QStringLiteral("A1"))->segments = {segment(clip, QStringLiteral("A2"), 10, 145)};
+    seq.storeIn(sequenceItem);
+
+    const QList<model::BinItem> items{clip, other, subclip, sequenceItem};
+    QTemporaryDir dir;
+    const QString path = dir.filePath(QStringLiteral("Round trip.aaf"));
+    aaf::ExportOptions options;
+    options.when = when;
+    const aaf::ExportResult written = aaf::exportItems(items, path, options);
+    QVERIFY2(written.ok, qPrintable(written.error));
+    QVERIFY2(written.warnings.isEmpty(), qPrintable(written.warnings.join(QLatin1Char('\n'))));
+
+    QString error;
+    const auto read = aaf::importFile(path, {}, &error);
+    QVERIFY2(read, qPrintable(error));
+    QCOMPARE(read->customColumns, QStringList{QStringLiteral("Circled")});
+    const QJsonObject before = structureOf(items, {QStringLiteral("Circled")});
+    const QJsonObject after = structureOf(read->items, read->customColumns);
+    if (before != after) {
+        // Both, for scripts/structdiff.py.
+        const QString out = qEnvironmentVariable("CUTTHULHU_TEST_OUT", dir.path());
+        for (const auto& [name, o] : {std::pair{QStringLiteral("before.json"), before}, std::pair{QStringLiteral("after.json"), after}}) {
+            QFile f(QDir(out).filePath(name));
+            if (f.open(QIODevice::WriteOnly)) {
+                f.write(QJsonDocument(QJsonObject{{QStringLiteral("format"), QStringLiteral("cutthulhu-structure")},
+                                                  {QStringLiteral("version"), 1},
+                                                  {QStringLiteral("bins"), QJsonArray{o}}})
+                            .toJson());
+            }
+        }
+        QFAIL(qPrintable(QStringLiteral("the bin read back is not the bin written (before.json, after.json in %1)").arg(out)));
+    }
+    // The source chain survives too.
+    const model::BinItem& back = read->items.first();
+    QCOMPARE(back.sources.size(), 4);
+    QCOMPARE(back.sources[0].path, QStringLiteral("/media/A001_C002.mxf"));
+    QCOMPARE(back.sources[3].kind, model::ClipSource::Kind::Tape);
+    QCOMPARE(back.sources[3].mob, tape.mob);
+    QCOMPARE(back.fields.value(QStringLiteral("Tape")), QStringLiteral("A001"));
+    QCOMPARE(back.created, when);
 }
 
 void TestAaf::notAaf() {

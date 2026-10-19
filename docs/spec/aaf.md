@@ -25,7 +25,7 @@ Avid's AAF SDK is not used: its licence is doubtful for us (ROADMAP §3).
 | Compound file: storages and streams in one file | `src/interop/cfb.*` | 3.2a, done |
 | AAF objects: properties, types, the metadictionary | `src/interop/aaf*` | 3.2b, done |
 | Import into bins: mobs to clips, sources and sequences | `src/interop/aaf_import.*` | 3.2c, done |
-| Export and round trips | | 3.2d |
+| Export and round trips | `src/interop/aaf_writer.*`, `aaf_export.*` | 3.2d, done |
 | File > Import and Export, from the Editing Guide | | 3.2e |
 
 ## The compound file (3.2a)
@@ -238,3 +238,72 @@ What was read only in part comes back as warnings, once each with a count.
   Media Composer's effect IDs.
 * tst_aaf (`importsBin`): what the dump does not show: sources and their
   paths, transitions' alignment, and segments naming their clips' items.
+
+## Writing (3.2d)
+
+`aaf::Builder` builds objects by class and property name and writes them
+as one compound file (4096-byte sectors, version 4).
+
+* **Values** are encoded by the property's type: the forms `File::decode`
+  returns, so what is read can be written back. A value that does not fit
+  its type, or a property the class does not have, is an error, and nothing
+  is written.
+* **Storages** are named as Media Composer and pyaaf2 name them: the
+  property's name, "-" and its pid in hex (`Content-3b03`), squeezed in the
+  middle to fit; the elements of a vector or set `<name>{<index in hex>}`,
+  with the index stream `<name> index`. A set's index gives each element's
+  key: the value of its class's unique property (a mob's MobID, a
+  definition's AUID).
+* **Weak references** are entered in the `referenced properties` table as
+  the path of pids their type's target set names, with the key pid of the
+  class they point to.
+* **The metadictionary** defines every class and type of the built-in
+  model, as pyaaf2's files do, so a reader needs nothing of its own.
+  Extension properties get local IDs from 0xFFFF down, in a stable order.
+* `Builder::missing()` lists required properties that were not set; export
+  refuses to write a file with any.
+
+## Export (3.2d)
+
+`aaf::exportItems` writes bin items in the layout Media Composer's own
+exports have, the import's rules reversed:
+
+* **Master clips**: a master mob with a slot for each track (its Tracks
+  column), each a source clip naming the track's file source mob. File mobs
+  carry a descriptor (CDCI for picture, from the Format column; PCM for
+  sound) with the media's path as a locator, and name the tape or import
+  source mob before them. That mob has the clip's tracks and a timecode
+  slot with the clip's Start. A clip with a Start but no tape or import
+  source gets a tape source (named for its Tape column, or itself) so its
+  Start travels. Columns that are not standard headings travel as user
+  comments.
+* **Subclips**: a composition mob used as Usage_SubClip, its slots naming
+  the master's.
+* **Sequences**: a composition mob used as Usage_TopLevel. TC1 is a
+  timecode slot with the Start. All video tracks are the slots of one
+  nested scope, V1 first, every number up to the highest; filler above V1
+  is a ScopeReference (the track below shows through). Audio tracks are
+  slots of their own. Transitions go back between the segments they
+  overlap. Effects are OperationGroups around their segment's clip.
+* **Effects**: dissolves are AAF's VideoDissolve and MonoAudioDissolve;
+  others are operation definitions named "Category/Name", which the import
+  reads back as that effect, until effects are matched to Media Composer's
+  (Phase 6).
+* Data tracks, and items that are neither clips nor sequences, are left
+  out, with a warning.
+
+`cutthulhu --export-aaf <bin.cthbin | file.aaf> --to OUT.aaf` exports a bin
+(an AAF file is imported first: a round trip).
+
+### Checks
+
+* ctest `aaf_round_trip`: every corpus AAF, imported, exported and
+  imported again, is the same (structdiff.py, effects included). With
+  pyaaf2 installed, pyaaf2 also reads every export as Cutthulhu does
+  (`aaf-dump.py --compare`), and finds every mob and definition valid (by
+  hand). This is Cutthulhu's half of Phase 3 gate 3; the halves through
+  Media Composer wait for its seat (ROADMAP gate status).
+* tst_aaf (`exportRoundTrip`): a bin made in code (clips with sources and
+  custom columns, a subclip, a sequence with two video tracks, filler, a
+  centred dissolve and a segment effect) exports with no warnings and reads
+  back the same, sources and dates included.

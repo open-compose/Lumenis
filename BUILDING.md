@@ -758,6 +758,11 @@ the build folder (`build/<preset>`) and configure again.
   pyavb`). By hand: `cutthulhu --import-aaf FILE.aaf > ours.json` and
   `python3 scripts/avb-structure.py BIN.avb > ref.json`, then
   `structdiff.py ref.json ours.json --no-effects`.
+* **AAF round trips (gate 3, Cutthulhu's half):** ctest `aaf_round_trip`
+  imports, exports and imports again every corpus AAF and compares the two
+  imports; with pyaaf2 installed it also has pyaaf2 read each export. By
+  hand: `cutthulhu --export-aaf FILE.aaf --to OUT.aaf` (or a .cthbin), then
+  `--import-aaf` both and `structdiff.py`.
 * **The built-in AAF model** (`src/interop/aaf_model.inc`) is made from
   pyaaf2's model tables: `python3 scripts/make-aaf-model.py --pyaaf2
   <pyaaf2 checkout>` (`--check` to compare).
@@ -782,6 +787,8 @@ cutthulhu --dump-aaf FILE [--canonical]
                              scripts/aaf-dump.py --compare (docs/spec/aaf.md)
 cutthulhu --import-aaf FILE   import an AAF file into a bin and print the bin as a structure dump
                              (docs/spec/aaf.md, "Import")
+cutthulhu --export-aaf BIN --to FILE
+                             export a bin (.cthbin) as AAF; an .aaf is imported first (a round trip)
 cutthulhu --write-media FILE --drive FOLDER [--resolution ID|all]
                              transcode FILE into managed MXF under FOLDER/Avid MediaFiles/MXF
                              and print the files made as JSON (for scripts/check-mxf.py)

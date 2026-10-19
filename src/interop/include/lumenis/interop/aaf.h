@@ -89,6 +89,13 @@ public:
 
     void addClass(const ClassDef& c);
     void addType(const TypeDef& t);
+    QList<QUuid> classAuids() const { return classes_.keys(); }
+    QList<QUuid> typeAuids() const { return types_.keys(); }
+    // A property by its AUID, in whichever class defines it.
+    const PropertyDef* propertyByAuid(const QUuid& auid) const;
+    // Gives each property without a local ID one, from 0xFFFF down, as
+    // writers do for extension properties (dynamic pids).
+    void assignDynamicPids();
     int classCount() const { return static_cast<int>(classes_.size()); }
     int typeCount() const { return static_cast<int>(types_.size()); }
 

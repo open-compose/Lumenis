@@ -341,6 +341,13 @@ private:
             const Object clip = firstSourceClip(t.segment);
             const Object fileMob = clip ? mob(clip.mobId(QStringLiteral("SourceID"))) : Object();
             if (!fileMob || !fileMob.isA(QStringLiteral("SourceMob"))) continue;
+            // A clip straight from its tape or import, with no file between.
+            const Object descriptor = fileMob.object(QStringLiteral("EssenceDescription"));
+            if (descriptor.isA(QStringLiteral("TapeDescriptor")) || descriptor.isA(QStringLiteral("ImportDescriptor"))) {
+                const MobId id = fileMob.mobId(QStringLiteral("MobID"));
+                if (!before.contains(id)) before << id;
+                continue;
+            }
             model::ClipSource s;
             s.kind = model::ClipSource::Kind::File;
             s.mob = fileMob.mobId(QStringLiteral("MobID"));
@@ -387,6 +394,7 @@ private:
         items_[item.mobId] = item.id;
         slotTracks_[item.mobId] = slotTracks;
         names_[item.mobId] = item.name;
+        tapes_[item.mobId] = item.fields.value(QStringLiteral("Tape"));
         if (start) starts_[item.mobId] = *start;
         result_.items << item;
     }
@@ -412,6 +420,9 @@ private:
                 s.mob = master;
                 s.name = valueIn(names_, master, mob(master).string(QStringLiteral("Name")));
                 s.offset = clip.integer(QStringLiteral("StartTime"));
+                // A subclip shows its master's tape (p.407).
+                const QString tape = valueIn(tapes_, master);
+                if (!tape.isEmpty()) item.fields.insert(QStringLiteral("Tape"), tape);
                 if (starts_.count(master)) {
                     start = starts_.at(master) + s.offset;
                     s.startTimecode = timecodeText(*start, tracks.first().rate, false);
@@ -531,9 +542,18 @@ private:
     model::Effect effectOf(const Object& group) {
         model::Effect e;
         const QString name = operationName(group);
-        if (name.startsWith(QLatin1String("VideoDissolve")) || name == QLatin1String("Audio Dissolve")) {
+        const QVariant op = group.value(QStringLiteral("Operation"));
+        const QUuid id = op.userType() == qMetaTypeId<Object>() ? op.value<Object>().auid(QStringLiteral("Identification")) : QUuid();
+        static const QUuid videoDissolve = auidFromText("0c3bea40-fc05-11d2-8a29-0050040ef7d2");
+        static const QUuid audioDissolve = auidFromText("0c3bea41-fc05-11d2-8a29-0050040ef7d2");
+        if (id == videoDissolve || id == audioDissolve || name.startsWith(QLatin1String("VideoDissolve")) ||
+            name == QLatin1String("Audio Dissolve")) {
             e.category = QStringLiteral("Blend");
             e.name = QStringLiteral("Dissolve");
+        } else if (name.contains(QLatin1Char('/'))) {
+            // Cutthulhu's own: "Category/Name" (aaf_export.cpp).
+            e.category = name.section(QLatin1Char('/'), 0, 0);
+            e.name = name.section(QLatin1Char('/'), 1);
         } else {
             // Kept by its AAF name until effects are matched (Phase 6, docs/spec/aaf.md).
             e.category = QStringLiteral("AAF");
@@ -643,6 +663,7 @@ private:
     std::map<MobId, QHash<qint64, QString>> slotTracks_;
     std::map<MobId, QString> names_;
     std::map<MobId, std::int64_t> starts_;
+    std::map<MobId, QString> tapes_;
     std::map<QString, int> notes_;
 };
 
