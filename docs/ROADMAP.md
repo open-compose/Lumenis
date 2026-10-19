@@ -475,7 +475,11 @@ Sub-steps:
     relabels them in the partition packs and header metadata, found through
     the random index pack. And the packages had zero dates; the writer now
     passes the creation time. The audio essence key still says
-    frame-wrapped (FFmpeg's); bmx accepts it.
+    frame-wrapped (FFmpeg's); bmx accepts it. A third fault came up in
+    Phase 3.1: FFmpeg gives every track file a different, random material
+    package, so Media Composer would see one clip per file. The writer now
+    puts the master clip's MobID in every track file and a file MobID in
+    each (docs/spec/native-model.md), and `check-mxf.py --make` checks it.
   * Gates 3 and 4: `cutthulhu --measure-playback` and
     `scripts/measure-playback.py` (DNxHD 120 1080p25 with a tone): dropped
     frames, and lip sync as how far the sound already is into a frame when

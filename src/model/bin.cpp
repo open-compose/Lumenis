@@ -17,7 +17,8 @@ namespace lumenis::model {
 
 namespace {
 
-// 2: items carry their MobID ("mobId"), segments their source's ("mob").
+// 2: items carry their MobID ("mobId") and source chain ("sources"),
+// segments their source clip's MobID ("mob").
 constexpr int kFileVersion = 2;
 constexpr auto kFileFormat = "cutthulhu-bin";
 
@@ -53,6 +54,50 @@ Rational parseRate(const QString& text) {
     return Rational(num, den);
 }
 
+const char* sourceKindText(ClipSource::Kind kind) {
+    switch (kind) {
+    case ClipSource::Kind::File: return "file";
+    case ClipSource::Kind::Tape: return "tape";
+    case ClipSource::Kind::Import: return "import";
+    case ClipSource::Kind::Clip: return "clip";
+    }
+    return "file";
+}
+
+QJsonObject sourceToJson(const ClipSource& s) {
+    QJsonObject o{{QStringLiteral("kind"), QString::fromLatin1(sourceKindText(s.kind))},
+                  {QStringLiteral("mob"), QString::fromStdString(s.mob.toString())}};
+    if (!s.track.isEmpty()) o.insert(QStringLiteral("track"), s.track);
+    if (!s.name.isEmpty()) o.insert(QStringLiteral("name"), s.name);
+    if (!s.path.isEmpty()) o.insert(QStringLiteral("path"), s.path);
+    if (!s.startTimecode.isEmpty()) o.insert(QStringLiteral("start"), s.startTimecode);
+    if (s.offset != 0) o.insert(QStringLiteral("offset"), static_cast<qint64>(s.offset));
+    if (!s.from.isNull()) o.insert(QStringLiteral("from"), QString::fromStdString(s.from.toString()));
+    return o;
+}
+
+std::optional<ClipSource> sourceFromJson(const QJsonObject& o) {
+    ClipSource s;
+    const QString kind = o.value(QStringLiteral("kind")).toString();
+    bool known = false;
+    for (const auto k : {ClipSource::Kind::File, ClipSource::Kind::Tape, ClipSource::Kind::Import, ClipSource::Kind::Clip}) {
+        if (kind == QLatin1String(sourceKindText(k))) {
+            s.kind = k;
+            known = true;
+        }
+    }
+    const auto mob = MobId::fromString(o.value(QStringLiteral("mob")).toString().toStdString());
+    if (!known || !mob) return std::nullopt;
+    s.mob = *mob;
+    s.track = o.value(QStringLiteral("track")).toString();
+    s.name = o.value(QStringLiteral("name")).toString();
+    s.path = o.value(QStringLiteral("path")).toString();
+    s.startTimecode = o.value(QStringLiteral("start")).toString();
+    s.offset = o.value(QStringLiteral("offset")).toInteger();
+    if (const auto from = MobId::fromString(o.value(QStringLiteral("from")).toString().toStdString())) s.from = *from;
+    return s;
+}
+
 QJsonObject itemToJson(const BinItem& item) {
     QJsonObject fields;
     for (auto it = item.fields.cbegin(); it != item.fields.cend(); ++it) fields.insert(it.key(), it.value());
@@ -73,6 +118,11 @@ QJsonObject itemToJson(const BinItem& item) {
     if (!item.composition.isEmpty()) o.insert(QStringLiteral("composition"), item.composition);
     if (!item.markers.isEmpty()) o.insert(QStringLiteral("markers"), item.markers);
     if (!item.link.isEmpty()) o.insert(QStringLiteral("link"), item.link);
+    if (!item.sources.isEmpty()) {
+        QJsonArray sources;
+        for (const ClipSource& s : item.sources) sources.append(sourceToJson(s));
+        o.insert(QStringLiteral("sources"), sources);
+    }
     return o;
 }
 
@@ -100,6 +150,9 @@ std::optional<BinItem> itemFromJson(const QJsonObject& o) {
     item.composition = o.value(QStringLiteral("composition")).toObject();
     item.markers = o.value(QStringLiteral("markers")).toArray();
     item.link = o.value(QStringLiteral("link")).toObject();
+    for (const QJsonValue& v : o.value(QStringLiteral("sources")).toArray()) {
+        if (const auto s = sourceFromJson(v.toObject())) item.sources << *s;
+    }
     return item;
 }
 
@@ -666,6 +719,10 @@ bool BinFile::write(const QString& path, const Bin& bin, QString* error) {
     return true;
 }
 
+QString sourceKindName(ClipSource::Kind kind) {
+    return QString::fromLatin1(sourceKindText(kind));
+}
+
 QString newItemId() {
     return QUuid::createUuid().toString(QUuid::WithoutBraces);
 }
@@ -697,6 +754,40 @@ BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& w
     const auto given = Timecode::parse(start.trimmed().toStdString(), format);
     const Timecode tc = given ? *given : Timecode(kDefaultStartHours * 3600 * format.nominalFps, format);
     s.fields.insert(QStringLiteral("Start"), QString::fromStdString(tc.toString()));
+    return s;
+}
+
+std::optional<BinItem> subclipItem(const Bin& bin, const BinItem& master, std::int64_t in, std::int64_t out,
+                                   const QDateTime& when) {
+    in = std::clamp<std::int64_t>(in, 0, master.durationFrames);
+    out = std::clamp<std::int64_t>(out, in, master.durationFrames);
+    if (out <= in) return std::nullopt;
+    BinItem s;
+    s.id = newItemId();
+    s.kind = BinItemKind::Subclip;
+    // "a numbered .Sub file name extension" (p.407; its picture: RedSky.Sub.01).
+    const QString base = master.name + QStringLiteral(".Sub");
+    s.name = QStringLiteral("%1.%2").arg(base).arg(highestNumber(bin, base) + 1, 2, 10, QLatin1Char('0'));
+    s.created = when;
+    s.modified = when;
+    s.editRate = master.editRate;
+    s.durationFrames = out - in;
+    s.color = master.color;
+    s.fields = master.fields;
+    s.link = master.link;
+    const TimecodeFormat format = TimecodeFormat::forRate(master.editRate, false);
+    const auto start = Timecode::parse(master.fields.value(QStringLiteral("Start")).toStdString(), format);
+    const std::int64_t first = (start ? start->frameCount() : 0) + in;
+    const QString startText = QString::fromStdString(Timecode(first, format).toString());
+    s.fields.insert(QStringLiteral("Start"), startText);
+    s.fields.insert(QStringLiteral("End"), QString::fromStdString(Timecode(first + s.durationFrames, format).toString()));
+    ClipSource from;
+    from.kind = ClipSource::Kind::Clip;
+    from.mob = mobIdOf(master);
+    from.name = master.name;
+    from.startTimecode = startText;
+    from.offset = in;
+    s.sources << from;
     return s;
 }
 

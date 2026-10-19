@@ -13,6 +13,7 @@
 #include <QFileInfo>
 #include <QTemporaryDir>
 #include <QPainter>
+#include <QSet>
 #include <QTest>
 
 #include <cmath>
@@ -326,6 +327,43 @@ private slots:
         const auto file = readMediaFile(link->audioPaths.at(1));
         QVERIFY(file);
         QCOMPARE(file->mediaId, link->mediaId);
+        // Its source chain (docs/spec/native-model.md): the linked clip's
+        // file and import sources; the new clip's files, one MobID each,
+        // from the same import source; and the MXF names the master clip
+        // (in every track file) and the file by those MobIDs.
+        using model::ClipSource;
+        QCOMPARE(clip->sources.size(), 4); // V1, A1, A2 of one file, then the import
+        QCOMPARE(clip->sources.at(0).mob, clip->sources.at(2).mob);
+        const ClipSource& imported = clip->sources.last();
+        QCOMPARE(imported.kind, ClipSource::Kind::Import);
+        QCOMPARE(imported.name, QStringLiteral("Dock Interview.mov"));
+        QCOMPARE(imported.startTimecode, QStringLiteral("10:00:00:00"));
+        QVERIFY(!made->mobId.isNull());
+        QCOMPARE(made->sources.size(), 4);
+        QStringList tracks;
+        QSet<QString> mobs;
+        for (int i = 0; i < 3; ++i) {
+            const ClipSource& fileSource = made->sources.at(i);
+            QCOMPARE(fileSource.kind, ClipSource::Kind::File);
+            QCOMPARE(fileSource.from, imported.mob);
+            tracks << fileSource.track;
+            mobs << QString::fromStdString(fileSource.mob.toString());
+            const auto info = probe(fileSource.path);
+            QVERIFY(info);
+            auto umid = [&](const char* key) {
+                return MobId::fromString(info->metadata.value(QString::fromLatin1(key)).mid(2).toStdString());
+            };
+            QCOMPARE(umid("material_package_umid"), made->mobId);
+            QCOMPARE(umid("file_package_umid"), fileSource.mob);
+        }
+        QCOMPARE(tracks, (QStringList{QStringLiteral("V1"), QStringLiteral("A1"), QStringLiteral("A2")}));
+        QCOMPARE(mobs.size(), 3);
+        QCOMPARE(made->sources.last(), imported);
+        // Linking the managed media takes its MobIDs from the MXF.
+        const auto relinked = linkClip(*probe(made->sources.at(0).path), o);
+        QVERIFY(relinked);
+        QCOMPARE(relinked->mobId, made->mobId);
+        QCOMPARE(relinked->sources.first().mob, made->sources.first().mob);
         QCOMPARE(file->track, QStringLiteral("A2"));
         QCOMPARE(file->clipName, clip->name);
         QCOMPARE(file->project, QStringLiteral("Harbor"));
@@ -825,6 +863,53 @@ private slots:
         QCOMPARE(codecs.front()->canDecode(q), patentCodecsAllowed());
         q.codec = "no-such-codec";
         QVERIFY(!codecs.front()->canDecode(q));
+    }
+
+    void subclips() {
+        // A subclip of a linked clip (p.407): "<master>.Sub.NN", linked to
+        // its master by MobID, its media the master's from the IN point.
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("RedSky.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(25);
+        s.startTimecode = QStringLiteral("01:00:00:00");
+        QVERIFY(writeVideo(path, s, 12));
+        LinkOptions o;
+        o.editRate = Rational(25);
+        auto master = linkClip(*probe(path), o);
+        QVERIFY(master);
+        model::Bin bin;
+        bin.items << *master;
+        const QDateTime when = QDateTime::currentDateTimeUtc();
+        const auto sub = makeSubclip(bin, *master, 3, 9, when);
+        QVERIFY(sub);
+        QCOMPARE(sub->kind, model::BinItemKind::Subclip);
+        QCOMPARE(sub->name, QStringLiteral("RedSky.Sub.01"));
+        QCOMPARE(sub->durationFrames, std::int64_t{6});
+        QCOMPARE(sub->fields.value(QStringLiteral("Start")), QStringLiteral("01:00:00:03"));
+        QCOMPARE(sub->fields.value(QStringLiteral("End")), QStringLiteral("01:00:00:09"));
+        QCOMPARE(sub->sources.size(), 1);
+        const model::ClipSource& from = sub->sources.first();
+        QCOMPARE(from.kind, model::ClipSource::Kind::Clip);
+        QCOMPARE(from.mob, model::mobIdOf(*master));
+        QCOMPARE(from.offset, std::int64_t{3});
+        QVERIFY(model::mobIdOf(*sub) != model::mobIdOf(*master));
+        // Frame 0 of the subclip is the master's frame 3.
+        const auto link = linkOf(*sub);
+        QVERIFY(link);
+        QCOMPARE(link->fileFrame(0, sub->editRate), std::int64_t{3});
+        VideoReader reader;
+        QVERIFY(reader.open(link->path));
+        QVERIFY(near(reader.frame(link->fileFrame(2, sub->editRate)), colourOf(5), 14));
+        // The next one is .Sub.02; none of an empty range.
+        bin.items << *sub;
+        QCOMPARE(makeSubclip(bin, *master, 0, 4, when)->name, QStringLiteral("RedSky.Sub.02"));
+        QVERIFY(!makeSubclip(bin, *master, 7, 7, when));
     }
 
     void linkVideoClip() {

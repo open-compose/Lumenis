@@ -14,7 +14,8 @@ Import and Transcode write it:
 
 Each file must open, be complete, read to its last frame (every frame is
 read for a checksum), be OP-Atom with one track, and carry real creation
-and modified dates. The other half of the gate, linking the files
+and modified dates. With --make, a clip's track files must also share their
+material package (the master clip) and each have its own file package. The other half of the gate, linking the files
 into a real Media Composer, is done by hand (M). Exits 77 (skipped) without
 mxf2raw (or, with --make, without ffmpeg), 1 when a file fails.
 """
@@ -57,7 +58,7 @@ def make(app, ffmpeg, folder):
         raise RuntimeError("cutthulhu --write-media failed")
     made = json.loads(r.stdout)
     print("made: " + ", ".join(f"{m['resolution']} ({len(m['files'])} files)" for m in made))
-    return drive
+    return drive, made
 
 
 def check(tool, path):
@@ -82,6 +83,37 @@ def check(tool, path):
     return "; ".join(problems) if problems else None
 
 
+def packages(tool, path):
+    """The file's material and file source package UIDs, as mxf2raw prints them."""
+    r = subprocess.run([tool, "--info", path], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    found = {}
+    section = None
+    for line in r.stdout.splitlines():
+        s = line.strip()
+        if s.startswith("MaterialPackage #"):
+            section = "material"
+        elif s.startswith("FileSourcePackage #"):
+            section = "file"
+        elif s.startswith("package_uid") and section and section not in found:
+            found[section] = s.split(":", 1)[1].strip()
+    return found.get("material"), found.get("file")
+
+
+def grouped(tool, made, folder):
+    """A clip's track files share its material package (Media Composer makes
+    one master clip of them) and each has a file source package of its own."""
+    problems = []
+    for clip in made:
+        ids = [packages(tool, os.path.join(folder, f) if not os.path.isabs(f) else f) for f in clip["files"]]
+        materials = {m for m, _ in ids}
+        files = [f for _, f in ids]
+        if len(materials) != 1 or None in materials:
+            problems.append(f"{clip['resolution']}: its files have {len(materials)} material packages")
+        if len(set(files)) != len(files) or None in files:
+            problems.append(f"{clip['resolution']}: its files share file source packages")
+    return problems
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("paths", nargs="*")
@@ -97,6 +129,7 @@ def main():
         return 77
     paths = list(args.paths)
     work = None
+    made = None
     if args.make:
         if not args.app:
             ap.error("--make needs --app")
@@ -110,7 +143,8 @@ def main():
         else:
             work = tempfile.TemporaryDirectory(prefix="check-mxf-")
             folder = work.name
-        paths.append(make(args.app, ffmpeg, folder))
+        drive, made = make(args.app, ffmpeg, folder)
+        paths.append(drive)
     if not paths:
         ap.error("no files or folders (or --make)")
     failed = 0
@@ -126,6 +160,10 @@ def main():
     if checked == 0:
         print("check-mxf: no MXF files found")
         return 1
+    if made is not None:
+        for problem in grouped(tool, made, folder):
+            failed += 1
+            print(f"FAILED: {problem}")
     print(f"check-mxf: {checked} files, {failed} failed")
     return 1 if failed else 0
 

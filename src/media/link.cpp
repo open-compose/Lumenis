@@ -131,6 +131,21 @@ QString linkPluginName() {
     return QStringLiteral("FFmpeg");
 }
 
+std::optional<model::BinItem> makeSubclip(const model::Bin& bin, const model::BinItem& master, std::int64_t in,
+                                          std::int64_t out, const QDateTime& when) {
+    auto item = model::subclipItem(bin, master, in, out, when);
+    if (!item) return std::nullopt;
+    if (auto link = linkOf(master)) {
+        // The master's file frame at `in`, before its own offset.
+        const std::int64_t at = item->sources.first().offset;
+        link->first += link->rate == master.editRate || master.editRate.num() <= 0
+                           ? at
+                           : rescaleDown(at, master.editRate.den() * link->rate.num(), master.editRate.num() * link->rate.den());
+        item->link = link->toJson();
+    }
+    return item;
+}
+
 std::int64_t Link::fileFrame(std::int64_t clipFrame, const Rational& clipRate) const {
     std::int64_t f = clipFrame;
     if (clipRate.num() > 0 && !(rate == clipRate)) {
@@ -345,6 +360,39 @@ std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions&
     const QStorageInfo volume(file.absoluteFilePath());
     set("Drive", volume.isValid() ? (volume.displayName().isEmpty() ? volume.rootPath() : volume.displayName()) : QString());
     set("Plug-In", linkPluginName());
+    // Its source chain (docs/spec/native-model.md): this file, one file
+    // source (one MobID) listed for each of its tracks, from an import
+    // source, the file as it was linked. MXF
+    // names its own: the master clip is its material package, the file
+    // source its file package (as FFmpeg reads them, "0x" and 64 digits).
+    auto umid = [&](const char* key) {
+        const QString text = info.metadata.value(QString::fromLatin1(key));
+        const auto mob = MobId::fromString(text.startsWith(QLatin1String("0x")) ? text.mid(2).toStdString() : text.toStdString());
+        return mob && !mob->isNull() ? *mob : MobId();
+    };
+    item.mobId = umid("material_package_umid");
+    model::ClipSource import;
+    import.kind = model::ClipSource::Kind::Import;
+    import.mob = MobId::generate();
+    import.name = file.fileName();
+    import.path = link.path;
+    import.startTimecode = timecodeText(start, editRate);
+    const MobId filePackage = umid("file_package_umid");
+    const MobId fileMob = filePackage.isNull() ? MobId::generate() : filePackage;
+    QStringList tracks;
+    if (video) tracks << QStringLiteral("V1");
+    for (int c = 0; c < link.channels; ++c) tracks << QStringLiteral("A%1").arg(c + 1);
+    for (const QString& track : tracks) {
+        model::ClipSource s;
+        s.kind = model::ClipSource::Kind::File;
+        s.mob = fileMob;
+        s.track = track;
+        s.name = file.fileName();
+        s.path = link.path;
+        s.from = import.mob;
+        item.sources << s;
+    }
+    item.sources << import;
     return item;
 }
 

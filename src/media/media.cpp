@@ -407,6 +407,13 @@ std::optional<MediaInfo> probe(const QString& path, QString* error) {
         // QuickTime keeps the timecode and reel on its timecode track.
         if (info.startTimecode.isEmpty()) info.startTimecode = metadata(st->metadata, "timecode");
         if (info.reelName.isEmpty()) info.reelName = metadata(st->metadata, "reel_name");
+        // MXF: the file source package of the stream (OP-Atom has one), next
+        // to the format's material_package_umid.
+        if (!info.metadata.contains(QStringLiteral("file_package_umid"))) {
+            if (const QString umid = metadata(st->metadata, "file_package_umid"); !umid.isEmpty()) {
+                info.metadata.insert(QStringLiteral("file_package_umid"), umid);
+            }
+        }
     }
     if (const auto seq = ImageSequence::fromSpec(path)) {
         // The run is what was chosen, not every numbered file after it.
@@ -1014,6 +1021,8 @@ struct MediaWriter::Impl {
     QString error;
     QString path;        // for the OP-Atom relabelling after the trailer
     bool opAtom = false;
+    MobId materialPackage;
+    MobId filePackage;
 
     ~Impl() {
         sws_freeContext(sws);
@@ -1094,14 +1103,19 @@ qint64 berLength(const QByteArray& b, qsizetype& at) {
     return static_cast<qint64>(v);
 }
 
-// FFmpeg's OP-Atom muxer clip-wraps the essence (one KLV for the whole of
-// it, as Avid's media is) but labels VC-3 (DNx) and BWF essence containers
-// frame-wrapped (SMPTE ST 2019-4 and 382: byte 15, 01 frame, 02 clip).
-// Readers that go by the label, such as bmx (ROADMAP Phase 2 gate 2), then
-// cannot read the essence. The labels are in each partition pack and the
-// header metadata after it; the random index pack at the end lists the
-// partitions. The essence is not touched.
-bool relabelOpAtomClipWrapped(const QString& path) {
+// Two fixes to what FFmpeg's OP-Atom muxer writes, in each partition pack
+// and the header metadata after it (the random index pack at the end lists
+// the partitions); the essence is not touched.
+// * It clip-wraps the essence (one KLV for the whole of it, as Avid's media
+//   is) but labels VC-3 (DNx) and BWF essence containers frame-wrapped
+//   (SMPTE ST 2019-4 and 382: byte 15, 01 frame, 02 clip). Readers that go
+//   by the label, such as bmx (ROADMAP Phase 2 gate 2), then cannot read
+//   the essence.
+// * Its package UMIDs are random in every file: one stem, the material
+//   package ending 00 and the file package 01. A clip's track files must
+//   share their material package (the master clip's MobID), so the given
+//   MobIDs replace them (docs/spec/native-model.md).
+bool fixOpAtom(const QString& path, const MobId& materialPackage, const MobId& filePackage) {
     QFile f(path);
     if (!f.open(QIODevice::ReadWrite)) return false;
     const qint64 size = f.size();
@@ -1116,20 +1130,50 @@ bool relabelOpAtomClipWrapped(const QString& path) {
     if (entries < 4) return false;
     static const QByteArray kPrefix = QByteArray::fromHex("060e2b34040101");
     static const QByteArray kMiddle = QByteArray::fromHex("0d01030102");
+    QList<qint64> offsets;
     for (qsizetype e = at; e + 12 <= at + entries - 4 && e + 12 <= rip.size(); e += 12) {
-        const auto offset = static_cast<qint64>(bigEndian(rip, e + 4, 8));
-        if (offset < 0 || offset >= size || !f.seek(offset)) return false;
+        offsets << static_cast<qint64>(bigEndian(rip, e + 4, 8));
+    }
+    std::sort(offsets.begin(), offsets.end());
+    for (qsizetype n = 0; n < offsets.size(); ++n) {
+        const qint64 offset = offsets.at(n);
+        const qint64 next = n + 1 < offsets.size() ? offsets.at(n + 1) : size - ripLength;
+        if (offset < 0 || offset >= size || next <= offset || !f.seek(offset)) return false;
         // The partition pack (key, length, then fixed fields: header byte
-        // count at 32) and the header metadata after it.
+        // count at 32), and the header metadata after it. That starts after
+        // the pack's fill (to the KLV alignment grid), which the byte count
+        // leaves out: a partition with metadata is read to the next one (in
+        // FFmpeg's OP-Atom the essence has a partition of its own).
         QByteArray head = f.read(64);
         qsizetype p = 16;
         const qint64 packLength = berLength(head, p);
         if (packLength < 40 || p + 40 > head.size()) return false;
         const auto headerBytes = static_cast<qint64>(bigEndian(head, p + 32, 8));
-        const qint64 length = p + packLength + headerBytes;
+        const qint64 length = headerBytes > 0 ? next - offset : p + packLength;
         if (length > 64 * 1024 * 1024 || offset + length > size || !f.seek(offset)) return false;
         QByteArray region = f.read(length);
         bool changed = false;
+        // FFmpeg's UMIDs: 06 0a 2b 34 01 01 01 05 01 01 0d 00 13, then the
+        // instance and material numbers, the last byte the package's kind.
+        static const QByteArray kFfmpegUmid = QByteArray::fromHex("060a2b340101010501010d0013");
+        if (!materialPackage.isNull() || !filePackage.isNull()) {
+            const qsizetype first = region.indexOf(kFfmpegUmid);
+            if (headerBytes > 0 && first < 0) return false; // not FFmpeg's layout: say so
+            if (first >= 0 && first + 32 <= region.size()) {
+                const QByteArray stem = region.mid(first, 31);
+                const QByteArray ours[2] = {
+                    QByteArray(reinterpret_cast<const char*>(materialPackage.bytes().data()), 32),
+                    QByteArray(reinterpret_cast<const char*>(filePackage.bytes().data()), 32)};
+                for (int kind = 0; kind < 2; ++kind) {
+                    if (ours[kind].count('\0') == 32) continue;
+                    const QByteArray theirs = stem + char(kind);
+                    for (qsizetype i = region.indexOf(theirs); i >= 0; i = region.indexOf(theirs, i + 32)) {
+                        region.replace(i, 32, ours[kind]);
+                        changed = true;
+                    }
+                }
+            }
+        }
         for (qsizetype i = region.indexOf(kPrefix); i >= 0 && i + 16 <= region.size(); i = region.indexOf(kPrefix, i + 1)) {
             const auto kind = static_cast<std::uint8_t>(region.at(i + 13));
             if (region.mid(i + 8, 5) == kMiddle && (kind == 0x11 || kind == 0x06) && region.at(i + 14) == 0x01 &&
@@ -1157,6 +1201,8 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
     const QByteArray format = s.format.toUtf8();
     d.path = path;
     d.opAtom = s.format == QLatin1String("mxf_opatom");
+    d.materialPackage = s.materialPackage;
+    d.filePackage = s.filePackage;
     if (avformat_alloc_output_context2(&d.out, nullptr, format.isEmpty() ? nullptr : format.constData(), file.constData()) < 0 ||
         !d.out) {
         return failed(QStringLiteral("unknown format %1").arg(s.format));
@@ -1409,8 +1455,8 @@ bool MediaWriter::finish(QString* error) {
     if (!ok) setError(error, d.error);
     // Close the file now.
     if (d.out && !(d.out->oformat->flags & AVFMT_NOFILE)) avio_closep(&d.out->pb);
-    if (ok && d.opAtom && !relabelOpAtomClipWrapped(d.path)) {
-        ok = d.fail(QStringLiteral("cannot relabel the MXF essence as clip-wrapped"));
+    if (ok && d.opAtom && !fixOpAtom(d.path, d.materialPackage, d.filePackage)) {
+        ok = d.fail(QStringLiteral("cannot finish the MXF's labels and package IDs"));
         setError(error, d.error);
     }
     return ok;

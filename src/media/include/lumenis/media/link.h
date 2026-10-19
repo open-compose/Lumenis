@@ -93,6 +93,11 @@ bool isLinkable(const MediaInfo& info);
 // Format, Source File, Source Path, Drive and Plug-In (p.274-278).
 std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions& options, QString* error = nullptr);
 
+// A subclip of frames [in, out) of a clip with media (model::subclipItem,
+// p.407), its media the master's from `in` on.
+std::optional<model::BinItem> makeSubclip(const model::Bin& bin, const model::BinItem& master, std::int64_t in,
+                                          std::int64_t out, const QDateTime& when);
+
 // Gathers numbered stills into image sequences (as specs, ImageSequence)
 // as p.325-326 describe, leaving other paths as they are, in order.
 QStringList groupStills(const QStringList& paths, const Rational& rate);

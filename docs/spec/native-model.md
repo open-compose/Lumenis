@@ -66,10 +66,61 @@ them. MobIDs read from elsewhere keep their own label bytes (FFmpeg's start
 the clip is named outside the project, and how an imported sequence finds
 the clips it uses.
 
+## The source chain
+
+`BinItem::sources` is a list of `ClipSource` entries: where the clip's
+material came from, in the order of AAF's source mobs.
+
+| Kind | What it is | Fields |
+|---|---|---|
+| File | a media file (AAF file source mob); one entry for each track it carries | `mob`, `track`, `name`, `path`, `from` |
+| Tape | the tape it came from (tape source mob) | `mob`, `name` (the tape's), `startTimecode` |
+| Import | the file it was imported or linked from (import source mob) | `mob`, `name`, `path`, `startTimecode` |
+| Clip | a subclip's master clip | `mob` (the master's), `name`, `offset`, `startTimecode` |
+
+`from` names the source before a file: its tape or import source. Clips made
+before the source chain existed have none, and it is never required.
+
+* **Linked clips** (`media::linkClip`): one file source, one MobID, listed
+  for each track of the file, from an import source for the file with its
+  start timecode. When the file is MXF, FFmpeg reports its
+  `material_package_umid` and its stream's `file_package_umid`. The clip
+  then takes the material package as its MobID and the file package as its
+  file source, so a clip linked from Media Composer's media keeps Media
+  Composer's MobIDs.
+* **Managed media** (Import, Transcode, Consolidate; `media::transcodeClip`):
+  the new master clip gets a new MobID, and each track's OP-Atom file gets a
+  file source with a MobID of its own. They come from the original clip's
+  tape or import source, which keeps its MobID; without one, a new one is
+  made (a tape source when the clip has a Tape). The MXF carries the same
+  MobIDs. The material package is the master clip in every track file, so
+  Media Composer sees one clip and not one per file. The file package is the
+  file's source. FFmpeg 6.1 ignores `material_package_umid` and writes random
+  UMIDs that differ in every file: one stem per file, the material package
+  ending `00` and the file package `01` (observed with bmx's mxf2raw).
+  `MediaWriter` therefore replaces them in the header metadata after the
+  trailer (`fixOpAtom`, `media.cpp`). `scripts/check-mxf.py --make` checks
+  that a clip's files share their material package and each have their own
+  file package.
+
+## Subclips
+
+"Subclips do not directly reference the original media. Subclips remain
+linked to the master clips from which they are created" (Editing Guide
+p.407). `model::subclipItem` and `media::makeSubclip` make one of frames
+[in, out) of a master clip:
+* Its name is "<master>.Sub.NN". The guide says "a numbered .Sub file name
+  extension" (p.407), and its picture shows `RedSky.Sub.01`. NN counts on
+  from the highest in the bin.
+* It has one Clip source: the master's MobID, with `in` as the offset.
+* Its Start and End are the master's, moved by `in`.
+* Its media is the master's, from `in` on (`Link::first`), so it plays
+  without the master being open.
+
+Subclips made in 24p and 25p projects are "hard": they cannot be trimmed
+past their edges (p.407). That belongs with trimming and is left for when
+the Make Subclip command arrives.
+
 ## Still to come in 3.1
 
-* The source chain: a master clip's file sources (one per track, with the
-  media's MobID), and the tape or import source before them, each with its
-  own start timecode (AAF's `SourceMob` chain).
-* Subclips as a reference to their master clip, with marks.
 * A structural dump and diff of bins and projects (Phase 3 gate 1).

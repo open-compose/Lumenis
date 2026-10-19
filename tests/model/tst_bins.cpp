@@ -107,6 +107,30 @@ private slots:
         imported.kind = BinItemKind::MasterClip;
         imported.name = QStringLiteral("A001_C002");
         imported.mobId = MobId::generate();
+        // Its source chain: a file per track from a tape (docs/spec/native-model.md).
+        ClipSource tape;
+        tape.kind = ClipSource::Kind::Tape;
+        tape.mob = MobId::generate();
+        tape.name = QStringLiteral("A001");
+        tape.startTimecode = QStringLiteral("01:00:00:00");
+        for (const QString& track : {QStringLiteral("V1"), QStringLiteral("A1")}) {
+            ClipSource file;
+            file.kind = ClipSource::Kind::File;
+            file.mob = MobId::generate();
+            file.track = track;
+            file.name = QStringLiteral("A001_C002.%1.mxf").arg(track);
+            file.path = QStringLiteral("/Volumes/Media/Avid MediaFiles/MXF/1/") + file.name;
+            file.from = tape.mob;
+            imported.sources << file;
+        }
+        imported.sources << tape;
+        ClipSource master;
+        master.kind = ClipSource::Kind::Clip;
+        master.mob = MobId::generate();
+        master.name = QStringLiteral("A001_C001");
+        master.offset = 48;
+        master.startTimecode = QStringLiteral("01:00:02:00");
+        imported.sources << master;
         // A sequence that uses it, and the clip without a MobID of its own.
         BinItem clip;
         clip.id = newItemId();
@@ -141,6 +165,8 @@ private slots:
         QVERIFY(back->items[0].mobId.isNull()); // derived, so kept as such
         QCOMPARE(mobIdOf(back->items[0]), derived);
         QCOMPARE(back->items[1].mobId, imported.mobId);
+        QCOMPARE(back->items[1].sources, imported.sources);
+        QVERIFY(back->items[2].sources.isEmpty());
         const Sequence again = Sequence::fromItem(back->items[0]);
         const Track* v1 = again.track(QStringLiteral("V1"));
         QVERIFY(v1);

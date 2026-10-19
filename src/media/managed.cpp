@@ -8,6 +8,7 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -110,6 +111,23 @@ public:
         id_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
         const std::optional<std::int64_t> start = startFrame(clip);
         startTc_ = timecodeText(start.value_or(0) + in, clip.editRate);
+        // The source before the files: the clip's own tape or import source
+        // when it has one, else a new one (docs/spec/native-model.md).
+        origin_.kind = clip.fields.value(QStringLiteral("Tape")).isEmpty() ? model::ClipSource::Kind::Import
+                                                                         : model::ClipSource::Kind::Tape;
+        for (const model::ClipSource& s : clip.sources) {
+            if (s.kind == model::ClipSource::Kind::Tape || s.kind == model::ClipSource::Kind::Import) {
+                origin_ = s;
+                break;
+            }
+        }
+        if (origin_.mob.isNull()) {
+            origin_.mob = MobId::generate();
+            origin_.name = origin_.kind == model::ClipSource::Kind::Tape ? clip.fields.value(QStringLiteral("Tape"))
+                                                                         : QFileInfo(link.path).fileName();
+            if (origin_.kind == model::ClipSource::Kind::Import) origin_.path = link.path;
+            origin_.startTimecode = timecodeText(start.value_or(0), clip.editRate);
+        }
     }
     ~Maker() {
         if (!kept_) {
@@ -118,12 +136,21 @@ public:
     }
 
     const QString& id() const { return id_; }
+    const MobId& master() const { return master_; }
+    const model::ClipSource& origin() const { return origin_; }
+    // A track's file source MobID, made the first time it is asked for.
+    const MobId& fileMob(const QString& track) {
+        auto it = files_.find(track);
+        if (it == files_.end()) it = files_.insert(track, MobId::generate());
+        return *it;
+    }
     const QString& startTimecode() const { return startTc_; }
     void keep() { kept_ = true; }
     void setWork(std::int64_t total) { total_ = std::max<std::int64_t>(total, 1); }
 
     // A new file's path for a track in a folder.
     QString pathFor(const QString& folder, const QString& track) {
+        fileMob(track); // the file's MobID, written into it
         // "<clip>.<track>.<id>.mxf": unique, and readable in a file browser.
         QString p = QStringLiteral("%1/%2.%3.%4.mxf").arg(folder, fileStem(clip_.name), track, id_.left(8));
         made_ << p;
@@ -147,6 +174,9 @@ public:
         s.metadata.append({kFramesKey, QString::number(out_ - in_)});
         s.metadata.append({kRateKey, rateText(clip_.editRate)});
         if (!resolution_.isEmpty()) s.metadata.append({kResolutionKey, resolution_});
+        // One master clip in all its track files, a file source each.
+        s.materialPackage = master_;
+        s.filePackage = files_.value(track);
         // The packages' creation and modified dates; without it FFmpeg writes
         // zeros (0-00-00), which bmx reports and the media database keys on.
         const QDateTime when = creation_.when.isValid() ? creation_.when : created_;
@@ -275,6 +305,9 @@ private:
     std::int64_t out_;
     const MediaCreation& creation_;
     QDateTime created_; // when creation_ has no time: one for all the tracks
+    MobId master_ = MobId::generate();
+    QHash<QString, MobId> files_;
+    model::ClipSource origin_;
     QString id_;
     QString startTc_;
     QString resolution_;
@@ -343,6 +376,21 @@ std::optional<model::BinItem> makeMedia(const model::BinItem& clip, std::int64_t
 
     model::BinItem item;
     item.id = model::newItemId();
+    item.mobId = maker.master();
+    // Its source chain: the files, one a track, then where they came from.
+    auto fileSource = [&](const QString& track, const QString& path) {
+        model::ClipSource s;
+        s.kind = model::ClipSource::Kind::File;
+        s.mob = maker.fileMob(track);
+        s.track = track;
+        s.name = QFileInfo(path).fileName();
+        s.path = path;
+        s.from = maker.origin().mob;
+        item.sources << s;
+    };
+    if (video) fileSource(QStringLiteral("V1"), made.path);
+    for (int t = 0; t < made.audioPaths.size(); ++t) fileSource(QStringLiteral("A%1").arg(t + 1), made.audioPaths.at(t));
+    item.sources << maker.origin();
     item.kind = video ? model::BinItemKind::MasterClip : model::BinItemKind::AudioClip;
     item.name = clip.name;
     item.created = creation.when.isValid() ? creation.when : QDateTime::currentDateTimeUtc();

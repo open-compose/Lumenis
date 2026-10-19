@@ -35,6 +35,27 @@ std::optional<BinItemKind> kindFromName(const QString& name);
 
 // One object in a bin. Headings that only some objects have (Tape, Drive,
 // custom columns, ...) live in `fields`, keyed by heading name.
+// One step of a clip's source chain (docs/spec/native-model.md, AAF's
+// source mobs): what the clip's material came from.
+struct ClipSource {
+    enum class Kind {
+        File,   // a media file of one track (AAF file source mob)
+        Tape,   // the tape it was captured or imported from (tape source mob)
+        Import, // the file it was imported or linked from (import source mob)
+        Clip,   // another clip: a subclip's master clip
+    };
+    Kind kind = Kind::File;
+    MobId mob;             // this source's MobID; a Clip source's is the clip's
+    QString track;         // the clip's track it carries ("V1", "A2"); empty: all
+    QString name;          // the tape's name, the file's name, the clip's name
+    QString path;          // File and Import: where the file is
+    QString startTimecode; // Tape and Import: their own start; Clip: where it starts in the master
+    std::int64_t offset = 0; // Clip: the first frame used of the master
+    MobId from;            // the source before this one (a file's tape or import)
+    bool operator==(const ClipSource&) const = default;
+};
+QString sourceKindName(ClipSource::Kind kind);
+
 struct BinItem {
     QString id; // stable, unique within the project
     // Its MobID in AAF and Media Composer's bins (docs/spec/native-model.md).
@@ -57,6 +78,9 @@ struct BinItem {
     // its frames map onto the clip's (lumenis/media/link.h). Empty for clips
     // without media.
     QJsonObject link;
+    // Its source chain: a file source per track, then the tape or import
+    // before them; a subclip's master clip. Empty for clips made before it.
+    QList<ClipSource> sources;
 };
 
 // How a bin is shown (p.245-254). Saved with the bin.
@@ -208,6 +232,14 @@ BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& w
 
 // Edit > Duplicate (p.260): a copy named "<name>.Copy.NN".
 BinItem duplicateItem(const Bin& bin, const BinItem& original, const QDateTime& when);
+// A subclip of frames [in, out) of a master clip (p.407): named
+// "<master>.Sub.NN", its Start and End moved by `in`, and a Clip source
+// that names the master by its MobID, with `in` as the offset ("Subclips
+// remain linked to the master clips from which they are created"). Its
+// link is the master's; media::makeSubclip moves it to `in`. Empty when the
+// range has no frames.
+std::optional<BinItem> subclipItem(const Bin& bin, const BinItem& master, std::int64_t in, std::int64_t out,
+                                   const QDateTime& when);
 
 // A unique id for new objects.
 QString newItemId();

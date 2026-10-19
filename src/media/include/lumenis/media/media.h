@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lumenis/core/mob_id.h"
 #include "lumenis/core/rational.h"
 
 #include <QImage>
@@ -175,6 +176,11 @@ struct WriterSettings {
     QList<QPair<QString, QString>> metadata;
     // The muxer's own options, e.g. mxf_opatom's "mxf_audio_edit_rate".
     QList<QPair<QString, QString>> formatOptions;
+    // mxf_opatom: the MobIDs of the material package (the master clip: the
+    // same in each of its track files) and of the file source package (this
+    // file). Null: FFmpeg's own, which differ in every file.
+    MobId materialPackage;
+    MobId filePackage;
 };
 
 class MediaWriter {
