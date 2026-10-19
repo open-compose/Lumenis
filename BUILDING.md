@@ -732,6 +732,19 @@ the build folder (`build/<preset>`) and configure again.
   It lists each difference in clip counts, names, timecodes, custom columns
   and sequence structure (docs/spec/structure.md). ctest `structdiff` checks
   the tool itself.
+* **The interchange corpus:** AAF files and bins from pyaaf2's and pyavb's
+  test suites (MIT), made with Media Composer. ctest `interop_corpus_fetch`
+  downloads them at pinned commits, checked by SHA-256, into
+  `build/<preset>/interop-corpus`; set `CUTTHULHU_INTEROP_CORPUS` (or the
+  CMake variable `LUMENIS_INTEROP_CORPUS`) to keep them elsewhere. By hand:
+  `python3 scripts/interop-corpus.py fetch`. Without a network the download
+  and the tests that read the files are skipped.
+* **Compound files (AAF's container):** `tst_cfb` reads every corpus AAF the
+  way olefile does (`tests/data/interop_corpus.json`). ctest `cfb_olefile`
+  reads what Cutthulhu writes with olefile and needs it installed
+  (`pip install olefile`, or the distribution's `python3-olefile`); without
+  it, it is skipped. After changing the corpus, rewrite the manifest with
+  `python3 scripts/interop-corpus.py manifest` (needs olefile).
 
 ## Command-line options
 
@@ -759,6 +772,8 @@ cutthulhu --dump-menus FILE  write the menu bar as JSON ('-' for stdout) and exi
 ## Environment variables
 
 * `CUTTHULHU_MODULE_PATH`: folders of extra modules (see `--list-providers`).
+* `CUTTHULHU_INTEROP_CORPUS`: where the interchange corpus is kept (Phase 3
+  gates).
 * `LUMENIS_MEDIA_DRIVES`: folders to offer as media drives, besides the
   volumes, for Import, Consolidate/Transcode and the Media Creation setting.
   Separate them as `PATH` does (`:` on macOS and Linux, `;` on Windows).

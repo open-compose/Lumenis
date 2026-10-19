@@ -1,0 +1,80 @@
+{
+ "cfb": {
+  "pyaaf2/empty.aaf": {
+   "listing": "49806360dce868f102cb957c3a3299eefe5fd0cad4724d99c4b2d6bc1aac0a74",
+   "storages": 358,
+   "streams": 407
+  },
+  "pyaaf2/retimes/bezier01.aaf": {
+   "listing": "98e061193d66c1af6dea7cb0a970c702a4bafe9358826f4f0c2173c8eb8ab9dc",
+   "storages": 1133,
+   "streams": 1276
+  },
+  "pyaaf2/retimes/bezier02.aaf": {
+   "listing": "2a790dcc0df4a199437449d06822d4a9406e2f6b30cee168022de4e42b9f86cd",
+   "storages": 1132,
+   "streams": 1275
+  },
+  "pyaaf2/retimes/bezier03.aaf": {
+   "listing": "9857361f0ea6b58559ed18a0d68690d480abd7fe85bfafcc18e7dbbe8a7775a9",
+   "storages": 1132,
+   "streams": 1275
+  },
+  "pyaaf2/retimes/linear01.aaf": {
+   "listing": "2983f0a1907f192731a309e934d832d90b3a9c3b3d952c5c0bb8cd5ffbee71e6",
+   "storages": 1071,
+   "streams": 1197
+  },
+  "pyaaf2/retimes/linear02.aaf": {
+   "listing": "a6afb5ff5cf7fa3e2e31d87f68f3501ecfbee09c7159225f6afe2ca772403644",
+   "storages": 1036,
+   "streams": 1162
+  },
+  "pyaaf2/retimes/linear03.aaf": {
+   "listing": "0439ac1912d0eb550e8b65f116940d876eec07a3bb792d9028eecdb8ff845089",
+   "storages": 1036,
+   "streams": 1162
+  },
+  "pyaaf2/retimes/spline01.aaf": {
+   "listing": "87f3f251d5a4ace66c606eec0cf8418a5b5031e34fa18c5ab1be36cc40229dcf",
+   "storages": 1132,
+   "streams": 1275
+  },
+  "pyaaf2/retimes/spline02.aaf": {
+   "listing": "b2ec640bdc795040e9b713431aafbb621d3db743a9a3e985c1b682d782ef7ded",
+   "storages": 1037,
+   "streams": 1163
+  },
+  "pyaaf2/retimes/spline03.aaf": {
+   "listing": "b6fb1cef1cbec4db042794e54291c07e895b83d502b9eb70e7c31df3631e6596",
+   "storages": 1037,
+   "streams": 1163
+  },
+  "pyaaf2/retimes/step01.aaf": {
+   "listing": "576905a7d9c9be48de452680aa014325335e7d2e646d8465320a10e735300a41",
+   "storages": 1071,
+   "streams": 1197
+  },
+  "pyaaf2/retimes/step02.aaf": {
+   "listing": "abf295f5df2712cf24a7dde20a7b44c5c7dd8cbf284d7e5444e9e48caf8822c7",
+   "storages": 1036,
+   "streams": 1162
+  },
+  "pyaaf2/retimes/step03.aaf": {
+   "listing": "49aa4517cbe019589361c34ce1fedebe473e55ea4a935ec4659ff1efd1e62493",
+   "storages": 1036,
+   "streams": 1162
+  },
+  "pyaaf2/sector_size_512.aaf": {
+   "listing": "e77233e59c187a1c713d0efebf490ee1a95f8bec7b7a55a8d8fe3b5af6d4818b",
+   "storages": 635,
+   "streams": 750
+  },
+  "pyaaf2/test_file_01.aaf": {
+   "listing": "1d65e88198e0ba2cab2cd4f8fe5315c08dd1f13b3a0cf311b39c27a75b415101",
+   "storages": 3259,
+   "streams": 4143
+  }
+ },
+ "comment": "Made by scripts/interop-corpus.py manifest with olefile 0.47"
+}

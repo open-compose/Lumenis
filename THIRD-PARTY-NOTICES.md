@@ -31,5 +31,17 @@ miniaudio is a single header kept unchanged in `third_party/miniaudio`
 It loads each platform's sound libraries (Core Audio, WASAPI, PulseAudio or
 ALSA) at run time, so nothing needs installing to build or run.
 
+## Prior art for interchange
+
+Cutthulhu's AAF and bin readers and writers (`src/interop`, ROADMAP Phase 3)
+are written after the public specifications, with Mark Reid's
+[pyaaf2](https://github.com/markreidvfx/pyaaf2) and
+[pyavb](https://github.com/markreidvfx/pyavb), both MIT-licensed, as the
+reference implementations. Where their design or tables are followed, the
+MIT licence applies to that part (`packaging/licenses/pyaaf2-LICENSE.txt`;
+pyavb's is the same, Copyright (c) 2022 Mark Reid). Their test files are the
+first interchange corpus. They are downloaded for testing
+(`scripts/interop-corpus.py`) and not distributed.
+
 When a component is added, also add it to this table and install its licence
 text (see `cmake/Packaging.cmake`).

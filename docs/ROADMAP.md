@@ -567,9 +567,16 @@ Shared-storage bin locking (`.lck`-style) comes after that.
   * Structure dumps (`cutthulhu --dump-structure`) and `scripts/structdiff.py`
     for gate 1 (docs/spec/structure.md).
 
-Next is 3.2, AAF. Without a Media Composer seat for now, the first
-reference corpus is the MIT-licensed bins and AAFs in pyavb's and pyaaf2's
-test suites, made with real Media Composer.
+3.2, AAF, has started (docs/spec/aaf.md). Without a Media Composer seat for
+now, the first reference corpus is the MIT-licensed bins and AAFs in pyavb's
+and pyaaf2's test suites, made with real Media Composer
+(`scripts/interop-corpus.py`, downloaded at pinned commits, not committed).
+  * 3.2a, the compound file container (`src/interop/cfb.*`), is done: a
+    reader for version 3 and 4 files that reads streams on demand and
+    refuses damaged files, and a writer. Every corpus AAF reads as olefile
+    reads it, and olefile reads what the writer makes.
+  * Next: 3.2b, AAF's objects, properties and metadictionary; 3.2c, import
+    into bins; 3.2d, export and round trips; 3.2e, File > Import and Export.
 
 ### Phase 4 — Core editing
 Features in this phase:
