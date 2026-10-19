@@ -121,6 +121,7 @@ Subclips made in 24p and 25p projects are "hard": they cannot be trimmed
 past their edges (p.407). That belongs with trimming and is left for when
 the Make Subclip command arrives.
 
-## Still to come in 3.1
+## Structure dumps
 
-* A structural dump and diff of bins and projects (Phase 3 gate 1).
+`cutthulhu --dump-structure` and `scripts/structdiff.py` compare bins and
+projects as Phase 3 gate 1 asks; see [structure.md](structure.md).

@@ -168,6 +168,17 @@ OP-Atom essence as clip-wrapped. Media Composer linking (M) is deferred
 until the owner has the licensed seat again; Phase 3 goes ahead meanwhile
 (ROADMAP gate status).
 
+Phase 3 (projects, bins and interchange) has started. 3.1, the native
+model, is done (docs/spec/native-model.md):
+  - MobIDs (`src/core/mob_id.*`, `BinItem::mobId`, `Segment::sourceMob`);
+    bins are version 2.
+  - Source chains (`BinItem::sources`), subclips (`model::subclipItem`,
+    `media::makeSubclip`), and package UMIDs in managed MXF
+    (`fixOpAtom` in `media.cpp`).
+  - Structure dumps (`--dump-structure`, `src/model/structure.*`) and
+    `scripts/structdiff.py` (docs/spec/structure.md).
+Next is 3.2, AAF (ROADMAP).
+
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 
 Panels are our own framework, not QDockWidget, because Qt cannot draw

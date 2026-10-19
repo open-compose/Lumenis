@@ -30,6 +30,14 @@ if(Python3_Interpreter_FOUND)
         TIMEOUT 60)
 endif()
 
+# The structural diff (ROADMAP Phase 3 gate 1): what it finds the same and
+# different.
+if(Python3_Interpreter_FOUND)
+    add_test(NAME structdiff
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/tests/scripts/test_structdiff.py)
+    set_tests_properties(structdiff PROPERTIES TIMEOUT 60)
+endif()
+
 # The decode corpus (ROADMAP Phase 2 gate 1): every frame of about 150
 # files, read by seeking, matches FFmpeg's own decode. Skipped without the
 # ffmpeg command.

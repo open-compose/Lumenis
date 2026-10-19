@@ -557,6 +557,20 @@ Shared-storage bin locking (`.lck`-style) comes after that.
    differences.
 4. Fuzzing the bin and AAF parsers for 24 hours produces no crashes.
 
+**Status (Phase 3):** 3.1, the native model for interchange, is done
+(docs/spec/native-model.md):
+  * MobIDs (SMPTE ST 330 UMIDs) for clips, sequences and segments. Bins are
+    version 2; version 1 bins get stable derived MobIDs.
+  * Source chains: file, tape and import sources, and subclips as references
+    to their master. Managed MXF carries the master clip's MobID in every
+    track file and a file MobID in each.
+  * Structure dumps (`cutthulhu --dump-structure`) and `scripts/structdiff.py`
+    for gate 1 (docs/spec/structure.md).
+
+Next is 3.2, AAF. Without a Media Composer seat for now, the first
+reference corpus is the MIT-licensed bins and AAFs in pyavb's and pyaaf2's
+test suites, made with real Media Composer.
+
 ### Phase 4 — Core editing
 Features in this phase:
 * Mark in/out, Splice-in, Overwrite, Lift, Extract, Replace and Fit-to-Fill.

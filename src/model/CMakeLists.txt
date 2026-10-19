@@ -8,6 +8,7 @@ add_library(lumenis_model STATIC
     marker.cpp
     settings.cpp
     calculator.cpp
+    structure.cpp
     include/lumenis/model/bin.h
     include/lumenis/model/project_bins.h
     include/lumenis/model/project_store.h
@@ -17,6 +18,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/marker.h
     include/lumenis/model/settings.h
     include/lumenis/model/calculator.h
+    include/lumenis/model/structure.h
 )
 add_library(lumenis::model ALIAS lumenis_model)
 

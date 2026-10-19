@@ -724,6 +724,15 @@ the build folder (`build/<preset>`) and configure again.
 * **Gate 5, transcode round trips:** `tst_media` (`transcodeRoundTrips`)
   prints each resolution's PSNR.
 
+## Phase 3 gates
+
+* **Gate 1, bins and projects:** dump what Cutthulhu reads with
+  `cutthulhu --dump-structure <bin or project>` and compare it with a
+  reference dump: `python3 scripts/structdiff.py reference.json ours.json`.
+  It lists each difference in clip counts, names, timecodes, custom columns
+  and sequence structure (docs/spec/structure.md). ctest `structdiff` checks
+  the tool itself.
+
 ## Command-line options
 
 ```
@@ -736,6 +745,9 @@ cutthulhu --framemd5 FILE    print each decoded frame's MD5 (as FFmpeg's framemd
 cutthulhu --measure-playback FILE [--seconds N]
                              play FILE at 1x with sound and print frames shown and dropped and
                              the picture's offset from the sound as JSON
+cutthulhu --dump-structure PATH
+                             print a bin (.cthbin) or project (.cthproj or its folder) as a
+                             structure dump, for scripts/structdiff.py (docs/spec/structure.md)
 cutthulhu --write-media FILE --drive FOLDER [--resolution ID|all]
                              transcode FILE into managed MXF under FOLDER/Avid MediaFiles/MXF
                              and print the files made as JSON (for scripts/check-mxf.py)

@@ -4,6 +4,7 @@
 #include "lumenis/core/branding.h"
 #include "lumenis/ext/module_loader.h"
 #include "lumenis/ext/provider.h"
+#include "lumenis/model/structure.h"
 #include "lumenis/model/locations.h"
 #include "lumenis/model/project_store.h"
 #include "lumenis/model/bin.h"
@@ -84,7 +85,8 @@ bool isHeadlessInvocation(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg(argv[i]);
         if (arg == "--version" || arg == "-v" || arg == "--help" || arg == "-h" || arg == "-?"
-            || arg == "--list-providers" || arg == "--probe" || arg == "--framemd5" || arg == "--write-media") {
+            || arg == "--list-providers" || arg == "--probe" || arg == "--framemd5" || arg == "--write-media"
+            || arg == "--dump-structure") {
             return true;
         }
     }
@@ -209,6 +211,12 @@ int main(int argc, char** argv) {
         QStringLiteral("resolution"),
         QStringLiteral("With --write-media: a resolution id (dnx_lb, dnx_sq, ...) or 'all' (default)."),
         QStringLiteral("id"), QStringLiteral("all"));
+    const QCommandLineOption dumpStructure(
+        QStringLiteral("dump-structure"),
+        QStringLiteral("Print the structure of a bin (.cthbin) or project (.cthproj or its folder) as JSON, "
+                       "for scripts/structdiff.py, then exit."),
+        QStringLiteral("path"));
+    parser.addOption(dumpStructure);
     parser.addOption(writeMedia);
     parser.addOption(mediaDrive);
     parser.addOption(mediaResolution);
@@ -256,6 +264,20 @@ int main(int argc, char** argv) {
             return 1;
         }
         const QByteArray json = QJsonDocument(info->toJson()).toJson();
+        std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
+        return 0;
+    }
+
+    if (parser.isSet(dumpStructure)) {
+        // Phase 3 gate 1: what a bin or project holds, to compare
+        // (docs/spec/structure.md).
+        QString error;
+        const QJsonObject structure = lumenis::model::structureOf(parser.value(dumpStructure), &error);
+        if (structure.isEmpty()) {
+            std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(parser.value(dumpStructure)), qPrintable(error));
+            return 1;
+        }
+        const QByteArray json = QJsonDocument(structure).toJson();
         std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
         return 0;
     }

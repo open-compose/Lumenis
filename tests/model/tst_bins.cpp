@@ -2,6 +2,7 @@
 #include "lumenis/model/project_bins.h"
 #include "lumenis/model/project_store.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/structure.h"
 
 #include <QDir>
 #include <QFile>
@@ -190,6 +191,89 @@ private slots:
         QVERIFY2(opened, qPrintable(error));
         QCOMPARE(mobIdOf(opened->items[2]), mobIdOf(clip));
         QCOMPARE(Sequence::fromItem(opened->items[0]).track(QStringLiteral("V1"))->segments[1].sourceMobId(), mobIdOf(clip));
+    }
+
+    void structureDump() {
+        // What Phase 3 gate 1 compares (docs/spec/structure.md).
+        QTemporaryDir dir;
+        ProjectSettings ps;
+        ps.name = QStringLiteral("Harbor");
+        ps.format = projectFormatPresets().front();
+        const auto entry = ProjectStore(dir.path()).create(ps);
+        QVERIFY(entry);
+        ProjectBins project(entry->folder, ps.name);
+        QVERIFY(project.load());
+        const QString binPath = project.binPath(project.bins().first()->id);
+        auto bin = BinFile::read(binPath);
+        QVERIFY(bin);
+        bin->display.customColumns = {QStringLiteral("Circled")};
+        BinItem clip;
+        clip.id = newItemId();
+        clip.kind = BinItemKind::MasterClip;
+        clip.name = QStringLiteral("A001_C001");
+        clip.editRate = Rational(25);
+        clip.durationFrames = 250;
+        clip.fields = {{QStringLiteral("Start"), QStringLiteral("01:00:00:00")},
+                       {QStringLiteral("End"), QStringLiteral("01:00:10:00")},
+                       {QStringLiteral("Tracks"), QStringLiteral("V1")},
+                       {QStringLiteral("Tape"), QStringLiteral("A001")},
+                       {QStringLiteral("Circled"), QStringLiteral("yes")},
+                       {QStringLiteral("Lens"), QStringLiteral("35mm")}};
+        BinItem cut = newSequence(*bin, Rational(25), kWhen);
+        Sequence s;
+        Segment used;
+        used.clipId = clip.id;
+        used.name = clip.name;
+        used.sourceTrack = QStringLiteral("V1");
+        used.sourceIn = 10;
+        used.length = 50;
+        Effect dissolve;
+        dissolve.category = QStringLiteral("Blend");
+        dissolve.name = QStringLiteral("Dissolve");
+        Segment gap = Segment::filler(25);
+        gap.transition = Transition{dissolve};
+        s.ensureTrack(QStringLiteral("V1"))->segments = {used, gap};
+        s.storeIn(cut);
+        bin->items << clip << cut;
+        QVERIFY(BinFile::write(binPath, *bin));
+
+        QString error;
+        const QJsonObject doc = structureOf(entry->folder, &error);
+        QVERIFY2(!doc.isEmpty(), qPrintable(error));
+        QCOMPARE(doc.value(QStringLiteral("format")).toString(), QStringLiteral("cutthulhu-structure"));
+        QCOMPARE(doc.value(QStringLiteral("project")).toString(), QStringLiteral("Harbor"));
+        const QJsonObject b = doc.value(QStringLiteral("bins")).toArray().first().toObject();
+        QCOMPARE(b.value(QStringLiteral("name")).toString(), QStringLiteral("Harbor"));
+        QCOMPARE(b.value(QStringLiteral("customColumns")).toArray(), QJsonArray{QStringLiteral("Circled")});
+        const QJsonArray items = b.value(QStringLiteral("items")).toArray();
+        QCOMPARE(items.size(), 2);
+        const QJsonObject c = items.at(0).toObject();
+        QCOMPARE(c.value(QStringLiteral("kind")).toString(), QStringLiteral("masterClip"));
+        QCOMPARE(c.value(QStringLiteral("mobId")).toString(), QString::fromStdString(mobIdOf(clip).toString()));
+        QCOMPARE(c.value(QStringLiteral("start")).toString(), QStringLiteral("01:00:00:00"));
+        QCOMPARE(c.value(QStringLiteral("duration")).toInteger(), 250);
+        // Custom columns (and headings that are not the guide's) apart from
+        // the standard ones.
+        QCOMPARE(c.value(QStringLiteral("columns")).toObject(),
+                 (QJsonObject{{QStringLiteral("Circled"), QStringLiteral("yes")}, {QStringLiteral("Lens"), QStringLiteral("35mm")}}));
+        QCOMPARE(c.value(QStringLiteral("fields")).toObject(), (QJsonObject{{QStringLiteral("Tape"), QStringLiteral("A001")}}));
+        const QJsonArray tracks =
+            items.at(1).toObject().value(QStringLiteral("sequence")).toObject().value(QStringLiteral("tracks")).toArray();
+        QCOMPARE(tracks.size(), 1);
+        const QJsonArray segments = tracks.first().toObject().value(QStringLiteral("segments")).toArray();
+        QCOMPARE(segments.at(0).toObject(),
+                 (QJsonObject{{QStringLiteral("source"), QString::fromStdString(mobIdOf(clip).toString())},
+                              {QStringLiteral("name"), QStringLiteral("A001_C001")},
+                              {QStringLiteral("track"), QStringLiteral("V1")},
+                              {QStringLiteral("in"), 10},
+                              {QStringLiteral("length"), 50}}));
+        QCOMPARE(segments.at(1).toObject(),
+                 (QJsonObject{{QStringLiteral("filler"), 25}, {QStringLiteral("transition"), QStringLiteral("Blend/Dissolve")}}));
+        // The bin file alone gives the same bin.
+        QJsonObject alone = structureOf(binPath, &error).value(QStringLiteral("bins")).toArray().first().toObject();
+        alone.insert(QStringLiteral("name"), QStringLiteral("Harbor"));
+        QCOMPARE(alone, b);
+        QVERIFY(structureOf(dir.filePath(QStringLiteral("nothing")), &error).isEmpty());
     }
 
     void headingsComeFromTheGuide() {
