@@ -106,7 +106,7 @@ class Maker {
 public:
     Maker(const model::BinItem& clip, const Link& link, std::int64_t in, std::int64_t out,
           const MediaCreation& creation)
-        : clip_(clip), link_(link), in_(in), out_(out), creation_(creation) {
+        : clip_(clip), link_(link), in_(in), out_(out), creation_(creation), created_(QDateTime::currentDateTimeUtc()) {
         id_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
         const std::optional<std::int64_t> start = startFrame(clip);
         startTc_ = timecodeText(start.value_or(0) + in, clip.editRate);
@@ -147,6 +147,10 @@ public:
         s.metadata.append({kFramesKey, QString::number(out_ - in_)});
         s.metadata.append({kRateKey, rateText(clip_.editRate)});
         if (!resolution_.isEmpty()) s.metadata.append({kResolutionKey, resolution_});
+        // The packages' creation and modified dates; without it FFmpeg writes
+        // zeros (0-00-00), which bmx reports and the media database keys on.
+        const QDateTime when = creation_.when.isValid() ? creation_.when : created_;
+        s.metadata.append({QStringLiteral("creation_time"), when.toUTC().toString(Qt::ISODateWithMs)});
         return s;
     }
     void setResolution(const QString& name) { resolution_ = name; }
@@ -270,6 +274,7 @@ private:
     std::int64_t in_;
     std::int64_t out_;
     const MediaCreation& creation_;
+    QDateTime created_; // when creation_ has no time: one for all the tracks
     QString id_;
     QString startTc_;
     QString resolution_;

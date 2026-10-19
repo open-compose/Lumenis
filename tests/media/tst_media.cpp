@@ -240,6 +240,14 @@ private slots:
         VideoReader reader;
         QVERIFY(reader.open(path));
         for (int n : {9, 0, 4}) QVERIFY2(near(reader.frame(n), colourOf(n), 14), qPrintable(QString::number(n)));
+        // The essence is clip-wrapped, and labelled so (FFmpeg labels it
+        // frame-wrapped; readers that go by the label, such as bmx, then
+        // fail: ROADMAP Phase 2 gate 2).
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const QByteArray bytes = file.readAll();
+        QVERIFY(!bytes.contains(QByteArray::fromHex("0d01030102110100")));
+        QVERIFY(bytes.contains(QByteArray::fromHex("0d01030102110200")));
     }
 
     void managedMedia() {

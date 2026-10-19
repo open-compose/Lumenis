@@ -466,8 +466,16 @@ Sub-steps:
     and fixed: frames counted from the first one shown (B-frames in AVI and
     MPEG-TS), a sane frame rate and counted length for files without an
     index (raw DV), and a reliable rewind when a seek overshoots.
-  * Gate 2: `scripts/check-mxf.py` runs bmx's mxf2raw when installed;
-    linking into Media Composer is by hand **(M)**.
+  * Gate 2: `scripts/check-mxf.py --make` makes media in every DNx
+    resolution with `cutthulhu --write-media` and checks it with bmx's
+    mxf2raw (ctest `mxf_check` when installed); linking into Media Composer
+    is by hand **(M)**. bmx found two faults. FFmpeg's OP-Atom muxer
+    clip-wraps the essence but labels VC-3 and BWF essence containers
+    frame-wrapped, so bmx could not read any frame; `MediaWriter` now
+    relabels them in the partition packs and header metadata, found through
+    the random index pack. And the packages had zero dates; the writer now
+    passes the creation time. The audio essence key still says
+    frame-wrapped (FFmpeg's); bmx accepts it.
   * Gates 3 and 4: `cutthulhu --measure-playback` and
     `scripts/measure-playback.py` (DNxHD 120 1080p25 with a tone): dropped
     frames, and lip sync as how far the sound already is into a frame when
@@ -494,8 +502,9 @@ first, as an editor would, and drops are timed from the start. The Mac's
 rerun then passed 60 minutes with no warning of any kind. The "±1 audio
 sample block" part of gate 4 has no measurement of its own: the picture is
 slaved to the audio clock, so there is no drift to measure, and lip sync
-covers the offset. Gate 2, the last one, waits on bmx and a Media Composer
-seat.
+covers the offset. Gate 2's validator half passes: all 15 files (5 DNx
+resolutions, picture and two audio tracks each) pass bmx 1.6.0's mxf2raw.
+Its other half, linking into a real Media Composer, waits on a seat (M).
 
 * Linking (AMA-style) and Import/Consolidate/Transcode into an Avid MediaFiles
   layout: `Avid MediaFiles/MXF/<n>/`.

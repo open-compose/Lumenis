@@ -689,10 +689,25 @@ the build folder (`build/<preset>`) and configure again.
   minutes; later runs about two. Codecs the local FFmpeg cannot encode (the
   Windows LGPL build has no x264 or x265) are left out; at least 100 files
   must be made. `report.json` in the folder lists each file.
-* **Gate 2, MXF:** make media (Import or Transcode), then
-  `python3 scripts/check-mxf.py "<drive>/Avid MediaFiles/MXF"`. It needs bmx's
-  `mxf2raw` (https://github.com/bbc/bmx, built from source). Then link the
-  files into Media Composer by hand.
+* **Gate 2, MXF:** `python3 scripts/check-mxf.py --make --app <cutthulhu>`
+  makes a 1080p25 test picture with a stereo tone, transcodes it into every
+  DNx resolution (`cutthulhu --write-media`, as Import and Transcode write
+  it), and checks each file with bmx's `mxf2raw`. A file passes when it is
+  complete and readable to its last frame (every frame is read for a
+  checksum), is OP-Atom with one track, and has real creation dates.
+  `check-mxf.py "<drive>/Avid MediaFiles/MXF"` checks media you made in the
+  application. With `mxf2raw` on PATH, ctest runs it as `mxf_check`. bmx
+  (BSD licence) is a tool here, not shipped. To build it on Ubuntu:
+
+  ```
+  sudo apt install libexpat1-dev liburiparser-dev uuid-dev
+  git clone --depth 1 https://github.com/bbc/bmx.git
+  cmake -S bmx -B bmx/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBMX_BUILD_TESTING=OFF
+  cmake --build bmx/build
+  sudo cp bmx/build/apps/mxf2raw/mxf2raw /usr/local/bin/
+  ```
+
+  Then link the files into Media Composer by hand.
 * **Gates 3 and 4, playback:** on a reference machine with a sound card,
   `python3 scripts/measure-playback.py --app <cutthulhu> --seconds 600` (gate
   3) and `--seconds 3600` (gate 4). Each run is judged on the gates its
@@ -721,6 +736,9 @@ cutthulhu --framemd5 FILE    print each decoded frame's MD5 (as FFmpeg's framemd
 cutthulhu --measure-playback FILE [--seconds N]
                              play FILE at 1x with sound and print frames shown and dropped and
                              the picture's offset from the sound as JSON
+cutthulhu --write-media FILE --drive FOLDER [--resolution ID|all]
+                             transcode FILE into managed MXF under FOLDER/Avid MediaFiles/MXF
+                             and print the files made as JSON (for scripts/check-mxf.py)
 cutthulhu --dump-menus FILE  write the menu bar as JSON ('-' for stdout) and exit;
                              with --sample-project, open a temporary project first
                              and add each command's id and whether it works yet

@@ -4,6 +4,7 @@
 #include "lumenis/ext/provider.h"
 
 #include <QCryptographicHash>
+#include <QFile>
 #include <QJsonArray>
 #include <QStringList>
 
@@ -1011,6 +1012,8 @@ struct MediaWriter::Impl {
     bool headerWritten = false;
     bool rec709 = false;
     QString error;
+    QString path;        // for the OP-Atom relabelling after the trailer
+    bool opAtom = false;
 
     ~Impl() {
         sws_freeContext(sws);
@@ -1071,6 +1074,77 @@ QString MediaWriter::lastError() const {
     return d_->error;
 }
 
+namespace {
+
+std::uint64_t bigEndian(const QByteArray& b, qsizetype at, int bytes) {
+    std::uint64_t v = 0;
+    for (int i = 0; i < bytes; ++i) v = (v << 8) | static_cast<std::uint8_t>(b.at(at + i));
+    return v;
+}
+
+// A KLV's BER length at `at`; `at` moves past it. -1 when it is not one.
+qint64 berLength(const QByteArray& b, qsizetype& at) {
+    if (at >= b.size()) return -1;
+    const auto first = static_cast<std::uint8_t>(b.at(at++));
+    if (!(first & 0x80)) return first;
+    const int bytes = first & 0x7f;
+    if (bytes < 1 || bytes > 8 || at + bytes > b.size()) return -1;
+    const auto v = bigEndian(b, at, bytes);
+    at += bytes;
+    return static_cast<qint64>(v);
+}
+
+// FFmpeg's OP-Atom muxer clip-wraps the essence (one KLV for the whole of
+// it, as Avid's media is) but labels VC-3 (DNx) and BWF essence containers
+// frame-wrapped (SMPTE ST 2019-4 and 382: byte 15, 01 frame, 02 clip).
+// Readers that go by the label, such as bmx (ROADMAP Phase 2 gate 2), then
+// cannot read the essence. The labels are in each partition pack and the
+// header metadata after it; the random index pack at the end lists the
+// partitions. The essence is not touched.
+bool relabelOpAtomClipWrapped(const QString& path) {
+    QFile f(path);
+    if (!f.open(QIODevice::ReadWrite)) return false;
+    const qint64 size = f.size();
+    if (size < 4 || !f.seek(size - 4)) return false;
+    const auto ripLength = static_cast<qint64>(bigEndian(f.read(4), 0, 4));
+    if (ripLength < 20 || ripLength > size || !f.seek(size - ripLength)) return false;
+    const QByteArray rip = f.read(ripLength);
+    static const QByteArray kRipKey = QByteArray::fromHex("060e2b34020501010d01020101110100");
+    if (!rip.startsWith(kRipKey)) return false;
+    qsizetype at = 16;
+    const qint64 entries = berLength(rip, at);
+    if (entries < 4) return false;
+    static const QByteArray kPrefix = QByteArray::fromHex("060e2b34040101");
+    static const QByteArray kMiddle = QByteArray::fromHex("0d01030102");
+    for (qsizetype e = at; e + 12 <= at + entries - 4 && e + 12 <= rip.size(); e += 12) {
+        const auto offset = static_cast<qint64>(bigEndian(rip, e + 4, 8));
+        if (offset < 0 || offset >= size || !f.seek(offset)) return false;
+        // The partition pack (key, length, then fixed fields: header byte
+        // count at 32) and the header metadata after it.
+        QByteArray head = f.read(64);
+        qsizetype p = 16;
+        const qint64 packLength = berLength(head, p);
+        if (packLength < 40 || p + 40 > head.size()) return false;
+        const auto headerBytes = static_cast<qint64>(bigEndian(head, p + 32, 8));
+        const qint64 length = p + packLength + headerBytes;
+        if (length > 64 * 1024 * 1024 || offset + length > size || !f.seek(offset)) return false;
+        QByteArray region = f.read(length);
+        bool changed = false;
+        for (qsizetype i = region.indexOf(kPrefix); i >= 0 && i + 16 <= region.size(); i = region.indexOf(kPrefix, i + 1)) {
+            const auto kind = static_cast<std::uint8_t>(region.at(i + 13));
+            if (region.mid(i + 8, 5) == kMiddle && (kind == 0x11 || kind == 0x06) && region.at(i + 14) == 0x01 &&
+                region.at(i + 15) == 0x00) {
+                region[i + 14] = 0x02;
+                changed = true;
+            }
+        }
+        if (changed && (!f.seek(offset) || f.write(region) != region.size())) return false;
+    }
+    return true;
+}
+
+} // namespace
+
 bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* error) {
     d_ = std::make_unique<Impl>();
     Impl& d = *d_;
@@ -1081,6 +1155,8 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
     };
     const QByteArray file = path.toUtf8();
     const QByteArray format = s.format.toUtf8();
+    d.path = path;
+    d.opAtom = s.format == QLatin1String("mxf_opatom");
     if (avformat_alloc_output_context2(&d.out, nullptr, format.isEmpty() ? nullptr : format.constData(), file.constData()) < 0 ||
         !d.out) {
         return failed(QStringLiteral("unknown format %1").arg(s.format));
@@ -1333,6 +1409,10 @@ bool MediaWriter::finish(QString* error) {
     if (!ok) setError(error, d.error);
     // Close the file now.
     if (d.out && !(d.out->oformat->flags & AVFMT_NOFILE)) avio_closep(&d.out->pb);
+    if (ok && d.opAtom && !relabelOpAtomClipWrapped(d.path)) {
+        ok = d.fail(QStringLiteral("cannot relabel the MXF essence as clip-wrapped"));
+        setError(error, d.error);
+    }
     return ok;
 }
 

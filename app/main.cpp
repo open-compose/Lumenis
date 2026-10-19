@@ -13,6 +13,8 @@
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/capture.h"
+#include "lumenis/media/link.h"
+#include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
 #include "lumenis/media/playback.h"
 #include "lumenis/ui/command_registry.h"
@@ -36,6 +38,7 @@
 #include <tuple>
 #include <QIcon>
 #include <QCommandLineParser>
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QTimeZone>
@@ -81,7 +84,7 @@ bool isHeadlessInvocation(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg(argv[i]);
         if (arg == "--version" || arg == "-v" || arg == "--help" || arg == "-h" || arg == "-?"
-            || arg == "--list-providers" || arg == "--probe" || arg == "--framemd5") {
+            || arg == "--list-providers" || arg == "--probe" || arg == "--framemd5" || arg == "--write-media") {
             return true;
         }
     }
@@ -195,6 +198,20 @@ int main(int argc, char** argv) {
         QStringLiteral("file"));
     const QCommandLineOption shuffle(
         QStringLiteral("shuffle"), QStringLiteral("With --framemd5: read the frames in a shuffled order, seeking."));
+    const QCommandLineOption writeMedia(
+        QStringLiteral("write-media"),
+        QStringLiteral("Transcode <file> into managed MXF media under --drive (Avid MediaFiles/MXF/<n>/), "
+                       "in each resolution of --resolution, then print the files as JSON and exit."),
+        QStringLiteral("file"));
+    const QCommandLineOption mediaDrive(
+        QStringLiteral("drive"), QStringLiteral("With --write-media: the drive (folder) for the media."), QStringLiteral("folder"));
+    const QCommandLineOption mediaResolution(
+        QStringLiteral("resolution"),
+        QStringLiteral("With --write-media: a resolution id (dnx_lb, dnx_sq, ...) or 'all' (default)."),
+        QStringLiteral("id"), QStringLiteral("all"));
+    parser.addOption(writeMedia);
+    parser.addOption(mediaDrive);
+    parser.addOption(mediaResolution);
     parser.addOption(listProviders);
     parser.addOption(probeMedia);
     parser.addOption(frameMd5);
@@ -239,6 +256,64 @@ int main(int argc, char** argv) {
             return 1;
         }
         const QByteArray json = QJsonDocument(info->toJson()).toJson();
+        std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
+        return 0;
+    }
+
+    if (parser.isSet(writeMedia)) {
+        // MXF to check against a validator (ROADMAP Phase 2 gate 2,
+        // scripts/check-mxf.py --make): what Import and Transcode write.
+        const QString file = parser.value(writeMedia);
+        const QString drive = parser.value(mediaDrive);
+        if (drive.isEmpty()) {
+            std::fprintf(stderr, "--write-media needs --drive <folder>\n");
+            return 1;
+        }
+        QString error;
+        const auto info = lumenis::media::probe(file, &error);
+        if (!info) {
+            std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(file), qPrintable(error));
+            return 1;
+        }
+        const lumenis::media::StreamInfo* video = info->firstVideo();
+        lumenis::media::LinkOptions link;
+        if (video && video->frameRate.num() > 0) link.editRate = video->frameRate;
+        const auto clip = lumenis::media::linkClip(*info, link, &error);
+        if (!clip) {
+            std::fprintf(stderr, "cannot link %s: %s\n", qPrintable(file), qPrintable(error));
+            return 1;
+        }
+        QList<lumenis::media::Resolution> chosen;
+        if (parser.value(mediaResolution) == QLatin1String("all")) {
+            chosen = lumenis::media::resolutions();
+        } else if (const auto* r = lumenis::media::findResolution(parser.value(mediaResolution))) {
+            chosen = {*r};
+        } else {
+            std::fprintf(stderr, "no resolution %s\n", qPrintable(parser.value(mediaResolution)));
+            return 1;
+        }
+        QJsonArray made;
+        for (const auto& resolution : chosen) {
+            lumenis::media::MediaCreation creation;
+            if (video) creation.raster = QSize(video->width, video->height);
+            creation.resolution = resolution;
+            creation.videoDrive = drive;
+            creation.project = QStringLiteral("check-mxf");
+            creation.when = QDateTime::currentDateTimeUtc();
+            const auto result = lumenis::media::transcodeClip(*clip, 0, -1, creation, &error);
+            if (!result) {
+                std::fprintf(stderr, "%s: %s\n", qPrintable(resolution.id), qPrintable(error));
+                return 1;
+            }
+            const auto media = lumenis::media::linkOf(*result);
+            QJsonArray files;
+            if (media && !media->path.isEmpty()) files.append(media->path);
+            if (media) {
+                for (const QString& audio : media->audioPaths) files.append(audio);
+            }
+            made.append(QJsonObject{{QStringLiteral("resolution"), resolution.id}, {QStringLiteral("files"), files}});
+        }
+        const QByteArray json = QJsonDocument(made).toJson();
         std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
         return 0;
     }

@@ -161,8 +161,11 @@ status, BUILDING.md "Phase 2 gates"):
   - `--measure-playback`, `scripts/measure-playback.py` and
     `scripts/check-mxf.py` for the runs done by hand.
 Gates 3 and 4 (playback) pass on the owner's Windows PC, M1 Mac mini and
-Ubuntu 26.04 in WSL, the reference Linux. Phase 2 waits only on gate 2:
-bmx validation and Media Composer linking (M). Next is Phase 3 (ROADMAP).
+Ubuntu 26.04 in WSL, the reference Linux. Gate 2's bmx half passes
+(`scripts/check-mxf.py --make`, `cutthulhu --write-media`, ctest
+`mxf_check` with mxf2raw installed); `MediaWriter` relabels FFmpeg's
+OP-Atom essence as clip-wrapped. Phase 2 waits only on Media Composer
+linking (M). Next is Phase 3 (ROADMAP).
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

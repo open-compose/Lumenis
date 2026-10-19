@@ -50,6 +50,21 @@ if(Python3_Interpreter_FOUND)
     endif()
 endif()
 
+# MXF we write against bmx's mxf2raw (ROADMAP Phase 2 gate 2): every DNx
+# resolution with stereo sound. Left out without mxf2raw (BUILDING.md).
+if(Python3_Interpreter_FOUND AND LUMENIS_FFMPEG_COMMAND)
+    find_program(LUMENIS_MXF2RAW_COMMAND mxf2raw)
+    if(LUMENIS_MXF2RAW_COMMAND)
+        add_test(NAME mxf_check
+            COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/check-mxf.py --make
+                    --app $<TARGET_FILE:lumenis_app> --ffmpeg ${LUMENIS_FFMPEG_COMMAND}
+                    --mxf2raw ${LUMENIS_MXF2RAW_COMMAND})
+        set_tests_properties(mxf_check PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 600)
+    else()
+        message(STATUS "bmx's mxf2raw was not found: the mxf_check test is left out (BUILDING.md, Phase 2 gates).")
+    endif()
+endif()
+
 # FFmpeg is a built-in codec provider (docs/EXTENSIONS.md).
 add_test(NAME app_ffmpeg_provider COMMAND lumenis_app --list-providers)
 set_tests_properties(app_ffmpeg_provider PROPERTIES
