@@ -44,6 +44,15 @@
 
 #include <algorithm>
 
+// The Source Browser (source_browser.h): SourceMediaModel, the listing of a folder with what probing
+// found for each file, and SourceBrowser, the window around it (navigation, Explore / Favorites /
+// Recent places, Text and Frame views, the Source Browser settings and the Link/Import row).
+//
+// Files are probed with media::probe() on the browser's own thread pool and turned into the clips
+// they would link as with media::linkClip() (src/media/link.*); thumbnails come from MediaFrames
+// (media_frames.cpp). The browser only emits requests (linkRequested, importRequested, loadRequested,
+// volumeBinRequested ...); MainWindow (main_window.cpp) does the linking and importing into bins.
+
 namespace lumenis::ui {
 
 namespace {
@@ -58,6 +67,7 @@ QSize thumbnailFor(int step) {
     return {w, w * 9 / 16};
 }
 
+// A small auto-raised tool button with a glyph, as the navigation and view buttons are.
 QToolButton* navButton(QWidget* parent, const QString& name, GlyphIcon glyph, const QString& tip) {
     auto* b = new QToolButton(parent);
     b->setObjectName(name);
@@ -78,6 +88,8 @@ public:
         return {t.width() + 16, t.height() + kLabelHeight + 12};
     }
 
+    // The decoded thumbnail when MediaFrames has it (it repaints on thumbnailReady); otherwise a
+    // frame outline with a folder, audio or clip glyph, dimmed for files that are not media.
     void paint(QPainter* p, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         p->save();
         const QSize t = browser_->thumbnailSize();
@@ -123,6 +135,7 @@ class BrowserSortModel : public QSortFilterProxyModel {
 public:
     using QSortFilterProxyModel::QSortFilterProxyModel;
 
+    // Media Folder View: hide rows that were probed and are not media. Rows still being probed stay.
     void setMediaOnly(bool on) {
         mediaOnly_ = on;
         refilter();
@@ -181,6 +194,7 @@ void SourceMediaModel::setEntries(const QList<Entry>& entries) {
     endResetModel();
 }
 
+// Rows are found by path, so a result for a file no longer listed does nothing.
 void SourceMediaModel::setProbed(const QString& path, const std::optional<media::MediaInfo>& info) {
     const int row = rowOf(path);
     if (row < 0) return;
@@ -280,6 +294,8 @@ QMimeData* SourceMediaModel::mimeData(const QModelIndexList& indexes) const {
 
 // ---------------------------------------------------------------- SourceBrowser
 
+// The model is shown through BrowserSortModel (folders first, by name, case-insensitive; the search
+// filters column 0). Frame view and Text view share one selection model.
 SourceBrowser::SourceBrowser(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("sourceBrowser"));
     pool_.setMaxThreadCount(2);
@@ -310,6 +326,8 @@ SourceBrowser::SourceBrowser(QWidget* parent) : QWidget(parent) {
     auto* middle = new QSplitter(Qt::Horizontal, vertical);
     middle->setChildrenCollapsible(false);
 
+    // The places: Explore (a folder tree of the file system), Favorites and Recent; clicking one
+    // shows that folder.
     places_ = new QTabWidget(middle);
     places_->setObjectName(QStringLiteral("sourceBrowserPlaces"));
     folders_ = new QFileSystemModel(this);
@@ -340,6 +358,7 @@ SourceBrowser::SourceBrowser(QWidget* parent) : QWidget(parent) {
     middle->setSizes({220, 560});
     vertical->addWidget(middle);
 
+    // Source Browser Settings (p.315); changes emit stateChanged.
     settingsBox_ = new QFrame(vertical);
     settingsBox_->setObjectName(QStringLiteral("sourceBrowserSettings"));
     settingsBox_->setFrameShape(QFrame::StyledPanel);
@@ -396,6 +415,8 @@ SourceBrowser::~SourceBrowser() {
     pool_.waitForDone();
 }
 
+// Back, Forward, Up; Home, Collapse Directories, Favorite; Media Folder View; then the breadcrumb
+// bar, which updateNavigation() fills.
 void SourceBrowser::buildNavigation(QHBoxLayout* row) {
     backButton_ = navButton(this, QStringLiteral("back"), GlyphIcon::ArrowBack, tr("Back"));
     forwardButton_ = navButton(this, QStringLiteral("forward"), GlyphIcon::ArrowForward, tr("Forward"));
@@ -428,6 +449,8 @@ void SourceBrowser::buildNavigation(QHBoxLayout* row) {
     row->addWidget(crumbBar_, 1);
 }
 
+// The media display: a stack of the Text view (sortable columns) and the Frame view (thumbnails
+// drawn by ThumbnailDelegate), and the bar below it.
 QWidget* SourceBrowser::buildDisplay() {
     auto* box = new QWidget(this);
     auto* v = new QVBoxLayout(box);
@@ -600,6 +623,7 @@ void SourceBrowser::setFolder(const QString& path) {
     emit stateChanged();
 }
 
+// Back and Forward move through the history without adding to it or to Recent.
 void SourceBrowser::back() {
     if (!canGoBack()) return;
     --position_;
@@ -648,6 +672,7 @@ void SourceBrowser::toggleFavorite() {
     emit stateChanged();
 }
 
+// Also called through the button's toggled signal, so setting the button here re-enters once.
 void SourceBrowser::setMediaFolderView(bool on) {
     if (volumeButton_->isChecked() != on) volumeButton_->setChecked(on);
     static_cast<BrowserSortModel*>(proxy_)->setMediaOnly(on);
@@ -680,6 +705,8 @@ void SourceBrowser::refreshLists() {
     fill(recentList_, recent_);
 }
 
+// The crumbs are rebuilt as buttons from breadcrumbs(); `paths` holds the matching absolute path
+// of each, root first, for its click.
 void SourceBrowser::updateNavigation() {
     backButton_->setEnabled(canGoBack());
     forwardButton_->setEnabled(canGoForward());
@@ -719,6 +746,8 @@ void SourceBrowser::updateNavigation() {
 
 // ---- Listing and probing
 
+// A new generation invalidates the probes of the previous listing; those not yet started are
+// dropped from the pool.
 void SourceBrowser::list() {
     ++generation_;
     pool_.clear();
@@ -734,6 +763,7 @@ void SourceBrowser::list() {
                 entries << e;
             }
         } else {
+            // A plain folder: its folders and files, without recursing.
             const QFileInfoList infos =
                 QDir(folder_).entryInfoList(QDir::Dirs | QDir::Files | QDir::NoDotAndDotDot, QDir::Name | QDir::DirsFirst);
             for (const QFileInfo& fi : infos) {
@@ -749,6 +779,8 @@ void SourceBrowser::list() {
     updateProgress();
 }
 
+// Each probe runs on pool_ and posts its result back to the GUI thread, where it is applied only if
+// the listing has not changed since (generation still current).
 void SourceBrowser::startProbes(int generation) {
     for (const SourceMediaModel::Entry& e : model_->entries()) {
         if (e.folder) continue;
@@ -769,6 +801,7 @@ void SourceBrowser::startProbes(int generation) {
     }
 }
 
+// Waits for the pool, then delivers the results queued to the GUI thread.
 void SourceBrowser::waitForProbes() {
     pool_.waitForDone();
     QCoreApplication::sendPostedEvents(this);
@@ -883,6 +916,9 @@ void SourceBrowser::activate(const QModelIndex& index) {
     }
 }
 
+// In the Explore tree: Add Volume Bin for the folder under the pointer. In the media views: Add to
+// Bin and Load in Source Monitor for the selected files, and Add Volume Bin when exactly one folder
+// is selected.
 void SourceBrowser::showMenu(QWidget* view, const QPoint& pos) {
     QMenu menu(this);
     if (view == tree_) {
@@ -1037,6 +1073,8 @@ void SourceBrowser::save(QSettings& settings) const {
     settings.endGroup();
 }
 
+// The Media Folder View button is set with its signals blocked so the folder is listed only once,
+// by setFolder() at the end.
 void SourceBrowser::restore(QSettings& settings) {
     settings.beginGroup(QStringLiteral("sourceBrowser"));
     favorites_ = settings.value(QStringLiteral("favorites")).toStringList();

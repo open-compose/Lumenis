@@ -14,7 +14,9 @@
 // selected clips and sequences, and the clips that use it.
 namespace lumenis::media {
 
+// The Consolidate/Transcode dialog's choices (src/ui/consolidate_dialog.cpp).
 struct ConsolidateOptions {
+    // Consolidate copies the picture as it is (DNx only, canConsolidate()); Transcode re-encodes it.
     enum class Mode { Consolidate, Transcode };
     Mode mode = Mode::Consolidate;
     // Frames kept outside what a sequence uses (p.351).
@@ -38,6 +40,7 @@ struct ConsolidateOptions {
 };
 
 // The raster a clip is transcoded at.
+// The source sizes come from probing the clip's file; even, and at least kMinimumRaster.
 QSize rasterFor(const model::BinItem& clip, ConsolidateOptions::Raster raster, QSize project);
 
 // The handle length the dialog starts with (p.351): 60 frames for NTSC
@@ -47,6 +50,7 @@ std::int64_t defaultHandles(const Rational& editRate);
 // "<name>.new.01", the first number no item in `taken` has (p.349).
 QString numberedName(const QString& name, const QString& suffix, const QStringList& taken);
 
+// What consolidate() made and changed; the caller puts them in the bin.
 struct ConsolidateResult {
     QList<model::BinItem> added;   // new clips and sequences, for the bin
     QList<model::BinItem> changed; // selected items now using the new media
@@ -57,6 +61,8 @@ struct ConsolidateResult {
 // Master clips are copied whole; sequences, the parts of their clips they
 // use with handles, as new master clips (p.349). `clips` finds a sequence's
 // clips; `taken` are the names in the bin, for numbering.
+// The work runs on the calling thread and can take long (the UI runs it from the Background
+// Queue). It stops at the first error, keeping what was made so far in `added`.
 ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QString& binId, const ClipLookup& clips,
                               const QStringList& taken, const ConsolidateOptions& options);
 

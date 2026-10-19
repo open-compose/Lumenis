@@ -39,10 +39,27 @@
 
 #include <algorithm>
 
+// One open bin (guide p.245-294): BinDocument, the only code that changes a
+// model::Bin while it is open; the Qt models over it (BinItemModel for the
+// rows, BinFilterModel for Set Bin Display, the quick filter and the sift);
+// and the widgets, BinView with its Text (a QTableView), Frame (BinFrameView)
+// and Script (BinScriptView) views. Saved Bin Views live in BinViewLibrary.
+//
+// The data flow is one way: a view calls BinDocument, which changes the bin
+// and emits itemsChanged() or displayChanged(); BinItemModel then resets and
+// BinView::applyDisplay() redraws. Nothing here writes to model::Bin directly.
+// BinContainer (bin_container.cpp) opens documents and routes drops between
+// bins. Related code: the bin model and its helpers (cellText, sortItems,
+// siftMatches) in src/model/bin.h; the dialogs in bin_dialogs.cpp; frames from
+// media in media_frames.h; sizes, icons and colours in theme.h.
+
 namespace lumenis::ui {
 
 namespace {
 
+// Fixed column widths and Frame/Script view sizes in pixels. They are not
+// measured from the font so that bins lay out the same on every platform
+// (the screenshot comparison depends on it).
 constexpr int kIconWidth = 26;
 constexpr int kNameWidth = 220;
 constexpr int kColumnWidth = 120;
@@ -52,6 +69,7 @@ constexpr int kFrameMargin = 8;
 constexpr int kScriptTextHeight = 64;
 constexpr int kSaveAsRole = Qt::UserRole + 1; // the Bin View menu's Save As
 
+// The icon column's picture for each object type.
 GlyphIcon iconFor(model::BinItemKind kind) {
     using K = model::BinItemKind;
     switch (kind) {
@@ -69,6 +87,7 @@ GlyphIcon iconFor(model::BinItemKind kind) {
     return GlyphIcon::ItemClip;
 }
 
+// A flat tool button of the bin's top row, all of one size.
 QToolButton* toolButton(QWidget* parent, const QString& name, const QIcon& icon, const QString& tip) {
     auto* b = new QToolButton(parent);
     b->setObjectName(name);
@@ -97,6 +116,8 @@ void paintFrame(QPainter& p, const QRect& frame, model::BinItemKind kind, const 
     glyphIcon(iconFor(kind)).paint(&p, icon, Qt::AlignCenter, QIcon::Disabled);
 }
 
+// A 14-pixel colour square for the colour menus; an invalid colour (None) is
+// crossed out.
 QPixmap swatch(const QColor& color) {
     QPixmap pm(14, 14);
     pm.fill(color.isValid() ? color : QColor(Qt::transparent));
@@ -114,6 +135,8 @@ public:
 
     QSize sizeHint(const QStyleOptionViewItem&, const QModelIndex&) const override { return view_->cellSize(); }
 
+    // The frame is centred at the top of the cell, with a highlight border
+    // when selected; the elided name sits on one line below it.
     void paint(QPainter* p, const QStyleOptionViewItem& option, const QModelIndex& index) const override {
         p->save();
         const QSize f = view_->frameSize(view_->property("frameStep").toInt());
@@ -174,6 +197,8 @@ protected:
             row = (row + dRow + rows) % rows;
         }
         const int column = header->logicalIndex(visual);
+        // Commit and close with NoHint and consume the key, so Qt's own Tab
+        // and Enter handling does not move to another cell as well.
         emit commitData(editor);
         emit closeEditor(editor, QAbstractItemDelegate::NoHint);
         // The model may have been rebuilt by the change: find the cell again.
@@ -201,6 +226,8 @@ private:
 BinDocument::BinDocument(QString nodeId, QString path, model::Bin bin, QObject* parent)
     : QObject(parent), nodeId_(std::move(nodeId)), path_(std::move(path)), bin_(std::move(bin)) {}
 
+// Marks the bin changed; dirtyChanged(true) fires only on the first change
+// since it was saved.
 void BinDocument::touch() {
     if (!dirty_) {
         dirty_ = true;
@@ -268,6 +295,8 @@ void BinDocument::sort(const QList<model::BinSortKey>& keys) {
 }
 
 void BinDocument::moveItems(const QStringList& ids, int toIndex) {
+    // Take the moved items out, counting those before `toIndex`, which shifts
+    // the insertion point left by that many once they are gone.
     QList<model::BinItem> moving;
     int before = 0;
     for (qsizetype i = 0; i < bin_.items.size(); ++i) {
@@ -310,6 +339,9 @@ void BinDocument::setLocked(const QStringList& ids, bool locked) {
     emit itemsChanged();
 }
 
+// The setters below mark the bin changed but emit neither itemsChanged() nor
+// displayChanged(): the views already show the change, and a reset would
+// rebuild the Script view's text boxes under the user's typing.
 void BinDocument::setScript(const QString& id, const QString& text) {
     if (model::BinItem* i = bin_.item(id); i && i->script != text) {
         i->script = text;
@@ -339,6 +371,8 @@ void BinDocument::deleteCustomColumn(const QString& heading) {
     emit displayChanged();
 }
 
+// Renames the heading wherever the bin refers to it: the custom column list,
+// the shown columns, the widths, every item's field and the sort keys.
 bool BinDocument::renameCustomColumn(const QString& from, const QString& to) {
     const QString name = to.trimmed();
     if (!bin_.display.customColumns.contains(from) || name.isEmpty() || name == from) return false;
@@ -369,6 +403,9 @@ bool BinDocument::save(QString* error) {
 
 // ---------------------------------------------------------------- BinItemModel
 
+// Every change resets the model. Bins are small enough, and a reset keeps the
+// rows and columns simply in step with the document; BinView keeps the
+// selection across it.
 BinItemModel::BinItemModel(BinDocument& document, QObject* parent) : QAbstractTableModel(parent), document_(document) {
     connect(&document_, &BinDocument::itemsChanged, this, [this] {
         beginResetModel();
@@ -380,6 +417,7 @@ BinItemModel::BinItemModel(BinDocument& document, QObject* parent) : QAbstractTa
     });
 }
 
+// Column 0 is the icon, 1 is Name, and 2 on are display.columns in order.
 QString BinItemModel::heading(int column) const {
     if (column == kIconColumn) return {};
     if (column == kNameColumn) return QStringLiteral("Name");
@@ -405,6 +443,7 @@ int BinItemModel::columnCount(const QModelIndex& parent) const {
     return parent.isValid() ? 0 : 2 + static_cast<int>(document_.bin().display.columns.size());
 }
 
+// The custom roles answer for any column; the other roles depend on the column.
 QVariant BinItemModel::data(const QModelIndex& index, int role) const {
     if (!index.isValid() || index.row() >= rowCount()) return {};
     const model::BinItem& item = document_.bin().items.at(index.row());
@@ -435,6 +474,7 @@ QVariant BinItemModel::data(const QModelIndex& index, int role) const {
     return model::cellText(item, h);
 }
 
+// Typing into a cell goes to BinDocument::setField, which resets the model.
 bool BinItemModel::setData(const QModelIndex& index, const QVariant& value, int role) {
     if (role != Qt::EditRole || !index.isValid()) return false;
     const QString id = document_.bin().items.at(index.row()).id;
@@ -451,6 +491,8 @@ QVariant BinItemModel::headerData(int section, Qt::Orientation orientation, int 
     return {};
 }
 
+// Every cell can be dragged; only Name, the modifiable headings and custom
+// columns can be typed into.
 Qt::ItemFlags BinItemModel::flags(const QModelIndex& index) const {
     Qt::ItemFlags f = QAbstractTableModel::flags(index) | Qt::ItemIsDragEnabled;
     const QString h = heading(index.column());
@@ -486,6 +528,8 @@ bool BinItemModel::canDropMimeData(const QMimeData* data, Qt::DropAction, int, i
     // Files from the Source Browser are linked into the bin (p.317).
     if (data->hasFormat(mediaFilesMime())) return true;
     if (!data->hasFormat(binItemsMime())) return false;
+    // Items from this same bin are refused: the Text and Frame views do not
+    // reorder by dragging (only the Script view does).
     const QString from = QString::fromUtf8(data->data(binItemsMime())).section(QLatin1Char('\n'), 0, 0);
     return from != document_.nodeId();
 }
@@ -501,6 +545,8 @@ bool BinItemModel::dropMimeData(const QMimeData* data, Qt::DropAction action, in
     const QString from = lines.takeFirst();
     // Alt/Option (p.260) or Ctrl (p.261, the platform's copy key) copies.
     const bool copy = action == Qt::CopyAction || (QApplication::keyboardModifiers() & Qt::AltModifier);
+    // Only reported: BinContainer::transferItems does the move or copy,
+    // queued until the drag has finished.
     emit itemsDropped(from, lines, copy);
     return true;
 }
@@ -524,11 +570,16 @@ void BinFilterModel::setQuickFilter(const QString& text, const QStringList& head
 #endif
 }
 
+// One setting for all bins (Bin settings), set by
+// BinContainer::setQuickFilterAllColumns.
 bool& BinFilterModel::searchAllColumns() {
     static bool all = false;
     return all;
 }
 
+// A row is shown if its kind is not hidden, it matches the quick filter (if
+// any) and, while the bin is shown sifted, it matches the sift. The sift's Any
+// searches Name and the shown columns.
 bool BinFilterModel::filterAcceptsRow(int row, const QModelIndex&) const {
     const model::Bin& bin = document_.bin();
     if (row < 0 || row >= bin.items.size()) return false;
@@ -566,6 +617,8 @@ BinFrameView::BinFrameView(BinDocument& document, QWidget* parent) : QListView(p
     setSelectionBehavior(QAbstractItemView::SelectRows);
     setEditTriggers(QAbstractItemView::NoEditTriggers);
     setItemDelegate(new FrameDelegate(this));
+    // Frames the user drags are remembered in the bin; decoded head frames
+    // repaint the view as they arrive.
     connect(this, &QListView::indexesMoved, this, &BinFrameView::storePositions);
     if (MediaFrames* frames = MediaFrames::instance()) {
         connect(frames, &MediaFrames::thumbnailReady, viewport(), qOverload<>(&QWidget::update));
@@ -590,6 +643,8 @@ QSize BinFrameView::cellSize() const {
     return {f.width() + 2 * kFrameMargin, f.height() + kFrameMargin + kRowHeight + 6};
 }
 
+// The delegate reads the frame size from the "frameStep" property; the grid
+// size makes QListView lay out whole cells.
 void BinFrameView::applyDisplay() {
     setProperty("frameStep", document_.bin().display.frameSize);
     setGridSize(cellSize());
@@ -597,6 +652,9 @@ void BinFrameView::applyDisplay() {
     viewport()->update();
 }
 
+// QListView lays every frame out in rows whenever it lays out the items (after
+// a reset, for instance); frames the user placed are then moved back to their stored positions. Frames with no
+// stored position keep their place in the rows.
 void BinFrameView::doItemsLayout() {
     QListView::doItemsLayout();
     if (!model()) return;
@@ -623,12 +681,15 @@ QPoint BinFrameView::framePosition(const QString& id) const {
     return {-1, -1};
 }
 
+// The nearest grid point (a multiple of the cell size), never negative.
 QPoint BinFrameView::snapped(const QPoint& p) const {
     const QSize c = cellSize();
     auto snap = [](int v, int step) { return std::max(0, (v + step / 2) / step * step); };
     return {snap(p.x(), c.width()), snap(p.y(), c.height())};
 }
 
+// After the user drags frames: keep their new positions, snapped unless Snap
+// to Grid is Disable.
 void BinFrameView::storePositions(const QModelIndexList& moved) {
     QHash<QString, QPoint> positions = document_.bin().display.framePositions;
     const bool snap = document_.bin().display.snap != model::SnapToGrid::Disable;
@@ -647,6 +708,8 @@ void BinFrameView::storePositions(const QModelIndexList& moved) {
 void BinFrameView::alignToGrid(bool selectedOnly) {
     if (!model()) return;
     // Each frame goes to its nearest free grid cell, the first frames first.
+    // Cells are keyed by (row, column) packed into 64 bits. Frames that do not
+    // move occupy their cells first.
     const QSize c = cellSize();
     QSet<quint64> taken;
     auto key = [&](const QPoint& p) {
@@ -666,6 +729,8 @@ void BinFrameView::alignToGrid(bool selectedOnly) {
     QHash<QString, QPoint> positions = document_.bin().display.framePositions;
     for (const QModelIndex& i : moving) {
         QPoint p = snapped(rectForIndex(i).topLeft());
+        // Step right to the next free cell, wrapping to the next row at the
+        // window's edge.
         while (taken.contains(key(p))) {
             p.rx() += c.width();
             if (p.x() / c.width() >= columns) p = QPoint(0, p.y() + c.height());
@@ -708,6 +773,9 @@ void BinFrameView::fillSorted() {
     viewport()->update();
 }
 
+// The dotted grid under the frames: always with Snap to Grid Enable, and only
+// while dragging with Temporary. Disable and Invisible draw none. The lines
+// follow the scroll offset so they stay on the cell edges.
 void BinFrameView::paintEvent(QPaintEvent* event) {
     const model::SnapToGrid snap = document_.bin().display.snap;
     if (snap == model::SnapToGrid::Enable || (snap == model::SnapToGrid::Temporary && state() == DraggingState)) {
@@ -726,6 +794,7 @@ void BinFrameView::paintEvent(QPaintEvent* event) {
     QListView::paintEvent(event);
 }
 
+// The tooltip is the item's summary (kSummaryRole), not the cell text.
 bool BinFrameView::viewportEvent(QEvent* event) {
     if (event->type() == QEvent::ToolTip) {
         auto* help = static_cast<QHelpEvent*>(event);
@@ -748,6 +817,7 @@ BinScriptView::BinScriptView(BinDocument& document, QAbstractItemModel* rows, QI
     setObjectName(QStringLiteral("binScript"));
     setWidgetResizable(true);
     setFrameShape(QFrame::NoFrame);
+    // Any change to the rows rebuilds every row widget.
     connect(rows_, &QAbstractItemModel::modelReset, this, &BinScriptView::rebuild);
     connect(rows_, &QAbstractItemModel::layoutChanged, this, &BinScriptView::rebuild);
     connect(rows_, &QAbstractItemModel::rowsInserted, this, &BinScriptView::rebuild);
@@ -759,6 +829,10 @@ BinScriptView::BinScriptView(BinDocument& document, QAbstractItemModel* rows, QI
     rebuild();
 }
 
+// One QFrame per shown row: the frame on the left, the name and duration above
+// a text box on the right. Rows carry their item id in the "binItemId"
+// property, which the event filter, selection and pictures look up. The
+// content widget takes drops; rows take the clicks and drags.
 void BinScriptView::rebuild() {
     content_ = new QWidget;
     content_->setObjectName(QStringLiteral("scriptRows"));
@@ -815,6 +889,7 @@ void BinScriptView::rebuild() {
     updateSelection();
 }
 
+// The frame as a pixmap for the row's QLabel, drawn as the Frame view draws it.
 QPixmap BinScriptView::scriptPicture(const model::BinItem& item, QSize size) const {
     QPixmap pm(size);
     pm.fill(Qt::transparent);
@@ -824,6 +899,7 @@ QPixmap BinScriptView::scriptPicture(const model::BinItem& item, QSize size) con
     return pm;
 }
 
+// When decoded head frames arrive, redraw the pictures without a rebuild.
 void BinScriptView::updatePictures() {
     if (!content_) return;
     for (QLabel* frame : content_->findChildren<QLabel*>(QStringLiteral("scriptFrame"))) {
@@ -845,6 +921,7 @@ QString BinScriptView::idAt(QObject* rowWidget) const {
     return rowWidget ? rowWidget->property("binItemId").toString() : QString();
 }
 
+// Selected rows get the highlight background, the others AlternateBase.
 void BinScriptView::updateSelection() {
     if (!content_) return;
     QSet<QString> selected;
@@ -854,6 +931,14 @@ void BinScriptView::updateSelection() {
     }
 }
 
+// The Script view has no QAbstractItemView, so selection and drag and drop
+// are done here, on the row widgets and the content widget:
+// - a press on a row selects it (or toggles it with Ctrl/Cmd); a press on an
+//   already-selected row keeps the selection, so several rows can be dragged;
+// - moving past the drag distance starts a drag of the selected items, in
+//   the same binItemsMime() format as the other views;
+// - a drop from another bin is reported with itemsDropped(); a drop from this
+//   bin moves the items before the row under the pointer.
 bool BinScriptView::eventFilter(QObject* watched, QEvent* event) {
     const QString id = idAt(watched);
     if (!id.isEmpty() && event->type() == QEvent::MouseButtonPress) {
@@ -931,6 +1016,10 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
     : QWidget(parent), document_(document), fastMenu_(fastMenu) {
     setObjectName(QStringLiteral("binView"));
 
+    // The widget is built top to bottom: the button row, the three views in a
+    // stack (one shown per mode), then the status bar. All three views show
+    // proxy_ and share the table's selection model.
+
     // Bin View menu, view buttons, quick filter and fast menu (p.249).
     viewMenu_ = new QComboBox(this);
     viewMenu_->setObjectName(QStringLiteral("binViewMenu"));
@@ -963,7 +1052,8 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
     auto* fast = toolButton(this, QStringLiteral("binFastMenu"), glyphIcon(GlyphIcon::FastMenu), tr("Bin Fast Menu"));
     fast->setPopupMode(QToolButton::InstantPopup);
     if (fastMenu) {
-        // The Bin menu, and Input > Source Browser (p.315).
+        // The Bin menu, and Input > Source Browser (p.315). Refilled each time
+        // it opens, with the main menu's own actions, so their state is current.
         auto* menu = new QMenu(fast);
         menu->setObjectName(QStringLiteral("binFastMenuItems"));
         connect(menu, &QMenu::aboutToShow, this, [this, menu] {
@@ -983,6 +1073,7 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
     filter_->setClearButtonEnabled(true);
     filter_->setVisible(false);
     filter_->setFixedWidth(140);
+    // The search button shows the filter box; hiding it clears the filter.
     connect(search, &QToolButton::toggled, this, [this](bool on) {
         filter_->setVisible(on);
         if (on) {
@@ -1048,6 +1139,9 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
         sortOn(h, ascending);
     });
     connect(header, &QHeaderView::customContextMenuRequested, this, &BinView::headerMenu);
+    // A heading dragged to a new place: rewrite the bin's columns once the
+    // header has finished moving it. Moves made by applyDisplay() itself are
+    // ignored (applying_).
     connect(header, &QHeaderView::sectionMoved, this, [this] {
         if (!applying_) QMetaObject::invokeMethod(this, &BinView::columnsMoved, Qt::QueuedConnection);
     });
@@ -1081,6 +1175,8 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
     stack_->addWidget(frames_);
     stack_->addWidget(script_);
 
+    // The same right-click menu in all three views. The table and Frame view
+    // report positions in their viewports, the Script view in itself.
     for (QWidget* w : {static_cast<QWidget*>(table_), static_cast<QWidget*>(frames_), static_cast<QWidget*>(script_)}) {
         connect(w, &QWidget::customContextMenuRequested, this, [this, w](const QPoint& pos) {
             QWidget* area = w == script_ ? w : static_cast<QAbstractScrollArea*>(w)->viewport();
@@ -1115,6 +1211,10 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
     applyDisplay();
 }
 
+// Brings the widgets in line with model::BinDisplay after any display change:
+// column order and widths, selected headings, background colour, the view
+// mode, the Frame view, the status bar and the Bin View menu. `applying_`
+// stops the header's signals from writing these back into the document.
 void BinView::applyDisplay() {
     applying_ = true;
     const model::BinDisplay& d = document_.bin().display;
@@ -1164,6 +1264,9 @@ void BinView::applyDisplay() {
     applying_ = false;
 }
 
+// Refills the Bin View menu: built-in views, saved views, Save As. A bin
+// whose view is not in the list (or has none, "Untitled") gets an extra
+// entry at the top for it.
 void BinView::updateViewMenu() {
     const model::BinDisplay& d = document_.bin().display;
     QSignalBlocker block(viewMenu_);
@@ -1197,6 +1300,8 @@ void BinView::updateStatus() {
     status_->setText(text);
 }
 
+// The selection model holds a cell per column; reduce it to rows, in the
+// order shown.
 QStringList BinView::selectedIds() const {
     QStringList ids;
     if (!table_->selectionModel()) return ids;
@@ -1233,6 +1338,8 @@ void BinView::reverseSelection() {
     selectIds(others);
 }
 
+// Selected headings narrow the search only in Text view, where they can be
+// seen.
 void BinView::setQuickFilter(const QString& text) {
     quick_ = text;
     proxy_->setQuickFilter(text, mode() == model::BinViewMode::Text ? selectedHeadings_ : QStringList());
@@ -1260,6 +1367,7 @@ void BinView::setMode(model::BinViewMode mode) {
     selectIds(selected);
 }
 
+// A built-in view of the same name wins over a saved one.
 void BinView::applyView(const QString& name) {
     const model::BinViewPreset* view = BinViewLibrary::find(name);
     for (const model::BinViewPreset& v : model::builtInBinViews()) {
@@ -1298,6 +1406,8 @@ void BinView::selectHeadings(const QStringList& headings) {
     if (!quick_.isEmpty()) setQuickFilter(quick_);
 }
 
+// Clicking a heading selects it (p.247); the icon heading clears the
+// selection.
 void BinView::headerClicked(int logical) {
     const QString h = model_->heading(logical);
     if (h.isEmpty()) {
@@ -1327,6 +1437,8 @@ void BinView::headerClicked(int logical) {
     selectHeadings(headings);
 }
 
+// The heading's right-click menu. Right-clicking an unselected heading
+// selects it first.
 void BinView::headerMenu(const QPoint& pos) {
     QHeaderView* header = table_->horizontalHeader();
     const QString h = model_->heading(header->logicalIndexAt(pos));
@@ -1356,6 +1468,8 @@ void BinView::editHeading(const QString& heading) {
     QHeaderView* header = table_->horizontalHeader();
     const int logical = model_->columnOf(heading);
     if (logical < 0) return;
+    // A line edit laid over the heading's section; finishing (Enter or
+    // focus out) renames, and an unchanged or refused name leaves it as it was.
     auto* editor = new QLineEdit(heading, header->viewport());
     editor->setObjectName(QStringLiteral("headingEditor"));
     editor->setGeometry(header->sectionViewportPosition(logical), 0, header->sectionSize(logical), header->height());
@@ -1380,6 +1494,7 @@ void BinView::chooseColumns() {
 
 void BinView::setColumns(const QStringList& headings) {
     model::BinDisplay d = document_.bin().display;
+    // Columns still wanted keep their order.
     QStringList columns;
     for (const QString& c : d.columns) {
         if (headings.contains(c)) columns << c;
@@ -1421,6 +1536,7 @@ void BinView::deleteColumns(const QStringList& headings, bool ask) {
             hide << h; // a standard column is only hidden (p.268)
             continue;
         }
+        // A custom column: ask Delete (OK), Hide or Cancel.
         bool remove = true;
         if (ask) {
             QMessageBox box(QMessageBox::Warning, tr("Delete"),
@@ -1462,6 +1578,9 @@ bool BinView::renameColumn(const QString& from, const QString& to) {
     return true;
 }
 
+// Queued from the header's sectionMoved, so it runs after the header has
+// finished. The display is set even when the order is unchanged, so that
+// applyDisplay() moves the sections back to the model's order.
 void BinView::columnsMoved() {
     // Dragging a heading moves the column (p.268); Name and the icon stay
     // at the left.
@@ -1521,6 +1640,7 @@ void BinView::sortAgain() {
 
 // ---------------------------------------------------------------- sifting
 
+// Apply in the dialog sifts at once; OK sifts with what the dialog holds.
 void BinView::siftBinContents() {
     const model::BinDisplay& d = document_.bin().display;
     // Shown columns, and the timecode ranges they make (p.290).
@@ -1607,6 +1727,9 @@ void BinView::setLocked(bool locked) {
     document_.setLocked(selectedIds(), locked);
 }
 
+// None, the clip colours of model::clipColors(), and Other. With `parent` the
+// menu is its submenu; otherwise a new top-level menu the caller owns. It
+// sets the selected items' colour, or with `background` the bin's.
 QMenu* BinView::colorMenu(QMenu* parent, const QString& title, bool background) {
     QMenu* menu = parent ? parent->addMenu(title) : new QMenu(title, this);
     auto apply = [this, background](const QString& hex) {
@@ -1639,6 +1762,7 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
     if (view == table_) {
         const QModelIndex at = table_->indexAt(viewportPos);
         if (at.isValid() && model_->heading(at.column()) == QLatin1String("Color")) {
+            // Only the colours: the menu built so far is thrown away.
             if (!table_->selectionModel()->isSelected(at)) selectIds({at.data(BinItemModel::kIdRole).toString()});
             menu->deleteLater();
             return colorMenu(nullptr, tr("Color"), false);
@@ -1680,6 +1804,7 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
     return menu;
 }
 
+// Watches the table, its viewport and the Frame view.
 bool BinView::eventFilter(QObject* watched, QEvent* event) {
     // While a cell is being typed in, its editor has the keys, not the table.
     if ((watched == table_ || watched == frames_) && event->type() == QEvent::KeyPress) {
@@ -1702,6 +1827,8 @@ bool BinView::eventFilter(QObject* watched, QEvent* event) {
 
 // ---------------------------------------------------------------- BinViewLibrary
 
+// The saved views are process-wide; load() and save() move them to and from a
+// QSettings.
 QList<model::BinViewPreset>& BinViewLibrary::views() {
     static QList<model::BinViewPreset> saved;
     return saved;

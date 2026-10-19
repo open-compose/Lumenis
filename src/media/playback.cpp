@@ -13,6 +13,17 @@
 #include <cmath>
 #include <numbers>
 
+// Playback's sound (ROADMAP Phase 2.3): audioPieces() turns what a monitor shows (a clip, or a
+// sequence's monitored audio tracks) into pieces of files placed in time; AudioMix reads and mixes
+// them to 48 kHz stereo through AudioReader (media.cpp); AudioPlayer plays the mix through miniaudio
+// (third_party/miniaudio) and gives the clock the Composer's picture follows. The UI side is in
+// src/ui/main_window.cpp, which builds the pieces and owns the player; the picture is decoded ahead
+// by MediaFrames::prefetch (src/ui/media_frames.cpp).
+//
+// Threads: a feeder thread (AudioPlayer::feed) renders the mix into a single-producer,
+// single-consumer ring; miniaudio's callback thread drains it (pull()); the UI thread reads clock().
+// The mix is used only by the feeder while playing.
+
 namespace lumenis::media {
 
 namespace {
@@ -31,12 +42,14 @@ void panGains(int pan, double gainDb, float* left, float* right) {
     *right = static_cast<float>(std::sin(angle) * gain);
 }
 
+// Rounds toward zero; a rate without frames (num <= 0) gives 0.
 std::int64_t framesToSamples(std::int64_t frames, const Rational& rate) {
     // Exact in integers: frames * 48000 * den / num.
     if (rate.num() <= 0) return 0;
     return frames * kPlaybackRate * rate.den() / rate.num();
 }
 
+// The exact frame position, with fraction, of an output sample.
 double samplesToFrames(std::int64_t samples, const Rational& rate) {
     return static_cast<double>(samples) * static_cast<double>(rate.num()) /
            (static_cast<double>(kPlaybackRate) * static_cast<double>(rate.den()));
@@ -45,6 +58,8 @@ double samplesToFrames(std::int64_t samples, const Rational& rate) {
 namespace {
 
 // A clip's audio track `track` (0 for A1) as a piece, if it has media.
+// The piece's path, stream, channel and start in the file; the caller sets where it plays and for
+// how long. Nothing when the clip is unlinked, the track has no channel or the file is missing.
 std::optional<AudioPiece> pieceFor(const model::BinItem& clip, int track) {
     const auto link = linkOf(clip);
     if (!link || link->unlinked) return std::nullopt;
@@ -67,6 +82,10 @@ int sidePan(int trackNumber) {
 
 } // namespace
 
+// Clips (not sequences) play every channel from 0 for the clip's duration. For sequences each
+// non-filler segment of a monitored audio track plays its source clip's track from the segment's
+// source in, at its place in the sequence; the segment's pan, or the track's side when it has none,
+// and its gain set the stereo gains.
 std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup& clips,
                                     const std::function<bool(const QString& track)>& monitored, bool alternatingPan) {
     auto side = [alternatingPan](int trackNumber) { return alternatingPan ? sidePan(trackNumber) : 0; };
@@ -118,6 +137,8 @@ AudioMix::AudioMix(std::vector<AudioPiece> pieces) : pieces_(std::move(pieces)) 
 
 AudioMix::~AudioMix() = default;
 
+// The reader for a piece, opened on first use and kept for the mix's life; null (kept, so not
+// retried) if the file cannot be opened.
 AudioReader* AudioMix::reader(const AudioPiece& piece) {
     // One reader for each channel: the channels of a stereo file are read
     // side by side, and a shared reader would seek between them.
@@ -132,6 +153,8 @@ AudioReader* AudioMix::reader(const AudioPiece& piece) {
     return it->second.get();
 }
 
+// Each piece adds its part of [start, start + count) into the output. Files at 48 kHz are read
+// directly; others are read at their own rate and interpolated.
 void AudioMix::render(std::int64_t start, int count, float* out) {
     std::fill(out, out + 2 * static_cast<std::ptrdiff_t>(count), 0.0f);
     const std::int64_t end = start + count;
@@ -178,6 +201,7 @@ void AudioMix::render(std::int64_t start, int count, float* out) {
 
 // ---------------------------------------------------------------- AudioPlayer
 
+// The miniaudio device, when one is open.
 struct AudioPlayer::Device {
     ma_device device{};
     bool open = false;
@@ -185,6 +209,7 @@ struct AudioPlayer::Device {
 
 namespace {
 
+// miniaudio's callback, on its own audio thread: the output asks for `frames` stereo samples.
 void dataCallback(ma_device* device, void* output, const void*, ma_uint32 frames) {
     auto* player = static_cast<AudioPlayer*>(device->pUserData);
     player->pull(static_cast<float*>(output), static_cast<int>(frames));
@@ -198,6 +223,9 @@ AudioPlayer::~AudioPlayer() {
     stop();
 }
 
+// Stops any earlier playback, then starts the feeder thread and, unless options.device is false, a
+// 48 kHz stereo float device. The device's buffering (periods times period size, converted to the
+// output rate) is kept as latency_ for clock(). Speed is clamped to -3..3, 0 meaning 1.
 bool AudioPlayer::start(std::shared_ptr<AudioMix> mix, std::int64_t start, const PlayOptions& options) {
     stop();
     mix_ = std::move(mix);
@@ -245,6 +273,7 @@ bool AudioPlayer::start(std::shared_ptr<AudioMix> mix, std::int64_t start, const
     return true;
 }
 
+// The device goes first, then the feeder thread is joined; safe to call when nothing plays.
 void AudioPlayer::stop() {
     if (device_ && device_->open) {
         // Stops the callbacks before the buffer and mix go.
@@ -257,11 +286,15 @@ void AudioPlayer::stop() {
     mix_.reset();
 }
 
+// Empty when no device is open (not playing, or tests without one).
 QString AudioPlayer::deviceName() const {
     if (!device_ || !device_->open) return {};
     return QString::fromUtf8(device_->device.playback.name);
 }
 
+// The feeder thread: whenever the ring has room for a chunk, renders the next kChunk output samples
+// (silence once a digital scrub's limit is used up) and publishes them by advancing writeAt_.
+// readAt_ and writeAt_ count samples without wrapping; the ring index is their remainder.
 void AudioPlayer::feed() {
     std::vector<float> chunk(2 * kChunk);
     const int step = std::abs(speed_);
@@ -312,6 +345,8 @@ void AudioPlayer::feed() {
     }
 }
 
+// Called by the device's thread (or by tests): copies what the ring holds, up to `count`, pads the
+// rest with silence, and notes how much and when for clock().
 int AudioPlayer::pull(float* out, int count) {
     std::size_t r = readAt_.load();
     const std::size_t available = writeAt_.load() - r;
@@ -331,6 +366,7 @@ int AudioPlayer::pull(float* out, int count) {
     return n;
 }
 
+// 0 until the device has taken samples.
 std::int64_t AudioPlayer::clock() const {
     const std::int64_t played = played_.load();
     const std::int64_t at = pulledAt_.load();

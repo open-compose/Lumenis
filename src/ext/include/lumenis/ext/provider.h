@@ -15,6 +15,7 @@ enum class LicenseTier {
     ThirdParty,      // needs an SDK or licence we must obtain (AAX, AVX, a commercial codec pack)
 };
 
+// The kind of job a provider does; each has its own interface derived from Provider.
 enum class Category {
     VideoCodec,
     AudioCodec,
@@ -26,9 +27,12 @@ enum class Category {
     SharedStorage,    // NAS bin locking, vendor storage clients
 };
 
+// Stable lower-case names ("open-source", "video-codec", ...) for logs and the About box.
 std::string_view toString(LicenseTier tier);
 std::string_view toString(Category category);
 
+// Identity and licensing of a provider. info() is called often (lookups compare ids), so it
+// should be cheap.
 struct ProviderInfo {
     std::string id; // stable, reverse-DNS style: "org.ffmpeg.libavcodec"
     std::string displayName;
@@ -38,6 +42,7 @@ struct ProviderInfo {
     std::string version;
 };
 
+// The result of Provider::probe(). Unavailable providers stay registered but are never chosen.
 struct Availability {
     bool available = true;
     std::string reason; // why not, for the user, when unavailable
@@ -61,6 +66,8 @@ public:
     virtual int priority() const { return 0; }
 };
 
+// Holds every provider the application and its modules registered, in registration order. One
+// registry is created in app/main.cpp; the media library looks up codec providers in it.
 class ProviderRegistry {
 public:
     // Fails (returns false) if a provider with the same id is already registered.
@@ -70,7 +77,9 @@ public:
     void setEnabled(std::string_view id, bool enabled);
     bool isEnabled(std::string_view id) const;
 
+    // The provider with this id, enabled or not, or null.
     std::shared_ptr<Provider> find(std::string_view id) const;
+    // Every registered provider, in registration order.
     const std::vector<std::shared_ptr<Provider>>& all() const { return providers_; }
 
     // Enabled, available providers implementing T, best first.
@@ -86,9 +95,11 @@ public:
     }
 
 private:
+    // Enabled providers whose probe() says available, by descending priority.
     std::vector<std::shared_ptr<Provider>> ranked() const;
 
     std::vector<std::shared_ptr<Provider>> providers_;
+    // Ids switched off with setEnabled(); providers are enabled unless listed here.
     std::vector<std::string> disabled_;
 };
 

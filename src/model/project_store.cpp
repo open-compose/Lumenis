@@ -10,6 +10,10 @@
 
 #include <algorithm>
 
+// Projects on disk (project_store.h): listing, creating, deleting, reading and writing the
+// "<name>.cthproj" project file, and user profile folders. The Select Project window
+// (src/ui/select_project_dialog.*) drives it; the project's bins are managed by ProjectBins
+// (project_bins.*), which create() asks for the project's first bin.
 namespace lumenis::model {
 
 namespace {
@@ -24,6 +28,7 @@ bool fail(QString* error, const QString& message) {
     return false;
 }
 
+// Rationals are stored as "num/den" text; parseRational() also takes a bare integer.
 QString rationalText(const Rational& r) {
     return QString::fromStdString(r.toString());
 }
@@ -56,6 +61,7 @@ std::optional<FormatFamily> parseFamily(const QString& s) {
     return std::nullopt;
 }
 
+// The project file's JSON layout. Dates are ISO 8601 in UTC; filmType is written only when set.
 QJsonObject toJson(const ProjectSettings& s) {
     QJsonObject format{
         {QStringLiteral("group"), QString::fromStdString(s.format.group)},
@@ -104,6 +110,7 @@ QList<ProjectEntry> ProjectStore::list() const {
     return result;
 }
 
+// The project folder is removed again if the project file or the first bin cannot be written.
 std::optional<ProjectEntry> ProjectStore::create(ProjectSettings settings, QString* error) const {
     if (const auto problem = validateName(settings.name.toStdString(), kMaxProjectNameLength)) {
         fail(error, QString::fromStdString(*problem));
@@ -148,6 +155,7 @@ std::optional<ProjectEntry> ProjectStore::create(ProjectSettings settings, QStri
     return ProjectEntry{folder, file, settings};
 }
 
+// The name must be a plain folder name, so nothing outside the root can be deleted.
 bool ProjectStore::remove(const QString& name, QString* error) const {
     if (name.isEmpty() || name.contains(QLatin1Char('/')) || name.contains(QLatin1Char('\\'))
         || name == QLatin1String("..") || name == QLatin1String(".")) {
@@ -245,6 +253,7 @@ bool UserProfiles::create(const QString& name, QString* error) const {
     return true;
 }
 
+// Falls back to "editor" when neither variable is set.
 QString UserProfiles::defaultName() {
     QString name = qEnvironmentVariable("USERNAME"); // Windows
     if (name.isEmpty()) {

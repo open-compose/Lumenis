@@ -30,11 +30,11 @@ enum class BinItemKind {
     Title,
 };
 
+// The kind's name in bin files ("masterClip", "subclip", ...); kindFromName() reads it back and
+// gives nullopt for an unknown name.
 QString kindName(BinItemKind kind);
 std::optional<BinItemKind> kindFromName(const QString& name);
 
-// One object in a bin. Headings that only some objects have (Tape, Drive,
-// custom columns, ...) live in `fields`, keyed by heading name.
 // One step of a clip's source chain (docs/spec/native-model.md, AAF's
 // source mobs): what the clip's material came from.
 struct ClipSource {
@@ -54,8 +54,11 @@ struct ClipSource {
     MobId from;            // the source before this one (a file's tape or import)
     bool operator==(const ClipSource&) const = default;
 };
+// "file", "tape", "import" or "clip", as bin files and structure dumps write them.
 QString sourceKindName(ClipSource::Kind kind);
 
+// One object in a bin. Headings that only some objects have (Tape, Drive,
+// custom columns, ...) live in `fields`, keyed by heading name.
 struct BinItem {
     QString id; // stable, unique within the project
     // Its MobID in AAF and Media Composer's bins (docs/spec/native-model.md).
@@ -63,14 +66,20 @@ struct BinItem {
     // set when it came from elsewhere (AAF, a bin) or was given one.
     MobId mobId;
     BinItemKind kind = BinItemKind::MasterClip;
+    // Shown in the Name column; need not be unique.
     QString name;
+    // Creation Date and Modified Date; written to bin files in UTC.
     QDateTime created;
     QDateTime modified;
+    // Length in frames at editRate. For a sequence, the end of its last track's material.
     std::int64_t durationFrames = 0;
+    // Frames per second of the clip's timecode and durations.
     Rational editRate{24000, 1001};
     QString color; // "#rrggbb", empty for none (p.264)
     bool locked = false; // Clip > Lock Bin Selection (p.265)
     QString script;      // the Script view's text box (p.253)
+    // Heading name -> cell text, e.g. "Start" and "End" as timecode text, "Tracks", "Tape", custom
+    // columns. Name, Duration, the dates, Lock and Color are shown from the members instead.
     QHash<QString, QString> fields;
     QJsonObject composition; // a sequence's tracks (lumenis/model/sequence.h)
     QJsonArray markers;      // lumenis/model/marker.h
@@ -84,9 +93,11 @@ struct BinItem {
 };
 
 // How a bin is shown (p.245-254). Saved with the bin.
+// Text (columns), Frame (pictures) or Script (pictures with a text box).
 enum class BinViewMode { Text, Frame, Script };
 
 // Bin > Sort and Sort Again (p.247): headings, highest priority first.
+// One sort key: a heading and its direction.
 struct BinSortKey {
     QString heading;
     bool ascending = true;
@@ -111,8 +122,10 @@ struct BinSift {
 };
 
 // Snap to Grid in Frame view (p.252).
+// Disable, Temporary (while a key is held), Enable, or Enable without drawing the grid.
 enum class SnapToGrid { Disable, Temporary, Enable, Invisible };
 
+// Everything about how a bin is shown, saved in the bin file's "display" object.
 struct BinDisplay {
     // "up to seven times" (p.250): eight frame sizes.
     static constexpr int kMaxFrameSize = 7;
@@ -123,12 +136,15 @@ struct BinDisplay {
     bool viewModified = false; // shown in italic as "<view>.1" (p.249)
     QStringList columns;       // Text view headings, left to right (Name is implied)
     QStringList customColumns; // user-made headings (p.269)
+    // Text view column widths in pixels, by heading.
     QHash<QString, int> widths;
     QString background;                    // "#rrggbb", empty for the default (p.263)
     int frameSize = kDefaultFrameSize;     // Enlarge/Reduce Frame (p.250)
+    // Keyed by BinItem::id.
     QHash<QString, QPoint> framePositions; // Frame view items placed by hand (p.250)
     SnapToGrid snap = SnapToGrid::Disable;
     QList<BinSortKey> sort; // the last sort, for Sort Again
+    // The last sift's criteria, kept so that Show Sifted can show it again.
     BinSift sift;
     bool sifted = false;    // Show Sifted / Show Unsifted
     bool statusBar = false; // Show Status Bar (p.254)
@@ -147,6 +163,7 @@ struct Bin {
     QList<BinItem> items;
     BinDisplay display;
 
+    // The item with this BinItem::id, or null. The pointer is valid until `items` changes.
     const BinItem* item(const QString& id) const;
     BinItem* item(const QString& id);
 
@@ -191,12 +208,14 @@ struct SiftRange {
     QString end;   // heading, or empty: start + Duration
 };
 const QList<SiftRange>& siftRanges();
+// The names of the ranges whose columns are all among `columns`.
 QStringList siftRangesFor(const QStringList& columns);
 // A timecode typed without colons or leading zeros ("3172000") or with
 // them, as frames at `editRate`; nullopt if it is not a timecode.
 std::optional<std::int64_t> timecodeFrames(const QString& text, const Rational& editRate);
 
 // Set Bin Display: the object types the dialog lists (p.243-244, p.288).
+// The plural label of a kind in Set Bin Display ("Master Clips", ...), and every kind in its order.
 QString kindLabel(BinItemKind kind);
 const QList<BinItemKind>& allKinds();
 
@@ -207,6 +226,8 @@ struct ClipColor {
     QString hex;
 };
 const QList<ClipColor>& clipColors();
+// The palette name for "#rrggbb" (any case), the hex text itself for a colour not in the palette,
+// or empty for no colour.
 QString clipColorName(const QString& hex);
 
 // Bin files (".cthbin", JSON). Media Composer's .avb bins are read and
@@ -214,6 +235,10 @@ QString clipColorName(const QString& hex);
 class BinFile {
 public:
     static QString suffix() { return QStringLiteral(".cthbin"); }
+    // The file is {format: "cutthulhu-bin", version, name, items: [...], display: {...}}. Version 2
+    // adds MobIDs and source chains; version 1 files are read too (their MobIDs are derived from item
+    // ids). read() fails on a newer version and skips items without an id or a known kind. write()
+    // always writes the current version and replaces the file atomically.
     static std::optional<Bin> read(const QString& path, QString* error = nullptr);
     static bool write(const QString& path, const Bin& bin, QString* error = nullptr);
 };

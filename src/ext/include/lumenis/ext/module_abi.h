@@ -24,6 +24,8 @@
 // breaks binary compatibility.
 #define LUMENIS_MODULE_ABI_VERSION 1u
 
+// Identifies the C++ standard library ABI, which must match for C++ objects to cross the module
+// boundary. Debug and release MSVC runtimes are not compatible, so they get different ids.
 #if defined(_MSC_VER)
 #  if defined(_DEBUG)
 #    define LUMENIS_TOOLCHAIN_ID "msvc-v14-debug"
@@ -42,6 +44,7 @@
 #  error "Unknown C++ toolchain: add it to LUMENIS_TOOLCHAIN_ID"
 #endif
 
+// Put before the two exported module functions so they keep C names and are visible.
 #if defined(_WIN32)
 #  define LUMENIS_MODULE_EXPORT extern "C" __declspec(dllexport)
 #else
@@ -50,6 +53,8 @@
 
 extern "C" {
 
+// Returned by lumenis_module_info(). The strings must stay valid for the life of the process (a
+// static object in the module is the usual way); null strings are read as empty.
 struct LumenisModuleInfo {
     std::uint32_t abiVersion; // LUMENIS_MODULE_ABI_VERSION the module was built with
     const char* toolchain;    // LUMENIS_TOOLCHAIN_ID the module was built with
@@ -68,11 +73,13 @@ namespace lumenis::ext {
 class ModuleHost {
 public:
     virtual ~ModuleHost() = default;
+    // The application's LUMENIS_MODULE_ABI_VERSION.
     virtual std::uint32_t abiVersion() const = 0;
     // Returns false if a provider with the same id already exists.
     virtual bool addProvider(std::shared_ptr<Provider> provider) = 0;
 };
 
+// Signatures of the two exported functions and the symbol names the loader resolves.
 using ModuleInfoFunction = const LumenisModuleInfo* (*)();
 using ModuleRegisterFunction = int (*)(ModuleHost* host); // 0 on success
 

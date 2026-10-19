@@ -77,6 +77,7 @@ enum class GlyphIcon {
     ChevronDown,
     ChevronUp,
 };
+// An icon 16 logical pixels square (a 32 px pixmap at device pixel ratio 2) in one colour.
 QIcon glyphIcon(GlyphIcon which, QColor color = QColor(0xdc, 0xdc, 0xdc));
 
 // Applies the application's look: the Fusion style, the bundled Inter font

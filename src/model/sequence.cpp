@@ -6,10 +6,19 @@
 #include <algorithm>
 #include <cmath>
 
+// Sequences (sequence.h): tracks of segments stored as JSON in a sequence's BinItem::composition,
+// and the editing operations on them: splice, overwrite, lift and extract, three-point edits and
+// track patching, segment moves, trims, slip and slide, effects and transitions, clip gain and
+// pan, and undo. Everything here is pure data with no widgets; the Timeline and Composer
+// (src/ui/timeline.*, composer.*) call it, AAF import and export (src/interop/aaf_*) read and
+// build sequences, and structure dumps (structure.*) print them. Frames are always counted from
+// the sequence's or clip's first frame, at the item's edit rate. docs/spec/native-model.md
+// describes how segments refer to clips.
 namespace lumenis::model {
 
 namespace {
 
+// The letter of a track name, and the order of the kinds in a sequence.
 QChar kindLetter(TrackKind kind) {
     switch (kind) {
     case TrackKind::Video: return QLatin1Char('V');
@@ -28,6 +37,7 @@ int kindOrder(TrackKind kind) {
     return 0;
 }
 
+// The names used in composition JSON for audio formats and transition alignments.
 const std::pair<AudioFormat, const char*> kFormats[] = {
     {AudioFormat::Mono, "mono"},
     {AudioFormat::Stereo, "stereo"},
@@ -42,6 +52,7 @@ const std::pair<TransitionAlignment, const char*> kAlignments[] = {
     {TransitionAlignment::CustomStart, "custom"},
 };
 
+// {effect, duration, alignment} plus start for CustomStart.
 QJsonObject transitionToJson(const Transition& t) {
     QJsonObject o{{QStringLiteral("effect"), t.effect.toJson()},
                   {QStringLiteral("duration"), static_cast<qint64>(t.duration)}};
@@ -71,6 +82,8 @@ void effectsToJson(const Segment& s, QJsonObject& o) {
     if (s.transition) o.insert(QStringLiteral("transition"), transitionToJson(*s.transition));
 }
 
+// See Sequence::toJson() in sequence.h for the layout. Defaults (0 gain and pan, no MobID of its
+// own) are left out.
 QJsonObject segmentToJson(const Segment& s) {
     QJsonObject o{{QStringLiteral("length"), static_cast<qint64>(s.length)}};
     effectsToJson(s, o);
@@ -87,6 +100,8 @@ QJsonObject segmentToJson(const Segment& s) {
     return o;
 }
 
+// A stored "mob" equal to the one derived from the clip id is dropped, so segments that never had
+// a MobID of their own stay that way. Gain and pan are clamped to their ranges.
 Segment segmentFromJson(const QJsonObject& o) {
     Segment s;
     s.clipId = o.value(QStringLiteral("clip")).toString();
@@ -183,6 +198,7 @@ std::int64_t Track::length() const {
     return total;
 }
 
+// A linear walk; frames before 0 or at or past the end give -1.
 int Track::segmentAt(std::int64_t frame, std::int64_t* start) const {
     std::int64_t at = 0;
     for (int i = 0; i < segments.size(); ++i) {
@@ -206,6 +222,7 @@ QList<std::int64_t> Track::editPoints() const {
     return points;
 }
 
+// TC1 is not a track here: timecode_ defaults to true.
 Sequence Sequence::withDefaultTracks() {
     Sequence s;
     s.tracks_ = {Track{TrackKind::Video, 1, AudioFormat::Mono, {}}, Track{TrackKind::Audio, 1, AudioFormat::Mono, {}},
@@ -334,6 +351,8 @@ QList<std::int64_t> Sequence::editPoints(const QStringList& names) const {
     return points;
 }
 
+// Pieces of the segments overlapping the range, trimmed to it (sourceIn moved on for a piece that
+// starts inside its segment), then filler for whatever lies past the track's end.
 QList<Segment> Sequence::material(const QString& name, std::int64_t start, std::int64_t length) const {
     QList<Segment> out;
     if (length <= 0) return out;
@@ -360,6 +379,7 @@ QList<Segment> Sequence::material(const QString& name, std::int64_t start, std::
     return out;
 }
 
+// Returns the index of the segment that now starts at `frame`.
 int Sequence::cut(Track& t, std::int64_t frame) {
     const std::int64_t length = t.length();
     if (frame >= length) {
@@ -402,6 +422,7 @@ void Sequence::tidy(Track& t) {
     t.segments = out;
 }
 
+// cut() pads with filler when `at` is past the end, so a splice there leaves a gap of filler.
 void Sequence::splice(const QString& name, std::int64_t at, const QList<Segment>& material) {
     Track* t = track(name);
     if (!t || at < 0) return;
@@ -410,6 +431,8 @@ void Sequence::splice(const QString& name, std::int64_t at, const QList<Segment>
     tidy(*t);
 }
 
+// Cuts at `at` and at the end of the overwritten range, removes the segments between, then
+// inserts the material in their place.
 void Sequence::overwrite(const QString& name, std::int64_t at, const QList<Segment>& material) {
     Track* t = track(name);
     if (!t || at < 0) return;
@@ -452,6 +475,7 @@ QList<Segment> Sequence::extract(const QString& name, std::int64_t start, std::i
     return removed;
 }
 
+// Audio clips without a Tracks column offer A1 and A2.
 QStringList sourceTracksOf(const BinItem& item) {
     if (item.kind == BinItemKind::Sequence) return Sequence::fromItem(item).trackNames();
     QStringList tracks = parseTrackList(item.fields.value(QStringLiteral("Tracks")));
@@ -460,6 +484,7 @@ QStringList sourceTracksOf(const BinItem& item) {
     return {QStringLiteral("V1"), QStringLiteral("A1"), QStringLiteral("A2")};
 }
 
+// Patches of tracks the new source does not have are dropped; selections are kept by name.
 void TrackPatch::setSourceTracks(const QStringList& tracks) {
     source_ = tracks;
     for (auto it = patch_.begin(); it != patch_.end();) {
@@ -533,6 +558,7 @@ QString TrackPatch::sourceFor(const QString& record) const {
     return {};
 }
 
+// Each record track receives at most one source track: the first one in source order.
 QList<std::pair<QString, QString>> TrackPatch::editPairs(const Sequence& sequence) const {
     QList<std::pair<QString, QString>> pairs;
     QSet<QString> used;
@@ -548,6 +574,8 @@ QList<std::pair<QString, QString>> TrackPatch::editPairs(const Sequence& sequenc
     return pairs;
 }
 
+// Lengths are inclusive of both marks (OUT - IN + 1). recordStartFor() backtimes from a record OUT
+// when there is no record IN.
 EditPlan planEdit(const EditMarks& source, const EditMarks& record) {
     EditPlan plan;
     if (source.duration <= 0) {
@@ -645,6 +673,7 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
     return changed;
 }
 
+// Tracks that had nothing in the range are not reported as changed.
 QStringList removeMaterial(Sequence& sequence, bool extract, std::int64_t start, std::int64_t length,
                            const QStringList& tracks) {
     QStringList changed;
@@ -679,6 +708,7 @@ bool Sequence::removeTrack(const QString& name) {
     return false;
 }
 
+// An Add Edit in filler is flagged on the second part, or tidy() would merge it straight back.
 bool Sequence::addEdit(const QString& name, std::int64_t frame) {
     Track* t = track(name);
     if (!t || frame <= 0 || frame >= t->length()) return false;
@@ -700,6 +730,7 @@ bool Sequence::isMatchFrame(const Segment& before, const Segment& after) {
            before.sourceIn + before.length == after.sourceIn;
 }
 
+// Joins each segment into the one before it when the edit between them is a match frame.
 int Sequence::removeMatchFrameEdits(const QStringList& names, std::int64_t start, std::int64_t length) {
     int removed = 0;
     const std::int64_t end = start + length;
@@ -722,6 +753,7 @@ int Sequence::removeMatchFrameEdits(const QStringList& names, std::int64_t start
     return removed;
 }
 
+// The excerpt's tracks are unlocked and not sync-locked; tracks with only filler are left out.
 Sequence Sequence::excerpt(const QStringList& names, std::int64_t start, std::int64_t length) const {
     Sequence out;
     out.timecode_ = timecode_;
@@ -739,6 +771,8 @@ Sequence Sequence::excerpt(const QStringList& names, std::int64_t start, std::in
     return out;
 }
 
+// The record range is IN to OUT, or else the segment under the record position; the source start
+// is chosen so that the source position lands on the record position.
 EditPlan planReplace(const Sequence& sequence, const QString& track, const EditMarks& source, const EditMarks& record) {
     EditPlan plan;
     if (source.duration <= 0) {
@@ -798,6 +832,7 @@ std::optional<Segment> segmentFor(const Sequence& sequence, const SegmentRef& re
 
 namespace {
 
+// The track `by` numbers up (negative: down) of the same kind, or nullopt past 1 or the limit.
 std::optional<QString> shiftedTrack(const QString& name, int by) {
     const auto ref = parseTrackName(name);
     if (!ref) return std::nullopt;
@@ -808,6 +843,9 @@ std::optional<QString> shiftedTrack(const QString& name, int by) {
 
 } // namespace
 
+// All checks are made before anything changes. Then the originals are taken out (unless copying)
+// and the pieces put in at their destinations. Destinations are adjusted for extracts on the same
+// track, and the references already returned for splices that push them.
 QList<SegmentRef> moveSegments(Sequence& sequence, const QList<SegmentRef>& segments, std::int64_t frames, int tracks,
                                EditKind kind, bool copy, QString* error) {
     auto failed = [error](const QString& text) {
@@ -878,6 +916,8 @@ QList<SegmentRef> moveSegments(Sequence& sequence, const QList<SegmentRef>& segm
     return moved;
 }
 
+// Latest first, so the references to earlier segments stay valid. Locked tracks are skipped;
+// false when nothing was deleted.
 bool deleteSegments(Sequence& sequence, const QList<SegmentRef>& segments, bool extract) {
     QList<std::pair<SegmentRef, std::int64_t>> found;
     for (const SegmentRef& ref : segments) {
@@ -897,6 +937,8 @@ bool deleteSegments(Sequence& sequence, const QList<SegmentRef>& segments, bool 
     return true;
 }
 
+// An excerpt of the span the segments cover, with every unselected segment in it lifted to filler.
+// An empty sequence (and *start 0) when no reference is valid.
 Sequence copySegments(const Sequence& sequence, const QList<SegmentRef>& segments, std::int64_t* start) {
     std::int64_t first = -1;
     std::int64_t end = 0;
@@ -952,8 +994,11 @@ void Sequence::normalize(const QString& name) {
 
 namespace {
 
+// "No limit" in trim range calculations: far more frames than any sequence has, but small enough
+// not to overflow when added to frame counts.
 constexpr std::int64_t kNoLimit = std::int64_t(1) << 40;
 
+// The two segments at an edit point, as indices into the track's segments (-1: none).
 struct EditSides {
     int a = -1; // the segment ending at the edit
     int b = -1; // the segment starting there
@@ -984,6 +1029,7 @@ std::int64_t tailRoom(const Segment& s, const SourceLength& length) {
     return std::max<std::int64_t>(*total - (s.sourceIn + s.length), 0);
 }
 
+// For the head, the clip's frames before sourceIn; filler has no limit.
 std::int64_t headRoom(const Segment& s) {
     return s.isFiller() ? kNoLimit : std::max<std::int64_t>(s.sourceIn, 0);
 }
@@ -1016,10 +1062,12 @@ std::int64_t fillerRunBefore(const Track& t, std::int64_t frame) {
 
 // How a single-roller ripple changes the length of the track after its
 // edit: +frames on the A-side, -frames on the B-side.
+// 0 for a dual-roller trim, which does not change the track's length.
 int rippleSign(TrimSide side) {
     return side == TrimSide::A ? 1 : side == TrimSide::B ? -1 : 0;
 }
 
+// The rollers on tracks that exist and are not locked.
 QList<TrimRoller> unlocked(const Sequence& seq, const QList<TrimRoller>& rollers) {
     QList<TrimRoller> out;
     for (const TrimRoller& r : rollers) {
@@ -1062,6 +1110,10 @@ QList<std::int64_t> trimPoints(const Sequence& sequence, const QString& name) {
     return out;
 }
 
+// Each roller limits the range by its segments: a dual roller by both sides; an A-side by what
+// the A segment can lose or gain (and, for Overwrite, what the B segment can lose); a B-side
+// likewise. The range is the intersection, then narrowed so that sync-locked tracks give up only
+// filler.
 TrimRange trimRange(const Sequence& sequence, const QList<TrimRoller>& all, TrimKind kind,
                     const SourceLength& sourceLength) {
     const QList<TrimRoller> rollers = unlocked(sequence, all);
@@ -1111,6 +1163,10 @@ TrimRange trimRange(const Sequence& sequence, const QList<TrimRoller>& all, Trim
     return range;
 }
 
+// One delta for every roller. Dual rollers move the edit (A longer, B shorter, or the reverse).
+// Ripple trims change one side and so the track's length. Overwrite trims keep the length: the
+// other side is overwritten or filler is put in. `shift` records how much each ripple moved the
+// rest of its track, used to move the sync-locked tracks and the rollers that come after.
 QList<TrimRoller> trim(Sequence& sequence, const QList<TrimRoller>& all, TrimKind kind, std::int64_t frames,
                        const SourceLength& sourceLength, std::int64_t* applied) {
     const TrimRange range = trimRange(sequence, all, kind, sourceLength);
@@ -1172,6 +1228,8 @@ QList<TrimRoller> trim(Sequence& sequence, const QList<TrimRoller>& all, TrimKin
         }
         sequence.normalize(r.track);
     }
+    // The rollers' new frames, moved on by the ripples at earlier edits on the same track. Rollers
+    // on locked tracks keep their frames.
     QList<TrimRoller> out = all;
     for (int i = 0; i < rollers.size(); ++i) {
         std::int64_t frame = moved.at(i);
@@ -1188,6 +1246,8 @@ QList<TrimRoller> trim(Sequence& sequence, const QList<TrimRoller>& all, TrimKin
     return out;
 }
 
+// Only sourceIn changes, so nothing moves in the sequence. The delta is limited so that every
+// slipped clip stays within its media; filler and locked tracks are skipped.
 std::int64_t slipSegments(Sequence& sequence, const QList<SegmentRef>& segments, std::int64_t frames,
                           const SourceLength& sourceLength) {
     std::int64_t lo = -kNoLimit;
@@ -1209,6 +1269,8 @@ std::int64_t slipSegments(Sequence& sequence, const QList<SegmentRef>& segments,
     return delta;
 }
 
+// A segment slides only if it has neighbours on both sides: the one before grows (or shrinks)
+// and the one after shrinks (or grows) by the same amount. The references are updated in place.
 std::int64_t slideSegments(Sequence& sequence, QList<SegmentRef>& segments, std::int64_t frames,
                            const SourceLength& sourceLength) {
     std::int64_t lo = -kNoLimit;
@@ -1242,6 +1304,8 @@ std::int64_t slideSegments(Sequence& sequence, QList<SegmentRef>& segments, std:
     return delta;
 }
 
+// The track end is not an edit that can be extended. A track is skipped if the move does not fit
+// in its trim range.
 QStringList extendEdits(Sequence& sequence, const QStringList& tracks, std::int64_t mark, bool toIn,
                         const SourceLength& sourceLength) {
     QStringList changed;
@@ -1300,6 +1364,7 @@ QStringList EditHistory::descriptions() const {
 
 // ---------------------------------------------------------------- effects
 
+// The segment effect replaces any there; filler can take one.
 bool applySegmentEffect(Sequence& sequence, const QString& name, std::int64_t frame, const Effect& effect) {
     Track* t = sequence.track(name);
     // Video effects go on video tracks; never on data tracks (FX guide p.44).
@@ -1310,6 +1375,7 @@ bool applySegmentEffect(Sequence& sequence, const QString& name, std::int64_t fr
     return true;
 }
 
+// Nullopt when there is no segment starting at `frame` (or on a data track).
 std::optional<TransitionRoom> transitionRoom(const Sequence& sequence, const QString& name, std::int64_t frame,
                                              const SourceLength& sourceLength) {
     const Track* t = sequence.track(name);
@@ -1331,6 +1397,7 @@ std::optional<TransitionRoom> transitionRoom(const Sequence& sequence, const QSt
     return room;
 }
 
+// A zero-length transition never fits. When both sides are short, "Media B" is reported.
 bool transitionFits(const Transition& transition, const TransitionRoom& room, QString* which) {
     QString shortSide;
     if (transition.after() > room.after) shortSide = QStringLiteral("Media A");
@@ -1339,6 +1406,9 @@ bool transitionFits(const Transition& transition, const TransitionRoom& room, QS
     return transition.duration > 0 && shortSide.isEmpty();
 }
 
+// Ending and Starting keep their alignment while there is room on their side; Centered keeps it
+// with the smaller of the two sides on both. Otherwise the transition takes all the room there
+// is, realigned to fit.
 Transition sizeToFit(const Transition& transition, const TransitionRoom& room) {
     Transition t = transition;
     const std::int64_t before = std::min(transition.before(), room.before);
@@ -1379,6 +1449,7 @@ Transition sizeToFit(const Transition& transition, const TransitionRoom& room) {
     return t;
 }
 
+// The transition is stored on the B-side segment, replacing any there.
 bool applyTransition(Sequence& sequence, const QString& name, std::int64_t frame, const Transition& transition,
                      const SourceLength& sourceLength) {
     const auto room = transitionRoom(sequence, name, frame, sourceLength);
@@ -1389,6 +1460,7 @@ bool applyTransition(Sequence& sequence, const QString& name, std::int64_t frame
     return true;
 }
 
+// Returns the removed effect's name, or empty when there was none (or the track is locked).
 QString removeEffect(Sequence& sequence, const QString& name, std::int64_t frame, EffectTarget target) {
     Track* t = sequence.track(name);
     if (!t || t->locked) return {};
@@ -1407,6 +1479,7 @@ QString removeEffect(Sequence& sequence, const QString& name, std::int64_t frame
     return removed;
 }
 
+// On each track, transitions are looked at before segment effects.
 std::optional<EffectRef> effectAt(const Sequence& sequence, const QStringList& tracks, std::int64_t position) {
     for (const QString& name : tracks) {
         const Track* t = sequence.track(name);
@@ -1427,6 +1500,8 @@ std::optional<EffectRef> effectAt(const Sequence& sequence, const QStringList& t
 
 namespace {
 
+// The segment starting exactly at ref.frame. Non-const so that the non-const effectFor() and
+// transitionFor() can share the lookup.
 Segment* segmentForEffect(const Sequence& sequence, const EffectRef& ref) {
     const Track* t = sequence.track(ref.track);
     if (!t) return nullptr;
@@ -1466,6 +1541,7 @@ double clampGain(double db) {
     return std::min(std::round(db * 10) / 10, kGainMax);
 }
 
+// Audio tracks only. A segment counts if any of its frames is in the range.
 int setClipAudio(Sequence& sequence, const QString& name, std::int64_t start, std::int64_t length,
                  std::optional<double> gain, std::optional<int> pan) {
     Track* t = sequence.track(name);

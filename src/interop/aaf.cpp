@@ -8,6 +8,15 @@
 #include <algorithm>
 #include <cstring>
 
+// AAF's object layer (docs/spec/aaf.md, "Objects"). Every AAF object is a storage of the compound file
+// (cfb.cpp): the storage's class ID is the object's class AUID, and its `properties` stream holds its
+// properties. This file reads them: AUIDs and MobIDs, the metadictionary (the built-in model from
+// aaf_model.inc, which scripts/make-aaf-model.py makes from pyaaf2's model tables, plus what the file
+// defines), objects and their stored forms (strong and weak references, index streams, streams), and
+// File::decode, which turns data properties into QVariants by their types. aaf_dump.cpp prints what is
+// read as JSON, aaf_import.cpp makes bins of it and aaf_writer.cpp writes the same structures. pyaaf2 is
+// the reference implementation; tests/interop/tst_aaf.cpp checks this against its dumps of the corpus,
+// and on damaged files.
 namespace lumenis::interop::aaf {
 
 namespace {
@@ -53,6 +62,7 @@ const QUuid kMobIdType = auidFromText("01030200-0000-0000-060e-2b3401040101");
 const QUuid kBooleanType = auidFromText("01040100-0000-0000-060e-2b3401040101");
 const QUuid kCharacterType = auidFromText("01100100-0000-0000-060e-2b3401040101");
 
+// The class of each TypeDefinition object in a file's metadictionary, and the kind of type it defines.
 const QHash<QUuid, TypeKind>& typeDefClasses() {
     static const QHash<QUuid, TypeKind> classes{
         {auidFromText("0d010101-0204-0000-060e-2b3402060101"), TypeKind::Int},
@@ -110,8 +120,11 @@ enum : quint16 {
     PidExtEnumValues = 0x0020,
 };
 
+// The byte order mark at the start of a `properties` stream, of `referenced properties` and of indirect
+// values: little-endian.
 constexpr quint8 kLittleEndian = 0x4c;
 
+// A UTF-16LE string, its terminating 0s dropped.
 QString utf16(const QByteArray& data) {
     qsizetype n = data.size() / 2;
     const char* p = data.constData();
@@ -121,6 +134,7 @@ QString utf16(const QByteArray& data) {
     return s;
 }
 
+// UTF-16LE strings, each ended by a 0 (AAF's string arrays); text after the last 0 is dropped.
 QStringList utf16List(const QByteArray& data) {
     QStringList out;
     QString current;
@@ -143,6 +157,7 @@ QString hex(const QByteArray& data) { return QString::fromLatin1(data.toHex()); 
 
 // ---- AUIDs and MobIDs -------------------------------------------------------
 
+// An AUID's 16 bytes as stored: a GUID, Data1-3 little-endian and Data4 as is.
 QUuid auidFromBytes(const char* p) {
     const auto* b = reinterpret_cast<const uchar*>(p);
     return QUuid(qFromLittleEndian<quint32>(p), qFromLittleEndian<quint16>(p + 4), qFromLittleEndian<quint16>(p + 6),
@@ -158,6 +173,7 @@ QByteArray auidBytes(const QUuid& auid) {
     return out;
 }
 
+// Lower-case, without braces.
 QString auidText(const QUuid& auid) { return auid.toString(QUuid::WithoutBraces); }
 
 QUuid auidFromText(const char* text) { return QUuid::fromString(QLatin1String(text)); }
@@ -205,6 +221,9 @@ QString WeakKey::text() const {
 
 // ---- MetaDictionary ---------------------------------------------------------
 
+// The built-in model: classes with their properties, and types with their members (enumeration elements,
+// extensible enumeration values, record members, a weak reference's target path), from the tables of
+// aaf_model.inc.
 MetaDictionary MetaDictionary::builtIn() {
     MetaDictionary m;
     for (const ModelClass& c : kModelClasses) {
@@ -293,6 +312,7 @@ void MetaDictionary::addType(const TypeDef& t) {
     typeNames_.insert(t.name, t.auid);
 }
 
+// A linear search through every class; used for the few pids the writer looks up by AUID.
 const PropertyDef* MetaDictionary::propertyByAuid(const QUuid& auid) const {
     for (const ClassDef& c : classes_) {
         for (const PropertyDef& p : c.properties) {
@@ -325,6 +345,7 @@ void MetaDictionary::assignDynamicPids() {
     }
 }
 
+// Class and type lookups by AUID or by name; a file's own names replace the model's.
 const ClassDef* MetaDictionary::classDef(const QUuid& auid) const {
     auto it = classes_.constFind(auid);
     return it == classes_.constEnd() ? nullptr : &it.value();
@@ -345,6 +366,8 @@ const TypeDef* MetaDictionary::typeDef(const QString& name) const {
     return it == typeNames_.constEnd() ? nullptr : typeDef(it.value());
 }
 
+// Searches the class, then its parents. A class that names itself as parent is a root; the depth limit
+// keeps a damaged hierarchy from looping.
 const PropertyDef* MetaDictionary::property(const QUuid& classAuid, int pid) const {
     QUuid at = classAuid;
     for (int depth = 0; depth < 64 && !at.isNull(); ++depth) {
@@ -384,6 +407,8 @@ bool MetaDictionary::isA(const QUuid& auid, const QUuid& base) const {
     return false;
 }
 
+// Renamed types and enumerations have the size of the type they rename or are stored as; records are the
+// sum of their members. Strings, variable arrays, sets, references and indirect values vary: 0.
 int MetaDictionary::byteSize(const QUuid& type) const {
     const TypeDef* t = typeDef(type);
     for (int depth = 0; t && depth < 32; ++depth) {
@@ -459,6 +484,12 @@ QString Object::propertyName(int pid) const {
     return d ? d->name : QStringLiteral("0x%1").arg(pid, 4, 16, QLatin1Char('0'));
 }
 
+// The objects a strong reference names, by its stored form. A strong reference's value is the name of the
+// child storage holding the object. A vector's or set's value is a name: the stream `<name> index` lists
+// the elements, which are the child storages `<name>{<local key in hex>}`. The index starts with the
+// count, then two more 32-bit words (the next free and the last free local key) that are not needed here;
+// a set's index then gives the key's pid (16 bits) and the key's size (8 bits), at 12 and 14. Then each
+// element: its 32-bit local key, and for a set a 32-bit reference count and the key.
 QList<Object> Object::referenced(const RawProperty& p) const {
     QList<Object> out;
     if (isNull()) return out;
@@ -498,6 +529,7 @@ QList<Object> Object::referenced(const RawProperty& p) const {
     return out;
 }
 
+// A stream property's value: a byte order, then the UTF-16 name of a stream next to `properties`.
 int Object::streamEntry(const RawProperty& p) const {
     if (isNull() || p.form != static_cast<quint16>(StoredForm::Stream)) return -1;
     // A byte order (0x55, unspecified), then the stream's name.
@@ -505,6 +537,9 @@ int Object::streamEntry(const RawProperty& p) const {
     return child >= 0 && file_->container().entry(child).isStream() ? child : -1;
 }
 
+// A weak reference's value: the index of its table in `referenced properties` (16 bits), the pid of the
+// target class's unique identifier (16 bits), the key's size (8 bits) and the key: 16 bytes for an AUID,
+// 32 for a MobID.
 std::optional<WeakKey> Object::weakKey(const RawProperty& p) const {
     if (p.form != static_cast<quint16>(StoredForm::WeakRef) || p.data.size() < 5) return std::nullopt;
     const char* d = p.data.constData();
@@ -517,6 +552,8 @@ std::optional<WeakKey> Object::weakKey(const RawProperty& p) const {
     return k;
 }
 
+// A weak reference vector's or set's value is the name of its index stream, `<name> index`: the count (32
+// bits), the table's index and the key's pid (16 bits each), the key's size (8 bits), then the keys.
 QList<WeakKey> Object::weakKeys(const RawProperty& p) const {
     QList<WeakKey> out;
     if (isNull() || (p.form != static_cast<quint16>(StoredForm::WeakRefVector) &&
@@ -545,6 +582,9 @@ std::optional<WeakKey> Object::weakKey(const QString& name) const {
     return p ? weakKey(*p) : std::nullopt;
 }
 
+// A property's value by stored form: strong references as Object (or a list of them), weak references as
+// their targets (or their keys as text when the target is not in the file), streams as nothing, and data
+// decoded by the property's type (its bytes when the property is not in the metadictionary).
 QVariant Object::value(const RawProperty& p) const {
     if (isNull()) return {};
     switch (static_cast<StoredForm>(p.form)) {
@@ -633,6 +673,8 @@ void File::close() {
     meta_ = std::make_unique<MetaDictionary>(MetaDictionary::builtIn());
 }
 
+// Opening reads only the compound file's header and directory, the referenced properties and the
+// metadictionary; other objects are read when asked for.
 bool File::open(const QString& path, QString* error) {
     close();
     error_.clear();
@@ -656,6 +698,9 @@ bool File::open(const QString& path, QString* error) {
     return true;
 }
 
+// The `referenced properties` stream: the byte order (8 bits), the number of paths (16 bits) and the
+// total number of pids (32 bits, the 0s below included), then the pids (16 bits each), each path ended
+// by a 0. Path n is table n, which weak references name by its index.
 bool File::readReferencedProperties() {
     const int entry = cfb_->find(QStringLiteral("/referenced properties"));
     if (entry < 0) return true; // a file without weak references
@@ -676,6 +721,9 @@ bool File::readReferencedProperties() {
     return referenced_.size() == paths;
 }
 
+// The `properties` stream: the byte order (8 bits), a version (8 bits, not checked) and the count (16
+// bits), then for each property its pid, stored form and size (16 bits each), then the values one after
+// another in the same order. A stream cut short keeps the properties that fit.
 const QList<RawProperty>& File::propertiesOf(int entry) const {
     auto it = properties_.constFind(entry);
     if (it != properties_.constEnd()) return it.value();
@@ -709,6 +757,10 @@ Object File::content() const { return header().object(QStringLiteral("Content"))
 Object File::dictionary() const { return header().object(QStringLiteral("Dictionary")); }
 QList<Object> File::mobs() const { return content().objects(QStringLiteral("Mobs")); }
 
+// A weak reference's target. The table's path is followed from the root: each pid but the last is a
+// strong reference (or the first element of a vector), and the last names the set the target is in; the
+// set's index gives each element's key, so the target is the element with this key. Each table's elements
+// are found once and cached in targets_.
 Object File::resolve(const WeakKey& key) const {
     if (key.table < 0 || key.table >= referenced_.size()) return {};
     auto it = targets_.find(key.table);
@@ -746,6 +798,9 @@ Object File::resolve(const WeakKey& key) const {
     return it.value().value(key.key);
 }
 
+// Decodes data by type (see File::decode in aaf.h). Integers must be the type's size; records are decoded
+// member by member and must use the bytes exactly; indirect and opaque values are a byte order, the inner
+// type's AUID and the value. Anything that does not fit comes back as its bytes.
 QVariant File::decode(const QUuid& type, const QByteArray& data) const {
     const TypeDef* t = meta_->typeDef(type);
     if (!t) return data;
@@ -773,6 +828,7 @@ QVariant File::decode(const QUuid& type, const QByteArray& data) const {
         return utf16(data);
     }
     case TypeKind::Enum: {
+        // Boolean is an enumeration stored in one byte; it decodes as bool, not as an element name.
         if (type == kBooleanType) return data.size() == 1 ? QVariant(data[0] == 1) : QVariant(data);
         const QVariant v = decode(t->element, data);
         if (v.typeId() != QMetaType::LongLong && v.typeId() != QMetaType::ULongLong) return data;
@@ -822,6 +878,10 @@ QVariant File::decode(const QUuid& type, const QByteArray& data) const {
     }
 }
 
+// A type definition object of the file's metadictionary, by the pids of the metadictionary's own classes
+// above. Each kind keeps what it needs: integer size and signedness, the element or referenced type,
+// enumeration names and values (64-bit values, in the order of the names), record member names and types,
+// extensible enumeration names and AUIDs.
 TypeDef File::readTypeDef(const Object& o) const {
     TypeDef t;
     t.kind = typeDefClasses().value(o.classAuid(), TypeKind::Opaque);
@@ -906,6 +966,9 @@ TypeDef File::readTypeDef(const Object& o) const {
     return t;
 }
 
+// Adds the file's own definitions to the built-in model (MetaDictionary::addClass and addType merge
+// them). A property's type is stored as a bare AUID or as a weak reference to the type definition; both
+// are read.
 void File::readMetaDictionary() {
     const Object meta = root().object(QStringLiteral("MetaDictionary"));
     if (!meta) return;

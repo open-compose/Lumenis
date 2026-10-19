@@ -20,6 +20,20 @@
 
 #include <algorithm>
 
+// Managed media (ROADMAP Phase 2.4a/b): media the application writes itself, as MXF OP-Atom files,
+// one per track, in "<drive>/Avid MediaFiles/MXF/<n>/". This file holds:
+// - the resolutions (Avid DNx levels through FFmpeg's DNxHR encoder) and the media drives;
+// - makeMedia(), behind transcodeClip() (Transcode, Import) and consolidateClip() (Consolidate):
+//   the Maker class writes each track through MediaWriter or copyVideoFrames() (media.cpp), with
+//   the metadata the media database and relinking read back, and the clip's MobIDs as the files'
+//   package IDs (docs/spec/native-model.md);
+// - readMediaFile() and MediaDatabase, the index of the managed files on the drives (one
+//   MediaDatabase.json per MXF folder), and deleteMediaFiles().
+// Callers: consolidate.cpp and relink.cpp here; in src/ui, main_window.cpp (Import, Consolidate/
+// Transcode, Delete Media), consolidate_dialog.cpp, settings_window.cpp (drive settings),
+// and media_tool.cpp. Tests pick drives with setExtraMediaDrives() or
+// LUMENIS_MEDIA_DRIVES (BUILDING.md); scripts/check-mxf.py checks the files with bmx.
+
 namespace lumenis::media {
 
 namespace {
@@ -41,10 +55,12 @@ std::int64_t samplesAt(std::int64_t frames, const Rational& rate, int sampleRate
     return frames * sampleRate * rate.den() / rate.num();
 }
 
+// "num/den", as the files and the index keep a rate.
 QString rateText(const Rational& r) {
     return QStringLiteral("%1/%2").arg(r.num()).arg(r.den());
 }
 
+// 23.976, 25, 29.97: the rate as the FPS column shows it.
 QString fpsText(double fps) {
     QString s = QString::number(fps, 'f', 3);
     while (s.endsWith(QLatin1Char('0'))) s.chop(1);
@@ -62,6 +78,7 @@ QString fileStem(const QString& name) {
     return s.left(80);
 }
 
+// The volume's name for the Drive column; its root when it has none.
 QString driveName(const QString& path) {
     const QStorageInfo volume(path);
     if (!volume.isValid()) return {};
@@ -81,6 +98,7 @@ QImage fitted(const QImage& image, QSize raster) {
     return out;
 }
 
+// The clip's Start column as a frame count at its edit rate; nothing without one.
 std::optional<std::int64_t> startFrame(const model::BinItem& clip) {
     const QString text = clip.fields.value(QStringLiteral("Start"));
     if (text.isEmpty()) return std::nullopt;
@@ -89,11 +107,13 @@ std::optional<std::int64_t> startFrame(const model::BinItem& clip) {
     return tc->frameCount();
 }
 
+// Frames from midnight as non-drop timecode at the rate, wrapped at 24 hours.
 QString timecodeText(std::int64_t frames, const Rational& rate) {
     const TimecodeFormat format = TimecodeFormat::forRate(rate, false);
     return QString::fromStdString(Timecode(frames % format.framesPerDay(), format).toString());
 }
 
+// "V1 A1-2", as the Tracks column shows tracks (p.278).
 QString trackList(bool video, int channels) {
     QStringList parts;
     if (video) parts << QStringLiteral("V1");
@@ -103,6 +123,10 @@ QString trackList(bool video, int channels) {
 }
 
 // Writes one track's media; the files made so far are removed on failure.
+// One Maker makes one clip's media: it holds the media id (a UUID shared by every track file), the
+// master clip's MobID, a file MobID per track and the source the files came from. Frames [in, out)
+// are clip frames at the clip's edit rate; Link::fileFrame() maps them to the file's frames.
+// Progress counts frames per track; MediaCreation::progress returning false cancels.
 class Maker {
 public:
     Maker(const model::BinItem& clip, const Link& link, std::int64_t in, std::int64_t out,
@@ -157,6 +181,8 @@ public:
         return p;
     }
 
+    // The writer settings every track file shares: OP-Atom, the clip's rate and start timecode, and the
+    // "comment_lumenis_*" metadata readMediaFile() reads back.
     WriterSettings settingsFor(const QString& track) const {
         WriterSettings s;
         s.format = QStringLiteral("mxf_opatom");
@@ -192,6 +218,7 @@ public:
         return creation_.progress(std::min(1.0, static_cast<double>(done_) / static_cast<double>(total_)));
     }
 
+    // V1 re-encoded as DNxHR at the creation's resolution and raster.
     bool transcodeVideo(const QString& path, QString* error) {
         VideoReader reader;
         if (!reader.open(link_.path, link_.videoStream, error)) return false;
@@ -223,6 +250,7 @@ public:
         return writer.finish(error);
     }
 
+    // V1 copied packet for packet (Consolidate; canConsolidate() made sure that is exact).
     bool copyVideo(const QString& path, QString* error) {
         WriterSettings s = settingsFor(QStringLiteral("V1"));
         if (!copyVideoFrames(link_.path, link_.videoStream, link_.fileFrame(in_, clip_.editRate), out_ - in_, path, s,
@@ -239,6 +267,8 @@ public:
             if (error) *error = QObject::tr("%1 has no track A%2.").arg(clip_.name).arg(t + 1);
             return false;
         }
+        // One channel of the source stream, read at its own rate, resampled to 48 kHz when needed, and
+        // written exactly as long as the frames [in, out) last; past the file's end it is silence.
         AudioReader reader;
         if (!reader.open(link_.audioFile(t), channel->first, error)) return false;
         const int rate = reader.sampleRate();
@@ -293,6 +323,7 @@ public:
         return writer.finish(error);
     }
 
+    // Sets the error to "Cancelled." and returns false.
     static bool cancelled(QString* error) {
         if (error) *error = QObject::tr("Cancelled.");
         return false;
@@ -317,6 +348,10 @@ private:
     std::int64_t done_ = 0;
 };
 
+// The media for frames [in, out) of a clip: every track written (copy: Consolidate, else Transcode)
+// into the MXF folder of the video or audio drive, then a new master clip (an audio clip without
+// picture) linked to the files with its source chain and columns. If any track fails, the files
+// made so far are deleted (Maker's destructor) and the error says why.
 std::optional<model::BinItem> makeMedia(const model::BinItem& clip, std::int64_t in, std::int64_t out,
                                         const MediaCreation& creation, bool copy, QString* error) {
     auto failed = [&](const QString& text) -> std::optional<model::BinItem> {
@@ -374,6 +409,7 @@ std::optional<model::BinItem> makeMedia(const model::BinItem& clip, std::int64_t
     }
     maker.keep();
 
+    // The new clip.
     model::BinItem item;
     item.id = model::newItemId();
     item.mobId = maker.master();
@@ -467,6 +503,9 @@ const Resolution& defaultResolution() {
     return resolutions().at(2);
 }
 
+// The writable volumes that can hold media (system, temporary and read-only file systems are
+// skipped), the home folder when its volume's top is not writable, and the existing `extra`
+// folders, each root once.
 QList<MediaDrive> mediaDrives(const QStringList& extra) {
     QList<MediaDrive> out;
     auto add = [&](const QString& root, const QString& name, std::int64_t free) {
@@ -509,6 +548,8 @@ QList<MediaDrive> mediaDrives(const QStringList& extra) {
 }
 
 namespace {
+// The extra folders: LUMENIS_MEDIA_DRIVES at first use, then whatever setExtraMediaDrives() sets.
+// Not locked: set it before media work starts on other threads.
 QStringList& extraDrives() {
     static QStringList folders = [] {
         QStringList list;
@@ -554,6 +595,7 @@ QString mediaFilesFolder(const QString& drive) {
     return QDir(drive).filePath(QStringLiteral("Avid MediaFiles"));
 }
 
+// Takes the highest-numbered folder (by its name as a number) and makes it, or "1", if needed.
 QString mxfFolder(const QString& drive, QString* error) {
     const QDir mxf(QDir(mediaFilesFolder(drive)).filePath(QStringLiteral("MXF")));
     int highest = 0;
@@ -575,6 +617,8 @@ std::optional<model::BinItem> transcodeClip(const model::BinItem& clip, std::int
     return makeMedia(clip, in, out, creation, false, error);
 }
 
+// Audio is always written as PCM; a picture must be DNx at the clip's rate, in a file (not an image
+// sequence), so its frames can be copied as they are.
 bool canConsolidate(const model::BinItem& clip) {
     const auto link = linkOf(clip);
     if (!link || link->unlinked) return false;
@@ -600,6 +644,7 @@ std::optional<model::BinItem> consolidateClip(const model::BinItem& clip, std::i
 
 namespace {
 
+// Parses "num/den"; 25/1 when it is not a positive rate.
 Rational rateFrom(const QString& text) {
     const QStringList parts = text.split(QLatin1Char('/'));
     const std::int64_t num = parts.value(0).toLongLong();
@@ -609,6 +654,7 @@ Rational rateFrom(const QString& text) {
 
 } // namespace
 
+// A file's entry in a folder's MediaDatabase.json (the index adds its size and time).
 QJsonObject MediaFileInfo::toJson() const {
     QJsonObject o{{QStringLiteral("id"), mediaId},     {QStringLiteral("track"), track},
                   {QStringLiteral("clip"), clipName},  {QStringLiteral("project"), project},
@@ -639,6 +685,8 @@ MediaFileInfo MediaFileInfo::fromJson(const QJsonObject& o) {
     return f;
 }
 
+// Probes a file and reads the "comment_lumenis_*" metadata Maker wrote. Nothing if the file cannot
+// be read or is not managed media (no media id or track).
 std::optional<MediaFileInfo> readMediaFile(const QString& path) {
     const auto info = probe(path);
     if (!info) return std::nullopt;
@@ -687,6 +735,7 @@ int MediaSet::audioTracks() const {
     return n;
 }
 
+// Every file a track; each file has one stream, so audio streams are 0 and one channel each.
 Link MediaSet::link(std::int64_t first) const {
     Link l;
     l.mediaId = mediaId;
@@ -713,6 +762,10 @@ void MediaDatabase::clear() {
     files_.clear();
 }
 
+// Reads every MXF folder of each drive. A file is read again (readMediaFile()) only when its size or
+// modification time differs from what the folder's index recorded; the index is rewritten when
+// anything changed. Files that are not managed media stay in the index but not in the database.
+// Earlier scans' files are kept: clear() first to forget them.
 void MediaDatabase::scan(const QStringList& drives) {
     for (const QString& drive : drives) {
         const QDir mxf(QDir(mediaFilesFolder(drive)).filePath(QStringLiteral("MXF")));
@@ -781,6 +834,7 @@ QList<MediaFileInfo> MediaDatabase::files() const {
     return out;
 }
 
+// One set per media id, in the order of the files' paths.
 QList<MediaSet> MediaDatabase::sets() const {
     QHash<QString, MediaSet> byId;
     QStringList order;
@@ -820,6 +874,7 @@ void MediaDatabase::remove(const QString& path) {
     files_.remove(path);
 }
 
+// The set of the first file whose material package is that MobID.
 std::optional<MediaSet> MediaDatabase::setOf(const MobId& master) const {
     if (master.isNull()) return std::nullopt;
     for (const MediaFileInfo& f : files_) {
@@ -828,6 +883,8 @@ std::optional<MediaSet> MediaDatabase::setOf(const MobId& master) const {
     return std::nullopt;
 }
 
+// Replaces the link's paths with where the database has the files of its media id now; the item is
+// changed only when a path differs.
 bool MediaDatabase::resolve(model::BinItem& item) const {
     auto link = linkOf(item);
     if (!link || !link->isManaged()) return false;
@@ -850,6 +907,8 @@ bool MediaDatabase::resolve(model::BinItem& item) const {
     return true;
 }
 
+// Files that readMediaFile() does not take as managed media are left alone, and so are files that
+// cannot be removed; neither is in the returned list.
 QStringList deleteMediaFiles(const QStringList& paths, MediaDatabase* db) {
     QStringList deleted;
     for (const QString& path : paths) {

@@ -3,6 +3,8 @@
 #include <numeric>
 #include <stdexcept>
 
+// Rational: exact fractions for edit rates and times (rational.h). Every arithmetic result goes
+// back through the constructor, so it is reduced to lowest terms with a positive denominator.
 namespace lumenis {
 
 Rational::Rational(std::int64_t num, std::int64_t den) {
@@ -22,6 +24,7 @@ std::string Rational::toString() const {
     return std::to_string(num_) + "/" + std::to_string(den_);
 }
 
+// C++ division truncates towards zero, so negative values with a remainder step down by one.
 std::int64_t Rational::floor() const {
     std::int64_t q = num_ / den_;
     if ((num_ % den_ != 0) && (num_ < 0)) {
@@ -30,6 +33,7 @@ std::int64_t Rational::floor() const {
     return q;
 }
 
+// (2n + d) / 2d is n/d + 1/2 truncated; for negatives the same is done on the magnitude.
 std::int64_t Rational::round() const {
     const std::int64_t twice = 2 * num_;
     if (num_ >= 0) {
@@ -57,6 +61,7 @@ Rational operator/(const Rational& a, const Rational& b) {
     return {a.num_ * b.den_, a.den_ * b.num_};
 }
 
+// Cross-multiplication; valid because both denominators are positive.
 std::strong_ordering operator<=>(const Rational& a, const Rational& b) {
     return a.num_ * b.den_ <=> b.num_ * a.den_;
 }

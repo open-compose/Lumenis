@@ -2,6 +2,9 @@
 
 #include <algorithm>
 
+// ProviderRegistry and the names of the provider enums (provider.h). Providers are the extension
+// points for codecs, transcription, plug-in hosts and devices; docs/EXTENSIONS.md explains how
+// licence tiers decide which ones are bundled.
 namespace lumenis::ext {
 
 std::string_view toString(LicenseTier tier) {
@@ -27,6 +30,7 @@ std::string_view toString(Category category) {
     return "unknown";
 }
 
+// Null providers and duplicate ids are refused.
 bool ProviderRegistry::add(std::shared_ptr<Provider> provider) {
     if (!provider || find(provider->info().id)) {
         return false;
@@ -35,6 +39,8 @@ bool ProviderRegistry::add(std::shared_ptr<Provider> provider) {
     return true;
 }
 
+// The disabled list may name ids that are not (yet) registered, so a setting can be applied before
+// a module loads.
 void ProviderRegistry::setEnabled(std::string_view id, bool enabled) {
     const auto it = std::find(disabled_.begin(), disabled_.end(), id);
     if (enabled && it != disabled_.end()) {

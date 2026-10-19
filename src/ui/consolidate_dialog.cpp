@@ -13,10 +13,15 @@
 #include <QSpinBox>
 #include <QVBoxLayout>
 
+// The Consolidate/Transcode dialog and the Copying Media Files question (consolidate_dialog.h). The
+// options map onto media::ConsolidateOptions (src/media/consolidate.h); the drives and resolutions come
+// from src/media/managed.*. MainWindow (main_window.cpp) opens the dialog and runs the jobs.
+
 namespace lumenis::ui {
 
 namespace {
 
+// Controls for features not implemented yet are shown disabled, with this tooltip.
 QString laterTip() {
     return QObject::tr("Not available yet");
 }
@@ -26,6 +31,7 @@ void later(QWidget* w) {
     w->setToolTip(laterTip());
 }
 
+// A drive's free space, in GiB with one decimal.
 QString sizeText(std::int64_t bytes) {
     const double gb = static_cast<double>(bytes) / (1024.0 * 1024.0 * 1024.0);
     return QObject::tr("%1 GB free").arg(QString::number(gb, 'f', 1));
@@ -52,6 +58,7 @@ QListWidget* driveList(QWidget* parent, const QString& name) {
     return list;
 }
 
+// The root folder of the drive chosen in `list`; empty if none is.
 QString chosen(const QListWidget* list) {
     const QListWidgetItem* item = list->currentItem();
     return item ? item->data(Qt::UserRole).toString() : QString();
@@ -59,6 +66,9 @@ QString chosen(const QListWidget* list) {
 
 } // namespace
 
+// Lays out the whole dialog from top to bottom: mode, drives, handles and options, the Consolidate- or
+// Transcode-only options, Audio, Processing Options and the buttons. update() then shows the parts
+// for the mode.
 ConsolidateDialog::ConsolidateDialog(const Rational& editRate, bool hasSequences, QWidget* parent) : QDialog(parent) {
     setObjectName(QStringLiteral("consolidateDialog"));
     setWindowTitle(tr("Consolidate/Transcode"));
@@ -263,6 +273,8 @@ bool ConsolidateDialog::isTranscode() const {
     return transcode_->isChecked();
 }
 
+// The drive is resolved as the Media Creation setting is (media::chooseDrive): a missing one becomes
+// the one with the most space.
 void ConsolidateDialog::setDrive(const QString& drive) {
     const QString root = media::chooseDrive(drive);
     for (QListWidget* list : {videoDrives_, audioDrives_}) {
@@ -281,6 +293,8 @@ void ConsolidateDialog::setBitDepth(int bits) {
     bitDepth_->setCurrentIndex(bits <= 16 ? 0 : 1);
 }
 
+// Options that do not apply are left off: new sequences without sequences, skipping files on the
+// target when transcoding, and a separate audio drive when both go on the same drive.
 media::ConsolidateOptions ConsolidateDialog::options() const {
     media::ConsolidateOptions o;
     o.mode = transcode_->isChecked() ? media::ConsolidateOptions::Mode::Transcode
@@ -301,6 +315,7 @@ media::ConsolidateOptions ConsolidateDialog::options() const {
     return o;
 }
 
+// A small modal dialog of two choices; Keep is the default.
 std::optional<bool> ConsolidateDialog::askKeepMastersLinked(QWidget* parent) {
     QDialog dialog(parent);
     dialog.setObjectName(QStringLiteral("copyingMediaFiles"));

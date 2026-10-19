@@ -10,15 +10,27 @@
 #include <QRegularExpression>
 #include <QMouseEvent>
 
+// Button mapping (button_mapping.h): the application-wide ButtonMapper that holds the Command
+// Palette's mode and the Menu to Button target, the command picture registry, and MappableButton,
+// the user-selectable button used by the Tool palette, the Composer and the Keyboard palette
+// (KeyButton derives from it).
+//
+// The Command Palette (command_palette.cpp) starts drags with ButtonMapper::mimeFor() and sets the
+// mode; MainWindow forwards menu commands to mapMenuCommand() in Menu to Button mode. Windows that
+// draw their own button pictures (Composer, Timeline) register them with registerCommandIcon().
+
 namespace lumenis::ui {
 
 namespace {
 
+// Pictures registered with registerCommandIcon(), by command id.
 QHash<QString, QIcon>& icons() {
     static QHash<QString, QIcon> all;
     return all;
 }
 
+// A 32 x 32 transparent picture with the letters centred in bold light grey; smaller type for
+// more than two letters.
 QIcon initialsIcon(const QString& initials, bool italic = false) {
     constexpr int size = 32;
     QPixmap pm(size, size);
@@ -112,6 +124,8 @@ QIcon commandIcon(const QString& commandId) {
 
 // ---------------------------------------------------------------- MappableButton
 
+// Reloads its picture whenever ButtonMapper::iconsChanged fires, and turns a click into
+// commandClicked unless the button is Blank.
 MappableButton::MappableButton(QWidget* parent) : QToolButton(parent) {
     setAutoRaise(true);
     setAcceptDrops(true);
@@ -148,6 +162,7 @@ void MappableButton::dragEnterEvent(QDragEnterEvent* event) {
     }
 }
 
+// A command dropped from the Command Palette replaces this button's command.
 void MappableButton::dropEvent(QDropEvent* event) {
     if (!event->mimeData()->hasFormat(ButtonMapper::mimeType())) return;
     const QString id = QString::fromUtf8(event->mimeData()->data(ButtonMapper::mimeType()));
@@ -157,6 +172,7 @@ void MappableButton::dropEvent(QDropEvent* event) {
     emit commandMapped(id);
 }
 
+// The Menu to Button target is outlined in the highlight colour.
 void MappableButton::paintEvent(QPaintEvent* event) {
     QToolButton::paintEvent(event);
     if (ButtonMapper::instance().target() == this) {

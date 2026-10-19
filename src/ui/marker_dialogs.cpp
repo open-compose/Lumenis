@@ -17,10 +17,16 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 
+// Markers (Editing Guide p.412-424): the Edit Marker dialog and the Markers window, declared in
+// marker_dialogs.h. Markers are stored in the bin item (src/model/marker.*); the Timeline (timeline.cpp)
+// adds, changes and deletes them, and opens MarkerDialog from its marker commands. MainWindow opens the
+// Markers window from Tools > Markers.
+
 namespace lumenis::ui {
 
 namespace {
 
+// A small oval in the marker colour `color`, for the colour menus and the table's first column.
 QIcon swatch(const QString& color) {
     QPixmap pm(14, 14);
     pm.fill(Qt::transparent);
@@ -92,6 +98,7 @@ model::Marker MarkerDialog::marker() const {
     return m;
 }
 
+// A table of the markers, one row each, with double-click to jump and a right-click menu.
 MarkersWindow::MarkersWindow(Timeline& timeline, QWidget* parent) : QWidget(parent, Qt::Tool), timeline_(timeline) {
     setObjectName(QStringLiteral("markersWindow"));
     setWindowTitle(tr("Markers"));
@@ -132,6 +139,7 @@ void MarkersWindow::refresh() {
     table_->setRowCount(static_cast<int>(list.size()));
     const TimecodeFormat format =
         TimecodeFormat::forRate(s.isEmpty() ? Rational(24000, 1001) : s.current()->item.editRate, false);
+    // Marker frames count from the clip's start; the TC column adds the clip's start timecode.
     for (int row = 0; row < list.size(); ++row) {
         const model::Marker& m = list.at(row);
         auto* color = new QTableWidgetItem(swatch(m.color), QString());
@@ -153,6 +161,7 @@ void MarkersWindow::jumpTo(int row) {
     timeline_.composer().moveTo(monitor_, list.at(row).frame);
 }
 
+// The ids are gathered first: each deletion changes the Composer, which refreshes the table.
 void MarkersWindow::deleteSelected() {
     const QList<model::Marker> list = markers();
     QStringList ids;
@@ -162,6 +171,8 @@ void MarkersWindow::deleteSelected() {
     for (const QString& id : ids) timeline_.deleteMarker(monitor_, id);
 }
 
+// Jump, Edit, Change Color, Change Track and Delete for one row. Each action reads the markers again
+// when it runs, since the list may have changed since the menu opened.
 QMenu* MarkersWindow::contextMenu(int row) {
     auto* menu = new QMenu(this);
     const QList<model::Marker> list = markers();
@@ -210,6 +221,7 @@ QMenu* MarkersWindow::contextMenu(int row) {
     return menu;
 }
 
+// Delete or Backspace deletes the selected markers.
 void MarkersWindow::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
         deleteSelected();

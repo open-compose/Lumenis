@@ -4,6 +4,9 @@
 
 #include <algorithm>
 
+// Markers (marker.h): the colour list and the functions that read, add, change and find markers
+// stored in a bin item's JSON. The Composer and Timeline (src/ui/composer.*, timeline.*) and the
+// Markers window and Marker dialog (src/ui/marker_dialogs.*) call these.
 namespace lumenis::model {
 
 const QList<MarkerColor>& markerColors() {
@@ -64,6 +67,8 @@ void setMarkers(BinItem& item, QList<Marker> markers) {
     item.markers = a;
 }
 
+// A new spanned marker is refused if it overlaps any other spanned marker, whatever its track. A
+// single-frame marker replaces another single-frame marker on the same frame and track only.
 bool addMarker(BinItem& item, Marker marker) {
     QList<Marker> markers = markersOf(item);
     if (marker.id.isEmpty()) marker.id = newItemId();
@@ -100,6 +105,7 @@ bool updateMarker(BinItem& item, const Marker& marker) {
     return false;
 }
 
+// markersOf() is sorted by frame, so the last match is the nearest one before.
 std::optional<std::int64_t> previousMarker(const BinItem& item, std::int64_t frame) {
     std::optional<std::int64_t> best;
     for (const Marker& m : markersOf(item)) {

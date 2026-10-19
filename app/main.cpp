@@ -81,6 +81,17 @@
 #  include <windows.h>
 #endif
 
+// The cutthulhu executable: main() sets up Qt, the provider registry and modules, then either runs
+// one of the command-line tools below and exits, or opens the editor (Select Project, then
+// lumenis::ui::MainWindow). The options are declared in main() and handled in this order:
+// --list-providers, --probe, --dump-structure, --export-aaf, --import-aaf, --dump-aaf,
+// --write-media and --framemd5 need no display (isHeadlessInvocation()); --dump-menus,
+// --measure-playback, --screenshot and --smoke-test open the main window; --project or Select
+// Project start a normal session. The scripts that run these are in scripts/ (decode-corpus.py,
+// check-mxf.py, measure-playback.py, structdiff.py, aaf-dump.py, make-checklist.py,
+// ci-screenshots.py); BUILDING.md describes them. Module search paths are in module_paths.cpp and
+// the Windows crash report in crash_report.cpp.
+
 namespace {
 
 // Options that only print and exit; they must work without a display.
@@ -113,6 +124,8 @@ void attachParentConsole() {
 #endif
 }
 
+// --list-providers: each module found (loaded, or why not) and each provider with its category,
+// licence tier and whether it is available here.
 void printProviders(const lumenis::ext::ProviderRegistry& registry,
                     const lumenis::ext::ModuleLoader& loader) {
     std::printf("Modules:\n");
@@ -144,6 +157,8 @@ void printProviders(const lumenis::ext::ProviderRegistry& registry,
 
 } // namespace
 
+// Order matters: the console and crash report first, the Wayland fallback before the
+// QApplication exists (it reads QT_QPA_PLATFORM), the registry before any command-line tool.
 int main(int argc, char** argv) {
     attachParentConsole();
     installCrashReport();
@@ -163,6 +178,7 @@ int main(int argc, char** argv) {
                          lumenis::branding::kExecutableName, qPrintable(why));
         }
     }
+    // A QCoreApplication for the tools that only print, so they run without a display (CI, scripts).
     std::unique_ptr<QCoreApplication> app = headless
         ? std::make_unique<QCoreApplication>(argc, argv)
         : std::make_unique<QApplication>(argc, argv);
@@ -175,6 +191,7 @@ int main(int argc, char** argv) {
         QGuiApplication::setApplicationDisplayName(QString::fromUtf8(lumenis::branding::kProductName));
     }
 
+    // The options. --help and --version are handled (and exit) in parser.process().
     QCommandLineParser parser;
     parser.setApplicationDescription(QString::fromUtf8(lumenis::branding::kDescription));
     parser.addHelpOption();
@@ -279,11 +296,13 @@ int main(int argc, char** argv) {
     lumenis::ext::ModuleLoader loader(registry);
     loader.loadDirectories(lumenis::app::moduleSearchPaths());
 
+    // --list-providers: modules, providers and the FFmpeg version.
     if (parser.isSet(listProviders)) {
         printProviders(registry, loader);
         std::printf("%s\n", qPrintable(lumenis::media::ffmpegVersion()));
         return 0;
     }
+    // --probe <file>: MediaInfo::toJson() on stdout (media::probe(), src/media/media.cpp).
     if (parser.isSet(probeMedia)) {
         QString error;
         const auto info = lumenis::media::probe(parser.value(probeMedia), &error);
@@ -310,6 +329,9 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    // --export-aaf <bin> --to <file>: a .cthbin's items, or an AAF file's imported items (a round trip,
+    // ctest aaf_round_trip), written as AAF by interop::aaf::exportItems() (docs/spec/aaf.md). Warnings
+    // go to stderr; exit status 2 when --to is missing.
     if (parser.isSet(exportAaf)) {
         QString error;
         const QString from = parser.value(exportAaf);
@@ -394,6 +416,8 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(file), qPrintable(error));
             return 1;
         }
+        // The file is linked as a clip at its own rate, then transcoded once per resolution at its own
+        // raster, as Import does (media::transcodeClip(), src/media/managed.cpp).
         const lumenis::media::StreamInfo* video = info->firstVideo();
         lumenis::media::LinkOptions link;
         if (video && video->frameRate.num() > 0) link.editRate = video->frameRate;
@@ -447,6 +471,8 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(parser.value(frameMd5)), qPrintable(error));
             return 1;
         }
+        // Hashes are read in the given (possibly shuffled, with a fixed seed so runs repeat) order but
+        // printed by frame number; a frame that cannot be decoded prints "-" and makes the exit status 2.
         const std::int64_t count = reader.frameCount();
         std::vector<std::int64_t> order(static_cast<std::size_t>(std::max<std::int64_t>(count, 0)));
         std::iota(order.begin(), order.end(), std::int64_t{0});
@@ -464,6 +490,7 @@ int main(int argc, char** argv) {
         return missing == 0 ? 0 : 2;
     }
 
+    // From here on the main window exists: only GUI invocations get this far, so app is a QApplication.
     auto& guiApp = static_cast<QApplication&>(*app);
     lumenis::ui::applyTheme(guiApp);
     // Warnings and errors also go to Tools > Console (p.101).
@@ -565,6 +592,7 @@ int main(int argc, char** argv) {
         lumenis::ui::Composer& composer = window.composer();
         composer.loadDefault(binId, item);
         composer.setActiveMonitor(lumenis::ui::MonitorId::Source);
+        // --seconds: how long to play, at least 1.
         const int seconds = std::max(parser.value(playSeconds).toInt(), 1);
         // Every 20 ms: where the picture is against the sound heard, in
         // frames, after half a second for the output to start.
@@ -669,6 +697,10 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    // --screenshot <dir>: fixed sample projects, bins and sequences in a temporary folder, then a PNG of
+    // each window and tool in a fixed state, saved through ui::capture(). The images are compared across
+    // platforms (ui-consistency in CI, scripts/ci-screenshots.py), so everything shown must be the same
+    // on every machine: fixed sizes, dates and labels, no focus or text cursor.
     if (parser.isSet(screenshot)) {
         // Same content size on every platform: the macOS menu bar lives
         // outside the window, elsewhere it takes window height.
@@ -1016,6 +1048,8 @@ int main(int argc, char** argv) {
         return app->exec();
     }
 
+    // --smoke-test: the main window opens with the product's title, within 30 seconds (CI's installer
+    // checks launch the installed application this way).
     if (parser.isSet(smokeTest)) {
         window.show();
         // Fail rather than hang if the event loop never gets going.
@@ -1044,6 +1078,7 @@ int main(int argc, char** argv) {
     // Site settings (p.1141), and the user chosen in Select Project
     // (p.1138).
     window.settings().setSiteFolder(locations.siteSettings);
+    // Opens a project file in the main window; false (with the reason on stderr) if it cannot be read.
     auto openProjectFile = [&window](const QString& file) {
         QString error;
         const auto projectSettings = lumenis::model::ProjectStore::read(file, &error);
@@ -1056,6 +1091,8 @@ int main(int argc, char** argv) {
         return true;
     };
 
+    // Shows a new Select Project dialog; accepting it opens the chosen project as the chosen user,
+    // anything else quits.
     std::function<void()> showSelectProject = [&] {
         window.hide();
         window.clearProject();
@@ -1071,6 +1108,7 @@ int main(int argc, char** argv) {
     };
     QObject::connect(&window, &lumenis::ui::MainWindow::closeProjectRequested, &guiApp, [&] { showSelectProject(); });
 
+    // --project <file>: straight into the project, as the default user.
     if (parser.isSet(openProject)) {
         window.settings().setUser(locations.users, lumenis::model::UserProfiles::defaultName());
         if (!openProjectFile(parser.value(openProject))) {

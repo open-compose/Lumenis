@@ -6,8 +6,15 @@
 #include <QPluginLoader>
 #include <QSettings>
 
+// Picks the Qt platform on Linux before the QApplication exists (platform_check.h). When a Wayland
+// session lacks part of Qt's Wayland support, the program asks for xcb (XWayland) instead and says what
+// to install, rather than letting Qt print a page of warnings. app/main.cpp calls
+// fallbackPlatformForThisSystem(); the parts are separate functions so tests can give any environment and
+// plugins folder. BUILDING.md has the troubleshooting entry.
+
 namespace lumenis::ui {
 
+// Checks for the files first; loading is tried only when both are there.
 WaylandSupport waylandSupport(const QString& pluginsDir, bool tryLoad) {
     WaylandSupport s;
     // libqwayland-egl/-generic.so up to Qt 6.9, libqwayland.so from 6.10.
@@ -53,6 +60,8 @@ QString fallbackPlatform(const PlatformEnvironment& env, const WaylandSupport& s
     return env.x11 ? QStringLiteral("xcb") : QString();
 }
 
+// qt.conf's [Paths] Prefix is relative to the executable's folder and Plugins to the prefix, with Qt's
+// defaults "." and "plugins". Without a qt.conf, Qt's built-in plugins path.
 QString qtPluginsDir(const QString& executable) {
     const QDir bin = QFileInfo(executable).absoluteDir();
     const QString conf = bin.filePath(QStringLiteral("qt.conf"));
@@ -67,6 +76,8 @@ QString qtPluginsDir(const QString& executable) {
     return QLibraryInfo::path(QLibraryInfo::PluginsPath);
 }
 
+// `bundled` is set when the plugins folder is not Qt's built-in one, i.e. it came from a qt.conf (an
+// AppImage). Other platforms always return empty.
 QString fallbackPlatformForThisSystem(QString* why) {
 #if defined(Q_OS_LINUX)
     PlatformEnvironment env;

@@ -15,10 +15,16 @@
 #include <algorithm>
 #include <functional>
 
+// The Bin Container's tree of bins, folders, Trash and Other Bins for one project
+// (project_bins.h), and its file "<project>.cthbins". The bins themselves are BinFile files
+// (bin.*); this file creates, renames and deletes them on disk as the tree changes. The Bin
+// Container (src/ui/bin_container.*) and the main window edit the tree; ProjectStore::create() makes a new
+// project's first bin here; structure dumps (structure.*) walk it.
 namespace lumenis::model {
 
 namespace {
 
+// The tree file's format tag and the newest version this build reads and writes.
 constexpr int kFileVersion = 1;
 constexpr auto kFileFormat = "cutthulhu-bins";
 
@@ -48,6 +54,8 @@ std::optional<BinNode::Kind> parseKind(const QString& s) {
     return std::nullopt;
 }
 
+// One tree entry as JSON: {id, kind, name} plus {file, external?} for bins or {children} for the
+// containers. nodeFromJson() drops entries with an unknown kind, no id or no name.
 QJsonObject nodeToJson(const BinNode& n) {
     QJsonObject o{{QStringLiteral("id"), n.id},
                   {QStringLiteral("kind"), QLatin1String(kindText(n.kind))},
@@ -78,6 +86,7 @@ std::optional<BinNode> nodeFromJson(const QJsonObject& o) {
     return n;
 }
 
+// Appends the bins in `nodes` depth first, in display order, skipping the Trash unless asked.
 void collectBins(const QList<BinNode>& nodes, bool includeTrash, QList<const BinNode*>& out) {
     for (const BinNode& n : nodes) {
         if (n.kind == BinNode::Kind::Bin) {
@@ -88,6 +97,7 @@ void collectBins(const QList<BinNode>& nodes, bool includeTrash, QList<const Bin
     }
 }
 
+// True if `id` is n itself or anywhere below it.
 bool contains(const BinNode& n, const QString& id) {
     if (n.id == id) return true;
     return std::any_of(n.children.begin(), n.children.end(), [&](const BinNode& c) { return contains(c, id); });
@@ -102,6 +112,8 @@ QString ProjectBins::treeFile() const {
     return QDir(folder_).filePath(projectName_ + suffix());
 }
 
+// A missing tree file is not an error: the tree is then rebuilt from the bin files in the folder.
+// Open bins that no longer exist or are in the Trash are forgotten.
 bool ProjectBins::load(QString* error) {
     roots_.clear();
     openBins.clear();
@@ -134,6 +146,7 @@ bool ProjectBins::load(QString* error) {
 
     // Add bin files the tree does not know about.
     const QDir dir(folder_);
+    // File names are compared case-insensitively, as on Windows and macOS.
     QStringList known;
     for (const BinNode* b : bins(true)) {
         if (!b->external) known << b->file.toLower();
@@ -233,6 +246,7 @@ QString ProjectBins::binForPath(const QString& path) const {
     return {};
 }
 
+// Bins from other projects do not count: they live in other folders.
 bool ProjectBins::binNameTaken(const QString& name, const QString& except) const {
     for (const BinNode* b : bins(true)) {
         if (b->id != except && !b->external && b->name.compare(name, Qt::CaseInsensitive) == 0) return true;
@@ -248,6 +262,7 @@ QString ProjectBins::uniqueBinName(const QString& base, bool numberFirst) const 
     }
 }
 
+// Writes an empty bin with the default columns and puts it first in the tree.
 QString ProjectBins::createInitialBin(QString* error) {
     BinNode n;
     n.id = newId();
@@ -262,6 +277,7 @@ QString ProjectBins::createInitialBin(QString* error) {
     return n.id;
 }
 
+// Writes an empty bin "<project>.N" with the default columns, at the end of `parent`.
 QString ProjectBins::createBin(const QString& parent, QString* error) {
     QList<BinNode>* list = childrenOf(parent);
     if (!list || isInTrash(parent)) {
@@ -300,6 +316,8 @@ QString ProjectBins::createBin(const QString& parent, QString* error) {
     return n.id;
 }
 
+// "Untitled Folder", then "Untitled Folder.1", ... until the name is free among its siblings.
+// Folders may only go in folders or the top level, never in the Trash or Other Bins.
 QString ProjectBins::createFolder(const QString& parent) {
     QList<BinNode>* list = childrenOf(parent);
     const BinNode* p = node(parent);
@@ -322,6 +340,9 @@ QString ProjectBins::createFolder(const QString& parent) {
     return f.id;
 }
 
+// Folders and Other Bins only change their name. A bin is rewritten under its new file name (with
+// the new name inside) and its old file removed; a bin from another project is renamed in its
+// own folder.
 bool ProjectBins::rename(const QString& id, const QString& requested, QString* error) {
     BinNode* n = find(id);
     if (!n) return fail(error, QStringLiteral("no such bin or folder"));
@@ -378,6 +399,8 @@ bool ProjectBins::takeNode(const QString& id, BinNode* out) {
     return take(roots_);
 }
 
+// The Trash and Other Bins stay where they are, and only bins from other projects may go in
+// Other Bins. `index` counts in the destination list after the entry has been taken out.
 bool ProjectBins::move(const QString& id, const QString& parent, int index, QString* error) {
     const BinNode* n = node(id);
     if (!n) return fail(error, QStringLiteral("no such bin or folder"));
@@ -404,6 +427,8 @@ bool ProjectBins::move(const QString& id, const QString& parent, int index, QStr
     return true;
 }
 
+// Nothing is deleted from disk here: bins and folders move into the Trash (made on first use),
+// and their bins are closed. emptyTrash() deletes the files.
 bool ProjectBins::remove(const QString& id, QString* error) {
     const BinNode* n = node(id);
     if (!n) return fail(error, QStringLiteral("no such bin or folder"));
@@ -453,6 +478,7 @@ bool ProjectBins::remove(const QString& id, QString* error) {
     return true;
 }
 
+// Stops at the first file that cannot be deleted, leaving the Trash in the tree.
 bool ProjectBins::emptyTrash(QString* error) {
     const BinNode* t = trash();
     if (!t) return true;
@@ -468,6 +494,8 @@ bool ProjectBins::emptyTrash(QString* error) {
     return true;
 }
 
+// The file must be a readable bin. A bin already in the tree (by path) returns its existing id.
+// Other Bins is made on first use, just before the Trash (which is assumed to be the last entry).
 QString ProjectBins::addOtherBin(const QString& path, QString* error) {
     const QFileInfo info(path);
     if (!info.isFile()) {

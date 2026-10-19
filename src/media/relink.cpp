@@ -10,10 +10,18 @@
 
 #include <algorithm>
 
+// Clip > Relink > Managed Media (Editing Guide p.361-364; ROADMAP Phase 2.4b). Master clips are
+// matched against the media database (MediaDatabase, managed.cpp) by name and the timecode range
+// their material covers; sequences' segments are moved to master clips in the open bins that hold
+// the same material. Nothing here changes the bins: the results go back to the caller,
+// src/ui/main_window.cpp, which stores them; the dialog is ManagedRelinkDialog in
+// src/ui/relink_dialog.cpp. Relink > Linked Media is in link.cpp.
+
 namespace lumenis::media {
 
 namespace {
 
+// A timecode (drop-frame ';' read as ':') as frames at the rate; 0 if empty or unreadable.
 std::int64_t framesOf(const QString& timecode, const Rational& rate) {
     if (timecode.isEmpty()) return 0;
     QString plain = timecode;
@@ -22,6 +30,7 @@ std::int64_t framesOf(const QString& timecode, const Rational& rate) {
     return tc ? tc->frameCount() : 0;
 }
 
+// Master clips and audio clips: the items relinked to media themselves.
 bool isMaster(const model::BinItem& item) {
     return item.kind == model::BinItemKind::MasterClip || item.kind == model::BinItemKind::AudioClip;
 }
@@ -42,6 +51,8 @@ std::pair<bool, int> tracksOf(const model::BinItem& clip) {
     return {video, audio};
 }
 
+// Whether a file is in the Avid MediaFiles folder of one of the drives; any drive when none are
+// chosen (All Available Drives).
 bool onDrives(const QString& path, const QStringList& drives) {
     if (drives.isEmpty()) return true;
     const QString file = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
@@ -77,6 +88,8 @@ bool better(int a, int b, const RelinkOptions& o) {
     return false;
 }
 
+// Whether `outer`'s timecode range holds all of `inner`'s. Different rates fail unless
+// acrossRates is set; then the frame counts are compared as they are, without conversion.
 bool covers(const Material& outer, const Material& inner, const RelinkOptions& o) {
     if (!(outer.rate == inner.rate) && !o.acrossRates) return false;
     return outer.start <= inner.start && outer.start + outer.frames >= inner.start + inner.frames;
@@ -84,6 +97,7 @@ bool covers(const Material& outer, const Material& inner, const RelinkOptions& o
 
 } // namespace
 
+// Tape, else Source File, else the clip's name (with Relink by Name, the name only).
 Material materialOf(const model::BinItem& clip, RelinkOptions::By by) {
     Material m;
     if (by == RelinkOptions::By::SourceName) {
@@ -97,6 +111,7 @@ Material materialOf(const model::BinItem& clip, RelinkOptions::By by) {
     return m;
 }
 
+// The same for a media file: its tape, else its source, else its clip name.
 Material materialOf(const MediaFileInfo& file, RelinkOptions::By by) {
     Material m;
     if (by == RelinkOptions::By::SourceName) m.name = file.tape.isEmpty() ? file.source : file.tape;
@@ -107,6 +122,8 @@ Material materialOf(const MediaFileInfo& file, RelinkOptions::By by) {
     return m;
 }
 
+// Ignore extension drops the text from the last '.'; Ignore characters after drops the text from the
+// last occurrence of that string.
 bool sameName(const QString& a, const QString& b, const RelinkOptions& options) {
     auto clean = [&](QString s) {
         if (options.ignoreExtension) {
@@ -133,6 +150,9 @@ int qualityOf(const QString& resolution) {
     return -1;
 }
 
+// Goes through every media set in the database, keeps those on the chosen drives (and project) with
+// the clip's tracks, its name and its whole range, and takes the best by the relink method. The link
+// starts at the clip's first frame within the set and keeps only the clip's tracks.
 std::optional<Link> findMedia(const model::BinItem& clip, const MediaDatabase& db, const RelinkOptions& options) {
     const Material want = materialOf(clip, options.by);
     const auto [video, audio] = tracksOf(clip);
@@ -169,6 +189,9 @@ std::optional<Link> findMedia(const model::BinItem& clip, const MediaDatabase& d
     return link;
 }
 
+// Master clips get a new link (or, with no match and unlinkWithoutMatch, are unlinked); sequences
+// get their segments pointed at the best candidate clip and come back as changed items or as new
+// ".relinked" ones. Items with any segment left unmatched are named in notRelinked.
 RelinkResult relinkManaged(const QList<model::BinItem>& selection, const MediaDatabase& db,
                            const QList<BinClip>& candidates, const ClipLookup& lookup, const RelinkOptions& options,
                            const QStringList& taken) {
@@ -216,6 +239,7 @@ RelinkResult relinkManaged(const QList<model::BinItem>& selection, const MediaDa
                     missed = true;
                     continue;
                 }
+                // The material the segment uses: its clip's, from the segment's source in, for its length.
                 Material used = materialOf(*clip, options.by);
                 used.start += s.sourceIn;
                 used.frames = s.length;

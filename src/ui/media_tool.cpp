@@ -22,9 +22,16 @@
 
 #include <algorithm>
 
+// The Media Tool (Editing Guide p.344-348): its Display dialog, the tool itself, and the Delete Media
+// dialog (media_tool.h). MainWindow (main_window.cpp) supplies the project's items and the media
+// database's files (src/media/managed.*) and does the deleting; this file only shows them and asks
+// which files go.
+
 namespace lumenis::ui {
 
 // ---------------------------------------------------------------- MediaToolDisplayDialog
+
+// The drives and projects side by side, each with its buttons, then the kinds of object to show.
 
 MediaToolDisplayDialog::MediaToolDisplayDialog(const QString& currentProject,
                                                const QList<QPair<QString, QString>>& drives,
@@ -118,6 +125,7 @@ QCheckBox* MediaToolDisplayDialog::option(const QString& objectName) const {
 
 // ---------------------------------------------------------------- MediaTool
 
+// A sortable, read-only table with whole rows selected.
 MediaTool::MediaTool(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("mediaTool"));
     table_ = new QTableWidget(this);
@@ -144,12 +152,15 @@ namespace {
 
 constexpr int kFilesRole = Qt::UserRole + 1; // "track\npath" for each file
 
+// The name of the volume holding `path` (its root if it has no name); empty if there is none.
 QString driveName(const QString& path) {
     const QStorageInfo volume(path);
     if (!volume.isValid()) return {};
     return volume.displayName().isEmpty() ? volume.rootPath() : volume.displayName();
 }
 
+// Whether `path` is inside the Avid MediaFiles folder of one of `drives` (roots); any path is when
+// `drives` is empty.
 bool onDrives(const QString& path, const QStringList& drives) {
     if (drives.isEmpty()) return true;
     const QString file = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
@@ -161,6 +172,9 @@ bool onDrives(const QString& path, const QStringList& drives) {
 
 } // namespace
 
+// Refills the table: a row per master clip shown by the options, then, with Media Files on, a row per
+// file in `files`. Each row keeps the media files it stands for (kFilesRole), which deleteSelected()
+// offers. Sorting is off while rows are added, so rows do not move under insertRow().
 void MediaTool::setItems(const QList<model::BinItem>& items, const MediaToolDisplay& display,
                          const QList<media::MediaFileInfo>& files) {
     display_ = display;
@@ -185,6 +199,7 @@ void MediaTool::setItems(const QList<model::BinItem>& items, const MediaToolDisp
         return QString::fromStdString(
             Timecode(std::max<std::int64_t>(frames, 0), TimecodeFormat::forRate(rate, false)).toString());
     };
+    // Only managed clips are filtered by drive; linked clips are always shown when wanted.
     for (const model::BinItem& item : items) {
         // Master clips (p.345); no sequences or subclips.
         const bool master = item.kind == model::BinItemKind::MasterClip || item.kind == model::BinItemKind::AudioClip;
@@ -206,6 +221,8 @@ void MediaTool::setItems(const QList<model::BinItem>& items, const MediaToolDisp
                item.fields.value(QStringLiteral("Drive")), item.fields.value(QStringLiteral("IN-OUT")), item.created,
                media);
     }
+    // The media files, of the current project unless all projects are shown. Files with no project
+    // recorded are always shown.
     if (display.mediaFiles) {
         for (const media::MediaFileInfo& f : files) {
             if (!onDrives(f.path, display.drives)) continue;
@@ -223,6 +240,7 @@ QStringList MediaTool::names() const {
     return out;
 }
 
+// MultiSelection lets selectRow() add to the selection rather than replace it.
 void MediaTool::selectNames(const QStringList& names) {
     table_->clearSelection();
     table_->setSelectionMode(QAbstractItemView::MultiSelection);
@@ -232,6 +250,8 @@ void MediaTool::selectNames(const QStringList& names) {
     table_->setSelectionMode(QAbstractItemView::ExtendedSelection);
 }
 
+// Gathers the selected rows' files by track, asks which tracks (Delete Media dialog), confirms, then
+// hands the paths to `deleter`. The hooks stand in for the dialogs in tests.
 bool MediaTool::deleteSelected() {
     // The selected rows' media files, by track (p.347).
     QHash<QString, QStringList> byTrack;

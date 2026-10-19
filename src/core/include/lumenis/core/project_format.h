@@ -13,12 +13,16 @@ namespace lumenis {
 // the "Project Formats and Resolutions" tables of the Media Composer
 // Editing Guide 2025.12 (ch. 35, p.1241-1275); docs/spec/ui-inventory.md.
 
+// SD (NTSC, PAL), HD (720 and 1080 lines) and the formats greater than HD (UHD, 2K, 4K, 8K, 16K).
 enum class FormatFamily { SD, HD, HighRes };
+// Progressive or interlaced scanning; labels show it as the "p" or "i" after the lines or rate.
 enum class ScanMode { Progressive, Interlaced };
 
+// One raster, frame rate and scan mode a project can be created in.
 struct ProjectFormat {
     std::string group;  // as listed in the guide: "HD 1080p", "UHD", "2K DCI Flat", ...
     FormatFamily family = FormatFamily::HD;
+    // Raster size in pixels.
     int width = 1920;
     int height = 1080;
     Rational editRate{24};  // frames per second (interlaced: frames, not fields)
@@ -64,6 +68,7 @@ std::optional<std::string> validateCustomRaster(int width, int height, bool ster
 // in the UTF-8 input.
 inline constexpr int kMaxProjectNameLength = 56;
 inline constexpr int kMaxBinNameLength = 64;
+// maxLength is kMaxProjectNameLength or kMaxBinNameLength. The reason is English text for the UI.
 std::optional<std::string> validateName(std::string_view utf8Name, int maxLength);
 
 } // namespace lumenis

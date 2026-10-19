@@ -13,6 +13,12 @@
 
 #include <algorithm>
 
+// Bins (bin.h): the bin item model, the bin file format (".cthbin", JSON), and the bin logic
+// that does not need widgets: the headings table, cell text, sorting, sifting, timecode entry,
+// clip colours and naming of new sequences, subclips and duplicates. The bin views and dialogs
+// (src/ui/bin_view.*, bin_dialogs.*, bin_container.*) show and edit bins; sequences keep their
+// tracks in BinItem::composition (sequence.*); AAF import and export (src/interop/aaf_*) convert
+// to and from these items. docs/spec/native-model.md explains MobIDs and source chains.
 namespace lumenis::model {
 
 namespace {
@@ -22,11 +28,13 @@ namespace {
 constexpr int kFileVersion = 2;
 constexpr auto kFileFormat = "cutthulhu-bin";
 
+// Sets *error (if wanted) and returns false, for one-line failure returns.
 bool fail(QString* error, const QString& message) {
     if (error) *error = message;
     return false;
 }
 
+// The kind names used in bin files.
 const std::pair<BinItemKind, const char*> kKinds[] = {
     {BinItemKind::MasterClip, "masterClip"},
     {BinItemKind::Subclip, "subclip"},
@@ -44,6 +52,7 @@ QString rateText(const Rational& r) {
     return QString::fromStdString(r.toString());
 }
 
+// "num/den" or a whole number; anything unreadable or not positive falls back to 23.976.
 Rational parseRate(const QString& text) {
     const QStringList parts = text.split(QLatin1Char('/'));
     bool okNum = false;
@@ -64,6 +73,8 @@ const char* sourceKindText(ClipSource::Kind kind) {
     return "file";
 }
 
+// A source as {kind, mob} plus only the members that are set. sourceFromJson() drops sources with
+// an unknown kind or an unreadable MobID.
 QJsonObject sourceToJson(const ClipSource& s) {
     QJsonObject o{{QStringLiteral("kind"), QString::fromLatin1(sourceKindText(s.kind))},
                   {QStringLiteral("mob"), QString::fromStdString(s.mob.toString())}};
@@ -98,6 +109,8 @@ std::optional<ClipSource> sourceFromJson(const QJsonObject& o) {
     return s;
 }
 
+// An item's JSON. "mobId" is always written (derived when the item has none of its own); the
+// optional members are left out when empty.
 QJsonObject itemToJson(const BinItem& item) {
     QJsonObject fields;
     for (auto it = item.fields.cbegin(); it != item.fields.cend(); ++it) fields.insert(it.key(), it.value());
@@ -187,6 +200,7 @@ const char* snapName(SnapToGrid s) {
     return "disable";
 }
 
+// Unknown names read as Disable.
 SnapToGrid snapFromName(const QString& name) {
     for (SnapToGrid s : {SnapToGrid::Temporary, SnapToGrid::Enable, SnapToGrid::Invisible}) {
         if (name == QLatin1String(snapName(s))) return s;
@@ -215,6 +229,7 @@ QString dateText(const QDateTime& when) {
 }
 
 // Natural order: runs of digits compare as numbers, the rest ignoring case.
+// Returns -1, 0 or 1.
 int naturalCompare(const QString& a, const QString& b) {
     qsizetype i = 0;
     qsizetype j = 0;
@@ -258,6 +273,7 @@ struct Hsv {
     double v = 0;
 };
 
+// Anything that is not "#rrggbb" reads as black (no hue).
 Hsv hsvOf(const QString& hex) {
     bool ok = false;
     const uint rgb = QStringView(hex).mid(1).toUInt(&ok, 16);
@@ -279,10 +295,14 @@ Hsv hsvOf(const QString& hex) {
     return out;
 }
 
+// -1, 0 or 1 from operator<.
 template <typename T> int threeWay(const T& a, const T& b) {
     return a < b ? -1 : (b < a ? 1 : 0);
 }
 
+// A row whose column is a timecode range (siftRanges()): the typed timecode must fall between the
+// range's start and end columns, both inclusive, at the item's edit rate. An open range ends on
+// the item's last frame.
 bool rangeMatches(const BinItem& item, const SiftRow& row) {
     for (const SiftRange& r : siftRanges()) {
         if (r.name != row.column) continue;
@@ -303,6 +323,8 @@ bool rangeMatches(const BinItem& item, const SiftRow& row) {
     return false;
 }
 
+// One row: the text is found (ignoring case) in the row's column, or in any of `columns` when the
+// row's column is empty ("Any").
 bool rowMatches(const BinItem& item, const SiftRow& row, const QStringList& columns) {
     if (row.column.endsWith(QLatin1String(" Range"))) return rangeMatches(item, row);
     const QStringList searched = row.column.isEmpty() ? columns : QStringList{row.column};
@@ -470,6 +492,7 @@ QString cellText(const BinItem& item, const QString& h) {
     return item.fields.value(h);
 }
 
+// Returns -1, 0 or 1.
 int compareCells(const BinItem& a, const BinItem& b, const QString& h) {
     if (h == QLatin1String("Duration")) return threeWay(a.durationFrames, b.durationFrames);
     if (h == QLatin1String("Creation Date")) return threeWay(a.created, b.created);
@@ -498,6 +521,8 @@ void sortItems(Bin& bin, const QList<BinSortKey>& keys) {
     });
 }
 
+// Sift Selected Items wins over criteria. Otherwise an item stays when it meets all rows of either
+// group.
 bool siftMatches(const BinItem& item, const BinSift& sift, const QStringList& columns) {
     if (!sift.ids.isEmpty()) return sift.ids.contains(item.id);
     return groupMatches(item, sift.find, columns) || groupMatches(item, sift.also, columns);
@@ -528,6 +553,8 @@ QStringList siftRangesFor(const QStringList& columns) {
     return out;
 }
 
+// Separators are ignored and the digits right-aligned as HHMMSSFF; a ';' anywhere makes it
+// drop-frame (where the rate allows). Hours are not limited to 23.
 std::optional<std::int64_t> timecodeFrames(const QString& text, const Rational& editRate) {
     // "you do not need to enter colons or semicolons, and you can omit the
     // leading zero" (p.290).
@@ -588,6 +615,7 @@ const QList<ClipColor>& clipColors() {
     return colors;
 }
 
+// Clip colours are stored as hex, so a colour picked outside the palette has no name of its own.
 QString clipColorName(const QString& hex) {
     if (hex.isEmpty()) return {};
     for (const ClipColor& c : clipColors()) {
@@ -596,6 +624,8 @@ QString clipColorName(const QString& hex) {
     return hex;
 }
 
+// Missing display members keep their defaults; "columns" missing (not merely empty) gives the
+// default columns, and "hiddenKinds" missing gives the default hidden kinds.
 std::optional<Bin> BinFile::read(const QString& path, QString* error) {
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly)) {
@@ -741,6 +771,8 @@ MobId derivedMobId(const QString& itemId) {
     return MobId::withMaterial(material);
 }
 
+// The new sequence has no tracks (an empty composition) and duration 0; Start is stored as
+// non-drop-frame timecode text.
 BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& when, const QString& start) {
     const QString base = QStringLiteral("Untitled Sequence");
     BinItem s;
@@ -757,6 +789,8 @@ BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& w
     return s;
 }
 
+// in and out are clamped to the master; the subclip copies its fields, colour and link. End is
+// written as the frame after the last one (Start + duration).
 std::optional<BinItem> subclipItem(const Bin& bin, const BinItem& master, std::int64_t in, std::int64_t out,
                                    const QDateTime& when) {
     in = std::clamp<std::int64_t>(in, 0, master.durationFrames);
@@ -791,6 +825,7 @@ std::optional<BinItem> subclipItem(const Bin& bin, const BinItem& master, std::i
     return s;
 }
 
+// The copy keeps everything else, including sources, markers and composition, but is unlocked.
 BinItem duplicateItem(const Bin& bin, const BinItem& original, const QDateTime& when) {
     BinItem copy = original;
     copy.id = newItemId();
@@ -803,6 +838,7 @@ BinItem duplicateItem(const Bin& bin, const BinItem& original, const QDateTime& 
     return copy;
 }
 
+// Non-drop-frame fields at the rate; negative frame counts show as 0:00.
 QString durationText(std::int64_t frames, const Rational& editRate) {
     const TimecodeFormat format = TimecodeFormat::forRate(editRate, false);
     const TimecodeFields f = Timecode(std::max<std::int64_t>(frames, 0), format).fields();

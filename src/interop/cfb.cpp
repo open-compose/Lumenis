@@ -7,6 +7,12 @@
 #include <cstring>
 #include <functional>
 
+// The compound file container (docs/spec/aaf.md, "The compound file"). cfb::Reader opens an existing
+// file: it reads the header, the FAT, the mini FAT and the directory, checks the directory tree, and then
+// reads streams on demand. cfb::Writer lays a tree of storages and streams out as a new file in one go.
+// Every number in the format is little-endian. The AAF layer (aaf.cpp, aaf_writer.cpp) keeps its objects
+// in these storages and streams. The reference implementation is pyaaf2's cfb.py;
+// tests/interop/tst_cfb.cpp checks both halves, on files with every edge, damaged files and the corpus.
 namespace lumenis::interop::cfb {
 
 namespace {
@@ -19,6 +25,9 @@ constexpr std::uint32_t kEndOfChain = 0xFFFFFFFE;
 constexpr std::uint32_t kFreeSect = 0xFFFFFFFF;
 constexpr std::uint32_t kNoStream = 0xFFFFFFFF;
 
+// The header's signature, and fixed sizes: the header, a directory entry, the DIFAT entries the header
+// holds, a mini sector, the mini stream cutoff (streams smaller than this live in the mini stream) and
+// the longest name in UTF-16 code units, without its terminating 0.
 constexpr std::array<std::uint8_t, 8> kSignature{0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1};
 constexpr int kHeaderSize = 512;
 constexpr int kEntrySize = 128;
@@ -27,6 +36,7 @@ constexpr std::uint32_t kMiniSector = 64;
 constexpr std::uint32_t kMiniCutoff = 4096;
 constexpr int kMaxName = 31;
 
+// Little-endian reads and writes.
 std::uint16_t u16(const char* p) { return qFromLittleEndian<quint16>(p); }
 std::uint32_t u32(const char* p) { return qFromLittleEndian<quint32>(p); }
 std::uint64_t u64(const char* p) { return qFromLittleEndian<quint64>(p); }
@@ -35,6 +45,7 @@ void put16(QByteArray& b, qsizetype at, std::uint16_t v) { qToLittleEndian<quint
 void put32(QByteArray& b, qsizetype at, std::uint32_t v) { qToLittleEndian<quint32>(v, b.data() + at); }
 void put64(QByteArray& b, qsizetype at, std::uint64_t v) { qToLittleEndian<quint64>(v, b.data() + at); }
 
+// Whether a sector number names a sector rather than one of the special values above.
 bool isRegular(std::uint32_t sector) { return sector <= kMaxRegular; }
 
 } // namespace
@@ -61,6 +72,7 @@ bool isValidName(const QString& name) {
 
 // ---- Reader -----------------------------------------------------------------
 
+// Sets `error`, closes the file and returns false, so a failed open leaves nothing half read.
 bool Reader::fail(QString* error, const QString& message) {
     if (error) *error = QStringLiteral("%1: %2").arg(file_.fileName(), message);
     close();
@@ -89,6 +101,12 @@ bool Reader::open(const QString& path, QString* error) {
     return readHeader(error) && readFat(error) && readMiniFat(error) && readDirectory(error) && checkTree(error);
 }
 
+// The 512-byte header ([MS-CFB] 2.2): the signature at 0, the class ID at 8, the major version at 26, the
+// byte order mark 0xFFFE at 28, the sector shift at 30 (9: 512 bytes, 12: 4096), the mini sector shift at
+// 32 (6: 64 bytes), the number of FAT sectors at 44, the directory's first sector at 48, the mini stream
+// cutoff at 56, the mini FAT's first sector and sector count at 60 and 64, the first DIFAT sector and the
+// DIFAT sector count at 68 and 72, and the first 109 DIFAT entries from 76. Only version 3 with 512-byte
+// sectors and version 4 with 4096-byte sectors are taken.
 bool Reader::readHeader(QString* error) {
     const QByteArray h = file_.read(kHeaderSize);
     if (h.size() < kHeaderSize) return fail(error, QStringLiteral("too short for a compound file"));
@@ -117,6 +135,8 @@ bool Reader::readHeader(QString* error) {
     return true;
 }
 
+// One sector into `data`, which has room for one. Sector n starts at byte (n + 1) × the sector size: the
+// first sector's worth of the file is the header.
 bool Reader::readSector(std::uint32_t sector, char* data, QString* error) {
     const std::uint64_t at = (static_cast<std::uint64_t>(sector) + 1) * sectorSize_;
     if (!isRegular(sector) || at >= fileSize_) {
@@ -157,6 +177,7 @@ bool Reader::chain(const std::vector<std::uint32_t>& table, std::uint32_t start,
     return true;
 }
 
+// The sectors' contents one after another; fails at the first that cannot be read.
 bool Reader::readChain(const std::vector<std::uint32_t>& sectors, QByteArray& out, QString* error) {
     out.resize(static_cast<qsizetype>(sectors.size() * sectorSize_));
     for (std::size_t i = 0; i < sectors.size(); ++i) {
@@ -165,6 +186,10 @@ bool Reader::readChain(const std::vector<std::uint32_t>& sectors, QByteArray& ou
     return true;
 }
 
+// The FAT. Its sectors are listed in the header's 109 DIFAT entries, then in DIFAT sectors: each holds
+// one sector number fewer than it can, and its last entry names the next DIFAT sector. Each FAT sector
+// holds sectorSize / 4 entries, and entry n is the sector after sector n in its chain (or ENDOFCHAIN,
+// FREESECT, FATSECT or DIFSECT).
 bool Reader::readFat(QString* error) {
     const std::uint64_t sectorsInFile = fileSize_ / sectorSize_; // header included: an upper bound
     if (fatCount_ > sectorsInFile) return fail(error, QStringLiteral("more FAT sectors than the file holds"));
@@ -175,6 +200,7 @@ bool Reader::readFat(QString* error) {
     const std::uint32_t perSector = sectorSize_ / 4;
     std::uint32_t d = difatStart_;
     QByteArray buffer(static_cast<qsizetype>(sectorSize_), Qt::Uninitialized);
+    // `n` is bounded by the file's sector count too, so a DIFAT chain that loops ends.
     for (std::uint32_t n = 0; n < difatCount_ && fatSectors.size() < fatCount_; ++n) {
         if (n > sectorsInFile || !readSector(d, buffer.data(), error)) {
             return fail(error, QStringLiteral("the DIFAT is broken"));
@@ -194,6 +220,8 @@ bool Reader::readFat(QString* error) {
     return true;
 }
 
+// The mini FAT: a chain of regular sectors from the header's mini FAT start, read whole. Entry n is the
+// mini sector after mini sector n in its chain.
 bool Reader::readMiniFat(QString* error) {
     std::vector<std::uint32_t> sectors;
     QString why;
@@ -205,6 +233,12 @@ bool Reader::readMiniFat(QString* error) {
     return true;
 }
 
+// The directory: a chain of 128-byte entries ([MS-CFB] 2.6.1). Each holds the name (UTF-16, up to 32 code
+// units with its terminating 0) at 0, the name's length in bytes, the 0 included, at 64, the type at 66,
+// the colour at 67 (not read: the tree is checked as a tree, not as a red-black one), the left sibling,
+// right sibling and child at 68, 72 and 76, the class ID at 80, the state bits at 96, the creation and
+// modification times at 100 and 108, the first sector at 116 and the size at 120. Entries of an unknown
+// type read as empty.
 bool Reader::readDirectory(QString* error) {
     std::vector<std::uint32_t> sectors;
     QString why;
@@ -235,6 +269,7 @@ bool Reader::readDirectory(QString* error) {
         e.size = u64(p + 120);
         // Version 3 files may hold anything in the size's high half ([MS-CFB] 2.6.1).
         if (major_ == 3) e.size &= 0xFFFFFFFFu;
+        // Storages have no size; the root's is the mini stream's.
         if (!e.isStream()) {
             if (e.type != EntryType::Root) e.size = 0;
         }
@@ -253,6 +288,11 @@ bool Reader::readDirectory(QString* error) {
     return true;
 }
 
+// Builds parent_ and kids_ from the directory. Each storage's `child` is the root of a binary tree of its
+// children, linked by `left` and `right`; an in-order walk (with an explicit stack) gives them in
+// directory order. Every entry may be reached once only, so a tree that loops or shares an entry, or that
+// names an empty entry, the root or an index past the directory, is an error rather than a hang or a
+// crash.
 bool Reader::checkTree(QString* error) {
     const std::size_t n = entries_.size();
     parent_.assign(n, -1);
@@ -293,6 +333,7 @@ QList<int> Reader::children(int storage) const {
     return kids_[static_cast<std::size_t>(storage)];
 }
 
+// A linear search of the storage's children; compareNames ignores case, as the tree's order does.
 int Reader::child(int storage, const QString& name) const {
     for (const int id : children(storage)) {
         if (compareNames(entries_[static_cast<std::size_t>(id)].name, name) == 0) return id;
@@ -334,6 +375,8 @@ bool Reader::isMini(int stream) const {
     return stream != root() && entries_[static_cast<std::size_t>(stream)].size < miniCutoff_;
 }
 
+// Only as many sectors as the size needs are kept, but chain() follows the chain to its end, so a loop
+// past the size is still found.
 const std::vector<std::uint32_t>* Reader::streamChain(int stream, QString* error) {
     auto it = chains_.find(stream);
     if (it != chains_.end()) return &it.value();
@@ -352,6 +395,10 @@ const std::vector<std::uint32_t>* Reader::streamChain(int stream, QString* error
     return &chains_.insert(stream, std::move(sectors)).value();
 }
 
+// Reads in pieces. A small stream's mini sectors each lie at their place in the mini stream, itself a
+// chain of regular sectors, so they are read one at a time. A large stream is read a run of consecutive
+// sectors at a time, so that a stream laid out in one run (as the writer lays them out) is read with one
+// seek.
 QByteArray Reader::read(int stream, std::uint64_t offset, std::uint64_t length, QString* error) {
     if (stream < 0 || static_cast<std::size_t>(stream) >= entries_.size() || !entries_[static_cast<std::size_t>(stream)].isStream()) {
         if (error) *error = QStringLiteral("%1: no such stream").arg(file_.fileName());
@@ -374,6 +421,8 @@ QByteArray Reader::read(int stream, std::uint64_t offset, std::uint64_t length, 
         std::uint64_t at = 0;    // byte offset in the file
         std::uint64_t count = 0; // bytes that lie together there
         if (mini) {
+            // The mini sector's offset in the mini stream, then the regular sector of the mini stream
+            // that holds it.
             const std::uint64_t inMini = static_cast<std::uint64_t>((*sectors)[index]) * kMiniSector + inner;
             const std::uint64_t regular = inMini / sectorSize_;
             if (regular >= miniStream_.size()) {
@@ -402,6 +451,7 @@ QByteArray Reader::read(int stream, std::uint64_t offset, std::uint64_t length, 
 
 // ---- Writer -----------------------------------------------------------------
 
+// Node 0 is the root storage, "Root Entry". A sector size other than 512 is taken as 4096.
 Writer::Writer(int sectorSize) : sectorSize_(sectorSize == 512 ? 512u : 4096u) {
     Node rootNode;
     rootNode.entry.name = QStringLiteral("Root Entry");
@@ -427,6 +477,7 @@ void Writer::setStateBits(int id, std::uint32_t bits) {
     if (n.entry.isStorage()) n.entry.stateBits = bits;
 }
 
+// Adds a child node; the name must be valid and not taken by a sibling (case does not matter).
 int Writer::add(int parent, const QString& name, EntryType type, QString* error) {
     if (parent < 0 || static_cast<std::size_t>(parent) >= nodes_.size() ||
         !nodes_[static_cast<std::size_t>(parent)].entry.isStorage()) {
@@ -470,6 +521,11 @@ void Writer::setData(int stream, const QByteArray& data) {
     n.entry.size = static_cast<std::uint64_t>(data.size());
 }
 
+// Lays the whole file out in memory. `out` starts with one sector's room for the header (512 bytes of it
+// used; with 4096-byte sectors the rest is padding), so that sector n lands at byte (n + 1) × ss, and
+// `fat` gets one entry for each sector appended. The order is: streams of 4096 bytes or more, the mini
+// stream (the root's chain), the mini FAT, the directory, then the FAT and the DIFAT; the header is
+// filled in last, when every count and first sector is known.
 QByteArray Writer::toBytes(QString* error) const {
     const std::uint32_t ss = sectorSize_;
     const std::uint32_t perSector = ss / 4;
@@ -479,6 +535,8 @@ QByteArray Writer::toBytes(QString* error) const {
     std::vector<std::uint32_t> fat;
     QByteArray out(static_cast<qsizetype>(ss), '\0'); // the header, filled in last
 
+    // The next sector's number, its FAT entry ENDOFCHAIN until a chain links it on. The range lock sector
+    // is skipped: left zeroed, marked ENDOFCHAIN, and part of no chain.
     auto nextSector = [&]() {
         auto s = static_cast<std::uint32_t>(fat.size());
         if (s == rangeLock) {
@@ -538,6 +596,7 @@ QByteArray Writer::toBytes(QString* error) const {
     }
     entries[0].start = writeChain(mini);
     entries[0].size = static_cast<std::uint64_t>(mini.size());
+    // The mini FAT, padded to whole sectors with FREESECT.
     QByteArray miniFatBytes;
     if (!miniFat.empty()) {
         const std::size_t padded = (miniFat.size() + perSector - 1) / perSector * perSector;
@@ -567,6 +626,9 @@ QByteArray Writer::toBytes(QString* error) const {
         });
         entries[i].child = build(sorted, 0, sorted.size() - 1);
     }
+    // The directory's entries in node order, so that node i is entry i, padded to whole sectors with
+    // empty entries (no siblings, no child). The layout is the one readDirectory reads; every node is
+    // black (colour 1), and storages other than the root have no first sector or size.
     const std::size_t perDirSector = ss / kEntrySize;
     const std::size_t dirEntries = (entries.size() + perDirSector - 1) / perDirSector * perDirSector;
     QByteArray dir(static_cast<qsizetype>(dirEntries * kEntrySize), '\0');
@@ -597,6 +659,10 @@ QByteArray Writer::toBytes(QString* error) const {
     const auto dirCount = static_cast<std::uint32_t>(dir.size() / ss);
 
     // The FAT and DIFAT come last; they must cover themselves.
+    // The FAT's and the DIFAT's own sectors need FAT entries too, so their counts are found by growing
+    // them until they cover everything, themselves included. When the file grows past the range lock
+    // sector, it takes one entry more. DIFAT sectors are needed past the header's 109 FAT sector numbers,
+    // each holding perSector - 1 of them.
     std::uint32_t fatCount = 0;
     std::uint32_t difatCount = 0;
     for (;;) {
@@ -626,6 +692,8 @@ QByteArray Writer::toBytes(QString* error) const {
         put32(fatBytes, static_cast<qsizetype>(4 * i), i < fat.size() ? fat[i] : kFreeSect);
     }
     out.append(fatBytes);
+    // DIFAT sectors: the FAT sector numbers from the 110th on, then the next DIFAT sector (ENDOFCHAIN in
+    // the last one).
     for (std::uint32_t d = 0; d < difatCount; ++d) {
         QByteArray sector(static_cast<qsizetype>(ss), '\0');
         for (std::uint32_t k = 0; k + 1 < perSector; ++k) {
@@ -640,6 +708,9 @@ QByteArray Writer::toBytes(QString* error) const {
     QByteArray& h = out;
     std::memcpy(h.data(), kSignature.data(), kSignature.size());
     std::memcpy(h.data() + 8, headerClsid_.data(), headerClsid_.size());
+    // The minor version (0x3E) at 24, the version and the sector shift, the mini sector shift at 32, and
+    // the number of directory sectors at 40, which version 3 files leave 0. The transaction signature at
+    // 52 is 0. The other fields are as readHeader reads them.
     put16(h, 24, 0x003E);
     put16(h, 26, ss == 512 ? 3 : 4);
     put16(h, 28, 0xFFFE);
@@ -661,6 +732,7 @@ QByteArray Writer::toBytes(QString* error) const {
     return out;
 }
 
+// Writes atomically: the file is replaced only when every byte is written.
 bool Writer::save(const QString& path, QString* error) const {
     const QByteArray bytes = toBytes(error);
     if (bytes.isEmpty()) return false;

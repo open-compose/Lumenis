@@ -21,29 +21,41 @@ class MappableButton;
 //   Tool palette or the Composer;
 // * Active Palette: clicking a palette button runs its command;
 // * Menu to Button: click a target button, then choose a menu command.
+// One application-wide instance; the Command Palette sets its mode and every
+// MappableButton consults it on click and paint.
 class ButtonMapper : public QObject {
     Q_OBJECT
 
 public:
     enum class Mode { ButtonToButton, Active, MenuToButton };
 
+    // The application-wide mapper.
     static ButtonMapper& instance();
+    // The drag MIME type that carries a command id (UTF-8).
     static QString mimeType() { return QStringLiteral("application/x-cutthulhu-command"); }
-    // The drag data for a command ("" is the Blank button, p.97).
+    // The drag data for a command ("" is the Blank button, p.97). The caller
+    // owns the result (normally it passes it to QDrag).
     static QMimeData* mimeFor(const QString& commandId);
 
     Mode mode() const { return mode_; }
+    // Changes the mode, clears any Menu to Button target and emits
+    // modeChanged; does nothing if the mode is unchanged.
     void setMode(Mode mode);
 
     // Commands' texts, for initials and tooltips.
     void setRegistry(CommandRegistry* registry);
     CommandRegistry* registry() const { return registry_; }
+    // The command's menu text; "Blank" for "", and the id itself when there
+    // is no registry or the command has no text.
     QString text(const QString& commandId) const;
 
     // Menu to Button: the button waiting for a menu command.
     MappableButton* target() const { return target_; }
+    // Sets (nullptr clears) the target; the old and new buttons repaint and
+    // targetChanged is emitted.
     void setTarget(MappableButton* button);
-    // Maps a chosen menu command to the target; false without one.
+    // Maps a chosen menu command to the target, clears the target and emits
+    // the button's commandMapped; false without one.
     bool mapMenuCommand(const QString& commandId);
 
     // Command pictures changed (a workspace button's name): every button
@@ -52,7 +64,9 @@ public:
 
 signals:
     void modeChanged(Mode mode);
+    // The Menu to Button target was set or cleared.
     void targetChanged();
+    // Emitted by refreshIcons(); every MappableButton reloads its icon.
     void iconsChanged();
 
 private:
@@ -64,11 +78,15 @@ private:
 // A command's button picture: one registered by the window that draws it
 // (the Composer's and Timeline's own buttons), otherwise the command's
 // initials, as a mapped menu command shows them (p.98-99).
+// registerCommandIcon replaces any earlier picture for the command; buttons
+// already showing it update only after ButtonMapper::refreshIcons().
 void registerCommandIcon(const QString& commandId, const QIcon& icon);
+// The registered picture, else a 32 px initials picture; a null icon for "".
 QIcon commandIcon(const QString& commandId);
 // A picture of a few letters (initials, a workspace button's label).
 QIcon labelIcon(const QString& text, bool italic = false);
-// "Load Filler" -> "LF".
+// "Load Filler" -> "LF": the first letter or digit of each word (words split
+// at white space and '/'), upper-cased, at most three.
 QString commandInitials(const QString& text);
 
 // A user-selectable button (p.96): a command, or Blank. It takes commands
@@ -80,8 +98,10 @@ class MappableButton : public QToolButton {
 public:
     explicit MappableButton(QWidget* parent = nullptr);
 
+    // The mapped command id; "" is Blank.
     const QString& command() const { return command_; }
-    // Shows the command (its picture and name); "" is Blank.
+    // Shows the command (its picture and name); "" is Blank. Does not emit
+    // commandMapped; that is only for the user's own mapping.
     void setCommand(const QString& commandId);
     bool isBlank() const { return command_.isEmpty(); }
 

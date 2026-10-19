@@ -31,6 +31,23 @@
 #include <algorithm>
 #include <functional>
 
+// The Bin Container (guide p.239-299) and its Sidebar. BinContainer owns the
+// open bins (BinDocument, bin_view.h) and their views, places the views in
+// BinDockAreas (bin_dock.cpp): its own, and one per FloatingBinContainer. It
+// also keeps the project's bin list, model::ProjectBins
+// (src/model/project_bins.h), saved and every BinSidebar showing it.
+// BinTreeModel is the Sidebar's Qt model; FavoriteBins is the user's list of
+// bins kept across projects.
+//
+// Ids: Sidebar entries are model::BinNode ids, "favorites" for the Favorite
+// Bins folder, or "favorite:<path>" for a Favorite Bin (see FavoriteBins). A
+// Favorite Bin that belongs to the open project is treated as that project's
+// bin (canonicalBin()), so the same file never opens twice.
+//
+// MainWindow (main_window.cpp) creates the container, connects the menus to
+// it, and gives the Project panel a second BinSidebar. Drags between bins end
+// in transferItems(); drags of bins end in placeView() or dropNodes().
+
 namespace lumenis::ui {
 
 namespace {
@@ -59,6 +76,7 @@ protected:
     }
 };
 
+// A Favorite Bin is named after its file.
 QString favoriteName(const QString& path) {
     return QFileInfo(path).completeBaseName();
 }
@@ -92,6 +110,7 @@ void FavoriteBins::save(QSettings& settings) {
 
 BinTreeModel::BinTreeModel(BinContainer& container, QObject* parent) : QAbstractItemModel(parent), container_(container) {}
 
+// Mirrors the project's node tree into Rows under `into`.
 void BinTreeModel::build(const QList<model::BinNode>& nodes, Row* into) {
     for (const model::BinNode& n : nodes) {
         auto row = std::make_unique<Row>();
@@ -117,6 +136,8 @@ void BinTreeModel::addFavorites() {
     root_.children.push_back(std::move(folder));
 }
 
+// The whole list is rebuilt on every change: the tree view's expanded folders
+// are restored by BinSidebar::refresh(), by id.
 void BinTreeModel::rebuild() {
     beginResetModel();
     root_.children.clear();
@@ -154,6 +175,7 @@ void BinTreeModel::setFilter(const QString& text) {
     rebuild();
 }
 
+// Indexes point at their Row; the invalid index is the root.
 BinTreeModel::Row* BinTreeModel::rowFor(const QModelIndex& index) const {
     return index.isValid() ? static_cast<Row*>(index.internalPointer()) : const_cast<Row*>(&root_);
 }
@@ -188,6 +210,7 @@ int BinTreeModel::columnCount(const QModelIndex&) const {
     return 2;
 }
 
+// A depth-first search of the whole tree; the lists are short.
 QModelIndex BinTreeModel::indexOf(const QString& id) const {
     std::function<QModelIndex(const Row*, const QModelIndex&)> search = [&](const Row* r, const QModelIndex& parent) {
         for (std::size_t i = 0; i < r->children.size(); ++i) {
@@ -204,6 +227,9 @@ QString BinTreeModel::idOf(const QModelIndex& index) const {
     return index.isValid() ? rowFor(index)->id : QString();
 }
 
+// Names, icons and sizes are looked up each time from the container, so the
+// rows never hold stale data. Favorite Bins and their folder have no BinNode
+// and are treated as a bin and a folder.
 QVariant BinTreeModel::data(const QModelIndex& index, int role) const {
     const model::ProjectBins* bins = container_.bins();
     if (!index.isValid() || !bins) return {};
@@ -258,6 +284,8 @@ QVariant BinTreeModel::data(const QModelIndex& index, int role) const {
     }
 }
 
+// Renaming in place goes through BinContainer::renameNode, which renames the
+// bin file too.
 bool BinTreeModel::setData(const QModelIndex& index, const QVariant& value, int role) {
     if (role != Qt::EditRole || !index.isValid()) return false;
     return container_.renameNode(rowFor(index)->id, value.toString());
@@ -268,6 +296,8 @@ QVariant BinTreeModel::headerData(int section, Qt::Orientation orientation, int 
     return section == kNameColumn ? tr("Name") : tr("Size");
 }
 
+// What can be renamed, dragged and dropped on. The empty area (invalid index)
+// takes drops, which move entries to the top level.
 Qt::ItemFlags BinTreeModel::flags(const QModelIndex& index) const {
     Qt::ItemFlags f = QAbstractItemModel::flags(index);
     const model::ProjectBins* bins = container_.bins();
@@ -293,6 +323,8 @@ QStringList BinTreeModel::mimeTypes() const {
     return {binNodesMime(), binItemsMime()};
 }
 
+// Dragged entries, one id a line; the same data docks bins when dropped on a
+// BinDockArea.
 QMimeData* BinTreeModel::mimeData(const QModelIndexList& indexes) const {
     QStringList ids;
     for (const QModelIndex& i : indexes) {
@@ -303,6 +335,9 @@ QMimeData* BinTreeModel::mimeData(const QModelIndexList& indexes) const {
     return data;
 }
 
+// Bin items drop onto a bin (not between rows: `row` < 0 means onto
+// `parent`). Entries drop into folders or the top level, not onto bins, not
+// into Favorite Bins and not in Flat View.
 bool BinTreeModel::canDropMimeData(const QMimeData* data, Qt::DropAction, int row, int, const QModelIndex& parent) const {
     const model::ProjectBins* bins = container_.bins();
     if (!bins) return false;
@@ -330,6 +365,8 @@ bool BinTreeModel::dropMimeData(const QMimeData* data, Qt::DropAction action, in
         });
         return true;
     }
+    // Entries move only, never copy. Each goes after the one before when a
+    // row was given; the tree is rebuilt later, by moveNode().
     if (action != Qt::MoveAction) return false;
     const QStringList ids = QString::fromUtf8(data->data(binNodesMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
     bool moved = false;
@@ -383,6 +420,8 @@ BinSidebar::BinSidebar(BinContainer& container, QWidget* parent) : QWidget(paren
     tree_->header()->setSectionResizeMode(BinTreeModel::kNameColumn, QHeaderView::Stretch);
     tree_->header()->setSectionResizeMode(BinTreeModel::kSizeColumn, QHeaderView::Fixed);
     tree_->header()->resizeSection(BinTreeModel::kSizeColumn, 52);
+    // Delete and Backspace delete the selected entries, unless a name is being
+    // typed.
     tree->onDelete = [this] {
         for (const QString& id : selectedNodes()) container_.deleteNode(id);
     };
@@ -414,6 +453,7 @@ BinSidebar::BinSidebar(BinContainer& container, QWidget* parent) : QWidget(paren
 }
 
 void BinSidebar::refresh() {
+    // Note the open folders by id, rebuild, then reopen them.
     QStringList expanded;
     std::function<void(const QModelIndex&)> collect = [&](const QModelIndex& parent) {
         for (int r = 0; r < model_->rowCount(parent); ++r) {
@@ -453,6 +493,7 @@ void BinSidebar::expand(const QString& folderId) {
     if (!folderId.isEmpty()) tree_->setExpanded(model_->indexOf(folderId), true);
 }
 
+// Right-click: the menu for the entry under the pointer, or for the list.
 void BinSidebar::showMenu(const QPoint& pos) {
     const QString id = model_->idOf(tree_->indexAt(pos));
     QMenu menu(this);
@@ -465,8 +506,10 @@ void BinSidebar::showMenu(const QPoint& pos) {
 FloatingBinContainer::FloatingBinContainer(BinContainer& container, QWidget* owner)
     : QWidget(owner, Qt::Tool), container_(container) {
     setObjectName(QStringLiteral("floatingBinContainer"));
+    // BinContainer deletes it (removeEmptyFloating), not closing.
     setAttribute(Qt::WA_DeleteOnClose, false);
     setWindowTitle(tr("Bins"));
+    // Its own Sidebar and area, laid out as the main Bin Container's.
     sidebar_ = new BinSidebar(container_, this);
     sidebar_->onHide = [this] { setSidebarVisible(false); };
     area_ = new BinDockArea(this);
@@ -566,11 +609,15 @@ BinContainer::~BinContainer() {
     }
 }
 
+// Every BinSidebar on this container registers itself, so refreshTree()
+// reaches them all; it leaves the list when it is destroyed.
 void BinContainer::registerSidebar(BinSidebar* sidebar) {
     sidebars_ << sidebar;
     connect(sidebar, &QObject::destroyed, this, [this, sidebar] { sidebars_.removeAll(sidebar); });
 }
 
+// What the container does with an area's signals: the main area's and every
+// floating one's.
 void BinContainer::connectArea(BinDockArea* area) {
     connect(area, &BinDockArea::closeRequested, this, [this](BinView* v) { closeBin(&v->document()); });
     connect(area, &BinDockArea::currentViewChanged, this, [this](BinView* v) {
@@ -597,6 +644,8 @@ void BinContainer::connectArea(BinDockArea* area) {
     });
 }
 
+// The Sidebar gets its share once, at the first real size; after that the
+// user's splitter position is kept.
 void BinContainer::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
     if (!sized_ && width() > 1) {
@@ -612,6 +661,7 @@ void BinContainer::setFavoritesAtTop(bool top) {
     refreshTree();
 }
 
+// Re-runs the quick filter of every open bin that has one.
 void BinContainer::setQuickFilterAllColumns(bool all) {
     if (BinFilterModel::searchAllColumns() == all) return;
     BinFilterModel::searchAllColumns() = all;
@@ -620,6 +670,8 @@ void BinContainer::setQuickFilterAllColumns(bool all) {
     }
 }
 
+// Only a bin that was not open already floats; an open one just comes to the
+// front.
 BinDocument* BinContainer::openBinAsSet(const QString& id) {
     const bool wasOpen = document(canonicalBin(id)) != nullptr;
     BinDocument* doc = openBin(id);
@@ -637,6 +689,9 @@ void BinContainer::setAutoSaveMinutes(int minutes) {
 }
 
 void BinContainer::setProject(const QString& folder, const QString& name, const Rational& editRate) {
+    // Closing the old project: save everything, then delete the views,
+    // documents and floating containers directly (not deleteLater), before
+    // the bin list goes. saveAll() has already recorded which bins were open.
     if (bins_) {
         saveAll();
         while (!documents_.isEmpty()) {
@@ -656,6 +711,7 @@ void BinContainer::setProject(const QString& folder, const QString& name, const 
     if (!folder.isEmpty()) {
         bins_ = std::make_unique<model::ProjectBins>(folder, name);
         bins_->load();
+        // Copied: openBin() rewrites openBins as each bin opens.
         const QStringList open = bins_->openBins;
         refreshTree();
         for (BinSidebar* s : sidebars_) s->tree()->expandAll();
@@ -668,6 +724,8 @@ void BinContainer::setProject(const QString& folder, const QString& name, const 
     emit activeBinChanged();
 }
 
+// Saves the bin list, with the bins open in every area, so the project
+// reopens them.
 void BinContainer::saveTree() {
     if (!bins_) return;
     bins_->openBins.clear();
@@ -728,12 +786,15 @@ BinView* BinContainer::viewFor(const BinDocument* document) const {
     return nullptr;
 }
 
+// Emits activeBinChanged() only when the active bin really changes.
 void BinContainer::setActiveView(BinView* view) {
     if (active_ == view) return;
     active_ = view;
     emit activeBinChanged();
 }
 
+// `active_` may point at a view that has left every area; fall back to the
+// current tab of the first area that has one.
 BinView* BinContainer::activeView() const {
     if (active_ && areaOf(active_)) return active_;
     for (const BinDockArea* a : areas()) {
@@ -777,6 +838,11 @@ QString BinContainer::nodePath(const QString& id) const {
     return bins_ ? bins_->binPath(id) : QString();
 }
 
+// Opening a bin: read its file, let the loader point managed clips at their
+// media, wrap it in a BinDocument and a BinView, connect the view's signals to
+// the container, and tab it into the main area. The view's own drops are
+// queued so that the source bin is not changed while its drag is still
+// running.
 BinDocument* BinContainer::openBin(const QString& requested) {
     if (!bins_) return nullptr;
     const QString id = canonicalBin(requested);
@@ -800,6 +866,8 @@ BinDocument* BinContainer::openBin(const QString& requested) {
         path = bins_->binPath(id);
         name = node->name;
     }
+    // The name shown is the Sidebar's (for a Favorite Bin, its file's), not
+    // the one stored in the file.
     auto bin = model::BinFile::read(path);
     if (!bin) return nullptr;
     bin->name = name;
@@ -838,6 +906,7 @@ BinDocument* BinContainer::openBin(const QString& requested) {
     return doc;
 }
 
+// Saving errors are not reported here: closing goes ahead regardless.
 void BinContainer::closeBin(BinDocument* document) {
     if (!document || !documents_.contains(document)) return;
     if (document->isDirty()) document->save();
@@ -868,6 +937,7 @@ bool BinContainer::saveBin(BinDocument* document, QString* error) {
     return ok;
 }
 
+// Keeps going after a failure; `error` holds the last one.
 bool BinContainer::saveAll(QString* error) {
     bool ok = true;
     for (BinDocument* d : documents_) {
@@ -880,6 +950,9 @@ bool BinContainer::saveAll(QString* error) {
 
 // ---------------------------------------------------------------- arranging bins
 
+// Moves an open bin's view into `area`: tabbed into or beside `target`, or
+// into the area's current group if `target` is null. Floating containers left
+// empty close.
 void BinContainer::placeView(BinView* view, BinDockArea* area, BinTabGroup* target, BinDropSide side) {
     if (!view || !area) return;
     BinDockArea* from = areaOf(view);
@@ -912,6 +985,8 @@ FloatingBinContainer* BinContainer::floatBin(BinDocument* document, const QRect&
         if (geometry.isValid()) f->setGeometry(geometry);
         return f;
     }
+    // A new window over the main one; MainWindow is told so that the window
+    // gets the application's commands too.
     auto* f = new FloatingBinContainer(*this, window());
     floating_ << f;
     emit floatingContainerCreated(f);
@@ -943,6 +1018,9 @@ void BinContainer::removeEmptyFloating() {
     }
 }
 
+// A bin tab dragged out of its bar: a drag carrying the bin's id with a faded
+// picture of the bin. exec() blocks until the drop; an area that takes it
+// moves the bin through binDropped.
 void BinContainer::dragTab(BinView* view) {
     auto* drag = new QDrag(this);
     auto* mime = new QMimeData;
@@ -983,6 +1061,9 @@ void BinContainer::dropNodes(const QStringList& ids, BinDockArea* area, const Bi
 
 // ---------------------------------------------------------------- Sidebar entries
 
+// Where New Bin and New Folder put the entry, for a right-click on `id`: the
+// folder itself, a bin's folder, or the top level (empty) for anything else,
+// including the Trash and what is in it.
 QString BinContainer::folderForNew(const QString& id) const {
     if (!bins_ || id.isEmpty()) return {};
     const model::BinNode* n = bins_->node(id);
@@ -1031,6 +1112,8 @@ bool BinContainer::renameNode(const QString& id, const QString& name, QString* e
         updateTab(doc);
     }
     saveTree();
+    // Later: this may be called from the tree's own editor (setData), which
+    // must not have its model reset under it.
     QTimer::singleShot(0, this, [this] { refreshTree(); });
     return true;
 }
@@ -1083,6 +1166,7 @@ bool BinContainer::moveNode(const QString& id, const QString& parentFolder, int 
     } else {
         ok = bins_->move(id, parentFolder, index, error);
         if (ok) {
+            // Refreshed later, as this runs inside the tree's dropMimeData.
             saveTree();
             QTimer::singleShot(0, this, [this, parentFolder] {
                 refreshTree();
@@ -1118,6 +1202,7 @@ void BinContainer::removeFromFavorites(const QString& path) {
     refreshTree();
 }
 
+// Showing the Sidebar also ends Show Sidebar Only; Show Sidebar Only shows it.
 void BinContainer::setSidebarVisible(bool visible) {
     sidebar_->setVisible(visible);
     if (visible) area_->setVisible(true);
@@ -1144,6 +1229,9 @@ void BinContainer::setBinFilter(const QString& text) {
     sidebar_->setFilter(text);
 }
 
+// The menu's sections: New Bin and New Folder always; Open and Delete for a
+// Favorite Bin; Open, Rename and Delete for a project entry; Flat View, Empty
+// Trash and Hide Sidebar for the list itself (Empty Trash also on the Trash).
 QMenu* BinContainer::sidebarMenu(QMenu* menu, const QString& id, BinSidebar* sidebar) {
     menu->clear();
     const QString folder = folderForNew(id);
@@ -1199,6 +1287,7 @@ QString BinContainer::newSequence(const QString& targetBin) {
     return item.id;
 }
 
+// Duplicates get new ids, and names as model::duplicateItem() makes them.
 QStringList BinContainer::duplicateSelection() {
     BinView* view = activeView();
     if (!view) return {};

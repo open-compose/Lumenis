@@ -7,11 +7,19 @@
 #include <cstring>
 #include <functional>
 
+// The AAF writer (docs/spec/aaf.md, "Writing"). aaf::Builder keeps objects in memory by class AUID and
+// properties by pid, encodes data properties by the metadictionary's types (the reverse of File::decode
+// in aaf.cpp), and toBytes() lays them out with cfb::Writer: each object a storage named after the
+// property that holds it, its `properties` stream, the index streams of its vectors and sets, the
+// `referenced properties` table of weak references, and a MetaDictionary defining the whole model.
+// Storage names and layouts follow Media Composer's and pyaaf2's files. aaf_export.cpp builds bins with
+// it; tests/interop/tst_aaf.cpp (exportRoundTrip) and ctest aaf_round_trip read what it writes back.
 namespace lumenis::interop::aaf {
 
 namespace {
 
 constexpr quint8 kLittleEndian = 0x4c;
+// The `properties` stream's version byte, as written.
 constexpr quint8 kPropertyVersion = 32;
 
 // The header class ID AAF files with 4096-byte sectors carry (as pyaaf2
@@ -34,6 +42,7 @@ void append64(QByteArray& b, quint64 v) {
     b.append(d, 8);
 }
 
+// UTF-16LE with a terminating 0, as AAF stores strings and storage names in property values.
 QByteArray utf16z(const QString& s) {
     QByteArray out;
     for (const QChar c : s) append16(out, c.unicode());
@@ -54,6 +63,7 @@ QString mangle(const QString& name, int pid, int size) {
     return n + QLatin1Char('-') + p;
 }
 
+// An AUID as a compound file class ID: the same 16 bytes.
 cfb::Clsid clsidOf(const QUuid& auid) {
     const QByteArray b = auidBytes(auid);
     cfb::Clsid c{};
@@ -61,6 +71,7 @@ cfb::Clsid clsidOf(const QUuid& auid) {
     return c;
 }
 
+// The type, renames followed.
 const TypeDef* resolved(const MetaDictionary& meta, const QUuid& type) {
     const TypeDef* t = meta.typeDef(type);
     for (int i = 0; t && t->kind == TypeKind::Rename && i < 16; ++i) t = meta.typeDef(t->element);
@@ -69,6 +80,8 @@ const TypeDef* resolved(const MetaDictionary& meta, const QUuid& type) {
 
 } // namespace
 
+// The skeleton every file has: Root → Header → ContentStorage (Mobs, empty) and Dictionary. Dynamic pids
+// are given first, so each property has one.
 Builder::Builder(MetaDictionary meta) : meta_(std::move(meta)) {
     meta_.assignDynamicPids();
     root_ = create(QStringLiteral("Root"));
@@ -112,6 +125,11 @@ const PropertyDef* Builder::property(Ref object, const QString& name) {
     return p && p->pid >= 0 ? p : nullptr;
 }
 
+// The reverse of File::decode. Integers take any number (or a bool) and are cut to the type's size;
+// enumerations take an element name, a number or a bool; extensible enumerations a name or an AUID;
+// strings are written with a terminating 0; records other than AUID and MobIDType are a QVariantMap with
+// every member; string arrays are each string with its 0. Indirect, opaque, stream and reference types
+// are not data, and fail.
 QByteArray Builder::encode(const QUuid& type, const QVariant& value, bool* ok) const {
     const TypeDef* t = meta_.typeDef(type);
     if (!t) {
@@ -225,6 +243,8 @@ QByteArray Builder::encode(const QUuid& type, const QVariant& value, bool* ok) c
     return {};
 }
 
+// A data property. References, streams and indirect values have their own setters; arrays of references
+// are refused here too.
 bool Builder::set(Ref object, const QString& name, const QVariant& value) {
     const PropertyDef* p = property(object, name);
     if (!p) return false;
@@ -247,6 +267,7 @@ bool Builder::set(Ref object, const QString& name, const QVariant& value) {
     return true;
 }
 
+// An indirect value: the byte order, the AUID of the value's type, then the value encoded by that type.
 bool Builder::setIndirect(Ref object, const QString& name, const QString& typeName, const QVariant& value) {
     const PropertyDef* p = property(object, name);
     if (!p) return false;
@@ -265,6 +286,10 @@ bool Builder::setIndirect(Ref object, const QString& name, const QString& typeNa
     return true;
 }
 
+// Finds the property and checks that its type is a reference of the wanted kind (strong or weak), alone
+// or in a variable array (vector) or set. A property of another kind already there is replaced, emptied;
+// the kept `type` is the reference type itself (the element type for vectors and sets), which keyOf and
+// weakTable read.
 Builder::Property* Builder::referenceProperty(Ref object, const QString& name, Kind single, Kind vector, Kind set) {
     const PropertyDef* p = property(object, name);
     if (!p) return nullptr;
@@ -335,6 +360,8 @@ int Builder::pidOfProperty(const QUuid& propertyAuid) const {
     return p ? p->pid : -1;
 }
 
+// The weak reference's table: its type's target path (the properties from the root to the set its targets
+// are in) as pids. Equal paths share one table.
 int Builder::weakTable(const QUuid& weakRefType) {
     const TypeDef* t = resolved(meta_, weakRefType);
     if (!t) return -1;
@@ -350,6 +377,8 @@ int Builder::weakTable(const QUuid& weakRefType) {
     return static_cast<int>(tables_.size() - 1);
 }
 
+// Looks for the first unique property in the class and then its parents; the object's value of it, or
+// nothing when that property is not set.
 QByteArray Builder::uniqueKey(Ref object) const {
     QUuid at = objects_[object].classAuid;
     for (int depth = 0; depth < 64 && !at.isNull(); ++depth) {
@@ -366,6 +395,8 @@ QByteArray Builder::uniqueKey(Ref object) const {
     return {};
 }
 
+// The unique identifier of the class the reference type names (or one of its parents): its pid and its
+// fixed size in bytes; {0, 0} when there is none.
 std::pair<int, int> Builder::keyOf(const QUuid& referenceType) const {
     const TypeDef* t = resolved(meta_, referenceType);
     QUuid at = t ? t->element : QUuid();
@@ -381,6 +412,7 @@ std::pair<int, int> Builder::keyOf(const QUuid& referenceType) const {
     return {0, 0};
 }
 
+// Required properties not set, of every object but the Root, by the class and its parents.
 QStringList Builder::missing() const {
     QStringList out;
     for (qsizetype i = 0; i < objects_.size(); ++i) {
@@ -405,6 +437,10 @@ QStringList Builder::missing() const {
     return out;
 }
 
+// The metadictionary pyaaf2's files carry: every class of the model (but Root, which is the file itself)
+// with its property definitions, and every type, each as the TypeDefinition class of its kind with the
+// properties that kind has. In AUID order, so the same model always writes the same objects. References
+// to other definitions are weak references by AUID.
 void Builder::addMetaDictionary(Ref meta) {
     auto define = [&](Ref def, const QUuid& auid, const QString& name) {
         set(def, QStringLiteral("Identification"), auid);
@@ -521,6 +557,10 @@ void Builder::addMetaDictionary(Ref meta) {
     }
 }
 
+// Writes the file. The MetaDictionary is made first, under the Root; then the objects are written depth
+// first from the Root, each into its storage; then `referenced properties`. Once the objects are written,
+// the metadictionary objects and the tables are dropped again, so that a builder can be written more
+// than once.
 QByteArray Builder::toBytes(QString* error) {
     const Ref meta = create(QStringLiteral("MetaDictionary"));
     setObject(root_, QStringLiteral("MetaDictionary"), meta);
@@ -533,6 +573,9 @@ QByteArray Builder::toBytes(QString* error) {
     cfb::Writer w(4096);
     w.setHeaderClsid(clsidOf(kHeaderClsid));
     QString failure;
+    // One object into `storage`: the class ID, the child storages and index streams of its references,
+    // then its `properties` stream (see File::propertiesOf in aaf.cpp): the byte order, the version, the
+    // count, then each property's pid, stored form and size, then the values.
     std::function<void(Ref, int)> write = [&](Ref ref, int storage) {
         Object& o = objects_[ref];
         w.setClsid(storage, clsidOf(o.classAuid));
@@ -544,6 +587,8 @@ QByteArray Builder::toBytes(QString* error) {
             quint16 form = 0;
             const bool many = p.kind == Kind::StrongVector || p.kind == Kind::StrongSet || p.kind == Kind::WeakVector ||
                               p.kind == Kind::WeakSet;
+            // A vector's or set's storage name leaves room for "{index}" and " index" within 31
+            // characters.
             const QString name = mangle(p.name, pid, many ? 22 : 32);
             switch (p.kind) {
             case Kind::Data:
@@ -562,6 +607,10 @@ QByteArray Builder::toBytes(QString* error) {
                 const bool set = p.kind == Kind::StrongSet;
                 form = static_cast<quint16>(set ? StoredForm::StrongRefSet : StoredForm::StrongRefVector);
                 data = utf16z(name);
+                // The index stream (see Object::referenced in aaf.cpp): the count, the next free local
+                // key (the count) and the last free key (none), and for a set the key's pid and size;
+                // then each element's local key (its position), and for a set its reference count (1) and
+                // key. Each element's storage is `<name>{<hex key>}`.
                 QByteArray list;
                 append32(list, static_cast<quint32>(p.children.size()));
                 append32(list, static_cast<quint32>(p.children.size()));
@@ -597,6 +646,9 @@ QByteArray Builder::toBytes(QString* error) {
                     failure = QStringLiteral("%1.%2: the reference's target cannot be named").arg(className(ref), p.name);
                     continue;
                 }
+                // A weak reference: the table, the key's pid, the key's size and the key. A vector or set
+                // is stored as an index stream instead: the count, the table, the key's pid, the key's
+                // size, then the keys.
                 if (p.kind == Kind::Weak) {
                     form = static_cast<quint16>(StoredForm::WeakRef);
                     append16(data, static_cast<quint16>(table));
@@ -636,6 +688,8 @@ QByteArray Builder::toBytes(QString* error) {
     };
     write(root_, cfb::Writer::root());
 
+    // `referenced properties` (see File::readReferencedProperties in aaf.cpp): the tables' paths, each
+    // ended by a 0.
     QByteArray referenced;
     referenced.append(static_cast<char>(kLittleEndian));
     append16(referenced, static_cast<quint16>(tables_.size()));

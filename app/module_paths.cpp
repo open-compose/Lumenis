@@ -9,16 +9,22 @@
 
 #include <algorithm>
 
+// Where main() (app/main.cpp) looks for extension modules, which ext::ModuleLoader then loads
+// (docs/EXTENSIONS.md).
+
 namespace lumenis::app {
 
 namespace {
 
+// A QString as a filesystem path, through UTF-16 so non-ASCII folders survive on Windows.
 std::filesystem::path toPath(const QString& s) {
     return std::filesystem::path(s.toStdU16String());
 }
 
 } // namespace
 
+// In the header's order. The shipped directory is the platform's installed location, then the
+// build tree's; duplicates are dropped.
 std::vector<std::filesystem::path> moduleSearchPaths() {
     std::vector<std::filesystem::path> paths;
 

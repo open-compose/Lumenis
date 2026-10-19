@@ -61,6 +61,7 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
 
 // Mixes pieces into interleaved stereo. Reads the files itself, so one mix
 // serves one thread at a time.
+// Files are opened on first use and kept open for the mix's life.
 class AudioMix {
 public:
     explicit AudioMix(std::vector<AudioPiece> pieces = {});
@@ -74,6 +75,7 @@ public:
     void render(std::int64_t start, int count, float* out);
 
 private:
+    // The reader of a piece's file, stream and channel; null if it cannot be opened.
     AudioReader* reader(const AudioPiece& piece);
 
     std::vector<AudioPiece> pieces_;
@@ -84,6 +86,8 @@ private:
 // renders ahead into a buffer the output drains; what the output has taken
 // is the clock. Without an output device nothing plays and the clock stays
 // at zero: the caller falls back to its own.
+// Use it from one thread (the UI's): start() and stop() start and join the feeder thread, and the
+// device's callback calls pull() on its own thread.
 class AudioPlayer {
 public:
     AudioPlayer();
@@ -106,7 +110,9 @@ public:
     // opened.
     bool start(std::shared_ptr<AudioMix> mix, std::int64_t start, const PlayOptions& options);
     bool start(std::shared_ptr<AudioMix> mix, std::int64_t from) { return start(std::move(mix), from, PlayOptions{}); }
+    // The speed playing, -3..3 (negative: backwards).
     int speed() const { return speed_; }
+    // Stops the device and the feeder; nothing plays until the next start().
     void stop();
     bool isPlaying() const { return playing_; }
     // Output samples the device has taken since start.
@@ -125,11 +131,14 @@ public:
 
 private:
     struct Device;
+    // Renders ahead into the ring on the feeder thread.
     void feed();
 
     std::unique_ptr<Device> device_;
+    // What plays; released by stop().
     std::shared_ptr<AudioMix> mix_;
     std::thread feeder_;
+    // Tells the feeder thread to keep going.
     std::atomic<bool> running_{false};
     bool playing_ = false;
     std::atomic<std::int64_t> played_{0};

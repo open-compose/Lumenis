@@ -2,6 +2,11 @@
 
 #include <QMetaObject>
 
+// MediaFrames: the application's source of clip pictures (media_frames.h). Monitors call frame() on
+// the GUI thread; bins, the Timeline and the Source Browser call thumbnail(), which decodes on a small
+// thread pool and posts the result back; playback calls prefetch() so the next frames are already in
+// media::FrameCache (src/media/link.*) when the Composer shows them (playback in src/media/playback.*).
+
 namespace lumenis::ui {
 
 namespace {
@@ -10,6 +15,8 @@ MediaFrames* g_instance = nullptr;
 constexpr std::size_t kMaxThumbnails = 2000;
 } // namespace
 
+// The cache keeps 8 files open and the last 48 frames. Two threads decode thumbnails; one decodes
+// ahead for playback, so those frames come in play order.
 MediaFrames::MediaFrames(QObject* parent) : QObject(parent), cache_(8, 48) {
     pool_.setMaxThreadCount(2);
     ahead_.setMaxThreadCount(1);
@@ -43,6 +50,8 @@ QString MediaFrames::key(const model::BinItem& item, std::int64_t clipFrame, QSi
              QString::number(size.width()), QString::number(size.height()));
 }
 
+// Returns a decoded thumbnail, or starts decoding it once (pending_) and returns null; the result is
+// stored on the GUI thread and announced with thumbnailReady().
 QImage MediaFrames::thumbnail(const model::BinItem& item, std::int64_t clipFrame, QSize size) {
     if (!media::isLinked(item) || media::isUnlinked(item)) return {};
     const QString k = key(item, clipFrame, size);
@@ -68,6 +77,8 @@ QImage MediaFrames::thumbnail(const model::BinItem& item, std::int64_t clipFrame
     return {};
 }
 
+// Decodes into the frame cache ahead of playback. At most three requests wait; more are dropped, so a
+// slow decoder does not fall further and further behind the play head.
 void MediaFrames::prefetch(const model::BinItem& item, std::int64_t clipFrame, QSize size) {
     if (!media::isLinked(item) || media::isUnlinked(item) || aheadWaiting_.load() >= 3) return;
     ++aheadWaiting_;

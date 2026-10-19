@@ -19,23 +19,28 @@ class ExportAsDialog : public QDialog {
     Q_OBJECT
 
 public:
-    // `settings`: the Export settings' names, the active one at `active`.
+    // `path`: the file name offered first. `settings`: the Export settings' names, the active one at
+    // `active` (an index into `settings`). Save stays disabled while the file name is blank.
     ExportAsDialog(const QString& path, const QStringList& settings, int active, QWidget* parent = nullptr);
 
+    // The file name typed or browsed to, trimmed of spaces.
     QString path() const;
     void setPath(const QString& path);
     // The Export setting chosen, by its place in the list.
     int setting() const;
     void setSetting(int index);
 
+    // The widgets, for tests.
     QLineEdit* pathEdit() const { return path_; }
     QPushButton* optionsButton() const { return options_; }
 
 signals:
-    // Options (p.869): the chosen setting's dialog.
+    // Options (p.869): the chosen setting's dialog. `setting` is setting(); MainWindow opens that
+    // Export setting in the Settings window's User tab.
     void optionsRequested(int setting);
 
 private:
+    // Browse: the system's save dialog, filtered to AAF files.
     void browse();
 
     QLineEdit* path_ = nullptr;

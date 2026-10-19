@@ -17,10 +17,16 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+// The workspace toolbar and the New Workspace dialog (workspace_bar.h). Both only present
+// WorkspaceManager (workspace.cpp), which does the switching and keeps the layouts. The icons are drawn
+// in theme.cpp (glyphIcon).
+
 namespace lumenis::ui {
 
 namespace {
 
+// Bar geometry in pixels: the space above the first item, an item's height with and without its label,
+// and the icon size.
 constexpr int kTop = 8;
 constexpr int kItemHeightWide = 58;
 constexpr int kItemHeightNarrow = 40;
@@ -62,6 +68,7 @@ QIcon WorkspaceBar::iconFor(const QString& name, bool active) {
     return glyphIcon(GlyphIcon::WorkspaceCustom, color);
 }
 
+// Labels use the palette's WindowText so the text-free screenshots hide them.
 void WorkspaceBar::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.fillRect(rect(), QColor(0x2e, 0x2e, 0x2e));
@@ -98,6 +105,7 @@ void WorkspaceBar::mousePressEvent(QMouseEvent* event) {
     }
 }
 
+// The right-click menu chooses the bar mode (p.87-89).
 void WorkspaceBar::contextMenuEvent(QContextMenuEvent* event) {
     QMenu menu(this);
     menu.addSection(tr("WORKSPACE BAR"));

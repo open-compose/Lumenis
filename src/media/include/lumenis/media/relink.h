@@ -16,6 +16,7 @@
 // timecode.
 namespace lumenis::media {
 
+// The Relink dialog's choices (ManagedRelinkDialog, src/ui/relink_dialog.cpp).
 struct RelinkOptions {
     // Relink selected items to: media on these drives' Avid MediaFiles
     // folders; empty for All Available Drives.
@@ -43,6 +44,7 @@ struct RelinkOptions {
     bool unlinkWithoutMatch = false;
     // Create new sequences: copies named "<name>.relinked" (p.364).
     bool newSequences = true;
+    // Match material at another edit rate too (frame counts are then compared as they are).
     bool acrossRates = false;
 };
 
@@ -50,10 +52,13 @@ struct RelinkOptions {
 // in timecode (at its rate) and its length.
 struct Material {
     QString name;
+    // Timecode frames from midnight at `rate`.
     std::int64_t start = 0;
     std::int64_t frames = 0;
     Rational rate{25, 1};
 };
+// A clip's material from its Tape (else Source File) column, Start and duration; Relink by Name uses
+// its name. A media file's from its tape (else source) and starting timecode.
 Material materialOf(const model::BinItem& clip, RelinkOptions::By by);
 Material materialOf(const MediaFileInfo& file, RelinkOptions::By by);
 // The names compared, with the options' Ignore and Match case applied.
@@ -77,10 +82,13 @@ struct RelinkResult {
 // Relinks the selection. Master clips find media in the database;
 // sequences' segments find master clips among `candidates` holding the same
 // material (the open bins' clips, with their bin ids).
+// A candidate clip and the bin it is in.
 struct BinClip {
     QString binId;
     model::BinItem item;
 };
+// `lookup` finds a segment's clip; `taken` are the bin's names, for numbering. Nothing in the bins
+// changes here: the caller stores the result.
 RelinkResult relinkManaged(const QList<model::BinItem>& selection, const MediaDatabase& db,
                            const QList<BinClip>& candidates, const ClipLookup& lookup,
                            const RelinkOptions& options, const QStringList& taken);

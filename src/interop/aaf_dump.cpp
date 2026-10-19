@@ -5,12 +5,18 @@
 
 #include <algorithm>
 
+// Dumps of AAF objects as JSON (docs/spec/aaf.md, "Dumps"), for `cutthulhu --dump-aaf`. The form is the
+// one scripts/aaf-dump.py prints from pyaaf2's reading of the same file, so the two readers can be
+// compared property by property, or by the digest of canonicalJson (tst_aaf's corpusDumps, ctest
+// aaf_pyaaf2).
 namespace lumenis::interop::aaf {
 
 namespace {
 
 QJsonValue dumpObject(const File& file, const Object& o, int depth);
 
+// A decoded value as JSON: numbers, Booleans and strings as themselves, AUIDs and MobIDs as text,
+// undecoded bytes as {"bytes": hex}, and objects (strong references' targets) dumped in place.
 QJsonValue dumpVariant(const File& file, const QVariant& v, int depth) {
     switch (v.typeId()) {
     case QMetaType::Bool: return v.toBool();
@@ -38,12 +44,16 @@ QJsonValue dumpVariant(const File& file, const QVariant& v, int depth) {
     return QJsonValue();
 }
 
+// Whether the type is a set, renames followed.
 bool isSetType(const MetaDictionary& meta, const QUuid& type) {
     const TypeDef* t = meta.typeDef(type);
     for (int i = 0; t && i < 16 && t->kind == TypeKind::Rename; ++i) t = meta.typeDef(t->element);
     return t && t->kind == TypeKind::Set;
 }
 
+// A property as JSON by its stored form: strong references as the objects they hold, weak references as
+// {"weakref": the key as text}, streams as {"stream": size in bytes, or -1 when missing}, and data
+// decoded by its type ({"bytes": hex} when the property is not in the metadictionary).
 QJsonValue dumpProperty(const File& file, const Object& o, const RawProperty& p, int depth) {
     switch (static_cast<StoredForm>(p.form)) {
     case StoredForm::StrongRef: {
@@ -88,6 +98,8 @@ QJsonValue dumpProperty(const File& file, const Object& o, const RawProperty& p,
     return v;
 }
 
+// An object as {"class": name, "properties": {name: value}}. The depth limit keeps damaged files that
+// reference their own ancestors from recursing without end.
 QJsonValue dumpObject(const File& file, const Object& o, int depth) {
     if (o.isNull() || depth > 200) return QJsonValue();
     QJsonObject properties;
@@ -95,6 +107,8 @@ QJsonValue dumpObject(const File& file, const Object& o, int depth) {
     return QJsonObject{{QStringLiteral("class"), o.className()}, {QStringLiteral("properties"), properties}};
 }
 
+// A JSON string as Python's json.dumps writes it with ensure_ascii: everything outside printable ASCII
+// as a backslash-u escape of four hex digits (UTF-16 code units, so a pair for characters past U+FFFF).
 void writeString(QByteArray& out, const QString& s) {
     out.append('"');
     for (const QChar c : s) {
@@ -118,6 +132,7 @@ void writeString(QByteArray& out, const QString& s) {
     out.append('"');
 }
 
+// Compact JSON with sorted keys; integers without a fraction, other numbers with 17 significant digits.
 void writeCanonical(QByteArray& out, const QJsonValue& v) {
     switch (v.type()) {
     case QJsonValue::Null:

@@ -20,10 +20,17 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+// The Effect Editor (effect_editor.h). It builds its controls from resources/effect_parameters.json
+// (the parameter categories) and resources/effects.json (which categories an effect has, through
+// EffectCatalog in effect_palette.*). The effect itself is found and changed through the Timeline
+// (timeline.*), which finds it in the Record monitor's sequence (model::effectAt and
+// model::effectFor in src/model/sequence.*).
+
 namespace lumenis::ui {
 
 namespace {
 
+// Parameter categories by name.
 using Catalog = QHash<QString, QList<EffectParameter>>;
 
 const Catalog& catalog() {
@@ -55,10 +62,12 @@ const Catalog& catalog() {
     return all;
 }
 
+// The key of a parameter's control in controls_ and valueLabels_.
 QString key(const QString& category, const QString& parameter) {
     return category + QLatin1Char('/') + parameter;
 }
 
+// A slider's starting value: the default if it is a number, within the range.
 int defaultInt(const EffectParameter& p) {
     const int v = p.defaultValue.isDouble() ? static_cast<int>(p.defaultValue.toDouble()) : 0;
     return std::clamp(v, p.min, p.max);
@@ -92,6 +101,7 @@ QIcon alignmentIcon(std::optional<model::TransitionAlignment> a, const QColor& c
     return QIcon(pm);
 }
 
+// A small disabled button for a feature that comes later, labelled with its name's first letters.
 QToolButton* offButton(const QString& name, const QString& tip, QWidget* parent) {
     auto* b = new QToolButton(parent);
     b->setObjectName(name);
@@ -110,6 +120,7 @@ const QList<EffectParameter>* effectParameters(const QString& category) {
     return it == catalog().constEnd() ? nullptr : &*it;
 }
 
+// The title row, the scrolling parameter groups with the side buttons, and the bottom row.
 EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent), timeline_(timeline) {
     setObjectName(QStringLiteral("effectEditor"));
 
@@ -222,6 +233,8 @@ QString EffectEditor::durationText(std::int64_t frames) const {
     return QStringLiteral("%1:%2").arg(frames / fps).arg(frames % fps, 2, 10, QLatin1Char('0'));
 }
 
+// Finds the effect at the Record monitor's position. A different effect (or a switch to or from
+// Transition parameters only) rebuilds the controls; the same one only updates their values.
 void EffectEditor::refresh() {
     const model::LoadedClip* rec = timeline_.composer().state(MonitorId::Record).current();
     std::optional<model::EffectRef> ref = timeline_.currentEffect();
@@ -253,6 +266,8 @@ QString EffectEditor::effectName() const {
     return shown_ ? title_->text() : QString();
 }
 
+// A group per parameter category the effect lists (EffectInfo::parameters) and the parameter file
+// knows. Each control stores its value as it changes; a slider only when released, if dragged.
 void EffectEditor::rebuild(const model::Effect* effect) {
     // Clear the old controls, keeping the stretch at the end.
     while (groups_->count() > 1) {
@@ -374,6 +389,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     syncValues(*effect);
 }
 
+// Parameters without a stored value keep what the control shows (its default after a rebuild).
 void EffectEditor::syncValues(const model::Effect& effect) {
     syncing_ = true;
     for (auto it = controls_.cbegin(); it != controls_.cend(); ++it) {
@@ -433,6 +449,7 @@ void EffectEditor::setValue(const QString& category, const QString& parameter, c
     });
 }
 
+// Keeps the shown transition's duration and start; elsewhere the default transition length.
 void EffectEditor::setAlignment(model::TransitionAlignment alignment) {
     const QList<model::TrimRoller> cuts = transitionCuts();
     if (cuts.isEmpty()) return;
@@ -468,6 +485,8 @@ bool EffectEditor::setDuration(const QString& text) {
         syncTransition();
         return false;
     }
+    // The start (frames before the cut) stays the shown transition's, within the new duration; for a
+    // new transition it is half the duration.
     const QList<model::TrimRoller> cuts = transitionCuts();
     if (cuts.isEmpty()) return false;
     std::int64_t start = frames / 2;
@@ -480,6 +499,7 @@ bool EffectEditor::setDuration(const QString& text) {
     return done;
 }
 
+// The openers are the group layout's tool buttons; their text is the category.
 QStringList EffectEditor::categories() const {
     QStringList out;
     for (int i = 0; i < groups_->count(); ++i) {

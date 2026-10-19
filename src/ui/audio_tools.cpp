@@ -22,6 +22,13 @@
 
 #include <cmath>
 
+// The Audio Mixer and the Audio Tool (audio_tools.h): the fader scale's maths, the mixer strips, the
+// mixer with its Clip, Auto and Live modes and Fast menu, the Set Calibration Tone dialog, and the
+// Audio Tool's meters. The mixer reads and changes clip gain and pan through the Timeline
+// (Timeline::audioSegmentAt, Timeline::setClipAudio in timeline.*); the gain limits are in
+// src/model/sequence.h (kGainOff, kGainFaderMax, clampGain). Sound itself plays from
+// src/media/playback.*; these meters are not fed by it yet.
+
 namespace lumenis::ui {
 
 // ---------------------------------------------------------------- fader
@@ -38,6 +45,7 @@ constexpr int kStep = kRange / kSteps;
 
 } // namespace
 
+// Linear between the two marks around `db`, each step kStep positions high; the top mark is kRange.
 int position(double db) {
     if (db <= kMarks[kSteps]) return 0;
     if (db >= kMarks[0]) return kRange;
@@ -102,6 +110,7 @@ std::optional<int> parsePan(const QString& t) {
 
 namespace {
 
+// A plain small button of the mixer and Audio Tool.
 QToolButton* smallButton(const QString& text, const QString& name, QWidget* parent, bool checkable = false) {
     auto* b = new QToolButton(parent);
     b->setText(text);
@@ -112,6 +121,7 @@ QToolButton* smallButton(const QString& text, const QString& name, QWidget* pare
     return b;
 }
 
+// A disabled button for a feature that comes later; its tooltip says so.
 QToolButton* laterButton(const QString& text, const QString& name, const QString& tip, QWidget* parent) {
     QToolButton* b = smallButton(text, name, parent);
     b->setToolTip(tip + QStringLiteral(" (") + QObject::tr("not available yet") + QLatin1Char(')'));
@@ -152,6 +162,8 @@ private:
 
 // ---------------------------------------------------------------- MixerStrip
 
+// Lays out the strip top down as on p.693, then wires each control to update the others and emit
+// gainSet() or panSet(). Typed values that cannot be read put the old value back.
 MixerStrip::MixerStrip(const QString& track, bool master, QWidget* parent) : QWidget(parent), track_(track) {
     setObjectName(QStringLiteral("strip:") + track);
     auto* v = new QVBoxLayout(this);
@@ -260,6 +272,7 @@ MixerStrip::MixerStrip(const QString& track, bool master, QWidget* parent) : QWi
     });
 }
 
+// The fader stops at +12 dB; higher typed levels show in the level display, in yellow.
 void MixerStrip::show(double gain, int pan) {
     syncing_ = true;
     gain_ = gain;
@@ -321,6 +334,8 @@ bool MixerStrip::eventFilter(QObject* watched, QEvent* event) {
 
 // ---------------------------------------------------------------- AudioMixer
 
+// The top bar, then the track strips in a sideways-scrolling area with the Master strip to the right.
+// The Fast menu is filled each time it opens (fastMenu()).
 AudioMixer::AudioMixer(Timeline& timeline, QWidget* parent) : QWidget(parent), timeline_(timeline) {
     setObjectName(QStringLiteral("audioMixer"));
 
@@ -454,6 +469,7 @@ void AudioMixer::refresh() {
     syncValues();
 }
 
+// New strips go after the "empty" label (index 0) and before the stretch.
 void AudioMixer::rebuild(const QStringList& tracks) {
     for (MixerStrip* s : std::as_const(strips_)) delete s;
     strips_.clear();
@@ -544,6 +560,9 @@ void AudioMixer::syncValues() {
     master_->setLive(mode_ == Mode::Live);
 }
 
+// Live mode keeps the values in the mixer and follows every move. Clip mode stores only finished
+// changes (done), one undo step per ganged track with a segment under the position. Auto mode stores
+// nothing yet.
 void AudioMixer::setGain(const QString& track, double db, bool done) {
     // Ganged faders move by the same amount (p.704).
     QStringList moved{track};
@@ -585,6 +604,8 @@ QStringList AudioMixer::selectedTracks() const {
     return out;
 }
 
+// Each working item applies the selected strips' shown values (or removes them) through
+// Timeline::setClipAudio with `onTrack`; the rest are listed disabled.
 QMenu* AudioMixer::fastMenu() {
     // The Fast menu's items depend on the mode (p.711, p.719-720, p.725-726)
     // and are dimmed until a track is selected (p.711). They act between
@@ -700,6 +721,7 @@ double fraction(double db) {
 
 } // namespace
 
+// Starts with every level and peak at the bottom of the scale.
 AudioMeters::AudioMeters(int channels, QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("audioMeters"));
     for (int i = 0; i < channels; ++i) {
@@ -739,6 +761,8 @@ QColor AudioMeters::colourFor(double db, int reference) {
     return QColor(0xffd84040);
 }
 
+// A bar per channel between the scales, filled from the bottom up to its level and coloured line by
+// line, and a line at its peak.
 void AudioMeters::paintEvent(QPaintEvent*) {
     QPainter p(this);
     const QColor text = palette().color(QPalette::WindowText);
@@ -782,6 +806,7 @@ void AudioMeters::paintEvent(QPaintEvent*) {
 
 // ---------------------------------------------------------------- AudioTool
 
+// RP, the In/Out buttons and PH with its menu above the meters.
 AudioTool::AudioTool(int channels, QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("audioTool"));
     // The top row (picture on p.158): RP, an In/Out button per channel, PH.

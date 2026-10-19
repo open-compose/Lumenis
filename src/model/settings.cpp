@@ -10,13 +10,19 @@
 
 #include <algorithm>
 
+// Settings files (settings.h): the list of setting versions of one scope, read from and written
+// to Settings.json, and the edits the Settings window makes to it (activate, duplicate, delete,
+// drag in). What the options are and how they are shown is in src/ui/settings* and
+// src/ui/resources/settings.json; this file only stores them.
 namespace lumenis::model {
 
 namespace {
 
+// The file's format tag and the newest version this build reads and writes.
 constexpr int kFileVersion = 1;
 constexpr auto kFileFormat = "cutthulhu-settings";
 
+// Sets *error (if wanted) and returns false, for one-line failure returns.
 bool fail(QString* error, const QString& message) {
     if (error) *error = message;
     return false;
@@ -81,6 +87,8 @@ bool SettingsFile::write(const QString& path, QString* error) const {
     return true;
 }
 
+// For each kind, the site file's versions (copied with their active flags) or else one active
+// default version.
 SettingsFile SettingsFile::seeded(const QStringList& kinds, const SettingsFile* site) {
     SettingsFile file;
     for (const QString& kind : kinds) {
@@ -165,6 +173,7 @@ void SettingsFile::remove(QList<int> indices) {
     normalize();
 }
 
+// New versions go after the last version of their kind, or at the end for a new kind.
 int SettingsFile::add(SettingEntry entry, bool replace) {
     const int active = activeIndex(entry.kind);
     if (replace && active >= 0) {
@@ -179,6 +188,7 @@ int SettingsFile::add(SettingEntry entry, bool replace) {
     return at;
 }
 
+// New kinds have no other versions, so their single version is active and normalize() is not needed.
 int SettingsFile::ensure(const QStringList& kinds) {
     int added = 0;
     for (const QString& kind : kinds) {

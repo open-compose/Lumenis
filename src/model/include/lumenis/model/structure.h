@@ -12,6 +12,8 @@ namespace lumenis::model {
 // sequences (docs/spec/structure.md). Any reader that fills the model (our
 // bins, AAF, Media Composer's bins) can be dumped and diffed this way, with
 // scripts/structdiff.py.
+// One bin: {name, customColumns (sorted), items}. projectStructure() and structureOf() wrap bins in
+// a document {format: "cutthulhu-structure", version: 1, bins[, project]}.
 QJsonObject binStructure(const Bin& bin);
 // Every bin of the project in `folder` (the one holding "<name>.cthproj"),
 // depth first, without the Trash. Empty, with `error` set, when it cannot

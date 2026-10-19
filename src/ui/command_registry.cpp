@@ -9,10 +9,18 @@
 #include <QJsonObject>
 #include <QSettings>
 
+// The command registry (command_registry.h). Commands are declared in src/ui/resources/commands.json and
+// placed in menus by menus.json (menu_builder.cpp); the Command Palette's buttons are listed in
+// command_palette.json. Each command gets one QAction named "cmd:<id>", shared by its menu item, its
+// shortcut, and the palette and mapped buttons (button_mapping.cpp).
+// To add a command: declare it in commands.json, place it in menus.json (and the menu inventory,
+// tests/data/menu_inventory.json), and give it a handler with setHandler(), usually in main_window.cpp.
+
 namespace lumenis::ui {
 
 namespace {
 
+// The macOS menu role of a declared "role"; on macOS Qt moves such items to the application menu.
 QAction::MenuRole toMenuRole(const QString& role) {
     if (role == QLatin1String("quit")) return QAction::QuitRole;
     if (role == QLatin1String("about")) return QAction::AboutRole;
@@ -22,6 +30,7 @@ QAction::MenuRole toMenuRole(const QString& role) {
     return QAction::NoRole;
 }
 
+// The QSettings group of the user's shortcut changes.
 constexpr auto kShortcutGroup = "keyboard";
 
 } // namespace
@@ -70,6 +79,7 @@ bool CommandRegistry::load(const QByteArray& json, QString* error) {
         action->setMenuRole(toMenuRole(spec.role));
         action->setEnabled(false);
         const QString id = spec.id;
+        // Triggering looks the handler up each time, so setHandler() can replace it later.
         connect(action, &QAction::triggered, this, [this, id] {
             if (capture_ && capture_(id)) return;
             if (const Entry* e = find(id); e && e->handler) {
@@ -109,6 +119,7 @@ QAction* CommandRegistry::action(const QString& id) const {
     return e ? e->action : nullptr;
 }
 
+// The same mnemonic stripping as menu_builder.cpp's plainText(): "&&" is a literal '&'.
 QString CommandRegistry::text(const QString& id) const {
     const Entry* e = find(id);
     if (!e) return {};
@@ -169,6 +180,7 @@ void CommandRegistry::saveShortcuts(QSettings& settings) const {
     settings.endGroup();
 }
 
+// Keys that are not command ids are ignored by setShortcut().
 void CommandRegistry::loadShortcuts(QSettings& settings) {
     resetShortcuts();
     settings.beginGroup(QLatin1String(kShortcutGroup));

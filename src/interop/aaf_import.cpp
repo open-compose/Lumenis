@@ -10,10 +10,18 @@
 #include <algorithm>
 #include <map>
 
+// AAF import into bins (docs/spec/aaf.md, "Import"): the mobs an aaf::File reads (aaf.cpp) become bin
+// items of the native model (docs/spec/native-model.md). Master mobs become master or audio clips with
+// their source chains (file, then tape or import source mobs), composition mobs used as subclips become
+// subclips, and other composition mobs become sequences, whose nested scopes, transitions and effects are
+// flattened into tracks of segments. aaf_export.cpp applies the same rules in reverse. ctest
+// aaf_import_bins compares what this makes with Media Composer's own bins of the corpus
+// (tests/data/aaf_reference); tests/interop/tst_aaf.cpp (importsBin) checks what the dumps do not show.
 namespace lumenis::interop::aaf {
 
 namespace {
 
+// What a slot carries, by its segment's data definition.
 enum class DataKind { Picture, Sound, Timecode, Edgecode, Other };
 
 // Data definitions by AUID: AAF's (SMPTE labels) and the older ones Avid
@@ -35,12 +43,14 @@ DataKind dataKindOf(const QUuid& auid) {
     return kinds.value(auid, DataKind::Other);
 }
 
+// The component's kind, from its DataDefinition weak reference.
 DataKind dataKind(const Object& component) {
     const auto key = component.weakKey(QStringLiteral("DataDefinition"));
     if (!key || key->key.size() != 16) return DataKind::Other;
     return dataKindOf(auidFromBytes(key->key.constData()));
 }
 
+// An edit rate (a Rational record) as a Rational; `fallback` when it is missing or not positive.
 Rational rateOf(const QVariant& v, const Rational& fallback) {
     const QVariantMap m = v.toMap();
     const qint64 num = m.value(QStringLiteral("Numerator")).toLongLong();
@@ -58,6 +68,7 @@ Rational rateOf(const QVariant& v, const Rational& fallback) {
     return r;
 }
 
+// A TimeStamp record (date and time, UTC) as a QDateTime; invalid when the record is missing or damaged.
 QDateTime timeOf(const QVariant& v) {
     const QVariantMap m = v.toMap();
     const QVariantMap d = m.value(QStringLiteral("date")).toMap();
@@ -76,6 +87,7 @@ std::int64_t rescale(std::int64_t frames, const Rational& from, const Rational& 
     return r.floor();
 }
 
+// Frames as timecode text at the rate, wrapped into one day; drop frame only where the rate has it.
 QString timecodeText(std::int64_t frames, const Rational& rate, bool drop) {
     TimecodeFormat format = TimecodeFormat::forRate(rate, drop);
     if (!format.isValid()) format = TimecodeFormat::forRate(rate, false);
@@ -102,12 +114,16 @@ QString trackList(const QList<int>& video, const QList<int>& audio) {
     return parts.join(QLatin1Char(' '));
 }
 
+// A Timecode segment's start, frames per second and drop frame flag.
 struct SourceTimecode {
     std::int64_t start = 0; // frames at fps
     int fps = 0;
     bool drop = false;
 };
 
+// Reads one file's mobs. run() goes through them in four passes: index every mob by MobID, then master
+// mobs, then subclips (which name their masters' items), then sequences (whose segments name either). The
+// maps below carry what later passes need from earlier ones.
 class Importer {
 public:
     Importer(const File& file, const ImportOptions& options) : file_(file), options_(options) {}
@@ -142,6 +158,7 @@ public:
     }
 
 private:
+    // One picture or sound slot of a mob, named as a bin track ("V1", "A2").
     struct Track {
         QString name;
         DataKind kind = DataKind::Other;
@@ -150,8 +167,10 @@ private:
         Object segment;
     };
 
+    // Counts a warning; run() lists each once, with its count.
     void note(const QString& what) { ++notes_[what]; }
 
+    // A mob of the file by MobID; null when the file does not hold it.
     Object mob(const MobId& id) const {
         const auto it = mobs_.find(id);
         return it == mobs_.end() ? Object() : it->second;
@@ -162,6 +181,8 @@ private:
         return it == map.end() ? fallback : it->second;
     }
 
+    // The first source clip in a segment: itself, or down sequences, effects' inputs and essence groups'
+    // choices.
     static Object firstSourceClip(const Object& c, int depth = 0) {
         if (!c || depth > 16) return {};
         if (c.isA(QStringLiteral("SourceClip"))) return c;
@@ -183,6 +204,7 @@ private:
         return {};
     }
 
+    // A mob's slot by SlotID; null when there is none.
     static Object slot(const Object& mob, qint64 slotId) {
         for (const Object& s : mob.objects(QStringLiteral("Slots"))) {
             if (s.integer(QStringLiteral("SlotID"), -1) == slotId) return s;
@@ -191,6 +213,7 @@ private:
     }
 
     // The tracks of a mob's picture and sound slots, named as in a bin.
+    // The number is the slot's PhysicalTrackNumber, or else the count of slots of that kind so far.
     static QList<Track> tracksOf(const Object& m) {
         QList<Track> out;
         int pictures = 0;
@@ -211,6 +234,8 @@ private:
         return out;
     }
 
+    // The first Timecode segment among a mob's slots, also inside a Pulldown or as the first component of
+    // a Sequence.
     static std::optional<SourceTimecode> timecodeOf(const Object& m) {
         for (const Object& s : m.objects(QStringLiteral("Slots"))) {
             Object c = s.object(QStringLiteral("Segment"));
@@ -232,6 +257,8 @@ private:
         return std::nullopt;
     }
 
+    // The media's path: the first locator URL of the mob's descriptor, as a local path when it is a file
+    // URL.
     static QString locatorPath(const Object& m) {
         const Object descriptor = m.object(QStringLiteral("EssenceDescription"));
         for (const Object& l : descriptor.objects(QStringLiteral("Locator"))) {
@@ -245,6 +272,8 @@ private:
 
     // Frames in `rate` where the clip starts on its source's timecode: down
     // the source chain from a slot's clip to the first mob with timecode.
+    // Each source clip's StartTime is added up on the way. A timecode at another frame rate is scaled to
+    // the nominal rate of `rate` (30 fps 00:00:30;00 is 24 fps 00:00:30:00).
     std::optional<std::int64_t> startOf(const Object& segment, const Rational& rate) const {
         Object clip = firstSourceClip(segment);
         std::int64_t offset = 0;
@@ -264,6 +293,8 @@ private:
         return std::nullopt;
     }
 
+    // What every item takes from its mob: a new item ID, the MobID, Name, Created and Modified (`when`,
+    // when the mob has none), and the bin columns.
     void commonFields(model::BinItem& item, const Object& m) {
         item.id = model::newItemId();
         item.mobId = m.mobId(QStringLiteral("MobID"));
@@ -286,6 +317,8 @@ private:
         }
     }
 
+    // The edit rate (the first picture track's, else the first track's), the duration (the longest track
+    // of that kind, in that rate), the Tracks column, and Start and End when there is a start.
     void setTiming(model::BinItem& item, const QList<Track>& tracks, std::optional<std::int64_t> start, bool drop) {
         QList<int> video;
         QList<int> audio;
@@ -317,6 +350,9 @@ private:
         return false;
     }
 
+    // A master mob as a master clip, or an audio clip when it has no picture. `slotTracks` maps the mob's
+    // SlotIDs to track names, so that sequences' and subclips' source clips (which name a slot) find the
+    // track.
     void master(const Object& m) {
         if (isPrecompute(m)) {
             note(QStringLiteral("rendered effect clips left out"));
@@ -361,6 +397,8 @@ private:
             item.sources << s;
         }
         bool drop = false;
+        // The sources before the files: a Tape source (which also gives the Tape column) or an Import
+        // source, each with its own start timecode.
         for (const MobId& id : before) {
             const Object source = mob(id);
             const Object descriptor = source.object(QStringLiteral("EssenceDescription"));
@@ -399,6 +437,8 @@ private:
         result_.items << item;
     }
 
+    // A composition mob used as Usage_SubClip: a Clip source naming its master (the first track's source
+    // clip) and where in it the subclip starts. Start is the master's plus that offset.
     void subclip(const Object& m) {
         model::BinItem item;
         commonFields(item, m);
@@ -439,6 +479,9 @@ private:
 
     // ---- sequences ----
 
+    // Turns one track's AAF components into the native model's segments, at the sequence's edit rate
+    // (`rate`; lengths in the file are in the slot's, `slotRate`). `letter` is V or A, for track names of
+    // clips the file does not hold. A transition is kept `pending` and goes onto the next segment pushed.
     struct Flattener {
         Importer& importer;
         Rational rate;
@@ -452,6 +495,8 @@ private:
             return rescale(c.integer(QStringLiteral("Length")), slotRate, rate);
         }
 
+        // Applies a pending transition to the segment after it: that segment starts `pendingCut` frames
+        // later.
         void push(model::Segment s) {
             if (pending) {
                 if (!s.isFiller()) s.sourceIn += pendingCut;
@@ -474,6 +519,9 @@ private:
                     push(importer.segmentFor(c, id, frames(c), letter));
                 }
             } else if (c.isA(QStringLiteral("Transition"))) {
+                // A transition of length L with its cut point at c overlaps the segments on either side.
+                // In a sequence it sits at the cut: the segment before is shortened by L - c here, and the
+                // one after starts c frames later (push). The alignment follows c.
                 const std::int64_t length = frames(c);
                 const std::int64_t cut = std::clamp<std::int64_t>(rescale(c.integer(QStringLiteral("CutPoint")), slotRate, rate), 0, length);
                 if (!out.isEmpty()) out.last().length = std::max<std::int64_t>(0, out.last().length - (length - cut));
@@ -533,12 +581,16 @@ private:
         }
     };
 
+    // The name of a group's OperationDefinition (a weak reference); empty when it cannot be found.
     QString operationName(const Object& group) const {
         const QVariant op = group.value(QStringLiteral("Operation"));
         if (op.userType() == qMetaTypeId<Object>()) return op.value<Object>().string(QStringLiteral("Name"));
         return {};
     }
 
+    // An effect of the native model for an OperationGroup: dissolves (by AUID, or by Media Composer's
+    // names) are Blend/Dissolve; others are read back from Cutthulhu's "Category/Name" or kept by their
+    // AAF names.
     model::Effect effectOf(const Object& group) {
         model::Effect e;
         const QString name = operationName(group);
@@ -563,6 +615,8 @@ private:
         return e;
     }
 
+    // A segment for a source clip naming `id`: its clip item and track when the clip is in the file, its
+    // StartTime as the IN point.
     model::Segment segmentFor(const Object& clip, const MobId& id, std::int64_t length, QChar letter) {
         model::Segment s;
         s.sourceMob = id;
@@ -584,6 +638,8 @@ private:
         return s;
     }
 
+    // A composition mob as a sequence. The first timecode slot gives the TC1 track and Start (scaled to
+    // the edit rate's nominal frames per second); picture and sound slots give V and A tracks.
     void sequence(const Object& m) {
         model::BinItem item;
         commonFields(item, m);
@@ -654,6 +710,9 @@ private:
         result_.items << item;
     }
 
+    // The mobs in file order and by MobID, and for each imported clip or subclip (by MobID): its item ID,
+    // its SlotIDs' track names, its name, and for master clips its start in frames and its Tape
+    // column. notes_ counts the warnings.
     const File& file_;
     ImportOptions options_;
     ImportResult result_;
@@ -669,6 +728,7 @@ private:
 
 } // namespace
 
+// `when` defaults to now, so that items always have dates.
 ImportResult importMobs(const File& file, const ImportOptions& options) {
     ImportOptions o = options;
     if (!o.when.isValid()) o.when = QDateTime::currentDateTimeUtc();

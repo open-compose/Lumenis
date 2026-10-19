@@ -10,6 +10,10 @@
 
 #include <algorithm>
 
+// Structure dumps (structure.h): bins and projects as a JSON document that leaves out everything
+// incidental (ids, positions, display settings), so that bins read from different sources can be
+// compared with scripts/structdiff.py. `--dump-structure` in app/main.cpp prints them; AAF import
+// tests compare them with Media Composer's bins. The layout is in docs/spec/structure.md.
 namespace lumenis::model {
 
 namespace {
@@ -17,10 +21,13 @@ namespace {
 constexpr auto kFormat = "cutthulhu-structure";
 constexpr int kVersion = 1;
 
+// A MobID as text, or empty for the null MobID.
 QString mobText(const MobId& mob) {
     return mob.isNull() ? QString() : QString::fromStdString(mob.toString());
 }
 
+// A segment: {filler: length} or {source, name, track, in, length}, plus "effect" and "transition"
+// as "category/name" when present.
 QJsonObject segmentStructure(const Segment& s) {
     QJsonObject o;
     if (s.isFiller()) {
@@ -39,6 +46,9 @@ QJsonObject segmentStructure(const Segment& s) {
     return o;
 }
 
+// A bin item: kind, name, MobID, edit rate, duration and Start/End, the custom columns and
+// unknown headings under "columns", the other standard headings under "fields", the source chain
+// and, for sequences, the segments of each track.
 QJsonObject itemStructure(const BinItem& item, const QStringList& custom) {
     QJsonObject o{
         {QStringLiteral("kind"), kindName(item.kind)},
@@ -107,6 +117,7 @@ QJsonObject binStructure(const Bin& bin) {
             {QStringLiteral("items"), items}};
 }
 
+// Each bin is listed under its name in the Bin Container (the tree's name, not the file's).
 QJsonObject projectStructure(const QString& folder, const QString& name, QString* error) {
     ProjectBins project(folder, name);
     if (!project.load(error)) return {};
@@ -123,6 +134,7 @@ QJsonObject projectStructure(const QString& folder, const QString& name, QString
     return o;
 }
 
+// A folder is taken as the project whose .cthproj file comes first by name.
 QJsonObject structureOf(const QString& path, QString* error) {
     const QFileInfo info(path);
     if (info.isFile() && path.endsWith(BinFile::suffix())) {

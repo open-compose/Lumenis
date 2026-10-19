@@ -4,15 +4,21 @@
 #include <cmath>
 #include <cstdio>
 
+// The project format presets and the rules New Project applies (raster limits, name rules, frame
+// rate text). The Select Project and New Project dialogs (src/ui/select_project_dialog.*) and the
+// project model (src/model/project_store.*) use them; docs/spec/ui-inventory.md has the citations.
 namespace lumenis {
 
 namespace {
 
+// A frame rate's display text and its exact value.
 struct RateName {
     const char* text;
     Rational rate;
 };
 
+// Every rate the presets and parseFrameRate() know. frameRateText() shows the first spelling of a
+// rate, so the canonical spellings come before the alternatives at the end.
 const std::array<RateName, 15> kRates{{
     {"23.976", Rational(24000, 1001)}, {"24", Rational(24)},
     {"25", Rational(25)},               {"29.97", Rational(30000, 1001)},
@@ -25,6 +31,7 @@ const std::array<RateName, 15> kRates{{
     {"23.98", Rational(24000, 1001)},   {"29.976", Rational(30000, 1001)},
 }};
 
+// Builds projectFormatPresets(): one ProjectFormat per raster and rate, in the guide's order.
 std::vector<ProjectFormat> buildPresets() {
     std::vector<ProjectFormat> out;
     const auto add = [&out](const char* group, FormatFamily family, int w, int h, ScanMode scan,
@@ -77,6 +84,8 @@ std::vector<ProjectFormat> buildPresets() {
 
 } // namespace
 
+// Known rates use their table spelling; other whole-number rates print as integers and the rest
+// with three decimals.
 std::string frameRateText(const Rational& rate) {
     for (const RateName& r : kRates) {
         if (r.rate == rate) {
@@ -161,6 +170,7 @@ std::vector<std::string> stereoscopicModes() {
     return {"Off", "Leading Eye", "Left Eye Only", "Right Eye Only", "Side by Side", "Over / Under", "Full"};
 }
 
+// Only HD progressive 720 or 1080 line formats at 23.976, 24 or 25 fps qualify.
 bool filmAvailable(const ProjectFormat& format) {
     if (format.scan != ScanMode::Progressive || (format.height != 720 && format.height != 1080)
         || format.family != FormatFamily::HD) {
@@ -169,6 +179,7 @@ bool filmAvailable(const ProjectFormat& format) {
     return format.editRate == Rational(24000, 1001) || format.editRate == Rational(24) || format.editRate == Rational(25);
 }
 
+// The checks run in this order, so the first failing rule is the one reported.
 std::optional<std::string> validateCustomRaster(int width, int height, bool stereoscopic) {
     if (width % 2 != 0 || height % 2 != 0) {
         return "raster dimensions must be even";

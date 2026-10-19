@@ -16,8 +16,17 @@
 
 #include <functional>
 
+// Docking bins inside a Bin Container (guide p.241-243): the tab bar that lets
+// a tab be dragged out, the tab groups, and BinDockArea, which keeps the groups
+// in a tree of QSplitters and works out the green drop zones. The area only
+// arranges widgets and reports what the user did through signals;
+// BinContainer (bin_container.cpp) decides what happens to the bins. The
+// colours and sizes (kDropZoneColor, kSplitterHandle) are in theme.h.
+
 namespace lumenis::ui {
 
+// MIME types for drags between bins, the Sidebar and the Source Browser. The
+// formats of their data are described in bin_dock.h.
 QString binTabMime() {
     return QStringLiteral("application/x-cutthulhu-bin-tab");
 }
@@ -65,6 +74,8 @@ private:
     BinDockArea& area_;
 };
 
+// A splitter between groups. Its sides cannot be collapsed to nothing, so a
+// group can always be seen and dropped on.
 QSplitter* newSplitter(Qt::Orientation orientation) {
     auto* s = new QSplitter(orientation);
     s->setObjectName(QStringLiteral("binSplitter"));
@@ -81,6 +92,8 @@ BinTabBar::BinTabBar(QWidget* parent) : QTabBar(parent) {
     setObjectName(QStringLiteral("binTabBar"));
 }
 
+// Remembers which tab a left press was on, so that a later move can tell a
+// drag out from a move along the bar.
 void BinTabBar::mousePressEvent(QMouseEvent* event) {
     pressIndex_ = event->button() == Qt::LeftButton ? tabAt(event->position().toPoint()) : -1;
     pressPos_ = event->position().toPoint();
@@ -91,7 +104,9 @@ void BinTabBar::mouseMoveEvent(QMouseEvent* event) {
     const QPoint p = event->position().toPoint();
     if (pressIndex_ >= 0 && (event->buttons() & Qt::LeftButton) &&
         (p.y() < -kDragOutDistance || p.y() > height() + kDragOutDistance)) {
-        // Out of the bar: end the bar's own tab move, then drag the bin.
+        // Out of the bar: end the bar's own tab move, then drag the bin. A
+        // synthetic release ends QTabBar's movable-tab drag, so the bar is not
+        // left mid-move while the bin is dragged.
         const int index = pressIndex_;
         pressIndex_ = -1;
         QMouseEvent release(QEvent::MouseButtonRelease, pressPos_, mapToGlobal(pressPos_), Qt::LeftButton,
@@ -140,6 +155,7 @@ BinTabGroup::BinTabGroup(BinDockArea& area) : QTabWidget(&area), area_(area) {
     menuButton->setMenu(menu);
     setCornerWidget(menuButton, Qt::TopRightCorner);
 
+    // The group only reports; BinContainer closes, activates or moves bins.
     connect(this, &QTabWidget::tabCloseRequested, this, [this](int i) {
         if (auto* v = qobject_cast<BinView*>(widget(i))) emit area_.closeRequested(v);
     });
@@ -177,6 +193,8 @@ BinDockArea::BinDockArea(QWidget* parent) : QWidget(parent) {
     overlay_ = new DropOverlay(*this);
 }
 
+// Depth-first through the splitter tree, so the order is left to right and
+// top to bottom.
 QList<BinTabGroup*> BinDockArea::groups() const {
     QList<BinTabGroup*> out;
     std::function<void(QWidget*)> walk = [&](QWidget* w) {
@@ -217,6 +235,8 @@ BinTabGroup* BinDockArea::newGroup() {
     return new BinTabGroup(*this);
 }
 
+// Puts `root` at the top of the tree (or empties the area with null). The
+// overlay is raised again so it stays above the new root.
 void BinDockArea::setRoot(QWidget* root) {
     root_ = root;
     if (root_) {
@@ -227,6 +247,8 @@ void BinDockArea::setRoot(QWidget* root) {
     overlay_->raise();
 }
 
+// Puts `replacement` where `old` is in the tree, keeping the splitter's sizes.
+// `old` is detached but not deleted.
 void BinDockArea::replace(QWidget* old, QWidget* replacement) {
     if (old == root_) {
         layout()->removeWidget(old);
@@ -264,6 +286,10 @@ void BinDockArea::addView(BinView* view, const QString& title, BinTabGroup* targ
     const Qt::Orientation o =
         side == BinDropSide::Left || side == BinDropSide::Right ? Qt::Horizontal : Qt::Vertical;
     const bool before = side == BinDropSide::Left || side == BinDropSide::Top;
+    // If the target already sits in a splitter running the same way, the new
+    // group joins that splitter and takes half of the target's share.
+    // Otherwise a new splitter takes the target's place and holds the target
+    // and the new group half and half.
     auto* parent = qobject_cast<QSplitter*>(target->parentWidget());
     if (parent && parent->orientation() == o) {
         const int at = parent->indexOf(target);
@@ -286,6 +312,7 @@ void BinDockArea::addView(BinView* view, const QString& title, BinTabGroup* targ
     current_ = g;
 }
 
+// The view loses its parent; the caller owns it and must re-add or delete it.
 void BinDockArea::takeView(BinView* view) {
     BinTabGroup* g = groupOf(view);
     if (!g) return;
@@ -294,6 +321,8 @@ void BinDockArea::takeView(BinView* view) {
     if (g->count() == 0) removeGroup(g);
 }
 
+// Takes an empty group out of the tree and deletes it later; emits emptied()
+// when it was the last.
 void BinDockArea::removeGroup(BinTabGroup* group) {
     if (group == root_) {
         layout()->removeWidget(group);
@@ -323,6 +352,9 @@ void BinDockArea::showView(BinView* view) {
     }
 }
 
+// For each group: the whole group (Tab), then, unless `tabOnly`, a band along
+// each edge a quarter of its size. The bands overlap the Tab zone and each
+// other at the corners; zoneAt() picks between them.
 QList<BinDockArea::Zone> BinDockArea::zones(bool tabOnly) const {
     QList<Zone> out;
     for (BinTabGroup* g : groups()) {
@@ -358,6 +390,8 @@ BinDockArea::Zone BinDockArea::zoneAt(const QPoint& pos, bool tabOnly) const {
         case BinDropSide::Bottom: d = g.bottom() - pos.y(); break;
         case BinDropSide::Tab: break;
         }
+        // `best` starts invalid with side Tab, so the first edge always wins
+        // over no zone or a Tab zone.
         if (best.side == BinDropSide::Tab || d < bestDistance) {
             best = z;
             bestDistance = d;
@@ -370,6 +404,7 @@ BinDockArea::Zone BinDockArea::zoneAt(const QPoint& pos, bool tabOnly) const {
     return best;
 }
 
+// The overlay covers the whole area and draws only the hovered zone.
 void BinDockArea::setHoveredZone(const Zone& zone) {
     hovered_ = zone;
     overlay_->setGeometry(rect());
@@ -378,6 +413,8 @@ void BinDockArea::setHoveredZone(const Zone& zone) {
     overlay_->update();
 }
 
+// The area takes bin tabs and Sidebar entries. Bin items are not taken here:
+// they are dropped on the views inside the bins.
 bool BinDockArea::accepts(const QMimeData* mime) {
     return mime->hasFormat(binTabMime()) || mime->hasFormat(binNodesMime());
 }
@@ -391,6 +428,7 @@ void BinDockArea::dragEnterEvent(QDragEnterEvent* event) {
 void BinDockArea::dragMoveEvent(QDragMoveEvent* event) {
     if (!accepts(event->mimeData())) return;
     // Alt tabs the bin into a group; without it, the edges subdivide (p.243).
+    // An empty area takes the drop anywhere: the bin becomes its first group.
     const Zone z = zoneAt(event->position().toPoint(), event->modifiers() & Qt::AltModifier);
     if (z.isValid() || isEmpty()) {
         event->acceptProposedAction();
@@ -404,6 +442,8 @@ void BinDockArea::dragLeaveEvent(QDragLeaveEvent*) {
     setHoveredZone({});
 }
 
+// Reports the drop with the zone under the pointer; BinContainer moves the
+// bin (binDropped) or opens the Sidebar's bins there (nodesDropped).
 void BinDockArea::dropEvent(QDropEvent* event) {
     const Zone z = zoneAt(event->position().toPoint(), event->modifiers() & Qt::AltModifier);
     setHoveredZone({});

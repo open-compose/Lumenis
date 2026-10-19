@@ -28,6 +28,8 @@ namespace lumenis::media {
 QString linkPluginName();
 
 // Where a linked clip's media is, kept with the clip (model::BinItem::link).
+// Kept in the bin as JSON (toJson(), fromJson()); clip frames are at the clip's edit rate, file
+// frames at `rate`.
 struct Link {
     QString path;
     // The file's video frame rate; a clip runs at the project's rate, and
@@ -35,6 +37,7 @@ struct Link {
     Rational rate{25, 1};
     std::int64_t frames = 0; // the file's video frames; 0 for audio only
     int videoStream = -1;    // -1: no picture
+    // The file's audio streams the clip uses, in track order (A1 is the first channel of the first).
     QList<int> audioStreams;
     QList<int> streamChannels; // channels in each of audioStreams
     int channels = 0; // audio channels, all streams together
@@ -68,15 +71,20 @@ struct Link {
     static std::optional<Link> fromJson(const QJsonObject& json);
 };
 
+// The item's link; nothing if it has none or it cannot be read.
 std::optional<Link> linkOf(const model::BinItem& item);
+// Whether the item points at media (unlinked clips too).
 bool isLinked(const model::BinItem& item);
+// Whether the clip was unlinked (Clip > Modify > Unlink Media).
 bool isUnlinked(const model::BinItem& item);
 // Clip > Modify > Unlink Media (p.368): master clips only. False if the
 // item is not a linked clip.
 bool unlinkClip(model::BinItem& item);
 
+// How files are linked: the project's rate and the Link settings.
 struct LinkOptions {
     Rational editRate{24000, 1001}; // the project's
+    // The clips' creation time; now (UTC) if invalid.
     QDateTime when;
     // Link settings, Link Options tab: "Always use 16:9 aspect ratio for SD
     // clips" (p.1204).
@@ -110,14 +118,18 @@ QList<model::BinItem> linkFiles(const QStringList& paths, const LinkOptions& opt
 // a clip's media is among them (its source file; for a sequence, its first
 // file), and pointing the clip at it. The media must fit the clip: the same
 // tracks and duration (p.320). Relinking ends an Unlink.
+// File name to path for every file under `folder` (recursively); the first found wins a name.
 QHash<QString, QString> indexFolder(const QString& folder);
+// Where the item's media is in such an index (a sequence spec for an image sequence); empty if not.
 QString locateMedia(const model::BinItem& item, const QHash<QString, QString>& index);
+// Points the clip at `path` if its media fits; false with the reason in *error otherwise.
 bool relinkClip(model::BinItem& item, const QString& path, QString* error = nullptr);
 
 // Frames of linked clips, decoded on demand. Keeps a few files open and the
 // frames last asked for; safe to use from several threads.
 class FrameCache {
 public:
+    // Keeps up to `openFiles` files open and `frames` frames (each at the size it was asked for).
     explicit FrameCache(int openFiles = 8, int frames = 64);
     ~FrameCache();
     FrameCache(const FrameCache&) = delete;
@@ -135,6 +147,7 @@ private:
     struct Reader;
     std::shared_ptr<Reader> reader(const Link& link);
 
+    // Guards readers_ and the image cache; each Reader has its own lock for decoding.
     QMutex mutex_;
     int openFiles_;
     int frames_;

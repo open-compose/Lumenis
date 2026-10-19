@@ -12,6 +12,7 @@
 // out its own exports, so that its AAF import reads them.
 namespace lumenis::interop::aaf {
 
+// How an export is written.
 struct ExportOptions {
     QString productName;    // the product's name when empty
     QString productVersion; // the product's version when empty
@@ -23,7 +24,9 @@ struct ExportOptions {
     bool includeAudio = true;
 };
 
+// What an export did.
 struct ExportResult {
+    // Whether the file was written; `error` says why not.
     bool ok = false;
     QString error;
     QStringList warnings; // what was left out, once each

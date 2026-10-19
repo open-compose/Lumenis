@@ -29,17 +29,23 @@ QString ffmpegVersion();
 // Codecs that wait for counsel's review (docs/EXTENSIONS.md, marked with a
 // dagger). With LUMENIS_PATENT_CODECS off they are probed but not decoded
 // or encoded.
+// Whether FFmpeg's codec name (any case) is one of those.
 bool isPatentCodec(const QString& codec);
+// Whether this build was made with LUMENIS_PATENT_CODECS on.
 bool patentCodecsAllowed();
+// Whether a codec may be decoded or encoded in this build.
 bool codecAllowed(const QString& codec);
 
+// What a stream carries, as FFmpeg's media type says.
 enum class StreamKind { Video, Audio, Data, Other };
 
 // One stream of a media file.
 struct StreamInfo {
+    // The stream's index in the file, as VideoReader::open() and AudioReader::open() take it.
     int index = 0;
     StreamKind kind = StreamKind::Other;
     QString codec;        // FFmpeg's name: "dnxhd", "prores", "pcm_s24le", ...
+    // FFmpeg's long name for the codec.
     QString codecLongName;
     QString profile;      // e.g. "DNXHR HQ", "422 HQ"
     // Video.
@@ -61,9 +67,12 @@ struct StreamInfo {
 
 // What a file holds (the Source Browser's columns, Editing Guide ch. 11).
 struct MediaInfo {
+    // The path or ImageSequence spec probed.
     QString path;
     QString format;        // "mov,mp4,m4a,3gp,3g2,mj2", "mxf", ...
+    // FFmpeg's description of the format.
     QString formatLongName;
+    // The file's duration as the demuxer gives it (an image sequence's from its count and rate).
     double durationSeconds = 0;
     QString startTimecode; // "01:00:00:00" when the file records one
     QString reelName;      // tape or reel name metadata, if any
@@ -71,8 +80,11 @@ struct MediaInfo {
     QHash<QString, QString> metadata;
     std::vector<StreamInfo> streams;
 
+    // The first video stream, null if there is none.
     const StreamInfo* firstVideo() const;
+    // The audio streams, in file order.
     std::vector<const StreamInfo*> audio() const;
+    // What `--probe` prints (app/main.cpp).
     QJsonObject toJson() const;
 };
 
@@ -90,18 +102,24 @@ struct ImageSequence {
     QString name() const;
     // "seq:<pattern>?first=1&count=40&rate=24/1".
     QString spec() const;
+    // Parses spec(); nothing if `spec` is not one or names no files.
     static std::optional<ImageSequence> fromSpec(const QString& spec);
 };
+// Whether a path is an ImageSequence spec ("seq:...").
 bool isSequenceSpec(const QString& path);
 // Whether a file name is a numbered still that can be part of a sequence:
 // its stem ends in digits and its extension is an image format.
 bool isNumberedStill(const QString& path);
 
+// Reads a file's (or an ImageSequence spec's) format, metadata and streams without decoding. Nothing
+// if FFmpeg cannot open it, with its reason in *error. Lengths of formats without an index are
+// counted by reading the file through.
 std::optional<MediaInfo> probe(const QString& path, QString* error = nullptr);
 
 // Reads the frames of one video stream by frame number, from 0. Reading the
 // next frame continues decoding; other frames seek to the keyframe before
 // them and decode forward, so every frame is exact.
+// Not thread-safe: one thread at a time (FrameCache gives each open file its own lock).
 class VideoReader {
 public:
     VideoReader();
@@ -111,8 +129,10 @@ public:
 
     // The first video stream when `stream` is -1.
     bool open(const QString& path, int stream = -1, QString* error = nullptr);
+    // Whether open() succeeded; info() is only valid then.
     bool isOpen() const;
     const StreamInfo& info() const;
+    // Frames in the stream (an image sequence's run); 0 when not open or unknown.
     std::int64_t frameCount() const;
 
     // The frame as RGBA (8 bits per channel), scaled to `size` if given,
@@ -133,6 +153,8 @@ private:
 };
 
 // Reads one audio stream as 32-bit float samples, interleaved by channel.
+// Samples are numbered from the stream's start at the file's own rate (no resampling). Not
+// thread-safe; AudioMix keeps one reader per channel it plays.
 class AudioReader {
 public:
     AudioReader();
@@ -140,9 +162,12 @@ public:
     AudioReader(const AudioReader&) = delete;
     AudioReader& operator=(const AudioReader&) = delete;
 
+    // The first audio stream when `stream` is -1. False if the stream cannot be decoded, with the reason
+    // in *error.
     bool open(const QString& path, int stream = -1, QString* error = nullptr);
     bool isOpen() const;
     const StreamInfo& info() const;
+    // The stream's channel count and sample rate; 0 when not open.
     int channels() const;
     int sampleRate() const;
     // `count` samples per channel from sample `start`; fewer at the end.
@@ -183,6 +208,8 @@ struct WriterSettings {
     MobId filePackage;
 };
 
+// Not thread-safe. Errors are reported by returning false, with the reason in lastError() (and, for
+// open() and finish(), in *error).
 class MediaWriter {
 public:
     MediaWriter();
@@ -190,6 +217,7 @@ public:
     MediaWriter(const MediaWriter&) = delete;
     MediaWriter& operator=(const MediaWriter&) = delete;
 
+    // Creates the file and writes its header. The muxer's metadata keys are FFmpeg's.
     bool open(const QString& path, const WriterSettings& settings, QString* error = nullptr);
     // The next video frame (any QImage format; converted and scaled).
     bool writeVideo(const QImage& frame);
@@ -201,6 +229,7 @@ public:
     bool writeAudio(const float* samples, int count);
     // Flushes the encoders and writes the trailer.
     bool finish(QString* error = nullptr);
+    // The reason the last call failed.
     QString lastError() const;
 
 private:
@@ -218,12 +247,16 @@ struct Psnr {
     double cr = 0;
     double worst() const;
 };
+// Compares frame `frameA` of `a` with frame `frameB` of `b` (scaled to a's raster); nothing if
+// either frame cannot be read. Identical planes give 100 dB.
 std::optional<Psnr> comparePictures(VideoReader& a, std::int64_t frameA, VideoReader& b, std::int64_t frameB);
 
 // Converts interleaved float audio from one sample rate to another
 // (FFmpeg's swresample).
 class Resampler {
 public:
+    // Channels and rates must be positive; otherwise, or if swresample refuses, isValid() is false
+    // and push() returns nothing.
     Resampler(int channels, int fromRate, int toRate);
     ~Resampler();
     Resampler(const Resampler&) = delete;

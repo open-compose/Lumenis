@@ -13,14 +13,26 @@
 #include <algorithm>
 #include <cmath>
 
+// Linked media (ROADMAP Phase 2.2): master clips that point at files where they are, through a Link
+// kept as JSON in model::BinItem::link. This file makes such clips from probed files (linkClip(),
+// linkFiles(), groupStills() for image sequences), with the bin columns their metadata fills and a
+// source chain of MobIDs (docs/spec/native-model.md); relinks them (Relink > Linked Media:
+// indexFolder(), locateMedia(), relinkClip()); and decodes their frames (FrameCache). Managed media
+// (managed.cpp) uses the same Link with a mediaId and a file per track.
+// Callers: the Source Browser (src/ui/source_browser.cpp), its linking and importing in
+// src/ui/main_window.cpp, the relink dialogs (src/ui/relink_dialog.cpp) and the frames the monitors,
+// bins and Timeline show (src/ui/media_frames.cpp).
+
 namespace lumenis::media {
 
 namespace {
 
+// "num/den", as Link::toJson() keeps a rate.
 QString rateText(const Rational& r) {
     return QStringLiteral("%1/%2").arg(r.num()).arg(r.den());
 }
 
+// Parses rateText(); the default Rational if it is not a positive rate.
 Rational parseRate(const QString& text) {
     const QStringList parts = text.split(QLatin1Char('/'));
     const std::int64_t num = parts.value(0).toLongLong();
@@ -45,6 +57,7 @@ std::int64_t rescale(std::int64_t a, std::int64_t b, std::int64_t c) {
     return (a * b + c / 2) / c; // rounded to the nearest
 }
 
+// a * b / c rounded down, and up; 0 when c is not positive.
 std::int64_t rescaleDown(std::int64_t a, std::int64_t b, std::int64_t c) {
     return c <= 0 ? 0 : a * b / c;
 }
@@ -77,6 +90,7 @@ QString videoName(const StreamInfo& s) {
     return names.value(s.codec, s.codec.toUpper());
 }
 
+// The audio codec as editors know it: "PCM", "AAC", ...
 QString audioName(const StreamInfo& s) {
     if (s.codec.startsWith(QLatin1String("pcm_"))) return QStringLiteral("PCM");
     static const QHash<QString, QString> names{
@@ -87,6 +101,7 @@ QString audioName(const StreamInfo& s) {
     return names.value(s.codec, s.codec.toUpper());
 }
 
+// Whether FFmpeg's pixel format name is an RGB one, for the Color Space column.
 bool isRgb(const QString& pixelFormat) {
     return pixelFormat.startsWith(QLatin1String("rgb")) || pixelFormat.startsWith(QLatin1String("bgr")) ||
            pixelFormat.startsWith(QLatin1String("gbr")) || pixelFormat.startsWith(QLatin1String("argb")) ||
@@ -120,6 +135,7 @@ std::optional<std::int64_t> startFrames(const QString& text, const Rational& fil
     return std::nullopt;
 }
 
+// Frames from midnight as the project's (non-drop) timecode, wrapped at 24 hours.
 QString timecodeText(std::int64_t frames, const Rational& editRate) {
     const TimecodeFormat format = TimecodeFormat::forRate(editRate, false);
     return QString::fromStdString(Timecode(frames % format.framesPerDay(), format).toString());
@@ -131,6 +147,8 @@ QString linkPluginName() {
     return QStringLiteral("FFmpeg");
 }
 
+// model::subclipItem() makes the item; the subclip's link is the master's with `first` moved to the
+// file frame of `in`, converted when the file runs at another rate.
 std::optional<model::BinItem> makeSubclip(const model::Bin& bin, const model::BinItem& master, std::int64_t in,
                                           std::int64_t out, const QDateTime& when) {
     auto item = model::subclipItem(bin, master, in, out, when);
@@ -146,6 +164,8 @@ std::optional<model::BinItem> makeSubclip(const model::Bin& bin, const model::Bi
     return item;
 }
 
+// Converts at the file's rate when it differs (rounding down), adds the start offset `first`, and
+// clamps to the file's frames.
 std::int64_t Link::fileFrame(std::int64_t clipFrame, const Rational& clipRate) const {
     std::int64_t f = clipFrame;
     if (clipRate.num() > 0 && !(rate == clipRate)) {
@@ -157,6 +177,7 @@ std::int64_t Link::fileFrame(std::int64_t clipFrame, const Rational& clipRate) c
     return std::max<std::int64_t>(f, 0);
 }
 
+// The link as kept in the bin; `first`, `unlinked`, `mediaId` and `audioPaths` only when set.
 QJsonObject Link::toJson() const {
     QJsonObject o{
         {QStringLiteral("path"), path},
@@ -180,6 +201,7 @@ QJsonObject Link::toJson() const {
     return o;
 }
 
+// Nothing if there is no path; absent fields keep their defaults.
 std::optional<Link> Link::fromJson(const QJsonObject& json) {
     Link l;
     l.path = json.value(QStringLiteral("path")).toString();
@@ -223,6 +245,8 @@ QString Link::audioFile(int track) const {
     return {};
 }
 
+// The picture's file (or, without one, the path when there are no per-track audio files), then each
+// distinct audio file.
 QStringList Link::files() const {
     QStringList out;
     if (videoStream >= 0 || audioPaths.isEmpty()) out << file();
@@ -237,14 +261,17 @@ QString Link::file() const {
     return path;
 }
 
+// The item's link, if it has one.
 std::optional<Link> linkOf(const model::BinItem& item) {
     return item.link.isEmpty() ? std::nullopt : Link::fromJson(item.link);
 }
 
+// Whether the item has a link with a path (unlinked ones too).
 bool isLinked(const model::BinItem& item) {
     return !item.link.value(QStringLiteral("path")).toString().isEmpty();
 }
 
+// Whether the clip's media was unlinked (Clip > Modify > Unlink Media).
 bool isUnlinked(const model::BinItem& item) {
     return item.link.value(QStringLiteral("unlinked")).toBool();
 }
@@ -258,12 +285,16 @@ bool unlinkClip(model::BinItem& item) {
     return true;
 }
 
+// True if a video or audio stream can be decoded in this build.
 bool isLinkable(const MediaInfo& info) {
     return std::any_of(info.streams.begin(), info.streams.end(), [](const StreamInfo& s) {
         return (s.kind == StreamKind::Video || s.kind == StreamKind::Audio) && s.decodable;
     });
 }
 
+// The clip runs at the project's rate (options.editRate); its duration converts the file's frames
+// (or, for sound only, its samples) to that rate. Undecodable pictures are ignored, so a file with
+// sound the build can read and a picture it cannot becomes an audio clip.
 std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions& options, QString* error) {
     if (!isLinkable(info)) {
         if (error) *error = QObject::tr("%1 has no picture or sound that can be read.").arg(info.path);
@@ -286,6 +317,7 @@ std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions&
         link.channels += a->channels;
     }
 
+    // The item: a master clip with a picture, an audio clip without.
     model::BinItem item;
     item.id = model::newItemId();
     item.kind = video ? model::BinItemKind::MasterClip : model::BinItemKind::AudioClip;
@@ -298,6 +330,8 @@ std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions&
     item.modified = item.created;
     item.editRate = editRate;
 
+    // Its duration, from the picture's frames at the file's rate, or from the first audio stream's
+    // samples.
     Rational fileRate = editRate;
     if (video) {
         link.videoStream = video->index;
@@ -320,6 +354,7 @@ std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions&
     }
     item.link = link.toJson();
 
+    // The columns (p.274-278), set only when there is a value.
     auto set = [&](const char* heading, const QString& value) {
         if (!value.isEmpty()) item.fields.insert(QString::fromLatin1(heading), value);
     };
@@ -407,6 +442,7 @@ struct Numbered {
     QString key() const { return stem + QLatin1Char('|') + QString::number(width) + QLatin1Char('|') + suffix; }
 };
 
+// Splits a numbered still's path; nothing if it is not one (isNumberedStill()).
 std::optional<Numbered> numbered(const QString& path) {
     if (!isNumberedStill(path)) return std::nullopt;
     const QFileInfo fi(path);
@@ -422,6 +458,7 @@ std::optional<Numbered> numbered(const QString& path) {
     return n;
 }
 
+// The ImageSequence of a run: the stem, "%0<width>d" and the suffix as FFmpeg's image2 pattern.
 ImageSequence sequenceOf(const Numbered& n, std::int64_t first, std::int64_t count, const Rational& rate) {
     ImageSequence s;
     s.pattern = n.stem + QStringLiteral("%0") + QString::number(n.width) + QLatin1Char('d') + n.suffix;
@@ -455,6 +492,7 @@ QStringList groupStills(const QStringList& paths, const Rational& rate) {
         }
         groups[key] << n->number;
     }
+    // Each group's runs go where its first file was among `paths`.
     QHash<qsizetype, QStringList> filled;
     for (auto it = groups.begin(); it != groups.end(); ++it) {
         const Numbered& n = examples.value(it.key());
@@ -500,6 +538,7 @@ QStringList groupStills(const QStringList& paths, const Rational& rate) {
     return result;
 }
 
+// Probes each path (or sequence spec) and links it with linkClip(), in order.
 QList<model::BinItem> linkFiles(const QStringList& paths, const LinkOptions& options, int* skipped) {
     QList<model::BinItem> items;
     int missed = 0;
@@ -516,6 +555,7 @@ QList<model::BinItem> linkFiles(const QStringList& paths, const LinkOptions& opt
     return items;
 }
 
+// File name to path for every file under `folder`, recursively; the first one found wins a name.
 QHash<QString, QString> indexFolder(const QString& folder) {
     QHash<QString, QString> index;
     QDirIterator it(folder, QDir::Files | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
@@ -527,6 +567,8 @@ QHash<QString, QString> indexFolder(const QString& folder) {
     return index;
 }
 
+// Looks the clip's file name up in the index; for a sequence, its first file, and the result is the
+// sequence's spec moved to that folder. Empty when it is not there.
 QString locateMedia(const model::BinItem& item, const QHash<QString, QString>& index) {
     const auto link = linkOf(item);
     if (!link) return {};
@@ -541,6 +583,9 @@ QString locateMedia(const model::BinItem& item, const QHash<QString, QString>& i
     return found;
 }
 
+// Links the file afresh at the clip's rate and checks it fits: the same duration and Tracks. The
+// clip keeps its name, id and other columns; only the link (which drops any Unlink) and the Source
+// File, Source Path, Drive and Plug-In columns change.
 bool relinkClip(model::BinItem& item, const QString& path, QString* error) {
     const auto info = probe(path, error);
     if (!info) return false;
@@ -563,6 +608,8 @@ bool relinkClip(model::BinItem& item, const QString& path, QString* error) {
 
 // ---------------------------------------------------------------- FrameCache
 
+// One open file, with its own mutex: a VideoReader is used by one thread at a time. `ok` is false if
+// the file has no picture or could not be opened; such a reader stays cached until it is dropped.
 struct FrameCache::Reader {
     QString path;
     QMutex mutex;
@@ -574,6 +621,8 @@ FrameCache::FrameCache(int openFiles, int frames) : openFiles_(std::max(openFile
 
 FrameCache::~FrameCache() = default;
 
+// The reader for the link's file, most recently used first; the least recently used are closed past
+// openFiles_. Readers are kept by path alone.
 std::shared_ptr<FrameCache::Reader> FrameCache::reader(const Link& link) {
     // Called with mutex_ held.
     for (auto it = readers_.begin(); it != readers_.end(); ++it) {
@@ -590,6 +639,9 @@ std::shared_ptr<FrameCache::Reader> FrameCache::reader(const Link& link) {
     return r;
 }
 
+// Looks up the scaled frame; on a miss it decodes outside the cache lock, holding only that file's
+// reader lock, so other files decode at the same time on other threads. The frame is decoded at the
+// file's raster and scaled with QImage, then kept, dropping the oldest past frames_.
 QImage FrameCache::frame(const model::BinItem& item, std::int64_t clipFrame, QSize size) {
     const auto link = linkOf(item);
     if (!link || link->videoStream < 0 || link->unlinked) return {};
@@ -622,6 +674,7 @@ QImage FrameCache::frame(const model::BinItem& item, std::int64_t clipFrame, QSi
     return image;
 }
 
+// Every file the media is in exists; nothing is opened.
 bool FrameCache::isOnline(const model::BinItem& item) {
     const auto link = linkOf(item);
     if (!link || link->unlinked) return false;

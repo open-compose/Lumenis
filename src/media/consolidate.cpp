@@ -12,10 +12,16 @@
 #include <algorithm>
 #include <map>
 
+// Clip > Consolidate/Transcode over a bin selection (Editing Guide p.348-356). This file decides
+// what to make and how the bin changes; the media itself is written by consolidateClip() and
+// transcodeClip() in managed.cpp. The dialog is src/ui/consolidate_dialog.cpp; the command runs from
+// src/ui/main_window.cpp, through the Background Queue (src/ui/background_queue.cpp).
+
 namespace lumenis::media {
 
 namespace {
 
+// Master clips and audio clips: the items that point at media themselves.
 bool isClip(const model::BinItem& item) {
     return item.kind == model::BinItemKind::MasterClip || item.kind == model::BinItemKind::AudioClip;
 }
@@ -39,6 +45,8 @@ std::int64_t defaultHandles(const Rational& editRate) {
     return 24;
 }
 
+// Source rasters are read from the clip's file (probe()); without a picture or a readable file the
+// project's raster is used. Sizes are kept even and never below kMinimumRaster.
 QSize rasterFor(const model::BinItem& clip, ConsolidateOptions::Raster raster, QSize project) {
     if (raster == ConsolidateOptions::Raster::Project) return project;
     const auto link = linkOf(clip);
@@ -58,6 +66,7 @@ QSize rasterFor(const model::BinItem& clip, ConsolidateOptions::Raster raster, Q
     return size.expandedTo(kMinimumRaster);
 }
 
+// Tries ".01", ".02", ... until the name is free.
 QString numberedName(const QString& name, const QString& suffix, const QStringList& taken) {
     for (int n = 1;; ++n) {
         const QString candidate = QStringLiteral("%1%2.%3").arg(name, suffix).arg(n, 2, 10, QLatin1Char('0'));
@@ -65,6 +74,8 @@ QString numberedName(const QString& name, const QString& suffix, const QStringLi
     }
 }
 
+// Goes through the selection in order and stops at the first error (which also leaves what was made
+// so far in `added`). `names` grows with each new name, so numbering stays unique within one run.
 ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QString& binId, const ClipLookup& clips,
                               const QStringList& taken, const ConsolidateOptions& options) {
     ConsolidateResult result;
@@ -85,6 +96,8 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
         }
         return {};
     };
+    // Makes the media of frames [in, out) (out -1: to the end): copied for Consolidate, otherwise
+    // transcoded at the raster the options choose for this clip.
     auto make = [&](const model::BinItem& clip, std::int64_t in, std::int64_t out, QString* error) {
         if (copy) return consolidateClip(clip, in, out, options.creation, error);
         MediaCreation creation = options.creation;
@@ -153,6 +166,7 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
             std::int64_t from = 0;
         };
         QHash<QString, Made> remap;
+        // Each clip used gets new media for its used range plus handles, clamped to the clip.
         for (const auto& [clipId, use] : uses) {
             const auto clip = clips ? clips(use.binId, clipId) : std::nullopt;
             if (!clip) {
@@ -179,6 +193,7 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
         if (!result.error.isEmpty()) break;
         if (remap.isEmpty()) continue;
         // The sequence's segments now use the new clips (p.349).
+        // Each segment that used a remade clip points at the new one, which starts at `from`.
         for (const QString& name : sequence.trackNames()) {
             model::Track* track = sequence.track(name);
             if (!track) continue;

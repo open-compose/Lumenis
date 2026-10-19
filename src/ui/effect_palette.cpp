@@ -16,10 +16,16 @@
 #include <QTabBar>
 #include <QVBoxLayout>
 
+// The Effect Palette (effect_palette.h): the built-in effect catalog read from resources/effects.json,
+// the drag data that carries an effect to the Timeline (timeline.cpp takes the drop), the effect icon,
+// and the palette widget. Applying an effect to a segment or transition is the Timeline's and the
+// sequence model's (model::Effect in src/model/sequence.*); its parameters are effect_editor.*.
+
 namespace lumenis::ui {
 
 namespace {
 
+// The category entry that lists every category's effects.
 const QString kAll = QStringLiteral("All");
 
 // Our own effect tile colours (the guide's icons are not copied).
@@ -31,6 +37,8 @@ constexpr QRgb kRealTime = 0xff3cc85a;
 
 // ---------------------------------------------------------------- EffectCatalog
 
+// effects.json holds "tabs" (name and kind) and "categories", each with its "effects". An effect's
+// "realTime" is true when left out.
 const EffectCatalog& EffectCatalog::builtin() {
     static const EffectCatalog catalog = [] {
         EffectCatalog c;
@@ -101,6 +109,7 @@ std::optional<EffectInfo> effectFromMime(const QMimeData* mime) {
     return *e;
 }
 
+// A 26x18 pixmap: the optional green dot on the left, then a purple tile.
 QIcon effectIcon(bool transition, bool realTimeDot) {
     QPixmap pm(26, 18);
     pm.fill(Qt::transparent);
@@ -128,6 +137,7 @@ QIcon effectIcon(bool transition, bool realTimeDot) {
 
 // ---------------------------------------------------------------- EffectList
 
+// Each item's text is the effect's name and its Qt::UserRole its category, which find the effect.
 void EffectList::startDrag(Qt::DropActions) {
     QListWidgetItem* item = currentItem();
     if (!item) return;
@@ -141,6 +151,7 @@ void EffectList::startDrag(Qt::DropActions) {
 
 // ---------------------------------------------------------------- EffectPalette
 
+// The tab bar, Quick Find, then the categories and effects side by side in a splitter.
 EffectPalette::EffectPalette(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("effectPalette"));
     tabs_ = new QTabBar(this);
@@ -215,6 +226,8 @@ void EffectPalette::fillCategories() {
     fillEffects();
 }
 
+// Effects that apply only to transitions get the transition icon. In "All" the tooltip names the
+// category too.
 void EffectPalette::fillEffects() {
     effects_->clear();
     const QString cat = category();

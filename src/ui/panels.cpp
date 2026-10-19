@@ -16,6 +16,19 @@
 #include <algorithm>
 #include <cmath>
 
+// The widgets of the panel framework (declared in panels.h); the logic that moves panels around is in
+// panel_manager.cpp. We draw our own instead of using QDockWidget, because Qt cannot draw vertical title
+// bars, green drop zones or Alt-drag tabbing.
+//
+// The structure, from the top:
+//   - DockHost: an area holding a tree whose inner nodes are QSplitters (PanelSplitter) and whose leaves
+//     are PanelGroups. The main window has one; each FloatingWindow has its own. A DropOverlay child sits
+//     above the tree and paints drop zones during a drag.
+//   - PanelGroup: a vertical title bar (PanelTitleBar) beside a QStackedWidget of Panels, one tab each.
+//   - Panel: one window (Composer, Timeline, a bin, a tool); its content widget fills it.
+// The title bar only reports presses and drags to the PanelManager, which decides where things go and
+// saves and restores the whole arrangement as JSON for workspaces (PanelManager::saveLayout).
+
 namespace lumenis::ui {
 
 namespace {
@@ -34,6 +47,9 @@ int roundUp(int value, int step) {
     return (value + step - 1) / step * step;
 }
 
+// The vertical title bar of a PanelGroup. Pressing a tab activates its panel, the tab menu button lists
+// the group's panels, and dragging a tab (one panel) or the box or space (the whole group) starts a
+// PanelManager drag; Alt during the drag tabs instead of docking.
 class PanelTitleBar : public QWidget {
 public:
     PanelTitleBar(PanelGroup& group, PanelManager& manager) : QWidget(&group), group_(group), manager_(manager) {
@@ -45,6 +61,7 @@ public:
     QSize sizeHint() const override { return {kTitleBarWidth, 120}; }
 
 protected:
+    // What a point on the bar is over; `index` is the tab's index for Tab and Close.
     struct Hit {
         enum Kind { None, Box, Menu, Tab, Close, Space } kind = None;
         int index = -1;
@@ -64,6 +81,7 @@ protected:
         return kCloseHeight + roundUp(text + 12, 10);
     }
 
+    // The tabs' rectangles, top to bottom, in the group's panel order.
     QList<QRect> tabRects() const {
         QList<QRect> rects;
         int y = kTabsTop;
@@ -87,6 +105,7 @@ protected:
         return {Hit::Space, -1};
     }
 
+    // Text is drawn with the palette's BrightText so the text-free screenshots hide it (capture.h).
     void paintEvent(QPaintEvent*) override {
         QPainter p(this);
         p.fillRect(rect(), QColor::fromRgba(group_.isActive() ? kTitleBarActiveColor : kTitleBarColor));
@@ -147,6 +166,7 @@ protected:
         }
     }
 
+    // A press on Close does nothing until release, so it can be cancelled by moving off the button.
     void mousePressEvent(QMouseEvent* event) override {
         if (event->button() != Qt::LeftButton) return;
         press_ = hitTest(event->position().toPoint());
@@ -169,6 +189,8 @@ protected:
         }
     }
 
+    // A drag starts after the platform's drag distance, from a tab, the box or the space, but not from the
+    // close or menu buttons.
     void mouseMoveEvent(QMouseEvent* event) override {
         if (!(event->buttons() & Qt::LeftButton)) return;
         const QPoint global = event->globalPosition().toPoint();
@@ -184,6 +206,7 @@ protected:
         manager_.updateDrag(global, tabbing);
     }
 
+    // Ends a drag, or closes the panel when the press and release were on the same close button.
     void mouseReleaseEvent(QMouseEvent* event) override {
         if (event->button() != Qt::LeftButton) return;
         const Hit pressed = press_;
@@ -228,6 +251,7 @@ private:
     bool dragging_ = false;
 };
 
+// A plain splitter handle in kSplitterColor, without the style's grip.
 class FlatSplitterHandle : public QSplitterHandle {
 public:
     using QSplitterHandle::QSplitterHandle;
@@ -238,8 +262,11 @@ protected:
     }
 };
 
+// The splitters of a DockHost's tree. Sizes given as proportions are kept until the splitter has a real
+// size (see DockHost::setProportions).
 class PanelSplitter : public QSplitter {
 public:
+    // Named "hsplit" or "vsplit" after the orientation; the names appear in layout dumps (capture.h).
     explicit PanelSplitter(Qt::Orientation o) : QSplitter(o) {
         setObjectName(o == Qt::Horizontal ? QStringLiteral("hsplit") : QStringLiteral("vsplit"));
         setHandleWidth(kSplitterHandle);
@@ -265,6 +292,8 @@ protected:
     }
 
 private:
+    // Shares the space left after the handles in the pending proportions, once the splitter is wider (or
+    // taller) than one pixel.
     void applyPending() {
         const int extent = orientation() == Qt::Horizontal ? width() : height();
         if (pending_.isEmpty() || extent <= 1) return;
@@ -300,10 +329,12 @@ protected:
         QPainter p(this);
         QColor green = QColor::fromRgba(kDropZoneColor);
         for (const DropTarget& zone : m.dropZones(&host_, tabbing)) {
+            // The zone under the pointer is opaque; the others are translucent, fainter while tabbing.
             const bool hot = hoveredHere && zone.kind == hovered.kind && zone.zone == hovered.zone;
             green.setAlpha(hot ? 255 : (tabbing ? 90 : 190));
             p.fillRect(zone.zone, green);
         }
+        // The preview shows where the panel will go; there is none when tabbing.
         if (hoveredHere && !tabbing) {
             p.fillRect(hovered.preview, QColor(255, 255, 255, 70));
             p.setPen(QPen(QColor(255, 255, 255, 200), 2));
@@ -320,6 +351,7 @@ private:
 
 // ---------------------------------------------------------------- Panel
 
+// The content is put in a margin-free layout, which re-parents it to the panel.
 Panel::Panel(const QString& id, const QString& title, QWidget* content, QWidget* parent)
     : QWidget(parent), title_(title), content_(content) {
     setObjectName(id);
@@ -338,6 +370,7 @@ void Panel::setTitle(const QString& title) {
     emit titleChanged();
 }
 
+// The nearest PanelGroup ancestor (the panel's parent is the group's QStackedWidget).
 PanelGroup* Panel::group() const {
     for (QWidget* w = parentWidget(); w; w = w->parentWidget()) {
         if (auto* g = qobject_cast<PanelGroup*>(w)) return g;
@@ -359,6 +392,7 @@ PanelGroup::PanelGroup(PanelManager& manager, QWidget* parent) : QWidget(parent)
     layout->addWidget(stack_, 1);
 }
 
+// The title bar repaints when the panel's title changes, until the panel is taken out.
 void PanelGroup::insertPanel(int index, Panel* panel) {
     if (!panel || panels_.contains(panel)) return;
     if (index < 0 || index > count()) index = count();
@@ -371,6 +405,7 @@ void PanelGroup::insertPanel(int index, Panel* panel) {
     titleBar_->update();
 }
 
+// The stack shows a neighbour when the current panel leaves; currentChanged() reports that.
 void PanelGroup::takePanel(Panel* panel) {
     const auto index = panels_.indexOf(panel);
     if (index < 0) return;
@@ -422,6 +457,7 @@ QSplitter* DockHost::createSplitter(Qt::Orientation orientation) {
     return new PanelSplitter(orientation);
 }
 
+// Other splitters get the proportions as sizes at once, which QSplitter scales to its size.
 void DockHost::setProportions(QSplitter* splitter, const QList<int>& proportions) {
     if (auto* s = dynamic_cast<PanelSplitter*>(splitter)) {
         s->setProportions(proportions);
@@ -432,6 +468,7 @@ void DockHost::setProportions(QSplitter* splitter, const QList<int>& proportions
 
 namespace {
 
+// Depth first, in splitter order: left to right, top to bottom.
 void collectGroups(QWidget* node, QList<PanelGroup*>& out) {
     if (auto* g = qobject_cast<PanelGroup*>(node)) {
         out << g;
@@ -465,6 +502,9 @@ void DockHost::replace(QWidget* old, QWidget* replacement) {
     }
 }
 
+// If the target already sits in a splitter of the right orientation, the group joins it beside the
+// target, which gives up `fraction` of its size; otherwise a new splitter takes the target's place and
+// holds the two. Before the host has a size, a nominal extent of 1000 stands in.
 void DockHost::insert(PanelGroup* group, PanelGroup* target, DockSide side, double fraction) {
     if (!group || !target || target->host() != this) return;
     const Qt::Orientation o = (side == DockSide::Left || side == DockSide::Right) ? Qt::Horizontal : Qt::Vertical;
@@ -495,6 +535,8 @@ void DockHost::insert(PanelGroup* group, PanelGroup* target, DockSide side, doub
     overlay_->raise();
 }
 
+// If the root is a splitter of the right orientation, the group becomes its first or last child and the
+// other children shrink in proportion; otherwise a new root splitter holds the old root and the group.
 void DockHost::insertAtEdge(PanelGroup* group, DockSide side, double fraction) {
     if (!group) return;
     if (!root_) {
@@ -535,6 +577,8 @@ void DockHost::fill(PanelGroup* group) {
     setRoot(group);
 }
 
+// A splitter left with one child is replaced by that child and deleted later (it may be in the middle of
+// handling an event). Splitters with two or more children remain.
 void DockHost::remove(PanelGroup* group) {
     if (!group) return;
     if (group == root_) {
@@ -555,6 +599,7 @@ void DockHost::remove(PanelGroup* group) {
     }
 }
 
+// The caller owns the returned tree.
 QWidget* DockHost::takeRoot() {
     QWidget* r = root_;
     root_ = nullptr;
@@ -563,6 +608,7 @@ QWidget* DockHost::takeRoot() {
     return r;
 }
 
+// Takes ownership of `root`. The previous root, if any, is not deleted; callers take it first.
 void DockHost::setRoot(QWidget* root) {
     if (root_ == root) return;
     root_ = root;
@@ -602,6 +648,7 @@ void FloatingWindow::updateTitle() {
     setWindowTitle(p ? p->title() : QString());
 }
 
+// The manager takes the panels out (they become closed) and deletes the window later.
 void FloatingWindow::closeEvent(QCloseEvent* event) {
     event->accept();
     manager_.floatingWindowClosed(this);

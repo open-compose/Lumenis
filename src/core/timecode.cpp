@@ -4,10 +4,14 @@
 #include <charconv>
 #include <cstdio>
 
+// SMPTE timecode: converting between frame counts and HH:MM:SS:FF labels, including drop-frame
+// (timecode.h). The Composer and Timeline (src/ui), the media readers and MXF writer (src/media),
+// AAF interchange (src/interop) and the model's start timecodes all use it.
 namespace lumenis {
 
 namespace {
 
+// a mod b in [0, b), also for negative a (C++'s % keeps the sign of a).
 std::int64_t floorMod(std::int64_t a, std::int64_t b) {
     const std::int64_t r = a % b;
     return r < 0 ? r + b : r;
@@ -15,6 +19,8 @@ std::int64_t floorMod(std::int64_t a, std::int64_t b) {
 
 } // namespace
 
+// The nominal rate is the edit rate rounded (29.97 -> 30, 23.976 -> 24); drop-frame is ignored
+// for rates that are not a multiple of 30.
 TimecodeFormat TimecodeFormat::forRate(const Rational& editRate, bool dropFrame) {
     TimecodeFormat format;
     format.nominalFps = static_cast<int>(editRate.round());
@@ -40,6 +46,8 @@ std::int64_t TimecodeFormat::framesPerDay() const {
 Timecode::Timecode(std::int64_t frameCount, TimecodeFormat format)
     : frames_(frameCount), format_(format) {}
 
+// Drop-frame skips the first framesDroppedPerMinute() labels of every minute except each tenth,
+// so the labels before this one skipped that many times (totalMinutes - totalMinutes / 10).
 Timecode Timecode::fromFields(const TimecodeFields& f, TimecodeFormat format) {
     const std::int64_t fps = format.nominalFps;
     const std::int64_t totalMinutes = std::int64_t{f.hours} * 60 + f.minutes;
@@ -48,6 +56,9 @@ Timecode Timecode::fromFields(const TimecodeFields& f, TimecodeFormat format) {
     return {frames, format};
 }
 
+// The inverse of fromFields(). For drop-frame, the frame count is first turned into a count of
+// labels as if none were dropped: each whole ten-minute block adds 9 * drop skipped labels, and
+// within a block every minute after the first (which keeps all its labels) adds drop more.
 TimecodeFields Timecode::fields() const {
     const std::int64_t fps = format_.nominalFps;
     std::int64_t frames = floorMod(frames_, format_.framesPerDay());
@@ -71,6 +82,8 @@ TimecodeFields Timecode::fields() const {
     return f;
 }
 
+// Reads four non-negative integers separated by ':', ';' or '.' (separators may be mixed), then
+// checks the ranges and rejects the labels drop-frame skips.
 std::optional<Timecode> Timecode::parse(std::string_view text, TimecodeFormat format) {
     if (!format.isValid()) {
         return std::nullopt;

@@ -20,13 +20,17 @@ class WorkspaceBar : public QWidget {
     Q_OBJECT
 
 public:
+    // Follows WorkspaceManager::changed(): its width, visibility and highlighted workspace.
     explicit WorkspaceBar(WorkspaceManager& workspaces, QWidget* parent = nullptr);
 
+    // The fixed width of the bar mode, and room for every workspace.
     QSize sizeHint() const override;
     // Where a workspace's button is, for tests.
+    // In the bar's coordinates; `index` is into WorkspaceManager::names().
     QRect itemRect(int index) const;
 
     // The toolbar icon for a workspace (our own drawings).
+    // Built-in workspaces have their own; others share one. `active` draws it in the accent colour.
     static QIcon iconFor(const QString& name, bool active);
 
 protected:
@@ -35,6 +39,7 @@ protected:
     void contextMenuEvent(QContextMenuEvent* event) override;
 
 private:
+    // Applies the bar mode: width kWorkspaceBarWide or kWorkspaceBarNarrow, hidden for Hidden.
     void sync();
 
     WorkspaceManager& workspaces_;
@@ -46,13 +51,17 @@ class NewWorkspaceDialog : public QDialog {
     Q_OBJECT
 
 public:
+    // OK is enabled only for a name that is not empty and not taken. The caller passes name() and basedOn() to
+    // WorkspaceManager::create().
     NewWorkspaceDialog(const WorkspaceManager& workspaces, QWidget* parent = nullptr);
 
+    // Trimmed.
     QString name() const;
     // Empty unless "Based on Workspace" is selected.
     QString basedOn() const;
 
 private:
+    // Enables OK for a valid name.
     void validate();
 
     const WorkspaceManager& workspaces_;

@@ -9,10 +9,18 @@
 #include <QMenu>
 #include <QMenuBar>
 
+// Builds the menu bar from src/ui/resources/menus.json, using the QActions of the commands declared in
+// commands.json (CommandRegistry, command_registry.cpp), and dumps the menu bar for the inventory test
+// (tests/data/menu_inventory.json) and for scripts/make-checklist.py (--dump-menus). No action is made
+// here for a command item: it is the command's shared QAction, so the same command in a menu, a
+// shortcut and the Command Palette is one action. Menus are named "menu:<id>" so code can find them
+// (findChild), for example to add the workspace names to Windows > Workspaces.
+
 namespace lumenis::ui {
 
 namespace {
 
+// Adds the items of one menu, recursing into submenus; stops at the first bad item.
 bool populate(QMenu* menu, const QJsonArray& items, CommandRegistry& commands, QString* error) {
     for (const QJsonValue& item : items) {
         if (item.isString()) {
@@ -46,6 +54,7 @@ bool populate(QMenu* menu, const QJsonArray& items, CommandRegistry& commands, Q
     return true;
 }
 
+// Menu text without mnemonic marks, as the inventory lists it.
 QString plainText(QString text) {
     // "&&" is a literal ampersand; a single '&' marks the mnemonic.
     text.replace(QStringLiteral("&&"), QStringLiteral("\x01"));
@@ -54,6 +63,7 @@ QString plainText(QString text) {
     return text;
 }
 
+// One level of dumpMenus(). Command actions are named "cmd:<id>" by CommandRegistry.
 QJsonArray dumpActions(const QList<QAction*>& actions, const CommandRegistry* commands) {
     QJsonArray items;
     for (const QAction* action : actions) {
@@ -105,6 +115,7 @@ bool buildMenus(QMenuBar* bar, CommandRegistry& commands, const QByteArray& json
     return true;
 }
 
+// The built-in file is part of the program, so an error in it is fatal.
 void buildBuiltinMenus(QMenuBar* bar, CommandRegistry& commands) {
     QFile file(QStringLiteral(":/lumenis/ui/menus.json"));
     QString error;

@@ -4,10 +4,13 @@
 
 #include <cstdlib>
 
+// The Calculator tool's arithmetic (calculator.h), kept out of the UI so it can be tested. The
+// window itself is in src/ui/tool_windows.*.
 namespace lumenis::model {
 
 namespace {
 
+// HHMMSSFF, or six digits of feet and two of frames.
 constexpr int kMaxDigits = 8;
 
 TimecodeFormat timecodeFormat(const CalculatorFormat& f) {
@@ -59,6 +62,7 @@ void Calculator::setFormat(int index) {
     format_ = index;
 }
 
+// The last eight digits, padded on the left with zeros, are split into two-digit fields.
 std::int64_t Calculator::parse(const QString& digits) const {
     const CalculatorFormat& f = calculatorFormats().at(format_);
     const QString d = digits.right(kMaxDigits).rightJustified(kMaxDigits, QLatin1Char('0'));
@@ -84,6 +88,8 @@ std::int64_t Calculator::parse(const QString& digits) const {
     return ((part(0) * 60 + part(2)) * 60 + part(4)) * f.nominalFps + part(6);
 }
 
+// Film is "feet+frames"; timecode uses Timecode's text (so it wraps after 24 hours). Negative
+// values get a leading minus sign.
 QString Calculator::text(std::int64_t frames) const {
     const CalculatorFormat& f = calculatorFormats().at(format_);
     const QString sign = frames < 0 ? QStringLiteral("-") : QString();

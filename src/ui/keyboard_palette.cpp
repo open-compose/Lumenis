@@ -11,6 +11,12 @@
 #include <QRadioButton>
 #include <QVBoxLayout>
 
+// The Keyboard palette (KeyboardPalette, keyboard_palette.h): a picture of a US keyboard whose keys
+// are KeyButtons (MappableButtons from button_mapping.cpp) showing the commands of the editing
+// keyboard (KeyboardMap, keyboard_map.cpp). Commands dragged from the Command Palette
+// (command_palette.cpp) onto a key change the map; MainWindow saves it in the Keyboard setting.
+// The key layout is the static tables rows() and sideRows() below.
+
 namespace lumenis::ui {
 
 namespace {
@@ -82,10 +88,14 @@ void KeyButton::paintEvent(QPaintEvent* event) {
 
 // ---------------------------------------------------------------- KeyboardPalette
 
+// Builds the main and navigation key blocks from the KeySpec tables, the Standard / Map Foreign
+// Keyboard choice under them, and shows the current map.
 KeyboardPalette::KeyboardPalette(KeyboardMap& keyboard, QWidget* parent) : QWidget(parent), keyboard_(keyboard) {
     setObjectName(QStringLiteral("keyboardPalette"));
     setFocusPolicy(Qt::StrongFocus);
 
+    // One block of rows; a key w units wide also covers the w - 1 two-pixel gaps it spans, so
+    // wide keys line up with the rows above and below.
     auto block = [this](const QList<QList<KeySpec>>& spec) {
         auto* w = new QWidget(this);
         auto* v = new QVBoxLayout(w);

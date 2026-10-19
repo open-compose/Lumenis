@@ -10,6 +10,14 @@
 
 #include <algorithm>
 
+// The editing keyboard's key-to-command map (KeyboardMap, declared in keyboard_map.h).
+//
+// Defaults come from the built-in resource src/ui/resources/keyboard.json; commands are checked
+// against the CommandRegistry (src/ui/resources/commands.json). MainWindow owns the map, routes keys
+// pressed in the Composer and Timeline through commandFor(), and persists it either in QSettings
+// (save/restore) or in the Keyboard user setting as JSON differences (differences/setDifferences).
+// The palette that edits it is keyboard_palette.cpp.
+
 namespace lumenis::ui {
 
 namespace {
@@ -27,6 +35,8 @@ QKeySequence fromSettingsKey(const QString& s) {
 
 } // namespace
 
+// Parses {"layout": "...", "keys": [{"key": "<portable text>", "command": "<id>"}, ...]} and
+// validates every entry before replacing the defaults and the current map.
 bool KeyboardMap::load(const QByteArray& json, const CommandRegistry& commands, QString* error) {
     auto fail = [error](const QString& message) {
         if (error) *error = message;

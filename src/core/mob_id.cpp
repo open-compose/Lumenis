@@ -3,12 +3,19 @@
 #include <mutex>
 #include <random>
 
+// MobId: generating, parsing and printing SMPTE ST 330 UMIDs. The model (src/model/bin.*, sequence.*)
+// stores them on bin items and segments, managed media (src/media/managed.*) writes them as MXF
+// package UIDs, and AAF import and export (src/interop/aaf_*) map them to AAF MobIDs. See
+// docs/spec/native-model.md for how they tie clips, sources and media files together.
 namespace lumenis {
 
 namespace {
 
+// Bytes 0-11 of every MobID made here: the UMID universal label with material type 0x0f and
+// methods 0x10 (see mob_id.h).
 constexpr std::array<std::uint8_t, 12> kLabel{0x06, 0x0a, 0x2b, 0x34, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x0f, 0x10};
 
+// The value of one hex digit, or -1 if c is not one.
 int hexValue(char c) {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -49,6 +56,8 @@ MobId MobId::withMaterial(const std::array<std::uint8_t, 16>& material) {
     return MobId(b);
 }
 
+// Strips an optional "urn:smpte:umid:" prefix (any case), then reads exactly 64 hex digits; dots
+// anywhere are ignored. Anything else, too few or too many digits gives nullopt.
 std::optional<MobId> MobId::fromString(std::string_view text) {
     constexpr std::string_view kPrefix = "urn:smpte:umid:";
     if (text.size() >= kPrefix.size()) {

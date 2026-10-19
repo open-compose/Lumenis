@@ -22,10 +22,15 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
+// The two Relink dialogs (relink_dialog.h): Linked Media, for clips linked to files in place
+// (src/media/link.*), and the Relink dialog for managed media (src/media/relink.*). MainWindow
+// (main_window.cpp) opens both from Clip > Relink and writes the results into the bins.
+
 namespace lumenis::ui {
 
 namespace {
 
+// The Linked Media list's columns, which are also bin column names for model::cellText.
 // The picture on p.365.
 const QStringList& headings() {
     static const QStringList h{QStringLiteral("Color"),       QStringLiteral("Name"),     QStringLiteral("Source File"),
@@ -34,10 +39,12 @@ const QStringList& headings() {
     return h;
 }
 
+// A row's index into clips_, in its first column.
 constexpr int kClipRole = Qt::UserRole + 1;
 
 } // namespace
 
+// The filter and search above the list, Locate Media and the counts below.
 LinkedMediaDialog::LinkedMediaDialog(const QList<Clip>& clips, QWidget* parent) : QDialog(parent), clips_(clips) {
     setObjectName(QStringLiteral("linkedMediaDialog"));
     setWindowTitle(tr("Linked Media"));
@@ -136,6 +143,8 @@ QStringList LinkedMediaDialog::shownNames() const {
     return names;
 }
 
+// Indexes the folder's files once, then matches each clip against the index; every clip ends up
+// either relinked() or notRelinked().
 int LinkedMediaDialog::locateMedia(const QString& folder) {
     // The selected clips, or with none selected every clip shown (p.365:
     // "select specific clips to relink or proceed directly").
@@ -175,10 +184,12 @@ QString LinkedMediaDialog::summary() const {
 
 namespace {
 
+// Controls not implemented yet are shown disabled, with this tooltip.
 QString laterTip() {
     return QObject::tr("Not available yet");
 }
 
+// A check box named `name` (for check()); `later` disables it as not available yet.
 QCheckBox* checkBox(QWidget* parent, const QString& text, const QString& name, bool on, bool later = false) {
     auto* c = new QCheckBox(text, parent);
     c->setObjectName(name);
@@ -206,6 +217,8 @@ QComboBox* menuOf(QWidget* parent, const QString& name, const QStringList& items
 
 } // namespace
 
+// The dialog's groups as on p.362-364: Relink selected items to, Relink by, Video Relink Parameters,
+// and the check boxes below them.
 ManagedRelinkDialog::ManagedRelinkDialog(const QString& project, QWidget* parent) : QDialog(parent), project_(project) {
     setObjectName(QStringLiteral("relinkDialog"));
     setWindowTitle(tr("Relink"));
@@ -317,6 +330,8 @@ bool ManagedRelinkDialog::allOpenBins() const {
     return check(QStringLiteral("allOpenBins"))->isChecked();
 }
 
+// Source Name's "Name" relinks by clip name; its other working choice by tape or source file name.
+// The Relink method and quality menus are in the order of media::RelinkOptions' enums.
 media::RelinkOptions ManagedRelinkDialog::options() const {
     media::RelinkOptions o;
     if (oneDrive_->isChecked() && drive_->currentIndex() >= 0) o.drives << drive_->currentData().toString();

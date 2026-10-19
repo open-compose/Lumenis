@@ -29,6 +29,17 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
+// The Select Project window (SelectProjectDialog, select_project_dialog.h; spec in
+// docs/spec/ui-inventory.md §2). It has a sidebar (Select Project, What's New), the User Profile and
+// Location menus, and three pages: the project list (text or frame view), the New Project form and
+// the What's New notes (resource whats_new.html).
+//
+// Model types: model::Locations (src/model/locations.*) for the folders, model::UserProfiles,
+// model::ProjectStore and model::ProjectSettings (src/model/project_store.*) for the profiles and
+// projects, and ProjectFormat with its presets, frame rates and colour spaces from
+// src/core/include/lumenis/core/project_format.h. app/main.cpp shows the dialog before the main
+// window and opens the project it returns.
+
 namespace lumenis::ui {
 
 namespace {
@@ -52,6 +63,7 @@ QString str(const std::string& s) {
     return QString::fromStdString(s);
 }
 
+// "16:9" and "4:3" as ratios; any other aspect as "<n>:1" with two decimals.
 QString aspectText(const Rational& a) {
     if (a == Rational(16, 9) || a == Rational(4, 3)) {
         return QStringLiteral("%1:%2").arg(a.num()).arg(a.den());
@@ -103,6 +115,8 @@ std::optional<FormatKey> fromVariant(const QVariant& v) {
                      l[3].toBool() ? ScanMode::Interlaced : ScanMode::Progressive};
 }
 
+// The Format menu's text: "1080p  (1920 x 1080)" for HD, "<group> interlaced  (<raster>)" for SD,
+// "<group>  (<raster>)" otherwise. populateFormats() looks up the default by this text.
 QString formatKeyLabel(const FormatKey& k, FormatFamily family) {
     const QString raster = QStringLiteral("%1 x %2").arg(k.width).arg(k.height);
     if (family == FormatFamily::HD) {
@@ -118,6 +132,9 @@ QString formatKeyLabel(const FormatKey& k, FormatFamily family) {
 
 } // namespace
 
+// Lays out the sidebar on the left and, on the right, the welcome title, the Projects / New Project
+// tabs, the User Profile and Location menus and the stacked pages; then fills the menus and lists
+// the projects.
 SelectProjectDialog::SelectProjectDialog(const model::Locations& locations, QWidget* parent)
     : QDialog(parent), locations_(locations) {
     setObjectName(QStringLiteral("SelectProjectDialog"));
@@ -242,6 +259,8 @@ QWidget* SelectProjectDialog::buildSidebar() {
     return side;
 }
 
+// The project list: view controls, the text view (a sortable table) and frame view (icons) in a
+// stack, and Quit / Open. Both views list the same projects, kept in step by name.
 QWidget* SelectProjectDialog::buildProjectsPage() {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
@@ -372,6 +391,8 @@ QWidget* SelectProjectDialog::buildProjectsPage() {
     return page;
 }
 
+// The New Project form: the name, then a Settings: disclosure that shows the format fields, which
+// updateFormatDependentFields() keeps consistent. OK or Return in the name creates the project.
 QWidget* SelectProjectDialog::buildNewProjectPage() {
     auto* page = new QWidget(this);
     auto* layout = new QVBoxLayout(page);
@@ -479,6 +500,7 @@ QWidget* SelectProjectDialog::buildNewProjectPage() {
     connect(format_, &QComboBox::currentIndexChanged, this, &SelectProjectDialog::updateFormatDependentFields);
     connect(rasterWidth_, &QSpinBox::valueChanged, this, &SelectProjectDialog::updateFormatDependentFields);
     connect(rasterHeight_, &QSpinBox::valueChanged, this, &SelectProjectDialog::updateFormatDependentFields);
+    // A new frame rate can change whether the format offers film.
     connect(frameRate_, &QComboBox::currentIndexChanged, this, [this] {
         const auto chosen = chosenFormat();
         const bool filmOk = chosen && filmAvailable(*chosen) && !chooseForMe_->isChecked();
@@ -491,6 +513,7 @@ QWidget* SelectProjectDialog::buildNewProjectPage() {
     return page;
 }
 
+// The release notes from :/lumenis/ui/whats_new.html, with %PRODUCT% and %VERSION% filled in.
 QWidget* SelectProjectDialog::buildWhatsNewPage() {
     auto* browser = new QTextBrowser(this);
     browser->setObjectName(QStringLiteral("whatsNew"));
@@ -546,6 +569,9 @@ void SelectProjectDialog::setLocationLabel(Location location, const QString& tex
     populateLocations();
 }
 
+// One Format menu item per preset raster and scan (presets differing only in frame rate share an
+// item), with separators between families and Custom last. Item data is a FormatKey as a variant;
+// Custom has none.
 void SelectProjectDialog::populateFormats() {
     QSignalBlocker block(format_);
     format_->clear();
@@ -597,6 +623,9 @@ std::optional<ProjectFormat> SelectProjectDialog::chosenFormat() const {
     return custom;
 }
 
+// With Choose for me checked the Format, raster, frame rate, aspect and film fields are disabled.
+// Every menu rebuilt here keeps its previous choice when the new list still has it; signals are
+// blocked while it is rebuilt.
 void SelectProjectDialog::updateFormatDependentFields() {
     const bool manual = !chooseForMe_->isChecked();
     const auto key = fromVariant(format_->currentData());
@@ -703,6 +732,7 @@ model::ProjectSettings SelectProjectDialog::settingsFromForm(QString* error) con
     return s;
 }
 
+// On success the form's name is reset to "Untitled Project" for the next one.
 bool SelectProjectDialog::createProjectFromForm() {
     QString error;
     const model::ProjectSettings settings = settingsFromForm(&error);

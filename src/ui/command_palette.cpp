@@ -22,12 +22,21 @@
 #include <QTabWidget>
 #include <QVBoxLayout>
 
+// The Command Palette and the Tool palette (command_palette.h). The palette's tabs and buttons are data,
+// in src/ui/resources/command_palette.json: {"tabs": [{"name", "workspaceMenus", "columns": [[ids]]}]},
+// where a button is a command id, "" for a blank button, or {"id", "platforms": [...]} for a button shown
+// only on some platforms. Mapping (dragging buttons, Menu to Button, the current mode, icons) belongs to
+// ButtonMapper and MappableButton in button_mapping.cpp; this file builds the windows and runs commands
+// through CommandRegistry's actions.
+
 namespace lumenis::ui {
 
 namespace {
 
+// The width of a palette button in pixels; its height is kToolButtonHeight.
 constexpr int kPaletteButtonWidth = 28;
 
+// The name used in command_palette.json's "platforms" lists.
 QString platformName() {
 #if defined(Q_OS_WIN)
     return QStringLiteral("windows");
@@ -38,6 +47,7 @@ QString platformName() {
 #endif
 }
 
+// The "tabs" array of the built-in command_palette.json.
 QJsonArray paletteTabs() {
     QFile file(QStringLiteral(":/lumenis/ui/command_palette.json"));
     if (!file.open(QIODevice::ReadOnly)) qFatal("built-in command_palette.json is missing");
@@ -63,6 +73,7 @@ void PaletteButton::mousePressEvent(QMouseEvent* event) {
     QToolButton::mousePressEvent(event);
 }
 
+// In the other modes the button behaves as a plain tool button.
 void PaletteButton::mouseMoveEvent(QMouseEvent* event) {
     // Button to Button: drag the button onto another palette (p.98).
     if (ButtonMapper::instance().mode() == ButtonMapper::Mode::ButtonToButton && (event->buttons() & Qt::LeftButton) &&
@@ -94,6 +105,9 @@ CommandPalette::CommandPalette(CommandRegistry& commands, QWidget* parent) : QWi
     tabs_->setObjectName(QStringLiteral("commandPaletteTabs"));
     tabs_->setUsesScrollButtons(true);
     QStringList names;
+    // One page per tab: its columns side by side, each a grid of label, button and (on the Workspaces tab)
+    // a workspace menu per row. A command that appears on several tabs gets a button on each, but buttons_,
+    // labels_ and tabOf_ keep the first.
     for (const QJsonValue& t : paletteTabs()) {
         const QJsonObject tab = t.toObject();
         auto* page = new QWidget;
@@ -159,6 +173,7 @@ CommandPalette::CommandPalette(CommandRegistry& commands, QWidget* parent) : QWi
     completer->setFilterMode(Qt::MatchContains);
     find_->setCompleter(completer);
     connect(find_, &QLineEdit::textChanged, this, &CommandPalette::setQuickFind);
+    // Choosing a completion shows that command's button.
     connect(completer, qOverload<const QString&>(&QCompleter::activated), this, [this](const QString& text) {
         for (auto it = buttons_.cbegin(); it != buttons_.cend(); ++it) {
             if (!it.key().isEmpty() && ButtonMapper::instance().text(it.key()) == text) {
@@ -200,6 +215,8 @@ CommandPalette::CommandPalette(CommandRegistry& commands, QWidget* parent) : QWi
     layout->addLayout(modeRow);
 }
 
+// Refills every W button's menu with None and the workspace names, selecting the assigned one (None if
+// it no longer exists).
 void CommandPalette::setWorkspaces(const QStringList& names, const QStringList& assigned) {
     fillingMenus_ = true;
     for (int i = 0; i < workspaceMenus_.size(); ++i) {
@@ -272,6 +289,7 @@ void CommandPalette::setQuickFind(const QString& text) {
     QSet<int> tabsWithMatches;
     for (const QString& id : found) tabsWithMatches << tabOf_.value(id);
     for (int i = 0; i < tabs_->count(); ++i) tabs_->setTabVisible(i, all || tabsWithMatches.contains(i));
+    // Dimming applies to the labels; the buttons keep the state refresh() gave them.
     for (const Row& r : rows_) r.label->setEnabled(all || found.contains(r.id));
     if (!all && !found.isEmpty() && !tabsWithMatches.contains(tabs_->currentIndex())) {
         tabs_->setCurrentIndex(tabOf_.value(found.first()));
@@ -292,6 +310,7 @@ void CommandPalette::activate(const QString& commandId) {
 
 // ---------------------------------------------------------------- ToolPalette
 
+// A kRows x kColumns grid of MappableButtons; commands can be mapped onto them from the Command Palette.
 ToolPalette::ToolPalette(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("toolPalette"));
     auto* grid = new QGridLayout(this);
@@ -329,6 +348,7 @@ QStringList ToolPalette::commands() const {
     return out;
 }
 
+// A button is set again only when its command changed, or its icon does not match whether it is blank.
 void ToolPalette::setCommands(const QStringList& commands) {
     const QStringList defaults = defaultCommands();
     for (int i = 0; i < slots_.size(); ++i) {

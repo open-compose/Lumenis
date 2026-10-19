@@ -7,6 +7,11 @@
 #include <QPainter>
 #include <QScreen>
 
+// Full Screen Playback (FullScreenView in full_screen.h): a black, cursor-less window on the client
+// screen that paints the Composer's active monitor (composer.*) with the Reformat setting applied.
+// MainWindow (main_window.cpp) opens it and passes on the Full Screen Playback settings
+// (resources/settings.json).
+
 namespace lumenis::ui {
 
 FullScreenView::Reformat FullScreenView::reformatFrom(const QString& value) {
@@ -37,6 +42,8 @@ void FullScreenView::setFullScreenScaling(bool on) {
     update();
 }
 
+// Where the picture is drawn: centred, and scaled as the Reformat setting says, unless "Full Screen"
+// scaling is off.
 QRect FullScreenView::pictureRect(QSize area, QSize image) const {
     if (image.isEmpty()) return {};
     auto centred = [&](QSize s) {
@@ -62,6 +69,7 @@ QRect FullScreenView::pictureRect(QSize area, QSize image) const {
     return centred(image);
 }
 
+// Black, then the active monitor's frame; "Media Offline" in place of a frame that cannot be read.
 void FullScreenView::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.fillRect(rect(), Qt::black);

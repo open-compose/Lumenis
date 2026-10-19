@@ -21,10 +21,16 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+// Small tool windows (tool_windows.h): the Calculator, the Console log and its window, and the
+// Configuration, Usage and Hardware tabs of Help > About. MainWindow (main_window.cpp) makes them and
+// puts the Calculator and Console in panels; the Calculator's arithmetic is src/model/calculator.*.
+
 namespace lumenis::ui {
 
 // ---------------------------------------------------------------- CalculatorWindow
 
+// The Format menu, a black display in timecode green, and a 4x4 grid of keys. The keys take no focus,
+// so typing keeps going to the window.
 CalculatorWindow::CalculatorWindow(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("calculator"));
     setFocusPolicy(Qt::StrongFocus);
@@ -84,6 +90,7 @@ QString CalculatorWindow::displayText() const {
     return display_->text();
 }
 
+// Unknown keys change nothing but still refresh the display.
 void CalculatorWindow::press(const QString& key) {
     if (key == QLatin1String("00")) {
         calc_.doubleZero();
@@ -129,6 +136,8 @@ void CalculatorWindow::refresh() {
 
 namespace {
 
+// The handler installed before ours, which ours passes every message on to. Function statics, so they
+// exist whenever the handler runs, even during static destruction.
 QtMessageHandler& previousHandler() {
     static QtMessageHandler previous = nullptr;
     return previous;
@@ -139,6 +148,8 @@ bool& handlerInstalled() {
     return installed;
 }
 
+// Qt's message handler: warnings, criticals and fatals also go to the Console log; everything goes on
+// to the previous handler, or to stderr as Qt would print it.
 void consoleHandler(QtMsgType type, const QMessageLogContext& context, const QString& message) {
     if (type != QtDebugMsg && type != QtInfoMsg) {
         const char* kind = type == QtWarningMsg ? "Warning" : type == QtCriticalMsg ? "Error" : "Fatal";
@@ -209,6 +220,7 @@ QStringList ConsoleLog::systemInfo() {
 
 // ---------------------------------------------------------------- ConsoleWindow
 
+// The log so far, then each line as it is added; the command line runs run() on Return.
 ConsoleWindow::ConsoleWindow(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("console"));
     log_ = new QPlainTextEdit(this);
@@ -254,6 +266,8 @@ void ConsoleWindow::run(const QString& command) {
 
 // ---------------------------------------------------------------- AboutInfoDialog
 
+// Builds the three tabs from labels and values; nothing in them can be edited. Values we do not have
+// yet ("GPU", the bytes used) are shown as such.
 AboutInfoDialog::AboutInfoDialog(const QStringList& plugins, const ProjectUsage& usage, QWidget* parent)
     : QDialog(parent) {
     setObjectName(QStringLiteral("aboutInfo"));

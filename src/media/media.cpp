@@ -24,6 +24,22 @@ extern "C" {
 #include <cstring>
 #include <limits>
 
+// The FFmpeg layer of the media library (ROADMAP Phase 2.1): everything here talks to libavformat,
+// libavcodec, libswscale and libswresample directly, and the rest of the application sees only the
+// types of media.h. It holds:
+// - the codec policy (isPatentCodec, LUMENIS_PATENT_CODECS; docs/EXTENSIONS.md);
+// - probe(), which fills MediaInfo for the Source Browser (src/ui/source_browser.cpp), linking
+//   (link.cpp) and `--probe` (app/main.cpp);
+// - ImageSequence, numbered stills read through FFmpeg's image2 demuxer;
+// - VideoReader and AudioReader, frame- and sample-exact readers used by FrameCache (link.cpp), the
+//   audio mix (playback.cpp), transcoding (managed.cpp) and the decode corpus (`--framemd5`);
+// - MediaWriter, which encodes new media (managed.cpp) and test files, and fixOpAtom(), which
+//   corrects what FFmpeg's mxf_opatom muxer writes (docs/spec/native-model.md);
+// - Resampler, copyVideoFrames() (Consolidate without re-encoding) and comparePictures() (PSNR);
+// - the "org.ffmpeg.libavcodec" codec provider (docs/EXTENSIONS.md, src/ext).
+// The supported formats are summarised in docs/spec/media-formats.md; how FFmpeg is found for a build
+// is in BUILDING.md and cmake/FindFFmpeg.cmake.
+
 namespace lumenis::media {
 
 namespace {
@@ -31,34 +47,41 @@ namespace {
 // AV_NOPTS_VALUE, without the C cast in FFmpeg's macro.
 constexpr std::int64_t kNoPts = std::numeric_limits<std::int64_t>::min();
 
+// FFmpeg's message for a negative AVERROR code.
 QString errorText(int code) {
     char buf[256] = {};
     av_strerror(code, buf, sizeof buf);
     return QString::fromUtf8(buf);
 }
 
+// Sets *error when the caller asked for it (error may be null).
 void setError(QString* error, const QString& text) {
     if (error) *error = text;
 }
 
+// An FFmpeg rational as ours; a zero denominator (FFmpeg's "unknown") becomes the default Rational.
 Rational toRational(AVRational r) {
     if (r.den == 0) return Rational();
     return Rational(r.num, r.den);
 }
 
+// Ours as FFmpeg's; the terms are narrowed to int, which edit rates and time bases fit.
 AVRational toAv(const Rational& r) {
     return AVRational{static_cast<int>(r.num()), static_cast<int>(r.den())};
 }
 
+// 1/r: turns an edit rate into the time base that counts its frames, and back.
 AVRational inverse(AVRational r) {
     return AVRational{r.den, r.num};
 }
 
+// A metadata entry's value, empty if the key is not there.
 QString metadata(AVDictionary* dict, const char* key) {
     const AVDictionaryEntry* e = av_dict_get(dict, key, nullptr, 0);
     return e ? QString::fromUtf8(e->value) : QString();
 }
 
+// Whether a pixel format holds RGB (packed or planar) rather than Y'CbCr.
 bool isRgbFormat(AVPixelFormat format) {
     const AVPixFmtDescriptor* desc = av_pix_fmt_desc_get(format);
     return desc && (desc->flags & AV_PIX_FMT_FLAG_RGB);
@@ -72,6 +95,7 @@ int colourSpaceOf(const AVFrame* f) {
     return f->height > 576 ? SWS_CS_ITU709 : SWS_CS_SMPTE170M;
 }
 
+// Whether a frame's samples use the full range (RGB, JPEG-range Y'CbCr) rather than legal range.
 bool fullRange(const AVFrame* f) {
     return isRgbFormat(static_cast<AVPixelFormat>(f->format)) || f->color_range == AVCOL_RANGE_JPEG ||
            f->format == AV_PIX_FMT_YUVJ420P || f->format == AV_PIX_FMT_YUVJ422P || f->format == AV_PIX_FMT_YUVJ444P;
@@ -142,10 +166,12 @@ AVRational videoRate(const AVStream* st) {
     return AVRational{25, 1};
 }
 
+// The stream's first timestamp, in its time base; 0 when the file does not give one.
 std::int64_t streamStart(const AVStream* st) {
     return st->start_time != kNoPts ? st->start_time : 0;
 }
 
+// Frees an input context with avformat_close_input when an Input goes out of scope.
 struct InputCloser {
     void operator()(AVFormatContext* c) const {
         if (c) avformat_close_input(&c);
@@ -153,6 +179,8 @@ struct InputCloser {
 };
 using Input = std::unique_ptr<AVFormatContext, InputCloser>;
 
+// Opens a file (or an ImageSequence spec) and reads enough of it to know its streams. Null on
+// failure, with FFmpeg's message in *error.
 Input openInput(const QString& path, QString* error) {
     AVFormatContext* raw = nullptr;
     QByteArray file = path.toUtf8();
@@ -190,6 +218,8 @@ bool lengthIsGuessed(const AVFormatContext* fmt) {
     return fmt->duration_estimation_method == AVFMT_DURATION_FROM_BITRATE;
 }
 
+// The packets of one stream, counted by reading the file to its end: the context is left at the
+// end, so callers count on a context of their own or seek back.
 std::int64_t countPackets(AVFormatContext* fmt, int stream) {
     AVPacket* packet = av_packet_alloc();
     std::int64_t n = 0;
@@ -201,6 +231,9 @@ std::int64_t countPackets(AVFormatContext* fmt, int stream) {
     return n;
 }
 
+// A stream as StreamInfo: codec, raster, rate, aspect, sample format and length in frames (video) or
+// samples (audio). The length comes from the stream's frame count, else its duration, else the
+// file's; probe() and VideoReader::open() replace guessed lengths with counted ones.
 StreamInfo describe(const AVFormatContext* fmt, const AVStream* st) {
     StreamInfo s;
     const AVCodecParameters* par = st->codecpar;
@@ -221,6 +254,7 @@ StreamInfo describe(const AVFormatContext* fmt, const AVStream* st) {
         s.height = par->height;
         const AVRational rate = videoRate(st);
         s.frameRate = toRational(rate);
+        // The display aspect ratio is the raster times the sample (pixel) aspect ratio, reduced.
         AVRational sar = par->sample_aspect_ratio.num > 0 ? par->sample_aspect_ratio : AVRational{1, 1};
         int dw = 0;
         int dh = 0;
@@ -256,6 +290,7 @@ StreamInfo describe(const AVFormatContext* fmt, const AVStream* st) {
     return s;
 }
 
+// The "kind" of a stream in MediaInfo::toJson().
 const char* kindName(StreamKind k) {
     switch (k) {
     case StreamKind::Video: return "video";
@@ -266,6 +301,7 @@ const char* kindName(StreamKind k) {
     return "other";
 }
 
+// The index of the first stream of a type, -1 if there is none.
 int firstStream(const AVFormatContext* fmt, AVMediaType type) {
     for (unsigned i = 0; i < fmt->nb_streams; ++i) {
         if (fmt->streams[i]->codecpar->codec_type == type) return static_cast<int>(i);
@@ -351,6 +387,7 @@ std::vector<const StreamInfo*> MediaInfo::audio() const {
     return out;
 }
 
+// MediaInfo as JSON, as `--probe` prints it (app/main.cpp).
 QJsonObject MediaInfo::toJson() const {
     QJsonArray list;
     for (const StreamInfo& s : streams) {
@@ -385,6 +422,9 @@ QJsonObject MediaInfo::toJson() const {
     return o;
 }
 
+// Reads a file's format, metadata and streams without decoding any frames (except to count those of
+// formats without an index, see lengthIsGuessed()). The file and stream metadata are merged:
+// QuickTime keeps the timecode and reel on a track, MXF the file package's UMID on its stream.
 std::optional<MediaInfo> probe(const QString& path, QString* error) {
     Input in = openInput(path, error);
     if (!in) return std::nullopt;
@@ -432,6 +472,7 @@ std::optional<MediaInfo> probe(const QString& path, QString* error) {
 
 namespace {
 
+// The extensions isNumberedStill() takes as image formats that can make a sequence.
 const QStringList& stillExtensions() {
     static const QStringList e{QStringLiteral("dpx"), QStringLiteral("exr"), QStringLiteral("tif"),
                                QStringLiteral("tiff"), QStringLiteral("png"), QStringLiteral("jpg"),
@@ -451,6 +492,7 @@ QString ImageSequence::fileAt(std::int64_t index) const {
     return pattern.left(at) + QStringLiteral("%1").arg(first + index, width, 10, QLatin1Char('0')) + pattern.mid(d + 1);
 }
 
+// The file name before its number, with trailing separators ("._- ") removed.
 QString ImageSequence::name() const {
     const QString file = pattern.mid(pattern.lastIndexOf(QLatin1Char('/')) + 1);
     QString stem = file.left(file.indexOf(QLatin1Char('%')));
@@ -464,6 +506,8 @@ QString ImageSequence::spec() const {
            QStringLiteral("?first=%1&count=%2&rate=%3/%4").arg(first).arg(count).arg(rate.num()).arg(rate.den());
 }
 
+// Parses "seq:<pattern>?first=..&count=..&rate=n/d". The query is the text after the last '?', so
+// the pattern may hold one. Nothing if it is not a spec or the run is empty.
 std::optional<ImageSequence> ImageSequence::fromSpec(const QString& spec) {
     if (!spec.startsWith(QLatin1String("seq:"))) return std::nullopt;
     const qsizetype q = spec.lastIndexOf(QLatin1Char('?'));
@@ -498,6 +542,9 @@ bool isNumberedStill(const QString& path) {
 
 // ---------------------------------------------------------------- VideoReader
 
+// One open video stream: the demuxer, a decoder and the last decoded frame. Frame numbers count
+// from the first frame shown at the stream's edit rate (`rate`); toPts() and toFrame() convert
+// between them and the stream's timestamps. Not thread-safe: FrameCache serialises its use.
 struct VideoReader::Impl {
     Input fmt;
     AVStream* stream = nullptr;
@@ -506,6 +553,7 @@ struct VideoReader::Impl {
     AVFrame* frame = nullptr;
     SwsContext* sws = nullptr;
     StreamInfo info;
+    // The edit rate, frames per second (videoRate()).
     AVRational rate{25, 1};
     std::int64_t next = -1; // the frame the decoder gives next, -1: unknown
     bool eof = false;
@@ -517,15 +565,19 @@ struct VideoReader::Impl {
         avcodec_free_context(&dec);
     }
 
+    // The first frame's timestamp, in the stream's time base (set in open()).
     std::int64_t first = 0; // the first frame's time
     std::int64_t toPts(std::int64_t n) const {
         return first + av_rescale_q(n, inverse(rate), stream->time_base);
     }
+    // The nearest frame number for a timestamp, so rounded timestamps still find their frame.
     std::int64_t toFrame(std::int64_t pts) const {
         return av_rescale_q_rnd(pts - first, stream->time_base, inverse(rate),
                                 static_cast<AVRounding>(AV_ROUND_NEAR_INF | AV_ROUND_PASS_MINMAX));
     }
 
+    // Seeks to the keyframe at or before frame n (the stream's start for frame 0, or if that seek fails)
+    // and empties the decoder. Which frame decoding gives next is then unknown.
     void seek(std::int64_t n) {
         avcodec_flush_buffers(dec);
         if (n <= 0 || av_seek_frame(fmt.get(), stream->index, toPts(n), AVSEEK_FLAG_BACKWARD) < 0) {
@@ -538,8 +590,12 @@ struct VideoReader::Impl {
     // The next decoded frame, its number in `number`; false at the end.
     bool decodeNext(std::int64_t& number) {
         for (;;) {
+            // FFmpeg's send/receive loop: take a frame if the decoder has one; otherwise feed it the next
+            // packet of our stream (others are dropped), or, at the end of the file, a null packet that drains
+            // what it still holds until it returns AVERROR_EOF.
             const int rc = avcodec_receive_frame(dec, frame);
             if (rc == 0) {
+                // The frame's number from its timestamp; without one, the one after the last.
                 const std::int64_t pts = frame->best_effort_timestamp != kNoPts ? frame->best_effort_timestamp : frame->pts;
                 number = pts != kNoPts ? toFrame(pts) : (next >= 0 ? next : 0);
                 next = number + 1;
@@ -573,6 +629,9 @@ struct VideoReader::Impl {
     bool rewind();
     QString path;
 
+    // The current frame as an RGBA8888 QImage at `size` (its own if empty), through a cached swscale
+    // context. The source's matrix and range are set explicitly so pictures look the same whatever the
+    // file leaves unspecified.
     QImage convert(QSize size) {
         const int w = size.isValid() && !size.isEmpty() ? size.width() : frame->width;
         const int h = size.isValid() && !size.isEmpty() ? size.height() : frame->height;
@@ -600,6 +659,9 @@ struct VideoReader::Impl {
 VideoReader::VideoReader() = default;
 VideoReader::~VideoReader() = default;
 
+// Opens the stream, works out its length (counted when the format only guesses it, the chosen run
+// for an image sequence) and decodes the first frame to learn where frame 0 starts, then seeks back.
+// On failure the reader stays as it was.
 bool VideoReader::open(const QString& path, int streamIndex, QString* error) {
     auto d = std::make_unique<Impl>();
     d->fmt = openInput(path, error);
@@ -671,6 +733,10 @@ bool VideoReader::Impl::rewind() {
     return true;
 }
 
+// Decodes frame `number` into `frame`: carries on when it is the next one, otherwise seeks to the
+// keyframe before it and decodes forward, discarding earlier frames. If the seek lands after the
+// frame, or the frame never comes, it starts over from the beginning once (rewind()) and decodes
+// every frame up to it. False past the end or if the frame cannot be found.
 bool VideoReader::Impl::locate(std::int64_t number) {
     if (number < 0 || (info.length > 0 && number >= info.length)) return false;
     // The next frame continues decoding; anything else seeks first.
@@ -713,6 +779,9 @@ QString VideoReader::frameMd5(std::int64_t number) {
     return QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Md5).toHex());
 }
 
+// Three ways, so the values do not depend on the FFmpeg version where it matters: planar RGB at its
+// own size is converted here with the Rec. 709 matrix; planar legal-range Y'CbCr at its own size is
+// upsampled here (planarYuvTo444()); anything else, or a different size, goes through swscale.
 bool VideoReader::planes(std::int64_t number, QSize size, std::vector<std::uint16_t>* y, std::vector<std::uint16_t>* cb,
                          std::vector<std::uint16_t>* cr) {
     if (!d_ || !d_->locate(number)) return false;
@@ -758,6 +827,7 @@ bool VideoReader::planes(std::int64_t number, QSize size, std::vector<std::uint1
         }
         return true;
     }
+    // Planar Y'CbCr at its own size: done here when planarYuvTo444() takes the format.
     if (w == f->width && h == f->height) {
         const std::size_t n = static_cast<std::size_t>(w) * static_cast<std::size_t>(h);
         y->assign(n, 0);
@@ -765,6 +835,7 @@ bool VideoReader::planes(std::int64_t number, QSize size, std::vector<std::uint1
         cr->assign(n, 0);
         if (planarYuvTo444(f, y->data(), cb->data(), cr->data(), w)) return true;
     }
+    // Otherwise swscale, to 16-bit little-endian 4:4:4 at the requested size.
     SwsContext* sws = sws_getContext(f->width, f->height, static_cast<AVPixelFormat>(f->format), w, h,
                                      AV_PIX_FMT_YUV444P16LE, SWS_BICUBIC | SWS_ACCURATE_RND | SWS_FULL_CHR_H_INT,
                                      nullptr, nullptr, nullptr);
@@ -788,6 +859,7 @@ double Psnr::worst() const {
     return std::min({y, cb, cr});
 }
 
+// Frame A against frame B scaled to A's raster. Identical planes give 100 dB rather than infinity.
 std::optional<Psnr> comparePictures(VideoReader& a, std::int64_t frameA, VideoReader& b, std::int64_t frameB) {
     std::vector<std::uint16_t> ay, acb, acr, by, bcb, bcr;
     if (!a.planes(frameA, {}, &ay, &acb, &acr)) return std::nullopt;
@@ -812,6 +884,9 @@ std::optional<Psnr> comparePictures(VideoReader& a, std::int64_t frameA, VideoRe
 
 // ---------------------------------------------------------------- AudioReader
 
+// One open audio stream, decoded and converted to interleaved float at the stream's own rate and
+// channel count (no resampling: Resampler and AudioMix do that). Decoded samples wait in `pending`
+// so consecutive requests continue without seeking.
 struct AudioReader::Impl {
     Input fmt;
     AVStream* stream = nullptr;
@@ -822,6 +897,8 @@ struct AudioReader::Impl {
     StreamInfo info;
     int channels = 0;
     int rate = 0;
+    // pendingStart is the sample number of pending's first sample; -1 after a seek, until the first
+    // decoded frame says where it starts.
     std::vector<float> pending;  // decoded, interleaved
     std::int64_t pendingStart = -1;
     bool eof = false;
@@ -833,10 +910,13 @@ struct AudioReader::Impl {
         avcodec_free_context(&dec);
     }
 
+    // The sample number just after what is pending.
     std::int64_t pendingEnd() const {
         return pendingStart + static_cast<std::int64_t>(pending.size()) / channels;
     }
 
+    // Seeks to the packet at or before `sample` and drops what is pending; decodeMore() then learns the
+    // position from the first frame's timestamp, so the samples before `sample` are skipped by samples().
     void seek(std::int64_t sample) {
         avcodec_flush_buffers(dec);
         const std::int64_t pts = streamStart(stream) + av_rescale_q(sample, AVRational{1, rate}, stream->time_base);
@@ -849,6 +929,9 @@ struct AudioReader::Impl {
     // Decodes one more frame into `pending`; false at the end.
     bool decodeMore() {
         for (;;) {
+            // The same send/receive loop as VideoReader::Impl::decodeNext(). Each frame is converted with
+            // swresample and appended to `pending`; the first frame after a seek sets pendingStart from its
+            // timestamp, later frames follow on.
             const int rc = avcodec_receive_frame(dec, frame);
             if (rc == 0) {
                 std::int64_t start = pendingStart >= 0 ? pendingEnd() : 0;
@@ -890,6 +973,8 @@ struct AudioReader::Impl {
 AudioReader::AudioReader() = default;
 AudioReader::~AudioReader() = default;
 
+// Opens the stream and a swresample context that changes only the sample format, to interleaved
+// 32-bit float, keeping the rate and the channel layout.
 bool AudioReader::open(const QString& path, int streamIndex, QString* error) {
     auto d = std::make_unique<Impl>();
     d->fmt = openInput(path, error);
@@ -939,6 +1024,8 @@ int AudioReader::sampleRate() const {
     return d_ ? d_->rate : 0;
 }
 
+// Seeks only when `start` is not inside (or just after) what is pending, then decodes until the
+// request is covered or the stream ends. What is returned is removed from `pending`.
 std::vector<float> AudioReader::samples(std::int64_t start, int count) {
     if (!d_ || count <= 0 || start < 0) return {};
     Impl& d = *d_;
@@ -971,6 +1058,8 @@ std::vector<float> AudioReader::samples(std::int64_t start, int count) {
 
 namespace {
 
+// The encoder's preferred pixel format: the first it lists (avcodec_get_supported_config() from
+// libavcodec 61.13, which deprecates AVCodec::pix_fmts).
 AVPixelFormat firstPixelFormat(const AVCodec* codec) {
 #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
     const void* list = nullptr;
@@ -984,6 +1073,7 @@ AVPixelFormat firstPixelFormat(const AVCodec* codec) {
 #endif
 }
 
+// Likewise, the encoder's first sample format.
 AVSampleFormat firstSampleFormat(const AVCodec* codec) {
 #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(61, 13, 100)
     const void* list = nullptr;
@@ -999,6 +1089,9 @@ AVSampleFormat firstSampleFormat(const AVCodec* codec) {
 
 } // namespace
 
+// One output file: the muxer and up to one video and one audio encoder. vpts counts frames (the video
+// time base is 1/edit rate), apts samples (1/sample rate). Audio is buffered in `abuffer` until it
+// fills an encoder frame of aframeSize samples.
 struct MediaWriter::Impl {
     AVFormatContext* out = nullptr;
     AVCodecContext* venc = nullptr;
@@ -1044,6 +1137,7 @@ struct MediaWriter::Impl {
         return false;
     }
 
+    // Writes every packet the encoder has ready, its timestamps moved to the stream's time base.
     bool drain(AVCodecContext* enc, AVStream* st) {
         for (;;) {
             const int rc = avcodec_receive_packet(enc, packet);
@@ -1056,12 +1150,15 @@ struct MediaWriter::Impl {
         }
     }
 
+    // Sends a frame (null: flush the encoder) and writes what comes out.
     bool encode(AVCodecContext* enc, AVStream* st, AVFrame* f) {
         const int rc = avcodec_send_frame(enc, f);
         if (rc < 0 && rc != AVERROR_EOF) return fail(errorText(rc));
         return drain(enc, st);
     }
 
+    // Converts the first `n` buffered samples to the encoder's sample format, encodes them as one frame
+    // and removes them from the buffer.
     bool encodeAudio(int n) {
         av_frame_make_writable(aframe);
         aframe->nb_samples = n;
@@ -1085,6 +1182,7 @@ QString MediaWriter::lastError() const {
 
 namespace {
 
+// `bytes` bytes of b from `at` as a big-endian number (MXF's byte order).
 std::uint64_t bigEndian(const QByteArray& b, qsizetype at, int bytes) {
     std::uint64_t v = 0;
     for (int i = 0; i < bytes; ++i) v = (v << 8) | static_cast<std::uint8_t>(b.at(at + i));
@@ -1118,6 +1216,8 @@ qint64 berLength(const QByteArray& b, qsizetype& at) {
 bool fixOpAtom(const QString& path, const MobId& materialPackage, const MobId& filePackage) {
     QFile f(path);
     if (!f.open(QIODevice::ReadWrite)) return false;
+    // The random index pack is at the end of the file; its last four bytes give its length. Its entries
+    // (body SID and byte offset, 12 bytes each) list every partition.
     const qint64 size = f.size();
     if (size < 4 || !f.seek(size - 4)) return false;
     const auto ripLength = static_cast<qint64>(bigEndian(f.read(4), 0, 4));
@@ -1174,6 +1274,8 @@ bool fixOpAtom(const QString& path, const MobId& materialPackage, const MobId& f
                 }
             }
         }
+        // The essence container labels: 06 0e 2b 34 04 01 01 .. 0d 01 03 01 02, then 11 (VC-3) or 06 (BWF),
+        // mapping byte 01 (frame-wrapped) and 00; the mapping byte becomes 02 (clip-wrapped).
         for (qsizetype i = region.indexOf(kPrefix); i >= 0 && i + 16 <= region.size(); i = region.indexOf(kPrefix, i + 1)) {
             const auto kind = static_cast<std::uint8_t>(region.at(i + 13));
             if (region.mid(i + 8, 5) == kMiddle && (kind == 0x11 || kind == 0x06) && region.at(i + 14) == 0x01 &&
@@ -1189,6 +1291,9 @@ bool fixOpAtom(const QString& path, const MobId& materialPackage, const MobId& f
 
 } // namespace
 
+// Sets up the muxer and the encoders from the settings and writes the header. Formats that want
+// global headers (MOV, MXF) get them from the encoders. The metadata keys are FFmpeg's ("timecode",
+// "reel_name", MXF's "material_package_name" and "comment_*"); the muxer keeps what it knows.
 bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* error) {
     d_ = std::make_unique<Impl>();
     Impl& d = *d_;
@@ -1214,6 +1319,7 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
     }
     const bool globalHeader = (d.out->oformat->flags & AVFMT_GLOBALHEADER) != 0;
 
+    // The video encoder; the profile goes to its private options (DNxHR's "dnxhr_hq", ...).
     if (!s.videoCodec.isEmpty()) {
         if (!codecAllowed(s.videoCodec)) return failed(QStringLiteral("%1 is not available in this build").arg(s.videoCodec));
         const AVCodec* codec = avcodec_find_encoder_by_name(s.videoCodec.toUtf8().constData());
@@ -1250,6 +1356,7 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
         d.vframe->height = s.height;
         if (av_frame_get_buffer(d.vframe, 0) < 0) return failed(QStringLiteral("out of memory"));
     }
+    // The audio encoder, and a swresample context from interleaved float to its sample format.
     if (!s.audioCodec.isEmpty()) {
         if (!codecAllowed(s.audioCodec)) return failed(QStringLiteral("%1 is not available in this build").arg(s.audioCodec));
         const AVCodec* codec = avcodec_find_encoder_by_name(s.audioCodec.toUtf8().constData());
@@ -1282,6 +1389,7 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
         if (av_frame_get_buffer(d.aframe, 0) < 0) return failed(QStringLiteral("out of memory"));
     }
     if (!d.venc && !d.aenc) return failed(QStringLiteral("nothing to write"));
+    // The file itself, unless the muxer writes its own; then the header with the muxer's options.
     if (!(d.out->oformat->flags & AVFMT_NOFILE)) {
         const int rc = avio_open(&d.out->pb, file.constData(), AVIO_FLAG_WRITE);
         if (rc < 0) return failed(errorText(rc));
@@ -1298,6 +1406,8 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
     return true;
 }
 
+// Converts any QImage to RGBA and lets swscale scale it to the raster and convert it to the encoder's
+// pixel format, with the stream's matrix. Each frame is the next one: pts counts from 0.
 bool MediaWriter::writeVideo(const QImage& image) {
     Impl& d = *d_;
     if (!d.venc) return d.fail(QStringLiteral("no video stream"));
@@ -1322,6 +1432,9 @@ bool MediaWriter::writeVideo(const QImage& image) {
 }
 
 
+// Takes the reader's decoded frame (at full bit depth, not via QImage) and draws it into `target`
+// on a black raster: for transcoding, where the picture is fitted into the project's raster. RGB
+// output (DNx 444) from Y'CbCr sources is converted here; everything else through swscale.
 bool MediaWriter::writeVideoFrom(VideoReader& reader, std::int64_t number, QRect target) {
     Impl& d = *d_;
     if (!d.venc) return d.fail(QStringLiteral("no video stream"));
@@ -1335,6 +1448,7 @@ bool MediaWriter::writeVideoFrom(VideoReader& reader, std::int64_t number, QRect
     target = target.intersected(QRect(0, 0, d.venc->width, d.venc->height));
     target.setRect(target.x() & ~1, target.y() & ~1, target.width() & ~1, target.height() & ~1);
     if (target.isEmpty()) return d.fail(QStringLiteral("nothing to draw into"));
+    // Black first, so the bars outside the target stay black.
     av_frame_make_writable(d.vframe);
     const bool rgbOut = isRgbFormat(format);
     std::ptrdiff_t lines[4] = {d.vframe->linesize[0], d.vframe->linesize[1], d.vframe->linesize[2],
@@ -1405,6 +1519,7 @@ bool MediaWriter::writeVideoFrom(VideoReader& reader, std::int64_t number, QRect
                 }
             }
         }
+    // Otherwise swscale converts and scales straight into the target's corner of each plane.
     } else {
         d.sws = sws_getCachedContext(d.sws, src->width, src->height, static_cast<AVPixelFormat>(src->format),
                                      target.width(), target.height(), format,
@@ -1423,6 +1538,7 @@ bool MediaWriter::writeVideoFrom(VideoReader& reader, std::int64_t number, QRect
     return d.encode(d.venc, d.vst, d.vframe);
 }
 
+// Buffers the samples and encodes every full encoder frame; the rest waits for more or for finish().
 bool MediaWriter::writeAudio(const float* samples, int count) {
     Impl& d = *d_;
     if (!d.aenc) return d.fail(QStringLiteral("no audio stream"));
@@ -1434,6 +1550,9 @@ bool MediaWriter::writeAudio(const float* samples, int count) {
     return true;
 }
 
+// Encodes what is buffered, flushes both encoders, writes the trailer and closes the file. For
+// mxf_opatom it then rewrites the labels and package IDs in place (fixOpAtom()), which needs the file
+// complete and closed. False with the reason in *error and lastError().
 bool MediaWriter::finish(QString* error) {
     Impl& d = *d_;
     bool ok = d.headerWritten;
@@ -1464,6 +1583,7 @@ bool MediaWriter::finish(QString* error) {
 
 // ---------------------------------------------------------------- Resampler
 
+// A swresample context between two rates, interleaved float on both sides.
 struct Resampler::Impl {
     SwrContext* swr = nullptr;
     int channels = 0;
@@ -1471,6 +1591,7 @@ struct Resampler::Impl {
     int to = 0;
     ~Impl() { swr_free(&swr); }
 
+    // As many samples out as are ready; a null `samples` drains what swresample holds.
     std::vector<float> convert(const float* samples, int count) {
         std::vector<float> out;
         if (!swr) return out;
@@ -1517,6 +1638,9 @@ std::vector<float> Resampler::flush() {
 
 // ---------------------------------------------------------------- copyVideoFrames
 
+// Remuxes packets: the input's codec parameters are copied to the output stream and each packet of
+// the stream from the `first`-th on is written with new timestamps, one frame apart from 0. That only
+// gives exact frames for intra-only codecs; the caller (consolidateClip(), managed.cpp) checks.
 bool copyVideoFrames(const QString& from, int stream, std::int64_t first, std::int64_t count, const QString& to,
                      const WriterSettings& settings, QString* error) {
     Input in = openInput(from, error);
@@ -1556,6 +1680,7 @@ bool copyVideoFrames(const QString& from, int stream, std::int64_t first, std::i
     }
     AVStream* ost = avformat_new_stream(out, nullptr);
     if (!ost || avcodec_parameters_copy(ost->codecpar, ist->codecpar) < 0) return failed(QStringLiteral("out of memory"));
+    // Let the muxer pick its own tag for the codec: the input container's may not fit.
     ost->codecpar->codec_tag = 0;
     const AVRational rate = videoRate(ist);
     ost->time_base = inverse(rate);
@@ -1616,6 +1741,9 @@ QString ffmpegName(const std::string& name) {
     return n;
 }
 
+// An ext::Decoder over an FFmpeg decoder, for modules that hand us packets (docs/EXTENSIONS.md).
+// Decoded frames are copied out plane by plane: video planes at their stride, audio one plane per
+// channel when planar, else one.
 class FFmpegDecoder : public ext::Decoder {
 public:
     explicit FFmpegDecoder(AVCodecContext* ctx) : ctx_(ctx), frame_(av_frame_alloc()), packet_(av_packet_alloc()) {}
@@ -1685,6 +1813,8 @@ private:
     AVPacket* packet_;
 };
 
+// FFmpeg as a codec provider in the registry (src/ext). It decodes whatever FFmpeg and the codec
+// policy allow; it does not encode yet.
 class FFmpegProvider : public ext::CodecProvider {
 public:
     ext::ProviderInfo info() const override {

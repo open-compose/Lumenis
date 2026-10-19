@@ -11,13 +11,26 @@
 
 #include <algorithm>
 
+// PanelManager (declared in panels.h): the logic of the panel framework, whose widgets are in panels.cpp.
+// It moves panels between groups, hosts and floating windows, keeps track of the active panel and of blank
+// panels, handles title bar drags and their drop zones, and saves and restores layouts as JSON. Workspaces
+// (workspace.cpp) store those layouts; MainWindow (main_window.cpp) registers the panels and wires the
+// Windows menu commands to the functions here.
+//
+// Every move follows the same pattern: takeForMove() takes the panel (in a new group of its own) or the
+// whole group out of the layout, a DockHost function places the group, and finishMove() removes floating
+// windows left empty, activates the moved panel and emits layoutChanged().
+
 namespace lumenis::ui {
 
 namespace {
 
+// The "version" of saveLayout()'s JSON; restoreLayout() ignores other versions.
 constexpr int kLayoutVersion = 1;
+// Blank panels have ids "Blank1", "Blank2", ...; layouts recreate them from the id.
 const QString kBlankPrefix = QStringLiteral("Blank");
 
+// The panel that a widget is in, or null.
 Panel* panelAncestor(QObject* object) {
     for (auto* w = qobject_cast<QWidget*>(object); w; w = w->parentWidget()) {
         if (auto* p = qobject_cast<Panel*>(w)) return p;
@@ -25,6 +38,7 @@ Panel* panelAncestor(QObject* object) {
     return nullptr;
 }
 
+// A rectangle as [x, y, width, height]; an array of another length reads back as an empty rectangle.
 QJsonArray rectToJson(const QRect& r) {
     return QJsonArray{r.x(), r.y(), r.width(), r.height()};
 }
@@ -37,12 +51,15 @@ QRect rectFromJson(const QJsonValue& v) {
 
 } // namespace
 
+// The application-wide event filter (eventFilter() below) activates panels on click and watches keys
+// during drags.
 PanelManager::PanelManager(QWidget* owner) : QObject(owner), owner_(owner) {
     mainHost_ = new DockHost(*this);
     mainHost_->setObjectName(QStringLiteral("mainHost"));
     qApp->installEventFilter(this);
 }
 
+// Closed panels have no parent, so nothing else would delete them.
 PanelManager::~PanelManager() {
     qApp->removeEventFilter(this);
     for (Panel* p : QList<Panel*>(panels_)) {
@@ -54,6 +71,8 @@ QList<FloatingWindow*> PanelManager::floatingWindows() const {
     return floating_;
 }
 
+// The manager forgets a panel when it is destroyed. A panel that is not already in a group is closed:
+// un-parented and hidden.
 void PanelManager::addPanel(Panel* panel) {
     if (!panel || panels_.contains(panel)) return;
     panels_ << panel;
@@ -103,6 +122,8 @@ PanelGroup* PanelManager::newGroup() {
     return new PanelGroup(*this);
 }
 
+// With no id, takes the next free "BlankN". With one (from a layout), makes sure later ids do not repeat
+// it.
 Panel* PanelManager::newBlankPanel(const QString& requestedId) {
     QString id = requestedId;
     if (id.isEmpty()) {
@@ -120,6 +141,7 @@ Panel* PanelManager::newBlankPanel(const QString& requestedId) {
     return blank;
 }
 
+// Also drops any blank-panel homes that pointed at it.
 void PanelManager::forget(Panel* panel) {
     panels_.removeAll(panel);
     for (auto it = blankHomes_.begin(); it != blankHomes_.end();) {
@@ -137,10 +159,12 @@ void PanelManager::detach(Panel* panel) {
     discardGroupIfEmpty(group);
 }
 
+// Takes the group out of its host's tree, leaving it without a parent.
 void PanelManager::detachGroup(PanelGroup* group) {
     if (DockHost* host = group->host()) host->remove(group);
 }
 
+// Deleted later: the group's own title bar may be handling the event that emptied it.
 void PanelManager::discardGroupIfEmpty(PanelGroup* group) {
     if (!group || group->count() > 0) return;
     detachGroup(group);
@@ -158,6 +182,8 @@ void PanelManager::removeEmptyFloatingWindows() {
     }
 }
 
+// Three cases: a panel that shares its group leaves it for a new group of its own; a panel alone in its
+// group, or a whole group, takes its group out of the layout; a closed panel gets a new group.
 PanelGroup* PanelManager::takeForMove(PanelGroup* group, Panel* panel) {
     if (panel && panel->group() && panel->group()->count() > 1) {
         detach(panel);
@@ -182,6 +208,7 @@ void PanelManager::finishMove(PanelGroup* moved) {
     changed();
 }
 
+// Docking a panel beside its own group when it is the only tab would change nothing.
 void PanelManager::dock(Panel* panel, PanelGroup* target, DockSide side, double fraction) {
     if (!panel || !target || !target->host()) return;
     if (panel->group() == target && target->count() == 1) return;
@@ -206,6 +233,7 @@ void PanelManager::dockAtEdge(Panel* panel, DockHost* host, DockSide side, doubl
     finishMove(moving);
 }
 
+// Adds the panel as the target's last tab.
 void PanelManager::tab(Panel* panel, PanelGroup* target) {
     if (!panel || !target || panel->group() == target) return;
     detach(panel);
@@ -215,6 +243,7 @@ void PanelManager::tab(Panel* panel, PanelGroup* target) {
     changed();
 }
 
+// Shown only while the main window is visible; eventFilter() shows and hides them with it.
 FloatingWindow* PanelManager::newFloatingWindow(const QRect& requested) {
     QRect geometry = requested;
     // Keep it reachable: on a screen that exists now.
@@ -232,6 +261,7 @@ FloatingWindow* PanelManager::newFloatingWindow(const QRect& requested) {
     return window;
 }
 
+// Centred on the main window, or on the primary screen before the main window is shown.
 QRect PanelManager::defaultFloatingGeometry(const QSize& size) const {
     QRect r(QPoint(), size);
     if (owner_->isVisible()) {
@@ -242,6 +272,8 @@ QRect PanelManager::defaultFloatingGeometry(const QSize& size) const {
     return r;
 }
 
+// Without a geometry, a docked panel floats where it is now: its rectangle plus a title bar's width on
+// the left.
 FloatingWindow* PanelManager::floatPanel(Panel* panel, const QRect& geometry) {
     if (!panel) return nullptr;
     PanelGroup* group = panel->group();
@@ -311,6 +343,10 @@ Panel* PanelManager::addBlankPanel() {
     return blank;
 }
 
+// With blankPanelOnClose(), the last panel of a group in the main window leaves a blank panel in its place
+// and blankHomes_ remembers where; showPanel() later puts the panel back there. Blank panels are deleted
+// when closed. If the active panel is gone, the panel now showing in that group (or else the first open
+// one) becomes active.
 void PanelManager::closePanel(Panel* panel) {
     PanelGroup* group = panel ? panel->group() : nullptr;
     if (!group) return;
@@ -336,6 +372,7 @@ void PanelManager::closePanel(Panel* panel) {
     changed();
 }
 
+// A closed panel goes back to its blank panel's place if it left one; otherwise it opens floating.
 void PanelManager::showPanel(Panel* panel) {
     if (!panel) return;
     if (isOpen(panel)) {
@@ -357,6 +394,7 @@ void PanelManager::showPanel(Panel* panel) {
     floatPanel(panel, defaultFloatingGeometry(QSize(720, 420)));
 }
 
+// Closing a floating window closes its panels (blank ones are deleted) rather than docking them.
 void PanelManager::floatingWindowClosed(FloatingWindow* window) {
     for (PanelGroup* g : window->host()->groups()) {
         for (Panel* p : QList<Panel*>(g->panels())) {
@@ -373,6 +411,7 @@ void PanelManager::floatingWindowClosed(FloatingWindow* window) {
     changed();
 }
 
+// With no active panel, the first group becomes active.
 void PanelManager::cycleWindows(int direction) {
     const QList<PanelGroup*> groups = allGroups();
     if (groups.isEmpty()) return;
@@ -385,6 +424,7 @@ void PanelManager::cycleWindows(int direction) {
     g->window()->activateWindow();
 }
 
+// Moves to the next tab of the active panel's group, wrapping round.
 void PanelManager::cycleTabs() {
     if (!isOpen(active_)) return;
     PanelGroup* g = active_->group();
@@ -393,6 +433,7 @@ void PanelManager::cycleTabs() {
     activate(g->panels().at((index + 1) % g->count()));
 }
 
+// The main host first, then the floating windows' hosts in creation order.
 QList<DockHost*> PanelManager::hosts() const {
     QList<DockHost*> out{mainHost_};
     for (FloatingWindow* w : floatingWindows()) out << w->host();
@@ -405,6 +446,7 @@ QList<PanelGroup*> PanelManager::allGroups() const {
     return out;
 }
 
+// Called after every change: floating window titles follow their first group's current panel.
 void PanelManager::changed() {
     for (FloatingWindow* w : floatingWindows()) w->updateTitle();
     emit layoutChanged();
@@ -412,6 +454,8 @@ void PanelManager::changed() {
 
 // ---------------------------------------------------------------- layouts
 
+// One node of a host's tree: a group as {"tabs", "current"}, a splitter as {"split", "sizes", "children"}
+// (see saveLayout() in panels.h).
 QJsonObject PanelManager::nodeToJson(QWidget* node) const {
     if (auto* g = qobject_cast<PanelGroup*>(node)) {
         QJsonArray tabs;
@@ -431,6 +475,10 @@ QJsonObject PanelManager::nodeToJson(QWidget* node) const {
     return {};
 }
 
+// Builds the widgets for one node. Unknown ids are skipped (except blank ids, which make new blank panels),
+// and a panel already in `placed` is not placed twice. Groups and splitters left empty are dropped, and a
+// splitter with one child is replaced by that child. Sizes are applied as proportions once the splitter
+// has its real size.
 QWidget* PanelManager::nodeFromJson(const QJsonObject& node, QList<Panel*>& placed) {
     if (node.contains(QStringLiteral("tabs"))) {
         const QJsonArray tabs = node.value(QStringLiteral("tabs")).toArray();
@@ -489,6 +537,9 @@ QJsonObject PanelManager::saveLayout() const {
     return layout;
 }
 
+// Takes every panel out (closing them), discards the old groups, splitters and floating windows, then
+// builds the main host and the floating windows from the JSON. Blank panels the layout does not place are
+// deleted. The saved active panel, or else the first placed one, becomes active.
 void PanelManager::restoreLayout(const QJsonObject& layout) {
     if (layout.value(QStringLiteral("version")).toInt() != kLayoutVersion) return;
     cancelDrag();
@@ -537,6 +588,7 @@ void PanelManager::restoreLayout(const QJsonObject& layout) {
 
 // ---------------------------------------------------------------- dragging
 
+// Dragging the only tab of a group drags the whole group. Every host's overlay is shown for the drag.
 void PanelManager::beginDrag(PanelGroup* group, Panel* panel) {
     if (!group) return;
     dragGroup_ = group;
@@ -565,6 +617,7 @@ void PanelManager::cancelDrag() {
     for (DockHost* h : hosts()) h->overlay()->hide();
 }
 
+// The drag is cancelled (overlays hidden) before the move, which may delete the group being dragged.
 void PanelManager::endDrag(const QPoint& globalPos, bool tabbing) {
     if (!dragGroup_) return;
     const DropTarget target = dropTargetAt(globalPos, tabbing);
@@ -602,6 +655,7 @@ void PanelManager::endDrag(const QPoint& globalPos, bool tabbing) {
         finishMove(moving);
         break;
     }
+    // A whole group dropped as tabs moves all its panels into the target group.
     case DropTarget::Kind::Tab:
         if (panel) {
             tab(panel, target.group);
@@ -620,6 +674,11 @@ void PanelManager::endDrag(const QPoint& globalPos, bool tabbing) {
     }
 }
 
+// The drop zones of one host for the current drag, in host coordinates. Each has a small `zone` that
+// the pointer must be over and a `preview` of the space the panel would take. An empty host has one Fill
+// zone; while tabbing, each other group's title bar is a Tab zone; otherwise there are four Edge zones
+// along the host's sides and four Split zones inside each group (but not inside a whole group that is
+// being dragged).
 QList<DropTarget> PanelManager::dropZones(const DockHost* host, bool tabbing) const {
     QList<DropTarget> zones;
     if (!dragGroup_ || !host) return zones;
@@ -664,6 +723,8 @@ QList<DropTarget> PanelManager::dropZones(const DockHost* host, bool tabbing) co
         if (movingWhole && g == dragGroup_) continue;
         const QRect r(g->mapTo(host, QPoint()), g->size());
         const int inset = 14;
+        // Bars `th` thick and half the group's length, `inset` from its sides; the preview is the half the
+        // panel would take.
         const int th = std::clamp(std::min(r.width(), r.height()) / 6, 8, 22);
         const int lh = r.height() / 2;
         const int lw = r.width() / 2;
@@ -683,6 +744,7 @@ QList<DropTarget> PanelManager::dropZones(const DockHost* host, bool tabbing) co
     return zones;
 }
 
+// Only the topmost host under the pointer counts, so a floating window hides the zones beneath it.
 DropTarget PanelManager::dropTargetAt(const QPoint& globalPos, bool tabbing) const {
     if (!dragGroup_) return {};
     // Floating windows sit above the main window; the newest on top.
@@ -706,6 +768,7 @@ void PanelManager::refreshOverlays() {
     for (DockHost* h : hosts()) h->overlay()->update();
 }
 
+// Installed on the whole application. It never consumes events except Esc during a drag.
 bool PanelManager::eventFilter(QObject* watched, QEvent* event) {
     switch (event->type()) {
     case QEvent::MouseButtonPress:

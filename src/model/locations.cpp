@@ -5,6 +5,8 @@
 #include <QDir>
 #include <QStandardPaths>
 
+// The default project, user and site settings folders (locations.h). The Select Project window
+// (src/ui/select_project_dialog.*) lists projects and users from them; tests pass their own.
 namespace lumenis::model {
 
 Locations Locations::defaults() {

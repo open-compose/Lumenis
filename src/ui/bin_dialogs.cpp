@@ -12,6 +12,11 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+// The bins' modal dialogs: Bin Column Selection, Custom Sift and Set Bin
+// Display. They only collect a choice; BinView (bin_view.cpp) opens them and
+// writes the result into the bin's model::BinDisplay (src/model/bin.h), where
+// the filtering itself happens (BinFilterModel, model::siftMatches).
+
 namespace lumenis::ui {
 
 // ---------------------------------------------------------------- ChooseColumnsDialog
@@ -32,6 +37,7 @@ ChooseColumnsDialog::ChooseColumnsDialog(const QStringList& available, const QSt
 
     auto* all = new QPushButton(tr("All/None"), this);
     all->setObjectName(QStringLiteral("allNone"));
+    // All/None selects everything unless everything is selected already.
     connect(all, &QPushButton::clicked, this, [this] {
         const bool select = list_->selectedItems().size() < list_->count();
         for (int i = 0; i < list_->count(); ++i) list_->item(i)->setSelected(select);
@@ -63,6 +69,9 @@ CustomSiftDialog::CustomSiftDialog(const QStringList& columns, const model::BinS
     setObjectName(QStringLiteral("customSift"));
     setWindowTitle(tr("Custom Sift"));
 
+    // Builds one group of kRows criteria rows into `rows`, filled from
+    // `values` (the bin's current sift) as far as it goes. The column menu's
+    // data is the heading, empty for Any.
     auto group = [&](const QString& title, QList<Row>& rows, const QList<model::SiftRow>& values) {
         auto* box = new QGroupBox(title, this);
         auto* grid = new QGridLayout(box);
@@ -80,6 +89,7 @@ CustomSiftDialog::CustomSiftDialog(const QStringList& columns, const model::BinS
             for (const QString& c : columns) row.column->addItem(c, c);
             if (r < values.size()) {
                 row.text->setText(values.at(r).text);
+                // A column no longer shown falls back to Any.
                 const int i = row.column->findData(values.at(r).column);
                 row.column->setCurrentIndex(i < 0 ? 0 : i);
             }
@@ -99,6 +109,7 @@ CustomSiftDialog::CustomSiftDialog(const QStringList& columns, const model::BinS
     buttons->addButton(QDialogButtonBox::Ok);
     buttons->addButton(QDialogButtonBox::Cancel);
     QPushButton* apply = buttons->addButton(QDialogButtonBox::Apply);
+    // Clear empties the rows but neither closes nor applies.
     connect(clear, &QPushButton::clicked, this, [this] {
         for (QList<Row>* rows : {&find_, &also_}) {
             for (Row& r : *rows) {
@@ -117,6 +128,8 @@ CustomSiftDialog::CustomSiftDialog(const QStringList& columns, const model::BinS
     layout->addWidget(buttons);
 }
 
+// The rows with text, in order; the criterion is always Contains, so only the
+// text and column are kept.
 model::BinSift CustomSiftDialog::sift() const {
     model::BinSift s;
     auto read = [](const QList<Row>& rows) {

@@ -13,6 +13,7 @@ namespace lumenis::model {
 // frame rate, or film feet and frames. The guide names no list; ours covers
 // the usual video rates and 35mm and 16mm film.
 struct CalculatorFormat {
+    // The Format menu text, e.g. "29.97 DF Timecode" or "16mm (40 fr/ft)".
     QString name;
     Rational rate;          // frames per second
     int nominalFps = 0;     // timecode: frames per labelled second
@@ -21,6 +22,7 @@ struct CalculatorFormat {
     bool isFilm() const { return framesPerFoot > 0; }
 };
 
+// The Format menu, in menu order; Calculator::format() indexes it.
 const QList<CalculatorFormat>& calculatorFormats();
 
 // The Avid Calculator (p.100): durations typed without colons or leading
@@ -30,15 +32,19 @@ class Calculator {
 public:
     Calculator();
 
+    // Index into calculatorFormats(); 29.97 NDF at start.
     int format() const { return format_; }
     // Converts the total (and anything being typed) to another format:
     // drop- and non-drop-frame timecode at the same rate keep the frame
     // count; other formats keep the duration in time (p.100).
     void setFormat(int index);
 
+    // Digit keys append to the entry being typed, up to 8 digits; further digits are ignored.
     void digit(int d);   // 0-9, typed from the right
     void doubleZero();   // the "00" key
     void backspace();
+    // add(), subtract() and equals() first fold the entry into the total with the pending operator;
+    // add() and subtract() then make themselves the pending one. clear() resets everything.
     void add();
     void subtract();
     void equals();
@@ -53,12 +59,16 @@ public:
     // Typed digits as frames: the last two are frames, then seconds,
     // minutes and hours (or feet, for film).
     std::int64_t parse(const QString& digits) const;
+    // A frame count at one format's rate as the nearest frame count of the same duration at
+    // another's; formats with the same rate keep the count.
     static std::int64_t convert(std::int64_t frames, const CalculatorFormat& from, const CalculatorFormat& to);
 
 private:
+    // Applies the entry being typed to the total with op_, then clears the entry.
     void commit();
 
     int format_ = 0;
+    // The running total and the digits being typed (empty when none), both in the current format.
     std::int64_t total_ = 0;
     QString entry_;
     char op_ = 0; // '+', '-' or none

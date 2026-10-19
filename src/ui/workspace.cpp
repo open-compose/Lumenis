@@ -7,6 +7,13 @@
 
 #include <algorithm>
 
+// WorkspaceManager (workspace.h): named panel layouts. Each workspace keeps two PanelManager layouts:
+// `saved` (Save Current) and `lastKnown` (how it was when the user last left it). Which one switching
+// back uses depends on the "When moving to a workspace" option. With neither, a workspace falls back to the
+// default layout of the built-in workspace it is based on; MainWindow sets those defaults
+// (setDefaultLayout) and stores the workspaces as Workspace View user settings. The toolbar and the New
+// Workspace dialog are in workspace_bar.cpp; the Windows > Workspaces menu is built in main_window.cpp.
+
 namespace lumenis::ui {
 
 namespace {
@@ -20,6 +27,7 @@ const QStringList kBuiltins = {QStringLiteral("Edit"), QStringLiteral("Color"), 
 constexpr int kStoreVersion = 1;
 constexpr auto kGroup = "workspaces";
 
+// Layouts are stored in QSettings as compact JSON text; an empty layout as an empty string.
 QString toText(const QJsonObject& o) {
     return o.isEmpty() ? QString() : QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
 }
@@ -68,6 +76,7 @@ const WorkspaceManager::Workspace* WorkspaceManager::find(const QString& name) c
     return const_cast<WorkspaceManager*>(this)->find(name);
 }
 
+// The guard stops a cycle of "based on" names.
 QJsonObject WorkspaceManager::defaultFor(const QString& name) const {
     // Follow "based on" back to a built-in workspace.
     QString n = name;
@@ -84,6 +93,7 @@ void WorkspaceManager::apply(const QJsonObject& layout) {
     panels_.restoreLayout(layout);
 }
 
+// The layout used is the first that exists of: last known (with Last Known State), saved, default.
 bool WorkspaceManager::activate(const QString& name) {
     Workspace* target = find(name);
     if (!target) return false;
@@ -100,6 +110,9 @@ bool WorkspaceManager::activate(const QString& name) {
     return true;
 }
 
+// Without `basedOn`, the new workspace saves the current arrangement and the screen does not change; it
+// records the active workspace as what it is based on. With `basedOn`, it takes that workspace's saved
+// layout (or default) and applies it.
 bool WorkspaceManager::create(const QString& requested, const QString& basedOn, QString* error) {
     auto fail = [error](const QString& message) {
         if (error) *error = message;
@@ -150,6 +163,7 @@ bool WorkspaceManager::removeActive() {
     return true;
 }
 
+// Also makes it the last known layout, so switching back shows what was saved.
 void WorkspaceManager::saveCurrent() {
     if (Workspace* w = find(active_)) {
         w->saved = panels_.saveLayout();
@@ -158,6 +172,7 @@ void WorkspaceManager::saveCurrent() {
     }
 }
 
+// Forgets the last known layout so the saved one is used next time too.
 void WorkspaceManager::restoreToSaved() {
     if (Workspace* w = find(active_)) {
         const QJsonObject layout = w->saved.isEmpty() ? defaultFor(w->name) : w->saved;
@@ -167,6 +182,7 @@ void WorkspaceManager::restoreToSaved() {
     }
 }
 
+// Forgets both layouts, so the workspace follows its default from now on.
 void WorkspaceManager::restoreCurrentToDefault() {
     if (Workspace* w = find(active_)) {
         w->saved = {};
@@ -182,6 +198,7 @@ void WorkspaceManager::setBarMode(BarMode mode) {
     emit changed();
 }
 
+// Not const: it first records the current arrangement as the active workspace's last known layout.
 QList<WorkspaceManager::Entry> WorkspaceManager::entries() {
     if (Workspace* w = find(active_)) w->lastKnown = panels_.saveLayout();
     QList<Entry> out;
@@ -189,6 +206,8 @@ QList<WorkspaceManager::Entry> WorkspaceManager::entries() {
     return out;
 }
 
+// Entries with an empty or repeated name (case-insensitive) and those past the 12th are dropped. Missing
+// built-in workspaces are put back near their usual places. An unknown `active` picks the first workspace.
 void WorkspaceManager::setEntries(const QList<Entry>& entries, const QString& active) {
     std::vector<Workspace> loaded;
     for (const Entry& e : entries) {
@@ -214,6 +233,7 @@ void WorkspaceManager::setEntries(const QList<Entry>& entries, const QString& ac
     emit changed();
 }
 
+// Even when nothing valid is stored, the active workspace's layout is applied.
 void WorkspaceManager::load(QSettings& settings) {
     settings.beginGroup(QLatin1String(kGroup));
     if (settings.value(QStringLiteral("version")).toInt() == kStoreVersion) {

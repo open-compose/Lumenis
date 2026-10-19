@@ -1,5 +1,8 @@
 #include "crash_report.h"
 
+// The crash report installed first thing in main() (app/main.cpp). Windows only: there the process
+// would otherwise end silently, which leaves CI and the owner's reports with nothing to go on.
+// Symbols come from DbgHelp, searching the executable's folder for cutthulhu.pdb.
 #if defined(_WIN32)
 
 #ifndef NOMINMAX
@@ -14,6 +17,8 @@
 
 namespace {
 
+// A short name for the common exception codes (0xC0000374 and 0xC0000409 have no named constant
+// in every SDK).
 const char* exceptionName(DWORD code) {
     switch (code) {
     case EXCEPTION_ACCESS_VIOLATION: return "access violation";
@@ -27,6 +32,9 @@ const char* exceptionName(DWORD code) {
     }
 }
 
+// The unhandled-exception filter: prints the exception, the faulting address and up to 48 stack
+// frames to stderr, then lets Windows carry on as it would have (EXCEPTION_CONTINUE_SEARCH). Only
+// the first crash is reported, should a second thread crash meanwhile.
 LONG WINAPI report(EXCEPTION_POINTERS* info) {
     static LONG reported = 0;
     if (InterlockedExchange(&reported, 1) != 0) return EXCEPTION_CONTINUE_SEARCH;
@@ -46,6 +54,7 @@ LONG WINAPI report(EXCEPTION_POINTERS* info) {
     if (char* slash = std::strrchr(exe, '\\')) *slash = '\0';
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_FAIL_CRITICAL_ERRORS);
     const bool symbols = SymInitialize(process, exe, TRUE) != FALSE;
+// StackWalk64 starts from the faulting thread's registers, copied: it changes the context.
 #if defined(_M_X64)
     CONTEXT context = *info->ContextRecord;
     STACKFRAME64 frame = {};
@@ -70,6 +79,7 @@ LONG WINAPI report(EXCEPTION_POINTERS* info) {
             frame.AddrPC.Offset == 0) {
             break;
         }
+        // Each frame as module!function +offset (file:line) when symbols are found, else module +offset.
         const DWORD64 address = frame.AddrPC.Offset;
         char moduleName[MAX_PATH] = "?";
         const DWORD64 base = SymGetModuleBase64(process, address);
@@ -112,6 +122,7 @@ void installCrashReport() {
 
 #else
 
+// Elsewhere the system's crash reporter has the stack.
 void installCrashReport() {}
 
 #endif

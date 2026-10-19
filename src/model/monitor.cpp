@@ -4,10 +4,14 @@
 
 #include <algorithm>
 
+// MonitorState (monitor.h): what the Source, Record and pop-up monitors have loaded, the shown
+// clip's position and marks, and the tracking displays above them. The Composer
+// (src/ui/composer.*) owns and drives them and paints the frames (src/ui/media_frames.*).
 namespace lumenis::model {
 
 namespace {
 
+// The timecode format of an item's edit rate. Every caller here uses non-drop-frame.
 TimecodeFormat formatOf(const BinItem& item, bool dropFrame = false) {
     return TimecodeFormat::forRate(item.editRate, dropFrame);
 }
@@ -52,6 +56,7 @@ void MonitorState::load(const QString& binId, const BinItem& item) {
     current_ = static_cast<int>(loaded_.size()) - 1;
 }
 
+// The item may have become shorter, so the position is clamped and marks past the new end dropped.
 bool MonitorState::replaceItem(const BinItem& item) {
     for (LoadedClip& c : loaded_) {
         if (c.item.id != item.id) continue;
@@ -84,6 +89,8 @@ QStringList MonitorState::menuNames(bool loadOrder) const {
     return names;
 }
 
+// `index` counts in menuNames(loadOrder): the same case-insensitive stable sort maps it back to
+// loaded_.
 bool MonitorState::select(int index, bool loadOrder) {
     if (index < 0 || index >= loaded_.size()) return false;
     if (loadOrder) {
@@ -103,6 +110,7 @@ void MonitorState::clearMonitor() {
     current_ = -1;
 }
 
+// With nothing shown, every clip is unloaded.
 void MonitorState::clearMenu() {
     const LoadedClip* shown = current();
     if (!shown) {
@@ -208,6 +216,8 @@ void MonitorState::setCurrentBin(const QString& binId) {
     if (LoadedClip* c = currentMutable()) c->binId = binId;
 }
 
+// Uncommitted clips are linked (a link, no bin). The shown clip stays shown if it survives;
+// otherwise the monitor goes black.
 int MonitorState::removeUncommitted() {
     const QString shown = current() ? current()->item.id : QString();
     int removed = 0;
@@ -223,6 +233,7 @@ int MonitorState::removeUncommitted() {
     return removed;
 }
 
+// The Start column is parsed as timecode at the item's edit rate.
 std::int64_t MonitorState::startFrame() const {
     const LoadedClip* c = current();
     if (!c) return 0;

@@ -15,11 +15,19 @@
 #include <cmath>
 #include <numbers>
 
+// The application's look (theme.h): a proxy of Qt's Fusion style with sizes that do not depend on the
+// platform, the dark palette, the bundled Inter font (embedded as a Qt resource, see
+// THIRD-PARTY-NOTICES.md), and the small icons drawn in code. All of it serves Phase 1 gate 1: the same
+// window looks the same on macOS, Windows and Linux, checked by CI's screenshot comparison (capture.cpp).
+// Colours and sizes of the panel chrome are constants in theme.h.
+
 namespace lumenis::ui {
 
 namespace {
 
+// Whether applyTheme() loaded both Inter faces; uiFontFamily() reports it.
 bool g_fontLoaded = false;
+// Slider groove thickness in pixels, see LumenisStyle::subControlRect().
 constexpr int kSliderGroove = 7;
 
 } // namespace
@@ -226,6 +234,7 @@ void applyTheme(QApplication& app) {
     }
 }
 
+// Each icon is drawn on a 32 px grid, filled with `color` or stroked 3 px wide.
 QIcon glyphIcon(GlyphIcon which, QColor color) {
     // Drawn at 2x and scaled down, so they are crisp on HiDPI screens.
     constexpr int size = 32;

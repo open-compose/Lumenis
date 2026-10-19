@@ -14,6 +14,14 @@
 
 #include <algorithm>
 
+// The Background Queue (background_queue.h): BackgroundQueue runs Consolidate/Transcode jobs one at a
+// time on a std::thread, and BackgroundQueueWindow lists them. MainWindow (main_window.cpp) queues the
+// jobs from the Consolidate/Transcode dialog (consolidate_dialog.*); the work itself is
+// media::consolidate (src/media/consolidate.*).
+//
+// Threading: the worker only writes the Entry's shared atomics and result; the UI thread polls them on
+// a timer, so no signal is emitted from the worker.
+
 namespace lumenis::ui {
 
 BackgroundQueue::BackgroundQueue(QObject* parent) : QObject(parent) {
@@ -46,6 +54,8 @@ BackgroundQueue::Entry* BackgroundQueue::find(int id) {
     return nullptr;
 }
 
+// A waiting job is marked Cancelled at once. A running one is only asked to stop: its progress
+// callback returns false, and poll() marks it Cancelled when its thread ends.
 void BackgroundQueue::cancel(int id) {
     Entry* e = find(id);
     if (!e) return;
@@ -89,6 +99,7 @@ bool BackgroundQueue::isBusy() const {
                                         [](const Entry& e) { return e.job.state == State::Waiting; });
 }
 
+// Polls by hand, since tests have no event loop running the timer.
 void BackgroundQueue::waitForIdle() {
     while (isBusy()) {
         poll();
@@ -109,6 +120,7 @@ void BackgroundQueue::startNext() {
         timer_.stop();
         return;
     }
+    // The previous job's thread has finished (poll() saw it done); join it before reusing worker_.
     if (worker_.joinable()) worker_.join();
     next->job.state = State::Running;
     running_ = next->job.id;
@@ -129,6 +141,8 @@ void BackgroundQueue::startNext() {
     timer_.start();
 }
 
+// On the timer: once the running job's thread is done, its state comes from how it ended. A stop that
+// was asked for wins over the result.
 void BackgroundQueue::poll() {
     Entry* e = running_ >= 0 ? find(running_) : nullptr;
     if (e && e->done->load()) {
@@ -156,6 +170,7 @@ void BackgroundQueue::poll() {
 
 // ---------------------------------------------------------------- BackgroundQueueWindow
 
+// The Tool menu above a scrolling list of job rows.
 BackgroundQueueWindow::BackgroundQueueWindow(BackgroundQueue& queue, QWidget* parent)
     : QWidget(parent), queue_(queue) {
     setObjectName(QStringLiteral("backgroundQueue"));
@@ -200,12 +215,14 @@ void BackgroundQueueWindow::refresh() {
             if (i == jobs.size() - 1) return;
         }
     }
-    // Later: a row's own Cancel button may be what changed the queue.
+    // Otherwise every row is rebuilt. The old rows are deleted later: a row's own Cancel button may be
+    // what changed the queue.
     for (QWidget* w : existing) {
         w->setObjectName(QString());
         w->hide();
         w->deleteLater();
     }
+    // A row: name, Cancel (active jobs), progress, Priority (waiting jobs) and the message (inactive).
     for (const BackgroundQueue::Job& job : jobs) {
         auto* row = new QWidget;
         row->setObjectName(QStringLiteral("backgroundJob"));

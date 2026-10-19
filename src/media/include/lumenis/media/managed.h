@@ -41,6 +41,7 @@ const Resolution& defaultResolution(); // Avid DNx HQ
 // A place media can be made: a volume, or a folder the user chose. Its
 // "Avid MediaFiles" folder goes at `root`.
 struct MediaDrive {
+    // The name shown in the drive menus, the folder (cleaned path) and the space free on its volume.
     QString name;
     QString root;
     std::int64_t freeBytes = 0;
@@ -54,10 +55,12 @@ QList<MediaDrive> mediaDrives(const QStringList& extra);
 // kept in a folder rather than on a drive of its own.
 QList<MediaDrive> mediaDrives();
 void setExtraMediaDrives(const QStringList& folders);
+// The folders set with setExtraMediaDrives() (or, until then, from LUMENIS_MEDIA_DRIVES).
 QStringList extraMediaDrives();
 // The drive a setting names, or the one with the most space when it names
 // none or one that is not there.
 QString chooseDrive(const QString& setting);
+// The index of the drive with the most free space; -1 if there are none.
 int mostSpace(const QList<MediaDrive>& drives);
 
 // "<drive>/Avid MediaFiles".
@@ -72,6 +75,7 @@ QString mxfFolder(const QString& drive, QString* error = nullptr);
 struct MediaCreation {
     QSize raster{1920, 1080}; // the project's
     Resolution resolution = defaultResolution();
+    // Drive roots (MediaDrive::root) the picture and the sound are written to.
     QString videoDrive;
     QString audioDrive; // empty: the video drive
     int bitDepth = 24;  // PCM, 16 or 24
@@ -105,26 +109,33 @@ std::optional<model::BinItem> consolidateClip(const model::BinItem& clip, std::i
 // Which clip and track a managed media file holds, from its metadata, and
 // what it holds: for relinking by source name and timecode (p.362-363).
 struct MediaFileInfo {
+    // Where the file is now (not kept in the index: the index is per folder, by file name).
     QString path;
+    // The id every track file of one clip's media shares (a UUID).
     QString mediaId;
     QString track; // "V1", "A1", ...
+    // The master clip's name, and the project the media was made in.
     QString clipName;
     QString project;
     QString source;     // the source file it was made from, or the clip
     QString tape;
     QString start;      // starting timecode
+    // Length in frames at `rate` (the clip's edit rate).
     std::int64_t frames = 0;
     Rational rate{25, 1};
     QString resolution; // "Avid DNx HQ", or the copied picture's codec
+    // The file's size, and its creation time (else its modification time).
     std::int64_t bytes = 0;
     QDateTime created;
     // The master clip's MobID: the file's material package
     // (docs/spec/native-model.md). How a clip read from AAF finds its media.
     MobId material;
 
+    // The entry kept in a folder's MediaDatabase.json.
     QJsonObject toJson() const;
     static MediaFileInfo fromJson(const QJsonObject& o);
 };
+// The file's MediaFileInfo from its metadata; nothing if it is not readable or not managed media.
 std::optional<MediaFileInfo> readMediaFile(const QString& path);
 
 // The files that make one clip's media, by track.
@@ -135,6 +146,7 @@ struct MediaSet {
     // The track's file; empty if there is none.
     MediaFileInfo track(const QString& name) const;
     bool hasVideo() const { return tracks.contains(QStringLiteral("V1")); }
+    // A1, A2, ... counted until the first missing one.
     int audioTracks() const;
     // A link to it, starting at file frame `first`.
     Link link(std::int64_t first = 0) const;
@@ -149,11 +161,14 @@ public:
 
     // Reads the Avid MediaFiles folders of the drives (their roots).
     void scan(const QStringList& drives);
+    // Forgets every file; scan() adds to what is known.
     void clear();
     // Track ("V1", "A1") to file, for a clip's id.
     QHash<QString, QString> filesOf(const QString& mediaId) const;
+    // How many files are known, and the files sorted by path.
     int fileCount() const;
     QList<MediaFileInfo> files() const;
+    // The files grouped by media id, and one media id's files; nothing if it has none.
     QList<MediaSet> sets() const;
     std::optional<MediaSet> set(const QString& mediaId) const;
     // The media of the master clip with this MobID (its files' material

@@ -4,4 +4,5 @@
 // (functions and lines from cutthulhu.pdb next to the executable, else
 // module + offset), then ends the process as before. Elsewhere it does
 // nothing: the system's own crash reporter has the stack.
+// Called once, at the start of main() (app/main.cpp).
 void installCrashReport();

@@ -10,8 +10,13 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+// The Export As dialog of File > Output > Export to File (ExportAsDialog in export_dialog.h). It only
+// collects a file name and an Export setting; MainWindow (main_window.cpp) builds the list of Export
+// settings, runs the dialog and writes the file through the AAF exporter (src/interop/aaf_export.*).
+
 namespace lumenis::ui {
 
+// Builds the form: the file name with Browse, the Export setting with Options, then Save and Cancel.
 ExportAsDialog::ExportAsDialog(const QString& path, const QStringList& settings, int active, QWidget* parent)
     : QDialog(parent) {
     setObjectName(QStringLiteral("exportAsDialog"));
@@ -65,6 +70,7 @@ void ExportAsDialog::setSetting(int index) {
     settings_->setCurrentIndex(index);
 }
 
+// Browse: picks a file with the system's save dialog and makes sure it ends in .aaf.
 void ExportAsDialog::browse() {
     const QString chosen = QFileDialog::getSaveFileName(this, tr("Export As"), path(), tr("AAF files (*.aaf)"));
     if (chosen.isEmpty()) return;

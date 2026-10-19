@@ -35,6 +35,17 @@
 
 #include <algorithm>
 
+// The Settings window and its parts (settings_window.h): SettingsDialog, the generic dialog built
+// from a setting's options in src/ui/resources/settings.json; SettingsList, the Settings list of one
+// scope (Project, User or Site) with Duplicate, Delete, Restore to Default, renaming, the active check
+// boxes and drag-and-drop between lists; SettingsWindow (File > Settings) and SiteSettingsWindow; and
+// CreateUserProfileDialog.
+//
+// The lists edit the model::SettingsFile objects held by ui::Settings (settings.cpp) and save them with
+// Settings::commit(), which emits Settings::changed for every window to re-read its options. User
+// profile folders come from model::UserProfiles (src/model). MainWindow creates the windows and opens
+// the tools that some settings stand for (toolRequested).
+
 namespace lumenis::ui {
 
 using model::SettingEntry;
@@ -57,12 +68,15 @@ public:
     }
 };
 
+// Settings entries as the "settings" array of a settings file, for drag data.
 QJsonArray entriesJson(const QList<SettingEntry>& entries) {
     SettingsFile f;
     f.entries = entries;
     return f.toJson().value(QStringLiteral("settings")).toArray();
 }
 
+// The entries in drag data from entriesJson(), read back through SettingsFile::fromJson; empty if it
+// does not parse.
 QList<SettingEntry> entriesFrom(const QMimeData* mime) {
     const QJsonDocument doc = QJsonDocument::fromJson(mime->data(SettingsList::mimeType()));
     QJsonObject o = SettingsFile().toJson();
@@ -81,10 +95,14 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
     // "Bin Settings - Current" in Media Composer; the custom name here.
     setWindowTitle(entry.name.isEmpty() ? kind.title() : QStringLiteral("%1 - %2").arg(kind.title(), entry.name));
 
+    // An option's starting value: the entry's, or the default when it has none or the option is not
+    // available yet.
     auto value = [&](const SettingOption& o) {
         const QJsonValue v = values_.value(o.key);
         return v.isUndefined() || o.later ? o.defaultValue : v;
     };
+    // One tab's page: a row per option, with the control its type and style call for. Every control
+    // is named after its option key and recorded in editors_.
     auto page = [&](const SettingTab& tab) {
         auto* w = new QWidget;
         auto* v = new QVBoxLayout(w);
@@ -97,6 +115,8 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                 box->setChecked(current.toBool());
                 editor = row = box;
             } else if (o.type == QLatin1String("choice") && o.style == QLatin1String("radio")) {
+                // Radio buttons in a box titled with the label; the QButtonGroup "<key>Group" ids
+                // are indices into o.choices, which values() reads back.
                 QWidget* holder = o.label.isEmpty() ? new QWidget : new QGroupBox(o.label);
                 auto* buttons = new QVBoxLayout(holder);
                 auto* group = new QButtonGroup(holder);
@@ -204,6 +224,8 @@ QWidget* SettingsDialog::editor(const QString& key) const {
     return editors_.value(key);
 }
 
+// Reads each control back by its type. Timecodes are checked against a 30 fps non-drop format only
+// to tell whether they parse.
 QJsonObject SettingsDialog::values() const {
     QJsonObject out = values_;
     for (const SettingTab& t : kind_.tabs) {
@@ -254,6 +276,7 @@ SettingsList::SettingsList(Settings& settings, SettingsScope scope, QWidget* par
     setDefaultDropAction(Qt::CopyAction);
     setRootIsDecorated(true);
 
+    // Double-click: the Name column edits the name, any other column opens the dialog.
     connect(this, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem* item, int column) {
         const QVariant entry = item->data(kSettingColumn, kEntryRole);
         if (!entry.isValid()) return;
@@ -263,6 +286,8 @@ SettingsList::SettingsList(Settings& settings, SettingsScope scope, QWidget* par
             openEntry(entry.toInt());
         }
     });
+    // An edited name or a checked active box. The change is applied after the signal returns because
+    // committing it rebuilds the list and deletes `item`.
     connect(this, &QTreeWidget::itemChanged, this, [this](QTreeWidgetItem* item, int column) {
         if (filling_) return;
         const QVariant entry = item->data(kSettingColumn, kEntryRole);
@@ -283,6 +308,8 @@ SettingsList::SettingsList(Settings& settings, SettingsScope scope, QWidget* par
     refresh();
 }
 
+// A kind with one version is a single row; one with several is a group row with a checkable row
+// per version. filling_ keeps the rebuild from being taken as user edits.
 void SettingsList::refresh() {
     filling_ = true;
     QSet<QString> expanded;
@@ -356,6 +383,8 @@ void SettingsList::commit() {
     emit edited();
 }
 
+// Each copy is inserted after the last version of its kind, so the indices of copies made so far are
+// shifted past each new insertion.
 void SettingsList::duplicateSelection() {
     QList<int> entries = selectedEntries();
     if (entries.isEmpty()) return;
@@ -382,6 +411,7 @@ void SettingsList::deleteSelection() {
     commit();
 }
 
+// Restoring empties the entry's values, so every option reads its default.
 void SettingsList::restoreSelection(Restore how) {
     QList<int> entries = selectedEntries();
     if (entries.isEmpty()) return;
@@ -429,6 +459,7 @@ void SettingsList::rename(int entry, const QString& name) {
     commit();
 }
 
+// Site settings take any kind and always add; Project and User settings skip kinds of the other scope.
 int SettingsList::copyIn(const QList<SettingEntry>& entries, bool replace) {
     const QStringList kinds = SettingsSchema::builtIn().kindNames(scope_);
     int copied = 0;
@@ -441,6 +472,7 @@ int SettingsList::copyIn(const QList<SettingEntry>& entries, bool replace) {
     return copied;
 }
 
+// The dialog edits a copy of the entry; the file changes only when OK is clicked with different values.
 bool SettingsList::openEntry(int entry) {
     if (entry < 0 || entry >= file().entries.size()) return false;
     const SettingEntry e = file().entries.at(entry);
@@ -474,6 +506,7 @@ QMenu* SettingsList::contextMenu() {
     return menu;
 }
 
+// Right-clicking an unselected row selects it alone first, so the menu acts on that row.
 void SettingsList::contextMenuEvent(QContextMenuEvent* event) {
     if (QTreeWidgetItem* item = itemAt(event->pos()); item && !item->isSelected()) {
         clearSelection();
@@ -502,6 +535,7 @@ QStringList SettingsList::mimeTypes() const {
     return {mimeType()};
 }
 
+// Drag data for the dragged version rows (group rows are skipped); nullptr if there are none.
 QMimeData* SettingsList::mimeData(const QList<QTreeWidgetItem*>& items) const {
     QList<SettingEntry> entries;
     for (QTreeWidgetItem* item : items) {
@@ -518,6 +552,7 @@ bool SettingsList::accepts(const QMimeData* mime) const {
     return mime && mime->hasFormat(mimeType());
 }
 
+// Settings are copied between lists only; a drag within the same list is refused.
 void SettingsList::dragEnterEvent(QDragEnterEvent* event) {
     if (event->source() != this && accepts(event->mimeData())) {
         event->setDropAction(Qt::CopyAction);
@@ -561,6 +596,8 @@ void SettingsList::dropEvent(QDropEvent* event) {
 
 // ---------------------------------------------------------------- SettingsWindow
 
+// Four tabs in Tab order: Format (a form filled by setProject), Project, User (with the User Profile
+// menu above its list) and Site. Opens on the User tab.
 SettingsWindow::SettingsWindow(Settings& settings, QWidget* parent) : QWidget(parent, Qt::Tool), settings_(settings) {
     setObjectName(QStringLiteral("settingsWindow"));
     setWindowTitle(tr("Settings"));
@@ -599,6 +636,8 @@ SettingsWindow::SettingsWindow(Settings& settings, QWidget* parent) : QWidget(pa
     resize(380, 520);
     showTab(Tab::User);
 
+    // The User Profile menu: a profile name switches user; the items with data are its commands.
+    // Update User Profiles adds default versions of settings the user's file lacks.
     connect(profiles_, &QComboBox::activated, this, [this](int index) {
         if (filling_) return;
         const QString action = profiles_->itemData(index).toString();
@@ -624,6 +663,9 @@ SettingsWindow::SettingsWindow(Settings& settings, QWidget* parent) : QWidget(pa
     setProject(std::nullopt);
 }
 
+// The profiles in the users folder (plus the current user if it has no folder yet), a separator and
+// the commands. Create and Reveal need a users folder, so they are disabled while settings are kept
+// in memory only.
 void SettingsWindow::fillProfiles() {
     filling_ = true;
     profiles_->clear();

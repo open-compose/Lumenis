@@ -19,8 +19,11 @@ namespace lumenis::ext {
 // A host provider only discovers plug-ins here; the processing interfaces are
 // added with the effects (Phase 6) and audio (Phase 5) engines.
 
+// The plug-in standards a host provider can serve.
 enum class PluginStandard { OFX, AVX, CLAP, VST3, AAX };
 
+// One plug-in found by a scan: its standard, id and display details, and the file or bundle it
+// lives in.
 struct PluginDescriptor {
     PluginStandard standard = PluginStandard::OFX;
     std::string id;
@@ -30,11 +33,13 @@ struct PluginDescriptor {
     std::filesystem::path location;
 };
 
+// A provider that finds plug-ins of one standard on disk.
 class PluginHostProvider : public Provider {
 public:
     virtual PluginStandard standard() const = 0;
     // The platform's conventional install locations for this standard.
     virtual std::vector<std::filesystem::path> defaultSearchPaths() const = 0;
+    // Finds the plug-ins in the given directories (usually defaultSearchPaths() plus the user's own).
     virtual std::vector<PluginDescriptor> scan(const std::vector<std::filesystem::path>& paths) = 0;
 };
 

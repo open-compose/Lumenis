@@ -13,13 +13,18 @@ namespace lumenis::model {
 struct BinNode {
     enum class Kind { Folder, Bin, Trash, OtherBins };
 
+    // A UUID that names the entry in the tree, in openBins and in the UI; it does not change when the
+    // entry is renamed or moved.
     QString id;
     Kind kind = Kind::Bin;
+    // The name shown in the sidebar; for a bin, also its file name without ".cthbin".
     QString name;
     // Bins: the file name inside the project folder, or an absolute path for
     // a bin from another project.
     QString file;
+    // True for a bin from another project (listed under Other Bins); `file` is then absolute.
     bool external = false;
+    // The contents of a folder, the Trash or Other Bins, in display order; empty for bins.
     QList<BinNode> children;
 
     bool isContainer() const { return kind != Kind::Bin; }
@@ -32,6 +37,7 @@ class ProjectBins {
 public:
     static QString suffix() { return QStringLiteral(".cthbins"); }
 
+    // Nothing is read until load(); a new project starts with createInitialBin() and save().
     ProjectBins(QString projectFolder, QString projectName);
 
     const QString& folder() const { return folder_; }
@@ -40,22 +46,30 @@ public:
     // Reads the tree. Bin files the tree does not know are added at the top
     // level; entries whose bin file is gone are dropped.
     bool load(QString* error = nullptr);
+    // Writes the tree and openBins to "<project>.cthbins" (format "cutthulhu-bins", version 1),
+    // replacing the file atomically. Bin contents are saved separately (BinFile in bin.h).
     bool save(QString* error = nullptr) const;
 
     // Top-level entries.
     const QList<BinNode>& nodes() const { return roots_; }
+    // The entry with this id anywhere in the tree, or null. The pointer is valid until the tree changes.
     const BinNode* node(const QString& id) const;
     // The folder holding `id`, or null at the top level.
     const BinNode* parentOf(const QString& id) const;
     // Every bin, depth first; Trash contents only when asked.
     QList<const BinNode*> bins(bool includeTrash = false) const;
+    // True for entries inside the Trash (not for the Trash itself).
     bool isInTrash(const QString& id) const;
+    // The Trash, or null until something has been deleted.
     const BinNode* trash() const;
+    // The bin's file as an absolute path, or empty if `id` is not a bin.
     QString binPath(const QString& id) const;
     // The bin whose file is `path`, or empty.
     QString binForPath(const QString& path) const;
 
     // A new project's first bin, named after the project (p.294).
+    // The functions that create entries return the new entry's id, or empty (with *error set where
+    // there is one) on failure. Changes to the tree are kept in memory until save().
     QString createInitialBin(QString* error = nullptr);
     // New Bin: "<project>.N", numbered on (p.295). `parent` is a folder id
     // or empty for the top level.
@@ -76,14 +90,21 @@ public:
     QString addOtherBin(const QString& path, QString* error = nullptr);
 
     // Bins open when the project was last closed.
+    // Their ids (BinNode::id).
     QStringList openBins;
 
 private:
+    // The child list of a container (empty parent: the top level), or null if parent is not one.
     QList<BinNode>* childrenOf(const QString& parent);
     BinNode* find(const QString& id);
+    // Removes the entry from wherever it is in the tree and moves it into *out.
     bool takeNode(const QString& id, BinNode* out);
+    // base, unless taken (or numberFirst), else the first free "base.N" from N = 1.
     QString uniqueBinName(const QString& base, bool numberFirst) const;
+    // Case-insensitive: another of this project's bins has the name or, when not renaming (except
+    // empty), a bin file of that name exists in the folder.
     bool binNameTaken(const QString& name, const QString& except = {}) const;
+    // The "<project>.cthbins" file in the project folder.
     QString treeFile() const;
 
     QString folder_;

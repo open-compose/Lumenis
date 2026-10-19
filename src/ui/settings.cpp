@@ -6,6 +6,15 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+// The settings schema and the settings in use (settings.h).
+//
+// SettingsSchema parses the built-in resource src/ui/resources/settings.json: each setting kind, its
+// scope (User or Project), its dialog tabs and options with defaults. Settings holds the three
+// settings files (model::SettingsFile in src/model/settings.*) for the user, the open project and the
+// site, and resolves option values against the schema. MainWindow owns it; app/main.cpp sets the site
+// folder and the user chosen in SelectProjectDialog, MainWindow::setProject() sets the project, and
+// SettingsWindow (settings_window.cpp) edits the files.
+
 namespace lumenis::ui {
 
 using model::SettingsFile;
@@ -24,6 +33,9 @@ QString SettingKind::title() const {
     return QObject::tr("%1 Settings").arg(kind);
 }
 
+// The document is {"settings": [{"kind", "scope", "page", "opens", "tabs": [{"name", "options":
+// [{"key", "type", "label", "suffix", "style", "default", "min", "max", "page", "later",
+// "choices": [{"value", "label", "later"}]}]}]}]}.
 SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) {
     SettingsSchema schema;
     QJsonParseError parseError;
@@ -100,6 +112,7 @@ QStringList SettingsSchema::kindNames(SettingsScope scope) const {
 
 // ---------------------------------------------------------------- Settings
 
+// Until setUser() and setProject() are called, both files are default versions in memory.
 Settings::Settings(QObject* parent) : QObject(parent) {
     userFile_ = SettingsFile::seeded(SettingsSchema::builtIn().kindNames(SettingsScope::User));
     project_ = SettingsFile::seeded(SettingsSchema::builtIn().kindNames(SettingsScope::Project));
@@ -125,6 +138,8 @@ void Settings::setSiteFolder(const QString& folder) {
     }
 }
 
+// A new user's file is seeded from the site settings and written at once, so the user exists on
+// disk.
 void Settings::setUser(const QString& usersRoot, const QString& name) {
     emit aboutToChangeUser();
     usersRoot_ = usersRoot;

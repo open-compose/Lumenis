@@ -22,11 +22,15 @@ enum class TrackKind { Video, Audio, Data };
 enum class AudioFormat { Mono, Stereo, Surround51, Surround71 };
 
 // "V1", "A2", "D1".
+// No range check: trackName(Video, 0) gives "V0".
 QString trackName(TrackKind kind, int number);
+// A parsed track name: its kind and number (1 and up).
 struct TrackRef {
     TrackKind kind = TrackKind::Video;
     int number = 1;
 };
+// "V1", "a2", " D1 " (case and surrounding spaces do not matter), numbers 1 to 99; nullopt for
+// anything else, including "TC1".
 std::optional<TrackRef> parseTrackName(const QString& name);
 // A Tracks column ("V1 A1-2", "V1-2 A1 A2 TC1") as track names; timecode
 // tracks are left out.
@@ -42,8 +46,10 @@ inline constexpr int kMaxTracks = 99;
 struct Effect {
     QString category; // "Blend"
     QString name;     // "Dissolve"
+    // Parameter category -> {parameter name -> value}; empty when every parameter has its default.
     QJsonObject parameters;
 
+    // {category, name, parameters?}; fromJson() takes missing members as empty.
     QJsonObject toJson() const;
     static Effect fromJson(const QJsonObject& o);
     bool operator==(const Effect&) const = default;
@@ -58,11 +64,13 @@ enum class TransitionAlignment { EndingAtCut, CenteredOnCut, StartingAtCut, Cust
 // it out).
 struct Transition {
     Effect effect;
+    // Length in frames, and how it lies on the cut; `start` is used only with CustomStart.
     std::int64_t duration = 0;
     TransitionAlignment alignment = TransitionAlignment::CenteredOnCut;
     std::int64_t start = 0;
 
     // Frames before and after the cut.
+    // before() is clamped to 0..duration for CustomStart.
     std::int64_t before() const;
     std::int64_t after() const { return duration - before(); }
     bool operator==(const Transition&) const = default;
@@ -71,6 +79,8 @@ struct Transition {
 // One piece of a track: material from a source clip, or filler (black,
 // silence) where `clipId` is empty.
 struct Segment {
+    // The source clip's BinItem::id (empty for filler) and the bin it was in when edited in (may be
+    // empty, e.g. for material from AAF).
     QString clipId;
     QString binId;
     // The source clip's MobID (AAF's SourceClip SourceID). Null: the one
@@ -80,6 +90,7 @@ struct Segment {
     QString name;        // the clip's name when it was edited in
     QString sourceTrack; // the clip's track this came from, e.g. "A2"
     std::int64_t sourceIn = 0; // first frame used, counted from the clip's start
+    // Frames this segment lasts in the sequence (> 0 once a track is tidied).
     std::int64_t length = 0;
     // Filler that starts with an Add Edit (p.640); filler is otherwise
     // joined to the filler before it.
@@ -95,30 +106,40 @@ struct Segment {
 
     bool hasEffects() const { return effect || transition; }
     bool isFiller() const { return clipId.isEmpty(); }
+    // The MobID the segment refers to: sourceMob, else the one derived from clipId; null for filler.
     MobId sourceMobId() const;
+    // A filler segment of `length` frames with nothing else set.
     static Segment filler(std::int64_t length);
     bool operator==(const Segment&) const = default;
 };
 
+// One track of a sequence: its segments laid end to end. Segments are kept tidy: no empty
+// segments, and neighbouring plain filler merged (see Sequence::normalize()).
 struct Track {
     TrackKind kind = TrackKind::Video;
     int number = 1;
+    // Audio tracks only; video and data tracks keep Mono.
     AudioFormat format = AudioFormat::Mono;
     QList<Segment> segments; // back to back from frame 0
     bool locked = false;     // no edits (p.633)
     bool syncLocked = false; // kept in sync with other sync-locked tracks (p.493)
 
     QString name() const { return trackName(kind, number); }
+    // The sum of the segment lengths: the frame after the track's last one.
     std::int64_t length() const;
     // The segment covering `frame` and its first frame, or -1.
     int segmentAt(std::int64_t frame, std::int64_t* start = nullptr) const;
     // Where segments start and the track ends.
+    // Always starts with 0 and ends with length().
     QList<std::int64_t> editPoints() const;
     bool operator==(const Track&) const = default;
 };
 
 // A sequence's tracks and segments (guide ch. 15 and 19). Stored in the
 // sequence's bin item.
+// A value type: copy it, edit it, and storeIn() the item to keep the result. Frames count from
+// the sequence's first frame (0), not from its start timecode. Track names are as trackName()
+// gives them. Functions given an unknown track name do nothing (or return empty / false).
 class Sequence {
 public:
     // A new sequence's tracks: V1, A1, A2 and TC1 (p.459).
@@ -128,14 +149,20 @@ public:
     // Writes the composition and the duration into a sequence item.
     void storeIn(BinItem& item) const;
 
+    // The composition JSON: {tracks: [{name, segments: [...], locked?, syncLocked?, format?}],
+    // timecode}. A segment is {length, gain?, pan?, effect?, transition?} plus addEdit? for filler or
+    // {clip, mob?, bin?, name, track, in} for material. fromJson() skips unreadable and duplicate
+    // tracks, tidies each track and sorts the tracks.
     QJsonObject toJson() const;
     static Sequence fromJson(const QJsonObject& o);
 
     const QList<Track>& tracks() const { return tracks_; }
+    // The named track, or null. The pointer is valid until tracks are added or removed.
     const Track* track(const QString& name) const;
     Track* track(const QString& name);
     // Video, then audio, then data, each by number.
     QStringList trackNames() const;
+    // Whether TC1 is shown; it has no segments.
     bool hasTimecodeTrack() const { return timecode_; }
     void setTimecodeTrack(bool on) { timecode_ = on; }
 
@@ -145,6 +172,7 @@ public:
     // Adds the named track if it is missing.
     Track* ensureTrack(const QString& name);
 
+    // The length of the longest track.
     std::int64_t duration() const;
     // Edit points on the named tracks (all tracks if empty), in order,
     // including the start and the ends of the tracks.
@@ -156,6 +184,10 @@ public:
 
     // Edits on one track (p.466-467, p.478-479). Frames past the end of the
     // track are first filled with filler. Removing returns what was removed.
+    // splice() inserts the material at `at`, pushing the rest of the track later. overwrite() replaces
+    // the frames from `at` for the material's length, so the track only grows if the material goes
+    // past its end. lift() replaces [start, start + length) with filler; extract() removes it and
+    // closes the gap. Both clip the range to the track.
     void splice(const QString& track, std::int64_t at, const QList<Segment>& material);
     void overwrite(const QString& track, std::int64_t at, const QList<Segment>& material);
     QList<Segment> lift(const QString& track, std::int64_t start, std::int64_t length);
@@ -169,6 +201,7 @@ public:
     bool addEdit(const QString& track, std::int64_t frame);
     // Timeline > Remove Match Frame Edits (p.640): joins segments that
     // continue each other within [start, start + length). Returns how many.
+    // An empty `tracks` list means every track. Only edits strictly inside the range are joined.
     int removeMatchFrameEdits(const QStringList& tracks, std::int64_t start, std::int64_t length);
     // Whether the edit between two neighbouring segments is a match frame:
     // the second continues the first (p.639).
@@ -180,6 +213,7 @@ public:
 
     // Merges filler and drops empty segments after a track was changed
     // through track().
+    // The same tidying every edit function does at its end.
     void normalize(const QString& track);
 
     bool operator==(const Sequence&) const = default;
@@ -187,10 +221,16 @@ public:
 private:
     // Splits the segment at `frame` so a segment starts there; pads the
     // track with filler to reach it. Returns that segment's index.
+    // The part after the cut loses the Add Edit flag and the transition, which stay with the first
+    // part. For a frame at or past the end, returns the number of segments (where to append).
     static int cut(Track& track, std::int64_t frame);
+    // Drops segments of length <= 0 and merges filler into the filler before it unless the later
+    // one has an Add Edit or effects, or the earlier one has a segment effect.
     static void tidy(Track& track);
+    // Video, then audio, then data, each by number.
     void sortTracks();
 
+    // Always sorted by sortTracks(), and without duplicate names.
     QList<Track> tracks_;
     bool timecode_ = true;
 };
@@ -201,11 +241,13 @@ private:
 QStringList sourceTracksOf(const BinItem& item);
 
 // The Track Selector panel's selections and patches (p.625-630).
+// The Timeline (src/ui/timeline.*) keeps one for the Track Selector; applyEdit() reads it.
 class TrackPatch {
 public:
     // The source clip changed: tracks it still has keep their selection and
     // patches; new tracks start selected.
     void setSourceTracks(const QStringList& tracks);
+    // The source side's tracks, in the order given to setSourceTracks().
     const QStringList& sourceTracks() const { return source_; }
 
     // Tracks are selected until deselected.
@@ -218,10 +260,14 @@ public:
 
     // Patching: audio only to audio, video only to video, never data
     // (p.629). Returns false if not allowed.
+    // patch() also needs `source` to be one of sourceTracks(). A source track already patched to
+    // `record` takes the moved track's old record track (or its own default) in exchange. Patching a
+    // track to its own name restores its default.
     static bool canPatch(const QString& source, const QString& record);
     bool patch(const QString& source, const QString& record);
     // Timeline > Restore Default Patch (p.630).
     void restoreDefault() { patch_.clear(); }
+    // The record track a source track goes to: its patch, or by default the track of the same name.
     QString recordFor(const QString& source) const;
     // The source track patched to a record track, or empty.
     QString sourceFor(const QString& record) const;
@@ -233,6 +279,8 @@ public:
     bool operator==(const TrackPatch&) const = default;
 
 private:
+    // The source tracks; sourceOff_ and recordOff_ hold the deselected tracks (all are selected by
+    // default).
     QStringList source_;
     QSet<QString> sourceOff_;
     QSet<QString> recordOff_;
@@ -240,6 +288,8 @@ private:
 };
 
 // The marks and position of one monitor, for working out an edit.
+// Frames from the clip's or sequence's first frame; in and out are inclusive marks, nullopt when
+// not set; duration is the clip's length in frames (for a sequence, its duration()).
 struct EditMarks {
     std::optional<std::int64_t> in;
     std::optional<std::int64_t> out;
@@ -256,12 +306,21 @@ struct EditPlan {
     QString error; // why the edit cannot be made
     bool ok() const { return error.isEmpty(); }
 };
+// The marks are used in this order: source IN and OUT; record IN and OUT (a lone source OUT
+// backtimes); a source OUT alone; a record OUT alone; else from the source IN (or position) to
+// the end of the clip. When the source marks give the length, a record OUT without a record IN
+// backtimes: the edit ends on it. On failure `error`
+// holds the message to show and the other fields are not to be used.
 EditPlan planEdit(const EditMarks& source, const EditMarks& record);
 
+// Splice-in pushes later material along; Overwrite replaces it.
 enum class EditKind { SpliceIn, Overwrite };
 
 // Edits the marked source material into the sequence on every edited
 // track pair. Returns the record tracks changed.
+// A source sequence is edited in as its segments (taken from its patched track); a clip becomes
+// one segment per track pair. Missing record tracks are added; locked ones are skipped. A splice
+// into a sync-locked track splices filler into the other sync-locked tracks (p.493).
 QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, const QString& binId,
                       const BinItem& source, const TrackPatch& patch);
 
@@ -280,9 +339,12 @@ EditPlan planReplace(const Sequence& sequence, const QString& track, const EditM
 
 // Pastes a Clipboard sequence onto the tracks it came from (ks2009), at
 // `at`. Returns the tracks changed; locked tracks are left alone.
+// Each of the clip's tracks is pasted for the clip's whole duration, so shorter tracks are padded
+// with filler.
 QStringList paste(Sequence& sequence, const Sequence& clip, std::int64_t at, EditKind kind);
 
 // A segment, by its track and first frame.
+// A reference stays valid only while the segment starts at that frame; segmentFor() checks it.
 struct SegmentRef {
     QString track;
     std::int64_t start = 0;
@@ -310,6 +372,7 @@ struct MatchedFrame {
     Segment segment;
     std::int64_t frame = 0; // counted from the clip's start
 };
+// An empty `tracks` list means every track. Filler never matches.
 std::optional<MatchedFrame> matchFrame(const Sequence& sequence, const QStringList& tracks, std::int64_t position);
 
 // ---- Trimming (guide ch. 20, p.647-665)
@@ -322,6 +385,8 @@ enum class TrimSide { A, B, Both };
 enum class TrimKind { Ripple, Overwrite };
 
 // A roller at the edit point `frame` of `track`.
+// `frame` is the edit point: the frame after the A-side's last frame, which is the B-side's
+// first.
 struct TrimRoller {
     QString track;
     std::int64_t frame = 0;
@@ -337,6 +402,7 @@ using SourceLength = std::function<std::optional<std::int64_t>(const Segment&)>;
 // no segment shorter than one frame (p.647), no trim past a clip's media,
 // and with sync locks no sync-locked track losing anything but filler
 // (p.662).
+// Frames, relative to where the rollers are now; {0, 0} when they cannot move.
 struct TrimRange {
     std::int64_t min = 0;
     std::int64_t max = 0;
@@ -352,6 +418,7 @@ QList<TrimRoller> trim(Sequence& sequence, const QList<TrimRoller>& rollers, Tri
 
 // The edit points of a track that rollers can sit on: between two
 // segments, and the end of the track.
+// Every segment end, in order (0 is not included).
 QList<std::int64_t> trimPoints(const Sequence& sequence, const QString& track);
 
 // Slip: the segments show other frames of their clips; positive shows
@@ -377,6 +444,7 @@ QStringList extendEdits(Sequence& sequence, const QStringList& tracks, std::int6
 enum class EffectTarget { Segment, Transition };
 
 // Puts a segment effect on the segment at `frame`, replacing any there.
+// Video tracks only; false on any other track, a locked track or past the end of the track.
 bool applySegmentEffect(Sequence& sequence, const QString& track, std::int64_t frame, const Effect& effect);
 
 // How much material a transition at the cut `frame` may use: frames of
@@ -405,6 +473,7 @@ bool applyTransition(Sequence& sequence, const QString& track, std::int64_t fram
 QString removeEffect(Sequence& sequence, const QString& track, std::int64_t frame, EffectTarget target);
 
 // An effect in the sequence and where it is.
+// For a transition, `frame` is the first frame of the segment that carries it (its B-side).
 struct EffectRef {
     QString track;
     std::int64_t frame = 0; // the cut, or the segment's first frame
@@ -416,6 +485,7 @@ struct EffectRef {
 // position or a segment effect under it.
 std::optional<EffectRef> effectAt(const Sequence& sequence, const QStringList& tracks, std::int64_t position);
 // The effect an EffectRef names.
+// Null when the reference no longer names an effect. Pointers are valid until the track changes.
 const Effect* effectFor(const Sequence& sequence, const EffectRef& ref);
 Effect* effectFor(Sequence& sequence, const EffectRef& ref);
 const Transition* transitionFor(const Sequence& sequence, const EffectRef& ref);
@@ -429,6 +499,7 @@ inline constexpr double kGainMax = 36.0;
 inline constexpr double kGainFaderMax = 12.0;
 inline constexpr double kGainOff = -1000.0;
 inline constexpr int kPanMax = 100; // ours: the guide gives no range
+// Rounds to 0.1 dB and caps at kGainMax; anything at or below kGainOff + 1 becomes kGainOff.
 double clampGain(double db);
 // Clip Volume and Pan mode (p.702, p.711): sets the gain and/or pan of the
 // whole segments of a track that overlap [start, start + length); never
@@ -439,6 +510,7 @@ int setClipAudio(Sequence& sequence, const QString& track, std::int64_t start, s
 
 // One step of Edit > Undo/Redo (p.466): a sequence item before and after.
 struct EditStep {
+    // The menu text of the edit; binId is the bin holding the sequence item.
     QString description; // "Splice-in", "Overwrite", ...
     QString binId;
     BinItem before;
@@ -450,10 +522,13 @@ class EditHistory {
 public:
     static constexpr int kLevels = 100;
 
+    // Drops any steps that were undone, adds the step and forgets the oldest past kLevels.
     void push(EditStep step);
     bool canUndo() const { return next_ > 0; }
     bool canRedo() const { return next_ < steps_.size(); }
     // The step undone or redone.
+    // Pointers are valid until the next push() or clear(); null when there is nothing to do. The
+    // caller puts the step's `before` (undo) or `after` (redo) item back into its bin.
     const EditStep* undo();
     const EditStep* redo();
     void clear();

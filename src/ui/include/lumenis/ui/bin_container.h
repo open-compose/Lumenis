@@ -21,6 +21,14 @@ class QSplitter;
 class QTimer;
 class QTreeView;
 
+// The Bin Container (guide p.239-299): the project's bin list (the Sidebar),
+// the bins open beside it, floating Bin Containers and Favorite Bins.
+// BinContainer is the hub: it owns the open BinDocuments, creates their
+// BinViews (bin_view.h), arranges them in BinDockAreas (bin_dock.h) and keeps
+// the project's bin list, model::ProjectBins (src/model/project_bins.h), in
+// step. MainWindow creates one and drives it from the Bin, File and Edit
+// menus; the Project panel shows a second BinSidebar on it.
+
 namespace lumenis::ui {
 
 class BinContainer;
@@ -33,12 +41,14 @@ class BinView;
 // Sidebar ("Favorite Bins show at", Bin settings).
 class FavoriteBins {
 public:
+    // Absolute paths of the bin files, process-wide.
     static QStringList& paths();
     static bool& atTop();
+    // Read and write "favoriteBins/paths" and "favoriteBins/atTop".
     static void load(QSettings& settings);
     static void save(QSettings& settings);
 
-    // Sidebar ids: the folder, and one per bin.
+    // Sidebar ids: the folder, and one per bin ("favorite:" and the path).
     static QString folderId() { return QStringLiteral("favorites"); }
     static QString idFor(const QString& path) { return QStringLiteral("favorite:") + path; }
     static bool isFavoriteId(const QString& id) { return id.startsWith(QLatin1String("favorite:")); }
@@ -48,7 +58,9 @@ public:
 // The Bin Container Sidebar's list (guide p.294-299): bins, folders, the
 // Trash, Other Bins and Favorite Bins, or a flat list of bins when filtering
 // or in Flat View. Entries can be renamed in place and dragged into
-// folders; bin items dropped on a bin move into it (p.243).
+// folders; bin items dropped on a bin move into it (p.243). Rows hold only
+// Sidebar ids; names, kinds and sizes are looked up in the BinContainer each
+// time. Two columns: Name and Size.
 class BinTreeModel : public QAbstractItemModel {
     Q_OBJECT
 
@@ -59,11 +71,16 @@ public:
 
     explicit BinTreeModel(BinContainer& container, QObject* parent = nullptr);
 
+    // Re-reads the container's bins and resets the model.
     void rebuild();
+    // Flat View (p.297): every bin, no folders.
     void setFlat(bool flat);
     bool isFlat() const { return flat_; }
+    // Bins whose names contain `text`, as a flat list; empty restores the tree.
     void setFilter(const QString& text);
+    // The Name-column index of a Sidebar id; invalid if it is not listed.
     QModelIndex indexOf(const QString& id) const;
+    // The Sidebar id of a row; empty for an invalid index.
     QString idOf(const QModelIndex& index) const;
 
     QModelIndex index(int row, int column, const QModelIndex& parent = {}) const override;
@@ -112,11 +129,15 @@ public:
     BinTreeModel* model() const { return model_; }
     QLineEdit* filter() const { return filter_; }
 
-    // Rebuilds the list, keeping folders open.
+    // Rebuilds the list, keeping folders open. The first time, every folder
+    // opens.
     void refresh();
+    // Sidebar ids of the selected entries.
     QStringList selectedNodes() const;
     void setFlatView(bool flat);
+    // Also puts `text` in the filter box.
     void setFilter(const QString& text);
+    // Opens a folder; an empty id does nothing.
     void expand(const QString& folderId);
     // Hide Sidebar in the fast menu, when the owner allows it.
     std::function<void()> onHide;
@@ -137,6 +158,8 @@ class FloatingBinContainer : public QWidget {
     Q_OBJECT
 
 public:
+    // A tool window over `owner`. Made only by BinContainer::floatBin(), which
+    // keeps it in its list and deletes it when it empties.
     FloatingBinContainer(BinContainer& container, QWidget* owner);
 
     BinDockArea* area() const { return area_; }
@@ -155,18 +178,23 @@ private:
 };
 
 // The Bin Container (p.239-243): the Sidebar with the project's bins on the
-// left, open bins on the right, tabbed or side by side.
+// left, open bins on the right, tabbed or side by side. Bins and folders are
+// named by Sidebar id throughout: a model::BinNode id, or a FavoriteBins id.
+// Changes to the bin list are saved at once (saveTree()); open bins are saved
+// on close, on Save All, on the auto-save timer and when the project closes.
 class BinContainer : public QWidget {
     Q_OBJECT
 
 public:
     explicit BinContainer(QWidget* parent = nullptr);
+    // Saves open bins and the bin list, then deletes floating containers.
     ~BinContainer() override;
 
     // Shows a project's bins and reopens the bins that were open when it was
     // last closed. A null folder closes the project (saving open bins).
     void setProject(const QString& folder, const QString& name, const Rational& editRate);
     bool hasProject() const { return bins_ != nullptr; }
+    // The project's bin list; null with no project.
     model::ProjectBins* bins() const { return bins_.get(); }
 
     // The Bin menu, offered as each bin's fast menu (p.259).
@@ -174,17 +202,26 @@ public:
     // File > Input, which bins offer too (p.315).
     void setInputMenu(QMenu* menu) { inputMenu_ = menu; }
 
-    // Open bins.
+    // Open bins, in the order they opened. The container owns them.
     QList<BinDocument*> openDocuments() const;
+    // The open bin with Sidebar id `id`; null if it is not open.
     BinDocument* document(const QString& id) const;
     BinDocument* activeDocument() const;
-    // The bin last clicked or typed in, in any Bin Container.
+    // The bin last clicked or typed in, in any Bin Container; failing that,
+    // the current tab of the first area that has one.
     BinView* activeView() const;
+    // The view showing `document`, in any area; null if none.
     BinView* viewFor(const BinDocument* document) const;
+    // Opens a bin, tabbed into the main area, and makes it active; an open
+    // bin is brought to the front instead. Null if `id` is not a bin, is in
+    // the Trash, or its file cannot be read.
     BinDocument* openBin(const QString& id);
+    // Saves the bin if it has changes, then closes it. Its view and document
+    // are deleted later, from the event loop.
     void closeBin(BinDocument* document);
     // Windows > Close All Bins But Active.
     void closeAllBinsButActive();
+    // Saves one bin, whether or not it has changes.
     bool saveBin(BinDocument* document, QString* error = nullptr);
     // File > Save All: every open bin with changes, and the bin list.
     bool saveAll(QString* error = nullptr);
@@ -192,7 +229,10 @@ public:
     // Arranging bins (p.241-243). `target` null means the area's current
     // group; floating makes a new Bin Container.
     void dockBin(BinDocument* document, BinTabGroup* target, BinDropSide side);
+    // `geometry`: the new window's; by default the bin's size at the pointer.
+    // A bin already alone in a floating container stays there.
     FloatingBinContainer* floatBin(BinDocument* document, const QRect& geometry = {});
+    // The area showing `view`; null if none.
     BinDockArea* areaOf(const BinView* view) const;
     // The main area and those of floating Bin Containers.
     QList<BinDockArea*> areas() const;
@@ -201,21 +241,34 @@ public:
     // The main area's current group of tabs.
     BinTabGroup* tabs() const;
 
-    // The Sidebar's entries.
+    // The Sidebar's entries. An empty `parentFolder` is the top level.
+    // newBin() and newFolder() return the new id (empty on failure) and open
+    // its name for typing; a new bin also opens.
     QString newBin(const QString& parentFolder = {});
     QString newFolder(const QString& parentFolder = {});
+    // Saves the bin first if it is open with changes. Favorite Bins cannot be
+    // renamed here.
     bool renameNode(const QString& id, const QString& name, QString* error = nullptr);
+    // Moves a bin or folder to the Trash (see model::ProjectBins::remove),
+    // closing what is open in it; a Favorite Bin only leaves the favourites.
+    // Entries already in the Trash, and the Trash itself, are refused.
     bool deleteNode(const QString& id, QString* error = nullptr);
     bool emptyTrash(QString* error = nullptr);
+    // File > Open Bin of a bin outside the project: adds it under Other Bins
+    // and opens it. Returns its id, empty on failure.
     QString openOtherBin(const QString& path, QString* error = nullptr);
+    // Into `parentFolder` at `index` (-1: the end). Moving into the Trash
+    // deletes.
     bool moveNode(const QString& id, const QString& parentFolder, int index, QString* error = nullptr);
+    // In the Sidebar that has the focus, otherwise the main one.
     QStringList selectedNodes() const;
     bool isOpen(const QString& id) const { return document(id) != nullptr; }
     // A Sidebar entry: a project node, or a Favorite Bin.
     QString nodeName(const QString& id) const;
     QString nodePath(const QString& id) const;
 
-    // Favorite Bins (p.293).
+    // Favorite Bins (p.293). addToFavorites() returns false if the bin is
+    // already one; it saves the bin first.
     bool addToFavorites(BinDocument* document);
     void removeFromFavorites(const QString& path);
 
@@ -225,19 +278,27 @@ public:
     bool isSidebarVisible() const;
     void setSidebarOnly(bool only);
     bool isSidebarOnly() const;
+    // The main Sidebar's Flat View and filter.
     void setFlatView(bool flat);
     void setBinFilter(const QString& text);
     // Every Sidebar, so that all show changes.
     void refreshTree();
+    // Fills `menu` (clearing it first) with the Sidebar's fast menu, or with
+    // the right-click menu for entry `id`; an empty id is the list itself.
+    // Returns `menu`.
     QMenu* sidebarMenu(QMenu* menu, const QString& id, BinSidebar* sidebar);
 
     // Bin contents, for the active bin.
-    // Timeline > New > Sequence (p.457): into the active bin, or `target`.
+    // Timeline > New > Sequence (p.457): into the active bin, or `target`
+    // (opened if need be). Returns the new item's id, empty with no bin.
     QString newSequence(const QString& targetBin = {});
-    // Edit > Duplicate (p.260).
+    // Edit > Duplicate (p.260). Returns the new ids, which become selected.
     QStringList duplicateSelection();
     // Edit > Delete (p.261). Clips have no media yet, so only the objects go.
+    // Locked items stay, and the delete filter may keep more. Returns how many
+    // went; with headings selected it deletes columns instead and returns 0.
     int deleteSelection();
+    // Edit > Select All in the active bin.
     void selectAll();
     // Dragging items to another bin moves them; with Alt/Option (or Ctrl on
     // Windows) it copies them (p.260-261). A closed bin opens with the items
@@ -249,7 +310,8 @@ public:
     BinTreeModel* treeModel() const;
     QList<BinSidebar*> sidebars() const { return sidebars_; }
 
-    // Bin settings "Auto-Save interval" (p.299), in minutes; 0 turns it off.
+    // Bin settings "Auto-Save interval" (p.299), in minutes; 0 or less turns
+    // it off. Each tick is a Save All.
     void setAutoSaveMinutes(int minutes);
     // Bin settings (p.1153): where Favorite Bins show, whether bins opened
     // from the sidebar float, and what the quick filter searches.
@@ -273,6 +335,7 @@ public:
     void setDeleteFilter(DeleteFilter filter) { deleteFilter_ = std::move(filter); }
 
 signals:
+    // The active bin changed, a bin closed, or the project changed.
     void activeBinChanged();
     // Something that needs saving, or was saved.
     void dirtyChanged();

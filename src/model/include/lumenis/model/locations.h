@@ -16,11 +16,13 @@ namespace lumenis::model {
 //
 // <P> is the product name. Tests and screenshot runs construct their own.
 struct Locations {
+    // Absolute folders, cleaned (QDir::cleanPath).
     QString privateProjects;
     QString sharedProjects;
     QString users;
     QString siteSettings; // empty: no site settings
 
+    // The defaults for this platform, from the table above. The folders are not created here.
     static Locations defaults();
 };
 

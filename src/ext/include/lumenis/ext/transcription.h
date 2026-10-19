@@ -14,11 +14,14 @@ namespace lumenis::ext {
 // (MIT); a licensed engine or a cloud service can be added as another
 // provider without changing callers.
 
+// How to transcribe.
 struct TranscriptionOptions {
     std::string language;       // BCP 47 tag, empty = detect
     bool wordTimestamps = true;
 };
 
+// One recognised word, with its times in seconds from the start of the samples and the engine's
+// confidence (0 to 1).
 struct TranscribedWord {
     std::string text;
     double startSeconds = 0.0;
@@ -26,6 +29,7 @@ struct TranscribedWord {
     float confidence = 0.0f;
 };
 
+// The language detected or used, and the words in time order.
 struct Transcript {
     std::string language;
     std::vector<TranscribedWord> words;
@@ -34,6 +38,8 @@ struct Transcript {
 // Mono float samples at the given rate. Returns false to cancel.
 using TranscriptionProgress = std::function<bool(double fraction)>;
 
+// A speech-to-text engine (Category::Transcription). transcribe() runs synchronously and calls
+// progress from time to time; when progress returns false it stops early.
 class TranscriptionProvider : public Provider {
 public:
     virtual Transcript transcribe(std::span<const float> samples, int sampleRate,

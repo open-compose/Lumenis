@@ -9,6 +9,10 @@
 #include <bit>
 #include <cstring>
 
+// ModuleLoader: loads separately built modules (shared libraries) and lets them add providers to
+// the registry. The ABI they must follow is in module_abi.h; app/main.cpp loads every module in
+// the module search paths at start-up. docs/EXTENSIONS.md describes the extension model and
+// tests/ext/test_module.cpp is a complete example module.
 namespace lumenis::ext {
 
 namespace {
@@ -17,6 +21,7 @@ std::string orEmpty(const char* s) {
     return s ? std::string(s) : std::string();
 }
 
+// The ModuleHost handed to one module's register function; counts the providers it adds.
 class RegistryHost final : public ModuleHost {
 public:
     explicit RegistryHost(ProviderRegistry& registry) : registry_(registry) {}
@@ -40,6 +45,7 @@ private:
 
 } // namespace
 
+// Keeps every loaded QLibrary alive (they are never unloaded; see load()).
 struct ModuleLoader::Impl {
     std::vector<std::unique_ptr<QLibrary>> libraries;
 };
@@ -77,6 +83,7 @@ ModuleRecord ModuleLoader::load(const std::filesystem::path& file) {
         return fail("not a module: missing lumenis_module_info or lumenis_module_register");
     }
 
+    // The info is plain C, so it is safe to read before any compatibility check.
     const LumenisModuleInfo* info = infoFn();
     if (!info) {
         return fail("module returned no info");
@@ -103,6 +110,8 @@ ModuleRecord ModuleLoader::load(const std::filesystem::path& file) {
         return fail("module '" + record.id + "' is already loaded");
     }
 
+    // Only now is it safe to pass C++ objects. Providers added before a failing return code stay
+    // registered, so the library is kept either way.
     RegistryHost host(registry_);
     const int rc = registerFn(&host);
     record.providersAdded = host.added();
@@ -116,6 +125,7 @@ ModuleRecord ModuleLoader::load(const std::filesystem::path& file) {
     return record;
 }
 
+// Directories are taken in the order given, so an earlier directory's copy of a module wins.
 std::vector<ModuleRecord> ModuleLoader::loadDirectories(const std::vector<std::filesystem::path>& dirs) {
     std::vector<ModuleRecord> result;
     for (const auto& dir : dirs) {
