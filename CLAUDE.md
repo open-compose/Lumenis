@@ -160,8 +160,9 @@ status, BUILDING.md "Phase 2 gates"):
   - `transcodeRoundTrips` in `tst_media` (PSNR, timecode, tape);
   - `--measure-playback`, `scripts/measure-playback.py` and
     `scripts/check-mxf.py` for the runs done by hand.
-Phase 2 waits on the reference-machine playback runs and Media Composer
-linking (M). Next is Phase 3 (ROADMAP).
+Gates 3 and 4 (playback) pass on the owner's Windows PC, M1 Mac mini and
+Ubuntu 26.04 in WSL, the reference Linux. Phase 2 waits only on gate 2:
+bmx validation and Media Composer linking (M). Next is Phase 3 (ROADMAP).
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

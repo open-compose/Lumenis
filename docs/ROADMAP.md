@@ -480,20 +480,22 @@ Sub-steps:
     Transcoding now goes straight from the decoded picture to the encoder
     at full depth (10-bit DNx keeps 10 bits; RGB 444 rose from 33 to 53 dB, its 4:4:4 step and matrix done by hand as swscale's results differ between FFmpeg versions; FFmpeg's arm64 build decodes DNxHR 444 less exactly, about 42 dB, so arm64 accepts 40 dB).
 
-**Gate status (Phase 2):** 1 and 5 pass on Linux (FFmpeg 6.1, 156 files);
-the CI runners run them on every push. Gate 3 passes the 10-minute run on
-the owner's Windows PC, M1 Mac mini and Ubuntu 26.04 in WSL. Gate 4 passes
-60 minutes on Windows and in WSL. The owner's other Linux machines are
-servers without a GUI, so Ubuntu 26.04 in WSL is the reference Linux
-(owner's decision). An earlier WSL run had one picture change 0.53 frame
-late. The Mac held lip sync for 60 minutes with Docker stopped, but
-dropped 3 frames, all in the first half second. The measurement pressed
-Play before the window had been drawn, so its first paint fell in the
-first ticks. It now waits a second first, as an editor would, and drops
-are timed from the start. Still to do: the Mac's 60-minute run again. The "±1 audio sample block" part of gate 4 has no
-measurement of its own yet: the picture is slaved to the audio clock, so
-there is no drift to measure, and lip sync covers the offset. 2 waits on
-bmx and a Media Composer seat.
+**Gate status (Phase 2):** gates 1 and 5 pass on the Linux, Windows and
+Mac CI runners on every push (156 files; FFmpeg 6.1 to 9). Gates 3 and 4
+pass on all three reference machines: the owner's Windows PC, M1 Mac mini
+and Ubuntu 26.04 in WSL, with 10 minutes without a dropped frame and 60
+minutes of lip sync within half a frame. The owner's other Linux machines
+are servers without a GUI, so Ubuntu 26.04 in WSL is the reference Linux
+(owner's decision). One earlier WSL run had one picture change 0.53 frame
+late. An earlier Mac run, with Docker stopped, dropped 3 frames, all in the
+first half second. The measurement had pressed Play before the window was
+drawn, so its first paint fell in the first ticks. It now waits a second
+first, as an editor would, and drops are timed from the start. The Mac's
+rerun then passed 60 minutes with no warning of any kind. The "±1 audio
+sample block" part of gate 4 has no measurement of its own: the picture is
+slaved to the audio clock, so there is no drift to measure, and lip sync
+covers the offset. Gate 2, the last one, waits on bmx and a Media Composer
+seat.
 
 * Linking (AMA-style) and Import/Consolidate/Transcode into an Avid MediaFiles
   layout: `Avid MediaFiles/MXF/<n>/`.
