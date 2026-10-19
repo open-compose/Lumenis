@@ -575,8 +575,11 @@ and pyaaf2's test suites, made with real Media Composer
     reader for version 3 and 4 files that reads streams on demand and
     refuses damaged files, and a writer. Every corpus AAF reads as olefile
     reads it, and olefile reads what the writer makes.
-  * Next: 3.2b, AAF's objects, properties and metadictionary; 3.2c, import
-    into bins; 3.2d, export and round trips; 3.2e, File > Import and Export.
+  * 3.2b, AAF's objects, properties and metadictionary (`src/interop/aaf*`),
+    is done. Every corpus AAF dumps byte for byte as pyaaf2 reads it
+    (`cutthulhu --dump-aaf`, `scripts/aaf-dump.py --compare`).
+  * Next: 3.2c, import into bins; 3.2d, export and round trips; 3.2e,
+    File > Import and Export.
 
 ### Phase 4 — Core editing
 Features in this phase:

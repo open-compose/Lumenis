@@ -744,7 +744,15 @@ the build folder (`build/<preset>`) and configure again.
   reads what Cutthulhu writes with olefile and needs it installed
   (`pip install olefile`, or the distribution's `python3-olefile`); without
   it, it is skipped. After changing the corpus, rewrite the manifest with
-  `python3 scripts/interop-corpus.py manifest` (needs olefile).
+  `python3 scripts/interop-corpus.py manifest` (needs olefile and pyaaf2).
+* **AAF objects:** `tst_aaf` reads every corpus AAF as pyaaf2 does, compared
+  by the digest of a dump. ctest `aaf_pyaaf2` compares the dumps themselves
+  and lists any difference; it needs pyaaf2 (`pip install pyaaf2`) and is
+  skipped without it. By hand: `python3 scripts/aaf-dump.py --compare --app
+  build/ci/bin/cutthulhu FILE.aaf`.
+* **The built-in AAF model** (`src/interop/aaf_model.inc`) is made from
+  pyaaf2's model tables: `python3 scripts/make-aaf-model.py --pyaaf2
+  <pyaaf2 checkout>` (`--check` to compare).
 
 ## Command-line options
 
@@ -761,6 +769,9 @@ cutthulhu --measure-playback FILE [--seconds N]
 cutthulhu --dump-structure PATH
                              print a bin (.cthbin) or project (.cthproj or its folder) as a
                              structure dump, for scripts/structdiff.py (docs/spec/structure.md)
+cutthulhu --dump-aaf FILE [--canonical]
+                             print every object of an AAF file below its Header as JSON, for
+                             scripts/aaf-dump.py --compare (docs/spec/aaf.md)
 cutthulhu --write-media FILE --drive FOLDER [--resolution ID|all]
                              transcode FILE into managed MXF under FOLDER/Avid MediaFiles/MXF
                              and print the files made as JSON (for scripts/check-mxf.py)

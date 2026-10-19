@@ -4,6 +4,7 @@
 #include "lumenis/core/branding.h"
 #include "lumenis/ext/module_loader.h"
 #include "lumenis/ext/provider.h"
+#include "lumenis/interop/aaf.h"
 #include "lumenis/model/structure.h"
 #include "lumenis/model/locations.h"
 #include "lumenis/model/project_store.h"
@@ -86,7 +87,7 @@ bool isHeadlessInvocation(int argc, char** argv) {
         const std::string_view arg(argv[i]);
         if (arg == "--version" || arg == "-v" || arg == "--help" || arg == "-h" || arg == "-?"
             || arg == "--list-providers" || arg == "--probe" || arg == "--framemd5" || arg == "--write-media"
-            || arg == "--dump-structure") {
+            || arg == "--dump-structure" || arg == "--dump-aaf") {
             return true;
         }
     }
@@ -217,6 +218,16 @@ int main(int argc, char** argv) {
                        "for scripts/structdiff.py, then exit."),
         QStringLiteral("path"));
     parser.addOption(dumpStructure);
+    const QCommandLineOption dumpAaf(
+        QStringLiteral("dump-aaf"),
+        QStringLiteral("Print every object of an AAF file below its Header, with every property, as JSON "
+                       "(docs/spec/aaf.md), then exit. With --canonical, compact and sorted, as "
+                       "scripts/aaf-dump.py prints it."),
+        QStringLiteral("file"));
+    const QCommandLineOption canonical(QStringLiteral("canonical"),
+                                       QStringLiteral("With --dump-aaf: compact, sorted JSON."));
+    parser.addOption(dumpAaf);
+    parser.addOption(canonical);
     parser.addOption(writeMedia);
     parser.addOption(mediaDrive);
     parser.addOption(mediaResolution);
@@ -278,6 +289,21 @@ int main(int argc, char** argv) {
             return 1;
         }
         const QByteArray json = QJsonDocument(structure).toJson();
+        std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
+        return 0;
+    }
+
+    if (parser.isSet(dumpAaf)) {
+        // What an AAF file holds, to compare with pyaaf2's reading of it.
+        lumenis::interop::aaf::File file;
+        QString error;
+        if (!file.open(parser.value(dumpAaf), &error)) {
+            std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(parser.value(dumpAaf)), qPrintable(error));
+            return 1;
+        }
+        const QJsonValue dump = lumenis::interop::aaf::dump(file);
+        const QByteArray json = parser.isSet(canonical) ? lumenis::interop::aaf::canonicalJson(dump) + '\n'
+                                                        : QJsonDocument(dump.toObject()).toJson();
         std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
         return 0;
     }

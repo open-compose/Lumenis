@@ -37,7 +37,8 @@ Cutthulhu's AAF and bin readers and writers (`src/interop`, ROADMAP Phase 3)
 are written after the public specifications, with Mark Reid's
 [pyaaf2](https://github.com/markreidvfx/pyaaf2) and
 [pyavb](https://github.com/markreidvfx/pyavb), both MIT-licensed, as the
-reference implementations. Where their design or tables are followed, the
+reference implementations. Where their design or tables are followed (the
+built-in AAF model, `src/interop/aaf_model.inc`, is made from pyaaf2's), the
 MIT licence applies to that part (`packaging/licenses/pyaaf2-LICENSE.txt`;
 pyavb's is the same, Copyright (c) 2022 Mark Reid). Their test files are the
 first interchange corpus. They are downloaded for testing

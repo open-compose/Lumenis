@@ -180,7 +180,10 @@ model, is done (docs/spec/native-model.md):
 3.2, AAF (docs/spec/aaf.md), has started. 3.2a, the compound file
 container (`src/interop/cfb.*`, target `lumenis_interop`), is done; the
 corpus comes from `scripts/interop-corpus.py` (pyaaf2's and pyavb's test
-files, MIT). Next is 3.2b, AAF's object layer.
+files, MIT). 3.2b, AAF's object layer (`src/interop/aaf*`, the built-in
+model `aaf_model.inc` from `scripts/make-aaf-model.py`), is done; `--dump-aaf`
+and `scripts/aaf-dump.py --compare` check it against pyaaf2. Next is 3.2c,
+AAF import into bins.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

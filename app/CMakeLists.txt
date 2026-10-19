@@ -27,7 +27,7 @@ set_target_properties(lumenis_app PROPERTIES
     MACOSX_BUNDLE_COPYRIGHT "GPL-3.0-or-later"
     MACOSX_BUNDLE_ICON_FILE app.icns
 )
-target_link_libraries(lumenis_app PRIVATE lumenis::ui lumenis::media lumenis::ext lumenis::core Qt6::Widgets)
+target_link_libraries(lumenis_app PRIVATE lumenis::ui lumenis::media lumenis::interop lumenis::ext lumenis::core Qt6::Widgets)
 lumenis_set_warnings(lumenis_app)
 
 if(WIN32)

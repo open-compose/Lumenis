@@ -2,7 +2,11 @@
 # Phase 3, docs/spec/aaf.md).
 add_library(lumenis_interop STATIC
     cfb.cpp
+    aaf.cpp
+    aaf_dump.cpp
+    aaf_model.inc
     include/lumenis/interop/cfb.h
+    include/lumenis/interop/aaf.h
 )
 add_library(lumenis::interop ALIAS lumenis_interop)
 

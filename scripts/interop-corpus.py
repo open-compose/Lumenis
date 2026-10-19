@@ -14,6 +14,13 @@ committed here: `fetch` downloads them into a cache folder.
         storages and streams olefile (another compound file reader) finds,
         and a digest of its listing (every path, and each stream's size and
         SHA-256; listing_digest). tst_cfb compares its own reading with this.
+        Also a digest of each one's dump as pyaaf2 reads it
+        (scripts/aaf-dump.py --canonical), which tst_aaf compares with its
+        own. Needs olefile and pyaaf2.
+    interop-corpus.py check-aaf --app build/ci/bin/cutthulhu [--dir DIR]
+        Compare `cutthulhu --dump-aaf` of every AAF file with pyaaf2's
+        reading (scripts/aaf-dump.py --compare). Exits 77 without the corpus
+        or pyaaf2 (pip install pyaaf2).
     interop-corpus.py check-written --test build/ci/bin/tst_cfb [--dir DIR]
         Run tst_cfb's forOlefile, which writes compound files with
         Cutthulhu's writer, and read them back with olefile. Exits 77 without
@@ -22,6 +29,7 @@ committed here: `fetch` downloads them into a cache folder.
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
@@ -161,12 +169,32 @@ def manifest(folder):
             entries = listing(olefile, os.path.join(folder, name))
             streams = sum(1 for e in entries.values() if e["type"] == "stream")
             cfb[name] = {"storages": len(entries) - streams, "streams": streams, "listing": listing_digest(entries)}
-    doc = {"comment": "Made by scripts/interop-corpus.py manifest with olefile " + olefile.__version__, "cfb": cfb}
+    # The AAF files as pyaaf2 reads them (scripts/aaf-dump.py), for tst_aaf.
+    spec = importlib.util.spec_from_file_location("aaf_dump", os.path.join(ROOT, "scripts", "aaf-dump.py"))
+    aaf_dump = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(aaf_dump)
+    aaf = {}
+    for name in cfb:
+        text = aaf_dump.canonical(aaf_dump.dump(os.path.join(folder, name)))
+        aaf[name] = {"dump": hashlib.sha256(text.encode("utf-8")).hexdigest(), "objects": text.count('"class":')}
+    import aaf2
+    doc = {"comment": f"Made by scripts/interop-corpus.py manifest with olefile {olefile.__version__} "
+                      f"and pyaaf2 {aaf2.__version__}", "cfb": cfb, "aaf": aaf}
     with open(MANIFEST, "w", encoding="utf-8", newline="\n") as f:
         json.dump(doc, f, indent=1, sort_keys=True)
         f.write("\n")
     print(f"interop-corpus: wrote {MANIFEST}")
     return 0
+
+
+def check_aaf(app, folder):
+    paths = [os.path.join(folder, name) for name, _, _ in files() if name.endswith(".aaf")]
+    paths = [p for p in paths if os.path.exists(p)]
+    if not paths:
+        print(f"interop-corpus: no corpus in {folder} (interop-corpus.py fetch)", file=sys.stderr)
+        return 77
+    script = os.path.join(ROOT, "scripts", "aaf-dump.py")
+    return subprocess.run([sys.executable, script, "--compare", "--app", app] + paths).returncode
 
 
 def check_written(test, folder):
@@ -200,14 +228,19 @@ def check_written(test, folder):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["fetch", "manifest", "check-written"])
+    ap.add_argument("command", choices=["fetch", "manifest", "check-aaf", "check-written"])
     ap.add_argument("--dir", help="the corpus folder (check-written: where to keep the files written)")
     ap.add_argument("--test", help="tst_cfb, for check-written")
+    ap.add_argument("--app", help="the cutthulhu executable, for check-aaf")
     args = ap.parse_args()
     if args.command == "fetch":
         return fetch(args.dir or default_dir())
     if args.command == "manifest":
         return manifest(args.dir or default_dir())
+    if args.command == "check-aaf":
+        if not args.app:
+            ap.error("check-aaf needs --app")
+        return check_aaf(args.app, args.dir or default_dir())
     if not args.test:
         ap.error("check-written needs --test")
     return check_written(args.test, args.dir)
