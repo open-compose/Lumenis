@@ -89,6 +89,19 @@ class TestStructDiff(unittest.TestCase):
         # By name, a different MobID with the same clip name is the same.
         self.assertEqual(structdiff.diff(BASE, changed(source), use_mob=False), [])
 
+    def test_without_effects(self):
+        def effects(b):
+            segments = b["items"][2]["sequence"]["tracks"][0]["segments"]
+            segments[1]["transition"] = "AAF/VideoDissolve_2"
+            segments.append({"filler": 5, "effect": "AAF/Title_2"})
+        other = changed(effects)
+        self.assertEqual(len(structdiff.diff(BASE, other)), 2)
+        # Effect names left out, and filler an effect kept apart is one: the
+        # 25 frames and the 5 compare as 30 with the reference's 30.
+        def joined(b):
+            b["items"][2]["sequence"]["tracks"][0]["segments"][1] = {"filler": 30}
+        self.assertEqual(structdiff.diff(changed(joined), other, effects=False), [])
+
     def test_bins(self):
         other = changed(lambda b: b.update(name="Selects"))
         self.assertEqual(structdiff.diff(BASE, other),

@@ -24,7 +24,7 @@ Avid's AAF SDK is not used: its licence is doubtful for us (ROADMAP §3).
 |---|---|---|
 | Compound file: storages and streams in one file | `src/interop/cfb.*` | 3.2a, done |
 | AAF objects: properties, types, the metadictionary | `src/interop/aaf*` | 3.2b, done |
-| Import into bins: mobs to clips, sources and sequences | | 3.2c |
+| Import into bins: mobs to clips, sources and sequences | `src/interop/aaf_import.*` | 3.2c, done |
 | Export and round trips | | 3.2d |
 | File > Import and Export, from the Editing Guide | | 3.2e |
 
@@ -159,3 +159,82 @@ print compact, sorted JSON, byte for byte the same when they agree.
   (`pip install pyaaf2`), and prints each difference.
 * `damaged`: 200 randomly damaged files open or are refused, and dump,
   without a crash or a hang.
+
+## Import (3.2c)
+
+`aaf::importFile` reads an AAF file's mobs into bin items
+(native-model.md); `cutthulhu --import-aaf FILE` prints the bin they make
+as a structure dump (structure.md).
+
+### Clips
+
+* **Master mobs** become master clips, or audio clips when they have no
+  picture. Name, MobID, Created and Modified come from the mob. Each
+  picture and sound slot is a track: its kind from its segment's data
+  definition (AAF's labels and the older ones Avid writes), its number from
+  the slot's PhysicalTrackNumber. The edit rate and duration are the first
+  picture slot's.
+* **NTSC rates.** Media Composer writes 23.976 as 23976/1000; the import
+  reads it, and every rate within 1/1000 of n×1000/1001, as the exact rate
+  (24000/1001), as its bins do.
+* **The source chain.** Each track's source clip names a file source mob:
+  a File source with the media's path (the descriptor's locator). The file
+  mob's own source clip names the tape or import source mob before it: a
+  Tape source (TapeDescriptor; also the Tape column) or an Import source
+  (ImportDescriptor, with the original file's path), each with its own
+  start timecode.
+* **Start and End** come from the first timecode down that chain (inside a
+  Pulldown if need be), moved by the source clips' start times. A timecode
+  at another frame rate is scaled to the clip's (30 fps 00:00:30;00 is
+  24 fps 00:00:30:00).
+* **Bin columns** travel as the mob's user comments (Name, Value). Those
+  that are not standard headings are the bin's custom columns.
+* **Rendered effects.** Media Composer exports the clips it made for
+  rendered effects as master mobs whose file mobs carry AppCode 9 ("file
+  mob with a precompute" in pyavb). Its bins do not show them, and the
+  import leaves them out.
+* **Subclips** are composition mobs used as Usage_SubClip: a subclip with a
+  Clip source naming its master and where it starts.
+
+### Sequences
+
+Composition mobs used as Usage_TopLevel (or with no usage) become
+sequences.
+
+* **Tracks.** A timecode slot gives the sequence its TC1 track and its
+  Start. Sound slots are A tracks. Media Composer keeps all video tracks in
+  one picture slot as a NestedScope: its slots are V1, V2 and up.
+* **Segments.** A source clip is a segment: its clip (by MobID; the clip
+  imported from the same file, in the same bin), the clip's track (the
+  slot it names), its start time as the IN point, and its length. Filler,
+  and a ScopeReference (the track below shows through), are filler.
+* **Transitions** overlap the segments on either side in AAF; in a
+  sequence they sit at the cut. A transition of length L with its cut
+  point at c frames shortens the segment before by L − c and starts the one
+  after c frames later. Its alignment follows c: 0 is Starting at Cut, L
+  Ending at Cut, L/2 Centered on Cut, others Custom.
+* **Effects** (OperationGroups) apply to the segments of their first input
+  that has material. A timewarp's input runs at another speed, so the
+  segments are fitted to the effect's length. Audio Gain and Audio Pan are
+  clip gain and pan, not effects. Video and audio dissolves become
+  Blend/Dissolve; other effects keep their AAF names, in the category
+  "AAF", until effects are matched to the Effect Palette's (Phase 6).
+* A segment whose clip the file does not hold keeps its MobID and name and
+  is offline.
+
+What was read only in part comes back as warnings, once each with a count.
+
+### Checks
+
+* ctest `aaf_import_bins`: each corpus AAF that has a Media Composer bin of
+  the same material (`test_file_01` and the twelve `retimes` files), once
+  imported, is the same as that bin by `structdiff.py --no-effects`: the
+  same clips and counts, names, MobIDs, edit rates, durations, Start and
+  End, custom columns, tracks and segments. The bins' dumps are made with
+  pyavb (`scripts/avb-structure.py`, `interop-corpus.py reference`) and
+  kept in `tests/data/aaf_reference`, so the check runs without pyavb.
+  This is Phase 3 gate 1 on the corpus there is until Media Composer is
+  at hand again. Effects are left out of it because the bin names them by
+  Media Composer's effect IDs.
+* tst_aaf (`importsBin`): what the dump does not show: sources and their
+  paths, transitions' alignment, and segments naming their clips' items.

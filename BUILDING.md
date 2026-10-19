@@ -750,6 +750,14 @@ the build folder (`build/<preset>`) and configure again.
   and lists any difference; it needs pyaaf2 (`pip install pyaaf2`) and is
   skipped without it. By hand: `python3 scripts/aaf-dump.py --compare --app
   build/ci/bin/cutthulhu FILE.aaf`.
+* **AAF import against Media Composer's bins (gate 1 on the corpus):**
+  ctest `aaf_import_bins` imports each corpus AAF that has a bin of the same
+  material and compares it with the bin's dump in `tests/data/aaf_reference`
+  (`structdiff.py --no-effects`). Rewrite those dumps with
+  `python3 scripts/interop-corpus.py reference` (needs pyavb: `pip install
+  pyavb`). By hand: `cutthulhu --import-aaf FILE.aaf > ours.json` and
+  `python3 scripts/avb-structure.py BIN.avb > ref.json`, then
+  `structdiff.py ref.json ours.json --no-effects`.
 * **The built-in AAF model** (`src/interop/aaf_model.inc`) is made from
   pyaaf2's model tables: `python3 scripts/make-aaf-model.py --pyaaf2
   <pyaaf2 checkout>` (`--check` to compare).
@@ -772,6 +780,8 @@ cutthulhu --dump-structure PATH
 cutthulhu --dump-aaf FILE [--canonical]
                              print every object of an AAF file below its Header as JSON, for
                              scripts/aaf-dump.py --compare (docs/spec/aaf.md)
+cutthulhu --import-aaf FILE   import an AAF file into a bin and print the bin as a structure dump
+                             (docs/spec/aaf.md, "Import")
 cutthulhu --write-media FILE --drive FOLDER [--resolution ID|all]
                              transcode FILE into managed MXF under FOLDER/Avid MediaFiles/MXF
                              and print the files made as JSON (for scripts/check-mxf.py)

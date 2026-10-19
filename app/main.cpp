@@ -5,6 +5,7 @@
 #include "lumenis/ext/module_loader.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/interop/aaf.h"
+#include "lumenis/interop/aaf_import.h"
 #include "lumenis/model/structure.h"
 #include "lumenis/model/locations.h"
 #include "lumenis/model/project_store.h"
@@ -87,7 +88,7 @@ bool isHeadlessInvocation(int argc, char** argv) {
         const std::string_view arg(argv[i]);
         if (arg == "--version" || arg == "-v" || arg == "--help" || arg == "-h" || arg == "-?"
             || arg == "--list-providers" || arg == "--probe" || arg == "--framemd5" || arg == "--write-media"
-            || arg == "--dump-structure" || arg == "--dump-aaf") {
+            || arg == "--dump-structure" || arg == "--dump-aaf" || arg == "--import-aaf") {
             return true;
         }
     }
@@ -227,6 +228,12 @@ int main(int argc, char** argv) {
     const QCommandLineOption canonical(QStringLiteral("canonical"),
                                        QStringLiteral("With --dump-aaf: compact, sorted JSON."));
     parser.addOption(dumpAaf);
+    const QCommandLineOption importAaf(
+        QStringLiteral("import-aaf"),
+        QStringLiteral("Import an AAF file into a bin and print the bin's structure dump "
+                       "(docs/spec/structure.md), then exit."),
+        QStringLiteral("file"));
+    parser.addOption(importAaf);
     parser.addOption(canonical);
     parser.addOption(writeMedia);
     parser.addOption(mediaDrive);
@@ -288,6 +295,28 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(parser.value(dumpStructure)), qPrintable(error));
             return 1;
         }
+        const QByteArray json = QJsonDocument(structure).toJson();
+        std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
+        return 0;
+    }
+
+    if (parser.isSet(importAaf)) {
+        // What an AAF file imports as: the bin's structure (Phase 3 gate 1).
+        QString error;
+        const QString path = parser.value(importAaf);
+        const auto imported = lumenis::interop::aaf::importFile(path, {}, &error);
+        if (!imported) {
+            std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(path), qPrintable(error));
+            return 1;
+        }
+        for (const QString& w : imported->warnings) std::fprintf(stderr, "import-aaf: %s\n", qPrintable(w));
+        lumenis::model::Bin bin;
+        bin.name = QFileInfo(path).completeBaseName();
+        bin.items = imported->items;
+        bin.display.customColumns = imported->customColumns;
+        const QJsonObject structure{{QStringLiteral("format"), QStringLiteral("cutthulhu-structure")},
+                                    {QStringLiteral("version"), 1},
+                                    {QStringLiteral("bins"), QJsonArray{lumenis::model::binStructure(bin)}}};
         const QByteArray json = QJsonDocument(structure).toJson();
         std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
         return 0;

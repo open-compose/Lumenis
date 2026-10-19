@@ -76,6 +76,15 @@ with Cutthulhu's.
 * Sequences: track names in order, and each track's segments in order.
   `--no-mob` matches items only by kind and name, and segments' sources by
   name, for comparing with a reader that does not keep MobIDs.
+  `--no-effects` leaves effect and transition names out, and joins filler
+  that only an effect kept apart, for a reader that names effects
+  otherwise.
+
+## Reference dumps
+
+`scripts/avb-structure.py BIN.avb` dumps a Media Composer bin read with
+pyavb (MIT) in this form. ctest `aaf_import_bins` compares AAF imports with
+the bins of the same material this way (aaf.md, "Import").
 
 It prints every difference, one per line, and exits 1 when there are any.
 `tests/scripts/test_structdiff.py` (ctest `structdiff`) covers each case,

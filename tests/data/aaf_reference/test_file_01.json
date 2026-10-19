@@ -1,0 +1,1127 @@
+{
+ "format": "cutthulhu-structure",
+ "version": 1,
+ "bins": [
+  {
+   "name": "test_file_01",
+   "customColumns": [
+    "UNC Path"
+   ],
+   "items": [
+    {
+     "kind": "masterClip",
+     "name": "646x01_02_dustbust.0001.tif",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fd557ff.a4e504d0",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Marty/Demo/Television/Kingdom Hospital/Footage/Hd/Finals/646x01/646x01_02_dustbust/646x01_02_dustbust.0001.tif"
+     },
+     "duration": 115,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:04:19"
+    },
+    {
+     "kind": "masterClip",
+     "name": "96_116_20_03_01.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9f1f4.2aba0184",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "X:\\demo\\film\\luna\\quicktimes\\96_116_20_03_01.mov"
+     },
+     "duration": 57,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:32:09"
+    },
+    {
+     "kind": "masterClip",
+     "name": "WR_068_001_v0001_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dc4f1.9af10020",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Marty/temp/WR/WR_068_001/2D/2D_Renders/WR_068_001_v0001_r0001.mov"
+     },
+     "duration": 61,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:02:13"
+    },
+    {
+     "kind": "masterClip",
+     "name": "sc02_03_02.0001.tif",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa5c2ed.af471e53",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Marty/Demo/Commercial/Mitsui/Mitsui 02/footage/resized/sc02_03_02/sc02_03_02.0001.tif"
+     },
+     "duration": 133,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:05:13"
+    },
+    {
+     "kind": "masterClip",
+     "name": "sc02_04_01.0001.tif",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa5c1e5.a8661e4f",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Marty/Demo/Commercial/Mitsui/Mitsui 03/Finals/resized/sc02_04_01/sc02_04_01.0001.tif"
+     },
+     "duration": 48,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:02:00"
+    },
+    {
+     "kind": "masterClip",
+     "name": "buggers_08_06_lig_14_02.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9d7e0.4e11011e",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "X:\\demo\\commercial\\aquarium\\quicktimes\\buggers_08_06_lig_14_02.mov"
+     },
+     "duration": 576,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:54:00"
+    },
+    {
+     "kind": "masterClip",
+     "name": "BA_022_002_v0001_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9ddbd8.107f007a",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Users/mark/Desktop/Treasure_picks/BA_022_002_v0001_r0001.mov"
+     },
+     "duration": 80,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:03:08"
+    },
+    {
+     "kind": "masterClip",
+     "name": "047x40_01_01.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48ca04bd.8b6501cd",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "D:\\demo\\television\\stargate_sg1\\sg1_1006_200\\quicktimes\\047x40_01_01.mov"
+     },
+     "duration": 104,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:34:08"
+    },
+    {
+     "kind": "masterClip",
+     "name": "GB_030_001_v0001_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9de1b0.e2a70090",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Yummy/Projects/Treasure_Buddies/Quicktimes/Treasure_Buddies/SEQ/GB/GB_030_001/2D/2D_Renders/GB_030_001_v0001_r0001.mov"
+     },
+     "duration": 97,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:04:01"
+    },
+    {
+     "kind": "masterClip",
+     "name": "047x36_02_01.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48ca04b0.5ab001cd",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "D:\\demo\\television\\stargate_sg1\\sg1_1006_200\\quicktimes\\047x36_02_01.mov"
+     },
+     "duration": 74,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:33:02"
+    },
+    {
+     "kind": "masterClip",
+     "name": "a30x01b_01_01.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9c6a1.ee7200da",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "X:\\demo\\television\\andromedia\\episode_518\\quicktimes\\a30x01b_01_01.mov"
+     },
+     "duration": 93,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:33:21"
+    },
+    {
+     "kind": "masterClip",
+     "name": "a30x01a_01_01.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9c6a0.ead800da",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "X:\\demo\\television\\andromedia\\episode_518\\quicktimes\\a30x01a_01_01.mov"
+     },
+     "duration": 61,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:32:13"
+    },
+    {
+     "kind": "masterClip",
+     "name": "RT_008_002_v0001_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dc49e.57c3001f",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Marty/temp/RT/RT_008_002/2D/2D_Renders/RT_008_002_v0001_r0001.mov"
+     },
+     "duration": 70,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:02:22"
+    },
+    {
+     "kind": "masterClip",
+     "name": "BA_040_001_v0002_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dcc9a.860e003e",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Einstein/Projects/Treasure_Buddies/SEQ/BA/BA_040_001/2D/2D_Renders/BA_040_001_v0002_r0001.mov"
+     },
+     "duration": 93,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:03:21"
+    },
+    {
+     "kind": "masterClip",
+     "name": "HT_003_001_v0004_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9ded92.65d60014",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Users/mark/Desktop/spooky/HT_003_001_v0004_r0001.mov"
+     },
+     "duration": 66,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:02:18"
+    },
+    {
+     "kind": "masterClip",
+     "name": "01x01_09_v0001.0002.tif",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa5c08d.68611e4a",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Marty/Demo/Commercial/Uga/Footage/resized/01x01_09_v0001/01x01_09_v0001.0002.tif"
+     },
+     "duration": 145,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:06:01"
+    },
+    {
+     "kind": "masterClip",
+     "name": "RT_009_002_v0001_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dc486.fa04001e",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Marty/temp/RT/RT_009_002/2D/2D_Renders/RT_009_002_v0001_r0001.mov"
+     },
+     "duration": 65,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:02:17"
+    },
+    {
+     "kind": "masterClip",
+     "name": "FX_061_001_v0001_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9ded7e.1a680014",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Users/mark/Desktop/spooky/FX_061_001_v0001_r0001.mov"
+     },
+     "duration": 130,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:05:10"
+    },
+    {
+     "kind": "masterClip",
+     "name": "CS_034_001_v0002_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9ddc78.813b007c",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Users/mark/Desktop/Treasure_picks/CS_034_001_v0002_r0001.mov"
+     },
+     "duration": 112,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:04:16"
+    },
+    {
+     "kind": "masterClip",
+     "name": "RT_011_001_v0002_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dc476.babb001e",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Marty/temp/RT/RT_011_001/2D/2D_Renders/RT_011_001_v0002_r0001.mov"
+     },
+     "duration": 40,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:01:16"
+    },
+    {
+     "kind": "masterClip",
+     "name": "041x03_02_04.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48ca0276.a7a301c4",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "D:\\demo\\television\\stargate_sg1\\sg1_904_ties_that_bind\\quicktimes\\041x03_02_04.mov"
+     },
+     "duration": 148,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:36:04"
+    },
+    {
+     "kind": "masterClip",
+     "name": "SL_033_001_v0001_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dde74.41bf0084",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Users/mark/Desktop/Treasure_picks/SL_033_001_v0001_r0001.mov"
+     },
+     "duration": 91,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:03:19"
+    },
+    {
+     "kind": "audioClip",
+     "name": "Beverly",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa73571.f25923fa",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Yummy/Beverly.mp3"
+     },
+     "duration": 5832,
+     "tracks": "A1-2",
+     "start": "01:00:00:00",
+     "end": "01:04:03:00"
+    },
+    {
+     "kind": "masterClip",
+     "name": "037x01_02.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48ca0b67.92e801e7",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "D:\\demo\\television\\stargate_sg1\\sg1_913_ripple_effect\\quicktimes\\037x01_02.mov"
+     },
+     "duration": 229,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:39:13"
+    },
+    {
+     "kind": "masterClip",
+     "name": "BA_028_001_v0001_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9de35e.71f30097",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Yummy/Projects/Treasure_Buddies/Quicktimes/Treasure_Buddies/SEQ/BA/BA_028_001/2D/2D_Renders/BA_028_001_v0001_r0001.mov"
+     },
+     "duration": 79,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:03:07"
+    },
+    {
+     "kind": "masterClip",
+     "name": "SL_018_001_v0002_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dde5e.ecf10083",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Users/mark/Desktop/Treasure_picks/SL_018_001_v0002_r0001.mov"
+     },
+     "duration": 69,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:02:21"
+    },
+    {
+     "kind": "masterClip",
+     "name": "BA_046_001_v0001_r0003.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dcc58.832b003d",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Einstein/Projects/Treasure_Buddies/SEQ/BA/BA_046_001/2D/2D_Renders/BA_046_001_v0001_r0003.mov"
+     },
+     "duration": 123,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:05:03"
+    },
+    {
+     "kind": "masterClip",
+     "name": "022x01_02.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48ca0b55.4e1f01e7",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "D:\\demo\\television\\stargate_sg1\\sg1_913_ripple_effect\\quicktimes\\022x01_02.mov"
+     },
+     "duration": 779,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:01:02:11"
+    },
+    {
+     "kind": "masterClip",
+     "name": "998x02.0001.tga",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa5ad52.4ceb1dff",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Marty/Demo/Television/Kingdom Hospital/Footage/Hd/Finals/998x02/998x02.0001.tga"
+     },
+     "duration": 116,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:04:20"
+    },
+    {
+     "kind": "masterClip",
+     "name": "spaceship_crash_space.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4e87d148.6d6a04cf",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "Marty:Demo:Film:Outlander:Quicktimes:Bluray:spaceship_crash_space.mov"
+     },
+     "duration": 389,
+     "tracks": "V1",
+     "start": "01:01:00:04",
+     "end": "01:01:16:09"
+    },
+    {
+     "kind": "masterClip",
+     "name": "SL_017_001_v0001_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dde44.87850083",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Users/mark/Desktop/Treasure_picks/SL_017_001_v0001_r0001.mov"
+     },
+     "duration": 74,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:03:02"
+    },
+    {
+     "kind": "masterClip",
+     "name": "rogers_spot1_24fps.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9d73e.d418011b",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "X:\\demo\\commercial\\rogers\\quicktimes\\rogers_spot1_24fps.mov"
+     },
+     "duration": 362,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:45:02"
+    },
+    {
+     "kind": "masterClip",
+     "name": "shepard_002.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4e87d13b.3bfe04cf",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "Marty:Demo:Film:Outlander:Quicktimes:Bluray:shepard_002.mov"
+     },
+     "duration": 142,
+     "tracks": "V1",
+     "start": "01:01:23:14",
+     "end": "01:01:29:12"
+    },
+    {
+     "kind": "masterClip",
+     "name": "030x01_02.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48ca0139.d03201bf",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "D:\\demo\\television\\stargate_sg1\\sg1_1009_company_of_thieves\\quicktimes\\030x01_02.mov"
+     },
+     "duration": 128,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:35:08"
+    },
+    {
+     "kind": "masterClip",
+     "name": "CA_003_001_v0001_r0002.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9ddc35.7bc8007b",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Users/mark/Desktop/Treasure_picks/CA_003_001_v0001_r0002.mov"
+     },
+     "duration": 103,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:04:07"
+    },
+    {
+     "kind": "masterClip",
+     "name": "GB_010_001_v0001_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9ddd2f.4aa2007f",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Users/mark/Desktop/Treasure_picks/GB_010_001_v0001_r0001.mov"
+     },
+     "duration": 142,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:05:22"
+    },
+    {
+     "kind": "masterClip",
+     "name": "morrwind_jump.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4e87d12e.07c104cf",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "Marty:Demo:Film:Outlander:Quicktimes:Bluray:morrwind_jump.mov"
+     },
+     "duration": 53,
+     "tracks": "V1",
+     "start": "01:04:57:22",
+     "end": "01:05:00:03"
+    },
+    {
+     "kind": "masterClip",
+     "name": "re-entry.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4e87d12e.0b7504cf",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "Marty:Demo:Film:Outlander:Quicktimes:Bluray:re-entry.mov"
+     },
+     "duration": 561,
+     "tracks": "V1",
+     "start": "01:03:47:08",
+     "end": "01:04:10:17"
+    },
+    {
+     "kind": "masterClip",
+     "name": "CS_040_001_v0003_r0001.0001.tif",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa6ce2e.98342267",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Marty/Demo/Film/Treasure_Buddies/Quicktimes/Convert/CS_040_001_v0003_r0001/CS_040_001_v0003_r0001/CS_040_001_v0003_r0001.0001.tif"
+     },
+     "duration": 90,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:03:18"
+    },
+    {
+     "kind": "masterClip",
+     "name": "DD_109_001_v0002_r0002.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9e052e.e4740016",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Users/mark/Desktop/spooky/DD_109_001_v0002_r0002.mov"
+     },
+     "duration": 60,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:02:12"
+    },
+    {
+     "kind": "masterClip",
+     "name": "morrwind_001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4e87d127.f00104ce",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "Marty:Demo:Film:Outlander:Quicktimes:Bluray:morrwind_001.mov"
+     },
+     "duration": 355,
+     "tracks": "V1",
+     "start": "01:04:16:21",
+     "end": "01:04:31:16"
+    },
+    {
+     "kind": "masterClip",
+     "name": "megablast_part_02.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4e87d124.e3c404ce",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "Marty:Demo:Film:Outlander:Quicktimes:Bluray:megablast_part_02.mov"
+     },
+     "duration": 179,
+     "tracks": "V1",
+     "start": "01:04:50:11",
+     "end": "01:04:57:22"
+    },
+    {
+     "kind": "masterClip",
+     "name": "SL_006_001_v0003_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dde22.00320083",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Users/mark/Desktop/Treasure_picks/SL_006_001_v0003_r0001.mov"
+     },
+     "duration": 54,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:02:06"
+    },
+    {
+     "kind": "masterClip",
+     "name": "006x02.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9d521.93e90113",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "X:\\demo\\television\\stargate_atlantis\\atlantis_103_hide_and_seek\\quicktimes\\006x02.mov"
+     },
+     "duration": 146,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:36:02"
+    },
+    {
+     "kind": "masterClip",
+     "name": "006x01.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9d51f.89790113",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "X:\\demo\\television\\stargate_atlantis\\atlantis_103_hide_and_seek\\quicktimes\\006x01.mov"
+     },
+     "duration": 220,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:39:04"
+    },
+    {
+     "kind": "masterClip",
+     "name": "vfx_11_03_01.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9e71c.d0800159",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "X:\\demo\\film\\diary_of_the_dead\\quicktimes\\vfx_11_03_01.mov"
+     },
+     "duration": 66,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:32:18"
+    },
+    {
+     "kind": "masterClip",
+     "name": "004x02.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9d51c.7dd10113",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "X:\\demo\\television\\stargate_atlantis\\atlantis_103_hide_and_seek\\quicktimes\\004x02.mov"
+     },
+     "duration": 77,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:33:05"
+    },
+    {
+     "kind": "masterClip",
+     "name": "halldoors_track.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4e87d114.a31304ce",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "Marty:Demo:Film:Outlander:Quicktimes:Bluray:halldoors_track.mov"
+     },
+     "duration": 185,
+     "tracks": "V1",
+     "start": "01:03:44:08",
+     "end": "01:03:52:01"
+    },
+    {
+     "kind": "masterClip",
+     "name": "SL_004_001_v0001_r0001.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dde12.c4710082",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Users/mark/Desktop/Treasure_picks/SL_004_001_v0001_r0001.mov"
+     },
+     "duration": 55,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:02:07"
+    },
+    {
+     "kind": "masterClip",
+     "name": "sc01_06_01_03.0001.tif",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa5c20f.4e301e50",
+     "editRate": "24000/1001",
+     "columns": {
+      "UNC Path": "/Volumes/Marty/Demo/Commercial/Mitsui/Mitsui 03/Finals/resized/sc01_06_01_03/sc01_06_01_03.0001.tif"
+     },
+     "duration": 76,
+     "tracks": "V1",
+     "start": "01:00:00:00",
+     "end": "01:00:03:04"
+    },
+    {
+     "kind": "masterClip",
+     "name": "52_64_2_03_05.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9f200.5a940184",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "X:\\demo\\film\\luna\\quicktimes\\52_64_2_03_05.mov"
+     },
+     "duration": 99,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:34:03"
+    },
+    {
+     "kind": "sequence",
+     "name": "Demo_2012_v0002.Exported.01",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.5be90cf4.b17e035c",
+     "editRate": "24000/1001",
+     "duration": 4794,
+     "tracks": "V1-4 A1-2 TC1",
+     "start": "01:00:00:00",
+     "end": "01:03:19:18",
+     "sequence": {
+      "tracks": [
+       {
+        "name": "V1",
+        "segments": [
+         {
+          "filler": 134
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4e87d127.f00104ce",
+          "name": "morrwind_001.mov",
+          "track": "V1",
+          "in": 136,
+          "length": 219
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4e87d12e.0b7504cf",
+          "name": "re-entry.mov",
+          "track": "V1",
+          "in": 213,
+          "length": 295
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4e87d13b.3bfe04cf",
+          "name": "shepard_002.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 142
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dc4f1.9af10020",
+          "name": "WR_068_001_v0001_r0001.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 61
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dc476.babb001e",
+          "name": "RT_011_001_v0002_r0001.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 40
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9e052e.e4740016",
+          "name": "DD_109_001_v0002_r0002.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 60
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dc49e.57c3001f",
+          "name": "RT_008_002_v0001_r0001.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 70
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dc486.fa04001e",
+          "name": "RT_009_002_v0001_r0001.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 65
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4e87d124.e3c404ce",
+          "name": "megablast_part_02.mov",
+          "track": "V1",
+          "in": 80,
+          "length": 84
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4e87d12e.07c104cf",
+          "name": "morrwind_jump.mov",
+          "track": "V1",
+          "in": 13,
+          "length": 27
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dcc9a.860e003e",
+          "name": "BA_040_001_v0002_r0001.mov",
+          "track": "V1",
+          "in": 33,
+          "length": 51
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dcc58.832b003d",
+          "name": "BA_046_001_v0001_r0003.mov",
+          "track": "V1",
+          "in": 28,
+          "length": 40
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9ded92.65d60014",
+          "name": "HT_003_001_v0004_r0001.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 66
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9ddd2f.4aa2007f",
+          "name": "GB_010_001_v0001_r0001.mov",
+          "track": "V1",
+          "in": 65,
+          "length": 63
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9de1b0.e2a70090",
+          "name": "GB_030_001_v0001_r0001.mov",
+          "track": "V1",
+          "in": 23,
+          "length": 71
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9ddc35.7bc8007b",
+          "name": "CA_003_001_v0001_r0002.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 72
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa6ce2e.98342267",
+          "name": "CS_040_001_v0003_r0001.0001.tif",
+          "track": "V1",
+          "in": 0,
+          "length": 64
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9ddc78.813b007c",
+          "name": "CS_034_001_v0002_r0001.mov",
+          "track": "V1",
+          "in": 31,
+          "length": 76
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dde74.41bf0084",
+          "name": "SL_033_001_v0001_r0001.mov",
+          "track": "V1",
+          "in": 13,
+          "length": 73
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dde12.c4710082",
+          "name": "SL_004_001_v0001_r0001.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 55
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dde22.00320083",
+          "name": "SL_006_001_v0003_r0001.mov",
+          "track": "V1",
+          "in": 13,
+          "length": 41
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dde44.87850083",
+          "name": "SL_017_001_v0001_r0001.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 59
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9dde5e.ecf10083",
+          "name": "SL_018_001_v0002_r0001.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 69
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9de35e.71f30097",
+          "name": "BA_028_001_v0001_r0001.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 79
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9f1f4.2aba0184",
+          "name": "96_116_20_03_01.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 56
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9f200.5a940184",
+          "name": "52_64_2_03_05.mov",
+          "track": "V1",
+          "in": 34,
+          "length": 64
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa5c08d.68611e4a",
+          "name": "01x01_09_v0001.0002.tif",
+          "track": "V1",
+          "in": 27,
+          "length": 106
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa5c2ed.af471e53",
+          "name": "sc02_03_02.0001.tif",
+          "track": "V1",
+          "in": 25,
+          "length": 98
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa5c20f.4e301e50",
+          "name": "sc01_06_01_03.0001.tif",
+          "track": "V1",
+          "in": 0,
+          "length": 76
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa5c1e5.a8661e4f",
+          "name": "sc02_04_01.0001.tif",
+          "track": "V1",
+          "in": 0,
+          "length": 48
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9d73e.d418011b",
+          "name": "rogers_spot1_24fps.mov",
+          "track": "V1",
+          "in": 177,
+          "length": 179
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9e71c.d0800159",
+          "name": "vfx_11_03_01.mov",
+          "track": "V1",
+          "in": 18,
+          "length": 47
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa5ad52.4ceb1dff",
+          "name": "998x02.0001.tga",
+          "track": "V1",
+          "in": 0,
+          "length": 73
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fd557ff.a4e504d0",
+          "name": "646x01_02_dustbust.0001.tif",
+          "track": "V1",
+          "in": 31,
+          "length": 52
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9d7e0.4e11011e",
+          "name": "buggers_08_06_lig_14_02.mov",
+          "track": "V1",
+          "in": 102,
+          "length": 262
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48ca04b0.5ab001cd",
+          "name": "047x36_02_01.mov",
+          "track": "V1",
+          "in": 13,
+          "length": 53
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48ca04bd.8b6501cd",
+          "name": "047x40_01_01.mov",
+          "track": "V1",
+          "in": 64,
+          "length": 32
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48ca0139.d03201bf",
+          "name": "030x01_02.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 121
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48ca0276.a7a301c4",
+          "name": "041x03_02_04.mov",
+          "track": "V1",
+          "in": 1,
+          "length": 124
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48ca0b55.4e1f01e7",
+          "name": "022x01_02.mov",
+          "track": "V1",
+          "in": 121,
+          "length": 114
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48ca0b67.92e801e7",
+          "name": "037x01_02.mov",
+          "track": "V1",
+          "in": 71,
+          "length": 100
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9d51c.7dd10113",
+          "name": "004x02.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 64
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9c6a0.ead800da",
+          "name": "a30x01a_01_01.mov",
+          "track": "V1",
+          "in": 7,
+          "length": 49
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9c6a1.ee7200da",
+          "name": "a30x01b_01_01.mov",
+          "track": "V1",
+          "in": 17,
+          "length": 75
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9ded7e.1a680014",
+          "name": "FX_061_001_v0001_r0001.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 110
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4e87d114.a31304ce",
+          "name": "halldoors_track.mov",
+          "track": "V1",
+          "in": 34,
+          "length": 102
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4e87d148.6d6a04cf",
+          "name": "spaceship_crash_space.mov",
+          "track": "V1",
+          "in": 218,
+          "length": 170
+         },
+         {
+          "filler": 8
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9d51f.89790113",
+          "name": "006x01.mov",
+          "track": "V1",
+          "in": 42,
+          "length": 159
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9d521.93e90113",
+          "name": "006x02.mov",
+          "track": "V1",
+          "in": 36,
+          "length": 55
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4f9ddbd8.107f007a",
+          "name": "BA_022_002_v0001_r0001.mov",
+          "track": "V1",
+          "in": 0,
+          "length": 80
+         },
+         {
+          "filler": 10
+         },
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fd56687.66f40509",
+          "name": "Temp Title Demo 2012.01",
+          "track": "V1",
+          "in": 0,
+          "length": 231
+         }
+        ]
+       },
+       {
+        "name": "V2",
+        "segments": [
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fd56687.66f40509",
+          "name": "Temp Title Demo 2012.01",
+          "track": "V1",
+          "in": 0,
+          "length": 126
+         },
+         {
+          "filler": 4668
+         }
+        ]
+       },
+       {
+        "name": "V3",
+        "segments": [
+         {
+          "filler": 4794
+         }
+        ]
+       },
+       {
+        "name": "V4",
+        "segments": [
+         {
+          "filler": 4794
+         }
+        ]
+       },
+       {
+        "name": "A1",
+        "segments": [
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa73571.f25923fa",
+          "name": "Beverly",
+          "track": "A1",
+          "in": 0,
+          "length": 4794
+         }
+        ]
+       },
+       {
+        "name": "A2",
+        "segments": [
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fa73571.f25923fa",
+          "name": "Beverly",
+          "track": "A2",
+          "in": 0,
+          "length": 4794
+         }
+        ]
+       }
+      ]
+     }
+    },
+    {
+     "kind": "masterClip",
+     "name": "Temp Title Demo 2012.01",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.4fd56687.66f40509",
+     "editRate": "24000/1001",
+     "duration": 2877,
+     "tracks": "V1-2",
+     "start": "01:00:00:00",
+     "end": "01:01:59:21"
+    }
+   ]
+  }
+ ]
+}

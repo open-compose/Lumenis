@@ -1,4 +1,6 @@
 #include "lumenis/interop/aaf.h"
+#include "lumenis/interop/aaf_import.h"
+#include "lumenis/model/sequence.h"
 
 #include <QCryptographicHash>
 #include <QDir>
@@ -32,6 +34,7 @@ private slots:
     void builtInModel();
     void corpusDumps();
     void objects();
+    void importsBin();
     void notAaf();
     void damaged();
 };
@@ -164,6 +167,65 @@ void TestAaf::objects() {
     QCOMPARE(picture.string(QStringLiteral("Name")), QStringLiteral("Picture"));
     QVERIFY(!clip.has(QStringLiteral("StartTime")) || clip.integer(QStringLiteral("StartTime"), -1) >= 0);
     QVERIFY(clip.string(QStringLiteral("NoSuchProperty"), QStringLiteral("none")) == QLatin1String("none"));
+}
+
+// AAF into a bin (docs/spec/aaf.md, "Import"). The structure as a whole is
+// compared with Media Composer's bin by ctest aaf_import_bins; this checks
+// what the structure dump does not show.
+void TestAaf::importsBin() {
+    const QString folder = corpus();
+    if (folder.isEmpty()) QSKIP("no interchange corpus (scripts/interop-corpus.py fetch)");
+    QString error;
+    aaf::ImportOptions options;
+    options.binId = QStringLiteral("bin-1");
+    const auto result = aaf::importFile(QDir(folder).filePath(QStringLiteral("pyaaf2/test_file_01.aaf")), options, &error);
+    QVERIFY2(result, qPrintable(error));
+    QCOMPARE(result->items.size(), 53); // 52 clips and the sequence; 13 rendered effect clips left out
+    QVERIFY(result->warnings.contains(QStringLiteral("13 × rendered effect clips left out")));
+    QCOMPARE(result->customColumns, QStringList{QStringLiteral("UNC Path")});
+
+    const model::BinItem* clip = nullptr;
+    const model::BinItem* sequenceItem = nullptr;
+    for (const model::BinItem& item : result->items) {
+        if (item.name == QLatin1String("52_64_2_03_05.mov")) clip = &item;
+        if (item.kind == model::BinItemKind::Sequence) sequenceItem = &item;
+    }
+    QVERIFY(clip && sequenceItem);
+    QCOMPARE(clip->kind, model::BinItemKind::MasterClip);
+    QCOMPARE(clip->fields.value(QStringLiteral("Tracks")), QStringLiteral("V1"));
+    // The import source's 30 fps drop-frame timecode, at the clip's 24 fps.
+    QCOMPARE(clip->fields.value(QStringLiteral("Start")), QStringLiteral("00:00:30:00"));
+    QCOMPARE(clip->sources.size(), 2);
+    QCOMPARE(clip->sources[0].kind, model::ClipSource::Kind::File);
+    QCOMPARE(clip->sources[0].track, QStringLiteral("V1"));
+    QCOMPARE(clip->sources[0].path, QStringLiteral("/Giraffe/Marty/Avid MediaFiles/MXF/1/52_64_2_03_05.mov.V48C9F200.mxf"));
+    QCOMPARE(clip->sources[0].from, clip->sources[1].mob);
+    QCOMPARE(clip->sources[1].kind, model::ClipSource::Kind::Import);
+    QCOMPARE(clip->sources[1].startTimecode, QStringLiteral("00:00:30;00"));
+    QVERIFY(clip->created.isValid());
+
+    QCOMPARE(sequenceItem->editRate, Rational(24000, 1001));
+    QCOMPARE(sequenceItem->fields.value(QStringLiteral("Start")), QStringLiteral("01:00:00:00"));
+    const model::Sequence sequence = model::Sequence::fromItem(*sequenceItem);
+    QVERIFY(sequence.hasTimecodeTrack());
+    QCOMPARE(sequence.trackNames(), (QStringList{QStringLiteral("V1"), QStringLiteral("V2"), QStringLiteral("V3"),
+                                                 QStringLiteral("V4"), QStringLiteral("A1"), QStringLiteral("A2")}));
+    QCOMPARE(sequence.duration(), 4794);
+    // The first cut: a dissolve starting at it (Cut Point 0).
+    const model::Track* v1 = sequence.track(QStringLiteral("V1"));
+    QVERIFY(v1->segments[0].isFiller());
+    const model::Segment& first = v1->segments[1];
+    QVERIFY(first.transition);
+    QCOMPARE(first.transition->duration, 33);
+    QCOMPARE(first.transition->alignment, model::TransitionAlignment::StartingAtCut);
+    QCOMPARE(first.transition->effect.name, QStringLiteral("Dissolve"));
+    // Segments name their clips in the bin.
+    QCOMPARE(first.binId, QStringLiteral("bin-1"));
+    const auto named = std::find_if(result->items.begin(), result->items.end(),
+                                    [&](const model::BinItem& i) { return i.id == first.clipId; });
+    QVERIFY(named != result->items.end());
+    QCOMPARE(named->mobId, first.sourceMob);
+    QCOMPARE(first.sourceTrack, QStringLiteral("V1"));
 }
 
 void TestAaf::notAaf() {

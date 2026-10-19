@@ -4,9 +4,11 @@ add_library(lumenis_interop STATIC
     cfb.cpp
     aaf.cpp
     aaf_dump.cpp
+    aaf_import.cpp
     aaf_model.inc
     include/lumenis/interop/cfb.h
     include/lumenis/interop/aaf.h
+    include/lumenis/interop/aaf_import.h
 )
 add_library(lumenis::interop ALIAS lumenis_interop)
 

@@ -21,6 +21,15 @@ committed here: `fetch` downloads them into a cache folder.
         Compare `cutthulhu --dump-aaf` of every AAF file with pyaaf2's
         reading (scripts/aaf-dump.py --compare). Exits 77 without the corpus
         or pyaaf2 (pip install pyaaf2).
+    interop-corpus.py reference [--dir DIR]
+        Rewrite tests/data/aaf_reference/: the structure dump of each
+        Media Composer bin that has an AAF export of the same material, as
+        pyavb reads the bin (scripts/avb-structure.py). Needs pyavb.
+    interop-corpus.py check-import --app build/ci/bin/cutthulhu [--dir DIR]
+        Import each of those AAF files (`cutthulhu --import-aaf`) and compare
+        the result with the bin's reference dump (structdiff.py
+        --no-effects): Phase 3 gate 1 on the corpus. Exits 77 without the
+        corpus.
     interop-corpus.py check-written --test build/ci/bin/tst_cfb [--dir DIR]
         Run tst_cfb's forOlefile, which writes compound files with
         Cutthulhu's writer, and read them back with olefile. Exits 77 without
@@ -39,6 +48,13 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MANIFEST = os.path.join(ROOT, "tests", "data", "interop_corpus.json")
+REFERENCE = os.path.join(ROOT, "tests", "data", "aaf_reference")
+
+# The same material twice from Media Composer: a bin and an AAF export of it.
+RETIMES = ["bezier01", "bezier02", "bezier03", "linear01", "linear02", "linear03",
+           "spline01", "spline02", "spline03", "step01", "step02", "step03"]
+PAIRS = [("pyavb/test_file_01.avb", "pyaaf2/test_file_01.aaf")] + \
+        [(f"pyavb/retimes/{n}.avb", f"pyaaf2/retimes/{n}.aaf") for n in RETIMES]
 
 SOURCES = {
     "pyaaf2": ("https://raw.githubusercontent.com/markreidvfx/pyaaf2/08dcc3dfe823ea5781db1cb657d9c2606557fcdc/tests/test_files/", {
@@ -187,6 +203,54 @@ def manifest(folder):
     return 0
 
 
+def reference(folder):
+    script = os.path.join(ROOT, "scripts", "avb-structure.py")
+    os.makedirs(REFERENCE, exist_ok=True)
+    for avb, aaf in PAIRS:
+        run = subprocess.run([sys.executable, script, os.path.join(folder, avb)], capture_output=True, text=True)
+        if run.returncode != 0:
+            print(run.stderr, file=sys.stderr)
+            return run.returncode
+        path = os.path.join(REFERENCE, os.path.splitext(os.path.basename(aaf))[0] + ".json")
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
+            f.write(run.stdout)
+    print(f"interop-corpus: wrote {len(PAIRS)} reference dumps in {REFERENCE}")
+    return 0
+
+
+def check_import(app, folder):
+    structdiff = os.path.join(ROOT, "scripts", "structdiff.py")
+    failed = 0
+    checked = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        for _, aaf in PAIRS:
+            path = os.path.join(folder, aaf)
+            if not os.path.exists(path):
+                continue
+            stem = os.path.splitext(os.path.basename(aaf))[0]
+            ours = os.path.join(tmp, stem + ".json")
+            run = subprocess.run([app, "--import-aaf", path], capture_output=True, text=True)
+            if run.returncode != 0:
+                print(f"{aaf}: cutthulhu failed: {run.stderr.strip()}")
+                failed += 1
+                continue
+            with open(ours, "w", encoding="utf-8") as f:
+                f.write(run.stdout)
+            diff = subprocess.run([sys.executable, structdiff, os.path.join(REFERENCE, stem + ".json"), ours,
+                                   "--no-effects"], capture_output=True, text=True)
+            checked += 1
+            if diff.returncode != 0:
+                failed += 1
+                print(f"{aaf}: differs from its bin")
+                print("  " + diff.stdout.strip().replace("\n", "\n  "))
+            else:
+                print(f"{aaf}: the same as its bin")
+    if not checked:
+        print(f"interop-corpus: no corpus in {folder} (interop-corpus.py fetch)", file=sys.stderr)
+        return 77
+    return 1 if failed else 0
+
+
 def check_aaf(app, folder):
     paths = [os.path.join(folder, name) for name, _, _ in files() if name.endswith(".aaf")]
     paths = [p for p in paths if os.path.exists(p)]
@@ -228,7 +292,7 @@ def check_written(test, folder):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["fetch", "manifest", "check-aaf", "check-written"])
+    ap.add_argument("command", choices=["fetch", "manifest", "reference", "check-aaf", "check-import", "check-written"])
     ap.add_argument("--dir", help="the corpus folder (check-written: where to keep the files written)")
     ap.add_argument("--test", help="tst_cfb, for check-written")
     ap.add_argument("--app", help="the cutthulhu executable, for check-aaf")
@@ -237,6 +301,12 @@ def main():
         return fetch(args.dir or default_dir())
     if args.command == "manifest":
         return manifest(args.dir or default_dir())
+    if args.command == "reference":
+        return reference(args.dir or default_dir())
+    if args.command == "check-import":
+        if not args.app:
+            ap.error("check-import needs --app")
+        return check_import(args.app, args.dir or default_dir())
     if args.command == "check-aaf":
         if not args.app:
             ap.error("check-aaf needs --app")

@@ -182,8 +182,11 @@ container (`src/interop/cfb.*`, target `lumenis_interop`), is done; the
 corpus comes from `scripts/interop-corpus.py` (pyaaf2's and pyavb's test
 files, MIT). 3.2b, AAF's object layer (`src/interop/aaf*`, the built-in
 model `aaf_model.inc` from `scripts/make-aaf-model.py`), is done; `--dump-aaf`
-and `scripts/aaf-dump.py --compare` check it against pyaaf2. Next is 3.2c,
-AAF import into bins.
+and `scripts/aaf-dump.py --compare` check it against pyaaf2. 3.2c, AAF
+import into bins (`aaf_import.*`, `--import-aaf`), is done; ctest
+`aaf_import_bins` compares it with Media Composer's bins of the same
+material (`tests/data/aaf_reference`, from `scripts/avb-structure.py`).
+Next is 3.2d, AAF export.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

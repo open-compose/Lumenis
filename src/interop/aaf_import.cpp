@@ -1,0 +1,663 @@
+#include "lumenis/interop/aaf_import.h"
+
+#include "lumenis/core/timecode.h"
+#include "lumenis/model/sequence.h"
+
+#include <QSet>
+#include <QTimeZone>
+#include <QUrl>
+
+#include <algorithm>
+#include <map>
+
+namespace lumenis::interop::aaf {
+
+namespace {
+
+enum class DataKind { Picture, Sound, Timecode, Edgecode, Other };
+
+// Data definitions by AUID: AAF's (SMPTE labels) and the older ones Avid
+// still writes.
+DataKind dataKindOf(const QUuid& auid) {
+    static const QHash<QUuid, DataKind> kinds{
+        {auidFromText("01030202-0100-0000-060e-2b3404010101"), DataKind::Picture},
+        {auidFromText("6f3c8ce1-6cef-11d2-807d-006008143e6f"), DataKind::Picture},
+        {auidFromText("05cba731-1daa-11d3-80ad-006008143e6f"), DataKind::Picture}, // Matte
+        {auidFromText("05cba732-1daa-11d3-80ad-006008143e6f"), DataKind::Picture}, // PictureWithMatte
+        {auidFromText("01030202-0200-0000-060e-2b3404010101"), DataKind::Sound},
+        {auidFromText("78e1ebe1-6cef-11d2-807d-006008143e6f"), DataKind::Sound},
+        {auidFromText("01030201-0100-0000-060e-2b3404010101"), DataKind::Timecode},
+        {auidFromText("01030201-0200-0000-060e-2b3404010101"), DataKind::Timecode},
+        {auidFromText("01030201-0300-0000-060e-2b3404010101"), DataKind::Timecode},
+        {auidFromText("7f275e81-77e5-11d2-807f-006008143e6f"), DataKind::Timecode},
+        {auidFromText("d2bb2af0-d234-11d2-89ee-006097116212"), DataKind::Edgecode},
+    };
+    return kinds.value(auid, DataKind::Other);
+}
+
+DataKind dataKind(const Object& component) {
+    const auto key = component.weakKey(QStringLiteral("DataDefinition"));
+    if (!key || key->key.size() != 16) return DataKind::Other;
+    return dataKindOf(auidFromBytes(key->key.constData()));
+}
+
+Rational rateOf(const QVariant& v, const Rational& fallback) {
+    const QVariantMap m = v.toMap();
+    const qint64 num = m.value(QStringLiteral("Numerator")).toLongLong();
+    const qint64 den = m.value(QStringLiteral("Denominator")).toLongLong();
+    if (num <= 0 || den <= 0) return fallback;
+    // Media Composer writes NTSC rates rounded (23976/1000, 2997/100): they
+    // are the exact ones (24000/1001, 30000/1001).
+    const Rational r(num, den);
+    if (r.den() != 1) {
+        const std::int64_t whole = (r * Rational(1001, 1000)).round();
+        const Rational ntsc(whole * 1000, 1001);
+        const Rational off = r > ntsc ? r - ntsc : ntsc - r;
+        if (whole > 0 && off < Rational(1, 1000)) return ntsc;
+    }
+    return r;
+}
+
+QDateTime timeOf(const QVariant& v) {
+    const QVariantMap m = v.toMap();
+    const QVariantMap d = m.value(QStringLiteral("date")).toMap();
+    const QVariantMap t = m.value(QStringLiteral("time")).toMap();
+    const QDate date(d.value(QStringLiteral("year")).toInt(), d.value(QStringLiteral("month")).toInt(),
+                     d.value(QStringLiteral("day")).toInt());
+    const QTime time(t.value(QStringLiteral("hour")).toInt(), t.value(QStringLiteral("minute")).toInt(),
+                     t.value(QStringLiteral("second")).toInt());
+    return date.isValid() && time.isValid() ? QDateTime(date, time, QTimeZone::utc()) : QDateTime();
+}
+
+// Frames at one rate as frames at another, rounded down.
+std::int64_t rescale(std::int64_t frames, const Rational& from, const Rational& to) {
+    if (from == to || from.num() <= 0 || to.num() <= 0) return frames;
+    const Rational r = Rational(frames) * to / from;
+    return r.floor();
+}
+
+QString timecodeText(std::int64_t frames, const Rational& rate, bool drop) {
+    TimecodeFormat format = TimecodeFormat::forRate(rate, drop);
+    if (!format.isValid()) format = TimecodeFormat::forRate(rate, false);
+    const std::int64_t day = format.framesPerDay();
+    return QString::fromStdString(Timecode(((frames % day) + day) % day, format).toString());
+}
+
+// "V1 A1-2 A4": runs of track numbers.
+QString trackList(const QList<int>& video, const QList<int>& audio) {
+    QStringList parts;
+    auto runs = [&](QChar letter, QList<int> numbers) {
+        std::sort(numbers.begin(), numbers.end());
+        numbers.erase(std::unique(numbers.begin(), numbers.end()), numbers.end());
+        for (qsizetype i = 0; i < numbers.size();) {
+            qsizetype j = i;
+            while (j + 1 < numbers.size() && numbers[j + 1] == numbers[j] + 1) ++j;
+            parts << (j == i ? QStringLiteral("%1%2").arg(letter).arg(numbers[i])
+                             : QStringLiteral("%1%2-%3").arg(letter).arg(numbers[i]).arg(numbers[j]));
+            i = j + 1;
+        }
+    };
+    runs(QLatin1Char('V'), video);
+    runs(QLatin1Char('A'), audio);
+    return parts.join(QLatin1Char(' '));
+}
+
+struct SourceTimecode {
+    std::int64_t start = 0; // frames at fps
+    int fps = 0;
+    bool drop = false;
+};
+
+class Importer {
+public:
+    Importer(const File& file, const ImportOptions& options) : file_(file), options_(options) {}
+
+    ImportResult run() {
+        for (const Object& m : file_.mobs()) {
+            const MobId id = m.mobId(QStringLiteral("MobID"));
+            if (!id.isNull()) mobs_.emplace(id, m);
+            order_.append(m);
+        }
+        for (const Object& m : order_) {
+            if (m.isA(QStringLiteral("MasterMob"))) master(m);
+        }
+        for (const Object& m : order_) {
+            if (!m.isA(QStringLiteral("CompositionMob"))) continue;
+            const QString usage = m.string(QStringLiteral("UsageCode"));
+            if (usage == QLatin1String("Usage_SubClip")) subclip(m);
+        }
+        for (const Object& m : order_) {
+            if (!m.isA(QStringLiteral("CompositionMob"))) continue;
+            const QString usage = m.string(QStringLiteral("UsageCode"));
+            if (usage.isEmpty() || usage == QLatin1String("Usage_TopLevel")) {
+                sequence(m);
+            } else if (usage != QLatin1String("Usage_SubClip")) {
+                note(QStringLiteral("composition mobs used as %1 (not imported)").arg(usage));
+            }
+        }
+        for (auto it = notes_.begin(); it != notes_.end(); ++it) {
+            result_.warnings << (it->second > 1 ? QStringLiteral("%1 × %2").arg(it->second).arg(it->first) : it->first);
+        }
+        return result_;
+    }
+
+private:
+    struct Track {
+        QString name;
+        DataKind kind = DataKind::Other;
+        Rational rate{25};
+        std::int64_t length = 0;
+        Object segment;
+    };
+
+    void note(const QString& what) { ++notes_[what]; }
+
+    Object mob(const MobId& id) const {
+        const auto it = mobs_.find(id);
+        return it == mobs_.end() ? Object() : it->second;
+    }
+    template <typename T>
+    static T valueIn(const std::map<MobId, T>& map, const MobId& id, const T& fallback = T()) {
+        const auto it = map.find(id);
+        return it == map.end() ? fallback : it->second;
+    }
+
+    static Object firstSourceClip(const Object& c, int depth = 0) {
+        if (!c || depth > 16) return {};
+        if (c.isA(QStringLiteral("SourceClip"))) return c;
+        if (c.isA(QStringLiteral("Sequence"))) {
+            for (const Object& x : c.objects(QStringLiteral("Components"))) {
+                if (Object s = firstSourceClip(x, depth + 1)) return s;
+            }
+        }
+        if (c.isA(QStringLiteral("OperationGroup"))) {
+            for (const Object& x : c.objects(QStringLiteral("InputSegments"))) {
+                if (Object s = firstSourceClip(x, depth + 1)) return s;
+            }
+        }
+        if (c.isA(QStringLiteral("EssenceGroup"))) {
+            for (const Object& x : c.objects(QStringLiteral("Choices"))) {
+                if (Object s = firstSourceClip(x, depth + 1)) return s;
+            }
+        }
+        return {};
+    }
+
+    static Object slot(const Object& mob, qint64 slotId) {
+        for (const Object& s : mob.objects(QStringLiteral("Slots"))) {
+            if (s.integer(QStringLiteral("SlotID"), -1) == slotId) return s;
+        }
+        return {};
+    }
+
+    // The tracks of a mob's picture and sound slots, named as in a bin.
+    static QList<Track> tracksOf(const Object& m) {
+        QList<Track> out;
+        int pictures = 0;
+        int sounds = 0;
+        for (const Object& s : m.objects(QStringLiteral("Slots"))) {
+            if (!s.isA(QStringLiteral("TimelineMobSlot"))) continue;
+            Track t;
+            t.segment = s.object(QStringLiteral("Segment"));
+            t.kind = dataKind(t.segment);
+            if (t.kind != DataKind::Picture && t.kind != DataKind::Sound) continue;
+            const int counted = t.kind == DataKind::Picture ? ++pictures : ++sounds;
+            const auto number = static_cast<int>(s.integer(QStringLiteral("PhysicalTrackNumber"), counted));
+            t.name = QStringLiteral("%1%2").arg(t.kind == DataKind::Picture ? QLatin1Char('V') : QLatin1Char('A')).arg(number);
+            t.rate = rateOf(s.value(QStringLiteral("EditRate")), Rational(25));
+            t.length = t.segment.integer(QStringLiteral("Length"));
+            out.append(t);
+        }
+        return out;
+    }
+
+    static std::optional<SourceTimecode> timecodeOf(const Object& m) {
+        for (const Object& s : m.objects(QStringLiteral("Slots"))) {
+            Object c = s.object(QStringLiteral("Segment"));
+            for (int depth = 0; c && depth < 8; ++depth) {
+                if (c.isA(QStringLiteral("Timecode"))) {
+                    return SourceTimecode{c.integer(QStringLiteral("Start")), static_cast<int>(c.integer(QStringLiteral("FPS"))),
+                                          c.value(QStringLiteral("Drop")).toBool()};
+                }
+                if (c.isA(QStringLiteral("Pulldown"))) {
+                    c = c.object(QStringLiteral("InputSegment"));
+                } else if (c.isA(QStringLiteral("Sequence"))) {
+                    const QList<Object> parts = c.objects(QStringLiteral("Components"));
+                    c = parts.isEmpty() ? Object() : parts.first();
+                } else {
+                    break;
+                }
+            }
+        }
+        return std::nullopt;
+    }
+
+    static QString locatorPath(const Object& m) {
+        const Object descriptor = m.object(QStringLiteral("EssenceDescription"));
+        for (const Object& l : descriptor.objects(QStringLiteral("Locator"))) {
+            const QString url = l.string(QStringLiteral("URLString"));
+            if (url.isEmpty()) continue;
+            const QUrl u(url);
+            return u.isLocalFile() ? u.toLocalFile() : url;
+        }
+        return {};
+    }
+
+    // Frames in `rate` where the clip starts on its source's timecode: down
+    // the source chain from a slot's clip to the first mob with timecode.
+    std::optional<std::int64_t> startOf(const Object& segment, const Rational& rate) const {
+        Object clip = firstSourceClip(segment);
+        std::int64_t offset = 0;
+        for (int depth = 0; clip && depth < 8; ++depth) {
+            offset += clip.integer(QStringLiteral("StartTime"));
+            const Object source = mob(clip.mobId(QStringLiteral("SourceID")));
+            if (!source) return std::nullopt;
+            if (const auto tc = timecodeOf(source)) {
+                std::int64_t start = tc->start;
+                const TimecodeFormat format = TimecodeFormat::forRate(rate, false);
+                if (tc->fps > 0 && tc->fps != format.nominalFps) start = start * format.nominalFps / tc->fps;
+                return start + offset;
+            }
+            const Object next = slot(source, clip.integer(QStringLiteral("SourceMobSlotID")));
+            clip = next ? firstSourceClip(next.object(QStringLiteral("Segment"))) : Object();
+        }
+        return std::nullopt;
+    }
+
+    void commonFields(model::BinItem& item, const Object& m) {
+        item.id = model::newItemId();
+        item.mobId = m.mobId(QStringLiteral("MobID"));
+        item.name = m.string(QStringLiteral("Name"));
+        item.created = timeOf(m.value(QStringLiteral("CreationTime")));
+        item.modified = timeOf(m.value(QStringLiteral("LastModified")));
+        if (!item.created.isValid()) item.created = options_.when;
+        if (!item.modified.isValid()) item.modified = item.created;
+        // Bin columns travel as user comments (Name, Value).
+        for (const Object& c : m.objects(QStringLiteral("UserComments"))) {
+            const QString name = c.string(QStringLiteral("Name"));
+            const QVariant value = c.value(QStringLiteral("Value"));
+            if (name.isEmpty()) continue;
+            const QString text = value.typeId() == QMetaType::QString ? value.toString()
+                                 : value.typeId() == QMetaType::LongLong || value.typeId() == QMetaType::ULongLong
+                                     ? value.toString()
+                                     : QString();
+            item.fields.insert(name, text);
+            if (!model::binHeadings().contains(name) && !result_.customColumns.contains(name)) result_.customColumns << name;
+        }
+    }
+
+    void setTiming(model::BinItem& item, const QList<Track>& tracks, std::optional<std::int64_t> start, bool drop) {
+        QList<int> video;
+        QList<int> audio;
+        const Track* first = nullptr;
+        for (const Track& t : tracks) {
+            (t.kind == DataKind::Picture ? video : audio) << t.name.mid(1).toInt();
+            if (!first || (t.kind == DataKind::Picture && first->kind != DataKind::Picture)) first = &t;
+        }
+        item.editRate = first ? first->rate : Rational(25);
+        for (const Track& t : tracks) {
+            if (first && t.kind == first->kind) item.durationFrames = std::max(item.durationFrames, rescale(t.length, t.rate, item.editRate));
+        }
+        if (!tracks.isEmpty()) item.fields.insert(QStringLiteral("Tracks"), trackList(video, audio));
+        if (start) {
+            item.fields.insert(QStringLiteral("Start"), timecodeText(*start, item.editRate, drop));
+            item.fields.insert(QStringLiteral("End"), timecodeText(*start + item.durationFrames, item.editRate, drop));
+        }
+    }
+
+    // A clip Media Composer made for a rendered effect: its media files are
+    // marked so (AppCode 9, "file mob with a precompute" in pyavb). Its bin
+    // does not show it, and it is not imported.
+    bool isPrecompute(const Object& m) const {
+        for (const Track& t : tracksOf(m)) {
+            const Object clip = firstSourceClip(t.segment);
+            const Object fileMob = clip ? mob(clip.mobId(QStringLiteral("SourceID"))) : Object();
+            if (fileMob && fileMob.integer(QStringLiteral("AppCode"), 0) == 9) return true;
+        }
+        return false;
+    }
+
+    void master(const Object& m) {
+        if (isPrecompute(m)) {
+            note(QStringLiteral("rendered effect clips left out"));
+            return;
+        }
+        model::BinItem item;
+        commonFields(item, m);
+        const QList<Track> tracks = tracksOf(m);
+        bool picture = false;
+        QHash<qint64, QString> slotTracks;
+        for (const Object& s : m.objects(QStringLiteral("Slots"))) {
+            for (const Track& t : tracks) {
+                if (t.segment == s.object(QStringLiteral("Segment"))) slotTracks.insert(s.integer(QStringLiteral("SlotID")), t.name);
+            }
+        }
+        for (const Track& t : tracks) picture = picture || t.kind == DataKind::Picture;
+        item.kind = picture || tracks.isEmpty() ? model::BinItemKind::MasterClip : model::BinItemKind::AudioClip;
+
+        // The source chain: each track's file, then the tape or file before them.
+        QList<MobId> before;
+        for (const Track& t : tracks) {
+            const Object clip = firstSourceClip(t.segment);
+            const Object fileMob = clip ? mob(clip.mobId(QStringLiteral("SourceID"))) : Object();
+            if (!fileMob || !fileMob.isA(QStringLiteral("SourceMob"))) continue;
+            model::ClipSource s;
+            s.kind = model::ClipSource::Kind::File;
+            s.mob = fileMob.mobId(QStringLiteral("MobID"));
+            s.track = t.name;
+            s.name = fileMob.string(QStringLiteral("Name"));
+            s.path = locatorPath(fileMob);
+            const Object next = slot(fileMob, clip.integer(QStringLiteral("SourceMobSlotID")));
+            const Object nextClip = next ? firstSourceClip(next.object(QStringLiteral("Segment"))) : Object();
+            if (nextClip) s.from = nextClip.mobId(QStringLiteral("SourceID"));
+            if (!s.from.isNull() && !before.contains(s.from)) before << s.from;
+            item.sources << s;
+        }
+        bool drop = false;
+        for (const MobId& id : before) {
+            const Object source = mob(id);
+            const Object descriptor = source.object(QStringLiteral("EssenceDescription"));
+            model::ClipSource s;
+            s.mob = id;
+            s.name = source.string(QStringLiteral("Name"));
+            if (descriptor.isA(QStringLiteral("TapeDescriptor"))) {
+                s.kind = model::ClipSource::Kind::Tape;
+                item.fields.insert(QStringLiteral("Tape"), s.name);
+            } else if (descriptor.isA(QStringLiteral("ImportDescriptor"))) {
+                s.kind = model::ClipSource::Kind::Import;
+                s.path = locatorPath(source);
+            } else {
+                continue;
+            }
+            if (const auto tc = timecodeOf(source)) {
+                drop = drop || tc->drop;
+                s.startTimecode = timecodeText(tc->start, Rational(tc->fps > 0 ? tc->fps : 25), tc->drop);
+            }
+            item.sources << s;
+        }
+        const Track* first = nullptr;
+        for (const Track& t : tracks) {
+            if (!first || (t.kind == DataKind::Picture && first->kind != DataKind::Picture)) first = &t;
+        }
+        std::optional<std::int64_t> start;
+        if (first) start = startOf(first->segment, first->rate);
+        setTiming(item, tracks, start, false);
+        (void)drop;
+
+        items_[item.mobId] = item.id;
+        slotTracks_[item.mobId] = slotTracks;
+        names_[item.mobId] = item.name;
+        if (start) starts_[item.mobId] = *start;
+        result_.items << item;
+    }
+
+    void subclip(const Object& m) {
+        model::BinItem item;
+        commonFields(item, m);
+        item.kind = model::BinItemKind::Subclip;
+        const QList<Track> tracks = tracksOf(m);
+        QHash<qint64, QString> slotTracks;
+        for (const Object& s : m.objects(QStringLiteral("Slots"))) {
+            for (const Track& t : tracks) {
+                if (t.segment == s.object(QStringLiteral("Segment"))) slotTracks.insert(s.integer(QStringLiteral("SlotID")), t.name);
+            }
+        }
+        std::optional<std::int64_t> start;
+        if (!tracks.isEmpty()) {
+            const Object clip = firstSourceClip(tracks.first().segment);
+            if (clip) {
+                const MobId master = clip.mobId(QStringLiteral("SourceID"));
+                model::ClipSource s;
+                s.kind = model::ClipSource::Kind::Clip;
+                s.mob = master;
+                s.name = valueIn(names_, master, mob(master).string(QStringLiteral("Name")));
+                s.offset = clip.integer(QStringLiteral("StartTime"));
+                if (starts_.count(master)) {
+                    start = starts_.at(master) + s.offset;
+                    s.startTimecode = timecodeText(*start, tracks.first().rate, false);
+                }
+                item.sources << s;
+            }
+        }
+        setTiming(item, tracks, start, false);
+        items_[item.mobId] = item.id;
+        slotTracks_[item.mobId] = slotTracks;
+        names_[item.mobId] = item.name;
+        result_.items << item;
+    }
+
+    // ---- sequences ----
+
+    struct Flattener {
+        Importer& importer;
+        Rational rate;
+        Rational slotRate;
+        QChar letter;
+        QList<model::Segment> out;
+        std::optional<model::Transition> pending;
+        std::int64_t pendingCut = 0;
+
+        std::int64_t frames(const Object& c) const {
+            return rescale(c.integer(QStringLiteral("Length")), slotRate, rate);
+        }
+
+        void push(model::Segment s) {
+            if (pending) {
+                if (!s.isFiller()) s.sourceIn += pendingCut;
+                s.length = std::max<std::int64_t>(0, s.length - pendingCut);
+                s.transition = *pending;
+                pending.reset();
+            }
+            out << s;
+        }
+
+        void add(const Object& c, int depth = 0) {
+            if (!c || depth > 32) return;
+            if (c.isA(QStringLiteral("Sequence"))) {
+                for (const Object& x : c.objects(QStringLiteral("Components"))) add(x, depth + 1);
+            } else if (c.isA(QStringLiteral("SourceClip"))) {
+                const MobId id = c.mobId(QStringLiteral("SourceID"));
+                if (id.isNull()) {
+                    push(model::Segment::filler(frames(c)));
+                } else {
+                    push(importer.segmentFor(c, id, frames(c), letter));
+                }
+            } else if (c.isA(QStringLiteral("Transition"))) {
+                const std::int64_t length = frames(c);
+                const std::int64_t cut = std::clamp<std::int64_t>(rescale(c.integer(QStringLiteral("CutPoint")), slotRate, rate), 0, length);
+                if (!out.isEmpty()) out.last().length = std::max<std::int64_t>(0, out.last().length - (length - cut));
+                model::Transition t;
+                t.effect = importer.effectOf(c.object(QStringLiteral("OperationGroup")));
+                t.duration = length;
+                t.start = cut;
+                t.alignment = cut == 0                ? model::TransitionAlignment::StartingAtCut
+                              : cut == length         ? model::TransitionAlignment::EndingAtCut
+                              : cut * 2 == length     ? model::TransitionAlignment::CenteredOnCut
+                                                      : model::TransitionAlignment::CustomStart;
+                pending = t;
+                pendingCut = cut;
+            } else if (c.isA(QStringLiteral("OperationGroup"))) {
+                // The effect's material: its first input that has some.
+                Flattener inner{importer, rate, slotRate, letter, {}, {}, 0};
+                for (const Object& input : c.objects(QStringLiteral("InputSegments"))) {
+                    inner.out.clear();
+                    inner.add(input, depth + 1);
+                    if (std::any_of(inner.out.begin(), inner.out.end(), [](const model::Segment& s) { return !s.isFiller(); })) break;
+                }
+                if (inner.out.isEmpty()) inner.out << model::Segment::filler(frames(c));
+                // A timewarp's input runs at its own speed: the effect lasts
+                // as long as the group does.
+                std::int64_t total = 0;
+                for (const model::Segment& s : inner.out) total += s.length;
+                const std::int64_t want = frames(c);
+                while (total > want && !inner.out.isEmpty()) {
+                    model::Segment& last = inner.out.last();
+                    const std::int64_t cut = std::min(last.length, total - want);
+                    last.length -= cut;
+                    total -= cut;
+                    if (last.length == 0 && inner.out.size() > 1) inner.out.removeLast();
+                }
+                if (total < want) inner.out.last().length += want - total;
+                const QString name = importer.operationName(c);
+                // Clip gain and pan are not effects in a bin (p.702).
+                const bool mix = name == QLatin1String("Audio Gain") || name == QLatin1String("Audio Pan");
+                for (model::Segment& s : inner.out) {
+                    if (!mix) s.effect = importer.effectOf(c);
+                    push(s);
+                }
+            } else if (c.isA(QStringLiteral("Selector"))) {
+                add(c.object(QStringLiteral("Selected")), depth + 1);
+            } else if (c.isA(QStringLiteral("EssenceGroup"))) {
+                const QList<Object> choices = c.objects(QStringLiteral("Choices"));
+                if (choices.isEmpty()) push(model::Segment::filler(frames(c)));
+                else add(choices.first(), depth + 1);
+            } else {
+                // Filler, a reference to the track below (ScopeReference), or
+                // something not read: empty for its length.
+                if (!c.isA(QStringLiteral("Filler")) && !c.isA(QStringLiteral("ScopeReference"))) {
+                    importer.note(QStringLiteral("%1 components read as filler").arg(c.className()));
+                }
+                push(model::Segment::filler(frames(c)));
+            }
+        }
+    };
+
+    QString operationName(const Object& group) const {
+        const QVariant op = group.value(QStringLiteral("Operation"));
+        if (op.userType() == qMetaTypeId<Object>()) return op.value<Object>().string(QStringLiteral("Name"));
+        return {};
+    }
+
+    model::Effect effectOf(const Object& group) {
+        model::Effect e;
+        const QString name = operationName(group);
+        if (name.startsWith(QLatin1String("VideoDissolve")) || name == QLatin1String("Audio Dissolve")) {
+            e.category = QStringLiteral("Blend");
+            e.name = QStringLiteral("Dissolve");
+        } else {
+            // Kept by its AAF name until effects are matched (Phase 6, docs/spec/aaf.md).
+            e.category = QStringLiteral("AAF");
+            e.name = name.isEmpty() ? QStringLiteral("Effect") : name;
+            note(QStringLiteral("effects kept by their AAF names"));
+        }
+        return e;
+    }
+
+    model::Segment segmentFor(const Object& clip, const MobId& id, std::int64_t length, QChar letter) {
+        model::Segment s;
+        s.sourceMob = id;
+        s.length = length;
+        s.sourceIn = clip.integer(QStringLiteral("StartTime"));
+        const qint64 slotId = clip.integer(QStringLiteral("SourceMobSlotID"));
+        if (items_.count(id)) {
+            s.clipId = items_.at(id);
+            s.binId = options_.binId;
+            s.name = names_.at(id);
+            s.sourceTrack = valueIn(slotTracks_, id).value(slotId);
+        } else {
+            // A clip the file does not hold: kept by its MobID, offline.
+            s.clipId = QStringLiteral("aaf:") + QString::fromStdString(id.toString());
+            s.name = mob(id).string(QStringLiteral("Name"));
+            note(QStringLiteral("segments of clips not in the file"));
+        }
+        if (s.sourceTrack.isEmpty()) s.sourceTrack = QStringLiteral("%1%2").arg(letter).arg(slotId);
+        return s;
+    }
+
+    void sequence(const Object& m) {
+        model::BinItem item;
+        commonFields(item, m);
+        item.kind = model::BinItemKind::Sequence;
+        model::Sequence seq;
+        seq.setTimecodeTrack(false);
+        const QList<Track> tracks = tracksOf(m);
+        const Track* first = nullptr;
+        for (const Track& t : tracks) {
+            if (!first || (t.kind == DataKind::Picture && first->kind != DataKind::Picture)) first = &t;
+        }
+        item.editRate = first ? first->rate : Rational(25);
+        std::optional<std::int64_t> start;
+        bool drop = false;
+        for (const Object& s : m.objects(QStringLiteral("Slots"))) {
+            const Object segment = s.object(QStringLiteral("Segment"));
+            if (dataKind(segment) == DataKind::Timecode && segment.isA(QStringLiteral("Timecode"))) {
+                seq.setTimecodeTrack(true);
+                if (!start) {
+                    start = segment.integer(QStringLiteral("Start"));
+                    drop = segment.value(QStringLiteral("Drop")).toBool();
+                    const int fps = static_cast<int>(segment.integer(QStringLiteral("FPS")));
+                    const int nominal = TimecodeFormat::forRate(item.editRate, false).nominalFps;
+                    if (fps > 0 && fps != nominal) start = *start * nominal / fps;
+                }
+            }
+        }
+        for (const Track& t : tracks) {
+            const QChar letter = t.kind == DataKind::Picture ? QLatin1Char('V') : QLatin1Char('A');
+            // Media Composer keeps its video tracks as the slots of one
+            // nested scope, V1 first.
+            QList<QPair<QString, Object>> layers;
+            if (t.kind == DataKind::Picture && t.segment.isA(QStringLiteral("NestedScope"))) {
+                const int base = t.name.mid(1).toInt();
+                int i = 0;
+                for (const Object& layer : t.segment.objects(QStringLiteral("Slots"))) {
+                    layers.append({QStringLiteral("V%1").arg(base + i++), layer});
+                }
+            } else {
+                layers.append({t.name, t.segment});
+            }
+            for (const auto& [name, layer] : layers) {
+                model::Track* track = seq.ensureTrack(name);
+                if (!track) {
+                    note(QStringLiteral("tracks past the limit left out"));
+                    continue;
+                }
+                Flattener f{*this, item.editRate, t.rate, letter, {}, {}, 0};
+                f.add(layer);
+                track->segments = f.out;
+                seq.normalize(name);
+            }
+        }
+        seq.storeIn(item);
+        QList<int> video;
+        QList<int> audio;
+        for (const model::Track& t : seq.tracks()) {
+            if (t.kind == model::TrackKind::Video) video << t.number;
+            if (t.kind == model::TrackKind::Audio) audio << t.number;
+        }
+        QString list = trackList(video, audio);
+        if (seq.hasTimecodeTrack()) list += QStringLiteral(" TC1");
+        item.fields.insert(QStringLiteral("Tracks"), list.trimmed());
+        if (start) {
+            item.fields.insert(QStringLiteral("Start"), timecodeText(*start, item.editRate, drop));
+            item.fields.insert(QStringLiteral("End"), timecodeText(*start + item.durationFrames, item.editRate, drop));
+        }
+        result_.items << item;
+    }
+
+    const File& file_;
+    ImportOptions options_;
+    ImportResult result_;
+    QList<Object> order_;
+    std::map<MobId, Object> mobs_;
+    std::map<MobId, QString> items_;
+    std::map<MobId, QHash<qint64, QString>> slotTracks_;
+    std::map<MobId, QString> names_;
+    std::map<MobId, std::int64_t> starts_;
+    std::map<QString, int> notes_;
+};
+
+} // namespace
+
+ImportResult importMobs(const File& file, const ImportOptions& options) {
+    ImportOptions o = options;
+    if (!o.when.isValid()) o.when = QDateTime::currentDateTimeUtc();
+    return Importer(file, o).run();
+}
+
+std::optional<ImportResult> importFile(const QString& path, const ImportOptions& options, QString* error) {
+    File file;
+    if (!file.open(path, error)) return std::nullopt;
+    return importMobs(file, options);
+}
+
+} // namespace lumenis::interop::aaf

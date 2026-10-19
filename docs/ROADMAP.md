@@ -578,8 +578,12 @@ and pyaaf2's test suites, made with real Media Composer
   * 3.2b, AAF's objects, properties and metadictionary (`src/interop/aaf*`),
     is done. Every corpus AAF dumps byte for byte as pyaaf2 reads it
     (`cutthulhu --dump-aaf`, `scripts/aaf-dump.py --compare`).
-  * Next: 3.2c, import into bins; 3.2d, export and round trips; 3.2e,
-    File > Import and Export.
+  * 3.2c, AAF import into bins (`src/interop/aaf_import.*`), is done:
+    master clips with their source chains, subclips and sequences. Every
+    corpus AAF with a Media Composer bin of the same material (13) imports
+    the same as that bin (ctest `aaf_import_bins`): gate 1 on the corpus at
+    hand, effect names aside.
+  * Next: 3.2d, export and round trips; 3.2e, File > Import and Export.
 
 ### Phase 4 — Core editing
 Features in this phase:

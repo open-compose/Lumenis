@@ -39,4 +39,13 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(aaf_pyaaf2 PROPERTIES
         SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    # Phase 3 gate 1 on the corpus: each AAF imported into a bin is the same
+    # as Media Composer's own bin of the material (tests/data/aaf_reference).
+    add_test(NAME aaf_import_bins
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py check-import
+                --app $<TARGET_FILE:lumenis_app> --dir ${LUMENIS_INTEROP_CORPUS})
+    set_tests_properties(aaf_import_bins PROPERTIES
+        SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

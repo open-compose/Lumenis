@@ -1,0 +1,69 @@
+{
+ "format": "cutthulhu-structure",
+ "version": 1,
+ "bins": [
+  {
+   "name": "bezier02",
+   "customColumns": [
+    "UNC Path"
+   ],
+   "items": [
+    {
+     "kind": "masterClip",
+     "name": "96_116_20_03_01.mov",
+     "mobId": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9f1f4.2aba0184",
+     "editRate": "24/1",
+     "columns": {
+      "UNC Path": "X:\\demo\\film\\luna\\quicktimes\\96_116_20_03_01.mov"
+     },
+     "duration": 57,
+     "tracks": "V1",
+     "start": "00:00:30:00",
+     "end": "00:00:32:09"
+    },
+    {
+     "kind": "sequence",
+     "name": "spline02.Exported.02",
+     "mobId": "urn:smpte:umid:060a2b34.01010105.01010f10.13000000.5a2becc4.97618805.facb0a00.27000011",
+     "editRate": "24000/1001",
+     "duration": 56,
+     "tracks": "V1 A1-2 TC1",
+     "start": "01:00:00:00",
+     "end": "01:00:02:08",
+     "sequence": {
+      "tracks": [
+       {
+        "name": "V1",
+        "segments": [
+         {
+          "source": "urn:smpte:umid:060a2b34.01010101.01010f00.13000000.060e2b34.7f7f2a80.48c9f1f4.2aba0184",
+          "name": "96_116_20_03_01.mov",
+          "track": "V1",
+          "in": 1,
+          "length": 56
+         }
+        ]
+       },
+       {
+        "name": "A1",
+        "segments": [
+         {
+          "filler": 56
+         }
+        ]
+       },
+       {
+        "name": "A2",
+        "segments": [
+         {
+          "filler": 56
+         }
+        ]
+       }
+      ]
+     }
+    }
+   ]
+  }
+ ]
+}
