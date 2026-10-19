@@ -9,6 +9,7 @@
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/consolidate_dialog.h"
+#include "lumenis/ui/export_dialog.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/media_tool.h"
@@ -25,6 +26,7 @@
 #include <QComboBox>
 #include <QTableWidget>
 #include <QDir>
+#include <QLineEdit>
 #include <QFile>
 #include <QListWidget>
 #include <QPushButton>
@@ -232,6 +234,103 @@ private slots:
         };
         list->openEntry(i);
         QVERIFY(checked);
+        media::setExtraMediaDrives({});
+    }
+
+    // File > Output > Export to File as AAF (p.868-869, p.1175), and the
+    // AAF imported into another bin (p.547): the clips come back with
+    // their media online, found by MobID, and the sequence names them.
+    void exportAndImportAaf() {
+        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        const QString movie = dir.filePath(QStringLiteral("A002.mov"));
+        QVERIFY(writeMovie(movie, 10));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Harbor"));
+        project.settings.name = QStringLiteral("Harbor");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 256;
+        project.settings.format.height = 144;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("importVideoDrive"), drive);
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        QCOMPARE(window.importFiles(binId, {movie}, QStringLiteral("dnx_lb")).size(), 1);
+        const model::BinItem clip = bin->bin().items.first();
+        Composer& composer = window.composer();
+        composer.loadDefault(bin->nodeId(), clip);
+        composer.state(MonitorId::Source).setPosition(2);
+        composer.state(MonitorId::Source).markIn();
+        composer.state(MonitorId::Source).setPosition(6);
+        composer.state(MonitorId::Source).markOut();
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.splice_in")));
+        const model::LoadedClip* record = composer.state(MonitorId::Record).current();
+        QVERIFY(record);
+        const QString sequenceId = record->item.id;
+        window.binContainer().saveAll();
+
+        // Only the sequence selected: its clip goes with it.
+        BinView* view = window.binContainer().viewFor(bin);
+        QVERIFY(view);
+        view->selectIds({sequenceId});
+        const QString aaf = dir.filePath(QStringLiteral("Cut.aaf"));
+        QString proposed;
+        window.setExportHook([&](ExportAsDialog& dialog) -> bool {
+            proposed = dialog.pathEdit()->text();
+            dialog.setPath(aaf);
+            return true;
+        });
+        commands.action(QStringLiteral("file.output.export_to_file"))->trigger();
+        QVERIFY2(proposed.endsWith(QLatin1String(".aaf")), qPrintable(proposed));
+        QVERIFY(QFile::exists(aaf));
+
+        // Imported into a new bin, through the Source Browser's Import.
+        const QString otherId = window.binContainer().newBin();
+        BinDocument* other = window.binContainer().openBin(otherId);
+        QVERIFY(other);
+        const QStringList ids = window.importFiles(otherId, {aaf});
+        QCOMPARE(ids.size(), 2);
+        const model::BinItem* back = named(*other, clip.name);
+        QVERIFY(back);
+        QCOMPARE(back->mobId, model::mobIdOf(clip));
+        const auto link = media::linkOf(*back);
+        QVERIFY2(link && link->isManaged(), "the imported clip finds its managed media by MobID");
+        const model::BinItem* sequence = nullptr;
+        for (const model::BinItem& item : other->bin().items) {
+            if (item.kind == model::BinItemKind::Sequence) sequence = &item;
+        }
+        QVERIFY(sequence);
+        const model::Sequence cut = model::Sequence::fromItem(*sequence);
+        const model::Track* v1 = cut.track(QStringLiteral("V1"));
+        QVERIFY(v1 && !v1->segments.isEmpty());
+        QCOMPARE(v1->segments.first().clipId, back->id);
+        QCOMPARE(v1->segments.first().binId, otherId);
+        QCOMPARE(v1->segments.first().sourceIn, std::int64_t{2});
+        QCOMPARE(v1->segments.first().length, std::int64_t{5}); // OUT is the last frame used
+        QVERIFY(cut.track(QStringLiteral("A1")));
+
+        // Include All Audio Tracks in Sequence off (p.1175): no audio.
+        window.settings().setValue(QStringLiteral("Export"), QStringLiteral("includeAudio"), false);
+        commands.action(QStringLiteral("file.output.export_to_file"))->trigger();
+        const QString third = window.binContainer().newBin();
+        QVERIFY(window.binContainer().openBin(third));
+        window.importFiles(third, {aaf});
+        for (const model::BinItem& item : window.binContainer().document(third)->bin().items) {
+            if (item.kind == model::BinItemKind::Sequence) QVERIFY(!model::Sequence::fromItem(item).track(QStringLiteral("A1")));
+        }
         media::setExtraMediaDrives({});
     }
 

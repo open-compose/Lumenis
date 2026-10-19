@@ -589,7 +589,11 @@ and pyaaf2's test suites, made with real Media Composer
     gate 3's Cutthulhu→Cutthulhu half. The halves through Media Composer
     (MC→Cutthulhu→MC, Cutthulhu→MC→Cutthulhu) are DEFERRED with gate 2's
     Media Composer check until the owner has the seat again.
-  * Next: 3.2e, File > Import and Export of AAF.
+  * 3.2e, AAF in the application, is done: Import through the Source
+    Browser (clips online by MobID, p.547), File > Output > Export to File
+    with the Export As dialog and the Export setting (p.868-869,
+    p.1173-1177).
+  * Next: 3.3, reading Media Composer's `.avb` bins (ROADMAP order).
 
 ### Phase 4 — Core editing
 Features in this phase:

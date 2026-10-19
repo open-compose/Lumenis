@@ -118,6 +118,9 @@ struct MediaFileInfo {
     QString resolution; // "Avid DNx HQ", or the copied picture's codec
     std::int64_t bytes = 0;
     QDateTime created;
+    // The master clip's MobID: the file's material package
+    // (docs/spec/native-model.md). How a clip read from AAF finds its media.
+    MobId material;
 
     QJsonObject toJson() const;
     static MediaFileInfo fromJson(const QJsonObject& o);
@@ -153,6 +156,9 @@ public:
     QList<MediaFileInfo> files() const;
     QList<MediaSet> sets() const;
     std::optional<MediaSet> set(const QString& mediaId) const;
+    // The media of the master clip with this MobID (its files' material
+    // package), as for a clip imported from AAF (p.547).
+    std::optional<MediaSet> setOf(const MobId& master) const;
     // The projects with media on the drives.
     QStringList projects() const;
     // Points a managed clip at where its files are now. False if it is not

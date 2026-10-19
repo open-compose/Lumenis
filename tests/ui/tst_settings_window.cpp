@@ -82,7 +82,7 @@ private slots:
         QCOMPARE(schema.kindNames(SettingsScope::Project),
                  (QStringList{"Audio Project", "General", "Media Creation", "Video Display"}));
         QCOMPARE(schema.kindNames(SettingsScope::User),
-                 (QStringList{"Audio", "Bin", "Composer", "Full Screen Playback", "Import", "Interface", "Keyboard", "Link",
+                 (QStringList{"Audio", "Bin", "Composer", "Export", "Full Screen Playback", "Import", "Interface", "Keyboard", "Link",
                               "Timeline", "Tool Palette", "Workspace View", "Trim"}));
         QSet<QString> keys;
         for (const SettingKind& k : schema.kinds()) {
@@ -218,12 +218,12 @@ private slots:
         // Picture on p.1136: one row per setting; versions under it.
         Settings settings;
         SettingsList list(settings, SettingsScope::User);
-        QCOMPARE(list.topLevelItemCount(), 12);
+        QCOMPARE(list.topLevelItemCount(), 13);
         QCOMPARE(list.topLevelItem(0)->text(SettingsList::kSettingColumn), QStringLiteral("Audio"));
         const int timeline = settings.file(SettingsScope::User).activeIndex("Timeline");
         list.selectEntries({timeline});
         list.duplicateSelection();
-        QTreeWidgetItem* group = list.topLevelItem(8);
+        QTreeWidgetItem* group = list.topLevelItem(9);
         QCOMPARE(group->text(0), QStringLiteral("Timeline"));
         QCOMPARE(group->childCount(), 2);
         QVERIFY(!group->data(0, SettingsList::kEntryRole).isValid());

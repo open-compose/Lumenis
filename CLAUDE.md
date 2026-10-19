@@ -189,7 +189,9 @@ material (`tests/data/aaf_reference`, from `scripts/avb-structure.py`).
 3.2d, AAF export (`aaf_writer.*` builds any AAF objects, `aaf_export.*`
 lays out bins as Media Composer does, `--export-aaf`), is done; ctest
 `aaf_round_trip` checks it. Gate 3's Media Composer halves are deferred.
-Next is 3.2e, File > Import and Export of AAF.
+3.2e is done: AAF Import through the Source Browser (`MainWindow::importAaf`;
+clips find managed media by MobID) and File > Output > Export to File
+(`export_dialog.*`, the Export setting). Next is 3.3, `.avb` bin read.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

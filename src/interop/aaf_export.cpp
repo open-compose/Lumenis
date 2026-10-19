@@ -450,7 +450,7 @@ private:
         // V1 first; every track number up to the highest is there.
         int highest = 0;
         for (const model::Track& t : seq.tracks()) {
-            if (t.kind == model::TrackKind::Video) highest = std::max(highest, t.number);
+            if (t.kind == model::TrackKind::Video && options_.includeVideo) highest = std::max(highest, t.number);
         }
         if (highest > 0) {
             const Ref scope = b_.create(QStringLiteral("NestedScope"));
@@ -464,11 +464,11 @@ private:
             slot(m, n++, 1, item.editRate, scope);
         }
         for (const model::Track& t : seq.tracks()) {
-            if (t.kind != model::TrackKind::Audio) continue;
+            if (t.kind != model::TrackKind::Audio || !options_.includeAudio) continue;
             slot(m, n++, t.number, item.editRate, trackSequence(t, false));
         }
         for (const model::Track& t : seq.tracks()) {
-            if (t.kind == model::TrackKind::Data) note(QStringLiteral("data tracks left out"));
+            if (t.kind == model::TrackKind::Data && options_.includeVideo) note(QStringLiteral("data tracks left out"));
         }
         userComments(m, item);
     }

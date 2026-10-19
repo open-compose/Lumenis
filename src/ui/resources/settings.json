@@ -130,6 +130,50 @@
       ]
     },
     {
+      "kind": "Export",
+      "scope": "user",
+      "page": 1173,
+      "tabs": [
+        {
+          "name": "",
+          "options": [
+            {"key": "exportAs", "type": "choice", "style": "menu", "label": "Export As", "default": "aaf", "page": 1173,
+             "choices": [{"value": "omfi1", "label": "OMFI 1.0", "later": true}, {"value": "omfi2", "label": "OMFI 2.0", "later": true},
+                         {"value": "aaf", "label": "AAF"}, {"value": "qtReference", "label": "QuickTime Reference", "later": true},
+                         {"value": "qtMovie", "label": "QuickTime Movie", "later": true}, {"value": "avi", "label": "AVI", "later": true},
+                         {"value": "windowsMedia", "label": "Windows Media", "later": true}, {"value": "scc", "label": "SCC", "later": true},
+                         {"value": "ttml", "label": "TTML", "later": true}, {"value": "audio", "label": "Audio", "later": true},
+                         {"value": "graphic", "label": "Graphic", "later": true}, {"value": "ale", "label": "Avid Log Exchange", "later": true},
+                         {"value": "tabDelimited", "label": "Tab Delimited", "later": true}, {"value": "op1a", "label": "MXF OP1a", "later": true},
+                         {"value": "op1aLegacy", "label": "MXF OP1a (legacy)", "later": true}, {"value": "dpx", "label": "DPX", "later": true},
+                         {"value": "xdcam", "label": "XDCAM MXF OP1a", "later": true}]},
+            {"key": "useMarks", "type": "bool", "label": "Use Marks", "default": false, "page": 1175, "later": true},
+            {"key": "useSelectedTracks", "type": "bool", "label": "Use Selected Tracks", "default": true, "page": 1175, "later": true},
+            {"key": "aafEditProtocol", "type": "bool", "label": "AAF Edit Protocol", "default": false, "page": 1175, "later": true},
+            {"key": "includeVideo", "type": "bool", "label": "Include All Video/Data Tracks in Sequence", "default": true, "page": 1175},
+            {"key": "includeAudio", "type": "bool", "label": "Include All Audio Tracks in Sequence", "default": true, "page": 1175}
+          ]
+        },
+        {
+          "name": "Video Details",
+          "options": [
+            {"key": "videoExportMethod", "type": "choice", "style": "menu", "label": "Export Method", "default": "link", "page": 1175,
+             "choices": [{"value": "link", "label": "Link to (Don't Export) Media"}, {"value": "copy", "label": "Copy All Media", "later": true},
+                         {"value": "consolidate", "label": "Consolidate Media", "later": true}]}
+          ]
+        },
+        {
+          "name": "Audio Details",
+          "options": [
+            {"key": "audioExportMethod", "type": "choice", "style": "menu", "label": "Export Method", "default": "link", "page": 1175,
+             "choices": [{"value": "link", "label": "Link to (Don't Export) Media"}, {"value": "copy", "label": "Copy All Media", "later": true},
+                         {"value": "consolidate", "label": "Consolidate Media", "later": true}]},
+            {"key": "splitToMono", "type": "bool", "label": "Split Tracks to Mono", "default": true, "page": 1176, "later": true}
+          ]
+        }
+      ]
+    },
+    {
       "kind": "Full Screen Playback",
       "scope": "user",
       "page": 1189,

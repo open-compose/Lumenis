@@ -16,6 +16,11 @@ struct ExportOptions {
     QString productName;    // the product's name when empty
     QString productVersion; // the product's version when empty
     QDateTime when; // the file's dates; now when invalid
+    // The Export setting's Include All Video/Data Tracks in Sequence and
+    // Include All Audio Tracks in Sequence (p.1175): sequences' tracks of
+    // that kind are left out when off.
+    bool includeVideo = true;
+    bool includeAudio = true;
 };
 
 struct ExportResult {

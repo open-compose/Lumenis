@@ -33,7 +33,7 @@ const QString kFramesKey = QStringLiteral("comment_lumenis_frames");
 const QString kRateKey = QStringLiteral("comment_lumenis_rate");
 const QString kResolutionKey = QStringLiteral("comment_lumenis_resolution");
 // The index's layout; an index of another version is read again.
-constexpr int kIndexVersion = 2;
+constexpr int kIndexVersion = 3; // 3: each file's material package MobID
 
 // Frames to samples at `sampleRate`, exact in integers (a * b / c).
 std::int64_t samplesAt(std::int64_t frames, const Rational& rate, int sampleRate) {
@@ -617,6 +617,7 @@ QJsonObject MediaFileInfo::toJson() const {
                   {QStringLiteral("rate"), rateText(rate)}, {QStringLiteral("resolution"), resolution},
                   {QStringLiteral("bytes"), static_cast<qint64>(bytes)}};
     if (created.isValid()) o.insert(QStringLiteral("created"), created.toString(Qt::ISODate));
+    if (!material.isNull()) o.insert(QStringLiteral("material"), QString::fromStdString(material.toString()));
     return o;
 }
 
@@ -634,6 +635,7 @@ MediaFileInfo MediaFileInfo::fromJson(const QJsonObject& o) {
     f.resolution = o.value(QStringLiteral("resolution")).toString();
     f.bytes = o.value(QStringLiteral("bytes")).toInteger();
     f.created = QDateTime::fromString(o.value(QStringLiteral("created")).toString(), Qt::ISODate);
+    f.material = MobId::fromString(o.value(QStringLiteral("material")).toString().toStdString()).value_or(MobId());
     return f;
 }
 
@@ -654,6 +656,10 @@ std::optional<MediaFileInfo> readMediaFile(const QString& path) {
     f.rate = rateFrom(m.value(kRateKey));
     f.frames = m.value(kFramesKey).toLongLong();
     f.resolution = m.value(kResolutionKey);
+    // FFmpeg reads package UMIDs as "0x" and 64 hex digits.
+    QString material = m.value(QStringLiteral("material_package_umid"));
+    if (material.startsWith(QLatin1String("0x"))) material = material.mid(2);
+    f.material = MobId::fromString(material.toStdString()).value_or(MobId());
     if (f.frames <= 0 && !info->streams.empty()) {
         // Files made before these were written: from the stream.
         const StreamInfo& st = info->streams.front();
@@ -812,6 +818,14 @@ QStringList MediaDatabase::projects() const {
 
 void MediaDatabase::remove(const QString& path) {
     files_.remove(path);
+}
+
+std::optional<MediaSet> MediaDatabase::setOf(const MobId& master) const {
+    if (master.isNull()) return std::nullopt;
+    for (const MediaFileInfo& f : files_) {
+        if (f.material == master) return set(f.mediaId);
+    }
+    return std::nullopt;
 }
 
 bool MediaDatabase::resolve(model::BinItem& item) const {

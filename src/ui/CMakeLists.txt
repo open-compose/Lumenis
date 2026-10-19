@@ -9,6 +9,7 @@ add_library(lumenis_ui STATIC
     button_mapping.cpp
     composer.cpp
     consolidate_dialog.cpp
+    export_dialog.cpp
     effect_editor.cpp
     effect_palette.cpp
     capture.cpp
@@ -44,6 +45,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/button_mapping.h
     include/lumenis/ui/composer.h
     include/lumenis/ui/consolidate_dialog.h
+    include/lumenis/ui/export_dialog.h
     include/lumenis/ui/effect_editor.h
     include/lumenis/ui/effect_palette.h
     include/lumenis/ui/capture.h
@@ -90,5 +92,5 @@ qt_add_resources(lumenis_ui lumenis_ui_resources
 )
 
 target_include_directories(lumenis_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_link_libraries(lumenis_ui PUBLIC Qt6::Widgets lumenis::core lumenis::ext lumenis::model lumenis::media)
+target_link_libraries(lumenis_ui PUBLIC Qt6::Widgets lumenis::core lumenis::ext lumenis::model lumenis::media lumenis::interop)
 lumenis_set_warnings(lumenis_ui)

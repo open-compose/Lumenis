@@ -41,6 +41,7 @@ class BackgroundQueue;
 class BackgroundQueueWindow;
 class CalculatorWindow;
 class ConsolidateDialog;
+class ExportAsDialog;
 class AboutInfoDialog;
 class AudioMixer;
 class AudioTool;
@@ -152,6 +153,15 @@ public:
     // the files as new media in a bin (p.213), at the Media Creation
     // setting's import resolution unless `resolution` names another.
     QStringList importFiles(const QString& binId, const QStringList& paths, const QString& resolution = {});
+    // AAF files imported into a bin (p.547): their clips and sequences,
+    // master clips with media on the drives online by MobID.
+    QStringList importAaf(const QString& binId, const QStringList& paths);
+    // File > Output > Export to File (p.868-869) on the active bin's
+    // selection, with the sequences' clips: the Export As dialog, then the
+    // chosen Export setting (p.1173-1177). The hook stands in for the
+    // dialog (tests; true: Save).
+    void exportToFile();
+    void setExportHook(std::function<bool(ExportAsDialog&)> hook) { exportHook_ = std::move(hook); }
     // Clip > Consolidate/Transcode on the active bin's selection
     // (p.350-356). The hooks stand in for the dialogs (tests): the first
     // answers Consolidate/Transcode (true: OK), the second Copying Media
@@ -278,6 +288,7 @@ private:
     void startSound(MonitorId monitor, int speed);
     std::function<void(LinkedMediaDialog&)> linkedMediaHook_;
     std::function<bool(ConsolidateDialog&)> consolidateHook_;
+    std::function<bool(ExportAsDialog&)> exportHook_;
     std::function<bool(ManagedRelinkDialog&)> managedRelinkHook_;
     std::function<std::optional<BinDeleteChoice>(int, int)> binDeleteHook_;
     std::function<std::optional<bool>()> copyingMediaHook_;

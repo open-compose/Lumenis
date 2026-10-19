@@ -70,7 +70,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Input > Link |  | p.328 | *later* | ☐ | | |
 | Input > Tape Capture | Ctrl+7 | p.115 | *later* | ☐ | | |
 | Input > Import EDL |  | p.951 | *later* | ☐ | | |
-| Output > Export to File |  | p.129 | *later* | ☐ | | |
+| Output > Export to File |  | p.129 | works | ☐ | | |
 | Output > Export Bin |  | p.130 | *later* | ☐ | | |
 | Output > Export to Device > P2 |  | p.901 | *later* | ☐ | | |
 | Output > Export to Device > XDCAM |  | p.883 | *later* | ☐ | | |
@@ -312,6 +312,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 208 menu commands, 91 of them working with a project open; the
+* 208 menu commands, 92 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

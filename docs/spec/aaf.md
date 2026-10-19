@@ -26,7 +26,7 @@ Avid's AAF SDK is not used: its licence is doubtful for us (ROADMAP §3).
 | AAF objects: properties, types, the metadictionary | `src/interop/aaf*` | 3.2b, done |
 | Import into bins: mobs to clips, sources and sequences | `src/interop/aaf_import.*` | 3.2c, done |
 | Export and round trips | `src/interop/aaf_writer.*`, `aaf_export.*` | 3.2d, done |
-| File > Import and Export, from the Editing Guide | | 3.2e |
+| File > Import and Export, from the Editing Guide | `main_window.cpp`, `export_dialog.*` | 3.2e, done |
 
 ## The compound file (3.2a)
 
@@ -307,3 +307,20 @@ exports have, the import's rules reversed:
   custom columns, a subclip, a sequence with two video tracks, filler, a
   centred dissolve and a segment effect) exports with no warnings and reads
   back the same, sources and dates included.
+
+## In the application (3.2e)
+
+The menus and dialogs are in ui-inventory.md §18, from the Editing Guide.
+
+* **Import**: an `.aaf` file imported through the Source Browser
+  (`MainWindow::importAaf`). Master clips find managed media by MobID: the
+  media database knows each file's material package
+  (`MediaFileInfo::material`, read from the MXF; its folder indexes are
+  version 3 for this), so media made by Cutthulhu and exported with a
+  sequence comes online in another project at once.
+* **Export**: File > Output > Export to File (`MainWindow::exportToFile`,
+  the Export As dialog in `export_dialog.*`) with the Export setting.
+* tst_managed_media (`exportAndImportAaf`): media imported, cut into a
+  sequence, exported from the bin through the dialog, imported into
+  another bin: the clip online, the sequence naming it; then exported with
+  Include All Audio Tracks off, and no audio tracks come back.

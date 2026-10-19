@@ -1,3 +1,5 @@
+#include "lumenis/interop/aaf_export.h"
+#include "lumenis/interop/aaf_import.h"
 #include "lumenis/ui/main_window.h"
 
 #include "lumenis/media/consolidate.h"
@@ -19,6 +21,7 @@
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/consolidate_dialog.h"
+#include "lumenis/ui/export_dialog.h"
 #include "lumenis/ui/keyboard_map.h"
 #include "lumenis/ui/keyboard_palette.h"
 #include "lumenis/ui/marker_dialogs.h"
@@ -53,6 +56,8 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QSettings>
+#include <QStandardPaths>
 #include <QStorageInfo>
 #include <QPixmap>
 #include <QProgressDialog>
@@ -1226,10 +1231,142 @@ void MainWindow::loadMediaDatabase() {
     ConsoleLog::instance().append(tr("Media database: %n media file(s) on the drives.", "", mediaDb_.fileCount()));
 }
 
-QStringList MainWindow::importFiles(const QString& binId, const QStringList& paths, const QString& resolution) {
+QStringList MainWindow::importAaf(const QString& binId, const QStringList& paths) {
     BinDocument* doc = binContainer_->document(binId);
     if (!doc) doc = binContainer_->openBin(binId);
     if (!doc || paths.isEmpty()) return {};
+    // Master clips find their managed media by MobID, so the media of a
+    // clip exported elsewhere comes online (p.547).
+    loadMediaDatabase();
+    QStringList ids;
+    model::BinDisplay display = doc->bin().display;
+    for (const QString& path : paths) {
+        QString error;
+        interop::aaf::ImportOptions options;
+        options.binId = doc->nodeId();
+        options.when = QDateTime::currentDateTimeUtc();
+        const auto imported = interop::aaf::importFile(path, options, &error);
+        if (!imported) {
+            ConsoleLog::instance().append(tr("Import: %1").arg(error));
+            continue;
+        }
+        int online = 0;
+        for (model::BinItem item : imported->items) {
+            const bool clip = item.kind == model::BinItemKind::MasterClip || item.kind == model::BinItemKind::AudioClip;
+            if (clip) {
+                if (const auto set = mediaDb_.setOf(item.mobId)) {
+                    item.link = set->link().toJson();
+                    ++online;
+                }
+            }
+            doc->addItem(item);
+            ids << item.id;
+        }
+        for (const QString& column : imported->customColumns) {
+            if (!display.customColumns.contains(column)) display.customColumns << column;
+        }
+        ConsoleLog::instance().append(tr("Import: %1: %n item(s), %2 with media", "", static_cast<int>(imported->items.size()))
+                                          .arg(QFileInfo(path).fileName())
+                                          .arg(online));
+        for (const QString& w : imported->warnings) ConsoleLog::instance().append(tr("Import: %1: %2").arg(QFileInfo(path).fileName(), w));
+    }
+    if (display.customColumns != doc->bin().display.customColumns) doc->setDisplay(display);
+    if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
+    return ids;
+}
+
+void MainWindow::exportToFile() {
+    BinView* view = binContainer_->activeView();
+    if (!view || view->selectedIds().isEmpty()) {
+        ConsoleLog::instance().append(tr("Export to File: select the clips or sequences to export in a bin."));
+        return;
+    }
+    const BinDocument& doc = view->document();
+    QList<model::BinItem> items;
+    QStringList ids;
+    for (const model::BinItem& item : doc.bin().items) {
+        if (!view->selectedIds().contains(item.id)) continue;
+        items << item;
+        ids << item.id;
+    }
+    // A sequence's clips go with it, so that it is not offline where it is
+    // read.
+    const QList<model::BinItem> selected = items;
+    for (const model::BinItem& item : selected) {
+        if (item.kind != model::BinItemKind::Sequence) continue;
+        const model::Sequence sequence = model::Sequence::fromItem(item);
+        for (const model::Track& t : sequence.tracks()) {
+            for (const model::Segment& s : t.segments) {
+                if (s.isFiller() || ids.contains(s.clipId)) continue;
+                if (const auto clip = composer_->resolve(s.binId, s.clipId)) {
+                    items << *clip;
+                    ids << clip->id;
+                }
+            }
+        }
+    }
+    model::SettingsFile& file = settings_->file(model::SettingsScope::User);
+    if (file.versions(QStringLiteral("Export")).isEmpty()) {
+        file.ensure({QStringLiteral("Export")});
+        settings_->commit(model::SettingsScope::User);
+    }
+    const QList<int> versions = file.versions(QStringLiteral("Export"));
+    QStringList names;
+    int active = 0;
+    for (int i = 0; i < versions.size(); ++i) {
+        const model::SettingEntry& e = file.entries.at(versions.at(i));
+        names << (e.name.isEmpty() ? tr("Untitled") : e.name);
+        if (e.active) active = i;
+    }
+    QSettings remembered;
+    QString folder = remembered.value(QStringLiteral("export/folder")).toString();
+    if (folder.isEmpty() || !QDir(folder).exists()) folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    QString base = items.first().name;
+    base.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
+    ExportAsDialog dialog(QDir(folder).filePath(base + QLatin1String(".aaf")), names, active, this);
+    connect(&dialog, &ExportAsDialog::optionsRequested, this, [this, versions](int i) {
+        if (i < 0 || i >= versions.size()) return;
+        if (SettingsWindow* w = showSettings()) {
+            w->showTab(SettingsWindow::Tab::User);
+            w->list(model::SettingsScope::User)->openEntry(versions.at(i));
+        }
+    });
+    const bool ok = exportHook_ ? exportHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok || dialog.path().isEmpty()) return;
+    // The setting chosen is the one in use from now on.
+    if (const int chosen = dialog.setting(); chosen >= 0 && chosen < versions.size() && chosen != active) {
+        file.setActive(versions.at(chosen));
+        settings_->commit(model::SettingsScope::User);
+    }
+    if (settings_->text(QStringLiteral("Export"), QStringLiteral("exportAs")) != QLatin1String("aaf")) {
+        ConsoleLog::instance().append(tr("Export to File: only AAF can be exported so far (Export As in the Export setting)."));
+        return;
+    }
+    remembered.setValue(QStringLiteral("export/folder"), QFileInfo(dialog.path()).absolutePath());
+    interop::aaf::ExportOptions options;
+    options.includeVideo = settings_->flag(QStringLiteral("Export"), QStringLiteral("includeVideo"));
+    options.includeAudio = settings_->flag(QStringLiteral("Export"), QStringLiteral("includeAudio"));
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const interop::aaf::ExportResult result = interop::aaf::exportItems(items, dialog.path(), options);
+    QApplication::restoreOverrideCursor();
+    if (!result.ok) {
+        ConsoleLog::instance().append(tr("Export to File: %1").arg(result.error));
+        return;
+    }
+    ConsoleLog::instance().append(tr("Export to File: %1: %n item(s)", "", static_cast<int>(items.size()))
+                                      .arg(QDir::toNativeSeparators(dialog.path())));
+    for (const QString& w : result.warnings) ConsoleLog::instance().append(tr("Export to File: %1").arg(w));
+}
+
+QStringList MainWindow::importFiles(const QString& binId, const QStringList& allPaths, const QString& resolution) {
+    // AAF files are compositions, not media (p.547).
+    QStringList paths;
+    QStringList aaf;
+    for (const QString& p : allPaths) (p.endsWith(QLatin1String(".aaf"), Qt::CaseInsensitive) ? aaf : paths) << p;
+    QStringList fromAaf = importAaf(binId, aaf);
+    BinDocument* doc = binContainer_->document(binId);
+    if (!doc) doc = binContainer_->openBin(binId);
+    if (!doc || paths.isEmpty()) return fromAaf;
     const media::LinkOptions options = linkOptions();
     // Import settings (p.1196-1197): numbered stills as one clip, and how
     // long a single picture lasts.
@@ -1275,6 +1412,7 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& pat
         ids << made->id;
     }
     progress.reset();
+    ids = fromAaf + ids;
     if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
     if (skipped > 0) ConsoleLog::instance().append(tr("Import: %n file(s) are not media that can be imported.", "", skipped));
     return ids;
@@ -1596,6 +1734,8 @@ void MainWindow::installPanelHandlers() {
         if (SourceBrowser* browser = sourceBrowser_.data()) browser->setImportMode(true);
     });
     handle("clip.consolidate_transcode", [this] { consolidateTranscode(); });
+    // File > Output > Export to File (p.868).
+    handle("file.output.export_to_file", [this] { exportToFile(); });
     handle("tools.background_queue_window", [this] { showTool(QStringLiteral("BackgroundQueue")); });
     handle("file.media.load_media_database", [this] { loadMediaDatabase(); });
     handle("file.media.refresh_media_directories", [this] { loadMediaDatabase(); });

@@ -1371,7 +1371,7 @@ p.610–640, ch. 13 p.432–434).**
 * **Not yet.**
   * Import and Export User Profile, with Personal or Group.
   * File > New Settings File and File > Open Settings File.
-  * Settings whose tools come later: Audio, Capture, Export, Import, Grid,
+  * Settings whose tools come later: Audio, Capture, Import, Grid,
     Keyboard (1.6), Link, Video Display and others.
   * Options shown dimmed in the dialogs. Their features come with later
     phases: the attic, pop-up monitors, two information rows, MultiCam and
@@ -2054,5 +2054,55 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
   * offline placeholders in the bin while a job runs (p.356);
   * Resume for suspended jobs; Show Job Groups.
 
-## 18. Still to document
+## 18. AAF import and export (p.547, p.861-870, p.1173-1177)
+
+### Import (p.547)
+* "Right-click in the bin, and select Import ... Locate the AAF file that
+  you want to import and click Open" (p.547). Here: Import through the
+  Source Browser (File > Input > Import Media, or the bin's Import), as for
+  media. An `.aaf` file selected for Import is read as a composition, not
+  transcoded: its master clips, subclips and sequences go into the target
+  bin (docs/spec/aaf.md, "Import").
+* "If you imported an AAF, all clips in the bin will automatically be
+  linked to the corresponding MXF media" (p.547): master clips whose MobID
+  is a managed media file's material package are online at once (the
+  media database, read first).
+* Columns the AAF carries that are not standard headings become the bin's
+  custom columns. The Console lists each file's items and what was read
+  only in part.
+* Later: the sequence report (Popup Report on AAF Import, p.237), and the
+  Import setting's OMFI/AAF tab (p.1197), which is about media.
+
+### Export to File (p.868-869)
+* Select the clips or sequences in a bin, then File > Output > Export to
+  File (p.868, steps 1-2). The Export As dialog opens with a file name
+  from the first item (p.868 step 2), the Export Setting menu (step 3),
+  Options (step 4; it opens the setting, p.869), and Save (step 7).
+* The Export Setting menu lists the User settings of the Export kind
+  (p.861: "Select from the Export Settings list in the Export As dialog
+  box"); one not named shows as Untitled, the guide's default (p.868).
+* A sequence's clips are exported with it, so it is not offline where it
+  is read.
+* **Our choices, unverified.** The Export As dialog is ours: a file name
+  with Browse, the Export Setting menu and Options; the guide's is the
+  system save dialog with those controls. The setting chosen becomes the
+  active Export setting. The folder last used is offered next time.
+* Later: exporting from a monitor (p.869 step 2), drag-and-drop export
+  (p.869), and every format but AAF.
+
+### Export setting (p.1173-1177)
+* Export As (p.1173-1174): every format the guide lists; only AAF works
+  (others are shown dimmed).
+* Use Marks, Use Selected Tracks (p.1174-1175) and AAF Edit Protocol
+  (p.1175): shown dimmed, for later.
+* Include All Video/Data Tracks in Sequence and Include All Audio Tracks in
+  Sequence (p.1175): a sequence's tracks of that kind are left out when
+  off.
+* Video Details and Audio Details tabs: Export Method (p.1175): Link to
+  (Don't Export) Media; Copy All Media and Consolidate Media are dimmed.
+  Split Tracks to Mono (p.1176), "selected by default", is dimmed.
+* **Our choices, unverified.** Defaults the guide does not give: Export As
+  AAF, the two Include options on, Link to (Don't Export) Media.
+
+## 19. Still to document
 * Menu order and separators, confirmed against a licensed seat.
