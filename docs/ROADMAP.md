@@ -504,7 +504,11 @@ sample block" part of gate 4 has no measurement of its own: the picture is
 slaved to the audio clock, so there is no drift to measure, and lip sync
 covers the offset. Gate 2's validator half passes: all 15 files (5 DNx
 resolutions, picture and two audio tracks each) pass bmx 1.6.0's mxf2raw.
-Its other half, linking into a real Media Composer, waits on a seat (M).
+Its other half, linking into a real Media Composer, is **deferred** until the
+owner has access to the licensed seat again (M): run
+`scripts/check-mxf.py --make --app <cutthulhu> --keep <folder>` and copy
+`<folder>/drive/Avid MediaFiles` to a drive Media Composer watches. Phase 3
+goes ahead meanwhile (owner's decision).
 
 * Linking (AMA-style) and Import/Consolidate/Transcode into an Avid MediaFiles
   layout: `Avid MediaFiles/MXF/<n>/`.

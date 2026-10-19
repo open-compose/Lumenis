@@ -164,8 +164,9 @@ Gates 3 and 4 (playback) pass on the owner's Windows PC, M1 Mac mini and
 Ubuntu 26.04 in WSL, the reference Linux. Gate 2's bmx half passes
 (`scripts/check-mxf.py --make`, `cutthulhu --write-media`, ctest
 `mxf_check` with mxf2raw installed); `MediaWriter` relabels FFmpeg's
-OP-Atom essence as clip-wrapped. Phase 2 waits only on Media Composer
-linking (M). Next is Phase 3 (ROADMAP).
+OP-Atom essence as clip-wrapped. Media Composer linking (M) is deferred
+until the owner has the licensed seat again; Phase 3 goes ahead meanwhile
+(ROADMAP gate status).
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 
