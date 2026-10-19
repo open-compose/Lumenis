@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lumenis/core/mob_id.h"
 #include "lumenis/core/rational.h"
 
 #include <QDateTime>
@@ -36,6 +37,10 @@ std::optional<BinItemKind> kindFromName(const QString& name);
 // custom columns, ...) live in `fields`, keyed by heading name.
 struct BinItem {
     QString id; // stable, unique within the project
+    // Its MobID in AAF and Media Composer's bins (docs/spec/native-model.md).
+    // Null: derived from `id` (mobIdOf), as for clips made before MobIDs;
+    // set when it came from elsewhere (AAF, a bin) or was given one.
+    MobId mobId;
     BinItemKind kind = BinItemKind::MasterClip;
     QString name;
     QDateTime created;
@@ -206,6 +211,11 @@ BinItem duplicateItem(const Bin& bin, const BinItem& original, const QDateTime& 
 
 // A unique id for new objects.
 QString newItemId();
+// A clip's MobID: its own, else the one derived from its id.
+MobId mobIdOf(const BinItem& item);
+// The MobID for an item id that has none of its own: the same every time,
+// and different for every id (a name-based UUID as the material number).
+MobId derivedMobId(const QString& itemId);
 
 // Durations as bins show them: leading zero fields are left out, e.g.
 // "0:00", "1:11", "4:24:14", "1:00:00:00" (pictures on p.246-255).

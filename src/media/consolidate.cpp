@@ -149,6 +149,7 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
         }
         struct Made {
             QString id;
+            MobId mobId;
             std::int64_t from = 0;
         };
         QHash<QString, Made> remap;
@@ -172,7 +173,7 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
             }
             made->name = numberedName(clip->name, QStringLiteral(".new"), names);
             names << made->name;
-            remap.insert(clipId, {made->id, from});
+            remap.insert(clipId, {made->id, made->mobId, from});
             result.added << *made;
         }
         if (!result.error.isEmpty()) break;
@@ -185,6 +186,7 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
                 const auto it = remap.constFind(s.clipId);
                 if (it == remap.constEnd()) continue;
                 s.clipId = it->id;
+                s.sourceMob = it->mobId;
                 s.binId = binId;
                 s.sourceIn -= it->from;
             }

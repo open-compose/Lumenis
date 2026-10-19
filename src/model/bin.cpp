@@ -17,7 +17,8 @@ namespace lumenis::model {
 
 namespace {
 
-constexpr int kFileVersion = 1;
+// 2: items carry their MobID ("mobId"), segments their source's ("mob").
+constexpr int kFileVersion = 2;
 constexpr auto kFileFormat = "cutthulhu-bin";
 
 bool fail(QString* error, const QString& message) {
@@ -57,6 +58,7 @@ QJsonObject itemToJson(const BinItem& item) {
     for (auto it = item.fields.cbegin(); it != item.fields.cend(); ++it) fields.insert(it.key(), it.value());
     QJsonObject o{
         {QStringLiteral("id"), item.id},
+        {QStringLiteral("mobId"), QString::fromStdString(mobIdOf(item).toString())},
         {QStringLiteral("kind"), kindName(item.kind)},
         {QStringLiteral("name"), item.name},
         {QStringLiteral("created"), item.created.toUTC().toString(Qt::ISODate)},
@@ -81,6 +83,11 @@ std::optional<BinItem> itemFromJson(const QJsonObject& o) {
     item.name = o.value(QStringLiteral("name")).toString();
     if (item.id.isEmpty() || !kind) return std::nullopt;
     item.kind = *kind;
+    // Version 1 bins have none: it is derived from the id, as it was saved.
+    if (const auto mob = MobId::fromString(o.value(QStringLiteral("mobId")).toString().toStdString());
+        mob && !mob->isNull() && *mob != derivedMobId(item.id)) {
+        item.mobId = *mob;
+    }
     item.created = QDateTime::fromString(o.value(QStringLiteral("created")).toString(), Qt::ISODate);
     item.modified = QDateTime::fromString(o.value(QStringLiteral("modified")).toString(), Qt::ISODate);
     item.durationFrames = o.value(QStringLiteral("duration")).toInteger();
@@ -663,6 +670,20 @@ QString newItemId() {
     return QUuid::createUuid().toString(QUuid::WithoutBraces);
 }
 
+MobId mobIdOf(const BinItem& item) {
+    return item.mobId.isNull() ? derivedMobId(item.id) : item.mobId;
+}
+
+MobId derivedMobId(const QString& itemId) {
+    // A version 5 (SHA-1, name-based) UUID of the id in a namespace of our
+    // own, as the material number of a MobID like MobId::generate()'s.
+    static const QUuid kNamespace(QStringLiteral("{5d7b4c1e-3f0a-4a8e-9c2d-6b1f0e7a9d34}"));
+    const QByteArray uuid = QUuid::createUuidV5(kNamespace, itemId).toRfc4122();
+    std::array<std::uint8_t, 16> material{};
+    for (std::size_t i = 0; i < material.size(); ++i) material[i] = static_cast<std::uint8_t>(uuid.at(static_cast<qsizetype>(i)));
+    return MobId::withMaterial(material);
+}
+
 BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& when, const QString& start) {
     const QString base = QStringLiteral("Untitled Sequence");
     BinItem s;
@@ -682,6 +703,7 @@ BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& w
 BinItem duplicateItem(const Bin& bin, const BinItem& original, const QDateTime& when) {
     BinItem copy = original;
     copy.id = newItemId();
+    copy.mobId = MobId(); // a new clip: a MobID of its own (Media Composer's duplicates get one too)
     const QString base = original.name + QStringLiteral(".Copy");
     copy.name = QStringLiteral("%1.%2").arg(base).arg(highestNumber(bin, base) + 1, 2, 10, QLatin1Char('0'));
     copy.created = when;

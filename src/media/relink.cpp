@@ -251,6 +251,7 @@ RelinkResult relinkManaged(const QList<model::BinItem>& selection, const MediaDa
                 const std::int64_t sourceIn = used.start - materialOf(best->item, options.by).start;
                 if (best->item.id == s.clipId && sourceIn == s.sourceIn) continue;
                 s.clipId = best->item.id;
+                s.sourceMob = best->item.mobId;
                 s.binId = best->binId;
                 s.sourceIn = sourceIn;
                 any = true;

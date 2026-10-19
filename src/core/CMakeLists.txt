@@ -4,6 +4,8 @@ add_library(lumenis_core STATIC
     rational.cpp
     timecode.cpp
     project_format.cpp
+    mob_id.cpp
+    include/lumenis/core/mob_id.h
     include/lumenis/core/project_format.h
     include/lumenis/core/rational.h
     include/lumenis/core/timecode.h

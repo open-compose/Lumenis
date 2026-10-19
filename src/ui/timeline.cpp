@@ -1489,6 +1489,7 @@ void Timeline::sync() {
                 if (model::Track* track = shown_.ensureTrack(t)) {
                     model::Segment seg;
                     seg.clipId = item.id;
+                    seg.sourceMob = item.mobId;
                     seg.binId = clip->binId;
                     seg.name = item.name;
                     seg.sourceTrack = t;

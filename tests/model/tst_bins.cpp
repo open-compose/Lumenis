@@ -1,10 +1,12 @@
 #include "lumenis/model/bin.h"
 #include "lumenis/model/project_bins.h"
 #include "lumenis/model/project_store.h"
+#include "lumenis/model/sequence.h"
 
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QTimeZone>
@@ -84,6 +86,84 @@ private slots:
         QVERIFY(back->display.sifted);
         QVERIFY(back->isSiftShown());
         QCOMPARE(b.script, QStringLiteral("INT. HOUSE - NIGHT"));
+    }
+
+    void mobIds() {
+        // Every clip and sequence has a MobID (docs/spec/native-model.md):
+        // its own when it came from elsewhere, else one derived from its id.
+        QTemporaryDir dir;
+        Bin bin;
+        bin.name = QStringLiteral("Dailies");
+        BinItem made = newSequence(bin, Rational(25), kWhen);
+        QVERIFY(made.mobId.isNull());
+        const MobId derived = mobIdOf(made);
+        QVERIFY(!derived.isNull());
+        QCOMPARE(derivedMobId(made.id), derived);
+        QVERIFY(derivedMobId(newItemId()) != derived);
+        QVERIFY(QString::fromStdString(derived.toString()).startsWith(QStringLiteral("urn:smpte:umid:060a2b34.01010101.01010f10.13000000.")));
+        // One from an AAF or a bin keeps its MobID.
+        BinItem imported;
+        imported.id = newItemId();
+        imported.kind = BinItemKind::MasterClip;
+        imported.name = QStringLiteral("A001_C002");
+        imported.mobId = MobId::generate();
+        // A sequence that uses it, and the clip without a MobID of its own.
+        BinItem clip;
+        clip.id = newItemId();
+        clip.name = QStringLiteral("B001_C001");
+        Sequence s;
+        Segment a;
+        a.clipId = imported.id;
+        a.sourceMob = imported.mobId;
+        a.length = 25;
+        Segment b;
+        b.clipId = clip.id;
+        b.length = 50;
+        s.ensureTrack(QStringLiteral("V1"))->segments = {a, b};
+        s.storeIn(made);
+        bin.items << made << imported << clip;
+        // A duplicate is a new clip with a MobID of its own.
+        const BinItem copy = duplicateItem(bin, imported, kWhen);
+        QVERIFY(copy.mobId.isNull());
+        QVERIFY(mobIdOf(copy) != mobIdOf(imported));
+        const QString path = dir.filePath(QStringLiteral("Dailies.cthbin"));
+        QString error;
+        QVERIFY2(BinFile::write(path, bin, &error), qPrintable(error));
+        QFile f(path);
+        QVERIFY(f.open(QIODevice::ReadOnly));
+        const QByteArray text = f.readAll();
+        QVERIFY(text.contains("\"version\": 2"));
+        QVERIFY(text.contains(QByteArray::fromStdString(imported.mobId.toString())));
+        QVERIFY(text.contains(QByteArray::fromStdString(derived.toString()))); // written out, though derived
+        const auto back = BinFile::read(path, &error);
+        QVERIFY2(back, qPrintable(error));
+        QCOMPARE(back->items.size(), 3);
+        QVERIFY(back->items[0].mobId.isNull()); // derived, so kept as such
+        QCOMPARE(mobIdOf(back->items[0]), derived);
+        QCOMPARE(back->items[1].mobId, imported.mobId);
+        const Sequence again = Sequence::fromItem(back->items[0]);
+        const Track* v1 = again.track(QStringLiteral("V1"));
+        QVERIFY(v1);
+        QCOMPARE(v1->segments.size(), 2);
+        QCOMPARE(v1->segments[0].sourceMobId(), imported.mobId);
+        QVERIFY(v1->segments[1].sourceMob.isNull());
+        QCOMPARE(v1->segments[1].sourceMobId(), mobIdOf(clip));
+        QCOMPARE(v1->segments, s.track(QStringLiteral("V1"))->segments);
+        // A version 1 bin (no MobIDs) opens, its clips' MobIDs derived from
+        // their ids as the segments' are from theirs.
+        QString v1Text = QString::fromUtf8(text);
+        v1Text.replace(QStringLiteral("\"version\": 2"), QStringLiteral("\"version\": 1"));
+        v1Text.remove(QRegularExpression(QStringLiteral("\\s*\"mob(Id)?\": \"[^\"]*\",?")));
+        QVERIFY(!v1Text.contains(QStringLiteral("mob")));
+        const QString oldPath = dir.filePath(QStringLiteral("Old.cthbin"));
+        QFile old(oldPath);
+        QVERIFY(old.open(QIODevice::WriteOnly));
+        old.write(v1Text.toUtf8());
+        old.close();
+        const auto opened = BinFile::read(oldPath, &error);
+        QVERIFY2(opened, qPrintable(error));
+        QCOMPARE(mobIdOf(opened->items[2]), mobIdOf(clip));
+        QCOMPARE(Sequence::fromItem(opened->items[0]).track(QStringLiteral("V1"))->segments[1].sourceMobId(), mobIdOf(clip));
     }
 
     void headingsComeFromTheGuide() {

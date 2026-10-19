@@ -79,6 +79,7 @@ QJsonObject segmentToJson(const Segment& s) {
         return o;
     }
     o.insert(QStringLiteral("clip"), s.clipId);
+    if (!s.sourceMob.isNull()) o.insert(QStringLiteral("mob"), QString::fromStdString(s.sourceMob.toString()));
     if (!s.binId.isEmpty()) o.insert(QStringLiteral("bin"), s.binId);
     o.insert(QStringLiteral("name"), s.name);
     o.insert(QStringLiteral("track"), s.sourceTrack);
@@ -89,6 +90,10 @@ QJsonObject segmentToJson(const Segment& s) {
 Segment segmentFromJson(const QJsonObject& o) {
     Segment s;
     s.clipId = o.value(QStringLiteral("clip")).toString();
+    if (const auto mob = MobId::fromString(o.value(QStringLiteral("mob")).toString().toStdString());
+        mob && !mob->isNull() && *mob != derivedMobId(s.clipId)) {
+        s.sourceMob = *mob;
+    }
     s.binId = o.value(QStringLiteral("bin")).toString();
     s.name = o.value(QStringLiteral("name")).toString();
     s.sourceTrack = o.value(QStringLiteral("track")).toString();
@@ -105,6 +110,11 @@ Segment segmentFromJson(const QJsonObject& o) {
 }
 
 } // namespace
+
+MobId Segment::sourceMobId() const {
+    if (isFiller()) return {};
+    return sourceMob.isNull() ? derivedMobId(clipId) : sourceMob;
+}
 
 QJsonObject Effect::toJson() const {
     QJsonObject o{{QStringLiteral("category"), category}, {QStringLiteral("name"), name}};
@@ -604,6 +614,7 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
         } else {
             Segment s;
             s.clipId = source.id;
+            s.sourceMob = source.mobId;
             s.binId = binId;
             s.name = source.name;
             s.sourceTrack = from;

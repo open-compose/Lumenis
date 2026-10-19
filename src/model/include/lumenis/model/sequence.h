@@ -73,6 +73,10 @@ struct Transition {
 struct Segment {
     QString clipId;
     QString binId;
+    // The source clip's MobID (AAF's SourceClip SourceID). Null: the one
+    // derived from clipId, as for clips without a MobID of their own
+    // (derivedMobId in lumenis/model/bin.h).
+    MobId sourceMob;
     QString name;        // the clip's name when it was edited in
     QString sourceTrack; // the clip's track this came from, e.g. "A2"
     std::int64_t sourceIn = 0; // first frame used, counted from the clip's start
@@ -91,6 +95,7 @@ struct Segment {
 
     bool hasEffects() const { return effect || transition; }
     bool isFiller() const { return clipId.isEmpty(); }
+    MobId sourceMobId() const;
     static Segment filler(std::int64_t length);
     bool operator==(const Segment&) const = default;
 };
