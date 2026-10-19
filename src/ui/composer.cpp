@@ -25,6 +25,22 @@
 #include <algorithm>
 #include <cmath>
 
+// The Composer window (Phase 1.4a, guide ch.13): the Source and Record monitors side by side, each a
+// "column" of information row (Clip Name menu, tracking display), picture (MonitorPicture), position
+// bar (PositionBar), Trim mode counter and two rows of mappable buttons; plus the center duration
+// display and the Trim buttons used by Trim mode.
+//
+// What a monitor holds (the loaded clips, position, marks) lives in model::MonitorState
+// (src/model/monitor.*); this file only draws it and runs the transport and marking commands on it
+// (Composer::perform). Everything the Composer cannot know by itself comes in through resolvers set
+// by MainWindow::createPanels (main_window.cpp): bin items (ItemResolver), pictures (PictureResolver,
+// backed by MediaFrames), keys (KeyResolver, the KeyboardMap), the Source Browser's commit
+// (Committer) and the audio play clock (PlayClock). The Timeline (timeline.cpp) sets the edit points
+// (the event and stop resolvers) and the Trim display. A MarkResolver (Mark Clip on selected
+// segments) is declared, but nothing sets one yet. Commands that are not the Composer's own
+// (Splice-in, Overwrite, Trim) leave through commandRequested(), which MainWindow routes to the
+// Timeline or the menus. Buttons are MappableButtons (button_mapping.*), so the Command Palette can
+// map other commands onto them.
 namespace lumenis::ui {
 
 namespace {
@@ -154,6 +170,8 @@ QIcon trimGlyph(const QString& label) {
     return QIcon(pm);
 }
 
+// Draws a button glyph on a 32 x 32 pixmap shown at 16 x 16 logical pixels (device pixel ratio 2),
+// so it stays sharp on high-density screens. The coordinates below are in the 32-pixel space.
 QIcon glyph(Glyph g, const QColor& color) {
     constexpr int size = 32;
     QPixmap pm(size, size);
@@ -274,12 +292,15 @@ QString trackingPrefix(model::TrackingFormat f) {
     return {};
 }
 
+// The edit rate of the monitor's current clip in frames per second; 25 when nothing is loaded.
 double framesPerSecond(const model::MonitorState& s) {
     const model::LoadedClip* c = s.current();
     if (!c) return 25.0;
     return static_cast<double>(c->item.editRate.num()) / static_cast<double>(c->item.editRate.den());
 }
 
+// A button of the information row (Clip Name menu, tracking display): green text on near-black, a
+// popup menu on click, and a width set by the layout, not by its text.
 QToolButton* infoBox(QWidget* parent, const QString& name) {
     auto* b = new QToolButton(parent);
     b->setObjectName(name);
@@ -299,6 +320,9 @@ QToolButton* infoBox(QWidget* parent, const QString& name) {
 
 // ---------------------------------------------------------------- Column
 
+// The widgets of one monitor's column, built by buildColumn() and owned by the Composer (the widgets
+// by Qt parenting, the Column itself deleted in ~Composer). `buttons` maps a command id to the first
+// button that carries it, for Composer::button().
 struct Composer::Column {
     QWidget* widget = nullptr;
     QWidget* controls = nullptr;
@@ -327,6 +351,8 @@ QSize PositionBar::sizeHint() const {
     return {200, kBarHeight};
 }
 
+// The bar spans the whole clip: x = 0 is frame 0 and the right edge the last frame (duration - 1).
+// x outside the bar is clamped; frameAt and xFor are each other's inverse up to rounding.
 std::int64_t PositionBar::frameAt(int x) const {
     const std::int64_t d = composer_.state(monitor_).duration();
     if (d <= 1 || width() <= 1) return 0;
@@ -340,6 +366,8 @@ int PositionBar::xFor(std::int64_t frame) const {
     return static_cast<int>(std::lround(static_cast<double>(frame) / static_cast<double>(d - 1) * (width() - 1)));
 }
 
+// Background (Source/Record colour or plain grey) with 24 tick marks, then the marked span, the
+// markers and the blue position indicator on top.
 void PositionBar::paintEvent(QPaintEvent*) {
     QPainter p(this);
     const model::MonitorState& s = composer_.state(monitor_);
@@ -369,6 +397,7 @@ void PositionBar::paintEvent(QPaintEvent*) {
     p.fillRect(QRect(xFor(s.position()) - 1, 0, 2, height()), QColor(kIndicator));
 }
 
+// The first shown marker whose start is within 4 pixels of x.
 std::optional<model::Marker> PositionBar::markerAt(int x) const {
     const model::MonitorState& s = composer_.state(monitor_);
     if (s.isEmpty()) return std::nullopt;
@@ -383,6 +412,8 @@ void PositionBar::mouseDoubleClickEvent(QMouseEvent* event) {
     if (const auto m = markerAt(event->position().toPoint().x())) emit composer_.markerEditRequested(monitor_, m->id);
 }
 
+// Clicking the bar activates its monitor, stops playback and jumps there; dragging with the left
+// button held keeps moving (mouseMoveEvent).
 void PositionBar::mousePressEvent(QMouseEvent* event) {
     composer_.setActiveMonitor(monitor_);
     composer_.stop();
@@ -416,6 +447,9 @@ QRect MonitorPicture::pictureRect() const {
     return {(width() - w) / 2, (height() - h) / 2, w, h};
 }
 
+// Draws, in order: the dark surround and the black picture area, the frame from the PictureResolver
+// (or "Media Offline"), the IN/OUT sawtooth when the position is on a mark, a marker oval, and the
+// highlight frame of the active monitor (dual-monitor mode only).
 void MonitorPicture::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.fillRect(rect(), QColor(18, 18, 18));
@@ -521,6 +555,9 @@ void MonitorPicture::dropEvent(QDropEvent* event) {
 
 // ---------------------------------------------------------------- Composer
 
+// Builds both columns from the default button rows, the center duration label and the hidden Trim
+// bar, and the playback timer. The saved button layout and display settings arrive later through
+// setButtonLayout() and setDisplay() (MainWindow::applySettings).
 Composer::Composer(QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("composer"));
     setFocusPolicy(Qt::StrongFocus);
@@ -591,6 +628,8 @@ Composer::Composer(QWidget* parent) : QWidget(parent) {
     trimBar_->hide();
     outer->addWidget(trimBar_);
 
+    // Playback steps: tick() runs every kTickInterval ms while playing (started by play(), stopped by
+    // stop()).
     timer_ = new QTimer(this);
     timer_->setInterval(kTickInterval);
     timer_->setTimerType(Qt::PreciseTimer);
@@ -598,6 +637,7 @@ Composer::Composer(QWidget* parent) : QWidget(parent) {
     refresh();
 }
 
+// The Columns are plain structs, not QObjects; their widgets go with the Composer's children.
 Composer::~Composer() {
     delete columns_[0];
     delete columns_[1];
@@ -607,6 +647,9 @@ Composer::Column& Composer::column(MonitorId monitor) const {
     return *columns_[monitor == MonitorId::Source ? 0 : 1];
 }
 
+// Builds one monitor's column, top to bottom: information row, picture, position bar, Trim counter
+// (hidden outside Trim mode) and the button rows. The Source column also carries the center duration
+// display at the end of its information row.
 QWidget* Composer::buildColumn(MonitorId monitor) {
     auto* c = new Column;
     columns_[monitor == MonitorId::Source ? 0 : 1] = c;
@@ -706,8 +749,11 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
     return c->widget;
 }
 
+// Gives a button slot its command (empty: Blank). Called when the column is built, when a command is
+// mapped onto the button and when a saved layout is applied.
 void Composer::setupButton(MonitorId monitor, MappableButton* b, const QString& id) {
     Column& c = column(monitor);
+    // Forget whatever command this button carried before.
     for (auto it = c.buttons.begin(); it != c.buttons.end();) {
         it = it.value() == b ? c.buttons.erase(it) : std::next(it);
     }
@@ -725,6 +771,7 @@ void Composer::setupButton(MonitorId monitor, MappableButton* b, const QString& 
     b->setEnabled(!later(id) && !(id == QLatin1String("other.gang") && monitor == MonitorId::Record));
 }
 
+// The current command of every slot, in the format described in composer.h.
 QJsonObject Composer::buttonLayout() const {
     QJsonObject out;
     for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
@@ -735,6 +782,7 @@ QJsonObject Composer::buttonLayout() const {
     return out;
 }
 
+// The slots as built in, from buttonRows().
 QJsonObject Composer::defaultButtonLayout() {
     QJsonObject out;
     for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
@@ -776,6 +824,8 @@ void Composer::setButtonLayout(const QJsonObject& layout) {
     refresh();
 }
 
+// Shows or hides the information row, the button rows and the center duration display. The button
+// rows stay hidden in Trim mode whatever the setting.
 void Composer::setDisplay(const Display& display) {
     display_ = display;
     for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
@@ -789,6 +839,7 @@ void Composer::setDisplay(const Display& display) {
     refresh();
 }
 
+// The current clip's markers, filtered by the Show Composer Markers and spanned-marker settings.
 QList<model::Marker> Composer::shownMarkers(MonitorId monitor) const {
     const model::MonitorState& s = state(monitor);
     if (s.isEmpty() || !display_.markers) return {};
@@ -810,6 +861,7 @@ void Composer::setAspectRatio(const Rational& aspect) {
     refresh();
 }
 
+// Returns true when there was nothing to commit, false only when the Committer could not place it.
 bool Composer::commitSource() {
     const model::LoadedClip* c = source_.current();
     // Only clips from the Source Browser: they are linked and in no bin
@@ -833,6 +885,7 @@ QImage Composer::picture(MonitorId monitor, QSize size, bool* offline) const {
     return pictures_(monitor, size, offline);
 }
 
+// Loading stops playback and makes the monitor active.
 void Composer::load(MonitorId monitor, const QString& binId, const model::BinItem& item) {
     stop();
     state(monitor).load(binId, item);
@@ -944,6 +997,8 @@ void Composer::setGanged(bool ganged) {
     refresh();
 }
 
+// The position is clamped by MonitorState::setPosition. A ganged monitor moves by the same number of
+// frames the first one actually moved, not to the same frame.
 void Composer::moveTo(MonitorId monitor, std::int64_t frame) {
     model::MonitorState& s = state(monitor);
     const std::int64_t before = s.position();
@@ -956,6 +1011,9 @@ void Composer::moveTo(MonitorId monitor, std::int64_t frame) {
     refresh();
 }
 
+// Starts or changes playback of the active monitor at `speed` times normal (negative: reverse).
+// Speed 0, or an empty monitor, stops instead. The stats are reset only when play starts from a stop;
+// playStart_ and clock_ restart at every speed change, which is what the play clock counts from.
 void Composer::play(int speed) {
     const model::MonitorState& s = state(active_);
     if (s.isEmpty() || speed == 0) {
@@ -972,6 +1030,7 @@ void Composer::play(int speed) {
     emit playStarted(active_, speed);
 }
 
+// Stops playback and forgets a Play In to Out end point; emits playStopped() only if it was playing.
 void Composer::stop() {
     if (speed_ == 0 && !timer_->isActive()) return;
     stopAt_.reset();
@@ -981,6 +1040,9 @@ void Composer::stop() {
     emit playStopped();
 }
 
+// One playback step, run by timer_. Moves the active monitor to where the sound (or the wall clock)
+// says it should be, stops at the end (or the OUT of Play In to Out, or the start when playing
+// backward) and counts shown and dropped frames.
 void Composer::tick() {
     const qint64 ms = clock_.restart();
     const std::int64_t before = state(active_).position();
@@ -990,6 +1052,8 @@ void Composer::tick() {
     // does.
     std::optional<double> played;
     if (std::abs(speed_) <= 3 && playClock_) played = playClock_();
+    // The play clock gives seconds of program played since playStart_ (negative going backward). The
+    // picture only ever moves in the direction of play, so a clock that lags a tick holds the frame.
     if (played) {
         model::MonitorState& s = state(active_);
         const auto target = playStart_ + static_cast<std::int64_t>(*played * framesPerSecond(s));
@@ -1036,6 +1100,8 @@ double Composer::qualityScale() const {
     return 1.0;
 }
 
+// Wall-clock playback: `ms` milliseconds at the current speed, keeping the fraction of a frame in
+// carry_ for the next call. Reaching the end (or the Play In to Out end) or the start stops play.
 void Composer::advance(qint64 ms) {
     if (speed_ == 0) return;
     model::MonitorState& s = state(active_);
@@ -1053,6 +1119,8 @@ void Composer::advance(qint64 ms) {
     moveTo(active_, target);
 }
 
+// The commands perform() carries out itself. MainWindow::installPanelHandlers routes each of them to
+// perform(); every other button or key leaves as commandRequested().
 bool Composer::handles(const QString& id) {
     static const QStringList ids{
         QStringLiteral("play.play"),
@@ -1082,6 +1150,8 @@ bool Composer::handles(const QString& id) {
     return ids.contains(id);
 }
 
+// Runs one of the commands in handles() on the active monitor, then refreshes and emits performed().
+// The play commands change speed; the move and mark commands stop playback first.
 bool Composer::perform(const QString& id) {
     if (!handles(id)) return false;
     const MonitorId m = active_;
@@ -1122,6 +1192,7 @@ bool Composer::perform(const QString& id) {
         play(1);
     } else {
         stop();
+        // Moves and marks; positions are clamped by MonitorState.
         if (id == QLatin1String("move.step_backward_one_frame")) {
             moveTo(m, s.position() - 1);
         } else if (id == QLatin1String("move.step_forward_one_frame")) {
@@ -1143,6 +1214,7 @@ bool Composer::perform(const QString& id) {
             }
             moveTo(m, to);
         } else if (id == QLatin1String("move.go_to_next_event")) {
+            // The first stop after the position; the end when there is none.
             std::int64_t to = s.lastPosition();
             for (std::int64_t e : stops(m)) {
                 if (e > s.position()) {
@@ -1169,10 +1241,12 @@ bool Composer::perform(const QString& id) {
                     break;
                 }
             }
+            // A MarkResolver's range, when it gives one, wins over the segment under the position.
             if (const auto range = marks_ ? marks_(m) : std::nullopt) {
                 from = range->first;
                 to = range->second;
             }
+            // Mark IN and OUT through the position, then put the position back.
             if (!s.isEmpty() && from <= to) {
                 s.setPosition(from);
                 s.markIn();
@@ -1197,6 +1271,8 @@ bool Composer::perform(const QString& id) {
     return true;
 }
 
+// Keys reach the Composer when it has focus: K is tracked for K+J / K+L, and every other key is
+// looked up in the Keyboard settings (KeyResolver) and run as a command.
 void Composer::keyPressEvent(QKeyEvent* event) {
     if (event->isAutoRepeat() && event->key() == Qt::Key_K) return;
     if (event->key() == Qt::Key_K) kHeld_ = true;
@@ -1223,6 +1299,7 @@ void Composer::keyReleaseEvent(QKeyEvent* event) {
     QWidget::keyReleaseEvent(event);
 }
 
+// Rebuilt each time the Clip Name menu is about to show, so it reads the Alt key held at that moment.
 QMenu* Composer::clipNameMenu(MonitorId monitor) {
     // Loaded clips, alphabetically (load order with Alt), then Clear Monitor
     // and Clear Menu (p.394-395).
@@ -1255,6 +1332,7 @@ QMenu* Composer::clipNameMenu(MonitorId monitor) {
     return menu;
 }
 
+// A new menu each time, deleted when it closes; the caller shows it with exec().
 QMenu* Composer::contextMenu() {
     // Right-click in a monitor (p.381).
     auto* menu = new QMenu(this);
@@ -1290,6 +1368,9 @@ MonitorPicture* Composer::picture(MonitorId monitor) const {
     return column(monitor).picture;
 }
 
+// Brings every widget up to date with the monitor states (clip names, tracking, Gang button, picture,
+// bars, center duration) and emits changed(). Most setters end here, so changed() fires often:
+// listeners (the Timeline, digital audio scrub in MainWindow) must be cheap.
 void Composer::refresh() {
     for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
         if (!columns_[m == MonitorId::Source ? 0 : 1]) continue;
@@ -1305,10 +1386,12 @@ void Composer::refresh() {
     emit changed();
 }
 
+// Without a stop resolver, Go to Previous/Next Event stop at the events.
 QList<std::int64_t> Composer::stops(MonitorId monitor) const {
     return stops_ ? stops_(monitor) : events(monitor);
 }
 
+// Without an event resolver, a clip's only events are its start and its end (duration).
 QList<std::int64_t> Composer::events(MonitorId monitor) const {
     if (events_) return events_(monitor);
     const model::MonitorState& s = state(monitor);

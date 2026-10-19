@@ -19,6 +19,12 @@ class QScrollBar;
 class QSlider;
 class QToolButton;
 
+// The Timeline window and its tracks area. Timeline holds the editing state (track patch, segment
+// selection, Trim mode, the Clipboard, zoom) and carries out the Timeline's commands by changing
+// the Record monitor's sequence through the model (src/model/include/lumenis/model/sequence.h,
+// marker.h) and storing it back in its bin; TimelineView draws the tracks and turns mouse input
+// into calls on Timeline. MainWindow (main_window.cpp) creates the Timeline and wires its stores;
+// the Composer (composer.h) owns the monitors whose loaded items the Timeline shows and changes.
 namespace lumenis::ui {
 
 class Timeline;
@@ -31,6 +37,7 @@ class TimelineView : public QWidget {
     Q_OBJECT
 
 public:
+    // The view reads all of its state from `timeline`, which must outlive it.
     explicit TimelineView(Timeline& timeline, QWidget* parent = nullptr);
 
     // The rows top to bottom: D1, video tracks from the highest, TC1, audio
@@ -41,18 +48,28 @@ public:
         int height = 0;
         bool exists = true; // false: only a source track is patched here
     };
+    // The rows in display order, with `top` already offset by the vertical scroll (so it can be
+    // negative or below the widget). Empty with nothing shown.
     QList<Row> rows() const;
+    // The ruler plus every row, in pixels, ignoring the scroll.
     int contentHeight() const;
+    // The height of the timecode ruler at the top, in pixels.
     int rulerHeight() const;
+    // The width of the Track Selector panel, or 0 when the Fast menu's Track Panel is off.
     int headerWidth() const;
     // Frame at an x position in the tracks area, and back.
+    // Frames count from the start of the shown sequence (0 = its first frame); x is in widget
+    // pixels, so the header is included. frameAt() rounds down, and gives 0 if the scale is not
+    // positive.
     std::int64_t frameAt(int x) const;
     double xFor(std::int64_t frame) const;
+    // The Track Selector's buttons for a row, in widget pixels: the source track button, the
+    // record track button, the Sync Lock button and the Track Monitor button (p.625-630).
     QRect sourceButton(const Row& row) const;
     QRect recordButton(const Row& row) const;
     QRect syncButton(const Row& row) const;
     QRect monitorButton(const Row& row) const;
-    // The row under a point, or nullptr.
+    // The row under a point, or nothing (also over the ruler).
     std::optional<Row> rowAt(const QPoint& pos) const;
     // The segment under a point (filler too, but not at the ends of a
     // track, p.611).
@@ -68,6 +85,7 @@ public:
     model::TrimKind trimKindAt(const QPoint& pos) const;
 
     // Vertical scrolling (p.608).
+    // The offset is in pixels from the top of the rows; it is clamped to be at least 0.
     void setTopOffset(int offset);
     int topOffset() const { return top_; }
 
@@ -127,8 +145,12 @@ public:
     // the item, not yet stored.
     using SequenceMaker = std::function<std::optional<std::pair<QString, model::BinItem>>()>;
 
+    // The Timeline follows `composer`, which must outlive it: it redraws when the Composer changes,
+    // takes the Composer's Timeline commands and installs the Composer's event and stop resolvers.
     explicit Timeline(Composer& composer, QWidget* parent = nullptr);
 
+    // The callbacks MainWindow supplies: where sequences are stored, how the first edit makes
+    // one, and which command a key press means. Without a store, changes reach only the Composer.
     void setSequenceStore(SequenceStore store) { store_ = std::move(store); }
     void setSequenceMaker(SequenceMaker maker) { maker_ = std::move(maker); }
     void setKeyResolver(Composer::KeyResolver resolver) { keys_ = std::move(resolver); }
@@ -152,6 +174,8 @@ public:
         // Trim settings (p.1223).
         bool trimAutoFocus = false;
     };
+    // Applies new settings at once: shows or hides the top toolbar and, with Only One Segment
+    // Tool, turns Extract/Splice-in off if both segment tools were on.
     void setOptions(const Options& options);
     const Options& options() const { return options_; }
 
@@ -163,22 +187,34 @@ public:
     // What the Timeline shows: a sequence, or a clip as one segment per
     // track. Empty with nothing loaded.
     const model::Sequence& shown() const { return shown_; }
+    // Whether the shown monitor has anything loaded.
     bool hasShown() const;
+    // The timecode format for the shown item's edit rate.
     const TimecodeFormat& format() const { return format_; }
+    // The shown item's starting timecode as a frame count; frame 0 of shown() is at this timecode.
     std::int64_t startFrame() const;
 
+    // The Track Selector state: which source tracks there are, which are patched to which record
+    // tracks, and which are selected.
     model::TrackPatch& patch() { return patch_; }
     const model::TrackPatch& patch() const { return patch_; }
+    // The undo history of the record sequence's changes.
     model::EditHistory& history() { return history_; }
 
     // Commands the Timeline carries out (editing, tracks, undo).
+    // Returns false for a command it does not handle; true otherwise, also when the command did
+    // nothing (see lastMessage()), except for a few commands that report false on failure.
     bool perform(const QString& commandId);
+    // Whether perform() takes this command ID (from commands.json).
     static bool handles(const QString& commandId);
     // Why the last command did nothing, for the status line.
     QString lastMessage() const { return message_; }
 
     // Patching from the Track Selector (p.629).
+    // Returns false, with a message, if the patch is not allowed (audio only to audio, video
+    // only to video, never data; model::TrackPatch::canPatch).
     bool patchTracks(const QString& source, const QString& record);
+    // Select or deselect a source or record track button.
     void toggleSourceTrack(const QString& track);
     void toggleRecordTrack(const QString& track);
     // Track Monitor buttons (p.627-628): which tracks are heard and seen.
@@ -186,6 +222,8 @@ public:
     void toggleMonitor(const QString& track);
 
     // Track locks (p.633) and sync locks (p.493).
+    // These change the record sequence without an undo step; they do nothing (with a message)
+    // if the Record monitor has no sequence.
     void setTracksLocked(const QStringList& tracks, bool locked);
     void toggleSyncLock(const QString& track);
     void toggleSyncLockAll();
@@ -195,30 +233,42 @@ public:
     // is Lift/Overwrite, as for a lasso with no tool, p.612).
     bool isSegmentTool(model::EditKind kind) const;
     void setSegmentTool(model::EditKind kind, bool on);
+    // The kind of edit the segment tools make: the one tool that is on, else Lift/Overwrite.
     model::EditKind segmentKind() const;
+    // The selected segments of the record sequence; empty when the source is shown.
     const QList<model::SegmentRef>& selection() const { return selection_; }
     void setSelection(const QList<model::SegmentRef>& segments);
     // Click and Shift-click (p.611).
     void clickSegment(const model::SegmentRef& segment, bool toggle);
+    // Moves (or with `copy` copies) the selected segments by frames and by tracks of the same kind
+    // (positive to higher-numbered tracks), as one undo step; the moved segments stay selected
+    // (p.620).
     bool moveSelection(std::int64_t frames, int tracks, model::EditKind kind, bool copy);
     // The Delete key: selected segments (p.621), or else the selected
     // tracks after asking (p.636).
     bool deleteSelection();
+    // Removes the named tracks from the record sequence without asking, as one undo step.
     bool deleteTracks(const QStringList& tracks);
     // The right-click Select menu (p.613-614).
     enum class SelectWhere { Left, Right, Reverse };
+    // Selects on the selected record tracks; turns on Lift/Overwrite if no segment tool is on.
     void selectSegments(SelectWhere where);
 
     // Trim mode (ch. 20). Rollers sit on edit points; single-roller trims
     // are Ripple or Overwrite (the trim tools, p.650).
     bool isTrimMode() const { return trimMode_; }
+    // The rollers on the record sequence, empty when slipping.
     const QList<model::TrimRoller>& rollers() const { return rollers_; }
     model::TrimKind trimKind() const { return trimKind_; }
     // The Trim Mode button: dual rollers at the transition nearest the
     // position on the selected tracks (p.655); `direction` -1 or 1 takes the
     // previous or next one (the A and S keys, p.651).
     bool enterTrimMode(int direction = 0);
+    // Leaves Trim mode and slip, remembering the rollers for Alt+Trim Mode (p.651), and undoes
+    // the Focus that Trim mode's auto focus turned on.
     void exitTrimMode();
+    // Enters Trim mode with exactly these rollers, clearing the segment selection and the trim
+    // counters.
     void setRollers(const QList<model::TrimRoller>& rollers, model::TrimKind kind);
     // Click and Shift-click on a transition (p.652).
     void clickTransition(const model::TrimRoller& roller, model::TrimKind kind, bool add);
@@ -226,19 +276,24 @@ public:
     // Sides, p.651).
     void setTrimSide(model::TrimSide side);
     // Trims by frames: Trim buttons, drags, J-K-L later (p.656).
+    // Positive frames trim to the right. Returns false, and beeps, when no frame could be trimmed.
     bool trimBy(std::int64_t frames);
     // The Overwrite Trim and Ripple Trim tools (p.650).
     bool isTrimTool(model::TrimKind kind) const;
     void setTrimTool(model::TrimKind kind, bool on);
     // Slip and slide (p.663-665): the segments selected for it.
+    // Enters Trim mode slipping (or with `slide` sliding) the segments; an empty list leaves it.
     void setSlip(const QList<model::SegmentRef>& segments, bool slide);
     const QList<model::SegmentRef>& slipSelection() const { return slip_; }
     bool isSlide() const { return slide_; }
     // How long the clip a segment comes from is, from its bin.
+    // The callback returns nothing when the clip is not in an open bin.
     model::SourceLength sourceLength() const;
 
     // Markers (p.412-424). Add Marker opens the Edit Marker dialog unless
     // it is disabled (the Markers window's Fast menu, p.416).
+    // addMarker() marks the active monitor's item. A marker change on the Record monitor's
+    // sequence is an undo step; on anything else it is stored without one.
     void setMarkerDialogEnabled(bool on) { markerDialog_ = on; }
     bool addMarker(const QString& color = QStringLiteral("Red"), bool spanned = false);
     // The marker in a monitor, changed or deleted.
@@ -246,6 +301,7 @@ public:
     bool deleteMarker(MonitorId monitor, const QString& id);
 
     // The Clipboard (p.479-480): a sequence that is in no bin.
+    // Lift, Extract, Copy to Clipboard and Ctrl+C/X fill it; empty until one of them does.
     const std::optional<model::BinItem>& clipboard() const { return clipboard_; }
 
     // ---- Effects (FX guide ch. 2-3)
@@ -263,6 +319,8 @@ public:
     // top down (p.84).
     std::optional<model::EffectRef> currentEffect() const;
     // Changes an effect of the record sequence, with an undo step.
+    // `change` gets the effect and, for a transition, the transition itself (else nullptr).
+    // Returns false if there is no such effect or its track is locked.
     bool changeEffect(const model::EffectRef& ref, const QString& description,
                       const std::function<void(model::Effect&, model::Transition*)>& change);
     // The Transition parameters (p.63, p.500): the duration and alignment
@@ -280,6 +338,7 @@ public:
     // The Insufficient Source dialog (p.48): `which` is "Media A" or
     // "Media B"; true sizes the effect to fit, false cancels.
     using InsufficientSource = std::function<bool(const QString& which)>;
+    // Without one, the Timeline asks with its own message box (tst_effects sets one).
     void setInsufficientSource(InsufficientSource ask) { insufficient_ = std::move(ask); }
     // Transition effects default to one second (Editing Guide p.1296).
     std::int64_t defaultTransitionLength() const;
@@ -287,19 +346,25 @@ public:
     // Zoom (p.607-608). The scale is in pixels per frame.
     double scale() const;
     double fitScale() const;
+    // A scale at or below fitScale() shows the whole sequence. `anchor` (default the position) is
+    // the frame that stays where it is on screen.
     void setScale(double pixelsPerFrame, std::optional<std::int64_t> anchor = std::nullopt);
+    // The frame at the left edge of the tracks area; always 0 when the whole sequence fits.
     double firstFrame() const { return first_; }
+    // Scrolls horizontally; ignored when the whole sequence fits.
     void setFirstFrame(double frame);
     void showEntireSequence();
     // The Focus button: 90 pixels per second around the position, and back
     // (p.608).
     void toggleFocus();
     bool isFocused() const { return focusBack_.has_value(); }
+    // Shows the frames from..to across the tracks area, keeping the old view for zoomBack().
     void zoomTo(std::int64_t from, std::int64_t to);
     void zoomBack();
     static constexpr int kFocusPixelsPerSecond = 90;
 
     // Fast menu display options (p.592-593).
+    // What the Timeline draws; changed from the Fast menu, kept per Timeline (not a setting).
     struct Display {
         bool trackPanel = true;
         bool clipNames = true;
@@ -313,19 +378,25 @@ public:
     const Display& display() const { return display_; }
 
     TimelineView* view() const { return view_; }
+    // A toolbar button by object name ("focus", "smart.lift_overwrite", ...), or nullptr.
     QToolButton* toolButton(const QString& name) const;
     QSlider* scaleBar() const { return scaleBar_; }
     QScrollBar* scrollBar() const { return scroll_; }
+    // The Fast menu, rebuilt each time it opens. The Timeline owns it.
     QMenu* fastMenu();
     // The right-click menu, over a track's button or elsewhere (p.613,
     // p.633-636). The caller owns it.
     QMenu* contextMenu(const QString& track = {});
+    // The master timecode display in the top toolbar.
     QLabel* timecodeDisplay() const { return timecode_; }
     // Edit > Undo/Redo List (p.466): the most recent first.
+    // The menu deletes itself when closed.
     QMenu* undoRedoMenu();
 
 signals:
+    // The shown item, the selection, the patch or Trim mode changed.
     void changed();
+    // Why a command did nothing, as lastMessage() gives it.
     void message(const QString& text);
     // Video Quality Menu > Video Display Settings (p.405).
     void videoDisplaySettingsRequested();

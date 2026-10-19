@@ -80,6 +80,8 @@ class MainWindow : public QMainWindow {
     Q_OBJECT
 
 public:
+    // `commands` and `providers` must outlive the window. The window starts with no project;
+    // app/main.cpp calls setProject() when one opens.
     MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& providers,
                QWidget* parent = nullptr);
     ~MainWindow() override;
@@ -87,9 +89,13 @@ public:
     // The open project, shown in the title bar. File > Close Project is
     // available only while a project is open.
     void setProject(const model::ProjectEntry& project);
+
+    // Closes the project: bins, monitors, undo history and project settings are cleared and the
+    // project-only commands disabled.
     void clearProject();
     const std::optional<model::ProjectEntry>& project() const { return project_; }
 
+    // The main panels and the managers, created in the constructor and alive as long as the window.
     PanelManager& panels() const { return *panels_; }
     BinContainer& binContainer() const { return *binContainer_; }
     Composer& composer() const { return *composer_; }
@@ -104,8 +110,10 @@ public:
     // Tools (ch.5) open as floating panels, which can be docked and tabbed
     // like other panels (p.94): "CommandPalette", "ToolPalette",
     // "Calculator", "Console", "EffectPalette", "EffectEditor", "AudioMixer", "AudioTool",
-    // "MediaTool".
+    // "MediaTool", also "Keyboard", "SourceBrowser" and "BackgroundQueue". An open panel is brought
+    // forward; a closed one floats at its first size. Null for an unknown id.
     Panel* showTool(const QString& panelId);
+    // The tools' widgets, created in the constructor whether or not their panels are open.
     CommandPalette& commandPalette() const { return *commandPalette_; }
     ToolPalette& toolPalette() const { return *toolPalette_; }
     CalculatorWindow& calculator() const { return *calculator_; }
@@ -117,15 +125,19 @@ public:
     MediaTool& mediaTool() const { return *mediaTool_; }
     // File > Input > Source Browser (p.312-318).
     SourceBrowser& sourceBrowser() const;
+
+    // Opens it with the project's bins as targets, at the home folder the first time.
     void showSourceBrowser();
     // Links media files into a bin (p.317), returning the new clips' ids.
     // Files that are not media are left out and named in the Console.
+    // The bin is opened if needed; empty if it cannot be.
     QStringList linkFiles(const QString& binId, const QStringList& paths);
     // Links files without putting them in a bin and loads them into a
     // monitor, to review (p.315-316).
     void loadFiles(const QStringList& paths, bool recordMonitor = false);
     // "Add volume Bin" (p.318): a new bin named after the folder, with every
     // media file in it and the folders in it. Returns the bin's id.
+    // Empty without a project.
     QString linkVolume(const QString& folder);
     // The project's rate and the Link settings.
     media::LinkOptions linkOptions() const;
@@ -133,6 +145,8 @@ public:
     // Media (p.368). The hook stands in for showing the dialog (tests).
     void relinkLinkedMedia();
     void setLinkedMediaHook(std::function<void(LinkedMediaDialog&)> hook) { linkedMediaHook_ = std::move(hook); }
+
+    // Returns the number of clips unlinked.
     int unlinkSelection();
     // Clip > Relink > Managed Media (p.361-364): the selection, or with
     // "Selected items in ALL open bins" every open bin's. The hook stands in
@@ -152,9 +166,11 @@ public:
     // Managed media (Phase 2.4, p.348-359). File > Input > Import Media:
     // the files as new media in a bin (p.213), at the Media Creation
     // setting's import resolution unless `resolution` names another.
+    // AAF files among the paths go to importAaf(). Returns the new items' ids.
     QStringList importFiles(const QString& binId, const QStringList& paths, const QString& resolution = {});
     // AAF files imported into a bin (p.547): their clips and sequences,
     // master clips with media on the drives online by MobID.
+    // Returns the new items' ids; failures and warnings go to the Console.
     QStringList importAaf(const QString& binId, const QStringList& paths);
     // File > Output > Export to File (p.868-869) on the active bin's
     // selection, with the sequences' clips: the Export As dialog, then the
@@ -188,7 +204,11 @@ public:
     std::int64_t scrubStart() const { return scrubStart_; }
     // Composer > Full Screen Playback (p.391).
     void toggleFullScreen();
+
+    // Null until Full Screen Playback is first opened.
     FullScreenView* fullScreenView() const;
+
+    // The audio clock in output samples (media::kPlaybackRate per second); 0 without a player.
     std::int64_t soundClock() const;
     // Tools > Media Tool: the Media Tool Display dialog, then the tool
     // (p.346). Tests answer the dialog through the hook (true: OK).
@@ -197,10 +217,12 @@ public:
         mediaToolDisplay_ = std::move(hook);
     }
     // Help > About's Configuration, Usage and Hardware (p.102-105).
+    // A new dialog parented to this window; the caller shows it and decides when it goes.
     AboutInfoDialog* createAboutInfo();
     KeyboardPalette& keyboardPalette() const { return *keyboardPalette_; }
     KeyboardMap& keyboard() const { return *keyboard_; }
     // The workspace each of the W1-W12 buttons switches to (p.90-91).
+    // Index i is button W(i+1); an empty name leaves it unassigned.
     QStringList workspaceButtons() const;
 
     // The layout of a new user (p.74): Bin Container top left, Composer to
@@ -226,17 +248,26 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
+    // Command handlers: application-wide (installHandlers), needing the panels (installPanelHandlers),
+    // and needing a project, cleared again with false (installProjectHandlers).
     void installHandlers();
     void installPanelHandlers();
     void installProjectHandlers(bool projectOpen);
+
+    // Whether the Bin Container (docked, floating, or the Project panel) is the active panel.
     bool binsActive() const;
     void createPanels();
+
+    // Workspaces: the menus and button kept in step with WorkspaceManager, and the commands that change
+    // them.
     void syncWorkspaceUi();
     void placeWorkspaceButton();
     void newWorkspace();
     void deleteWorkspace();
     void restoreCurrentToDefault();
     void showAbout();
+
+    // Pushes the active settings into every window; runs on each Settings::changed.
     void applySettings();
     void createTools();
     // Workspaces are User settings, one Workspace View each (p.86,
@@ -278,13 +309,20 @@ private:
     QString scrubItem_;
     std::int64_t scrubPosition_ = -1;
     std::int64_t scrubStart_ = 0;
+    // Counts bursts, so that only the latest one's timer lets the device go.
     int scrubToken_ = 0;
     bool scrubbing_ = false;
+
+    // Plays a scrub burst when the position moved while stopped (runs on Composer::changed).
     void scrubIfMoved();
+
+    // The audio of a loaded item; `monitored`, when set, picks the sequence tracks heard.
     std::vector<media::AudioPiece> soundOf(const model::LoadedClip& loaded,
                                            const std::function<bool(const QString&)>& monitored) const;
     // What a monitor shows at a position: a linked clip and its frame.
     std::optional<std::pair<model::BinItem, std::int64_t>> frameAt(MonitorId monitor, std::int64_t position) const;
+
+    // Starts the monitor's sound at `speed` for playback, or none above three times normal.
     void startSound(MonitorId monitor, int speed);
     std::function<void(LinkedMediaDialog&)> linkedMediaHook_;
     std::function<bool(ConsolidateDialog&)> consolidateHook_;
@@ -298,10 +336,16 @@ private:
     void applyConsolidate(const QString& binId, const media::ConsolidateResult& result);
     // Puts a changed clip back in its bin and the monitors.
     void storeClip(const QString& binId, const model::BinItem& item);
+
+    // Gives the Source Browser the project's bins.
     void refreshSourceBins();
     std::function<bool(MediaToolDisplayDialog&)> mediaToolDisplay_;
+    // The Audio Mixer mode last taken from the settings, so the mixer is switched only when it changes.
     QString appliedMixerMode_;
+    // When the project opened (Help > About, Usage).
     QDateTime projectOpened_;
+
+    // Every item in the project's bins, open ones as they are now; *binCount gets the number of bins.
     QList<model::BinItem> projectItems(int* binCount = nullptr) const;
     ConsoleWindow* console_ = nullptr;
     KeyboardPalette* keyboardPalette_ = nullptr;
@@ -309,12 +353,15 @@ private:
     SettingsWindow* settingsWindow_ = nullptr;
     SiteSettingsWindow* siteSettingsWindow_ = nullptr;
     ToolTipFilter* toolTips_ = nullptr;
+    // Set while workspaces are written to or read from the settings, so the two do not feed back.
     bool syncingWorkspaces_ = false;
+    // The workspace whose Link to Named settings were last applied.
     QString linkedWorkspace_;
     std::unique_ptr<KeyboardMap> keyboard_;
     WorkspaceManager* workspaces_ = nullptr;
     WorkspaceBar* bar_ = nullptr;
     QToolButton* workspaceButton_ = nullptr;
+    // The workspace entries put in Windows > Workspaces, rebuilt by syncWorkspaceUi().
     QList<QAction*> workspaceActions_;
 };
 

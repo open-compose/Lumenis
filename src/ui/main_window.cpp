@@ -67,6 +67,21 @@
 
 #include <algorithm>
 
+// MainWindow: the application frame and the place where the parts of the editor are wired together.
+// It owns the panel framework (PanelManager, panels.*) and the workspaces (workspace*), creates every
+// panel and tool (createPanels, createTools), connects the Composer, Timeline, bins and tools to each
+// other, and gives the commands declared in resources/commands.json their handlers
+// (installHandlers, installPanelHandlers, installProjectHandlers). A command without a handler stays
+// in the menus but disabled (CommandRegistry::setHandler), which is how project-only commands turn
+// off when no project is open.
+//
+// It also carries the work that spans several parts and so belongs to no single panel:
+//   - settings: applySettings() pushes every setting (settings.*, resources/settings.json) into the
+//     windows whenever Settings::changed fires; workspaces are stored as User settings;
+//   - playback sound and digital audio scrub, through media::AudioPlayer (src/media/playback.*);
+//   - linking, importing, AAF import and export, relinking, Consolidate/Transcode and the media
+//     database (src/media/link.*, managed.*, consolidate.*, relink.*, src/interop/aaf_*).
+// The menus themselves are built by buildBuiltinMenus (menu_builder.*) from menus.json.
 namespace lumenis::ui {
 
 // Interface settings, Show ToolTips (p.1200): with it off, no tooltips.
@@ -84,6 +99,8 @@ protected:
 
 namespace {
 
+// Building blocks of a panel layout as PanelManager::restoreLayout reads it: a tab group holding one
+// panel, and a split of children with relative sizes ("h" side by side, "v" one above the other).
 QJsonObject tabs(const QString& id) {
     return {{QStringLiteral("tabs"), QJsonArray{id}}, {QStringLiteral("current"), 0}};
 }
@@ -96,18 +113,23 @@ QJsonObject split(const char* orientation, const QJsonArray& sizes, const QJsonA
 
 } // namespace
 
+// The order matters: createTools() uses the Composer, Timeline and KeyboardMap made by createPanels();
+// the bin and input menus are handed to the Bin Container only once buildBuiltinMenus() has made them;
+// and the default layout is restored once every panel exists.
 MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& providers, QWidget* parent)
     : QMainWindow(parent), commands_(commands), providers_(providers) {
     setObjectName(QStringLiteral("MainWindow"));
     setWindowTitle(QString::fromUtf8(branding::kProductName));
     resize(1280, 800);
 
+    // Every workspace has the same default layout (p.74).
     panels_ = new PanelManager(this);
     workspaces_ = new WorkspaceManager(*panels_, this);
     for (const QString& name : workspaces_->names()) {
         workspaces_->setDefaultLayout(name, defaultLayout());
     }
 
+    // The central area: the docked panels, with the workspace toolbar along its right edge.
     auto* area = new QWidget(this);
     area->setObjectName(QStringLiteral("WorkspaceArea"));
     auto* layout = new QHBoxLayout(area);
@@ -146,6 +168,8 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     binContainer_->setInputMenu(menuBar()->findChild<QMenu*>(QStringLiteral("menu:file_input")));
     installProjectHandlers(false);
     panels_->restoreLayout(defaultLayout());
+    // Workspaces follow the User settings: written back whenever they change, read again when another
+    // user's settings load, and a switch applies the new workspace's Link to Named settings.
     connect(workspaces_, &WorkspaceManager::changed, this, &MainWindow::syncWorkspaceUi);
     connect(workspaces_, &WorkspaceManager::changed, this, [this] {
         writeWorkspaces();
@@ -183,6 +207,9 @@ QJsonObject MainWindow::defaultLayout() {
             {QStringLiteral("blankHomes"), QJsonObject()}};
 }
 
+// Creates the main panels (Bin Container, Project, Composer, Timeline) and connects them: the
+// Composer's resolvers find bin items and media frames, its play signals drive the sound, and the
+// Timeline stores its sequences in bins. The tools come after, in createTools().
 void MainWindow::createPanels() {
     // Its tab reads "Bins" in the pictures on p.240-242.
     binContainer_ = new BinContainer;
@@ -192,6 +219,7 @@ void MainWindow::createPanels() {
     panels_->addPanel(new Panel(QStringLiteral("Project"), tr("Project"), new BinSidebar(*binContainer_)));
     // The Composer window (ch. 13).
     composer_ = new Composer;
+    // Bin items are looked up in the bins open in the Bin Container; items in closed bins are not found.
     composer_->setItemResolver([this](const QString& binId, const QString& itemId) -> std::optional<model::BinItem> {
         const BinDocument* doc = binContainer_->document(binId);
         const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr;
@@ -259,6 +287,8 @@ void MainWindow::createPanels() {
         loadFiles(paths, monitor == MonitorId::Record);
     });
     // Deleting managed clips can delete their media files too (p.359).
+    // The filter returns the ids the bin goes on to delete: all of them when no managed media is among
+    // them, none when only the media files go, and nothing (std::nullopt) on Cancel.
     binContainer_->setDeleteFilter([this](const BinDocument& doc, const QStringList& ids) -> std::optional<QStringList> {
         QStringList files;
         int clips = 0;
@@ -312,6 +342,8 @@ void MainWindow::createPanels() {
     });
     connect(binContainer_, &BinContainer::filesDropped, this,
             [this](const QString& binId, const QStringList& paths) { linkFiles(binId, paths); });
+    // The Keyboard setting's map, starting from the declared shortcuts; the Composer and the Timeline
+    // run the keys pressed in them through it.
     keyboard_ = std::make_unique<KeyboardMap>();
     keyboard_->loadBuiltin(commands_);
     composer_->setKeyResolver([this](const QKeySequence& key) { return keyboard_->commandFor(key); });
@@ -367,6 +399,8 @@ void MainWindow::createPanels() {
     panels_->addPanel(new Panel(QStringLiteral("Timeline"), tr("Timeline"), timeline_));
 }
 
+// Opening a project: settings, bins, monitors and undo history are reset for it, the project-only
+// commands get their handlers, and the media database is read.
 void MainWindow::setProject(const model::ProjectEntry& project) {
     project_ = project;
     setWindowTitle(QStringLiteral("%1 - %2").arg(QString::fromUtf8(branding::kProductName), project.settings.name));
@@ -384,6 +418,8 @@ void MainWindow::setProject(const model::ProjectEntry& project) {
     loadMediaDatabase();
 }
 
+// Every item in every bin of the project, for the Media Tool, Help > About's Usage and background
+// jobs. Closed bins are read from disk; a bin that cannot be read is skipped but still counted.
 QList<model::BinItem> MainWindow::projectItems(int* binCount) const {
     QList<model::BinItem> items;
     int count = 0;
@@ -419,6 +455,8 @@ void MainWindow::showMediaTool() {
     showTool(QStringLiteral("MediaTool"));
 }
 
+// Configuration lists the registered extension providers; Usage counts the open project's bins,
+// sequences and other items, and how long it has been open.
 AboutInfoDialog* MainWindow::createAboutInfo() {
     QStringList plugins;
     for (const auto& p : providers_.all()) {
@@ -440,6 +478,7 @@ AboutInfoDialog* MainWindow::createAboutInfo() {
     return new AboutInfoDialog(plugins, usage, this);
 }
 
+// Closing the project: the reverse of setProject(), and the Settings windows are hidden.
 void MainWindow::clearProject() {
     project_.reset();
     setWindowTitle(QString::fromUtf8(branding::kProductName));
@@ -463,11 +502,15 @@ bool MainWindow::binsActive() const {
     return p && (p->id() == QLatin1String("BinContainer") || p->id() == QLatin1String("Project"));
 }
 
+// Commands that need an open project (bins, sequences, Settings, the Edit commands on bins). Called
+// with false at start-up and on close, which clears every handler here and so disables the commands,
+// and with true when a project opens.
 void MainWindow::installProjectHandlers(bool projectOpen) {
     auto handle = [this, projectOpen](const char* id, std::function<void()> handler) {
         commands_.setHandler(QString::fromLatin1(id), projectOpen ? std::move(handler) : std::function<void()>());
     };
     BinContainer* bins = binContainer_;
+    // File menu: opening, closing and saving bins.
     handle("file.open_bin", [this, bins] {
         const QString file = QFileDialog::getOpenFileName(this, tr("Open a Bin"), {}, tr("Bins (*.cthbin)"));
         if (file.isEmpty()) return;
@@ -494,11 +537,13 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
     };
     handle("file.save_all", saveAll);
     handle("file.save_all_bins", saveAll);
+    // Bin > Show Sidebar Only is a check item mirroring the Bin Container's state.
     QAction* sidebarOnly = commands_.action(QStringLiteral("bin.show_sidebar_only"));
     sidebarOnly->setCheckable(true);
     sidebarOnly->setChecked(bins->isSidebarOnly());
     handle("bin.show_sidebar_only", [bins, sidebarOnly] { bins->setSidebarOnly(sidebarOnly->isChecked()); });
     handle("windows.close_all_bins_but_active", [bins] { bins->closeAllBinsButActive(); });
+    // New Sequence: in the active bin, or in a bin chosen in the Select dialog.
     handle("timeline.new.sequence", [this, bins] {
         QString target;
         if (!bins->activeDocument()) {
@@ -553,6 +598,7 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
     });
 
     // The active bin's views, columns, sorting and sifting (ch. 10).
+    // Each of these acts on the active bin's view, and does nothing when no bin is active.
     auto view = [bins](const char* id, std::function<void(BinView&)> act) {
         return std::pair<const char*, std::function<void()>>(id, [bins, act = std::move(act)] {
             if (BinView* v = bins->activeView()) act(*v);
@@ -602,6 +648,7 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
     });
 }
 
+// closed() fires only once the close is accepted.
 void MainWindow::closeEvent(QCloseEvent* event) {
     // Where each workspace was left, for the next session.
     writeWorkspaces();
@@ -611,6 +658,7 @@ void MainWindow::closeEvent(QCloseEvent* event) {
     }
 }
 
+// The Settings window is made on first use and kept; it is a top-level window parented to this one.
 SettingsWindow* MainWindow::showSettings() {
     if (!settingsWindow_) {
         settingsWindow_ = new SettingsWindow(*settings_, this);
@@ -639,6 +687,8 @@ SiteSettingsWindow* MainWindow::showSiteSettings() {
     return siteSettingsWindow_;
 }
 
+// The settings list Edit > Duplicate and Delete act on: the one in the active Settings or Site
+// Settings window, or null when neither is active.
 SettingsList* MainWindow::activeSettingsList() const {
     const QWidget* active = QApplication::activeWindow();
     if (settingsWindow_ && active == settingsWindow_) return settingsWindow_->currentList();
@@ -646,6 +696,9 @@ SettingsList* MainWindow::activeSettingsList() const {
     return nullptr;
 }
 
+// Replaces the User settings' Workspace View entries with the workspaces as they are now: their saved
+// and last known layouts and what each is based on, the active one marked active. syncingWorkspaces_
+// stops the commit (which fires Settings::changed and so applySettings) from coming back here.
 void MainWindow::writeWorkspaces() {
     if (syncingWorkspaces_) return;
     syncingWorkspaces_ = true;
@@ -671,6 +724,8 @@ void MainWindow::writeWorkspaces() {
     syncingWorkspaces_ = false;
 }
 
+// The reverse of writeWorkspaces(), when another user's settings load. It writes them back at the end
+// so that a new user's settings get the default workspaces.
 void MainWindow::readWorkspaces() {
     syncingWorkspaces_ = true;
     const model::SettingsFile& f = settings_->file(model::SettingsScope::User);
@@ -695,6 +750,7 @@ void MainWindow::readWorkspaces() {
     writeWorkspaces();
 }
 
+// Index i is the workspace of button W(i+1); an empty name leaves the button unassigned.
 QStringList MainWindow::workspaceButtons() const {
     const QJsonValue v = settings_->value(QStringLiteral("Interface"), QStringLiteral("workspaceButtons"));
     if (!v.isArray()) {
@@ -720,6 +776,9 @@ void MainWindow::updateWorkspaceButtons() {
     commandPalette_->setWorkspaces(workspaces_->names(), buttons);
 }
 
+// Called when the active workspace changes. Only for a workspace whose Workspace View has Link to
+// Named settings on (linkNamed): every other kind of User setting switches to the version of that
+// name, if it has one that is not already active.
 void MainWindow::linkSettings(const QString& workspace) {
     linkedWorkspace_ = workspace;
     model::SettingsFile& f = settings_->file(model::SettingsScope::User);
@@ -746,6 +805,10 @@ void MainWindow::linkSettings(const QString& workspace) {
     if (any) settings_->commit(model::SettingsScope::User);
 }
 
+// Creates the tool panels (ch.5) and connects them: Command Palette, Tool Palette, Calculator,
+// Console, Effect Palette and Editor, Audio Mixer and Tool, Background Queue, Media Tool, Source
+// Browser and the Keyboard palette. All start closed; showTool() floats them on first use. Changes made
+// in the tools (mixer modes, keys, mapped buttons, workspace buttons) are saved into the settings.
 void MainWindow::createTools() {
     ButtonMapper::instance().setRegistry(&commands_);
     // Menu to Button (p.98): with a target button picked, the next menu
@@ -829,6 +892,7 @@ void MainWindow::createTools() {
     });
     // "Clear Source Monitor Upon Closing Source Browser" (p.315): the clips
     // it loaded without a bin go.
+    // Guarded: panel layout changes still arrive while the window is being taken down.
     QPointer<Composer> composer = composer_;
     connect(panels_, &PanelManager::layoutChanged, sourceBrowser_, [this, browserPanel, composer] {
         if (!composer) return;
@@ -896,6 +960,8 @@ std::optional<std::pair<model::BinItem, std::int64_t>> MainWindow::frameAt(Monit
     return std::make_pair(item, frame);
 }
 
+// The audio of a loaded clip or sequence as pieces for media::AudioMix (media::audioPieces).
+// `monitored`, when set, picks the sequence tracks heard (the Track Selector panel).
 std::vector<media::AudioPiece> MainWindow::soundOf(const model::LoadedClip& loaded,
                                                   const std::function<bool(const QString&)>& monitored) const {
     // Audio settings, Default Pan for mono tracks (p.1147).
@@ -905,6 +971,8 @@ std::vector<media::AudioPiece> MainWindow::soundOf(const model::LoadedClip& load
         monitored, alternating);
 }
 
+// The Full Screen Playback view is made once and kept (guarded by a QPointer); applySettings() gives it
+// the Full Screen Playback settings before it opens.
 void MainWindow::toggleFullScreen() {
     FullScreenView* view = fullScreen_.data();
     if (view && view->isVisible()) {
@@ -924,6 +992,9 @@ FullScreenView* MainWindow::fullScreenView() const {
     return fullScreen_.data();
 }
 
+// Runs on every Composer::changed. A burst of sound plays only when the active monitor still shows
+// the same item but its position moved, playback is stopped, and Shift is held or the Digital Audio
+// Scrub button is on. The first change after loading another item only records the position.
 void MainWindow::scrubIfMoved() {
     const MonitorId monitor = composer_->activeMonitor();
     const model::LoadedClip* loaded = composer_->state(monitor).current();
@@ -959,6 +1030,7 @@ void MainWindow::scrubIfMoved() {
     const int ms = static_cast<int>(1000.0 * (out + in) * static_cast<double>(rate.den()) /
                                     static_cast<double>(std::max<std::int64_t>(rate.num(), 1))) +
                    250;
+    // The burst's length plus a quarter second; a later burst (a new token) or playback keeps the device.
     QTimer::singleShot(ms, this, [this, token] {
         if (token == scrubToken_ && scrubbing_ && !composer_->isPlaying()) {
             audio_->stop();
@@ -975,6 +1047,8 @@ std::int64_t MainWindow::soundClock() const {
     return audio_ ? audio_->clock() : 0;
 }
 
+// Runs on Composer::playStarted, also when only the speed changed: the sound restarts from the
+// current position at the new speed. With no output device, play goes on silently.
 void MainWindow::startSound(MonitorId monitor, int speed) {
     audio_->stop();
     scrubbing_ = false;
@@ -999,6 +1073,7 @@ void MainWindow::startSound(MonitorId monitor, int speed) {
     }
 }
 
+// Without a project, the edit rate stays the LinkOptions default.
 media::LinkOptions MainWindow::linkOptions() const {
     media::LinkOptions o;
     if (project_) o.editRate = project_->settings.format.editRate;
@@ -1011,6 +1086,7 @@ SourceBrowser& MainWindow::sourceBrowser() const {
     return *sourceBrowser_.data();
 }
 
+// Gives the Source Browser the project's bins for its target bin menu.
 void MainWindow::refreshSourceBins() {
     SourceBrowser* browser = sourceBrowser_.data();
     if (!browser) return;
@@ -1030,6 +1106,7 @@ void MainWindow::showSourceBrowser() {
     showTool(QStringLiteral("SourceBrowser"));
 }
 
+// The bin is opened if it is not; the new clips are selected in it.
 QStringList MainWindow::linkFiles(const QString& binId, const QStringList& paths) {
     BinDocument* doc = binContainer_->document(binId);
     if (!doc) doc = binContainer_->openBin(binId);
@@ -1050,6 +1127,8 @@ QStringList MainWindow::linkFiles(const QString& binId, const QStringList& paths
     return ids;
 }
 
+// The clips are loaded with an empty bin id: they are in no bin until Composer::commitSource() puts
+// them in one (p.316).
 void MainWindow::loadFiles(const QStringList& paths, bool recordMonitor) {
     const QList<model::BinItem> items = media::linkFiles(paths, linkOptions());
     for (const model::BinItem& item : items) {
@@ -1103,6 +1182,9 @@ void MainWindow::relinkLinkedMedia() {
     }
 }
 
+// Re-reads the media database and relinks the chosen clips to the media files that match them;
+// changed clips are stored back, new ".relinked" sequences are added to their bin and selected, and
+// items with no match are named in the Console.
 void MainWindow::relinkManagedMedia() {
     if (!project_) return;
     ManagedRelinkDialog dialog(project_->settings.name, this);
@@ -1189,6 +1271,8 @@ std::function<bool(double)> progressOn(QProgressDialog& dialog) {
 
 } // namespace
 
+// The Media Creation setting's keys are prefixed by the tab: "importResolution", "transcodeVideoDrive"
+// and so on. A resolution that is not found keeps the MediaCreation default.
 media::MediaCreation MainWindow::mediaCreation(const QString& tab) const {
     media::MediaCreation c;
     const QString kind = QStringLiteral("Media Creation");
@@ -1206,6 +1290,9 @@ media::MediaCreation MainWindow::mediaCreation(const QString& tab) const {
     return c;
 }
 
+// Rescans every media drive from scratch (a wait cursor shows meanwhile) and points offline managed
+// clips in open bins at their files. Clips in bins opened later are resolved by the bin loader set in
+// createPanels().
 void MainWindow::loadMediaDatabase() {
     // Every drive's Avid MediaFiles folder (p.358-359).
     QStringList roots;
@@ -1231,6 +1318,8 @@ void MainWindow::loadMediaDatabase() {
     ConsoleLog::instance().append(tr("Media database: %n media file(s) on the drives.", "", mediaDb_.fileCount()));
 }
 
+// Each file is imported on its own: one that fails is reported in the Console and the rest go on.
+// The AAF's custom bin columns are added to the bin's display.
 QStringList MainWindow::importAaf(const QString& binId, const QStringList& paths) {
     BinDocument* doc = binContainer_->document(binId);
     if (!doc) doc = binContainer_->openBin(binId);
@@ -1275,6 +1364,9 @@ QStringList MainWindow::importAaf(const QString& binId, const QStringList& paths
     return ids;
 }
 
+// Steps: collect the selection and the clips its sequences use, make sure an Export setting exists,
+// ask for the file and setting (Export As dialog), then write the AAF with interop::aaf::exportItems.
+// Results and warnings go to the Console. The last folder exported to is remembered in QSettings.
 void MainWindow::exportToFile() {
     BinView* view = binContainer_->activeView();
     if (!view || view->selectedIds().isEmpty()) {
@@ -1321,6 +1413,7 @@ void MainWindow::exportToFile() {
     QSettings remembered;
     QString folder = remembered.value(QStringLiteral("export/folder")).toString();
     if (folder.isEmpty() || !QDir(folder).exists()) folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    // The first item's name, with characters that are not allowed in file names replaced.
     QString base = items.first().name;
     base.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
     ExportAsDialog dialog(QDir(folder).filePath(base + QLatin1String(".aaf")), names, active, this);
@@ -1358,6 +1451,9 @@ void MainWindow::exportToFile() {
     for (const QString& w : result.warnings) ConsoleLog::instance().append(tr("Export to File: %1").arg(w));
 }
 
+// Import transcodes each file into new managed media (media::transcodeClip) with a progress dialog.
+// A file that fails is named in the Console; once Cancel was clicked, the first failure ends the
+// import. Returns the new items' ids, the AAF ones first.
 QStringList MainWindow::importFiles(const QString& binId, const QStringList& allPaths, const QString& resolution) {
     // AAF files are compositions, not media (p.547).
     QStringList paths;
@@ -1394,6 +1490,7 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
     for (int i = 0; i < clips.size(); ++i) {
         model::BinItem clip = clips.at(i);
         const auto link = media::linkOf(clip);
+        // A still picture lasts frameImportDuration seconds.
         if (link && link->videoStream >= 0 && link->channels == 0 && link->frames == 1) {
             clip.durationFrames = std::max<std::int64_t>(
                 1, seconds * options.editRate.num() / std::max<std::int64_t>(options.editRate.den(), 1));
@@ -1418,6 +1515,9 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
     return ids;
 }
 
+// Consolidate/Transcode on the active bin's selection: the dialog (initialised from the Media
+// Creation setting's transcode tab), then the Copying Media Files question for master clips, then the
+// work, either now with a progress dialog or as Background Queue jobs. Both end in applyConsolidate().
 void MainWindow::consolidateTranscode() {
     BinView* view = binContainer_->activeView();
     if (!view || view->selectedIds().isEmpty() || !project_) return;
@@ -1478,6 +1578,7 @@ void MainWindow::consolidateTranscode() {
         showTool(QStringLiteral("BackgroundQueue"));
         return;
     }
+    // In the foreground: one run over the whole selection, with the open bins as the clip lookup.
     QProgressDialog progress(dialog.isTranscode() ? tr("Transcoding...") : tr("Consolidating..."), tr("Cancel"), 0, 1000,
                              this);
     progress.setObjectName(QStringLiteral("consolidateProgress"));
@@ -1490,6 +1591,8 @@ void MainWindow::consolidateTranscode() {
     applyConsolidate(doc.nodeId(), result);
 }
 
+// Adds the new clips and sequences to the bin (opening it if needed) and selects them, stores the
+// changed clips, reports what was skipped, and drops cached frames so the monitors read the new media.
 void MainWindow::applyConsolidate(const QString& binId, const media::ConsolidateResult& result) {
     BinDocument* doc = binContainer_->document(binId);
     if (!doc) doc = binContainer_->openBin(binId);
@@ -1516,6 +1619,8 @@ void MainWindow::applyConsolidate(const QString& binId, const media::Consolidate
     frames_->clear();
 }
 
+// Every file under the folder, subfolders too, in name order; files that are not media are skipped by
+// linkFiles().
 QString MainWindow::linkVolume(const QString& folder) {
     if (!binContainer_->hasProject()) return {};
     const QString id = binContainer_->newBin();
@@ -1530,6 +1635,7 @@ QString MainWindow::linkVolume(const QString& folder) {
     return id;
 }
 
+// An open panel is brought forward; a closed one floats near the window's top left at its first size.
 Panel* MainWindow::showTool(const QString& panelId) {
     Panel* panel = panels_->panel(panelId);
     if (!panel) return nullptr;
@@ -1555,6 +1661,8 @@ Panel* MainWindow::showTool(const QString& panelId) {
     return panel;
 }
 
+// Writes to the Console, one line per track: filler, nothing, or the segment's clip, its clip frame
+// at the position and the segment's first and last frame in the sequence.
 void MainWindow::positionInfo() {
     // The sequence in the Record monitor at its position (p.101).
     const model::MonitorState& record = composer_->state(MonitorId::Record);
@@ -1591,6 +1699,9 @@ void MainWindow::positionInfo() {
     showTool(QStringLiteral("Console"));
 }
 
+// Pushes the active settings into every window. Runs on each Settings::changed (any setting, any
+// scope), so each part here must be cheap and safe to repeat. A new setting in settings.json takes
+// effect only once it is read here or by its window.
 void MainWindow::applySettings() {
     const Settings& s = *settings_;
     // Video Display (p.1224) and Full Screen Playback (p.1190-1191) settings.
@@ -1687,6 +1798,7 @@ void MainWindow::applySettings() {
                                      : WorkspaceManager::MoveBehavior::LastKnownState);
 }
 
+// Keeps the workspace button in the top right corner as the central area resizes.
 bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     if (watched == centralWidget() && event->type() == QEvent::Resize) {
         placeWorkspaceButton();
@@ -1694,12 +1806,15 @@ bool MainWindow::eventFilter(QObject* watched, QEvent* event) {
     return QMainWindow::eventFilter(watched, event);
 }
 
+// Commands that work whether or not a project is open and need nothing else.
 void MainWindow::installHandlers() {
     commands_.setHandler(QStringLiteral("file.exit"), [] { QApplication::closeAllWindows(); });
     commands_.setHandler(QStringLiteral("help.about"), [this] { showAbout(); });
     commands_.setHandler(QStringLiteral("help.about_qt"), [] { QApplication::aboutQt(); });
 }
 
+// Handlers for commands that need the panels but not a project: workspaces, tools, media, windows,
+// and the Composer's and Timeline's own commands. Installed once, after the menus are built.
 void MainWindow::installPanelHandlers() {
     auto handle = [this](const char* id, std::function<void()> handler) {
         commands_.setHandler(QString::fromLatin1(id), std::move(handler));
@@ -1716,6 +1831,7 @@ void MainWindow::installPanelHandlers() {
         commands_.setHandler(QString::fromLatin1(id), [] {});
     }
     // Tools (ch.5).
+    // Tools menu: each opens its panel through showTool().
     handle("tools.command_palette", [this] { showTool(QStringLiteral("CommandPalette")); });
     handle("tools.calculator", [this] { showTool(QStringLiteral("Calculator")); });
     handle("tools.console", [this] { showTool(QStringLiteral("Console")); });
@@ -1767,6 +1883,7 @@ void MainWindow::installPanelHandlers() {
             w->list(model::SettingsScope::User)->openEntry(i);
         }
     });
+    // Windows menu: panels and workspaces.
     handle("windows.float_all_panels", [this] { panels_->floatAll(); });
     handle("windows.float_active_panel", [this] { panels_->floatActive(); });
     handle("windows.add_blank_panel", [this] { panels_->addBlankPanel(); });
@@ -1819,6 +1936,7 @@ void MainWindow::installPanelHandlers() {
     }
     // Floating windows are separate windows: give them every command so
     // their shortcuts work there too.
+    // QAction shortcuts only fire in a window that holds the action.
     auto giveCommands = [this](QWidget* window) {
         for (const QString& id : commands_.ids()) window->addAction(commands_.action(id));
     };
@@ -1826,6 +1944,8 @@ void MainWindow::installPanelHandlers() {
     connect(binContainer_, &BinContainer::floatingContainerCreated, this, giveCommands);
 }
 
+// Brings the menus and the workspace button up to date with the workspaces: check marks, the list of
+// workspaces in Windows > Workspaces and in the button's menu, and whether the button shows.
 void MainWindow::syncWorkspaceUi() {
     const bool barShown = workspaces_->barMode() != WorkspaceManager::BarMode::Hidden;
     commands_.action(QStringLiteral("windows.workspaces.show_workspace_toolbar"))->setChecked(barShown);
@@ -1833,6 +1953,7 @@ void MainWindow::syncWorkspaceUi() {
 
     // Windows > Workspaces lists the workspaces above its commands (p.86).
     if (auto* menu = menuBar()->findChild<QMenu*>(QStringLiteral("menu:windows_workspaces"))) {
+        // The workspace entries are rebuilt each time; the menu's declared commands stay below them.
         qDeleteAll(workspaceActions_);
         workspaceActions_.clear();
         QAction* first = menu->actions().value(0);
@@ -1910,6 +2031,8 @@ void MainWindow::restoreCurrentToDefault() {
     if (answer == QMessageBox::Ok) workspaces_->restoreCurrentToDefault();
 }
 
+// The text names the product, version, licence, extension count and font licence, and disclaims any
+// tie to Avid.
 QMessageBox* MainWindow::createAboutBox() {
     const QString name = QString::fromUtf8(branding::kProductName);
     auto* box = new QMessageBox(this);

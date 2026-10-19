@@ -29,6 +29,24 @@
 #include <algorithm>
 #include <cmath>
 
+// The Timeline window (Editing Guide ch. 15, 19, 20) and its tracks area.
+//
+// - TimelineView (first half) paints the Track Selector panel, the ruler, the tracks with their
+//   segments, effects, marks, markers, trim rollers and drag outlines, and maps mouse input to
+//   Timeline calls: scrubbing, segment selection and drags, lassos, trim rollers, patching and
+//   the Track Selector's buttons. Coordinates: x = headerWidth() + (frame - firstFrame) * scale,
+//   with the scale in pixels per frame; rows stack below the ruler, offset by the vertical scroll.
+// - Timeline (second half) builds the toolbars, keeps the editing state and carries out the
+//   commands listed in Timeline::handles(). Every change to the record sequence follows one
+//   pattern: read model::Sequence::fromItem() from the Record monitor's BinItem, change it with a
+//   function from the model, storeIn() a copy of the item, then commit() it, which pushes an undo
+//   step and hands the item to the bin (SequenceStore) and the Composer.
+//
+// The editing algorithms live in the model (src/model/include/lumenis/model/sequence.h: edits,
+// trims, slips, segment moves, effects; marker.h: markers); the monitors and their marks in
+// the Composer (composer.h, src/model/include/lumenis/model/monitor.h). MainWindow
+// (main_window.cpp) creates the Timeline; the Effect Editor (effect_editor.cpp) and Audio Tools
+// (audio_tools.cpp) call its effect and audio functions. Tests: tests/ui.
 namespace lumenis::ui {
 
 namespace {
@@ -76,6 +94,7 @@ constexpr QRgb kSelected = 0xffe8e8e8;       // selected segments
 constexpr QRgb kLocked = 0xffd9a13a;
 constexpr QRgb kDualRoller = 0xffe87fb8;     // dual-roller trims are pink (p.651)
 
+// A row's height for a track name; anything that is not a known track gets the TC1 height.
 int rowHeight(const QString& track) {
     if (track == QLatin1String("TC1")) return kTimecodeRow;
     const auto ref = model::parseTrackName(track);
@@ -132,6 +151,7 @@ QIcon qualityIcon(Composer::VideoQuality quality) {
     return QIcon(pm);
 }
 
+// Draws one toolbar picture at 32 pixels square, in the glyph colour (or the tool's colour).
 QIcon picture(Picture which) {
     constexpr int size = 32;
     QPixmap pm(size, size);
@@ -351,11 +371,14 @@ int TimelineView::contentHeight() const {
     return h;
 }
 
+// Clamps to 0 at the top. The bottom limit adds the current offset to contentHeight(), which
+// does not depend on it; syncScrollBars() computes the vertical range the same way.
 void TimelineView::setTopOffset(int offset) {
     top_ = std::clamp(offset, 0, std::max(contentHeight() + top_ - height(), 0));
     update();
 }
 
+// x to frame and back: frame = firstFrame + (x - headerWidth) / scale.
 std::int64_t TimelineView::frameAt(int x) const {
     const double scale = timeline_.scale();
     if (scale <= 0) return 0;
@@ -366,6 +389,7 @@ double TimelineView::xFor(std::int64_t frame) const {
     return headerWidth() + (static_cast<double>(frame) - timeline_.firstFrame()) * timeline_.scale();
 }
 
+// The buttons are fixed columns of the header, inset 2 pixels in the row and at least 12 tall.
 QRect TimelineView::sourceButton(const Row& row) const {
     return QRect(kSourceX, row.top + 2, kSourceWidth, std::max(row.height - 4, 12));
 }
@@ -395,6 +419,10 @@ void TimelineView::resizeEvent(QResizeEvent* event) {
     setTopOffset(top_);
 }
 
+// Paints in layers, back to front: the tracks and their segments and effects, the IN to OUT
+// highlight, the ruler with its marks, the position indicator, markers, trim rollers, segment
+// drag outlines, the lasso, the zoom area, then the Track Selector panel over the left edge and
+// a patch arrow being dragged. firstVisible and lastVisible bound the frames worth drawing.
 void TimelineView::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.fillRect(rect(), QColor(kBackground));
@@ -810,6 +838,8 @@ void TimelineView::paintEvent(QPaintEvent*) {
     }
 }
 
+// Moves the shown monitor's position to the frame under x (a click or scrub in the tracks),
+// stopping playback and making that monitor active.
 void TimelineView::moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifiers) {
     std::int64_t frame = std::max<std::int64_t>(frameAt(pos.x()), 0);
     // Ctrl snaps to the head of transitions, Ctrl+Alt to the tail (p.609).
@@ -922,6 +952,8 @@ std::int64_t TimelineView::dragFrames(Qt::KeyboardModifiers modifiers) const {
     return frames;
 }
 
+// Tracks moved by a segment drag: the track number difference between the row it started on
+// and the row under the pointer, or 0 when they are tracks of different kinds.
 int TimelineView::dragTracks() const {
     if (!dragFrom_) return 0;
     const auto from = rowAt(*dragFrom_);
@@ -994,6 +1026,11 @@ model::TrimKind TimelineView::trimKindAt(const QPoint& pos) const {
     return timeline_.trimKind();
 }
 
+// A left press decides what the drag that follows does, in priority order: in the tracks area
+// a zoom selection, a trim roller or slip, leaving Trim mode, a lasso (Alt), a segment selection
+// and drag with a segment tool, else scrubbing; in the Track Selector, a patch drag from a
+// source button or a click on a record, sync or monitor button. The state set here (zoomFrom_,
+// trimFrom_, lassoFrom_, dragFrom_, scrubbing_, patchFrom_) is finished in mouseReleaseEvent().
 void TimelineView::mousePressEvent(QMouseEvent* event) {
     if (event->button() != Qt::LeftButton) return;
     const QPoint pos = event->position().toPoint();
@@ -1081,6 +1118,8 @@ void TimelineView::mousePressEvent(QMouseEvent* event) {
     }
 }
 
+// Updates whichever drag mousePressEvent() started. A segment drag counts as dragging only
+// once it passes the platform's drag distance, so a click does not move segments.
 void TimelineView::mouseMoveEvent(QMouseEvent* event) {
     const QPoint pos = event->position().toPoint();
     if (zoomFrom_) {
@@ -1104,6 +1143,8 @@ void TimelineView::mouseMoveEvent(QMouseEvent* event) {
     }
 }
 
+// Finishes the drag mousePressEvent() started; a plain click ends scrubbing or toggles a source
+// track button.
 void TimelineView::mouseReleaseEvent(QMouseEvent* event) {
     const QPoint pos = event->position().toPoint();
     if (zoomFrom_) {
@@ -1197,6 +1238,7 @@ void TimelineView::mouseReleaseEvent(QMouseEvent* event) {
     update();
 }
 
+// Over the Track Selector the menu is the track's; elsewhere the Timeline's.
 void TimelineView::contextMenuEvent(QContextMenuEvent* event) {
     QString track;
     if (const auto row = rowAt(event->pos()); row && event->pos().x() < headerWidth()) track = row->track;
@@ -1205,6 +1247,8 @@ void TimelineView::contextMenuEvent(QContextMenuEvent* event) {
     menu->popup(event->globalPos());
 }
 
+// A horizontal wheel or Shift scrolls through time, about 40 pixels per notch (120 units);
+// a vertical wheel scrolls the rows and moves the Timeline's vertical scroll bar to match.
 void TimelineView::wheelEvent(QWheelEvent* event) {
     const QPoint delta = event->angleDelta();
     if (delta.x() != 0 || (event->modifiers() & Qt::ShiftModifier)) {
@@ -1221,6 +1265,9 @@ void TimelineView::wheelEvent(QWheelEvent* event) {
 
 // ------------------------------------------------------------------ Timeline
 
+// Builds the window: the top toolbar (timecode and command buttons), the tracks view with its
+// vertical scroll bar, and the bottom toolbar; then connects to the Composer and installs the
+// resolvers the Composer uses for events and stops in the shown items.
 Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), composer_(composer) {
     setObjectName(QStringLiteral("Timeline"));
     view_ = new TimelineView(*this, this);
@@ -1465,6 +1512,8 @@ std::int64_t Timeline::startFrame() const {
     return composer_.state(shownMonitor()).startFrame();
 }
 
+// Clearing shownId_ makes sync() treat the item as new: the view zooms out and the selection
+// and Trim mode end.
 void Timeline::setShowSource(bool on) {
     if (showSource_ == on) return;
     showSource_ = on;
@@ -1473,6 +1522,8 @@ void Timeline::setShowSource(bool on) {
     sync();
 }
 
+// Rebuilds shown_ from the shown monitor whenever the Composer changes, and with it the source
+// tracks of the patch, the selection, the timecode display and the horizontal view.
 void Timeline::sync() {
     if (syncing_) return;
     const model::MonitorState& s = composer_.state(shownMonitor());
@@ -1543,6 +1594,8 @@ void Timeline::sync() {
     emit changed();
 }
 
+// Sets the scroll bars and scale bar from the view without feeding back: syncing_ makes their
+// valueChanged handlers ignore the change. The horizontal bar's range is in frames.
 void Timeline::syncScrollBars() {
     syncing_ = true;
     const int area = std::max(view_->width() - view_->headerWidth(), 1);
@@ -1572,6 +1625,8 @@ double Timeline::fitScale() const {
     return area / static_cast<double>(span);
 }
 
+// The scale bar (0..1000) is logarithmic between fitScale() at 0 and kMaxScale at 1000; 0 means
+// fit (a scale of 0). sliderFor() is the inverse.
 double Timeline::scaleFor(int slider) const {
     const double fit = fitScale();
     if (slider <= 0 || fit >= kMaxScale) return 0;
@@ -1605,6 +1660,7 @@ void Timeline::setScale(double pixelsPerFrame, std::optional<std::int64_t> ancho
     view_->update();
 }
 
+// Clamped to the sequence's duration; ignored while the whole sequence fits.
 void Timeline::setFirstFrame(double frame) {
     if (scale_ <= 0) return;
     first_ = std::clamp(frame, 0.0, std::max(static_cast<double>(shown_.duration()), 0.0));
@@ -1617,6 +1673,7 @@ void Timeline::showEntireSequence() {
     setScale(0);
 }
 
+// focusBack_ keeps the scale and first frame to go back to.
 void Timeline::toggleFocus() {
     if (focusBack_) {
         const auto [sc, first] = *focusBack_;
@@ -1638,6 +1695,7 @@ void Timeline::toggleFocus() {
     view_->update();
 }
 
+// The old view goes on zoomStack_ for zoomBack(); a range wider than the whole sequence fits it.
 void Timeline::zoomTo(std::int64_t from, std::int64_t to) {
     if (to <= from) return;
     zoomStack_ << std::make_pair(scale_, first_);
@@ -1852,6 +1910,8 @@ bool Timeline::handles(const QString& id) {
     return ids.contains(id);
 }
 
+// Dispatches a command ID from Timeline::handles() to the function that does it. Failures go
+// through fail(), which sets message_ and emits message().
 bool Timeline::perform(const QString& id) {
     if (!handles(id)) return false;
     message_.clear();
@@ -2021,6 +2081,9 @@ bool Timeline::perform(const QString& id) {
     return true;
 }
 
+// Splice-in or Overwrite from the Source monitor into the record sequence (ch. 15): the plan
+// comes from the two monitors' marks (three-point editing, model::planEdit) and the patch picks
+// the tracks (model::applyEdit).
 void Timeline::edit(model::EditKind kind) {
     composer_.stop();
     const model::MonitorState& source = composer_.state(MonitorId::Source);
@@ -2077,6 +2140,7 @@ void Timeline::edit(model::EditKind kind) {
     if (options_.activateRecordAfterEdit) composer_.setActiveMonitor(MonitorId::Record);
 }
 
+// Lift (extract false) or Extract between the record marks.
 void Timeline::remove(bool extract) {
     composer_.stop();
     model::MonitorState& record = composer_.state(MonitorId::Record);
@@ -2116,6 +2180,7 @@ void Timeline::remove(bool extract) {
     composer_.moveTo(MonitorId::Record, start);
 }
 
+// Adds the next track of a kind (timeline.new.*) and selects it, as one undo step.
 void Timeline::addTrack(model::TrackKind kind, model::AudioFormat format) {
     const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
     if (!rec || rec->item.kind != model::BinItemKind::Sequence) {
@@ -2136,6 +2201,9 @@ void Timeline::addTrack(model::TrackKind kind, model::AudioFormat format) {
     commit(tr("Add Track"), before, after);
 }
 
+// Every undoable change ends here: an undo step for the Record monitor's bin, then the new item
+// is stored. restore() stores an item in its bin and updates the Composer's loaded copy; undo
+// and redo use it directly.
 void Timeline::commit(const QString& description, const model::BinItem& before, model::BinItem after) {
     const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
     const QString binId = rec ? rec->binId : QString();
@@ -2199,6 +2267,8 @@ bool Timeline::isSegmentTool(model::EditKind kind) const {
     return kind == model::EditKind::Overwrite ? liftTool_ : spliceTool_;
 }
 
+// EditKind::Overwrite stands for Lift/Overwrite and SpliceIn for Extract/Splice-in. Turning
+// both off drops the selection.
 void Timeline::setSegmentTool(model::EditKind kind, bool on) {
     (kind == model::EditKind::Overwrite ? liftTool_ : spliceTool_) = on;
     // Only One Segment Tool Can Be Enabled At A Time (p.1220).
@@ -2220,6 +2290,7 @@ void Timeline::setSelection(const QList<model::SegmentRef>& segments) {
     emit changed();
 }
 
+// A click selects only that segment; Shift (toggle) adds or removes it.
 void Timeline::clickSegment(const model::SegmentRef& segment, bool toggle) {
     if (!toggle) {
         selection_ = {segment};
@@ -2273,6 +2344,7 @@ bool Timeline::moveSelection(std::int64_t frames, int tracks, model::EditKind ki
     return true;
 }
 
+// Deleting segments lifts them, or extracts them when the segment tool is Extract/Splice-in.
 bool Timeline::deleteSelection() {
     const model::LoadedClip* rec = recordSequence();
     if (!rec) return false;
@@ -2315,6 +2387,8 @@ bool Timeline::deleteTracks(const QStringList& tracks) {
     return true;
 }
 
+// Stores `material` as the Clipboard sequence (an item in no bin); `from` names the sequence it
+// came from, for the Alt subclip name.
 void Timeline::setClipboard(const model::Sequence& material, const QString& from) {
     model::BinItem clip;
     clip.id = QStringLiteral("clipboard-") + model::newItemId();
@@ -2330,6 +2404,7 @@ void Timeline::setClipboard(const model::Sequence& material, const QString& from
     if (QApplication::keyboardModifiers() & Qt::AltModifier) loadClipboard(from + QStringLiteral(".Sub"));
 }
 
+// A fresh copy of the Clipboard, with a new ID, into the Source monitor under `name`.
 void Timeline::loadClipboard(const QString& name) {
     if (!clipboard_) return;
     model::BinItem clip = *clipboard_;
@@ -2386,6 +2461,9 @@ void Timeline::pasteClipboard() {
     composer_.moveTo(MonitorId::Record, at + clip.duration());
 }
 
+// Replace Edit (p.467): the record segment under the position on the first patched record track
+// (or the record IN to OUT) is overwritten with source material lined up on the two positions
+// (model::planReplace).
 void Timeline::replaceEdit() {
     composer_.stop();
     const model::MonitorState& source = composer_.state(MonitorId::Source);
@@ -2432,6 +2510,8 @@ void Timeline::replaceEdit() {
     if (options_.activateRecordAfterEdit) composer_.setActiveMonitor(MonitorId::Record);
 }
 
+// Add Edit at the Record position: on the selected unlocked tracks, or with fillerOnly on every
+// unlocked track that has filler there.
 void Timeline::addEdit(bool fillerOnly) {
     const model::LoadedClip* rec = recordSequence();
     if (!rec) return;
@@ -2621,6 +2701,9 @@ void Timeline::setTrimTool(model::TrimKind kind, bool on) {
     view_->update();
 }
 
+// Picks the edit nearest the position (direction 0), or the nearest before (-1) or after (1)
+// it, among the selected unlocked tracks' trim points; the last trim point, the end of the
+// track, is not one.
 bool Timeline::enterTrimMode(int direction) {
     const model::LoadedClip* rec = recordSequence();
     if (!rec) return false;
@@ -2677,6 +2760,7 @@ void Timeline::exitTrimMode() {
     syncTrimDisplay();
 }
 
+// Every way into Trim mode with rollers ends here; the A and B counters restart from 0.
 void Timeline::setRollers(const QList<model::TrimRoller>& rollers, model::TrimKind kind) {
     trimMode_ = true;
     rollers_ = rollers;
@@ -2813,6 +2897,8 @@ void Timeline::extend() {
     commit(tr("Extend"), before, after);
 }
 
+// Tells the Composer what the trim counters show (frames trimmed on each side, and which sides
+// are active) and updates the Trim Mode button and the view.
 void Timeline::syncTrimDisplay() {
     Composer::TrimDisplay d;
     d.on = trimMode_;
@@ -2840,6 +2926,7 @@ void Timeline::composerPerformed(const QString& id) {
     }
 }
 
+// `change` edits a copy of the monitor's item and returns false to leave it unchanged.
 bool Timeline::changeItem(MonitorId monitor, const QString& description,
                           const std::function<bool(model::BinItem&)>& change) {
     const model::LoadedClip* loaded = composer_.state(monitor).current();
@@ -2964,6 +3051,7 @@ std::int64_t Timeline::defaultTransitionLength() const {
     return std::max(format_.nominalFps, 1);
 }
 
+// Commits `seq` as the new record sequence, with an undo step.
 bool Timeline::commitSequence(const QString& description, const model::Sequence& seq) {
     const model::LoadedClip* rec = recordSequence();
     if (!rec) return false;
@@ -2975,6 +3063,9 @@ bool Timeline::commitSequence(const QString& description, const model::Sequence&
     return true;
 }
 
+// Puts `effect` as a transition of the default length, centred on each cut, on `seq` (not yet
+// committed). Cuts without room are skipped; it fails if none takes the effect, or when the
+// user cancels the Insufficient Source question.
 bool Timeline::addTransitions(model::Sequence& seq, const QList<model::TrimRoller>& cuts, const EffectInfo& effect) {
     const model::SourceLength length = sourceLength();
     model::Transition t{effect.effect(), defaultTransitionLength(), model::TransitionAlignment::CenteredOnCut, 0};
@@ -3106,6 +3197,8 @@ bool Timeline::removeEffectAtPosition() {
     return commitSequence(tr("Remove Effect"), seq);
 }
 
+// Each cut keeps its transition's effect, or gets a Dissolve; the duration, alignment and start
+// are replaced. Locked tracks and cuts without room are skipped.
 bool Timeline::setTransitions(const QList<model::TrimRoller>& cuts, std::int64_t duration,
                               model::TransitionAlignment alignment, std::int64_t start) {
     message_.clear();
@@ -3142,6 +3235,8 @@ bool Timeline::setTransitions(const QList<model::TrimRoller>& cuts, std::int64_t
     return commitSequence(tr("Transition Duration"), seq);
 }
 
+// The range is one frame at the position, or with onTrack from the IN (else 0) to the OUT
+// (else the end of the track); model::setClipAudio sets the whole segments it touches.
 bool Timeline::setClipAudio(const QString& track, std::optional<double> gain, std::optional<int> pan, bool onTrack,
                             const QString& description) {
     message_.clear();

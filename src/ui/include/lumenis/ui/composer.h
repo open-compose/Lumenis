@@ -33,9 +33,12 @@ class PositionBar : public QWidget {
     Q_OBJECT
 
 public:
+    // Draws and edits `monitor`'s state in `composer`, which must outlive the bar.
     PositionBar(Composer& composer, MonitorId monitor, QWidget* parent = nullptr);
     QSize sizeHint() const override;
     // Frame at an x position, and back.
+    // x is in widget pixels; frames run from 0 at the left edge to duration - 1 at the right. frameAt
+    // clamps x to the bar; both return 0 while the monitor holds less than two frames.
     std::int64_t frameAt(int x) const;
     int xFor(std::int64_t frame) const;
 
@@ -59,7 +62,11 @@ class MonitorPicture : public QWidget {
     Q_OBJECT
 
 public:
+    // Shows `monitor` of `composer`, which must outlive the picture.
     MonitorPicture(Composer& composer, MonitorId monitor, QWidget* parent = nullptr);
+
+    // The area of the widget the picture fills: the largest rectangle of the project's aspect ratio,
+    // centred (letterboxed or pillarboxed), in widget coordinates.
     QRect pictureRect() const;
 
 protected:
@@ -89,10 +96,12 @@ public:
     explicit Composer(QWidget* parent = nullptr);
     ~Composer() override;
 
+    // Set by MainWindow; without one, resolve() finds nothing and loadFromBin() loads nothing.
     void setItemResolver(ItemResolver resolver) { resolver_ = std::move(resolver); }
     std::optional<model::BinItem> resolve(const QString& binId, const QString& itemId) const {
         return resolver_ ? resolver_(binId, itemId) : std::nullopt;
     }
+    // Keys pressed in the Composer are run through it (keyPressEvent).
     void setKeyResolver(KeyResolver resolver) { keys_ = std::move(resolver); }
     // The picture a monitor shows at its position, scaled to fit `size`:
     // the clip's frame, or for a sequence the frame of its top video track
@@ -108,12 +117,17 @@ public:
     bool commitSource();
     // Removes the clips that are in no bin from both monitors (p.315).
     void clearUncommitted();
+
+    // The PictureResolver's image; a null image when there is no resolver or the monitor is empty.
+    // `*offline` is reset to false first.
     QImage picture(MonitorId monitor, QSize size, bool* offline = nullptr) const;
     // Edit points of what a monitor shows (the Timeline knows a sequence's;
     // a clip has its start and end), for Go to Previous/Next Event and
     // Mark Clip.
     using EventResolver = std::function<QList<std::int64_t>(MonitorId)>;
     void setEventResolver(EventResolver resolver) { events_ = std::move(resolver); }
+
+    // Frame numbers in the monitor's own time, in ascending order.
     QList<std::int64_t> events(MonitorId monitor) const;
     // Where Go to Previous/Next Event stop (Composer settings, Move tab,
     // p.1160); the events when nothing else decides.
@@ -127,6 +141,8 @@ public:
     void setAspectRatio(const Rational& aspect);
     Rational aspectRatio() const { return aspect_; }
 
+    // The loaded clips, position and marks of a monitor. Changing the state directly does not refresh
+    // the widgets; the Composer's own methods do.
     model::MonitorState& state(MonitorId monitor);
     const model::MonitorState& state(MonitorId monitor) const;
 
@@ -134,6 +150,8 @@ public:
     // sequences to the Record monitor.
     void load(MonitorId monitor, const QString& binId, const model::BinItem& item);
     void loadDefault(const QString& binId, const model::BinItem& item);
+
+    // Loads each item through the ItemResolver in turn; the last one stays shown.
     void loadFromBin(MonitorId monitor, const QString& binId, const QStringList& itemIds);
     void clear(); // the project closed
     // A loaded item changed in its bin (an edit, undo): both monitors show
@@ -163,8 +181,14 @@ public:
         bool aActive = false;
         bool bActive = false;
     };
+
+    // Turns the Big Trim display on or off and updates its counters. While on, the position bars and
+    // button rows are hidden and both monitors are shown even in single-monitor mode.
     void setTrimDisplay(const TrimDisplay& display);
     const TrimDisplay& trimDisplay() const { return trim_; }
+
+    // The frame counter under a monitor in Trim mode (Source: A side, Record: B side), and the row of
+    // Trim buttons; exposed for tests and the Timeline.
     QToolButton* trimCounter(MonitorId monitor) const;
     QWidget* trimBar() const { return trimBar_; }
 
@@ -188,6 +212,8 @@ public:
     // Composer settings.
     QJsonObject buttonLayout() const;
     void setButtonLayout(const QJsonObject& layout); // {} for the defaults
+
+    // The built-in commands of every slot, in the same format.
     static QJsonObject defaultButtonLayout();
 
     // Show Source/Record colors in Composer (Interface settings, p.383).
@@ -223,8 +249,12 @@ public:
         std::int64_t dropped = 0;
     };
     const PlayStats& playStats() const { return stats_; }
+
+    // The current speed: 0 when stopped, otherwise a multiple of normal (negative: reverse).
     bool isPlaying() const { return speed_ != 0; }
     int speed() const { return speed_; }
+
+    // play() plays the active monitor at `speed` (0 stops); stop() stops and clears Play In to Out.
     void play(int speed);
     void stop();
     // Advances playback by `ms` milliseconds (also used by tests).
@@ -233,16 +263,23 @@ public:
     // Runs a Composer command by id (the buttons, the menus and the
     // keyboard all come here). Returns false if it is not one.
     bool perform(const QString& commandId);
+
+    // Whether perform() knows the command.
     static bool handles(const QString& commandId);
 
     // Moves the active monitor, and a ganged one with it.
     void moveTo(MonitorId monitor, std::int64_t frame);
 
+    // The Composer's widgets, for MainWindow and tests. button() is the first button carrying the
+    // command, or null; none of these transfer ownership.
     QToolButton* button(MonitorId monitor, const QString& commandId) const;
     QToolButton* clipNameButton(MonitorId monitor) const;
     QToolButton* trackingButton(MonitorId monitor) const;
     PositionBar* positionBar(MonitorId monitor) const;
     MonitorPicture* picture(MonitorId monitor) const;
+
+    // clipNameMenu() rebuilds and returns the monitor's Clip Name menu (owned by the Composer).
+    // contextMenu() makes a new right-click menu that deletes itself when closed.
     QMenu* clipNameMenu(MonitorId monitor);
     QMenu* contextMenu();
 
@@ -258,12 +295,18 @@ signals:
     void trimSideRequested(model::TrimSide side);
     // Play started or changed speed, and play stopped.
     void playStarted(MonitorId monitor, int speed);
+
+    // playStopped() fires only when play was running.
     void playStopped();
+
+    // The Video Quality Menu button's setting changed.
     void videoQualityChanged(VideoQuality quality);
     // Media files dropped on a monitor from the Source Browser (p.316).
     void filesDropped(MonitorId monitor, const QStringList& paths);
     // A marker was double-clicked (p.416).
     void markerEditRequested(MonitorId monitor, const QString& markerId);
+
+    // Composer > Show Single/Dual Monitor switched modes.
     void singleMonitorChanged(bool single);
     // A command was mapped onto one of the buttons.
     void buttonsChanged();
@@ -289,6 +332,7 @@ private:
     bool single_ = false;
     bool colors_ = false;
     bool ganged_ = false;
+    // K is held down (K+J / K+L step a frame).
     bool kHeld_ = false;
     int speed_ = 0;
     std::optional<std::int64_t> stopAt_; // Play In to Out
@@ -299,11 +343,13 @@ private:
     QWidget* trimBar_ = nullptr;
     TrimDisplay trim_;
     Display display_;
+    // The command of every button slot, row by row (see buttonLayout()).
     QList<QStringList> layout_[2]; // Source, Record
     Column* columns_[2] = {nullptr, nullptr};
     ItemResolver resolver_;
     PictureResolver pictures_;
     PlayClock playClock_;
+    // The position play last started (or changed speed) from; the play clock counts from here.
     std::int64_t playStart_ = 0;
     VideoQuality quality_ = VideoQuality::Full;
     bool smoothScaling_ = true;
