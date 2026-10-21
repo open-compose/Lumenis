@@ -78,6 +78,19 @@
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
         "LUMENIS_WARNINGS_AS_ERRORS": "ON"
       }
+    },
+    {
+      "name": "asan",
+      "displayName": "AddressSanitizer and UBSan (Linux and macOS, GCC or Clang)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined",
+        "CMAKE_MODULE_LINKER_FLAGS": "-fsanitize=address,undefined"
+      }
     }
   ],
   "buildPresets": [
@@ -104,6 +117,10 @@
     {
       "name": "ci-macos",
       "configurePreset": "ci-macos"
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan"
     }
   ],
   "testPresets": [
@@ -146,6 +163,19 @@
       "name": "ci-macos",
       "inherits": "base",
       "configurePreset": "ci-macos"
+    },
+    {
+      "name": "asan",
+      "inherits": "base",
+      "configurePreset": "asan",
+      "environment": {
+        "QT_QPA_PLATFORM": "offscreen",
+        "ASAN_OPTIONS": "detect_leaks=0",
+        "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"
+      },
+      "execution": {
+        "timeout": 900
+      }
     }
   ]
 }

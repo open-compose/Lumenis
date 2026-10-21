@@ -587,6 +587,16 @@ jobs:
         # In the folder set up by "setup-wsl-runner.sh builds" (BUILDING.md).
         run: scripts/keep-build.sh build/ci/*.AppImage
 
+      - name: Sanitizers (AddressSanitizer, UBSan)
+        # Memory errors that glibc tolerates and MSVC's heap does not (a
+        # reference into a destroyed temporary crashed tst_main_window on
+        # Windows only): every test again in a Debug build with the
+        # sanitizers, failing on the first report (BUILDING.md).
+        run: |
+          cmake --preset asan
+          cmake --build --preset asan
+          ctest --preset asan
+
   windows:
     name: Windows x64
     if: vars.HOSTED_CI != 'off'

@@ -196,6 +196,14 @@ MainWindow::~MainWindow() {
         composer_->setPlayClock({});
     }
     if (audio_) audio_->stop();
+    // The bins are saved now, while this window is whole: BinContainer saves what is left when it
+    // is deleted (after this destructor), and the signals that saving sends reach lambdas of this
+    // window connected with other context objects (the Source Browser's bin list).
+    if (binContainer_) {
+        binContainer_->saveAll();
+        disconnect(binContainer_, nullptr, this, nullptr);
+        if (sourceBrowser_) disconnect(binContainer_, nullptr, sourceBrowser_.data(), nullptr);
+    }
     // The mapper outlives this window's commands.
     if (ButtonMapper::instance().registry() == &commands_) ButtonMapper::instance().setRegistry(nullptr);
     commands_.setCapture({});

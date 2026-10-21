@@ -36,6 +36,11 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
 - Also build once with `-DCMAKE_CXX_COMPILER=clang++`, because CI's macOS
   jobs use Clang, and run `scripts/check-apple-conversions.py build/clang`
   (Apple arm64's 64-bit `long double`).
+- Run the sanitizers before pushing changes to object lifetimes or
+  ownership: `cmake --preset asan && cmake --build --preset asan && ctest
+  --preset asan` (AddressSanitizer and UBSan). glibc tolerates
+  use-after-free that crashes Windows (0xc0000374); the self-hosted Linux
+  job runs them too.
 - Actions minutes are limited (private repository; macOS costs 10×). Pushes
   to `claude/**` run Linux and Windows only; macOS runs on `main`, pull
   requests and by hand. Run it by hand (`gh workflow run ci.yml --ref

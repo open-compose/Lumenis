@@ -136,6 +136,13 @@ Useful options:
 
 The test presets set `QT_QPA_PLATFORM=offscreen`, so tests need no display.
 
+The `asan` presets (Linux and macOS, GCC or Clang) build everything in Debug
+with AddressSanitizer and UBSan and stop at the first report:
+
+    cmake --preset asan && cmake --build --preset asan && ctest --preset asan
+
+The self-hosted Linux job runs them on every push.
+
 ## Continuous integration
 
 `.github/workflows/ci.yml` builds, tests and packages on `ubuntu-24.04`
@@ -510,6 +517,18 @@ Linux has an 80-bit `long double` and says nothing. Use integer arithmetic
 for frame and sample counts, or explicit casts. Before pushing, run
 `scripts/check-apple-conversions.py build/clang`: it compiles every file of
 the Clang build as the Mac would see `long double`.
+
+### A test crashes on Windows (0xc0000374) or macOS but passes on Linux
+
+0xc0000374 is Windows' heap corruption: memory used after it was freed,
+or written past its end. glibc's allocator often lets the same mistake
+pass, so the Linux jobs stay green. Run the sanitizers on Linux
+(`cmake --preset asan && cmake --build --preset asan && ctest --preset asan`,
+see Tests): they name the line. The usual cause is a reference into a
+temporary, e.g. `const Segment& s = Sequence::fromItem(item).track(...)->
+segments.first();`; keep the temporary in a variable first. The
+self-hosted Linux job runs the sanitizers on every push so this is caught
+there too.
 
 ### Packaging on Windows: "Invalid character escape '\U'"
 
