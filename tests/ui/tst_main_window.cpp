@@ -454,7 +454,8 @@ private slots:
         const model::BinItem& sequenceItem = doc->bin().items.at(1);
         QCOMPARE(clipItem.kind, model::BinItemKind::MasterClip);
         QCOMPARE(sequenceItem.kind, model::BinItemKind::Sequence);
-        const model::Segment& s = model::Sequence::fromItem(sequenceItem).track(QStringLiteral("V1"))->segments.first();
+        const model::Sequence sequence = model::Sequence::fromItem(sequenceItem);
+        const model::Segment& s = sequence.track(QStringLiteral("V1"))->segments.first();
         QCOMPARE(s.binId, id);
         QCOMPARE(s.clipId, clipItem.id);
         const auto resolved = window.composer().resolve(s.binId, s.clipId);
