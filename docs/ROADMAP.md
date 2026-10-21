@@ -605,7 +605,14 @@ and pyaaf2's test suites, made with real Media Composer
     (`cutthulhu --import-avb`, ctest `avb_import_bins`), effect names
     aside. File > Open Bin reads an `.avb` into a bin under Other Bins
     (p.296), its clips online by MobID.
-  * Next: 3.4, writing `.avb` bins.
+  * 3.4, writing `.avb` bins (docs/spec/avb.md, "Writing"), has started.
+    3.4a, the object writer (`src/interop/avb_writer.*`, ported from
+    pyavb's write methods), is done: all 14 corpus bins read and written
+    back are the same files, byte for byte (`cutthulhu --rewrite-avb`,
+    ctest `avb_round_trip`); written big-endian they read the same in
+    Cutthulhu and pyavb; a bin built from scratch reads in pyavb as
+    Cutthulhu reads it (ctest `avb_write_pyavb`, tst_avb).
+  * Next: 3.4b, native bins written out as `.avb`.
 
 ### Phase 4 — Core editing
 Features in this phase:

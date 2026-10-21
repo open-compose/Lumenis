@@ -39,7 +39,8 @@ are written after the public specifications, with Mark Reid's
 [pyavb](https://github.com/markreidvfx/pyavb), both MIT-licensed, as the
 reference implementations. Where their design or tables are followed (the
 built-in AAF model, `src/interop/aaf_model.inc`, is made from pyaaf2's, and
-the bin reader `src/interop/avb.cpp` ports pyavb's class layouts), the MIT
+the bin reader `src/interop/avb.cpp` and writer `src/interop/avb_writer.cpp`
+port pyavb's class layouts), the MIT
 licence applies to that part (`packaging/licenses/pyaaf2-LICENSE.txt` and
 `packaging/licenses/pyavb-LICENSE.txt`). Their test files are the
 first interchange corpus. They are downloaded for testing

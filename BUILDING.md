@@ -775,6 +775,13 @@ the build folder (`build/<preset>`) and configure again.
   themselves, byte for byte, and lists any difference; it needs pyavb
   (`pip install pyavb`) and is skipped without it. By hand: `python3
   scripts/avb-dump.py --compare --app build/ci/bin/cutthulhu BIN.avb`.
+* **Writing bins (.avb):** ctest `avb_round_trip` reads and writes back
+  every corpus bin (`cutthulhu --rewrite-avb IN.avb OUT.avb`) and checks
+  that the files are the same, byte for byte; it needs only the corpus.
+  ctest `avb_write_pyavb` has pyavb read what the writer makes (a bin built
+  from scratch, and the corpus written big-endian), from tst_avb's
+  `forPyavb`; it needs pyavb and is skipped without it. By hand: `python3
+  scripts/interop-corpus.py check-avb-write --test build/ci/bin/tst_avb`.
 * **AAF import against Media Composer's bins (gate 1 on the corpus):**
   ctest `aaf_import_bins` imports each corpus AAF that has a bin of the same
   material and compares it with the bin's dump in `tests/data/aaf_reference`

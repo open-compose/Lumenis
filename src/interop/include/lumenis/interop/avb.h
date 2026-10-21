@@ -28,6 +28,7 @@
 // is checked, and a failed check makes that object unreadable (Object::error)
 // rather than the whole file. Reading what the bin means (clips, sequences,
 // sources) into the native model is the next layer (3.3b).
+// The writer, avb_writer.h, is the inverse of this reader (3.4a).
 namespace lumenis::interop::avb {
 
 class Value;
@@ -107,6 +108,31 @@ struct Property {
 
 // The value of a property by name in an ordered property list, or nullptr.
 const Value* find(const Properties& properties, const QString& name);
+// Sets a property as Python sets an attribute (and as the reader sets
+// them): a name already set keeps its place and takes the new value; a new
+// one goes at the end. The writer (avb_writer.h) finds properties by name,
+// so the order matters only to the dump.
+void set(Properties& properties, const QString& name, Value value);
+
+// The file header (docs/spec/avb.md, "The container"), less the object
+// count and the root index, which belong to the table. What File reads and
+// what the writer (avb_writer.h) writes.
+struct Header {
+    bool littleEndian = true;
+    // The last save as text, "2022/07/01 06:07:17", as written (Media
+    // Composer writes local time). Empty when writing: lastSave in local time.
+    QString lastSaveText;
+    Time lastSave;
+    // The 4 bytes after the last save time: not zero in Media Composer's
+    // bins, meaning unknown; pyavb skips them and writes zeros. Written as
+    // they are; empty: zeros.
+    QByteArray unknown;
+    // The creator, "Media Composer 18.9.0.49510", stored in a 30-byte field
+    // padded with spaces (the reader keeps the padding).
+    QString creatorVersion;
+    // 16 reserved bytes (zeros in every bin seen); empty: zeros.
+    QByteArray reserved;
+};
 
 // One object of the table.
 struct Object {
@@ -145,6 +171,8 @@ public:
     Time lastSave() const { return lastSave_; }
     QString creatorVersion() const { return creatorVersion_; }
     std::uint32_t rootIndex() const { return rootIndex_; }
+    // The whole header, for writing the file again (avb_writer.h).
+    Header header() const;
 
     // The number of objects in the table; valid indexes are 1..objectCount().
     std::uint32_t objectCount() const { return static_cast<std::uint32_t>(positions_.size()); }
@@ -156,6 +184,10 @@ public:
     const Object& object(const Ref& ref) const { return object(ref.index); }
     // The root object: the Bin (ABIN).
     const Object& root() const { return object(rootIndex_); }
+    // An object's payload as stored (after its class ID and size): what the
+    // writer copies for an object that could not be read. Empty for an
+    // invalid index or a payload cut short.
+    QByteArray payload(std::uint32_t index) const;
 
 private:
     QByteArray data_;
@@ -163,6 +195,8 @@ private:
     QString lastSaveText_;
     Time lastSave_;
     QString creatorVersion_;
+    QByteArray headerUnknown_;
+    QByteArray headerReserved_;
     std::uint32_t rootIndex_ = 0;
     std::vector<qsizetype> positions_; // each object's chunk header, from index 1
     mutable std::vector<std::unique_ptr<Object>> cache_;
@@ -170,6 +204,9 @@ private:
 
 // Strings as bins store them: Mac OS Roman (pyavb's default).
 QString fromMacRoman(const QByteArray& bytes);
+// The inverse, for writing: nullopt when a character has no Mac OS Roman
+// byte (Python's encode('macroman') raises then).
+std::optional<QByteArray> toMacRoman(const QString& text);
 // Strict UTF-8, as Python decodes it: nullopt for invalid input.
 std::optional<QString> fromUtf8Strict(const QByteArray& bytes);
 // A double as Python's repr() writes it: "25.0", "23.976", "1e-05", "inf".

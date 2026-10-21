@@ -1,12 +1,14 @@
-# Media Composer bins (.avb) (Phase 3.3)
+# Media Composer bins (.avb) (Phases 3.3 and 3.4)
 
 A Media Composer bin is one `.avb` file: its clips, subclips, sequences and
 their sources, with the bin's view and settings. Cutthulhu reads bins into
-the native model (native-model.md), the way AAF is read (aaf.md).
+the native model (native-model.md), the way AAF is read (aaf.md), and
+writes them (3.4).
 
 Sources:
 * pyavb (MIT, Mark Reid), a reader and writer of bins in Python: the
-  reference, read for the layout of every class (its `read()` methods).
+  reference, read for the layout of every class (its `read()` methods,
+  and its `write()` methods for the writer).
   Credited in THIRD-PARTY-NOTICES.md ("Prior art for interchange").
 * Black-box observation of bins made by Media Composer: the test files of
   pyavb (`scripts/interop-corpus.py`), 14 bins from Media Composer 18.9
@@ -21,6 +23,8 @@ No Avid SDK or documentation of the format is used: Avid publishes none.
 | Objects: the container and every class's properties | `src/interop/avb.*` | 3.3a, done |
 | Import into bins: mobs to clips, sources and sequences | `src/interop/avb_import.*` | 3.3b, done |
 | File > Open Bin of a `.avb`, from the Editing Guide | `main_window.cpp` (`openBinFile`) | 3.3b, done |
+| Writing objects: the header, the table, every class read | `src/interop/avb_writer.*` | 3.4a, done |
+| Native bins written as `.avb` | | 3.4b, next |
 
 ## The container (3.3a)
 
@@ -46,7 +50,7 @@ The header:
 | u32 | the root object's index |
 | u32 | `49 49 49 49` or `4D 4D 4D 4D` |
 | u32 | the last save, seconds since 1970 |
-| 4 bytes | |
+| 4 bytes | not zero in Media Composer's bins, meaning unknown; kept (`Header::unknown`) |
 | fourcc, fourcc | `ATob`, `ATve` |
 | string | the creator, `Media Composer 18.9.0.49510`, padded with spaces |
 | 16 bytes | reserved |
@@ -260,6 +264,93 @@ warnings go to the Console.
 * tst_main_window (`openBinReadsAMediaComposerBin`): File > Open Bin of a
   corpus bin lists it under Other Bins, its sequence names its clips there,
   and opening it again opens the same bin.
+
+## Writing (3.4a)
+
+`avb::Builder` (`src/interop/avb_writer.h`) writes a bin: the header
+(`avb::Header`, which `File::header()` gives for a bin read) and the object
+table, in the order objects are added. Objects are the reader's
+(`avb::Object`: a class ID and properties by pyavb's names; ATTR's
+attributes as properties; PRLS's references as items), references are
+`Value::ref(index)` into the table being written, so `add()` returns each
+object's index at once and a reference may point forward. The property
+names and value kinds the reader gives are the contract between the two.
+Each class's write is ported from pyavb's `write()` methods and is the
+inverse of its read, part by part:
+
+* Properties a class always writes and the builder was not given are zero,
+  empty or no reference; an extension is written only when its property is
+  set (SCLP's and CMPO's `mob_id`, CMPO's `creation_time`, a component's
+  `param_list`, DIDD's extensions in tag order...). TRKG writes its tracks'
+  lock numbers (extension 01) whenever it has tracks, 0 for a track without
+  one, and each track's flags from which of its fields are set. MCBR writes
+  `name_utf8` only when set (pyavb always writes it).
+* What pyavb's reader skips is written as pyavb writes it: the old 8-byte
+  MobIDs of SCLP, CMPO and MSML from the MobID's material number (Data1,
+  then Data2 + Data3 << 16), the unused bytes of TCCP and ECCP as zeros,
+  BVst's format descriptor size as s16(size + 2), s16(0). A component's
+  name or effect ID, and PRIT's name, that is empty is size 0xFFFF; other
+  empty strings are size 0. UTF-8 strings start with two NULs. The creator
+  is a 30-byte field padded with spaces. Edit and sample rates are
+  multiplied by ten until whole (at most six times), and 59.94 is written
+  59940e-3, as pyavb does.
+* Values are checked against their fields: an integer out of range, a value
+  of the wrong kind, a reference past the table, a string Mac OS Roman
+  cannot hold or longer than 65534 bytes, a rate that is not finite or
+  whose mantissa does not fit 32 bits make `toBytes()` fail with the
+  object and the property named, never a bad file.
+
+`avb::rewrite(file)` writes every object of a bin read back as read, with
+its header and root; objects that could not be read (a class not read yet,
+damage) are copied as they were stored, which keeps the file's byte order.
+Given the other byte order, it writes the bin big-endian (or back), when
+every object was read. `cutthulhu --rewrite-avb IN OUT` runs it.
+
+What is and is not round-tripped: all 14 corpus bins come back the same
+files, byte for byte, with no normalisation; pyavb's writer does the same
+for their objects, all but the header's 4 unknown bytes, which pyavb writes
+as zeros and Cutthulhu keeps. What the reader keeps cannot represent a
+few forms no bin seen uses, which would be written in pyavb's form: a
+Boolean byte other than 0 or 1 (written 0), a rate stored with a needless
+power of ten (2500e-2 for 25 is written 25e0), a string with NULs at
+either end or an empty one stored with size 0xFFFF where 0 is written (or
+the reverse), a name given twice in an ATTR (one is kept), DIDD's line map
+size when not a multiple of 4, extensions out of order or repeated, and
+unused bytes that are not zero. Bins that hold them would be compared
+after that normalisation; none is needed yet.
+
+### Checks
+
+* ctest `avb_round_trip` (`interop-corpus.py check-avb-rewrite`): every
+  corpus bin through `--rewrite-avb` is the same file. Needs only the
+  corpus.
+* ctest `avb_write_pyavb` (`interop-corpus.py check-avb-write`, skipped
+  without pyavb or the corpus): tst_avb's `forPyavb` writes a bin built
+  from scratch (an ABIN listing a master clip CMPO whose picture track's
+  source clip names a source mob with an MDES descriptor and FILE locator,
+  user columns in ATTR, a BVst view), little- and big-endian, and every
+  corpus bin written big-endian. pyavb reads the bin from scratch as
+  Cutthulhu does (the same canonical dump) and finds the clip, its source
+  clip, source mob and user column; it reads each big-endian bin as it
+  reads the original.
+* tst_avb: `rewritesCorpus` (test_file_01.avb and a retimes bin written
+  back byte for byte, big-endian and back again), `buildsBin` (the bin from
+  scratch, both byte orders: every property reads back as given, the
+  import reads its master clip, and it writes back to the same bytes),
+  `editRates`, `writerRefuses` (values out of range or of the wrong kind,
+  bad references, class IDs and header fields are errors) and
+  `rewritesDamaged` (200 damaged bins written again without a crash).
+
+### For 3.4b
+
+Native bins out as `.avb` will build the objects the import reads
+(native-model.md and "Import" above, in reverse): a master mob per clip
+with its tracks' source clips, the file and tape source mobs with their
+descriptors and locators (MSML for managed media), sequences as SEQU and
+track groups, the user columns in ATTR, a BVst view and the ABIN. The
+builder needs only the properties that matter; the rest default to zero.
+Names must be Mac OS Roman, so 3.4b decides what to write for others
+(Media Composer's UTF-8 extensions where a class has one).
 
 ## Dumps
 

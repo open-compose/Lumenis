@@ -206,8 +206,12 @@ clips find managed media by MobID) and File > Output > Export to File
 into the native model (`avb_import.*`, `--import-avb`; helpers shared with
 the AAF import in `import_common.h`), is done; ctest `avb_import_bins`
 compares it with `tests/data/aaf_reference`. File > Open Bin takes a `.avb`
-and lists a native copy under Other Bins (`MainWindow::openBinFile`). Next
-is 3.4, `.avb` bin write.
+and lists a native copy under Other Bins (`MainWindow::openBinFile`). 3.4,
+`.avb` bin write, has started: 3.4a, the object writer (`avb_writer.*`,
+`avb::Builder`, ported from pyavb's write()), is done; every corpus bin
+rewrites byte for byte (`--rewrite-avb`, ctest `avb_round_trip`) and pyavb
+reads what we build (ctest `avb_write_pyavb`). Next is 3.4b, native bins
+out as `.avb`.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

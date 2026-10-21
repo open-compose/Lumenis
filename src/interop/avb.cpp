@@ -59,18 +59,6 @@ struct ReadError {
     QString what;
 };
 
-// Sets a property as Python sets an attribute: a name already set keeps its
-// place and takes the new value; a new one goes at the end.
-void set(Properties& p, const QString& name, Value v) {
-    for (Property& e : p) {
-        if (e.name == name) {
-            e.value = std::move(v);
-            return;
-        }
-    }
-    p.push_back({name, std::move(v)});
-}
-
 // A bounds-checked cursor over one payload, in the file's byte order
 // (pyavb's AVBIOContext). Every read checks that its bytes are there.
 class Reader {
@@ -1350,6 +1338,16 @@ const Value* find(const Properties& properties, const QString& name) {
     return nullptr;
 }
 
+void set(Properties& properties, const QString& name, Value value) {
+    for (Property& e : properties) {
+        if (e.name == name) {
+            e.value = std::move(value);
+            return;
+        }
+    }
+    properties.push_back({name, std::move(value)});
+}
+
 const Value& Object::property(const QString& name) const {
     const Value* v = find(properties, name);
     return v ? *v : kNullValue;
@@ -1363,6 +1361,22 @@ QString fromMacRoman(const QByteArray& bytes) {
     for (const char c : bytes) {
         const auto b = static_cast<std::uint8_t>(c);
         out.append(QChar(b < 0x80 ? static_cast<char16_t>(b) : kMacRoman[static_cast<std::size_t>(b - 0x80)]));
+    }
+    return out;
+}
+
+std::optional<QByteArray> toMacRoman(const QString& text) {
+    QByteArray out;
+    out.reserve(text.size());
+    for (const QChar c : text) {
+        const char16_t u = c.unicode();
+        if (u < 0x80) {
+            out.append(static_cast<char>(u));
+            continue;
+        }
+        const auto* at = std::find(kMacRoman.begin(), kMacRoman.end(), u);
+        if (at == kMacRoman.end()) return std::nullopt;
+        out.append(static_cast<char>(0x80 + (at - kMacRoman.begin())));
     }
     return out;
 }
@@ -1483,11 +1497,12 @@ bool File::load(QByteArray data, QString* error) {
         const std::uint32_t mark = r.u32();
         r.check(mark == 0x49494949 || mark == 0x4D4D4D4D, "no II or MM mark");
         lastSave_ = Time{r.u32()};
-        r.take(4);
+        headerUnknown_ = r.bytes(4); // kept for the writer
+
         r.check(r.fourcc() == "ATob", "no ATob");
         r.check(r.fourcc() == "ATve", "no ATve");
         creatorVersion_ = r.string();
-        r.take(16);
+        headerReserved_ = r.bytes(16);
         // Each chunk takes at least 8 bytes: a count past that is a damaged
         // table, refused before anything is allocated for it.
         if (count > r.left() / 8) r.fail(QStringLiteral("object table of %1 objects cut short").arg(count));
@@ -1509,6 +1524,26 @@ bool File::load(QByteArray data, QString* error) {
     data_ = std::move(data);
     cache_.resize(positions_.size() + 1);
     return true;
+}
+
+Header File::header() const {
+    Header h;
+    h.littleEndian = little_;
+    h.lastSaveText = lastSaveText_;
+    h.lastSave = lastSave_;
+    h.unknown = headerUnknown_;
+    h.creatorVersion = creatorVersion_;
+    h.reserved = headerReserved_;
+    return h;
+}
+
+QByteArray File::payload(std::uint32_t index) const {
+    if (index == 0 || index > objectCount()) return {};
+    const qsizetype at = positions_[index - 1];
+    const char* sizeBytes = data_.constData() + at + 4;
+    const std::uint32_t size = little_ ? qFromLittleEndian<quint32>(sizeBytes) : qFromBigEndian<quint32>(sizeBytes);
+    if (static_cast<qsizetype>(size) > data_.size() - (at + 8)) return {};
+    return data_.mid(at + 8, size);
 }
 
 QString File::classIdAt(std::uint32_t index) const {

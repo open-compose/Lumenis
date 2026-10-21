@@ -50,6 +50,24 @@ if(Python3_Interpreter_FOUND)
         SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+    # The writer's round trip: every corpus bin read and written back
+    # (--rewrite-avb) is the same file, byte for byte. Needs only the corpus.
+    add_test(NAME avb_round_trip
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py check-avb-rewrite
+                --app $<TARGET_FILE:lumenis_app> --dir ${LUMENIS_INTEROP_CORPUS})
+    set_tests_properties(avb_round_trip PROPERTIES
+        SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    # What the writer makes, read by pyavb: a bin built from scratch, and the
+    # corpus written big-endian (tst_avb forPyavb). Skipped without pyavb or
+    # the corpus.
+    add_test(NAME avb_write_pyavb
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py check-avb-write
+                --test $<TARGET_FILE:tst_avb> --dir ${LUMENIS_INTEROP_CORPUS})
+    set_tests_properties(avb_write_pyavb PROPERTIES
+        SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch)
+
     # Phase 3 gate 1 on the corpus: each AAF imported into a bin is the same
     # as Media Composer's own bin of the material (tests/data/aaf_reference).
     add_test(NAME aaf_import_bins

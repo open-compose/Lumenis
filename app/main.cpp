@@ -9,6 +9,7 @@
 #include "lumenis/interop/aaf_import.h"
 #include "lumenis/interop/avb.h"
 #include "lumenis/interop/avb_import.h"
+#include "lumenis/interop/avb_writer.h"
 #include "lumenis/model/structure.h"
 #include "lumenis/model/locations.h"
 #include "lumenis/model/project_store.h"
@@ -50,6 +51,7 @@
 #include <QTimeZone>
 #include <QFile>
 #include <QJsonDocument>
+#include <QSaveFile>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QLineEdit>
@@ -87,7 +89,7 @@
 // one of the command-line tools below and exits, or opens the editor (Select Project, then
 // lumenis::ui::MainWindow). The options are declared in main() and handled in this order:
 // --list-providers, --probe, --dump-structure, --export-aaf, --import-aaf, --import-avb, --dump-aaf,
-// --dump-avb, --write-media and --framemd5 need no display (isHeadlessInvocation()); --dump-menus,
+// --dump-avb, --rewrite-avb, --write-media and --framemd5 need no display (isHeadlessInvocation()); --dump-menus,
 // --measure-playback, --screenshot and --smoke-test open the main window; --project or Select
 // Project start a normal session. The scripts that run these are in scripts/ (decode-corpus.py,
 // check-mxf.py, measure-playback.py, structdiff.py, aaf-dump.py, make-checklist.py,
@@ -103,7 +105,7 @@ bool isHeadlessInvocation(int argc, char** argv) {
         if (arg == "--version" || arg == "-v" || arg == "--help" || arg == "-h" || arg == "-?"
             || arg == "--list-providers" || arg == "--probe" || arg == "--framemd5" || arg == "--write-media"
             || arg == "--dump-structure" || arg == "--dump-aaf" || arg == "--dump-avb" || arg == "--import-aaf" || arg == "--import-avb"
-            || arg == "--export-aaf") {
+            || arg == "--export-aaf" || arg == "--rewrite-avb") {
             return true;
         }
     }
@@ -256,6 +258,13 @@ int main(int argc, char** argv) {
                                        QStringLiteral("With --dump-aaf or --dump-avb: compact, sorted JSON."));
     parser.addOption(dumpAaf);
     parser.addOption(dumpAvb);
+    const QCommandLineOption rewriteAvb(
+        QStringLiteral("rewrite-avb"),
+        QStringLiteral("Read a Media Composer bin (.avb) and write every object back, unchanged, to the file "
+                       "given after it (docs/spec/avb.md, \"Writing\"), then exit: the same bytes for a bin "
+                       "the reader reads in full."),
+        QStringLiteral("file"));
+    parser.addOption(rewriteAvb);
     const QCommandLineOption importAaf(
         QStringLiteral("import-aaf"),
         QStringLiteral("Import an AAF file into a bin and print the bin's structure dump "
@@ -445,6 +454,33 @@ int main(int argc, char** argv) {
         const QByteArray json = parser.isSet(canonical) ? lumenis::interop::aaf::canonicalJson(dump) + '\n'
                                                         : QJsonDocument(dump.toObject()).toJson();
         std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
+        return 0;
+    }
+
+    // --rewrite-avb IN OUT: the object layer's round trip (ctest avb_round_trip compares the bytes).
+    if (parser.isSet(rewriteAvb)) {
+        const QString from = parser.value(rewriteAvb);
+        const QStringList rest = parser.positionalArguments();
+        if (rest.size() != 1) {
+            std::fprintf(stderr, "--rewrite-avb needs the file to write after the bin to read\n");
+            return 2;
+        }
+        lumenis::interop::avb::File file;
+        QString error;
+        if (!file.open(from, &error)) {
+            std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(from), qPrintable(error));
+            return 1;
+        }
+        int unread = 0;
+        for (std::uint32_t i = 1; i <= file.objectCount(); ++i) unread += file.object(i).ok() ? 0 : 1;
+        if (unread > 0) std::fprintf(stderr, "rewrite-avb: %d objects not read, copied as they were\n", unread);
+        const QByteArray bytes = lumenis::interop::avb::rewrite(file, &error);
+        QSaveFile out(rest.first());
+        if (bytes.isEmpty() || !out.open(QIODevice::WriteOnly) || out.write(bytes) != bytes.size() || !out.commit()) {
+            std::fprintf(stderr, "cannot write %s: %s\n", qPrintable(rest.first()),
+                         qPrintable(bytes.isEmpty() ? error : out.errorString()));
+            return 1;
+        }
         return 0;
     }
 
