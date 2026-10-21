@@ -95,12 +95,9 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
     // "Bin Settings - Current" in Media Composer; the custom name here.
     setWindowTitle(entry.name.isEmpty() ? kind.title() : QStringLiteral("%1 - %2").arg(kind.title(), entry.name));
 
-    // An option's starting value: the entry's, or the default when it has none or the option is not
-    // available yet.
-    auto value = [&](const SettingOption& o) {
-        const QJsonValue v = values_.value(o.key);
-        return v.isUndefined() || o.later ? o.defaultValue : v;
-    };
+    // An option's starting value: the entry's, or the default where Settings::value() would use it
+    // (none stored, not available yet, the wrong type, an unknown choice).
+    auto value = [&](const SettingOption& o) { return o.effectiveValue(values_.value(o.key)); };
     // One tab's page: a row per option, with the control its type and style call for. Every control
     // is named after its option key and recorded in editors_.
     auto page = [&](const SettingTab& tab) {
@@ -224,8 +221,9 @@ QWidget* SettingsDialog::editor(const QString& key) const {
     return editors_.value(key);
 }
 
-// Reads each control back by its type. Timecodes are checked against a 30 fps non-drop format only
-// to tell whether they parse.
+// Reads each control back by its type. Timecodes are checked against the project's timecode format
+// (drop-frame when written with ';', as model::parseTimecode reads them) to tell whether they parse;
+// without a project, against 30 fps.
 QJsonObject SettingsDialog::values() const {
     QJsonObject out = values_;
     for (const SettingTab& t : kind_.tabs) {
@@ -240,9 +238,10 @@ QJsonObject SettingsDialog::values() const {
                 out.insert(o.key, menu->currentData().toString());
             } else if (auto* line = qobject_cast<QLineEdit*>(e)) {
                 QString text = line->text().trimmed();
-                if (o.type == QLatin1String("timecode") &&
-                    !Timecode::parse(text.toStdString(), TimecodeFormat{30, false})) {
-                    text = o.defaultValue.toString();
+                if (o.type == QLatin1String("timecode")) {
+                    TimecodeFormat format = TimecodeFormat::forRate(editRate_, text.contains(QLatin1Char(';')));
+                    if (!format.isValid()) format = TimecodeFormat::forRate(editRate_, false);
+                    if (!Timecode::parse(text.toStdString(), format)) text = o.defaultValue.toString();
                 }
                 out.insert(o.key, text);
             } else if (e) {
@@ -486,6 +485,7 @@ bool SettingsList::openEntry(int entry) {
     }
     SettingsDialog dialog(*kind, e, this);
     dialog.setInfo(QStringLiteral("projectFormat"), projectFormat);
+    if (projectEditRate) dialog.setEditRate(*projectEditRate);
     if (dialogHook) dialogHook(dialog);
     if (dialog.exec() != QDialog::Accepted) return false;
     const QJsonObject values = dialog.values();
@@ -732,7 +732,10 @@ void SettingsWindow::setProject(const std::optional<model::ProjectEntry>& projec
     } else {
         format_->addRow(new QLabel(tr("No project is open.")));
     }
-    for (SettingsList* l : {project_, user_, site_}) l->projectFormat = formatText;
+    for (SettingsList* l : {project_, user_, site_}) {
+        l->projectFormat = formatText;
+        l->projectEditRate = project ? std::optional<Rational>(project->settings.format.editRate) : std::nullopt;
+    }
 }
 
 void SettingsWindow::showTab(Tab tab) {

@@ -7,6 +7,7 @@
 #include <QButtonGroup>
 #include <QDial>
 #include <QDialogButtonBox>
+#include <QElapsedTimer>
 #include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -20,7 +21,9 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
+#include <memory>
 
 // The Audio Mixer and the Audio Tool (audio_tools.h): the fader scale's maths, the mixer strips, the
 // mixer with its Clip, Auto and Live modes and Fast menu, the Set Calibration Tone dialog, and the
@@ -400,6 +403,8 @@ AudioMixer::AudioMixer(Timeline& timeline, QWidget* parent) : QWidget(parent), t
     masterColumn->addWidget(laterButton(tr("Stereo Sequence"), QStringLiteral("sequenceMixFormat"),
                                         tr("Sequence Mix Format"), this));
     masterColumn->addWidget(master_, 1);
+    // The Master fader sets the level of the whole mix, after the tracks, in every mode.
+    connect(master_, &MixerStrip::gainSet, this, [this](double db, bool) { setMasterGain(db); });
     auto* body = new QHBoxLayout;
     body->addWidget(scroll, 1);
     body->addLayout(masterColumn);
@@ -558,6 +563,15 @@ void AudioMixer::syncValues() {
         }
     }
     master_->setLive(mode_ == Mode::Live);
+    master_->show(masterGain_, 0);
+}
+
+void AudioMixer::setMasterGain(double db) {
+    db = model::clampGain(db);
+    const bool changed = db != masterGain_;
+    masterGain_ = db;
+    master_->show(db, 0);
+    if (changed) emit masterGainChanged(db);
 }
 
 // Live mode keeps the values in the mixer and follows every move. Clip mode stores only finished
@@ -706,45 +720,75 @@ namespace {
 // The digital scale (picture on p.158).
 constexpr int kDigital[] = {0, -4, -8, -14, -20, -26, -30, -35, -40, -65, -90};
 
-// Where a level sits: the scale's marks equally spaced, as pictured.
-double fraction(double db) {
-    constexpr int n = 10;
+constexpr int kMarks = 10; // intervals between the marks of kDigital
+
+} // namespace
+
+// The scale's marks are equally spaced, as pictured; levels between two marks are interpolated.
+double AudioMeters::scalePosition(double db) {
     if (db >= 0) return 0;
     if (db <= -90) return 1;
-    for (int i = 0; i < n; ++i) {
+    for (int i = 0; i < kMarks; ++i) {
         if (db <= kDigital[i] && db >= kDigital[i + 1]) {
-            return (i + (kDigital[i] - db) / (kDigital[i] - kDigital[i + 1])) / n;
+            return (i + (kDigital[i] - db) / (kDigital[i] - kDigital[i + 1])) / kMarks;
         }
     }
     return 1;
 }
 
-} // namespace
+// The inverse of scalePosition(): which interval the position falls in, then where in it.
+double AudioMeters::levelAt(double position) {
+    if (position <= 0) return 0;
+    if (position >= 1) return -90;
+    const double at = position * kMarks;
+    const int i = std::min(static_cast<int>(at), kMarks - 1);
+    return kDigital[i] - (at - i) * (kDigital[i] - kDigital[i + 1]);
+}
 
-// Starts with every level and peak at the bottom of the scale.
+// Starts with every level and peak at the bottom of the scale. The default clock is a monotonic
+// timer started here.
 AudioMeters::AudioMeters(int channels, QWidget* parent) : QWidget(parent) {
     setObjectName(QStringLiteral("audioMeters"));
     for (int i = 0; i < channels; ++i) {
         levels_ << -90;
         peaks_ << -90;
+        peakTimes_ << 0;
     }
+    auto started = std::make_shared<QElapsedTimer>();
+    started->start();
+    clock_ = [started] { return started->elapsed(); };
     setMinimumHeight(220);
+}
+
+void AudioMeters::setHold(Hold hold) {
+    hold_ = hold;
+}
+
+void AudioMeters::setClock(Clock clock) {
+    if (clock) clock_ = std::move(clock);
 }
 
 QSize AudioMeters::sizeHint() const {
     return QSize(60 + channels() * 14, 260);
 }
 
+// A higher level always raises the peak and restarts its hold time. With Peak Hold, a peak older
+// than kPeakHoldMs falls to the current level; with Infinite Hold it stays until resetPeaks().
 void AudioMeters::setLevel(int channel, double db) {
     if (channel < 0 || channel >= levels_.size()) return;
     levels_[channel] = db;
-    peaks_[channel] = std::max(peaks_.at(channel), db);
+    const qint64 now = clock_();
+    if (db >= peaks_.at(channel) || (hold_ == Hold::PeakHold && now - peakTimes_.at(channel) >= kPeakHoldMs)) {
+        peaks_[channel] = db;
+        peakTimes_[channel] = now;
+    }
     update();
 }
 
 void AudioMeters::setPeak(int channel, double db) {
     if (channel < 0 || channel >= peaks_.size()) return;
     peaks_[channel] = db;
+    peakTimes_[channel] = clock_();
     update();
 }
 
@@ -777,7 +821,7 @@ void AudioMeters::paintEvent(QPaintEvent*) {
     // Digital scale on the left; VU on the right, 0 VU at the reference
     // (p.157-158).
     for (int d : kDigital) {
-        const int yy = top + static_cast<int>(fraction(d) * span);
+        const int yy = top + static_cast<int>(scalePosition(d) * span);
         p.drawText(QRect(0, yy - 6, scaleWidth - 4, 12), Qt::AlignRight | Qt::AlignVCenter, QString::number(d));
         const int vu = d - reference_;
         p.drawText(QRect(width() - scaleWidth + 4, yy - 6, scaleWidth - 4, 12), Qt::AlignLeft | Qt::AlignVCenter,
@@ -789,14 +833,15 @@ void AudioMeters::paintEvent(QPaintEvent*) {
     for (int c = 0; c < channels(); ++c) {
         const int x = scaleWidth + c * (area / n) + 1;
         p.fillRect(QRect(x, top, barWidth, span), palette().color(QPalette::Base));
-        const int levelY = top + static_cast<int>(fraction(levels_.at(c)) * span);
-        // The bar, coloured by band.
+        const int levelY = top + static_cast<int>(scalePosition(levels_.at(c)) * span);
+        // The bar, coloured by band: each line's level read back through the scale's own mapping,
+        // so the bands change colour at the marks they belong to.
         for (int yy = levelY; yy < bottom; ++yy) {
-            const double db = -90 + 90.0 * (1 - static_cast<double>(yy - top) / span);
+            const double db = levelAt(static_cast<double>(yy - top) / span);
             p.setPen(colourFor(db, reference_));
             p.drawLine(x, yy, x + barWidth - 1, yy);
         }
-        const int peakY = top + static_cast<int>(fraction(peaks_.at(c)) * span);
+        const int peakY = top + static_cast<int>(scalePosition(peaks_.at(c)) * span);
         if (peaks_.at(c) > -90) {
             p.setPen(colourFor(peaks_.at(c), reference_));
             p.drawLine(x, peakY, x + barWidth - 1, peakY);
@@ -824,8 +869,8 @@ AudioTool::AudioTool(int channels, QWidget* parent) : QWidget(parent) {
         holds->addAction(a);
     }
     peak->setChecked(true);
-    connect(peak, &QAction::triggered, this, [this] { hold_ = Hold::PeakHold; });
-    connect(infinite, &QAction::triggered, this, [this] { hold_ = Hold::Infinite; });
+    connect(peak, &QAction::triggered, this, [this] { meters_->setHold(Hold::PeakHold); });
+    connect(infinite, &QAction::triggered, this, [this] { meters_->setHold(Hold::Infinite); });
     menu->addSeparator();
     menu->addAction(tr("Set Calibration Tone..."), this, [this] {
         CalibrationToneDialog dialog(tone_, this);

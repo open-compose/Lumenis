@@ -16,7 +16,11 @@
 #include <QHeaderView>
 #include <QLineEdit>
 #include <QMimeData>
-#include <QSettings>
+#include <QDir>
+#include <QDropEvent>
+#include <QFile>
+#include <QJsonArray>
+#include <QSignalSpy>
 #include <QSplitter>
 #include <QTableView>
 #include <QTemporaryDir>
@@ -262,6 +266,87 @@ private slots:
         delete own;
     }
 
+    // Locking prevents deletion (p.265): a move leaves locked items in the
+    // source bin, as Delete does, and moves the others.
+    void movingLockedItemsCopiesThem() {
+        Fixture f;
+        BinDocument* a = f.doc(0);
+        BinDocument* b = f.doc(1);
+        model::BinItem locked = clip(QStringLiteral("Locked"));
+        locked.locked = true;
+        const model::BinItem free = clip(QStringLiteral("Free"));
+        a->addItem(locked);
+        a->addItem(free);
+        QCOMPARE(f.container.transferItems(a->nodeId(), {locked.id, free.id}, b->nodeId(), false),
+                 (QStringList{locked.id, free.id}));
+        QVERIFY(a->bin().item(locked.id));
+        QVERIFY(!a->bin().item(free.id));
+        QVERIFY(b->bin().item(locked.id) && b->bin().item(free.id));
+    }
+
+    // Alt/Option (p.260) or Ctrl/Command (p.261) copies, in every drop path.
+    void copyModifiers() {
+        QVERIFY(isCopyDrop(Qt::CopyAction, Qt::NoModifier));
+        QVERIFY(isCopyDrop(Qt::MoveAction, Qt::AltModifier));
+        QVERIFY(isCopyDrop(Qt::MoveAction, Qt::ControlModifier));
+        QVERIFY(!isCopyDrop(Qt::MoveAction, Qt::ShiftModifier));
+        QVERIFY(!isCopyDrop(Qt::MoveAction, Qt::NoModifier));
+
+        // The Script view reads the drop event's modifiers. Its event filter
+        // takes the drop directly: Qt delivers a Drop only during a drag.
+        Fixture f;
+        const model::BinItem one = clip(QStringLiteral("One"));
+        f.doc(0)->addItem(one);
+        f.view(1)->setMode(model::BinViewMode::Script);
+        settle();
+        BinScriptView* script = f.view(1)->scriptView();
+        QSignalSpy dropped(script, &BinScriptView::itemsDropped);
+        QMimeData mime;
+        mime.setData(binItemsMime(), (f.bins.at(0) + QLatin1Char('\n') + one.id).toUtf8());
+        // A move drop: only the modifiers ask for a copy.
+        QDropEvent ctrl(QPointF(5, 5), Qt::MoveAction, &mime, Qt::NoButton, Qt::ControlModifier);
+        QObject* filter = script;
+        QVERIFY(filter->eventFilter(script->widget(), &ctrl));
+        QDropEvent plain(QPointF(5, 5), Qt::MoveAction, &mime, Qt::NoButton, Qt::NoModifier);
+        QVERIFY(filter->eventFilter(script->widget(), &plain));
+        QCOMPARE(dropped.count(), 2);
+        QVERIFY(dropped.at(0).at(2).toBool());
+        QVERIFY(!dropped.at(1).at(2).toBool());
+        settle();
+    }
+
+    // A bin whose file cannot be written stays open with its changes, and
+    // the failure is reported.
+    void closingABinThatCannotBeSaved() {
+        Fixture f;
+        BinDocument* a = f.doc(1);
+        a->addItem(clip(QStringLiteral("Unsaved")));
+        QVERIFY(a->isDirty());
+        // A directory where the bin file should be: the write fails, even
+        // for a privileged user.
+        QVERIFY(QFile::remove(a->path()));
+        QVERIFY(QDir().mkpath(a->path() + QStringLiteral("/blocked")));
+        QSignalSpy failed(&f.container, &BinContainer::saveFailed);
+        QString error;
+        QVERIFY(!f.container.closeBin(a, &error));
+        QVERIFY(!error.isEmpty());
+        QCOMPARE(failed.count(), 1);
+        QCOMPARE(failed.at(0).at(0).toString(), a->name());
+        settle();
+        QCOMPARE(f.container.document(f.bins.at(1)), a);
+        QVERIFY(a->isDirty());
+        QVERIFY(f.container.viewFor(a));
+        // Deleting the bin is refused too: nothing goes to the Trash unsaved.
+        QVERIFY(!f.container.deleteNode(f.bins.at(1)));
+        QVERIFY(!f.container.bins()->isInTrash(f.bins.at(1)));
+        // Once it can be written, it closes.
+        QVERIFY(QDir(a->path()).removeRecursively());
+        QVERIFY(f.container.closeBin(a));
+        settle();
+        QVERIFY(!f.container.document(f.bins.at(1)));
+        QCOMPARE(model::BinFile::read(f.container.nodePath(f.bins.at(1)))->items.size(), 1);
+    }
+
     void favoriteBins() {
         Fixture f;
         // Add Bin to Favorites (p.293): the folder appears, at the top.
@@ -280,27 +365,22 @@ private slots:
         QCOMPARE(f.treeNames().last(), QStringLiteral("Favorite Bins"));
 
         // Another project sees it, and opens it from where it is.
-        QTemporaryDir settingsDir;
-        {
-            QSettings s(settingsDir.filePath(QStringLiteral("s.ini")), QSettings::IniFormat);
-            FavoriteBins::save(s);
-        }
+        const QJsonArray stored = FavoriteBins::toJson();
         f.container.saveAll();
         Project other(QStringLiteral("Other"));
         BinContainer second;
         FavoriteBins::paths().clear();
-        {
-            QSettings s(settingsDir.filePath(QStringLiteral("s.ini")), QSettings::IniFormat);
-            FavoriteBins::load(s);
-        }
-        QVERIFY(!FavoriteBins::atTop());
+        QVERIFY(FavoriteBins::fromJson(stored));
+        QVERIFY(!FavoriteBins::fromJson(stored)); // unchanged
         second.setProject(other.entry.folder, other.entry.settings.name, Rational(25));
         BinDocument* opened = second.openBin(favorite);
         QVERIFY(opened);
         QCOMPARE(opened->nodeId(), favorite);
         QCOMPARE(opened->name(), QStringLiteral("Doc.1"));
         // Delete takes it off the list only.
+        QSignalSpy changed(&second, &BinContainer::favoritesChanged);
         QVERIFY(second.deleteNode(favorite));
+        QCOMPARE(changed.count(), 1);
         QVERIFY(FavoriteBins::paths().isEmpty());
         QVERIFY(QFileInfo::exists(FavoriteBins::pathOf(favorite)));
         second.setProject({}, {}, Rational(25));
@@ -325,6 +405,44 @@ private slots:
         QVERIFY(f.container.saveBin(a));
         QCOMPARE(model::BinFile::read(a->path())->display.hiddenKinds,
                  (QList<model::BinItemKind>{model::BinItemKind::MasterClip, model::BinItemKind::RenderedEffect}));
+    }
+
+    // "Show clips created by user" off hides all but what the system made:
+    // source clips and rendered effects (p.288).
+    void setBinDisplayHidesClipsCreatedByUser() {
+        Fixture f;
+        BinDocument* a = f.doc(0);
+        const model::BinItem tape = clip(QStringLiteral("Tape"), model::BinItemKind::Source);
+        a->addItem(clip(QStringLiteral("Clip")));
+        a->addItem(clip(QStringLiteral("Sequence"), model::BinItemKind::Sequence));
+        a->addItem(tape);
+        f.view(0)->setHiddenKinds({});
+        QCOMPARE(f.view(0)->visibleCount(), 3);
+        SetBinDisplayDialog dialog(a->bin().display);
+        dialog.findChild<QCheckBox*>(QStringLiteral("showUserClips"))->setChecked(false);
+        model::BinDisplay d = a->bin().display;
+        d.showUserClips = dialog.showUserClips();
+        a->setDisplay(d);
+        QCOMPARE(f.view(0)->visibleIds(), QStringList{tape.id});
+        d.showUserClips = true;
+        a->setDisplay(d);
+        QCOMPARE(f.view(0)->visibleCount(), 3);
+    }
+
+    // Items not placed by the user (reference clips) show only with Show reference clips (p.288);
+    // tst_bins checks that the mark is saved.
+    void setBinDisplayShowsReferenceClips() {
+        Fixture f;
+        BinDocument* a = f.doc(0);
+        model::BinItem referenced = clip(QStringLiteral("Referenced"));
+        referenced.userPlaced = false;
+        a->addItem(clip(QStringLiteral("Placed")));
+        a->addItem(referenced);
+        QCOMPARE(f.view(0)->visibleCount(), 1);
+        model::BinDisplay d = a->bin().display;
+        d.showReferenceClips = true;
+        a->setDisplay(d);
+        QCOMPARE(f.view(0)->visibleCount(), 2);
     }
 
     void quickFilterSearchesSelectedColumns() {

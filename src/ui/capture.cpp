@@ -6,6 +6,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QPalette>
+#include <QPointer>
 #include <QWidget>
 
 // Screenshots and layout dumps for the cross-platform consistency check (Phase 1 gate 1, capture.h). The
@@ -51,8 +52,8 @@ void describe(const QWidget* root, const QWidget* w, const QString& path, QJsonA
     }
 }
 
-// Applies `palette` to `root` and every descendant that carries its own
-// palette (labels with custom colours, for example).
+// Applies `palette` to `root` and every descendant, so that descendants that carry their own palette
+// (labels with custom colours, for example) lose their text colours too.
 // Only the text roles are copied into the descendants, so their other colours stay as they are.
 void applyPalette(QWidget* root, const QPalette& palette) {
     root->setPalette(palette);
@@ -68,6 +69,33 @@ void applyPalette(QWidget* root, const QPalette& palette) {
     }
 }
 
+// What applyPalette() changes, saved for each widget so it can be put back exactly: whether the widget
+// had a palette of its own (WA_SetPalette) and, if so, that palette. Widgets without one go back to
+// inheriting, so capture() leaves no explicit palette behind.
+struct SavedPalette {
+    QPointer<QWidget> widget;
+    bool own = false;
+    QPalette palette;
+};
+
+QList<SavedPalette> savePalettes(QWidget* root) {
+    QList<SavedPalette> saved;
+    // findChildren() lists parents before their children, so restoring in this order lets each
+    // inheriting child pick up its parent's restored palette.
+    QList<QWidget*> widgets{root};
+    widgets += root->findChildren<QWidget*>();
+    for (QWidget* w : widgets) saved.append({w, w->testAttribute(Qt::WA_SetPalette), w->palette()});
+    return saved;
+}
+
+void restorePalettes(const QList<SavedPalette>& saved) {
+    for (const SavedPalette& s : saved) {
+        if (!s.widget) continue;
+        // An empty palette (no roles resolved) clears WA_SetPalette and re-inherits.
+        s.widget->setPalette(s.own ? s.palette : QPalette());
+    }
+}
+
 } // namespace
 
 QJsonArray describeLayout(const QWidget* root) {
@@ -77,7 +105,7 @@ QJsonArray describeLayout(const QWidget* root) {
 }
 
 // Grabs the widget as rendered, writes the layout, then swaps in a palette with transparent text (for
-// the application and the widget tree), grabs again and puts the palettes back.
+// the application and the widget tree), grabs again and puts every widget's own palette back.
 bool capture(QWidget* widget, const QDir& dir, const QString& name) {
     bool ok = widget->grab().save(dir.filePath(name + QStringLiteral(".png")));
 
@@ -87,7 +115,7 @@ bool capture(QWidget* widget, const QDir& dir, const QString& name) {
 
     // Same picture with text invisible. Style sheets that name palette
     // roles (palette(highlighted-text)) follow the palette too.
-    const QPalette original = widget->palette();
+    const QList<SavedPalette> original = savePalettes(widget);
     // Start from the application palette: it has every role set, whereas a
     // widget's own palette may only carry the roles it overrides.
     QPalette noText = QApplication::palette();
@@ -111,7 +139,7 @@ bool capture(QWidget* widget, const QDir& dir, const QString& name) {
     repolish();
     ok = widget->grab().save(dir.filePath(name + QStringLiteral(".notext.png"))) && ok;
     QApplication::setPalette(appPalette);
-    applyPalette(widget, original);
+    restorePalettes(original);
     repolish();
     return ok;
 }

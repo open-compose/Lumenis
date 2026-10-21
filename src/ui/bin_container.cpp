@@ -22,6 +22,7 @@
 #include <QPalette>
 #include <QScreen>
 #include <QSettings>
+#include <QJsonArray>
 #include <QSplitter>
 #include <QTimer>
 #include <QToolButton>
@@ -96,14 +97,27 @@ bool& FavoriteBins::atTop() {
     return top;
 }
 
-void FavoriteBins::load(QSettings& settings) {
-    paths() = settings.value(QStringLiteral("favoriteBins/paths")).toStringList();
-    atTop() = settings.value(QStringLiteral("favoriteBins/atTop"), true).toBool();
+QJsonArray FavoriteBins::toJson() {
+    return QJsonArray::fromStringList(paths());
 }
 
-void FavoriteBins::save(QSettings& settings) {
-    settings.setValue(QStringLiteral("favoriteBins/paths"), paths());
-    settings.setValue(QStringLiteral("favoriteBins/atTop"), atTop());
+bool FavoriteBins::fromJson(const QJsonValue& value) {
+    QStringList list;
+    for (const QJsonValue& v : value.toArray()) {
+        if (!v.toString().isEmpty() && !list.contains(v.toString())) list << v.toString();
+    }
+    if (list == paths()) return false;
+    paths() = list;
+    return true;
+}
+
+QJsonValue FavoriteBins::legacy(const QSettings& settings) {
+    const QStringList list = settings.value(QStringLiteral("favoriteBins/paths")).toStringList();
+    return list.isEmpty() ? QJsonValue() : QJsonValue(QJsonArray::fromStringList(list));
+}
+
+void FavoriteBins::forgetLegacy(QSettings& settings) {
+    settings.remove(QStringLiteral("favoriteBins"));
 }
 
 // ---------------------------------------------------------------- BinTreeModel
@@ -358,7 +372,7 @@ bool BinTreeModel::dropMimeData(const QMimeData* data, Qt::DropAction action, in
         QStringList lines = QString::fromUtf8(data->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
         if (lines.size() < 2) return false;
         const QString from = lines.takeFirst();
-        const bool copy = action == Qt::CopyAction || (QApplication::keyboardModifiers() & Qt::AltModifier);
+        const bool copy = isCopyDrop(action, QApplication::keyboardModifiers());
         // After the drag has finished, so the source bin is not changed under it.
         QTimer::singleShot(0, &container_, [c = &container_, from, lines, parentId, copy] {
             c->transferItems(from, lines, parentId, copy);
@@ -539,9 +553,15 @@ bool FloatingBinContainer::isSidebarVisible() const {
 }
 
 void FloatingBinContainer::closeEvent(QCloseEvent* event) {
-    // Closing the window closes its bins, which are saved.
-    for (BinView* v : area_->views()) container_.closeBin(&v->document());
-    event->accept();
+    // Closing the window closes its bins, which are saved. A bin that cannot
+    // be saved stays open, and so does the window.
+    bool closed = true;
+    for (BinView* v : area_->views()) closed = container_.closeBin(&v->document()) && closed;
+    if (closed) {
+        event->accept();
+    } else {
+        event->ignore();
+    }
 }
 
 // ---------------------------------------------------------------- BinContainer
@@ -584,7 +604,9 @@ BinContainer::BinContainer(QWidget* parent) : QWidget(parent) {
     });
 
     autoSave_ = new QTimer(this);
-    connect(autoSave_, &QTimer::timeout, this, [this] { saveAll(); });
+    connect(autoSave_, &QTimer::timeout, this, [this] {
+        if (QString error; !saveAll(&error)) emit saveFailed({}, error);
+    });
     // The guide does not give the default interval; ours is 15 minutes.
     setAutoSaveMinutes(15);
 }
@@ -693,7 +715,8 @@ void BinContainer::setProject(const QString& folder, const QString& name, const 
     // documents and floating containers directly (not deleteLater), before
     // the bin list goes. saveAll() has already recorded which bins were open.
     if (bins_) {
-        saveAll();
+        // The project is closing either way; a failure is at least reported.
+        if (QString error; !saveAll(&error)) emit saveFailed({}, error);
         while (!documents_.isEmpty()) {
             BinDocument* d = documents_.takeLast();
             if (BinView* v = viewFor(d)) {
@@ -882,6 +905,11 @@ BinDocument* BinContainer::openBin(const QString& requested) {
     });
     connect(doc, &BinDocument::displayChanged, this, [this, doc] { updateTab(doc); });
     connect(view, &BinView::deleteRequested, this, [this] { deleteSelection(); });
+    // A view saved in one bin is offered in every bin's Bin View menu.
+    connect(view, &BinView::viewSaved, this, [this] {
+        refreshViewMenus();
+        emit binViewsChanged();
+    });
     connect(view, &BinView::itemActivated, this,
             [this, doc](const QString& itemId) { emit itemActivated(doc->nodeId(), itemId); });
     // Items dragged in from another bin, after the drag has finished.
@@ -906,10 +934,18 @@ BinDocument* BinContainer::openBin(const QString& requested) {
     return doc;
 }
 
-// Saving errors are not reported here: closing goes ahead regardless.
-void BinContainer::closeBin(BinDocument* document) {
-    if (!document || !documents_.contains(document)) return;
-    if (document->isDirty()) document->save();
+// A bin that cannot be saved stays open with its changes, so nothing is lost;
+// the failure is reported with saveFailed().
+bool BinContainer::closeBin(BinDocument* document, QString* error) {
+    if (!document || !documents_.contains(document)) return false;
+    if (document->isDirty()) {
+        QString why;
+        if (!document->save(&why)) {
+            if (error) *error = why;
+            emit saveFailed(document->name(), why);
+            return false;
+        }
+    }
     if (BinView* v = viewFor(document)) {
         if (active_ == v) active_ = nullptr;
         if (BinDockArea* a = areaOf(v)) a->takeView(v);
@@ -921,6 +957,7 @@ void BinContainer::closeBin(BinDocument* document) {
     saveTree();
     refreshTree();
     emit activeBinChanged();
+    return true;
 }
 
 void BinContainer::closeAllBinsButActive() {
@@ -1128,11 +1165,14 @@ bool BinContainer::deleteNode(const QString& id, QString* error) {
     const model::BinNode* n = bins_->node(id);
     if (!n || n->kind == model::BinNode::Kind::Trash || bins_->isInTrash(id)) return false;
     // Close what is open inside it first.
+    // A bin that cannot be saved stays open, and nothing moves to the Trash.
+    bool closed = true;
     std::function<void(const model::BinNode&)> closeOpen = [&](const model::BinNode& node) {
-        if (BinDocument* d = document(node.id)) closeBin(d);
+        if (BinDocument* d = document(node.id)) closed = closeBin(d, error) && closed;
         for (const model::BinNode& c : node.children) closeOpen(c);
     };
     closeOpen(*n);
+    if (!closed) return false;
     if (!bins_->remove(id, error)) return false;
     saveTree();
     refreshTree();
@@ -1193,6 +1233,7 @@ bool BinContainer::addToFavorites(BinDocument* document) {
     FavoriteBins::paths() << path;
     refreshTree();
     for (BinSidebar* s : sidebars_) s->expand(FavoriteBins::folderId());
+    emit favoritesChanged();
     return true;
 }
 
@@ -1200,6 +1241,13 @@ void BinContainer::removeFromFavorites(const QString& path) {
     if (FavoriteBins::paths().removeAll(path) == 0) return;
     // An open Favorite Bin from elsewhere stays open until it is closed.
     refreshTree();
+    emit favoritesChanged();
+}
+
+void BinContainer::refreshViewMenus() {
+    for (BinDocument* d : documents_) {
+        if (BinView* v = viewFor(d)) v->updateViewMenu();
+    }
 }
 
 // Showing the Sidebar also ends Show Sidebar Only; Show Sidebar Only shows it.
@@ -1357,15 +1405,19 @@ QStringList BinContainer::transferItems(const QString& fromBin, const QStringLis
     if (columnsAdded) target->setDisplay(display);
 
     QStringList added;
+    QStringList moved;
     for (const QString& id : ids) {
         const model::BinItem* item = source->bin().item(id);
         // A copy is the same clip in another bin, so it keeps its identity
         // and, unlike Duplicate, its name (p.260).
         if (!item || target->bin().item(id)) continue;
+        // Locking prevents deletion (p.265), so a moved locked item is only
+        // copied: it stays in the source bin, as Delete leaves it.
+        if (!item->locked) moved << id;
         target->addItem(*item);
         added << id;
     }
-    if (!copy) source->removeItems(added);
+    if (!copy) source->removeItems(moved);
     if (BinView* v = viewFor(target)) v->selectIds(added);
     return added;
 }

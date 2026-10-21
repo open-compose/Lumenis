@@ -122,7 +122,8 @@ public:
     QString folder() const { return folder_; }
     bool canGoBack() const { return position_ > 0; }
     bool canGoForward() const { return position_ + 1 < history_.size(); }
-    // Move through the history without changing it.
+    // Move through the history without changing it; the folder reached is
+    // shown as by setFolder (Recent, the Explore tree, stateChanged).
     void back();
     void forward();
     // The parent folder, and the user's home folder.
@@ -211,7 +212,7 @@ public:
 
     // The folder, favorites, recent folders, views and Source Browser
     // settings, in the "sourceBrowser" group. app/main.cpp restores them at
-    // startup and saves them on quit.
+    // startup and saves them on each stateChanged and on quit.
     void save(QSettings& settings) const;
     void restore(QSettings& settings);
 
@@ -257,6 +258,10 @@ private:
     void updateNavigation();
     // Shows "Processing media" while probes are pending.
     void updateProgress();
+    // Shows a folder already in the history at position_: moves it to the
+    // top of Recent, selects it in the Explore tree, lists it, and emits
+    // stateChanged.
+    void showFolder(const QString& path);
     void addRecent(const QString& path);
     // Refills the Favorites and Recent lists.
     void refreshLists();

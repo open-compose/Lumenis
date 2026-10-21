@@ -826,8 +826,9 @@ These are recorded now so they are not entered from memory later.
   * The Bin settings dialog (Favorite Bins placement, auto-save interval)
     comes with Settings in 1.5.
   * Frame view border colours and icons, changing the represented frame,
-    Faster Thumbnails, and "Show reference clips" (no sequences reference
-    clips until the Timeline).
+    Faster Thumbnails. "Show reference clips" shows items marked as not
+    placed by the user (`BinItem::userPlaced`); only bins read from Media
+    Composer (3.3b) will have them.
   * Copies are clones only in name: a change to one does not yet reach
     the other.
   * The Avid Attic backups.
@@ -1895,7 +1896,7 @@ p.610–640, ch. 13 p.432–434).**
   stereo. Files at other rates are resampled.
 * Without a sound card, its null device keeps time, so CI tests the clock.
 
-## 17. Managed media (ch. 9, p.211–216; ch. 12, p.348–359)
+## 17. Managed media (ch. 9, p.211–216; ch. 12, p.349–359)
 
 Media the application makes itself: imported, consolidated or transcoded.
 The guide calls it Managed Media, unlike Linked Media (p.361).
@@ -1950,7 +1951,7 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
 * Later: Set Multichannel Audio (p.214), gain on import (p.215–216),
   pullup/pulldown rates (p.216).
 
-### Consolidate/Transcode (p.348–356)
+### Consolidate/Transcode (p.349–356)
 * Clip > Consolidate/Transcode on the bin's selection. Consolidate or
   Transcode in the upper left; Target Drive(s); options; the button in the
   lower right (p.350–355).
@@ -2031,7 +2032,7 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
 * With Media Files ticked, each media file is a row, named for its clip and
   track ("Interview V1", ours). Managed master clips show when Master Clips
   is ticked, linked ones when Linked Master Clips is.
-* Edit > Delete or the Delete key opens the Delete Media dialog (p.348):
+* Edit > Delete or the Delete key opens the Delete Media dialog (p.349):
   * a box for each track the selection has media for: Video media file
     (V), Audio media file (A1, A2, ...);
   * then a confirmation, then Delete.

@@ -47,11 +47,15 @@ WorkspaceBar::WorkspaceBar(WorkspaceManager& workspaces, QWidget* parent) : QWid
 void WorkspaceBar::sync() {
     setFixedWidth(wide(workspaces_) ? kWorkspaceBarWide : kWorkspaceBarNarrow);
     setVisible(workspaces_.barMode() != WorkspaceManager::BarMode::Hidden);
+    // The mode and the number of workspaces change sizeHint().
+    updateGeometry();
     update();
 }
 
+// Ends below the last item as itemRect() places it, with or without labels.
 QSize WorkspaceBar::sizeHint() const {
-    return {width(), kTop + static_cast<int>(workspaces_.names().size()) * kItemHeightWide};
+    const int count = static_cast<int>(workspaces_.names().size());
+    return {width(), count == 0 ? kTop : itemRect(count - 1).bottom() + 1};
 }
 
 QRect WorkspaceBar::itemRect(int index) const {

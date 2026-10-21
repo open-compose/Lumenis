@@ -536,14 +536,22 @@ int main(int argc, char** argv) {
         commands.loadShortcuts(settings);
         window.restoreGeometry(settings.value(QStringLiteral("mainWindow/geometry")).toByteArray());
         // Workspaces are User settings now (p.86), loaded with the user.
-        lumenis::ui::BinViewLibrary::load(settings);
-        lumenis::ui::FavoriteBins::load(settings);
+        // Favorite Bins and bin views are User settings too (p.293, p.249); lists an older build
+        // kept here move into the user's Bin setting.
+        window.adoptLegacyBinLists(lumenis::ui::FavoriteBins::legacy(settings),
+                                   lumenis::ui::BinViewLibrary::legacy(settings));
         window.sourceBrowser().restore(settings);
+        // Saved as it changes too, so a crash does not lose the folder and settings; connected
+        // after restore() so restoring does not write back what it just read.
+        QObject::connect(&window.sourceBrowser(), &lumenis::ui::SourceBrowser::stateChanged, &guiApp,
+                         [&] { window.sourceBrowser().save(settings); });
         QObject::connect(&guiApp, &QApplication::aboutToQuit, [&] {
             window.sourceBrowser().save(settings);
             settings.setValue(QStringLiteral("mainWindow/geometry"), window.saveGeometry());
-            lumenis::ui::BinViewLibrary::save(settings);
-            lumenis::ui::FavoriteBins::save(settings);
+            if (!window.legacyBinListsPending()) {
+                lumenis::ui::FavoriteBins::forgetLegacy(settings);
+                lumenis::ui::BinViewLibrary::forgetLegacy(settings);
+            }
             commands.saveShortcuts(settings);
         });
     }

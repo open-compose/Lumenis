@@ -284,12 +284,14 @@ void CommandPalette::setQuickFind(const QString& text) {
     if (find_->text() != text) find_->setText(text);
     const QStringList found = matches(text);
     const bool all = text.trimmed().isEmpty();
-    // Only the tabs that include matches remain open (p.100); the other
-    // buttons are dimmed.
+    // Only the tabs that include matches remain open (p.100). The guide says
+    // the button options are "narrowed down" without saying how; here the
+    // labels of the buttons that do not match are dimmed.
     QSet<int> tabsWithMatches;
     for (const QString& id : found) tabsWithMatches << tabOf_.value(id);
     for (int i = 0; i < tabs_->count(); ++i) tabs_->setTabVisible(i, all || tabsWithMatches.contains(i));
-    // Dimming applies to the labels; the buttons keep the state refresh() gave them.
+    // Only the labels: the buttons keep the enabled state refresh() gave them (available commands), so
+    // a button that does not match still works and can still be mapped.
     for (const Row& r : rows_) r.label->setEnabled(all || found.contains(r.id));
     if (!all && !found.isEmpty() && !tabsWithMatches.contains(tabs_->currentIndex())) {
         tabs_->setCurrentIndex(tabOf_.value(found.first()));

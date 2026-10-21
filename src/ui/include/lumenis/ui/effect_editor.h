@@ -98,8 +98,12 @@ private:
     // The cuts the Transition parameters apply to: the shown transition's, or in Trim mode the
     // video rollers when no effect is shown; empty otherwise.
     QList<model::TrimRoller> transitionCuts() const;
+    // The video rollers in Trim mode; empty outside it.
+    QList<model::TrimRoller> trimCuts() const;
     // `frames` as seconds:frames at the project's nominal rate.
     QString durationText(std::int64_t frames) const;
+    // The Record monitor's sequence; an empty one when nothing is loaded.
+    model::Sequence recordSequence() const;
 
     Timeline& timeline_;
     std::optional<model::EffectRef> shown_;

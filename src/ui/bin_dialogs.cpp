@@ -166,8 +166,10 @@ SetBinDisplayDialog::SetBinDisplayDialog(const model::BinDisplay& display, QWidg
     }
     layout->addSpacing(6);
     userClips_ = new QCheckBox(tr("Show clips created by user"), this);
+    userClips_->setObjectName(QStringLiteral("showUserClips"));
     userClips_->setChecked(display.showUserClips);
     referenceClips_ = new QCheckBox(tr("Show reference clips"), this);
+    referenceClips_->setObjectName(QStringLiteral("showReferenceClips"));
     referenceClips_->setChecked(display.showReferenceClips);
     layout->addWidget(userClips_);
     layout->addWidget(referenceClips_);

@@ -14,6 +14,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
+#include <QJsonObject>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
@@ -312,6 +313,43 @@ private slots:
         QVERIFY(rig.editor.setDuration(QStringLiteral("30")));
         QCOMPARE(rig.v1(1).transition->duration, 30);
         QVERIFY(!rig.editor.setDuration(QStringLiteral("x")));
+        // Off the transition, outside Trim mode, the editor is blank again (p.84).
+        rig.composer.moveTo(MonitorId::Record, 90);
+        QVERIFY(rig.editor.isBlank());
+        QVERIFY(!rig.editor.durationBox()->isEnabled());
+    }
+
+    void colourParameterShowsDefault() {
+        // A colour with no stored value shows its default on the swatch.
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(100, 40));
+        settle();
+        QVERIFY(rig.timeline.dropEffect(QStringLiteral("V1"), 70, effect("Blend", "Picture-in-Picture")));
+        rig.composer.moveTo(MonitorId::Record, 70);
+        auto* swatch = rig.editor.findChild<QToolButton*>(QStringLiteral("param:Border/Color"));
+        QVERIFY(swatch);
+        QVERIFY(!rig.v1(1).effect->parameters.value("Border").toObject().contains("Color"));
+        QCOMPARE(swatch->property("color").value<QColor>(), QColor(Qt::black));
+        QVERIFY(swatch->styleSheet().contains(QStringLiteral("#000000")));
+    }
+
+    void noSequenceLoaded() {
+        // The shown transition outlives its sequence until the next refresh: nothing may assume
+        // the Record monitor still holds one.
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(100, 40));
+        settle();
+        rig.timeline.setRollers({model::TrimRoller{QStringLiteral("V1"), 50, model::TrimSide::Both}}, model::TrimKind::Ripple);
+        QVERIFY(rig.editor.setDuration(QStringLiteral("0:20")));
+        rig.timeline.exitTrimMode();
+        rig.composer.moveTo(MonitorId::Record, 45);
+        QCOMPARE(rig.editor.effectName(), QStringLiteral("Dissolve"));
+        rig.composer.state(MonitorId::Record).clearMonitor(); // no Composer::changed
+        QVERIFY(!rig.composer.state(MonitorId::Record).current());
+        rig.editor.setAlignment(model::TransitionAlignment::EndingAtCut);
+        QVERIFY(!rig.editor.setDuration(QStringLiteral("30")));
+        rig.editor.refresh();
+        QVERIFY(rig.editor.isBlank());
     }
 
     void timelineDisplay() {

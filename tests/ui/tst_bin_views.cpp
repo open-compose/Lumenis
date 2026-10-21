@@ -18,7 +18,8 @@
 #include <QListWidget>
 #include <QMenu>
 #include <QPlainTextEdit>
-#include <QSettings>
+#include <QJsonArray>
+#include <QSignalSpy>
 #include <QStackedWidget>
 #include <QTabWidget>
 #include <QTableView>
@@ -148,21 +149,27 @@ private slots:
         QVERIFY(f.doc().bin().display.viewModified);
         QCOMPARE(f.view->viewMenu()->currentText(), QStringLiteral("Capture.1"));
         QVERIFY(f.view->viewMenu()->font().italic());
+        // Only that entry is italic in the list, not every view.
+        QComboBox* menu = f.view->viewMenu();
+        auto italic = [menu](int index) { return menu->itemData(index, Qt::FontRole).value<QFont>().italic(); };
+        QVERIFY(italic(menu->currentIndex()));
+        const int statistics = menu->findData(QStringLiteral("Statistics"));
+        QVERIFY(statistics >= 0 && statistics != menu->currentIndex());
+        QVERIFY(menu->itemData(statistics, Qt::FontRole).isValid());
+        QVERIFY(!italic(statistics));
 
-        // Save As keeps the view for every bin.
+        // Save As keeps the view for every bin, and is reported for the
+        // User settings.
+        QSignalSpy saved(&f.container, &BinContainer::binViewsChanged);
         f.view->saveViewAs(QStringLiteral("Logging"));
+        QCOMPARE(saved.count(), 1);
         QCOMPARE(f.view->viewMenu()->currentText(), QStringLiteral("Logging"));
         QVERIFY(f.view->viewMenu()->findData(QStringLiteral("Logging")) >= 0);
-        QTemporaryDir dir;
-        {
-            QSettings settings(dir.filePath(QStringLiteral("s.ini")), QSettings::IniFormat);
-            BinViewLibrary::save(settings);
-        }
+        QVERIFY(!italic(f.view->viewMenu()->currentIndex()));
+        const QJsonArray stored = BinViewLibrary::toJson();
         BinViewLibrary::views().clear();
-        {
-            QSettings settings(dir.filePath(QStringLiteral("s.ini")), QSettings::IniFormat);
-            BinViewLibrary::load(settings);
-        }
+        QVERIFY(BinViewLibrary::fromJson(stored));
+        QVERIFY(!BinViewLibrary::fromJson(stored)); // unchanged
         QVERIFY(BinViewLibrary::find(QStringLiteral("Logging")));
         QCOMPARE(BinViewLibrary::find(QStringLiteral("Logging"))->columns, (QStringList{"Start", "End", "Tracks", "Video"}));
         BinViewLibrary::views().clear();

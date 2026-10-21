@@ -111,6 +111,9 @@ private:
         QJsonObject lastKnown;
     };
 
+    // The list load() and setEntries() keep: trimmed, unique names
+    // (case-insensitive), at most 12, built-in ones always there.
+    static std::vector<Workspace> tidied(const std::vector<Workspace>& workspaces);
     // Case-insensitive; null if there is none.
     Workspace* find(const QString& name);
     const Workspace* find(const QString& name) const;

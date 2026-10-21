@@ -27,6 +27,15 @@ const QStringList kBuiltins = {QStringLiteral("Edit"), QStringLiteral("Color"), 
 constexpr int kStoreVersion = 1;
 constexpr auto kGroup = "workspaces";
 
+// The built-in workspace's spelling of a name compared case-insensitively, as find() does; empty for
+// a user workspace.
+QString builtinName(const QString& name) {
+    for (const QString& b : kBuiltins) {
+        if (b.compare(name, Qt::CaseInsensitive) == 0) return b;
+    }
+    return {};
+}
+
 // Layouts are stored in QSettings as compact JSON text; an empty layout as an empty string.
 QString toText(const QJsonObject& o) {
     return o.isEmpty() ? QString() : QString::fromUtf8(QJsonDocument(o).toJson(QJsonDocument::Compact));
@@ -206,24 +215,43 @@ QList<WorkspaceManager::Entry> WorkspaceManager::entries() {
     return out;
 }
 
-// Entries with an empty or repeated name (case-insensitive) and those past the 12th are dropped. Missing
-// built-in workspaces are put back near their usual places. An unknown `active` picks the first workspace.
-void WorkspaceManager::setEntries(const QList<Entry>& entries, const QString& active) {
-    std::vector<Workspace> loaded;
-    for (const Entry& e : entries) {
-        const QString name = e.name.trimmed();
-        if (name.isEmpty() || static_cast<int>(loaded.size()) >= kMaxWorkspaces) continue;
-        if (std::any_of(loaded.begin(), loaded.end(),
-                        [&](const Workspace& w) { return w.name.compare(name, Qt::CaseInsensitive) == 0; })) {
+// Names are trimmed; entries with an empty or repeated name (case-insensitive, as find() compares) and
+// those past the 12th (built-ins included) are dropped. A name that is a built-in's in another case is that built-in, with its
+// spelling. Missing built-in workspaces are put back near their usual places.
+std::vector<WorkspaceManager::Workspace> WorkspaceManager::tidied(const std::vector<Workspace>& workspaces) {
+    std::vector<Workspace> out;
+    for (Workspace w : workspaces) {
+        w.name = w.name.trimmed();
+        if (w.name.isEmpty() || static_cast<int>(out.size()) >= kMaxWorkspaces) continue;
+        if (std::any_of(out.begin(), out.end(),
+                        [&](const Workspace& o) { return o.name.compare(w.name, Qt::CaseInsensitive) == 0; })) {
             continue;
         }
-        loaded.push_back({name, e.basedOn, kBuiltins.contains(name), e.saved, e.lastKnown});
+        const QString builtin = builtinName(w.name);
+        w.builtin = !builtin.isEmpty();
+        if (w.builtin) w.name = builtin;
+        out.push_back(std::move(w));
     }
     for (const QString& name : kBuiltins) {
-        const bool present = std::any_of(loaded.begin(), loaded.end(), [&](const Workspace& w) { return w.name == name; });
-        if (!present) loaded.insert(loaded.begin() + std::min<std::ptrdiff_t>(kBuiltins.indexOf(name), static_cast<std::ptrdiff_t>(loaded.size())), Workspace{name, {}, true, {}, {}});
+        const bool present = std::any_of(out.begin(), out.end(), [&](const Workspace& w) { return w.name == name; });
+        if (!present) {
+            const auto at = std::min<std::ptrdiff_t>(kBuiltins.indexOf(name), static_cast<std::ptrdiff_t>(out.size()));
+            out.insert(out.begin() + at, Workspace{name, {}, true, {}, {}});
+        }
     }
-    workspaces_ = std::move(loaded);
+    // Put-back built-ins count towards the 12: the last user workspaces make room for them.
+    for (auto it = out.end(); static_cast<int>(out.size()) > kMaxWorkspaces && it != out.begin();) {
+        --it;
+        if (!it->builtin) it = out.erase(it);
+    }
+    return out;
+}
+
+// An unknown `active` picks the first workspace.
+void WorkspaceManager::setEntries(const QList<Entry>& entries, const QString& active) {
+    std::vector<Workspace> loaded;
+    for (const Entry& e : entries) loaded.push_back({e.name, e.basedOn, false, e.saved, e.lastKnown});
+    workspaces_ = tidied(loaded);
     active_ = find(active) ? find(active)->name : workspaces_.front().name;
     const Workspace* w = find(active_);
     QJsonObject layout = w->lastKnown;
@@ -239,24 +267,18 @@ void WorkspaceManager::load(QSettings& settings) {
     if (settings.value(QStringLiteral("version")).toInt() == kStoreVersion) {
         std::vector<Workspace> loaded;
         const int n = settings.beginReadArray(QStringLiteral("list"));
-        for (int i = 0; i < n && i < kMaxWorkspaces; ++i) {
+        for (int i = 0; i < n; ++i) {
             settings.setArrayIndex(i);
             Workspace w;
             w.name = settings.value(QStringLiteral("name")).toString();
             w.basedOn = settings.value(QStringLiteral("basedOn")).toString();
-            w.builtin = kBuiltins.contains(w.name);
             w.saved = fromText(settings.value(QStringLiteral("saved")).toString());
             w.lastKnown = fromText(settings.value(QStringLiteral("lastKnown")).toString());
-            if (!w.name.isEmpty()) loaded.push_back(w);
+            loaded.push_back(w);
         }
         settings.endArray();
-        // The built-in workspaces always exist.
-        for (const QString& name : kBuiltins) {
-            const bool present = std::any_of(loaded.begin(), loaded.end(),
-                                             [&](const Workspace& w) { return w.name == name; });
-            if (!present) loaded.push_back({name, {}, true, {}, {}});
-        }
-        workspaces_ = std::move(loaded);
+        // The same rules as setEntries(); the built-in workspaces always exist.
+        workspaces_ = tidied(loaded);
         const int bar = settings.value(QStringLiteral("barMode"), 0).toInt();
         barMode_ = bar == 1 ? BarMode::IconOnly : bar == 2 ? BarMode::Hidden : BarMode::IconAndText;
         moveBehavior_ = settings.value(QStringLiteral("moveBehavior"), 0).toInt() == 1 ? MoveBehavior::LastSavedState

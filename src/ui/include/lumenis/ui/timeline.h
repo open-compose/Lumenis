@@ -407,6 +407,8 @@ protected:
     void keyPressEvent(QKeyEvent* event) override;
 
 private:
+    friend class TimelineView; // its resizeEvent() calls syncScrollBars()
+
     void sync();
     void syncScrollBars();
     void edit(model::EditKind kind);

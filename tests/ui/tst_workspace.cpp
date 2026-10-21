@@ -177,6 +177,45 @@ private slots:
         QVERIFY(g.panels.blankPanelOnClose());
     }
 
+    void loadTidiesNamesAsSetEntriesDoes() {
+        // Names that differ only in case are one workspace (find() is
+        // case-insensitive); a built-in in another case is that built-in.
+        const QStringList stored{"edit", "Logging", "logging", " ", "Audio"};
+        QTemporaryDir dir;
+        QSettings settings(dir.filePath(QStringLiteral("s.ini")), QSettings::IniFormat);
+        settings.beginGroup(QStringLiteral("workspaces"));
+        settings.setValue(QStringLiteral("version"), 1);
+        settings.beginWriteArray(QStringLiteral("list"), static_cast<int>(stored.size()));
+        for (int i = 0; i < stored.size(); ++i) {
+            settings.setArrayIndex(i);
+            settings.setValue(QStringLiteral("name"), stored.at(i));
+        }
+        settings.endArray();
+        settings.setValue(QStringLiteral("active"), QStringLiteral("LOGGING"));
+        settings.endGroup();
+        Fixture f;
+        f.workspaces.load(settings);
+        const QStringList want{"Edit", "Color", "Effects", "Logging", "Audio"};
+        QCOMPARE(f.workspaces.names(), want);
+        QVERIFY(f.workspaces.isBuiltin(QStringLiteral("edit")));
+        QVERIFY(!f.workspaces.isBuiltin(QStringLiteral("Logging")));
+        QCOMPARE(f.workspaces.active(), QStringLiteral("Logging"));
+
+        QList<WorkspaceManager::Entry> entries;
+        for (const QString& n : stored) entries << WorkspaceManager::Entry{n, {}, {}, {}};
+        Fixture g;
+        g.workspaces.setEntries(entries, QStringLiteral("LOGGING"));
+        QCOMPARE(g.workspaces.names(), want);
+        QVERIFY(g.workspaces.isBuiltin(QStringLiteral("Edit")));
+
+        // Built-ins put back count towards the 12.
+        QList<WorkspaceManager::Entry> many;
+        for (int i = 0; i < WorkspaceManager::kMaxWorkspaces; ++i) many << WorkspaceManager::Entry{QStringLiteral("W%1").arg(i), {}, {}, {}};
+        g.workspaces.setEntries(many, {});
+        QCOMPARE(static_cast<int>(g.workspaces.names().size()), WorkspaceManager::kMaxWorkspaces);
+        for (const char* b : {"Edit", "Color", "Effects", "Audio"}) QVERIFY(g.workspaces.isBuiltin(QString::fromLatin1(b)));
+    }
+
     void ignoresSettingsFromAnOlderVersion() {
         QTemporaryDir dir;
         QSettings settings(dir.filePath(QStringLiteral("s.ini")), QSettings::IniFormat);
@@ -196,8 +235,12 @@ private slots:
         QTest::mouseClick(&bar, Qt::LeftButton, {}, bar.itemRect(2).center());
         QCOMPARE(f.workspaces.active(), QStringLiteral("Effects"));
 
+        // The height hint ends below the last item, with or without labels.
+        QCOMPARE(bar.sizeHint().height(), bar.itemRect(3).bottom() + 1);
         f.workspaces.setBarMode(WorkspaceManager::BarMode::IconOnly);
         QCOMPARE(bar.width(), 36);
+        QCOMPARE(bar.sizeHint().height(), bar.itemRect(3).bottom() + 1);
+        QVERIFY(bar.itemRect(3).height() < 58);
         f.workspaces.setBarMode(WorkspaceManager::BarMode::Hidden);
         QVERIFY(bar.isHidden());
         f.workspaces.setBarMode(WorkspaceManager::BarMode::IconAndText);

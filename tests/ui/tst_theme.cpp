@@ -1,8 +1,12 @@
+#include "lumenis/ui/capture.h"
 #include "lumenis/ui/theme.h"
 
 #include <QApplication>
 #include <QComboBox>
+#include <QDir>
+#include <QFile>
 #include <QFontInfo>
+#include <QLabel>
 #include <QImage>
 #include <QLineEdit>
 #include <QProxyStyle>
@@ -11,6 +15,7 @@
 #include <QStyle>
 #include <QSlider>
 #include <QStyleOptionSlider>
+#include <QTemporaryDir>
 #include <QTest>
 
 using namespace lumenis::ui;
@@ -20,6 +25,34 @@ class TestTheme : public QObject {
 
 private slots:
     void initTestCase() { applyTheme(*qApp); }
+
+    void captureLeavesPalettesAsTheyWere() {
+        // capture() swaps in a text-free palette and must put back each
+        // widget's own: a child's custom text colour stays, and widgets that
+        // inherited their palette still inherit it.
+        QWidget root;
+        auto* plain = new QLabel(QStringLiteral("plain"), &root);
+        auto* red = new QLabel(QStringLiteral("red"), &root);
+        red->move(0, 20);
+        QPalette p = red->palette();
+        p.setColor(QPalette::WindowText, Qt::red);
+        red->setPalette(p);
+        root.resize(80, 40);
+        QTemporaryDir dir;
+        QVERIFY(capture(&root, QDir(dir.path()), QStringLiteral("shot")));
+        QVERIFY(QFile::exists(QDir(dir.path()).filePath(QStringLiteral("shot.notext.png"))));
+        QCOMPARE(red->palette().color(QPalette::WindowText), QColor(Qt::red));
+        QVERIFY(red->testAttribute(Qt::WA_SetPalette));
+        QVERIFY(!root.testAttribute(Qt::WA_SetPalette));
+        QVERIFY(!plain->testAttribute(Qt::WA_SetPalette));
+        QCOMPARE(plain->palette().color(QPalette::WindowText), QApplication::palette().color(QPalette::WindowText));
+        // Still inheriting: a new root palette reaches the plain label.
+        QPalette blue = root.palette();
+        blue.setColor(QPalette::WindowText, Qt::blue);
+        root.setPalette(blue);
+        QCOMPARE(plain->palette().color(QPalette::WindowText), QColor(Qt::blue));
+        QCOMPARE(red->palette().color(QPalette::WindowText), QColor(Qt::red));
+    }
 
     void appliesStyleFontAndPalette() {
         const auto* proxy = qobject_cast<const QProxyStyle*>(QApplication::style());

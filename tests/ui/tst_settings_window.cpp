@@ -212,6 +212,33 @@ private slots:
         tc->setText(QStringLiteral("99:99:99:99"));
         QCOMPARE(general.values().value("defaultStartTc").toString(), QStringLiteral("01:00:00:00"));
         QVERIFY(!general.values().contains("projectFormat"));
+
+        // Timecodes are checked at the project's rate: frame 29 exists at
+        // 30 fps but not at 25; 00:01:00;00 does not exist in 29.97 drop.
+        tc->setText(QStringLiteral("00:59:58:29"));
+        QCOMPARE(general.values().value("defaultStartTc").toString(), QStringLiteral("00:59:58:29"));
+        general.setEditRate(Rational(25));
+        QCOMPARE(general.values().value("defaultStartTc").toString(), QStringLiteral("01:00:00:00"));
+        tc->setText(QStringLiteral("00:59:58:24"));
+        QCOMPARE(general.values().value("defaultStartTc").toString(), QStringLiteral("00:59:58:24"));
+        general.setEditRate(Rational(30000, 1001));
+        tc->setText(QStringLiteral("00:01:00;00"));
+        QCOMPARE(general.values().value("defaultStartTc").toString(), QStringLiteral("01:00:00:00"));
+        tc->setText(QStringLiteral("00:01:00;02"));
+        QCOMPARE(general.values().value("defaultStartTc").toString(), QStringLiteral("00:01:00;02"));
+
+        // The controls start from what Settings::value() would return: a
+        // stored value of the wrong type, an unknown choice or a choice not
+        // available yet shows the default.
+        SettingsDialog wrong(kind("Bin"), SettingEntry{QStringLiteral("Bin"), {}, true,
+                                                       {{QStringLiteral("autoSaveMinutes"), QStringLiteral("x")},
+                                                        {QStringLiteral("favoritesAt"), QStringLiteral("nowhere")},
+                                                        {QStringLiteral("doubleClickLoads"), QStringLiteral("popup")}}});
+        QCOMPARE(qobject_cast<QSpinBox*>(wrong.editor("autoSaveMinutes"))->value(), 15);
+        auto* wrongLoads = qobject_cast<QComboBox*>(wrong.editor("doubleClickLoads"));
+        QCOMPARE(wrongLoads->currentData().toString(), kind("Bin").option("doubleClickLoads")->defaultValue.toString());
+        auto* wrongFavorites = qobject_cast<QComboBox*>(wrong.editor("favoritesAt"));
+        QCOMPARE(wrongFavorites->currentData().toString(), kind("Bin").option("favoritesAt")->defaultValue.toString());
     }
 
     void listGroupsVersionsWithActiveCheckmarks() {

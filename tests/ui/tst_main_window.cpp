@@ -1,12 +1,25 @@
 #include "lumenis/core/branding.h"
+#include "lumenis/core/project_format.h"
 #include "lumenis/ext/provider.h"
+#include "lumenis/media/link.h"
+#include "lumenis/model/sequence.h"
+#include "lumenis/ui/bin_container.h"
+#include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
+#include "lumenis/ui/composer.h"
+#include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/menu_builder.h"
 #include "lumenis/ui/panels.h"
+#include "lumenis/ui/settings.h"
+#include "lumenis/ui/theme.h"
+#include "lumenis/ui/timeline.h"
 #include "lumenis/ui/workspace.h"
 
 #include <QAction>
+#include <QComboBox>
+#include <QDir>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QMenu>
@@ -18,9 +31,44 @@
 #include <functional>
 #include <memory>
 #include <QSignalSpy>
+#include <QSettings>
+#include <QTemporaryDir>
 #include <QTest>
 
 using namespace lumenis;
+
+namespace {
+
+// A project in a temporary folder.
+struct Project {
+    QTemporaryDir dir;
+    model::ProjectEntry entry;
+
+    Project() {
+        model::ProjectSettings s;
+        s.name = QStringLiteral("Doc");
+        s.format = projectFormatPresets().front();
+        entry = *model::ProjectStore(dir.path()).create(s);
+    }
+};
+
+void settle() {
+    for (int i = 0; i < 3; ++i) {
+        QCoreApplication::processEvents();
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    }
+}
+
+model::BinItem clip(const QString& name) {
+    model::BinItem i;
+    i.id = model::newItemId();
+    i.name = name;
+    i.durationFrames = 100;
+    i.editRate = Rational(25);
+    return i;
+}
+
+} // namespace
 
 class TestMainWindow : public QObject {
     Q_OBJECT
@@ -166,6 +214,234 @@ private slots:
         QCOMPARE(picture.deviceIndependentSize().toSize(),
                  QSize(ui::MainWindow::kAboutPictureSize, ui::MainWindow::kAboutPictureSize));
         QVERIFY(commands.action(QStringLiteral("help.about"))->isEnabled());
+    }
+
+    // Favorite Bins (p.293) and saved bin views (p.249) are the user's: they
+    // are kept in the User settings and come back in the next session.
+    void favoritesAndBinViewsAreUserSettings() {
+        Project project;
+        QTemporaryDir users;
+        ext::ProviderRegistry providers;
+        ui::CommandRegistry commands;
+        commands.loadBuiltin();
+        ui::FavoriteBins::paths().clear();
+        ui::BinViewLibrary::views().clear();
+        QString favorite;
+        {
+            ui::MainWindow window(commands, providers);
+            window.settings().setUser(users.path(), QStringLiteral("ed"));
+            window.setProject(project.entry);
+            ui::BinContainer& bins = window.binContainer();
+            QVERIFY(bins.addToFavorites(bins.activeDocument()));
+            favorite = ui::FavoriteBins::paths().value(0);
+            bins.activeView()->saveViewAs(QStringLiteral("Logging"));
+            QCOMPARE(window.settings().value(QStringLiteral("Bin"), QStringLiteral("favoriteBins")).toArray(),
+                     QJsonArray{favorite});
+            window.clearProject();
+        }
+        ui::FavoriteBins::paths().clear();
+        ui::BinViewLibrary::views().clear();
+        {
+            ui::MainWindow window(commands, providers);
+            window.settings().setUser(users.path(), QStringLiteral("ed"));
+            QCOMPARE(ui::FavoriteBins::paths(), QStringList{favorite});
+            QVERIFY(ui::BinViewLibrary::find(QStringLiteral("Logging")));
+            window.setProject(project.entry);
+            ui::BinContainer& bins = window.binContainer();
+            QVERIFY(bins.treeModel()->indexOf(ui::FavoriteBins::folderId()).isValid());
+            QVERIFY(bins.activeView()->viewMenu()->findData(QStringLiteral("Logging")) >= 0);
+            // Taking it off the list is saved too.
+            QVERIFY(bins.deleteNode(ui::FavoriteBins::idFor(favorite)));
+            QVERIFY(window.settings().value(QStringLiteral("Bin"), QStringLiteral("favoriteBins")).toArray().isEmpty());
+            window.clearProject();
+        }
+        ui::FavoriteBins::paths().clear();
+        ui::BinViewLibrary::views().clear();
+    }
+
+    // Lists an older build kept in QSettings move into the user's Bin setting once a user is
+    // active, and a user who has lists of their own keeps them.
+    void legacyBinListsMoveIntoUserSettings() {
+        QTemporaryDir users;
+        ext::ProviderRegistry providers;
+        ui::CommandRegistry commands;
+        commands.loadBuiltin();
+        ui::FavoriteBins::paths().clear();
+        ui::BinViewLibrary::views().clear();
+        QSettings old(users.filePath(QStringLiteral("old.ini")), QSettings::IniFormat);
+        old.setValue(QStringLiteral("favoriteBins/paths"), QStringList{QStringLiteral("/p/Bins/A.cthbin")});
+        old.beginWriteArray(QStringLiteral("binViews"), 1);
+        old.setArrayIndex(0);
+        old.setValue(QStringLiteral("name"), QStringLiteral("Logging"));
+        old.setValue(QStringLiteral("columns"), QStringList{QStringLiteral("Name"), QStringLiteral("Tape")});
+        old.endArray();
+        {
+            ui::MainWindow window(commands, providers);
+            window.adoptLegacyBinLists(ui::FavoriteBins::legacy(old), ui::BinViewLibrary::legacy(old));
+            QVERIFY(window.legacyBinListsPending()); // no user yet: nowhere to write them
+            window.settings().setUser(users.path(), QStringLiteral("ed"));
+            QVERIFY(!window.legacyBinListsPending());
+            QCOMPARE(window.settings().value(QStringLiteral("Bin"), QStringLiteral("favoriteBins")).toArray(),
+                     QJsonArray{QStringLiteral("/p/Bins/A.cthbin")});
+            QCOMPARE(ui::FavoriteBins::paths(), QStringList{QStringLiteral("/p/Bins/A.cthbin")});
+            const auto* view = ui::BinViewLibrary::find(QStringLiteral("Logging"));
+            QVERIFY(view);
+            QCOMPARE(view->columns, (QStringList{QStringLiteral("Name"), QStringLiteral("Tape")}));
+        }
+        {
+            // The user now has lists of their own: the old ones are not written over them.
+            ui::MainWindow window(commands, providers);
+            window.settings().setUser(users.path(), QStringLiteral("ed"));
+            window.settings().setValue(QStringLiteral("Bin"), QStringLiteral("favoriteBins"), QJsonArray{});
+            window.adoptLegacyBinLists(ui::FavoriteBins::legacy(old), QJsonValue());
+            QVERIFY(!window.legacyBinListsPending());
+            QVERIFY(window.settings().value(QStringLiteral("Bin"), QStringLiteral("favoriteBins")).toArray().isEmpty());
+        }
+        ui::FavoriteBins::forgetLegacy(old);
+        ui::BinViewLibrary::forgetLegacy(old);
+        QVERIFY(ui::FavoriteBins::legacy(old).isNull());
+        QVERIFY(ui::BinViewLibrary::legacy(old).isNull());
+        ui::FavoriteBins::paths().clear();
+        ui::BinViewLibrary::views().clear();
+    }
+
+    // Playback hears a track only when it is not muted, and only soloed tracks once any is (p.698).
+    void soloAndMuteDecideWhatIsHeard() {
+        Project project;
+        ext::ProviderRegistry providers;
+        ui::CommandRegistry commands;
+        commands.loadBuiltin();
+        ui::MainWindow window(commands, providers);
+        window.setProject(project.entry);
+        ui::BinDocument* doc = window.binContainer().activeDocument();
+        QVERIFY(doc);
+        model::BinItem item;
+        item.id = model::newItemId();
+        item.name = QStringLiteral("Cut");
+        item.kind = model::BinItemKind::Sequence;
+        item.editRate = Rational(25);
+        model::Sequence::withDefaultTracks().storeIn(item);
+        doc->addItem(item);
+        window.composer().load(ui::MonitorId::Record, doc->nodeId(), item);
+        ui::AudioMixer& mixer = window.audioMixer();
+        mixer.refresh();
+        QVERIFY(mixer.strip(QStringLiteral("A1")) && mixer.strip(QStringLiteral("A2")));
+        QVERIFY(window.isHeard(QStringLiteral("A1")) && window.isHeard(QStringLiteral("A2")));
+        mixer.strip(QStringLiteral("A1"))->muteButton()->click();
+        QVERIFY(!window.isHeard(QStringLiteral("A1")));
+        QVERIFY(window.isHeard(QStringLiteral("A2")));
+        mixer.strip(QStringLiteral("A1"))->muteButton()->click();
+        // A soloed track is the only one heard.
+        mixer.strip(QStringLiteral("A2"))->soloButton()->click();
+        QVERIFY(!window.isHeard(QStringLiteral("A1")));
+        QVERIFY(window.isHeard(QStringLiteral("A2")));
+        window.clearProject();
+    }
+
+    // Mark Clip with segments selected in the Timeline marks from the start
+    // of the first to the end of the last (p.622).
+    void markClipMarksTheSelectedSegments() {
+        Project project;
+        ext::ProviderRegistry providers;
+        ui::CommandRegistry commands;
+        commands.loadBuiltin();
+        ui::MainWindow window(commands, providers);
+        window.setProject(project.entry);
+        ui::BinDocument* doc = window.binContainer().activeDocument();
+        QVERIFY(doc);
+        model::BinItem item;
+        item.id = model::newItemId();
+        item.name = QStringLiteral("Cut");
+        item.kind = model::BinItemKind::Sequence;
+        item.editRate = Rational(25);
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        for (const QString& t : seq.trackNames()) {
+            QList<model::Segment> parts;
+            for (const char* id : {"a", "b", "c"}) {
+                model::Segment g;
+                g.clipId = QLatin1String(id);
+                g.sourceTrack = t;
+                g.length = 40;
+                parts << g;
+            }
+            seq.splice(t, 0, parts);
+        }
+        seq.storeIn(item);
+        doc->addItem(item);
+        ui::Composer& composer = window.composer();
+        composer.load(ui::MonitorId::Record, doc->nodeId(), item);
+        const model::MonitorState& state = composer.state(ui::MonitorId::Record);
+        // Nothing selected: the segment under the position.
+        composer.perform(QStringLiteral("edit.mark_clip"));
+        QCOMPARE(state.in(), std::optional<std::int64_t>(0));
+        QCOMPARE(state.out(), std::optional<std::int64_t>(39));
+        window.timeline().setSelection({{QStringLiteral("V1"), 40}, {QStringLiteral("A1"), 80}});
+        composer.perform(QStringLiteral("edit.mark_clip"));
+        QCOMPARE(state.in(), std::optional<std::int64_t>(40));
+        QCOMPARE(state.out(), std::optional<std::int64_t>(119));
+        window.clearProject();
+    }
+
+    // Deleting asks about the managed clips among the selection: the count
+    // is theirs, not every selected item's (p.359).
+    void deleteCountsTheManagedClips() {
+        Project project;
+        ext::ProviderRegistry providers;
+        ui::CommandRegistry commands;
+        commands.loadBuiltin();
+        ui::MainWindow window(commands, providers);
+        window.setProject(project.entry);
+        ui::BinContainer& bins = window.binContainer();
+        ui::BinDocument* doc = bins.activeDocument();
+        model::BinItem managed = clip(QStringLiteral("Managed"));
+        media::Link link;
+        link.path = project.dir.filePath(QStringLiteral("missing.mxf"));
+        link.mediaId = QStringLiteral("m1");
+        managed.link = link.toJson();
+        const model::BinItem plain = clip(QStringLiteral("Plain"));
+        const model::BinItem other = clip(QStringLiteral("Other"));
+        doc->addItem(managed);
+        doc->addItem(plain);
+        doc->addItem(other);
+        int clips = -1;
+        int files = -1;
+        window.setBinDeleteHook([&](int c, int f) -> std::optional<ui::MainWindow::BinDeleteChoice> {
+            clips = c;
+            files = f;
+            return ui::MainWindow::BinDeleteChoice{true, false};
+        });
+        bins.activeView()->selectIds({managed.id, plain.id, other.id});
+        QCOMPARE(bins.deleteSelection(), 3);
+        QCOMPARE(clips, 1);
+        QCOMPARE(files, 1);
+        window.clearProject();
+    }
+
+    // A bin that cannot be saved as it closes stays open, and the user is
+    // told (without a modal dialog, which auto-save could not wait for).
+    void failedBinSaveIsShown() {
+        Project project;
+        ext::ProviderRegistry providers;
+        ui::CommandRegistry commands;
+        commands.loadBuiltin();
+        ui::MainWindow window(commands, providers);
+        window.show();
+        window.setProject(project.entry);
+        ui::BinContainer& bins = window.binContainer();
+        ui::BinDocument* doc = bins.activeDocument();
+        doc->addItem(clip(QStringLiteral("Unsaved")));
+        // A directory where the bin file should be: the write fails.
+        QVERIFY(QFile::remove(doc->path()));
+        QVERIFY(QDir().mkpath(doc->path() + QStringLiteral("/blocked")));
+        commands.action(QStringLiteral("file.close_bin"))->trigger();
+        settle();
+        QCOMPARE(bins.activeDocument(), doc);
+        auto* box = window.findChild<QMessageBox*>(QStringLiteral("binSaveFailed"));
+        QVERIFY(box && box->isVisible());
+        QVERIFY(box->text().contains(doc->name()));
+        box->close();
+        QVERIFY(QDir(doc->path()).removeRecursively());
+        window.clearProject();
     }
 
     void closingTheWindowIsReported() {

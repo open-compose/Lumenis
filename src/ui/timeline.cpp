@@ -371,10 +371,11 @@ int TimelineView::contentHeight() const {
     return h;
 }
 
-// Clamps to 0 at the top. The bottom limit adds the current offset to contentHeight(), which
-// does not depend on it; syncScrollBars() computes the vertical range the same way.
+// Clamps to 0 at the top and, at the bottom, to the offset that puts the last row's bottom
+// edge at the view's bottom edge. contentHeight() does not depend on the offset, so the limit
+// is contentHeight() - height(); syncScrollBars() computes the vertical range the same way.
 void TimelineView::setTopOffset(int offset) {
-    top_ = std::clamp(offset, 0, std::max(contentHeight() + top_ - height(), 0));
+    top_ = std::clamp(offset, 0, std::max(contentHeight() - height(), 0));
     update();
 }
 
@@ -414,9 +415,12 @@ std::optional<TimelineView::Row> TimelineView::rowAt(const QPoint& pos) const {
     return std::nullopt;
 }
 
+// A new height changes how far the rows can scroll, so the Timeline's vertical scroll bar is
+// set again too.
 void TimelineView::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
     setTopOffset(top_);
+    timeline_.syncScrollBars();
 }
 
 // Paints in layers, back to front: the tracks and their segments and effects, the IN to OUT
@@ -1597,6 +1601,7 @@ void Timeline::sync() {
 // Sets the scroll bars and scale bar from the view without feeding back: syncing_ makes their
 // valueChanged handlers ignore the change. The horizontal bar's range is in frames.
 void Timeline::syncScrollBars() {
+    if (!scroll_ || !vscroll_ || !scaleBar_) return; // still being built
     syncing_ = true;
     const int area = std::max(view_->width() - view_->headerWidth(), 1);
     const double sc = scale();
@@ -1609,8 +1614,9 @@ void Timeline::syncScrollBars() {
     scroll_->setEnabled(scale_ > 0);
     scaleBar_->setValue(sliderFor(sc));
     if (QToolButton* f = toolButton(QStringLiteral("focus"))) f->setChecked(focusBack_.has_value());
-    const int extra = std::max(view_->contentHeight() + view_->topOffset() - view_->height(), 0);
+    const int extra = std::max(view_->contentHeight() - view_->height(), 0);
     vscroll_->setRange(0, extra);
+    vscroll_->setValue(view_->topOffset());
     vscroll_->setPageStep(std::max(view_->height(), 1));
     vscroll_->setVisible(extra > 0);
     syncing_ = false;
@@ -2116,7 +2122,6 @@ void Timeline::edit(model::EditKind kind) {
         return;
     }
     const model::BinItem before = rec->item;
-    const QString binId = rec->binId;
     model::Sequence seq = model::Sequence::fromItem(before);
     const model::EditMarks sourceMarks{source.in(), source.out(), source.position(), source.duration()};
     const model::EditMarks recordMarks{record.in(), record.out(), record.position(), seq.duration()};
@@ -2155,7 +2160,6 @@ void Timeline::remove(bool extract) {
         return;
     }
     const model::BinItem before = rec->item;
-    const QString binId = rec->binId;
     model::Sequence seq = model::Sequence::fromItem(before);
     const std::int64_t start = record.markedStart();
     const std::int64_t length = record.markedEnd() - start + 1;
@@ -2721,8 +2725,9 @@ bool Timeline::enterTrimMode(int direction) {
         for (std::int64_t e : points) {
             const bool fits = direction < 0 ? e < pos : direction > 0 ? e > pos : true;
             if (!fits) continue;
-            const auto score = [&](std::int64_t x) { return direction == 0 ? std::abs(x - pos) : std::abs(x - pos); };
-            if (!best || score(e) < score(*best)) best = e;
+            // Nearest in every case (p.655): direction only filters the side. On a tie the
+            // edit found first wins, the earlier one on a track.
+            if (!best || std::abs(e - pos) < std::abs(*best - pos)) best = e;
         }
     }
     if (!best) return fail(tr("There is no transition to trim on the selected tracks."));

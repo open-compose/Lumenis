@@ -30,6 +30,8 @@
 #include <QPushButton>
 #include <QSet>
 #include <QSettings>
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QStackedWidget>
 #include <QStyledItemDelegate>
 #include <QTableView>
@@ -218,6 +220,14 @@ protected:
 private:
     QTableView* table_;
 };
+
+// Set Bin Display's "Show clips created by user" (p.288): turned off, it
+// hides "all objects except those created by the system". The system makes
+// source clips (capture and import) and rendered effects (rendering); the
+// user makes every other kind.
+bool isMadeByUser(const model::BinItem& item) {
+    return item.kind != model::BinItemKind::Source && item.kind != model::BinItemKind::RenderedEffect;
+}
 
 } // namespace
 
@@ -543,8 +553,8 @@ bool BinItemModel::dropMimeData(const QMimeData* data, Qt::DropAction action, in
     }
     QStringList lines = QString::fromUtf8(data->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
     const QString from = lines.takeFirst();
-    // Alt/Option (p.260) or Ctrl (p.261, the platform's copy key) copies.
-    const bool copy = action == Qt::CopyAction || (QApplication::keyboardModifiers() & Qt::AltModifier);
+    // Alt/Option (p.260) or Ctrl/Command (p.261) copies; see isCopyDrop().
+    const bool copy = isCopyDrop(action, QApplication::keyboardModifiers());
     // Only reported: BinContainer::transferItems does the move or copy,
     // queued until the drag has finished.
     emit itemsDropped(from, lines, copy);
@@ -577,15 +587,21 @@ bool& BinFilterModel::searchAllColumns() {
     return all;
 }
 
-// A row is shown if its kind is not hidden, it matches the quick filter (if
-// any) and, while the bin is shown sifted, it matches the sift. The sift's Any
-// searches Name and the shown columns.
+// A row is shown if Set Bin Display shows it (its kind, and who made it), it
+// matches the quick filter (if any) and, while the bin is shown sifted, it
+// matches the sift. The sift's Any searches Name and the shown columns.
+//
+// "Show reference clips" (p.288) shows objects that sequences in the bin
+// reference but that were not placed in the bin (model::BinItem::userPlaced
+// false, as Media Composer's bins mark them).
 bool BinFilterModel::filterAcceptsRow(int row, const QModelIndex&) const {
     const model::Bin& bin = document_.bin();
     if (row < 0 || row >= bin.items.size()) return false;
     const model::BinItem& item = bin.items.at(row);
     // Set Bin Display (p.288).
     if (bin.display.hiddenKinds.contains(item.kind)) return false;
+    if (!bin.display.showUserClips && isMadeByUser(item)) return false;
+    if (!bin.display.showReferenceClips && !item.userPlaced) return false;
     if (!quick_.isEmpty()) {
         QStringList searched = quickHeadings_;
         if (searched.isEmpty()) {
@@ -988,8 +1004,7 @@ bool BinScriptView::eventFilter(QObject* watched, QEvent* event) {
         if (from != document_.nodeId()) {
             // From another bin.
             de->acceptProposedAction();
-            emit itemsDropped(from, ids,
-                              de->dropAction() == Qt::CopyAction || (de->modifiers() & Qt::AltModifier));
+            emit itemsDropped(from, ids, isCopyDrop(de->dropAction(), de->modifiers()));
             return true;
         }
         // Before the row under the pointer, or at the end.
@@ -1282,10 +1297,17 @@ void BinView::updateViewMenu() {
         viewMenu_->insertItem(0, shown, d.viewName);
         index = 0;
     }
-    // A view whose columns changed reads "<view>.1", in italic (p.249).
+    // A view whose columns changed reads "<view>.1", in italic (p.249). Only
+    // that entry is italic in the list (its Qt::FontRole); the closed menu,
+    // which draws with the box's own font, follows the entry it shows.
     QFont f = viewMenu_->font();
+    f.setItalic(false);
+    for (int i = 0; i < viewMenu_->count(); ++i) viewMenu_->setItemData(i, f, Qt::FontRole);
     f.setItalic(d.viewModified);
-    if (d.viewModified) viewMenu_->setItemText(index, shown + QStringLiteral(".1"));
+    if (d.viewModified) {
+        viewMenu_->setItemText(index, shown + QStringLiteral(".1"));
+        viewMenu_->setItemData(index, f, Qt::FontRole);
+    }
     viewMenu_->setFont(f);
     viewMenu_->setCurrentIndex(index);
     // The Bin View menu works in Text view only (p.248).
@@ -1395,6 +1417,7 @@ void BinView::saveViewAs(const QString& name) {
     d.viewName = name;
     d.viewModified = false;
     document_.setDisplay(d);
+    emit viewSaved();
 }
 
 // ---------------------------------------------------------------- columns
@@ -1827,8 +1850,8 @@ bool BinView::eventFilter(QObject* watched, QEvent* event) {
 
 // ---------------------------------------------------------------- BinViewLibrary
 
-// The saved views are process-wide; load() and save() move them to and from a
-// QSettings.
+// The saved views are process-wide; toJson() and fromJson() move them to and
+// from the User settings.
 QList<model::BinViewPreset>& BinViewLibrary::views() {
     static QList<model::BinViewPreset> saved;
     return saved;
@@ -1841,25 +1864,51 @@ const model::BinViewPreset* BinViewLibrary::find(const QString& name) {
     return nullptr;
 }
 
-void BinViewLibrary::load(QSettings& settings) {
-    views().clear();
+QJsonArray BinViewLibrary::toJson() {
+    QJsonArray out;
+    for (const model::BinViewPreset& v : views()) {
+        out.append(QJsonObject{{QStringLiteral("name"), v.name},
+                               {QStringLiteral("columns"), QJsonArray::fromStringList(v.columns)}});
+    }
+    return out;
+}
+
+bool BinViewLibrary::fromJson(const QJsonValue& value) {
+    QList<model::BinViewPreset> read;
+    for (const QJsonValue& v : value.toArray()) {
+        const QJsonObject o = v.toObject();
+        const QString name = o.value(QStringLiteral("name")).toString();
+        if (name.isEmpty()) continue;
+        QStringList columns;
+        for (const QJsonValue& c : o.value(QStringLiteral("columns")).toArray()) columns << c.toString();
+        read.append({name, columns});
+    }
+    const bool same = std::equal(read.begin(), read.end(), views().begin(), views().end(),
+                                 [](const model::BinViewPreset& a, const model::BinViewPreset& b) {
+                                     return a.name == b.name && a.columns == b.columns;
+                                 });
+    if (same) return false;
+    views() = read;
+    return true;
+}
+
+QJsonValue BinViewLibrary::legacy(QSettings& settings) {
+    QJsonArray out;
     const int n = settings.beginReadArray(QStringLiteral("binViews"));
     for (int i = 0; i < n; ++i) {
         settings.setArrayIndex(i);
         const QString name = settings.value(QStringLiteral("name")).toString();
-        if (!name.isEmpty()) views().append({name, settings.value(QStringLiteral("columns")).toStringList()});
+        if (name.isEmpty()) continue;
+        out.append(QJsonObject{{QStringLiteral("name"), name},
+                               {QStringLiteral("columns"),
+                                QJsonArray::fromStringList(settings.value(QStringLiteral("columns")).toStringList())}});
     }
     settings.endArray();
+    return out.isEmpty() ? QJsonValue() : QJsonValue(out);
 }
 
-void BinViewLibrary::save(QSettings& settings) {
-    settings.beginWriteArray(QStringLiteral("binViews"), static_cast<int>(views().size()));
-    for (int i = 0; i < views().size(); ++i) {
-        settings.setArrayIndex(i);
-        settings.setValue(QStringLiteral("name"), views().at(i).name);
-        settings.setValue(QStringLiteral("columns"), views().at(i).columns);
-    }
-    settings.endArray();
+void BinViewLibrary::forgetLegacy(QSettings& settings) {
+    settings.remove(QStringLiteral("binViews"));
 }
 
 } // namespace lumenis::ui

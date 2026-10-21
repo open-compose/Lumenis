@@ -25,6 +25,7 @@
 #include <QTabWidget>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QThread>
 
 using namespace lumenis;
 using namespace lumenis::ui;
@@ -247,6 +248,29 @@ private slots:
         QVERIFY(console.log()->toPlainText().isEmpty());
         ConsoleLog::instance().append(QStringLiteral("Error: test"));
         QCOMPARE(console.log()->toPlainText(), QStringLiteral("Error: test"));
+    }
+
+    void consoleFromThreads() {
+        // Qt's message handler runs on the thread that logged: every line arrives, and the
+        // window gets them on its own thread.
+        ConsoleWindow console;
+        ConsoleLog::instance().clear();
+        constexpr int kThreads = 8;
+        constexpr int kLines = 300;
+        QList<QThread*> threads;
+        for (int t = 0; t < kThreads; ++t) {
+            threads << QThread::create([t] {
+                for (int i = 0; i < kLines; ++i) ConsoleLog::instance().append(QStringLiteral("thread %1 line %2").arg(t).arg(i));
+            });
+        }
+        for (QThread* t : threads) t->start();
+        for (QThread* t : threads) {
+            QVERIFY(t->wait(10000));
+            delete t;
+        }
+        QCOMPARE(ConsoleLog::instance().lines().size(), kThreads * kLines);
+        QTRY_COMPARE(console.log()->blockCount(), kThreads * kLines);
+        ConsoleLog::instance().clear();
     }
 
     void mainWindowTools() {

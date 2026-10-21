@@ -37,6 +37,18 @@ private slots:
         QVERIFY(!error.isEmpty());
         QVERIFY(!r.load(R"({"commands": [{"id": "x", "text": "X"}, {"id": "x", "text": "Y"}]})", &error));
         QVERIFY(error.contains(QStringLiteral("duplicate")));
+        // All or nothing: the commands before the error are not registered.
+        QVERIFY(!r.contains(QStringLiteral("x")));
+        QVERIFY(r.ids().isEmpty());
+        // Ids are QSettings keys of saveShortcuts(): '/' would make a group
+        // that loadShortcuts() never reads.
+        QVERIFY(!r.load(R"({"commands": [{"id": "a", "text": "A"}, {"id": "file/open", "text": "Open"}]})", &error));
+        QVERIFY(error.contains(QStringLiteral("file/open")));
+        QVERIFY(r.ids().isEmpty());
+        QVERIFY(r.load(R"({"commands": [{"id": "a", "text": "A"}]})", &error));
+        // Against those already registered too.
+        QVERIFY(!r.load(R"({"commands": [{"id": "b", "text": "B"}, {"id": "a", "text": "A"}]})", &error));
+        QCOMPARE(r.ids(), QStringList{QStringLiteral("a")});
     }
 
     void disabledUntilHandled() {

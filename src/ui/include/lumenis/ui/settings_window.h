@@ -34,9 +34,12 @@ public:
     // Format, p.1192).
     void setInfo(const QString& key, const QString& text);
     // The entry's values with the dialog's changes. Options not available
-    // yet and "info" options keep what the entry had; an unreadable timecode
-    // becomes the option's default.
+    // yet and "info" options keep what the entry had; a timecode that does
+    // not parse at the edit rate becomes the option's default.
     QJsonObject values() const;
+    // The project's edit rate, for checking timecodes (default 30 fps, when
+    // no project is open). Written with ';' a timecode is drop-frame.
+    void setEditRate(const Rational& rate) { editRate_ = rate; }
     // The editor of an option: a QCheckBox, QSpinBox, QComboBox, QLineEdit
     // or, for radio buttons, the QGroupBox (or QWidget) holding them.
     QWidget* editor(const QString& key) const;
@@ -48,6 +51,7 @@ private:
     QJsonObject values_;
     QHash<QString, QWidget*> editors_;
     QTabWidget* tabs_ = nullptr;
+    Rational editRate_{30};
 };
 
 // The Settings list of one scope (p.1136-1141): one row per setting, its
@@ -110,6 +114,9 @@ public:
     std::function<void(SettingsDialog&)> dialogHook;
     // The project format, for General settings.
     QString projectFormat;
+    // The project's edit rate, for the dialogs' timecodes; none without a
+    // project (SettingsDialog::setEditRate).
+    std::optional<Rational> projectEditRate;
 
 signals:
     // The user changed the file from this list (after the commit).

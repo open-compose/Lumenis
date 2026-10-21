@@ -611,9 +611,27 @@ void SourceBrowser::setFolder(const QString& path) {
         history_ << p;
         position_ = static_cast<int>(history_.size()) - 1;
     }
-    folder_ = p;
-    addRecent(p);
-    const QModelIndex at = folders_->index(p);
+    showFolder(p);
+}
+
+// Back and Forward move through the history without changing it. The folder they reach is shown
+// like any other: Recent lists the most recently viewed folders (p.313), so it moves to the top.
+void SourceBrowser::back() {
+    if (!canGoBack()) return;
+    --position_;
+    showFolder(history_.at(position_));
+}
+
+void SourceBrowser::forward() {
+    if (!canGoForward()) return;
+    ++position_;
+    showFolder(history_.at(position_));
+}
+
+void SourceBrowser::showFolder(const QString& path) {
+    folder_ = path;
+    addRecent(path);
+    const QModelIndex at = folders_->index(path);
     if (at.isValid()) {
         tree_->setCurrentIndex(at);
         tree_->scrollTo(at);
@@ -621,23 +639,6 @@ void SourceBrowser::setFolder(const QString& path) {
     list();
     updateNavigation();
     emit stateChanged();
-}
-
-// Back and Forward move through the history without adding to it or to Recent.
-void SourceBrowser::back() {
-    if (!canGoBack()) return;
-    --position_;
-    folder_ = history_.at(position_);
-    list();
-    updateNavigation();
-}
-
-void SourceBrowser::forward() {
-    if (!canGoForward()) return;
-    ++position_;
-    folder_ = history_.at(position_);
-    list();
-    updateNavigation();
 }
 
 void SourceBrowser::up() {
@@ -672,9 +673,13 @@ void SourceBrowser::toggleFavorite() {
     emit stateChanged();
 }
 
-// Also called through the button's toggled signal, so setting the button here re-enters once.
+// Also called through the button's toggled signal; the button is set with its signals blocked so a
+// call from code does not re-enter, list the folder twice and emit stateChanged twice.
 void SourceBrowser::setMediaFolderView(bool on) {
-    if (volumeButton_->isChecked() != on) volumeButton_->setChecked(on);
+    {
+        const QSignalBlocker block(volumeButton_);
+        volumeButton_->setChecked(on);
+    }
     static_cast<BrowserSortModel*>(proxy_)->setMediaOnly(on);
     list();
     emit stateChanged();

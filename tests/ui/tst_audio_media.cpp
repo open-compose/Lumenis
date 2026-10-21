@@ -1,7 +1,9 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/media/link.h"
 #include "lumenis/ui/audio_tools.h"
+#include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/main_window.h"
@@ -16,17 +18,22 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QDial>
+#include <QDialogButtonBox>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QSignalSpy>
 #include <QSlider>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTemporaryDir>
 #include <QTest>
 #include <QToolButton>
+
+#include <atomic>
+#include <thread>
 
 using namespace lumenis;
 using namespace lumenis::ui;
@@ -327,6 +334,191 @@ private slots:
         display.masterClips = false;
         tool.setItems({clip}, display);
         QVERIFY(tool.names().isEmpty());
+    }
+
+    void meterScaleMapping() {
+        // The digital scale's marks equally spaced (p.158): levelAt() undoes scalePosition().
+        QCOMPARE(AudioMeters::scalePosition(0), 0.0);
+        QCOMPARE(AudioMeters::scalePosition(-90), 1.0);
+        QCOMPARE(AudioMeters::scalePosition(-20), 0.4);
+        for (double db : {0.0, -2.0, -4.0, -11.0, -20.0, -33.0, -50.0, -89.0, -90.0}) {
+            QVERIFY(std::abs(AudioMeters::levelAt(AudioMeters::scalePosition(db)) - db) < 1e-9);
+        }
+        // The bar's colours change at the scale's marks: drawn at 0 dB, a line just above the -20
+        // mark is yellow and one just below it green; just above -3, red.
+        AudioMeters meters(1);
+        meters.resize(80, 260);
+        meters.setLevel(0, 0);
+        const QImage image = meters.grab().toImage();
+        const int top = 8;
+        const int span = meters.height() - 16;
+        const int x = 26 + 1 + 2;
+        auto at = [&](double db, int dy) {
+            return image.pixelColor(x, top + static_cast<int>(AudioMeters::scalePosition(db) * span) + dy).rgb();
+        };
+        QCOMPARE(at(-20, -2), QColor(0xffd8c040).rgb());
+        QCOMPARE(at(-20, 2), QColor(0xff3cc85a).rgb());
+        QCOMPARE(at(-14, 0), QColor(0xffd8c040).rgb());
+        QCOMPARE(at(-3, -2), QColor(0xffd84040).rgb());
+    }
+
+    void peakHold() {
+        AudioTool tool(2);
+        AudioMeters* meters = tool.meters();
+        qint64 now = 0;
+        meters->setClock([&now] { return now; });
+        QCOMPARE(tool.hold(), AudioTool::Hold::PeakHold);
+        // Peak Hold: the peak holds, then falls to the level once its time is up.
+        meters->setLevel(0, -6);
+        now = AudioMeters::kPeakHoldMs - 1;
+        meters->setLevel(0, -30);
+        QCOMPARE(meters->peak(0), -6.0);
+        now = AudioMeters::kPeakHoldMs;
+        meters->setLevel(0, -30);
+        QCOMPARE(meters->peak(0), -30.0);
+        // A higher level always raises it and restarts the time.
+        meters->setLevel(0, -10);
+        now += 10;
+        meters->setLevel(0, -40);
+        QCOMPARE(meters->peak(0), -10.0);
+        // Infinite Hold, from the PH menu: kept until Reset Peak.
+        QAction* infinite = nullptr;
+        for (QAction* a : tool.peakHoldButton()->menu()->actions()) {
+            if (a->text() == QLatin1String("Infinite Hold")) infinite = a;
+        }
+        QVERIFY(infinite);
+        infinite->trigger();
+        QCOMPARE(tool.hold(), AudioTool::Hold::Infinite);
+        now += 100000;
+        meters->setLevel(0, -50);
+        QCOMPARE(meters->peak(0), -10.0);
+        tool.resetPeakButton()->click();
+        QCOMPARE(meters->peak(0), -90.0);
+    }
+
+    void masterFader() {
+        Rig rig;
+        MixerStrip* master = rig.mixer.master();
+        QCOMPARE(rig.mixer.masterGain(), 0.0);
+        QSignalSpy spy(&rig.mixer, &AudioMixer::masterGainChanged);
+        master->levelBox()->setText(QStringLiteral("-6"));
+        master->levelBox()->setModified(true);
+        emit master->levelBox()->editingFinished();
+        QCOMPARE(rig.mixer.masterGain(), -6.0);
+        QCOMPARE(spy.count(), 1);
+        // The tracks keep their own levels.
+        QCOMPARE(rig.a("A1", 0).gain, 0.0);
+        // It stays through refreshes and mode changes.
+        rig.mixer.setMode(AudioMixer::Mode::Live);
+        rig.mixer.refresh();
+        QCOMPARE(master->gain(), -6.0);
+        // Alt-click resets it to 0 dB (p.703).
+        QTest::mouseClick(master->fader(), Qt::LeftButton, Qt::AltModifier, master->fader()->rect().center());
+        QCOMPARE(rig.mixer.masterGain(), 0.0);
+    }
+
+    void aboutTabsByKey() {
+        AboutInfoDialog info({}, ProjectUsage{});
+        info.tabs()->setTabText(1, QStringLiteral("Nutzung")); // as if translated
+        info.showTab(QStringLiteral("Usage"));
+        QCOMPARE(info.tabs()->currentIndex(), 1);
+        info.showTab(QStringLiteral("Hardware"));
+        QCOMPARE(info.tabs()->currentIndex(), 2);
+        info.showTab(QStringLiteral("Configuration"));
+        QCOMPARE(info.tabs()->currentIndex(), 0);
+        info.showTab(QStringLiteral("Unknown"));
+        QCOMPARE(info.tabs()->currentIndex(), 0);
+    }
+
+    void freeSpaceInDecimalGigabytes() {
+        QCOMPARE(freeSpaceText(1'500'000'000), QStringLiteral("1.5 GB free"));
+        QCOMPARE(freeSpaceText(0), QStringLiteral("0.0 GB free"));
+        QCOMPARE(freeSpaceText(Q_INT64_C(1073741824)), QStringLiteral("1.1 GB free"));
+    }
+
+    void mediaToolDisplayNeedsADrive() {
+        // The tool loads only the drives selected (p.345): with none, OK waits.
+        MediaToolDisplayDialog dialog(QStringLiteral("Film"),
+                                      {{QStringLiteral("One"), QStringLiteral("/one")},
+                                       {QStringLiteral("Two"), QStringLiteral("/two")}},
+                                      {}, MediaToolDisplay{});
+        QPushButton* ok = dialog.findChild<QDialogButtonBox*>()->button(QDialogButtonBox::Ok);
+        QVERIFY(ok->isEnabled());
+        QCOMPARE(dialog.display().drives, QStringList{});
+        dialog.driveList()->item(0)->setSelected(false);
+        QVERIFY(ok->isEnabled());
+        QCOMPARE(dialog.display().drives, QStringList{"/two"});
+        dialog.driveList()->clearSelection();
+        QVERIFY(!ok->isEnabled());
+        dialog.driveList()->item(1)->setSelected(true);
+        QVERIFY(ok->isEnabled());
+    }
+
+    void mediaToolFiltersLinkedClipsByDrive() {
+        QTemporaryDir dir;
+        const QString one = dir.filePath(QStringLiteral("one"));
+        const QString two = dir.filePath(QStringLiteral("two"));
+        const QString nested = dir.filePath(QStringLiteral("one/nested"));
+        auto linked = [](const QString& name, const QString& path) {
+            BinItem clip;
+            clip.id = name;
+            clip.name = name;
+            clip.kind = BinItemKind::MasterClip;
+            clip.durationFrames = 50;
+            clip.editRate = Rational(25);
+            media::Link link;
+            link.path = path;
+            link.videoStream = 0;
+            link.frames = 50;
+            clip.link = link.toJson();
+            return clip;
+        };
+        const QList<BinItem> items{linked(QStringLiteral("A"), one + QStringLiteral("/a.mov")),
+                                   linked(QStringLiteral("B"), two + QStringLiteral("/b.mov")),
+                                   linked(QStringLiteral("C"), nested + QStringLiteral("/c.mov"))};
+        MediaTool tool;
+        MediaToolDisplay display;
+        tool.setItems(items, display);
+        QCOMPARE(tool.names(), (QStringList{"A", "B", "C"}));
+        display.knownDrives = {one, two, nested};
+        display.drives = {two};
+        tool.setItems(items, display);
+        QCOMPARE(tool.names(), QStringList{"B"});
+        // A file on a volume mounted inside another belongs to the inner one.
+        display.drives = {one};
+        tool.setItems(items, display);
+        QCOMPARE(tool.names(), QStringList{"A"});
+    }
+
+    void cancelAsJobFinishes() {
+        // Cancel pressed after the work's last progress call: its success stands.
+        BackgroundQueue queue;
+        std::atomic<bool> go{false};
+        std::atomic<bool> returned{false};
+        const int id = queue.add(QStringLiteral("Clip"), QStringLiteral("bin"),
+                                 [&](const std::function<bool(double)>& progress) {
+                                     progress(0.5);
+                                     while (!go.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                                     returned.store(true);
+                                     return media::ConsolidateResult{};
+                                 });
+        go.store(true);
+        while (!returned.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(50)); // the thread marks itself done
+        queue.cancel(id);
+        queue.waitForIdle();
+        QCOMPARE(queue.jobs().constFirst().state, BackgroundQueue::State::Completed);
+        // A job told to stop is cancelled.
+        const int second = queue.add(QStringLiteral("Clip 2"), QStringLiteral("bin"),
+                                     [&](const std::function<bool(double)>& progress) {
+                                         media::ConsolidateResult r;
+                                         while (progress(0.1)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                                         r.error = QStringLiteral("Cancelled");
+                                         return r;
+                                     });
+        queue.cancel(second);
+        queue.waitForIdle();
+        QCOMPARE(queue.jobs().constLast().state, BackgroundQueue::State::Cancelled);
     }
 };
 

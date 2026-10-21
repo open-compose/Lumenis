@@ -53,8 +53,9 @@ public:
     void setShiftLayer(bool on);
     bool isShiftLayer() const { return shift_; }
     // Maps a command onto a key as dropping it there does, in the current
-    // layer. "" leaves the key unassigned; the modifier key buttons copy the
-    // key's Alt or Control function instead. Emits keyboardChanged.
+    // layer. "" leaves the key unassigned; the modifier key buttons swap the
+    // key's function with its Alt or Control function (p.97). Emits
+    // keyboardChanged.
     void mapCommand(KeyButton* key, const QString& commandId);
     // Shows the keyboard's current commands. Call it after changing the
     // KeyboardMap from outside (a restored setting).

@@ -66,6 +66,7 @@
 #include <QToolTip>
 
 #include <algorithm>
+#include <cmath>
 
 // MainWindow: the application frame and the place where the parts of the editor are wired together.
 // It owns the panel framework (PanelManager, panels.*) and the workspaces (workspace*), creates every
@@ -303,7 +304,7 @@ void MainWindow::createPanels() {
         if (files.isEmpty()) return ids;
         BinDeleteChoice choice;
         if (binDeleteHook_) {
-            const auto answer = binDeleteHook_(static_cast<int>(ids.size()), static_cast<int>(files.size()));
+            const auto answer = binDeleteHook_(clips, static_cast<int>(files.size()));
             if (!answer) return std::nullopt;
             choice = *answer;
         } else {
@@ -311,7 +312,7 @@ void MainWindow::createPanels() {
             dialog.setObjectName(QStringLiteral("deleteDialog"));
             dialog.setWindowTitle(tr("Delete"));
             auto* layout = new QVBoxLayout(&dialog);
-            auto* clipBox = new QCheckBox(tr("Delete %n clip(s)", "", static_cast<int>(ids.size())), &dialog);
+            auto* clipBox = new QCheckBox(tr("Delete %n clip(s)", "", clips), &dialog);
             clipBox->setChecked(true);
             auto* mediaBox = new QCheckBox(tr("Delete %n media file(s)", "", static_cast<int>(files.size())), &dialog);
             layout->addWidget(new QLabel(tr("%n of the clips have media files:", "", clips), &dialog));
@@ -342,6 +343,24 @@ void MainWindow::createPanels() {
     });
     connect(binContainer_, &BinContainer::filesDropped, this,
             [this](const QString& binId, const QStringList& paths) { linkFiles(binId, paths); });
+    // Favorite Bins (p.293) and saved bin views (p.249) are User settings:
+    // kept in the active Bin setting, and read back in applySettings().
+    connect(binContainer_, &BinContainer::favoritesChanged, this, [this] {
+        settings_->setValue(QStringLiteral("Bin"), QStringLiteral("favoriteBins"), FavoriteBins::toJson());
+    });
+    connect(binContainer_, &BinContainer::binViewsChanged, this, [this] {
+        settings_->setValue(QStringLiteral("Bin"), QStringLiteral("binViews"), BinViewLibrary::toJson());
+    });
+    // A bin that could not be saved. Not modal: it may come from the
+    // auto-save timer, or while the project closes.
+    connect(binContainer_, &BinContainer::saveFailed, this, [this](const QString& bin, const QString& error) {
+        const QString text = bin.isEmpty() ? tr("The bins could not be saved.\n%1").arg(error)
+                                           : tr("The bin \"%1\" could not be saved; it stays open.\n%2").arg(bin, error);
+        auto* box = new QMessageBox(QMessageBox::Warning, tr("Save Bin"), text, QMessageBox::Ok, this);
+        box->setObjectName(QStringLiteral("binSaveFailed"));
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        box->open();
+    });
     // The Keyboard setting's map, starting from the declared shortcuts; the Composer and the Timeline
     // run the keys pressed in them through it.
     keyboard_ = std::make_unique<KeyboardMap>();
@@ -359,6 +378,27 @@ void MainWindow::createPanels() {
     // The Timeline (ch. 19), showing the Record monitor's sequence.
     timeline_ = new Timeline(*composer_);
     timeline_->setKeyResolver([this](const QKeySequence& key) { return keyboard_->commandFor(key); });
+    // Mark Clip with segments selected in the Timeline marks "an In point at the start and an Out
+    // point at the end of the selected segments" (p.622): from the earliest selected segment's first
+    // frame to the latest one's last. The selection is the record sequence's, so it marks the Record
+    // monitor only; with nothing selected the Composer marks the segment under the position.
+    composer_->setMarkResolver([this](MonitorId monitor) -> std::optional<std::pair<std::int64_t, std::int64_t>> {
+        const model::MonitorState& state = composer_->state(monitor);
+        if (monitor != MonitorId::Record || timeline_->selection().isEmpty() || state.isEmpty() ||
+            state.current()->item.kind != model::BinItemKind::Sequence) {
+            return std::nullopt;
+        }
+        const model::Sequence seq = model::Sequence::fromItem(state.current()->item);
+        std::optional<std::pair<std::int64_t, std::int64_t>> range;
+        for (const model::SegmentRef& ref : timeline_->selection()) {
+            const auto segment = model::segmentFor(seq, ref);
+            if (!segment || segment->length <= 0) continue;
+            const std::int64_t last = ref.start + segment->length - 1;
+            range = range ? std::make_pair(std::min(range->first, ref.start), std::max(range->second, last))
+                          : std::make_pair(ref.start, last);
+        }
+        return range;
+    });
     timeline_->setSequenceStore([this](const QString& binId, const model::BinItem& item, bool isNew) {
         BinDocument* doc = binContainer_->document(binId);
         if (!doc) doc = binContainer_->openBin(binId);
@@ -966,9 +1006,28 @@ std::vector<media::AudioPiece> MainWindow::soundOf(const model::LoadedClip& load
                                                   const std::function<bool(const QString&)>& monitored) const {
     // Audio settings, Default Pan for mono tracks (p.1147).
     const bool alternating = settings_->text(QStringLiteral("Audio"), QStringLiteral("defaultPan")) != QLatin1String("centered");
-    return media::audioPieces(
+    auto pieces = media::audioPieces(
         loaded.item, [this](const QString& binId, const QString& clipId) { return composer_->resolve(binId, clipId); },
         monitored, alternating);
+    // The Audio Mixer's Master fader, a gain on the whole mix.
+    const double master = audioMixer_ ? audioMixer_->masterGain() : 0.0;
+    if (master != 0.0) {
+        const float gain = master <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, master / 20.0));
+        for (media::AudioPiece& piece : pieces) {
+            piece.left *= gain;
+            piece.right *= gain;
+        }
+    }
+    return pieces;
+}
+
+// A sequence's audio track is heard when it is monitored in the Track Selector panel (p.395), not
+// muted in the Audio Mixer, and soloed whenever any track is (p.698).
+bool MainWindow::isHeard(const QString& track) const {
+    if (!timeline_->isMonitored(track)) return false;
+    if (!audioMixer_) return true;
+    if (audioMixer_->isMuted(track)) return false;
+    return !audioMixer_->anySoloed() || audioMixer_->isSoloed(track);
 }
 
 // The Full Screen Playback view is made once and kept (guarded by a QPointer); applySettings() gives it
@@ -1015,7 +1074,7 @@ void MainWindow::scrubIfMoved() {
     if (out + in <= 0) return;
     std::function<bool(const QString&)> monitored;
     if (loaded->item.kind == model::BinItemKind::Sequence) {
-        monitored = [this](const QString& track) { return timeline_->isMonitored(track); };
+        monitored = [this](const QString& track) { return isHeard(track); };
     }
     auto pieces = soundOf(*loaded, monitored);
     if (pieces.empty()) return;
@@ -1057,11 +1116,10 @@ void MainWindow::startSound(MonitorId monitor, int speed) {
     if (speed == 0 || std::abs(speed) > 3) return;
     const model::LoadedClip* loaded = composer_->state(monitor).current();
     if (!loaded) return;
-    // A sequence plays the audio tracks monitored in the Track Selector
-    // panel (p.395).
+    // A sequence plays the audio tracks that are heard (isHeard).
     std::function<bool(const QString&)> monitored;
     if (loaded->item.kind == model::BinItemKind::Sequence) {
-        monitored = [this](const QString& track) { return timeline_->isMonitored(track); };
+        monitored = [this](const QString& track) { return isHeard(track); };
     }
     auto pieces = soundOf(*loaded, monitored);
     if (pieces.empty()) return;
@@ -1702,7 +1760,38 @@ void MainWindow::positionInfo() {
 // Pushes the active settings into every window. Runs on each Settings::changed (any setting, any
 // scope), so each part here must be cheap and safe to repeat. A new setting in settings.json takes
 // effect only once it is read here or by its window.
+void MainWindow::adoptLegacyBinLists(const QJsonValue& favorites, const QJsonValue& views) {
+    legacyFavorites_ = favorites;
+    legacyBinViews_ = views;
+    writeLegacyBinLists();
+}
+
+bool MainWindow::writeLegacyBinLists() {
+    // Only into a user's settings file: before one is chosen they live in memory and would be lost.
+    if (settings_->user().isEmpty() || settings_->usersRoot().isEmpty()) return false;
+    bool wrote = false;
+    const auto adopt = [&](QJsonValue& legacy, const QString& key) {
+        if (legacy.isNull()) return;
+        const QJsonValue now = settings_->value(QStringLiteral("Bin"), key);
+        if (!now.isNull() && !now.isUndefined()) {
+            legacy = QJsonValue(); // the user has lists of their own already
+            return;
+        }
+        settings_->setValue(QStringLiteral("Bin"), key, legacy);
+        // Kept until it reads back, in case the setting cannot be written.
+        if (settings_->value(QStringLiteral("Bin"), key) == legacy) {
+            legacy = QJsonValue();
+            wrote = true;
+        }
+    };
+    adopt(legacyFavorites_, QStringLiteral("favoriteBins"));
+    adopt(legacyBinViews_, QStringLiteral("binViews"));
+    return wrote;
+}
+
 void MainWindow::applySettings() {
+    // Writing them fires Settings::changed, which applies everything again with them in place.
+    if (legacyBinListsPending() && writeLegacyBinLists()) return;
     const Settings& s = *settings_;
     // Video Display (p.1224) and Full Screen Playback (p.1190-1191) settings.
     composer_->setHighQualityScaling(s.flag(QStringLiteral("Video Display"), QStringLiteral("highQualityScaling")));
@@ -1715,6 +1804,9 @@ void MainWindow::applySettings() {
     binContainer_->setFavoritesAtTop(s.text(QStringLiteral("Bin"), QStringLiteral("favoritesAt")) != QLatin1String("bottom"));
     binContainer_->setOpenBinsFloating(s.text(QStringLiteral("Bin"), QStringLiteral("openBin")) == QLatin1String("float"));
     binContainer_->setQuickFilterAllColumns(s.text(QStringLiteral("Bin"), QStringLiteral("quickFilter")) == QLatin1String("all"));
+    // The user's Favorite Bins (p.293) and saved bin views (p.249).
+    if (FavoriteBins::fromJson(s.value(QStringLiteral("Bin"), QStringLiteral("favoriteBins")))) binContainer_->refreshTree();
+    if (BinViewLibrary::fromJson(s.value(QStringLiteral("Bin"), QStringLiteral("binViews")))) binContainer_->refreshViewMenus();
     // Audio Project settings (p.692, p.1150).
     const QString mixerMode = s.text(QStringLiteral("Audio Project"), QStringLiteral("mixerMode"));
     if (const auto mode = AudioMixer::modeFromName(mixerMode); mode && mixerMode != appliedMixerMode_) {
@@ -1844,7 +1936,7 @@ void MainWindow::installPanelHandlers() {
     handle("file.input.source_browser", [this] { showSourceBrowser(); });
     handle("clip.relink.linked_media", [this] { relinkLinkedMedia(); });
     handle("clip.relink.managed_media", [this] { relinkManagedMedia(); });
-    // Managed media (p.213, p.134, p.348-359).
+    // Managed media (p.213, p.134, p.349-359).
     handle("file.input.import_media", [this] {
         showSourceBrowser();
         if (SourceBrowser* browser = sourceBrowser_.data()) browser->setImportMode(true);
@@ -2057,13 +2149,18 @@ QMessageBox* MainWindow::createAboutBox() {
     box->setIconPixmap(picture);
     box->setStandardButtons(QMessageBox::Ok);
     // Configuration, Usage and Hardware (p.94, p.102-105).
-    for (const QString& tab : {tr("Configuration"), tr("Usage"), tr("Hardware")}) {
-        QPushButton* b = box->addButton(tab, QMessageBox::ActionRole);
-        b->setObjectName(QStringLiteral("about") + tab);
-        connect(b, &QPushButton::clicked, this, [this, tab] {
+    // Each button by its untranslated key (its object name and AboutInfoDialog::showTab's key) and
+    // its translated text.
+    const std::pair<QString, QString> tabs[] = {{QStringLiteral("Configuration"), tr("Configuration")},
+                                                {QStringLiteral("Usage"), tr("Usage")},
+                                                {QStringLiteral("Hardware"), tr("Hardware")}};
+    for (const auto& [key, text] : tabs) {
+        QPushButton* b = box->addButton(text, QMessageBox::ActionRole);
+        b->setObjectName(QStringLiteral("about") + key);
+        connect(b, &QPushButton::clicked, this, [this, key] {
             AboutInfoDialog* info = createAboutInfo();
             info->setAttribute(Qt::WA_DeleteOnClose);
-            info->showTab(tab);
+            info->showTab(key);
             info->show();
         });
     }

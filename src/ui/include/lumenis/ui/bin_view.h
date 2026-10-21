@@ -14,6 +14,8 @@ class QComboBox;
 class QLabel;
 class QLineEdit;
 class QMenu;
+class QJsonArray;
+class QJsonValue;
 class QSettings;
 class QStackedWidget;
 class QTableView;
@@ -148,8 +150,8 @@ public:
                       const QModelIndex& parent) override;
 
 signals:
-    // Items from the bin `fromBin` (a node id) dropped here; `copy` when the
-    // drop was a copy or Alt was held.
+    // Items from the bin `fromBin` (a node id) dropped here; `copy` as
+    // isCopyDrop() (bin_dock.h) decides.
     void itemsDropped(const QString& fromBin, const QStringList& ids, bool copy);
     // Media files dropped from the Source Browser, to link (p.317).
     void filesDropped(const QStringList& paths);
@@ -159,8 +161,8 @@ private:
     QStringList selectedHeadings_;
 };
 
-// The quick filter (p.294) and the sift (p.288-289). Also hides the kinds
-// Set Bin Display turns off. It filters only and never sorts: rows keep the
+// The quick filter (p.294) and the sift (p.288-289). Also hides the objects
+// Set Bin Display turns off (p.288). It filters only and never sorts: rows keep the
 // bin's order, which BinDocument::sort() sets.
 class BinFilterModel : public QSortFilterProxyModel {
     Q_OBJECT
@@ -320,6 +322,10 @@ public:
     // replacing a saved view of the same name.
     void applyView(const QString& name);
     void saveViewAs(const QString& name);
+    // Refills the Bin View menu: built-in views, saved views, Save As. A bin
+    // whose view is not in the list (or has none, "Untitled") gets an extra
+    // entry at the top for it; a modified view's entry is in italic.
+    void updateViewMenu();
 
     // Columns (p.246-247, 268-269). Selected headings are clicked ones.
     QStringList selectedHeadings() const { return selectedHeadings_; }
@@ -395,6 +401,8 @@ signals:
     void filesDropped(const QStringList& paths);
     // Double-click on an item: it loads into a monitor (p.394).
     void itemActivated(const QString& itemId);
+    // saveViewAs() changed BinViewLibrary.
+    void viewSaved();
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -402,7 +410,6 @@ protected:
 private:
     void applyDisplay();
     void updateStatus();
-    void updateViewMenu();
     void headerClicked(int logical);
     void headerMenu(const QPoint& pos);
     void editHeading(const QString& heading);
@@ -429,7 +436,9 @@ private:
 };
 
 // Bin views saved with Save As (p.249). They belong to the user, not to a
-// bin, and are kept in the application settings.
+// bin: the guide keeps them as User settings (p.249). MainWindow keeps them
+// in the active Bin setting's "binViews" value, reading it in
+// applySettings() and writing it on BinContainer::binViewsChanged().
 class BinViewLibrary {
 public:
     // The saved views, process-wide; built-in views are not in the list
@@ -437,9 +446,15 @@ public:
     static QList<model::BinViewPreset>& views();
     // A saved view by name, or null.
     static const model::BinViewPreset* find(const QString& name);
-    // Read and write the "binViews" array in `settings`.
-    static void load(QSettings& settings);
-    static void save(QSettings& settings);
+    // The views as a JSON array of {name, columns}, and back. fromJson()
+    // skips entries without a name, and returns whether the list changed.
+    static QJsonArray toJson();
+    static bool fromJson(const QJsonValue& value);
+    // The views as builds before they were a User setting kept them, in the
+    // application's QSettings: as toJson() makes them, null when there are
+    // none. forgetLegacy() removes them once MainWindow has adopted them.
+    static QJsonValue legacy(QSettings& settings);
+    static void forgetLegacy(QSettings& settings);
 };
 
 } // namespace lumenis::ui

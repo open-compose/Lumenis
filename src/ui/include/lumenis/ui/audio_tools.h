@@ -5,6 +5,7 @@
 #include <QSet>
 #include <QWidget>
 
+#include <functional>
 #include <optional>
 
 class QButtonGroup;
@@ -144,11 +145,20 @@ public:
     // A track's strip; null for a track not shown. Strips are remade when the tracks change.
     MixerStrip* strip(const QString& track) const { return strips_.value(track); }
     MixerStrip* master() const { return master_; }
+    // The Master fader's level in dB (model::kGainOff for -∞), 0 by default: a gain on the whole
+    // mix, after each track's. It is kept in the mixer, not in the sequence; MainWindow applies
+    // it to what plays.
+    double masterGain() const { return masterGain_; }
+    // Clamped by model::clampGain; shows it on the Master strip and emits masterGainChanged() if it
+    // changed.
+    void setMasterGain(double db);
     // Fills the Fast menu for the current mode and selected tracks and returns it (the mixer
     // owns it).
     QMenu* fastMenu();
     bool isSoloed(const QString& track) const { return solo_.contains(track); }
     bool isMuted(const QString& track) const { return mute_.contains(track); }
+    // Whether any track is soloed: then only soloed tracks are heard (p.698).
+    bool anySoloed() const { return !solo_.isEmpty(); }
     // Gangs A-J (p.704): ganged faders move together.
     // An empty letter takes the track out of its gang.
     void setGang(const QString& track, const QString& letter);
@@ -162,6 +172,8 @@ signals:
     void modeChanged(Mode mode);
     // After setMixMode() changed it.
     void mixModeChanged(const QString& value);
+    // The Master fader moved (also while dragging) or setMasterGain() changed it.
+    void masterGainChanged(double db);
 
 private:
     // Replaces the strips with one per track, keeping each track's gang, solo and mute.
@@ -188,6 +200,7 @@ private:
     QHash<QString, MixerStrip*> strips_; // track -> strip
     QStringList order_;                  // tracks(), the strips' order
     MixerStrip* master_ = nullptr;
+    double masterGain_ = 0;
     QSet<QString> solo_;                 // by track name; kept when strips are remade
     QSet<QString> mute_;
     QHash<QString, QString> gangs_;      // track -> gang letter
@@ -223,11 +236,28 @@ class AudioMeters : public QWidget {
     Q_OBJECT
 
 public:
+    // The PH menu's peak hold (p.157 names Peak Hold and Infinite Hold; the guide does not say how
+    // long Peak Hold holds, so this follows common peak meters): PeakHold keeps a peak for
+    // kPeakHoldMs, then lets it fall to the current level; Infinite keeps it until resetPeaks().
+    enum class Hold { PeakHold, Infinite };
+    static constexpr int kPeakHoldMs = 2000;
+    // Milliseconds from any fixed start; peak hold times are measured with it.
+    using Clock = std::function<qint64()>;
+
     // `channels` bars, all at -90 dB.
     explicit AudioMeters(int channels, QWidget* parent = nullptr);
     int channels() const { return static_cast<int>(levels_.size()); }
-    // A channel's level in dB (0-based channel; others are ignored); raises its peak if higher.
+    // A channel's level in dB (0-based channel; others are ignored); raises its peak if higher,
+    // and lets an expired peak fall as hold() says.
     void setLevel(int channel, double db);
+    Hold hold() const { return hold_; }
+    void setHold(Hold hold);
+    // Replaces the clock (tests); an empty function is ignored.
+    void setClock(Clock clock);
+    // Where a level sits on the digital scale, 0 at the top (0 dB) to 1 at the bottom (-90 dB):
+    // the scale's marks equally spaced, as pictured on p.158. levelAt() is its inverse.
+    static double scalePosition(double db);
+    static double levelAt(double position);
     // Sets a channel's peak mark directly.
     void setPeak(int channel, double db);
     // RP: every peak back to -90 dB.
@@ -247,6 +277,9 @@ protected:
 private:
     QList<double> levels_;
     QList<double> peaks_;
+    QList<qint64> peakTimes_; // clock_() when each peak was set
+    Hold hold_ = Hold::PeakHold;
+    Clock clock_;
     int reference_ = -20;
 };
 
@@ -273,9 +306,9 @@ public:
     // Stores the tone and emits calibrationToneChanged(), even if it is the same.
     void setCalibrationTone(const CalibrationTone& tone);
 
-    // The PH menu's hold choice. Only recorded so far: the meters do not let peaks fall yet.
-    enum class Hold { None, PeakHold, Infinite };
-    Hold hold() const { return hold_; }
+    // The PH menu's hold choice, which the meters follow.
+    using Hold = AudioMeters::Hold;
+    Hold hold() const { return meters_->hold(); }
 
 signals:
     // After setCalibrationTone(), also from the Set Calibration Tone dialog.
@@ -287,7 +320,6 @@ private:
     QToolButton* peakHold_ = nullptr;
     QList<QToolButton*> io_;
     CalibrationTone tone_;
-    Hold hold_ = Hold::PeakHold;
 };
 
 } // namespace lumenis::ui

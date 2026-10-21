@@ -183,7 +183,11 @@ void KeyboardPalette::refresh() {
 void KeyboardPalette::mapCommand(KeyButton* key, const QString& commandId) {
     const QKeySequence seq = sequenceFor(key);
     // The modifier key buttons (p.97): the key takes the function it has
-    // with that modifier held, e.g. I with Add Alt Key becomes Go to IN.
+    // with that modifier held, e.g. I with Add Alt Key becomes Go to IN, and
+    // the key's own function moves to the modifier: Alt+I then marks IN, as
+    // the guide's note says the default function stays under the modifier.
+    // The two are swapped, so nothing is lost even when the modified key had
+    // no function (the key is then unassigned and its function is on Alt).
     Qt::KeyboardModifier modifier = Qt::NoModifier;
     if (commandId == QLatin1String("other.add_alt_key") || commandId == QLatin1String("other.add_option_key")) {
         modifier = Qt::AltModifier;
@@ -192,8 +196,10 @@ void KeyboardPalette::mapCommand(KeyButton* key, const QString& commandId) {
     }
     if (modifier != Qt::NoModifier) {
         const QKeyCombination base = seq[0];
-        const QString modified = keyboard_.commandFor(QKeySequence(QKeyCombination(base.keyboardModifiers() | modifier, base.key())));
-        keyboard_.assign(seq, modified);
+        const QKeySequence modifiedKey(QKeyCombination(base.keyboardModifiers() | modifier, base.key()));
+        const QString own = keyboard_.commandFor(seq);
+        keyboard_.assign(seq, keyboard_.commandFor(modifiedKey));
+        keyboard_.assign(modifiedKey, own);
     } else {
         // A command, or Blank to leave the key unassigned.
         keyboard_.assign(seq, commandId);

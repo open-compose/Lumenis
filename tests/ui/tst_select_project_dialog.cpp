@@ -147,8 +147,13 @@ private slots:
         QVERIFY(stereo->isEnabled());
         rate->setCurrentText(QStringLiteral("23.976"));
         QVERIFY(film->isEnabled());
+        film->setChecked(true);
         rate->setCurrentText(QStringLiteral("29.97"));
         QVERIFY(!film->isEnabled());
+        // A frame rate without film also unchecks it, as a format change
+        // does, so no film type is recorded.
+        QVERIFY(!film->isChecked());
+        QVERIFY(!child<QComboBox>(d, "filmType")->isEnabled());
 
         // Choose for Me defers the format (p.64).
         child<QCheckBox>(d, "chooseForMe")->setChecked(true);

@@ -18,6 +18,9 @@ namespace lumenis::ui {
 // What the Media Tool shows (the Media Tool Display dialog, p.346).
 struct MediaToolDisplay {
     QStringList drives;      // the drives' roots; empty: all drives
+    // Every drive offered, selected or not, when `drives` is not empty: a file linked in place
+    // belongs to the deepest of these roots that holds it (a volume mounted inside another).
+    QStringList knownDrives;
     bool allProjects = false; // else the current project's media only
     QString project;          // the current project
     bool masterClips = true;       // managed master clips
@@ -37,7 +40,8 @@ public:
     // the current project comes first (p.346).
     MediaToolDisplayDialog(const QString& currentProject, const QList<QPair<QString, QString>>& drives,
                            const QStringList& projects, const MediaToolDisplay& display, QWidget* parent = nullptr);
-    // The choices. Every drive selected gives an empty drive list (all drives); every project
+    // The choices. Every drive selected gives an empty drive list (all drives); OK is disabled while
+    // no drive is selected, since the tool loads only the drives selected (p.345). Every project
     // selected, when there is more than the current one, gives allProjects.
     MediaToolDisplay display() const;
     QListWidget* driveList() const { return drives_; }
@@ -57,14 +61,14 @@ private:
     QCheckBox* media_ = nullptr;
 };
 
-// The Delete Media dialog (p.348): which of the selection's media files to
+// The Delete Media dialog (p.349): which of the selection's media files to
 // delete, by track.
 class DeleteMediaDialog : public QDialog {
     Q_OBJECT
 
 public:
     // `tracks`: "V1", "A1", ... that the selection has media for.
-    // A box per track, all checked; the other kinds of file on p.348 are disabled.
+    // A box per track, all checked; the other kinds of file on p.349 are disabled.
     DeleteMediaDialog(const QStringList& tracks, QWidget* parent = nullptr);
     // The tracks whose boxes are checked, in the order given.
     QStringList chosenTracks() const;

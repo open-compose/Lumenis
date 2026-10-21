@@ -104,6 +104,13 @@ private slots:
         // The Add Alt Key button (p.97): I becomes Go to IN Point (Alt+I).
         dropCommand(palette.key("I"), QStringLiteral("other.add_alt_key"));
         QCOMPARE(map.commandFor(key("I")), QStringLiteral("edit.go_to_in_point"));
+        // ... and the key's own function is kept under the modifier (p.97).
+        QCOMPARE(map.commandFor(key("Alt+I")), QStringLiteral("edit.mark_in"));
+        // With nothing on the modified key, the function still moves there
+        // rather than being lost.
+        dropCommand(palette.key("O"), QStringLiteral("other.add_alt_key"));
+        QVERIFY(map.commandFor(key("O")).isEmpty());
+        QCOMPARE(map.commandFor(key("Alt+O")), QStringLiteral("edit.mark_out"));
         // The Shift layer.
         palette.setShiftLayer(true);
         QVERIFY(palette.key("Q")->isBlank());

@@ -17,6 +17,7 @@
 #include <QAction>
 #include <QDir>
 #include <QFile>
+#include <QFileSystemModel>
 #include <QListView>
 #include <QMenu>
 #include <QMimeData>
@@ -198,6 +199,33 @@ private slots:
         browser.home();
         QCOMPARE(browser.folder(), QDir::cleanPath(QDir::homePath()));
         QVERIFY(!browser.button(QStringLiteral("favorite"))->isChecked());
+
+        // Back and Forward show the folder like any other: Recent lists the
+        // most recently viewed folders (p.313), the Explore tree follows and
+        // the state is saved.
+        browser.setFolder(f.root);
+        browser.setFolder(f.path("Day 2"));
+        QSignalSpy changed(&browser, &SourceBrowser::stateChanged);
+        browser.back();
+        QCOMPARE(changed.count(), 1);
+        QCOMPARE(browser.recent().first(), f.root);
+        QCOMPARE(QDir::cleanPath(browser.explorer()->currentIndex().data(QFileSystemModel::FilePathRole).toString()),
+                 f.root);
+        browser.forward();
+        QCOMPARE(changed.count(), 2);
+        QCOMPARE(browser.recent().first(), f.path("Day 2"));
+        QCOMPARE(QDir::cleanPath(browser.explorer()->currentIndex().data(QFileSystemModel::FilePathRole).toString()),
+                 f.path("Day 2"));
+
+        // Media Folder View set from code lists once and signals once (the
+        // button's toggled signal must not re-enter).
+        changed.clear();
+        browser.setMediaFolderView(true);
+        QCOMPARE(changed.count(), 1);
+        QVERIFY(browser.button(QStringLiteral("mediaFolderView"))->isChecked());
+        browser.button(QStringLiteral("mediaFolderView"))->click();
+        QCOMPARE(changed.count(), 2);
+        QVERIFY(!browser.isMediaFolderView());
 
         // Settings and view are kept between sessions.
         browser.setFrameView(true);

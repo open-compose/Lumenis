@@ -35,6 +35,13 @@ struct SettingOption {
     int page = 0; // the Editing Guide page that describes it; 0 when not given
     bool later = false; // shown, not available yet: value() returns the default
     QList<SettingChoice> choices;
+
+    // The value a stored one stands for: the default when nothing is stored,
+    // the option is not available yet, the stored value has another JSON
+    // type than the default, or it is a choice that is unknown or not
+    // available yet; otherwise the stored value. Settings::value() and the
+    // setting's dialog both use it.
+    QJsonValue effectiveValue(const QJsonValue& stored) const;
 };
 
 // A tab of a setting's dialog.
@@ -117,7 +124,7 @@ public:
     // An option's value in the active version of its setting, or its
     // default. The default is also returned for an option or choice not
     // available yet ("later") and for a stored value of the wrong type. Keys
-    // not in the schema return the stored value as is (undefined if none).
+    // not in the schema return the stored value as is (null if none).
     QJsonValue value(const QString& kind, const QString& key) const;
     bool flag(const QString& kind, const QString& key) const { return value(kind, key).toBool(); }
     int number(const QString& kind, const QString& key) const { return value(kind, key).toInt(); }

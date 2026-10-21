@@ -1,5 +1,7 @@
 #include "lumenis/ui/consolidate_dialog.h"
 
+#include "lumenis/ui/tool_windows.h"
+
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QComboBox>
@@ -31,12 +33,6 @@ void later(QWidget* w) {
     w->setToolTip(laterTip());
 }
 
-// A drive's free space, in GiB with one decimal.
-QString sizeText(std::int64_t bytes) {
-    const double gb = static_cast<double>(bytes) / (1024.0 * 1024.0 * 1024.0);
-    return QObject::tr("%1 GB free").arg(QString::number(gb, 'f', 1));
-}
-
 // The drives, the one with the most space in bold (p.135).
 QListWidget* driveList(QWidget* parent, const QString& name) {
     auto* list = new QListWidget(parent);
@@ -44,7 +40,7 @@ QListWidget* driveList(QWidget* parent, const QString& name) {
     const QList<media::MediaDrive> drives = media::mediaDrives();
     const int best = media::mostSpace(drives);
     for (int i = 0; i < drives.size(); ++i) {
-        auto* item = new QListWidgetItem(QStringLiteral("%1  (%2)").arg(drives.at(i).name, sizeText(drives.at(i).freeBytes)),
+        auto* item = new QListWidgetItem(QStringLiteral("%1  (%2)").arg(drives.at(i).name, freeSpaceText(drives.at(i).freeBytes)),
                                          list);
         item->setData(Qt::UserRole, drives.at(i).root);
         if (i == best) {

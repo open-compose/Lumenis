@@ -195,22 +195,25 @@ void Settings::commit(SettingsScope scope) {
 
 QJsonValue Settings::value(const QString& kind, const QString& key) const {
     const SettingKind* k = SettingsSchema::builtIn().find(kind);
-    const SettingOption* o = k ? k->option(key) : nullptr;
-    const QJsonValue fallback = o ? o->defaultValue : QJsonValue();
-    if (!k) return fallback;
+    if (!k) return QJsonValue();
+    const QJsonValue v = file(k->scope).activeValues(kind).value(key);
+    // A key the schema does not know is returned as stored.
+    const SettingOption* o = k->option(key);
+    return o ? o->effectiveValue(v) : (v.isUndefined() ? QJsonValue() : v);
+}
+
+QJsonValue SettingOption::effectiveValue(const QJsonValue& stored) const {
     // Options not available yet keep their default.
-    if (o && o->later) return fallback;
-    const QJsonObject values = file(k->scope).activeValues(kind);
-    const QJsonValue v = values.value(key);
-    if (v.isUndefined() || (o && v.type() != fallback.type() && !fallback.isNull())) return fallback;
+    if (later || stored.isUndefined()) return defaultValue;
+    if (stored.type() != defaultValue.type() && !defaultValue.isNull()) return defaultValue;
     // A choice that is not available yet counts as the default.
-    if (o && o->type == QLatin1String("choice")) {
-        for (const SettingChoice& c : o->choices) {
-            if (c.value == v.toString()) return c.later ? fallback : v;
+    if (type == QLatin1String("choice")) {
+        for (const SettingChoice& c : choices) {
+            if (c.value == stored.toString()) return c.later ? defaultValue : stored;
         }
-        return fallback;
+        return defaultValue;
     }
-    return v;
+    return stored;
 }
 
 void Settings::setValue(const QString& kind, const QString& key, const QJsonValue& value) {

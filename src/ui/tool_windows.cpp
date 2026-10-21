@@ -4,13 +4,14 @@
 #include "lumenis/ui/theme.h"
 
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QCryptographicHash>
-#include <cstdio>
 #include <QDateTime>
 #include <QGridLayout>
 #include <QKeyEvent>
 #include <QDialogButtonBox>
 #include <QLabel>
+#include <QMutexLocker>
 #include <QListWidget>
 #include <QProgressBar>
 #include <QStorageInfo>
@@ -20,6 +21,9 @@
 #include <QSysInfo>
 #include <QToolButton>
 #include <QVBoxLayout>
+
+#include <algorithm>
+#include <cstdio>
 
 // Small tool windows (tool_windows.h): the Calculator, the Console log and its window, and the
 // Configuration, Usage and Hardware tabs of Help > About. MainWindow (main_window.cpp) makes them and
@@ -164,9 +168,7 @@ void consoleHandler(QtMsgType type, const QMessageLogContext& context, const QSt
 
 } // namespace
 
-ConsoleLog::ConsoleLog() {
-    lines_ = systemInfo();
-}
+ConsoleLog::ConsoleLog() : lines_(systemInfo()) {}
 
 // A static: it goes after main() returns, while Qt can still log (its own
 // statics, threads stopping). Messages go back to the handler from before.
@@ -191,15 +193,29 @@ void ConsoleLog::installMessageHandler() {
     previousHandler() = qInstallMessageHandler(consoleHandler);
 }
 
+// Qt's message handler calls this on whatever thread logged, so lines_ is only touched under the
+// mutex. The signal is emitted on the calling thread; receivers that live on another thread (the
+// Console windows, on the UI thread) get it queued.
 void ConsoleLog::append(const QString& line) {
-    lines_ << line;
-    // Keep the log bounded.
-    if (lines_.size() > 5000) lines_.remove(0, lines_.size() - 5000);
+    {
+        const QMutexLocker lock(&mutex_);
+        lines_ << line;
+        // Keep the log bounded.
+        if (lines_.size() > 5000) lines_.remove(0, lines_.size() - 5000);
+    }
     emit lineAdded(line);
 }
 
+QStringList ConsoleLog::lines() const {
+    const QMutexLocker lock(&mutex_);
+    return lines_;
+}
+
 void ConsoleLog::clear() {
-    lines_.clear();
+    {
+        const QMutexLocker lock(&mutex_);
+        lines_.clear();
+    }
     emit cleared();
 }
 
@@ -236,6 +252,7 @@ ConsoleWindow::ConsoleWindow(QWidget* parent) : QWidget(parent) {
         command_->clear();
         if (!text.isEmpty()) run(text);
     });
+    // `this` as the context: lines logged on other threads arrive queued, on the window's thread.
     connect(&ConsoleLog::instance(), &ConsoleLog::lineAdded, this, [this](const QString& line) {
         log_->appendPlainText(line);
     });
@@ -300,6 +317,7 @@ AboutInfoDialog::AboutInfoDialog(const QStringList& plugins, const ProjectUsage&
     list->setObjectName(QStringLiteral("aboutPlugins"));
     list->addItems(plugins);
     cl->addWidget(list, 1);
+    config->setObjectName(QStringLiteral("Configuration"));
     tabs_->addTab(config, tr("Configuration"));
 
     // Usage (p.102-104): the project's statistics.
@@ -324,6 +342,7 @@ AboutInfoDialog::AboutInfoDialog(const QStringList& plugins, const ProjectUsage&
         ul->addWidget(v, r++, 1);
     }
     ul->setRowStretch(r, 1);
+    use->setObjectName(QStringLiteral("Usage"));
     tabs_->addTab(use, tr("Usage"));
 
     // Hardware (p.102): a Drives tab with a bar of each online drive's
@@ -343,7 +362,7 @@ AboutInfoDialog::AboutInfoDialog(const QStringList& plugins, const ProjectUsage&
         const double used = 1.0 - static_cast<double>(volume.bytesAvailable()) / static_cast<double>(volume.bytesTotal());
         bar->setValue(static_cast<int>(used * 1000));
         // The number is the free space (p.102).
-        bar->setFormat(tr("%1 GB free").arg(static_cast<double>(volume.bytesAvailable()) / 1e9, 0, 'f', 1));
+        bar->setFormat(freeSpaceText(volume.bytesAvailable()));
         dl->addWidget(bar, r++, 1);
     }
     dl->setRowStretch(r, 1);
@@ -364,6 +383,7 @@ AboutInfoDialog::AboutInfoDialog(const QStringList& plugins, const ProjectUsage&
     sl->setRowStretch(r, 1);
     hardware_->addTab(system, tr("System"));
     tabs_->addTab(hardware_, tr("Hardware"));
+    // hardwareTabs keeps its own object name; showTab() maps "Hardware" to it.
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
@@ -373,10 +393,24 @@ AboutInfoDialog::AboutInfoDialog(const QStringList& plugins, const ProjectUsage&
     resize(520, 420);
 }
 
+// Matches the page's object name, which is not translated; the tab's (translated) text is
+// accepted as well, for callers that pass what the user sees.
 void AboutInfoDialog::showTab(const QString& name) {
     for (int i = 0; i < tabs_->count(); ++i) {
-        if (tabs_->tabText(i) == name) tabs_->setCurrentIndex(i);
+        const QWidget* page = tabs_->widget(i);
+        const QString key = page == hardware_ ? QStringLiteral("Hardware") : page->objectName();
+        if (key == name || tabs_->tabText(i) == name) {
+            tabs_->setCurrentIndex(i);
+            return;
+        }
     }
+}
+
+// Decimal gigabytes (10^9 bytes), as macOS's Finder and drive makers count them; the guide does not
+// say how Media Composer counts.
+QString freeSpaceText(qint64 bytes) {
+    return QCoreApplication::translate("lumenis::ui", "%1 GB free")
+        .arg(QString::number(static_cast<double>(std::max<qint64>(bytes, 0)) / 1e9, 'f', 1));
 }
 
 } // namespace lumenis::ui

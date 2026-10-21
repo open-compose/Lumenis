@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSet>
 #include <QSettings>
 
 // The command registry (command_registry.h). Commands are declared in src/ui/resources/commands.json and
@@ -53,6 +54,9 @@ bool CommandRegistry::load(const QByteArray& json, QString* error) {
     const QJsonArray commands = doc.object().value(QStringLiteral("commands")).toArray();
     const QString product = QString::fromUtf8(branding::kProductName);
 
+    // Every declaration is checked before any is registered, so a bad document changes nothing.
+    std::vector<CommandSpec> specs;
+    QSet<QString> seen;
     for (const QJsonValue& value : commands) {
         const QJsonObject o = value.toObject();
         CommandSpec spec;
@@ -69,10 +73,18 @@ bool CommandRegistry::load(const QByteArray& json, QString* error) {
         if (spec.id.isEmpty() || spec.text.isEmpty()) {
             return fail(QStringLiteral("command without id or text"));
         }
-        if (contains(spec.id)) {
+        // Ids are QSettings keys in saveShortcuts(), where '/' and '\\' would make subgroups.
+        if (spec.id.contains(QLatin1Char('/')) || spec.id.contains(QLatin1Char('\\'))) {
+            return fail(QStringLiteral("command id with '/' or '\\': %1").arg(spec.id));
+        }
+        if (contains(spec.id) || seen.contains(spec.id)) {
             return fail(QStringLiteral("duplicate command id: %1").arg(spec.id));
         }
+        seen.insert(spec.id);
+        specs.push_back(std::move(spec));
+    }
 
+    for (CommandSpec& spec : specs) {
         auto* action = new QAction(spec.text, this);
         action->setObjectName(QStringLiteral("cmd:") + spec.id);
         action->setShortcut(spec.shortcut);

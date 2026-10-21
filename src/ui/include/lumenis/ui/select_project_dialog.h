@@ -105,12 +105,16 @@ private:
     // Updates the New Project fields that depend on the Format menu and
     // Choose for me: raster, frame rates, aspect, colour spaces, film.
     void updateFormatDependentFields();
+    // Enables Film only where the chosen format and frame rate offer it
+    // (p.67), unchecking it otherwise; called by the above and when the
+    // frame rate changes.
+    void updateFilmFields();
     // Accepts the dialog with the selected project, if any.
     void openSelected();
     // Quit, after the Leave/Cancel question unless setConfirmQuit(false).
     void quit();
     // The New Project form as project settings; on a problem sets *error
-    // (which must not be null) and the result is incomplete.
+    // (when not null) and the result is incomplete.
     model::ProjectSettings settingsFromForm(QString* error) const;
     // The preset matching the Format menu and frame rate, a Custom format
     // from the raster boxes, or nullopt when the pair matches no preset.

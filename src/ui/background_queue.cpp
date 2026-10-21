@@ -129,26 +129,31 @@ void BackgroundQueue::startNext() {
     auto work = next->work;
     auto permille = next->permille;
     auto stop = next->stop;
+    auto stopped = next->stopped;
     auto done = next->done;
     auto result = next->result;
-    worker_ = std::thread([work, permille, stop, done, result] {
-        *result = work([permille, stop](double fraction) {
+    worker_ = std::thread([work, permille, stop, stopped, done, result] {
+        *result = work([permille, stop, stopped](double fraction) {
             permille->store(static_cast<int>(fraction * 1000));
-            return !stop->load();
+            if (!stop->load()) return true;
+            stopped->store(true);
+            return false;
         });
         done->store(true);
     });
     timer_.start();
 }
 
-// On the timer: once the running job's thread is done, its state comes from how it ended. A stop that
-// was asked for wins over the result.
+// On the timer: once the running job's thread is done, its state comes from how it ended. It was
+// cancelled if the work was told to stop (a progress call returned false), or if a stop was asked
+// for and it failed; a stop asked for after the work's last progress call, by a Cancel pressed as
+// the job finished, does not undo a success.
 void BackgroundQueue::poll() {
     Entry* e = running_ >= 0 ? find(running_) : nullptr;
     if (e && e->done->load()) {
         if (worker_.joinable()) worker_.join();
         const media::ConsolidateResult result = *e->result;
-        if (e->stop->load()) {
+        if (e->stopped->load() || (e->stop->load() && !result.error.isEmpty())) {
             e->job.state = State::Cancelled;
             e->job.message = tr("Cancelled");
         } else if (!result.error.isEmpty()) {

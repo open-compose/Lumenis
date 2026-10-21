@@ -501,12 +501,7 @@ QWidget* SelectProjectDialog::buildNewProjectPage() {
     connect(rasterWidth_, &QSpinBox::valueChanged, this, &SelectProjectDialog::updateFormatDependentFields);
     connect(rasterHeight_, &QSpinBox::valueChanged, this, &SelectProjectDialog::updateFormatDependentFields);
     // A new frame rate can change whether the format offers film.
-    connect(frameRate_, &QComboBox::currentIndexChanged, this, [this] {
-        const auto chosen = chosenFormat();
-        const bool filmOk = chosen && filmAvailable(*chosen) && !chooseForMe_->isChecked();
-        film_->setEnabled(filmOk);
-        filmType_->setEnabled(filmOk && film_->isChecked());
-    });
+    connect(frameRate_, &QComboBox::currentIndexChanged, this, &SelectProjectDialog::updateFilmFields);
     connect(film_, &QCheckBox::toggled, filmType_, &QWidget::setEnabled);
     connect(name_, &QLineEdit::returnPressed, this, &SelectProjectDialog::createProjectFromForm);
     connect(ok, &QPushButton::clicked, this, &SelectProjectDialog::createProjectFromForm);
@@ -700,7 +695,14 @@ void SelectProjectDialog::updateFormatDependentFields() {
     // progressive HD formats (p.67).
     stereoscopic_->setEnabled(family != FormatFamily::SD);
     if (family == FormatFamily::SD) stereoscopic_->setCurrentIndex(0);
-    const bool filmOk = manual && format && filmAvailable(*format);
+    updateFilmFields();
+}
+
+// A disabled Film box is also unchecked, so settingsFromForm() never records a film type the
+// format does not offer.
+void SelectProjectDialog::updateFilmFields() {
+    const auto format = chosenFormat();
+    const bool filmOk = !chooseForMe_->isChecked() && format && filmAvailable(*format);
     film_->setEnabled(filmOk);
     if (!filmOk) film_->setChecked(false);
     filmType_->setEnabled(filmOk && film_->isChecked());
@@ -712,14 +714,14 @@ model::ProjectSettings SelectProjectDialog::settingsFromForm(QString* error) con
     s.chooseForMe = chooseForMe_->isChecked();
     const auto format = chosenFormat();
     if (!format) {
-        *error = tr("Choose a format and frame rate.");
+        if (error) *error = tr("Choose a format and frame rate.");
         return s;
     }
     s.format = *format;
     if (format->group == "Custom") {
         const bool stereo = stereoscopic_->currentIndex() > 0;
         if (const auto problem = validateCustomRaster(format->width, format->height, stereo)) {
-            *error = str(*problem);
+            if (error) *error = str(*problem);
             return s;
         }
     }

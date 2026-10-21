@@ -16,6 +16,8 @@
 
 class QLineEdit;
 class QMenu;
+class QJsonArray;
+class QJsonValue;
 class QSettings;
 class QSplitter;
 class QTimer;
@@ -35,18 +37,26 @@ class BinContainer;
 class BinDocument;
 class BinView;
 
-// Favorite Bins (guide p.293): bins the user reaches from any project. The
-// list belongs to the user, not to a project, and is kept in the user's
-// settings, as is whether its folder shows at the top or the bottom of the
-// Sidebar ("Favorite Bins show at", Bin settings).
+// Favorite Bins (guide p.293): bins the user reaches from any project. "The
+// list of Favorite Bins is stored in the Bin User settings" (p.293), as is
+// whether its folder shows at the top or the bottom of the Sidebar
+// ("Favorite Bins show at"). MainWindow keeps the list in the active Bin
+// setting's "favoriteBins" value: it reads it in applySettings() and writes
+// it on BinContainer::favoritesChanged().
 class FavoriteBins {
 public:
     // Absolute paths of the bin files, process-wide.
     static QStringList& paths();
     static bool& atTop();
-    // Read and write "favoriteBins/paths" and "favoriteBins/atTop".
-    static void load(QSettings& settings);
-    static void save(QSettings& settings);
+    // The paths as a JSON array of strings, and back. fromJson() skips
+    // empty and repeated paths, and returns whether the list changed.
+    static QJsonArray toJson();
+    static bool fromJson(const QJsonValue& value);
+    // The list as builds before it was a User setting kept it, in the
+    // application's QSettings: as toJson() makes it, null when there is
+    // none. forgetLegacy() removes it once MainWindow has adopted it.
+    static QJsonValue legacy(const QSettings& settings);
+    static void forgetLegacy(QSettings& settings);
 
     // Sidebar ids: the folder, and one per bin ("favorite:" and the path).
     static QString folderId() { return QStringLiteral("favorites"); }
@@ -217,8 +227,10 @@ public:
     // the Trash, or its file cannot be read.
     BinDocument* openBin(const QString& id);
     // Saves the bin if it has changes, then closes it. Its view and document
-    // are deleted later, from the event loop.
-    void closeBin(BinDocument* document);
+    // are deleted later, from the event loop. If the save fails the bin stays
+    // open with its changes: returns false, sets `error` and emits
+    // saveFailed().
+    bool closeBin(BinDocument* document, QString* error = nullptr);
     // Windows > Close All Bins But Active.
     void closeAllBinsButActive();
     // Saves one bin, whether or not it has changes.
@@ -250,7 +262,8 @@ public:
     // renamed here.
     bool renameNode(const QString& id, const QString& name, QString* error = nullptr);
     // Moves a bin or folder to the Trash (see model::ProjectBins::remove),
-    // closing what is open in it; a Favorite Bin only leaves the favourites.
+    // closing what is open in it (refused if a bin there cannot be saved); a
+    // Favorite Bin only leaves the favourites.
     // Entries already in the Trash, and the Trash itself, are refused.
     bool deleteNode(const QString& id, QString* error = nullptr);
     bool emptyTrash(QString* error = nullptr);
@@ -283,6 +296,8 @@ public:
     void setBinFilter(const QString& text);
     // Every Sidebar, so that all show changes.
     void refreshTree();
+    // Every open bin's Bin View menu, after the saved views changed.
+    void refreshViewMenus();
     // Fills `menu` (clearing it first) with the Sidebar's fast menu, or with
     // the right-click menu for entry `id`; an empty id is the list itself.
     // Returns `menu`.
@@ -300,9 +315,11 @@ public:
     int deleteSelection();
     // Edit > Select All in the active bin.
     void selectAll();
-    // Dragging items to another bin moves them; with Alt/Option (or Ctrl on
-    // Windows) it copies them (p.260-261). A closed bin opens with the items
-    // selected (p.243). Returns the ids now in the target.
+    // Dragging items to another bin moves them; with Alt/Option or
+    // Ctrl/Command it copies them (p.260-261, isCopyDrop() in bin_dock.h).
+    // Locked items are copied even by a move: locking prevents deletion
+    // (p.265). A closed bin opens with the items selected (p.243). Returns
+    // the ids now in the target.
     QStringList transferItems(const QString& fromBin, const QStringList& ids, const QString& toBin, bool copy);
 
     BinSidebar* sidebar() const { return sidebar_; }
@@ -345,6 +362,15 @@ signals:
     void filesDropped(const QString& binId, const QStringList& paths);
     // A bin floated into a new Bin Container window.
     void floatingContainerCreated(QWidget* window);
+    // A bin could not be saved: on close (it stays open), on auto-save or
+    // as the project closed. `bin` is its name, empty when several bins were
+    // being saved; `error` says why. MainWindow shows it to the user.
+    void saveFailed(const QString& bin, const QString& error);
+    // The user's Favorite Bins list (FavoriteBins::paths()) or saved bin
+    // views (BinViewLibrary) changed here; MainWindow stores them in the
+    // User settings.
+    void favoritesChanged();
+    void binViewsChanged();
 
 protected:
     void resizeEvent(QResizeEvent* event) override;

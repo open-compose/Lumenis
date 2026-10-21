@@ -686,6 +686,64 @@ private slots:
         QVERIFY(rig.composer.positionBar(MonitorId::Source)->isVisibleTo(&rig.composer));
     }
 
+    void trimModeDirections() {
+        // Edits at 20, 50 and 80 on every track: the nearest, the nearest before and the nearest
+        // after the position (p.655).
+        Rig rig;
+        BinItem cut = sequence(QStringLiteral("Cut"), 100);
+        model::Sequence seq = model::Sequence::fromItem(cut);
+        for (const QString& tr : seq.trackNames()) {
+            seq.addEdit(tr, 20);
+            seq.addEdit(tr, 80);
+        }
+        seq.storeIn(cut);
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), cut);
+        Timeline& t = rig.timeline;
+        model::MonitorState& rec = rig.composer.state(MonitorId::Record);
+        auto rollerAfter = [&](std::int64_t at, int direction) -> std::int64_t {
+            t.exitTrimMode();
+            rec.setPosition(at);
+            if (!t.enterTrimMode(direction)) return -1;
+            return t.rollers().first().frame;
+        };
+        QCOMPARE(rollerAfter(45, 0), 50);
+        QCOMPARE(rollerAfter(30, 0), 20);
+        QCOMPARE(rollerAfter(45, -1), 20);
+        QCOMPARE(rollerAfter(70, -1), 50);
+        QCOMPARE(rollerAfter(55, 1), 80);
+        QCOMPARE(rollerAfter(25, 1), 50);
+        // Nothing after the last edit.
+        QCOMPARE(rollerAfter(85, 1), -1);
+    }
+
+    void verticalScrollStopsAtLastRow() {
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(QStringLiteral("Cut"), 100));
+        for (int i = 0; i < 6; ++i) QVERIFY(rig.timeline.perform(QStringLiteral("timeline.new.audio_track.mono")));
+        rig.timeline.resize(900, 200);
+        settle();
+        TimelineView* view = rig.timeline.view();
+        const int limit = view->contentHeight() - view->height();
+        QVERIFY(limit > 0);
+        // Scrolling far down stops with the last row's bottom at the view's bottom.
+        view->setTopOffset(100000);
+        QCOMPARE(view->topOffset(), limit);
+        const auto last = view->rows().constLast();
+        QCOMPARE(last.top + last.height, view->height());
+        // Asking again from there does not creep further.
+        view->setTopOffset(100000);
+        QCOMPARE(view->topOffset(), limit);
+        // The scroll bar's range is the same.
+        QScrollBar* bar = nullptr;
+        for (QScrollBar* b : rig.timeline.findChildren<QScrollBar*>()) {
+            if (b->orientation() == Qt::Vertical) bar = b;
+        }
+        QVERIFY(bar);
+        rig.timeline.resize(900, 201);
+        settle();
+        QCOMPARE(bar->maximum(), view->contentHeight() - view->height());
+    }
+
     void transitionKeysAndTools() {
         Rig rig;
         CommandRegistry commands;

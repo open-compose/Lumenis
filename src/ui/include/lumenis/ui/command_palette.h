@@ -60,7 +60,9 @@ public:
     // tabs with one stay open.
     // Command ids, sorted; case-insensitive, and empty for blank text.
     QStringList matches(const QString& text) const;
-    // Also sets the field's text. Blank text shows every tab again.
+    // Also sets the field's text, hides the tabs without a match and dims
+    // the labels (not the buttons) that do not match. Blank text shows every
+    // tab and label again.
     void setQuickFind(const QString& text);
     // Shows a command's tab and selects its button.
     // False if the command has no button.

@@ -43,6 +43,10 @@ QString mediaFilesMime() {
     return QStringLiteral("application/x-cutthulhu-media-files");
 }
 
+bool isCopyDrop(Qt::DropAction action, Qt::KeyboardModifiers modifiers) {
+    return action == Qt::CopyAction || (modifiers & (Qt::AltModifier | Qt::ControlModifier));
+}
+
 namespace {
 
 // Pixels the pointer must leave the tab bar by before a tab is dragged out

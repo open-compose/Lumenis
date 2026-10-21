@@ -73,6 +73,19 @@ int defaultInt(const EffectParameter& p) {
     return std::clamp(v, p.min, p.max);
 }
 
+// A colour parameter's starting colour: the default if the file gives one ("#rrggbb" or a colour
+// name), black otherwise (the parameter file gives none for most).
+QColor defaultColor(const EffectParameter& p) {
+    const QColor c(p.defaultValue.toString());
+    return c.isValid() ? c : QColor(Qt::black);
+}
+
+// Shows a colour on a parameter's swatch button and keeps it for the colour dialog.
+void setSwatch(QToolButton* swatch, const QColor& color) {
+    swatch->setProperty("color", color);
+    swatch->setStyleSheet(QStringLiteral("background: %1;").arg(color.name()));
+}
+
 // Alignment names (p.500).
 struct AlignmentName {
     model::TransitionAlignment alignment;
@@ -215,16 +228,24 @@ QList<model::TrimRoller> EffectEditor::transitionCuts() const {
     if (shown_ && shown_->target == model::EffectTarget::Transition) {
         return {model::TrimRoller{shown_->track, shown_->frame, model::TrimSide::Both}};
     }
-    // Clicking a transition in Trim mode shows its Transition parameters
-    // (p.63).
-    if (!shown_ && timeline_.isTrimMode()) {
-        QList<model::TrimRoller> cuts;
-        for (const model::TrimRoller& r : timeline_.rollers()) {
-            if (r.track.startsWith(QLatin1Char('V'))) cuts << r;
-        }
-        return cuts;
+    return shown_ ? QList<model::TrimRoller>() : trimCuts();
+}
+
+// Clicking a transition in Trim mode shows its Transition parameters (p.63).
+QList<model::TrimRoller> EffectEditor::trimCuts() const {
+    QList<model::TrimRoller> cuts;
+    if (!timeline_.isTrimMode()) return cuts;
+    for (const model::TrimRoller& r : timeline_.rollers()) {
+        if (r.track.startsWith(QLatin1Char('V'))) cuts << r;
     }
-    return {};
+    return cuts;
+}
+
+// The shown effect can outlive the sequence it was in until the next refresh() (the Record monitor
+// emptied without a change signal), so nothing assumes a sequence is loaded.
+model::Sequence EffectEditor::recordSequence() const {
+    const model::LoadedClip* rec = timeline_.composer().state(MonitorId::Record).current();
+    return rec ? model::Sequence::fromItem(rec->item) : model::Sequence();
 }
 
 QString EffectEditor::durationText(std::int64_t frames) const {
@@ -243,9 +264,11 @@ void EffectEditor::refresh() {
     if (ref && rec) {
         seq = model::Sequence::fromItem(rec->item);
         effect = model::effectFor(seq, *ref);
-        if (!effect) ref.reset();
     }
-    const bool transitionOnly = !ref && !transitionCuts().isEmpty();
+    if (!effect) ref.reset(); // also with no sequence loaded
+
+    // From the new ref, not shown_, which still holds the effect shown before.
+    const bool transitionOnly = !ref && !trimCuts().isEmpty();
     const QString name = effect ? effect->category + QLatin1Char('/') + effect->name : QString();
     if (ref != shown_ || name != shownName_ || transitionOnly != transitionOnly_) {
         shown_ = ref;
@@ -352,6 +375,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     auto* swatch = new QToolButton(box);
                     swatch->setObjectName(QStringLiteral("param:") + k);
                     swatch->setFixedSize(18, 14);
+                    setSwatch(swatch, defaultColor(p));
                     connect(swatch, &QToolButton::clicked, this, [this, swatch, category, name = p.name] {
                         const QColor c = QColorDialog::getColor(swatch->property("color").value<QColor>(), this);
                         if (c.isValid()) setValue(category, name, c.name());
@@ -408,8 +432,7 @@ void EffectEditor::syncValues(const model::Effect& effect) {
             m->setCurrentText(v.toString());
         } else if (auto* b = qobject_cast<QToolButton*>(w)) {
             const QColor color(v.toString());
-            b->setProperty("color", color);
-            b->setStyleSheet(QStringLiteral("background: %1;").arg(color.name()));
+            if (color.isValid()) setSwatch(b, color);
         }
     }
     syncing_ = false;
@@ -424,8 +447,7 @@ void EffectEditor::syncTransition() {
     syncing_ = true;
     duration_->clear();
     if (shown_ && shown_->target == model::EffectTarget::Transition) {
-        const model::LoadedClip* rec = timeline_.composer().state(MonitorId::Record).current();
-        const model::Sequence seq = model::Sequence::fromItem(rec->item);
+        const model::Sequence seq = recordSequence();
         if (const model::Transition* t = model::transitionFor(seq, *shown_)) {
             duration_->setText(durationText(t->duration));
             shownAlignment = t->alignment;
@@ -456,7 +478,7 @@ void EffectEditor::setAlignment(model::TransitionAlignment alignment) {
     std::int64_t duration = timeline_.defaultTransitionLength();
     std::int64_t start = 0;
     if (shown_) {
-        const model::Sequence seq = model::Sequence::fromItem(timeline_.composer().state(MonitorId::Record).current()->item);
+        const model::Sequence seq = recordSequence();
         if (const model::Transition* t = model::transitionFor(seq, *shown_)) {
             duration = t->duration;
             start = t->before();
@@ -491,7 +513,7 @@ bool EffectEditor::setDuration(const QString& text) {
     if (cuts.isEmpty()) return false;
     std::int64_t start = frames / 2;
     if (shown_) {
-        const model::Sequence seq = model::Sequence::fromItem(timeline_.composer().state(MonitorId::Record).current()->item);
+        const model::Sequence seq = recordSequence();
         if (const model::Transition* t = model::transitionFor(seq, *shown_)) start = std::min(t->before(), frames);
     }
     const bool done = timeline_.setTransitions(cuts, frames, shownAlignment_, start);

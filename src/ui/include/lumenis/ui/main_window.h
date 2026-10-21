@@ -8,6 +8,7 @@
 
 #include <QDateTime>
 #include <QJsonObject>
+#include <QJsonValue>
 #include <QList>
 #include <QMainWindow>
 #include <QPointer>
@@ -95,6 +96,13 @@ public:
     void clearProject();
     const std::optional<model::ProjectEntry>& project() const { return project_; }
 
+    // Favorite Bins and saved bin views as builds before they were User settings kept them
+    // (FavoriteBins::legacy, BinViewLibrary::legacy; null for none). Each is written into the active
+    // Bin setting the first time a user is active whose setting has none, so updating loses neither.
+    // legacyBinListsPending() is true until both are written; app/main.cpp then forgets the old ones.
+    void adoptLegacyBinLists(const QJsonValue& favorites, const QJsonValue& views);
+    bool legacyBinListsPending() const { return !legacyFavorites_.isNull() || !legacyBinViews_.isNull(); }
+
     // The main panels and the managers, created in the constructor and alive as long as the window.
     PanelManager& panels() const { return *panels_; }
     BinContainer& binContainer() const { return *binContainer_; }
@@ -121,6 +129,9 @@ public:
     EffectPalette& effectPalette() const { return *effectPalette_; }
     EffectEditor& effectEditor() const { return *effectEditor_; }
     AudioMixer& audioMixer() const { return *audioMixer_; }
+    // Whether a sequence's audio track is heard when it plays: monitored in the Track Selector
+    // panel (p.395), not muted in the Audio Mixer, and soloed whenever any track is (p.698).
+    bool isHeard(const QString& track) const;
     AudioTool& audioTool() const { return *audioTool_; }
     MediaTool& mediaTool() const { return *mediaTool_; }
     // File > Input > Source Browser (p.312-318).
@@ -163,7 +174,7 @@ public:
         binDeleteHook_ = std::move(hook);
     }
     void setManagedRelinkHook(std::function<bool(ManagedRelinkDialog&)> hook) { managedRelinkHook_ = std::move(hook); }
-    // Managed media (Phase 2.4, p.348-359). File > Input > Import Media:
+    // Managed media (Phase 2.4, p.349-359). File > Input > Import Media:
     // the files as new media in a bin (p.213), at the Media Creation
     // setting's import resolution unless `resolution` names another.
     // AAF files among the paths go to importAaf(). Returns the new items' ids.
@@ -268,6 +279,8 @@ private:
     void showAbout();
 
     // Pushes the active settings into every window; runs on each Settings::changed.
+    // Writes the lists adoptLegacyBinLists() was given into the Bin setting; true when it wrote one.
+    bool writeLegacyBinLists();
     void applySettings();
     void createTools();
     // Workspaces are User settings, one Workspace View each (p.86,
@@ -316,7 +329,8 @@ private:
     // Plays a scrub burst when the position moved while stopped (runs on Composer::changed).
     void scrubIfMoved();
 
-    // The audio of a loaded item; `monitored`, when set, picks the sequence tracks heard.
+    // The audio of a loaded item, through the Audio Mixer's Master fader; `monitored`, when set,
+    // picks the sequence tracks heard.
     std::vector<media::AudioPiece> soundOf(const model::LoadedClip& loaded,
                                            const std::function<bool(const QString&)>& monitored) const;
     // What a monitor shows at a position: a linked clip and its frame.
@@ -342,6 +356,8 @@ private:
     std::function<bool(MediaToolDisplayDialog&)> mediaToolDisplay_;
     // The Audio Mixer mode last taken from the settings, so the mixer is switched only when it changes.
     QString appliedMixerMode_;
+    QJsonValue legacyFavorites_;
+    QJsonValue legacyBinViews_;
     // When the project opened (Help > About, Usage).
     QDateTime projectOpened_;
 

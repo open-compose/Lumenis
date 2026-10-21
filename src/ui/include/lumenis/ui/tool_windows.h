@@ -2,6 +2,7 @@
 
 #include "lumenis/model/calculator.h"
 
+#include <QMutex>
 #include <QObject>
 #include <QStringList>
 #include <QDialog>
@@ -51,7 +52,8 @@ private:
 // messages and errors as they are logged.
 //
 // A process-wide singleton. Anything may append() to it (MainWindow logs relink, import and export
-// results here); every ConsoleWindow shows it.
+// results here); every ConsoleWindow shows it. append(), lines() and clear() may be called from any
+// thread (Qt's message handler runs on the thread that logged).
 class ConsoleLog : public QObject {
     Q_OBJECT
 
@@ -61,9 +63,9 @@ public:
     // Sends Qt's warnings and errors here too (and on to where they went).
     static void installMessageHandler();
 
-    // Every line kept, oldest first; at most the last 5000.
-    QStringList lines() const { return lines_; }
-    // Adds a line and emits lineAdded().
+    // Every line kept, oldest first; at most the last 5000. A copy, taken under the lock.
+    QStringList lines() const;
+    // Adds a line and emits lineAdded() on the calling thread.
     void append(const QString& line);
     // Empties the log (the system information too) and emits cleared().
     void clear();
@@ -71,7 +73,8 @@ public:
     static QStringList systemInfo();
 
 signals:
-    // After append(), with the line added.
+    // After append(), with the line added, on the thread that appended: connect with a receiver
+    // as context so it arrives on the receiver's thread.
     void lineAdded(const QString& line);
     // After clear().
     void cleared();
@@ -80,6 +83,7 @@ private:
     ConsoleLog();
     // Puts back the message handler from before installMessageHandler().
     ~ConsoleLog() override;
+    mutable QMutex mutex_; // guards lines_
     QStringList lines_;
 };
 
@@ -124,8 +128,8 @@ public:
     AboutInfoDialog(const QStringList& plugins, const ProjectUsage& usage, QWidget* parent = nullptr);
     // The top-level tabs: Configuration, Usage and Hardware.
     QTabWidget* tabs() const { return tabs_; }
-    // "Configuration", "Usage" or "Hardware".
-    // Compared with the tab's (translated) text; an unknown name changes nothing.
+    // "Configuration", "Usage" or "Hardware": stable keys, not translated (the tab's translated
+    // text is accepted too). An unknown name changes nothing.
     void showTab(const QString& name);
     // The Hardware tab's own tabs: Drives and System.
     QTabWidget* hardwareTabs() const { return hardware_; }
@@ -134,5 +138,9 @@ private:
     QTabWidget* tabs_ = nullptr;
     QTabWidget* hardware_ = nullptr;
 };
+
+// A drive's free space as "12.3 GB free", in decimal gigabytes (10^9 bytes), for every place that
+// shows one (Help > About's Drives, the Consolidate/Transcode drive lists).
+QString freeSpaceText(qint64 bytes);
 
 } // namespace lumenis::ui

@@ -80,7 +80,8 @@ private:
         Job job;
         Work work;
         std::shared_ptr<std::atomic<int>> permille = std::make_shared<std::atomic<int>>(0);
-        std::shared_ptr<std::atomic<bool>> stop = std::make_shared<std::atomic<bool>>(false);
+        std::shared_ptr<std::atomic<bool>> stop = std::make_shared<std::atomic<bool>>(false);    // asked to stop
+        std::shared_ptr<std::atomic<bool>> stopped = std::make_shared<std::atomic<bool>>(false); // the work was told
         std::shared_ptr<std::atomic<bool>> done = std::make_shared<std::atomic<bool>>(false);
         std::shared_ptr<media::ConsolidateResult> result = std::make_shared<media::ConsolidateResult>();
     };

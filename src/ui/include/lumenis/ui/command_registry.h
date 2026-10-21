@@ -36,10 +36,11 @@ public:
 
     // Loads declarations from a commands.json document. "%PRODUCT%" in text
     // is replaced by the product name. Returns false and sets *error on a
-    // malformed document or duplicate id.
+    // malformed document, a duplicate id or an id with '/' or '\' (which
+    // QSettings would read as a group in saveShortcuts()).
     // The document is {"commands": [{"id", "text", "shortcut", "shortcutMac", "role"}]}; shortcuts are in
-    // Qt's portable text ("Ctrl+Q"), and "shortcutMac" replaces "shortcut" on macOS. Commands read before an
-    // error stay registered. Each new action starts disabled.
+    // Qt's portable text ("Ctrl+Q"), and "shortcutMac" replaces "shortcut" on macOS. On an error nothing
+    // is registered. Each new action starts disabled.
     bool load(const QByteArray& json, QString* error = nullptr);
     // Loads the built-in declarations from the application's resources.
     // Exits with a fatal error if the built-in file is invalid.

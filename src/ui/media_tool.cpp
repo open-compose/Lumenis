@@ -98,6 +98,12 @@ MediaToolDisplayDialog::MediaToolDisplayDialog(const QString& currentProject,
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    // The tool loads only the drives selected (p.345), and an empty drive list means all drives,
+    // so OK waits until at least one is selected (unless there are none to choose from).
+    QPushButton* ok = buttons->button(QDialogButtonBox::Ok);
+    auto syncOk = [this, ok] { ok->setEnabled(drives_->count() == 0 || !drives_->selectedItems().isEmpty()); };
+    connect(drives_, &QListWidget::itemSelectionChanged, this, syncOk);
+    syncOk();
     auto* layout = new QVBoxLayout(this);
     layout->addLayout(grid);
     layout->addLayout(checks);
@@ -108,6 +114,7 @@ MediaToolDisplay MediaToolDisplayDialog::display() const {
     MediaToolDisplay d;
     if (drives_->selectedItems().size() != drives_->count()) {
         for (const QListWidgetItem* i : drives_->selectedItems()) d.drives << i->data(Qt::UserRole).toString();
+        for (int i = 0; i < drives_->count(); ++i) d.knownDrives << drives_->item(i)->data(Qt::UserRole).toString();
     }
     d.project = current_;
     d.allProjects = projects_->count() > 1 && projects_->selectedItems().size() == projects_->count();
@@ -159,15 +166,32 @@ QString driveName(const QString& path) {
     return volume.displayName().isEmpty() ? volume.rootPath() : volume.displayName();
 }
 
+// Whether `path` is inside `folder`.
+bool inside(const QString& path, const QString& folder) {
+    const QString file = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
+    QString root = QDir::cleanPath(QFileInfo(folder).absoluteFilePath());
+    if (!root.endsWith(QLatin1Char('/'))) root += QLatin1Char('/'); // "/" stays "/"
+    return file.startsWith(root);
+}
+
 // Whether `path` is inside the Avid MediaFiles folder of one of `drives` (roots); any path is when
 // `drives` is empty.
 bool onDrives(const QString& path, const QStringList& drives) {
     if (drives.isEmpty()) return true;
-    const QString file = QDir::cleanPath(QFileInfo(path).absoluteFilePath());
-    return std::any_of(drives.begin(), drives.end(), [&](const QString& d) {
-        return file.startsWith(QDir::cleanPath(QFileInfo(media::mediaFilesFolder(d)).absoluteFilePath()) +
-                               QLatin1Char('/'));
-    });
+    return std::any_of(drives.begin(), drives.end(),
+                       [&](const QString& d) { return inside(path, media::mediaFilesFolder(d)); });
+}
+
+// Whether a file linked in place lies on one of `drives` (roots), anywhere on it; any path is when
+// `drives` is empty. With nested roots (a volume mounted inside another), the deepest root that
+// holds the file is its drive.
+bool linkedOnDrives(const QString& path, const QStringList& drives, const QStringList& allDrives) {
+    if (drives.isEmpty()) return true;
+    QString best;
+    for (const QString& d : allDrives + drives) {
+        if (inside(path, d) && QDir::cleanPath(d).size() > QDir::cleanPath(best).size()) best = d;
+    }
+    return !best.isEmpty() && drives.contains(best);
 }
 
 } // namespace
@@ -199,7 +223,8 @@ void MediaTool::setItems(const QList<model::BinItem>& items, const MediaToolDisp
         return QString::fromStdString(
             Timecode(std::max<std::int64_t>(frames, 0), TimecodeFormat::forRate(rate, false)).toString());
     };
-    // Only managed clips are filtered by drive; linked clips are always shown when wanted.
+    // Managed clips are filtered by the drive of their Avid MediaFiles folder, clips linked in place
+    // by the drive their file is on.
     for (const model::BinItem& item : items) {
         // Master clips (p.345); no sequences or subclips.
         const bool master = item.kind == model::BinItemKind::MasterClip || item.kind == model::BinItemKind::AudioClip;
@@ -210,6 +235,7 @@ void MediaTool::setItems(const QList<model::BinItem>& items, const MediaToolDisp
         // A managed clip's files are its media; a linked clip's are not ours
         // to delete.
         QStringList media;
+        if (linked && !linkedOnDrives(link->path, display.drives, display.knownDrives)) continue;
         if (link && link->isManaged()) {
             if (!display.drives.isEmpty() && !onDrives(link->path, display.drives)) continue;
             if (link->videoStream >= 0) media << QStringLiteral("V1\n") + link->path;
@@ -279,7 +305,7 @@ bool MediaTool::deleteSelected() {
     QStringList paths;
     for (const QString& track : dialog.chosenTracks()) paths += byTrack.value(track);
     if (paths.isEmpty()) return false;
-    // "A dialog box opens, asking you to confirm the deletion" (p.348).
+    // "A dialog box opens, asking you to confirm the deletion" (p.349).
     bool confirmed = false;
     if (confirmHook) {
         confirmed = confirmHook(static_cast<int>(paths.size()));
@@ -306,7 +332,7 @@ DeleteMediaDialog::DeleteMediaDialog(const QStringList& tracks, QWidget* parent)
     setWindowTitle(tr("Delete Media"));
     auto* layout = new QVBoxLayout(this);
     layout->addWidget(new QLabel(tr("Delete these media files:"), this));
-    // The options of p.348, a box for each track the selection has.
+    // The options of p.349, a box for each track the selection has.
     for (const QString& t : tracks) {
         const QString text = t == QLatin1String("V1") ? tr("Video media file (V)") : tr("Audio media file (%1)").arg(t);
         auto* box = new QCheckBox(text, this);
