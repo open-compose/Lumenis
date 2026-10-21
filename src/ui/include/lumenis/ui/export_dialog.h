@@ -29,6 +29,9 @@ public:
     // The Export setting chosen, by its place in the list.
     int setting() const;
     void setSetting(int index);
+    // The file type Browse offers and keeps (p.869: the file name extension stays the format's):
+    // its extension without the dot ("aaf", the default; "avb") and its name in the save dialog.
+    void setFileType(const QString& suffix, const QString& filter);
 
     // The widgets, for tests.
     QLineEdit* pathEdit() const { return path_; }
@@ -40,13 +43,15 @@ signals:
     void optionsRequested(int setting);
 
 private:
-    // Browse: the system's save dialog, filtered to AAF files.
+    // Browse: the system's save dialog, filtered to the file type (setFileType).
     void browse();
 
     QLineEdit* path_ = nullptr;
     QComboBox* settings_ = nullptr;
     QPushButton* options_ = nullptr;
     QPushButton* save_ = nullptr;
+    QString suffix_ = QStringLiteral("aaf");
+    QString filter_ = QStringLiteral("AAF files (*.aaf)");
 };
 
 } // namespace lumenis::ui

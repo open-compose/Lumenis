@@ -696,6 +696,16 @@ void readMediaDescriptor(Reader& r, Props& p, const QString& cls) {
     if (cls == QLatin1String("MDES")) r.tag(0x03);
 }
 
+// TapeDescriptor (MDTP): the MDES part, then 02 02, s16 cframe (pyavb's name; meaning unknown).
+// The descriptor of a tape source mob.
+void readTapeDescriptor(Reader& r, Props& p, const QString& cls) {
+    readMediaDescriptor(r, p, cls);
+    r.tag(0x02);
+    r.tag(0x02);
+    set(p, QStringLiteral("cframe"), Value::integer(r.s16()));
+    r.tag(0x03);
+}
+
 // MediaFileDescriptor (MDFL): 02 03, edit rate, length, is OMFI, data offset.
 void readMediaFileDescriptor(Reader& r, Props& p, const QString& cls) {
     readMediaDescriptor(r, p, cls);
@@ -1244,6 +1254,7 @@ constexpr ClassEntry kClasses[] = {
     {"SPED", readMotionEffect},
     {"CMPO", readComposition},
     {"MDES", readMediaDescriptor},
+    {"MDTP", readTapeDescriptor},
     {"MDFL", readMediaFileDescriptor},
     {"PCMA", readPCMA},
     {"DIDD", readDIDD},

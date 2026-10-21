@@ -24,7 +24,8 @@ No Avid SDK or documentation of the format is used: Avid publishes none.
 | Import into bins: mobs to clips, sources and sequences | `src/interop/avb_import.*` | 3.3b, done |
 | File > Open Bin of a `.avb`, from the Editing Guide | `main_window.cpp` (`openBinFile`) | 3.3b, done |
 | Writing objects: the header, the table, every class read | `src/interop/avb_writer.*` | 3.4a, done |
-| Native bins written as `.avb` | | 3.4b, next |
+| Native bins written as `.avb` | `src/interop/avb_export.*` | 3.4b, done |
+| File > Output > Export to File as a Media Composer bin (ours) | `main_window.cpp` (`exportToFile`), `export_dialog.*` | 3.4b, done |
 
 ## The container (3.3a)
 
@@ -115,16 +116,20 @@ file's order and Data4 (8 bytes); in a MobID it is tagged 72, 70, 70,
 | `FXPS` effect parameters | | `12`: s32 original length, window offset, count, key frame size; each key frame's fixed parameters (crop, scale, box, borders, spill, colours, user bytes) |
 | `PRIT` parameter | | `02`: UUID, s16 value type and the value (1 s32, 2 double, 4 ref), name, enabled, ref control track. Ext 01: 66 contributes to signature |
 | `PRLS` parameter list | | `01`: s32 count, references |
+| `MDTP` tape descriptor | MDES | `02`: s16 cframe (pyavb's name; meaning unknown) |
 | `MCBR` bin reference | | `01`: s32 bin ID high, low, name. Ext 01: 76 the name in UTF-8 |
 | `ATTR` attributes | | `01`: u32 count; each u32 type, name, value (1 s32, 2 string, 3 ref, 4 u32 size and bytes). A name met twice keeps its first place and its last value |
 | `BVst` bin view | | `06`: name, kind, s16 attribute count and type, ref attributes; then `0a`: u16 count, columns (title, s16 format, s16 type, hidden). Ext 01: 69 count, each 69 column ID, 71 size, 76, 4 bytes, the UTF-8 format descriptor |
 | `ABIN` bin | | `0e` (u16 item count) or `0f` (u32, a large bin): ref view setting, u64 ID, items (ref mob, s16 x, s16 y, s32 key frame, user placed), s32 display mask, s16 display mode, sifted and six sift settings (s16 method, string, column), s16 count of sort columns (u8 direction, column), s16 font, size, image scale, rect (s16 1, four s16), two colours (s16 1, three u16), s16 QuickLook scale, ref attributes, was iconic |
 
 Classes pyavb reads that the corpus does not hold (markers `TMBC`, audio
-suite `ASPI`, equalizer `EQMB`, selectors `SLCT`, tape and film descriptors,
+suite `ASPI`, equalizer `EQMB`, selectors `SLCT`, film descriptors,
 MPEG and JPEG descriptors, trackers, positions, `BINF`...) are not read yet:
 their objects come back with the error "class not read", until bins that hold
-them can check a port.
+them can check a port. The tape descriptor (`MDTP`) is the exception: the
+export writes tape sources with it (3.4b), so it is read and written, and
+pyavb reads the bins that hold it as Cutthulhu does (ctest
+`avb_write_pyavb`).
 
 ## Import (3.3b)
 
@@ -161,8 +166,10 @@ reference clip, shown with Set Bin Display's *Show reference clips*
   sequences and the tracks of track groups such as essence groups) names a
   file source mob: one whose descriptor is a media file descriptor (MDFL
   and its subclasses: CDCI, RGBA, PCMA, ...). Its locator is a media
-  locator (MSML) for managed media, which names its file by MobID: a File
-  source with no path. The file mob's track (by the clip's `track_id` and
+  locator (MSML) for managed media, which names its file by MobID; the
+  descriptor's physical media (an MDES) may give its last known path with
+  a file locator ("Avid MediaFiles/MXF/1/....mxf", as in test_file_01.avb),
+  which is then the File source's path, else it has none. The file mob's track (by the clip's `track_id` and
   media kind) names the mob before it: a Tape source (descriptor MDTP; also
   the Tape column) or an Import source (a plain MDES, the file a clip was
   imported or linked from, with its file locator's path: UTF-8, else POSIX,
@@ -236,8 +243,9 @@ and the bin's custom columns.
 
 File > Open Bin opens "a bin from another project" (Editing Guide p.296:
 "Bins have the file name extension .avb"; it "appears in the Bins list in a
-folder called Other Bins"). Writing `.avb` is 3.4, so an `.avb` is read
-once into a bin of ours, `<project>/Other Bins/<key>/<name>.cthbin` (the key
+folder called Other Bins"). Cutthulhu's bins are its own files, and the
+import does not read all a Media Composer bin holds, so an `.avb` is read
+once into a bin of ours (not written back: "Export" below), `<project>/Other Bins/<key>/<name>.cthbin` (the key
 is made from the `.avb`'s path, so that bins of the same name from
 different projects do not meet), and that bin is listed under Other Bins and
 opened (`MainWindow::openBinFile`). Master clips whose MobID the media
@@ -343,14 +351,168 @@ after that normalisation; none is needed yet.
 
 ### For 3.4b
 
-Native bins out as `.avb` will build the objects the import reads
-(native-model.md and "Import" above, in reverse): a master mob per clip
-with its tracks' source clips, the file and tape source mobs with their
-descriptors and locators (MSML for managed media), sequences as SEQU and
-track groups, the user columns in ATTR, a BVst view and the ABIN. The
-builder needs only the properties that matter; the rest default to zero.
-Names must be Mac OS Roman, so 3.4b decides what to write for others
-(Media Composer's UTF-8 extensions where a class has one).
+The export ("Export", below) builds the objects the import reads with this
+builder.
+
+## Export (3.4b)
+
+`avb::exportBin` (`src/interop/avb_export.h`) writes a bin of the native
+model as a Media Composer bin; `cutthulhu --export-avb <bin.cthbin | bin.avb>
+OUT.avb` runs it. An `.avb` is imported first: a round trip. A `.cthbin`
+finds the clips its sequences use in the other bins of its folder (the
+project's). The export is the import's inverse, laid out as Media
+Composer's own bins are (the corpus) and as the AAF export lays out the
+same mobs (aaf.md, "Export"): what the import reads, the export writes, and
+reading the result back gives the same bin.
+
+### What maps
+
+* **The bin** (ABIN, the root, last in the table): its mobs as items, the
+  user's items with `user_placed` set, then the reference clips and the
+  source mobs without it; positions -30000, -30000 as in every bin seen.
+  The display values every corpus bin has (font 139 size 11, image scales,
+  home rectangle, foreground colour, display mask 98999, six empty sift
+  settings); the background colour is the bin's (p.263, as 16-bit
+  channels). Its ID is made from the export time and the bin's name. The
+  header names the creator ("Cutthulhu 0.x") and the time of the export.
+* **The bin view** (BVst): Media Composer's columns as the corpus lists
+  them (title, format and column type; the media resolutions' columns,
+  whose types differ from bin to bin, are left out). The icon, colour and
+  Name columns, then the bin's Text view headings, in their order, are
+  shown; the rest are hidden. Headings are matched without regard to case
+  (our "Plug-In" is its "Plug-in"). The view's name is the bin's
+  (Untitled when it has none).
+* **Master and audio clips**: a master mob (CMPO, mob type 2) with a track
+  for each of its Tracks (labelled by number, with the filler proxy Media
+  Composer gives every track), each a source clip naming the track of the
+  same number of its file source mob. File source mobs (mob type 3), one
+  for each file source MobID, with the tracks it carries: a CDCI
+  descriptor for picture (8-bit 4:2:2, the size from the Format column, as
+  the AAF export), PCMA for sound (one channel, 24-bit, 48 kHz). Managed
+  media (a path in `Avid MediaFiles/MXF/`, or none) is named by MobID with
+  an MSML locator, its path kept as the physical media's file locator, as
+  Media Composer's bins have it; a linked file has a file locator (FILE:
+  the path, its POSIX form, and UTF-8, which the import reads first). Each
+  file's tracks name the source before it (`from`): a tape source mob (an
+  MDTP descriptor, mob kind 2 as in pyavb's test_create.py) or an import
+  source mob (MDES, mob kind 5 as in the corpus, with the file's locator).
+  Its tracks end the chain (a source clip with no MobID), and its timecode
+  track (TCCP) gives the clip its Start. A clip with a Start or a Tape
+  column but no tape or import source gets one made up (a tape named for
+  the Tape column, else an import source named for the clip), so that they
+  travel.
+* **Source timecode.** The model keeps a tape's or import's start as text
+  (`ClipSource::startTimecode`), without its frames per second. The TCCP's
+  rate is the first (drop frame: 30, 60; else the clip's, 24, 25, 30, 50,
+  60) at which the text reads as a timecode that gives the clip's Start as
+  the import reckons it (`startAtRate`); without one, the clip's Start at
+  its own rate, with a warning. So 00:00:30;00 behind a 24 fps clip is
+  written at 30 fps drop frame, as Media Composer wrote it.
+* **Subclips**: a composition mob used as a subclip (usage code 2), each
+  track naming its master's track of the same number from the subclip's
+  offset (its Clip source).
+* **Sequences**: a composition mob (usage code 0) with a timecode track
+  (TC1: its Start at the edit rate's nominal frames per second, drop frame
+  as the Start is written) and a track for each video and audio track,
+  labelled by number, each a SEQU between the zero-length fillers Media
+  Composer puts at each end. Segments are source clips (the clip's MobID,
+  its track by kind and number, the IN point) or filler. A transition goes
+  back over its cut, as for AAF: the segment before is lengthened by the
+  frames after the cut, the one after by the frames before it and starts
+  that much earlier, and a TNFX of the transition's length, its cut point
+  the frames before the cut, lies between them. A segment's effect is a
+  track effect (TKFX) around its clip, or a motion effect (SPED, at speed
+  1:1) for Media Composer's time warps (`EFF_TIMEWARP...`). The Export
+  setting's Include options leave video or audio tracks out.
+* **Effects** by effect ID: Blend/Dissolve is `EFF2_BLEND_DISSOLVE` on
+  video and `BLEND_AUDIO_DISSOLVE` on audio; effects the import kept by
+  their Media Composer effect IDs (category "AVB") get them back, so the
+  corpus's effects round-trip.
+* **Reference clips.** Clips the bin's sequences use that are not in it,
+  and subclips' masters, are found through `ExportOptions::resolve` (the
+  project's other bins) and written as reference clips (not user placed,
+  p.288), as Media Composer's bins hold the clips their sequences use.
+  Without them the segments name the clips by MobID and are offline where
+  the bin is read (a warning with the count).
+* **Columns**: the clips' `_USER` attributes hold the custom columns and
+  the standard headings that can be typed into (p.274-278: Comments, Take,
+  ...), as text. Start, End, Tracks and Tape travel in the bin's
+  structure.
+* **Names, MobIDs and dates.** Every mob keeps the item's MobID (or the one
+  derived from its id, native-model.md), name, Created (`creation_time`)
+  and Modified (`last_modified`), to the second. Source MobIDs the model
+  lacks are derived from the item's id, so they are the same on every
+  export.
+* **Text Mac OS Roman cannot hold.** Mob and component names, attribute
+  names and values, and view names are Mac OS Roman, and their classes
+  have no UTF-8 form (pyavb reads none). Characters Mac OS Roman cannot
+  hold (and UTF-16 surrogate pairs) are written as `?`, with one warning.
+  File paths keep every character: the file locator's UTF-8 path is
+  written too.
+
+### What does not map (left out, a warning for each kind)
+
+Items that are not clips, subclips or sequences (groups, effects, titles,
+...); clip colours (the `_COLOR_*` attributes are not confirmed, see
+"Import"); Lock Bin Selection; markers (`TMBC` is not read yet); the
+Script view's text; standard columns Media Composer works out from the
+media (Video, Format, FPS, ...: one warning listing them); a Tape column on
+a clip imported from a file; data tracks; stereo and surround audio tracks
+(written as mono tracks); clip gain and pan (PVOL's values are not read);
+effects and transitions with no Media Composer effect ID (the Effect
+Palette's until Phase 6, AAF's); effect parameters; motion effects' speeds
+(the model keeps none); transitions at the start of a track; add edits in
+filler (the import joins filler); the bin's sort, sift, Frame view
+positions, and the Frame or Script view (written as the Text view).
+
+### In the application
+
+The Editing Guide gives no command that writes a bin for another system:
+Media Composer's bins are `.avb` files already, copied or opened from
+another project (File > Open Bin, p.296), and File > Output > Export Bin
+writes shot logs (p.130). So the entry point is ours, the smallest that
+fits: File > Output > Export to File (p.868-869) with the Export setting's
+Export As at **Media Composer Bin**, a choice added to the guide's list
+(p.1173). The selection is written as a bin named for the file, with the
+source bin's view and custom columns; the clips its sequences use and the
+subclips' masters that are not selected go in as reference clips. The file
+name ends in `.avb` (p.869: the extension stays the format's). Warnings go
+to the Console. Writing an opened `.avb` back to its own file was not
+chosen: the import does not read everything a Media Composer bin holds
+(effect parameters, clip gain, markers...), so writing over it would lose
+them.
+
+### Checks
+
+* ctest `avb_export_round_trip` (`interop-corpus.py check-avb-export`):
+  each corpus bin with a reference dump, read (`--import-avb`), written
+  (`--export-avb`) and read again, is the same bin (`structdiff.py --fields
+  --sources`: items, columns, standard fields, source chains, sequences,
+  effect and transition names). Needs only the corpus. All 13 are the
+  same.
+* ctest `avb_export_pyavb` (`interop-corpus.py check-avb-export-pyavb`,
+  skipped without pyavb or the corpus): pyavb opens each bin written,
+  reads every object as Cutthulhu does (`avb-dump.py --compare`), and the
+  bin it reads (`avb-structure.py`) is the one exported, as Cutthulhu read
+  it from the corpus (`structdiff.py --no-effects`, because
+  avb-structure.py does not name effects; the round trip above checks
+  them). All 13 pass.
+* ctest `avb_write_pyavb` also writes tst_avb's exported bin (below) in
+  both byte orders: pyavb reads it as Cutthulhu does and as the bin
+  Cutthulhu reads back, with the tape descriptor and subclip the corpus has
+  none of.
+* tst_avb: `exportsBin` (a bin in the application's terms: a linked clip, a
+  managed clip from a tape, a subclip, a sequence with filler, a centred
+  dissolve, an effect and a clip from another bin; in both byte orders:
+  only the expected warning, every object read in full and written back to
+  the same bytes, and the import gives the same structure, dates,
+  user-placed flags and source chains with their paths) and `exportsNames`
+  (text Mac OS Roman cannot hold, and what has no place in a bin, with
+  their warnings).
+* tst_managed_media (`exportAsMediaComposerBin`): media imported, cut into
+  a sequence, the sequence exported through the dialog as a bin, and that
+  file opened with File > Open Bin: the clip is a reference clip, online by
+  MobID, and the sequence names it.
 
 ## Dumps
 

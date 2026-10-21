@@ -210,8 +210,11 @@ and lists a native copy under Other Bins (`MainWindow::openBinFile`). 3.4,
 `.avb` bin write, has started: 3.4a, the object writer (`avb_writer.*`,
 `avb::Builder`, ported from pyavb's write()), is done; every corpus bin
 rewrites byte for byte (`--rewrite-avb`, ctest `avb_round_trip`) and pyavb
-reads what we build (ctest `avb_write_pyavb`). Next is 3.4b, native bins
-out as `.avb`.
+reads what we build (ctest `avb_write_pyavb`). 3.4b, native bins out as
+`.avb` (`avb_export.*`, `--export-avb`, File > Output > Export to File's
+"Media Composer Bin"), is done; ctests `avb_export_round_trip` and
+`avb_export_pyavb`. Gate 2 (Media Composer opens our bins) waits for the
+owner's seat. Next is 3.5, `.avp` projects and `.avs` settings.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

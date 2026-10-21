@@ -310,15 +310,19 @@ private:
     }
 
     // Where a file is: a file locator's path (UTF-8, else POSIX, else as stored). A media locator
-    // (MSML, managed media) names its file by MobID and gives no path.
-    QString locatorPath(const Object* descriptor) {
-        const Object* l = descriptor ? deref(descriptor->property(QStringLiteral("locator"))) : nullptr;
-        if (!is(l, "FILE") && !is(l, "WINF")) return {};
-        for (const char* name : {"path_utf8", "path_posix", "path"}) {
-            const QString path = l->property(QLatin1String(name)).toString();
-            if (!path.isEmpty()) return path;
+    // (MSML, managed media) names its file by MobID; where the descriptor's physical media (an MDES)
+    // has a file locator, that is the file's last known path (Media Composer's own bins give one for
+    // some managed files: "Avid MediaFiles/MXF/2/<name>.mxf").
+    QString locatorPath(const Object* descriptor, int depth = 0) {
+        if (!descriptor || depth > 2) return {};
+        const Object* l = deref(descriptor->property(QStringLiteral("locator")));
+        if (is(l, "FILE") || is(l, "WINF")) {
+            for (const char* name : {"path_utf8", "path_posix", "path"}) {
+                const QString path = l->property(QLatin1String(name)).toString();
+                if (!path.isEmpty()) return path;
+            }
         }
-        return {};
+        return locatorPath(deref(descriptor->property(QStringLiteral("physical_media"))), depth + 1);
     }
 
     // What every item takes from its mob: a new item ID, the MobID, Name, Created and Modified (`when`,

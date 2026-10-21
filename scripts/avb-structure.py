@@ -23,6 +23,14 @@ import os
 import sys
 
 
+# The standard bin headings that can be typed into (Editing Guide p.274-278,
+# "Modifiable after capture with no restrictions"; model::isEditableHeading):
+# the ones a bin's _USER attributes carry besides custom columns.
+EDITABLE_HEADINGS = {"Name", "Comments", "Journalist", "Production", "Shoot date", "Start", "Take", "TapeID",
+                     "Frame Count Start", "TC 24", "TC 25", "TC 25PD", "TC 30", "TC 30NP", "TC 60"} | \
+                    {f"Auxiliary TC{i}" for i in range(1, 6)}
+
+
 def rate_text(rate):
     """NTSC rates as their exact fractions (23.976 is 24000/1001)."""
     r = float(rate)
@@ -125,14 +133,20 @@ class Dumper:
         first = pics[0] if pics else (tracks[0] if tracks else None)
         rate = mob.edit_rate
         out = {"kind": kind, "name": mob.name, "mobId": str(mob.mob_id), "editRate": rate_text(rate)}
-        # The bin's columns (_USER); empty ones do not travel in AAF.
+        # The bin's columns (_USER); empty ones do not travel in AAF. Standard
+        # headings that can be typed into (Comments, Take, ...) are fields, as
+        # Cutthulhu's dumps have them; the others are custom columns.
         user = mob.attributes.get("_USER") if hasattr(mob.attributes, "get") else None
-        columns = {k: str(v) for k, v in (user.items() if user is not None else []) if str(v)}
+        values = {k: str(v) for k, v in (user.items() if user is not None else []) if str(v)}
+        columns = {k: v for k, v in values.items() if k not in EDITABLE_HEADINGS}
+        fields = {k: v for k, v in values.items() if k in EDITABLE_HEADINGS}
         if columns:
             out["columns"] = columns
             for k in columns:
                 if k not in self.custom:
                     self.custom.append(k)
+        if fields:
+            out["fields"] = fields
         if kind == "sequence":
             out.update(self.sequence(mob, rate))
         else:
@@ -258,6 +272,9 @@ def main():
                     items.append(d.item(m, "masterClip" if any(t.media_kind == "picture" for t in d.tracks(m)) or not d.tracks(m) else "audioClip"))
                 elif m.mob_type == "CompositionMob" and usage in (None, 0):
                     items.append(d.item(m, "sequence"))
+                elif m.mob_type == "CompositionMob" and usage == 2:
+                    # A subclip (usage code 2): its Start is its master's, moved by its offset.
+                    items.append(d.item(m, "subclip"))
             bins.append({"name": os.path.splitext(os.path.basename(path))[0], "customColumns": sorted(d.custom),
                          "items": items})
     json.dump({"format": "cutthulhu-structure", "version": 1, "bins": bins}, sys.stdout, indent=1)

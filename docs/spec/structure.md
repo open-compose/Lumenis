@@ -63,7 +63,7 @@ with Cutthulhu's.
   edited in, its track, IN point and length. Effects are named
   "Category/Name".
 * `sources` is the clip's source chain (native-model.md). It is informative:
-  structdiff does not compare it.
+  structdiff compares it only with `--sources`.
 
 ## What structdiff compares
 
@@ -78,7 +78,8 @@ with Cutthulhu's.
   name, for comparing with a reader that does not keep MobIDs.
   `--no-effects` leaves effect and transition names out, and joins filler
   that only an effect kept apart, for a reader that names effects
-  otherwise.
+  otherwise. `--sources` also compares each item's source chain, for round
+  trips through Cutthulhu's own reader (ctest `avb_export_round_trip`).
 
 ## Reference dumps
 

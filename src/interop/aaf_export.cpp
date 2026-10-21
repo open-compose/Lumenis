@@ -1,11 +1,12 @@
 #include "lumenis/interop/aaf_export.h"
 
+#include "import_common.h"
+
 #include "lumenis/core/branding.h"
 #include "lumenis/core/timecode.h"
 #include "lumenis/interop/aaf_writer.h"
 #include "lumenis/model/sequence.h"
 
-#include <QRegularExpression>
 #include <QTimeZone>
 #include <QUrl>
 
@@ -54,14 +55,9 @@ QVariantMap timestamp(const QDateTime& when) {
                          {QStringLiteral("fraction"), 0}}}};
 }
 
-// A timecode column ("01:00:00:00", ";" for drop frame) as frames at the rate.
+// A timecode column ("01:00:00:00", ";" for drop frame) as frames at the rate (import_common.h).
 std::optional<std::int64_t> frames(const QString& text, const Rational& rate, bool* drop) {
-    if (text.isEmpty()) return std::nullopt;
-    *drop = text.contains(QLatin1Char(';'));
-    TimecodeFormat format = TimecodeFormat::forRate(rate, *drop);
-    if (!format.isValid()) format = TimecodeFormat::forRate(rate, *drop = false);
-    const auto tc = Timecode::parse(text.toStdString(), format);
-    return tc ? std::optional<std::int64_t>(tc->frameCount()) : std::nullopt;
+    return detail::timecodeFrames(text, rate, drop);
 }
 
 // Builds one file. run() writes master and audio clips first, then subclips, then sequences, so that each
@@ -240,10 +236,9 @@ private:
     // The picture size comes from the Format column's height ("1080i", "720p"), 1080 when there is none;
     // 16:9 from 720 lines up, else 720 wide and 4:3. The other values describe 8-bit 4:2:2 full frames.
     Ref pictureDescriptor(const model::BinItem& item, std::int64_t length) {
-        const QString format = item.fields.value(QStringLiteral("Format"));
-        int height = format.section(QRegularExpression(QStringLiteral("[ip]")), 0, 0).toInt();
-        if (height <= 0) height = 1080;
-        const int width = height >= 1080 ? height * 16 / 9 : height >= 720 ? 1280 : 720;
+        const detail::PictureSize size = detail::pictureSizeOf(item.fields.value(QStringLiteral("Format")));
+        const int height = size.height;
+        const int width = size.width;
         const Ref d = b_.create(QStringLiteral("CDCIDescriptor"));
         b_.set(d, QStringLiteral("SampleRate"), rational(item.editRate));
         b_.set(d, QStringLiteral("Length"), static_cast<qint64>(length));
@@ -251,7 +246,7 @@ private:
         b_.set(d, QStringLiteral("StoredWidth"), width);
         b_.set(d, QStringLiteral("FrameLayout"), QStringLiteral("FullFrame"));
         b_.set(d, QStringLiteral("VideoLineMap"), QVariantList{0, 0});
-        b_.set(d, QStringLiteral("ImageAspectRatio"), rational(height >= 720 ? Rational(16, 9) : Rational(4, 3)));
+        b_.set(d, QStringLiteral("ImageAspectRatio"), rational(size.wide ? Rational(16, 9) : Rational(4, 3)));
         b_.set(d, QStringLiteral("ComponentWidth"), 8);
         b_.set(d, QStringLiteral("HorizontalSubsampling"), 2);
         return d;

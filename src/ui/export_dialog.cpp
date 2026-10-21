@@ -12,7 +12,8 @@
 
 // The Export As dialog of File > Output > Export to File (ExportAsDialog in export_dialog.h). It only
 // collects a file name and an Export setting; MainWindow (main_window.cpp) builds the list of Export
-// settings, runs the dialog and writes the file through the AAF exporter (src/interop/aaf_export.*).
+// settings, runs the dialog and writes the file through the AAF exporter (src/interop/aaf_export.*) or,
+// for the Export As choice Media Composer Bin, the bin exporter (src/interop/avb_export.*).
 
 namespace lumenis::ui {
 
@@ -70,13 +71,18 @@ void ExportAsDialog::setSetting(int index) {
     settings_->setCurrentIndex(index);
 }
 
-// Browse: picks a file with the system's save dialog and makes sure it ends in .aaf.
+void ExportAsDialog::setFileType(const QString& suffix, const QString& filter) {
+    suffix_ = suffix;
+    filter_ = filter;
+}
+
+// Browse: picks a file with the system's save dialog and makes sure it ends in the type's extension.
 void ExportAsDialog::browse() {
-    const QString chosen = QFileDialog::getSaveFileName(this, tr("Export As"), path(), tr("AAF files (*.aaf)"));
+    const QString chosen = QFileDialog::getSaveFileName(this, tr("Export As"), path(), filter_);
     if (chosen.isEmpty()) return;
     // The file name extension stays the format's (p.869).
-    setPath(QFileInfo(chosen).suffix().compare(QLatin1String("aaf"), Qt::CaseInsensitive) == 0 ? chosen
-                                                                                               : chosen + QLatin1String(".aaf"));
+    setPath(QFileInfo(chosen).suffix().compare(suffix_, Qt::CaseInsensitive) == 0 ? chosen
+                                                                                  : chosen + QLatin1Char('.') + suffix_);
 }
 
 } // namespace lumenis::ui

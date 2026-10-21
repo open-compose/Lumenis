@@ -786,6 +786,14 @@ void writeMediaDescriptor(In& in, const QString& cls) {
     if (cls == QLatin1String("MDES")) o.tag(0x03);
 }
 
+// TapeDescriptor (MDTP): the MDES part, then 02 02, s16 cframe.
+void writeTapeDescriptor(In& in, const QString& cls) {
+    writeMediaDescriptor(in, cls);
+    part(in.o, 0x02);
+    in.s16("cframe");
+    in.o.tag(0x03);
+}
+
 // MediaFileDescriptor (MDFL): 02 03, edit rate, length, is OMFI, data offset.
 void writeMediaFileDescriptor(In& in, const QString& cls) {
     writeMediaDescriptor(in, cls);
@@ -1344,6 +1352,7 @@ constexpr ClassEntry kClasses[] = {
     {"SPED", writeMotionEffect},
     {"CMPO", writeComposition},
     {"MDES", writeMediaDescriptor},
+    {"MDTP", writeTapeDescriptor},
     {"MDFL", writeMediaFileDescriptor},
     {"PCMA", writePCMA},
     {"DIDD", writeDIDD},

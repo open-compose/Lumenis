@@ -2090,12 +2090,18 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
   with Browse, the Export Setting menu and Options; the guide's is the
   system save dialog with those controls. The setting chosen becomes the
   active Export setting. The folder last used is offered next time.
+* The file name's extension is the format's (p.869): `.aaf`, or `.avb`
+  for Media Composer Bin, also when the setting is changed in the dialog.
 * Later: exporting from a monitor (p.869 step 2), drag-and-drop export
-  (p.869), and every format but AAF.
+  (p.869), and every format but AAF and Media Composer Bin.
 
 ### Export setting (p.1173-1177)
 * Export As (p.1173-1174): every format the guide lists; only AAF works
-  (others are shown dimmed).
+  (others are shown dimmed). **Ours, not in the guide:** a last choice,
+  Media Composer Bin, writes the selection as a `.avb` bin (docs/spec/avb.md,
+  "Export"): the guide has no command that writes a bin for another system,
+  Media Composer's bins being `.avb` files already (p.296), and File >
+  Output > Export Bin writes shot logs (p.130).
 * Use Marks, Use Selected Tracks (p.1174-1175) and AAF Edit Protocol
   (p.1175): shown dimmed, for later.
 * Include All Video/Data Tracks in Sequence and Include All Audio Tracks in

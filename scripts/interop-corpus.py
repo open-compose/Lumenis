@@ -52,11 +52,26 @@ committed here: `fetch` downloads them into a cache folder.
         Exits 77 without the corpus.
     interop-corpus.py check-avb-write --test build/ci/bin/tst_avb [--dir DIR]
         Run tst_avb's forPyavb, which writes a bin built from scratch by
-        Cutthulhu's writer (little- and big-endian) and every corpus bin
-        rewritten big-endian, and read them with pyavb: the bin from scratch
-        must dump as Cutthulhu reads it and hold its clip, the big-endian
-        bins as pyavb reads the originals. Exits 77 without pyavb or the
+        Cutthulhu's writer (little- and big-endian), a bin exported from the
+        model (avb_export, both orders) and every corpus bin rewritten
+        big-endian, and read them with pyavb: the bin from scratch must dump
+        as Cutthulhu reads it and hold its clip, the exported bin dump the
+        same and read (avb-structure.py) as Cutthulhu reads it back, the
+        big-endian bins as pyavb reads the originals. Exits 77 without pyavb or the
         corpus.
+    interop-corpus.py check-avb-export --app build/ci/bin/cutthulhu [--dir DIR]
+        Read each Media Composer bin that has a reference dump
+        (`cutthulhu --import-avb`), write what it reads as a bin
+        (`cutthulhu --export-avb`) and read that again: the two readings must
+        be the same (structdiff.py --fields --sources, effects included).
+        Exits 77 without the corpus.
+    interop-corpus.py check-avb-export-pyavb --app build/ci/bin/cutthulhu [--dir DIR]
+        Write the same bins (`cutthulhu --export-avb`) and read them with
+        pyavb: it must read every object as Cutthulhu reads it
+        (avb-dump.py --compare), and the bin it reads
+        (scripts/avb-structure.py) must be the one exported, as Cutthulhu
+        read it from the corpus (structdiff.py --no-effects: avb-structure.py
+        does not name effects). Exits 77 without pyavb or the corpus.
     interop-corpus.py check-written --test build/ci/bin/tst_cfb [--dir DIR]
         Run tst_cfb's forOlefile, which writes compound files with
         Cutthulhu's writer, and read them back with olefile. Exits 77 without
@@ -448,6 +463,33 @@ def check_avb_write(test, folder):
                 if clip.attributes["_USER"]["Comments"] != "made from scratch":
                     problems.append(f"{name}: the clip's user columns are not read")
                 print(f"{name}: pyavb reads {len(list(f.content.mobs))} mobs as written")
+        # Bins exported from the model (tst_avb's exportsBin): pyavb reads every
+        # object as Cutthulhu does, and the bin (avb-structure.py) as Cutthulhu
+        # reads it back (structdiff.py --no-effects: avb-structure.py does not
+        # name effects).
+        structdiff = os.path.join(ROOT, "scripts", "structdiff.py")
+        structure = os.path.join(ROOT, "scripts", "avb-structure.py")
+        for name, ours in expected.get("exported", {}).items():
+            path = os.path.join(out, name)
+            try:
+                theirs = avb_dump.dump(path)
+            except Exception as e:  # pyavb's assertions and errors
+                problems.append(f"{name}: pyavb cannot read it: {e!r}")
+                continue
+            found = avb_dump.differences(theirs, json.loads(ours["dump"]))
+            problems += [f"{name}: {line}" for line in found]
+            mine = os.path.join(out, name + ".structure.json")
+            with open(mine, "w", encoding="utf-8") as f:
+                json.dump(ours["structure"], f)
+            run = subprocess.run([sys.executable, structure, path], capture_output=True, text=True)
+            pyavbs = os.path.join(out, name + ".pyavb.json")
+            with open(pyavbs, "w", encoding="utf-8") as f:
+                f.write(run.stdout)
+            diff = subprocess.run([sys.executable, structdiff, pyavbs, mine, "--no-effects"], capture_output=True, text=True)
+            if run.returncode != 0 or diff.returncode != 0:
+                problems.append(f"{name}: pyavb reads another bin: " + (diff.stdout.strip() or run.stderr.strip()))
+            elif not found:
+                print(f"{name}: pyavb reads the exported bin as Cutthulhu does")
         # The corpus written big-endian reads in pyavb as the originals do.
         for name, original in expected["big_endian"].items():
             try:
@@ -462,6 +504,109 @@ def check_avb_write(test, folder):
     for line in problems:
         print(line)
     return 1 if problems else 0
+
+
+def export_bins(app, folder, tmp):
+    """Each corpus bin of a pair, read (--import-avb, the first reading) and written as a bin
+    (--export-avb), under the same file name so that the bins have the same name. Yields (name,
+    first reading, exported file), or (name, None, error) when Cutthulhu fails."""
+    for avb, _ in PAIRS:
+        path = os.path.join(folder, avb)
+        if not os.path.exists(path):
+            continue
+        stem = os.path.splitext(os.path.basename(avb))[0]
+        out_dir = os.path.join(tmp, stem)
+        os.makedirs(out_dir)
+        first = os.path.join(out_dir, "import0.json")
+        exported = os.path.join(out_dir, os.path.basename(avb))
+        imp = subprocess.run([app, "--import-avb", path], capture_output=True, text=True)
+        run = subprocess.run([app, "--export-avb", path, exported], capture_output=True, text=True)
+        if imp.returncode != 0 or run.returncode != 0:
+            yield avb, None, (imp.stderr + run.stderr).strip()
+            continue
+        with open(first, "w", encoding="utf-8") as f:
+            f.write(imp.stdout)
+        yield avb, first, exported
+
+
+def check_avb_export(app, folder):
+    structdiff = os.path.join(ROOT, "scripts", "structdiff.py")
+    failed = 0
+    checked = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, first, exported in export_bins(app, folder, tmp):
+            checked += 1
+            if first is None:
+                print(f"{name}: cutthulhu failed: {exported}")
+                failed += 1
+                continue
+            imp = subprocess.run([app, "--import-avb", exported], capture_output=True, text=True)
+            second = os.path.join(os.path.dirname(first), "import1.json")
+            with open(second, "w", encoding="utf-8") as f:
+                f.write(imp.stdout)
+            diff = subprocess.run([sys.executable, structdiff, first, second, "--fields", "--sources"],
+                                  capture_output=True, text=True)
+            if imp.returncode != 0 or diff.returncode != 0:
+                failed += 1
+                print(f"{name}: the bin written reads back differently")
+                print("  " + (diff.stdout.strip() or imp.stderr.strip()).replace("\n", "\n  "))
+            else:
+                print(f"{name}: the bin written reads back the same")
+    if not checked:
+        print(f"interop-corpus: no corpus in {folder} (interop-corpus.py fetch)", file=sys.stderr)
+        return 77
+    return 1 if failed else 0
+
+
+def check_avb_export_pyavb(app, folder):
+    try:
+        import avb
+    except ImportError:
+        print("interop-corpus: pyavb is not installed (pip install pyavb)", file=sys.stderr)
+        return 77
+    structdiff = os.path.join(ROOT, "scripts", "structdiff.py")
+    structure = os.path.join(ROOT, "scripts", "avb-structure.py")
+    dump = os.path.join(ROOT, "scripts", "avb-dump.py")
+    failed = 0
+    checked = 0
+    with tempfile.TemporaryDirectory() as tmp:
+        for name, first, exported in export_bins(app, folder, tmp):
+            checked += 1
+            if first is None:
+                print(f"{name}: cutthulhu failed: {exported}")
+                failed += 1
+                continue
+            problems = []
+            try:
+                with avb.open(exported) as f:
+                    mobs = len(list(f.content.mobs))
+            except Exception as e:  # pyavb's assertions and errors
+                problems.append(f"pyavb cannot open it: {e!r}")
+                mobs = 0
+            if not problems:
+                same = subprocess.run([sys.executable, dump, "--compare", "--app", app, exported],
+                                      capture_output=True, text=True)
+                if same.returncode != 0:
+                    problems.append(same.stdout.strip())
+                theirs = os.path.join(os.path.dirname(first), "pyavb.json")
+                run = subprocess.run([sys.executable, structure, exported], capture_output=True, text=True)
+                with open(theirs, "w", encoding="utf-8") as f:
+                    f.write(run.stdout)
+                diff = subprocess.run([sys.executable, structdiff, theirs, first, "--no-effects"],
+                                      capture_output=True, text=True)
+                if run.returncode != 0 or diff.returncode != 0:
+                    problems.append(diff.stdout.strip() or run.stderr.strip())
+            if problems:
+                failed += 1
+                print(f"{name}: pyavb reads the bin written differently")
+                for p in problems:
+                    print("  " + p.replace("\n", "\n  "))
+            else:
+                print(f"{name}: pyavb reads the bin written ({mobs} mobs) as Cutthulhu exported it")
+    if not checked:
+        print(f"interop-corpus: no corpus in {folder} (interop-corpus.py fetch)", file=sys.stderr)
+        return 77
+    return 1 if failed else 0
 
 
 def check_written(test, folder):
@@ -497,7 +642,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["fetch", "manifest", "reference", "check-aaf", "check-avb", "check-import",
                                         "check-avb-import", "check-round-trip", "check-written", "check-avb-rewrite",
-                                        "check-avb-write"])
+                                        "check-avb-write", "check-avb-export", "check-avb-export-pyavb"])
     ap.add_argument("--dir", help="the corpus folder (check-written: where to keep the files written)")
     ap.add_argument("--test", help="tst_cfb, for check-written; tst_avb, for check-avb-write")
     ap.add_argument("--app", help="the cutthulhu executable, for the check- commands")
@@ -532,6 +677,11 @@ def main():
         if not args.app:
             ap.error("check-avb-rewrite needs --app")
         return check_avb_rewrite(args.app, args.dir or default_dir())
+    if args.command in ("check-avb-export", "check-avb-export-pyavb"):
+        if not args.app:
+            ap.error(f"{args.command} needs --app")
+        check = check_avb_export if args.command == "check-avb-export" else check_avb_export_pyavb
+        return check(args.app, args.dir or default_dir())
     if args.command == "check-avb-write":
         if not args.test:
             ap.error("check-avb-write needs --test")

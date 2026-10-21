@@ -10,10 +10,12 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 
 // What the importers into bins share (aaf_import.cpp, avb_import.cpp): the rules that make an AAF
 // file and a Media Composer bin of the same material read into the same bin items, so that both are
-// compared with one reference (tests/data/aaf_reference, docs/spec/structure.md). Internal to
+// compared with one reference (tests/data/aaf_reference, docs/spec/structure.md). The exporters
+// (aaf_export.cpp, avb_export.cpp) use the same rules in reverse (timecodeFrames). Internal to
 // lumenis_interop: not installed with the public headers.
 namespace lumenis::interop::detail {
 
@@ -45,6 +47,43 @@ inline QString timecodeText(std::int64_t frames, const Rational& rate, bool drop
     if (!format.isValid()) format = TimecodeFormat::forRate(rate, false);
     const std::int64_t day = format.framesPerDay();
     return QString::fromStdString(Timecode(((frames % day) + day) % day, format).toString());
+}
+
+// A timecode column's text ("01:00:00:00", ";" before the frames for drop frame) as frames at the
+// rate's nominal frames per second; nullopt when it is empty or not a timecode. `drop` says whether it
+// was drop frame (false where the rate has none).
+inline std::optional<std::int64_t> timecodeFrames(const QString& text, const Rational& rate, bool* drop = nullptr) {
+    bool isDrop = text.contains(QLatin1Char(';'));
+    if (drop) *drop = false;
+    if (text.isEmpty()) return std::nullopt;
+    const TimecodeFormat format = TimecodeFormat::forRate(rate, isDrop);
+    if (!format.isValid()) return std::nullopt;
+    isDrop = format.dropFrame; // only where the rate has drop frame
+    const auto tc = Timecode::parse(text.toStdString(), format);
+    if (!tc) return std::nullopt;
+    if (drop) *drop = isDrop;
+    return tc->frameCount();
+}
+
+// The picture size a clip's Format column gives ("1080i", "720p"): its height, 1080 when there is
+// none; 16:9 from 720 lines up, else 720 wide (4:3). For the descriptors the exporters write.
+struct PictureSize {
+    int width = 1920;
+    int height = 1080;
+    bool wide = true; // 16:9, else 4:3
+};
+inline PictureSize pictureSizeOf(const QString& format) {
+    PictureSize p;
+    int height = 0;
+    for (const QChar c : format) {
+        if (!c.isDigit()) break;
+        height = height * 10 + c.digitValue();
+        if (height > 100000) break;
+    }
+    p.height = height > 0 ? height : 1080;
+    p.width = p.height >= 1080 ? p.height * 16 / 9 : p.height >= 720 ? 1280 : 720;
+    p.wide = p.height >= 720;
+    return p;
 }
 
 // A start timecode counted at `fps` frames per second as frames at the nominal frames per second of

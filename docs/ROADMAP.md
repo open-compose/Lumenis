@@ -605,14 +605,29 @@ and pyaaf2's test suites, made with real Media Composer
     (`cutthulhu --import-avb`, ctest `avb_import_bins`), effect names
     aside. File > Open Bin reads an `.avb` into a bin under Other Bins
     (p.296), its clips online by MobID.
-  * 3.4, writing `.avb` bins (docs/spec/avb.md, "Writing"), has started.
-    3.4a, the object writer (`src/interop/avb_writer.*`, ported from
-    pyavb's write methods), is done: all 14 corpus bins read and written
-    back are the same files, byte for byte (`cutthulhu --rewrite-avb`,
-    ctest `avb_round_trip`); written big-endian they read the same in
-    Cutthulhu and pyavb; a bin built from scratch reads in pyavb as
-    Cutthulhu reads it (ctest `avb_write_pyavb`, tst_avb).
-  * Next: 3.4b, native bins written out as `.avb`.
+  * 3.4, writing `.avb` bins (docs/spec/avb.md, "Writing" and "Export"),
+    is done. 3.4a, the object writer (`src/interop/avb_writer.*`, ported
+    from pyavb's write methods): all 14 corpus bins read and written back
+    are the same files, byte for byte (`cutthulhu --rewrite-avb`, ctest
+    `avb_round_trip`); written big-endian they read the same in Cutthulhu
+    and pyavb; a bin built from scratch reads in pyavb as Cutthulhu reads
+    it (ctest `avb_write_pyavb`, tst_avb).
+  * 3.4b, native bins written as `.avb` (`src/interop/avb_export.*`,
+    `cutthulhu --export-avb`), is done: master and audio clips with their
+    source chains (managed and linked files, tapes, imports), subclips,
+    sequences with filler, transitions and effects (by Media Composer's
+    effect IDs), reference clips, user columns and the bin view. All 13
+    corpus bins with a reference read, written and read again are the same,
+    columns, sources and effects included (ctest `avb_export_round_trip`);
+    pyavb reads every bin written as Cutthulhu does and as the bin exported
+    (ctest `avb_export_pyavb`); a bin made in the application's terms reads
+    back the same (tst_avb `exportsBin`). In the application: File > Output
+    > Export to File with the Export setting's Export As at Media Composer
+    Bin (ours: the guide's Export As menu has no bin type; docs/spec/avb.md,
+    "In the application"). Gate 2 (bins saved by Cutthulhu open in Media
+    Composer) is DEFERRED with the other Media Composer checks until the
+    owner has the seat again.
+  * Next: 3.5, Media Composer projects (`.avp`) and settings (`.avs`).
 
 ### Phase 4 — Core editing
 Features in this phase:

@@ -779,9 +779,21 @@ the build folder (`build/<preset>`) and configure again.
   every corpus bin (`cutthulhu --rewrite-avb IN.avb OUT.avb`) and checks
   that the files are the same, byte for byte; it needs only the corpus.
   ctest `avb_write_pyavb` has pyavb read what the writer makes (a bin built
-  from scratch, and the corpus written big-endian), from tst_avb's
+  from scratch, a bin exported from the model, and the corpus written
+  big-endian), from tst_avb's
   `forPyavb`; it needs pyavb and is skipped without it. By hand: `python3
   scripts/interop-corpus.py check-avb-write --test build/ci/bin/tst_avb`.
+* **Native bins written as .avb:** ctest `avb_export_round_trip` reads each
+  corpus bin that has a reference dump, writes what it read as a bin and
+  reads that again; the two readings must be the same (`structdiff.py
+  --fields --sources`); it needs only the corpus. ctest `avb_export_pyavb`
+  has pyavb read the same bins written: every object as Cutthulhu reads it
+  (`avb-dump.py --compare`) and the bin as the one exported
+  (`avb-structure.py`, `structdiff.py --no-effects`); it needs pyavb and is
+  skipped without it. By hand: `cutthulhu --export-avb BIN.avb OUT.avb` (or
+  a .cthbin), then `--import-avb` both and `structdiff.py --fields
+  --sources`, or `python3 scripts/interop-corpus.py check-avb-export --app
+  build/ci/bin/cutthulhu` (and `check-avb-export-pyavb`).
 * **AAF import against Media Composer's bins (gate 1 on the corpus):**
   ctest `aaf_import_bins` imports each corpus AAF that has a bin of the same
   material and compares it with the bin's dump in `tests/data/aaf_reference`
@@ -832,6 +844,10 @@ cutthulhu --import-aaf FILE   import an AAF file into a bin and print the bin as
                              (docs/spec/aaf.md, "Import")
 cutthulhu --export-aaf BIN --to FILE
                              export a bin (.cthbin) as AAF; an .aaf is imported first (a round trip)
+cutthulhu --export-avb BIN OUT.avb
+                             write a bin (.cthbin) as a Media Composer bin, with the clips its
+                             sequences use from the other bins of its folder as reference clips;
+                             an .avb is imported first (a round trip) (docs/spec/avb.md, "Export")
 cutthulhu --write-media FILE --drive FOLDER [--resolution ID|all]
                              transcode FILE into managed MXF under FOLDER/Avid MediaFiles/MXF
                              and print the files made as JSON (for scripts/check-mxf.py)

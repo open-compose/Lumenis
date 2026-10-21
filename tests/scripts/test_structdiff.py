@@ -102,6 +102,18 @@ class TestStructDiff(unittest.TestCase):
             b["items"][2]["sequence"]["tracks"][0]["segments"][1] = {"filler": 30}
         self.assertEqual(structdiff.diff(changed(joined), other, effects=False), [])
 
+    def test_sources(self):
+        # Source chains are compared only when asked, in order, field by field.
+        source = {"kind": "file", "mob": MOB_B, "track": "V1", "name": "A001_C001.mxf"}
+        with_source = changed(lambda b: b["items"][0].update(sources=[source]))
+        self.assertEqual(structdiff.diff(BASE, with_source), [])
+        self.assertEqual(len(structdiff.diff(BASE, with_source, sources=True)), 1)
+        renamed = changed(lambda b: b["items"][0].update(sources=[dict(source, name="other.mxf")]))
+        out = structdiff.diff(with_source, renamed, sources=True)
+        self.assertEqual(len(out), 1)
+        self.assertIn("source 1", out[0])
+        self.assertEqual(structdiff.diff(with_source, copy.deepcopy(with_source), sources=True), [])
+
     def test_bins(self):
         other = changed(lambda b: b.update(name="Selects"))
         self.assertEqual(structdiff.diff(BASE, other),

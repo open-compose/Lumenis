@@ -1,4 +1,5 @@
 #include "lumenis/interop/aaf_export.h"
+#include "lumenis/interop/avb_export.h"
 #include "lumenis/interop/aaf_import.h"
 #include "lumenis/interop/avb_import.h"
 #include "lumenis/ui/main_window.h"
@@ -1504,8 +1505,10 @@ QString MainWindow::openBinFile(const QString& path, QString* error) {
 }
 
 // Steps: collect the selection and the clips its sequences use, make sure an Export setting exists,
-// ask for the file and setting (Export As dialog), then write the AAF with interop::aaf::exportItems.
-// Results and warnings go to the Console. The last folder exported to is remembered in QSettings.
+// ask for the file and setting (Export As dialog), then write the AAF with interop::aaf::exportItems,
+// or, when the Export setting's Export As is Media Composer Bin (ours, docs/spec/avb.md "Export"), a
+// bin with interop::avb::exportBin. Results and warnings go to the Console. The last folder exported
+// to is remembered in QSettings.
 void MainWindow::exportToFile() {
     BinView* view = binContainer_->activeView();
     if (!view || view->selectedIds().isEmpty()) {
@@ -1513,24 +1516,26 @@ void MainWindow::exportToFile() {
         return;
     }
     const BinDocument& doc = view->document();
-    QList<model::BinItem> items;
+    QList<model::BinItem> selected;
     QStringList ids;
     for (const model::BinItem& item : doc.bin().items) {
         if (!view->selectedIds().contains(item.id)) continue;
-        items << item;
+        selected << item;
         ids << item.id;
     }
-    // A sequence's clips go with it, so that it is not offline where it is
-    // read.
-    const QList<model::BinItem> selected = items;
+    // A sequence's clips go with it, so that it is not offline where it is read: in AAF as items of
+    // their own, in a bin as reference clips (found through the resolver below).
+    QList<model::BinItem> clips;
+    QHash<QString, QString> binOf; // clip id -> the bin its segments name
     for (const model::BinItem& item : selected) {
         if (item.kind != model::BinItemKind::Sequence) continue;
         const model::Sequence sequence = model::Sequence::fromItem(item);
         for (const model::Track& t : sequence.tracks()) {
             for (const model::Segment& s : t.segments) {
                 if (s.isFiller() || ids.contains(s.clipId)) continue;
+                binOf.insert(s.clipId, s.binId);
                 if (const auto clip = composer_->resolve(s.binId, s.clipId)) {
-                    items << *clip;
+                    clips << *clip;
                     ids << clip->id;
                 }
             }
@@ -1549,13 +1554,17 @@ void MainWindow::exportToFile() {
         names << (e.name.isEmpty() ? tr("Untitled") : e.name);
         if (e.active) active = i;
     }
+    // The file type of an Export As choice: its extension and its name in the save dialog.
+    auto suffixOf = [](const QString& exportAs) { return exportAs == QLatin1String("avb") ? QStringLiteral("avb") : QStringLiteral("aaf"); };
+    const QString exportAs = settings_->text(QStringLiteral("Export"), QStringLiteral("exportAs"));
     QSettings remembered;
     QString folder = remembered.value(QStringLiteral("export/folder")).toString();
     if (folder.isEmpty() || !QDir(folder).exists()) folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
     // The first item's name, with characters that are not allowed in file names replaced.
-    QString base = items.first().name;
+    QString base = selected.first().name;
     base.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
-    ExportAsDialog dialog(QDir(folder).filePath(base + QLatin1String(".aaf")), names, active, this);
+    ExportAsDialog dialog(QDir(folder).filePath(base + QLatin1Char('.') + suffixOf(exportAs)), names, active, this);
+    dialog.setFileType(suffixOf(exportAs), exportAs == QLatin1String("avb") ? tr("Media Composer bins (*.avb)") : tr("AAF files (*.aaf)"));
     connect(&dialog, &ExportAsDialog::optionsRequested, this, [this, versions](int i) {
         if (i < 0 || i >= versions.size()) return;
         if (SettingsWindow* w = showSettings()) {
@@ -1570,24 +1579,73 @@ void MainWindow::exportToFile() {
         file.setActive(versions.at(chosen));
         settings_->commit(model::SettingsScope::User);
     }
-    if (settings_->text(QStringLiteral("Export"), QStringLiteral("exportAs")) != QLatin1String("aaf")) {
-        ConsoleLog::instance().append(tr("Export to File: only AAF can be exported so far (Export As in the Export setting)."));
+    const QString format = settings_->text(QStringLiteral("Export"), QStringLiteral("exportAs"));
+    if (format != QLatin1String("aaf") && format != QLatin1String("avb")) {
+        ConsoleLog::instance().append(
+            tr("Export to File: only AAF and Media Composer bins can be exported so far (Export As in the Export setting)."));
         return;
     }
-    remembered.setValue(QStringLiteral("export/folder"), QFileInfo(dialog.path()).absolutePath());
-    interop::aaf::ExportOptions options;
-    options.includeVideo = settings_->flag(QStringLiteral("Export"), QStringLiteral("includeVideo"));
-    options.includeAudio = settings_->flag(QStringLiteral("Export"), QStringLiteral("includeAudio"));
+    // The file name extension stays the format's (p.869), also when the setting was changed in the
+    // dialog.
+    QString path = dialog.path();
+    const QString suffix = suffixOf(format);
+    if (QFileInfo(path).suffix().compare(suffix, Qt::CaseInsensitive) != 0) {
+        const QString old = QFileInfo(path).suffix();
+        if (old.compare(QLatin1String("aaf"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("avb"), Qt::CaseInsensitive) == 0) {
+            path.chop(old.size() + 1);
+        }
+        path += QLatin1Char('.') + suffix;
+    }
+    remembered.setValue(QStringLiteral("export/folder"), QFileInfo(path).absolutePath());
+    const bool includeVideo = settings_->flag(QStringLiteral("Export"), QStringLiteral("includeVideo"));
+    const bool includeAudio = settings_->flag(QStringLiteral("Export"), QStringLiteral("includeAudio"));
     QApplication::setOverrideCursor(Qt::WaitCursor);
-    const interop::aaf::ExportResult result = interop::aaf::exportItems(items, dialog.path(), options);
+    bool written = false;
+    QString error;
+    QStringList warnings;
+    qsizetype count = selected.size();
+    if (format == QLatin1String("avb")) {
+        // A bin named for the file, with the source bin's columns and view; the sequences' clips
+        // that are not selected, and subclips' masters, as reference clips.
+        model::Bin bin;
+        bin.name = QFileInfo(path).completeBaseName();
+        bin.items = selected;
+        bin.display = doc.bin().display;
+        interop::avb::ExportOptions options;
+        options.includeVideo = includeVideo;
+        options.includeAudio = includeAudio;
+        const model::Bin& source = doc.bin();
+        options.resolve = [&](const MobId& mob, const QString& clipId) -> std::optional<model::BinItem> {
+            if (!clipId.isEmpty()) {
+                if (auto clip = composer_->resolve(binOf.value(clipId, doc.nodeId()), clipId)) return clip;
+            }
+            for (const model::BinItem& item : source.items) {
+                if (model::mobIdOf(item) == mob) return item;
+            }
+            return std::nullopt;
+        };
+        const interop::avb::ExportResult result = interop::avb::exportBin(bin, path, options);
+        written = result.ok;
+        error = result.error;
+        warnings = result.warnings;
+        count += result.referenceClips;
+    } else {
+        interop::aaf::ExportOptions options;
+        options.includeVideo = includeVideo;
+        options.includeAudio = includeAudio;
+        const interop::aaf::ExportResult result = interop::aaf::exportItems(selected + clips, path, options);
+        written = result.ok;
+        error = result.error;
+        warnings = result.warnings;
+        count += clips.size();
+    }
     QApplication::restoreOverrideCursor();
-    if (!result.ok) {
-        ConsoleLog::instance().append(tr("Export to File: %1").arg(result.error));
+    if (!written) {
+        ConsoleLog::instance().append(tr("Export to File: %1").arg(error));
         return;
     }
-    ConsoleLog::instance().append(tr("Export to File: %1: %n item(s)", "", static_cast<int>(items.size()))
-                                      .arg(QDir::toNativeSeparators(dialog.path())));
-    for (const QString& w : result.warnings) ConsoleLog::instance().append(tr("Export to File: %1").arg(w));
+    ConsoleLog::instance().append(tr("Export to File: %1: %n item(s)", "", static_cast<int>(count)).arg(QDir::toNativeSeparators(path)));
+    for (const QString& w : warnings) ConsoleLog::instance().append(tr("Export to File: %1").arg(w));
 }
 
 // Import transcodes each file into new managed media (media::transcodeClip) with a progress dialog.

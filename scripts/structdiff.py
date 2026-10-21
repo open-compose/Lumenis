@@ -5,7 +5,7 @@ Compares two structure dumps (docs/spec/structure.md), such as
 `cutthulhu --dump-structure` of a bin read from Media Composer and a
 reference dump of the same bin:
 
-    structdiff.py A.json B.json [--no-mob] [--fields] [--no-effects]
+    structdiff.py A.json B.json [--no-mob] [--fields] [--no-effects] [--sources]
 
 What gate 1 asks to be identical:
 * the bins, by name, and the clip count of each kind in each;
@@ -19,8 +19,10 @@ their order among items with the same kind and name). --no-mob matches by
 kind and name only and compares segments' sources by name: for a reader whose
 MobIDs differ from the other's. --fields also compares the standard columns
 (Video, Tape, ...). --no-effects leaves effect and transition names out, for
-a reader that names them otherwise (avb-structure.py). Exits 1 when they
-differ, listing every difference.
+a reader that names them otherwise (avb-structure.py). --sources also
+compares each item's source chain (its kinds, MobIDs, tracks, names, start
+timecodes and offsets), for round trips through one reader (ctest
+avb_export_round_trip). Exits 1 when they differ, listing every difference.
 """
 
 import argparse
@@ -97,7 +99,11 @@ def diff_sequences(a, b, use_mob, out, where, effects=True):
                     out.append(f"{where}: {name} segment {i + 1}: {x} != {y}")
 
 
-def diff_items(a, b, use_mob, fields, out, where, effects=True):
+def source_text(s):
+    return " ".join(f"{k}={s[k]}" for k in sorted(s))
+
+
+def diff_items(a, b, use_mob, fields, out, where, effects=True, sources=False):
     for k in ("name", "kind", "editRate", "duration", "start", "end"):
         if a.get(k) != b.get(k):
             out.append(f"{where}: {k} {a.get(k)!r} != {b.get(k)!r}")
@@ -110,11 +116,19 @@ def diff_items(a, b, use_mob, fields, out, where, effects=True):
                     out.append(f"{where}: {k[:-1] if k.endswith('s') else k} '{col}' {va.get(col)!r} != {vb.get(col)!r}")
         elif va != vb:
             out.append(f"{where}: {k} {va!r} != {vb!r}")
+    if sources:
+        sa = [source_text(s) for s in a.get("sources", [])]
+        sb = [source_text(s) for s in b.get("sources", [])]
+        for i in range(max(len(sa), len(sb))):
+            x = sa[i] if i < len(sa) else "(none)"
+            y = sb[i] if i < len(sb) else "(none)"
+            if x != y:
+                out.append(f"{where}: source {i + 1}: {x} != {y}")
     if "sequence" in a or "sequence" in b:
         diff_sequences(a.get("sequence", {}), b.get("sequence", {}), use_mob, out, where, effects)
 
 
-def diff(a, b, use_mob=True, fields=False, effects=True):
+def diff(a, b, use_mob=True, fields=False, effects=True, sources=False):
     out = []
     bins_a = {x["name"]: x for x in a.get("bins", [])}
     bins_b = {x["name"]: x for x in b.get("bins", [])}
@@ -143,7 +157,7 @@ def diff(a, b, use_mob=True, fields=False, effects=True):
         for k in ib.keys() - ia.keys():
             out.append(f"{where}: {label(ib[k])} only in the second")
         for k in sorted(ia.keys() & ib.keys(), key=str):
-            diff_items(ia[k], ib[k], use_mob, fields, out, f"{where}: {label(ia[k])}", effects)
+            diff_items(ia[k], ib[k], use_mob, fields, out, f"{where}: {label(ia[k])}", effects, sources)
     return out
 
 
@@ -154,8 +168,9 @@ def main():
     ap.add_argument("--no-mob", action="store_true", help="match by kind and name, sources by name")
     ap.add_argument("--fields", action="store_true", help="also compare the standard columns")
     ap.add_argument("--no-effects", action="store_true", help="leave effect and transition names out")
+    ap.add_argument("--sources", action="store_true", help="also compare the items' source chains")
     args = ap.parse_args()
-    differences = diff(load(args.first), load(args.second), not args.no_mob, args.fields, not args.no_effects)
+    differences = diff(load(args.first), load(args.second), not args.no_mob, args.fields, not args.no_effects, args.sources)
     for line in differences:
         print(line)
     if differences:

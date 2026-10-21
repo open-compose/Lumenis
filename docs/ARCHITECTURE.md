@@ -14,7 +14,7 @@ The code is a stack of static libraries. Each depends only on those below it.
 | `lumenis_core` | `src/core` | Value types with no Qt widgets: `Rational` (exact edit rates), `Timecode`, `MobId` (SMPTE UMIDs), the project format, branding constants. | — |
 | `lumenis_ext` | `src/ext` | Extension points: provider interfaces (codecs, effects) and the module loader for plug-ins (docs/EXTENSIONS.md). | core |
 | `lumenis_model` | `src/model` | The editing model, independent of the UI: projects and their bin tree, bins and bin items, sequences (tracks, segments, edits), markers, monitor state, settings files, the calculator, structure dumps. | core |
-| `lumenis_interop` | `src/interop` | Interchange: the compound file container, AAF reading, import into bins, writing and export (docs/spec/aaf.md); Media Composer's `.avb` bins (docs/spec/avb.md). | model |
+| `lumenis_interop` | `src/interop` | Interchange: the compound file container, AAF reading, import into bins, writing and export (docs/spec/aaf.md); Media Composer's `.avb` bins, read, imported, written and exported (docs/spec/avb.md). | model |
 | `lumenis_media` | `src/media` | Media through FFmpeg: probing, frame-exact reading, writing, linking files as clips, managed MXF media and the media database, consolidate/transcode, relink, sound output and the playback clock. | model, ext |
 | `lumenis_ui` | `src/ui` | Every window, panel and dialog (Qt Widgets), and the main window that ties them to the model and media. | everything above |
 | `lumenis_app` (`cutthulhu`) | `app` | `main()`: command-line options (many are test and gate tools), crash reports, then the main window. | ui, interop, media |
@@ -65,7 +65,8 @@ headers in `include/lumenis/<library>/`.
   `aaf_export.*`; `avb.*` reads Media Composer's `.avb` bins, `avb_writer.*`
   writes their objects back (the inverse of `avb.*`), and
   `avb_import.*` reads them into bins (helpers shared with `aaf_import.cpp`
-  in `import_common.h`). The native model they read into and write from is
+  and the exporters in `import_common.h`), and `avb_export.*` writes bins
+  as `.avb` (the import's inverse, built with `avb_writer.*`). The native model they read into and write from is
   described in docs/spec/native-model.md.
 * **Effects.** The Effect Palette's list is `src/ui/resources/effects.json`
   and the Effect Editor's parameters `effect_parameters.json`; UI in
@@ -87,7 +88,9 @@ headers in `include/lumenis/<library>/`.
 4. Pictures come from `ui::MediaFrames` (a cache over `media` readers);
    sound from `media::AudioPlayer`, whose clock paces playback.
 5. Interchange converts between files and bin items: AAF import and `.avb`
-   reading make `model::BinItem`s for a bin; export writes bin items to AAF.
+   reading make `model::BinItem`s for a bin; export writes bin items to AAF
+   or a bin to `.avb` (File > Output > Export to File, `--export-aaf`,
+   `--export-avb`).
 
 ## Tests
 
@@ -102,8 +105,9 @@ with CTest (`ctest --preset ci`). Python checks live in `scripts/` and
 * interchange: the AAF corpus against olefile and pyaaf2, the `.avb`
   corpus against pyavb (`avb_pyavb`), imports against
   Media Composer's bins (`aaf_import_bins`), the bins themselves read into
-  bins (`avb_import_bins`), round trips (`aaf_round_trip`, `avb_round_trip`),
-  and what the `.avb` writer makes read by pyavb (`avb_write_pyavb`).
+  bins (`avb_import_bins`), round trips (`aaf_round_trip`, `avb_round_trip`,
+  `avb_export_round_trip`), and what the `.avb` writer and export make read
+  by pyavb (`avb_write_pyavb`, `avb_export_pyavb`).
 
 Screenshots of the windows are compared across platforms in CI
 (`ui-consistency`); custom-painted widgets draw text with palette colours

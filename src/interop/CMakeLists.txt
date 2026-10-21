@@ -11,6 +11,7 @@ add_library(lumenis_interop STATIC
     avb.cpp
     avb_import.cpp
     avb_writer.cpp
+    avb_export.cpp
     import_common.h
     include/lumenis/interop/cfb.h
     include/lumenis/interop/aaf.h
@@ -20,6 +21,7 @@ add_library(lumenis_interop STATIC
     include/lumenis/interop/avb.h
     include/lumenis/interop/avb_import.h
     include/lumenis/interop/avb_writer.h
+    include/lumenis/interop/avb_export.h
 )
 add_library(lumenis::interop ALIAS lumenis_interop)
 

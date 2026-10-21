@@ -7,13 +7,18 @@
 // (src/interop/avb_writer.*, docs/spec/avb.md, "Writing"): corpus bins
 // written back byte for byte and in the other byte order, a bin built from
 // scratch read back, and values the writer must refuse; forPyavb writes
-// bins for pyavb to read (ctest avb_write_pyavb).
+// bins for pyavb to read (ctest avb_write_pyavb). The export of native bins
+// (src/interop/avb_export.*, docs/spec/avb.md, "Export"): exportsBin and
+// exportsNames write bins made in code and read them back.
 
+#include "lumenis/core/timecode.h"
 #include "lumenis/interop/aaf.h"
 #include "lumenis/interop/avb.h"
+#include "lumenis/interop/avb_export.h"
 #include "lumenis/interop/avb_import.h"
 #include "lumenis/interop/avb_writer.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/structure.h"
 
 #include <QCryptographicHash>
 #include <QDir>
@@ -67,6 +72,8 @@ private slots:
     void writerRefuses();
     void rewritesDamaged();
     void forPyavb();
+    void exportsBin();
+    void exportsNames();
 };
 
 void TestAvb::strings() {
@@ -263,14 +270,15 @@ void TestAvb::importsBin() {
     QVERIFY(!clip->fields.contains(QStringLiteral("Comments"))); // empty in the bin
     QVERIFY(clip->created.isValid());
     QVERIFY(clip->created <= clip->modified);
-    // The source chain: the media file (managed, found by MobID: no path),
-    // then the QuickTime file it was imported from, at 30 fps drop frame.
+    // The source chain: the media file (managed, found by MobID, with its last
+    // known path as its physical media), then the QuickTime file it was
+    // imported from, at 30 fps drop frame.
     QCOMPARE(clip->sources.size(), 2);
     const model::ClipSource& file = clip->sources.at(0);
     QCOMPARE(file.kind, model::ClipSource::Kind::File);
     QCOMPARE(file.track, QStringLiteral("V1"));
     QCOMPARE(file.name, QStringLiteral("52_64_2_03_05.mov.PHYS"));
-    QVERIFY(file.path.isEmpty());
+    QCOMPARE(file.path, QStringLiteral("/Giraffe/Marty/Avid MediaFiles/MXF/1/52_64_2_03_05.mov.V48C9F200.mxf"));
     const model::ClipSource& import = clip->sources.at(1);
     QCOMPARE(import.kind, model::ClipSource::Kind::Import);
     QCOMPARE(file.from, import.mob);
@@ -768,6 +776,156 @@ void TestAvb::rewritesDamaged() {
 // avb_write_pyavb): the bin from scratch in both byte orders, and each
 // corpus bin written big-endian, into $CUTTHULHU_AVB_OUT, with written.json
 // saying what each should dump as.
+namespace {
+
+// The bin exportsBin writes, in the terms the application makes them in: a clip linked to a file
+// (media::linkClip: one file source for every track, from an import source), a clip of managed
+// media (media::transcodeClip: a file a track in Avid MediaFiles, from a tape), a subclip of it
+// (model::subclipItem), and a sequence of both with filler, a centred dissolve, a segment effect
+// kept by its Media Composer effect ID and a clip from another bin.
+struct ScratchExport {
+    model::Bin bin;
+    model::BinItem elsewhere; // in another bin of the project
+};
+
+ScratchExport scratchExport() {
+    const QDateTime when = QDateTime::fromSecsSinceEpoch(1700000000, QTimeZone::utc());
+    ScratchExport out;
+    model::Bin& bin = out.bin;
+    bin.name = QStringLiteral("Scratch");
+    bin.display.customColumns = {QStringLiteral("Circled")};
+    bin.display.columns = {QStringLiteral("Creation Date"), QStringLiteral("Duration"), QStringLiteral("Tape"),
+                           QStringLiteral("Circled")};
+
+    model::BinItem linked;
+    linked.id = model::newItemId();
+    linked.kind = model::BinItemKind::MasterClip;
+    linked.name = QStringLiteral("Linked.mov");
+    linked.mobId = MobId::generate();
+    linked.created = when;
+    linked.modified = when.addSecs(60);
+    linked.editRate = Rational(25);
+    linked.durationFrames = 100;
+    linked.fields = {{QStringLiteral("Tracks"), QStringLiteral("V1 A1-2")},
+                     {QStringLiteral("Start"), QStringLiteral("10:00:00:00")},
+                     {QStringLiteral("End"), QStringLiteral("10:00:04:00")},
+                     {QStringLiteral("Comments"), QStringLiteral("linked")},
+                     {QStringLiteral("Circled"), QStringLiteral("yes")}};
+    model::ClipSource import;
+    import.kind = model::ClipSource::Kind::Import;
+    import.mob = MobId::generate();
+    import.name = QStringLiteral("Linked.mov");
+    import.path = QString::fromUtf8("/Media/Lien\xc3\xa9/Linked.mov");
+    import.startTimecode = QStringLiteral("10:00:00:00");
+    const MobId linkedFile = MobId::generate();
+    for (const char* track : {"V1", "A1", "A2"}) {
+        model::ClipSource f;
+        f.kind = model::ClipSource::Kind::File;
+        f.mob = linkedFile;
+        f.track = QString::fromLatin1(track);
+        f.name = import.name;
+        f.path = import.path;
+        f.from = import.mob;
+        linked.sources << f;
+    }
+    linked.sources << import;
+
+    model::BinItem managed;
+    managed.id = model::newItemId();
+    managed.kind = model::BinItemKind::MasterClip;
+    managed.name = QStringLiteral("Managed");
+    managed.mobId = MobId::generate();
+    managed.created = when;
+    managed.modified = when;
+    managed.editRate = Rational(24000, 1001);
+    managed.durationFrames = 120;
+    managed.fields = {{QStringLiteral("Tracks"), QStringLiteral("V1 A1")},
+                      {QStringLiteral("Start"), QStringLiteral("01:00:00:00")},
+                      {QStringLiteral("End"), QStringLiteral("01:00:05:00")},
+                      {QStringLiteral("Tape"), QStringLiteral("TAPE01")},
+                      {QStringLiteral("Video"), QStringLiteral("DNxHD 36")}};
+    model::ClipSource tape;
+    tape.kind = model::ClipSource::Kind::Tape;
+    tape.mob = MobId::generate();
+    tape.name = QStringLiteral("TAPE01");
+    tape.startTimecode = QStringLiteral("01:00:00:00");
+    for (const char* track : {"V1", "A1"}) {
+        model::ClipSource f;
+        f.kind = model::ClipSource::Kind::File;
+        f.mob = MobId::generate();
+        f.track = QString::fromLatin1(track);
+        f.name = QStringLiteral("Managed.%1.mxf").arg(f.track);
+        f.path = QStringLiteral("/Volumes/Media/Avid MediaFiles/MXF/1/") + f.name;
+        f.from = tape.mob;
+        managed.sources << f;
+    }
+    managed.sources << tape;
+
+    bin.items << linked << managed;
+    const auto sub = model::subclipItem(bin, managed, 10, 40, when);
+    Q_ASSERT(sub);
+    bin.items << *sub;
+
+    model::BinItem& elsewhere = out.elsewhere;
+    elsewhere = linked;
+    elsewhere.id = model::newItemId();
+    elsewhere.name = QStringLiteral("Elsewhere.mov");
+    elsewhere.mobId = MobId::generate();
+    elsewhere.fields.remove(QStringLiteral("Circled"));
+    elsewhere.fields.remove(QStringLiteral("Comments"));
+    // A file of its own, from the same import source.
+    const MobId elsewhereFile = MobId::generate();
+    for (model::ClipSource& s : elsewhere.sources) {
+        if (s.kind == model::ClipSource::Kind::File) s.mob = elsewhereFile;
+    }
+
+    model::BinItem seqItem;
+    seqItem.id = model::newItemId();
+    seqItem.kind = model::BinItemKind::Sequence;
+    seqItem.name = QStringLiteral("Cut 1");
+    seqItem.mobId = MobId::generate();
+    seqItem.created = when;
+    seqItem.modified = when.addSecs(3600);
+    seqItem.editRate = Rational(25);
+    seqItem.fields.insert(QStringLiteral("Start"), QStringLiteral("01:00:00:00"));
+    model::Sequence seq;
+    auto clip = [](const model::BinItem& c, const char* track, std::int64_t in, std::int64_t length) {
+        model::Segment s;
+        s.clipId = c.id;
+        s.sourceMob = c.mobId;
+        s.name = c.name;
+        s.sourceTrack = QString::fromLatin1(track);
+        s.sourceIn = in;
+        s.length = length;
+        return s;
+    };
+    model::Segment second = clip(managed, "V1", 20, 30);
+    model::Transition dissolve;
+    dissolve.effect = {QStringLiteral("Blend"), QStringLiteral("Dissolve"), {}};
+    dissolve.duration = 10;
+    dissolve.alignment = model::TransitionAlignment::CenteredOnCut;
+    second.transition = dissolve;
+    model::Segment resized = clip(linked, "V1", 50, 25);
+    resized.effect = model::Effect{QStringLiteral("AVB"), QStringLiteral("EFF2_BLEND_RESIZE"), {}};
+    seq.ensureTrack(QStringLiteral("V1"))->segments = {clip(linked, "V1", 5, 40), second, model::Segment::filler(20), resized,
+                                                       clip(elsewhere, "V1", 0, 15)};
+    seq.ensureTrack(QStringLiteral("A1"))->segments = {clip(linked, "A1", 5, 40), model::Segment::filler(10), clip(managed, "A1", 0, 20)};
+    seq.ensureTrack(QStringLiteral("A2"))->segments = {clip(linked, "A2", 5, 40)};
+    seq.normalize(QStringLiteral("V1"));
+    seq.storeIn(seqItem);
+    seqItem.fields.insert(QStringLiteral("Tracks"), QStringLiteral("V1 A1-2 TC1"));
+    const TimecodeFormat tc25 = TimecodeFormat::forRate(Rational(25), false);
+    seqItem.fields.insert(QStringLiteral("End"), QString::fromStdString(Timecode(90000 + seqItem.durationFrames, tc25).toString()));
+    bin.items << seqItem;
+    return out;
+}
+
+// The structure dump of a bin, without the parts an export does not keep the same: the bin's
+// order of items (the import lists clips, then subclips, then sequences).
+QJsonObject structureOf(const model::Bin& bin) { return model::binStructure(bin); }
+
+} // namespace
+
 void TestAvb::forPyavb() {
     const QString out = qEnvironmentVariable("CUTTHULHU_AVB_OUT");
     if (out.isEmpty()) QSKIP("CUTTHULHU_AVB_OUT is not set");
@@ -780,6 +938,34 @@ void TestAvb::forPyavb() {
         avb::File file;
         QVERIFY2(file.open(QDir(out).filePath(name), &error), qPrintable(error));
         scratch.insert(name, QString::fromUtf8(aaf::canonicalJson(avb::dump(file))));
+    }
+    // A bin exported from the model (exportsBin's, both byte orders): its dump, and the structure of
+    // the bin as Cutthulhu reads it back, for pyavb's reading (avb-structure.py) to be compared with.
+    QJsonObject exported;
+    const ScratchExport made = scratchExport();
+    for (const bool little : {true, false}) {
+        const QString name = little ? QStringLiteral("exported.avb") : QStringLiteral("exported-be.avb");
+        avb::ExportOptions options;
+        options.littleEndian = little;
+        options.resolve = [&made](const MobId& mob, const QString&) -> std::optional<model::BinItem> {
+            if (mob == made.elsewhere.mobId) return made.elsewhere;
+            return std::nullopt;
+        };
+        const avb::ExportResult result = avb::exportBin(made.bin, QDir(out).filePath(name), options);
+        QVERIFY2(result.ok, qPrintable(result.error));
+        avb::File file;
+        QString error;
+        QVERIFY2(file.open(QDir(out).filePath(name), &error), qPrintable(error));
+        const avb::ImportResult imported = avb::importBin(file);
+        model::Bin back;
+        back.name = QFileInfo(name).completeBaseName();
+        back.items = imported.items;
+        back.display.customColumns = imported.customColumns;
+        const QJsonObject structure{{QStringLiteral("format"), QStringLiteral("cutthulhu-structure")},
+                                    {QStringLiteral("version"), 1},
+                                    {QStringLiteral("bins"), QJsonArray{model::binStructure(back)}}};
+        exported.insert(name, QJsonObject{{QStringLiteral("dump"), QString::fromUtf8(aaf::canonicalJson(avb::dump(file)))},
+                                          {QStringLiteral("structure"), structure}});
     }
     QJsonObject bigEndian;
     const QString folder = corpus();
@@ -807,8 +993,127 @@ void TestAvb::forPyavb() {
     }
     QFile json(QDir(out).filePath(QStringLiteral("written.json")));
     QVERIFY(json.open(QIODevice::WriteOnly));
-    json.write(QJsonDocument(QJsonObject{{QStringLiteral("scratch"), scratch}, {QStringLiteral("big_endian"), bigEndian}})
+    json.write(QJsonDocument(QJsonObject{{QStringLiteral("scratch"), scratch},
+                                         {QStringLiteral("exported"), exported},
+                                         {QStringLiteral("big_endian"), bigEndian}})
                    .toJson());
+}
+
+// A bin made in the application's terms exports with only the warnings expected and imports back
+// as the same bin: items, MobIDs, dates, columns, the source chains with their paths, the subclip,
+// the sequence's segments, transition and effect, and the clip from another bin as a reference clip.
+void TestAvb::exportsBin() {
+    const ScratchExport scratch = scratchExport();
+    const model::Bin& bin = scratch.bin;
+    avb::ExportOptions options;
+    options.when = QDateTime::fromSecsSinceEpoch(1700003600, QTimeZone::utc());
+    const model::BinItem elsewhere = scratch.elsewhere;
+    options.resolve = [&](const MobId& mob, const QString& clipId) -> std::optional<model::BinItem> {
+        if (mob == elsewhere.mobId || clipId == elsewhere.id) return elsewhere;
+        return std::nullopt;
+    };
+    for (const bool little : {true, false}) {
+        options.littleEndian = little;
+        avb::ExportResult result;
+        const QByteArray bytes = avb::exportBytes(bin, options, &result);
+        QVERIFY2(result.ok, qPrintable(result.error));
+        QCOMPARE(result.referenceClips, 1);
+        // Only what a bin cannot hold: the linked clip's media columns.
+        QCOMPARE(result.warnings, QStringList{QStringLiteral("columns Media Composer works out from the media not written: Video")});
+
+        avb::File file;
+        QString error;
+        QVERIFY2(file.load(bytes, &error), qPrintable(error));
+        QCOMPARE(file.littleEndian(), little);
+        for (std::uint32_t i = 1; i <= file.objectCount(); ++i) QVERIFY2(file.object(i).ok(), qPrintable(file.object(i).error));
+        // Written back by the object layer, the same bytes: every object is one it reads in full.
+        QVERIFY(avb::rewrite(file, &error) == bytes);
+        avb::ImportOptions importOptions;
+        importOptions.when = options.when;
+        const avb::ImportResult imported = avb::importBin(file, importOptions);
+        QVERIFY2(imported.warnings == QStringList{QStringLiteral("effects kept by their Media Composer effect IDs")},
+                 qPrintable(imported.warnings.join(QLatin1String("; "))));
+        QCOMPARE(imported.customColumns, QStringList{QStringLiteral("Circled")});
+
+        model::Bin back;
+        back.name = bin.name;
+        back.items = imported.items;
+        back.display.customColumns = imported.customColumns;
+        // The bin written holds the clip from the other bin too, as a reference clip.
+        model::Bin expected = bin;
+        model::BinItem reference = elsewhere;
+        reference.userPlaced = false;
+        expected.items.insert(2, reference);
+        // The Video column is the media's (not written; the subclip shows its master's); the subclip
+        // is listed after the clips.
+        for (model::BinItem& item : expected.items) item.fields.remove(QStringLiteral("Video"));
+        std::stable_sort(expected.items.begin(), expected.items.end(), [](const model::BinItem& a, const model::BinItem& b) {
+            auto rank = [](model::BinItemKind k) { return k == model::BinItemKind::Subclip ? 1 : k == model::BinItemKind::Sequence ? 2 : 0; };
+            return rank(a.kind) < rank(b.kind);
+        });
+        QCOMPARE(QJsonDocument(structureOf(back)).toJson(), QJsonDocument(structureOf(expected)).toJson());
+        QCOMPARE(back.items.size(), expected.items.size());
+        for (qsizetype i = 0; i < back.items.size(); ++i) {
+            const model::BinItem& a = back.items.at(i);
+            const model::BinItem& e = expected.items.at(i);
+            QCOMPARE(a.created, e.created);
+            QCOMPARE(a.modified, e.modified);
+            QCOMPARE(a.userPlaced, e.userPlaced);
+            if (e.kind == model::BinItemKind::Sequence) continue;
+            QCOMPARE(a.sources.size(), e.sources.size());
+            for (qsizetype j = 0; j < a.sources.size(); ++j) {
+                // Paths too (the structure dump leaves them out); a subclip's offset and start.
+                QCOMPARE(a.sources.at(j), e.sources.at(j));
+            }
+        }
+        // The transition at the cut and the effect on the segment.
+        const model::Sequence seq = model::Sequence::fromItem(back.items.last());
+        const model::Track* v1 = seq.track(QStringLiteral("V1"));
+        QVERIFY(v1 && v1->segments.size() == 5);
+        QVERIFY(v1->segments.at(1).transition);
+        QCOMPARE(v1->segments.at(1).transition->duration, std::int64_t{10});
+        QCOMPARE(v1->segments.at(1).transition->alignment, model::TransitionAlignment::CenteredOnCut);
+        QVERIFY(v1->segments.at(3).effect);
+        QCOMPARE(v1->segments.at(3).effect->name, QStringLiteral("EFF2_BLEND_RESIZE"));
+        QCOMPARE(v1->segments.at(4).clipId, back.items.at(2).id);
+    }
+}
+
+// Names Mac OS Roman cannot hold are written with '?' and one warning; what has no place in a bin is
+// left out, a warning for each kind; a file's path keeps its characters (UTF-8).
+void TestAvb::exportsNames() {
+    model::Bin bin = scratchExport().bin;
+    bin.items[0].name = QString::fromUtf8("Caf\xc3\xa9 \xe2\x9c\x93");  // é is Mac OS Roman, ✓ is not
+    bin.items[0].fields.insert(QString::fromUtf8("\xe2\x98\x85 Stars"), QStringLiteral("3"));
+    bin.items[0].color = QStringLiteral("#ff0000");
+    bin.items[0].markers = QJsonArray{QJsonObject{{QStringLiteral("frame"), 3}}};
+    model::BinItem group;
+    group.id = model::newItemId();
+    group.kind = model::BinItemKind::Group;
+    group.name = QStringLiteral("Group");
+    bin.items << group;
+    model::Sequence seq = model::Sequence::fromItem(bin.items[3]);
+    seq.ensureTrack(QStringLiteral("V1"))->segments[0].effect = model::Effect{QStringLiteral("Image"), QStringLiteral("Mask"), {}};
+    seq.storeIn(bin.items[3]);
+    avb::ExportResult result;
+    const QByteArray bytes = avb::exportBytes(bin, {}, &result);
+    QVERIFY2(result.ok, qPrintable(result.error));
+    for (const char* expected : {"names or columns with characters Mac OS Roman cannot hold, written with ?", "clip colours not written",
+                                 "markers not written", "groups left out", "effects with no Media Composer effect ID left out (Image/Mask)",
+                                 "segments and subclips of clips not in the bin (offline where it is read)"}) {
+        QVERIFY2(std::any_of(result.warnings.begin(), result.warnings.end(),
+                             [&](const QString& w) { return w.endsWith(QString::fromUtf8(expected)); }),
+                 qPrintable(QStringLiteral("%1 not in: %2").arg(QString::fromUtf8(expected), result.warnings.join(QLatin1String("; ")))));
+    }
+    avb::File file;
+    QString error;
+    QVERIFY2(file.load(bytes, &error), qPrintable(error));
+    const avb::ImportResult imported = avb::importBin(file);
+    const model::BinItem* clip = named(imported.items, QStringLiteral("Café ?"));
+    QVERIFY(clip);
+    QCOMPARE(clip->fields.value(QStringLiteral("? Stars")), QStringLiteral("3"));
+    QCOMPARE(clip->sources.first().path, QString::fromUtf8("/Media/Lien\xc3\xa9/Linked.mov"));
+    QVERIFY(!named(imported.items, QStringLiteral("Group")));
 }
 
 QTEST_GUILESS_MAIN(TestAvb)

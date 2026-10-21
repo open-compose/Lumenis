@@ -394,6 +394,95 @@ private slots:
         media::setExtraMediaDrives({});
     }
 
+    // File > Output > Export to File with the Export setting's Export As at
+    // Media Composer Bin (ours, docs/spec/avb.md "Export"): the sequence is
+    // written as a .avb with its clip as a reference clip, and File > Open
+    // Bin of that file (p.296) lists it under Other Bins with the clip online
+    // (its managed media found by MobID) and the sequence naming it.
+    void exportAsMediaComposerBin() {
+        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        const QString movie = dir.filePath(QStringLiteral("A003.mov"));
+        QVERIFY(writeMovie(movie, 10));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Harbor"));
+        project.settings.name = QStringLiteral("Harbor");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 256;
+        project.settings.format.height = 144;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("importVideoDrive"), drive);
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        QCOMPARE(window.importFiles(binId, {movie}, QStringLiteral("dnx_lb")).size(), 1);
+        const model::BinItem clip = bin->bin().items.first();
+        Composer& composer = window.composer();
+        composer.loadDefault(bin->nodeId(), clip);
+        composer.state(MonitorId::Source).setPosition(1);
+        composer.state(MonitorId::Source).markIn();
+        composer.state(MonitorId::Source).setPosition(7);
+        composer.state(MonitorId::Source).markOut();
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.splice_in")));
+        const model::LoadedClip* record = composer.state(MonitorId::Record).current();
+        QVERIFY(record);
+        const QString sequenceId = record->item.id;
+        const QString sequenceName = record->item.name;
+        window.binContainer().saveAll();
+
+        window.settings().setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("avb"));
+        BinView* view = window.binContainer().viewFor(bin);
+        QVERIFY(view);
+        view->selectIds({sequenceId});
+        const QString avb = dir.filePath(QStringLiteral("Selects.avb"));
+        QString proposed;
+        window.setExportHook([&](ExportAsDialog& dialog) -> bool {
+            proposed = dialog.pathEdit()->text();
+            dialog.setPath(dir.filePath(QStringLiteral("Selects"))); // the extension is added
+            return true;
+        });
+        commands.action(QStringLiteral("file.output.export_to_file"))->trigger();
+        QVERIFY2(proposed.endsWith(QLatin1String(".avb")), qPrintable(proposed));
+        QVERIFY(QFile::exists(avb));
+
+        QString error;
+        const QString otherId = window.openBinFile(avb, &error);
+        QVERIFY2(!otherId.isEmpty(), qPrintable(error));
+        BinDocument* other = window.binContainer().document(otherId);
+        QVERIFY(other);
+        QCOMPARE(other->bin().items.size(), 2);
+        const model::BinItem* back = named(*other, clip.name);
+        QVERIFY(back);
+        QCOMPARE(back->mobId, model::mobIdOf(clip));
+        QVERIFY(!back->userPlaced); // a reference clip: only the sequence was selected
+        QCOMPARE(back->sources.size(), clip.sources.size());
+        const auto link = media::linkOf(*back);
+        QVERIFY2(link && link->isManaged(), "the clip read back finds its managed media by MobID");
+        const model::BinItem* sequence = named(*other, sequenceName);
+        QVERIFY(sequence);
+        QCOMPARE(sequence->kind, model::BinItemKind::Sequence);
+        const model::Sequence cut = model::Sequence::fromItem(*sequence);
+        const model::Track* v1 = cut.track(QStringLiteral("V1"));
+        QVERIFY(v1 && !v1->segments.isEmpty());
+        QCOMPARE(v1->segments.first().clipId, back->id);
+        QCOMPARE(v1->segments.first().sourceIn, std::int64_t{1});
+        QCOMPARE(v1->segments.first().length, std::int64_t{7});
+        QVERIFY(cut.track(QStringLiteral("A1")));
+        media::setExtraMediaDrives({});
+    }
+
     void relinkDeleteAndTheBackgroundQueue() {
         if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;

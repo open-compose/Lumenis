@@ -68,6 +68,26 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(avb_write_pyavb PROPERTIES
         SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch)
 
+    # Native bins out as Media Composer bins (3.4b): each corpus bin with a
+    # reference read (--import-avb), written (--export-avb) and read again is
+    # the same, columns, sources and effects included. Needs only the corpus.
+    add_test(NAME avb_export_round_trip
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py check-avb-export
+                --app $<TARGET_FILE:lumenis_app> --dir ${LUMENIS_INTEROP_CORPUS})
+    set_tests_properties(avb_export_round_trip PROPERTIES
+        SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    # The same bins written, read by pyavb: every object as Cutthulhu reads
+    # it, and the bin (avb-structure.py) as the one exported. Skipped without
+    # pyavb or the corpus.
+    add_test(NAME avb_export_pyavb
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py check-avb-export-pyavb
+                --app $<TARGET_FILE:lumenis_app> --dir ${LUMENIS_INTEROP_CORPUS})
+    set_tests_properties(avb_export_pyavb PROPERTIES
+        SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
     # Phase 3 gate 1 on the corpus: each AAF imported into a bin is the same
     # as Media Composer's own bin of the material (tests/data/aaf_reference).
     add_test(NAME aaf_import_bins

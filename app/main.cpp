@@ -8,6 +8,7 @@
 #include "lumenis/interop/aaf_export.h"
 #include "lumenis/interop/aaf_import.h"
 #include "lumenis/interop/avb.h"
+#include "lumenis/interop/avb_export.h"
 #include "lumenis/interop/avb_import.h"
 #include "lumenis/interop/avb_writer.h"
 #include "lumenis/model/structure.h"
@@ -88,8 +89,8 @@
 // The cutthulhu executable: main() sets up Qt, the provider registry and modules, then either runs
 // one of the command-line tools below and exits, or opens the editor (Select Project, then
 // lumenis::ui::MainWindow). The options are declared in main() and handled in this order:
-// --list-providers, --probe, --dump-structure, --export-aaf, --import-aaf, --import-avb, --dump-aaf,
-// --dump-avb, --rewrite-avb, --write-media and --framemd5 need no display (isHeadlessInvocation()); --dump-menus,
+// --list-providers, --probe, --dump-structure, --export-aaf, --export-avb, --import-aaf, --import-avb,
+// --dump-aaf, --dump-avb, --rewrite-avb, --write-media and --framemd5 need no display (isHeadlessInvocation()); --dump-menus,
 // --measure-playback, --screenshot and --smoke-test open the main window; --project or Select
 // Project start a normal session. The scripts that run these are in scripts/ (decode-corpus.py,
 // check-mxf.py, measure-playback.py, structdiff.py, aaf-dump.py, make-checklist.py,
@@ -105,7 +106,7 @@ bool isHeadlessInvocation(int argc, char** argv) {
         if (arg == "--version" || arg == "-v" || arg == "--help" || arg == "-h" || arg == "-?"
             || arg == "--list-providers" || arg == "--probe" || arg == "--framemd5" || arg == "--write-media"
             || arg == "--dump-structure" || arg == "--dump-aaf" || arg == "--dump-avb" || arg == "--import-aaf" || arg == "--import-avb"
-            || arg == "--export-aaf" || arg == "--rewrite-avb") {
+            || arg == "--export-aaf" || arg == "--export-avb" || arg == "--rewrite-avb") {
             return true;
         }
     }
@@ -286,6 +287,14 @@ int main(int argc, char** argv) {
                                       QStringLiteral("file"));
     parser.addOption(exportAaf);
     parser.addOption(exportTo);
+    const QCommandLineOption exportAvb(
+        QStringLiteral("export-avb"),
+        QStringLiteral("Write a bin (.cthbin) as a Media Composer bin (.avb) to the file given after it "
+                       "(docs/spec/avb.md, \"Export\"), then exit. Clips its sequences use from the project's "
+                       "other bins (the .cthbin files beside it) go in as reference clips. A .avb is read "
+                       "first: a round trip."),
+        QStringLiteral("bin"));
+    parser.addOption(exportAvb);
     parser.addOption(canonical);
     parser.addOption(writeMedia);
     parser.addOption(mediaDrive);
@@ -384,6 +393,61 @@ int main(int argc, char** argv) {
         for (const QString& w : result.warnings) std::fprintf(stderr, "export-aaf: %s\n", qPrintable(w));
         if (!result.ok) {
             std::fprintf(stderr, "cannot write %s: %s\n", qPrintable(parser.value(exportTo)), qPrintable(result.error));
+            return 1;
+        }
+        return 0;
+    }
+
+    // --export-avb <bin> OUT: a .cthbin (with the other bins of its folder, the project's, to find the
+    // clips its sequences use), or a Media Composer bin's import (a round trip, ctest
+    // avb_export_round_trip), written by interop::avb::exportBin() (docs/spec/avb.md). Warnings go to
+    // stderr; exit status 2 without OUT.
+    if (parser.isSet(exportAvb)) {
+        QString error;
+        const QString from = parser.value(exportAvb);
+        const QStringList rest = parser.positionalArguments();
+        if (rest.size() != 1) {
+            std::fprintf(stderr, "--export-avb needs the file to write after the bin to read\n");
+            return 2;
+        }
+        lumenis::model::Bin bin;
+        QList<lumenis::model::Bin> others;
+        if (from.endsWith(QLatin1String(".avb"), Qt::CaseInsensitive)) {
+            const auto imported = lumenis::interop::avb::importFile(from, {}, &error);
+            if (!imported) {
+                std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(from), qPrintable(error));
+                return 1;
+            }
+            for (const QString& w : imported->warnings) std::fprintf(stderr, "import-avb: %s\n", qPrintable(w));
+            bin.name = QFileInfo(from).completeBaseName();
+            bin.items = imported->items;
+            bin.display.customColumns = imported->customColumns;
+        } else {
+            const auto read = lumenis::model::BinFile::read(from, &error);
+            if (!read) {
+                std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(from), qPrintable(error));
+                return 1;
+            }
+            bin = *read;
+            const QFileInfo info(from);
+            for (const QFileInfo& f : info.dir().entryInfoList({QStringLiteral("*") + lumenis::model::BinFile::suffix()}, QDir::Files)) {
+                if (f.canonicalFilePath() == info.canonicalFilePath()) continue;
+                if (auto other = lumenis::model::BinFile::read(f.filePath())) others << *other;
+            }
+        }
+        lumenis::interop::avb::ExportOptions options;
+        options.resolve = [&others](const lumenis::MobId& mob, const QString& clipId) -> std::optional<lumenis::model::BinItem> {
+            for (const lumenis::model::Bin& b : others) {
+                for (const lumenis::model::BinItem& item : b.items) {
+                    if ((!clipId.isEmpty() && item.id == clipId) || lumenis::model::mobIdOf(item) == mob) return item;
+                }
+            }
+            return std::nullopt;
+        };
+        const auto result = lumenis::interop::avb::exportBin(bin, rest.first(), options);
+        for (const QString& w : result.warnings) std::fprintf(stderr, "export-avb: %s\n", qPrintable(w));
+        if (!result.ok) {
+            std::fprintf(stderr, "cannot write %s: %s\n", qPrintable(rest.first()), qPrintable(result.error));
             return 1;
         }
         return 0;
