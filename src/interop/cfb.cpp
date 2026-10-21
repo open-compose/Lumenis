@@ -536,7 +536,9 @@ QByteArray Writer::toBytes(QString* error) const {
     QByteArray out(static_cast<qsizetype>(ss), '\0'); // the header, filled in last
 
     // The next sector's number, its FAT entry ENDOFCHAIN until a chain links it on. The range lock sector
-    // is skipped: left zeroed, marked ENDOFCHAIN, and part of no chain.
+    // is skipped: left zeroed, marked ENDOFCHAIN, and part of no chain. ENDOFCHAIN (not FREESECT) is what
+    // [MS-CFB] 2.2 asks of a file past 2 GB: the sector is allocated in the FAT, so that no writer reuses
+    // it, yet holds no stream's data (no chain names it). Readers such as olefile only follow chains.
     auto nextSector = [&]() {
         auto s = static_cast<std::uint32_t>(fat.size());
         if (s == rangeLock) {

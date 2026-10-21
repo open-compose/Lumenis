@@ -4,6 +4,7 @@
 #include <QJsonObject>
 
 #include <algorithm>
+#include <limits>
 
 // Dumps of AAF objects as JSON (docs/spec/aaf.md, "Dumps"), for `cutthulhu --dump-aaf`. The form is the
 // one scripts/aaf-dump.py prints from pyaaf2's reading of the same file, so the two readers can be

@@ -213,6 +213,8 @@ sequences.
   point at c frames shortens the segment before by L − c and starts the one
   after c frames later. Its alignment follows c: 0 is Starting at Cut, L
   Ending at Cut, L/2 Centered on Cut, others Custom.
+  A transition last in its track (or in an effect's input) has no segment
+  after it; it is left out with a warning.
 * **Effects** (OperationGroups) apply to the segments of their first input
   that has material. A timewarp's input runs at another speed, so the
   segments are fitted to the effect's length. Audio Gain and Audio Pan are

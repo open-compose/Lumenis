@@ -10,7 +10,7 @@
 
 #include <cstdint>
 
-// Clip > Consolidate/Transcode (Editing Guide p.348-356): new media for the
+// Clip > Consolidate/Transcode (Editing Guide p.349-356): new media for the
 // selected clips and sequences, and the clips that use it.
 namespace lumenis::media {
 

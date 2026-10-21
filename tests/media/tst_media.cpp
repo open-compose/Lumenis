@@ -252,7 +252,7 @@ private slots:
     }
 
     void managedMedia() {
-        // Import/Transcode and Consolidate into Avid MediaFiles (p.348-356):
+        // Import/Transcode and Consolidate into Avid MediaFiles (p.349-356):
         // MXF OP-Atom, a file per track.
         if (!patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
         QTemporaryDir dir;
@@ -402,12 +402,28 @@ private slots:
         QCOMPARE(copied->fields.value(QStringLiteral("Start")), QStringLiteral("10:00:00:03"));
         QCOMPARE(copied->fields.value(QStringLiteral("Video")), QStringLiteral("Avid DNx LB"));
         for (int n : {0, 3}) QCOMPARE(cache.frame(*copied, n), cache.frame(*made, n + 1));
+        // The copied picture's MXF names the new clip and its file by their
+        // MobIDs too, as the sound's do, and is labelled clip-wrapped.
+        for (const ClipSource& fileSource : copied->sources) {
+            if (fileSource.kind != ClipSource::Kind::File) continue;
+            const auto info = probe(fileSource.path);
+            QVERIFY(info);
+            auto umid = [&](const char* key) {
+                return MobId::fromString(info->metadata.value(QString::fromLatin1(key)).mid(2).toStdString());
+            };
+            QCOMPARE(umid("material_package_umid"), copied->mobId);
+            QCOMPARE(umid("file_package_umid"), fileSource.mob);
+        }
 
         // The media database finds the files where they are now.
         MediaDatabase db;
         db.scan({drive, drive2});
         QCOMPARE(db.fileCount(), 6);
         QVERIFY(QFileInfo::exists(QDir(folder).filePath(MediaDatabase::indexName())));
+        const auto copiedSet = db.setOf(copied->mobId);
+        QVERIFY(copiedSet);
+        QCOMPARE(copiedSet->mediaId, linkOf(*copied)->mediaId);
+        QCOMPARE(copiedSet->track(QStringLiteral("V1")).material, copied->mobId);
         const QString moved = QDir(drive2).filePath(QStringLiteral("Avid MediaFiles/MXF/2"));
         QVERIFY(QDir().mkpath(moved));
         // Closed first: Windows renames no open file.
@@ -651,6 +667,24 @@ private slots:
         r.currentProjectOnly = true;
         r.project = QStringLiteral("Other");
         QVERIFY(!findMedia(*part, db, r));
+        // The part's material in a 50 fps clip: 10:00:00:10 for 20 frames
+        // is the 25 fps media's frames 5-14. Only with Allow relink across
+        // rates (p.363), and then converted to the media's frames.
+        model::BinItem fifty = *part;
+        fifty.editRate = Rational(50);
+        fifty.durationFrames = 20;
+        fifty.fields.insert(QStringLiteral("Start"), QStringLiteral("10:00:00:10"));
+        r = RelinkOptions{};
+        r.method = RelinkOptions::Method::MostCompressed;
+        QVERIFY(!findMedia(fifty, db, r));
+        r.acrossRates = true;
+        link = findMedia(fifty, db, r);
+        QVERIFY(link);
+        QCOMPARE(link->mediaId, linkOf(*whole)->mediaId);
+        QCOMPARE(link->first, std::int64_t{5});
+        // Past the media's end at the other rate: no match.
+        fifty.durationFrames = 32;
+        QVERIFY(!findMedia(fifty, db, r));
 
         // No match: the clip stays, or is unlinked.
         r = RelinkOptions{};
@@ -700,6 +734,10 @@ private slots:
         QVERIFY(QFileInfo::exists(source));
         QCOMPARE(db.fileCount(), 2);
         QVERIFY(!cache.isOnline(*whole));
+        // Files deleted behind its back are gone after the next scan.
+        for (const QString& f : linkOf(*part)->files()) QVERIFY(QFile::remove(f));
+        db.scan({dir.path()});
+        QCOMPARE(db.fileCount(), 0);
     }
 
     void transcodeRoundTrips() {
@@ -1352,6 +1390,50 @@ private slots:
         s.format = QStringLiteral("no-such-format");
         s.videoCodec = QStringLiteral("ffv1");
         QVERIFY(!w.open(QStringLiteral("x.bin"), s, &error));
+
+        // Sound that says it has no channels, and a picture that cannot be
+        // decoded: nothing to link (not a crash).
+        MediaInfo info;
+        info.path = QStringLiteral("/no/such/odd.mov");
+        StreamInfo picture;
+        picture.kind = StreamKind::Video;
+        picture.frameRate = Rational(25);
+        picture.decodable = false;
+        StreamInfo sound;
+        sound.index = 1;
+        sound.kind = StreamKind::Audio;
+        sound.sampleRate = 48000;
+        sound.channels = 0;
+        sound.decodable = true;
+        info.streams = {picture, sound};
+        error.clear();
+        QVERIFY(!linkClip(info, LinkOptions{}, &error));
+        QVERIFY(!error.isEmpty());
+    }
+
+    // A frame cache does not keep a file it could not open: once the file
+    // is there, its frames are.
+    void frameCacheRetriesMissingFiles() {
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("Later.mov"));
+        WriterSettings s;
+        s.format = QStringLiteral("mov");
+        s.videoCodec = QStringLiteral("ffv1");
+        s.pixelFormat = QStringLiteral("bgr0");
+        s.width = 64;
+        s.height = 36;
+        s.frameRate = Rational(25);
+        QVERIFY(writeVideo(path, s, 4));
+        LinkOptions o;
+        o.editRate = Rational(25);
+        const auto clip = linkClip(*probe(path), o);
+        QVERIFY(clip);
+        const QString away = dir.filePath(QStringLiteral("Away.mov"));
+        QVERIFY(QFile::rename(path, away));
+        FrameCache cache;
+        QVERIFY(cache.frame(*clip, 1).isNull());
+        QVERIFY(QFile::rename(away, path));
+        QVERIFY(near(cache.frame(*clip, 1), colourOf(1), 14));
     }
 };
 

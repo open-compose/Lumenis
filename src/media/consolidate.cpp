@@ -12,7 +12,7 @@
 #include <algorithm>
 #include <map>
 
-// Clip > Consolidate/Transcode over a bin selection (Editing Guide p.348-356). This file decides
+// Clip > Consolidate/Transcode over a bin selection (Editing Guide p.349-356). This file decides
 // what to make and how the bin changes; the media itself is written by consolidateClip() and
 // transcodeClip() in managed.cpp. The dialog is src/ui/consolidate_dialog.cpp; the command runs from
 // src/ui/main_window.cpp, through the Background Queue (src/ui/background_queue.cpp).
@@ -99,7 +99,12 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
     // Makes the media of frames [in, out) (out -1: to the end): copied for Consolidate, otherwise
     // transcoded at the raster the options choose for this clip.
     auto make = [&](const model::BinItem& clip, std::int64_t in, std::int64_t out, QString* error) {
-        if (copy) return consolidateClip(clip, in, out, options.creation, error);
+        if (copy) {
+            // The clip itself takes the copy unless masters stay linked: the files then name it.
+            MediaCreation creation = options.creation;
+            if (!options.keepMastersLinked && in == 0 && out < 0) creation.master = clip.mobId;
+            return consolidateClip(clip, in, out, creation, error);
+        }
         MediaCreation creation = options.creation;
         creation.raster = rasterFor(clip, options.raster, options.creation.raster);
         return transcodeClip(clip, in, out, creation, error);
@@ -120,14 +125,20 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
             }
             made->markers = item.markers;
             if (copy && !options.keepMastersLinked) {
-                // The clip takes the copy; ".old" keeps the media it had.
+                // The clip takes the copy; ".old", a new master clip, keeps the media it had (p.349). The
+                // clip keeps its MobID, so the sequences that name it play the copy: the copy's files
+                // were made naming it (make()), and it takes their file sources. The old files still
+                // name the clip's MobID too; they hold the same frames.
                 model::BinItem old = item;
                 old.id = model::newItemId();
+                old.mobId = MobId::generate();
                 old.name = numberedName(item.name, QStringLiteral(".old"), names);
                 names << old.name;
                 model::BinItem relinked = item;
                 relinked.link = made->link;
                 relinked.fields = made->fields;
+                relinked.sources = made->sources;
+                if (relinked.mobId.isNull()) relinked.mobId = made->mobId; // a clip from before MobIDs
                 relinked.modified = made->modified;
                 result.changed << relinked;
                 result.added << old;

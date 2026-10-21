@@ -1,6 +1,7 @@
 #include "lumenis/interop/aaf.h"
 #include "lumenis/interop/aaf_export.h"
 #include "lumenis/interop/aaf_import.h"
+#include "lumenis/interop/aaf_writer.h"
 #include "lumenis/model/structure.h"
 #include "lumenis/model/sequence.h"
 
@@ -14,6 +15,9 @@
 #include <QTemporaryDir>
 #include <QTimeZone>
 #include <QtTest>
+
+#include <limits>
+#include <stdexcept>
 
 using namespace lumenis;
 using namespace lumenis::interop;
@@ -42,6 +46,10 @@ private slots:
     void exportRoundTrip();
     void notAaf();
     void damaged();
+    void builderUnchangedByWrite();
+    void trailingTransition();
+    void dropFrameStart();
+    void numbersPastRational();
 };
 
 void TestAaf::auids() {
@@ -409,6 +417,169 @@ void TestAaf::damaged() {
         for (const aaf::Object& m : file.mobs()) m.string(QStringLiteral("Name"));
     }
     QVERIFY(opened > 0);
+}
+
+namespace {
+
+const QUuid kPictureDef = aaf::auidFromText("01030202-0100-0000-060e-2b3404010101");
+const QUuid kTimecodeDef = aaf::auidFromText("01030201-0100-0000-060e-2b3404010101");
+
+QVariantMap rationalOf(qint64 num, qint64 den) {
+    return {{QStringLiteral("Numerator"), num}, {QStringLiteral("Denominator"), den}};
+}
+
+// A builder with the Header's basics and the Picture and Timecode data definitions, for hand-made files.
+void startFile(aaf::Builder& b) {
+    b.set(b.header(), QStringLiteral("ByteOrder"), 0x4949);
+    b.set(b.header(), QStringLiteral("Version"), QVariantMap{{QStringLiteral("major"), 1}, {QStringLiteral("minor"), 1}});
+    for (const auto& [auid, name] : {std::pair{kPictureDef, QStringLiteral("Picture")}, std::pair{kTimecodeDef, QStringLiteral("Timecode")}}) {
+        const aaf::Builder::Ref d = b.create(QStringLiteral("DataDefinition"));
+        b.set(d, QStringLiteral("Identification"), auid);
+        b.set(d, QStringLiteral("Name"), name);
+        b.set(d, QStringLiteral("Description"), QString());
+        b.append(b.dictionary(), QStringLiteral("DataDefinitions"), d);
+    }
+}
+
+// A mob of `className` with its MobID and name, in the file's content.
+aaf::Builder::Ref addMob(aaf::Builder& b, const QString& className, const MobId& id, const QString& name) {
+    const aaf::Builder::Ref m = b.create(className);
+    b.set(m, QStringLiteral("MobID"), QVariant::fromValue(id));
+    b.set(m, QStringLiteral("Name"), name);
+    b.append(b.content(), QStringLiteral("Mobs"), m);
+    return m;
+}
+
+// A timeline slot holding `segment`.
+void addSlot(aaf::Builder& b, aaf::Builder::Ref mob, int id, const QVariantMap& rate, aaf::Builder::Ref segment) {
+    const aaf::Builder::Ref s = b.create(QStringLiteral("TimelineMobSlot"));
+    b.set(s, QStringLiteral("SlotID"), id);
+    b.set(s, QStringLiteral("EditRate"), rate);
+    b.set(s, QStringLiteral("Origin"), 0);
+    b.setObject(s, QStringLiteral("Segment"), segment);
+    b.append(mob, QStringLiteral("Slots"), s);
+}
+
+} // namespace
+
+// toBytes() leaves the builder as it found it, also when it fails: no
+// metadictionary objects are left behind to be written twice.
+void TestAaf::builderUnchangedByWrite() {
+    aaf::Builder good;
+    const QByteArray first = good.toBytes();
+    QVERIFY(!first.isEmpty());
+    QCOMPARE(good.toBytes().size(), first.size());
+
+    aaf::Builder b;
+    const aaf::Builder::Ref before = b.create(QStringLiteral("Filler"));
+    QVERIFY(!b.set(before, QStringLiteral("NoSuchProperty"), 1));
+    QCOMPARE(b.errors().size(), 1);
+    QString error;
+    QVERIFY(b.toBytes(&error).isEmpty());
+    QVERIFY(error.contains(QStringLiteral("NoSuchProperty")));
+    QCOMPARE(b.errors().size(), 1);
+    // The next object takes the place after the last one made before the write.
+    QCOMPARE(b.create(QStringLiteral("Filler")), before + 1);
+}
+
+// A transition last in its track has no segment after it to go onto: it is
+// left out with a warning, not silently.
+void TestAaf::trailingTransition() {
+    aaf::Builder b;
+    startFile(b);
+    const aaf::Builder::Ref m = addMob(b, QStringLiteral("CompositionMob"), MobId::generate(), QStringLiteral("Cut"));
+    b.set(m, QStringLiteral("UsageCode"), QStringLiteral("Usage_TopLevel"));
+    const aaf::Builder::Ref seq = b.create(QStringLiteral("Sequence"));
+    b.setWeak(seq, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(seq, QStringLiteral("Length"), qint64(40));
+    const aaf::Builder::Ref filler = b.create(QStringLiteral("Filler"));
+    b.setWeak(filler, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(filler, QStringLiteral("Length"), qint64(50));
+    b.append(seq, QStringLiteral("Components"), filler);
+    const aaf::Builder::Ref t = b.create(QStringLiteral("Transition"));
+    b.setWeak(t, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(t, QStringLiteral("Length"), qint64(10));
+    b.set(t, QStringLiteral("CutPoint"), qint64(5));
+    b.append(seq, QStringLiteral("Components"), t);
+    addSlot(b, m, 1, rationalOf(25, 1), seq);
+    QTemporaryDir dir;
+    const QString path = dir.filePath(QStringLiteral("trailing.aaf"));
+    QString error;
+    QVERIFY2(b.save(path, &error), qPrintable(error));
+
+    const auto result = aaf::importFile(path, {}, &error);
+    QVERIFY2(result, qPrintable(error));
+    QCOMPARE(result->items.size(), 1);
+    QVERIFY2(result->warnings.contains(QStringLiteral("transitions at the end of a track left out")),
+             qPrintable(result->warnings.join(QLatin1Char('\n'))));
+}
+
+// A master clip's Start and End follow its tape's drop-frame timecode.
+void TestAaf::dropFrameStart() {
+    aaf::Builder b;
+    startFile(b);
+    const QVariantMap ntsc = rationalOf(30000, 1001);
+    const MobId tapeId = MobId::generate();
+    const aaf::Builder::Ref tape = addMob(b, QStringLiteral("SourceMob"), tapeId, QStringLiteral("TAPE1"));
+    b.setObject(tape, QStringLiteral("EssenceDescription"), b.create(QStringLiteral("TapeDescriptor")));
+    const aaf::Builder::Ref tc = b.create(QStringLiteral("Timecode"));
+    b.setWeak(tc, QStringLiteral("DataDefinition"), kTimecodeDef);
+    b.set(tc, QStringLiteral("Length"), qint64(1000000));
+    b.set(tc, QStringLiteral("Start"), qint64(107892)); // 01:00:00;00 at 29.97 drop frame
+    b.set(tc, QStringLiteral("FPS"), 30);
+    b.set(tc, QStringLiteral("Drop"), true);
+    addSlot(b, tape, 1, ntsc, tc);
+
+    const aaf::Builder::Ref master = addMob(b, QStringLiteral("MasterMob"), MobId::generate(), QStringLiteral("Clip"));
+    const aaf::Builder::Ref clip = b.create(QStringLiteral("SourceClip"));
+    b.setWeak(clip, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(clip, QStringLiteral("Length"), qint64(1800));
+    b.set(clip, QStringLiteral("SourceID"), QVariant::fromValue(tapeId));
+    b.set(clip, QStringLiteral("SourceMobSlotID"), 1);
+    b.set(clip, QStringLiteral("StartTime"), qint64(0));
+    addSlot(b, master, 1, ntsc, clip);
+    QTemporaryDir dir;
+    const QString path = dir.filePath(QStringLiteral("drop.aaf"));
+    QString error;
+    QVERIFY2(b.save(path, &error), qPrintable(error));
+
+    const auto result = aaf::importFile(path, {}, &error);
+    QVERIFY2(result, qPrintable(error));
+    QCOMPARE(result->items.size(), 1);
+    const model::BinItem& item = result->items.first();
+    QCOMPARE(item.fields.value(QStringLiteral("Tape")), QStringLiteral("TAPE1"));
+    QCOMPARE(item.fields.value(QStringLiteral("Start")), QStringLiteral("01:00:00;00"));
+    QCOMPARE(item.fields.value(QStringLiteral("End")), QStringLiteral("01:01:00;02"));
+}
+
+// A damaged file whose lengths and rates do not fit a Rational is an error, not a crash: Rational
+// throws rather than wrap, and importFile() reports it.
+void TestAaf::numbersPastRational() {
+    aaf::Builder b;
+    startFile(b);
+    const aaf::Builder::Ref m = addMob(b, QStringLiteral("CompositionMob"), MobId::generate(), QStringLiteral("Cut"));
+    b.set(m, QStringLiteral("UsageCode"), QStringLiteral("Usage_TopLevel"));
+    // Two picture tracks at different rates: the clip's duration converts the second's length to
+    // the first's rate.
+    const aaf::Builder::Ref first = b.create(QStringLiteral("Filler"));
+    b.setWeak(first, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(first, QStringLiteral("Length"), qint64(25));
+    addSlot(b, m, 1, rationalOf(25, 1), first);
+    const aaf::Builder::Ref second = b.create(QStringLiteral("Filler"));
+    b.setWeak(second, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(second, QStringLiteral("Length"), std::numeric_limits<qint64>::max() / 3);
+    addSlot(b, m, 2, rationalOf(2147483647, 2147483646), second);
+    QTemporaryDir dir;
+    const QString path = dir.filePath(QStringLiteral("huge.aaf"));
+    QString error;
+    QVERIFY2(b.save(path, &error), qPrintable(error));
+    const auto result = aaf::importFile(path, {}, &error);
+    QVERIFY2(!result, "the lengths should not fit");
+    QVERIFY2(error.contains(QStringLiteral("huge.aaf")), qPrintable(error));
+    // It is the overflow that importFile() turned into the error.
+    aaf::File file;
+    QVERIFY(file.open(path, &error));
+    QVERIFY_THROWS_EXCEPTION(std::overflow_error, aaf::importMobs(file));
 }
 
 QTEST_GUILESS_MAIN(TestAaf)

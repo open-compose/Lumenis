@@ -20,6 +20,7 @@ extern "C" {
 }
 
 #include <algorithm>
+#include <exception>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -425,7 +426,9 @@ QJsonObject MediaInfo::toJson() const {
 // Reads a file's format, metadata and streams without decoding any frames (except to count those of
 // formats without an index, see lengthIsGuessed()). The file and stream metadata are merged:
 // QuickTime keeps the timecode and reel on a track, MXF the file package's UMID on its stream.
-std::optional<MediaInfo> probe(const QString& path, QString* error) {
+namespace {
+
+std::optional<MediaInfo> probeUnchecked(const QString& path, QString* error) {
     Input in = openInput(path, error);
     if (!in) return std::nullopt;
     MediaInfo info;
@@ -466,6 +469,19 @@ std::optional<MediaInfo> probe(const QString& path, QString* error) {
                                static_cast<double>(seq->rate.num());
     }
     return info;
+}
+
+} // namespace
+
+std::optional<MediaInfo> probe(const QString& path, QString* error) {
+    // A damaged file's numbers can be past what Rational holds (it throws rather than wrap): the
+    // file is then unreadable, not a crash.
+    try {
+        return probeUnchecked(path, error);
+    } catch (const std::exception& e) {
+        if (error) *error = QStringLiteral("%1: %2").arg(path, QString::fromUtf8(e.what()));
+        return std::nullopt;
+    }
 }
 
 // ---------------------------------------------------------------- ImageSequence
@@ -1640,7 +1656,8 @@ std::vector<float> Resampler::flush() {
 
 // Remuxes packets: the input's codec parameters are copied to the output stream and each packet of
 // the stream from the `first`-th on is written with new timestamps, one frame apart from 0. That only
-// gives exact frames for intra-only codecs; the caller (consolidateClip(), managed.cpp) checks.
+// gives exact frames for intra-only codecs; the caller (consolidateClip(), managed.cpp) checks. For
+// mxf_opatom the closed file is then fixed as MediaWriter's is (fixOpAtom()), with the settings' package IDs.
 bool copyVideoFrames(const QString& from, int stream, std::int64_t first, std::int64_t count, const QString& to,
                      const WriterSettings& settings, QString* error) {
     Input in = openInput(from, error);
@@ -1725,6 +1742,11 @@ bool copyVideoFrames(const QString& from, int stream, std::int64_t first, std::i
     rc = av_write_trailer(out);
     if (!ok || rc < 0) return failed(QStringLiteral("cannot write %1").arg(to));
     if (written < count) return failed(QStringLiteral("%1 ends before frame %2").arg(from).arg(first + count));
+    // As MediaWriter::finish(): OP-Atom gets its labels and the given package IDs once the file is closed.
+    if (!(out->oformat->flags & AVFMT_NOFILE)) avio_closep(&out->pb);
+    if (settings.format == QLatin1String("mxf_opatom") && !fixOpAtom(to, settings.materialPackage, settings.filePackage)) {
+        return failed(QStringLiteral("cannot finish the MXF's labels and package IDs"));
+    }
     return true;
 }
 

@@ -11,6 +11,7 @@
 #include <QStorageInfo>
 
 #include <algorithm>
+#include <exception>
 #include <cmath>
 
 // Linked media (ROADMAP Phase 2.2): master clips that point at files where they are, through a Link
@@ -295,7 +296,9 @@ bool isLinkable(const MediaInfo& info) {
 // The clip runs at the project's rate (options.editRate); its duration converts the file's frames
 // (or, for sound only, its samples) to that rate. Undecodable pictures are ignored, so a file with
 // sound the build can read and a picture it cannot becomes an audio clip.
-std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions& options, QString* error) {
+namespace {
+
+std::optional<model::BinItem> linkClipUnchecked(const MediaInfo& info, const LinkOptions& options, QString* error) {
     if (!isLinkable(info)) {
         if (error) *error = QObject::tr("%1 has no picture or sound that can be read.").arg(info.path);
         return std::nullopt;
@@ -315,6 +318,11 @@ std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions&
         link.audioStreams << a->index;
         link.streamChannels << a->channels;
         link.channels += a->channels;
+    }
+    // isLinkable() also passes sound streams with no channels, and those are skipped above.
+    if (!video && !firstAudio) {
+        if (error) *error = QObject::tr("%1 has no picture or sound that can be read.").arg(info.path);
+        return std::nullopt;
     }
 
     // The item: a master clip with a picture, an audio clip without.
@@ -429,6 +437,19 @@ std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions&
     }
     item.sources << import;
     return item;
+}
+
+} // namespace
+
+std::optional<model::BinItem> linkClip(const MediaInfo& info, const LinkOptions& options, QString* error) {
+    // A damaged file's numbers can be past what Rational holds (it throws rather than wrap): the
+    // file is then unreadable, not a crash.
+    try {
+        return linkClipUnchecked(info, options, error);
+    } catch (const std::exception& e) {
+        if (error) *error = QStringLiteral("%1: %2").arg(info.path, QString::fromUtf8(e.what()));
+        return std::nullopt;
+    }
 }
 
 namespace {
@@ -608,10 +629,11 @@ bool relinkClip(model::BinItem& item, const QString& path, QString* error) {
 
 // ---------------------------------------------------------------- FrameCache
 
-// One open file, with its own mutex: a VideoReader is used by one thread at a time. `ok` is false if
-// the file has no picture or could not be opened; such a reader stays cached until it is dropped.
+// One open file's video stream, with its own mutex: a VideoReader is used by one thread at a time.
+// `ok` is false if the file has no picture or could not be opened; such a reader is not cached.
 struct FrameCache::Reader {
     QString path;
+    int stream = -1;
     QMutex mutex;
     VideoReader video;
     bool ok = false;
@@ -622,18 +644,21 @@ FrameCache::FrameCache(int openFiles, int frames) : openFiles_(std::max(openFile
 FrameCache::~FrameCache() = default;
 
 // The reader for the link's file, most recently used first; the least recently used are closed past
-// openFiles_. Readers are kept by path alone.
+// openFiles_. Readers are kept by path and stream; one that failed to open is returned but not kept,
+// so the next call tries again (the file may have come online).
 std::shared_ptr<FrameCache::Reader> FrameCache::reader(const Link& link) {
     // Called with mutex_ held.
     for (auto it = readers_.begin(); it != readers_.end(); ++it) {
-        if ((*it)->path == link.path) {
+        if ((*it)->path == link.path && (*it)->stream == link.videoStream) {
             readers_.splice(readers_.begin(), readers_, it);
             return readers_.front();
         }
     }
     auto r = std::make_shared<Reader>();
     r->path = link.path;
+    r->stream = link.videoStream;
     r->ok = link.videoStream >= 0 && r->video.open(link.path, link.videoStream);
+    if (!r->ok) return r;
     readers_.push_front(r);
     while (static_cast<int>(readers_.size()) > openFiles_) readers_.pop_back();
     return r;
@@ -647,9 +672,9 @@ QImage FrameCache::frame(const model::BinItem& item, std::int64_t clipFrame, QSi
     if (!link || link->videoStream < 0 || link->unlinked) return {};
     const std::int64_t n = link->fileFrame(clipFrame, item.editRate);
     // One arg() call: a sequence's path holds a %04d of its own.
-    const QString key = QStringLiteral("%1|%2|%3x%4")
-                            .arg(link->path, QString::number(n), QString::number(size.width()),
-                                 QString::number(size.height()));
+    const QString key = QStringLiteral("%1|%2|%3|%4x%5")
+                            .arg(link->path, QString::number(link->videoStream), QString::number(n),
+                                 QString::number(size.width()), QString::number(size.height()));
     std::shared_ptr<Reader> r;
     {
         QMutexLocker lock(&mutex_);

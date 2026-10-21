@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstring>
 #include <functional>
+#include <limits>
 
 // The AAF writer (docs/spec/aaf.md, "Writing"). aaf::Builder keeps objects in memory by class AUID and
 // properties by pid, encodes data properties by the metadictionary's types (the reverse of File::decode
@@ -558,15 +559,23 @@ void Builder::addMetaDictionary(Ref meta) {
 }
 
 // Writes the file. The MetaDictionary is made first, under the Root; then the objects are written depth
-// first from the Root, each into its storage; then `referenced properties`. Once the objects are written,
-// the metadictionary objects and the tables are dropped again, so that a builder can be written more
-// than once.
+// first from the Root, each into its storage; then `referenced properties`. On every way out the
+// metadictionary objects, the Root's reference to them, the tables and any errors made here are dropped
+// again (`restore`), so that the builder is left as it was and can be written more than once.
 QByteArray Builder::toBytes(QString* error) {
+    const qsizetype errorsBefore = errors_.size();
     const Ref meta = create(QStringLiteral("MetaDictionary"));
+    auto restore = [&] {
+        objects_[root_].properties.erase(pidOfProperty(auidFromText("0d010301-0101-0100-060e-2b3401010102")));
+        objects_.resize(meta);
+        tables_.clear();
+        errors_.resize(errorsBefore);
+    };
     setObject(root_, QStringLiteral("MetaDictionary"), meta);
     addMetaDictionary(meta);
     if (!errors_.isEmpty()) {
         if (error) *error = errors_.join(QLatin1Char('\n'));
+        restore();
         return {};
     }
 
@@ -703,9 +712,7 @@ QByteArray Builder::toBytes(QString* error) {
     w.addStream(cfb::Writer::root(), QStringLiteral("referenced properties"), referenced, &failure);
 
     // The metadictionary is rebuilt on each save.
-    objects_[root_].properties.erase(pidOfProperty(auidFromText("0d010301-0101-0100-060e-2b3401010102")));
-    objects_.resize(meta);
-    tables_.clear();
+    restore();
     if (!failure.isEmpty()) {
         if (error) *error = failure;
         return {};

@@ -8,6 +8,7 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <exception>
 #include <map>
 
 // AAF import into bins (docs/spec/aaf.md, "Import"): the mobs an aaf::File reads (aaf.cpp) become bin
@@ -426,8 +427,7 @@ private:
         }
         std::optional<std::int64_t> start;
         if (first) start = startOf(first->segment, first->rate);
-        setTiming(item, tracks, start, false);
-        (void)drop;
+        setTiming(item, tracks, start, drop);
 
         items_[item.mobId] = item.id;
         slotTracks_[item.mobId] = slotTracks;
@@ -481,7 +481,8 @@ private:
 
     // Turns one track's AAF components into the native model's segments, at the sequence's edit rate
     // (`rate`; lengths in the file are in the slot's, `slotRate`). `letter` is V or A, for track names of
-    // clips the file does not hold. A transition is kept `pending` and goes onto the next segment pushed.
+    // clips the file does not hold. A transition is kept `pending` and goes onto the next segment pushed;
+    // finish() reports one that no segment follows.
     struct Flattener {
         Importer& importer;
         Rational rate;
@@ -505,6 +506,15 @@ private:
                 pending.reset();
             }
             out << s;
+        }
+
+        // Ends the track (or an effect's input). AAF puts a transition between two segments, so one left
+        // pending, last in its sequence, has nothing to go onto: it is left out, with a warning.
+        void finish() {
+            if (!pending) return;
+            importer.note(QStringLiteral("transitions at the end of a track left out"));
+            pending.reset();
+            pendingCut = 0;
         }
 
         void add(const Object& c, int depth = 0) {
@@ -541,6 +551,7 @@ private:
                 for (const Object& input : c.objects(QStringLiteral("InputSegments"))) {
                     inner.out.clear();
                     inner.add(input, depth + 1);
+                    inner.finish();
                     if (std::any_of(inner.out.begin(), inner.out.end(), [](const model::Segment& s) { return !s.isFiller(); })) break;
                 }
                 if (inner.out.isEmpty()) inner.out << model::Segment::filler(frames(c));
@@ -689,6 +700,7 @@ private:
                 }
                 Flattener f{*this, item.editRate, t.rate, letter, {}, {}, 0};
                 f.add(layer);
+                f.finish();
                 track->segments = f.out;
                 seq.normalize(name);
             }
@@ -738,7 +750,14 @@ ImportResult importMobs(const File& file, const ImportOptions& options) {
 std::optional<ImportResult> importFile(const QString& path, const ImportOptions& options, QString* error) {
     File file;
     if (!file.open(path, error)) return std::nullopt;
-    return importMobs(file, options);
+    // A damaged file's numbers can be past what Rational holds (it throws rather than wrap): the file
+    // is then unreadable, not a crash.
+    try {
+        return importMobs(file, options);
+    } catch (const std::exception& e) {
+        if (error) *error = QStringLiteral("%1: %2").arg(path, QString::fromUtf8(e.what()));
+        return std::nullopt;
+    }
 }
 
 } // namespace lumenis::interop::aaf

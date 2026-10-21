@@ -88,20 +88,24 @@ before the source chain existed have none, and it is never required.
   then takes the material package as its MobID and the file package as its
   file source, so a clip linked from Media Composer's media keeps Media
   Composer's MobIDs.
-* **Managed media** (Import, Transcode, Consolidate; `media::transcodeClip`):
-  the new master clip gets a new MobID, and each track's OP-Atom file gets a
-  file source with a MobID of its own. They come from the original clip's
-  tape or import source, which keeps its MobID; without one, a new one is
-  made (a tape source when the clip has a Tape). The MXF carries the same
-  MobIDs. The material package is the master clip in every track file, so
-  Media Composer sees one clip and not one per file. The file package is the
-  file's source. FFmpeg 6.1 ignores `material_package_umid` and writes random
-  UMIDs that differ in every file: one stem per file, the material package
-  ending `00` and the file package `01` (observed with bmx's mxf2raw).
-  `MediaWriter` therefore replaces them in the header metadata after the
-  trailer (`fixOpAtom`, `media.cpp`). `scripts/check-mxf.py --make` checks
-  that a clip's files share their material package and each have their own
-  file package.
+* **Managed media** (Import, Transcode, Consolidate;
+  `media::transcodeClip`): the new master clip gets a new MobID (except in
+  one case of Consolidate, below), and each track's OP-Atom file gets a file
+  source with a MobID of its own. They come from the original clip's tape or
+  import source, which keeps its MobID; without one, a new one is made (a
+  tape source when the clip has a Tape). The MXF carries the same MobIDs.
+  The material package is the master clip in every track file, so Media
+  Composer sees one clip and not one per file. The file package is the
+  file's source. FFmpeg 6.1 ignores `material_package_umid` and writes
+  random UMIDs that differ in every file: one stem per file, the material
+  package ending `00` and the file package `01` (observed with bmx's
+  mxf2raw). `MediaWriter` therefore replaces them in the header metadata
+  after the trailer (`fixOpAtom`, `media.cpp`). `scripts/check-mxf.py
+  --make` checks that a clip's files share their material package and each
+  have their own file package. Consolidate: when the original master clip is
+  relinked to the new files (Editing Guide p.349), the clip keeps its MobID
+  and the new files name it as their material package; the ".old" clip that
+  keeps the old media gets a new MobID.
 
 ## Subclips
 

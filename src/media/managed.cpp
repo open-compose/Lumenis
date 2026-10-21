@@ -133,6 +133,7 @@ public:
           const MediaCreation& creation)
         : clip_(clip), link_(link), in_(in), out_(out), creation_(creation), created_(QDateTime::currentDateTimeUtc()) {
         id_ = QUuid::createUuid().toString(QUuid::WithoutBraces);
+        if (!creation.master.isNull()) master_ = creation.master;
         const std::optional<std::int64_t> start = startFrame(clip);
         startTc_ = timecodeText(start.value_or(0) + in, clip.editRate);
         // The source before the files: the clip's own tape or import source
@@ -284,7 +285,14 @@ public:
         MediaWriter writer;
         if (!writer.open(path, s, error)) return false;
         std::unique_ptr<Resampler> resampler;
-        if (rate != kManagedSampleRate) resampler = std::make_unique<Resampler>(1, rate, kManagedSampleRate);
+        if (rate != kManagedSampleRate) {
+            resampler = std::make_unique<Resampler>(1, rate, kManagedSampleRate);
+            // An invalid one gives no samples: the track would be silence.
+            if (!resampler->isValid()) {
+                if (error) *error = QObject::tr("Cannot convert the sound of %1 from %2 Hz.").arg(clip_.name).arg(rate);
+                return false;
+            }
+        }
         // In the file, where the clip starts in it.
         const std::int64_t offset = samplesAt(link_.first, link_.rate, rate);
         std::int64_t at = samplesAt(in_, clip_.editRate, rate) + offset;
@@ -314,11 +322,15 @@ public:
             at += n;
             if (!step(std::max<std::int64_t>(n / perStep, 1))) return cancelled(error);
         }
-        if (resampler && !put(resampler->flush())) return false;
+        auto failed = [&] {
+            if (error) *error = writer.lastError();
+            return false;
+        };
+        if (resampler && !put(resampler->flush())) return failed();
         // Exactly the frames' length.
         if (written < wanted) {
             const std::vector<float> silence(static_cast<std::size_t>(wanted - written), 0.0f);
-            if (!put(silence)) return false;
+            if (!put(silence)) return failed();
         }
         return writer.finish(error);
     }
@@ -765,10 +777,16 @@ void MediaDatabase::clear() {
 // Reads every MXF folder of each drive. A file is read again (readMediaFile()) only when its size or
 // modification time differs from what the folder's index recorded; the index is rewritten when
 // anything changed. Files that are not managed media stay in the index but not in the database.
-// Earlier scans' files are kept: clear() first to forget them.
+// What earlier scans found on the drives scanned now is forgotten first, so deleted files go; files on
+// other drives are kept (clear() forgets them too).
 void MediaDatabase::scan(const QStringList& drives) {
     for (const QString& drive : drives) {
         const QDir mxf(QDir(mediaFilesFolder(drive)).filePath(QStringLiteral("MXF")));
+        const QString under = QDir::cleanPath(mxf.absolutePath()) + QLatin1Char('/');
+        for (auto it = files_.begin(); it != files_.end();) {
+            if (QDir::cleanPath(it.key()).startsWith(under)) it = files_.erase(it);
+            else ++it;
+        }
         for (const QString& sub : mxf.entryList(QDir::Dirs | QDir::NoDotAndDotDot)) {
             const QDir folder(mxf.filePath(sub));
             // The folder's index: the files read before, by name, with the

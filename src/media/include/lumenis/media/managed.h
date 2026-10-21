@@ -17,7 +17,7 @@
 #include <map>
 #include <optional>
 
-// Managed media (Editing Guide ch.12, p.348-359; ROADMAP Phase 2.4): media
+// Managed media (Editing Guide ch.12, p.349-359; ROADMAP Phase 2.4): media
 // the application makes itself, by importing, consolidating or
 // transcoding. It is kept as MXF OP-Atom ("Avid OP-Atom", p.1209), one file
 // per track, in "<drive>/Avid MediaFiles/MXF/<n>/" (p.513).
@@ -81,6 +81,10 @@ struct MediaCreation {
     int bitDepth = 24;  // PCM, 16 or 24
     QString project;    // the project's name, kept in the files
     QDateTime when;
+    // The new master clip's MobID, which its files name as their material
+    // package; null: a new one. Consolidate sets it to the clip's own when
+    // the clip itself takes the new media (p.349).
+    MobId master;
     // The fraction done; returning false cancels.
     std::function<bool(double)> progress;
 };
@@ -98,7 +102,7 @@ inline constexpr int kManagedSampleRate = 48000;
 std::optional<model::BinItem> transcodeClip(const model::BinItem& clip, std::int64_t in, std::int64_t out,
                                             const MediaCreation& creation, QString* error = nullptr);
 
-// Consolidate (p.348-352): copies the media of frames [in, out) without
+// Consolidate (p.349-352): copies the media of frames [in, out) without
 // converting the picture. That needs a picture whose frames stand alone
 // and that MXF OP-Atom holds (DNx), at the clip's rate; sound is written
 // as PCM, which loses nothing.
@@ -159,9 +163,11 @@ class MediaDatabase {
 public:
     static QString indexName() { return QStringLiteral("MediaDatabase.json"); }
 
-    // Reads the Avid MediaFiles folders of the drives (their roots).
+    // Reads the Avid MediaFiles folders of the drives (their roots). The
+    // files known from those drives are replaced by what is there now;
+    // other drives' files are kept.
     void scan(const QStringList& drives);
-    // Forgets every file; scan() adds to what is known.
+    // Forgets every file.
     void clear();
     // Track ("V1", "A1") to file, for a clip's id.
     QHash<QString, QString> filesOf(const QString& mediaId) const;

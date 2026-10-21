@@ -1,4 +1,5 @@
 #include "lumenis/ext/provider.h"
+#include "lumenis/media/consolidate.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
@@ -235,6 +236,65 @@ private slots:
         list->openEntry(i);
         QVERIFY(checked);
         media::setExtraMediaDrives({});
+    }
+
+    // Consolidate with the master clip taking the copy (p.349): the clip
+    // keeps its MobID, and the copy's files name it as their material
+    // package; ".old.01" is a new clip with the media the clip had.
+    void consolidateRelinksTheClip() {
+        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        const QString movie = dir.filePath(QStringLiteral("A001.mov"));
+        QVERIFY(writeMovie(movie, 6));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        const QString drive2 = dir.filePath(QStringLiteral("Media 2"));
+        QVERIFY(QDir().mkpath(drive) && QDir().mkpath(drive2));
+        media::LinkOptions o;
+        o.editRate = Rational(25);
+        const auto linked = media::linkClip(*media::probe(movie), o);
+        QVERIFY(linked);
+        media::MediaCreation c;
+        c.raster = QSize(256, 144);
+        c.videoDrive = drive;
+        c.resolution = *media::findResolution(QStringLiteral("dnx_lb"));
+        QString error;
+        const auto managed = media::transcodeClip(*linked, 0, -1, c, &error);
+        QVERIFY2(managed, qPrintable(error));
+
+        media::ConsolidateOptions options;
+        options.keepMastersLinked = false;
+        options.creation = c;
+        options.creation.videoDrive = drive2;
+        const media::ConsolidateResult result = media::consolidate({*managed}, QStringLiteral("b"), {}, {}, options);
+        QVERIFY2(result.error.isEmpty(), qPrintable(result.error));
+        QCOMPARE(result.changed.size(), 1);
+        QCOMPARE(result.added.size(), 1);
+        const model::BinItem& clip = result.changed.first();
+        QCOMPARE(clip.id, managed->id);
+        QCOMPARE(clip.mobId, managed->mobId);
+        const auto link = media::linkOf(clip);
+        QVERIFY(link && link->path.startsWith(QDir(drive2).absolutePath()));
+        int files = 0;
+        for (const model::ClipSource& s : clip.sources) {
+            if (s.kind != model::ClipSource::Kind::File) continue;
+            ++files;
+            QVERIFY(link->files().contains(s.path));
+            const auto info = media::readMediaFile(s.path);
+            QVERIFY(info);
+            QCOMPARE(info->material, clip.mobId);
+        }
+        QCOMPARE(files, 3);
+        const model::BinItem& old = result.added.first();
+        QCOMPARE(old.name, QStringLiteral("A001.old.01"));
+        QVERIFY(old.mobId != clip.mobId);
+        QCOMPARE(old.sources, managed->sources);
+        QCOMPARE(media::linkOf(old)->path, media::linkOf(*managed)->path);
+        // The media database finds the clip's new media by its MobID.
+        media::MediaDatabase db;
+        db.scan({drive2});
+        const auto set = db.setOf(clip.mobId);
+        QVERIFY(set);
+        QCOMPARE(set->mediaId, link->mediaId);
     }
 
     // File > Output > Export to File as AAF (p.868-869, p.1175), and the

@@ -35,6 +35,8 @@ struct ImportResult {
 
 // Reads the file's mobs into bin items (Created and Modified default to now when `options.when` is not
 // valid).
+// Throws std::overflow_error when the file's rates or lengths do not fit a Rational (a damaged
+// file); importFile() turns that into an error.
 ImportResult importMobs(const File& file, const ImportOptions& options = {});
 // Opens the file and imports it; nothing, with `error` set, when it cannot
 // be read.

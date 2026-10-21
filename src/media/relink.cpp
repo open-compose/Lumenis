@@ -2,6 +2,7 @@
 
 #include "lumenis/core/timecode.h"
 #include "lumenis/media/consolidate.h"
+#include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
 
 #include <QDir>
@@ -21,13 +22,11 @@ namespace lumenis::media {
 
 namespace {
 
-// A timecode (drop-frame ';' read as ':') as frames at the rate; 0 if empty or unreadable.
+// A timecode as frames at the rate, drop-frame when it has a ';' and the rate allows it (as the bins
+// count it, model::timecodeFrames); 0 if empty or unreadable.
 std::int64_t framesOf(const QString& timecode, const Rational& rate) {
     if (timecode.isEmpty()) return 0;
-    QString plain = timecode;
-    plain.replace(QLatin1Char(';'), QLatin1Char(':'));
-    const auto tc = Timecode::parse(plain.toStdString(), TimecodeFormat::forRate(rate, false));
-    return tc ? tc->frameCount() : 0;
+    return model::timecodeFrames(timecode, rate).value_or(0);
 }
 
 // Master clips and audio clips: the items relinked to media themselves.
@@ -88,11 +87,32 @@ bool better(int a, int b, const RelinkOptions& o) {
     return false;
 }
 
-// Whether `outer`'s timecode range holds all of `inner`'s. Different rates fail unless
-// acrossRates is set; then the frame counts are compared as they are, without conversion.
+// A material's first frame and the end of its last, as (fractional) frames at `rate`. The start is a
+// timecode, so it converts by the timecodes' frames per second (01:00:00:00 is the same moment at 24
+// and 30 fps); the length is time, so it converts by the rates themselves.
+struct Span {
+    Rational start;
+    Rational end;
+};
+Span spanAt(const Material& m, const Rational& rate) {
+    if (m.rate == rate || m.rate.num() <= 0 || rate.num() <= 0) return {Rational(m.start), Rational(m.start + m.frames)};
+    const int from = TimecodeFormat::forRate(m.rate, false).nominalFps;
+    const int to = TimecodeFormat::forRate(rate, false).nominalFps;
+    const Rational start = from > 0 && to > 0 ? Rational(m.start) * Rational(to) / Rational(from) : Rational(m.start) * rate / m.rate;
+    return {start, start + Rational(m.frames) * rate / m.rate};
+}
+
+// Where `inner` starts in `outer`, in `outer`'s frames (rounded down).
+std::int64_t offsetIn(const Material& outer, const Material& inner) {
+    return spanAt(inner, outer.rate).start.floor() - outer.start;
+}
+
+// Whether `outer`'s timecode range holds all of `inner`'s. Different rates fail unless acrossRates is
+// set; then `inner` is converted to `outer`'s rate (spanAt()).
 bool covers(const Material& outer, const Material& inner, const RelinkOptions& o) {
     if (!(outer.rate == inner.rate) && !o.acrossRates) return false;
-    return outer.start <= inner.start && outer.start + outer.frames >= inner.start + inner.frames;
+    const Span span = spanAt(inner, outer.rate);
+    return Rational(outer.start) <= span.start && Rational(outer.start + outer.frames) >= span.end;
 }
 
 } // namespace
@@ -173,8 +193,8 @@ std::optional<Link> findMedia(const model::BinItem& clip, const MediaDatabase& d
         }
     }
     if (!best) return std::nullopt;
-    const Material have = materialOf(best->any(), options.by);
-    Link link = best->link(want.start - have.start);
+    // The clip's first frame in the set's frames (its rate may differ: acrossRates).
+    Link link = best->link(offsetIn(materialOf(best->any(), options.by), want));
     // Only the clip's tracks: a set may hold more channels.
     if (!video) {
         link.videoStream = -1;
@@ -272,7 +292,8 @@ RelinkResult relinkManaged(const QList<model::BinItem>& selection, const MediaDa
                     missed = true;
                     continue;
                 }
-                const std::int64_t sourceIn = used.start - materialOf(best->item, options.by).start;
+                // In the new clip's frames (its rate may differ: acrossRates).
+                const std::int64_t sourceIn = offsetIn(materialOf(best->item, options.by), used);
                 if (best->item.id == s.clipId && sourceIn == s.sourceIn) continue;
                 s.clipId = best->item.id;
                 s.sourceMob = best->item.mobId;
