@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <bit>
 #include <cstring>
+#include <string>
+#include <vector>
 
 // ModuleLoader: loads separately built modules (shared libraries) and lets them add providers to
 // the registry. The ABI they must follow is in module_abi.h; app/main.cpp loads every module in
@@ -21,7 +23,8 @@ std::string orEmpty(const char* s) {
     return s ? std::string(s) : std::string();
 }
 
-// The ModuleHost handed to one module's register function; counts the providers it adds.
+// The ModuleHost handed to one module's register function; remembers the ids of the providers it
+// adds, so that a failed registration can be undone.
 class RegistryHost final : public ModuleHost {
 public:
     explicit RegistryHost(ProviderRegistry& registry) : registry_(registry) {}
@@ -29,18 +32,30 @@ public:
     std::uint32_t abiVersion() const override { return LUMENIS_MODULE_ABI_VERSION; }
 
     bool addProvider(std::shared_ptr<Provider> provider) override {
+        if (!provider) {
+            return false;
+        }
+        std::string id = provider->info().id;
         const bool added = registry_.add(std::move(provider));
         if (added) {
-            ++added_;
+            added_.push_back(std::move(id));
         }
         return added;
     }
 
-    std::size_t added() const { return added_; }
+    std::size_t added() const { return added_.size(); }
+
+    // Takes every provider this host added back out of the registry.
+    void rollBack() {
+        for (const std::string& id : added_) {
+            registry_.remove(id);
+        }
+        added_.clear();
+    }
 
 private:
     ProviderRegistry& registry_;
-    std::size_t added_ = 0;
+    std::vector<std::string> added_;
 };
 
 } // namespace
@@ -110,15 +125,17 @@ ModuleRecord ModuleLoader::load(const std::filesystem::path& file) {
         return fail("module '" + record.id + "' is already loaded");
     }
 
-    // Only now is it safe to pass C++ objects. Providers added before a failing return code stay
-    // registered, so the library is kept either way.
+    // Only now is it safe to pass C++ objects. A failing return code takes back the providers the
+    // module added before it failed, so a half-registered module leaves nothing behind. The library
+    // is kept either way: the module may still hold the provider objects it made.
     RegistryHost host(registry_);
     const int rc = registerFn(&host);
-    record.providersAdded = host.added();
     impl_->libraries.push_back(std::move(library));
     if (rc != 0) {
+        host.rollBack();
         return fail("module registration failed with code " + std::to_string(rc));
     }
+    record.providersAdded = host.added();
 
     record.loaded = true;
     records_.push_back(record);

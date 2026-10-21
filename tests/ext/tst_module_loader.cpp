@@ -47,6 +47,22 @@ private slots:
         QVERIFY(registry.all().empty());
     }
 
+    void rollsBackFailedRegistration() {
+        // The module adds a provider, then returns an error: nothing of it may stay registered,
+        // so a good module with the same provider id still loads afterwards.
+        ProviderRegistry registry;
+        ModuleLoader loader(registry);
+        const ModuleRecord failed = loader.load(TEST_MODULE_FAILS);
+        QVERIFY(!failed.loaded);
+        QVERIFY2(failed.error.find("registration failed") != std::string::npos, failed.error.c_str());
+        QCOMPARE(failed.providersAdded, std::size_t{0});
+        QVERIFY(registry.all().empty());
+        QVERIFY(!registry.find("org.lumenis.test.codec"));
+        const ModuleRecord good = loader.load(TEST_MODULE_GOOD);
+        QVERIFY2(good.loaded, good.error.c_str());
+        QCOMPARE(registry.all().size(), std::size_t{1});
+    }
+
     void reportsMissingFile() {
         ProviderRegistry registry;
         ModuleLoader loader(registry);

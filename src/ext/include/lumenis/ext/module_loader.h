@@ -21,7 +21,8 @@ struct ModuleRecord {
     std::string version;
     std::string vendor;
     std::string license;
-    // Providers the module added to the registry while registering (also when registration failed).
+    // Providers the module added to the registry while registering; 0 when registration failed,
+    // because the loader then takes them out again.
     std::size_t providersAdded = 0;
 };
 
@@ -38,7 +39,8 @@ public:
 
     // Loads one shared library, checks its ABI version, toolchain and id, and lets it register its
     // providers. The record is returned and also kept in records(); loaded is false and error says
-    // why when any step fails. A module whose id is already loaded is rejected.
+    // why when any step fails. A module whose id is already loaded is rejected. If the register
+    // function returns non-zero, the providers it added are removed from the registry again.
     ModuleRecord load(const std::filesystem::path& file);
 
     // Loads every shared library directly inside each directory (not

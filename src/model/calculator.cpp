@@ -2,6 +2,7 @@
 
 #include "lumenis/core/timecode.h"
 
+#include <algorithm>
 #include <cstdlib>
 
 // The Calculator tool's arithmetic (calculator.h), kept out of the UI so it can be tested. The
@@ -71,21 +72,22 @@ std::int64_t Calculator::parse(const QString& digits) const {
         // Feet, then two digits of frames.
         return d.left(kMaxDigits - 2).toLongLong() * f.framesPerFoot + part(kMaxDigits - 2);
     }
-    const TimecodeFields fields{static_cast<int>(part(0)), static_cast<int>(part(2)), static_cast<int>(part(4)),
-                                static_cast<int>(part(6))};
-    if (const auto tc = Timecode::parse(
-            QStringLiteral("%1:%2:%3%4%5")
-                .arg(fields.hours, 2, 10, QLatin1Char('0'))
-                .arg(fields.minutes, 2, 10, QLatin1Char('0'))
-                .arg(fields.seconds, 2, 10, QLatin1Char('0'))
-                .arg(f.dropFrame ? QLatin1Char(';') : QLatin1Char(':'))
-                .arg(fields.frames, 2, 10, QLatin1Char('0'))
-                .toStdString(),
-            timecodeFormat(f))) {
-        return tc->frameCount();
-    }
-    // Fields past their limits (90 seconds, 40 frames) still add up.
-    return ((part(0) * 60 + part(2)) * 60 + part(4)) * f.nominalFps + part(6);
+    // Fields past their limits (90 seconds, 40 frames) still add up: they are carried into the
+    // next field first. A label drop-frame skips (00:01:00;00) counts as the next label that
+    // exists (00:01:00;02), so the count follows drop-frame like any other label.
+    const std::int64_t fps = f.nominalFps;
+    std::int64_t frames = part(6);
+    std::int64_t seconds = part(4) + frames / fps;
+    frames %= fps;
+    std::int64_t minutes = part(2) + seconds / 60;
+    seconds %= 60;
+    const std::int64_t hours = part(0) + minutes / 60;
+    minutes %= 60;
+    const TimecodeFormat format = timecodeFormat(f);
+    if (seconds == 0 && minutes % 10 != 0) frames = std::max<std::int64_t>(frames, format.framesDroppedPerMinute());
+    const TimecodeFields fields{static_cast<int>(hours), static_cast<int>(minutes), static_cast<int>(seconds),
+                                static_cast<int>(frames)};
+    return Timecode::fromFields(fields, format).frameCount();
 }
 
 // Film is "feet+frames"; timecode uses Timecode's text (so it wraps after 24 hours). Negative

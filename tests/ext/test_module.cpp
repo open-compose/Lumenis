@@ -30,6 +30,10 @@ public:
 #if defined(TEST_MODULE_BAD_ABI)
 constexpr std::uint32_t kAbi = LUMENIS_MODULE_ABI_VERSION + 1;
 constexpr const char* kId = "org.lumenis.test.module-bad-abi";
+#elif defined(TEST_MODULE_FAILS)
+// Adds its provider, then reports failure: the loader must take the provider back out.
+constexpr std::uint32_t kAbi = LUMENIS_MODULE_ABI_VERSION;
+constexpr const char* kId = "org.lumenis.test.module-fails";
 #else
 constexpr std::uint32_t kAbi = LUMENIS_MODULE_ABI_VERSION;
 constexpr const char* kId = "org.lumenis.test.module";
@@ -45,5 +49,10 @@ LUMENIS_MODULE_EXPORT const LumenisModuleInfo* lumenis_module_info() {
 }
 
 LUMENIS_MODULE_EXPORT int lumenis_module_register(lumenis::ext::ModuleHost* host) {
-    return host->addProvider(std::make_shared<TestCodecProvider>()) ? 0 : 1;
+    const bool added = host->addProvider(std::make_shared<TestCodecProvider>());
+#if defined(TEST_MODULE_FAILS)
+    return added ? 2 : 1;
+#else
+    return added ? 0 : 1;
+#endif
 }

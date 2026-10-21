@@ -110,6 +110,24 @@ private slots:
         r.load({}, clip(QStringLiteral("Cut"), 100, BinItemKind::Sequence));
         QCOMPARE(r.tracking(TrackingFormat::Master), QStringLiteral("01:00:00:00"));
     }
+
+    void dropFrameTracking() {
+        // A clip whose Start is drop-frame is tracked in drop-frame timecode.
+        MonitorState m;
+        BinItem c = clip(QStringLiteral("NTSC"), 20000);
+        c.editRate = Rational(30000, 1001);
+        c.fields.insert(QStringLiteral("Start"), QStringLiteral("01:00:00;00"));
+        m.load({}, c);
+        m.setPosition(1800);
+        QCOMPARE(m.tracking(TrackingFormat::Master), QStringLiteral("01:01:00;02"));
+        QCOMPARE(m.tracking(TrackingFormat::Absolute), QStringLiteral("00:01:00;02"));
+        // Non-drop-frame Start: non-drop-frame tracking.
+        c.fields.insert(QStringLiteral("Start"), QStringLiteral("01:00:00:00"));
+        MonitorState n;
+        n.load({}, c);
+        n.setPosition(1800);
+        QCOMPARE(n.tracking(TrackingFormat::Absolute), QStringLiteral("00:01:00:00"));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestMonitor)

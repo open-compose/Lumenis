@@ -39,6 +39,7 @@ private slots:
         a.durationFrames = 1500;
         a.color = QStringLiteral("#20a040");
         a.locked = true;
+        a.userPlaced = false;
         a.fields.insert(QStringLiteral("Comments"), QStringLiteral("opening"));
         bin.items << a;
         bin.display.mode = BinViewMode::Frame;
@@ -72,6 +73,7 @@ private slots:
         QCOMPARE(b.editRate, Rational(25));
         QCOMPARE(b.color, a.color);
         QVERIFY(b.locked);
+        QVERIFY(!b.userPlaced);
         QCOMPARE(b.fields.value(QStringLiteral("Comments")), QStringLiteral("opening"));
         QCOMPARE(back->display.mode, BinViewMode::Frame);
         QCOMPARE(back->display.columns, bin.display.columns);
@@ -419,6 +421,28 @@ private slots:
         QCOMPARE(durationText(36, Rational(25)), QStringLiteral("1:11"));
         QCOMPARE(durationText((4 * 60 + 24) * 25 + 14, Rational(25)), QStringLiteral("4:24:14"));
         QCOMPARE(durationText(3600 * 24, Rational(24000, 1001)), QStringLiteral("1:00:00:00"));
+        // Durations do not wrap at 24 hours as timecode does.
+        QCOMPARE(durationText(25 * 3600 * 25 + 3, Rational(25)), QStringLiteral("25:00:00:03"));
+        QCOMPARE(durationText(100 * 3600 * 30, Rational(30000, 1001)), QStringLiteral("100:00:00:00"));
+    }
+
+    void subclipKeepsDropFrame() {
+        // A subclip of a drop-frame clip keeps drop-frame timecode (its Start was read as
+        // non-drop-frame before).
+        BinItem master;
+        master.id = newItemId();
+        master.name = QStringLiteral("NTSC");
+        master.editRate = Rational(30000, 1001);
+        master.durationFrames = 4000;
+        master.fields.insert(QStringLiteral("Start"), QStringLiteral("01:00:00;00"));
+        QVERIFY(isDropFrame(master));
+        const auto sub = subclipItem(Bin{}, master, 1800, 1900, QDateTime::currentDateTimeUtc());
+        QVERIFY(sub);
+        QCOMPARE(sub->fields.value(QStringLiteral("Start")), QStringLiteral("01:01:00;02"));
+        QCOMPARE(sub->sources.first().startTimecode, QStringLiteral("01:01:00;02"));
+        QVERIFY(sub->fields.value(QStringLiteral("End")).contains(QLatin1Char(';')));
+        master.editRate = Rational(25);
+        QVERIFY(!isDropFrame(master)); // 25 fps has no drop-frame
     }
 
     void newProjectsGetABinNamedAfterThem() {
@@ -532,6 +556,32 @@ private slots:
         QVERIFY(QFileInfo::exists(foreign));
         QVERIFY(!bins.trash());
         QCOMPARE(names(bins.nodes()), (QStringList{"Doc"}));
+    }
+
+    void putsOtherBinsAboveTheTrashWhereverItIs() {
+        // move() can put a bin after the Trash; Other Bins still goes just above the Trash.
+        QTemporaryDir dir;
+        QDir(dir.path()).mkpath(QStringLiteral("Doc"));
+        QDir(dir.path()).mkpath(QStringLiteral("Other"));
+        ProjectBins other(dir.filePath(QStringLiteral("Other")), QStringLiteral("Other"));
+        other.load();
+        const QString foreign = other.binPath(other.createInitialBin());
+
+        ProjectBins bins(dir.filePath(QStringLiteral("Doc")), QStringLiteral("Doc"));
+        bins.load();
+        bins.createInitialBin();
+        const QString doomed = bins.createBin();
+        const QString last = bins.createBin();
+        QVERIFY(bins.remove(doomed)); // makes the Trash, at the end
+        QVERIFY(bins.move(last, {}, -1)); // to the end: after the Trash
+        QCOMPARE(bins.nodes().last().id, last);
+        const QString id = bins.addOtherBin(foreign);
+        QVERIFY(!id.isEmpty());
+        QStringList kinds;
+        for (const BinNode& n : bins.nodes()) kinds << QString::fromLatin1(n.kind == BinNode::Kind::Trash ? "trash"
+                                                                          : n.kind == BinNode::Kind::OtherBins ? "other"
+                                                                                                                : "bin");
+        QCOMPARE(kinds, (QStringList{"bin", "other", "trash", "bin"}));
     }
 
     void adoptsUnlistedBinFilesAndDropsMissingOnes() {

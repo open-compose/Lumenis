@@ -77,6 +77,10 @@ struct BinItem {
     Rational editRate{24000, 1001};
     QString color; // "#rrggbb", empty for none (p.264)
     bool locked = false; // Clip > Lock Bin Selection (p.265)
+    // False for an item the bin holds only because something placed in it refers to it (a
+    // "reference clip", shown with Set Bin Display's Show reference clips, p.288): Media Composer's
+    // bins mark these (pyavb's user_placed), ours made here are all placed.
+    bool userPlaced = true;
     QString script;      // the Script view's text box (p.253)
     // Heading name -> cell text, e.g. "Start" and "End" as timecode text, "Tracks", "Tape", custom
     // columns. Name, Duration, the dates, Lock and Color are shown from the members instead.
@@ -213,6 +217,9 @@ QStringList siftRangesFor(const QStringList& columns);
 // A timecode typed without colons or leading zeros ("3172000") or with
 // them, as frames at `editRate`; nullopt if it is not a timecode.
 std::optional<std::int64_t> timecodeFrames(const QString& text, const Rational& editRate);
+// Whether an item's timecode is drop-frame: its Start is written with a ';'
+// (as drop-frame timecode is, "01:00:00;00") and its edit rate allows it.
+bool isDropFrame(const BinItem& item);
 
 // Set Bin Display: the object types the dialog lists (p.243-244, p.288).
 // The plural label of a kind in Set Bin Display ("Master Clips", ...), and every kind in its order.
@@ -275,7 +282,8 @@ MobId mobIdOf(const BinItem& item);
 MobId derivedMobId(const QString& itemId);
 
 // Durations as bins show them: leading zero fields are left out, e.g.
-// "0:00", "1:11", "4:24:14", "1:00:00:00" (pictures on p.246-255).
+// "0:00", "1:11", "4:24:14", "1:00:00:00" (pictures on p.246-255). Hours
+// do not wrap at 24 as timecode does: 25 hours is "25:00:00:00".
 QString durationText(std::int64_t frames, const Rational& editRate);
 
 } // namespace lumenis::model

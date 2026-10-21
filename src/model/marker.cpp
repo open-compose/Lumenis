@@ -1,6 +1,7 @@
 #include "lumenis/model/marker.h"
 
 #include <QJsonObject>
+#include <QUuid>
 
 #include <algorithm>
 
@@ -30,10 +31,24 @@ std::uint32_t markerColor(const QString& name) {
     return markerColors().first().rgb;
 }
 
+namespace {
+
+// The id of a stored marker that has none (an older or hand-written bin): a name-based UUID of
+// the item's id and the marker's place in the stored list, so every markersOf() call gives it the
+// same id and removeMarker()/updateMarker() can find it. setMarkers() then stores the id, so later
+// changes to the list do not move it. The namespace UUID is our own.
+QString derivedMarkerId(const BinItem& item, qsizetype index) {
+    static const QUuid kNamespace(QStringLiteral("{8f3e2b6a-1c4d-4e7f-a0b9-5d2c7e1f3a68}"));
+    return QUuid::createUuidV5(kNamespace, QStringLiteral("%1/marker/%2").arg(item.id).arg(index))
+        .toString(QUuid::WithoutBraces);
+}
+
+} // namespace
+
 QList<Marker> markersOf(const BinItem& item) {
     QList<Marker> out;
-    for (const QJsonValue& v : item.markers) {
-        const QJsonObject o = v.toObject();
+    for (qsizetype i = 0; i < item.markers.size(); ++i) {
+        const QJsonObject o = item.markers.at(i).toObject();
         Marker m;
         m.id = o.value(QStringLiteral("id")).toString();
         m.user = o.value(QStringLiteral("user")).toString();
@@ -43,7 +58,7 @@ QList<Marker> markersOf(const BinItem& item) {
         m.track = o.value(QStringLiteral("track")).toString();
         m.frame = std::max<std::int64_t>(o.value(QStringLiteral("frame")).toInteger(), 0);
         m.length = std::max<std::int64_t>(o.value(QStringLiteral("length")).toInteger(1), 1);
-        if (m.id.isEmpty()) m.id = newItemId();
+        if (m.id.isEmpty()) m.id = derivedMarkerId(item, i);
         out << m;
     }
     std::stable_sort(out.begin(), out.end(), [](const Marker& a, const Marker& b) { return a.frame < b.frame; });

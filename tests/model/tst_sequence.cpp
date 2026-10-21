@@ -1,6 +1,8 @@
 #include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
 
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QTest>
 
 using namespace lumenis;
@@ -619,6 +621,33 @@ private slots:
         QCOMPARE(markersOf(item).last().color, QStringLiteral("Green"));
     }
 
+    void storedMarkersWithoutIds() {
+        // A stored marker with no id (an older or hand-written bin) keeps one id across reads,
+        // so it can be removed or changed before anything has saved an id for it.
+        BinItem item;
+        item.id = QStringLiteral("item");
+        item.markers = QJsonArray{QJsonObject{{"frame", 5}, {"track", "V1"}}, QJsonObject{{"frame", 9}, {"track", "V1"}}};
+        const QList<Marker> first = markersOf(item);
+        QCOMPARE(first.size(), 2);
+        QVERIFY(!first.at(0).id.isEmpty());
+        QVERIFY(first.at(0).id != first.at(1).id);
+        QCOMPARE(markersOf(item), first);
+        Marker changed = first.at(1);
+        changed.color = QStringLiteral("Green");
+        QVERIFY(updateMarker(item, changed));
+        QCOMPARE(markersOf(item).at(1).color, QStringLiteral("Green"));
+        QCOMPARE(markersOf(item).at(1).id, first.at(1).id); // now stored
+        QVERIFY(removeMarker(item, first.at(0).id));
+        QCOMPARE(markersOf(item).size(), 1);
+        QCOMPARE(markersOf(item).first().id, first.at(1).id);
+        // A fresh copy of the same unsaved markers is also removable by its read id.
+        BinItem other;
+        other.id = QStringLiteral("item");
+        other.markers = QJsonArray{QJsonObject{{"frame", 5}, {"track", "V1"}}};
+        QVERIFY(removeMarker(other, markersOf(other).first().id));
+        QVERIFY(markersOf(other).isEmpty());
+    }
+
     void undoRedo() {
         EditHistory h;
         QVERIFY(!h.canUndo());
@@ -703,6 +732,13 @@ private slots:
         QString which;
         QVERIFY(!transitionFits(dissolve, *room, &which));
         QCOMPARE(which, QStringLiteral("Media B"));
+        // Both sides short: both are named (FX guide p.48).
+        QVERIFY(!transitionFits(dissolve, TransitionRoom{4, 4}, &which));
+        QCOMPARE(which, QStringLiteral("Media A and Media B"));
+        QVERIFY(!transitionFits(dissolve, TransitionRoom{40, 4}, &which));
+        QCOMPARE(which, QStringLiteral("Media A"));
+        QVERIFY(transitionFits(dissolve, TransitionRoom{40, 40}, &which));
+        QVERIFY(which.isEmpty());
         QVERIFY(!applyTransition(s, "V1", 50, dissolve, length));
         const Transition fitted = sizeToFit(dissolve, *room);
         QCOMPARE(fitted.alignment, TransitionAlignment::CenteredOnCut);

@@ -495,7 +495,7 @@ bool ProjectBins::emptyTrash(QString* error) {
 }
 
 // The file must be a readable bin. A bin already in the tree (by path) returns its existing id.
-// Other Bins is made on first use, just before the Trash (which is assumed to be the last entry).
+// Other Bins is made on first use, just before the Trash (or at the end when there is none).
 QString ProjectBins::addOtherBin(const QString& path, QString* error) {
     const QFileInfo info(path);
     if (!info.isFile()) {
@@ -513,9 +513,10 @@ QString ProjectBins::addOtherBin(const QString& path, QString* error) {
         o.id = newId();
         o.kind = BinNode::Kind::OtherBins;
         o.name = QStringLiteral("Other Bins");
-        // Above the Trash.
-        const bool hasTrash = trash() != nullptr;
-        roots_.insert(hasTrash ? roots_.size() - 1 : roots_.size(), o);
+        // Just above the Trash, wherever it is (move() can put entries after it), or last.
+        const auto trashAt = std::find_if(roots_.cbegin(), roots_.cend(),
+                                          [](const BinNode& r) { return r.kind == BinNode::Kind::Trash; });
+        roots_.insert(trashAt - roots_.cbegin(), o);
         for (BinNode& r : roots_) {
             if (r.kind == BinNode::Kind::OtherBins) other = &r;
         }

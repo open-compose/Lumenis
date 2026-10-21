@@ -103,7 +103,8 @@ public:
     // The clip's starting timecode in frames (its Start column, or the
     // sequence default) and what a tracking display shows.
     std::int64_t startFrame() const;
-    // tracking() is empty when nothing is shown. Timecodes use the item's edit rate, non-drop-frame.
+    // tracking() is empty when nothing is shown. Timecodes use the item's edit rate, drop-frame
+    // when the item's Start timecode is (model::isDropFrame()).
     QString tracking(TrackingFormat format) const;
     // As bins show durations (p.246-255): "0:00", "1:11", "4:24:14".
     QString durationText(std::int64_t frames) const;

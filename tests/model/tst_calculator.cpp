@@ -86,6 +86,28 @@ private slots:
         QCOMPARE(c.display(), QStringLiteral("12+15"));
     }
 
+    void dropFrameLabelsThatDoNotExist() {
+        // Digits Timecode::parse rejects in drop-frame still count in drop-frame: a skipped
+        // label is the next one that exists, and fields past their limits are carried first.
+        Calculator c;
+        c.setFormat(formatIndex(QStringLiteral("29.97 DF Timecode")));
+        type(c, "110000"); // 00:11:00;00 is skipped: 00:11:00;02
+        QCOMPARE(c.value(), c.parse(QStringLiteral("110002")));
+        QCOMPARE(c.display(), QStringLiteral("00:11:00;02"));
+        c.clear();
+        type(c, "9000"); // 90 seconds: 00:01:30;00
+        QCOMPARE(c.value(), c.parse(QStringLiteral("13000")));
+        QCOMPARE(c.display(), QStringLiteral("00:01:30;00"));
+        c.clear();
+        type(c, "5940"); // 59 seconds and 40 frames: 00:01:00;10
+        QCOMPARE(c.display(), QStringLiteral("00:01:00;10"));
+        // Non-drop-frame is unchanged.
+        c.setFormat(formatIndex(QStringLiteral("29.97 NDF Timecode")));
+        c.clear();
+        type(c, "9000");
+        QCOMPARE(c.value(), 90 * 30);
+    }
+
     void convertKeepsTime() {
         const auto& f = calculatorFormats();
         const CalculatorFormat& ntsc = f.at(formatIndex(QStringLiteral("29.97 NDF Timecode")));

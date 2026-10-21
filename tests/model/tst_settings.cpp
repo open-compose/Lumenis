@@ -113,6 +113,13 @@ private slots:
         QCOMPARE(newSequence(bin, Rational(24, 1), now, QStringLiteral("nonsense"))
                      .fields.value(QStringLiteral("Start")),
                  QStringLiteral("01:00:00:00"));
+        // A drop-frame start stays drop-frame where the rate allows it.
+        QCOMPARE(newSequence(bin, Rational(30000, 1001), now, QStringLiteral("00:59:59;29"))
+                     .fields.value(QStringLiteral("Start")),
+                 QStringLiteral("00:59:59;29"));
+        QCOMPARE(newSequence(bin, Rational(25, 1), now, QStringLiteral("10:00:00;00"))
+                     .fields.value(QStringLiteral("Start")),
+                 QStringLiteral("10:00:00:00"));
     }
 };
 

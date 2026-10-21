@@ -458,7 +458,9 @@ struct TransitionRoom {
 std::optional<TransitionRoom> transitionRoom(const Sequence& sequence, const QString& track, std::int64_t frame,
                                              const SourceLength& sourceLength = {});
 // Whether the transition fits the room; if not, `which` names the side that
-// is short ("Media A", "Media B"; the Insufficient Source dialog, p.48).
+// is short ("Media A" (outgoing), "Media B" (incoming), or "Media A and
+// Media B" when both are; the Insufficient Source dialog, FX guide p.48).
+// It is empty when the transition fits or only its length is zero.
 bool transitionFits(const Transition& transition, const TransitionRoom& room, QString* which = nullptr);
 // Size To Fit (p.48): the transition shortened to the room, keeping its
 // alignment where it can.

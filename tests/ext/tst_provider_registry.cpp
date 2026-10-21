@@ -56,6 +56,17 @@ private slots:
         QCOMPARE(registry.all().size(), std::size_t{1});
     }
 
+    void removesById() {
+        ProviderRegistry registry;
+        QVERIFY(registry.add(std::make_shared<FakeCodec>("a", 0)));
+        QVERIFY(registry.add(std::make_shared<FakeCodec>("b", 0)));
+        QVERIFY(registry.remove("a"));
+        QVERIFY(!registry.remove("a"));
+        QVERIFY(!registry.find("a"));
+        QCOMPARE(ids(registry.usable<CodecProvider>()), QStringList{"b"});
+        QVERIFY(registry.add(std::make_shared<FakeCodec>("a", 0))); // the id is free again
+    }
+
     void ranksByPriorityThenRegistrationOrder() {
         ProviderRegistry registry;
         registry.add(std::make_shared<FakeCodec>("ffmpeg", 0));

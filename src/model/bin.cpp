@@ -126,6 +126,7 @@ QJsonObject itemToJson(const BinItem& item) {
     };
     if (!item.color.isEmpty()) o.insert(QStringLiteral("color"), item.color);
     if (item.locked) o.insert(QStringLiteral("locked"), true);
+    if (!item.userPlaced) o.insert(QStringLiteral("userPlaced"), false);
     if (!item.script.isEmpty()) o.insert(QStringLiteral("script"), item.script);
     if (!fields.isEmpty()) o.insert(QStringLiteral("fields"), fields);
     if (!item.composition.isEmpty()) o.insert(QStringLiteral("composition"), item.composition);
@@ -157,6 +158,7 @@ std::optional<BinItem> itemFromJson(const QJsonObject& o) {
     item.editRate = parseRate(o.value(QStringLiteral("editRate")).toString());
     item.color = o.value(QStringLiteral("color")).toString();
     item.locked = o.value(QStringLiteral("locked")).toBool();
+    item.userPlaced = o.value(QStringLiteral("userPlaced")).toBool(true);
     item.script = o.value(QStringLiteral("script")).toString();
     const QJsonObject fields = o.value(QStringLiteral("fields")).toObject();
     for (auto it = fields.begin(); it != fields.end(); ++it) item.fields.insert(it.key(), it.value().toString());
@@ -578,6 +580,11 @@ std::optional<std::int64_t> timecodeFrames(const QString& text, const Rational& 
     return Timecode::fromFields(f, format).frameCount();
 }
 
+bool isDropFrame(const BinItem& item) {
+    return TimecodeFormat::forRate(item.editRate, item.fields.value(QStringLiteral("Start")).contains(QLatin1Char(';')))
+        .dropFrame;
+}
+
 QString kindLabel(BinItemKind kind) {
     switch (kind) {
     case BinItemKind::MasterClip: return QStringLiteral("Master Clips");
@@ -772,7 +779,7 @@ MobId derivedMobId(const QString& itemId) {
 }
 
 // The new sequence has no tracks (an empty composition) and duration 0; Start is stored as
-// non-drop-frame timecode text.
+// timecode text, drop-frame when `start` is written with a ';' and the rate allows it.
 BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& when, const QString& start) {
     const QString base = QStringLiteral("Untitled Sequence");
     BinItem s;
@@ -782,7 +789,7 @@ BinItem newSequence(const Bin& bin, const Rational& editRate, const QDateTime& w
     s.created = when;
     s.modified = when;
     s.editRate = editRate;
-    const TimecodeFormat format = TimecodeFormat::forRate(editRate, false);
+    const TimecodeFormat format = TimecodeFormat::forRate(editRate, start.contains(QLatin1Char(';')));
     const auto given = Timecode::parse(start.trimmed().toStdString(), format);
     const Timecode tc = given ? *given : Timecode(kDefaultStartHours * 3600 * format.nominalFps, format);
     s.fields.insert(QStringLiteral("Start"), QString::fromStdString(tc.toString()));
@@ -809,7 +816,8 @@ std::optional<BinItem> subclipItem(const Bin& bin, const BinItem& master, std::i
     s.color = master.color;
     s.fields = master.fields;
     s.link = master.link;
-    const TimecodeFormat format = TimecodeFormat::forRate(master.editRate, false);
+    // In the master's timecode format: a drop-frame Start stays drop-frame.
+    const TimecodeFormat format = TimecodeFormat::forRate(master.editRate, isDropFrame(master));
     const auto start = Timecode::parse(master.fields.value(QStringLiteral("Start")).toStdString(), format);
     const std::int64_t first = (start ? start->frameCount() : 0) + in;
     const QString startText = QString::fromStdString(Timecode(first, format).toString());
@@ -839,13 +847,18 @@ BinItem duplicateItem(const Bin& bin, const BinItem& original, const QDateTime& 
 }
 
 // Non-drop-frame fields at the rate; negative frame counts show as 0:00.
+// Not through Timecode::fields(), which wraps into one day: a duration of 25 hours is 25:00:00:00.
 QString durationText(std::int64_t frames, const Rational& editRate) {
-    const TimecodeFormat format = TimecodeFormat::forRate(editRate, false);
-    const TimecodeFields f = Timecode(std::max<std::int64_t>(frames, 0), format).fields();
-    auto two = [](int v) { return QStringLiteral("%1").arg(v, 2, 10, QLatin1Char('0')); };
-    if (f.hours > 0) return QStringLiteral("%1:%2:%3:%4").arg(f.hours).arg(two(f.minutes), two(f.seconds), two(f.frames));
-    if (f.minutes > 0) return QStringLiteral("%1:%2:%3").arg(f.minutes).arg(two(f.seconds), two(f.frames));
-    return QStringLiteral("%1:%2").arg(f.seconds).arg(two(f.frames));
+    const std::int64_t fps = TimecodeFormat::forRate(editRate, false).nominalFps;
+    const std::int64_t n = std::max<std::int64_t>(frames, 0);
+    const std::int64_t hours = n / (fps * 3600);
+    const std::int64_t minutes = n / (fps * 60) % 60;
+    const std::int64_t seconds = n / fps % 60;
+    auto two = [](std::int64_t v) { return QStringLiteral("%1").arg(v, 2, 10, QLatin1Char('0')); };
+    const QString ff = two(n % fps);
+    if (hours > 0) return QStringLiteral("%1:%2:%3:%4").arg(hours).arg(two(minutes), two(seconds), ff);
+    if (minutes > 0) return QStringLiteral("%1:%2:%3").arg(minutes).arg(two(seconds), ff);
+    return QStringLiteral("%1:%2").arg(seconds).arg(ff);
 }
 
 } // namespace lumenis::model

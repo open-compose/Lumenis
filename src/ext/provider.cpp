@@ -39,6 +39,16 @@ bool ProviderRegistry::add(std::shared_ptr<Provider> provider) {
     return true;
 }
 
+bool ProviderRegistry::remove(std::string_view id) {
+    const auto it = std::find_if(providers_.begin(), providers_.end(),
+                                 [&](const std::shared_ptr<Provider>& p) { return p->info().id == id; });
+    if (it == providers_.end()) {
+        return false;
+    }
+    providers_.erase(it);
+    return true;
+}
+
 // The disabled list may name ids that are not (yet) registered, so a setting can be applied before
 // a module loads.
 void ProviderRegistry::setEnabled(std::string_view id, bool enabled) {

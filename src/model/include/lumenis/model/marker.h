@@ -13,7 +13,8 @@ namespace lumenis::model {
 // A marker: an electronic bookmark on a frame of a clip or sequence, or on a
 // span of frames (guide p.412-424).
 struct Marker {
-    // Unique within the item (newItemId()); markersOf() gives one to a stored marker that has none.
+    // Unique within the item (newItemId()). A stored marker that has none gets the same derived id
+    // from every markersOf() call until setMarkers() stores it.
     QString id;
     QString user;    // "By default ... the user name logged onto your system" (p.413)
     QString name;

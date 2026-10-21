@@ -11,9 +11,9 @@ namespace lumenis::model {
 
 namespace {
 
-// The timecode format of an item's edit rate. Every caller here uses non-drop-frame.
-TimecodeFormat formatOf(const BinItem& item, bool dropFrame = false) {
-    return TimecodeFormat::forRate(item.editRate, dropFrame);
+// The timecode format of an item: its edit rate, drop-frame when its Start is (isDropFrame()).
+TimecodeFormat formatOf(const BinItem& item) {
+    return TimecodeFormat::forRate(item.editRate, isDropFrame(item));
 }
 
 } // namespace

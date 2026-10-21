@@ -72,6 +72,9 @@ class ProviderRegistry {
 public:
     // Fails (returns false) if a provider with the same id is already registered.
     bool add(std::shared_ptr<Provider> provider);
+    // Takes the provider with this id out of the registry (its enabled setting is kept); false if
+    // there is none. The module loader uses it to undo a module whose registration failed.
+    bool remove(std::string_view id);
 
     // The user can switch a provider off, e.g. to force software decoding.
     void setEnabled(std::string_view id, bool enabled);

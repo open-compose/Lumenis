@@ -1397,11 +1397,12 @@ std::optional<TransitionRoom> transitionRoom(const Sequence& sequence, const QSt
     return room;
 }
 
-// A zero-length transition never fits. When both sides are short, "Media B" is reported.
+// A zero-length transition never fits. When both sides are short, both are named.
 bool transitionFits(const Transition& transition, const TransitionRoom& room, QString* which) {
-    QString shortSide;
-    if (transition.after() > room.after) shortSide = QStringLiteral("Media A");
-    if (transition.before() > room.before) shortSide = QStringLiteral("Media B");
+    QStringList shortSides;
+    if (transition.after() > room.after) shortSides << QStringLiteral("Media A");
+    if (transition.before() > room.before) shortSides << QStringLiteral("Media B");
+    const QString shortSide = shortSides.join(QStringLiteral(" and "));
     if (which) *which = shortSide;
     return transition.duration > 0 && shortSide.isEmpty();
 }
