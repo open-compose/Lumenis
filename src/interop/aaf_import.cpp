@@ -1,5 +1,7 @@
 #include "lumenis/interop/aaf_import.h"
 
+#include "import_common.h"
+
 #include "lumenis/core/timecode.h"
 #include "lumenis/model/sequence.h"
 
@@ -21,6 +23,13 @@
 namespace lumenis::interop::aaf {
 
 namespace {
+
+using detail::exactNtscRate;
+using detail::rescale;
+using detail::SourceTimecode;
+using detail::startAtRate;
+using detail::timecodeText;
+using detail::trackList;
 
 // What a slot carries, by its segment's data definition.
 enum class DataKind { Picture, Sound, Timecode, Edgecode, Other };
@@ -59,14 +68,7 @@ Rational rateOf(const QVariant& v, const Rational& fallback) {
     if (num <= 0 || den <= 0) return fallback;
     // Media Composer writes NTSC rates rounded (23976/1000, 2997/100): they
     // are the exact ones (24000/1001, 30000/1001).
-    const Rational r(num, den);
-    if (r.den() != 1) {
-        const std::int64_t whole = (r * Rational(1001, 1000)).round();
-        const Rational ntsc(whole * 1000, 1001);
-        const Rational off = r > ntsc ? r - ntsc : ntsc - r;
-        if (whole > 0 && off < Rational(1, 1000)) return ntsc;
-    }
-    return r;
+    return exactNtscRate(Rational(num, den));
 }
 
 // A TimeStamp record (date and time, UTC) as a QDateTime; invalid when the record is missing or damaged.
@@ -80,47 +82,6 @@ QDateTime timeOf(const QVariant& v) {
                      t.value(QStringLiteral("second")).toInt());
     return date.isValid() && time.isValid() ? QDateTime(date, time, QTimeZone::utc()) : QDateTime();
 }
-
-// Frames at one rate as frames at another, rounded down.
-std::int64_t rescale(std::int64_t frames, const Rational& from, const Rational& to) {
-    if (from == to || from.num() <= 0 || to.num() <= 0) return frames;
-    const Rational r = Rational(frames) * to / from;
-    return r.floor();
-}
-
-// Frames as timecode text at the rate, wrapped into one day; drop frame only where the rate has it.
-QString timecodeText(std::int64_t frames, const Rational& rate, bool drop) {
-    TimecodeFormat format = TimecodeFormat::forRate(rate, drop);
-    if (!format.isValid()) format = TimecodeFormat::forRate(rate, false);
-    const std::int64_t day = format.framesPerDay();
-    return QString::fromStdString(Timecode(((frames % day) + day) % day, format).toString());
-}
-
-// "V1 A1-2 A4": runs of track numbers.
-QString trackList(const QList<int>& video, const QList<int>& audio) {
-    QStringList parts;
-    auto runs = [&](QChar letter, QList<int> numbers) {
-        std::sort(numbers.begin(), numbers.end());
-        numbers.erase(std::unique(numbers.begin(), numbers.end()), numbers.end());
-        for (qsizetype i = 0; i < numbers.size();) {
-            qsizetype j = i;
-            while (j + 1 < numbers.size() && numbers[j + 1] == numbers[j] + 1) ++j;
-            parts << (j == i ? QStringLiteral("%1%2").arg(letter).arg(numbers[i])
-                             : QStringLiteral("%1%2-%3").arg(letter).arg(numbers[i]).arg(numbers[j]));
-            i = j + 1;
-        }
-    };
-    runs(QLatin1Char('V'), video);
-    runs(QLatin1Char('A'), audio);
-    return parts.join(QLatin1Char(' '));
-}
-
-// A Timecode segment's start, frames per second and drop frame flag.
-struct SourceTimecode {
-    std::int64_t start = 0; // frames at fps
-    int fps = 0;
-    bool drop = false;
-};
 
 // Reads one file's mobs. run() goes through them in four passes: index every mob by MobID, then master
 // mobs, then subclips (which name their masters' items), then sequences (whose segments name either). The
@@ -283,10 +244,7 @@ private:
             const Object source = mob(clip.mobId(QStringLiteral("SourceID")));
             if (!source) return std::nullopt;
             if (const auto tc = timecodeOf(source)) {
-                std::int64_t start = tc->start;
-                const TimecodeFormat format = TimecodeFormat::forRate(rate, false);
-                if (tc->fps > 0 && tc->fps != format.nominalFps) start = start * format.nominalFps / tc->fps;
-                return start + offset;
+                return startAtRate(tc->start, tc->fps, rate) + offset;
             }
             const Object next = slot(source, clip.integer(QStringLiteral("SourceMobSlotID")));
             clip = next ? firstSourceClip(next.object(QStringLiteral("Segment"))) : Object();
@@ -670,11 +628,9 @@ private:
             if (dataKind(segment) == DataKind::Timecode && segment.isA(QStringLiteral("Timecode"))) {
                 seq.setTimecodeTrack(true);
                 if (!start) {
-                    start = segment.integer(QStringLiteral("Start"));
                     drop = segment.value(QStringLiteral("Drop")).toBool();
-                    const int fps = static_cast<int>(segment.integer(QStringLiteral("FPS")));
-                    const int nominal = TimecodeFormat::forRate(item.editRate, false).nominalFps;
-                    if (fps > 0 && fps != nominal) start = *start * nominal / fps;
+                    start = startAtRate(segment.integer(QStringLiteral("Start")),
+                                        static_cast<int>(segment.integer(QStringLiteral("FPS"))), item.editRate);
                 }
             }
         }

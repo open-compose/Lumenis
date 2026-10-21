@@ -2,6 +2,8 @@
 #include "lumenis/core/project_format.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/link.h"
+#include "lumenis/model/bin.h"
+#include "lumenis/model/project_bins.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
@@ -414,6 +416,74 @@ private slots:
         QCOMPARE(bins.deleteSelection(), 3);
         QCOMPARE(clips, 1);
         QCOMPARE(files, 1);
+        window.clearProject();
+    }
+
+    // File > Open Bin with a Media Composer bin from another project
+    // (p.296): it is read into a bin of ours, listed under Other Bins and
+    // opened; its sequence's segments name its clips in that bin. Opening it
+    // again opens the same bin; a file that is not a bin is an error.
+    void openBinReadsAMediaComposerBin() {
+        const QString corpus = qEnvironmentVariable("CUTTHULHU_INTEROP_CORPUS");
+        const QString avb = QDir(corpus).filePath(QStringLiteral("pyavb/retimes/linear01.avb"));
+        if (corpus.isEmpty() || !QFile::exists(avb)) QSKIP("no interchange corpus (scripts/interop-corpus.py fetch)");
+        Project project;
+        ext::ProviderRegistry providers;
+        ui::CommandRegistry commands;
+        commands.loadBuiltin();
+        ui::MainWindow window(commands, providers);
+        window.setProject(project.entry);
+        QVERIFY(commands.action(QStringLiteral("file.open_bin"))->isEnabled());
+        ui::BinContainer& bins = window.binContainer();
+        QString error;
+        const QString id = window.openBinFile(avb, &error);
+        QVERIFY2(!id.isEmpty(), qPrintable(error));
+        const model::BinNode* node = bins.bins()->node(id);
+        QVERIFY(node);
+        QVERIFY(node->external);
+        QCOMPARE(node->name, QStringLiteral("linear01"));
+        const model::BinNode* folder = bins.bins()->parentOf(id);
+        QVERIFY(folder && folder->kind == model::BinNode::Kind::OtherBins);
+        ui::BinDocument* doc = bins.document(id);
+        QVERIFY(doc);
+        QVERIFY(!doc->isDirty()); // saved as it was read
+        QVERIFY(doc->path().startsWith(QDir(project.entry.folder).absolutePath()));
+        QCOMPARE(doc->bin().display.customColumns, QStringList{QStringLiteral("UNC Path")});
+        QCOMPARE(doc->bin().items.size(), 2);
+        const model::BinItem& clipItem = doc->bin().items.at(0);
+        const model::BinItem& sequenceItem = doc->bin().items.at(1);
+        QCOMPARE(clipItem.kind, model::BinItemKind::MasterClip);
+        QCOMPARE(sequenceItem.kind, model::BinItemKind::Sequence);
+        const model::Segment& s = model::Sequence::fromItem(sequenceItem).track(QStringLiteral("V1"))->segments.first();
+        QCOMPARE(s.binId, id);
+        QCOMPARE(s.clipId, clipItem.id);
+        const auto resolved = window.composer().resolve(s.binId, s.clipId);
+        QVERIFY(resolved);
+        QCOMPARE(resolved->mobId, clipItem.mobId);
+        // The bin file holds the same.
+        const auto file = model::BinFile::read(doc->path(), &error);
+        QVERIFY2(file, qPrintable(error));
+        QCOMPARE(file->items.size(), 2);
+
+        QCOMPARE(window.openBinFile(avb), id);
+        QCOMPARE(doc->bin().items.size(), 2);
+
+        const QString junk = project.dir.filePath(QStringLiteral("Junk.avb"));
+        QFile f(junk);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("not a bin");
+        f.close();
+        error.clear();
+        QVERIFY(window.openBinFile(junk, &error).isEmpty());
+        QVERIFY(!error.isEmpty());
+
+        // Taking it off the list removes our copy too: nothing else lists it. Another project's
+        // own bin would stay where it is (p.296).
+        const QString copy = doc->path();
+        QVERIFY(QFile::exists(copy));
+        QVERIFY(window.binContainer().deleteNode(id, &error));
+        QVERIFY(!QFile::exists(copy));
+        QVERIFY(QFile::exists(avb));
         window.clearProject();
     }
 

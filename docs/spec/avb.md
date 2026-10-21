@@ -19,7 +19,8 @@ No Avid SDK or documentation of the format is used: Avid publishes none.
 | Layer | Where | Status |
 |---|---|---|
 | Objects: the container and every class's properties | `src/interop/avb.*` | 3.3a, done |
-| Import into bins: mobs to clips, sources and sequences | | 3.3b |
+| Import into bins: mobs to clips, sources and sequences | `src/interop/avb_import.*` | 3.3b, done |
+| File > Open Bin of a `.avb`, from the Editing Guide | `main_window.cpp` (`openBinFile`) | 3.3b, done |
 
 ## The container (3.3a)
 
@@ -120,6 +121,145 @@ suite `ASPI`, equalizer `EQMB`, selectors `SLCT`, tape and film descriptors,
 MPEG and JPEG descriptors, trackers, positions, `BINF`...) are not read yet:
 their objects come back with the error "class not read", until bins that hold
 them can check a port.
+
+## Import (3.3b)
+
+`avb::importFile` reads a bin's mobs into bin items (native-model.md);
+`cutthulhu --import-avb BIN.avb` prints the bin they make as a structure
+dump (structure.md). The rules are the AAF import's (aaf.md, "Import"), so
+that a bin and an AAF export of the same material read into the same items;
+the helpers both use are in `src/interop/import_common.h`.
+
+### The bin's mobs
+
+The bin (ABIN) lists its mobs (CMPO) as items, each with a user-placed flag
+(pyavb's `user_placed`). Every mob the bin holds is listed, also the ones
+it holds only because a placed one refers to them (a sequence's title clip,
+the source mobs). By mob type (`mob_type_id`): master mobs (2) and
+composition mobs (1) become items; source mobs (3) are not items but their
+clips' sources. An item listed as not placed keeps `userPlaced` false: a
+reference clip, shown with Set Bin Display's *Show reference clips*
+(Editing Guide p.288). A mob listed twice is one item.
+
+### Clips
+
+* **Master mobs** become master clips, or audio clips when they have no
+  picture track. Name, MobID, Created (`creation_time`) and Modified
+  (`last_modified`) come from the mob, and so does the edit rate. Tracks
+  are the picture (media kind 1) and sound (2) tracks, numbered by their
+  label (`index`). The duration is the longest track of the first track's
+  kind (picture first). A sequence's length is its components', less its
+  transitions', as pyavb computes it.
+* **Rates** are stored as doubles (23.976); whole rates are read as they
+  are, and others as the exact NTSC rate within 1/1000 (24000/1001), as for
+  AAF.
+* **The source chain.** Each track's first source clip (SCLP, down
+  sequences and the tracks of track groups such as essence groups) names a
+  file source mob: one whose descriptor is a media file descriptor (MDFL
+  and its subclasses: CDCI, RGBA, PCMA, ...). Its locator is a media
+  locator (MSML) for managed media, which names its file by MobID: a File
+  source with no path. The file mob's track (by the clip's `track_id` and
+  media kind) names the mob before it: a Tape source (descriptor MDTP; also
+  the Tape column) or an Import source (a plain MDES, the file a clip was
+  imported or linked from, with its file locator's path: UTF-8, else POSIX,
+  else as stored). A source clip whose MobID's material number is zero ends
+  the chain.
+* **Start and End** come from the first timecode (TCCP) down that chain
+  (also as the first track of a capture mask or the first component of a
+  sequence), moved by the source clips' start times; a timecode at another
+  frame rate is scaled to the clip's, as for AAF. Bit 0 of a timecode's
+  flags is drop frame: it is set only at 30 fps in the corpus, where an
+  hour starts at frame 107892 (01:00:00;00).
+* **Bin columns.** The mob's attributes hold `_USER`, the user columns by
+  heading. Those with a value are the item's; those that are not standard
+  headings are the bin's custom columns (Media Composer's UNC Path is one).
+* **Rendered effects.** A master mob whose file mobs are used as "file mob
+  with a precompute" (usage code 9) is left out, as the AAF import leaves
+  out the same clips. Components' `precomputed` references are not read.
+  A master mob used as "precompute" (1), as a title's clip is, is a master
+  clip.
+* **Subclips** are composition mobs used as subclips (usage code 2): a
+  subclip with a Clip source naming its master and where it starts.
+* Other composition mob usages (effect, group, motion, ...) are not
+  imported, with a warning.
+
+### Sequences
+
+Composition mobs with usage code 0 become sequences, at the mob's edit rate.
+
+* **Tracks.** The first timecode track gives the sequence its TC1 track and
+  its Start. Media Composer keeps a track for each video track (V1, V2,
+  ...), unlike AAF's nested scope, and the import names them by label,
+  video first.
+* **Segments.** A source clip is a segment: its clip by MobID (the item
+  made from the same bin), the clip's track (the source clip's media kind
+  and `track_id`), its `start_time` as the IN point, and its length, in the
+  sequence's edit rate as the bin stores its components. Filler, and a
+  source clip with no source, are filler; anything else that is not
+  material reads as filler with a warning.
+* **Transitions** (TNFX) are placed at the cut as for AAF: one of length L
+  with its cut point at c shortens the segment before by L − c and starts
+  the one after c frames later.
+* **Track groups** (TKFX effects and their subclasses, SPED motion effects,
+  RSET essence groups, MASK capture masks) apply to the segments of their
+  first track that has material, fitted to the group's length (a motion
+  effect's input runs at its own speed). The effect is the group's effect
+  ID. The model keeps one effect a segment, so where effects are nested the
+  innermost is kept: the motion effect inside Media Composer's spatial
+  adapter (INT_EFF_SPATIAL_ADAPTER), where the AAF export names the
+  adapter. Dissolves (EFF2_BLEND_DISSOLVE, BLEND_AUDIO_DISSOLVE) are
+  Blend/Dissolve; other effects keep their effect IDs in the category "AVB",
+  until effects are matched to the Effect Palette's (Phase 6). Audio Pan
+  Volume (PVOL) is clip gain and pan, not an effect; its values are not read
+  yet.
+* A segment whose clip the bin does not hold keeps its MobID and name and
+  is offline.
+
+### Left out, with a warning
+
+What is read only in part comes back as warnings, once each with a count:
+edgecode and data tracks, timecode tracks after the first (Media
+Composer's sequences carry several: eight in the corpus), clip gain and
+pan, nested effects, objects the reader could not read (by class: MDTP and the other classes not read
+yet, or damage), and the `_COLOR_R`, `_COLOR_G`, `_COLOR_B` attributes.
+These are on one sequence of the corpus (16 bits each) and may be its clip
+colour (p.264), but nothing seen confirms it, so clip colours are not read
+until a bin shows what they are. The bin's view (its columns, sort and
+sift) is not read either: an opened bin starts with the default display
+and the bin's custom columns.
+
+### In the application
+
+File > Open Bin opens "a bin from another project" (Editing Guide p.296:
+"Bins have the file name extension .avb"; it "appears in the Bins list in a
+folder called Other Bins"). Writing `.avb` is 3.4, so an `.avb` is read
+once into a bin of ours, `<project>/Other Bins/<key>/<name>.cthbin` (the key
+is made from the `.avb`'s path, so that bins of the same name from
+different projects do not meet), and that bin is listed under Other Bins and
+opened (`MainWindow::openBinFile`). Master clips whose MobID the media
+database knows come online, as with AAF import (p.547). Opening the same
+`.avb` again while it is listed opens the bin made before, with whatever was
+changed in it since; deleting it from Other Bins removes only the pointer
+(p.296), and opening the `.avb` after that reads it again. The import's
+warnings go to the Console.
+
+### Checks
+
+* ctest `avb_import_bins` (`interop-corpus.py check-avb-import`): each
+  corpus bin that has a reference dump in `tests/data/aaf_reference` (made
+  with pyavb by `scripts/avb-structure.py`) reads into the same bin by
+  `structdiff.py --no-effects`. It needs only the corpus, not pyavb. The
+  thirteen bins are the same; the AAF exports of the same material are too
+  (`aaf_import_bins`), so the two readers agree on everything but the
+  effects' names.
+* tst_avb: `importsBin` (test_file_01.avb: item kinds, a source chain with
+  its import path and drop-frame timecode, columns, a reference clip, the
+  sequence's segments, transitions and effects, warnings), `importsRetime`
+  (a motion effect in a 23.976 sequence) and `importsDamaged` (100 damaged
+  bins import or are refused without a crash).
+* tst_main_window (`openBinReadsAMediaComposerBin`): File > Open Bin of a
+  corpus bin lists it under Other Bins, its sequence names its clips there,
+  and opening it again opens the same bin.
 
 ## Dumps
 

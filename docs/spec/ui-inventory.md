@@ -711,7 +711,9 @@ These are recorded now so they are not entered from memory later.
   * Naming: the project rules, up to 64 characters (p.295).
   * Open bins are dimmed, and bins from other projects are in italic.
   * *File > Open Bin* lists a bin from elsewhere under **Other Bins**;
-    deleting it removes only the pointer.
+    deleting it removes only the pointer. "Bins have the file name
+    extension .avb" (p.296): a Media Composer bin is read into a bin of ours
+    first (docs/spec/avb.md, "Import").
   * *File > Open Selected Bins (In One Window)*.
   * *New Folder*, and drag bins into folders.
   * *Flat View* (fast menu).

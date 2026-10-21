@@ -764,6 +764,14 @@ the build folder (`build/<preset>`) and configure again.
   pyavb`). By hand: `cutthulhu --import-aaf FILE.aaf > ours.json` and
   `python3 scripts/avb-structure.py BIN.avb > ref.json`, then
   `structdiff.py ref.json ours.json --no-effects`.
+* **Bins read into the native model (gate 1 on the corpus):** ctest
+  `avb_import_bins` reads each corpus bin that has a reference dump in
+  `tests/data/aaf_reference` and compares it with that dump
+  (`structdiff.py --no-effects`); it needs only the corpus. By hand:
+  `cutthulhu --import-avb BIN.avb > ours.json` and `structdiff.py
+  tests/data/aaf_reference/BIN.json ours.json --no-effects`, or
+  `python3 scripts/interop-corpus.py check-avb-import --app
+  build/ci/bin/cutthulhu`.
 * **AAF round trips (gate 3, Cutthulhu's half):** ctest `aaf_round_trip`
   imports, exports and imports again every corpus AAF and compares the two
   imports; with pyaaf2 installed it also has pyaaf2 read each export. By

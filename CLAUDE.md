@@ -197,8 +197,12 @@ lays out bins as Media Composer does, `--export-aaf`), is done; ctest
 clips find managed media by MobID) and File > Output > Export to File
 (`export_dialog.*`, the Export setting). 3.3, `.avb` bins (docs/spec/avb.md), has started: 3.3a, the object reader
 (`src/interop/avb.*`, `--dump-avb`, ported from pyavb), is done; ctest
-`avb_pyavb` compares it with pyavb (`scripts/avb-dump.py`). Next is 3.3b,
-bins into the native model.
+`avb_pyavb` compares it with pyavb (`scripts/avb-dump.py`). 3.3b, bins
+into the native model (`avb_import.*`, `--import-avb`; helpers shared with
+the AAF import in `import_common.h`), is done; ctest `avb_import_bins`
+compares it with `tests/data/aaf_reference`. File > Open Bin takes a `.avb`
+and lists a native copy under Other Bins (`MainWindow::openBinFile`). Next
+is 3.4, `.avb` bin write.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

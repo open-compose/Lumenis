@@ -8,6 +8,7 @@
 #include "lumenis/interop/aaf_export.h"
 #include "lumenis/interop/aaf_import.h"
 #include "lumenis/interop/avb.h"
+#include "lumenis/interop/avb_import.h"
 #include "lumenis/model/structure.h"
 #include "lumenis/model/locations.h"
 #include "lumenis/model/project_store.h"
@@ -85,8 +86,8 @@
 // The cutthulhu executable: main() sets up Qt, the provider registry and modules, then either runs
 // one of the command-line tools below and exits, or opens the editor (Select Project, then
 // lumenis::ui::MainWindow). The options are declared in main() and handled in this order:
-// --list-providers, --probe, --dump-structure, --export-aaf, --import-aaf, --dump-aaf,
-// --write-media and --framemd5 need no display (isHeadlessInvocation()); --dump-menus,
+// --list-providers, --probe, --dump-structure, --export-aaf, --import-aaf, --import-avb, --dump-aaf,
+// --dump-avb, --write-media and --framemd5 need no display (isHeadlessInvocation()); --dump-menus,
 // --measure-playback, --screenshot and --smoke-test open the main window; --project or Select
 // Project start a normal session. The scripts that run these are in scripts/ (decode-corpus.py,
 // check-mxf.py, measure-playback.py, structdiff.py, aaf-dump.py, make-checklist.py,
@@ -101,7 +102,8 @@ bool isHeadlessInvocation(int argc, char** argv) {
         const std::string_view arg(argv[i]);
         if (arg == "--version" || arg == "-v" || arg == "--help" || arg == "-h" || arg == "-?"
             || arg == "--list-providers" || arg == "--probe" || arg == "--framemd5" || arg == "--write-media"
-            || arg == "--dump-structure" || arg == "--dump-aaf" || arg == "--dump-avb" || arg == "--import-aaf" || arg == "--export-aaf") {
+            || arg == "--dump-structure" || arg == "--dump-aaf" || arg == "--dump-avb" || arg == "--import-aaf" || arg == "--import-avb"
+            || arg == "--export-aaf") {
             return true;
         }
     }
@@ -260,6 +262,12 @@ int main(int argc, char** argv) {
                        "(docs/spec/structure.md), then exit."),
         QStringLiteral("file"));
     parser.addOption(importAaf);
+    const QCommandLineOption importAvb(
+        QStringLiteral("import-avb"),
+        QStringLiteral("Read a Media Composer bin (.avb) into a bin and print the bin's structure dump "
+                       "(docs/spec/structure.md), then exit."),
+        QStringLiteral("file"));
+    parser.addOption(importAvb);
     const QCommandLineOption exportAaf(
         QStringLiteral("export-aaf"),
         QStringLiteral("Export a bin (.cthbin) as AAF to the file --to names, then exit. An AAF file is "
@@ -372,8 +380,22 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    // What an AAF file or a Media Composer bin imports as: the bin's structure (Phase 3 gate 1). Both
+    // print the same form, so that either can be compared with a reference dump (structdiff.py).
+    auto printImported = [](const QString& path, const QStringList& warnings, const char* option,
+                            const QList<lumenis::model::BinItem>& items, const QStringList& customColumns) {
+        for (const QString& w : warnings) std::fprintf(stderr, "%s: %s\n", option, qPrintable(w));
+        lumenis::model::Bin bin;
+        bin.name = QFileInfo(path).completeBaseName();
+        bin.items = items;
+        bin.display.customColumns = customColumns;
+        const QJsonObject structure{{QStringLiteral("format"), QStringLiteral("cutthulhu-structure")},
+                                    {QStringLiteral("version"), 1},
+                                    {QStringLiteral("bins"), QJsonArray{lumenis::model::binStructure(bin)}}};
+        const QByteArray json = QJsonDocument(structure).toJson();
+        std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
+    };
     if (parser.isSet(importAaf)) {
-        // What an AAF file imports as: the bin's structure (Phase 3 gate 1).
         QString error;
         const QString path = parser.value(importAaf);
         const auto imported = lumenis::interop::aaf::importFile(path, {}, &error);
@@ -381,16 +403,18 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(path), qPrintable(error));
             return 1;
         }
-        for (const QString& w : imported->warnings) std::fprintf(stderr, "import-aaf: %s\n", qPrintable(w));
-        lumenis::model::Bin bin;
-        bin.name = QFileInfo(path).completeBaseName();
-        bin.items = imported->items;
-        bin.display.customColumns = imported->customColumns;
-        const QJsonObject structure{{QStringLiteral("format"), QStringLiteral("cutthulhu-structure")},
-                                    {QStringLiteral("version"), 1},
-                                    {QStringLiteral("bins"), QJsonArray{lumenis::model::binStructure(bin)}}};
-        const QByteArray json = QJsonDocument(structure).toJson();
-        std::fwrite(json.constData(), 1, static_cast<std::size_t>(json.size()), stdout);
+        printImported(path, imported->warnings, "import-aaf", imported->items, imported->customColumns);
+        return 0;
+    }
+    if (parser.isSet(importAvb)) {
+        QString error;
+        const QString path = parser.value(importAvb);
+        const auto imported = lumenis::interop::avb::importFile(path, {}, &error);
+        if (!imported) {
+            std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(path), qPrintable(error));
+            return 1;
+        }
+        printImported(path, imported->warnings, "import-avb", imported->items, imported->customColumns);
         return 0;
     }
 

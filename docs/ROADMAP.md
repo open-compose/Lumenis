@@ -598,7 +598,14 @@ and pyaaf2's test suites, made with real Media Composer
     every class in the corpus bins is read as pyavb reads it, and all 14
     bins dump byte for byte the same (`cutthulhu --dump-avb`,
     `scripts/avb-dump.py --compare`, ctest `avb_pyavb`, tst_avb).
-  * Next: 3.3b, bins into the native model.
+  * 3.3b, bins into the native model (`src/interop/avb_import.*`), is
+    done: master and audio clips with their source chains, subclips and
+    sequences, with reference clips marked (`userPlaced`). All 13 corpus
+    bins with a reference dump read the same as pyavb reads them
+    (`cutthulhu --import-avb`, ctest `avb_import_bins`), effect names
+    aside. File > Open Bin reads an `.avb` into a bin under Other Bins
+    (p.296), its clips online by MobID.
+  * Next: 3.4, writing `.avb` bins.
 
 ### Phase 4 — Core editing
 Features in this phase:

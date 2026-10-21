@@ -10,6 +10,11 @@ target_compile_definitions(tst_menu_inventory PRIVATE
     MENU_INVENTORY="${PROJECT_SOURCE_DIR}/tests/data/menu_inventory.json")
 lumenis_add_test(tst_select_project_dialog SOURCES tst_select_project_dialog.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_main_window SOURCES tst_main_window.cpp LIBS ${ui_test_libs})
+# File > Open Bin of a Media Composer bin reads one of the interchange corpus
+# (tests/interop/CMakeLists.txt); without it that test is skipped.
+set_tests_properties(tst_main_window PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;CUTTHULHU_INTEROP_CORPUS=${LUMENIS_INTEROP_CORPUS}"
+    DEPENDS interop_corpus_fetch)
 
 lumenis_add_test(tst_keyboard SOURCES tst_keyboard.cpp LIBS ${ui_test_libs})
 target_compile_definitions(tst_keyboard PRIVATE

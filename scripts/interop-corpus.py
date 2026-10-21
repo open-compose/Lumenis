@@ -36,6 +36,11 @@ committed here: `fetch` downloads them into a cache folder.
         the result with the bin's reference dump (structdiff.py
         --no-effects): Phase 3 gate 1 on the corpus. Exits 77 without the
         corpus.
+    interop-corpus.py check-avb-import --app build/ci/bin/cutthulhu [--dir DIR]
+        Read each of those Media Composer bins (`cutthulhu --import-avb`) and
+        compare the result with its reference dump (structdiff.py
+        --no-effects): the bin reads as pyavb reads it. Exits 77 without the
+        corpus.
     interop-corpus.py check-round-trip --app build/ci/bin/cutthulhu [--dir DIR]
         Import each AAF file, export it (`cutthulhu --export-aaf`) and import
         the export: the two imports must be the same (structdiff.py). With
@@ -247,20 +252,24 @@ def reference(folder):
     return 0
 
 
-def check_import(app, folder):
+def check_import(app, folder, bins=False):
+    """Each corpus file of a pair read by Cutthulhu, compared with its bin's reference dump: the AAF
+    exports (--import-aaf), or with `bins` the bins themselves (--import-avb)."""
     structdiff = os.path.join(ROOT, "scripts", "structdiff.py")
+    option = "--import-avb" if bins else "--import-aaf"
     failed = 0
     checked = 0
     with tempfile.TemporaryDirectory() as tmp:
-        for _, aaf in PAIRS:
-            path = os.path.join(folder, aaf)
+        for avb, aaf in PAIRS:
+            name = avb if bins else aaf
+            path = os.path.join(folder, name)
             if not os.path.exists(path):
                 continue
-            stem = os.path.splitext(os.path.basename(aaf))[0]
+            stem = os.path.splitext(os.path.basename(name))[0]
             ours = os.path.join(tmp, stem + ".json")
-            run = subprocess.run([app, "--import-aaf", path], capture_output=True, text=True)
+            run = subprocess.run([app, option, path], capture_output=True, text=True)
             if run.returncode != 0:
-                print(f"{aaf}: cutthulhu failed: {run.stderr.strip()}")
+                print(f"{name}: cutthulhu failed: {run.stderr.strip()}")
                 failed += 1
                 continue
             with open(ours, "w", encoding="utf-8") as f:
@@ -270,10 +279,10 @@ def check_import(app, folder):
             checked += 1
             if diff.returncode != 0:
                 failed += 1
-                print(f"{aaf}: differs from its bin")
+                print(f"{name}: differs from its bin" + (" as pyavb reads it" if bins else ""))
                 print("  " + diff.stdout.strip().replace("\n", "\n  "))
             else:
-                print(f"{aaf}: the same as its bin")
+                print(f"{name}: the same as its bin" + (" as pyavb reads it" if bins else ""))
     if not checked:
         print(f"interop-corpus: no corpus in {folder} (interop-corpus.py fetch)", file=sys.stderr)
         return 77
@@ -384,7 +393,7 @@ def check_written(test, folder):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["fetch", "manifest", "reference", "check-aaf", "check-avb", "check-import",
-                                        "check-round-trip", "check-written"])
+                                        "check-avb-import", "check-round-trip", "check-written"])
     ap.add_argument("--dir", help="the corpus folder (check-written: where to keep the files written)")
     ap.add_argument("--test", help="tst_cfb, for check-written")
     ap.add_argument("--app", help="the cutthulhu executable, for the check- commands")
@@ -399,6 +408,10 @@ def main():
         if not args.app:
             ap.error("check-import needs --app")
         return check_import(args.app, args.dir or default_dir())
+    if args.command == "check-avb-import":
+        if not args.app:
+            ap.error("check-avb-import needs --app")
+        return check_import(args.app, args.dir or default_dir(), bins=True)
     if args.command == "check-round-trip":
         if not args.app:
             ap.error("check-round-trip needs --app")

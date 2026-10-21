@@ -434,9 +434,20 @@ bool ProjectBins::remove(const QString& id, QString* error) {
     if (!n) return fail(error, QStringLiteral("no such bin or folder"));
     if (n->kind == BinNode::Kind::Trash) return fail(error, QStringLiteral("use Empty Trash"));
     if (n->external || n->kind == BinNode::Kind::OtherBins) {
-        // Only the pointers go; the files stay where they are (p.296).
+        // Only the pointers go; the files stay where they are (p.296). Except our own copies of
+        // Media Composer bins (MainWindow::openBinFile keeps them in the project folder's
+        // "Other Bins/<key>/"): nothing else lists them, so they go with their entry.
         BinNode taken;
         takeNode(id, &taken);
+        const QString copies = QDir(folder_).absoluteFilePath(QStringLiteral("Other Bins")) + QLatin1Char('/');
+        std::function<void(const BinNode&)> dropCopies = [&](const BinNode& b) {
+            if (b.external && QDir::cleanPath(b.file).startsWith(copies)) {
+                QFile::remove(b.file);
+                QDir().rmdir(QFileInfo(b.file).absolutePath()); // the key folder, once empty
+            }
+            for (const BinNode& c : b.children) dropCopies(c);
+        };
+        if (!folder_.isEmpty()) dropCopies(taken);
         roots_.removeIf([](const BinNode& r) { return r.kind == BinNode::Kind::OtherBins && r.children.isEmpty(); });
         openBins.removeAll(id);
         return true;

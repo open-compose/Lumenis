@@ -1,5 +1,6 @@
 #include "lumenis/interop/aaf_export.h"
 #include "lumenis/interop/aaf_import.h"
+#include "lumenis/interop/avb_import.h"
 #include "lumenis/ui/main_window.h"
 
 #include "lumenis/media/consolidate.h"
@@ -40,6 +41,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QCryptographicHash>
 #include <QVBoxLayout>
 #include <QDialogButtonBox>
 #include <QCheckBox>
@@ -56,6 +58,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QSet>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QStorageInfo>
@@ -551,11 +554,14 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
     };
     BinContainer* bins = binContainer_;
     // File menu: opening, closing and saving bins.
-    handle("file.open_bin", [this, bins] {
-        const QString file = QFileDialog::getOpenFileName(this, tr("Open a Bin"), {}, tr("Bins (*.cthbin)"));
+    handle("file.open_bin", [this] {
+        // "Bins have the file name extension .avb" (p.296): Media Composer's, and ours.
+        const QString file = QFileDialog::getOpenFileName(
+            this, tr("Open a Bin"), {},
+            tr("Bins (*.cthbin *.avb);;%1 bins (*.cthbin);;Media Composer bins (*.avb)").arg(QString::fromUtf8(branding::kProductName)));
         if (file.isEmpty()) return;
         QString error;
-        if (bins->openOtherBin(file, &error).isEmpty()) QMessageBox::warning(this, tr("Open Bin"), error);
+        if (openBinFile(file, &error).isEmpty()) QMessageBox::warning(this, tr("Open Bin"), error);
     });
     // Both open the selected bins as tabs; separate Bin Containers come later.
     handle("file.open_selected_bins", [bins] {
@@ -1399,13 +1405,7 @@ QStringList MainWindow::importAaf(const QString& binId, const QStringList& paths
         }
         int online = 0;
         for (model::BinItem item : imported->items) {
-            const bool clip = item.kind == model::BinItemKind::MasterClip || item.kind == model::BinItemKind::AudioClip;
-            if (clip) {
-                if (const auto set = mediaDb_.setOf(item.mobId)) {
-                    item.link = set->link().toJson();
-                    ++online;
-                }
-            }
+            if (linkByMobId(item)) ++online;
             doc->addItem(item);
             ids << item.id;
         }
@@ -1420,6 +1420,79 @@ QStringList MainWindow::importAaf(const QString& binId, const QStringList& paths
     if (display.customColumns != doc->bin().display.customColumns) doc->setDisplay(display);
     if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
     return ids;
+}
+
+bool MainWindow::linkByMobId(model::BinItem& item) const {
+    if (item.kind != model::BinItemKind::MasterClip && item.kind != model::BinItemKind::AudioClip) return false;
+    const auto set = mediaDb_.setOf(item.mobId);
+    if (!set) return false;
+    item.link = set->link().toJson();
+    return true;
+}
+
+// A .cthbin is listed as it is. Writing .avb comes with Phase 3.4, so a Media Composer bin is read
+// once into a bin of ours, kept in the project folder under "Other Bins/<key>/<name>.cthbin" (the key
+// is from the .avb's path, so that bins of the same name from different projects do not meet), and
+// that is listed under Other Bins. Opening the same .avb again while it is listed opens the bin
+// made before, with whatever was changed in it since.
+QString MainWindow::openBinFile(const QString& path, QString* error) {
+    BinContainer* bins = binContainer_;
+    if (!bins->bins()) {
+        if (error) *error = tr("No project is open.");
+        return {};
+    }
+    if (!path.endsWith(QLatin1String(".avb"), Qt::CaseInsensitive)) return bins->openOtherBin(path, error);
+    const QFileInfo info(path);
+    const QString key =
+        QString::fromLatin1(QCryptographicHash::hash(info.absoluteFilePath().toUtf8(), QCryptographicHash::Sha1).toHex().left(8));
+    const QString converted = QDir(bins->bins()->folder())
+                                  .filePath(QStringLiteral("Other Bins/%1/%2%3").arg(key, info.completeBaseName(), model::BinFile::suffix()));
+    if (const QString existing = bins->bins()->binForPath(converted); !existing.isEmpty()) {
+        bins->openBin(existing);
+        return existing;
+    }
+    interop::avb::ImportOptions options;
+    options.when = QDateTime::currentDateTimeUtc();
+    const auto imported = interop::avb::importFile(path, options, error);
+    if (!imported) return {};
+    // An empty bin first: the sequences' segments name the bin by its Sidebar id, which it has once
+    // it is listed.
+    model::Bin bin;
+    bin.name = info.completeBaseName();
+    bin.display.customColumns = imported->customColumns;
+    if (!QDir().mkpath(QFileInfo(converted).absolutePath())) {
+        if (error) *error = tr("Cannot make the folder %1.").arg(QDir::toNativeSeparators(QFileInfo(converted).absolutePath()));
+        return {};
+    }
+    if (!model::BinFile::write(converted, bin, error)) return {};
+    const QString id = bins->openOtherBin(converted, error);
+    BinDocument* doc = id.isEmpty() ? nullptr : bins->document(id);
+    if (!doc) return {};
+    // Master clips find their managed media by MobID, as with AAF (p.547).
+    loadMediaDatabase();
+    QSet<QString> itemIds;
+    for (const model::BinItem& item : imported->items) itemIds.insert(item.id);
+    int online = 0;
+    for (model::BinItem item : imported->items) {
+        if (linkByMobId(item)) ++online;
+        if (item.kind == model::BinItemKind::Sequence) {
+            model::Sequence sequence = model::Sequence::fromItem(item);
+            for (const QString& name : sequence.trackNames()) {
+                for (model::Segment& s : sequence.track(name)->segments) {
+                    if (itemIds.contains(s.clipId)) s.binId = id;
+                }
+            }
+            sequence.storeIn(item);
+        }
+        doc->addItem(item);
+    }
+    QString saveError;
+    if (!bins->saveBin(doc, &saveError)) ConsoleLog::instance().append(tr("Open Bin: %1").arg(saveError));
+    ConsoleLog::instance().append(tr("Open Bin: %1: %n item(s), %2 with media", "", static_cast<int>(imported->items.size()))
+                                      .arg(info.fileName())
+                                      .arg(online));
+    for (const QString& w : imported->warnings) ConsoleLog::instance().append(tr("Open Bin: %1: %2").arg(info.fileName(), w));
+    return id;
 }
 
 // Steps: collect the selection and the clips its sequences use, make sure an Export setting exists,

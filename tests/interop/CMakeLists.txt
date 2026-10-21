@@ -59,6 +59,16 @@ if(Python3_Interpreter_FOUND)
         SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
+    # Phase 3 gate 1 on the bins themselves: each corpus bin read into a bin
+    # (--import-avb) is the same as pyavb's reading of it (the same
+    # reference dumps). Needs only the corpus, not pyavb.
+    add_test(NAME avb_import_bins
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py check-avb-import
+                --app $<TARGET_FILE:lumenis_app> --dir ${LUMENIS_INTEROP_CORPUS})
+    set_tests_properties(avb_import_bins PROPERTIES
+        SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
     # Phase 3 gate 3, Cutthulhu's half: every corpus AAF imported, exported
     # and imported again is the same; pyaaf2, when installed, reads each
     # export as Cutthulhu does.

@@ -183,6 +183,12 @@ public:
     // master clips with media on the drives online by MobID.
     // Returns the new items' ids; failures and warnings go to the Console.
     QStringList importAaf(const QString& binId, const QStringList& paths);
+    // File > Open Bin (p.296): a bin from another project, listed under
+    // Other Bins and opened. A Media Composer bin (.avb) is read into a bin
+    // of ours first (interop::avb::importFile), its master clips online by
+    // MobID. Returns the bin's Sidebar id; empty, with `error` set, when it
+    // cannot be read. Warnings go to the Console.
+    QString openBinFile(const QString& path, QString* error = nullptr);
     // File > Output > Export to File (p.868-869) on the active bin's
     // selection, with the sequences' clips: the Export As dialog, then the
     // chosen Export setting (p.1173-1177). The hook stands in for the
@@ -264,6 +270,9 @@ private:
     void installHandlers();
     void installPanelHandlers();
     void installProjectHandlers(bool projectOpen);
+    // An imported master or audio clip whose MobID the media database knows
+    // is linked to that media (importAaf, openBinFile). True when it was.
+    bool linkByMobId(model::BinItem& item) const;
 
     // Whether the Bin Container (docked, floating, or the Project panel) is the active panel.
     bool binsActive() const;

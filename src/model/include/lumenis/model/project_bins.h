@@ -82,7 +82,8 @@ public:
     // Moves an entry into a folder (empty = top level) at `index` (-1 = end).
     bool move(const QString& id, const QString& parent, int index = -1, QString* error = nullptr);
     // Delete: bins and folders go to the Trash; a bin from another project
-    // is only removed from the list (p.296-298).
+    // is only removed from the list (p.296-298), except a copy we made of a
+    // Media Composer bin (in the folder's "Other Bins/"), which is deleted.
     bool remove(const QString& id, QString* error = nullptr);
     // Empty Trash: deletes the bin files in it (p.298).
     bool emptyTrash(QString* error = nullptr);

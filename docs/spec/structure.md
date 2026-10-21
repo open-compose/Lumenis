@@ -84,7 +84,9 @@ with Cutthulhu's.
 
 `scripts/avb-structure.py BIN.avb` dumps a Media Composer bin read with
 pyavb (MIT) in this form. ctest `aaf_import_bins` compares AAF imports with
-the bins of the same material this way (aaf.md, "Import").
+the bins of the same material this way (aaf.md, "Import"), and ctest
+`avb_import_bins` the bins themselves as Cutthulhu reads them
+(`cutthulhu --import-avb`, avb.md, "Import").
 
 It prints every difference, one per line, and exits 1 when there are any.
 `tests/scripts/test_structdiff.py` (ctest `structdiff`) covers each case,
