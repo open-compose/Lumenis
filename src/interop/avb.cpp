@@ -1374,7 +1374,7 @@ std::optional<QByteArray> toMacRoman(const QString& text) {
             out.append(static_cast<char>(u));
             continue;
         }
-        const auto* at = std::find(kMacRoman.begin(), kMacRoman.end(), u);
+        const auto at = std::find(kMacRoman.begin(), kMacRoman.end(), u);
         if (at == kMacRoman.end()) return std::nullopt;
         out.append(static_cast<char>(0x80 + (at - kMacRoman.begin())));
     }
