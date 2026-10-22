@@ -404,6 +404,24 @@ jobs:
       - name: Build
         run: cmake --build --preset ci
 
+      - name: File speed check
+        # Writing 200 small files takes well under a second on this PC. A
+        # scan of every new file (antivirus, backup) once made every test
+        # 100 times slower and tests time out; this names the cause
+        # (BUILDING.md "The self-hosted Windows or Linux job waits or fails").
+        shell: powershell
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'file-speed'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          $bytes = New-Object byte[] 4096
+          $watch = [Diagnostics.Stopwatch]::StartNew()
+          for ($i = 0; $i -lt 200; $i++) { [IO.File]::WriteAllBytes((Join-Path $dir "f$i.bin"), $bytes) }
+          $watch.Stop()
+          Remove-Item -Recurse -Force $dir
+          $s = [math]::Round($watch.Elapsed.TotalSeconds, 2)
+          Write-Host "200 files written in $s s"
+          if ($s -gt 10) { Write-Host "::warning::Writing files is slow on this runner ($s s for 200): tests may time out. See BUILDING.md." }
+
       - name: Test
         shell: powershell
         run: |

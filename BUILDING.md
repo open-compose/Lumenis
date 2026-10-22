@@ -571,6 +571,16 @@ hand.
   limit: the runner's user may not use the Windows Installer service, not
   even for `msiexec /a`. The self-hosted job checks the .zip package (the
   same files) instead; the hosted job installs the .msi.
+* *Tests time out ("Test function timed out"), and every test takes
+  seconds:* something on the PC is scanning each new file or process
+  (an antivirus or backup tool's real-time protection, such as Acronis
+  Active Protection, or a Windows Defender scan). Once, every test ran
+  100 times slower and the tests that write hundreds of files passed 300 s.
+  The job's "File speed check" step warns when writing 200 small files
+  takes over 10 s. Exclude the runner's folder (`C:\actions-runner`) and
+  `ghrunner`'s temporary folder from the scanner, or wait for the scan to
+  end. Tests should read and write damaged inputs in memory, not through
+  hundreds of temporary files.
 * *"Qt 6.8.3 is not in C:\Qt":* run `scripts\setup-windows-runner.ps1
   install <token>` again; it installs Qt and keeps the existing runner.
 * *"Pillow is missing on this runner":* the screenshot comparison runs on
