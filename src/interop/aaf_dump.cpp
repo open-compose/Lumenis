@@ -2,6 +2,7 @@
 
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QSet>
 
 #include <algorithm>
 #include <limits>
@@ -14,11 +15,17 @@ namespace lumenis::interop::aaf {
 
 namespace {
 
-QJsonValue dumpObject(const File& file, const Object& o, int depth);
+// The storages already dumped. A valid file's strong references form a tree, so each storage is reached
+// once; a damaged one can make many references share storages, and dumping each share in place grew
+// exponentially with the depth (found by fuzz_aaf: 25 s for a 250 KB file,
+// fuzz/regressions/aaf/shared-strong-refs.aaf).
+using Seen = QSet<int>;
+
+QJsonValue dumpObject(const File& file, const Object& o, int depth, Seen& seen);
 
 // A decoded value as JSON: numbers, Booleans and strings as themselves, AUIDs and MobIDs as text,
 // undecoded bytes as {"bytes": hex}, and objects (strong references' targets) dumped in place.
-QJsonValue dumpVariant(const File& file, const QVariant& v, int depth) {
+QJsonValue dumpVariant(const File& file, const QVariant& v, int depth, Seen& seen) {
     switch (v.typeId()) {
     case QMetaType::Bool: return v.toBool();
     case QMetaType::LongLong: return v.toLongLong();
@@ -30,18 +37,18 @@ QJsonValue dumpVariant(const File& file, const QVariant& v, int depth) {
     case QMetaType::QVariantMap: {
         QJsonObject out;
         const QVariantMap m = v.toMap();
-        for (auto it = m.begin(); it != m.end(); ++it) out.insert(it.key(), dumpVariant(file, it.value(), depth));
+        for (auto it = m.begin(); it != m.end(); ++it) out.insert(it.key(), dumpVariant(file, it.value(), depth, seen));
         return out;
     }
     case QMetaType::QVariantList: {
         QJsonArray out;
-        for (const QVariant& e : v.toList()) out.append(dumpVariant(file, e, depth));
+        for (const QVariant& e : v.toList()) out.append(dumpVariant(file, e, depth, seen));
         return out;
     }
     default: break;
     }
     if (v.userType() == qMetaTypeId<MobId>()) return QString::fromStdString(v.value<MobId>().toString());
-    if (v.userType() == qMetaTypeId<Object>()) return dumpObject(file, v.value<Object>(), depth + 1);
+    if (v.userType() == qMetaTypeId<Object>()) return dumpObject(file, v.value<Object>(), depth + 1, seen);
     return QJsonValue();
 }
 
@@ -55,16 +62,16 @@ bool isSetType(const MetaDictionary& meta, const QUuid& type) {
 // A property as JSON by its stored form: strong references as the objects they hold, weak references as
 // {"weakref": the key as text}, streams as {"stream": size in bytes, or -1 when missing}, and data
 // decoded by its type ({"bytes": hex} when the property is not in the metadictionary).
-QJsonValue dumpProperty(const File& file, const Object& o, const RawProperty& p, int depth) {
+QJsonValue dumpProperty(const File& file, const Object& o, const RawProperty& p, int depth, Seen& seen) {
     switch (static_cast<StoredForm>(p.form)) {
     case StoredForm::StrongRef: {
         const QList<Object> r = o.referenced(p);
-        return r.isEmpty() ? QJsonValue() : dumpObject(file, r.first(), depth + 1);
+        return r.isEmpty() ? QJsonValue() : dumpObject(file, r.first(), depth + 1, seen);
     }
     case StoredForm::StrongRefVector:
     case StoredForm::StrongRefSet: {
         QJsonArray out;
-        for (const Object& r : o.referenced(p)) out.append(dumpObject(file, r, depth + 1));
+        for (const Object& r : o.referenced(p)) out.append(dumpObject(file, r, depth + 1, seen));
         return out;
     }
     case StoredForm::WeakRef: {
@@ -85,7 +92,7 @@ QJsonValue dumpProperty(const File& file, const Object& o, const RawProperty& p,
     }
     const PropertyDef* d = o.propertyDef(p.pid);
     if (!d) return QJsonObject{{QStringLiteral("bytes"), QString::fromLatin1(p.data.toHex())}};
-    QJsonValue v = dumpVariant(file, file.decode(d->type, p.data), depth);
+    QJsonValue v = dumpVariant(file, file.decode(d->type, p.data), depth, seen);
     // A set has no order: sorted, as pyaaf2's Python sets are made comparable.
     if (v.isArray() && isSetType(file.metaDictionary(), d->type)) {
         QJsonArray a = v.toArray();
@@ -99,12 +106,14 @@ QJsonValue dumpProperty(const File& file, const Object& o, const RawProperty& p,
     return v;
 }
 
-// An object as {"class": name, "properties": {name: value}}. The depth limit keeps damaged files that
-// reference their own ancestors from recursing without end.
-QJsonValue dumpObject(const File& file, const Object& o, int depth) {
-    if (o.isNull() || depth > 200) return QJsonValue();
+// An object as {"class": name, "properties": {name: value}}. A storage already dumped (only in a damaged
+// file: an ancestor referenced again, or a storage shared by several references) is null where it is
+// reached again; the depth limit also keeps a deep chain from exhausting the stack.
+QJsonValue dumpObject(const File& file, const Object& o, int depth, Seen& seen) {
+    if (o.isNull() || depth > 200 || seen.contains(o.entry())) return QJsonValue();
+    seen.insert(o.entry());
     QJsonObject properties;
-    for (const RawProperty& p : o.properties()) properties.insert(o.propertyName(p.pid), dumpProperty(file, o, p, depth));
+    for (const RawProperty& p : o.properties()) properties.insert(o.propertyName(p.pid), dumpProperty(file, o, p, depth, seen));
     return QJsonObject{{QStringLiteral("class"), o.className()}, {QStringLiteral("properties"), properties}};
 }
 
@@ -179,7 +188,8 @@ void writeCanonical(QByteArray& out, const QJsonValue& v) {
 } // namespace
 
 QJsonValue dump(const File& file, const Object& from) {
-    return dumpObject(file, from.isNull() ? file.header() : from, 0);
+    Seen seen;
+    return dumpObject(file, from.isNull() ? file.header() : from, 0, seen);
 }
 
 QByteArray canonicalJson(const QJsonValue& value) {

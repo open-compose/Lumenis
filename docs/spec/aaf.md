@@ -149,6 +149,9 @@ property as JSON (`aaf::dump`). `scripts/aaf-dump.py` prints the same form
 from pyaaf2's reading, so the two readers are compared on every file:
 `aaf-dump.py --compare --app cutthulhu FILE...`. With `--canonical` both
 print compact, sorted JSON, byte for byte the same when they agree.
+Each storage is dumped once: in a valid file every object has one owner, and
+in a damaged one a storage reached again (an index listing an element many
+times, or an ancestor) is `null` there, so the dump stays linear in the file.
 
 * tst_aaf (`corpusDumps`): every corpus AAF dumps to the digest pyaaf2's
   dump has (`tests/data/interop_corpus.json`). For `test_file_01.aaf`,

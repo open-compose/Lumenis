@@ -53,6 +53,7 @@ private slots:
     void numbersPastRational();
     void negativeGroupLength();
     void slowEditRate();
+    void sharedStrongRefs();
 };
 
 void TestAaf::auids() {
@@ -555,8 +556,9 @@ namespace {
 
 // The file without its metadictionary, in 512-byte sectors: the reader has the model built in, so it
 // reads the same, and the file is small enough to keep as a fuzz regression input (fuzz/seeds.cpp
-// makes seeds the same way).
-QByteArray compact(const QByteArray& bytes) {
+// makes seeds the same way). `edit`, when given, may change each stream's bytes on the way (by name).
+QByteArray compact(const QByteArray& bytes,
+                   const std::function<QByteArray(const QString&, const QByteArray&)>& edit = {}) {
     aaf::File file;
     if (!file.openData(bytes)) return {};
     const int meta = file.root().object(QStringLiteral("MetaDictionary")).entry();
@@ -573,7 +575,8 @@ QByteArray compact(const QByteArray& bytes) {
                 w.setClsid(s, e.clsid);
                 copy(id, s);
             } else {
-                w.addStream(to, e.name, r.readAll(id));
+                const QByteArray data = r.readAll(id);
+                w.addStream(to, e.name, edit ? edit(e.name, data) : data);
             }
         }
     };
@@ -653,6 +656,60 @@ void TestAaf::slowEditRate() {
     const aaf::ImportResult result = aaf::importMobs(file);
     QCOMPARE(result.items.size(), 1);
     QVERIFY(result.items.first().fields.value(QStringLiteral("Start")).isEmpty());
+}
+
+// Found by fuzz_aaf in the 24-hour run (25 s on a 250 KB file): strong reference vectors whose index
+// lists one element many times, nested, so that the dump (aaf::dump) dumped each element as often as it
+// was listed, the product of the counts at every level. Each storage is now dumped once; where it is
+// reached again the dump has null. Here two nested sequences each list their only component 300 times
+// (90,000 fillers before). CUTTHULHU_FUZZ_REGRESSIONS: see negativeGroupLength.
+void TestAaf::sharedStrongRefs() {
+    aaf::Builder b;
+    startFile(b);
+    const aaf::Builder::Ref m = addMob(b, QStringLiteral("CompositionMob"), MobId::generate(), QStringLiteral("Cut"));
+    b.set(m, QStringLiteral("UsageCode"), QStringLiteral("Usage_TopLevel"));
+    const aaf::Builder::Ref outer = b.create(QStringLiteral("Sequence"));
+    b.setWeak(outer, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(outer, QStringLiteral("Length"), qint64(10));
+    const aaf::Builder::Ref inner = b.create(QStringLiteral("Sequence"));
+    b.setWeak(inner, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(inner, QStringLiteral("Length"), qint64(10));
+    const aaf::Builder::Ref filler = b.create(QStringLiteral("Filler"));
+    b.setWeak(filler, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(filler, QStringLiteral("Length"), qint64(10));
+    b.append(inner, QStringLiteral("Components"), filler);
+    b.append(outer, QStringLiteral("Components"), inner);
+    addSlot(b, m, 1, rationalOf(25, 1), outer);
+    QString error;
+    const QByteArray built = b.toBytes(&error);
+    QVERIFY2(!built.isEmpty(), qPrintable(error));
+    // Each Components index (count, two words, then one local key per element) lists its one key 300
+    // times.
+    constexpr quint32 kRepeats = 300;
+    int edited = 0;
+    const QByteArray bytes = compact(built, [&](const QString& name, const QByteArray& data) {
+        if (!name.startsWith(QLatin1String("Components")) || !name.endsWith(QLatin1String(" index")) ||
+            data.size() < 16 || qFromLittleEndian<quint32>(data.constData()) != 1) {
+            return data;
+        }
+        ++edited;
+        QByteArray index = data.left(12);
+        qToLittleEndian<quint32>(kRepeats, index.data());
+        for (quint32 i = 0; i < kRepeats; ++i) index.append(data.mid(12, 4));
+        return index;
+    });
+    QVERIFY(!bytes.isEmpty());
+    QCOMPARE(edited, 2);
+    const QString out = qEnvironmentVariable("CUTTHULHU_FUZZ_REGRESSIONS");
+    if (!out.isEmpty()) {
+        QFile f(QDir(out).filePath(QStringLiteral("aaf/shared-strong-refs.aaf")));
+        QVERIFY(f.open(QIODevice::WriteOnly) && f.write(bytes) == bytes.size());
+    }
+    aaf::File file;
+    QVERIFY2(file.openData(bytes, QStringLiteral("shared.aaf"), &error), qPrintable(error));
+    const QByteArray dumped = aaf::canonicalJson(aaf::dump(file));
+    QCOMPARE(dumped.count("\"class\":\"Filler\""), 1);
+    QCOMPARE(dumped.count("\"class\":\"Sequence\""), 2);
 }
 
 // A damaged file whose lengths and rates do not fit a Rational is an error, not a crash: Rational
