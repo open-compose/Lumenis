@@ -235,6 +235,8 @@ public:
     // properties table and the file's metadictionary. False, with `error` (and errorString()) set, when
     // the file is not a compound file, not AAF, or its referenced properties are damaged.
     bool open(const QString& path, QString* error = nullptr);
+    // The same for a whole file in memory (cfb::Reader::openData); `name` stands for its name in errors.
+    bool openData(const QByteArray& data, const QString& name = QStringLiteral("<memory>"), QString* error = nullptr);
     // Closes the file; the metadictionary goes back to the built-in one.
     void close();
     QString errorString() const { return error_; }
@@ -269,6 +271,9 @@ public:
     const QList<RawProperty>& propertiesOf(int entry) const;
 
 private:
+    // What open() and openData() share once the compound file is open: the root's class, the referenced
+    // properties and the metadictionary.
+    bool start(const QString& name, QString* error);
     // Reads `/referenced properties`: the pid paths weak references' tables index (into referenced_).
     bool readReferencedProperties();
     // Adds the file's own type and class definitions to meta_.

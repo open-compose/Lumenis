@@ -22,6 +22,8 @@ endif()
 
 option(LUMENIS_BUILD_TESTS "Build unit tests" ON)
 option(LUMENIS_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
+# libFuzzer executables for the interchange parsers (fuzz/README.md); Clang only, see the fuzz preset.
+option(LUMENIS_FUZZ "Build the libFuzzer targets in fuzz/" OFF)
 
 # Qt 6.4 is the oldest supported (Ubuntu 24.04 system Qt). Release builds use
 # the Qt 6.8 LTS series.
@@ -110,6 +112,12 @@ add_subdirectory(app)
 if(LUMENIS_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+# fuzz/ holds the fuzz targets. Their stand-alone replay driver is built with the tests (ctest
+# fuzz_replay, on every platform); the libFuzzer executables only with LUMENIS_FUZZ.
+if(LUMENIS_FUZZ OR LUMENIS_BUILD_TESTS)
+    add_subdirectory(fuzz)
 endif()
 
 include(cmake/Packaging.cmake)

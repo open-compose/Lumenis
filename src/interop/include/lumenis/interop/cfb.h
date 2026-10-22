@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QBuffer>
 #include <QByteArray>
 #include <QFile>
 #include <QHash>
@@ -63,9 +64,12 @@ public:
     // directory tree. False, with `error` set to the file's name and what is broken, when any of them is
     // damaged.
     bool open(const QString& path, QString* error = nullptr);
+    // The same for a whole file in memory (the fuzz targets, fuzz/README.md, and tests); `name` stands
+    // for the file's name in errors. The data is shared, not copied (QByteArray is implicitly shared).
+    bool openData(const QByteArray& data, const QString& name = QStringLiteral("<memory>"), QString* error = nullptr);
     // Closes the file and forgets everything read from it.
     void close();
-    bool isOpen() const { return file_.isOpen(); }
+    bool isOpen() const { return io_ && io_->isOpen(); }
 
     // The header's major version (3 or 4), its sector size (512 or 4096 bytes) and its class ID.
     int majorVersion() const { return major_; }
@@ -120,7 +124,13 @@ private:
     // the mini stream).
     bool isMini(int stream) const;
 
+    // What open() and openData() read from: file_ or buffer_ (io_ points to the one in use), and the
+    // name errors give.
+    bool start(QString* error);
     QFile file_;
+    QBuffer buffer_;
+    QIODevice* io_ = nullptr;
+    QString name_;
     // In bytes, for bounds checks.
     std::uint64_t fileSize_ = 0;
     int major_ = 0;
@@ -146,6 +156,8 @@ private:
     std::vector<Entry> entries_;
     std::vector<int> parent_;
     std::vector<QList<int>> kids_;
+    // Large storages' children by name key (child()), made on first lookup.
+    mutable QHash<int, QHash<QString, int>> names_;
     // Streams' chains, made on first read.
     QHash<int, std::vector<std::uint32_t>> chains_;
 };

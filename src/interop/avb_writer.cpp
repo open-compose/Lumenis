@@ -153,12 +153,32 @@ public:
         data.append(d4, 8);
     }
 
+    // 10^0 to 10^6, each exact as a double.
+    static constexpr double kPowersOfTen[] = {1.0, 10.0, 100.0, 1000.0, 10000.0, 100000.0, 1000000.0};
+
     // A number as a 32-bit mantissa and a 16-bit power of ten
     // (write_exp10_encoded_float): multiplied by ten until it is whole, at
     // most six times or while the mantissa fits; 59.94 is written 59940e-3,
     // as Media Composer writes it.
     void exp10(double value, const char* name) {
         if (!std::isfinite(value)) fail(QStringLiteral("%1: %2 is not a finite number").arg(nameOf(name)).arg(value));
+        const double original = value;
+        // First the fewest powers of ten whose whole mantissa, read back as the reader computes it
+        // (avb.cpp, Reader::exp10), is the value to the bit: every value read from a bin is one, so
+        // it is written back as it was read. Multiplying by ten again and again, below, gathers
+        // rounding errors on the way: 2.3976 (23976e-4) became 2397600e-6, which reads back one
+        // unit in the last place lower (found by fuzz_avb_rewrite). 59.94 stays 59940e-3, as Media
+        // Composer writes it.
+        for (int k = 0; k <= 6; ++k) {
+            const double m = std::nearbyint(original * kPowersOfTen[k]);
+            if (std::fabs(m) > std::numeric_limits<std::int32_t>::max()) break;
+            const double back = k == 0 ? m : m * std::pow(10.0, static_cast<double>(-k));
+            if (back != original) continue;
+            if (k == 2 && m == 5994) break; // to the special case below
+            s32(static_cast<qint64>(m), name);
+            s16(-k, name);
+            return;
+        }
         int exponent = 0;
         while (std::trunc(value) != value) {
             if (std::fabs(value * 10) >= 0x7FFFFFFF) break;
@@ -174,6 +194,14 @@ public:
         const double mantissa = std::trunc(value);
         if (mantissa < std::numeric_limits<std::int32_t>::min() || mantissa > std::numeric_limits<std::int32_t>::max()) {
             fail(QStringLiteral("%1: %2 does not fit a 32-bit mantissa").arg(nameOf(name)).arg(value));
+        }
+        // What the search stopped at is cut to a whole mantissa: a value it cannot hold (2.4e-63
+        // became 0e-6, found by fuzz_avb_rewrite) would be written as another number, and read back
+        // as that. Refused instead, as other values out of a field's range are; every rate a bin
+        // holds (25, 29.97, 59.94, 23.976, 48000) is exact.
+        if (std::fabs(mantissa - value) > 1e-9 * std::fabs(value)) {
+            fail(QStringLiteral("%1: %2 cannot be written as a 32-bit mantissa and a power of ten from 10^-6")
+                     .arg(nameOf(name)).arg(original));
         }
         s32(static_cast<qint64>(mantissa), name);
         s16(exponent, name);
@@ -1485,7 +1513,12 @@ QByteArray Builder::toBytes(QString* error) const {
         o.fourcc("ATve");
         const auto creator = toMacRoman(header_.creatorVersion);
         if (!creator) fail(QStringLiteral("creator: \"%1\" has characters Mac OS Roman cannot hold").arg(header_.creatorVersion));
+        // Cut to the field, then without the zero bytes at either end that the reader strips (a
+        // longer creator cut where it held a 0 was read back one character shorter, so the bin did
+        // not rewrite to itself; found by fuzz_avb_rewrite), padded with spaces.
         QByteArray field = creator->left(30);
+        while (!field.isEmpty() && field.back() == '\0') field.chop(1);
+        while (!field.isEmpty() && field.front() == '\0') field.remove(0, 1);
         field.append(QByteArray(30 - field.size(), ' '));
         o.u16(30);
         o.raw(field);

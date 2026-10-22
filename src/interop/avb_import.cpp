@@ -99,7 +99,8 @@ bool noSource(const MobId& id) {
 // either). The maps below carry what later passes need from earlier ones.
 class Importer {
 public:
-    Importer(const File& file, const ImportOptions& options) : file_(file), options_(options) {}
+    Importer(const File& file, const ImportOptions& options)
+        : file_(file), options_(options), budget_(64 * (static_cast<std::int64_t>(file.objectCount()) + 1) + 65536) {}
 
     ImportResult run() {
         const Object& root = file_.root();
@@ -155,6 +156,23 @@ private:
     // Counts a warning; finish() lists each once, with its count.
     void note(const QString& what) { ++notes_[what]; }
 
+    // One step of a walk down components (lengthOf, firstClip, Flattener::add); false once the
+    // import's budget is spent. The walks stop at a depth, but a damaged bin whose components share
+    // children (each of n components naming the same sequence, nested) still makes n^depth steps:
+    // a hang (seen while fixing one fuzz_avb found; fuzz/regressions/avb). The budget, many times
+    // the steps a bin's table can need when nothing is shared, keeps the import linear in its size.
+    bool spend() {
+        if (budget_ > 0) {
+            --budget_;
+            return true;
+        }
+        if (budget_ == 0) {
+            note(QStringLiteral("components that refer to one another too often: read in part"));
+            budget_ = -1;
+        }
+        return false;
+    }
+
     ImportResult finish() {
         // Objects the reader could not read (avb.cpp: a class not read yet, or damage), by class.
         std::map<QString, int> unread;
@@ -196,7 +214,7 @@ private:
     // A component's length: a sequence's is its components' (less its transitions, which overlap
     // their neighbours), as pyavb computes it; every other component stores its own.
     std::int64_t lengthOf(const Object* c, int depth = 0) {
-        if (!c || depth > 32) return 0;
+        if (!c || depth > 32 || !spend()) return 0;
         if (!is(c, "SEQU")) return c->property(QStringLiteral("length")).toInt();
         std::int64_t total = 0;
         for (const Value& v : c->property(QStringLiteral("components")).toList()) {
@@ -213,7 +231,7 @@ private:
     // The first source clip in a component: itself, or down sequences and the tracks of track groups
     // (effects' inputs, essence groups' choices).
     const Object* firstClip(const Object* c, int depth = 0) {
-        if (!c || depth > 16) return nullptr;
+        if (!c || depth > 16 || !spend()) return nullptr;
         if (is(c, "SCLP")) return c;
         for (const Value& v : c->property(QStringLiteral("components")).toList()) {
             if (const Object* s = firstClip(deref(v), depth + 1)) return s;
@@ -539,7 +557,7 @@ private:
         }
 
         void add(const Object* c, int depth = 0) {
-            if (!c || depth > 32) return;
+            if (!c || depth > 32 || !importer.spend()) return;
             const std::int64_t length = importer.lengthOf(c);
             if (is(c, "SEQU")) {
                 for (const Value& v : c->property(QStringLiteral("components")).toList()) add(importer.deref(v), depth + 1);
@@ -575,6 +593,9 @@ private:
         // track that has material, fitted to the group's length (a motion effect's input runs at
         // its own speed), with the group's effect.
         void group(const Object& c, std::int64_t length, int depth) {
+            // A damaged bin's length can be negative: fitting the segments to it below would then
+            // never end (found by fuzz_avb, fuzz/regressions/avb).
+            length = std::max<std::int64_t>(0, length);
             Flattener inner{importer, letter, {}, {}, 0};
             for (const Value& t : c.property(QStringLiteral("tracks")).toList()) {
                 const Object* input = importer.deref(t.member(QStringLiteral("component")));
@@ -755,6 +776,8 @@ private:
     std::map<MobId, QString> tapes_;
     std::map<QString, int> notes_;
     std::set<std::uint32_t> unreadable_;
+    // Steps left for the walks down components (spend()); -1 once spent and noted.
+    std::int64_t budget_;
 };
 
 } // namespace

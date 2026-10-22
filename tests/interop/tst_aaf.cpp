@@ -16,6 +16,7 @@
 #include <QTimeZone>
 #include <QtTest>
 
+#include <functional>
 #include <limits>
 #include <stdexcept>
 
@@ -50,6 +51,8 @@ private slots:
     void trailingTransition();
     void dropFrameStart();
     void numbersPastRational();
+    void negativeGroupLength();
+    void slowEditRate();
 };
 
 void TestAaf::auids() {
@@ -550,6 +553,110 @@ void TestAaf::dropFrameStart() {
     QCOMPARE(item.fields.value(QStringLiteral("Tape")), QStringLiteral("TAPE1"));
     QCOMPARE(item.fields.value(QStringLiteral("Start")), QStringLiteral("01:00:00;00"));
     QCOMPARE(item.fields.value(QStringLiteral("End")), QStringLiteral("01:01:00;02"));
+}
+
+namespace {
+
+// The file without its metadictionary, in 512-byte sectors: the reader has the model built in, so it
+// reads the same, and the file is small enough to keep as a fuzz regression input (fuzz/seeds.cpp
+// makes seeds the same way).
+QByteArray compact(const QByteArray& bytes) {
+    aaf::File file;
+    if (!file.openData(bytes)) return {};
+    const int meta = file.root().object(QStringLiteral("MetaDictionary")).entry();
+    cfb::Reader& r = file.container();
+    cfb::Writer w(512);
+    w.setHeaderClsid(r.headerClsid());
+    w.setClsid(cfb::Writer::root(), r.entry(cfb::Reader::root()).clsid);
+    std::function<void(int, int)> copy = [&](int from, int to) {
+        for (const int id : r.children(from)) {
+            if (id == meta) continue;
+            const cfb::Entry& e = r.entry(id);
+            if (e.isStorage()) {
+                const int s = w.addStorage(to, e.name);
+                w.setClsid(s, e.clsid);
+                copy(id, s);
+            } else {
+                w.addStream(to, e.name, r.readAll(id));
+            }
+        }
+    };
+    copy(cfb::Reader::root(), cfb::Writer::root());
+    return w.toBytes();
+}
+
+} // namespace
+
+// Found by reading the import alongside fuzz_avb's same hang in the bin import (fuzz/regressions/aaf):
+// an effect (OperationGroup) whose Length is negative left the loop that fits its input to its length
+// with one empty segment, forever. It now imports as an empty effect. With CUTTHULHU_FUZZ_REGRESSIONS
+// set to fuzz/regressions, the file is written to aaf/ there.
+void TestAaf::negativeGroupLength() {
+    aaf::Builder b;
+    startFile(b);
+    const aaf::Builder::Ref m = addMob(b, QStringLiteral("CompositionMob"), MobId::generate(), QStringLiteral("Cut"));
+    b.set(m, QStringLiteral("UsageCode"), QStringLiteral("Usage_TopLevel"));
+    const aaf::Builder::Ref seq = b.create(QStringLiteral("Sequence"));
+    b.setWeak(seq, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(seq, QStringLiteral("Length"), qint64(10));
+    const aaf::Builder::Ref group = b.create(QStringLiteral("OperationGroup"));
+    b.setWeak(group, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(group, QStringLiteral("Length"), qint64(-5));
+    const aaf::Builder::Ref filler = b.create(QStringLiteral("Filler"));
+    b.setWeak(filler, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(filler, QStringLiteral("Length"), qint64(10));
+    b.append(group, QStringLiteral("InputSegments"), filler);
+    b.append(seq, QStringLiteral("Components"), group);
+    addSlot(b, m, 1, rationalOf(25, 1), seq);
+    QString error;
+    const QByteArray bytes = compact(b.toBytes(&error));
+    QVERIFY2(!bytes.isEmpty(), qPrintable(error));
+    const QString out = qEnvironmentVariable("CUTTHULHU_FUZZ_REGRESSIONS");
+    if (!out.isEmpty()) {
+        QFile f(QDir(out).filePath(QStringLiteral("aaf/negative-group-length.aaf")));
+        QVERIFY(f.open(QIODevice::WriteOnly) && f.write(bytes) == bytes.size());
+    }
+    aaf::File file;
+    QVERIFY2(file.openData(bytes, QStringLiteral("negative.aaf"), &error), qPrintable(error));
+    const aaf::ImportResult result = aaf::importMobs(file);
+    QCOMPARE(result.items.size(), 1);
+    QCOMPARE(result.items.first().kind, model::BinItemKind::Sequence);
+}
+
+// Found by fuzz_aaf (fuzz/regressions/aaf/slow-edit-rate.aaf): a sequence whose picture slot's edit
+// rate is 1/3 (under one frame a second, so no timecode: 0 nominal frames a second), with a timecode
+// slot. Its Start and End were made at that rate, whose frames per day are 0, and the wrap into one
+// day divided by zero (a crash, SIGFPE). They are now left empty. CUTTHULHU_FUZZ_REGRESSIONS: see
+// negativeGroupLength.
+void TestAaf::slowEditRate() {
+    aaf::Builder b;
+    startFile(b);
+    const aaf::Builder::Ref m = addMob(b, QStringLiteral("CompositionMob"), MobId::generate(), QStringLiteral("Cut"));
+    b.set(m, QStringLiteral("UsageCode"), QStringLiteral("Usage_TopLevel"));
+    const aaf::Builder::Ref filler = b.create(QStringLiteral("Filler"));
+    b.setWeak(filler, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(filler, QStringLiteral("Length"), qint64(10));
+    addSlot(b, m, 1, rationalOf(1, 3), filler);
+    const aaf::Builder::Ref tc = b.create(QStringLiteral("Timecode"));
+    b.setWeak(tc, QStringLiteral("DataDefinition"), kTimecodeDef);
+    b.set(tc, QStringLiteral("Length"), qint64(10));
+    b.set(tc, QStringLiteral("Start"), qint64(90000));
+    b.set(tc, QStringLiteral("FPS"), 25);
+    b.set(tc, QStringLiteral("Drop"), false);
+    addSlot(b, m, 2, rationalOf(25, 1), tc);
+    QString error;
+    const QByteArray bytes = compact(b.toBytes(&error));
+    QVERIFY2(!bytes.isEmpty(), qPrintable(error));
+    const QString out = qEnvironmentVariable("CUTTHULHU_FUZZ_REGRESSIONS");
+    if (!out.isEmpty()) {
+        QFile f(QDir(out).filePath(QStringLiteral("aaf/slow-edit-rate.aaf")));
+        QVERIFY(f.open(QIODevice::WriteOnly) && f.write(bytes) == bytes.size());
+    }
+    aaf::File file;
+    QVERIFY2(file.openData(bytes, QStringLiteral("slow.aaf"), &error), qPrintable(error));
+    const aaf::ImportResult result = aaf::importMobs(file);
+    QCOMPARE(result.items.size(), 1);
+    QVERIFY(result.items.first().fields.value(QStringLiteral("Start")).isEmpty());
 }
 
 // A damaged file whose lengths and rates do not fit a Rational is an error, not a crash: Rational

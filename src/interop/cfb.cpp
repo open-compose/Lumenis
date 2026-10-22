@@ -74,30 +74,50 @@ bool isValidName(const QString& name) {
 
 // Sets `error`, closes the file and returns false, so a failed open leaves nothing half read.
 bool Reader::fail(QString* error, const QString& message) {
-    if (error) *error = QStringLiteral("%1: %2").arg(file_.fileName(), message);
+    if (error) *error = QStringLiteral("%1: %2").arg(name_, message);
     close();
     return false;
 }
 
 void Reader::close() {
     file_.close();
+    buffer_.close();
+    buffer_.setData(QByteArray());
+    io_ = nullptr;
     fat_.clear();
     miniFat_.clear();
     miniStream_.clear();
     entries_.clear();
     parent_.clear();
     kids_.clear();
+    names_.clear();
     chains_.clear();
 }
 
 bool Reader::open(const QString& path, QString* error) {
     close();
     file_.setFileName(path);
+    name_ = path;
     if (!file_.open(QIODevice::ReadOnly)) {
         if (error) *error = QStringLiteral("%1: %2").arg(path, file_.errorString());
         return false;
     }
-    fileSize_ = static_cast<std::uint64_t>(file_.size());
+    io_ = &file_;
+    return start(error);
+}
+
+bool Reader::openData(const QByteArray& data, const QString& name, QString* error) {
+    close();
+    name_ = name;
+    buffer_.setData(data);
+    buffer_.open(QIODevice::ReadOnly); // cannot fail for a read-only buffer
+    io_ = &buffer_;
+    return start(error);
+}
+
+// What open() and openData() share, once io_ is open.
+bool Reader::start(QString* error) {
+    fileSize_ = static_cast<std::uint64_t>(io_->size());
     return readHeader(error) && readFat(error) && readMiniFat(error) && readDirectory(error) && checkTree(error);
 }
 
@@ -108,7 +128,7 @@ bool Reader::open(const QString& path, QString* error) {
 // DIFAT sector count at 68 and 72, and the first 109 DIFAT entries from 76. Only version 3 with 512-byte
 // sectors and version 4 with 4096-byte sectors are taken.
 bool Reader::readHeader(QString* error) {
-    const QByteArray h = file_.read(kHeaderSize);
+    const QByteArray h = io_->read(kHeaderSize);
     if (h.size() < kHeaderSize) return fail(error, QStringLiteral("too short for a compound file"));
     const char* p = h.constData();
     if (std::memcmp(p, kSignature.data(), kSignature.size()) != 0) {
@@ -140,17 +160,17 @@ bool Reader::readHeader(QString* error) {
 bool Reader::readSector(std::uint32_t sector, char* data, QString* error) {
     const std::uint64_t at = (static_cast<std::uint64_t>(sector) + 1) * sectorSize_;
     if (!isRegular(sector) || at >= fileSize_) {
-        if (error) *error = QStringLiteral("%1: sector %2 is past the end of the file").arg(file_.fileName()).arg(sector);
+        if (error) *error = QStringLiteral("%1: sector %2 is past the end of the file").arg(name_).arg(sector);
         return false;
     }
-    if (!file_.seek(static_cast<qint64>(at))) {
-        if (error) *error = QStringLiteral("%1: %2").arg(file_.fileName(), file_.errorString());
+    if (!io_->seek(static_cast<qint64>(at))) {
+        if (error) *error = QStringLiteral("%1: %2").arg(name_, io_->errorString());
         return false;
     }
     // The last sector may be cut short: what is missing reads as zeros.
-    const qint64 got = file_.read(data, sectorSize_);
+    const qint64 got = io_->read(data, sectorSize_);
     if (got < 0) {
-        if (error) *error = QStringLiteral("%1: %2").arg(file_.fileName(), file_.errorString());
+        if (error) *error = QStringLiteral("%1: %2").arg(name_, io_->errorString());
         return false;
     }
     std::memset(data + got, 0, sectorSize_ - static_cast<std::uint32_t>(got));
@@ -167,7 +187,7 @@ bool Reader::chain(const std::vector<std::uint32_t>& table, std::uint32_t start,
     std::size_t steps = 0;
     while (s != kEndOfChain) {
         if (s >= table.size() || steps >= table.size()) {
-            if (error) *error = QStringLiteral("%1: a sector chain from %2 is broken or loops").arg(file_.fileName()).arg(start);
+            if (error) *error = QStringLiteral("%1: a sector chain from %2 is broken or loops").arg(name_).arg(start);
             return false;
         }
         if (out.size() < limit) out.push_back(s);
@@ -333,12 +353,41 @@ QList<int> Reader::children(int storage) const {
     return kids_[static_cast<std::size_t>(storage)];
 }
 
-// A linear search of the storage's children; compareNames ignores case, as the tree's order does.
+namespace {
+
+// A name with each UTF-16 code unit upper-cased, as compareNames compares them: names that compare
+// equal have the same key.
+QString nameKey(const QString& name) {
+    QString key(name.size(), Qt::Uninitialized);
+    for (qsizetype i = 0; i < name.size(); ++i) key[i] = name.at(i).toUpper();
+    return key;
+}
+
+} // namespace
+
+// compareNames ignores case, as the tree's order does. A small storage is searched; a large one (an
+// AAF set of thousands of mobs, or a damaged file's thousands of siblings) through an index of its
+// names made on first use, since the AAF layer looks children up by name for every object and a
+// search each time made reading such a file quadratic (found while fuzzing: a third of fuzz_aaf's
+// time went here). The first child of a name wins, as the search finds it.
 int Reader::child(int storage, const QString& name) const {
-    for (const int id : children(storage)) {
-        if (compareNames(entries_[static_cast<std::size_t>(id)].name, name) == 0) return id;
+    const QList<int> kids = children(storage);
+    constexpr qsizetype kSearched = 16;
+    if (kids.size() <= kSearched) {
+        for (const int id : kids) {
+            if (compareNames(entries_[static_cast<std::size_t>(id)].name, name) == 0) return id;
+        }
+        return -1;
     }
-    return -1;
+    auto it = names_.find(storage);
+    if (it == names_.end()) {
+        QHash<QString, int> index;
+        index.reserve(kids.size());
+        // insert() replaces, so in reverse order: each name keeps its first child.
+        for (auto k = kids.crbegin(); k != kids.crend(); ++k) index.insert(nameKey(entries_[static_cast<std::size_t>(*k)].name), *k);
+        it = names_.insert(storage, std::move(index));
+    }
+    return it->value(nameKey(name), -1);
 }
 
 int Reader::find(const QString& path) const {
@@ -383,12 +432,15 @@ const std::vector<std::uint32_t>* Reader::streamChain(int stream, QString* error
     const Entry& e = entries_[static_cast<std::size_t>(stream)];
     const bool mini = isMini(stream);
     const std::uint64_t unit = mini ? kMiniSector : sectorSize_;
-    const std::uint64_t needed = (e.size + unit - 1) / unit;
+    // Rounded up without overflow: a version 4 file's 64-bit size can be anything, and
+    // (size + unit - 1) wrapped to 0 sectors for 0xFFFFFFFFFFFFFF93, leaving read() an empty chain
+    // to index (found by fuzz_cfb, fuzz/regressions/cfb). A size past the chain is refused below.
+    const std::uint64_t needed = e.size / unit + (e.size % unit != 0 ? 1 : 0);
     std::vector<std::uint32_t> sectors;
     if (needed > 0) {
         if (!chain(mini ? miniFat_ : fat_, e.start, sectors, needed, error)) return nullptr;
         if (sectors.size() < needed) {
-            if (error) *error = QStringLiteral("%1: stream %2 is shorter than its size").arg(file_.fileName(), path(stream));
+            if (error) *error = QStringLiteral("%1: stream %2 is shorter than its size").arg(name_, path(stream));
             return nullptr;
         }
     }
@@ -401,7 +453,7 @@ const std::vector<std::uint32_t>* Reader::streamChain(int stream, QString* error
 // seek.
 QByteArray Reader::read(int stream, std::uint64_t offset, std::uint64_t length, QString* error) {
     if (stream < 0 || static_cast<std::size_t>(stream) >= entries_.size() || !entries_[static_cast<std::size_t>(stream)].isStream()) {
-        if (error) *error = QStringLiteral("%1: no such stream").arg(file_.fileName());
+        if (error) *error = QStringLiteral("%1: no such stream").arg(name_);
         return {};
     }
     const Entry& e = entries_[static_cast<std::size_t>(stream)];
@@ -426,7 +478,7 @@ QByteArray Reader::read(int stream, std::uint64_t offset, std::uint64_t length, 
             const std::uint64_t inMini = static_cast<std::uint64_t>((*sectors)[index]) * kMiniSector + inner;
             const std::uint64_t regular = inMini / sectorSize_;
             if (regular >= miniStream_.size()) {
-                if (error) *error = QStringLiteral("%1: stream %2 lies past the mini stream").arg(file_.fileName(), path(stream));
+                if (error) *error = QStringLiteral("%1: stream %2 lies past the mini stream").arg(name_, path(stream));
                 return {};
             }
             at = (static_cast<std::uint64_t>(miniStream_[regular]) + 1) * sectorSize_ + inMini % sectorSize_;
@@ -438,9 +490,9 @@ QByteArray Reader::read(int stream, std::uint64_t offset, std::uint64_t length, 
             at = (static_cast<std::uint64_t>((*sectors)[index]) + 1) * sectorSize_ + inner;
             count = std::min(end, (last + 1) * unit) - pos;
         }
-        if (at + count > fileSize_ || !file_.seek(static_cast<qint64>(at)) ||
-            file_.read(to, static_cast<qint64>(count)) != static_cast<qint64>(count)) {
-            if (error) *error = QStringLiteral("%1: stream %2 is cut short").arg(file_.fileName(), path(stream));
+        if (at + count > fileSize_ || !io_->seek(static_cast<qint64>(at)) ||
+            io_->read(to, static_cast<qint64>(count)) != static_cast<qint64>(count)) {
+            if (error) *error = QStringLiteral("%1: stream %2 is cut short").arg(name_, path(stream));
             return {};
         }
         to += count;

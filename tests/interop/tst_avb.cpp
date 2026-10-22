@@ -22,6 +22,7 @@
 
 #include <QCryptographicHash>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -29,6 +30,7 @@
 #include <QMap>
 #include <QRandomGenerator>
 #include <QTimeZone>
+#include <QtEndian>
 #include <QtTest>
 
 #include <exception>
@@ -64,12 +66,15 @@ private slots:
     void importsBin();
     void importsRetime();
     void importsDamaged();
+    void importsHostile();
     void rewritesCorpus_data();
     void rewritesCorpus();
     void buildsBin_data();
     void buildsBin();
     void editRates();
     void writerRefuses();
+    void writesRatesAsRead();
+    void writesLongCreator();
     void rewritesDamaged();
     void forPyavb();
     void exportsBin();
@@ -654,6 +659,73 @@ void TestAvb::buildsBin() {
 
 // Edit rates and sample rates as a mantissa and a power of ten: the rates
 // Media Composer uses come back as the same doubles.
+// Bins found by fuzzing (fuzz/README.md, fuzz/regressions/avb), built here with the writer: each
+// imports quickly instead of hanging. A track group with a negative length made the loop that fits
+// its segments to the group's length run forever; a chain of sequences each naming the next one
+// several times made the walks down components take 4^32 steps, and the dump expand 2,000,000
+// objects. With CUTTHULHU_FUZZ_REGRESSIONS set to fuzz/regressions, the bins are written there too,
+// in avb/ (how they were made).
+void TestAvb::importsHostile() {
+    using avb::Value;
+    auto bin = [](avb::Builder& b, std::uint32_t top, const char* name) {
+        const std::uint32_t mob = b.add(
+            QStringLiteral("CMPO"),
+            with(component(1, 25.0), {prop("mc_mode", Value::integer(0)), prop("length", Value::integer(10)),
+                                      prop("num_scalars", Value::integer(0)), prop("name", Value::string(QStringLiteral("Hostile"))),
+                                      prop("tracks", Value::list({track(top, 1)})), prop("mob_type_id", Value::integer(1)),
+                                      prop("usage_code", Value::integer(0)), prop("descriptor", Value::ref(0)),
+                                      prop("mob_id", Value::mobId(kMasterMob))}));
+        b.add(QStringLiteral("ABIN"),
+              {prop("items", Value::list({Value::record({prop("mob", Value::ref(mob)), prop("user_placed", Value::boolean(true))})}))});
+        avb::File file;
+        QString error;
+        const QByteArray bytes = b.toBytes(&error);
+        if (bytes.isEmpty() || !file.load(bytes, &error)) qFatal("cannot build the bin: %s", qPrintable(error));
+        const QString out = qEnvironmentVariable("CUTTHULHU_FUZZ_REGRESSIONS");
+        if (!out.isEmpty()) {
+            QFile f(QDir(out).filePath(QStringLiteral("avb/") + QString::fromLatin1(name)));
+            if (!f.open(QIODevice::WriteOnly) || f.write(bytes) != bytes.size()) qFatal("cannot write %s", qPrintable(f.fileName()));
+        }
+        // The import, and the dump (--dump-avb), which expands references in place.
+        QElapsedTimer timer;
+        timer.start();
+        const avb::ImportResult result = avb::importBin(file);
+        const QByteArray dump = aaf::canonicalJson(avb::dump(file));
+        return std::make_tuple(result, timer.elapsed(), dump);
+    };
+
+    {
+        // A sequence holding a track group of length -5 whose input is 10 frames of filler.
+        avb::Builder b;
+        const std::uint32_t fill = b.add(QStringLiteral("FILL"), with(component(1, 25.0), {prop("length", Value::integer(10))}));
+        const std::uint32_t group = b.add(
+            QStringLiteral("TRKG"), with(component(1, 25.0), {prop("mc_mode", Value::integer(0)), prop("length", Value::integer(-5)),
+                                                              prop("num_scalars", Value::integer(0)),
+                                                              prop("tracks", Value::list({track(fill, 1)}))}));
+        const std::uint32_t seq = b.add(QStringLiteral("SEQU"), with(component(1, 25.0), {prop("components", Value::list({Value::ref(group)}))}));
+        const auto [result, ms, dump] = bin(b, seq, "negative-group-length.avb");
+        QCOMPARE(result.items.size(), 1);
+        QVERIFY2(ms < 30000, qPrintable(QStringLiteral("%1 ms").arg(ms))); // hours before the fix; slack for sanitizers
+    }
+    {
+        // 40 sequences, each naming the next four times, then filler.
+        avb::Builder b;
+        std::uint32_t next = b.add(QStringLiteral("FILL"), with(component(1, 25.0), {prop("length", Value::integer(1))}));
+        for (int i = 0; i < 40; ++i) {
+            next = b.add(QStringLiteral("SEQU"),
+                         with(component(1, 25.0), {prop("components", Value::list({Value::ref(next), Value::ref(next), Value::ref(next),
+                                                                                  Value::ref(next)}))}));
+        }
+        const auto [result, ms, dump] = bin(b, next, "shared-components.avb");
+        QCOMPARE(result.items.size(), 1);
+        QVERIFY2(ms < 30000, qPrintable(QStringLiteral("%1 ms").arg(ms))); // hours before the fix; slack for sanitizers
+        QVERIFY(result.warnings.contains(QStringLiteral("components that refer to one another too often: read in part")));
+        // The dump stops at 16,384 objects (8 × the table, at least 16,384), saying so.
+        QVERIFY(dump.contains("too many objects"));
+        QVERIFY2(dump.count("\"class\":") < 2 * 16384, qPrintable(QString::number(dump.count("\"class\":"))));
+    }
+}
+
 void TestAvb::editRates() {
     using avb::Value;
     for (const double rate : {25.0, 24.0, 23.976, 29.97, 59.94, 50.0, 48000.0, 0.5, -12.25, 0.0}) {
@@ -705,6 +777,35 @@ void TestAvb::writerRefuses() {
     QCOMPARE(refused(QStringLiteral("FILL"), with(component(1, 25, QStringLiteral("中")), {}), "Mac OS Roman"), QString());
     QCOMPARE(refused(QStringLiteral("FILL"), component(1, std::numeric_limits<double>::quiet_NaN()), "not a finite number"), QString());
     QCOMPARE(refused(QStringLiteral("FILL"), component(1, 1e30), "32-bit mantissa"), QString());
+    // Found by fuzz_avb_rewrite (fuzz/regressions/avb_rewrite/tiny-edit-rate.avb): a rate read as
+    // 2.3976e-63 was written as 0e-6, so the bin read back with another rate. Values that a
+    // mantissa and a power of ten from 10^-6 cannot hold are refused; those bins hold are written.
+    QCOMPARE(refused(QStringLiteral("FILL"), component(1, 2.3976e-63), "cannot be written"), QString());
+    QCOMPARE(refused(QStringLiteral("FILL"), component(1, 1.0 / 3.0), "cannot be written"), QString());
+    for (const double rate : {25.0, 29.97, 59.94, 23.976, 24.0, 0.0, 48000.0, 0.000001}) {
+        QCOMPARE(refused(QStringLiteral("FILL"), component(1, rate), "?"), QStringLiteral("written"));
+    }
+    {
+        // The bin itself: filler at 23.976 (23976e-3), its exponent made -66. It reads, but cannot
+        // be written back as read. CUTTHULHU_FUZZ_REGRESSIONS: see importsHostile.
+        avb::Builder tiny;
+        tiny.add(QStringLiteral("FILL"), with(component(1, 23.976), {prop("length", Value::integer(10))}));
+        QByteArray bytes = tiny.toBytes(&error);
+        const QByteArray rate("\xa8\x5d\x00\x00\xfd\xff", 6);
+        QCOMPARE(bytes.count(rate), 1);
+        bytes.replace(rate, QByteArray("\xa8\x5d\x00\x00\xbe\xff", 6));
+        const QString out = qEnvironmentVariable("CUTTHULHU_FUZZ_REGRESSIONS");
+        if (!out.isEmpty()) {
+            QFile f(QDir(out).filePath(QStringLiteral("avb_rewrite/tiny-edit-rate.avb")));
+            QVERIFY(f.open(QIODevice::WriteOnly) && f.write(bytes) == bytes.size());
+        }
+        avb::File file;
+        QVERIFY(file.load(bytes, &error));
+        QVERIFY(file.object(1).ok());
+        QVERIFY(file.object(1).property(QStringLiteral("edit_rate")).toDouble() < 1e-60);
+        QVERIFY(avb::rewrite(file, &error).isEmpty());
+        QVERIFY2(error.contains(QStringLiteral("cannot be written")), qPrintable(error));
+    }
     QCOMPARE(refused(QStringLiteral("ECCP"), with(component(3, 25), {prop("header", Value::bytes("short"))}), "not 8"), QString());
     QCOMPARE(refused(QStringLiteral("PRCL"), with(component(1, 25), {prop("value_type", Value::integer(3))}), "unknown type"), QString());
     QCOMPARE(refused(QStringLiteral("SEQU"), with(component(1, 25), {prop("components", Value::integer(1))}), "not a list"), QString());
@@ -742,6 +843,73 @@ void TestAvb::writerRefuses() {
 // were read are written from their properties, the rest copied as stored,
 // and what is written opens again; in the other byte order the unread
 // objects are an error.
+// Found by fuzz_avb_rewrite (fuzz/regressions/avb_rewrite/rate-23976e-4.avb): a rate stored as
+// 23976e-4 was written back as 2397600e-6, which reads one unit in the last place lower, so the bin
+// did not rewrite to itself. Each rate below, stored with its exponent patched in, rewrites to the
+// same bytes. CUTTHULHU_FUZZ_REGRESSIONS: see importsHostile.
+void TestAvb::writesRatesAsRead() {
+    using avb::Value;
+    struct Stored {
+        qint32 mantissa;
+        qint16 exponent;
+    };
+    for (const Stored& rate : {Stored{23976, -4}, Stored{2997, -2}, Stored{59940, -3}, Stored{23976, -3}, Stored{25, 0},
+                               Stored{1, -6}, Stored{123456, -5}}) {
+        avb::Builder b;
+        b.add(QStringLiteral("FILL"), with(component(1, 25.0), {prop("length", Value::integer(10))}));
+        QString error;
+        QByteArray bytes = b.toBytes(&error);
+        const QByteArray stored("\x19\x00\x00\x00\x00\x00", 6); // 25e0
+        QCOMPARE(bytes.count(stored), 1);
+        QByteArray patched(6, Qt::Uninitialized);
+        qToLittleEndian<qint32>(rate.mantissa, patched.data());
+        qToLittleEndian<qint16>(rate.exponent, patched.data() + 4);
+        bytes.replace(stored, patched);
+        const QString out = qEnvironmentVariable("CUTTHULHU_FUZZ_REGRESSIONS");
+        if (!out.isEmpty() && rate.mantissa == 23976 && rate.exponent == -4) {
+            QFile f(QDir(out).filePath(QStringLiteral("avb_rewrite/rate-23976e-4.avb")));
+            QVERIFY(f.open(QIODevice::WriteOnly) && f.write(bytes) == bytes.size());
+        }
+        avb::File file;
+        QVERIFY2(file.load(bytes, &error), qPrintable(error));
+        QVERIFY(file.object(1).ok());
+        const QByteArray again = avb::rewrite(file, &error);
+        QVERIFY2(again == bytes, qPrintable(QStringLiteral("%1e%2: %3").arg(rate.mantissa).arg(rate.exponent).arg(error)));
+    }
+}
+
+// Found by fuzz_avb_rewrite (fuzz/regressions/avb_rewrite/long-creator.avb): a creator longer than
+// the header's 30-byte field, with a 0 as its 30th character. It was cut there and read back without
+// the 0 (the reader strips zero bytes at a string's ends), so the bin did not rewrite to itself. The
+// cut field is now stripped as the reader strips it. CUTTHULHU_FUZZ_REGRESSIONS: see importsHostile.
+void TestAvb::writesLongCreator() {
+    // The writer makes 30-byte creators only, so the longer one is patched in.
+    avb::Header header;
+    header.creatorVersion = QString(30, QLatin1Char('A'));
+    avb::Builder b(header);
+    b.add(QStringLiteral("ABIN"), {});
+    QString error;
+    QByteArray bytes = b.toBytes(&error);
+    QVERIFY2(!bytes.isEmpty(), qPrintable(error));
+    const QByteArray field = QByteArray("\x1e\x00", 2) + QByteArray(30, 'A');
+    QCOMPARE(bytes.count(field), 1);
+    bytes.replace(field, QByteArray("\x26\x00", 2) + QByteArray(29, 'A') + QByteArray(1, '\0') + QByteArray("and more"));
+    const QString out = qEnvironmentVariable("CUTTHULHU_FUZZ_REGRESSIONS");
+    if (!out.isEmpty()) {
+        QFile f(QDir(out).filePath(QStringLiteral("avb_rewrite/long-creator.avb")));
+        QVERIFY(f.open(QIODevice::WriteOnly) && f.write(bytes) == bytes.size());
+    }
+    avb::File file;
+    QVERIFY2(file.load(bytes, &error), qPrintable(error));
+    QCOMPARE(file.creatorVersion().size(), 38);
+    // Written, read and written again: the same bytes, the creator cut to 29 characters and a space.
+    const QByteArray once = avb::rewrite(file, &error);
+    avb::File back;
+    QVERIFY2(back.load(once, &error), qPrintable(error));
+    QCOMPARE(back.creatorVersion(), QString(29, QLatin1Char('A')) + QLatin1Char(' '));
+    QCOMPARE(avb::rewrite(back, &error), once);
+}
+
 void TestAvb::rewritesDamaged() {
     const QString folder = corpus();
     if (folder.isEmpty()) QSKIP("no interchange corpus (scripts/interop-corpus.py fetch)");

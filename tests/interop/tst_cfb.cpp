@@ -54,6 +54,7 @@ private slots:
     void difat();
     void readsPartly();
     void damaged();
+    void hugeStreamSize();
     void corpus();
     void forOlefile();
 };
@@ -157,6 +158,10 @@ void TestCfb::manyEntries() {
         QVERIFY(id > 0);
         QCOMPARE(reader.readAll(id), QByteArray::number(i));
     }
+    // Names in a storage this large are looked up through an index (Reader::child): also a name
+    // that is not there.
+    QCOMPARE(reader.child(big, QStringLiteral("item 700")), -1);
+    QCOMPARE(reader.child(big, QStringLiteral("item")), -1);
 }
 
 // More than 109 FAT sectors: the rest are listed in DIFAT sectors.
@@ -247,6 +252,34 @@ void TestCfb::damaged() {
         for (int k = 0; k < 8; ++k) bytes[random.bounded(static_cast<int>(bytes.size()))] = static_cast<char>(random.bounded(256));
         tryRead(bytes);
     }
+}
+
+// Found by fuzz_cfb (fuzz/regressions/cfb/huge-stream-size.cfb): a version 4 file's stream with a
+// 64-bit size near 2^64. Its sector count, rounded up, wrapped to 0, and read() indexed the empty
+// chain. It is refused as a chain shorter than the size, also when read from memory (openData).
+// With CUTTHULHU_FUZZ_REGRESSIONS set to fuzz/regressions, the file is written to cfb/ there.
+void TestCfb::hugeStreamSize() {
+    cfb::Writer writer(4096);
+    writer.addStream(cfb::Writer::root(), QStringLiteral("a"), pattern(4097, 5));
+    QByteArray bytes = writer.toBytes();
+    const quint32 dirSector = qFromLittleEndian<quint32>(bytes.constData() + 48);
+    const qsizetype entry = (dirSector + 1) * 4096 + 128; // entry 1, after the root
+    QCOMPARE(qFromLittleEndian<quint64>(bytes.constData() + entry + 120), quint64{4097});
+    qToLittleEndian<quint64>(0xFFFFFFFFFFFFFF93ull, bytes.data() + entry + 120);
+    const QString out = qEnvironmentVariable("CUTTHULHU_FUZZ_REGRESSIONS");
+    if (!out.isEmpty()) {
+        QFile f(QDir(out).filePath(QStringLiteral("cfb/huge-stream-size.cfb")));
+        QVERIFY(f.open(QIODevice::WriteOnly) && f.write(bytes) == bytes.size());
+    }
+    cfb::Reader reader;
+    QString error;
+    QVERIFY2(reader.openData(bytes, QStringLiteral("huge.cfb"), &error), qPrintable(error));
+    const int a = reader.find(QStringLiteral("/a"));
+    QVERIFY(a > 0);
+    QCOMPARE(reader.entry(a).size, quint64{0xFFFFFFFFFFFFFF93ull});
+    QVERIFY(reader.readAll(a, &error).isEmpty());
+    QVERIFY2(error.contains(QStringLiteral("shorter than its size")), qPrintable(error));
+    QVERIFY(reader.read(a, 1u << 20, 100, &error).isEmpty());
 }
 
 // The interchange corpus (scripts/interop-corpus.py fetch): every file reads,

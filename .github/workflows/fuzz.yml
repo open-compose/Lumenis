@@ -1,0 +1,77 @@
+name: Fuzz
+
+# ROADMAP Phase 3 gate 4: the bin and AAF parsers fuzzed for 24 hours without a
+# crash (fuzz/README.md, BUILDING.md "Fuzzing"). Run by hand only, on the
+# owner's self-hosted Linux runner (Ubuntu in WSL), which needs Clang and its
+# runtime libraries (sudo apt-get install -y clang libclang-rt-dev):
+#
+#   gh workflow run fuzz.yml --ref <branch> -f hours=24
+#
+# The time is split between the targets (scripts/fuzz.py run). The job fails
+# on the first crash, hang or sanitizer report and prints the stack and the
+# reproducer as base64 in the log; nothing is uploaded (the artifact quota is
+# used up). The corpora the run grows are kept on the runner, outside the
+# workspace (actions/checkout cleans it), so each run starts where the last
+# one ended. While it runs, the runner takes no other jobs.
+on:
+  workflow_dispatch:
+    inputs:
+      hours:
+        description: Hours of fuzzing in all, split between the targets
+        type: string
+        default: '24'
+      jobs:
+        description: Processes per target (libFuzzer -fork)
+        type: string
+        default: '2'
+      ubuntu:
+        description: The self-hosted runner's Ubuntu version (label ubuntu-<version>)
+        type: string
+        default: '26.04'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz
+  cancel-in-progress: false
+
+jobs:
+  fuzz:
+    name: Fuzz the interchange parsers (${{ inputs.hours }} h)
+    runs-on: [self-hosted, Linux, X64, cutthulhu, 'ubuntu-${{ inputs.ubuntu }}']
+    # Self-hosted jobs may run up to 5 days; this allows a 24-hour run with
+    # room for the build, the seeds and the corpus merges between targets.
+    timeout-minutes: 2160
+    env:
+      FUZZ_HOME: ${{ github.workspace }}/../cutthulhu-fuzz
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clang and libFuzzer
+        run: |
+          clang++ --version | head -n1
+          printf 'extern "C" int LLVMFuzzerTestOneInput(const char*, unsigned long) { return 0; }\n' > "$RUNNER_TEMP/probe.cpp"
+          if ! clang++ -fsanitize=fuzzer,address,undefined "$RUNNER_TEMP/probe.cpp" -o "$RUNNER_TEMP/probe"; then
+            echo "::error::Clang cannot link libFuzzer: run 'sudo apt-get install -y clang libclang-rt-dev' in the runner's Ubuntu (BUILDING.md, Fuzzing)"
+            exit 1
+          fi
+
+      - name: Interchange corpus
+        # The seeds: pyaaf2's and pyavb's test files, downloaded at pinned commits.
+        run: python3 scripts/interop-corpus.py fetch --dir "$FUZZ_HOME/interop-corpus"
+
+      - name: Build
+        run: python3 scripts/fuzz.py build
+
+      - name: Replay the regression inputs
+        run: python3 scripts/fuzz.py replay --seeds fuzz/regressions "$FUZZ_HOME/interop-corpus" > replay.log 2>&1 || { tail -n 60 replay.log; exit 1; }
+
+      - name: Seed
+        run: python3 scripts/fuzz.py seed --corpus "$FUZZ_HOME/interop-corpus" --out "$FUZZ_HOME/corpus"
+
+      - name: Fuzz
+        run: |
+          python3 scripts/fuzz.py run --time "${{ inputs.hours }}h" --jobs "${{ inputs.jobs }}" \
+            --corpus-dir "$FUZZ_HOME/corpus" --artifacts "$FUZZ_HOME/artifacts" \
+            --stats "$FUZZ_HOME/stats.json"

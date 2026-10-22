@@ -517,7 +517,9 @@ private:
                 // as long as the group does.
                 std::int64_t total = 0;
                 for (const model::Segment& s : inner.out) total += s.length;
-                const std::int64_t want = frames(c);
+                // A damaged file's Length can be negative: fitting the input to it below would then
+                // never end (tst_aaf negativeGroupLength; the bin import had the same, found by fuzz_avb).
+                const std::int64_t want = std::max<std::int64_t>(0, frames(c));
                 while (total > want && !inner.out.isEmpty()) {
                     model::Segment& last = inner.out.last();
                     const std::int64_t cut = std::min(last.length, total - want);

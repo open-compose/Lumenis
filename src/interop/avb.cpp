@@ -1614,7 +1614,13 @@ namespace {
 // above this one; one of them met again is a cycle, written {"ref": index}.
 class Dumper {
 public:
-    explicit Dumper(const File& file) : file_(file) {}
+    // The limit on objects dumped: references are expanded in place, so a bin whose objects each
+    // name the next several times dumps exponentially many (4^40 for fuzz/regressions/avb's
+    // shared-components.avb, which fuzz_avb then ran: the flat 2,000,000 took two minutes and
+    // gigabytes under the sanitizers). Media Composer's bins expand to fewer objects than they hold (2,190 of
+    // the corpus's largest); eight times the table is far above any of them.
+    explicit Dumper(const File& file)
+        : file_(file), limit_(std::clamp<qint64>(8 * static_cast<qint64>(file.objectCount()), 16384, 2'000'000)) {}
 
     QJsonValue object(std::uint32_t index) {
         const Object& o = file_.object(index);
@@ -1624,7 +1630,7 @@ public:
         if (path_.size() > 400) {
             return QJsonObject{{QStringLiteral("class"), o.classId}, {QStringLiteral("error"), QStringLiteral("nested too deep")}};
         }
-        if (++count_ > 2'000'000) {
+        if (++count_ > limit_) {
             return QJsonObject{{QStringLiteral("class"), o.classId}, {QStringLiteral("error"), QStringLiteral("too many objects")}};
         }
         path_.push_back(index);
@@ -1684,6 +1690,7 @@ private:
     const File& file_;
     std::vector<std::uint32_t> path_;
     qint64 count_ = 0;
+    qint64 limit_;
 };
 
 } // namespace

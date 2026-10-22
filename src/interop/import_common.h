@@ -42,9 +42,12 @@ inline std::int64_t rescale(std::int64_t frames, const Rational& from, const Rat
 }
 
 // Frames as timecode text at the rate, wrapped into one day; drop frame only where the rate has it.
+// Empty for a rate with no timecode (under one frame a second, from a damaged file): its frames per
+// day are 0, and the wrap divided by zero (found by fuzz_aaf, tst_aaf slowEditRate).
 inline QString timecodeText(std::int64_t frames, const Rational& rate, bool drop) {
     TimecodeFormat format = TimecodeFormat::forRate(rate, drop);
     if (!format.isValid()) format = TimecodeFormat::forRate(rate, false);
+    if (!format.isValid() || format.framesPerDay() <= 0) return {};
     const std::int64_t day = format.framesPerDay();
     return QString::fromStdString(Timecode(((frames % day) + day) % day, format).toString());
 }

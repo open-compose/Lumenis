@@ -91,6 +91,23 @@
         "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined",
         "CMAKE_MODULE_LINKER_FLAGS": "-fsanitize=address,undefined"
       }
+    },
+    {
+      "name": "fuzz",
+      "displayName": "libFuzzer targets with AddressSanitizer and UBSan (Linux and macOS, Clang)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "LUMENIS_FUZZ": "ON",
+        "LUMENIS_BUILD_TESTS": "OFF",
+        "CMAKE_C_FLAGS": "-O1 -fsanitize=fuzzer-no-link,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-O1 -fsanitize=fuzzer-no-link,address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
+        "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined",
+        "CMAKE_MODULE_LINKER_FLAGS": "-fsanitize=address,undefined"
+      }
     }
   ],
   "buildPresets": [
@@ -121,6 +138,11 @@
     {
       "name": "asan",
       "configurePreset": "asan"
+    },
+    {
+      "name": "fuzz",
+      "configurePreset": "fuzz",
+      "targets": ["fuzz_cfb", "fuzz_aaf", "fuzz_avb", "fuzz_avb_rewrite", "lumenis_fuzz_replay"]
     }
   ],
   "testPresets": [

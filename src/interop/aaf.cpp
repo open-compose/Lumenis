@@ -225,55 +225,61 @@ QString WeakKey::text() const {
 // extensible enumeration values, record members, a weak reference's target path), from the tables of
 // aaf_model.inc.
 MetaDictionary MetaDictionary::builtIn() {
-    MetaDictionary m;
-    for (const ModelClass& c : kModelClasses) {
-        ClassDef d;
-        d.auid = auidFromText(c.auid);
-        d.name = QString::fromLatin1(c.name);
-        if (c.parent) d.parent = auidFromText(c.parent);
-        d.concrete = c.concrete;
-        for (int i = c.firstProperty; i < c.firstProperty + c.propertyCount; ++i) {
-            const ModelProperty& p = kModelProperties[i];
-            d.properties.append({auidFromText(p.auid), QString::fromLatin1(p.name), p.pid, auidFromText(p.type),
-                                 p.optional, p.unique});
-        }
-        m.addClass(d);
-    }
-    for (const ModelType& t : kModelTypes) {
-        TypeDef d;
-        d.auid = auidFromText(t.auid);
-        d.name = QString::fromLatin1(t.name);
-        d.kind = t.kind;
-        d.size = t.size;
-        d.isSigned = t.isSigned;
-        if (t.element) d.element = auidFromText(t.element);
-        for (int i = t.firstMember; i < t.firstMember + t.memberCount; ++i) {
-            const ModelMember& mm = kModelMembers[i];
-            const QString name = QString::fromLatin1(mm.name);
-            switch (t.kind) {
-            case TypeKind::Enum: d.values.insert(QByteArray(mm.value).toLongLong(), name); break;
-            case TypeKind::ExtEnum: d.extValues.insert(auidFromText(mm.value), name); break;
-            case TypeKind::Record: d.members.append({name, auidFromText(mm.value)}); break;
-            case TypeKind::WeakRef: d.targetPath.append(auidFromText(mm.value)); break;
-            default: break;
+    // Made once: every File starts from it and goes back to it on close, and making it parses the
+    // whole model (a tenth of fuzz_aaf's time per input). Copies share its tables until a file's own
+    // metadictionary changes them (Qt's implicit sharing).
+    static const MetaDictionary model = [] {
+        MetaDictionary m;
+        for (const ModelClass& c : kModelClasses) {
+            ClassDef d;
+            d.auid = auidFromText(c.auid);
+            d.name = QString::fromLatin1(c.name);
+            if (c.parent) d.parent = auidFromText(c.parent);
+            d.concrete = c.concrete;
+            for (int i = c.firstProperty; i < c.firstProperty + c.propertyCount; ++i) {
+                const ModelProperty& p = kModelProperties[i];
+                d.properties.append({auidFromText(p.auid), QString::fromLatin1(p.name), p.pid, auidFromText(p.type),
+                                     p.optional, p.unique});
             }
+            m.addClass(d);
         }
-        m.addType(d);
-    }
-    // The root object's class and its two references, which the model leaves out.
-    const QUuid headerRef = auidFromText("05022800-0000-0000-060e-2b3401040101");
-    const QUuid metaRef = auidFromText("05022700-0000-0000-060e-2b3401040101");
-    m.addType({headerRef, QStringLiteral("HeaderStrongReference"), TypeKind::StrongRef, 0, false,
-               auidFromText("0d010101-0101-2f00-060e-2b3402060101"), {}, {}, {}, {}});
-    m.addType({metaRef, QStringLiteral("MetaDictionaryStrongReference"), TypeKind::StrongRef, 0, false,
-               auidFromText("0d010101-0225-0000-060e-2b3402060101"), {}, {}, {}, {}});
-    ClassDef root{kRootClass, QStringLiteral("Root"), {}, true, {}};
-    root.properties.append({auidFromText("0d010301-0102-0100-060e-2b3401010102"), QStringLiteral("Header"), PidHeader,
-                            headerRef, false, false});
-    root.properties.append({auidFromText("0d010301-0101-0100-060e-2b3401010102"), QStringLiteral("MetaDictionary"),
-                            PidMetaDictionary, metaRef, false, false});
-    m.addClass(root);
-    return m;
+        for (const ModelType& t : kModelTypes) {
+            TypeDef d;
+            d.auid = auidFromText(t.auid);
+            d.name = QString::fromLatin1(t.name);
+            d.kind = t.kind;
+            d.size = t.size;
+            d.isSigned = t.isSigned;
+            if (t.element) d.element = auidFromText(t.element);
+            for (int i = t.firstMember; i < t.firstMember + t.memberCount; ++i) {
+                const ModelMember& mm = kModelMembers[i];
+                const QString name = QString::fromLatin1(mm.name);
+                switch (t.kind) {
+                case TypeKind::Enum: d.values.insert(QByteArray(mm.value).toLongLong(), name); break;
+                case TypeKind::ExtEnum: d.extValues.insert(auidFromText(mm.value), name); break;
+                case TypeKind::Record: d.members.append({name, auidFromText(mm.value)}); break;
+                case TypeKind::WeakRef: d.targetPath.append(auidFromText(mm.value)); break;
+                default: break;
+                }
+            }
+            m.addType(d);
+        }
+        // The root object's class and its two references, which the model leaves out.
+        const QUuid headerRef = auidFromText("05022800-0000-0000-060e-2b3401040101");
+        const QUuid metaRef = auidFromText("05022700-0000-0000-060e-2b3401040101");
+        m.addType({headerRef, QStringLiteral("HeaderStrongReference"), TypeKind::StrongRef, 0, false,
+                   auidFromText("0d010101-0101-2f00-060e-2b3402060101"), {}, {}, {}, {}});
+        m.addType({metaRef, QStringLiteral("MetaDictionaryStrongReference"), TypeKind::StrongRef, 0, false,
+                   auidFromText("0d010101-0225-0000-060e-2b3402060101"), {}, {}, {}, {}});
+        ClassDef root{kRootClass, QStringLiteral("Root"), {}, true, {}};
+        root.properties.append({auidFromText("0d010301-0102-0100-060e-2b3401010102"), QStringLiteral("Header"), PidHeader,
+                                headerRef, false, false});
+        root.properties.append({auidFromText("0d010301-0101-0100-060e-2b3401010102"), QStringLiteral("MetaDictionary"),
+                                PidMetaDictionary, metaRef, false, false});
+        m.addClass(root);
+        return m;
+    }();
+    return model;
 }
 
 void MetaDictionary::addClass(const ClassDef& c) {
@@ -682,6 +688,20 @@ bool File::open(const QString& path, QString* error) {
         if (error) *error = error_;
         return false;
     }
+    return start(path, error);
+}
+
+bool File::openData(const QByteArray& data, const QString& name, QString* error) {
+    close();
+    error_.clear();
+    if (!cfb_->openData(data, name, &error_)) {
+        if (error) *error = error_;
+        return false;
+    }
+    return start(name, error);
+}
+
+bool File::start(const QString& path, QString* error) {
     if (root().classAuid() != kRootClass) {
         error_ = QStringLiteral("%1: not an AAF file (the root is not an AAF root object)").arg(path);
         cfb_->close();
