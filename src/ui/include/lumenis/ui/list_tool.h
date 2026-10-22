@@ -1,0 +1,109 @@
+#pragma once
+
+#include "lumenis/interop/edl.h"
+#include "lumenis/model/bin.h"
+
+#include <QString>
+#include <QWidget>
+
+#include <functional>
+#include <optional>
+
+class QCheckBox;
+class QComboBox;
+class QHBoxLayout;
+class QLabel;
+class QLineEdit;
+class QPlainTextEdit;
+class QPushButton;
+class QSpinBox;
+class QTabWidget;
+class QToolButton;
+
+namespace lumenis::ui {
+
+// Tools > List Tool (Editing Guide p.944-960), for EDLs. Left: Active Setting and Output Format,
+// then the Input tab (the sequence, with Load and Clear; a button for each track; the Title), the
+// List Options tab and the Formatting tab. Right: Preview, Save List and Clear List, and the Master
+// EDL and Sources tabs that show the list. The EDL Output Types written are CMX_3600 and File_129
+// (interop/edl.h); the other output formats (CMX_DigitalCut, CMX_Transfer, Cuedos, File_16, File_32,
+// and the cut and change lists: Columnar, TabbedLists, WebLists, XML) are listed dimmed, as are the
+// options not yet carried out (docs/spec/ui-inventory.md §19).
+class ListTool : public QWidget {
+    Q_OBJECT
+
+public:
+    // How the list finds a segment's clip (for its reel and timecode): the clip's MobID and id.
+    using Resolver = std::function<std::optional<model::BinItem>(const MobId& mob, const QString& clipId)>;
+
+    explicit ListTool(QWidget* parent = nullptr);
+
+    // Step 3 (p.948): the sequence to list. Its tracks fill the Tracks pane, all on (step 4); the
+    // Title is the sequence's name. Clear empties the tool.
+    void setSequence(const model::BinItem& sequence, Resolver resolve);
+    void clearSequence();
+    bool hasSequence() const { return sequence_.has_value(); }
+    const std::optional<model::BinItem>& sequence() const { return sequence_; }
+
+    // The export options the tabs say.
+    interop::edl::ExportOptions options() const;
+    // Preview (step 8): makes the list and shows it in Master EDL, its reels in Sources. Returns the
+    // list; empty without a sequence. The warnings go to message().
+    QString preview();
+    // Save List (step 9): the list (made first if there is none) written to `path`.
+    bool saveList(const QString& path, QString* error = nullptr);
+
+    // Where Save List writes: asks with the system's save dialog unless set (tests set it). Empty:
+    // not saved.
+    std::function<QString(const QString& suggested)> savePath;
+
+    // The widgets, for tests.
+    QComboBox* outputFormat() const { return format_; }
+    QLineEdit* title() const { return title_; }
+    QPlainTextEdit* masterList() const { return master_; }
+    QPlainTextEdit* sourcesList() const { return sources_; }
+    QPushButton* loadButton() const { return load_; }
+    QPushButton* previewButton() const { return preview_; }
+    QPushButton* saveButton() const { return save_; }
+    QCheckBox* optimizeBox() const { return optimize_; }
+    QSpinBox* startEvent() const { return startEvent_; }
+    // The Tracks pane's button for a track, or null.
+    QToolButton* trackButton(const QString& track) const;
+
+signals:
+    // Load (p.945): MainWindow answers with setSequence() for the Record monitor's sequence.
+    void loadRequested();
+    // A line for the Console: the list's warnings, a save.
+    void message(const QString& line);
+
+private:
+    void rebuildTracks();
+    void saveClicked();
+
+    std::optional<model::BinItem> sequence_;
+    Resolver resolve_;
+    QString made_; // the last list made, for Save List
+
+    QComboBox* format_ = nullptr;
+    QLabel* sequenceLabel_ = nullptr;
+    QPushButton* load_ = nullptr;
+    QPushButton* clear_ = nullptr;
+    QWidget* tracks_ = nullptr;
+    QHBoxLayout* trackRow_ = nullptr;
+    QLineEdit* title_ = nullptr;
+    QCheckBox* pictureDissolves_ = nullptr;
+    QCheckBox* soundDissolves_ = nullptr;
+    QCheckBox* blackEdits_ = nullptr;
+    QCheckBox* clipNames_ = nullptr;
+    QCheckBox* markers_ = nullptr;
+    QCheckBox* optimize_ = nullptr;
+    QSpinBox* startEvent_ = nullptr;
+    QPushButton* preview_ = nullptr;
+    QPushButton* save_ = nullptr;
+    QPushButton* clearList_ = nullptr;
+    QTabWidget* listTabs_ = nullptr;
+    QPlainTextEdit* master_ = nullptr;
+    QPlainTextEdit* sources_ = nullptr;
+};
+
+} // namespace lumenis::ui

@@ -1,4 +1,6 @@
 #include "lumenis/interop/aaf_export.h"
+#include "lumenis/interop/ale.h"
+#include "lumenis/interop/edl.h"
 #include "lumenis/interop/avb_export.h"
 #include "lumenis/interop/aaf_import.h"
 #include "lumenis/interop/avb_import.h"
@@ -24,6 +26,8 @@
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/consolidate_dialog.h"
 #include "lumenis/ui/export_dialog.h"
+#include "lumenis/ui/interchange_dialogs.h"
+#include "lumenis/ui/list_tool.h"
 #include "lumenis/ui/keyboard_map.h"
 #include "lumenis/ui/keyboard_palette.h"
 #include "lumenis/ui/marker_dialogs.h"
@@ -919,6 +923,18 @@ void MainWindow::createTools() {
         return deleted;
     };
     panels_->addPanel(new Panel(QStringLiteral("MediaTool"), tr("Media Tool"), mediaTool_));
+    // Tools > List Tool (p.944): Load takes the Record monitor's sequence (p.945).
+    listTool_ = new ListTool;
+    panels_->addPanel(new Panel(QStringLiteral("ListTool"), tr("List Tool"), listTool_));
+    connect(listTool_, &ListTool::loadRequested, this, [this] {
+        const model::LoadedClip* loaded = composer_->state(MonitorId::Record).current();
+        if (!loaded || loaded->item.kind != model::BinItemKind::Sequence) {
+            ConsoleLog::instance().append(tr("List Tool: load a sequence into the Record monitor first."));
+            return;
+        }
+        listTool_->setSequence(loaded->item, clipResolver(loaded->item));
+    });
+    connect(listTool_, &ListTool::message, this, [](const QString& line) { ConsoleLog::instance().append(line); });
     // File > Input > Source Browser (p.312-318).
     sourceBrowser_ = new SourceBrowser;
     auto* browserPanel = new Panel(QStringLiteral("SourceBrowser"), tr("Source Browser"), sourceBrowser_);
@@ -1555,7 +1571,14 @@ void MainWindow::exportToFile() {
         if (e.active) active = i;
     }
     // The file type of an Export As choice: its extension and its name in the save dialog.
-    auto suffixOf = [](const QString& exportAs) { return exportAs == QLatin1String("avb") ? QStringLiteral("avb") : QStringLiteral("aaf"); };
+    auto suffixOf = [](const QString& exportAs) {
+        return exportAs == QLatin1String("avb") ? QStringLiteral("avb") : exportAs == QLatin1String("ale") ? QStringLiteral("ale") : QStringLiteral("aaf");
+    };
+    auto filterOf = [](const QString& exportAs) {
+        return exportAs == QLatin1String("avb")   ? tr("Media Composer bins (*.avb)")
+               : exportAs == QLatin1String("ale") ? tr("Avid Log Exchange (*.ale)")
+                                                  : tr("AAF files (*.aaf)");
+    };
     const QString exportAs = settings_->text(QStringLiteral("Export"), QStringLiteral("exportAs"));
     QSettings remembered;
     QString folder = remembered.value(QStringLiteral("export/folder")).toString();
@@ -1564,7 +1587,7 @@ void MainWindow::exportToFile() {
     QString base = selected.first().name;
     base.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
     ExportAsDialog dialog(QDir(folder).filePath(base + QLatin1Char('.') + suffixOf(exportAs)), names, active, this);
-    dialog.setFileType(suffixOf(exportAs), exportAs == QLatin1String("avb") ? tr("Media Composer bins (*.avb)") : tr("AAF files (*.aaf)"));
+    dialog.setFileType(suffixOf(exportAs), filterOf(exportAs));
     connect(&dialog, &ExportAsDialog::optionsRequested, this, [this, versions](int i) {
         if (i < 0 || i >= versions.size()) return;
         if (SettingsWindow* w = showSettings()) {
@@ -1580,9 +1603,9 @@ void MainWindow::exportToFile() {
         settings_->commit(model::SettingsScope::User);
     }
     const QString format = settings_->text(QStringLiteral("Export"), QStringLiteral("exportAs"));
-    if (format != QLatin1String("aaf") && format != QLatin1String("avb")) {
-        ConsoleLog::instance().append(
-            tr("Export to File: only AAF and Media Composer bins can be exported so far (Export As in the Export setting)."));
+    if (format != QLatin1String("aaf") && format != QLatin1String("avb") && format != QLatin1String("ale")) {
+        ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange and Media Composer bins can be exported so "
+                                         "far (Export As in the Export setting)."));
         return;
     }
     // The file name extension stays the format's (p.869), also when the setting was changed in the
@@ -1591,7 +1614,8 @@ void MainWindow::exportToFile() {
     const QString suffix = suffixOf(format);
     if (QFileInfo(path).suffix().compare(suffix, Qt::CaseInsensitive) != 0) {
         const QString old = QFileInfo(path).suffix();
-        if (old.compare(QLatin1String("aaf"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("avb"), Qt::CaseInsensitive) == 0) {
+        if (old.compare(QLatin1String("aaf"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("avb"), Qt::CaseInsensitive) == 0 ||
+            old.compare(QLatin1String("ale"), Qt::CaseInsensitive) == 0) {
             path.chop(old.size() + 1);
         }
         path += QLatin1Char('.') + suffix;
@@ -1604,7 +1628,17 @@ void MainWindow::exportToFile() {
     QString error;
     QStringList warnings;
     qsizetype count = selected.size();
-    if (format == QLatin1String("avb")) {
+    if (format == QLatin1String("ale")) {
+        // A shot log of the master clips and subclips selected (p.130, p.1174), with the bin's
+        // columns.
+        interop::ale::ExportOptions options;
+        options.columns = doc.bin().display.columns + doc.bin().display.customColumns;
+        const interop::ale::ExportResult result = interop::ale::exportFile(selected, path, options);
+        written = result.ok;
+        error = result.error;
+        warnings = result.warnings;
+        count = result.clips;
+    } else if (format == QLatin1String("avb")) {
         // A bin named for the file, with the source bin's columns and view; the sequences' clips
         // that are not selected, and subclips' masters, as reference clips.
         model::Bin bin;
@@ -1648,15 +1682,188 @@ void MainWindow::exportToFile() {
     for (const QString& w : warnings) ConsoleLog::instance().append(tr("Export to File: %1").arg(w));
 }
 
+// Each log is imported on its own, as importAaf() does with AAF files; the logs' custom columns are
+// added to the bin's display.
+QStringList MainWindow::importShotLogs(const QString& binId, const QStringList& paths) {
+    BinDocument* doc = binContainer_->document(binId);
+    if (!doc) doc = binContainer_->openBin(binId);
+    if (!doc || paths.isEmpty()) return {};
+    QStringList ids;
+    model::BinDisplay display = doc->bin().display;
+    for (const QString& path : paths) {
+        QString error;
+        interop::ale::ImportOptions options;
+        options.when = QDateTime::currentDateTimeUtc();
+        const auto imported = interop::ale::importFile(path, options, &error);
+        if (!imported) {
+            ConsoleLog::instance().append(tr("Import: %1").arg(error));
+            continue;
+        }
+        for (const model::BinItem& item : imported->items) {
+            doc->addItem(item);
+            ids << item.id;
+        }
+        for (const QString& column : imported->customColumns) {
+            if (!display.customColumns.contains(column)) display.customColumns << column;
+        }
+        ConsoleLog::instance().append(
+            tr("Import: %1: %n clip(s) from the shot log", "", static_cast<int>(imported->items.size())).arg(QFileInfo(path).fileName()));
+        for (const QString& w : imported->warnings) ConsoleLog::instance().append(tr("Import: %1: %2").arg(QFileInfo(path).fileName(), w));
+    }
+    if (display.customColumns != doc->bin().display.customColumns) doc->setDisplay(display);
+    if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
+    return ids;
+}
+
+// The steps of p.951: the file (the system's open dialog first, unless a hook answers), the Frame
+// Rate and the bin (New Bin makes one). The reels' sources already in the bin are used again
+// (edl::reuseSources), so importing a list twice does not make two sources of one tape.
+QStringList MainWindow::importEdl() {
+    if (!project_ || !binContainer_->bins()) {
+        ConsoleLog::instance().append(tr("Import EDL: open a project first."));
+        return {};
+    }
+    QList<ImportEdlDialog::Bin> bins;
+    for (const model::BinNode* n : binContainer_->bins()->bins()) bins.append({n->id, n->name});
+    const BinDocument* active = binContainer_->activeDocument();
+    QSettings remembered;
+    ImportEdlDialog dialog(QString(), project_->settings.format.editRate, bins, active ? active->nodeId() : QString(), this);
+    bool ok = false;
+    if (importEdlHook_) {
+        ok = importEdlHook_(dialog);
+    } else {
+        const QString chosen = QFileDialog::getOpenFileName(this, tr("Select File to Open"),
+                                                            remembered.value(QStringLiteral("import/edlFolder")).toString(),
+                                                            tr("Edit decision lists (*.edl);;All files (*)"));
+        if (chosen.isEmpty()) return {};
+        dialog.setPath(chosen);
+        ok = dialog.exec() == QDialog::Accepted;
+    }
+    if (!ok || dialog.path().isEmpty()) return {};
+    const QString path = dialog.path();
+    remembered.setValue(QStringLiteral("import/edlFolder"), QFileInfo(path).absolutePath());
+    QString binId = dialog.bin();
+    if (binId.isEmpty()) binId = binContainer_->newBin();
+    BinDocument* doc = binContainer_->document(binId);
+    if (!doc) doc = binContainer_->openBin(binId);
+    if (!doc) {
+        ConsoleLog::instance().append(tr("Import EDL: the bin cannot be opened."));
+        return {};
+    }
+    interop::edl::ImportOptions options;
+    options.binId = doc->nodeId();
+    options.when = QDateTime::currentDateTimeUtc();
+    options.rate = dialog.rate();
+    QString error;
+    auto imported = interop::edl::importFile(path, options, &error);
+    if (!imported) {
+        ConsoleLog::instance().append(tr("Import EDL: %1").arg(error));
+        return {};
+    }
+    interop::edl::reuseSources(*imported, doc->bin().items);
+    QStringList ids;
+    QString sequenceId;
+    for (const model::BinItem& item : imported->items) {
+        doc->addItem(item);
+        ids << item.id;
+        if (item.kind == model::BinItemKind::Sequence) sequenceId = item.id;
+    }
+    const QString name = QFileInfo(path).fileName();
+    ConsoleLog::instance().append(tr("Import EDL: %1: a sequence and %n new source(s)", "", static_cast<int>(ids.size()) - 1).arg(name));
+    // "A message displays asking you to Decompose the sequence before trying to use it" (p.951):
+    // its segments name the tapes' sources, which have no media until Decompose (later).
+    ConsoleLog::instance().append(tr("Import EDL: %1: the sequence uses its tapes' sources; Decompose it before using it.").arg(name));
+    for (const QString& w : imported->warnings) ConsoleLog::instance().append(tr("Import EDL: %1: %2").arg(name, w));
+    if (BinView* view = binContainer_->viewFor(doc); view && !sequenceId.isEmpty()) view->selectIds({sequenceId});
+    return ids;
+}
+
+// The bin's Text view columns and custom columns go out, so the log holds what the bin shows (p.129
+// step 1: "click the Text tab to display all clip information").
+void MainWindow::exportBin() {
+    BinView* view = binContainer_->activeView();
+    if (!view) {
+        ConsoleLog::instance().append(tr("Export Bin: open the bin to export first."));
+        return;
+    }
+    const model::Bin& bin = view->document().bin();
+    QSettings remembered;
+    QString folder = remembered.value(QStringLiteral("export/folder")).toString();
+    if (folder.isEmpty() || !QDir(folder).exists()) folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    QString base = bin.name;
+    base.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
+    ExportBinDialog dialog(QDir(folder).filePath(base + QStringLiteral(".ale")), this);
+    const bool ok = exportBinHook_ ? exportBinHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok || dialog.path().isEmpty()) return;
+    QString path = dialog.path();
+    if (QFileInfo(path).suffix().compare(QLatin1String("ale"), Qt::CaseInsensitive) != 0) path += QStringLiteral(".ale");
+    remembered.setValue(QStringLiteral("export/folder"), QFileInfo(path).absolutePath());
+    interop::ale::ExportOptions options;
+    // "The system creates a shot log of only the master clips in the bin" (p.130).
+    options.subclips = false;
+    options.columns = bin.display.columns + bin.display.customColumns;
+    const interop::ale::ExportResult result = interop::ale::exportFile(bin.items, path, options);
+    if (!result.ok) {
+        ConsoleLog::instance().append(tr("Export Bin: %1").arg(result.error));
+        return;
+    }
+    ConsoleLog::instance().append(tr("Export Bin: %1: %n clip(s)", "", result.clips).arg(QDir::toNativeSeparators(path)));
+    for (const QString& w : result.warnings) ConsoleLog::instance().append(tr("Export Bin: %1").arg(w));
+}
+
+// "select a sequence in a bin, and when you open a new List Tool window, the old sequence will be
+// populated by the selected sequence" (p.948 step 3); without one, the Record monitor's.
+void MainWindow::showListTool() {
+    showTool(QStringLiteral("ListTool"));
+    if (BinView* view = binContainer_->activeView()) {
+        for (const model::BinItem& item : view->document().bin().items) {
+            if (item.kind == model::BinItemKind::Sequence && view->selectedIds().contains(item.id)) {
+                listTool_->setSequence(item, clipResolver(item));
+                return;
+            }
+        }
+    }
+    if (!listTool_->hasSequence()) emit listTool_->loadRequested();
+}
+
+// A sequence's segments name their clips' bins; a clip not found there is looked for by MobID in
+// the open bins.
+std::function<std::optional<model::BinItem>(const MobId&, const QString&)> MainWindow::clipResolver(const model::BinItem& sequence) const {
+    QHash<QString, QString> binOf;
+    const model::Sequence s = model::Sequence::fromItem(sequence);
+    for (const model::Track& t : s.tracks()) {
+        for (const model::Segment& seg : t.segments) {
+            if (!seg.isFiller()) binOf.insert(seg.clipId, seg.binId);
+        }
+    }
+    QPointer<Composer> composer = composer_;
+    QPointer<BinContainer> bins = binContainer_;
+    return [binOf, composer, bins](const MobId& mob, const QString& clipId) -> std::optional<model::BinItem> {
+        if (composer && binOf.contains(clipId)) {
+            if (auto clip = composer->resolve(binOf.value(clipId), clipId)) return clip;
+        }
+        if (!bins) return std::nullopt;
+        for (const BinDocument* doc : bins->openDocuments()) {
+            for (const model::BinItem& item : doc->bin().items) {
+                if (item.kind != model::BinItemKind::Sequence && (item.id == clipId || model::mobIdOf(item) == mob)) return item;
+            }
+        }
+        return std::nullopt;
+    };
+}
+
 // Import transcodes each file into new managed media (media::transcodeClip) with a progress dialog.
 // A file that fails is named in the Console; once Cancel was clicked, the first failure ends the
 // import. Returns the new items' ids, the AAF ones first.
 QStringList MainWindow::importFiles(const QString& binId, const QStringList& allPaths, const QString& resolution) {
-    // AAF files are compositions, not media (p.547).
+    // AAF files are compositions, not media (p.547); shot logs are clip information (p.131-132).
     QStringList paths;
     QStringList aaf;
-    for (const QString& p : allPaths) (p.endsWith(QLatin1String(".aaf"), Qt::CaseInsensitive) ? aaf : paths) << p;
-    QStringList fromAaf = importAaf(binId, aaf);
+    QStringList logs;
+    for (const QString& p : allPaths) {
+        (p.endsWith(QLatin1String(".aaf"), Qt::CaseInsensitive) ? aaf : interop::ale::isShotLog(p) ? logs : paths) << p;
+    }
+    QStringList fromAaf = importAaf(binId, aaf) + importShotLogs(binId, logs);
     BinDocument* doc = binContainer_->document(binId);
     if (!doc) doc = binContainer_->openBin(binId);
     if (!doc || paths.isEmpty()) return fromAaf;
@@ -1852,6 +2059,7 @@ Panel* MainWindow::showTool(const QString& panelId) {
     if (panelId == QLatin1String("AudioTool")) size = QSize(300, 340);
     if (panelId == QLatin1String("MediaTool")) size = QSize(640, 320);
     if (panelId == QLatin1String("SourceBrowser")) size = QSize(960, 600);
+    if (panelId == QLatin1String("ListTool")) size = QSize(980, 560);
     const QPoint at = mapToGlobal(QPoint(80, 90));
     panels_->floatPanel(panel, QRect(at, size));
     panels_->activate(panel);
@@ -2071,6 +2279,10 @@ void MainWindow::installPanelHandlers() {
     handle("tools.audio_mixer", [this] { showTool(QStringLiteral("AudioMixer")); });
     handle("tools.audio_tool", [this] { showTool(QStringLiteral("AudioTool")); });
     handle("tools.media_tool", [this] { showMediaTool(); });
+    // Tools > List Tool (p.944), File > Input > Import EDL (p.951), File > Output > Export Bin (p.130).
+    handle("tools.list_tool", [this] { showListTool(); });
+    handle("file.input.import_edl", [this] { importEdl(); });
+    handle("file.output.export_bin", [this] { exportBin(); });
     // File > Input > Source Browser, Tools > Source Browser (p.315, p.327).
     handle("file.input.source_browser", [this] { showSourceBrowser(); });
     handle("clip.relink.linked_media", [this] { relinkLinkedMedia(); });

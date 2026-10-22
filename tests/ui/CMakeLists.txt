@@ -33,3 +33,5 @@ lumenis_add_test(tst_audio_media SOURCES tst_audio_media.cpp LIBS ${ui_test_libs
 lumenis_add_test(tst_source_browser SOURCES tst_source_browser.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_managed_media SOURCES tst_managed_media.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_playback SOURCES tst_playback.cpp LIBS ${ui_test_libs} lumenis::media)
+# File > Input > Import EDL, Tools > List Tool, shot logs (Phase 3.6a).
+lumenis_add_test(tst_interchange SOURCES tst_interchange.cpp LIBS ${ui_test_libs})

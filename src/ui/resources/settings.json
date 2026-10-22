@@ -143,7 +143,7 @@
                          {"value": "qtMovie", "label": "QuickTime Movie", "later": true}, {"value": "avi", "label": "AVI", "later": true},
                          {"value": "windowsMedia", "label": "Windows Media", "later": true}, {"value": "scc", "label": "SCC", "later": true},
                          {"value": "ttml", "label": "TTML", "later": true}, {"value": "audio", "label": "Audio", "later": true},
-                         {"value": "graphic", "label": "Graphic", "later": true}, {"value": "ale", "label": "Avid Log Exchange", "later": true},
+                         {"value": "graphic", "label": "Graphic", "later": true}, {"value": "ale", "label": "Avid Log Exchange"},
                          {"value": "tabDelimited", "label": "Tab Delimited", "later": true}, {"value": "op1a", "label": "MXF OP1a", "later": true},
                          {"value": "op1aLegacy", "label": "MXF OP1a (legacy)", "later": true}, {"value": "dpx", "label": "DPX", "later": true},
                          {"value": "xdcam", "label": "XDCAM MXF OP1a", "later": true},

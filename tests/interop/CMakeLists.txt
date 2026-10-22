@@ -1,7 +1,9 @@
 lumenis_add_test(tst_cfb SOURCES tst_cfb.cpp LIBS lumenis::interop)
 lumenis_add_test(tst_aaf SOURCES tst_aaf.cpp LIBS lumenis::interop)
 lumenis_add_test(tst_avb SOURCES tst_avb.cpp LIBS lumenis::interop)
-foreach(t tst_cfb tst_aaf tst_avb)
+lumenis_add_test(tst_edl SOURCES tst_edl.cpp LIBS lumenis::interop)
+lumenis_add_test(tst_ale SOURCES tst_ale.cpp LIBS lumenis::interop)
+foreach(t tst_cfb tst_aaf tst_avb tst_edl tst_ale)
     target_compile_definitions(${t} PRIVATE LUMENIS_TEST_DATA="${PROJECT_SOURCE_DIR}/tests/data")
 endforeach()
 
@@ -14,7 +16,7 @@ else()
     set(LUMENIS_INTEROP_CORPUS_DEFAULT "${CMAKE_BINARY_DIR}/interop-corpus")
 endif()
 set(LUMENIS_INTEROP_CORPUS "${LUMENIS_INTEROP_CORPUS_DEFAULT}" CACHE PATH "Where the interchange corpus is kept")
-set_tests_properties(tst_cfb tst_aaf tst_avb PROPERTIES
+set_tests_properties(tst_cfb tst_aaf tst_avb tst_edl tst_ale PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;CUTTHULHU_INTEROP_CORPUS=${LUMENIS_INTEROP_CORPUS}")
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
@@ -23,7 +25,7 @@ if(Python3_Interpreter_FOUND)
         COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py fetch
                 --dir ${LUMENIS_INTEROP_CORPUS})
     set_tests_properties(interop_corpus_fetch PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300 LABELS corpus)
-    set_tests_properties(tst_cfb tst_aaf tst_avb PROPERTIES DEPENDS interop_corpus_fetch)
+    set_tests_properties(tst_cfb tst_aaf tst_avb tst_edl tst_ale PROPERTIES DEPENDS interop_corpus_fetch)
 
     # What the Writer makes, read by another implementation (olefile).
     # Skipped without olefile.

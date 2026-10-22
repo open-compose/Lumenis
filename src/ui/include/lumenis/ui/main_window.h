@@ -43,6 +43,9 @@ class BackgroundQueueWindow;
 class CalculatorWindow;
 class ConsolidateDialog;
 class ExportAsDialog;
+class ExportBinDialog;
+class ImportEdlDialog;
+class ListTool;
 class AboutInfoDialog;
 class AudioMixer;
 class AudioTool;
@@ -118,7 +121,7 @@ public:
     // Tools (ch.5) open as floating panels, which can be docked and tabbed
     // like other panels (p.94): "CommandPalette", "ToolPalette",
     // "Calculator", "Console", "EffectPalette", "EffectEditor", "AudioMixer", "AudioTool",
-    // "MediaTool", also "Keyboard", "SourceBrowser" and "BackgroundQueue". An open panel is brought
+    // "MediaTool", also "Keyboard", "SourceBrowser", "BackgroundQueue" and "ListTool". An open panel is brought
     // forward; a closed one floats at its first size. Null for an unknown id.
     Panel* showTool(const QString& panelId);
     // The tools' widgets, created in the constructor whether or not their panels are open.
@@ -134,6 +137,11 @@ public:
     bool isHeard(const QString& track) const;
     AudioTool& audioTool() const { return *audioTool_; }
     MediaTool& mediaTool() const { return *mediaTool_; }
+    // Tools > List Tool (p.944-960): EDLs of a sequence.
+    ListTool& listTool() const { return *listTool_; }
+    // Opens the List Tool with the sequence selected in the active bin, else the Record monitor's
+    // (p.948 step 3).
+    void showListTool();
     // File > Input > Source Browser (p.312-318).
     SourceBrowser& sourceBrowser() const;
 
@@ -150,6 +158,9 @@ public:
     // media file in it and the folders in it. Returns the bin's id.
     // Empty without a project.
     QString linkVolume(const QString& folder);
+    // How a sequence's segments find their clips (the bins they name, else the open bins by MobID),
+    // for the List Tool.
+    std::function<std::optional<model::BinItem>(const MobId&, const QString&)> clipResolver(const model::BinItem& sequence) const;
     // The project's rate and the Link settings.
     media::LinkOptions linkOptions() const;
     // Clip > Relink > Linked Media (p.364-365) and Clip > Modify > Unlink
@@ -177,12 +188,25 @@ public:
     // Managed media (Phase 2.4, p.349-359). File > Input > Import Media:
     // the files as new media in a bin (p.213), at the Media Creation
     // setting's import resolution unless `resolution` names another.
-    // AAF files among the paths go to importAaf(). Returns the new items' ids.
+    // AAF files among the paths go to importAaf(), shot logs to importShotLogs(). Returns the new
+    // items' ids.
     QStringList importFiles(const QString& binId, const QStringList& paths, const QString& resolution = {});
     // AAF files imported into a bin (p.547): their clips and sequences,
     // master clips with media on the drives online by MobID.
     // Returns the new items' ids; failures and warnings go to the Console.
     QStringList importAaf(const QString& binId, const QStringList& paths);
+    // Shot logs (Avid Log Exchange, p.131-132) imported into a bin: a master clip for each logged
+    // event. Returns the new items' ids; warnings go to the Console.
+    QStringList importShotLogs(const QString& binId, const QStringList& paths);
+    // File > Input > Import EDL (p.951): the Import EDL dialog (the file, the Frame Rate and the bin),
+    // then the sequence and a source for each reel go into the bin. The hook stands in for the dialog
+    // (tests; true: OK). Returns the new items' ids.
+    QStringList importEdl();
+    void setImportEdlHook(std::function<bool(ImportEdlDialog&)> hook) { importEdlHook_ = std::move(hook); }
+    // File > Output > Export Bin (p.130): the active bin's master clips as a shot log. The hook
+    // stands in for the Export Bin As dialog (tests; true: OK).
+    void exportBin();
+    void setExportBinHook(std::function<bool(ExportBinDialog&)> hook) { exportBinHook_ = std::move(hook); }
     // File > Open Bin (p.296): a bin from another project, listed under
     // Other Bins and opened. A Media Composer bin (.avb) is read into a bin
     // of ours first (interop::avb::importFile), its master clips online by
@@ -321,6 +345,7 @@ private:
     AudioMixer* audioMixer_ = nullptr;
     AudioTool* audioTool_ = nullptr;
     MediaTool* mediaTool_ = nullptr;
+    ListTool* listTool_ = nullptr;
     MediaFrames* frames_ = nullptr;
     // Guarded: bins save (and signal) as the window is taken down.
     QPointer<SourceBrowser> sourceBrowser_;
@@ -350,6 +375,8 @@ private:
     std::function<void(LinkedMediaDialog&)> linkedMediaHook_;
     std::function<bool(ConsolidateDialog&)> consolidateHook_;
     std::function<bool(ExportAsDialog&)> exportHook_;
+    std::function<bool(ImportEdlDialog&)> importEdlHook_;
+    std::function<bool(ExportBinDialog&)> exportBinHook_;
     std::function<bool(ManagedRelinkDialog&)> managedRelinkHook_;
     std::function<std::optional<BinDeleteChoice>(int, int)> binDeleteHook_;
     std::function<std::optional<bool>()> copyingMediaHook_;

@@ -5,12 +5,14 @@
 #include "lumenis/ext/module_loader.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/interop/aaf.h"
+#include "lumenis/interop/ale.h"
 #include "lumenis/interop/aaf_export.h"
 #include "lumenis/interop/aaf_import.h"
 #include "lumenis/interop/avb.h"
 #include "lumenis/interop/avb_export.h"
 #include "lumenis/interop/avb_import.h"
 #include "lumenis/interop/avb_writer.h"
+#include "lumenis/interop/edl.h"
 #include "lumenis/model/structure.h"
 #include "lumenis/model/locations.h"
 #include "lumenis/model/project_store.h"
@@ -89,7 +91,8 @@
 // The cutthulhu executable: main() sets up Qt, the provider registry and modules, then either runs
 // one of the command-line tools below and exits, or opens the editor (Select Project, then
 // lumenis::ui::MainWindow). The options are declared in main() and handled in this order:
-// --list-providers, --probe, --dump-structure, --export-aaf, --export-avb, --import-aaf, --import-avb,
+// --list-providers, --probe, --dump-structure, --export-aaf, --export-avb, --export-edl, --export-ale, --import-aaf,
+// --import-avb, --import-edl, --import-ale,
 // --dump-aaf, --dump-avb, --rewrite-avb, --write-media and --framemd5 need no display (isHeadlessInvocation()); --dump-menus,
 // --measure-playback, --screenshot and --smoke-test open the main window; --project or Select
 // Project start a normal session. The scripts that run these are in scripts/ (decode-corpus.py,
@@ -106,11 +109,26 @@ bool isHeadlessInvocation(int argc, char** argv) {
         if (arg == "--version" || arg == "-v" || arg == "--help" || arg == "-h" || arg == "-?"
             || arg == "--list-providers" || arg == "--probe" || arg == "--framemd5" || arg == "--write-media"
             || arg == "--dump-structure" || arg == "--dump-aaf" || arg == "--dump-avb" || arg == "--import-aaf" || arg == "--import-avb"
-            || arg == "--export-aaf" || arg == "--export-avb" || arg == "--rewrite-avb") {
+            || arg == "--export-aaf" || arg == "--export-avb" || arg == "--rewrite-avb" || arg == "--import-edl"
+            || arg == "--export-edl" || arg == "--import-ale" || arg == "--export-ale") {
             return true;
         }
     }
     return false;
+}
+
+// A frame rate given on the command line: "25", "29.97" (NTSC rates written short) or "24000/1001".
+std::optional<lumenis::Rational> parseRate(const QString& text) {
+    const qsizetype slash = text.indexOf(QLatin1Char('/'));
+    if (slash > 0) {
+        bool okNum = false;
+        bool okDen = false;
+        const qlonglong num = text.left(slash).toLongLong(&okNum);
+        const qlonglong den = text.mid(slash + 1).toLongLong(&okDen);
+        if (okNum && okDen && num > 0 && den > 0) return lumenis::Rational(num, den);
+        return std::nullopt;
+    }
+    return lumenis::interop::ale::rateFromFps(text);
 }
 
 void attachParentConsole() {
@@ -295,6 +313,40 @@ int main(int argc, char** argv) {
                        "first: a round trip."),
         QStringLiteral("bin"));
     parser.addOption(exportAvb);
+    const QCommandLineOption importEdl(
+        QStringLiteral("import-edl"),
+        QStringLiteral("Import an EDL (CMX 3600, File_129) into a bin: a source for each reel and the sequence. Print "
+                       "the bin's structure dump (docs/spec/structure.md), then exit. --rate gives the frame rate."),
+        QStringLiteral("file"));
+    const QCommandLineOption edlRate(
+        QStringLiteral("rate"),
+        QStringLiteral("With --import-edl: the frame rate (25, 29.97, 24000/1001); guessed from the list when not given."),
+        QStringLiteral("rate"));
+    const QCommandLineOption exportEdl(
+        QStringLiteral("export-edl"),
+        QStringLiteral("Write the sequence named after the bin (.cthbin) as an EDL to the file given after the name, then "
+                       "exit (docs/spec/edl.md). Clips come from the bin and the other bins beside it. An .edl is "
+                       "imported first: a round trip (then the name may be left out). --edl-type picks the type."),
+        QStringLiteral("bin"));
+    const QCommandLineOption edlType(QStringLiteral("edl-type"),
+                                     QStringLiteral("With --export-edl: CMX_3600 (default) or File_129."), QStringLiteral("type"),
+                                     QStringLiteral("CMX_3600"));
+    const QCommandLineOption importAle(
+        QStringLiteral("import-ale"),
+        QStringLiteral("Import a shot log (Avid Log Exchange, .ale) into a bin and print the bin's structure dump, then exit "
+                       "(docs/spec/ale.md)."),
+        QStringLiteral("file"));
+    const QCommandLineOption exportAle(
+        QStringLiteral("export-ale"),
+        QStringLiteral("Write the master clips and subclips of a bin (.cthbin) as a shot log (.ale) to the file given "
+                       "after it, then exit. An .ale is imported first: a round trip."),
+        QStringLiteral("bin"));
+    parser.addOption(importEdl);
+    parser.addOption(edlRate);
+    parser.addOption(exportEdl);
+    parser.addOption(edlType);
+    parser.addOption(importAle);
+    parser.addOption(exportAle);
     parser.addOption(canonical);
     parser.addOption(writeMedia);
     parser.addOption(mediaDrive);
@@ -453,6 +505,112 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    // --export-edl <bin> SEQUENCE OUT: a sequence of a .cthbin (its clips found in that bin and the other
+    // bins of its folder, the project's) or of an EDL's import (a round trip), written by
+    // interop::edl::exportFile() (docs/spec/edl.md). Warnings go to stderr; exit status 2 for wrong
+    // arguments.
+    if (parser.isSet(exportEdl)) {
+        QString error;
+        const QString from = parser.value(exportEdl);
+        const QStringList rest = parser.positionalArguments();
+        const auto type = lumenis::interop::edl::formatFromName(parser.value(edlType));
+        if (!type) {
+            std::fprintf(stderr, "--edl-type is CMX_3600 or File_129\n");
+            return 2;
+        }
+        QList<lumenis::model::BinItem> items;
+        const bool isEdl = from.endsWith(QLatin1String(".edl"), Qt::CaseInsensitive);
+        if (isEdl) {
+            lumenis::interop::edl::ImportOptions options;
+            if (parser.isSet(edlRate)) options.rate = parseRate(parser.value(edlRate));
+            const auto imported = lumenis::interop::edl::importFile(from, options, &error);
+            if (!imported) {
+                std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(from), qPrintable(error));
+                return 1;
+            }
+            for (const QString& w : imported->warnings) std::fprintf(stderr, "import-edl: %s\n", qPrintable(w));
+            items = imported->items;
+        } else {
+            const auto bin = lumenis::model::BinFile::read(from, &error);
+            if (!bin) {
+                std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(from), qPrintable(error));
+                return 1;
+            }
+            items = bin->items;
+            const QFileInfo info(from);
+            for (const QFileInfo& f : info.dir().entryInfoList({QStringLiteral("*") + lumenis::model::BinFile::suffix()}, QDir::Files)) {
+                if (f.canonicalFilePath() == info.canonicalFilePath()) continue;
+                if (auto other = lumenis::model::BinFile::read(f.filePath())) items += other->items;
+            }
+        }
+        if (rest.size() != 2 && !(isEdl && rest.size() == 1)) {
+            std::fprintf(stderr, "--export-edl needs the sequence's name and the file to write after the bin\n");
+            return 2;
+        }
+        const lumenis::model::BinItem* sequence = nullptr;
+        for (const lumenis::model::BinItem& item : items) {
+            if (item.kind != lumenis::model::BinItemKind::Sequence) continue;
+            if (!sequence && (rest.size() == 1 || item.name == rest.first())) sequence = &item;
+        }
+        if (!sequence) {
+            std::fprintf(stderr, "no sequence %s in %s\n", qPrintable(rest.size() == 2 ? rest.first() : QString()), qPrintable(from));
+            return 1;
+        }
+        lumenis::interop::edl::ExportOptions options;
+        options.format = *type;
+        options.resolve = [&items](const lumenis::MobId& mob, const QString& clipId) -> std::optional<lumenis::model::BinItem> {
+            for (const lumenis::model::BinItem& item : items) {
+                if (item.kind == lumenis::model::BinItemKind::Sequence) continue;
+                if ((!clipId.isEmpty() && item.id == clipId) || lumenis::model::mobIdOf(item) == mob) return item;
+            }
+            return std::nullopt;
+        };
+        const auto result = lumenis::interop::edl::exportFile(*sequence, rest.last(), options);
+        for (const QString& w : result.warnings) std::fprintf(stderr, "export-edl: %s\n", qPrintable(w));
+        if (!result.ok) {
+            std::fprintf(stderr, "cannot write %s: %s\n", qPrintable(rest.last()), qPrintable(result.error));
+            return 1;
+        }
+        return 0;
+    }
+
+    // --export-ale <bin> OUT: a .cthbin's master clips and subclips, or a shot log's import (a round
+    // trip), written by interop::ale::exportFile() (docs/spec/ale.md).
+    if (parser.isSet(exportAle)) {
+        QString error;
+        const QString from = parser.value(exportAle);
+        const QStringList rest = parser.positionalArguments();
+        if (rest.size() != 1) {
+            std::fprintf(stderr, "--export-ale needs the file to write after the bin to read\n");
+            return 2;
+        }
+        QList<lumenis::model::BinItem> items;
+        lumenis::interop::ale::ExportOptions options;
+        if (from.endsWith(QLatin1String(".ale"), Qt::CaseInsensitive)) {
+            const auto imported = lumenis::interop::ale::importFile(from, {}, &error);
+            if (!imported) {
+                std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(from), qPrintable(error));
+                return 1;
+            }
+            for (const QString& w : imported->warnings) std::fprintf(stderr, "import-ale: %s\n", qPrintable(w));
+            items = imported->items;
+        } else {
+            const auto bin = lumenis::model::BinFile::read(from, &error);
+            if (!bin) {
+                std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(from), qPrintable(error));
+                return 1;
+            }
+            items = bin->items;
+        }
+        const auto result = lumenis::interop::ale::exportFile(items, rest.first(), options);
+        for (const QString& w : result.warnings) std::fprintf(stderr, "export-ale: %s\n", qPrintable(w));
+        if (!result.ok) {
+            std::fprintf(stderr, "cannot write %s: %s\n", qPrintable(rest.first()), qPrintable(result.error));
+            return 1;
+        }
+        return 0;
+    }
+
     // What an AAF file or a Media Composer bin imports as: the bin's structure (Phase 3 gate 1). Both
     // print the same form, so that either can be compared with a reference dump (structdiff.py).
     auto printImported = [](const QString& path, const QStringList& warnings, const char* option,
@@ -477,6 +635,36 @@ int main(int argc, char** argv) {
             return 1;
         }
         printImported(path, imported->warnings, "import-aaf", imported->items, imported->customColumns);
+        return 0;
+    }
+    if (parser.isSet(importEdl)) {
+        QString error;
+        const QString path = parser.value(importEdl);
+        lumenis::interop::edl::ImportOptions options;
+        if (parser.isSet(edlRate)) {
+            options.rate = parseRate(parser.value(edlRate));
+            if (!options.rate) {
+                std::fprintf(stderr, "--rate %s is not a frame rate\n", qPrintable(parser.value(edlRate)));
+                return 2;
+            }
+        }
+        const auto imported = lumenis::interop::edl::importFile(path, options, &error);
+        if (!imported) {
+            std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(path), qPrintable(error));
+            return 1;
+        }
+        printImported(path, imported->warnings, "import-edl", imported->items, {});
+        return 0;
+    }
+    if (parser.isSet(importAle)) {
+        QString error;
+        const QString path = parser.value(importAle);
+        const auto imported = lumenis::interop::ale::importFile(path, {}, &error);
+        if (!imported) {
+            std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(path), qPrintable(error));
+            return 1;
+        }
+        printImported(path, imported->warnings, "import-ale", imported->items, imported->customColumns);
         return 0;
     }
     if (parser.isSet(importAvb)) {

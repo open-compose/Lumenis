@@ -2,8 +2,9 @@
 """The interchange corpus (ROADMAP Phase 3): AAF files and Media Composer bins
 made by other programs, for the readers in src/interop to be tested on.
 
-The files belong to pyaaf2 and pyavb (both MIT, by Mark Reid) and come from
-their repositories at pinned commits, checked by SHA-256. They are not
+The files belong to pyaaf2 and pyavb (both MIT, by Mark Reid), and the EDLs
+and shot logs to OpenTimelineIO's CMX 3600 and ALE adapters (Apache-2.0); they
+come from their repositories at pinned commits, checked by SHA-256. They are not
 committed here: `fetch` downloads them into a cache folder.
 
     interop-corpus.py fetch [--dir DIR]
@@ -131,6 +132,36 @@ SOURCES = {
         "retimes/step01.avb": "8f3080dee606242ea157d8ee162965cee9d7d45fbc2944150c0a90d549dd918c",
         "retimes/step02.avb": "9a8ffb81b387797da1d04db94a5c2c37aee0a14b319a1f400aeef0766e1644e8",
         "retimes/step03.avb": "9f89928379677fc305234146c3f2f9f8bb635a28d10c08612046ca7433a33865",
+    }),
+    # EDLs and shot logs from OpenTimelineIO's adapters (Apache-2.0), for tst_edl and tst_ale.
+    "otio-cmx3600": ("https://raw.githubusercontent.com/OpenTimelineIO/otio-cmx3600-adapter/4b02a6668b4ddb435bd6b8e7459e1dbd170938df/tests/sample_data/", {
+        "25fps.edl": "a5e260114ce76268818f3b5a5bee4eca17c8921ad30bb8af918c965b60ab5edd",
+        "avid_example.edl": "74d6a91d1d74f682c3f5d0a1ce68204d968a3cef02a930e9e8257aa989e341de",
+        "cdl.edl": "9976086fd2a8b489fe483d0e7ff7a5f38c47409aacb056d531771e54718958ec",
+        "dissolve_test.edl": "48263530da1e9e92017203e7ec724752ddd1b299f29bdeec11210aa1abe6e8e1",
+        "dissolve_test_2.edl": "20a64a8271f234c0620cff4e46fe4f8f26f80b627d65e71af86066ac124a9353",
+        "dissolve_test_3.edl": "6374cacc71594e5672ff0d229af32190b32f3ae4492f90dbf07595b904557619",
+        "dissolve_test_4.edl": "d11ec4cf3e7171ee703d7dc703f2411a7006c72a9fadc7525ab3f75f102b4a71",
+        "dissolve_test_fail.edl": "37cc1a647a2cbb3dd538530d71c411347fb2da486d637419213133dc93899419",
+        "gap_test.edl": "abfb492a5dafefc7c2f9866c1aba9edecc471905169469d4ad7b36b998f05709",
+        "multi_audio.edl": "5cf1b0ccc0ae02ac6871a89e5caf21c1a2c63ab43d89c7bbea02f0492026d391",
+        "no_spaces_test.edl": "09a0b0c472c7e2ef7f1b84b86cdd38bb9461a1d441a3c68dfa71de6a5562c30b",
+        "nucoda_example.edl": "2e5774cbd94e973bf2cd8dccf2cab5d7eb0ac252c94c73a81491f7c6f5e795f8",
+        "premiere_example.edl": "cbe0d9b888915118b04d5c11f7173274cfededf67b1154429120f70736a7eed3",
+        "screening_example.edl": "e0014ea06ce356fbc36ffdf0a37203c6453987c99899d792d604a34954734c29",
+        "speed_effects.edl": "42ac693839b5b8b3896a531ad5c039cb308dded84067cf67dddd77f9d589d3bf",
+        "speed_effects_small.edl": "6613dca5a18359742cfdc2174b51f275720894c6e3475d56624ce925d1b48b08",
+        "timecode_mismatch.edl": "6acd34befc2ffb236edfb35aff334620d6c6b6b45d7ddbd9d63f03fb56e24bbc",
+        "transition_duration.edl": "88faa12c4d054006aa7092c8ca6557891a70fc8cc81b4c2c1317b3b37a727542",
+        "wipe_test.edl": "ec48c4834ad399a726ae6178fca2ce380c1a6b03d6976d3d198c8b3f06906ccb",
+    }),
+    "otio-ale": ("https://raw.githubusercontent.com/OpenTimelineIO/otio-ale-adapter/70c647d36468a423ff1815b761c92f2ea138638c/tests/sample_data/", {
+        "sample.ale": "8e76edf86e788f872bc0b978402659cc7a9b687685868eab5252ed2edd1b64e6",
+        "sample2.ale": "d8924e6ac77caadac7e1b00a334ef0304a09205c90aee1e3e751931c9ac591a7",
+        "sampleUHD.ale": "97168d84a1c8719e33f2aee18bc66a30065a965c13874008f45e51ed358998a2",
+        "sample_blanks.ale": "ea2be9a2e2179bcb2c13436716de0ae707102de676f86047a3edc5b42beef329",
+        "sample_cdl.ale": "86f9ab120888ffb618b4790153b462aa87b7aa2978ad265ee08bd4ec6571575e",
+        "sample_no_blanks.ale": "d8a6d7b821cf17fb0b3cfeeab3121cfdcebd12a45bff48b312c0d75c6879b73e",
     }),
 }
 

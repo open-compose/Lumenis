@@ -69,9 +69,9 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Input > Import Media |  | p.969 | works | ☐ | | |
 | Input > Link |  | p.328 | *later* | ☐ | | |
 | Input > Tape Capture | Ctrl+7 | p.115 | *later* | ☐ | | |
-| Input > Import EDL |  | p.951 | *later* | ☐ | | |
+| Input > Import EDL |  | p.951 | works | ☐ | | |
 | Output > Export to File |  | p.129 | works | ☐ | | |
-| Output > Export Bin |  | p.130 | *later* | ☐ | | |
+| Output > Export Bin |  | p.130 | works | ☐ | | |
 | Output > Export to Device > P2 |  | p.901 | *later* | ☐ | | |
 | Output > Export to Device > XDCAM |  | p.883 | *later* | ☐ | | |
 | Output > Digital Cut |  | p.912 | *later* | ☐ | | |
@@ -241,7 +241,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Dynamic Media Folders |  | p.372 | *later* | ☐ | | |
 | Effect Palette | Ctrl+8 | p.791 | works | ☐ | | |
 | IMF Window |  | p.335 | *later* | ☐ | | |
-| List Tool |  | p.944 | *later* | ☐ | | |
+| List Tool |  | p.944 | works | ☐ | | |
 | Markers |  | p.416 | works | ☐ | | |
 | Media Tool |  | p.346 | works | ☐ | | |
 | New Deck Controller |  | p.95 | *later* | ☐ | | |
@@ -312,6 +312,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 208 menu commands, 92 of them working with a project open; the
+* 208 menu commands, 95 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

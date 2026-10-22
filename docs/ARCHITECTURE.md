@@ -14,7 +14,7 @@ The code is a stack of static libraries. Each depends only on those below it.
 | `lumenis_core` | `src/core` | Value types with no Qt widgets: `Rational` (exact edit rates), `Timecode`, `MobId` (SMPTE UMIDs), the project format, branding constants. | — |
 | `lumenis_ext` | `src/ext` | Extension points: provider interfaces (codecs, effects) and the module loader for plug-ins (docs/EXTENSIONS.md). | core |
 | `lumenis_model` | `src/model` | The editing model, independent of the UI: projects and their bin tree, bins and bin items, sequences (tracks, segments, edits), markers, monitor state, settings files, the calculator, structure dumps. | core |
-| `lumenis_interop` | `src/interop` | Interchange: the compound file container, AAF reading, import into bins, writing and export (docs/spec/aaf.md); Media Composer's `.avb` bins, read, imported, written and exported (docs/spec/avb.md). | model |
+| `lumenis_interop` | `src/interop` | Interchange: the compound file container, AAF reading, import into bins, writing and export (docs/spec/aaf.md); Media Composer's `.avb` bins, read, imported, written and exported (docs/spec/avb.md); EDLs (docs/spec/edl.md) and ALE shot logs (docs/spec/ale.md), read and written. | model |
 | `lumenis_media` | `src/media` | Media through FFmpeg: probing, frame-exact reading, writing, linking files as clips, managed MXF media and the media database, consolidate/transcode, relink, sound output and the playback clock. | model, ext |
 | `lumenis_ui` | `src/ui` | Every window, panel and dialog (Qt Widgets), and the main window that ties them to the model and media. | everything above |
 | `lumenis_app` (`cutthulhu`) | `app` | `main()`: command-line options (many are test and gate tools), crash reports, then the main window. | ui, interop, media |
@@ -66,8 +66,11 @@ headers in `include/lumenis/<library>/`.
   writes their objects back (the inverse of `avb.*`), and
   `avb_import.*` reads them into bins (helpers shared with `aaf_import.cpp`
   and the exporters in `import_common.h`), and `avb_export.*` writes bins
-  as `.avb` (the import's inverse, built with `avb_writer.*`). The native model they read into and write from is
-  described in docs/spec/native-model.md.
+  as `.avb` (the import's inverse, built with `avb_writer.*`). `edl.*` reads and writes edit
+  decision lists (CMX 3600, File_129) and `ale.*` Avid Log Exchange shot logs; the text helpers they
+  share are in `text_common.h`. The native model they read into and write from is
+  described in docs/spec/native-model.md. In the UI, `list_tool.*` is Tools > List Tool and
+  `interchange_dialogs.*` the Import EDL and Export Bin As dialogs.
 * **Effects.** The Effect Palette's list is `src/ui/resources/effects.json`
   and the Effect Editor's parameters `effect_parameters.json`; UI in
   `effect_palette.*` and `effect_editor.*`; the model keeps effects on
@@ -90,7 +93,11 @@ headers in `include/lumenis/<library>/`.
 5. Interchange converts between files and bin items: AAF import and `.avb`
    reading make `model::BinItem`s for a bin; export writes bin items to AAF
    or a bin to `.avb` (File > Output > Export to File, `--export-aaf`,
-   `--export-avb`).
+   `--export-avb`). An EDL imports as a sequence and a source for each
+   tape (File > Input > Import EDL, `--import-edl`); the List Tool writes a
+   sequence as an EDL (`--export-edl`). Shot logs import as master clips
+   (the Source Browser's Import, `--import-ale`) and are written by Export
+   Bin and Export to File (`--export-ale`).
 
 ## Tests
 
@@ -107,7 +114,16 @@ with CTest (`ctest --preset ci`). Python checks live in `scripts/` and
   Media Composer's bins (`aaf_import_bins`), the bins themselves read into
   bins (`avb_import_bins`), round trips (`aaf_round_trip`, `avb_round_trip`,
   `avb_export_round_trip`), and what the `.avb` writer and export make read
-  by pyavb (`avb_write_pyavb`, `avb_export_pyavb`).
+  by pyavb (`avb_write_pyavb`, `avb_export_pyavb`); EDLs and shot logs
+  (`tst_edl`, `tst_ale`, with OpenTimelineIO's sample files from the
+  corpus, and `tst_interchange` for the menus and the List Tool).
+
+`fuzz/` holds libFuzzer targets for the interchange parsers (the compound
+file, AAF, `.avb` bins and their writer; ROADMAP Phase 3 gate 4), built by
+the `fuzz` preset and run with `scripts/fuzz.py` (fuzz/README.md, BUILDING.md
+"Fuzzing"). Every build also makes `lumenis_fuzz_replay`, and ctest
+`fuzz_replay` runs the saved crash inputs (`fuzz/regressions/`) through
+them.
 
 Screenshots of the windows are compared across platforms in CI
 (`ui-consistency`); custom-painted widgets draw text with palette colours

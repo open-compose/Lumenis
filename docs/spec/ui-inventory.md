@@ -2096,8 +2096,8 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
   (p.869), and every format but AAF and Media Composer Bin.
 
 ### Export setting (p.1173-1177)
-* Export As (p.1173-1174): every format the guide lists; only AAF works
-  (others are shown dimmed). **Ours, not in the guide:** a last choice,
+* Export As (p.1173-1174): every format the guide lists; AAF and Avid Log
+  Exchange (docs/spec/ale.md) work (others are shown dimmed). **Ours, not in the guide:** a last choice,
   Media Composer Bin, writes the selection as a `.avb` bin (docs/spec/avb.md,
   "Export"): the guide has no command that writes a bin for another system,
   Media Composer's bins being `.avb` files already (p.296), and File >
@@ -2113,5 +2113,70 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
 * **Our choices, unverified.** Defaults the guide does not give: Export As
   AAF, the two Include options on, Link to (Don't Export) Media.
 
-## 19. Still to document
+## 19. EDLs and shot logs (p.106-132, p.939-968, p.1174)
+
+The formats and what maps are in docs/spec/edl.md and docs/spec/ale.md.
+
+### File > Input > Import EDL (p.951-952)
+* Steps: File > Input > Import EDL; the Select File to Open dialog; a
+  dialog with Frame Rate, Project Type and Audio Mapping; OK; the Select
+  window: one of the bins, or New Bin; a message to Decompose the sequence
+  before using it (p.951 steps 1-7).
+* Here: the system's open dialog, then one Import EDL dialog with the file
+  (and Browse), Frame Rate (the project's first), Project Type and Audio
+  Mapping (dimmed: the guide does not list their choices) and the bin (New
+  Bin first, the active bin chosen). **Our choice, unverified:** the
+  options and the Select window as one dialog. The message is a Console
+  line.
+* The sequence and a source for each reel go into the bin, the sequence
+  selected. Sources of reels the bin holds already are used again.
+* Later: Decompose (p.951-952 steps 8-11).
+
+### Tools > List Tool (p.944-960)
+* A tool panel. Left (p.945, p.947 pictures): Active Setting (Default EDL;
+  dimmed: Save As and Remove Current, p.956-957, later), Output Format, List
+  / Change List (Change List dimmed), the Input, List Options and
+  Formatting tabs. Right: Preview, Save List, Clear List, New List, Clone
+  List; the Master EDL and Sources tabs (p.947 picture).
+* Output Format lists CMX_3600, CMX_DigitalCut, CMX_Transfer, Cuedos,
+  File_16, File_32, File_129, then Columnar, TabbedLists, WebLists, XML
+  (p.945 picture, p.947 step 2). CMX_3600 and File_129 work; the rest are
+  dimmed.
+* Input tab (p.945, p.948 steps 3-4): the sequence (Load: the Record
+  monitor's; Clear), a toggle button for each track, all on, and the Title,
+  the sequence's name. A sequence selected in the active bin when the tool
+  opens is loaded (p.948 step 3). Dragging a sequence in: later.
+* List Options (p.958): Picture Dissolves and Black Edits, Sound Dissolves,
+  Clip Names and Markers work; the others are shown dimmed (a subset of the
+  guide's list).
+* Formatting (p.958-960): Optimize EDL and Starting Event Number work;
+  Source TC (Start), Record TC (TC1), Reel ID Type (Tape), Sort Mode (A),
+  Tape or File Name truncation (End) show their working first entry, the
+  rest dimmed; Convert tape names to numbers and Include source table
+  dimmed.
+* Preview fills Master EDL and Sources (reel, source name, MobID; p.950-951)
+  and sends the list's warnings to the Console. Save List writes the list
+  to one file (p.949 step 9), named for the Title.
+* **Our choices, unverified:** the defaults of List Options (Dissolves,
+  Clip Names, Markers on; Black Edits off) and Formatting (Optimize EDL
+  off); the guide gives none. The panel's first size (980 × 560).
+* Later: multiple files, Edit mode with Find (p.949-950), New List, Clone
+  List, Sources' Save List, the template's case setting (p.950: names are
+  capitalized).
+
+### Shot logs
+* **Import** (p.131-132): Import in the Source Browser of an `.ale` file
+  (or a `.txt` whose first line is Heading) puts its clips into the target
+  bin; the log's custom columns join the bin's.
+* **File > Output > Export Bin** (p.130): the Export Bin As dialog: the
+  Export Bin As menu (Avid Log Exchange; Tab Delimited dimmed), and the file
+  name with Browse (**ours**: the guide does not show where it is named),
+  then OK. The active bin's master clips, with its Text view and custom
+  columns.
+* **Export to File** with the Export setting's Export As at Avid Log
+  Exchange (now working, p.1174): the selected master clips and subclips,
+  to an `.ale`.
+* Later: the Import setting's Shot Log tab (p.1197-1198), Tab Delimited.
+
+## 20. Still to document
 * Menu order and separators, confirmed against a licensed seat.

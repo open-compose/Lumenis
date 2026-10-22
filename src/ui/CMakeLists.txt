@@ -10,6 +10,8 @@ add_library(lumenis_ui STATIC
     composer.cpp
     consolidate_dialog.cpp
     export_dialog.cpp
+    interchange_dialogs.cpp
+    list_tool.cpp
     effect_editor.cpp
     effect_palette.cpp
     capture.cpp
@@ -46,6 +48,8 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/composer.h
     include/lumenis/ui/consolidate_dialog.h
     include/lumenis/ui/export_dialog.h
+    include/lumenis/ui/interchange_dialogs.h
+    include/lumenis/ui/list_tool.h
     include/lumenis/ui/effect_editor.h
     include/lumenis/ui/effect_palette.h
     include/lumenis/ui/capture.h

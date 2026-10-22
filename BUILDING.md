@@ -581,6 +581,13 @@ hand.
   `systemd=true` to `/etc/wsl.conf`, run `wsl --shutdown` in Windows, and
   open the distribution again.
 
+### Fuzzing: "cannot find .../libclang_rt.fuzzer-x86_64.a"
+
+Clang is installed without its runtime libraries (libFuzzer, the
+sanitizers), which Ubuntu packages separately: `sudo apt-get install -y
+libclang-rt-dev` (or `libclang-rt-<version>-dev` to match `clang++
+--version`). The Fuzz workflow checks this first and says so.
+
 ### The self-hosted macOS job waits or fails
 
 * *Queued for a long time:* the Mac is off or asleep, or the runner is
@@ -815,9 +822,102 @@ the build folder (`build/<preset>`) and configure again.
   imports; with pyaaf2 installed it also has pyaaf2 read each export. By
   hand: `cutthulhu --export-aaf FILE.aaf --to OUT.aaf` (or a .cthbin), then
   `--import-aaf` both and `structdiff.py`.
+* **EDLs and shot logs (3.6a):** `tst_edl` and `tst_ale` read, write and
+  read again lists and logs made in the tests, and every sample EDL and ALE
+  of OpenTimelineIO's CMX 3600 and ALE adapters (Apache-2.0), which the
+  corpus downloads into `otio-cmx3600` and `otio-ale`; without the corpus
+  those parts are skipped. `tst_interchange` drives File > Input > Import
+  EDL, Tools > List Tool, shot log Import, Export Bin and Export to File.
+  By hand: `cutthulhu --import-edl FILE.edl [--rate 25] > ours.json`,
+  `cutthulhu --export-edl BIN.cthbin "Sequence name" OUT.edl [--edl-type
+  File_129]` (an .edl in place of the bin is a round trip), `cutthulhu
+  --import-ale FILE.ale` and `cutthulhu --export-ale BIN.cthbin OUT.ale`.
 * **The built-in AAF model** (`src/interop/aaf_model.inc`) is made from
   pyaaf2's model tables: `python3 scripts/make-aaf-model.py --pyaaf2
   <pyaaf2 checkout>` (`--check` to compare).
+* **Gate 4, fuzzing:** see [Fuzzing](#fuzzing) below.
+
+## Fuzzing
+
+Phase 3 gate 4 asks that fuzzing the bin and AAF parsers for 24 hours
+produces no crashes. `fuzz/` holds four libFuzzer targets (fuzz/README.md
+says what each runs): `cfb` (the compound file container), `aaf` (AAF
+objects, the `--dump-aaf` dump and the import into bins), `avb` (bins, the
+`--dump-avb` dump and the import) and `avb_rewrite` (the bin writer: what is
+read is written back and must read back the same). A crash, a hang (an
+input taking over 10 s), an AddressSanitizer or UBSan report, or a failed
+round-trip check is a failure.
+
+**Requirements:** Linux or macOS with Clang and its runtime libraries. On
+Ubuntu, `sudo apt-get install -y clang libclang-rt-dev` (or
+`libclang-rt-18-dev` for Clang 18); Xcode's Clang has them. GCC and MSVC
+cannot build the fuzzers, but every build makes `lumenis_fuzz_replay`,
+which runs saved inputs through the same targets.
+
+**Every build:** ctest `fuzz_replay` runs the regression inputs
+(`fuzz/regressions/`), the seeds our writers make and the downloaded
+interchange corpus through all four targets, in a few seconds.
+
+**By hand:**
+
+    python3 scripts/fuzz.py build      # cmake --preset fuzz, then build it
+    python3 scripts/fuzz.py seed       # build/fuzz/corpus/<target>/
+    python3 scripts/fuzz.py run --time 1h --jobs 2
+    python3 scripts/fuzz.py run --targets avb --time 30m --each
+
+`seed` makes each target's corpus from the interchange corpus (`.aaf` for
+`cfb` and `aaf`, `.avb` for the others; each AAF is also laid out again in
+512-byte sectors and without its metadictionary, which the fuzzer mutates
+far faster), the seeds made by our own writers, and the regression inputs,
+keeping only what adds coverage. None of these are committed. `run` splits
+`--time` between the targets (`--each`: that long each), runs libFuzzer in
+fork mode with `--jobs` processes, adds what it finds to the corpus, and
+prints a summary: seconds, executions, executions per second, coverage
+(`cov`, edges; `ft`, features) and corpus size. It stops at the first
+failure, prints the stack and the reproducer as base64, and exits 1; the
+log and the reproducer are in `build/fuzz/artifacts/<target>/`. To
+reproduce: `build/fuzz/bin/fuzz_<target> FILE`, or in any build
+`lumenis_fuzz_replay --target <target> FILE` (the `asan` preset for the
+sanitizer's report). fuzz/README.md, "After a crash", says how to minimise
+it, fix it, and keep it as a regression input with a unit test.
+
+**The 24-hour gate run** goes on the self-hosted Linux runner (Ubuntu in
+WSL, with Clang installed as above):
+
+    gh workflow run fuzz.yml --ref <branch> -f hours=24 -f jobs=2
+
+The Fuzz workflow (`.github/workflows/fuzz.yml`, run by hand only) builds
+the `fuzz` preset, replays the regression inputs, seeds, and runs every
+target for its share of the hours: with the default weights, 24 hours are
+2.7 for `cfb`, 8 each for `aaf` and `avb` and 5.3 for `avb_rewrite`. It
+prints a progress line every 10 minutes and the summary at the end. The job
+fails on any crash, hang or sanitizer report, with the reproducer as base64
+in the log (nothing is uploaded: the artifact quota is used up). Decode it
+(`base64 -d > input`), reproduce, fix, add it to `fuzz/regressions/`, and
+run the gate again. The corpora it grows are kept in the runner's
+`_work/Lumenis/cutthulhu-fuzz/`, so a later run starts from them. The gate
+passes when one full 24-hour run is clean; record its summary here.
+Meanwhile the runner takes no other jobs, so start it when CI can wait (or
+on a second runner).
+
+**Runs so far** (Clang 18, Ubuntu 24.04 container, 4 cores; executions are
+over all processes):
+
+| Date | Target | Processes | Time | Executions | Exec/s | Coverage (cov / ft) | Corpus | Result |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2026-10-22 | `aaf` | 2 (fork) | 61 min | 265,424 | 56 | 35,060 / 30,603 | 917 | clean |
+| 2026-10-22 | `avb` | 1 | 60 min | 660,110 | 183 | 6,352 / 21,334 | 809 | clean |
+| 2026-10-22 | `avb_rewrite` | 1 | 40 min | 382,570 | 159 | 3,628 / 17,025 | 681 | clean |
+| 2026-10-22 | `cfb` | 1 | 35 min | 215,220 | 102 | 1,669 / 8,278 | 413 | clean |
+
+In fork mode libFuzzer counts coverage over all its processes, so `aaf`'s
+`cov` is not comparable with the single-process rows. Earlier, shorter runs
+found the bugs listed in fuzz/README.md ("Regression inputs"): two hangs and
+a division by zero in the imports, a dump that ran away on shared
+references, an overflow in the compound file reader, and three ways the bin
+writer did not write back what it read. Each is fixed, kept as a
+regression input and a unit test. The 24-hour gate run has not been made
+yet.
 
 ## Command-line options
 
@@ -848,6 +948,16 @@ cutthulhu --export-avb BIN OUT.avb
                              write a bin (.cthbin) as a Media Composer bin, with the clips its
                              sequences use from the other bins of its folder as reference clips;
                              an .avb is imported first (a round trip) (docs/spec/avb.md, "Export")
+cutthulhu --import-edl FILE [--rate R]
+                             read an EDL (CMX_3600, File_129) into a sequence and print the bin
+                             as a structure dump (docs/spec/edl.md)
+cutthulhu --export-edl BIN SEQUENCE OUT.edl [--edl-type CMX_3600|File_129]
+                             write a sequence of a bin (.cthbin) as an EDL; an .edl is read
+                             first (a round trip)
+cutthulhu --import-ale FILE   read an ALE shot log into master clips and print the bin as a
+                             structure dump (docs/spec/ale.md)
+cutthulhu --export-ale BIN OUT.ale
+                             write a bin's (.cthbin) clips as an ALE shot log
 cutthulhu --write-media FILE --drive FOLDER [--resolution ID|all]
                              transcode FILE into managed MXF under FOLDER/Avid MediaFiles/MXF
                              and print the files made as JSON (for scripts/check-mxf.py)
@@ -861,6 +971,9 @@ cutthulhu --dump-menus FILE  write the menu bar as JSON ('-' for stdout) and exi
 * `CUTTHULHU_MODULE_PATH`: folders of extra modules (see `--list-providers`).
 * `CUTTHULHU_INTEROP_CORPUS`: where the interchange corpus is kept (Phase 3
   gates).
+* `CUTTHULHU_FUZZ_REGRESSIONS`: set to `fuzz/regressions` when running
+  `tst_cfb`, `tst_aaf` and `tst_avb`, and the tests that build the
+  fuzzers' regression inputs write them there (fuzz/README.md).
 * `LUMENIS_MEDIA_DRIVES`: folders to offer as media drives, besides the
   volumes, for Import, Consolidate/Transcode and the Media Creation setting.
   Separate them as `PATH` does (`:` on macOS and Linux, `;` on Windows).

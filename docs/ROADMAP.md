@@ -627,7 +627,31 @@ and pyaaf2's test suites, made with real Media Composer
     "In the application"). Gate 2 (bins saved by Cutthulhu open in Media
     Composer) is DEFERRED with the other Media Composer checks until the
     owner has the seat again.
-  * Next: 3.5, Media Composer projects (`.avp`) and settings (`.avs`).
+  * 3.5, Media Composer projects (`.avp`) and settings (`.avs`), is
+    DEFERRED: neither pyavb nor any other open reader covers them, no public
+    sample files exist, and black-box observation needs a Media Composer
+    seat. It resumes when the owner can supply sample files (used for tests
+    only, not committed) or has the seat again.
+  * 3.6, EDL, ALE, OTIO and FCP XML, has started. 3.6a is done: EDLs
+    (`src/interop/edl.*`, docs/spec/edl.md: CMX_3600 and File_129 read into
+    a sequence with a tape source per reel, written from one; `--import-edl`,
+    `--export-edl`) and ALE shot logs (`src/interop/ale.*`, docs/spec/ale.md;
+    `--import-ale`, `--export-ale`). In the application: File > Input >
+    Import EDL (p.951-952), Tools > List Tool (`list_tool.*`, p.939-960),
+    shot logs through the Source Browser's Import (p.129-132), File >
+    Output > Export Bin and Export to File as Avid Log Exchange (p.130,
+    p.1174). Tests `tst_edl`, `tst_ale` (with OpenTimelineIO's sample files,
+    Apache-2.0, in the downloaded corpus) and `tst_interchange`. File_129's
+    exact layout is to be checked against Media Composer when the seat is
+    back.
+  * Gate 4 (fuzzing): libFuzzer targets for the compound file, AAF and
+    bin readers, importers and the bin writer (`fuzz/`, `scripts/fuzz.py`,
+    BUILDING.md "Fuzzing") found and fixed 9 bugs (hangs, a division by
+    zero, an overflow, three writer round-trip slips); saved inputs replay
+    on every platform (ctest `fuzz_replay`). Runs of 35-61 minutes per
+    target are clean. The 24-hour run itself is by hand on the self-hosted
+    Linux runner (`.github/workflows/fuzz.yml`, needs `libclang-rt-dev`).
+  * Next: 3.6b, OTIO and FCP XML.
 
 ### Phase 4 — Core editing
 Features in this phase:

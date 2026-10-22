@@ -46,5 +46,16 @@ licence applies to that part (`packaging/licenses/pyaaf2-LICENSE.txt` and
 first interchange corpus. They are downloaded for testing
 (`scripts/interop-corpus.py`) and not distributed.
 
+The EDL and shot log readers and writers (`src/interop/edl.cpp`,
+`src/interop/ale.cpp`, Phase 3.6a) follow the published CMX 3600 format and
+the Editing Guide's Avid Log Specifications, with the behaviour of
+OpenTimelineIO's [CMX 3600](https://github.com/OpenTimelineIO/otio-cmx3600-adapter)
+and [ALE](https://github.com/OpenTimelineIO/otio-ale-adapter) adapters
+(Apache-2.0, Copyright Contributors to the OpenTimelineIO project) as prior
+art: how a transition's two lines relate, `M2` and `LOC` lines, and logs as
+other programs write them. No code of theirs is copied. Their sample files
+are downloaded for testing (`scripts/interop-corpus.py`) and not
+distributed.
+
 When a component is added, also add it to this table and install its licence
 text (see `cmake/Packaging.cmake`).
