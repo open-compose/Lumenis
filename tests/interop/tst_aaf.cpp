@@ -400,8 +400,8 @@ void TestAaf::damaged() {
     QFile source(QDir(folder).filePath(QStringLiteral("pyaaf2/empty.aaf")));
     QVERIFY(source.open(QIODevice::ReadOnly));
     const QByteArray good = source.readAll();
-    QTemporaryDir dir;
-    const QString path = dir.filePath(QStringLiteral("bad.aaf"));
+    // From memory: hundreds of temporary files are slow on Windows, where each is scanned, and the
+    // reader is the same as for a file (openData).
     QRandomGenerator random(7);
     int opened = 0;
     for (int i = 0; i < 200; ++i) {
@@ -409,12 +409,8 @@ void TestAaf::damaged() {
         for (int k = 0; k < 16; ++k) {
             bytes[random.bounded(static_cast<int>(bytes.size()))] = static_cast<char>(random.bounded(256));
         }
-        QFile f(path);
-        QVERIFY(f.open(QIODevice::WriteOnly | QIODevice::Truncate));
-        f.write(bytes);
-        f.close();
         aaf::File file;
-        if (!file.open(path)) continue;
+        if (!file.openData(bytes, QStringLiteral("bad.aaf"))) continue;
         ++opened;
         aaf::canonicalJson(aaf::dump(file));
         for (const aaf::Object& m : file.mobs()) m.string(QStringLiteral("Name"));

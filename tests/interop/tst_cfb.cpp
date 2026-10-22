@@ -213,14 +213,20 @@ void TestCfb::damaged() {
     const QByteArray good = writer.toBytes();
     QTemporaryDir dir;
     const QString path = dir.filePath(QStringLiteral("bad.cfb"));
-    auto tryRead = [&](const QByteArray& bytes) {
-        QFile f(path);
-        if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
-        f.write(bytes);
-        f.close();
+    // Through a file (the fixed cases) or from memory (the random ones: hundreds of temporary files
+    // are slow on Windows, where each is scanned, and the reader is the same either way).
+    auto tryRead = [&](const QByteArray& bytes, bool fromFile = true) {
         cfb::Reader reader;
         QString error;
-        if (!reader.open(path, &error)) return false;
+        if (fromFile) {
+            QFile f(path);
+            if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
+            f.write(bytes);
+            f.close();
+            if (!reader.open(path, &error)) return false;
+        } else if (!reader.openData(bytes, QStringLiteral("bad.cfb"), &error)) {
+            return false;
+        }
         for (const QString& p : reader.paths()) {
             const int id = reader.find(p);
             if (reader.entry(id).isStream() && reader.readAll(id, &error).size() != static_cast<qsizetype>(reader.entry(id).size)) {
@@ -250,7 +256,7 @@ void TestCfb::damaged() {
     for (int i = 0; i < 300; ++i) {
         QByteArray bytes = good;
         for (int k = 0; k < 8; ++k) bytes[random.bounded(static_cast<int>(bytes.size()))] = static_cast<char>(random.bounded(256));
-        tryRead(bytes);
+        tryRead(bytes, false);
     }
 }
 
