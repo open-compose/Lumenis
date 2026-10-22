@@ -13,7 +13,14 @@ name: Fuzz
 # used up). The corpora the run grows are kept on the runner, outside the
 # workspace (actions/checkout cleans it), so each run starts where the last
 # one ended. While it runs, the runner takes no other jobs.
+#
+# GitHub only dispatches a workflow it has seen run, and the default branch
+# does not hold this file yet, so a push that changes it also starts it: the
+# job is skipped then (nothing is fuzzed), but the run makes `gh workflow run`
+# find the workflow (BUILDING.md, Fuzzing: "HTTP 404").
 on:
+  push:
+    paths: ['.github/workflows/fuzz.yml']
   workflow_dispatch:
     inputs:
       hours:
@@ -39,6 +46,7 @@ concurrency:
 jobs:
   fuzz:
     name: Fuzz the interchange parsers (${{ inputs.hours }} h)
+    if: github.event_name == 'workflow_dispatch'
     runs-on: [self-hosted, Linux, X64, cutthulhu, 'ubuntu-${{ inputs.ubuntu }}']
     # Self-hosted jobs may run up to 5 days; this allows a 24-hour run with
     # room for the build, the seeds and the corpus merges between targets.

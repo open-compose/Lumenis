@@ -598,6 +598,16 @@ sanitizers), which Ubuntu packages separately: `sudo apt-get install -y
 libclang-rt-dev` (or `libclang-rt-<version>-dev` to match `clang++
 --version`). The Fuzz workflow checks this first and says so.
 
+### Fuzzing: "HTTP 404: Not Found (.../actions/workflows/fuzz.yml)"
+
+`gh workflow run` only finds a workflow that GitHub has seen run, and a
+workflow only run by hand is not seen until it is on the default branch.
+`fuzz.yml` therefore also runs on a push that changes it, with its job
+skipped, which registers it. If the 404 persists (the registering run is
+missing under the repository's Actions tab), push any change to
+`.github/workflows/fuzz.yml`, or merge the branch into `main`, then run
+`gh workflow run fuzz.yml --ref <branch> -f hours=24`.
+
 ### The self-hosted macOS job waits or fails
 
 * *Queued for a long time:* the Mac is off or asleep, or the runner is
