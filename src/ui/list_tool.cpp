@@ -7,6 +7,7 @@
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFontDatabase>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -220,8 +221,10 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     master_->setObjectName(QStringLiteral("listMaster"));
     master_->setReadOnly(true);
     master_->setLineWrapMode(QPlainTextEdit::NoWrap);
-    QFont mono(QStringLiteral("Monospace"));
-    mono.setStyleHint(QFont::TypeWriter);
+    // The system's fixed-width font. A family by name ("Monospace") that the system lacks (macOS) made
+    // Qt build its family aliases, a quarter of a second, when the font was first used, which held
+    // back playback (tst_playback); tst_playback and tst_interchange fail on that warning.
+    const QFont mono = QFontDatabase::systemFont(QFontDatabase::FixedFont);
     master_->setFont(mono);
     sources_ = new QPlainTextEdit(listTabs_);
     sources_->setObjectName(QStringLiteral("listSources"));

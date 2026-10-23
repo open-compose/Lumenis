@@ -56,6 +56,9 @@ class TestPlayback : public QObject {
 
 private slots:
     void initTestCase() { applyTheme(*qApp); }
+    // A font family asked for by a name the system lacks makes Qt build its family aliases (a quarter
+    // of a second on macOS), which stalls the window: use QFontDatabase::systemFont (list_tool.cpp).
+    void init() { QTest::failOnWarning(QRegularExpression(QStringLiteral("Populating font family aliases"))); }
 
     void playsWithSoundAndQuality() {
         // Play at normal speed plays the clip's sound and the picture keeps

@@ -91,6 +91,9 @@ class TestInterchange : public QObject {
 
 private slots:
     void initTestCase() { applyTheme(*qApp); }
+    // A font family asked for by a name the system lacks makes Qt build its family aliases (a quarter
+    // of a second on macOS), which stalls the window: use QFontDatabase::systemFont (list_tool.cpp).
+    void init() { QTest::failOnWarning(QRegularExpression(QStringLiteral("Populating font family aliases"))); }
 
     // File > Input > Import EDL: the dialog's file, Frame Rate and bin; a sequence and a source for
     // each reel go into the bin. Imported again, the reels' sources are used again.

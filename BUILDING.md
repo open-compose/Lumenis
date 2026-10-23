@@ -518,6 +518,16 @@ for frame and sample counts, or explicit casts. Before pushing, run
 `scripts/check-apple-conversions.py build/clang`: it compiles every file of
 the Clang build as the Mac would see `long double`.
 
+### macOS: `tst_playback` "the picture was N frames from the sound", with many frames dropped
+
+Look for `qt.qpa.fonts: Populating font family aliases took ... ms` in the
+test's log. A widget asked for a font family by a name macOS does not have
+(the List Tool asked for "Monospace"), and Qt built its family aliases, a
+quarter of a second with the window stalled, in the middle of playback. Ask
+for `QFontDatabase::systemFont(QFontDatabase::FixedFont)` (or another system
+font) instead of a family name. `tst_playback` and `tst_interchange` fail on
+that warning, so a new one is named where it happens.
+
 ### A test crashes on Windows (0xc0000374) or macOS but passes on Linux
 
 0xc0000374 is Windows' heap corruption: memory used after it was freed,
