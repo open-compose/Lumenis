@@ -29,6 +29,7 @@ namespace {
 
 using detail::exactNtscRate;
 using detail::SourceTimecode;
+using detail::saturatingAdd;
 using detail::startAtRate;
 using detail::timecodeText;
 using detail::trackList;
@@ -318,10 +319,10 @@ private:
         const Object* clip = firstClip(track.component);
         std::int64_t offset = 0;
         for (int depth = 0; clip && depth < 8; ++depth) {
-            offset += clip->property(QStringLiteral("start_time")).toInt();
+            offset = saturatingAdd(offset, clip->property(QStringLiteral("start_time")).toInt());
             const Object* source = mob(mobIdOf(*clip));
             if (!source) return std::nullopt;
-            if (const auto tc = timecodeOf(*source)) return startAtRate(tc->start, tc->fps, rate) + offset;
+            if (const auto tc = timecodeOf(*source)) return saturatingAdd(startAtRate(tc->start, tc->fps, rate), offset);
             clip = firstClip(trackComponent(*source, clip->property(QStringLiteral("track_id")).toInt(), track.kind));
         }
         return std::nullopt;
@@ -393,7 +394,7 @@ private:
         if (!tracks.isEmpty()) item.fields.insert(QStringLiteral("Tracks"), trackList(video, audio));
         if (start) {
             item.fields.insert(QStringLiteral("Start"), timecodeText(*start, item.editRate, drop));
-            item.fields.insert(QStringLiteral("End"), timecodeText(*start + item.durationFrames, item.editRate, drop));
+            item.fields.insert(QStringLiteral("End"), timecodeText(saturatingAdd(*start, item.durationFrames), item.editRate, drop));
         }
     }
 
@@ -757,7 +758,7 @@ private:
         item.fields.insert(QStringLiteral("Tracks"), list.trimmed());
         if (start) {
             item.fields.insert(QStringLiteral("Start"), timecodeText(*start, item.editRate, drop));
-            item.fields.insert(QStringLiteral("End"), timecodeText(*start + item.durationFrames, item.editRate, drop));
+            item.fields.insert(QStringLiteral("End"), timecodeText(saturatingAdd(*start, item.durationFrames), item.editRate, drop));
         }
         result_.items << item;
     }

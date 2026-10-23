@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <optional>
 
 // What the importers into bins share (aaf_import.cpp, avb_import.cpp): the rules that make an AAF
@@ -89,11 +90,29 @@ inline PictureSize pictureSizeOf(const QString& format) {
     return p;
 }
 
+// a + b, held at the limits of std::int64_t instead of overflowing: timecodes and offsets come from the
+// file, and a damaged one can hold any 64-bit value (found by fuzz_aaf: a start near 2^62).
+inline std::int64_t saturatingAdd(std::int64_t a, std::int64_t b) {
+    constexpr std::int64_t kMax = std::numeric_limits<std::int64_t>::max();
+    constexpr std::int64_t kMin = std::numeric_limits<std::int64_t>::min();
+    if (b > 0 && a > kMax - b) return kMax;
+    if (b < 0 && a < kMin - b) return kMin;
+    return a + b;
+}
+
 // A start timecode counted at `fps` frames per second as frames at the nominal frames per second of
-// `rate`, rounded down (30 fps 00:00:30;00 is 24 fps 00:00:30:00).
+// `rate`, rounded toward zero (30 fps 00:00:30;00 is 24 fps 00:00:30:00). Worked out as whole seconds
+// and the frames left over, so that no product overflows before the division; a start whose result is
+// past std::int64_t is held at its limits.
 inline std::int64_t startAtRate(std::int64_t start, int fps, const Rational& rate) {
     const int nominal = TimecodeFormat::forRate(rate, false).nominalFps;
-    return fps > 0 && nominal > 0 && fps != nominal ? start * nominal / fps : start;
+    if (fps <= 0 || nominal <= 0 || fps == nominal) return start;
+    const std::int64_t seconds = start / fps;
+    const std::int64_t frames = (start % fps) * nominal / fps; // |start % fps| < fps: no overflow
+    constexpr std::int64_t kMax = std::numeric_limits<std::int64_t>::max();
+    if (seconds > kMax / nominal) return kMax;
+    if (seconds < -(kMax / nominal)) return std::numeric_limits<std::int64_t>::min();
+    return saturatingAdd(seconds * nominal, frames);
 }
 
 // The Tracks column: runs of track numbers, video first ("V1 A1-2 A4").

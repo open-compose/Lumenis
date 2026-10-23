@@ -54,6 +54,8 @@ private slots:
     void negativeGroupLength();
     void slowEditRate();
     void sharedStrongRefs();
+    void hugeStart_data();
+    void hugeStart();
 };
 
 void TestAaf::auids() {
@@ -710,6 +712,66 @@ void TestAaf::sharedStrongRefs() {
     const QByteArray dumped = aaf::canonicalJson(aaf::dump(file));
     QCOMPARE(dumped.count("\"class\":\"Filler\""), 1);
     QCOMPARE(dumped.count("\"class\":\"Sequence\""), 2);
+}
+
+void TestAaf::hugeStart_data() {
+    QTest::addColumn<qint64>("tapeStart");
+    QTest::addColumn<qint64>("startTime");
+    QTest::addColumn<QString>("start");
+    // 10^17 seconds of 30 fps timecode, at 24 fps: start * 24 overflowed before the division; it is
+    // 10^17 seconds still, 09:46:40 into its day.
+    QTest::newRow("scaled") << qint64(3'000'000'000'000'000'000) << qint64(0) << QStringLiteral("09:46:40:00");
+    // A clip's StartTime added to the tape's start overflowed; it is held at the largest frame count,
+    // 20:38:45:07 into its day at 24 fps.
+    QTest::newRow("offset") << qint64(30) << std::numeric_limits<qint64>::max() << QStringLiteral("20:38:45:07");
+    // The most negative start converts without overflow too (-7,378,697,629,483,820,647 frames at
+    // 24 fps, with the StartTime of -1), and a timecode before 00:00:00:00 wraps into the day before.
+    QTest::newRow("negative") << std::numeric_limits<qint64>::min() << qint64(-1) << QStringLiteral("07:28:59:17");
+}
+
+// Found by fuzz_aaf in the 24-hour run (UBSan: signed integer overflow): a master clip whose tape
+// timecode starts near 2^62 frames, at 30 fps on a 24 fps clip. Converting the start to the clip's
+// rate (startAtRate) multiplied before dividing, and the clip's StartTime was added unchecked; both
+// overflowed std::int64_t, undefined behaviour, as did End (Start plus the duration). The conversion
+// now divides first, and the sums are held at the limits of std::int64_t (detail::saturatingAdd, which
+// the AVB import shares). CUTTHULHU_FUZZ_REGRESSIONS: see negativeGroupLength.
+void TestAaf::hugeStart() {
+    QFETCH(qint64, tapeStart);
+    QFETCH(qint64, startTime);
+    QFETCH(QString, start);
+    aaf::Builder b;
+    startFile(b);
+    const MobId tapeId = MobId::generate();
+    const aaf::Builder::Ref tape = addMob(b, QStringLiteral("SourceMob"), tapeId, QStringLiteral("TAPE1"));
+    b.setObject(tape, QStringLiteral("EssenceDescription"), b.create(QStringLiteral("TapeDescriptor")));
+    const aaf::Builder::Ref tc = b.create(QStringLiteral("Timecode"));
+    b.setWeak(tc, QStringLiteral("DataDefinition"), kTimecodeDef);
+    b.set(tc, QStringLiteral("Length"), qint64(1000000));
+    b.set(tc, QStringLiteral("Start"), tapeStart);
+    b.set(tc, QStringLiteral("FPS"), 30);
+    b.set(tc, QStringLiteral("Drop"), false);
+    addSlot(b, tape, 1, rationalOf(30, 1), tc);
+    const aaf::Builder::Ref master = addMob(b, QStringLiteral("MasterMob"), MobId::generate(), QStringLiteral("Clip"));
+    const aaf::Builder::Ref clip = b.create(QStringLiteral("SourceClip"));
+    b.setWeak(clip, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(clip, QStringLiteral("Length"), qint64(48));
+    b.set(clip, QStringLiteral("SourceID"), QVariant::fromValue(tapeId));
+    b.set(clip, QStringLiteral("SourceMobSlotID"), 1);
+    b.set(clip, QStringLiteral("StartTime"), startTime);
+    addSlot(b, master, 1, rationalOf(24, 1), clip);
+    QString error;
+    const QByteArray bytes = compact(b.toBytes(&error));
+    QVERIFY2(!bytes.isEmpty(), qPrintable(error));
+    const QString out = qEnvironmentVariable("CUTTHULHU_FUZZ_REGRESSIONS");
+    if (!out.isEmpty()) {
+        QFile f(QDir(out).filePath(QStringLiteral("aaf/huge-start-%1.aaf").arg(QString::fromLatin1(QTest::currentDataTag()))));
+        QVERIFY(f.open(QIODevice::WriteOnly) && f.write(bytes) == bytes.size());
+    }
+    aaf::File file;
+    QVERIFY2(file.openData(bytes, QStringLiteral("huge.aaf"), &error), qPrintable(error));
+    const aaf::ImportResult result = aaf::importMobs(file);
+    QCOMPARE(result.items.size(), 1);
+    QCOMPARE(result.items.first().fields.value(QStringLiteral("Start")), start);
 }
 
 // A damaged file whose lengths and rates do not fit a Rational is an error, not a crash: Rational
