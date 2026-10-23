@@ -905,7 +905,12 @@ fork mode with `--jobs` processes, adds what it finds to the corpus, and
 prints a summary: seconds, executions, executions per second, coverage
 (`cov`, edges; `ft`, features) and corpus size. It stops at the first
 failure, prints the stack and the reproducer as base64, and exits 1; the
-log and the reproducer are in `build/fuzz/artifacts/<target>/`. To
+log and the reproducer are in `build/fuzz/artifacts/<target>/`. With
+`--keep-going` (the Fuzz workflow's way) it fuzzes every target for its
+whole time, keeps every failing input, then groups them into problems by
+their stacks and prints each problem's stack and smallest reproducer, a
+list of the problems after the summary, and exits 1 if there were any: one
+run finds all it can. To
 reproduce: `build/fuzz/bin/fuzz_<target> FILE`, or in any build
 `lumenis_fuzz_replay --target <target> FILE` (the `asan` preset for the
 sanitizer's report). fuzz/README.md, "After a crash", says how to minimise
@@ -920,11 +925,13 @@ The Fuzz workflow (`.github/workflows/fuzz.yml`, run by hand only) builds
 the `fuzz` preset, replays the regression inputs, seeds, and runs every
 target for its share of the hours: with the default weights, 24 hours are
 2.7 for `cfb`, 8 each for `aaf` and `avb` and 5.3 for `avb_rewrite`. It
-prints a progress line every 10 minutes and the summary at the end. The job
-fails on any crash, hang or sanitizer report, with the reproducer as base64
-in the log (nothing is uploaded: the artifact quota is used up). Decode it
-(`base64 -d > input`), reproduce, fix, add it to `fuzz/regressions/`, and
-run the gate again. The corpora it grows are kept in the runner's
+prints a progress line every 10 minutes and the summary at the end. Every
+target runs for its whole share even after a failure (`--keep-going`), and
+the job fails if anything failed: the log lists the problems after the
+summary (`== problems`), and above it gives each one's stack and smallest
+reproducer as base64 (nothing is uploaded: the artifact quota is used up).
+Decode each (`base64 -d > input`), reproduce, fix, add it to
+`fuzz/regressions/`, and run the gate again. The corpora it grows are kept in the runner's
 `_work/Lumenis/cutthulhu-fuzz/`, so a later run starts from them. The gate
 passes when one full 24-hour run is clean; record its summary here.
 Meanwhile the runner takes no other jobs, so start it when CI can wait (or
@@ -946,7 +953,12 @@ found the bugs listed in fuzz/README.md ("Regression inputs"): two hangs and
 a division by zero in the imports, a dump that ran away on shared
 references, an overflow in the compound file reader, and three ways the bin
 writer did not write back what it read. Each is fixed, kept as a
-regression input and a unit test. The 24-hour gate run has not been made
+regression input and a unit test. The first three 24-hour gate runs
+(2026-10-22 and 23, on the WSL runner) each ran `cfb` clean for its 2.7
+hours and then stopped in `aaf`, each on a new bug: a dump that grew with
+the product of repeated references (a timeout), and two signed overflows in
+the import's frame arithmetic, also kept as regression inputs. Runs now go
+on after a failure, so one run reports all it finds; the gate has not passed
 yet.
 
 ## Command-line options

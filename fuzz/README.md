@@ -45,7 +45,11 @@ minimised reproducers in `regressions/` are committed.
     scripts/fuzz.py replay fuzz/regressions     # any build's lumenis_fuzz_replay
 
 A run stops at the first crash, hang (`--timeout`, 10 s an input) or
-sanitizer report, prints the stack, and prints the reproducer as base64. To
+sanitizer report, prints the stack, and prints the reproducer as base64.
+With `--keep-going` (as the Fuzz workflow runs it) every target runs for its
+whole time instead, every failing input is kept, and at the end they are
+grouped into problems (the kind of failure and the first frame of the stack
+in our code), each printed with its stack and its smallest reproducer. To
 reproduce: `base64 -d > input`, then `build/fuzz/bin/fuzz_<target> input`,
 or `lumenis_fuzz_replay --target <target> input` in any build (under the
 `asan` preset for a sanitizer report).
@@ -74,6 +78,9 @@ or `lumenis_fuzz_replay --target <target> input` in any build (under the
 | `regressions/avb_rewrite/long-creator.avb` | avb_rewrite | A creator longer than the header's 30-byte field, with a 0 as its 30th character: cut there, it read back without the 0, so the rewrite did not rewrite to itself. | `tst_avb writesLongCreator` |
 | `regressions/aaf/negative-group-length.aaf` | aaf | The same hang in the AAF import, an OperationGroup with a negative Length (found by reading the AAF import after the bin import's; the file was then made to reproduce it). | `tst_aaf negativeGroupLength` |
 | `regressions/aaf/slow-edit-rate.aaf` | aaf | A sequence at an edit rate of 1/3 (no timecode: 0 nominal frames a second) with a timecode slot: making its Start divided by its 0 frames a day (SIGFPE). | `tst_aaf slowEditRate` |
+| `regressions/aaf/shared-strong-refs.aaf` | aaf | Found by the first 24-hour run (a timeout): strong reference vectors whose index lists one element many times, nested, so the dump wrote each element as often as it was listed, the product of the counts at every level (25 s for 250 KB). Each storage is now dumped once. | `tst_aaf sharedStrongRefs` |
+| `regressions/aaf/huge-start-*.aaf` | aaf | Found by the second 24-hour run (UBSan): a tape timecode start near 2^62 frames at 30 fps on a 24 fps clip; converting it multiplied before dividing, and adding the clip's StartTime and the duration overflowed. | `tst_aaf hugeStart` |
+| `regressions/aaf/huge-lengths.aaf` | aaf | Found by the third 24-hour run (UBSan): an effect whose input segments' lengths, near 2^63, overflowed when added up. Frame counts from AAF files are now clamped to 2^40 as they are read. | `tst_aaf hugeLengths` |
 | `regressions/cfb/huge-stream-size.cfb` | cfb | A version 4 stream of size 0xFFFFFFFFFFFFFF93: its sector count wrapped to 0 and `read()` indexed an empty chain (UBSan). | `tst_cfb hugeStreamSize` |
 
 The tests write these files when `CUTTHULHU_FUZZ_REGRESSIONS` is set to this folder

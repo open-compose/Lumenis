@@ -12,8 +12,11 @@ and pyavb's test files, MIT; they are not committed), the small inputs our own w
 build, `seed` keeps only the inputs that add coverage (libFuzzer's -merge=1).
 
 `run` stops at the first crash, hang (-timeout) or sanitizer report, prints the reproducer as base64
-(the CI job uploads nothing) and exits 1. Each target's statistics (executions, coverage, corpus)
-are printed at the end, and written as JSON with --stats.
+(the CI job uploads nothing) and exits 1. With --keep-going it fuzzes every target for its whole
+time instead, keeping each failing input, then groups them into problems by their stacks (a
+problem is the first frame in our code and the kind of failure) and prints each problem's stack and
+smallest reproducer, and exits 1 if there were any. Each target's statistics (executions,
+coverage, corpus) are printed at the end, and written as JSON with --stats.
 """
 from __future__ import annotations
 
@@ -157,9 +160,12 @@ def run_target(t: str, seconds: int, args) -> dict:
                f"-max_len={args.max_len or MAX_LEN[t]}", f"-rss_limit_mb={args.rss_limit}",
                f"-artifact_prefix={artifacts}{os.sep}", "-print_final_stats=1"]
     if args.jobs > 1:
-        # Fork mode: N processes share the corpus. It ignores hangs and running out of memory unless
-        # told otherwise; for the gate, both are failures like crashes, and the first stops the run.
-        command += [f"-fork={args.jobs}", "-ignore_timeouts=0", "-ignore_ooms=0", "-ignore_crashes=0"]
+        # Fork mode: N processes share the corpus. Hangs and running out of memory are failures like
+        # crashes; without --keep-going the first stops the run, with it each is saved and the fuzzer
+        # goes on (libFuzzer's -ignore_*: the child that failed is replaced).
+        ignore = "1" if args.keep_going else "0"
+        command += [f"-fork={args.jobs}", f"-ignore_timeouts={ignore}", f"-ignore_ooms={ignore}",
+                    f"-ignore_crashes={ignore}"]
     print(f"== fuzz_{t} for {seconds} s: {' '.join(command)}", flush=True)
     start = time.time()
 
@@ -169,18 +175,38 @@ def run_target(t: str, seconds: int, args) -> dict:
             found = m
         return found
 
-    with open(log, "w") as out:
-        process = subprocess.Popen(command, stdout=out, stderr=subprocess.STDOUT, env=env())
-        # A line of progress every few minutes, so that a long run's log shows it is alive.
-        while True:
-            try:
-                code = process.wait(timeout=args.progress)
-                break
-            except subprocess.TimeoutExpired:
-                m = latest()
-                if m:
-                    print(f"   {round(time.time() - start)} s: {m.group(1)} executions, cov {m.group(2)}, "
-                          f"ft {m.group(3)}, corpus {m.group(4)}, {m.group(6)} exec/s", flush=True)
+    log.write_text("")
+    code = 0
+    seen: set = set()
+    while True:
+        with open(log, "a") as out:
+            process = subprocess.Popen(command, stdout=out, stderr=subprocess.STDOUT, env=env())
+            # A line of progress every few minutes, so that a long run's log shows it is alive.
+            while True:
+                try:
+                    code = process.wait(timeout=args.progress)
+                    break
+                except subprocess.TimeoutExpired:
+                    m = latest()
+                    if m:
+                        print(f"   {round(time.time() - start)} s: {m.group(1)} executions, cov {m.group(2)}, "
+                              f"ft {m.group(3)}, corpus {m.group(4)}, {m.group(6)} exec/s", flush=True)
+        # One process stops at its first failure: with --keep-going it is started again for the time
+        # left (fork mode goes on by itself). The failing input is in the artifacts already; when it is
+        # one of the corpus's own files, that file is moved out, or the next start would fail on it
+        # again. A start that saves nothing new ends the loop.
+        left = seconds - round(time.time() - start)
+        saved = {f.name for f in artifacts.iterdir() if f.name != "fuzz.log"}
+        if args.jobs > 1 or not args.keep_going or code == 0 or left < 10 or saved == seen:
+            break
+        seen = saved
+        failing = {f.read_bytes() for f in artifacts.iterdir() if f.name in saved}
+        sizes = {len(b) for b in failing}
+        for c in list(corpus.iterdir()):
+            if c.is_file() and c.stat().st_size in sizes and c.read_bytes() in failing:
+                c.rename(artifacts / f"corpus-{c.name}")
+        print(f"   {round(time.time() - start)} s: stopped (exit {code}); again for the {left} s left", flush=True)
+        command = [a if not a.startswith("-max_total_time=") else f"-max_total_time={left}" for a in command]
     elapsed = time.time() - start
     text = log.read_text(errors="replace")
     last = latest()
@@ -191,16 +217,74 @@ def run_target(t: str, seconds: int, args) -> dict:
     m = re.search(r"stat::number_of_executed_units:\s*(\d+)", text)
     if m and args.jobs <= 1:
         stats["executions"] = max(stats["executions"], int(m.group(1)))
-    found = [f for f in artifacts.iterdir() if f.name != "fuzz.log"]
+    found = sorted((f for f in artifacts.iterdir() if f.name != "fuzz.log" and not f.name.startswith("corpus-")),
+                   key=lambda f: f.name)
     stats["artifacts"] = [f.name for f in found]
-    if code != 0 or found:
+    stats["problems"] = []
+    if args.keep_going and found:
+        stats["problems"] = report_problems(t, fuzzer, found, args)
+    elif code != 0 or found:
         print("\n".join(text.splitlines()[-80:]))
         for f in found:
-            data = f.read_bytes()
-            print(f"\n== reproducer {f.name} ({len(data)} bytes), base64; decode with `base64 -d > input`, then "
-                  f"build/fuzz/bin/fuzz_{t} input (or lumenis_fuzz_replay --target {t} input):")
-            print(base64.encodebytes(data).decode(), end="")
+            print_reproducer(t, f)
     return stats
+
+
+def print_reproducer(t: str, f: Path) -> None:
+    data = f.read_bytes()
+    print(f"\n== reproducer {f.name} ({len(data)} bytes), base64; decode with `base64 -d > input`, then "
+          f"build/fuzz/bin/fuzz_{t} input (or lumenis_fuzz_replay --target {t} input):")
+    print(base64.encodebytes(data).decode(), end="", flush=True)
+
+
+# A stack frame in our code ("#3 0x... in lumenis::interop::aaf::...(...) /path/src/interop/aaf.cpp:520:65"),
+# and the sanitizer's or libFuzzer's one-line summary of what went wrong.
+OUR_FRAME = re.compile(r"#\d+ 0x[0-9a-f]+ in (lumenis::(?:[^(\s]|\(anonymous namespace\))+).*?((?:src|fuzz)/[^\s:]+:\d+)")
+SUMMARY = re.compile(r"^SUMMARY: (.*)$", re.M)
+# Problems whose stack and reproducer are printed, by target; the rest are counted.
+MAX_PRINTED = 20
+
+
+def report_problems(t: str, fuzzer: Path, found: list, args) -> list:
+    """Each failing input run once more, alone, for its stack, and grouped by where it fails.
+
+    The same bug is usually saved many times (each process, each mutation that reaches it). A problem
+    is the kind of failure (the artifact's prefix: crash, timeout, oom, leak, slow-unit) and the first
+    frame of the stack in our code; failures with no such frame are told apart by the summary line.
+    """
+    groups: dict = {}
+    for f in found:
+        kind = f.name.rsplit("-", 1)[0]  # crash, timeout, oom, leak, slow-unit
+        try:
+            run = subprocess.run([str(fuzzer), f"-timeout={args.timeout}", f"-rss_limit_mb={args.rss_limit}", str(f)],
+                                 capture_output=True, text=True, errors="replace", env=env(),
+                                 timeout=args.timeout * 3 + 60)
+            output = run.stdout + run.stderr
+        except subprocess.TimeoutExpired as e:
+            # What it printed before it was stopped (bytes, even in text mode, on some Pythons).
+            output = "".join(x.decode(errors="replace") if isinstance(x, bytes) else (x or "") for x in (e.stdout, e.stderr))
+        frame = OUR_FRAME.search(output)
+        summary = SUMMARY.search(output)
+        where = (f"{frame.group(1)} ({frame.group(2)})" if frame else summary.group(1) if summary
+                 else "nothing when run alone (slow, or it depends on what ran before)")
+        key = (kind, where)
+        g = groups.setdefault(key, {"kind": kind, "where": where, "files": [], "output": output})
+        g["files"].append(f)
+    problems = sorted(groups.values(), key=lambda g: (g["kind"], g["where"]))
+    print(f"\n== fuzz_{t}: {len(found)} failing inputs, {len(problems)} problems", flush=True)
+    for i, g in enumerate(problems, 1):
+        smallest = min(g["files"], key=lambda f: f.stat().st_size)
+        print(f"\n== problem {i} of {len(problems)}: {g['kind']} in {g['where']} ({len(g['files'])} inputs)")
+        if i > MAX_PRINTED:
+            continue
+        lines = [l for l in g["output"].splitlines() if l.strip()]
+        start = next((n for n, l in enumerate(lines) if "ERROR:" in l or "runtime error" in l or "ALARM" in l), 0)
+        print("\n".join(lines[start:start + 40]))
+        print_reproducer(t, smallest)
+    if len(problems) > MAX_PRINTED:
+        print(f"\n(the stacks and reproducers of problems past {MAX_PRINTED} are not printed: they are in {found[0].parent})")
+    return [{"kind": g["kind"], "where": g["where"], "inputs": len(g["files"]),
+             "reproducer": min(g["files"], key=lambda f: f.stat().st_size).name} for g in problems]
 
 
 def cmd_run(args) -> int:
@@ -220,9 +304,19 @@ def cmd_run(args) -> int:
     print("\n== summary")
     print(f"{'target':<12} {'seconds':>8} {'executions':>12} {'exec/s':>8} {'cov':>6} {'ft':>7} {'corpus':>7}  result")
     for r in results:
-        result = "clean" if r["exit"] == 0 and not r["artifacts"] else f"FAILED ({', '.join(r['artifacts']) or 'exit ' + str(r['exit'])})"
+        if r["exit"] == 0 and not r["artifacts"]:
+            result = "clean"
+        elif r["problems"]:
+            result = f"FAILED ({len(r['problems'])} problems, {len(r['artifacts'])} inputs)"
+        else:
+            result = f"FAILED ({', '.join(r['artifacts']) or 'exit ' + str(r['exit'])})"
         print(f"{r['target']:<12} {r['seconds']:>8} {r['executions']:>12} {r['exec_per_s']:>8} {r['coverage']:>6} "
               f"{r['features']:>7} {r['corpus']:>7}  {result}")
+    problems = [(r["target"], p) for r in results for p in r["problems"]]
+    if problems:
+        print("\n== problems")
+        for t, p in problems:
+            print(f"{t:<12} {p['kind']:<9} {p['where']}  ({p['inputs']} inputs; {p['reproducer']})")
     if args.stats:
         Path(args.stats).write_text(json.dumps(results, indent=2) + "\n")
     return 1 if failed else 0
@@ -263,7 +357,9 @@ def main() -> int:
                    help="the corpora, which the run adds to (default: %(default)s)")
     r.add_argument("--artifacts", default=str(ROOT / "build" / "fuzz" / "artifacts"),
                    help="logs and reproducers, by target (default: %(default)s)")
-    r.add_argument("--keep-going", action="store_true", help="run the other targets after a failure")
+    r.add_argument("--keep-going", action="store_true",
+                   help="fuzz every target for its whole time, keep every failing input, and report them "
+                        "grouped into problems at the end")
     r.add_argument("--progress", type=int, default=600, help="seconds between progress lines (default 600)")
     r.add_argument("--stats", help="write the statistics as JSON here")
     r.set_defaults(func=cmd_run)

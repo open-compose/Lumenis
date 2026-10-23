@@ -7,10 +7,12 @@ name: Fuzz
 #
 #   gh workflow run fuzz.yml --ref <branch> -f hours=24
 #
-# The time is split between the targets (scripts/fuzz.py run). The job fails
-# on the first crash, hang or sanitizer report and prints the stack and the
-# reproducer as base64 in the log; nothing is uploaded (the artifact quota is
-# used up). The corpora the run grows are kept on the runner, outside the
+# The time is split between the targets (scripts/fuzz.py run). Every target
+# runs for its whole time even after a crash, hang or sanitizer report
+# (--keep-going); at the end the failing inputs are grouped into problems by
+# their stacks, each problem's stack and smallest reproducer (base64) are
+# printed, and the job fails if there were any. Nothing is uploaded (the
+# artifact quota is used up). The corpora the run grows are kept on the runner, outside the
 # workspace (actions/checkout cleans it), so each run starts where the last
 # one ended. While it runs, the runner takes no other jobs.
 #
@@ -80,6 +82,6 @@ jobs:
 
       - name: Fuzz
         run: |
-          python3 scripts/fuzz.py run --time "${{ inputs.hours }}h" --jobs "${{ inputs.jobs }}" \
+          python3 scripts/fuzz.py run --keep-going --time "${{ inputs.hours }}h" --jobs "${{ inputs.jobs }}" \
             --corpus-dir "$FUZZ_HOME/corpus" --artifacts "$FUZZ_HOME/artifacts" \
             --stats "$FUZZ_HOME/stats.json"
