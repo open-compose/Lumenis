@@ -523,10 +523,13 @@ the Clang build as the Mac would see `long double`.
 Look for `qt.qpa.fonts: Populating font family aliases took ... ms` in the
 test's log. A widget asked for a font family by a name macOS does not have
 (the List Tool asked for "Monospace"), and Qt built its family aliases, a
-quarter of a second with the window stalled, in the middle of playback. Ask
-for `QFontDatabase::systemFont(QFontDatabase::FixedFont)` (or another system
-font) instead of a family name. `tst_playback` and `tst_interchange` fail on
-that warning, so a new one is named where it happens.
+quarter of a second with the window stalled, in the middle of playback. Use
+a family that `QFontDatabase::families()` lists, as `fixedFont()` in
+`src/ui/list_tool.cpp` does: even `QFontDatabase::systemFont(FixedFont)` can
+name the missing generic family (the offscreen platform the tests use on
+macOS), and `QFontDatabase::hasFamily` resolves aliases itself.
+`tst_playback` and `tst_interchange` fail on that warning, so a new one is
+named where it happens.
 
 ### A test crashes on Windows (0xc0000374) or macOS but passes on Linux
 

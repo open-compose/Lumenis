@@ -35,6 +35,30 @@ namespace lumenis::ui {
 
 namespace {
 
+// A fixed-width font whose family the system has. A family it lacks makes Qt build its family aliases
+// when the font is first used, a quarter of a second on macOS with the window stalled, which held back
+// playback (tst_playback; BUILDING.md). Asking for "Monospace" did that, and so does the system fixed
+// font where the platform only names the generic family (the offscreen platform the tests use on
+// macOS). QFontDatabase::hasFamily resolves aliases itself, so the families are looked up directly.
+QFont fixedFont() {
+    QFont font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    const QStringList families = QFontDatabase::families();
+    if (!families.contains(font.family(), Qt::CaseInsensitive)) {
+        for (const char* name : {"Menlo", "Consolas", "DejaVu Sans Mono", "Liberation Mono", "Courier New", "Courier"}) {
+            if (families.contains(QLatin1String(name), Qt::CaseInsensitive)) {
+                font.setFamily(QLatin1String(name));
+                break;
+            }
+        }
+    }
+    font.setStyleHint(QFont::TypeWriter);
+    return font;
+}
+
+} // namespace
+
+namespace {
+
 // The Output Format menu (p.945 picture, p.947 step 2): the EDL types, then the cut and change list
 // types. Only CMX_3600 and File_129 are written so far.
 struct OutputFormat {
@@ -221,10 +245,7 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     master_->setObjectName(QStringLiteral("listMaster"));
     master_->setReadOnly(true);
     master_->setLineWrapMode(QPlainTextEdit::NoWrap);
-    // The system's fixed-width font. A family by name ("Monospace") that the system lacks (macOS) made
-    // Qt build its family aliases, a quarter of a second, when the font was first used, which held
-    // back playback (tst_playback); tst_playback and tst_interchange fail on that warning.
-    const QFont mono = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    const QFont mono = fixedFont();
     master_->setFont(mono);
     sources_ = new QPlainTextEdit(listTabs_);
     sources_->setObjectName(QStringLiteral("listSources"));
