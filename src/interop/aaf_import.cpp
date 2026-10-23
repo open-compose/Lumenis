@@ -27,6 +27,7 @@ namespace {
 using detail::exactNtscRate;
 using detail::rescale;
 using detail::SourceTimecode;
+using detail::clampFrames;
 using detail::saturatingAdd;
 using detail::startAtRate;
 using detail::timecodeText;
@@ -191,7 +192,7 @@ private:
             const auto number = static_cast<int>(s.integer(QStringLiteral("PhysicalTrackNumber"), counted));
             t.name = QStringLiteral("%1%2").arg(t.kind == DataKind::Picture ? QLatin1Char('V') : QLatin1Char('A')).arg(number);
             t.rate = rateOf(s.value(QStringLiteral("EditRate")), Rational(25));
-            t.length = t.segment.integer(QStringLiteral("Length"));
+            t.length = clampFrames(t.segment.integer(QStringLiteral("Length")));
             out.append(t);
         }
         return out;
@@ -204,7 +205,7 @@ private:
             Object c = s.object(QStringLiteral("Segment"));
             for (int depth = 0; c && depth < 8; ++depth) {
                 if (c.isA(QStringLiteral("Timecode"))) {
-                    return SourceTimecode{c.integer(QStringLiteral("Start")), static_cast<int>(c.integer(QStringLiteral("FPS"))),
+                    return SourceTimecode{clampFrames(c.integer(QStringLiteral("Start"))), static_cast<int>(c.integer(QStringLiteral("FPS"))),
                                           c.value(QStringLiteral("Drop")).toBool()};
                 }
                 if (c.isA(QStringLiteral("Pulldown"))) {
@@ -241,7 +242,7 @@ private:
         Object clip = firstSourceClip(segment);
         std::int64_t offset = 0;
         for (int depth = 0; clip && depth < 8; ++depth) {
-            offset = saturatingAdd(offset, clip.integer(QStringLiteral("StartTime")));
+            offset = saturatingAdd(offset, clampFrames(clip.integer(QStringLiteral("StartTime"))));
             const Object source = mob(clip.mobId(QStringLiteral("SourceID")));
             if (!source) return std::nullopt;
             if (const auto tc = timecodeOf(source)) {
@@ -418,7 +419,7 @@ private:
                 s.kind = model::ClipSource::Kind::Clip;
                 s.mob = master;
                 s.name = valueIn(names_, master, mob(master).string(QStringLiteral("Name")));
-                s.offset = clip.integer(QStringLiteral("StartTime"));
+                s.offset = clampFrames(clip.integer(QStringLiteral("StartTime")));
                 // A subclip shows its master's tape (p.407).
                 const QString tape = valueIn(tapes_, master);
                 if (!tape.isEmpty()) item.fields.insert(QStringLiteral("Tape"), tape);
@@ -593,7 +594,7 @@ private:
         model::Segment s;
         s.sourceMob = id;
         s.length = length;
-        s.sourceIn = clip.integer(QStringLiteral("StartTime"));
+        s.sourceIn = clampFrames(clip.integer(QStringLiteral("StartTime")));
         const qint64 slotId = clip.integer(QStringLiteral("SourceMobSlotID"));
         if (items_.count(id)) {
             s.clipId = items_.at(id);
@@ -632,7 +633,7 @@ private:
                 seq.setTimecodeTrack(true);
                 if (!start) {
                     drop = segment.value(QStringLiteral("Drop")).toBool();
-                    start = startAtRate(segment.integer(QStringLiteral("Start")),
+                    start = startAtRate(clampFrames(segment.integer(QStringLiteral("Start"))),
                                         static_cast<int>(segment.integer(QStringLiteral("FPS"))), item.editRate);
                 }
             }

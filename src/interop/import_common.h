@@ -35,11 +35,24 @@ inline Rational exactNtscRate(const Rational& r) {
     return r;
 }
 
-// Frames at one rate as frames at another, rounded down.
+// The largest frame count an import keeps: 2^40 frames is over 1,400 years at 24 fps, far past any real
+// clip, and lengths, offsets and cut points this small can be added up over every segment a file can
+// hold without overflowing std::int64_t. A damaged file can hold any 64-bit value in each (fuzz_aaf
+// found such sums overflowing: tst_aaf hugeStart, hugeLengths), so frame counts read from a file go
+// through clampFrames.
+inline constexpr std::int64_t kMaxFrames = std::int64_t{1} << 40;
+
+inline std::int64_t clampFrames(std::int64_t frames) {
+    return std::clamp(frames, -kMaxFrames, kMaxFrames);
+}
+
+// Frames at one rate as frames at another, rounded down, and clamped (clampFrames): a damaged file's
+// rates can make a small count huge.
 inline std::int64_t rescale(std::int64_t frames, const Rational& from, const Rational& to) {
+    frames = clampFrames(frames);
     if (from == to || from.num() <= 0 || to.num() <= 0) return frames;
     const Rational r = Rational(frames) * to / from;
-    return r.floor();
+    return clampFrames(r.floor());
 }
 
 // Frames as timecode text at the rate, wrapped into one day; drop frame only where the rate has it.

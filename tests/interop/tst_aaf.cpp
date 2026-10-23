@@ -56,6 +56,7 @@ private slots:
     void sharedStrongRefs();
     void hugeStart_data();
     void hugeStart();
+    void hugeLengths();
 };
 
 void TestAaf::auids() {
@@ -718,15 +719,16 @@ void TestAaf::hugeStart_data() {
     QTest::addColumn<qint64>("tapeStart");
     QTest::addColumn<qint64>("startTime");
     QTest::addColumn<QString>("start");
-    // 10^17 seconds of 30 fps timecode, at 24 fps: start * 24 overflowed before the division; it is
-    // 10^17 seconds still, 09:46:40 into its day.
-    QTest::newRow("scaled") << qint64(3'000'000'000'000'000'000) << qint64(0) << QStringLiteral("09:46:40:00");
-    // A clip's StartTime added to the tape's start overflowed; it is held at the largest frame count,
-    // 20:38:45:07 into its day at 24 fps.
-    QTest::newRow("offset") << qint64(30) << std::numeric_limits<qint64>::max() << QStringLiteral("20:38:45:07");
-    // The most negative start converts without overflow too (-7,378,697,629,483,820,647 frames at
-    // 24 fps, with the StartTime of -1), and a timecode before 00:00:00:00 wraps into the day before.
-    QTest::newRow("negative") << std::numeric_limits<qint64>::min() << qint64(-1) << QStringLiteral("07:28:59:17");
+    // Frame counts from the file are clamped to 2^40 (detail::kMaxFrames) before they are converted
+    // or added. A 30 fps start of 3 * 10^18 frames, whose start * 24 overflowed, is 2^40 frames: at
+    // 24 fps 879,609,302,220, 07:13:12:12 into its day.
+    QTest::newRow("scaled") << qint64(3'000'000'000'000'000'000) << qint64(0) << QStringLiteral("07:13:12:12");
+    // A clip's StartTime added to the tape's start overflowed; clamped, 30 frames (24 at 24 fps) plus
+    // 2^40 is 21:01:31:16 into its day.
+    QTest::newRow("offset") << qint64(30) << std::numeric_limits<qint64>::max() << QStringLiteral("21:01:31:16");
+    // The most negative start is -2^40 frames, -879,609,302,221 at 24 fps with the StartTime of -1; a
+    // timecode before 00:00:00:00 wraps into the day before.
+    QTest::newRow("negative") << std::numeric_limits<qint64>::min() << qint64(-1) << QStringLiteral("16:46:47:11");
 }
 
 // Found by fuzz_aaf in the 24-hour run (UBSan: signed integer overflow): a master clip whose tape
@@ -774,6 +776,50 @@ void TestAaf::hugeStart() {
     QCOMPARE(result.items.first().fields.value(QStringLiteral("Start")), start);
 }
 
+// Found by fuzz_aaf in the third 24-hour run (UBSan: signed integer overflow in the import's
+// Flattener): an effect whose input segments' lengths, near 2^63, were added up to fit them to the
+// effect's length, overflowing. Lengths are now clamped to 2^40 frames as they are read
+// (detail::clampFrames), so no such sum can overflow; the effect lasts its own 10 frames.
+// CUTTHULHU_FUZZ_REGRESSIONS: see negativeGroupLength.
+void TestAaf::hugeLengths() {
+    aaf::Builder b;
+    startFile(b);
+    const aaf::Builder::Ref m = addMob(b, QStringLiteral("CompositionMob"), MobId::generate(), QStringLiteral("Cut"));
+    b.set(m, QStringLiteral("UsageCode"), QStringLiteral("Usage_TopLevel"));
+    const aaf::Builder::Ref inputs = b.create(QStringLiteral("Sequence"));
+    b.setWeak(inputs, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(inputs, QStringLiteral("Length"), std::numeric_limits<qint64>::max());
+    for (const qint64 length : {std::numeric_limits<qint64>::max() - 1, qint64{1} << 62}) {
+        const aaf::Builder::Ref filler = b.create(QStringLiteral("Filler"));
+        b.setWeak(filler, QStringLiteral("DataDefinition"), kPictureDef);
+        b.set(filler, QStringLiteral("Length"), length);
+        b.append(inputs, QStringLiteral("Components"), filler);
+    }
+    const aaf::Builder::Ref group = b.create(QStringLiteral("OperationGroup"));
+    b.setWeak(group, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(group, QStringLiteral("Length"), qint64(10));
+    b.append(group, QStringLiteral("InputSegments"), inputs);
+    const aaf::Builder::Ref seq = b.create(QStringLiteral("Sequence"));
+    b.setWeak(seq, QStringLiteral("DataDefinition"), kPictureDef);
+    b.set(seq, QStringLiteral("Length"), qint64(10));
+    b.append(seq, QStringLiteral("Components"), group);
+    addSlot(b, m, 1, rationalOf(25, 1), seq);
+    QString error;
+    const QByteArray bytes = compact(b.toBytes(&error));
+    QVERIFY2(!bytes.isEmpty(), qPrintable(error));
+    const QString out = qEnvironmentVariable("CUTTHULHU_FUZZ_REGRESSIONS");
+    if (!out.isEmpty()) {
+        QFile f(QDir(out).filePath(QStringLiteral("aaf/huge-lengths.aaf")));
+        QVERIFY(f.open(QIODevice::WriteOnly) && f.write(bytes) == bytes.size());
+    }
+    aaf::File file;
+    QVERIFY2(file.openData(bytes, QStringLiteral("lengths.aaf"), &error), qPrintable(error));
+    const aaf::ImportResult result = aaf::importMobs(file);
+    QCOMPARE(result.items.size(), 1);
+    const model::Sequence sequence = model::Sequence::fromItem(result.items.first());
+    QCOMPARE(sequence.duration(), 10);
+}
+
 // A damaged file whose lengths and rates do not fit a Rational is an error, not a crash: Rational
 // throws rather than wrap, and importFile() reports it.
 void TestAaf::numbersPastRational() {
@@ -790,7 +836,9 @@ void TestAaf::numbersPastRational() {
     const aaf::Builder::Ref second = b.create(QStringLiteral("Filler"));
     b.setWeak(second, QStringLiteral("DataDefinition"), kPictureDef);
     b.set(second, QStringLiteral("Length"), std::numeric_limits<qint64>::max() / 3);
-    addSlot(b, m, 2, rationalOf(2147483647, 2147483646), second);
+    // Lengths are clamped to 2^40 frames (detail::kMaxFrames); at one frame in 2^31 - 1 seconds, that
+    // is still past what converts to 25 fps.
+    addSlot(b, m, 2, rationalOf(1, 2147483647), second);
     QTemporaryDir dir;
     const QString path = dir.filePath(QStringLiteral("huge.aaf"));
     QString error;
