@@ -602,7 +602,9 @@ hand.
   install it).
 * *"Only N GB free on the runner's disk", or "No space left on device"
   (CMake then calls the compiler broken):* the self-hosted jobs need about
-  5 GB; the "Disk space" step stops a job with less. Each keeps its build
+  5 GB, in the work folder and in the temporary folder (`/tmp`, where the
+  compiler writes; it can be full when the work folder is not); the "Disk
+  space" step stops a job with less of either. Each keeps its build
   folders (`build/ci`, `build/asan`, several GB) in the runner's work
   folder, and `keep-build.sh` the newest five packages. In WSL, see what
   is using the disk with `sudo du -xh --max-depth=2 / | sort -h | tail`,

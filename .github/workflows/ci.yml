@@ -168,6 +168,7 @@ jobs:
         # The bootstrap script must install all of Qt's Wayland support:
         # Ubuntu 26.04 splits it over several packages (BUILDING.md).
         run: |
+          set -o pipefail # a failed configure must fail the step, not pass through tee
           cmake --preset ci ${CHECK_PYTHON:+-DPython3_EXECUTABLE="$CHECK_PYTHON"} 2>&1 | tee configure.log
           ! grep -q "Wayland support is incomplete" configure.log
 
@@ -325,13 +326,18 @@ jobs:
       - name: Disk space
         # A full disk fails the build in odd places (CMake reports the compiler as broken):
         # say so first (BUILDING.md, "The self-hosted Windows or Linux job waits or fails").
+        # The temporary folder too: the compiler writes there, and it can be another disk.
         run: |
-          free=$(df -Pk . | awk 'NR==2 {print int($4 / 1048576)}')
-          echo "$free GB free on the runner's disk"
-          if [ "$free" -lt 5 ]; then
-            echo "::error::Only $free GB free on the runner's disk ($(pwd)): CI needs about 5 GB. Free some space on that machine (BUILDING.md, The self-hosted Windows or Linux job waits or fails)"
-            exit 1
-          fi
+          status=0
+          for dir in . "${TMPDIR:-/tmp}"; do
+            free=$(df -Pk "$dir" | awk 'NR==2 {print int($4 / 1048576)}')
+            echo "$free GB free for $dir"
+            if [ "$free" -lt 5 ]; then
+              echo "::error::Only $free GB free for $dir ($(cd "$dir" && pwd)) on the runner: CI needs about 5 GB. Free some space on that machine (BUILDING.md, The self-hosted Windows or Linux job waits or fails)"
+              status=1
+            fi
+          done
+          exit $status
 
       - name: Python packages for the checks
         # olefile, pyaaf2, pyavb and OpenTimelineIO in a virtual environment in
@@ -651,13 +657,18 @@ jobs:
       - name: Disk space
         # A full disk fails the build in odd places (CMake reports the compiler as broken):
         # say so first (BUILDING.md, "The self-hosted Windows or Linux job waits or fails").
+        # The temporary folder too: the compiler writes there, and it can be another disk.
         run: |
-          free=$(df -Pk . | awk 'NR==2 {print int($4 / 1048576)}')
-          echo "$free GB free on the runner's disk"
-          if [ "$free" -lt 5 ]; then
-            echo "::error::Only $free GB free on the runner's disk ($(pwd)): CI needs about 5 GB. Free some space on that machine (BUILDING.md, The self-hosted Windows or Linux job waits or fails)"
-            exit 1
-          fi
+          status=0
+          for dir in . "${TMPDIR:-/tmp}"; do
+            free=$(df -Pk "$dir" | awk 'NR==2 {print int($4 / 1048576)}')
+            echo "$free GB free for $dir"
+            if [ "$free" -lt 5 ]; then
+              echo "::error::Only $free GB free for $dir ($(cd "$dir" && pwd)) on the runner: CI needs about 5 GB. Free some space on that machine (BUILDING.md, The self-hosted Windows or Linux job waits or fails)"
+              status=1
+            fi
+          done
+          exit $status
 
       - name: Python packages for the checks
         # olefile, pyaaf2, pyavb and OpenTimelineIO in a virtual environment in
@@ -674,6 +685,7 @@ jobs:
 
       - name: Configure
         run: |
+          set -o pipefail # a failed configure must fail the step, not pass through tee
           cmake --preset ci ${CHECK_PYTHON:+-DPython3_EXECUTABLE="$CHECK_PYTHON"} 2>&1 | tee configure.log
           ! grep -q "Wayland support is incomplete" configure.log
 
