@@ -18,6 +18,7 @@
       scripts\setup-windows-runner.ps1 keep-wsl <distribution>
       scripts\setup-windows-runner.ps1 unkeep-wsl <distribution>
       scripts\setup-windows-runner.ps1 builds
+      scripts\setup-windows-runner.ps1 python
 
     The token comes from GitHub: the repository's Settings > Actions > Runners >
     New self-hosted runner (install), or the runner's page there (remove). It is
@@ -30,6 +31,11 @@
     builds makes the folder "Cutthulhu Builds" in your Documents and lets the
     runner's user write in it; CI then keeps each .msi it builds there (the
     newest five). Run it from your own account (elevated).
+
+    python installs the Python packages the interchange checks need (Python 3.12
+    for all users and a virtual environment in C:\actions-runner-tools) for a
+    runner installed before install did it (BUILDING.md, "Python packages for
+    the checks").
 #>
 param(
     [Parameter(Position = 0)][string]$Command,
@@ -64,6 +70,42 @@ function New-RandomPassword {
     -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
 }
 
+# The Python packages for the interchange checks (BUILDING.md, "Python packages
+# for the checks"), in a virtual environment the runner's user can use, made
+# from a Python installed for all users: the one bootstrap-windows.ps1 installs
+# is in your profile, out of that user's reach. CI keeps it current
+# (scripts\check-python.py). Returns the environment's folder.
+function Install-CheckPython {
+    $machinePython = Join-Path $env:ProgramFiles 'Python312\python.exe'
+    if (-not (Test-Path $machinePython)) {
+        Write-Host '== Python 3.12 for all users'
+        $installer = Join-Path $env:TEMP 'python-3.12.10-amd64.exe'
+        Invoke-WebRequest -UseBasicParsing -OutFile $installer 'https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe'
+        $p = Start-Process -Wait -PassThru $installer -ArgumentList '/quiet', 'InstallAllUsers=1', 'PrependPath=0', 'Include_test=0', 'Include_launcher=0'
+        Remove-Item $installer
+        if ($p.ExitCode -ne 0 -or -not (Test-Path $machinePython)) { throw "Python 3.12 did not install into $machinePython" }
+    }
+    $checkVenv = Join-Path $ToolsDir 'check-venv'
+    & $machinePython (Join-Path $PSScriptRoot 'check-python.py') --venv $checkVenv | Write-Host
+    if ($LASTEXITCODE -ne 0) { throw 'scripts\check-python.py failed: see above' }
+    icacls $checkVenv /grant "${RunnerUser}:(OI)(CI)M" /T /Q | Out-Null
+    $checkVenv
+}
+
+# `python`: the same for a runner installed before it was part of install.
+function Set-CheckPython {
+    $service = Get-RunnerService
+    if (-not $service) { throw 'No runner service: run install first.' }
+    $checkVenv = Install-CheckPython
+    $envFile = Join-Path $RunnerDir '.env'
+    $lines = @(Get-Content $envFile -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch '^CUTTHULHU_CHECK_VENV=' })
+    $lines += "CUTTHULHU_CHECK_VENV=$checkVenv"
+    $lines | Set-Content -Encoding ascii $envFile
+    # The runner reads .env when it starts (a job running now is cut short).
+    Restart-Service $service.Name
+    Write-Host "CI runs the interchange checks with $checkVenv."
+}
+
 function Install-Runner([string]$Token) {
     if (-not $Token) { throw 'usage: scripts\setup-windows-runner.ps1 install <registration-token>' }
 
@@ -81,6 +123,8 @@ function Install-Runner([string]$Token) {
         New-Item -ItemType Directory -Force $wix | Out-Null
         Copy-Item -Recurse -Force (Join-Path $env:USERPROFILE '.wix\wix314\*') $wix
     }
+
+    $checkVenv = Install-CheckPython
 
     # A hidden standard (not administrator) user with a random password.
     $password = New-RandomPassword
@@ -112,11 +156,12 @@ function Install-Runner([string]$Token) {
         icacls $dir /grant "${RunnerUser}:(OI)(CI)M" /T /Q | Out-Null
     }
 
-    # The runner's environment: the Qt and WiX it uses, and a limited number
-    # of parallel compile jobs so the PC stays responsive.
+    # The runner's environment: the Qt, WiX and Python packages it uses, and a
+    # limited number of parallel compile jobs so the PC stays responsive.
     @(
         "QT_ROOT_DIR=$qt",
         "WIX=$wix",
+        "CUTTHULHU_CHECK_VENV=$checkVenv",
         "CMAKE_BUILD_PARALLEL_LEVEL=$Jobs"
     ) | Set-Content -Encoding ascii (Join-Path $RunnerDir '.env')
 
@@ -205,6 +250,7 @@ switch ($Command) {
     'remove' { Assert-Admin; Remove-Runner $Argument }
     'keep-wsl' { Assert-Admin; Set-KeepWsl $Argument }
     'builds' { Assert-Admin; Set-BuildsFolder }
+    'python' { Assert-Admin; Set-CheckPython }
     'unkeep-wsl' {
         Assert-Admin
         Unregister-ScheduledTask -Confirm:$false -TaskName "Keep WSL $Argument running"

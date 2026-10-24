@@ -44,8 +44,20 @@ jobs:
       - name: Install dependencies
         run: scripts/bootstrap-linux.sh
 
+      - name: Python packages for the checks
+        # olefile, pyaaf2, pyavb and OpenTimelineIO in a virtual environment in
+        # the runner's home, made again only when scripts/check-requirements.txt
+        # changes (BUILDING.md, "Python packages for the checks"). If it cannot
+        # be made, the build goes on and those checks are skipped.
+        continue-on-error: true
+        run: |
+          if ! python3 scripts/check-python.py --github-env; then
+            echo "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above (BUILDING.md, Python packages for the checks)"
+            exit 1
+          fi
+
       - name: Configure
-        run: cmake --preset ci
+        run: cmake --preset ci ${CHECK_PYTHON:+-DPython3_EXECUTABLE="$CHECK_PYTHON"}
 
       - name: Build
         run: cmake --build --preset ci
@@ -138,11 +150,23 @@ jobs:
           fi
           dpkg-query -W libavcodec-dev
 
+      - name: Python packages for the checks
+        # olefile, pyaaf2, pyavb and OpenTimelineIO in a virtual environment in
+        # the runner's home, made again only when scripts/check-requirements.txt
+        # changes (BUILDING.md, "Python packages for the checks"). If it cannot
+        # be made, the build goes on and those checks are skipped.
+        continue-on-error: true
+        run: |
+          if ! python3 scripts/check-python.py --github-env; then
+            echo "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above (BUILDING.md, Python packages for the checks)"
+            exit 1
+          fi
+
       - name: Configure
         # The bootstrap script must install all of Qt's Wayland support:
         # Ubuntu 26.04 splits it over several packages (BUILDING.md).
         run: |
-          cmake --preset ci 2>&1 | tee configure.log
+          cmake --preset ci ${CHECK_PYTHON:+-DPython3_EXECUTABLE="$CHECK_PYTHON"} 2>&1 | tee configure.log
           ! grep -q "Wayland support is incomplete" configure.log
 
       - name: Build
@@ -194,8 +218,20 @@ jobs:
       - name: Install build tools
         run: brew install ninja ffmpeg pkg-config
 
+      - name: Python packages for the checks
+        # olefile, pyaaf2, pyavb and OpenTimelineIO in a virtual environment in
+        # the runner's home, made again only when scripts/check-requirements.txt
+        # changes (BUILDING.md, "Python packages for the checks"). If it cannot
+        # be made, the build goes on and those checks are skipped.
+        continue-on-error: true
+        run: |
+          if ! python3 scripts/check-python.py --github-env; then
+            echo "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above (BUILDING.md, Python packages for the checks)"
+            exit 1
+          fi
+
       - name: Configure
-        run: cmake --preset ci-macos
+        run: cmake --preset ci-macos ${CHECK_PYTHON:+-DPython3_EXECUTABLE="$CHECK_PYTHON"}
 
       - name: Build
         run: cmake --build --preset ci-macos
@@ -283,8 +319,20 @@ jobs:
             exit 1
           fi
 
+      - name: Python packages for the checks
+        # olefile, pyaaf2, pyavb and OpenTimelineIO in a virtual environment in
+        # the runner's home, made again only when scripts/check-requirements.txt
+        # changes (BUILDING.md, "Python packages for the checks"). If it cannot
+        # be made, the build goes on and those checks are skipped.
+        continue-on-error: true
+        run: |
+          if ! python3 scripts/check-python.py --github-env; then
+            echo "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above (BUILDING.md, Python packages for the checks)"
+            exit 1
+          fi
+
       - name: Configure
-        run: cmake --preset ci-macos
+        run: cmake --preset ci-macos ${CHECK_PYTHON:+-DPython3_EXECUTABLE="$CHECK_PYTHON"}
 
       - name: Build
         run: cmake --build --preset ci-macos
@@ -396,10 +444,28 @@ jobs:
         with:
           arch: x64
 
+      - name: Python packages for the checks
+        # As on the other platforms (BUILDING.md, "Python packages for the
+        # checks"). setup-windows-runner.ps1 makes the environment and names it
+        # in CUTTHULHU_CHECK_VENV.
+        continue-on-error: true
+        shell: powershell
+        run: |
+          $venvPy = if ($env:CUTTHULHU_CHECK_VENV) { Join-Path $env:CUTTHULHU_CHECK_VENV 'Scripts\python.exe' } else { '' }
+          $py = if ($venvPy -and (Test-Path $venvPy)) { $venvPy } else { @('python', 'py') | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } | Select-Object -First 1 }
+          if ($py) { & $py scripts/check-python.py --github-env }
+          if (-not $py -or $LASTEXITCODE -ne 0) {
+            Write-Host "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: run scripts\setup-windows-runner.ps1 install again (BUILDING.md, Python packages for the checks)"
+            exit 1
+          }
+
       - name: Configure
         # The runner's user cannot reach the Windows Installer service that
         # validates the .msi (BUILDING.md).
-        run: cmake --preset ci -DLUMENIS_WIX_SKIP_VALIDATION=ON
+        run: |
+          $python = if ($env:CHECK_PYTHON) { @("-DPython3_EXECUTABLE=$env:CHECK_PYTHON") } else { @() }
+          cmake --preset ci -DLUMENIS_WIX_SKIP_VALIDATION=ON @python
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build
         run: cmake --build --preset ci
@@ -551,9 +617,21 @@ jobs:
             echo "::warning::The ffmpeg command is missing, so the decode_corpus test is left out: in WSL run 'sudo apt-get install -y ffmpeg' (BUILDING.md, Phase 2 gates)"
           fi
 
+      - name: Python packages for the checks
+        # olefile, pyaaf2, pyavb and OpenTimelineIO in a virtual environment in
+        # the runner's home, made again only when scripts/check-requirements.txt
+        # changes (BUILDING.md, "Python packages for the checks"). If it cannot
+        # be made, the build goes on and those checks are skipped.
+        continue-on-error: true
+        run: |
+          if ! python3 scripts/check-python.py --github-env; then
+            echo "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above (BUILDING.md, Python packages for the checks)"
+            exit 1
+          fi
+
       - name: Configure
         run: |
-          cmake --preset ci 2>&1 | tee configure.log
+          cmake --preset ci ${CHECK_PYTHON:+-DPython3_EXECUTABLE="$CHECK_PYTHON"} 2>&1 | tee configure.log
           ! grep -q "Wayland support is incomplete" configure.log
 
       - name: Build
@@ -611,7 +689,7 @@ jobs:
         # Windows only): every test again in a Debug build with the
         # sanitizers, failing on the first report (BUILDING.md).
         run: |
-          cmake --preset asan
+          cmake --preset asan ${CHECK_PYTHON:+-DPython3_EXECUTABLE="$CHECK_PYTHON"}
           cmake --build --preset asan
           ctest --preset asan
 
@@ -655,8 +733,27 @@ jobs:
           powershell -NoProfile -ExecutionPolicy Bypass -File scripts\get-ffmpeg.ps1
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Python packages for the checks
+        # As on the other platforms (BUILDING.md, "Python packages for the
+        # checks"). setup-windows-runner.ps1 makes the environment and names it
+        # in CUTTHULHU_CHECK_VENV.
+        continue-on-error: true
+        shell: powershell
+        run: |
+          $venvPy = if ($env:CUTTHULHU_CHECK_VENV) { Join-Path $env:CUTTHULHU_CHECK_VENV 'Scripts\python.exe' } else { '' }
+          $py = if ($venvPy -and (Test-Path $venvPy)) { $venvPy } else { @('python', 'py') | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } | Select-Object -First 1 }
+          if ($py) { & $py scripts/check-python.py --github-env }
+          if (-not $py -or $LASTEXITCODE -ne 0) {
+            Write-Host "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: run scripts\setup-windows-runner.ps1 install again (BUILDING.md, Python packages for the checks)"
+            exit 1
+          }
+
       - name: Configure
-        run: cmake --preset ci
+        shell: pwsh
+        run: |
+          $python = if ($env:CHECK_PYTHON) { @("-DPython3_EXECUTABLE=$env:CHECK_PYTHON") } else { @() }
+          cmake --preset ci @python
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Build
         run: cmake --build --preset ci

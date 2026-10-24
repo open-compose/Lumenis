@@ -67,6 +67,17 @@ install)
     id "$RUNNER_USER" >/dev/null 2>&1 || die "could not create the user $RUNNER_USER"
     chmod 700 "$HOME_DIR"
 
+    # The Python packages for the interchange checks, in a virtual environment
+    # in the runner's home (BUILDING.md, "Python packages for the checks"); CI
+    # keeps it current with the same script. Homebrew's Python is preferred:
+    # OpenTimelineIO has wheels for it, while the Command Line Tools' Python
+    # 3.9 has to compile it.
+    python=/opt/homebrew/bin/python3
+    [ -x "$python" ] || python=/usr/bin/python3
+    script_dir=$(cd "$(dirname "$0")" && pwd)
+    "$python" "$script_dir/check-python.py" --venv "$HOME_DIR/.cutthulhu-venv"
+    chown -R "$RUNNER_USER" "$HOME_DIR/.cutthulhu-venv"
+
     # The runner itself, the latest release.
     if [ ! -x "$RUNNER_DIR/config.sh" ]; then
         url=$(curl -fsSL https://api.github.com/repos/actions/runner/releases/latest |

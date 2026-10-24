@@ -52,8 +52,8 @@ install)
         die "systemd is not running. Add [boot] systemd=true to /etc/wsl.conf, run 'wsl --shutdown' in Windows, and try again"
 
     # Everything the CI jobs need, installed for all users: the build
-    # dependencies, git, weston for the Wayland check, and Pillow for the
-    # screenshot comparison.
+    # dependencies (with Python's venv and headers), git, weston for the
+    # Wayland check, and Pillow for the screenshot comparison.
     script_dir=$(cd "$(dirname "$0")" && pwd)
     "$script_dir/bootstrap-linux.sh"
     apt-get install -y --no-install-recommends git ca-certificates fonts-dejavu-core weston curl file python3-pil \
@@ -64,6 +64,13 @@ install)
         useradd --create-home --shell /bin/bash --comment "GitHub Actions runner" "$RUNNER_USER"
     fi
     chmod 700 "$HOME_DIR"
+
+    # The Python packages for the interchange checks, in a virtual environment
+    # in the runner's home (BUILDING.md, "Python packages for the checks"). CI
+    # keeps it current with the same script.
+    venv_dir="$HOME_DIR/.cutthulhu-venv"
+    python3 "$script_dir/check-python.py" --venv "$venv_dir"
+    chown -R "$RUNNER_USER" "$venv_dir"
 
     if [ ! -x "$RUNNER_DIR/config.sh" ]; then
         url=$(curl -fsSL https://api.github.com/repos/actions/runner/releases/latest |

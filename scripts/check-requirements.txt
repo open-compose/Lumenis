@@ -1,0 +1,8 @@
+# The Python packages the interchange checks read files with, pinned so every
+# machine compares against the same readers (BUILDING.md, "Python packages
+# for the checks"). scripts/check-python.py installs them into a virtual
+# environment; it reinstalls when this file changes.
+olefile==0.47
+pyaaf2==1.7.1
+pyavb==1.4.0
+opentimelineio==0.18.1

@@ -43,7 +43,7 @@ if(Python3_Interpreter_FOUND)
     if(_missing)
         list(JOIN _missing " " _missing)
         message(STATUS "Interchange checks against other readers will be skipped: ${Python3_EXECUTABLE} "
-            "lacks ${_missing} (BUILDING.md, \"Python packages for the checks\")")
+            "lacks ${_missing}: run scripts/check-python.py (BUILDING.md, \"Python packages for the checks\")")
     endif()
 
     # What the Writer makes, read by another implementation (olefile).

@@ -609,8 +609,8 @@ hand.
 OpenTimelineIO has no prebuilt wheel for the newest Pythons (0.18.1 has
 none for 3.14, Ubuntu 26.04's), so pip compiles it, and that needs Python's
 C headers, which Ubuntu packages separately: `sudo apt-get install -y
-python3-dev`, then run the `pip install` again. It builds and passes
-`otio_python` on 3.14. Configuring prints the packages still missing
+python3-dev`, then run `scripts/check-python.py` (or the `pip install`)
+again. It builds and passes `otio_python` on 3.14. Configuring prints the packages still missing
 ([Python packages for the checks](#python-packages-for-the-checks)).
 
 ### Fuzzing: "cannot find .../libclang_rt.fuzzer-x86_64.a"
@@ -800,21 +800,41 @@ Several interchange checks have another implementation read the same files:
 olefile (`cfb_olefile`), pyaaf2 (`aaf_pyaaf2`, part of `aaf_round_trip`),
 pyavb (`avb_pyavb`, `avb_write_pyavb`, `avb_export_pyavb`) and
 OpenTimelineIO (`otio_python`). Without its package a check is skipped, and
-configuring prints which packages the Python it found lacks. Install them
-into a virtual environment and point CMake at it:
+configuring prints which packages the Python it found lacks.
+`scripts/check-python.py` puts them, at the versions pinned in
+`scripts/check-requirements.txt`, into a virtual environment
+(`~/.cutthulhu-venv`, or `--venv DIR`) and prints its Python; run again, it
+does nothing unless the pins changed or the environment broke. Then point
+CMake at that Python:
 
 ```sh
-# Linux (Ubuntu): the headers OpenTimelineIO builds against, when pip has no wheel for your Python
-sudo apt-get install -y python3-dev
-python3 -m venv ~/.cutthulhu-venv
-~/.cutthulhu-venv/bin/pip install pyaaf2 pyavb opentimelineio olefile
+# Linux (Ubuntu): venv, and the headers pip compiles OpenTimelineIO against
+# when it has no wheel for your Python (bootstrap-linux.sh installs both)
+sudo apt-get install -y python3-venv python3-dev
+python3 scripts/check-python.py
 cmake --preset ci -DPython3_EXECUTABLE=$HOME/.cutthulhu-venv/bin/python
 ```
 
-On Windows: `py -m venv $HOME\.cutthulhu-venv`, then
-`& $HOME\.cutthulhu-venv\Scripts\pip install pyaaf2 pyavb opentimelineio
-olefile` and `-DPython3_EXECUTABLE="$HOME\.cutthulhu-venv\Scripts\python.exe"`.
-On a self-hosted runner, install them as the runner's user too.
+On Windows: `py scripts\check-python.py`, then `cmake --preset ci
+-DPython3_EXECUTABLE="$HOME\.cutthulhu-venv\Scripts\python.exe"`.
+
+**CI** runs the script in every job before configuring ("Python packages
+for the checks") and configures with that Python. On the self-hosted
+runners the environment stays in the runner's home between jobs; if it
+cannot be made, the step is marked failed with an error annotation and the
+job goes on with those checks skipped. The setup scripts make it when they
+install a runner. For a runner installed before that:
+
+* **WSL:** `sudo apt-get install -y python3-venv python3-dev` in the
+  distribution; the next job makes the environment.
+* **Mac:** nothing; the next job makes it. With only the Command Line
+  Tools' Python 3.9, pip compiles OpenTimelineIO (a few minutes, once);
+  `brew install python` avoids that.
+* **Windows:** in an elevated PowerShell, `scripts\setup-windows-runner.ps1
+  python`. The runner's user cannot use a Python installed in your profile,
+  so this installs Python 3.12 for all users, makes the environment in
+  `C:\actions-runner-tools\check-venv` and names it in the runner's `.env`
+  (`CUTTHULHU_CHECK_VENV`).
 
 * **Gate 1, bins and projects:** dump what Cutthulhu reads with
   `cutthulhu --dump-structure <bin or project>` and compare it with a
