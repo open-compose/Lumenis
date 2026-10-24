@@ -651,7 +651,13 @@ and pyaaf2's test suites, made with real Media Composer
     `otio`). In the application (p.969): Import Media and drops into a bin
     take `.otio` files (`MainWindow::importOtio`), and the List Tool has the
     OTIO output format with the Default OpenTimelineIO setting (test
-    `tst_interchange`). 3.6b is done; next is 3.6c, FCP XML.
+    `tst_interchange`). 3.6b is done. 3.6c, FCP 7 XML, is done
+    (`src/interop/fcp_xml.*`, docs/spec/fcp-xml.md; ours, as Media Composer
+    has none): xmeml read and written through the OTIO import and export,
+    `--import-fcpxml`, `--export-fcpxml`, Import Media and bin drops, and
+    Export to File's "Final Cut Pro 7 XML"; checked against OpenTimelineIO's
+    FCP adapter (ctests `fcpxml_round_trip`, `fcpxml_python`, `tst_fcpxml`)
+    and fuzzed (target `fcpxml`). 3.6 is done.
   * Gate 4 (fuzzing): libFuzzer targets for the compound file, AAF and
     bin readers, importers and the bin writer (`fuzz/`, `scripts/fuzz.py`,
     BUILDING.md "Fuzzing") found and fixed 9 bugs (hangs, a division by
@@ -661,7 +667,8 @@ and pyaaf2's test suites, made with real Media Composer
     `libclang-rt-dev`). The first three found three more bugs in the AAF
     dump and import (fixed, with regression inputs); the fourth
     (2026-10-23/24, run 39992718177) was clean on every target: **passed**.
-  * Next: 3.6c, FCP XML.
+  * Left in Phase 3: shared-storage bin locking, 3.5 (deferred), and the
+    gates' Media Composer halves, which wait for the owner's seat.
 
 ### Phase 4 — Core editing
 Features in this phase:

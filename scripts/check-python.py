@@ -5,10 +5,10 @@ checks").
     check-python.py [--venv DIR] [--github-env]
 
 Makes DIR (default: $CUTTHULHU_CHECK_VENV, else ~/.cutthulhu-venv) a virtual environment holding
-the packages in scripts/check-requirements.txt (olefile, pyaaf2, pyavb, opentimelineio), checks
-that each imports, and prints the environment's Python, the one to configure with
-(cmake --preset ci -DPython3_EXECUTABLE=...). Run again, it does nothing unless the requirements
-changed or the environment broke (its base Python was upgraded or removed); then it is made again.
+the packages in scripts/check-requirements.txt (olefile, pyaaf2, pyavb, opentimelineio,
+otio-fcp-adapter), checks that each imports, and prints the environment's Python, the one to
+configure with (cmake --preset ci -DPython3_EXECUTABLE=...). Run again, it does nothing unless the
+requirements changed or the environment broke (its base Python was upgraded or removed); then it is made again.
 
 --github-env also writes CHECK_PYTHON=<that Python> to $GITHUB_ENV, for CI's configure step.
 
@@ -28,7 +28,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 REQUIREMENTS = ROOT / "scripts" / "check-requirements.txt"
 STAMP = "cutthulhu-requirements.txt"  # a copy of what was installed, inside the environment
-MODULES = ["olefile", "aaf2", "avb", "opentimelineio"]
+MODULES = ["olefile", "aaf2", "avb", "opentimelineio", "otio_fcp_adapter"]
 PIP_MINUTES = 20  # compiling opentimelineio, where pip has no wheel, takes a few
 
 

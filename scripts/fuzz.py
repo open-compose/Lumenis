@@ -33,16 +33,16 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TARGETS = ["cfb", "aaf", "avb", "avb_rewrite", "otio"]
+TARGETS = ["cfb", "aaf", "avb", "avb_rewrite", "otio", "fcpxml"]
 # Which corpus files seed which target.
-EXTENSIONS = {"cfb": (".aaf",), "aaf": (".aaf",), "avb": (".avb",), "avb_rewrite": (".avb",), "otio": (".otio",)}
+EXTENSIONS = {"cfb": (".aaf",), "aaf": (".aaf",), "avb": (".avb",), "avb_rewrite": (".avb",), "otio": (".otio",), "fcpxml": (".xml",)}
 # The largest input the fuzzer makes or keeps (-max_len), and the largest corpus file used as a
 # seed: libFuzzer mutates small inputs far faster. AAF files are compound files of a few hundred
 # kilobytes, so `seed` also lays each out again smaller; bins are a few tens of kilobytes.
-MAX_LEN = {"cfb": 262144, "aaf": 262144, "avb": 131072, "avb_rewrite": 131072, "otio": 131072}
+MAX_LEN = {"cfb": 262144, "aaf": 262144, "avb": 131072, "avb_rewrite": 131072, "otio": 131072, "fcpxml": 131072}
 # How a total time is split between the targets: the AAF and bin parsers (and their imports) have
 # the most code.
-WEIGHTS = {"cfb": 1, "aaf": 3, "avb": 3, "avb_rewrite": 2, "otio": 2}
+WEIGHTS = {"cfb": 1, "aaf": 3, "avb": 3, "avb_rewrite": 2, "otio": 2, "fcpxml": 2}
 
 
 def default_corpus() -> Path:

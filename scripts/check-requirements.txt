@@ -6,3 +6,4 @@ olefile==0.47
 pyaaf2==1.7.1
 pyavb==1.4.0
 opentimelineio==0.18.1
+otio-fcp-adapter==1.0.0

@@ -84,6 +84,12 @@ committed here: `fetch` downloads them into a cache folder.
         Export every corpus timeline twice over (import, export, import,
         export): the two exports must be the same (otio-check.py
         --round-trip). Needs only the corpus.
+    interop-corpus.py check-fcpxml --app build/ci/bin/cutthulhu [--dir DIR]
+    interop-corpus.py check-fcpxml-round-trip --app build/ci/bin/cutthulhu [--dir DIR]
+        The same as FCP 7 XML (`cutthulhu --export-fcpxml`), from the corpus's
+        FCP XML files and its .otio files: check-fcpxml reads the exports and
+        the FCP originals with OpenTimelineIO's FCP adapter (exits 77 without
+        opentimelineio and otio-fcp-adapter).
     interop-corpus.py check-written --test build/ci/bin/tst_cfb [--dir DIR]
         Run tst_cfb's forOlefile, which writes compound files with
         Cutthulhu's writer, and read them back with olefile. Exits 77 without
@@ -189,6 +195,15 @@ SOURCES = {
         "simple_cut.otio": "a85440060aa8b421fb7430dcf4c6d9a89a78b256198767afcfff1496ededf7eb",
         "transition.otio": "c7fe66127f5b1c6a651ce55d3115b910b0efb53e4e275b5e1ee954079c72e9cc",
         "transition_test.otio": "fe2a88668728386c1083cb964196e8966a5cc2062cfc022c7548fb43f21691da",
+    }),
+    # FCP 7 XML (xmeml) written by Premiere Pro and Hiero: OpenTimelineIO's FCP adapter's test files
+    # (Apache-2.0), for the FCP XML reader and writer (Phase 3.6c, docs/spec/fcp-xml.md).
+    "otio-fcp": ("https://raw.githubusercontent.com/OpenTimelineIO/otio-fcp-adapter/v1.0.0/tests/sample_data/", {
+        "empty_name_tags.xml": "b2bb37a107e85afb251899d31a0d6c730a6b79c6f9e412e84fee8f71b93ed7d8",
+        "hiero_xml_export.xml": "9f138d74740d49b899dc3fac31ca3eb447d1aed96a9805e82e12a2a36ca9e8d6",
+        "premiere_example.xml": "caa4f58caffcd916428cca369290a8e177a0649cb77aa2a191ea59d266067b06",
+        "premiere_generators.xml": "6f35f02532130b6df28b793f901c0c642028c84570d24fde81e6f175925fe45f",
+        "sample_just_track.xml": "3b8a5681c93cfccb0c962b166910fddcee5e4325a78b9d7d7cc024eb72dc7cfe",
     }),
 }
 
@@ -445,16 +460,19 @@ def check_avb(app, folder):
     return subprocess.run([sys.executable, script, "--compare", "--app", app] + paths).returncode
 
 
-def check_otio(app, folder, compare):
-    """otio-check.py on every corpus timeline: --compare (with OpenTimelineIO) or --round-trip."""
-    paths = [os.path.join(folder, name) for name, _, _ in files() if name.endswith(".otio")]
+def check_otio(app, folder, compare, fcpxml=False):
+    """otio-check.py on every corpus timeline: --compare (with OpenTimelineIO) or --round-trip. With
+    `fcpxml`, exported as FCP 7 XML, from the FCP XML files as well as the .otio ones."""
+    wanted = (".otio", ".xml") if fcpxml else (".otio",)
+    paths = [os.path.join(folder, name) for name, _, _ in files() if name.endswith(wanted)]
     paths = [p for p in paths if os.path.exists(p)]
     if not paths:
         print(f"interop-corpus: no corpus in {folder} (interop-corpus.py fetch)", file=sys.stderr)
         return 77
     script = os.path.join(ROOT, "scripts", "otio-check.py")
     mode = "--compare" if compare else "--round-trip"
-    return subprocess.run([sys.executable, script, mode, "--app", app] + paths).returncode
+    extra = ["--format", "fcpxml"] if fcpxml else []
+    return subprocess.run([sys.executable, script, mode, "--app", app] + extra + paths).returncode
 
 
 def corpus_bins(folder):
@@ -713,7 +731,7 @@ def main():
     ap.add_argument("command", choices=["fetch", "manifest", "reference", "check-aaf", "check-avb", "check-import",
                                         "check-avb-import", "check-round-trip", "check-written", "check-avb-rewrite",
                                         "check-avb-write", "check-avb-export", "check-avb-export-pyavb", "check-otio",
-                                        "check-otio-round-trip"])
+                                        "check-otio-round-trip", "check-fcpxml", "check-fcpxml-round-trip"])
     ap.add_argument("--dir", help="the corpus folder (check-written: where to keep the files written)")
     ap.add_argument("--test", help="tst_cfb, for check-written; tst_avb, for check-avb-write")
     ap.add_argument("--app", help="the cutthulhu executable, for the check- commands")
@@ -757,6 +775,10 @@ def main():
         if not args.app:
             ap.error(f"{args.command} needs --app")
         return check_otio(args.app, args.dir or default_dir(), args.command == "check-otio")
+    if args.command in ("check-fcpxml", "check-fcpxml-round-trip"):
+        if not args.app:
+            ap.error(f"{args.command} needs --app")
+        return check_otio(args.app, args.dir or default_dir(), args.command == "check-fcpxml", fcpxml=True)
     if args.command == "check-avb-write":
         if not args.test:
             ap.error("check-avb-write needs --test")

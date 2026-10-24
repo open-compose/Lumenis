@@ -4,7 +4,8 @@ lumenis_add_test(tst_avb SOURCES tst_avb.cpp LIBS lumenis::interop)
 lumenis_add_test(tst_edl SOURCES tst_edl.cpp LIBS lumenis::interop)
 lumenis_add_test(tst_ale SOURCES tst_ale.cpp LIBS lumenis::interop)
 lumenis_add_test(tst_otio SOURCES tst_otio.cpp LIBS lumenis::interop)
-foreach(t tst_cfb tst_aaf tst_avb tst_edl tst_ale tst_otio)
+lumenis_add_test(tst_fcpxml SOURCES tst_fcpxml.cpp LIBS lumenis::interop)
+foreach(t tst_cfb tst_aaf tst_avb tst_edl tst_ale tst_otio tst_fcpxml)
     target_compile_definitions(${t} PRIVATE LUMENIS_TEST_DATA="${PROJECT_SOURCE_DIR}/tests/data")
 endforeach()
 
@@ -17,7 +18,7 @@ else()
     set(LUMENIS_INTEROP_CORPUS_DEFAULT "${CMAKE_BINARY_DIR}/interop-corpus")
 endif()
 set(LUMENIS_INTEROP_CORPUS "${LUMENIS_INTEROP_CORPUS_DEFAULT}" CACHE PATH "Where the interchange corpus is kept")
-set_tests_properties(tst_cfb tst_aaf tst_avb tst_edl tst_ale tst_otio PROPERTIES
+set_tests_properties(tst_cfb tst_aaf tst_avb tst_edl tst_ale tst_otio tst_fcpxml PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;CUTTHULHU_INTEROP_CORPUS=${LUMENIS_INTEROP_CORPUS}")
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
@@ -26,17 +27,18 @@ if(Python3_Interpreter_FOUND)
         COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py fetch
                 --dir ${LUMENIS_INTEROP_CORPUS})
     set_tests_properties(interop_corpus_fetch PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300 LABELS corpus)
-    set_tests_properties(tst_cfb tst_aaf tst_avb tst_edl tst_ale tst_otio PROPERTIES DEPENDS interop_corpus_fetch)
+    set_tests_properties(tst_cfb tst_aaf tst_avb tst_edl tst_ale tst_otio tst_fcpxml PROPERTIES DEPENDS interop_corpus_fetch)
 
     # The checks against other implementations are skipped without their Python packages, and
     # ctest says only "Skipped": name the missing ones here, where they can be seen.
     set(_missing "")
-    foreach(module olefile aaf2 avb opentimelineio)
+    foreach(module olefile aaf2 avb opentimelineio otio_fcp_adapter)
         execute_process(COMMAND ${Python3_EXECUTABLE} -c "import ${module}"
             RESULT_VARIABLE _status OUTPUT_QUIET ERROR_QUIET)
         if(NOT _status EQUAL 0)
             string(REPLACE "aaf2" "pyaaf2" _package "${module}")
             string(REPLACE "avb" "pyavb" _package "${_package}")
+            string(REPLACE "otio_fcp_adapter" "otio-fcp-adapter" _package "${_package}")
             list(APPEND _missing ${_package})
         endif()
     endforeach()
@@ -139,6 +141,18 @@ if(Python3_Interpreter_FOUND)
         COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py check-otio
                 --app $<TARGET_FILE:lumenis_app> --dir ${LUMENIS_INTEROP_CORPUS})
     set_tests_properties(otio_round_trip otio_python PROPERTIES
+        SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    # FCP 7 XML (docs/spec/fcp-xml.md): the same two checks with the export written as FCP XML, from
+    # the corpus's FCP XML and .otio files; fcpxml_python reads them with OpenTimelineIO's FCP adapter.
+    add_test(NAME fcpxml_round_trip
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py check-fcpxml-round-trip
+                --app $<TARGET_FILE:lumenis_app> --dir ${LUMENIS_INTEROP_CORPUS})
+    add_test(NAME fcpxml_python
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py check-fcpxml
+                --app $<TARGET_FILE:lumenis_app> --dir ${LUMENIS_INTEROP_CORPUS})
+    set_tests_properties(fcpxml_round_trip fcpxml_python PROPERTIES
         SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 

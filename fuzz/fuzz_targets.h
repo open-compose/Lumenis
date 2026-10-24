@@ -31,8 +31,11 @@ int fuzzAvbRewrite(const std::uint8_t* data, std::size_t size);
 // OpenTimelineIO: otio::importJson reads the bytes, and each sequence it makes is exported and must
 // import again (target_otio.cpp).
 int fuzzOtio(const std::uint8_t* data, std::size_t size);
+// FCP 7 XML: fcpxml::importXml reads the bytes, and each sequence it makes is exported as FCP XML and
+// must import again (target_fcpxml.cpp).
+int fuzzFcpXml(const std::uint8_t* data, std::size_t size);
 
-// A target by its name ("cfb", "aaf", "avb", "avb_rewrite", "otio"), as the directories in
+// A target by its name ("cfb", "aaf", "avb", "avb_rewrite", "otio", "fcpxml"), as the directories in
 // fuzz/regressions and the executables fuzz_<name> are named.
 struct Target {
     const char* name;

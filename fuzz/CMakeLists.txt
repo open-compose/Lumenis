@@ -16,6 +16,7 @@ add_library(lumenis_fuzz_targets STATIC
     target_avb.cpp
     target_avb_rewrite.cpp
     target_otio.cpp
+    target_fcpxml.cpp
 )
 target_include_directories(lumenis_fuzz_targets PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(lumenis_fuzz_targets PUBLIC lumenis::interop lumenis::model Qt6::Core)
@@ -30,7 +31,7 @@ if(LUMENIS_FUZZ)
         message(FATAL_ERROR "LUMENIS_FUZZ needs Clang (libFuzzer); use the fuzz preset")
     endif()
     # One executable per target; the function each calls is fuzz<Name> in fuzz_targets.h.
-    foreach(pair "cfb:fuzzCfb" "aaf:fuzzAaf" "avb:fuzzAvb" "avb_rewrite:fuzzAvbRewrite" "otio:fuzzOtio")
+    foreach(pair "cfb:fuzzCfb" "aaf:fuzzAaf" "avb:fuzzAvb" "avb_rewrite:fuzzAvbRewrite" "otio:fuzzOtio" "fcpxml:fuzzFcpXml")
         string(REPLACE ":" ";" pair "${pair}")
         list(GET pair 0 name)
         list(GET pair 1 function)

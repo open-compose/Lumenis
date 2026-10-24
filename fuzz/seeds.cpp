@@ -8,6 +8,7 @@
 #include "lumenis/interop/aaf_export.h"
 #include "lumenis/interop/avb_export.h"
 #include "lumenis/interop/cfb.h"
+#include "lumenis/interop/fcp_xml.h"
 #include "lumenis/interop/otio.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
@@ -181,6 +182,19 @@ std::vector<Seed> seeds(const QString& target) {
         };
         for (const model::BinItem& i : bin.items) {
             if (i.kind == model::BinItemKind::Sequence) add(QStringLiteral("tiny.otio"), interop::otio::exportJson(i, options).json);
+        }
+    } else if (target == QLatin1String("fcpxml")) {
+        // The same sequence as FCP 7 XML.
+        const model::Bin bin = tinyBin();
+        interop::otio::ExportOptions options;
+        options.resolve = [&bin](const MobId& mob, const QString& clipId) -> std::optional<model::BinItem> {
+            for (const model::BinItem& i : bin.items) {
+                if (i.kind != model::BinItemKind::Sequence && (i.id == clipId || model::mobIdOf(i) == mob)) return i;
+            }
+            return std::nullopt;
+        };
+        for (const model::BinItem& i : bin.items) {
+            if (i.kind == model::BinItemKind::Sequence) add(QStringLiteral("tiny.xml"), interop::fcpxml::exportXml(i, options).json);
         }
     }
     return out;

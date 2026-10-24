@@ -574,8 +574,10 @@ private:
             f.segments << s;
             return f;
         }
-        // The media's key: its file, else the reference's name, else the clip's.
+        // The media's key: its file, else the reference's name, else the clip's. "file://localhost/"
+        // (as FCP XML and older writers spell a local file) is the same file as "file:///".
         QString url = ref.value(QStringLiteral("target_url")).toString();
+        if (url.startsWith(QLatin1String("file://localhost/"), Qt::CaseInsensitive)) url = QStringLiteral("file:///") + url.mid(17);
         if (refSchema == QLatin1String("ImageSequenceReference")) {
             url = ref.value(QStringLiteral("target_url_base")).toString() + ref.value(QStringLiteral("name_prefix")).toString() +
                   QStringLiteral("#") + ref.value(QStringLiteral("name_suffix")).toString();
@@ -587,6 +589,16 @@ private:
         if (key.isEmpty()) {
             key = QStringLiteral("untitled");
             notes_.add(QStringLiteral("clips without a name or media named \"untitled\""));
+        }
+        // The same file named again with another start is other media (Premiere writes a <file> for
+        // each clip, and files of the same path but different timecode are different files): its own
+        // clip, keyed by its start too.
+        if (!url.isEmpty() && available) {
+            const auto first = media_.find(key);
+            const std::int64_t availableStart = framesAt(available->start, rate_);
+            if (first != media_.end() && first->second.hasRange && first->second.start != availableStart) {
+                key += QStringLiteral("#start=%1").arg(availableStart);
+            }
         }
         Media& m = mediaFor(key, url, !refName.isEmpty() ? refName : clipName, available);
         const auto ref2 = model::parseTrackName(track);

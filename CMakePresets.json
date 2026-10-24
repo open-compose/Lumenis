@@ -142,7 +142,7 @@
     {
       "name": "fuzz",
       "configurePreset": "fuzz",
-      "targets": ["fuzz_cfb", "fuzz_aaf", "fuzz_avb", "fuzz_avb_rewrite", "fuzz_otio", "lumenis_fuzz_replay"]
+      "targets": ["fuzz_cfb", "fuzz_aaf", "fuzz_avb", "fuzz_avb_rewrite", "fuzz_otio", "fuzz_fcpxml", "lumenis_fuzz_replay"]
     }
   ],
   "testPresets": [

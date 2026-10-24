@@ -14,7 +14,7 @@ The code is a stack of static libraries. Each depends only on those below it.
 | `lumenis_core` | `src/core` | Value types with no Qt widgets: `Rational` (exact edit rates), `Timecode`, `MobId` (SMPTE UMIDs), the project format, branding constants. | — |
 | `lumenis_ext` | `src/ext` | Extension points: provider interfaces (codecs, effects) and the module loader for plug-ins (docs/EXTENSIONS.md). | core |
 | `lumenis_model` | `src/model` | The editing model, independent of the UI: projects and their bin tree, bins and bin items, sequences (tracks, segments, edits), markers, monitor state, settings files, the calculator, structure dumps. | core |
-| `lumenis_interop` | `src/interop` | Interchange: the compound file container, AAF reading, import into bins, writing and export (docs/spec/aaf.md); Media Composer's `.avb` bins, read, imported, written and exported (docs/spec/avb.md); EDLs (docs/spec/edl.md), ALE shot logs (docs/spec/ale.md) and OpenTimelineIO (docs/spec/otio.md), read and written. | model |
+| `lumenis_interop` | `src/interop` | Interchange: the compound file container, AAF reading, import into bins, writing and export (docs/spec/aaf.md); Media Composer's `.avb` bins, read, imported, written and exported (docs/spec/avb.md); EDLs (docs/spec/edl.md), ALE shot logs (docs/spec/ale.md), OpenTimelineIO (docs/spec/otio.md) and FCP 7 XML (docs/spec/fcp-xml.md), read and written. | model |
 | `lumenis_media` | `src/media` | Media through FFmpeg: probing, frame-exact reading, writing, linking files as clips, managed MXF media and the media database, consolidate/transcode, relink, sound output and the playback clock. | model, ext |
 | `lumenis_ui` | `src/ui` | Every window, panel and dialog (Qt Widgets), and the main window that ties them to the model and media. | everything above |
 | `lumenis_app` (`cutthulhu`) | `app` | `main()`: command-line options (many are test and gate tools), crash reports, then the main window. | ui, interop, media |
@@ -68,7 +68,7 @@ headers in `include/lumenis/<library>/`.
   and the exporters in `import_common.h`), and `avb_export.*` writes bins
   as `.avb` (the import's inverse, built with `avb_writer.*`). `edl.*` reads and writes edit
   decision lists (CMX 3600, File_129) and `ale.*` Avid Log Exchange shot logs; the text helpers they
-  share are in `text_common.h`. `otio.*` reads and writes OpenTimelineIO's `.otio` JSON. The native model they read into and write from is
+  share are in `text_common.h`. `otio.*` reads and writes OpenTimelineIO's `.otio` JSON, and `fcp_xml.*` FCP 7 XML through it. The native model they read into and write from is
   described in docs/spec/native-model.md. In the UI, `list_tool.*` is Tools > List Tool and
   `interchange_dialogs.*` the Import EDL and Export Bin As dialogs.
 * **Effects.** The Effect Palette's list is `src/ui/resources/effects.json`
@@ -100,7 +100,8 @@ headers in `include/lumenis/<library>/`.
    Bin and Export to File (`--export-ale`). OpenTimelineIO files import as
    offline master clips and sequences (Import Media, a drop into a bin,
    `--import-otio`) and are written from a sequence (the List Tool's OTIO
-   output, `--export-otio`).
+   output, `--export-otio`); FCP 7 XML goes through the same import and
+   export (Import Media, Export to File, `--import-fcpxml`, `--export-fcpxml`).
 
 ## Tests
 
@@ -121,10 +122,11 @@ with CTest (`ctest --preset ci`). Python checks live in `scripts/` and
   (`tst_edl`, `tst_ale`, with OpenTimelineIO's sample files from the
   corpus, and `tst_interchange` for the menus and the List Tool); OTIO
   (`tst_otio`, `otio_round_trip`, and `otio_python` against
-  OpenTimelineIO's own reader).
+  OpenTimelineIO's own reader); FCP 7 XML (`tst_fcpxml`, `fcpxml_round_trip`,
+  `fcpxml_python` against OpenTimelineIO's FCP adapter).
 
 `fuzz/` holds libFuzzer targets for the interchange parsers (the compound
-file, AAF, `.avb` bins and their writer, OTIO; ROADMAP Phase 3 gate 4), built by
+file, AAF, `.avb` bins and their writer, OTIO, FCP XML; ROADMAP Phase 3 gate 4), built by
 the `fuzz` preset and run with `scripts/fuzz.py` (fuzz/README.md, BUILDING.md
 "Fuzzing"). Every build also makes `lumenis_fuzz_replay`, and ctest
 `fuzz_replay` runs the saved crash inputs (`fuzz/regressions/`) through

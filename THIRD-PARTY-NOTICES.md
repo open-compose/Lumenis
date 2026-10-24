@@ -64,5 +64,14 @@ OpenTimelineIO project). No code of theirs is copied. Its sample files are
 downloaded for testing (`scripts/interop-corpus.py`) and not distributed;
 its Python package is used only by the checks (`scripts/otio-check.py`).
 
+The FCP 7 XML reader and writer (`src/interop/fcp_xml.cpp`, Phase 3.6c)
+follow Apple's published Final Cut Pro XML Interchange Format, with the
+behaviour of OpenTimelineIO's [FCP 7 XML adapter](https://github.com/OpenTimelineIO/otio-fcp-adapter)
+(Apache-2.0, Copyright Contributors to the OpenTimelineIO project) as prior
+art: how Premiere Pro and Hiero write the format and how it maps to
+OpenTimelineIO. No code of it is copied. Its sample files are downloaded for
+testing (`scripts/interop-corpus.py`) and not distributed; the adapter itself
+is used only by the checks.
+
 When a component is added, also add it to this table and install its licence
 text (see `cmake/Packaging.cmake`).

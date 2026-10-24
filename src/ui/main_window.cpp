@@ -1,6 +1,7 @@
 #include "lumenis/interop/aaf_export.h"
 #include "lumenis/interop/ale.h"
 #include "lumenis/interop/edl.h"
+#include "lumenis/interop/fcp_xml.h"
 #include "lumenis/interop/otio.h"
 #include "lumenis/interop/avb_export.h"
 #include "lumenis/interop/aaf_import.h"
@@ -359,12 +360,16 @@ void MainWindow::createPanels() {
         }
     });
     // Files dropped into a bin are linked (p.317); OpenTimelineIO files among them are imported
-    // (p.969 step 1).
+    // (p.969 step 1), and so are FCP 7 XML files (ours).
     connect(binContainer_, &BinContainer::filesDropped, this, [this](const QString& binId, const QStringList& paths) {
         QStringList media;
         QStringList timelines;
-        for (const QString& p : paths) (interop::otio::isOtioFile(p) ? timelines : media) << p;
+        QStringList fcp;
+        for (const QString& p : paths) {
+            (interop::otio::isOtioFile(p) ? timelines : interop::fcpxml::isFcpXmlFile(p) ? fcp : media) << p;
+        }
         importOtio(binId, timelines);
+        importFcpXml(binId, fcp);
         linkFiles(binId, media);
     });
     // Favorite Bins (p.293) and saved bin views (p.249) are User settings:
@@ -1580,12 +1585,16 @@ void MainWindow::exportToFile() {
     }
     // The file type of an Export As choice: its extension and its name in the save dialog.
     auto suffixOf = [](const QString& exportAs) {
-        return exportAs == QLatin1String("avb") ? QStringLiteral("avb") : exportAs == QLatin1String("ale") ? QStringLiteral("ale") : QStringLiteral("aaf");
+        return exportAs == QLatin1String("avb")      ? QStringLiteral("avb")
+               : exportAs == QLatin1String("ale")    ? QStringLiteral("ale")
+               : exportAs == QLatin1String("fcpxml") ? QStringLiteral("xml")
+                                                     : QStringLiteral("aaf");
     };
     auto filterOf = [](const QString& exportAs) {
-        return exportAs == QLatin1String("avb")   ? tr("Media Composer bins (*.avb)")
-               : exportAs == QLatin1String("ale") ? tr("Avid Log Exchange (*.ale)")
-                                                  : tr("AAF files (*.aaf)");
+        return exportAs == QLatin1String("avb")      ? tr("Media Composer bins (*.avb)")
+               : exportAs == QLatin1String("ale")    ? tr("Avid Log Exchange (*.ale)")
+               : exportAs == QLatin1String("fcpxml") ? tr("Final Cut Pro 7 XML (*.xml)")
+                                                     : tr("AAF files (*.aaf)");
     };
     const QString exportAs = settings_->text(QStringLiteral("Export"), QStringLiteral("exportAs"));
     QSettings remembered;
@@ -1611,9 +1620,18 @@ void MainWindow::exportToFile() {
         settings_->commit(model::SettingsScope::User);
     }
     const QString format = settings_->text(QStringLiteral("Export"), QStringLiteral("exportAs"));
-    if (format != QLatin1String("aaf") && format != QLatin1String("avb") && format != QLatin1String("ale")) {
-        ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange and Media Composer bins can be exported so "
-                                         "far (Export As in the Export setting)."));
+    if (format != QLatin1String("aaf") && format != QLatin1String("avb") && format != QLatin1String("ale") &&
+        format != QLatin1String("fcpxml")) {
+        ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange, Media Composer bins and Final Cut Pro 7 XML "
+                                         "can be exported so far (Export As in the Export setting)."));
+        return;
+    }
+    const model::BinItem* firstSequence = nullptr;
+    for (const model::BinItem& item : selected) {
+        if (item.kind == model::BinItemKind::Sequence && !firstSequence) firstSequence = &item;
+    }
+    if (format == QLatin1String("fcpxml") && !firstSequence) {
+        ConsoleLog::instance().append(tr("Export to File: Final Cut Pro 7 XML holds a sequence: select one."));
         return;
     }
     // The file name extension stays the format's (p.869), also when the setting was changed in the
@@ -1623,7 +1641,7 @@ void MainWindow::exportToFile() {
     if (QFileInfo(path).suffix().compare(suffix, Qt::CaseInsensitive) != 0) {
         const QString old = QFileInfo(path).suffix();
         if (old.compare(QLatin1String("aaf"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("avb"), Qt::CaseInsensitive) == 0 ||
-            old.compare(QLatin1String("ale"), Qt::CaseInsensitive) == 0) {
+            old.compare(QLatin1String("ale"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("xml"), Qt::CaseInsensitive) == 0) {
             path.chop(old.size() + 1);
         }
         path += QLatin1Char('.') + suffix;
@@ -1646,6 +1664,36 @@ void MainWindow::exportToFile() {
         error = result.error;
         warnings = result.warnings;
         count = result.clips;
+    } else if (format == QLatin1String("fcpxml")) {
+        // The first sequence selected (an FCP XML file of ours holds one), its clips found in the bins.
+        interop::otio::ExportOptions options;
+        if (!includeVideo || !includeAudio) {
+            const model::Sequence sequence = model::Sequence::fromItem(*firstSequence);
+            for (const model::Track& t : sequence.tracks()) {
+                if ((t.kind == model::TrackKind::Video && includeVideo) || (t.kind == model::TrackKind::Audio && includeAudio)) {
+                    options.tracks << t.name();
+                }
+            }
+            if (options.tracks.isEmpty()) options.tracks << QStringLiteral("-");
+        }
+        const model::Bin& source = doc.bin();
+        options.resolve = [&](const MobId& mob, const QString& clipId) -> std::optional<model::BinItem> {
+            if (!clipId.isEmpty()) {
+                if (auto clip = composer_->resolve(binOf.value(clipId, doc.nodeId()), clipId)) return clip;
+            }
+            for (const model::BinItem& item : source.items) {
+                if (model::mobIdOf(item) == mob) return item;
+            }
+            return std::nullopt;
+        };
+        const interop::otio::ExportResult result = interop::fcpxml::exportFile(*firstSequence, path, options);
+        written = result.ok;
+        error = result.error;
+        warnings = result.warnings;
+        count = 1;
+        if (std::count_if(selected.begin(), selected.end(), [](const model::BinItem& i) { return i.kind == model::BinItemKind::Sequence; }) > 1) {
+            warnings << tr("only the first sequence selected was written");
+        }
     } else if (format == QLatin1String("avb")) {
         // A bin named for the file, with the source bin's columns and view; the sequences' clips
         // that are not selected, and subclips' masters, as reference clips.
@@ -1694,6 +1742,15 @@ void MainWindow::exportToFile() {
 // that a clip of the bin already stands for (the same MobID, interop::otio::mediaMobId) is that clip;
 // the rest are offline master clips, to be relinked (p.969).
 QStringList MainWindow::importOtio(const QString& binId, const QStringList& paths) {
+    return importTimelines(binId, paths, false);
+}
+
+// FCP 7 XML goes through the OTIO import (interop/fcp_xml.h): the same rules, the same clips.
+QStringList MainWindow::importFcpXml(const QString& binId, const QStringList& paths) {
+    return importTimelines(binId, paths, true);
+}
+
+QStringList MainWindow::importTimelines(const QString& binId, const QStringList& paths, bool fcp) {
     if (paths.isEmpty()) return {};
     BinDocument* doc = binContainer_->document(binId);
     if (!doc) doc = binContainer_->openBin(binId);
@@ -1704,7 +1761,7 @@ QStringList MainWindow::importOtio(const QString& binId, const QStringList& path
         interop::otio::ImportOptions options;
         options.binId = doc->nodeId();
         options.when = QDateTime::currentDateTimeUtc();
-        auto imported = interop::otio::importFile(path, options, &error);
+        auto imported = fcp ? interop::fcpxml::importFile(path, options, &error) : interop::otio::importFile(path, options, &error);
         if (!imported) {
             ConsoleLog::instance().append(tr("Import: %1").arg(error));
             continue;
@@ -1900,19 +1957,21 @@ std::function<std::optional<model::BinItem>(const MobId&, const QString&)> MainW
 // import. Returns the new items' ids, the AAF ones first.
 QStringList MainWindow::importFiles(const QString& binId, const QStringList& allPaths, const QString& resolution) {
     // AAF files are compositions, not media (p.547); shot logs are clip information (p.131-132);
-    // OpenTimelineIO files are timelines (p.969).
+    // OpenTimelineIO files are timelines (p.969), and so are FCP 7 XML files (ours).
     QStringList paths;
     QStringList aaf;
     QStringList logs;
     QStringList timelines;
+    QStringList fcp;
     for (const QString& p : allPaths) {
         (p.endsWith(QLatin1String(".aaf"), Qt::CaseInsensitive) ? aaf
          : interop::ale::isShotLog(p)                           ? logs
          : interop::otio::isOtioFile(p)                         ? timelines
+         : interop::fcpxml::isFcpXmlFile(p)                     ? fcp
                                                                 : paths)
             << p;
     }
-    QStringList fromAaf = importAaf(binId, aaf) + importShotLogs(binId, logs) + importOtio(binId, timelines);
+    QStringList fromAaf = importAaf(binId, aaf) + importShotLogs(binId, logs) + importOtio(binId, timelines) + importFcpXml(binId, fcp);
     BinDocument* doc = binContainer_->document(binId);
     if (!doc) doc = binContainer_->openBin(binId);
     if (!doc || paths.isEmpty()) return fromAaf;

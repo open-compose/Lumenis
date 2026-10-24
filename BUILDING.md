@@ -810,8 +810,8 @@ the build folder (`build/<preset>`) and configure again.
 
 Several interchange checks have another implementation read the same files:
 olefile (`cfb_olefile`), pyaaf2 (`aaf_pyaaf2`, part of `aaf_round_trip`),
-pyavb (`avb_pyavb`, `avb_write_pyavb`, `avb_export_pyavb`) and
-OpenTimelineIO (`otio_python`). Without its package a check is skipped, and
+pyavb (`avb_pyavb`, `avb_write_pyavb`, `avb_export_pyavb`),
+OpenTimelineIO (`otio_python`) and its FCP adapter (`fcpxml_python`). Without its package a check is skipped, and
 configuring prints which packages the Python it found lacks.
 `scripts/check-python.py` puts them, at the versions pinned in
 `scripts/check-requirements.txt`, into a virtual environment
@@ -942,6 +942,15 @@ install a runner. For a runner installed before that:
   --export-otio BIN.cthbin "Sequence name" OUT.otio` (an .otio in place
   of the bin is a round trip, and then the name may be left out), and `python3 scripts/otio-check.py
   --compare --app build/ci/bin/cutthulhu FILE.otio...`.
+* **FCP 7 XML (3.6c):** `tst_fcpxml` reads, writes and reads again a
+  document made in the test and the FCP XML files of OpenTimelineIO's FCP
+  adapter (Apache-2.0), which the corpus downloads into `otio-fcp`. ctests
+  `fcpxml_round_trip` and `fcpxml_python` are the two OTIO checks with the
+  exports written as FCP XML, from the FCP XML and the .otio files; the
+  second reads them with OpenTimelineIO's FCP adapter (`pip install
+  otio-fcp-adapter`; docs/spec/fcp-xml.md, "Checks"). By hand: `cutthulhu
+  --import-fcpxml FILE.xml`, `cutthulhu --export-fcpxml BIN.cthbin
+  "Sequence name" OUT.xml`, and `otio-check.py --format fcpxml`.
 * **The built-in AAF model** (`src/interop/aaf_model.inc`) is made from
   pyaaf2's model tables: `python3 scripts/make-aaf-model.py --pyaaf2
   <pyaaf2 checkout>` (`--check` to compare).
@@ -950,12 +959,13 @@ install a runner. For a runner installed before that:
 ## Fuzzing
 
 Phase 3 gate 4 asks that fuzzing the bin and AAF parsers for 24 hours
-produces no crashes. `fuzz/` holds five libFuzzer targets (fuzz/README.md
+produces no crashes. `fuzz/` holds six libFuzzer targets (fuzz/README.md
 says what each runs): `cfb` (the compound file container), `aaf` (AAF
 objects, the `--dump-aaf` dump and the import into bins), `avb` (bins, the
 `--dump-avb` dump and the import), `avb_rewrite` (the bin writer: what is
-read is written back and must read back the same) and `otio`
-(OpenTimelineIO files, imported, exported and imported again). A crash, a hang (an
+read is written back and must read back the same), `otio`
+(OpenTimelineIO files, imported, exported and imported again) and `fcpxml`
+(FCP 7 XML, the same). A crash, a hang (an
 input taking over 10 s), an AddressSanitizer or UBSan report, or a failed
 round-trip check is a failure.
 
@@ -1097,6 +1107,11 @@ cutthulhu --import-otio FILE  read an OpenTimelineIO file (.otio) into master cl
 cutthulhu --export-otio BIN SEQUENCE OUT.otio
                              write a sequence of a bin (.cthbin) as OpenTimelineIO; an .otio is
                              read first (a round trip; without SEQUENCE its first timeline)
+cutthulhu --import-fcpxml FILE
+                             read an FCP 7 XML file (xmeml) as --import-otio does (docs/spec/fcp-xml.md)
+cutthulhu --export-fcpxml BIN SEQUENCE OUT.xml
+                             write a sequence as FCP 7 XML, as --export-otio does; an FCP XML or .otio
+                             file is read first (--export-otio also takes an FCP XML file)
 cutthulhu --import-ale FILE   read an ALE shot log into master clips and print the bin as a
                              structure dump (docs/spec/ale.md)
 cutthulhu --export-ale BIN OUT.ale

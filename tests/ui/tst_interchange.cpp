@@ -1,5 +1,6 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/interop/edl.h"
+#include "lumenis/interop/fcp_xml.h"
 #include "lumenis/interop/otio.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_container.h"
@@ -35,7 +36,8 @@
 // (p.951), Tools > List Tool (p.944-960), shot logs imported through the Source Browser's Import
 // (p.131-132), File > Output > Export Bin (p.130) and Export to File as Avid Log Exchange (p.1174);
 // and OpenTimelineIO (Phase 3.6b, p.969): Import Media, a drop into a bin, and the List Tool's OTIO
-// output with the Default OpenTimelineIO setting.
+// output with the Default OpenTimelineIO setting; and FCP 7 XML (Phase 3.6c, ours): Import Media, a
+// drop into a bin and Export to File.
 
 using namespace lumenis;
 using namespace lumenis::ui;
@@ -118,6 +120,19 @@ const QByteArray kOtio = QByteArrayLiteral(
     "    ]}\n"
     "  ]}\n"
     "}\n");
+
+// An FCP 7 XML sequence at 25 fps: two clips of two files on V1, joined by a 10-frame dissolve.
+const QByteArray kFcpXml = QByteArrayLiteral(
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE xmeml>\n<xmeml version=\"5\"><sequence id=\"s\">"
+    "<name>Harbor XML</name><rate><timebase>25</timebase><ntsc>FALSE</ntsc></rate>"
+    "<timecode><rate><timebase>25</timebase></rate><frame>90000</frame></timecode><media><video><track>"
+    "<clipitem id=\"a\"><name>Wide</name><start>0</start><end>-1</end><in>50</in><out>155</out>"
+    "<file id=\"f1\"><name>wide.mov</name><pathurl>file:///media/wide.mov</pathurl><duration>500</duration></file></clipitem>"
+    "<transitionitem><start>95</start><end>105</end><alignment>center</alignment>"
+    "<effect><name>Cross Dissolve</name><effectid>Cross Dissolve</effectid></effect></transitionitem>"
+    "<clipitem id=\"b\"><name>Close</name><start>-1</start><end>175</end><in>0</in><out>80</out>"
+    "<file id=\"f2\"><name>close.mov</name><pathurl>file:///media/close.mov</pathurl><duration>300</duration></file></clipitem>"
+    "</track></video></media></sequence></xmeml>\n");
 
 int countOf(const BinDocument& bin, model::BinItemKind kind) {
     return static_cast<int>(std::count_if(bin.bin().items.begin(), bin.bin().items.end(),
@@ -394,6 +409,53 @@ private slots:
         QCOMPARE(tool.activeSetting()->currentText(), QStringLiteral("Default EDL"));
         tool.outputFormat()->setCurrentText(QStringLiteral("OTIO"));
         QCOMPARE(tool.activeSetting()->currentText(), QStringLiteral("Default OpenTimelineIO"));
+    }
+
+    // FCP 7 XML (ours, docs/spec/fcp-xml.md): Import Media and a drop into a bin import it as an
+    // OTIO file is; Export to File with Export As at Final Cut Pro 7 XML writes the sequence selected.
+    void fcpXml() {
+        QTemporaryDir dir;
+        const QString file = dir.filePath(QStringLiteral("turnover.xml"));
+        writeFile(file, kFcpXml);
+        QVERIFY(interop::fcpxml::isFcpXmlFile(file));
+        Session s(dir);
+        MainWindow& window = *s.window;
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QCOMPARE(window.importFiles(binId, {file}).size(), 3);
+        QCOMPARE(countOf(*bin, model::BinItemKind::MasterClip), 2);
+        QCOMPARE(countOf(*bin, model::BinItemKind::Sequence), 1);
+        QMimeData drop;
+        drop.setUrls({QUrl::fromLocalFile(file)});
+        BinItemModel* model = window.binContainer().viewFor(bin)->itemModel();
+        QVERIFY(model->dropMimeData(&drop, Qt::CopyAction, -1, -1, {}));
+        QCoreApplication::processEvents(); // the bin hands the files on once the drag has finished
+        QCOMPARE(countOf(*bin, model::BinItemKind::Sequence), 2);
+        QCOMPARE(countOf(*bin, model::BinItemKind::MasterClip), 2);
+
+        // File > Output > Export to File, as Final Cut Pro 7 XML.
+        QString sequenceId;
+        for (const model::BinItem& item : bin->bin().items) {
+            if (item.kind == model::BinItemKind::Sequence) sequenceId = item.id;
+        }
+        window.settings().setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("fcpxml"));
+        window.binContainer().viewFor(bin)->selectIds({sequenceId});
+        const QString out = dir.filePath(QStringLiteral("out.xml"));
+        QString proposed;
+        window.setExportHook([&](ExportAsDialog& dialog) {
+            proposed = dialog.pathEdit()->text();
+            dialog.setPath(out);
+            return true;
+        });
+        s.commands.action(QStringLiteral("file.output.export_to_file"))->trigger();
+        QVERIFY2(proposed.endsWith(QLatin1String("Harbor XML.xml")), qPrintable(proposed));
+        QVERIFY(interop::fcpxml::isFcpXmlFile(out));
+        const auto back = interop::fcpxml::importFile(out);
+        QVERIFY(back);
+        QCOMPARE(back->items.size(), 3);
+        const QByteArray written = readFile(out);
+        QVERIFY(written.contains("<transitionitem>"));
+        QVERIFY(written.contains("file:///media/wide.mov"));
     }
 };
 

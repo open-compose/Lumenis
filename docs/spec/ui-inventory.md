@@ -2101,7 +2101,9 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
   Media Composer Bin, writes the selection as a `.avb` bin (docs/spec/avb.md,
   "Export"): the guide has no command that writes a bin for another system,
   Media Composer's bins being `.avb` files already (p.296), and File >
-  Output > Export Bin writes shot logs (p.130).
+  Output > Export Bin writes shot logs (p.130). **Also ours:** after it,
+  Final Cut Pro 7 XML writes the first sequence selected as FCP 7 XML
+  (docs/spec/fcp-xml.md); Media Composer has no FCP XML.
 * Use Marks, Use Selected Tracks (p.1174-1175) and AAF Edit Protocol
   (p.1175): shown dimmed, for later.
 * Include All Video/Data Tracks in Sequence and Include All Audio Tracks in
@@ -2183,6 +2185,8 @@ docs/spec/otio.md.
   counts and warnings go to the Console.
 * A bin's own Input > Import Media (step 3, a right-click in the bin)
   comes with the bin's context menu, later.
+* **Ours:** Import Media and a drop into a bin take FCP 7 XML (`.xml`
+  files whose root is `<xmeml>`) in the same way (docs/spec/fcp-xml.md).
 
 ### Shot logs
 * **Import** (p.131-132): Import in the Source Browser of an `.ale` file

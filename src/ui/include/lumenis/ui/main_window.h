@@ -189,7 +189,7 @@ public:
     // the files as new media in a bin (p.213), at the Media Creation
     // setting's import resolution unless `resolution` names another.
     // AAF files among the paths go to importAaf(), shot logs to importShotLogs(), OpenTimelineIO
-    // files to importOtio(). Returns the new items' ids.
+    // files to importOtio(), FCP 7 XML files to importFcpXml(). Returns the new items' ids.
     QStringList importFiles(const QString& binId, const QStringList& paths, const QString& resolution = {});
     // AAF files imported into a bin (p.547): their clips and sequences,
     // master clips with media on the drives online by MobID.
@@ -203,6 +203,9 @@ public:
     // brings the media online). Also what dropping .otio files into a bin does. Returns the new
     // items' ids; failures and warnings go to the Console.
     QStringList importOtio(const QString& binId, const QStringList& paths);
+    // FCP 7 XML files (ours: Media Composer has no FCP XML, docs/spec/fcp-xml.md) imported as
+    // importOtio() imports OpenTimelineIO, through the same rules.
+    QStringList importFcpXml(const QString& binId, const QStringList& paths);
     // File > Input > Import EDL (p.951): the Import EDL dialog (the file, the Frame Rate and the bin),
     // then the sequence and a source for each reel go into the bin. The hook stands in for the dialog
     // (tests; true: OK). Returns the new items' ids.
@@ -302,6 +305,8 @@ private:
     // An imported master or audio clip whose MobID the media database knows
     // is linked to that media (importAaf, openBinFile). True when it was.
     bool linkByMobId(model::BinItem& item) const;
+    // importOtio() and importFcpXml(): each file read with the OTIO or the FCP XML importer.
+    QStringList importTimelines(const QString& binId, const QStringList& paths, bool fcp);
 
     // Whether the Bin Container (docked, floating, or the Project panel) is the active panel.
     bool binsActive() const;

@@ -225,8 +225,12 @@ done: the reader and writer (`otio.*`, docs/spec/otio.md,
 `otio_python` against OpenTimelineIO's Python package, fuzz target `otio`),
 Import Media and bin drops (`MainWindow::importOtio`), and the List Tool's
 OTIO output with the Default OpenTimelineIO setting (p.969). The checks'
-Python packages come from `scripts/check-python.py` (BUILDING.md). Next is
-3.6c, FCP XML.
+Python packages come from `scripts/check-python.py` (BUILDING.md). 3.6c, FCP
+7 XML (ours: `fcp_xml.*`, docs/spec/fcp-xml.md, through the OTIO import and
+export; `--import-fcpxml`/`--export-fcpxml`, Import Media, Export to File's
+"Final Cut Pro 7 XML"; ctests `fcpxml_round_trip`, `fcpxml_python`, fuzz
+target `fcpxml`), is done, so 3.6 is. Left in Phase 3: shared-storage bin
+locking, 3.5 (deferred) and the gates that wait for the owner's seat.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

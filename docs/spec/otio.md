@@ -78,7 +78,10 @@ A JSON document. Every object names its schema and version in
   again names the same clip, and `reuseClips()` drops the clips a project
   already has. The URL is kept as the clip's import source (a path for
   `file:` URLs), which Relink uses (p.969). Start and length come from the
-  `available_range`, else from what the clips use.
+  `available_range`, else from what the clips use. `file://localhost/` is
+  the same file as `file:///`. The same URL with another available start
+  (Premiere's FCP XML has a file for each clip, fcp-xml.md) is other media:
+  its key adds the start.
 * **Sequences.** Each timeline becomes a sequence named by the timeline (or
   `ImportOptions::name`), starting at `global_start_time`. Video tracks are
   V1, V2, ..., audio tracks A1, A2, ..., in the stack's order; other kinds

@@ -13,6 +13,7 @@
 #include "lumenis/interop/avb_import.h"
 #include "lumenis/interop/avb_writer.h"
 #include "lumenis/interop/edl.h"
+#include "lumenis/interop/fcp_xml.h"
 #include "lumenis/interop/otio.h"
 #include "lumenis/model/structure.h"
 #include "lumenis/model/locations.h"
@@ -93,7 +94,8 @@
 // one of the command-line tools below and exits, or opens the editor (Select Project, then
 // lumenis::ui::MainWindow). The options are declared in main() and handled in this order:
 // --list-providers, --probe, --dump-structure, --export-aaf, --export-avb, --export-edl, --export-ale,
-// --export-otio, --import-aaf, --import-avb, --import-edl, --import-ale, --import-otio,
+// --export-otio, --export-fcpxml, --import-aaf, --import-avb, --import-edl, --import-ale, --import-otio,
+// --import-fcpxml,
 // --dump-aaf, --dump-avb, --rewrite-avb, --write-media and --framemd5 need no display (isHeadlessInvocation()); --dump-menus,
 // --measure-playback, --screenshot and --smoke-test open the main window; --project or Select
 // Project start a normal session. The scripts that run these are in scripts/ (decode-corpus.py,
@@ -112,7 +114,7 @@ bool isHeadlessInvocation(int argc, char** argv) {
             || arg == "--dump-structure" || arg == "--dump-aaf" || arg == "--dump-avb" || arg == "--import-aaf" || arg == "--import-avb"
             || arg == "--export-aaf" || arg == "--export-avb" || arg == "--rewrite-avb" || arg == "--import-edl"
             || arg == "--export-edl" || arg == "--import-ale" || arg == "--export-ale" || arg == "--import-otio"
-            || arg == "--export-otio") {
+            || arg == "--export-otio" || arg == "--import-fcpxml" || arg == "--export-fcpxml") {
             return true;
         }
     }
@@ -362,6 +364,18 @@ int main(int argc, char** argv) {
         QStringLiteral("bin"));
     parser.addOption(importOtio);
     parser.addOption(exportOtio);
+    const QCommandLineOption importFcpXml(
+        QStringLiteral("import-fcpxml"),
+        QStringLiteral("Import a Final Cut Pro 7 XML file (xmeml) into a bin, as --import-otio does. Print the bin's "
+                       "structure dump, then exit (docs/spec/fcp-xml.md)."),
+        QStringLiteral("file"));
+    const QCommandLineOption exportFcpXml(
+        QStringLiteral("export-fcpxml"),
+        QStringLiteral("Write the sequence named after the bin (.cthbin) as Final Cut Pro 7 XML to the file given after "
+                       "the name, then exit (docs/spec/fcp-xml.md). An FCP XML or .otio file is imported first."),
+        QStringLiteral("bin"));
+    parser.addOption(importFcpXml);
+    parser.addOption(exportFcpXml);
     parser.addOption(canonical);
     parser.addOption(writeMedia);
     parser.addOption(mediaDrive);
@@ -589,23 +603,28 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    // --export-otio <bin> SEQUENCE OUT: a sequence of a .cthbin (its clips found in that bin and the
-    // other bins of its folder) or of an .otio's import (a round trip, scripts/otio-check.py), written
-    // by interop::otio::exportFile() (docs/spec/otio.md). Warnings go to stderr; exit status 2 for
-    // wrong arguments.
-    if (parser.isSet(exportOtio)) {
+    // --export-otio <bin> SEQUENCE OUT and --export-fcpxml (the same, written as FCP XML): a sequence
+    // of a .cthbin (its clips found in that bin and the other bins of its folder), or of an .otio's or
+    // an FCP XML file's import (a round trip, scripts/otio-check.py), written by
+    // interop::otio::exportFile() or interop::fcpxml::exportFile() (docs/spec/otio.md,
+    // docs/spec/fcp-xml.md). Warnings go to stderr; exit status 2 for wrong arguments.
+    if (parser.isSet(exportOtio) || parser.isSet(exportFcpXml)) {
         QString error;
-        const QString from = parser.value(exportOtio);
+        const bool toFcp = parser.isSet(exportFcpXml);
+        const char* option = toFcp ? "--export-fcpxml" : "--export-otio";
+        const QString from = parser.value(toFcp ? exportFcpXml : exportOtio);
         const QStringList rest = parser.positionalArguments();
         QList<lumenis::model::BinItem> items;
-        const bool isOtio = from.endsWith(QLatin1String(".otio"), Qt::CaseInsensitive);
+        const bool fromFcp = lumenis::interop::fcpxml::isFcpXmlFile(from);
+        const bool isOtio = fromFcp || from.endsWith(QLatin1String(".otio"), Qt::CaseInsensitive);
         if (isOtio) {
-            const auto imported = lumenis::interop::otio::importFile(from, {}, &error);
+            const auto imported = fromFcp ? lumenis::interop::fcpxml::importFile(from, {}, &error)
+                                          : lumenis::interop::otio::importFile(from, {}, &error);
             if (!imported) {
                 std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(from), qPrintable(error));
                 return 1;
             }
-            for (const QString& w : imported->warnings) std::fprintf(stderr, "import-otio: %s\n", qPrintable(w));
+            for (const QString& w : imported->warnings) std::fprintf(stderr, "import: %s\n", qPrintable(w));
             items = imported->items;
         } else {
             const auto bin = lumenis::model::BinFile::read(from, &error);
@@ -621,7 +640,7 @@ int main(int argc, char** argv) {
             }
         }
         if (rest.size() != 2 && !(isOtio && rest.size() == 1)) {
-            std::fprintf(stderr, "--export-otio needs the sequence's name and the file to write after the bin\n");
+            std::fprintf(stderr, "%s needs the sequence's name and the file to write after the bin\n", option);
             return 2;
         }
         const lumenis::model::BinItem* sequence = nullptr;
@@ -641,8 +660,9 @@ int main(int argc, char** argv) {
             }
             return std::nullopt;
         };
-        const auto result = lumenis::interop::otio::exportFile(*sequence, rest.last(), options);
-        for (const QString& w : result.warnings) std::fprintf(stderr, "export-otio: %s\n", qPrintable(w));
+        const auto result = toFcp ? lumenis::interop::fcpxml::exportFile(*sequence, rest.last(), options)
+                                  : lumenis::interop::otio::exportFile(*sequence, rest.last(), options);
+        for (const QString& w : result.warnings) std::fprintf(stderr, "%s: %s\n", option + 2, qPrintable(w));
         if (!result.ok) {
             std::fprintf(stderr, "cannot write %s: %s\n", qPrintable(rest.last()), qPrintable(result.error));
             return 1;
@@ -741,6 +761,17 @@ int main(int argc, char** argv) {
             return 1;
         }
         printImported(path, imported->warnings, "import-otio", imported->items, {});
+        return 0;
+    }
+    if (parser.isSet(importFcpXml)) {
+        QString error;
+        const QString path = parser.value(importFcpXml);
+        const auto imported = lumenis::interop::fcpxml::importFile(path, {}, &error);
+        if (!imported) {
+            std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(path), qPrintable(error));
+            return 1;
+        }
+        printImported(path, imported->warnings, "import-fcpxml", imported->items, {});
         return 0;
     }
     if (parser.isSet(importAle)) {
