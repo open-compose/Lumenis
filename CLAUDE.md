@@ -218,7 +218,9 @@ owner's seat. 3.5, `.avp` projects and `.avs` settings, is deferred (no
 prior art, samples or seat; ROADMAP). 3.6a, EDL and ALE (`edl.*`,
 `ale.*`, `--import-edl`/`--export-edl`/`--import-ale`/`--export-ale`; Import
 EDL, the List Tool `list_tool.*`, Export Bin, shot logs through Import), is
-done. Next is 3.6b, OTIO and FCP XML.
+done. Gate 4 (fuzzing, `fuzz/`, `scripts/fuzz.py`) passed: the 24-hour
+run on the WSL runner was clean (BUILDING.md "Fuzzing"). Next is 3.6b, OTIO
+and FCP XML.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

@@ -648,9 +648,11 @@ and pyaaf2's test suites, made with real Media Composer
     bin readers, importers and the bin writer (`fuzz/`, `scripts/fuzz.py`,
     BUILDING.md "Fuzzing") found and fixed 9 bugs (hangs, a division by
     zero, an overflow, three writer round-trip slips); saved inputs replay
-    on every platform (ctest `fuzz_replay`). Runs of 35-61 minutes per
-    target are clean. The 24-hour run itself is by hand on the self-hosted
-    Linux runner (`.github/workflows/fuzz.yml`, needs `libclang-rt-dev`).
+    on every platform (ctest `fuzz_replay`). The 24-hour run is by hand on
+    the self-hosted Linux runner (`.github/workflows/fuzz.yml`, needs
+    `libclang-rt-dev`). The first three found three more bugs in the AAF
+    dump and import (fixed, with regression inputs); the fourth
+    (2026-10-23/24, run 39992718177) was clean on every target: **passed**.
   * Next: 3.6b, OTIO and FCP XML.
 
 ### Phase 4 — Core editing

@@ -961,8 +961,23 @@ regression input and a unit test. The first three 24-hour gate runs
 hours and then stopped in `aaf`, each on a new bug: a dump that grew with
 the product of repeated references (a timeout), and two signed overflows in
 the import's frame arithmetic, also kept as regression inputs. Runs now go
-on after a failure, so one run reports all it finds; the gate has not passed
-yet.
+on after a failure, so one run reports all it finds. The fourth run
+(2026-10-23 17:09 to 2026-10-24 17:16 UTC, run 39992718177, 2 processes a
+target) was clean on every target, and the gate passed:
+
+| Target | Seconds | Executions | Exec/s | Coverage (cov / ft) | Corpus | Result |
+| --- | --- | --- | --- | --- | --- | --- |
+| `cfb` | 9,632 | 3,884,980 | 192 | 1,695 / 9,069 | 510 | clean |
+| `aaf` | 28,930 | 8,091,179 | 77 | 7,889 / 41,087 | 1,743 | clean |
+| `avb` | 28,842 | 43,284,447 | 841 | 6,496 / 27,495 | 2,105 | clean |
+| `avb_rewrite` | 19,334 | 37,310,820 | 1,031 | 3,552 / 18,916 | 1,613 | clean |
+
+The log is on GitHub: the repository's Actions tab, the Fuzz workflow, the
+run, then its job; the table above is its `== summary`. Download it with
+`gh run view <run id> --log > fuzz.log` (or the job page's gear menu,
+"Download log archive"). The runner also keeps each target's libFuzzer log
+in `_work/Lumenis/cutthulhu-fuzz/artifacts/<target>/fuzz.log` until the
+next run.
 
 ## Command-line options
 
