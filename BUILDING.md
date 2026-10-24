@@ -613,6 +613,18 @@ python3-dev`, then run `scripts/check-python.py` (or the `pip install`)
 again. It builds and passes `otio_python` on 3.14. Configuring prints the packages still missing
 ([Python packages for the checks](#python-packages-for-the-checks)).
 
+### CI: "Python packages for the checks" takes long or stops after 20 minutes
+
+`scripts/check-python.py` runs pip without `-q`, so the step's log shows
+what pip was fetching or building when it stalled. pip asks nothing
+(`--no-input`), gives up on a stalled connection after 60 s, and the
+install is stopped after 20 minutes (the step after 25), so the job goes on
+with those checks skipped. A first run that compiles OpenTimelineIO takes a
+few minutes; later runs take under a second. If it stalls on a download,
+check the machine's network or proxy for pip (`pip config list`). An
+earlier, quiet version once ran for 37 minutes on the Windows runner
+without a word.
+
 ### Fuzzing: "cannot find .../libclang_rt.fuzzer-x86_64.a"
 
 Clang is installed without its runtime libraries (libFuzzer, the
@@ -830,9 +842,12 @@ install a runner. For a runner installed before that:
 * **Mac:** nothing; the next job makes it. With only the Command Line
   Tools' Python 3.9, pip compiles OpenTimelineIO (a few minutes, once);
   `brew install python` avoids that.
-* **Windows:** in an elevated PowerShell, `scripts\setup-windows-runner.ps1
-  python`. The runner's user cannot use a Python installed in your profile,
-  so this installs Python 3.12 for all users, makes the environment in
+* **Windows:** nothing when a Python is installed for all users (in
+  `C:\Program Files`, on the runner's PATH): the next job makes the
+  environment in the runner's profile. Otherwise, in an elevated
+  PowerShell, `scripts\setup-windows-runner.ps1 python`: the runner's user
+  cannot use a Python installed in your profile, so this installs Python
+  3.12 for all users, makes the environment in
   `C:\actions-runner-tools\check-venv` and names it in the runner's `.env`
   (`CUTTHULHU_CHECK_VENV`).
 

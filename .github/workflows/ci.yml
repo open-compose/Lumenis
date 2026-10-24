@@ -50,6 +50,7 @@ jobs:
         # changes (BUILDING.md, "Python packages for the checks"). If it cannot
         # be made, the build goes on and those checks are skipped.
         continue-on-error: true
+        timeout-minutes: 25
         run: |
           if ! python3 scripts/check-python.py --github-env; then
             echo "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above (BUILDING.md, Python packages for the checks)"
@@ -156,6 +157,7 @@ jobs:
         # changes (BUILDING.md, "Python packages for the checks"). If it cannot
         # be made, the build goes on and those checks are skipped.
         continue-on-error: true
+        timeout-minutes: 25
         run: |
           if ! python3 scripts/check-python.py --github-env; then
             echo "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above (BUILDING.md, Python packages for the checks)"
@@ -224,6 +226,7 @@ jobs:
         # changes (BUILDING.md, "Python packages for the checks"). If it cannot
         # be made, the build goes on and those checks are skipped.
         continue-on-error: true
+        timeout-minutes: 25
         run: |
           if ! python3 scripts/check-python.py --github-env; then
             echo "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above (BUILDING.md, Python packages for the checks)"
@@ -325,6 +328,7 @@ jobs:
         # changes (BUILDING.md, "Python packages for the checks"). If it cannot
         # be made, the build goes on and those checks are skipped.
         continue-on-error: true
+        timeout-minutes: 25
         run: |
           if ! python3 scripts/check-python.py --github-env; then
             echo "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above (BUILDING.md, Python packages for the checks)"
@@ -449,13 +453,14 @@ jobs:
         # checks"). setup-windows-runner.ps1 makes the environment and names it
         # in CUTTHULHU_CHECK_VENV.
         continue-on-error: true
+        timeout-minutes: 25
         shell: powershell
         run: |
           $venvPy = if ($env:CUTTHULHU_CHECK_VENV) { Join-Path $env:CUTTHULHU_CHECK_VENV 'Scripts\python.exe' } else { '' }
           $py = if ($venvPy -and (Test-Path $venvPy)) { $venvPy } else { @('python', 'py') | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } | Select-Object -First 1 }
           if ($py) { & $py scripts/check-python.py --github-env }
           if (-not $py -or $LASTEXITCODE -ne 0) {
-            Write-Host "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: run scripts\setup-windows-runner.ps1 install again (BUILDING.md, Python packages for the checks)"
+            Write-Host "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above, or run scripts\setup-windows-runner.ps1 python (BUILDING.md, Python packages for the checks)"
             exit 1
           }
 
@@ -623,6 +628,7 @@ jobs:
         # changes (BUILDING.md, "Python packages for the checks"). If it cannot
         # be made, the build goes on and those checks are skipped.
         continue-on-error: true
+        timeout-minutes: 25
         run: |
           if ! python3 scripts/check-python.py --github-env; then
             echo "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above (BUILDING.md, Python packages for the checks)"
@@ -738,13 +744,14 @@ jobs:
         # checks"). setup-windows-runner.ps1 makes the environment and names it
         # in CUTTHULHU_CHECK_VENV.
         continue-on-error: true
+        timeout-minutes: 25
         shell: powershell
         run: |
           $venvPy = if ($env:CUTTHULHU_CHECK_VENV) { Join-Path $env:CUTTHULHU_CHECK_VENV 'Scripts\python.exe' } else { '' }
           $py = if ($venvPy -and (Test-Path $venvPy)) { $venvPy } else { @('python', 'py') | Where-Object { Get-Command $_ -ErrorAction SilentlyContinue } | Select-Object -First 1 }
           if ($py) { & $py scripts/check-python.py --github-env }
           if (-not $py -or $LASTEXITCODE -ne 0) {
-            Write-Host "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: run scripts\setup-windows-runner.ps1 install again (BUILDING.md, Python packages for the checks)"
+            Write-Host "::error::The Python packages for the interchange checks could not be installed, so those checks are skipped: see the log above, or run scripts\setup-windows-runner.ps1 python (BUILDING.md, Python packages for the checks)"
             exit 1
           }
 

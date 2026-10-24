@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parent.parent
 REQUIREMENTS = ROOT / "scripts" / "check-requirements.txt"
 STAMP = "cutthulhu-requirements.txt"  # a copy of what was installed, inside the environment
 MODULES = ["olefile", "aaf2", "avb", "opentimelineio"]
+PIP_MINUTES = 20  # compiling opentimelineio, where pip has no wheel, takes a few
 
 
 def python_of(env: Path) -> Path:
@@ -79,8 +80,18 @@ def main() -> int:
         if not python.exists() or subprocess.run([str(python), "-c", "pass"], capture_output=True).returncode != 0:
             make(env)
         print(f"check-python: installing {', '.join(MODULES)} into {env}")
-        pip = [str(python), "-m", "pip", "install", "--disable-pip-version-check", "-q", "-r", str(REQUIREMENTS)]
-        if subprocess.run(pip).returncode != 0:
+        # Not quiet, and never waiting: pip says what it is fetching or building (in CI's log), asks
+        # nothing (--no-input), gives up on a stalled connection (--timeout), and the whole install
+        # gets PIP_MINUTES (a silent pip once ran for 37 minutes on a runner until cancelled).
+        pip = [str(python), "-m", "pip", "install", "--disable-pip-version-check", "--no-input", "--progress-bar", "off",
+               "--timeout", "60", "-r", str(REQUIREMENTS)]
+        try:
+            status = subprocess.run(pip, timeout=PIP_MINUTES * 60).returncode
+        except subprocess.TimeoutExpired:
+            print(f"check-python: pip install took over {PIP_MINUTES} minutes and was stopped; see what it "
+                  "printed above", file=sys.stderr)
+            return 1
+        if status != 0:
             print(f"check-python: pip install failed; {hint()}", file=sys.stderr)
             return 1
         if not works(python):
