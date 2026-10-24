@@ -1,6 +1,7 @@
 #include "lumenis/interop/aaf_export.h"
 #include "lumenis/interop/ale.h"
 #include "lumenis/interop/edl.h"
+#include "lumenis/interop/otio.h"
 #include "lumenis/interop/avb_export.h"
 #include "lumenis/interop/aaf_import.h"
 #include "lumenis/interop/avb_import.h"
@@ -357,8 +358,15 @@ void MainWindow::createPanels() {
             mediaDb_.resolve(item);
         }
     });
-    connect(binContainer_, &BinContainer::filesDropped, this,
-            [this](const QString& binId, const QStringList& paths) { linkFiles(binId, paths); });
+    // Files dropped into a bin are linked (p.317); OpenTimelineIO files among them are imported
+    // (p.969 step 1).
+    connect(binContainer_, &BinContainer::filesDropped, this, [this](const QString& binId, const QStringList& paths) {
+        QStringList media;
+        QStringList timelines;
+        for (const QString& p : paths) (interop::otio::isOtioFile(p) ? timelines : media) << p;
+        importOtio(binId, timelines);
+        linkFiles(binId, media);
+    });
     // Favorite Bins (p.293) and saved bin views (p.249) are User settings:
     // kept in the active Bin setting, and read back in applySettings().
     connect(binContainer_, &BinContainer::favoritesChanged, this, [this] {
@@ -1682,6 +1690,41 @@ void MainWindow::exportToFile() {
     for (const QString& w : warnings) ConsoleLog::instance().append(tr("Export to File: %1").arg(w));
 }
 
+// Each file is imported on its own, as importAaf() does with AAF files. The media a timeline names
+// that a clip of the bin already stands for (the same MobID, interop::otio::mediaMobId) is that clip;
+// the rest are offline master clips, to be relinked (p.969).
+QStringList MainWindow::importOtio(const QString& binId, const QStringList& paths) {
+    if (paths.isEmpty()) return {};
+    BinDocument* doc = binContainer_->document(binId);
+    if (!doc) doc = binContainer_->openBin(binId);
+    if (!doc) return {};
+    QStringList ids;
+    for (const QString& path : paths) {
+        QString error;
+        interop::otio::ImportOptions options;
+        options.binId = doc->nodeId();
+        options.when = QDateTime::currentDateTimeUtc();
+        auto imported = interop::otio::importFile(path, options, &error);
+        if (!imported) {
+            ConsoleLog::instance().append(tr("Import: %1").arg(error));
+            continue;
+        }
+        interop::otio::reuseClips(*imported, doc->bin().items);
+        int sequences = 0;
+        for (const model::BinItem& item : imported->items) {
+            if (item.kind == model::BinItemKind::Sequence) ++sequences;
+            doc->addItem(item);
+            ids << item.id;
+        }
+        ConsoleLog::instance().append(tr("Import: %1: %n sequence(s), %2 clip(s)", "", sequences)
+                                          .arg(QFileInfo(path).fileName())
+                                          .arg(imported->items.size() - sequences));
+        for (const QString& w : imported->warnings) ConsoleLog::instance().append(tr("Import: %1: %2").arg(QFileInfo(path).fileName(), w));
+    }
+    if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
+    return ids;
+}
+
 // Each log is imported on its own, as importAaf() does with AAF files; the logs' custom columns are
 // added to the bin's display.
 QStringList MainWindow::importShotLogs(const QString& binId, const QStringList& paths) {
@@ -1856,14 +1899,20 @@ std::function<std::optional<model::BinItem>(const MobId&, const QString&)> MainW
 // A file that fails is named in the Console; once Cancel was clicked, the first failure ends the
 // import. Returns the new items' ids, the AAF ones first.
 QStringList MainWindow::importFiles(const QString& binId, const QStringList& allPaths, const QString& resolution) {
-    // AAF files are compositions, not media (p.547); shot logs are clip information (p.131-132).
+    // AAF files are compositions, not media (p.547); shot logs are clip information (p.131-132);
+    // OpenTimelineIO files are timelines (p.969).
     QStringList paths;
     QStringList aaf;
     QStringList logs;
+    QStringList timelines;
     for (const QString& p : allPaths) {
-        (p.endsWith(QLatin1String(".aaf"), Qt::CaseInsensitive) ? aaf : interop::ale::isShotLog(p) ? logs : paths) << p;
+        (p.endsWith(QLatin1String(".aaf"), Qt::CaseInsensitive) ? aaf
+         : interop::ale::isShotLog(p)                           ? logs
+         : interop::otio::isOtioFile(p)                         ? timelines
+                                                                : paths)
+            << p;
     }
-    QStringList fromAaf = importAaf(binId, aaf) + importShotLogs(binId, logs);
+    QStringList fromAaf = importAaf(binId, aaf) + importShotLogs(binId, logs) + importOtio(binId, timelines);
     BinDocument* doc = binContainer_->document(binId);
     if (!doc) doc = binContainer_->openBin(binId);
     if (!doc || paths.isEmpty()) return fromAaf;

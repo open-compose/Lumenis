@@ -98,8 +98,9 @@ headers in `include/lumenis/<library>/`.
    sequence as an EDL (`--export-edl`). Shot logs import as master clips
    (the Source Browser's Import, `--import-ale`) and are written by Export
    Bin and Export to File (`--export-ale`). OpenTimelineIO files import as
-   offline master clips and sequences and are written from a sequence
-   (`--import-otio`, `--export-otio`).
+   offline master clips and sequences (Import Media, a drop into a bin,
+   `--import-otio`) and are written from a sequence (the List Tool's OTIO
+   output, `--export-otio`).
 
 ## Tests
 

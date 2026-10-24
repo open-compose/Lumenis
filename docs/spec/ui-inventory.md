@@ -2113,9 +2113,10 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
 * **Our choices, unverified.** Defaults the guide does not give: Export As
   AAF, the two Include options on, Link to (Don't Export) Media.
 
-## 19. EDLs and shot logs (p.106-132, p.939-968, p.1174)
+## 19. EDLs, shot logs and OpenTimelineIO (p.106-132, p.939-969, p.1174)
 
-The formats and what maps are in docs/spec/edl.md and docs/spec/ale.md.
+The formats and what maps are in docs/spec/edl.md, docs/spec/ale.md and
+docs/spec/otio.md.
 
 ### File > Input > Import EDL (p.951-952)
 * Steps: File > Input > Import EDL; the Select File to Open dialog; a
@@ -2133,15 +2134,24 @@ The formats and what maps are in docs/spec/edl.md and docs/spec/ale.md.
 * Later: Decompose (p.951-952 steps 8-11).
 
 ### Tools > List Tool (p.944-960)
-* A tool panel. Left (p.945, p.947 pictures): Active Setting (Default EDL;
-  dimmed: Save As and Remove Current, p.956-957, later), Output Format, List
+* A tool panel. Left (p.945, p.947 pictures): Active Setting (Default EDL
+  and Default OpenTimelineIO, p.969 note; Save As and Remove Current,
+  p.956-957, later), Output Format, List
   / Change List (Change List dimmed), the Input, List Options and
   Formatting tabs. Right: Preview, Save List, Clear List, New List, Clone
   List; the Master EDL and Sources tabs (p.947 picture).
 * Output Format lists CMX_3600, CMX_DigitalCut, CMX_Transfer, Cuedos,
   File_16, File_32, File_129, then Columnar, TabbedLists, WebLists, XML
-  (p.945 picture, p.947 step 2). CMX_3600 and File_129 work; the rest are
-  dimmed.
+  (p.945 picture, p.947 step 2), then OTIO (p.969 step 2). CMX_3600,
+  File_129 and OTIO work; the rest are dimmed. **Our choice, unverified:**
+  OTIO last (the p.945 picture predates it).
+* Default OpenTimelineIO and the OTIO format go together: choosing the
+  setting chooses OTIO, choosing OTIO makes it the active setting
+  ("current user profiles can create one by setting the output format to
+  OTIO", p.969), and an EDL format brings back Default EDL. With OTIO,
+  Preview shows the .otio file's JSON in Master EDL, and Save List writes
+  an `.otio` file (p.969 step 3); the List Options and Formatting tabs do
+  not apply to it.
 * Input tab (p.945, p.948 steps 3-4): the sequence (Load: the Record
   monitor's; Clear), a toggle button for each track, all on, and the Title,
   the sequence's name. A sequence selected in the active bin when the tool
@@ -2163,6 +2173,16 @@ The formats and what maps are in docs/spec/edl.md and docs/spec/ale.md.
 * Later: multiple files, Edit mode with Find (p.949-950), New List, Clone
   List, Sources' Save List, the template's case setting (p.950: names are
   capitalized).
+
+### OpenTimelineIO import (p.969)
+* File > Input > Import Media with an `.otio` file (step 2), or a drop of
+  `.otio` files into a bin (step 1), from the Source Browser or the
+  desktop's file manager: a sequence for each timeline and an offline
+  master clip for each piece of media, its file kept for Relink > Managed
+  Media; clips the bin holds already (the same media) are used again. The
+  counts and warnings go to the Console.
+* A bin's own Input > Import Media (step 3, a right-click in the bin)
+  comes with the bin's context menu, later.
 
 ### Shot logs
 * **Import** (p.131-132): Import in the Source Browser of an `.ale` file

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/interop/edl.h"
+#include "lumenis/interop/otio.h"
 #include "lumenis/model/bin.h"
 
 #include <QString>
@@ -22,7 +23,8 @@ class QToolButton;
 
 namespace lumenis::ui {
 
-// Tools > List Tool (Editing Guide p.944-960), for EDLs. Left: Active Setting and Output Format,
+// Tools > List Tool (Editing Guide p.944-960), for EDLs and OpenTimelineIO files (the OTIO output
+// format and the Default OpenTimelineIO setting, p.969). Left: Active Setting and Output Format,
 // then the Input tab (the sequence, with Load and Clear; a button for each track; the Title), the
 // List Options tab and the Formatting tab. Right: Preview, Save List and Clear List, and the Master
 // EDL and Sources tabs that show the list. The EDL Output Types written are CMX_3600 and File_129
@@ -45,8 +47,11 @@ public:
     bool hasSequence() const { return sequence_.has_value(); }
     const std::optional<model::BinItem>& sequence() const { return sequence_; }
 
-    // The export options the tabs say.
+    // The export options the tabs say: for an EDL, and for OTIO (the tracks and clips only).
     interop::edl::ExportOptions options() const;
+    interop::otio::ExportOptions otioOptions() const;
+    // Whether the Output Format is OTIO (Save List then writes an .otio file).
+    bool isOtio() const;
     // Preview (step 8): makes the list and shows it in Master EDL, its reels in Sources. Returns the
     // list; empty without a sequence. The warnings go to message().
     QString preview();
@@ -59,6 +64,7 @@ public:
 
     // The widgets, for tests.
     QComboBox* outputFormat() const { return format_; }
+    QComboBox* activeSetting() const { return setting_; }
     QLineEdit* title() const { return title_; }
     QPlainTextEdit* masterList() const { return master_; }
     QPlainTextEdit* sourcesList() const { return sources_; }
@@ -79,11 +85,15 @@ signals:
 private:
     void rebuildTracks();
     void saveClicked();
+    void formatChanged();
+    // The Tracks pane's tracks that are on ("-" alone when none is, so that nothing is listed).
+    QStringList listedTracks() const;
 
     std::optional<model::BinItem> sequence_;
     Resolver resolve_;
     QString made_; // the last list made, for Save List
 
+    QComboBox* setting_ = nullptr;
     QComboBox* format_ = nullptr;
     QLabel* sequenceLabel_ = nullptr;
     QPushButton* load_ = nullptr;

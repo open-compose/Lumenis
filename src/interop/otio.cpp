@@ -892,6 +892,10 @@ private:
 
 } // namespace
 
+bool isOtioFile(const QString& path) {
+    return path.endsWith(QLatin1String(".otio"), Qt::CaseInsensitive);
+}
+
 MobId mediaMobId(const QString& key) {
     return model::derivedMobId(QStringLiteral("otio-media:") + key);
 }

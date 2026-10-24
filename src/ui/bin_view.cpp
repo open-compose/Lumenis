@@ -24,6 +24,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QUrl>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPlainTextEdit>
@@ -519,8 +520,22 @@ Qt::DropActions BinItemModel::supportedDropActions() const {
 }
 
 QStringList BinItemModel::mimeTypes() const {
-    return {binItemsMime(), mediaFilesMime()};
+    // text/uri-list: files dragged in from the desktop (an .otio dropped into a bin, p.969).
+    return {binItemsMime(), mediaFilesMime(), QStringLiteral("text/uri-list")};
 }
+
+namespace {
+
+// The local files among a drop's URLs (files dragged in from the desktop's file manager).
+QStringList localFiles(const QMimeData* data) {
+    QStringList paths;
+    for (const QUrl& url : data->urls()) {
+        if (url.isLocalFile()) paths << url.toLocalFile();
+    }
+    return paths;
+}
+
+} // namespace
 
 QMimeData* BinItemModel::mimeData(const QModelIndexList& indexes) const {
     // The bin first, then the items.
@@ -537,7 +552,7 @@ QMimeData* BinItemModel::mimeData(const QModelIndexList& indexes) const {
 bool BinItemModel::canDropMimeData(const QMimeData* data, Qt::DropAction, int, int, const QModelIndex&) const {
     // Files from the Source Browser are linked into the bin (p.317).
     if (data->hasFormat(mediaFilesMime())) return true;
-    if (!data->hasFormat(binItemsMime())) return false;
+    if (!data->hasFormat(binItemsMime())) return !localFiles(data).isEmpty();
     // Items from this same bin are refused: the Text and Frame views do not
     // reorder by dragging (only the Script view does).
     const QString from = QString::fromUtf8(data->data(binItemsMime())).section(QLatin1Char('\n'), 0, 0);
@@ -549,6 +564,10 @@ bool BinItemModel::dropMimeData(const QMimeData* data, Qt::DropAction action, in
     if (!canDropMimeData(data, action, row, column, parent)) return false;
     if (data->hasFormat(mediaFilesMime())) {
         emit filesDropped(QString::fromUtf8(data->data(mediaFilesMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts));
+        return true;
+    }
+    if (!data->hasFormat(binItemsMime())) {
+        emit filesDropped(localFiles(data));
         return true;
     }
     QStringList lines = QString::fromUtf8(data->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);

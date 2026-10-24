@@ -24,6 +24,10 @@
 // and markers.
 namespace lumenis::interop::otio {
 
+// Whether `path` names an OpenTimelineIO file: by its .otio extension (Import Media and a bin drop
+// send it to the import, p.969).
+bool isOtioFile(const QString& path);
+
 // The MobID of the master clip an import makes for a piece of media (its file's URL, else the media
 // reference's or the clip's name): the same for every import of the same media, so that a timeline
 // imported again, or another of the same material, names the same clips. A name-based UUID

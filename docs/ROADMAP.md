@@ -648,8 +648,10 @@ and pyaaf2's test suites, made with real Media Composer
     clips and sequences, a sequence out as a Timeline; `--import-otio`,
     `--export-otio`) are done, checked against OpenTimelineIO's own reader
     (ctests `otio_round_trip`, `otio_python`, `tst_otio`) and fuzzed (target
-    `otio`). Next in 3.6b: Import Media, the List Tool's OTIO output and the
-    Default OpenTimelineIO setting (p.968-969); then 3.6c, FCP XML.
+    `otio`). In the application (p.969): Import Media and drops into a bin
+    take `.otio` files (`MainWindow::importOtio`), and the List Tool has the
+    OTIO output format with the Default OpenTimelineIO setting (test
+    `tst_interchange`). 3.6b is done; next is 3.6c, FCP XML.
   * Gate 4 (fuzzing): libFuzzer targets for the compound file, AAF and
     bin readers, importers and the bin writer (`fuzz/`, `scripts/fuzz.py`,
     BUILDING.md "Fuzzing") found and fixed 9 bugs (hangs, a division by
@@ -659,7 +661,7 @@ and pyaaf2's test suites, made with real Media Composer
     `libclang-rt-dev`). The first three found three more bugs in the AAF
     dump and import (fixed, with regression inputs); the fourth
     (2026-10-23/24, run 39992718177) was clean on every target: **passed**.
-  * Next: 3.6b's application side, then 3.6c, FCP XML.
+  * Next: 3.6c, FCP XML.
 
 ### Phase 4 — Core editing
 Features in this phase:

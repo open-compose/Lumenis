@@ -1,5 +1,6 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/interop/edl.h"
+#include "lumenis/interop/otio.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
@@ -20,6 +21,7 @@
 #include <QDir>
 #include <QFile>
 #include <QLineEdit>
+#include <QMimeData>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSpinBox>
@@ -27,10 +29,13 @@
 #include <QTemporaryDir>
 #include <QTest>
 #include <QToolButton>
+#include <QUrl>
 
 // The EDL and shot log entry points of the application (Phase 3.6a): File > Input > Import EDL
 // (p.951), Tools > List Tool (p.944-960), shot logs imported through the Source Browser's Import
-// (p.131-132), File > Output > Export Bin (p.130) and Export to File as Avid Log Exchange (p.1174).
+// (p.131-132), File > Output > Export Bin (p.130) and Export to File as Avid Log Exchange (p.1174);
+// and OpenTimelineIO (Phase 3.6b, p.969): Import Media, a drop into a bin, and the List Tool's OTIO
+// output with the Default OpenTimelineIO setting.
 
 using namespace lumenis;
 using namespace lumenis::ui;
@@ -83,6 +88,41 @@ const QByteArray kLog = QByteArrayLiteral(
     "Column\r\nName\tTracks\tStart\tEnd\tTape\tScene\tCircled\r\n\r\nData\r\n"
     "Take 1\tVA1A2\t10:00:00:00\t10:00:10:00\tDAY1\t4\tyes\r\n"
     "Take 2\tVA1A2\t10:00:10:00\t10:00:20:00\tDAY1\t4\t\r\n");
+
+// An OTIO timeline at 25 fps: two clips of two files on V1, joined by a 10-frame dissolve.
+const QByteArray kOtio = QByteArrayLiteral(
+    "{\n"
+    "  \"OTIO_SCHEMA\": \"Timeline.1\", \"name\": \"Harbor Turnover\",\n"
+    "  \"global_start_time\": {\"OTIO_SCHEMA\": \"RationalTime.1\", \"rate\": 25, \"value\": 90000},\n"
+    "  \"tracks\": {\"OTIO_SCHEMA\": \"Stack.1\", \"name\": \"tracks\", \"children\": [\n"
+    "    {\"OTIO_SCHEMA\": \"Track.1\", \"name\": \"V1\", \"kind\": \"Video\", \"children\": [\n"
+    "      {\"OTIO_SCHEMA\": \"Clip.1\", \"name\": \"Wide\",\n"
+    "       \"source_range\": {\"OTIO_SCHEMA\": \"TimeRange.1\",\n"
+    "         \"start_time\": {\"OTIO_SCHEMA\": \"RationalTime.1\", \"rate\": 25, \"value\": 50},\n"
+    "         \"duration\": {\"OTIO_SCHEMA\": \"RationalTime.1\", \"rate\": 25, \"value\": 100}},\n"
+    "       \"media_reference\": {\"OTIO_SCHEMA\": \"ExternalReference.1\", \"target_url\": \"file:///media/wide.mov\",\n"
+    "         \"available_range\": {\"OTIO_SCHEMA\": \"TimeRange.1\",\n"
+    "           \"start_time\": {\"OTIO_SCHEMA\": \"RationalTime.1\", \"rate\": 25, \"value\": 0},\n"
+    "           \"duration\": {\"OTIO_SCHEMA\": \"RationalTime.1\", \"rate\": 25, \"value\": 500}}}},\n"
+    "      {\"OTIO_SCHEMA\": \"Transition.1\", \"transition_type\": \"SMPTE_Dissolve\",\n"
+    "       \"in_offset\": {\"OTIO_SCHEMA\": \"RationalTime.1\", \"rate\": 25, \"value\": 5},\n"
+    "       \"out_offset\": {\"OTIO_SCHEMA\": \"RationalTime.1\", \"rate\": 25, \"value\": 5}},\n"
+    "      {\"OTIO_SCHEMA\": \"Clip.1\", \"name\": \"Close\",\n"
+    "       \"source_range\": {\"OTIO_SCHEMA\": \"TimeRange.1\",\n"
+    "         \"start_time\": {\"OTIO_SCHEMA\": \"RationalTime.1\", \"rate\": 25, \"value\": 0},\n"
+    "         \"duration\": {\"OTIO_SCHEMA\": \"RationalTime.1\", \"rate\": 25, \"value\": 75}},\n"
+    "       \"media_reference\": {\"OTIO_SCHEMA\": \"ExternalReference.1\", \"target_url\": \"file:///media/close.mov\",\n"
+    "         \"available_range\": {\"OTIO_SCHEMA\": \"TimeRange.1\",\n"
+    "           \"start_time\": {\"OTIO_SCHEMA\": \"RationalTime.1\", \"rate\": 25, \"value\": 0},\n"
+    "           \"duration\": {\"OTIO_SCHEMA\": \"RationalTime.1\", \"rate\": 25, \"value\": 300}}}}\n"
+    "    ]}\n"
+    "  ]}\n"
+    "}\n");
+
+int countOf(const BinDocument& bin, model::BinItemKind kind) {
+    return static_cast<int>(std::count_if(bin.bin().items.begin(), bin.bin().items.end(),
+                                          [kind](const model::BinItem& i) { return i.kind == kind; }));
+}
 
 } // namespace
 
@@ -275,6 +315,85 @@ private slots:
         const QByteArray one = readFile(selection);
         QVERIFY(one.contains("Take 2"));
         QVERIFY(!one.contains("Take 1"));
+    }
+
+    // OpenTimelineIO (p.969): Import Media and a drop into a bin import a sequence and offline master
+    // clips; the List Tool writes the sequence with the OTIO output format, which goes with the
+    // Default OpenTimelineIO setting.
+    void otio() {
+        QTemporaryDir dir;
+        const QString file = dir.filePath(QStringLiteral("turnover.otio"));
+        writeFile(file, kOtio);
+        Session s(dir);
+        MainWindow& window = *s.window;
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+
+        // File > Input > Import Media (p.969 step 2).
+        const QStringList ids = window.importFiles(binId, {file});
+        QCOMPARE(ids.size(), 3);
+        QCOMPARE(countOf(*bin, model::BinItemKind::MasterClip), 2);
+        QCOMPARE(countOf(*bin, model::BinItemKind::Sequence), 1);
+        const model::BinItem* sequence = nullptr;
+        for (const model::BinItem& item : bin->bin().items) {
+            if (item.kind == model::BinItemKind::Sequence) sequence = &item;
+            if (item.kind == model::BinItemKind::MasterClip) {
+                // Offline, with its file kept for Relink.
+                QVERIFY(item.link.isEmpty());
+                QVERIFY(!item.fields.value(QStringLiteral("Source File")).isEmpty());
+            }
+        }
+        QVERIFY(sequence);
+        QCOMPARE(sequence->name, QStringLiteral("Harbor Turnover"));
+        const model::Sequence cut = model::Sequence::fromItem(*sequence);
+        QCOMPARE(cut.trackNames(), (QStringList{QStringLiteral("V1")}));
+        QVERIFY(ConsoleLog::instance().lines().join(QLatin1Char('\n')).contains(QStringLiteral("turnover.otio: 1 sequence(s), 2 clip(s)")));
+
+        // Dropped into the bin from the desktop (step 1): another sequence, the same two clips.
+        QMimeData drop;
+        drop.setUrls({QUrl::fromLocalFile(file)});
+        BinItemModel* model = window.binContainer().viewFor(bin)->itemModel();
+        QVERIFY(model->canDropMimeData(&drop, Qt::CopyAction, -1, -1, {}));
+        QVERIFY(model->dropMimeData(&drop, Qt::CopyAction, -1, -1, {}));
+        QCoreApplication::processEvents(); // the bin hands the files on once the drag has finished
+        QCOMPARE(countOf(*bin, model::BinItemKind::Sequence), 2);
+        QCOMPARE(countOf(*bin, model::BinItemKind::MasterClip), 2);
+
+        // The List Tool: the Default OpenTimelineIO setting chooses the OTIO output format.
+        window.composer().load(MonitorId::Record, binId, *sequence);
+        s.commands.action(QStringLiteral("tools.list_tool"))->trigger();
+        ListTool& tool = window.listTool();
+        tool.loadButton()->click();
+        QVERIFY(tool.hasSequence());
+        QCOMPARE(tool.activeSetting()->currentText(), QStringLiteral("Default EDL"));
+        tool.activeSetting()->setCurrentText(QStringLiteral("Default OpenTimelineIO"));
+        QCOMPARE(tool.outputFormat()->currentText(), QStringLiteral("OTIO"));
+        QVERIFY(tool.isOtio());
+        tool.previewButton()->click();
+        QVERIFY2(tool.masterList()->toPlainText().contains(QStringLiteral("\"Timeline.1\"")), qPrintable(tool.masterList()->toPlainText()));
+        // Save List (step 3): an .otio file that reads back as the same cut.
+        const QString out = dir.filePath(QStringLiteral("out.otio"));
+        QString suggested;
+        tool.savePath = [&](const QString& name) {
+            suggested = name;
+            return out;
+        };
+        tool.saveButton()->click();
+        QCOMPARE(suggested, QStringLiteral("Harbor Turnover.otio"));
+        const auto back = interop::otio::importFile(out);
+        QVERIFY(back);
+        const model::BinItem& written = back->items.last();
+        QCOMPARE(written.kind, model::BinItemKind::Sequence);
+        const model::Sequence again = model::Sequence::fromItem(written);
+        QCOMPARE(again.trackNames(), cut.trackNames());
+        QCOMPARE(again.tracks().first().segments.size(), cut.tracks().first().segments.size());
+        // The media keeps its file through the round trip: the clips are the same MobIDs.
+        QCOMPARE(back->items.first().mobId, bin->bin().items.first().mobId);
+        // An EDL format makes Default EDL the setting again; choosing OTIO makes it Default OpenTimelineIO.
+        tool.outputFormat()->setCurrentText(QStringLiteral("CMX_3600"));
+        QCOMPARE(tool.activeSetting()->currentText(), QStringLiteral("Default EDL"));
+        tool.outputFormat()->setCurrentText(QStringLiteral("OTIO"));
+        QCOMPARE(tool.activeSetting()->currentText(), QStringLiteral("Default OpenTimelineIO"));
     }
 };
 

@@ -188,8 +188,8 @@ public:
     // Managed media (Phase 2.4, p.349-359). File > Input > Import Media:
     // the files as new media in a bin (p.213), at the Media Creation
     // setting's import resolution unless `resolution` names another.
-    // AAF files among the paths go to importAaf(), shot logs to importShotLogs(). Returns the new
-    // items' ids.
+    // AAF files among the paths go to importAaf(), shot logs to importShotLogs(), OpenTimelineIO
+    // files to importOtio(). Returns the new items' ids.
     QStringList importFiles(const QString& binId, const QStringList& paths, const QString& resolution = {});
     // AAF files imported into a bin (p.547): their clips and sequences,
     // master clips with media on the drives online by MobID.
@@ -198,6 +198,11 @@ public:
     // Shot logs (Avid Log Exchange, p.131-132) imported into a bin: a master clip for each logged
     // event. Returns the new items' ids; warnings go to the Console.
     QStringList importShotLogs(const QString& binId, const QStringList& paths);
+    // OpenTimelineIO files imported into a bin (p.969): a sequence for each timeline and an offline
+    // master clip for each piece of media it names, unless the bin has that clip already (Relink
+    // brings the media online). Also what dropping .otio files into a bin does. Returns the new
+    // items' ids; failures and warnings go to the Console.
+    QStringList importOtio(const QString& binId, const QStringList& paths);
     // File > Input > Import EDL (p.951): the Import EDL dialog (the file, the Frame Rate and the bin),
     // then the sequence and a source for each reel go into the bin. The hook stands in for the dialog
     // (tests; true: OK). Returns the new items' ids.

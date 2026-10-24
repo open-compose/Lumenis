@@ -1,5 +1,6 @@
 #include "lumenis/ui/list_tool.h"
 
+#include "lumenis/interop/otio.h"
 #include "lumenis/model/sequence.h"
 
 #include <QCheckBox>
@@ -18,6 +19,7 @@
 #include <QRadioButton>
 #include <QRegularExpression>
 #include <QScrollArea>
+#include <QSignalBlocker>
 #include <QSpinBox>
 #include <QSplitter>
 #include <QStandardItemModel>
@@ -28,7 +30,8 @@
 #include <set>
 
 // The List Tool (list_tool.h): its controls, laid out as the pictures on p.945 and p.947 show them,
-// and the list made from them with interop::edl::exportText (src/interop/edl.*). MainWindow creates
+// and the list made from them with interop::edl::exportText (src/interop/edl.*), or the OTIO file
+// with interop::otio::exportJson (src/interop/otio.*, p.969). MainWindow creates
 // it as a tool panel and answers Load with the Record monitor's sequence (main_window.cpp).
 
 namespace lumenis::ui {
@@ -60,7 +63,7 @@ QFont fixedFont() {
 namespace {
 
 // The Output Format menu (p.945 picture, p.947 step 2): the EDL types, then the cut and change list
-// types. Only CMX_3600 and File_129 are written so far.
+// types, then OTIO ("choose OTIO", p.969). CMX_3600, File_129 and OTIO are written so far.
 struct OutputFormat {
     const char* name;
     bool works;
@@ -68,8 +71,10 @@ struct OutputFormat {
 constexpr OutputFormat kFormats[] = {
     {"CMX_3600", true},    {"CMX_DigitalCut", false}, {"CMX_Transfer", false}, {"Cuedos", false},
     {"File_16", false},    {"File_32", false},        {"File_129", true},      {"Columnar", false},
-    {"TabbedLists", false}, {"WebLists", false},      {"XML", false},
+    {"TabbedLists", false}, {"WebLists", false},      {"XML", false},            {"OTIO", true},
 };
+
+constexpr const char* kOtio = "OTIO";
 
 void dim(QComboBox* box, int index) {
     if (auto* model = qobject_cast<QStandardItemModel*>(box->model())) {
@@ -105,10 +110,13 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     auto* left = new QWidget(split);
     auto* leftLayout = new QVBoxLayout(left);
     auto* top = new QFormLayout;
-    auto* setting = new QComboBox(left);
-    setting->addItem(tr("Default EDL"));
-    setting->setEnabled(false); // Save As and Remove Current (p.956-957) come later.
-    top->addRow(tr("Active Setting:"), setting);
+    // Two settings to recall (p.956): Default EDL and "Default OpenTimelineIO" (p.969 note), which
+    // goes with the OTIO output format. Save As and Remove Current (p.956-957) come later.
+    setting_ = new QComboBox(left);
+    setting_->setObjectName(QStringLiteral("listActiveSetting"));
+    setting_->addItem(tr("Default EDL"));
+    setting_->addItem(tr("Default OpenTimelineIO"));
+    top->addRow(tr("Active Setting:"), setting_);
     format_ = new QComboBox(left);
     format_->setObjectName(QStringLiteral("listOutputFormat"));
     for (int i = 0; i < static_cast<int>(std::size(kFormats)); ++i) {
@@ -257,6 +265,23 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
     rightLayout->addWidget(listTabs_, 1);
     split->setStretchFactor(1, 1);
 
+    // The setting and the format follow each other: Default OpenTimelineIO is the OTIO format, and
+    // choosing OTIO makes it the active setting ("current user profiles can create one by setting
+    // the output format to OTIO", p.969).
+    connect(setting_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const QSignalBlocker block(format_);
+        if (index == 1) {
+            format_->setCurrentText(QString::fromLatin1(kOtio));
+        } else if (isOtio()) {
+            format_->setCurrentIndex(0);
+        }
+        formatChanged();
+    });
+    connect(format_, &QComboBox::currentIndexChanged, this, [this] {
+        const QSignalBlocker block(setting_);
+        setting_->setCurrentIndex(isOtio() ? 1 : 0);
+        formatChanged();
+    });
     connect(load_, &QPushButton::clicked, this, &ListTool::loadRequested);
     connect(clear_, &QPushButton::clicked, this, &ListTool::clearSequence);
     connect(preview_, &QPushButton::clicked, this, [this] { preview(); });
@@ -267,6 +292,34 @@ ListTool::ListTool(QWidget* parent) : QWidget(parent) {
         made_.clear();
     });
     clearSequence();
+}
+
+bool ListTool::isOtio() const {
+    return format_->currentText() == QLatin1String(kOtio);
+}
+
+// A list made in one format is not saved as another: the next Preview or Save List makes it again.
+void ListTool::formatChanged() {
+    made_.clear();
+    master_->clear();
+    sources_->clear();
+}
+
+QStringList ListTool::listedTracks() const {
+    QStringList tracks;
+    for (QToolButton* b : tracks_->findChildren<QToolButton*>()) {
+        if (b->isChecked()) tracks << b->text();
+    }
+    // No track on lists nothing, rather than everything.
+    if (tracks.isEmpty()) tracks << QStringLiteral("-");
+    return tracks;
+}
+
+interop::otio::ExportOptions ListTool::otioOptions() const {
+    interop::otio::ExportOptions o;
+    o.tracks = listedTracks();
+    o.resolve = resolve_;
+    return o;
 }
 
 QToolButton* ListTool::trackButton(const QString& track) const {
@@ -317,11 +370,7 @@ interop::edl::ExportOptions ListTool::options() const {
     interop::edl::ExportOptions o;
     o.format = interop::edl::formatFromName(format_->currentText()).value_or(interop::edl::Format::Cmx3600);
     o.title = title_->text().trimmed();
-    for (QToolButton* b : tracks_->findChildren<QToolButton*>()) {
-        if (b->isChecked()) o.tracks << b->text();
-    }
-    // No track on lists nothing, rather than everything.
-    if (o.tracks.isEmpty()) o.tracks << QStringLiteral("-");
+    o.tracks = listedTracks();
     o.pictureDissolves = pictureDissolves_->isChecked();
     o.soundDissolves = soundDissolves_->isChecked();
     o.blackEdits = blackEdits_->isChecked();
@@ -335,26 +384,38 @@ interop::edl::ExportOptions ListTool::options() const {
 
 QString ListTool::preview() {
     if (!sequence_) return {};
-    if (!interop::edl::formatFromName(format_->currentText())) {
-        emit message(tr("List Tool: %1 lists are not made yet; CMX_3600 and File_129 are.").arg(format_->currentText()));
-        return {};
+    QStringList warnings;
+    if (isOtio()) {
+        const interop::otio::ExportResult r = interop::otio::exportJson(*sequence_, otioOptions());
+        if (!r.ok) {
+            emit message(tr("List Tool: %1").arg(r.error));
+            return {};
+        }
+        made_ = QString::fromUtf8(r.json);
+        warnings = r.warnings;
+    } else {
+        if (!interop::edl::formatFromName(format_->currentText())) {
+            emit message(tr("List Tool: %1 lists are not made yet; CMX_3600, File_129 and OTIO are.").arg(format_->currentText()));
+            return {};
+        }
+        const interop::edl::ExportResult r = interop::edl::exportText(*sequence_, options());
+        if (!r.ok) {
+            emit message(tr("List Tool: %1").arg(r.error));
+            return {};
+        }
+        made_ = r.text;
+        warnings = r.warnings;
     }
-    const interop::edl::ExportResult r = interop::edl::exportText(*sequence_, options());
-    if (!r.ok) {
-        emit message(tr("List Tool: %1").arg(r.error));
-        return {};
-    }
-    made_ = r.text;
-    QString shown = r.text;
+    QString shown = made_;
     shown.remove(QLatin1Char('\r'));
     master_->setPlainText(shown);
     // Sources (p.950-951): a row for each reel the list names, with the source's name and MobID.
     QStringList rows;
     std::set<QString> seen;
     const model::Sequence s = model::Sequence::fromItem(*sequence_);
-    const interop::edl::ExportOptions o = options();
+    const QStringList listed = listedTracks();
     for (const model::Track& t : s.tracks()) {
-        if (!o.tracks.contains(t.name())) continue;
+        if (!listed.contains(t.name())) continue;
         for (const model::Segment& seg : t.segments) {
             if (seg.isFiller()) continue;
             const auto clip = resolve_ ? resolve_(seg.sourceMobId(), seg.clipId) : std::nullopt;
@@ -366,7 +427,7 @@ QString ListTool::preview() {
         }
     }
     sources_->setPlainText(rows.join(QLatin1Char('\n')));
-    for (const QString& w : r.warnings) emit message(tr("List Tool: %1").arg(w));
+    for (const QString& w : warnings) emit message(tr("List Tool: %1").arg(w));
     return made_;
 }
 
@@ -374,6 +435,11 @@ bool ListTool::saveList(const QString& path, QString* error) {
     if (made_.isEmpty() && preview().isEmpty()) {
         if (error) *error = tr("There is no list to save.");
         return false;
+    }
+    if (isOtio()) {
+        const interop::otio::ExportResult r = interop::otio::exportFile(*sequence_, path, otioOptions());
+        if (!r.ok && error) *error = r.error;
+        return r.ok;
     }
     const interop::edl::ExportResult r = interop::edl::exportFile(*sequence_, path, options());
     if (!r.ok) {
@@ -383,14 +449,14 @@ bool ListTool::saveList(const QString& path, QString* error) {
     return true;
 }
 
-// Save List (step 9): to one file, asked for with the system's save dialog.
+// Save List (step 9; p.969 step 3 for OTIO): to one file, asked for with the system's save dialog.
 void ListTool::saveClicked() {
     if (!sequence_) return;
     QString base = title_->text().trimmed().isEmpty() ? sequence_->name : title_->text().trimmed();
     base.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
-    const QString suggested = base + QStringLiteral(".edl");
-    const QString path = savePath ? savePath(suggested)
-                                  : QFileDialog::getSaveFileName(this, tr("Save List"), suggested, tr("Edit decision lists (*.edl)"));
+    const QString suggested = base + (isOtio() ? QStringLiteral(".otio") : QStringLiteral(".edl"));
+    const QString filter = isOtio() ? tr("OpenTimelineIO files (*.otio)") : tr("Edit decision lists (*.edl)");
+    const QString path = savePath ? savePath(suggested) : QFileDialog::getSaveFileName(this, tr("Save List"), suggested, filter);
     if (path.isEmpty()) return;
     QString error;
     if (saveList(path, &error)) {

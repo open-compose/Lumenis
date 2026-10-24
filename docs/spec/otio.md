@@ -135,9 +135,19 @@ files, dissolves, speed changes and markers. What the import leaves out
 
 ## In the application
 
-Task 3.6b's second part: Import Media takes `.otio` files (also dropped
-onto a bin), the List Tool gets the "OTIO" output format, and the Default
-OpenTimelineIO setting (p.968-969).
+* **Import** (`MainWindow::importOtio`): File > Input > Import Media with
+  `.otio` files (p.969 step 2), or `.otio` files dropped into a bin (step
+  1), from the Source Browser or the desktop. Each file goes through
+  `importFile()`, then `reuseClips()` with the bin's items, so media the
+  bin holds a clip for already is that clip; the rest are offline master
+  clips to relink (Relink > Managed Media, p.969).
+* **Export:** the List Tool's Output Format "OTIO" (p.969 step 2) and Save
+  List (step 3) write the loaded sequence's chosen tracks with
+  `exportFile()`, its clips found in the open bins. The Active Setting
+  "Default OpenTimelineIO" (p.969 note) goes with that format (ui-inventory
+  §19).
+* Later: a bin's context menu Input > Import Media (step 3), and the
+  Relink window's "Ignore extension" option the guide's relink steps use.
 
 ## Checks
 
