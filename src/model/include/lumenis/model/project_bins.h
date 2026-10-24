@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QList>
 #include <QString>
 #include <QStringList>
@@ -93,8 +94,16 @@ public:
     // Bins open when the project was last closed.
     // Their ids (BinNode::id).
     QStringList openBins;
+    // Where openBins is kept instead of the tree file. A project on shared storage keeps each
+    // machine's open bins apart, as Media Composer keeps "a project folder for each computer that
+    // accesses the project" (p.301), so that users do not reopen each other's bins. Empty: in the
+    // tree file. Set before load().
+    void setOpenBinsFile(const QString& path) { openBinsFile_ = path; }
+    // The "<project>.cthbins" file, which others may change on shared storage.
+    QString treeFilePath() const { return treeFile(); }
 
 private:
+    QByteArray treeJson() const;
     // The child list of a container (empty parent: the top level), or null if parent is not one.
     QList<BinNode>* childrenOf(const QString& parent);
     BinNode* find(const QString& id);
@@ -110,6 +119,10 @@ private:
 
     QString folder_;
     QString projectName_;
+    QString openBinsFile_;
+    // The tree as last read or written (treeJson()), for save() with an open
+    // bins file.
+    mutable QByteArray savedTree_;
     QList<BinNode> roots_;
 };
 

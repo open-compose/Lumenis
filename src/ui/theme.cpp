@@ -439,6 +439,17 @@ QIcon glyphIcon(GlyphIcon which, QColor color) {
         p.drawPolygon(star);
         break;
     }
+    case GlyphIcon::Lock: { // a padlock: the shackle, then the body
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        p.drawArc(QRectF(10, 5, 12, 14), 0, 180 * 16);
+        p.drawLine(QPointF(10, 12), QPointF(10, 15));
+        p.drawLine(QPointF(22, 12), QPointF(22, 15));
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawRoundedRect(QRectF(7, 15, 18, 13), 2, 2);
+        break;
+    }
     case GlyphIcon::MediaVolume: // a drive with a light
         p.drawRoundedRect(QRectF(4, 10, 24, 12), 3, 3);
         p.setBrush(QColor(20, 20, 20));

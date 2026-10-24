@@ -238,12 +238,46 @@ BinDocument::BinDocument(QString nodeId, QString path, model::Bin bin, QObject* 
     : QObject(parent), nodeId_(std::move(nodeId)), path_(std::move(path)), bin_(std::move(bin)) {}
 
 // Marks the bin changed; dirtyChanged(true) fires only on the first change
-// since it was saved.
+// since it was saved. A read-only bin's display changes are not unsaved work:
+// they cannot be saved.
 void BinDocument::touch() {
+    if (isReadOnly()) return;
     if (!dirty_) {
         dirty_ = true;
         emit dirtyChanged(true);
     }
+}
+
+bool BinDocument::isReadOnly() const {
+    return lockState_ != LockState::NotShared && lockState_ != LockState::Mine;
+}
+
+bool BinDocument::refused() {
+    if (!isReadOnly()) return false;
+    emit writeRefused();
+    return true;
+}
+
+void BinDocument::setLockState(LockState state, std::optional<model::BinLockHolder> holder) {
+    if (state == lockState_ && holder.has_value() == lockHolder_.has_value() &&
+        (!holder || (holder->isSameAs(*lockHolder_) && holder->kind == lockHolder_->kind))) {
+        return;
+    }
+    lockState_ = state;
+    lockHolder_ = std::move(holder);
+    emit lockChanged();
+}
+
+void BinDocument::reload(const model::Bin& bin) {
+    const QString name = bin_.name;
+    bin_ = bin;
+    bin_.name = name; // the Sidebar's
+    if (dirty_) {
+        dirty_ = false;
+        emit dirtyChanged(false);
+    }
+    emit itemsChanged();
+    emit displayChanged();
 }
 
 void BinDocument::setName(const QString& name) {
@@ -252,12 +286,14 @@ void BinDocument::setName(const QString& name) {
 }
 
 void BinDocument::addItem(const model::BinItem& item) {
+    if (refused()) return;
     bin_.items.append(item);
     touch();
     emit itemsChanged();
 }
 
 bool BinDocument::replaceItem(const model::BinItem& item) {
+    if (refused()) return false;
     model::BinItem* existing = bin_.item(item.id);
     if (!existing) return false;
     *existing = item;
@@ -267,6 +303,7 @@ bool BinDocument::replaceItem(const model::BinItem& item) {
 }
 
 void BinDocument::removeItems(const QStringList& ids) {
+    if (refused()) return;
     const auto removed = bin_.items.removeIf([&](const model::BinItem& i) { return ids.contains(i.id); });
     if (removed == 0) return;
     for (const QString& id : ids) bin_.display.framePositions.remove(id);
@@ -275,6 +312,7 @@ void BinDocument::removeItems(const QStringList& ids) {
 }
 
 bool BinDocument::setField(const QString& id, const QString& heading, const QString& value) {
+    if (refused()) return false;
     model::BinItem* item = bin_.item(id);
     if (!item) return false;
     if (heading == QLatin1String("Name")) {
@@ -306,6 +344,7 @@ void BinDocument::sort(const QList<model::BinSortKey>& keys) {
 }
 
 void BinDocument::moveItems(const QStringList& ids, int toIndex) {
+    if (refused()) return;
     // Take the moved items out, counting those before `toIndex`, which shifts
     // the insertion point left by that many once they are gone.
     QList<model::BinItem> moving;
@@ -325,6 +364,7 @@ void BinDocument::moveItems(const QStringList& ids, int toIndex) {
 }
 
 void BinDocument::setColor(const QStringList& ids, const QString& color) {
+    if (refused()) return;
     bool changed = false;
     for (const QString& id : ids) {
         if (model::BinItem* i = bin_.item(id); i && i->color != color) {
@@ -338,6 +378,7 @@ void BinDocument::setColor(const QStringList& ids, const QString& color) {
 }
 
 void BinDocument::setLocked(const QStringList& ids, bool locked) {
+    if (refused()) return;
     bool changed = false;
     for (const QString& id : ids) {
         if (model::BinItem* i = bin_.item(id); i && i->locked != locked) {
@@ -354,6 +395,7 @@ void BinDocument::setLocked(const QStringList& ids, bool locked) {
 // displayChanged(): the views already show the change, and a reset would
 // rebuild the Script view's text boxes under the user's typing.
 void BinDocument::setScript(const QString& id, const QString& text) {
+    if (refused()) return;
     if (model::BinItem* i = bin_.item(id); i && i->script != text) {
         i->script = text;
         touch();
@@ -373,6 +415,7 @@ void BinDocument::setFramePositions(const QHash<QString, QPoint>& positions) {
 }
 
 void BinDocument::deleteCustomColumn(const QString& heading) {
+    if (refused()) return;
     if (!bin_.display.customColumns.contains(heading)) return;
     bin_.display.customColumns.removeAll(heading);
     bin_.display.columns.removeAll(heading);
@@ -385,6 +428,7 @@ void BinDocument::deleteCustomColumn(const QString& heading) {
 // Renames the heading wherever the bin refers to it: the custom column list,
 // the shown columns, the widths, every item's field and the sort keys.
 bool BinDocument::renameCustomColumn(const QString& from, const QString& to) {
+    if (refused()) return false;
     const QString name = to.trimmed();
     if (!bin_.display.customColumns.contains(from) || name.isEmpty() || name == from) return false;
     // Standard headings cannot be renamed or reused (p.269).
@@ -404,7 +448,23 @@ bool BinDocument::renameCustomColumn(const QString& from, const QString& to) {
 }
 
 bool BinDocument::save(QString* error) {
+    if (isReadOnly()) {
+        if (error) {
+            *error = lockHolder_ ? tr("the bin is locked by %1").arg(lockHolder_->describe()) : tr("the bin is locked");
+        }
+        return false;
+    }
+    if (lockState_ == LockState::Mine && lockUser_) {
+        // The lock may have gone to someone else since it was taken (p.304).
+        const auto now = model::readBinLock(path_);
+        if (!now || !now->isSameAs(*lockUser_)) {
+            setLockState(now ? LockState::Others : LockState::Released, now);
+            if (error) *error = now ? tr("the bin is locked by %1").arg(now->describe()) : tr("the bin's lock was released");
+            return false;
+        }
+    }
     if (!model::BinFile::write(path_, bin_, error)) return false;
+    if (lockState_ == LockState::Mine && lockUser_) model::appendBinHistory(path_, *lockUser_, QStringLiteral("saved"));
     if (dirty_) {
         dirty_ = false;
         emit dirtyChanged(false);
@@ -550,6 +610,8 @@ QMimeData* BinItemModel::mimeData(const QModelIndexList& indexes) const {
 }
 
 bool BinItemModel::canDropMimeData(const QMimeData* data, Qt::DropAction, int, int, const QModelIndex&) const {
+    // "You cannot drag an item to a locked bin" (p.304).
+    if (document_.isReadOnly()) return false;
     // Files from the Source Browser are linked into the bin (p.317).
     if (data->hasFormat(mediaFilesMime())) return true;
     if (!data->hasFormat(binItemsMime())) return !localFiles(data).isEmpty();
@@ -1118,9 +1180,17 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
     });
     connect(filter_, &QLineEdit::textChanged, this, &BinView::setQuickFilter);
 
+    // The Bin Lock Status button, only for a bin on shared storage (p.301-302).
+    lockButton_ = toolButton(this, QStringLiteral("binLockButton"), QIcon(), tr("Bin Lock Status"));
+    connect(lockButton_, &QToolButton::clicked, this,
+            [this] { emit lockButtonClicked(QApplication::keyboardModifiers() & Qt::AltModifier); });
+    connect(&document_, &BinDocument::lockChanged, this, &BinView::updateLockButton);
+    updateLockButton();
+
     auto* top = new QHBoxLayout;
     top->setContentsMargins(4, 3, 4, 3);
     top->setSpacing(2);
+    top->addWidget(lockButton_);
     top->addStretch(1);
     top->addWidget(viewMenu_);
     top->addSpacing(4);
@@ -1331,6 +1401,43 @@ void BinView::updateViewMenu() {
     viewMenu_->setCurrentIndex(index);
     // The Bin View menu works in Text view only (p.248).
     viewMenu_->setEnabled(d.mode == model::BinViewMode::Text);
+}
+
+// Green: this user may change the bin; red: someone else holds it, or it is
+// protected; yellow: its holder has saved changes since it was read; blue:
+// its holder has let it go (p.301-303).
+void BinView::updateLockButton() {
+    using State = BinDocument::LockState;
+    const State state = document_.lockState();
+    lockButton_->setVisible(state != State::NotShared);
+    QColor color;
+    QString tip;
+    const QString who = document_.lockHolder() ? document_.lockHolder()->describe() : tr("another user");
+    switch (state) {
+    case State::NotShared: return;
+    case State::Mine:
+        color = QColor(0x3c, 0xc8, 0x50);
+        tip = tr("Unlocked: you can change this bin. Click for its history; Alt+click to release the lock.");
+        break;
+    case State::Others:
+        color = QColor(0xe0, 0x40, 0x40);
+        tip = tr("Locked by %1. Click for the bin's history.").arg(who);
+        break;
+    case State::Protected:
+        color = QColor(0xe0, 0x40, 0x40);
+        tip = tr("Protected by %1: read only for everyone. Click for the bin's history.").arg(who);
+        break;
+    case State::Modified:
+        color = QColor(0xf0, 0xd0, 0x30);
+        tip = tr("%1 has changed this bin. Click to read it again.").arg(who);
+        break;
+    case State::Released:
+        color = QColor(0x40, 0x80, 0xf0);
+        tip = tr("The lock is free. Click to take it.");
+        break;
+    }
+    lockButton_->setIcon(glyphIcon(GlyphIcon::Lock, color));
+    lockButton_->setToolTip(tip);
 }
 
 void BinView::updateStatus() {

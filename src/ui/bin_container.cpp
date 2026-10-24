@@ -1,6 +1,7 @@
 #include "lumenis/ui/bin_container.h"
 
 #include "lumenis/model/bin.h"
+#include "lumenis/model/bin_lock.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/theme.h"
 
@@ -8,6 +9,8 @@
 #include <QApplication>
 #include <QCloseEvent>
 #include <QCursor>
+#include <QDialog>
+#include <QDir>
 #include <QDateTime>
 #include <QDrag>
 #include <QFileInfo>
@@ -16,10 +19,12 @@
 #include <QHeaderView>
 #include <QKeyEvent>
 #include <QLineEdit>
+#include <QLocale>
 #include <QMenu>
 #include <QMimeData>
 #include <QPainter>
 #include <QPalette>
+#include <QPlainTextEdit>
 #include <QScreen>
 #include <QSettings>
 #include <QJsonArray>
@@ -282,11 +287,19 @@ QVariant BinTreeModel::data(const QModelIndex& index, int role) const {
         }
         return {};
     case Qt::FontRole:
-        if (italic) {
+        // "Bold text in the Bin Container also identifies bins that are
+        // locked by another user" (p.302).
+        if (italic || container_.isLockedByOther(id)) {
             QFont f;
-            f.setItalic(true);
+            f.setItalic(italic);
+            f.setBold(container_.isLockedByOther(id));
             return f;
         }
+        return {};
+    case Qt::ToolTipRole:
+        // Who holds it, as the guide's bin title shows (p.302); a tooltip,
+        // since the Sidebar has no column for it.
+        if (const auto lock = container_.lockOf(id)) return BinContainer::tr("Locked by %1").arg(lock->describe());
         return {};
     case Qt::ForegroundRole:
         // "The Bin icon appears dimmed in the Bins list, indicating the bin
@@ -441,13 +454,15 @@ BinSidebar::BinSidebar(BinContainer& container, QWidget* parent) : QWidget(paren
     };
     connect(tree_, &QTreeView::customContextMenuRequested, this, &BinSidebar::showMenu);
     connect(tree_, &QTreeView::doubleClicked, this, [this](const QModelIndex& index) {
-        // Double-click a bin to open it (p.240).
+        // Double-click a bin to open it (p.240); Alt (Option) opens it
+        // "without controlling the lock" (p.302).
         const QString id = model_->idOf(index);
+        const bool takeLock = !(QApplication::keyboardModifiers() & Qt::AltModifier);
         if (FavoriteBins::isFavoriteId(id)) {
-            container_.openBinAsSet(id);
+            container_.openBinAsSet(id, takeLock);
         } else if (const model::ProjectBins* bins = container_.bins();
                    bins && bins->node(id) && bins->node(id)->kind == model::BinNode::Kind::Bin) {
-            container_.openBinAsSet(id);
+            container_.openBinAsSet(id, takeLock);
         }
     });
 
@@ -609,11 +624,20 @@ BinContainer::BinContainer(QWidget* parent) : QWidget(parent) {
     });
     // The guide does not give the default interval; ours is 15 minutes.
     setAutoSaveMinutes(15);
+
+    // Until MainWindow names the User profile's user: the system's.
+    lockUser_ = model::localBinLockHolder(qEnvironmentVariable("USER", qEnvironmentVariable("USERNAME")));
+    // Other systems' locks and saves are noticed by reading the lock files
+    // again; file watching does not reach across network file systems.
+    lockTimer_ = new QTimer(this);
+    connect(lockTimer_, &QTimer::timeout, this, &BinContainer::pollLocks);
 }
 
 BinContainer::~BinContainer() {
-    // Unsaved changes are not lost when the window goes.
+    // Unsaved changes are not lost when the window goes, and the bins' locks
+    // are given up.
     if (bins_) saveAll();
+    for (BinDocument* d : documents_) releaseOnClose(d);
     qDeleteAll(floating_);
     floating_.clear();
     // Children die after this object's members: nothing may call back.
@@ -694,9 +718,9 @@ void BinContainer::setQuickFilterAllColumns(bool all) {
 
 // Only a bin that was not open already floats; an open one just comes to the
 // front.
-BinDocument* BinContainer::openBinAsSet(const QString& id) {
+BinDocument* BinContainer::openBinAsSet(const QString& id, bool takeLock) {
     const bool wasOpen = document(canonicalBin(id)) != nullptr;
-    BinDocument* doc = openBin(id);
+    BinDocument* doc = openBin(id, takeLock);
     const bool invert = QApplication::keyboardModifiers() & Qt::ControlModifier;
     if (doc && !wasOpen && openFloating_ != invert) floatBin(doc);
     return doc;
@@ -719,6 +743,7 @@ void BinContainer::setProject(const QString& folder, const QString& name, const 
         if (QString error; !saveAll(&error)) emit saveFailed({}, error);
         while (!documents_.isEmpty()) {
             BinDocument* d = documents_.takeLast();
+            releaseOnClose(d);
             if (BinView* v = viewFor(d)) {
                 if (BinDockArea* a = areaOf(v)) a->takeView(v);
                 delete v;
@@ -731,9 +756,26 @@ void BinContainer::setProject(const QString& folder, const QString& name, const 
         bins_.reset();
     }
     editRate_ = editRate;
+    locks_.clear();
+    lockTimer_->stop();
+    projectShared_ = false;
     if (!folder.isEmpty()) {
         bins_ = std::make_unique<model::ProjectBins>(folder, name);
+        // On shared storage each machine keeps its own list of open bins, in
+        // a folder named for it, as Media Composer keeps a project folder for
+        // each computer (p.301); the bin list itself is shared.
+        projectShared_ = model::isSharedLocation(folder);
+        if (projectShared_) {
+            bins_->setOpenBinsFile(
+                QDir(folder).filePath(QStringLiteral("%1/open-bins.json").arg(lockUser_.machine.isEmpty() ? QStringLiteral("this")
+                                                                                                         : lockUser_.machine)));
+        }
         bins_->load();
+        treeReadAt_ = QFileInfo(bins_->treeFilePath()).lastModified();
+        if (projectShared_) {
+            for (const model::BinNode* n : bins_->bins()) readLock(n->id);
+        }
+        lockTimer_->start(2000);
         // Copied: openBin() rewrites openBins as each bin opens.
         const QStringList open = bins_->openBins;
         refreshTree();
@@ -756,6 +798,8 @@ void BinContainer::saveTree() {
         for (const BinView* v : a->views()) bins_->openBins << v->document().nodeId();
     }
     bins_->save();
+    // Our own write is not someone else's change (pollLocks()).
+    treeReadAt_ = QFileInfo(bins_->treeFilePath()).lastModified();
 }
 
 void BinContainer::refreshTree() {
@@ -837,6 +881,9 @@ void BinContainer::updateTab(BinDocument* document) {
         // after it while it is shown sifted (p.289).
         QString text = (document->isDirty() ? QStringLiteral("* ") : QString()) + document->name();
         if (document->bin().isSiftShown()) text += tr(" (sifted)");
+        // "the bin title provides a status in parentheses indicating that the
+        // locked bin has been modified" (p.302).
+        if (document->lockState() == BinDocument::LockState::Modified) text += tr(" (modified)");
         if (BinDockArea* a = areaOf(v)) a->setTitle(v, text);
     }
 }
@@ -866,7 +913,7 @@ QString BinContainer::nodePath(const QString& id) const {
 // the container, and tab it into the main area. The view's own drops are
 // queued so that the source bin is not changed while its drag is still
 // running.
-BinDocument* BinContainer::openBin(const QString& requested) {
+BinDocument* BinContainer::openBin(const QString& requested, bool takeLock) {
     if (!bins_) return nullptr;
     const QString id = canonicalBin(requested);
     if (BinDocument* d = document(id)) {
@@ -897,6 +944,7 @@ BinDocument* BinContainer::openBin(const QString& requested) {
     if (binLoader_) binLoader_(*bin);
     auto* doc = new BinDocument(id, path, *bin, this);
     documents_ << doc;
+    if (model::isSharedLocation(path)) lockOnOpen(doc, takeLock);
     auto* view = new BinView(*doc, binMenu_);
     view->setInputMenu(inputMenu_);
     connect(doc, &BinDocument::dirtyChanged, this, [this, doc] {
@@ -905,6 +953,12 @@ BinDocument* BinContainer::openBin(const QString& requested) {
     });
     connect(doc, &BinDocument::displayChanged, this, [this, doc] { updateTab(doc); });
     connect(view, &BinView::deleteRequested, this, [this] { deleteSelection(); });
+    connect(view, &BinView::lockButtonClicked, this, [this, doc](bool alt) { lockButtonClicked(doc, alt); });
+    connect(doc, &BinDocument::lockChanged, this, [this, doc] {
+        updateTab(doc);
+        refreshTree();
+    });
+    connect(doc, &BinDocument::writeRefused, this, [this, doc] { emit lockRefused(doc->nodeId()); });
     // A view saved in one bin is offered in every bin's Bin View menu.
     connect(view, &BinView::viewSaved, this, [this] {
         refreshViewMenus();
@@ -946,6 +1000,7 @@ bool BinContainer::closeBin(BinDocument* document, QString* error) {
             return false;
         }
     }
+    releaseOnClose(document);
     if (BinView* v = viewFor(document)) {
         if (active_ == v) active_ = nullptr;
         if (BinDockArea* a = areaOf(v)) a->takeView(v);
@@ -1139,7 +1194,7 @@ QString BinContainer::newFolder(const QString& parentFolder) {
 }
 
 bool BinContainer::renameNode(const QString& id, const QString& name, QString* error) {
-    if (!bins_ || FavoriteBins::isFavoriteId(id)) return false;
+    if (!bins_ || FavoriteBins::isFavoriteId(id) || refuseLocked(id, error)) return false;
     BinDocument* doc = document(id);
     if (doc && doc->isDirty() && !doc->save(error)) return false;
     if (!bins_->rename(id, name, error)) return false;
@@ -1164,6 +1219,14 @@ bool BinContainer::deleteNode(const QString& id, QString* error) {
     }
     const model::BinNode* n = bins_->node(id);
     if (!n || n->kind == model::BinNode::Kind::Trash || bins_->isInTrash(id)) return false;
+    // Nothing goes when a bin inside is someone else's.
+    bool held = false;
+    std::function<void(const model::BinNode&)> checkHeld = [&](const model::BinNode& node) {
+        held = held || refuseLocked(node.id, error);
+        for (const model::BinNode& c : node.children) checkHeld(c);
+    };
+    checkHeld(*n);
+    if (held) return false;
     // Close what is open inside it first.
     // A bin that cannot be saved stays open, and nothing moves to the Trash.
     bool closed = true;
@@ -1198,7 +1261,7 @@ QString BinContainer::openOtherBin(const QString& path, QString* error) {
 }
 
 bool BinContainer::moveNode(const QString& id, const QString& parentFolder, int index, QString* error) {
-    if (!bins_ || FavoriteBins::isFavoriteId(id)) return false;
+    if (!bins_ || FavoriteBins::isFavoriteId(id) || refuseLocked(id, error)) return false;
     const model::BinNode* target = bins_->node(parentFolder);
     bool ok = false;
     if (target && target->kind == model::BinNode::Kind::Trash) {
@@ -1304,6 +1367,16 @@ QMenu* BinContainer::sidebarMenu(QMenu* menu, const QString& id, BinSidebar* sid
                             [sidebar, id] { sidebar->tree()->edit(sidebar->model()->indexOf(id)); });
             if (!bins_->isInTrash(id)) menu->addAction(tr("Delete"), this, [this, id] { deleteNode(id); });
         }
+        // For the selected bins, or the one right-clicked (p.302).
+        if (n->kind == model::BinNode::Kind::Bin && !bins_->isInTrash(id) && model::isSharedLocation(bins_->binPath(id))) {
+            QStringList ids = sidebar->selectedNodes();
+            if (!ids.contains(id)) ids = {id};
+            menu->addSeparator();
+            menu->addAction(tr("Lock Project Bin"), this, [this, ids] { lockProjectBins(ids, model::BinLockKind::Locked); });
+            menu->addAction(tr("Protect Project Bin"), this,
+                            [this, ids] { lockProjectBins(ids, model::BinLockKind::Protected); });
+            menu->addAction(tr("Unlock Project Bin"), this, [this, ids] { unlockProjectBins(ids); });
+        }
     }
     if (id.isEmpty()) {
         menu->addSeparator();
@@ -1323,11 +1396,325 @@ QMenu* BinContainer::sidebarMenu(QMenu* menu, const QString& id, BinSidebar* sid
     return menu;
 }
 
+// ---------------------------------------------------------------- shared bins
+
+namespace {
+
+// The state of a bin held by `holder`, for `me`: red when someone else holds
+// it, and for everyone when it is protected (p.302).
+BinDocument::LockState stateFor(const model::BinLockHolder& holder, const model::BinLockHolder& me) {
+    if (holder.kind == model::BinLockKind::Protected) return BinDocument::LockState::Protected;
+    return holder.isSameAs(me) ? BinDocument::LockState::Mine : BinDocument::LockState::Others;
+}
+
+QDateTime modifiedAt(const QString& path) {
+    return QFileInfo(path).lastModified();
+}
+
+} // namespace
+
+void BinContainer::setLockUser(const QString& user) {
+    // Open bins keep the user that took their locks, so that they release them.
+    lockUser_ = model::localBinLockHolder(user);
+}
+
+// A bin opened without the lock (Alt+double-click) is red while someone holds
+// it and blue while no one does; a lock this user already holds is theirs.
+void BinContainer::lockOnOpen(BinDocument* document, bool take) {
+    document->setLockUser(lockUser_);
+    readAt_[document] = modifiedAt(document->path());
+    std::optional<model::BinLockHolder> holder;
+    if (take) {
+        model::BinLockHolder got;
+        switch (model::acquireBinLock(document->path(), lockUser_, &got)) {
+        case model::BinLockResult::Acquired:
+        case model::BinLockResult::Held: holder = got; break;
+        case model::BinLockResult::Failed:
+            // The lock file cannot be made (a read-only share): the bin can be
+            // read, not changed.
+            document->setLockState(BinDocument::LockState::Others);
+            readLock(document->nodeId());
+            return;
+        }
+    } else {
+        holder = model::readBinLock(document->path());
+    }
+    document->setLockState(holder ? stateFor(*holder, lockUser_) : BinDocument::LockState::Released, holder);
+    readLock(document->nodeId());
+}
+
+// Only a lock this bin took is given up; a Locked or Protected one stays
+// (releaseBinLock()).
+void BinContainer::releaseOnClose(BinDocument* document) {
+    readAt_.remove(document);
+    if (document->lockState() != BinDocument::LockState::Mine || !document->lockUser()) return;
+    model::releaseBinLock(document->path(), *document->lockUser(), false);
+    readLock(document->nodeId());
+}
+
+void BinContainer::readLock(const QString& id) {
+    if (!bins_ || FavoriteBins::isFavoriteId(id) || !bins_->node(id)) return;
+    const QString path = bins_->binPath(id);
+    if (!projectShared_ && !model::isSharedLocation(path)) {
+        locks_.remove(id);
+        return;
+    }
+    locks_[id] = model::readBinLock(path);
+}
+
+std::optional<model::BinLockHolder> BinContainer::lockOf(const QString& id) const {
+    return locks_.value(canonicalBin(id));
+}
+
+bool BinContainer::isLockedByOther(const QString& id) const {
+    const auto lock = lockOf(id);
+    return lock && !lock->isSameAs(lockUser_);
+}
+
+bool BinContainer::refuseLocked(const QString& id, QString* error) const {
+    if (!isLockedByOther(id)) return false;
+    if (error) *error = tr("%1 is locked by %2").arg(nodeName(id), lockOf(id)->describe());
+    return true;
+}
+
+// For each open shared bin: a lock lost to someone else turns it red, a free
+// lock blue, and a save by the holder (the file newer than when it was read)
+// yellow. The Sidebar's bold follows the lock files, and the bin list is read
+// again when another system changed it.
+void BinContainer::pollLocks() {
+    if (!bins_) return;
+    using State = BinDocument::LockState;
+    bool treeChanged = false;
+    if (projectShared_) {
+        const QDateTime treeAt = modifiedAt(bins_->treeFilePath());
+        if (treeAt.isValid() && treeAt != treeReadAt_) {
+            // Someone else's new, renamed or moved bins. This system's open
+            // bins are its own (setOpenBinsFile()), so they stay as they are.
+            const QStringList open = bins_->openBins;
+            if (bins_->load()) {
+                bins_->openBins = open;
+                for (BinDocument* d : documents_) {
+                    if (bins_->node(d->nodeId())) d->setPath(bins_->binPath(d->nodeId()));
+                }
+            }
+            treeReadAt_ = treeAt;
+            treeChanged = true;
+        }
+        const auto before = locks_;
+        locks_.clear();
+        for (const model::BinNode* n : bins_->bins()) readLock(n->id);
+        auto same = [](const std::optional<model::BinLockHolder>& a, const std::optional<model::BinLockHolder>& b) {
+            return a.has_value() == b.has_value() && (!a || (a->isSameAs(*b) && a->kind == b->kind));
+        };
+        for (auto it = locks_.cbegin(); it != locks_.cend() && !treeChanged; ++it) {
+            if (!before.contains(it.key()) || !same(before.value(it.key()), it.value())) treeChanged = true;
+        }
+        treeChanged = treeChanged || before.size() != locks_.size();
+    }
+    for (BinDocument* d : documents_) {
+        const State state = d->lockState();
+        if (state == State::NotShared) continue;
+        const auto holder = model::readBinLock(d->path());
+        const model::BinLockHolder me = d->lockUser().value_or(lockUser_);
+        if (!holder) {
+            // Mine lost (someone removed the file), or let go by its holder.
+            d->setLockState(State::Released);
+        } else if (holder->isSameAs(me)) {
+            if (holder->kind == model::BinLockKind::Protected) {
+                d->setLockState(State::Protected, holder);
+            } else if (state == State::Mine || state == State::Protected) {
+                d->setLockState(State::Mine, holder);
+            }
+        } else if (holder->kind == model::BinLockKind::Protected) {
+            d->setLockState(State::Protected, holder);
+        } else if (state == State::Modified || modifiedAt(d->path()) > readAt_.value(d)) {
+            d->setLockState(State::Modified, holder);
+        } else {
+            d->setLockState(State::Others, holder);
+        }
+    }
+    if (treeChanged) refreshTree();
+}
+
+void BinContainer::lockButtonClicked(BinDocument* document, bool alt) {
+    if (!document || !documents_.contains(document)) return;
+    using State = BinDocument::LockState;
+    const State state = document->lockState();
+    // Read again what the holder saved (p.302): the bin turns red.
+    auto reread = [this, document] {
+        auto bin = model::BinFile::read(document->path());
+        if (!bin) return false;
+        if (binLoader_) binLoader_(*bin);
+        document->reload(*bin);
+        readAt_[document] = modifiedAt(document->path());
+        return true;
+    };
+    if (state == State::Modified) {
+        if (reread()) document->setLockState(State::Others, document->lockHolder());
+        return;
+    }
+    if (state == State::Released) {
+        // "If you click the blue icon, you now control the bin and the icon
+        // turns green" (p.303); what was saved since it was read comes first.
+        model::BinLockHolder got;
+        const model::BinLockResult r = model::acquireBinLock(document->path(), lockUser_, &got);
+        if (r == model::BinLockResult::Failed) return;
+        if (modifiedAt(document->path()) > readAt_.value(document)) reread();
+        document->setLockUser(lockUser_);
+        document->setLockState(stateFor(got, lockUser_), got);
+        readLock(document->nodeId());
+        return;
+    }
+    if (state == State::Mine && alt) {
+        // "You can release the lock by Alt + clicking the green icon" (p.303),
+        // after saving what was changed.
+        if (document->isDirty()) {
+            if (QString why; !document->save(&why)) {
+                emit saveFailed(document->name(), why);
+                return;
+            }
+        }
+        if (document->lockUser() && model::releaseBinLock(document->path(), *document->lockUser(), true)) {
+            document->setLockState(State::Released);
+            readLock(document->nodeId());
+        }
+        return;
+    }
+    showLockHistory(document);
+}
+
+QWidget* BinContainer::showLockHistory(BinDocument* document) {
+    if (!document) return nullptr;
+    auto* dialog = new QDialog(this);
+    dialog->setObjectName(QStringLiteral("binLockHistory"));
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    dialog->setWindowTitle(tr("%1 History").arg(document->name()));
+    auto* text = new QPlainTextEdit(dialog);
+    text->setObjectName(QStringLiteral("binLockHistoryText"));
+    text->setReadOnly(true);
+    QStringList lines;
+    if (const auto lock = model::readBinLock(document->path())) {
+        lines << tr("Locked by %1 since %2").arg(lock->describe(), QLocale().toString(lock->since.toLocalTime(), QLocale::ShortFormat));
+    } else {
+        lines << tr("Not locked");
+    }
+    lines << QString();
+    // "which computers and users have modified the bin and the date and time
+    // of the modifications" (p.301): the newest first.
+    const QList<model::BinHistoryEntry> history = model::readBinHistory(document->path());
+    for (auto it = history.crbegin(); it != history.crend(); ++it) {
+        lines << QStringLiteral("%1\t%2\t%3\t%4")
+                     .arg(QLocale().toString(it->when.toLocalTime(), QLocale::ShortFormat), it->user, it->machine, it->action);
+    }
+    if (history.isEmpty()) lines << tr("No changes recorded.");
+    text->setPlainText(lines.join(QLatin1Char('\n')));
+    auto* layout = new QVBoxLayout(dialog);
+    layout->addWidget(text);
+    dialog->resize(520, 320);
+    dialog->show();
+    return dialog;
+}
+
+// Each bin on its own: a refusal leaves the others locked, and `error` says
+// which bins were refused.
+bool BinContainer::lockProjectBins(const QStringList& ids, model::BinLockKind kind, QString* error) {
+    if (!bins_) return false;
+    QStringList problems;
+    model::BinLockHolder me = lockUser_;
+    me.kind = kind;
+    for (const QString& requested : ids) {
+        const QString id = canonicalBin(requested);
+        const model::BinNode* n = bins_->node(id);
+        if (!n || n->kind != model::BinNode::Kind::Bin) continue;
+        const QString path = bins_->binPath(id);
+        if (!model::isSharedLocation(path)) {
+            problems << tr("%1 is not on shared storage").arg(n->name);
+            continue;
+        }
+        BinDocument* doc = document(id);
+        // Changes go in before a protected bin turns read-only.
+        if (doc && doc->isDirty() && !doc->isReadOnly()) {
+            if (QString why; !doc->save(&why)) {
+                problems << tr("%1: %2").arg(n->name, why);
+                continue;
+            }
+        }
+        model::BinLockHolder got;
+        QString why;
+        switch (model::acquireBinLock(path, me, &got, &why)) {
+        case model::BinLockResult::Acquired:
+            model::appendBinHistory(path, me, kind == model::BinLockKind::Protected ? QStringLiteral("protected") : QStringLiteral("locked"));
+            if (doc) {
+                // A bin opened without the lock may be older than the file.
+                if (doc->isReadOnly() && got.kind != model::BinLockKind::Protected &&
+                    modifiedAt(path) > readAt_.value(doc)) {
+                    if (auto bin = model::BinFile::read(path)) {
+                        if (binLoader_) binLoader_(*bin);
+                        doc->reload(*bin);
+                        readAt_[doc] = modifiedAt(path);
+                    }
+                }
+                doc->setLockUser(lockUser_);
+                doc->setLockState(stateFor(got, lockUser_), got);
+            }
+            break;
+        case model::BinLockResult::Held: problems << tr("%1 is locked by %2").arg(n->name, got.describe()); break;
+        case model::BinLockResult::Failed: problems << tr("%1: %2").arg(n->name, why); break;
+        }
+        readLock(id);
+    }
+    refreshTree();
+    if (error) *error = problems.join(QLatin1Char('\n'));
+    return problems.isEmpty();
+}
+
+// A bin this user still has open keeps an ordinary lock: unlocking ends only
+// the Locked or Protected one.
+bool BinContainer::unlockProjectBins(const QStringList& ids, QString* error) {
+    if (!bins_) return false;
+    QStringList problems;
+    for (const QString& requested : ids) {
+        const QString id = canonicalBin(requested);
+        const model::BinNode* n = bins_->node(id);
+        if (!n || n->kind != model::BinNode::Kind::Bin) continue;
+        const QString path = bins_->binPath(id);
+        if (!model::isSharedLocation(path)) continue;
+        const auto lock = model::readBinLock(path);
+        if (!lock) continue;
+        QString why;
+        if (!model::releaseBinLock(path, lockUser_, true, &why)) {
+            problems << tr("%1: %2").arg(n->name, why);
+            continue;
+        }
+        model::appendBinHistory(path, lockUser_, QStringLiteral("unlocked"));
+        if (BinDocument* doc = document(id)) {
+            using State = BinDocument::LockState;
+            if (doc->lockState() == State::Mine || doc->lockState() == State::Protected) {
+                model::BinLockHolder got;
+                if (model::acquireBinLock(path, lockUser_, &got) == model::BinLockResult::Acquired) {
+                    doc->setLockState(State::Mine, got);
+                } else {
+                    doc->setLockState(State::Released);
+                }
+            }
+        }
+        readLock(id);
+    }
+    refreshTree();
+    if (error) *error = problems.join(QLatin1Char('\n'));
+    return problems.isEmpty();
+}
+
 // ---------------------------------------------------------------- bin contents
 
 QString BinContainer::newSequence(const QString& targetBin) {
     BinDocument* doc = targetBin.isEmpty() ? activeDocument() : openBin(targetBin);
     if (!doc) return {};
+    // A bin someone else holds cannot be chosen for new items (p.304).
+    if (doc->isReadOnly()) {
+        emit lockRefused(doc->nodeId());
+        return {};
+    }
     const model::BinItem item =
         model::newSequence(doc->bin(), editRate_, QDateTime::currentDateTimeUtc(), startTimecode_);
     doc->addItem(item);
@@ -1340,6 +1727,10 @@ QStringList BinContainer::duplicateSelection() {
     BinView* view = activeView();
     if (!view) return {};
     BinDocument& doc = view->document();
+    if (doc.isReadOnly()) {
+        emit lockRefused(doc.nodeId());
+        return {};
+    }
     QStringList created;
     const QDateTime now = QDateTime::currentDateTimeUtc();
     for (const QString& id : view->selectedIds()) {
@@ -1359,6 +1750,10 @@ int BinContainer::deleteSelection() {
     // With headings selected, Edit > Delete removes columns (p.268).
     if (view->mode() == model::BinViewMode::Text && !view->selectedHeadings().isEmpty()) {
         view->deleteColumns(view->selectedHeadings());
+        return 0;
+    }
+    if (view->document().isReadOnly()) {
+        emit lockRefused(view->document().nodeId());
         return 0;
     }
     QStringList ids;
@@ -1393,6 +1788,13 @@ QStringList BinContainer::transferItems(const QString& fromBin, const QStringLis
         target = openBin(to);
         if (!target) return {};
     }
+    // "You cannot drag an item to a locked bin"; one dragged from a locked bin
+    // to a writable one is duplicated there, and stays where it was (p.304).
+    if (target->isReadOnly()) {
+        emit lockRefused(target->nodeId());
+        return {};
+    }
+    const bool fromLocked = source->isReadOnly();
     // Custom columns come along, in the order they were made (p.260).
     model::BinDisplay display = target->bin().display;
     bool columnsAdded = false;
@@ -1411,13 +1813,19 @@ QStringList BinContainer::transferItems(const QString& fromBin, const QStringLis
         // A copy is the same clip in another bin, so it keeps its identity
         // and, unlike Duplicate, its name (p.260).
         if (!item || target->bin().item(id)) continue;
+        if (fromLocked) {
+            const model::BinItem duplicate = model::duplicateItem(target->bin(), *item, QDateTime::currentDateTimeUtc());
+            target->addItem(duplicate);
+            added << duplicate.id;
+            continue;
+        }
         // Locking prevents deletion (p.265), so a moved locked item is only
         // copied: it stays in the source bin, as Delete leaves it.
         if (!item->locked) moved << id;
         target->addItem(*item);
         added << id;
     }
-    if (!copy) source->removeItems(moved);
+    if (!copy && !fromLocked) source->removeItems(moved);
     if (BinView* v = viewFor(target)) v->selectIds(added);
     return added;
 }

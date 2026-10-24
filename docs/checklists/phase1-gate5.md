@@ -167,6 +167,8 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Edit Group |  | p.1125 | *later* | ☐ | | |
 | Lock Bin Selection |  | p.265 | works | ☐ | | |
 | Unlock Bin Selection |  | p.266 | works | ☐ | | |
+| Lock Project Bin |  | p.302 | works | ☐ | | |
+| Unlock Project Bin |  | p.302 | works | ☐ | | |
 | Lock Tracks |  | p.633 | works | ☐ | | |
 | Unlock Tracks |  | p.634 | works | ☐ | | |
 | Loop Selected Clips |  | p.393 | *later* | ☐ | | |
@@ -312,6 +314,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 208 menu commands, 95 of them working with a project open; the
+* 210 menu commands, 97 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

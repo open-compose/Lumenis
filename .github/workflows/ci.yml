@@ -634,12 +634,14 @@ jobs:
         ubuntu: ${{ fromJSON(vars.LINUX_RUNNERS || '[]') }}
     runs-on: [self-hosted, Linux, X64, cutthulhu, 'ubuntu-${{ matrix.ubuntu }}']
     timeout-minutes: 90
-    # Temporary files in the runner's own temporary folder, on the work disk, which the runner
-    # empties after each job: Ubuntu 26.04's /tmp is a small tmpfs (in memory), which filled up
-    # and stopped every build (BUILDING.md, "The self-hosted Windows or Linux job waits or fails").
-    env:
-      TMPDIR: ${{ runner.temp }}
     steps:
+      # Temporary files in the runner's own temporary folder, on the work disk, which the runner
+      # empties after each job: Ubuntu 26.04's /tmp is a small tmpfs (in memory), which filled up
+      # and stopped every build (BUILDING.md, "The self-hosted Windows or Linux job waits or
+      # fails"). Set here, as a job's env cannot use the runner context.
+      - name: Temporary folder
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       - name: Shell scripts parse

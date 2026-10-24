@@ -667,8 +667,15 @@ and pyaaf2's test suites, made with real Media Composer
     `libclang-rt-dev`). The first three found three more bugs in the AAF
     dump and import (fixed, with regression inputs); the fourth
     (2026-10-23/24, run 39992718177) was clean on every target: **passed**.
-  * Left in Phase 3: shared-storage bin locking, 3.5 (deferred), and the
-    gates' Media Composer halves, which wait for the owner's seat.
+  * 3.7, shared-storage bin locking (docs/spec/bin-locking.md), is done:
+    lock and history files beside each bin on a network share
+    (`src/model/bin_lock.*`), the Bin Lock Status button (green, red,
+    yellow, blue), read-only bins, bold locked bins in the Bin Container,
+    Lock, Protect and Unlock Project Bin, Alt+double-click, and each
+    machine's open bins kept apart (ctests `tst_bin_lock`,
+    `tst_bin_locking`).
+  * Left in Phase 3: 3.5 (deferred), and the gates' Media Composer halves,
+    which wait for the owner's seat.
 
 ### Phase 4 — Core editing
 Features in this phase:

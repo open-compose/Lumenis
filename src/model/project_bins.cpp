@@ -132,7 +132,15 @@ bool ProjectBins::load(QString* error) {
         for (const QJsonValue& v : o.value(QStringLiteral("tree")).toArray()) {
             if (auto n = nodeFromJson(v.toObject())) roots_.append(*n);
         }
-        for (const QJsonValue& v : o.value(QStringLiteral("open")).toArray()) openBins << v.toString();
+        if (openBinsFile_.isEmpty()) {
+            for (const QJsonValue& v : o.value(QStringLiteral("open")).toArray()) openBins << v.toString();
+        }
+    }
+    if (!openBinsFile_.isEmpty()) {
+        QFile open(openBinsFile_);
+        if (open.open(QIODevice::ReadOnly)) {
+            for (const QJsonValue& v : QJsonDocument::fromJson(open.readAll()).array()) openBins << v.toString();
+        }
     }
 
     // Drop entries whose file is gone.
@@ -162,7 +170,14 @@ bool ProjectBins::load(QString* error) {
         roots_.append(n);
     }
     openBins.removeIf([&](const QString& id) { return !node(id) || isInTrash(id); });
+    savedTree_ = treeJson();
     return true;
+}
+
+QByteArray ProjectBins::treeJson() const {
+    QJsonArray tree;
+    for (const BinNode& n : roots_) tree.append(nodeToJson(n));
+    return QJsonDocument(tree).toJson(QJsonDocument::Compact);
 }
 
 bool ProjectBins::save(QString* error) const {
@@ -170,6 +185,19 @@ bool ProjectBins::save(QString* error) const {
     for (const BinNode& n : roots_) tree.append(nodeToJson(n));
     QJsonArray open;
     for (const QString& id : openBins) open.append(id);
+    if (!openBinsFile_.isEmpty()) {
+        // This machine's open bins, beside the shared tree, which then lists none.
+        QDir().mkpath(QFileInfo(openBinsFile_).absolutePath());
+        QSaveFile mine(openBinsFile_);
+        if (!mine.open(QIODevice::WriteOnly)) return fail(error, mine.errorString());
+        mine.write(QJsonDocument(open).toJson());
+        if (!mine.commit()) return fail(error, mine.errorString());
+        open = QJsonArray();
+        // The shared list is written only when this system changed it, so
+        // that opening and closing bins never writes back an older list over
+        // another system's changes.
+        if (treeJson() == savedTree_ && QFileInfo::exists(treeFile())) return true;
+    }
     const QJsonObject o{{QStringLiteral("format"), QLatin1String(kFileFormat)},
                         {QStringLiteral("version"), kFileVersion},
                         {QStringLiteral("tree"), tree},
@@ -178,6 +206,7 @@ bool ProjectBins::save(QString* error) const {
     if (!f.open(QIODevice::WriteOnly)) return fail(error, f.errorString());
     f.write(QJsonDocument(o).toJson());
     if (!f.commit()) return fail(error, f.errorString());
+    savedTree_ = treeJson();
     return true;
 }
 

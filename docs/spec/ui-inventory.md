@@ -659,7 +659,8 @@ These are recorded now so they are not entered from memory later.
   * Clip colours: right-click in the Color column, or *Set Clip Color* in
     the right-click menu of any view; None resets.
   * The colour palettes have a button for the system colour picker.
-* **Lock (p.265):** *Clip > Lock/Unlock Bin Selection*.
+* **Lock (p.265):** *Clip > Lock/Unlock Bin Selection*. Bins on shared
+  storage are locked as a whole: §20.
 * **Columns (p.267–278).**
   * Drag a heading to move its column (p.268).
   * *Bin > Align and Fill > Align Columns* spaces columns by the length of
@@ -2202,5 +2203,31 @@ docs/spec/otio.md.
   to an `.ale`.
 * Later: the Import setting's Shot Log tab (p.1197-1198), Tab Delimited.
 
-## 20. Still to document
+## 20. Shared bins (p.300-304)
+Details: docs/spec/bin-locking.md.
+* **Bin Lock Status button** (p.301-303), at the left of a bin's top row,
+  only for a bin on shared storage (p.302 note). Green: this user holds the
+  lock and may change the bin. Red: another user holds it, or it is
+  protected (for everyone). Yellow: the holder saved changes since it was
+  read; the bin's tab adds "(modified)" (p.302; the wording is **ours**);
+  a click reads it again and turns it red. Blue: the holder released the
+  lock; a click takes it and turns it green. Alt (Option)+click on green
+  releases the lock (p.303). Otherwise a click shows the bin's history: who
+  saved it, on which machine, when (p.301), in a window of its own
+  (**ours**: the guide does not show it).
+* **Bin Container** (p.301-302): bins locked by another user are in bold;
+  **ours**: a tooltip names the holder ("ed on EDIT-1", with `*` for Locked
+  and `**` for Protected, p.302). Alt (Option)+double-click opens a bin
+  without taking its lock (p.302).
+* **Right-click a bin** in the Bin Container: Lock Project Bin, Protect
+  Project Bin and Unlock Project Bin (p.302), for the selected bins or the
+  one clicked; **Clip > Lock Project Bin** and **Clip > Unlock Project
+  Bin** (p.302 note) for the selected bins, else the active bin.
+* **Restrictions** (p.304): no drops into a bin someone else holds, nor new
+  sequences, imports or duplicates; items dragged out of one are
+  duplicated; it cannot be moved, renamed or deleted. **Ours**: changes to
+  its items are refused (the Console says so), rather than made and then
+  not saved.
+
+## 21. Still to document
 * Menu order and separators, confirmed against a licensed seat.

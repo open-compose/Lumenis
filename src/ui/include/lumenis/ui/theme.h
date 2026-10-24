@@ -76,6 +76,8 @@ enum class GlyphIcon {
     MediaVolume,
     ChevronDown,
     ChevronUp,
+    // The Bin Lock Status button (guide p.301), drawn in its state's colour. Our own drawing.
+    Lock,
 };
 // An icon 16 logical pixels square (a 32 px pixmap at device pixel ratio 2) in one colour.
 QIcon glyphIcon(GlyphIcon which, QColor color = QColor(0xdc, 0xdc, 0xdc));

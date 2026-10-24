@@ -643,6 +643,16 @@ check the machine's network or proxy for pip (`pip config list`). An
 earlier, quiet version once ran for 37 minutes on the Windows runner
 without a word.
 
+### CI: a run fails with no jobs
+
+GitHub refuses a workflow file it cannot use, and the run then shows
+"failure" with no jobs and no log. Once, a job's `env:` set
+`TMPDIR: ${{ runner.temp }}`; the `runner` context is not available there
+(only in steps), so every job was dropped. ctest `workflows_lint`
+(`scripts/check-workflows.py`, actionlint from the check environment)
+finds such mistakes before a push; run it after changing a workflow.
+Labels of the self-hosted runners are listed in `.github/actionlint.yaml`.
+
 ### Fuzzing: "cannot find .../libclang_rt.fuzzer-x86_64.a"
 
 Clang is installed without its runtime libraries (libFuzzer, the
@@ -829,7 +839,9 @@ the build folder (`build/<preset>`) and configure again.
 Several interchange checks have another implementation read the same files:
 olefile (`cfb_olefile`), pyaaf2 (`aaf_pyaaf2`, part of `aaf_round_trip`),
 pyavb (`avb_pyavb`, `avb_write_pyavb`, `avb_export_pyavb`),
-OpenTimelineIO (`otio_python`) and its FCP adapter (`fcpxml_python`). Without its package a check is skipped, and
+OpenTimelineIO (`otio_python`) and its FCP adapter (`fcpxml_python`); the
+same environment holds actionlint, which checks the CI workflows
+(`workflows_lint`). Without its package a check is skipped, and
 configuring prints which packages the Python it found lacks.
 `scripts/check-python.py` puts them, at the versions pinned in
 `scripts/check-requirements.txt`, into a virtual environment
@@ -973,6 +985,17 @@ install a runner. For a runner installed before that:
   pyaaf2's model tables: `python3 scripts/make-aaf-model.py --pyaaf2
   <pyaaf2 checkout>` (`--check` to compare).
 * **Gate 4, fuzzing:** see [Fuzzing](#fuzzing) below.
+* **Shared bins (3.7):** `tst_bin_lock` and `tst_bin_locking` run
+  everywhere, on local folders with `LUMENIS_SHARED_BINS=all`. By hand, on
+  a real NAS share mounted on two systems: open the project on both, open a
+  bin on the first (green) and on the second (red, bold in its Bin
+  Container); save on the first (yellow on the second, a click reads it);
+  close it on the first (blue, a click takes it); Lock, Protect and Unlock
+  Project Bin. Each system keeps the bins it has open in
+  `<project>/<machine name>/open-bins.json`; locks are
+  `<bin>.cthbin.lck`, and a lock left by a crash is removed by opening
+  the bin again as the same user on the same machine, or by deleting that
+  file.
 
 ## Fuzzing
 
@@ -1155,3 +1178,10 @@ cutthulhu --dump-menus FILE  write the menu bar as JSON ('-' for stdout) and exi
   Separate them as `PATH` does (`:` on macOS and Linux, `;` on Windows).
   Each one gets an `Avid MediaFiles/MXF/<n>` folder when media is made on
   it. Use it to keep test media off the system drive.
+* `LUMENIS_SHARED_BINS`: `all` (or `1`) treats every folder as shared
+  storage, so bins take locks and show the Bin Lock Status button; `none`
+  (or `0`) treats none as shared. Without it, network file systems (SMB,
+  NFS, AFP, WebDAV and the like; on Windows network drives and UNC paths)
+  are shared (docs/spec/bin-locking.md). Use `all` for a share Cutthulhu
+  does not recognise, and to try locking on one machine with two users
+  (start each with its own User profile).

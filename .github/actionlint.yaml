@@ -1,0 +1,6 @@
+# actionlint's settings (scripts/check-workflows.py): the labels of the self-hosted runners
+# (BUILDING.md, "Continuous integration"). The ubuntu-* labels name each WSL runner's Ubuntu.
+self-hosted-runner:
+  labels:
+    - cutthulhu
+    - ubuntu-*

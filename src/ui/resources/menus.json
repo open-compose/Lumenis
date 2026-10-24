@@ -190,6 +190,8 @@
         "clip.edit_group",
         "clip.lock_bin_selection",
         "clip.unlock_bin_selection",
+        "clip.lock_project_bin",
+        "clip.unlock_project_bin",
         "clip.lock_tracks",
         "clip.unlock_tracks",
         "clip.loop_selected_clips",

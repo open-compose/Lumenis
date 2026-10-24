@@ -30,6 +30,13 @@ if(Python3_Interpreter_FOUND)
         TIMEOUT 60)
 endif()
 
+# The CI workflows are ones GitHub accepts (scripts/check-workflows.py); skipped without actionlint.
+if(Python3_Interpreter_FOUND)
+    add_test(NAME workflows_lint
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/check-workflows.py)
+    set_tests_properties(workflows_lint PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 120)
+endif()
+
 # The structural diff (ROADMAP Phase 3 gate 1): what it finds the same and
 # different.
 if(Python3_Interpreter_FOUND)

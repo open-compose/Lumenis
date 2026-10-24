@@ -73,5 +73,12 @@ OpenTimelineIO. No code of it is copied. Its sample files are downloaded for
 testing (`scripts/interop-corpus.py`) and not distributed; the adapter itself
 is used only by the checks.
 
+## Development tools
+
+[actionlint](https://github.com/rhysd/actionlint) (MIT, Copyright rhysd),
+installed through the [actionlint-py](https://github.com/Mateusz-Grzelinski/actionlint-py)
+package (MIT), checks the CI workflows (`scripts/check-workflows.py`). It is
+used only by the checks and not distributed.
+
 When a component is added, also add it to this table and install its licence
 text (see `cmake/Packaging.cmake`).

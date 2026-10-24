@@ -1,5 +1,6 @@
 add_library(lumenis_model STATIC
     bin.cpp
+    bin_lock.cpp
     project_bins.cpp
     project_store.cpp
     locations.cpp
@@ -10,6 +11,7 @@ add_library(lumenis_model STATIC
     calculator.cpp
     structure.cpp
     include/lumenis/model/bin.h
+    include/lumenis/model/bin_lock.h
     include/lumenis/model/project_bins.h
     include/lumenis/model/project_store.h
     include/lumenis/model/locations.h

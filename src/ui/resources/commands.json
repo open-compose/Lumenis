@@ -99,6 +99,8 @@
     {"id": "clip.edit_group", "text": "Edit Group"},
     {"id": "clip.lock_bin_selection", "text": "Lock Bin Selection"},
     {"id": "clip.unlock_bin_selection", "text": "Unlock Bin Selection"},
+    {"id": "clip.lock_project_bin", "text": "Lock Project Bin"},
+    {"id": "clip.unlock_project_bin", "text": "Unlock Project Bin"},
     {"id": "clip.lock_tracks", "text": "Lock Tracks"},
     {"id": "clip.unlock_tracks", "text": "Unlock Tracks"},
     {"id": "clip.loop_selected_clips", "text": "Loop Selected Clips"},

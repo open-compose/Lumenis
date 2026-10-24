@@ -55,9 +55,11 @@ jobs:
     timeout-minutes: 2160
     env:
       FUZZ_HOME: ${{ github.workspace }}/../cutthulhu-fuzz
-      # Not Ubuntu 26.04's small in-memory /tmp (ci.yml, linux-local).
-      TMPDIR: ${{ runner.temp }}
     steps:
+      # Not Ubuntu 26.04's small in-memory /tmp (ci.yml, linux-local).
+      - name: Temporary folder
+        run: echo "TMPDIR=$RUNNER_TEMP" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v4
 
       - name: Clang and libFuzzer

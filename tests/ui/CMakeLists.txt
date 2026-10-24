@@ -22,6 +22,7 @@ target_compile_definitions(tst_keyboard PRIVATE
 lumenis_add_test(tst_bin_container SOURCES tst_bin_container.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_bin_views SOURCES tst_bin_views.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_bin_dock SOURCES tst_bin_dock.cpp LIBS ${ui_test_libs})
+lumenis_add_test(tst_bin_locking SOURCES tst_bin_locking.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_platform_check SOURCES tst_platform_check.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_composer SOURCES tst_composer.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_timeline SOURCES tst_timeline.cpp LIBS ${ui_test_libs})

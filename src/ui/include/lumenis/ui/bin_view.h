@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/model/bin.h"
+#include "lumenis/model/bin_lock.h"
 
 #include <QAbstractTableModel>
 #include <QListView>
@@ -89,21 +90,54 @@ public:
     bool renameCustomColumn(const QString& from, const QString& to);
 
     // Writes the bin file (model::BinFile) and clears the dirty flag. On
-    // failure returns false, sets `error` and stays dirty.
+    // failure returns false, sets `error` and stays dirty. A shared bin is
+    // written only while its lock is still this user's (two users can both
+    // see the green button for a moment, p.304); each save goes into the
+    // bin's history (p.301).
     bool save(QString* error = nullptr);
+
+    // Shared-storage locking (p.300-304, model/bin_lock.h). The states are
+    // those of the Bin Lock Status button: green, this user holds the lock and
+    // may change the bin; red, another user does (or the bin is protected);
+    // yellow, the holder has saved changes since it was read; blue, the holder
+    // has released the lock. A bin not on shared storage has no lock and no
+    // button. BinContainer takes, releases and watches the locks.
+    enum class LockState { NotShared, Mine, Others, Modified, Released, Protected };
+    LockState lockState() const { return lockState_; }
+    // Who holds the lock (Others, Modified, Protected, and Mine's own).
+    const std::optional<model::BinLockHolder>& lockHolder() const { return lockHolder_; }
+    void setLockState(LockState state, std::optional<model::BinLockHolder> holder = std::nullopt);
+    // This user, for the history and for checking the lock before a save.
+    void setLockUser(const model::BinLockHolder& me) { lockUser_ = me; }
+    const std::optional<model::BinLockHolder>& lockUser() const { return lockUser_; }
+    // Changes cannot be saved: someone else holds the lock, or the bin is
+    // protected. Changes to the items are refused (writeRefused()); changes to
+    // how it is shown are made but not marked as unsaved.
+    bool isReadOnly() const;
+    // The bin as read again from its file, replacing what is shown (a click on
+    // the yellow button, p.302). Not marked changed.
+    void reload(const model::Bin& bin);
 
 signals:
     void itemsChanged();
     void displayChanged();
     void dirtyChanged(bool dirty);
+    void lockChanged();
+    // A change to the items was refused: the bin is read-only.
+    void writeRefused();
 
 private:
     void touch();
+    // True, emitting writeRefused(), when the bin is read-only.
+    bool refused();
 
     QString nodeId_;
     QString path_;
     model::Bin bin_;
     bool dirty_ = false;
+    LockState lockState_ = LockState::NotShared;
+    std::optional<model::BinLockHolder> lockHolder_;
+    std::optional<model::BinLockHolder> lockUser_;
 };
 
 // Rows of a bin: an icon column, Name, then the bin's chosen headings.
@@ -403,6 +437,9 @@ signals:
     void itemActivated(const QString& itemId);
     // saveViewAs() changed BinViewLibrary.
     void viewSaved();
+    // The Bin Lock Status button was clicked, `alt` with Alt (Option) held
+    // (p.302-303); BinContainer::lockButtonClicked() acts on it.
+    void lockButtonClicked(bool alt);
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -410,6 +447,8 @@ protected:
 private:
     void applyDisplay();
     void updateStatus();
+    // The Bin Lock Status button's colour and tooltip, from the document.
+    void updateLockButton();
     void headerClicked(int logical);
     void headerMenu(const QPoint& pos);
     void editHeading(const QString& heading);
@@ -429,6 +468,7 @@ private:
     BinScriptView* script_ = nullptr;
     QLineEdit* filter_ = nullptr;
     QLabel* status_ = nullptr;
+    QToolButton* lockButton_ = nullptr;
     QStringList selectedHeadings_;
     QStringList keepSelection_;
     QString quick_;

@@ -229,8 +229,11 @@ Python packages come from `scripts/check-python.py` (BUILDING.md). 3.6c, FCP
 7 XML (ours: `fcp_xml.*`, docs/spec/fcp-xml.md, through the OTIO import and
 export; `--import-fcpxml`/`--export-fcpxml`, Import Media, Export to File's
 "Final Cut Pro 7 XML"; ctests `fcpxml_round_trip`, `fcpxml_python`, fuzz
-target `fcpxml`), is done, so 3.6 is. Left in Phase 3: shared-storage bin
-locking, 3.5 (deferred) and the gates that wait for the owner's seat.
+target `fcpxml`), is done, so 3.6 is. 3.7, shared-storage bin locking
+(docs/spec/bin-locking.md: `src/model/bin_lock.*`, the Bin Lock Status
+button in `bin_view.*`, locks in `bin_container.*`, Lock/Protect/Unlock
+Project Bin, `LUMENIS_SHARED_BINS`), is done. Left in Phase 3: 3.5
+(deferred) and the gates that wait for the owner's seat.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

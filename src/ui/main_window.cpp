@@ -63,6 +63,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QSet>
@@ -189,6 +190,9 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     });
     connect(settings_, &Settings::aboutToChangeUser, this, &MainWindow::writeWorkspaces);
     connect(settings_, &Settings::userChanged, this, &MainWindow::readWorkspaces);
+    // Shared bins are locked in the User profile's name (p.302).
+    binContainer_->setLockUser(settings_->user());
+    connect(settings_, &Settings::userChanged, this, [this] { binContainer_->setLockUser(settings_->user()); });
     syncWorkspaceUi();
 }
 
@@ -379,6 +383,15 @@ void MainWindow::createPanels() {
     });
     connect(binContainer_, &BinContainer::binViewsChanged, this, [this] {
         settings_->setValue(QStringLiteral("Bin"), QStringLiteral("binViews"), BinViewLibrary::toJson());
+    });
+    // A change to a bin someone else holds, refused (p.304): said in the
+    // Console, as it can come from any edit.
+    connect(binContainer_, &BinContainer::lockRefused, this, [this](const QString& binId) {
+        if (!console_) return;
+        const auto lock = binContainer_->lockOf(binId);
+        const QString name = binContainer_->nodeName(binId);
+        console_->log()->appendPlainText(lock ? tr("The bin \"%1\" is locked by %2; it cannot be changed.").arg(name, lock->describe())
+                                              : tr("The bin \"%1\" is locked; it cannot be changed.").arg(name));
     });
     // A bin that could not be saved. Not modal: it may come from the
     // auto-save timer, or while the project closes.
@@ -2377,6 +2390,31 @@ void MainWindow::installPanelHandlers() {
     for (const char* id : {"other.add_alt_key", "other.add_control_key", "other.add_option_key"}) {
         commands_.setHandler(QString::fromLatin1(id), [] {});
     }
+    // Clip > Lock Project Bin and Unlock Project Bin (p.302): the bins
+    // selected in the Bin Container, or else the active bin.
+    auto projectBins = [this](bool lock) {
+        QStringList ids;
+        for (const QString& id : binContainer_->selectedNodes()) {
+            if (const model::ProjectBins* b = binContainer_->bins(); b && b->node(id) && b->node(id)->kind == model::BinNode::Kind::Bin) {
+                ids << id;
+            }
+        }
+        if (ids.isEmpty()) {
+            if (BinDocument* d = binContainer_->activeDocument()) ids << d->nodeId();
+        }
+        QString error;
+        const bool ok = lock ? binContainer_->lockProjectBins(ids, model::BinLockKind::Locked, &error)
+                             : binContainer_->unlockProjectBins(ids, &error);
+        if (!ok && !error.isEmpty()) {
+            auto* box = new QMessageBox(QMessageBox::Warning, lock ? tr("Lock Project Bin") : tr("Unlock Project Bin"), error,
+                                        QMessageBox::Ok, this);
+            box->setObjectName(QStringLiteral("binLockFailed"));
+            box->setAttribute(Qt::WA_DeleteOnClose);
+            box->open();
+        }
+    };
+    handle("clip.lock_project_bin", [projectBins] { projectBins(true); });
+    handle("clip.unlock_project_bin", [projectBins] { projectBins(false); });
     // Tools (ch.5).
     // Tools menu: each opens its panel through showTool().
     handle("tools.command_palette", [this] { showTool(QStringLiteral("CommandPalette")); });

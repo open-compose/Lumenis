@@ -2,10 +2,13 @@
 
 #include "lumenis/core/rational.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/bin_lock.h"
 #include "lumenis/model/project_bins.h"
 #include "lumenis/ui/bin_dock.h"
 
 #include <QAbstractItemModel>
+#include <QDateTime>
+#include <QHash>
 #include <QList>
 #include <QWidget>
 
@@ -224,8 +227,10 @@ public:
     BinView* viewFor(const BinDocument* document) const;
     // Opens a bin, tabbed into the main area, and makes it active; an open
     // bin is brought to the front instead. Null if `id` is not a bin, is in
-    // the Trash, or its file cannot be read.
-    BinDocument* openBin(const QString& id);
+    // the Trash, or its file cannot be read. A bin on shared storage takes
+    // its lock unless someone holds it; `takeLock` false opens it without
+    // taking the lock (Alt+double-click, p.302).
+    BinDocument* openBin(const QString& id, bool takeLock = true);
     // Saves the bin if it has changes, then closes it. Its view and document
     // are deleted later, from the event loop. If the save fails the bin stays
     // open with its changes: returns false, sets `error` and emits
@@ -337,11 +342,38 @@ public:
     bool opensBinsFloating() const { return openFloating_; }
     void setQuickFilterAllColumns(bool all);
     // A bin the user opens or creates: tabbed or floating as the Bin
-    // settings say; Ctrl (Command) inverts that (p.1153).
-    BinDocument* openBinAsSet(const QString& id);
+    // settings say; Ctrl (Command) inverts that (p.1153). `takeLock` as for
+    // openBin().
+    BinDocument* openBinAsSet(const QString& id, bool takeLock = true);
     // General settings "Default Starting TC" (p.1192) for new sequences.
     void setDefaultStartTimecode(const QString& tc) { startTimecode_ = tc; }
     const QString& defaultStartTimecode() const { return startTimecode_; }
+
+    // Shared-storage bin locking (p.300-304, docs/spec/bin-locking.md). The
+    // user whose locks these are (the User profile, p.1138), on this machine.
+    void setLockUser(const QString& user);
+    const model::BinLockHolder& lockUser() const { return lockUser_; }
+    // The Bin Lock Status button (p.301-303): yellow reads the bin again and
+    // turns red, blue takes the lock and turns green, Alt on green releases
+    // the lock; otherwise it shows the bin's history (showLockHistory()).
+    void lockButtonClicked(BinDocument* document, bool alt);
+    // A window listing who saved the bin and when (p.301). Not modal; it is
+    // named "binLockHistory".
+    QWidget* showLockHistory(BinDocument* document);
+    // Lock Project Bin and Protect Project Bin (`kind` Locked or Protected)
+    // and Unlock Project Bin (p.302), for Sidebar entries; bins not on shared
+    // storage, and bins someone else holds, are refused with `error`.
+    bool lockProjectBins(const QStringList& ids, model::BinLockKind kind, QString* error = nullptr);
+    bool unlockProjectBins(const QStringList& ids, QString* error = nullptr);
+    // Who holds a bin's lock, as last read; nothing when it has none or is
+    // not on shared storage.
+    std::optional<model::BinLockHolder> lockOf(const QString& id) const;
+    // Bins locked by another user are in bold in the Bin Container (p.301).
+    bool isLockedByOther(const QString& id) const;
+    // Reads the locks and files again: of the open bins (their buttons) and
+    // of the Sidebar's bins, and the bin list when someone else changed it.
+    // A timer does it every two seconds while the project is shared.
+    void pollLocks();
 
     // Called with each bin read from its file, before it opens: the media
     // database points managed clips at their files (p.358).
@@ -366,6 +398,9 @@ signals:
     // as the project closed. `bin` is its name, empty when several bins were
     // being saved; `error` says why. MainWindow shows it to the user.
     void saveFailed(const QString& bin, const QString& error);
+    // A change to a bin someone else holds was refused (p.304); MainWindow
+    // says so in the Console.
+    void lockRefused(const QString& binId);
     // The user's Favorite Bins list (FavoriteBins::paths()) or saved bin
     // views (BinViewLibrary) changed here; MainWindow stores them in the
     // User settings.
@@ -390,7 +425,24 @@ private:
     void registerSidebar(BinSidebar* sidebar);
     QString canonicalBin(const QString& id) const;
 
+    // Takes (or, with `take` false, only reads) a shared bin's lock as it
+    // opens; releases it as it closes.
+    void lockOnOpen(BinDocument* document, bool take);
+    void releaseOnClose(BinDocument* document);
+    // The project's folder is on shared storage (model::isSharedLocation).
+    bool projectShared() const { return projectShared_; }
+    // A bin's lock in its Sidebar's terms, read again into locks_.
+    void readLock(const QString& id);
+    // Rename, move and delete are refused for a bin someone else holds (p.304).
+    bool refuseLocked(const QString& id, QString* error) const;
+
     std::function<void(model::Bin&)> binLoader_;
+    model::BinLockHolder lockUser_;
+    QTimer* lockTimer_ = nullptr;
+    QHash<QString, std::optional<model::BinLockHolder>> locks_; // Sidebar bin id -> its lock
+    QHash<const BinDocument*, QDateTime> readAt_;               // when each open shared bin was read
+    QDateTime treeReadAt_;                                      // the bin list's file, as last read or written
+    bool projectShared_ = false;
     DeleteFilter deleteFilter_;
     std::unique_ptr<model::ProjectBins> bins_;
     Rational editRate_{24000, 1001};
