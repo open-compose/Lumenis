@@ -65,7 +65,7 @@ def load_otio():
     try:
         import opentimelineio  # noqa: F401
     except ImportError:
-        print("otio-check: opentimelineio is not installed (pip install opentimelineio)", file=sys.stderr)
+        print("otio-check: opentimelineio is not installed (pip install opentimelineio; on Linux it may need python3-dev; BUILDING.md, \"Python packages for the checks\")", file=sys.stderr)
         sys.exit(77)
     import opentimelineio as otio
     return otio

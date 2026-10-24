@@ -28,6 +28,24 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(interop_corpus_fetch PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300 LABELS corpus)
     set_tests_properties(tst_cfb tst_aaf tst_avb tst_edl tst_ale tst_otio PROPERTIES DEPENDS interop_corpus_fetch)
 
+    # The checks against other implementations are skipped without their Python packages, and
+    # ctest says only "Skipped": name the missing ones here, where they can be seen.
+    set(_missing "")
+    foreach(module olefile aaf2 avb opentimelineio)
+        execute_process(COMMAND ${Python3_EXECUTABLE} -c "import ${module}"
+            RESULT_VARIABLE _status OUTPUT_QUIET ERROR_QUIET)
+        if(NOT _status EQUAL 0)
+            string(REPLACE "aaf2" "pyaaf2" _package "${module}")
+            string(REPLACE "avb" "pyavb" _package "${_package}")
+            list(APPEND _missing ${_package})
+        endif()
+    endforeach()
+    if(_missing)
+        list(JOIN _missing " " _missing)
+        message(STATUS "Interchange checks against other readers will be skipped: ${Python3_EXECUTABLE} "
+            "lacks ${_missing} (BUILDING.md, \"Python packages for the checks\")")
+    endif()
+
     # What the Writer makes, read by another implementation (olefile).
     # Skipped without olefile.
     add_test(NAME cfb_olefile
