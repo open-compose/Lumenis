@@ -322,6 +322,17 @@ jobs:
             exit 1
           fi
 
+      - name: Disk space
+        # A full disk fails the build in odd places (CMake reports the compiler as broken):
+        # say so first (BUILDING.md, "The self-hosted Windows or Linux job waits or fails").
+        run: |
+          free=$(df -Pk . | awk 'NR==2 {print int($4 / 1048576)}')
+          echo "$free GB free on the runner's disk"
+          if [ "$free" -lt 5 ]; then
+            echo "::error::Only $free GB free on the runner's disk ($(pwd)): CI needs about 5 GB. Free some space on that machine (BUILDING.md, The self-hosted Windows or Linux job waits or fails)"
+            exit 1
+          fi
+
       - name: Python packages for the checks
         # olefile, pyaaf2, pyavb and OpenTimelineIO in a virtual environment in
         # the runner's home, made again only when scripts/check-requirements.txt
@@ -448,6 +459,18 @@ jobs:
         with:
           arch: x64
 
+      - name: Disk space
+        # As on the other runners: a full disk is named before it breaks the build.
+        shell: powershell
+        run: |
+          $drive = Get-PSDrive -Name (Get-Location).Drive.Name
+          $free = [math]::Floor($drive.Free / 1GB)
+          Write-Host "$free GB free on the runner's disk"
+          if ($free -lt 5) {
+            Write-Host "::error::Only $free GB free on the runner's disk ($(Get-Location)): CI needs about 5 GB. Free some space on that machine (BUILDING.md, The self-hosted Windows or Linux job waits or fails)"
+            exit 1
+          }
+
       - name: Python packages for the checks
         # As on the other platforms (BUILDING.md, "Python packages for the
         # checks"). setup-windows-runner.ps1 makes the environment and names it
@@ -468,7 +491,10 @@ jobs:
         # The runner's user cannot reach the Windows Installer service that
         # validates the .msi (BUILDING.md).
         run: |
-          $python = if ($env:CHECK_PYTHON) { @("-DPython3_EXECUTABLE=$env:CHECK_PYTHON") } else { @() }
+          # Built up, not assigned from an if: PowerShell unrolls a one-element array returned
+          # by an if into a string, which @ then splats character by character.
+          $python = @()
+          if ($env:CHECK_PYTHON) { $python += "-DPython3_EXECUTABLE=$env:CHECK_PYTHON" }
           cmake --preset ci -DLUMENIS_WIX_SKIP_VALIDATION=ON @python
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -622,6 +648,17 @@ jobs:
             echo "::warning::The ffmpeg command is missing, so the decode_corpus test is left out: in WSL run 'sudo apt-get install -y ffmpeg' (BUILDING.md, Phase 2 gates)"
           fi
 
+      - name: Disk space
+        # A full disk fails the build in odd places (CMake reports the compiler as broken):
+        # say so first (BUILDING.md, "The self-hosted Windows or Linux job waits or fails").
+        run: |
+          free=$(df -Pk . | awk 'NR==2 {print int($4 / 1048576)}')
+          echo "$free GB free on the runner's disk"
+          if [ "$free" -lt 5 ]; then
+            echo "::error::Only $free GB free on the runner's disk ($(pwd)): CI needs about 5 GB. Free some space on that machine (BUILDING.md, The self-hosted Windows or Linux job waits or fails)"
+            exit 1
+          fi
+
       - name: Python packages for the checks
         # olefile, pyaaf2, pyavb and OpenTimelineIO in a virtual environment in
         # the runner's home, made again only when scripts/check-requirements.txt
@@ -758,7 +795,10 @@ jobs:
       - name: Configure
         shell: pwsh
         run: |
-          $python = if ($env:CHECK_PYTHON) { @("-DPython3_EXECUTABLE=$env:CHECK_PYTHON") } else { @() }
+          # Built up, not assigned from an if: PowerShell unrolls a one-element array returned
+          # by an if into a string, which @ then splats character by character.
+          $python = @()
+          if ($env:CHECK_PYTHON) { $python += "-DPython3_EXECUTABLE=$env:CHECK_PYTHON" }
           cmake --preset ci @python
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 

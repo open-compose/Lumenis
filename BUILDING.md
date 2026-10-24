@@ -600,6 +600,18 @@ hand.
   the WSL runner while `HOSTED_CI` is `off` and needs Pillow: in the
   distribution, `sudo apt-get install -y python3-pil` (newer setup scripts
   install it).
+* *"Only N GB free on the runner's disk", or "No space left on device"
+  (CMake then calls the compiler broken):* the self-hosted jobs need about
+  5 GB; the "Disk space" step stops a job with less. Each keeps its build
+  folders (`build/ci`, `build/asan`, several GB) in the runner's work
+  folder, and `keep-build.sh` the newest five packages. In WSL, see what
+  is using the disk with `sudo du -xh --max-depth=2 / | sort -h | tail`,
+  and the runner's folder with `sudo du -sh
+  /home/ghrunner/actions-runner/_work/*`. Deleting
+  `/home/ghrunner/actions-runner/_work/Lumenis/Lumenis/build` is safe (the
+  next job builds again). WSL's virtual disk grows to its limit and does not
+  shrink on its own: `wsl --manage <distribution> --set-sparse true` in
+  Windows lets it, and Windows' own free space limits it too.
 * *"systemd is not running" from setup-wsl-runner.sh:* add `[boot]` and
   `systemd=true` to `/etc/wsl.conf`, run `wsl --shutdown` in Windows, and
   open the distribution again.
