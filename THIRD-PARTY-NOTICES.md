@@ -75,10 +75,9 @@ is used only by the checks.
 
 ## Development tools
 
-[actionlint](https://github.com/rhysd/actionlint) (MIT, Copyright rhysd),
-installed through the [actionlint-py](https://github.com/Mateusz-Grzelinski/actionlint-py)
-package (MIT), checks the CI workflows (`scripts/check-workflows.py`). It is
-used only by the checks and not distributed.
+[actionlint](https://github.com/rhysd/actionlint) (MIT, Copyright rhysd)
+checks the CI workflows (`scripts/check-workflows.py`, which downloads its
+pinned release). It is used only by the checks and not distributed.
 
 When a component is added, also add it to this table and install its licence
 text (see `cmake/Packaging.cmake`).

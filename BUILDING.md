@@ -649,9 +649,18 @@ GitHub refuses a workflow file it cannot use, and the run then shows
 "failure" with no jobs and no log. Once, a job's `env:` set
 `TMPDIR: ${{ runner.temp }}`; the `runner` context is not available there
 (only in steps), so every job was dropped. ctest `workflows_lint`
-(`scripts/check-workflows.py`, actionlint from the check environment)
-finds such mistakes before a push; run it after changing a workflow.
-Labels of the self-hosted runners are listed in `.github/actionlint.yaml`.
+(`scripts/check-workflows.py`)
+finds such mistakes before a push; run it after changing a workflow. It
+downloads the pinned actionlint release once (checked by SHA-256) into
+`~/.cache/cutthulhu` (or `$CUTTHULHU_TOOLS`), and is skipped without a
+network. Labels of the self-hosted runners are listed in
+`.github/actionlint.yaml`.
+
+actionlint was first a package in `scripts/check-requirements.txt`
+(actionlint-py). It has no Windows wheel, and building one on the Windows
+runner took 20 minutes, so the install was stopped and every interchange
+check was skipped. The check environment holds only the readers now;
+tools come as pinned downloads.
 
 ### Fuzzing: "cannot find .../libclang_rt.fuzzer-x86_64.a"
 
@@ -839,9 +848,7 @@ the build folder (`build/<preset>`) and configure again.
 Several interchange checks have another implementation read the same files:
 olefile (`cfb_olefile`), pyaaf2 (`aaf_pyaaf2`, part of `aaf_round_trip`),
 pyavb (`avb_pyavb`, `avb_write_pyavb`, `avb_export_pyavb`),
-OpenTimelineIO (`otio_python`) and its FCP adapter (`fcpxml_python`); the
-same environment holds actionlint, which checks the CI workflows
-(`workflows_lint`). Without its package a check is skipped, and
+OpenTimelineIO (`otio_python`) and its FCP adapter (`fcpxml_python`). Without its package a check is skipped, and
 configuring prints which packages the Python it found lacks.
 `scripts/check-python.py` puts them, at the versions pinned in
 `scripts/check-requirements.txt`, into a virtual environment
