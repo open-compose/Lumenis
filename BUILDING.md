@@ -602,9 +602,13 @@ hand.
   install it).
 * *"Only N GB free on the runner's disk", or "No space left on device"
   (CMake then calls the compiler broken):* the self-hosted jobs need about
-  5 GB, in the work folder and in the temporary folder (`/tmp`, where the
-  compiler writes; it can be full when the work folder is not); the "Disk
-  space" step stops a job with less of either. Each keeps its build
+  5 GB, in the work folder and in the temporary folder (where the compiler
+  writes); the "Disk space" step stops a job with less of either. On Ubuntu
+  26.04 `/tmp` is a tmpfs, in memory and small, and it once filled up with
+  939 GB free on the disk: the Linux jobs now set `TMPDIR` to the runner's
+  own temporary folder on the work disk, which the runner empties after
+  each job. To empty `/tmp` itself, run `wsl --shutdown` in Windows (a
+  tmpfs is cleared when the distribution stops). Each keeps its build
   folders (`build/ci`, `build/asan`, several GB) in the runner's work
   folder, and `keep-build.sh` the newest five packages. In WSL, see what
   is using the disk with `sudo du -xh --max-depth=2 / | sort -h | tail`,

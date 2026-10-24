@@ -55,6 +55,8 @@ jobs:
     timeout-minutes: 2160
     env:
       FUZZ_HOME: ${{ github.workspace }}/../cutthulhu-fuzz
+      # Not Ubuntu 26.04's small in-memory /tmp (ci.yml, linux-local).
+      TMPDIR: ${{ runner.temp }}
     steps:
       - uses: actions/checkout@v4
 
