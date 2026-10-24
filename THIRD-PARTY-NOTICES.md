@@ -57,5 +57,12 @@ other programs write them. No code of theirs is copied. Their sample files
 are downloaded for testing (`scripts/interop-corpus.py`) and not
 distributed.
 
+The OpenTimelineIO reader and writer (`src/interop/otio.cpp`, Phase 3.6b)
+follow [OpenTimelineIO](https://github.com/AcademySoftwareFoundation/OpenTimelineIO)'s
+published file format and schemas (Apache-2.0, Copyright Contributors to the
+OpenTimelineIO project). No code of theirs is copied. Its sample files are
+downloaded for testing (`scripts/interop-corpus.py`) and not distributed;
+its Python package is used only by the checks (`scripts/otio-check.py`).
+
 When a component is added, also add it to this table and install its licence
 text (see `cmake/Packaging.cmake`).

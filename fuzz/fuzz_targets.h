@@ -28,8 +28,11 @@ int fuzzAvb(const std::uint8_t* data, std::size_t size);
 // The bin writer: what avb::File reads is written back with avb::rewrite, which must read back with
 // the same objects and rewrite to the same bytes, in either byte order (target_avb_rewrite.cpp).
 int fuzzAvbRewrite(const std::uint8_t* data, std::size_t size);
+// OpenTimelineIO: otio::importJson reads the bytes, and each sequence it makes is exported and must
+// import again (target_otio.cpp).
+int fuzzOtio(const std::uint8_t* data, std::size_t size);
 
-// A target by its name ("cfb", "aaf", "avb", "avb_rewrite"), as the directories in
+// A target by its name ("cfb", "aaf", "avb", "avb_rewrite", "otio"), as the directories in
 // fuzz/regressions and the executables fuzz_<name> are named.
 struct Target {
     const char* name;

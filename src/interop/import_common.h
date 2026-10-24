@@ -2,8 +2,11 @@
 
 #include "lumenis/core/rational.h"
 #include "lumenis/core/timecode.h"
+#include "lumenis/model/sequence.h"
 
 #include <QChar>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QList>
 #include <QString>
 #include <QStringList>
@@ -153,5 +156,23 @@ struct SourceTimecode {
     int fps = 0;
     bool drop = false;
 };
+
+// A speed change (an EDL's M2 line, an OTIO LinearTimeWarp or FreezeFrame) as the imports keep it:
+// a segment effect of category "EDL", named "Motion Effect", with the speed as a multiple of
+// normal (0 for a freeze frame, negative for reverse), which the EDL export writes back as M2.
+inline model::Effect motionEffect(double speed) {
+    model::Effect e;
+    e.category = QStringLiteral("EDL");
+    e.name = QStringLiteral("Motion Effect");
+    e.parameters = QJsonObject{{QStringLiteral("M2"), QJsonObject{{QStringLiteral("Speed"), speed}}}};
+    return e;
+}
+
+// The speed of a motion effect an import made (motionEffect()), or nothing for another effect.
+inline std::optional<double> speedOf(const model::Effect& e) {
+    if (e.category != QLatin1String("EDL") || e.name != QLatin1String("Motion Effect")) return std::nullopt;
+    const QJsonValue v = e.parameters.value(QStringLiteral("M2")).toObject().value(QStringLiteral("Speed"));
+    return v.isDouble() ? std::optional<double>(v.toDouble()) : std::nullopt;
+}
 
 } // namespace lumenis::interop::detail

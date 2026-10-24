@@ -865,6 +865,17 @@ the build folder (`build/<preset>`) and configure again.
   `cutthulhu --export-edl BIN.cthbin "Sequence name" OUT.edl [--edl-type
   File_129]` (an .edl in place of the bin is a round trip), `cutthulhu
   --import-ale FILE.ale` and `cutthulhu --export-ale BIN.cthbin OUT.ale`.
+* **OpenTimelineIO (3.6b):** `tst_otio` reads, writes and reads again
+  timelines made in the test and the sample files of OpenTimelineIO
+  (Apache-2.0), which the corpus downloads into `otio`. ctest
+  `otio_round_trip` exports every sample, then exports the export, and
+  needs the same JSON; ctest `otio_python` has OpenTimelineIO's own Python
+  package (`pip install opentimelineio`; skipped without it) compare each
+  export with the original, clip by clip (docs/spec/otio.md, "Checks"). By
+  hand: `cutthulhu --import-otio FILE.otio > ours.json`, `cutthulhu
+  --export-otio BIN.cthbin "Sequence name" OUT.otio` (an .otio in place
+  of the bin is a round trip, and then the name may be left out), and `python3 scripts/otio-check.py
+  --compare --app build/ci/bin/cutthulhu FILE.otio...`.
 * **The built-in AAF model** (`src/interop/aaf_model.inc`) is made from
   pyaaf2's model tables: `python3 scripts/make-aaf-model.py --pyaaf2
   <pyaaf2 checkout>` (`--check` to compare).
@@ -873,11 +884,12 @@ the build folder (`build/<preset>`) and configure again.
 ## Fuzzing
 
 Phase 3 gate 4 asks that fuzzing the bin and AAF parsers for 24 hours
-produces no crashes. `fuzz/` holds four libFuzzer targets (fuzz/README.md
+produces no crashes. `fuzz/` holds five libFuzzer targets (fuzz/README.md
 says what each runs): `cfb` (the compound file container), `aaf` (AAF
 objects, the `--dump-aaf` dump and the import into bins), `avb` (bins, the
-`--dump-avb` dump and the import) and `avb_rewrite` (the bin writer: what is
-read is written back and must read back the same). A crash, a hang (an
+`--dump-avb` dump and the import), `avb_rewrite` (the bin writer: what is
+read is written back and must read back the same) and `otio`
+(OpenTimelineIO files, imported, exported and imported again). A crash, a hang (an
 input taking over 10 s), an AddressSanitizer or UBSan report, or a failed
 round-trip check is a failure.
 
@@ -1014,6 +1026,11 @@ cutthulhu --import-edl FILE [--rate R]
 cutthulhu --export-edl BIN SEQUENCE OUT.edl [--edl-type CMX_3600|File_129]
                              write a sequence of a bin (.cthbin) as an EDL; an .edl is read
                              first (a round trip)
+cutthulhu --import-otio FILE  read an OpenTimelineIO file (.otio) into master clips and sequences
+                             and print the bin as a structure dump (docs/spec/otio.md)
+cutthulhu --export-otio BIN SEQUENCE OUT.otio
+                             write a sequence of a bin (.cthbin) as OpenTimelineIO; an .otio is
+                             read first (a round trip; without SEQUENCE its first timeline)
 cutthulhu --import-ale FILE   read an ALE shot log into master clips and print the bin as a
                              structure dump (docs/spec/ale.md)
 cutthulhu --export-ale BIN OUT.ale

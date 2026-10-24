@@ -33,16 +33,16 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TARGETS = ["cfb", "aaf", "avb", "avb_rewrite"]
+TARGETS = ["cfb", "aaf", "avb", "avb_rewrite", "otio"]
 # Which corpus files seed which target.
-EXTENSIONS = {"cfb": (".aaf",), "aaf": (".aaf",), "avb": (".avb",), "avb_rewrite": (".avb",)}
+EXTENSIONS = {"cfb": (".aaf",), "aaf": (".aaf",), "avb": (".avb",), "avb_rewrite": (".avb",), "otio": (".otio",)}
 # The largest input the fuzzer makes or keeps (-max_len), and the largest corpus file used as a
 # seed: libFuzzer mutates small inputs far faster. AAF files are compound files of a few hundred
 # kilobytes, so `seed` also lays each out again smaller; bins are a few tens of kilobytes.
-MAX_LEN = {"cfb": 262144, "aaf": 262144, "avb": 131072, "avb_rewrite": 131072}
+MAX_LEN = {"cfb": 262144, "aaf": 262144, "avb": 131072, "avb_rewrite": 131072, "otio": 131072}
 # How a total time is split between the targets: the AAF and bin parsers (and their imports) have
 # the most code.
-WEIGHTS = {"cfb": 1, "aaf": 3, "avb": 3, "avb_rewrite": 2}
+WEIGHTS = {"cfb": 1, "aaf": 3, "avb": 3, "avb_rewrite": 2, "otio": 2}
 
 
 def default_corpus() -> Path:
@@ -83,6 +83,12 @@ def env() -> dict:
 def cmd_build(args) -> int:
     subprocess.run(["cmake", "--preset", "fuzz"], cwd=ROOT, check=True)
     subprocess.run(["cmake", "--build", "--preset", "fuzz"], cwd=ROOT, check=True)
+    # The fuzz build preset lists its targets by name: one left out there builds nothing for it.
+    missing = [t for t in TARGETS if not (ROOT / "build" / "fuzz" / "bin" / f"fuzz_{t}").exists()]
+    if missing:
+        print(f"fuzz: no fuzz_{', fuzz_'.join(missing)} after the build: add them to the fuzz build "
+              "preset's targets in CMakePresets.json", file=sys.stderr)
+        return 1
     return 0
 
 

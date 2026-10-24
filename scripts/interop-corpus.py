@@ -2,8 +2,9 @@
 """The interchange corpus (ROADMAP Phase 3): AAF files and Media Composer bins
 made by other programs, for the readers in src/interop to be tested on.
 
-The files belong to pyaaf2 and pyavb (both MIT, by Mark Reid), and the EDLs
-and shot logs to OpenTimelineIO's CMX 3600 and ALE adapters (Apache-2.0); they
+The files belong to pyaaf2 and pyavb (both MIT, by Mark Reid), the EDLs
+and shot logs to OpenTimelineIO's CMX 3600 and ALE adapters, and the .otio
+timelines to OpenTimelineIO itself (Apache-2.0); they
 come from their repositories at pinned commits, checked by SHA-256. They are not
 committed here: `fetch` downloads them into a cache folder.
 
@@ -73,6 +74,16 @@ committed here: `fetch` downloads them into a cache folder.
         (scripts/avb-structure.py) must be the one exported, as Cutthulhu
         read it from the corpus (structdiff.py --no-effects: avb-structure.py
         does not name effects). Exits 77 without pyavb or the corpus.
+    interop-corpus.py check-otio --app build/ci/bin/cutthulhu [--dir DIR]
+        Export every corpus timeline (`cutthulhu --export-otio`) and read it
+        with OpenTimelineIO's Python package: the same clips, gaps and
+        transitions in every track as it finds in the original
+        (scripts/otio-check.py --compare). Exits 77 without opentimelineio
+        (pip install opentimelineio) or the corpus.
+    interop-corpus.py check-otio-round-trip --app build/ci/bin/cutthulhu [--dir DIR]
+        Export every corpus timeline twice over (import, export, import,
+        export): the two exports must be the same (otio-check.py
+        --round-trip). Needs only the corpus.
     interop-corpus.py check-written --test build/ci/bin/tst_cfb [--dir DIR]
         Run tst_cfb's forOlefile, which writes compound files with
         Cutthulhu's writer, and read them back with olefile. Exits 77 without
@@ -162,6 +173,22 @@ SOURCES = {
         "sample_blanks.ale": "ea2be9a2e2179bcb2c13436716de0ae707102de676f86047a3edc5b42beef329",
         "sample_cdl.ale": "86f9ab120888ffb618b4790153b462aa87b7aa2978ad265ee08bd4ec6571575e",
         "sample_no_blanks.ale": "d8a6d7b821cf17fb0b3cfeeab3121cfdcebd12a45bff48b312c0d75c6879b73e",
+    }),
+    # OpenTimelineIO's own sample timelines (Apache-2.0), at the v0.17.0 tag, for tst_otio and
+    # otio-check.py (Phase 3.6b).
+    "otio": ("https://raw.githubusercontent.com/AcademySoftwareFoundation/OpenTimelineIO/v0.17.0/tests/sample_data/", {
+        "big_int.otio": "065de8d684cd8598d6d21f8915008ccadf74b7ab978587703bf47597a8c556a7",
+        "clip_example.otio": "b87fbdaf96561c4ba2b361c572b298a91aa2a73613e215402dd5ae400220b326",
+        "generator_reference_test.otio": "85c0a9eca537134ee75809820e6555e9cbec0ef64be5d1806c23cedf382a8c59",
+        "multiple_track.otio": "8cfcaa5f346a302a3e3c23ed03b35f85046c9d9a6a67e5c894652d814a0b5668",
+        "multitrack.otio": "8982f905993ca4c7113423e63fdd7d2eff69d56ed4659a080e3281b7e7f038e0",
+        "nested_example.otio": "b9bc0f25590f724b7adc8ebfe4543256cc899b81f33ed4e75cd17cb6323f52cb",
+        "preflattened.otio": "553240152332819a8b0a7bb3ab0469ac9f91e075ffb2a24e3e975f7473770424",
+        "premiere_example.otio": "412c2dc0cd78397ea1c5ecf9e76c8f12c853c4c32203564644e2df82e561e35a",
+        "screening_example.otio": "13a8f4151382791c1090dab3d35f4f33b25918132e7328d440cdd4bd971e3749",
+        "simple_cut.otio": "a85440060aa8b421fb7430dcf4c6d9a89a78b256198767afcfff1496ededf7eb",
+        "transition.otio": "c7fe66127f5b1c6a651ce55d3115b910b0efb53e4e275b5e1ee954079c72e9cc",
+        "transition_test.otio": "fe2a88668728386c1083cb964196e8966a5cc2062cfc022c7548fb43f21691da",
     }),
 }
 
@@ -416,6 +443,18 @@ def check_avb(app, folder):
         return 77
     script = os.path.join(ROOT, "scripts", "avb-dump.py")
     return subprocess.run([sys.executable, script, "--compare", "--app", app] + paths).returncode
+
+
+def check_otio(app, folder, compare):
+    """otio-check.py on every corpus timeline: --compare (with OpenTimelineIO) or --round-trip."""
+    paths = [os.path.join(folder, name) for name, _, _ in files() if name.endswith(".otio")]
+    paths = [p for p in paths if os.path.exists(p)]
+    if not paths:
+        print(f"interop-corpus: no corpus in {folder} (interop-corpus.py fetch)", file=sys.stderr)
+        return 77
+    script = os.path.join(ROOT, "scripts", "otio-check.py")
+    mode = "--compare" if compare else "--round-trip"
+    return subprocess.run([sys.executable, script, mode, "--app", app] + paths).returncode
 
 
 def corpus_bins(folder):
@@ -673,7 +712,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["fetch", "manifest", "reference", "check-aaf", "check-avb", "check-import",
                                         "check-avb-import", "check-round-trip", "check-written", "check-avb-rewrite",
-                                        "check-avb-write", "check-avb-export", "check-avb-export-pyavb"])
+                                        "check-avb-write", "check-avb-export", "check-avb-export-pyavb", "check-otio",
+                                        "check-otio-round-trip"])
     ap.add_argument("--dir", help="the corpus folder (check-written: where to keep the files written)")
     ap.add_argument("--test", help="tst_cfb, for check-written; tst_avb, for check-avb-write")
     ap.add_argument("--app", help="the cutthulhu executable, for the check- commands")
@@ -713,6 +753,10 @@ def main():
             ap.error(f"{args.command} needs --app")
         check = check_avb_export if args.command == "check-avb-export" else check_avb_export_pyavb
         return check(args.app, args.dir or default_dir())
+    if args.command in ("check-otio", "check-otio-round-trip"):
+        if not args.app:
+            ap.error(f"{args.command} needs --app")
+        return check_otio(args.app, args.dir or default_dir(), args.command == "check-otio")
     if args.command == "check-avb-write":
         if not args.test:
             ap.error("check-avb-write needs --test")

@@ -1,5 +1,6 @@
 # Interchange: AAF and the formats other editors read and write (ROADMAP
-# Phase 3, docs/spec/aaf.md, docs/spec/avb.md, docs/spec/edl.md, docs/spec/ale.md).
+# Phase 3, docs/spec/aaf.md, docs/spec/avb.md, docs/spec/edl.md, docs/spec/ale.md,
+# docs/spec/otio.md).
 add_library(lumenis_interop STATIC
     cfb.cpp
     aaf.cpp
@@ -14,6 +15,7 @@ add_library(lumenis_interop STATIC
     avb_export.cpp
     edl.cpp
     ale.cpp
+    otio.cpp
     import_common.h
     text_common.h
     include/lumenis/interop/cfb.h
@@ -27,6 +29,7 @@ add_library(lumenis_interop STATIC
     include/lumenis/interop/avb_export.h
     include/lumenis/interop/edl.h
     include/lumenis/interop/ale.h
+    include/lumenis/interop/otio.h
 )
 add_library(lumenis::interop ALIAS lumenis_interop)
 

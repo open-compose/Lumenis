@@ -13,6 +13,7 @@
 #include "lumenis/interop/avb_import.h"
 #include "lumenis/interop/avb_writer.h"
 #include "lumenis/interop/edl.h"
+#include "lumenis/interop/otio.h"
 #include "lumenis/model/structure.h"
 #include "lumenis/model/locations.h"
 #include "lumenis/model/project_store.h"
@@ -91,8 +92,8 @@
 // The cutthulhu executable: main() sets up Qt, the provider registry and modules, then either runs
 // one of the command-line tools below and exits, or opens the editor (Select Project, then
 // lumenis::ui::MainWindow). The options are declared in main() and handled in this order:
-// --list-providers, --probe, --dump-structure, --export-aaf, --export-avb, --export-edl, --export-ale, --import-aaf,
-// --import-avb, --import-edl, --import-ale,
+// --list-providers, --probe, --dump-structure, --export-aaf, --export-avb, --export-edl, --export-ale,
+// --export-otio, --import-aaf, --import-avb, --import-edl, --import-ale, --import-otio,
 // --dump-aaf, --dump-avb, --rewrite-avb, --write-media and --framemd5 need no display (isHeadlessInvocation()); --dump-menus,
 // --measure-playback, --screenshot and --smoke-test open the main window; --project or Select
 // Project start a normal session. The scripts that run these are in scripts/ (decode-corpus.py,
@@ -110,7 +111,8 @@ bool isHeadlessInvocation(int argc, char** argv) {
             || arg == "--list-providers" || arg == "--probe" || arg == "--framemd5" || arg == "--write-media"
             || arg == "--dump-structure" || arg == "--dump-aaf" || arg == "--dump-avb" || arg == "--import-aaf" || arg == "--import-avb"
             || arg == "--export-aaf" || arg == "--export-avb" || arg == "--rewrite-avb" || arg == "--import-edl"
-            || arg == "--export-edl" || arg == "--import-ale" || arg == "--export-ale") {
+            || arg == "--export-edl" || arg == "--import-ale" || arg == "--export-ale" || arg == "--import-otio"
+            || arg == "--export-otio") {
             return true;
         }
     }
@@ -347,6 +349,19 @@ int main(int argc, char** argv) {
     parser.addOption(edlType);
     parser.addOption(importAle);
     parser.addOption(exportAle);
+    const QCommandLineOption importOtio(
+        QStringLiteral("import-otio"),
+        QStringLiteral("Import an OpenTimelineIO file (.otio) into a bin: a master clip for each piece of media and a "
+                       "sequence for each timeline. Print the bin's structure dump, then exit (docs/spec/otio.md)."),
+        QStringLiteral("file"));
+    const QCommandLineOption exportOtio(
+        QStringLiteral("export-otio"),
+        QStringLiteral("Write the sequence named after the bin (.cthbin) as an OpenTimelineIO file to the file given "
+                       "after the name, then exit (docs/spec/otio.md). Clips come from the bin and the other bins "
+                       "beside it. An .otio is imported first: a round trip (then the name may be left out)."),
+        QStringLiteral("bin"));
+    parser.addOption(importOtio);
+    parser.addOption(exportOtio);
     parser.addOption(canonical);
     parser.addOption(writeMedia);
     parser.addOption(mediaDrive);
@@ -574,6 +589,67 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    // --export-otio <bin> SEQUENCE OUT: a sequence of a .cthbin (its clips found in that bin and the
+    // other bins of its folder) or of an .otio's import (a round trip, scripts/otio-check.py), written
+    // by interop::otio::exportFile() (docs/spec/otio.md). Warnings go to stderr; exit status 2 for
+    // wrong arguments.
+    if (parser.isSet(exportOtio)) {
+        QString error;
+        const QString from = parser.value(exportOtio);
+        const QStringList rest = parser.positionalArguments();
+        QList<lumenis::model::BinItem> items;
+        const bool isOtio = from.endsWith(QLatin1String(".otio"), Qt::CaseInsensitive);
+        if (isOtio) {
+            const auto imported = lumenis::interop::otio::importFile(from, {}, &error);
+            if (!imported) {
+                std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(from), qPrintable(error));
+                return 1;
+            }
+            for (const QString& w : imported->warnings) std::fprintf(stderr, "import-otio: %s\n", qPrintable(w));
+            items = imported->items;
+        } else {
+            const auto bin = lumenis::model::BinFile::read(from, &error);
+            if (!bin) {
+                std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(from), qPrintable(error));
+                return 1;
+            }
+            items = bin->items;
+            const QFileInfo info(from);
+            for (const QFileInfo& f : info.dir().entryInfoList({QStringLiteral("*") + lumenis::model::BinFile::suffix()}, QDir::Files)) {
+                if (f.canonicalFilePath() == info.canonicalFilePath()) continue;
+                if (auto other = lumenis::model::BinFile::read(f.filePath())) items += other->items;
+            }
+        }
+        if (rest.size() != 2 && !(isOtio && rest.size() == 1)) {
+            std::fprintf(stderr, "--export-otio needs the sequence's name and the file to write after the bin\n");
+            return 2;
+        }
+        const lumenis::model::BinItem* sequence = nullptr;
+        for (const lumenis::model::BinItem& item : items) {
+            if (item.kind != lumenis::model::BinItemKind::Sequence) continue;
+            if (!sequence && (rest.size() == 1 || item.name == rest.first())) sequence = &item;
+        }
+        if (!sequence) {
+            std::fprintf(stderr, "no sequence %s in %s\n", qPrintable(rest.size() == 2 ? rest.first() : QString()), qPrintable(from));
+            return 1;
+        }
+        lumenis::interop::otio::ExportOptions options;
+        options.resolve = [&items](const lumenis::MobId& mob, const QString& clipId) -> std::optional<lumenis::model::BinItem> {
+            for (const lumenis::model::BinItem& item : items) {
+                if (item.kind == lumenis::model::BinItemKind::Sequence) continue;
+                if ((!clipId.isEmpty() && item.id == clipId) || lumenis::model::mobIdOf(item) == mob) return item;
+            }
+            return std::nullopt;
+        };
+        const auto result = lumenis::interop::otio::exportFile(*sequence, rest.last(), options);
+        for (const QString& w : result.warnings) std::fprintf(stderr, "export-otio: %s\n", qPrintable(w));
+        if (!result.ok) {
+            std::fprintf(stderr, "cannot write %s: %s\n", qPrintable(rest.last()), qPrintable(result.error));
+            return 1;
+        }
+        return 0;
+    }
+
     // --export-ale <bin> OUT: a .cthbin's master clips and subclips, or a shot log's import (a round
     // trip), written by interop::ale::exportFile() (docs/spec/ale.md).
     if (parser.isSet(exportAle)) {
@@ -654,6 +730,17 @@ int main(int argc, char** argv) {
             return 1;
         }
         printImported(path, imported->warnings, "import-edl", imported->items, {});
+        return 0;
+    }
+    if (parser.isSet(importOtio)) {
+        QString error;
+        const QString path = parser.value(importOtio);
+        const auto imported = lumenis::interop::otio::importFile(path, {}, &error);
+        if (!imported) {
+            std::fprintf(stderr, "cannot read %s: %s\n", qPrintable(path), qPrintable(error));
+            return 1;
+        }
+        printImported(path, imported->warnings, "import-otio", imported->items, {});
         return 0;
     }
     if (parser.isSet(importAle)) {

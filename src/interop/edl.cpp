@@ -38,7 +38,9 @@ namespace lumenis::interop::edl {
 
 namespace {
 
+using detail::motionEffect;
 using detail::Notes;
+using detail::speedOf;
 
 // Reels that stand for black (no source), as edit controllers write them.
 bool isBlackReel(const QString& reel) {
@@ -206,21 +208,6 @@ QString markerColorNamed(const QString& word) {
         if (c.name.compare(word, Qt::CaseInsensitive) == 0) return c.name;
     }
     return {};
-}
-
-// The Speed of a motion effect the import made (category "EDL", name "Motion Effect").
-std::optional<double> speedOf(const model::Effect& e) {
-    if (e.category != QLatin1String("EDL") || e.name != QLatin1String("Motion Effect")) return std::nullopt;
-    const QJsonValue v = e.parameters.value(QStringLiteral("M2")).toObject().value(QStringLiteral("Speed"));
-    return v.isDouble() ? std::optional<double>(v.toDouble()) : std::nullopt;
-}
-
-model::Effect motionEffect(double speed) {
-    model::Effect e;
-    e.category = QStringLiteral("EDL");
-    e.name = QStringLiteral("Motion Effect");
-    e.parameters = QJsonObject{{QStringLiteral("M2"), QJsonObject{{QStringLiteral("Speed"), speed}}}};
-    return e;
 }
 
 // ---- Import

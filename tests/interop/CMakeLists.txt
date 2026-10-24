@@ -3,7 +3,8 @@ lumenis_add_test(tst_aaf SOURCES tst_aaf.cpp LIBS lumenis::interop)
 lumenis_add_test(tst_avb SOURCES tst_avb.cpp LIBS lumenis::interop)
 lumenis_add_test(tst_edl SOURCES tst_edl.cpp LIBS lumenis::interop)
 lumenis_add_test(tst_ale SOURCES tst_ale.cpp LIBS lumenis::interop)
-foreach(t tst_cfb tst_aaf tst_avb tst_edl tst_ale)
+lumenis_add_test(tst_otio SOURCES tst_otio.cpp LIBS lumenis::interop)
+foreach(t tst_cfb tst_aaf tst_avb tst_edl tst_ale tst_otio)
     target_compile_definitions(${t} PRIVATE LUMENIS_TEST_DATA="${PROJECT_SOURCE_DIR}/tests/data")
 endforeach()
 
@@ -16,7 +17,7 @@ else()
     set(LUMENIS_INTEROP_CORPUS_DEFAULT "${CMAKE_BINARY_DIR}/interop-corpus")
 endif()
 set(LUMENIS_INTEROP_CORPUS "${LUMENIS_INTEROP_CORPUS_DEFAULT}" CACHE PATH "Where the interchange corpus is kept")
-set_tests_properties(tst_cfb tst_aaf tst_avb tst_edl tst_ale PROPERTIES
+set_tests_properties(tst_cfb tst_aaf tst_avb tst_edl tst_ale tst_otio PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;CUTTHULHU_INTEROP_CORPUS=${LUMENIS_INTEROP_CORPUS}")
 
 find_package(Python3 COMPONENTS Interpreter QUIET)
@@ -25,7 +26,7 @@ if(Python3_Interpreter_FOUND)
         COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py fetch
                 --dir ${LUMENIS_INTEROP_CORPUS})
     set_tests_properties(interop_corpus_fetch PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 300 LABELS corpus)
-    set_tests_properties(tst_cfb tst_aaf tst_avb tst_edl tst_ale PROPERTIES DEPENDS interop_corpus_fetch)
+    set_tests_properties(tst_cfb tst_aaf tst_avb tst_edl tst_ale tst_otio PROPERTIES DEPENDS interop_corpus_fetch)
 
     # What the Writer makes, read by another implementation (olefile).
     # Skipped without olefile.
@@ -106,6 +107,20 @@ if(Python3_Interpreter_FOUND)
         COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py check-avb-import
                 --app $<TARGET_FILE:lumenis_app> --dir ${LUMENIS_INTEROP_CORPUS})
     set_tests_properties(avb_import_bins PROPERTIES
+        SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+    # OpenTimelineIO (3.6b): every corpus timeline exported, imported and
+    # exported again is the same; and OpenTimelineIO's own Python package
+    # reads each export with the clips, gaps and transitions it finds in the
+    # original. The second is skipped without opentimelineio.
+    add_test(NAME otio_round_trip
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py check-otio-round-trip
+                --app $<TARGET_FILE:lumenis_app> --dir ${LUMENIS_INTEROP_CORPUS})
+    add_test(NAME otio_python
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/interop-corpus.py check-otio
+                --app $<TARGET_FILE:lumenis_app> --dir ${LUMENIS_INTEROP_CORPUS})
+    set_tests_properties(otio_round_trip otio_python PROPERTIES
         SKIP_RETURN_CODE 77 TIMEOUT 600 DEPENDS interop_corpus_fetch
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
