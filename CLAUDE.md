@@ -251,7 +251,10 @@ Editing Guide is at
 https://resources.avid.com/SupportFiles/attach/Media_Composer/2026/Media_Composer_v2026.x_Editing_Guide.pdf
 and the FX Guide at the same folder's `Media_Composer_v2026.x_FX_Guide.pdf`
 (same pages as 2025.12). The page offsets between the editions are in
-docs/spec/ui-inventory.md, "Editions". Avid's 2026.8 shared projects on
+docs/spec/ui-inventory.md, "Editions". When new Avid documents arrive,
+compare them with the last edition (as in "Editions") and recheck the
+"Watch list" there: ours where the guides are silent. The owner wants
+these changed if Avid's documents turn out to differ. Avid's 2026.8 shared projects on
 third-party storage are undocumented, so our bin locking stays
 (docs/spec/bin-locking.md).
 

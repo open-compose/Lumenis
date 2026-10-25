@@ -40,6 +40,16 @@ pages are the 2025.12 pages plus:
 (`pdftotext` of both editions, compared line by line with page numbers
 masked, in the scratchpad; the guides themselves are not committed.)
 
+**Watch list.** These choices are ours because the guides are silent.
+Recheck them against each new edition of Avid's documents (Editing Guide,
+FX Guide, What's New, ReadMe) and against a seat when there is one:
+* Change Source Track > More: the segment then refers to the master clip,
+  at the same frames (§11; 2026.8 guide p.507).
+* Shared projects on third-party storage: our own lock files (§20a;
+  docs/spec/bin-locking.md).
+* Choose Columns: Search matches anywhere in a heading; All/None acts on
+  the headings shown; the width is fixed (§9).
+
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical
   resize (2026.8 guide p.246; What's New 2026.8 p.8): §9, built.
@@ -1175,7 +1185,9 @@ p.610–640, ch. 13 p.432–434).**
   MobID among the open bins. The segment keeps its place, length, clip
   gain, pan and effects, and the change is one undo step. The clip in the
   bin is not changed. **Ours:** after More the segment refers to the
-  master clip, at the same frames. Not yet built: group and multigroup
+  master clip, at the same frames. This is the owner's decision
+  (2026-10-25), and it is on the watch list below: the guide does not say
+  what Media Composer does. Not yet built: group and multigroup
   clips (multicamera editing), and source track names from the
   production metadata (p.595-596).
 * **Locks (p.633, p.493).** Clip > Lock Tracks / Unlock Tracks, the
