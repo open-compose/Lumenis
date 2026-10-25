@@ -125,6 +125,7 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
             p->length = framesToSamples(start + s.length, rate) - p->at;
             p->sourceStart += framesToSamples(s.sourceIn, clip->editRate);
             panGains(s.pan != 0 ? s.pan : side(track.number), s.gain, &p->left, &p->right);
+            p->gain = s.gain <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, s.gain / 20.0));
             out.push_back(*p);
         }
     }

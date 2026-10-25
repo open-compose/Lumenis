@@ -42,6 +42,7 @@ class BackgroundQueue;
 class BackgroundQueueWindow;
 class CalculatorWindow;
 class ConsolidateDialog;
+class AudioMixdownDialog;
 class ExportAsDialog;
 class ExportBinDialog;
 class ImportEdlDialog;
@@ -233,6 +234,12 @@ public:
     // Files (keep master clips linked; nothing: cancel).
     void consolidateTranscode();
     void setConsolidateHook(std::function<bool(ConsolidateDialog&)> hook) { consolidateHook_ = std::move(hook); }
+    // Timeline > Mixdown > Audio > To Sequence (p.731-732): the selected audio tracks of the Record
+    // monitor's sequence, between its marks (or all of it), mixed down into a new audio clip in the
+    // chosen bin and overwritten into the target tracks, as one undo step. The hook stands in for the
+    // dialog (tests; true: OK).
+    void audioMixdown();
+    void setMixdownHook(std::function<bool(AudioMixdownDialog&)> hook) { mixdownHook_ = std::move(hook); }
     void setCopyingMediaHook(std::function<std::optional<bool>()> hook) { copyingMediaHook_ = std::move(hook); }
     // How media is made, from the Media Creation setting's tab ("import",
     // "transcode") and the project.
@@ -384,6 +391,7 @@ private:
     void startSound(MonitorId monitor, int speed);
     std::function<void(LinkedMediaDialog&)> linkedMediaHook_;
     std::function<bool(ConsolidateDialog&)> consolidateHook_;
+    std::function<bool(AudioMixdownDialog&)> mixdownHook_;
     std::function<bool(ExportAsDialog&)> exportHook_;
     std::function<bool(ImportEdlDialog&)> importEdlHook_;
     std::function<bool(ExportBinDialog&)> exportBinHook_;

@@ -2219,7 +2219,17 @@ docs/spec/otio.md.
   to an `.ale`.
 * Later: the Import setting's Shot Log tab (p.1197-1198), Tab Delimited.
 
-## 20. Shared bins (p.300-304)
+## 20. Audio Mixdown (p.731-732)
+Details: docs/spec/audio-mixdown.md.
+* **Timeline > Mixdown > Audio > To Sequence** opens the Audio Mixdown
+  dialog box: Source Tracks, Range, Mono / Dual Mono / Stereo / 5.1 / 7.1
+  with the target track, Include Master Fader, a bin and a drive, Save
+  Premix Sequence, OK (p.732). **Ours:** the layout; Stereo, 5.1 and 7.1
+  dimmed until multichannel tracks; Dual Mono targets are pairs of empty
+  tracks; the clip is named "<sequence> Mixdown".
+* Multiple Mixes (p.732-734) is later.
+
+## 20a. Shared bins (p.300-304)
 Details: docs/spec/bin-locking.md.
 * **Bin Lock Status button** (p.301-303), at the left of a bin's top row,
   only for a bin on shared storage (p.302 note). Green: this user holds the

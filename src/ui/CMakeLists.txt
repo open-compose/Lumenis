@@ -9,6 +9,7 @@ add_library(lumenis_ui STATIC
     button_mapping.cpp
     composer.cpp
     consolidate_dialog.cpp
+    mixdown_dialog.cpp
     export_dialog.cpp
     interchange_dialogs.cpp
     list_tool.cpp
@@ -47,6 +48,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/button_mapping.h
     include/lumenis/ui/composer.h
     include/lumenis/ui/consolidate_dialog.h
+    include/lumenis/ui/mixdown_dialog.h
     include/lumenis/ui/export_dialog.h
     include/lumenis/ui/interchange_dialogs.h
     include/lumenis/ui/list_tool.h

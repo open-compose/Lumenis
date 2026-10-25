@@ -198,7 +198,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Add Filler at Start |  | p.462 | *later* | ☐ | | |
 | Find Black Hole |  | p.645 | *later* | ☐ | | |
 | Find Flash Frame |  | p.645 | *later* | ☐ | | |
-| Mixdown > Audio > To Sequence |  | p.732 | *later* | ☐ | | |
+| Mixdown > Audio > To Sequence |  | p.732 | works | ☐ | | |
 | Mixdown > Audio > Multiple Mixes |  | p.732 | *later* | ☐ | | |
 | Mixdown > Data |  | p.982 | *later* | ☐ | | |
 | Mixdown > Video |  | p.228 | *later* | ☐ | | |
@@ -314,6 +314,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 210 menu commands, 97 of them working with a project open; the
+* 210 menu commands, 98 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

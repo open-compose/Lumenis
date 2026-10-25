@@ -12,6 +12,8 @@
 #include "lumenis/media/playback.h"
 
 #include "lumenis/core/branding.h"
+#include "lumenis/core/timecode.h"
+#include "lumenis/media/mixdown.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
@@ -27,6 +29,7 @@
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/consolidate_dialog.h"
+#include "lumenis/ui/mixdown_dialog.h"
 #include "lumenis/ui/export_dialog.h"
 #include "lumenis/ui/interchange_dialogs.h"
 #include "lumenis/ui/list_tool.h"
@@ -2040,6 +2043,122 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
     return ids;
 }
 
+// The dialog (from the Record monitor's sequence, its marks and the selected tracks), then the mix
+// with a progress dialog, the new clip into its bin (after the premix copy, when asked for) and the
+// clip overwritten into the targets, new tracks added when there are none.
+void MainWindow::audioMixdown() {
+    auto fail = [this](const QString& text) {
+        auto* box = new QMessageBox(QMessageBox::Warning, tr("Audio Mixdown"), text, QMessageBox::Ok, this);
+        box->setObjectName(QStringLiteral("mixdownFailed"));
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        box->open();
+    };
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence || !project_) {
+        fail(tr("Load a sequence into the Record monitor first."));
+        return;
+    }
+    const model::BinItem sequence = rec->item;
+    const model::Sequence seq = model::Sequence::fromItem(sequence);
+    // "Click the Track buttons ... to select the audio tracks you want to mix down" (p.731).
+    QStringList tracks;
+    for (const QString& t : timeline_->patch().selectedRecordTracks(seq)) {
+        const model::Track* track = seq.track(t);
+        if (track && track->kind == model::TrackKind::Audio) tracks << t;
+    }
+    if (tracks.isEmpty()) {
+        fail(tr("Select the audio tracks to mix down."));
+        return;
+    }
+    // "If you do not mark the section ... the system mixes down all of the selected audio tracks."
+    const model::MonitorState& marks = composer_->state(MonitorId::Record);
+    std::int64_t start = 0;
+    std::int64_t end = seq.duration();
+    if (marks.in() || marks.out()) {
+        start = marks.markedStart();
+        end = marks.markedEnd() + 1;
+    }
+    if (end <= start) {
+        fail(tr("There is nothing to mix down."));
+        return;
+    }
+    auto tc = [this](std::int64_t frame) {
+        return QString::fromStdString(Timecode(timeline_->startFrame() + frame, timeline_->format()).toString());
+    };
+    AudioMixdownDialog::Setup setup;
+    setup.sourceTracks = tracks;
+    setup.rangeStart = tc(start);
+    setup.rangeEnd = tc(end);
+    setup.emptyTracks = model::emptyAudioTracks(seq, start, end, tracks);
+    for (const BinDocument* d : binContainer_->openDocuments()) {
+        if (!d->isReadOnly()) setup.bins << qMakePair(d->nodeId(), d->name());
+    }
+    setup.activeBin = rec->binId;
+    media::MediaCreation creation = mediaCreation(QStringLiteral("transcode"));
+    setup.drive = creation.audioDrive.isEmpty() ? creation.videoDrive : creation.audioDrive;
+    AudioMixdownDialog dialog(setup, this);
+    const bool ok = mixdownHook_ ? mixdownHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok) return;
+    BinDocument* doc = binContainer_->document(dialog.bin());
+    if (!doc || doc->isReadOnly()) {
+        fail(tr("Choose a bin that can be changed."));
+        return;
+    }
+    // "Select Save Premix Sequence if you want to save the sequence before mixing down" (p.732).
+    if (dialog.savePremixSequence()) {
+        model::BinItem premix = model::duplicateItem(doc->bin(), sequence, QDateTime::currentDateTimeUtc());
+        doc->addItem(premix);
+    }
+    media::MixdownRequest request;
+    request.sequence = sequence;
+    request.tracks = tracks;
+    request.start = start;
+    request.end = end;
+    request.format = dialog.format();
+    request.includeMaster = dialog.includeMasterFader();
+    request.masterGainDb = audioMixer_ ? audioMixer_->masterGain() : 0.0;
+    request.alternatingPan = settings_->text(QStringLiteral("Audio"), QStringLiteral("defaultPan")) != QLatin1String("centered");
+    request.clips = [this](const QString& binId, const QString& clipId) { return composer_->resolve(binId, clipId); };
+    creation.videoDrive = dialog.drive();
+    creation.audioDrive = dialog.drive();
+    QProgressDialog progress(tr("Mixing down..."), tr("Cancel"), 0, 1000, this);
+    progress.setObjectName(QStringLiteral("mixdownProgress"));
+    creation.progress = progressOn(progress);
+    QString error;
+    const auto made = media::mixdownClip(request, tr("%1 Mixdown").arg(sequence.name), tc(start), creation, &error);
+    progress.reset();
+    if (!made) {
+        fail(error);
+        return;
+    }
+    doc->addItem(*made);
+    // "Media Composer mixes down the audio, displays the new master clip in the bin, and edits the
+    // mixdown clip into the sequence."
+    QStringList targets = dialog.targetTracks();
+    const int channels = media::mixdownChannels(request.format);
+    const QString binId = doc->nodeId();
+    timeline_->changeRecordSequence(tr("Audio Mixdown"), [&](model::Sequence& s) {
+        while (targets.size() < channels) {
+            const auto added = s.addTrack(model::TrackKind::Audio);
+            if (!added) return false;
+            targets << *added;
+        }
+        for (int c = 0; c < channels; ++c) {
+            model::Segment seg;
+            seg.clipId = made->id;
+            seg.binId = binId;
+            seg.sourceMob = made->mobId;
+            seg.name = made->name;
+            seg.sourceTrack = QStringLiteral("A%1").arg(c + 1);
+            seg.length = end - start;
+            // Dual Mono: the left panned left, the right panned right (p.734).
+            if (request.format == media::MixdownFormat::DualMono) seg.pan = c == 0 ? -model::kPanMax : model::kPanMax;
+            s.overwrite(targets.at(c), start, {seg});
+        }
+        return true;
+    });
+}
+
 // Consolidate/Transcode on the active bin's selection: the dialog (initialised from the Media
 // Creation setting's transcode tab), then the Copying Media Files question for master clips, then the
 // work, either now with a progress dialog or as Background Queue jobs. Both end in applyConsolidate().
@@ -2439,6 +2558,7 @@ void MainWindow::installPanelHandlers() {
         if (SourceBrowser* browser = sourceBrowser_.data()) browser->setImportMode(true);
     });
     handle("clip.consolidate_transcode", [this] { consolidateTranscode(); });
+    handle("timeline.mixdown.audio.to_sequence", [this] { audioMixdown(); });
     // File > Output > Export to File (p.868).
     handle("file.output.export_to_file", [this] { exportToFile(); });
     handle("tools.background_queue_window", [this] { showTool(QStringLiteral("BackgroundQueue")); });

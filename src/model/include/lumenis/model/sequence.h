@@ -390,6 +390,10 @@ struct MatchedFrame {
 // An empty `tracks` list means every track. Filler never matches.
 std::optional<MatchedFrame> matchFrame(const Sequence& sequence, const QStringList& tracks, std::int64_t position);
 
+// Audio Mixdown's targets (p.732): the audio tracks, in order, that are not in `exclude` and hold
+// nothing but filler in frames [start, end) (a track that ends before `start` counts).
+QStringList emptyAudioTracks(const Sequence& sequence, std::int64_t start, std::int64_t end, const QStringList& exclude = {});
+
 // Reverse Match Frame (p.433-434): the sequence frames, in order, that show frame `frame` of clip
 // `clipId` from one of `sourceTracks` (empty: any) on one of `tracks` (empty: every track).
 QList<std::int64_t> reverseMatchFrames(const Sequence& sequence, const QStringList& tracks, const QString& clipId,

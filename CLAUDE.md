@@ -241,6 +241,10 @@ Fit to Fill, Reverse Match Frame and the edit-scenario harness
 `scripts/make-scenarios.py`, ctest `edit_scenarios_generated`). Add a
 scenario for each editing change.
 
+Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
+`src/media/mixdown.*`, `media::renderedAudioClip`, `mixdown_dialog.*`,
+`MainWindow::audioMixdown`), is done; `tst_mixdown` is gate 1's null test.
+
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 
 Panels are our own framework, not QDockWidget, because Qt cannot draw

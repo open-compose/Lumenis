@@ -1022,6 +1022,24 @@ std::optional<MatchedFrame> matchFrame(const Sequence& sequence, const QStringLi
     return std::nullopt;
 }
 
+QStringList emptyAudioTracks(const Sequence& sequence, std::int64_t start, std::int64_t end, const QStringList& exclude) {
+    QStringList out;
+    for (const Track& t : sequence.tracks()) {
+        if (t.kind != TrackKind::Audio || exclude.contains(t.name())) continue;
+        bool empty = true;
+        std::int64_t at = 0;
+        for (const Segment& s : t.segments) {
+            if (!s.isFiller() && at < end && at + s.length > start) {
+                empty = false;
+                break;
+            }
+            at += s.length;
+        }
+        if (empty) out << t.name();
+    }
+    return out;
+}
+
 // Each segment of the clip whose source range covers the frame gives one sequence frame; a frame
 // shown on several tracks at once is listed once.
 QList<std::int64_t> reverseMatchFrames(const Sequence& sequence, const QStringList& tracks, const QString& clipId,

@@ -205,6 +205,9 @@ public:
     // Returns false for a command it does not handle; true otherwise, also when the command did
     // nothing (see lastMessage()), except for a few commands that report false on failure.
     bool perform(const QString& commandId);
+    // Changes the Record monitor's sequence as one undo step named `description` (Audio Mixdown):
+    // `change` edits a copy and returns false to leave it as it was. False without a sequence.
+    bool changeRecordSequence(const QString& description, const std::function<bool(model::Sequence&)>& change);
     // Whether perform() takes this command ID (from commands.json).
     static bool handles(const QString& commandId);
     // Why the last command did nothing, for the status line.

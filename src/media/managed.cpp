@@ -335,6 +335,34 @@ public:
         return writer.finish(error);
     }
 
+    // Track `t` (0 for A1) from rendered sound (renderedAudioClip()): `channel` of what `render` gives,
+    // exactly as long as the frames [in, out) last.
+    bool writeRendered(int t, int channel, int channels, const RenderAudio& render, const QString& path, QString* error) {
+        WriterSettings s = settingsFor(QStringLiteral("A%1").arg(t + 1));
+        s.audioCodec = creation_.bitDepth <= 16 ? QStringLiteral("pcm_s16le") : QStringLiteral("pcm_s24le");
+        s.sampleRate = kManagedSampleRate;
+        s.channels = 1;
+        s.formatOptions = {{QStringLiteral("mxf_audio_edit_rate"), rateText(clip_.editRate)}};
+        MediaWriter writer;
+        if (!writer.open(path, s, error)) return false;
+        const std::int64_t wanted = samplesAt(out_ - in_, clip_.editRate, kManagedSampleRate);
+        const std::int64_t perStep = std::max<std::int64_t>(samplesAt(1, clip_.editRate, kManagedSampleRate), 1);
+        constexpr int kChunk = kManagedSampleRate / 4;
+        std::vector<std::vector<float>> buffers(static_cast<std::size_t>(channels));
+        for (std::int64_t at = 0; at < wanted;) {
+            const int n = static_cast<int>(std::min<std::int64_t>(kChunk, wanted - at));
+            for (auto& b : buffers) b.assign(static_cast<std::size_t>(n), 0.0f);
+            render(at, n, buffers);
+            if (!writer.writeAudio(buffers[static_cast<std::size_t>(channel)].data(), n)) {
+                if (error) *error = writer.lastError();
+                return false;
+            }
+            at += n;
+            if (!step(std::max<std::int64_t>(n / perStep, 1))) return cancelled(error);
+        }
+        return writer.finish(error);
+    }
+
     // Sets the error to "Cancelled." and returns false.
     static bool cancelled(QString* error) {
         if (error) *error = QObject::tr("Cancelled.");
@@ -486,6 +514,80 @@ std::optional<model::BinItem> makeMedia(const model::BinItem& clip, std::int64_t
 }
 
 } // namespace
+
+// A Maker for a clip that exists only as its name, rate, length and start (no media of its own):
+// the files' source is a new import source named as the clip.
+std::optional<model::BinItem> renderedAudioClip(const QString& name, const Rational& editRate, std::int64_t frames,
+                                                int channels, const RenderAudio& render, const QString& startTimecode,
+                                                const MediaCreation& creation, QString* error) {
+    auto failed = [&](const QString& text) -> std::optional<model::BinItem> {
+        if (error) *error = text;
+        return std::nullopt;
+    };
+    if (frames <= 0 || channels <= 0) return failed(QObject::tr("There is no sound to make media of."));
+    const QString drive = creation.audioDrive.isEmpty() ? creation.videoDrive : creation.audioDrive;
+    if (drive.isEmpty()) return failed(QObject::tr("No target drive is chosen."));
+    const QString folder = mxfFolder(drive, error);
+    if (folder.isEmpty()) return std::nullopt;
+    model::BinItem clip;
+    clip.name = name;
+    clip.editRate = editRate;
+    clip.durationFrames = frames;
+    if (!startTimecode.isEmpty()) clip.fields.insert(QStringLiteral("Start"), startTimecode);
+    const Link none;
+    Maker maker(clip, none, 0, frames, creation);
+    maker.setWork(frames * channels);
+    Link made;
+    made.rate = editRate;
+    made.frames = frames;
+    made.mediaId = maker.id();
+    QString err;
+    for (int t = 0; t < channels; ++t) {
+        const QString path = maker.pathFor(folder, QStringLiteral("A%1").arg(t + 1));
+        if (!maker.writeRendered(t, t, channels, render, path, &err)) return failed(err);
+        if (made.path.isEmpty()) made.path = path;
+        made.audioPaths << path;
+        made.audioStreams << 0;
+        made.streamChannels << 1;
+        made.channels += 1;
+    }
+    maker.keep();
+
+    model::BinItem item;
+    item.id = model::newItemId();
+    item.mobId = maker.master();
+    model::ClipSource origin = maker.origin();
+    origin.name = name;
+    for (int t = 0; t < made.audioPaths.size(); ++t) {
+        model::ClipSource s;
+        s.kind = model::ClipSource::Kind::File;
+        const QString track = QStringLiteral("A%1").arg(t + 1);
+        s.mob = maker.fileMob(track);
+        s.track = track;
+        s.name = QFileInfo(made.audioPaths.at(t)).fileName();
+        s.path = made.audioPaths.at(t);
+        s.from = origin.mob;
+        item.sources << s;
+    }
+    item.sources << origin;
+    item.kind = model::BinItemKind::AudioClip;
+    item.name = name;
+    item.created = creation.when.isValid() ? creation.when : QDateTime::currentDateTimeUtc();
+    item.modified = item.created;
+    item.editRate = editRate;
+    item.durationFrames = frames;
+    item.link = made.toJson();
+    const std::int64_t start = startFrame(clip).value_or(0);
+    item.fields.insert(QStringLiteral("Start"), timecodeText(start, editRate));
+    item.fields.insert(QStringLiteral("End"), timecodeText(start + frames, editRate));
+    item.fields.insert(QStringLiteral("Tracks"), trackList(false, made.channels));
+    item.fields.insert(QStringLiteral("Drive"), driveName(folder));
+    item.fields.insert(QStringLiteral("Audio SR"), QString::number(kManagedSampleRate));
+    item.fields.insert(QStringLiteral("Audio Bit Depth"), QStringLiteral("%1 bit").arg(creation.bitDepth <= 16 ? 16 : 24));
+    item.fields.insert(QStringLiteral("Audio Format"), QStringLiteral("PCM"));
+    item.fields.insert(QStringLiteral("Video File Format"), QStringLiteral("MXF"));
+    return item;
+}
 
 const QList<Resolution>& resolutions() {
     // The quality levels p.1240 names, in order of quality.

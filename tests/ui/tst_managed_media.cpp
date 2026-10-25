@@ -12,6 +12,7 @@
 #include "lumenis/ui/consolidate_dialog.h"
 #include "lumenis/ui/export_dialog.h"
 #include "lumenis/ui/main_window.h"
+#include "lumenis/ui/mixdown_dialog.h"
 #include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/media_tool.h"
 #include "lumenis/ui/panels.h"
@@ -92,6 +93,89 @@ class TestManagedMedia : public QObject {
 
 private slots:
     void initTestCase() { applyTheme(*qApp); }
+
+    // Timeline > Mixdown > Audio > To Sequence (p.731-732): A1 and A2 of a cut, mixed down Mono into
+    // a new track, with the premix sequence saved first; one undo step.
+    void audioMixdownIntoTheSequence() {
+        QTemporaryDir dir;
+        QVERIFY(writeMovie(dir.filePath(QStringLiteral("Tone.mov")), 12));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Harbor"));
+        project.settings.name = QStringLiteral("Harbor");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("transcodeVideoDrive"), drive);
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        const QStringList ids = window.linkFiles(binId, {dir.filePath(QStringLiteral("Tone.mov"))});
+        QCOMPARE(ids.size(), 1);
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, *bin->bin().item(ids.first()));
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.splice_in")));
+        const model::LoadedClip* record = composer.state(MonitorId::Record).current();
+        QVERIFY(record);
+        const QString sequenceId = record->item.id;
+        // Frames 2 to 9 marked.
+        model::MonitorState& marks = composer.state(MonitorId::Record);
+        marks.setPosition(2);
+        marks.markIn();
+        marks.setPosition(9);
+        marks.markOut();
+        const int before = window.timeline().history().undoCount();
+
+        window.setMixdownHook([&](AudioMixdownDialog& d) {
+            d.setFormat(media::MixdownFormat::Mono);
+            // A1 and A2 are mixed, and no other audio track is empty: a new track.
+            if (d.targetTracks() != QStringList{}) return false;
+            d.setSavePremixSequence(true);
+            return true;
+        });
+        commands.action(QStringLiteral("timeline.mixdown.audio.to_sequence"))->trigger();
+        QCoreApplication::processEvents();
+        QCOMPARE(window.timeline().history().undoCount(), before + 1);
+        // The premix copy and the mixdown clip are in the bin.
+        QCOMPARE(bin->bin().items.size(), 4);
+        const model::BinItem* mix = named(*bin, QStringLiteral("Untitled Sequence.01 Mixdown"));
+        QVERIFY(mix);
+        QCOMPARE(mix->kind, model::BinItemKind::AudioClip);
+        QCOMPARE(mix->durationFrames, std::int64_t{8});
+        // A3 holds it from frame 2.
+        const model::Sequence seq = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item);
+        const model::Track* a3 = seq.track(QStringLiteral("A3"));
+        QVERIFY(a3);
+        std::int64_t start = 0;
+        const int i = a3->segmentAt(2, &start);
+        QVERIFY(i >= 0);
+        QCOMPARE(start, std::int64_t{2});
+        QCOMPARE(a3->segments.at(i).clipId, mix->id);
+        QCOMPARE(a3->segments.at(i).length, std::int64_t{8});
+        // Mono: both channels at their clip gain (0 dB), 0.25 each.
+        const auto link = media::linkOf(*mix);
+        QVERIFY(link && link->isManaged());
+        media::AudioReader reader;
+        QVERIFY(reader.open(link->audioPaths.first()));
+        const std::vector<float> got = reader.samples(100, 100);
+        QCOMPARE(got.size(), std::size_t{100});
+        for (float v : got) QVERIFY(std::abs(v - 0.5f) < 1e-3f);
+        // One undo takes it out of the sequence again.
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.undo")));
+        QVERIFY(!model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("A3")));
+        QCOMPARE(composer.state(MonitorId::Record).current()->item.id, sequenceId);
+        media::setExtraMediaDrives({});
+    }
 
     void importConsolidateAndTheMediaDatabase() {
         if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");

@@ -35,6 +35,8 @@ struct AudioPiece {
     std::int64_t length = 0;       // in output samples
     float left = 1.0f;             // gains into the stereo output
     float right = 1.0f;
+    // The piece's own gain (clip gain), before the pan: what a mono mixdown uses.
+    float gain = 1.0f;
 };
 
 // Equal-power gains for a pan from -100 (left) to 100 (right), times a

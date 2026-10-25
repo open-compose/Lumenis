@@ -3127,6 +3127,14 @@ std::int64_t Timeline::defaultTransitionLength() const {
 }
 
 // Commits `seq` as the new record sequence, with an undo step.
+bool Timeline::changeRecordSequence(const QString& description, const std::function<bool(model::Sequence&)>& change) {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    if (!change(seq)) return false;
+    return commitSequence(description, seq);
+}
+
 bool Timeline::commitSequence(const QString& description, const model::Sequence& seq) {
     const model::LoadedClip* rec = recordSequence();
     if (!rec) return false;

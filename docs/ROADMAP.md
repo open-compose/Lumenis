@@ -714,6 +714,13 @@ from real Media Composer wait for the owner's seat; gate 3 is by hand.
 1. Sample-exact mixdown against reference renders: null test ≤ -120 dBFS.
 2. Real-time mix of 24 tracks with 2 effects each on the reference hardware.
 
+**Status (Phase 5):** 5.1, Audio Mixdown (docs/spec/audio-mixdown.md), is
+done: Timeline > Mixdown > Audio > To Sequence, Mono and Dual Mono, into
+managed media and the target tracks (`src/media/mixdown.*`,
+`mixdown_dialog.*`). Gate 1's null test (`tst_mixdown`) passes against a
+reference worked out from the sources at about -137 dBFS; the reference
+renders from real Media Composer wait for the owner's seat.
+
 ### Phase 6 — Effects and rendering
 * Transitions, motion effects, timewarps, Color Correction (HSL and curves),
   3D Warp, Picture-in-Picture, AniMatte, Paint, Blur, SpotColor and titles.

@@ -57,7 +57,8 @@ headers in `include/lumenis/<library>/`.
 * **Media.** `src/media/media.*` (FFmpeg probe, readers, writer, MXF
   fix-ups), `link.*` (files linked as clips), `managed.*` (managed media in
   `Avid MediaFiles/MXF`, the media database), `consolidate.*`, `relink.*`,
-  `playback.*` (sound through miniaudio, the audio clock). UI side:
+  `playback.*` (sound through miniaudio, the audio clock), `mixdown.*`
+  (Audio Mixdown, docs/spec/audio-mixdown.md). UI side:
   `media_frames.*` (frames for monitors, bins and the Timeline),
   `source_browser.*`, `media_tool.*`, `relink_dialog.*`,
   `consolidate_dialog.*`, `background_queue.*`.
@@ -126,6 +127,7 @@ with CTest (`ctest --preset ci`). Python checks live in `scripts/` and
   (`tst_otio`, `otio_round_trip`, and `otio_python` against
   OpenTimelineIO's own reader); FCP 7 XML (`tst_fcpxml`, `fcpxml_round_trip`,
   `fcpxml_python` against OpenTimelineIO's FCP adapter);
+* audio: the mixdown null test (`tst_mixdown`, Phase 5 gate 1);
 * editing: scripted edit scenarios in `tests/scenarios/*.json` run by
   `tst_scenarios`, with undo and redo checked by hash, and 300 random ones
   from `scripts/make-scenarios.py`'s reference model

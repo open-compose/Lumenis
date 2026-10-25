@@ -14,6 +14,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <vector>
 #include <map>
 #include <optional>
 
@@ -109,6 +110,16 @@ std::optional<model::BinItem> transcodeClip(const model::BinItem& clip, std::int
 bool canConsolidate(const model::BinItem& clip);
 std::optional<model::BinItem> consolidateClip(const model::BinItem& clip, std::int64_t in, std::int64_t out,
                                               const MediaCreation& creation, QString* error = nullptr);
+
+// Sound made by Cutthulhu itself (Audio Mixdown, p.731-732): `channels` tracks of `frames` frames at
+// `editRate`, each written as a mono 48 kHz PCM file in the audio drive's MXF folder. `render` fills
+// `count` samples of every track (out[track][i], resized by the caller) from output sample `at`. The
+// result is an audio clip named `name` linked to the files, starting at `startTimecode` (empty:
+// 00:00:00:00). On failure the files made are removed and `error` says why.
+using RenderAudio = std::function<void(std::int64_t at, int count, std::vector<std::vector<float>>& out)>;
+std::optional<model::BinItem> renderedAudioClip(const QString& name, const Rational& editRate, std::int64_t frames,
+                                                int channels, const RenderAudio& render, const QString& startTimecode,
+                                                const MediaCreation& creation, QString* error = nullptr);
 
 // Which clip and track a managed media file holds, from its metadata, and
 // what it holds: for relinking by source name and timecode (p.362-363).
