@@ -1,0 +1,69 @@
+[
+  {
+    "name": "extract/splice-in drag moves a segment after the next one",
+    "guide": "p.620",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]], "A1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]]}},
+    "steps": [
+      {"select": [["V1", 0]]},
+      {"move": [40, 0], "tool": "extract"}
+    ],
+    "expect": {"V1": [["B", 0, 20], ["A", 0, 20], ["C", 0, 20]], "A1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]]}
+  },
+  {
+    "name": "asymmetric trim: an A-side and a B-side in opposite directions",
+    "guide": "p.652-653",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"rollers": [["V1", 50, "a"], ["A1", 50, "b"]], "kind": "ripple"},
+      {"trim": 5}
+    ],
+    "expect": {"V1": [["A", 0, 55], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 5, 45]]}
+  },
+  {
+    "name": "ripple trim keeps sync-locked tracks in sync with filler",
+    "guide": "p.656",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"sync_lock": "V1"},
+      {"sync_lock": "A1"},
+      {"rollers": [["V1", 50, "a"]], "kind": "ripple"},
+      {"trim": 5}
+    ],
+    "expect": {
+      "V1": [["A", 0, 55], ["B", 0, 50]],
+      "A1": [["A", 0, 50], ["filler", 5], ["B", 0, 50]],
+      "A2": [["A", 0, 50], ["B", 0, 50]]}
+  },
+  {
+    "name": "undo three times, redo once",
+    "guide": "p.466",
+    "clips": [{"name": "A"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50]], "A1": [["A", 0, 50]], "A2": [["A", 0, 50]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 0, "out": 4},
+      {"mark": "record", "at": 10},
+      {"command": "edit.splice_in"},
+      {"mark": "record", "at": 20},
+      {"command": "edit.splice_in"},
+      {"mark": "record", "at": 30},
+      {"command": "edit.splice_in"},
+      {"command": "edit.undo"},
+      {"command": "edit.undo"},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"}
+    ],
+    "expect": {"V1": [["A", 0, 10], ["C", 0, 5], ["A", 10, 40]]}
+  },
+  {
+    "name": "undo with nothing to undo is refused",
+    "guide": "p.466",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50]]}},
+    "steps": [{"command": "edit.undo", "refused": true}],
+    "expect": {"V1": [["A", 0, 50]]}
+  }
+]

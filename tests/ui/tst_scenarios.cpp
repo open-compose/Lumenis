@@ -16,6 +16,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMap>
 #include <QTest>
 
 #include <cmath>
@@ -326,18 +327,24 @@ private slots:
         QFETCH(QJsonObject, scenario);
         Run run;
         QVERIFY2(run.setUp(scenario), qPrintable(run.error));
-        // Gate 2: each state on the way (by the undo count it was reached at), to compare with undo
-        // and redo.
-        QList<std::pair<int, QByteArray>> states{{run.timeline.history().undoCount(), run.hash()}};
+        // Gate 2: the state at each undo level (QMap: by level). An undo or redo among the steps
+        // must give back the state recorded at its level; a new edit replaces the levels above.
+        QMap<int, QByteArray> states{{run.timeline.history().undoCount(), run.hash()}};
         for (const QJsonValue& v : scenario.value(QStringLiteral("steps")).toArray()) {
-            QVERIFY2(run.step(v.toObject()), qPrintable(run.error));
-            // A change that is not an undo step (a sync lock, a track's lock) is part of the state at
-            // that undo level.
+            const QJsonObject o = v.toObject();
+            const int before = run.timeline.history().undoCount();
+            QVERIFY2(run.step(o), qPrintable(run.error));
             const int count = run.timeline.history().undoCount();
-            if (count != states.last().first) {
-                states.append({count, run.hash()});
+            const QString id = o.value(QStringLiteral("command")).toString();
+            if (count != before && (id == QLatin1String("edit.undo") || id == QLatin1String("edit.redo"))) {
+                QVERIFY2(run.hash() == states.value(count), qPrintable(QStringLiteral("%1 to level %2").arg(id).arg(count)));
             } else {
-                states.last().second = run.hash();
+                // A new step, or a change that is not an undo step (a sync lock, a track's lock),
+                // which is part of the state at its level.
+                if (count != before) {
+                    while (!states.isEmpty() && states.lastKey() > count) states.remove(states.lastKey());
+                }
+                states.insert(count, run.hash());
             }
         }
         const QJsonObject expected = scenario.value(QStringLiteral("expect")).toObject();
@@ -370,18 +377,16 @@ private slots:
             QVERIFY2(got == want, qPrintable(QStringLiteral("%1: got %2, expected %3")
                                                  .arg(it.key(), QString::fromUtf8(got), QString::fromUtf8(want))));
         }
-        // Undo back to the start, then redo to the end: the same states, in turn.
-        for (qsizetype i = states.size() - 1; i > 0; --i) {
-            while (run.timeline.history().undoCount() > states.at(i - 1).first) {
-                QVERIFY(run.timeline.perform(QStringLiteral("edit.undo")));
-            }
-            QVERIFY2(run.hash() == states.at(i - 1).second, qPrintable(QStringLiteral("undo to state %1").arg(i - 1)));
+        // Undo back to the start, then redo as far as it goes: each level's state, in turn.
+        while (run.timeline.history().canUndo()) {
+            QVERIFY(run.timeline.perform(QStringLiteral("edit.undo")));
+            const int level = run.timeline.history().undoCount();
+            QVERIFY2(run.hash() == states.value(level), qPrintable(QStringLiteral("undo to level %1").arg(level)));
         }
-        for (qsizetype i = 1; i < states.size(); ++i) {
-            while (run.timeline.history().undoCount() < states.at(i).first) {
-                QVERIFY(run.timeline.perform(QStringLiteral("edit.redo")));
-            }
-            QVERIFY2(run.hash() == states.at(i).second, qPrintable(QStringLiteral("redo to state %1").arg(i)));
+        while (run.timeline.history().canRedo()) {
+            QVERIFY(run.timeline.perform(QStringLiteral("edit.redo")));
+            const int level = run.timeline.history().undoCount();
+            QVERIFY2(run.hash() == states.value(level), qPrintable(QStringLiteral("redo to level %1").arg(level)));
         }
     }
 };

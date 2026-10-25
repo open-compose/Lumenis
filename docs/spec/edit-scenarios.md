@@ -53,9 +53,11 @@ Each file is a JSON list of scenarios:
   **expect_monitors:** a monitor's position, clip, and marks (`null`: no
   mark).
 
-After the steps, the test undoes back to the start and redoes to the end,
-comparing a SHA-256 of the sequence (`Sequence::toJson()`) with the state
-recorded after each undo step on the way. A change that is not an undo
+The test records a SHA-256 of the sequence (`Sequence::toJson()`) at each
+undo level as the steps run; an Undo or Redo among the steps must give back
+the state recorded at its level, and a new edit replaces the levels above.
+After the steps it undoes back to the start and redoes as far as it goes,
+comparing each level's state. A change that is not an undo
 step (a sync lock) belongs to the state of its undo level. Before the
 first edit makes a sequence the state is an empty sequence, which undoing
 that edit leaves (undo does not cover the bin).
