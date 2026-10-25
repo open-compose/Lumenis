@@ -98,6 +98,24 @@ struct AudioKey {
     bool operator==(const AudioKey&) const = default;
 };
 
+// An Audio EQ effect (Editing Guide p.736-745; lumenis/model/audio_eq.h): three bands, each
+// from -20 to +15 dB (p.739). The low shelf turns over at 50, 80, 120 or 240 Hz, the high shelf
+// at 6, 8, 12 or 15 kHz; the parametric midrange is 1/4 octave or 2 octaves wide (p.738), centred
+// between 50 Hz and 15 kHz (the EQ Range slider, picture on p.737). `in`: the In button (p.737);
+// an EQ that is not In does not play. The defaults are the picture's: 50 Hz, 2 octaves, 15 kHz,
+// centred at 500 Hz.
+struct AudioEq {
+    double low = 0;
+    double mid = 0;
+    double high = 0;
+    int lowTurnover = 50;
+    int highTurnover = 15000;
+    double midFrequency = 500;
+    bool wideMid = true; // 2 octaves; false: 1/4 octave
+    bool in = true;
+    bool operator==(const AudioEq&) const = default;
+};
+
 // One piece of a track: material from a source clip, or filler (black,
 // silence) where `clipId` is empty.
 struct Segment {
@@ -129,6 +147,8 @@ struct Segment {
     // frame, at most one keyframe a frame position. Empty: none.
     QList<AudioKey> volumeKeys;
     QList<AudioKey> panKeys;
+    // The segment's Audio EQ effect (p.736-745), on audio segments only.
+    std::optional<AudioEq> eq;
 
     bool hasEffects() const { return effect || transition; }
     bool hasAutomation() const { return !volumeKeys.isEmpty() || !panKeys.isEmpty(); }
@@ -177,7 +197,7 @@ public:
     void storeIn(BinItem& item) const;
 
     // The composition JSON: {tracks: [{name, segments: [...], locked?, syncLocked?, format?}],
-    // timecode}. A segment is {length, gain?, pan?, volumeKeys?, panKeys?, effect?, transition?}
+    // timecode}. A segment is {length, gain?, pan?, volumeKeys?, panKeys?, eq?, effect?, transition?}
     // (keys as [[frame, value], ...]) plus addEdit? for filler or
     // {clip, mob?, bin?, name, track, in} for material. fromJson() skips unreadable and duplicate
     // tracks, tidies each track and sorts the tracks.

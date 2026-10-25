@@ -268,6 +268,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   - sample-by-sample gains in `media::AudioMix`.
   Tests: `tst_automation`, `tst_automation_ui`, and the null test's
   automated cases.
+5.3 is done: the Audio EQ tool (docs/spec/audio-eq.md):
+  - three bands on whole segments (`src/model/audio_eq.*`, `Segment::eq`);
+  - the filters in `media::AudioMix`;
+  - the tool (`src/ui/audio_eq.*`), with Set EQ and Remove EQs, Remove
+    Effect and Bypass RT EQ.
+  Tests: `tst_audio_eq`, `tst_audio_eq_ui`, scenario `08-audio-eq.json`.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

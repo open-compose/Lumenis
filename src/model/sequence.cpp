@@ -1,4 +1,5 @@
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/audio_eq.h"
 
 #include <QJsonArray>
 #include <QRegularExpression>
@@ -102,11 +103,38 @@ QList<AudioKey> keysFromJson(const QJsonValue& v, bool pan) {
     return out;
 }
 
+// {low, mid, high, lowTurnover, highTurnover, midFrequency, wideMid, in}; fromJson() puts
+// out-of-range values back in range (clampEq).
+QJsonObject eqToJson(const AudioEq& e) {
+    return QJsonObject{{QStringLiteral("low"), e.low},
+                       {QStringLiteral("mid"), e.mid},
+                       {QStringLiteral("high"), e.high},
+                       {QStringLiteral("lowTurnover"), e.lowTurnover},
+                       {QStringLiteral("highTurnover"), e.highTurnover},
+                       {QStringLiteral("midFrequency"), e.midFrequency},
+                       {QStringLiteral("wideMid"), e.wideMid},
+                       {QStringLiteral("in"), e.in}};
+}
+
+AudioEq eqFromJson(const QJsonObject& o) {
+    AudioEq e;
+    e.low = o.value(QStringLiteral("low")).toDouble();
+    e.mid = o.value(QStringLiteral("mid")).toDouble();
+    e.high = o.value(QStringLiteral("high")).toDouble();
+    e.lowTurnover = o.value(QStringLiteral("lowTurnover")).toInt(e.lowTurnover);
+    e.highTurnover = o.value(QStringLiteral("highTurnover")).toInt(e.highTurnover);
+    e.midFrequency = o.value(QStringLiteral("midFrequency")).toDouble(e.midFrequency);
+    e.wideMid = o.value(QStringLiteral("wideMid")).toBool(true);
+    e.in = o.value(QStringLiteral("in")).toBool(true);
+    return clampEq(e);
+}
+
 void effectsToJson(const Segment& s, QJsonObject& o) {
     if (s.gain != 0.0) o.insert(QStringLiteral("gain"), s.gain);
     if (s.pan != 0) o.insert(QStringLiteral("pan"), s.pan);
     if (!s.volumeKeys.isEmpty()) o.insert(QStringLiteral("volumeKeys"), keysToJson(s.volumeKeys));
     if (!s.panKeys.isEmpty()) o.insert(QStringLiteral("panKeys"), keysToJson(s.panKeys));
+    if (s.eq) o.insert(QStringLiteral("eq"), eqToJson(*s.eq));
     if (s.effect) o.insert(QStringLiteral("effect"), s.effect->toJson());
     if (s.transition) o.insert(QStringLiteral("transition"), transitionToJson(*s.transition));
 }
@@ -148,6 +176,7 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.pan = std::clamp(o.value(QStringLiteral("pan")).toInt(), -kPanMax, kPanMax);
     s.volumeKeys = keysFromJson(o.value(QStringLiteral("volumeKeys")), false);
     s.panKeys = keysFromJson(o.value(QStringLiteral("panKeys")), true);
+    if (o.contains(QStringLiteral("eq"))) s.eq = eqFromJson(o.value(QStringLiteral("eq")).toObject());
     if (o.contains(QStringLiteral("effect"))) s.effect = Effect::fromJson(o.value(QStringLiteral("effect")).toObject());
     if (o.contains(QStringLiteral("transition"))) {
         s.transition = transitionFromJson(o.value(QStringLiteral("transition")).toObject());
@@ -793,6 +822,7 @@ bool Sequence::isMatchFrame(const Segment& before, const Segment& after) {
     // Halves of one segment keep the same keyframes (counted in the clip's frames), so an Add Edit
     // between them is still a match frame; other keyframes keep the edit.
     if (before.volumeKeys != after.volumeKeys || before.panKeys != after.panKeys) return false;
+    if (before.eq != after.eq) return false;
     if (before.isFiller() || after.isFiller()) return before.isFiller() && after.isFiller() && after.addEdit;
     return before.clipId == after.clipId && before.binId == after.binId && before.sourceTrack == after.sourceTrack &&
            before.sourceIn + before.length == after.sourceIn;

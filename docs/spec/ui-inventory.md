@@ -57,6 +57,13 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
     half of an Add Edit;
   * the pan graph runs from L at the top to R at the bottom;
   * Audio Data acts on all tracks.
+* Audio EQ (docs/spec/audio-eq.md):
+  * the filter shapes (Audio EQ Cookbook shelves and peak);
+  * the midrange starts at 500 Hz, and its range is 50 Hz to 15 kHz;
+  * a change in the tool sets the segment under the position at once;
+  * Set EQ - In/Out with only an OUT acts from the start;
+  * the Timeline's EQ icon;
+  * Audio Mixdown keeps the EQ while Bypass RT EQ is on.
 
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical
@@ -2334,6 +2341,25 @@ Details: docs/spec/audio-mixdown.md.
   dimmed until multichannel tracks; Dual Mono targets are pairs of empty
   tracks; the clip is named "<sequence> Mixdown".
 * Multiple Mixes (p.732-734) is later.
+
+## 20b. Audio EQ (p.736-745)
+Details: docs/spec/audio-eq.md.
+* **Tools > Audio EQ** (p.736) opens the tool as a panel.
+* **Top row** (table on p.736-737): the Effect icon, Audio Loop Play and
+  Render Effect (later), the Fast menu, the Track Selection Menu button
+  (plus signs for several tracks), In, and Bypass RT EQ.
+* **Bottom part** (picture on p.737): the EQ Parameter display, the low
+  shelf, parametric midrange and high shelf sliders (+15 to -20 dB, p.739),
+  the 3-band buttons (50/80/120/240 Hz; 2 octaves or 1/4 octave; 6/8/12/15
+  kHz, p.738), the EQ Range slider (50 Hz to 15 kHz) and the EQ Parameter
+  graph.
+* **Fast menu** (picture on p.744): Set EQ - In/Out, Remove EQs On Track -
+  In/Out, Remove EQs On Enabled Tracks - In/Out, then the twelve
+  predefined templates, dimmed (their values are undocumented).
+* **Remove Effect** removes an EQ at the position (p.741).
+* **Ours:** the filter shapes, the defaults (500 Hz midrange), a change
+  setting the segment at once, an OUT alone acting from the start, and
+  the Timeline's EQ icon.
 
 ## 20a. Shared bins (p.300-304)
 Details: docs/spec/bin-locking.md.

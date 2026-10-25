@@ -230,7 +230,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 
 | Command | Shortcut | Guide | Status | Found | Where | Notes |
 |---|---|---|---|---|---|---|
-| Audio EQ |  | p.736 | *later* | ☐ | | |
+| Audio EQ |  | p.736 | works | ☐ | | |
 | Audio Mixer |  | p.686 | works | ☐ | | |
 | Audio Punch-In |  | p.750 | *later* | ☐ | | |
 | Audio Tool | Ctrl+1 | p.703 | works | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 99 of them working with a project open; the
+* 211 menu commands, 100 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

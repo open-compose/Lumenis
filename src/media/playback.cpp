@@ -132,6 +132,7 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
             panGains(s.pan != 0 ? s.pan : side(track.number), s.gain, &p->left, &p->right);
             p->gain = s.gain <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, s.gain / 20.0));
             p->gainDb = s.gain;
+            p->eq = s.eq;
             p->pan = s.pan != 0 ? s.pan : side(track.number);
             // Keyframes in the clip's frames, as output samples from the segment's start.
             const double perFrame = static_cast<double>(kPlaybackRate) * static_cast<double>(rate.den()) /
@@ -148,6 +149,10 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
 }
 
 // ---------------------------------------------------------------- AudioMix
+
+bool AudioPiece::equalised() const {
+    return eq && eq->in && !model::isFlat(*eq);
+}
 
 namespace {
 
@@ -177,7 +182,7 @@ void automatedGains(const AudioPiece& piece, double offset, float* left, float* 
 
 } // namespace
 
-AudioMix::AudioMix(std::vector<AudioPiece> pieces) : pieces_(std::move(pieces)) {}
+AudioMix::AudioMix(std::vector<AudioPiece> pieces) : pieces_(std::move(pieces)), eq_(pieces_.size()) {}
 
 AudioMix::~AudioMix() = default;
 
@@ -202,52 +207,98 @@ AudioReader* AudioMix::reader(const AudioPiece& piece) {
 void AudioMix::render(std::int64_t start, int count, float* out) {
     std::fill(out, out + 2 * static_cast<std::ptrdiff_t>(count), 0.0f);
     const std::int64_t end = start + count;
-    for (const AudioPiece& piece : pieces_) {
+    for (std::size_t index = 0; index < pieces_.size(); ++index) {
+        const AudioPiece& piece = pieces_[index];
         const std::int64_t from = std::max(start, piece.at);
         const std::int64_t to = std::min(end, piece.at + piece.length);
         if (from >= to) continue;
-        AudioReader* r = reader(piece);
-        if (!r || piece.channel >= r->channels()) continue;
-        const int channels = r->channels();
-        const int rate = r->sampleRate();
         const auto n = static_cast<int>(to - from);
+        std::vector<float> src = samples(piece, from - piece.at, n);
+        if (src.empty()) continue;
+        if (piece.equalised()) equalise(index, from - piece.at, src);
         float* dest = out + 2 * (from - start);
-        // Adds sample `s` at output index i, with the piece's gains (automated: worked out there).
-        auto add = [&](int i, float s) {
-            if (!piece.automated()) {
-                dest[2 * i] += s * piece.left;
-                dest[2 * i + 1] += s * piece.right;
-                return;
+        if (!piece.automated()) {
+            for (int i = 0; i < n; ++i) {
+                dest[2 * i] += src[static_cast<std::size_t>(i)] * piece.left;
+                dest[2 * i + 1] += src[static_cast<std::size_t>(i)] * piece.right;
             }
-            float l = 0;
-            float rr = 0;
-            automatedGains(piece, static_cast<double>(from - piece.at + i), &l, &rr);
-            dest[2 * i] += s * l;
-            dest[2 * i + 1] += s * rr;
-        };
-        if (rate == kPlaybackRate) {
-            const std::vector<float> src = r->samples(piece.sourceStart + (from - piece.at), n);
-            const auto got = static_cast<int>(src.size()) / channels;
-            for (int i = 0; i < got; ++i) add(i, src[static_cast<std::size_t>(i * channels + piece.channel)]);
             continue;
         }
-        // Another rate: linear interpolation between the file's samples.
-        const double step = static_cast<double>(rate) / kPlaybackRate;
-        const double first = static_cast<double>(piece.sourceStart + (from - piece.at)) * step;
-        const auto base = static_cast<std::int64_t>(std::floor(first));
-        const int need = static_cast<int>(std::ceil(static_cast<double>(n) * step)) + 2;
-        const std::vector<float> src = r->samples(base, need);
-        const auto got = static_cast<std::int64_t>(src.size()) / channels;
         for (int i = 0; i < n; ++i) {
-            const double pos = first + static_cast<double>(i) * step - static_cast<double>(base);
-            const auto k = static_cast<std::int64_t>(pos);
-            if (k + 1 >= got) break;
-            const auto frac = static_cast<float>(pos - static_cast<double>(k));
-            const float a = src[static_cast<std::size_t>(k * channels + piece.channel)];
-            const float b = src[static_cast<std::size_t>((k + 1) * channels + piece.channel)];
-            add(i, a + (b - a) * frac);
+            float l = 0;
+            float r = 0;
+            automatedGains(piece, static_cast<double>(from - piece.at + i), &l, &r);
+            dest[2 * i] += src[static_cast<std::size_t>(i)] * l;
+            dest[2 * i + 1] += src[static_cast<std::size_t>(i)] * r;
         }
     }
+}
+
+// Files at 48 kHz are read directly; others are read at their own rate and interpolated linearly.
+// Empty when the file cannot be read.
+std::vector<float> AudioMix::samples(const AudioPiece& piece, std::int64_t offset, int count) {
+    AudioReader* r = reader(piece);
+    if (!r || piece.channel >= r->channels() || count <= 0) return {};
+    std::vector<float> out(static_cast<std::size_t>(count), 0.0f);
+    const int channels = r->channels();
+    const int rate = r->sampleRate();
+    if (rate == kPlaybackRate) {
+        const std::vector<float> src = r->samples(piece.sourceStart + offset, count);
+        const auto got = std::min(static_cast<int>(src.size()) / channels, count);
+        for (int i = 0; i < got; ++i) out[static_cast<std::size_t>(i)] = src[static_cast<std::size_t>(i * channels + piece.channel)];
+        return out;
+    }
+    const double step = static_cast<double>(rate) / kPlaybackRate;
+    const double first = static_cast<double>(piece.sourceStart + offset) * step;
+    const auto base = static_cast<std::int64_t>(std::floor(first));
+    const int need = static_cast<int>(std::ceil(static_cast<double>(count) * step)) + 2;
+    const std::vector<float> src = r->samples(base, need);
+    const auto got = static_cast<std::int64_t>(src.size()) / channels;
+    for (int i = 0; i < count; ++i) {
+        const double pos = first + static_cast<double>(i) * step - static_cast<double>(base);
+        const auto k = static_cast<std::int64_t>(pos);
+        if (k + 1 >= got) break;
+        const auto frac = static_cast<float>(pos - static_cast<double>(k));
+        const float a = src[static_cast<std::size_t>(k * channels + piece.channel)];
+        const float b = src[static_cast<std::size_t>((k + 1) * channels + piece.channel)];
+        out[static_cast<std::size_t>(i)] = a + (b - a) * frac;
+    }
+    return out;
+}
+
+void AudioMix::equalise(std::size_t index, std::int64_t offset, std::vector<float>& samples) {
+    if (eq_.size() != pieces_.size()) eq_.resize(pieces_.size());
+    EqState& eq = eq_[index];
+    if (!eq.ready) {
+        eq.filters = model::eqFilters(*pieces_[index].eq, kPlaybackRate);
+        eq.ready = true;
+    }
+    auto run = [&eq](std::vector<float>& buffer) {
+        for (float& sample : buffer) {
+            double x = static_cast<double>(sample);
+            for (std::size_t k = 0; k < eq.filters.size(); ++k) {
+                const model::Biquad& f = eq.filters[k];
+                std::array<double, 2>& z = eq.state[k];
+                const double y = f.b0 * x + z[0];
+                z[0] = f.b1 * x - f.a1 * y + z[1];
+                z[1] = f.b2 * x - f.a2 * y;
+                x = y;
+            }
+            sample = static_cast<float>(x);
+        }
+    };
+    if (offset != eq.next) {
+        // Not following on: start again, settled on what comes before (none at the piece's start,
+        // where the filters start from silence).
+        eq.state = {};
+        const auto warm = static_cast<int>(std::min<std::int64_t>(offset, kPlaybackRate / 10));
+        if (warm > 0) {
+            std::vector<float> before = this->samples(pieces_[index], offset - warm, warm);
+            run(before);
+        }
+    }
+    run(samples);
+    eq.next = offset + static_cast<std::int64_t>(samples.size());
 }
 
 // ---------------------------------------------------------------- AudioPlayer

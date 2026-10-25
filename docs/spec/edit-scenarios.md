@@ -50,12 +50,17 @@ Each file is a JSON list of scenarios:
   * `{"audio_data": "volume"|"pan"}` picks the automation graph, and
     `{"key_drag": [track, record frame, frames, by]}` drags a keyframe
     (p.716); Add Keyframe is `{"command": "fx.add_keyframe"}`;
+  * `{"eq": {...}}` sets the Audio EQ tool's values (those not given at
+    their defaults; the keys of `model::AudioEq`), and `{"eq_menu": item}`
+    chooses an item of its Fast menu (p.739-740);
   * `{"command": id}`: any command of `commands.json` that the Timeline or
     the Composer carries out.
   * `"refused": true` on a command or trim step: it must be refused.
 * **expect:** tracks as `sequence` writes them, without trailing filler; a
   segment with a motion effect adds `{"speed": s}` (Fit to Fill), and one
-  with automation `{"volume": [[clip frame, value], ...], "pan": [...]}`.
+  with automation `{"volume": [[clip frame, value], ...], "pan": [...]}`,
+  and one with an Audio EQ `{"eq": {...}}` (the values not at their
+  defaults).
   **expect_monitors:** a monitor's position, clip, and marks (`null`: no
   mark).
 

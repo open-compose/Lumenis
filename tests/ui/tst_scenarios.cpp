@@ -4,12 +4,15 @@
 // give them) and the sequence expected at the end. A Composer and Timeline of their own run them.
 // After the last step every scenario is undone step by step back to its starting sequence and
 // redone to its end, and each state is compared by hash with the one recorded on the way (gate 2).
+#include "lumenis/model/audio_eq.h"
 #include "lumenis/model/automation.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/ui/audio_eq.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timeline.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QCryptographicHash>
 #include <QDir>
@@ -40,10 +43,39 @@ QStringList scenarioDirs() {
     return {QStringLiteral(LUMENIS_SCENARIO_DIR)};
 }
 
+// An Audio EQ as scenarios write it: only the values that differ from model::AudioEq's defaults.
+QJsonObject eqToJson(const model::AudioEq& e) {
+    const model::AudioEq d;
+    QJsonObject o;
+    if (e.low != d.low) o.insert(QStringLiteral("low"), e.low);
+    if (e.mid != d.mid) o.insert(QStringLiteral("mid"), e.mid);
+    if (e.high != d.high) o.insert(QStringLiteral("high"), e.high);
+    if (e.lowTurnover != d.lowTurnover) o.insert(QStringLiteral("lowTurnover"), e.lowTurnover);
+    if (e.highTurnover != d.highTurnover) o.insert(QStringLiteral("highTurnover"), e.highTurnover);
+    if (e.midFrequency != d.midFrequency) o.insert(QStringLiteral("midFrequency"), e.midFrequency);
+    if (e.wideMid != d.wideMid) o.insert(QStringLiteral("wideMid"), e.wideMid);
+    if (e.in != d.in) o.insert(QStringLiteral("in"), e.in);
+    return o;
+}
+
+model::AudioEq eqFromJson(const QJsonObject& o) {
+    model::AudioEq e;
+    e.low = o.value(QStringLiteral("low")).toDouble(e.low);
+    e.mid = o.value(QStringLiteral("mid")).toDouble(e.mid);
+    e.high = o.value(QStringLiteral("high")).toDouble(e.high);
+    e.lowTurnover = o.value(QStringLiteral("lowTurnover")).toInt(e.lowTurnover);
+    e.highTurnover = o.value(QStringLiteral("highTurnover")).toInt(e.highTurnover);
+    e.midFrequency = o.value(QStringLiteral("midFrequency")).toDouble(e.midFrequency);
+    e.wideMid = o.value(QStringLiteral("wideMid")).toBool(e.wideMid);
+    e.in = o.value(QStringLiteral("in")).toBool(e.in);
+    return e;
+}
+
 // What a scenario starts from and runs in.
 struct Run {
     Composer composer;
     Timeline timeline{composer};
+    AudioEqTool eq{timeline};
     QHash<QString, BinItem> clips; // by name
     QHash<QString, BinItem> items; // by id: clips and the sequences stored
     QString error;
@@ -261,6 +293,21 @@ struct Run {
             }
             return true;
         }
+        if (o.contains(QStringLiteral("eq"))) {
+            // The Audio EQ tool's values, those not given at their defaults (p.739).
+            eq.setEq(eqFromJson(o.value(QStringLiteral("eq")).toObject()));
+            return true;
+        }
+        if (o.contains(QStringLiteral("eq_menu"))) {
+            // An item of the Audio EQ tool's Fast menu (p.740).
+            for (QAction* a : eq.fastMenu()->actions()) {
+                if (a->text() == o.value(QStringLiteral("eq_menu")).toString()) {
+                    a->trigger();
+                    return true;
+                }
+            }
+            return fail(QStringLiteral("no %1 in the Audio EQ Fast menu").arg(o.value(QStringLiteral("eq_menu")).toString()));
+        }
         if (o.contains(QStringLiteral("lock"))) {
             timeline.setTracksLocked({o.value(QStringLiteral("lock")).toString()}, true);
             return true;
@@ -316,6 +363,7 @@ struct Run {
                         for (const model::AudioKey& k : *keys) list.append(QJsonArray{k.frame, k.value});
                         extra.insert(QLatin1String(name), list);
                     }
+                    if (g.eq) extra.insert(QStringLiteral("eq"), eqToJson(*g.eq));
                     if (!extra.isEmpty()) a.append(extra);
                     segs.append(a);
                 }

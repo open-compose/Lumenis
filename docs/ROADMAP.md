@@ -738,6 +738,14 @@ renders from real Media Composer wait for the owner's seat.
 * the Audio Mixer's Auto mode faders, recording and Fast menu;
 * playback and mixdown following the keyframes sample by sample.
 The null test has automated cases at about -137 dBFS.
+5.3, the Audio EQ tool (docs/spec/audio-eq.md), is done:
+* three-band EQ on whole segments (`src/model/audio_eq.*`, `Segment::eq`);
+* the filters in playback and mixdown (`media::AudioMix`), checked against
+  a double-precision reference at about -144 dBFS;
+* the tool (`src/ui/audio_eq.*`): sliders, 3-band buttons, EQ Range,
+  graph, In, Bypass RT EQ, Track Selection and the Fast menu's Set EQ and
+  Remove EQs; Remove Effect and the Timeline's EQ icon.
+The EQ templates, Audio Loop Play and Render Effect come later.
 
 ### Phase 6 — Effects and rendering
 * Transitions, motion effects, timewarps, Color Correction (HSL and curves),

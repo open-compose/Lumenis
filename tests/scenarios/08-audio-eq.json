@@ -1,0 +1,31 @@
+[
+  {
+    "name": "an EQ set on one segment, copied over the marks by Set EQ, kept through a splice; Remove Effect takes it off, and Undo puts it back",
+    "guide": "p.738-741",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {"A1": [["A", 0, 20], ["B", 0, 20], ["A", 20, 20]], "A2": [["A", 0, 60]]}},
+    "steps": [
+      {"record_tracks": ["A1"]},
+      {"position": "record", "frame": 25},
+      {"eq": {"low": -6, "lowTurnover": 120, "mid": 4.5, "midFrequency": 2000}},
+      {"mark": "record", "in": 10, "out": 25, "at": 25},
+      {"eq_menu": "Set EQ - In/Out"},
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 0, "out": 4},
+      {"source_tracks": ["A1"]},
+      {"mark": "record", "at": 20},
+      {"command": "edit.splice_in"},
+      {"position": "record", "frame": 50},
+      {"command": "fx.remove_effect", "refused": true},
+      {"position": "record", "frame": 30},
+      {"command": "fx.remove_effect"},
+      {"command": "edit.undo"}
+    ],
+    "expect": {
+      "A1": [["A", 0, 20, {"eq": {"low": -6, "lowTurnover": 120, "mid": 4.5, "midFrequency": 2000}}],
+             ["C", 0, 5],
+             ["B", 0, 20, {"eq": {"low": -6, "lowTurnover": 120, "mid": 4.5, "midFrequency": 2000}}],
+             ["A", 20, 20]],
+      "A2": [["A", 0, 60]]}
+  }
+]

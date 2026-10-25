@@ -330,7 +330,8 @@ public:
     // An effect double-clicked in the Effect Palette (p.44): on the
     // selected segments, or on the transitions with trim rollers.
     bool applyEffectToSelection(const EffectInfo& effect);
-    // Remove Effect (p.47): the effect the Effect Editor would show.
+    // Remove Effect (p.47): the effect the Effect Editor would show; without one, the Audio EQ
+    // effects at the position on the selected audio tracks (p.741).
     bool removeEffectAtPosition();
     // The effect at the Record monitor's position on the selected tracks,
     // top down (p.84).
@@ -350,6 +351,13 @@ public:
     // to the end, the start to OUT, or the whole track without marks.
     bool setClipAudio(const QString& track, std::optional<double> gain, std::optional<int> pan, bool onTrack,
                       const QString& description);
+    // Audio EQ (p.736-741; lumenis/model/audio_eq.h): `eq` on the whole segment under the Record
+    // position on each of `tracks`, or without one its EQ removed; with `onTrack` (Set EQ - In/Out
+    // and the Remove EQs items) on the segments between the marks: IN to OUT, IN to the end, the
+    // start to OUT, or the whole track. One undo step. Already so: true without a step; no audio
+    // segment there: false.
+    bool setEq(const QStringList& tracks, const std::optional<model::AudioEq>& eq, bool onTrack,
+               const QString& description);
     // The segment under the Record position on an audio track, if any.
     std::optional<model::Segment> audioSegmentAt(const QString& track) const;
 

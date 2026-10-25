@@ -49,8 +49,8 @@ headers in `include/lumenis/<library>/`.
   Sift, Set Bin Display).
 * **Editing.** Model: `src/model/sequence.*` (splice, overwrite, lift,
   extract, trims, effects, transitions, Change Source Track),
-  `automation.*` (volume and pan keyframes) and `monitor.*` (marks,
-  positions).
+  `automation.*` (volume and pan keyframes), `audio_eq.*` (Audio EQ's
+  bands and filters) and `monitor.*` (marks, positions).
   UI: `timeline.*` (the Timeline panel and its edit commands;
   `timeline_automation.cpp` its keyframe graph and editing) and
   `composer.*` (the Source and Record monitors).
@@ -82,6 +82,9 @@ headers in `include/lumenis/<library>/`.
   and the Effect Editor's parameters `effect_parameters.json`; UI in
   `effect_palette.*` and `effect_editor.*`; the model keeps effects on
   segments (`model::Effect`, `model::Transition`).
+* **Audio tools.** `audio_tools.*` (the Audio Mixer and the Audio Tool),
+  `audio_eq.*` (the Audio EQ tool, docs/spec/audio-eq.md) and
+  `mixdown_dialog.*`; the sound is `src/media/playback.*`.
 
 ## Data flow
 
@@ -131,7 +134,8 @@ with CTest (`ctest --preset ci`). Python checks live in `scripts/` and
   (`tst_otio`, `otio_round_trip`, and `otio_python` against
   OpenTimelineIO's own reader); FCP 7 XML (`tst_fcpxml`, `fcpxml_round_trip`,
   `fcpxml_python` against OpenTimelineIO's FCP adapter);
-* audio: the mixdown null test (`tst_mixdown`, Phase 5 gate 1);
+* audio: the mixdown null test (`tst_mixdown`, Phase 5 gate 1) and the
+  Audio EQ's sound against a reference (`tst_audio_eq`);
 * editing: scripted edit scenarios in `tests/scenarios/*.json` run by
   `tst_scenarios`, with undo and redo checked by hash, and 300 random ones
   from `scripts/make-scenarios.py`'s reference model

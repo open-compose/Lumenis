@@ -18,6 +18,7 @@
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/button_mapping.h"
+#include "lumenis/ui/audio_eq.h"
 #include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/command_palette.h"
@@ -941,6 +942,8 @@ void MainWindow::createTools() {
     connect(audioMixer_, &AudioMixer::mixModeChanged, this, [this](const QString& value) {
         settings_->setValue(QStringLiteral("Audio Project"), QStringLiteral("mixMode"), value);
     });
+    audioEq_ = new AudioEqTool(*timeline_);
+    panels_->addPanel(new Panel(QStringLiteral("AudioEQ"), tr("Audio EQ"), audioEq_));
     audioTool_ = new AudioTool;
     panels_->addPanel(new Panel(QStringLiteral("AudioTool"), tr("Audio Tool"), audioTool_));
     // Tools > Background Queue Window (p.356-357).
@@ -1077,6 +1080,10 @@ std::vector<media::AudioPiece> MainWindow::soundOf(const model::LoadedClip& load
     auto pieces = media::audioPieces(
         loaded.item, [this](const QString& binId, const QString& clipId) { return composer_->resolve(binId, clipId); },
         monitored, alternating);
+    // Bypass RT EQ (p.737): the EQ effects are not heard.
+    if (audioEq_ && audioEq_->bypassed()) {
+        for (media::AudioPiece& piece : pieces) piece.eq.reset();
+    }
     // The Audio Mixer's Master fader, a gain on the whole mix.
     const double master = audioMixer_ ? audioMixer_->masterGain() : 0.0;
     if (master != 0.0) {
@@ -2304,6 +2311,7 @@ Panel* MainWindow::showTool(const QString& panelId) {
     if (panelId == QLatin1String("EffectPalette")) size = QSize(480, 420);
     if (panelId == QLatin1String("EffectEditor")) size = QSize(340, 520);
     if (panelId == QLatin1String("AudioMixer")) size = QSize(560, 440);
+    if (panelId == QLatin1String("AudioEQ")) size = QSize(620, 300);
     if (panelId == QLatin1String("AudioTool")) size = QSize(300, 340);
     if (panelId == QLatin1String("MediaTool")) size = QSize(640, 320);
     if (panelId == QLatin1String("SourceBrowser")) size = QSize(960, 600);
@@ -2552,6 +2560,7 @@ void MainWindow::installPanelHandlers() {
     handle("tools.effect_palette", [this] { showTool(QStringLiteral("EffectPalette")); });
     handle("tools.effect_editor", [this] { showTool(QStringLiteral("EffectEditor")); });
     handle("tools.audio_mixer", [this] { showTool(QStringLiteral("AudioMixer")); });
+    handle("tools.audio_eq", [this] { showTool(QStringLiteral("AudioEQ")); });
     handle("tools.audio_tool", [this] { showTool(QStringLiteral("AudioTool")); });
     handle("tools.media_tool", [this] { showMediaTool(); });
     // Tools > List Tool (p.944), File > Input > Import EDL (p.951), File > Output > Export Bin (p.130).

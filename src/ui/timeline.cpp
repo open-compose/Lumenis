@@ -1,5 +1,6 @@
 #include "lumenis/ui/timeline.h"
 
+#include "lumenis/model/audio_eq.h"
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/marker_dialogs.h"
 #include "lumenis/ui/media_frames.h"
@@ -902,6 +903,27 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
             const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
             const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));
             if (x1 - x0 > iconWidth + 8) icon((x0 + x1) / 2, *s.effect, false);
+        }
+        if (s.eq) {
+            // Audio EQ (p.740): a teal icon with three bars for the bands. Without text, so the
+            // text-free screenshots keep it.
+            const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
+            const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));
+            if (x1 - x0 > iconWidth + 8) {
+                const double centre = (x0 + x1) / 2;
+                const QRectF box(centre - iconWidth / 2.0, r.top + (r.height - iconHeight) / 2.0, iconWidth, iconHeight);
+                p.setPen(QPen(QColor(0xff1f5a5a), 1));
+                p.setBrush(s.eq->in ? QColor(0xff4fb0b0) : QColor(0xff7a8a8a));
+                p.drawRoundedRect(box, 2, 2);
+                p.setPen(Qt::NoPen);
+                p.setBrush(QColor(0xff1f5a5a));
+                const double bar = iconWidth / 7.0;
+                const double heights[] = {0.6, 0.3, 0.5};
+                for (int b = 0; b < 3; ++b) {
+                    const double h = (iconHeight - 4) * heights[b];
+                    p.drawRect(QRectF(box.left() + bar * (1 + 2 * b), box.bottom() - 2 - h, bar, h));
+                }
+            }
         }
         if (s.transition) {
             const double x0 = xFor(at - s.transition->before());
@@ -3440,7 +3462,18 @@ std::optional<model::EffectRef> Timeline::currentEffect() const {
 bool Timeline::removeEffectAtPosition() {
     message_.clear();
     const auto ref = currentEffect();
-    if (!ref) return fail(tr("There is no effect at the position on the selected tracks."));
+    if (!ref) {
+        // No video effect: the Audio EQ effects there on the selected audio tracks (p.741).
+        if (!recordSequence()) return fail(tr("There is no effect at the position on the selected tracks."));
+        const model::MonitorState& record = composer_.state(MonitorId::Record);
+        model::Sequence seq = model::Sequence::fromItem(record.current()->item);
+        int removed = 0;
+        for (const QString& t : patch_.selectedRecordTracks(seq)) {
+            removed += model::setEq(seq, t, record.position(), record.position() + 1, std::nullopt);
+        }
+        if (removed == 0) return fail(tr("There is no effect at the position on the selected tracks."));
+        return commitSequence(tr("Remove Effect"), seq);
+    }
     model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
     if (model::removeEffect(seq, ref->track, ref->frame, ref->target).isEmpty()) {
         return fail(tr("The track is locked."));
@@ -3504,6 +3537,42 @@ bool Timeline::setClipAudio(const QString& track, std::optional<double> gain, st
     }
     if (model::setClipAudio(seq, track, start, length, gain, pan) == 0) {
         return fail(tr("There is no audio segment there to adjust."));
+    }
+    return commitSequence(description, seq);
+}
+
+bool Timeline::setEq(const QStringList& tracks, const std::optional<model::AudioEq>& eq, bool onTrack,
+                     const QString& description) {
+    message_.clear();
+    if (!recordSequence()) return false;
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    model::Sequence seq = model::Sequence::fromItem(record.current()->item);
+    int changed = 0;
+    for (const QString& track : tracks) {
+        std::int64_t from = record.position();
+        std::int64_t to = from + 1;
+        if (onTrack) {
+            // IN to OUT, IN to the end, the start to OUT, or the whole track (p.740).
+            const model::Track* t = seq.track(track);
+            from = record.in().value_or(0);
+            to = record.out() ? *record.out() + 1 : (t ? t->length() : 0);
+        }
+        changed += model::setEq(seq, track, from, to, eq);
+    }
+    if (changed == 0) {
+        // Nothing to do is not an error when the segments already have this EQ.
+        bool any = false;
+        for (const QString& track : tracks) {
+            const model::Track* t = seq.track(track);
+            if (!t || t->kind != model::TrackKind::Audio || t->locked) continue;
+            if (onTrack) {
+                any = any || std::any_of(t->segments.begin(), t->segments.end(), [](const model::Segment& g) { return !g.isFiller(); });
+            } else {
+                const int i = t->segmentAt(record.position());
+                any = any || (i >= 0 && !t->segments.at(i).isFiller());
+            }
+        }
+        return any ? true : fail(tr("There is no audio segment there to equalize."));
     }
     return commitSequence(description, seq);
 }

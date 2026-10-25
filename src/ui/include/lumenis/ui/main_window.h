@@ -48,6 +48,7 @@ class ExportBinDialog;
 class ImportEdlDialog;
 class ListTool;
 class AboutInfoDialog;
+class AudioEqTool;
 class AudioMixer;
 class AudioTool;
 class EffectEditor;
@@ -133,9 +134,14 @@ public:
     EffectPalette& effectPalette() const { return *effectPalette_; }
     EffectEditor& effectEditor() const { return *effectEditor_; }
     AudioMixer& audioMixer() const { return *audioMixer_; }
+    AudioEqTool& audioEq() const { return *audioEq_; }
     // Whether a sequence's audio track is heard when it plays: monitored in the Track Selector
     // panel (p.395), not muted in the Audio Mixer, and soloed whenever any track is (p.698).
     bool isHeard(const QString& track) const;
+    // The audio of a loaded item, through the Audio Mixer's Master fader and without EQ while the
+    // Audio EQ tool's Bypass RT EQ is on; `monitored`, when set, picks the sequence tracks heard.
+    std::vector<media::AudioPiece> soundOf(const model::LoadedClip& loaded,
+                                           const std::function<bool(const QString&)>& monitored) const;
     AudioTool& audioTool() const { return *audioTool_; }
     MediaTool& mediaTool() const { return *mediaTool_; }
     // Tools > List Tool (p.944-960): EDLs of a sequence.
@@ -360,6 +366,7 @@ private:
     EffectPalette* effectPalette_ = nullptr;
     EffectEditor* effectEditor_ = nullptr;
     AudioMixer* audioMixer_ = nullptr;
+    AudioEqTool* audioEq_ = nullptr;
     AudioTool* audioTool_ = nullptr;
     MediaTool* mediaTool_ = nullptr;
     ListTool* listTool_ = nullptr;
@@ -380,10 +387,6 @@ private:
     // Plays a scrub burst when the position moved while stopped (runs on Composer::changed).
     void scrubIfMoved();
 
-    // The audio of a loaded item, through the Audio Mixer's Master fader; `monitored`, when set,
-    // picks the sequence tracks heard.
-    std::vector<media::AudioPiece> soundOf(const model::LoadedClip& loaded,
-                                           const std::function<bool(const QString&)>& monitored) const;
     // What a monitor shows at a position: a linked clip and its frame.
     std::optional<std::pair<model::BinItem, std::int64_t>> frameAt(MonitorId monitor, std::int64_t position) const;
 

@@ -2,10 +2,12 @@
 
 #include "lumenis/core/rational.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/audio_eq.h"
 #include "lumenis/model/sequence.h"
 
 #include <QString>
 
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <functional>
@@ -49,6 +51,10 @@ struct AudioPiece {
     bool monoGain = false; // the volume alone, on the left, without the pan (a mono mixdown)
     float scale = 1.0f;    // a gain on top of the automated volume (the Master fader in a mixdown)
     bool automated() const { return !volumeKeys.isEmpty() || !panKeys.isEmpty(); }
+    // The segment's Audio EQ (lumenis/model/audio_eq.h), filtering the piece's samples before
+    // its gains; none, not In, or flat: unfiltered.
+    std::optional<model::AudioEq> eq;
+    bool equalised() const;
 };
 
 // Equal-power gains for a pan from -100 (left) to 100 (right), times a
@@ -93,8 +99,25 @@ public:
 private:
     // The reader of a piece's file, stream and channel; null if it cannot be opened.
     AudioReader* reader(const AudioPiece& piece);
+    // `count` samples of a piece's channel from `offset` output samples into the piece, at the
+    // output rate; zeros where the file has none.
+    std::vector<float> samples(const AudioPiece& piece, std::int64_t offset, int count);
+    // Runs piece `index`'s EQ over `samples`, which start `offset` samples into the piece. The
+    // filters keep their state from one render to the next; when a render does not follow on from
+    // the last one (a seek, reverse play), they start again, run first over up to 0.1 s of the
+    // samples before so they have settled.
+    void equalise(std::size_t index, std::int64_t offset, std::vector<float>& samples);
+
+    // One piece's filters and where its last render ended.
+    struct EqState {
+        bool ready = false;
+        std::array<model::Biquad, 3> filters{};
+        std::array<std::array<double, 2>, 3> state{}; // transposed direct form II
+        std::int64_t next = -1;
+    };
 
     std::vector<AudioPiece> pieces_;
+    std::vector<EqState> eq_;
     std::map<QString, std::unique_ptr<AudioReader>> readers_;
 };
 
