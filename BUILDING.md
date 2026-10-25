@@ -531,6 +531,13 @@ macOS), and `QFontDatabase::hasFamily` resolves aliases itself.
 `tst_playback` and `tst_interchange` fail on that warning, so a new one is
 named where it happens.
 
+Without that warning, the machine held the test's own thread back: on
+2026-10-25 the Mac runner showed 12 frames and dropped 37 in what should
+have been half a second of play. The test's looks at the picture and the
+sound go on for up to two seconds until one lands on a tick in time (the
+2-frame limit stays). If it still fails, see what else was running on the
+Mac then; `scripts/measure-playback.py` measures sync over a longer run.
+
 ### A test crashes on Windows (0xc0000374) or macOS but passes on Linux
 
 0xc0000374 is Windows' heap corruption: memory used after it was freed,

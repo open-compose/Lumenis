@@ -101,11 +101,14 @@ private slots:
         if (!window.isPlayingSound()) QSKIP("no audio output, not even the null device");
         QTest::qWait(300);
         // The picture follows the sound: the position is where the clock
-        // put it at the last tick (every 20 ms). A busy machine can hold a
-        // tick back, so the closest of several looks counts.
+        // put it at the last tick (every 20 ms). A busy machine can hold
+        // ticks back, for over a second on the self-hosted Mac runner (12
+        // frames shown and 37 dropped in what should have been 14), so the
+        // closest of the looks counts, and the looks go on for up to two
+        // seconds until one lands on a tick in time (BUILDING.md).
         double closest = 1e9;
         std::int64_t position = 0;
-        for (int i = 0; i < 10; ++i) {
+        for (int i = 0; i < 80 && (i < 10 || closest > 2.0); ++i) {
             QTest::qWait(25);
             position = composer.state(MonitorId::Source).position();
             const double heard = media::samplesToFrames(window.soundClock(), Rational(25));
