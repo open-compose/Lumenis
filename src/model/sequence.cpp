@@ -574,6 +574,40 @@ QList<std::pair<QString, QString>> TrackPatch::editPairs(const Sequence& sequenc
     return pairs;
 }
 
+Effect motionEffect(double speed) {
+    Effect e;
+    e.category = QStringLiteral("EDL");
+    e.name = QStringLiteral("Motion Effect");
+    e.parameters = QJsonObject{{QStringLiteral("M2"), QJsonObject{{QStringLiteral("Speed"), speed}}}};
+    return e;
+}
+
+std::optional<double> motionSpeed(const Effect& e) {
+    if (e.category != QLatin1String("EDL") || e.name != QLatin1String("Motion Effect")) return std::nullopt;
+    const QJsonValue v = e.parameters.value(QStringLiteral("M2")).toObject().value(QStringLiteral("Speed"));
+    return v.isDouble() ? std::optional<double>(v.toDouble()) : std::nullopt;
+}
+
+// The record marks give the length and place; the source marks only the start and the speed.
+EditPlan planFitToFill(const EditMarks& source, const EditMarks& record, double* speed) {
+    EditPlan plan;
+    if (!source.in || !source.out || !record.in || !record.out) {
+        plan.error = QStringLiteral("Mark an IN and an OUT in both monitors for Fit to Fill.");
+        return plan;
+    }
+    const std::int64_t sourceLength = *source.out - *source.in + 1;
+    const std::int64_t recordLength = *record.out - *record.in + 1;
+    if (sourceLength <= 0 || recordLength <= 0) {
+        plan.error = QStringLiteral("Each OUT must come after its IN.");
+        return plan;
+    }
+    plan.sourceStart = *source.in;
+    plan.recordStart = *record.in;
+    plan.length = recordLength;
+    if (speed) *speed = static_cast<double>(sourceLength) / static_cast<double>(recordLength);
+    return plan;
+}
+
 // Lengths are inclusive of both marks (OUT - IN + 1). recordStartFor() backtimes from a record OUT
 // when there is no record IN.
 EditPlan planEdit(const EditMarks& source, const EditMarks& record) {
@@ -986,6 +1020,27 @@ std::optional<MatchedFrame> matchFrame(const Sequence& sequence, const QStringLi
         return MatchedFrame{s, s.sourceIn + position - start};
     }
     return std::nullopt;
+}
+
+// Each segment of the clip whose source range covers the frame gives one sequence frame; a frame
+// shown on several tracks at once is listed once.
+QList<std::int64_t> reverseMatchFrames(const Sequence& sequence, const QStringList& tracks, const QString& clipId,
+                                       const QStringList& sourceTracks, std::int64_t frame) {
+    QList<std::int64_t> out;
+    for (const Track& t : sequence.tracks()) {
+        if (!tracks.isEmpty() && !tracks.contains(t.name())) continue;
+        std::int64_t start = 0;
+        for (const Segment& s : t.segments) {
+            if (!s.isFiller() && s.clipId == clipId && (sourceTracks.isEmpty() || sourceTracks.contains(s.sourceTrack)) &&
+                frame >= s.sourceIn && frame < s.sourceIn + s.length) {
+                out << start + frame - s.sourceIn;
+            }
+            start += s.length;
+        }
+    }
+    std::sort(out.begin(), out.end());
+    out.erase(std::unique(out.begin(), out.end()), out.end());
+    return out;
 }
 
 void Sequence::normalize(const QString& name) {

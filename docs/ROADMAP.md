@@ -685,7 +685,7 @@ Features in this phase:
   loop.
 * Add Edit, Match Frame, Reverse Match Frame, sync locks, track patching,
   subclips and locators.
-* 32-level undo.
+* Undo: the guide gives 100 levels (p.466), which Cutthulhu keeps.
 
 **Gates**
 1. More than 300 scripted edit scenarios, each written as a command sequence.
@@ -694,6 +694,16 @@ Features in this phase:
 2. Undo/redo of every scenario restores identical state, checked by hash.
 3. Keyboard-only editing works for everything in the user guide's editing
    chapters **(M)**.
+
+**Status (Phase 4):** the editing features were built in Phase 1.4
+(1.4a-1.4d). 4.1 adds what was missing, Fit to Fill (FX Guide p.170) and
+Reverse Match Frame (p.433-434), and the gates' harness
+(docs/spec/edit-scenarios.md): `tst_scenarios` runs the scenarios in
+`tests/scenarios` (from the guide's rules, each with its page) and 300
+random ones whose results `scripts/make-scenarios.py` works out with a
+reference model of its own (ctest `edit_scenarios_generated`), and undoes
+and redoes each by hash (gate 2: **passes**). Gate 1's expected sequences
+from real Media Composer wait for the owner's seat; gate 3 is by hand.
 
 ### Phase 5 — Audio
 * Audio Mixer, clip/track gain and pan, keyframes, Audio EQ, AudioSuite

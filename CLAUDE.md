@@ -235,6 +235,12 @@ button in `bin_view.*`, locks in `bin_container.*`, Lock/Protect/Unlock
 Project Bin, `LUMENIS_SHARED_BINS`), is done. Left in Phase 3: 3.5
 (deferred) and the gates that wait for the owner's seat.
 
+Phase 4 (core editing) has started; its features came in 1.4. 4.1 added
+Fit to Fill, Reverse Match Frame and the edit-scenario harness
+(docs/spec/edit-scenarios.md: `tests/scenarios/*.json`, `tst_scenarios`,
+`scripts/make-scenarios.py`, ctest `edit_scenarios_generated`). Add a
+scenario for each editing change.
+
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 
 Panels are our own framework, not QDockWidget, because Qt cannot draw

@@ -977,6 +977,13 @@ These are recorded now so they are not entered from memory later.
     material moves down (p.466). Overwrite (red) replaces and only
     lengthens the sequence past its end (p.467). Replace (blue) is on the
     Command Palette's Edit tab (p.467).
+  * Fit to Fill, on the Command Palette's Edit tab, "performs an overwrite
+    edit and uses a Variable Speed motion effect to fill the marked
+    duration" (FX Guide p.170): the source IN to OUT into the record IN to
+    OUT, at the speed that makes it fit. **Ours:** it needs all four marks,
+    and a clip (not a sequence) in the Source monitor; the motion effect is
+    the one the EDL and OTIO imports make (`model::motionEffect`). Alt for an
+    unrendered effect comes with rendering (Phase 6).
   * Undo (Ctrl+Z) and Redo (Ctrl+R), 100 levels, and *Edit > Undo/Redo
     List*, which undoes or redoes back to the chosen command (p.466).
   * Lift leaves filler and keeps the length; Extract closes the gap. Both
@@ -1127,6 +1134,14 @@ p.610–640, ch. 13 p.432–434).**
   Source monitor at the matching frame, marked IN, old marks removed (Alt
   keeps them). The highest selected track wins, "in descending order: V1,
   A1, A2". Right-click a track button > Match Frame Track.
+* **Reverse Match Frame (p.433–434):** a button on the Command Palette's
+  Other tab. The Source monitor's frame, on its selected tracks, is looked
+  for in the Record monitor's sequence on its selected tracks: the first
+  place it is shown, then each later place at each click. **Ours:** after
+  the last place it starts again at the first; with a sequence in the
+  Source monitor, its clip under the position is looked for. Later: the
+  track button's right-click Reverse Match Frame, which searches every
+  track (p.434).
 
 **Implementation status (1.4c).**
 * **Built.**
@@ -1158,7 +1173,8 @@ p.610–640, ch. 13 p.432–434).**
   link selection, the four-frame display, nonadjacent drags across
   tracks, the Select items that need clip colours, Create Sequence Based
   on Selection, Rename Track, the Add Track dialog, the Clipboard
-  Monitor, Sync Point editing, Reverse Match Frame, markers (1.4d).
+  Monitor, Sync Point editing, markers (1.4d). (Reverse Match Frame came
+  in Phase 4.)
 
 **Trim mode and markers (1.4d; ch. 20 p.647–666, ch. 13 p.412–424).**
 * **Trims (p.647–656).**

@@ -1862,6 +1862,7 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("fx.remove_effect"),
         QStringLiteral("edit.splice_in"),
         QStringLiteral("edit.overwrite"),
+        QStringLiteral("edit.fit_to_fill"),
         QStringLiteral("edit.lift"),
         QStringLiteral("edit.extract"),
         QStringLiteral("edit.undo"),
@@ -1892,6 +1893,7 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("clip.lock_tracks"),
         QStringLiteral("clip.unlock_tracks"),
         QStringLiteral("other.match_frame"),
+        QStringLiteral("other.reverse_match_frame"),
         QStringLiteral("smart.lift_overwrite"),
         QStringLiteral("smart.extract_splice_in"),
         QStringLiteral("smart.overwrite_trim"),
@@ -1931,6 +1933,8 @@ bool Timeline::perform(const QString& id) {
         edit(model::EditKind::SpliceIn);
     } else if (id == QLatin1String("edit.overwrite")) {
         edit(model::EditKind::Overwrite);
+    } else if (id == QLatin1String("edit.fit_to_fill")) {
+        edit(model::EditKind::Overwrite, true);
     } else if (id == QLatin1String("edit.lift")) {
         remove(false);
     } else if (id == QLatin1String("edit.extract")) {
@@ -1998,6 +2002,8 @@ bool Timeline::perform(const QString& id) {
         }
     } else if (id == QLatin1String("other.match_frame")) {
         matchFrame();
+    } else if (id == QLatin1String("other.reverse_match_frame")) {
+        reverseMatchFrame();
     } else if (id == QLatin1String("smart.lift_overwrite")) {
         setSegmentTool(model::EditKind::Overwrite, !liftTool_);
     } else if (id == QLatin1String("smart.extract_splice_in")) {
@@ -2089,8 +2095,9 @@ bool Timeline::perform(const QString& id) {
 
 // Splice-in or Overwrite from the Source monitor into the record sequence (ch. 15): the plan
 // comes from the two monitors' marks (three-point editing, model::planEdit) and the patch picks
-// the tracks (model::applyEdit).
-void Timeline::edit(model::EditKind kind) {
+// the tracks (model::applyEdit). Fit to Fill plans from all four marks instead and puts a motion
+// effect on the new segments.
+void Timeline::edit(model::EditKind kind, bool fitToFill) {
     composer_.stop();
     const model::MonitorState& source = composer_.state(MonitorId::Source);
     if (source.isEmpty()) {
@@ -2125,19 +2132,35 @@ void Timeline::edit(model::EditKind kind) {
     model::Sequence seq = model::Sequence::fromItem(before);
     const model::EditMarks sourceMarks{source.in(), source.out(), source.position(), source.duration()};
     const model::EditMarks recordMarks{record.in(), record.out(), record.position(), seq.duration()};
-    const model::EditPlan plan = model::planEdit(sourceMarks, recordMarks);
+    double speed = 1.0;
+    const model::EditPlan plan =
+        fitToFill ? model::planFitToFill(sourceMarks, recordMarks, &speed) : model::planEdit(sourceMarks, recordMarks);
     if (!plan.ok()) {
         fail(plan.error);
         return;
     }
-    if (model::applyEdit(seq, kind, plan, src->binId, src->item, patch_).isEmpty()) {
+    if (fitToFill && src->item.kind == model::BinItemKind::Sequence) {
+        fail(tr("Fit to Fill needs a clip in the Source monitor."));
+        return;
+    }
+    const QStringList edited = model::applyEdit(seq, kind, plan, src->binId, src->item, patch_);
+    if (edited.isEmpty()) {
         fail(tr("Select a source track and a record track to edit."));
         return;
+    }
+    if (fitToFill && speed != 1.0) {
+        // The overwrite made one segment per edited track at the record IN.
+        for (const QString& name : edited) {
+            model::Track* track = seq.track(name);
+            std::int64_t start = 0;
+            const int at = track ? track->segmentAt(plan.recordStart, &start) : -1;
+            if (at >= 0 && start == plan.recordStart) track->segments[at].effect = model::motionEffect(speed);
+        }
     }
     model::BinItem after = before;
     seq.storeIn(after);
     after.modified = QDateTime::currentDateTimeUtc();
-    commit(kind == model::EditKind::SpliceIn ? tr("Splice-in") : tr("Overwrite"), before, after);
+    commit(fitToFill ? tr("Fit to Fill") : kind == model::EditKind::SpliceIn ? tr("Splice-in") : tr("Overwrite"), before, after);
     // The Record monitor shows the end of the new edit (p.464); the
     // sequence's marks are used up.
     record.clearBoth();
@@ -2602,6 +2625,53 @@ void Timeline::matchFrame() {
     composer_.moveTo(MonitorId::Source, match->frame);
     if (!keepMarks) source.markIn();
     composer_.setActiveMonitor(MonitorId::Source);
+}
+
+// The Source monitor's frame found in the Record monitor's sequence, on the selected tracks of both
+// sides (p.433): the first place it is shown, then each later one at each click. Ours: after the
+// last place it starts again at the first.
+void Timeline::reverseMatchFrame() {
+    const model::MonitorState& source = composer_.state(MonitorId::Source);
+    const model::LoadedClip* src = source.current();
+    model::MonitorState& record = composer_.state(MonitorId::Record);
+    const model::LoadedClip* rec = record.current();
+    if (!src || !rec || rec->item.kind != model::BinItemKind::Sequence) {
+        fail(tr("Reverse Match Frame needs a clip in the Source monitor and a sequence in the Record monitor."));
+        return;
+    }
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    QString clipId = src->item.id;
+    std::int64_t frame = source.position();
+    QStringList sourceTracks;
+    if (src->item.kind == model::BinItemKind::Sequence) {
+        // A sequence in the Source monitor: its clip under the position.
+        const auto match = model::matchFrame(model::Sequence::fromItem(src->item), {}, frame);
+        if (!match) {
+            fail(tr("There is no clip under the Source monitor's position indicator."));
+            return;
+        }
+        clipId = match->segment.clipId;
+        frame = match->frame;
+        sourceTracks = {match->segment.sourceTrack};
+    } else {
+        for (const QString& t : patch_.sourceTracks()) {
+            if (patch_.isSourceSelected(t)) sourceTracks << t;
+        }
+    }
+    const QList<std::int64_t> found =
+        model::reverseMatchFrames(seq, patch_.selectedRecordTracks(seq), clipId, sourceTracks, frame);
+    if (found.isEmpty()) {
+        fail(tr("The frame is not in the sequence on the selected tracks."));
+        return;
+    }
+    std::int64_t at = found.first();
+    if (reverseMatchAt_ && record.position() == *reverseMatchAt_) {
+        const auto next = std::upper_bound(found.cbegin(), found.cend(), record.position());
+        if (next != found.cend()) at = *next;
+    }
+    reverseMatchAt_ = at;
+    composer_.moveTo(MonitorId::Record, at);
+    composer_.setActiveMonitor(MonitorId::Record);
 }
 
 void Timeline::moveClips(int tracks) {

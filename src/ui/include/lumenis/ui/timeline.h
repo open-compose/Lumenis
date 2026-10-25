@@ -411,12 +411,14 @@ private:
 
     void sync();
     void syncScrollBars();
-    void edit(model::EditKind kind);
+    // `fitToFill`: Fit to Fill, an overwrite with a Variable Speed effect (FX guide p.170).
+    void edit(model::EditKind kind, bool fitToFill = false);
     void remove(bool extract);
     void replaceEdit();
     void addEdit(bool fillerOnly);
     void topOrTail(bool top);
     void matchFrame();
+    void reverseMatchFrame();
     void copyToClipboard();
     void cutOrCopySelection(bool cut);
     void pasteClipboard();
@@ -488,6 +490,8 @@ private:
     bool markerDialog_ = true;
     std::optional<model::BinItem> clipboard_;
     int clipboardCount_ = 0;
+    // Where the last Reverse Match Frame cued the sequence: the next one goes on from there.
+    std::optional<std::int64_t> reverseMatchAt_;
     QString message_;
     bool syncing_ = false;
     SequenceStore store_;

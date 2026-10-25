@@ -38,7 +38,7 @@
       ["smart.ripple_trim", "smart.overwrite_trim"]
     ]},
     {"name": "Other", "page": 97, "columns": [
-      ["", "other.tool_palette", "other.gang", "other.match_frame"],
+      ["", "other.tool_palette", "other.gang", "other.match_frame", "other.reverse_match_frame"],
       [{"id": "other.add_alt_key", "platforms": ["windows", "linux"]},
        {"id": "other.add_control_key", "platforms": ["macos"]},
        {"id": "other.add_option_key", "platforms": ["macos"]}]

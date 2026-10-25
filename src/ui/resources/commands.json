@@ -257,6 +257,7 @@
     {"id": "edit.move_clip_up", "text": "Move Clip Up", "palette": "edit"},
     {"id": "edit.move_clip_down", "text": "Move Clip Down", "palette": "edit"},
     {"id": "other.match_frame", "text": "Match Frame", "palette": "other"},
+    {"id": "other.reverse_match_frame", "text": "Reverse Match Frame", "palette": "other"},
     {"id": "smart.lift_overwrite", "text": "Lift/Overwrite", "palette": "smart_tool"},
     {"id": "smart.extract_splice_in", "text": "Extract/Splice-in", "palette": "smart_tool"},
     {"id": "smart.overwrite_trim", "text": "Overwrite Trim", "palette": "smart_tool"},

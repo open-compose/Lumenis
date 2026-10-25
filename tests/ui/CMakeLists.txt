@@ -36,3 +36,20 @@ lumenis_add_test(tst_managed_media SOURCES tst_managed_media.cpp LIBS ${ui_test_
 lumenis_add_test(tst_playback SOURCES tst_playback.cpp LIBS ${ui_test_libs} lumenis::media)
 # File > Input > Import EDL, Tools > List Tool, shot logs (Phase 3.6a).
 lumenis_add_test(tst_interchange SOURCES tst_interchange.cpp LIBS ${ui_test_libs})
+
+# Scripted edit scenarios (ROADMAP Phase 4 gates 1 and 2; docs/spec/edit-scenarios.md).
+lumenis_add_test(tst_scenarios SOURCES tst_scenarios.cpp LIBS ${ui_test_libs})
+target_compile_definitions(tst_scenarios PRIVATE LUMENIS_SCENARIO_DIR="${PROJECT_SOURCE_DIR}/tests/scenarios")
+# The same test on random scenarios whose results scripts/make-scenarios.py works out with a
+# reference model of its own (gate 1).
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME edit_scenarios_generate
+        COMMAND Python3::Interpreter ${PROJECT_SOURCE_DIR}/scripts/make-scenarios.py
+                --out ${CMAKE_CURRENT_BINARY_DIR}/generated-scenarios)
+    set_tests_properties(edit_scenarios_generate PROPERTIES FIXTURES_SETUP generated_scenarios TIMEOUT 60)
+    add_test(NAME edit_scenarios_generated COMMAND tst_scenarios)
+    set_tests_properties(edit_scenarios_generated PROPERTIES
+        FIXTURES_REQUIRED generated_scenarios TIMEOUT 600
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;LUMENIS_SCENARIOS=${CMAKE_CURRENT_BINARY_DIR}/generated-scenarios")
+endif()

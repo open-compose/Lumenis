@@ -55,6 +55,15 @@ struct Effect {
     bool operator==(const Effect&) const = default;
 };
 
+// A speed change on a segment: the imports' speed changes (an EDL's M2 line, an OTIO
+// LinearTimeWarp or FreezeFrame) and Fit to Fill's Variable Speed effect. An effect of category
+// "EDL" named "Motion Effect", with the speed as a multiple of normal (0 for a freeze frame,
+// negative for reverse), which the EDL export writes back as M2. The segment's length is its
+// length in the sequence; it uses about length × speed frames of its clip from sourceIn.
+Effect motionEffect(double speed);
+// The speed of a motionEffect(), or nothing for another effect.
+std::optional<double> motionSpeed(const Effect& e);
+
 // Where a transition effect lies relative to its cut (Transition Effect
 // Alignment, FX guide p.500).
 enum class TransitionAlignment { EndingAtCut, CenteredOnCut, StartingAtCut, CustomStart };
@@ -313,6 +322,12 @@ struct EditPlan {
 // holds the message to show and the other fields are not to be used.
 EditPlan planEdit(const EditMarks& source, const EditMarks& record);
 
+// Fit to Fill (FX guide p.170): the source IN to OUT overwritten into the record IN to OUT, with
+// a Variable Speed motion effect that makes it fit; `speed` gets the source length over the
+// record length. Needs all four marks (ours: the guide describes only marked durations on both
+// sides).
+EditPlan planFitToFill(const EditMarks& source, const EditMarks& record, double* speed);
+
 // Splice-in pushes later material along; Overwrite replaces it.
 enum class EditKind { SpliceIn, Overwrite };
 
@@ -374,6 +389,11 @@ struct MatchedFrame {
 };
 // An empty `tracks` list means every track. Filler never matches.
 std::optional<MatchedFrame> matchFrame(const Sequence& sequence, const QStringList& tracks, std::int64_t position);
+
+// Reverse Match Frame (p.433-434): the sequence frames, in order, that show frame `frame` of clip
+// `clipId` from one of `sourceTracks` (empty: any) on one of `tracks` (empty: every track).
+QList<std::int64_t> reverseMatchFrames(const Sequence& sequence, const QStringList& tracks, const QString& clipId,
+                                       const QStringList& sourceTracks, std::int64_t frame);
 
 // ---- Trimming (guide ch. 20, p.647-665)
 

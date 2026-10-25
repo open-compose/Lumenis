@@ -1,0 +1,93 @@
+[
+  {
+    "name": "splice-in at the position moves later material down",
+    "guide": "p.466",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 10, "out": 29},
+      {"position": "record", "frame": 50},
+      {"command": "edit.splice_in"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 50], ["C", 10, 20], ["B", 0, 50]],
+      "A1": [["A", 0, 50], ["C", 10, 20], ["B", 0, 50]],
+      "A2": [["A", 0, 50], ["C", 10, 20], ["B", 0, 50]]}
+  },
+  {
+    "name": "overwrite at the record IN replaces and keeps the length",
+    "guide": "p.467",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 10, "out": 29},
+      {"mark": "record", "in": 40},
+      {"command": "edit.overwrite"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 40], ["C", 10, 20], ["B", 10, 40]],
+      "A1": [["A", 0, 40], ["C", 10, 20], ["B", 10, 40]]}
+  },
+  {
+    "name": "overwrite past the end lengthens the sequence",
+    "guide": "p.467",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 10, "out": 29},
+      {"mark": "record", "in": 90},
+      {"command": "edit.overwrite"}
+    ],
+    "expect": {"V1": [["A", 0, 50], ["B", 0, 40], ["C", 10, 20]]}
+  },
+  {
+    "name": "three-point edit: record IN and OUT, source IN",
+    "guide": "p.466",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 10},
+      {"mark": "record", "in": 20, "out": 39},
+      {"command": "edit.overwrite"}
+    ],
+    "expect": {"V1": [["A", 0, 20], ["C", 10, 20], ["A", 40, 10], ["B", 0, 50]]}
+  },
+  {
+    "name": "splice-in on the selected tracks only",
+    "guide": "p.626",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"source_tracks": ["V1"]},
+      {"mark": "source", "in": 0, "out": 9},
+      {"position": "record", "frame": 25},
+      {"command": "edit.splice_in"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 25], ["C", 0, 10], ["A", 25, 25], ["B", 0, 50]],
+      "A1": [["A", 0, 50], ["B", 0, 50]]}
+  },
+  {
+    "name": "the first edit makes a sequence",
+    "guide": "p.457",
+    "clips": [{"name": "C"}],
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 5, "out": 14},
+      {"command": "edit.splice_in"},
+      {"mark": "source", "in": 50, "out": 54},
+      {"command": "edit.splice_in"}
+    ],
+    "expect": {"V1": [["C", 5, 10], ["C", 50, 5]], "A2": [["C", 5, 10], ["C", 50, 5]]}
+  }
+]

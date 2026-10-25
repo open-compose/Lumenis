@@ -161,18 +161,12 @@ struct SourceTimecode {
 // a segment effect of category "EDL", named "Motion Effect", with the speed as a multiple of
 // normal (0 for a freeze frame, negative for reverse), which the EDL export writes back as M2.
 inline model::Effect motionEffect(double speed) {
-    model::Effect e;
-    e.category = QStringLiteral("EDL");
-    e.name = QStringLiteral("Motion Effect");
-    e.parameters = QJsonObject{{QStringLiteral("M2"), QJsonObject{{QStringLiteral("Speed"), speed}}}};
-    return e;
+    return model::motionEffect(speed);
 }
 
 // The speed of a motion effect an import made (motionEffect()), or nothing for another effect.
 inline std::optional<double> speedOf(const model::Effect& e) {
-    if (e.category != QLatin1String("EDL") || e.name != QLatin1String("Motion Effect")) return std::nullopt;
-    const QJsonValue v = e.parameters.value(QStringLiteral("M2")).toObject().value(QStringLiteral("Speed"));
-    return v.isDouble() ? std::optional<double>(v.toDouble()) : std::nullopt;
+    return model::motionSpeed(e);
 }
 
 } // namespace lumenis::interop::detail

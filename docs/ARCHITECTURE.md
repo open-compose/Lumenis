@@ -125,7 +125,11 @@ with CTest (`ctest --preset ci`). Python checks live in `scripts/` and
   corpus, and `tst_interchange` for the menus and the List Tool); OTIO
   (`tst_otio`, `otio_round_trip`, and `otio_python` against
   OpenTimelineIO's own reader); FCP 7 XML (`tst_fcpxml`, `fcpxml_round_trip`,
-  `fcpxml_python` against OpenTimelineIO's FCP adapter).
+  `fcpxml_python` against OpenTimelineIO's FCP adapter);
+* editing: scripted edit scenarios in `tests/scenarios/*.json` run by
+  `tst_scenarios`, with undo and redo checked by hash, and 300 random ones
+  from `scripts/make-scenarios.py`'s reference model
+  (`edit_scenarios_generated`; docs/spec/edit-scenarios.md).
 
 `fuzz/` holds libFuzzer targets for the interchange parsers (the compound
 file, AAF, `.avb` bins and their writer, OTIO, FCP XML; ROADMAP Phase 3 gate 4), built by

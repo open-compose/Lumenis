@@ -1,0 +1,204 @@
+[
+  {
+    "name": "fit to fill overwrites with a variable speed effect",
+    "guide": "FX p.170",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 0, "out": 39},
+      {"mark": "record", "in": 50, "out": 69},
+      {"command": "edit.fit_to_fill"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 50], ["C", 0, 20, {"speed": 2}], ["B", 20, 30]],
+      "A1": [["A", 0, 50], ["C", 0, 20, {"speed": 2}], ["B", 20, 30]]}
+  },
+  {
+    "name": "fit to fill needs four marks",
+    "guide": "FX p.170",
+    "clips": [{"name": "A"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 0, "out": 39},
+      {"mark": "record", "in": 10},
+      {"command": "edit.fit_to_fill", "refused": true}
+    ],
+    "expect": {"V1": [["A", 0, 50]]}
+  },
+  {
+    "name": "reverse match frame cues to each place in turn",
+    "guide": "p.433-434",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["C", 0, 20], ["B", 0, 30], ["C", 0, 20]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"position": "source", "frame": 5},
+      {"command": "other.reverse_match_frame"},
+      {"command": "other.reverse_match_frame"}
+    ],
+    "expect_monitors": {"record": {"position": 105}},
+    "expect": {"V1": [["A", 0, 50], ["C", 0, 20], ["B", 0, 30], ["C", 0, 20]]}
+  },
+  {
+    "name": "reverse match frame: the first place",
+    "guide": "p.434",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["C", 0, 20], ["B", 0, 30], ["C", 0, 20]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"position": "source", "frame": 5},
+      {"position": "record", "frame": 120},
+      {"command": "other.reverse_match_frame"}
+    ],
+    "expect_monitors": {"record": {"position": 55}}
+  },
+  {
+    "name": "match frame from the record monitor",
+    "guide": "p.432-433",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 10, 40]]}},
+    "steps": [
+      {"position": "record", "frame": 60},
+      {"activate": "record"},
+      {"command": "other.match_frame"}
+    ],
+    "expect_monitors": {"source": {"clip": "B", "position": 20, "in": 20, "out": null}}
+  },
+  {
+    "name": "replace edit lines up the two positions",
+    "guide": "p.467-468",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"position": "source", "frame": 30},
+      {"position": "record", "frame": 60},
+      {"command": "edit.replace_edit"}
+    ],
+    "expect": {"V1": [["A", 0, 50], ["C", 20, 50]], "A1": [["A", 0, 50], ["C", 20, 50]]}
+  },
+  {
+    "name": "top extracts from the start of the segment to the position",
+    "guide": "p.639",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"position": "record", "frame": 20},
+      {"command": "edit.top"}
+    ],
+    "expect": {"V1": [["A", 21, 29], ["B", 0, 50]], "A1": [["A", 21, 29], ["B", 0, 50]]}
+  },
+  {
+    "name": "tail extracts from the position to the end of the segment",
+    "guide": "p.639",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"position": "record", "frame": 20},
+      {"command": "edit.tail"}
+    ],
+    "expect": {"V1": [["A", 0, 20], ["B", 0, 50]], "A1": [["A", 0, 20], ["B", 0, 50]]}
+  },
+  {
+    "name": "add edit splits the segment at the position",
+    "guide": "p.640",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50]], "A1": [["A", 0, 50]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"position": "record", "frame": 20},
+      {"command": "edit.add_edit"}
+    ],
+    "expect": {"V1": [["A", 0, 20], ["A", 20, 30]], "A1": [["A", 0, 50]]}
+  },
+  {
+    "name": "lift/overwrite segment move leaves filler and overwrites",
+    "guide": "p.620",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"select": [["V1", 50]]},
+      {"move": [-20, 0], "tool": "lift"}
+    ],
+    "expect": {"V1": [["A", 0, 30], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]]}
+  },
+  {
+    "name": "splice-in on a sync-locked track splices filler into the others",
+    "guide": "p.493",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"sync_lock": "V1"},
+      {"sync_lock": "A1"},
+      {"load": "source", "clip": "C"},
+      {"source_tracks": ["V1"]},
+      {"mark": "source", "in": 0, "out": 9},
+      {"position": "record", "frame": 25},
+      {"command": "edit.splice_in"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 25], ["C", 0, 10], ["A", 25, 25], ["B", 0, 50]],
+      "A1": [["A", 0, 25], ["filler", 10], ["A", 25, 25], ["B", 0, 50]],
+      "A2": [["A", 0, 50], ["B", 0, 50]]}
+  },
+  {
+    "name": "ripple trim of the A-side lengthens the outgoing segment",
+    "guide": "p.654",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"rollers": [["V1", 50, "a"]], "kind": "ripple"},
+      {"trim": 10}
+    ],
+    "expect": {"V1": [["A", 0, 60], ["B", 0, 50]]}
+  },
+  {
+    "name": "ripple trim of the B-side shortens the incoming segment",
+    "guide": "p.654",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"rollers": [["V1", 50, "b"]], "kind": "ripple"},
+      {"trim": 10}
+    ],
+    "expect": {"V1": [["A", 0, 50], ["B", 10, 40]]}
+  },
+  {
+    "name": "dual-roller trim moves the cut",
+    "guide": "p.655",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"rollers": [["V1", 50, "both"]]},
+      {"trim": 10}
+    ],
+    "expect": {"V1": [["A", 0, 60], ["B", 10, 40]]}
+  },
+  {
+    "name": "a dual-roller trim stops at the incoming clip's first frame",
+    "guide": "p.655",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"rollers": [["V1", 50, "both"]]},
+      {"trim": -10, "refused": true}
+    ],
+    "expect": {"V1": [["A", 0, 50], ["B", 0, 50]]}
+  },
+  {
+    "name": "overwrite trim of the B-side leaves filler",
+    "guide": "p.653",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"rollers": [["V1", 50, "b"]], "kind": "overwrite"},
+      {"trim": 10}
+    ],
+    "expect": {"V1": [["A", 0, 50], ["filler", 10], ["B", 10, 40]]}
+  }
+]

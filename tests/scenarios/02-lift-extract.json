@@ -1,0 +1,63 @@
+[
+  {
+    "name": "lift leaves filler",
+    "guide": "p.478",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"mark": "record", "in": 20, "out": 29},
+      {"command": "edit.lift"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 20], ["filler", 10], ["A", 30, 20], ["B", 0, 50]],
+      "A2": [["A", 0, 20], ["filler", 10], ["A", 30, 20], ["B", 0, 50]]}
+  },
+  {
+    "name": "extract closes the gap",
+    "guide": "p.479",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"mark": "record", "in": 45, "out": 54},
+      {"command": "edit.extract"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 45], ["B", 5, 45]],
+      "A1": [["A", 0, 45], ["B", 5, 45]]}
+  },
+  {
+    "name": "extract on one track leaves the others",
+    "guide": "p.479",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"mark": "record", "in": 0, "out": 9},
+      {"command": "edit.extract"}
+    ],
+    "expect": {
+      "V1": [["A", 10, 40], ["B", 0, 50]],
+      "A1": [["A", 0, 50], ["B", 0, 50]]}
+  },
+  {
+    "name": "several edits undo and redo in turn",
+    "guide": "p.466",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"mark": "record", "in": 10, "out": 19},
+      {"command": "edit.lift"},
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 0, "out": 9},
+      {"mark": "record", "in": 10},
+      {"command": "edit.overwrite"},
+      {"mark": "record", "in": 0, "out": 4},
+      {"command": "edit.extract"}
+    ],
+    "expect": {"V1": [["A", 5, 5], ["C", 0, 10], ["A", 20, 30], ["B", 0, 50]]}
+  }
+]
