@@ -40,7 +40,7 @@ int mixdownChannels(MixdownFormat format) {
 }
 
 MixdownRenderer::MixdownRenderer(const MixdownRequest& request)
-    : format_(request.format), channels_(mixdownChannels(request.format)),
+    : channels_(mixdownChannels(request.format)),
       offset_(framesToSamples(request.start, request.sequence.editRate)),
       samples_(std::max<std::int64_t>(framesToSamples(request.end, request.sequence.editRate) - offset_, 0)),
       mix_(piecesFor(request)) {}

@@ -50,7 +50,6 @@ public:
     void render(std::int64_t at, int count, std::vector<std::vector<float>>& out);
 
 private:
-    MixdownFormat format_;
     int channels_;
     std::int64_t offset_; // the range's first output sample
     std::int64_t samples_;

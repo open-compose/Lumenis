@@ -518,6 +518,13 @@ for frame and sample counts, or explicit casts. Before pushing, run
 `scripts/check-apple-conversions.py build/clang`: it compiles every file of
 the Clang build as the Mac would see `long double`.
 
+### macOS: "private field 'x' is not used [-Werror,-Wunused-private-field]"
+
+Apple's Clang (Xcode 15 and later) reports a private member that is set
+but never read, which neither Ubuntu's Clang 15 or 18 nor GCC report for
+the same code (the mixdown renderer's `format_`, 2026-10-25). Remove the
+field, or read it. Only the Mac job catches it, and it runs on every push.
+
 ### macOS: `tst_playback` "the picture was N frames from the sound", with many frames dropped
 
 Look for `qt.qpa.fonts: Populating font family aliases took ... ms` in the
