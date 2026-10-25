@@ -217,6 +217,20 @@ struct Run {
             timeline.setRollers(rollers, kind);
             return true;
         }
+        if (o.contains(QStringLiteral("slip"))) {
+            // Slip (or with "slide", Slide) the segments in Trim mode; then {"trim": n} moves them.
+            QList<model::SegmentRef> refs;
+            for (const QJsonValue& v : o.value(QStringLiteral("slip")).toArray()) {
+                const QJsonArray a = v.toArray();
+                refs << model::SegmentRef{a.at(0).toString(), a.at(1).toInteger()};
+            }
+            timeline.setSlip(refs, o.value(QStringLiteral("slide")).toBool());
+            return true;
+        }
+        if (o.contains(QStringLiteral("lock"))) {
+            timeline.setTracksLocked({o.value(QStringLiteral("lock")).toString()}, true);
+            return true;
+        }
         if (o.contains(QStringLiteral("trim"))) {
             const bool ok = timeline.trimBy(o.value(QStringLiteral("trim")).toInteger());
             if (ok == o.value(QStringLiteral("refused")).toBool()) {

@@ -41,7 +41,10 @@ Each file is a JSON list of scenarios:
     and `{"move": [frames, tracks], "tool": "lift"|"extract", "copy": b}`;
   * `{"rollers": [[track, edit point, "a"|"b"|"both"], ...], "kind":
     "ripple"|"overwrite"}` enters Trim mode with those rollers, and
-    `{"trim": n}` trims by n frames;
+    `{"trim": n}` trims by n frames; `{"slip": [[track, start], ...],
+    "slide": b}` slips (or slides) those segments in Trim mode, and
+    `{"trim": n}` moves them (positive: earlier material, or to the right);
+  * `{"lock": track}` locks a track (p.633);
   * `{"command": id}`: any command of `commands.json` that the Timeline or
     the Composer carries out.
   * `"refused": true` on a command or trim step: it must be refused.

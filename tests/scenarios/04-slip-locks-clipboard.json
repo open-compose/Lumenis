@@ -1,0 +1,71 @@
+[
+  {
+    "name": "slip shows earlier material",
+    "guide": "p.665",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 40], ["B", 20, 30], ["A", 60, 30]]}},
+    "steps": [
+      {"slip": [["V1", 40]]},
+      {"trim": 5}
+    ],
+    "expect": {"V1": [["A", 0, 40], ["B", 15, 30], ["A", 60, 30]]}
+  },
+  {
+    "name": "slip stops at the clip's first frame",
+    "guide": "p.665",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 40], ["B", 20, 30], ["A", 60, 30]]}},
+    "steps": [
+      {"slip": [["V1", 40]]},
+      {"trim": 30}
+    ],
+    "expect": {"V1": [["A", 0, 40], ["B", 0, 30], ["A", 60, 30]]}
+  },
+  {
+    "name": "slide moves the segment and trims its neighbours",
+    "guide": "p.663",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 40], ["B", 20, 30], ["A", 60, 30]]}},
+    "steps": [
+      {"slip": [["V1", 40]], "slide": true},
+      {"trim": 5}
+    ],
+    "expect": {"V1": [["A", 0, 45], ["B", 20, 30], ["A", 65, 25]]}
+  },
+  {
+    "name": "a locked track is not edited",
+    "guide": "p.633",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"lock": "A1"},
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 0, "out": 9},
+      {"position": "record", "frame": 50},
+      {"command": "edit.splice_in"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 50], ["C", 0, 10], ["B", 0, 50]],
+      "A1": [["A", 0, 50], ["B", 0, 50]],
+      "A2": [["A", 0, 50], ["C", 0, 10], ["B", 0, 50]]}
+  },
+  {
+    "name": "copy to clipboard and splice the clipboard's contents",
+    "guide": "p.479-480",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 50], ["B", 0, 50]], "A1": [["A", 0, 50], ["B", 0, 50]], "A2": [["A", 0, 50], ["B", 0, 50]]}},
+    "steps": [
+      {"mark": "record", "in": 0, "out": 9},
+      {"command": "edit.copy_to_clipboard"},
+      {"command": "edit.clipboard_contents"},
+      {"mark": "record", "at": 99},
+      {"position": "record", "frame": 100},
+      {"command": "edit.splice_in"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 50], ["B", 0, 50], ["A", 0, 10]],
+      "A1": [["A", 0, 50], ["B", 0, 50], ["A", 0, 10]]}
+  }
+]
