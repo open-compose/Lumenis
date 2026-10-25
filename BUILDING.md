@@ -539,11 +539,15 @@ macOS), and `QFontDatabase::hasFamily` resolves aliases itself.
 named where it happens.
 
 Without that warning, the machine held the test's own thread back: on
-2026-10-25 the Mac runner showed 12 frames and dropped 37 in what should
-have been half a second of play. The test's looks at the picture and the
-sound go on for up to two seconds until one lands on a tick in time (the
-2-frame limit stays). If it still fails, see what else was running on the
-Mac then; `scripts/measure-playback.py` measures sync over a longer run.
+2026-10-25 the Mac runner twice showed 11 or 12 frames and dropped 37 or
+38, which adds up to the whole of the test's two-second clip: it had played
+to its end, where the picture holds the last frame, before the test
+compared the picture with the sound, so the gap could not close. The clip
+is now twenty seconds long, the looks at the picture and the sound go on
+for up to two seconds until one lands on a tick in time (the 2-frame limit
+stays), and a clip played to its end fails with that message instead. If it
+still fails, see what else was running on the Mac then;
+`scripts/measure-playback.py` measures sync over a longer run.
 
 ### A test crashes on Windows (0xc0000374) or macOS but passes on Linux
 

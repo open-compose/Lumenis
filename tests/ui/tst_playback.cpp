@@ -26,8 +26,10 @@ QColor colourOf(int n) {
     return QColor(40 + (n * 23) % 176, 40 + (175 - n * 11 % 176), 40 + (n * 57) % 176);
 }
 
-// Two seconds at 25 fps with a stereo tone: a QuickTime file with picture
-// and sound.
+// Twenty seconds at 25 fps with a stereo tone: a QuickTime file with picture and sound. Long enough
+// that a machine holding the test back for seconds does not play it to its end before the picture is
+// compared with the sound: a two-second clip once ended there on the Mac runner, and the last frame,
+// held, was then frames from a sound clock that had gone on (BUILDING.md).
 bool writeClip(const QString& path) {
     media::WriterSettings s;
     s.format = QStringLiteral("mov");
@@ -41,7 +43,7 @@ bool writeClip(const QString& path) {
     media::MediaWriter w;
     if (!w.open(path, s)) return false;
     std::vector<float> second(2 * 1920, 0.25f); // one frame's samples
-    for (int i = 0; i < 50; ++i) {
+    for (int i = 0; i < 500; ++i) {
         QImage image(64, 36, QImage::Format_RGBA8888);
         image.fill(colourOf(i));
         if (!w.writeVideo(image) || !w.writeAudio(second.data(), 1920)) return false;
@@ -115,6 +117,9 @@ private slots:
             closest = std::min(closest, std::abs(static_cast<double>(position) - heard));
         }
         QVERIFY2(window.soundClock() > 0, "no sound was heard");
+        // At the clip's end the picture holds its last frame while the clock goes on: that measures
+        // how long the machine held the test back, not sync.
+        QVERIFY2(position < 499, "the clip played to its end before the picture and the sound were compared");
         QVERIFY2(closest <= 2.0, qPrintable(QStringLiteral("the picture was %1 frames from the sound (%2 frames shown, %3 dropped)")
                                                 .arg(closest)
                                                 .arg(composer.playStats().shown)
