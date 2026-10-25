@@ -252,6 +252,14 @@ void MainWindow::createPanels() {
         if (!item) return std::nullopt;
         return *item;
     });
+    composer_->setMobResolver([this](const MobId& mob) -> std::optional<std::pair<QString, model::BinItem>> {
+        for (const BinDocument* doc : binContainer_->openDocuments()) {
+            for (const model::BinItem& item : doc->bin().items) {
+                if (item.kind != model::BinItemKind::Sequence && model::mobIdOf(item) == mob) return std::pair{doc->nodeId(), item};
+            }
+        }
+        return std::nullopt;
+    });
     // The monitors show the frames of linked clips; a sequence shows its top
     // video track's (p.432-434 orders the tracks the same way).
     composer_->setPictureResolver([this](MonitorId monitor, QSize size, bool* offline) -> QImage {

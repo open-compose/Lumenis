@@ -45,6 +45,8 @@ Each file is a JSON list of scenarios:
     "slide": b}` slips (or slides) those segments in Trim mode, and
     `{"trim": n}` moves them (positive: earlier material, or to the right);
   * `{"lock": track}` locks a track (p.633);
+  * `{"source_track": [track, start, source track]}`: the segment's
+    right-click Change Source Track (p.595; 2026.8 guide p.507);
   * `{"command": id}`: any command of `commands.json` that the Timeline or
     the Composer carries out.
   * `"refused": true` on a command or trim step: it must be refused.

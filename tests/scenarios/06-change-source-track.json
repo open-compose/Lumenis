@@ -1,0 +1,27 @@
+[
+  {
+    "name": "change source track: an audio segment takes another track of its clip",
+    "guide": "p.595; 2026.8 guide p.507",
+    "clips": [{"name": "A", "tracks": "V1 A1-4"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 30], ["B", 0, 20]], "A1": [["A", 0, 30], ["B", 0, 20]], "A2": [["A", 0, 30], ["B", 0, 20]]}},
+    "steps": [
+      {"source_track": ["A1", 0, "A3"]},
+      {"source_track": ["A2", 0, "A4"]}
+    ],
+    "expect": {"V1": [["A", 0, 30], ["B", 0, 20]], "A1": [["A", 0, 30, "A3"], ["B", 0, 20]], "A2": [["A", 0, 30, "A4"], ["B", 0, 20]]}
+  },
+  {
+    "name": "change source track back, then undo and redo",
+    "guide": "p.595; p.466",
+    "clips": [{"name": "A", "tracks": "V1 A1-4"}],
+    "sequence": {"tracks": {"A1": [["filler", 10], ["A", 5, 30, "A2"]]}},
+    "steps": [
+      {"source_track": ["A1", 10, "A1"]},
+      {"source_track": ["A1", 10, "A4"]},
+      {"command": "edit.undo"},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"}
+    ],
+    "expect": {"A1": [["filler", 10], ["A", 5, 30]]}
+  }
+]

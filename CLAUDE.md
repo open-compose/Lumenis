@@ -239,7 +239,21 @@ Phase 4 (core editing) has started; its features came in 1.4. 4.1 added
 Fit to Fill, Reverse Match Frame and the edit-scenario harness
 (docs/spec/edit-scenarios.md: `tests/scenarios/*.json`, `tst_scenarios`,
 `scripts/make-scenarios.py`, ctest `edit_scenarios_generated`). Add a
-scenario for each editing change.
+scenario for each editing change. 4.2 took in the
+2026.8 guides' changes: Change Source Track with More
+(`Timeline::addChangeSourceTrack`, `model::changeSourceTrack`), Choose
+Columns' Search field and keys (`bin_dialogs.*`), 32-bit Effects
+Processing.
+
+Guide editions: citations are the 2025.12 guides' pages. Material new in
+2026.8 is cited "2026.8 guide p.N" or "What's New 2026.8 p.N". The 2026.8
+Editing Guide is at
+https://resources.avid.com/SupportFiles/attach/Media_Composer/2026/Media_Composer_v2026.x_Editing_Guide.pdf
+and the FX Guide at the same folder's `Media_Composer_v2026.x_FX_Guide.pdf`
+(same pages as 2025.12). The page offsets between the editions are in
+docs/spec/ui-inventory.md, "Editions". Avid's 2026.8 shared projects on
+third-party storage are undocumented, so our bin locking stays
+(docs/spec/bin-locking.md).
 
 Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
 `src/media/mixdown.*`, `media::renderedAudioClip`, `mixdown_dialog.*`,

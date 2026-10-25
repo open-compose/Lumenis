@@ -866,6 +866,41 @@ std::optional<Segment> segmentFor(const Sequence& sequence, const SegmentRef& re
 
 namespace {
 
+// The audio segment `ref` names, for changing; nullptr if there is none.
+Segment* audioSegment(Sequence& sequence, const SegmentRef& ref, const QString& sourceTrack) {
+    const auto to = parseTrackName(sourceTrack);
+    if (!to || to->kind != TrackKind::Audio) return nullptr;
+    Track* t = sequence.track(ref.track);
+    std::int64_t start = 0;
+    const int i = t && t->kind == TrackKind::Audio ? t->segmentAt(ref.start, &start) : -1;
+    if (i < 0 || start != ref.start || t->segments.at(i).isFiller()) return nullptr;
+    return &t->segments[i];
+}
+
+} // namespace
+
+bool changeSourceTrack(Sequence& sequence, const SegmentRef& ref, const QString& sourceTrack) {
+    Segment* seg = audioSegment(sequence, ref, sourceTrack);
+    if (!seg) return false;
+    seg->sourceTrack = sourceTrack;
+    return true;
+}
+
+bool changeSourceTrack(Sequence& sequence, const SegmentRef& ref, const BinItem& master, const QString& masterBin,
+                       std::int64_t offset, const QString& sourceTrack) {
+    Segment* seg = audioSegment(sequence, ref, sourceTrack);
+    if (!seg) return false;
+    seg->clipId = master.id;
+    seg->binId = masterBin;
+    seg->sourceMob = mobIdOf(master);
+    seg->name = master.name;
+    seg->sourceIn += offset;
+    seg->sourceTrack = sourceTrack;
+    return true;
+}
+
+namespace {
+
 // The track `by` numbers up (negative: down) of the same kind, or nullopt past 1 or the limit.
 std::optional<QString> shiftedTrack(const QString& name, int by) {
     const auto ref = parseTrackName(name);

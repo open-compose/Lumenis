@@ -13,8 +13,11 @@ class QListWidget;
 namespace lumenis::ui {
 
 // The Bin Column Selection dialog (guide p.246): click a heading to select
-// or deselect it, All/None, OK. Opened by BinView::chooseColumns(); the dialog
-// only reports the choice, and the caller applies it with BinView::setColumns().
+// or deselect it, All/None, OK; since 2026.8 a Search field that filters the
+// headings, Tab and Shift+Tab between it and the list, typing in the list to
+// scroll to a heading, and a vertical resize (2026.8 guide p.246; What's New
+// 2026.8 p.8). Opened by BinView::chooseColumns(); the dialog only reports
+// the choice, and the caller applies it with BinView::setColumns().
 class ChooseColumnsDialog : public QDialog {
     Q_OBJECT
 
@@ -24,10 +27,12 @@ public:
 
     // The selected headings, in the order `available` gave them.
     QStringList chosen() const;
-    // The heading list, for tests.
+    // The heading list and the Search field, for tests.
     QListWidget* list() const { return list_; }
+    QLineEdit* search() const;
 
 private:
+    QLineEdit* search_ = nullptr;
     QListWidget* list_ = nullptr;
 };
 

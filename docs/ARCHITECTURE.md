@@ -45,9 +45,11 @@ headers in `include/lumenis/<library>/`.
   `bin_view.*`
   (Text, Frame and Script views, `BinDocument`), `bin_container.*` (the
   Bin Container and its sidebar), `bin_dock.*` (docking bins),
-  `bin_dialogs.*`.
+  `bin_dialogs.*` (Bin Column Selection with its Search field, Custom
+  Sift, Set Bin Display).
 * **Editing.** Model: `src/model/sequence.*` (splice, overwrite, lift,
-  extract, trims, effects, transitions) and `monitor.*` (marks, positions).
+  extract, trims, effects, transitions, Change Source Track) and
+  `monitor.*` (marks, positions).
   UI: `timeline.*` (the Timeline panel and its edit commands) and
   `composer.*` (the Source and Record monitors).
 * **Panels and workspaces.** Our own docking framework (`panels.*`,

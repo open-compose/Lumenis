@@ -1246,7 +1246,7 @@ void TimelineView::mouseReleaseEvent(QMouseEvent* event) {
 void TimelineView::contextMenuEvent(QContextMenuEvent* event) {
     QString track;
     if (const auto row = rowAt(event->pos()); row && event->pos().x() < headerWidth()) track = row->track;
-    QMenu* menu = timeline_.contextMenu(track);
+    QMenu* menu = timeline_.contextMenu(track, track.isEmpty() ? segmentAt(event->pos()) : std::nullopt);
     menu->setAttribute(Qt::WA_DeleteOnClose);
     menu->popup(event->globalPos());
 }
@@ -2683,7 +2683,7 @@ void Timeline::moveClips(int tracks) {
     moveSelection(0, tracks, segmentKind(), QApplication::keyboardModifiers() & Qt::AltModifier);
 }
 
-QMenu* Timeline::contextMenu(const QString& track) {
+QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::SegmentRef>& segment) {
     auto* menu = new QMenu(this);
     auto run = [this](QMenu* m, const QString& text, const QString& id) {
         QAction* a = m->addAction(text);
@@ -2731,6 +2731,7 @@ QMenu* Timeline::contextMenu(const QString& track) {
         return menu;
     }
     // In the Timeline (p.613, p.633, p.635).
+    if (segment) addChangeSourceTrack(menu, *segment);
     QMenu* add = menu->addMenu(tr("New"));
     run(add, tr("Sequence"), QStringLiteral("timeline.new.sequence"));
     run(add, tr("Video Track"), QStringLiteral("timeline.new.video_track"));
@@ -2754,6 +2755,69 @@ QMenu* Timeline::contextMenu(const QString& track) {
     connect(select->addAction(tr("Reverse")), &QAction::triggered, this, [this] { selectSegments(SelectWhere::Reverse); });
     menu->addAction(tr("Create Sequence Based on Selection"))->setEnabled(false);
     return menu;
+}
+
+// Change Source Track (p.595; 2026.8 guide p.507; What's New 2026.8 p.7): the clip's audio
+// tracks, the segment's own checked; for a subclip, More lists the master clip's audio tracks the
+// subclip does not have ("audio tracks from the master clip can be accessed directly"). Only the
+// segment changes, as one undo step; the clip in the bin does not.
+void Timeline::addChangeSourceTrack(QMenu* menu, const model::SegmentRef& ref) {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec || showsSource()) return;
+    const auto seg = model::segmentFor(model::Sequence::fromItem(rec->item), ref);
+    const auto kind = model::parseTrackName(ref.track);
+    if (!seg || seg->isFiller() || !kind || kind->kind != model::TrackKind::Audio) return;
+    const auto clip = composer_.resolve(seg->binId, seg->clipId);
+    auto audioOf = [](const model::BinItem& item) {
+        QStringList audio;
+        for (const QString& t : model::sourceTracksOf(item)) {
+            if (const auto r = model::parseTrackName(t); r && r->kind == model::TrackKind::Audio) audio << t;
+        }
+        return audio;
+    };
+    QMenu* change = menu->addMenu(tr("Change Source Track"));
+    change->setObjectName(QStringLiteral("changeSourceTrack"));
+    const QStringList own = clip ? audioOf(*clip) : QStringList{};
+    for (const QString& t : own) {
+        QAction* a = change->addAction(t);
+        a->setCheckable(true);
+        a->setChecked(t == seg->sourceTrack);
+        connect(a, &QAction::triggered, this, [this, ref, t] {
+            changeRecordSequence(tr("Change Source Track"),
+                                 [&](model::Sequence& s) { return model::changeSourceTrack(s, ref, t); });
+        });
+    }
+    // A subclip's master clip, by the MobID of its Clip source.
+    std::optional<std::pair<QString, model::BinItem>> master;
+    std::int64_t offset = 0;
+    if (clip && clip->kind == model::BinItemKind::Subclip) {
+        for (const model::ClipSource& from : clip->sources) {
+            if (from.kind != model::ClipSource::Kind::Clip) continue;
+            master = composer_.resolveMob(from.mob);
+            offset = from.offset;
+            break;
+        }
+    }
+    QStringList more;
+    if (master) {
+        for (const QString& t : audioOf(master->second)) {
+            if (!own.contains(t)) more << t;
+        }
+    }
+    if (clip && clip->kind == model::BinItemKind::Subclip) {
+        QMenu* m = change->addMenu(tr("More"));
+        m->setObjectName(QStringLiteral("changeSourceTrackMore"));
+        m->setEnabled(!more.isEmpty());
+        for (const QString& t : more) {
+            connect(m->addAction(t), &QAction::triggered, this, [this, ref, t, master, offset] {
+                changeRecordSequence(tr("Change Source Track"), [&](model::Sequence& s) {
+                    return model::changeSourceTrack(s, ref, master->second, master->first, offset, t);
+                });
+            });
+        }
+    }
+    change->setEnabled(!own.isEmpty() || !more.isEmpty());
+    menu->addSeparator();
 }
 
 model::SourceLength Timeline::sourceLength() const {

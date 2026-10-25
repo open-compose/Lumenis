@@ -101,6 +101,13 @@ public:
     std::optional<model::BinItem> resolve(const QString& binId, const QString& itemId) const {
         return resolver_ ? resolver_(binId, itemId) : std::nullopt;
     }
+    // A clip by its MobID, from the open bins: its bin and the item. The Timeline's Change Source
+    // Track > More finds a subclip's master clip with it. Set by MainWindow.
+    using MobResolver = std::function<std::optional<std::pair<QString, model::BinItem>>(const MobId& mob)>;
+    void setMobResolver(MobResolver resolver) { mobs_ = std::move(resolver); }
+    std::optional<std::pair<QString, model::BinItem>> resolveMob(const MobId& mob) const {
+        return mobs_ ? mobs_(mob) : std::nullopt;
+    }
     // Keys pressed in the Composer are run through it (keyPressEvent).
     void setKeyResolver(KeyResolver resolver) { keys_ = std::move(resolver); }
     // The picture a monitor shows at its position, scaled to fit `size`:
@@ -347,6 +354,7 @@ private:
     QList<QStringList> layout_[2]; // Source, Record
     Column* columns_[2] = {nullptr, nullptr};
     ItemResolver resolver_;
+    MobResolver mobs_;
     PictureResolver pictures_;
     PlayClock playClock_;
     // The position play last started (or changed speed) from; the play clock counts from here.

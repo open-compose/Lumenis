@@ -367,6 +367,18 @@ struct SegmentRef {
 };
 // The segment a reference names, and its length; nullopt if it is gone.
 std::optional<Segment> segmentFor(const Sequence& sequence, const SegmentRef& ref);
+// Change Source Track (p.595; 2026.8 guide p.507, What's New 2026.8 p.7): the
+// audio segment `ref` names takes its sound from `sourceTrack`, another
+// audio track of the same clip. Its place, length, clip gain, pan and
+// effects stay; the clip itself is not changed. False if `ref` names no
+// audio segment, or `sourceTrack` is not an audio track.
+bool changeSourceTrack(Sequence& sequence, const SegmentRef& ref, const QString& sourceTrack);
+// Change Source Track > More: a subclip's segment takes `sourceTrack` of the
+// master clip `master` (in `masterBin`) instead, the subclip starting
+// `offset` frames into it (its Clip source, BinItem::sources). The segment
+// then refers to the master clip, at the same frames.
+bool changeSourceTrack(Sequence& sequence, const SegmentRef& ref, const BinItem& master, const QString& masterBin,
+                       std::int64_t offset, const QString& sourceTrack);
 // Segment editing (p.610-623): moves selected segments `frames` later and
 // `tracks` tracks up (negative: down), Lift/Overwrite or Extract/Splice-in,
 // or copies them (Alt-drag, p.620). Tracks past the last are added

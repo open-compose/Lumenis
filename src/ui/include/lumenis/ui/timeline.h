@@ -388,8 +388,9 @@ public:
     // The Fast menu, rebuilt each time it opens. The Timeline owns it.
     QMenu* fastMenu();
     // The right-click menu, over a track's button or elsewhere (p.613,
-    // p.633-636). The caller owns it.
-    QMenu* contextMenu(const QString& track = {});
+    // p.633-636); over an audio segment, `segment`, it starts with Change
+    // Source Track (p.595; 2026.8 guide p.507). The caller owns it.
+    QMenu* contextMenu(const QString& track = {}, const std::optional<model::SegmentRef>& segment = {});
     // The master timecode display in the top toolbar.
     QLabel* timecodeDisplay() const { return timecode_; }
     // Edit > Undo/Redo List (p.466): the most recent first.
@@ -414,6 +415,8 @@ private:
 
     void sync();
     void syncScrollBars();
+    // contextMenu()'s Change Source Track submenu for the audio segment `ref`.
+    void addChangeSourceTrack(QMenu* menu, const model::SegmentRef& ref);
     // `fitToFill`: Fit to Fill, an overwrite with a Variable Speed effect (FX guide p.170).
     void edit(model::EditKind kind, bool fitToFill = false);
     void remove(bool extract);

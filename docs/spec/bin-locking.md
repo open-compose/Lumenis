@@ -13,6 +13,27 @@ Shared Projects and Bins", "Working with Locks and Shared Bins",
 How Media Composer stores its locks is not documented, and is not copied:
 the files below are Cutthulhu's own.
 
+## Media Composer 2026.8: shared projects on third-party storage
+
+Media Composer 2026.8 supports shared projects on third-party NAS and SAN
+storage with a Media Composer Enterprise license, "without requiring Avid
+NEXIS storage" (2026.8 Editing Guide p.301; What's New 2026.8 p.2). They
+"use the same project-sharing and bin-locking workflows as other shared
+project environments". The bins show the same green, red, yellow and blue
+lock icons, and a red bin opens read-only.
+
+Neither document says how the locks are stored or exchanged, and the Knowledge
+Base article they refer to ("Media Composer 2026.8 Update: Shared Project
+Workflows with Third-Party Storage") is not public. There is nothing that
+could be implemented compatibly without a seat to observe, so Cutthulhu
+keeps its own lock files below. Its behaviour already matches the 2026.8
+description. Two things remain to check once the owner's seat is back
+(ROADMAP gate status):
+* whether 2026.8 Enterprise and Cutthulhu can share a bin folder, each
+  respecting the other's locks;
+* whether Media Composer's own lock files can be read, by black-box
+  observation only.
+
 ## Shared storage (`model::isSharedLocation`)
 
 "The Bin Lock Status button does not appear if the bin is not on Avid

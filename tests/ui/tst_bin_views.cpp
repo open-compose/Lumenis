@@ -204,6 +204,68 @@ private slots:
         QVERIFY(dialog.chosen().isEmpty());
     }
 
+    // 2026.8's Search field, keyboard navigation and vertical resize (2026.8 guide p.246; What's
+    // New 2026.8 p.8).
+    void chooseColumnsSearchAndKeys() {
+        const QStringList available = QStringList(model::binHeadings()).mid(1);
+        ChooseColumnsDialog dialog(available, {QStringLiteral("Duration")});
+        dialog.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&dialog));
+        dialog.activateWindow();
+        // The Search field is first and has the focus.
+        QTRY_COMPARE(QApplication::focusWidget(), static_cast<QWidget*>(dialog.search()));
+        QListWidget* list = dialog.list();
+        auto shown = [list] {
+            QStringList out;
+            for (int i = 0; i < list->count(); ++i) {
+                if (!list->item(i)->isHidden()) out << list->item(i)->text();
+            }
+            return out;
+        };
+        QTest::keyClicks(dialog.search(), QStringLiteral("date"));
+        QVERIFY(!shown().isEmpty());
+        for (const QString& h : shown()) QVERIFY2(h.contains(QStringLiteral("date"), Qt::CaseInsensitive), qPrintable(h));
+        QVERIFY(shown().size() < available.size());
+        // All/None acts on the headings shown; Duration, hidden, stays selected.
+        dialog.findChild<QAbstractButton*>(QStringLiteral("allNone"))->click();
+        QStringList want = shown();
+        want << QStringLiteral("Duration");
+        want.sort();
+        QStringList chosen = dialog.chosen();
+        chosen.sort();
+        QCOMPARE(chosen, want);
+        dialog.findChild<QAbstractButton*>(QStringLiteral("allNone"))->click();
+        QCOMPARE(dialog.chosen(), QStringList{QStringLiteral("Duration")});
+        dialog.search()->clear();
+        QCOMPARE(shown(), available);
+
+        // Tab to the list, Shift+Tab back.
+        QTest::keyClick(dialog.search(), Qt::Key_Tab);
+        QTRY_COMPARE(QApplication::focusWidget(), static_cast<QWidget*>(list));
+        QTest::keyClick(list, Qt::Key_Tab, Qt::ShiftModifier);
+        QTRY_COMPARE(QApplication::focusWidget(), static_cast<QWidget*>(dialog.search()));
+        QTest::keyClick(dialog.search(), Qt::Key_Tab);
+        QTRY_COMPARE(QApplication::focusWidget(), static_cast<QWidget*>(list));
+
+        // Arrow keys move between headings without selecting them.
+        list->setCurrentRow(0, QItemSelectionModel::NoUpdate);
+        QTest::keyClick(list, Qt::Key_Down);
+        QCOMPARE(list->currentRow(), 1);
+        QCOMPARE(dialog.chosen(), QStringList{QStringLiteral("Duration")});
+        // Typing scrolls to a matching heading and makes it current, but does not select it.
+        const int tape = static_cast<int>(available.indexOf(QStringLiteral("Tape")));
+        QVERIFY(tape >= 0);
+        QTest::keyClicks(list, QStringLiteral("tape"));
+        QCOMPARE(list->currentItem()->text().left(4).toLower(), QStringLiteral("tape"));
+        QCOMPARE(dialog.chosen(), QStringList{QStringLiteral("Duration")});
+
+        // Taller, not wider.
+        const QSize before = dialog.size();
+        dialog.resize(before.width() + 200, before.height() + 200);
+        QTRY_COMPARE(dialog.height(), before.height() + 200);
+        QCOMPARE(dialog.width(), before.width());
+    }
+
     void sortsByDoubleClickingAHeading() {
         Fixture f;
         QHeaderView* header = f.view->table()->horizontalHeader();

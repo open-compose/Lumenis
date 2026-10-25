@@ -673,7 +673,11 @@ and pyaaf2's test suites, made with real Media Composer
     yellow, blue), read-only bins, bold locked bins in the Bin Container,
     Lock, Protect and Unlock Project Bin, Alt+double-click, and each
     machine's open bins kept apart (ctests `tst_bin_lock`,
-    `tst_bin_locking`).
+    `tst_bin_locking`). Media Composer 2026.8 Enterprise adds shared
+    projects on third-party NAS/SAN with "the same ... bin-locking
+    workflows" (2026.8 Editing Guide p.301). Avid does not document its
+    lock files, so ours stay. Whether the two can share a bin folder is
+    checked when the seat is back (docs/spec/bin-locking.md).
   * Left in Phase 3: 3.5 (deferred), and the gates' Media Composer halves,
     which wait for the owner's seat.
 
@@ -704,6 +708,13 @@ random ones whose results `scripts/make-scenarios.py` works out with a
 reference model of its own (ctest `edit_scenarios_generated`), and undoes
 and redoes each by hash (gate 2: **passes**). Gate 1's expected sequences
 from real Media Composer wait for the owner's seat; gate 3 is by hand.
+4.2 brings in what the 2026.8 guides changed (docs/spec/ui-inventory.md,
+"Editions"):
+* Change Source Track on audio segments, with More for a subclip's master
+  clip tracks (2026.8 guide p.507);
+* the Bin Column Selection dialog's Search field, keys and vertical resize
+  (2026.8 guide p.246);
+* 32-bit Effects Processing in the Media Creation setting.
 
 ### Phase 5 — Audio
 * Audio Mixer, clip/track gain and pan, keyframes, Audio EQ, AudioSuite
@@ -724,8 +735,9 @@ renders from real Media Composer wait for the owner's seat.
 ### Phase 6 — Effects and rendering
 * Transitions, motion effects, timewarps, Color Correction (HSL and curves),
   3D Warp, Picture-in-Picture, AniMatte, Paint, Blur, SpotColor and titles.
-* Keyframing in the Effect Editor.
-* Render and expert render.
+* Keyframing in the Effect Editor. Titler+ keeps a title's keyframes through
+  trims, splits and duplicates (FX p.325, 2026.8).
+* Render and expert render, at 8-, 16- or 32-bit (FX p.151-152, 2026.8).
 * OFX host, with OCIO colour management covering Rec.709, Rec.2020, PQ/HLG and
   ACES.
 
@@ -750,6 +762,13 @@ renders from real Media Composer wait for the owner's seat.
 * Multicam (group/multigroup), ScriptSync/PhraseFind equivalents, Dynamic Media
   Folders/background services, FrameFlex, stereoscopic, Symphony-level colour,
   and multi-user bin locking.
+* From 2026.8:
+  * the Transcript Tool's versions (Revert, Revert Transcript), Start New
+    Line, Group Speaker Lines and New Line After (2026.8 guide p.446);
+  * Multicam Auto Cut from transcript speakers (2026.8 guide p.451,
+    p.1134);
+  * Change Source Track for group and multigroup clips (2026.8 guide
+    p.507).
 
 ### Phase 9 — Hardening
 * Performance profiling, accessibility audit, localisation (the languages

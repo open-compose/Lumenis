@@ -2,7 +2,9 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QApplication>
 #include <QDialogButtonBox>
+#include <QElapsedTimer>
 #include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
@@ -10,7 +12,10 @@
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
+#include <QStyle>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 // The bins' modal dialogs: Bin Column Selection, Custom Sift and Set Bin
 // Display. They only collect a choice; BinView (bin_view.cpp) opens them and
@@ -21,37 +26,110 @@ namespace lumenis::ui {
 
 // ---------------------------------------------------------------- ChooseColumnsDialog
 
+namespace {
+
+// The heading list. Typing while it has the focus scrolls to the first shown heading that starts
+// with what was typed (else contains it) and makes it current, without selecting it ("Typing in
+// the column list scrolls to matching entries but does not select them", 2026.8 guide p.246).
+// QAbstractItemView's own keyboard search would toggle the heading in a MultiSelection list.
+class ColumnList : public QListWidget {
+public:
+    using QListWidget::QListWidget;
+
+    void keyboardSearch(const QString& search) override {
+        // Keys typed within the keyboard input interval add up, as in Qt's own search.
+        if (!typed_.isValid() || typed_.elapsed() > QApplication::keyboardInputInterval()) text_.clear();
+        typed_.start();
+        text_ += search;
+        QListWidgetItem* found = nullptr;
+        for (const bool prefix : {true, false}) {
+            for (int i = 0; i < count() && !found; ++i) {
+                QListWidgetItem* it = item(i);
+                if (it->isHidden()) continue;
+                if (prefix ? it->text().startsWith(text_, Qt::CaseInsensitive)
+                           : it->text().contains(text_, Qt::CaseInsensitive)) {
+                    found = it;
+                }
+            }
+            if (found) break;
+        }
+        if (!found) return;
+        selectionModel()->setCurrentIndex(indexFromItem(found), QItemSelectionModel::NoUpdate);
+        scrollToItem(found);
+    }
+
+private:
+    QString text_;
+    QElapsedTimer typed_;
+};
+
+} // namespace
+
 ChooseColumnsDialog::ChooseColumnsDialog(const QStringList& available, const QStringList& shown, QWidget* parent)
     : QDialog(parent) {
     setObjectName(QStringLiteral("binColumnSelection"));
     setWindowTitle(tr("Bin Column Selection"));
 
-    list_ = new QListWidget(this);
+    // The Search field at the top, focused when the dialog opens (2026.8 guide p.246; What's New
+    // 2026.8 p.8): it shows only the headings that contain what is typed. Selections are kept
+    // while headings are hidden.
+    search_ = new QLineEdit(this);
+    search_->setObjectName(QStringLiteral("columnSearch"));
+    search_->setPlaceholderText(tr("Search"));
+    search_->setClearButtonEnabled(true);
+
+    list_ = new ColumnList(this);
     list_->setObjectName(QStringLiteral("columnList"));
-    // A click selects a heading and a second click deselects it (p.246).
+    // A click selects a heading and a second click deselects it (p.246). The arrow keys move
+    // between headings without selecting them; Space selects or deselects the current one.
     list_->setSelectionMode(QAbstractItemView::MultiSelection);
     for (const QString& h : available) {
         auto* item = new QListWidgetItem(h, list_);
         item->setSelected(shown.contains(h));
     }
+    connect(search_, &QLineEdit::textChanged, this, [this](const QString& text) {
+        for (int i = 0; i < list_->count(); ++i) {
+            QListWidgetItem* item = list_->item(i);
+            item->setHidden(!item->text().contains(text.trimmed(), Qt::CaseInsensitive));
+        }
+    });
 
     auto* all = new QPushButton(tr("All/None"), this);
     all->setObjectName(QStringLiteral("allNone"));
-    // All/None selects everything unless everything is selected already.
+    // All/None selects every heading shown unless they all are selected already (ours: with a
+    // search, only the headings it shows).
     connect(all, &QPushButton::clicked, this, [this] {
-        const bool select = list_->selectedItems().size() < list_->count();
-        for (int i = 0; i < list_->count(); ++i) list_->item(i)->setSelected(select);
+        QList<QListWidgetItem*> shownItems;
+        for (int i = 0; i < list_->count(); ++i) {
+            if (!list_->item(i)->isHidden()) shownItems << list_->item(i);
+        }
+        const bool select = std::any_of(shownItems.begin(), shownItems.end(), [](QListWidgetItem* i) { return !i->isSelected(); });
+        for (QListWidgetItem* i : shownItems) i->setSelected(select);
     });
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     buttons->addButton(all, QDialogButtonBox::ResetRole);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    // Tab goes from the Search field to the list, Shift+Tab back (2026.8 guide p.246).
+    setTabOrder(search_, list_);
+    setTabOrder(list_, buttons);
 
     auto* layout = new QVBoxLayout(this);
+    layout->addWidget(search_);
     layout->addWidget(list_, 1);
     layout->addWidget(buttons);
-    resize(280, 420);
+    // It resizes vertically to show more headings (2026.8 guide p.246); the width stays.
+    const int width = std::max(280, list_->sizeHintForColumn(0) + 2 * list_->frameWidth() +
+                                        list_->style()->pixelMetric(QStyle::PM_ScrollBarExtent) + 24);
+    resize(width, 420);
+    setMinimumHeight(200);
+    setFixedWidth(width);
+    search_->setFocus();
+}
+
+QLineEdit* ChooseColumnsDialog::search() const {
+    return search_;
 }
 
 QStringList ChooseColumnsDialog::chosen() const {

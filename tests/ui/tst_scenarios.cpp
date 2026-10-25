@@ -15,6 +15,7 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QMenu>
 #include <QJsonObject>
 #include <QMap>
 #include <QTest>
@@ -227,6 +228,21 @@ struct Run {
             }
             timeline.setSlip(refs, o.value(QStringLiteral("slide")).toBool());
             return true;
+        }
+        if (o.contains(QStringLiteral("source_track"))) {
+            // [track, start, source track]: the segment's right-click Change Source Track (p.595).
+            const QJsonArray a = o.value(QStringLiteral("source_track")).toArray();
+            QMenu* menu = timeline.contextMenu({}, model::SegmentRef{a.at(0).toString(), a.at(1).toInteger()});
+            menu->deleteLater();
+            QMenu* change = menu->findChild<QMenu*>(QStringLiteral("changeSourceTrack"));
+            if (!change) return fail(QStringLiteral("no Change Source Track on %1 at %2").arg(a.at(0).toString()).arg(a.at(1).toInteger()));
+            for (QAction* act : change->actions()) {
+                if (act->text() == a.at(2).toString()) {
+                    act->trigger();
+                    return true;
+                }
+            }
+            return fail(QStringLiteral("Change Source Track does not offer %1").arg(a.at(2).toString()));
         }
         if (o.contains(QStringLiteral("lock"))) {
             timeline.setTracksLocked({o.value(QStringLiteral("lock")).toString()}, true);

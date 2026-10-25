@@ -9,6 +9,9 @@ keyboard shortcut a Media Composer 2024/2025 user expects.
 |---|---|---|
 | Editing Guide (EG) | Media Composer Editing Guide, version 2025.12 (1,317 pages) | `https://resources.avid.com/SupportFiles/attach/Media_Composer/Media_Composer_v2025.x_Editing_Guide.pdf` |
 | FX Guide (FX) | Media Composer Effects Guide, version 2025.12 (762 pages) | `https://resources.avid.com/SupportFiles/attach/Media_Composer/Media_Composer_v2025.x_FX_Guide.pdf` |
+| Editing Guide 2026.8 | Media Composer Editing Guide, version 2026.8 (1,320 pages) | `https://resources.avid.com/SupportFiles/attach/Media_Composer/2026/Media_Composer_v2026.x_Editing_Guide.pdf` |
+| FX Guide 2026.8 | Media Composer Effects and Color Correction Guide, version 2026.8 (762 pages) | `https://resources.avid.com/SupportFiles/attach/Media_Composer/2026/Media_Composer_v2026.x_FX_Guide.pdf` |
+| What's New 2026.8 | Media Composer What's New for Version 2026.8 (10 pages) | from the owner; listed on Avid's "Media Composer 2026 Documentation" Knowledge Base page |
 | Shortcut sheet (KS2009) | "Keyboard Shortcuts for Avid Editors", Moviola, 2009 (13 pages); hosted by Avid | `https://resources.avid.com/supportfiles/attach/keyboard%20shortcuts.pdf` |
 
 **The 2009 sheet is a secondary source.** It is older and third-party, so it
@@ -19,6 +22,51 @@ but the 2025 guide makes it Get Info (p.388), so the guide wins.
 
 A plain page number ("p.61") refers to the Editing Guide. FX Guide pages are
 written "FX p.303".
+
+**Editions.** Page numbers are the 2025.12 guides' unless marked. Material
+new in 2026.8 is cited "2026.8 guide p.246" (the 2026.8 Editing Guide) or
+"What's New 2026.8 p.8". The 2026.8 FX Guide keeps the 2025.12 page
+numbers. The 2026.8 Editing Guide changes only what is listed below, and its
+pages are the 2025.12 pages plus:
+
+| 2025.12 pages | 2026.8 pages |
+|---|---|
+| 1–445 | the same |
+| 446–450 | +1 |
+| 451–1132 | +2 (505 straddles +2 and +3) |
+| 1133–1201 | +3 |
+| 1202–1233 (the settings tables reflow) | +3 or +4 |
+
+(`pdftotext` of both editions, compared line by line with page numbers
+masked, in the scratchpad; the guides themselves are not committed.)
+
+What 2026.8 changed, and where it is here:
+* The Bin Column Selection dialog's Search field, keyboard and vertical
+  resize (2026.8 guide p.246; What's New 2026.8 p.8): §9, built.
+* Shared projects on third-party storage (2026.8 guide p.301; What's New
+  2026.8 p.2): §20a; no new behaviour to build.
+* Change Source Track for subclips and group clips, with More (2026.8 guide
+  p.507; What's New 2026.8 p.7): §11, built for subclips; group clips wait
+  for multicamera editing.
+* Effects Processing gains 32-bit (FX p.151-152, 2026.8): §17's Media
+  Creation setting lists it; rendering is later. The Editing Guide's
+  settings table (2026.8 guide p.1212) still lists 8-bit, 16-bit and
+  Automatic.
+* Markers keep User Name and Marker Name apart (2026.8 guide p.418), as
+  ours always have (`model::Marker`).
+* Avid DNx targets in Consolidate/Transcode are "Resolution Independent";
+  2026.8 notes this was called DNxHR (2026.8 guide p.355). Our menu already
+  says "Avid DNx ...".
+* OpenTimelineIO "can also be used by supported third-party integrations"
+  (2026.8 guide p.971): no change.
+* Later phases:
+  * the Transcript Tool's Group Speaker Lines, New Line After, Start New
+    Line and Revert (2026.8 guide p.446; What's New 2026.8 p.5-6);
+  * Multicam Auto Cut from transcript speakers (2026.8 guide p.451 and
+    p.1134; What's New 2026.8 p.3-4);
+  * Titler+ keeping keyframes through trims, splits and duplicates (FX
+    p.325, 2026.8; What's New 2026.8 p.9).
+  These are in ROADMAP Phases 6 and 8.
 
 **Clean-room rules (ROADMAP §3).** Entries record names, behaviour and layout
 only. Avid's artwork, icons and prose are never copied into this project, and
@@ -607,6 +655,16 @@ These are recorded now so they are not entered from memory later.
   * Text view: *Choose Columns* (the Bin Column Selection dialog: click
     to select or deselect, All/None, OK; p.246). New columns go to the
     right of the selected column, otherwise at the far right (p.247).
+    Since 2026.8 (2026.8 guide p.246; What's New 2026.8 p.8):
+    * a Search field at the top, focused when the dialog opens, shows the
+      matching headings. **Ours:** headings that contain the text, any
+      case; All/None acts on the headings shown;
+    * Tab moves from the Search field to the list, and Shift+Tab moves back;
+    * the arrow keys move through the list;
+    * typing in the list scrolls to a matching heading without selecting
+      it. **Ours:** the first heading that starts with the typed text,
+      else one that contains it;
+    * the dialog resizes vertically. **Ours:** its width stays fixed.
   * Sorting (p.247–248):
     * double-click a heading to sort, and again to reverse;
     * the heading's right-click menu has *Sort on Column, Ascending* and
@@ -763,7 +821,8 @@ These are recorded now so they are not entered from memory later.
     The view is saved with the bin.
   * The Bin View menu: the seven built-in views, Save As (kept in the
     user's settings), and the italic "<view>.1" for a changed view.
-  * Columns: Choose Columns (the Bin Column Selection dialog), moving,
+  * Columns: Choose Columns (the Bin Column Selection dialog, with
+    2026.8's Search field and keys), moving,
     resizing, Hide Column, Align Columns, Add Custom Column, Rename Column,
     and Delete (hide, or delete a custom column after asking). All headings
     from p.274–278 can be shown; the modifiable ones can be typed into.
@@ -1109,6 +1168,16 @@ p.610–640, ch. 13 p.432–434).**
   * The Timeline Top toolbar holds editing buttons and can be shown in the
     Timeline settings (p.603); the Lift/Overwrite button is there (p.621).
     Its picture (p.607) has a master timecode display at its left.
+* **Change Source Track** (p.595; 2026.8 guide p.507; What's New 2026.8
+  p.7). Right-click an audio segment > Change Source Track lists the clip's
+  audio tracks, with its own ticked. For a subclip, *More* lists the master
+  clip's audio tracks that the subclip lacks, found by its Clip source's
+  MobID among the open bins. The segment keeps its place, length, clip
+  gain, pan and effects, and the change is one undo step. The clip in the
+  bin is not changed. **Ours:** after More the segment refers to the
+  master clip, at the same frames. Not yet built: group and multigroup
+  clips (multicamera editing), and source track names from the
+  production metadata (p.595-596).
 * **Locks (p.633, p.493).** Clip > Lock Tracks / Unlock Tracks, the
   Timeline right-click menu, or a track button's right-click Lock Track.
   Sync Lock buttons per track and Sync Lock All (Edit tab; the sync icon
@@ -1950,6 +2019,9 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
     Transcode; the rest later.
   * The drive with the most space is bold and is used when the setting
     names none (p.135).
+  * The Render tab's Effects Processing offers 8-bit, 16-bit, 32-bit and
+    Automatic, the default. 32-bit is new in 2026.8 (FX p.151-152, 2026.8).
+    It waits for rendering.
 * Ours: drives are the writable volumes, plus the home folder where the top
   of the system volume cannot be written (macOS, Linux). Folders can be
   added through `LUMENIS_MEDIA_DRIVES` (BUILDING.md).
@@ -2231,6 +2303,13 @@ Details: docs/spec/audio-mixdown.md.
 
 ## 20a. Shared bins (p.300-304)
 Details: docs/spec/bin-locking.md.
+* **Third-party storage** (2026.8 guide p.301; What's New 2026.8 p.2):
+  Media Composer 2026.8 Enterprise supports shared projects on NAS and SAN
+  storage that is not Avid NEXIS. These use "the same project-sharing and
+  bin-locking workflows as other shared project environments". Neither
+  document describes Avid's lock files or the protocol, so ours stays as
+  it is. It was built for any shared volume, NAS included, and its
+  behaviour matches that description (docs/spec/bin-locking.md).
 * **Bin Lock Status button** (p.301-303), at the left of a bin's top row,
   only for a bin on shared storage (p.302 note). Green: this user holds the
   lock and may change the bin. Red: another user holds it, or it is

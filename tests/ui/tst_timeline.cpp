@@ -822,6 +822,109 @@ private slots:
         QCOMPARE(t.history().descriptions().first(), QStringLiteral("Extend"));
     }
 
+    // Change Source Track (p.595; 2026.8 guide p.507; What's New 2026.8 p.7): on an audio segment the
+    // clip's audio tracks; for a subclip, More lists the master clip's other audio tracks.
+    void changeSourceTrack() {
+        Rig rig;
+        BinItem master = clip(QStringLiteral("Interview"), 200, QStringLiteral("V1 A1-4"));
+        BinItem sub = master;
+        sub.id = model::newItemId();
+        sub.kind = BinItemKind::Subclip;
+        sub.name = QStringLiteral("Interview.Sub.01");
+        sub.durationFrames = 50;
+        sub.fields.insert(QStringLiteral("Tracks"), QStringLiteral("V1 A1-2")); // two of the master's four
+        model::ClipSource from;
+        from.kind = model::ClipSource::Kind::Clip;
+        from.mob = model::mobIdOf(master);
+        from.offset = 30;
+        sub.sources << from;
+        const QHash<QString, BinItem> items{{master.id, master}, {sub.id, sub}};
+        rig.composer.setItemResolver([&](const QString&, const QString& id) -> std::optional<BinItem> {
+            if (items.contains(id)) return items.value(id);
+            return std::nullopt;
+        });
+        rig.composer.setMobResolver([&](const MobId& mob) -> std::optional<std::pair<QString, BinItem>> {
+            if (mob == model::mobIdOf(master)) return std::pair{QStringLiteral("masters"), master};
+            return std::nullopt;
+        });
+        // A1 holds 10 frames of the subclip from its frame 5, at -4 dB and panned right.
+        BinItem cut = sequence(QStringLiteral("Cut"), 100);
+        model::Sequence seq = model::Sequence::fromItem(cut);
+        model::Segment s;
+        s.clipId = sub.id;
+        s.binId = QStringLiteral("bin");
+        s.name = sub.name;
+        s.sourceTrack = QStringLiteral("A1");
+        s.sourceIn = 5;
+        s.length = 10;
+        s.gain = -4.0;
+        s.pan = 60;
+        seq.overwrite(QStringLiteral("A1"), 20, {s});
+        seq.storeIn(cut);
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), cut);
+        const model::SegmentRef ref{QStringLiteral("A1"), 20};
+
+        auto submenu = [](QMenu* menu, const QString& name) -> QMenu* { return menu->findChild<QMenu*>(name); };
+        auto texts = [](QMenu* menu) {
+            QStringList out;
+            for (QAction* a : menu->actions()) {
+                if (!a->isSeparator()) out << a->text();
+            }
+            return out;
+        };
+        // Not on a video segment, nor over a track button.
+        QVERIFY(!submenu(rig.timeline.contextMenu({}, model::SegmentRef{QStringLiteral("V1"), 0}), QStringLiteral("changeSourceTrack")));
+        QVERIFY(!submenu(rig.timeline.contextMenu(QStringLiteral("A1")), QStringLiteral("changeSourceTrack")));
+
+        QMenu* menu = rig.timeline.contextMenu({}, ref);
+        QMenu* change = submenu(menu, QStringLiteral("changeSourceTrack"));
+        QVERIFY(change);
+        QCOMPARE(texts(change), (QStringList{"A1", "A2", "More"}));
+        QVERIFY(change->actions().first()->isChecked());
+        QMenu* more = submenu(change, QStringLiteral("changeSourceTrackMore"));
+        QVERIFY(more && more->isEnabled());
+        QCOMPARE(texts(more), (QStringList{"A3", "A4"}));
+
+        // A2 of the subclip: only the source track changes.
+        change->actions().at(1)->trigger();
+        auto now = model::segmentFor(rig.recordSequence(), ref);
+        QVERIFY(now);
+        QCOMPARE(now->sourceTrack, QStringLiteral("A2"));
+        QCOMPARE(now->clipId, sub.id);
+        QCOMPARE(now->gain, -4.0);
+        QCOMPARE(now->pan, 60);
+        QCOMPARE(now->length, std::int64_t{10});
+
+        // More > A4: the master clip's track, at the same frames of the master.
+        menu = rig.timeline.contextMenu({}, ref);
+        more = submenu(submenu(menu, QStringLiteral("changeSourceTrack")), QStringLiteral("changeSourceTrackMore"));
+        more->actions().last()->trigger();
+        now = model::segmentFor(rig.recordSequence(), ref);
+        QVERIFY(now);
+        QCOMPARE(now->clipId, master.id);
+        QCOMPARE(now->binId, QStringLiteral("masters"));
+        QCOMPARE(now->sourceTrack, QStringLiteral("A4"));
+        QCOMPARE(now->sourceIn, std::int64_t{35});
+        QCOMPARE(now->gain, -4.0);
+        QCOMPARE(now->pan, 60);
+        // Each change is an undo step; the subclip itself was not changed.
+        QVERIFY(rig.timeline.perform(QStringLiteral("edit.undo")));
+        QCOMPARE(model::segmentFor(rig.recordSequence(), ref)->clipId, sub.id);
+        QCOMPARE(items.value(sub.id).fields.value(QStringLiteral("Tracks")), QStringLiteral("V1 A1-2"));
+
+        // A master clip has no More.
+        rig.timeline.perform(QStringLiteral("edit.undo"));
+        model::Sequence plain = rig.recordSequence();
+        QVERIFY(model::changeSourceTrack(plain, ref, master, QStringLiteral("masters"), 30, QStringLiteral("A3")));
+        QVERIFY(!model::changeSourceTrack(plain, ref, QStringLiteral("V1"))); // not an audio track
+        QVERIFY(!model::changeSourceTrack(plain, model::SegmentRef{QStringLiteral("A1"), 21}, QStringLiteral("A2"))); // no segment starts there
+        BinItem withMaster = rig.composer.state(MonitorId::Record).current()->item;
+        plain.storeIn(withMaster);
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), withMaster);
+        change = submenu(rig.timeline.contextMenu({}, ref), QStringLiteral("changeSourceTrack"));
+        QCOMPARE(texts(change), (QStringList{"A1", "A2", "A3", "A4"}));
+    }
+
     void markers() {
         Rig rig;
         rig.timeline.setMarkerDialogEnabled(false);
