@@ -261,6 +261,13 @@ third-party storage are undocumented, so our bin locking stays
 Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
 `src/media/mixdown.*`, `media::renderedAudioClip`, `mixdown_dialog.*`,
 `MainWindow::audioMixdown`), is done; `tst_mixdown` is gate 1's null test.
+5.2 is done: volume and pan automation (docs/spec/automation.md):
+  - keyframes on segments (`src/model/automation.*`);
+  - the Timeline's Audio Data and keyframe editing (`timeline_automation.cpp`);
+  - the Audio Mixer's Auto mode and recording (`audio_tools.*`);
+  - sample-by-sample gains in `media::AudioMix`.
+  Tests: `tst_automation`, `tst_automation_ui`, and the null test's
+  automated cases.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

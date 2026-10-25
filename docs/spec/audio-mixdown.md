@@ -16,7 +16,8 @@ must null against a reference render to -120 dBFS.
 * The mix is the one playback hears (`media::audioPieces`, `AudioMix`): each
   segment's clip gain and pan (p.702); a centred pan follows its track's
   side, odd left and even right, unless the Audio setting's Default Pan for
-  mono tracks is Centered (p.1147). The Master fader's gain is applied when
+  mono tracks is Centered (p.1147); and volume and pan automation
+  (docs/spec/automation.md), sample by sample. The Master fader's gain is applied when
   Include Master Fader is on (p.732). Mute and solo are not: the tracks
   mixed are the ones selected.
 * Formats (p.732): **Mono**, every track summed at its clip gain without its
@@ -66,5 +67,4 @@ The Audio Mixdown dialog box (p.732; its layout is ours):
 
 * Stereo, 5.1 and 7.1 mixdowns, with multichannel tracks.
 * Mixdown > Audio > Multiple Mixes (the Multi-Mix tool, p.732-734).
-* Track-level faders, automation and effects in the mix, as they come
-  (Phase 5).
+* Track-level faders and effects in the mix, as they come (Phase 5).

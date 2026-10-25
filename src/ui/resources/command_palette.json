@@ -27,7 +27,7 @@
       ["trim.select_nearest_transition", "trim.select_previous_transition", "trim.select_next_transition"]
     ]},
     {"name": "FX", "page": 97, "columns": [
-      ["fx.remove_effect"]
+      ["fx.remove_effect", "fx.add_keyframe"]
     ]},
     {"name": "3D", "page": 96, "columns": []},
     {"name": "CC", "page": 96, "columns": []},

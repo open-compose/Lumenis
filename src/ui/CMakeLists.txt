@@ -35,6 +35,7 @@ add_library(lumenis_ui STATIC
     settings_window.cpp
     theme.cpp
     timeline.cpp
+    timeline_automation.cpp
     tool_windows.cpp
     workspace.cpp
     workspace_bar.cpp

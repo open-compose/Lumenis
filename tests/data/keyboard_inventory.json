@@ -188,6 +188,12 @@
       "page": 651,
       "nameVerified": false,
       "note": "p.651: selects both sides of the nearest, previous or next transition; the command name is ours."
+    },
+    {
+      "key": "'",
+      "command": "Add Keyframe",
+      "page": 716,
+      "note": "p.716: \"Click the Add Keyframe key on the keyboard (\u201c)\"; the glyph printed is a quote mark, on a US keyboard the ' key."
     }
   ],
   "contextual": [

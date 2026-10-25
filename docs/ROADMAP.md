@@ -731,6 +731,13 @@ managed media and the target tracks (`src/media/mixdown.*`,
 `mixdown_dialog.*`). Gate 1's null test (`tst_mixdown`) passes against a
 reference worked out from the sources at about -137 dBFS; the reference
 renders from real Media Composer wait for the owner's seat.
+5.2, volume and pan automation (docs/spec/automation.md), is done:
+* keyframes on segments, counted in the clip's frames (`src/model/automation.*`);
+* the Timeline's Audio Data graph and keyframe editing, copy and paste
+  (`timeline_automation.cpp`);
+* the Audio Mixer's Auto mode faders, recording and Fast menu;
+* playback and mixdown following the keyframes sample by sample.
+The null test has automated cases at about -137 dBFS.
 
 ### Phase 6 — Effects and rendering
 * Transitions, motion effects, timewarps, Color Correction (HSL and curves),

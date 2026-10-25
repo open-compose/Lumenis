@@ -85,6 +85,19 @@ struct Transition {
     bool operator==(const Transition&) const = default;
 };
 
+// One volume or pan automation keyframe (p.714-723; docs/spec/automation.md):
+// where it is, in frames of the source clip from its start (a fraction is a
+// sub-frame keyframe, p.720-721), and its value: dB added to the clip gain
+// (kGainOff for -∞), or a pan from -kPanMax to kPanMax. Keyframes count in
+// the clip's frames so they move with its material: a trim shows or hides
+// them (p.723, "hidden keyframes"), and both halves of an Add Edit keep
+// them.
+struct AudioKey {
+    double frame = 0;
+    double value = 0;
+    bool operator==(const AudioKey&) const = default;
+};
+
 // One piece of a track: material from a source clip, or filler (black,
 // silence) where `clipId` is empty.
 struct Segment {
@@ -112,8 +125,13 @@ struct Segment {
     // pan, -100 (left) to 100 (right).
     double gain = 0.0;
     int pan = 0;
+    // Volume and pan automation (lumenis/model/automation.h), each sorted by
+    // frame, at most one keyframe a frame position. Empty: none.
+    QList<AudioKey> volumeKeys;
+    QList<AudioKey> panKeys;
 
     bool hasEffects() const { return effect || transition; }
+    bool hasAutomation() const { return !volumeKeys.isEmpty() || !panKeys.isEmpty(); }
     bool isFiller() const { return clipId.isEmpty(); }
     // The MobID the segment refers to: sourceMob, else the one derived from clipId; null for filler.
     MobId sourceMobId() const;
@@ -159,7 +177,8 @@ public:
     void storeIn(BinItem& item) const;
 
     // The composition JSON: {tracks: [{name, segments: [...], locked?, syncLocked?, format?}],
-    // timecode}. A segment is {length, gain?, pan?, effect?, transition?} plus addEdit? for filler or
+    // timecode}. A segment is {length, gain?, pan?, volumeKeys?, panKeys?, effect?, transition?}
+    // (keys as [[frame, value], ...]) plus addEdit? for filler or
     // {clip, mob?, bin?, name, track, in} for material. fromJson() skips unreadable and duplicate
     // tracks, tidies each track and sorts the tracks.
     QJsonObject toJson() const;

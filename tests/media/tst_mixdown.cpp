@@ -15,6 +15,7 @@
 
 #include <cmath>
 #include <numbers>
+#include <optional>
 
 using namespace lumenis;
 using namespace lumenis::media;
@@ -55,10 +56,30 @@ struct Part {
     std::int64_t length;   // frames
     double gainDb;
     int pan;               // 0 follows the track's side: odd left, even right (p.627)
+    QList<model::AudioKey> volumeKeys{}; // volume and pan automation, in clip frames (p.714)
+    QList<model::AudioKey> panKeys{};
 };
 
+// The automation's value at clip frame `f`, worked out here apart from model::automationAt: a
+// straight line between keyframes, held outside them, -∞ ramping from -96 dB.
+std::optional<double> keyValue(const QList<model::AudioKey>& keys, double f) {
+    if (keys.isEmpty()) return std::nullopt;
+    if (f <= keys.first().frame) return keys.first().value;
+    if (f >= keys.last().frame) return keys.last().value;
+    for (int i = 1; i < keys.size(); ++i) {
+        const model::AudioKey& a = keys.at(i - 1);
+        const model::AudioKey& b = keys.at(i);
+        if (f > b.frame) continue;
+        if (f == a.frame) return a.value;
+        const double va = a.value <= model::kGainOff ? -96.0 : a.value;
+        const double vb = b.value <= model::kGainOff ? -96.0 : b.value;
+        return va + (vb - va) * (f - a.frame) / (b.frame - a.frame);
+    }
+    return keys.last().value;
+}
+
 // The equal-power pan law playback uses (media::panGains), in double.
-void reference(int pan, double gainDb, double* left, double* right) {
+void reference(double pan, double gainDb, double* left, double* right) {
     const double p = pan / 100.0;
     const double angle = (p + 1.0) * std::numbers::pi / 4.0;
     const double g = std::pow(10.0, gainDb / 20.0);
@@ -82,12 +103,17 @@ class TestMixdown : public QObject {
 private slots:
     void nullTest_data() {
         QTest::addColumn<int>("format");
-        QTest::newRow("mono") << static_cast<int>(MixdownFormat::Mono);
-        QTest::newRow("dual mono") << static_cast<int>(MixdownFormat::DualMono);
+        QTest::addColumn<bool>("automated");
+        QTest::newRow("mono") << static_cast<int>(MixdownFormat::Mono) << false;
+        QTest::newRow("dual mono") << static_cast<int>(MixdownFormat::DualMono) << false;
+        // Volume and pan automation (p.714-721): ramps, a sub-frame keyframe, a fade in from -∞.
+        QTest::newRow("mono, automated") << static_cast<int>(MixdownFormat::Mono) << true;
+        QTest::newRow("dual mono, automated") << static_cast<int>(MixdownFormat::DualMono) << true;
     }
 
     void nullTest() {
         QFETCH(int, format);
+        QFETCH(bool, automated);
         const auto fmt = static_cast<MixdownFormat>(format);
         QTemporaryDir dir;
         const QString one = dir.filePath(QStringLiteral("one.wav"));
@@ -104,11 +130,20 @@ private slots:
         // A1: 5 frames of filler, then tone 1 from frame 10 for 40 frames at -6 dB, 30% left.
         // A2: tone 2 from frame 0 for 30 frames at +3 dB, 40% right; then tone 1 from frame 50 for
         // 20 frames at 0 dB and centred, which follows A2's side, the right.
-        const QList<Part> parts{
+        QList<Part> parts{
             {QStringLiteral("A1"), 1, tone1, 5, 10, 40, -6.0, -30},
             {QStringLiteral("A2"), 2, tone2, 0, 0, 30, 3.0, 40},
             {QStringLiteral("A2"), 2, tone1, 30, 50, 20, 0.0, 0},
         };
+        if (automated) {
+            // A1: up, down and a sub-frame keyframe, a hidden one before its material; the pan
+            // sweeps right. A2's second segment fades in from -∞ and its pan follows the side
+            // until its first pan keyframe.
+            parts[0].volumeKeys = {{4, -20}, {12, 0}, {30, -12}, {45.5, 3}};
+            parts[0].panKeys = {{20, -80}, {40, 60}};
+            parts[2].volumeKeys = {{52, model::kGainOff}, {62, 0}};
+            parts[2].panKeys = {{60, 100}, {68, -100}};
+        }
         model::Sequence seq = model::Sequence::withDefaultTracks();
         std::int64_t a1 = 0;
         std::int64_t a2 = 0;
@@ -128,6 +163,8 @@ private slots:
             s.length = p.length;
             s.gain = p.gainDb;
             s.pan = p.pan;
+            s.volumeKeys = p.volumeKeys;
+            s.panKeys = p.panKeys;
             seq.splice(p.track, end, {s});
             end += p.length;
         }
@@ -175,13 +212,23 @@ private slots:
         std::vector<double> left(static_cast<std::size_t>(count), 0.0);
         std::vector<double> right(static_cast<std::size_t>(count), 0.0);
         for (const Part& p : parts) {
-            double l = 0;
-            double rr = 0;
-            reference(p.pan != 0 ? p.pan : (p.trackNumber % 2 == 1 ? -100 : 100), p.gainDb, &l, &rr);
-            const double g = std::pow(10.0, p.gainDb / 20.0);
+            const double clipPan = p.pan != 0 ? p.pan : (p.trackNumber % 2 == 1 ? -100 : 100);
             for (std::int64_t n = 0; n < p.length * kPerFrame; ++n) {
                 const std::int64_t out = p.at * kPerFrame + n - first;
                 if (out < 0 || out >= count) continue;
+                // The clip gain plus the volume automation, and the pan, at this sample.
+                const double f = static_cast<double>(p.sourceIn) + static_cast<double>(n) / kPerFrame;
+                const std::optional<double> auto_ = keyValue(p.volumeKeys, f);
+                const bool silent = auto_ && *auto_ <= model::kGainOff;
+                const double db = p.gainDb + auto_.value_or(0.0);
+                double l = 0;
+                double rr = 0;
+                reference(keyValue(p.panKeys, f).value_or(clipPan), db, &l, &rr);
+                const double g = silent ? 0.0 : std::pow(10.0, db / 20.0);
+                if (silent) {
+                    l = 0;
+                    rr = 0;
+                }
                 const double v = p.tone(p.sourceIn * kPerFrame + n);
                 if (fmt == MixdownFormat::Mono) {
                     left[static_cast<std::size_t>(out)] += v * g * master;

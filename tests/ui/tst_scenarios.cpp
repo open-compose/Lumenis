@@ -4,6 +4,7 @@
 // give them) and the sequence expected at the end. A Composer and Timeline of their own run them.
 // After the last step every scenario is undone step by step back to its starting sequence and
 // redone to its end, and each state is compared by hash with the one recorded on the way (gate 2).
+#include "lumenis/model/automation.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/theme.h"
@@ -244,6 +245,22 @@ struct Run {
             }
             return fail(QStringLiteral("Change Source Track does not offer %1").arg(a.at(2).toString()));
         }
+        if (o.contains(QStringLiteral("audio_data"))) {
+            // The graph keyframe steps act on (Audio Data, p.715): "volume" or "pan".
+            const bool pan = o.value(QStringLiteral("audio_data")).toString() == QLatin1String("pan");
+            timeline.setAudioData(false, pan ? model::AutomationParam::Pan : model::AutomationParam::Volume);
+            return true;
+        }
+        if (o.contains(QStringLiteral("key_drag"))) {
+            // [track, record frame, frames later, value up]: a keyframe drag (p.716).
+            const QJsonArray a = o.value(QStringLiteral("key_drag")).toArray();
+            const bool ok = timeline.dragKeyframes(model::KeyRef{a.at(0).toString(), a.at(1).toDouble()}, a.at(2).toDouble(),
+                                                   a.at(3).toDouble(), false);
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the keyframe drag was not refused") : timeline.lastMessage());
+            }
+            return true;
+        }
         if (o.contains(QStringLiteral("lock"))) {
             timeline.setTracksLocked({o.value(QStringLiteral("lock")).toString()}, true);
             return true;
@@ -285,12 +302,21 @@ struct Run {
                 } else {
                     QJsonArray a{g.name, qint64(g.sourceIn), qint64(g.length)};
                     if (g.sourceTrack != t.name()) a.append(g.sourceTrack);
-                    // A motion effect's speed (Fit to Fill), rounded to 1/1000.
+                    // A motion effect's speed (Fit to Fill), rounded to 1/1000, and volume and pan
+                    // automation keyframes as [[clip frame, value], ...].
+                    QJsonObject extra;
                     if (g.effect) {
                         if (const auto speed = model::motionSpeed(*g.effect)) {
-                            a.append(QJsonObject{{QStringLiteral("speed"), std::round(*speed * 1000.0) / 1000.0}});
+                            extra.insert(QStringLiteral("speed"), std::round(*speed * 1000.0) / 1000.0);
                         }
                     }
+                    for (const auto& [name, keys] : {std::pair{"volume", &g.volumeKeys}, std::pair{"pan", &g.panKeys}}) {
+                        if (keys->isEmpty()) continue;
+                        QJsonArray list;
+                        for (const model::AudioKey& k : *keys) list.append(QJsonArray{k.frame, k.value});
+                        extra.insert(QLatin1String(name), list);
+                    }
+                    if (!extra.isEmpty()) a.append(extra);
                     segs.append(a);
                 }
             }

@@ -2410,6 +2410,8 @@ void MainWindow::applySettings() {
     }
     const QString mix = s.text(QStringLiteral("Audio Project"), QStringLiteral("mixMode"));
     if (!mix.isEmpty()) audioMixer_->setMixMode(mix);
+    // New pan keyframes take the pan that plays (Audio setting, Default Pan, p.1147).
+    timeline_->setAlternatingPan(s.text(QStringLiteral("Audio"), QStringLiteral("defaultPan")) != QLatin1String("centered"));
     // General settings (p.1192).
     binContainer_->setDefaultStartTimecode(s.text(QStringLiteral("General"), QStringLiteral("defaultStartTc")));
 
@@ -2633,7 +2635,19 @@ void MainWindow::installPanelHandlers() {
     });
     // Playing, moving and marking in the Composer (ch. 13).
     for (const QString& id : commands_.ids()) {
-        if (Composer::handles(id)) handle(id.toLatin1().constData(), [this, id] { composer_->perform(id); });
+        if (Composer::handles(id)) {
+            handle(id.toLatin1().constData(), [this, id] {
+                // With the Audio Mixer active in Auto mode, Go to Next/Previous Event goes to the
+                // next or previous audio keyframe (p.720).
+                const bool event = id == QLatin1String("move.go_to_next_event") || id == QLatin1String("move.go_to_previous_event");
+                const Panel* active = panels_->activePanel();
+                if (event && active && active->id() == QLatin1String("AudioMixer") &&
+                    audioMixer_->goToKeyframe(id == QLatin1String("move.go_to_next_event") ? 1 : -1)) {
+                    return;
+                }
+                composer_->perform(id);
+            });
+        }
         // Editing, tracks and undo (ch. 15, 19).
         if (Timeline::handles(id)) {
             handle(id.toLatin1().constData(), [this, id] {

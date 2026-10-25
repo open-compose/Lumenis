@@ -1,15 +1,19 @@
 #include "lumenis/ui/audio_tools.h"
 
+#include "lumenis/model/automation.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QActionGroup>
+#include <QApplication>
 #include <QButtonGroup>
 #include <QDial>
 #include <QDialogButtonBox>
+#include <QDoubleSpinBox>
 #include <QElapsedTimer>
 #include <QFormLayout>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
@@ -299,10 +303,16 @@ void MixerStrip::setLive(bool on) {
     syncColours();
 }
 
+void MixerStrip::setAuto(bool on) {
+    auto_ = on;
+    syncColours();
+}
+
 void MixerStrip::syncColours() {
     // Extended levels (over +12 dB) show yellow (p.670); Live mode red (p.725).
     QString style;
     if (gain_ > model::kGainFaderMax) style = QStringLiteral("background: #b8a020;");
+    if (auto_) style = QStringLiteral("background: #2a4a8a;");
     if (live_) style = QStringLiteral("background: #8a2a2a;");
     fader_->setStyleSheet(style.isEmpty() ? QString() : QStringLiteral("QSlider { %1 }").arg(style));
     level_->setStyleSheet(gain_ > model::kGainFaderMax ? QStringLiteral("QLineEdit { background: #b8a020; }") : QString());
@@ -337,6 +347,35 @@ bool MixerStrip::eventFilter(QObject* watched, QEvent* event) {
 
 // ---------------------------------------------------------------- AudioMixer
 
+namespace {
+
+// Adjust Volume/Pan on Track (p.719): "if you type -1 in the Volume Adjustment text box, the
+// various audio level settings ... are lowered by exactly 1 dB". Ours: a Pan Adjustment too.
+std::optional<std::pair<double, int>> askAdjust(QWidget* parent) {
+    QDialog dialog(parent);
+    dialog.setObjectName(QStringLiteral("adjustVolumePan"));
+    dialog.setWindowTitle(QObject::tr("Adjust Volume/Pan on Track"));
+    auto* volume = new QDoubleSpinBox(&dialog);
+    volume->setRange(-60, 36);
+    volume->setDecimals(1);
+    volume->setSuffix(QObject::tr(" dB"));
+    auto* pan = new QSpinBox(&dialog);
+    pan->setRange(-2 * model::kPanMax, 2 * model::kPanMax);
+    auto* form = new QFormLayout;
+    form->addRow(QObject::tr("Volume Adjustment:"), volume);
+    form->addRow(QObject::tr("Pan Adjustment:"), pan);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    auto* layout = new QVBoxLayout(&dialog);
+    layout->addLayout(form);
+    layout->addWidget(buttons);
+    if (dialog.exec() != QDialog::Accepted) return std::nullopt;
+    return std::pair{volume->value(), pan->value()};
+}
+
+} // namespace
+
 // The top bar, then the track strips in a sideways-scrolling area with the Master strip to the right.
 // The Fast menu is filled each time it opens (fastMenu()).
 AudioMixer::AudioMixer(Timeline& timeline, QWidget* parent) : QWidget(parent), timeline_(timeline) {
@@ -370,6 +409,37 @@ AudioMixer::AudioMixer(Timeline& timeline, QWidget* parent) : QWidget(parent), t
     bypass_ = smallButton(tr("Bypass"), QStringLiteral("bypass"), this, true);
     bypass_->setToolTip(tr("Bypass clip volume and volume automation"));
     bar->addWidget(bypass_);
+    // Auto mode's Record and Cancel buttons and preroll and postroll boxes (picture and table on
+    // p.717), shown in Auto mode only.
+    recordControls_ = new QWidget(this);
+    auto* rec = new QHBoxLayout(recordControls_);
+    rec->setContentsMargins(0, 0, 0, 0);
+    rec->setSpacing(3);
+    record_ = smallButton(tr("Rec"), QStringLiteral("recordAutomation"), recordControls_, true);
+    record_->setToolTip(tr("Record (B)"));
+    cancel_ = smallButton(tr("Cancel"), QStringLiteral("cancelAutomation"), recordControls_);
+    preroll_ = new QSpinBox(recordControls_);
+    preroll_->setObjectName(QStringLiteral("preroll"));
+    preroll_->setRange(0, 60);
+    preroll_->setToolTip(tr("Preroll (seconds)"));
+    postroll_ = new QSpinBox(recordControls_);
+    postroll_->setObjectName(QStringLiteral("postroll"));
+    postroll_->setRange(0, 60);
+    postroll_->setToolTip(tr("Postroll (seconds)"));
+    rec->addWidget(record_);
+    rec->addWidget(cancel_);
+    rec->addWidget(preroll_);
+    rec->addWidget(postroll_);
+    recordControls_->setVisible(false);
+    connect(record_, &QToolButton::clicked, this, [this] {
+        if (recording_) {
+            stopRecording(false);
+        } else {
+            startRecording();
+        }
+    });
+    connect(cancel_, &QToolButton::clicked, this, [this] { stopRecording(true); });
+    bar->addWidget(recordControls_);
     bar->addWidget(laterButton(tr("Loop"), QStringLiteral("audioLoopPlay"), tr("Audio Loop Play"), this));
     bar->addWidget(laterButton(tr("Render"), QStringLiteral("renderEffect"), tr("Render Effect"), this));
     bar->addStretch(1);
@@ -417,6 +487,8 @@ AudioMixer::AudioMixer(Timeline& timeline, QWidget* parent) : QWidget(parent), t
 
     connect(&timeline_, &Timeline::changed, this, &AudioMixer::refresh);
     connect(&timeline_.composer(), &Composer::changed, this, &AudioMixer::refresh);
+    connect(&timeline_.composer(), &Composer::changed, this, &AudioMixer::recordTick);
+    setFocusPolicy(Qt::StrongFocus);
     refresh();
 }
 
@@ -443,9 +515,11 @@ QToolButton* AudioMixer::modeButton(Mode mode) const {
 void AudioMixer::setMode(Mode mode) {
     modeButtons_[static_cast<int>(mode)]->setChecked(true);
     if (mode == mode_) return;
+    if (recording_) stopRecording(false);
     mode_ = mode;
-    // Bypass is hidden in Live mode (p.692).
+    // Bypass is hidden in Live mode (p.692); the recording controls show in Auto mode (p.717).
     bypass_->setVisible(mode != Mode::Live);
+    recordControls_->setVisible(mode == Mode::Auto);
     syncValues();
     emit modeChanged(mode);
 }
@@ -540,21 +614,31 @@ void AudioMixer::syncValues() {
         if (!s) continue;
         s->trackButton()->setChecked(timeline_.patch().isRecordSelected(t));
         s->setLive(mode_ == Mode::Live);
+        s->setAuto(mode_ == Mode::Auto);
         const auto segment = timeline_.audioSegmentAt(t);
         switch (mode_) {
         case Mode::Clip:
             s->fader()->setEnabled(segment.has_value());
             s->panKnob()->setEnabled(segment.has_value());
             s->show(segment ? segment->gain : 0, segment ? segment->pan : 0);
+            // "In Clip Volume mode, if the track has an volume and pan automation value associated
+            // with it, the word Auto appears" (p.694).
+            if (segment && segment->hasAutomation()) s->showText(tr("Auto"));
             break;
-        case Mode::Auto:
-            // Volume automation comes with Phase 5; the display says when
-            // the track has clip volume (p.694).
-            s->fader()->setEnabled(false);
-            s->panKnob()->setEnabled(false);
-            s->show(0, 0);
+        case Mode::Auto: {
+            // The automation at the position (p.716); a strip being recorded keeps what the user
+            // is doing with it.
+            s->fader()->setEnabled(segment.has_value());
+            s->panKnob()->setEnabled(segment.has_value());
+            if (recording_ && (touchedGain_.contains(t) || touchedPan_.contains(t))) break;
+            const double gain = timeline_.automationAt(t, model::AutomationParam::Volume).value_or(0);
+            const double pan = timeline_.automationAt(t, model::AutomationParam::Pan).value_or(0);
+            s->show(gain, static_cast<int>(std::lround(pan)));
+            // "... if the track has a system clip volume value associated with it, the word Clip
+            // appears" (p.694).
             if (segment && segment->gain != 0) s->showText(tr("Clip"));
             break;
+        }
         case Mode::Live:
             s->fader()->setEnabled(true);
             s->panKnob()->setEnabled(true);
@@ -575,14 +659,20 @@ void AudioMixer::setMasterGain(double db) {
 }
 
 // Live mode keeps the values in the mixer and follows every move. Clip mode stores only finished
-// changes (done), one undo step per ganged track with a segment under the position. Auto mode stores
-// nothing yet.
+// changes (done), one undo step per ganged track with a segment under the position. Auto mode sets
+// the automation there the same way (Timeline::setAutomationValue); while recording, every move is
+// written at the position and the track keeps being written as the position moves (recordTick).
 void AudioMixer::setGain(const QString& track, double db, bool done) {
     // Ganged faders move by the same amount (p.704).
     QStringList moved{track};
     const QString gang = gangs_.value(track);
-    const double delta = db - (mode_ == Mode::Live ? liveGain_.value(track, 0)
-                                                   : timeline_.audioSegmentAt(track).value_or(model::Segment{}).gain);
+    const double was = mode_ == Mode::Live ? liveGain_.value(track, 0)
+                       : mode_ == Mode::Auto
+                           ? (recording_ && touchedGain_.contains(track) && strips_.value(track)
+                                  ? strips_.value(track)->gain()
+                                  : timeline_.automationAt(track, model::AutomationParam::Volume).value_or(0))
+                           : timeline_.audioSegmentAt(track).value_or(model::Segment{}).gain;
+    const double delta = db - was;
     if (!gang.isEmpty()) {
         for (const QString& t : order_) {
             if (t != track && gangs_.value(t) == gang) moved << t;
@@ -591,6 +681,21 @@ void AudioMixer::setGain(const QString& track, double db, bool done) {
     if (mode_ == Mode::Live) {
         for (const QString& t : moved) liveGain_.insert(t, t == track ? db : model::clampGain(liveGain_.value(t, 0) + delta));
         syncValues();
+        return;
+    }
+    if (mode_ == Mode::Auto) {
+        for (const QString& t : moved) {
+            const double base = t == track ? was : timeline_.automationAt(t, model::AutomationParam::Volume).value_or(0);
+            const double value = t == track ? db : model::clampGain(base + delta);
+            if (recording_) {
+                // The strip holds what it records, for the frames that follow (recordTick).
+                touchedGain_.insert(t);
+                if (MixerStrip* s = strips_.value(t)) s->show(value, s->pan());
+                if (inRecordRange()) timeline_.writeAutomation(t, model::AutomationParam::Volume, value);
+            } else if (done) {
+                timeline_.setAutomationValue(t, model::AutomationParam::Volume, value);
+            }
+        }
         return;
     }
     if (mode_ != Mode::Clip || !done) return;
@@ -608,6 +713,104 @@ void AudioMixer::setPan(const QString& track, int pan, bool done) {
         return;
     }
     if (mode_ == Mode::Clip && done) timeline_.setClipAudio(track, std::nullopt, pan, false, tr("Clip Pan"));
+    if (mode_ == Mode::Auto) {
+        if (recording_) {
+            touchedPan_.insert(track);
+            if (MixerStrip* s = strips_.value(track)) s->show(s->gain(), pan);
+            if (inRecordRange()) timeline_.writeAutomation(track, model::AutomationParam::Pan, pan);
+        } else if (done) {
+            timeline_.setAutomationValue(track, model::AutomationParam::Pan, pan);
+        }
+    }
+}
+
+bool AudioMixer::inRecordRange() const {
+    const model::MonitorState& record = timeline_.composer().state(MonitorId::Record);
+    const std::int64_t at = record.position();
+    return (!record.in() || at >= *record.in()) && (!record.out() || at <= *record.out());
+}
+
+void AudioMixer::startRecording(bool play) {
+    if (mode_ != Mode::Auto || recording_) {
+        record_->setChecked(recording_);
+        return;
+    }
+    if (!timeline_.beginAutomationRecording()) {
+        record_->setChecked(false);
+        return;
+    }
+    recording_ = true;
+    record_->setChecked(true);
+    touchedGain_.clear();
+    touchedPan_.clear();
+    Composer& composer = timeline_.composer();
+    const model::MonitorState& record = composer.state(MonitorId::Record);
+    const std::int64_t fps = std::max(timeline_.format().nominalFps, 1);
+    const std::int64_t start = record.in().value_or(record.position());
+    recordEnd_.reset();
+    if (record.out()) recordEnd_ = *record.out() + postroll_->value() * fps;
+    lastWritten_ = -1;
+    recordPlaying_ = false;
+    if (play) {
+        composer.setActiveMonitor(MonitorId::Record);
+        composer.moveTo(MonitorId::Record, std::max<std::int64_t>(start - preroll_->value() * fps, 0));
+        composer.play(1);
+        recordPlaying_ = composer.isPlaying();
+    }
+    lastWritten_ = record.position();
+}
+
+void AudioMixer::stopRecording(bool cancel) {
+    if (!recording_) return;
+    recording_ = false;
+    record_->setChecked(false);
+    if (recordPlaying_) timeline_.composer().stop();
+    recordPlaying_ = false;
+    touchedGain_.clear();
+    touchedPan_.clear();
+    timeline_.endAutomationRecording(cancel);
+    syncValues();
+}
+
+// A new Record position while recording writes each moved strip there (frame-accurate keyframes,
+// p.721), between the marks; past the end, or when the playback it started stops, it stops.
+void AudioMixer::recordTick() {
+    if (!recording_) return;
+    Composer& composer = timeline_.composer();
+    const std::int64_t at = composer.state(MonitorId::Record).position();
+    if (at != lastWritten_) {
+        lastWritten_ = at;
+        if (inRecordRange()) {
+            for (const QString& t : std::as_const(touchedGain_)) {
+                if (const MixerStrip* s = strips_.value(t)) timeline_.writeAutomation(t, model::AutomationParam::Volume, s->gain());
+            }
+            for (const QString& t : std::as_const(touchedPan_)) {
+                if (const MixerStrip* s = strips_.value(t)) timeline_.writeAutomation(t, model::AutomationParam::Pan, s->pan());
+            }
+        }
+    }
+    if ((recordEnd_ && at > *recordEnd_) || (recordPlaying_ && !composer.isPlaying())) stopRecording(false);
+}
+
+bool AudioMixer::goToKeyframe(int direction) {
+    if (mode_ != Mode::Auto) return false;
+    const auto frame = timeline_.nextKeyframe(direction);
+    if (!frame) return false;
+    timeline_.composer().moveTo(MonitorId::Record, *frame);
+    return true;
+}
+
+// B records in Auto mode (p.718).
+void AudioMixer::keyPressEvent(QKeyEvent* event) {
+    if (mode_ == Mode::Auto && event->key() == Qt::Key_B && event->modifiers() == Qt::NoModifier) {
+        if (recording_) {
+            stopRecording(false);
+        } else {
+            startRecording();
+        }
+        return;
+    }
+    QWidget::keyPressEvent(event);
 }
 
 QStringList AudioMixer::selectedTracks() const {
@@ -657,17 +860,39 @@ QMenu* AudioMixer::fastMenu() {
         later(tr("Disable Track Monitoring"));
         later(tr("Set Display Options..."));
         break;
-    case Mode::Auto:
-        for (const QString& t : {tr("Filter volume automation on Track"), tr("Filter Pan on Track"),
-                                 tr("Adjust Volume/Pan on Track..."), tr("Remove volume automation on Track"),
-                                 tr("Remove Pan on Track"), tr("Remove Volume/Pan on Track"),
-                                 tr("Remove Hidden Volume Automation on Track - Global"),
-                                 tr("Remove Hidden Pan on Track - Global"),
-                                 tr("Remove Hidden Pan/Volume on Track - Global"), tr("Calibrate Hardware Sliders"),
-                                 tr("Set Display Options...")}) {
-            later(t);
-        }
+    case Mode::Auto: {
+        // Each acts between the marks on the selected tracks (Timeline::editAutomation, p.719-720).
+        using Edit = Timeline::AutomationEdit;
+        using model::AutomationParam;
+        auto onAuto = [this, m, tracks](const QString& text, Edit edit, std::optional<AutomationParam> param) {
+            QAction* a = m->addAction(text);
+            a->setEnabled(!tracks.isEmpty());
+            connect(a, &QAction::triggered, this, [this, edit, param] {
+                // Alt with Filter keeps only the peaks (p.719).
+                const bool alt = QApplication::keyboardModifiers() & Qt::AltModifier;
+                timeline_.editAutomation(edit, param, 0, alt);
+            });
+        };
+        onAuto(tr("Filter volume automation on Track"), Edit::Filter, AutomationParam::Volume);
+        onAuto(tr("Filter Pan on Track"), Edit::Filter, AutomationParam::Pan);
+        QAction* adjust = m->addAction(tr("Adjust Volume/Pan on Track..."));
+        adjust->setEnabled(!tracks.isEmpty());
+        connect(adjust, &QAction::triggered, this, [this] {
+            const auto by = adjustAsk_ ? adjustAsk_() : askAdjust(this);
+            if (!by) return;
+            if (by->first != 0) timeline_.editAutomation(Edit::Adjust, AutomationParam::Volume, by->first);
+            if (by->second != 0) timeline_.editAutomation(Edit::Adjust, AutomationParam::Pan, by->second);
+        });
+        onAuto(tr("Remove volume automation on Track"), Edit::Remove, AutomationParam::Volume);
+        onAuto(tr("Remove Pan on Track"), Edit::Remove, AutomationParam::Pan);
+        onAuto(tr("Remove Volume/Pan on Track"), Edit::Remove, std::nullopt);
+        onAuto(tr("Remove Hidden Volume Automation on Track - Global"), Edit::RemoveHidden, AutomationParam::Volume);
+        onAuto(tr("Remove Hidden Pan on Track - Global"), Edit::RemoveHidden, AutomationParam::Pan);
+        onAuto(tr("Remove Hidden Pan/Volume on Track - Global"), Edit::RemoveHidden, std::nullopt);
+        later(tr("Calibrate Hardware Sliders"));
+        later(tr("Set Display Options..."));
         break;
+    }
     case Mode::Live: {
         QAction* reset = m->addAction(tr("Set Live Mix to Default"));
         connect(reset, &QAction::triggered, this, [this] {

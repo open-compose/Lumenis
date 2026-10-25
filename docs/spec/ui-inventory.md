@@ -49,6 +49,14 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   docs/spec/bin-locking.md).
 * Choose Columns: Search matches anywhere in a heading; All/None acts on
   the headings shown; the width is fixed (§9).
+* Volume and pan automation (docs/spec/automation.md):
+  * pan automation takes the place of the clip pan instead of adding to it;
+  * a -∞ keyframe ramps from -96 dB;
+  * an Auto mode fader between keyframes moves the keyframes either side;
+  * a value drag also changes the hidden copy of the keyframe in the other
+    half of an Add Edit;
+  * the pan graph runs from L at the top to R at the bottom;
+  * Audio Data acts on all tracks.
 
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical
@@ -456,6 +464,8 @@ default keyboard is still to come (§7).
 | Ctrl+Z | Edit > Undo | 466 |
 | Ctrl+R | Edit > Redo | 466 |
 | Ctrl+C / Ctrl+V | Edit > Copy / Paste | 423 |
+| Shift+Ctrl+V | Edit > Paste Audio Keyframes | 722 |
+| ' | Add Keyframe (the guide prints the key as a quote mark) | 716 |
 | Ctrl+A | Edit > Select All | FX p.153 |
 | Ctrl+W | File > Close | KS2009 |
 | Ctrl+P | File > Print Bin | KS2009 |
@@ -1190,6 +1200,13 @@ p.610–640, ch. 13 p.432–434).**
   what Media Composer does. Not yet built: group and multigroup
   clips (multicamera editing), and source track names from the
   production metadata (p.595-596).
+* **Volume and pan automation** (p.714-723; docs/spec/automation.md).
+  * Fast menu > Audio Data: Clip Volume, plus Volume or Pan.
+  * Keyframes: Add Keyframe (the ' key), click/Shift-click, drag
+    (Ctrl snaps, Alt in time), Ctrl+Shift+click, Delete, and
+    Ctrl+Shift+arrows.
+  * Ctrl+C / Ctrl+V copy and paste keyframes, and so does Edit > Paste
+    Audio Keyframes (Shift+Ctrl+V) with its dialog.
 * **Locks (p.633, p.493).** Clip > Lock Tracks / Unlock Tracks, the
   Timeline right-click menu, or a track button's right-click Lock Track.
   Sync Lock buttons per track and Sync Lock All (Edit tab; the sync icon
@@ -1651,9 +1668,12 @@ p.610–640, ch. 13 p.432–434).**
   * Clip gain and pan are saved with the segment.
   * An edit between segments with different levels is not a match-frame
     edit.
-* **Auto mode (p.701, p.714):** keyframes come with Phase 5. The faders are
-  off. The Volume Level display shows "Clip" when the segment has clip
-  volume (p.694).
+* **Auto mode (p.701, p.714-720):** the faders and pan show and set the
+  volume and pan automation at the position, and Record (or B) records it
+  while playing, with preroll and postroll. The fader areas are blue
+  (p.717). The Volume Level display shows "Clip" when the segment has clip
+  volume. In Clip mode it shows "Auto" when the segment has automation
+  (p.694). Details: docs/spec/automation.md.
 * **Live mode (p.723–725):** values are temporary and are not saved. The
   fader areas turn red.
 * **Fast menu (p.710–711, p.719–720, p.725–726):**
@@ -1665,7 +1685,10 @@ p.610–640, ch. 13 p.432–434).**
     Gain on Track, Remove Pan on Track, Remove Pan/Vols on Track.
   * Clip mode, not yet: Adjust Pan/Vols on Track, Remove and Commit Default
     Clip Pan, Disable Track Monitoring, Set Display Options.
-  * Auto mode: all its items are listed and off.
+  * Auto mode, working: Filter volume automation (Alt: peaks only) and
+    Filter Pan; Adjust Volume/Pan on Track; Remove volume automation, Remove
+    Pan and Remove Volume/Pan; the three Remove Hidden items.
+  * Auto mode, not yet: Calibrate Hardware Sliders, Set Display Options.
   * Live mode: Set Live Mix to Default works. Set Live Mix to Automation and
     Set Live Mix as Automation are off.
 
@@ -1733,14 +1756,13 @@ p.610–640, ch. 13 p.432–434).**
 
 ### Implementation status (1.7b and 1.7c)
 * **Done:**
-  * The Audio Mixer: Clip mode works, Live mode is temporary, and Auto mode
-    is shown.
+  * The Audio Mixer: Clip and Auto modes work, and Live mode is temporary.
   * The Audio Tool.
   * The Media Tool and its display dialog.
   * Help > About's Configuration, Usage and Hardware.
   * The Audio Project setting.
 * **Not yet:**
-  * Sound, meters that move, and volume automation (Phase 5).
+  * Meters that move (Phase 5).
   * Media files and Delete Media (Phase 2).
   * Surround panning, the track sidebar, the groups pane, and display
     options.

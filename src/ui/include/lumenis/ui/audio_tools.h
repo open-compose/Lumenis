@@ -70,9 +70,10 @@ public:
     void show(double gain, int pan);
     // The Volume Level display's text in place of a value ("Clip", "Auto").
     void showText(const QString& text);
-    // Live mode colours the fader area red (p.725); levels over +12 dB are
-    // yellow (p.670).
+    // Live mode colours the fader area red (p.725), Auto mode blue (p.717); levels over +12 dB
+    // are yellow (p.670).
     void setLive(bool on);
+    void setAuto(bool on);
     // The gang letter "A"-"J" shown on the gang button; empty for none.
     void setGang(const QString& letter);
     const QString& gangName() const { return gangName_; }
@@ -105,14 +106,16 @@ private:
     double gain_ = 0;
     int panValue_ = 0;
     bool live_ = false;
+    bool auto_ = false;
     bool syncing_ = false; // show() is setting the controls; their signals are ignored
 };
 
 // Tools > Audio Mixer (p.690-726): a strip per audio track of the
 // sequence in the Record monitor and the Master strip; the Clip, Auto and
 // Live modes; the Fast menu. In Clip mode the faders set the clip gain and
-// pan of the segment under the position (p.702). Volume automation (Auto
-// mode) and the sound itself come with Phase 5.
+// pan of the segment under the position (p.702). In Auto mode they show and
+// set the volume and pan automation there (Timeline::setAutomationValue,
+// p.716), and record it while playing (p.717-719).
 //
 // A panel's contents ("AudioMixer"), made by MainWindow, which stores the mode and mix mode in the
 // Audio Project setting. It follows Timeline::changed and Composer::changed. Clip mode changes go
@@ -166,6 +169,29 @@ public:
     // Remakes the strips if the sequence's audio tracks changed, then shows the values.
     void refresh();
 
+    // Auto mode's recording (p.717-719): the Record and Cancel buttons and the preroll and
+    // postroll in seconds, shown in Auto mode only.
+    QToolButton* recordButton() const { return record_; }
+    QToolButton* cancelButton() const { return cancel_; }
+    QSpinBox* prerollBox() const { return preroll_; }
+    QSpinBox* postrollBox() const { return postroll_; }
+    bool isRecording() const { return recording_; }
+    // Record (or the B key in the mixer): from the IN (else the position), backed up by the
+    // preroll, playing with `play` until the OUT plus the postroll or until playback stops. While
+    // it records, each fader or pan moved writes its value as a keyframe at every frame the Record
+    // position reaches, between the marks (Timeline::writeAutomation). Not in Auto mode: nothing.
+    void startRecording(bool play = true);
+    // Record again keeps what was recorded as one undo step; Cancel (`cancel`) discards it.
+    void stopRecording(bool cancel);
+    // Go to Next/Previous Event with the mixer active in Auto mode (p.720): the Record position to
+    // the next (1) or previous (-1) keyframe on the selected tracks. False when not in Auto mode or
+    // there is none, for the Composer's own event.
+    bool goToKeyframe(int direction);
+    // Adjust Volume/Pan on Track's dialog (p.719): the volume (dB) and pan to add, or nothing to
+    // cancel. Without one the mixer asks with its own dialog (tests set one).
+    using AdjustAsk = std::function<std::optional<std::pair<double, int>>()>;
+    void setAdjustAsk(AdjustAsk ask) { adjustAsk_ = std::move(ask); }
+
 signals:
     // Clip or Auto: saved in the Audio Project setting (p.692).
     // Fires for Live too; MainWindow does not save that one.
@@ -206,6 +232,27 @@ private:
     QHash<QString, QString> gangs_;      // track -> gang letter
     QHash<QString, double> liveGain_; // Live mode: not saved (p.725)
     QHash<QString, int> livePan_;
+    // Auto mode recording.
+    QToolButton* record_ = nullptr;
+    QToolButton* cancel_ = nullptr;
+    QSpinBox* preroll_ = nullptr;
+    QSpinBox* postroll_ = nullptr;
+    QWidget* recordControls_ = nullptr;
+    bool recording_ = false;
+    bool recordPlaying_ = false;           // playback was started for it
+    std::optional<std::int64_t> recordEnd_; // the OUT plus the postroll
+    std::int64_t lastWritten_ = -1;         // the Record position last written
+    QSet<QString> touchedGain_;             // strips moved while recording
+    QSet<QString> touchedPan_;
+    AdjustAsk adjustAsk_;
+
+    // While recording: writes the moved strips at a new position, and stops at the end.
+    void recordTick();
+    // Whether the Record position is between the marks (or there are none).
+    bool inRecordRange() const;
+
+protected:
+    void keyPressEvent(QKeyEvent* event) override;
 };
 
 // The calibration tone (p.920): -20 dB at 1000 Hz unless changed.

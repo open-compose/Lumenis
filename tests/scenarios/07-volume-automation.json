@@ -1,0 +1,43 @@
+[
+  {
+    "name": "keyframes stay with their material through a splice",
+    "guide": "p.714-716",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"A1": [["A", 0, 50]], "A2": [["A", 0, 50]]}},
+    "steps": [
+      {"record_tracks": ["A1"]},
+      {"position": "record", "frame": 20},
+      {"command": "fx.add_keyframe"},
+      {"key_drag": ["A1", 20, 0, -6]},
+      {"position": "record", "frame": 40},
+      {"command": "fx.add_keyframe"},
+      {"load": "source", "clip": "B"},
+      {"mark": "source", "in": 0, "out": 9},
+      {"source_tracks": ["A1"]},
+      {"mark": "record", "at": 0},
+      {"command": "edit.splice_in"}
+    ],
+    "expect": {"A1": [["B", 0, 10], ["A", 0, 50, {"volume": [[20, -6], [40, -6]]}]], "A2": [["A", 0, 50]]}
+  },
+  {
+    "name": "an add edit leaves both halves the keyframes; dragging one moves its twin, and in time only the visible one",
+    "guide": "p.640; p.716",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"A1": [["A", 0, 50]], "A2": [["A", 0, 50]]}},
+    "steps": [
+      {"record_tracks": ["A1", "A2"]},
+      {"audio_data": "pan"},
+      {"position": "record", "frame": 10},
+      {"command": "fx.add_keyframe"},
+      {"key_drag": ["A1", 10, 0, 50]},
+      {"position": "record", "frame": 30},
+      {"command": "edit.add_edit"},
+      {"key_drag": ["A1", 10, 5, 0]},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"}
+    ],
+    "expect": {
+      "A1": [["A", 0, 30, {"pan": [[15, -50]]}], ["A", 30, 20, {"pan": [[10, -50]]}]],
+      "A2": [["A", 0, 30, {"pan": [[15, 100]]}], ["A", 30, 20, {"pan": [[10, 100]]}]]}
+  }
+]

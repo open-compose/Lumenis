@@ -48,9 +48,11 @@ headers in `include/lumenis/<library>/`.
   `bin_dialogs.*` (Bin Column Selection with its Search field, Custom
   Sift, Set Bin Display).
 * **Editing.** Model: `src/model/sequence.*` (splice, overwrite, lift,
-  extract, trims, effects, transitions, Change Source Track) and
-  `monitor.*` (marks, positions).
-  UI: `timeline.*` (the Timeline panel and its edit commands) and
+  extract, trims, effects, transitions, Change Source Track),
+  `automation.*` (volume and pan keyframes) and `monitor.*` (marks,
+  positions).
+  UI: `timeline.*` (the Timeline panel and its edit commands;
+  `timeline_automation.cpp` its keyframe graph and editing) and
   `composer.*` (the Source and Record monitors).
 * **Panels and workspaces.** Our own docking framework (`panels.*`,
   `panel_manager.cpp`), not QDockWidget, because Qt cannot draw vertical

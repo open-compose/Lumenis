@@ -129,6 +129,10 @@
     {
       "key": "S",
       "command": "trim.select_next_transition"
+    },
+    {
+      "key": "'",
+      "command": "fx.add_keyframe"
     }
   ]
 }

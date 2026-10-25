@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/core/timecode.h"
+#include "lumenis/model/automation.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
@@ -83,6 +84,13 @@ public:
     // The trim kind a click there picks with the trim tools (p.650): the
     // upper half Overwrite, the lower half Ripple when both are on.
     model::TrimKind trimKindAt(const QPoint& pos) const;
+    // The automation graph of an audio row (Audio Data, p.715): where a value is drawn, and the
+    // value at a height. Volume follows the Audio Mixer fader's scale (+12 dB at the top, -∞ at
+    // the bottom); pan goes from L100 at the top to R100 at the bottom (ours).
+    double yForValue(const Row& row, model::AutomationParam param, double value) const;
+    double valueForY(const Row& row, model::AutomationParam param, double y) const;
+    // The keyframe of the graph shown under a point (within a few pixels), if any.
+    std::optional<model::KeyRef> keyframeAt(const QPoint& pos) const;
 
     // Vertical scrolling (p.608).
     // The offset is in pixels from the top of the rows; it is clamped to be at least 0.
@@ -108,6 +116,8 @@ protected:
 
 private:
     void paintEffects(QPainter& p, const Row& r, const model::Track& t) const;
+    // Audio Data over an audio row's segments (timeline_automation.cpp).
+    void paintAudioData(QPainter& p, const Row& r, const model::Track& t) const;
     void moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifiers);
     // A segment drag: frames and tracks moved so far.
     std::int64_t dragFrames(Qt::KeyboardModifiers modifiers) const;
@@ -130,6 +140,10 @@ private:
     QPoint lassoTo_;
     std::optional<QPoint> trimFrom_; // a roller or slip drag
     QPoint trimPos_;
+    std::optional<QPoint> keyFrom_; // a keyframe drag (p.716)
+    QPoint keyPos_;
+    model::KeyRef keyGrab_;
+    double keyGrabValue_ = 0;
 };
 
 // The Timeline window (ch. 19): the Record monitor's sequence, or with
@@ -338,6 +352,77 @@ public:
                       const QString& description);
     // The segment under the Record position on an audio track, if any.
     std::optional<model::Segment> audioSegmentAt(const QString& track) const;
+
+    // ---- Volume and pan automation (p.714-723; lumenis/model/automation.h; timeline_automation.cpp)
+    // What Add Keyframe and the keyframe edits act on: the graph Audio Data shows (Display), else
+    // Volume.
+    model::AutomationParam automationParam() const;
+    // Audio Data (Fast menu, p.677-680): the clip gain's line and/or the Volume or Pan graph (not
+    // both, p.715) on the audio tracks. Changing the graph clears the keyframe selection.
+    void setAudioData(bool clipVolume, std::optional<model::AutomationParam> automation);
+    // The Audio setting's Default Pan for mono tracks (p.1147): odd tracks left and even right,
+    // unless Centered. New pan keyframes take the pan that plays, so they need it.
+    void setAlternatingPan(bool on) { alternatingPan_ = on; }
+    bool alternatingPan() const { return alternatingPan_; }
+    // Add Keyframe (the ' key or the Tool palette's button, p.716): a keyframe at the Record
+    // position on each selected audio track with material there, as one undo step. Shows the
+    // Volume graph when no graph is shown.
+    bool addKeyframe();
+    // Ctrl+Shift+click on a track (p.721): a keyframe there at `frame`, which with Alt too may
+    // fall between frames (p.721).
+    bool addKeyframeAt(const QString& track, double frame);
+    // The selected keyframes, of automationParam() (pink, p.721).
+    const QList<model::KeyRef>& keySelection() const { return keySelection_; }
+    void setKeySelection(const QList<model::KeyRef>& keys);
+    // Click and Shift-click on a keyframe (p.721-722).
+    void clickKeyframe(const model::KeyRef& key, bool toggle);
+    // The keyframes a drag of `grabbed` moves (p.716, p.723): the selection if it holds it and
+    // more; else
+    // those in the marked region (IN to OUT) on the selected tracks if it is there; else it and
+    // those at the same place on the other selected audio tracks.
+    QList<model::KeyRef> keyframesMovedWith(const model::KeyRef& grabbed) const;
+    // Moves those keyframes `frames` later (Alt-drag) and `by` up (dB or pan), as one undo step;
+    // with `snap` (Ctrl, p.716) `by` is changed so that `grabbed` lands on the nearest line of the
+    // graph's scale. The moved keyframes become the selection.
+    bool dragKeyframes(const model::KeyRef& grabbed, double frames, double by, bool snap);
+    // The Delete key over a keyframe (p.717): it, and those at the same place on the other
+    // selected audio tracks.
+    bool deleteKeyframeAt(const model::KeyRef& key);
+    // Ctrl+Shift+arrows (p.723): the selected keyframes by whole frames and dB (pan: by 1).
+    bool nudgeKeyframes(double frames, double by);
+    // The Audio Mixer's Fast menu in Auto mode (p.719-720), on the selected audio tracks between
+    // the marks: IN to OUT, IN to the end, the start to OUT, or the whole tracks without marks.
+    // `param` empty: volume and pan. `by` for Adjust; `peaksOnly` for Filter with Alt.
+    enum class AutomationEdit { Filter, Adjust, Remove, RemoveHidden };
+    bool editAutomation(AutomationEdit edit, std::optional<model::AutomationParam> param, double by = 0,
+                        bool peaksOnly = false);
+    // A track's automation value at the Record position, as the Auto mode faders show it; nothing
+    // without material there.
+    std::optional<double> automationAt(const QString& track, model::AutomationParam param) const;
+    // An Auto mode fader or pan set to `value` (p.716): the keyframe at the position; else every
+    // keyframe in the marked region when the position is in it; else the keyframes either side of
+    // the position ("between keyframes"), or the only one; else a first keyframe at the position.
+    // They move by the same amount, so the value at the position becomes `value`. One undo step.
+    bool setAutomationValue(const QString& track, model::AutomationParam param, double value);
+    // Recording automation (p.717-719): between begin and end, writeAutomation() puts a keyframe at
+    // the Record position (frame-accurate, p.721) without an undo step each; ending keeps it all
+    // as one undo step, or with `cancel` puts the sequence back.
+    bool beginAutomationRecording();
+    bool isRecordingAutomation() const { return recordBefore_.has_value(); }
+    void writeAutomation(const QString& track, model::AutomationParam param, double value);
+    void endAutomationRecording(bool cancel);
+    // Keyframes copied (p.721-722) by Ctrl+C with keyframes selected, or with a graph shown the
+    // keyframes of the marked region (else the selected segments) on the selected audio tracks.
+    const model::KeyClipboard& keyClipboard() const { return keyClipboard_; }
+    // Pastes them at the IN (else the position) onto the selected audio tracks, as one undo step.
+    bool pasteKeyframes(bool volume, bool pan);
+    // Edit > Paste Audio Keyframes (p.722) asks which with this: (gain, pan), or nothing to
+    // cancel. Without one, the Timeline's own dialog asks.
+    using PasteKeysAsk = std::function<std::optional<std::pair<bool, bool>>()>;
+    void setPasteKeysAsk(PasteKeysAsk ask) { pasteKeysAsk_ = std::move(ask); }
+    // Go to Next/Previous Event in the Audio Mixer's Auto mode (p.720): the record frame of the
+    // next (direction 1) or previous (-1) keyframe on the selected audio tracks, if any.
+    std::optional<std::int64_t> nextKeyframe(int direction) const;
     // The Insufficient Source dialog (p.48): `which` is "Media A" or
     // "Media B"; true sizes the effect to fit, false cancels.
     using InsufficientSource = std::function<bool(const QString& which)>;
@@ -377,6 +462,11 @@ public:
         bool effectIcons = true;   // Effect Icons, Dissolve Icons (FX guide p.40)
         bool dissolveIcons = true;
         bool clipFrames = false;   // Clip Frames: each segment's start frame (p.592)
+        // Audio Data (p.677-680): the clip gain's line, and the Volume or Pan automation graph.
+        // Ours: on every audio track (the Track Control panel's per-track buttons come later),
+        // and audio rows are taller while one is shown.
+        bool clipVolume = false;
+        std::optional<model::AutomationParam> automation;
     };
     const Display& display() const { return display_; }
 
@@ -453,6 +543,14 @@ private:
     // Puts transitions on cuts of `seq`, asking about insufficient source.
     bool addTransitions(model::Sequence& seq, const QList<model::TrimRoller>& cuts, const EffectInfo& effect);
     bool commitSequence(const QString& description, const model::Sequence& seq);
+    // The selected record audio tracks of `seq`, in order.
+    QStringList selectedAudioTracks(const model::Sequence& seq) const;
+    // The marked range of the Record monitor as the Fast menu commands use it (p.719).
+    std::pair<double, double> markedRange(const model::Sequence& seq) const;
+    // Ctrl+C's keyframe half: true if it copied keyframes and the segments should not be copied.
+    bool copyKeyframes();
+    // Edit > Paste Audio Keyframes: asks which (pasteKeysAsk_ or a dialog), then pastes.
+    bool pasteAudioKeyframes();
     int sliderFor(double scale) const;
     double scaleFor(int slider) const;
 
@@ -495,6 +593,13 @@ private:
     std::int64_t trimB_ = 0;
     bool markerDialog_ = true;
     std::optional<model::BinItem> clipboard_;
+    // Automation (timeline_automation.cpp).
+    bool alternatingPan_ = true;
+    QList<model::KeyRef> keySelection_;
+    model::KeyClipboard keyClipboard_;
+    bool keysCopiedLast_ = false;          // the last Ctrl+C copied individual keyframes
+    std::optional<model::BinItem> recordBefore_; // the sequence when recording began
+    PasteKeysAsk pasteKeysAsk_;
     int clipboardCount_ = 0;
     // Where the last Reverse Match Frame cued the sequence: the next one goes on from there.
     std::optional<std::int64_t> reverseMatchAt_;

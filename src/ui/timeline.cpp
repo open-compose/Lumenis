@@ -14,6 +14,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QCursor>
 #include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -55,6 +56,7 @@ namespace {
 constexpr int kRulerHeight = 20;
 constexpr int kVideoRow = 30;
 constexpr int kAudioRow = 26;
+constexpr int kAudioDataRow = 64; // ours: audio rows while Audio Data shows a graph or line
 constexpr int kDataRow = 20;
 constexpr int kTimecodeRow = 18;
 constexpr int kSourceX = 4;
@@ -358,6 +360,8 @@ QList<TimelineView::Row> TimelineView::rows() const {
         r.track = n;
         r.top = y;
         r.height = rowHeight(n);
+        const auto& d = timeline_.display();
+        if (r.height == kAudioRow && n.startsWith(QLatin1Char('A')) && (d.clipVolume || d.automation)) r.height = kAudioDataRow;
         r.exists = !missing.contains(n);
         out << r;
         y += r.height;
@@ -540,6 +544,7 @@ void TimelineView::paintEvent(QPaintEvent*) {
                 previous = &s;
                 at = end;
             }
+            if (t->kind == model::TrackKind::Audio && !timeline_.showsSource()) paintAudioData(p, r, *t);
             if (timeline_.display().effectIcons) paintEffects(p, r, *t);
         }
         p.setPen(QColor(kRowLine));
@@ -1045,6 +1050,31 @@ void TimelineView::mousePressEvent(QMouseEvent* event) {
             update();
             return;
         }
+        // Keyframes of the graph shown (p.716, p.721-722): click, Shift-click and drag one;
+        // Ctrl+Shift+click adds one (with Alt between frames); clicking elsewhere deselects.
+        if (pos.y() >= kRulerHeight && timeline_.display().automation && !timeline_.showsSource()) {
+            const Qt::KeyboardModifiers mods = event->modifiers();
+            if (const auto key = keyframeAt(pos)) {
+                const bool shift = mods & Qt::ShiftModifier;
+                if (shift || !timeline_.keySelection().contains(*key)) timeline_.clickKeyframe(*key, shift);
+                if (!shift && timeline_.keySelection().contains(*key)) {
+                    keyFrom_ = pos;
+                    keyPos_ = pos;
+                    keyGrab_ = *key;
+                    const auto row = rowAt(pos);
+                    keyGrabValue_ = row ? valueForY(*row, timeline_.automationParam(), pos.y()) : 0;
+                }
+                return;
+            }
+            const auto row = rowAt(pos);
+            if ((mods & Qt::ControlModifier) && (mods & Qt::ShiftModifier) && row && row->exists &&
+                row->track.startsWith(QLatin1Char('A'))) {
+                const double exact = timeline_.firstFrame() + (pos.x() - headerWidth()) / std::max(timeline_.scale(), 1e-9);
+                timeline_.addKeyframeAt(row->track, (mods & Qt::AltModifier) ? exact : std::floor(exact));
+                return;
+            }
+            if (!timeline_.keySelection().isEmpty() && !(mods & Qt::ShiftModifier)) timeline_.setKeySelection({});
+        }
         // Trim mode, or a trim tool: transitions take rollers (p.650-655).
         const bool trimming = timeline_.isTrimMode() || timeline_.isTrimTool(model::TrimKind::Overwrite) ||
                               timeline_.isTrimTool(model::TrimKind::Ripple);
@@ -1126,7 +1156,10 @@ void TimelineView::mousePressEvent(QMouseEvent* event) {
 // once it passes the platform's drag distance, so a click does not move segments.
 void TimelineView::mouseMoveEvent(QMouseEvent* event) {
     const QPoint pos = event->position().toPoint();
-    if (zoomFrom_) {
+    if (keyFrom_) {
+        keyPos_ = pos;
+        update();
+    } else if (zoomFrom_) {
         zoomTo_ = pos.x();
         update();
     } else if (lassoFrom_) {
@@ -1151,6 +1184,28 @@ void TimelineView::mouseMoveEvent(QMouseEvent* event) {
 // track button.
 void TimelineView::mouseReleaseEvent(QMouseEvent* event) {
     const QPoint pos = event->position().toPoint();
+    if (keyFrom_) {
+        // Up or down changes the value; with Alt it moves in time too, by whole frames, or with
+        // Ctrl+Alt between them (p.716, p.721). Ctrl alone snaps to the scale's lines.
+        const QPoint from = *keyFrom_;
+        keyFrom_.reset();
+        if ((pos - from).manhattanLength() >= QApplication::startDragDistance()) {
+            const Qt::KeyboardModifiers mods = event->modifiers();
+            const bool alt = mods & Qt::AltModifier;
+            const bool ctrl = mods & Qt::ControlModifier;
+            double frames = 0;
+            if (alt) {
+                frames = (pos.x() - from.x()) / std::max(timeline_.scale(), 1e-9);
+                if (!ctrl) frames = std::round(frames);
+            }
+            double by = 0;
+            if (const auto row = rowAt(from)) by = valueForY(*row, timeline_.automationParam(), pos.y()) - keyGrabValue_;
+            if (alt) by = 0;
+            if (frames != 0 || by != 0 || (ctrl && !alt)) timeline_.dragKeyframes(keyGrab_, frames, by, ctrl && !alt);
+        }
+        update();
+        return;
+    }
     if (zoomFrom_) {
         const int from = *zoomFrom_;
         zoomFrom_.reset();
@@ -1779,7 +1834,18 @@ QMenu* Timeline::fastMenu() {
     laterMenu(m, tr("Sync Breaks"));
     later(tr("Dupe Detection"));
     later(tr("Color Correction"));
-    laterMenu(m, tr("Audio Data"));
+    // Audio Data (p.677-680): the clip gain's line, and the Volume or Pan graph, one at a time.
+    QMenu* audioData = m->addMenu(tr("Audio Data"));
+    audioData->setObjectName(QStringLiteral("audioData"));
+    audioData->addAction(tr("Waveform"))->setEnabled(false);
+    check(audioData, tr("Clip Volume"), display_.clipVolume, [this](bool v) { setAudioData(v, display_.automation); });
+    check(audioData, tr("Volume"), display_.automation == model::AutomationParam::Volume, [this](bool v) {
+        setAudioData(display_.clipVolume, v ? std::optional(model::AutomationParam::Volume) : std::nullopt);
+    });
+    check(audioData, tr("Pan"), display_.automation == model::AutomationParam::Pan, [this](bool v) {
+        setAudioData(display_.clipVolume, v ? std::optional(model::AutomationParam::Pan) : std::nullopt);
+    });
+    audioData->addAction(tr("Allow Per Track Settings"))->setEnabled(false);
     later(tr("Clip Color..."));
     later(tr("Segment Selection"));
     later(tr("Mark IO Selection"));
@@ -1914,6 +1980,8 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("move.go_to_previous_marker"),
         QStringLiteral("move.go_to_next_marker"),
         QStringLiteral("edit.mark_markers"),
+        QStringLiteral("fx.add_keyframe"),
+        QStringLiteral("edit.paste_audio_keyframes"),
     };
     return ids.contains(id);
 }
@@ -1985,6 +2053,12 @@ bool Timeline::perform(const QString& id) {
         toggleSyncLockAll();
     } else if (id == QLatin1String("edit.move_clip_up") || id == QLatin1String("edit.move_clip_down")) {
         moveClips(id == QLatin1String("edit.move_clip_up") ? 1 : -1);
+    } else if (id == QLatin1String("fx.add_keyframe")) {
+        addKeyframe();
+    } else if (id == QLatin1String("edit.paste_audio_keyframes")) {
+        pasteAudioKeyframes();
+    } else if (id == QLatin1String("edit.copy") && copyKeyframes()) {
+        // Selected keyframes were copied, not the segments (p.721).
     } else if (id == QLatin1String("edit.copy") || id == QLatin1String("edit.cut")) {
         if (selection_.isEmpty()) {
             if (id == QLatin1String("edit.copy")) copyToClipboard();
@@ -1992,9 +2066,25 @@ bool Timeline::perform(const QString& id) {
             cutOrCopySelection(id == QLatin1String("edit.cut"));
         }
     } else if (id == QLatin1String("edit.paste")) {
-        pasteClipboard();
+        // After copying individual keyframes, Ctrl+V pastes them (p.722).
+        if (keysCopiedLast_ && !keyClipboard_.isEmpty()) {
+            pasteKeyframes(true, true);
+        } else {
+            pasteClipboard();
+        }
     } else if (id == QLatin1String("edit.delete")) {
-        deleteSelection();
+        if (!keySelection_.isEmpty()) {
+            const QList<model::KeyRef> keys = keySelection_;
+            if (const model::LoadedClip* rec = recordSequence()) {
+                model::Sequence seq = model::Sequence::fromItem(rec->item);
+                if (model::deleteKeyframes(seq, keys, automationParam()) > 0) {
+                    keySelection_.clear();
+                    commitSequence(tr("Delete Keyframes"), seq);
+                }
+            }
+        } else {
+            deleteSelection();
+        }
     } else if (id == QLatin1String("clip.lock_tracks") || id == QLatin1String("clip.unlock_tracks")) {
         if (const model::LoadedClip* rec = recordSequence()) {
             setTracksLocked(patch_.selectedRecordTracks(model::Sequence::fromItem(rec->item)),
@@ -3137,10 +3227,24 @@ void Timeline::keyPressEvent(QKeyEvent* event) {
         exitTrimMode();
         return;
     }
-    // The Delete key: segments or tracks (p.621, p.636).
+    // The Delete key: the keyframe under the pointer (p.717), else selected keyframes, segments or
+    // tracks (p.621, p.636).
     if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
+        if (const auto key = view_->keyframeAt(view_->mapFromGlobal(QCursor::pos()))) {
+            deleteKeyframeAt(*key);
+            return;
+        }
         perform(QStringLiteral("edit.delete"));
         return;
+    }
+    // Ctrl+Shift+arrows nudge the selected keyframes: 1 dB up or down, a frame left or right (p.723).
+    if (!keySelection_.isEmpty() && (event->modifiers() & Qt::ControlModifier) && (event->modifiers() & Qt::ShiftModifier)) {
+        const int key = event->key();
+        if (key == Qt::Key_Up || key == Qt::Key_Down || key == Qt::Key_Left || key == Qt::Key_Right) {
+            nudgeKeyframes(key == Qt::Key_Left ? -1 : key == Qt::Key_Right ? 1 : 0,
+                           key == Qt::Key_Up ? 1 : key == Qt::Key_Down ? -1 : 0);
+            return;
+        }
     }
     if (keys_) {
         const QString id = keys_(QKeySequence(event->keyCombination()));

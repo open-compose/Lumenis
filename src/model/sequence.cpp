@@ -75,9 +75,38 @@ Transition transitionFromJson(const QJsonObject& o) {
     return t;
 }
 
+// Keyframes as [[frame, value], ...]; read back sorted, one a frame, values clamped.
+QJsonArray keysToJson(const QList<AudioKey>& keys) {
+    QJsonArray a;
+    for (const AudioKey& k : keys) a.append(QJsonArray{k.frame, k.value});
+    return a;
+}
+
+QList<AudioKey> keysFromJson(const QJsonValue& v, bool pan) {
+    QList<AudioKey> keys;
+    for (const QJsonValue& k : v.toArray()) {
+        const QJsonArray a = k.toArray();
+        if (a.size() < 2) continue;
+        const double value = a.at(1).toDouble();
+        keys << AudioKey{a.at(0).toDouble(), pan ? std::clamp(value, -double(kPanMax), double(kPanMax)) : clampGain(value)};
+    }
+    std::stable_sort(keys.begin(), keys.end(), [](const AudioKey& x, const AudioKey& y) { return x.frame < y.frame; });
+    QList<AudioKey> out;
+    for (const AudioKey& k : keys) {
+        if (!out.isEmpty() && out.last().frame == k.frame) {
+            out.last() = k;
+        } else {
+            out << k;
+        }
+    }
+    return out;
+}
+
 void effectsToJson(const Segment& s, QJsonObject& o) {
     if (s.gain != 0.0) o.insert(QStringLiteral("gain"), s.gain);
     if (s.pan != 0) o.insert(QStringLiteral("pan"), s.pan);
+    if (!s.volumeKeys.isEmpty()) o.insert(QStringLiteral("volumeKeys"), keysToJson(s.volumeKeys));
+    if (!s.panKeys.isEmpty()) o.insert(QStringLiteral("panKeys"), keysToJson(s.panKeys));
     if (s.effect) o.insert(QStringLiteral("effect"), s.effect->toJson());
     if (s.transition) o.insert(QStringLiteral("transition"), transitionToJson(*s.transition));
 }
@@ -117,6 +146,8 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.addEdit = s.isFiller() && o.value(QStringLiteral("addEdit")).toBool();
     s.gain = clampGain(o.value(QStringLiteral("gain")).toDouble());
     s.pan = std::clamp(o.value(QStringLiteral("pan")).toInt(), -kPanMax, kPanMax);
+    s.volumeKeys = keysFromJson(o.value(QStringLiteral("volumeKeys")), false);
+    s.panKeys = keysFromJson(o.value(QStringLiteral("panKeys")), true);
     if (o.contains(QStringLiteral("effect"))) s.effect = Effect::fromJson(o.value(QStringLiteral("effect")).toObject());
     if (o.contains(QStringLiteral("transition"))) {
         s.transition = transitionFromJson(o.value(QStringLiteral("transition")).toObject());
@@ -759,6 +790,9 @@ bool Sequence::isMatchFrame(const Segment& before, const Segment& after) {
     // An edit with a transition, or between different effects, is kept.
     if (after.transition || before.effect != after.effect) return false;
     if (before.gain != after.gain || before.pan != after.pan) return false;
+    // Halves of one segment keep the same keyframes (counted in the clip's frames), so an Add Edit
+    // between them is still a match frame; other keyframes keep the edit.
+    if (before.volumeKeys != after.volumeKeys || before.panKeys != after.panKeys) return false;
     if (before.isFiller() || after.isFiller()) return before.isFiller() && after.isFiller() && after.addEdit;
     return before.clipId == after.clipId && before.binId == after.binId && before.sourceTrack == after.sourceTrack &&
            before.sourceIn + before.length == after.sourceIn;

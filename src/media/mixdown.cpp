@@ -26,9 +26,11 @@ std::vector<AudioPiece> piecesFor(const MixdownRequest& r) {
             // All on the left, which render() takes.
             p.left = p.gain;
             p.right = 0.0f;
+            p.monoGain = true;
         }
         p.left *= master;
         p.right *= master;
+        p.scale = master;
     }
     return pieces;
 }

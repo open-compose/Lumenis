@@ -101,6 +101,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Undo/Redo List |  | p.466 | works | ☐ | | |
 | Copy | Ctrl+C | p.423 | works | ☐ | | |
 | Paste | Ctrl+V | p.423 | works | ☐ | | |
+| Paste Audio Keyframes | Ctrl+Shift+V | p.722 | works | ☐ | | |
 | Delete |  | p.262 | works | ☐ | | |
 | Duplicate | Ctrl+D | p.260 | works | ☐ | | |
 | Select All | Ctrl+A | p.180 | works | ☐ | | |
@@ -314,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 210 menu commands, 98 of them working with a project open; the
+* 211 menu commands, 99 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

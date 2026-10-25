@@ -2,6 +2,7 @@
 
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
+#include "lumenis/model/automation.h"
 #include "lumenis/model/sequence.h"
 
 #include <QFileInfo>
@@ -34,8 +35,12 @@ constexpr std::size_t kRingFrames = kPlaybackRate / 4; // a quarter second ahead
 } // namespace
 
 void panGains(int pan, double gainDb, float* left, float* right) {
+    panGains(static_cast<double>(pan), gainDb, left, right);
+}
+
+void panGains(double pan, double gainDb, float* left, float* right) {
     // Equal power: the centre is 3 dB down on each side.
-    const double p = std::clamp(pan, -100, 100) / 100.0;
+    const double p = std::clamp(pan, -100.0, 100.0) / 100.0;
     const double angle = (p + 1.0) * std::numbers::pi / 4.0;
     const double gain = std::pow(10.0, gainDb / 20.0);
     *left = static_cast<float>(std::cos(angle) * gain);
@@ -126,6 +131,16 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
             p->sourceStart += framesToSamples(s.sourceIn, clip->editRate);
             panGains(s.pan != 0 ? s.pan : side(track.number), s.gain, &p->left, &p->right);
             p->gain = s.gain <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, s.gain / 20.0));
+            p->gainDb = s.gain;
+            p->pan = s.pan != 0 ? s.pan : side(track.number);
+            // Keyframes in the clip's frames, as output samples from the segment's start.
+            const double perFrame = static_cast<double>(kPlaybackRate) * static_cast<double>(rate.den()) /
+                                    static_cast<double>(rate.num());
+            for (const auto& [from, into] : {std::pair{&s.volumeKeys, &p->volumeKeys}, std::pair{&s.panKeys, &p->panKeys}}) {
+                for (const model::AudioKey& k : *from) {
+                    *into << model::AudioKey{(k.frame - static_cast<double>(s.sourceIn)) * perFrame, k.value};
+                }
+            }
             out.push_back(*p);
         }
     }
@@ -133,6 +148,34 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
 }
 
 // ---------------------------------------------------------------- AudioMix
+
+namespace {
+
+// An automated piece's gains `offset` output samples into it: the volume as model::volumeAt and
+// the pan as model::panAt work them out (lumenis/model/automation.h), then the scale.
+void automatedGains(const AudioPiece& piece, double offset, float* left, float* right) {
+    double db = piece.gainDb;
+    if (const auto v = model::automationAt(piece.volumeKeys, offset)) {
+        db = (*v <= model::kGainOff || piece.gainDb <= model::kGainOff) ? model::kGainOff
+                                                                         : std::min(piece.gainDb + *v, model::kGainMax);
+    }
+    if (db <= model::kGainOff) {
+        *left = 0;
+        *right = 0;
+        return;
+    }
+    if (piece.monoGain) {
+        *left = static_cast<float>(std::pow(10.0, db / 20.0)) * piece.scale;
+        *right = 0;
+        return;
+    }
+    const double pan = model::automationAt(piece.panKeys, offset).value_or(piece.pan);
+    panGains(pan, db, left, right);
+    *left *= piece.scale;
+    *right *= piece.scale;
+}
+
+} // namespace
 
 AudioMix::AudioMix(std::vector<AudioPiece> pieces) : pieces_(std::move(pieces)) {}
 
@@ -169,14 +212,23 @@ void AudioMix::render(std::int64_t start, int count, float* out) {
         const int rate = r->sampleRate();
         const auto n = static_cast<int>(to - from);
         float* dest = out + 2 * (from - start);
+        // Adds sample `s` at output index i, with the piece's gains (automated: worked out there).
+        auto add = [&](int i, float s) {
+            if (!piece.automated()) {
+                dest[2 * i] += s * piece.left;
+                dest[2 * i + 1] += s * piece.right;
+                return;
+            }
+            float l = 0;
+            float rr = 0;
+            automatedGains(piece, static_cast<double>(from - piece.at + i), &l, &rr);
+            dest[2 * i] += s * l;
+            dest[2 * i + 1] += s * rr;
+        };
         if (rate == kPlaybackRate) {
             const std::vector<float> src = r->samples(piece.sourceStart + (from - piece.at), n);
             const auto got = static_cast<int>(src.size()) / channels;
-            for (int i = 0; i < got; ++i) {
-                const float s = src[static_cast<std::size_t>(i * channels + piece.channel)];
-                dest[2 * i] += s * piece.left;
-                dest[2 * i + 1] += s * piece.right;
-            }
+            for (int i = 0; i < got; ++i) add(i, src[static_cast<std::size_t>(i * channels + piece.channel)]);
             continue;
         }
         // Another rate: linear interpolation between the file's samples.
@@ -193,9 +245,7 @@ void AudioMix::render(std::int64_t start, int count, float* out) {
             const auto frac = static_cast<float>(pos - static_cast<double>(k));
             const float a = src[static_cast<std::size_t>(k * channels + piece.channel)];
             const float b = src[static_cast<std::size_t>((k + 1) * channels + piece.channel)];
-            const float s = a + (b - a) * frac;
-            dest[2 * i] += s * piece.left;
-            dest[2 * i + 1] += s * piece.right;
+            add(i, a + (b - a) * frac);
         }
     }
 }

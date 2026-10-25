@@ -99,6 +99,7 @@
         "edit.undo_redo_list",
         "edit.copy",
         "edit.paste",
+        "edit.paste_audio_keyframes",
         "edit.delete",
         "edit.duplicate",
         "edit.select_all",

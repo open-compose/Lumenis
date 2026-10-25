@@ -278,6 +278,12 @@
           "shortcut": "Ctrl+V"
         },
         {
+          "text": "Paste Audio Keyframes",
+          "page": 722,
+          "shortcut": "Ctrl+Shift+V",
+          "shortcutPage": 722
+        },
+        {
           "text": "Delete",
           "page": 262
         },

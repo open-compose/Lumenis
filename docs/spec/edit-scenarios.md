@@ -47,11 +47,15 @@ Each file is a JSON list of scenarios:
   * `{"lock": track}` locks a track (p.633);
   * `{"source_track": [track, start, source track]}`: the segment's
     right-click Change Source Track (p.595; 2026.8 guide p.507);
+  * `{"audio_data": "volume"|"pan"}` picks the automation graph, and
+    `{"key_drag": [track, record frame, frames, by]}` drags a keyframe
+    (p.716); Add Keyframe is `{"command": "fx.add_keyframe"}`;
   * `{"command": id}`: any command of `commands.json` that the Timeline or
     the Composer carries out.
   * `"refused": true` on a command or trim step: it must be refused.
 * **expect:** tracks as `sequence` writes them, without trailing filler; a
-  segment with a motion effect adds `{"speed": s}` (Fit to Fill).
+  segment with a motion effect adds `{"speed": s}` (Fit to Fill), and one
+  with automation `{"volume": [[clip frame, value], ...], "pan": [...]}`.
   **expect_monitors:** a monitor's position, clip, and marks (`null`: no
   mark).
 

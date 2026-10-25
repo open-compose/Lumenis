@@ -2,6 +2,7 @@
 
 #include "lumenis/core/rational.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/sequence.h"
 
 #include <QString>
 
@@ -37,11 +38,23 @@ struct AudioPiece {
     float right = 1.0f;
     // The piece's own gain (clip gain), before the pan: what a mono mixdown uses.
     float gain = 1.0f;
+    // Volume and pan automation (lumenis/model/automation.h), with AudioKey::frame in output
+    // samples from `at`: the volume in dB on top of `gainDb`, the pan (-100 to 100) in place of
+    // `pan`. When either has keyframes the gains are worked out sample by sample from these and
+    // `left`, `right` and `gain` are not used.
+    QList<model::AudioKey> volumeKeys;
+    QList<model::AudioKey> panKeys;
+    double gainDb = 0;     // the clip gain (model::kGainOff for -∞)
+    double pan = 0;        // the pan where there is no pan automation
+    bool monoGain = false; // the volume alone, on the left, without the pan (a mono mixdown)
+    float scale = 1.0f;    // a gain on top of the automated volume (the Master fader in a mixdown)
+    bool automated() const { return !volumeKeys.isEmpty() || !panKeys.isEmpty(); }
 };
 
 // Equal-power gains for a pan from -100 (left) to 100 (right), times a
 // gain in dB.
 void panGains(int pan, double gainDb, float* left, float* right);
+void panGains(double pan, double gainDb, float* left, float* right);
 
 // Frames at an edit rate as output samples, and back.
 std::int64_t framesToSamples(std::int64_t frames, const Rational& rate);
@@ -52,7 +65,8 @@ double samplesToFrames(std::int64_t samples, const Rational& rate);
 // - a clip: each audio channel is a track; mono tracks are panned odd to
 //   the left, even to the right (p.627);
 // - a sequence: the segments of its monitored audio tracks, each with its
-//   clip gain and pan (p.702); a centred pan follows its track's side.
+//   clip gain and pan (p.702); a centred pan follows its track's side; and
+//   its volume and pan automation (p.714).
 // Clips without media, unlinked or offline, are silent. Without
 // `alternatingPan` (Audio settings, "Default Pan for mono tracks":
 // Centered, p.1147) mono tracks play in the middle.

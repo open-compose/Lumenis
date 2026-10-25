@@ -207,7 +207,8 @@ private slots:
         rig.mixer.setMode(AudioMixer::Mode::Auto);
         // Auto mode shows "Clip" when the track has clip volume (p.694).
         QCOMPARE(rig.mixer.strip(QStringLiteral("A1"))->levelBox()->text(), QStringLiteral("Clip"));
-        QVERIFY(!rig.mixer.strip(QStringLiteral("A1"))->fader()->isEnabled());
+        // Its faders set the automation (Phase 5.2, tst_automation_ui).
+        QVERIFY(rig.mixer.strip(QStringLiteral("A1"))->fader()->isEnabled());
         // Live mode: temporary values, not in the sequence; no Bypass.
         rig.mixer.setMode(AudioMixer::Mode::Live);
         QVERIFY(rig.mixer.bypassButton()->isHidden());

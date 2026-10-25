@@ -6,6 +6,7 @@ add_library(lumenis_model STATIC
     locations.cpp
     monitor.cpp
     sequence.cpp
+    automation.cpp
     marker.cpp
     settings.cpp
     calculator.cpp
@@ -17,6 +18,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/locations.h
     include/lumenis/model/monitor.h
     include/lumenis/model/sequence.h
+    include/lumenis/model/automation.h
     include/lumenis/model/marker.h
     include/lumenis/model/settings.h
     include/lumenis/model/calculator.h
