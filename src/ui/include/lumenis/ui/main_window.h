@@ -50,6 +50,7 @@ class ImportEdlDialog;
 class ListTool;
 class AboutInfoDialog;
 class AudioEqTool;
+class AudioSuiteTool;
 class AudioPunchInTool;
 class AudioTrackEffectTool;
 class AudioMixer;
@@ -140,6 +141,9 @@ public:
     AudioEqTool& audioEq() const { return *audioEq_; }
     AudioPunchInTool& audioPunchIn() const { return *audioPunchIn_; }
     AudioTrackEffectTool& audioTrackEffect() const { return *audioTrackEffect_; }
+    AudioSuiteTool& audioSuite() const { return *audioSuite_; }
+    // Fills the AudioSuite tool's Target Drive menu (Tools > AudioSuite does too).
+    void prepareAudioSuite();
     // Fills the Audio Punch-In tool's input, drive and bin menus (Tools > Audio Punch-In does too).
     void preparePunchIn();
     // Whether a sequence's audio track is heard when it plays: monitored in the Track Selector
@@ -259,6 +263,10 @@ public:
     // Writes an Audio Punch-In take as managed media on its drive and adds the clip to its bin
     // (AudioPunchInTool::ClipMaker).
     std::optional<model::BinItem> punchInClip(const AudioPunchInTool::Take& take, QString* error);
+    // An AudioSuite render of `segment` of the Record monitor's sequence, its media on `drive` (empty:
+    // the Media Creation setting's audio drive); media::renderAudioSuite.
+    std::optional<model::AudioSuiteEffect> renderAudioSuite(const model::Segment& segment, const QString& drive,
+                                                            QString* error);
     void setCopyingMediaHook(std::function<std::optional<bool>()> hook) { copyingMediaHook_ = std::move(hook); }
     // How media is made, from the Media Creation setting's tab ("import",
     // "transcode") and the project.
@@ -382,6 +390,7 @@ private:
     AudioEqTool* audioEq_ = nullptr;
     AudioPunchInTool* audioPunchIn_ = nullptr;
     AudioTrackEffectTool* audioTrackEffect_ = nullptr;
+    AudioSuiteTool* audioSuite_ = nullptr;
     AudioTool* audioTool_ = nullptr;
     MediaTool* mediaTool_ = nullptr;
     ListTool* listTool_ = nullptr;

@@ -2,6 +2,7 @@
 
 #include "lumenis/media/audio_fx.h"
 #include "lumenis/model/audio_eq.h"
+#include "lumenis/model/audio_suite.h"
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/marker_dialogs.h"
 #include "lumenis/ui/media_frames.h"
@@ -924,6 +925,30 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
                 for (int b = 0; b < 3; ++b) {
                     const double h = (iconHeight - 4) * heights[b];
                     p.drawRect(QRectF(box.left() + bar * (1 + 2 * b), box.bottom() - 2 - h, bar, h));
+                }
+            }
+        }
+        if (s.audioSuite && !s.eq) {
+            // AudioSuite: a plum icon with a plug's two prongs; a blue dot until it is rendered, as
+            // effects that do not play in real time have. With an EQ too, only the EQ's icon shows
+            // ("The AudioSuite plug-in still applies even though the icon is not visible", p.700).
+            const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
+            const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));
+            if (x1 - x0 > iconWidth + 8) {
+                const double centre = (x0 + x1) / 2;
+                const QRectF box(centre - iconWidth / 2.0, r.top + (r.height - iconHeight) / 2.0, iconWidth, iconHeight);
+                p.setPen(QPen(QColor(0xff4a2a5a), 1));
+                p.setBrush(QColor(0xffa070c0));
+                p.drawRoundedRect(box, 2, 2);
+                p.setPen(Qt::NoPen);
+                p.setBrush(QColor(0xff4a2a5a));
+                const double prong = iconWidth / 7.0;
+                p.drawRect(QRectF(box.left() + prong * 2, box.top() + 2, prong, iconHeight / 2.0));
+                p.drawRect(QRectF(box.left() + prong * 4, box.top() + 2, prong, iconHeight / 2.0));
+                p.drawRect(QRectF(box.left() + prong * 1.5, box.top() + 2 + iconHeight / 2.0 - 1, prong * 4, prong));
+                if (model::needsRender(s)) {
+                    p.setBrush(QColor(0xff3c78dc));
+                    p.drawEllipse(QRectF(box.left() - 5, box.center().y() - 2, 4, 4));
                 }
             }
         }
@@ -3520,13 +3545,15 @@ bool Timeline::removeEffectAtPosition() {
     message_.clear();
     const auto ref = currentEffect();
     if (!ref) {
-        // No video effect: the Audio EQ effects there on the selected audio tracks (p.741).
+        // No video effect: the Audio EQ (p.741) and AudioSuite effects there on the selected audio
+        // tracks.
         if (!recordSequence()) return fail(tr("There is no effect at the position on the selected tracks."));
         const model::MonitorState& record = composer_.state(MonitorId::Record);
         model::Sequence seq = model::Sequence::fromItem(record.current()->item);
         int removed = 0;
         for (const QString& t : patch_.selectedRecordTracks(seq)) {
             removed += model::setEq(seq, t, record.position(), record.position() + 1, std::nullopt);
+            removed += model::setAudioSuite(seq, t, record.position(), record.position() + 1, std::nullopt);
         }
         if (removed == 0) return fail(tr("There is no effect at the position on the selected tracks."));
         return commitSequence(tr("Remove Effect"), seq);
@@ -3632,6 +3659,102 @@ bool Timeline::setEq(const QStringList& tracks, const std::optional<model::Audio
         return any ? true : fail(tr("There is no audio segment there to equalize."));
     }
     return commitSequence(description, seq);
+}
+
+bool Timeline::setAudioSuite(const QStringList& tracks, const std::optional<model::AudioSuiteEffect>& effect, bool onTrack,
+                             const QString& description) {
+    message_.clear();
+    if (!recordSequence()) return false;
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    model::Sequence seq = model::Sequence::fromItem(record.current()->item);
+    int changed = 0;
+    bool any = false;
+    for (const QString& track : tracks) {
+        std::int64_t from = record.position();
+        std::int64_t to = from + 1;
+        if (onTrack) std::tie(from, to) = markedRange(track);
+        changed += model::setAudioSuite(seq, track, from, to, effect);
+        // Nothing to do is not an error where the segments already are so.
+        const model::Track* t = seq.track(track);
+        if (!t || t->kind != model::TrackKind::Audio || t->locked) continue;
+        std::int64_t at = 0;
+        for (const model::Segment& g : t->segments) {
+            any = any || (!g.isFiller() && at + g.length > from && at < to);
+            at += g.length;
+        }
+    }
+    if (changed == 0) return any ? true : fail(tr("There is no audio segment there for the AudioSuite plug-in."));
+    return commitSequence(description, seq);
+}
+
+std::pair<std::int64_t, std::int64_t> Timeline::markedRange(const QString& track) const {
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    std::int64_t end = 0;
+    if (const model::LoadedClip* rec = composer_.state(MonitorId::Record).current(); rec && rec->item.kind == model::BinItemKind::Sequence) {
+        const model::Sequence seq = model::Sequence::fromItem(rec->item);
+        if (const model::Track* t = seq.track(track)) end = t->length();
+    }
+    return {record.in().value_or(0), record.out() ? *record.out() + 1 : end};
+}
+
+std::optional<model::AudioSuiteEffect> Timeline::audioSuiteAt(const QString& track) const {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(track);
+    if (!t) return std::nullopt;
+    const int i = t->segmentAt(composer_.state(MonitorId::Record).position());
+    if (i < 0) return std::nullopt;
+    return t->segments.at(i).audioSuite;
+}
+
+int Timeline::audioSuiteToRender(const QStringList& tracks, std::int64_t from, std::int64_t to) const {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return 0;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    int n = 0;
+    for (const QString& track : tracks) {
+        const model::Track* t = seq.track(track);
+        if (!t || t->kind != model::TrackKind::Audio) continue;
+        std::int64_t at = 0;
+        for (const model::Segment& g : t->segments) {
+            if (at + g.length > from && at < to && model::needsRender(g)) ++n;
+            at += g.length;
+        }
+    }
+    return n;
+}
+
+std::optional<int> Timeline::renderAudioSuite(const QStringList& tracks, std::int64_t from, std::int64_t to,
+                                              const AudioSuiteRenderer& render) {
+    message_.clear();
+    if (!recordSequence()) return std::nullopt;
+    model::Sequence seq = model::Sequence::fromItem(recordSequence()->item);
+    int rendered = 0;
+    QString error;
+    for (const QString& track : tracks) {
+        model::Track* t = seq.track(track);
+        if (!t || t->kind != model::TrackKind::Audio || !error.isEmpty()) continue;
+        std::int64_t at = 0;
+        for (model::Segment& g : t->segments) {
+            const std::int64_t start = at;
+            at += g.length;
+            if (start + g.length <= from || start >= to || !model::needsRender(g)) continue;
+            const auto made = render(g, &error);
+            if (!made) {
+                if (error.isEmpty()) error = tr("The AudioSuite effect could not be rendered.");
+                break;
+            }
+            g.audioSuite = made;
+            ++rendered;
+        }
+    }
+    if (rendered > 0) commitSequence(tr("Render AudioSuite"), seq);
+    if (!error.isEmpty()) {
+        fail(error);
+        return std::nullopt;
+    }
+    return rendered;
 }
 
 std::optional<QStringList> Timeline::punchIn(const QString& binId, const model::BinItem& clip, const QStringList& targets,

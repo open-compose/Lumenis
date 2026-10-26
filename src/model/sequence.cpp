@@ -1,5 +1,6 @@
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/audio_eq.h"
+#include "lumenis/model/audio_suite.h"
 
 #include <QJsonArray>
 #include <QRegularExpression>
@@ -140,6 +141,7 @@ void effectsToJson(const Segment& s, QJsonObject& o) {
     if (!s.volumeKeys.isEmpty()) o.insert(QStringLiteral("volumeKeys"), keysToJson(s.volumeKeys));
     if (!s.panKeys.isEmpty()) o.insert(QStringLiteral("panKeys"), keysToJson(s.panKeys));
     if (s.eq) o.insert(QStringLiteral("eq"), eqToJson(*s.eq));
+    if (s.audioSuite) o.insert(QStringLiteral("audioSuite"), audioSuiteToJson(*s.audioSuite));
     if (s.effect) o.insert(QStringLiteral("effect"), s.effect->toJson());
     if (s.transition) o.insert(QStringLiteral("transition"), transitionToJson(*s.transition));
 }
@@ -182,6 +184,7 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.volumeKeys = keysFromJson(o.value(QStringLiteral("volumeKeys")), false);
     s.panKeys = keysFromJson(o.value(QStringLiteral("panKeys")), true);
     if (o.contains(QStringLiteral("eq"))) s.eq = eqFromJson(o.value(QStringLiteral("eq")).toObject());
+    if (o.contains(QStringLiteral("audioSuite"))) s.audioSuite = audioSuiteFromJson(o.value(QStringLiteral("audioSuite")).toObject());
     if (o.contains(QStringLiteral("effect"))) s.effect = Effect::fromJson(o.value(QStringLiteral("effect")).toObject());
     if (o.contains(QStringLiteral("transition"))) {
         s.transition = transitionFromJson(o.value(QStringLiteral("transition")).toObject());

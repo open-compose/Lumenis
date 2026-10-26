@@ -10,8 +10,8 @@
 
 // Audio effects (Editing Guide ch. 24; docs/spec/track-effects.md): the interface every audio effect
 // has, whoever made it, and the effects built in. Audio Track Effects (p.790-795) run a track's
-// inserts through these as it plays (media::AudioMix); AudioSuite (p.796-805) will run them over
-// clips. A plug-in host (CLAP, lumenis/ext/plugin_host.h) adds its plug-ins with
+// inserts through these as it plays (media::AudioMix); AudioSuite (p.796-805) runs them over
+// stretches of sound offline (lumenis/media/audio_suite.h). A plug-in host (CLAP, lumenis/ext/plugin_host.h) adds its plug-ins with
 // registerAudioEffects(), so the rest of Cutthulhu sees one list.
 //
 // The built-in effects are our own: the guide describes Avid's core plug-ins (p.805-860) by what they

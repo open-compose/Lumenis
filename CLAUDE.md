@@ -291,7 +291,14 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `third_party/clap`, `src/media/clap_host.*` (scan at start-up in
   `app/main.cpp`, `LUMENIS_NO_CLAP=1` skips it), plug-ins as audio effects.
   Test: `tst_clap_host` with our own `tests/media/clap_test_plugin.cpp`.
-  Next: 5.5c AudioSuite.
+5.5c1 is done: AudioSuite on Timeline segments (docs/spec/audiosuite.md):
+  - our processes and every audio effect offline, rendering into managed
+    media (`src/media/audio_suite.*`); the effect on segments and when a
+    render is out of date (`src/model/audio_suite.*`, `Segment::audioSuite`);
+  - playback plays renders; Audio Mixdown renders first;
+  - the tool (`src/ui/audio_suite.*`).
+  Tests: `tst_audio_suite`, `tst_audio_suite_ui`, scenario `11-audiosuite.json`.
+  Next: 5.5c2, AudioSuite on master clips and templates.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

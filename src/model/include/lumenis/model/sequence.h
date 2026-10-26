@@ -126,6 +126,24 @@ struct AudioEq {
     bool operator==(const AudioEq&) const = default;
 };
 
+// An AudioSuite plug-in effect on an audio segment (Editing Guide p.796-800;
+// docs/spec/audiosuite.md): the process's id (media::audioSuitePlugins()), its name when it was
+// applied (so one that is not installed can still be named), and its parameter values. "You need to
+// render all AudioSuite plug-ins before you can play back the effect" (p.800): `rendered` is the
+// processed sound's media file (managed media) with its stream and channel, and `renderedKey` what it
+// was made from (model::audioSuiteKey); a segment whose key no longer matches plays unprocessed until
+// it is rendered again.
+struct AudioSuiteEffect {
+    QString effect;
+    QString name;
+    QMap<QString, double> params;
+    QString rendered;
+    int renderedStream = 0;
+    int renderedChannel = 0;
+    QString renderedKey;
+    bool operator==(const AudioSuiteEffect&) const = default;
+};
+
 // One piece of a track: material from a source clip, or filler (black,
 // silence) where `clipId` is empty.
 struct Segment {
@@ -159,6 +177,8 @@ struct Segment {
     QList<AudioKey> panKeys;
     // The segment's Audio EQ effect (p.736-745), on audio segments only.
     std::optional<AudioEq> eq;
+    // The segment's AudioSuite plug-in effect (p.797-800), on audio segments only.
+    std::optional<AudioSuiteEffect> audioSuite;
 
     bool hasEffects() const { return effect || transition; }
     bool hasAutomation() const { return !volumeKeys.isEmpty() || !panKeys.isEmpty(); }

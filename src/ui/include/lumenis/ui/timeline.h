@@ -358,6 +358,26 @@ public:
     // segment there: false.
     bool setEq(const QStringList& tracks, const std::optional<model::AudioEq>& eq, bool onTrack,
                const QString& description);
+    // AudioSuite (p.797-800; lumenis/model/audio_suite.h): `effect` on the whole segment under the
+    // Record position on each of `tracks`, or with `onTrack` (the Fast menu's items) on the segments
+    // between the marks: IN to OUT, IN to the end ("From IN"), the start to OUT, or the whole track
+    // ("Global", p.799); without an effect, the effect removed. One undo step. Already so: true
+    // without a step; no audio segment there: false.
+    bool setAudioSuite(const QStringList& tracks, const std::optional<model::AudioSuiteEffect>& effect, bool onTrack,
+                       const QString& description);
+    // The record frames [from, to) the Fast menu's items work on for `track`, as for onTrack above.
+    std::pair<std::int64_t, std::int64_t> markedRange(const QString& track) const;
+    // The AudioSuite effect of the segment under the Record position on `track`, if any.
+    std::optional<model::AudioSuiteEffect> audioSuiteAt(const QString& track) const;
+    // Render Effect (p.797, p.800): each segment of `tracks` overlapping record frames [from, to)
+    // whose AudioSuite effect is not rendered gets the render `render` makes of it, as one undo step.
+    // A render that fails stops there with its message (the ones made before it are kept). Returns
+    // how many were rendered, or nothing on failure.
+    using AudioSuiteRenderer = std::function<std::optional<model::AudioSuiteEffect>(const model::Segment&, QString* error)>;
+    std::optional<int> renderAudioSuite(const QStringList& tracks, std::int64_t from, std::int64_t to,
+                                        const AudioSuiteRenderer& render);
+    // How many segments of `tracks` overlapping [from, to) have an AudioSuite effect to render.
+    int audioSuiteToRender(const QStringList& tracks, std::int64_t from, std::int64_t to) const;
     // Audio Punch-In (p.749-751; audio_punch_in.h): one recorded take of `clip` (a master clip of
     // `targets.size()` audio tracks, in bin `binId`) edited into the record sequence. The clip's
     // track k goes to targets[k]: a mono audio track that is not locked, or empty for a new audio

@@ -1,0 +1,31 @@
+[
+  {
+    "name": "AudioSuite plug-ins on segments: one under the position, Set over the marks on two tracks, another plug-in, Remove over other marks, an undo step each; none where there is no segment",
+    "guide": "p.797-799",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"A1": [["A", 0, 20], ["B", 0, 20], ["A", 20, 20]], "A2": [["A", 0, 60]]}},
+    "steps": [
+      {"record_tracks": ["A1"]},
+      {"position": "record", "frame": 25},
+      {"audiosuite": "suite.gain", "params": {"gain": -6}},
+      {"mark": "record", "in": 10, "out": 45, "at": 25},
+      {"record_tracks": ["A1", "A2"]},
+      {"audiosuite_menu": "Set AudioSuite - IN/OUT"},
+      {"record_tracks": ["A2"]},
+      {"position": "record", "frame": 30},
+      {"audiosuite": "suite.invert"},
+      {"record_tracks": ["A1"]},
+      {"mark": "record", "in": 0, "out": 15, "at": 5},
+      {"audiosuite_menu": "Remove AudioSuite - IN/OUT"},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"},
+      {"position": "record", "frame": 80},
+      {"audiosuite": "suite.gain", "refused": true}
+    ],
+    "expect": {
+      "A1": [["A", 0, 20],
+             ["B", 0, 20, {"audiosuite": ["suite.gain", {"gain": -6}]}],
+             ["A", 20, 20, {"audiosuite": ["suite.gain", {"gain": -6}]}]],
+      "A2": [["A", 0, 60, {"audiosuite": ["suite.invert", {}]}]]}
+  }
+]

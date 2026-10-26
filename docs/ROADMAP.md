@@ -770,7 +770,19 @@ the standard folders and `CLAP_PATH` at start-up, and the effect plug-ins
 that fit (mono or stereo) join the Audio Track Effects. A CLAP file of our
 own tests it (`tst_clap_host`). Plug-in windows, latency compensation and
 state come later.
-Next: 5.5c, AudioSuite; then 5.1/7.1 routing.
+5.5c1, AudioSuite on Timeline segments (docs/spec/audiosuite.md), is done:
+* our own processes (Gain, Normalize, Invert, Reverse, DC Offset Removal,
+  Signal Generator) and every audio effect run offline
+  (`src/media/audio_suite.*`); Avid's own AudioSuite plug-ins wait for the
+  AAX bridge;
+* the effect on segments, rendered into managed media that plays in the
+  segment's place, unrendered by the changes the render order says
+  (p.700); Audio Mixdown renders first (`src/model/audio_suite.*`);
+* Tools > AudioSuite (`src/ui/audio_suite.*`): Track Selection and Plug-In
+  Selection menus, the plug-in dialog, Render Effect, the Fast menu's Set,
+  Render and Remove over the marks, the Target Drive menu.
+Next: 5.5c2, AudioSuite on master clips and effect templates; then 5.1/7.1
+routing.
 
 ### Phase 6 — Effects and rendering
 * Transitions, motion effects, timewarps, Color Correction (HSL and curves),

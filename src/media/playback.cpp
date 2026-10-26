@@ -3,6 +3,7 @@
 #include "lumenis/media/audio_input.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
+#include "lumenis/model/audio_suite.h"
 #include "lumenis/model/automation.h"
 #include "lumenis/model/sequence.h"
 
@@ -122,17 +123,31 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
             const std::int64_t start = at;
             at += s.length;
             if (s.isFiller() || !clips) continue;
-            const auto clip = clips(s.binId, s.clipId);
-            const auto ref = model::parseTrackName(s.sourceTrack);
-            if (!clip || !ref || ref->kind != model::TrackKind::Audio) continue;
-            auto p = pieceFor(*clip, ref->number - 1);
-            if (!p) continue;
+            std::optional<AudioPiece> p;
+            // A rendered AudioSuite effect plays its rendered sound, which starts at the segment's
+            // start and already has the clip gain in it (the render order, p.700): the pan, EQ and
+            // automation still apply.
+            const bool rendered = model::isRendered(s) && QFileInfo::exists(s.audioSuite->rendered);
+            double gainDb = s.gain;
+            if (rendered) {
+                p = AudioPiece{};
+                p->path = s.audioSuite->rendered;
+                p->stream = s.audioSuite->renderedStream;
+                p->channel = s.audioSuite->renderedChannel;
+                gainDb = 0.0;
+            } else {
+                const auto clip = clips(s.binId, s.clipId);
+                const auto ref = model::parseTrackName(s.sourceTrack);
+                if (!clip || !ref || ref->kind != model::TrackKind::Audio) continue;
+                p = pieceFor(*clip, ref->number - 1);
+                if (!p) continue;
+                p->sourceStart += framesToSamples(s.sourceIn, clip->editRate);
+            }
             p->at = framesToSamples(start, rate);
             p->length = framesToSamples(start + s.length, rate) - p->at;
-            p->sourceStart += framesToSamples(s.sourceIn, clip->editRate);
-            panGains(s.pan != 0 ? s.pan : side(track.number), s.gain, &p->left, &p->right);
-            p->gain = s.gain <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, s.gain / 20.0));
-            p->gainDb = s.gain;
+            panGains(s.pan != 0 ? s.pan : side(track.number), gainDb, &p->left, &p->right);
+            p->gain = gainDb <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, gainDb / 20.0));
+            p->gainDb = gainDb;
             p->eq = s.eq;
             p->track = track.name();
             p->pan = s.pan != 0 ? s.pan : side(track.number);

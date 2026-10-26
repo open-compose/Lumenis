@@ -8,6 +8,7 @@ add_library(lumenis_model STATIC
     sequence.cpp
     automation.cpp
     audio_eq.cpp
+    audio_suite.cpp
     marker.cpp
     settings.cpp
     calculator.cpp
@@ -21,6 +22,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/sequence.h
     include/lumenis/model/automation.h
     include/lumenis/model/audio_eq.h
+    include/lumenis/model/audio_suite.h
     include/lumenis/model/marker.h
     include/lumenis/model/settings.h
     include/lumenis/model/calculator.h

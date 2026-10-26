@@ -53,6 +53,10 @@ Each file is a JSON list of scenarios:
   * `{"eq": {...}}` sets the Audio EQ tool's values (those not given at
     their defaults; the keys of `model::AudioEq`), and `{"eq_menu": item}`
     chooses an item of its Fast menu (p.739-740);
+  * `{"audiosuite": plug-in id or null, "params": {...}}` chooses an
+    AudioSuite plug-in in the Plug-In Selection menu and sets values as its
+    dialog's OK does, and `{"audiosuite_menu": item}` chooses an item of its
+    Fast menu (p.797-799);
   * `{"punch_in": {"clip": name, "targets": [track or "" for New Track, ...],
     "punches": [[record frame, length, clip frame], ...]}}` edits in an Audio
     Punch-In take (p.749-751), an undo step per punch-in;
@@ -67,7 +71,8 @@ Each file is a JSON list of scenarios:
   segment with a motion effect adds `{"speed": s}` (Fit to Fill), and one
   with automation `{"volume": [[clip frame, value], ...], "pan": [...]}`,
   and one with an Audio EQ `{"eq": {...}}` (the values not at their
-  defaults).
+  defaults), and one with an AudioSuite effect `{"audiosuite": [plug-in,
+  {the values not at their defaults}]}`.
   **expect_monitors:** a monitor's position, clip, and marks (`null`: no
   mark).
 

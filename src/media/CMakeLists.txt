@@ -1,6 +1,7 @@
 add_library(lumenis_media STATIC
     media.cpp
     audio_fx.cpp
+    audio_suite.cpp
     audio_input.cpp
     clap_host.cpp
     link.cpp
@@ -11,6 +12,7 @@ add_library(lumenis_media STATIC
     mixdown.cpp
     include/lumenis/media/media.h
     include/lumenis/media/audio_fx.h
+    include/lumenis/media/audio_suite.h
     include/lumenis/media/audio_input.h
     include/lumenis/media/clap_host.h
     include/lumenis/media/link.h

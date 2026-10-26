@@ -235,7 +235,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Audio Punch-In |  | p.750 | works | ☐ | | |
 | Audio Tool | Ctrl+1 | p.703 | works | ☐ | | |
 | Audio Track Effect |  | p.791 | works | ☐ | | |
-| AudioSuite |  | p.797 | *later* | ☐ | | |
+| AudioSuite |  | p.797 | works | ☐ | | |
 | Background Queue Window |  | p.358 | works | ☐ | | |
 | Background Services |  | p.376 | *later* | ☐ | | |
 | Calculator | Ctrl+2 | p.100 | works | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 102 of them working with a project open; the
+* 211 menu commands, 103 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

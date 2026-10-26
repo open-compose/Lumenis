@@ -8,6 +8,8 @@ lumenis_add_test(tst_mixdown SOURCES tst_mixdown.cpp LIBS lumenis::media)
 # Audio EQ: the bands, setting the effect, and the filtered sound (docs/spec/audio-eq.md).
 lumenis_add_test(tst_audio_eq SOURCES tst_audio_eq.cpp LIBS lumenis::media)
 lumenis_add_test(tst_audio_fx SOURCES tst_audio_fx.cpp LIBS lumenis::media)
+# AudioSuite: the processes, the effect on segments, and rendering (docs/spec/audiosuite.md).
+lumenis_add_test(tst_audio_suite SOURCES tst_audio_suite.cpp LIBS lumenis::media)
 
 # The CLAP host's tests load a CLAP file of our own (clap_test_plugin.cpp), built as
 # cutthulhu-test.clap in a folder of its own.

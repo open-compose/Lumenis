@@ -64,7 +64,8 @@ headers in `include/lumenis/<library>/`.
   `playback.*` (sound through miniaudio, the audio clock), `audio_input.*`
   (recording from an input), `audio_fx.*` (the audio effect interface and
   the built-in effects), `clap_host.*` (CLAP plug-ins as audio effects,
-  docs/spec/clap-host.md), `mixdown.*`
+  docs/spec/clap-host.md), `audio_suite.*` (AudioSuite processes and
+  rendering, docs/spec/audiosuite.md), `mixdown.*`
   (Audio Mixdown, docs/spec/audio-mixdown.md). UI side:
   `media_frames.*` (frames for monitors, bins and the Timeline),
   `source_browser.*`, `media_tool.*`, `relink_dialog.*`,
@@ -89,7 +90,8 @@ headers in `include/lumenis/<library>/`.
   `audio_eq.*` (the Audio EQ tool, docs/spec/audio-eq.md),
   `audio_punch_in.*` (Audio Punch-In, docs/spec/punch-in.md),
   `audio_track_effect.*` (the Audio Track Effect tool,
-  docs/spec/track-effects.md) and
+  docs/spec/track-effects.md), `audio_suite.*` (the AudioSuite tool,
+  docs/spec/audiosuite.md) and
   `mixdown_dialog.*`; the sound is `src/media/playback.*` and recording
   `src/media/audio_input.*`.
 

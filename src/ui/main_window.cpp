@@ -15,6 +15,7 @@
 #include "lumenis/core/branding.h"
 #include "lumenis/core/timecode.h"
 #include "lumenis/media/managed.h"
+#include "lumenis/media/audio_suite.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/ui/bin_container.h"
@@ -22,6 +23,7 @@
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/audio_eq.h"
 #include "lumenis/ui/audio_punch_in.h"
+#include "lumenis/ui/audio_suite.h"
 #include "lumenis/ui/audio_track_effect.h"
 #include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/background_queue.h"
@@ -971,6 +973,12 @@ void MainWindow::createTools() {
     connect(timeline_, &Timeline::trackEffectToolRequested, this, [this](const QString& track) {
         audioTrackEffect_->select(track, 0);
         showTool(QStringLiteral("AudioTrackEffect"));
+    });
+    // AudioSuite (p.796-800): effects on segments, rendered into managed media on the tool's drive.
+    audioSuite_ = new AudioSuiteTool(*timeline_);
+    panels_->addPanel(new Panel(QStringLiteral("AudioSuite"), tr("AudioSuite"), audioSuite_));
+    audioSuite_->setRenderer([this](const model::Segment& s, const QString& drive, QString* error) {
+        return renderAudioSuite(s, drive, error);
     });
     audioTool_ = new AudioTool;
     panels_->addPanel(new Panel(QStringLiteral("AudioTool"), tr("Audio Tool"), audioTool_));
@@ -2179,8 +2187,20 @@ void MainWindow::audioMixdown() {
         model::BinItem premix = model::duplicateItem(doc->bin(), sequence, QDateTime::currentDateTimeUtc());
         doc->addItem(premix);
     }
+    // "If you do not render the effect manually, Media Composer automatically renders the effect
+    // before it creates an audio mixdown" (p.800): an undo step of its own, on the mixdown's drive.
+    if (timeline_->audioSuiteToRender(tracks, start, end) > 0) {
+        const QString drive = dialog.drive();
+        const auto rendered = timeline_->renderAudioSuite(tracks, start, end, [this, drive](const model::Segment& s, QString* error) {
+            return renderAudioSuite(s, drive, error);
+        });
+        if (!rendered) {
+            fail(timeline_->lastMessage());
+            return;
+        }
+    }
     media::MixdownRequest request;
-    request.sequence = sequence;
+    request.sequence = composer_->state(MonitorId::Record).current()->item;
     request.tracks = tracks;
     request.start = start;
     request.end = end;
@@ -2252,6 +2272,30 @@ void MainWindow::preparePunchIn() {
     audioPunchIn_->setTargets(drives, creation.audioDrive.isEmpty() ? creation.videoDrive : creation.audioDrive, bins,
                               rec ? rec->binId : QString());
     audioPunchIn_->refresh();
+}
+
+void MainWindow::prepareAudioSuite() {
+    QList<QPair<QString, QString>> drives;
+    for (const media::MediaDrive& d : media::mediaDrives()) drives.append({d.name, d.root});
+    const media::MediaCreation creation = mediaCreation(QStringLiteral("transcode"));
+    audioSuite_->setDrives(drives, creation.audioDrive.isEmpty() ? creation.videoDrive : creation.audioDrive);
+    audioSuite_->refresh();
+}
+
+std::optional<model::AudioSuiteEffect> MainWindow::renderAudioSuite(const model::Segment& segment, const QString& drive,
+                                                                    QString* error) {
+    const auto clip = composer_->resolve(segment.binId, segment.clipId);
+    if (!clip) {
+        if (error) *error = tr("The clip %1 of the AudioSuite effect is not found.").arg(segment.name);
+        return std::nullopt;
+    }
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    media::MediaCreation creation = mediaCreation(QStringLiteral("transcode"));
+    if (!drive.isEmpty()) {
+        creation.videoDrive = drive;
+        creation.audioDrive = drive;
+    }
+    return media::renderAudioSuite(segment, *clip, rec ? rec->item.editRate : clip->editRate, creation, error);
 }
 
 // A punch-in take as managed media: "<sequence> Voice Over.<n>" (the picture on p.751), n one more than
@@ -2434,6 +2478,7 @@ Panel* MainWindow::showTool(const QString& panelId) {
     if (panelId == QLatin1String("AudioMixer")) size = QSize(560, 440);
     if (panelId == QLatin1String("AudioEQ")) size = QSize(620, 300);
     if (panelId == QLatin1String("AudioTrackEffect")) size = QSize(460, 360);
+    if (panelId == QLatin1String("AudioSuite")) size = QSize(480, 160);
     if (panelId == QLatin1String("AudioTool")) size = QSize(300, 340);
     if (panelId == QLatin1String("MediaTool")) size = QSize(640, 320);
     if (panelId == QLatin1String("SourceBrowser")) size = QSize(960, 600);
@@ -2688,6 +2733,10 @@ void MainWindow::installPanelHandlers() {
     handle("tools.audio_punch_in", [this] {
         preparePunchIn();
         showTool(QStringLiteral("AudioPunchIn"));
+    });
+    handle("tools.audiosuite", [this] {
+        prepareAudioSuite();
+        showTool(QStringLiteral("AudioSuite"));
     });
     handle("tools.media_tool", [this] { showMediaTool(); });
     // Tools > List Tool (p.944), File > Input > Import EDL (p.951), File > Output > Export Bin (p.130).

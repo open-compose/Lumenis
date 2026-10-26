@@ -8,6 +8,7 @@
 #include "lumenis/model/automation.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/audio_eq.h"
+#include "lumenis/ui/audio_suite.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timeline.h"
@@ -21,6 +22,7 @@
 #include <QJsonDocument>
 #include <QMenu>
 #include <QJsonObject>
+#include <QLabel>
 #include <QMap>
 #include <QTest>
 
@@ -80,6 +82,7 @@ struct Run {
     Composer composer;
     Timeline timeline{composer};
     AudioEqTool eq{timeline};
+    AudioSuiteTool suite{timeline};
     QHash<QString, BinItem> clips; // by name
     QHash<QString, BinItem> items; // by id: clips and the sequences stored
     QString error;
@@ -312,6 +315,33 @@ struct Run {
             }
             return fail(QStringLiteral("no %1 in the Audio EQ Fast menu").arg(o.value(QStringLiteral("eq_menu")).toString()));
         }
+        if (o.contains(QStringLiteral("audiosuite"))) {
+            // An AudioSuite plug-in chosen in the Plug-In Selection menu (null: None), on the segments
+            // under the position on the selected tracks (p.797), then `params` set as its dialog's OK
+            // does (p.798).
+            const QJsonValue id = o.value(QStringLiteral("audiosuite"));
+            bool ok = suite.choosePlugin(id.isNull() ? QString() : id.toString());
+            if (ok && o.contains(QStringLiteral("params"))) {
+                QMap<QString, double> values = suite.current() ? suite.current()->params : QMap<QString, double>{};
+                const QJsonObject params = o.value(QStringLiteral("params")).toObject();
+                for (auto it = params.begin(); it != params.end(); ++it) values.insert(it.key(), it.value().toDouble());
+                ok = suite.setValues(values);
+            }
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the AudioSuite plug-in was not refused") : suite.messageLabel()->text());
+            }
+            return true;
+        }
+        if (o.contains(QStringLiteral("audiosuite_menu"))) {
+            // An item of the AudioSuite tool's Fast menu (p.799).
+            for (QAction* a : suite.fastMenu()->actions()) {
+                if (a->text() == o.value(QStringLiteral("audiosuite_menu")).toString()) {
+                    a->trigger();
+                    return true;
+                }
+            }
+            return fail(QStringLiteral("no %1 in the AudioSuite Fast menu").arg(o.value(QStringLiteral("audiosuite_menu")).toString()));
+        }
         if (o.contains(QStringLiteral("punch_in"))) {
             // A recorded take edited in by Audio Punch-In (p.749-751): {"clip": name, "targets": [track or
             // "" for New Track, ...], "punches": [[record frame, length, clip frame], ...]}.
@@ -407,6 +437,16 @@ struct Run {
                         extra.insert(QLatin1String(name), list);
                     }
                     if (g.eq) extra.insert(QStringLiteral("eq"), eqToJson(*g.eq));
+                    if (g.audioSuite) {
+                        // [plug-in, {the values not at their defaults}].
+                        QJsonObject params;
+                        const auto info = media::findAudioSuitePlugin(g.audioSuite->effect);
+                        for (auto it = g.audioSuite->params.cbegin(); it != g.audioSuite->params.cend(); ++it) {
+                            const media::AudioEffectParam* p = info ? info->param(it.key()) : nullptr;
+                            if (!p || p->defaultValue != it.value()) params.insert(it.key(), it.value());
+                        }
+                        extra.insert(QStringLiteral("audiosuite"), QJsonArray{g.audioSuite->effect, params});
+                    }
                     if (!extra.isEmpty()) a.append(extra);
                     segs.append(a);
                 }

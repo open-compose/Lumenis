@@ -37,9 +37,12 @@ handle all of these the same way.
     Audio plug-ins process through `media::AudioEffect`
     (`src/media/audio_fx.h`): a host registers its plug-ins with
     `media::registerAudioEffects`, and they appear with the built-in effects
-    as Audio Track Effects (docs/spec/track-effects.md). The CLAP host
-    (`src/media/clap_host.*`, `org.cleveraudio.clap-host`) is built in
-    (docs/spec/clap-host.md).
+    as Audio Track Effects (docs/spec/track-effects.md) and in the AudioSuite
+    tool's Plug-In Selection menu, run offline (docs/spec/audiosuite.md). The
+    CLAP host (`src/media/clap_host.*`, `org.cleveraudio.clap-host`) is built
+    in (docs/spec/clap-host.md). Avid's own AudioSuite plug-ins (its AAX
+    format) wait for the AAX bridge; the AudioSuite tool offers our own
+    processes meanwhile.
 
   Video I/O devices and shared storage are reserved as categories. They get
   interfaces in their phases.

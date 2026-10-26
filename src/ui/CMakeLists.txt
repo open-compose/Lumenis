@@ -1,5 +1,6 @@
 add_library(lumenis_ui STATIC
     audio_eq.cpp
+    audio_suite.cpp
     audio_punch_in.cpp
     audio_track_effect.cpp
     audio_tools.cpp
@@ -43,6 +44,7 @@ add_library(lumenis_ui STATIC
     workspace.cpp
     workspace_bar.cpp
     include/lumenis/ui/audio_eq.h
+    include/lumenis/ui/audio_suite.h
     include/lumenis/ui/audio_punch_in.h
     include/lumenis/ui/audio_track_effect.h
     include/lumenis/ui/audio_tools.h

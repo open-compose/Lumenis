@@ -3,7 +3,8 @@
 Audio Track Effects are effects inserted on audio tracks, up to five per
 track (inserts a to e). They are processed in real time as the sequence
 plays (Editing Guide p.790-795). AudioSuite (offline processing of clips,
-p.796-805) and a CLAP plug-in host come next and use the same effects.
+p.796-805; docs/spec/audiosuite.md) and the CLAP plug-in host use the same
+effects.
 
 ## The effects (`src/media/audio_fx.*`)
 
@@ -148,5 +149,5 @@ p.796-805) and a CLAP plug-in host come next and use the same effects.
 * Compare, and the Plug-In Settings files: Save, Save As, Import, Delete,
   Lock (.tfx).
 * Stereo and surround tracks and their effects.
-* AudioSuite (5.5c). The CLAP host is done (docs/spec/clap-host.md).
+* AudioSuite is docs/spec/audiosuite.md; the CLAP host is docs/spec/clap-host.md.
 * Inserts in AAF, OTIO, FCP XML and `.avb` interchange.
