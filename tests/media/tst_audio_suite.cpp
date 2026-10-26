@@ -2,7 +2,8 @@
 // docs/spec/audiosuite.md): the built-in processes, audio effects run offline, the effect on
 // segments (what keeps a render and what loses it, its form in sequences), and Render Effect: the
 // rendered managed media and playback hearing it in place of the source, at the clip gain the render
-// already holds (the render order, p.700).
+// already holds (the render order, p.700); templates and their names, and new master clips made from
+// a clip's tracks (p.800-804).
 #include "lumenis/media/audio_suite.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
@@ -71,6 +72,10 @@ model::AudioSuiteEffect suite(const char* id, const char* name, const QMap<QStri
     e.name = QString::fromLatin1(name);
     e.params = params;
     return e;
+}
+
+double dbToGainOf(double db) {
+    return std::pow(10.0, db / 20.0);
 }
 
 double db(double gain) {
@@ -331,6 +336,132 @@ private slots:
         s.audioSuite->effect = QStringLiteral("suite.nothing");
         QVERIFY(!renderAudioSuite(s, clip, Rational(25), creation, &error));
         QVERIFY(error.contains(QLatin1String("suite.nothing")));
+    }
+
+    // Templates (p.804): as bin items and JSON, and the names Media Composer gives (p.803-804).
+    void templates() {
+        model::AudioSuiteTemplate t;
+        t.effect = suite("suite.normalize", "Normalize", {{QStringLiteral("level"), -3}});
+        t.effect.rendered = QStringLiteral("/left/out");
+        t.sourceBin = QStringLiteral("bin1");
+        t.sourceClip = QStringLiteral("clip1");
+        t.tracks = {0, 2};
+        t.in = 10;
+        t.out = 40;
+        t.handleSeconds = 1.5;
+        const QDateTime when = QDateTime::currentDateTimeUtc();
+        const model::BinItem item = model::audioSuiteTemplateItem(t, QStringLiteral("Tone - AudioSuite Plug-In Effect: Normalize"), when);
+        QCOMPARE(item.kind, model::BinItemKind::Effect);
+        const auto back = model::audioSuiteTemplateOf(item);
+        QVERIFY(back);
+        QVERIFY(back->effect.rendered.isEmpty()); // the render is not part of a template
+        model::AudioSuiteTemplate want = t;
+        want.effect.rendered.clear();
+        QCOMPARE(*back, want);
+        // A template from the Timeline has no source.
+        model::AudioSuiteTemplate bare;
+        bare.effect = suite("suite.invert", "Invert");
+        const auto b = model::audioSuiteTemplateFromJson(model::audioSuiteTemplateToJson(bare));
+        QVERIFY(b && !b->hasSource());
+        QVERIFY(!model::audioSuiteTemplateOf(model::BinItem{}));
+        QVERIFY(!model::audioSuiteTemplateFromJson({}));
+        QCOMPARE(model::audioSuiteClipName(QStringLiteral("Test Audio clip"), QStringLiteral("Normalize"), false),
+                 QStringLiteral("Test Audio clip_Normalize"));
+        QCOMPARE(model::audioSuiteClipName(QStringLiteral("QuietClip"), QStringLiteral("Normalize"), true), QStringLiteral("QuietClip.Normalize"));
+        QCOMPARE(model::audioSuiteTemplateName(QStringLiteral("Test Audio clip"), QStringLiteral("Normalize"), false),
+                 QStringLiteral("Test Audio clip - AudioSuite Plug-In Effect: Normalize"));
+        QCOMPARE(model::audioSuiteTemplateName(QStringLiteral("QuietClip"), QStringLiteral("Normalize"), true),
+                 QStringLiteral("QuietClip.Normalize.effect"));
+    }
+
+    // Creating new master clips (p.800-804): tracks chosen, the marks, a handle, several tracks
+    // processed together; Duplicate.
+    void newMasterClip() {
+        QTemporaryDir dir;
+        // Two channels: 0.5 and 0.1 sines.
+        const QString wav = dir.filePath(QStringLiteral("two.wav"));
+        {
+            WriterSettings ws;
+            ws.format = QStringLiteral("wav");
+            ws.audioCodec = QStringLiteral("pcm_f32le");
+            ws.channels = 2;
+            MediaWriter w;
+            QVERIFY(w.open(wav, ws));
+            std::vector<float> v(2 * 2 * kRate);
+            const std::vector<float> a = sine(2 * kRate, 0.5);
+            const std::vector<float> b = sine(2 * kRate, 0.1);
+            for (std::size_t i = 0; i < a.size(); ++i) {
+                v[2 * i] = a[i];
+                v[2 * i + 1] = b[i];
+            }
+            QVERIFY(w.writeAudio(v.data(), 2 * kRate) && w.finish());
+        }
+        LinkOptions o;
+        o.editRate = Rational(25);
+        model::BinItem clip = linkFiles({wav}, o).first();
+        clip.fields.insert(QStringLiteral("Start"), QStringLiteral("01:00:00:00"));
+        QCOMPARE(clip.durationFrames, std::int64_t{50});
+        const QString drive = dir.filePath(QStringLiteral("Drive"));
+        QVERIFY(QDir().mkpath(drive));
+        MediaCreation creation;
+        creation.videoDrive = drive;
+        creation.bitDepth = 24;
+
+        // Both tracks, frames 10-29, Normalize on all tracks together, half a second of handle.
+        AudioSuiteClipRequest r;
+        r.clip = clip;
+        r.tracks = {0, 1};
+        r.in = 10;
+        r.out = 29;
+        r.handleSeconds = 0.5;
+        r.effect = QStringLiteral("suite.normalize");
+        r.params = {{QStringLiteral("level"), -1}};
+        r.name = QStringLiteral("two_Normalize");
+        QString error;
+        const auto made = audioSuiteClip(r, creation, &error);
+        QVERIFY2(made, qPrintable(error));
+        QCOMPARE(made->name, QStringLiteral("two_Normalize"));
+        QCOMPARE(made->durationFrames, std::int64_t{20 + 13}); // 0.5 s at 25 fps rounds up to 13 frames
+        QCOMPARE(made->fields.value(QStringLiteral("Start")), QStringLiteral("01:00:00:10"));
+        const auto link = linkOf(*made);
+        QVERIFY(link);
+        QCOMPARE(link->audioPaths.size(), 2);
+        AudioReader first, second;
+        QVERIFY(first.open(link->audioPaths.at(0)) && second.open(link->audioPaths.at(1)));
+        const std::vector<float> a = first.samples(0, 20 * 1920);
+        const std::vector<float> b = second.samples(0, 20 * 1920);
+        // The louder track reaches the level and the other keeps its share (p.803).
+        QVERIFY(std::abs(db(peak(a)) - -1) < 0.01);
+        QVERIFY(std::abs(peak(b) / peak(a) - 0.2) < 0.01);
+        // From the clip's frame 10: its sample 19200.
+        QVERIFY(std::abs(static_cast<double>(a[7]) - 0.5 * std::sin(2 * std::numbers::pi * 440 * (19200 + 7) / kRate) * dbToGainOf(-1) / 0.5) < 1e-3);
+        // The handle is silent.
+        const std::vector<float> tail = first.samples(25 * 1920, 1920);
+        QCOMPARE(peak(tail), 0.0);
+
+        // One track alone, the whole clip, Duplicate: the same sound.
+        r.tracks = {1};
+        r.in = 0;
+        r.out = -1;
+        r.handleSeconds = 0;
+        r.effect = QStringLiteral("suite.duplicate");
+        r.params = {};
+        r.name = QStringLiteral("two_Duplicate");
+        const auto dup = audioSuiteClip(r, creation, &error);
+        QVERIFY2(dup, qPrintable(error));
+        QCOMPARE(dup->durationFrames, std::int64_t{50});
+        QCOMPARE(linkOf(*dup)->audioPaths.size(), 1);
+        QVERIFY(first.open(linkOf(*dup)->audioPaths.first()));
+        const std::vector<float> d = first.samples(1000, 10);
+        for (std::size_t i = 0; i < d.size(); ++i) {
+            QVERIFY(std::abs(static_cast<double>(d[i]) - 0.1 * std::sin(2 * std::numbers::pi * 440 * static_cast<double>(1000 + i) / kRate)) < 1e-4);
+        }
+        QVERIFY(findAudioSuitePlugin(QStringLiteral("suite.duplicate"))->masterClipOnly);
+
+        // No tracks: refused.
+        r.tracks = {};
+        QVERIFY(!audioSuiteClip(r, creation, &error));
+        QVERIFY(!error.isEmpty());
     }
 };
 

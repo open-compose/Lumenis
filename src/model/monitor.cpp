@@ -75,6 +75,13 @@ const LoadedClip* MonitorState::current() const {
     return current_ >= 0 && current_ < loaded_.size() ? &loaded_.at(current_) : nullptr;
 }
 
+const LoadedClip* MonitorState::loaded(const QString& itemId) const {
+    for (const LoadedClip& c : loaded_) {
+        if (c.item.id == itemId) return &c;
+    }
+    return nullptr;
+}
+
 LoadedClip* MonitorState::currentMutable() {
     return current_ >= 0 && current_ < loaded_.size() ? &loaded_[current_] : nullptr;
 }

@@ -72,6 +72,8 @@ public:
     void clearMonitor();
     void clearMenu();
     int loadedCount() const { return static_cast<int>(loaded_.size()); }
+    // The loaded clip with BinItem::id `itemId`, shown or not (with its marks); null if not loaded.
+    const LoadedClip* loaded(const QString& itemId) const;
 
     // Position, 0 to lastPosition().
     std::int64_t duration() const;

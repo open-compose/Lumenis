@@ -1,6 +1,9 @@
 #include "lumenis/model/audio_suite.h"
 
+#include <QJsonArray>
 #include <QJsonObject>
+
+#include <algorithm>
 
 // AudioSuite effects on segments (audio_suite.h).
 namespace lumenis::model {
@@ -55,6 +58,63 @@ int setAudioSuite(Sequence& sequence, const QString& name, std::int64_t from, st
         at = end;
     }
     return changed;
+}
+
+QJsonObject audioSuiteTemplateToJson(const AudioSuiteTemplate& t) {
+    AudioSuiteEffect e = t.effect;
+    e.rendered.clear();
+    e.renderedKey.clear();
+    e.renderedStream = 0;
+    e.renderedChannel = 0;
+    QJsonObject o{{QStringLiteral("effect"), audioSuiteToJson(e)}};
+    if (t.hasSource()) {
+        o.insert(QStringLiteral("sourceBin"), t.sourceBin);
+        o.insert(QStringLiteral("sourceClip"), t.sourceClip);
+        QJsonArray tracks;
+        for (const int k : t.tracks) tracks.append(k);
+        o.insert(QStringLiteral("tracks"), tracks);
+        if (t.in) o.insert(QStringLiteral("in"), static_cast<qint64>(*t.in));
+        if (t.out) o.insert(QStringLiteral("out"), static_cast<qint64>(*t.out));
+        if (t.handleSeconds > 0) o.insert(QStringLiteral("handle"), t.handleSeconds);
+    }
+    return o;
+}
+
+std::optional<AudioSuiteTemplate> audioSuiteTemplateFromJson(const QJsonObject& o) {
+    AudioSuiteTemplate t;
+    t.effect = audioSuiteFromJson(o.value(QStringLiteral("effect")).toObject());
+    if (t.effect.effect.isEmpty()) return std::nullopt;
+    t.sourceBin = o.value(QStringLiteral("sourceBin")).toString();
+    t.sourceClip = o.value(QStringLiteral("sourceClip")).toString();
+    for (const QJsonValue& v : o.value(QStringLiteral("tracks")).toArray()) t.tracks << v.toInt();
+    if (o.contains(QStringLiteral("in"))) t.in = o.value(QStringLiteral("in")).toInteger();
+    if (o.contains(QStringLiteral("out"))) t.out = o.value(QStringLiteral("out")).toInteger();
+    t.handleSeconds = std::max(o.value(QStringLiteral("handle")).toDouble(), 0.0);
+    return t;
+}
+
+BinItem audioSuiteTemplateItem(const AudioSuiteTemplate& t, const QString& name, const QDateTime& when) {
+    BinItem item;
+    item.id = newItemId();
+    item.kind = BinItemKind::Effect;
+    item.name = name;
+    item.created = when;
+    item.modified = when;
+    item.composition.insert(QStringLiteral("audioSuite"), audioSuiteTemplateToJson(t));
+    return item;
+}
+
+std::optional<AudioSuiteTemplate> audioSuiteTemplateOf(const BinItem& item) {
+    if (item.kind != BinItemKind::Effect || !item.composition.contains(QStringLiteral("audioSuite"))) return std::nullopt;
+    return audioSuiteTemplateFromJson(item.composition.value(QStringLiteral("audioSuite")).toObject());
+}
+
+QString audioSuiteClipName(const QString& clip, const QString& effect, bool mac) {
+    return clip + (mac ? QLatin1Char('.') : QLatin1Char('_')) + effect;
+}
+
+QString audioSuiteTemplateName(const QString& clip, const QString& effect, bool mac) {
+    return mac ? QStringLiteral("%1.%2.effect").arg(clip, effect) : QStringLiteral("%1 - AudioSuite Plug-In Effect: %2").arg(clip, effect);
 }
 
 QJsonObject audioSuiteToJson(const AudioSuiteEffect& e) {

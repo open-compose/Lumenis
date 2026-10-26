@@ -2,8 +2,10 @@
 // Plug-In Selection menus put a plug-in on the segments under the Record position, Activate opens
 // its dialog (OK and Render), Render Effect renders through the renderer, the Fast menu's items work
 // over the marks, Remove Effect takes an effect off; in the application, Tools > AudioSuite renders
-// into managed media that plays, and Audio Mixdown renders what is not rendered first (p.800). The
-// processes and the sound are in tests/media/tst_audio_suite.cpp.
+// into managed media that plays, and Audio Mixdown renders what is not rendered first (p.800). Master
+// clip processing (p.800-804): dropped clips, the controls, new master clips with their templates,
+// Find Source From Effect, templates in the Fast menu and dropped in bins. The processes and the
+// sound are in tests/media/tst_audio_suite.cpp.
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/managed.h"
@@ -14,6 +16,7 @@
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/audio_suite.h"
 #include "lumenis/ui/bin_container.h"
+#include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
@@ -27,9 +30,13 @@
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QMenu>
+#include <QMimeData>
 #include <QPushButton>
+#include <QSignalSpy>
 #include <QSlider>
 #include <QTemporaryDir>
 #include <QTest>
@@ -132,6 +139,26 @@ struct FakeRenderer {
         };
     }
 };
+
+// A master clip with picture and two sound tracks, in no bin of its own.
+BinItem toneClip(const char* id = "tone") {
+    BinItem c;
+    c.id = QString::fromLatin1(id);
+    c.name = QStringLiteral("Tone");
+    c.kind = BinItemKind::MasterClip;
+    c.editRate = Rational(25);
+    c.durationFrames = 100;
+    c.fields.insert(QStringLiteral("Tracks"), QStringLiteral("V1 A1-2"));
+    return c;
+}
+
+// Media Composer's names differ by platform (p.803-804).
+constexpr bool kMac =
+#ifdef Q_OS_MACOS
+    true;
+#else
+    false;
+#endif
 
 } // namespace
 
@@ -328,6 +355,182 @@ private slots:
         for (int i = 0; i < 3; ++i) QVERIFY(!rig.effect("A1", i));
     }
 
+    // Master clip processing (p.800-803): dropped clips, the controls, and what a render asks for.
+    void masterClipMode() {
+        Rig rig;
+        QList<AudioSuiteTool::MasterClipRender> made;
+        rig.tool.setBins({{QStringLiteral("b1"), QStringLiteral("Bin")}, {QStringLiteral("b2"), QStringLiteral("Other")}},
+                         QStringLiteral("b2"));
+        QCOMPARE(rig.tool.targetBin(), QStringLiteral("b2"));
+        QVERIFY(!rig.tool.controlsShown());
+        QVERIFY(!rig.tool.masterClipMode());
+        // Only clips with sound are taken; dropping one enters master clip mode and shows the
+        // controls (p.803).
+        BinItem picture = toneClip("pic");
+        picture.fields.insert(QStringLiteral("Tracks"), QStringLiteral("V1"));
+        QCOMPARE(rig.tool.addItems(QStringLiteral("b1"), {picture, sequence()}), 0);
+        QVERIFY(!rig.tool.messageLabel()->text().isEmpty());
+        const BinItem clip = toneClip();
+        QCOMPARE(rig.tool.addItems(QStringLiteral("b1"), {clip}), 1);
+        QVERIFY(rig.tool.masterClipMode());
+        QVERIFY(rig.tool.masterModeButton()->isChecked());
+        QVERIFY(!rig.tool.masterModeButton()->styleSheet().isEmpty()); // yellow (p.802)
+        QVERIFY(rig.tool.controlsShown());
+        QCOMPARE(rig.tool.clipMenu()->count(), 1);
+        QCOMPARE(rig.tool.activeClip(), 0);
+        QCOMPARE(rig.tool.inputTracks(), (QList<int>{0, 1}));
+        QVERIFY(rig.tool.inputButton(1) && rig.tool.inputButton(1)->isChecked());
+        QVERIFY(!rig.tool.inputButton(2));
+        QVERIFY(rig.tool.statusLabel()->text().contains(QLatin1String("Tone: 2 of 2 tracks")));
+        QVERIFY(!rig.tool.trackButton()->isEnabled());
+
+        // Plug-ins for master clips only are offered here; nothing changes on the Timeline.
+        const int before = rig.timeline.history().undoCount();
+        QVERIFY(rig.tool.choosePlugin(QStringLiteral("suite.duplicate")));
+        QCOMPARE(rig.tool.processingModes(), QStringList{QStringLiteral("Mono")});
+        QVERIFY(rig.tool.choosePlugin(QStringLiteral("suite.normalize")));
+        QCOMPARE(rig.timeline.history().undoCount(), before);
+        // Normalize's processing modes (p.803).
+        QCOMPARE(rig.tool.processingModes(), (QStringList{"Levels On All Chans-Tracks", "Level On Each Chan-Track"}));
+        rig.tool.setProcessingMode(1);
+        QCOMPARE(rig.tool.values().value(QStringLiteral("mode")), 1.0);
+        QCOMPARE(rig.tool.modeMenu()->currentIndex(), 1);
+        rig.tool.inputButton(0)->click();
+        QCOMPARE(rig.tool.inputTracks(), QList<int>{1});
+
+        // The marks come from the Source monitor (p.802); the lights turn green.
+        QVERIFY(!rig.tool.clipIn() && rig.tool.markIndicator(true)->styleSheet().isEmpty());
+        QSignalSpy wanted(&rig.tool, &AudioSuiteTool::sourceRequested);
+        QVERIFY(rig.tool.loadInSourceMonitor());
+        QCOMPARE(wanted.count(), 1);
+        rig.composer.load(MonitorId::Source, QStringLiteral("b1"), clip);
+        model::MonitorState& source = rig.composer.state(MonitorId::Source);
+        source.setPosition(5);
+        source.markIn();
+        source.setPosition(20);
+        source.markOut();
+        rig.composer.load(MonitorId::Source, QStringLiteral("b1"), toneClip("other")); // the marks stay with the clip
+        settle();
+        QCOMPARE(rig.tool.clipIn(), std::optional<std::int64_t>(5));
+        QCOMPARE(rig.tool.clipOut(), std::optional<std::int64_t>(20));
+        rig.tool.refresh();
+        QVERIFY(!rig.tool.markIndicator(true)->styleSheet().isEmpty());
+        rig.tool.setHandleSeconds(1.5);
+        rig.tool.setLoadResult(true);
+
+        QVERIFY(!rig.tool.render()); // no maker
+        rig.tool.setClipMaker([&](const AudioSuiteTool::MasterClipRender& r, QString*) {
+            made << r;
+            return true;
+        });
+        rig.tool.setDrives({{QStringLiteral("Media"), QStringLiteral("/m")}}, QStringLiteral("/m"));
+        QVERIFY(rig.tool.renderButton()->isEnabled());
+        rig.tool.renderButton()->click();
+        QCOMPARE(made.size(), 1);
+        const AudioSuiteTool::MasterClipRender& r = made.first();
+        QCOMPARE(r.source.binId, QStringLiteral("b1"));
+        QCOMPARE(r.source.item.id, clip.id);
+        QCOMPARE(r.tracks, QList<int>{1});
+        QCOMPARE(r.in, std::optional<std::int64_t>(5));
+        QCOMPARE(r.out, std::optional<std::int64_t>(20));
+        QCOMPARE(r.handleSeconds, 1.5);
+        QCOMPARE(r.effect.effect, QStringLiteral("suite.normalize"));
+        QCOMPARE(r.effect.params.value(QStringLiteral("mode")), 1.0);
+        QCOMPARE(r.targetBin, QStringLiteral("b2"));
+        QCOMPARE(r.drive, QStringLiteral("/m"));
+        QVERIFY(r.loadResult);
+        QCOMPARE(rig.tool.messageLabel()->text(), model::audioSuiteClipName(QStringLiteral("Tone"), QStringLiteral("Normalize"), kMac) + QStringLiteral(" made."));
+        // The effect icon's template carries the clip (p.804).
+        const auto t = rig.tool.iconTemplate();
+        QVERIFY(t && t->hasSource());
+        QCOMPARE(t->sourceClip, clip.id);
+        QCOMPARE(t->tracks, QList<int>{1});
+        // A second clip joins the Clip Selection menu.
+        QCOMPARE(rig.tool.addItems(QStringLiteral("b1"), {toneClip("second")}), 1);
+        QCOMPARE(rig.tool.clipMenu()->count(), 2);
+        QCOMPARE(rig.tool.activeClip(), 1);
+        rig.tool.setActiveClip(0);
+        QCOMPARE(rig.tool.activeClip(), 0);
+
+        // Back on the Timeline: Duplicate is refused there (p.839).
+        rig.tool.masterModeButton()->click();
+        QVERIFY(!rig.tool.masterClipMode());
+        rig.at(35);
+        QVERIFY(!rig.tool.choosePlugin(QStringLiteral("suite.duplicate")));
+        QVERIFY(rig.tool.messageLabel()->text().contains(QLatin1String("master clips")));
+    }
+
+    // AudioSuite templates (p.804): Find Source From Effect, the Fast menu, a drop on the window.
+    void templates() {
+        Rig rig;
+        const BinItem clip = toneClip();
+        rig.tool.setItemResolver([&](const QString& binId, const QString& id) -> std::optional<BinItem> {
+            if (binId == QLatin1String("b1") && id == clip.id) return clip;
+            return std::nullopt;
+        });
+        model::AudioSuiteTemplate t;
+        t.effect.effect = QStringLiteral("suite.gain");
+        t.effect.name = QStringLiteral("Gain");
+        t.effect.params = {{QStringLiteral("gain"), -4}};
+        t.sourceBin = QStringLiteral("b1");
+        t.sourceClip = clip.id;
+        t.tracks = {1};
+        t.handleSeconds = 2;
+        t.in = 3;
+        t.out = 9;
+        const BinItem item = model::audioSuiteTemplateItem(t, QStringLiteral("Tone - AudioSuite Plug-In Effect: Gain"), QDateTime::currentDateTimeUtc());
+        QVERIFY(!rig.tool.canFindSource());
+        QVERIFY(!rig.tool.findSourceButton()->isEnabled());
+        QCOMPARE(rig.tool.addItems(QStringLiteral("b1"), {item}), 1);
+        QVERIFY(rig.tool.canFindSource());
+        QVERIFY(rig.tool.findSourceButton()->isEnabled());
+        rig.tool.findSourceButton()->click();
+        QVERIFY(rig.tool.masterClipMode());
+        QCOMPARE(rig.tool.clips().size(), 1);
+        QCOMPARE(rig.tool.inputTracks(), QList<int>{1});
+        QCOMPARE(rig.tool.handleSeconds(), 2.0);
+        QCOMPARE(rig.tool.plugin(), QStringLiteral("suite.gain"));
+        QCOMPARE(rig.tool.values().value(QStringLiteral("gain")), -4.0);
+        // The template's marks, as the clip is not marked in the Source monitor.
+        QCOMPARE(rig.tool.clipIn(), std::optional<std::int64_t>(3));
+        QCOMPARE(rig.tool.clipOut(), std::optional<std::int64_t>(9));
+        // A template whose clip is gone (p.802).
+        model::AudioSuiteTemplate lost = t;
+        lost.sourceClip = QStringLiteral("gone");
+        rig.tool.addItems(QStringLiteral("b1"), {model::audioSuiteTemplateItem(lost, QStringLiteral("x"), QDateTime::currentDateTimeUtc())});
+        QVERIFY(!rig.tool.findSourceFromEffect());
+        QVERIFY(rig.tool.messageLabel()->text().contains(QLatin1String("cannot be found")));
+
+        // The Fast menu's templates, on the Timeline: one undo step.
+        rig.tool.setMasterClipMode(false);
+        rig.tool.setTemplateSource([&] { return QList<BinItem>{item, sequence()}; });
+        rig.at(35);
+        const int before = rig.timeline.history().undoCount();
+        QMenu* list = rig.tool.fastMenu()->findChild<QMenu*>(QStringLiteral("templates"));
+        QVERIFY(list);
+        QCOMPARE(list->actions().size(), 1);
+        list->actions().first()->trigger();
+        QCOMPARE(rig.timeline.history().undoCount(), before + 1);
+        QCOMPARE(rig.effect("A1", 1)->params.value(QStringLiteral("gain")), -4.0);
+
+        // Clips dragged from a bin onto the window.
+        Rig other;
+        other.tool.setItemResolver([&](const QString&, const QString& id) -> std::optional<BinItem> {
+            if (id == clip.id) return clip;
+            return std::nullopt;
+        });
+        auto* mime = new QMimeData;
+        mime->setData(binItemsMime(), QStringLiteral("b1\n%1").arg(clip.id).toUtf8());
+        QDragEnterEvent enter(QPoint(5, 5), Qt::CopyAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&other.tool, &enter);
+        QVERIFY(enter.isAccepted());
+        QDropEvent drop(QPointF(5, 5), Qt::CopyAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&other.tool, &drop);
+        QVERIFY(other.tool.masterClipMode());
+        QCOMPARE(other.tool.clips().size(), 1);
+        delete mime;
+    }
+
     // In the application: Tools > AudioSuite renders into managed media that plays in the segment's
     // place, and Audio Mixdown renders what is not rendered first (p.800).
     void mainWindow() {
@@ -418,6 +621,107 @@ private slots:
         QVERIFY(link);
         QVERIFY(reader.open(link->audioPaths.first()));
         for (float v : reader.samples(100, 10)) QVERIFY(std::abs(v - 0.125f) < 1e-3f);
+        media::setExtraMediaDrives({});
+    }
+
+    // In the application: a master clip dropped on the window makes a new master clip and a template
+    // in the target bin, loaded into the Source monitor (p.802-804); the template, dropped back,
+    // finds its clip; the effect icon's template can be dropped in a bin (p.798).
+    void mainWindowMasterClip() {
+        QTemporaryDir dir;
+        const QString wav = dir.filePath(QStringLiteral("tone.wav"));
+        {
+            media::WriterSettings ws;
+            ws.format = QStringLiteral("wav");
+            ws.audioCodec = QStringLiteral("pcm_f32le");
+            ws.channels = 2;
+            media::MediaWriter w;
+            QVERIFY(w.open(wav, ws));
+            std::vector<float> samples(2 * 48000, 0.25f);
+            QVERIFY(w.writeAudio(samples.data(), 48000) && w.finish());
+        }
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("transcodeVideoDrive"), drive);
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("transcodeAudioDrive"), drive);
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        const QStringList ids = window.linkFiles(binId, {wav});
+        QCOMPARE(ids.size(), 1);
+        const BinItem clip = *bin->bin().item(ids.first());
+        commands.action(QStringLiteral("tools.audiosuite"))->trigger();
+        settle();
+        AudioSuiteTool& tool = window.audioSuite();
+        QCOMPARE(tool.targetBin(), binId);
+        QCOMPARE(tool.addItems(binId, {clip}), 1);
+        QCOMPARE(tool.inputTracks(), (QList<int>{0, 1}));
+        QVERIFY(tool.choosePlugin(QStringLiteral("suite.gain")));
+        QVERIFY(tool.setValues({{QStringLiteral("gain"), -6.0206}}));
+        tool.setLoadResult(true);
+        QVERIFY2(tool.render(), qPrintable(tool.messageLabel()->text()));
+        // The new clip and its template, by Media Composer's names.
+        const QString name = model::audioSuiteClipName(clip.name, QStringLiteral("Gain"), kMac);
+        const BinItem* made = nullptr;
+        const BinItem* tmpl = nullptr;
+        for (const BinItem& i : bin->bin().items) {
+            if (i.name == name) made = &i;
+            if (i.name == model::audioSuiteTemplateName(clip.name, QStringLiteral("Gain"), kMac)) tmpl = &i;
+        }
+        QVERIFY(made);
+        QVERIFY(tmpl);
+        QCOMPARE(made->durationFrames, clip.durationFrames);
+        const auto link = media::linkOf(*made);
+        QVERIFY(link && link->audioPaths.size() == 2);
+        media::AudioReader reader;
+        QVERIFY(reader.open(link->audioPaths.at(1)));
+        for (float v : reader.samples(500, 10)) QVERIFY(std::abs(v - 0.125f) < 1e-3f);
+        // Load Result (p.802).
+        QCOMPARE(window.composer().state(MonitorId::Source).current()->item.id, made->id);
+        const auto t = model::audioSuiteTemplateOf(*tmpl);
+        QVERIFY(t);
+        QCOMPARE(t->sourceClip, clip.id);
+        QCOMPARE(t->sourceBin, binId);
+        const BinItem templateItem = *tmpl;
+
+        // The template, dropped on the window, finds its clip.
+        tool.setMasterClipMode(false);
+        QCOMPARE(tool.addItems(binId, {templateItem}), 1);
+        QVERIFY(tool.findSourceFromEffect());
+        QCOMPARE(tool.clips().at(tool.activeClip()).item.id, clip.id);
+        QCOMPARE(tool.values().value(QStringLiteral("gain")), -6.0206);
+
+        // The effect icon's template dropped in the bin becomes an item.
+        const int count = static_cast<int>(bin->bin().items.size());
+        BinItemModel itemModel(*bin);
+        BinItemModel* model = &itemModel;
+        const auto icon = tool.iconTemplate();
+        QVERIFY(icon);
+        QMimeData mime;
+        mime.setData(audioSuiteTemplateMime(),
+                     QJsonDocument(QJsonObject{{QStringLiteral("name"), QStringLiteral("My Gain")},
+                                               {QStringLiteral("template"), model::audioSuiteTemplateToJson(*icon)}})
+                         .toJson());
+        QVERIFY(model->canDropMimeData(&mime, Qt::CopyAction, -1, -1, {}));
+        QVERIFY(model->dropMimeData(&mime, Qt::CopyAction, -1, -1, {}));
+        QCOMPARE(static_cast<int>(bin->bin().items.size()), count + 1);
+        QCOMPARE(bin->bin().items.last().name, QStringLiteral("My Gain"));
+        QVERIFY(model::audioSuiteTemplateOf(bin->bin().items.last()));
         media::setExtraMediaDrives({});
     }
 };

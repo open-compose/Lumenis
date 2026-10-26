@@ -6,6 +6,7 @@
 #include "lumenis/model/bin.h"
 #include "lumenis/model/project_store.h"
 #include "lumenis/ui/audio_punch_in.h"
+#include "lumenis/ui/audio_suite.h"
 
 #include <QDateTime>
 #include <QJsonObject>
@@ -50,7 +51,6 @@ class ImportEdlDialog;
 class ListTool;
 class AboutInfoDialog;
 class AudioEqTool;
-class AudioSuiteTool;
 class AudioPunchInTool;
 class AudioTrackEffectTool;
 class AudioMixer;
@@ -267,6 +267,9 @@ public:
     // the Media Creation setting's audio drive); media::renderAudioSuite.
     std::optional<model::AudioSuiteEffect> renderAudioSuite(const model::Segment& segment, const QString& drive,
                                                             QString* error);
+    // A new master clip made by the AudioSuite tool in master clip mode, with its template, in the
+    // target bin (p.803-804); media::audioSuiteClip.
+    bool makeAudioSuiteClip(const AudioSuiteTool::MasterClipRender& render, QString* error);
     void setCopyingMediaHook(std::function<std::optional<bool>()> hook) { copyingMediaHook_ = std::move(hook); }
     // How media is made, from the Media Creation setting's tab ("import",
     // "transcode") and the project.

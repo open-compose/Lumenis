@@ -781,8 +781,12 @@ state come later.
 * Tools > AudioSuite (`src/ui/audio_suite.*`): Track Selection and Plug-In
   Selection menus, the plug-in dialog, Render Effect, the Fast menu's Set,
   Render and Remove over the marks, the Target Drive menu.
-Next: 5.5c2, AudioSuite on master clips and effect templates; then 5.1/7.1
-routing.
+5.5c2, AudioSuite on master clips (docs/spec/audiosuite.md), is done: clips
+dropped on the tool become new master clips of managed media with their
+templates beside them (`media::audioSuiteClip`, the tool's master clip
+controls), templates find their clips again (Find Source From Effect),
+the effect icon saves templates to bins, the Fast menu applies them;
+Duplicate. Next: 5.1/7.1 routing.
 
 ### Phase 6 — Effects and rendering
 * Transitions, motion effects, timewarps, Color Correction (HSL and curves),

@@ -31,6 +31,10 @@ QString binNodesMime();
 QString binItemsMime();
 // Media files dragged from the Source Browser (p.316-317), one path a line.
 QString mediaFilesMime();
+// An AudioSuite effect template dragged from the AudioSuite tool's effect icon (p.798): {"name": the
+// template's name, "template": model::audioSuiteTemplateToJson}. A bin it is dropped on makes it an
+// item.
+QString audioSuiteTemplateMime();
 // Whether a drop of bin items into another bin copies them rather than moves
 // them: a copy drop action, or Alt (Windows) / Option (Mac) held (p.260), or
 // Ctrl (Windows) / Command (Mac) held (p.261). Qt reports Command as

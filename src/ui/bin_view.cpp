@@ -1,5 +1,7 @@
 #include "lumenis/ui/bin_view.h"
 
+#include "lumenis/model/audio_suite.h"
+
 #include "lumenis/ui/bin_dialogs.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/media_frames.h"
@@ -17,6 +19,8 @@
 #include <QHeaderView>
 #include <QHelpEvent>
 #include <QInputDialog>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QItemSelectionModel>
 #include <QKeyEvent>
 #include <QLabel>
@@ -581,7 +585,7 @@ Qt::DropActions BinItemModel::supportedDropActions() const {
 
 QStringList BinItemModel::mimeTypes() const {
     // text/uri-list: files dragged in from the desktop (an .otio dropped into a bin, p.969).
-    return {binItemsMime(), mediaFilesMime(), QStringLiteral("text/uri-list")};
+    return {binItemsMime(), mediaFilesMime(), audioSuiteTemplateMime(), QStringLiteral("text/uri-list")};
 }
 
 namespace {
@@ -593,6 +597,21 @@ QStringList localFiles(const QMimeData* data) {
         if (url.isLocalFile()) paths << url.toLocalFile();
     }
     return paths;
+}
+
+} // namespace
+
+namespace {
+
+// An AudioSuite effect template dropped from the AudioSuite tool (p.798): a new Effect item. False if
+// the bin is locked or the data holds no template.
+bool addAudioSuiteTemplate(BinDocument& document, const QMimeData* data) {
+    if (document.isReadOnly()) return false;
+    const QJsonObject o = QJsonDocument::fromJson(data->data(audioSuiteTemplateMime())).object();
+    const auto t = model::audioSuiteTemplateFromJson(o.value(QStringLiteral("template")).toObject());
+    if (!t) return false;
+    document.addItem(model::audioSuiteTemplateItem(*t, o.value(QStringLiteral("name")).toString(), QDateTime::currentDateTimeUtc()));
+    return true;
 }
 
 } // namespace
@@ -613,7 +632,7 @@ bool BinItemModel::canDropMimeData(const QMimeData* data, Qt::DropAction, int, i
     // "You cannot drag an item to a locked bin" (p.304).
     if (document_.isReadOnly()) return false;
     // Files from the Source Browser are linked into the bin (p.317).
-    if (data->hasFormat(mediaFilesMime())) return true;
+    if (data->hasFormat(mediaFilesMime()) || data->hasFormat(audioSuiteTemplateMime())) return true;
     if (!data->hasFormat(binItemsMime())) return !localFiles(data).isEmpty();
     // Items from this same bin are refused: the Text and Frame views do not
     // reorder by dragging (only the Script view does).
@@ -628,6 +647,7 @@ bool BinItemModel::dropMimeData(const QMimeData* data, Qt::DropAction action, in
         emit filesDropped(QString::fromUtf8(data->data(mediaFilesMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts));
         return true;
     }
+    if (data->hasFormat(audioSuiteTemplateMime())) return addAudioSuiteTemplate(document_, data);
     if (!data->hasFormat(binItemsMime())) {
         emit filesDropped(localFiles(data));
         return true;
@@ -1074,10 +1094,15 @@ bool BinScriptView::eventFilter(QObject* watched, QEvent* event) {
     if (watched == content_ && (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove)) {
         auto* de = static_cast<QDropEvent*>(event);
         if (de->mimeData()->hasFormat(binItemsMime())) de->acceptProposedAction();
+        if (de->mimeData()->hasFormat(audioSuiteTemplateMime()) && !document_.isReadOnly()) de->acceptProposedAction();
         return true;
     }
     if (watched == content_ && event->type() == QEvent::Drop) {
         auto* de = static_cast<QDropEvent*>(event);
+        if (de->mimeData()->hasFormat(audioSuiteTemplateMime())) {
+            if (addAudioSuiteTemplate(document_, de->mimeData())) de->acceptProposedAction();
+            return true;
+        }
         QStringList ids =
             QString::fromUtf8(de->mimeData()->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
         if (ids.isEmpty()) return true;

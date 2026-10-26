@@ -35,6 +35,8 @@ struct AudioSuiteInfo {
     bool effect = false;
     // Makes sound of its own (Signal Generator): what comes in is replaced.
     bool generator = false;
+    // Only for creating new master clips (Duplicate, p.839), not on Timeline segments.
+    bool masterClipOnly = false;
     QMap<QString, double> defaults() const;
     const AudioEffectParam* param(const QString& paramId) const;
 };
@@ -51,6 +53,10 @@ std::optional<AudioSuiteInfo> findAudioSuitePlugin(const QString& id);
 bool processAudioSuite(const QString& id, const QMap<QString, double>& params, std::vector<std::vector<float>>& channels,
                        QString* error = nullptr);
 
+// `count` samples (48 kHz) of audio track `track` (0 for A1) of `clip`, from clip frame `from`, as
+// playback reads it, at unity gain. Silence where the clip has no media there.
+std::vector<float> clipTrackSound(const model::BinItem& clip, int track, std::int64_t from, std::int64_t count);
+
 // The sound a segment plays before its AudioSuite effect, at 48 kHz: its source clip's track from its
 // source frame for its length in sequence frames at `sequenceRate`, plus one frame, at its clip gain
 // (the first in the render order, p.700). Silence where the clip has no media.
@@ -62,5 +68,24 @@ std::vector<float> segmentSource(const model::Segment& segment, const model::Bin
 std::optional<model::AudioSuiteEffect> renderAudioSuite(const model::Segment& segment, const model::BinItem& clip,
                                                         const Rational& sequenceRate, const MediaCreation& creation,
                                                         QString* error = nullptr);
+
+// Creating a new master clip with an AudioSuite plug-in (p.800-804): `tracks` of `clip` (0-based
+// audio tracks) from clip frame `in` to `out` (inclusive; -1: the clip's end), with `handleSeconds`
+// of silence after them ("Handle Length for End of Master Clip", p.802), processed together by
+// `effect` (Normalize's "Levels On All Chans-Tracks" weighs them together, p.803) and written as
+// managed media: a new audio clip named `name`, one track per track used, starting at the
+// clip's timecode at `in`.
+struct AudioSuiteClipRequest {
+    model::BinItem clip;
+    QList<int> tracks;
+    std::int64_t in = 0;
+    std::int64_t out = -1;
+    double handleSeconds = 0;
+    QString effect;
+    QMap<QString, double> params;
+    QString name;
+};
+std::optional<model::BinItem> audioSuiteClip(const AudioSuiteClipRequest& request, const MediaCreation& creation,
+                                             QString* error = nullptr);
 
 } // namespace lumenis::media

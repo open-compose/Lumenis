@@ -85,7 +85,9 @@ struct BinItem {
     // Heading name -> cell text, e.g. "Start" and "End" as timecode text, "Tracks", "Tape", custom
     // columns. Name, Duration, the dates, Lock and Color are shown from the members instead.
     QHash<QString, QString> fields;
-    QJsonObject composition; // a sequence's tracks (lumenis/model/sequence.h)
+    // A sequence's tracks (lumenis/model/sequence.h); an AudioSuite effect template's effect
+    // (lumenis/model/audio_suite.h).
+    QJsonObject composition;
     QJsonArray markers;      // lumenis/model/marker.h
     // A linked clip's media file (Editing Guide ch.11): where it is and how
     // its frames map onto the clip's (lumenis/media/link.h). Empty for clips

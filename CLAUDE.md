@@ -298,7 +298,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   - playback plays renders; Audio Mixdown renders first;
   - the tool (`src/ui/audio_suite.*`).
   Tests: `tst_audio_suite`, `tst_audio_suite_ui`, scenario `11-audiosuite.json`.
-  Next: 5.5c2, AudioSuite on master clips and templates.
+5.5c2 is done: AudioSuite on master clips (`media::audioSuiteClip`, the
+  tool's master clip controls, `MainWindow::makeAudioSuiteClip`) and effect
+  templates (`model::AudioSuiteTemplate`, Effect items in bins; dropped from
+  the effect icon through `audioSuiteTemplateMime()`).
+  Next: 5.1/7.1 routing.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

@@ -1,8 +1,11 @@
 #pragma once
 
+#include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
 
+#include <QDateTime>
 #include <QJsonObject>
+#include <QList>
 #include <QString>
 
 #include <optional>
@@ -29,6 +32,38 @@ bool needsRender(const Segment& segment);
 // many segments changed.
 int setAudioSuite(Sequence& sequence, const QString& track, std::int64_t from, std::int64_t to,
                   const std::optional<AudioSuiteEffect>& effect);
+
+// An AudioSuite effect template (p.804): the effect and its values, and for one made by creating a
+// new master clip, the master clip it was applied to (its bin and id), the clip's tracks used
+// (0-based audio tracks), its marks then (clip frames, inclusive) and the handle length in seconds.
+// "This effect template contains a reference to the original master clip" (p.804); a template saved
+// from the Timeline (the effect icon dragged to a bin, p.798) has no source.
+struct AudioSuiteTemplate {
+    AudioSuiteEffect effect;
+    QString sourceBin;
+    QString sourceClip;
+    QList<int> tracks;
+    std::optional<std::int64_t> in;
+    std::optional<std::int64_t> out;
+    double handleSeconds = 0;
+    bool hasSource() const { return !sourceClip.isEmpty(); }
+    bool operator==(const AudioSuiteTemplate&) const = default;
+};
+// The template as JSON, as bin items keep it (and as it is dragged from the AudioSuite tool to a
+// bin); the effect's render is left out. Nothing for JSON without an effect.
+QJsonObject audioSuiteTemplateToJson(const AudioSuiteTemplate& t);
+std::optional<AudioSuiteTemplate> audioSuiteTemplateFromJson(const QJsonObject& o);
+// The template as a bin item: an Effect named `name`, holding the template in
+// BinItem::composition["audioSuite"] (render fields left out).
+BinItem audioSuiteTemplateItem(const AudioSuiteTemplate& t, const QString& name, const QDateTime& when);
+// The template a bin item holds; nothing for any other item.
+std::optional<AudioSuiteTemplate> audioSuiteTemplateOf(const BinItem& item);
+// The names Media Composer gives what it makes from a master clip (p.803-804): the new clip
+// "<clip>_<effect>" (Windows) or "<clip>.<effect>" (macOS), and the template "<clip> - AudioSuite
+// Plug-In Effect: <effect>" (Windows) or "<clip>.<effect>.effect" (macOS). Linux takes the Windows
+// form (ours). `mac` picks the macOS form.
+QString audioSuiteClipName(const QString& clip, const QString& effect, bool mac);
+QString audioSuiteTemplateName(const QString& clip, const QString& effect, bool mac);
 
 // The effect as kept in sequences: {effect, name, params, rendered, renderedStream, renderedChannel,
 // renderedKey}; render fields only when rendered.

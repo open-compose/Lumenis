@@ -43,6 +43,10 @@ QString mediaFilesMime() {
     return QStringLiteral("application/x-cutthulhu-media-files");
 }
 
+QString audioSuiteTemplateMime() {
+    return QStringLiteral("application/x-cutthulhu-audiosuite-template");
+}
+
 bool isCopyDrop(Qt::DropAction action, Qt::KeyboardModifiers modifiers) {
     return action == Qt::CopyAction || (modifiers & (Qt::AltModifier | Qt::ControlModifier));
 }

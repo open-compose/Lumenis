@@ -1,5 +1,7 @@
 #include "lumenis/media/audio_suite.h"
 
+#include "lumenis/core/timecode.h"
+
 #include "lumenis/media/link.h"
 #include "lumenis/media/playback.h"
 #include "lumenis/model/audio_suite.h"
@@ -63,6 +65,10 @@ const QList<AudioSuiteInfo>& builtIn() {
         l << process("suite.invert", "Invert");
         l << process("suite.reverse", "Reverse");
         l << process("suite.dc", "DC Offset Removal");
+        // "Creates a new master clip from a selected audio master clip" between its marks (p.839).
+        AudioSuiteInfo dup = process("suite.duplicate", "Duplicate");
+        dup.masterClipOnly = true;
+        l << dup;
         AudioSuiteInfo gen = process("suite.signal", "Signal Generator",
                                      {param("frequency", "Frequency", "Hz", 20, 20000, 1000),
                                       param("level", "Level", "dB", -95, 0, -20),
@@ -233,6 +239,8 @@ bool processAudioSuite(const QString& id, const QMap<QString, double>& params, s
             const double mean = sum / static_cast<double>(c.size());
             for (float& s : c) s = static_cast<float>(static_cast<double>(s) - mean);
         }
+    } else if (id == QLatin1String("suite.duplicate")) {
+        // The sound as it is.
     } else if (id == QLatin1String("suite.signal")) {
         const double level = dbToGain(value(params, *info, "level"));
         const bool rms = value(params, *info, "calibration") >= 0.5;
@@ -245,18 +253,16 @@ bool processAudioSuite(const QString& id, const QMap<QString, double>& params, s
     return true;
 }
 
-std::vector<float> segmentSource(const model::Segment& s, const model::BinItem& clip, const Rational& sequenceRate) {
-    const std::int64_t count = framesToSamples(s.length + 1, sequenceRate);
+std::vector<float> clipTrackSound(const model::BinItem& clip, int trackIndex, std::int64_t from, std::int64_t count) {
     std::vector<float> out(static_cast<std::size_t>(std::max<std::int64_t>(count, 0)), 0.0f);
-    const auto ref = model::parseTrackName(s.sourceTrack);
-    if (out.empty() || !ref || ref->kind != model::TrackKind::Audio) return out;
+    if (out.empty()) return out;
     // The clip's track as playback reads it, alone and unpanned: full on the left, nothing right.
-    const QString track = QStringLiteral("A%1").arg(ref->number);
+    const QString track = QStringLiteral("A%1").arg(trackIndex + 1);
     std::vector<AudioPiece> pieces = audioPieces(clip, {}, [&](const QString& t) { return t == track; });
     if (pieces.empty()) return out;
     AudioPiece p = pieces.front();
     p.at = 0;
-    p.sourceStart += framesToSamples(s.sourceIn, clip.editRate);
+    p.sourceStart += framesToSamples(from, clip.editRate);
     p.length = count;
     p.left = 1.0f;
     p.right = 0.0f;
@@ -267,8 +273,19 @@ std::vector<float> segmentSource(const model::Segment& s, const model::BinItem& 
         const int n = static_cast<int>(std::min<std::int64_t>(kChunk, count - at));
         mix.render(at, n, stereo.data() + 2 * at);
     }
+    for (std::size_t i = 0; i < out.size(); ++i) out[i] = stereo[2 * i];
+    return out;
+}
+
+std::vector<float> segmentSource(const model::Segment& s, const model::BinItem& clip, const Rational& sequenceRate) {
+    const std::int64_t count = framesToSamples(s.length + 1, sequenceRate);
+    const auto ref = model::parseTrackName(s.sourceTrack);
+    if (!ref || ref->kind != model::TrackKind::Audio) {
+        return std::vector<float>(static_cast<std::size_t>(std::max<std::int64_t>(count, 0)), 0.0f);
+    }
+    std::vector<float> out = clipTrackSound(clip, ref->number - 1, s.sourceIn, count);
     const double gain = s.gain <= model::kGainOff ? 0.0 : dbToGain(s.gain);
-    for (std::size_t i = 0; i < out.size(); ++i) out[i] = static_cast<float>(static_cast<double>(stereo[2 * i]) * gain);
+    for (float& v : out) v = static_cast<float>(static_cast<double>(v) * gain);
     return out;
 }
 
@@ -305,6 +322,49 @@ std::optional<model::AudioSuiteEffect> renderAudioSuite(const model::Segment& s,
     e.renderedChannel = channel->second;
     e.renderedKey = model::audioSuiteKey(s);
     return e;
+}
+
+std::optional<model::BinItem> audioSuiteClip(const AudioSuiteClipRequest& r, const MediaCreation& creation, QString* error) {
+    auto failed = [&](const QString& text) -> std::optional<model::BinItem> {
+        if (error) *error = text;
+        return std::nullopt;
+    };
+    if (r.tracks.isEmpty()) return failed(QObject::tr("Select the input tracks."));
+    const std::int64_t last = r.out < 0 ? r.clip.durationFrames - 1 : std::min(r.out, r.clip.durationFrames - 1);
+    const std::int64_t in = std::clamp<std::int64_t>(r.in, 0, std::max<std::int64_t>(last, 0));
+    const std::int64_t frames = last - in + 1;
+    if (frames <= 0) return failed(QObject::tr("The clip has no frames to process."));
+    // The handle in whole frames, so the new clip ends on a frame.
+    const double fps = static_cast<double>(r.clip.editRate.num()) / static_cast<double>(r.clip.editRate.den());
+    const auto handle = static_cast<std::int64_t>(std::ceil(std::max(r.handleSeconds, 0.0) * fps - 1e-9));
+    const std::int64_t total = frames + handle;
+    const std::int64_t samples = framesToSamples(total, r.clip.editRate);
+    const std::int64_t sound = framesToSamples(frames, r.clip.editRate);
+    std::vector<std::vector<float>> channels;
+    for (const int t : r.tracks) {
+        std::vector<float> c = clipTrackSound(r.clip, t, in, sound);
+        c.resize(static_cast<std::size_t>(samples), 0.0f); // the handle: silence for the effect to ring into
+        channels.push_back(std::move(c));
+    }
+    if (!processAudioSuite(r.effect, r.params, channels, error)) return std::nullopt;
+    QString start;
+    if (const auto first = model::timecodeFrames(r.clip.fields.value(QStringLiteral("Start")), r.clip.editRate)) {
+        const TimecodeFormat format = TimecodeFormat::forRate(r.clip.editRate, model::isDropFrame(r.clip));
+        start = QString::fromStdString(Timecode(*first + in, format).toString());
+    }
+    auto made = renderedAudioClip(
+        r.name, r.clip.editRate, total, static_cast<int>(channels.size()),
+        [&](std::int64_t at, int count, std::vector<std::vector<float>>& out) {
+            for (std::size_t c = 0; c < channels.size(); ++c) {
+                out[c].assign(static_cast<std::size_t>(count), 0.0f);
+                for (int i = 0; i < count; ++i) {
+                    const auto k = static_cast<std::size_t>(at + i);
+                    if (k < channels[c].size()) out[c][static_cast<std::size_t>(i)] = channels[c][k];
+                }
+            }
+        },
+        start, creation, error);
+    return made;
 }
 
 } // namespace lumenis::media

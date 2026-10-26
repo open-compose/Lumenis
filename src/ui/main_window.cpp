@@ -16,6 +16,7 @@
 #include "lumenis/core/timecode.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/audio_suite.h"
+#include "lumenis/model/audio_suite.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/ui/bin_container.h"
@@ -980,6 +981,23 @@ void MainWindow::createTools() {
     audioSuite_->setRenderer([this](const model::Segment& s, const QString& drive, QString* error) {
         return renderAudioSuite(s, drive, error);
     });
+    // Master clip processing (p.800-804): new clips and templates in the target bin; dropped items
+    // and templates' clips are found in the bins.
+    audioSuite_->setClipMaker([this](const AudioSuiteTool::MasterClipRender& r, QString* error) {
+        return makeAudioSuiteClip(r, error);
+    });
+    audioSuite_->setItemResolver([this](const QString& binId, const QString& id) { return composer_->resolve(binId, id); });
+    audioSuite_->setTemplateSource([this] {
+        QList<model::BinItem> out;
+        for (const BinDocument* d : binContainer_->openDocuments()) {
+            for (const model::BinItem& i : d->bin().items) {
+                if (model::audioSuiteTemplateOf(i)) out << i;
+            }
+        }
+        return out;
+    });
+    connect(audioSuite_, &AudioSuiteTool::sourceRequested, this,
+            [this](const QString& binId, const model::BinItem& clip) { composer_->load(MonitorId::Source, binId, clip); });
     audioTool_ = new AudioTool;
     panels_->addPanel(new Panel(QStringLiteral("AudioTool"), tr("Audio Tool"), audioTool_));
     // Tools > Background Queue Window (p.356-357).
@@ -2279,7 +2297,59 @@ void MainWindow::prepareAudioSuite() {
     for (const media::MediaDrive& d : media::mediaDrives()) drives.append({d.name, d.root});
     const media::MediaCreation creation = mediaCreation(QStringLiteral("transcode"));
     audioSuite_->setDrives(drives, creation.audioDrive.isEmpty() ? creation.videoDrive : creation.audioDrive);
+    QList<QPair<QString, QString>> bins;
+    for (const BinDocument* d : binContainer_->openDocuments()) {
+        if (!d->isReadOnly()) bins.append({d->nodeId(), d->name()});
+    }
+    const model::LoadedClip* source = composer_->state(MonitorId::Source).current();
+    audioSuite_->setBins(bins, source ? source->binId : QString());
     audioSuite_->refresh();
+}
+
+bool MainWindow::makeAudioSuiteClip(const AudioSuiteTool::MasterClipRender& r, QString* error) {
+    BinDocument* doc = binContainer_->document(r.targetBin);
+    if (!doc || doc->isReadOnly()) {
+        if (error) *error = tr("Choose a bin that can be changed.");
+        return false;
+    }
+#ifdef Q_OS_MACOS
+    constexpr bool mac = true;
+#else
+    constexpr bool mac = false;
+#endif
+    media::AudioSuiteClipRequest request;
+    request.clip = r.source.item;
+    request.tracks = r.tracks;
+    request.in = r.in.value_or(0);
+    request.out = r.out.value_or(-1);
+    request.handleSeconds = r.handleSeconds;
+    request.effect = r.effect.effect;
+    request.params = r.effect.params;
+    request.name = model::audioSuiteClipName(r.source.item.name, r.effect.name, mac);
+    media::MediaCreation creation = mediaCreation(QStringLiteral("transcode"));
+    if (!r.drive.isEmpty()) {
+        creation.videoDrive = r.drive;
+        creation.audioDrive = r.drive;
+    }
+    const auto made = media::audioSuiteClip(request, creation, error);
+    if (!made) return false;
+    // "Media Composer creates a new master clip in the target bin ... also creates an AudioSuite
+    // effect template in the bin" (p.803-804).
+    doc->addItem(*made);
+    model::AudioSuiteTemplate t;
+    t.effect = r.effect;
+    t.sourceBin = r.source.binId;
+    t.sourceClip = r.source.item.id;
+    t.tracks = r.tracks;
+    t.in = r.in;
+    t.out = r.out;
+    t.handleSeconds = r.handleSeconds;
+    doc->addItem(model::audioSuiteTemplateItem(t, model::audioSuiteTemplateName(r.source.item.name, r.effect.name, mac),
+                                               QDateTime::currentDateTimeUtc()));
+    // "When enabled, instructs the system to automatically load the resulting master clip into the
+    // Source monitor" (p.802).
+    if (r.loadResult) composer_->load(MonitorId::Source, doc->nodeId(), *made);
+    return true;
 }
 
 std::optional<model::AudioSuiteEffect> MainWindow::renderAudioSuite(const model::Segment& segment, const QString& drive,
