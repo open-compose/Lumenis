@@ -17,9 +17,9 @@
 // clip gain and pan, then the Master fader when it is included.
 namespace lumenis::media {
 
-// The guide's Mono, Dual Mono, Stereo, 5.1 and 7.1 (p.732). Cutthulhu makes the first two: its
-// sequences hold one clip channel per track, so a stereo or surround track of several channels
-// waits for multichannel tracks.
+// The guide's Mono, Dual Mono, Stereo, 5.1 and 7.1 (p.732). Cutthulhu makes the first two; stereo,
+// 5.1 and 7.1 output come with surround mixing (docs/spec/multichannel.md). Multichannel tracks mix
+// in through their channels as playback places them.
 enum class MixdownFormat {
     Mono,     // one track: every source track summed at its clip gain, without its pan
     DualMono, // the stereo mix as two mono tracks, the left panned left and the right panned right

@@ -51,6 +51,7 @@ class ImportEdlDialog;
 class ListTool;
 class AboutInfoDialog;
 class AudioEqTool;
+class ModifyDialog;
 class AudioPunchInTool;
 class AudioTrackEffectTool;
 class AudioMixer;
@@ -260,6 +261,11 @@ public:
     // dialog (tests; true: OK).
     void audioMixdown();
     void setMixdownHook(std::function<bool(AudioMixdownDialog&)> hook) { mixdownHook_ = std::move(hook); }
+    // Clip > Modify > Modify Clip (p.279-281) on the active bin's selection: the Modify dialog, and
+    // the clips it changes stored. `hook` stands in for the dialog's exec() in tests. Returns how many
+    // clips changed.
+    int modifySelection();
+    void setModifyHook(std::function<bool(ModifyDialog&)> hook) { modifyHook_ = std::move(hook); }
     // Writes an Audio Punch-In take as managed media on its drive and adds the clip to its bin
     // (AudioPunchInTool::ClipMaker).
     std::optional<model::BinItem> punchInClip(const AudioPunchInTool::Take& take, QString* error);
@@ -422,6 +428,7 @@ private:
     std::function<void(LinkedMediaDialog&)> linkedMediaHook_;
     std::function<bool(ConsolidateDialog&)> consolidateHook_;
     std::function<bool(AudioMixdownDialog&)> mixdownHook_;
+    std::function<bool(ModifyDialog&)> modifyHook_;
     std::function<bool(ExportAsDialog&)> exportHook_;
     std::function<bool(ImportEdlDialog&)> importEdlHook_;
     std::function<bool(ExportBinDialog&)> exportBinHook_;

@@ -1,0 +1,25 @@
+[
+  {
+    "name": "a stereo source track patches only to a stereo track; edited onto a new stereo track, then Split Track to Mono makes two mono tracks with a channel each, one undo step",
+    "guide": "p.629, p.671, p.734-735",
+    "clips": [{"name": "A"}, {"name": "S", "tracks": "A1-3", "formats": "Stereo A1A2"}],
+    "sequence": {"tracks": {"A1": [["A", 0, 30]]}},
+    "steps": [
+      {"load": "source", "clip": "S"},
+      {"source_tracks": ["A1"]},
+      {"patch": ["A1", "A1"], "refused": true},
+      {"command": "timeline.new.audio_track.stereo"},
+      {"patch": ["A1", "A3"]},
+      {"mark": "source", "in": 0, "out": 9},
+      {"mark": "record", "in": 0},
+      {"command": "edit.overwrite"},
+      {"split_mono": "A1", "refused": true},
+      {"split_mono": "A3"},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"}
+    ],
+    "expect": {"A1": [["A", 0, 30]], "A3": [["S", 0, 10, "A1"]], "A4": [["S", 0, 10, "A2"]]},
+    "expect_formats": {"A1": "mono", "A3": "mono", "A4": "mono"},
+    "expect_channels": {"A3": ["A1"], "A4": ["A2"]}
+  }
+]

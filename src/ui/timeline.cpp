@@ -3,6 +3,7 @@
 #include "lumenis/media/audio_fx.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
+#include "lumenis/model/multichannel.h"
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/marker_dialogs.h"
 #include "lumenis/ui/media_frames.h"
@@ -1960,10 +1961,38 @@ void Timeline::toggleMonitor(const QString& track) {
 }
 
 bool Timeline::patchTracks(const QString& source, const QString& record) {
+    // "You can only patch multichannel audio tracks to multichannel audio tracks, or mono tracks to
+    // mono tracks" (p.629): a record track that exists must have the source track's format.
+    const model::LoadedClip* src = composer_.state(MonitorId::Source).current();
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (src && rec && rec->item.kind == model::BinItemKind::Sequence) {
+        const model::Sequence seq = model::Sequence::fromItem(rec->item);
+        if (const model::Track* t = seq.track(record); t && t->kind == model::TrackKind::Audio) {
+            const model::AudioFormat format = model::sourceFormat(src->item, source);
+            if (format != t->format) {
+                return fail(tr("%1 is %2 and cannot be patched to %3, which is %4.")
+                                .arg(source, model::formatName(format).toLower(), record, model::formatName(t->format).toLower()));
+            }
+        }
+    }
     if (!patch_.patch(source, record)) return fail(tr("%1 cannot be patched to %2.").arg(source, record));
     view_->update();
     emit changed();
     return true;
+}
+
+bool Timeline::splitTracksToMono(const QString& track) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    QString error;
+    const bool ok = track.isEmpty() ? model::splitAllToMono(seq, &error) > 0 : model::splitToMono(seq, track, &error);
+    if (!ok) return fail(error);
+    // "A copy of your original sequence is saved to your bin as [sequence_name].Copy.[number]"
+    // (p.735-736).
+    emit sequenceCopyRequested(rec->binId, rec->item);
+    return commitSequence(track.isEmpty() ? tr("Split All Tracks to Mono") : tr("Split Track to Mono"), seq);
 }
 
 bool Timeline::fail(const QString& text) {
@@ -1990,6 +2019,9 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("timeline.new.audio_track.5_1_surround"),
         QStringLiteral("timeline.new.audio_track.7_1_surround"),
         QStringLiteral("timeline.new.data_track"),
+        QStringLiteral("timeline.split_all_tracks"),
+        QStringLiteral("clip.split_all_tracks"),
+        QStringLiteral("clip.audio.split_all_tracks"),
         QStringLiteral("timeline.restore_default_patch"),
         QStringLiteral("timeline.remove_match_frame_edits"),
         QStringLiteral("edit.copy_to_clipboard"),
@@ -2081,6 +2113,9 @@ bool Timeline::perform(const QString& id) {
         addTrack(TrackKind::Audio, AudioFormat::Surround71);
     } else if (id == QLatin1String("timeline.new.data_track")) {
         addTrack(TrackKind::Data);
+    } else if (id == QLatin1String("timeline.split_all_tracks") || id == QLatin1String("clip.split_all_tracks") ||
+               id == QLatin1String("clip.audio.split_all_tracks")) {
+        splitTracksToMono({});
     } else if (id == QLatin1String("timeline.restore_default_patch")) {
         patch_.restoreDefault();
         view_->update();
@@ -2280,6 +2315,11 @@ void Timeline::edit(model::EditKind kind, bool fitToFill) {
     }
     if (fitToFill && src->item.kind == model::BinItemKind::Sequence) {
         fail(tr("Fit to Fill needs a clip in the Source monitor."));
+        return;
+    }
+    // Multichannel tracks edit only onto tracks of their format (p.629).
+    if (const QString mismatch = model::editFormatMismatch(seq, src->item, patch_); !mismatch.isEmpty()) {
+        fail(mismatch);
         return;
     }
     const QStringList edited = model::applyEdit(seq, kind, plan, src->binId, src->item, patch_);
@@ -2664,6 +2704,10 @@ void Timeline::replaceEdit() {
         return;
     }
     const model::LoadedClip* src = source.current();
+    if (const QString mismatch = model::editFormatMismatch(seq, src->item, patch_); !mismatch.isEmpty()) {
+        fail(mismatch);
+        return;
+    }
     if (model::applyEdit(seq, model::EditKind::Overwrite, plan, src->binId, src->item, patch_).isEmpty()) {
         fail(tr("The selected tracks are locked."));
         return;
@@ -2868,6 +2912,10 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
         });
         menu->addAction(tr("Rename Track"))->setEnabled(false);
         if (t && t->kind == model::TrackKind::Audio) {
+            // Split Track to Mono (p.735), for multichannel tracks.
+            QAction* split = menu->addAction(tr("Split Track to Mono"));
+            split->setEnabled(t->format != model::AudioFormat::Mono);
+            connect(split, &QAction::triggered, this, [this, track] { splitTracksToMono(track); });
             // Audio Track Effects [n] > Insert [a-e] > [effect] (p.791), and the tool (p.793).
             menu->addSeparator();
             QMenu* fx = menu->addMenu(tr("Audio Track Effects %1").arg(t->number));
@@ -2904,6 +2952,8 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
     run(audio, tr("5.1 Surround"), QStringLiteral("timeline.new.audio_track.5_1_surround"));
     run(audio, tr("7.1 Surround"), QStringLiteral("timeline.new.audio_track.7_1_surround"));
     run(add, tr("Data Track"), QStringLiteral("timeline.new.data_track"));
+    // "Right-click in the Timeline, and select Split All Tracks to Mono" (p.637).
+    run(menu, tr("Split All Tracks to Mono"), QStringLiteral("timeline.split_all_tracks"));
     menu->addSeparator();
     run(menu, tr("Lock Tracks"), QStringLiteral("clip.lock_tracks"));
     run(menu, tr("Unlock Tracks"), QStringLiteral("clip.unlock_tracks"));

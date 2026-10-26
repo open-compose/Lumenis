@@ -302,7 +302,16 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   tool's master clip controls, `MainWindow::makeAudioSuiteClip`) and effect
   templates (`model::AudioSuiteTemplate`, Effect items in bins; dropped from
   the effect icon through `audioSuiteTemplateMime()`).
-  Next: 5.1/7.1 routing.
+5.6a is done: multichannel tracks (docs/spec/multichannel.md):
+  - Track Formats on clips and Set Multichannel Audio (`src/model/multichannel.*`,
+    `modify_dialog.*`, `MainWindow::modifySelection`);
+  - multichannel segments name their first channel; patching, editing and
+    moves only between tracks of one format; Split Track to Mono;
+  - playback places each channel for stereo speakers (`media::audioPieces`),
+    inserts per channel (`media::channelTrackKey`).
+  Tests: `tst_multichannel`, `tst_multichannel_audio`, `tst_multichannel_ui`,
+  scenario `12-multichannel.json`.
+  Next: 5.6b, surround mixing.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

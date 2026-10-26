@@ -91,7 +91,8 @@ headers in `include/lumenis/<library>/`.
   `audio_punch_in.*` (Audio Punch-In, docs/spec/punch-in.md),
   `audio_track_effect.*` (the Audio Track Effect tool,
   docs/spec/track-effects.md), `audio_suite.*` (the AudioSuite tool,
-  docs/spec/audiosuite.md) and
+  docs/spec/audiosuite.md), `modify_dialog.*` (Clip > Modify > Modify Clip's
+  Set Multichannel Audio, docs/spec/multichannel.md) and
   `mixdown_dialog.*`; the sound is `src/media/playback.*` and recording
   `src/media/audio_input.*`.
 

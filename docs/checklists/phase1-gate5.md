@@ -153,7 +153,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Audio > Apply Gain |  | p.216 | *later* | ☐ | | |
 | Audio > Center Pan |  | p.714 | *later* | ☐ | | |
 | Audio > Change Sample Rate |  | p.731 | *later* | ☐ | | |
-| Audio > Split All Tracks |  | p.736 | *later* | ☐ | | |
+| Audio > Split All Tracks |  | p.736 | works | ☐ | | |
 | Auto VO |  | p.754 | *later* | ☐ | | |
 | AutoSequence |  | p.499 | *later* | ☐ | | |
 | AutoSync |  | p.223 | *later* | ☐ | | |
@@ -173,7 +173,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Lock Tracks |  | p.633 | works | ☐ | | |
 | Unlock Tracks |  | p.634 | works | ☐ | | |
 | Loop Selected Clips |  | p.393 | *later* | ☐ | | |
-| Modify > Modify Clip |  | p.279 | *later* | ☐ | | |
+| Modify > Modify Clip |  | p.279 | works | ☐ | | |
 | Modify > Modify Pulldown Phase |  | p.127 | *later* | ☐ | | |
 | Modify > Unlink Media |  | p.210 | works | ☐ | | |
 | Read Audio Timecode |  | p.668 | *later* | ☐ | | |
@@ -181,7 +181,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Refresh Sequence > Motion Adapters/Timewarps |  | p.545 | *later* | ☐ | | |
 | Relink > Linked Media |  | p.364 | works | ☐ | | |
 | Relink > Managed Media |  | p.361 | works | ☐ | | |
-| Split All Tracks |  | p.637 | *later* | ☐ | | |
+| Split All Tracks |  | p.637 | works | ☐ | | |
 | New Title |  | p.327 | *later* | ☐ | | |
 
 ## Timeline menu
@@ -211,7 +211,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Render > Clear Renders at Position |  | p.61 | *later* | ☐ | | |
 | Restore Default Patch |  | p.630 | works | ☐ | | |
 | Show Sequence Map |  | p.606 | *later* | ☐ | | |
-| Split All Tracks |  | p.736 | *later* | ☐ | | |
+| Split All Tracks |  | p.736 | works | ☐ | | |
 | Create Unrendered Title Media |  | p.375 | *later* | ☐ | | |
 
 ## Composer menu
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 103 of them working with a project open; the
+* 211 menu commands, 107 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

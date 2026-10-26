@@ -5,6 +5,7 @@
 #include "lumenis/media/media.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/automation.h"
+#include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
 
 #include <QFileInfo>
@@ -89,6 +90,63 @@ int sidePan(int trackNumber) {
 
 } // namespace
 
+namespace {
+
+// The channels of a segment on a multichannel track (lumenis/model/multichannel.h), each a piece of
+// its own from the segment's first channel on, placed for stereo speakers as the guide's table has
+// it (p.687-688): a stereo track's channels left and right; a surround track's L and R left and
+// right, C and LFE in the centre, the surround channels left and right 3 dB down. The segment's pan
+// moves them all to one side (ours), its volume automation applies to every channel, and its pan
+// automation is not used. Each channel is mixed through its track's inserts on its own
+// (channelTrackKey()). AudioSuite effects are not used on multichannel tracks yet.
+void multichannelPieces(const model::Track& track, const model::Segment& s, std::int64_t start, const Rational& rate,
+                        const ClipLookup& clips, std::vector<AudioPiece>& out) {
+    const auto clip = clips(s.binId, s.clipId);
+    const auto ref = model::parseTrackName(s.sourceTrack);
+    if (!clip || !ref || ref->kind != model::TrackKind::Audio) return;
+    // Pans and gains in Pro Tools channel order: L C R Ls Rs Lfe; L C R Lss Rss Lsr Rsr Lfe.
+    struct Place {
+        double pan;
+        double db;
+    };
+    QList<Place> places;
+    switch (track.format) {
+    case model::AudioFormat::Stereo: places = {{-100, 0}, {100, 0}}; break;
+    case model::AudioFormat::Surround51: places = {{-100, 0}, {0, 0}, {100, 0}, {-100, -3}, {100, -3}, {0, 0}}; break;
+    case model::AudioFormat::Surround71:
+        places = {{-100, 0}, {0, 0}, {100, 0}, {-100, -3}, {100, -3}, {-100, -3}, {100, -3}, {0, 0}};
+        break;
+    case model::AudioFormat::Mono: places = {{0, 0}}; break;
+    }
+    const double perFrame = static_cast<double>(kPlaybackRate) * static_cast<double>(rate.den()) / static_cast<double>(rate.num());
+    for (int k = 0; k < places.size(); ++k) {
+        auto p = pieceFor(*clip, ref->number - 1 + k);
+        if (!p) continue;
+        p->sourceStart += framesToSamples(s.sourceIn, clip->editRate);
+        p->at = framesToSamples(start, rate);
+        p->length = framesToSamples(start + s.length, rate) - p->at;
+        const double pan = std::clamp(places.at(k).pan + s.pan, -100.0, 100.0);
+        const double gainDb = s.gain <= model::kGainOff ? model::kGainOff : s.gain + places.at(k).db;
+        panGains(pan, gainDb, &p->left, &p->right);
+        p->gain = gainDb <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, gainDb / 20.0));
+        p->gainDb = gainDb;
+        p->pan = pan;
+        p->eq = s.eq;
+        p->track = channelTrackKey(track.name(), k);
+        for (const model::AudioKey& key : s.volumeKeys) {
+            p->volumeKeys << model::AudioKey{(key.frame - static_cast<double>(s.sourceIn)) * perFrame, key.value};
+        }
+        // Volume automation sets the pan from `pan` (AudioPiece::automated()).
+        out.push_back(*p);
+    }
+}
+
+} // namespace
+
+QString channelTrackKey(const QString& track, int channel) {
+    return channel == 0 ? track : QStringLiteral("%1#%2").arg(track).arg(channel + 1);
+}
+
 // Clips (not sequences) play every channel from 0 for the clip's duration. For sequences each
 // non-filler segment of a monitored audio track plays its source clip's track from the segment's
 // source in, at its place in the sequence; the segment's pan, or the track's side when it has none,
@@ -119,10 +177,15 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
         if (track.kind != model::TrackKind::Audio) continue;
         if (monitored && !monitored(track.name())) continue;
         std::int64_t at = 0;
+        const int channels = model::channelCount(track.format);
         for (const model::Segment& s : track.segments) {
             const std::int64_t start = at;
             at += s.length;
             if (s.isFiller() || !clips) continue;
+            if (channels > 1) {
+                multichannelPieces(track, s, start, rate, clips, out);
+                continue;
+            }
             std::optional<AudioPiece> p;
             // A rendered AudioSuite effect plays its rendered sound, which starts at the segment's
             // start and already has the clip gain in it (the render order, p.700): the pan, EQ and
@@ -209,7 +272,9 @@ TrackInserts trackInserts(const model::BinItem& item, bool bypassAll) {
         for (const auto& in : t.inserts) {
             if (in && !in->bypass) list << *in;
         }
-        if (!list.isEmpty()) out[t.name()] = list;
+        if (list.isEmpty()) continue;
+        // A multichannel track runs each channel through its own copy of the effects.
+        for (int k = 0; k < model::channelCount(t.format); ++k) out[channelTrackKey(t.name(), k)] = list;
     }
     return out;
 }

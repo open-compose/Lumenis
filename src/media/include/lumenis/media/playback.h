@@ -57,16 +57,21 @@ struct AudioPiece {
     // its gains; none, not In, or flat: unfiltered.
     std::optional<model::AudioEq> eq;
     bool equalised() const;
-    // The sequence track it plays on ("A1"); empty for a clip's channel. A track with Audio Track
-    // Effect inserts (TrackInserts) is mixed through them.
+    // The sequence track it plays on ("A1"; "A1#2" for the second channel of a multichannel track,
+    // channelTrackKey()); empty for a clip's channel. A track with Audio Track Effect inserts
+    // (TrackInserts) is mixed through them.
     QString track;
 };
 
 // The Audio Track Effect inserts each track plays through (Editing Guide p.790-795;
 // lumenis/media/audio_fx.h), a to e, without the bypassed ones.
 using TrackInserts = std::map<QString, QList<model::TrackInsert>>;
-// A sequence's inserts; empty for a clip, or with `bypassAll` (Ctrl+Bypass, p.794).
+// A sequence's inserts; empty for a clip, or with `bypassAll` (Ctrl+Bypass, p.794). A multichannel
+// track's are listed once for each of its channels, under channelTrackKey().
 TrackInserts trackInserts(const model::BinItem& item, bool bypassAll = false);
+// What AudioPiece::track and TrackInserts call channel `channel` (0-based) of a track: the track's
+// name for the first, "A1#2" and so on for the others of a multichannel track.
+QString channelTrackKey(const QString& track, int channel);
 
 // Equal-power gains for a pan from -100 (left) to 100 (right), times a
 // gain in dB.

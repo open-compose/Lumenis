@@ -229,8 +229,15 @@ public:
 
     // Patching from the Track Selector (p.629).
     // Returns false, with a message, if the patch is not allowed (audio only to audio, video
-    // only to video, never data; model::TrackPatch::canPatch).
+    // only to video, never data; model::TrackPatch::canPatch; and an audio track only to an
+    // existing record track of its format, p.629).
     bool patchTracks(const QString& source, const QString& record);
+    // Split Track to Mono (p.734-735) on `track`, or with an empty name Split All Tracks to Mono
+    // (Timeline > Split All Tracks, Clip > Split All Tracks, Clip > Audio > Split All Tracks, p.736):
+    // model::splitToMono on the record sequence, an undo step, after asking for a copy of the
+    // sequence as it was (sequenceCopyRequested). False with a message for a mono track or a
+    // sequence without multichannel tracks.
+    bool splitTracksToMono(const QString& track);
     // Select or deselect a source or record track button.
     void toggleSourceTrack(const QString& track);
     void toggleRecordTrack(const QString& track);
@@ -558,6 +565,9 @@ signals:
     void commandRequested(const QString& commandId);
     // The track button's Audio Track Effect Tool item (p.793, p.795): the tool, on that track.
     void trackEffectToolRequested(const QString& track);
+    // Before Split Track to Mono changes a sequence: a copy of it as it was belongs in its bin
+    // ("[sequence_name].Copy.[number]", p.735); MainWindow makes it.
+    void sequenceCopyRequested(const QString& binId, const model::BinItem& sequence);
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;

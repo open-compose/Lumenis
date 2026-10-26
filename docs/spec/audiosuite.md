@@ -165,6 +165,7 @@ The controls follow the picture on p.797:
   (p.803-805).
 * Preview, Bypass, Find Level, Plug-In Settings and Compare (p.798-799).
 * Nested levels and real-time EQ in the tool (p.800).
+* AudioSuite effects on multichannel tracks (docs/spec/multichannel.md).
 * Cancelling a render (p.805), and a progress bar while it runs.
 * Rendered files belong to no clip: the Media Tool lists them with the
   other media files, and Delete Media can delete them (the segment then

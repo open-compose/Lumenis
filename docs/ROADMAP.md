@@ -786,7 +786,15 @@ dropped on the tool become new master clips of managed media with their
 templates beside them (`media::audioSuiteClip`, the tool's master clip
 controls), templates find their clips again (Find Source From Effect),
 the effect icon saves templates to bins, the Fast menu applies them;
-Duplicate. Next: 5.1/7.1 routing.
+Duplicate.
+5.6a, multichannel tracks (docs/spec/multichannel.md), is done: Track
+Formats on clips and Clip > Modify > Modify Clip's Set Multichannel Audio
+(`src/model/multichannel.*`, `modify_dialog.*`); stereo, 5.1 and 7.1
+segments edited, patched and moved only onto tracks of their format; their
+channels played for stereo speakers as the guide's table has them, each
+through its own copy of the track's effects; Split Track to Mono and Split
+All Tracks. Next: 5.6b, surround mixing (Sequence and Monitor Mix Format,
+panning, 5.1/7.1 mixdown).
 
 ### Phase 6 — Effects and rendering
 * Transitions, motion effects, timewarps, Color Correction (HSL and curves),

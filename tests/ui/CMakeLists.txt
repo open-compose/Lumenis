@@ -34,6 +34,7 @@ lumenis_add_test(tst_audio_media SOURCES tst_audio_media.cpp LIBS ${ui_test_libs
 lumenis_add_test(tst_automation_ui SOURCES tst_automation_ui.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_audio_eq_ui SOURCES tst_audio_eq_ui.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_audio_suite_ui SOURCES tst_audio_suite_ui.cpp LIBS ${ui_test_libs} lumenis::media)
+lumenis_add_test(tst_multichannel_ui SOURCES tst_multichannel_ui.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_audio_punch_in SOURCES tst_audio_punch_in.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_track_effects SOURCES tst_track_effects.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_source_browser SOURCES tst_source_browser.cpp LIBS ${ui_test_libs} lumenis::media)

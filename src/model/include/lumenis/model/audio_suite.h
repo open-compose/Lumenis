@@ -28,8 +28,8 @@ bool needsRender(const Segment& segment);
 
 // The AudioSuite effect on audio track `track`'s segments that overlap record frames [from, to):
 // `effect` (its render forgotten), or without one the effect removed. A segment that already has this
-// effect with these values keeps its render. Filler and a locked track are left alone. Returns how
-// many segments changed.
+// effect with these values keeps its render. Filler, a locked track and multichannel tracks (later)
+// are left alone. Returns how many segments changed.
 int setAudioSuite(Sequence& sequence, const QString& track, std::int64_t from, std::int64_t to,
                   const std::optional<AudioSuiteEffect>& effect);
 

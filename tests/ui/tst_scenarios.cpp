@@ -6,6 +6,7 @@
 // redone to its end, and each state is compared by hash with the one recorded on the way (gate 2).
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/automation.h"
+#include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/audio_eq.h"
 #include "lumenis/ui/audio_suite.h"
@@ -140,6 +141,8 @@ struct Run {
             i.durationFrames = o.value(QStringLiteral("frames")).toInteger(100);
             i.editRate = kRate;
             i.fields.insert(QStringLiteral("Tracks"), o.value(QStringLiteral("tracks")).toString(QStringLiteral("V1 A1-2")));
+            // Multichannel groups, as the Track Formats column has them (p.671).
+            if (o.contains(QStringLiteral("formats"))) i.fields.insert(QStringLiteral("Track Formats"), o.value(QStringLiteral("formats")).toString());
             clips.insert(i.name, i);
             items.insert(i.id, i);
         }
@@ -214,7 +217,18 @@ struct Run {
         }
         if (o.contains(QStringLiteral("patch"))) {
             const QJsonArray a = o.value(QStringLiteral("patch")).toArray();
-            if (!timeline.patchTracks(a.at(0).toString(), a.at(1).toString())) return fail(QStringLiteral("cannot patch"));
+            const bool ok = timeline.patchTracks(a.at(0).toString(), a.at(1).toString());
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the patch was not refused") : QStringLiteral("cannot patch: ") + timeline.lastMessage());
+            }
+            return true;
+        }
+        if (o.contains(QStringLiteral("split_mono"))) {
+            // Split Track to Mono on a track, or "" for Split All Tracks to Mono (p.734-736).
+            const bool ok = timeline.splitTracksToMono(o.value(QStringLiteral("split_mono")).toString());
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the split was not refused") : timeline.lastMessage());
+            }
             return true;
         }
         if (o.contains(QStringLiteral("sync_lock"))) {
@@ -549,6 +563,26 @@ private slots:
                 const QJsonValue out = want.value(QStringLiteral("out"));
                 QCOMPARE(m.out().has_value(), !out.isNull());
                 if (m.out()) QCOMPARE(*m.out(), out.toInteger());
+            }
+        }
+        // Track formats ("mono", "stereo", "5.1", "7.1") and the channels the material comes from.
+        const QJsonObject formats = scenario.value(QStringLiteral("expect_formats")).toObject();
+        const QJsonObject channels = scenario.value(QStringLiteral("expect_channels")).toObject();
+        if (!formats.isEmpty() || !channels.isEmpty()) {
+            const model::Sequence s = model::Sequence::fromItem(run.composer.state(MonitorId::Record).current()->item);
+            for (auto it = formats.begin(); it != formats.end(); ++it) {
+                const model::Track* t = s.track(it.key());
+                QVERIFY2(t, qPrintable(it.key()));
+                QCOMPARE(model::formatName(t->format).toLower(), it.value().toString());
+            }
+            for (auto it = channels.begin(); it != channels.end(); ++it) {
+                const model::Track* t = s.track(it.key());
+                QVERIFY2(t, qPrintable(it.key()));
+                QJsonArray got;
+                for (const model::Segment& g : t->segments) {
+                    if (!g.isFiller()) got.append(g.sourceTrack);
+                }
+                QCOMPARE(got, it.value().toArray());
             }
         }
         // Audio Track Effect inserts: per track, the effect in each slot a-e, or null.

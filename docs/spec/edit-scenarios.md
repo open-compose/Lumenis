@@ -57,6 +57,11 @@ Each file is a JSON list of scenarios:
     AudioSuite plug-in in the Plug-In Selection menu and sets values as its
     dialog's OK does, and `{"audiosuite_menu": item}` chooses an item of its
     Fast menu (p.797-799);
+  * `{"split_mono": track or ""}` is Split Track to Mono on a track, or
+    Split All Tracks to Mono (p.734-736); `{"patch": [source, record],
+    "refused": true}` a patch that must be refused, as one across audio
+    formats (p.629); a clip's `"formats"` is its Track Formats column
+    (p.671);
   * `{"punch_in": {"clip": name, "targets": [track or "" for New Track, ...],
     "punches": [[record frame, length, clip frame], ...]}}` edits in an Audio
     Punch-In take (p.749-751), an undo step per punch-in;
@@ -74,7 +79,9 @@ Each file is a JSON list of scenarios:
   defaults), and one with an AudioSuite effect `{"audiosuite": [plug-in,
   {the values not at their defaults}]}`.
   **expect_monitors:** a monitor's position, clip, and marks (`null`: no
-  mark).
+  mark). **expect_formats** gives tracks' audio formats ("mono", "stereo",
+  "5.1", "7.1") and **expect_channels** the channels a track's segments
+  come from.
 
 The test records a SHA-256 of the sequence (`Sequence::toJson()`) at each
 undo level as the steps run; an Undo or Redo among the steps must give back

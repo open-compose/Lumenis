@@ -265,8 +265,10 @@ public:
     // Timeline > New > Video Track, Audio Track, Data Track (p.625): the next
     // free number, or nothing past the limit (one data track).
     std::optional<QString> addTrack(TrackKind kind, AudioFormat format = AudioFormat::Mono);
-    // Adds the named track if it is missing.
-    Track* ensureTrack(const QString& name);
+    // Adds the named track if it is missing; a new audio track gets `format`.
+    Track* ensureTrack(const QString& name, AudioFormat format = AudioFormat::Mono);
+    // Puts a whole track in, replacing any of the same name (Split Track to Mono rebuilds tracks so).
+    void restoreTrack(const Track& track);
 
     // The length of the longest track.
     std::int64_t duration() const;
@@ -332,7 +334,8 @@ private:
 };
 
 // The tracks a monitor's clip offers on the source side of the Track
-// Selector (p.626): a sequence's own tracks, a clip's Tracks column, or V1,
+// Selector (p.626): a sequence's own tracks, a clip's Tracks column (its audio
+// channels grouped by its Track Formats, lumenis/model/multichannel.h), or V1,
 // A1 and A2 for clips without one.
 QStringList sourceTracksOf(const BinItem& item);
 
@@ -419,12 +422,19 @@ EditPlan planFitToFill(const EditMarks& source, const EditMarks& record, double*
 enum class EditKind { SpliceIn, Overwrite };
 
 // Edits the marked source material into the sequence on every edited
-// track pair. Returns the record tracks changed.
+// track pair. Returns the record tracks changed. A pair whose record track
+// exists with another audio format than the source track's is left out
+// (multichannel tracks patch only to tracks of their format, p.629; see
+// editFormatMismatch); missing record tracks are added in the source's format.
 // A source sequence is edited in as its segments (taken from its patched track); a clip becomes
 // one segment per track pair. Missing record tracks are added; locked ones are skipped. A splice
 // into a sync-locked track splices filler into the other sync-locked tracks (p.493).
 QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, const QString& binId,
                       const BinItem& source, const TrackPatch& patch);
+// The first edited pair whose record track exists with another format than its source track
+// ("you can only patch multichannel audio tracks to multichannel audio tracks, or mono tracks to
+// mono tracks", p.629), as "A1 is stereo but A2 is mono"; empty when every pair matches.
+QString editFormatMismatch(const Sequence& sequence, const BinItem& source, const TrackPatch& patch);
 
 // Lift or Extract the frames [start, start + length) on the given tracks.
 // Locked tracks are left alone. Extract also extracts from the other

@@ -31,7 +31,8 @@ bool needsRender(const Segment& s) {
 int setAudioSuite(Sequence& sequence, const QString& name, std::int64_t from, std::int64_t to,
                   const std::optional<AudioSuiteEffect>& effect) {
     Track* t = sequence.track(name);
-    if (!t || t->locked || t->kind != TrackKind::Audio) return 0;
+    // Multichannel tracks take no AudioSuite effects yet (docs/spec/audiosuite.md).
+    if (!t || t->locked || t->kind != TrackKind::Audio || t->format != AudioFormat::Mono) return 0;
     int changed = 0;
     std::int64_t at = 0;
     for (Segment& s : t->segments) {

@@ -24,6 +24,7 @@
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/audio_eq.h"
 #include "lumenis/ui/audio_punch_in.h"
+#include "lumenis/ui/modify_dialog.h"
 #include "lumenis/ui/audio_suite.h"
 #include "lumenis/ui/audio_track_effect.h"
 #include "lumenis/ui/audio_tools.h"
@@ -971,6 +972,12 @@ void MainWindow::createTools() {
         if (composer_->isPlaying() && std::abs(composer_->speed()) <= 3) composer_->play(composer_->speed());
     });
     connect(audioTrackEffect_, &AudioTrackEffectTool::previewChanged, replay, qOverload<>(&QTimer::start));
+    // Split Track to Mono keeps a copy of the sequence as it was in its bin (p.735).
+    connect(timeline_, &Timeline::sequenceCopyRequested, this, [this](const QString& binId, const model::BinItem& sequence) {
+        BinDocument* doc = binContainer_->document(binId);
+        if (!doc || doc->isReadOnly()) return;
+        doc->addItem(model::duplicateItem(doc->bin(), sequence, QDateTime::currentDateTimeUtc()));
+    });
     connect(timeline_, &Timeline::trackEffectToolRequested, this, [this](const QString& track) {
         audioTrackEffect_->select(track, 0);
         showTool(QStringLiteral("AudioTrackEffect"));
@@ -1463,6 +1470,27 @@ int MainWindow::unlinkSelection() {
         ++unlinked;
     }
     return unlinked;
+}
+
+int MainWindow::modifySelection() {
+    BinView* view = binContainer_->activeView();
+    if (!view) return 0;
+    QList<model::BinItem> clips;
+    for (const QString& id : view->selectedIds()) {
+        if (const model::BinItem* found = view->document().bin().item(id)) clips << *found;
+    }
+    if (clips.isEmpty()) return 0;
+    ModifyDialog dialog(clips, this);
+    const bool ok = modifyHook_ ? modifyHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok) return 0;
+    QStringList errors;
+    const QList<model::BinItem> changed = dialog.apply(clips, &errors);
+    for (const model::BinItem& item : changed) storeClip(view->document().nodeId(), item);
+    for (const QString& e : errors) ConsoleLog::instance().append(tr("Modify: %1").arg(e));
+    if (!errors.isEmpty() && !modifyHook_) {
+        QMessageBox::warning(this, tr("Modify"), errors.join(QLatin1Char('\n')));
+    }
+    return static_cast<int>(changed.size());
 }
 
 // ---- Managed media (Phase 2.4)
@@ -2843,6 +2871,7 @@ void MainWindow::installPanelHandlers() {
     // and off.
     commands_.action(QStringLiteral("play.digital_audio_scrub"))->setCheckable(true);
     handle("clip.modify.unlink_media", [this] { unlinkSelection(); });
+    handle("clip.modify.modify_clip", [this] { modifySelection(); });
     handle("tools.source_browser", [this] { showSourceBrowser(); });
     // The Tool Palette button (Other tab, p.392).
     handle("other.tool_palette", [this] { showTool(QStringLiteral("ToolPalette")); });

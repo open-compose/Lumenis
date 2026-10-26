@@ -10,6 +10,8 @@ lumenis_add_test(tst_audio_eq SOURCES tst_audio_eq.cpp LIBS lumenis::media)
 lumenis_add_test(tst_audio_fx SOURCES tst_audio_fx.cpp LIBS lumenis::media)
 # AudioSuite: the processes, the effect on segments, and rendering (docs/spec/audiosuite.md).
 lumenis_add_test(tst_audio_suite SOURCES tst_audio_suite.cpp LIBS lumenis::media)
+# Multichannel tracks as they play (docs/spec/multichannel.md).
+lumenis_add_test(tst_multichannel_audio SOURCES tst_multichannel_audio.cpp LIBS lumenis::media)
 
 # The CLAP host's tests load a CLAP file of our own (clap_test_plugin.cpp), built as
 # cutthulhu-test.clap in a folder of its own.

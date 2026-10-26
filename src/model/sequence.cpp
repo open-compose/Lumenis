@@ -1,6 +1,7 @@
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
+#include "lumenis/model/multichannel.h"
 
 #include <QJsonArray>
 #include <QRegularExpression>
@@ -425,13 +426,19 @@ std::optional<QString> Sequence::addTrack(TrackKind kind, AudioFormat format) {
     return std::nullopt;
 }
 
-Track* Sequence::ensureTrack(const QString& name) {
+Track* Sequence::ensureTrack(const QString& name, AudioFormat format) {
     if (Track* t = track(name)) return t;
     const auto ref = parseTrackName(name);
     if (!ref || ref->number > (ref->kind == TrackKind::Data ? 1 : kMaxTracks)) return nullptr;
-    tracks_ << Track{ref->kind, ref->number, AudioFormat::Mono, {}};
+    tracks_ << Track{ref->kind, ref->number, ref->kind == TrackKind::Audio ? format : AudioFormat::Mono, {}};
     sortTracks();
     return track(name);
+}
+
+void Sequence::restoreTrack(const Track& t) {
+    removeTrack(t.name());
+    tracks_ << t;
+    sortTracks();
 }
 
 std::int64_t Sequence::duration() const {
@@ -579,6 +586,16 @@ QList<Segment> Sequence::extract(const QString& name, std::int64_t start, std::i
 QStringList sourceTracksOf(const BinItem& item) {
     if (item.kind == BinItemKind::Sequence) return Sequence::fromItem(item).trackNames();
     QStringList tracks = parseTrackList(item.fields.value(QStringLiteral("Tracks")));
+    if (!tracks.isEmpty() && !trackFormatsOf(item).isEmpty()) {
+        // The audio channels as grouped by the Track Formats.
+        QStringList grouped;
+        for (const QString& t : tracks) {
+            const auto ref = parseTrackName(t);
+            if (ref && ref->kind != TrackKind::Audio) grouped << t;
+        }
+        for (const SourceAudioTrack& a : sourceAudioTracks(item)) grouped << a.name;
+        return grouped;
+    }
     if (!tracks.isEmpty()) return tracks;
     if (item.kind == BinItemKind::AudioClip) return {QStringLiteral("A1"), QStringLiteral("A2")};
     return {QStringLiteral("V1"), QStringLiteral("A1"), QStringLiteral("A2")};
@@ -768,8 +785,11 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
     const std::optional<Sequence> nested =
         source.kind == BinItemKind::Sequence ? std::optional<Sequence>(Sequence::fromItem(source)) : std::nullopt;
     for (const auto& [from, to] : patch.editPairs(sequence)) {
-        if (const Track* existing = sequence.track(to); existing && existing->locked) continue;
-        if (!sequence.ensureTrack(to)) continue;
+        const AudioFormat format = sourceFormat(source, from);
+        if (const Track* existing = sequence.track(to); existing && (existing->locked || (existing->kind == TrackKind::Audio && existing->format != format))) {
+            continue;
+        }
+        if (!sequence.ensureTrack(to, format)) continue;
         QList<Segment> material;
         if (nested) {
             material = nested->material(from, plan.sourceStart, plan.length);
@@ -779,7 +799,8 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
             s.sourceMob = source.mobId;
             s.binId = binId;
             s.name = source.name;
-            s.sourceTrack = from;
+            // A multichannel source track is named by its first channel (multichannel.h).
+            s.sourceTrack = sourceChannel(source, from);
             s.sourceIn = plan.sourceStart;
             s.length = plan.length;
             material << s;
@@ -805,6 +826,18 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
         }
     }
     return changed;
+}
+
+QString editFormatMismatch(const Sequence& sequence, const BinItem& source, const TrackPatch& patch) {
+    for (const auto& [from, to] : patch.editPairs(sequence)) {
+        const Track* existing = sequence.track(to);
+        if (!existing || existing->kind != TrackKind::Audio) continue;
+        const AudioFormat format = sourceFormat(source, from);
+        if (existing->format != format) {
+            return QObject::tr("%1 is %2 but %3 is %4.").arg(from, formatName(format).toLower(), to, formatName(existing->format).toLower());
+        }
+    }
+    return {};
 }
 
 // Tracks that had nothing in the range are not reported as changed.
@@ -1031,6 +1064,7 @@ QList<SegmentRef> moveSegments(Sequence& sequence, const QList<SegmentRef>& segm
         Segment segment;
         QString to;
         std::int64_t at = 0;
+        AudioFormat format = AudioFormat::Mono; // a track added for it takes the source's format
     };
     QList<Piece> pieces;
     for (const SegmentRef& ref : segments) {
@@ -1045,8 +1079,15 @@ QList<SegmentRef> moveSegments(Sequence& sequence, const QList<SegmentRef>& segm
         if (const Track* t = sequence.track(ref.track); !copy && t->locked) {
             return failed(QStringLiteral("%1 is locked.").arg(ref.track));
         }
+        // "You can move mono audio tracks only to other mono audio tracks, and you can move stereo
+        // audio tracks only to stereo tracks" (p.610-611); so too for surround tracks.
+        if (const Track* from = sequence.track(ref.track), *dest = sequence.track(*to);
+            from && dest && from->kind == TrackKind::Audio && dest->format != from->format) {
+            return failed(QStringLiteral("%1 and %2 have different audio formats.").arg(ref.track, *to));
+        }
         if (ref.start + frames < 0) return failed(QStringLiteral("The segment would start before the sequence."));
-        pieces << Piece{ref, *seg, *to, ref.start + frames};
+        const Track* from = sequence.track(ref.track);
+        pieces << Piece{ref, *seg, *to, ref.start + frames, from ? from->format : AudioFormat::Mono};
     }
     if (pieces.isEmpty()) return failed(QStringLiteral("Select segments to move."));
     // Remove the originals, the latest first so earlier ones keep their
@@ -1075,7 +1116,7 @@ QList<SegmentRef> moveSegments(Sequence& sequence, const QList<SegmentRef>& segm
     std::sort(pieces.begin(), pieces.end(), [](const Piece& a, const Piece& b) { return a.at > b.at; });
     QList<SegmentRef> moved;
     for (const Piece& p : pieces) {
-        if (!sequence.ensureTrack(p.to)) continue;
+        if (!sequence.ensureTrack(p.to, p.format)) continue;
         if (kind == EditKind::SpliceIn) {
             sequence.splice(p.to, p.at, {p.segment});
             for (SegmentRef& m : moved) {
