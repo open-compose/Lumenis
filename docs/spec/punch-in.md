@@ -126,6 +126,8 @@ entitlement. BUILDING.md, "Audio Punch-In records silence", has the steps.
 * The Audio tool's meters showing the input with an orange I (p.751).
 * Peak Hold while recording (p.753).
 * GPI devices (p.776).
-* Latency compensation.
+* Latency compensation. Until then, Stop waits (at most a second plus the device's latency) for
+  the input to bring in the sound through the last punch-in's end before it stops the input
+  (ours): input runs behind play, and a busy machine left takes a few frames short.
 * Silencing only the punched part of a target track.
 * The Audio Project setting's Input tab (p.749 note).

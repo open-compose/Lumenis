@@ -7,6 +7,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QElapsedTimer>
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -19,7 +20,9 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <thread>
 
 // The Audio Punch-In tool (audio_punch_in.h; Editing Guide p.746-753; docs/spec/punch-in.md). A take
 // runs from the first Play In/Out or Record to Stop: the input records all the while (from the
@@ -407,6 +410,19 @@ void AudioPunchInTool::finish(bool keep) {
     finishing_ = true;
     timeline_.composer().stop();
     finishing_ = false;
+    if (keep) {
+        // The input runs behind play by its latency (and a busy machine's delays): before it stops,
+        // let it bring in the sound through the end of the last punch-in, so the take is not cut
+        // short. Bounded, in case the device has stopped delivering.
+        std::int64_t needed = 0;
+        for (const Timeline::PunchIn& p : punches_) needed = std::max(needed, p.source + p.length);
+        QElapsedTimer waited;
+        waited.start();
+        const auto limit = static_cast<qint64>(1000 + input_->latency() * 1000);
+        while (recordedFrames() < needed && waited.elapsed() < limit) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
+    }
     input_->stop();
     const QList<Timeline::PunchIn> punches = punches_;
     const QStringList targets = takeTargets_;
