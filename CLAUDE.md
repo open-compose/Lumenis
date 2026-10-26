@@ -274,6 +274,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   - the tool (`src/ui/audio_eq.*`), with Set EQ and Remove EQs, Remove
     Effect and Bypass RT EQ.
   Tests: `tst_audio_eq`, `tst_audio_eq_ui`, scenario `08-audio-eq.json`.
+5.4 is done: Audio Punch-In (docs/spec/punch-in.md):
+  - recording through miniaudio, simulated in tests (`src/media/audio_input.*`);
+  - the tool (`src/ui/audio_punch_in.*`) and `Timeline::punchIn`;
+  - the macOS microphone permission (packaging/macos/Info.plist.in, checked
+    by the installer gate).
+  Tests: `tst_audio_punch_in`, scenario `09-audio-punch-in.json`.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

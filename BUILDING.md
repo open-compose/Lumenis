@@ -315,6 +315,26 @@ python3 scripts/make-icons.py                                  # every platform'
 
 ## Troubleshooting
 
+### Audio Punch-In records silence
+
+Each system has to let Cutthulhu use the microphone (Tools > Audio
+Punch-In; docs/spec/punch-in.md):
+* **macOS** asks the first time a take starts. That needs the app's
+  `NSMicrophoneUsageDescription` (packaging/macos/Info.plist.in). Without it
+  the input gives only silence, so CI's installer gate checks that the key
+  is in the .dmg's app. A Developer ID build also needs the audio-input
+  entitlement (packaging/macos/entitlements.plist, used by
+  sign-and-notarize.sh). If the question was answered No, allow it again
+  under System Settings > Privacy & Security > Microphone. A build run from
+  the terminal asks on the terminal's behalf.
+* **Windows**: Settings > Privacy & security > Microphone, "Let desktop
+  apps access your microphone".
+* **Linux**: the input chosen in PipeWire or PulseAudio (for example
+  `pavucontrol`, Input Devices) must not be muted.
+
+The Input Source menu lists the inputs miniaudio finds; "Default" is the
+system's choice.
+
 ### "Artifact storage quota has been hit"
 
 GitHub keeps a private repository's CI artifacts in a small storage quota.

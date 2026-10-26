@@ -16,7 +16,9 @@ dmg="$2"
 : "${DEVELOPER_ID:?set DEVELOPER_ID}"
 : "${NOTARY_PROFILE:?set NOTARY_PROFILE}"
 
-codesign --force --deep --options runtime --timestamp --sign "$DEVELOPER_ID" "$app"
+# The hardened runtime needs the audio-input entitlement for Audio Punch-In's microphone.
+codesign --force --deep --options runtime --timestamp --entitlements "$(dirname "$0")/entitlements.plist" \
+    --sign "$DEVELOPER_ID" "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
 
 rm -f "$dmg"

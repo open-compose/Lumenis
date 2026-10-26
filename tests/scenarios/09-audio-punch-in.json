@@ -1,0 +1,21 @@
+[
+  {
+    "name": "two punch-ins of one take go to a new track and over A2, an undo step each; a locked track is refused first",
+    "guide": "p.749-751",
+    "clips": [{"name": "A"}, {"name": "VO", "tracks": "A1-2", "frames": 200}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50]], "A1": [["A", 0, 50]], "A2": [["A", 0, 50]]}},
+    "steps": [
+      {"lock": "A1"},
+      {"punch_in": {"clip": "VO", "targets": ["A1"], "punches": [[0, 5, 0]]}, "refused": true},
+      {"punch_in": {"clip": "VO", "targets": ["", "A2"], "punches": [[10, 10, 30], [30, 5, 60]]}},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"},
+      {"command": "edit.undo"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 50]],
+      "A1": [["A", 0, 50]],
+      "A2": [["A", 0, 10], ["VO", 30, 10], ["A", 20, 30]],
+      "A3": [["filler", 10], ["VO", 30, 10, "A1"]]}
+  }
+]

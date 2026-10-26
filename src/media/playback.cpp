@@ -1,5 +1,6 @@
 #include "lumenis/media/playback.h"
 
+#include "lumenis/media/audio_input.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
 #include "lumenis/model/automation.h"
@@ -460,6 +461,7 @@ int AudioPlayer::pull(float* out, int count) {
     }
     // Not ready yet: silence, and the clock waits.
     std::fill(out + 2 * n, out + 2 * std::max(count, 0), 0.0f);
+    if (AudioInput* input = monitor_.load()) input->addMonitor(out, count);
     readAt_.store(r);
     played_ += n;
     pulledAt_ = std::chrono::duration_cast<std::chrono::nanoseconds>(

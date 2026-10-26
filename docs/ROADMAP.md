@@ -746,6 +746,15 @@ The null test has automated cases at about -137 dBFS.
   graph, In, Bypass RT EQ, Track Selection and the Fast menu's Set EQ and
   Remove EQs; Remove Effect and the Timeline's EQ icon.
 The EQ templates, Audio Loop Play and Render Effect come later.
+5.4, Audio Punch-In (docs/spec/punch-in.md), is done:
+* recording from the system's inputs through miniaudio, with monitoring
+  (`src/media/audio_input.*`);
+* the tool (`src/ui/audio_punch_in.*`): Play In/Out with looping, Record
+  with preroll, postroll and handles, Stop at end or at mark out, the input
+  channels and Timeline Track menus, target drive and bin;
+* each take one "Voice Over" master clip of managed media, each punch-in an
+  undo step (`Timeline::punchIn`).
+On macOS the bundle asks for the microphone (Info.plist, entitlement).
 
 ### Phase 6 — Effects and rendering
 * Transitions, motion effects, timewarps, Color Correction (HSL and curves),

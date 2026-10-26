@@ -308,6 +308,25 @@ struct Run {
             }
             return fail(QStringLiteral("no %1 in the Audio EQ Fast menu").arg(o.value(QStringLiteral("eq_menu")).toString()));
         }
+        if (o.contains(QStringLiteral("punch_in"))) {
+            // A recorded take edited in by Audio Punch-In (p.749-751): {"clip": name, "targets": [track or
+            // "" for New Track, ...], "punches": [[record frame, length, clip frame], ...]}.
+            const QJsonObject p = o.value(QStringLiteral("punch_in")).toObject();
+            const QString name = p.value(QStringLiteral("clip")).toString();
+            if (!clips.contains(name)) return fail(QStringLiteral("no clip %1").arg(name));
+            QStringList targets;
+            for (const QJsonValue& t : p.value(QStringLiteral("targets")).toArray()) targets << t.toString();
+            QList<Timeline::PunchIn> punches;
+            for (const QJsonValue& v : p.value(QStringLiteral("punches")).toArray()) {
+                const QJsonArray a = v.toArray();
+                punches << Timeline::PunchIn{a.at(0).toInteger(), a.at(1).toInteger(), a.at(2).toInteger()};
+            }
+            const bool ok = timeline.punchIn(QStringLiteral("bin"), clips.value(name), targets, punches).has_value();
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the punch-in was not refused") : timeline.lastMessage());
+            }
+            return true;
+        }
         if (o.contains(QStringLiteral("lock"))) {
             timeline.setTracksLocked({o.value(QStringLiteral("lock")).toString()}, true);
             return true;
@@ -420,6 +439,13 @@ private slots:
         // Gate 2: the state at each undo level (QMap: by level). An undo or redo among the steps
         // must give back the state recorded at its level; a new edit replaces the levels above.
         QMap<int, QByteArray> states{{run.timeline.history().undoCount(), run.hash()}};
+        // A step that makes several undo steps (Audio Punch-In, one per punch-in) leaves the levels
+        // between unrecorded: each is recorded the first time undo or redo reaches it, and compared
+        // after that.
+        auto same = [&](int level) {
+            if (!states.contains(level)) states.insert(level, run.hash());
+            return run.hash() == states.value(level);
+        };
         for (const QJsonValue& v : scenario.value(QStringLiteral("steps")).toArray()) {
             const QJsonObject o = v.toObject();
             const int before = run.timeline.history().undoCount();
@@ -427,7 +453,7 @@ private slots:
             const int count = run.timeline.history().undoCount();
             const QString id = o.value(QStringLiteral("command")).toString();
             if (count != before && (id == QLatin1String("edit.undo") || id == QLatin1String("edit.redo"))) {
-                QVERIFY2(run.hash() == states.value(count), qPrintable(QStringLiteral("%1 to level %2").arg(id).arg(count)));
+                QVERIFY2(same(count), qPrintable(QStringLiteral("%1 to level %2").arg(id).arg(count)));
             } else {
                 // A new step, or a change that is not an undo step (a sync lock, a track's lock),
                 // which is part of the state at its level.
@@ -471,12 +497,12 @@ private slots:
         while (run.timeline.history().canUndo()) {
             QVERIFY(run.timeline.perform(QStringLiteral("edit.undo")));
             const int level = run.timeline.history().undoCount();
-            QVERIFY2(run.hash() == states.value(level), qPrintable(QStringLiteral("undo to level %1").arg(level)));
+            QVERIFY2(same(level), qPrintable(QStringLiteral("undo to level %1").arg(level)));
         }
         while (run.timeline.history().canRedo()) {
             QVERIFY(run.timeline.perform(QStringLiteral("edit.redo")));
             const int level = run.timeline.history().undoCount();
-            QVERIFY2(run.hash() == states.value(level), qPrintable(QStringLiteral("redo to level %1").arg(level)));
+            QVERIFY2(same(level), qPrintable(QStringLiteral("redo to level %1").arg(level)));
         }
     }
 };

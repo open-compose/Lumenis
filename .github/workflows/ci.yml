@@ -276,6 +276,8 @@ jobs:
           lipo -archs "$app" | grep -q arm64
           test -f "$mnt/Cutthulhu.app/Contents/PlugIns/platforms/libqoffscreen.dylib"
           codesign --verify --deep "$mnt/Cutthulhu.app"
+          # Without it macOS gives the microphone only silence (Audio Punch-In; BUILDING.md).
+          plutil -extract NSMicrophoneUsageDescription raw "$mnt/Cutthulhu.app/Contents/Info.plist"
           "$app" --version
           "$app" --smoke-test
           hdiutil detach "$mnt"
@@ -410,6 +412,8 @@ jobs:
           lipo -archs "$app" | grep -q arm64
           test -f "$mnt/Cutthulhu.app/Contents/PlugIns/platforms/libqoffscreen.dylib"
           codesign --verify --deep "$mnt/Cutthulhu.app"
+          # Without it macOS gives the microphone only silence (Audio Punch-In; BUILDING.md).
+          plutil -extract NSMicrophoneUsageDescription raw "$mnt/Cutthulhu.app/Contents/Info.plist"
           "$app" --version
           "$app" --smoke-test
 

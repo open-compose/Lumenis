@@ -53,6 +53,9 @@ Each file is a JSON list of scenarios:
   * `{"eq": {...}}` sets the Audio EQ tool's values (those not given at
     their defaults; the keys of `model::AudioEq`), and `{"eq_menu": item}`
     chooses an item of its Fast menu (p.739-740);
+  * `{"punch_in": {"clip": name, "targets": [track or "" for New Track, ...],
+    "punches": [[record frame, length, clip frame], ...]}}` edits in an Audio
+    Punch-In take (p.749-751), an undo step per punch-in;
   * `{"command": id}`: any command of `commands.json` that the Timeline or
     the Composer carries out.
   * `"refused": true` on a command or trim step: it must be refused.
@@ -69,7 +72,9 @@ undo level as the steps run; an Undo or Redo among the steps must give back
 the state recorded at its level, and a new edit replaces the levels above.
 After the steps it undoes back to the start and redoes as far as it goes,
 comparing each level's state. A change that is not an undo
-step (a sync lock) belongs to the state of its undo level. Before the
+step (a sync lock) belongs to the state of its undo level. A step that makes
+several undo steps (`punch_in`) leaves the levels between unrecorded: each
+is recorded the first time undo or redo reaches it. Before the
 first edit makes a sequence the state is an empty sequence, which undoing
 that edit leaves (undo does not cover the bin).
 

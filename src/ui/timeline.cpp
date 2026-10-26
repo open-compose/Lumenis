@@ -3577,6 +3577,77 @@ bool Timeline::setEq(const QStringList& tracks, const std::optional<model::Audio
     return commitSequence(description, seq);
 }
 
+std::optional<QStringList> Timeline::punchIn(const QString& binId, const model::BinItem& clip, const QStringList& targets,
+                                             const QList<PunchIn>& punches) {
+    message_.clear();
+    if (!recordSequence()) return std::nullopt;
+    if (targets.isEmpty() || punches.isEmpty()) {
+        fail(tr("There is nothing to edit in."));
+        return std::nullopt;
+    }
+    {
+        // "You can only use mono audio tracks for punch-in. You cannot select stereo tracks or
+        // locked tracks" (p.749).
+        const model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+        QStringList seen;
+        for (const QString& t : targets) {
+            if (t.isEmpty()) continue;
+            const model::Track* track = seq.track(t);
+            if (!track || track->kind != model::TrackKind::Audio || track->format != model::AudioFormat::Mono) {
+                fail(tr("%1 is not a mono audio track.").arg(t));
+                return std::nullopt;
+            }
+            if (track->locked) {
+                fail(tr("%1 is locked.").arg(t));
+                return std::nullopt;
+            }
+            if (seen.contains(t)) {
+                fail(tr("Two channels cannot record to %1.").arg(t));
+                return std::nullopt;
+            }
+            seen << t;
+        }
+    }
+    QStringList used = targets;
+    bool first = true;
+    for (const PunchIn& p : punches) {
+        if (p.length <= 0) continue;
+        const bool ok = changeRecordSequence(tr("Audio Punch-In"), [&](model::Sequence& s) {
+            for (qsizetype k = 0; k < used.size(); ++k) {
+                if (used[k].isEmpty()) {
+                    if (!first) return false;
+                    const auto added = s.addTrack(model::TrackKind::Audio);
+                    if (!added) return false;
+                    used[k] = *added;
+                }
+                model::Segment seg;
+                seg.clipId = clip.id;
+                seg.binId = binId;
+                seg.sourceMob = clip.mobId;
+                seg.name = clip.name;
+                seg.sourceTrack = QStringLiteral("A%1").arg(k + 1);
+                seg.sourceIn = p.source;
+                seg.length = p.length;
+                s.overwrite(used[k], p.at, {seg});
+            }
+            return true;
+        });
+        if (!ok) {
+            if (first) {
+                fail(tr("No audio track can be added."));
+                return std::nullopt;
+            }
+            break;
+        }
+        first = false;
+    }
+    if (first) {
+        fail(tr("There is nothing to edit in."));
+        return std::nullopt;
+    }
+    return used;
+}
+
 std::optional<model::Segment> Timeline::audioSegmentAt(const QString& track) const {
     const model::MonitorState& record = composer_.state(MonitorId::Record);
     const model::LoadedClip* rec = record.current();

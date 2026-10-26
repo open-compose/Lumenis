@@ -5,6 +5,7 @@
 #include "lumenis/media/managed.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/project_store.h"
+#include "lumenis/ui/audio_punch_in.h"
 
 #include <QDateTime>
 #include <QJsonObject>
@@ -49,6 +50,7 @@ class ImportEdlDialog;
 class ListTool;
 class AboutInfoDialog;
 class AudioEqTool;
+class AudioPunchInTool;
 class AudioMixer;
 class AudioTool;
 class EffectEditor;
@@ -135,6 +137,9 @@ public:
     EffectEditor& effectEditor() const { return *effectEditor_; }
     AudioMixer& audioMixer() const { return *audioMixer_; }
     AudioEqTool& audioEq() const { return *audioEq_; }
+    AudioPunchInTool& audioPunchIn() const { return *audioPunchIn_; }
+    // Fills the Audio Punch-In tool's input, drive and bin menus (Tools > Audio Punch-In does too).
+    void preparePunchIn();
     // Whether a sequence's audio track is heard when it plays: monitored in the Track Selector
     // panel (p.395), not muted in the Audio Mixer, and soloed whenever any track is (p.698).
     bool isHeard(const QString& track) const;
@@ -246,6 +251,9 @@ public:
     // dialog (tests; true: OK).
     void audioMixdown();
     void setMixdownHook(std::function<bool(AudioMixdownDialog&)> hook) { mixdownHook_ = std::move(hook); }
+    // Writes an Audio Punch-In take as managed media on its drive and adds the clip to its bin
+    // (AudioPunchInTool::ClipMaker).
+    std::optional<model::BinItem> punchInClip(const AudioPunchInTool::Take& take, QString* error);
     void setCopyingMediaHook(std::function<std::optional<bool>()> hook) { copyingMediaHook_ = std::move(hook); }
     // How media is made, from the Media Creation setting's tab ("import",
     // "transcode") and the project.
@@ -367,6 +375,7 @@ private:
     EffectEditor* effectEditor_ = nullptr;
     AudioMixer* audioMixer_ = nullptr;
     AudioEqTool* audioEq_ = nullptr;
+    AudioPunchInTool* audioPunchIn_ = nullptr;
     AudioTool* audioTool_ = nullptr;
     MediaTool* mediaTool_ = nullptr;
     ListTool* listTool_ = nullptr;

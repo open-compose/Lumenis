@@ -64,6 +64,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   * Set EQ - In/Out with only an OUT acts from the start;
   * the Timeline's EQ icon;
   * Audio Mixdown keeps the EQ while Bypass RT EQ is on.
+* Audio Punch-In (docs/spec/punch-in.md):
+  * a new track goes with the first punch-in's undo, and every punch-in
+    is its own undo step (the guide's third undo removes all of them);
+  * the punch-out is at the frame before the position;
+  * the whole target track is silenced while a take runs;
+  * Automatic monitoring judges by the input device's own delay.
 
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical
@@ -2360,6 +2366,24 @@ Details: docs/spec/audio-eq.md.
 * **Ours:** the filter shapes, the defaults (500 Hz midrange), a change
   setting the segment at once, an OUT alone acting from the start, and
   the Timeline's EQ icon.
+
+## 20c. Audio Punch-In (p.746-753)
+Details: docs/spec/punch-in.md.
+* **Tools > Audio Punch-In** (p.750) opens the tool as a panel.
+* **Layout** (picture and table on p.748-749):
+  * Play In/Out (V), Record (B), Stop, Go to Mark In; Cancel, Audio Tool;
+  * Monitor Mode Input: Automatic, On, Off, Manual;
+  * Stop at end or at mark out; Pre/Post (sec); Handles (sec); Input
+    Source;
+  * CH 1-4 (Alt+click for another input channel), each with a Timeline
+    Track menu: New Track or a mono audio track that is not locked;
+  * Target Drive, Target Bin.
+* **Scenarios** (p.749-750): only an OUT (the position is the IN), IN and
+  OUT with Record, and no marks with Record pressed on and off.
+* **Result:** one master clip per take, "<sequence> Voice Over.<n>"
+  (picture on p.751); each punch-in is an undo step (p.751).
+* **Ours:** button glyphs; the whole target track silenced during a take;
+  no latency compensation; the punch-out at the frame before the position.
 
 ## 20a. Shared bins (p.300-304)
 Details: docs/spec/bin-locking.md.

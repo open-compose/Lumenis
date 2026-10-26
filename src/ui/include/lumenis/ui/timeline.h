@@ -358,6 +358,20 @@ public:
     // segment there: false.
     bool setEq(const QStringList& tracks, const std::optional<model::AudioEq>& eq, bool onTrack,
                const QString& description);
+    // Audio Punch-In (p.749-751; audio_punch_in.h): one recorded take of `clip` (a master clip of
+    // `targets.size()` audio tracks, in bin `binId`) edited into the record sequence. The clip's
+    // track k goes to targets[k]: a mono audio track that is not locked, or empty for a new audio
+    // track, made with the first punch-in. Each punch-in overwrites its frames with the clip from
+    // its source frame, as an undo step of its own ("the first undo removes the most recent
+    // punch-in", p.751). Returns the tracks used, or nothing with a message, before any change.
+    struct PunchIn {
+        std::int64_t at = 0;     // record frame
+        std::int64_t length = 0; // frames
+        std::int64_t source = 0; // the clip's frame
+        bool operator==(const PunchIn&) const = default;
+    };
+    std::optional<QStringList> punchIn(const QString& binId, const model::BinItem& clip, const QStringList& targets,
+                                       const QList<PunchIn>& punches);
     // The segment under the Record position on an audio track, if any.
     std::optional<model::Segment> audioSegmentAt(const QString& track) const;
 

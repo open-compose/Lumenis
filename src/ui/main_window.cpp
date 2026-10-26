@@ -8,17 +8,20 @@
 #include "lumenis/interop/avb_import.h"
 #include "lumenis/ui/main_window.h"
 
+#include "lumenis/media/audio_input.h"
 #include "lumenis/media/consolidate.h"
 #include "lumenis/media/playback.h"
 
 #include "lumenis/core/branding.h"
 #include "lumenis/core/timecode.h"
+#include "lumenis/media/managed.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/audio_eq.h"
+#include "lumenis/ui/audio_punch_in.h"
 #include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/command_palette.h"
@@ -944,6 +947,15 @@ void MainWindow::createTools() {
     });
     audioEq_ = new AudioEqTool(*timeline_);
     panels_->addPanel(new Panel(QStringLiteral("AudioEQ"), tr("Audio EQ"), audioEq_));
+    // Audio Punch-In (p.747-753): the take becomes managed media in the chosen bin; the target tracks
+    // are silent while it runs; monitoring plays the input through the output.
+    audioPunchIn_ = new AudioPunchInTool(*timeline_);
+    panels_->addPanel(new Panel(QStringLiteral("AudioPunchIn"), tr("Audio Punch-In"), audioPunchIn_));
+    audioPunchIn_->setClipMaker([this](const AudioPunchInTool::Take& take, QString* error) { return punchInClip(take, error); });
+    connect(audioPunchIn_, &AudioPunchInTool::audioToolRequested, this, [this] { showTool(QStringLiteral("AudioTool")); });
+    connect(audioPunchIn_, &AudioPunchInTool::activeChanged, this, [this](bool active) {
+        audio_->setMonitor(active && audioPunchIn_->monitorsInput() ? &audioPunchIn_->input() : nullptr);
+    });
     audioTool_ = new AudioTool;
     panels_->addPanel(new Panel(QStringLiteral("AudioTool"), tr("Audio Tool"), audioTool_));
     // Tools > Background Queue Window (p.356-357).
@@ -1100,6 +1112,7 @@ std::vector<media::AudioPiece> MainWindow::soundOf(const model::LoadedClip& load
 // muted in the Audio Mixer, and soloed whenever any track is (p.698).
 bool MainWindow::isHeard(const QString& track) const {
     if (!timeline_->isMonitored(track)) return false;
+    if (audioPunchIn_ && audioPunchIn_->silencedTracks().contains(track)) return false;
     if (!audioMixer_) return true;
     if (audioMixer_->isMuted(track)) return false;
     return !audioMixer_->anySoloed() || audioMixer_->isSoloed(track);
@@ -2174,6 +2187,72 @@ void MainWindow::audioMixdown() {
     });
 }
 
+// The Audio Punch-In tool's menus: the inputs the system offers, the media drives (the Media Creation
+// setting's audio drive first chosen) and the bins that can be changed (the sequence's own first chosen).
+void MainWindow::preparePunchIn() {
+    QList<QPair<QString, int>> inputs;
+    const QList<media::AudioInputDevice> devices = media::audioInputDevices();
+    int defaultChannels = 2;
+    for (const media::AudioInputDevice& d : devices) {
+        if (d.isDefault) defaultChannels = d.channels;
+    }
+    inputs.append({tr("Default"), defaultChannels});
+    for (const media::AudioInputDevice& d : devices) inputs.append({d.name, d.channels});
+    audioPunchIn_->setInputs(inputs);
+    QList<QPair<QString, QString>> drives;
+    for (const media::MediaDrive& d : media::mediaDrives()) drives.append({d.name, d.root});
+    const media::MediaCreation creation = mediaCreation(QStringLiteral("transcode"));
+    QList<QPair<QString, QString>> bins;
+    for (const BinDocument* d : binContainer_->openDocuments()) {
+        if (!d->isReadOnly()) bins.append({d->nodeId(), d->name()});
+    }
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    audioPunchIn_->setTargets(drives, creation.audioDrive.isEmpty() ? creation.videoDrive : creation.audioDrive, bins,
+                              rec ? rec->binId : QString());
+    audioPunchIn_->refresh();
+}
+
+// A punch-in take as managed media: "<sequence> Voice Over.<n>" (the picture on p.751), n one more than
+// the bin's voice-overs of that sequence, starting at 00:00:00:00.
+std::optional<model::BinItem> MainWindow::punchInClip(const AudioPunchInTool::Take& take, QString* error) {
+    BinDocument* doc = binContainer_->document(take.binId);
+    if (!doc || doc->isReadOnly()) {
+        if (error) *error = tr("Choose a bin that can be changed.");
+        return std::nullopt;
+    }
+    const QString prefix = tr("%1 Voice Over.").arg(take.sequenceName);
+    int n = 0;
+    for (const model::BinItem& item : doc->bin().items) {
+        if (item.name.startsWith(prefix)) n = std::max(n, item.name.mid(prefix.size()).toInt());
+    }
+    std::size_t samples = 0;
+    for (const auto& c : take.channels) samples = std::max(samples, c.size());
+    const auto frames = static_cast<std::int64_t>(std::floor(media::samplesToFrames(static_cast<std::int64_t>(samples), take.editRate)));
+    if (frames <= 0 || take.channels.empty()) {
+        if (error) *error = tr("Nothing was recorded.");
+        return std::nullopt;
+    }
+    media::MediaCreation creation = mediaCreation(QStringLiteral("transcode"));
+    if (!take.drive.isEmpty()) {
+        creation.videoDrive = take.drive;
+        creation.audioDrive = take.drive;
+    }
+    const auto& channels = take.channels;
+    const auto render = [&channels](std::int64_t at, int count, std::vector<std::vector<float>>& out) {
+        for (std::size_t c = 0; c < channels.size(); ++c) {
+            out[c].assign(static_cast<std::size_t>(count), 0.0f);
+            for (int i = 0; i < count; ++i) {
+                const auto k = static_cast<std::size_t>(at + i);
+                if (k < channels[c].size()) out[c][static_cast<std::size_t>(i)] = channels[c][k];
+            }
+        }
+    };
+    const auto made = media::renderedAudioClip(prefix + QString::number(n + 1), take.editRate, frames,
+                                               static_cast<int>(channels.size()), render, QString(), creation, error);
+    if (made) doc->addItem(*made);
+    return made;
+}
+
 // Consolidate/Transcode on the active bin's selection: the dialog (initialised from the Media
 // Creation setting's transcode tab), then the Copying Media Files question for master clips, then the
 // work, either now with a progress dialog or as Background Queue jobs. Both end in applyConsolidate().
@@ -2562,6 +2641,10 @@ void MainWindow::installPanelHandlers() {
     handle("tools.audio_mixer", [this] { showTool(QStringLiteral("AudioMixer")); });
     handle("tools.audio_eq", [this] { showTool(QStringLiteral("AudioEQ")); });
     handle("tools.audio_tool", [this] { showTool(QStringLiteral("AudioTool")); });
+    handle("tools.audio_punch_in", [this] {
+        preparePunchIn();
+        showTool(QStringLiteral("AudioPunchIn"));
+    });
     handle("tools.media_tool", [this] { showMediaTool(); });
     // Tools > List Tool (p.944), File > Input > Import EDL (p.951), File > Output > Export Bin (p.130).
     handle("tools.list_tool", [this] { showListTool(); });

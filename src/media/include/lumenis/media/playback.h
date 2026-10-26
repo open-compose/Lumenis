@@ -23,6 +23,7 @@
 // clock the picture follows.
 namespace lumenis::media {
 
+class AudioInput;
 class AudioReader;
 
 // The output's sample rate. Files at other rates are resampled.
@@ -165,8 +166,12 @@ public:
     QString deviceName() const;
 
     // Fills `out` (2 * count floats) from the buffer, as the device does
-    // (tests).
+    // (tests), plus the monitored input if there is one.
     int pull(float* out, int count);
+    // Audio Punch-In's monitoring (p.748-749, p.753): what `input` records is added to the output
+    // until this is called again with null. The input must outlive that call.
+    void setMonitor(AudioInput* input) { monitor_.store(input); }
+    AudioInput* monitor() const { return monitor_.load(); }
 
 private:
     struct Device;
@@ -180,6 +185,7 @@ private:
     // Tells the feeder thread to keep going.
     std::atomic<bool> running_{false};
     bool playing_ = false;
+    std::atomic<AudioInput*> monitor_{nullptr};
     std::atomic<std::int64_t> played_{0};
     std::atomic<std::int64_t> pulledAt_{0}; // steady-clock ns of the last pull
     std::int64_t latency_ = 0;             // samples the device holds

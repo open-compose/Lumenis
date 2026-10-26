@@ -61,7 +61,8 @@ headers in `include/lumenis/<library>/`.
 * **Media.** `src/media/media.*` (FFmpeg probe, readers, writer, MXF
   fix-ups), `link.*` (files linked as clips), `managed.*` (managed media in
   `Avid MediaFiles/MXF`, the media database), `consolidate.*`, `relink.*`,
-  `playback.*` (sound through miniaudio, the audio clock), `mixdown.*`
+  `playback.*` (sound through miniaudio, the audio clock), `audio_input.*`
+  (recording from an input), `mixdown.*`
   (Audio Mixdown, docs/spec/audio-mixdown.md). UI side:
   `media_frames.*` (frames for monitors, bins and the Timeline),
   `source_browser.*`, `media_tool.*`, `relink_dialog.*`,
@@ -83,8 +84,10 @@ headers in `include/lumenis/<library>/`.
   `effect_palette.*` and `effect_editor.*`; the model keeps effects on
   segments (`model::Effect`, `model::Transition`).
 * **Audio tools.** `audio_tools.*` (the Audio Mixer and the Audio Tool),
-  `audio_eq.*` (the Audio EQ tool, docs/spec/audio-eq.md) and
-  `mixdown_dialog.*`; the sound is `src/media/playback.*`.
+  `audio_eq.*` (the Audio EQ tool, docs/spec/audio-eq.md),
+  `audio_punch_in.*` (Audio Punch-In, docs/spec/punch-in.md) and
+  `mixdown_dialog.*`; the sound is `src/media/playback.*` and recording
+  `src/media/audio_input.*`.
 
 ## Data flow
 
