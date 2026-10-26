@@ -63,7 +63,8 @@ headers in `include/lumenis/<library>/`.
   `Avid MediaFiles/MXF`, the media database), `consolidate.*`, `relink.*`,
   `playback.*` (sound through miniaudio, the audio clock), `audio_input.*`
   (recording from an input), `audio_fx.*` (the audio effect interface and
-  the built-in effects), `mixdown.*`
+  the built-in effects), `clap_host.*` (CLAP plug-ins as audio effects,
+  docs/spec/clap-host.md), `mixdown.*`
   (Audio Mixdown, docs/spec/audio-mixdown.md). UI side:
   `media_frames.*` (frames for monitors, bins and the Timeline),
   `source_browser.*`, `media_tool.*`, `relink_dialog.*`,

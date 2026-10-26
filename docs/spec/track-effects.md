@@ -14,8 +14,8 @@ p.796-805) and a CLAP plug-in host come next and use the same effects.
   * `set`, `reset`, `process` (one mono channel at 48 kHz, in place);
   * `tail`: how long it goes on sounding after its input stops.
 * **`audioEffects()`** lists the effects: the built-in ones, then those
-  registered from elsewhere (`registerAudioEffects`; the CLAP host,
-  5.5b). `makeAudioEffect(id)` makes one; an id nothing provides gives
+  registered from elsewhere (`registerAudioEffects`), such as the CLAP
+  host's plug-ins (docs/spec/clap-host.md). `makeAudioEffect(id)` makes one; an id nothing provides gives
   none.
 * **The built-in effects are ours.** The guide describes Avid's core
   plug-ins by what they do (p.805-860). Ours do the same kinds of thing,
@@ -148,5 +148,5 @@ p.796-805) and a CLAP plug-in host come next and use the same effects.
 * Compare, and the Plug-In Settings files: Save, Save As, Import, Delete,
   Lock (.tfx).
 * Stereo and surround tracks and their effects.
-* The CLAP host (5.5b) and AudioSuite (5.5c).
+* AudioSuite (5.5c). The CLAP host is done (docs/spec/clap-host.md).
 * Inserts in AAF, OTIO, FCP XML and `.avb` interchange.

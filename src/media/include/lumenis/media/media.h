@@ -281,8 +281,9 @@ private:
 bool copyVideoFrames(const QString& from, int stream, std::int64_t first, std::int64_t count, const QString& to,
                      const WriterSettings& settings, QString* error = nullptr);
 
-// Registers FFmpeg's codec provider ("org.ffmpeg.libavcodec") with the
-// application's provider registry (docs/EXTENSIONS.md).
+// Registers FFmpeg's codec provider ("org.ffmpeg.libavcodec") and the CLAP host
+// ("org.cleveraudio.clap-host", clap_host.h) with the application's provider
+// registry (docs/EXTENSIONS.md).
 void registerProviders(ext::ProviderRegistry& registry);
 
 } // namespace lumenis::media

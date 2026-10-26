@@ -315,6 +315,18 @@ python3 scripts/make-icons.py                                  # every platform'
 
 ## Troubleshooting
 
+### A CLAP plug-in is missing, or Cutthulhu crashes at start-up
+
+CLAP plug-ins are loaded at start-up (docs/spec/clap-host.md):
+* **A plug-in is missing.** Open Tools > Console. It says how many plug-ins
+  were found, which were left out and why (an instrument, or more than two
+  channels), and which files could not be loaded. Plug-ins are looked for
+  in the CLAP folders of your system and in the folders listed in
+  `CLAP_PATH`.
+* **Cutthulhu crashes at start-up after you installed a plug-in.** Start it
+  with `LUMENIS_NO_CLAP=1` set, which skips the scan. Then move the
+  plug-in out of the CLAP folders.
+
 ### Audio Punch-In records silence
 
 Each system has to let Cutthulhu use the microphone (Tools > Audio

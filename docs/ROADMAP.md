@@ -764,7 +764,13 @@ On macOS the bundle asks for the microphone (Info.plist, entitlement).
   through in real time and in Audio Mixdown (`media::AudioMix`);
 * Tools > Audio Track Effect, the track button's menu, the Effect
   Palette's Audio Track tab and Select Insert, Bypass and Ctrl+Bypass.
-Next: 5.5b, the CLAP host; 5.5c, AudioSuite; then 5.1/7.1 routing.
+5.5b, the CLAP plug-in host (docs/spec/clap-host.md), is done: CLAP 1.2.9
+headers in `third_party/clap`; `src/media/clap_host.*` finds `.clap` files in
+the standard folders and `CLAP_PATH` at start-up, and the effect plug-ins
+that fit (mono or stereo) join the Audio Track Effects. A CLAP file of our
+own tests it (`tst_clap_host`). Plug-in windows, latency compensation and
+state come later.
+Next: 5.5c, AudioSuite; then 5.1/7.1 routing.
 
 ### Phase 6 — Effects and rendering
 * Transitions, motion effects, timewarps, Color Correction (HSL and curves),

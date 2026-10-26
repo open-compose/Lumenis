@@ -25,6 +25,7 @@
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/capture.h"
+#include "lumenis/media/clap_host.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
@@ -951,6 +952,23 @@ int main(int argc, char** argv) {
     // Title bars, the taskbar and the Dock while running (Linux uses it in
     // place of the installed SVG when the desktop file is not installed).
     QApplication::setWindowIcon(QIcon(QStringLiteral(":/lumenis/ui/icons/app.png")));
+
+    // CLAP audio plug-ins join the Audio Track Effects (docs/spec/clap-host.md). LUMENIS_NO_CLAP=1 skips
+    // the scan, for a plug-in that crashes on loading.
+    if (qEnvironmentVariableIntValue("LUMENIS_NO_CLAP") == 0) {
+        QStringList errors;
+        const auto plugins = lumenis::media::scanClapPlugins(
+            lumenis::media::findClapFiles(lumenis::media::clapSearchPaths()), &errors);
+        const int added = lumenis::media::registerClapPlugins(plugins);
+        if (!plugins.isEmpty()) {
+            lumenis::ui::ConsoleLog::instance().append(
+                QObject::tr("CLAP: %1 plug-ins found, %2 added as Audio Track Effects.").arg(plugins.size()).arg(added));
+        }
+        for (const auto& p : plugins) {
+            if (!p.usable()) lumenis::ui::ConsoleLog::instance().append(QObject::tr("CLAP: %1 left out: %2.").arg(p.name, p.whyNot()));
+        }
+        for (const QString& e : errors) lumenis::ui::ConsoleLog::instance().append(QObject::tr("CLAP: %1").arg(e));
+    }
 
     lumenis::ui::CommandRegistry commands;
     commands.loadBuiltin();

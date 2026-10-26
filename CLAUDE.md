@@ -287,7 +287,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   - the tool (`src/ui/audio_track_effect.*`), the track button's menu, the
     Effect Palette's Audio Track tab.
   Tests: `tst_audio_fx`, `tst_track_effects`, scenario `10-track-effects.json`.
-  Next: 5.5b CLAP host, 5.5c AudioSuite.
+5.5b is done: the CLAP host (docs/spec/clap-host.md): CLAP 1.2.9 headers in
+  `third_party/clap`, `src/media/clap_host.*` (scan at start-up in
+  `app/main.cpp`, `LUMENIS_NO_CLAP=1` skips it), plug-ins as audio effects.
+  Test: `tst_clap_host` with our own `tests/media/clap_test_plugin.cpp`.
+  Next: 5.5c AudioSuite.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

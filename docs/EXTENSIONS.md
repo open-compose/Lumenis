@@ -37,7 +37,9 @@ handle all of these the same way.
     Audio plug-ins process through `media::AudioEffect`
     (`src/media/audio_fx.h`): a host registers its plug-ins with
     `media::registerAudioEffects`, and they appear with the built-in effects
-    as Audio Track Effects (docs/spec/track-effects.md).
+    as Audio Track Effects (docs/spec/track-effects.md). The CLAP host
+    (`src/media/clap_host.*`, `org.cleveraudio.clap-host`) is built in
+    (docs/spec/clap-host.md).
 
   Video I/O devices and shared storage are reserved as categories. They get
   interfaces in their phases.
@@ -81,7 +83,7 @@ an official build.
 | AAF | Our own implementation, modelled on pyaaf2 (MIT) | — | — |
 | ScriptSync / PhraseFind equivalent | whisper.cpp (MIT) with Whisper models (MIT), plus our own transcript / phonetic index | Apple Speech framework, Windows speech | Commercial engines or cloud ASR |
 | Effect plug-ins | OpenFX host (BSD) | — | AVX bridge (Avid SDK) |
-| Audio plug-ins | CLAP host (MIT); VST3 host (check the SDK licence when we start, since Steinberg has moved it to an open licence) | Audio Units (macOS) | AAX bridge (Avid SDK) |
+| Audio plug-ins | CLAP host (MIT; built in since 5.5b); VST3 host (check the SDK licence when we start, since Steinberg has moved it to an open licence) | Audio Units (macOS) | AAX bridge (Avid SDK) |
 | Colour management | OpenColorIO (BSD), ACES | — | — |
 | Video I/O hardware | AJA NTV2 SDK (MIT) | Blackmagic Desktop Video driver (installed by the user) | Other vendors' SDKs |
 | Shared storage | Bin locking on any NAS/SAN | — | NEXIS client, MediaCentral |
