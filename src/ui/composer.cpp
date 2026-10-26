@@ -100,9 +100,9 @@ const QList<QList<ButtonSpec>>& buttonRows(MonitorId monitor) {
         {{"", Glyph::Blank},
          {"move.step_backward_one_frame", Glyph::StepBack},
          {"move.step_forward_one_frame", Glyph::StepForward},
-         {"edit.mark_out", Glyph::MarkOut},
-         {"play.play", Glyph::Play},
          {"edit.mark_in", Glyph::MarkIn},
+         {"play.play", Glyph::Play},
+         {"edit.mark_out", Glyph::MarkOut},
          {"edit.mark_clip", Glyph::MarkClip},
          {"more.add_marker", Glyph::AddMarker},
          {"edit.splice_in", Glyph::SpliceIn},
@@ -110,9 +110,9 @@ const QList<QList<ButtonSpec>>& buttonRows(MonitorId monitor) {
         {{"other.gang", Glyph::Gang},
          {"move.go_to_previous_event", Glyph::PrevEvent},
          {"move.go_to_next_event", Glyph::NextEvent},
-         {"edit.go_to_out_point", Glyph::GoToOut},
-         {"play.play_in_to_out", Glyph::PlayInToOut},
          {"edit.go_to_in_point", Glyph::GoToIn},
+         {"play.play_in_to_out", Glyph::PlayInToOut},
+         {"edit.go_to_out_point", Glyph::GoToOut},
          {"edit.clear_both_marks", Glyph::ClearBoth},
          {"", Glyph::Blank},
          {"", Glyph::Blank},
@@ -123,9 +123,9 @@ const QList<QList<ButtonSpec>>& buttonRows(MonitorId monitor) {
          {"", Glyph::Blank},
          {"move.step_backward_one_frame", Glyph::StepBack},
          {"move.step_forward_one_frame", Glyph::StepForward},
-         {"edit.mark_out", Glyph::MarkOut},
-         {"play.play", Glyph::Play},
          {"edit.mark_in", Glyph::MarkIn},
+         {"play.play", Glyph::Play},
+         {"edit.mark_out", Glyph::MarkOut},
          {"", Glyph::Blank},
          {"more.add_marker", Glyph::AddMarker},
          {"", Glyph::Blank},
@@ -134,9 +134,9 @@ const QList<QList<ButtonSpec>>& buttonRows(MonitorId monitor) {
          {"", Glyph::Blank},
          {"move.go_to_previous_event", Glyph::PrevEvent},
          {"move.go_to_next_event", Glyph::NextEvent},
-         {"edit.go_to_out_point", Glyph::GoToOut},
-         {"play.play_in_to_out", Glyph::PlayInToOut},
          {"edit.go_to_in_point", Glyph::GoToIn},
+         {"play.play_in_to_out", Glyph::PlayInToOut},
+         {"edit.go_to_out_point", Glyph::GoToOut},
          {"", Glyph::Blank},
          {"", Glyph::Blank},
          {"", Glyph::Blank},
@@ -230,8 +230,10 @@ QIcon glyph(Glyph g, const QColor& color) {
         triangle(17, 9, 10, 14, true);
         break;
     case Glyph::Play: triangle(10, 8, 13, 16, true); break;
-    case Glyph::MarkIn: bracket(13, true); break;
-    case Glyph::MarkOut: bracket(19, false); break;
+    // Mark IN is "]" and Mark OUT "[", Go to IN "]" with an arrow pointing at it and Go to OUT
+    // the arrow then "[" (the labelled Capture tool buttons, p.117).
+    case Glyph::MarkIn: bracket(19, false); break;
+    case Glyph::MarkOut: bracket(13, true); break;
     case Glyph::MarkClip:
         p.setPen(QPen(color, 2));
         p.setBrush(Qt::NoBrush);
@@ -244,12 +246,12 @@ QIcon glyph(Glyph g, const QColor& color) {
         bracket(18, true);
         break;
     case Glyph::GoToIn:
-        arrow(5, 13);
-        bracket(18, true);
-        break;
-    case Glyph::GoToOut:
         bracket(12, false);
         arrow(27, 17);
+        break;
+    case Glyph::GoToOut:
+        arrow(5, 13);
+        bracket(18, true);
         break;
     case Glyph::PlayInToOut:
         p.drawRect(QRectF(6, 9, 3, 14));

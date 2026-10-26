@@ -347,6 +347,15 @@ Punch-In; docs/spec/punch-in.md):
 The Input Source menu lists the inputs miniaudio finds; "Default" is the
 system's choice.
 
+### The "]" button under a monitor marks an OUT point
+
+Before this was fixed, the Composer's "]" button (left of Play) marked OUT and "[" marked IN. Media
+Composer has it the other way: "]" is Mark IN and "[" is Mark OUT, and Go to IN and Go to OUT follow
+the same rule (the Capture tool's labelled buttons, Editing Guide p.117). The buttons are now
+assigned that way, and the I and O keys did not change. `tst_composer`'s `buttonsBelowTheMonitors`
+checks the order. If a saved button mapping (Command Palette) still puts a mark on the wrong
+button, map that button again.
+
 ### "Artifact storage quota has been hit"
 
 GitHub keeps a private repository's CI artifacts in a small storage quota.

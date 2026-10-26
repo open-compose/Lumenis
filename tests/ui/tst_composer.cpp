@@ -97,6 +97,18 @@ private slots:
                 QVERIFY2(c.button(m, QLatin1String(id)), id);
             }
         }
+        // Mark IN ("]") is left of Play and Mark OUT ("[") right of it; Go to IN and Go to OUT
+        // likewise around Play In to Out (the Capture tool's labelled buttons, p.117).
+        c.resize(1200, 600);
+        c.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&c));
+        for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
+            auto x = [&](const char* id) { return c.button(m, QLatin1String(id))->geometry().x(); };
+            QVERIFY(x("edit.mark_in") < x("play.play"));
+            QVERIFY(x("play.play") < x("edit.mark_out"));
+            QVERIFY(x("edit.go_to_in_point") < x("play.play_in_to_out"));
+            QVERIFY(x("play.play_in_to_out") < x("edit.go_to_out_point"));
+        }
         QVERIFY(c.button(MonitorId::Source, QStringLiteral("edit.splice_in")));
         QVERIFY(c.button(MonitorId::Source, QStringLiteral("edit.mark_clip")));
         // Editing is the Timeline's: the buttons ask for it.

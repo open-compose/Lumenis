@@ -1031,11 +1031,16 @@ These are recorded now so they are not entered from memory later.
 * **Our choices, unverified.**
   * The button rows follow the picture on p.380 slot by slot. The guide
     names the functions but does not show which icon is which; we matched
-    them by shape: Step Backward/Forward one frame, Mark OUT ("]"), Play,
-    Mark IN ("["), Mark Clip, Add Marker (red), Splice-in (yellow),
+    them by shape: Step Backward/Forward one frame, Mark IN ("]"), Play,
+    Mark OUT ("["), Mark Clip, Add Marker (red), Splice-in (yellow),
     Overwrite (red) on the first Source row; Gang, Go to Previous/Next
-    Event, Go to OUT Point, Play In to Out, Go to IN Point, Clear Both
-    Marks on the second. Slots we could not identify (the leftmost
+    Event, Go to IN Point ("]" and an arrow pointing at it), Play In to
+    Out, Go to OUT Point (an arrow, then "["), Clear Both Marks on the
+    second. The bracket shapes are verified: the Capture tool's labelled
+    buttons on p.117 show Mark IN as "]", Mark OUT as "[", Go to IN as
+    "]" with an arrow and Go to OUT as an arrow with "[". (Before
+    this was checked, the two marks were the other way round; the owner
+    noticed.) Slots we could not identify (the leftmost
     buttons, the Record row's film strip, green and second-row tools) are
     Blank buttons. "Go to OUT Point" is named after Go to IN Point.
   * Double-click loads sequences into the Record monitor and other items
