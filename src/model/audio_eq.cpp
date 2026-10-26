@@ -1,5 +1,9 @@
 #include "lumenis/model/audio_eq.h"
 
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+
 #include <algorithm>
 #include <cmath>
 #include <complex>
@@ -56,9 +60,18 @@ AudioEq clampEq(const AudioEq& eq) {
     e.low = clampGainDb(e.low);
     e.mid = clampGainDb(e.mid);
     e.high = clampGainDb(e.high);
-    e.lowTurnover = nearest(kLowTurnovers, e.lowTurnover);
-    e.highTurnover = nearest(kHighTurnovers, e.highTurnover);
-    e.midFrequency = std::clamp(e.midFrequency, kEqRangeMin, kEqRangeMax);
+    if (e.preset.isEmpty()) {
+        e.lowTurnover = nearest(kLowTurnovers, e.lowTurnover);
+        e.highTurnover = nearest(kHighTurnovers, e.highTurnover);
+        e.midFrequency = std::clamp(e.midFrequency, kEqRangeMin, kEqRangeMax);
+        e.midOctaves = 0;
+    } else {
+        // A template's own values, kept within what can be heard.
+        e.lowTurnover = std::clamp(e.lowTurnover, kPresetMinHz, kPresetMaxHz);
+        e.highTurnover = std::clamp(e.highTurnover, kPresetMinHz, kPresetMaxHz);
+        e.midFrequency = std::clamp(e.midFrequency, static_cast<double>(kPresetMinHz), static_cast<double>(kPresetMaxHz));
+        e.midOctaves = e.midOctaves > 0 ? std::clamp(e.midOctaves, kPresetMinOctaves, kPresetMaxOctaves) : 0.0;
+    }
     return e;
 }
 
@@ -70,7 +83,7 @@ std::array<Biquad, 3> eqFilters(const AudioEq& eq, double sampleRate) {
     // A band at 0 dB is no filter at all, so a flat EQ passes the sound unchanged.
     auto band = [](double db, auto make) { return db == 0 ? Biquad{} : make(); };
     return {band(eq.low, [&] { return shelf(true, eq.low, eq.lowTurnover, sampleRate); }),
-            band(eq.mid, [&] { return peak(eq.mid, eq.midFrequency, eq.wideMid ? 2.0 : 0.25, sampleRate); }),
+            band(eq.mid, [&] { return peak(eq.mid, eq.midFrequency, eq.octaves(), sampleRate); }),
             band(eq.high, [&] { return shelf(false, eq.high, std::min<double>(eq.highTurnover, sampleRate * 0.45), sampleRate); })};
 }
 
@@ -83,6 +96,52 @@ double eqResponse(const AudioEq& eq, double frequency, double sampleRate) {
         db += 20 * std::log10(std::max(std::abs(h), 1e-12));
     }
     return db;
+}
+
+QList<EqTemplate> parseEqTemplates(const QByteArray& json, QString* error) {
+    QJsonParseError e;
+    const QJsonDocument doc = QJsonDocument::fromJson(json, &e);
+    if (e.error != QJsonParseError::NoError || !doc.isObject()) {
+        if (error) *error = e.errorString();
+        return {};
+    }
+    QList<EqTemplate> out;
+    for (const QJsonValue& v : doc.object().value(QStringLiteral("templates")).toArray()) {
+        const QJsonObject o = v.toObject();
+        EqTemplate t;
+        t.eq.preset = o.value(QStringLiteral("name")).toString();
+        if (t.eq.preset.isEmpty()) continue;
+        t.eq.low = o.value(QStringLiteral("low")).toDouble();
+        t.eq.lowTurnover = o.value(QStringLiteral("lowTurnover")).toInt(t.eq.lowTurnover);
+        t.eq.mid = o.value(QStringLiteral("mid")).toDouble();
+        t.eq.midFrequency = o.value(QStringLiteral("midFrequency")).toDouble(t.eq.midFrequency);
+        t.eq.midOctaves = o.value(QStringLiteral("midOctaves")).toDouble(2.0);
+        t.eq.high = o.value(QStringLiteral("high")).toDouble();
+        t.eq.highTurnover = o.value(QStringLiteral("highTurnover")).toInt(t.eq.highTurnover);
+        t.eq = clampEq(t.eq);
+        t.source = o.value(QStringLiteral("source")).toString();
+        t.note = o.value(QStringLiteral("note")).toString();
+        out << t;
+    }
+    return out;
+}
+
+QString octavesText(double octaves) {
+    // Quarters as fractions below 1; others as a number.
+    for (int q = 1; q < 4; ++q) {
+        if (std::abs(octaves - q / 4.0) < 1e-9) return q == 2 ? QStringLiteral("1/2") : QStringLiteral("%1/4").arg(q);
+    }
+    return QString::number(octaves, 'g', 3);
+}
+
+QString describeEq(const AudioEq& eq) {
+    auto hz = [](double f) {
+        return f < 1000 ? QStringLiteral("%1 Hz").arg(std::lround(f)) : QStringLiteral("%1 kHz").arg(QString::number(f / 1000, 'g', 3));
+    };
+    auto db = [](double v) { return (v > 0 ? QStringLiteral("+") : QString()) + QString::number(v, 'f', 1) + QStringLiteral(" dB"); };
+    return QStringLiteral("low %1 at %2, mid %3 at %4 (%5 octave), high %6 at %7")
+        .arg(db(eq.low), hz(eq.lowTurnover), db(eq.mid), hz(eq.midFrequency), octavesText(eq.octaves()), db(eq.high),
+             hz(eq.highTurnover));
 }
 
 int setEq(Sequence& sequence, const QString& name, std::int64_t from, std::int64_t to, const std::optional<AudioEq>& eq) {

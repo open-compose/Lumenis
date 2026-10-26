@@ -106,14 +106,17 @@ QList<AudioKey> keysFromJson(const QJsonValue& v, bool pan) {
 // {low, mid, high, lowTurnover, highTurnover, midFrequency, wideMid, in}; fromJson() puts
 // out-of-range values back in range (clampEq).
 QJsonObject eqToJson(const AudioEq& e) {
-    return QJsonObject{{QStringLiteral("low"), e.low},
-                       {QStringLiteral("mid"), e.mid},
-                       {QStringLiteral("high"), e.high},
-                       {QStringLiteral("lowTurnover"), e.lowTurnover},
-                       {QStringLiteral("highTurnover"), e.highTurnover},
-                       {QStringLiteral("midFrequency"), e.midFrequency},
-                       {QStringLiteral("wideMid"), e.wideMid},
-                       {QStringLiteral("in"), e.in}};
+    QJsonObject o{{QStringLiteral("low"), e.low},
+                  {QStringLiteral("mid"), e.mid},
+                  {QStringLiteral("high"), e.high},
+                  {QStringLiteral("lowTurnover"), e.lowTurnover},
+                  {QStringLiteral("highTurnover"), e.highTurnover},
+                  {QStringLiteral("midFrequency"), e.midFrequency},
+                  {QStringLiteral("wideMid"), e.wideMid},
+                  {QStringLiteral("in"), e.in}};
+    if (!e.preset.isEmpty()) o.insert(QStringLiteral("preset"), e.preset);
+    if (e.midOctaves > 0) o.insert(QStringLiteral("midOctaves"), e.midOctaves);
+    return o;
 }
 
 AudioEq eqFromJson(const QJsonObject& o) {
@@ -126,6 +129,8 @@ AudioEq eqFromJson(const QJsonObject& o) {
     e.midFrequency = o.value(QStringLiteral("midFrequency")).toDouble(e.midFrequency);
     e.wideMid = o.value(QStringLiteral("wideMid")).toBool(true);
     e.in = o.value(QStringLiteral("in")).toBool(true);
+    e.preset = o.value(QStringLiteral("preset")).toString();
+    e.midOctaves = o.value(QStringLiteral("midOctaves")).toDouble();
     return clampEq(e);
 }
 

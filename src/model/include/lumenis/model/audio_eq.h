@@ -2,6 +2,10 @@
 
 #include "lumenis/model/sequence.h"
 
+#include <QByteArray>
+#include <QList>
+#include <QString>
+
 #include <array>
 #include <optional>
 
@@ -17,9 +21,16 @@ inline constexpr std::array<int, 4> kLowTurnovers{50, 80, 120, 240};       // p.
 inline constexpr std::array<int, 4> kHighTurnovers{6000, 8000, 12000, 15000};
 inline constexpr double kEqRangeMin = 50.0; // the EQ Range slider's ends (picture on p.737)
 inline constexpr double kEqRangeMax = 15000.0;
+// What a predefined template may hold (AudioEq::preset): any turnover or centre in the range of
+// hearing, and a midrange from 1/16 octave to 4 octaves wide.
+inline constexpr int kPresetMinHz = 20;
+inline constexpr int kPresetMaxHz = 20000;
+inline constexpr double kPresetMinOctaves = 0.0625;
+inline constexpr double kPresetMaxOctaves = 4.0;
 
 // The EQ with each value put in range: gains to kEqMin..kEqMax, rounded to 0.1 dB; turnovers to
-// the nearest of their four; the midrange to kEqRangeMin..kEqRangeMax.
+// the nearest of their four; the midrange to kEqRangeMin..kEqRangeMax. A template's turnovers,
+// centre and width are kept, within the kPreset limits.
 AudioEq clampEq(const AudioEq& eq);
 // An EQ that changes nothing: every band at 0 dB.
 bool isFlat(const AudioEq& eq);
@@ -29,12 +40,30 @@ struct Biquad {
     double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0;
 };
 // The EQ's three sections at `sampleRate`: a low shelf turning over at lowTurnover, a peaking
-// filter at midFrequency (1/4 or 2 octaves wide) and a high shelf at highTurnover. They are the
+// filter at midFrequency (AudioEq::octaves() wide) and a high shelf at highTurnover. They are the
 // widely published "Audio EQ Cookbook" second-order sections (shelf slope 1; ours: the guide
 // gives the controls, not the filter shapes).
 std::array<Biquad, 3> eqFilters(const AudioEq& eq, double sampleRate);
 // The EQ's gain in dB at `frequency` Hz (the Audio EQ tool's graph, p.738).
 double eqResponse(const AudioEq& eq, double frequency, double sampleRate = 48000);
+
+// A predefined EQ template (p.743-745): the EQ (its `preset` the template's name), and where its
+// values come from ("observed", "documented" or "guess") with a note. The table is
+// src/ui/resources/eq_templates.json.
+struct EqTemplate {
+    AudioEq eq;
+    QString source;
+    QString note;
+};
+// Reads a templates table ({"templates": [{name, low, lowTurnover, mid, midFrequency, midOctaves,
+// high, highTurnover, source, note}, ...]}), in order. Values are put in range (clampEq); entries
+// without a name are skipped. Empty, with `error` set, if the JSON cannot be read.
+QList<EqTemplate> parseEqTemplates(const QByteArray& json, QString* error = nullptr);
+// "-18 dB at 210 Hz, +11 dB at 1222 Hz (3/4 octave), -17 dB at 6 kHz": an EQ's values for the
+// Console (p.744 note).
+QString describeEq(const AudioEq& eq);
+// A width in octaves as the tool shows it: "2", "1/4", "3/4", "1.5".
+QString octavesText(double octaves);
 
 // Set EQ - In/Out (p.739-741) on audio track `track`: `eq` on every whole segment that
 // overlaps record frames [from, to); without one, their EQ is removed. "Apply Audio EQ to entire

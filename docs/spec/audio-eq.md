@@ -91,9 +91,33 @@ Playback, scrubbing and Audio Mixdown hear the EQ.
   * **Remove EQs On Track - In/Out** and **On Enabled Tracks - In/Out**
     remove EQs over the same range, on the tool's track or on every
     selected audio track.
-  * The twelve predefined templates (p.743-744) are listed but dimmed.
-    Their values are not documented: the guide sends the reader to the
-    Console of a seat.
+  * The twelve predefined templates (p.743-744, names from the picture on
+    p.744). Choosing one puts it on the segment under the position on the
+    selected audio tracks, as an undo step (p.745). Its values go to the
+    Console, as the note on p.744 says Media Composer's do.
+* **Templates' values** are in a table, `src/ui/resources/eq_templates.json`,
+  with each entry's source and a note. The guide gives none of them: it
+  sends the reader to the Console of a seat.
+  * **Telephone EQ "A"** is *observed*. The owner read it from the tool in
+    a public video of Media Composer: low shelf -18 dB at 210 Hz,
+    midrange +11 dB at 1222 Hz and 3/4 octave wide, high shelf -17 dB at
+    6 kHz.
+  * **Tape Hiss Filter** is *documented* as far as the guide goes: it
+    "rolls off frequencies above 4 kHz" (p.743). The amount is a guess.
+  * **The others are guesses** from their names. The NTSC and PAL Hum
+    Busters "cut the bass on frequencies that often cause hum" (p.743),
+    with a narrow cut at 60 or 50 Hz.
+  Replace a guess in the table when better values turn up, with its source.
+  `tst_audio_eq_ui` checks that each entry has a source and a note.
+* **A template keeps values the tool's controls do not offer** (210 Hz,
+  4 kHz, 3/4 octave): `AudioEq::preset` names it, and `midOctaves` holds a
+  width other than 2 or 1/4. Its turnovers and centre may be anywhere from
+  20 Hz to 20 kHz, and its width from 1/16 to 4 octaves.
+* **The tool shows a template's values but does not change them**: "you
+  cannot change the parameters of a predefined EQ template" (p.744). The
+  value controls are dimmed with a note saying so; In still works. Set EQ -
+  In/Out copies the template as it is. On a segment without an EQ, the
+  tool's values go back to the defaults.
 * **Remove Effect** (p.741), with no video effect at the position, removes
   the EQ there on the selected audio tracks.
 * **The Timeline** shows an EQ icon on segments that have one (p.740). It is
@@ -109,7 +133,7 @@ Playback, scrubbing and Audio Mixdown hear the EQ.
 * `tst_audio_eq_ui`:
   * the controls, typing on a slider and the scales;
   * several tracks and the Track Selection menu;
-  * the Fast menu, Remove Effect;
+  * the Fast menu, the templates table, applying a template, Remove Effect;
   * Tools > Audio EQ, and Bypass RT EQ in what plays.
 * Edit scenarios: `tests/scenarios/08-audio-eq.json` (Set EQ over the
   marks, a splice, Remove Effect, Undo). It uses the `eq` and `eq_menu`
@@ -117,8 +141,10 @@ Playback, scrubbing and Audio Mixdown hear the EQ.
 
 ## Later
 
-* EQ templates: dragging the Effect icon to a bin or segment, the
-  predefined templates' values, and Site_EQs_Bin (p.740, p.743-745).
+* EQ templates in bins: dragging the Effect icon to a bin or segment, and
+  Site_EQs_Bin with your own templates in the Fast menu (p.740, p.744-745).
+* The predefined templates' real values, when a seat or other observation
+  gives them.
 * Audio Loop Play while adjusting (p.745), and Render Effect.
 * EQ on source clips through Toggle Source/Record in Timeline (p.739).
 * Bypass RT EQ in the Audio Mixer and the Audio Project setting's Output

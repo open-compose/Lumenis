@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lumenis/model/audio_eq.h"
 #include "lumenis/model/sequence.h"
 
 #include <QWidget>
@@ -77,6 +78,14 @@ public:
     QLabel* messageLabel() const { return message_; }
     // Fills the Fast menu for the current track and returns it (the tool owns it).
     QMenu* fastMenu();
+
+    // The predefined templates of the Fast menu (p.743-744), in order, from
+    // src/ui/resources/eq_templates.json (docs/spec/audio-eq.md says where each one's values come
+    // from).
+    static const QList<model::EqTemplate>& templates();
+    // A template on the segment under the position on every selected audio track, as an undo step;
+    // its values go to the Console (p.744-745).
+    bool applyTemplate(const model::EqTemplate& t);
 
     // Bypass RT EQ (p.737): the EQ effects are not heard. Kept in the tool; MainWindow applies it.
     bool bypassed() const;

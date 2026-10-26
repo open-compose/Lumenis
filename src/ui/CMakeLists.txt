@@ -92,6 +92,7 @@ qt_add_resources(lumenis_ui lumenis_ui_resources
         resources/command_palette.json
         resources/effects.json
         resources/effect_parameters.json
+        resources/eq_templates.json
         resources/keyboard.json
         resources/menus.json
         resources/settings.json

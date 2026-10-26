@@ -1,0 +1,110 @@
+{
+  "_about": [
+    "The Audio EQ tool's predefined templates (Editing Guide p.743-744; docs/spec/audio-eq.md).",
+    "The guide names them only in a picture (p.744) and gives no values: it sends the reader to the Console of a seat.",
+    "Each entry says where its values come from in 'source': 'observed' (seen in Media Composer itself, by",
+    "black-box observation), 'documented' (a guide's words), or 'guess' (from the name alone). Replace a guess",
+    "when better information turns up, and say where it came from in 'note'. Order is the Fast menu's.",
+    "Gains are dB (+15 to -20). Turnovers and centres are Hz, and may be any value from 20 to 20000 Hz.",
+    "'midOctaves' is the midrange's width in octaves (1/16 to 4). The tool shows these values but does not",
+    "change them (p.744)."
+  ],
+  "templates": [
+    {
+      "name": "Female Voice with Presence",
+      "low": -6, "lowTurnover": 120,
+      "mid": 4, "midFrequency": 4000, "midOctaves": 1.5,
+      "high": 2, "highTurnover": 12000,
+      "source": "guess",
+      "note": "Low rumble cut; presence lift around 4 kHz, above a male voice's; a little air."
+    },
+    {
+      "name": "Male Voice with Presence",
+      "low": -4, "lowTurnover": 80,
+      "mid": 4, "midFrequency": 3000, "midOctaves": 1.5,
+      "high": 1, "highTurnover": 12000,
+      "source": "guess",
+      "note": "Rumble cut below the voice's fundamental; presence lift around 3 kHz."
+    },
+    {
+      "name": "Music High Boost",
+      "low": 0, "lowTurnover": 50,
+      "mid": 0, "midFrequency": 1000, "midOctaves": 2,
+      "high": 6, "highTurnover": 8000,
+      "source": "guess",
+      "note": "High shelf boost only."
+    },
+    {
+      "name": "Music High Boost with Mid-Rollout",
+      "low": 0, "lowTurnover": 50,
+      "mid": -4, "midFrequency": 1000, "midOctaves": 2,
+      "high": 6, "highTurnover": 8000,
+      "source": "guess",
+      "note": "As Music High Boost, with a wide cut in the midrange."
+    },
+    {
+      "name": "Music Low Boost",
+      "low": 6, "lowTurnover": 120,
+      "mid": 0, "midFrequency": 1000, "midOctaves": 2,
+      "high": 0, "highTurnover": 15000,
+      "source": "guess",
+      "note": "Low shelf boost only."
+    },
+    {
+      "name": "Music Low Boost with Mid-Rollout",
+      "low": 6, "lowTurnover": 120,
+      "mid": -4, "midFrequency": 1000, "midOctaves": 2,
+      "high": 0, "highTurnover": 15000,
+      "source": "guess",
+      "note": "As Music Low Boost, with a wide cut in the midrange."
+    },
+    {
+      "name": "NTSC Hum Buster",
+      "low": -12, "lowTurnover": 80,
+      "mid": -20, "midFrequency": 60, "midOctaves": 0.25,
+      "high": 0, "highTurnover": 15000,
+      "source": "guess",
+      "note": "'Cuts the bass on frequencies that often cause hum on NTSC systems' (p.743): a narrow cut at 60 Hz mains hum and a low shelf cut."
+    },
+    {
+      "name": "PAL Hum Buster",
+      "low": -12, "lowTurnover": 80,
+      "mid": -20, "midFrequency": 50, "midOctaves": 0.25,
+      "high": 0, "highTurnover": 15000,
+      "source": "guess",
+      "note": "As NTSC Hum Buster, at 50 Hz mains hum."
+    },
+    {
+      "name": "Tape Hiss Filter",
+      "low": 0, "lowTurnover": 50,
+      "mid": 0, "midFrequency": 1000, "midOctaves": 2,
+      "high": -20, "highTurnover": 4000,
+      "source": "documented",
+      "note": "'Tape Hiss Filter rolls off frequencies above 4 kHz' (p.743). The amount is a guess."
+    },
+    {
+      "name": "Tape Hiss Filter with High-End Boost",
+      "low": 0, "lowTurnover": 50,
+      "mid": -12, "midFrequency": 6000, "midOctaves": 2,
+      "high": 4, "highTurnover": 15000,
+      "source": "guess",
+      "note": "A wide cut where hiss is loudest, with the very top lifted back."
+    },
+    {
+      "name": "Telephone EQ \"A\"",
+      "low": -18, "lowTurnover": 210,
+      "mid": 11, "midFrequency": 1222, "midOctaves": 0.75,
+      "high": -17, "highTurnover": 6000,
+      "source": "observed",
+      "note": "Approximate values read from the Audio EQ tool in a public video of Media Composer (owner's report, 2026)."
+    },
+    {
+      "name": "Telephone EQ \"B\"",
+      "low": -20, "lowTurnover": 300,
+      "mid": 8, "midFrequency": 1500, "midOctaves": 1,
+      "high": -20, "highTurnover": 3400,
+      "source": "guess",
+      "note": "A narrower telephone band than \"A\": the classic 300-3400 Hz voice channel."
+    }
+  ]
+}

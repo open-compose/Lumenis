@@ -745,7 +745,9 @@ The null test has automated cases at about -137 dBFS.
 * the tool (`src/ui/audio_eq.*`): sliders, 3-band buttons, EQ Range,
   graph, In, Bypass RT EQ, Track Selection and the Fast menu's Set EQ and
   Remove EQs; Remove Effect and the Timeline's EQ icon.
-The EQ templates, Audio Loop Play and Render Effect come later.
+The twelve predefined templates are in the Fast menu; their values are in
+`src/ui/resources/eq_templates.json` (one observed, the rest mostly
+guesses). Templates in bins, Audio Loop Play and Render Effect come later.
 5.4, Audio Punch-In (docs/spec/punch-in.md), is done:
 * recording from the system's inputs through miniaudio, with monitoring
   (`src/media/audio_input.*`);

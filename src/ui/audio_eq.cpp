@@ -2,7 +2,9 @@
 
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/tool_windows.h"
 
+#include <QFile>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -378,12 +380,21 @@ void AudioEqTool::showEq(const model::AudioEq& e) {
         if (!sliders_[b]->isSliderDown()) sliders_[b]->setValue(sliderValue(gains[b]));
     }
     bandButtons_[Low]->setText(frequencyText(e.lowTurnover));
-    bandButtons_[Mid]->setText(e.wideMid ? tr("2 Oct") : tr("1/4 Oct"));
+    bandButtons_[Mid]->setText(tr("%1 Oct").arg(model::octavesText(e.octaves())));
     bandButtons_[High]->setText(frequencyText(e.highTurnover));
     if (!range_->isSliderDown()) range_->setValue(rangePosition(e.midFrequency));
     readout_->setText(frequencyText(e.midFrequency));
     in_->setChecked(e.in);
     graph_->setEq(e);
+    // "You cannot change the parameters of a predefined EQ template" (p.744); In still works.
+    const bool editable = e.preset.isEmpty();
+    for (int b = 0; b < 3; ++b) {
+        boxes_[b]->setEnabled(editable);
+        sliders_[b]->setEnabled(editable);
+        bandButtons_[b]->setEnabled(editable);
+    }
+    range_->setEnabled(editable);
+    if (!editable) message_->setText(tr("Predefined template %1: its values cannot be changed.").arg(e.preset));
     syncing_ = false;
 }
 
@@ -398,8 +409,14 @@ void AudioEqTool::refresh() {
     if (!t.isEmpty()) {
         if (const auto s = timeline_.audioSegmentAt(t.first())) current_ = s->eq;
     }
-    // A segment without an EQ shows the last values set, so they can be applied (ours).
-    if (current_) eq_ = *current_;
+    // A segment without an EQ shows the last values set, so they can be applied (ours); a template's
+    // cannot be changed, so the defaults then.
+    if (current_) {
+        eq_ = *current_;
+    } else if (!eq_.preset.isEmpty()) {
+        eq_ = model::AudioEq{};
+    }
+    if (eq_.preset.isEmpty() && message_->text().startsWith(tr("Predefined template"))) message_->clear();
     showEq(eq_);
 }
 
@@ -457,25 +474,39 @@ QMenu* AudioEqTool::fastMenu() {
     menu->addAction(tr("Remove EQs On Track - In/Out"), this, [this] { removeEqs(false); })->setEnabled(any);
     menu->addAction(tr("Remove EQs On Enabled Tracks - In/Out"), this, [this] { removeEqs(true); })->setEnabled(any);
     menu->addSeparator();
-    // The predefined templates (p.743-744). Their values are not documented; they come later.
-    const char* templates[] = {"Female Voice with Presence",
-                               "Male Voice with Presence",
-                               "Music High Boost",
-                               "Music High Boost with Mid-Rollout",
-                               "Music Low Boost",
-                               "Music Low Boost with Mid-Rollout",
-                               "NTSC Hum Buster",
-                               "PAL Hum Buster",
-                               "Tape Hiss Filter",
-                               "Tape Hiss Filter with High-End Boost",
-                               "Telephone EQ \"A\"",
-                               "Telephone EQ \"B\""};
-    for (const char* name : templates) {
-        QAction* a = menu->addAction(tr(name));
-        a->setEnabled(false);
-        a->setToolTip(tr("Not available yet"));
+    // The predefined templates (picture on p.744), from src/ui/resources/eq_templates.json.
+    for (const model::EqTemplate& t : templates()) {
+        QAction* a = menu->addAction(t.eq.preset, this, [this, t] { applyTemplate(t); });
+        a->setEnabled(any);
+        a->setToolTip(t.note);
     }
     return menu;
+}
+
+const QList<model::EqTemplate>& AudioEqTool::templates() {
+    static const QList<model::EqTemplate> table = [] {
+        QFile f(QStringLiteral(":/lumenis/ui/eq_templates.json"));
+        if (!f.open(QIODevice::ReadOnly)) return QList<model::EqTemplate>{};
+        return model::parseEqTemplates(f.readAll());
+    }();
+    return table;
+}
+
+// "Move the position indicator to the audio clip ... select the template. Media Composer places the
+// EQ effect on the audio clip" (p.745); its values go to the Console (p.744 note).
+bool AudioEqTool::applyTemplate(const model::EqTemplate& t) {
+    message_->clear();
+    const QStringList on = tracks();
+    if (on.isEmpty()) {
+        fail(tr("Select an audio track in the Timeline."));
+        return false;
+    }
+    if (!timeline_.setEq(on, t.eq, false, tr("Audio EQ Template"))) {
+        fail(timeline_.lastMessage());
+        return false;
+    }
+    ConsoleLog::instance().append(tr("Audio EQ template %1: %2.").arg(t.eq.preset, model::describeEq(t.eq)));
+    return true;
 }
 
 bool AudioEqTool::eventFilter(QObject* watched, QEvent* event) {

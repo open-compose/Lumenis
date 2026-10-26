@@ -55,6 +55,8 @@ QJsonObject eqToJson(const model::AudioEq& e) {
     if (e.midFrequency != d.midFrequency) o.insert(QStringLiteral("midFrequency"), e.midFrequency);
     if (e.wideMid != d.wideMid) o.insert(QStringLiteral("wideMid"), e.wideMid);
     if (e.in != d.in) o.insert(QStringLiteral("in"), e.in);
+    if (!e.preset.isEmpty()) o.insert(QStringLiteral("preset"), e.preset);
+    if (e.midOctaves > 0) o.insert(QStringLiteral("midOctaves"), e.midOctaves);
     return o;
 }
 
@@ -68,6 +70,8 @@ model::AudioEq eqFromJson(const QJsonObject& o) {
     e.midFrequency = o.value(QStringLiteral("midFrequency")).toDouble(e.midFrequency);
     e.wideMid = o.value(QStringLiteral("wideMid")).toBool(e.wideMid);
     e.in = o.value(QStringLiteral("in")).toBool(e.in);
+    e.preset = o.value(QStringLiteral("preset")).toString();
+    e.midOctaves = o.value(QStringLiteral("midOctaves")).toDouble();
     return e;
 }
 

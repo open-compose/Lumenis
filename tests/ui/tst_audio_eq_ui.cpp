@@ -17,6 +17,7 @@
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/tool_windows.h"
 
 #include <QAction>
 #include <QApplication>
@@ -246,11 +247,13 @@ private slots:
         }
         QCOMPARE(items.mid(0, 3), (QStringList{"Set EQ - In/Out", "Remove EQs On Track - In/Out",
                                                "Remove EQs On Enabled Tracks - In/Out"}));
-        // The twelve templates, dimmed until their values are known.
-        QCOMPARE(items.size(), 15);
-        QCOMPARE(items.at(3), QStringLiteral("Female Voice with Presence"));
-        QCOMPARE(items.last(), QStringLiteral("Telephone EQ \"B\""));
-        QVERIFY(!rig.fastItem(QStringLiteral("NTSC Hum Buster"))->isEnabled());
+        // The twelve templates, in the order of the picture on p.744.
+        QCOMPARE(items.mid(3), (QStringList{"Female Voice with Presence", "Male Voice with Presence", "Music High Boost",
+                                            "Music High Boost with Mid-Rollout", "Music Low Boost",
+                                            "Music Low Boost with Mid-Rollout", "NTSC Hum Buster", "PAL Hum Buster",
+                                            "Tape Hiss Filter", "Tape Hiss Filter with High-End Boost",
+                                            "Telephone EQ \"A\"", "Telephone EQ \"B\""}));
+        QVERIFY(rig.fastItem(QStringLiteral("NTSC Hum Buster"))->isEnabled());
 
         // An EQ on b, then Set EQ - In/Out with no marks: on the whole track (p.740).
         rig.at(40);
@@ -296,6 +299,67 @@ private slots:
         rig.fastItem(QStringLiteral("Remove EQs On Enabled Tracks - In/Out"))->trigger();
         settle();
         QVERIFY(!rig.eq("A1", 0) && !rig.eq("A2", 1));
+    }
+
+    // The templates table (src/ui/resources/eq_templates.json): every entry says where its values come
+    // from; a template goes on the segment, its values to the Console, and the tool shows them but
+    // does not change them (p.743-745).
+    void templates() {
+        const QList<model::EqTemplate>& table = AudioEqTool::templates();
+        QCOMPARE(table.size(), 12);
+        for (const model::EqTemplate& t : table) {
+            QVERIFY2(QStringList({"observed", "documented", "guess"}).contains(t.source), qPrintable(t.eq.preset));
+            QVERIFY2(!t.note.isEmpty(), qPrintable(t.eq.preset));
+            QCOMPARE(model::clampEq(t.eq), t.eq);
+        }
+        // The values the owner observed (docs/spec/audio-eq.md).
+        const model::AudioEq a = table.at(10).eq;
+        QCOMPARE(a.preset, QStringLiteral("Telephone EQ \"A\""));
+        QCOMPARE(a.low, -18.0);
+        QCOMPARE(a.lowTurnover, 210);
+        QCOMPARE(a.mid, 11.0);
+        QCOMPARE(a.midFrequency, 1222.0);
+        QCOMPARE(a.octaves(), 0.75);
+        QCOMPARE(a.high, -17.0);
+        QCOMPARE(a.highTurnover, 6000);
+        QCOMPARE(table.at(10).source, QStringLiteral("observed"));
+        // "Tape Hiss Filter rolls off frequencies above 4 kHz" (p.743).
+        QCOMPARE(table.at(8).eq.highTurnover, 4000);
+        QVERIFY(table.at(8).eq.high < 0);
+
+        Rig rig;
+        rig.at(40);
+        const int lines = static_cast<int>(ConsoleLog::instance().lines().size());
+        rig.fastItem(QStringLiteral("Telephone EQ \"A\""))->trigger();
+        settle();
+        QCOMPARE(rig.eq("A1", 1), std::optional(a));
+        QVERIFY(ConsoleLog::instance().lines().size() > lines);
+        QVERIFY(ConsoleLog::instance().lines().last().contains(QStringLiteral("low -18.0 dB at 210 Hz, mid +11.0 dB at 1.22 kHz (3/4 octave), high -17.0 dB at 6 kHz")));
+        // Shown, but not to be changed; In still works.
+        QCOMPARE(rig.tool.bandButton(AudioEqTool::Low)->text(), QStringLiteral("210 Hz"));
+        QCOMPARE(rig.tool.bandButton(AudioEqTool::Mid)->text(), QStringLiteral("3/4 Oct"));
+        QCOMPARE(rig.tool.rangeReadout()->text(), QStringLiteral("1.22 kHz"));
+        QVERIFY(!rig.tool.slider(AudioEqTool::Low)->isEnabled());
+        QVERIFY(!rig.tool.rangeSlider()->isEnabled());
+        QVERIFY(rig.tool.messageLabel()->text().contains(QStringLiteral("Predefined template")));
+        rig.tool.inButton()->click();
+        settle();
+        QVERIFY(!rig.eq("A1", 1)->in);
+        QCOMPARE(rig.eq("A1", 1)->preset, a.preset);
+        // Set EQ - In/Out copies it as it is.
+        rig.fastItem(QStringLiteral("Set EQ - In/Out"))->trigger();
+        settle();
+        QCOMPARE(rig.eq("A1", 0)->midOctaves, 0.75);
+        // A segment without an EQ: the defaults, which can be changed.
+        rig.timeline.setEq({QStringLiteral("A1")}, std::nullopt, true, QStringLiteral("Remove"));
+        settle();
+        QVERIFY(rig.tool.slider(AudioEqTool::Low)->isEnabled());
+        QCOMPARE(rig.tool.eq(), model::AudioEq{});
+        QVERIFY(rig.tool.messageLabel()->text().isEmpty());
+        // Its sound: the telephone's narrow band.
+        QVERIFY(model::eqResponse(a, 1222) > 9);
+        QVERIFY(model::eqResponse(a, 60) < -12);
+        QVERIFY(model::eqResponse(a, 15000) < -12);
     }
 
     // Remove Effect at the position takes the EQ off the selected audio tracks (p.741).

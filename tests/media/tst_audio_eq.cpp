@@ -115,6 +115,44 @@ private slots:
         QVERIFY(std::abs(model::eqResponse(narrow, 1000) + 15) < 0.01);
         QVERIFY(std::abs(model::eqResponse(wide, 1000) + 15) < 0.01);
         QVERIFY(model::eqResponse(narrow, 1500) > model::eqResponse(wide, 1500) + 5);
+
+        // A template keeps values the tool's own controls do not offer (p.744), and saves them.
+        AudioEq t;
+        t.preset = QStringLiteral("Telephone EQ \"A\"");
+        t.lowTurnover = 210;
+        t.highTurnover = 4000;
+        t.midFrequency = 30;
+        t.midOctaves = 0.75;
+        t.mid = 6;
+        const AudioEq kept = model::clampEq(t);
+        QCOMPARE(kept.lowTurnover, 210);
+        QCOMPARE(kept.highTurnover, 4000);
+        QCOMPARE(kept.midFrequency, 30.0);
+        QCOMPARE(kept.octaves(), 0.75);
+        t.midOctaves = 10;
+        QCOMPARE(model::clampEq(t).octaves(), model::kPresetMaxOctaves);
+        // 3/4 octave lies between 1/4 and 2.
+        AudioEq quarter = narrow;
+        AudioEq threeQuarters = narrow;
+        threeQuarters.preset = QStringLiteral("x");
+        threeQuarters.midOctaves = 0.75;
+        QVERIFY(model::eqResponse(threeQuarters, 1500) < model::eqResponse(quarter, 1500) - 3);
+        QVERIFY(model::eqResponse(threeQuarters, 1500) > model::eqResponse(wide, 1500) + 1);
+        // Read from a table, with its source.
+        const QList<model::EqTemplate> table = model::parseEqTemplates(
+            R"({"templates": [{"name": "T", "low": -30, "lowTurnover": 210, "midOctaves": 0.75, "source": "guess", "note": "n"},
+                               {"low": 1}]})");
+        QCOMPARE(table.size(), 1);
+        QCOMPARE(table.first().eq.preset, QStringLiteral("T"));
+        QCOMPARE(table.first().eq.low, -20.0);
+        QCOMPARE(table.first().eq.lowTurnover, 210);
+        QCOMPARE(table.first().source, QStringLiteral("guess"));
+        QString error;
+        QVERIFY(model::parseEqTemplates("{", &error).isEmpty());
+        QVERIFY(!error.isEmpty());
+        QCOMPARE(model::octavesText(0.75), QStringLiteral("3/4"));
+        QCOMPARE(model::octavesText(2), QStringLiteral("2"));
+        QCOMPARE(model::octavesText(1.5), QStringLiteral("1.5"));
     }
 
     void setOnSegments() {
@@ -133,6 +171,11 @@ private slots:
         QVERIFY(!t->segments.at(1).eq);
         QCOMPARE(t->segments.at(2).eq, std::optional(e));
         QVERIFY(!t->segments.at(3).eq);
+        // A template's name and width are saved too.
+        AudioEq preset = e;
+        preset.preset = QStringLiteral("Tape Hiss Filter");
+        preset.midOctaves = 0.75;
+        model::setEq(seq, QStringLiteral("A1"), 75, 80, preset);
         // Saved and read back; an EQ keeps an edit from being a match frame.
         QCOMPARE(model::Sequence::fromJson(seq.toJson()).toJson(), seq.toJson());
         QVERIFY(!model::Sequence::isMatchFrame(t->segments.at(2), t->segments.at(3)));

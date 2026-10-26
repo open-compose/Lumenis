@@ -113,6 +113,14 @@ struct AudioEq {
     double midFrequency = 500;
     bool wideMid = true; // 2 octaves; false: 1/4 octave
     bool in = true;
+    // A predefined template's (p.743-744): its name, and the midrange's width in octaves when it is
+    // neither 2 nor 1/4 (0: wideMid). A template keeps turnovers and widths the tool's own controls
+    // do not offer, and the tool does not change them ("you cannot change the parameters of a
+    // predefined EQ template", p.744).
+    QString preset;
+    double midOctaves = 0;
+    // The midrange's width in octaves.
+    double octaves() const { return midOctaves > 0 ? midOctaves : wideMid ? 2.0 : 0.25; }
     bool operator==(const AudioEq&) const = default;
 };
 

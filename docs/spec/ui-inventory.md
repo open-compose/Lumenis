@@ -64,6 +64,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   * Set EQ - In/Out with only an OUT acts from the start;
   * the Timeline's EQ icon;
   * Audio Mixdown keeps the EQ while Bypass RT EQ is on.
+  * the predefined templates' values, except Telephone EQ "A" (observed)
+    and Tape Hiss Filter's 4 kHz (p.743): recheck them against a seat's
+    Console (src/ui/resources/eq_templates.json).
 * Audio Punch-In (docs/spec/punch-in.md):
   * a new track goes with the first punch-in's undo, and every punch-in
     is its own undo step (the guide's third undo removes all of them);
@@ -2361,7 +2364,10 @@ Details: docs/spec/audio-eq.md.
   graph.
 * **Fast menu** (picture on p.744): Set EQ - In/Out, Remove EQs On Track -
   In/Out, Remove EQs On Enabled Tracks - In/Out, then the twelve
-  predefined templates, dimmed (their values are undocumented).
+  predefined templates. Their values come from
+  src/ui/resources/eq_templates.json: Telephone EQ "A" is observed, Tape
+  Hiss Filter partly documented (p.743), the rest guesses. A template's
+  values are shown but cannot be changed (p.744).
 * **Remove Effect** removes an EQ at the position (p.741).
 * **Ours:** the filter shapes, the defaults (500 Hz midrange), a change
   setting the segment at once, an OUT alone acting from the start, and
