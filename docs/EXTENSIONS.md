@@ -34,6 +34,10 @@ handle all of these the same way.
   * `TranscriptionProvider` (`transcription.h`): speech-to-text;
   * `PluginHostProvider` (`plugin_host.h`): OFX, AVX, CLAP, VST3 and AAX
     discovery.
+    Audio plug-ins process through `media::AudioEffect`
+    (`src/media/audio_fx.h`): a host registers its plug-ins with
+    `media::registerAudioEffects`, and they appear with the built-in effects
+    as Audio Track Effects (docs/spec/track-effects.md).
 
   Video I/O devices and shared storage are reserved as categories. They get
   interfaces in their phases.

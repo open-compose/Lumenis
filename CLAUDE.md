@@ -280,6 +280,14 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   - the macOS microphone permission (packaging/macos/Info.plist.in, checked
     by the installer gate).
   Tests: `tst_audio_punch_in`, scenario `09-audio-punch-in.json`.
+5.5a is done: Audio Track Effects (docs/spec/track-effects.md):
+  - the audio effect interface and built-in effects (`src/media/audio_fx.*`;
+    a plug-in host adds to it with `media::registerAudioEffects`);
+  - inserts a-e on tracks (`model::Track::inserts`), mixed in `media::AudioMix`;
+  - the tool (`src/ui/audio_track_effect.*`), the track button's menu, the
+    Effect Palette's Audio Track tab.
+  Tests: `tst_audio_fx`, `tst_track_effects`, scenario `10-track-effects.json`.
+  Next: 5.5b CLAP host, 5.5c AudioSuite.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

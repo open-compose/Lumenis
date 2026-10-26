@@ -757,6 +757,14 @@ guesses). Templates in bins, Audio Loop Play and Render Effect come later.
 * each take one "Voice Over" master clip of managed media, each punch-in an
   undo step (`Timeline::punchIn`).
 On macOS the bundle asks for the microphone (Info.plist, entitlement).
+5.5a, Audio Track Effects (docs/spec/track-effects.md), is done:
+* the audio effect interface and nine built-in effects (`src/media/audio_fx.*`),
+  which the CLAP host (5.5b) will add to;
+* five inserts a-e on each audio track (`model::Track::inserts`), mixed
+  through in real time and in Audio Mixdown (`media::AudioMix`);
+* Tools > Audio Track Effect, the track button's menu, the Effect
+  Palette's Audio Track tab and Select Insert, Bypass and Ctrl+Bypass.
+Next: 5.5b, the CLAP host; 5.5c, AudioSuite; then 5.1/7.1 routing.
 
 ### Phase 6 — Effects and rendering
 * Transitions, motion effects, timewarps, Color Correction (HSL and curves),

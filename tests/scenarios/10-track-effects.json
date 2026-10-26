@@ -1,0 +1,23 @@
+[
+  {
+    "name": "Audio Track Effect inserts put in, moved, copied and taken out, an undo step each; video tracks refused",
+    "guide": "p.791-795",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50]], "A1": [["A", 0, 50]], "A2": [["A", 0, 50]]}},
+    "steps": [
+      {"insert": ["V1", 0, "builtin.reverb"], "refused": true},
+      {"insert": ["A1", 0, "builtin.compressor"]},
+      {"insert": ["A1", 1, "builtin.reverb"]},
+      {"move_insert": ["A1", 1, "A2", 4, false]},
+      {"move_insert": ["A2", 4, "A1", 2, true]},
+      {"insert": ["A1", 0, null]},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"},
+      {"command": "edit.undo"}
+    ],
+    "expect": {"A1": [["A", 0, 50]], "A2": [["A", 0, 50]]},
+    "expect_inserts": {
+      "A1": ["builtin.compressor", null, "builtin.reverb", null, null],
+      "A2": [null, null, null, null, "builtin.reverb"]}
+  }
+]

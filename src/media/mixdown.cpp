@@ -35,6 +35,15 @@ std::vector<AudioPiece> piecesFor(const MixdownRequest& r) {
     return pieces;
 }
 
+// The Audio Track Effects of the tracks mixed down: they are heard in the mix, so they go into it.
+TrackInserts insertsFor(const MixdownRequest& r) {
+    TrackInserts all = trackInserts(r.sequence);
+    for (auto it = all.begin(); it != all.end();) {
+        it = r.tracks.contains(it->first) ? std::next(it) : all.erase(it);
+    }
+    return all;
+}
+
 } // namespace
 
 int mixdownChannels(MixdownFormat format) {
@@ -45,7 +54,7 @@ MixdownRenderer::MixdownRenderer(const MixdownRequest& request)
     : channels_(mixdownChannels(request.format)),
       offset_(framesToSamples(request.start, request.sequence.editRate)),
       samples_(std::max<std::int64_t>(framesToSamples(request.end, request.sequence.editRate) - offset_, 0)),
-      mix_(piecesFor(request)) {}
+      mix_(piecesFor(request), insertsFor(request)) {}
 
 void MixdownRenderer::render(std::int64_t at, int count, std::vector<std::vector<float>>& out) {
     std::vector<float> stereo(2 * static_cast<std::size_t>(std::max(count, 0)));

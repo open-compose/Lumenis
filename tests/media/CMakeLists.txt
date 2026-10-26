@@ -7,3 +7,4 @@ endif()
 lumenis_add_test(tst_mixdown SOURCES tst_mixdown.cpp LIBS lumenis::media)
 # Audio EQ: the bands, setting the effect, and the filtered sound (docs/spec/audio-eq.md).
 lumenis_add_test(tst_audio_eq SOURCES tst_audio_eq.cpp LIBS lumenis::media)
+lumenis_add_test(tst_audio_fx SOURCES tst_audio_fx.cpp LIBS lumenis::media)

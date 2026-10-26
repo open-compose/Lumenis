@@ -22,6 +22,7 @@
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/audio_eq.h"
 #include "lumenis/ui/audio_punch_in.h"
+#include "lumenis/ui/audio_track_effect.h"
 #include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/command_palette.h"
@@ -956,6 +957,21 @@ void MainWindow::createTools() {
     connect(audioPunchIn_, &AudioPunchInTool::activeChanged, this, [this](bool active) {
         audio_->setMonitor(active && audioPunchIn_->monitorsInput() ? &audioPunchIn_->input() : nullptr);
     });
+    // Audio Track Effects (p.790-795): changes made while playing are heard at once (p.793), by
+    // starting play again where it is.
+    audioTrackEffect_ = new AudioTrackEffectTool(*timeline_);
+    panels_->addPanel(new Panel(QStringLiteral("AudioTrackEffect"), tr("Audio Track Effect"), audioTrackEffect_));
+    auto* replay = new QTimer(this);
+    replay->setSingleShot(true);
+    replay->setInterval(60);
+    connect(replay, &QTimer::timeout, this, [this] {
+        if (composer_->isPlaying() && std::abs(composer_->speed()) <= 3) composer_->play(composer_->speed());
+    });
+    connect(audioTrackEffect_, &AudioTrackEffectTool::previewChanged, replay, qOverload<>(&QTimer::start));
+    connect(timeline_, &Timeline::trackEffectToolRequested, this, [this](const QString& track) {
+        audioTrackEffect_->select(track, 0);
+        showTool(QStringLiteral("AudioTrackEffect"));
+    });
     audioTool_ = new AudioTool;
     panels_->addPanel(new Panel(QStringLiteral("AudioTool"), tr("Audio Tool"), audioTool_));
     // Tools > Background Queue Window (p.356-357).
@@ -1108,6 +1124,32 @@ std::vector<media::AudioPiece> MainWindow::soundOf(const model::LoadedClip& load
     return pieces;
 }
 
+// The Audio Track Effects that play (p.790-795): the sequence's inserts, none with Ctrl+Bypass, and
+// the value the Audio Track Effect tool is dragging in place of the saved one.
+media::TrackInserts MainWindow::insertsOf(const model::LoadedClip& loaded) const {
+    const bool all = audioTrackEffect_ && audioTrackEffect_->bypassedAll();
+    media::TrackInserts inserts = media::trackInserts(loaded.item, all);
+    if (all || !audioTrackEffect_ || !audioTrackEffect_->preview() || loaded.item.kind != model::BinItemKind::Sequence) {
+        return inserts;
+    }
+    // Rebuild the previewed track's list from its slots, with the dragged one swapped in.
+    const AudioTrackEffectTool::Preview& p = *audioTrackEffect_->preview();
+    const model::Sequence seq = model::Sequence::fromItem(loaded.item);
+    if (const model::Track* track = seq.track(p.track)) {
+        QList<model::TrackInsert> list;
+        for (int slot = 0; slot < model::kTrackInserts; ++slot) {
+            const auto& in = slot == p.slot ? std::optional(p.insert) : track->inserts[static_cast<std::size_t>(slot)];
+            if (in && !in->bypass) list << *in;
+        }
+        if (list.isEmpty()) {
+            inserts.erase(p.track);
+        } else {
+            inserts[p.track] = list;
+        }
+    }
+    return inserts;
+}
+
 // A sequence's audio track is heard when it is monitored in the Track Selector panel (p.395), not
 // muted in the Audio Mixer, and soloed whenever any track is (p.698).
 bool MainWindow::isHeard(const QString& track) const {
@@ -1170,7 +1212,7 @@ void MainWindow::scrubIfMoved() {
     media::AudioPlayer::PlayOptions options;
     options.limit = media::framesToSamples(out + in, rate);
     scrubStart_ = media::framesToSamples(position - out, rate);
-    if (!audio_->start(std::make_shared<media::AudioMix>(std::move(pieces)), scrubStart_, options)) return;
+    if (!audio_->start(std::make_shared<media::AudioMix>(std::move(pieces), insertsOf(*loaded)), scrubStart_, options)) return;
     scrubbing_ = true;
     // The device is let go once the burst has played.
     const int token = ++scrubToken_;
@@ -1214,7 +1256,7 @@ void MainWindow::startSound(MonitorId monitor, int speed) {
     const std::int64_t at = media::framesToSamples(composer_->state(monitor).position(), loaded->item.editRate);
     media::AudioPlayer::PlayOptions options;
     options.speed = speed;
-    if (!audio_->start(std::make_shared<media::AudioMix>(std::move(pieces)), at, options)) {
+    if (!audio_->start(std::make_shared<media::AudioMix>(std::move(pieces), insertsOf(*loaded)), at, options)) {
         ConsoleLog::instance().append(tr("Playback: no audio output could be opened; playing without sound."));
     }
 }
@@ -2391,6 +2433,7 @@ Panel* MainWindow::showTool(const QString& panelId) {
     if (panelId == QLatin1String("EffectEditor")) size = QSize(340, 520);
     if (panelId == QLatin1String("AudioMixer")) size = QSize(560, 440);
     if (panelId == QLatin1String("AudioEQ")) size = QSize(620, 300);
+    if (panelId == QLatin1String("AudioTrackEffect")) size = QSize(460, 360);
     if (panelId == QLatin1String("AudioTool")) size = QSize(300, 340);
     if (panelId == QLatin1String("MediaTool")) size = QSize(640, 320);
     if (panelId == QLatin1String("SourceBrowser")) size = QSize(960, 600);
@@ -2641,6 +2684,7 @@ void MainWindow::installPanelHandlers() {
     handle("tools.audio_mixer", [this] { showTool(QStringLiteral("AudioMixer")); });
     handle("tools.audio_eq", [this] { showTool(QStringLiteral("AudioEQ")); });
     handle("tools.audio_tool", [this] { showTool(QStringLiteral("AudioTool")); });
+    handle("tools.audio_track_effect", [this] { showTool(QStringLiteral("AudioTrackEffect")); });
     handle("tools.audio_punch_in", [this] {
         preparePunchIn();
         showTool(QStringLiteral("AudioPunchIn"));

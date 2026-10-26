@@ -1,5 +1,6 @@
 add_library(lumenis_media STATIC
     media.cpp
+    audio_fx.cpp
     audio_input.cpp
     link.cpp
     playback.cpp
@@ -8,6 +9,7 @@ add_library(lumenis_media STATIC
     relink.cpp
     mixdown.cpp
     include/lumenis/media/media.h
+    include/lumenis/media/audio_fx.h
     include/lumenis/media/audio_input.h
     include/lumenis/media/link.h
     include/lumenis/media/playback.h

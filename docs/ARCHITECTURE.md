@@ -62,7 +62,8 @@ headers in `include/lumenis/<library>/`.
   fix-ups), `link.*` (files linked as clips), `managed.*` (managed media in
   `Avid MediaFiles/MXF`, the media database), `consolidate.*`, `relink.*`,
   `playback.*` (sound through miniaudio, the audio clock), `audio_input.*`
-  (recording from an input), `mixdown.*`
+  (recording from an input), `audio_fx.*` (the audio effect interface and
+  the built-in effects), `mixdown.*`
   (Audio Mixdown, docs/spec/audio-mixdown.md). UI side:
   `media_frames.*` (frames for monitors, bins and the Timeline),
   `source_browser.*`, `media_tool.*`, `relink_dialog.*`,
@@ -85,7 +86,9 @@ headers in `include/lumenis/<library>/`.
   segments (`model::Effect`, `model::Transition`).
 * **Audio tools.** `audio_tools.*` (the Audio Mixer and the Audio Tool),
   `audio_eq.*` (the Audio EQ tool, docs/spec/audio-eq.md),
-  `audio_punch_in.*` (Audio Punch-In, docs/spec/punch-in.md) and
+  `audio_punch_in.*` (Audio Punch-In, docs/spec/punch-in.md),
+  `audio_track_effect.*` (the Audio Track Effect tool,
+  docs/spec/track-effects.md) and
   `mixdown_dialog.*`; the sound is `src/media/playback.*` and recording
   `src/media/audio_input.*`.
 

@@ -1,5 +1,7 @@
 #include "lumenis/ui/effect_palette.h"
 
+#include "lumenis/media/audio_fx.h"
+
 #include <QContextMenuEvent>
 #include <QDrag>
 #include <QFile>
@@ -92,9 +94,23 @@ const EffectInfo* EffectCatalog::find(const QString& category, const QString& na
     return nullptr;
 }
 
+// The Audio Track tab's effects (p.791-792): media::audioEffects() as palette entries, by category.
+QList<EffectInfo> audioTrackEffects() {
+    QList<EffectInfo> out;
+    for (const media::AudioEffectInfo& a : media::audioEffects()) {
+        EffectInfo e;
+        e.category = a.category;
+        e.name = a.name;
+        e.audioEffect = a.id;
+        out << e;
+    }
+    return out;
+}
+
 QMimeData* effectMime(const EffectInfo& effect) {
     auto* mime = new QMimeData;
-    const QJsonObject o{{QStringLiteral("category"), effect.category}, {QStringLiteral("name"), effect.name}};
+    QJsonObject o{{QStringLiteral("category"), effect.category}, {QStringLiteral("name"), effect.name}};
+    if (!effect.audioEffect.isEmpty()) o.insert(QStringLiteral("audioEffect"), effect.audioEffect);
     mime->setData(QString::fromLatin1(kEffectMimeType), QJsonDocument(o).toJson(QJsonDocument::Compact));
     mime->setText(effect.name);
     return mime;
@@ -103,6 +119,12 @@ QMimeData* effectMime(const EffectInfo& effect) {
 std::optional<EffectInfo> effectFromMime(const QMimeData* mime) {
     if (!mime || !mime->hasFormat(QString::fromLatin1(kEffectMimeType))) return std::nullopt;
     const QJsonObject o = QJsonDocument::fromJson(mime->data(QString::fromLatin1(kEffectMimeType))).object();
+    if (const QString id = o.value(QStringLiteral("audioEffect")).toString(); !id.isEmpty()) {
+        for (const EffectInfo& a : audioTrackEffects()) {
+            if (a.audioEffect == id) return a;
+        }
+        return std::nullopt;
+    }
     const EffectInfo* e = EffectCatalog::builtin().find(o.value(QStringLiteral("category")).toString(),
                                                         o.value(QStringLiteral("name")).toString());
     if (!e) return std::nullopt;
@@ -203,11 +225,21 @@ bool EffectPalette::tabShows(const EffectInfo& effect) const {
     const QString& kind = tabs.at(i).kind;
     // Filters lists every video effect, as in the picture on p.37 (where
     // Illusion FX shows its transitions too); Transitions only those that
-    // apply to transitions. The built-in effects are all video effects;
-    // audio effects come with plug-ins.
+    // apply to transitions; Audio Track the audio track effects (p.792).
+    // Audio Clip effects come later.
+    if (kind == QLatin1String("audioTrack")) return !effect.audioEffect.isEmpty();
+    if (!effect.audioEffect.isEmpty()) return false;
     if (kind == QLatin1String("video")) return true;
     if (kind == QLatin1String("transitions")) return effect.transition;
     return false;
+}
+
+// The current tab's effects: the catalog's, or the audio track effects.
+QList<EffectInfo> EffectPalette::tabEffects() const {
+    const QList<EffectCatalog::Tab>& tabs = EffectCatalog::builtin().tabs();
+    const int i = tabs_->currentIndex();
+    if (i >= 0 && i < tabs.size() && tabs.at(i).kind == QLatin1String("audioTrack")) return audioTrackEffects();
+    return EffectCatalog::builtin().all();
 }
 
 void EffectPalette::fillCategories() {
@@ -215,9 +247,14 @@ void EffectPalette::fillCategories() {
     categories_->blockSignals(true);
     categories_->clear();
     categories_->addItem(kAll);
-    for (const QString& c : EffectCatalog::builtin().categories()) {
+    QStringList names = EffectCatalog::builtin().categories();
+    for (const EffectInfo& e : tabEffects()) {
+        if (!names.contains(e.category)) names << e.category;
+    }
+    const QList<EffectInfo> effects = tabEffects();
+    for (const QString& c : names) {
         bool shown = tabs_->currentIndex() == 0; // Filters lists every category (p.37)
-        for (const EffectInfo& e : EffectCatalog::builtin().effectsIn(c)) shown = shown || tabShows(e);
+        for (const EffectInfo& e : effects) shown = shown || (e.category == c && tabShows(e));
         if (shown) categories_->addItem(c);
     }
     const auto found = categories_->findItems(was, Qt::MatchExactly);
@@ -233,7 +270,7 @@ void EffectPalette::fillEffects() {
     const QString cat = category();
     const QString text = find_->text().trimmed();
     QList<EffectInfo> list;
-    for (const EffectInfo& e : EffectCatalog::builtin().all()) {
+    for (const EffectInfo& e : tabEffects()) {
         if (!tabShows(e)) continue;
         if (cat != kAll && e.category != cat) continue;
         if (!text.isEmpty() && !e.name.contains(text, Qt::CaseInsensitive)) continue;
@@ -242,6 +279,7 @@ void EffectPalette::fillEffects() {
     for (const EffectInfo& e : list) {
         auto* item = new QListWidgetItem(effectIcon(e.transition && !e.segment, e.realTime), e.name, effects_);
         item->setData(Qt::UserRole, e.category);
+        item->setData(Qt::UserRole + 1, e.audioEffect);
         item->setToolTip(cat == kAll ? e.category + QStringLiteral(": ") + e.name : e.name);
     }
 }
@@ -272,6 +310,9 @@ QStringList EffectPalette::shownEffects() const {
 std::optional<EffectInfo> EffectPalette::effectAt(int row) const {
     const QListWidgetItem* item = effects_->item(row);
     if (!item) return std::nullopt;
+    for (const EffectInfo& a : audioTrackEffects()) {
+        if (a.audioEffect == item->data(Qt::UserRole + 1).toString() && !a.audioEffect.isEmpty()) return a;
+    }
     const EffectInfo* e = EffectCatalog::builtin().find(item->data(Qt::UserRole).toString(), item->text());
     if (!e) return std::nullopt;
     return *e;

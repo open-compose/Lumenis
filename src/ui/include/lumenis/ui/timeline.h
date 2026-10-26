@@ -372,6 +372,24 @@ public:
     };
     std::optional<QStringList> punchIn(const QString& binId, const model::BinItem& clip, const QStringList& targets,
                                        const QList<PunchIn>& punches);
+    // ---- Audio Track Effects (p.790-795; docs/spec/track-effects.md)
+    // The insert in slot `slot` (0-4: a-e) of an audio track of the record sequence.
+    std::optional<model::TrackInsert> trackInsert(const QString& track, int slot) const;
+    // Puts `insert` in the slot (replacing what is there), or with none removes it, as an undo step.
+    // Refused, with a message, for a track that is not audio, a locked one, or a slot out of range.
+    // Already so: true without a step.
+    bool setTrackInsert(const QString& track, int slot, const std::optional<model::TrackInsert>& insert,
+                        const QString& description);
+    // Drag an insert button to another (p.795): moves the insert, replacing what is there; with `copy`
+    // (Alt+drag) leaves the original. Mono inserts go to mono tracks only (p.794).
+    bool moveTrackInsert(const QString& fromTrack, int fromSlot, const QString& toTrack, int toSlot, bool copy);
+    // A new insert of an effect with its default values.
+    static model::TrackInsert newInsert(const QString& effectId);
+    // An audio effect dropped on an audio track (p.792): the Select Insert dialog picks the slot; it
+    // goes there, replacing what is there. Without a hook a dialog asks.
+    bool dropTrackEffect(const QString& track, const QString& effectId);
+    using SelectInsertAsk = std::function<std::optional<int>(const QString& track)>;
+    void setSelectInsertAsk(SelectInsertAsk ask) { selectInsertAsk_ = std::move(ask); }
     // The segment under the Record position on an audio track, if any.
     std::optional<model::Segment> audioSegmentAt(const QString& track) const;
 
@@ -518,6 +536,8 @@ signals:
     void videoDisplaySettingsRequested();
     // A command that is not the Timeline's (New > Sequence).
     void commandRequested(const QString& commandId);
+    // The track button's Audio Track Effect Tool item (p.793, p.795): the tool, on that track.
+    void trackEffectToolRequested(const QString& track);
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -576,6 +596,7 @@ private:
     int sliderFor(double scale) const;
     double scaleFor(int slider) const;
 
+    SelectInsertAsk selectInsertAsk_;
     Composer& composer_;
     TimelineView* view_ = nullptr;
     QWidget* toolbar_ = nullptr;

@@ -51,6 +51,7 @@ class ListTool;
 class AboutInfoDialog;
 class AudioEqTool;
 class AudioPunchInTool;
+class AudioTrackEffectTool;
 class AudioMixer;
 class AudioTool;
 class EffectEditor;
@@ -138,11 +139,15 @@ public:
     AudioMixer& audioMixer() const { return *audioMixer_; }
     AudioEqTool& audioEq() const { return *audioEq_; }
     AudioPunchInTool& audioPunchIn() const { return *audioPunchIn_; }
+    AudioTrackEffectTool& audioTrackEffect() const { return *audioTrackEffect_; }
     // Fills the Audio Punch-In tool's input, drive and bin menus (Tools > Audio Punch-In does too).
     void preparePunchIn();
     // Whether a sequence's audio track is heard when it plays: monitored in the Track Selector
     // panel (p.395), not muted in the Audio Mixer, and soloed whenever any track is (p.698).
     bool isHeard(const QString& track) const;
+    // The Audio Track Effects a loaded item plays through (media::AudioMix): its inserts, none with the
+    // tool's Ctrl+Bypass, and the tool's dragged value in place of the saved one.
+    media::TrackInserts insertsOf(const model::LoadedClip& loaded) const;
     // The audio of a loaded item, through the Audio Mixer's Master fader and without EQ while the
     // Audio EQ tool's Bypass RT EQ is on; `monitored`, when set, picks the sequence tracks heard.
     std::vector<media::AudioPiece> soundOf(const model::LoadedClip& loaded,
@@ -376,6 +381,7 @@ private:
     AudioMixer* audioMixer_ = nullptr;
     AudioEqTool* audioEq_ = nullptr;
     AudioPunchInTool* audioPunchIn_ = nullptr;
+    AudioTrackEffectTool* audioTrackEffect_ = nullptr;
     AudioTool* audioTool_ = nullptr;
     MediaTool* mediaTool_ = nullptr;
     ListTool* listTool_ = nullptr;

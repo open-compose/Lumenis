@@ -257,6 +257,10 @@ Segment Segment::filler(std::int64_t length) {
     return s;
 }
 
+bool Track::hasInserts() const {
+    return std::any_of(inserts.begin(), inserts.end(), [](const auto& in) { return in.has_value(); });
+}
+
 std::int64_t Track::length() const {
     std::int64_t total = 0;
     for (const Segment& s : segments) total += s.length;
@@ -321,6 +325,22 @@ QJsonObject Sequence::toJson() const {
                 if (format == t.format) o.insert(QStringLiteral("format"), QString::fromLatin1(text));
             }
         }
+        if (t.hasInserts()) {
+            QJsonArray inserts;
+            for (int slot = 0; slot < kTrackInserts; ++slot) {
+                const auto& in = t.inserts[static_cast<std::size_t>(slot)];
+                if (!in) continue;
+                QJsonObject params;
+                for (auto it = in->params.begin(); it != in->params.end(); ++it) params.insert(it.key(), it.value());
+                QJsonObject io{{QStringLiteral("slot"), slot},
+                               {QStringLiteral("effect"), in->effect},
+                               {QStringLiteral("name"), in->name},
+                               {QStringLiteral("params"), params}};
+                if (in->bypass) io.insert(QStringLiteral("bypass"), true);
+                inserts.append(io);
+            }
+            o.insert(QStringLiteral("inserts"), inserts);
+        }
         tracks.append(o);
     }
     return QJsonObject{{QStringLiteral("tracks"), tracks}, {QStringLiteral("timecode"), timecode_}};
@@ -344,6 +364,18 @@ Sequence Sequence::fromJson(const QJsonObject& o) {
         }
         for (const QJsonValue& sv : to.value(QStringLiteral("segments")).toArray()) {
             t.segments << segmentFromJson(sv.toObject());
+        }
+        for (const QJsonValue& iv : to.value(QStringLiteral("inserts")).toArray()) {
+            const QJsonObject io = iv.toObject();
+            const int slot = io.value(QStringLiteral("slot")).toInt(-1);
+            if (t.kind != TrackKind::Audio || slot < 0 || slot >= kTrackInserts) continue;
+            TrackInsert in;
+            in.effect = io.value(QStringLiteral("effect")).toString();
+            in.name = io.value(QStringLiteral("name")).toString();
+            const QJsonObject params = io.value(QStringLiteral("params")).toObject();
+            for (auto it = params.begin(); it != params.end(); ++it) in.params.insert(it.key(), it.value().toDouble());
+            in.bypass = io.value(QStringLiteral("bypass")).toBool();
+            if (!in.effect.isEmpty()) t.inserts[static_cast<std::size_t>(slot)] = in;
         }
         tidy(t);
         s.tracks_ << t;
@@ -865,6 +897,7 @@ Sequence Sequence::excerpt(const QStringList& names, std::int64_t start, std::in
         Track copy = t;
         copy.locked = false;
         copy.syncLocked = false;
+        copy.inserts = {}; // the Clipboard holds material, not the track's effects
         copy.segments = material(t.name(), start, length);
         tidy(copy);
         bool empty = true;

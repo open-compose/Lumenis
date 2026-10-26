@@ -331,6 +331,26 @@ struct Run {
             }
             return true;
         }
+        if (o.contains(QStringLiteral("insert"))) {
+            // [track, slot, effect id or null]: an Audio Track Effect put in or taken out (p.791-795).
+            const QJsonArray a = o.value(QStringLiteral("insert")).toArray();
+            const std::optional<model::TrackInsert> in =
+                a.at(2).isNull() ? std::nullopt : std::optional(Timeline::newInsert(a.at(2).toString()));
+            const bool ok = timeline.setTrackInsert(a.at(0).toString(), a.at(1).toInt(), in, QStringLiteral("insert"));
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the insert was not refused") : timeline.lastMessage());
+            }
+            return true;
+        }
+        if (o.contains(QStringLiteral("move_insert"))) {
+            // [from track, slot, to track, slot, copy]: an insert button dragged (p.795).
+            const QJsonArray a = o.value(QStringLiteral("move_insert")).toArray();
+            if (!timeline.moveTrackInsert(a.at(0).toString(), a.at(1).toInt(), a.at(2).toString(), a.at(3).toInt(),
+                                          a.at(4).toBool())) {
+                return fail(timeline.lastMessage());
+            }
+            return true;
+        }
         if (o.contains(QStringLiteral("lock"))) {
             timeline.setTracksLocked({o.value(QStringLiteral("lock")).toString()}, true);
             return true;
@@ -489,6 +509,18 @@ private slots:
                 const QJsonValue out = want.value(QStringLiteral("out"));
                 QCOMPARE(m.out().has_value(), !out.isNull());
                 if (m.out()) QCOMPARE(*m.out(), out.toInteger());
+            }
+        }
+        // Audio Track Effect inserts: per track, the effect in each slot a-e, or null.
+        const QJsonObject inserts = scenario.value(QStringLiteral("expect_inserts")).toObject();
+        if (!inserts.isEmpty()) {
+            const model::Sequence s = model::Sequence::fromItem(run.composer.state(MonitorId::Record).current()->item);
+            for (auto it = inserts.begin(); it != inserts.end(); ++it) {
+                const model::Track* t = s.track(it.key());
+                QVERIFY2(t, qPrintable(it.key()));
+                QJsonArray got;
+                for (const auto& in : t->inserts) got.append(in ? QJsonValue(in->effect) : QJsonValue());
+                QCOMPARE(got, it.value().toArray());
             }
         }
         for (auto it = expected.begin(); it != expected.end(); ++it) {

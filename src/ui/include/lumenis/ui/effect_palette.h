@@ -24,6 +24,8 @@ struct EffectInfo {
     bool segment = false;      // can be applied to a segment
     bool realTime = true;      // the green dot (p.36)
     QStringList parameters;    // parameter categories (p.491)
+    // An Audio Track Effect (p.792): the id of a media::audioEffects() effect; empty for video ones.
+    QString audioEffect;
 
     // The effect as the sequence stores it, without parameters.
     model::Effect effect() const { return model::Effect{category, name, {}}; }
@@ -64,6 +66,8 @@ private:
 inline constexpr char kEffectMimeType[] = "application/x-cutthulhu-effect";
 // The drag data for `effect`; the caller (or the QDrag it is given to) owns it.
 QMimeData* effectMime(const EffectInfo& effect);
+// The Audio Track tab's effects: media::audioEffects() as palette entries (EffectInfo::audioEffect).
+QList<EffectInfo> audioTrackEffects();
 // The built-in effect a drag carries; nothing if `mime` is null, not an effect, or names an effect
 // not in the catalog.
 std::optional<EffectInfo> effectFromMime(const QMimeData* mime);
@@ -131,6 +135,8 @@ private:
     void fillEffects();
     // Whether the current tab lists `effect`.
     bool tabShows(const EffectInfo& effect) const;
+    // The effects the current tab draws from.
+    QList<EffectInfo> tabEffects() const;
 
     QTabBar* tabs_ = nullptr;
     QLineEdit* find_ = nullptr;

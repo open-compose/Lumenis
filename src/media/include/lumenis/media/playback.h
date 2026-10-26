@@ -1,8 +1,9 @@
 #pragma once
 
 #include "lumenis/core/rational.h"
-#include "lumenis/model/bin.h"
+#include "lumenis/media/audio_fx.h"
 #include "lumenis/model/audio_eq.h"
+#include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
 
 #include <QString>
@@ -56,7 +57,16 @@ struct AudioPiece {
     // its gains; none, not In, or flat: unfiltered.
     std::optional<model::AudioEq> eq;
     bool equalised() const;
+    // The sequence track it plays on ("A1"); empty for a clip's channel. A track with Audio Track
+    // Effect inserts (TrackInserts) is mixed through them.
+    QString track;
 };
+
+// The Audio Track Effect inserts each track plays through (Editing Guide p.790-795;
+// lumenis/media/audio_fx.h), a to e, without the bypassed ones.
+using TrackInserts = std::map<QString, QList<model::TrackInsert>>;
+// A sequence's inserts; empty for a clip, or with `bypassAll` (Ctrl+Bypass, p.794).
+TrackInserts trackInserts(const model::BinItem& item, bool bypassAll = false);
 
 // Equal-power gains for a pan from -100 (left) to 100 (right), times a
 // gain in dB.
@@ -87,7 +97,9 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
 // Files are opened on first use and kept open for the mix's life.
 class AudioMix {
 public:
-    explicit AudioMix(std::vector<AudioPiece> pieces = {});
+    // `inserts`: the tracks whose pieces are summed in mono, run through their effects left to right
+    // and then panned as their pieces are (p.794). Effects not installed are skipped.
+    explicit AudioMix(std::vector<AudioPiece> pieces = {}, const TrackInserts& inserts = {});
     ~AudioMix();
     AudioMix(const AudioMix&) = delete;
     AudioMix& operator=(const AudioMix&) = delete;
@@ -117,8 +129,27 @@ private:
         std::int64_t next = -1;
     };
 
+    // One track's effects and where its last render ended. `left` and `right` are the pan the
+    // effects' output takes where no piece plays (a reverb's tail): the last piece's.
+    struct Chain {
+        QString track;
+        std::vector<std::unique_ptr<AudioEffect>> effects;
+        int tail = 0; // the longest tail, in samples (at most 4 s)
+        std::int64_t next = -1;
+        float left = 0.70710678f;
+        float right = 0.70710678f;
+    };
+    // The track's pieces from `start`, summed in mono with their gains, and the pan of each sample,
+    // into `bus`, `left` and `right` (resized to `count`).
+    void trackInput(Chain& chain, std::int64_t start, int count, std::vector<float>& bus, std::vector<float>& left,
+                    std::vector<float>& right);
+    // A track's effects over [start, start + count), added to `out`; after a seek, the effects first
+    // run over the tail's length before `start` so they are settled.
+    void renderChain(Chain& chain, std::int64_t start, int count, float* out);
+
     std::vector<AudioPiece> pieces_;
     std::vector<EqState> eq_;
+    std::vector<Chain> chains_;
     std::map<QString, std::unique_ptr<AudioReader>> readers_;
 };
 

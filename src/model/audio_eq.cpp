@@ -55,6 +55,32 @@ Biquad peak(double db, double frequency, double octaves, double rate) {
 
 } // namespace
 
+Biquad lowShelf(double db, double frequency, double sampleRate) {
+    return shelf(true, db, std::min(frequency, sampleRate * 0.45), sampleRate);
+}
+
+Biquad highShelf(double db, double frequency, double sampleRate) {
+    return shelf(false, db, std::min(frequency, sampleRate * 0.45), sampleRate);
+}
+
+Biquad peaking(double db, double frequency, double octaves, double sampleRate) {
+    return peak(db, std::min(frequency, sampleRate * 0.45), octaves, sampleRate);
+}
+
+Biquad highPass(double frequency, double q, double sampleRate) {
+    const double w0 = 2 * std::numbers::pi * std::min(frequency, sampleRate * 0.45) / sampleRate;
+    const double c = std::cos(w0);
+    const double alpha = std::sin(w0) / (2 * q);
+    return normalised((1 + c) / 2, -(1 + c), (1 + c) / 2, 1 + alpha, -2 * c, 1 - alpha);
+}
+
+Biquad lowPass(double frequency, double q, double sampleRate) {
+    const double w0 = 2 * std::numbers::pi * std::min(frequency, sampleRate * 0.45) / sampleRate;
+    const double c = std::cos(w0);
+    const double alpha = std::sin(w0) / (2 * q);
+    return normalised((1 - c) / 2, 1 - c, (1 - c) / 2, 1 + alpha, -2 * c, 1 - alpha);
+}
+
 AudioEq clampEq(const AudioEq& eq) {
     AudioEq e = eq;
     e.low = clampGainDb(e.low);

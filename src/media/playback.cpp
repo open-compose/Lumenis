@@ -134,6 +134,7 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
             p->gain = s.gain <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, s.gain / 20.0));
             p->gainDb = s.gain;
             p->eq = s.eq;
+            p->track = track.name();
             p->pan = s.pan != 0 ? s.pan : side(track.number);
             // Keyframes in the clip's frames, as output samples from the segment's start.
             const double perFrame = static_cast<double>(kPlaybackRate) * static_cast<double>(rate.den()) /
@@ -183,7 +184,37 @@ void automatedGains(const AudioPiece& piece, double offset, float* left, float* 
 
 } // namespace
 
-AudioMix::AudioMix(std::vector<AudioPiece> pieces) : pieces_(std::move(pieces)), eq_(pieces_.size()) {}
+TrackInserts trackInserts(const model::BinItem& item, bool bypassAll) {
+    TrackInserts out;
+    if (bypassAll || item.kind != model::BinItemKind::Sequence) return out;
+    const model::Sequence seq = model::Sequence::fromItem(item);
+    for (const model::Track& t : seq.tracks()) {
+        if (t.kind != model::TrackKind::Audio) continue;
+        QList<model::TrackInsert> list;
+        for (const auto& in : t.inserts) {
+            if (in && !in->bypass) list << *in;
+        }
+        if (!list.isEmpty()) out[t.name()] = list;
+    }
+    return out;
+}
+
+// Each track's chain is made now; its effects take the inserts' values.
+AudioMix::AudioMix(std::vector<AudioPiece> pieces, const TrackInserts& inserts)
+    : pieces_(std::move(pieces)), eq_(pieces_.size()) {
+    for (const auto& [track, list] : inserts) {
+        Chain chain;
+        chain.track = track;
+        for (const model::TrackInsert& in : list) {
+            auto fx = makeAudioEffect(in.effect);
+            if (!fx) continue; // "Unavailable Effect" (p.790): the track plays without it
+            fx->setAll(in.params);
+            chain.tail = std::max(chain.tail, std::min(fx->tail(), 4 * kPlaybackRate));
+            chain.effects.push_back(std::move(fx));
+        }
+        if (!chain.effects.empty()) chains_.push_back(std::move(chain));
+    }
+}
 
 AudioMix::~AudioMix() = default;
 
@@ -208,8 +239,13 @@ AudioReader* AudioMix::reader(const AudioPiece& piece) {
 void AudioMix::render(std::int64_t start, int count, float* out) {
     std::fill(out, out + 2 * static_cast<std::ptrdiff_t>(count), 0.0f);
     const std::int64_t end = start + count;
+    for (Chain& chain : chains_) renderChain(chain, start, count, out);
     for (std::size_t index = 0; index < pieces_.size(); ++index) {
         const AudioPiece& piece = pieces_[index];
+        // Pieces on a track with effects went through renderChain().
+        if (!chains_.empty() && std::any_of(chains_.begin(), chains_.end(), [&](const Chain& c) { return c.track == piece.track; })) {
+            continue;
+        }
         const std::int64_t from = std::max(start, piece.at);
         const std::int64_t to = std::min(end, piece.at + piece.length);
         if (from >= to) continue;
@@ -233,6 +269,72 @@ void AudioMix::render(std::int64_t start, int count, float* out) {
             dest[2 * i + 1] += src[static_cast<std::size_t>(i)] * r;
         }
     }
+}
+
+// A piece's stereo gains (l, r) are a gain g = sqrt(l^2 + r^2) and a pan (l/g, r/g): the gain goes on
+// the mono sum, the pan on what the effects make of it.
+void AudioMix::trackInput(Chain& chain, std::int64_t start, int count, std::vector<float>& bus, std::vector<float>& left,
+                          std::vector<float>& right) {
+    const auto n = static_cast<std::size_t>(count);
+    bus.assign(n, 0.0f);
+    left.assign(n, -1.0f); // -1: no piece there
+    right.assign(n, 0.0f);
+    const std::int64_t end = start + count;
+    for (std::size_t index = 0; index < pieces_.size(); ++index) {
+        const AudioPiece& piece = pieces_[index];
+        if (piece.track != chain.track) continue;
+        const std::int64_t from = std::max(start, piece.at);
+        const std::int64_t to = std::min(end, piece.at + piece.length);
+        if (from >= to) continue;
+        const auto k = static_cast<int>(to - from);
+        std::vector<float> src = samples(piece, from - piece.at, k);
+        if (src.empty()) continue;
+        if (piece.equalised()) equalise(index, from - piece.at, src);
+        for (int i = 0; i < k; ++i) {
+            float l = piece.left;
+            float r = piece.right;
+            if (piece.automated()) automatedGains(piece, static_cast<double>(from - piece.at + i), &l, &r);
+            const float g = std::sqrt(l * l + r * r);
+            const auto at = static_cast<std::size_t>(from - start + i);
+            bus[at] += src[static_cast<std::size_t>(i)] * g;
+            if (g > 0) {
+                left[at] = l / g;
+                right[at] = r / g;
+            }
+        }
+    }
+    // Where no piece plays, the pan of the last sample that had one.
+    for (std::size_t i = 0; i < n; ++i) {
+        if (left[i] < 0) {
+            left[i] = chain.left;
+            right[i] = chain.right;
+        } else {
+            chain.left = left[i];
+            chain.right = right[i];
+        }
+    }
+}
+
+void AudioMix::renderChain(Chain& chain, std::int64_t start, int count, float* out) {
+    std::vector<float> bus, left, right;
+    if (start != chain.next) {
+        for (auto& fx : chain.effects) fx->reset();
+        const std::int64_t warm = std::min<std::int64_t>(chain.tail, std::max<std::int64_t>(start, 0));
+        for (std::int64_t at = start - warm; at < start;) {
+            const auto k = static_cast<int>(std::min<std::int64_t>(4096, start - at));
+            trackInput(chain, at, k, bus, left, right);
+            for (auto& fx : chain.effects) fx->process(bus.data(), k);
+            at += k;
+        }
+    }
+    trackInput(chain, start, count, bus, left, right);
+    for (auto& fx : chain.effects) fx->process(bus.data(), count);
+    for (int i = 0; i < count; ++i) {
+        const auto k = static_cast<std::size_t>(i);
+        out[2 * i] += bus[k] * left[k];
+        out[2 * i + 1] += bus[k] * right[k];
+    }
+    chain.next = start + count;
 }
 
 // Files at 48 kHz are read directly; others are read at their own rate and interpolated linearly.

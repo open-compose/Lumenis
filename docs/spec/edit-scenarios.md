@@ -56,6 +56,10 @@ Each file is a JSON list of scenarios:
   * `{"punch_in": {"clip": name, "targets": [track or "" for New Track, ...],
     "punches": [[record frame, length, clip frame], ...]}}` edits in an Audio
     Punch-In take (p.749-751), an undo step per punch-in;
+  * `{"insert": [track, slot, effect id or null]}` and `{"move_insert":
+    [from track, slot, to track, slot, copy]}` change Audio Track Effect
+    inserts (p.791-795); `expect_inserts` gives each track's five slots as
+    effect ids or null;
   * `{"command": id}`: any command of `commands.json` that the Timeline or
     the Composer carries out.
   * `"refused": true` on a command or trim step: it must be refused.

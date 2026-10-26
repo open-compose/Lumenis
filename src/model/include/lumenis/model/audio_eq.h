@@ -44,6 +44,14 @@ struct Biquad {
 // widely published "Audio EQ Cookbook" second-order sections (shelf slope 1; ours: the guide
 // gives the controls, not the filter shapes).
 std::array<Biquad, 3> eqFilters(const AudioEq& eq, double sampleRate);
+// The Cookbook's sections themselves, for other effects (media::audioEffects()): shelves with a
+// slope of 1, a peak `octaves` wide, and second-order high- and low-pass filters with quality `q`
+// (0.7071: Butterworth).
+Biquad lowShelf(double db, double frequency, double sampleRate);
+Biquad highShelf(double db, double frequency, double sampleRate);
+Biquad peaking(double db, double frequency, double octaves, double sampleRate);
+Biquad highPass(double frequency, double q, double sampleRate);
+Biquad lowPass(double frequency, double q, double sampleRate);
 // The EQ's gain in dB at `frequency` Hz (the Audio EQ tool's graph, p.738).
 double eqResponse(const AudioEq& eq, double frequency, double sampleRate = 48000);
 

@@ -73,6 +73,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   * the punch-out is at the frame before the position;
   * the whole target track is silenced while a take runs;
   * Automatic monitoring judges by the input device's own delay.
+* Audio Track Effects (docs/spec/track-effects.md):
+  * the built-in effects (our names, parameters and DSP);
+  * Ctrl+Bypass is not saved;
+  * locked tracks refuse insert changes;
+  * a double-click in the Effect Palette inserts an Audio Track effect;
+  * an effect's tail in filler keeps the last piece's pan.
 
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical
@@ -2390,6 +2396,25 @@ Details: docs/spec/punch-in.md.
   (picture on p.751); each punch-in is an undo step (p.751).
 * **Ours:** button glyphs; the whole target track silenced during a take;
   no latency compensation; the punch-out at the frame before the position.
+
+## 20d. Audio Track Effects (p.790-795)
+Details: docs/spec/track-effects.md.
+* **Five inserts per audio track**, a to e, processed left to right in real
+  time (p.790, p.794).
+* **Tools > Audio Track Effect** (p.791): Select Track, Select Insert,
+  Select Effect, the Plug-In Settings menu, Bypass (Ctrl+click: all
+  tracks), and the parameters (picture on p.793). The arrow keys change
+  the track and the insert (p.794). Select Insert > "no insert" removes one
+  (p.795).
+* **Right-click an audio Record Track button:** Audio Track Effects [n] >
+  Insert [a-e] > [effect], and Audio Track Effect Tool (p.791, p.793).
+* **The Effect Palette's Audio Track tab** (p.791-792): drag an effect onto
+  an audio track, and the Select Insert dialog picks the insert.
+* **Unavailable Effect** with the effect's name for one not installed
+  (p.790).
+* **Ours:** the built-in effects, Ctrl+Bypass not saved, double-click
+  inserts. The Track Control panel's insert buttons, templates, Compare
+  and settings files come later.
 
 ## 20a. Shared bins (p.300-304)
 Details: docs/spec/bin-locking.md.

@@ -16,8 +16,10 @@ namespace lumenis::ext {
 //   AVX   Avid SDK, needs agreement    -> Category::EffectPluginHost, ThirdParty
 //   AAX   Avid SDK, needs agreement    -> Category::AudioPluginHost, ThirdParty
 //
-// A host provider only discovers plug-ins here; the processing interfaces are
-// added with the effects (Phase 6) and audio (Phase 5) engines.
+// A host provider only discovers plug-ins here. Audio plug-ins process through
+// media::AudioEffect (src/media/audio_fx.h): a host registers them with
+// media::registerAudioEffects. Video effects get theirs with the effects engine
+// (Phase 6).
 
 // The plug-in standards a host provider can serve.
 enum class PluginStandard { OFX, AVX, CLAP, VST3, AAX };

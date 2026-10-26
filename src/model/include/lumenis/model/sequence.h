@@ -5,10 +5,12 @@
 #include <QHash>
 #include <QJsonObject>
 #include <QList>
+#include <QMap>
 #include <QSet>
 #include <QString>
 #include <QStringList>
 
+#include <array>
 #include <cstdint>
 #include <functional>
 #include <optional>
@@ -168,6 +170,20 @@ struct Segment {
     bool operator==(const Segment&) const = default;
 };
 
+// An Audio Track Effect insert (Editing Guide p.790-795; docs/spec/track-effects.md): the effect's id
+// (media::audioEffects()), its name when it was inserted, so an effect that is not installed can
+// still be named ("Unavailable Effect", p.790), its parameter values by parameter id, and whether it
+// is bypassed (p.794).
+struct TrackInsert {
+    QString effect;
+    QString name;
+    QMap<QString, double> params;
+    bool bypass = false;
+    bool operator==(const TrackInsert&) const = default;
+};
+// "Up to five Audio Track Effect plug-in inserts on each audio track", a through e (p.790-791).
+inline constexpr int kTrackInserts = 5;
+
 // One track of a sequence: its segments laid end to end. Segments are kept tidy: no empty
 // segments, and neighbouring plain filler merged (see Sequence::normalize()).
 struct Track {
@@ -178,6 +194,9 @@ struct Track {
     QList<Segment> segments; // back to back from frame 0
     bool locked = false;     // no edits (p.633)
     bool syncLocked = false; // kept in sync with other sync-locked tracks (p.493)
+    // Audio tracks: the Audio Track Effect inserts a-e, processed left to right (p.794).
+    std::array<std::optional<TrackInsert>, kTrackInserts> inserts{};
+    bool hasInserts() const;
 
     QString name() const { return trackName(kind, number); }
     // The sum of the segment lengths: the frame after the track's last one.
@@ -204,7 +223,8 @@ public:
     // Writes the composition and the duration into a sequence item.
     void storeIn(BinItem& item) const;
 
-    // The composition JSON: {tracks: [{name, segments: [...], locked?, syncLocked?, format?}],
+    // The composition JSON: {tracks: [{name, segments: [...], locked?, syncLocked?, format?,
+    // inserts?: [{slot (0-4), effect, name, params: {id: value}, bypass?}]}],
     // timecode}. A segment is {length, gain?, pan?, volumeKeys?, panKeys?, eq?, effect?, transition?}
     // (keys as [[frame, value], ...]) plus addEdit? for filler or
     // {clip, mob?, bin?, name, track, in} for material. fromJson() skips unreadable and duplicate

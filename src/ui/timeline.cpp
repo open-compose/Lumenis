@@ -1,5 +1,6 @@
 #include "lumenis/ui/timeline.h"
 
+#include "lumenis/media/audio_fx.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/marker_dialogs.h"
@@ -9,6 +10,7 @@
 #include <QApplication>
 #include <QContextMenuEvent>
 #include <QDateTime>
+#include <QDialog>
 #include <QDropEvent>
 #include <QHBoxLayout>
 #include <QKeyEvent>
@@ -2840,6 +2842,30 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
             source.markIn();
         });
         menu->addAction(tr("Rename Track"))->setEnabled(false);
+        if (t && t->kind == model::TrackKind::Audio) {
+            // Audio Track Effects [n] > Insert [a-e] > [effect] (p.791), and the tool (p.793).
+            menu->addSeparator();
+            QMenu* fx = menu->addMenu(tr("Audio Track Effects %1").arg(t->number));
+            fx->setObjectName(QStringLiteral("audioTrackEffects"));
+            for (int slot = 0; slot < model::kTrackInserts; ++slot) {
+                const auto& in = t->inserts[static_cast<std::size_t>(slot)];
+                QMenu* insert = fx->addMenu(tr("Insert %1").arg(QChar(u'a' + slot)) +
+                                            (in ? QStringLiteral(" (%1)").arg(in->name) : QString()));
+                insert->addAction(tr("No Insert"), this, [this, track, slot] {
+                    setTrackInsert(track, slot, std::nullopt, tr("Remove Audio Track Effect"));
+                })->setEnabled(in.has_value());
+                QMap<QString, QMenu*> categories;
+                for (const media::AudioEffectInfo& info : media::audioEffects()) {
+                    QMenu*& c = categories[info.category];
+                    if (!c) c = insert->addMenu(info.category);
+                    c->addAction(info.name, this, [this, track, slot, id = info.id] {
+                        setTrackInsert(track, slot, newInsert(id), tr("Audio Track Effect"));
+                    });
+                }
+            }
+            QAction* tool = menu->addAction(tr("Audio Track Effect Tool"));
+            connect(tool, &QAction::triggered, this, [this, track] { emit trackEffectToolRequested(track); });
+        }
         return menu;
     }
     // In the Timeline (p.613, p.633, p.635).
@@ -3292,8 +3318,11 @@ void TimelineView::dragEnterEvent(QDragEnterEvent* event) {
 
 void TimelineView::dragMoveEvent(QDragMoveEvent* event) {
     const auto row = rowAt(event->position().toPoint());
-    const bool video = row && row->exists && row->track.startsWith(QLatin1Char('V'));
-    if (video && effectFromMime(event->mimeData()) && !timeline_.showsSource()) {
+    const auto effect = effectFromMime(event->mimeData());
+    // Video effects go on video tracks; Audio Track Effects on audio tracks (p.792).
+    const QChar kind = effect && !effect->audioEffect.isEmpty() ? QLatin1Char('A') : QLatin1Char('V');
+    const bool fits = row && row->exists && row->track.startsWith(kind);
+    if (fits && effect && !timeline_.showsSource()) {
         event->acceptProposedAction();
     } else {
         event->ignore();
@@ -3305,6 +3334,10 @@ void TimelineView::dropEvent(QDropEvent* event) {
     const QPoint pos = event->position().toPoint();
     const auto row = rowAt(pos);
     if (!effect || !row || !row->exists || timeline_.showsSource()) return;
+    if (!effect->audioEffect.isEmpty()) {
+        if (timeline_.dropTrackEffect(row->track, effect->audioEffect)) event->acceptProposedAction();
+        return;
+    }
     // Near a cut, a transition effect goes on it; elsewhere on the
     // segment (p.44).
     std::optional<std::int64_t> cut;
@@ -3407,6 +3440,30 @@ bool Timeline::dropEffect(const QString& track, std::int64_t frame, const Effect
 bool Timeline::applyEffectToSelection(const EffectInfo& effect) {
     message_.clear();
     if (!recordSequence()) return false;
+    if (!effect.audioEffect.isEmpty()) {
+        // An Audio Track Effect double-clicked: the first empty insert of each selected audio track
+        // (ours; the guide drags them, p.792).
+        const model::Sequence now = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+        const QStringList selected = patch_.selectedRecordTracks(now);
+        bool full = false;
+        const bool ok = changeRecordSequence(tr("Audio Track Effect"), [&](model::Sequence& seq) {
+            int placed = 0;
+            for (const QString& name : selected) {
+                model::Track* t = seq.track(name);
+                if (!t || t->kind != model::TrackKind::Audio || t->locked || t->format != model::AudioFormat::Mono) continue;
+                auto empty = std::find_if(t->inserts.begin(), t->inserts.end(), [](const auto& in) { return !in; });
+                if (empty == t->inserts.end()) {
+                    full = true;
+                    continue;
+                }
+                *empty = newInsert(effect.audioEffect);
+                ++placed;
+            }
+            return placed > 0;
+        });
+        if (!ok) return fail(full ? tr("The selected audio tracks have no empty insert.") : tr("Select an audio track first."));
+        return true;
+    }
     model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
     auto video = [&](const QString& name) {
         const model::Track* t = seq.track(name);
@@ -3646,6 +3703,88 @@ std::optional<QStringList> Timeline::punchIn(const QString& binId, const model::
         return std::nullopt;
     }
     return used;
+}
+
+std::optional<model::TrackInsert> Timeline::trackInsert(const QString& track, int slot) const {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence || slot < 0 || slot >= model::kTrackInserts) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(track);
+    if (!t) return std::nullopt;
+    return t->inserts[static_cast<std::size_t>(slot)];
+}
+
+model::TrackInsert Timeline::newInsert(const QString& effectId) {
+    model::TrackInsert in;
+    in.effect = effectId;
+    if (const media::AudioEffectInfo* info = media::findAudioEffect(effectId)) {
+        in.name = info->name;
+        in.params = info->defaults();
+    }
+    return in;
+}
+
+bool Timeline::setTrackInsert(const QString& track, int slot, const std::optional<model::TrackInsert>& insert,
+                              const QString& description) {
+    message_.clear();
+    if (!recordSequence()) return false;
+    if (slot < 0 || slot >= model::kTrackInserts) return fail(tr("There is no such insert."));
+    model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+    model::Track* t = seq.track(track);
+    if (!t || t->kind != model::TrackKind::Audio) return fail(tr("Audio Track Effects go on audio tracks."));
+    // "You can only apply mono plug-ins to mono audio tracks" (p.790); ours are all mono.
+    if (insert && t->format != model::AudioFormat::Mono) return fail(tr("%1 is not a mono track.").arg(track));
+    if (t->locked) return fail(tr("%1 is locked.").arg(track));
+    auto& place = t->inserts[static_cast<std::size_t>(slot)];
+    if (place == insert) return true;
+    place = insert;
+    return commitSequence(description, seq);
+}
+
+bool Timeline::moveTrackInsert(const QString& fromTrack, int fromSlot, const QString& toTrack, int toSlot, bool copy) {
+    message_.clear();
+    if (!recordSequence()) return false;
+    if (fromSlot < 0 || fromSlot >= model::kTrackInserts || toSlot < 0 || toSlot >= model::kTrackInserts) {
+        return fail(tr("There is no such insert."));
+    }
+    model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+    model::Track* from = seq.track(fromTrack);
+    model::Track* to = seq.track(toTrack);
+    if (!from || !to || to->kind != model::TrackKind::Audio) return fail(tr("Audio Track Effects go on audio tracks."));
+    const auto insert = from->inserts[static_cast<std::size_t>(fromSlot)];
+    if (!insert) return fail(tr("There is no insert to move."));
+    if (to->format != from->format) return fail(tr("Mono inserts go on mono tracks, stereo on stereo (p.794)."));
+    if (to->locked || (!copy && from->locked)) return fail(tr("The track is locked."));
+    if (fromTrack == toTrack && fromSlot == toSlot) return true;
+    if (!copy) from->inserts[static_cast<std::size_t>(fromSlot)].reset();
+    seq.track(toTrack)->inserts[static_cast<std::size_t>(toSlot)] = insert;
+    return commitSequence(copy ? tr("Copy Audio Track Effect") : tr("Move Audio Track Effect"), seq);
+}
+
+// The Select Insert dialog (picture on p.792): a button per insert, "[Empty]" or the effect's name.
+bool Timeline::dropTrackEffect(const QString& track, const QString& effectId) {
+    message_.clear();
+    std::optional<int> slot;
+    if (selectInsertAsk_) {
+        slot = selectInsertAsk_(track);
+    } else {
+        QDialog dialog(this);
+        dialog.setObjectName(QStringLiteral("selectInsert"));
+        dialog.setWindowTitle(tr("Select Insert"));
+        auto* layout = new QVBoxLayout(&dialog);
+        for (int i = 0; i < model::kTrackInserts; ++i) {
+            const auto in = trackInsert(track, i);
+            auto* b = new QPushButton(QStringLiteral("%1: %2").arg(QChar(u'a' + i), in ? in->name : tr("[Empty]")), &dialog);
+            connect(b, &QPushButton::clicked, &dialog, [&dialog, &slot, i] {
+                slot = i;
+                dialog.accept();
+            });
+            layout->addWidget(b);
+        }
+        dialog.exec();
+    }
+    if (!slot) return false;
+    return setTrackInsert(track, *slot, newInsert(effectId), tr("Audio Track Effect"));
 }
 
 std::optional<model::Segment> Timeline::audioSegmentAt(const QString& track) const {
