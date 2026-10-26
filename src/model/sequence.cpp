@@ -303,6 +303,10 @@ Sequence Sequence::withDefaultTracks() {
     return s;
 }
 
+void Sequence::setMixFormat(AudioFormat format) {
+    mixFormat_ = format == AudioFormat::Mono ? AudioFormat::Stereo : format;
+}
+
 Sequence Sequence::fromItem(const BinItem& item) {
     if (!item.composition.isEmpty()) return fromJson(item.composition);
     Sequence s = withDefaultTracks();
@@ -347,12 +351,22 @@ QJsonObject Sequence::toJson() const {
         }
         tracks.append(o);
     }
-    return QJsonObject{{QStringLiteral("tracks"), tracks}, {QStringLiteral("timecode"), timecode_}};
+    QJsonObject out{{QStringLiteral("tracks"), tracks}, {QStringLiteral("timecode"), timecode_}};
+    if (mixFormat_ != AudioFormat::Stereo) {
+        for (const auto& [format, text] : kFormats) {
+            if (format == mixFormat_) out.insert(QStringLiteral("mix"), QString::fromLatin1(text));
+        }
+    }
+    return out;
 }
 
 Sequence Sequence::fromJson(const QJsonObject& o) {
     Sequence s;
     s.timecode_ = o.value(QStringLiteral("timecode")).toBool(true);
+    const QString mix = o.value(QStringLiteral("mix")).toString();
+    for (const auto& [f, text] : kFormats) {
+        if (mix == QLatin1String(text)) s.setMixFormat(f);
+    }
     for (const QJsonValue& v : o.value(QStringLiteral("tracks")).toArray()) {
         const QJsonObject to = v.toObject();
         const auto ref = parseTrackName(to.value(QStringLiteral("name")).toString());
@@ -928,6 +942,7 @@ int Sequence::removeMatchFrameEdits(const QStringList& names, std::int64_t start
 Sequence Sequence::excerpt(const QStringList& names, std::int64_t start, std::int64_t length) const {
     Sequence out;
     out.timecode_ = timecode_;
+    out.mixFormat_ = mixFormat_;
     for (const Track& t : tracks_) {
         if (!names.contains(t.name())) continue;
         Track copy = t;

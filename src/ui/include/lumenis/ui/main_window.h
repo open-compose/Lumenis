@@ -157,6 +157,9 @@ public:
     // Audio EQ tool's Bypass RT EQ is on; `monitored`, when set, picks the sequence tracks heard.
     std::vector<media::AudioPiece> soundOf(const model::LoadedClip& loaded,
                                            const std::function<bool(const QString&)>& monitored) const;
+    // A mix of a loaded item's pieces for the Audio Mixer's Mix Mode Selection (its speakers) and the
+    // sequence's Sequence Mix Format, with insertsOf().
+    std::shared_ptr<media::AudioMix> mixOf(const model::LoadedClip& loaded, std::vector<media::AudioPiece> pieces) const;
     AudioTool& audioTool() const { return *audioTool_; }
     MediaTool& mediaTool() const { return *mediaTool_; }
     // Tools > List Tool (p.944-960): EDLs of a sequence.

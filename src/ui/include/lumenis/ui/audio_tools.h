@@ -1,5 +1,8 @@
 #pragma once
 
+#include "lumenis/media/surround.h"
+#include "lumenis/model/sequence.h"
+
 #include <QDialog>
 #include <QHash>
 #include <QSet>
@@ -137,11 +140,22 @@ public:
     static std::optional<Mode> modeFromName(const QString& name);
     QToolButton* modeButton(Mode mode) const;
     QToolButton* bypassButton() const { return bypass_; }
+    // The Mix Mode Selection button (p.691-692), the Monitor Mix Format (p.689): which speakers
+    // listen (media::MonitorMix). MainWindow plays through it.
     QToolButton* mixModeButton() const { return mixMode_; }
-    // "stereo" or "mono".
+    // media::monitorMixId(): "stereo", "mono", "5.1-protools", ...
     QString mixMode() const { return mixModeValue_; }
+    media::MonitorMix monitorMix() const;
     // Other values are ignored; a change emits mixModeChanged().
     void setMixMode(const QString& value);
+    // The Sequence Mix Format button (p.686, p.693): the Record monitor's sequence's
+    // model::Sequence::mixFormat(), Stereo when there is none.
+    QToolButton* sequenceMixButton() const { return sequenceMix_; }
+    model::AudioFormat sequenceMixFormat() const;
+    // Sets it as an undoable change ("Sequence Mix Format"); false when nothing changed.
+    bool setSequenceMixFormat(model::AudioFormat format);
+    // "Stereo Sequence", "5.1 Sequence", "7.1 Sequence".
+    static QString sequenceMixName(model::AudioFormat format);
 
     // The audio tracks of the Record monitor's sequence, a strip each, in order.
     QStringList tracks() const;
@@ -218,6 +232,7 @@ private:
     QToolButton* modeButtons_[3] = {};
     QToolButton* bypass_ = nullptr;
     QToolButton* mixMode_ = nullptr;
+    QToolButton* sequenceMix_ = nullptr;
     QToolButton* fast_ = nullptr;
     QString mixModeValue_ = QStringLiteral("stereo");
     QWidget* stripArea_ = nullptr;

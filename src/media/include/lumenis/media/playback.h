@@ -2,6 +2,7 @@
 
 #include "lumenis/core/rational.h"
 #include "lumenis/media/audio_fx.h"
+#include "lumenis/media/surround.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
@@ -61,6 +62,10 @@ struct AudioPiece {
     // channelTrackKey()); empty for a clip's channel. A track with Audio Track Effect inserts
     // (TrackInserts) is mixed through them.
     QString track;
+    // The speaker of the mix's bus (lumenis/media/surround.h) a channel of a multichannel track in a
+    // surround sequence plays on, at its volume (`left` holds the gain, `right` is 0) and without a
+    // pan; -1 for the others, panned between L and R by `left` and `right`.
+    int speaker = -1;
 };
 
 // The Audio Track Effect inserts each track plays through (Editing Guide p.790-795;
@@ -97,8 +102,9 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
                                     const std::function<bool(const QString& track)>& monitored = {},
                                     bool alternatingPan = true);
 
-// Mixes pieces into interleaved stereo. Reads the files itself, so one mix
-// serves one thread at a time.
+// Mixes pieces onto the eight speakers of a bus (lumenis/media/surround.h) and from them into the
+// output's channels, interleaved: stereo unless setOutput() says otherwise. Reads the files itself,
+// so one mix serves one thread at a time.
 // Files are opened on first use and kept open for the mix's life.
 class AudioMix {
 public:
@@ -110,8 +116,20 @@ public:
     AudioMix& operator=(const AudioMix&) = delete;
 
     const std::vector<AudioPiece>& pieces() const { return pieces_; }
-    // `count` stereo samples from output sample `start` into `out`
-    // (2 * count floats), silence where nothing plays.
+    // The output: a row of gains from the bus for each channel (outputMatrix(), trackMatrix()). By
+    // default a stereo sequence's on stereo speakers, which has the pieces' left and right gains.
+    void setOutput(std::vector<SpeakerGains> matrix);
+    // A monitor's output: a sequence mixed in `sequenceFormat` heard through `monitor`.
+    void setOutput(model::AudioFormat sequenceFormat, MonitorMix monitor);
+    int channels() const { return static_cast<int>(matrix_.size()); }
+    // The monitor setOutput() was given; Stereo for a matrix.
+    MonitorMix monitor() const { return monitor_; }
+    // The output channels the bus's L and R speakers reach most: where a stereo signal from outside
+    // the mix goes (Audio Punch-In's monitoring).
+    int leftChannel() const { return leftChannel_; }
+    int rightChannel() const { return rightChannel_; }
+    // `count` samples of each output channel from output sample `start` into `out`
+    // (channels() * count floats, interleaved), silence where nothing plays.
     void render(std::int64_t start, int count, float* out);
 
 private:
@@ -135,9 +153,11 @@ private:
     };
 
     // One track's effects and where its last render ended. `left` and `right` are the pan the
-    // effects' output takes where no piece plays (a reverb's tail): the last piece's.
+    // effects' output takes where no piece plays (a reverb's tail): the last piece's. A channel of a
+    // multichannel track plays on its pieces' `speaker` instead.
     struct Chain {
         QString track;
+        int speaker = -1;
         std::vector<std::unique_ptr<AudioEffect>> effects;
         int tail = 0; // the longest tail, in samples (at most 4 s)
         std::int64_t next = -1;
@@ -148,20 +168,27 @@ private:
     // into `bus`, `left` and `right` (resized to `count`).
     void trackInput(Chain& chain, std::int64_t start, int count, std::vector<float>& bus, std::vector<float>& left,
                     std::vector<float>& right);
-    // A track's effects over [start, start + count), added to `out`; after a seek, the effects first
-    // run over the tail's length before `start` so they are settled.
-    void renderChain(Chain& chain, std::int64_t start, int count, float* out);
+    // A track's effects over [start, start + count), added to the bus (kSpeakers * count floats,
+    // interleaved); after a seek, the effects first run over the tail's length before `start` so
+    // they are settled.
+    void renderChain(Chain& chain, std::int64_t start, int count, float* bus);
 
     std::vector<AudioPiece> pieces_;
     std::vector<EqState> eq_;
     std::vector<Chain> chains_;
     std::map<QString, std::unique_ptr<AudioReader>> readers_;
+    std::vector<SpeakerGains> matrix_;
+    MonitorMix monitor_ = MonitorMix::Stereo;
+    int leftChannel_ = 0;
+    int rightChannel_ = 1;
+    std::vector<float> bus_; // render()'s, kept to save allocating it each time
 };
 
 // Plays a mix through the system's audio output (miniaudio). A thread
 // renders ahead into a buffer the output drains; what the output has taken
 // is the clock. Without an output device nothing plays and the clock stays
-// at zero: the caller falls back to its own.
+// at zero: the caller falls back to its own. The device has the mix's channels, in the order of its
+// monitor (AudioMix::monitor()); the system mixes them down if it has fewer speakers.
 // Use it from one thread (the UI's): start() and stop() start and join the feeder thread, and the
 // device's callback calls pull() on its own thread.
 class AudioPlayer {
@@ -201,7 +228,9 @@ public:
     // About and the Console.
     QString deviceName() const;
 
-    // Fills `out` (2 * count floats) from the buffer, as the device does
+    // The output's channels: the mix's (AudioMix::channels()), 2 when nothing plays.
+    int channels() const { return channels_; }
+    // Fills `out` (channels() * count floats) from the buffer, as the device does
     // (tests), plus the monitored input if there is one.
     int pull(float* out, int count);
     // Audio Punch-In's monitoring (p.748-749, p.753): what `input` records is added to the output
@@ -229,8 +258,12 @@ private:
     int speed_ = 1;
     std::int64_t left_ = -1; // samples still to render before silence; -1: no limit
 
-    // A single-producer, single-consumer ring of stereo samples.
+    // A single-producer, single-consumer ring of samples of channels_ channels.
     std::vector<float> ring_;
+    int channels_ = 2;
+    int monitorLeft_ = 0; // where the monitored input goes (AudioMix::leftChannel())
+    int monitorRight_ = 1;
+    std::vector<float> monitorBuffer_; // the monitored input, in stereo, when channels_ is not 2
     std::atomic<std::size_t> readAt_{0};
     std::atomic<std::size_t> writeAt_{0};
 };

@@ -1145,16 +1145,40 @@ std::vector<media::AudioPiece> MainWindow::soundOf(const model::LoadedClip& load
     if (audioEq_ && audioEq_->bypassed()) {
         for (media::AudioPiece& piece : pieces) piece.eq.reset();
     }
-    // The Audio Mixer's Master fader, a gain on the whole mix.
+    // The Audio Mixer's Master fader, a gain on the whole mix (`scale` for automated pieces).
     const double master = audioMixer_ ? audioMixer_->masterGain() : 0.0;
     if (master != 0.0) {
         const float gain = master <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, master / 20.0));
         for (media::AudioPiece& piece : pieces) {
             piece.left *= gain;
             piece.right *= gain;
+            piece.scale *= gain;
+        }
+    }
+    // The Mono mix "pans all the currently monitored tracks to center and ignores pan effects"
+    // (p.691): each panned piece in the middle at its own gain.
+    if (audioMixer_ && audioMixer_->monitorMix() == media::MonitorMix::Mono) {
+        for (media::AudioPiece& piece : pieces) {
+            if (piece.speaker >= 0) continue;
+            const float g = std::sqrt(piece.left * piece.left + piece.right * piece.right);
+            piece.left = g * 0.70710678f;
+            piece.right = g * 0.70710678f;
+            piece.pan = 0;
+            piece.panKeys.clear();
         }
     }
     return pieces;
+}
+
+// The pieces mixed for the Mix Mode Selection's speakers (p.689-692): a sequence in its Sequence Mix
+// Format, a clip as a stereo one, in the channel order it was captured in (p.689).
+std::shared_ptr<media::AudioMix> MainWindow::mixOf(const model::LoadedClip& loaded, std::vector<media::AudioPiece> pieces) const {
+    auto mix = std::make_shared<media::AudioMix>(std::move(pieces), insertsOf(loaded));
+    const model::AudioFormat format = loaded.item.kind == model::BinItemKind::Sequence
+                                          ? model::Sequence::fromItem(loaded.item).mixFormat()
+                                          : model::AudioFormat::Stereo;
+    mix->setOutput(format, audioMixer_ ? audioMixer_->monitorMix() : media::MonitorMix::Stereo);
+    return mix;
 }
 
 // The Audio Track Effects that play (p.790-795): the sequence's inserts, none with Ctrl+Bypass, and
@@ -1245,7 +1269,7 @@ void MainWindow::scrubIfMoved() {
     media::AudioPlayer::PlayOptions options;
     options.limit = media::framesToSamples(out + in, rate);
     scrubStart_ = media::framesToSamples(position - out, rate);
-    if (!audio_->start(std::make_shared<media::AudioMix>(std::move(pieces), insertsOf(*loaded)), scrubStart_, options)) return;
+    if (!audio_->start(mixOf(*loaded, std::move(pieces)), scrubStart_, options)) return;
     scrubbing_ = true;
     // The device is let go once the burst has played.
     const int token = ++scrubToken_;
@@ -1289,7 +1313,7 @@ void MainWindow::startSound(MonitorId monitor, int speed) {
     const std::int64_t at = media::framesToSamples(composer_->state(monitor).position(), loaded->item.editRate);
     media::AudioPlayer::PlayOptions options;
     options.speed = speed;
-    if (!audio_->start(std::make_shared<media::AudioMix>(std::move(pieces), insertsOf(*loaded)), at, options)) {
+    if (!audio_->start(mixOf(*loaded, std::move(pieces)), at, options)) {
         ConsoleLog::instance().append(tr("Playback: no audio output could be opened; playing without sound."));
     }
 }
@@ -2214,6 +2238,9 @@ void MainWindow::audioMixdown() {
     setup.rangeStart = tc(start);
     setup.rangeEnd = tc(end);
     setup.emptyTracks = model::emptyAudioTracks(seq, start, end, tracks);
+    for (const QString& t : setup.emptyTracks) {
+        if (const model::Track* track = seq.track(t)) setup.formats.insert(t, track->format);
+    }
     for (const BinDocument* d : binContainer_->openDocuments()) {
         if (!d->isReadOnly()) setup.bins << qMakePair(d->nodeId(), d->name());
     }
@@ -2270,16 +2297,19 @@ void MainWindow::audioMixdown() {
     doc->addItem(*made);
     // "Media Composer mixes down the audio, displays the new master clip in the bin, and edits the
     // mixdown clip into the sequence."
+    // A stereo or surround mixdown is one track of its format; Mono and Dual Mono one mono track for
+    // each channel.
     QStringList targets = dialog.targetTracks();
-    const int channels = media::mixdownChannels(request.format);
+    const model::AudioFormat format = media::mixdownTrackFormat(request.format);
+    const int targetCount = format == model::AudioFormat::Mono ? media::mixdownChannels(request.format) : 1;
     const QString binId = doc->nodeId();
     timeline_->changeRecordSequence(tr("Audio Mixdown"), [&](model::Sequence& s) {
-        while (targets.size() < channels) {
-            const auto added = s.addTrack(model::TrackKind::Audio);
+        while (targets.size() < targetCount) {
+            const auto added = s.addTrack(model::TrackKind::Audio, format);
             if (!added) return false;
             targets << *added;
         }
-        for (int c = 0; c < channels; ++c) {
+        for (int c = 0; c < targetCount; ++c) {
             model::Segment seg;
             seg.clipId = made->id;
             seg.binId = binId;

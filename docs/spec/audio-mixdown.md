@@ -24,9 +24,8 @@ must null against a reference render to -120 dBFS.
   pan (ours: the guide does not say how a mono mix treats pan), and **Dual
   Mono**, "a stereo mix written to two mono output tracks, one for the left
   channel, panned left, and one for the right channel, panned right"
-  (p.734). Stereo, 5.1 and 7.1 are dimmed: Cutthulhu's tracks hold one clip
-  channel each, so a track of several channels waits for multichannel
-  tracks.
+  (p.734). **Stereo**, **5.1** and **7.1** make one multichannel track of
+  the sequence's mix folded into that format (docs/spec/surround.md).
 * 48 kHz, 24-bit (or 16-bit, the Audio Project setting) PCM, one managed
   MXF OP-Atom file a track (`media::renderedAudioClip`), on the drive chosen
   (first the Media Creation setting's Mixdown & Transcode drive, p.1207).
@@ -35,7 +34,7 @@ must null against a reference render to -120 dBFS.
 
 The Audio Mixdown dialog box (p.732; its layout is ours):
 * Source Tracks and Range: the tracks and the start and end timecodes.
-* Mono, Dual Mono (Stereo, 5.1, 7.1 dimmed) and the target track: "A mono
+* Mono, Dual Mono, Stereo, 5.1, 7.1 and the target track: "A mono
   mixdown goes to the next available mono track ... If there are no
   appropriate tracks in the Timeline, the mixdown operation creates them."
   The menu lists the audio tracks with nothing in the range, not among the
@@ -65,6 +64,5 @@ The Audio Mixdown dialog box (p.732; its layout is ours):
 
 ## Later
 
-* Stereo, 5.1 and 7.1 mixdowns, with multichannel tracks.
 * Mixdown > Audio > Multiple Mixes (the Multi-Mix tool, p.732-734).
 * Track-level faders and effects in the mix, as they come (Phase 5).

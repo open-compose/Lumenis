@@ -9,6 +9,7 @@
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/audio_eq.h"
+#include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/audio_suite.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/theme.h"
@@ -228,6 +229,17 @@ struct Run {
             const bool ok = timeline.splitTracksToMono(o.value(QStringLiteral("split_mono")).toString());
             if (ok == o.value(QStringLiteral("refused")).toBool()) {
                 return fail(ok ? QStringLiteral("the split was not refused") : timeline.lastMessage());
+            }
+            return true;
+        }
+        if (o.contains(QStringLiteral("mix_format"))) {
+            // The Audio Mixer's Sequence Mix Format button (p.686): "stereo", "5.1" or "7.1".
+            const auto format = model::formatFromName(o.value(QStringLiteral("mix_format")).toString());
+            if (!format) return fail(QStringLiteral("no such mix format"));
+            AudioMixer mixer(timeline);
+            const bool ok = mixer.setSequenceMixFormat(*format);
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the mix format change was not refused") : QStringLiteral("nothing changed"));
             }
             return true;
         }
@@ -584,6 +596,11 @@ private slots:
                 }
                 QCOMPARE(got, it.value().toArray());
             }
+        }
+        // The Sequence Mix Format.
+        if (scenario.contains(QStringLiteral("expect_mix"))) {
+            const model::Sequence s = model::Sequence::fromItem(run.composer.state(MonitorId::Record).current()->item);
+            QCOMPARE(model::formatName(s.mixFormat()).toLower(), scenario.value(QStringLiteral("expect_mix")).toString());
         }
         // Audio Track Effect inserts: per track, the effect in each slot a-e, or null.
         const QJsonObject inserts = scenario.value(QStringLiteral("expect_inserts")).toObject();

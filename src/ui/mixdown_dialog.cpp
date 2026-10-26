@@ -15,7 +15,7 @@
 #include <QVBoxLayout>
 
 // The Audio Mixdown dialog box (mixdown_dialog.h). Formats are ids in a button group: the
-// media::MixdownFormat values for the ones made, and -1 for the dimmed ones.
+// media::MixdownFormat values.
 namespace lumenis::ui {
 
 AudioMixdownDialog::AudioMixdownDialog(const Setup& setup, QWidget* parent) : QDialog(parent), setup_(setup) {
@@ -40,14 +40,12 @@ AudioMixdownDialog::AudioMixdownDialog(const Setup& setup, QWidget* parent) : QD
     formats_ = new QButtonGroup(this);
     const QList<QPair<QString, int>> kinds{{tr("Mono"), static_cast<int>(media::MixdownFormat::Mono)},
                                            {tr("Dual Mono"), static_cast<int>(media::MixdownFormat::DualMono)},
-                                           {tr("Stereo"), -1},
-                                           {tr("5.1"), -1},
-                                           {tr("7.1"), -1}};
+                                           {tr("Stereo"), static_cast<int>(media::MixdownFormat::Stereo)},
+                                           {tr("5.1"), static_cast<int>(media::MixdownFormat::Surround51)},
+                                           {tr("7.1"), static_cast<int>(media::MixdownFormat::Surround71)}};
     for (const auto& [text, id] : kinds) {
         auto* b = new QRadioButton(text, output);
         b->setObjectName(QStringLiteral("mixdownFormat:") + text);
-        b->setEnabled(id >= 0);
-        if (id < 0) b->setToolTip(tr("Comes with multichannel tracks"));
         formats_->addButton(b, id);
         buttons->addWidget(b);
     }
@@ -95,8 +93,8 @@ AudioMixdownDialog::AudioMixdownDialog(const Setup& setup, QWidget* parent) : QD
 }
 
 media::MixdownFormat AudioMixdownDialog::format() const {
-    return formats_->checkedId() == static_cast<int>(media::MixdownFormat::Mono) ? media::MixdownFormat::Mono
-                                                                                : media::MixdownFormat::DualMono;
+    const int id = formats_->checkedId();
+    return id < 0 ? media::MixdownFormat::DualMono : static_cast<media::MixdownFormat>(id);
 }
 
 void AudioMixdownDialog::setFormat(media::MixdownFormat format) {
@@ -106,11 +104,20 @@ void AudioMixdownDialog::setFormat(media::MixdownFormat format) {
 
 // "A mono mixdown goes to the next available mono track ... If there are no appropriate tracks in
 // the Timeline, the mixdown operation creates them" (p.732): the first empty track (pair) is chosen,
-// else New Track(s). Ours: Dual Mono's pairs are two empty tracks one after the other.
+// else New Track(s). "A stereo or surround sound mixdown goes to the next available stereo or surround
+// sound track": an empty track of the format. Ours: Dual Mono's pairs are two empty mono tracks one
+// after the other.
 void AudioMixdownDialog::fillTargets() {
     target_->clear();
-    const QStringList& empty = setup_.emptyTracks;
-    if (format() == media::MixdownFormat::Mono) {
+    const model::AudioFormat want = media::mixdownTrackFormat(format());
+    QStringList empty;
+    for (const QString& t : setup_.emptyTracks) {
+        if (setup_.formats.value(t, model::AudioFormat::Mono) == want) empty << t;
+    }
+    if (want != model::AudioFormat::Mono) {
+        for (const QString& t : empty) target_->addItem(t, QStringList{t});
+        target_->addItem(tr("New Track"), QStringList{});
+    } else if (format() == media::MixdownFormat::Mono) {
         for (const QString& t : empty) target_->addItem(t, QStringList{t});
         target_->addItem(tr("New Track"), QStringList{});
     } else {

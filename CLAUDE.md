@@ -311,7 +311,14 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
     inserts per channel (`media::channelTrackKey`).
   Tests: `tst_multichannel`, `tst_multichannel_audio`, `tst_multichannel_ui`,
   scenario `12-multichannel.json`.
-  Next: 5.6b, surround mixing.
+5.6b1 is done: surround mixing (docs/spec/surround.md):
+  - the Sequence Mix Format (`model::Sequence::mixFormat`) and the Mix Mode
+    Selection's monitor formats (`src/media/surround.*`);
+  - `media::AudioMix` mixes onto eight speakers and folds them into the
+    output (`setOutput`); the player opens that many channels;
+  - Stereo, 5.1 and 7.1 Audio Mixdowns (`media::mixdownTrackFormat`).
+  Tests: `tst_surround`, `tst_multichannel_ui`, scenario `13-surround.json`.
+  Next: 5.6b2, the Pan grid and Advanced Panner.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

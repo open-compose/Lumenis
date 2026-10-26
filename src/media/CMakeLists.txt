@@ -10,6 +10,7 @@ add_library(lumenis_media STATIC
     consolidate.cpp
     relink.cpp
     mixdown.cpp
+    surround.cpp
     include/lumenis/media/media.h
     include/lumenis/media/audio_fx.h
     include/lumenis/media/audio_suite.h

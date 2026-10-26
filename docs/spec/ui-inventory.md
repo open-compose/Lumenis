@@ -1662,12 +1662,14 @@ p.610–640, ch. 13 p.432–434).**
     there.
 * **Top bar (picture and table on p.691–693):**
   * Show Track Sidebar (">>").
-  * The Mix Mode Selection menu: Stereo and Mono. The surround and Direct
-    Out mixes need output hardware (p.691–692, p.1150).
+  * The Mix Mode Selection menu: Stereo, Mono, the 4-channel mixes, and
+    the 5.1 and 7.1 orders of the Monitor Mix Format (p.689, p.691–692).
+    Direct Out comes later (docs/spec/surround.md).
   * The three mode buttons.
   * Bypass, hidden in Live mode (p.692).
   * Audio Loop Play, Render Effect and the Fast menu.
-  * The Sequence Mix Format button at the top of the Master strip (p.693).
+  * The Sequence Mix Format button at the top of the Master strip (p.693):
+    Stereo, 5.1 or 7.1 Sequence (p.686).
 * **Strips (picture and table on p.693–694):**
   * One strip per audio track of the sequence in the Record monitor, and the
     Master strip on the right. The strips scroll sideways (p.694–696).

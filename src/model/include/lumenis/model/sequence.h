@@ -245,8 +245,9 @@ public:
 
     // The composition JSON: {tracks: [{name, segments: [...], locked?, syncLocked?, format?,
     // inserts?: [{slot (0-4), effect, name, params: {id: value}, bypass?}]}],
-    // timecode}. A segment is {length, gain?, pan?, volumeKeys?, panKeys?, eq?, effect?, transition?}
-    // (keys as [[frame, value], ...]) plus addEdit? for filler or
+    // timecode, mix? ("5.1" or "7.1": mixFormat())}. A segment is {length, gain?, pan?,
+    // volumeKeys?, panKeys?, eq?, effect?, transition?} (keys as [[frame, value], ...]) plus
+    // addEdit? for filler or
     // {clip, mob?, bin?, name, track, in} for material. fromJson() skips unreadable and duplicate
     // tracks, tidies each track and sorts the tracks.
     QJsonObject toJson() const;
@@ -261,6 +262,11 @@ public:
     // Whether TC1 is shown; it has no segments.
     bool hasTimecodeTrack() const { return timecode_; }
     void setTimecodeTrack(bool on) { timecode_ = on; }
+    // The Audio Mixer's Sequence Mix Format (p.686): the format the sequence is mixed in, Stereo
+    // (the default), 5.1 or 7.1; it decides which speakers its tracks can be panned to and what an
+    // Audio Mixdown's surround formats hold (lumenis/media/surround.h). Mono is taken as Stereo.
+    AudioFormat mixFormat() const { return mixFormat_; }
+    void setMixFormat(AudioFormat format);
 
     // Timeline > New > Video Track, Audio Track, Data Track (p.625): the next
     // free number, or nothing past the limit (one data track).
@@ -331,6 +337,7 @@ private:
     // Always sorted by sortTracks(), and without duplicate names.
     QList<Track> tracks_;
     bool timecode_ = true;
+    AudioFormat mixFormat_ = AudioFormat::Stereo;
 };
 
 // The tracks a monitor's clip offers on the source side of the Track

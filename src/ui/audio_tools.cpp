@@ -1,6 +1,7 @@
 #include "lumenis/ui/audio_tools.h"
 
 #include "lumenis/model/automation.h"
+#include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/timeline.h"
 
@@ -389,10 +390,14 @@ AudioMixer::AudioMixer(Timeline& timeline, QWidget* parent) : QWidget(parent), t
     mixMode_->setToolTip(tr("Mix Mode Selection"));
     mixMode_->setPopupMode(QToolButton::InstantPopup);
     auto* mixMenu = new QMenu(mixMode_);
-    // Stereo and Mono; the surround and Direct Out mixes need output
-    // hardware (p.691-692, p.1150).
-    mixMenu->addAction(tr("Stereo"), this, [this] { setMixMode(QStringLiteral("stereo")); });
-    mixMenu->addAction(tr("Mono"), this, [this] { setMixMode(QStringLiteral("mono")); });
+    // The mixes of p.691-692, the surround ones as the Monitor Mix Format button lists them (p.689);
+    // Direct Out needs output assignments that come later (lumenis/media/surround.h).
+    for (media::MonitorMix m : media::monitorMixes()) {
+        const QString id = media::monitorMixId(m);
+        QAction* a = mixMenu->addAction(media::monitorMixName(m), this, [this, id] { setMixMode(id); });
+        a->setObjectName(QStringLiteral("mixMode:") + id);
+        if (m == media::MonitorMix::Quad || m == media::MonitorMix::ProTools51) mixMenu->insertSeparator(a);
+    }
     mixMode_->setMenu(mixMenu);
     bar->addWidget(mixMode_);
     auto* modes = new QButtonGroup(this);
@@ -468,10 +473,19 @@ AudioMixer::AudioMixer(Timeline& timeline, QWidget* parent) : QWidget(parent), t
     scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     master_ = new MixerStrip(tr("Master"), true, this);
     master_->setObjectName(QStringLiteral("strip:Master"));
-    // The Sequence Mix Format button at the top of the Master strip (p.693).
+    // The Sequence Mix Format button at the top of the Master strip (p.693): Stereo, 5.1 or 7.1
+    // Sequence (p.686), an undoable change to the Record monitor's sequence.
     auto* masterColumn = new QVBoxLayout;
-    masterColumn->addWidget(laterButton(tr("Stereo Sequence"), QStringLiteral("sequenceMixFormat"),
-                                        tr("Sequence Mix Format"), this));
+    sequenceMix_ = smallButton(tr("Stereo Sequence"), QStringLiteral("sequenceMixFormat"), this);
+    sequenceMix_->setToolTip(tr("Sequence Mix Format"));
+    sequenceMix_->setPopupMode(QToolButton::InstantPopup);
+    auto* sequenceMenu = new QMenu(sequenceMix_);
+    for (model::AudioFormat f : {model::AudioFormat::Stereo, model::AudioFormat::Surround51, model::AudioFormat::Surround71}) {
+        QAction* a = sequenceMenu->addAction(sequenceMixName(f), this, [this, f] { setSequenceMixFormat(f); });
+        a->setObjectName(QStringLiteral("sequenceMix:") + model::formatName(f));
+    }
+    sequenceMix_->setMenu(sequenceMenu);
+    masterColumn->addWidget(sequenceMix_);
     masterColumn->addWidget(master_, 1);
     // The Master fader sets the level of the whole mix, after the tracks, in every mode.
     connect(master_, &MixerStrip::gainSet, this, [this](double db, bool) { setMasterGain(db); });
@@ -525,11 +539,41 @@ void AudioMixer::setMode(Mode mode) {
 }
 
 void AudioMixer::setMixMode(const QString& value) {
-    if (value != QLatin1String("stereo") && value != QLatin1String("mono")) return;
+    const auto mix = media::monitorMixFromId(value);
+    if (!mix) return;
     const bool changed = value != mixModeValue_;
     mixModeValue_ = value;
-    mixMode_->setText(value == QLatin1String("mono") ? tr("Mono") : tr("Stereo"));
+    mixMode_->setText(media::monitorMixShortName(*mix));
     if (changed) emit mixModeChanged(value);
+}
+
+media::MonitorMix AudioMixer::monitorMix() const {
+    return media::monitorMixFromId(mixModeValue_).value_or(media::MonitorMix::Stereo);
+}
+
+QString AudioMixer::sequenceMixName(model::AudioFormat format) {
+    switch (format) {
+    case model::AudioFormat::Surround51: return tr("5.1 Sequence");
+    case model::AudioFormat::Surround71: return tr("7.1 Sequence");
+    case model::AudioFormat::Mono:
+    case model::AudioFormat::Stereo: break;
+    }
+    return tr("Stereo Sequence");
+}
+
+model::AudioFormat AudioMixer::sequenceMixFormat() const {
+    const model::LoadedClip* rec = timeline_.composer().state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return model::AudioFormat::Stereo;
+    return model::Sequence::fromItem(rec->item).mixFormat();
+}
+
+bool AudioMixer::setSequenceMixFormat(model::AudioFormat format) {
+    const model::LoadedClip* rec = timeline_.composer().state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence || sequenceMixFormat() == format) return false;
+    return timeline_.changeRecordSequence(tr("Sequence Mix Format"), [format](model::Sequence& s) {
+        s.setMixFormat(format);
+        return true;
+    });
 }
 
 QStringList AudioMixer::tracks() const {
@@ -545,6 +589,8 @@ void AudioMixer::refresh() {
         }
     }
     if (tracks != order_) rebuild(tracks);
+    sequenceMix_->setText(sequenceMixName(sequenceMixFormat()));
+    sequenceMix_->setEnabled(rec && rec->item.kind == model::BinItemKind::Sequence);
     syncValues();
 }
 

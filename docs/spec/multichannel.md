@@ -2,8 +2,8 @@
 
 Stereo, 5.1 and 7.1 tracks carry several channels in one track (Editing
 Guide p.624, p.670). 5.6a makes them work in clips and sequences. 5.6b
-adds surround mixing: the Sequence Mix Format and Monitor Mix Format
-buttons, panning, and 5.1/7.1 mixdown (p.685-689).
+adds surround mixing (docs/spec/surround.md): the Sequence Mix Format and
+Monitor Mix Format buttons, panning, and 5.1/7.1 mixdown (p.685-689).
 
 ## Clips (`src/model/multichannel.*`)
 
@@ -63,6 +63,9 @@ buttons, panning, and 5.1/7.1 mixdown (p.685-689).
     (p.687-688): a stereo track's channels left and right (p.627); a
     surround track's L and R to their sides, C and LFE in the centre, the
     surround channels to their sides 3 dB down.
+  * In a 5.1 or 7.1 sequence each channel plays on its own speaker
+    instead, and the mix is folded into the speakers listening
+    (docs/spec/surround.md).
   * The segment's pan moves every channel toward one side (ours). Its
     volume automation applies to every channel; its pan automation is not
     used on multichannel tracks.

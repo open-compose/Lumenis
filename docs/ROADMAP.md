@@ -793,8 +793,13 @@ Formats on clips and Clip > Modify > Modify Clip's Set Multichannel Audio
 segments edited, patched and moved only onto tracks of their format; their
 channels played for stereo speakers as the guide's table has them, each
 through its own copy of the track's effects; Split Track to Mono and Split
-All Tracks. Next: 5.6b, surround mixing (Sequence and Monitor Mix Format,
-panning, 5.1/7.1 mixdown).
+All Tracks.
+5.6b1, surround mixing (docs/spec/surround.md), is done: the Sequence Mix
+Format (`model::Sequence::mixFormat`) and the Mix Mode Selection's monitor
+formats (`src/media/surround.*`); the mix on an eight-speaker bus, folded
+as the guide's table has it into the speakers listening, in each of their
+channel orders; multichannel output; Stereo, 5.1 and 7.1 Audio Mixdowns.
+Next: 5.6b2, the Pan grid and Advanced Panner.
 
 ### Phase 6 — Effects and rendering
 * Transitions, motion effects, timewarps, Color Correction (HSL and curves),

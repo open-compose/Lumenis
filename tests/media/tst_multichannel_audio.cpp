@@ -99,7 +99,7 @@ private slots:
     void surroundOnStereo() {
         const auto [l, r] = play(sequenceOf(model::AudioFormat::Surround51, QStringLiteral("A1")));
         const double centre = std::cos(3.14159265358979 / 4);
-        const double down = std::pow(10.0, -3.0 / 20.0);
+        const double down = centre; // 3 dB down, as an equal-power pan to the middle has it
         const double wantL = value(0) + centre * value(1) + down * value(3) + centre * value(5);
         const double wantR = value(2) + centre * value(1) + down * value(4) + centre * value(5);
         QVERIFY2(std::abs(l - wantL) < 1e-5, qPrintable(QStringLiteral("%1 %2").arg(l).arg(wantL)));

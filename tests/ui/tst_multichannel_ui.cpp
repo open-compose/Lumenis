@@ -2,16 +2,20 @@
 // docs/spec/multichannel.md): the Modify dialog's Set Multichannel Audio, Clip > Modify > Modify Clip
 // on a bin's selection, and Split Track to Mono leaving a copy of the sequence in its bin. Editing and
 // splitting are also in the edit scenarios (tests/scenarios/12-multichannel.json); the model in
-// tests/model/tst_multichannel.cpp.
+// tests/model/tst_multichannel.cpp. Surround mixing's Audio Mixer buttons and the Audio Mixdown
+// dialog's surround formats (docs/spec/surround.md) are here too; the mixing itself is in
+// tests/media/tst_surround.cpp.
 #include "lumenis/ext/provider.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/main_window.h"
+#include "lumenis/ui/mixdown_dialog.h"
 #include "lumenis/ui/modify_dialog.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/theme.h"
@@ -20,6 +24,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QComboBox>
+#include <QRadioButton>
 #include <QMenu>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -157,6 +162,74 @@ private slots:
         // Nothing left to split.
         QVERIFY(!window.timeline().splitTracksToMono(QString()));
         QVERIFY(!window.timeline().lastMessage().isEmpty());
+
+        // The Sequence Mix Format button (p.686): an undoable change to the sequence.
+        AudioMixer& mixer = window.audioMixer();
+        QToolButton* format = mixer.sequenceMixButton();
+        QVERIFY(format->isEnabled());
+        QCOMPARE(format->text(), QStringLiteral("Stereo Sequence"));
+        QCOMPARE(format->menu()->actions().size(), 3);
+        format->menu()->findChild<QAction*>(QStringLiteral("sequenceMix:5.1"))->trigger();
+        auto mixFormat = [&window] {
+            return model::Sequence::fromItem(window.composer().state(MonitorId::Record).current()->item).mixFormat();
+        };
+        QCOMPARE(mixFormat(), AudioFormat::Surround51);
+        QCOMPARE(format->text(), QStringLiteral("5.1 Sequence"));
+        QVERIFY(!mixer.setSequenceMixFormat(AudioFormat::Surround51)); // no change
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.undo")));
+        QCOMPARE(mixFormat(), AudioFormat::Stereo);
+        QCOMPARE(format->text(), QStringLiteral("Stereo Sequence"));
+        QVERIFY(mixer.setSequenceMixFormat(AudioFormat::Surround71));
+
+        // The Mix Mode Selection button (p.689, p.691-692): its choice is the Audio Project setting.
+        QToolButton* mix = mixer.mixModeButton();
+        QCOMPARE(mix->menu()->findChildren<QAction*>().size() >= 10, true);
+        mix->menu()->findChild<QAction*>(QStringLiteral("mixMode:5.1-smpte"))->trigger();
+        QCOMPARE(mixer.monitorMix(), media::MonitorMix::Smpte51);
+        QCOMPARE(mix->text(), QStringLiteral("5.1 SMPTE"));
+        QCOMPARE(window.settings().text(QStringLiteral("Audio Project"), QStringLiteral("mixMode")), QStringLiteral("5.1-smpte"));
+        mixer.setMixMode(QStringLiteral("direct")); // not one of ours: ignored
+        QCOMPARE(mixer.monitorMix(), media::MonitorMix::Smpte51);
+        // What plays is the sequence's 7.1 mix on 5.1 SMPTE speakers.
+        const auto playing = window.mixOf(*window.composer().state(MonitorId::Record).current(), {});
+        QCOMPARE(playing->channels(), 6);
+        QCOMPARE(playing->monitor(), media::MonitorMix::Smpte51);
+        QCOMPARE(playing->rightChannel(), 1);
+        mixer.setMixMode(QStringLiteral("stereo"));
+    }
+
+    // The Audio Mixdown dialog's Stereo, 5.1 and 7.1 (p.732): "a stereo or surround sound mixdown
+    // goes to the next available stereo or surround sound track", else a new one.
+    void mixdownFormats() {
+        AudioMixdownDialog::Setup setup;
+        setup.sourceTracks = {QStringLiteral("A1")};
+        setup.emptyTracks = {QStringLiteral("A2"), QStringLiteral("A3"), QStringLiteral("A4"), QStringLiteral("A5")};
+        setup.formats = {{QStringLiteral("A3"), AudioFormat::Surround51}, {QStringLiteral("A5"), AudioFormat::Stereo}};
+        setup.bins = {{QStringLiteral("b"), QStringLiteral("Bin")}};
+        AudioMixdownDialog d(setup);
+        for (const char* name : {"Mono", "Dual Mono", "Stereo", "5.1", "7.1"}) {
+            auto* b = d.findChild<QRadioButton*>(QStringLiteral("mixdownFormat:") + QString::fromLatin1(name));
+            QVERIFY(b && b->isEnabled());
+        }
+        auto targets = [&d] {
+            QStringList out;
+            for (int i = 0; i < d.targetBox()->count(); ++i) out << d.targetBox()->itemText(i);
+            return out;
+        };
+        // Mono tracks only for Mono and Dual Mono.
+        d.setFormat(media::MixdownFormat::Mono);
+        QCOMPARE(targets(), (QStringList{"A2", "A4", "New Track"}));
+        d.setFormat(media::MixdownFormat::DualMono);
+        QCOMPARE(targets(), (QStringList{"A2 and A4", "New Tracks"}));
+        d.setFormat(media::MixdownFormat::Surround51);
+        QCOMPARE(d.format(), media::MixdownFormat::Surround51);
+        QCOMPARE(targets(), (QStringList{"A3", "New Track"}));
+        QCOMPARE(d.targetTracks(), QStringList{QStringLiteral("A3")});
+        d.setFormat(media::MixdownFormat::Stereo);
+        QCOMPARE(targets(), (QStringList{"A5", "New Track"}));
+        d.setFormat(media::MixdownFormat::Surround71);
+        QCOMPARE(targets(), (QStringList{"New Track"}));
+        QVERIFY(d.targetTracks().isEmpty());
     }
 };
 

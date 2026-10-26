@@ -96,11 +96,13 @@ namespace {
 // its own from the segment's first channel on, placed for stereo speakers as the guide's table has
 // it (p.687-688): a stereo track's channels left and right; a surround track's L and R left and
 // right, C and LFE in the centre, the surround channels left and right 3 dB down. The segment's pan
-// moves them all to one side (ours), its volume automation applies to every channel, and its pan
-// automation is not used. Each channel is mixed through its track's inserts on its own
-// (channelTrackKey()). AudioSuite effects are not used on multichannel tracks yet.
+// moves them all to one side (ours). In a 5.1 or 7.1 sequence (`mix`) each channel plays on its own
+// speaker instead (AudioPiece::speaker, trackSpeakers()), without a pan: the bus's folds place what
+// the sequence or the speakers lack (lumenis/media/surround.h). Its volume automation applies to
+// every channel, and its pan automation is not used. Each channel is mixed through its track's
+// inserts on its own (channelTrackKey()). AudioSuite effects are not used on multichannel tracks yet.
 void multichannelPieces(const model::Track& track, const model::Segment& s, std::int64_t start, const Rational& rate,
-                        const ClipLookup& clips, std::vector<AudioPiece>& out) {
+                        model::AudioFormat mix, const ClipLookup& clips, std::vector<AudioPiece>& out) {
     const auto clip = clips(s.binId, s.clipId);
     const auto ref = model::parseTrackName(s.sourceTrack);
     if (!clip || !ref || ref->kind != model::TrackKind::Audio) return;
@@ -110,15 +112,20 @@ void multichannelPieces(const model::Track& track, const model::Segment& s, std:
         double db;
     };
     QList<Place> places;
+    // "Volume lowered by 3dB": as the folds of lumenis/media/surround.h have it, one side of an
+    // equal-power pan to the middle (-3.01 dB).
+    const double down = -10.0 * std::log10(2.0);
     switch (track.format) {
     case model::AudioFormat::Stereo: places = {{-100, 0}, {100, 0}}; break;
-    case model::AudioFormat::Surround51: places = {{-100, 0}, {0, 0}, {100, 0}, {-100, -3}, {100, -3}, {0, 0}}; break;
+    case model::AudioFormat::Surround51: places = {{-100, 0}, {0, 0}, {100, 0}, {-100, down}, {100, down}, {0, 0}}; break;
     case model::AudioFormat::Surround71:
-        places = {{-100, 0}, {0, 0}, {100, 0}, {-100, -3}, {100, -3}, {-100, -3}, {100, -3}, {0, 0}};
+        places = {{-100, 0}, {0, 0}, {100, 0}, {-100, down}, {100, down}, {-100, down}, {100, down}, {0, 0}};
         break;
     case model::AudioFormat::Mono: places = {{0, 0}}; break;
     }
     const double perFrame = static_cast<double>(kPlaybackRate) * static_cast<double>(rate.den()) / static_cast<double>(rate.num());
+    const bool surround = mix == model::AudioFormat::Surround51 || mix == model::AudioFormat::Surround71;
+    const QList<Speaker> speakers = trackSpeakers(track.format);
     for (int k = 0; k < places.size(); ++k) {
         auto p = pieceFor(*clip, ref->number - 1 + k);
         if (!p) continue;
@@ -131,6 +138,16 @@ void multichannelPieces(const model::Track& track, const model::Segment& s, std:
         p->gain = gainDb <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, gainDb / 20.0));
         p->gainDb = gainDb;
         p->pan = pan;
+        if (surround && k < speakers.size()) {
+            // On its speaker at the segment's gain: no pan, and not the stereo placement's 3 dB.
+            p->speaker = static_cast<int>(speakers.at(k));
+            p->gainDb = s.gain;
+            p->gain = s.gain <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, s.gain / 20.0));
+            p->left = p->gain;
+            p->right = 0.0f;
+            p->pan = 0;
+            p->monoGain = true; // automation gives the volume alone (automatedGains)
+        }
         p->eq = s.eq;
         p->track = channelTrackKey(track.name(), k);
         for (const model::AudioKey& key : s.volumeKeys) {
@@ -176,6 +193,8 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
     for (const model::Track& track : seq.tracks()) {
         if (track.kind != model::TrackKind::Audio) continue;
         if (monitored && !monitored(track.name())) continue;
+        // (A clip's channels stay panned between L and R, whatever the monitor: "the monitor mix
+        // respects the channel order used when you captured the audio", p.689.)
         std::int64_t at = 0;
         const int channels = model::channelCount(track.format);
         for (const model::Segment& s : track.segments) {
@@ -183,7 +202,7 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
             at += s.length;
             if (s.isFiller() || !clips) continue;
             if (channels > 1) {
-                multichannelPieces(track, s, start, rate, clips, out);
+                multichannelPieces(track, s, start, rate, seq.mixFormat(), clips, out);
                 continue;
             }
             std::optional<AudioPiece> p;
@@ -281,10 +300,17 @@ TrackInserts trackInserts(const model::BinItem& item, bool bypassAll) {
 
 // Each track's chain is made now; its effects take the inserts' values.
 AudioMix::AudioMix(std::vector<AudioPiece> pieces, const TrackInserts& inserts)
-    : pieces_(std::move(pieces)), eq_(pieces_.size()) {
+    : pieces_(std::move(pieces)), eq_(pieces_.size()),
+      matrix_(outputMatrix(model::AudioFormat::Stereo, MonitorMix::Stereo)) {
     for (const auto& [track, list] : inserts) {
         Chain chain;
         chain.track = track;
+        for (const AudioPiece& p : pieces_) {
+            if (p.track == track) {
+                chain.speaker = p.speaker;
+                break;
+            }
+        }
         for (const model::TrackInsert& in : list) {
             auto fx = makeAudioEffect(in.effect);
             if (!fx) continue; // "Unavailable Effect" (p.790): the track plays without it
@@ -297,6 +323,30 @@ AudioMix::AudioMix(std::vector<AudioPiece> pieces, const TrackInserts& inserts)
 }
 
 AudioMix::~AudioMix() = default;
+
+// The output channels L and R reach are those with the largest gains from them.
+void AudioMix::setOutput(std::vector<SpeakerGains> matrix) {
+    if (matrix.empty()) return;
+    matrix_ = std::move(matrix);
+    monitor_ = MonitorMix::Stereo;
+    auto loudest = [this](Speaker s) {
+        int best = 0;
+        for (int c = 1; c < channels(); ++c) {
+            if (matrix_[static_cast<std::size_t>(c)][static_cast<std::size_t>(s)] >
+                matrix_[static_cast<std::size_t>(best)][static_cast<std::size_t>(s)]) {
+                best = c;
+            }
+        }
+        return best;
+    };
+    leftChannel_ = loudest(Speaker::L);
+    rightChannel_ = loudest(Speaker::R);
+}
+
+void AudioMix::setOutput(model::AudioFormat sequenceFormat, MonitorMix monitor) {
+    setOutput(outputMatrix(sequenceFormat, monitor));
+    monitor_ = monitor;
+}
 
 // The reader for a piece, opened on first use and kept for the mix's life; null (kept, so not
 // retried) if the file cannot be opened.
@@ -314,12 +364,17 @@ AudioReader* AudioMix::reader(const AudioPiece& piece) {
     return it->second.get();
 }
 
-// Each piece adds its part of [start, start + count) into the output. Files at 48 kHz are read
-// directly; others are read at their own rate and interpolated.
+// Each piece adds its part of [start, start + count) onto the bus, which then goes through the
+// output's matrix. Files at 48 kHz are read directly; others are read at their own rate and
+// interpolated.
 void AudioMix::render(std::int64_t start, int count, float* out) {
-    std::fill(out, out + 2 * static_cast<std::ptrdiff_t>(count), 0.0f);
+    const int outs = channels();
+    std::fill(out, out + outs * static_cast<std::ptrdiff_t>(std::max(count, 0)), 0.0f);
+    if (count <= 0) return;
+    bus_.assign(static_cast<std::size_t>(kSpeakers) * static_cast<std::size_t>(count), 0.0f);
+    float* bus = bus_.data();
     const std::int64_t end = start + count;
-    for (Chain& chain : chains_) renderChain(chain, start, count, out);
+    for (Chain& chain : chains_) renderChain(chain, start, count, bus);
     for (std::size_t index = 0; index < pieces_.size(); ++index) {
         const AudioPiece& piece = pieces_[index];
         // Pieces on a track with effects went through renderChain().
@@ -333,11 +388,15 @@ void AudioMix::render(std::int64_t start, int count, float* out) {
         std::vector<float> src = samples(piece, from - piece.at, n);
         if (src.empty()) continue;
         if (piece.equalised()) equalise(index, from - piece.at, src);
-        float* dest = out + 2 * (from - start);
+        float* dest = bus + kSpeakers * (from - start);
+        // A speaker's piece puts its gain (left) on that speaker; the others pan between L and R.
+        const int first = piece.speaker >= 0 ? piece.speaker : static_cast<int>(Speaker::L);
+        const int second = static_cast<int>(Speaker::R);
+        const bool panned = piece.speaker < 0;
         if (!piece.automated()) {
             for (int i = 0; i < n; ++i) {
-                dest[2 * i] += src[static_cast<std::size_t>(i)] * piece.left;
-                dest[2 * i + 1] += src[static_cast<std::size_t>(i)] * piece.right;
+                dest[kSpeakers * i + first] += src[static_cast<std::size_t>(i)] * piece.left;
+                if (panned) dest[kSpeakers * i + second] += src[static_cast<std::size_t>(i)] * piece.right;
             }
             continue;
         }
@@ -345,8 +404,17 @@ void AudioMix::render(std::int64_t start, int count, float* out) {
             float l = 0;
             float r = 0;
             automatedGains(piece, static_cast<double>(from - piece.at + i), &l, &r);
-            dest[2 * i] += src[static_cast<std::size_t>(i)] * l;
-            dest[2 * i + 1] += src[static_cast<std::size_t>(i)] * r;
+            dest[kSpeakers * i + first] += src[static_cast<std::size_t>(i)] * l;
+            if (panned) dest[kSpeakers * i + second] += src[static_cast<std::size_t>(i)] * r;
+        }
+    }
+    // The bus through the matrix, skipping the speakers a channel takes nothing from.
+    for (int c = 0; c < outs; ++c) {
+        const SpeakerGains& row = matrix_[static_cast<std::size_t>(c)];
+        for (int sp = 0; sp < kSpeakers; ++sp) {
+            const float g = row[static_cast<std::size_t>(sp)];
+            if (g == 0.0f) continue;
+            for (int i = 0; i < count; ++i) out[outs * i + c] += bus[kSpeakers * i + sp] * g;
         }
     }
 }
@@ -395,24 +463,28 @@ void AudioMix::trackInput(Chain& chain, std::int64_t start, int count, std::vect
     }
 }
 
-void AudioMix::renderChain(Chain& chain, std::int64_t start, int count, float* out) {
-    std::vector<float> bus, left, right;
+void AudioMix::renderChain(Chain& chain, std::int64_t start, int count, float* bus) {
+    std::vector<float> sum, left, right;
     if (start != chain.next) {
         for (auto& fx : chain.effects) fx->reset();
         const std::int64_t warm = std::min<std::int64_t>(chain.tail, std::max<std::int64_t>(start, 0));
         for (std::int64_t at = start - warm; at < start;) {
             const auto k = static_cast<int>(std::min<std::int64_t>(4096, start - at));
-            trackInput(chain, at, k, bus, left, right);
-            for (auto& fx : chain.effects) fx->process(bus.data(), k);
+            trackInput(chain, at, k, sum, left, right);
+            for (auto& fx : chain.effects) fx->process(sum.data(), k);
             at += k;
         }
     }
-    trackInput(chain, start, count, bus, left, right);
-    for (auto& fx : chain.effects) fx->process(bus.data(), count);
+    trackInput(chain, start, count, sum, left, right);
+    for (auto& fx : chain.effects) fx->process(sum.data(), count);
     for (int i = 0; i < count; ++i) {
         const auto k = static_cast<std::size_t>(i);
-        out[2 * i] += bus[k] * left[k];
-        out[2 * i + 1] += bus[k] * right[k];
+        if (chain.speaker >= 0) {
+            bus[kSpeakers * i + chain.speaker] += sum[k] * left[k];
+            continue;
+        }
+        bus[kSpeakers * i + static_cast<int>(Speaker::L)] += sum[k] * left[k];
+        bus[kSpeakers * i + static_cast<int>(Speaker::R)] += sum[k] * right[k];
     }
     chain.next = start + count;
 }
@@ -494,10 +566,34 @@ struct AudioPlayer::Device {
 
 namespace {
 
-// miniaudio's callback, on its own audio thread: the output asks for `frames` stereo samples.
+// miniaudio's callback, on its own audio thread: the output asks for `frames` samples of each channel.
 void dataCallback(ma_device* device, void* output, const void*, ma_uint32 frames) {
     auto* player = static_cast<AudioPlayer*>(device->pUserData);
     player->pull(static_cast<float*>(output), static_cast<int>(frames));
+}
+
+// The device's channel positions for a monitor's output channels, so a system with other speakers
+// knows what each is when it mixes them down. 5.1's surrounds are the side ones, as in WAVE files.
+std::vector<ma_channel> channelMap(MonitorMix mix) {
+    std::vector<ma_channel> map;
+    for (const QString& name : monitorChannelNames(mix)) {
+        const bool five = mix == MonitorMix::ProTools51 || mix == MonitorMix::Smpte51 || mix == MonitorMix::Quad;
+        ma_channel c = MA_CHANNEL_NONE;
+        if (name == QLatin1String("L")) c = MA_CHANNEL_FRONT_LEFT;
+        else if (name == QLatin1String("R")) c = MA_CHANNEL_FRONT_RIGHT;
+        else if (name == QLatin1String("C")) c = MA_CHANNEL_FRONT_CENTER;
+        else if (name == QLatin1String("Lfe")) c = MA_CHANNEL_LFE;
+        else if (name == QLatin1String("Ls")) c = five ? MA_CHANNEL_SIDE_LEFT : MA_CHANNEL_BACK_LEFT;
+        else if (name == QLatin1String("Rs")) c = five ? MA_CHANNEL_SIDE_RIGHT : MA_CHANNEL_BACK_RIGHT;
+        else if (name == QLatin1String("Lss")) c = MA_CHANNEL_SIDE_LEFT;
+        else if (name == QLatin1String("Rss")) c = MA_CHANNEL_SIDE_RIGHT;
+        else if (name == QLatin1String("Lsr")) c = MA_CHANNEL_BACK_LEFT;
+        else if (name == QLatin1String("Rsr")) c = MA_CHANNEL_BACK_RIGHT;
+        else if (name == QLatin1String("S")) c = MA_CHANNEL_BACK_CENTER;
+        else if (name == QLatin1String("M")) c = MA_CHANNEL_MONO;
+        map.push_back(c);
+    }
+    return map;
 }
 
 } // namespace
@@ -509,11 +605,15 @@ AudioPlayer::~AudioPlayer() {
 }
 
 // Stops any earlier playback, then starts the feeder thread and, unless options.device is false, a
-// 48 kHz stereo float device. The device's buffering (periods times period size, converted to the
+// 48 kHz float device with the mix's channels. The device's buffering (periods times period size, converted to the
 // output rate) is kept as latency_ for clock(). Speed is clamped to -3..3, 0 meaning 1.
 bool AudioPlayer::start(std::shared_ptr<AudioMix> mix, std::int64_t start, const PlayOptions& options) {
     stop();
     mix_ = std::move(mix);
+    channels_ = mix_ ? std::max(mix_->channels(), 1) : 2;
+    monitorLeft_ = mix_ ? mix_->leftChannel() : 0;
+    monitorRight_ = mix_ ? mix_->rightChannel() : 1;
+    ring_.assign(static_cast<std::size_t>(channels_) * kRingFrames, 0.0f);
     next_ = start;
     speed_ = std::clamp(options.speed, -3, 3) == 0 ? 1 : std::clamp(options.speed, -3, 3);
     left_ = options.limit;
@@ -533,7 +633,9 @@ bool AudioPlayer::start(std::shared_ptr<AudioMix> mix, std::int64_t start, const
     auto d = std::make_unique<Device>();
     ma_device_config config = ma_device_config_init(ma_device_type_playback);
     config.playback.format = ma_format_f32;
-    config.playback.channels = 2;
+    config.playback.channels = static_cast<ma_uint32>(channels_);
+    std::vector<ma_channel> map = channelMap(mix_ ? mix_->monitor() : MonitorMix::Stereo);
+    if (static_cast<int>(map.size()) == channels_ && channels_ != 2) config.playback.pChannelMap = map.data();
     config.sampleRate = kPlaybackRate;
     config.dataCallback = dataCallback;
     config.pUserData = this;
@@ -581,9 +683,11 @@ QString AudioPlayer::deviceName() const {
 // (silence once a digital scrub's limit is used up) and publishes them by advancing writeAt_.
 // readAt_ and writeAt_ count samples without wrapping; the ring index is their remainder.
 void AudioPlayer::feed() {
-    std::vector<float> chunk(2 * kChunk);
+    const int ch = channels_;
+    const auto chs = static_cast<std::size_t>(ch);
+    std::vector<float> chunk(chs * kChunk);
     const int step = std::abs(speed_);
-    std::vector<float> wide(2 * static_cast<std::size_t>(kChunk * step));
+    std::vector<float> wide(chs * static_cast<std::size_t>(kChunk * step));
     while (running_) {
         const std::size_t used = writeAt_.load() - readAt_.load();
         if (kRingFrames - used < kChunk) {
@@ -602,29 +706,28 @@ void AudioPlayer::feed() {
             const std::int64_t from = speed_ > 0 ? next_ : next_ - span;
             mix_->render(from, span, wide.data());
             for (int i = 0; i < kChunk; ++i) {
-                float l = 0.0f;
-                float r = 0.0f;
-                for (int k = 0; k < step; ++k) {
-                    const int src = speed_ > 0 ? i * step + k : span - 1 - (i * step + k);
-                    l += wide[static_cast<std::size_t>(2 * src)];
-                    r += wide[static_cast<std::size_t>(2 * src + 1)];
+                for (int c = 0; c < ch; ++c) {
+                    float sum = 0.0f;
+                    for (int k = 0; k < step; ++k) {
+                        const int src = speed_ > 0 ? i * step + k : span - 1 - (i * step + k);
+                        sum += wide[static_cast<std::size_t>(ch * src + c)];
+                    }
+                    chunk[static_cast<std::size_t>(ch * i + c)] = sum / static_cast<float>(step);
                 }
-                chunk[static_cast<std::size_t>(2 * i)] = l / static_cast<float>(step);
-                chunk[static_cast<std::size_t>(2 * i + 1)] = r / static_cast<float>(step);
             }
             next_ += speed_ > 0 ? span : -span;
         }
         if (left_ > 0) {
             // A digital scrub's samples, then silence.
             const std::int64_t keep = std::min<std::int64_t>(left_, kChunk);
-            std::fill(chunk.begin() + 2 * keep, chunk.end(), 0.0f);
+            std::fill(chunk.begin() + ch * keep, chunk.end(), 0.0f);
             left_ -= keep;
         }
         std::size_t w = writeAt_.load();
         for (int i = 0; i < kChunk; ++i, ++w) {
-            const std::size_t at = 2 * (w % kRingFrames);
-            ring_[at] = chunk[static_cast<std::size_t>(2 * i)];
-            ring_[at + 1] = chunk[static_cast<std::size_t>(2 * i + 1)];
+            const std::size_t at = chs * (w % kRingFrames);
+            std::copy_n(chunk.begin() + static_cast<std::ptrdiff_t>(chs * static_cast<std::size_t>(i)), ch,
+                        ring_.begin() + static_cast<std::ptrdiff_t>(at));
         }
         writeAt_.store(w);
     }
@@ -636,14 +739,27 @@ int AudioPlayer::pull(float* out, int count) {
     std::size_t r = readAt_.load();
     const std::size_t available = writeAt_.load() - r;
     const auto n = static_cast<int>(std::min<std::size_t>(available, static_cast<std::size_t>(std::max(count, 0))));
+    const int ch = channels_;
+    const auto chs = static_cast<std::size_t>(ch);
     for (int i = 0; i < n; ++i, ++r) {
-        const std::size_t at = 2 * (r % kRingFrames);
-        out[2 * i] = ring_[at];
-        out[2 * i + 1] = ring_[at + 1];
+        const std::size_t at = chs * (r % kRingFrames);
+        std::copy_n(ring_.begin() + static_cast<std::ptrdiff_t>(at), ch, out + ch * i);
     }
     // Not ready yet: silence, and the clock waits.
-    std::fill(out + 2 * n, out + 2 * std::max(count, 0), 0.0f);
-    if (AudioInput* input = monitor_.load()) input->addMonitor(out, count);
+    std::fill(out + ch * n, out + ch * std::max(count, 0), 0.0f);
+    if (AudioInput* input = monitor_.load()) {
+        if (ch == 2) {
+            input->addMonitor(out, count);
+        } else if (count > 0) {
+            // The input is stereo: onto the channels L and R reach (one, for a mono output).
+            monitorBuffer_.assign(2 * static_cast<std::size_t>(count), 0.0f);
+            input->addMonitor(monitorBuffer_.data(), count);
+            for (int i = 0; i < count; ++i) {
+                out[ch * i + monitorLeft_] += monitorBuffer_[2 * static_cast<std::size_t>(i)];
+                out[ch * i + monitorRight_] += monitorBuffer_[2 * static_cast<std::size_t>(i) + 1];
+            }
+        }
+    }
     readAt_.store(r);
     played_ += n;
     pulledAt_ = std::chrono::duration_cast<std::chrono::nanoseconds>(

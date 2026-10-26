@@ -17,15 +17,21 @@
 // clip gain and pan, then the Master fader when it is included.
 namespace lumenis::media {
 
-// The guide's Mono, Dual Mono, Stereo, 5.1 and 7.1 (p.732). Cutthulhu makes the first two; stereo,
-// 5.1 and 7.1 output come with surround mixing (docs/spec/multichannel.md). Multichannel tracks mix
-// in through their channels as playback places them.
+// The guide's Mono, Dual Mono, Stereo, 5.1 and 7.1 (p.732). Multichannel tracks mix in through their
+// channels as playback places them; the stereo and surround mixes are the sequence's mix folded into
+// a track of that format (trackMatrix(), lumenis/media/surround.h; docs/spec/surround.md).
 enum class MixdownFormat {
-    Mono,     // one track: every source track summed at its clip gain, without its pan
-    DualMono, // the stereo mix as two mono tracks, the left panned left and the right panned right
+    Mono,       // one track: every source track summed at its clip gain, without its pan
+    DualMono,   // the stereo mix as two mono tracks, the left panned left and the right panned right
+    Stereo,     // the stereo mix as one stereo track
+    Surround51, // the mix as one 5.1 track, its channels in Pro Tools order (L C R Ls Rs Lfe)
+    Surround71, // the mix as one 7.1 track (L C R Lss Rss Lsr Rsr Lfe)
 };
-// Output tracks a format makes.
+// Output channels a format makes: 1, 2, 2, 6 and 8.
 int mixdownChannels(MixdownFormat format);
+// The format of the track a mixdown goes on: Mono for Mono and Dual Mono (two mono tracks), else
+// Stereo, 5.1 or 7.1.
+model::AudioFormat mixdownTrackFormat(MixdownFormat format);
 
 struct MixdownRequest {
     model::BinItem sequence;
@@ -57,7 +63,8 @@ private:
 };
 
 // The mixdown as a new audio clip ("<sequence> Mixdown", ours) of managed media on the creation's
-// audio drive, starting at the range's timecode in the sequence.
+// audio drive, starting at the range's timecode in the sequence. A stereo or surround mixdown's clip
+// has its channels as one track of that format (its Track Formats, lumenis/model/multichannel.h).
 std::optional<model::BinItem> mixdownClip(const MixdownRequest& request, const QString& name, const QString& startTimecode,
                                           const MediaCreation& creation, QString* error = nullptr);
 

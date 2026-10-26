@@ -23,7 +23,16 @@
           "name": "Output",
           "options": [
             {"key": "mixMode", "type": "choice", "style": "menu", "label": "Mix Mode Selection", "default": "stereo", "page": 1150,
-             "choices": [{"value": "stereo", "label": "Stereo"}, {"value": "mono", "label": "Mono"}]}
+             "choices": [{"value": "stereo", "label": "Stereo"},
+                         {"value": "mono", "label": "Mono"},
+                         {"value": "lrclfe", "label": "4-channel LRCLfe"},
+                         {"value": "lrcs", "label": "4-channel LRCS"},
+                         {"value": "quad", "label": "4-channel Quadraphonic"},
+                         {"value": "5.1-protools", "label": "5.1 Pro Tools: L C R Ls Rs Lfe"},
+                         {"value": "5.1-smpte", "label": "5.1 SMPTE: L R C Lfe Ls Rs"},
+                         {"value": "7.1-protools", "label": "7.1 Pro Tools: L C R Lss Rss Lsr Rsr Lfe"},
+                         {"value": "7.1-ext", "label": "7.1 EXT: L R C Lfe Lsr Rsr Lss Rss"},
+                         {"value": "7.1-smpte-ds", "label": "7.1 SMPTE DS: L R C Lfe Lss Rss Lsr Rsr"}]}
           ]
         }
       ]
