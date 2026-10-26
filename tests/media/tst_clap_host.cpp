@@ -46,11 +46,22 @@ private slots:
     void findAndScan() {
         QTemporaryDir dir;
         // A plain file, a macOS-style bundle (Bundle.clap/Contents/MacOS/Bundle), a file that is not a
-        // library, and a folder without plug-ins.
+        // library, and a folder without plug-ins. Not the bundle on Windows: CLAP plug-ins there are
+        // plain files, and Windows cannot load a library whose name has no suffix (LoadLibrary adds
+        // ".dll"); the bundle's binary is a copy of our DLL under the name "Bundle".
+#ifdef Q_OS_WIN
+        constexpr bool bundles = false;
+#else
+        constexpr bool bundles = true;
+#endif
         QVERIFY(QDir().mkpath(dir.filePath(QStringLiteral("one"))));
         QVERIFY(QFile::copy(kPlugin, dir.filePath(QStringLiteral("one/Plain.clap"))));
-        QVERIFY(QDir().mkpath(dir.filePath(QStringLiteral("two/Bundle.clap/Contents/MacOS"))));
-        QVERIFY(QFile::copy(kPlugin, dir.filePath(QStringLiteral("two/Bundle.clap/Contents/MacOS/Bundle"))));
+        if constexpr (bundles) {
+            QVERIFY(QDir().mkpath(dir.filePath(QStringLiteral("two/Bundle.clap/Contents/MacOS"))));
+            QVERIFY(QFile::copy(kPlugin, dir.filePath(QStringLiteral("two/Bundle.clap/Contents/MacOS/Bundle"))));
+        } else {
+            QVERIFY(QDir().mkpath(dir.filePath(QStringLiteral("two"))));
+        }
         {
             QFile bad(dir.filePath(QStringLiteral("two/Broken.clap")));
             QVERIFY(bad.open(QIODevice::WriteOnly));
@@ -58,16 +69,16 @@ private slots:
         }
         QVERIFY(QDir().mkpath(dir.filePath(QStringLiteral("three"))));
         const QStringList files = findClapFiles({dir.path()});
-        QCOMPARE(files.size(), 3);
+        QCOMPARE(files.size(), bundles ? 3 : 2);
         QVERIFY(files.at(0).endsWith(QLatin1String("one/Plain.clap")));
         QVERIFY(files.at(1).endsWith(QLatin1String("two/Broken.clap")));
-        QVERIFY(files.at(2).endsWith(QLatin1String("two/Bundle.clap")));
+        if constexpr (bundles) QVERIFY(files.at(2).endsWith(QLatin1String("two/Bundle.clap")));
 
         QStringList errors;
         const QList<ClapPluginInfo> plugins = scanClapPlugins(files, &errors);
-        QCOMPARE(errors.size(), 1);
+        QVERIFY2(errors.size() == 1, qPrintable(errors.join(QLatin1Char('\n'))));
         QVERIFY(errors.first().contains(QLatin1String("Broken.clap")));
-        QCOMPARE(plugins.size(), 6); // three from each library
+        QCOMPARE(plugins.size(), bundles ? 6 : 3); // three from each library
         const ClapPluginInfo* gain = byId(plugins, "org.cutthulhu.test.gain");
         QVERIFY(gain);
         QCOMPARE(gain->name, QStringLiteral("Test Gain"));
