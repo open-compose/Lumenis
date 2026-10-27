@@ -133,14 +133,6 @@ QToolButton* smallButton(const QString& text, const QString& name, QWidget* pare
     return b;
 }
 
-// A disabled button for a feature that comes later; its tooltip says so.
-QToolButton* laterButton(const QString& text, const QString& name, const QString& tip, QWidget* parent) {
-    QToolButton* b = smallButton(text, name, parent);
-    b->setToolTip(tip + QStringLiteral(" (") + QObject::tr("not available yet") + QLatin1Char(')'));
-    b->setEnabled(false);
-    return b;
-}
-
 // The fader's scale (picture on p.693), in the text colour.
 class FaderScale : public QWidget {
 public:
@@ -502,7 +494,11 @@ AudioMixer::AudioMixer(Timeline& timeline, QWidget* parent) : QWidget(parent), t
     // The top bar (picture and table on p.691-693).
     auto* bar = new QHBoxLayout;
     bar->setSpacing(3);
-    bar->addWidget(laterButton(QStringLiteral(">>"), QStringLiteral("showTrackSidebar"), tr("Show Track Sidebar"), this));
+    // Show Track Sidebar (p.691): ">>" shows it, "<<" hides it (audio_groups.cpp).
+    sidebarButton_ = smallButton(QStringLiteral(">>"), QStringLiteral("showTrackSidebar"), this);
+    sidebarButton_->setToolTip(tr("Show Track Sidebar"));
+    connect(sidebarButton_, &QToolButton::clicked, this, [this] { setSidebarShown(!isSidebarShown()); });
+    bar->addWidget(sidebarButton_);
     mixMode_ = smallButton(tr("Stereo"), QStringLiteral("mixMode"), this);
     mixMode_->setToolTip(tr("Mix Mode Selection"));
     mixMode_->setPopupMode(QToolButton::InstantPopup);
@@ -623,6 +619,7 @@ AudioMixer::AudioMixer(Timeline& timeline, QWidget* parent) : QWidget(parent), t
     // The Master fader sets the level of the whole mix, after the tracks, in every mode.
     connect(master_, &MixerStrip::gainSet, this, [this](double db, bool) { setMasterGain(db); });
     auto* body = new QHBoxLayout;
+    body->addWidget(makeSidebar());
     body->addWidget(scroll, 1);
     body->addLayout(masterColumn);
 
@@ -784,7 +781,9 @@ void AudioMixer::rebuild(const QStringList& tracks) {
         });
         stripLayout_->insertWidget(at++, strip);
         strips_.insert(t, strip);
+        strip->setVisible(isTrackShown(t));
     }
+    syncSidebar();
 }
 
 void AudioMixer::setGang(const QString& track, const QString& letter) {

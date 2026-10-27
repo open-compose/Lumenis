@@ -3,6 +3,7 @@ add_library(lumenis_ui STATIC
     audio_suite.cpp
     audio_punch_in.cpp
     audio_track_effect.cpp
+    audio_groups.cpp
     audio_tools.cpp
     background_queue.cpp
     bin_container.cpp

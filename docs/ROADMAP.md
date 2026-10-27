@@ -817,8 +817,8 @@ area is built):
   `play.audio_loop_play`), the insert buttons, Render Effect, a segment's
   own centred pan (`Segment::hasPan`), the Clip mode items, Set Display
   Options, Live Mix heard in playback and Set Live Mix to/as Automation
-  (`model::setAutomationTo`). 5.7a2 is Show Track Sidebar and the Audio
-  Grouping pane (p.691, p.696-698). Calibrate Hardware Sliders stays dimmed
+  (`model::setAutomationTo`). 5.7a2, Show Track Sidebar and Audio
+  Grouping (p.691, p.696-698; `src/ui/audio_groups.cpp`), is done. Calibrate Hardware Sliders stays dimmed
   until external controllers (p.757);
 * 5.7b, the Clip and Timeline commands: Clip > Audio > Apply Gain (p.216),
   Center Pan (p.714) and Change Sample Rate (p.731), Auto VO (p.754), Read

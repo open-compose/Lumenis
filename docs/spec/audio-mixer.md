@@ -1,4 +1,4 @@
-# Audio Mixer: loop, inserts, render and Fast menu (Phase 5.7a)
+# Audio Mixer: loop, inserts, render, Fast menu and groups (Phase 5.7a)
 
 The Audio Mixer itself (strips, modes, gangs, solo and mute) is in
 docs/spec/ui-inventory.md, its automation in docs/spec/automation.md and its
@@ -99,13 +99,44 @@ on the whole track. They are dimmed until a track is selected.
   * Without marks, each segment holds the value throughout.
   * It is one undo step.
 
+## Track sidebar and Audio Grouping (5.7a2; p.691, p.696-698; `src/ui/audio_groups.cpp`)
+
+* **Show Track Sidebar.** The top bar's ">>" button shows the sidebar at the
+  mixer's left ("<<" hides it). The sidebar holds:
+  * the Tracks list, highest track at the top as pictured on p.697, with a
+    check box for each track. Unchecking a track hides its strip ("choose how
+    many tracks to display", p.691);
+  * the Groups pane below it.
+* **Groups.** A group is a name and a set of audio tracks (`ui::AudioGroup`).
+  * Right-click in the Groups pane: New Group from Selected Tracks and
+    Disable All Groups (picture on p.697).
+  * On a group, also Modify the Group, Duplicate the Group, Delete the Group,
+    and Gang (or Ungang) the Group (p.698).
+* **The Audio Track Grouping window** (picture on p.698):
+  * Group Name;
+  * Select Tracks in Group, a text of track numbers and ranges ("1-3, 5"),
+    with Apply (the text to the check boxes) and Restore (back to the group
+    as it was);
+  * a check box for each audio track, and OK and Cancel.
+  * Checking a box rewrites the text.
+* **Clicking a group (p.696):**
+  * selecting adds its tracks to the selection;
+  * deselecting removes them, except those in another selected group;
+  * Alt/Option-click when selecting replaces the selection with the group;
+  * Alt/Option-click when deselecting deselects every audio track.
+  * A selected group is shown in bold.
+* **Gang the Group** gives its tracks the first free gang letter, A-J
+  (p.704). Ungang takes the letter away again. The pane shows the letter.
+* **Disable All Groups** (ours, since the guide only names it): while it is on,
+  clicking a group does nothing.
+* Groups, like gangs and Live Mix, live in the mixer and are not saved (ours).
+
 ## Left for later
 
 * Calibrate Hardware Sliders (Auto mode): it needs external controllers
   (p.757).
-* Show Track Sidebar and the Audio Grouping pane (p.691, p.696-698): next,
-  5.7a2.
 * The Display Visibility Priority menu (p.694).
+* Saving groups with the project.
 
 ## Checks
 
@@ -117,5 +148,7 @@ on the whole track. They are dimmed until a track is selected.
   * the insert button, Render Effect;
   * Set Live Mix to and as Automation (ramps at the marks; whole segments
     without them).
+* `tst_audio_mixer` also covers the sidebar's Tracks list, the track
+  number text, the Audio Track Grouping window and the group rules.
 * Scenario `16-mixer-clip-pan.json`: Commit Default Clip Pan and Adjust Pan/Vols
   as undo steps.

@@ -14,6 +14,8 @@
 
 #include <QApplication>
 #include <QHash>
+#include <QLineEdit>
+#include <QListWidget>
 #include <QMenu>
 #include <QSignalSpy>
 #include <QSlider>
@@ -365,6 +367,124 @@ private slots:
         QCOMPARE(model::volumeAt(s, 18), -6.0);
         QVERIFY(rig.timeline.perform(QStringLiteral("edit.undo")));
         QCOMPARE(model::volumeAt(rig.segment(QStringLiteral("A2"), 0), 10), -6.0);
+    }
+
+    // Show Track Sidebar (p.691): ">>" shows the Tracks list and the Groups pane; unchecking a track
+    // hides its strip.
+    void trackSidebar() {
+        Rig rig;
+        rig.mixer.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&rig.mixer));
+        QToolButton* b = rig.mixer.sidebarButton();
+        QVERIFY(b && b->isEnabled());
+        QVERIFY(!rig.mixer.isSidebarShown());
+        b->click();
+        QVERIFY(rig.mixer.isSidebarShown());
+        QCOMPARE(b->text(), QStringLiteral("<<"));
+        QListWidget* list = rig.mixer.sidebarTracks();
+        QVERIFY(list);
+        QCOMPARE(list->count(), 2);
+        QCOMPARE(list->item(0)->text(), QStringLiteral("A2")); // the highest at the top (p.697)
+        list->item(0)->setCheckState(Qt::Unchecked);
+        QVERIFY(!rig.mixer.isTrackShown(QStringLiteral("A2")));
+        QVERIFY(!visible(rig.mixer.strip(QStringLiteral("A2"))));
+        QVERIFY(visible(rig.mixer.strip(QStringLiteral("A1"))));
+        rig.mixer.setTrackShown(QStringLiteral("A2"), true);
+        QVERIFY(visible(rig.mixer.strip(QStringLiteral("A2"))));
+        b->click();
+        QVERIFY(!rig.mixer.isSidebarShown());
+    }
+
+    void trackNumbers() {
+        QCOMPARE(parseTrackNumbers(QStringLiteral("1-3, 5")), std::optional(QList<int>{1, 2, 3, 5}));
+        QCOMPARE(parseTrackNumbers(QStringLiteral("4 2;2")), std::optional(QList<int>{2, 4}));
+        QCOMPARE(parseTrackNumbers(QString()), std::optional(QList<int>{}));
+        QVERIFY(!parseTrackNumbers(QStringLiteral("A1")));
+        QVERIFY(!parseTrackNumbers(QStringLiteral("3-1")));
+        QCOMPARE(trackNumbersText({5, 1, 2, 3, 7, 8}), QStringLiteral("1-3, 5, 7-8"));
+    }
+
+    // The Audio Track Grouping window (p.698): Apply reads the text into the check boxes; Restore
+    // puts the group back.
+    void groupDialog() {
+        AudioGroup g;
+        g.name = QStringLiteral("Dialogue");
+        g.tracks = {QStringLiteral("A1")};
+        AudioGroupDialog d(g, {QStringLiteral("A1"), QStringLiteral("A2"), QStringLiteral("A3")});
+        QCOMPARE(d.tracksBox()->text(), QStringLiteral("1"));
+        d.tracksBox()->setText(QStringLiteral("2-3"));
+        QVERIFY(d.apply());
+        QCOMPARE(d.group().tracks, (QStringList{QStringLiteral("A2"), QStringLiteral("A3")}));
+        d.trackList()->item(0)->setCheckState(Qt::Checked);
+        QCOMPARE(d.tracksBox()->text(), QStringLiteral("1-3"));
+        d.tracksBox()->setText(QStringLiteral("x"));
+        QVERIFY(!d.apply());
+        d.restore();
+        QCOMPARE(d.group().tracks, QStringList{QStringLiteral("A1")});
+        QCOMPARE(d.group().name, QStringLiteral("Dialogue"));
+    }
+
+    // Audio Grouping (p.696-698): New Group from Selected Tracks, the four click rules, Gang,
+    // Duplicate, Delete and Disable All Groups.
+    void groups() {
+        Rig rig;
+        rig.selectOnly(QStringLiteral("A1"));
+        rig.mixer.setGroupAsk([](const AudioGroup& initial, const QStringList& tracks) {
+            AudioGroup g = initial;
+            g.name = QStringLiteral("One");
+            return tracks.isEmpty() ? std::nullopt : std::optional(g);
+        });
+        QCOMPARE(rig.mixer.newGroupFromSelectedTracks(), 0);
+        QCOMPARE(rig.mixer.groups().first().tracks, QStringList{QStringLiteral("A1")});
+        const int both = rig.mixer.addGroup(AudioGroup{QStringLiteral("Both"), {QStringLiteral("A2"), QStringLiteral("A1")}, false, {}});
+        QCOMPARE(rig.mixer.groups().at(both).tracks, (QStringList{QStringLiteral("A1"), QStringLiteral("A2")}));
+        QCOMPARE(rig.mixer.groupList()->count(), 2);
+        // Selecting a group adds its tracks.
+        rig.selectOnly(QString());
+        rig.mixer.clickGroup(0, false);
+        QVERIFY(rig.timeline.patch().isRecordSelected(QStringLiteral("A1")));
+        QVERIFY(!rig.timeline.patch().isRecordSelected(QStringLiteral("A2")));
+        rig.mixer.clickGroup(both, false);
+        QVERIFY(rig.timeline.patch().isRecordSelected(QStringLiteral("A2")));
+        // Deselecting "Both" keeps A1, which "One" also selects.
+        rig.mixer.clickGroup(both, false);
+        QVERIFY(rig.timeline.patch().isRecordSelected(QStringLiteral("A1")));
+        QVERIFY(!rig.timeline.patch().isRecordSelected(QStringLiteral("A2")));
+        // Alt-click replaces the selection; Alt-click again deselects every audio track.
+        rig.mixer.addGroup(AudioGroup{QStringLiteral("Two"), {QStringLiteral("A2")}, false, {}});
+        rig.mixer.clickGroup(2, true);
+        QVERIFY(!rig.timeline.patch().isRecordSelected(QStringLiteral("A1")));
+        QVERIFY(rig.timeline.patch().isRecordSelected(QStringLiteral("A2")));
+        QVERIFY(!rig.mixer.groups().first().selected);
+        rig.mixer.clickGroup(2, true);
+        QVERIFY(!rig.timeline.patch().isRecordSelected(QStringLiteral("A2")));
+        // Gang the Group: its tracks share a gang letter; Ungang takes it away.
+        rig.mixer.setGroupGanged(both, true);
+        QCOMPARE(rig.mixer.groups().at(both).gang, QStringLiteral("A"));
+        QCOMPARE(rig.strip(QStringLiteral("A2")).gangName(), QStringLiteral("A"));
+        QVERIFY(findAction(rig.mixer.groupMenu(both), QStringLiteral("Ungang the Group")));
+        rig.mixer.setGroupGanged(both, false);
+        QVERIFY(rig.strip(QStringLiteral("A2")).gangName().isEmpty());
+        // Duplicate, Delete, Disable All Groups.
+        rig.mixer.duplicateGroup(0);
+        QCOMPARE(rig.mixer.groups().size(), 4);
+        QCOMPARE(rig.mixer.groups().last().name, QStringLiteral("One Copy"));
+        rig.mixer.removeGroup(3);
+        QCOMPARE(rig.mixer.groups().size(), 3);
+        rig.mixer.setGroupsDisabled(true);
+        rig.mixer.clickGroup(0, false);
+        QVERIFY(!rig.timeline.patch().isRecordSelected(QStringLiteral("A1")));
+        QVERIFY(findAction(rig.mixer.groupMenu(-1), QStringLiteral("Disable All Groups"))->isChecked());
+        // Modify the Group through the window's hook.
+        rig.mixer.setGroupAsk([](const AudioGroup& initial, const QStringList&) {
+            AudioGroup g = initial;
+            g.name = QStringLiteral("Renamed");
+            g.tracks = {QStringLiteral("A2")};
+            return std::optional(g);
+        });
+        QVERIFY(rig.mixer.modifyGroup(0));
+        QCOMPARE(rig.mixer.groups().first().name, QStringLiteral("Renamed"));
+        QCOMPARE(rig.mixer.groups().first().tracks, QStringList{QStringLiteral("A2")});
     }
 
     // Without marks each segment holds the value throughout (model::setAutomationTo).

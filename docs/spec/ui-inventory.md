@@ -1751,8 +1751,8 @@ p.610–640, ch. 13 p.432–434).**
   * Live mode: Set Live Mix to Default, Set Live Mix to Automation and Set
     Live Mix as Automation work (docs/spec/audio-mixer.md).
 * **Audio Loop Play, Render Effect and the insert buttons (p.692, p.712,
-  p.790):** see docs/spec/audio-mixer.md. Show Track Sidebar is dimmed until
-  5.7a2.
+  p.790):** see docs/spec/audio-mixer.md. So are Show Track Sidebar and Audio
+  Grouping (p.691, p.696-698).
 
 ### Audio Tool (p.157–159)
 * **Opening:** Tools > Audio Tool. Ctrl+1 comes from ks2009 p.12; the 2025

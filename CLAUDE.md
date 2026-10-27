@@ -336,9 +336,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `Timeline::audioLoopRange`), insert buttons, Render Effect, the Clip mode
   Fast menu with a segment's own centred pan (`Segment::hasPan`), Set
   Display Options and Live Mix to/as Automation (docs/spec/audio-mixer.md;
-  test `tst_audio_mixer`, scenario `16-mixer-clip-pan.json`).
-  Next: 5.7, the audio items still dimmed (ROADMAP Phase 5 status: 5.7a2 the
-  Track Sidebar and Audio Grouping, 5.7b Clip/Timeline audio commands, 5.7c tone, EQ icon and
+  test `tst_audio_mixer`, scenario `16-mixer-clip-pan.json`). 5.7a2 is
+  done: Show Track Sidebar and Audio Grouping (`src/ui/audio_groups.cpp`).
+  Next: 5.7, the audio items still dimmed (ROADMAP Phase 5 status: 5.7b Clip/Timeline audio commands, 5.7c tone, EQ icon and
   audio settings); then the UI completion pass (U1 Timeline, U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.

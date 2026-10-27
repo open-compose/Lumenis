@@ -20,6 +20,7 @@ class QDial;
 class QHBoxLayout;
 class QLabel;
 class QLineEdit;
+class QListWidget;
 class QMenu;
 class QPushButton;
 class QSlider;
@@ -157,6 +158,47 @@ private:
     bool syncing_ = false; // show() is setting the controls; their signals are ignored
 };
 
+// An Audio Grouping group (p.696-698): a named set of audio tracks shown in the Audio Mixer's Groups
+// pane. Clicking it selects its tracks. `gang` is the gang letter its tracks share while it is
+// ganged (Gang the Group), else empty. Ours: groups live in the mixer, as gangs do, and are not saved.
+struct AudioGroup {
+    QString name;
+    QStringList tracks; // "A1", "A3", in track order
+    bool selected = false;
+    QString gang;
+    bool operator==(const AudioGroup&) const = default;
+};
+
+// The Audio Track Grouping window's "Select Tracks in Group" text (picture on p.698): track numbers
+// and ranges, "1-3, 5". parseTrackNumbers() reads it (spaces, commas or semicolons between items;
+// nothing for text it cannot read); trackNumbersText() writes the shortest such text.
+std::optional<QList<int>> parseTrackNumbers(const QString& text);
+QString trackNumbersText(QList<int> numbers);
+
+// The Audio Track Grouping window (picture on p.698): Group Name, Select Tracks in Group with Apply
+// (the text to the check boxes) and Restore (back to the group as it was), a check box for each
+// audio track, OK and Cancel.
+class AudioGroupDialog : public QDialog {
+    Q_OBJECT
+
+public:
+    AudioGroupDialog(const AudioGroup& group, const QStringList& tracks, QWidget* parent = nullptr);
+    // The group as the dialog has it: the name, and the checked tracks.
+    AudioGroup group() const;
+    QLineEdit* nameBox() const { return name_; }
+    QLineEdit* tracksBox() const { return text_; }
+    QListWidget* trackList() const { return list_; }
+    // Apply: checks the tracks the text names; false (nothing changed) when it cannot be read.
+    bool apply();
+    void restore();
+
+private:
+    AudioGroup initial_;
+    QLineEdit* name_ = nullptr;
+    QLineEdit* text_ = nullptr;
+    QListWidget* list_ = nullptr;
+};
+
 // Tools > Audio Mixer (p.690-726): a strip per audio track of the
 // sequence in the Record monitor and the Master strip; the Clip, Auto and
 // Live modes; the Fast menu. In Clip mode the faders set the clip gain and
@@ -284,6 +326,43 @@ public:
     // The Set Display Options dialog; without a hook the mixer asks with its own.
     using DisplayAsk = std::function<std::optional<MixerDisplay>(const MixerDisplay& current)>;
     void setDisplayAsk(DisplayAsk ask) { displayAsk_ = std::move(ask); }
+    // Show Track Sidebar (p.691): the Tracks list, whose check boxes choose the strips shown, and the
+    // Groups pane (p.696-698). The ">>" button shows it; "<<" hides it.
+    QToolButton* sidebarButton() const { return sidebarButton_; }
+    bool isSidebarShown() const;
+    void setSidebarShown(bool shown);
+    QListWidget* sidebarTracks() const { return sidebarTracks_; }
+    QListWidget* groupList() const { return groupList_; }
+    // Whether a track's strip is shown (all are, until the Tracks list hides some).
+    bool isTrackShown(const QString& track) const { return !hidden_.contains(track); }
+    void setTrackShown(const QString& track, bool shown);
+    // Audio Grouping (p.696-698).
+    const QList<AudioGroup>& groups() const { return groups_; }
+    // New Group from Selected Tracks: the Audio Track Grouping window, with the selected tracks; OK
+    // adds the group. Returns its index, or -1 when cancelled or empty.
+    int newGroupFromSelectedTracks();
+    // Modify the Group: the window again, for group `index`. False when cancelled.
+    bool modifyGroup(int index);
+    // Adds a group (a name is made up when it has none); returns its index. Tracks the sequence
+    // does not have are kept, so a group outlives a track's removal.
+    int addGroup(const AudioGroup& group);
+    void duplicateGroup(int index);
+    void removeGroup(int index);
+    // Gang (or Ungang) the Group: its tracks take the first free gang letter (p.704), or leave it.
+    void setGroupGanged(int index, bool ganged);
+    // Disable all Groups: clicking a group does nothing until they are enabled again (ours: the
+    // guide only names the item).
+    bool groupsDisabled() const { return groupsDisabled_; }
+    void setGroupsDisabled(bool disabled);
+    // A click on a group (p.696): selects its tracks in the Timeline when it was not selected, else
+    // deselects those not in another selected group. With `alt` (Alt/Option-click) selecting
+    // replaces the track selection with the group, and deselecting deselects every audio track.
+    void clickGroup(int index, bool alt);
+    // The window's hook; without one the mixer asks with AudioGroupDialog (tests set one).
+    using GroupAsk = std::function<std::optional<AudioGroup>(const AudioGroup& initial, const QStringList& tracks)>;
+    void setGroupAsk(GroupAsk ask) { groupAsk_ = std::move(ask); }
+    // The Groups pane's right-click menu, filled for the group under the click (-1: none).
+    QMenu* groupMenu(int index);
     // Live mode (p.725-726). A track's Live Mix value: {dB, pan}.
     std::pair<double, int> liveValue(const QString& track) const;
     // Whether the track's Live Mix pan was moved (or set from automation); MainWindow plays the
@@ -368,6 +447,22 @@ private:
     QString message_;
     MixerDisplay display_;
     DisplayAsk displayAsk_;
+    // The sidebar (audio_groups.cpp).
+    QWidget* sidebar_ = nullptr;
+    QToolButton* sidebarButton_ = nullptr;
+    QListWidget* sidebarTracks_ = nullptr;
+    QListWidget* groupList_ = nullptr;
+    QMenu* groupMenu_ = nullptr;
+    QSet<QString> hidden_;
+    QList<AudioGroup> groups_;
+    bool groupsDisabled_ = false;
+    GroupAsk groupAsk_;
+    // Builds the sidebar; called once by the constructor.
+    QWidget* makeSidebar();
+    // Refills the Tracks list and the Groups pane from order_ and groups_.
+    void syncSidebar();
+    // Selects or deselects audio tracks in the Timeline.
+    void selectTracks(const QSet<QString>& tracks, bool replace);
 
     // While recording: writes the moved strips at a new position, and stops at the end.
     void recordTick();
