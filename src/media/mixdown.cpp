@@ -3,6 +3,7 @@
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
 
+#include <QJsonArray>
 #include <QObject>
 
 #include <algorithm>
@@ -11,6 +12,88 @@
 // Audio Mixdown (mixdown.h). The pieces are those playback mixes; a mono mixdown gives each piece
 // its own gain on one channel, the others the playback mix through the matrix of their format.
 namespace lumenis::media {
+
+QString mixdownFormatName(MixdownFormat format) {
+    switch (format) {
+    case MixdownFormat::Mono: return QStringLiteral("Mono");
+    case MixdownFormat::DualMono: return QStringLiteral("Dual Mono");
+    case MixdownFormat::Stereo: return QStringLiteral("Stereo");
+    case MixdownFormat::Surround51: return QStringLiteral("5.1");
+    case MixdownFormat::Surround71: return QStringLiteral("7.1");
+    }
+    return QStringLiteral("Stereo");
+}
+
+std::optional<MixdownFormat> mixdownFormatFromName(const QString& name) {
+    for (MixdownFormat f : {MixdownFormat::Mono, MixdownFormat::DualMono, MixdownFormat::Stereo, MixdownFormat::Surround51,
+                            MixdownFormat::Surround71}) {
+        if (mixdownFormatName(f) == name) return f;
+    }
+    return std::nullopt;
+}
+
+QJsonObject MultiMix::toJson() const {
+    QJsonArray outs;
+    for (const MixOutput& o : outputs) {
+        QJsonObject j;
+        if (!o.name.isEmpty()) j.insert(QStringLiteral("name"), o.name);
+        j.insert(QStringLiteral("format"), mixdownFormatName(o.format));
+        if (o.masterFader) j.insert(QStringLiteral("master"), true);
+        j.insert(QStringLiteral("inputs"), QJsonArray::fromStringList(o.inputs));
+        outs.append(j);
+    }
+    QJsonObject j;
+    j.insert(QStringLiteral("outputs"), outs);
+    j.insert(QStringLiteral("useMarks"), useMarks);
+    j.insert(QStringLiteral("newSequence"), newSequence);
+    if (!sequenceName.isEmpty()) j.insert(QStringLiteral("sequenceName"), sequenceName);
+    if (excludeVideoAndData) j.insert(QStringLiteral("excludeVideoAndData"), true);
+    return j;
+}
+
+MultiMix MultiMix::fromJson(const QJsonObject& o) {
+    MultiMix m;
+    for (const QJsonValue& v : o.value(QStringLiteral("outputs")).toArray()) {
+        const QJsonObject j = v.toObject();
+        MixOutput out;
+        out.name = j.value(QStringLiteral("name")).toString();
+        out.format = mixdownFormatFromName(j.value(QStringLiteral("format")).toString()).value_or(MixdownFormat::Stereo);
+        out.masterFader = j.value(QStringLiteral("master")).toBool();
+        for (const QJsonValue& t : j.value(QStringLiteral("inputs")).toArray()) out.inputs << t.toString();
+        m.outputs << out;
+    }
+    m.useMarks = o.value(QStringLiteral("useMarks")).toBool(true);
+    m.newSequence = o.value(QStringLiteral("newSequence")).toBool(true);
+    m.sequenceName = o.value(QStringLiteral("sequenceName")).toString();
+    m.excludeVideoAndData = o.value(QStringLiteral("excludeVideoAndData")).toBool();
+    return m;
+}
+
+int multiMixTracks(const MultiMix& mix) {
+    int n = 0;
+    for (const MixOutput& o : mix.outputs) n += o.format == MixdownFormat::DualMono ? 2 : 1;
+    return n;
+}
+
+int multiMixTrackNumber(const MultiMix& mix, int output) {
+    int n = 1;
+    for (int i = 0; i < output && i < mix.outputs.size(); ++i) n += mix.outputs.at(i).format == MixdownFormat::DualMono ? 2 : 1;
+    return n;
+}
+
+QString multiMixProblem(const MultiMix& mix) {
+    if (mix.outputs.isEmpty()) return QObject::tr("Add an output.");
+    if (multiMixTracks(mix) > kMultiMixTracks) return QObject::tr("A mix has at most %1 output tracks.").arg(kMultiMixTracks);
+    for (int i = 0; i < mix.outputs.size(); ++i) {
+        const MixOutput& o = mix.outputs.at(i);
+        const int number = multiMixTrackNumber(mix, i);
+        if (o.inputs.isEmpty()) return QObject::tr("Output %1 has no inputs.").arg(number);
+        if (o.format == MixdownFormat::DualMono && number % 2 == 0) {
+            return QObject::tr("Only odd-numbered tracks can be set to Dual Mono (output %1).").arg(number);
+        }
+    }
+    return {};
+}
 
 namespace {
 

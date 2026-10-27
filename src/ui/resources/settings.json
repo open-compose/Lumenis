@@ -38,6 +38,13 @@
       ]
     },
     {
+      "kind": "Audio Multi-Mix",
+      "scope": "project",
+      "page": 1148,
+      "opens": "multiMix",
+      "tabs": []
+    },
+    {
       "kind": "Audio",
       "scope": "user",
       "page": 1147,

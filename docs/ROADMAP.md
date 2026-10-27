@@ -822,8 +822,8 @@ area is built):
   until external controllers (p.757);
 * 5.7b, the Clip and Timeline commands (docs/spec/clip-audio.md; 5.7b1,
   Apply Gain, Center Pan and Auto VO, and 5.7b2, Read Audio Timecode with
-  our own LTC decoder and Change Sample Rate, are done; 5.7b3 is Multiple
-  Mixes): Clip > Audio > Apply Gain (p.216),
+  our own LTC decoder and Change Sample Rate, are done; 5.7b3, Multiple
+  Mixes with the Multi-Mix Tool (docs/spec/multi-mix.md), is done): Clip > Audio > Apply Gain (p.216),
   Center Pan (p.714) and Change Sample Rate (p.731), Auto VO (p.754), Read
   Audio Timecode (p.668), Mixdown > Audio > Multiple Mixes (p.732);
 * 5.7c, the Audio Tool's calibration tone and Create Tone Media, the Audio

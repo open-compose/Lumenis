@@ -64,5 +64,4 @@ The Audio Mixdown dialog box (p.732; its layout is ours):
 
 ## Later
 
-* Mixdown > Audio > Multiple Mixes (the Multi-Mix tool, p.732-734).
 * Track-level faders and effects in the mix, as they come (Phase 5).

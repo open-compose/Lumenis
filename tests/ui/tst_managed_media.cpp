@@ -13,6 +13,7 @@
 #include "lumenis/ui/export_dialog.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/mixdown_dialog.h"
+#include "lumenis/ui/multi_mix_dialog.h"
 #include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/media_tool.h"
 #include "lumenis/ui/panels.h"
@@ -174,6 +175,109 @@ private slots:
         QVERIFY(window.timeline().perform(QStringLiteral("edit.undo")));
         QVERIFY(!model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("A3")));
         QCOMPARE(composer.state(MonitorId::Record).current()->item.id, sequenceId);
+        media::setExtraMediaDrives({});
+    }
+
+    // Timeline > Mixdown > Audio > Multiple Mixes (p.732-734): a stereo mix of A1 and A2 and a mono
+    // mix of A1, between the marks, into a new sequence with the video copied; the setting saved.
+    void multipleMixes() {
+        QTemporaryDir dir;
+        QVERIFY(writeMovie(dir.filePath(QStringLiteral("Tone.mov")), 12));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Harbor"));
+        project.settings.name = QStringLiteral("Harbor");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("transcodeVideoDrive"), drive);
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        const QStringList ids = window.linkFiles(binId, {dir.filePath(QStringLiteral("Tone.mov"))});
+        QCOMPARE(ids.size(), 1);
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, *bin->bin().item(ids.first()));
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.splice_in")));
+        model::MonitorState& marks = composer.state(MonitorId::Record);
+        marks.setPosition(2);
+        marks.markIn();
+        marks.setPosition(9);
+        marks.markOut();
+        const QString sequenceName = composer.state(MonitorId::Record).current()->item.name;
+        const int items = static_cast<int>(bin->bin().items.size());
+        window.setMultiMixHook([&](MultiMixDialog& d) {
+            d.nameAsk = [] { return std::optional(QStringLiteral("Stems")); };
+            media::MultiMix m = d.mix(); // one stereo output of A1 and A2 to start
+            if (m.outputs.size() != 1 || m.outputs.first().inputs != QStringList{"A1", "A2"}) return false;
+            d.addOutput();
+            d.setFormat(1, media::MixdownFormat::Mono);
+            d.toggleInput(1, QStringLiteral("A1"));
+            d.addOutput(); // track 3: Dual Mono, two tracks
+            d.setFormat(2, media::MixdownFormat::DualMono);
+            d.toggleInput(2, QStringLiteral("A2"));
+            if (!d.saveSettingAs()) return false;
+            return d.mixButton()->isEnabled();
+        });
+        commands.action(QStringLiteral("timeline.mixdown.audio.multiple_mixes"))->trigger();
+        QCoreApplication::processEvents();
+        // Three clips and the new sequence.
+        QCOMPARE(static_cast<int>(bin->bin().items.size()), items + 4);
+        const model::BinItem* stereo = named(*bin, sequenceName + QStringLiteral(" Mix 1"));
+        const model::BinItem* mono = named(*bin, sequenceName + QStringLiteral(" Mix 2"));
+        QVERIFY(stereo && mono);
+        QCOMPARE(stereo->durationFrames, std::int64_t{8});
+        QCOMPARE(stereo->fields.value(QStringLiteral("Track Formats")), QStringLiteral("Stereo A1A2"));
+        // The mono mix is A1 alone at its clip gain: 0.25.
+        const auto link = media::linkOf(*mono);
+        QVERIFY(link);
+        media::AudioReader reader;
+        QVERIFY(reader.open(link->audioPaths.first()));
+        const std::vector<float> got = reader.samples(100, 50);
+        QCOMPARE(got.size(), std::size_t{50});
+        for (float v : got) QVERIFY(std::abs(v - 0.25f) < 1e-3f);
+        const model::BinItem* made = named(*bin, sequenceName + QStringLiteral(".MultiMix"));
+        QVERIFY(made);
+        const model::Sequence seq = model::Sequence::fromItem(*made);
+        QVERIFY(seq.track(QStringLiteral("V1")));
+        const model::Track* a1 = seq.track(QStringLiteral("A1"));
+        const model::Track* a2 = seq.track(QStringLiteral("A2"));
+        QVERIFY(a1 && a2);
+        QCOMPARE(a1->format, model::AudioFormat::Stereo);
+        QCOMPARE(a2->format, model::AudioFormat::Mono);
+        std::int64_t start = 0;
+        const int i = a2->segmentAt(2, &start);
+        QVERIFY(i >= 0);
+        QCOMPARE(start, std::int64_t{2});
+        QCOMPARE(a2->segments.at(i).clipId, mono->id);
+        // Dual Mono: two mono tracks, panned left and right (p.734).
+        const model::BinItem* dual = named(*bin, sequenceName + QStringLiteral(" Mix 3"));
+        QVERIFY(dual);
+        const model::Track* a3 = seq.track(QStringLiteral("A3"));
+        const model::Track* a4 = seq.track(QStringLiteral("A4"));
+        QVERIFY(a3 && a4);
+        QCOMPARE(a3->format, model::AudioFormat::Mono);
+        QCOMPARE(a4->format, model::AudioFormat::Mono);
+        const int l = a3->segmentAt(2);
+        const int r = a4->segmentAt(2);
+        QVERIFY(l >= 0 && r >= 0);
+        QCOMPARE(a3->segments.at(l).clipId, dual->id);
+        QCOMPARE(a3->segments.at(l).sourceTrack, QStringLiteral("A1"));
+        QCOMPARE(a4->segments.at(r).sourceTrack, QStringLiteral("A2"));
+        QVERIFY(a3->segments.at(l).hasPan && a3->segments.at(l).pan < 0);
+        QVERIFY(a4->segments.at(r).hasPan && a4->segments.at(r).pan > 0);
+        // The setting is a Project setting now.
+        QVERIFY(window.savedMultiMixes().contains(QStringLiteral("Stems")));
+        QCOMPARE(window.savedMultiMixes().value(QStringLiteral("Stems")).outputs.size(), 3);
         media::setExtraMediaDrives({});
     }
 

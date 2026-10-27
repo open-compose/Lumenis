@@ -3,7 +3,8 @@
 Clip > Audio > Apply Gain, Center Pan and Change Sample Rate, Clip > Auto
 VO, Clip > Read Audio Timecode, and Timeline > Mixdown > Audio > Multiple
 Mixes. 5.7b1 is Apply Gain, Center Pan and Auto VO; 5.7b2 Read Audio
-Timecode and Change Sample Rate. Pages are the Editing Guide's.
+Timecode and Change Sample Rate; 5.7b3, Multiple Mixes, is in
+docs/spec/multi-mix.md. Pages are the Editing Guide's.
 
 ## A clip's own gain and pan (`BinItem::audioGain`, `audioPan`; `src/model/clip_audio.*`)
 

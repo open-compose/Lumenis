@@ -4,6 +4,7 @@
 #include "lumenis/media/playback.h"
 #include "lumenis/model/bin.h"
 
+#include <QJsonObject>
 #include <QString>
 #include <QStringList>
 
@@ -67,5 +68,40 @@ private:
 // has its channels as one track of that format (its Track Formats, lumenis/model/multichannel.h).
 std::optional<model::BinItem> mixdownClip(const MixdownRequest& request, const QString& name, const QString& startTimecode,
                                           const MediaCreation& creation, QString* error = nullptr);
+
+// Timeline > Mixdown > Audio > Multiple Mixes, the Multi-Mix Tool (p.732-734;
+// docs/spec/multi-mix.md): several mixdowns of one sequence at once, each an output with its own
+// inputs, format and Master Fader choice.
+struct MixOutput {
+    QString name;        // Edit Mix's name; empty: "<sequence> Mix <n>" (ours)
+    MixdownFormat format = MixdownFormat::Stereo;
+    bool masterFader = false; // the button above the output: the Master Fader's effects and gain
+    QStringList inputs;  // the audio tracks mixed into it, "A1" ...
+    bool operator==(const MixOutput&) const = default;
+};
+struct MultiMix {
+    QList<MixOutput> outputs;
+    bool useMarks = true;
+    bool newSequence = true;
+    QString sequenceName; // empty: "<sequence>.MultiMix" (ours)
+    bool excludeVideoAndData = false;
+    bool operator==(const MultiMix&) const = default;
+
+    QJsonObject toJson() const;
+    // Unknown or missing values take their defaults.
+    static MultiMix fromJson(const QJsonObject& o);
+};
+// "You can create up to 24 output channels for the mix"; "The Dual Mono option counts as two tracks
+// against the limit" (p.733-734): an output takes one track, Dual Mono two.
+inline constexpr int kMultiMixTracks = 24;
+int multiMixTracks(const MultiMix& mix);
+// The output's first track number (1-based) in the tracks of the mix.
+int multiMixTrackNumber(const MultiMix& mix, int output);
+// What stops the mix, or empty: no outputs, an output without inputs, more than 24 tracks, or Dual
+// Mono on an even-numbered track ("Only odd-numbered tracks can be set to Dual Mono", p.734).
+QString multiMixProblem(const MultiMix& mix);
+// "Mono", "Stereo", "Dual Mono", "5.1", "7.1"; and back (nothing for other text).
+QString mixdownFormatName(MixdownFormat format);
+std::optional<MixdownFormat> mixdownFormatFromName(const QString& name);
 
 } // namespace lumenis::media

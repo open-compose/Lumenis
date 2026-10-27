@@ -3,6 +3,7 @@
 #include "lumenis/media/link.h"
 #include "lumenis/media/consolidate.h"
 #include "lumenis/media/managed.h"
+#include "lumenis/media/mixdown.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/project_store.h"
 #include "lumenis/ui/audio_punch_in.h"
@@ -12,6 +13,7 @@
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QList>
+#include <QMap>
 #include <QMainWindow>
 #include <QPointer>
 
@@ -45,6 +47,7 @@ class BackgroundQueueWindow;
 class CalculatorWindow;
 class ConsolidateDialog;
 class AudioMixdownDialog;
+class MultiMixDialog;
 class ExportAsDialog;
 class ExportBinDialog;
 class ImportEdlDialog;
@@ -284,6 +287,16 @@ public:
     // Change Sample Rate (p.731): new media for the selected audio clips, and the clips the selected
     // sequences' audio segments use, at the chosen rate (media::resampleClipAudio).
     int changeSampleRate();
+    // Timeline > Mixdown > Audio > Multiple Mixes (p.732-734): the Multi-Mix Tool on the Record
+    // monitor's sequence. Mix makes a master clip in the chosen bin for each output, and with Create
+    // New Sequence a new sequence with a track for each mix, the video and data tracks copied unless
+    // excluded. Returns the clips made. With `canMix` false (opened from the Settings window) the
+    // tool only edits and saves settings (p.734). The hook stands in for exec() in tests.
+    int multipleMixes(bool canMix = true);
+    void setMultiMixHook(std::function<bool(MultiMixDialog&)> hook) { multiMixHook_ = std::move(hook); }
+    // The saved Audio Multi-Mix settings (Project settings) by name, and saving one.
+    QMap<QString, media::MultiMix> savedMultiMixes() const;
+    void saveMultiMix(const QString& name, const media::MultiMix& mix);
     struct ReadTimecodeChoice {
         bool userBits = false;
         int track = 0;
@@ -470,6 +483,7 @@ private:
     std::function<bool(AudioMixdownDialog&)> mixdownHook_;
     std::function<bool(ModifyDialog&)> modifyHook_;
     ClipAudioHooks clipAudioHooks_;
+    std::function<bool(MultiMixDialog&)> multiMixHook_;
     std::function<bool(ExportAsDialog&)> exportHook_;
     std::function<bool(ImportEdlDialog&)> importEdlHook_;
     std::function<bool(ExportBinDialog&)> exportBinHook_;

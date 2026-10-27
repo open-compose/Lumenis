@@ -18,6 +18,7 @@ add_library(lumenis_ui STATIC
     composer.cpp
     consolidate_dialog.cpp
     mixdown_dialog.cpp
+    multi_mix_dialog.cpp
     modify_dialog.cpp
     export_dialog.cpp
     interchange_dialogs.cpp
@@ -66,6 +67,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/composer.h
     include/lumenis/ui/consolidate_dialog.h
     include/lumenis/ui/mixdown_dialog.h
+    include/lumenis/ui/multi_mix_dialog.h
     include/lumenis/ui/modify_dialog.h
     include/lumenis/ui/export_dialog.h
     include/lumenis/ui/interchange_dialogs.h

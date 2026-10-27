@@ -43,6 +43,8 @@ lumenis_add_test(tst_surround_ui SOURCES tst_surround_ui.cpp LIBS ${ui_test_libs
 lumenis_add_test(tst_audio_mixer SOURCES tst_audio_mixer.cpp LIBS ${ui_test_libs} lumenis::media)
 # The Clip menu's audio commands (docs/spec/clip-audio.md).
 lumenis_add_test(tst_clip_audio SOURCES tst_clip_audio.cpp LIBS ${ui_test_libs} lumenis::media)
+# The Multi-Mix Tool (docs/spec/multi-mix.md).
+lumenis_add_test(tst_multi_mix SOURCES tst_multi_mix.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_audio_punch_in SOURCES tst_audio_punch_in.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_track_effects SOURCES tst_track_effects.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_source_browser SOURCES tst_source_browser.cpp LIBS ${ui_test_libs} lumenis::media)

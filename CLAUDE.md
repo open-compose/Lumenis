@@ -344,9 +344,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   scenario `17-clip-gain-pan.json`). 5.7b2 is done: Read Audio Timecode
   (our LTC decoder `src/media/ltc.*`, test `tst_ltc`) and Change Sample
   Rate (`media::resampleClipAudio`; 32/44.1 kHz media is WAV, MXF takes only
-  48 kHz).
-  Next: 5.7, the audio items still dimmed (ROADMAP Phase 5 status: 5.7b Clip/Timeline audio commands, 5.7c tone, EQ icon and
-  audio settings); then the UI completion pass (U1 Timeline, U2 Composer and
+  48 kHz; `.wav` files open with FFmpeg's wav demuxer first, BUILDING.md).
+  5.7b3 is done: Multiple Mixes, the Multi-Mix Tool (`media::MultiMix` in
+  `mixdown.*`, `multi_mix_dialog.*`, `MainWindow::multipleMixes`, Project
+  setting "Audio Multi-Mix", docs/spec/multi-mix.md; test `tst_multi_mix`).
+  Next: 5.7c, the audio items still dimmed (ROADMAP Phase 5 status: tone,
+  EQ icon and audio settings); then the UI completion pass (U1 Timeline, U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.
 

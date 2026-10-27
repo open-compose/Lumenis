@@ -2395,7 +2395,8 @@ Details: docs/spec/audio-mixdown.md.
   Premix Sequence, OK (p.732). **Ours:** the layout; Stereo, 5.1 and 7.1
   dimmed until multichannel tracks; Dual Mono targets are pairs of empty
   tracks; the clip is named "<sequence> Mixdown".
-* Multiple Mixes (p.732-734) is later.
+* Timeline > Mixdown > Audio > Multiple Mixes opens the Multi-Mix Tool
+  (p.732-734); details: docs/spec/multi-mix.md.
 
 ## 20b. Audio EQ (p.736-745)
 Details: docs/spec/audio-eq.md.

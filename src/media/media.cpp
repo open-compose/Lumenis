@@ -6,6 +6,7 @@
 
 #include <QCryptographicHash>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QStringList>
 
@@ -198,7 +199,19 @@ Input openInput(const QString& path, QString* error) {
         av_dict_set(&options, "framerate",
                     QStringLiteral("%1/%2").arg(seq->rate.num()).arg(seq->rate.den()).toUtf8().constData(), 0);
     }
-    int rc = avformat_open_input(&raw, file.constData(), format, &options);
+    // WAV files by their own demuxer first: FFmpeg 7 and 8 probe some valid WAVs (ours at 32 kHz with
+    // LTC on them, CI on Windows and macOS) as another format and then fail with "End of file". A
+    // .wav that is not one is probed as before.
+    const QString suffix = QFileInfo(path).suffix().toLower();
+    if (!format && (suffix == QLatin1String("wav") || suffix == QLatin1String("wave") || suffix == QLatin1String("bwf"))) {
+        if (const AVInputFormat* wav = av_find_input_format("wav")) {
+            AVDictionary* wavOptions = nullptr;
+            av_dict_copy(&wavOptions, options, 0);
+            if (avformat_open_input(&raw, file.constData(), wav, &wavOptions) < 0) raw = nullptr;
+            av_dict_free(&wavOptions);
+        }
+    }
+    int rc = raw ? 0 : avformat_open_input(&raw, file.constData(), format, &options);
     av_dict_free(&options);
     if (rc < 0) {
         setError(error, errorText(rc));

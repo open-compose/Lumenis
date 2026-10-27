@@ -456,6 +456,18 @@ prints the reports that contain a failure. Locally, look in
 Tests that move or delete media files must let go of them first
 (`MediaFrames::clear()`): Windows does not move or delete open files.
 
+### A WAV file does not open: "End of file" (Windows, macOS)
+
+FFmpeg 7 and 8 (the Windows and Homebrew builds) can take some valid WAV
+files for another format when they probe them, and then fail with "End of
+file". Ubuntu 24.04's FFmpeg 6.1 opens them, so Linux passes. A 32 kHz
+24-bit WAV with LTC on it does this (`tst_clip_audio`'s Change Sample
+Rate). `openInput` in `src/media/media.cpp` therefore opens `.wav`,
+`.wave` and `.bwf` files with the wav demuxer first, and probes them only
+when that fails. To try a file with FFmpeg 8 on Linux, install PyAV in a
+virtual environment (`pip install av`) and compare `av.open(path)` with
+`av.open(path, format="wav")`.
+
 ### "no ffmpeg command found"
 
 `scripts/measure-playback.py` and the `decode_corpus` test need the

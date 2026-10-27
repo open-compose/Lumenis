@@ -43,6 +43,7 @@
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/consolidate_dialog.h"
 #include "lumenis/ui/mixdown_dialog.h"
+#include "lumenis/ui/multi_mix_dialog.h"
 #include "lumenis/ui/export_dialog.h"
 #include "lumenis/ui/interchange_dialogs.h"
 #include "lumenis/ui/list_tool.h"
@@ -779,6 +780,8 @@ SettingsWindow* MainWindow::showSettings() {
         connect(settingsWindow_, &SettingsWindow::toolRequested, this, [this](const QString& tool) {
             if (tool == QLatin1String("toolPalette")) showTool(QStringLiteral("ToolPalette"));
             if (tool == QLatin1String("keyboard")) showTool(QStringLiteral("Keyboard"));
+            // An Audio Multi-Mix setting opens the tool to change it, without Mix (p.734).
+            if (tool == QLatin1String("multiMix")) multipleMixes(false);
         });
         // Its own window: give it the commands so Edit's shortcuts work.
         for (const QString& id : commands_.ids()) settingsWindow_->addAction(commands_.action(id));
@@ -2585,6 +2588,197 @@ void MainWindow::audioMixdown() {
     });
 }
 
+QMap<QString, media::MultiMix> MainWindow::savedMultiMixes() const {
+    QMap<QString, media::MultiMix> out;
+    const model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
+    for (int i : f.versions(QStringLiteral("Audio Multi-Mix"))) {
+        const model::SettingEntry& e = f.entries.at(i);
+        if (!e.name.isEmpty()) out.insert(e.name, media::MultiMix::fromJson(e.values.value(QStringLiteral("mix")).toObject()));
+    }
+    return out;
+}
+
+// "The saved setting will appear in the Select Setting field, as well as an Audio Multi-Mix setting in
+// the Project tab of the Settings dialog box" (p.734): a version of that name, made active.
+void MainWindow::saveMultiMix(const QString& name, const media::MultiMix& mix) {
+    if (!settings_->hasProject() || name.isEmpty()) return;
+    model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
+    const QString kind = QStringLiteral("Audio Multi-Mix");
+    int index = -1;
+    for (int i : f.versions(kind)) {
+        if (f.entries.at(i).name == name) index = i;
+    }
+    if (index < 0) {
+        model::SettingEntry e;
+        e.kind = kind;
+        e.name = name;
+        e.active = false;
+        index = f.add(e);
+    }
+    f.entries[index].values.insert(QStringLiteral("mix"), mix.toJson());
+    f.setActive(index);
+    settings_->commit(model::SettingsScope::Project);
+}
+
+int MainWindow::multipleMixes(bool canMix) {
+    auto fail = [this](const QString& text) {
+        ConsoleLog::instance().append(tr("Multiple Mixes: %1").arg(text));
+        if (multiMixHook_) return;
+        auto* box = new QMessageBox(QMessageBox::Warning, tr("Multiple Mixes"), text, QMessageBox::Ok, this);
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        box->open();
+    };
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    const bool haveSequence = rec && rec->item.kind == model::BinItemKind::Sequence;
+    if (canMix && (!haveSequence || !project_)) {
+        fail(tr("Load a sequence into the Record monitor first."));
+        return 0;
+    }
+    MultiMixDialog::Setup setup;
+    const model::Sequence seq = haveSequence ? model::Sequence::fromItem(rec->item) : model::Sequence{};
+    for (const model::Track& t : seq.tracks()) {
+        if (t.kind == model::TrackKind::Audio) setup.tracks << t.name();
+    }
+    // From the Settings window without a sequence: the tracks a default sequence has (ours).
+    if (setup.tracks.isEmpty()) setup.tracks = {QStringLiteral("A1"), QStringLiteral("A2")};
+    for (const BinDocument* d : binContainer_->openDocuments()) {
+        if (!d->isReadOnly()) setup.bins << qMakePair(d->nodeId(), d->name());
+    }
+    setup.activeBin = haveSequence ? rec->binId : QString();
+    for (const media::MediaDrive& d : media::mediaDrives()) setup.drives.append({d.name, d.root});
+    media::MediaCreation creation = mediaCreation(QStringLiteral("transcode"));
+    setup.drive = creation.audioDrive.isEmpty() ? creation.videoDrive : creation.audioDrive;
+    if (std::none_of(setup.drives.cbegin(), setup.drives.cend(), [&](const auto& d) { return d.second == setup.drive; }) &&
+        !setup.drive.isEmpty()) {
+        setup.drives.prepend({QFileInfo(setup.drive).fileName(), setup.drive});
+    }
+    setup.settings = savedMultiMixes();
+    {
+        const model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
+        const int active = f.activeIndex(QStringLiteral("Audio Multi-Mix"));
+        if (active >= 0) setup.setting = f.entries.at(active).name;
+    }
+    setup.canMix = canMix;
+    MultiMixDialog dialog(setup, this);
+    dialog.save = [this](const QString& name, const media::MultiMix& mix) { saveMultiMix(name, mix); };
+    const bool ok = multiMixHook_ ? multiMixHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok || !canMix) return 0;
+    const media::MultiMix mix = dialog.mix();
+    if (const QString problem = media::multiMixProblem(mix); !problem.isEmpty()) {
+        fail(problem);
+        return 0;
+    }
+    BinDocument* doc = binContainer_->document(dialog.bin());
+    if (!doc || doc->isReadOnly()) {
+        fail(tr("Choose a bin that can be changed."));
+        return 0;
+    }
+    // "When this option is selected, Media Composer uses current IN and OUT points in the selected
+    // sequence to determine starting and ending frames for the mixdown" (p.734).
+    const model::MonitorState& marks = composer_->state(MonitorId::Record);
+    std::int64_t start = 0;
+    std::int64_t end = seq.duration();
+    if (mix.useMarks && (marks.in() || marks.out())) {
+        start = marks.markedStart();
+        end = marks.markedEnd() + 1;
+    }
+    if (end <= start) {
+        fail(tr("There is nothing to mix down."));
+        return 0;
+    }
+    const QString drive = dialog.drive().isEmpty() ? setup.drive : dialog.drive();
+    creation.videoDrive = drive;
+    creation.audioDrive = drive;
+    // AudioSuite effects are rendered first, as for Audio Mixdown (p.800).
+    QStringList inputs;
+    for (const media::MixOutput& o : mix.outputs) {
+        for (const QString& t : o.inputs) {
+            if (!inputs.contains(t)) inputs << t;
+        }
+    }
+    if (timeline_->audioSuiteToRender(inputs, start, end) > 0) {
+        const auto rendered = timeline_->renderAudioSuite(inputs, start, end, [this, drive](const model::Segment& s, QString* error) {
+            return renderAudioSuite(s, drive, error);
+        });
+        if (!rendered) {
+            fail(timeline_->lastMessage());
+            return 0;
+        }
+    }
+    const model::BinItem sequence = composer_->state(MonitorId::Record).current()->item;
+    auto tc = [this](std::int64_t frame) {
+        return QString::fromStdString(Timecode(timeline_->startFrame() + frame, timeline_->format()).toString());
+    };
+    QProgressDialog progress(tr("Mixing..."), tr("Cancel"), 0, 1000, this);
+    progress.setObjectName(QStringLiteral("multiMixProgress"));
+    QList<model::BinItem> made;
+    for (int o = 0; o < mix.outputs.size(); ++o) {
+        const media::MixOutput& out = mix.outputs.at(o);
+        media::MixdownRequest request;
+        request.sequence = sequence;
+        request.tracks = out.inputs;
+        request.start = start;
+        request.end = end;
+        request.format = out.format;
+        request.includeMaster = out.masterFader;
+        request.masterGainDb = audioMixer_ ? audioMixer_->masterGain() : 0.0;
+        request.alternatingPan = settings_->text(QStringLiteral("Audio"), QStringLiteral("defaultPan")) != QLatin1String("centered");
+        request.clips = [this](const QString& binId, const QString& clipId) { return composer_->resolve(binId, clipId); };
+        const QString name = out.name.isEmpty() ? tr("%1 Mix %2").arg(sequence.name).arg(media::multiMixTrackNumber(mix, o)) : out.name;
+        progress.setLabelText(tr("Mixing %1...").arg(name));
+        creation.progress = progressOn(progress);
+        QString error;
+        const auto clip = media::mixdownClip(request, name, tc(start), creation, &error);
+        if (!clip) {
+            progress.reset();
+            fail(error);
+            return static_cast<int>(made.size());
+        }
+        doc->addItem(*clip);
+        made << *clip;
+    }
+    progress.reset();
+    // "If you selected Create New Sequence, these clips will also be built into a new sequence with a
+    // track for each mix. The video and data tracks are also copied into the new sequence unchanged,
+    // unless you selected Exclude Video and Data Tracks" (p.734). The mixes sit where their range is.
+    if (mix.newSequence) {
+        model::Sequence ns;
+        ns.setTimecodeTrack(seq.hasTimecodeTrack());
+        ns.setMixFormat(seq.mixFormat());
+        if (!mix.excludeVideoAndData) {
+            for (const model::Track& t : seq.tracks()) {
+                if (t.kind != model::TrackKind::Audio) ns.restoreTrack(t);
+            }
+        }
+        for (int o = 0; o < made.size(); ++o) {
+            const media::MixdownFormat format = mix.outputs.at(o).format;
+            const int count = format == media::MixdownFormat::DualMono ? 2 : 1;
+            for (int c = 0; c < count; ++c) {
+                const auto track = ns.addTrack(model::TrackKind::Audio, media::mixdownTrackFormat(format));
+                if (!track) break;
+                model::Segment s;
+                s.clipId = made.at(o).id;
+                s.binId = doc->nodeId();
+                s.sourceMob = made.at(o).mobId;
+                s.name = made.at(o).name;
+                s.sourceTrack = QStringLiteral("A%1").arg(c + 1);
+                s.length = end - start;
+                if (format == media::MixdownFormat::DualMono) {
+                    s.pan = c == 0 ? -model::kPanMax : model::kPanMax;
+                    s.hasPan = true;
+                }
+                ns.overwrite(*track, start, {s});
+            }
+        }
+        model::BinItem item = model::newSequence(doc->bin(), sequence.editRate, QDateTime::currentDateTimeUtc(),
+                                                 sequence.fields.value(QStringLiteral("Start")));
+        item.name = mix.sequenceName.isEmpty() ? sequence.name + QStringLiteral(".MultiMix") : mix.sequenceName;
+        ns.storeIn(item);
+        doc->addItem(item);
+    }
+    return static_cast<int>(made.size());
+}
+
 // The Audio Punch-In tool's menus: the inputs the system offers, the media drives (the Media Creation
 // setting's audio drive first chosen) and the bins that can be changed (the sequence's own first chosen).
 void MainWindow::preparePunchIn() {
@@ -3173,6 +3367,7 @@ void MainWindow::installPanelHandlers() {
     handle("clip.audio.center_pan", [this] { centerPan(); });
     handle("clip.auto_vo", [this] { autoVo(); });
     handle("clip.read_audio_timecode", [this] { readAudioTimecode(); });
+    handle("timeline.mixdown.audio.multiple_mixes", [this] { multipleMixes(); });
     handle("clip.audio.change_sample_rate", [this] { changeSampleRate(); });
     handle("tools.source_browser", [this] { showSourceBrowser(); });
     // The Tool Palette button (Other tab, p.392).

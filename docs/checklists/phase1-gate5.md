@@ -200,7 +200,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Find Black Hole |  | p.645 | *later* | ☐ | | |
 | Find Flash Frame |  | p.645 | *later* | ☐ | | |
 | Mixdown > Audio > To Sequence |  | p.732 | works | ☐ | | |
-| Mixdown > Audio > Multiple Mixes |  | p.732 | *later* | ☐ | | |
+| Mixdown > Audio > Multiple Mixes |  | p.732 | works | ☐ | | |
 | Mixdown > Data |  | p.982 | *later* | ☐ | | |
 | Mixdown > Video |  | p.228 | *later* | ☐ | | |
 | Remove Match Frame Edits |  | p.495 | works | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 112 of them working with a project open; the
+* 211 menu commands, 113 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.
