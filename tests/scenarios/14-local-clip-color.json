@@ -1,0 +1,21 @@
+[
+  {
+    "name": "Set Local Clip Color colours the selected segments as one undo step; None takes it off; with nothing selected it is refused",
+    "guide": "p.598",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 10], ["B", 0, 10], ["A", 10, 10]]}},
+    "steps": [
+      {"local_color": "#8cc83c", "refused": true},
+      {"select": [["V1", 0], ["V1", 20]]},
+      {"local_color": "#8cc83c"},
+      {"select": [["V1", 10]]},
+      {"local_color": "#3cbed2"},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"},
+      {"select": [["V1", 0]]},
+      {"local_color": ""}
+    ],
+    "expect": {"V1": [["A", 0, 10], ["B", 0, 10], ["A", 10, 10]]},
+    "expect_local_colors": {"V1": ["", "#3cbed2", "#8cc83c"]}
+  }
+]

@@ -47,6 +47,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   at the same frames (§11; 2026.8 guide p.507).
 * Shared projects on third-party storage: our own lock files (§20a;
   docs/spec/bin-locking.md).
+* Timeline clip colours (docs/spec/timeline-colors.md): the Clip Color
+  dialog's defaults (Offline and Source on, the others off), the colours
+  other than offline red and proxy yellow, one Mixed Rates colour per rate
+  for ten rates, the layout, and Default Colors also resetting Linked Clips.
 * Choose Columns: Search matches anywhere in a heading; All/None acts on
   the headings shown; the width is fixed (§9).
 * Volume and pan automation (docs/spec/automation.md):
@@ -965,7 +969,8 @@ These are recorded now so they are not entered from memory later.
 * **Source/Record colours (p.382–383):** Interface settings, Timeline &
   Viewers: *Show Source/Record colors in Composer* turns the Source
   position bar green and the Record one blue (pop-ups green); *Show
-  Source/Record colors in Timeline* colours the track enable buttons.
+  Source/Record colors in Timeline* colours the selected track enable
+  buttons: source green, record blue (docs/spec/timeline-colors.md).
 * **Second row of buttons (p.384):** Composer settings, Button Display at
   Bottom, Two Rows under.
 * **Tracking information (p.384–387).**
@@ -1128,7 +1133,8 @@ These are recorded now so they are not entered from memory later.
     Frames, Clip Text (Clip Names, Group Clip Name, Clip Tracks, Source
     Track Name, Clip Durations, Clip Full Durations, Clip Trans Duration,
     Timeline Clip Notes, Source Names, Media Full Names, Clip Resolution),
-    Sync Breaks, Dupe Detection, Color Correction, Audio Data, Clip Color,
+    Sync Breaks, Dupe Detection, Color Correction, Audio Data, Clip Color
+    (the Clip Color dialog, p.594–597; docs/spec/timeline-colors.md),
     Segment Selection, Mark IO Selection, Track Color, Show Markers, Show
     Adapters, Show Track, Track Control Panel and Zoom (Zoom In, Zoom Out,
     Show Entire Sequence, Zoom into Region, Zoom Back to Last View, Show
@@ -1212,6 +1218,8 @@ p.610–640, ch. 13 p.432–434).**
     Clip Color, Clips With No Source Clip Color, Offline Clips, Clips With
     Same Local Clip Color, Reverse; filler is not selected. Create
     Sequence Based on Selection (p.613–614).
+  * Right-click the Fast Menu button > Set Local Clip Color: a colour for
+    the selected segments, or None (p.597–598).
   * The Timeline Top toolbar holds editing buttons and can be shown in the
     Timeline settings (p.603); the Lift/Overwrite button is there (p.621).
     Its picture (p.607) has a master timecode display at its left.
@@ -1488,7 +1496,7 @@ p.610–640, ch. 13 p.432–434).**
       Show Composer Markers; Show Spanned Markers; the Move tab.
     * **General:** Default Starting TC for new sequences.
     * **Interface:** Show ToolTips; Show Source/Record colors in
-      Composer; When moving to a workspace; Show Labels in Tool Palette
+      Composer and in Timeline; When moving to a workspace; Show Labels in Tool Palette
       (p.392, added in 1.5b).
     * **Tool Palette** (p.1221): opens the Tool palette, whose mapped
       buttons it keeps (1.5b).

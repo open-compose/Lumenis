@@ -162,6 +162,7 @@ QJsonObject segmentToJson(const Segment& s) {
     o.insert(QStringLiteral("name"), s.name);
     o.insert(QStringLiteral("track"), s.sourceTrack);
     o.insert(QStringLiteral("in"), static_cast<qint64>(s.sourceIn));
+    if (!s.localColor.isEmpty()) o.insert(QStringLiteral("localColor"), s.localColor);
     return o;
 }
 
@@ -178,6 +179,7 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.name = o.value(QStringLiteral("name")).toString();
     s.sourceTrack = o.value(QStringLiteral("track")).toString();
     s.sourceIn = o.value(QStringLiteral("in")).toInteger();
+    if (!s.isFiller()) s.localColor = o.value(QStringLiteral("localColor")).toString();
     s.length = std::max<std::int64_t>(o.value(QStringLiteral("length")).toInteger(), 0);
     s.addEdit = s.isFiller() && o.value(QStringLiteral("addEdit")).toBool();
     s.gain = clampGain(o.value(QStringLiteral("gain")).toDouble());
@@ -909,7 +911,7 @@ bool Sequence::isMatchFrame(const Segment& before, const Segment& after) {
     // Halves of one segment keep the same keyframes (counted in the clip's frames), so an Add Edit
     // between them is still a match frame; other keyframes keep the edit.
     if (before.volumeKeys != after.volumeKeys || before.panKeys != after.panKeys) return false;
-    if (before.eq != after.eq) return false;
+    if (before.eq != after.eq || before.localColor != after.localColor) return false;
     if (before.isFiller() || after.isFiller()) return before.isFiller() && after.isFiller() && after.addEdit;
     return before.clipId == after.clipId && before.binId == after.binId && before.sourceTrack == after.sourceTrack &&
            before.sourceIn + before.length == after.sourceIn;

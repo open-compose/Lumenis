@@ -318,6 +318,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
     output (`setOutput`); the player opens that many channels;
   - Stereo, 5.1 and 7.1 Audio Mixdowns (`media::mixdownTrackFormat`).
   Tests: `tst_surround`, `tst_multichannel_ui`, scenario `13-surround.json`.
+  Clip colours in the Timeline (docs/spec/timeline-colors.md: the Clip Color
+  dialog `clip_color_dialog.*`, `model::ClipColorOptions` in
+  `src/model/clip_coloring.*`, Set Local Clip Color, the Select menu's colour
+  choices, Show Source/Record colors in Timeline) were added after 5.6b1;
+  test `tst_clip_colors`, scenario `14-local-clip-color.json`.
   Next: 5.6b2, the Pan grid and Advanced Panner.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.

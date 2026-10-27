@@ -179,6 +179,9 @@ struct Segment {
     std::optional<AudioEq> eq;
     // The segment's AudioSuite plug-in effect (p.797-800), on audio segments only.
     std::optional<AudioSuiteEffect> audioSuite;
+    // Set Local Clip Color (p.597-598): "#rrggbb", empty for none. Shown when the Clip Color dialog's
+    // Timeline Local is on (lumenis/model/clip_coloring.h).
+    QString localColor;
 
     bool hasEffects() const { return effect || transition; }
     bool hasAutomation() const { return !volumeKeys.isEmpty() || !panKeys.isEmpty(); }
@@ -247,9 +250,8 @@ public:
     // inserts?: [{slot (0-4), effect, name, params: {id: value}, bypass?}]}],
     // timecode, mix? ("5.1" or "7.1": mixFormat())}. A segment is {length, gain?, pan?,
     // volumeKeys?, panKeys?, eq?, effect?, transition?} (keys as [[frame, value], ...]) plus
-    // addEdit? for filler or
-    // {clip, mob?, bin?, name, track, in} for material. fromJson() skips unreadable and duplicate
-    // tracks, tidies each track and sorts the tracks.
+    // addEdit? for filler or {clip, mob?, bin?, name, track, in, localColor?} for material.
+    // fromJson() skips unreadable and duplicate tracks, tidies each track and sorts the tracks.
     QJsonObject toJson() const;
     static Sequence fromJson(const QJsonObject& o);
 

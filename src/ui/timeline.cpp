@@ -1,10 +1,12 @@
 #include "lumenis/ui/timeline.h"
 
 #include "lumenis/media/audio_fx.h"
+#include "lumenis/media/link.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/ui/button_mapping.h"
+#include "lumenis/ui/clip_color_dialog.h"
 #include "lumenis/ui/marker_dialogs.h"
 #include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/theme.h"
@@ -14,6 +16,7 @@
 #include <QDateTime>
 #include <QDialog>
 #include <QDropEvent>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -87,6 +90,10 @@ constexpr QRgb kVideoSegment = 0xff3f8f9c;
 constexpr QRgb kAudioSegment = 0xff5d63c9;
 constexpr QRgb kDataSegment = 0xff7a7a7a;
 constexpr QRgb kButtonOn = 0xff767676;
+// Show Source/Record colors in Timeline (p.383): selected source buttons green, record ones blue, as
+// the Composer's position bars.
+constexpr QRgb kSourceButtonOn = 0xff2f8a6c;
+constexpr QRgb kRecordButtonOn = 0xff2b5576;
 constexpr QRgb kButtonOff = 0xff444444;
 constexpr QRgb kButtonDim = 0xff383838;
 constexpr QRgb kInOut = 0x38ffffff;
@@ -502,8 +509,11 @@ void TimelineView::paintEvent(QPaintEvent*) {
                     const double x0 = std::max(xFor(at), static_cast<double>(header - 1));
                     const double x1 = std::min(xFor(end), static_cast<double>(width() + 1));
                     const QRectF box(x0, r.top + 1, std::max(x1 - x0, 1.0), r.height - 2);
-                    p.fillRect(box, selected ? fill.lighter(135) : fill);
-                    p.setPen(fill.darker(160));
+                    // Clip colours (p.594-598) take the place of the track's.
+                    const QString clipColor = timeline_.segmentColor(s);
+                    const QColor segFill = clipColor.isEmpty() ? fill : QColor(clipColor);
+                    p.fillRect(box, selected ? segFill.lighter(135) : segFill);
+                    p.setPen(segFill.darker(160));
                     p.drawRect(box.adjusted(0, 0, -1, -1));
                     if (selected) {
                         p.setPen(QPen(QColor(kSelected), 2));
@@ -756,16 +766,18 @@ void TimelineView::paintEvent(QPaintEvent*) {
         if (!patchFrom_.isEmpty()) {
             if (const auto ref = model::parseTrackName(patchFrom_)) dragKind = ref->kind;
         }
-        auto button = [&](const QRect& box, const QString& label, bool on, bool dim) {
+        const bool colors = timeline_.sourceRecordColors();
+        auto button = [&](const QRect& box, const QString& label, bool on, bool dim, bool isSource) {
+            const QRgb lit = !colors ? kButtonOn : isSource ? kSourceButtonOn : kRecordButtonOn;
             p.setPen(Qt::NoPen);
-            p.setBrush(QColor(dim ? kButtonDim : on ? kButtonOn : kButtonOff));
+            p.setBrush(QColor(dim ? kButtonDim : on ? lit : kButtonOff));
             p.drawRoundedRect(box, 2, 2);
             p.setPen(dim ? text.darker(150) : text);
             p.drawText(box, Qt::AlignCenter, label);
         };
         for (const Row& r : rowList) {
             if (r.track == QLatin1String("TC1")) {
-                button(recordButton(r), r.track, false, true);
+                button(recordButton(r), r.track, false, true, false);
                 // The sync icon next to TC1: Sync Lock All (p.493).
                 bool all = !seq.tracks().isEmpty();
                 for (const model::Track& t : seq.tracks()) all = all && t.syncLocked;
@@ -780,11 +792,11 @@ void TimelineView::paintEvent(QPaintEvent*) {
             // (p.630).
             const QString source = sourceView ? (patch.sourceTracks().contains(r.track) ? r.track : QString())
                                               : patch.sourceFor(r.track);
-            if (!source.isEmpty()) button(sourceButton(r), source, patch.isSourceSelected(source), false);
+            if (!source.isEmpty()) button(sourceButton(r), source, patch.isSourceSelected(source), false, true);
             if (r.exists && !sourceView) {
                 const auto ref = model::parseTrackName(r.track);
                 const bool cannotTake = dragKind && (!ref || ref->kind != *dragKind || ref->kind == model::TrackKind::Data);
-                button(recordButton(r), r.track, patch.isRecordSelected(r.track), cannotTake);
+                button(recordButton(r), r.track, patch.isRecordSelected(r.track), cannotTake, false);
                 const model::Track* t = seq.track(r.track);
                 if (t && t->locked) {
                     // A padlock on the track button (p.633).
@@ -1407,6 +1419,14 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     fast->setPopupMode(QToolButton::InstantPopup);
     fast->setMenu(fastMenu_);
     connect(fastMenu_, &QMenu::aboutToShow, this, &Timeline::fastMenu);
+    // "Right click the Timeline Fast Menu and select Set Local Clip Color" (p.598).
+    fast->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(fast, &QToolButton::customContextMenuRequested, this, [this, fast](const QPoint& at) {
+        QMenu menu(this);
+        addClipColorMenu(&menu, tr("Set Local Clip Color"), [this](const QString& hex) { setLocalClipColor(hex); })
+            ->setEnabled(!selection_.isEmpty());
+        menu.exec(fast->mapToGlobal(at));
+    });
     QToolButton* focus = tool("focus", Picture::Focus, tr("Focus"), true);
     focus->setCheckable(true);
     connect(focus, &QToolButton::clicked, this, &Timeline::toggleFocus);
@@ -1896,7 +1916,7 @@ QMenu* Timeline::fastMenu() {
         setAudioData(display_.clipVolume, v ? std::optional(model::AutomationParam::Pan) : std::nullopt);
     });
     audioData->addAction(tr("Allow Per Track Settings"))->setEnabled(false);
-    later(tr("Clip Color..."));
+    connect(m->addAction(tr("Clip Color...")), &QAction::triggered, this, &Timeline::openClipColorDialog);
     later(tr("Segment Selection"));
     later(tr("Mark IO Selection"));
     later(tr("Track Color"));
@@ -2511,17 +2531,37 @@ void Timeline::clickSegment(const model::SegmentRef& segment, bool toggle) {
 
 void Timeline::selectSegments(SelectWhere where) {
     // To the Left / To the Right of the position, or Reverse; filler is not
-    // selected (p.614).
+    // selected (p.614). The colour choices first gather the colours of what is selected.
     const std::int64_t pos = composer_.state(MonitorId::Record).position();
+    QSet<QString> sourceColors;
+    QSet<QString> localColors;
+    for (const model::SegmentRef& ref : selection_) {
+        const auto seg = model::segmentFor(shown_, ref);
+        if (!seg || seg->isFiller()) continue;
+        if (const auto facts = clipFacts(*seg); facts && !facts->sourceColor.isEmpty()) sourceColors.insert(facts->sourceColor.toLower());
+        if (!seg->localColor.isEmpty()) localColors.insert(seg->localColor.toLower());
+    }
+    auto byColor = [&](const model::Segment& seg) {
+        const auto facts = clipFacts(seg);
+        const QString source = facts ? facts->sourceColor.toLower() : QString();
+        switch (where) {
+        case SelectWhere::SameSourceColor: return !source.isEmpty() && sourceColors.contains(source);
+        case SelectWhere::NoSourceColor: return source.isEmpty();
+        case SelectWhere::Offline: return !facts || facts->offline;
+        case SelectWhere::SameLocalColor: return !seg.localColor.isEmpty() && localColors.contains(seg.localColor.toLower());
+        default: return false;
+        }
+    };
     QList<model::SegmentRef> picked;
     for (const model::Track& t : shown_.tracks()) {
         if (!patch_.isRecordSelected(t.name())) continue;
         std::int64_t at = 0;
         for (const model::Segment& seg : t.segments) {
             const model::SegmentRef ref{t.name(), at};
-            const bool take = where == SelectWhere::Left    ? at + seg.length <= pos
-                              : where == SelectWhere::Right ? at >= pos
-                                                            : !selection_.contains(ref);
+            const bool take = where == SelectWhere::Left      ? at + seg.length <= pos
+                              : where == SelectWhere::Right   ? at >= pos
+                              : where == SelectWhere::Reverse ? !selection_.contains(ref)
+                                                              : !seg.isFiller() && byColor(seg);
             if (take && !seg.isFiller()) picked << ref;
             at += seg.length;
         }
@@ -2961,9 +3001,12 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
     QMenu* select = menu->addMenu(tr("Select"));
     connect(select->addAction(tr("To the Left")), &QAction::triggered, this, [this] { selectSegments(SelectWhere::Left); });
     connect(select->addAction(tr("To the Right")), &QAction::triggered, this, [this] { selectSegments(SelectWhere::Right); });
-    for (const QString& t : {tr("Clips with Same Source Clip Color"), tr("Clips With No Source Clip Color"),
-                             tr("Offline Clips"), tr("Clips With Same Local Clip Color")}) {
-        select->addAction(t)->setEnabled(false);
+    const std::pair<QString, SelectWhere> byColor[] = {{tr("Clips with Same Source Clip Color"), SelectWhere::SameSourceColor},
+                                                         {tr("Clips With No Source Clip Color"), SelectWhere::NoSourceColor},
+                                                         {tr("Offline Clips"), SelectWhere::Offline},
+                                                         {tr("Clips With Same Local Clip Color"), SelectWhere::SameLocalColor}};
+    for (const auto& [text, where] : byColor) {
+        connect(select->addAction(text), &QAction::triggered, this, [this, w = where] { selectSegments(w); });
     }
     connect(select->addAction(tr("Reverse")), &QAction::triggered, this, [this] { selectSegments(SelectWhere::Reverse); });
     menu->addAction(tr("Create Sequence Based on Selection"))->setEnabled(false);
@@ -3985,6 +4028,122 @@ bool Timeline::changeEffect(const model::EffectRef& ref, const QString& descript
         seq.storeIn(item);
         return true;
     });
+}
+
+} // namespace lumenis::ui
+
+namespace lumenis::ui {
+
+// ---------------------------------------------------------------- clip colours (p.594-598)
+
+void Timeline::setClipColorOptions(const model::ClipColorOptions& options) {
+    if (options == clipColors_) return;
+    clipColors_ = options;
+    view_->update();
+    emit clipColorOptionsChanged(clipColors_);
+}
+
+void Timeline::openClipColorDialog() {
+    ClipColorDialog dialog(clipColors_, this);
+    const bool ok = clipColorAsk_ ? clipColorAsk_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (ok) setClipColorOptions(dialog.options());
+}
+
+bool Timeline::setLocalClipColor(const QString& hex) {
+    message_.clear();
+    if (!recordSequence()) return false;
+    if (selection_.isEmpty()) return fail(tr("Select the clips to color with a segment tool."));
+    model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+    int changed = 0;
+    for (const model::SegmentRef& ref : selection_) {
+        model::Track* t = seq.track(ref.track);
+        if (!t) continue;
+        std::int64_t at = 0;
+        for (model::Segment& seg : t->segments) {
+            if (at == ref.start && !seg.isFiller() && seg.localColor != hex) {
+                seg.localColor = hex;
+                ++changed;
+            }
+            at += seg.length;
+        }
+    }
+    if (changed == 0) return false;
+    const QList<model::SegmentRef> keep = selection_;
+    const bool ok = commitSequence(tr("Set Local Clip Color"), seq);
+    selection_ = keep;
+    view_->update();
+    return ok;
+}
+
+// The clip is looked up as the monitors do; whether its media is online is kept for two seconds, so
+// painting does not look at the disk for every segment every time.
+std::optional<model::ClipFacts> Timeline::clipFacts(const model::Segment& segment) const {
+    if (segment.isFiller()) return std::nullopt;
+    const auto clip = composer_.resolve(segment.binId, segment.clipId);
+    if (!clip) return std::nullopt;
+    model::ClipFacts f;
+    f.kind = clip->kind;
+    f.sourceColor = clip->color;
+    const bool hasMedia = clip->kind == model::BinItemKind::MasterClip || clip->kind == model::BinItemKind::Subclip ||
+                          clip->kind == model::BinItemKind::AudioClip;
+    if (hasMedia) {
+        if (!onlineClock_.isValid()) onlineClock_.start();
+        const qint64 now = onlineClock_.elapsed();
+        const QString key = segment.binId + QLatin1Char('|') + segment.clipId;
+        auto it = online_.find(key);
+        if (it == online_.end() || now - it->second > 2000) {
+            // A clip with no media to point at, or unlinked, is offline as well as one whose files are gone.
+            const auto link = media::linkOf(*clip);
+            bool online = link && !link->unlinked;
+            if (online) {
+                for (const QString& file : link->files()) online = online && QFileInfo::exists(file);
+            }
+            it = online_.insert(key, {online, now});
+        }
+        f.offline = !it->first;
+        const auto link = media::linkOf(*clip);
+        f.linked = link && !link->isManaged();
+    }
+    // Mixed rates: the clip's FPS column against the sequence's edit rate.
+    const QString fps = clip->fields.value(QStringLiteral("FPS"));
+    const model::LoadedClip* rec = composer_.state(shownMonitor()).current();
+    if (!fps.isEmpty() && rec) {
+        bool ok = false;
+        const double rate = fps.toDouble(&ok);
+        if (ok && std::abs(rate - rec->item.editRate.toDouble()) > 0.01) {
+            for (const QString& r : model::mixedRates()) {
+                if (std::abs(r.toDouble() - rate) < 0.01) f.rate = r;
+            }
+        }
+    }
+    // SD/HD: the clip's Format column ("1080p/25") against the project's raster.
+    const QString format = clip->fields.value(QStringLiteral("Format"));
+    if (!format.isEmpty()) {
+        int lines = 0;
+        for (const QChar c : format) {
+            if (!c.isDigit()) break;
+            lines = lines * 10 + c.digitValue();
+        }
+        if (lines > 0) f.otherDefinition = (lines <= 576) != (projectHeight_ <= 576);
+    }
+    return f;
+}
+
+QString Timeline::segmentColor(const model::Segment& segment) const {
+    if (segment.isFiller()) return {};
+    return model::timelineClipColor(clipColors_, segment, clipFacts(segment));
+}
+
+void Timeline::setProjectHeight(int height) {
+    if (height <= 0 || height == projectHeight_) return;
+    projectHeight_ = height;
+    view_->update();
+}
+
+void Timeline::setSourceRecordColors(bool on) {
+    if (on == sourceRecordColors_) return;
+    sourceRecordColors_ = on;
+    view_->update();
 }
 
 } // namespace lumenis::ui

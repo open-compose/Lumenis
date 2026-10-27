@@ -80,6 +80,7 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <QSettings>
+#include <QSignalBlocker>
 #include <QStandardPaths>
 #include <QStorageInfo>
 #include <QPixmap>
@@ -440,6 +441,9 @@ void MainWindow::createPanels() {
     // The Timeline (ch. 19), showing the Record monitor's sequence.
     timeline_ = new Timeline(*composer_);
     timeline_->setKeyResolver([this](const QKeySequence& key) { return keyboard_->commandFor(key); });
+    connect(timeline_, &Timeline::clipColorOptionsChanged, this, [this](const model::ClipColorOptions& o) {
+        settings_->setValue(QStringLiteral("Timeline"), QStringLiteral("clipColor"), o.toJson());
+    });
     // Mark Clip with segments selected in the Timeline marks "an In point at the start and an Out
     // point at the end of the selected segments" (p.622): from the earliest selected segment's first
     // frame to the latest one's last. The selection is the record sequence's, so it marks the Record
@@ -505,6 +509,7 @@ void MainWindow::createPanels() {
 // commands get their handlers, and the media database is read.
 void MainWindow::setProject(const model::ProjectEntry& project) {
     project_ = project;
+    timeline_->setProjectHeight(project.settings.format.height);
     setWindowTitle(QStringLiteral("%1 - %2").arg(QString::fromUtf8(branding::kProductName), project.settings.name));
     commands_.setHandler(QStringLiteral("file.close_project"), [this] { emit closeProjectRequested(); });
     // Project settings first: they include the new-sequence timecode.
@@ -2785,6 +2790,13 @@ void MainWindow::applySettings() {
     const QString ui = QStringLiteral("Interface");
     toolTips_->enabled = s.flag(ui, QStringLiteral("showToolTips"));
     composer_->setSourceRecordColors(s.flag(ui, QStringLiteral("composerColors")));
+    timeline_->setSourceRecordColors(s.flag(ui, QStringLiteral("timelineColors")));
+    // The Timeline's Clip Color choices (p.594-597), kept with the Timeline setting.
+    {
+        // From the setting: not written back to it.
+        const QSignalBlocker quiet(timeline_);
+        timeline_->setClipColorOptions(model::ClipColorOptions::fromJson(s.value(tl, QStringLiteral("clipColor")).toObject()));
+    }
     workspaces_->setMoveBehavior(s.text(ui, QStringLiteral("workspaceMove")) == QLatin1String("saved")
                                      ? WorkspaceManager::MoveBehavior::LastSavedState
                                      : WorkspaceManager::MoveBehavior::LastKnownState);

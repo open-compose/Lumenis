@@ -65,6 +65,9 @@ Each file is a JSON list of scenarios:
   * `{"punch_in": {"clip": name, "targets": [track or "" for New Track, ...],
     "punches": [[record frame, length, clip frame], ...]}}` edits in an Audio
     Punch-In take (p.749-751), an undo step per punch-in;
+  * `{"local_color": "#rrggbb" or ""}` is Set Local Clip Color on the
+    selected segments (p.598); `expect_local_colors` gives each track's
+    material segments' local colours in order;
   * `{"mix_format": "stereo"|"5.1"|"7.1"}` sets the Audio Mixer's
     Sequence Mix Format (p.686); `expect_mix` is the format at the end;
   * `{"insert": [track, slot, effect id or null]}` and `{"move_insert":

@@ -256,6 +256,14 @@ struct Run {
             timeline.setSelection(refs);
             return true;
         }
+        if (o.contains(QStringLiteral("local_color"))) {
+            // Set Local Clip Color on the selected segments (p.598); "" is None.
+            const bool ok = timeline.setLocalClipColor(o.value(QStringLiteral("local_color")).toString());
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the local color was not refused") : timeline.lastMessage());
+            }
+            return true;
+        }
         if (o.contains(QStringLiteral("move"))) {
             // A segment-mode drag: frames, tracks up, and the red (overwrite) or yellow (splice) tool.
             const QJsonArray a = o.value(QStringLiteral("move")).toArray();
@@ -593,6 +601,20 @@ private slots:
                 QJsonArray got;
                 for (const model::Segment& g : t->segments) {
                     if (!g.isFiller()) got.append(g.sourceTrack);
+                }
+                QCOMPARE(got, it.value().toArray());
+            }
+        }
+        // Local clip colours: per track, each material segment's ("" for none).
+        const QJsonObject locals = scenario.value(QStringLiteral("expect_local_colors")).toObject();
+        if (!locals.isEmpty()) {
+            const model::Sequence s = model::Sequence::fromItem(run.composer.state(MonitorId::Record).current()->item);
+            for (auto it = locals.begin(); it != locals.end(); ++it) {
+                const model::Track* t = s.track(it.key());
+                QVERIFY2(t, qPrintable(it.key()));
+                QJsonArray got;
+                for (const model::Segment& g : t->segments) {
+                    if (!g.isFiller()) got.append(g.localColor);
                 }
                 QCOMPARE(got, it.value().toArray());
             }

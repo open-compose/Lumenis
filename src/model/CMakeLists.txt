@@ -11,6 +11,7 @@ add_library(lumenis_model STATIC
     audio_suite.cpp
     marker.cpp
     multichannel.cpp
+    clip_coloring.cpp
     settings.cpp
     calculator.cpp
     structure.cpp
@@ -26,6 +27,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/audio_suite.h
     include/lumenis/model/marker.h
     include/lumenis/model/multichannel.h
+    include/lumenis/model/clip_coloring.h
     include/lumenis/model/settings.h
     include/lumenis/model/calculator.h
     include/lumenis/model/structure.h

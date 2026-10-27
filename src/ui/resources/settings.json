@@ -387,7 +387,7 @@
           "options": [
             {"key": "customViewerBackground", "type": "bool", "label": "Use custom viewer background", "default": false, "page": 1201, "later": true},
             {"key": "composerColors", "type": "bool", "label": "Show Source/Record colors in Composer", "default": false, "page": 1201},
-            {"key": "timelineColors", "type": "bool", "label": "Show Source/Record colors in Timeline", "default": false, "page": 1201, "later": true},
+            {"key": "timelineColors", "type": "bool", "label": "Show Source/Record colors in Timeline", "default": false, "page": 1201},
             {"key": "timelineBackground", "type": "bool", "label": "Use Timeline Background Color", "default": false, "page": 1201, "later": true}
           ]
         }

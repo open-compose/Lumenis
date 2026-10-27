@@ -50,9 +50,11 @@ headers in `include/lumenis/<library>/`.
 * **Editing.** Model: `src/model/sequence.*` (splice, overwrite, lift,
   extract, trims, effects, transitions, Change Source Track),
   `automation.*` (volume and pan keyframes), `audio_eq.*` (Audio EQ's
-  bands and filters) and `monitor.*` (marks, positions).
+  bands and filters), `clip_coloring.*` (which colour a segment is drawn in,
+  docs/spec/timeline-colors.md) and `monitor.*` (marks, positions).
   UI: `timeline.*` (the Timeline panel and its edit commands;
-  `timeline_automation.cpp` its keyframe graph and editing) and
+  `timeline_automation.cpp` its keyframe graph and editing),
+  `clip_color_dialog.*` (the Timeline's Clip Color dialog) and
   `composer.*` (the Source and Record monitors).
 * **Panels and workspaces.** Our own docking framework (`panels.*`,
   `panel_manager.cpp`), not QDockWidget, because Qt cannot draw vertical

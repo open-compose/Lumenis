@@ -2,11 +2,14 @@
 
 #include "lumenis/core/timecode.h"
 #include "lumenis/model/automation.h"
+#include "lumenis/model/clip_coloring.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/effect_palette.h"
 
+#include <QElapsedTimer>
+#include <QHash>
 #include <QWidget>
 
 #include <functional>
@@ -28,6 +31,7 @@ class QToolButton;
 // the Composer (composer.h) owns the monitors whose loaded items the Timeline shows and changes.
 namespace lumenis::ui {
 
+class ClipColorDialog;
 class Timeline;
 
 // The tracks area of the Timeline: the Track Selector panel on the left
@@ -274,9 +278,36 @@ public:
     // Removes the named tracks from the record sequence without asking, as one undo step.
     bool deleteTracks(const QStringList& tracks);
     // The right-click Select menu (p.613-614).
-    enum class SelectWhere { Left, Right, Reverse };
+    // Clips with Same Source Clip Color collects the source (bin) colours of the selected clips and
+    // selects every clip with one of them; Clips With No Source Clip Color, Offline Clips and Clips
+    // With Same Local Clip Color (the selected clips' local colours) select as they say (p.613-614).
+    enum class SelectWhere { Left, Right, Reverse, SameSourceColor, NoSourceColor, Offline, SameLocalColor };
     // Selects on the selected record tracks; turns on Lift/Overwrite if no segment tool is on.
     void selectSegments(SelectWhere where);
+
+    // Clip colours (p.594-598; docs/spec/timeline-colors.md). The Clip Color dialog's choices, kept in
+    // the Timeline setting by MainWindow; a change repaints and emits clipColorOptionsChanged().
+    const model::ClipColorOptions& clipColorOptions() const { return clipColors_; }
+    void setClipColorOptions(const model::ClipColorOptions& options);
+    // Fast menu > Clip Color...: the dialog; OK applies it. Tests answer it through the hook, which
+    // returns whether OK was clicked.
+    using ClipColorAsk = std::function<bool(ClipColorDialog&)>;
+    void setClipColorAsk(ClipColorAsk ask) { clipColorAsk_ = std::move(ask); }
+    void openClipColorDialog();
+    // Set Local Clip Color (p.598): the selected segments take `hex` ("#rrggbb"; empty for None), as
+    // one undo step. False with a message when no segment is selected.
+    bool setLocalClipColor(const QString& hex);
+    // The facts about a segment's clip the colours depend on (model::ClipFacts); nothing when the clip
+    // cannot be found. Whether media is online is checked at most every two seconds per clip.
+    std::optional<model::ClipFacts> clipFacts(const model::Segment& segment) const;
+    // The colour a segment is drawn in; empty for its track's own.
+    QString segmentColor(const model::Segment& segment) const;
+    // The project's picture height, for SD/HD (SD up to 576 lines).
+    void setProjectHeight(int height);
+    // Show Source/Record colors in Timeline (Interface settings, p.383): selected source track
+    // buttons green, record ones blue.
+    void setSourceRecordColors(bool on);
+    bool sourceRecordColors() const { return sourceRecordColors_; }
 
     // Trim mode (ch. 20). Rollers sit on edit points; single-roller trims
     // are Ripple or Overwrite (the trim tools, p.650).
@@ -559,6 +590,8 @@ signals:
     void changed();
     // Why a command did nothing, as lastMessage() gives it.
     void message(const QString& text);
+    // The Clip Color dialog's choices changed (setClipColorOptions()).
+    void clipColorOptionsChanged(const model::ClipColorOptions& options);
     // Video Quality Menu > Video Display Settings (p.405).
     void videoDisplaySettingsRequested();
     // A command that is not the Timeline's (New > Sequence).
@@ -682,6 +715,14 @@ private:
     SequenceMaker maker_;
     Composer::KeyResolver keys_;
     InsufficientSource insufficient_;
+    // Clip colours.
+    model::ClipColorOptions clipColors_ = model::ClipColorOptions::defaults();
+    ClipColorAsk clipColorAsk_;
+    int projectHeight_ = 1080;
+    bool sourceRecordColors_ = false;
+    // Whether each clip's media was online when last looked at ("bin|clip"), and when.
+    mutable QHash<QString, std::pair<bool, qint64>> online_;
+    mutable QElapsedTimer onlineClock_;
 };
 
 } // namespace lumenis::ui
