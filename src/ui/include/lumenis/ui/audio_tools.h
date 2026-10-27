@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/media/surround.h"
+#include "lumenis/media/tone.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/surround_pan.h"
@@ -15,7 +16,9 @@
 #include <functional>
 #include <optional>
 
+class QAction;
 class QButtonGroup;
+class QComboBox;
 class QDial;
 class QHBoxLayout;
 class QLabel;
@@ -474,10 +477,7 @@ protected:
 };
 
 // The calibration tone (p.920): -20 dB at 1000 Hz unless changed.
-struct CalibrationTone {
-    int level = -20;
-    int frequency = 1000;
-};
+using CalibrationTone = media::Tone;
 
 // Set Calibration Tone (p.920): tone level and frequency.
 class CalibrationToneDialog : public QDialog {
@@ -492,6 +492,40 @@ public:
 private:
     QSpinBox* level_ = nullptr;
     QSpinBox* frequency_ = nullptr;
+};
+
+// Create Tone Media (p.158-159): the tone's level and frequency (0 for random noise, -777 for a
+// sweep), how many tracks (1 to 8), the target bin and the target drive. The length is ours (the
+// guide gives none): 60 seconds unless changed.
+struct ToneMediaChoice {
+    CalibrationTone tone;
+    int tracks = 1;
+    int seconds = 60;
+    QString bin;   // a bin's node id
+    QString drive; // a media drive's root
+};
+
+class CreateToneMediaDialog : public QDialog {
+    Q_OBJECT
+
+public:
+    // Starts at the calibration tone; `bins` and `drives` are (id or root, name) pairs, with
+    // `bin` and `drive` chosen first.
+    CreateToneMediaDialog(const CalibrationTone& tone, const QList<QPair<QString, QString>>& bins, const QString& bin,
+                          const QList<QPair<QString, QString>>& drives, const QString& drive, QWidget* parent = nullptr);
+    ToneMediaChoice choice() const;
+    // OK is dimmed for a frequency other than 1-20000 Hz, 0 or -777, or without a bin or drive.
+    bool isValid() const;
+
+private:
+    void update();
+    QSpinBox* level_ = nullptr;
+    QSpinBox* frequency_ = nullptr;
+    QSpinBox* tracks_ = nullptr;
+    QSpinBox* seconds_ = nullptr;
+    QComboBox* bins_ = nullptr;
+    QComboBox* drives_ = nullptr;
+    QPushButton* ok_ = nullptr;
 };
 
 // The Audio Tool's meters (picture on p.158): the digital scale on the
@@ -549,8 +583,8 @@ private:
 };
 
 // Tools > Audio Tool (p.157-159): RP (Reset Peak), an In/Out button per
-// channel, the PH (Peak Hold) menu and the meters. Nothing plays yet, so
-// the meters stay at the bottom until Phase 5.
+// channel, the PH (Peak Hold) menu and the meters. MainWindow plays the
+// tone and feeds the meters what the output plays (AudioPlayer::takePeaks).
 // A panel's contents ("AudioTool"), made by MainWindow.
 class AudioTool : public QWidget {
     Q_OBJECT
@@ -560,7 +594,8 @@ public:
 
     AudioMeters* meters() const { return meters_; }
     QToolButton* resetPeakButton() const { return reset_; }
-    // PH: its menu holds Peak Hold, Infinite Hold and Set Calibration Tone.
+    // PH: its menu holds Peak Hold, Infinite Hold, Set Calibration Tone, Play Calibration Tone and
+    // Create Tone Media.
     QToolButton* peakHoldButton() const { return peakHold_; }
     // A channel's In/Out button (0-based); null for one that does not exist.
     QToolButton* ioButton(int channel) const { return io_.value(channel); }
@@ -575,9 +610,19 @@ public:
     using Hold = AudioMeters::Hold;
     Hold hold() const { return meters_->hold(); }
 
+    // The PH menu's Play Calibration Tone and Create Tone Media... items.
+    QAction* playToneAction() const { return playTone_; }
+    QAction* createToneMediaAction() const { return createTone_; }
+
 signals:
     // After setCalibrationTone(), also from the Set Calibration Tone dialog.
     void calibrationToneChanged(const CalibrationTone& tone);
+    // PH > Play Calibration Tone (p.920); MainWindow plays it until Reset Peak (p.157).
+    void playToneRequested();
+    // PH > Create Tone Media... (p.158); MainWindow asks for the options and makes the clip.
+    void createToneMediaRequested();
+    // RP was clicked: the peaks are reset; the tone stops (p.157).
+    void resetPeakClicked();
 
 private:
     AudioMeters* meters_ = nullptr;
@@ -585,6 +630,8 @@ private:
     QToolButton* peakHold_ = nullptr;
     QList<QToolButton*> io_;
     CalibrationTone tone_;
+    QAction* playTone_ = nullptr;
+    QAction* createTone_ = nullptr;
 };
 
 } // namespace lumenis::ui

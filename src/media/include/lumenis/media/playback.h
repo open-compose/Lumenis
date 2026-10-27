@@ -3,6 +3,7 @@
 #include "lumenis/core/rational.h"
 #include "lumenis/media/audio_fx.h"
 #include "lumenis/media/surround.h"
+#include "lumenis/media/tone.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
@@ -69,6 +70,9 @@ struct AudioPiece {
     // A mono or stereo channel's surround pan in a 5.1 or 7.1 sequence (surroundGains()): its gain on
     // each speaker of the bus, times its volume (`left`, `right` 0); `speaker` is then -1.
     std::optional<SpeakerGains> surround;
+    // The Audio Tool's calibration tone (Play Calibration Tone, p.920): the piece plays this from its
+    // sourceStart instead of reading `path`.
+    std::optional<Tone> tone;
 };
 
 // The Audio Track Effect inserts each track plays through (Editing Guide p.790-795;
@@ -242,6 +246,10 @@ public:
     // until this is called again with null. The input must outlive that call.
     void setMonitor(AudioInput* input) { monitor_.store(input); }
     AudioInput* monitor() const { return monitor_.load(); }
+    // The highest absolute sample of each output channel the device has taken since the last call
+    // (the Audio Tool's meters, p.157); resets them to 0. Up to kMeteredChannels channels.
+    static constexpr int kMeteredChannels = 8;
+    std::array<float, kMeteredChannels> takePeaks();
 
 private:
     struct Device;
@@ -258,6 +266,7 @@ private:
     std::atomic<AudioInput*> monitor_{nullptr};
     std::atomic<std::int64_t> played_{0};
     std::atomic<std::int64_t> pulledAt_{0}; // steady-clock ns of the last pull
+    std::array<std::atomic<float>, kMeteredChannels> peaks_{}; // pull()'s, for takePeaks()
     std::int64_t latency_ = 0;             // samples the device holds
     std::int64_t next_ = 0; // the next sample to render
     int speed_ = 1;

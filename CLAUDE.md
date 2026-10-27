@@ -348,8 +348,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   5.7b3 is done: Multiple Mixes, the Multi-Mix Tool (`media::MultiMix` in
   `mixdown.*`, `multi_mix_dialog.*`, `MainWindow::multipleMixes`, Project
   setting "Audio Multi-Mix", docs/spec/multi-mix.md; test `tst_multi_mix`).
-  Next: 5.7c, the audio items still dimmed (ROADMAP Phase 5 status: tone,
-  EQ icon and audio settings); then the UI completion pass (U1 Timeline, U2 Composer and
+  5.7c1 is done: Play Calibration Tone, Create Tone Media and the Audio
+  Tool's meters following the output (`src/media/tone.*`, `AudioPiece::tone`,
+  `AudioPlayer::takePeaks`, `CreateToneMediaDialog`, docs/spec/tone.md; tests
+  `tst_tone`, `tst_audio_media`).
+  Next: 5.7c2 (the Audio EQ's effect icon and templates) and 5.7c3 (the
+  audio settings' options still dimmed; ROADMAP Phase 5 status); then the UI completion pass (U1 Timeline, U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.
 

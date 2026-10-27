@@ -1770,8 +1770,9 @@ p.610–640, ch. 13 p.432–434).**
   * Peak Hold and Infinite Hold (p.712, p.753).
   * Set Calibration Tone: level and frequency, −20 dB and 1000 Hz by
     default (p.920).
-  * Play Calibration Tone and Create Tone Media (p.158–159) come with audio
-    and media.
+  * Play Calibration Tone (p.920) and Create Tone Media (p.158–159);
+    details: docs/spec/tone.md.
+* **Meters** show the output's peaks while sound plays (docs/spec/tone.md).
 
 ### Media Tool (p.344–348)
 * **Opening:** Tools > Media Tool. The Media Tool Display dialog opens first

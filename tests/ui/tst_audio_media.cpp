@@ -2,8 +2,13 @@
 #include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/media/link.h"
+#include "lumenis/media/managed.h"
+#include "lumenis/media/media.h"
+#include "lumenis/media/playback.h"
 #include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/background_queue.h"
+#include "lumenis/ui/bin_container.h"
+#include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/main_window.h"
@@ -17,6 +22,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDial>
 #include <QDialogButtonBox>
 #include <QLineEdit>
@@ -26,6 +32,7 @@
 #include <QPushButton>
 #include <QSignalSpy>
 #include <QSlider>
+#include <QSpinBox>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QTemporaryDir>
@@ -254,6 +261,90 @@ private slots:
         }
         QCOMPARE(items, (QStringList{"Peak Hold", "Infinite Hold", "Set Calibration Tone...", "Play Calibration Tone",
                                      "Create Tone Media..."}));
+    }
+
+    // PH > Play Calibration Tone (p.920): the tone on L and R, shown in the meters, until RP (p.157);
+    // PH > Create Tone Media (p.158-159): a master clip of tone in the chosen bin.
+    void calibrationTone() {
+        QTemporaryDir dir;
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath("Users"), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath("Film");
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        AudioTool& tool = window.audioTool();
+        QVERIFY(tool.playToneAction()->isEnabled());
+        QVERIFY(tool.createToneMediaAction()->isEnabled());
+        // Without a bin there is nowhere to put the clip.
+        window.setToneMediaHook([](CreateToneMediaDialog&) { return true; });
+        QVERIFY(!window.createToneMedia());
+
+        tool.setCalibrationTone(CalibrationTone{-12, 1000});
+        QVERIFY(window.playCalibrationTone(false));
+        QVERIFY(window.isPlayingTone());
+        std::vector<float> out(2 * 4800);
+        int got = 0;
+        for (int tries = 0; tries < 200 && got == 0; ++tries) {
+            got = window.audioPlayer().pull(out.data(), 4800);
+            if (got == 0) QTest::qWait(5);
+        }
+        QVERIFY(got > 0);
+        window.updateMeters();
+        QVERIFY(std::abs(tool.meters()->peak(0) - -12.0) < 0.2);
+        QVERIFY(std::abs(tool.meters()->peak(1) - -12.0) < 0.2);
+        QCOMPARE(tool.meters()->peak(2), -90.0); // a stereo output
+        tool.resetPeakButton()->click();
+        QVERIFY(!window.isPlayingTone());
+        QVERIFY(!window.audioPlayer().isPlaying());
+
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        const int before = static_cast<int>(bin->bin().items.size());
+        window.setToneMediaHook([&](CreateToneMediaDialog& d) {
+            d.findChild<QSpinBox*>(QStringLiteral("toneFrequency"))->setValue(440);
+            d.findChild<QSpinBox*>(QStringLiteral("toneTracks"))->setValue(2);
+            d.findChild<QSpinBox*>(QStringLiteral("toneSeconds"))->setValue(2);
+            // Only 1-20000 Hz, 0 (noise) and -777 (a sweep) are taken (p.159).
+            d.findChild<QSpinBox*>(QStringLiteral("toneFrequency"))->setValue(-5);
+            if (d.isValid()) return false;
+            d.findChild<QSpinBox*>(QStringLiteral("toneFrequency"))->setValue(440);
+            auto* drives = d.findChild<QComboBox*>(QStringLiteral("toneDrive"));
+            drives->setCurrentIndex(drives->findData(drive));
+            return d.choice().tone.level == -12 && d.choice().bin == binId && d.choice().drive == drive;
+        });
+        const auto clip = window.createToneMedia();
+        QVERIFY(clip);
+        QCOMPARE(static_cast<int>(bin->bin().items.size()), before + 1);
+        QCOMPARE(clip->name, QStringLiteral("Tone 440 Hz -12 dB 2 Tracks"));
+        QCOMPARE(clip->durationFrames, std::int64_t{50});
+        const auto link = media::linkOf(*clip);
+        QVERIFY(link);
+        QCOMPARE(link->audioPaths.size(), 2);
+        QVERIFY(link->audioFile(1).startsWith(drive));
+        media::AudioReader reader;
+        QVERIFY(reader.open(link->audioFile(1)));
+        const std::vector<float> samples = reader.samples(0, 48000);
+        QCOMPARE(samples.size(), std::size_t{48000});
+        float peak = 0;
+        int crossings = 0;
+        for (std::size_t i = 0; i < samples.size(); ++i) {
+            peak = std::max(peak, std::abs(samples[i]));
+            if (i > 0 && samples[i - 1] < 0 && samples[i] >= 0) ++crossings;
+        }
+        QVERIFY(std::abs(peak - 0.2512f) < 2e-3f);
+        QVERIFY(std::abs(crossings - 440) <= 1);
+        media::setExtraMediaDrives({});
     }
 
     void mainWindowTools() {

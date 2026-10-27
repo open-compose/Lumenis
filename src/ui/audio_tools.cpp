@@ -11,6 +11,7 @@
 #include <QApplication>
 #include <QButtonGroup>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDial>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -22,6 +23,7 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QMouseEvent>
+#include <QPushButton>
 #include <QPainter>
 #include <QScrollArea>
 #include <QSlider>
@@ -1305,6 +1307,79 @@ CalibrationTone CalibrationToneDialog::tone() const {
     return CalibrationTone{level_->value(), frequency_->value()};
 }
 
+// ---------------------------------------------------------------- CreateToneMediaDialog
+
+CreateToneMediaDialog::CreateToneMediaDialog(const CalibrationTone& tone, const QList<QPair<QString, QString>>& bins,
+                                             const QString& bin, const QList<QPair<QString, QString>>& drives,
+                                             const QString& drive, QWidget* parent)
+    : QDialog(parent) {
+    setObjectName(QStringLiteral("createToneMediaDialog"));
+    setWindowTitle(tr("Create Tone Media"));
+    level_ = new QSpinBox(this);
+    level_->setObjectName(QStringLiteral("toneLevel"));
+    level_->setRange(-90, 0);
+    level_->setSuffix(tr(" dB"));
+    level_->setValue(tone.level);
+    // 0 is random noise and -777 a sweep (p.159).
+    frequency_ = new QSpinBox(this);
+    frequency_->setObjectName(QStringLiteral("toneFrequency"));
+    frequency_->setRange(media::kToneSweep, 20000);
+    frequency_->setSuffix(tr(" Hz"));
+    frequency_->setValue(tone.frequency);
+    frequency_->setToolTip(tr("0 makes random noise, -777 a tone sweep."));
+    tracks_ = new QSpinBox(this);
+    tracks_->setObjectName(QStringLiteral("toneTracks"));
+    tracks_->setRange(1, 8);
+    seconds_ = new QSpinBox(this);
+    seconds_->setObjectName(QStringLiteral("toneSeconds"));
+    seconds_->setRange(1, 3600);
+    seconds_->setValue(60);
+    seconds_->setSuffix(tr(" s"));
+    bins_ = new QComboBox(this);
+    bins_->setObjectName(QStringLiteral("toneBin"));
+    for (const auto& [id, name] : bins) bins_->addItem(name, id);
+    bins_->setCurrentIndex(std::max(bins_->findData(bin), 0));
+    drives_ = new QComboBox(this);
+    drives_->setObjectName(QStringLiteral("toneDrive"));
+    for (const auto& [root, name] : drives) drives_->addItem(name, root);
+    drives_->setCurrentIndex(std::max(drives_->findData(drive), 0));
+    auto* form = new QFormLayout;
+    form->addRow(tr("Tone Level:"), level_);
+    form->addRow(tr("Frequency:"), frequency_);
+    form->addRow(tr("Number of Tracks:"), tracks_);
+    form->addRow(tr("Length:"), seconds_);
+    form->addRow(tr("Target Bin:"), bins_);
+    form->addRow(tr("Target Drive:"), drives_);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    ok_ = buttons->button(QDialogButtonBox::Ok);
+    connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    connect(frequency_, &QSpinBox::valueChanged, this, &CreateToneMediaDialog::update);
+    auto* layout = new QVBoxLayout(this);
+    layout->addLayout(form);
+    layout->addWidget(buttons);
+    update();
+}
+
+ToneMediaChoice CreateToneMediaDialog::choice() const {
+    ToneMediaChoice c;
+    c.tone = CalibrationTone{level_->value(), frequency_->value()};
+    c.tracks = tracks_->value();
+    c.seconds = seconds_->value();
+    c.bin = bins_->currentData().toString();
+    c.drive = drives_->currentData().toString();
+    return c;
+}
+
+bool CreateToneMediaDialog::isValid() const {
+    const int f = frequency_->value();
+    return (f > 0 || f == media::kToneNoise || f == media::kToneSweep) && bins_->count() > 0 && drives_->count() > 0;
+}
+
+void CreateToneMediaDialog::update() {
+    ok_->setEnabled(isValid());
+}
+
 // ---------------------------------------------------------------- AudioMeters
 
 namespace {
@@ -1468,9 +1543,10 @@ AudioTool::AudioTool(int channels, QWidget* parent) : QWidget(parent) {
         CalibrationToneDialog dialog(tone_, this);
         if (dialog.exec() == QDialog::Accepted) setCalibrationTone(dialog.tone());
     });
-    // Tone needs playback, tone media needs media files (Phase 2 and 5).
-    menu->addAction(tr("Play Calibration Tone"))->setEnabled(false);
-    menu->addAction(tr("Create Tone Media..."))->setEnabled(false);
+    playTone_ = menu->addAction(tr("Play Calibration Tone"), this, &AudioTool::playToneRequested);
+    playTone_->setObjectName(QStringLiteral("playCalibrationTone"));
+    createTone_ = menu->addAction(tr("Create Tone Media..."), this, &AudioTool::createToneMediaRequested);
+    createTone_->setObjectName(QStringLiteral("createToneMedia"));
     peakHold_->setMenu(menu);
 
     auto* top = new QHBoxLayout;
@@ -1491,6 +1567,7 @@ AudioTool::AudioTool(int channels, QWidget* parent) : QWidget(parent) {
     meters_ = new AudioMeters(channels, this);
     // Reset Peak resets the peaks and stops the tone (p.157).
     connect(reset_, &QToolButton::clicked, meters_, &AudioMeters::resetPeaks);
+    connect(reset_, &QToolButton::clicked, this, &AudioTool::resetPeakClicked);
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(4, 4, 4, 4);
     layout->addLayout(top);

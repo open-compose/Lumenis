@@ -59,6 +59,7 @@ class AudioPunchInTool;
 class AudioTrackEffectTool;
 class AudioMixer;
 class AudioTool;
+class CreateToneMediaDialog;
 class EffectEditor;
 class FullScreenView;
 class LinkedMediaDialog;
@@ -294,6 +295,20 @@ public:
     // tool only edits and saves settings (p.734). The hook stands in for exec() in tests.
     int multipleMixes(bool canMix = true);
     void setMultiMixHook(std::function<bool(MultiMixDialog&)> hook) { multiMixHook_ = std::move(hook); }
+    // The Audio Tool's PH menu (p.157-159, p.920; docs/spec/tone.md). Play Calibration Tone plays the
+    // calibration tone on every output channel until Reset Peak (p.157) or playback; false if no
+    // output could be opened (`device` false: no device, the player's pull() takes the samples, for
+    // tests). Create Tone Media makes a master clip of tone in the chosen bin, its media on the chosen
+    // drive; nothing when cancelled or on failure (with a message). The hook stands in for exec().
+    bool playCalibrationTone(bool device = true);
+    void stopCalibrationTone();
+    bool isPlayingTone() const { return playingTone_; }
+    std::optional<model::BinItem> createToneMedia();
+    void setToneMediaHook(std::function<bool(CreateToneMediaDialog&)> hook) { toneMediaHook_ = std::move(hook); }
+    // Gives the Audio Tool's meters what the output played since the last call (a timer calls it
+    // while sound plays); channels switched to I (Input) show nothing, as nothing is recorded here.
+    void updateMeters();
+    media::AudioPlayer& audioPlayer() const { return *audio_; }
     // The saved Audio Multi-Mix settings (Project settings) by name, and saving one.
     QMap<QString, media::MultiMix> savedMultiMixes() const;
     void saveMultiMix(const QString& name, const media::MultiMix& mix);
@@ -469,6 +484,9 @@ private:
     // Counts bursts, so that only the latest one's timer lets the device go.
     int scrubToken_ = 0;
     bool scrubbing_ = false;
+    bool playingTone_ = false;
+    bool metersLive_ = false; // the meters show something; updateMeters() clears them once sound stops
+    std::function<bool(CreateToneMediaDialog&)> toneMediaHook_;
 
     // Plays a scrub burst when the position moved while stopped (runs on Composer::changed).
     void scrubIfMoved();

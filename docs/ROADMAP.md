@@ -828,7 +828,9 @@ area is built):
   Audio Timecode (p.668), Mixdown > Audio > Multiple Mixes (p.732);
 * 5.7c, the Audio Tool's calibration tone and Create Tone Media, the Audio
   EQ's effect icon, and the Audio, Audio Project and Import settings' audio
-  options.
+  options. 5.7c1, Play Calibration Tone, Create Tone Media and the Audio
+  Tool's meters (docs/spec/tone.md), is done; 5.7c2 is the Audio EQ's
+  effect icon and templates, 5.7c3 the settings' options.
 
 ### The UI completion pass (after Phase 5, before Phase 6)
 The same audit found items of areas built in Phases 1-4 left dimmed with no

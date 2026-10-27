@@ -96,6 +96,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 // MainWindow: the application frame and the place where the parts of the editor are wired together.
 // It owns the panel framework (PanelManager, panels.*) and the workspaces (workspace*), creates every
@@ -1030,6 +1031,15 @@ void MainWindow::createTools() {
             [this](const QString& binId, const model::BinItem& clip) { composer_->load(MonitorId::Source, binId, clip); });
     audioTool_ = new AudioTool;
     panels_->addPanel(new Panel(QStringLiteral("AudioTool"), tr("Audio Tool"), audioTool_));
+    connect(audioTool_, &AudioTool::playToneRequested, this, [this] { playCalibrationTone(); });
+    connect(audioTool_, &AudioTool::createToneMediaRequested, this, [this] { createToneMedia(); });
+    // Reset Peak also stops the tone (p.157).
+    connect(audioTool_, &AudioTool::resetPeakClicked, this, &MainWindow::stopCalibrationTone);
+    // The meters follow the output about 20 times a second.
+    auto* meterTimer = new QTimer(this);
+    meterTimer->setInterval(50);
+    connect(meterTimer, &QTimer::timeout, this, &MainWindow::updateMeters);
+    meterTimer->start();
     // Tools > Background Queue Window (p.356-357).
     backgroundQueue_ = new BackgroundQueue(this);
     panels_->addPanel(new Panel(QStringLiteral("BackgroundQueue"), tr("Background Queue Window"),
@@ -1319,6 +1329,7 @@ void MainWindow::scrubIfMoved() {
     media::AudioPlayer::PlayOptions options;
     options.limit = media::framesToSamples(out + in, rate);
     scrubStart_ = media::framesToSamples(position - out, rate);
+    playingTone_ = false;
     if (!audio_->start(mixOf(*loaded, std::move(pieces)), scrubStart_, options)) return;
     scrubbing_ = true;
     // The device is let go once the burst has played.
@@ -1348,6 +1359,7 @@ std::int64_t MainWindow::soundClock() const {
 void MainWindow::startSound(MonitorId monitor, int speed) {
     audio_->stop();
     scrubbing_ = false;
+    playingTone_ = false;
     // Smooth audio scrub: sound up to three times normal speed, either
     // way; faster, it cuts out (p.675).
     if (speed == 0 || std::abs(speed) > 3) return;
@@ -2618,6 +2630,97 @@ void MainWindow::saveMultiMix(const QString& name, const media::MultiMix& mix) {
     f.entries[index].values.insert(QStringLiteral("mix"), mix.toJson());
     f.setActive(index);
     settings_->commit(model::SettingsScope::Project);
+}
+
+// The tone on every output channel at its level (a piece centred at full gain on L and R), for as
+// long as a session could last.
+bool MainWindow::playCalibrationTone(bool device) {
+    if (composer_->isPlaying()) composer_->stop();
+    audio_->stop();
+    scrubbing_ = false;
+    media::AudioPiece tone;
+    tone.tone = audioTool_->calibrationTone();
+    tone.length = std::numeric_limits<std::int64_t>::max() / 4;
+    media::AudioPlayer::PlayOptions options;
+    options.device = device;
+    playingTone_ = audio_->start(std::make_shared<media::AudioMix>(std::vector<media::AudioPiece>{tone}), 0, options);
+    if (!playingTone_) ConsoleLog::instance().append(tr("Play Calibration Tone: no audio output could be opened."));
+    return playingTone_;
+}
+
+void MainWindow::stopCalibrationTone() {
+    if (!playingTone_) return;
+    audio_->stop();
+    playingTone_ = false;
+}
+
+void MainWindow::updateMeters() {
+    if (!audioTool_) return;
+    AudioMeters* meters = audioTool_->meters();
+    if (!audio_->isPlaying()) {
+        if (!metersLive_) return;
+        for (int c = 0; c < meters->channels(); ++c) meters->setLevel(c, -90);
+        metersLive_ = false;
+        return;
+    }
+    const auto peaks = audio_->takePeaks();
+    const int outs = audio_->channels();
+    for (int c = 0; c < meters->channels(); ++c) {
+        const float peak = c < outs && c < static_cast<int>(peaks.size()) && audioTool_->isOutput(c) ? peaks[static_cast<std::size_t>(c)] : 0.0f;
+        meters->setLevel(c, peak > 0 ? std::max(20.0 * std::log10(static_cast<double>(peak)), -90.0) : -90.0);
+    }
+    metersLive_ = true;
+}
+
+// "Open a bin", then PH > Create Tone Media (p.158-159): the tone's options start at the calibration
+// tone; the target bin is the active one and the drive the Media Creation setting's audio drive.
+std::optional<model::BinItem> MainWindow::createToneMedia() {
+    auto fail = [this](const QString& text) {
+        ConsoleLog::instance().append(tr("Create Tone Media: %1").arg(text));
+        if (toneMediaHook_) return;
+        auto* box = new QMessageBox(QMessageBox::Warning, tr("Create Tone Media"), text, QMessageBox::Ok, this);
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        box->open();
+    };
+    QList<QPair<QString, QString>> bins;
+    for (const BinDocument* d : binContainer_->openDocuments()) {
+        if (!d->isReadOnly()) bins << qMakePair(d->nodeId(), d->name());
+    }
+    if (bins.isEmpty() || !project_) {
+        fail(tr("Open a bin first."));
+        return std::nullopt;
+    }
+    const BinDocument* active = binContainer_->activeDocument();
+    QList<QPair<QString, QString>> drives;
+    for (const media::MediaDrive& d : media::mediaDrives()) drives.append({d.root, d.name});
+    media::MediaCreation creation = mediaCreation(QStringLiteral("transcode"));
+    const QString drive = creation.audioDrive.isEmpty() ? creation.videoDrive : creation.audioDrive;
+    CreateToneMediaDialog dialog(audioTool_->calibrationTone(), bins, active ? active->nodeId() : QString(), drives, drive, this);
+    const bool ok = toneMediaHook_ ? toneMediaHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok || !dialog.isValid()) return std::nullopt;
+    const ToneMediaChoice choice = dialog.choice();
+    BinDocument* doc = binContainer_->document(choice.bin);
+    if (!doc || doc->isReadOnly()) {
+        fail(tr("Choose a bin that can be changed."));
+        return std::nullopt;
+    }
+    creation.videoDrive = choice.drive;
+    creation.audioDrive = choice.drive;
+    const Rational rate = project_->settings.format.editRate;
+    const auto frames = static_cast<std::int64_t>(std::llround(choice.seconds * rate.toDouble()));
+    const media::Tone tone = choice.tone;
+    auto render = [tone](std::int64_t at, int count, std::vector<std::vector<float>>& out) {
+        for (std::vector<float>& track : out) media::renderTone(tone, at, count, media::kPlaybackRate, track.data());
+    };
+    QString error;
+    const auto clip = media::renderedAudioClip(media::toneClipName(tone, choice.tracks), rate, frames, choice.tracks, render,
+                                               QString(), creation, &error);
+    if (!clip) {
+        fail(error);
+        return std::nullopt;
+    }
+    doc->addItem(*clip);
+    return clip;
 }
 
 int MainWindow::multipleMixes(bool canMix) {

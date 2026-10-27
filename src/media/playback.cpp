@@ -541,6 +541,11 @@ void AudioMix::renderChain(Chain& chain, std::int64_t start, int count, float* b
 // Files at 48 kHz are read directly; others are read at their own rate and interpolated linearly.
 // Empty when the file cannot be read.
 std::vector<float> AudioMix::samples(const AudioPiece& piece, std::int64_t offset, int count) {
+    if (piece.tone) {
+        std::vector<float> out(static_cast<std::size_t>(std::max(count, 0)));
+        renderTone(*piece.tone, piece.sourceStart + offset, count, kPlaybackRate, out.data());
+        return out;
+    }
     AudioReader* r = reader(piece);
     if (!r || piece.channel >= r->channels() || count <= 0) return {};
     std::vector<float> out(static_cast<std::size_t>(count), 0.0f);
@@ -809,12 +814,27 @@ int AudioPlayer::pull(float* out, int count) {
             }
         }
     }
+    // What the meters show: the peak of each channel since takePeaks().
+    for (int c = 0; c < std::min(ch, kMeteredChannels); ++c) {
+        float peak = 0;
+        for (int i = 0; i < count; ++i) peak = std::max(peak, std::abs(out[ch * i + c]));
+        std::atomic<float>& held = peaks_[static_cast<std::size_t>(c)];
+        float now = held.load();
+        while (peak > now && !held.compare_exchange_weak(now, peak)) {
+        }
+    }
     readAt_.store(r);
     played_ += n;
     pulledAt_ = std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now().time_since_epoch())
                     .count();
     return n;
+}
+
+std::array<float, AudioPlayer::kMeteredChannels> AudioPlayer::takePeaks() {
+    std::array<float, kMeteredChannels> out{};
+    for (std::size_t c = 0; c < out.size(); ++c) out[c] = peaks_[c].exchange(0.0f);
+    return out;
 }
 
 // 0 until the device has taken samples.
