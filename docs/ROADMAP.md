@@ -820,7 +820,8 @@ area is built):
   (`model::setAutomationTo`). 5.7a2, Show Track Sidebar and Audio
   Grouping (p.691, p.696-698; `src/ui/audio_groups.cpp`), is done. Calibrate Hardware Sliders stays dimmed
   until external controllers (p.757);
-* 5.7b, the Clip and Timeline commands: Clip > Audio > Apply Gain (p.216),
+* 5.7b, the Clip and Timeline commands (docs/spec/clip-audio.md; 5.7b1,
+  Apply Gain, Center Pan and Auto VO, is done): Clip > Audio > Apply Gain (p.216),
   Center Pan (p.714) and Change Sample Rate (p.731), Auto VO (p.754), Read
   Audio Timecode (p.668), Mixdown > Audio > Multiple Mixes (p.732);
 * 5.7c, the Audio Tool's calibration tone and Create Tone Media, the Audio

@@ -359,8 +359,10 @@ private slots:
             }
         }
         QVERIFY(sequence);
-        QCOMPARE(sequence->name, QStringLiteral("Harbor Turnover"));
-        const model::Sequence cut = model::Sequence::fromItem(*sequence);
+        // A copy: the drop below adds items, which may move the bin's list.
+        const model::BinItem turnover = *sequence;
+        QCOMPARE(turnover.name, QStringLiteral("Harbor Turnover"));
+        const model::Sequence cut = model::Sequence::fromItem(turnover);
         QCOMPARE(cut.trackNames(), (QStringList{QStringLiteral("V1")}));
         QVERIFY(ConsoleLog::instance().lines().join(QLatin1Char('\n')).contains(QStringLiteral("turnover.otio: 1 sequence(s), 2 clip(s)")));
 
@@ -375,7 +377,7 @@ private slots:
         QCOMPARE(countOf(*bin, model::BinItemKind::MasterClip), 2);
 
         // The List Tool: the Default OpenTimelineIO setting chooses the OTIO output format.
-        window.composer().load(MonitorId::Record, binId, *sequence);
+        window.composer().load(MonitorId::Record, binId, turnover);
         s.commands.action(QStringLiteral("tools.list_tool"))->trigger();
         ListTool& tool = window.listTool();
         tool.loadButton()->click();

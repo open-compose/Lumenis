@@ -269,6 +269,20 @@ public:
     // clips changed.
     int modifySelection();
     void setModifyHook(std::function<bool(ModifyDialog&)> hook) { modifyHook_ = std::move(hook); }
+    // The Clip menu's audio commands on the active bin's selection (docs/spec/clip-audio.md):
+    // Apply Gain (p.216) and Center Pan (p.714) on master clips and subclips, Auto VO (p.754) on one
+    // sequence, which adds "<name>.vo" to the bin. Each returns how many items it changed or made.
+    // The hooks stand in for the dialogs in tests: the gain (nothing: Cancel), the Center Pan
+    // confirmation, and Auto VO's track and Keep segments.
+    int applyClipGain();
+    int centerPan();
+    int autoVo();
+    struct ClipAudioHooks {
+        std::function<std::optional<double>(double current)> gain;
+        std::function<bool()> confirmCenterPan;
+        std::function<std::optional<std::pair<QString, bool>>(const QStringList& tracks)> autoVo;
+    };
+    void setClipAudioHooks(ClipAudioHooks hooks) { clipAudioHooks_ = std::move(hooks); }
     // Writes an Audio Punch-In take as managed media on its drive and adds the clip to its bin
     // (AudioPunchInTool::ClipMaker).
     std::optional<model::BinItem> punchInClip(const AudioPunchInTool::Take& take, QString* error);
@@ -432,6 +446,7 @@ private:
     std::function<bool(ConsolidateDialog&)> consolidateHook_;
     std::function<bool(AudioMixdownDialog&)> mixdownHook_;
     std::function<bool(ModifyDialog&)> modifyHook_;
+    ClipAudioHooks clipAudioHooks_;
     std::function<bool(ExportAsDialog&)> exportHook_;
     std::function<bool(ImportEdlDialog&)> importEdlHook_;
     std::function<bool(ExportBinDialog&)> exportBinHook_;

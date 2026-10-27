@@ -17,11 +17,13 @@
 #include "lumenis/media/managed.h"
 #include "lumenis/media/audio_suite.h"
 #include "lumenis/model/audio_suite.h"
+#include "lumenis/model/clip_audio.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/button_mapping.h"
+#include "lumenis/ui/clip_audio_dialogs.h"
 #include "lumenis/ui/audio_eq.h"
 #include "lumenis/ui/audio_punch_in.h"
 #include "lumenis/ui/modify_dialog.h"
@@ -1560,6 +1562,86 @@ int MainWindow::modifySelection() {
     return static_cast<int>(changed.size());
 }
 
+// The gain the dialog starts at: the first selected clip's (ours; the guide does not say).
+int MainWindow::applyClipGain() {
+    BinView* view = binContainer_->activeView();
+    if (!view) return 0;
+    QList<model::BinItem> clips;
+    for (const QString& id : view->selectedIds()) {
+        if (const model::BinItem* found = view->document().bin().item(id); found && model::takesClipAudio(*found)) clips << *found;
+    }
+    if (clips.isEmpty()) return 0;
+    const double current = model::clipGain(clips.first());
+    std::optional<double> db;
+    if (clipAudioHooks_.gain) {
+        db = clipAudioHooks_.gain(current);
+    } else {
+        ApplyGainDialog dialog(current, this);
+        if (dialog.exec() == QDialog::Accepted) db = dialog.gain();
+    }
+    if (!db) return 0;
+    for (model::BinItem& item : clips) {
+        model::applyClipGain(item, *db);
+        storeClip(view->document().nodeId(), item);
+    }
+    return static_cast<int>(clips.size());
+}
+
+int MainWindow::centerPan() {
+    BinView* view = binContainer_->activeView();
+    if (!view) return 0;
+    QList<model::BinItem> clips;
+    for (const QString& id : view->selectedIds()) {
+        if (const model::BinItem* found = view->document().bin().item(id); found && model::takesClipAudio(*found)) clips << *found;
+    }
+    if (clips.isEmpty()) return 0;
+    // "A dialog box opens and asks you to confirm the pan" (p.714).
+    const bool ok = clipAudioHooks_.confirmCenterPan
+                        ? clipAudioHooks_.confirmCenterPan()
+                        : QMessageBox::question(this, tr("Center Pan"), tr("Pan the selected clips to the center?"),
+                                                QMessageBox::Ok | QMessageBox::Cancel) == QMessageBox::Ok;
+    if (!ok) return 0;
+    for (model::BinItem& item : clips) {
+        model::centerClipPan(item);
+        storeClip(view->document().nodeId(), item);
+    }
+    return static_cast<int>(clips.size());
+}
+
+// The new sequence goes into the same bin; the original "is retained and is unaffected" (p.754).
+int MainWindow::autoVo() {
+    BinView* view = binContainer_->activeView();
+    if (!view || view->document().isReadOnly()) return 0;
+    const QStringList ids = view->selectedIds();
+    const model::BinItem* found = ids.size() == 1 ? view->document().bin().item(ids.first()) : nullptr;
+    if (!found || found->kind != model::BinItemKind::Sequence) {
+        if (!clipAudioHooks_.autoVo) QMessageBox::information(this, tr("Auto VO"), tr("Select one sequence in the bin."));
+        return 0;
+    }
+    const model::BinItem item = *found;
+    const model::Sequence seq = model::Sequence::fromItem(item);
+    QStringList tracks;
+    for (const model::Track& t : seq.tracks()) {
+        if (t.kind == model::TrackKind::Audio) tracks << t.name();
+    }
+    if (tracks.isEmpty()) return 0;
+    std::optional<std::pair<QString, bool>> choice;
+    if (clipAudioHooks_.autoVo) {
+        choice = clipAudioHooks_.autoVo(tracks);
+    } else {
+        AutoVoDialog dialog(tracks, this);
+        if (dialog.exec() == QDialog::Accepted) choice = std::pair{dialog.track(), dialog.keep()};
+    }
+    if (!choice) return 0;
+    const auto made = model::autoVo(seq, choice->first, choice->second);
+    if (!made) return 0;
+    model::BinItem copy = model::duplicateItem(view->document().bin(), item, QDateTime::currentDateTimeUtc());
+    copy.name = model::autoVoName(item.name);
+    made->storeIn(copy);
+    view->document().addItem(copy);
+    return 1;
+}
+
 // ---- Managed media (Phase 2.4)
 
 namespace {
@@ -2952,6 +3034,9 @@ void MainWindow::installPanelHandlers() {
     commands_.action(QStringLiteral("play.digital_audio_scrub"))->setCheckable(true);
     handle("clip.modify.unlink_media", [this] { unlinkSelection(); });
     handle("clip.modify.modify_clip", [this] { modifySelection(); });
+    handle("clip.audio.apply_gain", [this] { applyClipGain(); });
+    handle("clip.audio.center_pan", [this] { centerPan(); });
+    handle("clip.auto_vo", [this] { autoVo(); });
     handle("tools.source_browser", [this] { showSourceBrowser(); });
     // The Tool Palette button (Other tab, p.392).
     handle("other.tool_palette", [this] { showTool(QStringLiteral("ToolPalette")); });

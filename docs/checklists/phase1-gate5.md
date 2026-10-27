@@ -150,11 +150,11 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 
 | Command | Shortcut | Guide | Status | Found | Where | Notes |
 |---|---|---|---|---|---|---|
-| Audio > Apply Gain |  | p.216 | *later* | ☐ | | |
-| Audio > Center Pan |  | p.714 | *later* | ☐ | | |
+| Audio > Apply Gain |  | p.216 | works | ☐ | | |
+| Audio > Center Pan |  | p.714 | works | ☐ | | |
 | Audio > Change Sample Rate |  | p.731 | *later* | ☐ | | |
 | Audio > Split All Tracks |  | p.736 | works | ☐ | | |
-| Auto VO |  | p.754 | *later* | ☐ | | |
+| Auto VO |  | p.754 | works | ☐ | | |
 | AutoSequence |  | p.499 | *later* | ☐ | | |
 | AutoSync |  | p.223 | *later* | ☐ | | |
 | Batch Capture |  | p.179 | *later* | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 107 of them working with a project open; the
+* 211 menu commands, 110 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

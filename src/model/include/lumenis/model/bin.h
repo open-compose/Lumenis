@@ -82,6 +82,11 @@ struct BinItem {
     // bins mark these (pyavb's user_placed), ours made here are all placed.
     bool userPlaced = true;
     QString script;      // the Script view's text box (p.253)
+    // A master clip's or subclip's own gain in dB (Clip > Audio > Apply Gain, p.216) and pan (Center
+    // Pan, p.714; -100 to 100), heard when it plays and copied into the segments edited from it
+    // (p.711). Use model::clipGain/clipPan (clip_audio.h).
+    double audioGain = 0.0;
+    std::optional<int> audioPan;
     // Heading name -> cell text, e.g. "Start" and "End" as timecode text, "Tracks", "Tape", custom
     // columns. Name, Duration, the dates, Lock and Color are shown from the members instead.
     QHash<QString, QString> fields;

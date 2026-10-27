@@ -338,6 +338,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Display Options and Live Mix to/as Automation (docs/spec/audio-mixer.md;
   test `tst_audio_mixer`, scenario `16-mixer-clip-pan.json`). 5.7a2 is
   done: Show Track Sidebar and Audio Grouping (`src/ui/audio_groups.cpp`).
+  5.7b1 is done: Apply Gain and Center Pan on bin clips (`BinItem::audioGain`,
+  `audioPan`, carried into edits) and Auto VO (`src/model/clip_audio.*`,
+  `clip_audio_dialogs.*`, docs/spec/clip-audio.md; test `tst_clip_audio`,
+  scenario `17-clip-gain-pan.json`).
   Next: 5.7, the audio items still dimmed (ROADMAP Phase 5 status: 5.7b Clip/Timeline audio commands, 5.7c tone, EQ icon and
   audio settings); then the UI completion pass (U1 Timeline, U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,

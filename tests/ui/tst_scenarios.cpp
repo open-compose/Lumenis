@@ -145,6 +145,9 @@ struct Run {
             i.fields.insert(QStringLiteral("Tracks"), o.value(QStringLiteral("tracks")).toString(QStringLiteral("V1 A1-2")));
             // Multichannel groups, as the Track Formats column has them (p.671).
             if (o.contains(QStringLiteral("formats"))) i.fields.insert(QStringLiteral("Track Formats"), o.value(QStringLiteral("formats")).toString());
+            // Apply Gain and Center Pan (p.216, p.714).
+            i.audioGain = o.value(QStringLiteral("gain")).toDouble();
+            if (o.contains(QStringLiteral("pan"))) i.audioPan = o.value(QStringLiteral("pan")).toInt();
             clips.insert(i.name, i);
             items.insert(i.id, i);
         }

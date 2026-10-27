@@ -1,9 +1,11 @@
 #include "lumenis/media/playback.h"
 
+
 #include "lumenis/media/audio_input.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/media.h"
 #include "lumenis/model/audio_suite.h"
+#include "lumenis/model/clip_audio.h"
 #include "lumenis/model/automation.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
@@ -189,8 +191,13 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
             p->at = 0;
             p->length = framesToSamples(item.durationFrames, rate);
             // A single channel plays in the middle; more go odd left, even
-            // right.
-            panGains(link->channels == 1 ? 0 : side(t + 1), 0.0, &p->left, &p->right);
+            // right; Center Pan (p.714) centres them all. Apply Gain sets the level (p.216).
+            const double gainDb = model::clipGain(item);
+            const int pan = model::clipPan(item).value_or(link->channels == 1 ? 0 : side(t + 1));
+            panGains(pan, gainDb, &p->left, &p->right);
+            p->gainDb = gainDb;
+            p->pan = pan;
+            p->gain = gainDb <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, gainDb / 20.0));
             out.push_back(*p);
         }
         return out;

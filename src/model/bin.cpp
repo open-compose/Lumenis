@@ -128,6 +128,8 @@ QJsonObject itemToJson(const BinItem& item) {
     if (item.locked) o.insert(QStringLiteral("locked"), true);
     if (!item.userPlaced) o.insert(QStringLiteral("userPlaced"), false);
     if (!item.script.isEmpty()) o.insert(QStringLiteral("script"), item.script);
+    if (item.audioGain != 0.0) o.insert(QStringLiteral("audioGain"), item.audioGain);
+    if (item.audioPan) o.insert(QStringLiteral("audioPan"), *item.audioPan);
     if (!fields.isEmpty()) o.insert(QStringLiteral("fields"), fields);
     if (!item.composition.isEmpty()) o.insert(QStringLiteral("composition"), item.composition);
     if (!item.markers.isEmpty()) o.insert(QStringLiteral("markers"), item.markers);
@@ -160,6 +162,8 @@ std::optional<BinItem> itemFromJson(const QJsonObject& o) {
     item.locked = o.value(QStringLiteral("locked")).toBool();
     item.userPlaced = o.value(QStringLiteral("userPlaced")).toBool(true);
     item.script = o.value(QStringLiteral("script")).toString();
+    item.audioGain = o.value(QStringLiteral("audioGain")).toDouble();
+    if (o.contains(QStringLiteral("audioPan"))) item.audioPan = o.value(QStringLiteral("audioPan")).toInt();
     const QJsonObject fields = o.value(QStringLiteral("fields")).toObject();
     for (auto it = fields.begin(); it != fields.end(); ++it) item.fields.insert(it.key(), it.value().toString());
     item.composition = o.value(QStringLiteral("composition")).toObject();

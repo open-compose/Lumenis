@@ -61,7 +61,8 @@ Each file is a JSON list of scenarios:
     Split All Tracks to Mono (p.734-736); `{"patch": [source, record],
     "refused": true}` a patch that must be refused, as one across audio
     formats (p.629); a clip's `"formats"` is its Track Formats column
-    (p.671);
+    (p.671), and its `"gain"` and `"pan"` its Apply Gain and Center Pan
+    (p.216, p.714);
   * `{"punch_in": {"clip": name, "targets": [track or "" for New Track, ...],
     "punches": [[record frame, length, clip frame], ...]}}` edits in an Audio
     Punch-In take (p.749-751), an undo step per punch-in;

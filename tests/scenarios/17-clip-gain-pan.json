@@ -1,0 +1,19 @@
+[
+  {
+    "name": "a master clip's Apply Gain and Center Pan carry into the segments edited from it; video takes neither",
+    "guide": "p.711, p.216, p.714",
+    "clips": [{"name": "A"}, {"name": "C", "gain": -6, "pan": 0}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20]], "A1": [["A", 0, 20]], "A2": [["A", 0, 20]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 0, "out": 9},
+      {"position": "record", "frame": 20},
+      {"command": "edit.splice_in"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 20], ["C", 0, 10]],
+      "A1": [["A", 0, 20], ["C", 0, 10]],
+      "A2": [["A", 0, 20], ["C", 0, 10]]},
+    "expect_clip_audio": {"A1": [[0, null], [-6, 0]], "A2": [[0, null], [-6, 0]]}
+  }
+]

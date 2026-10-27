@@ -1,6 +1,8 @@
 #include "lumenis/model/sequence.h"
+
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
+#include "lumenis/model/clip_audio.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
 
@@ -831,6 +833,15 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
             s.sourceTrack = sourceChannel(source, from);
             s.sourceIn = plan.sourceStart;
             s.length = plan.length;
+            // "Levels set in master clips carry across to the sequence after you edit the clips"
+            // (p.711): Apply Gain and Center Pan (clip_audio.h).
+            if (s.sourceTrack.startsWith(QLatin1Char('A'))) {
+                s.gain = clipGain(source);
+                if (const auto pan = clipPan(source)) {
+                    s.pan = *pan;
+                    s.hasPan = true;
+                }
+            }
             material << s;
         }
         if (kind == EditKind::SpliceIn) {

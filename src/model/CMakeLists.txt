@@ -6,6 +6,7 @@ add_library(lumenis_model STATIC
     locations.cpp
     monitor.cpp
     sequence.cpp
+    clip_audio.cpp
     automation.cpp
     audio_eq.cpp
     audio_suite.cpp
@@ -23,6 +24,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/locations.h
     include/lumenis/model/monitor.h
     include/lumenis/model/sequence.h
+    include/lumenis/model/clip_audio.h
     include/lumenis/model/automation.h
     include/lumenis/model/audio_eq.h
     include/lumenis/model/audio_suite.h
