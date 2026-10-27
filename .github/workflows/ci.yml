@@ -620,10 +620,24 @@ jobs:
           # The commit from GitHub: the PC may have no git.
           $sha = $env:GITHUB_SHA.Substring(0, 7)
           $name = '{0}_{1}_{2}.msi' -f $msi.BaseName, (Get-Date -Format 'yyyy-MM-dd_HHmm'), $sha
-          Copy-Item $msi.FullName (Join-Path $dir $name)
-          Write-Host "kept $(Join-Path $dir $name)"
-          Get-ChildItem (Join-Path $dir '*.msi') | Sort-Object LastWriteTime -Descending |
-            Select-Object -Skip 5 | Remove-Item -Force
+          # Keeping a copy is for the owner, not a check of the build: a copy that fails is a
+          # warning, with what may stop the runner's user writing in Documents (BUILDING.md,
+          # "The .msi is not kept in Documents\Cutthulhu Builds").
+          try {
+            Copy-Item $msi.FullName (Join-Path $dir $name) -ErrorAction Stop
+            Write-Host "kept $(Join-Path $dir $name)"
+            Get-ChildItem (Join-Path $dir '*.msi') | Sort-Object LastWriteTime -Descending |
+              Select-Object -Skip 5 | Remove-Item -Force
+          } catch {
+            Write-Host "::warning::the .msi could not be kept in ${dir}: $($_.Exception.Message)"
+            $cfa = 'unknown'
+            try { $cfa = (Get-MpPreference -ErrorAction Stop).EnableControlledFolderAccess } catch { }
+            Write-Host "Controlled Folder Access: $cfa (1 = on; it blocks writes to Documents by apps not allowed)"
+            Write-Host "Folder attributes: $((Get-Item $dir).Attributes) (ReparsePoint: a link, e.g. OneDrive)"
+            icacls $dir
+          }
+          # The runner ends the step with the last program's exit code (icacls's).
+          exit 0
 
   linux-local:
     # Ubuntu in WSL on the owner's PC (scripts/setup-wsl-runner.sh), one

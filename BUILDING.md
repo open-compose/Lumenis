@@ -445,6 +445,27 @@ stop with this command in their error:
 * **Windows PC:** nothing is needed. The job downloads the build itself
   into the runner's profile.
 
+### The .msi is not kept in Documents\Cutthulhu Builds
+
+The Windows job's step "Keep the .msi for the owner to try" found the folder
+but could not write in it (CI run 179: `Copy-Item : Could not find file
+'...\Documents\Cutthulhu Builds\cutthulhu-....msi'`). The build and its
+tests had passed. The step now warns instead of failing the job, and prints
+what it can find out. On the PC, check, in this order:
+
+* **Controlled Folder Access** (Windows Security > Virus & threat
+  protection > Ransomware protection). When it is on, it blocks writes to
+  Documents by programs it has not allowed, and the copy fails as above.
+  The step runs in Windows PowerShell: allow
+  `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe` under "Allow
+  an app through Controlled folder access".
+* **OneDrive** moving Documents to the cloud ("Folder attributes" in the
+  warning shows `ReparsePoint`). The runner's user cannot follow it; run
+  `scripts\setup-windows-runner.ps1 builds` again so the folder is made
+  where Documents now is.
+* **The folder's permissions** (`icacls` in the warning): the runner's user
+  needs Modify. The `builds` command grants it.
+
 ### A test fails in CI but its report is missing
 
 ctest's capture of a test's output can come back without QTest's FAIL
