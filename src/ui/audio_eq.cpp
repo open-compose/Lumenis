@@ -153,7 +153,7 @@ AudioEqTool::AudioEqTool(Timeline& timeline, QWidget* parent) : QWidget(parent),
     auto* bar = new QHBoxLayout;
     bar->setSpacing(3);
     bar->addWidget(laterButton(tr("EQ"), QStringLiteral("effectIcon"), tr("Effect icon: drag to a bin for a template"), this));
-    bar->addWidget(laterButton(tr("Loop"), QStringLiteral("audioLoopPlay"), tr("Audio Loop Play"), this));
+    bar->addWidget(timeline_.makeAudioLoopPlayButton(this));
     bar->addWidget(laterButton(tr("Render"), QStringLiteral("renderEffect"), tr("Render Effect"), this));
     fast_ = smallButton(QStringLiteral("☰"), QStringLiteral("fastMenu"), this);
     fast_->setToolTip(tr("Fast Menu"));

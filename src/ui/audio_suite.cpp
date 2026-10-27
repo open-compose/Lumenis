@@ -233,7 +233,7 @@ AudioSuiteTool::AudioSuiteTool(Timeline& timeline, QWidget* parent) : QWidget(pa
     effectIcon_ = smallButton(tr("AS"), QStringLiteral("effectIcon"), tr("Effect icon: drag to a bin for a template"), this);
     effectIcon_->installEventFilter(this);
     bar->addWidget(effectIcon_);
-    bar->addWidget(laterButton(tr("Loop"), QStringLiteral("audioLoopPlay"), tr("Audio Loop Play"), this));
+    bar->addWidget(timeline_.makeAudioLoopPlayButton(this));
     renderButton_ = smallButton(tr("Render"), QStringLiteral("renderEffect"), tr("Render Effect"), this);
     connect(renderButton_, &QToolButton::clicked, this, [this] { render(); });
     bar->addWidget(renderButton_);

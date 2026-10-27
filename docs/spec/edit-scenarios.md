@@ -79,6 +79,12 @@ Each file is a JSON list of scenarios:
     [from track, slot, to track, slot, copy]}` change Audio Track Effect
     inserts (p.791-795); `expect_inserts` gives each track's five slots as
     effect ids or null;
+  * `{"clip_pan": [track, pan or null]}` sets the Clip mode pan of the
+    segment under the Record position (null: none of its own; p.702),
+    `{"default_clip_pan": [[tracks], commit]}` is Commit (true) or Remove
+    (false) Default Clip Pan on Track and `{"adjust_clip_audio": [[tracks],
+    dB, pan]}` Adjust Pan/Vols on Track (p.711); `expect_clip_audio` gives
+    each material segment's `[gain, pan or null]`;
   * `{"command": id}`: any command of `commands.json` that the Timeline or
     the Composer carries out.
   * `"refused": true` on a command or trim step: it must be refused.

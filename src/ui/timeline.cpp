@@ -2084,6 +2084,7 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("edit.mark_markers"),
         QStringLiteral("fx.add_keyframe"),
         QStringLiteral("edit.paste_audio_keyframes"),
+        QStringLiteral("play.audio_loop_play"),
     };
     return ids.contains(id);
 }
@@ -2095,7 +2096,9 @@ bool Timeline::perform(const QString& id) {
     message_.clear();
     using model::AudioFormat;
     using model::TrackKind;
-    if (id == QLatin1String("fx.remove_effect")) {
+    if (id == QLatin1String("play.audio_loop_play")) {
+        toggleAudioLoopPlay();
+    } else if (id == QLatin1String("fx.remove_effect")) {
         removeEffectAtPosition();
         return true;
     }
@@ -2441,6 +2444,7 @@ void Timeline::commit(const QString& description, const model::BinItem& before, 
 void Timeline::restore(const QString& binId, const model::BinItem& item) {
     if (store_) store_(binId, item, false);
     composer_.updateItem(item);
+    emit sequenceEdited();
 }
 
 const model::LoadedClip* Timeline::recordSequence() {
@@ -2961,22 +2965,7 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
             menu->addSeparator();
             QMenu* fx = menu->addMenu(tr("Audio Track Effects %1").arg(t->number));
             fx->setObjectName(QStringLiteral("audioTrackEffects"));
-            for (int slot = 0; slot < model::kTrackInserts; ++slot) {
-                const auto& in = t->inserts[static_cast<std::size_t>(slot)];
-                QMenu* insert = fx->addMenu(tr("Insert %1").arg(QChar(u'a' + slot)) +
-                                            (in ? QStringLiteral(" (%1)").arg(in->name) : QString()));
-                insert->addAction(tr("No Insert"), this, [this, track, slot] {
-                    setTrackInsert(track, slot, std::nullopt, tr("Remove Audio Track Effect"));
-                })->setEnabled(in.has_value());
-                QMap<QString, QMenu*> categories;
-                for (const media::AudioEffectInfo& info : media::audioEffects()) {
-                    QMenu*& c = categories[info.category];
-                    if (!c) c = insert->addMenu(info.category);
-                    c->addAction(info.name, this, [this, track, slot, id = info.id] {
-                        setTrackInsert(track, slot, newInsert(id), tr("Audio Track Effect"));
-                    });
-                }
-            }
+            fillTrackEffectsMenu(fx, track);
             QAction* tool = menu->addAction(tr("Audio Track Effect Tool"));
             connect(tool, &QAction::triggered, this, [this, track] { emit trackEffectToolRequested(track); });
         }
@@ -3719,6 +3708,114 @@ bool Timeline::setClipAudio(const QString& track, std::optional<double> gain, st
     return commitSequence(description, seq);
 }
 
+std::optional<std::pair<std::int64_t, std::int64_t>> Timeline::audioLoopRange() const {
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    const model::LoadedClip* rec = record.current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
+    const auto in = record.in();
+    const auto out = record.out();
+    if (in && out) return std::pair{*in, *out};
+    // The shortest audio segment under the position.
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const std::int64_t at = record.position();
+    auto shortest = [&](bool selectedOnly) -> std::optional<std::pair<std::int64_t, std::int64_t>> {
+        std::optional<std::pair<std::int64_t, std::int64_t>> best;
+        for (const model::Track& t : seq.tracks()) {
+            if (t.kind != model::TrackKind::Audio || (selectedOnly && !patch_.isRecordSelected(t.name()))) continue;
+            std::int64_t start = 0;
+            const int i = t.segmentAt(at, &start);
+            if (i < 0 || t.segments.at(i).isFiller()) continue;
+            const std::int64_t end = start + t.segments.at(i).length - 1;
+            if (!best || end - start < best->second - best->first) best = std::pair{start, end};
+        }
+        return best;
+    };
+    auto segment = shortest(true);
+    if (!segment) segment = shortest(false);
+    if (!segment) return std::nullopt;
+    if (in && *in <= segment->second) return std::pair{*in, segment->second};
+    if (out && *out >= segment->first) return std::pair{segment->first, *out};
+    if (in || out) return std::nullopt;
+    return segment;
+}
+
+QToolButton* Timeline::makeAudioLoopPlayButton(QWidget* parent) {
+    auto* b = new QToolButton(parent);
+    b->setText(tr("Loop"));
+    b->setObjectName(QStringLiteral("audioLoopPlay"));
+    b->setToolTip(tr("Audio Loop Play"));
+    b->setCheckable(true);
+    b->setMinimumWidth(22);
+    connect(b, &QToolButton::clicked, this, [this, b] {
+        toggleAudioLoopPlay();
+        b->setChecked(composer_.isLooping());
+    });
+    connect(&composer_, &Composer::loopChanged, b, &QToolButton::setChecked);
+    return b;
+}
+
+bool Timeline::toggleAudioLoopPlay() {
+    message_.clear();
+    if (composer_.isLooping()) {
+        composer_.stop();
+        return true;
+    }
+    const auto range = audioLoopRange();
+    if (!range) return fail(tr("There is no audio to loop: mark IN and OUT or place the position on an audio segment."));
+    composer_.playLoop(MonitorId::Record, range->first, range->second);
+    return true;
+}
+
+bool Timeline::adjustClipAudio(const QStringList& tracks, double byDb, int byPan) {
+    message_.clear();
+    if (!recordSequence()) return false;
+    model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+    int changed = 0;
+    for (const QString& t : tracks) {
+        const model::Track* track = seq.track(t);
+        if (!track) continue;
+        const int side = track->format == model::AudioFormat::Mono ? model::sidePan(track->number, alternatingPan_) : 0;
+        const auto [from, to] = markedRange(t);
+        changed += model::adjustClipAudio(seq, t, from, to - from, byDb, byPan, side);
+    }
+    if (changed == 0) return fail(tr("There is no audio segment there to adjust."));
+    return commitSequence(tr("Adjust Pan/Vols on Track"), seq);
+}
+
+bool Timeline::setDefaultClipPan(const QStringList& tracks, bool commit) {
+    message_.clear();
+    if (!recordSequence()) return false;
+    model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+    int changed = 0;
+    for (const QString& t : tracks) {
+        const model::Track* track = seq.track(t);
+        if (!track) continue;
+        const int side = track->format == model::AudioFormat::Mono ? model::sidePan(track->number, alternatingPan_) : 0;
+        const auto [from, to] = markedRange(t);
+        changed += model::setDefaultClipPan(seq, t, from, to - from, side, commit);
+    }
+    if (changed == 0) return fail(commit ? tr("Every segment there has a pan of its own.") : tr("No segment there has the default pan."));
+    return commitSequence(commit ? tr("Commit Default Clip Pan on Track") : tr("Remove Default Clip Pan on Track"), seq);
+}
+
+bool Timeline::setLiveMixAsAutomation(const QStringList& tracks, const QHash<QString, std::pair<double, int>>& live) {
+    message_.clear();
+    if (!recordSequence()) return false;
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    model::Sequence seq = model::Sequence::fromItem(record.current()->item);
+    const auto [from, to] = markedRange(seq);
+    const bool ramps = record.in() || record.out();
+    int changed = 0;
+    for (const QString& t : tracks) {
+        const auto [db, pan] = live.value(t, {0.0, 0});
+        changed += model::setAutomationTo(seq, t, from, to, model::AutomationParam::Volume, db, ramps, alternatingPan_);
+        changed += model::setAutomationTo(seq, t, from, to, model::AutomationParam::Pan, pan, ramps, alternatingPan_);
+    }
+    if (changed == 0) return fail(tr("There is no audio segment there to set."));
+    keySelection_.clear();
+    return commitSequence(tr("Set Live Mix as Automation"), seq);
+}
+
 bool Timeline::setSurroundPan(const QString& track, int channel, const model::SurroundPan& pan,
                               const std::optional<model::SurroundPan>& other) {
     message_.clear();
@@ -4000,6 +4097,25 @@ bool Timeline::moveTrackInsert(const QString& fromTrack, int fromSlot, const QSt
     if (!copy) from->inserts[static_cast<std::size_t>(fromSlot)].reset();
     seq.track(toTrack)->inserts[static_cast<std::size_t>(toSlot)] = insert;
     return commitSequence(copy ? tr("Copy Audio Track Effect") : tr("Move Audio Track Effect"), seq);
+}
+
+void Timeline::fillTrackEffectsMenu(QMenu* fx, const QString& track) {
+    for (int slot = 0; slot < model::kTrackInserts; ++slot) {
+        const auto in = trackInsert(track, slot);
+        QMenu* insert = fx->addMenu(tr("Insert %1").arg(QChar(u'a' + slot)) + (in ? QStringLiteral(" (%1)").arg(in->name) : QString()));
+        insert->setObjectName(QStringLiteral("insert:%1").arg(slot));
+        insert->addAction(tr("No Insert"), this, [this, track, slot] {
+            setTrackInsert(track, slot, std::nullopt, tr("Remove Audio Track Effect"));
+        })->setEnabled(in.has_value());
+        QMap<QString, QMenu*> categories;
+        for (const media::AudioEffectInfo& info : media::audioEffects()) {
+            QMenu*& c = categories[info.category];
+            if (!c) c = insert->addMenu(info.category);
+            c->addAction(info.name, this, [this, track, slot, id = info.id] {
+                setTrackInsert(track, slot, newInsert(id), tr("Audio Track Effect"));
+            });
+        }
+    }
 }
 
 // The Select Insert dialog (picture on p.792): a button per insert, "[Empty]" or the effect's name.

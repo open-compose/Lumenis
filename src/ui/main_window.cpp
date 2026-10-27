@@ -977,6 +977,17 @@ void MainWindow::createTools() {
         if (composer_->isPlaying() && !composer_->isSlow() && std::abs(composer_->speed()) <= 3) composer_->play(composer_->speed());
     });
     connect(audioTrackEffect_, &AudioTrackEffectTool::previewChanged, replay, qOverload<>(&QTimer::start));
+    // So are Live Mix moves (p.724), and changes made during Audio Loop Play (p.712).
+    connect(audioMixer_, &AudioMixer::liveMixChanged, replay, qOverload<>(&QTimer::start));
+    connect(audioMixer_, &AudioMixer::modeChanged, replay, qOverload<>(&QTimer::start));
+    connect(timeline_, &Timeline::sequenceEdited, replay, [this, replay] {
+        if (composer_->isLooping()) replay->start();
+    });
+    connect(audioMixer_, &AudioMixer::trackEffectToolRequested, this, [this](const QString& track) {
+        audioTrackEffect_->select(track, 0);
+        showTool(QStringLiteral("AudioTrackEffect"));
+    });
+    audioMixer_->setRenderer([this](const model::Segment& s, QString* error) { return renderAudioSuite(s, QString(), error); });
     // Split Track to Mono keeps a copy of the sequence as it was in its bin (p.735).
     connect(timeline_, &Timeline::sequenceCopyRequested, this, [this](const QString& binId, const model::BinItem& sequence) {
         BinDocument* doc = binContainer_->document(binId);
@@ -1149,6 +1160,28 @@ std::vector<media::AudioPiece> MainWindow::soundOf(const model::LoadedClip& load
     // Bypass RT EQ (p.737): the EQ effects are not heard.
     if (audioEq_ && audioEq_->bypassed()) {
         for (media::AudioPiece& piece : pieces) piece.eq.reset();
+    }
+    // Live mode (p.724): "When you play the audio, the system uses your new settings" — each
+    // track's Live Mix level on top of what it plays, like an external mixer's fader (ours), and
+    // its Live Mix pan, once set, in place of its pans. Surround pans and multichannel tracks keep
+    // theirs.
+    if (audioMixer_ && audioMixer_->mode() == AudioMixer::Mode::Live) {
+        for (media::AudioPiece& piece : pieces) {
+            const QString track = piece.track.section(QLatin1Char('#'), 0, 0);
+            if (track.isEmpty()) continue;
+            const auto [db, pan] = audioMixer_->liveValue(track);
+            if (audioMixer_->hasLivePan(track) && piece.speaker < 0 && !piece.surround) {
+                piece.pan = pan;
+                piece.panKeys.clear();
+                media::panGains(pan, piece.gainDb, &piece.left, &piece.right);
+            }
+            if (db != 0.0) {
+                const float gain = db <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, db / 20.0));
+                piece.left *= gain;
+                piece.right *= gain;
+                piece.scale *= gain;
+            }
+        }
     }
     // The Audio Mixer's Master fader, a gain on the whole mix (`scale` for automated pieces).
     const double master = audioMixer_ ? audioMixer_->masterGain() : 0.0;

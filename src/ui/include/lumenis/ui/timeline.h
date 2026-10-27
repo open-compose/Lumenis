@@ -387,8 +387,21 @@ public:
     // the segment under the Record position; with `onTrack` (Set Level on
     // Track and the like) of the segments between the marks: IN to OUT, IN
     // to the end, the start to OUT, or the whole track without marks.
+    // A pan of model::kDefaultPan removes the segments' own pans.
     bool setClipAudio(const QString& track, std::optional<double> gain, std::optional<int> pan, bool onTrack,
                       const QString& description);
+    // The Clip mode Fast menu's other items (p.711), on `tracks` between the marks as for
+    // setClipAudio with `onTrack`, each one undo step; false with a message when nothing changed.
+    // Adjust Pan/Vols on Track: adds `byDb` to the clip gains and `byPan` to the pans.
+    bool adjustClipAudio(const QStringList& tracks, double byDb, int byPan);
+    // Commit Default Clip Pan on Track (`commit`) and Remove Default Clip Pan on Track
+    // (model::setDefaultClipPan, with each track's default from the Audio setting).
+    bool setDefaultClipPan(const QStringList& tracks, bool commit);
+    // Set Live Mix as Automation (p.725-726): on `tracks` between the marks (IN to OUT, IN to the
+    // end, the start to OUT, the whole tracks without marks) the volume and pan keyframes give way
+    // to each track's Live Mix value (`live`: track -> {dB, pan}), ramped at marks inside segments
+    // (model::setAutomationTo). One undo step.
+    bool setLiveMixAsAutomation(const QStringList& tracks, const QHash<QString, std::pair<double, int>>& live);
     // Surround panning (p.704-710; lumenis/model/surround_pan.h): channel `channel`'s pan of the
     // segment under the Record position on a mono or stereo track, with `other` the other channel's
     // too (Stereo Link and Mirror), as one undo step ("Surround Pan"). Already so: true without a step.
@@ -448,6 +461,9 @@ public:
     // Drag an insert button to another (p.795): moves the insert, replacing what is there; with `copy`
     // (Alt+drag) leaves the original. Mono inserts go to mono tracks only (p.794).
     bool moveTrackInsert(const QString& fromTrack, int fromSlot, const QString& toTrack, int toSlot, bool copy);
+    // Fills `menu` with Insert a-e, each with No Insert and the audio effects by category (the
+    // track button's Audio Track Effects menu, p.791, and the Audio Mixer's insert button).
+    void fillTrackEffectsMenu(QMenu* menu, const QString& track);
     // A new insert of an effect with its default values.
     static model::TrackInsert newInsert(const QString& effectId);
     // An audio effect dropped on an audio track (p.792): the Select Insert dialog picks the slot; it
@@ -455,6 +471,17 @@ public:
     bool dropTrackEffect(const QString& track, const QString& effectId);
     using SelectInsertAsk = std::function<std::optional<int>(const QString& track)>;
     void setSelectInsertAsk(SelectInsertAsk ask) { selectInsertAsk_ = std::move(ask); }
+    // Audio Loop Play (p.712): the frames to loop in the record sequence. IN to OUT when both are
+    // marked; with neither, the shortest segment under the position on the selected audio tracks
+    // (any audio track when none of those has one); with only an IN, from it to the end of that
+    // segment, and with only an OUT, from the segment's start to it. Inclusive.
+    std::optional<std::pair<std::int64_t, std::int64_t>> audioLoopRange() const;
+    // The Audio Loop Play button: loops audioLoopRange() in the Record monitor, or stops a loop.
+    // False, with a message, when there is nothing to loop.
+    bool toggleAudioLoopPlay();
+    // The Audio Loop Play button of the Audio Mixer, Audio EQ and AudioSuite tools ("appears in
+    // several of the audio effect tools", p.712): checkable, checked while a loop plays.
+    QToolButton* makeAudioLoopPlayButton(QWidget* parent);
     // The segment under the Record position on an audio track, if any.
     std::optional<model::Segment> audioSegmentAt(const QString& track) const;
 
@@ -605,6 +632,8 @@ signals:
     void commandRequested(const QString& commandId);
     // The track button's Audio Track Effect Tool item (p.793, p.795): the tool, on that track.
     void trackEffectToolRequested(const QString& track);
+    // The record sequence took an undo step, or one was undone or redone.
+    void sequenceEdited();
     // Before Split Track to Mono changes a sequence: a copy of it as it was belongs in its bin
     // ("[sequence_name].Copy.[number]", p.735); MainWindow makes it.
     void sequenceCopyRequested(const QString& binId, const model::BinItem& sequence);

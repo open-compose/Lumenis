@@ -241,6 +241,7 @@
     {"id": "edit.clear_both_marks", "text": "Clear Both Marks", "palette": "edit"},
     {"id": "edit.go_to_out_point", "text": "Go to OUT Point", "palette": "edit"},
     {"id": "play.play_in_to_out", "text": "Play In to Out", "palette": "play"},
+    {"id": "play.audio_loop_play", "text": "Audio Loop Play", "palette": "play"},
     {"id": "move.go_to_previous_event", "text": "Go to Previous Event", "palette": "move"},
     {"id": "move.go_to_next_event", "text": "Go to Next Event", "palette": "move"},
     {"id": "other.gang", "text": "Gang", "palette": "other"},

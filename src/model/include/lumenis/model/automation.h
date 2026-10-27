@@ -83,6 +83,14 @@ int removeAutomation(Sequence& sequence, const QStringList& tracks, double from,
 // segment.
 int adjustAutomation(Sequence& sequence, const QStringList& tracks, double from, double to, AutomationParam param,
                      double by, bool alternatingPan = true);
+// Set Live Mix as Automation (Live mode, p.725-726): the keyframes of `track` between [from, to)
+// are replaced by `value`. With `ramps` (marks set) the range's edges inside a segment keep the
+// value they had, in keyframes at the first and last frame of the range, and ramp in one frame to
+// keyframes holding `value` (the picture on p.726: "keyframes at the In and Out points and ...
+// ramps from the In and Out points to the new value"); without, each segment there holds `value`
+// throughout. Locked tracks are left alone. Returns how many segments changed.
+int setAutomationTo(Sequence& sequence, const QString& track, double from, double to, AutomationParam param,
+                    double value, bool ramps, bool alternatingPan = true);
 // Filter volume automation / Filter Pan on Track: removes the keyframes there that lie on a
 // straight line between their neighbours ("points on a linear ramp", p.719), then, until about
 // half are gone, every other one that is not a peak. With `peaksOnly` (Alt-click) keeps only the first, the last and the peaks (local minima

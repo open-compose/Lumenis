@@ -332,6 +332,16 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
     (`src/ui/surround_panner.*`, `audio_tools.*`);
   - LFE-only tracks (`Track::lfeOnly`).
   Tests: `tst_surround`, `tst_surround_ui`, scenario `15-surround-pan.json`.
+  5.7a1 is done: the Audio Mixer's Audio Loop Play (`Composer::playLoop`,
+  `Timeline::audioLoopRange`), insert buttons, Render Effect, the Clip mode
+  Fast menu with a segment's own centred pan (`Segment::hasPan`), Set
+  Display Options and Live Mix to/as Automation (docs/spec/audio-mixer.md;
+  test `tst_audio_mixer`, scenario `16-mixer-clip-pan.json`).
+  Next: 5.7, the audio items still dimmed (ROADMAP Phase 5 status: 5.7a2 the
+  Track Sidebar and Audio Grouping, 5.7b Clip/Timeline audio commands, 5.7c tone, EQ icon and
+  audio settings); then the UI completion pass (U1 Timeline, U2 Composer and
+  trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
+  Batch Import, AutoSync ...) comes before Phase 10, hardening.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 

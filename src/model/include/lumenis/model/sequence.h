@@ -13,6 +13,7 @@
 #include <array>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <optional>
 
 namespace lumenis::model {
@@ -195,6 +196,14 @@ struct Segment {
     // pan, -100 (left) to 100 (right).
     double gain = 0.0;
     int pan = 0;
+    // Whether the segment has a pan of its own (ownPan()). Without one it plays at its track's
+    // default pan (the Audio setting's Default Pan, p.1147), and follows that setting when it
+    // changes (Remove/Commit Default Clip Pan on Track, p.711). A pan other than 0 always counts
+    // as one, so a centred pan of its own needs this flag.
+    bool hasPan = false;
+    bool ownPan() const { return hasPan || pan != 0; }
+    // The pan it plays at on a track whose default pan is `side` (model::sidePan).
+    int panOr(int side) const { return ownPan() ? pan : side; }
     // Volume and pan automation (lumenis/model/automation.h), each sorted by
     // frame, at most one keyframe a frame position. Empty: none.
     QList<AudioKey> volumeKeys;
@@ -680,8 +689,21 @@ double clampGain(double db);
 // whole segments of a track that overlap [start, start + length); never
 // part of a segment. Filler and locked tracks are left alone. Returns how
 // many segments were set.
+// A pan of kDefaultPan removes the segments' own pans (Remove Pan on Track), so they play at the
+// track's default again.
 int setClipAudio(Sequence& sequence, const QString& track, std::int64_t start, std::int64_t length,
                  std::optional<double> gain, std::optional<int> pan);
+inline constexpr int kDefaultPan = std::numeric_limits<int>::min();
+// Adjust Pan/Vols on Track (p.711): adds `byDb` to the clip gain and `byPan` to the pan (from the
+// default `side` for segments without one) of the same segments. Returns how many changed.
+int adjustClipAudio(Sequence& sequence, const QString& track, std::int64_t start, std::int64_t length, double byDb,
+                    int byPan, int side);
+// Remove Default Clip Pan on Track (`commit` false): segments whose own pan equals the default
+// `side` lose it, so they follow the default from now on. Commit Default Clip Pan on Track:
+// segments without a pan of their own take `side` as theirs, so they keep it when the default
+// changes (p.711). Returns how many changed.
+int setDefaultClipPan(Sequence& sequence, const QString& track, std::int64_t start, std::int64_t length, int side,
+                      bool commit);
 
 // One step of Edit > Undo/Redo (p.466): a sequence item before and after.
 struct EditStep {

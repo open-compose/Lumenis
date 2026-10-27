@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/media/surround.h"
+#include "lumenis/model/audio_suite.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/surround_pan.h"
 #include "lumenis/ui/surround_panner.h"
@@ -50,6 +51,17 @@ std::optional<int> parsePan(const QString& text);
 
 // One track's strip of the Audio Mixer (picture and table on p.693-694).
 // It only shows values and reports what the user sets; AudioMixer decides what a change does.
+// The Audio Mixer's Set Display Options (p.711; the Fast menu's window options, p.694): what each
+// strip shows. Ours: a narrow mixer has smaller pan knobs and value boxes.
+struct MixerDisplay {
+    bool narrow = false;
+    bool faders = true;
+    bool legends = true; // the fader scales
+    bool effects = true; // the Audio Track Effect insert buttons
+    bool soloMute = true;
+    bool operator==(const MixerDisplay&) const = default;
+};
+
 class MixerStrip : public QWidget {
     Q_OBJECT
 
@@ -67,6 +79,12 @@ public:
     QToolButton* muteButton() const { return mute_; }
     QToolButton* gangButton() const { return gang_; }
     QToolButton* trackButton() const { return trackButton_; }
+    // The Audio Track Effects button (p.790): "+" without inserts, else the letters of the filled
+    // ones ("ac"). Its menu is the mixer's to fill.
+    QToolButton* insertButton() const { return insert_; }
+    void setInserts(const QString& letters);
+    void setDisplay(const MixerDisplay& display);
+    const MixerDisplay& display() const { return display_; }
 
     // The values shown: gain in dB (model::kGainOff for -∞), pan from -kPanMax (left) to
     // kPanMax (right).
@@ -122,6 +140,10 @@ private:
     QToolButton* mute_ = nullptr;
     QToolButton* gang_ = nullptr;
     QToolButton* trackButton_ = nullptr;
+    QToolButton* insert_ = nullptr;
+    QWidget* scale_ = nullptr;
+    bool master_ = false;
+    MixerDisplay display_;
     QWidget* surroundBox_ = nullptr;
     QList<PanGrid*> grids_;
     QToolButton* advanced_ = nullptr;
@@ -238,8 +260,41 @@ public:
     bool goToKeyframe(int direction);
     // Adjust Volume/Pan on Track's dialog (p.719): the volume (dB) and pan to add, or nothing to
     // cancel. Without one the mixer asks with its own dialog (tests set one).
+    // Clip mode's Adjust Pan/Vols on Track (p.711) asks the same way.
     using AdjustAsk = std::function<std::optional<std::pair<double, int>>()>;
     void setAdjustAsk(AdjustAsk ask) { adjustAsk_ = std::move(ask); }
+
+    // The top bar's Audio Loop Play and Render Effect buttons (p.692).
+    QToolButton* loopButton() const { return loop_; }
+    QToolButton* renderButton() const { return render_; }
+    // Render Effect (p.692): renders the AudioSuite effects that need it on the selected tracks, in
+    // the segments under the position or between the marks (Timeline::renderAudioSuite, with
+    // MainWindow's renderer; the AudioSuite tool's target drive is not used). False with a message
+    // (lastMessage()) when there is nothing to render. Audio dissolves are not rendered yet (they
+    // play as they are).
+    using Renderer = std::function<std::optional<model::AudioSuiteEffect>(const model::Segment&, QString* error)>;
+    void setRenderer(Renderer renderer) { renderer_ = std::move(renderer); }
+    bool renderEffect();
+    QString lastMessage() const { return message_; }
+    // Disable Track Monitoring (p.711): the selected tracks' monitors are turned off.
+    void disableTrackMonitoring();
+    // Set Display Options (p.711): what the strips show; the mixer keeps it (ours: not saved).
+    const MixerDisplay& display() const { return display_; }
+    void setDisplay(const MixerDisplay& display);
+    // The Set Display Options dialog; without a hook the mixer asks with its own.
+    using DisplayAsk = std::function<std::optional<MixerDisplay>(const MixerDisplay& current)>;
+    void setDisplayAsk(DisplayAsk ask) { displayAsk_ = std::move(ask); }
+    // Live mode (p.725-726). A track's Live Mix value: {dB, pan}.
+    std::pair<double, int> liveValue(const QString& track) const;
+    // Whether the track's Live Mix pan was moved (or set from automation); MainWindow plays the
+    // Live Mix level always and the pan only then.
+    bool hasLivePan(const QString& track) const { return livePan_.contains(track); }
+    // Set Live Mix to Automation: each track's Live Mix takes the volume and pan automation's
+    // values at the Record position (ours: the keyframes stay; see docs/spec/audio-mixer.md).
+    void setLiveMixToAutomation();
+    // Set Live Mix as Automation: Timeline::setLiveMixAsAutomation with the selected tracks' Live
+    // Mix values.
+    bool setLiveMixAsAutomation();
 
 signals:
     // Clip or Auto: saved in the Audio Project setting (p.692).
@@ -249,6 +304,10 @@ signals:
     void mixModeChanged(const QString& value);
     // The Master fader moved (also while dragging) or setMasterGain() changed it.
     void masterGainChanged(double db);
+    // A Live Mix value changed (MainWindow plays it at once).
+    void liveMixChanged();
+    // A strip's Audio Track Effects menu > Audio Track Effect Tool (p.793).
+    void trackEffectToolRequested(const QString& track);
 
 private:
     // Replaces the strips with one per track, keeping each track's gang, solo and mute.
@@ -261,6 +320,9 @@ private:
     void setPan(const QString& track, int pan, bool done);
     // The tracks whose Timeline record track buttons are selected, in strip order.
     QStringList selectedTracks() const;
+    // Where a segment without a pan of its own plays on the track: the Audio setting's Default Pan
+    // for mono tracks (model::sidePan), else the middle.
+    int defaultPan(const QString& track) const;
 
     Timeline& timeline_;
     Mode mode_ = Mode::Clip;
@@ -300,6 +362,12 @@ private:
     QSet<QString> touchedGain_;             // strips moved while recording
     QSet<QString> touchedPan_;
     AdjustAsk adjustAsk_;
+    QToolButton* loop_ = nullptr;
+    QToolButton* render_ = nullptr;
+    Renderer renderer_;
+    QString message_;
+    MixerDisplay display_;
+    DisplayAsk displayAsk_;
 
     // While recording: writes the moved strips at a new position, and stops at the end.
     void recordTick();

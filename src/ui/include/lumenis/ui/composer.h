@@ -285,6 +285,11 @@ public:
     // play() plays the active monitor at `speed` (0 stops); stop() stops and clears Play In to Out.
     void play(int speed);
     void stop();
+    // Audio Loop Play (p.712): plays `monitor` from `start` to `end` (inclusive) at normal speed, over
+    // and over, until stop(). Each pass restarts the sound (playStarted()). Playing at another speed
+    // ends the loop.
+    void playLoop(MonitorId monitor, std::int64_t start, std::int64_t end);
+    bool isLooping() const { return loop_.has_value(); }
     // Advances playback by `ms` milliseconds (also used by tests).
     void advance(qint64 ms);
 
@@ -326,6 +331,8 @@ signals:
 
     // playStopped() fires only when play was running.
     void playStopped();
+    // Audio Loop Play started or ended.
+    void loopChanged(bool looping);
 
     // The Video Quality Menu button's setting changed.
     void videoQualityChanged(VideoQuality quality);
@@ -365,6 +372,10 @@ private:
     int speed_ = 0;
     bool slow_ = false; // slow play (playSlow())
     std::optional<std::int64_t> stopAt_; // Play In to Out
+    std::optional<std::int64_t> loop_;   // Audio Loop Play: where each pass starts; it ends at stopAt_
+    // Play reached its end going forward: the next pass of a loop, or a stop.
+    void reachedEnd();
+    void endLoop();
     double carry_ = 0; // fractional frames between ticks
     QElapsedTimer clock_;
     QTimer* timer_ = nullptr;

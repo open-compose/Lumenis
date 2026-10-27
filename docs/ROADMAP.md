@@ -804,6 +804,51 @@ mono and stereo segments (`model::SurroundPan`, `src/model/surround_pan.*`)
 with our pan law (`media::surroundGains`), the Audio Mixer's Pan grids,
 Stereo Link and Mirror, the Advanced Panner (`src/ui/surround_panner.*`),
 and LFE-only tracks.
+5.7 finishes the audio items still dimmed in the UI, found by the audit of
+2026-10-27 (every dimmed command, button and setting sorted by whether its
+area is built):
+* 5.7a, the Audio Mixer: the strips' Insert button, Audio Loop Play (also
+  in the Audio EQ and AudioSuite tools), Render Effect, Show Track Sidebar,
+  and the Fast menu's Adjust Pan/Vols on Track, Remove/Commit Default Clip
+  Pan, Disable Track Monitoring, Set Display Options and Set Live Mix
+  to/as Automation;
+  5.7a1 is done (docs/spec/audio-mixer.md): Audio Loop Play
+  (`Composer::playLoop`, `Timeline::audioLoopRange`, command
+  `play.audio_loop_play`), the insert buttons, Render Effect, a segment's
+  own centred pan (`Segment::hasPan`), the Clip mode items, Set Display
+  Options, Live Mix heard in playback and Set Live Mix to/as Automation
+  (`model::setAutomationTo`). 5.7a2 is Show Track Sidebar and the Audio
+  Grouping pane (p.691, p.696-698). Calibrate Hardware Sliders stays dimmed
+  until external controllers (p.757);
+* 5.7b, the Clip and Timeline commands: Clip > Audio > Apply Gain (p.216),
+  Center Pan (p.714) and Change Sample Rate (p.731), Auto VO (p.754), Read
+  Audio Timecode (p.668), Mixdown > Audio > Multiple Mixes (p.732);
+* 5.7c, the Audio Tool's calibration tone and Create Tone Media, the Audio
+  EQ's effect icon, and the Audio, Audio Project and Import settings' audio
+  options.
+
+### The UI completion pass (after Phase 5, before Phase 6)
+The same audit found items of areas built in Phases 1-4 left dimmed with no
+phase of their own. They are done in three steps:
+* U1, the Timeline: audio waveforms (p.677) and Show Marked Waveforms; the
+  Fast menu's Show Markers, Track Color, Segment and Mark IO Selection
+  colours, Track Control panel, View Type and Timeline Views (p.592-604),
+  Sync Breaks, Dupe Detection, Show Every Frame and the remaining Clip Text
+  items; Show Sequence Map (p.606), Find Black Hole/Flash Frame (p.645), Add
+  Filler at Start (p.462), Rename Track, Create Sequence Based on Selection
+  (p.613); the Timeline settings still dimmed.
+* U2, the Composer, editing and trim: Load Filler (p.99), Sync Point
+  Overwrite (p.496), AutoSequence (p.499), Loop Selected Clips (p.393), the
+  Timecode Window (p.389), Edit > Find (p.417); the Composer and Trim
+  settings still dimmed (Single Mark Editing, Phantom Marks, trim loop,
+  Dual Image Play, J-K-L Trim ...).
+* U3, bins, media, windows and interface: Bin > Select's Offline Items,
+  Media Relatives, Sources and Unreferenced Clips (p.266-267), Enlarge and
+  Reduce HeadFrames (p.1016), Reveal File (p.360), Input > Link (p.328),
+  Media > Unmount (p.344), the bin attic and Bin settings; Close All But
+  Active (p.296), Bin Layout (p.93), Center Current/Send Current Home
+  (p.601), Set Font (p.82), Help > Shortcuts (p.97), the Interface colour
+  and font settings.
 
 ### Phase 6 — Effects and rendering
 * Transitions, motion effects, timewarps, Color Correction (HSL and curves),
@@ -843,7 +888,16 @@ and LFE-only tracks.
   * Change Source Track for group and multigroup clips (2026.8 guide
     p.507).
 
-### Phase 9 — Hardening
+### Phase 9 — Left over stuff
+Items that fit no other area or phase, done before hardening (owner's
+decision, 2026-10-27):
+* printing: Page Setup, Print Bin, Print Frame and Print Timeline
+  (p.288-292, p.645);
+* Batch Import and Batch Re-import (p.1098, p.230);
+* AutoSync (p.223);
+* anything else later found not to fit another area.
+
+### Phase 10 — Hardening
 * Performance profiling, accessibility audit, localisation (the languages
   Media Composer ships in), crash reporting, auto-update, code signing, and
   long-run stability tests (72-hour playback soak).

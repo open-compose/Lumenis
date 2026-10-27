@@ -233,12 +233,12 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
             }
             p->at = framesToSamples(start, rate);
             p->length = framesToSamples(start + s.length, rate) - p->at;
-            panGains(s.pan != 0 ? s.pan : side(track.number), gainDb, &p->left, &p->right);
+            panGains(s.panOr(side(track.number)), gainDb, &p->left, &p->right);
             p->gain = gainDb <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, gainDb / 20.0));
             p->gainDb = gainDb;
             p->eq = s.eq;
             p->track = track.name();
-            p->pan = s.pan != 0 ? s.pan : side(track.number);
+            p->pan = s.panOr(side(track.number));
             if (seq.mixFormat() != model::AudioFormat::Stereo) {
                 // A 5.1 or 7.1 sequence: an LFE-only track on the LFE channel alone (p.710), others
                 // where their surround pan puts them (p.704-706). Pan automation is not used.

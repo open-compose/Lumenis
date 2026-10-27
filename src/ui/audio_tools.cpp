@@ -5,10 +5,12 @@
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/surround_panner.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/tool_windows.h"
 
 #include <QActionGroup>
 #include <QApplication>
 #include <QButtonGroup>
+#include <QCheckBox>
 #include <QDial>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
@@ -29,6 +31,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <memory>
 
 // The Audio Mixer and the Audio Tool (audio_tools.h): the fader scale's maths, the mixer strips, the
@@ -173,7 +176,7 @@ private:
 
 // Lays out the strip top down as on p.693, then wires each control to update the others and emit
 // gainSet() or panSet(). Typed values that cannot be read put the old value back.
-MixerStrip::MixerStrip(const QString& track, bool master, QWidget* parent) : QWidget(parent), track_(track) {
+MixerStrip::MixerStrip(const QString& track, bool master, QWidget* parent) : QWidget(parent), track_(track), master_(master) {
     setObjectName(QStringLiteral("strip:") + track);
     auto* v = new QVBoxLayout(this);
     v->setContentsMargins(2, 2, 2, 2);
@@ -193,7 +196,11 @@ MixerStrip::MixerStrip(const QString& track, bool master, QWidget* parent) : QWi
     panBox_->setAlignment(Qt::AlignCenter);
     panBox_->setFixedWidth(44);
     panBox_->installEventFilter(this);
-    auto* insert = laterButton(QStringLiteral("+"), QStringLiteral("insert"), tr("Insert Effect"), this);
+    // The Audio Track Effect inserts (p.790): the mixer fills its menu (Timeline::fillTrackEffectsMenu).
+    insert_ = smallButton(QStringLiteral("+"), QStringLiteral("insert"), this);
+    insert_->setToolTip(tr("Audio Track Effects"));
+    insert_->setPopupMode(QToolButton::InstantPopup);
+    insert_->setMenu(new QMenu(insert_));
     solo_ = smallButton(QStringLiteral("S"), QStringLiteral("solo"), this, true);
     solo_->setToolTip(tr("Solo"));
     mute_ = smallButton(QStringLiteral("M"), QStringLiteral("mute"), this, true);
@@ -266,8 +273,9 @@ MixerStrip::MixerStrip(const QString& track, bool master, QWidget* parent) : QWi
         pan_->hide();
         panBox_->hide();
         solo_->hide();
+        insert_->hide();
     }
-    v->addWidget(insert, 0, Qt::AlignHCenter);
+    v->addWidget(insert_, 0, Qt::AlignHCenter);
     auto* sm = new QHBoxLayout;
     sm->setSpacing(2);
     sm->addWidget(solo_);
@@ -275,7 +283,9 @@ MixerStrip::MixerStrip(const QString& track, bool master, QWidget* parent) : QWi
     v->addLayout(sm);
     auto* faderRow = new QHBoxLayout;
     faderRow->setSpacing(0);
-    faderRow->addWidget(new FaderScale(fader_, this));
+    scale_ = new FaderScale(fader_, this);
+    scale_->setObjectName(QStringLiteral("legend"));
+    faderRow->addWidget(scale_);
     faderRow->addWidget(fader_);
     v->addLayout(faderRow, 1);
     v->addWidget(level_, 0, Qt::AlignHCenter);
@@ -317,6 +327,28 @@ MixerStrip::MixerStrip(const QString& track, bool master, QWidget* parent) : QWi
             show(gain_, panValue_);
         }
     });
+}
+
+void MixerStrip::setInserts(const QString& letters) {
+    insert_->setText(letters.isEmpty() ? QStringLiteral("+") : letters);
+    insert_->setToolTip(letters.isEmpty() ? tr("Audio Track Effects") : tr("Audio Track Effects: inserts %1").arg(letters));
+}
+
+// Each control is hidden rather than removed, so the strip's signals stay as they are.
+void MixerStrip::setDisplay(const MixerDisplay& display) {
+    display_ = display;
+    const bool narrow = display.narrow;
+    fader_->setVisible(display.faders);
+    scale_->setVisible(display.faders && display.legends);
+    if (!master_) {
+        insert_->setVisible(display.effects);
+        solo_->setVisible(display.soloMute);
+    }
+    mute_->setVisible(display.soloMute);
+    pan_->setFixedSize(narrow ? QSize(24, 24) : QSize(34, 34));
+    panBox_->setFixedWidth(narrow ? 34 : 44);
+    level_->setFixedWidth(narrow ? 34 : 44);
+    trackButton_->setMinimumWidth(narrow ? 28 : 40);
 }
 
 // The fader stops at +12 dB; higher typed levels show in the level display, in yellow.
@@ -432,6 +464,34 @@ std::optional<std::pair<double, int>> askAdjust(QWidget* parent) {
     return std::pair{volume->value(), pan->value()};
 }
 
+// Set Display Options (p.711): a check box for each part of the strips.
+std::optional<MixerDisplay> askDisplay(const MixerDisplay& current, QWidget* parent) {
+    QDialog dialog(parent);
+    dialog.setObjectName(QStringLiteral("mixerDisplayOptions"));
+    dialog.setWindowTitle(QObject::tr("Set Display Options"));
+    auto* layout = new QVBoxLayout(&dialog);
+    MixerDisplay d = current;
+    const std::pair<bool*, QString> boxes[] = {{&d.narrow, QObject::tr("Narrow Mixer")},
+                                               {&d.faders, QObject::tr("Faders")},
+                                               {&d.legends, QObject::tr("Legends")},
+                                               {&d.effects, QObject::tr("Audio Track Effects")},
+                                               {&d.soloMute, QObject::tr("Solo/Mute")}};
+    QList<std::pair<bool*, QCheckBox*>> checks;
+    for (const auto& [value, text] : boxes) {
+        auto* box = new QCheckBox(text, &dialog);
+        box->setChecked(*value);
+        layout->addWidget(box);
+        checks.append({value, box});
+    }
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    layout->addWidget(buttons);
+    if (dialog.exec() != QDialog::Accepted) return std::nullopt;
+    for (const auto& [value, box] : checks) *value = box->isChecked();
+    return d;
+}
+
 } // namespace
 
 // The top bar, then the track strips in a sideways-scrolling area with the Master strip to the right.
@@ -514,8 +574,12 @@ AudioMixer::AudioMixer(Timeline& timeline, QWidget* parent) : QWidget(parent), t
     });
     connect(cancel_, &QToolButton::clicked, this, [this] { stopRecording(true); });
     bar->addWidget(recordControls_);
-    bar->addWidget(laterButton(tr("Loop"), QStringLiteral("audioLoopPlay"), tr("Audio Loop Play"), this));
-    bar->addWidget(laterButton(tr("Render"), QStringLiteral("renderEffect"), tr("Render Effect"), this));
+    loop_ = timeline_.makeAudioLoopPlayButton(this);
+    bar->addWidget(loop_);
+    render_ = smallButton(tr("Render"), QStringLiteral("renderEffect"), this);
+    render_->setToolTip(tr("Render Effect"));
+    connect(render_, &QToolButton::clicked, this, [this] { renderEffect(); });
+    bar->addWidget(render_);
     bar->addStretch(1);
     fast_ = smallButton(QStringLiteral("☰"), QStringLiteral("fastMenu"), this);
     fast_->setToolTip(tr("Fast Menu"));
@@ -699,6 +763,15 @@ void AudioMixer::rebuild(const QStringList& tracks) {
         });
         // The track button selects the Timeline track and back (p.698).
         connect(strip->trackButton(), &QToolButton::clicked, this, [this, t] { timeline_.toggleRecordTrack(t); });
+        // The insert button's menu: Insert a-e as on the track button (p.791), and the tool (p.793).
+        QMenu* inserts = strip->insertButton()->menu();
+        connect(inserts, &QMenu::aboutToShow, this, [this, inserts, t] {
+            inserts->clear();
+            timeline_.fillTrackEffectsMenu(inserts, t);
+            inserts->addSeparator();
+            inserts->addAction(tr("Audio Track Effect Tool"), this, [this, t] { emit trackEffectToolRequested(t); });
+        });
+        strip->setDisplay(display_);
         // Right-click the gang button for gangs A-J (p.704).
         connect(strip->gangButton(), &QToolButton::customContextMenuRequested, this, [this, strip, t](const QPoint& pos) {
             QMenu menu(strip);
@@ -742,7 +815,7 @@ void AudioMixer::syncValues() {
             if (surround) {
                 const auto seg = timeline_.audioSegmentAt(t);
                 const int side = timeline_.alternatingPan() ? (track->number % 2 == 1 ? -model::kPanMax : model::kPanMax) : 0;
-                s->showSurroundPans(seg ? model::surroundPansOf(*seg, track->format, seg->pan != 0 ? seg->pan : side)
+                s->showSurroundPans(seg ? model::surroundPansOf(*seg, track->format, seg->panOr(side))
                                         : model::surroundPansOf(model::Segment{}, track->format, side));
                 for (int k = 0; k < channels; ++k) {
                     if (PanGrid* g = s->panGrid(k)) g->setEnabled(seg.has_value() && mode_ == Mode::Clip);
@@ -750,10 +823,15 @@ void AudioMixer::syncValues() {
                 s->advancedPannerButton()->setEnabled(seg.has_value() && mode_ == Mode::Clip);
                 AdvancedPanner* open = panner_.data();
                 if (open && open->track() == t && seg) {
-                    open->setPans(model::surroundPansOf(*seg, track->format, seg->pan != 0 ? seg->pan : side));
+                    open->setPans(model::surroundPansOf(*seg, track->format, seg->panOr(side)));
                 }
             }
         }
+        QString letters;
+        for (int slot = 0; slot < model::kTrackInserts; ++slot) {
+            if (timeline_.trackInsert(t, slot)) letters += QChar(u'a' + slot);
+        }
+        s->setInserts(letters);
         s->setLive(mode_ == Mode::Live);
         s->setAuto(mode_ == Mode::Auto);
         const auto segment = timeline_.audioSegmentAt(t);
@@ -761,7 +839,8 @@ void AudioMixer::syncValues() {
         case Mode::Clip:
             s->fader()->setEnabled(segment.has_value());
             s->panKnob()->setEnabled(segment.has_value());
-            s->show(segment ? segment->gain : 0, segment ? segment->pan : 0);
+            // A mono segment without a pan of its own shows the track's default, where it plays.
+            s->show(segment ? segment->gain : 0, segment ? segment->panOr(defaultPan(t)) : 0);
             // "In Clip Volume mode, if the track has an volume and pan automation value associated
             // with it, the word Auto appears" (p.694).
             if (segment && segment->hasAutomation()) s->showText(tr("Auto"));
@@ -810,7 +889,7 @@ void AudioMixer::setSurroundPan(const QString& track, int channel, const model::
     if (!t || !seg) return;
     std::optional<model::SurroundPan> other;
     const int side = timeline_.alternatingPan() ? (t->number % 2 == 1 ? -model::kPanMax : model::kPanMax) : 0;
-    const QList<model::SurroundPan> pans = model::surroundPansOf(*seg, t->format, seg->pan != 0 ? seg->pan : side);
+    const QList<model::SurroundPan> pans = model::surroundPansOf(*seg, t->format, seg->panOr(side));
     if (pans.size() == 2 && stereoLink_ != model::StereoLink::Unlinked && channel >= 0 && channel < 2) {
         other = model::linkedPan(pans.at(1 - channel), pans.at(channel), pan, stereoLink_);
         if (MixerStrip* s = strips_.value(track)) {
@@ -831,7 +910,7 @@ AdvancedPanner* AudioMixer::openAdvancedPanner(const QString& track) {
     }
     const int side = timeline_.alternatingPan() ? (t->number % 2 == 1 ? -model::kPanMax : model::kPanMax) : 0;
     delete panner_.data();
-    auto* panner = new AdvancedPanner(track, seq.mixFormat(), model::surroundPansOf(*seg, t->format, seg->pan != 0 ? seg->pan : side), this);
+    auto* panner = new AdvancedPanner(track, seq.mixFormat(), model::surroundPansOf(*seg, t->format, seg->panOr(side)), this);
     panner_ = panner;
     panner->setAttribute(Qt::WA_DeleteOnClose);
     panner->setLink(stereoLink_);
@@ -887,6 +966,7 @@ void AudioMixer::setGain(const QString& track, double db, bool done) {
     if (mode_ == Mode::Live) {
         for (const QString& t : moved) liveGain_.insert(t, t == track ? db : model::clampGain(liveGain_.value(t, 0) + delta));
         syncValues();
+        emit liveMixChanged();
         return;
     }
     if (mode_ == Mode::Auto) {
@@ -916,6 +996,7 @@ void AudioMixer::setGain(const QString& track, double db, bool done) {
 void AudioMixer::setPan(const QString& track, int pan, bool done) {
     if (mode_ == Mode::Live) {
         livePan_.insert(track, pan);
+        emit liveMixChanged();
         return;
     }
     if (mode_ == Mode::Clip && done) timeline_.setClipAudio(track, std::nullopt, pan, false, tr("Clip Pan"));
@@ -1019,6 +1100,14 @@ void AudioMixer::keyPressEvent(QKeyEvent* event) {
     QWidget::keyPressEvent(event);
 }
 
+int AudioMixer::defaultPan(const QString& track) const {
+    const model::LoadedClip* rec = timeline_.composer().state(MonitorId::Record).current();
+    if (!rec) return 0;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(track);
+    return t && t->format == model::AudioFormat::Mono ? model::sidePan(t->number, timeline_.alternatingPan()) : 0;
+}
+
 QStringList AudioMixer::selectedTracks() const {
     QStringList out;
     for (const QString& t : order_) {
@@ -1037,6 +1126,18 @@ QMenu* AudioMixer::fastMenu() {
     m->clear();
     const QStringList tracks = selectedTracks();
     auto later = [m](const QString& text) { m->addAction(text)->setEnabled(false); };
+    // An item that needs a selected track (p.711).
+    auto action = [this, m, &tracks](const QString& text, const std::function<void()>& f) {
+        QAction* a = m->addAction(text);
+        a->setEnabled(!tracks.isEmpty());
+        connect(a, &QAction::triggered, this, f);
+    };
+    // Set Display Options does not need one (ours).
+    auto displayOptions = [this, m] {
+        m->addAction(tr("Set Display Options..."), this, [this] {
+            if (const auto d = displayAsk_ ? displayAsk_(display_) : askDisplay(display_, this)) setDisplay(*d);
+        });
+    };
     auto onTracks = [this, m, tracks](const QString& text, std::optional<bool> gain, std::optional<bool> pan,
                                       bool remove) {
         QAction* a = m->addAction(text);
@@ -1048,7 +1149,7 @@ QMenu* AudioMixer::fastMenu() {
                 std::optional<double> g;
                 std::optional<int> p;
                 if (gain) g = remove ? 0.0 : s->gain();
-                if (pan) p = remove ? 0 : s->pan();
+                if (pan) p = remove ? model::kDefaultPan : s->pan();
                 timeline_.setClipAudio(t, g, p, true, text);
             }
         });
@@ -1057,14 +1158,17 @@ QMenu* AudioMixer::fastMenu() {
     case Mode::Clip:
         onTracks(tr("Set Level on Track"), true, std::nullopt, false);
         onTracks(tr("Set Pan on Track"), std::nullopt, true, false);
-        later(tr("Adjust Pan/Vols on Track..."));
-        later(tr("Remove Default Clip Pan on Track"));
-        later(tr("Commit Default Clip Pan on Track"));
+        action(tr("Adjust Pan/Vols on Track..."), [this, tracks] {
+            const auto by = adjustAsk_ ? adjustAsk_() : askAdjust(this);
+            if (by) timeline_.adjustClipAudio(tracks, by->first, by->second);
+        });
+        action(tr("Remove Default Clip Pan on Track"), [this, tracks] { timeline_.setDefaultClipPan(tracks, false); });
+        action(tr("Commit Default Clip Pan on Track"), [this, tracks] { timeline_.setDefaultClipPan(tracks, true); });
         onTracks(tr("Remove Clip Gain on Track"), true, std::nullopt, true);
         onTracks(tr("Remove Pan on Track"), std::nullopt, true, true);
         onTracks(tr("Remove Pan/Vols on Track"), true, true, true);
-        later(tr("Disable Track Monitoring"));
-        later(tr("Set Display Options..."));
+        action(tr("Disable Track Monitoring"), [this] { disableTrackMonitoring(); });
+        displayOptions();
         break;
     case Mode::Auto: {
         // Each acts between the marks on the selected tracks (Timeline::editAutomation, p.719-720).
@@ -1095,8 +1199,9 @@ QMenu* AudioMixer::fastMenu() {
         onAuto(tr("Remove Hidden Volume Automation on Track - Global"), Edit::RemoveHidden, AutomationParam::Volume);
         onAuto(tr("Remove Hidden Pan on Track - Global"), Edit::RemoveHidden, AutomationParam::Pan);
         onAuto(tr("Remove Hidden Pan/Volume on Track - Global"), Edit::RemoveHidden, std::nullopt);
+        // External controllers (p.757) come later.
         later(tr("Calibrate Hardware Sliders"));
-        later(tr("Set Display Options..."));
+        displayOptions();
         break;
     }
     case Mode::Live: {
@@ -1105,13 +1210,70 @@ QMenu* AudioMixer::fastMenu() {
             liveGain_.clear();
             livePan_.clear();
             syncValues();
+            emit liveMixChanged();
         });
-        later(tr("Set Live Mix to Automation"));
-        later(tr("Set Live Mix as Automation"));
+        m->addAction(tr("Set Live Mix to Automation"), this, [this] { setLiveMixToAutomation(); });
+        action(tr("Set Live Mix as Automation"), [this] { setLiveMixAsAutomation(); });
         break;
     }
     }
     return m;
+}
+
+bool AudioMixer::renderEffect() {
+    message_.clear();
+    const QStringList tracks = selectedTracks();
+    auto fail = [this](const QString& text) {
+        message_ = text;
+        ConsoleLog::instance().append(tr("Audio Mixer: %1").arg(text));
+        return false;
+    };
+    if (!renderer_) return fail(tr("Effects cannot be rendered here."));
+    if (tracks.isEmpty()) return fail(tr("Select an audio track."));
+    // The segments under the position, or between the marks.
+    const model::MonitorState& record = timeline_.composer().state(MonitorId::Record);
+    std::int64_t from = record.position();
+    std::int64_t to = from + 1;
+    if (record.in() || record.out()) {
+        from = record.in().value_or(0);
+        to = record.out() ? *record.out() + 1 : std::numeric_limits<std::int64_t>::max();
+    }
+    if (timeline_.audioSuiteToRender(tracks, from, to) == 0) return fail(tr("There is no audio effect to render."));
+    const auto done = timeline_.renderAudioSuite(tracks, from, to, renderer_);
+    if (!done) return fail(timeline_.lastMessage());
+    return true;
+}
+
+void AudioMixer::disableTrackMonitoring() {
+    for (const QString& t : selectedTracks()) {
+        if (timeline_.isMonitored(t)) timeline_.toggleMonitor(t);
+    }
+}
+
+void AudioMixer::setDisplay(const MixerDisplay& display) {
+    display_ = display;
+    for (MixerStrip* s : std::as_const(strips_)) s->setDisplay(display);
+    if (master_) master_->setDisplay(display);
+}
+
+std::pair<double, int> AudioMixer::liveValue(const QString& track) const {
+    return {liveGain_.value(track, 0.0), livePan_.value(track, 0)};
+}
+
+void AudioMixer::setLiveMixToAutomation() {
+    for (const QString& t : order_) {
+        if (const auto v = timeline_.automationAt(t, model::AutomationParam::Volume)) liveGain_.insert(t, *v);
+        if (const auto p = timeline_.automationAt(t, model::AutomationParam::Pan)) livePan_.insert(t, static_cast<int>(std::lround(*p)));
+    }
+    syncValues();
+    emit liveMixChanged();
+}
+
+bool AudioMixer::setLiveMixAsAutomation() {
+    const QStringList tracks = selectedTracks();
+    QHash<QString, std::pair<double, int>> live;
+    for (const QString& t : tracks) live.insert(t, liveValue(t));
+    return timeline_.setLiveMixAsAutomation(tracks, live);
 }
 
 // ---------------------------------------------------------------- CalibrationToneDialog

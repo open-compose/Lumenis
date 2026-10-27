@@ -161,7 +161,7 @@ double volumeAt(const Segment& segment, double frame) {
 
 double panAt(const Segment& segment, double frame, int side) {
     if (const auto pan = automationAt(segment.panKeys, frame)) return *pan;
-    return segment.pan != 0 ? segment.pan : side;
+    return segment.panOr(side);
 }
 
 double automationValue(const Segment& segment, AutomationParam param, double frame, int side) {
@@ -289,6 +289,41 @@ int adjustAutomation(Sequence& sequence, const QStringList& tracks, double from,
             k.value = clampValue(param, (k.value <= kGainOff && param == AutomationParam::Volume) ? k.value : k.value + by);
             ++changed;
         }
+    });
+    return changed;
+}
+
+int setAutomationTo(Sequence& sequence, const QString& track, double from, double to, AutomationParam param,
+                    double value, bool ramps, bool alternatingPan) {
+    int changed = 0;
+    value = clampValue(param, value);
+    eachSegment(sequence, {track}, true, [&](Track& t, Segment& s, std::int64_t start) {
+        if (!overlaps(s, start, from, to)) return;
+        const Segment before = s;
+        const int side = sidePan(t.number, alternatingPan);
+        // The range on this segment, in whole record frames: [a, b].
+        const double a = std::max(std::ceil(from - kSame), static_cast<double>(start));
+        const double b = std::min(std::ceil(to - kSame), static_cast<double>(start + s.length)) - 1;
+        if (b < a) return;
+        const bool rampIn = ramps && a > static_cast<double>(start);
+        const bool rampOut = ramps && b < static_cast<double>(start + s.length - 1);
+        const double holdIn = automationValue(s, param, sourceFrame(s, start, a), side);
+        const double holdOut = automationValue(s, param, sourceFrame(s, start, b), side);
+        QList<AudioKey>& keys = keysOf(s, param);
+        keys.removeIf([&](const AudioKey& k) {
+            const double r = recordFrame(s, start, k.frame);
+            return visible(s, k.frame) && r >= a - kSame && r <= b + kSame;
+        });
+        // The new value from the frame after a ramp's start to the frame before its end.
+        const double first = rampIn ? a + 1 : a;
+        const double last = rampOut ? b - 1 : b;
+        if (rampIn) put(keys, AudioKey{sourceFrame(s, start, a), clampValue(param, holdIn)});
+        if (rampOut) put(keys, AudioKey{sourceFrame(s, start, b), clampValue(param, holdOut)});
+        if (first <= last) {
+            put(keys, AudioKey{sourceFrame(s, start, first), value});
+            put(keys, AudioKey{sourceFrame(s, start, last), value});
+        }
+        if (!(s == before)) ++changed;
     });
     return changed;
 }

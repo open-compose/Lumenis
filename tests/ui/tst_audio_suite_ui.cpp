@@ -175,10 +175,13 @@ private slots:
         QVERIFY(rig.tool.statusLabel()->text().contains(QLatin1String("no AudioSuite effect")));
         QVERIFY(!rig.tool.activateButton()->isEnabled());
         // The picture's controls: the ones that come later are there, dimmed.
-        for (const char* name : {"effectIcon", "audioLoopPlay", "nestedLevel"}) {
+        for (const char* name : {"effectIcon", "nestedLevel"}) {
             auto* b = rig.tool.findChild<QToolButton*>(QString::fromLatin1(name));
             QVERIFY2(b && !b->isEnabled(), name);
         }
+        // Audio Loop Play works (p.712; tests/ui/tst_audio_mixer.cpp).
+        auto* loop = rig.tool.findChild<QToolButton*>(QStringLiteral("audioLoopPlay"));
+        QVERIFY(loop && loop->isEnabled() && loop->isCheckable());
         // The Plug-In Selection menu: the processes, the effects by category, and None.
         QMenu* menu = rig.tool.pluginButton()->menu();
         emit menu->aboutToShow();

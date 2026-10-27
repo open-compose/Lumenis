@@ -268,6 +268,35 @@ struct Run {
             }
             return true;
         }
+        if (o.contains(QStringLiteral("clip_pan"))) {
+            // A Clip mode pan of the segment under the Record position (p.702): [track, pan], null
+            // for none of its own (Remove Pan).
+            const QJsonArray a = o.value(QStringLiteral("clip_pan")).toArray();
+            const int pan = a.at(1).isNull() ? model::kDefaultPan : a.at(1).toInt();
+            if (!timeline.setClipAudio(a.at(0).toString(), std::nullopt, pan, false, QStringLiteral("Clip Pan"))) {
+                return fail(timeline.lastMessage());
+            }
+            return true;
+        }
+        if (o.contains(QStringLiteral("default_clip_pan"))) {
+            // Commit (true) or Remove (false) Default Clip Pan on Track (p.711): [tracks, commit].
+            const QJsonArray a = o.value(QStringLiteral("default_clip_pan")).toArray();
+            QStringList tracks;
+            for (const QJsonValue& v : a.at(0).toArray()) tracks << v.toString();
+            const bool ok = timeline.setDefaultClipPan(tracks, a.at(1).toBool());
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the default clip pan was not refused") : timeline.lastMessage());
+            }
+            return true;
+        }
+        if (o.contains(QStringLiteral("adjust_clip_audio"))) {
+            // Adjust Pan/Vols on Track (p.711): [tracks, dB, pan].
+            const QJsonArray a = o.value(QStringLiteral("adjust_clip_audio")).toArray();
+            QStringList tracks;
+            for (const QJsonValue& v : a.at(0).toArray()) tracks << v.toString();
+            if (!timeline.adjustClipAudio(tracks, a.at(1).toDouble(), a.at(2).toInt())) return fail(timeline.lastMessage());
+            return true;
+        }
         if (o.contains(QStringLiteral("lfe_only"))) {
             // "This track is LFE only" (p.710): [track, on].
             const QJsonArray a = o.value(QStringLiteral("lfe_only")).toArray();
@@ -653,6 +682,21 @@ private slots:
                     QJsonArray each;
                     for (const model::SurroundPan& p : g.surround) each.append(model::surroundPanToJson(p));
                     got.append(each);
+                }
+                QCOMPARE(got, it.value().toArray());
+            }
+        }
+        // Clip gain and pan: per track, each material segment's [gain, pan], the pan null without
+        // one of its own.
+        const QJsonObject clipAudio = scenario.value(QStringLiteral("expect_clip_audio")).toObject();
+        if (!clipAudio.isEmpty()) {
+            const model::Sequence s = model::Sequence::fromItem(run.composer.state(MonitorId::Record).current()->item);
+            for (auto it = clipAudio.begin(); it != clipAudio.end(); ++it) {
+                const model::Track* t = s.track(it.key());
+                QVERIFY2(t, qPrintable(it.key()));
+                QJsonArray got;
+                for (const model::Segment& g : t->segments) {
+                    if (!g.isFiller()) got.append(QJsonArray{g.gain, g.ownPan() ? QJsonValue(g.pan) : QJsonValue()});
                 }
                 QCOMPARE(got, it.value().toArray());
             }

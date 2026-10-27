@@ -1,0 +1,19 @@
+[
+  {
+    "name": "a centred clip pan of its own stays on an odd track; Commit Default Clip Pan gives the others the track's default, Adjust Pan/Vols adds to every segment, Remove Default Clip Pan takes back the default ones",
+    "guide": "p.711, p.1147",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"A1": [["A", 0, 10], ["B", 0, 10]]}},
+    "steps": [
+      {"position": "record", "frame": 2},
+      {"clip_pan": ["A1", 0]},
+      {"default_clip_pan": [["A1"], true]},
+      {"default_clip_pan": [["A1"], true], "refused": true},
+      {"adjust_clip_audio": [["A1"], -2, 10]},
+      {"command": "edit.undo"},
+      {"default_clip_pan": [["A1"], false]}
+    ],
+    "expect": {"A1": [["A", 0, 10], ["B", 0, 10]]},
+    "expect_clip_audio": {"A1": [[0, 0], [0, null]]}
+  }
+]

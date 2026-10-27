@@ -1109,6 +1109,10 @@ void Composer::play(int speed) {
         return;
     }
     if (speed_ == 0) stats_ = {};
+    if (loop_ && speed != 1) {
+        stopAt_.reset();
+        endLoop();
+    }
     speed_ = speed;
     slow_ = false;
     carry_ = 0;
@@ -1127,6 +1131,10 @@ void Composer::playSlow(int direction) {
         return;
     }
     if (speed_ == 0) stats_ = {};
+    if (loop_) {
+        stopAt_.reset();
+        endLoop();
+    }
     speed_ = direction > 0 ? 1 : -1;
     slow_ = true;
     carry_ = 0;
@@ -1159,6 +1167,7 @@ Composer::PlayDisplay Composer::playDisplay() const {
 
 // Stops playback and forgets a Play In to Out end point; emits playStopped() only if it was playing.
 void Composer::stop() {
+    endLoop();
     if (speed_ == 0 && !timer_->isActive()) return;
     stopAt_.reset();
     speed_ = 0;
@@ -1166,6 +1175,37 @@ void Composer::stop() {
     timer_->stop();
     refresh();
     emit playStopped();
+}
+
+void Composer::playLoop(MonitorId monitor, std::int64_t start, std::int64_t end) {
+    const model::MonitorState& s = state(monitor);
+    if (s.isEmpty() || end < start) return;
+    stop();
+    setActiveMonitor(monitor);
+    moveTo(monitor, start);
+    stopAt_ = end;
+    play(1);
+    loop_ = start;
+    emit loopChanged(true);
+}
+
+void Composer::endLoop() {
+    if (!loop_) return;
+    loop_.reset();
+    emit loopChanged(false);
+}
+
+// The next pass starts like play(1) from the loop's start, so the sound restarts there.
+void Composer::reachedEnd() {
+    if (!loop_) {
+        stop();
+        return;
+    }
+    moveTo(active_, *loop_);
+    carry_ = 0;
+    playStart_ = *loop_;
+    clock_.restart();
+    emit playStarted(active_, speed_);
 }
 
 // One playback step, run by timer_. Moves the active monitor to where the sound (or the wall clock)
@@ -1188,7 +1228,7 @@ void Composer::tick() {
         const std::int64_t end = stopAt_.value_or(s.lastPosition());
         if (speed_ > 0 && target >= end) {
             moveTo(active_, end);
-            stop();
+            reachedEnd();
         } else if (speed_ < 0 && target <= 0) {
             moveTo(active_, 0);
             stop();
@@ -1243,7 +1283,11 @@ void Composer::advance(qint64 ms) {
     const std::int64_t end = stopAt_.value_or(s.lastPosition());
     if (target >= end || target <= 0) {
         moveTo(active_, std::clamp<std::int64_t>(target, 0, end));
-        stop();
+        if (target >= end) {
+            reachedEnd();
+        } else {
+            stop();
+        }
         return;
     }
     moveTo(active_, target);

@@ -1738,16 +1738,21 @@ p.610–640, ch. 13 p.432–434).**
     selected.
   * They act on the selected tracks: IN to OUT, IN to the end, the start to
     OUT, or the whole track when there are no marks.
-  * Clip mode, working: Set Level on Track, Set Pan on Track, Remove Clip
-    Gain on Track, Remove Pan on Track, Remove Pan/Vols on Track.
-  * Clip mode, not yet: Adjust Pan/Vols on Track, Remove and Commit Default
-    Clip Pan, Disable Track Monitoring, Set Display Options.
+  * Clip mode: Set Level on Track, Set Pan on Track, Adjust Pan/Vols on
+    Track, Remove and Commit Default Clip Pan on Track, Remove Clip Gain on
+    Track, Remove Pan on Track, Remove Pan/Vols on Track, Disable Track
+    Monitoring and Set Display Options all work (docs/spec/audio-mixer.md).
   * Auto mode, working: Filter volume automation (Alt: peaks only) and
     Filter Pan; Adjust Volume/Pan on Track; Remove volume automation, Remove
-    Pan and Remove Volume/Pan; the three Remove Hidden items.
-  * Auto mode, not yet: Calibrate Hardware Sliders, Set Display Options.
-  * Live mode: Set Live Mix to Default works. Set Live Mix to Automation and
-    Set Live Mix as Automation are off.
+    Pan and Remove Volume/Pan; the three Remove Hidden items; Set Display
+    Options.
+  * Auto mode, not yet: Calibrate Hardware Sliders (external controllers,
+    p.757).
+  * Live mode: Set Live Mix to Default, Set Live Mix to Automation and Set
+    Live Mix as Automation work (docs/spec/audio-mixer.md).
+* **Audio Loop Play, Render Effect and the insert buttons (p.692, p.712,
+  p.790):** see docs/spec/audio-mixer.md. Show Track Sidebar is dimmed until
+  5.7a2.
 
 ### Audio Tool (p.157–159)
 * **Opening:** Tools > Audio Tool. Ctrl+1 comes from ks2009 p.12; the 2025

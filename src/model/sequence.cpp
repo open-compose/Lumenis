@@ -139,7 +139,7 @@ AudioEq eqFromJson(const QJsonObject& o) {
 
 void effectsToJson(const Segment& s, QJsonObject& o) {
     if (s.gain != 0.0) o.insert(QStringLiteral("gain"), s.gain);
-    if (s.pan != 0) o.insert(QStringLiteral("pan"), s.pan);
+    if (s.ownPan()) o.insert(QStringLiteral("pan"), s.pan);
     if (!s.volumeKeys.isEmpty()) o.insert(QStringLiteral("volumeKeys"), keysToJson(s.volumeKeys));
     if (!s.panKeys.isEmpty()) o.insert(QStringLiteral("panKeys"), keysToJson(s.panKeys));
     if (s.eq) o.insert(QStringLiteral("eq"), eqToJson(*s.eq));
@@ -193,6 +193,7 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.addEdit = s.isFiller() && o.value(QStringLiteral("addEdit")).toBool();
     s.gain = clampGain(o.value(QStringLiteral("gain")).toDouble());
     s.pan = std::clamp(o.value(QStringLiteral("pan")).toInt(), -kPanMax, kPanMax);
+    s.hasPan = o.contains(QStringLiteral("pan"));
     s.volumeKeys = keysFromJson(o.value(QStringLiteral("volumeKeys")), false);
     s.panKeys = keysFromJson(o.value(QStringLiteral("panKeys")), true);
     if (o.contains(QStringLiteral("eq"))) s.eq = eqFromJson(o.value(QStringLiteral("eq")).toObject());
@@ -1835,12 +1836,66 @@ int setClipAudio(Sequence& sequence, const QString& name, std::int64_t start, st
         const std::int64_t end = at + s.length;
         if (!s.isFiller() && end > start && at < start + length) {
             if (gain) s.gain = clampGain(*gain);
-            if (pan) s.pan = std::clamp(*pan, -kPanMax, kPanMax);
+            if (pan && *pan == kDefaultPan) {
+                s.pan = 0;
+                s.hasPan = false;
+            } else if (pan) {
+                s.pan = std::clamp(*pan, -kPanMax, kPanMax);
+                s.hasPan = true;
+            }
             ++changed;
         }
         at = end;
     }
     return changed;
+}
+
+namespace {
+
+// Calls `f` with each material segment of an unlocked audio track that overlaps [start, start + length).
+template <typename F>
+int eachClip(Sequence& sequence, const QString& name, std::int64_t start, std::int64_t length, F f) {
+    Track* t = sequence.track(name);
+    if (!t || t->locked || t->kind != TrackKind::Audio) return 0;
+    int changed = 0;
+    std::int64_t at = 0;
+    for (Segment& s : t->segments) {
+        const std::int64_t end = at + s.length;
+        if (!s.isFiller() && end > start && at < start + length && f(s)) ++changed;
+        at = end;
+    }
+    return changed;
+}
+
+} // namespace
+
+int adjustClipAudio(Sequence& sequence, const QString& track, std::int64_t start, std::int64_t length, double byDb,
+                    int byPan, int side) {
+    return eachClip(sequence, track, start, length, [&](Segment& s) {
+        const Segment before = s;
+        if (byDb != 0.0 && s.gain > kGainOff) s.gain = clampGain(s.gain + byDb);
+        if (byPan != 0) {
+            s.pan = std::clamp(s.panOr(side) + byPan, -kPanMax, kPanMax);
+            s.hasPan = true;
+        }
+        return !(s == before);
+    });
+}
+
+int setDefaultClipPan(Sequence& sequence, const QString& track, std::int64_t start, std::int64_t length, int side,
+                      bool commit) {
+    return eachClip(sequence, track, start, length, [&](Segment& s) {
+        if (commit) {
+            if (s.ownPan()) return false;
+            s.pan = side;
+            s.hasPan = true;
+            return true;
+        }
+        if (!s.ownPan() || s.pan != side) return false;
+        s.pan = 0;
+        s.hasPan = false;
+        return true;
+    });
 }
 
 } // namespace lumenis::model
