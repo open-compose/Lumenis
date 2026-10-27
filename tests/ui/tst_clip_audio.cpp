@@ -24,6 +24,8 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QFileInfo>
+#include <QJsonDocument>
 #include <QRadioButton>
 #include <QTemporaryDir>
 #include <QTest>
@@ -228,6 +230,23 @@ private slots:
         // The new media still carries the timecode.
         QString error;
         const auto tc = media::ltc::readClipTimecode(*bin->bin().item(linked.id), 0, false, false, &error);
+        if (!tc) {
+            // What the reader makes of the new file, for a failure on another platform.
+            const QString file = link->audioFile(0);
+            QString why;
+            media::AudioReader any;
+            const bool opened = any.open(file, -1, &why);
+            const auto ch = link->channelOf(0);
+            error += QStringLiteral(" | %1, %2 bytes; open(-1): %3 %4 (rate %5); stream %6 channel %7; link %8")
+                         .arg(file)
+                         .arg(QFileInfo(file).size())
+                         .arg(opened)
+                         .arg(why)
+                         .arg(any.sampleRate())
+                         .arg(ch ? ch->first : -9)
+                         .arg(ch ? ch->second : -9)
+                         .arg(QString::fromUtf8(QJsonDocument(bin->bin().item(linked.id)->link).toJson(QJsonDocument::Compact)));
+        }
         QVERIFY2(tc, qPrintable(error));
         QCOMPARE(QString::fromStdString(tc->toString()), QStringLiteral("10:00:00:00"));
     }
