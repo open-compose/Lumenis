@@ -610,19 +610,21 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $out -notmatch 'smoke-test: ok') { exit 1 }
 
       - name: Keep the .msi for the owner to try
-        # In the folder set up by "setup-windows-runner.ps1 builds"
-        # (BUILDING.md), named with the date and commit; the newest five.
+        # In the runner's profile (BUILDING.md, "Trying the builds"), named with
+        # the date and commit; the newest five.
         run: |
-          $dir = $env:CUTTHULHU_BUILDS
-          if (-not $dir) { Write-Host 'CUTTHULHU_BUILDS is not set; nothing kept (see BUILDING.md)'; exit 0 }
-          if (-not (Test-Path $dir)) { Write-Host "::warning::$dir is missing; run the setup script's builds command"; exit 0 }
+          # In the runner's own profile, which its user can always write in (the owner's
+          # Documents can be closed to it by security software, as in run 179);
+          # "setup-windows-runner.ps1 builds" links it into the owner's Documents.
+          $dir = Join-Path $env:USERPROFILE 'Cutthulhu Builds'
+          New-Item -ItemType Directory -Force $dir | Out-Null
           $msi = Get-ChildItem build\ci\*.msi | Select-Object -First 1
           # The commit from GitHub: the PC may have no git.
           $sha = $env:GITHUB_SHA.Substring(0, 7)
           $name = '{0}_{1}_{2}.msi' -f $msi.BaseName, (Get-Date -Format 'yyyy-MM-dd_HHmm'), $sha
           # Keeping a copy is for the owner, not a check of the build: a copy that fails is a
-          # warning, with what may stop the runner's user writing in Documents (BUILDING.md,
-          # "The .msi is not kept in Documents\Cutthulhu Builds").
+          # warning, with what may stop the runner's user writing there (BUILDING.md,
+          # "The .msi is not kept").
           try {
             Copy-Item $msi.FullName (Join-Path $dir $name) -ErrorAction Stop
             Write-Host "kept $(Join-Path $dir $name)"

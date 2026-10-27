@@ -28,9 +28,11 @@
     running, so the Linux runner inside it (scripts/setup-wsl-runner.sh) can
     take jobs. WSL only runs while you are logged on.
 
-    builds makes the folder "Cutthulhu Builds" in your Documents and lets the
-    runner's user write in it; CI then keeps each .msi it builds there (the
-    newest five). Run it from your own account (elevated).
+    builds lets you open the folder where CI keeps each .msi it builds (the
+    newest five): "Cutthulhu Builds" in the runner's own profile
+    (C:\Users\<runner user>\Cutthulhu Builds), which its user can always
+    write in. It gives you read access there and a link to it in your
+    Documents. Run it from your own account (elevated).
 
     python installs the Python packages the interchange checks need (Python 3.12
     for all users and a virtual environment in C:\actions-runner-tools) for a
@@ -213,20 +215,36 @@ function Set-KeepWsl([string]$Distribution) {
 function Set-BuildsFolder {
     $service = Get-RunnerService
     if (-not $service) { throw 'No runner service: run install first.' }
-    # Your Documents (the elevated PowerShell runs as you). The runner's
-    # user gets Modify on this folder only; it can reach it without access
-    # to the folders above it.
-    $dir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Cutthulhu Builds'
+    # CI keeps the .msi files in the runner's own profile ("Keep the .msi" in
+    # ci.yml), which its user can always write in. Writing in your Documents
+    # can be stopped by security software (Controlled Folder Access, Acronis
+    # Active Protection), as it was in CI run 179.
+    $profileDir = (Get-CimInstance Win32_UserProfile |
+        Where-Object { $_.LocalPath -like "*\$RunnerUser" } | Select-Object -First 1).LocalPath
+    if (-not $profileDir) { $profileDir = Join-Path (Split-Path $env:USERPROFILE) $RunnerUser }
+    $dir = Join-Path $profileDir 'Cutthulhu Builds'
     New-Item -ItemType Directory -Force $dir | Out-Null
     icacls $dir /grant "${RunnerUser}:(OI)(CI)M" /Q | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "icacls failed on $dir" }
+    # You (the elevated PowerShell runs as you): read access to the folder, and
+    # only passing through the profile above it.
+    $me = "$env:USERDOMAIN\$env:USERNAME"
+    icacls $dir /grant "${me}:(OI)(CI)RX" /Q | Out-Null
+    icacls $profileDir /grant "${me}:(X)" /Q | Out-Null
+    # A link in your Documents. A folder already there (the old builds folder)
+    # is kept, and the link takes another name.
+    $docs = [Environment]::GetFolderPath('MyDocuments')
+    $link = Join-Path $docs 'Cutthulhu Builds'
+    if ((Test-Path $link) -and -not ((Get-Item $link).Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        $link = Join-Path $docs 'Cutthulhu Builds (CI)'
+    }
+    if (Test-Path $link) { (Get-Item $link).Delete() }
+    New-Item -ItemType Junction -Path $link -Target $dir | Out-Null
+    # The old setting is no longer used.
     $envFile = Join-Path $RunnerDir '.env'
     $lines = @(Get-Content $envFile -ErrorAction SilentlyContinue | Where-Object { $_ -notmatch '^CUTTHULHU_BUILDS=' })
-    $lines += "CUTTHULHU_BUILDS=$dir"
-    $lines | Set-Content -Encoding ascii $envFile
-    # The runner reads .env when it starts (a job running now is cut short).
-    Restart-Service $service.Name
-    Write-Host "CI keeps each .msi in $dir (newest five)."
+    if ($lines.Count -gt 0) { $lines | Set-Content -Encoding ascii $envFile } else { Remove-Item -Force -ErrorAction SilentlyContinue $envFile }
+    Write-Host "CI keeps each .msi in $dir (newest five); open it from $link."
 }
 
 switch ($Command) {

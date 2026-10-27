@@ -280,7 +280,7 @@ five are kept.
 | Machine | Command | Package | Where |
 |---|---|---|---|
 | Mac | `sudo scripts/setup-mac-runner.sh builds` | `.dmg` | `/Users/Shared/Cutthulhu Builds`, linked as `Documents/Cutthulhu Builds` |
-| Windows (elevated PowerShell) | `scripts\setup-windows-runner.ps1 builds` | `.msi` | `Documents\Cutthulhu Builds` |
+| Windows (elevated PowerShell) | `scripts\setup-windows-runner.ps1 builds` | `.msi` | `C:\Users\ghrunner\Cutthulhu Builds` (the runner's profile), linked as `Documents\Cutthulhu Builds` |
 | WSL Ubuntu | `sudo scripts/setup-wsl-runner.sh builds` | AppImage | `/srv/cutthulhu-builds`, linked as `~/Documents/Cutthulhu Builds` |
 
 From Windows, the AppImages are also under
@@ -445,26 +445,27 @@ stop with this command in their error:
 * **Windows PC:** nothing is needed. The job downloads the build itself
   into the runner's profile.
 
-### The .msi is not kept in Documents\Cutthulhu Builds
+### The .msi is not kept
 
-The Windows job's step "Keep the .msi for the owner to try" found the folder
-but could not write in it (CI run 179: `Copy-Item : Could not find file
-'...\Documents\Cutthulhu Builds\cutthulhu-....msi'`). The build and its
-tests had passed. The step now warns instead of failing the job, and prints
-what it can find out. On the PC, check, in this order:
+The Windows job used to keep the `.msi` in the owner's
+`Documents\Cutthulhu Builds`. In CI run 179, after the owner changed the
+PC's security settings (Acronis was using a lot of CPU and memory), the
+runner's user could no longer write there: `Copy-Item : Could not find file
+'...\Documents\Cutthulhu Builds\cutthulhu-....msi'`. Security software
+blocks writes to Documents this way (Controlled Folder Access, Acronis
+Active Protection).
 
-* **Controlled Folder Access** (Windows Security > Virus & threat
-  protection > Ransomware protection). When it is on, it blocks writes to
-  Documents by programs it has not allowed, and the copy fails as above.
-  The step runs in Windows PowerShell: allow
-  `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe` under "Allow
-  an app through Controlled folder access".
-* **OneDrive** moving Documents to the cloud ("Folder attributes" in the
-  warning shows `ReparsePoint`). The runner's user cannot follow it; run
-  `scripts\setup-windows-runner.ps1 builds` again so the folder is made
-  where Documents now is.
-* **The folder's permissions** (`icacls` in the warning): the runner's user
-  needs Modify. The `builds` command grants it.
+So the job now keeps it in its own profile, `C:\Users\ghrunner\Cutthulhu
+Builds`, which its user can always write in. Run
+`scripts\setup-windows-runner.ps1 builds` once more, elevated, from your own
+account. It gives you read access to that folder and links it into your
+Documents as `Cutthulhu Builds`. If the old folder is still there, the link
+is `Cutthulhu Builds (CI)`; delete the old one when you no longer need its
+files, then run `builds` again to take the plain name.
+
+Keeping a copy is not a check of the build: if it fails, the step warns
+instead of failing the job. The warning prints the Controlled Folder Access
+setting, the folder's attributes and its permissions.
 
 ### A test fails in CI but its report is missing
 
