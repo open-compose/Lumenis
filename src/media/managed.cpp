@@ -288,9 +288,15 @@ public:
             // The edit rate the file's timecode counts in.
             s.formatOptions = {{QStringLiteral("mxf_audio_edit_rate"), rateText(clip_.editRate)}};
         } else {
+            // A bare WAV: no metadata, timecode or LIST chunk (bitexact). Newer FFmpeg releases fail to
+            // open what they write with them (CI on Windows and macOS: "End of file").
             s.format = QStringLiteral("wav");
             s.materialPackage = {};
             s.filePackage = {};
+            s.metadata.clear();
+            s.startTimecode.clear();
+            s.reelName.clear();
+            s.formatOptions = {{QStringLiteral("fflags"), QStringLiteral("+bitexact")}};
         }
         MediaWriter writer;
         if (!writer.open(path, s, error)) return false;
