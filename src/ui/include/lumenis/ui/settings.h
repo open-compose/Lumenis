@@ -100,6 +100,7 @@ public:
     // Where site settings are kept: empty for none. Reads the site file at
     // once; emits nothing.
     void setSiteFolder(const QString& folder);
+    QString siteFolder() const { return siteFolder_; }
     // The user profile whose settings are used (p.1138); `usersRoot` empty
     // keeps them in memory only. The file is <usersRoot>/<name>/ followed by
     // SettingsFile::fileName(); one that does not exist is created from the

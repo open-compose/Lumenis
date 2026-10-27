@@ -10,6 +10,8 @@
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/audio_eq.h"
 #include "lumenis/ui/bin_container.h"
+#include "lumenis/ui/bin_dock.h"
+#include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/main_window.h"
@@ -21,9 +23,12 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMimeData>
 #include <QSignalSpy>
 #include <QSlider>
 #include <QTemporaryDir>
@@ -379,6 +384,96 @@ private slots:
     }
 
     // Tools > Audio EQ opens the panel, and Bypass RT EQ keeps the EQ from what plays (p.737).
+    // EQ templates (p.740, p.745): the effect icon's template into a bin, onto a Timeline clip, a bin's
+    // template onto a clip, and Site_EQs_Bin's templates in the Fast menu.
+    void templatesInBins() {
+        QTemporaryDir dir;
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath("Users"), QStringLiteral("ed"));
+        window.settings().setSiteFolder(dir.filePath("Site"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath("Film");
+        project.settings.name = QStringLiteral("Film");
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        const BinItem cut = sequence();
+        bin->addItem(cut);
+        window.composer().load(MonitorId::Record, binId, cut);
+        settle();
+        AudioEqTool& tool = window.audioEq();
+        QVERIFY(tool.effectIcon()->isEnabled());
+        AudioEq e;
+        e.low = -6;
+        e.high = 4;
+        tool.setEq(e, false);
+
+        // The icon's template into the bin: an Effect item named "Audio EQ" (ours).
+        QMimeData icon;
+        icon.setData(eqTemplateMime(), tool.iconTemplate());
+        BinItemModel itemModel(*bin);
+        const int count = static_cast<int>(bin->bin().items.size());
+        QVERIFY(itemModel.canDropMimeData(&icon, Qt::CopyAction, -1, -1, {}));
+        QVERIFY(itemModel.dropMimeData(&icon, Qt::CopyAction, -1, -1, {}));
+        QCOMPARE(static_cast<int>(bin->bin().items.size()), count + 1);
+        const BinItem made = bin->bin().items.last();
+        QCOMPARE(made.kind, BinItemKind::Effect);
+        QCOMPARE(made.name, QStringLiteral("Audio EQ"));
+        QCOMPARE(model::eqTemplateOf(made), std::optional(model::clampEq(e)));
+
+        // The icon onto clip b of A2: the whole segment takes the EQ, one undo step.
+        Timeline& timeline = window.timeline();
+        QCOMPARE(timeline.droppedEq(&icon), std::optional(model::clampEq(e)));
+        QVERIFY(timeline.dropEq(QStringLiteral("A2"), 35, *timeline.droppedEq(&icon)));
+        auto eqOf = [&](const char* track, int segment) {
+            const model::Sequence seq = model::Sequence::fromItem(window.composer().state(MonitorId::Record).current()->item);
+            return seq.track(QString::fromLatin1(track))->segments.at(segment).eq;
+        };
+        QCOMPARE(eqOf("A2", 1), std::optional(model::clampEq(e)));
+        QVERIFY(!eqOf("A2", 0));
+        QVERIFY(!timeline.dropEq(QStringLiteral("V1"), 35, e));
+
+        // The bin's template dragged onto clip c of A1.
+        QMimeData fromBin;
+        fromBin.setData(binItemsMime(), (binId + QLatin1Char('\n') + made.id).toUtf8());
+        QCOMPARE(timeline.droppedEq(&fromBin), std::optional(model::clampEq(e)));
+        QVERIFY(timeline.dropEq(QStringLiteral("A1"), 70, *timeline.droppedEq(&fromBin)));
+        QCOMPARE(eqOf("A1", 2), std::optional(model::clampEq(e)));
+        // A clip is not an EQ.
+        QMimeData clip;
+        clip.setData(binItemsMime(), (binId + QLatin1Char('\n') + cut.id).toUtf8());
+        QVERIFY(!timeline.droppedEq(&clip));
+
+        // Site_EQs_Bin: made empty in the site folder; its templates follow the predefined ones.
+        const QString site = window.siteEqBinPath();
+        QVERIFY(site.startsWith(dir.filePath("Site")));
+        QVERIFY(QFileInfo::exists(site));
+        auto bins = model::BinFile::read(site);
+        QVERIFY(bins);
+        QVERIFY(bins->items.isEmpty());
+        AudioEq voice;
+        voice.mid = 5;
+        voice.midFrequency = 2500;
+        bins->items << model::eqTemplateItem(voice, QStringLiteral("House Voice"), QDateTime::currentDateTimeUtc());
+        QVERIFY(model::BinFile::write(site, *bins));
+        QCOMPARE(window.siteEqTemplates().size(), 1);
+        QAction* house = nullptr;
+        for (QAction* a : tool.fastMenu()->actions()) {
+            if (a->text() == QStringLiteral("House Voice")) house = a;
+        }
+        QVERIFY(house && house->isEnabled());
+        window.composer().moveTo(MonitorId::Record, 5);
+        settle();
+        house->trigger();
+        QCOMPARE(eqOf(tool.track().toLatin1().constData(), 0), std::optional(model::clampEq(voice)));
+    }
+
     void mainWindow() {
         QTemporaryDir dir;
         ext::ProviderRegistry providers;

@@ -16,6 +16,7 @@
 #include <optional>
 
 class QLabel;
+class QMimeData;
 class QPainter;
 class QLineEdit;
 class QMenu;
@@ -469,6 +470,13 @@ public:
     // An audio effect dropped on an audio track (p.792): the Select Insert dialog picks the slot; it
     // goes there, replacing what is there. Without a hook a dialog asks.
     bool dropTrackEffect(const QString& track, const QString& effectId);
+    // The EQ a drag carries (p.740): the Audio EQ tool's effect icon (eqTemplateMime), or one EQ
+    // template dragged from a bin (binItemsMime, resolved through the Composer); nothing otherwise.
+    std::optional<model::AudioEq> droppedEq(const QMimeData* mime) const;
+    // "Drag the effect icon in the Audio EQ tool to another audio clip in the Timeline" (p.740): `eq`
+    // on the whole segment at record frame `frame` of audio track `track`, one undo step; already so:
+    // true without a step. False for filler, a locked track or anything but an audio track.
+    bool dropEq(const QString& track, std::int64_t frame, const model::AudioEq& eq);
     using SelectInsertAsk = std::function<std::optional<int>(const QString& track)>;
     void setSelectInsertAsk(SelectInsertAsk ask) { selectInsertAsk_ = std::move(ask); }
     // Audio Loop Play (p.712): the frames to loop in the record sequence. IN to OUT when both are

@@ -35,6 +35,10 @@ QString mediaFilesMime();
 // template's name, "template": model::audioSuiteTemplateToJson}. A bin it is dropped on makes it an
 // item.
 QString audioSuiteTemplateMime();
+// An Audio EQ template dragged from the Audio EQ tool's effect icon (p.740, p.745): {"name": the
+// template's name, "eq": model::audioEqToJson}. A bin makes it an item; the Timeline puts the EQ on
+// the audio segment it is dropped on.
+QString eqTemplateMime();
 // Whether a drop of bin items into another bin copies them rather than moves
 // them: a copy drop action, or Alt (Windows) / Option (Mac) held (p.260), or
 // Ctrl (Windows) / Command (Mac) held (p.261). Qt reports Command as

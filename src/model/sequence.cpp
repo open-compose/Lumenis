@@ -209,6 +209,14 @@ Segment segmentFromJson(const QJsonObject& o) {
 
 } // namespace
 
+QJsonObject audioEqToJson(const AudioEq& eq) {
+    return eqToJson(eq);
+}
+
+AudioEq audioEqFromJson(const QJsonObject& o) {
+    return eqFromJson(o);
+}
+
 MobId Segment::sourceMobId() const {
     if (isFiller()) return {};
     return sourceMob.isNull() ? derivedMobId(clipId) : sourceMob;

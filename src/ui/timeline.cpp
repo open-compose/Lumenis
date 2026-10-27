@@ -6,6 +6,7 @@
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
+#include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/clip_color_dialog.h"
 #include "lumenis/ui/marker_dialogs.h"
@@ -25,6 +26,8 @@
 #include <QMessageBox>
 #include <QCursor>
 #include <QMenu>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
@@ -3421,11 +3424,22 @@ void Timeline::keyPressEvent(QKeyEvent* event) {
 // ---------------------------------------------------------------- effects
 
 void TimelineView::dragEnterEvent(QDragEnterEvent* event) {
-    if (effectFromMime(event->mimeData()) && !timeline_.showsSource()) event->acceptProposedAction();
+    if ((effectFromMime(event->mimeData()) || timeline_.droppedEq(event->mimeData())) && !timeline_.showsSource()) {
+        event->acceptProposedAction();
+    }
 }
 
 void TimelineView::dragMoveEvent(QDragMoveEvent* event) {
     const auto row = rowAt(event->position().toPoint());
+    // An EQ goes on an audio segment (p.740).
+    if (timeline_.droppedEq(event->mimeData())) {
+        if (row && row->exists && row->track.startsWith(QLatin1Char('A')) && !timeline_.showsSource()) {
+            event->acceptProposedAction();
+        } else {
+            event->ignore();
+        }
+        return;
+    }
     const auto effect = effectFromMime(event->mimeData());
     // Video effects go on video tracks; Audio Track Effects on audio tracks (p.792).
     const QChar kind = effect && !effect->audioEffect.isEmpty() ? QLatin1Char('A') : QLatin1Char('V');
@@ -3441,6 +3455,12 @@ void TimelineView::dropEvent(QDropEvent* event) {
     const auto effect = effectFromMime(event->mimeData());
     const QPoint pos = event->position().toPoint();
     const auto row = rowAt(pos);
+    if (const auto eq = timeline_.droppedEq(event->mimeData())) {
+        if (row && row->exists && !timeline_.showsSource() && timeline_.dropEq(row->track, frameAt(pos.x()), *eq)) {
+            event->acceptProposedAction();
+        }
+        return;
+    }
     if (!effect || !row || !row->exists || timeline_.showsSource()) return;
     if (!effect->audioEffect.isEmpty()) {
         if (timeline_.dropTrackEffect(row->track, effect->audioEffect)) event->acceptProposedAction();
@@ -4119,6 +4139,34 @@ void Timeline::fillTrackEffectsMenu(QMenu* fx, const QString& track) {
 }
 
 // The Select Insert dialog (picture on p.792): a button per insert, "[Empty]" or the effect's name.
+std::optional<model::AudioEq> Timeline::droppedEq(const QMimeData* mime) const {
+    if (!mime) return std::nullopt;
+    if (mime->hasFormat(eqTemplateMime())) {
+        const QJsonObject o = QJsonDocument::fromJson(mime->data(eqTemplateMime())).object();
+        if (!o.value(QStringLiteral("eq")).isObject()) return std::nullopt;
+        return model::audioEqFromJson(o.value(QStringLiteral("eq")).toObject());
+    }
+    if (!mime->hasFormat(binItemsMime())) return std::nullopt;
+    const QStringList lines = QString::fromUtf8(mime->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    if (lines.size() != 2) return std::nullopt;
+    const auto item = composer_.resolve(lines.at(0), lines.at(1));
+    return item ? model::eqTemplateOf(*item) : std::nullopt;
+}
+
+bool Timeline::dropEq(const QString& track, std::int64_t frame, const model::AudioEq& eq) {
+    message_.clear();
+    if (!track.startsWith(QLatin1Char('A'))) return false;
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    // Already so: true without an undo step.
+    const model::Sequence now = model::Sequence::fromItem(rec->item);
+    if (const model::Track* t = now.track(track)) {
+        const int i = t->segmentAt(frame);
+        if (i >= 0 && !t->segments.at(i).isFiller() && t->segments.at(i).eq == model::clampEq(eq)) return true;
+    }
+    return changeRecordSequence(tr("Audio EQ"), [&](model::Sequence& seq) { return model::setEq(seq, track, frame, frame + 1, eq) > 0; });
+}
+
 bool Timeline::dropTrackEffect(const QString& track, const QString& effectId) {
     message_.clear();
     std::optional<int> slot;

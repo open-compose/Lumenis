@@ -51,8 +51,10 @@ Each file is a JSON list of scenarios:
     `{"key_drag": [track, record frame, frames, by]}` drags a keyframe
     (p.716); Add Keyframe is `{"command": "fx.add_keyframe"}`;
   * `{"eq": {...}}` sets the Audio EQ tool's values (those not given at
-    their defaults; the keys of `model::AudioEq`), and `{"eq_menu": item}`
-    chooses an item of its Fast menu (p.739-740);
+    their defaults; the keys of `model::AudioEq`), `{"eq_menu": item}`
+    chooses an item of its Fast menu (p.739-740), and `{"eq_drop": [track,
+    record frame]}` drops its effect icon on that clip in the Timeline
+    (p.740; `"refused": true` when it must not take);
   * `{"audiosuite": plug-in id or null, "params": {...}}` chooses an
     AudioSuite plug-in in the Plug-In Selection menu and sets values as its
     dialog's OK does, and `{"audiosuite_menu": item}` chooses an item of its

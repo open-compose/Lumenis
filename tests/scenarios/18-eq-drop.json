@@ -1,0 +1,23 @@
+[
+  {
+    "name": "the Audio EQ tool's effect icon dropped on audio clips puts its EQ on each whole segment; a video track and filler refuse it, and Undo takes the last one off",
+    "guide": "p.740",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20]], "A1": [["A", 0, 20], ["B", 0, 20]], "A2": [["A", 0, 10]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"eq": {"low": -6, "high": 3}},
+      {"eq_drop": ["A1", 25]},
+      {"eq_drop": ["A2", 4]},
+      {"eq_drop": ["V1", 5], "refused": true},
+      {"eq_drop": ["A2", 30], "refused": true},
+      {"eq": {"mid": 4}},
+      {"eq_drop": ["A1", 2]},
+      {"command": "edit.undo"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 20]],
+      "A1": [["A", 0, 20], ["B", 0, 20, {"eq": {"low": -6, "high": 3}}]],
+      "A2": [["A", 0, 10, {"eq": {"low": -6, "high": 3}}]]}
+  }
+]

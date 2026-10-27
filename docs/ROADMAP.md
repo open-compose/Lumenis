@@ -829,8 +829,9 @@ area is built):
 * 5.7c, the Audio Tool's calibration tone and Create Tone Media, the Audio
   EQ's effect icon, and the Audio, Audio Project and Import settings' audio
   options. 5.7c1, Play Calibration Tone, Create Tone Media and the Audio
-  Tool's meters (docs/spec/tone.md), is done; 5.7c2 is the Audio EQ's
-  effect icon and templates, 5.7c3 the settings' options.
+  Tool's meters (docs/spec/tone.md), is done; 5.7c2, the Audio EQ's
+  effect icon and EQ templates in bins, the Timeline and Site_EQs_Bin
+  (docs/spec/audio-eq.md), is done; 5.7c3 is the settings' options.
 
 ### The UI completion pass (after Phase 5, before Phase 6)
 The same audit found items of areas built in Phases 1-4 left dimmed with no

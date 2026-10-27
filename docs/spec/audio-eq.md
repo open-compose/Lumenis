@@ -53,8 +53,8 @@ Playback, scrubbing and Audio Mixdown hear the EQ.
 * **Opening:** Tools > Audio EQ (p.736), a panel ("AudioEQ"). Opening it
   from an Audio tool's Effect Mode Selector menu comes later.
 * **The top row** (table on p.736-737):
-  * the Effect icon (dragging templates comes later);
-  * Audio Loop Play and Render Effect (later);
+  * the Effect icon (templates, below);
+  * Audio Loop Play (docs/spec/audio-mixer.md) and Render Effect (later);
   * the Fast menu;
   * the Track Selection Menu button. Its menu lists the audio tracks, and
     choosing one selects or deselects it in the Timeline. With several
@@ -123,6 +123,39 @@ Playback, scrubbing and Audio Mixdown hear the EQ.
 * **The Timeline** shows an EQ icon on segments that have one (p.740). It is
   teal, with three bars and no text, and grey when the EQ is not In.
 
+## EQ templates in bins (5.7c2; p.740, p.745)
+
+* **The Effect icon** carries the values the tool shows
+  (`AudioEqTool::iconTemplate`, `eqTemplateMime()`).
+  * "To save EQ settings in a bin: Drag the effect icon in the Audio EQ tool
+    to a bin." The bin makes an Effect item holding the EQ
+    (`model::eqTemplateItem`, `BinItem::composition["eq"]`).
+  * **Ours:** it is named "Audio EQ", or the predefined template's name.
+    "Rename the template by clicking the text and typing a new name"
+    (p.745).
+* **Onto the Timeline.** "To copy the settings to another audio clip: Drag
+  the effect icon in the Audio EQ tool to another audio clip in the
+  Timeline" (p.740).
+  * The EQ goes on that whole segment as one undo step
+    (`Timeline::dropEq`).
+  * An EQ template dragged from a bin onto an audio clip does the same
+    (`Timeline::droppedEq`; "Working with Effect Templates").
+  * Video tracks and filler refuse it.
+* **Site_EQs_Bin.** "You can add your own EQ templates to the Audio EQ Tool
+  Fast menu by storing your EQ templates in the same bin as the predefined
+  templates" (p.745).
+  * **Ours:**
+    * It is the native bin `Site_Effects/Site_EQs_Bin.cthbin` in the site
+      settings folder (`MainWindow::siteEqBinPath`), made empty if it is
+      missing, so File > Open Bin finds it.
+    * Our predefined templates come from `eq_templates.json`, not from
+      that bin.
+  * The Fast menu lists the bin's EQ templates after the predefined ones.
+    It reads the open bin as it is, else the file.
+  * Choosing one applies it like a predefined template, with its values in
+    the Console. Unlike a predefined template, its values can be changed
+    in the tool.
+
 ## Checks
 
 * `tst_audio_eq` (media):
@@ -134,15 +167,17 @@ Playback, scrubbing and Audio Mixdown hear the EQ.
   * the controls, typing on a slider and the scales;
   * several tracks and the Track Selection menu;
   * the Fast menu, the templates table, applying a template, Remove Effect;
-  * Tools > Audio EQ, and Bypass RT EQ in what plays.
+  * Tools > Audio EQ, and Bypass RT EQ in what plays;
+  * EQ templates: the effect icon into a bin and onto a Timeline clip, a
+    bin's template onto a clip, Site_EQs_Bin in the Fast menu.
+* Edit scenario `18-eq-drop.json`: the effect icon dropped on clips, the
+  refusals and Undo (step `eq_drop`).
 * Edit scenarios: `tests/scenarios/08-audio-eq.json` (Set EQ over the
   marks, a splice, Remove Effect, Undo). It uses the `eq` and `eq_menu`
   steps and the `eq` field in `expect`.
 
 ## Later
 
-* EQ templates in bins: dragging the Effect icon to a bin or segment, and
-  Site_EQs_Bin with your own templates in the Fast menu (p.740, p.744-745).
 * The predefined templates' real values, when a seat or other observation
   gives them.
 * Audio Loop Play while adjusting (p.745), and Render Effect.

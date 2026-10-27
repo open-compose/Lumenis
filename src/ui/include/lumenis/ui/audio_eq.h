@@ -1,10 +1,12 @@
 #pragma once
 
 #include "lumenis/model/audio_eq.h"
+#include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
 
 #include <QWidget>
 
+#include <functional>
 #include <optional>
 
 class QLabel;
@@ -86,6 +88,17 @@ public:
     // A template on the segment under the position on every selected audio track, as an undo step;
     // its values go to the Console (p.744-745).
     bool applyTemplate(const model::EqTemplate& t);
+    // A template by name and EQ (the Site_EQs_Bin's, p.745), the same way.
+    bool applyTemplate(const QString& name, const model::AudioEq& eq);
+    // The EQ templates of Site_EQs_Bin (p.745), listed in the Fast menu after the predefined ones;
+    // MainWindow reads the bin each time the menu opens.
+    using SiteTemplates = std::function<QList<model::BinItem>()>;
+    void setSiteTemplates(SiteTemplates source) { siteTemplates_ = std::move(source); }
+    // The effect icon (p.736): dragging it to a bin makes an EQ template of the values shown, and to
+    // an audio clip in the Timeline puts them there (p.740; eqTemplateMime()).
+    QToolButton* effectIcon() const { return effectIcon_; }
+    // What the effect icon drags: {"name", "eq"} as eqTemplateMime() describes.
+    QByteArray iconTemplate() const;
 
     // Bypass RT EQ (p.737): the EQ effects are not heard. Kept in the tool; MainWindow applies it.
     bool bypassed() const;
@@ -130,6 +143,9 @@ private:
     QToolButton* in_ = nullptr;
     QToolButton* bypass_ = nullptr;
     QToolButton* fast_ = nullptr;
+    QToolButton* effectIcon_ = nullptr;
+    QPoint pressAt_;
+    SiteTemplates siteTemplates_;
     QLineEdit* boxes_[3]{};
     QSlider* sliders_[3]{};
     QToolButton* bandButtons_[3]{};

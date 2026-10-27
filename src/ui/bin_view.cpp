@@ -1,5 +1,6 @@
 #include "lumenis/ui/bin_view.h"
 
+#include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
 
 #include "lumenis/ui/bin_dialogs.h"
@@ -585,7 +586,7 @@ Qt::DropActions BinItemModel::supportedDropActions() const {
 
 QStringList BinItemModel::mimeTypes() const {
     // text/uri-list: files dragged in from the desktop (an .otio dropped into a bin, p.969).
-    return {binItemsMime(), mediaFilesMime(), audioSuiteTemplateMime(), QStringLiteral("text/uri-list")};
+    return {binItemsMime(), mediaFilesMime(), audioSuiteTemplateMime(), eqTemplateMime(), QStringLiteral("text/uri-list")};
 }
 
 namespace {
@@ -603,14 +604,26 @@ QStringList localFiles(const QMimeData* data) {
 
 namespace {
 
-// An AudioSuite effect template dropped from the AudioSuite tool (p.798): a new Effect item. False if
-// the bin is locked or the data holds no template.
-bool addAudioSuiteTemplate(BinDocument& document, const QMimeData* data) {
+// An effect template dropped from the AudioSuite tool (p.798) or the Audio EQ tool (p.740): a new
+// Effect item. False if the bin is locked or the data holds no template.
+bool hasTemplate(const QMimeData* data) {
+    return data->hasFormat(audioSuiteTemplateMime()) || data->hasFormat(eqTemplateMime());
+}
+
+bool addTemplate(BinDocument& document, const QMimeData* data) {
     if (document.isReadOnly()) return false;
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    if (data->hasFormat(eqTemplateMime())) {
+        const QJsonObject o = QJsonDocument::fromJson(data->data(eqTemplateMime())).object();
+        if (!o.value(QStringLiteral("eq")).isObject()) return false;
+        document.addItem(model::eqTemplateItem(model::audioEqFromJson(o.value(QStringLiteral("eq")).toObject()),
+                                               o.value(QStringLiteral("name")).toString(), now));
+        return true;
+    }
     const QJsonObject o = QJsonDocument::fromJson(data->data(audioSuiteTemplateMime())).object();
     const auto t = model::audioSuiteTemplateFromJson(o.value(QStringLiteral("template")).toObject());
     if (!t) return false;
-    document.addItem(model::audioSuiteTemplateItem(*t, o.value(QStringLiteral("name")).toString(), QDateTime::currentDateTimeUtc()));
+    document.addItem(model::audioSuiteTemplateItem(*t, o.value(QStringLiteral("name")).toString(), now));
     return true;
 }
 
@@ -632,7 +645,7 @@ bool BinItemModel::canDropMimeData(const QMimeData* data, Qt::DropAction, int, i
     // "You cannot drag an item to a locked bin" (p.304).
     if (document_.isReadOnly()) return false;
     // Files from the Source Browser are linked into the bin (p.317).
-    if (data->hasFormat(mediaFilesMime()) || data->hasFormat(audioSuiteTemplateMime())) return true;
+    if (data->hasFormat(mediaFilesMime()) || hasTemplate(data)) return true;
     if (!data->hasFormat(binItemsMime())) return !localFiles(data).isEmpty();
     // Items from this same bin are refused: the Text and Frame views do not
     // reorder by dragging (only the Script view does).
@@ -647,7 +660,7 @@ bool BinItemModel::dropMimeData(const QMimeData* data, Qt::DropAction action, in
         emit filesDropped(QString::fromUtf8(data->data(mediaFilesMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts));
         return true;
     }
-    if (data->hasFormat(audioSuiteTemplateMime())) return addAudioSuiteTemplate(document_, data);
+    if (hasTemplate(data)) return addTemplate(document_, data);
     if (!data->hasFormat(binItemsMime())) {
         emit filesDropped(localFiles(data));
         return true;
@@ -1094,13 +1107,13 @@ bool BinScriptView::eventFilter(QObject* watched, QEvent* event) {
     if (watched == content_ && (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove)) {
         auto* de = static_cast<QDropEvent*>(event);
         if (de->mimeData()->hasFormat(binItemsMime())) de->acceptProposedAction();
-        if (de->mimeData()->hasFormat(audioSuiteTemplateMime()) && !document_.isReadOnly()) de->acceptProposedAction();
+        if (hasTemplate(de->mimeData()) && !document_.isReadOnly()) de->acceptProposedAction();
         return true;
     }
     if (watched == content_ && event->type() == QEvent::Drop) {
         auto* de = static_cast<QDropEvent*>(event);
-        if (de->mimeData()->hasFormat(audioSuiteTemplateMime())) {
-            if (addAudioSuiteTemplate(document_, de->mimeData())) de->acceptProposedAction();
+        if (hasTemplate(de->mimeData())) {
+            if (addTemplate(document_, de->mimeData())) de->acceptProposedAction();
             return true;
         }
         QStringList ids =

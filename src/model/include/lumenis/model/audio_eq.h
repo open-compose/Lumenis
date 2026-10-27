@@ -3,6 +3,8 @@
 #include "lumenis/model/sequence.h"
 
 #include <QByteArray>
+#include <QDateTime>
+#include <QJsonObject>
 #include <QList>
 #include <QString>
 
@@ -72,6 +74,19 @@ QList<EqTemplate> parseEqTemplates(const QByteArray& json, QString* error = null
 QString describeEq(const AudioEq& eq);
 // A width in octaves as the tool shows it: "2", "1/4", "3/4", "1.5".
 QString octavesText(double octaves);
+
+// The EQ as sequences keep it ({low, mid, high, lowTurnover, highTurnover, midFrequency, wideMid, in,
+// preset, midOctaves}), and back with its values put in range (clampEq).
+QJsonObject audioEqToJson(const AudioEq& eq);
+AudioEq audioEqFromJson(const QJsonObject& o);
+// An EQ template in a bin (p.740, p.745): an Effect named `name` holding the EQ in
+// BinItem::composition["eq"]; made by dragging the Audio EQ tool's effect icon to a bin.
+BinItem eqTemplateItem(const AudioEq& eq, const QString& name, const QDateTime& when);
+// The EQ an EQ template holds; nothing for any other item.
+std::optional<AudioEq> eqTemplateOf(const BinItem& item);
+// The name a template dragged from the tool takes (ours: the guide does not give one): the
+// predefined template's name, else "Audio EQ".
+QString eqTemplateName(const AudioEq& eq);
 
 // Set EQ - In/Out (p.739-741) on audio track `track`: `eq` on every whole segment that
 // overlaps record frames [from, to); without one, their EQ is removed. "Apply Audio EQ to entire

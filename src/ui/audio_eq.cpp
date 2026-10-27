@@ -1,15 +1,21 @@
 #include "lumenis/ui/audio_eq.h"
 
 #include "lumenis/model/audio_eq.h"
+#include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/timeline.h"
 #include "lumenis/ui/tool_windows.h"
 
+#include <QApplication>
+#include <QDrag>
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -152,7 +158,10 @@ AudioEqTool::AudioEqTool(Timeline& timeline, QWidget* parent) : QWidget(parent),
     // The top part (picture and table on p.736-737).
     auto* bar = new QHBoxLayout;
     bar->setSpacing(3);
-    bar->addWidget(laterButton(tr("EQ"), QStringLiteral("effectIcon"), tr("Effect icon: drag to a bin for a template"), this));
+    effectIcon_ = smallButton(tr("EQ"), QStringLiteral("effectIcon"), this);
+    effectIcon_->setToolTip(tr("Effect icon: drag to a bin for a template, or to an audio clip in the Timeline"));
+    effectIcon_->installEventFilter(this);
+    bar->addWidget(effectIcon_);
     bar->addWidget(timeline_.makeAudioLoopPlayButton(this));
     bar->addWidget(laterButton(tr("Render"), QStringLiteral("renderEffect"), tr("Render Effect"), this));
     fast_ = smallButton(QStringLiteral("☰"), QStringLiteral("fastMenu"), this);
@@ -480,7 +489,22 @@ QMenu* AudioEqTool::fastMenu() {
         a->setEnabled(any);
         a->setToolTip(t.note);
     }
+    // "You can add your own EQ templates to the Audio EQ Tool Fast menu by storing your EQ templates
+    // in the same bin as the predefined templates" (p.745): Site_EQs_Bin's.
+    const QList<model::BinItem> site = siteTemplates_ ? siteTemplates_() : QList<model::BinItem>{};
+    for (const model::BinItem& item : site) {
+        const auto eq = model::eqTemplateOf(item);
+        if (!eq) continue;
+        const QString name = item.name;
+        const model::AudioEq copy = *eq;
+        menu->addAction(name, this, [this, name, copy] { applyTemplate(name, copy); })->setEnabled(any);
+    }
     return menu;
+}
+
+QByteArray AudioEqTool::iconTemplate() const {
+    return QJsonDocument(QJsonObject{{QStringLiteral("name"), model::eqTemplateName(eq_)}, {QStringLiteral("eq"), model::audioEqToJson(eq_)}})
+        .toJson(QJsonDocument::Compact);
 }
 
 const QList<model::EqTemplate>& AudioEqTool::templates() {
@@ -495,21 +519,43 @@ const QList<model::EqTemplate>& AudioEqTool::templates() {
 // "Move the position indicator to the audio clip ... select the template. Media Composer places the
 // EQ effect on the audio clip" (p.745); its values go to the Console (p.744 note).
 bool AudioEqTool::applyTemplate(const model::EqTemplate& t) {
+    return applyTemplate(t.eq.preset, t.eq);
+}
+
+bool AudioEqTool::applyTemplate(const QString& name, const model::AudioEq& eq) {
     message_->clear();
     const QStringList on = tracks();
     if (on.isEmpty()) {
         fail(tr("Select an audio track in the Timeline."));
         return false;
     }
-    if (!timeline_.setEq(on, t.eq, false, tr("Audio EQ Template"))) {
+    if (!timeline_.setEq(on, eq, false, tr("Audio EQ Template"))) {
         fail(timeline_.lastMessage());
         return false;
     }
-    ConsoleLog::instance().append(tr("Audio EQ template %1: %2.").arg(t.eq.preset, model::describeEq(t.eq)));
+    ConsoleLog::instance().append(tr("Audio EQ template %1: %2.").arg(name, model::describeEq(eq)));
     return true;
 }
 
 bool AudioEqTool::eventFilter(QObject* watched, QEvent* event) {
+    // The effect icon drags a template (p.740).
+    if (watched == effectIcon_) {
+        if (event->type() == QEvent::MouseButtonPress) {
+            pressAt_ = static_cast<QMouseEvent*>(event)->position().toPoint();
+        } else if (event->type() == QEvent::MouseMove) {
+            auto* me = static_cast<QMouseEvent*>(event);
+            if (me->buttons().testFlag(Qt::LeftButton) &&
+                (me->position().toPoint() - pressAt_).manhattanLength() >= QApplication::startDragDistance()) {
+                auto* mime = new QMimeData;
+                mime->setData(eqTemplateMime(), iconTemplate());
+                auto* drag = new QDrag(effectIcon_);
+                drag->setMimeData(mime);
+                drag->exec(Qt::CopyAction);
+                return true;
+            }
+        }
+        return QWidget::eventFilter(watched, event);
+    }
     for (int b = 0; b < 3; ++b) {
         if (watched != sliders_[b] || event->type() != QEvent::KeyPress) continue;
         auto* key = static_cast<QKeyEvent*>(event);

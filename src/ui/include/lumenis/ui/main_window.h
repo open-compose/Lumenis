@@ -305,6 +305,12 @@ public:
     bool isPlayingTone() const { return playingTone_; }
     std::optional<model::BinItem> createToneMedia();
     void setToneMediaHook(std::function<bool(CreateToneMediaDialog&)> hook) { toneMediaHook_ = std::move(hook); }
+    // Site_EQs_Bin (p.745): our native bin "Site_Effects/Site_EQs_Bin" in the site settings folder,
+    // made empty if it is missing so that File > Open Bin finds it; empty without a site folder or
+    // when it cannot be made. Its EQ templates (the open bin's, if it is open) follow the Audio EQ
+    // tool's predefined ones in its Fast menu.
+    QString siteEqBinPath() const;
+    QList<model::BinItem> siteEqTemplates() const;
     // Gives the Audio Tool's meters what the output played since the last call (a timer calls it
     // while sound plays); channels switched to I (Input) show nothing, as nothing is recorded here.
     void updateMeters();

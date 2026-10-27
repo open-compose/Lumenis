@@ -18,6 +18,7 @@
 #include "lumenis/media/ltc.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/audio_suite.h"
+#include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/media/mixdown.h"
@@ -964,6 +965,7 @@ void MainWindow::createTools() {
         settings_->setValue(QStringLiteral("Audio Project"), QStringLiteral("mixMode"), value);
     });
     audioEq_ = new AudioEqTool(*timeline_);
+    audioEq_->setSiteTemplates([this] { return siteEqTemplates(); });
     panels_->addPanel(new Panel(QStringLiteral("AudioEQ"), tr("Audio EQ"), audioEq_));
     // Audio Punch-In (p.747-753): the take becomes managed media in the chosen bin; the target tracks
     // are silent while it runs; monitoring plays the input through the output.
@@ -2630,6 +2632,42 @@ void MainWindow::saveMultiMix(const QString& name, const media::MultiMix& mix) {
     f.entries[index].values.insert(QStringLiteral("mix"), mix.toJson());
     f.setActive(index);
     settings_->commit(model::SettingsScope::Project);
+}
+
+QString MainWindow::siteEqBinPath() const {
+    const QString site = settings_ ? settings_->siteFolder() : QString();
+    if (site.isEmpty()) return {};
+    const QString path = QDir(site).filePath(QStringLiteral("Site_Effects/Site_EQs_Bin") + model::BinFile::suffix());
+    if (!QFileInfo::exists(path)) {
+        model::Bin bin;
+        bin.name = QStringLiteral("Site_EQs_Bin");
+        if (!QDir().mkpath(QFileInfo(path).absolutePath()) || !model::BinFile::write(path, bin)) return {};
+    }
+    return path;
+}
+
+QList<model::BinItem> MainWindow::siteEqTemplates() const {
+    const QString path = siteEqBinPath();
+    if (path.isEmpty()) return {};
+    QList<model::BinItem> out;
+    QList<model::BinItem> items;
+    // The open bin as it is now; else the file.
+    bool open = false;
+    if (const model::ProjectBins* project = binContainer_->bins()) {
+        for (const BinDocument* d : binContainer_->openDocuments()) {
+            if (QFileInfo(project->binPath(d->nodeId())) == QFileInfo(path)) {
+                items = d->bin().items;
+                open = true;
+            }
+        }
+    }
+    if (!open) {
+        if (const auto bin = model::BinFile::read(path)) items = bin->items;
+    }
+    for (const model::BinItem& i : items) {
+        if (model::eqTemplateOf(i)) out << i;
+    }
+    return out;
 }
 
 // The tone on every output channel at its level (a piece centred at full gain on L and R), for as

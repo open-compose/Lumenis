@@ -12,6 +12,7 @@
 #include "lumenis/ui/audio_eq.h"
 #include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/audio_suite.h"
+#include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timeline.h"
@@ -25,6 +26,7 @@
 #include <QJsonDocument>
 #include <QMenu>
 #include <QJsonObject>
+#include <QMimeData>
 #include <QLabel>
 #include <QMap>
 #include <QTest>
@@ -390,6 +392,19 @@ struct Run {
         if (o.contains(QStringLiteral("eq"))) {
             // The Audio EQ tool's values, those not given at their defaults (p.739).
             eq.setEq(eqFromJson(o.value(QStringLiteral("eq")).toObject()));
+            return true;
+        }
+        if (o.contains(QStringLiteral("eq_drop"))) {
+            // The Audio EQ tool's effect icon dropped on an audio clip in the Timeline (p.740): the
+            // tool's values, as the icon carries them, on the segment at [track, record frame].
+            const QJsonArray at = o.value(QStringLiteral("eq_drop")).toArray();
+            QMimeData mime;
+            mime.setData(eqTemplateMime(), eq.iconTemplate());
+            const auto dropped = timeline.droppedEq(&mime);
+            const bool ok = dropped && timeline.dropEq(at.at(0).toString(), at.at(1).toInteger(), *dropped);
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the EQ drop was not refused") : QStringLiteral("the EQ drop was refused"));
+            }
             return true;
         }
         if (o.contains(QStringLiteral("eq_menu"))) {

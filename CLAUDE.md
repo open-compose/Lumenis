@@ -352,8 +352,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Tool's meters following the output (`src/media/tone.*`, `AudioPiece::tone`,
   `AudioPlayer::takePeaks`, `CreateToneMediaDialog`, docs/spec/tone.md; tests
   `tst_tone`, `tst_audio_media`).
-  Next: 5.7c2 (the Audio EQ's effect icon and templates) and 5.7c3 (the
-  audio settings' options still dimmed; ROADMAP Phase 5 status); then the UI completion pass (U1 Timeline, U2 Composer and
+  5.7c2 is done: EQ templates (`model::eqTemplateItem`, `eqTemplateMime()`,
+  `Timeline::dropEq`, Site_EQs_Bin through `MainWindow::siteEqBinPath`;
+  test `tst_audio_eq_ui`, scenario `18-eq-drop.json`).
+  Next: 5.7c3 (the audio settings' options still dimmed; ROADMAP Phase 5
+  status); then the UI completion pass (U1 Timeline, U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.
 

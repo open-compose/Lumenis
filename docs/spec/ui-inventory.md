@@ -2402,9 +2402,11 @@ Details: docs/spec/audio-mixdown.md.
 ## 20b. Audio EQ (p.736-745)
 Details: docs/spec/audio-eq.md.
 * **Tools > Audio EQ** (p.736) opens the tool as a panel.
-* **Top row** (table on p.736-737): the Effect icon, Audio Loop Play and
-  Render Effect (later), the Fast menu, the Track Selection Menu button
-  (plus signs for several tracks), In, and Bypass RT EQ.
+* **Top row** (table on p.736-737): the Effect icon (dragged to a bin or a
+  Timeline audio clip, p.740), Audio Loop Play, Render Effect (later), the
+  Fast menu with the predefined templates and Site_EQs_Bin's (p.745), the
+  Track Selection Menu button (plus signs for several tracks), In, and
+  Bypass RT EQ.
 * **Bottom part** (picture on p.737): the EQ Parameter display, the low
   shelf, parametric midrange and high shelf sliders (+15 to -20 dB, p.739),
   the 3-band buttons (50/80/120/240 Hz; 2 octaves or 1/4 octave; 6/8/12/15

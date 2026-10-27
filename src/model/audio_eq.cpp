@@ -189,4 +189,24 @@ int setEq(Sequence& sequence, const QString& name, std::int64_t from, std::int64
     return changed;
 }
 
+BinItem eqTemplateItem(const AudioEq& eq, const QString& name, const QDateTime& when) {
+    BinItem item;
+    item.id = newItemId();
+    item.kind = BinItemKind::Effect;
+    item.name = name;
+    item.created = when;
+    item.modified = when;
+    item.composition.insert(QStringLiteral("eq"), audioEqToJson(eq));
+    return item;
+}
+
+std::optional<AudioEq> eqTemplateOf(const BinItem& item) {
+    if (item.kind != BinItemKind::Effect || !item.composition.contains(QStringLiteral("eq"))) return std::nullopt;
+    return audioEqFromJson(item.composition.value(QStringLiteral("eq")).toObject());
+}
+
+QString eqTemplateName(const AudioEq& eq) {
+    return eq.preset.isEmpty() ? QStringLiteral("Audio EQ") : eq.preset;
+}
+
 } // namespace lumenis::model
