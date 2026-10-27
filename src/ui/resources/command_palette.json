@@ -33,7 +33,9 @@
     {"name": "3D", "page": 96, "columns": []},
     {"name": "CC", "page": 96, "columns": []},
     {"name": "MCam", "page": 96, "columns": []},
-    {"name": "Tracks", "page": 96, "columns": []},
+    {"name": "Tracks", "page": 96, "columns": [
+      ["timeline.enlarge_waveform", "timeline.reduce_waveform"]
+    ]},
     {"name": "Smart Tools", "page": 96, "columns": [
       ["smart.lift_overwrite", "smart.extract_splice_in"],
       ["smart.ripple_trim", "smart.overwrite_trim"]

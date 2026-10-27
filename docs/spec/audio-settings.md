@@ -27,10 +27,10 @@ shown dimmed.
     Hann-windowed grains of 1024 samples, one every 512 samples of output,
     each read 2 or 3 times further along. It keeps its pitch and level,
     forward and backward. **Ours:** the method; the guide gives none.
-* **Display Channel Order** stays dimmed. It orders the channels of 5.1 and
-  7.1 tracks "in the Audio Mixer tool and in the waveform display in the
-  Timeline". Waveforms come with the UI completion pass (U1), and the
-  mixer shows no per-channel labels yet.
+* **Display Channel Order** orders the channels of 5.1 and 7.1 tracks "in the
+  Audio Mixer tool and in the waveform display in the Timeline": the
+  Timeline's waveforms follow it (U1a, docs/spec/waveforms.md). The mixer
+  shows no per-channel labels yet.
 
 ## Audio Project settings (Project, p.1148-1149)
 
@@ -53,10 +53,10 @@ shown dimmed.
     (`AudioMix::setRequiredRate`). The calibration tone always plays.
   * **Ours:** Always by default, so nothing goes silent unasked (the guide
     gives no default).
-* **Show Mismatched Sample Rates as Different Color.** The Timeline draws
-  audio segments whose clip's Audio SR column differs from the project's
-  rate in `Timeline::kMismatchedRateColor` (ours: an orange; the guide names
-  no colour). It takes the place of the clip colour.
+* **Show Mismatched Sample Rates as Different Color.** The waveforms of clips
+  at the project's rate are drawn black, those of other rates white (p.680;
+  docs/spec/waveforms.md). (5.7c3 first coloured the whole segment; p.680
+  shows the plot, so U1a changed it.)
 * **Remove Extra Filler After Punchin** stays dimmed. The extra filler comes
   from Extended Audio Punch-In past the end of the sequence, which is not
   done yet (docs/spec/punch-in.md).
@@ -114,6 +114,7 @@ shown dimmed.
   * pull rates, alignment, BWF time stamps, silence and trimming, groups.
 * `tst_settings_window`: the buffer boxes, Recommended and rs.
 * `tst_audio_media`:
-  * `projectSampleRate`: tone media at 44.1 kHz, the mismatch colour;
+  * `projectSampleRate`: tone media at 44.1 kHz, the setting passed to
+    the Timeline (the colours are in `tst_waveform_ui`);
   * `importAudioSettings`: rates and bit depths kept or converted,
     centring, a BWF group aligned to its time stamp.

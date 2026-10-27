@@ -1149,12 +1149,14 @@ These are recorded now so they are not entered from memory later.
     Frames, Clip Text (Clip Names, Group Clip Name, Clip Tracks, Source
     Track Name, Clip Durations, Clip Full Durations, Clip Trans Duration,
     Timeline Clip Notes, Source Names, Media Full Names, Clip Resolution),
-    Sync Breaks, Dupe Detection, Color Correction, Audio Data, Clip Color
+    Sync Breaks, Dupe Detection, Color Correction, Audio Data (Waveform,
+    Clip Volume, Volume, Pan, Allow Per Track Settings), Clip Color
     (the Clip Color dialog, p.594–597; docs/spec/timeline-colors.md),
     Segment Selection, Mark IO Selection, Track Color, Show Markers, Show
     Adapters, Show Track, Track Control Panel and Zoom (Zoom In, Zoom Out,
     Show Entire Sequence, Zoom into Region, Zoom Back to Last View, Show
-    Every Frame).
+    Every Frame). Waveform Options (Source Levels, Output Levels, Full
+    Height) is also on it (p.679). Waveforms: docs/spec/waveforms.md.
   * The scale bar zooms around the position indicator; zoomed in, the
     indicator gets a dotted "shadow" at the end of the frame. Zoom In:
     drag over the area. Focus: 90 pixels per second around the position

@@ -517,6 +517,9 @@ void MainWindow::createPanels() {
 void MainWindow::setProject(const model::ProjectEntry& project) {
     project_ = project;
     timeline_->setProjectHeight(project.settings.format.height);
+    // "You will see a WaveformCache folder in the Avid Projects directory" (p.677): ours is in the
+    // project's folder.
+    timeline_->setWaveformFolder(QDir(project.folder).filePath(QStringLiteral("WaveformCache")));
     setWindowTitle(QStringLiteral("%1 - %2").arg(QString::fromUtf8(branding::kProductName), project.settings.name));
     commands_.setHandler(QStringLiteral("file.close_project"), [this] { emit closeProjectRequested(); });
     // Project settings first: they include the new-sequence timecode.
@@ -3403,6 +3406,8 @@ void MainWindow::applySettings() {
     Timeline::Options o;
     o.toolbar = s.flag(tl, QStringLiteral("showToolbar"));
     o.markedRegion = s.flag(tl, QStringLiteral("showMarkedRegion"));
+    o.markedWaveforms = s.flag(tl, QStringLiteral("showMarkedWaveforms"));
+    o.proToolsChannelOrder = s.text(QStringLiteral("Audio"), QStringLiteral("channelOrder")) == QLatin1String("protools");
     const QString movement = s.text(tl, QStringLiteral("movementDuringPlay"));
     o.movement = movement == QLatin1String("scroll") ? Timeline::Options::Movement::Scroll
                  : movement == QLatin1String("none") ? Timeline::Options::Movement::None

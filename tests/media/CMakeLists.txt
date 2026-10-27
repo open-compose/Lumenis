@@ -29,4 +29,5 @@ target_compile_definitions(tst_clap_host PRIVATE LUMENIS_TEST_CLAP="$<TARGET_FIL
 # Audio timecode (LTC) and Change Sample Rate (docs/spec/clip-audio.md).
 lumenis_add_test(tst_ltc SOURCES tst_ltc.cpp LIBS lumenis::media)
 lumenis_add_test(tst_tone SOURCES tst_tone.cpp LIBS lumenis::media)
+lumenis_add_test(tst_waveform SOURCES tst_waveform.cpp LIBS lumenis::media)
 lumenis_add_test(tst_audio_project SOURCES tst_audio_project.cpp LIBS lumenis::media)

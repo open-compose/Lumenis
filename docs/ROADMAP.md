@@ -841,7 +841,9 @@ area is built):
 The same audit found items of areas built in Phases 1-4 left dimmed with no
 phase of their own. They are done in three steps:
 * U1, the Timeline: audio waveforms (p.677) and Show Marked Waveforms, with
-  the Audio setting's Display Channel Order for 5.1 and 7.1 (p.1148); the
+  the Audio setting's Display Channel Order for 5.1 and 7.1 (p.1148) (U1a,
+  docs/spec/waveforms.md, is done but for the per-track buttons, which come
+  with the Track Control panel); the
   Fast menu's Show Markers, Track Color, Segment and Mark IO Selection
   colours, Track Control panel, View Type and Timeline Views (p.592-604),
   Sync Breaks, Dupe Detection, Show Every Frame and the remaining Clip Text

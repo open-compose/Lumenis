@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/core/timecode.h"
+#include "lumenis/media/waveform.h"
 #include "lumenis/model/automation.h"
 #include "lumenis/model/clip_coloring.h"
 #include "lumenis/model/marker.h"
@@ -8,11 +9,13 @@
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/effect_palette.h"
 
+#include <QColor>
 #include <QElapsedTimer>
 #include <QHash>
 #include <QWidget>
 
 #include <functional>
+#include <memory>
 #include <optional>
 
 class QLabel;
@@ -123,6 +126,12 @@ private:
     void paintEffects(QPainter& p, const Row& r, const model::Track& t) const;
     // Audio Data over an audio row's segments (timeline_automation.cpp).
     void paintAudioData(QPainter& p, const Row& r, const model::Track& t) const;
+    // A segment's waveform (p.677-680) in `box`: a band per channel of the track, in Display Channel
+    // Order, with a line between them.
+    void paintWaveform(QPainter& p, const QRectF& box, const model::Track& t, const model::Segment& s,
+                       std::int64_t at) const;
+    // The frame, with its fraction, at a widget x.
+    double exactFrameAt(double x) const;
     void moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifiers);
     // A segment drag: frames and tracks moved so far.
     std::int64_t dragFrames(Qt::KeyboardModifiers modifiers) const;
@@ -192,6 +201,11 @@ public:
         bool ignoreTrackSelectors = false;
         // Trim settings (p.1223).
         bool trimAutoFocus = false;
+        // Timeline settings: Show Marked Waveforms, waveforms only between the marks (p.1218).
+        bool markedWaveforms = false;
+        // Audio settings: Display Channel Order of 5.1 and 7.1 tracks' waveforms (p.1148): SMPTE, or
+        // Pro Tools.
+        bool proToolsChannelOrder = false;
     };
     // Applies new settings at once: shows or hides the top toolbar and, with Only One Segment
     // Tool, turns Extract/Splice-in off if both segment tools were on.
@@ -312,7 +326,24 @@ public:
     // audio segments whose clip's Audio SR is not `projectRate` take kMismatchedRateColor in place
     // of their clip colour.
     void setMismatchedRates(bool show, int projectRate);
-    static constexpr const char* kMismatchedRateColor = "#d0802c"; // ours: the guide names no colour
+    bool showsMismatchedRates() const { return showMismatchedRates_; }
+    int projectSampleRate() const { return projectSampleRate_; }
+    // The waveforms the Timeline draws (lumenis/media/waveform.h); MainWindow points it at the project's
+    // WaveformCache folder (p.677).
+    media::WaveformCache& waveforms() const { return *waveforms_; }
+    void setWaveformFolder(const QString& folder);
+    // Audio Data > Waveform and the Waveform Options (p.677-679), as the Fast menu sets them.
+    void setWaveform(bool on);
+    void setWaveformLevels(bool output, bool fullHeight);
+    // Enlarges (+1) or reduces (-1) the waveform plot without its track (p.678); false at the limit.
+    bool zoomWaveform(int steps);
+    // The order a track of `format` shows its channels' waveforms in (Display Channel Order, p.1148,
+    // with the orders of p.689): the indices of its channels (0 for its first), top to bottom.
+    QList<int> waveformChannels(model::AudioFormat format) const;
+    // The plot of the sound at the project's rate, and of other rates when Show Mismatched Sample
+    // Rates as Different Color is on (p.680).
+    static constexpr QRgb kWaveformColor = 0xff000000;
+    static constexpr QRgb kMismatchedWaveformColor = 0xffffffff;
     bool sourceRecordColors() const { return sourceRecordColors_; }
 
     // Trim mode (ch. 20). Rollers sit on edit points; single-roller trims
@@ -612,6 +643,13 @@ public:
         // and audio rows are taller while one is shown.
         bool clipVolume = false;
         std::optional<model::AutomationParam> automation;
+        // Audio Data > Waveform (p.677-678) and the Fast menu's Waveform Options (p.679): Source
+        // Levels (false) or Output Levels, and Full Height. waveformZoom is the plot's size without the
+        // track's, in steps of 2x (Ctrl+Alt+L and Ctrl+Alt+K, p.678), from -3 to 4.
+        bool waveform = false;
+        bool outputLevels = false;
+        bool fullHeight = false;
+        int waveformZoom = 0;
     };
     const Display& display() const { return display_; }
 
@@ -770,6 +808,7 @@ private:
     int projectHeight_ = 1080;
     bool sourceRecordColors_ = false;
     bool showMismatchedRates_ = false;
+    std::unique_ptr<media::WaveformCache> waveforms_;
     int projectSampleRate_ = 48000;
     // Whether each clip's media was online when last looked at ("bin|clip"), and when.
     mutable QHash<QString, std::pair<bool, qint64>> online_;

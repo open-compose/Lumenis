@@ -215,7 +215,7 @@ private slots:
         QCOMPARE(rs->text(), QStringLiteral("rs"));
         rs->click();
         QCOMPARE(buffer->value(), 0);
-        QVERIFY(!audio.editor("channelOrder")->isEnabledTo(&audio)); // waits for the waveforms (U1)
+        QVERIFY(audio.editor("channelOrder")->isEnabledTo(&audio)); // the waveforms' order (U1a)
 
         SettingsDialog general(kind("General"), SettingEntry{QStringLiteral("General"), {}, true, {}});
         general.setInfo("projectFormat", QStringLiteral("1080p/25"));

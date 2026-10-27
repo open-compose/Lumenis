@@ -60,7 +60,7 @@
              "choices": [{"value": "alternating", "label": "Alternating L/R"}, {"value": "centered", "label": "Centered"}]},
             {"key": "playBuffer", "type": "int", "label": "Play Buffer Size in Samples", "min": 0, "max": 16384, "default": 0, "specialText": "Recommended", "resetButton": "rs", "page": 1147},
             {"key": "toolBuffer", "type": "int", "label": "Tool Buffer Size in Samples", "min": 0, "max": 16384, "default": 0, "specialText": "Recommended", "resetButton": "rs", "page": 1147},
-            {"key": "channelOrder", "type": "choice", "style": "menu", "label": "Display Channel Order", "default": "smpte", "page": 1148, "later": true,
+            {"key": "channelOrder", "type": "choice", "style": "menu", "label": "Display Channel Order", "default": "smpte", "page": 1148,
              "choices": [{"value": "smpte", "label": "SMPTE"}, {"value": "protools", "label": "Pro Tools"}]},
             {"key": "pitchCorrection", "type": "bool", "label": "Pitch Correction during Shuttle", "default": false, "page": 1148}
           ]
@@ -467,7 +467,7 @@
           "options": [
             {"key": "showToolbar", "type": "bool", "label": "Show Toolbar", "default": true, "page": 1218},
             {"key": "showMarkedRegion", "type": "bool", "label": "Show Marked Region", "default": true, "page": 1218},
-            {"key": "showMarkedWaveforms", "type": "bool", "label": "Show Marked Waveforms", "default": false, "page": 1218, "later": true},
+            {"key": "showMarkedWaveforms", "type": "bool", "label": "Show Marked Waveforms", "default": false, "page": 1218},
             {"key": "doubleClickNesting", "type": "bool", "label": "Double-Click to Show Nesting", "default": false, "page": 1219, "later": true},
             {"key": "fastScrub", "type": "bool", "label": "Use Fast Scrub", "default": false, "page": 1219, "later": true},
             {"key": "wireframeDragging", "type": "bool", "label": "Wireframe Dragging", "default": false, "page": 1219, "later": true},

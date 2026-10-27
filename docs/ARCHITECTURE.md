@@ -73,7 +73,8 @@ headers in `include/lumenis/<library>/`.
   (Audio Mixdown, docs/spec/audio-mixdown.md), `surround.*` (speakers,
   monitor mixes and their folds, docs/spec/surround.md), `ltc.*` (audio
   timecode, docs/spec/clip-audio.md), `tone.*` (the calibration tone,
-  docs/spec/tone.md). UI side:
+  docs/spec/tone.md), `waveform.*` (Timeline waveform peaks and their cache,
+  docs/spec/waveforms.md). UI side:
   `media_frames.*` (frames for monitors, bins and the Timeline),
   `source_browser.*`, `media_tool.*`, `relink_dialog.*`,
   `consolidate_dialog.*`, `background_queue.*`.

@@ -361,7 +361,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   rate colours, the Import Audio tab with `media::groupMonoWavs` and
   `alignToFrame`; tests `tst_audio_project`, `tst_audio_media`). Display
   Channel Order, Remove Extra Filler and gain on import stay dimmed.
-  So 5.7 is done. Next: the UI completion pass (U1 Timeline, U2 Composer and
+  So 5.7 is done. The UI completion pass has started: U1a, audio waveforms in
+  the Timeline (docs/spec/waveforms.md: `src/media/waveform.*` with the
+  project's WaveformCache, `TimelineView::paintWaveform`, Waveform Options,
+  Ctrl+Alt+L/K, Show Marked Waveforms, mismatched rates white, Display
+  Channel Order; tests `tst_waveform`, `tst_waveform_ui`), is done.
+  Next: the rest of the UI completion pass (U1b-e Timeline, U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.
 

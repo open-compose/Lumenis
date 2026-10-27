@@ -349,7 +349,7 @@ private slots:
     }
 
     // The Audio Project setting's Sample Rate (p.1148): new media at that rate; and Show Mismatched
-    // Sample Rates as Different Color (p.1149) in the Timeline.
+    // Sample Rates as Different Color (p.1149) passed to the Timeline.
     void projectSampleRate() {
         QTemporaryDir dir;
         const QString drive = dir.filePath(QStringLiteral("Media"));
@@ -391,22 +391,15 @@ private slots:
         QVERIFY(reader.open(link->audioFile(0)));
         QCOMPARE(reader.sampleRate(), 44100);
 
-        // A sequence of both: with the option on, the 48 kHz segment takes the mismatch colour.
-        model::Segment a;
-        a.binId = binId;
-        a.clipId = at48->id;
-        a.sourceTrack = QStringLiteral("A1");
-        a.length = 25;
-        model::Segment b = a;
-        b.clipId = at44->id;
+        // Show Mismatched Sample Rates (p.1149) reaches the Timeline, which draws those waveforms
+        // white (tst_waveform).
         Timeline& timeline = window.timeline();
-        QVERIFY(timeline.segmentColor(a).isEmpty());
+        QVERIFY(!timeline.showsMismatchedRates());
         window.settings().setValue(QStringLiteral("Audio Project"), QStringLiteral("showMismatchedRates"), true);
-        QCOMPARE(timeline.segmentColor(a), QString::fromLatin1(Timeline::kMismatchedRateColor));
-        QVERIFY(timeline.segmentColor(b).isEmpty());
+        QVERIFY(timeline.showsMismatchedRates());
+        QCOMPARE(timeline.projectSampleRate(), 44100);
         window.settings().setValue(QStringLiteral("Audio Project"), QStringLiteral("sampleRate"), QStringLiteral("48000"));
-        QVERIFY(timeline.segmentColor(a).isEmpty());
-        QCOMPARE(timeline.segmentColor(b), QString::fromLatin1(Timeline::kMismatchedRateColor));
+        QCOMPARE(timeline.projectSampleRate(), 48000);
         media::setExtraMediaDrives({});
     }
 

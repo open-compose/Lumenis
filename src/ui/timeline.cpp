@@ -4,6 +4,7 @@
 #include "lumenis/media/link.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
+#include "lumenis/media/surround.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
 #include "lumenis/ui/bin_dock.h"
@@ -13,6 +14,7 @@
 #include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/theme.h"
 
+#include <QActionGroup>
 #include <QApplication>
 #include <QContextMenuEvent>
 #include <QDateTime>
@@ -377,7 +379,9 @@ QList<TimelineView::Row> TimelineView::rows() const {
         r.top = y;
         r.height = rowHeight(n);
         const auto& d = timeline_.display();
-        if (r.height == kAudioRow && n.startsWith(QLatin1Char('A')) && (d.clipVolume || d.automation)) r.height = kAudioDataRow;
+        if (r.height == kAudioRow && n.startsWith(QLatin1Char('A')) && (d.clipVolume || d.automation || d.waveform)) {
+            r.height = kAudioDataRow;
+        }
         r.exists = !missing.contains(n);
         out << r;
         y += r.height;
@@ -523,6 +527,8 @@ void TimelineView::paintEvent(QPaintEvent*) {
                         p.setPen(QPen(QColor(kSelected), 2));
                         p.drawRect(box.adjusted(1, 1, -1, -1));
                     }
+                    // Audio waveforms (p.677-680).
+                    if (timeline_.display().waveform && t->kind == model::TrackKind::Audio) paintWaveform(p, box, *t, s, at);
                     // Clip Frames (Fast menu, p.592): the start frame of each
                     // segment on video tracks, at its left end.
                     QRectF textArea = box;
@@ -890,6 +896,84 @@ void TimelineView::moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifi
     composer.stop();
     composer.setActiveMonitor(timeline_.shownMonitor());
     composer.moveTo(timeline_.shownMonitor(), frame);
+}
+
+double TimelineView::exactFrameAt(double x) const {
+    const double scale = timeline_.scale();
+    return scale > 0 ? timeline_.firstFrame() + (x - headerWidth()) / scale : 0.0;
+}
+
+// Each pixel column draws the lowest to the highest sample of the frames under it, read from the
+// waveform's peaks (media::Waveform::range) at the file's own rate. Output Levels scales by what plays
+// there (clip gain and volume automation, model::volumeAt); Full Height spreads 48 dB over the half
+// height (ours: the guide only says it "visually extends audio peaks"); the plot zoom doubles or halves.
+void TimelineView::paintWaveform(QPainter& p, const QRectF& box, const model::Track& t, const model::Segment& s,
+                                 std::int64_t at) const {
+    const auto clip = timeline_.composer().resolve(s.binId, s.clipId);
+    const auto link = clip ? media::linkOf(*clip) : std::nullopt;
+    const auto ref = model::parseTrackName(s.sourceTrack);
+    if (!clip || !link || link->unlinked || !ref || clip->editRate.num() <= 0) return;
+    const Timeline::Display& d = timeline_.display();
+    // Show Marked Waveforms: only between the marks (p.1218).
+    double left = box.left();
+    double right = box.right();
+    const model::MonitorState& marks = timeline_.composer().state(timeline_.shownMonitor());
+    if (timeline_.options().markedWaveforms && !marks.isEmpty() && (marks.in() || marks.out())) {
+        left = std::max(left, xFor(marks.markedStart()));
+        right = std::min(right, xFor(marks.markedEnd() + 1));
+    }
+    if (right <= left) return;
+    const QList<int> order = timeline_.waveformChannels(t.format);
+    const int bands = std::max(static_cast<int>(order.size()), 1);
+    const double bandHeight = (box.height() - 2) / bands;
+    const double zoom = std::pow(2.0, d.waveformZoom);
+    const double clipRate = clip->editRate.toDouble();
+    const double first = static_cast<double>(link->first) / std::max(link->rate.toDouble(), 1.0); // seconds
+    p.save();
+    p.setClipRect(QRectF(left, box.top(), right - left, box.height()), Qt::IntersectClip);
+    for (int b = 0; b < bands; ++b) {
+        const double top = box.top() + 1 + b * bandHeight;
+        if (b > 0) {
+            // "Separated by a horizontal divider" (p.677).
+            p.setPen(QColor(kRowLine));
+            p.drawLine(QPointF(left, top), QPointF(right, top));
+        }
+        const int track = ref->number - 1 + order.value(b, 0);
+        const auto channel = link->channelOf(track);
+        if (!channel) continue;
+        const auto waveform = timeline_.waveforms().get({link->audioFile(track), channel->first, channel->second});
+        if (!waveform || waveform->sampleRate <= 0) continue;
+        const bool mismatched = timeline_.showsMismatchedRates() && waveform->sampleRate != timeline_.projectSampleRate();
+        p.setPen(QColor::fromRgba(mismatched ? Timeline::kMismatchedWaveformColor : Timeline::kWaveformColor));
+        const double middle = top + bandHeight / 2;
+        const double half = bandHeight / 2 - 1;
+        auto sampleAt = [&](double record) {
+            const double source = static_cast<double>(s.sourceIn) + (record - static_cast<double>(at));
+            return static_cast<std::int64_t>(std::floor((first + source / clipRate) * waveform->sampleRate));
+        };
+        auto shape = [&](float v) {
+            double a = std::abs(static_cast<double>(v)) * zoom;
+            if (d.fullHeight) a = a > 0 ? std::max(0.0, 1.0 + 20.0 * std::log10(a) / 48.0) : 0.0;
+            return std::copysign(std::min(a, 1.0), static_cast<double>(v));
+        };
+        for (int x = static_cast<int>(std::floor(left)); x < static_cast<int>(std::ceil(right)); ++x) {
+            const double r0 = exactFrameAt(x);
+            const double r1 = exactFrameAt(x + 1);
+            const std::int64_t from = sampleAt(r0);
+            auto [lo, hi] = waveform->range(from, std::max(sampleAt(r1), from + 1));
+            if (d.outputLevels) {
+                // What plays there: the clip gain and the volume automation.
+                const double db = model::volumeAt(s, static_cast<double>(s.sourceIn) + (r0 - static_cast<double>(at)));
+                const auto g = static_cast<float>(db <= model::kGainOff ? 0.0 : std::pow(10.0, db / 20.0));
+                lo *= g;
+                hi *= g;
+            }
+            const double y0 = middle - shape(hi) * half;
+            const double y1 = middle - shape(lo) * half;
+            p.drawLine(QPointF(x + 0.5, y0), QPointF(x + 0.5, std::max(y1, y0 + 1)));
+        }
+    }
+    p.restore();
 }
 
 void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t) const {
@@ -1396,6 +1480,10 @@ void TimelineView::wheelEvent(QWheelEvent* event) {
 Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), composer_(composer) {
     setObjectName(QStringLiteral("Timeline"));
     view_ = new TimelineView(*this, this);
+    // Waveforms are worked out on the cache's thread; the view draws them once they are ready.
+    waveforms_ = std::make_unique<media::WaveformCache>([this] {
+        QMetaObject::invokeMethod(this, [this] { view_->update(); }, Qt::QueuedConnection);
+    });
     vscroll_ = new QScrollBar(Qt::Vertical, this);
     vscroll_->setObjectName(QStringLiteral("timelineVScroll"));
     connect(vscroll_, &QScrollBar::valueChanged, view_, &TimelineView::setTopOffset);
@@ -1911,7 +1999,7 @@ QMenu* Timeline::fastMenu() {
     // Audio Data (p.677-680): the clip gain's line, and the Volume or Pan graph, one at a time.
     QMenu* audioData = m->addMenu(tr("Audio Data"));
     audioData->setObjectName(QStringLiteral("audioData"));
-    audioData->addAction(tr("Waveform"))->setEnabled(false);
+    check(audioData, tr("Waveform"), display_.waveform, [this](bool v) { setWaveform(v); });
     check(audioData, tr("Clip Volume"), display_.clipVolume, [this](bool v) { setAudioData(v, display_.automation); });
     check(audioData, tr("Volume"), display_.automation == model::AutomationParam::Volume, [this](bool v) {
         setAudioData(display_.clipVolume, v ? std::optional(model::AutomationParam::Volume) : std::nullopt);
@@ -1920,6 +2008,16 @@ QMenu* Timeline::fastMenu() {
         setAudioData(display_.clipVolume, v ? std::optional(model::AutomationParam::Pan) : std::nullopt);
     });
     audioData->addAction(tr("Allow Per Track Settings"))->setEnabled(false);
+    // Waveform Options (p.679): Source Levels or Output Levels, and Full Height.
+    QMenu* waveformOptions = m->addMenu(tr("Waveform Options"));
+    waveformOptions->setObjectName(QStringLiteral("waveformOptions"));
+    auto* levels = new QActionGroup(waveformOptions);
+    check(waveformOptions, tr("Source Levels"), !display_.outputLevels, [this](bool v) { if (v) setWaveformLevels(false, display_.fullHeight); });
+    levels->addAction(waveformOptions->actions().constLast());
+    check(waveformOptions, tr("Output Levels"), display_.outputLevels, [this](bool v) { if (v) setWaveformLevels(true, display_.fullHeight); });
+    levels->addAction(waveformOptions->actions().constLast());
+    waveformOptions->addSeparator();
+    check(waveformOptions, tr("Full Height"), display_.fullHeight, [this](bool v) { setWaveformLevels(display_.outputLevels, v); });
     connect(m->addAction(tr("Clip Color...")), &QAction::triggered, this, &Timeline::openClipColorDialog);
     later(tr("Segment Selection"));
     later(tr("Mark IO Selection"));
@@ -2027,6 +2125,8 @@ bool Timeline::fail(const QString& text) {
 
 bool Timeline::handles(const QString& id) {
     static const QStringList ids{
+        QStringLiteral("timeline.enlarge_waveform"),
+        QStringLiteral("timeline.reduce_waveform"),
         QStringLiteral("fx.remove_effect"),
         QStringLiteral("edit.splice_in"),
         QStringLiteral("edit.overwrite"),
@@ -2099,6 +2199,10 @@ bool Timeline::perform(const QString& id) {
     message_.clear();
     using model::AudioFormat;
     using model::TrackKind;
+    if (id == QLatin1String("timeline.enlarge_waveform") || id == QLatin1String("timeline.reduce_waveform")) {
+        // "To enlarge the size of the waveform plot image without enlarging its track" (p.678).
+        return zoomWaveform(id == QLatin1String("timeline.enlarge_waveform") ? 1 : -1);
+    }
     if (id == QLatin1String("play.audio_loop_play")) {
         toggleAudioLoopPlay();
     } else if (id == QLatin1String("fx.remove_effect")) {
@@ -4320,12 +4424,6 @@ std::optional<model::ClipFacts> Timeline::clipFacts(const model::Segment& segmen
 
 QString Timeline::segmentColor(const model::Segment& segment) const {
     if (segment.isFiller()) return {};
-    if (showMismatchedRates_ && segment.sourceTrack.startsWith(QLatin1Char('A'))) {
-        if (const auto clip = composer_.resolve(segment.binId, segment.clipId)) {
-            const int rate = clip->fields.value(QStringLiteral("Audio SR")).toInt();
-            if (rate > 0 && rate != projectSampleRate_) return QString::fromLatin1(kMismatchedRateColor);
-        }
-    }
     return model::timelineClipColor(clipColors_, segment, clipFacts(segment));
 }
 
@@ -4333,6 +4431,45 @@ void Timeline::setProjectHeight(int height) {
     if (height <= 0 || height == projectHeight_) return;
     projectHeight_ = height;
     view_->update();
+}
+
+void Timeline::setWaveformFolder(const QString& folder) {
+    waveforms_->setFolder(folder);
+}
+
+void Timeline::setWaveform(bool on) {
+    display_.waveform = on;
+    view_->update();
+}
+
+void Timeline::setWaveformLevels(bool output, bool fullHeight) {
+    display_.outputLevels = output;
+    display_.fullHeight = fullHeight;
+    view_->update();
+}
+
+bool Timeline::zoomWaveform(int steps) {
+    const int to = std::clamp(display_.waveformZoom + steps, -3, 4);
+    if (to == display_.waveformZoom) return false;
+    display_.waveformZoom = to;
+    view_->update();
+    return true;
+}
+
+QList<int> Timeline::waveformChannels(model::AudioFormat format) const {
+    using media::Speaker;
+    const QList<Speaker> speakers = media::trackSpeakers(format);
+    // The monitor orders of p.689: 5.1 SMPTE L R C Lfe Ls Rs and Pro Tools L C R Ls Rs Lfe; 7.1 SMPTE DS
+    // L R C Lfe Lss Rss Lsr Rsr and Pro Tools L C R Lss Rss Lsr Rsr Lfe.
+    const QList<Speaker> order =
+        options_.proToolsChannelOrder
+            ? QList<Speaker>{Speaker::L, Speaker::C, Speaker::R, Speaker::Lss, Speaker::Rss, Speaker::Lsr, Speaker::Rsr, Speaker::Lfe}
+            : QList<Speaker>{Speaker::L, Speaker::R, Speaker::C, Speaker::Lfe, Speaker::Lss, Speaker::Rss, Speaker::Lsr, Speaker::Rsr};
+    QList<int> out;
+    for (int k = 0; k < speakers.size(); ++k) out << k;
+    if (format != model::AudioFormat::Surround51 && format != model::AudioFormat::Surround71) return out;
+    std::stable_sort(out.begin(), out.end(), [&](int a, int b) { return order.indexOf(speakers.at(a)) < order.indexOf(speakers.at(b)); });
+    return out;
 }
 
 void Timeline::setMismatchedRates(bool show, int projectRate) {
