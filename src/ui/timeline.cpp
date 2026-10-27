@@ -22,6 +22,8 @@
 #include <QDropEvent>
 #include <QFileInfo>
 #include <QHBoxLayout>
+#include <QInputDialog>
+#include <QJsonArray>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
@@ -35,6 +37,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QScrollBar>
 #include <QSlider>
 #include <QToolButton>
@@ -490,6 +493,10 @@ void TimelineView::resizeEvent(QResizeEvent* event) {
 void TimelineView::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.fillRect(rect(), QColor(kBackground));
+    if (timeline_.showsHeads()) {
+        paintHeads(p);
+        return;
+    }
     const int header = headerWidth();
     const QRect tracksArea(header, kRulerHeight, width() - header, height() - kRulerHeight);
     const QList<Row> rowList = rows();
@@ -991,6 +998,119 @@ void TimelineView::paintControls(QPainter& p, const Row& r, const model::Track& 
     }
 }
 
+// ---------------------------------------------------------------- Heads and Heads Tails views
+
+// Ours: the boxes are 16:9 frames 56 pixels high (two side by side in Heads Tails), 6 pixels apart,
+// in one row under the ruler, made narrower when they would not all fit.
+QRect TimelineView::headsBox(int index, int count) const {
+    const int header = headerWidth();
+    const bool tails = timeline_.display().viewType == Timeline::ViewType::HeadsTails;
+    const int frames = tails ? 2 : 1;
+    int h = 56;
+    const int available = width() - header - 8;
+    if (count > 0) {
+        const int fit = available / count - 6;
+        h = std::clamp(fit * 9 / (16 * frames), 12, h);
+    }
+    const int w = h * 16 / 9 * frames;
+    return QRect(header + 6 + index * (w + 6), kRulerHeight + 6, w, h);
+}
+
+int TimelineView::headsAt(const QPoint& pos, bool boundary) const {
+    const int count = static_cast<int>(timeline_.headsSpans().size());
+    if (count == 0 || pos.x() < headerWidth()) return -1;
+    const QRect first = headsBox(0, count);
+    const int step = (count > 1 ? headsBox(1, count).left() : first.right() + 7) - first.left();
+    const double at = static_cast<double>(pos.x() - first.left() + 3) / std::max(step, 1);
+    if (boundary) return std::clamp(static_cast<int>(std::lround(at)), 0, count);
+    if (pos.y() < first.top() || pos.y() > first.bottom()) return -1;
+    const int index = static_cast<int>(std::floor(at));
+    return index >= 0 && index < count && headsBox(index, count).contains(pos) ? index : -1;
+}
+
+// "Heads view shows the Head frame for each clip. Heads Tails view shows both the head and tail frames
+// for each clip" (p.639). The frame is the top selected video track's; a clip with no picture there
+// shows its name instead. The Track Selector shows "H" (the picture on p.639).
+void TimelineView::paintHeads(QPainter& p) {
+    const int header = headerWidth();
+    const QColor text = palette().color(QPalette::WindowText);
+    const QColor bright = palette().color(QPalette::BrightText);
+    const auto spans = timeline_.headsSpans();
+    const int count = static_cast<int>(spans.size());
+    const model::Sequence& seq = timeline_.shown();
+    const model::MonitorState& state = timeline_.composer().state(MonitorId::Record);
+    QStringList video;
+    for (const QString& t : timeline_.headsTracks()) {
+        if (t.startsWith(QLatin1Char('V'))) video.prepend(t); // the top track first
+    }
+    const bool tails = timeline_.display().viewType == Timeline::ViewType::HeadsTails;
+    QFont small = font();
+    small.setPointSizeF(std::max(small.pointSizeF() - 1, 6.0));
+    p.setFont(small);
+    auto frameAtTime = [&](std::int64_t frame, const QRect& box) {
+        p.fillRect(box, Qt::black);
+        for (const QString& name : video) {
+            const model::Track* t = seq.track(name);
+            if (!t) continue;
+            std::int64_t segStart = 0;
+            const int i = t->segmentAt(frame, &segStart);
+            if (i < 0 || t->segments.at(i).isFiller()) continue;
+            const model::Segment& s = t->segments.at(i);
+            if (MediaFrames* frames = MediaFrames::instance()) {
+                const auto clip = timeline_.composer().resolve(s.binId, s.clipId);
+                const QImage image = clip ? frames->thumbnail(*clip, s.sourceIn + frame - segStart, box.size()) : QImage();
+                if (!image.isNull()) {
+                    const QSize fit = image.size().scaled(box.size(), Qt::KeepAspectRatio);
+                    p.drawImage(QRect(box.left() + (box.width() - fit.width()) / 2, box.top() + (box.height() - fit.height()) / 2,
+                                      fit.width(), fit.height()),
+                                image);
+                    return;
+                }
+            }
+            p.setPen(bright);
+            p.drawText(box.adjusted(3, 0, -3, 0), Qt::AlignCenter | Qt::TextWordWrap, s.name);
+            return;
+        }
+    };
+    p.save();
+    p.setClipRect(QRect(header, kRulerHeight, width() - header, height() - kRulerHeight));
+    for (int i = 0; i < count; ++i) {
+        const QRect box = headsBox(i, count);
+        if (box.left() > width()) break;
+        const auto [start, end] = spans.at(i);
+        if (tails) {
+            const QRect head(box.left(), box.top(), box.width() / 2 - 1, box.height());
+            frameAtTime(start, head);
+            frameAtTime(end - 1, QRect(head.right() + 2, box.top(), box.width() - head.width() - 2, box.height()));
+        } else {
+            frameAtTime(start, box);
+        }
+        // The clip under the position indicator is outlined.
+        const bool current = state.position() >= start && state.position() < end;
+        p.setPen(QPen(current ? QColor(kIndicator) : QColor(kRowLine), current ? 2 : 1));
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(box.adjusted(0, 0, -1, -1));
+    }
+    // Where an Alt+drag will put the clip.
+    if (headsFrom_) {
+        const int to = headsAt(headsPos_, true);
+        if (to >= 0) {
+            const int x = to < count ? headsBox(to, count).left() - 3 : headsBox(count - 1, count).right() + 4;
+            p.setPen(QPen(QColor(kSpliceColor), 2));
+            p.drawLine(x, kRulerHeight + 2, x, headsBox(0, count).bottom() + 4);
+        }
+    }
+    p.restore();
+    if (header > 0) {
+        p.fillRect(QRect(0, 0, header, height()), QColor(kHeader));
+        const QRect row(0, kRulerHeight + 6, header, headsBox(0, std::max(count, 1)).height());
+        p.setPen(text);
+        p.drawText(row.adjusted(kRecordX, 0, 0, 0), Qt::AlignLeft | Qt::AlignVCenter, QStringLiteral("H"));
+        p.setPen(QColor(kRowLine));
+        p.drawLine(header - 1, 0, header - 1, height());
+    }
+}
+
 // Moves the shown monitor's position to the frame under x (a click or scrub in the tracks),
 // stopping playback and making that monitor active.
 void TimelineView::moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifiers) {
@@ -1310,6 +1430,23 @@ model::TrimKind TimelineView::trimKindAt(const QPoint& pos) const {
 void TimelineView::mousePressEvent(QMouseEvent* event) {
     if (event->button() != Qt::LeftButton) return;
     const QPoint pos = event->position().toPoint();
+    // Heads views (p.639): a click goes to the clip's head; "Press and hold the Alt key ... click the
+    // frames representing the clip you want to move, and drag the clip to its new position."
+    if (timeline_.showsHeads()) {
+        const int index = headsAt(pos, false);
+        if (index < 0) return;
+        if (event->modifiers() & Qt::AltModifier) {
+            headsFrom_ = index;
+            headsPos_ = pos;
+            update();
+        } else {
+            Composer& composer = timeline_.composer();
+            composer.stop();
+            composer.setActiveMonitor(MonitorId::Record);
+            composer.moveTo(MonitorId::Record, timeline_.headsSpans().at(index).first);
+        }
+        return;
+    }
     if (pos.x() >= headerWidth()) {
         if (zoomSelecting_) {
             zoomFrom_ = pos.x();
@@ -1458,6 +1595,11 @@ void TimelineView::mousePressEvent(QMouseEvent* event) {
 // once it passes the platform's drag distance, so a click does not move segments.
 void TimelineView::mouseMoveEvent(QMouseEvent* event) {
     const QPoint pos = event->position().toPoint();
+    if (headsFrom_) {
+        headsPos_ = pos;
+        update();
+        return;
+    }
     if (keyFrom_) {
         keyPos_ = pos;
         update();
@@ -1495,6 +1637,14 @@ std::optional<std::pair<QString, int>> TimelineView::insertAt(const QPoint& pos)
 
 void TimelineView::mouseReleaseEvent(QMouseEvent* event) {
     const QPoint pos = event->position().toPoint();
+    if (headsFrom_) {
+        const int from = *headsFrom_;
+        headsFrom_.reset();
+        const int to = headsAt(pos, true);
+        if (to >= 0 && to != from && to != from + 1) timeline_.moveHeads(from, to);
+        update();
+        return;
+    }
     if (insertFrom_) {
         const InsertPress press = *insertFrom_;
         insertFrom_.reset();
@@ -1739,7 +1889,16 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     tool("clientMonitor", Picture::ClientMonitor, tr("Client Monitor"), false);
     tool("stepIn", Picture::StepIn, tr("Step In"), false);
     tool("stepOut", Picture::StepOut, tr("Step Out"), false);
-    tool("viewMenu", Picture::ViewMenu, tr("Timeline View"), false);
+    // The View Menu button (p.604): the Timeline view in use, and a menu of the views; with Alt, the
+    // views to replace.
+    QToolButton* viewButton = tool("viewMenu", Picture::ViewMenu, tr("Timeline View"), true);
+    viewButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    viewButton->setFixedWidth(104);
+    viewButton->setText(tr("Untitled"));
+    connect(viewButton, &QToolButton::clicked, this, [this, viewButton] {
+        std::unique_ptr<QMenu> menu(viewMenu(QApplication::keyboardModifiers() & Qt::AltModifier, viewButton));
+        menu->exec(viewButton->mapToGlobal(QPoint(0, -menu->sizeHint().height())));
+    });
     search_ = new QLineEdit(toolbar_);
     search_->setObjectName(QStringLiteral("timelineSearch"));
     search_->setFixedSize(110, kToolButtonHeight - 2);
@@ -2145,12 +2304,18 @@ QMenu* Timeline::fastMenu() {
         });
     };
     connect(m->addAction(tr("Default Setup")), &QAction::triggered, this, [this] {
-        display_ = Display();
+        setDisplay(Display());
         showEntireSequence();
-        syncScrollBars();
-        view_->update();
     });
-    laterMenu(m, tr("View Type"));
+    // View Type (p.592, p.638-639): Heads or Heads Tails; choosing the one that is on goes back to
+    // the tracks (ours: the guide names no item for that). Dimmed while the Timeline shows a source
+    // (p.603).
+    QMenu* viewType = m->addMenu(tr("View Type"));
+    viewType->setObjectName(QStringLiteral("viewType"));
+    viewType->setEnabled(!showSource_);
+    for (const auto& [type, text] : {std::pair{ViewType::Heads, tr("Heads")}, std::pair{ViewType::HeadsTails, tr("Heads Tails")}}) {
+        check(viewType, text, display_.viewType == type, [this, t = type](bool v) { setViewType(v ? t : ViewType::Standard); });
+    }
     check(m, tr("Track Panel"), display_.trackPanel, [this](bool v) { display_.trackPanel = v; });
     check(m, tr("Effect Icons"), display_.effectIcons, [this](bool v) {
         display_.effectIcons = v;
@@ -4840,6 +5005,161 @@ void Timeline::setAllMarkersShown(bool shown) {
         for (const model::MarkerColor& c : model::markerColors()) display_.hiddenMarkers.insert(c.name);
     }
     view_->update();
+}
+
+// ---------------------------------------------------------------- display, views and View Type (U1b2)
+
+QJsonObject Timeline::displayToJson(const Display& d) {
+    QJsonObject o{
+        {QStringLiteral("trackPanel"), d.trackPanel},
+        {QStringLiteral("clipNames"), d.clipNames},
+        {QStringLiteral("clipDurations"), d.clipDurations},
+        {QStringLiteral("clipTracks"), d.clipTracks},
+        {QStringLiteral("timecodeTrack"), d.timecodeTrack},
+        {QStringLiteral("effectIcons"), d.effectIcons},
+        {QStringLiteral("dissolveIcons"), d.dissolveIcons},
+        {QStringLiteral("clipFrames"), d.clipFrames},
+        {QStringLiteral("clipVolume"), d.clipVolume},
+        {QStringLiteral("waveform"), d.waveform},
+        {QStringLiteral("outputLevels"), d.outputLevels},
+        {QStringLiteral("fullHeight"), d.fullHeight},
+        {QStringLiteral("waveformZoom"), d.waveformZoom},
+        {QStringLiteral("perTrack"), d.perTrack},
+        {QStringLiteral("trackControlPanel"), d.trackControlPanel},
+        {QStringLiteral("segmentSelectionColor"), d.segmentSelectionColor},
+        {QStringLiteral("markIOColor"), d.markIOColor},
+    };
+    if (d.automation) {
+        o.insert(QStringLiteral("automation"),
+                 *d.automation == model::AutomationParam::Volume ? QStringLiteral("volume") : QStringLiteral("pan"));
+    }
+    QJsonArray hidden;
+    QStringList markers(d.hiddenMarkers.begin(), d.hiddenMarkers.end());
+    markers.sort();
+    for (const QString& m : markers) hidden.append(m);
+    o.insert(QStringLiteral("hiddenMarkers"), hidden);
+    o.insert(QStringLiteral("viewType"), d.viewType == ViewType::Heads        ? QStringLiteral("heads")
+                                         : d.viewType == ViewType::HeadsTails ? QStringLiteral("headsTails")
+                                                                              : QStringLiteral("standard"));
+    return o;
+}
+
+Timeline::Display Timeline::displayFromJson(const QJsonObject& o) {
+    Display d;
+    auto flag = [&o](const char* key, bool& field) {
+        const QJsonValue v = o.value(QLatin1String(key));
+        if (v.isBool()) field = v.toBool();
+    };
+    flag("trackPanel", d.trackPanel);
+    flag("clipNames", d.clipNames);
+    flag("clipDurations", d.clipDurations);
+    flag("clipTracks", d.clipTracks);
+    flag("timecodeTrack", d.timecodeTrack);
+    flag("effectIcons", d.effectIcons);
+    flag("dissolveIcons", d.dissolveIcons);
+    flag("clipFrames", d.clipFrames);
+    flag("clipVolume", d.clipVolume);
+    flag("waveform", d.waveform);
+    flag("outputLevels", d.outputLevels);
+    flag("fullHeight", d.fullHeight);
+    flag("perTrack", d.perTrack);
+    flag("trackControlPanel", d.trackControlPanel);
+    d.waveformZoom = std::clamp(o.value(QStringLiteral("waveformZoom")).toInt(), -3, 4);
+    const QString automation = o.value(QStringLiteral("automation")).toString();
+    if (automation == QLatin1String("volume")) d.automation = model::AutomationParam::Volume;
+    if (automation == QLatin1String("pan")) d.automation = model::AutomationParam::Pan;
+    static const QRegularExpression hex(QStringLiteral("^#[0-9a-fA-F]{6}$"));
+    for (auto [key, field] : {std::pair{"segmentSelectionColor", &d.segmentSelectionColor}, std::pair{"markIOColor", &d.markIOColor}}) {
+        const QString c = o.value(QLatin1String(key)).toString();
+        if (hex.match(c).hasMatch()) *field = c;
+    }
+    for (const QJsonValue& v : o.value(QStringLiteral("hiddenMarkers")).toArray()) d.hiddenMarkers.insert(v.toString());
+    const QString view = o.value(QStringLiteral("viewType")).toString();
+    d.viewType = view == QLatin1String("heads")        ? ViewType::Heads
+                 : view == QLatin1String("headsTails") ? ViewType::HeadsTails
+                                                       : ViewType::Standard;
+    return d;
+}
+
+void Timeline::setDisplay(const Display& d) {
+    if (display_.automation != d.automation) keySelection_.clear();
+    display_ = d;
+    syncScrollBars();
+    view_->update();
+    emit changed();
+}
+
+void Timeline::setViewType(ViewType type) {
+    display_.viewType = type;
+    syncScrollBars();
+    view_->update();
+}
+
+bool Timeline::showsHeads() const {
+    return display_.viewType != ViewType::Standard && !showSource_ && hasShown();
+}
+
+// The selected record tracks, or every track when none is selected.
+QStringList Timeline::headsTracks() const {
+    const model::Sequence seq = recordSequenceOf(composer_);
+    QStringList tracks = patch_.selectedRecordTracks(seq);
+    if (tracks.isEmpty()) tracks = seq.trackNames();
+    return tracks;
+}
+
+QList<std::pair<std::int64_t, std::int64_t>> Timeline::headsSpans() const {
+    return recordSequenceOf(composer_).headsSpans(headsTracks());
+}
+
+// "If you rearrange a split edit ... the system cuts all tracks to the same edit point" (p.638):
+// model::Sequence::moveSpan moves the clip's frames on every selected track.
+void Timeline::setViews(const QStringList& names, const QString& current) {
+    views_ = names;
+    currentView_ = current;
+    if (QToolButton* b = toolButton(QStringLiteral("viewMenu"))) {
+        b->setText(current.isEmpty() ? tr("Untitled") : current);
+    }
+}
+
+// "Click the View Menu button, and select Save As. The View Name dialog box opens. Type a name for the
+// view"; Alt+click lists "saved view names, each appended with the Replace command" (p.604).
+QMenu* Timeline::viewMenu(bool replace, QWidget* parent) {
+    auto* menu = new QMenu(parent);
+    menu->setObjectName(QStringLiteral("timelineViewMenu"));
+    for (const QString& name : views_) {
+        if (replace) {
+            connect(menu->addAction(tr("%1 Replace").arg(name)), &QAction::triggered, this,
+                    [this, name] { emit viewSaveRequested(name, true); });
+            continue;
+        }
+        QAction* a = menu->addAction(name);
+        a->setCheckable(true);
+        a->setChecked(name == currentView_);
+        connect(a, &QAction::triggered, this, [this, name] { emit viewRequested(name); });
+    }
+    if (replace) return menu;
+    if (!views_.isEmpty()) menu->addSeparator();
+    connect(menu->addAction(tr("Save As...")), &QAction::triggered, this, [this] {
+        bool ok = false;
+        const QString name = QInputDialog::getText(this, tr("View Name"), tr("View name:"), QLineEdit::Normal,
+                                                   currentView_, &ok).trimmed();
+        if (ok && !name.isEmpty()) emit viewSaveRequested(name, false);
+    });
+    return menu;
+}
+
+bool Timeline::moveHeads(int from, int before) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const QStringList tracks = headsTracks();
+    const auto spans = seq.headsSpans(tracks);
+    if (from < 0 || from >= spans.size() || before < 0 || before > spans.size()) return false;
+    const auto [start, end] = spans.at(from);
+    const std::int64_t to = before < spans.size() ? spans.at(before).first : spans.constLast().second;
+    if (!seq.moveSpan(tracks, start, end - start, to)) return fail(tr("The clip cannot be moved there, or a track is locked."));
+    return commitSequence(tr("Move Clip"), seq);
 }
 
 QList<int> Timeline::waveformChannels(model::AudioFormat format) const {

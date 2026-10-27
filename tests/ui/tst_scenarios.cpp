@@ -311,6 +311,15 @@ struct Run {
             }
             return true;
         }
+        if (o.contains(QStringLiteral("heads_move"))) {
+            // Heads view's Alt+drag (p.639): [clip, before clip], over the selected record tracks.
+            const QJsonArray a = o.value(QStringLiteral("heads_move")).toArray();
+            const bool ok = timeline.moveHeads(a.at(0).toInt(), a.at(1).toInt());
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the heads move was not refused") : timeline.lastMessage());
+            }
+            return true;
+        }
         if (o.contains(QStringLiteral("local_color"))) {
             // Set Local Clip Color on the selected segments (p.598); "" is None.
             const bool ok = timeline.setLocalClipColor(o.value(QStringLiteral("local_color")).toString());

@@ -47,7 +47,9 @@
        {"id": "other.add_option_key", "platforms": ["macos"]}]
     ]},
     {"name": "More", "page": 96, "columns": [
-      ["more.add_marker", "edit.toggle_source_record"]
+      ["more.add_marker", "edit.toggle_source_record"],
+      ["timeline.view.tv1", "timeline.view.tv2", "timeline.view.tv3", "timeline.view.tv4"],
+      ["timeline.view.tv5", "timeline.view.tv6", "timeline.view.tv7", "timeline.view.tv8"]
     ]},
     {"name": "Workspaces", "page": 91, "workspaceMenus": true, "columns": [
       ["workspace.w1", "workspace.w2", "workspace.w3", "workspace.w4"],

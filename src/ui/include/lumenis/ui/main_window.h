@@ -392,6 +392,16 @@ public:
     // The workspace each of the W1-W12 buttons switches to (p.90-91).
     // Index i is button W(i+1); an empty name leaves it unassigned.
     QStringList workspaceButtons() const;
+    // Timeline views (p.604-605): the names of the Timeline View User settings, sorted ("Media Composer
+    // sorts the Timeline views alphabetically", p.605), and the view each TV button switches to
+    // (index 0 is TV1). An unassigned button takes the view in its place in that order (p.605).
+    QStringList timelineViews() const;
+    QStringList timelineViewButtons() const;
+    // Makes view `name` the active Timeline View setting, which applies it.
+    void chooseTimelineView(const QString& name);
+    // Keeps the Timeline's Fast menu settings and Clip Color choices as view `name`: a new view, or
+    // with `replace` (or a name already used) in place of that view's; it becomes the one in use.
+    void saveTimelineView(const QString& name, bool replace);
 
     // The layout of a new user (p.74): Bin Container top left, Composer to
     // its right, Timeline along the bottom.
@@ -453,6 +463,8 @@ private:
     // versions become active.
     void linkSettings(const QString& workspace);
     void updateWorkspaceButtons();
+    // Gives the Timeline, the Command Palette and the TV buttons the views as they are now.
+    void updateTimelineViews();
     // File > Get Position Info (p.101): the Timeline at the position, in the
     // Console.
     void positionInfo();
@@ -545,6 +557,8 @@ private:
     bool syncingWorkspaces_ = false;
     // The workspace whose Link to Named settings were last applied.
     QString linkedWorkspace_;
+    // The Timeline view last applied, so applySettings() applies a view only when another is chosen.
+    QString appliedTimelineView_;
     std::unique_ptr<KeyboardMap> keyboard_;
     WorkspaceManager* workspaces_ = nullptr;
     WorkspaceBar* bar_ = nullptr;

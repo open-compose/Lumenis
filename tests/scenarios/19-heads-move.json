@@ -1,0 +1,17 @@
+[
+  {
+    "name": "Alt+drag in Heads view moves a clip on every selected track, cutting them all at the same edit points; dropping it on itself is refused",
+    "guide": "p.638-639",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 10], ["B", 0, 20]], "A1": [["A", 0, 15], ["B", 0, 15]]}},
+    "steps": [
+      {"heads_move": [0, 3]},
+      {"heads_move": [0, 0], "refused": true},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"},
+      {"record_tracks": ["V1"]},
+      {"heads_move": [1, 0]}
+    ],
+    "expect": {"V1": [["A", 0, 10], ["B", 0, 20]], "A1": [["A", 10, 5], ["B", 0, 15], ["A", 0, 10]]}
+  }
+]

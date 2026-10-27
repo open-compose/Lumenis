@@ -80,11 +80,17 @@ public:
     void setWorkspaces(const QStringList& names, const QStringList& assigned);
     // `index` 0 is W1's menu; null out of range.
     QComboBox* workspaceMenu(int index) const { return workspaceMenus_.value(index); }
+    // The More tab's Timeline View buttons TV1-TV8 (p.605), each with a menu of the Timeline views
+    // ("None" and the view names). `assigned` holds TV1's view first; "" is None.
+    void setTimelineViews(const QStringList& names, const QStringList& assigned);
+    QComboBox* timelineViewMenu(int index) const { return viewMenus_.value(index); }
 
 signals:
     // The user chose a workspace for W button `index` (0-based); `name` is empty for None. Not emitted while
     // setWorkspaces() fills the menus.
     void workspaceAssigned(int index, const QString& name);
+    // The user chose a Timeline view for TV button `index` (0-based), as for workspaceAssigned().
+    void timelineViewAssigned(int index, const QString& name);
 
 protected:
     void showEvent(QShowEvent* event) override;
@@ -112,6 +118,7 @@ private:
     QHash<QString, int> tabOf_;
     QStringList tabNames_;
     QList<QComboBox*> workspaceMenus_;
+    QList<QComboBox*> viewMenus_;
     // Set while setWorkspaces() fills the menus, so it does not emit workspaceAssigned().
     bool fillingMenus_ = false;
 };

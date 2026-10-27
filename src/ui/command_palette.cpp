@@ -148,6 +148,17 @@ CommandPalette::CommandPalette(CommandRegistry& commands, QWidget* parent) : QWi
                     });
                     grid->addWidget(menu, row, 2);
                     workspaceMenus_ << menu;
+                } else if (id.startsWith(QLatin1String("timeline.view.tv"))) {
+                    // The Timeline view the TV button switches to (p.605).
+                    auto* menu = new QComboBox(page);
+                    const int v = static_cast<int>(viewMenus_.size());
+                    menu->setObjectName(QStringLiteral("timelineViewMenu:%1").arg(v + 1));
+                    menu->setMinimumWidth(110);
+                    connect(menu, &QComboBox::currentIndexChanged, this, [this, menu, v] {
+                        if (!fillingMenus_) emit timelineViewAssigned(v, menu->currentData().toString());
+                    });
+                    grid->addWidget(menu, row, 2);
+                    viewMenus_ << menu;
                 }
                 ++row;
                 rows_.append(Row{id, label, button});
@@ -226,6 +237,18 @@ void CommandPalette::setWorkspaces(const QStringList& names, const QStringList& 
         for (const QString& n : names) menu->addItem(n, n);
         const int at = menu->findData(assigned.value(i));
         menu->setCurrentIndex(std::max(at, 0));
+    }
+    fillingMenus_ = false;
+}
+
+void CommandPalette::setTimelineViews(const QStringList& names, const QStringList& assigned) {
+    fillingMenus_ = true;
+    for (int i = 0; i < viewMenus_.size(); ++i) {
+        QComboBox* menu = viewMenus_.at(i);
+        menu->clear();
+        menu->addItem(tr("None"), QString());
+        for (const QString& n : names) menu->addItem(n, n);
+        menu->setCurrentIndex(std::max(menu->findData(assigned.value(i)), 0));
     }
     fillingMenus_ = false;
 }

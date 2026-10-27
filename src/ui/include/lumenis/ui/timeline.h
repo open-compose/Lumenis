@@ -12,6 +12,7 @@
 #include <QColor>
 #include <QElapsedTimer>
 #include <QHash>
+#include <QJsonObject>
 #include <QWidget>
 
 #include <functional>
@@ -87,6 +88,11 @@ public:
     QRect controlButton(const Row& row, int control) const;
     // The Track Control Panel button above the track buttons (p.602).
     QRect controlPanelButton() const;
+    // Heads and Heads Tails views (p.638-639): one box per clip along a single row, with its head
+    // frame (and tail frame). headsBox() is clip `index` of `count`'s box; headsAt() the clip under a
+    // point, or with `boundary` the place between clips nearest it (0 to the clip count); -1 for none.
+    QRect headsBox(int index, int count) const;
+    int headsAt(const QPoint& pos, bool boundary) const;
     // The row under a point, or nothing (also over the ruler).
     std::optional<Row> rowAt(const QPoint& pos) const;
     // The segment under a point (filler too, but not at the ends of a
@@ -136,6 +142,7 @@ private:
     // Audio Data over an audio row's segments (timeline_automation.cpp).
     void paintAudioData(QPainter& p, const Row& r, const model::Track& t) const;
     void paintControls(QPainter& p, const Row& r, const model::Track& t) const;
+    void paintHeads(QPainter& p);
     // A segment's waveform (p.677-680) in `box`: a band per channel of the track, in Display Channel
     // Order, with a line between them.
     void paintWaveform(QPainter& p, const QRectF& box, const model::Track& t, const model::Segment& s,
@@ -176,6 +183,9 @@ private:
         QPoint from;
     };
     std::optional<InsertPress> insertFrom_;
+    // A clip being Alt+dragged in a Heads view (p.639), and where the mouse is.
+    std::optional<int> headsFrom_;
+    QPoint headsPos_;
     // The insert button under a point: its track and slot.
     std::optional<std::pair<QString, int>> insertAt(const QPoint& pos) const;
 };
@@ -187,6 +197,9 @@ class Timeline : public QWidget {
     Q_OBJECT
 
 public:
+    // View Type (Fast menu, p.592, p.638-639): Heads shows each clip's head frame, Heads Tails its
+    // head and tail frames, in place of the tracks.
+    enum class ViewType { Standard, Heads, HeadsTails };
     // Stores a changed or new sequence in its bin.
     using SequenceStore = std::function<bool(const QString& binId, const model::BinItem& item, bool isNew)>;
     // Makes a new, empty sequence for the first edit (p.463): its bin and
@@ -412,6 +425,28 @@ public:
     bool showsMarkers(const QString& color) const { return !display_.hiddenMarkers.contains(color); }
     void setMarkersShown(const QString& color, bool shown);
     void setAllMarkersShown(bool shown);
+
+    // View Type > Heads or Heads Tails (p.638-639). "Heads and Tails view is disabled when you are
+    // displaying material from the Source monitor" (p.603): showsHeads() is false then.
+    void setViewType(ViewType type);
+    bool showsHeads() const;
+    // The clips those views show: the record sequence cut at every edit point of the selected record
+    // tracks ("the system cuts all tracks to the same edit point", p.638), as [start, end) pairs.
+    QList<std::pair<std::int64_t, std::int64_t>> headsSpans() const;
+    QStringList headsTracks() const;
+    // Alt+drag in those views (p.639): clip `from` moves to just before clip `before`
+    // (headsSpans().size() for the end) on the selected tracks; an undo step.
+    bool moveHeads(int from, int before);
+
+    // Timeline views (p.604-605). MainWindow keeps them as Timeline View User settings and gives the
+    // Timeline their names, sorted, and the one in use ("" for Untitled); the View Menu button in the
+    // bottom toolbar shows it.
+    void setViews(const QStringList& names, const QString& current);
+    const QStringList& views() const { return views_; }
+    const QString& currentView() const { return currentView_; }
+    // The View Menu button's menu (the caller owns it): the views, then Save As.... With `replace`
+    // (Alt+click) it lists "<view> Replace" for each instead (p.604).
+    QMenu* viewMenu(bool replace, QWidget* parent);
     bool sourceRecordColors() const { return sourceRecordColors_; }
 
     // Trim mode (ch. 20). Rollers sit on edit points; single-roller trims
@@ -726,7 +761,15 @@ public:
         // Segment Selection and Mark IO Selection (p.593): "#rrggbb", empty for the default colours.
         QString segmentSelectionColor;
         QString markIOColor;
+        ViewType viewType = ViewType::Standard;
+        bool operator==(const Display&) const = default;
     };
+    // The Fast menu's settings as a Timeline view keeps them (p.604), and back. Values missing from
+    // `o` keep the defaults.
+    static QJsonObject displayToJson(const Display& d);
+    static Display displayFromJson(const QJsonObject& o);
+    // Sets every display option at once, as a Timeline view or Default Setup does.
+    void setDisplay(const Display& d);
     const Display& display() const { return display_; }
 
     TimelineView* view() const { return view_; }
@@ -751,6 +794,10 @@ signals:
     void changed();
     // The Track Control panel's Solo (`solo`) or Mute button for `track` was clicked (p.602).
     void soloMuteRequested(const QString& track, bool solo);
+    // The View Menu: a view was chosen, or the current display is to be saved as view `name` (Save
+    // As, or Replace when `replace`) (p.604).
+    void viewRequested(const QString& name);
+    void viewSaveRequested(const QString& name, bool replace);
     // Why a command did nothing, as lastMessage() gives it.
     void message(const QString& text);
     // The Clip Color dialog's choices changed (setClipColorOptions()).
@@ -845,6 +892,8 @@ private:
     model::EditHistory history_;
     QSet<QString> unmonitored_;
     std::function<bool(const QString&, bool)> soloMuteState_;
+    QStringList views_;
+    QString currentView_;
     // Changes `tracks` of the record sequence and keeps them without an undo step (per track
     // settings, p.677). The tracks of the Audio Data menu for a click on `track`'s Track Control
     // button: it alone, or with `all` (Alt+click) every audio track.

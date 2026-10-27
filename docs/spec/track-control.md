@@ -95,7 +95,8 @@ Code:
   * Ours: selected segments are filled with that colour; the default draws them lighter.
 * **Mark IO Selection** likewise for "the marked IO section". Ours: the colour is drawn
   see-through over the selected tracks.
-* Both are Timeline display settings, not kept with the sequence.
+* Both are Timeline display settings, not kept with the sequence; a Timeline view keeps them
+  (docs/spec/timeline-views.md).
 
 ## Show Markers (p.599)
 
@@ -108,8 +109,6 @@ Code:
 
 ## Later
 
-* Saving these display settings in Timeline views (p.604; U1b2). "You cannot save specific per track
-  settings in a custom Timeline view", but Allow Per Track Settings can be (p.677).
 * Pan L and Pan R > [speaker layout] in the Clip Volume/Pan menu for surround sequences (p.679-680).
 * Dragging an effect from the Effect Palette onto an insert button (p.792).
 * Ctrl+Bypass turning the insert buttons blue (p.794).

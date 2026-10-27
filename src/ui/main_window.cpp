@@ -448,6 +448,9 @@ void MainWindow::createPanels() {
     // The Timeline (ch. 19), showing the Record monitor's sequence.
     timeline_ = new Timeline(*composer_);
     timeline_->setKeyResolver([this](const QKeySequence& key) { return keyboard_->commandFor(key); });
+    // The View Menu (p.604).
+    connect(timeline_, &Timeline::viewRequested, this, &MainWindow::chooseTimelineView);
+    connect(timeline_, &Timeline::viewSaveRequested, this, &MainWindow::saveTimelineView);
     connect(timeline_, &Timeline::clipColorOptionsChanged, this, [this](const model::ClipColorOptions& o) {
         settings_->setValue(QStringLiteral("Timeline"), QStringLiteral("clipColor"), o.toJson());
     });
@@ -798,6 +801,7 @@ SettingsWindow* MainWindow::showSettings() {
             if (tool == QLatin1String("keyboard")) showTool(QStringLiteral("Keyboard"));
             // An Audio Multi-Mix setting opens the tool to change it, without Mix (p.734).
             if (tool == QLatin1String("multiMix")) multipleMixes(false);
+            // A Timeline View setting: made active, which applies it (applySettings, p.604).
         });
         // Its own window: give it the commands so Edit's shortcuts work.
         for (const QString& id : commands_.ids()) settingsWindow_->addAction(commands_.action(id));
@@ -907,6 +911,82 @@ void MainWindow::updateWorkspaceButtons() {
     }
     ButtonMapper::instance().refreshIcons();
     commandPalette_->setWorkspaces(workspaces_->names(), buttons);
+}
+
+QStringList MainWindow::timelineViews() const {
+    const model::SettingsFile& f = settings_->file(model::SettingsScope::User);
+    QStringList names;
+    for (int i : f.versions(QStringLiteral("Timeline View"))) {
+        const QString n = f.entries.at(i).name.trimmed();
+        if (!n.isEmpty() && !names.contains(n, Qt::CaseInsensitive)) names << n;
+    }
+    std::sort(names.begin(), names.end(), [](const QString& a, const QString& b) {
+        return QString::compare(a, b, Qt::CaseInsensitive) < 0;
+    });
+    return names;
+}
+
+QStringList MainWindow::timelineViewButtons() const {
+    const QStringList views = timelineViews();
+    const QJsonArray chosen = settings_->value(QStringLiteral("Timeline"), QStringLiteral("viewButtons")).toArray();
+    QStringList out;
+    for (int i = 0; i < 8; ++i) {
+        const QString c = chosen.at(i).toString();
+        out << (!c.isEmpty() ? c : views.value(i));
+    }
+    return out;
+}
+
+void MainWindow::chooseTimelineView(const QString& name) {
+    model::SettingsFile& f = settings_->file(model::SettingsScope::User);
+    for (int i : f.versions(QStringLiteral("Timeline View"))) {
+        if (f.entries.at(i).name.trimmed().compare(name, Qt::CaseInsensitive) != 0) continue;
+        appliedTimelineView_.clear(); // apply it even if it was the last one applied
+        f.setActive(i);
+        settings_->commit(model::SettingsScope::User);
+        return;
+    }
+}
+
+void MainWindow::saveTimelineView(const QString& name, bool replace) {
+    const QString kind = QStringLiteral("Timeline View");
+    model::SettingsFile& f = settings_->file(model::SettingsScope::User);
+    const QJsonObject values{{QStringLiteral("display"), Timeline::displayToJson(timeline_->display())},
+                             {QStringLiteral("clipColor"), timeline_->clipColorOptions().toJson()}};
+    int index = -1;
+    for (int i : f.versions(kind)) {
+        if (f.entries.at(i).name.trimmed().compare(name, Qt::CaseInsensitive) == 0) index = i;
+    }
+    if (index < 0 && replace) return;
+    if (index >= 0) {
+        f.entries[index].values = values;
+    } else {
+        index = f.add(model::SettingEntry{kind, name, false, values});
+    }
+    // It is in use already: applySettings() leaves the Timeline as it is.
+    appliedTimelineView_ = f.entries.at(index).name;
+    f.setActive(index);
+    settings_->commit(model::SettingsScope::User);
+}
+
+void MainWindow::updateTimelineViews() {
+    const QStringList views = timelineViews();
+    const model::SettingsFile& f = settings_->file(model::SettingsScope::User);
+    const int active = f.activeIndex(QStringLiteral("Timeline View"));
+    timeline_->setViews(views, active >= 0 ? f.entries.at(active).name.trimmed() : QString());
+    // A TV button shows the first two characters of its view, as the W buttons do (p.90).
+    const QStringList buttons = timelineViewButtons();
+    for (int i = 0; i < 8; ++i) {
+        const QString name = buttons.value(i);
+        registerCommandIcon(QStringLiteral("timeline.view.tv%1").arg(i + 1),
+                            name.isEmpty() ? labelIcon(QStringLiteral("TV%1").arg(i + 1))
+                                           : labelIcon(name.left(2), !views.contains(name, Qt::CaseInsensitive)));
+    }
+    ButtonMapper::instance().refreshIcons();
+    QJsonArray chosen = settings_->value(QStringLiteral("Timeline"), QStringLiteral("viewButtons")).toArray();
+    QStringList assigned;
+    for (int i = 0; i < 8; ++i) assigned << chosen.at(i).toString();
+    commandPalette_->setTimelineViews(views, assigned);
 }
 
 // Called when the active workspace changes. Only for a workspace whose Workspace View has Link to
@@ -1146,6 +1226,13 @@ void MainWindow::createTools() {
         settings_->setValue(QStringLiteral("Keyboard"), QStringLiteral("keys"), keyboard_->differences());
     });
     // The Workspaces tab's menus (p.91).
+    // TV1-TV8 (p.605): the view chosen in the button's menu.
+    connect(commandPalette_, &CommandPalette::timelineViewAssigned, this, [this](int index, const QString& name) {
+        QJsonArray buttons = settings_->value(QStringLiteral("Timeline"), QStringLiteral("viewButtons")).toArray();
+        while (buttons.size() <= index) buttons.append(QString());
+        buttons[index] = name;
+        settings_->setValue(QStringLiteral("Timeline"), QStringLiteral("viewButtons"), buttons);
+    });
     connect(commandPalette_, &CommandPalette::workspaceAssigned, this, [this](int index, const QString& name) {
         QStringList buttons = workspaceButtons();
         while (buttons.size() <= index) buttons << QString();
@@ -3473,6 +3560,25 @@ void MainWindow::applySettings() {
         const QSignalBlocker quiet(timeline_);
         timeline_->setClipColorOptions(model::ClipColorOptions::fromJson(s.value(tl, QStringLiteral("clipColor")).toObject()));
     }
+    // The Timeline view in use (p.604): applied when another one is chosen, here or in the Settings
+    // list. Its Clip Color choices become the Timeline setting's ("Clip color options are saved when
+    // you save a customized Timeline View", p.595).
+    {
+        const model::SettingsFile& user = s.file(model::SettingsScope::User);
+        const int v = user.activeIndex(QStringLiteral("Timeline View"));
+        const QString name = v >= 0 ? user.entries.at(v).name.trimmed() : QString();
+        if (!name.isEmpty() && name != appliedTimelineView_) {
+            const QJsonObject values = user.entries.at(v).values;
+            appliedTimelineView_ = name;
+            timeline_->setDisplay(Timeline::displayFromJson(values.value(QStringLiteral("display")).toObject()));
+            if (values.contains(QStringLiteral("clipColor"))) {
+                const auto colors = model::ClipColorOptions::fromJson(values.value(QStringLiteral("clipColor")).toObject());
+                QMetaObject::invokeMethod(this, [this, colors] { timeline_->setClipColorOptions(colors); }, Qt::QueuedConnection);
+            }
+        }
+        if (name.isEmpty()) appliedTimelineView_.clear();
+        updateTimelineViews();
+    }
     workspaces_->setMoveBehavior(s.text(ui, QStringLiteral("workspaceMove")) == QLatin1String("saved")
                                      ? WorkspaceManager::MoveBehavior::LastSavedState
                                      : WorkspaceManager::MoveBehavior::LastKnownState);
@@ -3499,6 +3605,14 @@ void MainWindow::installPanelHandlers() {
     auto handle = [this](const char* id, std::function<void()> handler) {
         commands_.setHandler(QString::fromLatin1(id), std::move(handler));
     };
+    // TV1-TV8 switch to their Timeline views (p.605). "You must create at least one Timeline view to
+    // use the Timeline View buttons."
+    for (int i = 0; i < 8; ++i) {
+        commands_.setHandler(QStringLiteral("timeline.view.tv%1").arg(i + 1), [this, i] {
+            const QString name = timelineViewButtons().value(i);
+            if (!name.isEmpty()) chooseTimelineView(name);
+        });
+    }
     // W1-W12 switch to their workspaces (p.90-91).
     for (int i = 0; i < WorkspaceManager::kMaxWorkspaces; ++i) {
         commands_.setHandler(QStringLiteral("workspace.w%1").arg(i + 1), [this, i] {

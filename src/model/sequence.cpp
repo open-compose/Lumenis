@@ -944,6 +944,34 @@ bool Sequence::removeTrack(const QString& name) {
 }
 
 // An Add Edit in filler is flagged on the second part, or tidy() would merge it straight back.
+QList<std::pair<std::int64_t, std::int64_t>> Sequence::headsSpans(const QStringList& tracks) const {
+    QList<std::pair<std::int64_t, std::int64_t>> out;
+    const QList<std::int64_t> points = editPoints(tracks);
+    for (qsizetype i = 1; i < points.size(); ++i) {
+        if (points.at(i) > points.at(i - 1)) out.append({points.at(i - 1), points.at(i)});
+    }
+    return out;
+}
+
+// Each track gives up the span and takes it back at `to`, which moves left by the span's length when
+// it lies after it. A track shorter than the span's end is first padded with filler so that every
+// track shifts by the same amount.
+bool Sequence::moveSpan(const QStringList& tracks, std::int64_t start, std::int64_t length, std::int64_t to) {
+    if (length <= 0 || start < 0 || (to >= start && to <= start + length)) return false;
+    for (const QString& name : tracks) {
+        const Track* t = track(name);
+        if (!t || t->locked) return false;
+    }
+    const std::int64_t at = to > start ? to - length : to;
+    for (const QString& name : tracks) {
+        const QList<Segment> moved = material(name, start, length);
+        if (track(name)->length() < start + length) overwrite(name, start, {Segment::filler(length)});
+        extract(name, start, length);
+        splice(name, at, moved);
+    }
+    return true;
+}
+
 bool Sequence::addEdit(const QString& name, std::int64_t frame) {
     Track* t = track(name);
     if (!t || frame <= 0 || frame >= t->length()) return false;

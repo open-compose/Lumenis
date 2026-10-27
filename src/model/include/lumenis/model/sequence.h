@@ -364,6 +364,14 @@ public:
     // Deletes a track (p.636).
     bool removeTrack(const QString& name);
 
+    // Heads and Heads Tails views (p.638-639): the sequence cut into clips at every edit point of
+    // `tracks` ("the system cuts all tracks to the same edit point"), as [start, end) pairs in order.
+    QList<std::pair<std::int64_t, std::int64_t>> headsSpans(const QStringList& tracks) const;
+    // Alt+drag in those views (p.639): frames [start, start + length) of `tracks` move to `to`, a
+    // frame of the sequence as it is before the move. False, with nothing changed, if `to` is inside
+    // the span or at its ends, if the span is empty, or if one of the tracks is missing or locked.
+    bool moveSpan(const QStringList& tracks, std::int64_t start, std::int64_t length, std::int64_t to);
+
     // Add Edit (p.639-640): an edit point at `frame` on the track. Returns
     // false if one is already there or the frame is outside the track.
     bool addEdit(const QString& track, std::int64_t frame);

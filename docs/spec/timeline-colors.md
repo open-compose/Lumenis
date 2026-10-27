@@ -27,8 +27,8 @@ applies colors when you select more than one option" (p.596):
 * A swatch opens a colour grid, the bins' palette (p.596). Default Colors
   puts back the Offline, Mixed Rates and SD/HD colours (p.597); Linked
   Clips' too (ours).
-* The choices are kept in the Timeline setting (key `clipColor`). The
-  guide keeps them in Timeline Views (p.594), which come later.
+* The choices are kept in the Timeline setting (key `clipColor`), and in
+  each Timeline view (p.595; U1b2, docs/spec/timeline-views.md).
 * Defaults (ours, on the watch list): Offline and Source on, so bin colours
   show as soon as they are set; Linked Clips, Mixed Rates, SD/HD and
   Timeline Local off ("Select Timeline Local, and then click OK", p.598).
@@ -77,5 +77,4 @@ Source mode the source buttons keep their green.
 ## Later
 
 * Resolution Tracking (MultiRez, p.1112-1113) and Proxy colours.
-* Timeline Views keeping the choices (p.604).
 * Track Color (p.597) and the Timeline Text Color setting (p.1219).

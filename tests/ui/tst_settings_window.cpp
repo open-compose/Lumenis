@@ -83,7 +83,7 @@ private slots:
                  (QStringList{"Audio Project", "Audio Multi-Mix", "General", "Media Creation", "Video Display"}));
         QCOMPARE(schema.kindNames(SettingsScope::User),
                  (QStringList{"Audio", "Bin", "Composer", "Export", "Full Screen Playback", "Import", "Interface", "Keyboard", "Link",
-                              "Timeline", "Tool Palette", "Workspace View", "Trim"}));
+                              "Timeline", "Timeline View", "Tool Palette", "Workspace View", "Trim"}));
         QSet<QString> keys;
         for (const SettingKind& k : schema.kinds()) {
             QVERIFY2(k.page >= 1136, qPrintable(k.kind));
@@ -260,7 +260,7 @@ private slots:
         // Picture on p.1136: one row per setting; versions under it.
         Settings settings;
         SettingsList list(settings, SettingsScope::User);
-        QCOMPARE(list.topLevelItemCount(), 13);
+        QCOMPARE(list.topLevelItemCount(), 14);
         QCOMPARE(list.topLevelItem(0)->text(SettingsList::kSettingColumn), QStringLiteral("Audio"));
         const int timeline = settings.file(SettingsScope::User).activeIndex("Timeline");
         list.selectEntries({timeline});

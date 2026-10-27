@@ -845,7 +845,8 @@ phase of their own. They are done in three steps:
   docs/spec/waveforms.md, is done); the
   Fast menu's Show Markers, Track Color, Segment and Mark IO Selection
   colours, Track Control panel (U1b1, docs/spec/track-control.md, with per
-  track settings and Enlarge/Reduce Track, is done), View Type and Timeline Views (p.592-604),
+  track settings and Enlarge/Reduce Track, is done), View Type and Timeline Views (p.592-604)
+  (U1b2, docs/spec/timeline-views.md, is done; Show Adapters and Render Ranges move to Phase 6),
   Sync Breaks, Dupe Detection, Show Every Frame and the remaining Clip Text
   items; Show Sequence Map (p.606), Find Black Hole/Flash Frame (p.645), Add
   Filler at Start (p.462), Rename Track, Create Sequence Based on Selection
@@ -869,6 +870,8 @@ phase of their own. They are done in three steps:
 * Keyframing in the Effect Editor. Titler+ keeps a title's keyframes through
   trims, splits and duplicates (FX p.325, 2026.8).
 * Render and expert render, at 8-, 16- or 32-bit (FX p.151-152, 2026.8).
+* The Timeline Fast menu's Render Ranges (FX guide) and Show Adapters (Editing Guide p.599), moved
+  here from the UI completion pass.
 * OFX host, with OCIO colour management covering Rec.709, Rec.2020, PQ/HLG and
   ACES.
 

@@ -1159,6 +1159,8 @@ These are recorded now so they are not entered from memory later.
     Height) is also on it (p.679). Waveforms: docs/spec/waveforms.md. The
     Track Control panel, per track settings, Track Color, the selection
     colours, Show Markers and track heights: docs/spec/track-control.md.
+    View Type (Heads, Heads Tails), the View Menu button's Timeline views and
+    the More tab's TV1-TV8: docs/spec/timeline-views.md.
   * The scale bar zooms around the position indicator; zoomed in, the
     indicator gets a dotted "shadow" at the end of the frame. Zoom In:
     drag over the area. Focus: 90 pixels per second around the position
@@ -1207,7 +1209,7 @@ These are recorded now so they are not entered from memory later.
   * Messages for edits that cannot be made show as a tooltip.
 * **Not yet built.**
   * Trim mode (1.4d), Solo, Sync Point edits, markers, Add Filler at
-    Start, Load Filler, the Track Control panel (U1b1), Timeline views, the Sequence Map, Search,
+    Start, Load Filler, the Track Control panel (U1b1), Timeline views (U1b2), the Sequence Map, Search,
     Video Quality, Step In/Out (nesting), clip colours, waveforms (U1a) and the
     other Fast menu options (shown disabled).
 
@@ -1522,6 +1524,7 @@ p.610–640, ch. 13 p.432–434).**
       buttons it keeps (1.5b).
     * **Keyboard** (p.1202) and **Workspace View** (p.89–90, p.1136):
       section 7 (1.6).
+    * **Timeline View** (p.604, p.1137): docs/spec/timeline-views.md (U1b2).
     * **Timeline:** Show Toolbar; Show Marked Region, including its
       effect on Replace Edit; Movement During Play; Only One Segment
       Tool; Default Segment Tool.

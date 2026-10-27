@@ -499,6 +499,13 @@
       ]
     },
     {
+      "kind": "Timeline View",
+      "scope": "user",
+      "page": 1137,
+      "opens": "timelineView",
+      "tabs": []
+    },
+    {
       "kind": "Tool Palette",
       "scope": "user",
       "page": 1221,

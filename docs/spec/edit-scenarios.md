@@ -68,6 +68,9 @@ Each file is a JSON list of scenarios:
   * `{"punch_in": {"clip": name, "targets": [track or "" for New Track, ...],
     "punches": [[record frame, length, clip frame], ...]}}` edits in an Audio
     Punch-In take (p.749-751), an undo step per punch-in;
+  * `{"heads_move": [clip, before]}` is an Alt+drag in Heads view (p.639):
+    clip `clip` of the sequence cut at every edit point of the selected
+    record tracks moves to before clip `before` (the clip count for the end);
   * `{"local_color": "#rrggbb" or ""}` is Set Local Clip Color on the
     selected segments (p.598); `expect_local_colors` gives each track's
     material segments' local colours in order;
