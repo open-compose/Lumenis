@@ -974,7 +974,7 @@ void MainWindow::createTools() {
     replay->setSingleShot(true);
     replay->setInterval(60);
     connect(replay, &QTimer::timeout, this, [this] {
-        if (composer_->isPlaying() && std::abs(composer_->speed()) <= 3) composer_->play(composer_->speed());
+        if (composer_->isPlaying() && !composer_->isSlow() && std::abs(composer_->speed()) <= 3) composer_->play(composer_->speed());
     });
     connect(audioTrackEffect_, &AudioTrackEffectTool::previewChanged, replay, qOverload<>(&QTimer::start));
     // Split Track to Mono keeps a copy of the sequence as it was in its bin (p.735).

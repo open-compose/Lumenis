@@ -257,9 +257,30 @@ public:
     };
     const PlayStats& playStats() const { return stats_; }
 
-    // The current speed: 0 when stopped, otherwise a multiple of normal (negative: reverse).
+    // The current speed: 0 when stopped, otherwise a multiple of normal (negative: reverse). In slow
+    // play it is 1 or -1 and isSlow() is true.
     bool isPlaying() const { return speed_ != 0; }
     int speed() const { return speed_; }
+    // Slow play (p.401): "Press the K and L keys together for slow forward (8 fps for NTSC, 6 fps for
+    // PAL, and 6 fps for 24p projects)", K and J for slow backward. Holding K and tapping L or J still
+    // steps a frame; holding both starts slow play, and letting go of L or J stops it. There is no sound.
+    void playSlow(int direction);
+    bool isSlow() const { return slow_; }
+    // The slow-play rate for a project's nominal frame rate: 8 for 30 (NTSC), 6 for 25 and 24, scaled
+    // for their multiples (ours: 16 for 60, 12 for 50, 12 for 48), else a quarter.
+    static int slowFps(int nominalFps);
+    // What the Play button of the playing monitor shows (ours: the owner's design, docs/spec/ui-inventory.md
+    // section 10). Normal: forward at normal speed, the play arrow in green. Forward: faster or slower
+    // than normal, the rate in frames per second with ">" after it in a green box. Reverse: always the
+    // rate, with "<" before it, in an amber box. `fps` counts the project's nominal frames (60 for 2x in
+    // a 30-frame project, as on p.400-401).
+    struct PlayDisplay {
+        enum class Kind { Stopped, Normal, Forward, Reverse };
+        Kind kind = Kind::Stopped;
+        int fps = 0;
+        bool operator==(const PlayDisplay&) const = default;
+    };
+    PlayDisplay playDisplay() const;
 
     // play() plays the active monitor at `speed` (0 stops); stop() stops and clears Play In to Out.
     void play(int speed);
@@ -342,6 +363,7 @@ private:
     // K is held down (K+J / K+L step a frame).
     bool kHeld_ = false;
     int speed_ = 0;
+    bool slow_ = false; // slow play (playSlow())
     std::optional<std::int64_t> stopAt_; // Play In to Out
     double carry_ = 0; // fractional frames between ticks
     QElapsedTimer clock_;

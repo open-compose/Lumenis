@@ -432,6 +432,17 @@ Not yet built:
     * the `help`, `clear`, `sysinfo` and `version` commands;
     * File > Get Position Info.
   * Tools open as floating panels (p.94), which can be docked and tabbed.
+* **The Play button while playing (the owner's design, not Media
+  Composer's look; it may change if editors dislike it).** The playing
+  monitor's Play button shows how it plays (`Composer::playDisplay`):
+  * forward at normal speed: the play arrow turns green;
+  * forward at any other speed, slow play included: the rate in frames per
+    second with ">" after it ("120 >"), light green on a dark green box;
+  * backward, at every speed: "<" and the rate ("< 60"), light amber on a
+    dark amber box;
+  * the number is centred where the play arrow is, and the box may spread
+    over the buttons beside it. The rate counts the project's nominal
+    frames (60 for 2x in a 30-frame project, as on p.400-401).
 * **Our choices, unverified.**
   * The Play, Trim, Smart Tools, Other and More tabs: which buttons, and
     in what order.
@@ -1025,7 +1036,9 @@ These are recorded now so they are not entered from memory later.
   * Loading by double-click (clips to the Source monitor, sequences to the
     Record monitor) and by dragging items from a bin; Clear Monitor and
     Clear Menu.
-  * Play, J-K-L with the shuttle speeds, K+J/L steps, Play In to Out, step
+  * Play, J-K-L with the shuttle speeds, K+J/L steps, holding K with L or J
+    for slow play (8 fps for 30-frame projects, 6 for 25 and 24; p.401;
+    no sound), Play In to Out, step
     one and 10 (8) frames, Go to Start/End and Previous/Next Event, Mark
     IN/OUT, Mark Clip, Clear IN/OUT/Both, Go to IN/OUT, Gang, Show
     Single/Dual Monitor. With no media yet, the position moves in real

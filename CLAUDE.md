@@ -322,7 +322,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   dialog `clip_color_dialog.*`, `model::ClipColorOptions` in
   `src/model/clip_coloring.*`, Set Local Clip Color, the Select menu's colour
   choices, Show Source/Record colors in Timeline) were added after 5.6b1;
-  test `tst_clip_colors`, scenario `14-local-clip-color.json`.
+  test `tst_clip_colors`, scenario `14-local-clip-color.json`. So were slow
+  play (K+L, K+J, p.401) and the Play button's speed display, the owner's
+  own design (`Composer::playDisplay`, docs/spec/ui-inventory.md section 10).
   Next: 5.6b2, the Pan grid and Advanced Panner.
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.

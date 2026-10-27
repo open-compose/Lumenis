@@ -439,7 +439,9 @@ private slots:
         // Composer settings (p.1158-1160).
         Composer& composer = window.composer();
         auto* controls = composer.findChild<QWidget*>(QStringLiteral("recordControls"));
-        const QList<QWidget*> rows = controls->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly);
+        // The button rows; the Play button's playing state lies over them.
+        QList<QWidget*> rows = controls->findChildren<QWidget*>(QString(), Qt::FindDirectChildrenOnly);
+        rows.removeIf([](QWidget* w) { return w->objectName() == QLatin1String("playState"); });
         QCOMPARE(rows.size(), 2);
         settings.setValue("Composer", "buttonDisplay", QStringLiteral("one"));
         QVERIFY(rows.at(0)->isVisible());

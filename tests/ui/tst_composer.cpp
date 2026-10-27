@@ -192,6 +192,78 @@ private slots:
         QVERIFY(!c.isPlaying());
     }
 
+    // The Play button while playing (the owner's design): a green arrow at normal speed, else the rate
+    // in frames per second, "N >" in green forward and "< N" in amber backward; slow play (p.401).
+    void playButtonShowsTheSpeed() {
+        using Kind = Composer::PlayDisplay::Kind;
+        Composer c;
+        c.resize(900, 360);
+        c.show();
+        QVERIFY(QTest::qWaitForWindowExposed(&c));
+        c.loadDefault({}, clip(QStringLiteral("Clip"), 1000));
+        QWidget* shown = c.findChild<QWidget*>(QStringLiteral("playState"));
+        QVERIFY(shown);
+        QCOMPARE(c.playDisplay(), Composer::PlayDisplay{});
+        c.perform(QStringLiteral("play.play"));
+        QCOMPARE(c.playDisplay(), (Composer::PlayDisplay{Kind::Normal, 25}));
+        // The state sits over the active monitor's Play button, centred on it.
+        QToolButton* play = nullptr;
+        for (QToolButton* b : c.findChildren<QToolButton*>(QStringLiteral("play.play"))) {
+            if (b->parentWidget()->parentWidget() == shown->parentWidget()) play = b;
+        }
+        QVERIFY(play);
+        settle();
+        QVERIFY(shown->isVisible());
+        auto centre = [&](QWidget* w) { return w->mapTo(&c, QPoint(w->width() / 2, 0)).x(); };
+        QVERIFY(std::abs(centre(shown) - centre(play)) <= 1);
+        c.perform(QStringLiteral("play.play_forward"));
+        QCOMPARE(c.playDisplay(), (Composer::PlayDisplay{Kind::Forward, 50}));
+        QVERIFY(shown->width() > play->width());
+        QVERIFY(std::abs(centre(shown) - centre(play)) <= 1);
+        // Backward is always the rate, at any speed.
+        c.perform(QStringLiteral("play.play_reverse"));
+        QCOMPARE(c.playDisplay(), (Composer::PlayDisplay{Kind::Reverse, 25}));
+        c.perform(QStringLiteral("play.play_reverse"));
+        QCOMPARE(c.playDisplay(), (Composer::PlayDisplay{Kind::Reverse, 50}));
+        c.perform(QStringLiteral("play.pause"));
+        settle();
+        QVERIFY(!shown->isVisible());
+
+        // Slow play: 8 fps for 30-frame projects, 6 for 25 and 24 (p.401); no sound.
+        QCOMPARE(Composer::slowFps(30), 8);
+        QCOMPARE(Composer::slowFps(25), 6);
+        QCOMPARE(Composer::slowFps(24), 6);
+        QCOMPARE(Composer::slowFps(60), 16);
+        QSignalSpy started(&c, &Composer::playStarted);
+        c.state(MonitorId::Source).setPosition(100);
+        c.playSlow(1);
+        QVERIFY(c.isSlow());
+        QCOMPARE(started.last().at(1).toInt(), 0);
+        QCOMPARE(c.playDisplay(), (Composer::PlayDisplay{Kind::Forward, 6}));
+        c.advance(1000);
+        QCOMPARE(c.state(MonitorId::Source).position(), 106);
+        c.playSlow(-1);
+        QCOMPARE(c.playDisplay(), (Composer::PlayDisplay{Kind::Reverse, 6}));
+        c.advance(500);
+        QCOMPARE(c.state(MonitorId::Source).position(), 103);
+        c.perform(QStringLiteral("play.play"));
+        QVERIFY(!c.isPlaying());
+        QVERIFY(!c.isSlow());
+
+        // K held with L: a tap steps, holding (the key's repeat) plays slowly, letting go stops.
+        c.setFocus();
+        QTest::keyPress(&c, Qt::Key_K);
+        QTest::keyPress(&c, Qt::Key_L);
+        QCOMPARE(c.state(MonitorId::Source).position(), 104);
+        QKeyEvent repeat(QEvent::KeyPress, Qt::Key_L, Qt::NoModifier, QString(), true);
+        QCoreApplication::sendEvent(&c, &repeat);
+        QVERIFY(c.isSlow());
+        QCOMPARE(c.speed(), 1);
+        QTest::keyRelease(&c, Qt::Key_L);
+        QVERIFY(!c.isPlaying());
+        QTest::keyRelease(&c, Qt::Key_K);
+    }
+
     void keyboard() {
         CommandRegistry commands;
         commands.loadBuiltin();

@@ -325,6 +325,90 @@ QToolButton* infoBox(QWidget* parent, const QString& name) {
 // The widgets of one monitor's column, built by buildColumn() and owned by the Composer (the widgets
 // by Qt parenting, the Column itself deleted in ~Composer). `buttons` maps a command id to the first
 // button that carries it, for Composer::button().
+// ---------------------------------------------------------------- PlayState
+
+// The playing monitor's Play button while it plays (Composer::PlayDisplay): a green arrow over the
+// button at normal speed, else the rate in a box laid over the button row, the number centred where
+// the arrow is and the direction arrow beside it. It takes no clicks.
+class PlayState : public QWidget {
+public:
+    explicit PlayState(QWidget* parent) : QWidget(parent) {
+        setObjectName(QStringLiteral("playState"));
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+        hide();
+    }
+
+    // Covers `button` (in the parent's coordinates) for `shown`, wide enough for the box.
+    void place(const QRect& button, const Composer::PlayDisplay& shown) {
+        shown_ = shown;
+        if (shown.kind == Composer::PlayDisplay::Kind::Stopped) {
+            hide();
+            return;
+        }
+        QFont f = font();
+        f.setBold(true);
+        const QFontMetrics fm(f);
+        const int number = fm.horizontalAdvance(QString::number(shown.fps));
+        const int arrow = fm.horizontalAdvance(QStringLiteral(" >"));
+        // Symmetric about the button's centre, so the number sits where the arrow is.
+        const int half = shown.kind == Composer::PlayDisplay::Kind::Normal ? button.width() / 2
+                                                                            : std::max(button.width() / 2, number / 2 + arrow + 4);
+        setGeometry(button.left() + button.width() / 2 - half, button.top(), 2 * half, button.height());
+        centre_ = half;
+        show();
+        raise();
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        using Kind = Composer::PlayDisplay::Kind;
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        if (shown_.kind == Kind::Normal) {
+            // The play arrow, green, where the button draws it (glyph(): 16 x 16 in the middle).
+            const QPointF o(width() / 2.0 - 8, height() / 2.0 - 8);
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(kPlayGreen));
+            p.drawPolygon(QPolygonF{o + QPointF(5, 4), o + QPointF(11.5, 8), o + QPointF(5, 12)});
+            return;
+        }
+        const bool forward = shown_.kind == Kind::Forward;
+        const QColor box(forward ? kForwardBox : kReverseBox);
+        const QColor ink(forward ? kForwardText : kReverseText);
+        p.setPen(QPen(box.darker(115), 1));
+        p.setBrush(box);
+        p.drawRoundedRect(QRectF(rect()).adjusted(0.5, 1.5, -0.5, -1.5), 3, 3);
+        QFont f = font();
+        f.setBold(true);
+        p.setFont(f);
+        p.setPen(ink);
+        const QFontMetrics fm(f);
+        const QString number = QString::number(shown_.fps);
+        const int w = fm.horizontalAdvance(number);
+        const QRect numberBox(centre_ - w / 2, 0, w, height());
+        p.drawText(numberBox, Qt::AlignCenter, number);
+        if (forward) {
+            p.drawText(QRect(numberBox.right() + 1, 0, width() - numberBox.right() - 1, height()), Qt::AlignVCenter | Qt::AlignLeft,
+                       QStringLiteral(" >"));
+        } else {
+            p.drawText(QRect(0, 0, numberBox.left(), height()), Qt::AlignVCenter | Qt::AlignRight, QStringLiteral("< "));
+        }
+    }
+
+private:
+    // The owner's colours: a dark green box with light green text forward, dark amber with light
+    // amber backward.
+    static constexpr QRgb kPlayGreen = 0xff4fd46a;
+    static constexpr QRgb kForwardBox = 0xff1e4a2a;
+    static constexpr QRgb kForwardText = 0xff8ff0a4;
+    static constexpr QRgb kReverseBox = 0xff5a4008;
+    static constexpr QRgb kReverseText = 0xffffc94d;
+
+    Composer::PlayDisplay shown_;
+    int centre_ = 0;
+};
+
 struct Composer::Column {
     QWidget* widget = nullptr;
     QWidget* controls = nullptr;
@@ -337,6 +421,7 @@ struct Composer::Column {
     QMenu* trackingMenu = nullptr;
     QHash<QString, QToolButton*> buttons;
     QList<QWidget*> rows; // the button rows
+    PlayState* playState = nullptr;
 };
 
 // ---------------------------------------------------------------- PositionBar
@@ -726,6 +811,7 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
         rows->addWidget(rowWidget);
         c->rows << rowWidget;
     }
+    c->playState = new PlayState(c->controls);
 
     auto* v = new QVBoxLayout(c->widget);
     v->setContentsMargins(0, 0, 0, 0);
@@ -1024,6 +1110,7 @@ void Composer::play(int speed) {
     }
     if (speed_ == 0) stats_ = {};
     speed_ = speed;
+    slow_ = false;
     carry_ = 0;
     playStart_ = s.position();
     clock_.restart();
@@ -1032,11 +1119,50 @@ void Composer::play(int speed) {
     emit playStarted(active_, speed);
 }
 
+// Slow play runs on the wall clock, without sound: playStarted() says speed 0 so none is started.
+void Composer::playSlow(int direction) {
+    const model::MonitorState& s = state(active_);
+    if (s.isEmpty() || direction == 0) {
+        stop();
+        return;
+    }
+    if (speed_ == 0) stats_ = {};
+    speed_ = direction > 0 ? 1 : -1;
+    slow_ = true;
+    carry_ = 0;
+    playStart_ = s.position();
+    clock_.restart();
+    timer_->start();
+    refresh();
+    emit playStarted(active_, 0);
+}
+
+int Composer::slowFps(int nominalFps) {
+    if (nominalFps <= 0) return 6;
+    if (nominalFps % 30 == 0) return 8 * nominalFps / 30;
+    if (nominalFps % 25 == 0) return 6 * nominalFps / 25;
+    if (nominalFps % 24 == 0) return 6 * nominalFps / 24;
+    return std::max(1, (nominalFps + 2) / 4);
+}
+
+Composer::PlayDisplay Composer::playDisplay() const {
+    PlayDisplay d;
+    if (speed_ == 0) return d;
+    const model::MonitorState& s = state(active_);
+    const int nominal = s.isEmpty() ? 25 : TimecodeFormat::forRate(s.current()->item.editRate, false).nominalFps;
+    d.fps = slow_ ? slowFps(nominal) : nominal * std::abs(speed_);
+    d.kind = speed_ < 0               ? PlayDisplay::Kind::Reverse
+             : speed_ == 1 && !slow_ ? PlayDisplay::Kind::Normal
+                                      : PlayDisplay::Kind::Forward;
+    return d;
+}
+
 // Stops playback and forgets a Play In to Out end point; emits playStopped() only if it was playing.
 void Composer::stop() {
     if (speed_ == 0 && !timer_->isActive()) return;
     stopAt_.reset();
     speed_ = 0;
+    slow_ = false;
     timer_->stop();
     refresh();
     emit playStopped();
@@ -1053,7 +1179,7 @@ void Composer::tick() {
     // smooth audio scrub p.675); faster, or with no sound, the wall clock
     // does.
     std::optional<double> played;
-    if (std::abs(speed_) <= 3 && playClock_) played = playClock_();
+    if (!slow_ && std::abs(speed_) <= 3 && playClock_) played = playClock_();
     // The play clock gives seconds of program played since playStart_ (negative going backward). The
     // picture only ever moves in the direction of play, so a clock that lags a tick holds the frame.
     if (played) {
@@ -1107,7 +1233,9 @@ double Composer::qualityScale() const {
 void Composer::advance(qint64 ms) {
     if (speed_ == 0) return;
     model::MonitorState& s = state(active_);
-    carry_ += static_cast<double>(ms) * framesPerSecond(s) * speed_ / 1000.0;
+    const double rate = slow_ ? static_cast<double>(playDisplay().fps) * (speed_ > 0 ? 1.0 : -1.0)
+                              : framesPerSecond(s) * speed_;
+    carry_ += static_cast<double>(ms) * rate / 1000.0;
     const auto frames = static_cast<std::int64_t>(carry_);
     carry_ -= static_cast<double>(frames);
     if (frames == 0) return;
@@ -1278,10 +1406,15 @@ bool Composer::perform(const QString& id) {
 void Composer::keyPressEvent(QKeyEvent* event) {
     if (event->isAutoRepeat() && event->key() == Qt::Key_K) return;
     if (event->key() == Qt::Key_K) kHeld_ = true;
-    // Holding K and tapping J or L steps one frame (p.401).
+    // Holding K and tapping J or L steps one frame; holding both plays slowly (p.401): the key's
+    // repeat, which starts once it has been held a moment, starts slow play.
     if (kHeld_ && (event->key() == Qt::Key_J || event->key() == Qt::Key_L)) {
-        perform(event->key() == Qt::Key_J ? QStringLiteral("move.step_backward_one_frame")
-                                          : QStringLiteral("move.step_forward_one_frame"));
+        const int direction = event->key() == Qt::Key_J ? -1 : 1;
+        if (!event->isAutoRepeat()) {
+            perform(direction < 0 ? QStringLiteral("move.step_backward_one_frame") : QStringLiteral("move.step_forward_one_frame"));
+        } else if (!slow_ || speed_ != direction) {
+            playSlow(direction);
+        }
         return;
     }
     if (keys_) {
@@ -1298,6 +1431,11 @@ void Composer::keyPressEvent(QKeyEvent* event) {
 
 void Composer::keyReleaseEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_K && !event->isAutoRepeat()) kHeld_ = false;
+    // Letting go of L or J (or K) ends slow play.
+    if (slow_ && !event->isAutoRepeat() &&
+        (event->key() == Qt::Key_K || event->key() == Qt::Key_J || event->key() == Qt::Key_L)) {
+        stop();
+    }
     QWidget::keyReleaseEvent(event);
 }
 
@@ -1381,6 +1519,13 @@ void Composer::refresh() {
         c.clipName->setText(clip ? clip->item.name + QStringLiteral("  ") : QString());
         c.tracking->setText(trackingText(m));
         if (QToolButton* gang = c.buttons.value(QStringLiteral("other.gang"))) gang->setChecked(ganged_);
+        // The playing monitor's Play button shows how it plays.
+        QToolButton* playButton = c.buttons.value(QStringLiteral("play.play"));
+        if (playButton && m == active_ && isPlaying() && playButton->isVisible()) {
+            c.playState->place(QRect(playButton->mapTo(c.controls, QPoint(0, 0)), playButton->size()), playDisplay());
+        } else {
+            c.playState->hide();
+        }
         c.picture->update();
         c.bar->update();
     }
