@@ -1623,7 +1623,7 @@ struct Resampler::Impl {
     }
 };
 
-Resampler::Resampler(int channels, int fromRate, int toRate) : d_(std::make_unique<Impl>()) {
+Resampler::Resampler(int channels, int fromRate, int toRate, int filterSize) : d_(std::make_unique<Impl>()) {
     d_->channels = channels;
     d_->from = fromRate;
     d_->to = toRate;
@@ -1632,7 +1632,7 @@ Resampler::Resampler(int channels, int fromRate, int toRate) : d_(std::make_uniq
     av_channel_layout_default(&layout, channels);
     if (swr_alloc_set_opts2(&d_->swr, &layout, AV_SAMPLE_FMT_FLT, toRate, &layout, AV_SAMPLE_FMT_FLT, fromRate, 0,
                             nullptr) < 0 ||
-        swr_init(d_->swr) < 0) {
+        av_opt_set_int(d_->swr, "filter_size", std::clamp(filterSize, 4, 256), 0) < 0 || swr_init(d_->swr) < 0) {
         swr_free(&d_->swr);
     }
     av_channel_layout_uninit(&layout);

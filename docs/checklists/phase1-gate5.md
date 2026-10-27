@@ -152,7 +152,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 |---|---|---|---|---|---|---|
 | Audio > Apply Gain |  | p.216 | works | ☐ | | |
 | Audio > Center Pan |  | p.714 | works | ☐ | | |
-| Audio > Change Sample Rate |  | p.731 | *later* | ☐ | | |
+| Audio > Change Sample Rate |  | p.731 | works | ☐ | | |
 | Audio > Split All Tracks |  | p.736 | works | ☐ | | |
 | Auto VO |  | p.754 | works | ☐ | | |
 | AutoSequence |  | p.499 | *later* | ☐ | | |
@@ -176,7 +176,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Modify > Modify Clip |  | p.279 | works | ☐ | | |
 | Modify > Modify Pulldown Phase |  | p.127 | *later* | ☐ | | |
 | Modify > Unlink Media |  | p.210 | works | ☐ | | |
-| Read Audio Timecode |  | p.668 | *later* | ☐ | | |
+| Read Audio Timecode |  | p.668 | works | ☐ | | |
 | Recreate Title Media |  | p.475 | *later* | ☐ | | |
 | Refresh Sequence > Motion Adapters/Timewarps |  | p.545 | *later* | ☐ | | |
 | Relink > Linked Media |  | p.364 | works | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 110 of them working with a project open; the
+* 211 menu commands, 112 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

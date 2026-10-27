@@ -6,7 +6,7 @@
 namespace lumenis::model {
 
 bool takesClipAudio(const BinItem& item) {
-    return item.kind == BinItemKind::MasterClip || item.kind == BinItemKind::Subclip;
+    return item.kind == BinItemKind::MasterClip || item.kind == BinItemKind::Subclip || item.kind == BinItemKind::AudioClip;
 }
 
 bool applyClipGain(BinItem& item, double db) {

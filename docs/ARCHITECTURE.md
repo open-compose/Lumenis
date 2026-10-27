@@ -71,7 +71,8 @@ headers in `include/lumenis/<library>/`.
   docs/spec/clap-host.md), `audio_suite.*` (AudioSuite processes and
   rendering, docs/spec/audiosuite.md), `mixdown.*`
   (Audio Mixdown, docs/spec/audio-mixdown.md), `surround.*` (speakers,
-  monitor mixes and their folds, docs/spec/surround.md). UI side:
+  monitor mixes and their folds, docs/spec/surround.md), `ltc.*` (audio
+  timecode, docs/spec/clip-audio.md). UI side:
   `media_frames.*` (frames for monitors, bins and the Timeline),
   `source_browser.*`, `media_tool.*`, `relink_dialog.*`,
   `consolidate_dialog.*`, `background_queue.*`.

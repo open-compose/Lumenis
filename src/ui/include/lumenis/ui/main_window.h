@@ -277,10 +277,33 @@ public:
     int applyClipGain();
     int centerPan();
     int autoVo();
+    // Read Audio Timecode (p.668-669): the selected master clips' and subclips' LTC on the chosen
+    // track, into the chosen Auxiliary TC column (media::ltc::readClipTimecode); other items are
+    // ignored with a message.
+    int readAudioTimecode();
+    // Change Sample Rate (p.731): new media for the selected audio clips, and the clips the selected
+    // sequences' audio segments use, at the chosen rate (media::resampleClipAudio).
+    int changeSampleRate();
+    struct ReadTimecodeChoice {
+        bool userBits = false;
+        int track = 0;
+        QString destination = QStringLiteral("Auxiliary TC1");
+        bool fill = true;
+    };
+    struct SampleRateChoice {
+        int rate = 48000;
+        int filterSize = 32;
+        bool deleteOriginal = false;
+        QString drive; // a drive root; empty: the Media Creation setting's
+    };
     struct ClipAudioHooks {
         std::function<std::optional<double>(double current)> gain;
         std::function<bool()> confirmCenterPan;
         std::function<std::optional<std::pair<QString, bool>>(const QStringList& tracks)> autoVo;
+        std::function<std::optional<ReadTimecodeChoice>(int tracks)> readTimecode;
+        std::function<std::optional<SampleRateChoice>()> sampleRate;
+        // Messages the commands would show in a box (ignored items, failures).
+        std::function<void(const QString&)> message;
     };
     void setClipAudioHooks(ClipAudioHooks hooks) { clipAudioHooks_ = std::move(hooks); }
     // Writes an Audio Punch-In take as managed media on its drive and adds the clip to its bin

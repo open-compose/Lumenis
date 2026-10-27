@@ -2,13 +2,14 @@
 
 Clip > Audio > Apply Gain, Center Pan and Change Sample Rate, Clip > Auto
 VO, Clip > Read Audio Timecode, and Timeline > Mixdown > Audio > Multiple
-Mixes. 5.7b1 is Apply Gain, Center Pan and Auto VO. Pages are the Editing
-Guide's.
+Mixes. 5.7b1 is Apply Gain, Center Pan and Auto VO; 5.7b2 Read Audio
+Timecode and Change Sample Rate. Pages are the Editing Guide's.
 
 ## A clip's own gain and pan (`BinItem::audioGain`, `audioPan`; `src/model/clip_audio.*`)
 
-* **Clip > Audio > Apply Gain (p.216).** It works on the master clips and
-  subclips selected in the bin; sequences and other items are left alone.
+* **Clip > Audio > Apply Gain (p.216).** It works on the master clips (with
+  or without picture) and subclips selected in the bin; sequences and other
+  items are left alone.
   * The Apply Clip Gain dialog takes a level from 12 to -96 dB, typed or
     stepped with the Up and Down arrows.
   * It starts at the first selected clip's gain (ours).
@@ -42,6 +43,59 @@ Guide's.
   original "is retained and is unaffected".
 * Extracting leaves cuts where the time was taken out, as Extract does.
 
+## Clip > Read Audio Timecode (p.668-669; `src/media/ltc.*`)
+
+* **The decoder.** LTC (SMPTE ST 12-1) is read by our own decoder; no library
+  is used.
+  * It finds the transitions of the biphase mark code, with hysteresis at a
+    quarter of the peak, so either polarity and any level work.
+  * Whole-bit and half-bit intervals at the clip's nominal rate (24, 25 or
+    30) make 0s and 1s.
+  * A frame counts where its sync word (bits 64-79) is found.
+  * The time fields, the drop-frame flag and the 32 user bits are read.
+  * `ltc::encode` writes LTC for the tests.
+* **The dialog (p.668-669):**
+  * User Bit Timecode;
+  * the Audio Timecode Source (the audio tracks; A1 the default);
+  * the Destination Track (Auxiliary TC1-5; TC1 the default);
+  * Fill Undecodeable Frames (on by default).
+* **What it writes.** For each selected master clip or subclip, the
+  timecode of the clip's first frame goes into the chosen Auxiliary TC
+  column. Other selected items get the guide's message that they will be
+  ignored.
+  * With Fill Undecodeable Frames, the first frame that decodes is worked
+    back to the clip's start, counting on as the guide's example does.
+  * Without it, the clip's first frame must decode, else the clip is
+    reported and left (ours: our columns hold one start timecode, not a
+    timecode a frame).
+* **User bits (ours).** User Bit Timecode reads the user bits as BCD
+  timecode in groups 1-8: frame units and tens, then seconds, minutes and
+  hours, the order of the time fields. The guide says only that they "must
+  be timecode only".
+* A frame is read when the transition after its last bit comes, so the very
+  last frame of a recording is not read.
+
+## Clip > Audio > Change Sample Rate (p.731; `media::resampleClipAudio`)
+
+* **The dialog:** Sample Rate (32, 44.1 or 48 kHz; 48 to start), Quality
+  (High, Medium, Low), Delete Original Media, and Target Drive.
+* **What it converts.** For the selected audio clips, and for the clips that
+  the selected sequences' audio segments use, each clip's audio tracks get
+  new files at the rate, as long as before. Its picture stays as it is. The
+  clip is relinked to the new files and its Audio SR column updated.
+* **Quality** is swresample's filter length: 64 (High), 32 (Medium, its
+  default) and 8 (Low) (ours).
+* **File format (ours).** FFmpeg's MXF OP-Atom muxer takes only 48 kHz:
+  * 48 kHz media is managed MXF, as Consolidate/Transcode makes;
+  * 32 and 44.1 kHz media is WAV in the same `Avid MediaFiles/MXF/<n>`
+    folder.
+  * The media database and the Media Tool list MXF files only, so those WAV
+    files are not in them.
+* **Delete Original Media** deletes the managed files the old audio used.
+  A linked clip's own files are left alone (ours).
+* A clip with picture that was relinked to media starting earlier
+  (`Link::first`) is refused: picture and sound share that offset.
+
 ## Checks
 
 * `tst_clip_audio`:
@@ -50,5 +104,13 @@ Guide's.
   * Auto VO both ways;
   * the dialogs;
   * the three commands in the application.
+* `tst_ltc` (media): encode and decode at 24, 25 and 29.97 drop frame, in
+  uneven pieces; inverted, quiet, noisy and offset; user bits; a linked
+  clip's LTC with and without Fill; Change Sample Rate to 44.1 kHz (WAV,
+  right length and level) and back to 48 kHz (MXF, the 44.1 kHz file as the
+  original to delete).
+* `tst_clip_audio` also checks the two dialogs, and both commands in the
+  application: LTC on a linked WAV into Auxiliary TC2, then Change Sample
+  Rate to 32 kHz keeping the timecode.
 * Scenario `17-clip-gain-pan.json`: an edit carries the clip's gain and pan
   into its audio segments.

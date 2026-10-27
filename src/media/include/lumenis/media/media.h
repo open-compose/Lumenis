@@ -257,7 +257,9 @@ class Resampler {
 public:
     // Channels and rates must be positive; otherwise, or if swresample refuses, isValid() is false
     // and push() returns nothing.
-    Resampler(int channels, int fromRate, int toRate);
+    // `filterSize` is swresample's filter length: longer is cleaner and slower (32, its default;
+    // Change Sample Rate's High, Medium and Low quality use 64, 32 and 8).
+    Resampler(int channels, int fromRate, int toRate, int filterSize = 32);
     ~Resampler();
     Resampler(const Resampler&) = delete;
     Resampler& operator=(const Resampler&) = delete;

@@ -26,3 +26,5 @@ set_target_properties(cutthulhu_test_clap PROPERTIES
 lumenis_add_test(tst_clap_host SOURCES tst_clap_host.cpp LIBS lumenis::media)
 add_dependencies(tst_clap_host cutthulhu_test_clap)
 target_compile_definitions(tst_clap_host PRIVATE LUMENIS_TEST_CLAP="$<TARGET_FILE:cutthulhu_test_clap>")
+# Audio timecode (LTC) and Change Sample Rate (docs/spec/clip-audio.md).
+lumenis_add_test(tst_ltc SOURCES tst_ltc.cpp LIBS lumenis::media)

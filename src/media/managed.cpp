@@ -176,8 +176,11 @@ public:
     // A new file's path for a track in a folder.
     QString pathFor(const QString& folder, const QString& track) {
         fileMob(track); // the file's MobID, written into it
-        // "<clip>.<track>.<id>.mxf": unique, and readable in a file browser.
-        QString p = QStringLiteral("%1/%2.%3.%4.mxf").arg(folder, fileStem(clip_.name), track, id_.left(8));
+        // "<clip>.<track>.<id>.mxf": unique, and readable in a file browser. Sound at another rate than
+        // MXF takes is WAV.
+        const bool wav = track.startsWith(QLatin1Char('A')) && creation_.sampleRate != kManagedSampleRate;
+        QString p = QStringLiteral("%1/%2.%3.%4.%5")
+                        .arg(folder, fileStem(clip_.name), track, id_.left(8), wav ? QStringLiteral("wav") : QStringLiteral("mxf"));
         made_ << p;
         return p;
     }
@@ -275,18 +278,25 @@ public:
         const int rate = reader.sampleRate();
         const int channels = std::max(reader.channels(), 1);
         const int c = std::clamp(channel->second, 0, channels - 1);
-        const std::int64_t wanted = samplesAt(out_ - in_, clip_.editRate, kManagedSampleRate);
+        const int target = creation_.sampleRate > 0 ? creation_.sampleRate : kManagedSampleRate;
+        const std::int64_t wanted = samplesAt(out_ - in_, clip_.editRate, target);
         WriterSettings s = settingsFor(QStringLiteral("A%1").arg(t + 1));
         s.audioCodec = creation_.bitDepth <= 16 ? QStringLiteral("pcm_s16le") : QStringLiteral("pcm_s24le");
-        s.sampleRate = kManagedSampleRate;
+        s.sampleRate = target;
         s.channels = 1;
-        // The edit rate the file's timecode counts in.
-        s.formatOptions = {{QStringLiteral("mxf_audio_edit_rate"), rateText(clip_.editRate)}};
+        if (target == kManagedSampleRate) {
+            // The edit rate the file's timecode counts in.
+            s.formatOptions = {{QStringLiteral("mxf_audio_edit_rate"), rateText(clip_.editRate)}};
+        } else {
+            s.format = QStringLiteral("wav");
+            s.materialPackage = {};
+            s.filePackage = {};
+        }
         MediaWriter writer;
         if (!writer.open(path, s, error)) return false;
         std::unique_ptr<Resampler> resampler;
-        if (rate != kManagedSampleRate) {
-            resampler = std::make_unique<Resampler>(1, rate, kManagedSampleRate);
+        if (rate != target) {
+            resampler = std::make_unique<Resampler>(1, rate, target, creation_.resampleFilter);
             // An invalid one gives no samples: the track would be silence.
             if (!resampler->isValid()) {
                 if (error) *error = QObject::tr("Cannot convert the sound of %1 from %2 Hz.").arg(clip_.name).arg(rate);
@@ -514,6 +524,68 @@ std::optional<model::BinItem> makeMedia(const model::BinItem& clip, std::int64_t
 }
 
 } // namespace
+
+std::optional<model::BinItem> resampleClipAudio(const model::BinItem& clip, const MediaCreation& creation,
+                                                QStringList* oldFiles, QString* error) {
+    auto failed = [error](const QString& text) -> std::optional<model::BinItem> {
+        if (error) *error = text;
+        return std::nullopt;
+    };
+    const auto link = linkOf(clip);
+    if (!link || link->unlinked || link->channels <= 0) return failed(QObject::tr("%1 has no audio media.").arg(clip.name));
+    const QString drive = creation.audioDrive.isEmpty() ? creation.videoDrive : creation.audioDrive;
+    if (drive.isEmpty()) return failed(QObject::tr("No target drive is chosen."));
+    // The picture and the sound share one offset into the media (Link::first), which the new sound
+    // would not have.
+    if (link->videoStream >= 0 && link->first != 0) {
+        return failed(QObject::tr("%1 was relinked to media that starts earlier; consolidate it first.").arg(clip.name));
+    }
+    const QString folder = mxfFolder(drive, error);
+    if (folder.isEmpty()) return std::nullopt;
+    Maker maker(clip, *link, 0, clip.durationFrames, creation);
+    maker.setWork(clip.durationFrames * link->channels);
+    Link made = *link;
+    made.audioPaths.clear();
+    made.audioStreams.clear();
+    made.streamChannels.clear();
+    made.channels = 0;
+    QStringList old;
+    QStringList paths;
+    for (int t = 0; t < link->channels; ++t) {
+        const QString was = link->audioFile(t);
+        if (was.contains(QLatin1String("Avid MediaFiles")) && !old.contains(was)) old << was;
+        const QString path = maker.pathFor(folder, QStringLiteral("A%1").arg(t + 1));
+        QString err;
+        if (!maker.writeAudio(t, path, &err)) return failed(err);
+        paths << path;
+        made.audioPaths << path;
+        made.audioStreams << 0;
+        made.streamChannels << 1;
+        made.channels += 1;
+    }
+    // A clip without picture is linked by its first audio file, which starts where the clip does; one
+    // with picture keeps its picture's file.
+    if (link->videoStream < 0) {
+        made.path = paths.constFirst();
+        made.first = 0;
+    }
+    maker.keep();
+    model::BinItem out = clip;
+    out.link = made.toJson();
+    out.fields.insert(QStringLiteral("Audio SR"), QString::number(creation.sampleRate));
+    out.fields.insert(QStringLiteral("Audio Bit Depth"), QStringLiteral("%1 bit").arg(creation.bitDepth <= 16 ? 16 : 24));
+    // The file sources of the audio tracks name the new files.
+    for (model::ClipSource& source : out.sources) {
+        if (source.kind != model::ClipSource::Kind::File || !source.track.startsWith(QLatin1Char('A'))) continue;
+        const int t = source.track.mid(1).toInt() - 1;
+        if (t < 0 || t >= paths.size()) continue;
+        source.mob = maker.fileMob(source.track);
+        source.name = QFileInfo(paths.at(t)).fileName();
+        source.path = paths.at(t);
+    }
+    if (oldFiles) *oldFiles = old;
+    return out;
+}
 
 // A Maker for a clip that exists only as its name, rate, length and start (no media of its own):
 // the files' source is a new import source named as the clip.

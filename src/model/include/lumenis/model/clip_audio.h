@@ -11,7 +11,7 @@
 // track. MainWindow runs them on the bin's selection.
 namespace lumenis::model {
 
-// Whether an item can take a clip gain or pan: a master clip or subclip.
+// Whether an item can take a clip gain or pan: a master clip (with or without picture) or subclip.
 bool takesClipAudio(const BinItem& item);
 // Clip > Audio > Apply Gain (p.216): "If there was a gain previously associated with the clip, the
 // new gain value overrides it." From -96 to 12 dB (the dialog's range), clamped. False for an item

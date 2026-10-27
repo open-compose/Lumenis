@@ -73,6 +73,9 @@ QString mxfFolder(const QString& drive, QString* error = nullptr);
 
 // How media is made (Media Creation settings, p.1206-1209; Audio Project
 // settings, p.1148).
+// MXF OP-Atom audio is 48 kHz (FFmpeg's muxer takes no other rate).
+inline constexpr int kManagedSampleRate = 48000;
+
 struct MediaCreation {
     QSize raster{1920, 1080}; // the project's
     Resolution resolution = defaultResolution();
@@ -80,6 +83,11 @@ struct MediaCreation {
     QString videoDrive;
     QString audioDrive; // empty: the video drive
     int bitDepth = 24;  // PCM, 16 or 24
+    // The sound's sample rate. Media at another rate than kManagedSampleRate is written as WAV
+    // beside the MXF files (Change Sample Rate's 32 and 44.1 kHz, p.731; ours), and the resampler's
+    // filter length (Resampler) sets its quality.
+    int sampleRate = kManagedSampleRate;
+    int resampleFilter = 32;
     QString project;    // the project's name, kept in the files
     QDateTime when;
     // The new master clip's MobID, which its files name as their material
@@ -91,8 +99,6 @@ struct MediaCreation {
 };
 // The smallest raster media is made at (p.355; DNxHR's too).
 inline const QSize kMinimumRaster{256, 120};
-// MXF OP-Atom audio is 48 kHz (FFmpeg's muxer takes no other rate).
-inline constexpr int kManagedSampleRate = 48000;
 
 // Transcode (p.353-356) and import (p.213): new media for frames [in, out)
 // of a clip with media, linked or managed, every track its own file: the
@@ -110,6 +116,13 @@ std::optional<model::BinItem> transcodeClip(const model::BinItem& clip, std::int
 bool canConsolidate(const model::BinItem& clip);
 std::optional<model::BinItem> consolidateClip(const model::BinItem& clip, std::int64_t in, std::int64_t out,
                                               const MediaCreation& creation, QString* error = nullptr);
+
+// Clip > Audio > Change Sample Rate (p.731): the clip with new media for its audio tracks at
+// creation.sampleRate, its picture left as it is. The new files go on the audio drive; *oldFiles
+// gets the managed files (under "Avid MediaFiles") the old audio used, for Delete Original Media.
+// Nothing, with the reason in *error, for a clip without audio media.
+std::optional<model::BinItem> resampleClipAudio(const model::BinItem& clip, const MediaCreation& creation,
+                                                QStringList* oldFiles = nullptr, QString* error = nullptr);
 
 // Sound made by Cutthulhu itself (Audio Mixdown, p.731-732): `channels` tracks of `frames` frames at
 // `editRate`, each written as a mono 48 kHz PCM file in the audio drive's MXF folder. `render` fills

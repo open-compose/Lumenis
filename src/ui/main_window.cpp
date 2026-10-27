@@ -14,6 +14,8 @@
 
 #include "lumenis/core/branding.h"
 #include "lumenis/core/timecode.h"
+#include "lumenis/media/link.h"
+#include "lumenis/media/ltc.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/audio_suite.h"
 #include "lumenis/model/audio_suite.h"
@@ -1642,6 +1644,139 @@ int MainWindow::autoVo() {
     return 1;
 }
 
+int MainWindow::readAudioTimecode() {
+    BinView* view = binContainer_->activeView();
+    if (!view) return 0;
+    auto tell = [this](const QString& text) {
+        ConsoleLog::instance().append(tr("Read Audio Timecode: %1").arg(text));
+        if (clipAudioHooks_.message) {
+            clipAudioHooks_.message(text);
+        } else {
+            QMessageBox::information(this, tr("Read Audio Timecode"), text);
+        }
+    };
+    QList<model::BinItem> clips;
+    int ignored = 0;
+    int tracks = 1;
+    for (const QString& id : view->selectedIds()) {
+        const model::BinItem* found = view->document().bin().item(id);
+        if (!found) continue;
+        if (!model::takesClipAudio(*found)) {
+            ++ignored;
+            continue;
+        }
+        clips << *found;
+        if (const auto link = media::linkOf(*found)) tracks = std::max(tracks, link->channels);
+    }
+    // "If any of the selected clips are not master clips or subclips, you will get a message, saying
+    // that they will be ignored" (p.668).
+    if (ignored > 0) tell(tr("%n selected item(s) that are not master clips or subclips will be ignored.", "", ignored));
+    if (clips.isEmpty()) return 0;
+    std::optional<ReadTimecodeChoice> choice;
+    if (clipAudioHooks_.readTimecode) {
+        choice = clipAudioHooks_.readTimecode(tracks);
+    } else {
+        ReadAudioTimecodeDialog dialog(tracks, this);
+        if (dialog.exec() == QDialog::Accepted) {
+            choice = ReadTimecodeChoice{dialog.userBits(), dialog.sourceTrack(), dialog.destination(), dialog.fill()};
+        }
+    }
+    if (!choice) return 0;
+    int read = 0;
+    QStringList failures;
+    for (model::BinItem& item : clips) {
+        QString error;
+        const auto tc = media::ltc::readClipTimecode(item, choice->track, choice->userBits, choice->fill, &error);
+        if (!tc) {
+            failures << QStringLiteral("%1: %2").arg(item.name, error);
+            continue;
+        }
+        item.fields.insert(choice->destination, QString::fromStdString(tc->toString()));
+        storeClip(view->document().nodeId(), item);
+        ++read;
+    }
+    if (!failures.isEmpty()) tell(failures.join(QLatin1Char('\n')));
+    return read;
+}
+
+// Each clip is converted once, however many selected sequences use it; it keeps its bin.
+int MainWindow::changeSampleRate() {
+    BinView* view = binContainer_->activeView();
+    if (!view) return 0;
+    QList<std::pair<QString, model::BinItem>> clips; // bin, clip
+    QSet<QString> seen;
+    auto add = [&](const QString& binId, const model::BinItem& clip) {
+        const auto link = media::linkOf(clip);
+        if (!link || link->channels <= 0 || seen.contains(clip.id)) return;
+        seen.insert(clip.id);
+        clips.append({binId, clip});
+    };
+    for (const QString& id : view->selectedIds()) {
+        const model::BinItem* found = view->document().bin().item(id);
+        if (!found) continue;
+        if (found->kind == model::BinItemKind::Sequence) {
+            const model::Sequence seq = model::Sequence::fromItem(*found);
+            for (const model::Track& t : seq.tracks()) {
+                if (t.kind != model::TrackKind::Audio) continue;
+                for (const model::Segment& s : t.segments) {
+                    if (s.isFiller()) continue;
+                    if (const auto clip = composer_->resolve(s.binId, s.clipId)) add(s.binId, *clip);
+                }
+            }
+        } else if (model::takesClipAudio(*found)) {
+            add(view->document().nodeId(), *found);
+        }
+    }
+    if (clips.isEmpty()) return 0;
+    std::optional<SampleRateChoice> choice;
+    if (clipAudioHooks_.sampleRate) {
+        choice = clipAudioHooks_.sampleRate();
+    } else {
+        QList<std::pair<QString, QString>> drives;
+        for (const media::MediaDrive& d : media::mediaDrives()) drives.append({d.name, d.root});
+        ChangeSampleRateDialog dialog(drives, this);
+        if (dialog.exec() == QDialog::Accepted) {
+            choice = SampleRateChoice{dialog.sampleRate(), dialog.filterSize(), dialog.deleteOriginal(), dialog.drive()};
+        }
+    }
+    if (!choice) return 0;
+    media::MediaCreation creation = mediaCreation(QStringLiteral("transcode"));
+    if (!choice->drive.isEmpty()) {
+        creation.videoDrive = choice->drive;
+        creation.audioDrive = choice->drive;
+    }
+    creation.sampleRate = choice->rate;
+    creation.resampleFilter = choice->filterSize;
+    int changed = 0;
+    QStringList failures;
+    QStringList old;
+    for (const auto& [binId, clip] : clips) {
+        QString error;
+        QStringList files;
+        const auto made = media::resampleClipAudio(clip, creation, &files, &error);
+        if (!made) {
+            failures << QStringLiteral("%1: %2").arg(clip.name, error);
+            continue;
+        }
+        storeClip(binId, *made);
+        old << files;
+        ++changed;
+    }
+    // "The system automatically deletes the original media after the conversion process completes"
+    // (p.731): only managed media; a linked clip's own files are left alone (ours).
+    if (choice->deleteOriginal && !old.isEmpty()) media::deleteMediaFiles(old, &mediaDb_);
+    if (!failures.isEmpty()) {
+        const QString text = failures.join(QLatin1Char('\n'));
+        ConsoleLog::instance().append(tr("Change Sample Rate: %1").arg(text));
+        if (clipAudioHooks_.message) {
+            clipAudioHooks_.message(text);
+        } else {
+            QMessageBox::warning(this, tr("Change Sample Rate"), text);
+        }
+    }
+    return changed;
+}
+
 // ---- Managed media (Phase 2.4)
 
 namespace {
@@ -3037,6 +3172,8 @@ void MainWindow::installPanelHandlers() {
     handle("clip.audio.apply_gain", [this] { applyClipGain(); });
     handle("clip.audio.center_pan", [this] { centerPan(); });
     handle("clip.auto_vo", [this] { autoVo(); });
+    handle("clip.read_audio_timecode", [this] { readAudioTimecode(); });
+    handle("clip.audio.change_sample_rate", [this] { changeSampleRate(); });
     handle("tools.source_browser", [this] { showSourceBrowser(); });
     // The Tool Palette button (Other tab, p.392).
     handle("other.tool_palette", [this] { showTool(QStringLiteral("ToolPalette")); });

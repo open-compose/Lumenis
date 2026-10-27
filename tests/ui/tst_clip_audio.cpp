@@ -3,6 +3,10 @@
 // dialogs, and the commands in the application. Clip gain and pan carrying into edits is scenario
 // 17-clip-gain-pan.json.
 #include "lumenis/ext/provider.h"
+#include "lumenis/media/link.h"
+#include "lumenis/media/ltc.h"
+#include "lumenis/media/managed.h"
+#include "lumenis/media/media.h"
 #include "lumenis/media/playback.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/clip_audio.h"
@@ -17,6 +21,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QRadioButton>
@@ -133,6 +138,98 @@ private slots:
         vo.keepButton()->setChecked(true);
         QCOMPARE(vo.track(), QStringLiteral("A2"));
         QVERIFY(vo.keep());
+    }
+
+    void moreDialogs() {
+        ReadAudioTimecodeDialog read(3);
+        QCOMPARE(read.sourceMenu()->count(), 3);
+        QCOMPARE(read.sourceTrack(), 0); // "A1 is the default"
+        QCOMPARE(read.destination(), QStringLiteral("Auxiliary TC1"));
+        QCOMPARE(read.destinationMenu()->count(), 5);
+        QVERIFY(read.fill()); // "This is the default"
+        QVERIFY(!read.userBits());
+        ChangeSampleRateDialog rate({{QStringLiteral("Media"), QStringLiteral("/media")}});
+        QCOMPARE(rate.sampleRate(), 48000);
+        QCOMPARE(rate.rateMenu()->count(), 3);
+        rate.rateMenu()->setCurrentIndex(1);
+        QCOMPARE(rate.sampleRate(), 44100);
+        QCOMPARE(rate.filterSize(), 64); // High
+        QVERIFY(!rate.deleteOriginal());
+        QCOMPARE(rate.drive(), QStringLiteral("/media"));
+    }
+
+    // Read Audio Timecode and Change Sample Rate on a linked clip in the application.
+    void timecodeAndRateInTheApplication() {
+        QTemporaryDir dir;
+        // A mono WAV with LTC from 10:00:00:00 at 25 fps.
+        const QString wav = dir.filePath(QStringLiteral("ltc.wav"));
+        {
+            const TimecodeFormat format = TimecodeFormat::forRate(Rational(25), false);
+            const std::vector<float> ltc = media::ltc::encode(Timecode(900000, format), 30, 48000);
+            media::WriterSettings ws;
+            ws.format = QStringLiteral("wav");
+            ws.audioCodec = QStringLiteral("pcm_f32le");
+            ws.channels = 1;
+            media::MediaWriter w;
+            QVERIFY(w.open(wav, ws));
+            QVERIFY(w.writeAudio(ltc.data(), static_cast<int>(ltc.size())) && w.finish());
+        }
+        media::LinkOptions o;
+        o.editRate = Rational(25);
+        BinItem linked = media::linkFiles({wav}, o).first();
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        bin->addItem(linked);
+        BinItem seq = model::newSequence(bin->bin(), Rational(25), QDateTime::currentDateTimeUtc());
+        bin->addItem(seq);
+        BinView* view = window.binContainer().viewFor(bin);
+        QVERIFY(view);
+        view->selectIds({linked.id, seq.id});
+        QStringList messages;
+        MainWindow::ClipAudioHooks hooks;
+        hooks.message = [&messages](const QString& m) { messages << m; };
+        hooks.readTimecode = [](int tracks) {
+            MainWindow::ReadTimecodeChoice c;
+            c.track = tracks - 1;
+            c.destination = QStringLiteral("Auxiliary TC2");
+            return std::optional(c);
+        };
+        const QString drive = dir.filePath(QStringLiteral("drive"));
+        QDir().mkpath(drive);
+        hooks.sampleRate = [&drive] {
+            MainWindow::SampleRateChoice c;
+            c.rate = 32000;
+            c.drive = drive;
+            return std::optional(c);
+        };
+        window.setClipAudioHooks(hooks);
+        const int read = window.readAudioTimecode();
+        QVERIFY2(read == 1, qPrintable(messages.join(QLatin1Char('\n'))));
+        // The sequence is ignored, with a message (p.668).
+        QCOMPARE(messages.size(), 1);
+        QCOMPARE(bin->bin().item(linked.id)->fields.value(QStringLiteral("Auxiliary TC2")), QStringLiteral("10:00:00:00"));
+        view->selectIds({linked.id});
+        QCOMPARE(window.changeSampleRate(), 1);
+        QCOMPARE(bin->bin().item(linked.id)->fields.value(QStringLiteral("Audio SR")), QStringLiteral("32000"));
+        const auto link = media::linkOf(*bin->bin().item(linked.id));
+        QVERIFY(link && link->audioFile(0).startsWith(drive));
+        // The new media still carries the timecode.
+        QString error;
+        const auto tc = media::ltc::readClipTimecode(*bin->bin().item(linked.id), 0, false, false, &error);
+        QVERIFY2(tc, qPrintable(error));
+        QCOMPARE(QString::fromStdString(tc->toString()), QStringLiteral("10:00:00:00"));
     }
 
     // The commands on a bin's selection.
