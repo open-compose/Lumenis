@@ -7,6 +7,7 @@
 #include "lumenis/model/automation.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/surround_pan.h"
 
 #include <QFileInfo>
 
@@ -139,8 +140,13 @@ void multichannelPieces(const model::Track& track, const model::Segment& s, std:
         p->gainDb = gainDb;
         p->pan = pan;
         if (surround && k < speakers.size()) {
-            // On its speaker at the segment's gain: no pan, and not the stereo placement's 3 dB.
-            p->speaker = static_cast<int>(speakers.at(k));
+            // On its speaker at the segment's gain: no pan, and not the stereo placement's 3 dB. A
+            // stereo track's channels follow their surround pans instead (p.704-706).
+            if (track.format == model::AudioFormat::Stereo) {
+                p->surround = surroundGains(model::surroundPansOf(s, track.format, 0).at(k), mix);
+            } else {
+                p->speaker = static_cast<int>(speakers.at(k));
+            }
             p->gainDb = s.gain;
             p->gain = s.gain <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, s.gain / 20.0));
             p->left = p->gain;
@@ -233,6 +239,18 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
             p->eq = s.eq;
             p->track = track.name();
             p->pan = s.pan != 0 ? s.pan : side(track.number);
+            if (seq.mixFormat() != model::AudioFormat::Stereo) {
+                // A 5.1 or 7.1 sequence: an LFE-only track on the LFE channel alone (p.710), others
+                // where their surround pan puts them (p.704-706). Pan automation is not used.
+                p->left = p->gain;
+                p->right = 0.0f;
+                p->monoGain = true;
+                if (track.lfeOnly) {
+                    p->speaker = static_cast<int>(Speaker::Lfe);
+                } else {
+                    p->surround = surroundGains(model::surroundPansOf(s, track.format, static_cast<int>(p->pan)).at(0), seq.mixFormat());
+                }
+            }
             // Keyframes in the clip's frames, as output samples from the segment's start.
             const double perFrame = static_cast<double>(kPlaybackRate) * static_cast<double>(rate.den()) /
                                     static_cast<double>(rate.num());
@@ -241,6 +259,7 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
                     *into << model::AudioKey{(k.frame - static_cast<double>(s.sourceIn)) * perFrame, k.value};
                 }
             }
+            if (p->surround || p->speaker >= 0) p->panKeys.clear();
             out.push_back(*p);
         }
     }
@@ -389,6 +408,20 @@ void AudioMix::render(std::int64_t start, int count, float* out) {
         if (src.empty()) continue;
         if (piece.equalised()) equalise(index, from - piece.at, src);
         float* dest = bus + kSpeakers * (from - start);
+        // A surround-panned piece spreads its volume (left) over the speakers.
+        if (piece.surround) {
+            const SpeakerGains& g = *piece.surround;
+            for (int i = 0; i < n; ++i) {
+                float l = piece.left;
+                if (piece.automated()) {
+                    float r = 0;
+                    automatedGains(piece, static_cast<double>(from - piece.at + i), &l, &r);
+                }
+                const float v = src[static_cast<std::size_t>(i)] * l;
+                for (int sp = 0; sp < kSpeakers; ++sp) dest[kSpeakers * i + sp] += v * g[static_cast<std::size_t>(sp)];
+            }
+            continue;
+        }
         // A speaker's piece puts its gain (left) on that speaker; the others pan between L and R.
         const int first = piece.speaker >= 0 ? piece.speaker : static_cast<int>(Speaker::L);
         const int second = static_cast<int>(Speaker::R);
@@ -422,11 +455,12 @@ void AudioMix::render(std::int64_t start, int count, float* out) {
 // A piece's stereo gains (l, r) are a gain g = sqrt(l^2 + r^2) and a pan (l/g, r/g): the gain goes on
 // the mono sum, the pan on what the effects make of it.
 void AudioMix::trackInput(Chain& chain, std::int64_t start, int count, std::vector<float>& bus, std::vector<float>& left,
-                          std::vector<float>& right) {
+                          std::vector<float>& right, std::vector<const SpeakerGains*>& surround) {
     const auto n = static_cast<std::size_t>(count);
     bus.assign(n, 0.0f);
     left.assign(n, -1.0f); // -1: no piece there
     right.assign(n, 0.0f);
+    surround.assign(n, nullptr);
     const std::int64_t end = start + count;
     for (std::size_t index = 0; index < pieces_.size(); ++index) {
         const AudioPiece& piece = pieces_[index];
@@ -448,6 +482,7 @@ void AudioMix::trackInput(Chain& chain, std::int64_t start, int count, std::vect
             if (g > 0) {
                 left[at] = l / g;
                 right[at] = r / g;
+                surround[at] = piece.surround ? &*piece.surround : nullptr;
             }
         }
     }
@@ -456,29 +491,36 @@ void AudioMix::trackInput(Chain& chain, std::int64_t start, int count, std::vect
         if (left[i] < 0) {
             left[i] = chain.left;
             right[i] = chain.right;
+            surround[i] = chain.surround;
         } else {
             chain.left = left[i];
             chain.right = right[i];
+            chain.surround = surround[i];
         }
     }
 }
 
 void AudioMix::renderChain(Chain& chain, std::int64_t start, int count, float* bus) {
     std::vector<float> sum, left, right;
+    std::vector<const SpeakerGains*> surround;
     if (start != chain.next) {
         for (auto& fx : chain.effects) fx->reset();
         const std::int64_t warm = std::min<std::int64_t>(chain.tail, std::max<std::int64_t>(start, 0));
         for (std::int64_t at = start - warm; at < start;) {
             const auto k = static_cast<int>(std::min<std::int64_t>(4096, start - at));
-            trackInput(chain, at, k, sum, left, right);
+            trackInput(chain, at, k, sum, left, right, surround);
             for (auto& fx : chain.effects) fx->process(sum.data(), k);
             at += k;
         }
     }
-    trackInput(chain, start, count, sum, left, right);
+    trackInput(chain, start, count, sum, left, right, surround);
     for (auto& fx : chain.effects) fx->process(sum.data(), count);
     for (int i = 0; i < count; ++i) {
         const auto k = static_cast<std::size_t>(i);
+        if (const SpeakerGains* g = surround[k]) {
+            for (int sp = 0; sp < kSpeakers; ++sp) bus[kSpeakers * i + sp] += sum[k] * left[k] * (*g)[static_cast<std::size_t>(sp)];
+            continue;
+        }
         if (chain.speaker >= 0) {
             bus[kSpeakers * i + chain.speaker] += sum[k] * left[k];
             continue;

@@ -14,9 +14,10 @@ Panner (p.704-710), which pan mono and stereo tracks to every speaker.
   Ls and Rs, are Lsr and Rsr. The guide says this when a 7.1 mix plays on
   5.1 speakers: "C, L, R, Lsr, Rsr, and LFE channels panned to appropriate
   speakers" (p.688).
-* Mono tracks, stereo tracks and clips are panned between L and R, as
-  before. In a 5.1 or 7.1 sequence, each channel of a multichannel track
-  plays on its own speaker (Pro Tools order, docs/spec/multichannel.md).
+* Clips, and mono and stereo tracks in a stereo sequence, are panned
+  between L and R, as before. In a 5.1 or 7.1 sequence mono and stereo
+  tracks follow their surround pans (below), and each channel of a
+  multichannel track plays on its own speaker (Pro Tools order, docs/spec/multichannel.md).
   It plays at the segment's gain, without a pan, and its volume
   automation applies. In a stereo sequence a multichannel track keeps its
   stereo placement (docs/spec/multichannel.md).
@@ -84,6 +85,67 @@ the Audio Project setting's Mix Mode Selection (p.1150). The menu:
 * A multichannel track's inserts are mixed in for every channel. Before,
   only the first channel's were.
 
+## Surround panning (5.6b2; `model::SurroundPan`, `src/model/surround_pan.*`, `src/ui/surround_panner.*`)
+
+* **The pan.** Each channel of a mono or stereo segment has the Advanced
+  Panner's values (p.705-706): Front Position and Rear Position
+  (left/right, L100 to R100), F/R Position (F100 front to R100 rear),
+  Center percentage, Side percentage (7.1) and LFE (0-100). The Pan
+  Location cursor sits on the trajectory from the front position to the
+  rear one. Dragging the cursor in a grid sets both positions to its
+  left/right place (an X/Y pan). Segments keep their pans (`surround` in
+  the composition). Pans are used only in 5.1 and 7.1 sequences.
+* **Defaults (ours).** With no pan of its own, a channel sits at the front:
+  * a mono segment where its stereo pan puts it, including the track's
+    side (odd tracks left, even right, p.1147), so a centred mono track
+    plays from C;
+  * a stereo segment's channels at the front left and right.
+  The guide's picture shows L50, L50, F100, 100 and 100 for one channel;
+  the guide does not give the defaults.
+* **The pan law (ours, `media::surroundGains`).** The guide gives none.
+  * The F/R position crossfades, with equal power, between the front row
+    and the rear surrounds; in 7.1 between the front, the side and the
+    rear rows.
+  * In the front row the front position pans across L, C and R; Center
+    percentage blends that with a phantom centre between L and R.
+  * The rear row pans the rear position between the rear surrounds; 7.1's
+    side row pans the cursor between the side surrounds; Side percentage
+    moves the side row's share to the front and rear rows.
+  * So the Position controls are heard "from just those two speakers"
+    (p.707), and grid pans in the middle reach more.
+  * The gains have unit power; LFE adds its percentage to the LFE channel.
+  * Pan automation and Live mode do not apply to surround pans yet.
+    Volume automation does.
+* **The Pan grid (p.705-706).** In a 5.1 or 7.1 sequence each mono or
+  stereo track's mixer strip shows a small grid for each channel, with the
+  speakers around it, instead of the pan knob. 5.1 and 7.1 tracks show no
+  pan, because their channels have their own speakers. In Clip mode,
+  dragging the cursor sets the pan of the segment under the position when
+  the drag ends ("Surround Pan", one undo step). In Auto and Live mode the
+  grids are dimmed (ours: surround automation comes later).
+* **The Advanced Panner (p.705-710).** The strip's Adv button opens it for
+  that track:
+  * a large grid for each channel, with the trajectory;
+  * double-clicking a speaker snaps the cursor to it (p.707); snapping to
+    C or a side speaker also sets its percentage to 100 (ours);
+  * the front, rear, f/r, center and (7.1) side knobs with their values
+    ("L50", "F100", "100");
+  * the LFE slider (0-100, as the table says; the picture shows a
+    fader in dB);
+  * the Stereo Link and Stereo Mirror buttons for stereo tracks;
+  * Close.
+  It follows the segment under the position.
+* **Stereo Link and Mirror (p.693, p.705).** The mixer's Unlinked / Stereo
+  Linked / Stereo Mirror button and the panner's buttons share one
+  setting. Linked moves the other channel the same way. Mirrored moves it
+  the other way left to right and the same way front to back
+  (`model::linkedPan`).
+* **LFE only (p.710).** Right-click a strip > "This track is LFE only", for
+  mono tracks. The strip shows LFE and no panner, and the track plays only
+  on the LFE channel of a surround mix (folded as LFE is in a stereo one).
+  Split Track to Mono marks the LFE channel's new track LFE only. It is an
+  undo step.
+
 ## Checks
 
 * `tst_surround` (media):
@@ -100,14 +162,22 @@ the Audio Project setting's Mix Mode Selection (p.1150). The menu:
   * the mixdown dialog's targets for each format.
 * Scenario `13-surround.json`: the format change as an undo step, and a
   5.1 edit in a 5.1 sequence.
+* `tst_surround` also checks the pan law (unit power, the speakers, the
+  percentages, the Position controls' two speakers), panned and LFE-only
+  playback, and the pan model (defaults, JSON, links, Split Track to Mono).
+* `tst_surround_ui`:
+  * the grids in place of the knob;
+  * storing pans and undo, Link and Mirror;
+  * the Advanced Panner's knobs, LFE and speaker snapping;
+  * LFE only.
+* Scenario `15-surround-pan.json`.
 * The mixdown null test (`tst_mixdown`) is unchanged: a stereo sequence's
   mix is what it was.
 
 ## Later
 
-* 5.6b2: the Pan grid and Advanced Panner (p.704-710), the Unlinked /
-  Stereo Linked / Stereo Mirror control (p.693), and LFE-only mono tracks
-  (p.710).
+* Surround pan automation and Live mode panning; 3-Knob mode and typed
+  Position values (p.706).
 * Direct Out and the Audio Project setting's output assignments
   (p.692, p.1150).
 * Starting a 5.1 or 7.1 mix at another output position (p.692).

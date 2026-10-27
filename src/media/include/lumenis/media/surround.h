@@ -77,6 +77,21 @@ int monitorChannels(MonitorMix mix);
 //   the rear surrounds into S (3 dB down, ours) and the side ones between S and their front speaker;
 //   Quad puts C, and Lss and Rss, in the middle of their speaker pairs and Lfe into L and R 3 dB down.
 std::vector<SpeakerGains> outputMatrix(model::AudioFormat sequenceFormat, MonitorMix monitor);
+// What a surround pan (model::SurroundPan, p.704-710) sends to each speaker of the bus in a sequence
+// mixed in `sequenceFormat` (5.1 or 7.1; Stereo gives L and R as an equal-power pan of the cursor's
+// position). Ours, as the guide gives no pan law:
+// - the cursor's row is between the front speakers and the rear surrounds (7.1: the front, the side
+//   and the rear surrounds), crossfaded by the F/R position with equal power;
+// - in the front row the front position pans across L, C and R; Center percentage blends that with a
+//   phantom centre (L and R only); the rear row pans the rear position between the rear surrounds, and
+//   7.1's side row the cursor's position between the side surrounds; Side percentage moves the side
+//   row's share to the front and rear rows;
+// - so moving along the trajectory with the Position controls is heard on the front and rear pairs
+//   only (p.707);
+// - LFE adds its percentage of the signal to the LFE channel.
+// Without LFE the gains have unit power.
+SpeakerGains surroundGains(const model::SurroundPan& pan, model::AudioFormat sequenceFormat);
+
 // The gains into the channels of a track of `format` (Stereo, 5.1 or 7.1, in the track's channel
 // order, trackSpeakers()): what an Audio Mixdown to that format writes (p.732).
 std::vector<SpeakerGains> trackMatrix(model::AudioFormat sequenceFormat, model::AudioFormat format);

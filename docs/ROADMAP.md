@@ -799,7 +799,11 @@ Format (`model::Sequence::mixFormat`) and the Mix Mode Selection's monitor
 formats (`src/media/surround.*`); the mix on an eight-speaker bus, folded
 as the guide's table has it into the speakers listening, in each of their
 channel orders; multichannel output; Stereo, 5.1 and 7.1 Audio Mixdowns.
-Next: 5.6b2, the Pan grid and Advanced Panner.
+5.6b2, surround panning (docs/spec/surround.md), is done: surround pans on
+mono and stereo segments (`model::SurroundPan`, `src/model/surround_pan.*`)
+with our pan law (`media::surroundGains`), the Audio Mixer's Pan grids,
+Stereo Link and Mirror, the Advanced Panner (`src/ui/surround_panner.*`),
+and LFE-only tracks.
 
 ### Phase 6 — Effects and rendering
 * Transitions, motion effects, timewarps, Color Correction (HSL and curves),

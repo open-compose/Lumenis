@@ -207,6 +207,9 @@ bool splitToMono(Sequence& sequence, const QString& name, QString* error) {
             mono.format = AudioFormat::Mono;
             mono.locked = original.locked;
             mono.syncLocked = original.syncLocked;
+            // "Using Split Tracks to Mono on a multichannel audio track also designates the created LFE
+            // track as LFE only" (p.710): the last channel of a 5.1 or 7.1 track (Pro Tools order).
+            mono.lfeOnly = (original.format == AudioFormat::Surround51 || original.format == AudioFormat::Surround71) && k == n - 1;
             // "Removes stereo track effects such as Audio Track Effect plug-in effects" (p.735).
             mono.segments = original.segments;
             for (Segment& s : mono.segments) {
@@ -221,6 +224,7 @@ bool splitToMono(Sequence& sequence, const QString& name, QString* error) {
                 // "Panning odd-numbered tracks to the left and even-numbered tracks to the right".
                 s.pan = mono.number % 2 == 1 ? -kPanMax : kPanMax;
                 s.panKeys.clear();
+                s.surround.clear(); // a stereo segment's pans were for both channels
             }
             sequence.restoreTrack(mono);
         }

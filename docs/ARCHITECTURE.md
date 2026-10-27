@@ -54,7 +54,9 @@ headers in `include/lumenis/<library>/`.
   docs/spec/timeline-colors.md) and `monitor.*` (marks, positions).
   UI: `timeline.*` (the Timeline panel and its edit commands;
   `timeline_automation.cpp` its keyframe graph and editing),
-  `clip_color_dialog.*` (the Timeline's Clip Color dialog) and
+  `clip_color_dialog.*` (the Timeline's Clip Color dialog),
+  `surround_panner.*` (the Pan grid and Advanced Panner; the pans
+  themselves are `src/model/surround_pan.*`) and
   `composer.*` (the Source and Record monitors).
 * **Panels and workspaces.** Our own docking framework (`panels.*`,
   `panel_manager.cpp`), not QDockWidget, because Qt cannot draw vertical

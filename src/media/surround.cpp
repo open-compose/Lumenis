@@ -2,6 +2,11 @@
 
 #include <QObject>
 
+#include <algorithm>
+#include <cmath>
+#include <tuple>
+#include <utility>
+
 // Surround mixing (surround.h). Each fold is a matrix of gains, one row for each speaker (or output
 // channel) it makes and one column for each speaker of the bus; outputMatrix() multiplies the
 // monitor's by the sequence's.
@@ -135,6 +140,87 @@ std::vector<SpeakerGains> through(const std::vector<SpeakerGains>& rows, const s
 }
 
 } // namespace
+
+namespace {
+
+constexpr double kHalfPi = 1.5707963267948966;
+
+// Equal-power gains between two speakers, t from 0 (the first) to 1 (the second).
+std::pair<double, double> between(double t) {
+    t = std::clamp(t, 0.0, 1.0);
+    return {std::cos(t * kHalfPi), std::sin(t * kHalfPi)};
+}
+
+} // namespace
+
+SpeakerGains surroundGains(const model::SurroundPan& pan, model::AudioFormat format) {
+    std::array<double, kSpeakers> g{};
+    auto add = [&g](Speaker s, double v) { g[static_cast<std::size_t>(at(s))] += v; };
+    const double y = std::clamp(pan.frontRear, -100, 100) / 100.0;
+    const double frontX = std::clamp(pan.front, -100, 100) / 100.0;
+    const double rearX = std::clamp(pan.rear, -100, 100) / 100.0;
+    if (format != model::AudioFormat::Surround51 && format != model::AudioFormat::Surround71) {
+        const auto [l, r] = between((pan.x() / 100.0 + 1.0) / 2.0);
+        add(S::L, l);
+        add(S::R, r);
+    } else {
+        // The rows' weights.
+        double wf = 0;
+        double ws = 0;
+        double wr = 0;
+        if (format == model::AudioFormat::Surround51) {
+            std::tie(wr, wf) = between((y + 1.0) / 2.0);
+        } else if (y >= 0) {
+            std::tie(ws, wf) = between(y);
+        } else {
+            std::tie(wr, ws) = between(y + 1.0);
+        }
+        if (ws > 0) {
+            // Side percentage: what the sides do not take goes to the front and rear rows.
+            const double s = std::clamp(pan.side, 0, 100) / 100.0;
+            const double spare = ws * ws * (1.0 - s * s);
+            ws *= s;
+            wf = std::sqrt(wf * wf + spare / 2.0);
+            wr = std::sqrt(wr * wr + spare / 2.0);
+        }
+        // Front row: L C R discretely, blended with a phantom centre by Center percentage.
+        if (wf > 0) {
+            const double c = std::clamp(pan.center, 0, 100) / 100.0;
+            double l = 0;
+            double ce = 0;
+            double r = 0;
+            if (frontX <= 0) {
+                std::tie(l, ce) = between(frontX + 1.0);
+            } else {
+                std::tie(ce, r) = between(frontX);
+            }
+            const auto [pl, pr] = between((frontX + 1.0) / 2.0);
+            l = c * l + (1.0 - c) * pl;
+            r = c * r + (1.0 - c) * pr;
+            ce = c * ce;
+            const double norm = std::sqrt(l * l + ce * ce + r * r);
+            if (norm > 0) {
+                add(S::L, wf * l / norm);
+                add(S::C, wf * ce / norm);
+                add(S::R, wf * r / norm);
+            }
+        }
+        if (ws > 0) {
+            const auto [l, r] = between((pan.x() / 100.0 + 1.0) / 2.0);
+            add(S::Lss, ws * l);
+            add(S::Rss, ws * r);
+        }
+        if (wr > 0) {
+            const auto [l, r] = between((rearX + 1.0) / 2.0);
+            add(S::Lsr, wr * l);
+            add(S::Rsr, wr * r);
+        }
+    }
+    add(S::Lfe, std::clamp(pan.lfe, 0, 100) / 100.0);
+    SpeakerGains out{};
+    for (std::size_t i = 0; i < out.size(); ++i) out[i] = static_cast<float>(g[i]);
+    return out;
+}
 
 QString speakerName(Speaker speaker) {
     static const char* const names[] = {"L", "R", "C", "Lfe", "Lss", "Rss", "Lsr", "Rsr"};

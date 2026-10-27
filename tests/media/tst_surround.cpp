@@ -10,6 +10,7 @@
 #include "lumenis/media/surround.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/surround_pan.h"
 
 #include <QDir>
 #include <QTemporaryDir>
@@ -235,6 +236,125 @@ private slots:
         near(play(item, MonitorMix::ProTools51), {value(1), 0, 0, 0, 0, 0});
         const model::BinItem stereo = sequenceOf(AudioFormat::Surround71, AudioFormat::Stereo, QStringLiteral("A1"));
         near(play(stereo, MonitorMix::SmpteDs71), {value(0), value(1), 0, 0, 0, 0, 0, 0});
+    }
+
+    // The pan law (ours, media::surroundGains): unit power, the speakers the Position controls name
+    // and the percentages (p.705-708).
+    void panLaw() {
+        using model::SurroundPan;
+        auto g = [](const SurroundPan& p, AudioFormat f, Speaker s) {
+            return static_cast<double>(surroundGains(p, f)[static_cast<std::size_t>(s)]);
+        };
+        auto power = [](const SpeakerGains& gains) {
+            double sum = 0;
+            for (std::size_t i = 0; i < gains.size(); ++i) {
+                if (i != static_cast<std::size_t>(Speaker::Lfe)) sum += static_cast<double>(gains[i] * gains[i]);
+            }
+            return sum;
+        };
+        // The default: the front centre, on C alone.
+        QVERIFY(std::abs(g({}, AudioFormat::Surround51, Speaker::C) - 1.0) < 1e-6);
+        QCOMPARE(g({}, AudioFormat::Surround51, Speaker::L), 0.0);
+        // Each speaker position.
+        QVERIFY(std::abs(g(SurroundPan::at(-100, 100), AudioFormat::Surround51, Speaker::L) - 1.0) < 1e-6);
+        QVERIFY(std::abs(g(SurroundPan::at(100, -100), AudioFormat::Surround51, Speaker::Rsr) - 1.0) < 1e-6);
+        QVERIFY(std::abs(g(SurroundPan::at(-100, 0), AudioFormat::Surround71, Speaker::Lss) - 1.0) < 1e-6);
+        // A 5.1 sequence has no side speakers: the middle is between front and rear.
+        QCOMPARE(g(SurroundPan::at(-100, 0), AudioFormat::Surround51, Speaker::Lss), 0.0);
+        QVERIFY(std::abs(g(SurroundPan::at(-100, 0), AudioFormat::Surround51, Speaker::L) - kHalf) < 1e-6);
+        QVERIFY(std::abs(g(SurroundPan::at(-100, 0), AudioFormat::Surround51, Speaker::Lsr) - kHalf) < 1e-6);
+        // Center 0: a phantom centre between L and R.
+        SurroundPan phantom;
+        phantom.center = 0;
+        QCOMPARE(g(phantom, AudioFormat::Surround51, Speaker::C), 0.0);
+        QVERIFY(std::abs(g(phantom, AudioFormat::Surround51, Speaker::L) - kHalf) < 1e-6);
+        // Side 0 (7.1): the middle goes to the front and rear rows.
+        SurroundPan noSide = SurroundPan::at(-100, 0);
+        noSide.side = 0;
+        QCOMPARE(g(noSide, AudioFormat::Surround71, Speaker::Lss), 0.0);
+        QVERIFY(g(noSide, AudioFormat::Surround71, Speaker::L) > 0.5 && g(noSide, AudioFormat::Surround71, Speaker::Lsr) > 0.5);
+        // Position controls: front left to rear right, half way, heard on L and Rsr only (p.707).
+        SurroundPan diagonal;
+        diagonal.front = -100;
+        diagonal.rear = 100;
+        diagonal.frontRear = 0;
+        const SpeakerGains d = surroundGains(diagonal, AudioFormat::Surround51);
+        QVERIFY(d[static_cast<std::size_t>(Speaker::L)] > 0.7f && d[static_cast<std::size_t>(Speaker::Rsr)] > 0.7f);
+        QCOMPARE(d[static_cast<std::size_t>(Speaker::R)] + d[static_cast<std::size_t>(Speaker::C)] + d[static_cast<std::size_t>(Speaker::Lsr)], 0.0f);
+        QVERIFY(std::abs(diagonal.x()) < 1e-9);
+        // Unit power everywhere; LFE adds its share.
+        for (int x = -100; x <= 100; x += 25) {
+            for (int y = -100; y <= 100; y += 25) {
+                for (AudioFormat f : {AudioFormat::Surround51, AudioFormat::Surround71}) {
+                    SurroundPan p = SurroundPan::at(x, y);
+                    p.center = (x + 100) / 2;
+                    p.side = (y + 100) / 2;
+                    QVERIFY2(std::abs(power(surroundGains(p, f)) - 1.0) < 1e-5, qPrintable(QStringLiteral("%1 %2").arg(x).arg(y)));
+                }
+            }
+        }
+        SurroundPan lfe;
+        lfe.lfe = 40;
+        QVERIFY(std::abs(g(lfe, AudioFormat::Surround51, Speaker::Lfe) - 0.4) < 1e-6);
+    }
+
+    // Surround pans and LFE-only tracks as they play (p.704-710).
+    void pannedPlayback() {
+        // A mono track panned to the left rear, its pan kept with the segment.
+        model::BinItem item = sequenceOf(AudioFormat::Surround51, AudioFormat::Mono, QStringLiteral("A2"));
+        model::Sequence seq = model::Sequence::fromItem(item);
+        QCOMPARE(model::setSurroundPan(seq, QStringLiteral("A1"), 0, 1, 0, model::SurroundPan::at(-100, -100)), 1);
+        seq.storeIn(item);
+        QCOMPARE(model::Sequence::fromItem(item).track(QStringLiteral("A1"))->segments.first().surround.size(), 1);
+        near(play(item, MonitorMix::ProTools51), {0, 0, 0, value(1), 0, 0});
+        // LFE only: on the LFE channel alone.
+        QVERIFY(model::setLfeOnly(seq, QStringLiteral("A1"), true));
+        seq.storeIn(item);
+        near(play(item, MonitorMix::ProTools51), {0, 0, 0, 0, 0, value(1)});
+        QVERIFY(model::Sequence::fromItem(item).track(QStringLiteral("A1"))->lfeOnly);
+        // A stereo track's channels pan on their own; by default left and right at the front.
+        model::BinItem stereo = sequenceOf(AudioFormat::Surround71, AudioFormat::Stereo, QStringLiteral("A1"));
+        model::Sequence s2 = model::Sequence::fromItem(stereo);
+        QVERIFY(model::setSurroundPan(s2, QStringLiteral("A1"), 0, 1, 1, model::SurroundPan::at(100, 0)) == 1);
+        s2.storeIn(stereo);
+        near(play(stereo, MonitorMix::SmpteDs71), {value(0), 0, 0, 0, 0, value(1), 0, 0});
+    }
+
+    // The model's side: defaults, JSON, links, and Split Track to Mono marking the LFE channel (p.710).
+    void panModel() {
+        using model::SurroundPan;
+        model::Segment seg;
+        seg.clipId = QStringLiteral("c");
+        QCOMPARE(model::surroundPansOf(seg, AudioFormat::Mono, -100), QList<SurroundPan>{SurroundPan::at(-100, 100)});
+        QCOMPARE(model::surroundPansOf(seg, AudioFormat::Stereo, 0),
+                 (QList<SurroundPan>{SurroundPan::at(-100, 100), SurroundPan::at(100, 100)}));
+        QVERIFY(model::surroundPansOf(seg, AudioFormat::Surround51, 0).isEmpty());
+        SurroundPan p;
+        p.front = -50;
+        p.rear = 30;
+        p.frontRear = -20;
+        p.center = 70;
+        p.side = 10;
+        p.lfe = 5;
+        QCOMPARE(model::surroundPanFromJson(model::surroundPanToJson(p)), p);
+        QCOMPARE(model::surroundXText(-50), QStringLiteral("L50"));
+        QCOMPARE(model::surroundXText(0), QStringLiteral("MID"));
+        QCOMPARE(model::surroundYText(100), QStringLiteral("F100"));
+        QCOMPARE(model::surroundYText(-40), QStringLiteral("R40"));
+        // Linked moves the other channel the same way, mirrored the other way left to right.
+        const SurroundPan left = SurroundPan::at(-100, 100);
+        const SurroundPan right = SurroundPan::at(100, 100);
+        const SurroundPan moved = SurroundPan::at(-60, 50);
+        QCOMPARE(model::linkedPan(right, left, moved, model::StereoLink::Linked), SurroundPan::at(100, 50));
+        QCOMPARE(model::linkedPan(right, left, moved, model::StereoLink::Mirror), SurroundPan::at(60, 50));
+        QCOMPARE(model::linkedPan(right, left, moved, model::StereoLink::Unlinked), right);
+        // Split Track to Mono: the 5.1 track's LFE channel becomes an LFE-only track.
+        model::Sequence seq = model::Sequence::fromItem(sequenceOf(AudioFormat::Surround51, AudioFormat::Surround51, QStringLiteral("A1")));
+        QVERIFY(model::splitToMono(seq, QStringLiteral("A1")));
+        for (int k = 1; k <= 6; ++k) QCOMPARE(seq.track(QStringLiteral("A%1").arg(k))->lfeOnly, k == 6);
+        // Only mono tracks can be LFE only.
+        model::Sequence st = model::Sequence::fromItem(sequenceOf(AudioFormat::Surround51, AudioFormat::Stereo, QStringLiteral("A1")));
+        QVERIFY(!model::setLfeOnly(st, QStringLiteral("A1"), true));
     }
 
     // Stereo, 5.1 and 7.1 mixdowns (p.732): one track of the format, its channels in Pro Tools order.

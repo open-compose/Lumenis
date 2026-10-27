@@ -2,9 +2,12 @@
 
 #include "lumenis/media/surround.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/surround_pan.h"
+#include "lumenis/ui/surround_panner.h"
 
 #include <QDialog>
 #include <QHash>
+#include <QPointer>
 #include <QSet>
 #include <QWidget>
 
@@ -73,6 +76,15 @@ public:
     void show(double gain, int pan);
     // The Volume Level display's text in place of a value ("Clip", "Auto").
     void showText(const QString& text);
+    // Surround panning (p.704-706): in a 5.1 or 7.1 sequence a mono or stereo track's strip shows a Pan
+    // grid for each channel and the Advanced Panner button in place of the pan knob; an LFE-only track
+    // shows "LFE" and no panner (p.710). `channels` 0 shows the pan knob again; -1 shows no pan at
+    // all (a 5.1 or 7.1 track in a surround sequence, whose channels have their own speakers).
+    void showSurround(model::AudioFormat sequenceFormat, int channels, bool lfeOnly);
+    // Shows the channels' pans without signalling.
+    void showSurroundPans(const QList<model::SurroundPan>& pans);
+    PanGrid* panGrid(int channel) const { return grids_.value(channel); }
+    QToolButton* advancedPannerButton() const { return advanced_; }
     // Live mode colours the fader area red (p.725), Auto mode blue (p.717); levels over +12 dB
     // are yellow (p.670).
     void setLive(bool on);
@@ -87,6 +99,11 @@ signals:
     void gainSet(double db, bool done);
     // The pan knob or pan box was set; `done` as for gainSet().
     void panSet(int pan, bool done);
+    // A Pan grid's cursor moved (`done` once the drag ends).
+    void surroundPanSet(int channel, const model::SurroundPan& pan, bool done);
+    void advancedPannerRequested();
+    // The right-click menu's "This track is LFE only" (p.710).
+    void lfeOnlyRequested(bool on);
 
 protected:
     // Alt-click on the fader or the pan box resets it.
@@ -105,6 +122,11 @@ private:
     QToolButton* mute_ = nullptr;
     QToolButton* gang_ = nullptr;
     QToolButton* trackButton_ = nullptr;
+    QWidget* surroundBox_ = nullptr;
+    QList<PanGrid*> grids_;
+    QToolButton* advanced_ = nullptr;
+    QLabel* lfeLabel_ = nullptr;
+    bool lfeOnly_ = false;
     QString gangName_;
     double gain_ = 0;
     int panValue_ = 0;
@@ -183,6 +205,19 @@ public:
     // Remakes the strips if the sequence's audio tracks changed, then shows the values.
     void refresh();
 
+    // Surround panning (p.704-710). Stereo Link and Stereo Mirror for stereo tracks' two pans (the
+    // control at the bottom of the mixer, p.693, and the Advanced Panner's buttons, p.705).
+    model::StereoLink stereoLink() const { return stereoLink_; }
+    void setStereoLink(model::StereoLink link);
+    QToolButton* stereoLinkButton() const { return stereoLinkButton_; }
+    // A strip's pan grid moved: in Clip mode the segment under the position takes it when `done`
+    // (Timeline::setSurroundPan), with the other channel of a stereo track as the link says.
+    void setSurroundPan(const QString& track, int channel, const model::SurroundPan& pan, bool done);
+    // The Advanced Panner for a track (one at a time; it follows the position). Null if the track
+    // cannot be surround-panned.
+    AdvancedPanner* openAdvancedPanner(const QString& track);
+    AdvancedPanner* advancedPanner() const { return panner_; }
+
     // Auto mode's recording (p.717-719): the Record and Cancel buttons and the preroll and
     // postroll in seconds, shown in Auto mode only.
     QToolButton* recordButton() const { return record_; }
@@ -233,6 +268,11 @@ private:
     QToolButton* bypass_ = nullptr;
     QToolButton* mixMode_ = nullptr;
     QToolButton* sequenceMix_ = nullptr;
+    QToolButton* stereoLinkButton_ = nullptr;
+    model::StereoLink stereoLink_ = model::StereoLink::Unlinked;
+    // The open Advanced Panner, a child that deletes itself on close; QPointer clears it then, also
+    // while the mixer itself is being destroyed.
+    QPointer<AdvancedPanner> panner_;
     QToolButton* fast_ = nullptr;
     QString mixModeValue_ = QStringLiteral("stereo");
     QWidget* stripArea_ = nullptr;

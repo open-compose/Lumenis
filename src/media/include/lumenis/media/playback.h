@@ -66,6 +66,9 @@ struct AudioPiece {
     // surround sequence plays on, at its volume (`left` holds the gain, `right` is 0) and without a
     // pan; -1 for the others, panned between L and R by `left` and `right`.
     int speaker = -1;
+    // A mono or stereo channel's surround pan in a 5.1 or 7.1 sequence (surroundGains()): its gain on
+    // each speaker of the bus, times its volume (`left`, `right` 0); `speaker` is then -1.
+    std::optional<SpeakerGains> surround;
 };
 
 // The Audio Track Effect inserts each track plays through (Editing Guide p.790-795;
@@ -163,11 +166,13 @@ private:
         std::int64_t next = -1;
         float left = 0.70710678f;
         float right = 0.70710678f;
+        const SpeakerGains* surround = nullptr; // the last piece's, for the tail
     };
     // The track's pieces from `start`, summed in mono with their gains, and the pan of each sample,
-    // into `bus`, `left` and `right` (resized to `count`).
+    // into `bus`, `left` and `right` (resized to `count`); `surround` holds each sample's surround
+    // gains, null where the piece has none.
     void trackInput(Chain& chain, std::int64_t start, int count, std::vector<float>& bus, std::vector<float>& left,
-                    std::vector<float>& right);
+                    std::vector<float>& right, std::vector<const SpeakerGains*>& surround);
     // A track's effects over [start, start + count), added to the bus (kSpeakers * count floats,
     // interleaved); after a seek, the effects first run over the tail's length before `start` so
     // they are settled.

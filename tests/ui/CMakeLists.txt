@@ -37,6 +37,8 @@ lumenis_add_test(tst_audio_suite_ui SOURCES tst_audio_suite_ui.cpp LIBS ${ui_tes
 lumenis_add_test(tst_multichannel_ui SOURCES tst_multichannel_ui.cpp LIBS ${ui_test_libs})
 # Clip colours in the Timeline (docs/spec/timeline-colors.md).
 lumenis_add_test(tst_clip_colors SOURCES tst_clip_colors.cpp LIBS ${ui_test_libs})
+# Surround panning in the Audio Mixer (docs/spec/surround.md).
+lumenis_add_test(tst_surround_ui SOURCES tst_surround_ui.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_audio_punch_in SOURCES tst_audio_punch_in.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_track_effects SOURCES tst_track_effects.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_source_browser SOURCES tst_source_browser.cpp LIBS ${ui_test_libs} lumenis::media)

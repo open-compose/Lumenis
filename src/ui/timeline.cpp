@@ -5,6 +5,7 @@
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/multichannel.h"
+#include "lumenis/model/surround_pan.h"
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/clip_color_dialog.h"
 #include "lumenis/ui/marker_dialogs.h"
@@ -3716,6 +3717,30 @@ bool Timeline::setClipAudio(const QString& track, std::optional<double> gain, st
         return fail(tr("There is no audio segment there to adjust."));
     }
     return commitSequence(description, seq);
+}
+
+bool Timeline::setSurroundPan(const QString& track, int channel, const model::SurroundPan& pan,
+                              const std::optional<model::SurroundPan>& other) {
+    message_.clear();
+    if (!recordSequence()) return false;
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    const model::Sequence before = model::Sequence::fromItem(record.current()->item);
+    model::Sequence seq = before;
+    if (model::setSurroundPan(seq, track, record.position(), 1, channel, pan, other) == 0) {
+        return fail(tr("There is no mono or stereo audio segment there to pan."));
+    }
+    if (seq == before) return true;
+    return commitSequence(tr("Surround Pan"), seq);
+}
+
+bool Timeline::setLfeOnly(const QString& track, bool on) {
+    message_.clear();
+    if (!recordSequence()) return false;
+    const model::Sequence before = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+    model::Sequence seq = before;
+    if (!model::setLfeOnly(seq, track, on)) return fail(tr("Only a mono audio track can be LFE only."));
+    if (seq == before) return true;
+    return commitSequence(on ? tr("LFE Only") : tr("Not LFE Only"), seq);
 }
 
 bool Timeline::setEq(const QStringList& tracks, const std::optional<model::AudioEq>& eq, bool onTrack,

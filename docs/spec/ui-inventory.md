@@ -47,6 +47,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   at the same frames (§11; 2026.8 guide p.507).
 * Shared projects on third-party storage: our own lock files (§20a;
   docs/spec/bin-locking.md).
+* Surround panning (docs/spec/surround.md): the pan law; the default pans;
+  speaker snapping setting Center/Side to 100; the LFE slider as 0-100;
+  no surround automation yet.
 * Timeline clip colours (docs/spec/timeline-colors.md): the Clip Color
   dialog's defaults (Offline and Source on, the others off), the colours
   other than offline red and proxy yellow, one Mixed Rates colour per rate
@@ -1691,6 +1694,10 @@ p.610–640, ch. 13 p.432–434).**
   * Audio Loop Play, Render Effect and the Fast menu.
   * The Sequence Mix Format button at the top of the Master strip (p.693):
     Stereo, 5.1 or 7.1 Sequence (p.686).
+  * Unlinked / Stereo Linked / Stereo Mirror (p.693); in a 5.1 or 7.1
+    sequence, Pan grids and the Advanced Panner button in place of the
+    pan knob, and right-click > This track is LFE only (p.705-710;
+    docs/spec/surround.md).
 * **Strips (picture and table on p.693–694):**
   * One strip per audio track of the sequence in the Record monitor, and the
     Master strip on the right. The strips scroll sideways (p.694–696).

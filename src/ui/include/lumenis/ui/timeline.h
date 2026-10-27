@@ -389,6 +389,13 @@ public:
     // to the end, the start to OUT, or the whole track without marks.
     bool setClipAudio(const QString& track, std::optional<double> gain, std::optional<int> pan, bool onTrack,
                       const QString& description);
+    // Surround panning (p.704-710; lumenis/model/surround_pan.h): channel `channel`'s pan of the
+    // segment under the Record position on a mono or stereo track, with `other` the other channel's
+    // too (Stereo Link and Mirror), as one undo step ("Surround Pan"). Already so: true without a step.
+    bool setSurroundPan(const QString& track, int channel, const model::SurroundPan& pan,
+                        const std::optional<model::SurroundPan>& other = std::nullopt);
+    // "This track is LFE only" (p.710), one undo step. False for anything but a mono audio track.
+    bool setLfeOnly(const QString& track, bool on);
     // Audio EQ (p.736-741; lumenis/model/audio_eq.h): `eq` on the whole segment under the Record
     // position on each of `tracks`, or without one its EQ removed; with `onTrack` (Set EQ - In/Out
     // and the Remove EQs items) on the segments between the marks: IN to OUT, IN to the end, the

@@ -144,6 +144,30 @@ struct AudioSuiteEffect {
     bool operator==(const AudioSuiteEffect&) const = default;
 };
 
+// A surround pan of one channel of a mono or stereo audio segment in a 5.1 or 7.1 sequence (Editing
+// Guide p.704-710; lumenis/model/surround_pan.h; docs/spec/surround.md): the Advanced Panner's
+// controls. The Pan Location cursor runs along a trajectory from the Front Position (left/right,
+// -100 to 100, at the front edge) to the Rear Position (at the rear edge); the F/R Position (-100
+// rear to 100 front) places it on that line. Center percentage (0-100) sends the front of the pan to
+// a discrete centre channel or, lower, to a phantom centre between L and R; Side percentage (7.1)
+// does the same for the side surrounds; LFE (0-100) is the share sent to the LFE channel. The
+// defaults put the cursor at the front centre.
+struct SurroundPan {
+    int front = 0;
+    int rear = 0;
+    int frontRear = 100;
+    int center = 100;
+    int side = 100;
+    int lfe = 0;
+    // The cursor's left/right position on the trajectory at frontRear.
+    double x() const;
+    // A pan with the cursor at (x, y) in the X/Y grid: front and rear both at x; the percentages
+    // are kept from `from`.
+    static SurroundPan at(double x, double y, const SurroundPan& from);
+    static SurroundPan at(double x, double y);
+    bool operator==(const SurroundPan&) const = default;
+};
+
 // One piece of a track: material from a source clip, or filler (black,
 // silence) where `clipId` is empty.
 struct Segment {
@@ -179,6 +203,9 @@ struct Segment {
     std::optional<AudioEq> eq;
     // The segment's AudioSuite plug-in effect (p.797-800), on audio segments only.
     std::optional<AudioSuiteEffect> audioSuite;
+    // Surround pans (p.704-710), one for each channel of a mono or stereo segment; empty for the
+    // default (lumenis/model/surround_pan.h: surroundPansOf). Used in 5.1 and 7.1 sequences only.
+    QList<SurroundPan> surround;
     // Set Local Clip Color (p.597-598): "#rrggbb", empty for none. Shown when the Clip Color dialog's
     // Timeline Local is on (lumenis/model/clip_coloring.h).
     QString localColor;
@@ -220,6 +247,9 @@ struct Track {
     // Audio tracks: the Audio Track Effect inserts a-e, processed left to right (p.794).
     std::array<std::optional<TrackInsert>, kTrackInserts> inserts{};
     bool hasInserts() const;
+    // "This track is LFE only" (p.710): a mono audio track heard only on the LFE channel of a surround
+    // mix, without a panner.
+    bool lfeOnly = false;
 
     QString name() const { return trackName(kind, number); }
     // The sum of the segment lengths: the frame after the track's last one.
@@ -247,10 +277,11 @@ public:
     void storeIn(BinItem& item) const;
 
     // The composition JSON: {tracks: [{name, segments: [...], locked?, syncLocked?, format?,
-    // inserts?: [{slot (0-4), effect, name, params: {id: value}, bypass?}]}],
+    // lfeOnly?, inserts?: [{slot (0-4), effect, name, params: {id: value}, bypass?}]}],
     // timecode, mix? ("5.1" or "7.1": mixFormat())}. A segment is {length, gain?, pan?,
     // volumeKeys?, panKeys?, eq?, effect?, transition?} (keys as [[frame, value], ...]) plus
-    // addEdit? for filler or {clip, mob?, bin?, name, track, in, localColor?} for material.
+    // addEdit? for filler or {clip, mob?, bin?, name, track, in, localColor?, surround?: [{front,
+    // rear, fr, center?, side?, lfe?}]} for material.
     // fromJson() skips unreadable and duplicate tracks, tidies each track and sorts the tracks.
     QJsonObject toJson() const;
     static Sequence fromJson(const QJsonObject& o);

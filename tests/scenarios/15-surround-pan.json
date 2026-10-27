@@ -1,0 +1,21 @@
+[
+  {
+    "name": "in a 5.1 sequence a mono segment is panned to the left rear as one undo step; a second pan, undone, leaves the first; the track is made LFE only",
+    "guide": "p.704-710",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"A1": [["A", 0, 20]]}},
+    "steps": [
+      {"mix_format": "5.1"},
+      {"position": "record", "frame": 5},
+      {"surround_pan": ["A1", 0, {"front": -100, "rear": -100, "fr": -100}]},
+      {"surround_pan": ["A1", 0, {"front": 40, "rear": 40, "fr": 0, "lfe": 20}]},
+      {"command": "edit.undo"},
+      {"lfe_only": ["A1", true]},
+      {"lfe_only": ["V1", true], "refused": true}
+    ],
+    "expect": {"A1": [["A", 0, 20]]},
+    "expect_surround": {"A1": [[{"front": -100, "rear": -100, "fr": -100}]]},
+    "expect_lfe_only": ["A1"],
+    "expect_mix": "5.1"
+  }
+]

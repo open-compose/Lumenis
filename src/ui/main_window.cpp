@@ -1165,6 +1165,11 @@ std::vector<media::AudioPiece> MainWindow::soundOf(const model::LoadedClip& load
     if (audioMixer_ && audioMixer_->monitorMix() == media::MonitorMix::Mono) {
         for (media::AudioPiece& piece : pieces) {
             if (piece.speaker >= 0) continue;
+            if (piece.surround) {
+                // A surround pan's volume is in `left`; in the middle, panned as the others.
+                piece.surround.reset();
+                piece.monoGain = false;
+            }
             const float g = std::sqrt(piece.left * piece.left + piece.right * piece.right);
             piece.left = g * 0.70710678f;
             piece.right = g * 0.70710678f;

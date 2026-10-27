@@ -68,6 +68,11 @@ Each file is a JSON list of scenarios:
   * `{"local_color": "#rrggbb" or ""}` is Set Local Clip Color on the
     selected segments (p.598); `expect_local_colors` gives each track's
     material segments' local colours in order;
+  * `{"surround_pan": [track, channel, pan]}` sets a surround pan at the
+    Record position (the pan as the composition writes it; p.704-706) and
+    `{"lfe_only": [track, on]}` "This track is LFE only" (p.710);
+    `expect_surround` gives each material segment's pans,
+    `expect_lfe_only` the LFE-only tracks;
   * `{"mix_format": "stereo"|"5.1"|"7.1"}` sets the Audio Mixer's
     Sequence Mix Format (p.686); `expect_mix` is the format at the end;
   * `{"insert": [track, slot, effect id or null]}` and `{"move_insert":

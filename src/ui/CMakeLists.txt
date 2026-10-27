@@ -11,6 +11,7 @@ add_library(lumenis_ui STATIC
     platform_check.cpp
     bin_view.cpp
     clip_color_dialog.cpp
+    surround_panner.cpp
     button_mapping.cpp
     composer.cpp
     consolidate_dialog.cpp
@@ -58,6 +59,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/bin_view.h
     include/lumenis/ui/button_mapping.h
     include/lumenis/ui/clip_color_dialog.h
+    include/lumenis/ui/surround_panner.h
     include/lumenis/ui/composer.h
     include/lumenis/ui/consolidate_dialog.h
     include/lumenis/ui/mixdown_dialog.h

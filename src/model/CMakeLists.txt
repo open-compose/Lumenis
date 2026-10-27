@@ -12,6 +12,7 @@ add_library(lumenis_model STATIC
     marker.cpp
     multichannel.cpp
     clip_coloring.cpp
+    surround_pan.cpp
     settings.cpp
     calculator.cpp
     structure.cpp
@@ -28,6 +29,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/marker.h
     include/lumenis/model/multichannel.h
     include/lumenis/model/clip_coloring.h
+    include/lumenis/model/surround_pan.h
     include/lumenis/model/settings.h
     include/lumenis/model/calculator.h
     include/lumenis/model/structure.h

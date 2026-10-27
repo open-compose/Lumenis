@@ -3,6 +3,7 @@
 #include "lumenis/model/automation.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/ui/surround_panner.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QActionGroup>
@@ -214,6 +215,33 @@ MixerStrip::MixerStrip(const QString& track, bool master, QWidget* parent) : QWi
     trackButton_ = smallButton(track, QStringLiteral("trackButton"), this, !master);
     trackButton_->setMinimumWidth(40);
 
+    // The Pan grids and Advanced Panner button of a surround sequence (p.705), shown instead of the
+    // pan knob by showSurround().
+    surroundBox_ = new QWidget(this);
+    surroundBox_->setObjectName(QStringLiteral("surroundPan"));
+    auto* sb = new QVBoxLayout(surroundBox_);
+    sb->setContentsMargins(0, 0, 0, 0);
+    sb->setSpacing(2);
+    auto* gridRow = new QHBoxLayout;
+    gridRow->setSpacing(2);
+    for (int k = 0; k < 2; ++k) {
+        auto* g = new PanGrid(false, surroundBox_);
+        g->setObjectName(QStringLiteral("panGrid:%1").arg(k));
+        connect(g, &PanGrid::panMoved, this, [this, k](const model::SurroundPan& pan, bool done) { emit surroundPanSet(k, pan, done); });
+        grids_ << g;
+        gridRow->addWidget(g);
+    }
+    sb->addLayout(gridRow);
+    advanced_ = smallButton(tr("Adv"), QStringLiteral("advancedPanner"), surroundBox_);
+    advanced_->setToolTip(tr("Advanced Panner"));
+    connect(advanced_, &QToolButton::clicked, this, &MixerStrip::advancedPannerRequested);
+    sb->addWidget(advanced_, 0, Qt::AlignHCenter);
+    surroundBox_->hide();
+    lfeLabel_ = new QLabel(tr("LFE"), this);
+    lfeLabel_->setObjectName(QStringLiteral("lfeOnly"));
+    lfeLabel_->setAlignment(Qt::AlignCenter);
+    lfeLabel_->hide();
+
     if (!master) {
         auto* top = new QHBoxLayout;
         top->addStretch(1);
@@ -222,6 +250,17 @@ MixerStrip::MixerStrip(const QString& track, bool master, QWidget* parent) : QWi
         v->addLayout(top);
         v->addWidget(pan_, 0, Qt::AlignHCenter);
         v->addWidget(panBox_, 0, Qt::AlignHCenter);
+        v->addWidget(surroundBox_, 0, Qt::AlignHCenter);
+        v->addWidget(lfeLabel_, 0, Qt::AlignHCenter);
+        // "Right-click on a track in the Audio Mixer ... click on 'This track is LFE only'" (p.710).
+        setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(this, &QWidget::customContextMenuRequested, this, [this](const QPoint& at) {
+            QMenu menu(this);
+            QAction* a = menu.addAction(tr("This track is LFE only"));
+            a->setCheckable(true);
+            a->setChecked(lfeOnly_);
+            if (menu.exec(mapToGlobal(at)) == a) emit lfeOnlyRequested(a->isChecked());
+        });
     } else {
         gang_->hide();
         pan_->hide();
@@ -291,6 +330,24 @@ void MixerStrip::show(double gain, int pan) {
     panBox_->setText(fader::panText(pan));
     syncColours();
     syncing_ = false;
+}
+
+void MixerStrip::showSurround(model::AudioFormat sequenceFormat, int channels, bool lfeOnly) {
+    lfeOnly_ = lfeOnly;
+    const bool surround = channels > 0 && !lfeOnly;
+    pan_->setVisible(channels == 0 && !lfeOnly);
+    panBox_->setVisible(channels == 0 && !lfeOnly);
+    if (channels < 0) channels = 0;
+    lfeLabel_->setVisible(lfeOnly);
+    surroundBox_->setVisible(surround);
+    for (int k = 0; k < grids_.size(); ++k) {
+        grids_.at(k)->setFormat(sequenceFormat);
+        grids_.at(k)->setVisible(k < channels);
+    }
+}
+
+void MixerStrip::showSurroundPans(const QList<model::SurroundPan>& pans) {
+    for (int k = 0; k < grids_.size() && k < pans.size(); ++k) grids_.at(k)->setPan(pans.at(k));
 }
 
 void MixerStrip::showText(const QString& text) {
@@ -400,6 +457,18 @@ AudioMixer::AudioMixer(Timeline& timeline, QWidget* parent) : QWidget(parent), t
     }
     mixMode_->setMenu(mixMenu);
     bar->addWidget(mixMode_);
+    // Unlinked / Stereo Linked / Stereo Mirror for stereo tracks' pans (p.693, bottom part 2).
+    stereoLinkButton_ = smallButton(tr("Unlinked"), QStringLiteral("stereoLink"), this);
+    stereoLinkButton_->setToolTip(tr("Stereo Link"));
+    stereoLinkButton_->setPopupMode(QToolButton::InstantPopup);
+    auto* linkMenu = new QMenu(stereoLinkButton_);
+    for (const auto& [link, text] : {std::pair{model::StereoLink::Unlinked, tr("Unlinked")},
+                                     std::pair{model::StereoLink::Linked, tr("Stereo Linked")},
+                                     std::pair{model::StereoLink::Mirror, tr("Stereo Mirror")}}) {
+        linkMenu->addAction(text, this, [this, l = link] { setStereoLink(l); });
+    }
+    stereoLinkButton_->setMenu(linkMenu);
+    bar->addWidget(stereoLinkButton_);
     auto* modes = new QButtonGroup(this);
     modes->setExclusive(true);
     const std::pair<Mode, QString> names[] = {{Mode::Clip, tr("Clip")}, {Mode::Auto, tr("Auto")}, {Mode::Live, tr("Live")}};
@@ -608,6 +677,10 @@ void AudioMixer::rebuild(const QStringList& tracks) {
         strip->muteButton()->setChecked(mute_.contains(t));
         connect(strip, &MixerStrip::gainSet, this, [this, t](double db, bool done) { setGain(t, db, done); });
         connect(strip, &MixerStrip::panSet, this, [this, t](int pan, bool done) { setPan(t, pan, done); });
+        connect(strip, &MixerStrip::surroundPanSet, this,
+                [this, t](int channel, const model::SurroundPan& pan, bool done) { setSurroundPan(t, channel, pan, done); });
+        connect(strip, &MixerStrip::advancedPannerRequested, this, [this, t] { openAdvancedPanner(t); });
+        connect(strip, &MixerStrip::lfeOnlyRequested, this, [this, t](bool on) { timeline_.setLfeOnly(t, on); });
         // Solo and mute stay through mode changes and closing the mixer
         // (p.694, p.699).
         connect(strip->soloButton(), &QToolButton::toggled, this, [this, t](bool on) {
@@ -659,6 +732,28 @@ void AudioMixer::syncValues() {
         MixerStrip* s = strips_.value(t);
         if (!s) continue;
         s->trackButton()->setChecked(timeline_.patch().isRecordSelected(t));
+        // Surround panning: mono and stereo tracks of a 5.1 or 7.1 sequence (p.706), in Clip mode
+        // (ours: surround pans are not automated yet).
+        if (const model::Track* track = seq.track(t)) {
+            const int channels = model::channelCount(track->format);
+            const bool surround = seq.mixFormat() != model::AudioFormat::Stereo && channels <= 2;
+            const bool ownSpeakers = seq.mixFormat() != model::AudioFormat::Stereo && channels > 2;
+            s->showSurround(seq.mixFormat(), surround ? channels : ownSpeakers ? -1 : 0, surround && track->lfeOnly);
+            if (surround) {
+                const auto seg = timeline_.audioSegmentAt(t);
+                const int side = timeline_.alternatingPan() ? (track->number % 2 == 1 ? -model::kPanMax : model::kPanMax) : 0;
+                s->showSurroundPans(seg ? model::surroundPansOf(*seg, track->format, seg->pan != 0 ? seg->pan : side)
+                                        : model::surroundPansOf(model::Segment{}, track->format, side));
+                for (int k = 0; k < channels; ++k) {
+                    if (PanGrid* g = s->panGrid(k)) g->setEnabled(seg.has_value() && mode_ == Mode::Clip);
+                }
+                s->advancedPannerButton()->setEnabled(seg.has_value() && mode_ == Mode::Clip);
+                AdvancedPanner* open = panner_.data();
+                if (open && open->track() == t && seg) {
+                    open->setPans(model::surroundPansOf(*seg, track->format, seg->pan != 0 ? seg->pan : side));
+                }
+            }
+        }
         s->setLive(mode_ == Mode::Live);
         s->setAuto(mode_ == Mode::Auto);
         const auto segment = timeline_.audioSegmentAt(t);
@@ -694,6 +789,71 @@ void AudioMixer::syncValues() {
     }
     master_->setLive(mode_ == Mode::Live);
     master_->show(masterGain_, 0);
+}
+
+void AudioMixer::setStereoLink(model::StereoLink link) {
+    stereoLink_ = link;
+    stereoLinkButton_->setText(link == model::StereoLink::Linked   ? tr("Stereo Linked")
+                               : link == model::StereoLink::Mirror ? tr("Stereo Mirror")
+                                                                   : tr("Unlinked"));
+    if (AdvancedPanner* p = panner_.data()) p->setLink(link);
+}
+
+// Only finished moves are stored; a stereo track's other channel follows the link.
+void AudioMixer::setSurroundPan(const QString& track, int channel, const model::SurroundPan& pan, bool done) {
+    if (mode_ != Mode::Clip) return;
+    const model::LoadedClip* rec = timeline_.composer().state(MonitorId::Record).current();
+    if (!rec) return;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(track);
+    const auto seg = timeline_.audioSegmentAt(track);
+    if (!t || !seg) return;
+    std::optional<model::SurroundPan> other;
+    const int side = timeline_.alternatingPan() ? (t->number % 2 == 1 ? -model::kPanMax : model::kPanMax) : 0;
+    const QList<model::SurroundPan> pans = model::surroundPansOf(*seg, t->format, seg->pan != 0 ? seg->pan : side);
+    if (pans.size() == 2 && stereoLink_ != model::StereoLink::Unlinked && channel >= 0 && channel < 2) {
+        other = model::linkedPan(pans.at(1 - channel), pans.at(channel), pan, stereoLink_);
+        if (MixerStrip* s = strips_.value(track)) {
+            if (PanGrid* g = s->panGrid(1 - channel)) g->setPan(*other);
+        }
+    }
+    if (done) timeline_.setSurroundPan(track, channel, pan, other);
+}
+
+AdvancedPanner* AudioMixer::openAdvancedPanner(const QString& track) {
+    const model::LoadedClip* rec = timeline_.composer().state(MonitorId::Record).current();
+    if (!rec) return nullptr;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(track);
+    const auto seg = timeline_.audioSegmentAt(track);
+    if (!t || !seg || seq.mixFormat() == model::AudioFormat::Stereo || model::channelCount(t->format) > 2 || t->lfeOnly) {
+        return nullptr;
+    }
+    const int side = timeline_.alternatingPan() ? (t->number % 2 == 1 ? -model::kPanMax : model::kPanMax) : 0;
+    delete panner_.data();
+    auto* panner = new AdvancedPanner(track, seq.mixFormat(), model::surroundPansOf(*seg, t->format, seg->pan != 0 ? seg->pan : side), this);
+    panner_ = panner;
+    panner->setAttribute(Qt::WA_DeleteOnClose);
+    panner->setLink(stereoLink_);
+    connect(panner, &AdvancedPanner::panChanged, this,
+            [this, track](int channel, const model::SurroundPan& pan, const std::optional<model::SurroundPan>& other, bool done) {
+                if (MixerStrip* s = strips_.value(track)) {
+                    if (PanGrid* g = s->panGrid(channel)) g->setPan(pan);
+                    if (other) {
+                        if (PanGrid* g = s->panGrid(1 - channel)) g->setPan(*other);
+                    }
+                }
+                if (done && mode_ == Mode::Clip) timeline_.setSurroundPan(track, channel, pan, other);
+            });
+    // The panner's link buttons set the mixer's.
+    connect(panner->linkButton(), &QToolButton::clicked, this, [this] {
+        if (const AdvancedPanner* p = panner_.data()) setStereoLink(p->link());
+    });
+    connect(panner->mirrorButton(), &QToolButton::clicked, this, [this] {
+        if (const AdvancedPanner* p = panner_.data()) setStereoLink(p->link());
+    });
+    panner->show();
+    return panner;
 }
 
 void AudioMixer::setMasterGain(double db) {

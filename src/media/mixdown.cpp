@@ -29,6 +29,7 @@ std::vector<AudioPiece> piecesFor(const MixdownRequest& r) {
             p.right = 0.0f;
             p.monoGain = true;
             p.speaker = -1;
+            p.surround.reset();
         }
         p.left *= master;
         p.right *= master;

@@ -2,6 +2,7 @@
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/multichannel.h"
+#include "lumenis/model/surround_pan.h"
 
 #include <QJsonArray>
 #include <QRegularExpression>
@@ -163,6 +164,11 @@ QJsonObject segmentToJson(const Segment& s) {
     o.insert(QStringLiteral("track"), s.sourceTrack);
     o.insert(QStringLiteral("in"), static_cast<qint64>(s.sourceIn));
     if (!s.localColor.isEmpty()) o.insert(QStringLiteral("localColor"), s.localColor);
+    if (!s.surround.isEmpty()) {
+        QJsonArray pans;
+        for (const SurroundPan& p : s.surround) pans.append(surroundPanToJson(p));
+        o.insert(QStringLiteral("surround"), pans);
+    }
     return o;
 }
 
@@ -180,6 +186,9 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.sourceTrack = o.value(QStringLiteral("track")).toString();
     s.sourceIn = o.value(QStringLiteral("in")).toInteger();
     if (!s.isFiller()) s.localColor = o.value(QStringLiteral("localColor")).toString();
+    for (const QJsonValue& v : o.value(QStringLiteral("surround")).toArray()) {
+        if (!s.isFiller() && s.surround.size() < 2) s.surround << surroundPanFromJson(v.toObject());
+    }
     s.length = std::max<std::int64_t>(o.value(QStringLiteral("length")).toInteger(), 0);
     s.addEdit = s.isFiller() && o.value(QStringLiteral("addEdit")).toBool();
     s.gain = clampGain(o.value(QStringLiteral("gain")).toDouble());
@@ -330,6 +339,7 @@ QJsonObject Sequence::toJson() const {
         QJsonObject o{{QStringLiteral("name"), t.name()}, {QStringLiteral("segments"), segments}};
         if (t.locked) o.insert(QStringLiteral("locked"), true);
         if (t.syncLocked) o.insert(QStringLiteral("syncLocked"), true);
+        if (t.lfeOnly) o.insert(QStringLiteral("lfeOnly"), true);
         if (t.kind == TrackKind::Audio && t.format != AudioFormat::Mono) {
             for (const auto& [format, text] : kFormats) {
                 if (format == t.format) o.insert(QStringLiteral("format"), QString::fromLatin1(text));
@@ -382,6 +392,7 @@ Sequence Sequence::fromJson(const QJsonObject& o) {
         for (const auto& [f, text] : kFormats) {
             if (format == QLatin1String(text)) t.format = f;
         }
+        t.lfeOnly = t.kind == TrackKind::Audio && t.format == AudioFormat::Mono && to.value(QStringLiteral("lfeOnly")).toBool();
         for (const QJsonValue& sv : to.value(QStringLiteral("segments")).toArray()) {
             t.segments << segmentFromJson(sv.toObject());
         }
@@ -911,7 +922,7 @@ bool Sequence::isMatchFrame(const Segment& before, const Segment& after) {
     // Halves of one segment keep the same keyframes (counted in the clip's frames), so an Add Edit
     // between them is still a match frame; other keyframes keep the edit.
     if (before.volumeKeys != after.volumeKeys || before.panKeys != after.panKeys) return false;
-    if (before.eq != after.eq || before.localColor != after.localColor) return false;
+    if (before.eq != after.eq || before.localColor != after.localColor || before.surround != after.surround) return false;
     if (before.isFiller() || after.isFiller()) return before.isFiller() && after.isFiller() && after.addEdit;
     return before.clipId == after.clipId && before.binId == after.binId && before.sourceTrack == after.sourceTrack &&
            before.sourceIn + before.length == after.sourceIn;

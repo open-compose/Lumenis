@@ -8,6 +8,7 @@
 #include "lumenis/model/automation.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/surround_pan.h"
 #include "lumenis/ui/audio_eq.h"
 #include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/audio_suite.h"
@@ -254,6 +255,26 @@ struct Run {
                 refs << model::SegmentRef{a.at(0).toString(), a.at(1).toInteger()};
             }
             timeline.setSelection(refs);
+            return true;
+        }
+        if (o.contains(QStringLiteral("surround_pan"))) {
+            // A surround pan at the Record position (p.704-706): [track, channel, pan as in the
+            // composition JSON].
+            const QJsonArray a = o.value(QStringLiteral("surround_pan")).toArray();
+            const bool ok = timeline.setSurroundPan(a.at(0).toString(), a.at(1).toInt(),
+                                                    model::surroundPanFromJson(a.at(2).toObject()));
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the pan was not refused") : timeline.lastMessage());
+            }
+            return true;
+        }
+        if (o.contains(QStringLiteral("lfe_only"))) {
+            // "This track is LFE only" (p.710): [track, on].
+            const QJsonArray a = o.value(QStringLiteral("lfe_only")).toArray();
+            const bool ok = timeline.setLfeOnly(a.at(0).toString(), a.at(1).toBool());
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("LFE only was not refused") : timeline.lastMessage());
+            }
             return true;
         }
         if (o.contains(QStringLiteral("local_color"))) {
@@ -618,6 +639,32 @@ private slots:
                 }
                 QCOMPARE(got, it.value().toArray());
             }
+        }
+        // Surround pans: per track, each material segment's pans (as the composition JSON writes them).
+        const QJsonObject pans = scenario.value(QStringLiteral("expect_surround")).toObject();
+        if (!pans.isEmpty()) {
+            const model::Sequence s = model::Sequence::fromItem(run.composer.state(MonitorId::Record).current()->item);
+            for (auto it = pans.begin(); it != pans.end(); ++it) {
+                const model::Track* t = s.track(it.key());
+                QVERIFY2(t, qPrintable(it.key()));
+                QJsonArray got;
+                for (const model::Segment& g : t->segments) {
+                    if (g.isFiller()) continue;
+                    QJsonArray each;
+                    for (const model::SurroundPan& p : g.surround) each.append(model::surroundPanToJson(p));
+                    got.append(each);
+                }
+                QCOMPARE(got, it.value().toArray());
+            }
+        }
+        // LFE-only tracks.
+        if (scenario.contains(QStringLiteral("expect_lfe_only"))) {
+            const model::Sequence s = model::Sequence::fromItem(run.composer.state(MonitorId::Record).current()->item);
+            QJsonArray got;
+            for (const model::Track& t : s.tracks()) {
+                if (t.lfeOnly) got.append(t.name());
+            }
+            QCOMPARE(got, scenario.value(QStringLiteral("expect_lfe_only")).toArray());
         }
         // The Sequence Mix Format.
         if (scenario.contains(QStringLiteral("expect_mix"))) {
