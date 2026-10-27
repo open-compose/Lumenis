@@ -158,7 +158,8 @@ void multichannelPieces(const model::Track& track, const model::Segment& s, std:
         }
         p->eq = s.eq;
         p->track = channelTrackKey(track.name(), k);
-        for (const model::AudioKey& key : s.volumeKeys) {
+        // An inactive track plays without its automation (p.602).
+        for (const model::AudioKey& key : track.inactive ? QList<model::AudioKey>{} : s.volumeKeys) {
             p->volumeKeys << model::AudioKey{(key.frame - static_cast<double>(s.sourceIn)) * perFrame, key.value};
         }
         // Volume automation sets the pan from `pan` (AudioPiece::automated()).
@@ -262,6 +263,8 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
             const double perFrame = static_cast<double>(kPlaybackRate) * static_cast<double>(rate.den()) /
                                     static_cast<double>(rate.num());
             for (const auto& [from, into] : {std::pair{&s.volumeKeys, &p->volumeKeys}, std::pair{&s.panKeys, &p->panKeys}}) {
+                // An inactive track plays without its automation (p.602).
+                if (track.inactive) break;
                 for (const model::AudioKey& k : *from) {
                     *into << model::AudioKey{(k.frame - static_cast<double>(s.sourceIn)) * perFrame, k.value};
                 }
@@ -312,7 +315,8 @@ TrackInserts trackInserts(const model::BinItem& item, bool bypassAll) {
     if (bypassAll || item.kind != model::BinItemKind::Sequence) return out;
     const model::Sequence seq = model::Sequence::fromItem(item);
     for (const model::Track& t : seq.tracks()) {
-        if (t.kind != model::TrackKind::Audio) continue;
+        // An inactive track's plug-ins are not processed (p.602).
+        if (t.kind != model::TrackKind::Audio || t.inactive) continue;
         QList<model::TrackInsert> list;
         for (const auto& in : t.inserts) {
             if (in && !in->bypass) list << *in;

@@ -365,8 +365,13 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   the Timeline (docs/spec/waveforms.md: `src/media/waveform.*` with the
   project's WaveformCache, `TimelineView::paintWaveform`, Waveform Options,
   Ctrl+Alt+L/K, Show Marked Waveforms, mismatched rates white, Display
-  Channel Order; tests `tst_waveform`, `tst_waveform_ui`), is done.
-  Next: the rest of the UI completion pass (U1b-e Timeline, U2 Composer and
+  Channel Order; tests `tst_waveform`, `tst_waveform_ui`), is done. U1b1,
+  the Track Control panel (docs/spec/track-control.md: per track settings
+  and Inactive on `model::Track`, kept with the sequence without undo steps;
+  Solo/Mute shared with the Audio Mixer; insert buttons; Enlarge/Reduce
+  Track with Ctrl+L/K in the Timeline; Track Color, Segment/Mark IO
+  Selection, Show Markers; test `tst_track_control`), is done.
+  Next: the rest of the UI completion pass (U1b2-e Timeline, U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.
 

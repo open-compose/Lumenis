@@ -1156,7 +1156,9 @@ These are recorded now so they are not entered from memory later.
     Adapters, Show Track, Track Control Panel and Zoom (Zoom In, Zoom Out,
     Show Entire Sequence, Zoom into Region, Zoom Back to Last View, Show
     Every Frame). Waveform Options (Source Levels, Output Levels, Full
-    Height) is also on it (p.679). Waveforms: docs/spec/waveforms.md.
+    Height) is also on it (p.679). Waveforms: docs/spec/waveforms.md. The
+    Track Control panel, per track settings, Track Color, the selection
+    colours, Show Markers and track heights: docs/spec/track-control.md.
   * The scale bar zooms around the position indicator; zoomed in, the
     indicator gets a dotted "shadow" at the end of the frame. Zoom In:
     drag over the area. Focus: 90 pixels per second around the position
@@ -1205,8 +1207,8 @@ These are recorded now so they are not entered from memory later.
   * Messages for edits that cannot be made show as a tooltip.
 * **Not yet built.**
   * Trim mode (1.4d), Solo, Sync Point edits, markers, Add Filler at
-    Start, Load Filler, the Track Control panel, Timeline views, the Sequence Map, Search,
-    Video Quality, Step In/Out (nesting), clip colours, waveforms and the
+    Start, Load Filler, the Track Control panel (U1b1), Timeline views, the Sequence Map, Search,
+    Video Quality, Step In/Out (nesting), clip colours, waveforms (U1a) and the
     other Fast menu options (shown disabled).
 
 **Segments, locks and the Clipboard (1.4c; ch. 15 p.479–481, ch. 19
@@ -2461,8 +2463,8 @@ Details: docs/spec/track-effects.md.
 * **Unavailable Effect** with the effect's name for one not installed
   (p.790).
 * **Ours:** the built-in effects, Ctrl+Bypass not saved, double-click
-  inserts. The Track Control panel's insert buttons, templates, Compare
-  and settings files come later.
+  inserts. Templates, Compare and settings files come later; the Track
+  Control panel's insert buttons came with U1b1.
 
 ## 20a. Shared bins (p.300-304)
 Details: docs/spec/bin-locking.md.

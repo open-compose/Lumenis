@@ -16,8 +16,10 @@ namespace lumenis::ui {
 
 // A menu of clip colours: None, the palette of model::clipColors() and Other... (the system colour
 // picker), calling `apply` with "#rrggbb" or empty for None. Added to `parent` as a submenu named
-// `title`; the bins' Set Clip Color (p.264) and the Timeline's Set Local Clip Color (p.598) use it.
-QMenu* addClipColorMenu(QMenu* parent, const QString& title, const std::function<void(const QString&)>& apply);
+// `title`; the bins' Set Clip Color (p.264), the Timeline's Set Local Clip Color (p.598), Track Color
+// (p.597) and the selection colours (p.593) use it. `noneText` names the first item ("None" if empty).
+QMenu* addClipColorMenu(QMenu* parent, const QString& title, const std::function<void(const QString&)>& apply,
+                        const QString& noneText = {});
 
 // The Timeline Fast menu's Clip Color dialog box (Editing Guide p.595-597; docs/spec/timeline-colors.md):
 // the kinds of clip colouring in priority order, each with its swatch where its colour can be

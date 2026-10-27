@@ -71,9 +71,9 @@ Code:
 
 ## Later
 
-* The Track Control panel's Waveform buttons and Audio Data > Allow Per Track
-  Settings (p.677-679, p.602) come with the Track Control panel (U1b).
-* Enlarge and Reduce Track (Ctrl+L, Ctrl+K, p.678) with track heights (U1b).
+* The Track Control panel's Waveform buttons, Audio Data > Allow Per Track
+  Settings (p.677-679, p.602) and Enlarge and Reduce Track (Ctrl+L, Ctrl+K,
+  p.678) came with U1b1 (docs/spec/track-control.md).
 * Waveforms in the Sequence Map (Timeline settings, p.1219), with the
   Sequence Map (U1d).
 * Waveforms of rendered AudioSuite effects and transitions in Output Levels.

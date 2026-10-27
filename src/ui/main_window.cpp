@@ -724,7 +724,6 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
             if (BinView* v = bins->activeView()) act(*v);
         });
     };
-    using Mode = model::BinViewMode;
     const std::pair<const char*, std::function<void()>> binCommands[] = {
         view("bin.choose_columns", [](BinView& v) { v.chooseColumns(); }),
         view("bin.hide_column", [](BinView& v) { v.hideColumns(v.selectedHeadings()); }),
@@ -742,14 +741,26 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
         view("bin.align_and_fill.fill_sorted", [](BinView& v) { v.frameView()->fillSorted(); }),
         view("clip.lock_bin_selection", [](BinView& v) { v.setLocked(true); }),
         view("clip.unlock_bin_selection", [](BinView& v) { v.setLocked(false); }),
-        view("edit.enlarge_frame", [](BinView& v) {
-            if (v.mode() != Mode::Text) v.enlargeFrame();
-        }),
-        view("edit.reduce_frame", [](BinView& v) {
-            if (v.mode() != Mode::Text) v.reduceFrame();
-        }),
     };
     for (const auto& [id, handler] : binCommands) handle(id, handler);
+    // Ctrl+L and Ctrl+K: Enlarge and Reduce Frame in a bin (p.250), Enlarge and Reduce Track with the
+    // Timeline active (p.594).
+    for (const auto& [id, step] : {std::pair{"edit.enlarge_frame", 1}, std::pair{"edit.reduce_frame", -1}}) {
+        handle(id, [this, bins, steps = step] {
+            const Panel* active = panels_->activePanel();
+            if (!binsActive() && active && active->id() == QLatin1String("Timeline")) {
+                timeline_->resizeTracks(steps);
+                return;
+            }
+            BinView* v = bins->activeView();
+            if (!v || v->mode() == model::BinViewMode::Text) return;
+            if (steps > 0) {
+                v->enlargeFrame();
+            } else {
+                v->reduceFrame();
+            }
+        });
+    }
     handle("bin.set_bin_display", [bins] {
         if (BinView* v = bins->activeView()) v->setBinDisplay();
     });
@@ -958,6 +969,14 @@ void MainWindow::createTools() {
     // Audio (ch. 21) and media (p.344-348).
     audioMixer_ = new AudioMixer(*timeline_);
     panels_->addPanel(new Panel(QStringLiteral("AudioMixer"), tr("Audio Mixer"), audioMixer_));
+    // The Track Control panel's Solo and Mute are the mixer's (p.602, p.698-699).
+    timeline_->setSoloMuteState([this](const QString& track, bool solo) {
+        return solo ? audioMixer_->isSoloed(track) : audioMixer_->isMuted(track);
+    });
+    connect(timeline_, &Timeline::soloMuteRequested, audioMixer_, [this](const QString& track, bool solo) {
+        audioMixer_->setSoloMute(track, solo, !(solo ? audioMixer_->isSoloed(track) : audioMixer_->isMuted(track)));
+    });
+    connect(audioMixer_, &AudioMixer::soloMuteChanged, timeline_->view(), qOverload<>(&QWidget::update));
     // The mode and mix are Audio Project settings; Live Mix is not saved
     // (p.692).
     connect(audioMixer_, &AudioMixer::modeChanged, this, [this](AudioMixer::Mode mode) {
@@ -1009,6 +1028,12 @@ void MainWindow::createTools() {
     });
     connect(timeline_, &Timeline::trackEffectToolRequested, this, [this](const QString& track) {
         audioTrackEffect_->select(track, 0);
+        showTool(QStringLiteral("AudioTrackEffect"));
+    });
+    // "When you select an insert button in the Track Control panel ... the controls for the plug-in
+    // appear in the Audio Track Effect tool window" (p.792).
+    connect(timeline_, &Timeline::trackInsertRequested, this, [this](const QString& track, int slot) {
+        audioTrackEffect_->select(track, slot);
         showTool(QStringLiteral("AudioTrackEffect"));
     });
     // AudioSuite (p.796-800): effects on segments, rendered into managed media on the tool's drive.

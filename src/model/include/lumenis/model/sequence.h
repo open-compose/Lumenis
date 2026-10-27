@@ -242,6 +242,9 @@ struct TrackInsert {
 };
 // "Up to five Audio Track Effect plug-in inserts on each audio track", a through e (p.790-791).
 inline constexpr int kTrackInserts = 5;
+// How far Enlarge Track and Reduce Track go from a track's default height (ours): Track::heightStep
+// stays within -kTrackHeightSteps / 2 and kTrackHeightSteps.
+inline constexpr int kTrackHeightSteps = 8;
 
 // One track of a sequence: its segments laid end to end. Segments are kept tidy: no empty
 // segments, and neighbouring plain filler merged (see Sequence::normalize()).
@@ -259,6 +262,25 @@ struct Track {
     // "This track is LFE only" (p.710): a mono audio track heard only on the LFE channel of a surround
     // mix, without a panner.
     bool lfeOnly = false;
+
+    // The Timeline's per track settings, kept with the sequence: "Media Composer stores per track
+    // settings with the sequence and does not apply them to other sequences" (p.677). They are
+    // display state, not edits: changing them takes no undo step.
+    // The Track Control panel's Waveform and Clip Volume/Pan buttons (p.602, p.677-680), shown
+    // while the Timeline's Allow Per Track Settings is on. showVolume and showPan are one or the
+    // other, as in the Audio Data menu.
+    bool showWaveform = false;
+    bool showClipVolume = false;
+    bool showVolume = false;
+    bool showPan = false;
+    // Inactive (p.602): "play back your sequence without processing the plug-in effects or
+    // automation for the inactive track". Audio tracks only.
+    bool inactive = false;
+    // Track Color (Fast menu, p.597): "#rrggbb", or empty for the Timeline's own colour.
+    QString color{};
+    // Enlarge Track and Reduce Track (Ctrl+L, Ctrl+K, p.594): steps from the track's default
+    // height, kTrackHeightSteps either way (ours).
+    int heightStep = 0;
 
     QString name() const { return trackName(kind, number); }
     // The sum of the segment lengths: the frame after the track's last one.

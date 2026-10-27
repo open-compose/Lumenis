@@ -142,8 +142,9 @@ effects.
 
 ## Later
 
-* The Timeline's Track Control panel with its insert buttons (p.792, p.794-795).
-  Dragging insert buttons will use `moveTrackInsert`.
+* The Timeline's Track Control panel with its insert buttons (p.792, p.794-795)
+  came with U1b1 (docs/spec/track-control.md); dragging an effect from the
+  Effect Palette onto an insert button is still to come.
 * The Audio Mixer's insert menus (p.790).
 * Audio Track Effect templates in bins (p.795) and Save Effect (p.793).
 * Compare, and the Plug-In Settings files: Save, Save As, Import, Delete,

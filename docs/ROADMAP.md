@@ -842,10 +842,10 @@ The same audit found items of areas built in Phases 1-4 left dimmed with no
 phase of their own. They are done in three steps:
 * U1, the Timeline: audio waveforms (p.677) and Show Marked Waveforms, with
   the Audio setting's Display Channel Order for 5.1 and 7.1 (p.1148) (U1a,
-  docs/spec/waveforms.md, is done but for the per-track buttons, which come
-  with the Track Control panel); the
+  docs/spec/waveforms.md, is done); the
   Fast menu's Show Markers, Track Color, Segment and Mark IO Selection
-  colours, Track Control panel, View Type and Timeline Views (p.592-604),
+  colours, Track Control panel (U1b1, docs/spec/track-control.md, with per
+  track settings and Enlarge/Reduce Track, is done), View Type and Timeline Views (p.592-604),
   Sync Breaks, Dupe Detection, Show Every Frame and the remaining Clip Text
   items; Show Sequence Map (p.606), Find Black Hole/Flash Frame (p.645), Add
   Filler at Start (p.462), Rename Track, Create Sequence Based on Selection

@@ -265,6 +265,9 @@ public:
     bool isMuted(const QString& track) const { return mute_.contains(track); }
     // Whether any track is soloed: then only soloed tracks are heard (p.698).
     bool anySoloed() const { return !solo_.isEmpty(); }
+    // Solo (`solo`) or Mute on or off for a track, as its strip's button does; also from the
+    // Timeline's Track Control panel (p.602). Emits soloMuteChanged().
+    void setSoloMute(const QString& track, bool solo, bool on);
     // Gangs A-J (p.704): ganged faders move together.
     // An empty letter takes the track out of its gang.
     void setGang(const QString& track, const QString& letter);
@@ -379,6 +382,8 @@ public:
     bool setLiveMixAsAutomation();
 
 signals:
+    // A track's Solo or Mute changed.
+    void soloMuteChanged();
     // Clip or Auto: saved in the Audio Project setting (p.692).
     // Fires for Live too; MainWindow does not save that one.
     void modeChanged(Mode mode);

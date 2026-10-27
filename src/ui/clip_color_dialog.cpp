@@ -33,9 +33,11 @@ QIcon swatchIcon(const QColor& color) {
 
 } // namespace
 
-QMenu* addClipColorMenu(QMenu* parent, const QString& title, const std::function<void(const QString&)>& apply) {
+QMenu* addClipColorMenu(QMenu* parent, const QString& title, const std::function<void(const QString&)>& apply,
+                        const QString& noneText) {
     QMenu* menu = parent->addMenu(title);
-    QObject::connect(menu->addAction(swatchIcon(QColor()), QObject::tr("None")), &QAction::triggered, menu,
+    const QString none = noneText.isEmpty() ? QObject::tr("None") : noneText;
+    QObject::connect(menu->addAction(swatchIcon(QColor()), none), &QAction::triggered, menu,
                      [apply] { apply(QString()); });
     for (const model::ClipColor& c : model::clipColors()) {
         QAction* a = menu->addAction(swatchIcon(QColor(c.hex)), c.name);

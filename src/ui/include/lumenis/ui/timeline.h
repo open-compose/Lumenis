@@ -78,6 +78,15 @@ public:
     QRect recordButton(const Row& row) const;
     QRect syncButton(const Row& row) const;
     QRect monitorButton(const Row& row) const;
+    // The Track Control panel's buttons for an audio row (p.602), right of the Track Selector:
+    // Waveform, Clip Volume/Pan, Inactive and Solo on the top line, the inserts a-e
+    // (InsertA + slot) and Mute below. Empty while the panel is hidden, for other rows, and
+    // for the lower line on a row too short for it ("If you reduce the size of the Timeline
+    // tracks, you might not see the Track Control panel tools", p.602).
+    enum Control { Waveform, AudioData, Inactive, Solo, Mute, InsertA };
+    QRect controlButton(const Row& row, int control) const;
+    // The Track Control Panel button above the track buttons (p.602).
+    QRect controlPanelButton() const;
     // The row under a point, or nothing (also over the ruler).
     std::optional<Row> rowAt(const QPoint& pos) const;
     // The segment under a point (filler too, but not at the ends of a
@@ -126,6 +135,7 @@ private:
     void paintEffects(QPainter& p, const Row& r, const model::Track& t) const;
     // Audio Data over an audio row's segments (timeline_automation.cpp).
     void paintAudioData(QPainter& p, const Row& r, const model::Track& t) const;
+    void paintControls(QPainter& p, const Row& r, const model::Track& t) const;
     // A segment's waveform (p.677-680) in `box`: a band per channel of the track, in Display Channel
     // Order, with a line between them.
     void paintWaveform(QPainter& p, const QRectF& box, const model::Track& t, const model::Segment& s,
@@ -158,6 +168,16 @@ private:
     QPoint keyPos_;
     model::KeyRef keyGrab_;
     double keyGrabValue_ = 0;
+    // An insert button pressed (p.795): its track and slot, and where. Released on another insert
+    // button it moves the insert there, or with Alt copies it; released in place it is a click.
+    struct InsertPress {
+        QString track;
+        int slot = 0;
+        QPoint from;
+    };
+    std::optional<InsertPress> insertFrom_;
+    // The insert button under a point: its track and slot.
+    std::optional<std::pair<QString, int>> insertAt(const QPoint& pos) const;
 };
 
 // The Timeline window (ch. 19): the Record monitor's sequence, or with
@@ -323,8 +343,8 @@ public:
     // buttons green, record ones blue.
     void setSourceRecordColors(bool on);
     // Show Mismatched Sample Rates as Different Color (Audio Project settings, p.1149): with `show`,
-    // audio segments whose clip's Audio SR is not `projectRate` take kMismatchedRateColor in place
-    // of their clip colour.
+    // the waveforms of clips whose Audio SR is not `projectRate` are drawn in
+    // kMismatchedWaveformColor (p.680).
     void setMismatchedRates(bool show, int projectRate);
     bool showsMismatchedRates() const { return showMismatchedRates_; }
     int projectSampleRate() const { return projectSampleRate_; }
@@ -344,6 +364,54 @@ public:
     // Rates as Different Color is on (p.680).
     static constexpr QRgb kWaveformColor = 0xff000000;
     static constexpr QRgb kMismatchedWaveformColor = 0xffffffff;
+
+    // What an audio track of the shown sequence shows (p.677-680): the Audio Data menu's choice for
+    // every track, or, while Allow Per Track Settings is on, also the track's own (model::Track's
+    // showWaveform, showClipVolume, showVolume, showPan). A track's own Volume or Pan takes the
+    // place of the menu's.
+    bool showsWaveform(const model::Track& track) const;
+    bool showsClipVolume(const model::Track& track) const;
+    std::optional<model::AutomationParam> automationShown(const model::Track& track) const;
+    // Audio Data > Allow Per Track Settings (p.677-679).
+    void setPerTrackSettings(bool on);
+    // The Track Control panel's Waveform button (p.602, p.678): turns `track`'s waveform on or off,
+    // or with `all` (Alt+click) every audio track's, and turns Allow Per Track Settings on (ours: so
+    // the click shows something). Kept with the sequence, without an undo step.
+    void setTrackWaveform(const QString& track, bool on, bool all = false);
+    // The Clip Volume/Pan button's menu (p.679-680): Clip Volume, and Volume or Pan, on `track` or
+    // with `all` on every audio track, as setTrackWaveform does.
+    void setTrackAudioData(const QString& track, bool clipVolume, std::optional<model::AutomationParam> automation,
+                           bool all = false);
+    // The Clip Volume/Pan button's menu for `track` (the caller owns it): Clip Volume, Volume, Pan.
+    QMenu* trackAudioDataMenu(const QString& track, bool all, QWidget* parent);
+    // The Track Control panel's Inactive button (p.602): the track plays without its plug-ins or
+    // automation (media::audioPieces, media::trackInserts). Audio tracks only.
+    void setTrackInactive(const QString& track, bool inactive);
+    // The Fast menu's Track Control Panel and the button above the track buttons (p.602).
+    void setTrackControlPanel(bool on);
+    // Solo and Mute are the Audio Mixer's (p.698-699): MainWindow gives the Timeline a way to read
+    // them (`soloed` false: muted), and the panel's buttons emit soloMuteRequested().
+    void setSoloMuteState(std::function<bool(const QString& track, bool soloed)> state);
+    bool isSoloMuted(const QString& track, bool soloed) const;
+
+    // Enlarge Track (+1) and Reduce Track (-1), Ctrl+L and Ctrl+K in the Timeline (p.594, p.601):
+    // the selected record tracks' heights, kept with the sequence. False with no track selected or at
+    // the limit.
+    bool resizeTracks(int steps);
+    // A row's height in pixels for a track of the shown sequence, by kind, Audio Data, the Track
+    // Control panel and the track's height step.
+    int trackHeight(const QString& track) const;
+    // Fast menu > Track Color (p.597): the colour of `tracks` ("#rrggbb", empty for the default).
+    // Clip colours take its place on their segments (p.595).
+    void setTrackColor(const QStringList& tracks, const QString& hex);
+    // Fast menu > Segment Selection and Mark IO Selection (p.593): the colour selected segments and
+    // the IN to OUT highlight are drawn in; empty for the default.
+    void setSelectionColors(const QString& segment, const QString& markIO);
+    // Fast menu > Show Markers (p.599): whether markers of a colour (a name from model::markerColors())
+    // are drawn. All shows every colour, None none.
+    bool showsMarkers(const QString& color) const { return !display_.hiddenMarkers.contains(color); }
+    void setMarkersShown(const QString& color, bool shown);
+    void setAllMarkersShown(bool shown);
     bool sourceRecordColors() const { return sourceRecordColors_; }
 
     // Trim mode (ch. 20). Rollers sit on edit points; single-roller trims
@@ -639,8 +707,8 @@ public:
         bool dissolveIcons = true;
         bool clipFrames = false;   // Clip Frames: each segment's start frame (p.592)
         // Audio Data (p.677-680): the clip gain's line, and the Volume or Pan automation graph.
-        // Ours: on every audio track (the Track Control panel's per-track buttons come later),
-        // and audio rows are taller while one is shown.
+        // On every audio track; a track's own settings add to them (showsWaveform() ...). Ours:
+        // audio rows are taller while one is shown.
         bool clipVolume = false;
         std::optional<model::AutomationParam> automation;
         // Audio Data > Waveform (p.677-678) and the Fast menu's Waveform Options (p.679): Source
@@ -650,6 +718,14 @@ public:
         bool outputLevels = false;
         bool fullHeight = false;
         int waveformZoom = 0;
+        // Audio Data > Allow Per Track Settings (p.677-679) and the Track Control panel (p.601-602).
+        bool perTrack = false;
+        bool trackControlPanel = false;
+        // Show Markers (p.599): the marker colours not drawn.
+        QSet<QString> hiddenMarkers;
+        // Segment Selection and Mark IO Selection (p.593): "#rrggbb", empty for the default colours.
+        QString segmentSelectionColor;
+        QString markIOColor;
     };
     const Display& display() const { return display_; }
 
@@ -673,6 +749,8 @@ public:
 signals:
     // The shown item, the selection, the patch or Trim mode changed.
     void changed();
+    // The Track Control panel's Solo (`solo`) or Mute button for `track` was clicked (p.602).
+    void soloMuteRequested(const QString& track, bool solo);
     // Why a command did nothing, as lastMessage() gives it.
     void message(const QString& text);
     // The Clip Color dialog's choices changed (setClipColorOptions()).
@@ -683,6 +761,9 @@ signals:
     void commandRequested(const QString& commandId);
     // The track button's Audio Track Effect Tool item (p.793, p.795): the tool, on that track.
     void trackEffectToolRequested(const QString& track);
+    // A Track Control panel insert button was clicked (p.792, p.795): the Audio Track Effect tool
+    // on that track and insert (0 for a).
+    void trackInsertRequested(const QString& track, int slot);
     // The record sequence took an undo step, or one was undone or redone.
     void sequenceEdited();
     // Before Split Track to Mono changes a sequence: a copy of it as it was belongs in its bin
@@ -763,6 +844,15 @@ private:
     model::TrackPatch patch_;
     model::EditHistory history_;
     QSet<QString> unmonitored_;
+    std::function<bool(const QString&, bool)> soloMuteState_;
+    // Changes `tracks` of the record sequence and keeps them without an undo step (per track
+    // settings, p.677). The tracks of the Audio Data menu for a click on `track`'s Track Control
+    // button: it alone, or with `all` (Alt+click) every audio track.
+    void changeTracks(const QStringList& tracks, const std::function<void(model::Track&)>& change);
+    QStringList audioTracksFor(const QString& track, bool all) const;
+    // The graph keyframe editing works on when the Audio Data menu shows none: the one shown on the
+    // track of the keyframe clicked last (per track settings).
+    model::AutomationParam editParam_ = model::AutomationParam::Volume;
     bool showSource_ = false;
     double scale_ = 0;  // 0: the whole sequence fits
     double first_ = 0;  // first frame shown

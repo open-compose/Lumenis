@@ -351,6 +351,16 @@ QJsonObject Sequence::toJson() const {
         if (t.locked) o.insert(QStringLiteral("locked"), true);
         if (t.syncLocked) o.insert(QStringLiteral("syncLocked"), true);
         if (t.lfeOnly) o.insert(QStringLiteral("lfeOnly"), true);
+        // The per track display settings (p.677), written only when set.
+        QJsonObject display;
+        if (t.showWaveform) display.insert(QStringLiteral("waveform"), true);
+        if (t.showClipVolume) display.insert(QStringLiteral("clipVolume"), true);
+        if (t.showVolume) display.insert(QStringLiteral("volume"), true);
+        if (t.showPan) display.insert(QStringLiteral("pan"), true);
+        if (t.heightStep != 0) display.insert(QStringLiteral("height"), t.heightStep);
+        if (!t.color.isEmpty()) display.insert(QStringLiteral("color"), t.color);
+        if (!display.isEmpty()) o.insert(QStringLiteral("display"), display);
+        if (t.inactive) o.insert(QStringLiteral("inactive"), true);
         if (t.kind == TrackKind::Audio && t.format != AudioFormat::Mono) {
             for (const auto& [format, text] : kFormats) {
                 if (format == t.format) o.insert(QStringLiteral("format"), QString::fromLatin1(text));
@@ -404,6 +414,17 @@ Sequence Sequence::fromJson(const QJsonObject& o) {
             if (format == QLatin1String(text)) t.format = f;
         }
         t.lfeOnly = t.kind == TrackKind::Audio && t.format == AudioFormat::Mono && to.value(QStringLiteral("lfeOnly")).toBool();
+        const QJsonObject display = to.value(QStringLiteral("display")).toObject();
+        const bool audio = t.kind == TrackKind::Audio;
+        t.showWaveform = audio && display.value(QStringLiteral("waveform")).toBool();
+        t.showClipVolume = audio && display.value(QStringLiteral("clipVolume")).toBool();
+        t.showVolume = audio && display.value(QStringLiteral("volume")).toBool();
+        t.showPan = audio && !t.showVolume && display.value(QStringLiteral("pan")).toBool();
+        t.heightStep = std::clamp(display.value(QStringLiteral("height")).toInt(), -kTrackHeightSteps / 2, kTrackHeightSteps);
+        t.color = display.value(QStringLiteral("color")).toString();
+        static const QRegularExpression hex(QStringLiteral("^#[0-9a-fA-F]{6}$"));
+        if (!hex.match(t.color).hasMatch()) t.color.clear();
+        t.inactive = audio && to.value(QStringLiteral("inactive")).toBool();
         for (const QJsonValue& sv : to.value(QStringLiteral("segments")).toArray()) {
             t.segments << segmentFromJson(sv.toObject());
         }
@@ -981,7 +1002,11 @@ Sequence Sequence::excerpt(const QStringList& names, std::int64_t start, std::in
         Track copy = t;
         copy.locked = false;
         copy.syncLocked = false;
-        copy.inserts = {}; // the Clipboard holds material, not the track's effects
+        copy.inserts = {}; // the Clipboard holds material, not the track's effects or display
+        copy.inactive = false;
+        copy.showWaveform = copy.showClipVolume = copy.showVolume = copy.showPan = false;
+        copy.color.clear();
+        copy.heightStep = 0;
         copy.segments = material(t.name(), start, length);
         tidy(copy);
         bool empty = true;

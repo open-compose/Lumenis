@@ -43,6 +43,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 
 // The Timeline window (Editing Guide ch. 15, 19, 20) and its tracks area.
 //
@@ -82,6 +83,14 @@ constexpr int kSyncWidth = 16;
 constexpr int kMonitorX = 92;
 constexpr int kMonitorWidth = 20;
 constexpr int kHeaderWidth = 116;
+// The Track Control panel (p.602), right of the Track Selector: two lines of buttons.
+constexpr int kControlWidth = 92;
+constexpr int kControlButton = 20;  // Waveform, Clip Volume/Pan, Inactive, Solo, Mute
+constexpr int kInsertButton = 13;   // inserts a-e
+constexpr int kControlLine = 12;    // the height of one line of buttons
+// Enlarge Track and Reduce Track (p.594): pixels a step (ours), and the lowest a row can be.
+constexpr int kTrackStep = 8;
+constexpr int kMinRow = 12;
 constexpr int kLabelSpacing = 90; // pixels between ruler labels, at least
 constexpr double kMaxScale = 40;  // pixels per frame, fully zoomed in
 
@@ -113,6 +122,13 @@ constexpr QRgb kReplaceColor = 0xff3a7bd2;   // Replace is blue (p.467)
 constexpr QRgb kSelected = 0xffe8e8e8;       // selected segments
 constexpr QRgb kLocked = 0xffd9a13a;
 constexpr QRgb kDualRoller = 0xffe87fb8;     // dual-roller trims are pink (p.651)
+
+// The Record monitor's sequence, or an empty one.
+model::Sequence recordSequenceOf(const Composer& composer) {
+    const model::LoadedClip* rec = composer.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return {};
+    return model::Sequence::fromItem(rec->item);
+}
 
 // A row's height for a track name; anything that is not a known track gets the TC1 height.
 int rowHeight(const QString& track) {
@@ -349,7 +365,9 @@ int TimelineView::rulerHeight() const {
 }
 
 int TimelineView::headerWidth() const {
-    return timeline_.display().trackPanel ? kHeaderWidth : 0;
+    const auto& d = timeline_.display();
+    if (!d.trackPanel) return 0;
+    return kHeaderWidth + (d.trackControlPanel ? kControlWidth : 0);
 }
 
 QList<TimelineView::Row> TimelineView::rows() const {
@@ -377,11 +395,7 @@ QList<TimelineView::Row> TimelineView::rows() const {
         Row r;
         r.track = n;
         r.top = y;
-        r.height = rowHeight(n);
-        const auto& d = timeline_.display();
-        if (r.height == kAudioRow && n.startsWith(QLatin1Char('A')) && (d.clipVolume || d.automation || d.waveform)) {
-            r.height = kAudioDataRow;
-        }
+        r.height = timeline_.trackHeight(n);
         r.exists = !missing.contains(n);
         out << r;
         y += r.height;
@@ -429,6 +443,28 @@ QRect TimelineView::syncButton(const Row& row) const {
 
 QRect TimelineView::monitorButton(const Row& row) const {
     return QRect(kMonitorX, row.top + 2, kMonitorWidth, std::max(row.height - 4, 12));
+}
+
+// Our layout of the panel in the picture on p.602: [Waveform][Clip Volume/Pan][Inactive][Solo] on
+// top, [a][b][c][d][e][Mute] below, the two lines centred in the row.
+QRect TimelineView::controlButton(const Row& row, int control) const {
+    if (!timeline_.display().trackPanel || !timeline_.display().trackControlPanel || !row.exists ||
+        !row.track.startsWith(QLatin1Char('A')) || control < 0 || control > InsertA + model::kTrackInserts - 1) {
+        return {};
+    }
+    const bool two = row.height >= 2 * kControlLine + 4;
+    const int top = two ? row.top + (row.height - 2 * kControlLine - 1) / 2 : row.top + (row.height - kControlLine) / 2;
+    const int x = kHeaderWidth + 2;
+    if (control <= Solo) return QRect(x + control * (kControlButton + 2), top, kControlButton, kControlLine);
+    if (!two) return {};
+    const int bottom = top + kControlLine + 1;
+    if (control == Mute) return QRect(x + 3 * (kControlButton + 2), bottom, kControlButton, kControlLine);
+    return QRect(x + (control - InsertA) * (kInsertButton + 1), bottom, kInsertButton, kControlLine);
+}
+
+QRect TimelineView::controlPanelButton() const {
+    if (!timeline_.display().trackPanel) return {};
+    return QRect(kHeaderWidth - 18, 3, 14, kRulerHeight - 6);
 }
 
 std::optional<TimelineView::Row> TimelineView::rowAt(const QPoint& pos) const {
@@ -491,9 +527,14 @@ void TimelineView::paintEvent(QPaintEvent*) {
                 p.drawText(QRect(x + 3, r.top, kLabelSpacing, r.height), Qt::AlignVCenter | Qt::AlignLeft, tc(f));
             }
         } else if (const model::Track* t = r.exists ? seq.track(r.track) : nullptr) {
-            const QColor fill(t->kind == model::TrackKind::Video   ? kVideoSegment
-                              : t->kind == model::TrackKind::Audio ? kAudioSegment
-                                                                   : kDataSegment);
+            // Track Color (p.597) takes the place of the kind's colour; an inactive track is
+            // drawn darker (ours).
+            QColor fill(t->kind == model::TrackKind::Video   ? kVideoSegment
+                        : t->kind == model::TrackKind::Audio ? kAudioSegment
+                                                             : kDataSegment);
+            if (!t->color.isEmpty()) fill = QColor(t->color);
+            if (t->inactive) fill = fill.darker(170);
+            const QString selectionColor = timeline_.display().segmentSelectionColor;
             if (t->locked) p.fillRect(rowRect, QColor(kTimecodeRowColor));
             std::int64_t at = 0;
             const model::Segment* previous = nullptr;
@@ -520,7 +561,10 @@ void TimelineView::paintEvent(QPaintEvent*) {
                     // Clip colours (p.594-598) take the place of the track's.
                     const QString clipColor = timeline_.segmentColor(s);
                     const QColor segFill = clipColor.isEmpty() ? fill : QColor(clipColor);
-                    p.fillRect(box, selected ? segFill.lighter(135) : segFill);
+                    // Segment Selection (p.593): the chosen colour, else a lighter fill.
+                    p.fillRect(box, !selected                  ? segFill
+                                    : selectionColor.isEmpty() ? segFill.lighter(135)
+                                                               : QColor(selectionColor));
                     p.setPen(segFill.darker(160));
                     p.drawRect(box.adjusted(0, 0, -1, -1));
                     if (selected) {
@@ -528,7 +572,7 @@ void TimelineView::paintEvent(QPaintEvent*) {
                         p.drawRect(box.adjusted(1, 1, -1, -1));
                     }
                     // Audio waveforms (p.677-680).
-                    if (timeline_.display().waveform && t->kind == model::TrackKind::Audio) paintWaveform(p, box, *t, s, at);
+                    if (t->kind == model::TrackKind::Audio && timeline_.showsWaveform(*t)) paintWaveform(p, box, *t, s, at);
                     // Clip Frames (Fast menu, p.592): the start frame of each
                     // segment on video tracks, at its left end.
                     QRectF textArea = box;
@@ -584,7 +628,13 @@ void TimelineView::paintEvent(QPaintEvent*) {
             const bool selected = timeline_.showsSource() ? timeline_.patch().isSourceSelected(r.track)
                                                           : timeline_.patch().isRecordSelected(r.track);
             if (r.exists && selected && r.track != QLatin1String("TC1")) {
-                p.fillRect(QRectF(x0, r.top, x1 - x0, r.height - 1), QColor::fromRgba(kInOut));
+                // Mark IO Selection (p.593): the chosen colour, see-through.
+                QColor highlight = QColor::fromRgba(kInOut);
+                if (!timeline_.display().markIOColor.isEmpty()) {
+                    highlight = QColor(timeline_.display().markIOColor);
+                    highlight.setAlpha(0x60);
+                }
+                p.fillRect(QRectF(x0, r.top, x1 - x0, r.height - 1), highlight);
             }
         }
     }
@@ -654,6 +704,7 @@ void TimelineView::paintEvent(QPaintEvent*) {
         p.setClipRect(tracksArea);
         p.setRenderHint(QPainter::Antialiasing);
         for (const model::Marker& m : model::markersOf(state.current()->item)) {
+            if (!timeline_.showsMarkers(m.color)) continue; // Show Markers (p.599)
             for (const Row& r : rowList) {
                 if (r.track != m.track) continue;
                 const QColor c = QColor::fromRgb(model::markerColor(m.color));
@@ -843,11 +894,29 @@ void TimelineView::paintEvent(QPaintEvent*) {
                                             QPointF(c.x() - 3, c.y() + 2.5), QPointF(c.x() - 6, c.y() + 2.5)});
                 }
             }
+            // The Track Control panel (p.602).
+            const model::Track* audio = r.exists && !sourceView ? seq.track(r.track) : nullptr;
+            if (audio && audio->kind == model::TrackKind::Audio && !controlButton(r, Waveform).isEmpty()) {
+                paintControls(p, r, *audio);
+            }
         }
         p.restore();
         if (sourceView) {
             p.fillRect(QRect(0, 0, header, kRulerHeight), QColor(kSourceView).darker(180));
         }
+        // The Track Control Panel button (p.602): an arrow pointing the way a click moves the panel.
+        const QRectF cb = controlPanelButton();
+        p.save();
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(timeline_.display().trackControlPanel ? kGlyph : QColor(kButtonOff).lighter(150).rgb()));
+        const QPointF cc = cb.center();
+        if (timeline_.display().trackControlPanel) {
+            p.drawPolygon(QPolygonF{QPointF(cc.x() + 3, cc.y() - 4), QPointF(cc.x() + 3, cc.y() + 4), QPointF(cc.x() - 3, cc.y())});
+        } else {
+            p.drawPolygon(QPolygonF{QPointF(cc.x() - 3, cc.y() - 4), QPointF(cc.x() - 3, cc.y() + 4), QPointF(cc.x() + 3, cc.y())});
+        }
+        p.restore();
         p.setPen(QColor(kRowLine));
         p.drawLine(header - 1, 0, header - 1, height());
     }
@@ -870,6 +939,54 @@ void TimelineView::paintEvent(QPaintEvent*) {
                 p.drawPolygon(QPolygonF{to, to - u * 8 + n * 4, to - u * 8 - n * 4});
             }
             break;
+        }
+    }
+}
+
+// The Track Control panel's buttons for an audio track (p.602), lit while on: Waveform a small
+// plot, Clip Volume/Pan a line with a keyframe, Inactive a power symbol, S and M Solo and Mute, and
+// each insert the first two letters of its effect (ours; the picture on p.602 shows "EQ", "Dy" ...).
+void TimelineView::paintControls(QPainter& p, const Row& r, const model::Track& t) const {
+    const QColor text = palette().color(QPalette::WindowText);
+    auto box = [&](const QRect& b, bool on) {
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(on ? kButtonOn : kButtonOff));
+        p.drawRoundedRect(b, 2, 2);
+        p.setPen(QPen(QColor(kGlyph), 1));
+        p.setBrush(Qt::NoBrush);
+    };
+    const bool perTrack = timeline_.display().perTrack;
+    QRect b = controlButton(r, Waveform);
+    box(b, perTrack && t.showWaveform);
+    for (int i = 0; i < 5; ++i) {
+        const int x = b.left() + 4 + i * 3;
+        const int h = 1 + (i * 2) % 4;
+        p.drawLine(x, b.center().y() - h, x, b.center().y() + h);
+    }
+    b = controlButton(r, AudioData);
+    box(b, perTrack && (t.showClipVolume || t.showVolume || t.showPan));
+    p.drawLine(b.left() + 3, b.center().y() + 2, b.center().x(), b.center().y() - 2);
+    p.drawLine(b.center().x(), b.center().y() - 2, b.right() - 3, b.center().y() - 2);
+    p.drawRect(QRect(b.center().x() - 1, b.center().y() - 3, 2, 2));
+    b = controlButton(r, Inactive);
+    box(b, t.inactive);
+    p.drawArc(QRectF(b.center().x() - 3.5, b.center().y() - 3, 7, 7), 120 * 16, 300 * 16);
+    p.drawLine(b.center().x(), b.center().y() - 4, b.center().x(), b.center().y());
+    for (const auto& [control, solo] : {std::pair{static_cast<int>(Solo), true}, std::pair{static_cast<int>(Mute), false}}) {
+        b = controlButton(r, control);
+        if (b.isEmpty()) continue;
+        box(b, timeline_.isSoloMuted(r.track, solo));
+        p.setPen(text);
+        p.drawText(b, Qt::AlignCenter, solo ? QStringLiteral("S") : QStringLiteral("M"));
+    }
+    for (int slot = 0; slot < model::kTrackInserts; ++slot) {
+        b = controlButton(r, InsertA + slot);
+        if (b.isEmpty()) continue;
+        const auto& in = t.inserts[static_cast<std::size_t>(slot)];
+        box(b, in && !in->bypass);
+        if (in) {
+            p.setPen(text);
+            p.drawText(b, Qt::AlignCenter, in->name.left(2));
         }
     }
 }
@@ -1202,7 +1319,11 @@ void TimelineView::mousePressEvent(QMouseEvent* event) {
         }
         // Keyframes of the graph shown (p.716, p.721-722): click, Shift-click and drag one;
         // Ctrl+Shift+click adds one (with Alt between frames); clicking elsewhere deselects.
-        if (pos.y() >= kRulerHeight && timeline_.display().automation && !timeline_.showsSource()) {
+        // A graph shows on this track, by the Audio Data menu or its own setting (p.679).
+        const auto graphRow = rowAt(pos);
+        const model::Track* graphTrack = graphRow && graphRow->exists ? timeline_.shown().track(graphRow->track) : nullptr;
+        const bool graph = timeline_.display().automation || (graphTrack && timeline_.automationShown(*graphTrack));
+        if (pos.y() >= kRulerHeight && graph && !timeline_.showsSource()) {
             const Qt::KeyboardModifiers mods = event->modifiers();
             if (const auto key = keyframeAt(pos)) {
                 const bool shift = mods & Qt::ShiftModifier;
@@ -1280,8 +1401,39 @@ void TimelineView::mousePressEvent(QMouseEvent* event) {
         moveIndicator(pos, event->modifiers());
         return;
     }
+    // The Track Control Panel button (p.602).
+    if (controlPanelButton().contains(pos)) {
+        timeline_.setTrackControlPanel(!timeline_.display().trackControlPanel);
+        return;
+    }
     const auto row = rowAt(pos);
     if (!row) return;
+    // The Track Control panel (p.602): Alt+click on Waveform or Clip Volume/Pan does every track
+    // (p.677-680).
+    const bool alt = event->modifiers() & Qt::AltModifier;
+    const model::Track* track = row->exists ? timeline_.shown().track(row->track) : nullptr;
+    if (track && !controlButton(*row, Waveform).isEmpty()) {
+        for (int control = Waveform; control < InsertA + model::kTrackInserts; ++control) {
+            const QRect b = controlButton(*row, control);
+            if (b.isEmpty() || !b.contains(pos)) continue;
+            const bool perTrack = timeline_.display().perTrack;
+            if (control == Waveform) {
+                timeline_.setTrackWaveform(row->track, !(perTrack && track->showWaveform), alt);
+            } else if (control == AudioData) {
+                std::unique_ptr<QMenu> menu(timeline_.trackAudioDataMenu(row->track, alt, this));
+                menu->exec(mapToGlobal(b.bottomLeft()));
+            } else if (control == Inactive) {
+                timeline_.setTrackInactive(row->track, !track->inactive);
+            } else if (control == Solo || control == Mute) {
+                emit timeline_.soloMuteRequested(row->track, control == Solo);
+            } else {
+                // An insert: a click opens the Audio Track Effect tool on it (p.602, p.792), a drag
+                // moves or copies it (p.795); see mouseReleaseEvent().
+                insertFrom_ = InsertPress{row->track, control - InsertA, pos};
+            }
+            return;
+        }
+    }
     if (sourceButton(*row).contains(pos)) {
         const QString source = timeline_.showsSource() ? row->track : timeline_.patch().sourceFor(row->track);
         if (timeline_.patch().sourceTracks().contains(source)) {
@@ -1332,8 +1484,34 @@ void TimelineView::mouseMoveEvent(QMouseEvent* event) {
 
 // Finishes the drag mousePressEvent() started; a plain click ends scrubbing or toggles a source
 // track button.
+std::optional<std::pair<QString, int>> TimelineView::insertAt(const QPoint& pos) const {
+    const auto row = rowAt(pos);
+    if (!row) return std::nullopt;
+    for (int slot = 0; slot < model::kTrackInserts; ++slot) {
+        if (controlButton(*row, InsertA + slot).contains(pos)) return std::pair{row->track, slot};
+    }
+    return std::nullopt;
+}
+
 void TimelineView::mouseReleaseEvent(QMouseEvent* event) {
     const QPoint pos = event->position().toPoint();
+    if (insertFrom_) {
+        const InsertPress press = *insertFrom_;
+        insertFrom_.reset();
+        const auto to = insertAt(pos);
+        if ((pos - press.from).manhattanLength() < QApplication::startDragDistance() || !to) {
+            if (!to || (to->first == press.track && to->second == press.slot)) {
+                emit timeline_.trackInsertRequested(press.track, press.slot);
+            }
+            return;
+        }
+        // "Click an Audio Track Effect insert button and drag it to an insert button on a new track
+        // or to a new insert button on the same track"; Alt+drag copies (p.795).
+        if (to->first != press.track || to->second != press.slot) {
+            timeline_.moveTrackInsert(press.track, press.slot, to->first, to->second, event->modifiers() & Qt::AltModifier);
+        }
+        return;
+    }
     if (keyFrom_) {
         // Up or down changes the value; with Alt it moves in time too, by whole frames, or with
         // Ctrl+Alt between them (p.716, p.721). Ctrl alone snaps to the scale's lines.
@@ -1952,6 +2130,8 @@ QMenu* Timeline::fastMenu() {
     // data, markers or media are listed but not available yet.
     QMenu* m = fastMenu_;
     m->clear();
+    // clear() leaves the submenus of the last build: delete them, so they do not pile up.
+    for (QMenu* sub : m->findChildren<QMenu*>(Qt::FindDirectChildrenOnly)) delete sub;
     auto later = [m](const QString& text) { m->addAction(text)->setEnabled(false); };
     auto laterMenu = [](QMenu* parent, const QString& text) { parent->addMenu(text)->setEnabled(false); };
     auto check = [this](QMenu* menu, const QString& text, bool on, std::function<void(bool)> apply) {
@@ -2007,7 +2187,8 @@ QMenu* Timeline::fastMenu() {
     check(audioData, tr("Pan"), display_.automation == model::AutomationParam::Pan, [this](bool v) {
         setAudioData(display_.clipVolume, v ? std::optional(model::AutomationParam::Pan) : std::nullopt);
     });
-    audioData->addAction(tr("Allow Per Track Settings"))->setEnabled(false);
+    // Allow Per Track Settings (p.677-679): the tracks' own Waveform and Clip Volume/Pan settings.
+    check(audioData, tr("Allow Per Track Settings"), display_.perTrack, [this](bool v) { setPerTrackSettings(v); });
     // Waveform Options (p.679): Source Levels or Output Levels, and Full Height.
     QMenu* waveformOptions = m->addMenu(tr("Waveform Options"));
     waveformOptions->setObjectName(QStringLiteral("waveformOptions"));
@@ -2019,14 +2200,36 @@ QMenu* Timeline::fastMenu() {
     waveformOptions->addSeparator();
     check(waveformOptions, tr("Full Height"), display_.fullHeight, [this](bool v) { setWaveformLevels(display_.outputLevels, v); });
     connect(m->addAction(tr("Clip Color...")), &QAction::triggered, this, &Timeline::openClipColorDialog);
-    later(tr("Segment Selection"));
-    later(tr("Mark IO Selection"));
-    later(tr("Track Color"));
-    laterMenu(m, tr("Show Markers"));
+    // Segment Selection and Mark IO Selection (p.593): Default, or a colour from the palette.
+    addClipColorMenu(m, tr("Segment Selection"), [this](const QString& hex) {
+        setSelectionColors(hex, display_.markIOColor);
+    }, tr("Default"))->setObjectName(QStringLiteral("segmentSelection"));
+    addClipColorMenu(m, tr("Mark IO Selection"), [this](const QString& hex) {
+        setSelectionColors(display_.segmentSelectionColor, hex);
+    }, tr("Default"))->setObjectName(QStringLiteral("markIOSelection"));
+    // Track Color (p.597): on the selected record tracks; "A track must be selected in the Timeline
+    // for the Track Color command to appear" (p.593), so it is dimmed without one. Other... is the
+    // custom colour the guide gives with Alt (ours: an item of its own).
+    const model::Sequence recordSeq = recordSequenceOf(composer_);
+    const QStringList selectedTracks = patch_.selectedRecordTracks(recordSeq);
+    QMenu* trackColor = addClipColorMenu(m, tr("Track Color"), [this, selectedTracks](const QString& hex) {
+        setTrackColor(selectedTracks, hex);
+    }, tr("Default"));
+    trackColor->setObjectName(QStringLiteral("trackColor"));
+    trackColor->setEnabled(!selectedTracks.isEmpty() && !showSource_);
+    // Show Markers (p.599): All, None, and each colour.
+    QMenu* markers = m->addMenu(tr("Show Markers"));
+    markers->setObjectName(QStringLiteral("showMarkers"));
+    connect(markers->addAction(tr("All")), &QAction::triggered, this, [this] { setAllMarkersShown(true); });
+    connect(markers->addAction(tr("None")), &QAction::triggered, this, [this] { setAllMarkersShown(false); });
+    markers->addSeparator();
+    for (const model::MarkerColor& c : model::markerColors()) {
+        check(markers, c.name, showsMarkers(c.name), [this, name = c.name](bool v) { setMarkersShown(name, v); });
+    }
     later(tr("Show Adapters"));
     QMenu* showTrack = m->addMenu(tr("Show Track"));
     check(showTrack, tr("TC1"), display_.timecodeTrack, [this](bool v) { display_.timecodeTrack = v; });
-    later(tr("Track Control Panel"));
+    check(m, tr("Track Control Panel"), display_.trackControlPanel, [this](bool v) { setTrackControlPanel(v); });
     QMenu* zoom = m->addMenu(tr("Zoom"));
     connect(zoom->addAction(tr("Zoom In")), &QAction::triggered, this, [this] { view_->beginZoomSelection(); });
     QAction* out = zoom->addAction(tr("Zoom Out"));
@@ -4454,6 +4657,189 @@ bool Timeline::zoomWaveform(int steps) {
     display_.waveformZoom = to;
     view_->update();
     return true;
+}
+
+// ---------------------------------------------------------------- per track settings (U1b)
+
+bool Timeline::showsWaveform(const model::Track& track) const {
+    if (track.kind != model::TrackKind::Audio) return false;
+    return display_.waveform || (display_.perTrack && track.showWaveform);
+}
+
+bool Timeline::showsClipVolume(const model::Track& track) const {
+    if (track.kind != model::TrackKind::Audio) return false;
+    return display_.clipVolume || (display_.perTrack && track.showClipVolume);
+}
+
+std::optional<model::AutomationParam> Timeline::automationShown(const model::Track& track) const {
+    if (track.kind != model::TrackKind::Audio) return std::nullopt;
+    if (display_.perTrack && track.showVolume) return model::AutomationParam::Volume;
+    if (display_.perTrack && track.showPan) return model::AutomationParam::Pan;
+    return display_.automation;
+}
+
+void Timeline::setPerTrackSettings(bool on) {
+    display_.perTrack = on;
+    syncScrollBars();
+    view_->update();
+}
+
+// Per track settings are kept in the record sequence without an undo step, as locks are.
+void Timeline::changeTracks(const QStringList& tracks, const std::function<void(model::Track&)>& change) {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    bool any = false;
+    for (const QString& name : tracks) {
+        if (model::Track* t = seq.track(name)) {
+            change(*t);
+            any = true;
+        }
+    }
+    if (!any) return;
+    storeLocks(seq);
+    syncScrollBars();
+    view_->update();
+}
+
+QStringList Timeline::audioTracksFor(const QString& track, bool all) const {
+    if (!all) return {track};
+    QStringList out;
+    const model::Sequence seq = recordSequenceOf(composer_);
+    for (const model::Track& t : seq.tracks()) {
+        if (t.kind == model::TrackKind::Audio) out << t.name();
+    }
+    return out;
+}
+
+void Timeline::setTrackWaveform(const QString& track, bool on, bool all) {
+    display_.perTrack = true;
+    changeTracks(audioTracksFor(track, all), [on](model::Track& t) { t.showWaveform = on; });
+    view_->update();
+}
+
+void Timeline::setTrackAudioData(const QString& track, bool clipVolume, std::optional<model::AutomationParam> automation,
+                                 bool all) {
+    display_.perTrack = true;
+    changeTracks(audioTracksFor(track, all), [&](model::Track& t) {
+        t.showClipVolume = clipVolume;
+        t.showVolume = automation == model::AutomationParam::Volume;
+        t.showPan = automation == model::AutomationParam::Pan;
+    });
+    view_->update();
+}
+
+// "Click the Clip Volume/Pan button ... and select Clip Volume or Volume"; "repeat the previous step
+// and select an additional volume value" shows both (p.679-680). Volume and Pan are one or the
+// other. Pan L and Pan R > [speaker layout] for surround sequences are not offered yet.
+QMenu* Timeline::trackAudioDataMenu(const QString& track, bool all, QWidget* parent) {
+    auto* menu = new QMenu(parent);
+    const model::Sequence seq = recordSequenceOf(composer_);
+    const model::Track* t = seq.track(track);
+    const bool perTrack = display_.perTrack && t;
+    const bool clip = perTrack && t->showClipVolume;
+    std::optional<model::AutomationParam> automation;
+    if (perTrack && t->showVolume) automation = model::AutomationParam::Volume;
+    if (perTrack && t->showPan) automation = model::AutomationParam::Pan;
+    auto item = [&](const QString& text, bool on, std::function<void()> apply) {
+        QAction* a = menu->addAction(text);
+        a->setCheckable(true);
+        a->setChecked(on);
+        connect(a, &QAction::triggered, this, std::move(apply));
+    };
+    item(tr("Clip Volume"), clip, [=, this] { setTrackAudioData(track, !clip, automation, all); });
+    item(tr("Volume"), automation == model::AutomationParam::Volume, [=, this] {
+        const bool on = automation == model::AutomationParam::Volume;
+        setTrackAudioData(track, clip, on ? std::nullopt : std::optional(model::AutomationParam::Volume), all);
+    });
+    item(tr("Pan"), automation == model::AutomationParam::Pan, [=, this] {
+        const bool on = automation == model::AutomationParam::Pan;
+        setTrackAudioData(track, clip, on ? std::nullopt : std::optional(model::AutomationParam::Pan), all);
+    });
+    return menu;
+}
+
+void Timeline::setTrackInactive(const QString& track, bool inactive) {
+    changeTracks({track}, [inactive](model::Track& t) {
+        if (t.kind == model::TrackKind::Audio) t.inactive = inactive;
+    });
+    // What plays changes with it.
+    emit sequenceEdited();
+}
+
+void Timeline::setTrackControlPanel(bool on) {
+    display_.trackControlPanel = on;
+    syncScrollBars();
+    view_->update();
+}
+
+void Timeline::setSoloMuteState(std::function<bool(const QString&, bool)> state) {
+    soloMuteState_ = std::move(state);
+    view_->update();
+}
+
+bool Timeline::isSoloMuted(const QString& track, bool soloed) const {
+    return soloMuteState_ && soloMuteState_(track, soloed);
+}
+
+bool Timeline::resizeTracks(int steps) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const QStringList tracks = patch_.selectedRecordTracks(seq);
+    if (tracks.isEmpty()) return fail(tr("Select the tracks to enlarge or reduce."));
+    bool changed = false;
+    for (const QString& name : tracks) {
+        const model::Track* t = seq.track(name);
+        const int to = std::clamp(t->heightStep + steps, -model::kTrackHeightSteps / 2, model::kTrackHeightSteps);
+        changed = changed || to != t->heightStep;
+    }
+    if (!changed) return false;
+    changeTracks(tracks, [steps](model::Track& t) {
+        t.heightStep = std::clamp(t.heightStep + steps, -model::kTrackHeightSteps / 2, model::kTrackHeightSteps);
+    });
+    return true;
+}
+
+int Timeline::trackHeight(const QString& track) const {
+    int h = rowHeight(track);
+    const model::Track* t = hasShown() ? shown().track(track) : nullptr;
+    if (!t) return h;
+    // Audio rows are taller while they show a waveform, a line or a graph (ours), and tall enough
+    // for both lines of the Track Control panel.
+    if (t->kind == model::TrackKind::Audio) {
+        if (showsWaveform(*t) || showsClipVolume(*t) || automationShown(*t)) h = kAudioDataRow;
+        if (display_.trackControlPanel && display_.trackPanel) h = std::max(h, 2 * kControlLine + 6);
+    }
+    return std::max(h + t->heightStep * kTrackStep, kMinRow);
+}
+
+void Timeline::setTrackColor(const QStringList& tracks, const QString& hex) {
+    changeTracks(tracks, [hex](model::Track& t) { t.color = hex; });
+}
+
+void Timeline::setSelectionColors(const QString& segment, const QString& markIO) {
+    display_.segmentSelectionColor = segment;
+    display_.markIOColor = markIO;
+    view_->update();
+}
+
+void Timeline::setMarkersShown(const QString& color, bool shown) {
+    if (shown) {
+        display_.hiddenMarkers.remove(color);
+    } else {
+        display_.hiddenMarkers.insert(color);
+    }
+    view_->update();
+}
+
+void Timeline::setAllMarkersShown(bool shown) {
+    display_.hiddenMarkers.clear();
+    if (!shown) {
+        for (const model::MarkerColor& c : model::markerColors()) display_.hiddenMarkers.insert(c.name);
+    }
+    view_->update();
 }
 
 QList<int> Timeline::waveformChannels(model::AudioFormat format) const {

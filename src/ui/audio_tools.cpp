@@ -746,20 +746,8 @@ void AudioMixer::rebuild(const QStringList& tracks) {
         connect(strip, &MixerStrip::lfeOnlyRequested, this, [this, t](bool on) { timeline_.setLfeOnly(t, on); });
         // Solo and mute stay through mode changes and closing the mixer
         // (p.694, p.699).
-        connect(strip->soloButton(), &QToolButton::toggled, this, [this, t](bool on) {
-            if (on) {
-                solo_.insert(t);
-            } else {
-                solo_.remove(t);
-            }
-        });
-        connect(strip->muteButton(), &QToolButton::toggled, this, [this, t](bool on) {
-            if (on) {
-                mute_.insert(t);
-            } else {
-                mute_.remove(t);
-            }
-        });
+        connect(strip->soloButton(), &QToolButton::toggled, this, [this, t](bool on) { setSoloMute(t, true, on); });
+        connect(strip->muteButton(), &QToolButton::toggled, this, [this, t](bool on) { setSoloMute(t, false, on); });
         // The track button selects the Timeline track and back (p.698).
         connect(strip->trackButton(), &QToolButton::clicked, this, [this, t] { timeline_.toggleRecordTrack(t); });
         // The insert button's menu: Insert a-e as on the track button (p.791), and the tool (p.793).
@@ -786,6 +774,22 @@ void AudioMixer::rebuild(const QStringList& tracks) {
         strip->setVisible(isTrackShown(t));
     }
     syncSidebar();
+}
+
+void AudioMixer::setSoloMute(const QString& track, bool solo, bool on) {
+    QSet<QString>& set = solo ? solo_ : mute_;
+    if (set.contains(track) == on) return;
+    if (on) {
+        set.insert(track);
+    } else {
+        set.remove(track);
+    }
+    if (MixerStrip* s = strips_.value(track)) {
+        QToolButton* b = solo ? s->soloButton() : s->muteButton();
+        const QSignalBlocker block(b);
+        b->setChecked(on);
+    }
+    emit soloMuteChanged();
 }
 
 void AudioMixer::setGang(const QString& track, const QString& letter) {

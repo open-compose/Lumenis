@@ -89,12 +89,14 @@ double TimelineView::valueForY(const Row& row, AutomationParam param, double y) 
 }
 
 std::optional<KeyRef> TimelineView::keyframeAt(const QPoint& pos) const {
-    const auto param = timeline_.display().automation;
-    if (!param || timeline_.showsSource() || pos.x() < headerWidth()) return std::nullopt;
+    if (timeline_.showsSource() || pos.x() < headerWidth()) return std::nullopt;
     const auto row = rowAt(pos);
     if (!row || !row->exists || !isAudio(row->track)) return std::nullopt;
     const model::Track* t = timeline_.shown().track(row->track);
     if (!t) return std::nullopt;
+    // The graph the track shows: the Audio Data menu's or its own (p.679).
+    const auto param = timeline_.automationShown(*t);
+    if (!param) return std::nullopt;
     std::optional<KeyRef> best;
     double distance = kKeyHit + 1;
     std::int64_t at = 0;
@@ -121,7 +123,8 @@ std::optional<KeyRef> TimelineView::keyframeAt(const QPoint& pos) const {
 // frame to its last with a square at each keyframe on its material, or, with automation not
 // shown, the pink triangle at the segment's top left (p.715).
 void TimelineView::paintAudioData(QPainter& p, const Row& r, const model::Track& t) const {
-    const Timeline::Display& d = timeline_.display();
+    const bool clipVolume = timeline_.showsClipVolume(t);
+    const auto automation = timeline_.automationShown(t);
     const double scale = timeline_.scale();
     const int side = model::sidePan(t.number, timeline_.alternatingPan());
     p.save();
@@ -134,12 +137,12 @@ void TimelineView::paintAudioData(QPainter& p, const Row& r, const model::Track&
         const double x0 = xFor(start);
         const double x1 = xFor(start + s.length);
         if (x1 < headerWidth() || x0 > width()) continue;
-        if (d.clipVolume) {
+        if (clipVolume) {
             p.setPen(QPen(QColor(kClipLine), 1, Qt::DashLine));
             const double y = yForValue(r, AutomationParam::Volume, s.gain);
             p.drawLine(QPointF(x0, y), QPointF(x1, y));
         }
-        if (!d.automation) {
+        if (!automation) {
             if (s.hasAutomation()) {
                 p.setPen(Qt::NoPen);
                 p.setBrush(QColor(kHiddenData));
@@ -147,7 +150,7 @@ void TimelineView::paintAudioData(QPainter& p, const Row& r, const model::Track&
             }
             continue;
         }
-        const AutomationParam param = *d.automation;
+        const AutomationParam param = *automation;
         auto xOf = [&](double sourceFrame) { return x0 + (sourceFrame - static_cast<double>(s.sourceIn)) * scale; };
         auto yOf = [&](double sourceFrame) {
             return yForValue(r, param, model::automationValue(s, param, sourceFrame, side));
@@ -178,7 +181,8 @@ void TimelineView::paintAudioData(QPainter& p, const Row& r, const model::Track&
 // ---------------------------------------------------------------- Timeline: keyframe editing
 
 AutomationParam Timeline::automationParam() const {
-    return display_.automation.value_or(AutomationParam::Volume);
+    // The Audio Data menu's graph, else the one shown on the track of the keyframe clicked last.
+    return display_.automation.value_or(editParam_);
 }
 
 void Timeline::setAudioData(bool clipVolume, std::optional<AutomationParam> automation) {
@@ -226,6 +230,9 @@ bool Timeline::addKeyframeAt(const QString& track, double frame) {
     const model::LoadedClip* rec = recordSequence();
     if (!rec) return false;
     model::Sequence seq = model::Sequence::fromItem(rec->item);
+    if (const model::Track* t = seq.track(track)) {
+        if (const auto shown = automationShown(*t)) editParam_ = *shown;
+    }
     if (model::addKeyframes(seq, {track}, frame, automationParam(), alternatingPan_) == 0) {
         return fail(tr("There is no audio there, or it has a keyframe already."));
     }
@@ -239,6 +246,13 @@ void Timeline::setKeySelection(const QList<KeyRef>& keys) {
 }
 
 void Timeline::clickKeyframe(const KeyRef& key, bool toggle) {
+    // Keyframes of a track's own graph are edited as that graph (per track settings, p.679).
+    if (const model::Track* t = shown().track(key.track)) {
+        if (const auto param = automationShown(*t); param && *param != editParam_ && !display_.automation) {
+            keySelection_.clear();
+            editParam_ = *param;
+        }
+    }
     if (!toggle) {
         setKeySelection({key});
         return;
