@@ -166,6 +166,7 @@ QJsonObject segmentToJson(const Segment& s) {
     o.insert(QStringLiteral("track"), s.sourceTrack);
     o.insert(QStringLiteral("in"), static_cast<qint64>(s.sourceIn));
     if (!s.localColor.isEmpty()) o.insert(QStringLiteral("localColor"), s.localColor);
+    if (!s.note.isEmpty()) o.insert(QStringLiteral("note"), s.note);
     if (!s.surround.isEmpty()) {
         QJsonArray pans;
         for (const SurroundPan& p : s.surround) pans.append(surroundPanToJson(p));
@@ -188,6 +189,7 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.sourceTrack = o.value(QStringLiteral("track")).toString();
     s.sourceIn = o.value(QStringLiteral("in")).toInteger();
     if (!s.isFiller()) s.localColor = o.value(QStringLiteral("localColor")).toString();
+    if (!s.isFiller()) s.note = o.value(QStringLiteral("note")).toString();
     for (const QJsonValue& v : o.value(QStringLiteral("surround")).toArray()) {
         if (!s.isFiller() && s.surround.size() < 2) s.surround << surroundPanFromJson(v.toObject());
     }

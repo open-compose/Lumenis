@@ -350,6 +350,15 @@ public:
     // Set Local Clip Color (p.598): the selected segments take `hex` ("#rrggbb"; empty for None), as
     // one undo step. False with a message when no segment is selected.
     bool setLocalClipColor(const QString& hex);
+    // Timeline Clip Notes (p.483-486). setClipNote() gives `segments` of the record sequence `note`
+    // (empty deletes it), as one undo step; false if none of them is material or nothing changed.
+    bool setClipNote(const QList<model::SegmentRef>& segments, const QString& note);
+    // Right-click > Add Timeline Clip Note: "The Timeline Clip Note dialog box opens. Type your notes
+    // in the text box, and click OK" (p.483). On the selected segments, else on `segment`. The dialog
+    // starts with the first one's note; tests answer it through setNoteAsk (nothing: Cancel).
+    bool addClipNote(const std::optional<model::SegmentRef>& segment = {});
+    using NoteAsk = std::function<std::optional<QString>(const QString& current)>;
+    void setNoteAsk(NoteAsk ask) { noteAsk_ = std::move(ask); }
     // The facts about a segment's clip the colours depend on (model::ClipFacts); nothing when the clip
     // cannot be found. Whether media is online is checked at most every two seconds per clip.
     std::optional<model::ClipFacts> clipFacts(const model::Segment& segment) const;
@@ -786,6 +795,7 @@ public:
         bool sourceNames = false;
         bool mediaFullNames = false;
         bool clipResolution = false;
+        bool clipNotes = false; // Timeline Clip Notes (p.483)
         bool operator==(const Display&) const = default;
     };
     // The Fast menu's settings as a Timeline view keeps them (p.604), and back. Values missing from
@@ -918,6 +928,7 @@ private:
     std::function<bool(const QString&, bool)> soloMuteState_;
     QStringList views_;
     QString currentView_;
+    NoteAsk noteAsk_;
     // Changes `tracks` of the record sequence and keeps them without an undo step (per track
     // settings, p.677). The tracks of the Audio Data menu for a click on `track`'s Track Control
     // button: it alone, or with `all` (Alt+click) every audio track.

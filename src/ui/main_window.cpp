@@ -51,6 +51,7 @@
 #include "lumenis/ui/keyboard_map.h"
 #include "lumenis/ui/keyboard_palette.h"
 #include "lumenis/ui/marker_dialogs.h"
+#include "lumenis/ui/clip_notes.h"
 #include "lumenis/ui/menu_builder.h"
 #include "lumenis/ui/panels.h"
 #include "lumenis/ui/relink_dialog.h"
@@ -750,6 +751,11 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
     // Timeline active (p.594).
     for (const auto& [id, step] : {std::pair{"edit.enlarge_frame", 1}, std::pair{"edit.reduce_frame", -1}}) {
         handle(id, [this, bins, steps = step] {
+            // The Timeline Clip Notes window's pictures (p.485-486).
+            if (clipNotesWindow_ && clipNotesWindow_->isActiveWindow()) {
+                clipNotesWindow_->resizeFrames(steps);
+                return;
+            }
             const Panel* active = panels_->activePanel();
             if (!binsActive() && active && active->id() == QLatin1String("Timeline")) {
                 timeline_->resizeTracks(steps);
@@ -3749,6 +3755,13 @@ void MainWindow::installPanelHandlers() {
     });
     handle("tools.timeline", [this] { panels_->showPanel(panels_->panel(QStringLiteral("Timeline"))); });
     handle("file.get_position_info", [this] { positionInfo(); });
+    // Tools > Timeline Clip Notes (p.484), one window, kept.
+    handle("tools.timeline_clip_notes", [this] {
+        if (!clipNotesWindow_) clipNotesWindow_ = new ClipNotesWindow(*timeline_, this);
+        clipNotesWindow_->refresh();
+        clipNotesWindow_->show();
+        clipNotesWindow_->raise();
+    });
     // Tools > Markers (p.420), one window, kept.
     handle("tools.markers", [this] {
         if (!markersWindow_) markersWindow_ = new MarkersWindow(*timeline_, this);

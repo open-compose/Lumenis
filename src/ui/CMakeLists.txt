@@ -32,6 +32,7 @@ add_library(lumenis_ui STATIC
     keyboard_map.cpp
     keyboard_palette.cpp
     marker_dialogs.cpp
+    clip_notes.cpp
     media_frames.cpp
     media_tool.cpp
     main_window.cpp
@@ -81,6 +82,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/keyboard_map.h
     include/lumenis/ui/keyboard_palette.h
     include/lumenis/ui/marker_dialogs.h
+    include/lumenis/ui/clip_notes.h
     include/lumenis/ui/media_frames.h
     include/lumenis/ui/media_tool.h
     include/lumenis/ui/main_window.h

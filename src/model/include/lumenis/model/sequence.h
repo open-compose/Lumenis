@@ -218,6 +218,9 @@ struct Segment {
     // Set Local Clip Color (p.597-598): "#rrggbb", empty for none. Shown when the Clip Color dialog's
     // Timeline Local is on (lumenis/model/clip_coloring.h).
     QString localColor;
+    // Add Timeline Clip Note (p.483): the segment's note, empty for none. A segment cut in two keeps
+    // it on both parts.
+    QString note;
 
     bool hasEffects() const { return effect || transition; }
     bool hasAutomation() const { return !volumeKeys.isEmpty() || !panKeys.isEmpty(); }

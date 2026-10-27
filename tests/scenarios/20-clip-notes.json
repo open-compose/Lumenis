@@ -1,0 +1,22 @@
+[
+  {
+    "name": "Add Timeline Clip Note puts a note on the selected segments as one undo step; an empty note deletes it; filler and nothing changed are refused",
+    "guide": "p.483-484",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 10], ["B", 0, 10]], "A1": [["A", 0, 10]]}},
+    "steps": [
+      {"clip_note": "keeper", "refused": true},
+      {"select": [["V1", 0], ["A1", 0]]},
+      {"clip_note": "good audio intro"},
+      {"clip_note": "good audio intro", "refused": true},
+      {"select": [["V1", 10]]},
+      {"clip_note": "city lights"},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"},
+      {"select": [["A1", 0]]},
+      {"clip_note": ""}
+    ],
+    "expect": {"V1": [["A", 0, 10], ["B", 0, 10]], "A1": [["A", 0, 10]]},
+    "expect_notes": {"V1": ["good audio intro", "city lights"], "A1": [""]}
+  }
+]

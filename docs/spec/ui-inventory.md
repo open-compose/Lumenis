@@ -1166,7 +1166,9 @@ These are recorded now so they are not entered from memory later.
     colours, Show Markers and track heights: docs/spec/track-control.md.
     View Type (Heads, Heads Tails), the View Menu button's Timeline views and
     the More tab's TV1-TV8: docs/spec/timeline-views.md. Sync Breaks, Dupe
-    Detection and the Clip Text items: docs/spec/sync-dupes.md.
+    Detection and the Clip Text items: docs/spec/sync-dupes.md. Timeline Clip
+    Notes (Add Timeline Clip Note, Tools > Timeline Clip Notes, p.483-486):
+    docs/spec/clip-notes.md.
   * The scale bar zooms around the position indicator; zoomed in, the
     indicator gets a dotted "shadow" at the end of the frame. Zoom In:
     drag over the area. Focus: 90 pixels per second around the position

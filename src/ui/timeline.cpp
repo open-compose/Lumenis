@@ -2363,7 +2363,7 @@ QMenu* Timeline::fastMenu() {
     check(clipTextMenu, tr("Clip Durations"), display_.clipDurations, [this](bool v) { display_.clipDurations = v; });
     check(clipTextMenu, tr("Clip Full Durations"), display_.clipFullDurations, [this](bool v) { display_.clipFullDurations = v; });
     check(clipTextMenu, tr("Clip Trans Duration"), display_.clipTransDuration, [this](bool v) { display_.clipTransDuration = v; });
-    clipTextMenu->addAction(tr("Timeline Clip Notes"))->setEnabled(false);
+    check(clipTextMenu, tr("Timeline Clip Notes"), display_.clipNotes, [this](bool v) { display_.clipNotes = v; });
     check(clipTextMenu, tr("Source Names"), display_.sourceNames, [this](bool v) { display_.sourceNames = v; });
     check(clipTextMenu, tr("Media Full Names"), display_.mediaFullNames, [this](bool v) { display_.mediaFullNames = v; });
     check(clipTextMenu, tr("Clip Resolution"), display_.clipResolution, [this](bool v) { display_.clipResolution = v; });
@@ -3524,6 +3524,15 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
         connect(select->addAction(text), &QAction::triggered, this, [this, w = where] { selectSegments(w); });
     }
     connect(select->addAction(tr("Reverse")), &QAction::triggered, this, [this] { selectSegments(SelectWhere::Reverse); });
+    // "Right click and select Add Timeline Clip Note" (p.483). Ours: near the end of the menu.
+    QAction* note = menu->addAction(tr("Add Timeline Clip Note"));
+    bool onClip = !selection_.isEmpty();
+    if (!onClip && segment) {
+        const auto seg = model::segmentFor(recordSequenceOf(composer_), *segment);
+        onClip = seg && !seg->isFiller();
+    }
+    note->setEnabled(!showSource_ && onClip);
+    connect(note, &QAction::triggered, this, [this, segment] { addClipNote(segment); });
     menu->addAction(tr("Create Sequence Based on Selection"))->setEnabled(false);
     return menu;
 }
@@ -4760,6 +4769,60 @@ void Timeline::openClipColorDialog() {
     if (ok) setClipColorOptions(dialog.options());
 }
 
+bool Timeline::setClipNote(const QList<model::SegmentRef>& segments, const QString& note) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    int changed = 0;
+    for (const model::SegmentRef& ref : segments) {
+        model::Track* t = seq.track(ref.track);
+        if (!t) continue;
+        std::int64_t at = 0;
+        for (model::Segment& seg : t->segments) {
+            if (at == ref.start && !seg.isFiller() && seg.note != note) {
+                seg.note = note;
+                ++changed;
+            }
+            at += seg.length;
+        }
+    }
+    if (changed == 0) return false;
+    const QList<model::SegmentRef> keep = selection_;
+    const bool ok = commitSequence(note.isEmpty() ? tr("Delete Timeline Clip Note") : tr("Add Timeline Clip Note"), seq);
+    selection_ = keep;
+    view_->update();
+    return ok;
+}
+
+bool Timeline::addClipNote(const std::optional<model::SegmentRef>& segment) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    QList<model::SegmentRef> refs = selection_;
+    if (refs.isEmpty() && segment) refs << *segment;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    QString current;
+    bool any = false;
+    for (const model::SegmentRef& ref : refs) {
+        const auto seg = model::segmentFor(seq, ref);
+        if (!seg || seg->isFiller()) continue;
+        if (!any) current = seg->note;
+        any = true;
+    }
+    if (!any) return fail(tr("Select the clips to add a note to with a segment tool."));
+    std::optional<QString> text;
+    if (noteAsk_) {
+        text = noteAsk_(current);
+    } else {
+        bool ok = false;
+        const QString typed = QInputDialog::getMultiLineText(this, tr("Timeline Clip Note"), tr("Note:"), current, &ok);
+        if (ok) text = typed;
+    }
+    if (!text) return false;
+    return setClipNote(refs, text->trimmed());
+}
+
 bool Timeline::setLocalClipColor(const QString& hex) {
     message_.clear();
     if (!recordSequence()) return false;
@@ -5086,6 +5149,7 @@ QJsonObject Timeline::displayToJson(const Display& d) {
         {QStringLiteral("sourceNames"), d.sourceNames},
         {QStringLiteral("mediaFullNames"), d.mediaFullNames},
         {QStringLiteral("clipResolution"), d.clipResolution},
+        {QStringLiteral("clipNotes"), d.clipNotes},
         {QStringLiteral("syncBreaks"), d.syncBreaks == SyncBreaks::Video   ? QStringLiteral("video")
                                        : d.syncBreaks == SyncBreaks::Audio ? QStringLiteral("audio")
                                        : d.syncBreaks == SyncBreaks::None  ? QStringLiteral("none")
@@ -5134,6 +5198,7 @@ Timeline::Display Timeline::displayFromJson(const QJsonObject& o) {
     flag("sourceNames", d.sourceNames);
     flag("mediaFullNames", d.mediaFullNames);
     flag("clipResolution", d.clipResolution);
+    flag("clipNotes", d.clipNotes);
     const QString sync = o.value(QStringLiteral("syncBreaks")).toString();
     d.syncBreaks = sync == QLatin1String("video")  ? SyncBreaks::Video
                    : sync == QLatin1String("audio") ? SyncBreaks::Audio
@@ -5225,6 +5290,9 @@ QString Timeline::clipText(const model::Track& track, const model::Segment& s) c
     const std::optional<model::BinItem> clip = needClip ? composer_.resolve(s.binId, s.clipId) : std::nullopt;
     if (d.clipFullDurations && clip) parts << state.durationText(clip->durationFrames);
     if (d.clipTransDuration && s.transition) parts << state.durationText(s.transition->duration);
+    // "You must enable the Timeline Fast menu > Clip Text > Timeline Clip Notes to display the notes
+    // in the Timeline" (p.483).
+    if (d.clipNotes) parts << s.note;
     if (d.sourceNames && clip) {
         const QString tape = model::cellText(*clip, QStringLiteral("Tape"));
         parts << (tape.isEmpty() ? model::cellText(*clip, QStringLiteral("Source File")) : tape);

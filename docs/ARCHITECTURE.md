@@ -54,7 +54,8 @@ headers in `include/lumenis/<library>/`.
   docs/spec/timeline-colors.md), `sync_dupes.*` (sync breaks and duplicate
   frames, docs/spec/sync-dupes.md) and `monitor.*` (marks, positions).
   UI: `timeline.*` (the Timeline panel and its edit commands;
-  `timeline_automation.cpp` its keyframe graph and editing),
+  `timeline_automation.cpp` its keyframe graph and editing), `clip_notes.*` (the
+  Timeline Clip Notes window, docs/spec/clip-notes.md),
   `clip_color_dialog.*` (the Timeline's Clip Color dialog),
   `surround_panner.*` (the Pan grid and Advanced Panner; the pans
   themselves are `src/model/surround_pan.*`) and

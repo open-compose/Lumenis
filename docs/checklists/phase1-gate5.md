@@ -255,7 +255,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Restrictions |  | p.292 | *later* | ☐ | | |
 | Source Browser |  | p.522 | works | ☐ | | |
 | Timecode Window |  | p.389 | *later* | ☐ | | |
-| Timeline Clip Notes |  | p.484 | *later* | ☐ | | |
+| Timeline Clip Notes |  | p.484 | works | ☐ | | |
 | Video Input Tool |  | p.161 | *later* | ☐ | | |
 | Video Output Tool |  | p.910 | *later* | ☐ | | |
 | Titler+ |  | p.303 | *later* | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 113 of them working with a project open; the
+* 211 menu commands, 114 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

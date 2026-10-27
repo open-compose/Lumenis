@@ -61,7 +61,8 @@ Code:
 
 ## Clip Text (p.592-593)
 
-* Clip Names, Clip Tracks and Clip Durations were there already. Now also, in the menu's order:
+* Clip Names, Clip Tracks and Clip Durations were there already; Timeline Clip Notes came with U1c2
+  (docs/spec/clip-notes.md). Now also, in the menu's order:
   * Clip Full Durations: the source clip's whole duration;
   * Clip Trans Duration: the duration of the transition at the segment's start;
   * Source Names: the clip's Tape column, or else its Source File;
@@ -72,8 +73,6 @@ Code:
   * Group Clip Name, which needs groups (multicamera editing);
   * Source Track Name, which needs the per-channel track names of production sound metadata
     (p.593-594);
-  * Timeline Clip Notes, which comes with Add Timeline Clip Note and the Timeline Clip Notes window
-    (U1c2, p.483-484).
 * **Zoom > Show Every Frame** stays dimmed: "To enable this option, you must first select Show Track >
   Film" (p.593), and there is no Film track until film projects.
 
