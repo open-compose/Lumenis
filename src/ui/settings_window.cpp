@@ -27,6 +27,7 @@
 #include <QRadioButton>
 #include <QRegularExpressionValidator>
 #include <QSpinBox>
+#include <QToolButton>
 #include <QStandardItemModel>
 #include <QStyledItemDelegate>
 #include <QTabWidget>
@@ -142,7 +143,17 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                     auto* spin = new QSpinBox(row);
                     spin->setRange(o.min, o.max);
                     spin->setValue(current.toInt());
+                    if (!o.specialText.isEmpty()) spin->setSpecialValueText(o.specialText);
                     editor = spin;
+                    if (!o.resetButton.isEmpty()) {
+                        // "To return this option to its default value, click the rs (recommended
+                        // sample) button" (p.1147).
+                        auto* reset = new QToolButton(row);
+                        reset->setText(o.resetButton);
+                        reset->setObjectName(o.key + QStringLiteral("Reset"));
+                        const int fallback = o.defaultValue.toInt();
+                        QObject::connect(reset, &QToolButton::clicked, spin, [spin, fallback] { spin->setValue(fallback); });
+                    }
                 } else if (o.type == QLatin1String("choice")) {
                     auto* menu = new QComboBox(row);
                     for (const SettingChoice& c : o.choices) {
@@ -183,6 +194,7 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                     editor = line;
                 }
                 h->addWidget(editor);
+                if (auto* reset = row->findChild<QToolButton*>(o.key + QStringLiteral("Reset"))) h->addWidget(reset);
                 if (!o.suffix.isEmpty()) h->addWidget(new QLabel(o.suffix, row));
                 h->addStretch(1);
             }

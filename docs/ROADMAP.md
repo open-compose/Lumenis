@@ -831,12 +831,17 @@ area is built):
   options. 5.7c1, Play Calibration Tone, Create Tone Media and the Audio
   Tool's meters (docs/spec/tone.md), is done; 5.7c2, the Audio EQ's
   effect icon and EQ templates in bins, the Timeline and Site_EQs_Bin
-  (docs/spec/audio-eq.md), is done; 5.7c3 is the settings' options.
+  (docs/spec/audio-eq.md), is done; 5.7c3, the Audio, Audio Project and
+  Import settings' audio options (docs/spec/audio-settings.md), is done but
+  for Display Channel Order (with U1's waveforms), Remove Extra Filler
+  After Punchin (with Extended Audio Punch-In) and Apply attenuation/gain
+  effect on import (Phase 9, with CD import).
 
 ### The UI completion pass (after Phase 5, before Phase 6)
 The same audit found items of areas built in Phases 1-4 left dimmed with no
 phase of their own. They are done in three steps:
-* U1, the Timeline: audio waveforms (p.677) and Show Marked Waveforms; the
+* U1, the Timeline: audio waveforms (p.677) and Show Marked Waveforms, with
+  the Audio setting's Display Channel Order for 5.1 and 7.1 (p.1148); the
   Fast menu's Show Markers, Track Color, Segment and Mark IO Selection
   colours, Track Control panel, View Type and Timeline Views (p.592-604),
   Sync Breaks, Dupe Detection, Show Every Frame and the remaining Clip Text
@@ -901,6 +906,8 @@ decision, 2026-10-27):
   (p.288-292, p.645);
 * Batch Import and Batch Re-import (p.1098, p.230);
 * AutoSync (p.223);
+* importing from audio CDs, with the Import setting's Apply
+  attenuation/gain effect on import and its CD only choice (p.1198);
 * anything else later found not to fit another area.
 
 ### Phase 10 — Hardening

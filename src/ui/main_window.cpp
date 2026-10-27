@@ -1240,6 +1240,10 @@ std::shared_ptr<media::AudioMix> MainWindow::mixOf(const model::LoadedClip& load
                                           ? model::Sequence::fromItem(loaded.item).mixFormat()
                                           : model::AudioFormat::Stereo;
     mix->setOutput(format, audioMixer_ ? audioMixer_->monitorMix() : media::MonitorMix::Stereo);
+    // Convert Sample Rates When Playing (p.1148-1149): Never leaves other rates silent.
+    if (settings_->text(QStringLiteral("Audio Project"), QStringLiteral("convertSampleRates")) == QLatin1String("never")) {
+        mix->setRequiredRate(projectSampleRate());
+    }
     return mix;
 }
 
@@ -1377,6 +1381,10 @@ void MainWindow::startSound(MonitorId monitor, int speed) {
     const std::int64_t at = media::framesToSamples(composer_->state(monitor).position(), loaded->item.editRate);
     media::AudioPlayer::PlayOptions options;
     options.speed = speed;
+    // Audio settings (p.1147-1148): Audio Loop Play takes the tool buffer, other play the play buffer.
+    options.bufferFrames = settings_->number(QStringLiteral("Audio"), composer_->isLooping() ? QStringLiteral("toolBuffer")
+                                                                                             : QStringLiteral("playBuffer"));
+    options.pitchCorrect = settings_->flag(QStringLiteral("Audio"), QStringLiteral("pitchCorrection"));
     if (!audio_->start(mixOf(*loaded, std::move(pieces)), at, options)) {
         ConsoleLog::instance().append(tr("Playback: no audio output could be opened; playing without sound."));
     }
@@ -1829,6 +1837,9 @@ media::MediaCreation MainWindow::mediaCreation(const QString& tab) const {
     c.videoDrive = media::chooseDrive(settings_->text(kind, tab + QStringLiteral("VideoDrive")));
     c.audioDrive = media::chooseDrive(settings_->text(kind, tab + QStringLiteral("AudioDrive")));
     c.bitDepth = settings_->text(QStringLiteral("Audio Project"), QStringLiteral("bitDepth")).toInt() == 16 ? 16 : 24;
+    // "Defines the audio sample rate for the entire system for playing and recording" (p.1148): new
+    // audio media is made at it.
+    c.sampleRate = projectSampleRate();
     c.when = QDateTime::currentDateTimeUtc();
     return c;
 }
@@ -2434,8 +2445,12 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
             }
         }
     }
+    const QString imp = QStringLiteral("Import");
+    // "Autodetect Broadcast Wave Monophonic Groups" (p.1199): name_1.wav, name_2.wav ... as one clip.
+    if (settings_->flag(imp, QStringLiteral("autodetectBwfGroups"))) clips = media::groupMonoWavs(clips);
     const int seconds = std::max(settings_->number(QStringLiteral("Import"), QStringLiteral("frameImportDuration")), 1);
-    media::MediaCreation creation = mediaCreation(QStringLiteral("import"));
+    const media::MediaCreation projectCreation = mediaCreation(QStringLiteral("import"));
+    media::MediaCreation creation = projectCreation;
     if (const media::Resolution* r = media::findResolution(resolution)) creation.resolution = *r;
     QProgressDialog progress(tr("Importing..."), tr("Cancel"), 0, 1000, this);
     progress.setObjectName(QStringLiteral("importProgress"));
@@ -2448,6 +2463,35 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
             clip.durationFrames = std::max<std::int64_t>(
                 1, seconds * options.editRate.num() / std::max<std::int64_t>(options.editRate.den(), 1));
         }
+        // The Audio tab (p.1198-1199), clip by clip.
+        creation.sampleRate = projectCreation.sampleRate;
+        creation.bitDepth = projectCreation.bitDepth;
+        creation.relabelPullRates = false;
+        creation.audioShift = 0;
+        if (link && link->channels > 0) {
+            const int sourceRate = clip.fields.value(QStringLiteral("Audio SR")).toInt();
+            if (settings_->flag(imp, QStringLiteral("convertSampleRate"))) {
+                // "Do not convert sources with pullup or pulldown rates".
+                creation.relabelPullRates = settings_->flag(imp, QStringLiteral("skipPullRates"));
+            } else if (media::isImportRate(sourceRate)) {
+                // "Media Composer imports audio media at the source sample rate. If Media Composer does
+                // not support the source sample rate, it autoconverts".
+                creation.sampleRate = sourceRate;
+            }
+            if (!settings_->flag(imp, QStringLiteral("convertBitDepth"))) {
+                const int bits = clip.fields.value(QStringLiteral("Audio Bit Depth")).section(QLatin1Char(' '), 0, 0).toInt();
+                if (bits == 16 || bits == 24) creation.bitDepth = bits;
+            }
+            // "Subframe Alignment to Broadcast WAV Start Time" (p.1199): on the nearest frame.
+            if (settings_->flag(imp, QStringLiteral("bwfAlignment")) && link->videoStream < 0 && sourceRate > 0) {
+                const auto info = media::probe(link->audioFile(0));
+                if (const auto tr = info ? media::bwfTimeReference(*info) : std::nullopt) {
+                    const media::BwfAlignment a = media::alignToFrame(*tr, sourceRate, clip.editRate);
+                    creation.audioShift = a.shift;
+                    clip.fields.insert(QStringLiteral("Start"), QString::fromStdString(Timecode(a.startFrame, TimecodeFormat::forRate(clip.editRate, false)).toString()));
+                }
+            }
+        }
         progress.setLabelText(tr("Importing %1 (%2 of %3)").arg(clip.name).arg(i + 1).arg(clips.size()));
         const std::function<bool(double)> step = progressOn(progress);
         creation.progress = [&](double done) { return step((i + done) / static_cast<double>(clips.size())); };
@@ -2458,8 +2502,13 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
             if (progress.wasCanceled()) break;
             continue;
         }
-        doc->addItem(*made);
-        ids << made->id;
+        model::BinItem item = *made;
+        // "Automatically center pan monophonic clips" (p.1198).
+        if (settings_->flag(imp, QStringLiteral("centerPanMono")) && item.fields.value(QStringLiteral("Tracks")) == QLatin1String("A1")) {
+            model::centerClipPan(item);
+        }
+        doc->addItem(item);
+        ids << item.id;
     }
     progress.reset();
     ids = fromAaf + ids;
@@ -2634,6 +2683,11 @@ void MainWindow::saveMultiMix(const QString& name, const media::MultiMix& mix) {
     settings_->commit(model::SettingsScope::Project);
 }
 
+int MainWindow::projectSampleRate() const {
+    const int rate = settings_ ? settings_->text(QStringLiteral("Audio Project"), QStringLiteral("sampleRate")).toInt() : 0;
+    return rate == 44100 || rate == 96000 ? rate : 48000;
+}
+
 QString MainWindow::siteEqBinPath() const {
     const QString site = settings_ ? settings_->siteFolder() : QString();
     if (site.isEmpty()) return {};
@@ -2681,6 +2735,7 @@ bool MainWindow::playCalibrationTone(bool device) {
     tone.length = std::numeric_limits<std::int64_t>::max() / 4;
     media::AudioPlayer::PlayOptions options;
     options.device = device;
+    options.bufferFrames = settings_->number(QStringLiteral("Audio"), QStringLiteral("toolBuffer"));
     playingTone_ = audio_->start(std::make_shared<media::AudioMix>(std::vector<media::AudioPiece>{tone}), 0, options);
     if (!playingTone_) ConsoleLog::instance().append(tr("Play Calibration Tone: no audio output could be opened."));
     return playingTone_;
@@ -3381,6 +3436,7 @@ void MainWindow::applySettings() {
     toolTips_->enabled = s.flag(ui, QStringLiteral("showToolTips"));
     composer_->setSourceRecordColors(s.flag(ui, QStringLiteral("composerColors")));
     timeline_->setSourceRecordColors(s.flag(ui, QStringLiteral("timelineColors")));
+    timeline_->setMismatchedRates(s.flag(QStringLiteral("Audio Project"), QStringLiteral("showMismatchedRates")), projectSampleRate());
     // The Timeline's Clip Color choices (p.594-597), kept with the Timeline setting.
     {
         // From the setting: not written back to it.

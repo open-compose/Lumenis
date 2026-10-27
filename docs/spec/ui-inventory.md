@@ -1811,7 +1811,8 @@ p.610–640, ch. 13 p.432–434).**
 ### Audio Project setting (p.1148–1150)
 * **Main tab:** Sample Rate, Bit Depth (24 Bit by default), Convert Sample
   Rates When Playing, Show Mismatched Sample Rates as Different Color, and
-  Remove Extra Filler After Punchin. These come with audio (Phase 5).
+  Remove Extra Filler After Punchin (dimmed until Extended Audio Punch-In).
+  Details: docs/spec/audio-settings.md.
 * **Output tab:** Mix Mode Selection (Stereo or Mono). It is the same as the
   mixer's menu.
 * **Mixer mode:** the mixer saves it here (p.692). It is not shown in the
@@ -2015,7 +2016,8 @@ p.610–640, ch. 13 p.432–434).**
     or backward. "The audio cuts out at greater than three times the
     normal speed."
   * Faster sound takes every n-th sample (averaged), so its pitch rises.
-    Pitch Correction during Shuttle (Audio settings, p.1148) is *later*.
+    With Pitch Correction during Shuttle (Audio settings, p.1148) it keeps
+    its pitch (docs/spec/audio-settings.md).
 * **Sync (ours):**
   * Up to 3x the picture follows the sound. The position is where the
     samples heard so far put it. Devices take samples in bursts and hold
@@ -2136,8 +2138,8 @@ The guide calls it Managed Media, unlike Linked Media (p.361).
   The rest is shown and waits.
 * Pictures are fitted to the raster keeping their shape ("Resize image to
   fit format raster", p.1195). The sound keeps its channels, one track each.
-* Later: Set Multichannel Audio (p.214), gain on import (p.215–216),
-  pullup/pulldown rates (p.216).
+* The Audio tab's options (p.1198-1199): docs/spec/audio-settings.md.
+* Later: Set Multichannel Audio (p.214), gain on import (p.215–216).
 
 ### Consolidate/Transcode (p.349–356)
 * Clip > Consolidate/Transcode on the bin's selection. Consolidate or

@@ -548,6 +548,8 @@ std::vector<float> AudioMix::samples(const AudioPiece& piece, std::int64_t offse
     }
     AudioReader* r = reader(piece);
     if (!r || piece.channel >= r->channels() || count <= 0) return {};
+    // "Never: Media Composer does not perform sample rate conversion (segments play as silence)".
+    if (requiredRate_ > 0 && r->sampleRate() != requiredRate_) return {};
     std::vector<float> out(static_cast<std::size_t>(count), 0.0f);
     const int channels = r->channels();
     const int rate = r->sampleRate();
@@ -670,6 +672,8 @@ bool AudioPlayer::start(std::shared_ptr<AudioMix> mix, std::int64_t start, const
     ring_.assign(static_cast<std::size_t>(channels_) * kRingFrames, 0.0f);
     next_ = start;
     speed_ = std::clamp(options.speed, -3, 3) == 0 ? 1 : std::clamp(options.speed, -3, 3);
+    pitchCorrect_ = options.pitchCorrect;
+    olaTail_.clear();
     left_ = options.limit;
     const bool device = options.device;
     readAt_ = 0;
@@ -691,6 +695,7 @@ bool AudioPlayer::start(std::shared_ptr<AudioMix> mix, std::int64_t start, const
     std::vector<ma_channel> map = channelMap(mix_ ? mix_->monitor() : MonitorMix::Stereo);
     if (static_cast<int>(map.size()) == channels_ && channels_ != 2) config.playback.pChannelMap = map.data();
     config.sampleRate = kPlaybackRate;
+    if (options.bufferFrames > 0) config.periodSizeInFrames = static_cast<ma_uint32>(options.bufferFrames);
     config.dataCallback = dataCallback;
     config.pUserData = this;
     if (ma_device_init(nullptr, &config, &d->device) != MA_SUCCESS) {
@@ -736,6 +741,37 @@ QString AudioPlayer::deviceName() const {
 // The feeder thread: whenever the ring has room for a chunk, renders the next kChunk output samples
 // (silence once a digital scrub's limit is used up) and publishes them by advancing writeAt_.
 // readAt_ and writeAt_ count samples without wrapping; the ring index is their remainder.
+// Pitch Correction during Shuttle: the chunk's kChunk output samples are Hann-windowed grains of
+// kGrain samples, one every kGrain / 2 of output, each read `step` times further along the program
+// than the last, so the program goes by `step` times as fast at its own pitch. Grains that run past the
+// chunk are carried in olaTail_.
+void AudioPlayer::correctedChunk(std::vector<float>& chunk, int step) {
+    const int ch = channels_;
+    const auto chs = static_cast<std::size_t>(ch);
+    constexpr int kHop = kGrain / 2;
+    std::vector<float> acc(chs * (kChunk + kGrain), 0.0f);
+    if (olaTail_.size() == chs * kGrain) std::copy(olaTail_.begin(), olaTail_.end(), acc.begin());
+    std::vector<float> grain(chs * kGrain);
+    for (int q = 0; q < kChunk; q += kHop) {
+        // Forward, the grain starts where the program is at output q; backward it ends there and is
+        // played reversed.
+        const std::int64_t at = speed_ > 0 ? next_ + std::int64_t{q} * step : next_ - std::int64_t{q} * step - kGrain;
+        mix_->render(at, kGrain, grain.data());
+        for (int i = 0; i < kGrain; ++i) {
+            const int src = speed_ > 0 ? i : kGrain - 1 - i;
+            const auto w = static_cast<float>(0.5 - 0.5 * std::cos(2.0 * std::numbers::pi * i / kGrain));
+            for (int c = 0; c < ch; ++c) {
+                acc[chs * static_cast<std::size_t>(q + i) + static_cast<std::size_t>(c)] +=
+                    w * grain[chs * static_cast<std::size_t>(src) + static_cast<std::size_t>(c)];
+            }
+        }
+    }
+    std::copy_n(acc.begin(), chs * kChunk, chunk.begin());
+    olaTail_.assign(acc.begin() + static_cast<std::ptrdiff_t>(chs * kChunk), acc.end());
+    const std::int64_t span = std::int64_t{kChunk} * step;
+    next_ += speed_ > 0 ? span : -span;
+}
+
 void AudioPlayer::feed() {
     const int ch = channels_;
     const auto chs = static_cast<std::size_t>(ch);
@@ -753,6 +789,8 @@ void AudioPlayer::feed() {
         } else if (step == 1 && speed_ > 0) {
             mix_->render(next_, kChunk, chunk.data());
             next_ += kChunk;
+        } else if (pitchCorrect_ && step > 1) {
+            correctedChunk(chunk, step);
         } else {
             // kChunk output samples cover kChunk * step of the program,
             // forward or backward from where play is.

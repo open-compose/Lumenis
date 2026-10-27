@@ -310,6 +310,8 @@ public:
     // when it cannot be made. Its EQ templates (the open bin's, if it is open) follow the Audio EQ
     // tool's predefined ones in its Fast menu.
     QString siteEqBinPath() const;
+    // The Audio Project setting's Sample Rate (p.1148): 44100, 48000 or 96000.
+    int projectSampleRate() const;
     QList<model::BinItem> siteEqTemplates() const;
     // Gives the Audio Tool's meters what the output played since the last call (a timer calls it
     // while sound plays); channels switched to I (Input) show nothing, as nothing is recorded here.

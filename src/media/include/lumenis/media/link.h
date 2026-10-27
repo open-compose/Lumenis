@@ -114,6 +114,26 @@ QStringList groupStills(const QStringList& paths, const Rational& rate);
 // are not media are skipped and counted in `skipped`.
 QList<model::BinItem> linkFiles(const QStringList& paths, const LinkOptions& options, int* skipped = nullptr);
 
+// A Broadcast WAV file's time reference (its "bext" chunk, which FFmpeg reads as "time_reference":
+// samples since midnight at the file's rate); nothing when it records none. A linked clip without a
+// timecode of its own starts at the frame its time reference falls in.
+std::optional<std::int64_t> bwfTimeReference(const MediaInfo& info);
+// Subframe Alignment to Broadcast WAV Start Time (Import settings, p.1199): a sound starting
+// `timeReference` samples after midnight at `sampleRate` goes on the nearest frame at `editRate`,
+// "either have silence added to the beginning, or up to half a frame of audio deleted from the
+// beginning". `shift` is the samples of silence to add (positive) or of sound to leave out
+// (negative), at `sampleRate`.
+struct BwfAlignment {
+    std::int64_t startFrame = 0;
+    std::int64_t shift = 0;
+};
+BwfAlignment alignToFrame(std::int64_t timeReference, int sampleRate, const Rational& editRate);
+// Autodetect Broadcast Wave Monophonic Groups (Import settings, p.1199): linked audio clips of files
+// named "<name>_1.wav", "<name>_2.wav" ... in one folder become one master clip "<name>" whose A1 is
+// _1's sound, A2 _2's and so on ("filename_1.wav is associated with track A1"); a group needs two or
+// more files. Other clips are kept as they are, in order, a group where its first file was.
+QList<model::BinItem> groupMonoWavs(const QList<model::BinItem>& clips);
+
 // Relink > Linked Media (p.364-365): the files under a folder by name, where
 // a clip's media is among them (its source file; for a sequence, its first
 // file), and pointing the clip at it. The media must fit the clip: the same

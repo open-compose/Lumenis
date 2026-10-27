@@ -9,13 +9,13 @@
         {
           "name": "Main",
           "options": [
-            {"key": "sampleRate", "type": "choice", "style": "menu", "label": "Sample Rate", "default": "48000", "page": 1148, "later": true,
+            {"key": "sampleRate", "type": "choice", "style": "menu", "label": "Sample Rate", "default": "48000", "page": 1148,
              "choices": [{"value": "44100", "label": "44.1 kHz"}, {"value": "48000", "label": "48 kHz"}, {"value": "96000", "label": "96 kHz"}]},
             {"key": "bitDepth", "type": "choice", "style": "radio", "label": "Bit Depth", "default": "24", "page": 1148,
              "choices": [{"value": "16", "label": "16 Bit"}, {"value": "24", "label": "24 Bit"}]},
-            {"key": "convertSampleRates", "type": "choice", "style": "menu", "label": "Convert Sample Rates When Playing", "default": "never", "page": 1148, "later": true,
+            {"key": "convertSampleRates", "type": "choice", "style": "menu", "label": "Convert Sample Rates When Playing", "default": "always", "page": 1148,
              "choices": [{"value": "never", "label": "Never"}, {"value": "always", "label": "Always"}]},
-            {"key": "showMismatchedRates", "type": "bool", "label": "Show Mismatched Sample Rates as Different Color", "default": false, "page": 1149, "later": true},
+            {"key": "showMismatchedRates", "type": "bool", "label": "Show Mismatched Sample Rates as Different Color", "default": false, "page": 1149},
             {"key": "removeExtraFiller", "type": "bool", "label": "Remove Extra Filler After Punchin", "default": false, "page": 1149, "later": true}
           ]
         },
@@ -58,11 +58,11 @@
             {"key": "recordScrubIn", "type": "int", "label": "Record Monitor Scrub: incoming frames", "min": 0, "max": 30, "default": 1, "page": 1147},
             {"key": "defaultPan", "type": "choice", "style": "radio", "label": "Default Pan for mono tracks", "default": "alternating", "page": 1147,
              "choices": [{"value": "alternating", "label": "Alternating L/R"}, {"value": "centered", "label": "Centered"}]},
-            {"key": "playBuffer", "type": "int", "label": "Play Buffer Size in Samples", "min": 256, "max": 16384, "default": 2048, "page": 1147, "later": true},
-            {"key": "toolBuffer", "type": "int", "label": "Tool Buffer Size in Samples", "min": 256, "max": 16384, "default": 1024, "page": 1147, "later": true},
+            {"key": "playBuffer", "type": "int", "label": "Play Buffer Size in Samples", "min": 0, "max": 16384, "default": 0, "specialText": "Recommended", "resetButton": "rs", "page": 1147},
+            {"key": "toolBuffer", "type": "int", "label": "Tool Buffer Size in Samples", "min": 0, "max": 16384, "default": 0, "specialText": "Recommended", "resetButton": "rs", "page": 1147},
             {"key": "channelOrder", "type": "choice", "style": "menu", "label": "Display Channel Order", "default": "smpte", "page": 1148, "later": true,
              "choices": [{"value": "smpte", "label": "SMPTE"}, {"value": "protools", "label": "Pro Tools"}]},
-            {"key": "pitchCorrection", "type": "bool", "label": "Pitch Correction during Shuttle", "default": false, "page": 1148, "later": true}
+            {"key": "pitchCorrection", "type": "bool", "label": "Pitch Correction during Shuttle", "default": false, "page": 1148}
           ]
         }
       ]
@@ -245,13 +245,13 @@
         {
           "name": "Audio",
           "options": [
-            {"key": "convertSampleRate", "type": "bool", "label": "Sample rate convert source sample rate to project sample rate", "default": true, "page": 1198, "later": true},
-            {"key": "skipPullRates", "type": "bool", "label": "Do not convert sources with pullup or pulldown rates", "default": true, "page": 1198, "later": true},
-            {"key": "convertBitDepth", "type": "bool", "label": "Convert source bit depth to project bit depth", "default": false, "page": 1198, "later": true},
+            {"key": "convertSampleRate", "type": "bool", "label": "Sample rate convert source sample rate to project sample rate", "default": true, "page": 1198},
+            {"key": "skipPullRates", "type": "bool", "label": "Do not convert sources with pullup or pulldown rates", "default": true, "page": 1198},
+            {"key": "convertBitDepth", "type": "bool", "label": "Convert source bit depth to project bit depth", "default": false, "page": 1198},
             {"key": "applyGain", "type": "bool", "label": "Apply attenuation/gain effect on import", "default": false, "page": 1198, "later": true},
-            {"key": "centerPanMono", "type": "bool", "label": "Automatically center pan monophonic clips", "default": false, "page": 1198, "later": true},
-            {"key": "autodetectBwfGroups", "type": "bool", "label": "Autodetect Broadcast Wave Monophonic Groups", "default": false, "page": 1199, "later": true},
-            {"key": "bwfAlignment", "type": "bool", "label": "Subframe Alignment to Broadcast WAV Start Time", "default": false, "page": 1199, "later": true}
+            {"key": "centerPanMono", "type": "bool", "label": "Automatically center pan monophonic clips", "default": false, "page": 1198},
+            {"key": "autodetectBwfGroups", "type": "bool", "label": "Autodetect Broadcast Wave Monophonic Groups", "default": false, "page": 1199},
+            {"key": "bwfAlignment", "type": "bool", "label": "Subframe Alignment to Broadcast WAV Start Time", "default": false, "page": 1199}
           ]
         },
         {

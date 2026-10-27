@@ -28,6 +28,8 @@ struct SettingOption {
     QString type; // bool, int, choice, drive, timecode, text, info
     QString label;
     QString suffix; // text after the control (a unit)
+    QString specialText; // int options: shown for `min` instead of the number ("Recommended")
+    QString resetButton; // int options: a button with this text that puts the default back ("rs")
     QString style; // choices: radio or menu
     QJsonValue defaultValue; // also the type a stored value must have
     int min = 0; // int options' range; 0 when not given

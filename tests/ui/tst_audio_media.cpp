@@ -5,6 +5,7 @@
 #include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
 #include "lumenis/media/playback.h"
+#include "lumenis/model/clip_audio.h"
 #include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/bin_container.h"
@@ -344,6 +345,152 @@ private slots:
         }
         QVERIFY(std::abs(peak - 0.2512f) < 2e-3f);
         QVERIFY(std::abs(crossings - 440) <= 1);
+        media::setExtraMediaDrives({});
+    }
+
+    // The Audio Project setting's Sample Rate (p.1148): new media at that rate; and Show Mismatched
+    // Sample Rates as Different Color (p.1149) in the Timeline.
+    void projectSampleRate() {
+        QTemporaryDir dir;
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath("Users"), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath("Film");
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        QCOMPARE(window.projectSampleRate(), 48000);
+        window.setToneMediaHook([&](CreateToneMediaDialog& d) {
+            d.findChild<QSpinBox*>(QStringLiteral("toneSeconds"))->setValue(1);
+            auto* drives = d.findChild<QComboBox*>(QStringLiteral("toneDrive"));
+            drives->setCurrentIndex(drives->findData(drive));
+            return true;
+        });
+        const auto at48 = window.createToneMedia();
+        QVERIFY(at48);
+        QCOMPARE(at48->fields.value(QStringLiteral("Audio SR")), QStringLiteral("48000"));
+        window.settings().setValue(QStringLiteral("Audio Project"), QStringLiteral("sampleRate"), QStringLiteral("44100"));
+        QCOMPARE(window.projectSampleRate(), 44100);
+        const auto at44 = window.createToneMedia();
+        QVERIFY(at44);
+        QCOMPARE(at44->fields.value(QStringLiteral("Audio SR")), QStringLiteral("44100"));
+        const auto link = media::linkOf(*at44);
+        QVERIFY(link && link->audioFile(0).endsWith(QLatin1String(".wav")));
+        media::AudioReader reader;
+        QVERIFY(reader.open(link->audioFile(0)));
+        QCOMPARE(reader.sampleRate(), 44100);
+
+        // A sequence of both: with the option on, the 48 kHz segment takes the mismatch colour.
+        model::Segment a;
+        a.binId = binId;
+        a.clipId = at48->id;
+        a.sourceTrack = QStringLiteral("A1");
+        a.length = 25;
+        model::Segment b = a;
+        b.clipId = at44->id;
+        Timeline& timeline = window.timeline();
+        QVERIFY(timeline.segmentColor(a).isEmpty());
+        window.settings().setValue(QStringLiteral("Audio Project"), QStringLiteral("showMismatchedRates"), true);
+        QCOMPARE(timeline.segmentColor(a), QString::fromLatin1(Timeline::kMismatchedRateColor));
+        QVERIFY(timeline.segmentColor(b).isEmpty());
+        window.settings().setValue(QStringLiteral("Audio Project"), QStringLiteral("sampleRate"), QStringLiteral("48000"));
+        QVERIFY(timeline.segmentColor(a).isEmpty());
+        QCOMPARE(timeline.segmentColor(b), QString::fromLatin1(Timeline::kMismatchedRateColor));
+        media::setExtraMediaDrives({});
+    }
+
+    // The Import settings' Audio tab (p.1198-1199) through File > Import: the source's rate and bit
+    // depth kept, centred mono clips, a monophonic Broadcast WAV group as one clip on its time stamp.
+    void importAudioSettings() {
+        QTemporaryDir dir;
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath("Users"), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath("Film");
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("importVideoDrive"), drive);
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        auto wav = [&](const QString& name, int rate, const QString& codec, std::int64_t timeReference) {
+            media::WriterSettings s;
+            s.format = QStringLiteral("wav");
+            s.audioCodec = codec;
+            s.channels = 1;
+            s.sampleRate = rate;
+            if (timeReference >= 0) {
+                s.formatOptions = {{QStringLiteral("write_bext"), QStringLiteral("1")}};
+                s.metadata = {{QStringLiteral("time_reference"), QString::number(timeReference)}};
+            }
+            media::MediaWriter w;
+            if (!w.open(dir.filePath(name), s)) return QString();
+            std::vector<float> v(static_cast<std::size_t>(rate / 2), 0.25f);
+            return w.writeAudio(v.data(), rate / 2) && w.finish() ? dir.filePath(name) : QString();
+        };
+        const QString music = wav(QStringLiteral("music.wav"), 44100, QStringLiteral("pcm_s16le"), -1);
+        QVERIFY(!music.isEmpty());
+
+        // By default: converted to the project's 48 kHz, 24 bit (convertBitDepth is off: the
+        // source's 16 bit kept), no pan of its own.
+        QStringList ids = window.importFiles(binId, {music});
+        QCOMPARE(ids.size(), 1);
+        const model::BinItem* plain = bin->bin().item(ids.first());
+        QVERIFY(plain);
+        QCOMPARE(plain->fields.value(QStringLiteral("Audio SR")), QStringLiteral("48000"));
+        QCOMPARE(plain->fields.value(QStringLiteral("Audio Bit Depth")), QStringLiteral("16 bit"));
+        QVERIFY(!model::clipPan(*plain));
+
+        // At the source's rate, converted to the project's bit depth, centred.
+        const QString imp = QStringLiteral("Import");
+        window.settings().setValue(imp, QStringLiteral("convertSampleRate"), false);
+        window.settings().setValue(imp, QStringLiteral("convertBitDepth"), true);
+        window.settings().setValue(imp, QStringLiteral("centerPanMono"), true);
+        ids = window.importFiles(binId, {music});
+        QCOMPARE(ids.size(), 1);
+        const model::BinItem* kept = bin->bin().item(ids.first());
+        QVERIFY(kept);
+        QCOMPARE(kept->fields.value(QStringLiteral("Audio SR")), QStringLiteral("44100"));
+        QCOMPARE(kept->fields.value(QStringLiteral("Audio Bit Depth")), QStringLiteral("24 bit"));
+        QCOMPARE(model::clipPan(*kept), std::optional<int>(0));
+
+        // Two files of a group, stamped 10:00:00:00 plus three quarters of a frame: one clip of two
+        // tracks; with Subframe Alignment it starts on the next frame.
+        window.settings().setValue(imp, QStringLiteral("convertSampleRate"), true);
+        window.settings().setValue(imp, QStringLiteral("autodetectBwfGroups"), true);
+        window.settings().setValue(imp, QStringLiteral("bwfAlignment"), true);
+        const std::int64_t tr = std::int64_t{48000} * 36000 + 1440;
+        const QString a = wav(QStringLiteral("Take_1.wav"), 48000, QStringLiteral("pcm_s24le"), tr);
+        const QString b = wav(QStringLiteral("Take_2.wav"), 48000, QStringLiteral("pcm_s24le"), tr);
+        QVERIFY(!a.isEmpty() && !b.isEmpty());
+        ids = window.importFiles(binId, {a, b});
+        QCOMPARE(ids.size(), 1);
+        const model::BinItem* take = bin->bin().item(ids.first());
+        QVERIFY(take);
+        QCOMPARE(take->name, QStringLiteral("Take"));
+        QCOMPARE(take->fields.value(QStringLiteral("Tracks")), QStringLiteral("A1-2"));
+        QCOMPARE(take->fields.value(QStringLiteral("Start")), QStringLiteral("10:00:00:01"));
+        QVERIFY(!model::clipPan(*take)); // not mono
         media::setExtraMediaDrives({});
     }
 

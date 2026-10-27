@@ -178,7 +178,7 @@ public:
         fileMob(track); // the file's MobID, written into it
         // "<clip>.<track>.<id>.mxf": unique, and readable in a file browser. Sound at another rate than
         // MXF takes is WAV.
-        const bool wav = track.startsWith(QLatin1Char('A')) && creation_.sampleRate != kManagedSampleRate;
+        const bool wav = track.startsWith(QLatin1Char('A')) && targetRate() != kManagedSampleRate;
         QString p = QStringLiteral("%1/%2.%3.%4.%5")
                         .arg(folder, fileStem(clip_.name), track, id_.left(8), wav ? QStringLiteral("wav") : QStringLiteral("mxf"));
         made_ << p;
@@ -278,24 +278,15 @@ public:
         const int rate = reader.sampleRate();
         const int channels = std::max(reader.channels(), 1);
         const int c = std::clamp(channel->second, 0, channels - 1);
-        const int target = creation_.sampleRate > 0 ? creation_.sampleRate : kManagedSampleRate;
+        const int target = targetRate();
         const std::int64_t wanted = samplesAt(out_ - in_, clip_.editRate, target);
-        WriterSettings s = settingsFor(QStringLiteral("A%1").arg(t + 1));
-        s.audioCodec = creation_.bitDepth <= 16 ? QStringLiteral("pcm_s16le") : QStringLiteral("pcm_s24le");
-        s.sampleRate = target;
-        s.channels = 1;
-        if (target == kManagedSampleRate) {
-            // The edit rate the file's timecode counts in.
-            s.formatOptions = {{QStringLiteral("mxf_audio_edit_rate"), rateText(clip_.editRate)}};
-        } else {
-            s.format = QStringLiteral("wav");
-            s.materialPackage = {};
-            s.filePackage = {};
-        }
+        const WriterSettings s = audioSettings(t);
         MediaWriter writer;
         if (!writer.open(path, s, error)) return false;
+        // A pull rate kept as it is is read as if it were the target rate.
+        const bool relabel = creation_.relabelPullRates && isPullRate(rate, target);
         std::unique_ptr<Resampler> resampler;
-        if (rate != target) {
+        if (rate != target && !relabel) {
             resampler = std::make_unique<Resampler>(1, rate, target, creation_.resampleFilter);
             // An invalid one gives no samples: the track would be silence.
             if (!resampler->isValid()) {
@@ -303,10 +294,11 @@ public:
                 return false;
             }
         }
-        // In the file, where the clip starts in it.
-        const std::int64_t offset = samplesAt(link_.first, link_.rate, rate);
-        std::int64_t at = samplesAt(in_, clip_.editRate, rate) + offset;
-        const std::int64_t end = samplesAt(out_, clip_.editRate, rate) + offset;
+        const int readRate = relabel ? target : rate;
+        // In the file, where the clip starts in it; Subframe Alignment moves it (audioShift).
+        const std::int64_t offset = samplesAt(link_.first, link_.rate, readRate) - std::min<std::int64_t>(creation_.audioShift, 0);
+        std::int64_t at = samplesAt(in_, clip_.editRate, readRate) + offset;
+        const std::int64_t end = samplesAt(out_, clip_.editRate, readRate) + offset;
         std::int64_t written = 0;
         auto put = [&](std::vector<float> mono) {
             const std::int64_t n = std::min<std::int64_t>(static_cast<std::int64_t>(mono.size()), wanted - written);
@@ -314,8 +306,17 @@ public:
             written += n;
             return writer.writeAudio(mono.data(), static_cast<int>(n));
         };
-        const int chunk = std::max(rate / 4, 1);
-        const std::int64_t perStep = samplesAt(1, clip_.editRate, rate) > 0 ? samplesAt(1, clip_.editRate, rate) : 1;
+        // Silence before the sound, through the resampler as the sound goes.
+        if (creation_.audioShift > 0 && in_ == 0) {
+            std::vector<float> silence(static_cast<std::size_t>(creation_.audioShift), 0.0f);
+            if (resampler) silence = resampler->push(silence.data(), static_cast<int>(silence.size()));
+            if (!put(std::move(silence))) {
+                if (error) *error = writer.lastError();
+                return false;
+            }
+        }
+        const int chunk = std::max(readRate / 4, 1);
+        const std::int64_t perStep = samplesAt(1, clip_.editRate, readRate) > 0 ? samplesAt(1, clip_.editRate, readRate) : 1;
         while (at < end) {
             const int n = static_cast<int>(std::min<std::int64_t>(chunk, end - at));
             std::vector<float> got = reader.samples(at, n);
@@ -347,30 +348,72 @@ public:
 
     // Track `t` (0 for A1) from rendered sound (renderedAudioClip()): `channel` of what `render` gives,
     // exactly as long as the frames [in, out) last.
+    // The sound is rendered at 48 kHz and, for another project rate (Audio Project settings, p.1148),
+    // resampled to it.
     bool writeRendered(int t, int channel, int channels, const RenderAudio& render, const QString& path, QString* error) {
-        WriterSettings s = settingsFor(QStringLiteral("A%1").arg(t + 1));
-        s.audioCodec = creation_.bitDepth <= 16 ? QStringLiteral("pcm_s16le") : QStringLiteral("pcm_s24le");
-        s.sampleRate = kManagedSampleRate;
-        s.channels = 1;
-        s.formatOptions = {{QStringLiteral("mxf_audio_edit_rate"), rateText(clip_.editRate)}};
+        const int target = targetRate();
         MediaWriter writer;
-        if (!writer.open(path, s, error)) return false;
-        const std::int64_t wanted = samplesAt(out_ - in_, clip_.editRate, kManagedSampleRate);
+        if (!writer.open(path, audioSettings(t), error)) return false;
+        std::unique_ptr<Resampler> resampler;
+        if (target != kManagedSampleRate) {
+            resampler = std::make_unique<Resampler>(1, kManagedSampleRate, target, creation_.resampleFilter);
+            if (!resampler->isValid()) {
+                if (error) *error = QObject::tr("Cannot convert the sound to %1 Hz.").arg(target);
+                return false;
+            }
+        }
+        const std::int64_t rendered = samplesAt(out_ - in_, clip_.editRate, kManagedSampleRate);
+        const std::int64_t wanted = samplesAt(out_ - in_, clip_.editRate, target);
         const std::int64_t perStep = std::max<std::int64_t>(samplesAt(1, clip_.editRate, kManagedSampleRate), 1);
         constexpr int kChunk = kManagedSampleRate / 4;
         std::vector<std::vector<float>> buffers(static_cast<std::size_t>(channels));
-        for (std::int64_t at = 0; at < wanted;) {
-            const int n = static_cast<int>(std::min<std::int64_t>(kChunk, wanted - at));
+        std::int64_t written = 0;
+        auto put = [&](const std::vector<float>& mono) {
+            const std::int64_t n = std::min<std::int64_t>(static_cast<std::int64_t>(mono.size()), wanted - written);
+            if (n <= 0) return true;
+            written += n;
+            return writer.writeAudio(mono.data(), static_cast<int>(n));
+        };
+        for (std::int64_t at = 0; at < rendered;) {
+            const int n = static_cast<int>(std::min<std::int64_t>(kChunk, rendered - at));
             for (auto& b : buffers) b.assign(static_cast<std::size_t>(n), 0.0f);
             render(at, n, buffers);
-            if (!writer.writeAudio(buffers[static_cast<std::size_t>(channel)].data(), n)) {
+            const std::vector<float>& mono = buffers[static_cast<std::size_t>(channel)];
+            if (!put(resampler ? resampler->push(mono.data(), n) : mono)) {
                 if (error) *error = writer.lastError();
                 return false;
             }
             at += n;
             if (!step(std::max<std::int64_t>(n / perStep, 1))) return cancelled(error);
         }
+        // Exactly the frames' length: what the resampler still holds is silence's worth at most.
+        if (written < wanted && !put(std::vector<float>(static_cast<std::size_t>(wanted - written), 0.0f))) {
+            if (error) *error = writer.lastError();
+            return false;
+        }
         return writer.finish(error);
+    }
+
+    // The rate new audio media is written at: creation.sampleRate, else 48 kHz.
+    int targetRate() const { return creation_.sampleRate > 0 ? creation_.sampleRate : kManagedSampleRate; }
+
+    // The writer settings of audio track `t` (0 for A1): mono PCM at targetRate() and the project's
+    // bit depth. 48 kHz is OP-Atom MXF; other rates are WAV (ours: FFmpeg's OP-Atom muxer takes only
+    // 48 kHz; docs/spec/clip-audio.md), without the MXF packages.
+    WriterSettings audioSettings(int t) const {
+        WriterSettings s = settingsFor(QStringLiteral("A%1").arg(t + 1));
+        s.audioCodec = creation_.bitDepth <= 16 ? QStringLiteral("pcm_s16le") : QStringLiteral("pcm_s24le");
+        s.sampleRate = targetRate();
+        s.channels = 1;
+        if (s.sampleRate == kManagedSampleRate) {
+            // The edit rate the file's timecode counts in.
+            s.formatOptions = {{QStringLiteral("mxf_audio_edit_rate"), rateText(clip_.editRate)}};
+        } else {
+            s.format = QStringLiteral("wav");
+            s.materialPackage = {};
+            s.filePackage = {};
+        }
+        return s;
     }
 
     // Sets the error to "Cancelled." and returns false.
@@ -515,7 +558,7 @@ std::optional<model::BinItem> makeMedia(const model::BinItem& clip, std::int64_t
         set("Drive", driveName(audioFolder));
     }
     if (made.channels > 0) {
-        set("Audio SR", QString::number(kManagedSampleRate));
+        set("Audio SR", QString::number(creation.sampleRate > 0 ? creation.sampleRate : kManagedSampleRate));
         set("Audio Bit Depth", QStringLiteral("%1 bit").arg(creation.bitDepth <= 16 ? 16 : 24));
         set("Audio Format", QStringLiteral("PCM"));
     }
@@ -654,11 +697,22 @@ std::optional<model::BinItem> renderedAudioClip(const QString& name, const Ratio
     item.fields.insert(QStringLiteral("End"), timecodeText(start + frames, editRate));
     item.fields.insert(QStringLiteral("Tracks"), trackList(false, made.channels));
     item.fields.insert(QStringLiteral("Drive"), driveName(folder));
-    item.fields.insert(QStringLiteral("Audio SR"), QString::number(kManagedSampleRate));
+    const int rate = creation.sampleRate > 0 ? creation.sampleRate : kManagedSampleRate;
+    item.fields.insert(QStringLiteral("Audio SR"), QString::number(rate));
     item.fields.insert(QStringLiteral("Audio Bit Depth"), QStringLiteral("%1 bit").arg(creation.bitDepth <= 16 ? 16 : 24));
     item.fields.insert(QStringLiteral("Audio Format"), QStringLiteral("PCM"));
-    item.fields.insert(QStringLiteral("Video File Format"), QStringLiteral("MXF"));
+    item.fields.insert(QStringLiteral("Video File Format"), rate == kManagedSampleRate ? QStringLiteral("MXF") : QStringLiteral("WAV"));
     return item;
+}
+
+bool isPullRate(int rate, int nominal) {
+    const auto up = static_cast<int>(std::lround(nominal * 1001.0 / 1000.0));
+    const auto down = static_cast<int>(std::lround(nominal * 1000.0 / 1001.0));
+    return nominal > 0 && (rate == up || rate == down);
+}
+
+bool isImportRate(int rate) {
+    return rate == 32000 || rate == 44100 || rate == 48000 || rate == 88200 || rate == 96000;
 }
 
 const QList<Resolution>& resolutions() {

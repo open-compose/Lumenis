@@ -202,6 +202,21 @@ private slots:
         QCOMPARE(bin.values().value("autoSaveMinutes").toInt(), 30);
         QCOMPARE(bin.values().value("favoritesAt").toString(), QStringLiteral("bottom"));
 
+        // The buffer sizes: "Recommended" (0) by default, and the rs button puts it back (p.1147).
+        SettingsDialog audio(kind("Audio"), SettingEntry{QStringLiteral("Audio"), {}, true, {}});
+        auto* buffer = qobject_cast<QSpinBox*>(audio.editor("playBuffer"));
+        QVERIFY(buffer && buffer->isEnabledTo(&audio));
+        QCOMPARE(buffer->value(), 0);
+        QCOMPARE(buffer->text(), QStringLiteral("Recommended"));
+        buffer->setValue(512);
+        QCOMPARE(audio.values().value("playBuffer").toInt(), 512);
+        auto* rs = audio.findChild<QToolButton*>(QStringLiteral("playBufferReset"));
+        QVERIFY(rs);
+        QCOMPARE(rs->text(), QStringLiteral("rs"));
+        rs->click();
+        QCOMPARE(buffer->value(), 0);
+        QVERIFY(!audio.editor("channelOrder")->isEnabledTo(&audio)); // waits for the waveforms (U1)
+
         SettingsDialog general(kind("General"), SettingEntry{QStringLiteral("General"), {}, true, {}});
         general.setInfo("projectFormat", QStringLiteral("1080p/25"));
         QCOMPARE(qobject_cast<QLabel*>(general.editor("projectFormat"))->text(), QStringLiteral("1080p/25"));

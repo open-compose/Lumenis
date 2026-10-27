@@ -4320,12 +4320,25 @@ std::optional<model::ClipFacts> Timeline::clipFacts(const model::Segment& segmen
 
 QString Timeline::segmentColor(const model::Segment& segment) const {
     if (segment.isFiller()) return {};
+    if (showMismatchedRates_ && segment.sourceTrack.startsWith(QLatin1Char('A'))) {
+        if (const auto clip = composer_.resolve(segment.binId, segment.clipId)) {
+            const int rate = clip->fields.value(QStringLiteral("Audio SR")).toInt();
+            if (rate > 0 && rate != projectSampleRate_) return QString::fromLatin1(kMismatchedRateColor);
+        }
+    }
     return model::timelineClipColor(clipColors_, segment, clipFacts(segment));
 }
 
 void Timeline::setProjectHeight(int height) {
     if (height <= 0 || height == projectHeight_) return;
     projectHeight_ = height;
+    view_->update();
+}
+
+void Timeline::setMismatchedRates(bool show, int projectRate) {
+    if (show == showMismatchedRates_ && projectRate == projectSampleRate_) return;
+    showMismatchedRates_ = show;
+    projectSampleRate_ = projectRate;
     view_->update();
 }
 

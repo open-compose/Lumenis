@@ -355,8 +355,13 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   5.7c2 is done: EQ templates (`model::eqTemplateItem`, `eqTemplateMime()`,
   `Timeline::dropEq`, Site_EQs_Bin through `MainWindow::siteEqBinPath`;
   test `tst_audio_eq_ui`, scenario `18-eq-drop.json`).
-  Next: 5.7c3 (the audio settings' options still dimmed; ROADMAP Phase 5
-  status); then the UI completion pass (U1 Timeline, U2 Composer and
+  5.7c3 is done: the audio settings' options (docs/spec/audio-settings.md:
+  buffer sizes, Pitch Correction, the project Sample Rate for new media,
+  Convert Sample Rates When Playing `AudioMix::setRequiredRate`, mismatched
+  rate colours, the Import Audio tab with `media::groupMonoWavs` and
+  `alignToFrame`; tests `tst_audio_project`, `tst_audio_media`). Display
+  Channel Order, Remove Extra Filler and gain on import stay dimmed.
+  So 5.7 is done. Next: the UI completion pass (U1 Timeline, U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.
 

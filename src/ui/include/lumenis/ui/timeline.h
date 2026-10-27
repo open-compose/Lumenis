@@ -308,6 +308,11 @@ public:
     // Show Source/Record colors in Timeline (Interface settings, p.383): selected source track
     // buttons green, record ones blue.
     void setSourceRecordColors(bool on);
+    // Show Mismatched Sample Rates as Different Color (Audio Project settings, p.1149): with `show`,
+    // audio segments whose clip's Audio SR is not `projectRate` take kMismatchedRateColor in place
+    // of their clip colour.
+    void setMismatchedRates(bool show, int projectRate);
+    static constexpr const char* kMismatchedRateColor = "#d0802c"; // ours: the guide names no colour
     bool sourceRecordColors() const { return sourceRecordColors_; }
 
     // Trim mode (ch. 20). Rollers sit on edit points; single-roller trims
@@ -764,6 +769,8 @@ private:
     ClipColorAsk clipColorAsk_;
     int projectHeight_ = 1080;
     bool sourceRecordColors_ = false;
+    bool showMismatchedRates_ = false;
+    int projectSampleRate_ = 48000;
     // Whether each clip's media was online when last looked at ("bin|clip"), and when.
     mutable QHash<QString, std::pair<bool, qint64>> online_;
     mutable QElapsedTimer onlineClock_;

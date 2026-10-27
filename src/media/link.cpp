@@ -6,8 +6,11 @@
 #include <QDirIterator>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QMap>
 #include <QMutexLocker>
 #include <QObject>
+#include <QRegularExpression>
+#include <QSet>
 #include <QStorageInfo>
 
 #include <algorithm>
@@ -197,6 +200,9 @@ QJsonObject Link::toJson() const {
     if (!mediaId.isEmpty()) {
         o.insert(QStringLiteral("mediaId"), mediaId);
         o.insert(QStringLiteral("audioPaths"), QJsonArray::fromStringList(audioPaths));
+    } else if (!audioPaths.isEmpty()) {
+        // A linked clip of several files (a monophonic group, groupMonoWavs()).
+        o.insert(QStringLiteral("audioPaths"), QJsonArray::fromStringList(audioPaths));
     }
     if (first != 0) o.insert(QStringLiteral("first"), static_cast<qint64>(first));
     return o;
@@ -367,7 +373,13 @@ std::optional<model::BinItem> linkClipUnchecked(const MediaInfo& info, const Lin
         if (!value.isEmpty()) item.fields.insert(QString::fromLatin1(heading), value);
     };
     set("Tracks", trackList(video != nullptr, link.channels));
-    const std::int64_t start = startFrames(info.startTimecode, fileRate, editRate).value_or(0);
+    std::int64_t start = startFrames(info.startTimecode, fileRate, editRate).value_or(0);
+    // A Broadcast WAV's time stamp, frame accurate: the frame its first sample falls in.
+    if (info.startTimecode.isEmpty() && firstAudio && firstAudio->sampleRate > 0) {
+        if (const auto tr = bwfTimeReference(info)) {
+            start = rescaleDown(*tr, editRate.num(), std::int64_t{firstAudio->sampleRate} * editRate.den());
+        }
+    }
     set("Start", timecodeText(start, editRate));
     set("End", timecodeText(start + item.durationFrames, editRate));
     set("Tape", info.reelName);
@@ -574,6 +586,92 @@ QList<model::BinItem> linkFiles(const QStringList& paths, const LinkOptions& opt
     }
     if (skipped) *skipped = missed;
     return items;
+}
+
+std::optional<std::int64_t> bwfTimeReference(const MediaInfo& info) {
+    const QString text = info.metadata.value(QStringLiteral("time_reference"));
+    bool ok = false;
+    const qlonglong tr = text.toLongLong(&ok);
+    if (!ok || tr < 0) return std::nullopt;
+    return tr;
+}
+
+BwfAlignment alignToFrame(std::int64_t timeReference, int sampleRate, const Rational& editRate) {
+    BwfAlignment a;
+    if (sampleRate <= 0 || editRate.num() <= 0) return a;
+    const double perFrame = static_cast<double>(sampleRate) * static_cast<double>(editRate.den()) / static_cast<double>(editRate.num());
+    const auto frame = static_cast<std::int64_t>(std::floor(static_cast<double>(timeReference) / perFrame));
+    const auto at = [&](std::int64_t f) { return static_cast<std::int64_t>(std::llround(static_cast<double>(f) * perFrame)); };
+    const std::int64_t past = timeReference - at(frame);
+    if (2 * past <= at(frame + 1) - at(frame)) {
+        a.startFrame = frame;
+        a.shift = past; // silence before the sound
+    } else {
+        a.startFrame = frame + 1;
+        a.shift = timeReference - at(frame + 1); // negative: the sound before the next frame left out
+    }
+    return a;
+}
+
+QList<model::BinItem> groupMonoWavs(const QList<model::BinItem>& clips) {
+    static const QRegularExpression pattern(QStringLiteral("^(.+)_(\\d+)\\.(wav|bwf)$"), QRegularExpression::CaseInsensitiveOption);
+    struct Part {
+        int index;
+        int number;
+    };
+    QMap<QString, QList<Part>> groups; // folder|name -> parts
+    for (int i = 0; i < clips.size(); ++i) {
+        const auto link = linkOf(clips.at(i));
+        if (!link || link->videoStream >= 0 || link->channels != 1) continue;
+        const QFileInfo file(link->path);
+        const auto m = pattern.match(file.fileName());
+        if (!m.hasMatch()) continue;
+        groups[file.absolutePath() + QLatin1Char('|') + m.captured(1)] << Part{i, m.captured(2).toInt()};
+    }
+    QHash<int, model::BinItem> joined; // first part's index -> the group's clip
+    QSet<int> taken;
+    for (auto it = groups.begin(); it != groups.end(); ++it) {
+        QList<Part>& parts = it.value();
+        if (parts.size() < 2) continue;
+        std::sort(parts.begin(), parts.end(), [](const Part& a, const Part& b) { return a.number < b.number; });
+        model::BinItem item = clips.at(parts.first().index);
+        Link link = *linkOf(item);
+        link.audioPaths = {link.path};
+        item.name = it.key().section(QLatin1Char('|'), 1);
+        // Each later file's sound as the next track, with its file source.
+        for (int k = 1; k < parts.size(); ++k) {
+            const model::BinItem& part = clips.at(parts.at(k).index);
+            const Link other = *linkOf(part);
+            link.audioPaths << other.path;
+            link.audioStreams << other.audioStreams.value(0);
+            link.streamChannels << 1;
+            link.channels += 1;
+            item.durationFrames = std::max(item.durationFrames, part.durationFrames);
+            // Its file source as track A<k+1>, and the import source that file source comes from.
+            for (model::ClipSource s : part.sources) {
+                if (s.kind == model::ClipSource::Kind::File) {
+                    s.track = QStringLiteral("A%1").arg(k + 1);
+                    item.sources.insert(item.sources.size() - 1, s); // before the first import source
+                } else {
+                    item.sources << s;
+                }
+            }
+        }
+        for (const Part& p : parts) taken.insert(p.index);
+        item.link = link.toJson();
+        item.fields.insert(QStringLiteral("Tracks"), trackList(false, link.channels));
+        item.fields.insert(QStringLiteral("Source File"), item.name);
+        joined.insert(parts.first().index, item);
+    }
+    QList<model::BinItem> out;
+    for (int i = 0; i < clips.size(); ++i) {
+        if (joined.contains(i)) {
+            out << joined.value(i);
+        } else if (!taken.contains(i)) {
+            out << clips.at(i);
+        }
+    }
+    return out;
 }
 
 // File name to path for every file under `folder`, recursively; the first one found wins a name.

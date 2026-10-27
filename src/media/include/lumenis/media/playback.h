@@ -133,6 +133,11 @@ public:
     MonitorMix monitor() const { return monitor_; }
     // The output channels the bus's L and R speakers reach most: where a stereo signal from outside
     // the mix goes (Audio Punch-In's monitoring).
+    // Convert Sample Rates When Playing: Never (Audio Project settings, p.1148-1149): files at another
+    // rate than `rate` play as silence; 0 (the default) plays every rate, resampled. Tone pieces
+    // always play.
+    void setRequiredRate(int rate) { requiredRate_ = rate; }
+    int requiredRate() const { return requiredRate_; }
     int leftChannel() const { return leftChannel_; }
     int rightChannel() const { return rightChannel_; }
     // `count` samples of each output channel from output sample `start` into `out`
@@ -188,6 +193,7 @@ private:
     std::map<QString, std::unique_ptr<AudioReader>> readers_;
     std::vector<SpeakerGains> matrix_;
     MonitorMix monitor_ = MonitorMix::Stereo;
+    int requiredRate_ = 0;
     int leftChannel_ = 0;
     int rightChannel_ = 1;
     std::vector<float> bus_; // render()'s, kept to save allocating it each time
@@ -217,6 +223,12 @@ public:
         // Without a device nothing is opened and pull() takes the samples
         // (tests).
         bool device = true;
+        // The device's buffer in samples (Play Buffer Size and Tool Buffer Size in Samples, Audio
+        // settings, p.1147, p.689); 0: the device's own choice.
+        int bufferFrames = 0;
+        // Pitch Correction during Shuttle (p.1148): at 2 and 3 times speed the sound keeps its pitch
+        // (overlap-add of windowed grains, ours) instead of rising as on tape.
+        bool pitchCorrect = false;
     };
     // Starts playing from output sample `start`. False if no output could be
     // opened.
@@ -255,6 +267,9 @@ private:
     struct Device;
     // Renders ahead into the ring on the feeder thread.
     void feed();
+    // One chunk at `step` times speed with its pitch kept (PlayOptions::pitchCorrect).
+    void correctedChunk(std::vector<float>& chunk, int step);
+    static constexpr int kGrain = 1024; // samples in a pitch-corrected grain (about 21 ms)
 
     std::unique_ptr<Device> device_;
     // What plays; released by stop().
@@ -270,6 +285,8 @@ private:
     std::int64_t latency_ = 0;             // samples the device holds
     std::int64_t next_ = 0; // the next sample to render
     int speed_ = 1;
+    bool pitchCorrect_ = false;
+    std::vector<float> olaTail_; // the overlap-add's carry into the next chunk (channels_ * kGrain)
     std::int64_t left_ = -1; // samples still to render before silence; -1: no limit
 
     // A single-producer, single-consumer ring of samples of channels_ channels.

@@ -34,7 +34,7 @@ QString SettingKind::title() const {
 }
 
 // The document is {"settings": [{"kind", "scope", "page", "opens", "tabs": [{"name", "options":
-// [{"key", "type", "label", "suffix", "style", "default", "min", "max", "page", "later",
+// [{"key", "type", "label", "suffix", "specialText", "resetButton", "style", "default", "min", "max", "page", "later",
 // "choices": [{"value", "label", "later"}]}]}]}]}.
 SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) {
     SettingsSchema schema;
@@ -62,6 +62,8 @@ SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) 
                 option.type = oo.value(QStringLiteral("type")).toString();
                 option.label = oo.value(QStringLiteral("label")).toString();
                 option.suffix = oo.value(QStringLiteral("suffix")).toString();
+                option.specialText = oo.value(QStringLiteral("specialText")).toString();
+                option.resetButton = oo.value(QStringLiteral("resetButton")).toString();
                 option.style = oo.value(QStringLiteral("style")).toString();
                 option.defaultValue = oo.value(QStringLiteral("default"));
                 option.min = oo.value(QStringLiteral("min")).toInt();

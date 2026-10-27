@@ -88,6 +88,13 @@ struct MediaCreation {
     // filter length (Resampler) sets its quality.
     int sampleRate = kManagedSampleRate;
     int resampleFilter = 32;
+    // The Import settings' Audio tab (p.1198-1199). With relabelPullRates, sound at a pullup or
+    // pulldown rate of sampleRate (0.1% off, isPullRate()) is written unconverted at sampleRate: "The
+    // length and pitch of the imported files are changed by plus or minus .1%". audioShift puts that
+    // many samples (at the file's rate) of silence before the sound, or leaves that many of it out
+    // when negative (Subframe Alignment to Broadcast WAV Start Time; alignToFrame()).
+    bool relabelPullRates = false;
+    std::int64_t audioShift = 0;
     QString project;    // the project's name, kept in the files
     QDateTime when;
     // The new master clip's MobID, which its files name as their material
@@ -97,6 +104,13 @@ struct MediaCreation {
     // The fraction done; returning false cancels.
     std::function<bool(double)> progress;
 };
+// Whether `rate` is a pullup or pulldown of `nominal` (times 1001/1000 or 1000/1001, to the sample):
+// 48048 and 47952 for 48 kHz, 44144 and 44056 for 44.1 kHz.
+bool isPullRate(int rate, int nominal);
+// The rates audio media can be imported at without conversion (Import settings, p.1198; ours: what
+// our WAV and MXF writers take): 32, 44.1, 48, 88.2 and 96 kHz.
+bool isImportRate(int rate);
+
 // The smallest raster media is made at (p.355; DNxHR's too).
 inline const QSize kMinimumRaster{256, 120};
 

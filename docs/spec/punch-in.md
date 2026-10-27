@@ -122,7 +122,8 @@ entitlement. BUILDING.md, "Audio Punch-In records silence", has the steps.
 ## Later
 
 * Capture tool voice-over (p.746-747) comes with tape capture.
-* Recording past the end of the sequence (Extended Audio Punch-In).
+* Recording past the end of the sequence (Extended Audio Punch-In), with the
+  Audio Project setting's Remove Extra Filler After Punchin (p.1149).
 * The Audio tool's meters showing the input with an orange I (p.751).
 * Peak Hold while recording (p.753).
 * GPI devices (p.776).
