@@ -3519,6 +3519,7 @@ void MainWindow::applySettings() {
     o.toolbar = s.flag(tl, QStringLiteral("showToolbar"));
     o.markedRegion = s.flag(tl, QStringLiteral("showMarkedRegion"));
     o.markedWaveforms = s.flag(tl, QStringLiteral("showMarkedWaveforms"));
+    o.dupeHandles = s.text(tl, QStringLiteral("dupeHandles")).toDouble();
     o.proToolsChannelOrder = s.text(QStringLiteral("Audio"), QStringLiteral("channelOrder")) == QLatin1String("protools");
     const QString movement = s.text(tl, QStringLiteral("movementDuringPlay"));
     o.movement = movement == QLatin1String("scroll") ? Timeline::Options::Movement::Scroll

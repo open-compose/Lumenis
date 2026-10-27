@@ -54,6 +54,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   dialog's defaults (Offline and Source on, the others off), the colours
   other than offline red and proxy yellow, one Mixed Rates colour per rate
   for ten rates, the layout, and Default Colors also resetting Linked Clips.
+* Sync breaks and Dupe Detection (docs/spec/sync-dupes.md): what counts as
+  a sync partner and the sign of the offset; the Sync Breaks submenu's item
+  names; dupes per clip and source track; the dupe colours after orange and
+  green; the Dupe Detection Handles choices; what the Clip Text items Clip
+  Full Durations, Source Names, Media Full Names and Clip Resolution show.
 * Choose Columns: Search matches anywhere in a heading; All/None acts on
   the headings shown; the width is fixed (§9).
 * Volume and pan automation (docs/spec/automation.md):
@@ -1160,7 +1165,8 @@ These are recorded now so they are not entered from memory later.
     Track Control panel, per track settings, Track Color, the selection
     colours, Show Markers and track heights: docs/spec/track-control.md.
     View Type (Heads, Heads Tails), the View Menu button's Timeline views and
-    the More tab's TV1-TV8: docs/spec/timeline-views.md.
+    the More tab's TV1-TV8: docs/spec/timeline-views.md. Sync Breaks, Dupe
+    Detection and the Clip Text items: docs/spec/sync-dupes.md.
   * The scale bar zooms around the position indicator; zoomed in, the
     indicator gets a dotted "shadow" at the end of the frame. Zoom In:
     drag over the area. Focus: 90 pixels per second around the position

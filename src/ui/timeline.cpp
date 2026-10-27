@@ -7,6 +7,7 @@
 #include "lumenis/media/surround.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
+#include "lumenis/model/sync_dupes.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/clip_color_dialog.h"
@@ -515,6 +516,16 @@ void TimelineView::paintEvent(QPaintEvent*) {
     };
     const std::int64_t interval = scale > 0 ? labelInterval(scale, static_cast<int>(fps)) : fps;
 
+    // What Sync Breaks and Dupe Detection mark (p.491, p.641), worked out once a paint.
+    const QList<model::SyncBreak> breakList =
+        timeline_.display().syncBreaks != Timeline::SyncBreaks::None ? model::syncBreaks(seq) : QList<model::SyncBreak>{};
+    QSet<model::TrackKind> dupeKinds;
+    if (timeline_.display().dupeVideo) dupeKinds.insert(model::TrackKind::Video);
+    if (timeline_.display().dupeAudio) dupeKinds.insert(model::TrackKind::Audio);
+    if (timeline_.display().dupeData) dupeKinds.insert(model::TrackKind::Data);
+    const QList<model::Dupe> dupeList =
+        dupeKinds.isEmpty() ? QList<model::Dupe>{} : model::dupes(seq, dupeKinds, timeline_.options().dupeHandles);
+
     // Tracks and segments.
     p.save();
     p.setClipRect(tracksArea);
@@ -549,7 +560,9 @@ void TimelineView::paintEvent(QPaintEvent*) {
                 const std::int64_t end = at + s.length;
                 const bool selected = !timeline_.showsSource() &&
                                       timeline_.selection().contains(model::SegmentRef{r.track, at});
-                if (end >= firstVisible && at <= lastVisible && previous && model::Sequence::isMatchFrame(*previous, s)) {
+                // Sync Breaks also governs the match-frame signs (p.491).
+                if (end >= firstVisible && at <= lastVisible && previous && timeline_.showsSyncBreaks(t->kind) &&
+                    model::Sequence::isMatchFrame(*previous, s)) {
                     // A match-frame edit shows an equal sign (p.640).
                     const double x = xFor(at);
                     p.setPen(QPen(QColor(kGlyph), 1.5));
@@ -604,23 +617,35 @@ void TimelineView::paintEvent(QPaintEvent*) {
                         }
                     }
                     // Clip text (Fast menu, p.592).
-                    QStringList parts;
-                    const auto& d = timeline_.display();
-                    if (d.clipNames) parts << s.name;
-                    if (d.clipTracks) parts << s.sourceTrack;
-                    if (d.clipDurations) parts << state.durationText(s.length);
-                    if (!parts.isEmpty() && textArea.width() > 12) {
+                    const QString clipText = textArea.width() > 12 ? timeline_.clipText(*t, s) : QString();
+                    if (!clipText.isEmpty()) {
                         p.setPen(bright);
                         const QRectF textBox = textArea.adjusted(4, 0, -3, 0);
                         p.drawText(textBox, Qt::AlignVCenter | Qt::AlignLeft,
-                                   p.fontMetrics().elidedText(parts.join(QStringLiteral("  ")), Qt::ElideRight,
-                                                              static_cast<int>(textBox.width())));
+                                   p.fontMetrics().elidedText(clipText, Qt::ElideRight, static_cast<int>(textBox.width())));
                     }
                 }
                 previous = &s;
                 at = end;
             }
             if (t->kind == model::TrackKind::Audio && !timeline_.showsSource()) paintAudioData(p, r, *t);
+            // Dupe Detection's bars above the frames (p.641).
+            for (const model::Dupe& dupe : dupeList) {
+                if (dupe.track != r.track) continue;
+                const QRectF bar(xFor(dupe.start), r.top + 1, xFor(dupe.start + dupe.length) - xFor(dupe.start), 4);
+                p.fillRect(bar, QColor(model::dupeColor(dupe.set)));
+            }
+            // Sync breaks: "white numbers indicating negative or positive offset values relative to
+            // zero" at the break (p.491).
+            for (const model::SyncBreak& b : breakList) {
+                if (b.track != r.track || !timeline_.showsSyncBreaks(t->kind)) continue;
+                const double x = xFor(b.start);
+                if (x > width() || xFor(b.start + b.length) < header) continue;
+                const QString number = b.offset > 0 ? QStringLiteral("+%1").arg(b.offset) : QString::number(b.offset);
+                p.setPen(bright);
+                p.drawText(QRectF(x + 3, r.top, std::max(xFor(b.start + b.length) - x - 6, 24.0), r.height),
+                           Qt::AlignVCenter | Qt::AlignRight, number);
+            }
             if (timeline_.display().effectIcons) paintEffects(p, r, *t);
         }
         p.setPen(QColor(kRowLine));
@@ -2292,7 +2317,6 @@ QMenu* Timeline::fastMenu() {
     // clear() leaves the submenus of the last build: delete them, so they do not pile up.
     for (QMenu* sub : m->findChildren<QMenu*>(Qt::FindDirectChildrenOnly)) delete sub;
     auto later = [m](const QString& text) { m->addAction(text)->setEnabled(false); };
-    auto laterMenu = [](QMenu* parent, const QString& text) { parent->addMenu(text)->setEnabled(false); };
     auto check = [this](QMenu* menu, const QString& text, bool on, std::function<void(bool)> apply) {
         QAction* a = menu->addAction(text);
         a->setCheckable(true);
@@ -2328,18 +2352,44 @@ QMenu* Timeline::fastMenu() {
     check(m, tr("Dissolve Icons"), display_.dissolveIcons, [this](bool v) { display_.dissolveIcons = v; });
     m->actions().constLast()->setEnabled(display_.effectIcons);
     check(m, tr("Clip Frames"), display_.clipFrames, [this](bool v) { display_.clipFrames = v; });
-    QMenu* clipText = m->addMenu(tr("Clip Text"));
-    check(clipText, tr("Clip Names"), display_.clipNames, [this](bool v) { display_.clipNames = v; });
-    clipText->addAction(tr("Group Clip Name"))->setEnabled(false);
-    check(clipText, tr("Clip Tracks"), display_.clipTracks, [this](bool v) { display_.clipTracks = v; });
-    for (const QString& t : {tr("Source Track Name")}) clipText->addAction(t)->setEnabled(false);
-    check(clipText, tr("Clip Durations"), display_.clipDurations, [this](bool v) { display_.clipDurations = v; });
-    for (const QString& t : {tr("Clip Full Durations"), tr("Clip Trans Duration"), tr("Timeline Clip Notes"),
-                             tr("Source Names"), tr("Media Full Names"), tr("Clip Resolution")}) {
-        clipText->addAction(t)->setEnabled(false);
+    // Clip Text (p.592). Group Clip Name needs groups (multicamera editing) and Source Track Name the
+    // per-channel track names of production sound metadata (p.593-594); neither is kept yet.
+    QMenu* clipTextMenu = m->addMenu(tr("Clip Text"));
+    clipTextMenu->setObjectName(QStringLiteral("clipText"));
+    check(clipTextMenu, tr("Clip Names"), display_.clipNames, [this](bool v) { display_.clipNames = v; });
+    clipTextMenu->addAction(tr("Group Clip Name"))->setEnabled(false);
+    check(clipTextMenu, tr("Clip Tracks"), display_.clipTracks, [this](bool v) { display_.clipTracks = v; });
+    clipTextMenu->addAction(tr("Source Track Name"))->setEnabled(false);
+    check(clipTextMenu, tr("Clip Durations"), display_.clipDurations, [this](bool v) { display_.clipDurations = v; });
+    check(clipTextMenu, tr("Clip Full Durations"), display_.clipFullDurations, [this](bool v) { display_.clipFullDurations = v; });
+    check(clipTextMenu, tr("Clip Trans Duration"), display_.clipTransDuration, [this](bool v) { display_.clipTransDuration = v; });
+    clipTextMenu->addAction(tr("Timeline Clip Notes"))->setEnabled(false);
+    check(clipTextMenu, tr("Source Names"), display_.sourceNames, [this](bool v) { display_.sourceNames = v; });
+    check(clipTextMenu, tr("Media Full Names"), display_.mediaFullNames, [this](bool v) { display_.mediaFullNames = v; });
+    check(clipTextMenu, tr("Clip Resolution"), display_.clipResolution, [this](bool v) { display_.clipResolution = v; });
+    // Sync Breaks (p.491-492): "display sync breaks and match-frame edits in video tracks only, audio
+    // tracks only, or neither"; the item names are ours.
+    QMenu* syncMenu = m->addMenu(tr("Sync Breaks"));
+    syncMenu->setObjectName(QStringLiteral("syncBreaks"));
+    auto* syncGroup = new QActionGroup(syncMenu);
+    for (const auto& [which, text] : {std::pair{SyncBreaks::All, tr("All Tracks")},
+                                      std::pair{SyncBreaks::Video, tr("Video Tracks Only")},
+                                      std::pair{SyncBreaks::Audio, tr("Audio Tracks Only")},
+                                      std::pair{SyncBreaks::None, tr("None")}}) {
+        check(syncMenu, text, display_.syncBreaks == which, [this, w = which](bool v) {
+            if (v) setSyncBreaks(w);
+        });
+        syncGroup->addAction(syncMenu->actions().constLast());
     }
-    laterMenu(m, tr("Sync Breaks"));
-    later(tr("Dupe Detection"));
+    // Dupe Detection (p.641): "You can choose to turn on Dupe Detection for Video, Audio, and Data
+    // tracks."
+    QMenu* dupeMenu = m->addMenu(tr("Dupe Detection"));
+    dupeMenu->setObjectName(QStringLiteral("dupeDetection"));
+    for (const auto& [kind, text, on] : {std::tuple{model::TrackKind::Video, tr("Video"), display_.dupeVideo},
+                                         std::tuple{model::TrackKind::Audio, tr("Audio"), display_.dupeAudio},
+                                         std::tuple{model::TrackKind::Data, tr("Data"), display_.dupeData}}) {
+        check(dupeMenu, text, on, [this, k = kind](bool v) { setDupeDetection(k, v); });
+    }
     later(tr("Color Correction"));
     // Audio Data (p.677-680): the clip gain's line, and the Volume or Pan graph, one at a time.
     QMenu* audioData = m->addMenu(tr("Audio Data"));
@@ -5028,6 +5078,18 @@ QJsonObject Timeline::displayToJson(const Display& d) {
         {QStringLiteral("trackControlPanel"), d.trackControlPanel},
         {QStringLiteral("segmentSelectionColor"), d.segmentSelectionColor},
         {QStringLiteral("markIOColor"), d.markIOColor},
+        {QStringLiteral("dupeVideo"), d.dupeVideo},
+        {QStringLiteral("dupeAudio"), d.dupeAudio},
+        {QStringLiteral("dupeData"), d.dupeData},
+        {QStringLiteral("clipFullDurations"), d.clipFullDurations},
+        {QStringLiteral("clipTransDuration"), d.clipTransDuration},
+        {QStringLiteral("sourceNames"), d.sourceNames},
+        {QStringLiteral("mediaFullNames"), d.mediaFullNames},
+        {QStringLiteral("clipResolution"), d.clipResolution},
+        {QStringLiteral("syncBreaks"), d.syncBreaks == SyncBreaks::Video   ? QStringLiteral("video")
+                                       : d.syncBreaks == SyncBreaks::Audio ? QStringLiteral("audio")
+                                       : d.syncBreaks == SyncBreaks::None  ? QStringLiteral("none")
+                                                                                    : QStringLiteral("all")},
     };
     if (d.automation) {
         o.insert(QStringLiteral("automation"),
@@ -5064,6 +5126,19 @@ Timeline::Display Timeline::displayFromJson(const QJsonObject& o) {
     flag("fullHeight", d.fullHeight);
     flag("perTrack", d.perTrack);
     flag("trackControlPanel", d.trackControlPanel);
+    flag("dupeVideo", d.dupeVideo);
+    flag("dupeAudio", d.dupeAudio);
+    flag("dupeData", d.dupeData);
+    flag("clipFullDurations", d.clipFullDurations);
+    flag("clipTransDuration", d.clipTransDuration);
+    flag("sourceNames", d.sourceNames);
+    flag("mediaFullNames", d.mediaFullNames);
+    flag("clipResolution", d.clipResolution);
+    const QString sync = o.value(QStringLiteral("syncBreaks")).toString();
+    d.syncBreaks = sync == QLatin1String("video")  ? SyncBreaks::Video
+                   : sync == QLatin1String("audio") ? SyncBreaks::Audio
+                   : sync == QLatin1String("none")  ? SyncBreaks::None
+                                                    : SyncBreaks::All;
     d.waveformZoom = std::clamp(o.value(QStringLiteral("waveformZoom")).toInt(), -3, 4);
     const QString automation = o.value(QStringLiteral("automation")).toString();
     if (automation == QLatin1String("volume")) d.automation = model::AutomationParam::Volume;
@@ -5113,6 +5188,62 @@ QList<std::pair<std::int64_t, std::int64_t>> Timeline::headsSpans() const {
 
 // "If you rearrange a split edit ... the system cuts all tracks to the same edit point" (p.638):
 // model::Sequence::moveSpan moves the clip's frames on every selected track.
+// ---------------------------------------------------------------- Sync Breaks, Dupe Detection, Clip Text (U1c1)
+
+void Timeline::setSyncBreaks(SyncBreaks which) {
+    display_.syncBreaks = which;
+    view_->update();
+}
+
+void Timeline::setDupeDetection(model::TrackKind kind, bool on) {
+    (kind == model::TrackKind::Video ? display_.dupeVideo : kind == model::TrackKind::Audio ? display_.dupeAudio : display_.dupeData) = on;
+    view_->update();
+}
+
+bool Timeline::showsSyncBreaks(model::TrackKind kind) const {
+    switch (display_.syncBreaks) {
+    case SyncBreaks::All: return true;
+    case SyncBreaks::Video: return kind == model::TrackKind::Video;
+    case SyncBreaks::Audio: return kind == model::TrackKind::Audio;
+    case SyncBreaks::None: return false;
+    }
+    return false;
+}
+
+// The Clip Text submenu's items (p.592-593) in its order. The source clip's facts come from its bin
+// item: Clip Full Durations its whole duration, Source Names its Tape column or else its Source File,
+// Media Full Names the name of the media file the segment's track plays from, Clip Resolution its
+// Video column (ours: the guide gives no examples of these four).
+QString Timeline::clipText(const model::Track& track, const model::Segment& s) const {
+    const auto& d = display_;
+    const model::MonitorState& state = composer_.state(shownMonitor());
+    QStringList parts;
+    if (d.clipNames) parts << s.name;
+    if (d.clipTracks) parts << s.sourceTrack;
+    if (d.clipDurations) parts << state.durationText(s.length);
+    const bool needClip = d.clipFullDurations || d.sourceNames || d.mediaFullNames || d.clipResolution;
+    const std::optional<model::BinItem> clip = needClip ? composer_.resolve(s.binId, s.clipId) : std::nullopt;
+    if (d.clipFullDurations && clip) parts << state.durationText(clip->durationFrames);
+    if (d.clipTransDuration && s.transition) parts << state.durationText(s.transition->duration);
+    if (d.sourceNames && clip) {
+        const QString tape = model::cellText(*clip, QStringLiteral("Tape"));
+        parts << (tape.isEmpty() ? model::cellText(*clip, QStringLiteral("Source File")) : tape);
+    }
+    if (d.mediaFullNames && clip) {
+        if (const auto link = media::linkOf(*clip)) {
+            QString file = link->file();
+            if (track.kind == model::TrackKind::Audio) {
+                const auto ref = model::parseTrackName(s.sourceTrack);
+                if (ref && ref->kind == model::TrackKind::Audio) file = link->audioFile(ref->number - 1);
+            }
+            if (!file.isEmpty()) parts << QFileInfo(file).fileName();
+        }
+    }
+    if (d.clipResolution && clip) parts << model::cellText(*clip, QStringLiteral("Video"));
+    parts.removeAll(QString());
+    return parts.join(QStringLiteral("  "));
+}
+
 void Timeline::setViews(const QStringList& names, const QString& current) {
     views_ = names;
     currentView_ = current;

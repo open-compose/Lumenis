@@ -848,7 +848,9 @@ phase of their own. They are done in three steps:
   track settings and Enlarge/Reduce Track, is done), View Type and Timeline Views (p.592-604)
   (U1b2, docs/spec/timeline-views.md, is done; Show Adapters and Render Ranges move to Phase 6),
   Sync Breaks, Dupe Detection, Show Every Frame and the remaining Clip Text
-  items; Show Sequence Map (p.606), Find Black Hole/Flash Frame (p.645), Add
+  items (U1c1, docs/spec/sync-dupes.md, is done but for Group Clip Name,
+  Source Track Name and Show Every Frame, which wait for groups, sound
+  metadata and the Film track; U1c2 is Timeline Clip Notes); Show Sequence Map (p.606), Find Black Hole/Flash Frame (p.645), Add
   Filler at Start (p.462), Rename Track, Create Sequence Based on Selection
   (p.613); the Timeline settings still dimmed.
 * U2, the Composer, editing and trim: Load Filler (p.99), Sync Point

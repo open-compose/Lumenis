@@ -375,8 +375,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   User settings from the View Menu button, `Timeline::displayToJson`,
   `MainWindow::saveTimelineView`, TV1-TV8 on the More tab; Heads and Heads
   Tails with `Sequence::headsSpans`/`moveSpan`; test `tst_timeline_views`,
-  scenario `19-heads-move.json`), is done.
-  Next: the rest of the UI completion pass (U1c-e Timeline, U2 Composer and
+  scenario `19-heads-move.json`), is done. U1c1, Sync Breaks, Dupe
+  Detection and Clip Text (docs/spec/sync-dupes.md: `src/model/sync_dupes.*`,
+  `Timeline::clipText`, the Dupe Detection Handles setting; test
+  `tst_sync_dupes`), is done.
+  Next: the rest of the UI completion pass (U1c2 Timeline Clip Notes, U1d-e Timeline, U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.
 

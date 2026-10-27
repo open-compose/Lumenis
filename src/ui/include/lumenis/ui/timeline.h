@@ -200,6 +200,9 @@ public:
     // View Type (Fast menu, p.592, p.638-639): Heads shows each clip's head frame, Heads Tails its
     // head and tail frames, in place of the tracks.
     enum class ViewType { Standard, Heads, HeadsTails };
+    // Sync Breaks (p.491-492): sync-break numbers and match-frame signs on every track, video tracks
+    // only, audio tracks only, or none.
+    enum class SyncBreaks { All, Video, Audio, None };
     // Stores a changed or new sequence in its bin.
     using SequenceStore = std::function<bool(const QString& binId, const model::BinItem& item, bool isNew)>;
     // Makes a new, empty sequence for the first edit (p.463): its bin and
@@ -239,6 +242,8 @@ public:
         // Audio settings: Display Channel Order of 5.1 and 7.1 tracks' waveforms (p.1148): SMPTE, or
         // Pro Tools.
         bool proToolsChannelOrder = false;
+        // Timeline settings: Dupe Detection Handles, frames added at both ends of each clip (p.1220).
+        double dupeHandles = 0;
     };
     // Applies new settings at once: shows or hides the top toolbar and, with Only One Segment
     // Tool, turns Extract/Splice-in off if both segment tools were on.
@@ -425,6 +430,13 @@ public:
     bool showsMarkers(const QString& color) const { return !display_.hiddenMarkers.contains(color); }
     void setMarkersShown(const QString& color, bool shown);
     void setAllMarkersShown(bool shown);
+    // Fast menu > Sync Breaks and Dupe Detection (p.491-492, p.641).
+    void setSyncBreaks(SyncBreaks which);
+    void setDupeDetection(model::TrackKind kind, bool on);
+    // Whether sync breaks and match frames show on a track of this kind.
+    bool showsSyncBreaks(model::TrackKind kind) const;
+    // The Clip Text a segment of `track` shows (p.592-593), in the menu's order, joined with spaces.
+    QString clipText(const model::Track& track, const model::Segment& segment) const;
 
     // View Type > Heads or Heads Tails (p.638-639). "Heads and Tails view is disabled when you are
     // displaying material from the Source monitor" (p.603): showsHeads() is false then.
@@ -762,6 +774,18 @@ public:
         QString segmentSelectionColor;
         QString markIOColor;
         ViewType viewType = ViewType::Standard;
+        SyncBreaks syncBreaks = SyncBreaks::All;
+        // Dupe Detection on video, audio and data tracks (p.641).
+        bool dupeVideo = false;
+        bool dupeAudio = false;
+        bool dupeData = false;
+        // The rest of Clip Text (p.592): the source clip's full duration, the transition's duration,
+        // the tape or source file name, the media file names and the clip's resolution.
+        bool clipFullDurations = false;
+        bool clipTransDuration = false;
+        bool sourceNames = false;
+        bool mediaFullNames = false;
+        bool clipResolution = false;
         bool operator==(const Display&) const = default;
     };
     // The Fast menu's settings as a Timeline view keeps them (p.604), and back. Values missing from
