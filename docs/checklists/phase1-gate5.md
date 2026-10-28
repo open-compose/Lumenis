@@ -124,7 +124,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Align and Fill > Align Columns |  | p.268 | works | ☐ | | |
 | Align and Fill > Fill Sorted |  | p.251 | works | ☐ | | |
 | Align and Fill > Fill Window |  | p.251 | works | ☐ | | |
-| AutoSequence |  | p.500 | *later* | ☐ | | |
+| AutoSequence |  | p.500 | works | ☐ | | |
 | Choose Columns |  | p.124 | works | ☐ | | |
 | Hide Column |  | p.268 | works | ☐ | | |
 | Go To Capture Mode |  | p.146 | *later* | ☐ | | |
@@ -155,7 +155,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Audio > Change Sample Rate |  | p.731 | works | ☐ | | |
 | Audio > Split All Tracks |  | p.736 | works | ☐ | | |
 | Auto VO |  | p.754 | works | ☐ | | |
-| AutoSequence |  | p.499 | *later* | ☐ | | |
+| AutoSequence |  | p.499 | works | ☐ | | |
 | AutoSync |  | p.223 | *later* | ☐ | | |
 | Batch Capture |  | p.179 | *later* | ☐ | | |
 | Batch Import |  | p.1098 | *later* | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 123 of them working with a project open; the
+* 211 menu commands, 125 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.
