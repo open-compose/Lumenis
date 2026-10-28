@@ -852,16 +852,19 @@ phase of their own. They are done in three steps:
   Source Track Name and Show Every Frame, which wait for groups, sound
   metadata and the Film track; U1c2, Timeline Clip Notes, docs/spec/clip-notes.md, is done); Show Sequence Map (p.606; U1d2, docs/spec/sequence-map.md, is done), Find Black Hole/Flash Frame (p.645), Add
   Filler at Start (p.462), Rename Track, Create Sequence Based on Selection
-  (p.613) (U1d1, docs/spec/timeline-commands.md, is done); the Timeline settings still dimmed (U1e1, the Edit tab, docs/spec/timeline-settings.md, is done but for Segment Drag Snap, which waits for bin editing; U1e2, the Display tab, next).
+  (p.613) (U1d1, docs/spec/timeline-commands.md, is done); the Timeline settings still dimmed (U1e, docs/spec/timeline-settings.md, is done but for Segment Drag Snap, which waits for bin editing; Display During Segment Drag and Dynamic Play move to U2; Double-Click to Show Nesting and Highlight Suggested Render Areas to Phase 6).
 * U2, the Composer, editing and trim: Load Filler (p.99), Sync Point
   Overwrite (p.496), AutoSequence (p.499), Loop Selected Clips (p.393), the
   Timecode Window (p.389), Edit > Find (p.417); the Composer and Trim
   settings still dimmed (Single Mark Editing, Phantom Marks, trim loop,
-  Dual Image Play, J-K-L Trim ...).
+  Dual Image Play, J-K-L Trim ...); from the Timeline settings, Display During
+  Segment Drag (the four-frame display) and Dynamic Play Forward/Reverse
+  with Dynamic Play Acceleration and Slow start speed (p.401-402, p.1219).
 * U3, bins, media, windows and interface: Bin > Select's Offline Items,
   Media Relatives, Sources and Unreferenced Clips (p.266-267), Enlarge and
   Reduce HeadFrames (p.1016), Reveal File (p.360), Input > Link (p.328),
-  Media > Unmount (p.344), the bin attic and Bin settings; Close All But
+  Media > Unmount (p.344), the bin attic and Bin settings (with bin editing
+  into the Timeline, p.623-624, and the Timeline's Segment Drag Snap); Close All But
   Active (p.296), Bin Layout (p.93), Center Current/Send Current Home
   (p.601), Set Font (p.82), Help > Shortcuts (p.97), the Interface colour
   and font settings.

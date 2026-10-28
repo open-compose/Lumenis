@@ -17,6 +17,7 @@
 #include "lumenis/ui/timeline.h"
 
 #include <QDir>
+#include <QMouseEvent>
 #include <QPoint>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -221,6 +222,90 @@ private slots:
         QVERIFY(!f.timeline.isTrimMode());
         QCOMPARE(f.timeline.selection(), (QList<SegmentRef>{SegmentRef{QStringLiteral("V1"), 0}, SegmentRef{QStringLiteral("V1"), 50}}));
         QVERIFY(f.timeline.isSegmentTool(f.timeline.options().defaultSegmentTool));
+    }
+
+    // Timeline Text Color (p.1219): black text on the segments.
+    void textColor() {
+        Fixture f;
+        auto blacks = [&f] {
+            const QImage image = f.timeline.view()->grab().toImage();
+            const QPoint a = f.at(QStringLiteral("V1"), 0) + QPoint(2, 0);
+            int n = 0;
+            for (int x = a.x(); x < f.at(QStringLiteral("V1"), 45).x(); ++x) {
+                for (int y = a.y() - 8; y < a.y() + 8; ++y) n += qGray(image.pixel(x, y)) < 40 ? 1 : 0;
+            }
+            return n;
+        };
+        QCOMPARE(blacks(), 0);
+        f.set([](Timeline::Options& o) { o.textColor = Timeline::Options::TextColor::Black; });
+        QVERIFY(blacks() > 0);
+        // Both: white on the segment's dark red (offline clips).
+        f.set([](Timeline::Options& o) { o.textColor = Timeline::Options::TextColor::Both; });
+        QCOMPARE(blacks(), 0);
+    }
+
+    // Wireframe Dragging (p.1219): without it the dragged clip is drawn whole at its new place.
+    void wireframeDragging() {
+        Fixture f;
+        f.timeline.setSegmentTool(EditKind::Overwrite, true);
+        QWidget* view = f.timeline.view();
+        auto dragged = [&] {
+            const QPoint from = f.at(QStringLiteral("V1"), 10);
+            const QPoint to = f.at(QStringLiteral("V1"), 70);
+            auto send = [view](QEvent::Type type, const QPoint& pos, Qt::MouseButtons buttons) {
+                QMouseEvent e(type, QPointF(pos), view->mapToGlobal(QPointF(pos)), Qt::LeftButton, buttons, Qt::NoModifier);
+                QApplication::sendEvent(view, &e);
+            };
+            send(QEvent::MouseButtonPress, from, Qt::LeftButton);
+            send(QEvent::MouseMove, to, Qt::LeftButton);
+            const QImage image = view->grab().toImage();
+            send(QEvent::MouseMove, from, Qt::LeftButton); // back where it was: no move
+            send(QEvent::MouseButtonRelease, from, Qt::NoButton);
+            // Pixels of the video colour where the filler was (frames 63-73).
+            // The segment's colour: its clip's (offline red here) or its track's.
+            const Sequence seq = f.recorded();
+            const QString clipColor = f.timeline.segmentColor(seq.track(QStringLiteral("V1"))->segments.first());
+            const QRgb video = (clipColor.isEmpty() ? Timeline::trackColor(*seq.track(QStringLiteral("V1"))) : QColor(clipColor)).rgb();
+            int n = 0;
+            for (int x = f.at(QStringLiteral("V1"), 63).x(); x < f.at(QStringLiteral("V1"), 73).x(); ++x) {
+                n += image.pixel(x, f.at(QStringLiteral("V1"), 0).y()) == video ? 1 : 0;
+            }
+            return n;
+        };
+        QVERIFY(dragged() > 0);
+        f.set([](Timeline::Options& o) { o.wireframeDragging = true; });
+        QCOMPARE(dragged(), 0);
+        QCOMPARE(names(f.recorded(), QStringLiteral("V1")), (QStringList{"a", "-25", "b"}));
+    }
+
+    // Use Fast Scrub (p.1219, p.397): the IN to OUT marks are not drawn while scrubbing.
+    void fastScrub() {
+        Fixture f;
+        model::MonitorState& record = f.composer.state(MonitorId::Record);
+        record.setPosition(20);
+        record.markIn();
+        record.setPosition(40);
+        record.markOut();
+        QWidget* view = f.timeline.view();
+        auto scrubbing = [&] {
+            const QPoint at = f.at(QStringLiteral("V1"), 100);
+            QMouseEvent press(QEvent::MouseButtonPress, QPointF(at), view->mapToGlobal(QPointF(at)), Qt::LeftButton, Qt::LeftButton,
+                              Qt::NoModifier);
+            QApplication::sendEvent(view, &press);
+            const QImage image = view->grab().toImage();
+            QMouseEvent release(QEvent::MouseButtonRelease, QPointF(at), view->mapToGlobal(QPointF(at)), Qt::LeftButton, Qt::NoButton,
+                                Qt::NoModifier);
+            QApplication::sendEvent(view, &release);
+            return image;
+        };
+        const QImage marked = scrubbing();
+        f.set([](Timeline::Options& o) { o.fastScrub = true; });
+        const QImage fast = scrubbing();
+        const QPoint in = f.at(QStringLiteral("V1"), 30);
+        QVERIFY(marked.pixel(in) != fast.pixel(in));
+        // After the scrub the marks are back.
+        const QImage after = view->grab().toImage();
+        QCOMPARE(after.pixel(in), marked.pixel(in));
     }
 
     // Applying Effects opens Effect Editor (p.1220).

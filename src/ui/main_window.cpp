@@ -3565,6 +3565,12 @@ void MainWindow::applySettings() {
     o.dupeHandles = s.text(tl, QStringLiteral("dupeHandles")).toDouble();
     o.startFillerSeconds = s.value(tl, QStringLiteral("startFiller")).toInt();
     o.flashFrames = s.value(tl, QStringLiteral("flashFrames")).toInt(10);
+    const QString text = s.value(tl, QStringLiteral("timelineText")).toString();
+    o.textColor = text == QLatin1String("black")  ? Timeline::Options::TextColor::Black
+                  : text == QLatin1String("both") ? Timeline::Options::TextColor::Both
+                                                  : Timeline::Options::TextColor::White;
+    o.wireframeDragging = s.value(tl, QStringLiteral("wireframeDragging")).toBool();
+    o.fastScrub = s.value(tl, QStringLiteral("fastScrub")).toBool();
     o.autoPatching = s.value(tl, QStringLiteral("autoPatching")).toBool();
     o.autoMonitoring = s.value(tl, QStringLiteral("autoMonitoring")).toBool();
     o.segmentDragSyncLocks = s.value(tl, QStringLiteral("segmentDragSyncLocks")).toBool();

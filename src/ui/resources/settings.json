@@ -468,17 +468,22 @@
             {"key": "showToolbar", "type": "bool", "label": "Show Toolbar", "default": true, "page": 1218},
             {"key": "showMarkedRegion", "type": "bool", "label": "Show Marked Region", "default": true, "page": 1218},
             {"key": "showMarkedWaveforms", "type": "bool", "label": "Show Marked Waveforms", "default": false, "page": 1218},
+            {"key": "highlightRenderAreas", "type": "bool", "label": "Highlight Suggested Render Areas After Playback", "default": false, "page": 1218, "later": true},
             {"key": "doubleClickNesting", "type": "bool", "label": "Double-Click to Show Nesting", "default": false, "page": 1219, "later": true},
-            {"key": "fastScrub", "type": "bool", "label": "Use Fast Scrub", "default": false, "page": 1219, "later": true},
-            {"key": "wireframeDragging", "type": "bool", "label": "Wireframe Dragging", "default": false, "page": 1219, "later": true},
+            {"key": "fastScrub", "type": "bool", "label": "Use Fast Scrub", "default": false, "page": 1219},
+            {"key": "wireframeDragging", "type": "bool", "label": "Wireframe Dragging", "default": false, "page": 1219},
             {"key": "mapOverlay", "type": "bool", "label": "Open Sequence Map as overlay on Timeline", "default": true, "page": 1219},
             {"key": "mapClickHides", "type": "bool", "label": "Clicking Elsewhere Hides the Sequence Map", "default": true, "page": 1219},
             {"key": "mapWaveforms", "type": "bool", "label": "Display waveforms", "default": false, "page": 1219},
             {"key": "mapEffects", "type": "bool", "label": "Display effects", "default": true, "page": 1219},
+            {"key": "segmentDragDisplay", "type": "choice", "style": "radio", "label": "Display During Segment Drag", "default": "positionBar", "page": 1219, "later": true,
+             "choices": [{"value": "positionBar", "label": "Position Bar"}, {"value": "fourFrame", "label": "Show Four-Frame Display"}, {"value": "none", "label": "None"}]},
             {"key": "movementDuringPlay", "type": "choice", "style": "radio", "label": "Movement During Play", "default": "page", "page": 1219,
              "choices": [{"value": "page", "label": "Page"}, {"value": "scroll", "label": "Scroll"}, {"value": "none", "label": "None"}]},
-            {"key": "timelineText", "type": "choice", "style": "radio", "label": "Timeline Text Color", "default": "white", "page": 1219, "later": true,
-             "choices": [{"value": "white", "label": "White Timeline Text"}, {"value": "black", "label": "Black Timeline Text"}, {"value": "both", "label": "White and Black Timeline Text"}]}
+            {"key": "timelineText", "type": "choice", "style": "radio", "label": "Timeline Text Color", "default": "white", "page": 1219,
+             "choices": [{"value": "white", "label": "White Timeline Text"}, {"value": "black", "label": "Black Timeline Text"}, {"value": "both", "label": "White and Black Timeline Text"}]},
+            {"key": "dynamicPlayAcceleration", "type": "int", "label": "Dynamic Play Acceleration", "min": 1, "max": 12, "default": 3, "page": 1219, "later": true},
+            {"key": "slowStartSpeed", "type": "int", "label": "Slow start speed", "min": 0, "max": 12, "default": 3, "page": 1219, "later": true}
           ]
         },
         {

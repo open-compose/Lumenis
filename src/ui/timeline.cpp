@@ -136,6 +136,20 @@ model::Sequence recordSequenceOf(const Composer& composer) {
     return model::Sequence::fromItem(rec->item);
 }
 
+// Timeline Text Color (p.1219): white (the palette's BrightText), black, or "either white or black text
+// on unselected clips, depending upon the clip's segment color" (ours: black on light colours). Black
+// keeps BrightText's alpha, so text-free screenshots hide it too.
+QColor clipTextColor(const QColor& fill, const QColor& bright, Timeline::Options::TextColor choice) {
+    QColor black(Qt::black);
+    black.setAlpha(bright.alpha());
+    switch (choice) {
+    case Timeline::Options::TextColor::White: return bright;
+    case Timeline::Options::TextColor::Black: return black;
+    case Timeline::Options::TextColor::Both: return fill.lightness() > 150 ? black : bright;
+    }
+    return bright;
+}
+
 // A row's height for a track name; anything that is not a known track gets the TC1 height.
 int rowHeight(const QString& track) {
     if (track == QLatin1String("TC1")) return kTimecodeRow;
@@ -591,11 +605,14 @@ void TimelineView::paintEvent(QPaintEvent*) {
                         p.drawRect(box.adjusted(1, 1, -1, -1));
                     }
                     // Audio waveforms (p.677-680).
-                    if (t->kind == model::TrackKind::Audio && timeline_.showsWaveform(*t)) paintWaveform(p, box, *t, s, at);
+                    if (t->kind == model::TrackKind::Audio && timeline_.showsWaveform(*t) && !fastScrubbing()) {
+                        paintWaveform(p, box, *t, s, at);
+                    }
                     // Clip Frames (Fast menu, p.592): the start frame of each
                     // segment on video tracks, at its left end.
                     QRectF textArea = box;
-                    if (timeline_.display().clipFrames && t->kind == model::TrackKind::Video && xFor(at) >= x0 - 1) {
+                    if (timeline_.display().clipFrames && t->kind == model::TrackKind::Video && xFor(at) >= x0 - 1 &&
+                        !fastScrubbing()) {
                         const int h = std::max(r.height - 4, 8);
                         const QSize size(h * 16 / 9, h);
                         if (box.width() > size.width() + 4) {
@@ -618,7 +635,7 @@ void TimelineView::paintEvent(QPaintEvent*) {
                     // Clip text (Fast menu, p.592).
                     const QString clipText = textArea.width() > 12 ? timeline_.clipText(*t, s) : QString();
                     if (!clipText.isEmpty()) {
-                        p.setPen(bright);
+                        p.setPen(clipTextColor(segFill, bright, timeline_.options().textColor));
                         const QRectF textBox = textArea.adjusted(4, 0, -3, 0);
                         p.drawText(textBox, Qt::AlignVCenter | Qt::AlignLeft,
                                    p.fontMetrics().elidedText(clipText, Qt::ElideRight, static_cast<int>(textBox.width())));
@@ -652,7 +669,7 @@ void TimelineView::paintEvent(QPaintEvent*) {
     }
     // IN to OUT highlighting (p.638), on the selected tracks; Show Marked
     // Region (p.1218) turns it off.
-    if (timeline_.options().markedRegion && !state.isEmpty() && (state.in() || state.out())) {
+    if (timeline_.options().markedRegion && !state.isEmpty() && (state.in() || state.out()) && !fastScrubbing()) {
         const double x0 = xFor(state.markedStart());
         const double x1 = xFor(state.markedEnd() + 1);
         for (const Row& r : rowList) {
@@ -730,7 +747,7 @@ void TimelineView::paintEvent(QPaintEvent*) {
     }
 
     // Markers: ovals on their tracks, spanned markers along TC1 (p.413-415).
-    if (!state.isEmpty()) {
+    if (!state.isEmpty() && !fastScrubbing()) {
         p.save();
         p.setClipRect(tracksArea);
         p.setRenderHint(QPainter::Antialiasing);
@@ -827,8 +844,21 @@ void TimelineView::paintEvent(QPaintEvent*) {
                 top = tracks > 0 ? kRulerHeight : height() - kAudioRow;
                 h = kAudioRow;
             }
-            p.drawRect(QRectF(xFor(ref.start + frames), top + 2, xFor(ref.start + frames + seg->length) - xFor(ref.start + frames),
-                              h - 4));
+            const QRectF box(xFor(ref.start + frames), top + 2, xFor(ref.start + frames + seg->length) - xFor(ref.start + frames),
+                             h - 4);
+            if (!timeline_.options().wireframeDragging && !seg->isFiller()) {
+                // Without Wireframe Dragging (p.1219) "the clip" is seen moving: drawn whole, with its name.
+                const model::Track* t = seq.track(ref.track);
+                const QString clipColor = timeline_.segmentColor(*seg);
+                const QColor fill = !clipColor.isEmpty() ? QColor(clipColor) : t ? Timeline::trackColor(*t) : QColor(kVideoSegment);
+                p.fillRect(box, fill);
+                p.save();
+                p.setPen(clipTextColor(fill, palette().color(QPalette::BrightText), timeline_.options().textColor));
+                p.drawText(box.adjusted(4, 0, -3, 0), Qt::AlignVCenter | Qt::AlignLeft,
+                           p.fontMetrics().elidedText(seg->name, Qt::ElideRight, static_cast<int>(box.width()) - 7));
+                p.restore();
+            }
+            p.drawRect(box);
         }
         p.restore();
     }
@@ -1180,6 +1210,10 @@ void TimelineView::moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifi
     composer.stop();
     composer.setActiveMonitor(timeline_.shownMonitor());
     composer.moveTo(timeline_.shownMonitor(), frame);
+}
+
+bool TimelineView::fastScrubbing() const {
+    return scrubbing_ && timeline_.options().fastScrub;
 }
 
 bool TimelineView::selectable(const model::SegmentRef& ref) const {
@@ -1845,6 +1879,8 @@ void TimelineView::mouseReleaseEvent(QMouseEvent* event) {
         update();
         return;
     }
+    // Fast Scrub's hidden marks come back.
+    if (scrubbing_ && timeline_.options().fastScrub) update();
     scrubbing_ = false;
     if (patchFrom_.isEmpty()) return;
     const QString source = patchFrom_;

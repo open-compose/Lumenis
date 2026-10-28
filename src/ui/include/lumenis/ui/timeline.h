@@ -153,6 +153,9 @@ private:
     double exactFrameAt(double x) const;
     // `click`: the press that starts a scrub, which Position Bar Snap snaps (p.1220).
     void moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifiers, bool click = false);
+    // Use Fast Scrub (p.1219, p.397): while the position indicator is dragged, markers, the IN to OUT
+    // marks, clip frames and waveforms are not drawn.
+    bool fastScrubbing() const;
     // Whether a click or lasso may select the segment: filler only with Select Filler with Segment
     // Tools (p.616, p.1220).
     bool selectable(const model::SegmentRef& ref) const;
@@ -254,6 +257,11 @@ public:
         bool proToolsChannelOrder = false;
         // Timeline settings: Dupe Detection Handles, frames added at both ends of each clip (p.1220).
         double dupeHandles = 0;
+        // Timeline settings, Display tab (p.1218-1219; docs/spec/timeline-settings.md).
+        enum class TextColor { White, Black, Both };
+        TextColor textColor = TextColor::White; // Timeline Text Color
+        bool wireframeDragging = false;         // Wireframe Dragging: outlines only while dragging
+        bool fastScrub = false;                 // Use Fast Scrub: no marks or markers while scrubbing
         // Timeline settings, Edit tab (p.1220; docs/spec/timeline-settings.md).
         bool autoPatching = false;         // Auto-Patching: patches follow the enabled tracks
         bool autoMonitoring = true;        // Auto-Monitoring: "selected by default"

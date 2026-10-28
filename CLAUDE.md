@@ -393,8 +393,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Drag Sync Locks `moveSegments(..., keepSync)`, Position Bar Snap, Default
   Sync Locks On, Select Filler, Effect Editor on apply, TC/ruler disables
   Smart Tools, Segment Mode lassos; test `tst_timeline_settings`, scenario
-  `22-segment-drag-sync-locks.json`), is done.
-  Next: the rest of the UI completion pass (U1e2 Timeline Display tab, U2 Composer and
+  `22-segment-drag-sync-locks.json`), is done. U1e2, the Display tab (Timeline
+  Text Color, Wireframe Dragging, Use Fast Scrub), is done; so is U1. Display
+  During Segment Drag and Dynamic Play move to U2.
+  Next: the rest of the UI completion pass (U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.
 
