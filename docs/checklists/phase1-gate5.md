@@ -210,7 +210,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Render > Clear Renders In/Out |  | p.60 | *later* | ☐ | | |
 | Render > Clear Renders at Position |  | p.61 | *later* | ☐ | | |
 | Restore Default Patch |  | p.630 | works | ☐ | | |
-| Show Sequence Map |  | p.606 | *later* | ☐ | | |
+| Show Sequence Map |  | p.606 | works | ☐ | | |
 | Split All Tracks |  | p.736 | works | ☐ | | |
 | Create Unrendered Title Media |  | p.375 | *later* | ☐ | | |
 
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 117 of them working with a project open; the
+* 211 menu commands, 118 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.
