@@ -865,11 +865,11 @@ phase of their own. They are done in three steps:
   and the four-frame display, U2e4; Undo Only Record Events and Color
   Framing stay dimmed). So U2 is done.
 * U3, bins, media, windows and interface: Bin > Select's Offline Items,
-  Media Relatives, Sources and Unreferenced Clips (p.266-267), Enlarge and
-  Reduce HeadFrames (p.1016), Reveal File (p.360), Input > Link (p.328),
+  Media Relatives, Sources and Unreferenced Clips (p.266-267), Reveal File
+  (p.360) and Close All But Active (U3a, docs/spec/bin-select.md, is done;
+  Enlarge and Reduce HeadFrames, p.1016, are the NRCS Tool's), Input > Link (p.328),
   Media > Unmount (p.344), the bin attic and Bin settings (with bin editing
-  into the Timeline, p.623-624, and the Timeline's Segment Drag Snap); Close All But
-  Active (p.296), Bin Layout (p.93), Center Current/Send Current Home
+  into the Timeline, p.623-624, and the Timeline's Segment Drag Snap); Bin Layout (p.93), Center Current/Send Current Home
   (p.601), Set Font (p.82), Help > Shortcuts (p.97), the Interface colour
   and font settings.
 

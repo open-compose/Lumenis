@@ -21,6 +21,7 @@
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/auto_sequence.h"
+#include "lumenis/model/bin_relations.h"
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/ext/provider.h"
@@ -96,6 +97,9 @@
 #include <QStorageInfo>
 #include <QPixmap>
 #include <QProgressDialog>
+#include <QUrl>
+#include <QDesktopServices>
+#include <QProcess>
 #include <QTimer>
 #include <QToolButton>
 #include <QToolTip>
@@ -259,6 +263,106 @@ QJsonObject MainWindow::defaultLayout() {
 // Composer's resolvers find bin items and media frames, its play signals drive the sound, and the
 // Timeline stores its sequences in bins. The tools come after, in createTools().
 // The bin's clips in the view's order; AutoSequence itself is model::autoSequence.
+QString MainWindow::revealFile() {
+    BinView* view = binContainer_->activeView();
+    BinDocument* doc = binContainer_->activeDocument();
+    if (!view || !doc) return {};
+    // "Select the clip in a bin for which you want to find the media file" (p.360): the first selected
+    // clip with a media file that exists.
+    QString file;
+    for (const QString& id : view->selectedIds()) {
+        const model::BinItem* item = doc->bin().item(id);
+        const auto link = item ? media::linkOf(*item) : std::nullopt;
+        if (!link) continue;
+        for (const QString& f : link->files()) {
+            if (QFileInfo::exists(f)) {
+                file = f;
+                break;
+            }
+        }
+        if (!file.isEmpty()) break;
+    }
+    if (file.isEmpty()) return {};
+    if (revealHook_) {
+        revealHook_(file);
+        return file;
+    }
+    // "opens Windows Explorer or the folder (macOS), and highlights related media files" (p.360).
+#if defined(Q_OS_WIN)
+    QProcess::startDetached(QStringLiteral("explorer.exe"), {QStringLiteral("/select,") + QDir::toNativeSeparators(file)});
+#elif defined(Q_OS_MACOS)
+    QProcess::startDetached(QStringLiteral("open"), {QStringLiteral("-R"), file});
+#else
+    QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(file).absolutePath()));
+#endif
+    return file;
+}
+
+int MainWindow::binSelect(const QString& what) {
+    BinContainer& bins = *binContainer_;
+    if (what == QLatin1String("offline_items")) {
+        // "The bin highlights all items that are missing media files" (p.266): clips whose media is
+        // missing, unlinked or never there, and sequences that use such a clip (ours).
+        BinDocument* doc = bins.activeDocument();
+        BinView* view = doc ? bins.viewFor(doc) : nullptr;
+        if (!view) return 0;
+        auto clipOffline = [](const model::BinItem& clip) {
+            if (clip.kind != model::BinItemKind::MasterClip && clip.kind != model::BinItemKind::Subclip &&
+                clip.kind != model::BinItemKind::AudioClip) {
+                return false;
+            }
+            const auto link = media::linkOf(clip);
+            if (!link || link->unlinked) return true;
+            for (const QString& file : link->files()) {
+                if (!QFileInfo::exists(file)) return true;
+            }
+            return false;
+        };
+        QStringList ids;
+        for (const model::BinItem& item : doc->bin().items) {
+            bool offline = clipOffline(item);
+            if (item.kind == model::BinItemKind::Sequence) {
+                const model::Sequence seq = model::Sequence::fromItem(item);
+                for (const QString& name : seq.trackNames()) {
+                    for (const model::Segment& s : seq.track(name)->segments) {
+                        if (offline || s.isFiller()) continue;
+                        const auto clip = composer_->resolve(s.binId.isEmpty() ? doc->nodeId() : s.binId, s.clipId);
+                        offline = clip && clipOffline(*clip);
+                    }
+                }
+            }
+            if (offline) ids << item.id;
+        }
+        view->selectIds(ids);
+        return static_cast<int>(ids.size());
+    }
+    QList<model::OpenBin> open;
+    model::BinSelection selected;
+    for (BinDocument* doc : bins.openDocuments()) {
+        open.append({doc->nodeId(), &doc->bin()});
+        if (BinView* v = bins.viewFor(doc)) selected.insert(doc->nodeId(), v->selectedIds());
+    }
+    model::BinSelection result;
+    if (what == QLatin1String("media_relatives")) {
+        result = model::mediaRelatives(open, selected);
+    } else if (what == QLatin1String("sources")) {
+        result = model::sources(open, selected);
+    } else if (what == QLatin1String("unreferenced_clips")) {
+        result = model::unreferencedClips(open);
+    } else {
+        return 0;
+    }
+    // "The system highlights all related objects in all open bins" (p.267): each open bin's selection
+    // becomes what was found in it.
+    int count = 0;
+    for (BinDocument* doc : bins.openDocuments()) {
+        const QStringList ids = result.value(doc->nodeId());
+        if (BinView* v = bins.viewFor(doc)) v->selectIds(ids);
+        count += static_cast<int>(ids.size());
+    }
+    return count;
+}
+
 QString MainWindow::autoSequence(bool noFiller, QString* error) {
     auto fail = [error](const QString& text) {
         if (error) *error = text;
@@ -717,6 +821,14 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
     sidebarOnly->setChecked(bins->isSidebarOnly());
     handle("bin.show_sidebar_only", [bins, sidebarOnly] { bins->setSidebarOnly(sidebarOnly->isChecked()); });
     handle("windows.close_all_bins_but_active", [bins] { bins->closeAllBinsButActive(); });
+    // "To close all but active bins, scripts, and pop-up monitors" (p.296): there are no scripts or
+    // pop-up monitors yet, so it closes the other bins.
+    handle("windows.close_all_but_active", [bins] { bins->closeAllBinsButActive(); });
+    handle("file.reveal_file", [this] {
+        if (revealFile().isEmpty()) {
+            QMessageBox::information(this, tr("Reveal File"), tr("Select a clip whose media file exists in a bin."));
+        }
+    });
     // New Sequence: in the active bin, or in a bin chosen in the Select dialog.
     handle("timeline.new.sequence", [this, bins] {
         QString target;
@@ -3919,6 +4031,18 @@ void MainWindow::installPanelHandlers() {
             if (autoSequence(QApplication::keyboardModifiers() & Qt::AltModifier, &error).isEmpty() && !error.isEmpty()) {
                 QMessageBox::warning(this, tr("AutoSequence"), error);
             }
+        });
+    }
+    for (const char* what : {"offline_items", "media_relatives", "sources", "unreferenced_clips"}) {
+        const QString kind = QString::fromLatin1(what);
+        handle(("bin.select." + kind).toLatin1().constData(), [this, kind] {
+            // "A message informs you that unreferenced clips highlight in open bins only (items in
+            // closed bins do not display)" (p.267).
+            if (kind == QLatin1String("unreferenced_clips")) {
+                QMessageBox::information(this, tr("Select Unreferenced Clips"),
+                                         tr("Unreferenced clips are selected in open bins only; items in closed bins are not shown."));
+            }
+            binSelect(kind);
         });
     }
     handle("edit.find_again", [this] {

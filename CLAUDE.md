@@ -418,7 +418,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   under "middle" in the button layout; test `tst_composer_display`), is done.
   U2e4, Dynamic Play Forward/Reverse (`Composer::playDynamic`, fractional
   speeds) and Display During Segment Drag (`Timeline::showSegmentDrag`,
-  `Composer::setDragDisplay`, the four-frame display), is done.
+  `Composer::setDragDisplay`, the four-frame display), is done. So U2 is.
+  U3a, Bin > Select's Offline Items, Media Relatives, Sources and
+  Unreferenced Clips, Reveal File and Close All But Active
+  (docs/spec/bin-select.md: `src/model/bin_relations.*`, `MainWindow::binSelect`,
+  `revealFile`; test `tst_bin_select`), is done.
   Next: the rest of the UI completion pass (U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.

@@ -155,6 +155,15 @@ public:
     // "<tape or source file>.NN" and loaded into the Record monitor. Returns the new item's id, or empty
     // with *error set.
     QString autoSequence(bool noFiller, QString* error = nullptr);
+    // Bin > Select (p.266-267; docs/spec/bin-select.md): "offline_items" in the active bin;
+    // "media_relatives" and "sources" of the selected objects, and "unreferenced_clips", in all open
+    // bins. Selects them and returns how many were selected.
+    int binSelect(const QString& what);
+    // File > Reveal File (p.360): the media file of the clip selected in the active bin, shown in the
+    // system's file browser (Explorer or the Finder select it; elsewhere its folder opens). Returns the
+    // file, or empty when the clip has none that exists. The hook replaces the file browser in tests.
+    QString revealFile();
+    void setRevealHook(std::function<void(const QString& file)> hook) { revealHook_ = std::move(hook); }
     // The Find window, once Edit > Find has opened it (p.417, p.429).
     FindWindow* findWindow() const { return findWindow_; }
     AudioEqTool& audioEq() const { return *audioEq_; }
@@ -540,6 +549,7 @@ private:
     std::function<bool(ConsolidateDialog&)> consolidateHook_;
     std::function<bool(AudioMixdownDialog&)> mixdownHook_;
     std::function<int(const QStringList&)> binChoiceHook_;
+    std::function<void(const QString&)> revealHook_;
     std::function<bool(ModifyDialog&)> modifyHook_;
     ClipAudioHooks clipAudioHooks_;
     std::function<bool(MultiMixDialog&)> multiMixHook_;

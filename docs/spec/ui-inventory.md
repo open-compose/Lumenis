@@ -72,6 +72,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Timeline and Markers tabs list, and Ctrl+G as a keyboard-only Find Again command.
 * AutoSequence (docs/spec/autosequence.md): which of two related clips is kept, the track layout of
   Camera groups, and the name when there is no Tape or Source File.
+* Bin > Select (docs/spec/bin-select.md): what counts as a reference (subclips through their Clip
+  source, sequences by segment MobID or clip id), sequences counted as offline, the Unreferenced Clips
+  message's wording, and Reveal File opening only the folder on Linux.
 * The Composer Window tab (docs/spec/composer-display.md): the second row's layout and Fast Menu,
   the Flow Data height, the tick intervals, and the middle panel's six buttons; Dynamic Play's other
   direction, top speed and silence between whole speeds; the Position Bar frame and the outer frames
