@@ -237,6 +237,10 @@ public:
         bool ignoreTrackSelectors = false;
         // Trim settings (p.1223).
         bool trimAutoFocus = false;
+        // Timeline settings, Edit tab (p.1220): Start Filler Duration (seconds, ours) and Find Flash
+        // Frames Shorter Than (frames).
+        int startFillerSeconds = 2;
+        int flashFrames = 10;
         // Timeline settings: Show Marked Waveforms, waveforms only between the marks (p.1218).
         bool markedWaveforms = false;
         // Audio settings: Display Channel Order of 5.1 and 7.1 tracks' waveforms (p.1148): SMPTE, or
@@ -359,6 +363,24 @@ public:
     bool addClipNote(const std::optional<model::SegmentRef>& segment = {});
     using NoteAsk = std::function<std::optional<QString>(const QString& current)>;
     void setNoteAsk(NoteAsk ask) { noteAsk_ = std::move(ask); }
+
+    // Timeline > Add Filler at Start (p.462): Start Filler Duration's filler before everything, an
+    // undo step. Refused for an empty sequence or a locked track.
+    bool addFillerAtStart();
+    // Timeline > Find Black Hole (false) and Find Flash Frame (true) (p.644-645): moves the Record
+    // position to the next one after it on the selected tracks; false, with a message, if there is
+    // none or no track is selected.
+    bool findGap(bool flash);
+    // Rename Track (p.635): "The Comments window opens. Type a new name for the track. Click OK"; its
+    // Remove button gives the default name back. Kept with the sequence, without an undo step (ours,
+    // as for locks). setTrackName() does it without the window; an empty name removes it.
+    void renameTrack(const QString& track);
+    void setTrackName(const QString& track, const QString& name);
+    // Tests answer the Comments window through this: the name, "" for Remove, nothing for Cancel.
+    using RenameAsk = std::function<std::optional<QString>(const QString& current)>;
+    void setRenameAsk(RenameAsk ask) { renameAsk_ = std::move(ask); }
+    // Create Sequence Based on Selection (p.613-614): emits sequenceFromSelectionRequested().
+    bool createSequenceFromSelection();
     // The facts about a segment's clip the colours depend on (model::ClipFacts); nothing when the clip
     // cannot be found. Whether media is online is checked at most every two seconds per clip.
     std::optional<model::ClipFacts> clipFacts(const model::Segment& segment) const;
@@ -850,6 +872,10 @@ signals:
     // Before Split Track to Mono changes a sequence: a copy of it as it was belongs in its bin
     // ("[sequence_name].Copy.[number]", p.735); MainWindow makes it.
     void sequenceCopyRequested(const QString& binId, const model::BinItem& sequence);
+    // Create Sequence Based on Selection (p.613-614): the new sequence, to go into a bin MainWindow
+    // chooses ("A Select a bin dialog box opens (if you have more than one bin open)"); `binId` is the
+    // record sequence's.
+    void sequenceFromSelectionRequested(const QString& binId, const model::BinItem& sequence);
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -929,6 +955,7 @@ private:
     QStringList views_;
     QString currentView_;
     NoteAsk noteAsk_;
+    RenameAsk renameAsk_;
     // Changes `tracks` of the record sequence and keeps them without an undo step (per track
     // settings, p.677). The tracks of the Audio Data menu for a click on `track`'s Track Control
     // button: it alone, or with `all` (Alt+click) every audio track.

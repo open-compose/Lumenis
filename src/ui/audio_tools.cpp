@@ -721,6 +721,19 @@ void AudioMixer::refresh() {
         }
     }
     if (tracks != order_) rebuild(tracks);
+    // "When you rename an audio track, the corresponding name along with the track number appears in
+    // the Audio Mixer tool" (p.635).
+    if (rec && rec->item.kind == model::BinItemKind::Sequence) {
+        const model::Sequence seq = model::Sequence::fromItem(rec->item);
+        for (const QString& t : std::as_const(order_)) {
+            const model::Track* track = seq.track(t);
+            if (MixerStrip* s = strips_.value(t); s && track) {
+                const QString text = track->customName.isEmpty() ? t : t + QLatin1Char(' ') + track->customName;
+                s->trackButton()->setText(text);
+                s->trackButton()->setToolTip(text);
+            }
+        }
+    }
     sequenceMix_->setText(sequenceMixName(sequenceMixFormat()));
     sequenceMix_->setEnabled(rec && rec->item.kind == model::BinItemKind::Sequence);
     syncValues();

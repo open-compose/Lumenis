@@ -381,8 +381,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_sync_dupes`), is done. U1c2, Timeline Clip Notes
   (docs/spec/clip-notes.md: `Segment::note`, `Timeline::setClipNote`, the
   window `src/ui/clip_notes.*`; test `tst_clip_notes`, scenario
-  `20-clip-notes.json`), is done.
-  Next: the rest of the UI completion pass (U1d-e Timeline, U2 Composer and
+  `20-clip-notes.json`), is done. U1d1, Add Filler at Start, Find Black
+  Hole/Flash Frame, Rename Track and Create Sequence Based on Selection
+  (docs/spec/timeline-commands.md: `Sequence::addFillerAtStart`,
+  `findBlackHole`, `findFlashFrame`, `selectionCopy`, `Track::customName`;
+  test `tst_timeline_commands`, scenario `21-filler-at-start.json`), is done.
+  Next: the rest of the UI completion pass (U1d2 Sequence Map, U1e Timeline settings, U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.
 

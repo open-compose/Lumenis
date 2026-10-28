@@ -1,0 +1,14 @@
+[
+  {
+    "name": "Add Filler at Start puts the Start Filler Duration's filler (2 seconds by default) before every track's material as one undo step",
+    "guide": "p.462, p.1220",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 10], ["B", 0, 10]], "A1": [["A", 0, 10]]}},
+    "steps": [
+      {"command": "timeline.add_filler_at_start"},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"}
+    ],
+    "expect": {"V1": [["filler", 50], ["A", 0, 10], ["B", 0, 10]], "A1": [["filler", 50], ["A", 0, 10]]}
+  }
+]

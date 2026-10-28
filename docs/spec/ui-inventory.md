@@ -54,6 +54,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   dialog's defaults (Offline and Source on, the others off), the colours
   other than offline red and proxy yellow, one Mixed Rates colour per rate
   for ten rates, the layout, and Default Colors also resetting Linked Clips.
+* Start Filler Duration in seconds, 2 by default; the name of a sequence made
+  by Create Sequence Based on Selection (docs/spec/timeline-commands.md).
 * Sync breaks and Dupe Detection (docs/spec/sync-dupes.md): what counts as
   a sync partner and the sign of the offset; the Sync Breaks submenu's item
   names; dupes per clip and source track; the dupe colours after orange and
@@ -1168,7 +1170,9 @@ These are recorded now so they are not entered from memory later.
     the More tab's TV1-TV8: docs/spec/timeline-views.md. Sync Breaks, Dupe
     Detection and the Clip Text items: docs/spec/sync-dupes.md. Timeline Clip
     Notes (Add Timeline Clip Note, Tools > Timeline Clip Notes, p.483-486):
-    docs/spec/clip-notes.md.
+    docs/spec/clip-notes.md. Add Filler at Start, Find Black Hole/Flash
+    Frame, Rename Track and Create Sequence Based on Selection:
+    docs/spec/timeline-commands.md.
   * The scale bar zooms around the position indicator; zoomed in, the
     indicator gets a dotted "shadow" at the end of the frame. Zoom In:
     drag over the area. Focus: 90 pixels per second around the position

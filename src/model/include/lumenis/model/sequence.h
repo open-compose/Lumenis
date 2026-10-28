@@ -284,6 +284,9 @@ struct Track {
     // Enlarge Track and Reduce Track (Ctrl+L, Ctrl+K, p.594): steps from the track's default
     // height, kTrackHeightSteps either way (ours).
     int heightStep = 0;
+    // Rename Track (p.635): the track's own name, shown on its track button and in the Audio Mixer
+    // with its number; empty for the default (V1, A2 ...). name() stays the track's identity.
+    QString customName{};
 
     QString name() const { return trackName(kind, number); }
     // The sum of the segment lengths: the frame after the track's last one.
@@ -295,6 +298,8 @@ struct Track {
     QList<std::int64_t> editPoints() const;
     bool operator==(const Track&) const = default;
 };
+
+struct SegmentRef;
 
 // A sequence's tracks and segments (guide ch. 15 and 19). Stored in the
 // sequence's bin item.
@@ -366,6 +371,21 @@ public:
 
     // Deletes a track (p.636).
     bool removeTrack(const QString& name);
+
+    // Timeline > Add Filler at Start (p.462): `length` frames of filler before everything on every
+    // track. False for an empty sequence ("You cannot add filler ... to an empty sequence") or a
+    // length of 0, and when a track is locked.
+    bool addFillerAtStart(std::int64_t length);
+    // Timeline > Find Black Hole and Find Flash Frame (p.644-645): the first frame after `after` on
+    // `tracks` where a run of filler starts (within the sequence's duration), or where a clip shorter
+    // than `shorterThan` frames starts; nothing if there is none.
+    std::optional<std::int64_t> findBlackHole(const QStringList& tracks, std::int64_t after) const;
+    std::optional<std::int64_t> findFlashFrame(const QStringList& tracks, std::int64_t after, std::int64_t shorterThan) const;
+    // Create Sequence Based on Selection (p.613-614): a copy keeping only `segments`, the others
+    // becoming filler. "Tracks that did not have something selected in the original sequence are not
+    // included ... If there was filler at the end of the original sequence, it is removed"; "Track
+    // attributes such as custom names, mute/solo states, and waveforms are maintained".
+    Sequence selectionCopy(const QList<SegmentRef>& segments) const;
 
     // Heads and Heads Tails views (p.638-639): the sequence cut into clips at every edit point of
     // `tracks` ("the system cuts all tracks to the same edit point"), as [start, end) pairs in order.

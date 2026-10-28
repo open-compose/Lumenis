@@ -1112,6 +1112,37 @@ void MainWindow::createTools() {
         if (!doc || doc->isReadOnly()) return;
         doc->addItem(model::duplicateItem(doc->bin(), sequence, QDateTime::currentDateTimeUtc()));
     });
+    // Create Sequence Based on Selection (p.614): "A Select a bin dialog box opens (if you have more
+    // than one bin open) ... A new sequence is placed in the selected bin, highlighted and ready to be
+    // renamed." Ours: the record sequence's bin is offered first; the name is "<sequence>.Copy.NN".
+    connect(timeline_, &Timeline::sequenceFromSelectionRequested, this, [this](const QString& binId, const model::BinItem& sequence) {
+        QList<BinDocument*> open;
+        for (BinDocument* doc : binContainer_->openDocuments()) {
+            if (!doc->isReadOnly()) open << doc;
+        }
+        if (open.isEmpty()) return;
+        std::stable_sort(open.begin(), open.end(), [&binId](BinDocument* a, BinDocument* b) {
+            return a->nodeId() == binId && b->nodeId() != binId;
+        });
+        BinDocument* target = open.first();
+        if (open.size() > 1) {
+            QStringList names;
+            for (BinDocument* doc : open) names << doc->name();
+            int index = -1;
+            if (binChoiceHook_) {
+                index = binChoiceHook_(names);
+            } else {
+                bool ok = false;
+                const QString chosen = QInputDialog::getItem(this, tr("Select a Bin"), tr("Bin:"), names, 0, false, &ok);
+                if (ok) index = static_cast<int>(names.indexOf(chosen));
+            }
+            if (index < 0 || index >= open.size()) return;
+            target = open.at(index);
+        }
+        model::BinItem item = model::duplicateItem(target->bin(), sequence, QDateTime::currentDateTimeUtc());
+        target->addItem(item);
+        if (BinView* view = binContainer_->viewFor(target)) view->selectIds({item.id});
+    });
     connect(timeline_, &Timeline::trackEffectToolRequested, this, [this](const QString& track) {
         audioTrackEffect_->select(track, 0);
         showTool(QStringLiteral("AudioTrackEffect"));
@@ -3526,6 +3557,8 @@ void MainWindow::applySettings() {
     o.markedRegion = s.flag(tl, QStringLiteral("showMarkedRegion"));
     o.markedWaveforms = s.flag(tl, QStringLiteral("showMarkedWaveforms"));
     o.dupeHandles = s.text(tl, QStringLiteral("dupeHandles")).toDouble();
+    o.startFillerSeconds = s.value(tl, QStringLiteral("startFiller")).toInt();
+    o.flashFrames = s.value(tl, QStringLiteral("flashFrames")).toInt(10);
     o.proToolsChannelOrder = s.text(QStringLiteral("Audio"), QStringLiteral("channelOrder")) == QLatin1String("protools");
     const QString movement = s.text(tl, QStringLiteral("movementDuringPlay"));
     o.movement = movement == QLatin1String("scroll") ? Timeline::Options::Movement::Scroll

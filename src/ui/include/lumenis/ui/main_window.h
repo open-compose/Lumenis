@@ -271,6 +271,9 @@ public:
     // dialog (tests; true: OK).
     void audioMixdown();
     void setMixdownHook(std::function<bool(AudioMixdownDialog&)> hook) { mixdownHook_ = std::move(hook); }
+    // Create Sequence Based on Selection's Select a Bin dialog (p.614): tests answer it here with the
+    // index of the chosen bin name, or -1 for Cancel.
+    void setBinChoiceHook(std::function<int(const QStringList& bins)> hook) { binChoiceHook_ = std::move(hook); }
     // Clip > Modify > Modify Clip (p.279-281) on the active bin's selection: the Modify dialog, and
     // the clips it changes stored. `hook` stands in for the dialog's exec() in tests. Returns how many
     // clips changed.
@@ -523,6 +526,7 @@ private:
     std::function<void(LinkedMediaDialog&)> linkedMediaHook_;
     std::function<bool(ConsolidateDialog&)> consolidateHook_;
     std::function<bool(AudioMixdownDialog&)> mixdownHook_;
+    std::function<int(const QStringList&)> binChoiceHook_;
     std::function<bool(ModifyDialog&)> modifyHook_;
     ClipAudioHooks clipAudioHooks_;
     std::function<bool(MultiMixDialog&)> multiMixHook_;

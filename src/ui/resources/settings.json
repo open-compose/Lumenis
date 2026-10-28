@@ -480,8 +480,8 @@
         {
           "name": "Edit",
           "options": [
-            {"key": "startFiller", "type": "int", "label": "Start Filler Duration:", "min": 0, "max": 999, "default": 0, "page": 1220, "later": true},
-            {"key": "flashFrames", "type": "int", "label": "Find Flash Frames Shorter Than", "suffix": "frames", "min": 1, "max": 999, "default": 10, "page": 1220, "later": true},
+            {"key": "startFiller", "type": "int", "label": "Start Filler Duration:", "suffix": "seconds", "min": 0, "max": 999, "default": 2, "page": 1220},
+            {"key": "flashFrames", "type": "int", "label": "Find Flash Frames Shorter Than", "suffix": "frames", "min": 1, "max": 999, "default": 10, "page": 1220},
             {"key": "autoPatching", "type": "bool", "label": "Auto-Patching", "default": false, "page": 1220, "later": true},
             {"key": "autoMonitoring", "type": "bool", "label": "Auto-Monitoring", "default": true, "page": 1220, "later": true},
             {"key": "segmentDragSyncLocks", "type": "bool", "label": "Segment Drag Sync Locks", "default": false, "page": 1220, "later": true},

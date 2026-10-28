@@ -363,6 +363,7 @@ QJsonObject Sequence::toJson() const {
         if (!t.color.isEmpty()) display.insert(QStringLiteral("color"), t.color);
         if (!display.isEmpty()) o.insert(QStringLiteral("display"), display);
         if (t.inactive) o.insert(QStringLiteral("inactive"), true);
+        if (!t.customName.isEmpty()) o.insert(QStringLiteral("customName"), t.customName);
         if (t.kind == TrackKind::Audio && t.format != AudioFormat::Mono) {
             for (const auto& [format, text] : kFormats) {
                 if (format == t.format) o.insert(QStringLiteral("format"), QString::fromLatin1(text));
@@ -427,6 +428,7 @@ Sequence Sequence::fromJson(const QJsonObject& o) {
         static const QRegularExpression hex(QStringLiteral("^#[0-9a-fA-F]{6}$"));
         if (!hex.match(t.color).hasMatch()) t.color.clear();
         t.inactive = audio && to.value(QStringLiteral("inactive")).toBool();
+        t.customName = to.value(QStringLiteral("customName")).toString().trimmed();
         for (const QJsonValue& sv : to.value(QStringLiteral("segments")).toArray()) {
             t.segments << segmentFromJson(sv.toObject());
         }
@@ -946,6 +948,71 @@ bool Sequence::removeTrack(const QString& name) {
 }
 
 // An Add Edit in filler is flagged on the second part, or tidy() would merge it straight back.
+bool Sequence::addFillerAtStart(std::int64_t length) {
+    if (length <= 0 || duration() == 0) return false;
+    for (const Track& t : tracks_) {
+        if (t.locked) return false;
+    }
+    for (Track& t : tracks_) {
+        if (t.segments.isEmpty()) continue; // an empty track stays empty
+        splice(t.name(), 0, {Segment::filler(length)});
+    }
+    return true;
+}
+
+std::optional<std::int64_t> Sequence::findBlackHole(const QStringList& tracks, std::int64_t after) const {
+    std::optional<std::int64_t> best;
+    const std::int64_t end = duration();
+    for (const QString& name : tracks) {
+        const Track* t = track(name);
+        if (!t) continue;
+        std::int64_t at = 0;
+        for (const Segment& s : t->segments) {
+            if (s.isFiller() && at > after && at < end && (!best || at < *best)) best = at;
+            at += s.length;
+        }
+        // A track that ends before the sequence does leaves a black hole after its end.
+        if (at > after && at < end && (!best || at < *best)) best = at;
+    }
+    return best;
+}
+
+std::optional<std::int64_t> Sequence::findFlashFrame(const QStringList& tracks, std::int64_t after, std::int64_t shorterThan) const {
+    std::optional<std::int64_t> best;
+    for (const QString& name : tracks) {
+        const Track* t = track(name);
+        if (!t) continue;
+        std::int64_t at = 0;
+        for (const Segment& s : t->segments) {
+            if (!s.isFiller() && s.length < shorterThan && at > after && (!best || at < *best)) best = at;
+            at += s.length;
+        }
+    }
+    return best;
+}
+
+Sequence Sequence::selectionCopy(const QList<SegmentRef>& segments) const {
+    Sequence out = *this;
+    out.tracks_.clear();
+    for (const Track& t : tracks_) {
+        Track copy = t;
+        copy.segments.clear();
+        bool any = false;
+        std::int64_t at = 0;
+        for (const Segment& s : t.segments) {
+            const bool chosen = !s.isFiller() && segments.contains(SegmentRef{t.name(), at});
+            copy.segments << (chosen ? s : Segment::filler(s.length));
+            any = any || chosen;
+            at += s.length;
+        }
+        if (!any) continue;
+        while (!copy.segments.isEmpty() && copy.segments.constLast().isFiller()) copy.segments.removeLast();
+        tidy(copy);
+        out.tracks_ << copy;
+    }
+    return out;
+}
+
 QList<std::pair<std::int64_t, std::int64_t>> Sequence::headsSpans(const QStringList& tracks) const {
     QList<std::pair<std::int64_t, std::int64_t>> out;
     const QList<std::int64_t> points = editPoints(tracks);
@@ -1037,6 +1104,7 @@ Sequence Sequence::excerpt(const QStringList& names, std::int64_t start, std::in
         copy.showWaveform = copy.showClipVolume = copy.showVolume = copy.showPan = false;
         copy.color.clear();
         copy.heightStep = 0;
+        copy.customName.clear();
         copy.segments = material(t.name(), start, length);
         tidy(copy);
         bool empty = true;

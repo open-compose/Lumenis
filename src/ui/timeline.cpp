@@ -20,6 +20,7 @@
 #include <QContextMenuEvent>
 #include <QDateTime>
 #include <QDialog>
+#include <QDialogButtonBox>
 #include <QDropEvent>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -889,8 +890,11 @@ void TimelineView::paintEvent(QPaintEvent*) {
             if (r.exists && !sourceView) {
                 const auto ref = model::parseTrackName(r.track);
                 const bool cannotTake = dragKind && (!ref || ref->kind != *dragKind || ref->kind == model::TrackKind::Data);
-                button(recordButton(r), r.track, patch.isRecordSelected(r.track), cannotTake, false);
                 const model::Track* t = seq.track(r.track);
+                // A renamed track shows its own name (p.635).
+                const QString label = t && !t->customName.isEmpty() ? t->customName : r.track;
+                button(recordButton(r), p.fontMetrics().elidedText(label, Qt::ElideRight, kRecordWidth - 2),
+                       patch.isRecordSelected(r.track), cannotTake, false);
                 if (t && t->locked) {
                     // A padlock on the track button (p.633).
                     const QRect b = recordButton(r);
@@ -2565,6 +2569,9 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("clip.split_all_tracks"),
         QStringLiteral("clip.audio.split_all_tracks"),
         QStringLiteral("timeline.restore_default_patch"),
+        QStringLiteral("timeline.add_filler_at_start"),
+        QStringLiteral("timeline.find_black_hole"),
+        QStringLiteral("timeline.find_flash_frame"),
         QStringLiteral("timeline.remove_match_frame_edits"),
         QStringLiteral("edit.copy_to_clipboard"),
         QStringLiteral("edit.clipboard_contents"),
@@ -2621,6 +2628,9 @@ bool Timeline::perform(const QString& id) {
         // "To enlarge the size of the waveform plot image without enlarging its track" (p.678).
         return zoomWaveform(id == QLatin1String("timeline.enlarge_waveform") ? 1 : -1);
     }
+    if (id == QLatin1String("timeline.add_filler_at_start")) return addFillerAtStart();
+    if (id == QLatin1String("timeline.find_black_hole")) return findGap(false);
+    if (id == QLatin1String("timeline.find_flash_frame")) return findGap(true);
     if (id == QLatin1String("play.audio_loop_play")) {
         toggleAudioLoopPlay();
     } else if (id == QLatin1String("fx.remove_effect")) {
@@ -3480,7 +3490,10 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
             composer_.moveTo(MonitorId::Source, m->frame);
             source.markIn();
         });
-        menu->addAction(tr("Rename Track"))->setEnabled(false);
+        // Rename Track (p.635).
+        QAction* rename = menu->addAction(tr("Rename Track"));
+        rename->setEnabled(t && !showSource_);
+        connect(rename, &QAction::triggered, this, [this, track] { renameTrack(track); });
         if (t && t->kind == model::TrackKind::Audio) {
             // Split Track to Mono (p.735), for multichannel tracks.
             QAction* split = menu->addAction(tr("Split Track to Mono"));
@@ -3533,7 +3546,12 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
     }
     note->setEnabled(!showSource_ && onClip);
     connect(note, &QAction::triggered, this, [this, segment] { addClipNote(segment); });
-    menu->addAction(tr("Create Sequence Based on Selection"))->setEnabled(false);
+    // "Right-click and choose Create Sequence Based on Selection" (p.614).
+    QAction* fromSelection = menu->addAction(tr("Create Sequence Based on Selection"));
+    fromSelection->setEnabled(!selection_.isEmpty() && !showSource_);
+    connect(fromSelection, &QAction::triggered, this, &Timeline::createSequenceFromSelection);
+    // "Right-click in the Timeline, and select Add Filler at Start" (p.462).
+    run(menu, tr("Add Filler at Start"), QStringLiteral("timeline.add_filler_at_start"));
     return menu;
 }
 
@@ -4767,6 +4785,88 @@ void Timeline::openClipColorDialog() {
     ClipColorDialog dialog(clipColors_, this);
     const bool ok = clipColorAsk_ ? clipColorAsk_(dialog) : dialog.exec() == QDialog::Accepted;
     if (ok) setClipColorOptions(dialog.options());
+}
+
+bool Timeline::addFillerAtStart() {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    const std::int64_t length = static_cast<std::int64_t>(std::max(options_.startFillerSeconds, 0)) *
+                                std::max<std::int64_t>(format().nominalFps, 1);
+    if (length == 0) return fail(tr("Set a Start Filler Duration in the Timeline settings first."));
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    if (!seq.addFillerAtStart(length)) {
+        return fail(seq.duration() == 0 ? tr("You cannot add filler to an empty sequence.")
+                                        : tr("A track is locked."));
+    }
+    return commitSequence(tr("Add Filler at Start"), seq);
+}
+
+bool Timeline::findGap(bool flash) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const QStringList tracks = patch_.selectedRecordTracks(seq);
+    if (tracks.isEmpty()) return fail(tr("Select the tracks to search."));
+    const std::int64_t position = composer_.state(MonitorId::Record).position();
+    // Find again goes to the next one: from the frame after the position, or from before frame 0.
+    const std::int64_t after = position == 0 ? -1 : position;
+    const auto at = flash ? seq.findFlashFrame(tracks, after, std::max(options_.flashFrames, 1)) : seq.findBlackHole(tracks, after);
+    if (!at) return fail(flash ? tr("There are no more flash frames.") : tr("There are no more black holes."));
+    composer_.stop();
+    composer_.setActiveMonitor(MonitorId::Record);
+    composer_.moveTo(MonitorId::Record, *at);
+    return true;
+}
+
+void Timeline::renameTrack(const QString& track) {
+    const model::Sequence seq = recordSequenceOf(composer_);
+    const model::Track* t = seq.track(track);
+    const QString current = t ? t->customName : QString();
+    std::optional<QString> name;
+    if (renameAsk_) {
+        name = renameAsk_(current);
+    } else {
+        QDialog dialog(this);
+        dialog.setObjectName(QStringLiteral("renameTrack"));
+        dialog.setWindowTitle(tr("Comments"));
+        auto* edit = new QLineEdit(current, &dialog);
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+        QPushButton* remove = buttons->addButton(tr("Remove"), QDialogButtonBox::DestructiveRole);
+        bool removed = false;
+        connect(remove, &QPushButton::clicked, &dialog, [&] {
+            removed = true;
+            dialog.accept();
+        });
+        connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        auto* v = new QVBoxLayout(&dialog);
+        v->addWidget(new QLabel(tr("Name for %1:").arg(track), &dialog));
+        v->addWidget(edit);
+        v->addWidget(buttons);
+        if (dialog.exec() == QDialog::Accepted) name = removed ? QString() : edit->text();
+    }
+    if (name) setTrackName(track, name->trimmed());
+}
+
+void Timeline::setTrackName(const QString& track, const QString& name) {
+    changeTracks({track}, [&name](model::Track& t) { t.customName = name.trimmed(); });
+    // The Audio Mixer shows the name with the track number (p.635).
+    emit sequenceEdited();
+}
+
+bool Timeline::createSequenceFromSelection() {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    if (selection_.isEmpty()) return fail(tr("Select clips in the Timeline first."));
+    const model::Sequence copy = model::Sequence::fromItem(rec->item).selectionCopy(selection_);
+    if (copy.tracks().isEmpty()) return fail(tr("Select clips in the Timeline first."));
+    model::BinItem item = rec->item;
+    copy.storeIn(item);
+    emit sequenceFromSelectionRequested(rec->binId, item);
+    return true;
 }
 
 bool Timeline::setClipNote(const QList<model::SegmentRef>& segments, const QString& note) {
