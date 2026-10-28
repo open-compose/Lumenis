@@ -284,7 +284,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Close All Bins But Active |  | p.296 | works | ☐ | | |
 | Center Current |  | p.601 | works | ☐ | | |
 | Send Current Home | Ctrl+' | p.601 | works | ☐ | | |
-| Set Font |  | p.82 | *later* | ☐ | | |
+| Set Font |  | p.82 | works | ☐ | | |
 | Site Settings |  | p.1141 | works | ☐ | | |
 
 ## Script menu
@@ -309,12 +309,12 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Command | Shortcut | Guide | Status | Found | Where | Notes |
 |---|---|---|---|---|---|---|
 | About Cutthulhu |  |  | works | ☐ | | |
-| Shortcuts |  | p.97 | *later* | ☐ | | |
+| Shortcuts |  | p.97 | works | ☐ | | |
 | About Qt |  |  | works | ☐ | | |
 
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 135 of them working with a project open; the
+* 211 menu commands, 137 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.
