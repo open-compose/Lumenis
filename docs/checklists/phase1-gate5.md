@@ -219,10 +219,10 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Command | Shortcut | Guide | Status | Found | Where | Notes |
 |---|---|---|---|---|---|---|
 | Full Screen Playback | Ctrl+Shift+F | p.391 | works | ☐ | | |
-| Load Filler |  | p.99 | *later* | ☐ | | |
+| Load Filler |  | p.99 | works | ☐ | | |
 | Remote Play |  | p.204 | *later* | ☐ | | |
 | Show Single/Dual Monitor |  | p.381 | works | ☐ | | |
-| Sync Point Overwrite |  | p.496 | *later* | ☐ | | |
+| Sync Point Overwrite |  | p.496 | works | ☐ | | |
 | Freeze Frame > Other |  | p.562 | *later* | ☐ | | |
 | Render On-the-Fly |  | p.370 | *later* | ☐ | | |
 
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 118 of them working with a project open; the
+* 211 menu commands, 120 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.
