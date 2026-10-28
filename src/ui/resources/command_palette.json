@@ -12,7 +12,7 @@
     {"name": "Play", "page": 96, "columns": [
       ["play.play", "play.play_reverse", "play.pause", "play.play_forward"],
       ["play.play_in_to_out", "play.mouse_jog", "play.mouse_shuttle", "play.digital_audio_scrub"],
-      ["play.audio_loop_play"]
+      ["play.audio_loop_play", "play.edit_review"]
     ]},
     {"name": "Edit", "page": 100, "columns": [
       ["edit.mark_in", "edit.mark_out", "edit.mark_clip", "edit.audio_mark_in", "edit.audio_mark_out"],
@@ -25,7 +25,7 @@
     {"name": "Trim", "page": 96, "columns": [
       ["trim.trim_mode", "trim.cycle_trim_sides", "trim.extend", "trim.slip_left", "trim.slip_right"],
       ["trim.trim_backward_10_frames", "trim.trim_backward_1_frame", "trim.trim_forward_1_frame", "trim.trim_forward_10_frames"],
-      ["trim.select_nearest_transition", "trim.select_previous_transition", "trim.select_next_transition"]
+      ["trim.select_nearest_transition", "trim.select_previous_transition", "trim.select_next_transition", "trim.play_loop"]
     ]},
     {"name": "FX", "page": 97, "columns": [
       ["fx.remove_effect", "fx.add_keyframe"]

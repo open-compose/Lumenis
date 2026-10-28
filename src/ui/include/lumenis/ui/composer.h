@@ -299,7 +299,18 @@ public:
     // and over, until stop(). Each pass restarts the sound (playStarted()). Playing at another speed
     // ends the loop.
     void playLoop(MonitorId monitor, std::int64_t start, std::int64_t end);
+    // Trim mode's Play Loop (p.657, p.659-660): as above, but before each pass `range` (when set) gives
+    // the frames to play, so a trim made during a pass is seen in the next one, and after each pass
+    // play waits `pauseMs` milliseconds (the Intermission) at the end before going round again.
+    struct LoopRange {
+        std::int64_t start = 0;
+        std::int64_t end = 0;
+    };
+    using LoopResolver = std::function<std::optional<LoopRange>()>;
+    void playLoop(MonitorId monitor, LoopResolver range, int pauseMs);
     bool isLooping() const { return loop_.has_value(); }
+    // True between two passes of a loop with an intermission.
+    bool isLoopPaused() const;
     // Clip > Loop Selected Clips (p.393): the clips play one after another in the Source monitor, each
     // from its IN to its OUT (`whole`, with Alt: start to end), round and round until stop(). Tab jumps
     // to the next clip and Shift+Tab to the previous one while the loop plays.
@@ -313,6 +324,11 @@ public:
     bool isClipLooping() const { return !clipLoop_.isEmpty(); }
     // Advances playback by `ms` milliseconds (also used by tests).
     void advance(qint64 ms);
+    // J-K-L Trim (Trim settings, p.658, p.1223): when set, holding K and tapping J or L asks it to step
+    // `direction` frames (-1 or 1) first; it returns true when it took the step (a trim), so the monitor
+    // does not move. Set by the Timeline.
+    using KStepHandler = std::function<bool(int direction)>;
+    void setKStepHandler(KStepHandler handler) { kStep_ = std::move(handler); }
 
     // Runs a Composer command by id (the buttons, the menus and the
     // keyboard all come here). Returns false if it is not one.
@@ -402,9 +418,14 @@ private:
     bool startingLoopClip_ = false; // load() inside the loop must not end it
     void startLoopClip(int index);
     void endClipLoop();
+    LoopResolver loopRange_;             // Trim mode's Play Loop: the next pass's frames
+    int loopPauseMs_ = 0;
+    QTimer* loopPause_ = nullptr;        // the Intermission between passes
+    KStepHandler kStep_;
     std::optional<std::int64_t> loop_;   // Audio Loop Play: where each pass starts; it ends at stopAt_
     // Play reached its end going forward: the next pass of a loop, or a stop.
     void reachedEnd();
+    void nextLoopPass();
     void endLoop();
     double carry_ = 0; // fractional frames between ticks
     QElapsedTimer clock_;

@@ -72,6 +72,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Timeline and Markers tabs list, and Ctrl+G as a keyboard-only Find Again command.
 * AutoSequence (docs/spec/autosequence.md): which of two related clips is kept, the track layout of
   Camera groups, and the name when there is no Tape or Source File.
+* Trim settings (docs/spec/trim-settings.md): Preroll, Postroll and Intermission in seconds, the
+  Intermission as a pause between passes (the guide calls it "a transition effect duration"), the
+  Play Loop button in the Big Trim display, which transition Edit Review takes and that J-K-L Trim
+  works from the Record monitor only.
 * The Sequence Map (docs/spec/sequence-map.md): the defaults of its four Timeline settings, the
   overlay's place and size, the effect band, a press off the white box moving it, and the window
   staying open when clicking elsewhere.
@@ -1454,10 +1458,12 @@ p.610–640, ch. 13 p.432–434).**
   * Filler next to a cut can be trimmed away entirely; clips keep one
     frame.
 * **Not yet built.** Small and Quick Trim displays, the outgoing and
-  incoming frames in the trim monitors (they show the loaded clips), Play
-  Loop, Edit Review, J-K-L trimming, the numeric keypad, end of trim
+  incoming frames in the trim monitors (they show the loaded clips), the
+  trim display's loop boxes, the numeric keypad, end of trim
   indicators, dual-image playback, the Transition Corner Display, link
-  selection, trim settings, the other fifteen Add Marker buttons, deleting
+  selection, the Small Trim, Dual Image Play and Sync Rollers settings
+  (Play Loop, Edit Review, J-K-L Trim and the Play Loop tab came in U2e1,
+  docs/spec/trim-settings.md), the other fifteen Add Marker buttons, deleting
   a marker selected in the Timeline, the Markers window's columns,
   sorting, Quick Find, export, import and printing, Find, Copy Source
   Markers.

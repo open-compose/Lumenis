@@ -724,6 +724,21 @@ Composer::Composer(QWidget* parent) : QWidget(parent) {
         connect(b, &QToolButton::clicked, this, [this, command] { emit commandRequested(command); });
         trims->addWidget(b);
     }
+    // The Play Loop button (p.657), lit while a loop plays; its picture is ours.
+    auto* loop = new QToolButton(trimBar_);
+    loop->setObjectName(QStringLiteral("trim.play_loop"));
+    loop->setToolTip(tr("Play Loop"));
+    loop->setAutoRaise(true);
+    loop->setCheckable(true);
+    loop->setFixedSize(2 * kButtonWidth, kToolButtonHeight);
+    loop->setIcon(glyph(Glyph::PlayInToOut, QColor(0xc8, 0xc8, 0xc8)));
+    connect(loop, &QToolButton::clicked, this, [this, loop] {
+        loop->setChecked(isLooping());
+        emit commandRequested(QStringLiteral("trim.play_loop"));
+    });
+    connect(this, &Composer::loopChanged, loop, &QToolButton::setChecked);
+    trims->addSpacing(kButtonWidth);
+    trims->addWidget(loop);
     trims->addStretch(1);
     trimBar_->hide();
     outer->addWidget(trimBar_);
@@ -1203,9 +1218,25 @@ void Composer::playLoop(MonitorId monitor, std::int64_t start, std::int64_t end)
     emit loopChanged(true);
 }
 
+void Composer::playLoop(MonitorId monitor, LoopResolver range, int pauseMs) {
+    const std::optional<LoopRange> first = range ? range() : std::nullopt;
+    if (!first) return;
+    playLoop(monitor, first->start, first->end);
+    if (!loop_) return;
+    loopRange_ = std::move(range);
+    loopPauseMs_ = std::max(0, pauseMs);
+}
+
+bool Composer::isLoopPaused() const {
+    return loopPause_ && loopPause_->isActive();
+}
+
 void Composer::endLoop() {
     if (!loop_) return;
     loop_.reset();
+    loopRange_ = {};
+    loopPauseMs_ = 0;
+    if (loopPause_) loopPause_->stop();
     emit loopChanged(false);
 }
 
@@ -1268,6 +1299,32 @@ void Composer::reachedEnd() {
     if (!loop_) {
         stop();
         return;
+    }
+    // Trim mode's Play Loop: the Intermission holds the last frame before the next pass (p.1223).
+    if (loopPauseMs_ > 0) {
+        if (!loopPause_) {
+            loopPause_ = new QTimer(this);
+            loopPause_->setSingleShot(true);
+            connect(loopPause_, &QTimer::timeout, this, [this] {
+                if (!loop_) return;
+                timer_->start();
+                nextLoopPass();
+            });
+        }
+        timer_->stop();
+        loopPause_->start(loopPauseMs_);
+        return;
+    }
+    nextLoopPass();
+}
+
+// Starts the next pass of a loop from its (re-resolved) start.
+void Composer::nextLoopPass() {
+    if (loopRange_) {
+        if (const std::optional<LoopRange> r = loopRange_()) {
+            loop_ = r->start;
+            stopAt_ = r->end;
+        }
     }
     moveTo(active_, *loop_);
     carry_ = 0;
@@ -1523,6 +1580,7 @@ void Composer::keyPressEvent(QKeyEvent* event) {
     if (kHeld_ && (event->key() == Qt::Key_J || event->key() == Qt::Key_L)) {
         const int direction = event->key() == Qt::Key_J ? -1 : 1;
         if (!event->isAutoRepeat()) {
+            if (kStep_ && kStep_(direction)) return;
             perform(direction < 0 ? QStringLiteral("move.step_backward_one_frame") : QStringLiteral("move.step_forward_one_frame"));
         } else if (!slow_ || speed_ != direction) {
             playSlow(direction);

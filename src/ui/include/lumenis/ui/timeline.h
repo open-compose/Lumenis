@@ -251,8 +251,12 @@ public:
         bool stopAtTail = false;
         bool stopAtMarkers = false;
         bool ignoreTrackSelectors = false;
-        // Trim settings (p.1223).
+        // Trim settings (p.1223; docs/spec/trim-settings.md).
         bool trimAutoFocus = false;
+        int trimPreroll = 2;      // Play Loop tab: seconds before the transition (ours: seconds)
+        int trimPostroll = 2;     // seconds after it
+        int trimIntermission = 0; // seconds between passes (ours: a pause)
+        bool jklTrim = true;      // J-K-L Trim (p.658)
         // Timeline settings, Edit tab (p.1220): Start Filler Duration (seconds, ours) and Find Flash
         // Frames Shorter Than (frames).
         int startFillerSeconds = 2;
@@ -554,7 +558,18 @@ public:
     // All rollers to one side, or both (the trim counters and Cycle Trim
     // Sides, p.651).
     void setTrimSide(model::TrimSide side);
-    // Trims by frames: Trim buttons, drags, J-K-L later (p.656).
+    // Trim mode's Play Loop (p.656-657, p.659-660; the Play Loop button, `trim.play_loop`): plays
+    // the transition of the first roller from Preroll before it to Postroll after it, over and over,
+    // pausing for the Intermission between passes; trims made meanwhile show in the next pass. In
+    // Source/Record mode it enters Trim mode first, at the last trimmed transition (p.656). Again, or
+    // the space bar, stops it. False with no transition.
+    bool playTrimLoop();
+    bool isTrimLooping() const { return trimLooping_; }
+    // Edit Review (the Play tab, p.657-658): in Trim mode, leaves it (deselecting the rollers) and plays
+    // from Preroll before the trimmed transition; otherwise from Preroll before the last transition at
+    // or before the position where every selected track has an edit. False with none.
+    bool editReview();
+    // Trims by frames: Trim buttons, drags, J-K-L (p.656, p.658).
     // Positive frames trim to the right. Returns false, and beeps, when no frame could be trimmed.
     bool trimBy(std::int64_t frames);
     // The Overwrite Trim and Ripple Trim tools (p.650).
@@ -1027,6 +1042,11 @@ private:
     double first_ = 0;  // first frame shown
     std::optional<std::pair<double, double>> focusBack_;
     bool trimFocused_ = false; // Trim mode turned Focus on
+    bool trimLooping_ = false; // the Play Loop of Trim mode is playing
+    // J-K-L Trim: J, L or slow play started in Trim mode; when play stops the transition moves to
+    // the frame shown (p.658-659).
+    bool jklTrimming_ = false;
+    std::int64_t playLoopCut() const;
     Options options_;
     QList<std::pair<double, double>> zoomStack_;
     Display display_;

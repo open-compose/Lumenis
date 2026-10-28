@@ -42,6 +42,7 @@
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScrollBar>
+#include <QSet>
 #include <QSlider>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -2131,6 +2132,26 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
         if (handles(id)) perform(id);
     });
     connect(&composer_, &Composer::trimSideRequested, this, &Timeline::setTrimSide);
+    connect(&composer_, &Composer::loopChanged, this, [this](bool looping) {
+        if (!looping) trimLooping_ = false;
+    });
+    // J-K-L Trim (p.658-659): slow play (K with J or L held) trims like J and L; when play stops the
+    // transition moves to the frame shown. Holding K and tapping J or L trims one frame.
+    connect(&composer_, &Composer::playStarted, this, [this](MonitorId monitor, int speed) {
+        if (speed == 0 && monitor == MonitorId::Record && trimMode_ && options_.jklTrim && !rollers_.isEmpty()) jklTrimming_ = true;
+    });
+    connect(&composer_, &Composer::playStopped, this, [this] {
+        if (!jklTrimming_) return;
+        jklTrimming_ = false;
+        if (!trimMode_ || rollers_.isEmpty()) return;
+        const std::int64_t frames = composer_.state(MonitorId::Record).position() - playLoopCut();
+        if (frames != 0) trimBy(frames);
+    });
+    composer_.setKStepHandler([this](int direction) {
+        if (!trimMode_ || !options_.jklTrim || rollers_.isEmpty()) return false;
+        trimBy(direction);
+        return true;
+    });
     connect(&composer_, &Composer::markerEditRequested, this, [this](MonitorId monitor, const QString& id) {
         const model::LoadedClip* loaded = composer_.state(monitor).current();
         if (!loaded) return;
@@ -2866,6 +2887,8 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("trim.trim_forward_1_frame"),
         QStringLiteral("trim.trim_forward_10_frames"),
         QStringLiteral("trim.cycle_trim_sides"),
+        QStringLiteral("trim.play_loop"),
+        QStringLiteral("play.edit_review"),
         QStringLiteral("trim.select_nearest_transition"),
         QStringLiteral("trim.select_previous_transition"),
         QStringLiteral("trim.select_next_transition"),
@@ -3039,6 +3062,10 @@ bool Timeline::perform(const QString& id) {
         const bool back = id.contains(QLatin1String("backward"));
         if (!trimMode_) return fail(tr("Enter Trim mode first."));
         trimBy(back ? -frames : frames);
+    } else if (id == QLatin1String("trim.play_loop")) {
+        playTrimLoop();
+    } else if (id == QLatin1String("play.edit_review")) {
+        editReview();
     } else if (id == QLatin1String("trim.cycle_trim_sides")) {
         // A-side, B-side, both (p.651).
         if (!trimMode_ || rollers_.isEmpty()) return fail(tr("Enter Trim mode first."));
@@ -4083,8 +4110,79 @@ bool Timeline::trimBy(std::int64_t frames) {
         QApplication::beep();
         fail(tr("The trim stopped at the end of the material."));
     }
-    composer_.moveTo(MonitorId::Record, rollers_.first().frame);
+    // During the Play Loop the next pass shows the trim (p.660); the position is the loop's.
+    if (!trimLooping_) composer_.moveTo(MonitorId::Record, rollers_.first().frame);
     syncTrimDisplay();
+    return true;
+}
+
+std::int64_t Timeline::playLoopCut() const {
+    return rollers_.isEmpty() ? 0 : rollers_.first().frame;
+}
+
+bool Timeline::playTrimLoop() {
+    if (trimLooping_) {
+        composer_.stop();
+        return true;
+    }
+    if (!trimMode_ || rollers_.isEmpty()) {
+        // From Source/Record mode: "The action takes you to the last trimmed transition" (p.656).
+        if (!lastRollers_.isEmpty()) {
+            setRollers(lastRollers_, trimKind_);
+        } else if (!enterTrimMode(0)) {
+            return false;
+        }
+    }
+    if (!recordSequence() || rollers_.isEmpty()) return fail(tr("Select a transition to trim."));
+    const auto fps = static_cast<std::int64_t>(std::max(format_.nominalFps, 1));
+    // "This loop begins at a preroll point before the transition and ends at a postroll point" (p.657).
+    Composer::LoopResolver range = [this, fps]() -> std::optional<Composer::LoopRange> {
+        if (!trimMode_ || rollers_.isEmpty()) return std::nullopt;
+        const std::int64_t cut = playLoopCut();
+        const std::int64_t last = std::max<std::int64_t>(composer_.state(MonitorId::Record).duration() - 1, 0);
+        const std::int64_t start = std::clamp<std::int64_t>(cut - options_.trimPreroll * fps, 0, last);
+        const std::int64_t end = std::clamp<std::int64_t>(cut + options_.trimPostroll * fps - 1, start, last);
+        return Composer::LoopRange{start, end};
+    };
+    trimLooping_ = true;
+    composer_.playLoop(MonitorId::Record, std::move(range), options_.trimIntermission * 1000);
+    if (!composer_.isLooping()) trimLooping_ = false;
+    return trimLooping_;
+}
+
+bool Timeline::editReview() {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return fail(tr("Load a sequence first."));
+    const auto fps = static_cast<std::int64_t>(std::max(format_.nominalFps, 1));
+    std::optional<std::int64_t> cut;
+    if (trimMode_ && !rollers_.isEmpty()) {
+        // "Using the Edit Review command causes Media Composer to deselect trim rollers" (p.657).
+        cut = playLoopCut();
+        exitTrimMode();
+    } else {
+        // "before the first set of edits that line up on all the selected tracks" (p.658), at or
+        // before the position.
+        const model::Sequence seq = model::Sequence::fromItem(rec->item);
+        const std::int64_t pos = composer_.state(MonitorId::Record).position();
+        std::optional<QSet<std::int64_t>> common;
+        for (const QString& name : patch_.selectedRecordTracks(seq)) {
+            QList<std::int64_t> points = model::trimPoints(seq, name);
+            if (!points.isEmpty()) points.removeLast();
+            if (points.isEmpty()) continue; // an empty track has no edit to line up
+            const QSet<std::int64_t> set(points.cbegin(), points.cend());
+            common = common ? common->intersect(set) : set;
+        }
+        if (common) {
+            for (std::int64_t e : *common) {
+                if (e <= pos && (!cut || e > *cut)) cut = e;
+            }
+        }
+    }
+    if (!cut) return fail(tr("There is no transition to review on the selected tracks."));
+    composer_.stop();
+    composer_.setActiveMonitor(MonitorId::Record);
+    composer_.moveTo(MonitorId::Record, std::max<std::int64_t>(*cut - options_.trimPreroll * fps, 0));
+    composer_.play(1);
     return true;
 }
 
@@ -4167,6 +4265,12 @@ void Timeline::syncTrimDisplay() {
 
 void Timeline::composerPerformed(const QString& id) {
     if (!trimMode_) return;
+    // J-K-L Trim: J and L play the trim; stopping completes it (p.658-659).
+    if ((id == QLatin1String("play.play_forward") || id == QLatin1String("play.play_reverse")) && options_.jklTrim &&
+        !rollers_.isEmpty() && composer_.isPlaying() && composer_.activeMonitor() == MonitorId::Record) {
+        jklTrimming_ = true;
+        return;
+    }
     // A frame step leaves Trim mode (p.651); Go to Previous/Next Event
     // selects the transition there (p.655).
     if (id.startsWith(QLatin1String("move.step_"))) {

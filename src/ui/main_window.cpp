@@ -3652,7 +3652,12 @@ void MainWindow::applySettings() {
     o.stopAtTail = s.flag(composer, QStringLiteral("stopAtTail"));
     o.stopAtMarkers = s.flag(composer, QStringLiteral("stopAtMarkers"));
     o.ignoreTrackSelectors = s.flag(composer, QStringLiteral("ignoreTrackSelectors"));
-    o.trimAutoFocus = s.flag(QStringLiteral("Trim"), QStringLiteral("autoFocus"));
+    const QString trim = QStringLiteral("Trim");
+    o.trimAutoFocus = s.flag(trim, QStringLiteral("autoFocus"));
+    o.trimPreroll = s.value(trim, QStringLiteral("preroll")).toInt(2);
+    o.trimPostroll = s.value(trim, QStringLiteral("postroll")).toInt(2);
+    o.trimIntermission = s.value(trim, QStringLiteral("intermission")).toInt(0);
+    o.jklTrim = s.flag(trim, QStringLiteral("jklTrim"));
     binContainer_->setDefaultSyncLocks(o.defaultSyncLocks);
     timeline_->setOptions(o);
 

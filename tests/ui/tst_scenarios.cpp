@@ -519,6 +519,16 @@ struct Run {
             timeline.setTracksLocked({o.value(QStringLiteral("lock")).toString()}, true);
             return true;
         }
+        if (o.contains(QStringLiteral("jkl"))) {
+            // J-K-L Trim (p.658-659): L (or J for a negative count) plays the Record monitor from the
+            // transition, which is moved n frames on before K stops it.
+            const std::int64_t n = o.value(QStringLiteral("jkl")).toInteger();
+            composer.setActiveMonitor(MonitorId::Record);
+            composer.perform(n < 0 ? QStringLiteral("play.play_reverse") : QStringLiteral("play.play_forward"));
+            composer.moveTo(MonitorId::Record, composer.state(MonitorId::Record).position() + n);
+            composer.perform(QStringLiteral("play.pause"));
+            return true;
+        }
         if (o.contains(QStringLiteral("trim"))) {
             const bool ok = timeline.trimBy(o.value(QStringLiteral("trim")).toInteger());
             if (ok == o.value(QStringLiteral("refused")).toBool()) {

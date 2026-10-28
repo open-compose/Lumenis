@@ -571,9 +571,9 @@
         {
           "name": "Play Loop",
           "options": [
-            {"key": "preroll", "type": "int", "label": "Preroll", "min": 0, "max": 999, "default": 2, "page": 1223, "later": true},
-            {"key": "postroll", "type": "int", "label": "Postroll", "min": 0, "max": 999, "default": 2, "page": 1223, "later": true},
-            {"key": "intermission", "type": "int", "label": "Intermission", "min": 0, "max": 999, "default": 0, "page": 1223, "later": true}
+            {"key": "preroll", "type": "int", "label": "Preroll", "suffix": "seconds", "min": 0, "max": 999, "default": 2, "page": 1223},
+            {"key": "postroll", "type": "int", "label": "Postroll", "suffix": "seconds", "min": 0, "max": 999, "default": 2, "page": 1223},
+            {"key": "intermission", "type": "int", "label": "Intermission", "suffix": "seconds", "min": 0, "max": 999, "default": 0, "page": 1223}
           ]
         },
         {
@@ -585,7 +585,7 @@
             {"key": "autoFocus", "type": "bool", "label": "Auto focus when entering Trim mode", "default": false, "page": 1223},
             {"key": "renderOnTheFly", "type": "bool", "label": "Render On-the-Fly", "default": true, "page": 1223, "later": true},
             {"key": "dualImagePlay", "type": "bool", "label": "Dual Image Play", "default": false, "page": 1223, "later": true},
-            {"key": "jklTrim", "type": "bool", "label": "J-K-L Trim", "default": true, "page": 1223, "later": true},
+            {"key": "jklTrim", "type": "bool", "label": "J-K-L Trim", "default": true, "page": 1223},
             {"key": "syncRollers", "type": "bool", "label": "Sync Rollers for Sync Locked Tracks", "default": false, "page": 1224, "later": true}
           ]
         }

@@ -406,7 +406,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   window (docs/spec/find.md: `src/model/text_find.*`, `src/ui/find_window.*`,
   Ctrl+G `edit.find_again`; test `tst_find_window`), is done. U2d, AutoSequence
   (docs/spec/autosequence.md: `model::autoSequence`, `MainWindow::autoSequence`;
-  test `tst_autosequence`), is done.
+  test `tst_autosequence`), is done. U2e1, the trim Play Loop, Edit Review and J-K-L Trim
+  (docs/spec/trim-settings.md: `Timeline::playTrimLoop`, `editReview`, the Trim
+  settings' Play Loop tab, `Composer::playLoop` with a `LoopResolver`; test
+  `tst_trim_settings`, scenario `24-jkl-trim.json`), is done.
   Next: the rest of the UI completion pass (U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.

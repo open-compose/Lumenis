@@ -45,6 +45,8 @@ Each file is a JSON list of scenarios:
     `{"trim": n}` trims by n frames; `{"slip": [[track, start], ...],
     "slide": b}` slips (or slides) those segments in Trim mode, and
     `{"trim": n}` moves them (positive: earlier material, or to the right);
+    `{"jkl": n}` plays n frames from the transition with L (J when
+    negative) and stops with K, the J-K-L Trim (p.658);
   * `{"lock": track}` locks a track (p.633);
   * `{"source_track": [track, start, source track]}`: the segment's
     right-click Change Source Track (p.595; 2026.8 guide p.507);
