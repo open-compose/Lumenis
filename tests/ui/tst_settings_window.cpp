@@ -175,7 +175,7 @@ private slots:
         QVERIFY(toolbar);
         QVERIFY(!toolbar->isChecked());
         // Options not available yet are dimmed.
-        QVERIFY(!dialog.editor("fastScrub")->isEnabledTo(&dialog));
+        QVERIFY(!dialog.editor("doubleClickNesting")->isEnabledTo(&dialog));
         QVERIFY(dialog.editor("showToolbar")->isEnabledTo(&dialog));
         toolbar->setChecked(true);
         dialog.findChild<QRadioButton*>(QStringLiteral("movementDuringPlay:scroll"))->setChecked(true);
@@ -185,7 +185,7 @@ private slots:
         QCOMPARE(v.value("movementDuringPlay").toString(), QStringLiteral("scroll"));
         QCOMPARE(v.value("defaultSegmentTool").toString(), QStringLiteral("insert"));
         QCOMPARE(v.value("custom").toInt(), 1);           // unknown values are kept
-        QVERIFY(!v.contains("fastScrub"));                // later: not stored
+        QVERIFY(!v.contains("doubleClickNesting"));       // later: not stored
 
         // Number boxes, menus and timecodes.
         SettingsDialog bin(kind("Bin"), SettingEntry{QStringLiteral("Bin"), {}, true, {}});
