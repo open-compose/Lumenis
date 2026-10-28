@@ -867,10 +867,10 @@ phase of their own. They are done in three steps:
 * U3, bins, media, windows and interface: Bin > Select's Offline Items,
   Media Relatives, Sources and Unreferenced Clips (p.266-267), Reveal File
   (p.360) and Close All But Active (U3a, docs/spec/bin-select.md, is done;
-  Enlarge and Reduce HeadFrames, p.1016, are the NRCS Tool's), Input > Link (p.328),
-  Media > Unmount (p.344), the bin attic and Bin settings (with bin editing
-  into the Timeline, p.623-624, and the Timeline's Segment Drag Snap); Bin Layout (p.93), Center Current/Send Current Home
-  (p.601), Set Font (p.82), Help > Shortcuts (p.97), the Interface colour
+  Enlarge and Reduce HeadFrames, p.1016, are the NRCS Tool's); Input > Link (p.328),
+  Media > Unmount (p.344) and Center Current/Send Current Home (p.601) (U3b,
+  docs/spec/media-unmount.md, is done); the bin attic and Bin settings (with bin editing
+  into the Timeline, p.623-624, and the Timeline's Segment Drag Snap); Bin Layout (p.93), Set Font (p.82), Help > Shortcuts (p.97), the Interface colour
   and font settings.
 
 ### Phase 6 — Effects and rendering

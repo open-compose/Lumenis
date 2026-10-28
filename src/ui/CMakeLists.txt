@@ -41,6 +41,7 @@ add_library(lumenis_ui STATIC
     panel_manager.cpp
     panels.cpp
     relink_dialog.cpp
+    unmount_dialog.cpp
     select_project_dialog.cpp
     sequence_map.cpp
     timecode_window.cpp
@@ -93,6 +94,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/menu_builder.h
     include/lumenis/ui/panels.h
     include/lumenis/ui/relink_dialog.h
+    include/lumenis/ui/unmount_dialog.h
     include/lumenis/ui/select_project_dialog.h
     include/lumenis/ui/sequence_map.h
     include/lumenis/ui/timecode_window.h

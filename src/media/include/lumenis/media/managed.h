@@ -54,8 +54,15 @@ QList<MediaDrive> mediaDrives(const QStringList& extra);
 // With the folders set here, and those in the environment variable
 // LUMENIS_MEDIA_DRIVES (separated as PATH is): for tests, and for media
 // kept in a folder rather than on a drive of its own.
+// Drives unmounted with File > Media > Unmount (p.343-344) are left out.
 QList<MediaDrive> mediaDrives();
 void setExtraMediaDrives(const QStringList& folders);
+// File > Media > Unmount (p.343-344): "The drives are no longer available to Media Composer". The
+// roots (cleaned paths) are left out of mediaDrives() until remountAllDrives(); "You can also remount
+// all the drives ... However, you cannot mount selected drives". Process-wide, not saved (ours).
+void unmountDrives(const QStringList& roots);
+void remountAllDrives();
+QStringList unmountedDrives();
 // The folders set with setExtraMediaDrives() (or, until then, from LUMENIS_MEDIA_DRIVES).
 QStringList extraMediaDrives();
 // The drive a setting names, or the one with the most space when it names

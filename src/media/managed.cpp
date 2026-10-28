@@ -809,8 +809,32 @@ QStringList extraMediaDrives() {
     return extraDrives();
 }
 
+namespace {
+QStringList& unmounted() {
+    static QStringList roots;
+    return roots;
+}
+} // namespace
+
 QList<MediaDrive> mediaDrives() {
-    return mediaDrives(extraDrives());
+    QList<MediaDrive> drives = mediaDrives(extraDrives());
+    drives.removeIf([](const MediaDrive& d) { return unmounted().contains(d.root); });
+    return drives;
+}
+
+void unmountDrives(const QStringList& roots) {
+    for (const QString& r : roots) {
+        const QString clean = QDir::cleanPath(r);
+        if (!unmounted().contains(clean)) unmounted() << clean;
+    }
+}
+
+void remountAllDrives() {
+    unmounted().clear();
+}
+
+QStringList unmountedDrives() {
+    return unmounted();
 }
 
 QString chooseDrive(const QString& setting) {

@@ -64,6 +64,7 @@
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timecode_window.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/unmount_dialog.h"
 #include "lumenis/ui/tool_windows.h"
 #include "lumenis/ui/workspace.h"
 #include "lumenis/ui/workspace_bar.h"
@@ -90,6 +91,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QRegularExpression>
+#include <QScreen>
 #include <QSet>
 #include <QSettings>
 #include <QSignalBlocker>
@@ -263,6 +265,36 @@ QJsonObject MainWindow::defaultLayout() {
 // Composer's resolvers find bin items and media frames, its play signals drive the sound, and the
 // Timeline stores its sequences in bins. The tools come after, in createTools().
 // The bin's clips in the view's order; AutoSequence itself is model::autoSequence.
+bool MainWindow::placeCurrentWindow(bool home) {
+    Panel* panel = panels_->activePanel();
+    if (!panel || !panels_->isFloating(panel)) return false;
+    QWidget* window = panel->window();
+    if (home) {
+        window->resize(window->sizeHint().expandedTo(window->minimumSizeHint()));
+        QRect r = window->frameGeometry();
+        r.moveCenter(frameGeometry().center());
+        window->move(r.topLeft());
+    } else {
+        const QScreen* screen = window->screen();
+        if (!screen) return false;
+        QRect r = window->frameGeometry();
+        r.moveCenter(screen->availableGeometry().center());
+        window->move(r.topLeft());
+    }
+    return true;
+}
+
+void MainWindow::unmountDrives() {
+    UnmountDialog dialog(this);
+    const bool ok = unmountHook_ ? unmountHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok) return;
+    if (dialog.mountAll()) {
+        media::remountAllDrives();
+    } else {
+        media::unmountDrives(dialog.selectedRoots());
+    }
+}
+
 QString MainWindow::revealFile() {
     BinView* view = binContainer_->activeView();
     BinDocument* doc = binContainer_->activeDocument();
@@ -3933,6 +3965,12 @@ void MainWindow::installPanelHandlers() {
     handle("clip.relink.linked_media", [this] { relinkLinkedMedia(); });
     handle("clip.relink.managed_media", [this] { relinkManagedMedia(); });
     // Managed media (p.213, p.134, p.349-359).
+    // File > Input > Link: the Source Browser, linking (p.315-317, p.328).
+    handle("file.input.link", [this] {
+        showSourceBrowser();
+        if (SourceBrowser* browser = sourceBrowser_.data()) browser->setImportMode(false);
+    });
+    handle("file.media.unmount", [this] { unmountDrives(); });
     handle("file.input.import_media", [this] {
         showSourceBrowser();
         if (SourceBrowser* browser = sourceBrowser_.data()) browser->setImportMode(true);
@@ -3982,6 +4020,13 @@ void MainWindow::installPanelHandlers() {
     // Windows menu: panels and workspaces.
     handle("windows.float_all_panels", [this] { panels_->floatAll(); });
     handle("windows.float_active_panel", [this] { panels_->floatActive(); });
+    // Windows > Center Current and Send Current Home (p.601), for the active panel's floating window:
+    // "To center a resized Timeline window ... select Windows > Center Current"; "To restore a resized
+    // Timeline window to its default position ... select Windows > Send Current Home". Ours: the default
+    // position is the one a floated panel first gets, its preferred size centred on the main window; a
+    // docked panel has no window of its own to move.
+    handle("windows.center_current", [this] { placeCurrentWindow(false); });
+    handle("windows.send_current_home", [this] { placeCurrentWindow(true); });
     handle("windows.add_blank_panel", [this] { panels_->addBlankPanel(); });
     handle("windows.workspaces.new_workspace", [this] { newWorkspace(); });
     handle("windows.workspaces.delete_workspace", [this] { deleteWorkspace(); });

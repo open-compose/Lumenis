@@ -422,7 +422,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   U3a, Bin > Select's Offline Items, Media Relatives, Sources and
   Unreferenced Clips, Reveal File and Close All But Active
   (docs/spec/bin-select.md: `src/model/bin_relations.*`, `MainWindow::binSelect`,
-  `revealFile`; test `tst_bin_select`), is done.
+  `revealFile`; test `tst_bin_select`), is done. U3b, Input > Link, Media >
+  Unmount and Center Current/Send Current Home (docs/spec/media-unmount.md:
+  `media::unmountDrives`, `unmount_dialog.*`, `MainWindow::placeCurrentWindow`;
+  test `tst_media_unmount`), is done.
   Next: the rest of the UI completion pass (U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.

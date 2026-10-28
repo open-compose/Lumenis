@@ -46,6 +46,7 @@ class BackgroundQueue;
 class BackgroundQueueWindow;
 class CalculatorWindow;
 class ConsolidateDialog;
+class UnmountDialog;
 class AudioMixdownDialog;
 class MultiMixDialog;
 class ExportAsDialog;
@@ -226,6 +227,14 @@ public:
     // "Selected items in ALL open bins" every open bin's. The hook stands in
     // for the dialog (tests; true: OK).
     void relinkManagedMedia();
+    // File > Media > Unmount (p.343-344): the Unmount Disk or Drives dialog; the hook answers it in
+    // tests (false for Cancel).
+    void unmountDrives();
+    // Windows > Center Current (home false) and Send Current Home (p.601): the active panel's floating
+    // window centred on its screen, or put back at its preferred size centred on the main window.
+    // False when the active panel is not floating.
+    bool placeCurrentWindow(bool home);
+    void setUnmountHook(std::function<bool(UnmountDialog&)> hook) { unmountHook_ = std::move(hook); }
     // Deleting managed clips from a bin (p.359): the clips, their media
     // files, or both. The hook answers the Delete dialog (tests; nothing:
     // Cancel).
@@ -550,6 +559,7 @@ private:
     std::function<bool(AudioMixdownDialog&)> mixdownHook_;
     std::function<int(const QStringList&)> binChoiceHook_;
     std::function<void(const QString&)> revealHook_;
+    std::function<bool(UnmountDialog&)> unmountHook_;
     std::function<bool(ModifyDialog&)> modifyHook_;
     ClipAudioHooks clipAudioHooks_;
     std::function<bool(MultiMixDialog&)> multiMixHook_;
