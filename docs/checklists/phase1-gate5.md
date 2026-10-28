@@ -64,7 +64,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Save Script |  | p.571 | *later* | ☐ | | |
 | Save a Script Copy As |  | p.571 | *later* | ☐ | | |
 | Get Position Info |  | p.101 | works | ☐ | | |
-| Reveal File |  | p.360 | *later* | ☐ | | |
+| Reveal File |  | p.360 | works | ☐ | | |
 | Input > Source Browser |  | p.132 | works | ☐ | | |
 | Input > Import Media |  | p.969 | works | ☐ | | |
 | Input > Link |  | p.328 | *later* | ☐ | | |
@@ -128,11 +128,11 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Choose Columns |  | p.124 | works | ☐ | | |
 | Hide Column |  | p.268 | works | ☐ | | |
 | Go To Capture Mode |  | p.146 | *later* | ☐ | | |
-| Select > Media Relatives |  | p.267 | *later* | ☐ | | |
-| Select > Offline Items |  | p.266 | *later* | ☐ | | |
+| Select > Media Relatives |  | p.267 | works | ☐ | | |
+| Select > Offline Items |  | p.266 | works | ☐ | | |
 | Select > Reverse |  | p.260 | works | ☐ | | |
-| Select > Sources |  | p.267 | *later* | ☐ | | |
-| Select > Unreferenced Clips |  | p.267 | *later* | ☐ | | |
+| Select > Sources |  | p.267 | works | ☐ | | |
+| Select > Unreferenced Clips |  | p.267 | works | ☐ | | |
 | Select > Unrendered Titles |  | p.359 | *later* | ☐ | | |
 | Set Bin Display |  | p.288 | works | ☐ | | |
 | Show Sidebar Only |  | p.243 | works | ☐ | | |
@@ -280,7 +280,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Bin Layout > New Bin Layout |  | p.93 | *later* | ☐ | | |
 | Bin Layout > Save Current |  | p.93 | *later* | ☐ | | |
 | Bin Layout > Delete Bin Layout |  | p.93 | *later* | ☐ | | |
-| Close All But Active |  | p.296 | *later* | ☐ | | |
+| Close All But Active |  | p.296 | works | ☐ | | |
 | Close All Bins But Active |  | p.296 | works | ☐ | | |
 | Center Current |  | p.601 | *later* | ☐ | | |
 | Send Current Home | Ctrl+' | p.601 | *later* | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 125 of them working with a project open; the
+* 211 menu commands, 131 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.
