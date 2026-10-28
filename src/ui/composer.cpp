@@ -58,6 +58,7 @@ constexpr QRgb kSourceBar = 0xff2f8a6c;  // Source/Record colours (p.383)
 constexpr QRgb kRecordBar = 0xff2b5576;
 constexpr QRgb kPlainBar = 0xff4a4a4a;
 constexpr QRgb kMarkedSpan = 0x60ffffff;
+constexpr QRgb kPhantomMark = 0xff3a7bd2; // phantom marks, blue (p.501)
 constexpr QRgb kSplice = 0xffe6c619;     // Splice-in (yellow) and Overwrite (red)
 constexpr QRgb kOverwrite = 0xffd23a32;
 constexpr QRgb kMarker = 0xffd23a32;     // red Add Marker
@@ -480,6 +481,18 @@ void PositionBar::paintEvent(QPaintEvent*) {
         } else {
             p.drawEllipse(QRectF(xFor(m.frame) - 4, 1, 8, 6));
         }
+    }
+    // Phantom marks (p.501): "blue mark In or Out icons in the position bars", as brackets.
+    const auto [phantomIn, phantomOut] = composer_.phantomMarks(monitor_);
+    p.setPen(QPen(QColor(kPhantomMark), 2));
+    p.setBrush(Qt::NoBrush);
+    if (phantomIn) {
+        const int x = xFor(*phantomIn);
+        p.drawPolyline(QPolygon{QPoint(x + 4, 1), QPoint(x, 1), QPoint(x, height() - 2), QPoint(x + 4, height() - 2)});
+    }
+    if (phantomOut) {
+        const int x = xFor(*phantomOut);
+        p.drawPolyline(QPolygon{QPoint(x - 4, 1), QPoint(x, 1), QPoint(x, height() - 2), QPoint(x - 4, height() - 2)});
     }
     p.fillRect(QRect(xFor(s.position()) - 1, 0, 2, height()), QColor(kIndicator));
 }
@@ -1500,6 +1513,11 @@ QMenu* Composer::clipNameMenu(MonitorId monitor) {
         });
     }
     if (!names.isEmpty()) menu->addSeparator();
+    // "Click above the Source monitor, and select Load Filler from the Clip Name menu" (p.462).
+    if (monitor == MonitorId::Source) {
+        connect(menu->addAction(tr("Load Filler")), &QAction::triggered, this,
+                [this] { emit commandRequested(QStringLiteral("composer.load_filler")); });
+    }
     QAction* clearMonitor = menu->addAction(tr("Clear Monitor"));
     QAction* clearMenu = menu->addAction(tr("Clear Menu"));
     clearMonitor->setEnabled(!state(monitor).isEmpty());

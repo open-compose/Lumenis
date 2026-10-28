@@ -512,7 +512,17 @@ struct EditPlan {
 // the end of the clip. When the source marks give the length, a record OUT without a record IN
 // backtimes: the edit ends on it. On failure `error`
 // holds the message to show and the other fields are not to be used.
-EditPlan planEdit(const EditMarks& source, const EditMarks& record);
+// Single Mark Editing (Composer settings, p.1159, p.468; on by default): a lone source mark takes
+// the source position as the other one: a source OUT alone edits from the position, a source IN
+// alone up to the position when the position is after it. Without it a source OUT alone edits from
+// the clip's start and a source IN alone to the clip's end (ours).
+EditPlan planEdit(const EditMarks& source, const EditMarks& record, bool singleMark = true);
+
+// Sync Point editing (p.495-496, Composer > Sync Point Overwrite): the source position is lined up
+// with the record position; the duration comes from two marks, IN and OUT in one monitor (the other
+// clear), or a source IN with a record OUT, or a record IN with a source OUT. Other marks are an
+// error, as is material before the clip or the sequence starts.
+EditPlan planSyncPoint(const EditMarks& source, const EditMarks& record);
 
 // Fit to Fill (FX guide p.170): the source IN to OUT overwritten into the record IN to OUT, with
 // a Variable Speed motion effect that makes it fit; `speed` gets the source length over the
@@ -531,8 +541,10 @@ enum class EditKind { SpliceIn, Overwrite };
 // A source sequence is edited in as its segments (taken from its patched track); a clip becomes
 // one segment per track pair. Missing record tracks are added; locked ones are skipped. A splice
 // into a sync-locked track splices filler into the other sync-locked tracks (p.493).
+// Without `createTracks` (Composer settings, Auto-create New Tracks off, p.1159-1160) a pair whose
+// record track does not exist is left out, unless the sequence has no tracks at all.
 QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, const QString& binId,
-                      const BinItem& source, const TrackPatch& patch);
+                      const BinItem& source, const TrackPatch& patch, bool createTracks = true);
 // The first edited pair whose record track exists with another format than its source track
 // ("you can only patch multichannel audio tracks to multichannel audio tracks, or mono tracks to
 // mono tracks", p.629), as "A1 is stereo but A2 is mono"; empty when every pair matches.

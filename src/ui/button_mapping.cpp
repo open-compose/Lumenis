@@ -130,9 +130,20 @@ MappableButton::MappableButton(QWidget* parent) : QToolButton(parent) {
     setAutoRaise(true);
     setAcceptDrops(true);
     connect(&ButtonMapper::instance(), &ButtonMapper::iconsChanged, this, [this] { setIcon(commandIcon(command_)); });
+    connect(&ButtonMapper::instance(), &ButtonMapper::marksChanged, this, qOverload<>(&QWidget::update));
     connect(this, &QToolButton::clicked, this, [this] {
         if (!command_.isEmpty()) emit commandClicked(command_);
     });
+}
+
+void ButtonMapper::setMarked(const QString& commandId, bool on) {
+    if (on == marked_.contains(commandId)) return;
+    if (on) {
+        marked_.insert(commandId);
+    } else {
+        marked_.remove(commandId);
+    }
+    emit marksChanged();
 }
 
 void MappableButton::setCommand(const QString& commandId) {
@@ -175,6 +186,14 @@ void MappableButton::dropEvent(QDropEvent* event) {
 // The Menu to Button target is outlined in the highlight colour.
 void MappableButton::paintEvent(QPaintEvent* event) {
     QToolButton::paintEvent(event);
+    if (!command_.isEmpty() && ButtonMapper::instance().isMarked(command_)) {
+        // The orange mark of a mode that is on (p.496): a small triangle in the top-left corner.
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(0xff, 0x8c, 0x1a));
+        p.drawPolygon(QPolygonF{QPointF(1, 1), QPointF(8, 1), QPointF(1, 8)});
+    }
     if (ButtonMapper::instance().target() == this) {
         QPainter p(this);
         p.setPen(QPen(palette().color(QPalette::Highlight), 2));

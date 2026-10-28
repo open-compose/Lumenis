@@ -395,7 +395,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Smart Tools, Segment Mode lassos; test `tst_timeline_settings`, scenario
   `22-segment-drag-sync-locks.json`), is done. U1e2, the Display tab (Timeline
   Text Color, Wireframe Dragging, Use Fast Scrub), is done; so is U1. Display
-  During Segment Drag and Dynamic Play move to U2.
+  During Segment Drag and Dynamic Play move to U2. U2a, the Composer
+  settings' Edit tab, Sync Point Overwrite and Load Filler
+  (docs/spec/composer-edit.md: `planSyncPoint`, `planEdit(..., singleMark)`,
+  phantom marks through `Composer::setPhantomResolver`, the orange mark
+  `ButtonMapper::setMarked`, `Timeline::loadFiller`; test `tst_composer_edit`,
+  scenario `23-composer-edit.json`), is done.
   Next: the rest of the UI completion pass (U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.

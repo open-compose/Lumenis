@@ -61,6 +61,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   tracks, the defaults of Select Filler (on) and Applying Effects opens Effect Editor (off), the
   segments a Segment Mode lasso selects, White and Black Timeline Text's lightness threshold, and
   Fast Scrub also leaving out clip frames and waveforms.
+* Composer settings' Edit tab (docs/spec/composer-edit.md): marks other than the guide's two for Sync
+  Point editing are refused; Single Mark Editing off; a source IN with the position on it running to
+  the clip's end; phantom marks as blue brackets; spanned copied markers cut short; Load Filler's
+  tracks.
 * The Sequence Map (docs/spec/sequence-map.md): the defaults of its four Timeline settings, the
   overlay's place and size, the effect band, a press off the white box moving it, and the window
   staying open when clicking elsewhere.

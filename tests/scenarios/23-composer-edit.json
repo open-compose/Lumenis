@@ -1,0 +1,82 @@
+[
+  {
+    "name": "Sync Point Overwrite: the source position lands on the record position, IN to OUT in the source",
+    "guide": "p.495-496",
+    "clips": [{"name": "A"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 100]], "A1": [["A", 0, 100]], "A2": [["A", 0, 100]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 10, "out": 29, "at": 20},
+      {"position": "record", "frame": 50},
+      {"command": "composer.sync_point_overwrite"},
+      {"command": "edit.overwrite"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 40], ["C", 10, 20], ["A", 60, 40]],
+      "A1": [["A", 0, 40], ["C", 10, 20], ["A", 60, 40]],
+      "A2": [["A", 0, 40], ["C", 10, 20], ["A", 60, 40]]}
+  },
+  {
+    "name": "Sync Point Overwrite with a source IN and a record OUT",
+    "guide": "p.496",
+    "clips": [{"name": "A"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 100]], "A1": [["A", 0, 100]], "A2": [["A", 0, 100]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 5, "at": 15},
+      {"mark": "record", "out": 69, "at": 40},
+      {"command": "composer.sync_point_overwrite"},
+      {"command": "edit.overwrite"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 30], ["C", 5, 40], ["A", 70, 30]],
+      "A1": [["A", 0, 30], ["C", 5, 40], ["A", 70, 30]],
+      "A2": [["A", 0, 30], ["C", 5, 40], ["A", 70, 30]]}
+  },
+  {
+    "name": "Sync Point Overwrite refuses three marks",
+    "guide": "p.496",
+    "clips": [{"name": "A"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 100]], "A1": [["A", 0, 100]], "A2": [["A", 0, 100]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 5, "out": 20, "at": 15},
+      {"mark": "record", "in": 30, "at": 40},
+      {"command": "composer.sync_point_overwrite"},
+      {"command": "edit.overwrite", "refused": true}
+    ],
+    "expect": {"V1": [["A", 0, 100]], "A1": [["A", 0, 100]], "A2": [["A", 0, 100]]}
+  },
+  {
+    "name": "Single Mark Editing: a source IN alone ends at the source position",
+    "guide": "p.468",
+    "clips": [{"name": "A"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 100]], "A1": [["A", 0, 100]], "A2": [["A", 0, 100]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 10, "at": 30},
+      {"position": "record", "frame": 50},
+      {"command": "edit.overwrite"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 50], ["C", 10, 21], ["A", 71, 29]],
+      "A1": [["A", 0, 50], ["C", 10, 21], ["A", 71, 29]],
+      "A2": [["A", 0, 50], ["C", 10, 21], ["A", 71, 29]]}
+  },
+  {
+    "name": "Load Filler: marked filler spliced in at the position",
+    "guide": "p.462",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 100]], "A1": [["A", 0, 100]], "A2": [["A", 0, 100]]}},
+    "steps": [
+      {"command": "composer.load_filler"},
+      {"mark": "source", "in": 0, "out": 9},
+      {"position": "record", "frame": 20},
+      {"command": "edit.splice_in"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 20], ["filler", 10], ["A", 20, 80]],
+      "A1": [["A", 0, 20], ["filler", 10], ["A", 20, 80]],
+      "A2": [["A", 0, 20], ["filler", 10], ["A", 20, 80]]}
+  }
+]

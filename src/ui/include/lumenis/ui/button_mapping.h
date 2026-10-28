@@ -5,6 +5,7 @@
 #include <QIcon>
 #include <QObject>
 #include <QPointer>
+#include <QSet>
 #include <QToolButton>
 
 #include <functional>
@@ -58,6 +59,11 @@ public:
     // the button's commandMapped; false without one.
     bool mapMenuCommand(const QString& commandId);
 
+    // A command whose buttons carry an orange mark in their corner while a mode of it is on (the
+    // Overwrite button during Sync Point editing, p.496).
+    void setMarked(const QString& commandId, bool on);
+    bool isMarked(const QString& commandId) const { return marked_.contains(commandId); }
+
     // Command pictures changed (a workspace button's name): every button
     // shows its command's picture again.
     void refreshIcons() { emit iconsChanged(); }
@@ -68,11 +74,14 @@ signals:
     void targetChanged();
     // Emitted by refreshIcons(); every MappableButton reloads its icon.
     void iconsChanged();
+    // setMarked() changed a command's mark; buttons repaint.
+    void marksChanged();
 
 private:
     Mode mode_ = Mode::ButtonToButton;
     QPointer<CommandRegistry> registry_; // cleared when it goes
     QPointer<MappableButton> target_;
+    QSet<QString> marked_;
 };
 
 // A command's button picture: one registered by the window that draws it

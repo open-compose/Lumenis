@@ -67,14 +67,14 @@ private slots:
         QCOMPARE(c.activeMonitor(), MonitorId::Source);
         QVERIFY(c.clipNameButton(MonitorId::Source)->text().startsWith(QStringLiteral("Interview")));
 
-        // The Clip Name menu: loaded clips, Clear Monitor and Clear Menu.
+        // The Clip Name menu: loaded clips, Load Filler (Source only, p.462), Clear Monitor and Clear Menu.
         c.load(MonitorId::Source, QStringLiteral("bin"), clip(QStringLiteral("B-roll"), 100));
         QMenu* menu = c.clipNameMenu(MonitorId::Source);
         QStringList texts;
         for (QAction* a : menu->actions()) {
             if (!a->isSeparator()) texts << a->text();
         }
-        QCOMPARE(texts, (QStringList{"B-roll", "Interview", "Clear Monitor", "Clear Menu"}));
+        QCOMPARE(texts, (QStringList{"B-roll", "Interview", "Load Filler", "Clear Monitor", "Clear Menu"}));
         menu->actions().at(1)->trigger();
         QCOMPARE(c.state(MonitorId::Source).current()->item.name, QStringLiteral("Interview"));
         c.clipNameMenu(MonitorId::Source)->actions().last()->trigger(); // Clear Menu

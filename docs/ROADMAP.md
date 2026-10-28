@@ -854,7 +854,9 @@ phase of their own. They are done in three steps:
   Filler at Start (p.462), Rename Track, Create Sequence Based on Selection
   (p.613) (U1d1, docs/spec/timeline-commands.md, is done); the Timeline settings still dimmed (U1e, docs/spec/timeline-settings.md, is done but for Segment Drag Snap, which waits for bin editing; Display During Segment Drag and Dynamic Play move to U2; Double-Click to Show Nesting and Highlight Suggested Render Areas to Phase 6).
 * U2, the Composer, editing and trim: Load Filler (p.99), Sync Point
-  Overwrite (p.496), AutoSequence (p.499), Loop Selected Clips (p.393), the
+  Overwrite (p.496) and the Composer settings' Edit tab (U2a,
+  docs/spec/composer-edit.md, is done but for Undo Only Record Events and
+  Color Framing), AutoSequence (p.499), Loop Selected Clips (p.393), the
   Timecode Window (p.389), Edit > Find (p.417); the Composer and Trim
   settings still dimmed (Single Mark Editing, Phantom Marks, trim loop,
   Dual Image Play, J-K-L Trim ...); from the Timeline settings, Display During

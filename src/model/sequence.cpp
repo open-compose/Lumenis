@@ -790,7 +790,7 @@ EditPlan planFitToFill(const EditMarks& source, const EditMarks& record, double*
 
 // Lengths are inclusive of both marks (OUT - IN + 1). recordStartFor() backtimes from a record OUT
 // when there is no record IN.
-EditPlan planEdit(const EditMarks& source, const EditMarks& record) {
+EditPlan planEdit(const EditMarks& source, const EditMarks& record, bool singleMark) {
     EditPlan plan;
     if (source.duration <= 0) {
         plan.error = QStringLiteral("There is no source material to edit.");
@@ -816,9 +816,9 @@ EditPlan planEdit(const EditMarks& source, const EditMarks& record) {
         plan.recordStart = *rIn;
         plan.sourceStart = sIn ? *sIn : sOut ? *sOut - plan.length + 1 : source.position;
     } else if (sOut) {
-        // Single-mark editing: the source position is the IN (p.468).
-        plan.sourceStart = source.position;
-        plan.length = *sOut - source.position + 1;
+        // Single-mark editing: the source position is the IN (p.468); without it, the clip's start.
+        plan.sourceStart = singleMark ? source.position : 0;
+        plan.length = *sOut - plan.sourceStart + 1;
         plan.recordStart = recordStartFor(plan.length);
     } else if (rOut) {
         plan.sourceStart = sIn.value_or(source.position);
@@ -826,9 +826,12 @@ EditPlan planEdit(const EditMarks& source, const EditMarks& record) {
         plan.length = *rOut - record.position + 1;
     } else {
         // From the source IN (or position) to the end of the clip, at the
-        // record IN or position (p.466, p.501).
+        // record IN or position (p.466, p.501). Single-mark editing: a source IN with the position
+        // after it ends at the position (p.468: "mark an In point ... play ... then press the
+        // Splice-in, Overwrite, or Replace Edit button").
         plan.sourceStart = sIn.value_or(source.position);
-        plan.length = source.duration - plan.sourceStart;
+        plan.length = singleMark && sIn && source.position > *sIn ? source.position - *sIn + 1
+                                                                  : source.duration - plan.sourceStart;
         plan.recordStart = rIn.value_or(record.position);
     }
     if (plan.length <= 0) {
@@ -841,10 +844,46 @@ EditPlan planEdit(const EditMarks& source, const EditMarks& record) {
     return plan;
 }
 
+EditPlan planSyncPoint(const EditMarks& source, const EditMarks& record) {
+    EditPlan plan;
+    const std::int64_t offset = source.position - record.position; // source frame - record frame
+    const auto& sIn = source.in;
+    const auto& sOut = source.out;
+    const auto& rIn = record.in;
+    const auto& rOut = record.out;
+    const int marks = (sIn ? 1 : 0) + (sOut ? 1 : 0) + (rIn ? 1 : 0) + (rOut ? 1 : 0);
+    if (marks == 2 && sIn && sOut) {
+        plan.sourceStart = *sIn;
+        plan.length = *sOut - *sIn + 1;
+    } else if (marks == 2 && rIn && rOut) {
+        plan.sourceStart = *rIn + offset;
+        plan.length = *rOut - *rIn + 1;
+    } else if (marks == 2 && sIn && rOut) {
+        plan.sourceStart = *sIn;
+        plan.length = *rOut + offset - *sIn + 1;
+    } else if (marks == 2 && rIn && sOut) {
+        plan.sourceStart = *rIn + offset;
+        plan.length = *sOut - plan.sourceStart + 1;
+    } else {
+        plan.error = QStringLiteral("Sync Point editing needs an IN and an OUT: both in one monitor, or one in each.");
+        return plan;
+    }
+    plan.recordStart = plan.sourceStart - offset;
+    if (plan.length <= 0) {
+        plan.error = QStringLiteral("The OUT mark is before the IN mark.");
+    } else if (plan.sourceStart < 0 || plan.sourceStart + plan.length > source.duration) {
+        plan.error = QStringLiteral("Insufficient source material to make this edit.");
+    } else if (plan.recordStart < 0) {
+        plan.error = QStringLiteral("The edit would start before the beginning of the sequence.");
+    }
+    return plan;
+}
+
 QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, const QString& binId,
-                      const BinItem& source, const TrackPatch& patch) {
+                      const BinItem& source, const TrackPatch& patch, bool createTracks) {
     QStringList changed;
     if (!plan.ok()) return changed;
+    const bool anyTracks = !sequence.tracks().isEmpty();
     const std::optional<Sequence> nested =
         source.kind == BinItemKind::Sequence ? std::optional<Sequence>(Sequence::fromItem(source)) : std::nullopt;
     for (const auto& [from, to] : patch.editPairs(sequence)) {
@@ -852,6 +891,7 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
         if (const Track* existing = sequence.track(to); existing && (existing->locked || (existing->kind == TrackKind::Audio && existing->format != format))) {
             continue;
         }
+        if (!createTracks && anyTracks && !sequence.track(to)) continue;
         if (!sequence.ensureTrack(to, format)) continue;
         QList<Segment> material;
         if (nested) {

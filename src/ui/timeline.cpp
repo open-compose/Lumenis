@@ -2117,6 +2117,7 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     v->addWidget(toolbar_);
 
     connect(&composer_, &Composer::changed, this, &Timeline::sync);
+    composer_.setPhantomResolver([this](MonitorId monitor) { return phantomMarks(monitor); });
     // The Sequence Map follows the sequence, the position and the selection.
     auto mapUpdate = [this] {
         if (map_) map_->update();
@@ -2186,8 +2187,63 @@ void Timeline::setOptions(const Options& options) {
     options_ = options;
     topbar_->setVisible(options.toolbar);
     if (options.onlyOneSegmentTool && liftTool_ && spliceTool_) setSegmentTool(model::EditKind::SpliceIn, false);
+    ButtonMapper::instance().setMarked(QStringLiteral("edit.overwrite"), options.syncPointEditing);
     view_->update();
     if (map_) map_->update();
+    composer_.refreshDisplay();
+}
+
+void Timeline::setSyncPointEditing(bool on) {
+    options_.syncPointEditing = on;
+    // "The orange mark on the Overwrite button signals Sync Point editing is active" (p.496).
+    ButtonMapper::instance().setMarked(QStringLiteral("edit.overwrite"), on);
+    emit changed();
+}
+
+void Timeline::loadFiller() {
+    // "The system loads a 2-minute clip of filler into the Source monitor" (p.462): ours, a sequence of
+    // filler on the record sequence's tracks (V1, A1 and A2 without one), in no bin, as Clipboard
+    // Contents is.
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    const bool sequence = rec && rec->item.kind == model::BinItemKind::Sequence;
+    const Rational rate = rec ? rec->item.editRate : Rational(std::max(format_.nominalFps, 1));
+    const std::int64_t length = 120 * std::max<std::int64_t>(format_.nominalFps, 1);
+    model::Sequence filler = model::Sequence::withDefaultTracks();
+    if (sequence) {
+        const model::Sequence seq = model::Sequence::fromItem(rec->item);
+        filler = model::Sequence();
+        for (const QString& name : seq.trackNames()) {
+            const model::Track* t = seq.track(name);
+            if (t && t->kind != model::TrackKind::Data) filler.ensureTrack(name, t->format);
+        }
+    }
+    for (const QString& name : filler.trackNames()) filler.track(name)->segments = {model::Segment::filler(length)};
+    model::BinItem clip;
+    clip.id = QStringLiteral("filler-") + model::newItemId();
+    clip.name = tr("Filler");
+    clip.kind = model::BinItemKind::Sequence;
+    clip.editRate = rate;
+    filler.storeIn(clip);
+    composer_.load(MonitorId::Source, QString(), clip);
+}
+
+std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>> Timeline::phantomMarks(MonitorId monitor) const {
+    // Phantom Marks (p.501): the marks the next Splice-in or Overwrite would use, where none is set.
+    if (!options_.phantomMarks) return {};
+    const model::MonitorState& source = composer_.state(MonitorId::Source);
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    if (source.isEmpty() || record.isEmpty()) return {};
+    const model::EditMarks sourceMarks{source.in(), source.out(), source.position(), source.duration()};
+    const model::EditMarks recordMarks{record.in(), record.out(), record.position(), record.duration()};
+    const model::EditPlan plan = options_.syncPointEditing ? model::planSyncPoint(sourceMarks, recordMarks)
+                                                           : model::planEdit(sourceMarks, recordMarks, options_.singleMarkEditing);
+    if (!plan.ok()) return {};
+    const model::MonitorState& s = monitor == MonitorId::Source ? source : record;
+    const std::int64_t start = monitor == MonitorId::Source ? plan.sourceStart : plan.recordStart;
+    std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>> out;
+    if (!s.in()) out.first = start;
+    if (!s.out()) out.second = start + plan.length - 1;
+    return out;
 }
 
 bool Timeline::hasShown() const {
@@ -2241,6 +2297,14 @@ void Timeline::sync() {
     const model::MonitorState& source = composer_.state(MonitorId::Source);
     const QStringList sourceBefore = patch_.sourceTracks();
     patch_.setSourceTracks(source.isEmpty() ? QStringList() : model::sourceTracksOf(source.current()->item));
+    // Auto-enable Source Tracks (p.1160): new source material starts with all its tracks enabled.
+    const QString sourceId = source.isEmpty() ? QString() : source.current()->item.id;
+    if (sourceId != lastSourceId_) {
+        lastSourceId_ = sourceId;
+        if (options_.autoEnableSourceTracks) {
+            for (const QString& t : patch_.sourceTracks()) patch_.setSourceSelected(t, true);
+        }
+    }
     // Auto-Patching (p.1220): another source clip is patched to the enabled record tracks.
     if (options_.autoPatching && patch_.sourceTracks() != sourceBefore) autoPatch();
 
@@ -2770,6 +2834,8 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("timeline.restore_default_patch"),
         QStringLiteral("timeline.add_filler_at_start"),
         QStringLiteral("timeline.show_sequence_map"),
+        QStringLiteral("composer.load_filler"),
+        QStringLiteral("composer.sync_point_overwrite"),
         QStringLiteral("timeline.find_black_hole"),
         QStringLiteral("timeline.find_flash_frame"),
         QStringLiteral("timeline.remove_match_frame_edits"),
@@ -2829,6 +2895,14 @@ bool Timeline::perform(const QString& id) {
         return zoomWaveform(id == QLatin1String("timeline.enlarge_waveform") ? 1 : -1);
     }
     if (id == QLatin1String("timeline.add_filler_at_start")) return addFillerAtStart();
+    if (id == QLatin1String("composer.load_filler")) {
+        loadFiller();
+        return true;
+    }
+    if (id == QLatin1String("composer.sync_point_overwrite")) {
+        setSyncPointEditing(!options_.syncPointEditing);
+        return true;
+    }
     if (id == QLatin1String("timeline.show_sequence_map")) {
         showSequenceMap(!mapShown_);
         return true;
@@ -3070,8 +3144,11 @@ void Timeline::edit(model::EditKind kind, bool fitToFill) {
     const model::EditMarks sourceMarks{source.in(), source.out(), source.position(), source.duration()};
     const model::EditMarks recordMarks{record.in(), record.out(), record.position(), seq.duration()};
     double speed = 1.0;
-    const model::EditPlan plan =
-        fitToFill ? model::planFitToFill(sourceMarks, recordMarks, &speed) : model::planEdit(sourceMarks, recordMarks);
+    // Sync Point editing overwrites only (p.1159).
+    const bool syncPoint = !fitToFill && kind == model::EditKind::Overwrite && options_.syncPointEditing;
+    const model::EditPlan plan = fitToFill   ? model::planFitToFill(sourceMarks, recordMarks, &speed)
+                                 : syncPoint ? model::planSyncPoint(sourceMarks, recordMarks)
+                                             : model::planEdit(sourceMarks, recordMarks, options_.singleMarkEditing);
     if (!plan.ok()) {
         fail(plan.error);
         return;
@@ -3085,7 +3162,7 @@ void Timeline::edit(model::EditKind kind, bool fitToFill) {
         fail(mismatch);
         return;
     }
-    const QStringList edited = model::applyEdit(seq, kind, plan, src->binId, src->item, patch_);
+    const QStringList edited = model::applyEdit(seq, kind, plan, src->binId, src->item, patch_, options_.autoCreateTracks);
     if (edited.isEmpty()) {
         fail(tr("Select a source track and a record track to edit."));
         return;
@@ -3102,7 +3179,30 @@ void Timeline::edit(model::EditKind kind, bool fitToFill) {
     model::BinItem after = before;
     seq.storeIn(after);
     after.modified = QDateTime::currentDateTimeUtc();
-    commit(fitToFill ? tr("Fit to Fill") : kind == model::EditKind::SpliceIn ? tr("Splice-in") : tr("Overwrite"), before, after);
+    // Copy Source Markers (p.1160): the markers within the source material go with it, onto the record
+    // tracks their source tracks are patched to, cut short at the edit's end.
+    if (options_.copySourceMarkers) {
+        QList<model::Marker> markers = model::markersOf(after);
+        const std::int64_t sourceEnd = plan.sourceStart + plan.length;
+        bool copied = false;
+        for (model::Marker m : model::markersOf(src->item)) {
+            if (m.frame < plan.sourceStart || m.frame >= sourceEnd) continue;
+            const QString to = patch_.recordFor(m.track);
+            if (!edited.contains(to)) continue;
+            m.id = model::newItemId();
+            m.length = std::min(m.length, sourceEnd - m.frame);
+            m.frame = plan.recordStart + (m.frame - plan.sourceStart);
+            m.track = to;
+            markers << m;
+            copied = true;
+        }
+        if (copied) model::setMarkers(after, markers);
+    }
+    commit(syncPoint   ? tr("Sync Point Overwrite")
+           : fitToFill ? tr("Fit to Fill")
+           : kind == model::EditKind::SpliceIn ? tr("Splice-in")
+                                               : tr("Overwrite"),
+           before, after);
     // The Record monitor shows the end of the new edit (p.464); the
     // sequence's marks are used up.
     record.clearBoth();

@@ -115,6 +115,16 @@ public:
     // there. `offline` is set when the media cannot be read (p.347).
     using PictureResolver = std::function<QImage(MonitorId, QSize size, bool* offline)>;
     void setPictureResolver(PictureResolver resolver) { pictures_ = std::move(resolver); }
+    // Phantom marks (Composer settings, p.501): the IN and OUT an edit would use where none is set,
+    // drawn in blue in the position bars. The Timeline works them out.
+    using PhantomResolver =
+        std::function<std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>>(MonitorId)>;
+    void setPhantomResolver(PhantomResolver resolver) { phantoms_ = std::move(resolver); }
+    std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>> phantomMarks(MonitorId monitor) const {
+        return phantoms_ ? phantoms_(monitor) : std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>>{};
+    }
+    // Repaints the monitors and position bars, after a setting they show changed.
+    void refreshDisplay() { refresh(); }
     // Puts a clip that is in no bin (loaded from the Source Browser) into
     // one, returning the bin's id; empty if it cannot.
     using Committer = std::function<QString(const model::BinItem&)>;
@@ -389,6 +399,7 @@ private:
     ItemResolver resolver_;
     MobResolver mobs_;
     PictureResolver pictures_;
+    PhantomResolver phantoms_;
     PlayClock playClock_;
     // The position play last started (or changed speed) from; the play clock counts from here.
     std::int64_t playStart_ = 0;

@@ -3594,6 +3594,12 @@ void MainWindow::applySettings() {
                                ? model::EditKind::SpliceIn
                                : model::EditKind::Overwrite;
     o.activateRecordAfterEdit = s.flag(composer, QStringLiteral("activateRecordAfterEdit"));
+    o.syncPointEditing = s.flag(composer, QStringLiteral("syncPointEditing"));
+    o.singleMarkEditing = s.flag(composer, QStringLiteral("singleMarkEditing"));
+    o.phantomMarks = s.flag(composer, QStringLiteral("phantomMarks"));
+    o.autoCreateTracks = s.flag(composer, QStringLiteral("autoCreateTracks"));
+    o.autoEnableSourceTracks = s.flag(composer, QStringLiteral("autoEnableSourceTracks"));
+    o.copySourceMarkers = s.flag(composer, QStringLiteral("copySourceMarkers"));
     o.stopAtHead = s.flag(composer, QStringLiteral("stopAtHead"));
     o.stopAtTail = s.flag(composer, QStringLiteral("stopAtTail"));
     o.stopAtMarkers = s.flag(composer, QStringLiteral("stopAtMarkers"));

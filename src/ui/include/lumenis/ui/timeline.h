@@ -239,6 +239,13 @@ public:
         model::EditKind defaultSegmentTool = model::EditKind::Overwrite;
         // Composer settings: Edit tab (p.1160).
         bool activateRecordAfterEdit = false;
+        // Composer settings, Edit tab (p.1159-1160; docs/spec/composer-edit.md).
+        bool syncPointEditing = false;    // Sync Point Editing (Overwrites), also Composer > Sync Point Overwrite
+        bool singleMarkEditing = true;    // Single Mark Editing (p.468)
+        bool phantomMarks = false;        // Phantom Marks (p.501)
+        bool autoCreateTracks = true;     // Auto-create New Tracks
+        bool autoEnableSourceTracks = true; // Auto-enable Source Tracks
+        bool copySourceMarkers = true;    // Copy Source Markers
         // Composer settings: Move tab (p.1160).
         bool stopAtHead = true;
         bool stopAtTail = false;
@@ -1030,6 +1037,15 @@ private:
     bool mapInWindow_ = false;
     // Puts the overlay at the bottom right of the tracks area (ours).
     void placeSequenceMap();
+    // Composer > Load Filler (p.462): a two-minute clip of filler in the Source monitor, on the record
+    // sequence's tracks.
+    void loadFiller();
+    // Composer > Sync Point Overwrite (p.496): turns Sync Point editing on or off; while on the Overwrite
+    // buttons carry an orange mark.
+    void setSyncPointEditing(bool on);
+    // The phantom marks of a monitor: the marks an edit would use that are not set (p.501).
+    std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>> phantomMarks(MonitorId monitor) const;
+    QString lastSourceId_; // Auto-enable Source Tracks: the clip the source tracks were set for
     // Auto-Patching (Timeline settings, p.1220), and a patch with Auto-Monitoring (p.629).
     void autoPatch();
     bool movePatch(const QString& source, const QString& record);
