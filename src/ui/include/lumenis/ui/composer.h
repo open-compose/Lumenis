@@ -238,6 +238,21 @@ public:
     // Record monitor plays the position (B, or the side last clicked; A shows the frame before it);
     // with Dual Image Play both sides follow play (p.659).
     std::int64_t trimFrame(model::TrimSide side) const;
+    // Display During Segment Drag (Timeline settings, p.617-618, p.1219), set by the Timeline while a
+    // segment is dragged. Four-frame: the Source monitor shows `frames` 0 and 1 side by side (the frame
+    // before the drop point and the segment's first frame), the Record monitor 2 and 3 (the segment's
+    // last frame and the frame after where it would end), with the offset counter centred beneath; with
+    // only the Record monitor, its outer two. Otherwise (Position Bar) the Record monitor shows frame 0.
+    // All frames are the Record monitor's sequence's.
+    struct DragDisplay {
+        bool on = false;
+        bool fourFrame = false;
+        std::int64_t frames[4] = {0, 0, 0, 0};
+        std::int64_t offset = 0;
+    };
+    void setDragDisplay(const DragDisplay& display);
+    const DragDisplay& dragDisplay() const { return drag_; }
+    QWidget* dragCounter() const;
     // A trim picture was clicked: that side plays in real time (p.659).
     void setTrimPlaySide(model::TrimSide side);
     model::TrimSide trimPlaySide() const { return trimPlaySide_; }
@@ -322,6 +337,16 @@ public:
     // steps a frame; holding both starts slow play, and letting go of L or J stops it. There is no sound.
     void playSlow(int direction);
     bool isSlow() const { return slow_; }
+    // Dynamic Play Forward and Reverse (p.401-402; the Play tab): play starts at normal speed, and each
+    // press in the same direction raises the speed by `acceleration` steps, twelve of which double it
+    // (Timeline settings, Dynamic Play Acceleration, p.1219). With `slowStart` (Alt) play starts
+    // `slowStartPresses` presses below normal speed ("the number of keystrokes it will take to get to
+    // 1x speed"). The other direction starts again at normal speed. Ours: the speed stops rising at 8
+    // times normal; sound plays only at whole multiples of normal speed.
+    void playDynamic(int direction, bool slowStart);
+    void setDynamicPlay(int acceleration, int slowStartPresses);
+    // The current speed as a multiple of normal (negative: reverse); 0 when stopped.
+    double rate() const;
     // The slow-play rate for a project's nominal frame rate: 8 for 30 (NTSC), 6 for 25 and 24, scaled
     // for their multiples (ours: 16 for 60, 12 for 50, 12 for 48), else a quarter.
     static int slowFps(int nominalFps);
@@ -457,6 +482,11 @@ private:
     bool kHeld_ = false;
     int speed_ = 0;
     bool slow_ = false; // slow play (playSlow())
+    double fraction_ = 0; // Dynamic Play between whole speeds: the multiple of normal (speed_ is +-1)
+    int dynamicDirection_ = 0; // Dynamic Play is playing this way
+    int dynamicSteps_ = 0;     // twelfths of an octave of speed above normal
+    int dynamicAcceleration_ = 3;
+    int dynamicSlowStart_ = 3;
     std::optional<std::int64_t> stopAt_; // Play In to Out
     // Loop Selected Clips: the clips, the one playing, and whether each plays whole.
     QList<LoopClip> clipLoop_;
@@ -481,6 +511,8 @@ private:
     QWidget* trimBar_ = nullptr;
     QWidget* smallTrim_ = nullptr;
     QWidget* middle_ = nullptr;
+    DragDisplay drag_;
+    class QLabel* dragCounter_ = nullptr;
     QList<QWidget*> middleRows_;
     QList<QStringList> middleLayout_;
     model::TrackingFormat sourceTracking2_ = model::TrackingFormat::None;

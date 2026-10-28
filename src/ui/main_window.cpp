@@ -3618,11 +3618,18 @@ void MainWindow::applySettings() {
     o.dupeHandles = s.text(tl, QStringLiteral("dupeHandles")).toDouble();
     o.startFillerSeconds = s.value(tl, QStringLiteral("startFiller")).toInt();
     o.flashFrames = s.value(tl, QStringLiteral("flashFrames")).toInt(10);
+    // Dynamic Play Acceleration and Slow start speed (Timeline settings, p.1219), for the Composer.
+    composer_->setDynamicPlay(s.value(tl, QStringLiteral("dynamicPlayAcceleration")).toInt(3),
+                              s.value(tl, QStringLiteral("slowStartSpeed")).toInt(3));
     const QString text = s.value(tl, QStringLiteral("timelineText")).toString();
     o.textColor = text == QLatin1String("black")  ? Timeline::Options::TextColor::Black
                   : text == QLatin1String("both") ? Timeline::Options::TextColor::Both
                                                   : Timeline::Options::TextColor::White;
     o.wireframeDragging = s.value(tl, QStringLiteral("wireframeDragging")).toBool();
+    const QString dragDisplay = s.value(tl, QStringLiteral("segmentDragDisplay")).toString();
+    o.segmentDragDisplay = dragDisplay == QLatin1String("fourFrame") ? Timeline::Options::DragDisplay::FourFrame
+                           : dragDisplay == QLatin1String("none")    ? Timeline::Options::DragDisplay::None
+                                                                     : Timeline::Options::DragDisplay::PositionBar;
     o.fastScrub = s.value(tl, QStringLiteral("fastScrub")).toBool();
     o.autoPatching = s.value(tl, QStringLiteral("autoPatching")).toBool();
     o.autoMonitoring = s.value(tl, QStringLiteral("autoMonitoring")).toBool();

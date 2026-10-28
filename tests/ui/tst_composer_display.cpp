@@ -1,10 +1,12 @@
 // The Composer settings' Window tab (Editing Guide p.380, p.384-385, p.1158-1159;
 // docs/spec/composer-display.md): two rows of data with a second tracking display, the Fast Menu
 // and the gang icon; Flow Data Dynamically; Tick Marks in Position Bars; the middle Composer button
-// panel.
+// panel. Also Dynamic Play (p.401-402) and Display During Segment Drag (p.617-618, p.1219).
 #include "lumenis/model/bin.h"
 #include "lumenis/ui/composer.h"
+#include "lumenis/model/sequence.h"
 #include "lumenis/ui/theme.h"
+#include "lumenis/ui/timeline.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -159,6 +161,111 @@ private slots:
         QVERIFY(!c.middlePanel()->isVisible());
         c.setTrimDisplay({});
         QVERIFY(c.middlePanel()->isVisible());
+    }
+
+    // Dynamic Play (p.401-402): normal speed first, then 12 steps double it; Alt starts below normal.
+    void dynamicPlay() {
+        Composer c;
+        c.load(MonitorId::Source, QStringLiteral("bin"), clip(QStringLiteral("a"), 10000));
+        c.setDynamicPlay(3, 3);
+        QVERIFY(c.perform(QStringLiteral("play.dynamic_play_forward")));
+        QCOMPARE(c.rate(), 1.0);
+        // "the default setting of 3 means that pressing the key 4 times (3 x 4 = 12) doubles the play
+        // speed" (p.402).
+        for (int i = 0; i < 3; ++i) c.playDynamic(1, false);
+        QVERIFY(c.rate() > 1.5 && c.rate() < 1.75);
+        QCOMPARE(c.playDisplay().kind, Composer::PlayDisplay::Kind::Forward);
+        c.playDynamic(1, false);
+        QCOMPARE(c.rate(), 2.0);
+        // Frames move at that rate: 2 x 25 fps for one second.
+        const std::int64_t before = c.state(MonitorId::Source).position();
+        c.advance(1000);
+        QCOMPARE(c.state(MonitorId::Source).position() - before, 50);
+        // The other way starts again at normal speed.
+        c.playDynamic(-1, false);
+        QCOMPARE(c.rate(), -1.0);
+        c.stop();
+        // Alt: "The Slow Start Speed setting is the number of keystrokes it will take to get to 1x speed".
+        c.playDynamic(1, true);
+        QVERIFY(c.rate() > 0.5 && c.rate() < 0.6); // 2^(-9/12)
+        for (int i = 0; i < 3; ++i) c.playDynamic(1, false);
+        QCOMPARE(c.rate(), 1.0);
+        // A higher acceleration doubles in fewer presses.
+        c.stop();
+        c.setDynamicPlay(6, 3);
+        c.playDynamic(1, false);
+        c.playDynamic(1, false);
+        c.playDynamic(1, false);
+        QCOMPARE(c.rate(), 2.0);
+        c.stop();
+        QCOMPARE(c.rate(), 0.0);
+    }
+
+    // Display During Segment Drag (p.617-618, p.1219): the four-frame display and its offset counter,
+    // the Position Bar frame, or nothing.
+    void segmentDragDisplay() {
+        Composer c;
+        Timeline timeline(c);
+        c.setPictureResolver([](MonitorId, std::int64_t frame, QSize size, bool*) {
+            QImage image(size, QImage::Format_RGB32);
+            image.fill(QColor(static_cast<int>(frame % 256), 0, 0));
+            return image;
+        });
+        c.resize(900, 360);
+        c.show();
+        BinItem item;
+        item.id = model::newItemId();
+        item.name = QStringLiteral("Cut");
+        item.kind = BinItemKind::Sequence;
+        item.editRate = Rational(25);
+        Sequence seq = Sequence::withDefaultTracks();
+        Segment a;
+        a.clipId = QStringLiteral("a");
+        a.name = QStringLiteral("a");
+        a.sourceTrack = QStringLiteral("V1");
+        a.length = 50;
+        Segment b = a;
+        b.clipId = QStringLiteral("b");
+        b.name = QStringLiteral("b");
+        seq.splice(QStringLiteral("V1"), 0, {a, b, a});
+        seq.storeIn(item);
+        c.load(MonitorId::Record, QStringLiteral("bin"), item);
+        timeline.setSelection({{QStringLiteral("V1"), 50}}); // b, frames 50-99
+        Timeline::Options o = timeline.options();
+        o.segmentDragDisplay = Timeline::Options::DragDisplay::FourFrame;
+        timeline.setOptions(o);
+        timeline.showSegmentDrag(30);
+        const Composer::DragDisplay& d = c.dragDisplay();
+        QVERIFY(d.on && d.fourFrame);
+        QCOMPARE(d.offset, 30);
+        QCOMPARE(d.frames[0], 79);  // before where b's head would go (80)
+        QCOMPARE(d.frames[1], 50);  // b's first frame
+        QCOMPARE(d.frames[2], 99);  // b's last frame
+        QCOMPARE(d.frames[3], 130); // after where it would end
+        QVERIFY(c.dragCounter()->isVisible());
+        // The Source monitor shows frames 79 and 50 side by side.
+        const QImage shot = c.picture(MonitorId::Source)->grab().toImage();
+        const QRect pic = c.picture(MonitorId::Source)->pictureRect();
+        QCOMPARE(qRed(shot.pixel(pic.left() + pic.width() / 4, pic.center().y())), 79);
+        QCOMPARE(qRed(shot.pixel(pic.left() + 3 * pic.width() / 4, pic.center().y())), 50);
+        // The drag ends: back to the monitors.
+        timeline.showSegmentDrag(std::nullopt);
+        QVERIFY(!c.dragDisplay().on);
+        QVERIFY(!c.dragCounter()->isVisible());
+        // Position Bar: the Record monitor shows the frame where the head would go.
+        o.segmentDragDisplay = Timeline::Options::DragDisplay::PositionBar;
+        timeline.setOptions(o);
+        timeline.showSegmentDrag(-20);
+        QVERIFY(c.dragDisplay().on && !c.dragDisplay().fourFrame);
+        QCOMPARE(c.dragDisplay().frames[0], 30);
+        QVERIFY(!c.dragCounter()->isVisible());
+        const QImage record = c.picture(MonitorId::Record)->grab().toImage();
+        QCOMPARE(qRed(record.pixel(record.width() / 2, record.height() / 2)), 30);
+        // None.
+        o.segmentDragDisplay = Timeline::Options::DragDisplay::None;
+        timeline.setOptions(o);
+        timeline.showSegmentDrag(10);
+        QVERIFY(!c.dragDisplay().on);
     }
 };
 

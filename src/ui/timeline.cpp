@@ -49,6 +49,7 @@
 #include <QWheelEvent>
 
 #include <algorithm>
+#include <limits>
 #include <cmath>
 #include <memory>
 
@@ -1724,6 +1725,7 @@ void TimelineView::mouseMoveEvent(QMouseEvent* event) {
     } else if (dragFrom_) {
         dragPos_ = pos;
         dragging_ = dragging_ || (pos - *dragFrom_).manhattanLength() >= QApplication::startDragDistance();
+        if (dragging_) timeline_.showSegmentDrag(dragFrames(event->modifiers()));
         update();
     } else if (scrubbing_) {
         moveIndicator(pos, event->modifiers());
@@ -1885,6 +1887,7 @@ void TimelineView::mouseReleaseEvent(QMouseEvent* event) {
         const int tracks = dragTracks();
         dragFrom_.reset();
         dragging_ = false;
+        timeline_.showSegmentDrag(std::nullopt);
         // Dropped outside the Timeline: cancelled (p.620). Alt copies.
         if (moved && rect().contains(pos) && (frames != 0 || tracks != 0)) {
             timeline_.moveSelection(frames, tracks, dragKind_, event->modifiers() & Qt::AltModifier);
@@ -4154,6 +4157,44 @@ QList<model::TrimRoller> Timeline::syncRollers() const {
         out << model::TrimRoller{name, first.frame, first.side};
     }
     return out;
+}
+
+void Timeline::showSegmentDrag(std::optional<std::int64_t> frames) {
+    Composer::DragDisplay d;
+    const model::LoadedClip* rec = recordSequence();
+    if (frames && rec && !selection_.isEmpty() && options_.segmentDragDisplay != Options::DragDisplay::None) {
+        const model::Sequence seq = model::Sequence::fromItem(rec->item);
+        std::int64_t head = std::numeric_limits<std::int64_t>::max();
+        std::int64_t end = 0;
+        for (const model::SegmentRef& ref : selection_) {
+            const auto seg = model::segmentFor(seq, ref);
+            if (!seg) continue;
+            head = std::min(head, ref.start);
+            end = std::max(end, ref.start + seg->length);
+        }
+        if (end > head) {
+            const std::int64_t last = std::max<std::int64_t>(composer_.state(MonitorId::Record).duration() - 1, 0);
+            const std::int64_t to = head + *frames;
+            d.on = true;
+            d.fourFrame = options_.segmentDragDisplay == Options::DragDisplay::FourFrame;
+            d.offset = *frames;
+            if (d.fourFrame) {
+                // "The two outer frames indicate ending and beginning frames of clips before and after
+                // the segment. The two inner frames represent the start and end frames of the segment"
+                // (p.618). Ours: the outer frames are those of the sequence as it is, around where the
+                // segment would go.
+                d.frames[0] = std::clamp<std::int64_t>(to - 1, 0, last);
+                d.frames[1] = head;
+                d.frames[2] = end - 1;
+                d.frames[3] = std::clamp<std::int64_t>(to + (end - head), 0, last);
+            } else {
+                // Position Bar: "shows the frame at the blue position bar when dragging a segment"
+                // (p.1219). Ours: the frame where the segment's head would go.
+                d.frames[0] = std::clamp<std::int64_t>(to, 0, last);
+            }
+        }
+    }
+    composer_.setDragDisplay(d);
 }
 
 std::int64_t Timeline::playLoopCut() const {

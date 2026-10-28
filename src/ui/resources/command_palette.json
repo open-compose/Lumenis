@@ -12,7 +12,7 @@
     {"name": "Play", "page": 96, "columns": [
       ["play.play", "play.play_reverse", "play.pause", "play.play_forward"],
       ["play.play_in_to_out", "play.mouse_jog", "play.mouse_shuttle", "play.digital_audio_scrub"],
-      ["play.audio_loop_play", "play.edit_review"]
+      ["play.audio_loop_play", "play.edit_review", "play.dynamic_play_forward", "play.dynamic_play_reverse"]
     ]},
     {"name": "Edit", "page": 100, "columns": [
       ["edit.mark_in", "edit.mark_out", "edit.mark_clip", "edit.audio_mark_in", "edit.audio_mark_out"],

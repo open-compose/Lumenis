@@ -277,6 +277,9 @@ public:
         enum class TextColor { White, Black, Both };
         TextColor textColor = TextColor::White; // Timeline Text Color
         bool wireframeDragging = false;         // Wireframe Dragging: outlines only while dragging
+        // Display During Segment Drag (p.617-618, p.1219).
+        enum class DragDisplay { PositionBar, FourFrame, None };
+        DragDisplay segmentDragDisplay = DragDisplay::PositionBar;
         bool fastScrub = false;                 // Use Fast Scrub: no marks or markers while scrubbing
         // Timeline settings, Edit tab (p.1220; docs/spec/timeline-settings.md).
         bool autoPatching = false;         // Auto-Patching: patches follow the enabled tracks
@@ -363,6 +366,9 @@ public:
     // is Lift/Overwrite, as for a lasso with no tool, p.612).
     bool isSegmentTool(model::EditKind kind) const;
     void setSegmentTool(model::EditKind kind, bool on);
+    // A segment drag of the selection by `frames` is under way (or, with nullopt, has ended): shows it
+    // in the Composer as Display During Segment Drag says (p.617-618, p.1219).
+    void showSegmentDrag(std::optional<std::int64_t> frames);
     // Turns every edit tool of the Smart Tool off: both segment tools and both trim tools (p.1220).
     void disableSmartTools();
     // The kind of edit the segment tools make: the one tool that is on, else Lift/Overwrite.

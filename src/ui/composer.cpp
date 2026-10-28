@@ -591,6 +591,34 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
     p.fillRect(rect(), QColor(18, 18, 18));
     const QRect pic = pictureRect();
     p.fillRect(pic, Qt::black);
+    const Composer::DragDisplay& drag = composer_.dragDisplay();
+    if (drag.on && !trimSide_ && (drag.fourFrame || monitor_ == MonitorId::Record)) {
+        // Display During Segment Drag (p.617-618): two frames side by side, or the Position Bar frame.
+        const double q = composer_.qualityScale();
+        auto paintFrame = [&](const QRect& area, std::int64_t frame) {
+            const QSize decode(std::max(1, static_cast<int>(area.width() * q)), std::max(1, static_cast<int>(area.height() * q)));
+            const QImage image = composer_.pictureAt(MonitorId::Record, frame, decode);
+            if (image.isNull()) return;
+            const QSize fit = image.size().scaled(area.size(), Qt::KeepAspectRatio);
+            p.drawImage(QRect(area.left() + (area.width() - fit.width()) / 2, area.top() + (area.height() - fit.height()) / 2,
+                              fit.width(), fit.height()),
+                        image);
+        };
+        if (!drag.fourFrame) {
+            paintFrame(pic, drag.frames[0]);
+            return;
+        }
+        const bool single = composer_.isSingleMonitor();
+        const std::int64_t left = monitor_ == MonitorId::Source ? drag.frames[0] : single ? drag.frames[0] : drag.frames[2];
+        const std::int64_t right = monitor_ == MonitorId::Source ? drag.frames[1] : drag.frames[3];
+        const int half = pic.width() / 2;
+        const QRect a(pic.left(), pic.top(), half - 1, pic.height());
+        const QRect b(pic.left() + half + 1, pic.top(), pic.width() - half - 1, pic.height());
+        p.fillRect(QRect(pic.left() + half - 1, pic.top(), 2, pic.height()), QColor(18, 18, 18));
+        paintFrame(a, left);
+        paintFrame(b, right);
+        return;
+    }
     if (const std::optional<model::TrimSide> side = shownTrimSide()) {
         // A trim picture: the sequence's frame on that side of the transition, without marks.
         const double q = composer_.qualityScale();
@@ -842,6 +870,16 @@ Composer::Composer(QWidget* parent) : QWidget(parent) {
     trims->addStretch(1);
     trimBar_->hide();
     outer->addWidget(trimBar_);
+    // The four-frame display's offset counter, centred below the monitors (p.617).
+    dragCounter_ = new QLabel(this);
+    dragCounter_->setObjectName(QStringLiteral("dragCounter"));
+    dragCounter_->setAlignment(Qt::AlignCenter);
+    dragCounter_->setFixedHeight(kInfoHeight);
+    QPalette dp = dragCounter_->palette();
+    dp.setColor(QPalette::WindowText, QColor(kTrimActive));
+    dragCounter_->setPalette(dp);
+    dragCounter_->hide();
+    outer->addWidget(dragCounter_);
 
     // Playback steps: tick() runs every kTickInterval ms while playing (started by play(), stopped by
     // stop()).
@@ -1350,6 +1388,18 @@ void Composer::setTrimDisplay(const TrimDisplay& display) {
     refresh();
 }
 
+void Composer::setDragDisplay(const DragDisplay& display) {
+    drag_ = display;
+    const bool four = display.on && display.fourFrame;
+    dragCounter_->setVisible(four);
+    dragCounter_->setText(four ? QString::number(display.offset) : QString());
+    refresh();
+}
+
+QWidget* Composer::dragCounter() const {
+    return dragCounter_;
+}
+
 QToolButton* Composer::trimCounter(MonitorId monitor) const {
     return column(monitor).trimCounter;
 }
@@ -1417,12 +1467,65 @@ void Composer::play(int speed) {
     }
     speed_ = speed;
     slow_ = false;
+    fraction_ = 0;
+    dynamicDirection_ = 0;
     carry_ = 0;
     playStart_ = s.position();
     clock_.restart();
     timer_->start();
     refresh();
     emit playStarted(active_, speed);
+}
+
+void Composer::setDynamicPlay(int acceleration, int slowStartPresses) {
+    dynamicAcceleration_ = std::clamp(acceleration, 1, 12);
+    dynamicSlowStart_ = std::clamp(slowStartPresses, 0, 12);
+}
+
+void Composer::playDynamic(int direction, bool slowStart) {
+    const model::MonitorState& s = state(active_);
+    if (s.isEmpty() || direction == 0) return;
+    const int dir = direction > 0 ? 1 : -1;
+    int steps = 0;
+    if (dynamicDirection_ == dir && isPlaying()) {
+        // "A total of 12 steps will double the play speed" (p.402); ours: no faster than 8x (36 steps).
+        steps = std::min(dynamicSteps_ + dynamicAcceleration_, 36);
+    } else if (slowStart) {
+        steps = -dynamicSlowStart_ * dynamicAcceleration_;
+    }
+    const double multiple = std::pow(2.0, steps / 12.0);
+    const double whole = std::round(multiple);
+    if (std::abs(multiple - whole) < 1e-9) {
+        play(dir * static_cast<int>(whole)); // with sound, as J and L
+    } else {
+        if (speed_ == 0) stats_ = {};
+        if (loop_) {
+            stopAt_.reset();
+            endLoop();
+        }
+        speed_ = dir;
+        slow_ = false;
+        fraction_ = multiple;
+        carry_ = 0;
+        playStart_ = s.position();
+        clock_.restart();
+        timer_->start();
+        refresh();
+        emit playStarted(active_, 0); // no sound between whole speeds
+    }
+    dynamicDirection_ = dir;
+    dynamicSteps_ = steps;
+}
+
+double Composer::rate() const {
+    if (speed_ == 0) return 0;
+    if (fraction_ > 0) return speed_ * fraction_;
+    if (slow_) {
+        const model::MonitorState& s = state(active_);
+        const int nominal = s.isEmpty() ? 25 : TimecodeFormat::forRate(s.current()->item.editRate, false).nominalFps;
+        return speed_ * static_cast<double>(slowFps(nominal)) / std::max(nominal, 1);
+    }
+    return speed_;
 }
 
 // Slow play runs on the wall clock, without sound: playStarted() says speed 0 so none is started.
@@ -1439,6 +1542,8 @@ void Composer::playSlow(int direction) {
     }
     speed_ = direction > 0 ? 1 : -1;
     slow_ = true;
+    fraction_ = 0;
+    dynamicDirection_ = 0;
     carry_ = 0;
     playStart_ = s.position();
     clock_.restart();
@@ -1460,9 +1565,11 @@ Composer::PlayDisplay Composer::playDisplay() const {
     if (speed_ == 0) return d;
     const model::MonitorState& s = state(active_);
     const int nominal = s.isEmpty() ? 25 : TimecodeFormat::forRate(s.current()->item.editRate, false).nominalFps;
-    d.fps = slow_ ? slowFps(nominal) : nominal * std::abs(speed_);
-    d.kind = speed_ < 0               ? PlayDisplay::Kind::Reverse
-             : speed_ == 1 && !slow_ ? PlayDisplay::Kind::Normal
+    d.fps = slow_          ? slowFps(nominal)
+            : fraction_ > 0 ? static_cast<int>(std::lround(nominal * fraction_))
+                            : nominal * std::abs(speed_);
+    d.kind = speed_ < 0                               ? PlayDisplay::Kind::Reverse
+             : speed_ == 1 && !slow_ && fraction_ == 0 ? PlayDisplay::Kind::Normal
                                       : PlayDisplay::Kind::Forward;
     return d;
 }
@@ -1475,6 +1582,8 @@ void Composer::stop() {
     stopAt_.reset();
     speed_ = 0;
     slow_ = false;
+    fraction_ = 0;
+    dynamicDirection_ = 0;
     timer_->stop();
     refresh();
     emit playStopped();
@@ -1618,7 +1727,7 @@ void Composer::tick() {
     // smooth audio scrub p.675); faster, or with no sound, the wall clock
     // does.
     std::optional<double> played;
-    if (!slow_ && std::abs(speed_) <= 3 && playClock_) played = playClock_();
+    if (!slow_ && fraction_ == 0 && std::abs(speed_) <= 3 && playClock_) played = playClock_();
     // The play clock gives seconds of program played since playStart_ (negative going backward). The
     // picture only ever moves in the direction of play, so a clock that lags a tick holds the frame.
     if (played) {
@@ -1672,8 +1781,9 @@ double Composer::qualityScale() const {
 void Composer::advance(qint64 ms) {
     if (speed_ == 0) return;
     model::MonitorState& s = state(active_);
-    const double rate = slow_ ? static_cast<double>(playDisplay().fps) * (speed_ > 0 ? 1.0 : -1.0)
-                              : framesPerSecond(s) * speed_;
+    const double rate = slow_            ? static_cast<double>(playDisplay().fps) * (speed_ > 0 ? 1.0 : -1.0)
+                        : fraction_ > 0 ? framesPerSecond(s) * fraction_ * speed_
+                                        : framesPerSecond(s) * speed_;
     carry_ += static_cast<double>(ms) * rate / 1000.0;
     const auto frames = static_cast<std::int64_t>(carry_);
     carry_ -= static_cast<double>(frames);
@@ -1700,6 +1810,8 @@ bool Composer::handles(const QString& id) {
         QStringLiteral("play.play_reverse"),
         QStringLiteral("play.pause"),
         QStringLiteral("play.play_forward"),
+        QStringLiteral("play.dynamic_play_forward"),
+        QStringLiteral("play.dynamic_play_reverse"),
         QStringLiteral("play.play_in_to_out"),
         QStringLiteral("move.step_backward_10_frames"),
         QStringLiteral("move.step_forward_10_frames"),
@@ -1756,6 +1868,10 @@ bool Composer::perform(const QString& id) {
         play(nextSpeed(1));
     } else if (id == QLatin1String("play.play_reverse")) {
         play(nextSpeed(-1));
+    } else if (id == QLatin1String("play.dynamic_play_forward") || id == QLatin1String("play.dynamic_play_reverse")) {
+        // "If you press Alt ... while you tap the Dynamic Play keys, start play starts at a lower
+        // speed" (p.402).
+        playDynamic(id.endsWith(QLatin1String("forward")) ? 1 : -1, QApplication::keyboardModifiers() & Qt::AltModifier);
     } else if (id == QLatin1String("play.pause")) {
         stop();
     } else if (id == QLatin1String("play.play_in_to_out")) {

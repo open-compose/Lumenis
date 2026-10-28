@@ -861,9 +861,9 @@ phase of their own. They are done in three steps:
   settings still dimmed (the trim loop, Edit Review and J-K-L Trim, U2e1,
   and the trim frames, Small Trim, Dual Image Play and Sync Rollers, U2e2,
   docs/spec/trim-settings.md, are done; so is the Composer Window tab, U2e3,
-  docs/spec/composer-display.md, but for multicamera icons); from the Timeline settings, Display During
-  Segment Drag (the four-frame display) and Dynamic Play Forward/Reverse
-  with Dynamic Play Acceleration and Slow start speed (p.401-402, p.1219).
+  docs/spec/composer-display.md, but for multicamera icons, and Dynamic Play
+  and the four-frame display, U2e4; Undo Only Record Events and Color
+  Framing stay dimmed). So U2 is done.
 * U3, bins, media, windows and interface: Bin > Select's Offline Items,
   Media Relatives, Sources and Unreferenced Clips (p.266-267), Enlarge and
   Reduce HeadFrames (p.1016), Reveal File (p.360), Input > Link (p.328),

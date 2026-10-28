@@ -246,6 +246,8 @@
     {"id": "play.play_in_to_out", "text": "Play In to Out", "palette": "play"},
     {"id": "play.audio_loop_play", "text": "Audio Loop Play", "palette": "play"},
     {"id": "play.edit_review", "text": "Edit Review", "palette": "play"},
+    {"id": "play.dynamic_play_forward", "text": "Dynamic Play Forward", "palette": "play"},
+    {"id": "play.dynamic_play_reverse", "text": "Dynamic Play Reverse", "palette": "play"},
     {"id": "move.go_to_previous_event", "text": "Go to Previous Event", "palette": "move"},
     {"id": "move.go_to_next_event", "text": "Go to Next Event", "palette": "move"},
     {"id": "other.gang", "text": "Gang", "palette": "other"},

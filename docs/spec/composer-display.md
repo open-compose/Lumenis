@@ -53,3 +53,42 @@ Code:
     are user-selectable like the monitors' buttons (p.96-98) and saved with the Composer settings'
     button layout under "middle".
   * The "Media Composer Classic" user profile does not exist here; the option is off by default.
+
+## Dynamic Play Forward and Reverse (U2e4; p.401-402, p.1219)
+
+* "You can use the Dynamic Play Forward and Dynamic Play Reverse buttons to adjust play speeds at
+  smaller increments than with the usual J and L keys. These buttons are in the Play tab of the Command
+  Palette" (p.401): commands `play.dynamic_play_forward` and `play.dynamic_play_reverse`,
+  `Composer::playDynamic`.
+* "The Dynamic Play Acceleration default is 3 steps per keystroke or button press. A total of 12 steps
+  will double the play speed" (p.402): the speed is 2^(steps/12) times normal.
+* "The Dynamic Play Forward and Reverse commands start play at normal speed (1x speed). If you press
+  Alt ... while you tap the Dynamic Play keys, start play starts at a lower speed. The Slow Start Speed
+  setting is the number of keystrokes it will take to get to 1x speed" (p.402): with Alt, play starts
+  Slow start speed x Acceleration steps below normal. "If you change the acceleration to a higher
+  number, your start play speed will get slower" follows.
+* The two Timeline settings (Display tab, p.1219) are read by `MainWindow::applySettings` into
+  `Composer::setDynamicPlay`.
+* Ours: pressing the other direction starts again at normal speed, as J and L do; the speed stops
+  rising at 8 times normal (the top J and L speed, p.401); sound plays only at whole multiples of
+  normal speed, and between them play is silent, as slow play is; the Play button shows the rate.
+
+## Display During Segment Drag (U2e4; p.617-618, p.1219)
+
+* "Position Bar: When this option is selected, Media Composer shows the frame at the blue position bar
+  when dragging a segment" (p.1219).
+  * Ours: the Record monitor shows the sequence's frame where the dragged segments' head would go.
+* "Show Four-Frame Display: ... shows the head and tail of incoming or outgoing frames of video when you
+  drag a segment" (p.1219). "The Source and Record monitors change to a four-frame monitor display. The
+  two outer frames update while you drag the segment ... A centered numeric offset counter appears below
+  the frame monitors. The offset counter tracks the number of frames ... that you move" (p.617). "The
+  two outer frames indicate ending and beginning frames of clips before and after the segment. The two
+  inner frames represent the start and end frames of the segment" (p.618). "When you drag segments with
+  only the Record monitor displayed, the interface changes to a two-frame display. Only the outer two
+  frames in the four-frame display appear in the Record monitor" (p.617).
+  * `Timeline::showSegmentDrag` and `Composer::setDragDisplay`. The outer frames are the frame before
+    where the head would go and the frame after where the tail would end, in the sequence as it is
+    (ours: before the move is made). The counter counts frames; feet+frames for 24p and 25p projects
+    wait for film (Phase 9).
+* "None: When selected, nothing is displayed in the Composer Window when dragging a segment in the
+  Timeline" (p.1219): the monitors stay as they are.
