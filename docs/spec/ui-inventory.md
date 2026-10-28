@@ -67,6 +67,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   tracks.
 * The Timecode window (docs/spec/timecode-window.md): its labels, font sizes, starting line and the
   dimmed empty-monitor submenus; Loop Selected Clips' Tab working anywhere while it plays.
+* The Find window (docs/spec/find.md): no indexing (bins read as they are), the default options
+  (Ignore Case, Load into monitor, Markers and Clip Names on), the default Results columns, what the
+  Timeline and Markers tabs list, and Ctrl+G as a keyboard-only Find Again command.
 * The Sequence Map (docs/spec/sequence-map.md): the defaults of its four Timeline settings, the
   overlay's place and size, the effect band, a press off the white box moving it, and the window
   staying open when clicking elsewhere.

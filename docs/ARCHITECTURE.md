@@ -58,6 +58,7 @@ headers in `include/lumenis/<library>/`.
   Timeline Clip Notes window, docs/spec/clip-notes.md),
   `sequence_map.*` (the Sequence Map, docs/spec/sequence-map.md),
   `timecode_window.*` (Tools > Timecode Window, docs/spec/timecode-window.md),
+  `find_window.*` (Edit > Find, docs/spec/find.md, over `src/model/text_find.*`),
   `clip_color_dialog.*` (the Timeline's Clip Color dialog),
   `surround_panner.*` (the Pan grid and Advanced Panner; the pans
   themselves are `src/model/surround_pan.*`) and

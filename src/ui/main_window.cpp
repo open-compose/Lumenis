@@ -52,6 +52,7 @@
 #include "lumenis/ui/keyboard_palette.h"
 #include "lumenis/ui/marker_dialogs.h"
 #include "lumenis/ui/clip_notes.h"
+#include "lumenis/ui/find_window.h"
 #include "lumenis/ui/menu_builder.h"
 #include "lumenis/ui/panels.h"
 #include "lumenis/ui/relink_dialog.h"
@@ -68,6 +69,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QCloseEvent>
+#include <QComboBox>
 #include <QCryptographicHash>
 #include <QVBoxLayout>
 #include <QDialogButtonBox>
@@ -3828,6 +3830,24 @@ void MainWindow::installPanelHandlers() {
         clipNotesWindow_->show();
         clipNotesWindow_->raise();
     });
+    // Edit > Find (Ctrl+F, p.417, p.429), one window, kept; Ctrl+G finds the next occurrence (p.429, p.431).
+    handle("edit.find", [this] {
+        if (!findWindow_) {
+            findWindow_ = new FindWindow(*binContainer_, *composer_, *timeline_, this);
+            connect(findWindow_, &FindWindow::showInBin, this, [this](const QString& binId, const QString& itemId) {
+                if (BinDocument* doc = binContainer_->openBin(binId)) {
+                    if (BinView* view = binContainer_->viewFor(doc)) view->selectIds({itemId});
+                }
+            });
+        }
+        findWindow_->show();
+        findWindow_->raise();
+        findWindow_->activateWindow();
+        findWindow_->findBox()->setFocus();
+    });
+    handle("edit.find_again", [this] {
+        if (findWindow_) findWindow_->findNext();
+    });
     // Tools > Timecode Window (p.389), one window, kept.
     handle("tools.timecode_window", [this] {
         if (!timecodeWindow_) timecodeWindow_ = new TimecodeWindow(*composer_, this);
@@ -3884,7 +3904,7 @@ void MainWindow::installPanelHandlers() {
     }
 
     // Keyboard-only commands work wherever the main window is active.
-    for (const char* id : {"windows.next_window", "windows.previous_window", "windows.next_tab",
+    for (const char* id : {"windows.next_window", "windows.previous_window", "windows.next_tab", "edit.find_again",
                            "windows.workspaces.save_current"}) {
         addAction(commands_.action(QString::fromLatin1(id)));
     }

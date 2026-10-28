@@ -52,6 +52,7 @@
     {"id": "edit.select_all", "text": "Select All", "shortcut": "Ctrl+A"},
     {"id": "edit.select_all_tracks", "text": "Select All Tracks"},
     {"id": "edit.find", "text": "Find", "shortcut": "Ctrl+F"},
+    {"id": "edit.find_again", "text": "Find Again", "shortcut": "Ctrl+G"},
     {"id": "edit.enlarge_frame", "text": "Enlarge Frame", "shortcut": "Ctrl+L"},
     {"id": "edit.reduce_frame", "text": "Reduce Frame", "shortcut": "Ctrl+K"},
     {"id": "timeline.enlarge_waveform", "text": "Enlarge Waveform", "shortcut": "Ctrl+Alt+L"},
