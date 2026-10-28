@@ -404,7 +404,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Selected Clips (docs/spec/timecode-window.md: `src/ui/timecode_window.*`,
   `Composer::playClipLoop`; test `tst_timecode_window`), is done. U2c, the Find
   window (docs/spec/find.md: `src/model/text_find.*`, `src/ui/find_window.*`,
-  Ctrl+G `edit.find_again`; test `tst_find_window`), is done.
+  Ctrl+G `edit.find_again`; test `tst_find_window`), is done. U2d, AutoSequence
+  (docs/spec/autosequence.md: `model::autoSequence`, `MainWindow::autoSequence`;
+  test `tst_autosequence`), is done.
   Next: the rest of the UI completion pass (U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.

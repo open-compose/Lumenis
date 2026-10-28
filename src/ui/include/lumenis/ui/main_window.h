@@ -150,6 +150,11 @@ public:
     ClipNotesWindow* clipNotesWindow() const { return clipNotesWindow_; }
     // The Timecode window, once Tools > Timecode Window has opened it (p.389).
     TimecodeWindow* timecodeWindow() const { return timecodeWindow_; }
+    // Bin > AutoSequence and Clip > AutoSequence (p.499-500): a sequence of the active bin's selected
+    // clips by source timecode (`noFiller`, with Alt: one after another), put in that bin as
+    // "<tape or source file>.NN" and loaded into the Record monitor. Returns the new item's id, or empty
+    // with *error set.
+    QString autoSequence(bool noFiller, QString* error = nullptr);
     // The Find window, once Edit > Find has opened it (p.417, p.429).
     FindWindow* findWindow() const { return findWindow_; }
     AudioEqTool& audioEq() const { return *audioEq_; }

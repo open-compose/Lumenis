@@ -8,6 +8,7 @@ add_library(lumenis_model STATIC
     sequence.cpp
     clip_audio.cpp
     automation.cpp
+    auto_sequence.cpp
     audio_eq.cpp
     audio_suite.cpp
     marker.cpp
@@ -28,6 +29,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/sequence.h
     include/lumenis/model/clip_audio.h
     include/lumenis/model/automation.h
+    include/lumenis/model/auto_sequence.h
     include/lumenis/model/audio_eq.h
     include/lumenis/model/audio_suite.h
     include/lumenis/model/marker.h

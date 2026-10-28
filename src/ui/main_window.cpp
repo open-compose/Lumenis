@@ -20,6 +20,7 @@
 #include "lumenis/media/audio_suite.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
+#include "lumenis/model/auto_sequence.h"
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/ext/provider.h"
@@ -257,6 +258,50 @@ QJsonObject MainWindow::defaultLayout() {
 // Creates the main panels (Bin Container, Project, Composer, Timeline) and connects them: the
 // Composer's resolvers find bin items and media frames, its play signals drive the sound, and the
 // Timeline stores its sequences in bins. The tools come after, in createTools().
+// The bin's clips in the view's order; AutoSequence itself is model::autoSequence.
+QString MainWindow::autoSequence(bool noFiller, QString* error) {
+    auto fail = [error](const QString& text) {
+        if (error) *error = text;
+        return QString();
+    };
+    BinView* view = binContainer_->activeView();
+    if (!view || view->selectedIds().isEmpty()) return fail(tr("Select clips in a bin first."));
+    BinDocument& doc = view->document();
+    if (doc.isReadOnly()) return fail(tr("The bin is locked by another user."));
+    const QStringList selected = view->selectedIds();
+    QList<model::BinItem> clips;
+    for (const QString& id : view->visibleIds()) {
+        if (const model::BinItem* item = selected.contains(id) ? doc.bin().item(id) : nullptr) clips << *item;
+    }
+    const model::AutoSequenceResult result = model::autoSequence(clips, doc.nodeId(), noFiller);
+    if (!result.ok()) return fail(result.error);
+    const model::BinItem* first = nullptr;
+    for (const model::BinItem& c : clips) {
+        if (c.durationFrames > 0 && c.kind != model::BinItemKind::Sequence) {
+            first = &c;
+            break;
+        }
+    }
+    const Rational rate = first ? first->editRate : Rational(25);
+    const TimecodeFormat format = TimecodeFormat::forRate(rate, first && model::isDropFrame(*first));
+    model::BinItem item = model::newSequence(doc.bin(), rate, QDateTime::currentDateTimeUtc(),
+                                             QString::fromStdString(Timecode(result.start, format).toString()));
+    // "The same name as the tape name ... or the same name as the source file name ... with a .xx (.01,
+    // .02, .03) extension" (p.500).
+    QStringList names;
+    for (const model::BinItem& i : doc.bin().items) names << i.name;
+    for (int n = 1;; ++n) {
+        item.name = QStringLiteral("%1.%2").arg(result.name).arg(n, 2, 10, QLatin1Char('0'));
+        if (!names.contains(item.name)) break;
+    }
+    result.sequence.storeIn(item);
+    doc.addItem(item);
+    view->selectIds({item.id});
+    // "The new sequence appears in the Record monitor and in the Timeline" (p.500).
+    composer_->load(MonitorId::Record, doc.nodeId(), item);
+    return item.id;
+}
+
 void MainWindow::createPanels() {
     // Its tab reads "Bins" in the pictures on p.240-242.
     binContainer_ = new BinContainer;
@@ -3845,6 +3890,14 @@ void MainWindow::installPanelHandlers() {
         findWindow_->activateWindow();
         findWindow_->findBox()->setFocus();
     });
+    for (const char* id : {"bin.autosequence", "clip.autosequence"}) {
+        handle(id, [this] {
+            QString error;
+            if (autoSequence(QApplication::keyboardModifiers() & Qt::AltModifier, &error).isEmpty() && !error.isEmpty()) {
+                QMessageBox::warning(this, tr("AutoSequence"), error);
+            }
+        });
+    }
     handle("edit.find_again", [this] {
         if (findWindow_) findWindow_->findNext();
     });

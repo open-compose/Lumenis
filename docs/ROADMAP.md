@@ -856,7 +856,7 @@ phase of their own. They are done in three steps:
 * U2, the Composer, editing and trim: Load Filler (p.99), Sync Point
   Overwrite (p.496) and the Composer settings' Edit tab (U2a,
   docs/spec/composer-edit.md, is done but for Undo Only Record Events and
-  Color Framing), AutoSequence (p.499), Loop Selected Clips (p.393), the
+  Color Framing), AutoSequence (p.499) (U2d, docs/spec/autosequence.md, is done), Loop Selected Clips (p.393), the
   Timecode Window (p.389) (U2b, docs/spec/timecode-window.md, is done), Edit > Find (p.417) (U2c, docs/spec/find.md, is done); the Composer and Trim
   settings still dimmed (Single Mark Editing, Phantom Marks, trim loop,
   Dual Image Play, J-K-L Trim ...); from the Timeline settings, Display During

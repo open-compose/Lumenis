@@ -70,6 +70,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * The Find window (docs/spec/find.md): no indexing (bins read as they are), the default options
   (Ignore Case, Load into monitor, Markers and Clip Names on), the default Results columns, what the
   Timeline and Markers tabs list, and Ctrl+G as a keyboard-only Find Again command.
+* AutoSequence (docs/spec/autosequence.md): which of two related clips is kept, the track layout of
+  Camera groups, and the name when there is no Tape or Source File.
 * The Sequence Map (docs/spec/sequence-map.md): the defaults of its four Timeline settings, the
   overlay's place and size, the effect band, a press off the white box moving it, and the window
   staying open when clicking elsewhere.
