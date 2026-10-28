@@ -163,7 +163,7 @@ private slots:
         const QString path = dir.filePath(QStringLiteral("notes.txt"));
         QVERIFY(window.exportText(path));
         QFile file(path);
-        QVERIFY(file.open(QIODevice::ReadOnly));
+        QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text)); // CRLF on Windows
         const QStringList lines = QString::fromUtf8(file.readAll()).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
         QCOMPARE(lines.size(), 2);
         QCOMPARE(lines.at(0), QStringLiteral("Clip Name\tStart\tEnd\tDuration\tTimeline Clip Note"));
