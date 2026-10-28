@@ -56,6 +56,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   for ten rates, the layout, and Default Colors also resetting Linked Clips.
 * Start Filler Duration in seconds, 2 by default; the name of a sequence made
   by Create Sequence Based on Selection (docs/spec/timeline-commands.md).
+* Timeline settings (docs/spec/timeline-settings.md): what Auto-Patching pairs, Position Bar
+  Snap's 8 pixels, Segment Drag Sync Locks only into sync-locked tracks, Default Sync Locks on new
+  tracks, the defaults of Select Filler (on) and Applying Effects opens Effect Editor (off), and
+  the segments a Segment Mode lasso selects.
 * The Sequence Map (docs/spec/sequence-map.md): the defaults of its four Timeline settings, the
   overlay's place and size, the effect band, a press off the white box moving it, and the window
   staying open when clicking elsewhere.

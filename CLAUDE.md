@@ -388,8 +388,13 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   test `tst_timeline_commands`, scenario `21-filler-at-start.json`), is done.
   U1d2, the Sequence Map (docs/spec/sequence-map.md: `src/ui/sequence_map.*`,
   `Timeline::showSequenceMap`, the Timeline settings' Sequence Map options;
-  test `tst_sequence_map`), is done.
-  Next: the rest of the UI completion pass (U1e Timeline settings, U2 Composer and
+  test `tst_sequence_map`), is done. U1e1, the Timeline settings' Edit tab
+  (docs/spec/timeline-settings.md: Auto-Patching, Auto-Monitoring, Segment
+  Drag Sync Locks `moveSegments(..., keepSync)`, Position Bar Snap, Default
+  Sync Locks On, Select Filler, Effect Editor on apply, TC/ruler disables
+  Smart Tools, Segment Mode lassos; test `tst_timeline_settings`, scenario
+  `22-segment-drag-sync-locks.json`), is done.
+  Next: the rest of the UI completion pass (U1e2 Timeline Display tab, U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.
 

@@ -36,7 +36,8 @@ Each file is a JSON list of scenarios:
   * `{"position": monitor, "frame": n}`, `{"activate": monitor}`;
   * `{"source_tracks": [...]}` and `{"record_tracks": [...]}`: the Track
     Selector's selected tracks, `{"patch": [source, record]}`,
-    `{"sync_lock": track}`;
+    `{"sync_lock": track}`; `{"timeline_setting": name, "value": b}` turns
+    a Timeline setting on or off (`segmentDragSyncLocks`, `defaultSyncLocks`);
   * `{"select": [[track, start], ...]}`: segments selected in Segment mode,
     and `{"move": [frames, tracks], "tool": "lift"|"extract", "copy": b}`;
   * `{"rollers": [[track, edit point, "a"|"b"|"both"], ...], "kind":

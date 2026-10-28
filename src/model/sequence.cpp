@@ -1224,8 +1224,17 @@ std::optional<QString> shiftedTrack(const QString& name, int by) {
 // All checks are made before anything changes. Then the originals are taken out (unless copying)
 // and the pieces put in at their destinations. Destinations are adjusted for extracts on the same
 // track, and the references already returned for splices that push them.
+void syncLockAllTracks(BinItem& sequence) {
+    Sequence s = Sequence::fromItem(sequence);
+    for (const QString& name : s.trackNames()) {
+        Track* t = s.track(name);
+        if (t && t->kind != TrackKind::Data) t->syncLocked = true;
+    }
+    s.storeIn(sequence);
+}
+
 QList<SegmentRef> moveSegments(Sequence& sequence, const QList<SegmentRef>& segments, std::int64_t frames, int tracks,
-                               EditKind kind, bool copy, QString* error) {
+                               EditKind kind, bool copy, QString* error, bool keepSync) {
     auto failed = [error](const QString& text) {
         if (error) *error = text;
         return QList<SegmentRef>();
@@ -1261,13 +1270,22 @@ QList<SegmentRef> moveSegments(Sequence& sequence, const QList<SegmentRef>& segm
         pieces << Piece{ref, *seg, *to, ref.start + frames, from ? from->format : AudioFormat::Mono};
     }
     if (pieces.isEmpty()) return failed(QStringLiteral("Select segments to move."));
+    // Segment Drag Sync Locks (p.618): a splice into a sync-locked track keeps sync. The pieces going to
+    // sync-locked tracks leave filler behind instead of closing the gap.
+    auto syncLocked = [&sequence](const QString& name) {
+        const Track* t = sequence.track(name);
+        return t && t->syncLocked;
+    };
+    QSet<QString> destinations;
+    for (const Piece& p : pieces) destinations.insert(p.to);
+    const bool syncing = keepSync && kind == EditKind::SpliceIn;
     // Remove the originals, the latest first so earlier ones keep their
     // place; Extract shifts later destinations on the same track.
     if (!copy) {
         QList<Piece> order = pieces;
         std::sort(order.begin(), order.end(), [](const Piece& a, const Piece& b) { return a.from.start > b.from.start; });
         for (const Piece& p : order) {
-            if (kind == EditKind::SpliceIn) {
+            if (kind == EditKind::SpliceIn && !(syncing && syncLocked(p.to))) {
                 sequence.extract(p.from.track, p.from.start, p.segment.length);
                 for (Piece& q : pieces) {
                     if (q.to != p.from.track) continue;
@@ -1292,6 +1310,15 @@ QList<SegmentRef> moveSegments(Sequence& sequence, const QList<SegmentRef>& segm
             sequence.splice(p.to, p.at, {p.segment});
             for (SegmentRef& m : moved) {
                 if (m.track == p.to && m.start >= p.at) m.start += p.segment.length;
+            }
+            if (syncing && syncLocked(p.to)) {
+                // "On all other sync-locked tracks that correspond to the new location of the segment
+                // you moved" (p.618): tracks that get no moved segment of their own.
+                QStringList others;
+                for (const Track& t : sequence.tracks()) {
+                    if (t.syncLocked && !t.locked && !destinations.contains(t.name()) && p.at < t.length()) others << t.name();
+                }
+                for (const QString& name : others) sequence.splice(name, p.at, {Segment::filler(p.segment.length)});
             }
         } else {
             sequence.overwrite(p.to, p.at, {p.segment});

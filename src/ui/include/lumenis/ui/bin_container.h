@@ -348,6 +348,8 @@ public:
     // General settings "Default Starting TC" (p.1192) for new sequences.
     void setDefaultStartTimecode(const QString& tc) { startTimecode_ = tc; }
     const QString& defaultStartTimecode() const { return startTimecode_; }
+    // New sequences sync-lock all their tracks (Timeline settings, Default Sync Locks On, p.1220).
+    void setDefaultSyncLocks(bool on) { defaultSyncLocks_ = on; }
 
     // Shared-storage bin locking (p.300-304, docs/spec/bin-locking.md). The
     // user whose locks these are (the User profile, p.1138), on this machine.
@@ -448,6 +450,7 @@ private:
     Rational editRate_{24000, 1001};
     bool openFloating_ = false;
     QString startTimecode_;
+    bool defaultSyncLocks_ = false;
     QList<BinDocument*> documents_;
     QMenu* binMenu_ = nullptr;
     QMenu* inputMenu_ = nullptr;

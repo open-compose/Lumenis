@@ -852,7 +852,7 @@ phase of their own. They are done in three steps:
   Source Track Name and Show Every Frame, which wait for groups, sound
   metadata and the Film track; U1c2, Timeline Clip Notes, docs/spec/clip-notes.md, is done); Show Sequence Map (p.606; U1d2, docs/spec/sequence-map.md, is done), Find Black Hole/Flash Frame (p.645), Add
   Filler at Start (p.462), Rename Track, Create Sequence Based on Selection
-  (p.613) (U1d1, docs/spec/timeline-commands.md, is done); the Timeline settings still dimmed.
+  (p.613) (U1d1, docs/spec/timeline-commands.md, is done); the Timeline settings still dimmed (U1e1, the Edit tab, docs/spec/timeline-settings.md, is done but for Segment Drag Snap, which waits for bin editing; U1e2, the Display tab, next).
 * U2, the Composer, editing and trim: Load Filler (p.99), Sync Point
   Overwrite (p.496), AutoSequence (p.499), Loop Selected Clips (p.393), the
   Timecode Window (p.389), Edit > Find (p.417); the Composer and Trim

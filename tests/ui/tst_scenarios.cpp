@@ -249,6 +249,21 @@ struct Run {
             }
             return true;
         }
+        if (o.contains(QStringLiteral("timeline_setting"))) {
+            // A Timeline setting's option (p.1218-1221), by its Timeline::Options name.
+            Timeline::Options options = timeline.options();
+            const QString name = o.value(QStringLiteral("timeline_setting")).toString();
+            const bool on = o.value(QStringLiteral("value")).toBool(true);
+            if (name == QLatin1String("segmentDragSyncLocks")) {
+                options.segmentDragSyncLocks = on;
+            } else if (name == QLatin1String("defaultSyncLocks")) {
+                options.defaultSyncLocks = on;
+            } else {
+                return fail(QStringLiteral("unknown Timeline setting %1").arg(name));
+            }
+            timeline.setOptions(options);
+            return true;
+        }
         if (o.contains(QStringLiteral("sync_lock"))) {
             timeline.toggleSyncLock(o.value(QStringLiteral("sync_lock")).toString());
             return true;

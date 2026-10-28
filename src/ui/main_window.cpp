@@ -491,9 +491,11 @@ void MainWindow::createPanels() {
         BinDocument* doc = binContainer_->activeDocument();
         if (!doc && !binContainer_->openDocuments().isEmpty()) doc = binContainer_->openDocuments().first();
         if (!doc || !project_) return std::nullopt;
-        return std::make_pair(doc->nodeId(), model::newSequence(doc->bin(), project_->settings.format.editRate,
-                                                            QDateTime::currentDateTimeUtc(),
-                                                            binContainer_->defaultStartTimecode()));
+        model::BinItem item = model::newSequence(doc->bin(), project_->settings.format.editRate,
+                                                 QDateTime::currentDateTimeUtc(), binContainer_->defaultStartTimecode());
+        // Default Sync Locks On (p.1220).
+        if (timeline_->options().defaultSyncLocks) model::syncLockAllTracks(item);
+        return std::make_pair(doc->nodeId(), item);
     });
     connect(timeline_, &Timeline::videoDisplaySettingsRequested, this, [this] {
         const model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
@@ -1050,6 +1052,10 @@ void MainWindow::createTools() {
     panels_->addPanel(new Panel(QStringLiteral("EffectPalette"), tr("Effect Palette"), effectPalette_));
     connect(effectPalette_, &EffectPalette::effectActivated, this,
             [this](const EffectInfo& effect) { timeline_->applyEffectToSelection(effect); });
+    // Applying Effects opens Effect Editor (Timeline settings, p.1220).
+    connect(timeline_, &Timeline::effectApplied, this, [this] {
+        if (timeline_->options().openEffectEditor) showTool(QStringLiteral("EffectEditor"));
+    });
     effectEditor_ = new EffectEditor(*timeline_);
     panels_->addPanel(new Panel(QStringLiteral("EffectEditor"), tr("Effect Editor"), effectEditor_));
     // Audio (ch. 21) and media (p.344-348).
@@ -3559,6 +3565,15 @@ void MainWindow::applySettings() {
     o.dupeHandles = s.text(tl, QStringLiteral("dupeHandles")).toDouble();
     o.startFillerSeconds = s.value(tl, QStringLiteral("startFiller")).toInt();
     o.flashFrames = s.value(tl, QStringLiteral("flashFrames")).toInt(10);
+    o.autoPatching = s.value(tl, QStringLiteral("autoPatching")).toBool();
+    o.autoMonitoring = s.value(tl, QStringLiteral("autoMonitoring")).toBool();
+    o.segmentDragSyncLocks = s.value(tl, QStringLiteral("segmentDragSyncLocks")).toBool();
+    o.positionBarSnap = s.value(tl, QStringLiteral("positionBarSnap")).toBool();
+    o.defaultSyncLocks = s.value(tl, QStringLiteral("defaultSyncLocks")).toBool();
+    o.selectFiller = s.value(tl, QStringLiteral("selectFiller")).toBool();
+    o.openEffectEditor = s.value(tl, QStringLiteral("openEffectEditor")).toBool();
+    o.tcDisablesSmartTools = s.value(tl, QStringLiteral("tcDisablesSmartTools")).toBool();
+    o.lassoSegmentMode = s.value(tl, QStringLiteral("lassoTransitions")).toString() == QLatin1String("segment");
     o.mapOverlay = s.value(tl, QStringLiteral("mapOverlay")).toBool();
     o.mapClickHides = s.value(tl, QStringLiteral("mapClickHides")).toBool();
     o.mapWaveforms = s.value(tl, QStringLiteral("mapWaveforms")).toBool();
@@ -3578,6 +3593,7 @@ void MainWindow::applySettings() {
     o.stopAtMarkers = s.flag(composer, QStringLiteral("stopAtMarkers"));
     o.ignoreTrackSelectors = s.flag(composer, QStringLiteral("ignoreTrackSelectors"));
     o.trimAutoFocus = s.flag(QStringLiteral("Trim"), QStringLiteral("autoFocus"));
+    binContainer_->setDefaultSyncLocks(o.defaultSyncLocks);
     timeline_->setOptions(o);
 
     // Choosing another Workspace View version in the Settings list switches

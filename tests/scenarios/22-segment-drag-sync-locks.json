@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Segment Drag Sync Locks: an extract/splice-in drag keeps the sync-locked tracks in sync",
+    "guide": "p.618, p.1220",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]], "A1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]], "A2": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]]}},
+    "steps": [
+      {"timeline_setting": "segmentDragSyncLocks"},
+      {"sync_lock": "V1"},
+      {"sync_lock": "A1"},
+      {"select": [["V1", 0]]},
+      {"move": [40, 0], "tool": "extract"}
+    ],
+    "expect": {
+      "V1": [["filler", 20], ["B", 0, 20], ["A", 0, 20], ["C", 0, 20]],
+      "A1": [["A", 0, 20], ["B", 0, 20], ["filler", 20], ["C", 0, 20]],
+      "A2": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]]}
+  },
+  {
+    "name": "Segment Drag Sync Locks off: the same drag closes the gap and breaks sync",
+    "guide": "p.618",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]], "A1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]]}},
+    "steps": [
+      {"sync_lock": "V1"},
+      {"sync_lock": "A1"},
+      {"select": [["V1", 0]]},
+      {"move": [40, 0], "tool": "extract"}
+    ],
+    "expect": {"V1": [["B", 0, 20], ["A", 0, 20], ["C", 0, 20]], "A1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20]]}
+  }
+]

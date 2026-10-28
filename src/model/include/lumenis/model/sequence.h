@@ -578,13 +578,19 @@ bool changeSourceTrack(Sequence& sequence, const SegmentRef& ref, const QString&
 // then refers to the master clip, at the same frames.
 bool changeSourceTrack(Sequence& sequence, const SegmentRef& ref, const BinItem& master, const QString& masterBin,
                        std::int64_t offset, const QString& sourceTrack);
+// Default Sync Locks On (Timeline settings, p.1220): sync-locks every video and audio track of a
+// sequence item, a new one taking the default tracks first.
+void syncLockAllTracks(BinItem& sequence);
 // Segment editing (p.610-623): moves selected segments `frames` later and
 // `tracks` tracks up (negative: down), Lift/Overwrite or Extract/Splice-in,
 // or copies them (Alt-drag, p.620). Tracks past the last are added
 // (p.635). On failure nothing changes and `error` says why. Returns the
 // moved segments' new references.
+// With `keepSync` (Segment Drag Sync Locks, p.618), an Extract/Splice-in move into a sync-locked track
+// leaves filler where the segment was and splices filler into the other sync-locked tracks at the
+// new place, so every track keeps its sync.
 QList<SegmentRef> moveSegments(Sequence& sequence, const QList<SegmentRef>& segments, std::int64_t frames, int tracks,
-                               EditKind kind, bool copy, QString* error = nullptr);
+                               EditKind kind, bool copy, QString* error = nullptr, bool keepSync = false);
 // Deletes segments: Lift leaves filler, Extract closes the gaps (p.621).
 bool deleteSegments(Sequence& sequence, const QList<SegmentRef>& segments, bool extract);
 // The selected segments as a Clipboard sequence, from the first one's start

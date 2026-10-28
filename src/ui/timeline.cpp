@@ -1140,8 +1140,28 @@ void TimelineView::paintHeads(QPainter& p) {
 
 // Moves the shown monitor's position to the frame under x (a click or scrub in the tracks),
 // stopping playback and making that monitor active.
-void TimelineView::moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifiers) {
+void TimelineView::moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifiers, bool click) {
     std::int64_t frame = std::max<std::int64_t>(frameAt(pos.x()), 0);
+    // Position Bar Snap (p.1220): "clicking in the Timeline will snap the position indicator to the
+    // nearest event, such as IN and OUT points, markers, and segment start and end points" (p.397: "to
+    // the nearest transition"). Ours: an event within kSnapPixels of the click.
+    if (click && timeline_.options().positionBarSnap && !(modifiers & Qt::ControlModifier)) {
+        const MonitorId monitor = timeline_.shownMonitor();
+        const model::MonitorState& state = timeline_.composer().state(monitor);
+        QList<std::int64_t> points = timeline_.composer().events(monitor);
+        if (state.in()) points << *state.in();
+        if (state.out()) points << *state.out();
+        for (const model::Marker& m : timeline_.composer().shownMarkers(monitor)) points << m.frame;
+        constexpr double kSnapPixels = 8;
+        double best = kSnapPixels;
+        for (std::int64_t e : points) {
+            const double d = std::abs(xFor(e) - pos.x());
+            if (d <= best) {
+                best = d;
+                frame = e;
+            }
+        }
+    }
     // Ctrl snaps to the head of transitions, Ctrl+Alt to the tail (p.609).
     if (modifiers & Qt::ControlModifier) {
         const QList<std::int64_t> points = timeline_.composer().events(timeline_.shownMonitor());
@@ -1160,6 +1180,12 @@ void TimelineView::moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifi
     composer.stop();
     composer.setActiveMonitor(timeline_.shownMonitor());
     composer.moveTo(timeline_.shownMonitor(), frame);
+}
+
+bool TimelineView::selectable(const model::SegmentRef& ref) const {
+    if (timeline_.options().selectFiller) return true;
+    const auto seg = model::segmentFor(timeline_.shown(), ref);
+    return seg && !seg->isFiller();
 }
 
 double TimelineView::exactFrameAt(double x) const {
@@ -1402,7 +1428,10 @@ void TimelineView::selectLasso(const QRect& area) {
         for (int i = 0; i < t->segments.size(); ++i) {
             const std::int64_t end = at + t->segments.at(i).length;
             const bool edge = i == 0 || i == t->segments.size() - 1;
-            if (at >= from && end <= to + 1 && !(t->segments.at(i).isFiller() && edge)) picked << model::SegmentRef{r.track, at};
+            const bool filler = t->segments.at(i).isFiller();
+            if (at >= from && end <= to + 1 && !(filler && (edge || !timeline_.options().selectFiller))) {
+                picked << model::SegmentRef{r.track, at};
+            }
             at = end;
         }
     }
@@ -1535,6 +1564,12 @@ void TimelineView::mousePressEvent(QMouseEvent* event) {
             }
             if (timeline_.isTrimMode()) return;
         }
+        // "Clicking the TC Track or ruler Disables Smart Tools" (Timeline settings, p.1220): every edit
+        // tool of the Smart Tool goes off.
+        if (timeline_.options().tcDisablesSmartTools) {
+            const auto row = rowAt(pos);
+            if (pos.y() < kRulerHeight || (row && row->track == QLatin1String("TC1"))) timeline_.disableSmartTools();
+        }
         // Clicking the ruler or TC1 leaves Trim mode (p.651).
         if (timeline_.isTrimMode()) {
             const auto row = rowAt(pos);
@@ -1549,7 +1584,7 @@ void TimelineView::mousePressEvent(QMouseEvent* event) {
         const bool tools = timeline_.isSegmentTool(model::EditKind::Overwrite) ||
                            timeline_.isSegmentTool(model::EditKind::SpliceIn);
         if (tools && pos.y() >= kRulerHeight) {
-            if (const auto seg = segmentAt(pos)) {
+            if (const auto seg = segmentAt(pos); seg && selectable(*seg)) {
                 const bool shift = event->modifiers() & Qt::ShiftModifier;
                 if (shift || !timeline_.selection().contains(*seg)) timeline_.clickSegment(*seg, shift);
                 if (timeline_.selection().contains(*seg)) {
@@ -1562,7 +1597,7 @@ void TimelineView::mousePressEvent(QMouseEvent* event) {
         }
         timeline_.setSelection({});
         scrubbing_ = true;
-        moveIndicator(pos, event->modifiers());
+        moveIndicator(pos, event->modifiers(), true);
         return;
     }
     // The Track Control Panel button (p.602).
@@ -1757,6 +1792,29 @@ void TimelineView::mouseReleaseEvent(QMouseEvent* event) {
             const QList<model::SegmentRef> picked = timeline_.selection();
             timeline_.setSelection({});
             timeline_.setSlip(picked, event->modifiers() & Qt::ShiftModifier);
+        } else if (timeline_.selection().isEmpty() && timeline_.options().lassoSegmentMode) {
+            // "Lassoing transitions enters: Segment Mode" (p.1221): the segments either side of the
+            // transitions inside, with the Default Segment Tool when no segment tool is on (ours).
+            QList<model::SegmentRef> picked;
+            const std::int64_t from = frameAt(area.left());
+            const std::int64_t to = frameAt(area.right());
+            for (const Row& r : rows()) {
+                if (!r.exists || r.top + r.height < area.top() || r.top > area.bottom()) continue;
+                const model::Track* t = timeline_.shown().track(r.track);
+                if (!t) continue;
+                std::int64_t at = 0;
+                for (const model::Segment& seg : t->segments) {
+                    const std::int64_t end = at + seg.length;
+                    const model::SegmentRef ref{r.track, at};
+                    if (end > from && at <= to && selectable(ref)) picked << ref;
+                    at = end;
+                }
+            }
+            if (!picked.isEmpty() && !timeline_.isSegmentTool(model::EditKind::Overwrite) &&
+                !timeline_.isSegmentTool(model::EditKind::SpliceIn)) {
+                timeline_.setSegmentTool(timeline_.options().defaultSegmentTool, true);
+            }
+            timeline_.setSelection(picked);
         } else if (timeline_.selection().isEmpty()) {
             // Only transitions inside: both sides of them (p.651).
             QList<model::TrimRoller> rollers;
@@ -2145,7 +2203,10 @@ void Timeline::sync() {
         shown_ = model::Sequence();
     }
     const model::MonitorState& source = composer_.state(MonitorId::Source);
+    const QStringList sourceBefore = patch_.sourceTracks();
     patch_.setSourceTracks(source.isEmpty() ? QStringList() : model::sourceTracksOf(source.current()->item));
+    // Auto-Patching (p.1220): another source clip is patched to the enabled record tracks.
+    if (options_.autoPatching && patch_.sourceTracks() != sourceBefore) autoPatch();
 
     // Selected segments that are gone are dropped.
     selection_.removeIf([this](const model::SegmentRef& ref) { return showSource_ || !model::segmentFor(shown_, ref); });
@@ -2548,14 +2609,53 @@ QMenu* Timeline::undoRedoMenu() {
 
 void Timeline::toggleSourceTrack(const QString& track) {
     patch_.setSourceSelected(track, !patch_.isSourceSelected(track));
+    if (options_.autoPatching) autoPatch();
     view_->update();
     emit changed();
 }
 
 void Timeline::toggleRecordTrack(const QString& track) {
     patch_.setRecordSelected(track, !patch_.isRecordSelected(track));
+    if (options_.autoPatching) autoPatch();
     view_->update();
     emit changed();
+}
+
+// "Automatically patches the enabled source tracks to the tracks enabled in the Timeline sequence"
+// (p.1220): of each kind, the enabled source tracks in order to the enabled record tracks in order;
+// an audio track only to a record track of its format (p.629). Source tracks left over keep their
+// patch.
+void Timeline::autoPatch() {
+    const model::LoadedClip* src = composer_.state(MonitorId::Source).current();
+    if (!src) return;
+    const model::Sequence seq = recordSequenceOf(composer_);
+    const QStringList records = patch_.selectedRecordTracks(seq);
+    QSet<QString> taken;
+    for (const QString& source : patch_.sourceTracks()) {
+        const auto ref = model::parseTrackName(source);
+        if (!patch_.isSourceSelected(source) || !ref || ref->kind == model::TrackKind::Data) continue;
+        const model::AudioFormat format = model::sourceFormat(src->item, source);
+        for (const QString& record : records) {
+            const model::Track* t = seq.track(record);
+            if (!t || t->kind != ref->kind || taken.contains(record)) continue;
+            if (t->kind == model::TrackKind::Audio && t->format != format) continue;
+            taken.insert(record);
+            if (patch_.recordFor(source) != record) movePatch(source, record);
+            break;
+        }
+    }
+}
+
+// Auto-Monitoring (p.629): "When you patch from one video track to another, the Video Track Monitor
+// icon moves to the track you are patching to."
+bool Timeline::movePatch(const QString& source, const QString& record) {
+    const QString old = patch_.recordFor(source);
+    if (!patch_.patch(source, record)) return false;
+    if (options_.autoMonitoring && source.startsWith(QLatin1Char('V')) && old != record && isMonitored(old)) {
+        unmonitored_.insert(old);
+        unmonitored_.remove(record);
+    }
+    return true;
 }
 
 void Timeline::toggleMonitor(const QString& track) {
@@ -2582,7 +2682,7 @@ bool Timeline::patchTracks(const QString& source, const QString& record) {
             }
         }
     }
-    if (!patch_.patch(source, record)) return fail(tr("%1 cannot be patched to %2.").arg(source, record));
+    if (!movePatch(source, record)) return fail(tr("%1 cannot be patched to %2.").arg(source, record));
     view_->update();
     emit changed();
     return true;
@@ -3026,6 +3126,8 @@ void Timeline::addTrack(model::TrackKind kind, model::AudioFormat format) {
         fail(tr("The sequence has all the tracks it can hold."));
         return;
     }
+    // Default Sync Locks On (p.1220): new tracks too (ours).
+    if (options_.defaultSyncLocks && kind != model::TrackKind::Data) seq.track(*name)->syncLocked = true;
     const model::BinItem before = rec->item;
     model::BinItem after = before;
     seq.storeIn(after);
@@ -3103,6 +3205,13 @@ bool Timeline::isSegmentTool(model::EditKind kind) const {
 
 // EditKind::Overwrite stands for Lift/Overwrite and SpliceIn for Extract/Splice-in. Turning
 // both off drops the selection.
+void Timeline::disableSmartTools() {
+    setSegmentTool(model::EditKind::Overwrite, false);
+    setSegmentTool(model::EditKind::SpliceIn, false);
+    setTrimTool(model::TrimKind::Overwrite, false);
+    setTrimTool(model::TrimKind::Ripple, false);
+}
+
 void Timeline::setSegmentTool(model::EditKind kind, bool on) {
     (kind == model::EditKind::Overwrite ? liftTool_ : spliceTool_) = on;
     // Only One Segment Tool Can Be Enabled At A Time (p.1220).
@@ -3184,7 +3293,7 @@ bool Timeline::moveSelection(std::int64_t frames, int tracks, model::EditKind ki
     const model::BinItem before = rec->item;
     model::Sequence seq = model::Sequence::fromItem(before);
     QString error;
-    const QList<model::SegmentRef> moved = model::moveSegments(seq, selection_, frames, tracks, kind, copy, &error);
+    const QList<model::SegmentRef> moved = model::moveSegments(seq, selection_, frames, tracks, kind, copy, &error, options_.segmentDragSyncLocks);
     if (moved.isEmpty()) return fail(error);
     model::BinItem after = before;
     seq.storeIn(after);
@@ -4179,7 +4288,9 @@ bool Timeline::dropEffect(const QString& track, std::int64_t frame, const Effect
     } else {
         return fail(tr("This effect cannot be applied there."));
     }
-    return commitSequence(tr("Apply Effect"), seq);
+    if (!commitSequence(tr("Apply Effect"), seq)) return false;
+    emit effectApplied();
+    return true;
 }
 
 bool Timeline::applyEffectToSelection(const EffectInfo& effect) {
@@ -4241,7 +4352,9 @@ bool Timeline::applyEffectToSelection(const EffectInfo& effect) {
     } else {
         return fail(tr("Select segments or transitions in the Timeline first."));
     }
-    return commitSequence(tr("Apply Effect"), seq);
+    if (!commitSequence(tr("Apply Effect"), seq)) return false;
+    emit effectApplied();
+    return true;
 }
 
 std::optional<model::EffectRef> Timeline::currentEffect() const {

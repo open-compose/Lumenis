@@ -151,7 +151,11 @@ private:
                        std::int64_t at) const;
     // The frame, with its fraction, at a widget x.
     double exactFrameAt(double x) const;
-    void moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifiers);
+    // `click`: the press that starts a scrub, which Position Bar Snap snaps (p.1220).
+    void moveIndicator(const QPoint& pos, Qt::KeyboardModifiers modifiers, bool click = false);
+    // Whether a click or lasso may select the segment: filler only with Select Filler with Segment
+    // Tools (p.616, p.1220).
+    bool selectable(const model::SegmentRef& ref) const;
     // A segment drag: frames and tracks moved so far.
     std::int64_t dragFrames(Qt::KeyboardModifiers modifiers) const;
     int dragTracks() const;
@@ -250,6 +254,16 @@ public:
         bool proToolsChannelOrder = false;
         // Timeline settings: Dupe Detection Handles, frames added at both ends of each clip (p.1220).
         double dupeHandles = 0;
+        // Timeline settings, Edit tab (p.1220; docs/spec/timeline-settings.md).
+        bool autoPatching = false;         // Auto-Patching: patches follow the enabled tracks
+        bool autoMonitoring = true;        // Auto-Monitoring: "selected by default"
+        bool segmentDragSyncLocks = false; // Segment Drag Sync Locks (p.618)
+        bool positionBarSnap = false;      // Position Bar Snap (p.397)
+        bool defaultSyncLocks = false;     // Default Sync Locks On
+        bool selectFiller = true;          // Select Filler with Segment Tools (p.616); ours: on
+        bool openEffectEditor = false;     // Applying Effects opens Effect Editor
+        bool tcDisablesSmartTools = false; // Clicking the TC Track or ruler Disables Smart Tools (p.722)
+        bool lassoSegmentMode = false;     // Lassoing transitions enters: Segment Mode (else Trim Mode)
         // Timeline settings: Sequence Map (p.1219). Ours: the defaults.
         bool mapOverlay = true;    // Open Sequence Map as overlay on Timeline
         bool mapClickHides = true; // Clicking Elsewhere Hides the Sequence Map
@@ -325,6 +339,8 @@ public:
     // is Lift/Overwrite, as for a lasso with no tool, p.612).
     bool isSegmentTool(model::EditKind kind) const;
     void setSegmentTool(model::EditKind kind, bool on);
+    // Turns every edit tool of the Smart Tool off: both segment tools and both trim tools (p.1220).
+    void disableSmartTools();
     // The kind of edit the segment tools make: the one tool that is on, else Lift/Overwrite.
     model::EditKind segmentKind() const;
     // The selected segments of the record sequence; empty when the source is shown.
@@ -873,6 +889,8 @@ public:
 signals:
     // The shown item, the selection, the patch or Trim mode changed.
     void changed();
+    // An effect was put on segments or transitions (Applying Effects opens Effect Editor, p.1220).
+    void effectApplied();
     // The Track Control panel's Solo (`solo`) or Mute button for `track` was clicked (p.602).
     void soloMuteRequested(const QString& track, bool solo);
     // The View Menu: a view was chosen, or the current display is to be saved as view `name` (Save
@@ -1004,6 +1022,9 @@ private:
     bool mapInWindow_ = false;
     // Puts the overlay at the bottom right of the tracks area (ours).
     void placeSequenceMap();
+    // Auto-Patching (Timeline settings, p.1220), and a patch with Auto-Monitoring (p.629).
+    void autoPatch();
+    bool movePatch(const QString& source, const QString& record);
     bool liftTool_ = false;
     bool spliceTool_ = false;
     QList<model::SegmentRef> selection_;

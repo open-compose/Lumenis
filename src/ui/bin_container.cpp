@@ -2,6 +2,7 @@
 
 #include "lumenis/model/bin.h"
 #include "lumenis/model/bin_lock.h"
+#include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/theme.h"
 
@@ -1715,8 +1716,8 @@ QString BinContainer::newSequence(const QString& targetBin) {
         emit lockRefused(doc->nodeId());
         return {};
     }
-    const model::BinItem item =
-        model::newSequence(doc->bin(), editRate_, QDateTime::currentDateTimeUtc(), startTimecode_);
+    model::BinItem item = model::newSequence(doc->bin(), editRate_, QDateTime::currentDateTimeUtc(), startTimecode_);
+    if (defaultSyncLocks_) model::syncLockAllTracks(item);
     doc->addItem(item);
     if (BinView* v = viewFor(doc)) v->selectIds({item.id});
     return item.id;
