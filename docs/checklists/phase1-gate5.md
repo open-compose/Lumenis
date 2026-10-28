@@ -67,7 +67,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Reveal File |  | p.360 | works | ☐ | | |
 | Input > Source Browser |  | p.132 | works | ☐ | | |
 | Input > Import Media |  | p.969 | works | ☐ | | |
-| Input > Link |  | p.328 | *later* | ☐ | | |
+| Input > Link |  | p.328 | works | ☐ | | |
 | Input > Tape Capture | Ctrl+7 | p.115 | *later* | ☐ | | |
 | Input > Import EDL |  | p.951 | works | ☐ | | |
 | Output > Export to File |  | p.129 | works | ☐ | | |
@@ -81,7 +81,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Media > Media Creation Settings | Ctrl+5 | p.137 | works | ☐ | | |
 | Media > Load Media Database |  | p.104 | works | ☐ | | |
 | Media > Refresh Media Directories |  | p.359 | works | ☐ | | |
-| Media > Unmount |  | p.344 | *later* | ☐ | | |
+| Media > Unmount |  | p.344 | works | ☐ | | |
 | Interplay Transfer > Clear Status |  | p.1094 | *later* | ☐ | | |
 | Page Setup |  | p.292 | *later* | ☐ | | |
 | Print Bin | Ctrl+P | p.288 | *later* | ☐ | | |
@@ -282,8 +282,8 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Bin Layout > Delete Bin Layout |  | p.93 | *later* | ☐ | | |
 | Close All But Active |  | p.296 | works | ☐ | | |
 | Close All Bins But Active |  | p.296 | works | ☐ | | |
-| Center Current |  | p.601 | *later* | ☐ | | |
-| Send Current Home | Ctrl+' | p.601 | *later* | ☐ | | |
+| Center Current |  | p.601 | works | ☐ | | |
+| Send Current Home | Ctrl+' | p.601 | works | ☐ | | |
 | Set Font |  | p.82 | *later* | ☐ | | |
 | Site Settings |  | p.1141 | works | ☐ | | |
 
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 131 of them working with a project open; the
+* 211 menu commands, 135 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.
