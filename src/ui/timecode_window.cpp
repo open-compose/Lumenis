@@ -150,7 +150,7 @@ QMenu* TimecodeWindow::menuFor(int index) {
             QAction* a = sub->addAction(model::trackingLabel(f));
             a->setCheckable(true);
             a->setChecked(current.monitor == monitor && current.format == f);
-            connect(a, &QAction::triggered, this, [this, index, monitor = monitor, f] { setLine(index, Line{monitor, f}); });
+            connect(a, &QAction::triggered, this, [this, index, m = monitor, f] { setLine(index, Line{m, f}); });
         }
     }
     QAction* none = menu->addAction(tr("None"));

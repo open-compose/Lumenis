@@ -172,7 +172,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Unlock Project Bin |  | p.302 | works | ☐ | | |
 | Lock Tracks |  | p.633 | works | ☐ | | |
 | Unlock Tracks |  | p.634 | works | ☐ | | |
-| Loop Selected Clips |  | p.393 | *later* | ☐ | | |
+| Loop Selected Clips |  | p.393 | works | ☐ | | |
 | Modify > Modify Clip |  | p.279 | works | ☐ | | |
 | Modify > Modify Pulldown Phase |  | p.127 | *later* | ☐ | | |
 | Modify > Unlink Media |  | p.210 | works | ☐ | | |
@@ -254,7 +254,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Remote Assets |  | p.292 | *later* | ☐ | | |
 | Restrictions |  | p.292 | *later* | ☐ | | |
 | Source Browser |  | p.522 | works | ☐ | | |
-| Timecode Window |  | p.389 | *later* | ☐ | | |
+| Timecode Window |  | p.389 | works | ☐ | | |
 | Timeline Clip Notes |  | p.484 | works | ☐ | | |
 | Video Input Tool |  | p.161 | *later* | ☐ | | |
 | Video Output Tool |  | p.910 | *later* | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 120 of them working with a project open; the
+* 211 menu commands, 122 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.
