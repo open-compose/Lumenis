@@ -257,6 +257,11 @@ public:
         int trimPostroll = 2;     // seconds after it
         int trimIntermission = 0; // seconds between passes (ours: a pause)
         bool jklTrim = true;      // J-K-L Trim (p.658)
+        // Features tab: Small Trim display never, after Go to Previous/Next Event, or always (p.649).
+        enum class SmallTrim { Never, GoTo, Always };
+        SmallTrim smallTrim = SmallTrim::Never;
+        bool dualImagePlay = false; // Dual Image Play (p.659)
+        bool syncRollers = false;   // Sync Rollers for Sync Locked Tracks (p.656)
         // Timeline settings, Edit tab (p.1220): Start Filler Duration (seconds, ours) and Find Flash
         // Frames Shorter Than (frames).
         int startFillerSeconds = 2;
@@ -565,6 +570,9 @@ public:
     // the space bar, stops it. False with no transition.
     bool playTrimLoop();
     bool isTrimLooping() const { return trimLooping_; }
+    // Sync Rollers for Sync Locked Tracks (p.656): in a single-roller ripple trim on a sync-locked
+    // track, the gray rollers drawn on the sync-locked tracks without one, which the trim moves too.
+    QList<model::TrimRoller> syncRollers() const;
     // Edit Review (the Play tab, p.657-658): in Trim mode, leaves it (deselecting the rollers) and plays
     // from Preroll before the trimmed transition; otherwise from Preroll before the last transition at
     // or before the position where every selected track has an edit. False with none.
@@ -1046,6 +1054,7 @@ private:
     // J-K-L Trim: J, L or slow play started in Trim mode; when play stops the transition moves to
     // the frame shown (p.658-659).
     bool jklTrimming_ = false;
+    bool goToTrim_ = false; // Trim mode came from Go to Previous/Next Event ("Go to Transition", p.1223)
     std::int64_t playLoopCut() const;
     Options options_;
     QList<std::pair<double, double>> zoomStack_;

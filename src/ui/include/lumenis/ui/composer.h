@@ -64,6 +64,9 @@ class MonitorPicture : public QWidget {
 public:
     // Shows `monitor` of `composer`, which must outlive the picture.
     MonitorPicture(Composer& composer, MonitorId monitor, QWidget* parent = nullptr);
+    // A picture of Small Trim display (p.648): always the Record monitor's sequence at that side of the
+    // transition (Composer::trimFrame).
+    void setTrimSide(model::TrimSide side) { trimSide_ = side; }
 
     // The area of the widget the picture fills: the largest rectangle of the project's aspect ratio,
     // centred (letterboxed or pillarboxed), in widget coordinates.
@@ -77,8 +80,14 @@ protected:
     void dropEvent(QDropEvent* event) override;
 
 private:
+    // What this picture shows now: in Big Trim display both monitors show the sequence's outgoing
+    // (Source) and incoming (Record) frames, "The new outgoing frame displays in the Source monitor as
+    // you trim" (p.655).
+    std::optional<model::TrimSide> shownTrimSide() const;
+
     Composer& composer_;
     MonitorId monitor_;
+    std::optional<model::TrimSide> trimSide_;
 };
 
 // The Composer window (p.379-387): the Source and Record monitors, each with
@@ -110,10 +119,10 @@ public:
     }
     // Keys pressed in the Composer are run through it (keyPressEvent).
     void setKeyResolver(KeyResolver resolver) { keys_ = std::move(resolver); }
-    // The picture a monitor shows at its position, scaled to fit `size`:
+    // The picture of what a monitor holds at `frame`, scaled to fit `size`:
     // the clip's frame, or for a sequence the frame of its top video track
     // there. `offline` is set when the media cannot be read (p.347).
-    using PictureResolver = std::function<QImage(MonitorId, QSize size, bool* offline)>;
+    using PictureResolver = std::function<QImage(MonitorId, std::int64_t frame, QSize size, bool* offline)>;
     void setPictureResolver(PictureResolver resolver) { pictures_ = std::move(resolver); }
     // Phantom marks (Composer settings, p.501): the IN and OUT an edit would use where none is set,
     // drawn in blue in the position bars. The Timeline works them out.
@@ -138,6 +147,8 @@ public:
     // The PictureResolver's image; a null image when there is no resolver or the monitor is empty.
     // `*offline` is reset to false first.
     QImage picture(MonitorId monitor, QSize size, bool* offline = nullptr) const;
+    // The same at another frame of the monitor's item.
+    QImage pictureAt(MonitorId monitor, std::int64_t frame, QSize size, bool* offline = nullptr) const;
     // Edit points of what a monitor shows (the Timeline knows a sequence's;
     // a clip has its start and end), for Go to Previous/Next Event and
     // Mark Clip.
@@ -197,12 +208,29 @@ public:
         std::int64_t bFrames = 0;
         bool aActive = false;
         bool bActive = false;
+        // Small Trim display (Trim settings, p.648-649, p.1223): the Source monitor stays and the
+        // Record monitor gives way to the outgoing and incoming frames side by side.
+        bool small = false;
+        // The last outgoing and the first incoming frame of the sequence at the transition.
+        std::int64_t aFrame = 0;
+        std::int64_t bFrame = 0;
+        // Dual Image Play (p.659): while play runs, both sides follow it.
+        bool dualImage = false;
     };
 
     // Turns the Big Trim display on or off and updates its counters. While on, the position bars and
     // button rows are hidden and both monitors are shown even in single-monitor mode.
     void setTrimDisplay(const TrimDisplay& display);
     const TrimDisplay& trimDisplay() const { return trim_; }
+    // The Record monitor's frame a trim picture of `side` (A or B) shows: the side's frame, or while the
+    // Record monitor plays the position (B, or the side last clicked; A shows the frame before it);
+    // with Dual Image Play both sides follow play (p.659).
+    std::int64_t trimFrame(model::TrimSide side) const;
+    // A trim picture was clicked: that side plays in real time (p.659).
+    void setTrimPlaySide(model::TrimSide side);
+    model::TrimSide trimPlaySide() const { return trimPlaySide_; }
+    // The Small Trim display's widget in the Record column (two pictures and their counters).
+    QWidget* smallTrim() const { return smallTrim_; }
 
     // The frame counter under a monitor in Trim mode (Source: A side, Record: B side), and the row of
     // Trim buttons; exposed for tests and the Timeline.
@@ -432,7 +460,10 @@ private:
     QTimer* timer_ = nullptr;
     QLabel* center_ = nullptr;
     QWidget* trimBar_ = nullptr;
+    QWidget* smallTrim_ = nullptr;
+    QList<QToolButton*> smallCounters_; // A, B
     TrimDisplay trim_;
+    model::TrimSide trimPlaySide_ = model::TrimSide::B;
     Display display_;
     // The command of every button slot, row by row (see buttonLayout()).
     QList<QStringList> layout_[2]; // Source, Record

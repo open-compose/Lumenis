@@ -328,9 +328,9 @@ void MainWindow::createPanels() {
     });
     // The monitors show the frames of linked clips; a sequence shows its top
     // video track's (p.432-434 orders the tracks the same way).
-    composer_->setPictureResolver([this](MonitorId monitor, QSize size, bool* offline) -> QImage {
+    composer_->setPictureResolver([this](MonitorId monitor, std::int64_t at, QSize size, bool* offline) -> QImage {
         const model::MonitorState& state = composer_->state(monitor);
-        const auto shown = frameAt(monitor, state.position());
+        const auto shown = frameAt(monitor, at);
         if (!shown) return {};
         const auto& [item, frame] = *shown;
         if (frames_->isOffline(item)) {
@@ -338,7 +338,7 @@ void MainWindow::createPanels() {
             return {};
         }
         // Playing: the next frames are decoded while this one shows.
-        if (composer_->isPlaying() && monitor == composer_->activeMonitor()) {
+        if (composer_->isPlaying() && monitor == composer_->activeMonitor() && at == state.position()) {
             const int step = composer_->speed() > 0 ? 1 : -1;
             for (int k = 1; k <= 2; ++k) {
                 if (const auto next = frameAt(monitor, state.position() + k * step * std::abs(composer_->speed()))) {
@@ -3658,6 +3658,12 @@ void MainWindow::applySettings() {
     o.trimPostroll = s.value(trim, QStringLiteral("postroll")).toInt(2);
     o.trimIntermission = s.value(trim, QStringLiteral("intermission")).toInt(0);
     o.jklTrim = s.flag(trim, QStringLiteral("jklTrim"));
+    const QString small = s.value(trim, QStringLiteral("trimMode")).toString();
+    o.smallTrim = small == QLatin1String("always") ? Timeline::Options::SmallTrim::Always
+                  : small == QLatin1String("goTo")  ? Timeline::Options::SmallTrim::GoTo
+                                                    : Timeline::Options::SmallTrim::Never;
+    o.dualImagePlay = s.flag(trim, QStringLiteral("dualImagePlay"));
+    o.syncRollers = s.flag(trim, QStringLiteral("syncRollers"));
     binContainer_->setDefaultSyncLocks(o.defaultSyncLocks);
     timeline_->setOptions(o);
 

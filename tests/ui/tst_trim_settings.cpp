@@ -1,6 +1,7 @@
 // The Trim settings (Editing Guide p.1223; docs/spec/trim-settings.md) and what they drive: the Play
 // Loop of Trim mode with Preroll, Postroll and Intermission, trimming during the loop (p.657,
-// p.659-660), Edit Review (p.657-658) and J-K-L Trim (p.658-659).
+// p.659-660), Edit Review (p.657-658), J-K-L Trim (p.658-659), the trim displays' outgoing and
+// incoming frames, Small Trim display (p.648-649), Dual Image Play (p.659) and Sync Rollers (p.656).
 #include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
@@ -8,6 +9,7 @@
 #include "lumenis/ui/timeline.h"
 
 #include <QSignalSpy>
+#include <QWidget>
 #include <QTest>
 #include <QToolButton>
 
@@ -33,7 +35,7 @@ struct Fixture {
     Composer composer;
     Timeline timeline{composer};
 
-    Fixture() {
+    explicit Fixture(bool syncLocks = false) {
         timeline.resize(1000, 360);
         BinItem item;
         item.id = model::newItemId();
@@ -43,6 +45,9 @@ struct Fixture {
         Sequence seq = Sequence::withDefaultTracks();
         seq.splice(QStringLiteral("V1"), 0, {seg(QStringLiteral("a"), QStringLiteral("V1"), 100), seg(QStringLiteral("b"), QStringLiteral("V1"), 100)});
         seq.splice(QStringLiteral("A1"), 0, {seg(QStringLiteral("x"), QStringLiteral("A1"), 100), seg(QStringLiteral("y"), QStringLiteral("A1"), 100)});
+        if (syncLocks) {
+            for (const QString& t : seq.trackNames()) seq.track(t)->syncLocked = true;
+        }
         seq.storeIn(item);
         composer.load(MonitorId::Record, QStringLiteral("bin"), item);
         composer.setActiveMonitor(MonitorId::Record);
@@ -190,6 +195,136 @@ private slots:
         f.composer.advance(400);
         f.composer.perform(QStringLiteral("play.pause"));
         QCOMPARE(f.firstLength(), 111);
+    }
+
+    // The trim monitors show the sequence's last outgoing and first incoming frames (p.648, p.655).
+    // While the Record monitor plays, the side last clicked follows; with Dual Image Play both do
+    // (p.659).
+    void trimFrames() {
+        Fixture f;
+        // Each frame a different red.
+        f.composer.setPictureResolver([](MonitorId, std::int64_t frame, QSize size, bool*) {
+            QImage image(size, QImage::Format_RGB32);
+            image.fill(QColor(static_cast<int>(frame % 256), 0, 0));
+            return image;
+        });
+        f.composer.resize(900, 420);
+        f.composer.show();
+        f.set([](Timeline::Options& o) { o.jklTrim = false; });
+        f.trimAtCut();
+        QCOMPARE(f.composer.trimDisplay().aFrame, 99);
+        QCOMPARE(f.composer.trimDisplay().bFrame, 100);
+        // Big Trim: the Source monitor shows frame 99 of the sequence, the Record monitor frame 100.
+        auto red = [](QWidget* w) {
+            const QImage shot = w->grab().toImage();
+            return qRed(shot.pixel(shot.width() / 2, shot.height() / 2));
+        };
+        QCOMPARE(red(f.composer.picture(MonitorId::Source)), 99);
+        QCOMPARE(red(f.composer.picture(MonitorId::Record)), 100);
+        f.composer.perform(QStringLiteral("play.play_forward"));
+        f.composer.advance(400);
+        QCOMPARE(f.composer.trimFrame(TrimSide::B), 110);
+        QCOMPARE(f.composer.trimFrame(TrimSide::A), 99);
+        f.composer.stop();
+        // Clicking the outgoing picture makes that side follow play, in the Record monitor.
+        QTest::mouseClick(f.composer.picture(MonitorId::Source), Qt::LeftButton);
+        QCOMPARE(f.composer.trimPlaySide(), TrimSide::A);
+        QCOMPARE(f.composer.activeMonitor(), MonitorId::Record);
+        f.composer.perform(QStringLiteral("play.play_forward"));
+        f.composer.advance(400);
+        QCOMPARE(f.composer.trimFrame(TrimSide::A), f.position() - 1);
+        QCOMPARE(f.composer.trimFrame(TrimSide::B), 100);
+        f.composer.stop();
+        // Dual Image Play.
+        f.timeline.exitTrimMode();
+        f.set([](Timeline::Options& o) { o.dualImagePlay = true; });
+        f.trimAtCut();
+        f.composer.perform(QStringLiteral("play.play_forward"));
+        f.composer.advance(400);
+        QCOMPARE(f.composer.trimFrame(TrimSide::B), 110);
+        QCOMPARE(f.composer.trimFrame(TrimSide::A), 109);
+        f.composer.stop();
+    }
+
+    // Small Trim display (p.648-649, p.1223): the Source monitor keeps its controls; the Record
+    // monitor gives way to the two trim pictures with their counters.
+    void smallTrim() {
+        Fixture f;
+        f.composer.resize(900, 420);
+        f.composer.show();
+        auto* sourceControls = f.composer.findChild<QWidget*>(QStringLiteral("sourceControls"));
+        auto* recordControls = f.composer.findChild<QWidget*>(QStringLiteral("recordControls"));
+        QVERIFY(sourceControls && recordControls);
+        // Never: Big Trim.
+        f.trimAtCut();
+        QVERIFY(!f.composer.trimDisplay().small);
+        QVERIFY(!f.composer.smallTrim()->isVisible());
+        QVERIFY(!sourceControls->isVisible());
+        f.timeline.exitTrimMode();
+        // Always.
+        f.set([](Timeline::Options& o) { o.smallTrim = Timeline::Options::SmallTrim::Always; });
+        f.trimAtCut();
+        QVERIFY(f.composer.trimDisplay().small);
+        QVERIFY(f.composer.smallTrim()->isVisible());
+        QVERIFY(!f.composer.picture(MonitorId::Record)->isVisible());
+        QVERIFY(f.composer.picture(MonitorId::Source)->isVisible());
+        QVERIFY(sourceControls->isVisible());
+        QVERIFY(!recordControls->isVisible());
+        QVERIFY(f.composer.trimBar()->isVisible());
+        auto* counterA = f.composer.findChild<QToolButton*>(QStringLiteral("smallTrimCounterA"));
+        QVERIFY(counterA && counterA->isVisible());
+        QVERIFY(f.timeline.trimBy(3));
+        QCOMPARE(counterA->text(), QStringLiteral("3"));
+        // A counter selects its side (p.651).
+        counterA->click();
+        QCOMPARE(f.timeline.rollers().first().side, TrimSide::A);
+        f.timeline.exitTrimMode();
+        QVERIFY(!f.composer.smallTrim()->isVisible());
+        QVERIFY(f.composer.picture(MonitorId::Record)->isVisible());
+        QVERIFY(recordControls->isVisible());
+        // "Go to Transition": only after Go to Previous/Next Event.
+        f.set([](Timeline::Options& o) { o.smallTrim = Timeline::Options::SmallTrim::GoTo; });
+        f.trimAtCut();
+        QVERIFY(!f.composer.trimDisplay().small);
+        f.composer.perform(QStringLiteral("move.go_to_previous_event"));
+        QVERIFY(f.timeline.isTrimMode());
+        QVERIFY(f.composer.trimDisplay().small);
+        f.timeline.exitTrimMode();
+        f.trimAtCut();
+        QVERIFY(!f.composer.trimDisplay().small);
+    }
+
+    // Sync Rollers for Sync Locked Tracks (p.656): gray rollers on the sync-locked tracks without one,
+    // for a single-roller trim; Shift-clicking a transition on such a track moves the trim there.
+    void syncRollers() {
+        Fixture f(true);
+        const QList<TrimRoller> a{{QStringLiteral("V1"), 100, TrimSide::A}};
+        f.timeline.setRollers(a, TrimKind::Ripple);
+        QVERIFY(f.timeline.syncRollers().isEmpty()); // the setting is off
+        f.set([](Timeline::Options& o) { o.syncRollers = true; });
+        QStringList tracks;
+        for (const TrimRoller& r : f.timeline.syncRollers()) {
+            tracks << r.track;
+            QCOMPARE(r.frame, 100);
+            QCOMPARE(r.side, TrimSide::A);
+        }
+        QVERIFY(tracks.contains(QStringLiteral("A1")));
+        QVERIFY(!tracks.contains(QStringLiteral("V1")));
+        // Dual rollers and Overwrite trims have none.
+        f.timeline.setRollers({{QStringLiteral("V1"), 100, TrimSide::Both}}, TrimKind::Ripple);
+        QVERIFY(f.timeline.syncRollers().isEmpty());
+        f.timeline.setRollers(a, TrimKind::Overwrite);
+        QVERIFY(f.timeline.syncRollers().isEmpty());
+        // Shift-click on A1, which has a sync roller: the trim moves to it.
+        f.timeline.setRollers(a, TrimKind::Ripple);
+        f.timeline.clickTransition({QStringLiteral("A1"), 100, TrimSide::A}, TrimKind::Ripple, true);
+        QCOMPARE(f.timeline.rollers().size(), 1);
+        QCOMPARE(f.timeline.rollers().first().track, QStringLiteral("A1"));
+        // Without sync locks there are none.
+        Fixture plain;
+        plain.set([](Timeline::Options& o) { o.syncRollers = true; });
+        plain.timeline.setRollers(a, TrimKind::Ripple);
+        QVERIFY(plain.timeline.syncRollers().isEmpty());
     }
 };
 

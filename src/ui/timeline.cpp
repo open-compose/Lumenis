@@ -129,6 +129,7 @@ constexpr QRgb kReplaceColor = 0xff3a7bd2;   // Replace is blue (p.467)
 constexpr QRgb kSelected = 0xffe8e8e8;       // selected segments
 constexpr QRgb kLocked = 0xffd9a13a;
 constexpr QRgb kDualRoller = 0xffe87fb8;     // dual-roller trims are pink (p.651)
+constexpr QRgb kSyncRoller = 0xff9a9a9a;     // sync rollers are gray (p.656); the shade is ours
 
 // The Record monitor's sequence, or an empty one.
 model::Sequence recordSequenceOf(const Composer& composer) {
@@ -803,6 +804,17 @@ void TimelineView::paintEvent(QPaintEvent*) {
                 if (offset != 0) {
                     // Where the drag will put it.
                     p.setPen(QPen(c, 1, Qt::DashLine));
+                    p.drawLine(QPointF(xFor(t.frame + offset), r.top), QPointF(xFor(t.frame + offset), r.top + r.height));
+                }
+            }
+        }
+        // Sync rollers, gray, on the sync-locked tracks the trim moves (p.656).
+        for (const model::TrimRoller& t : timeline_.syncRollers()) {
+            for (const Row& r : rowList) {
+                if (r.track != t.track) continue;
+                roller(r, t.frame, t.side, QColor(kSyncRoller));
+                if (offset != 0) {
+                    p.setPen(QPen(QColor(kSyncRoller), 1, Qt::DashLine));
                     p.drawLine(QPointF(xFor(t.frame + offset), r.top), QPointF(xFor(t.frame + offset), r.top + r.height));
                 }
             }
@@ -4029,6 +4041,7 @@ void Timeline::exitTrimMode() {
         if (focusBack_) toggleFocus();
     }
     if (!rollers_.isEmpty()) lastRollers_ = rollers_;
+    goToTrim_ = false;
     trimMode_ = false;
     rollers_.clear();
     slip_.clear();
@@ -4050,7 +4063,11 @@ void Timeline::setRollers(const QList<model::TrimRoller>& rollers, model::TrimKi
 }
 
 void Timeline::clickTransition(const model::TrimRoller& roller, model::TrimKind kind, bool add) {
-    if (!trimMode_ || !add) {
+    // "When you <shift> select a transition on a track with a sync roller, the trim is changed to the
+    // selected transition instead of adding another roller" (p.656).
+    const QList<model::TrimRoller> sync = syncRollers();
+    const bool onSync = std::any_of(sync.begin(), sync.end(), [&](const model::TrimRoller& r) { return r.track == roller.track; });
+    if (!trimMode_ || !add || onSync) {
         setRollers({roller}, kind);
         return;
     }
@@ -4114,6 +4131,29 @@ bool Timeline::trimBy(std::int64_t frames) {
     if (!trimLooping_) composer_.moveTo(MonitorId::Record, rollers_.first().frame);
     syncTrimDisplay();
     return true;
+}
+
+QList<model::TrimRoller> Timeline::syncRollers() const {
+    QList<model::TrimRoller> out;
+    if (!options_.syncRollers || !trimMode_ || rollers_.isEmpty() || trimKind_ != model::TrimKind::Ripple) return out;
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return out;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    bool locked = false;
+    for (const model::TrimRoller& r : rollers_) {
+        if (r.side == model::TrimSide::Both) return out; // single-roller trims only
+        const model::Track* t = seq.track(r.track);
+        locked = locked || (t && t->syncLocked);
+    }
+    if (!locked) return out;
+    const model::TrimRoller& first = rollers_.first();
+    for (const QString& name : seq.trackNames()) {
+        const model::Track* t = seq.track(name);
+        if (!t || !t->syncLocked) continue;
+        if (std::any_of(rollers_.begin(), rollers_.end(), [&](const model::TrimRoller& r) { return r.track == name; })) continue;
+        out << model::TrimRoller{name, first.frame, first.side};
+    }
+    return out;
 }
 
 std::int64_t Timeline::playLoopCut() const {
@@ -4257,6 +4297,15 @@ void Timeline::syncTrimDisplay() {
         d.bActive = d.bActive || r.side != model::TrimSide::A;
     }
     if (!slip_.isEmpty()) d.aActive = d.bActive = true;
+    // The outgoing and incoming frames of the transition (p.648, p.655).
+    if (!rollers_.isEmpty()) {
+        d.bFrame = rollers_.first().frame;
+        d.aFrame = std::max<std::int64_t>(d.bFrame - 1, 0);
+    } else {
+        d.aFrame = d.bFrame = composer_.state(MonitorId::Record).position();
+    }
+    d.small = options_.smallTrim == Options::SmallTrim::Always || (options_.smallTrim == Options::SmallTrim::GoTo && goToTrim_);
+    d.dualImage = options_.dualImagePlay;
     composer_.setTrimDisplay(d);
     if (QToolButton* b = toolButton(QStringLiteral("trim.trim_mode"))) b->setChecked(trimMode_);
     view_->update();
@@ -4276,7 +4325,11 @@ void Timeline::composerPerformed(const QString& id) {
     if (id.startsWith(QLatin1String("move.step_"))) {
         exitTrimMode();
     } else if (id == QLatin1String("move.go_to_previous_event") || id == QLatin1String("move.go_to_next_event")) {
+        // "Go to Transition" uses Small Trim mode: "Media Composer enters Small Trim mode only when you
+        // click the Go to Previous or Go to Next button" (p.1223).
+        goToTrim_ = true;
         enterTrimMode(0);
+        syncTrimDisplay();
     }
 }
 

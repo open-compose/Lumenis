@@ -1,7 +1,8 @@
-# Trim settings: Play Loop, Edit Review and J-K-L Trim (UI completion pass U2e1)
+# Trim settings and trim displays (UI completion pass U2e1, U2e2)
 
-The Trim settings' Play Loop tab and its J-K-L Trim option, with the Play Loop and Edit Review
-commands they serve. Pages are the Editing Guide's.
+The Trim settings (p.1223-1224) and what they serve: the Play Loop and Edit Review commands, J-K-L
+Trim (U2e1); the outgoing and incoming frames of the trim displays, Small Trim display, Dual Image
+Play and Sync Rollers (U2e2). Pages are the Editing Guide's.
 
 Code:
 * `Timeline::playTrimLoop`, `editReview`, the J-K-L Trim hooks in the constructor and
@@ -9,6 +10,9 @@ Code:
   `trimIntermission`, `jklTrim`, read by `MainWindow::applySettings`.
 * `Composer::playLoop(monitor, LoopResolver, pauseMs)`, `isLoopPaused`, `setKStepHandler`, and the
   Play Loop button of the trim display (`src/ui/composer.*`).
+* `Composer::TrimDisplay` (`small`, `aFrame`, `bFrame`, `dualImage`), `trimFrame`,
+  `setTrimPlaySide`, the Small Trim widget and `MonitorPicture::setTrimSide` (`src/ui/composer.*`);
+  `Timeline::syncRollers` and `syncTrimDisplay` (`src/ui/timeline.*`).
 * Test: `tst_trim_settings`; scenario `24-jkl-trim.json`.
 
 ## The settings (p.1223)
@@ -21,8 +25,9 @@ Code:
 * Features tab: "When the J-K-L Trim option is selected, you can use the J-K-L keys in Trim mode."
   It is on by default ("To use the J-K-L keys to only play, step, and shuttle without trimming,
   deselect the J-K-L Trim option", p.658).
-* Still dimmed: "Go to Transition" and Always use Small Trim mode, Render On-the-Fly, Dual Image Play
-  and Sync Rollers for Sync Locked Tracks (U2e2 and Phase 6).
+* Features tab: Never use Small Trim mode (the default, p.649), "Go to Transition" uses Small Trim
+  mode, Always use Small Trim mode, Dual Image Play and Sync Rollers for Sync Locked Tracks; below.
+* Still dimmed: Render On-the-Fly (Phase 6, effects).
 
 ## Play Loop (p.649, p.656-657, p.659-660)
 
@@ -78,3 +83,54 @@ Code:
   clips, not the outgoing and incoming frames ("Click either the outgoing (A-side) or incoming (B-side)
   monitor to play in real time", p.659, waits for those frames). Play (the space bar) started in Trim
   mode does not trim.
+
+## The trim monitors' frames (p.648, p.655)
+
+* Big Trim display "replaces the Source and Record monitors with displays of outgoing and incoming
+  frames" (p.648); "The new outgoing frame displays in the Source monitor as you trim" (p.655).
+  * The Source monitor shows the Record monitor's sequence at the frame before the first roller's
+    transition, the Record monitor the frame at it. The marks and markers are not drawn on them.
+* "Click either the outgoing (A-side) or incoming (B-side) monitor to play in real time during the
+  trim" (p.659). Clicking a trim picture makes the Record monitor active (so J-K-L plays the sequence)
+  and makes that side the one that follows play; the other keeps its frame. Ours: the B side follows
+  by default, and the side that follows has the active monitor's outline.
+  * Ours: what plays is the sequence. For an A-side trim past the cut the picture shows the incoming
+    material, not the outgoing clip's later frames.
+
+## Small Trim display (p.648-649, p.1223)
+
+* "Small Trim display leaves the monitor display intact and has smaller displays of outgoing and
+  incoming frames ... replaces Record monitor in two-monitor view. Outgoing and incoming frames appear
+  side-by-side on the right, with playback loop parameter controls above them, and with frame offset
+  counters and Trim buttons beneath them" (p.648).
+  * The Source monitor keeps its position bar and buttons. In place of the Record monitor, its position
+    bar and buttons: the two trim pictures with a counter under each; the Trim buttons are beneath.
+    The loop boxes are not built (as in Big Trim).
+* "Always use Small Trim mode — ... Media Composer enters Small Trim mode when you perform any
+  operation that activates Trim mode" (p.1223).
+* "'Go to Transition' uses Small Trim mode — ... Media Composer enters Small Trim mode only when you
+  click the Go to Previous or Go to Next button" (p.1223): Small Trim display when Trim mode moved to a
+  transition with Go to Previous/Next Event (p.655), until Trim mode ends.
+* Ours: in single-monitor view, where there is no Source monitor to keep, Trim mode uses Big Trim.
+  Quick Trim display (p.648) is not built.
+
+## Dual Image Play (p.659)
+
+* "Dual-image playback lets you view A-side and B-side frames in real time while performing a trim.
+  You can play through the transition by using the J-K-L keys or the Play and Trim buttons" (p.659).
+* With it, while the Record monitor plays in Trim mode, the A picture shows the frame before the
+  position and the B picture the position.
+* "Using the Dual Image Play option disables real-time effects" waits for real-time effects (Phase 6).
+
+## Sync Rollers for Sync Locked Tracks (p.656, p.1223-1224)
+
+* "When you enter single roller trim, gray sync rollers appear on unselected sync locked tracks making
+  it easier to see which tracks will be affected by the trim. When you are actually performing the trim
+  you will see the effect that the trim has on the sync locked tracks as you are trimming" (p.656).
+  * Gray rollers, on the same side and frame as the first roller, on each sync-locked track without a
+    roller, when every roller is single-sided, the trim is a ripple trim and a roller's track is
+    sync-locked (overwrite trims move nothing on the other tracks). While a roller is dragged, a dashed
+    line shows where they go.
+  * The tick marks "for visual reference only" are not drawn. The gray shade is ours.
+* "When you <shift> select a transition on a track with a sync roller, the trim is changed to the
+  selected transition instead of adding another roller" (p.656).

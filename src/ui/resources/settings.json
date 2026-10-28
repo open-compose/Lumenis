@@ -580,13 +580,13 @@
           "name": "Features",
           "options": [
             {"key": "trimMode", "type": "choice", "style": "radio", "label": "", "default": "never", "page": 1223,
-             "choices": [{"value": "never", "label": "Never use Small Trim mode"}, {"value": "goTo", "label": "\"Go to Transition\" uses Small Trim mode", "later": true},
-                         {"value": "always", "label": "Always use Small Trim mode", "later": true}]},
+             "choices": [{"value": "never", "label": "Never use Small Trim mode"}, {"value": "goTo", "label": "\"Go to Transition\" uses Small Trim mode"},
+                         {"value": "always", "label": "Always use Small Trim mode"}]},
             {"key": "autoFocus", "type": "bool", "label": "Auto focus when entering Trim mode", "default": false, "page": 1223},
             {"key": "renderOnTheFly", "type": "bool", "label": "Render On-the-Fly", "default": true, "page": 1223, "later": true},
-            {"key": "dualImagePlay", "type": "bool", "label": "Dual Image Play", "default": false, "page": 1223, "later": true},
+            {"key": "dualImagePlay", "type": "bool", "label": "Dual Image Play", "default": false, "page": 1223},
             {"key": "jklTrim", "type": "bool", "label": "J-K-L Trim", "default": true, "page": 1223},
-            {"key": "syncRollers", "type": "bool", "label": "Sync Rollers for Sync Locked Tracks", "default": false, "page": 1224, "later": true}
+            {"key": "syncRollers", "type": "bool", "label": "Sync Rollers for Sync Locked Tracks", "default": false, "page": 1224}
           ]
         }
       ]

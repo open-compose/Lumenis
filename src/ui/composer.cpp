@@ -9,6 +9,7 @@
 #include <QContextMenuEvent>
 #include <QHash>
 #include <QDragEnterEvent>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -550,11 +551,38 @@ QRect MonitorPicture::pictureRect() const {
 // Draws, in order: the dark surround and the black picture area, the frame from the PictureResolver
 // (or "Media Offline"), the IN/OUT sawtooth when the position is on a mark, a marker oval, and the
 // highlight frame of the active monitor (dual-monitor mode only).
+std::optional<model::TrimSide> MonitorPicture::shownTrimSide() const {
+    const Composer::TrimDisplay& t = composer_.trimDisplay();
+    if (!t.on) return std::nullopt;
+    if (trimSide_) return trimSide_;
+    if (t.small) return std::nullopt; // the Source monitor stays
+    return monitor_ == MonitorId::Source ? model::TrimSide::A : model::TrimSide::B;
+}
+
 void MonitorPicture::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.fillRect(rect(), QColor(18, 18, 18));
     const QRect pic = pictureRect();
     p.fillRect(pic, Qt::black);
+    if (const std::optional<model::TrimSide> side = shownTrimSide()) {
+        // A trim picture: the sequence's frame on that side of the transition, without marks.
+        const double q = composer_.qualityScale();
+        const QSize decode(std::max(1, static_cast<int>(pic.width() * q)), std::max(1, static_cast<int>(pic.height() * q)));
+        bool offline = false;
+        const QImage image = composer_.pictureAt(MonitorId::Record, composer_.trimFrame(*side), decode, &offline);
+        if (!image.isNull()) {
+            const QSize fit = image.size().scaled(pic.size(), Qt::KeepAspectRatio);
+            p.setRenderHint(QPainter::SmoothPixmapTransform, composer_.smoothScaling());
+            p.drawImage(QRect(pic.left() + (pic.width() - fit.width()) / 2, pic.top() + (pic.height() - fit.height()) / 2,
+                              fit.width(), fit.height()),
+                        image);
+        }
+        if (composer_.trimPlaySide() == *side && !composer_.trimDisplay().dualImage) {
+            p.setPen(QPen(palette().color(QPalette::Highlight), 1));
+            p.drawRect(rect().adjusted(0, 0, -1, -1));
+        }
+        return;
+    }
     const model::MonitorState& s = composer_.state(monitor_);
     if (!s.isEmpty()) {
         bool offline = false;
@@ -607,6 +635,15 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
 }
 
 void MonitorPicture::mousePressEvent(QMouseEvent* event) {
+    if (const std::optional<model::TrimSide> side = shownTrimSide()) {
+        // "Click either the outgoing (A-side) or incoming (B-side) monitor to play in real time during
+        // the trim" (p.659): the Record monitor plays the sequence; the clicked side follows it.
+        composer_.setTrimPlaySide(*side);
+        composer_.setActiveMonitor(MonitorId::Record);
+        composer_.setFocus();
+        composer_.refreshDisplay();
+        return;
+    }
     composer_.setActiveMonitor(monitor_);
     composer_.setFocus();
     // Clicking the oval of a marker opens Edit Marker (p.416).
@@ -862,6 +899,38 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
     });
     v->addWidget(c->trimCounter);
     v->addWidget(c->controls);
+    if (!source) {
+        // Small Trim display (p.648): in place of the Record monitor, the outgoing and incoming frames
+        // side by side, each with its frame counter beneath.
+        smallTrim_ = new QWidget(c->widget);
+        smallTrim_->setObjectName(QStringLiteral("smallTrim"));
+        auto* grid = new QGridLayout(smallTrim_);
+        grid->setContentsMargins(0, 0, 0, 0);
+        grid->setSpacing(3);
+        for (int i = 0; i < 2; ++i) {
+            const bool a = i == 0;
+            auto* pic = new MonitorPicture(*this, MonitorId::Record, smallTrim_);
+            pic->setObjectName(a ? QStringLiteral("smallTrimA") : QStringLiteral("smallTrimB"));
+            pic->setMinimumSize(60, 34);
+            pic->setTrimSide(a ? model::TrimSide::A : model::TrimSide::B);
+            pic->setAcceptDrops(false);
+            grid->addWidget(pic, 0, i);
+            auto* counter = new QToolButton(smallTrim_);
+            counter->setObjectName(a ? QStringLiteral("smallTrimCounterA") : QStringLiteral("smallTrimCounterB"));
+            counter->setFixedHeight(kInfoHeight);
+            counter->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+            counter->setAutoRaise(true);
+            connect(counter, &QToolButton::clicked, this, [this, a] {
+                const bool both = QApplication::keyboardModifiers() & Qt::ShiftModifier;
+                emit trimSideRequested(both ? model::TrimSide::Both : a ? model::TrimSide::A : model::TrimSide::B);
+            });
+            grid->addWidget(counter, 1, i);
+            smallCounters_ << counter;
+        }
+        grid->setRowStretch(0, 1);
+        smallTrim_->hide();
+        v->insertWidget(v->indexOf(c->picture) + 1, smallTrim_, 1);
+    }
     return c->widget;
 }
 
@@ -949,7 +1018,8 @@ void Composer::setDisplay(const Display& display) {
         c.clipName->setVisible(display.infoRow);
         c.tracking->setVisible(display.infoRow);
         for (int i = 0; i < c.rows.size(); ++i) c.rows.at(i)->setVisible(i < display.buttonRows);
-        c.controls->setVisible(!trim_.on && display.buttonRows > 0);
+        const bool trimHere = trim_.on && (!trim_.small || m == MonitorId::Record);
+        c.controls->setVisible(!trimHere && display.buttonRows > 0);
     }
     center_->setVisible(display.infoRow && display.centerDuration);
     refresh();
@@ -996,9 +1066,28 @@ void Composer::clearUncommitted() {
 }
 
 QImage Composer::picture(MonitorId monitor, QSize size, bool* offline) const {
+    return pictureAt(monitor, state(monitor).position(), size, offline);
+}
+
+QImage Composer::pictureAt(MonitorId monitor, std::int64_t frame, QSize size, bool* offline) const {
     if (offline) *offline = false;
     if (!pictures_ || state(monitor).isEmpty()) return {};
-    return pictures_(monitor, size, offline);
+    return pictures_(monitor, frame, size, offline);
+}
+
+std::int64_t Composer::trimFrame(model::TrimSide side) const {
+    const bool a = side == model::TrimSide::A;
+    if (isPlaying() && active_ == MonitorId::Record) {
+        const std::int64_t pos = record_.position();
+        // The side that plays follows the position; with Dual Image Play both do, the outgoing frame
+        // just before the incoming one.
+        if (trim_.dualImage || trimPlaySide_ == side) return a ? std::max<std::int64_t>(pos - 1, 0) : pos;
+    }
+    return a ? trim_.aFrame : trim_.bFrame;
+}
+
+void Composer::setTrimPlaySide(model::TrimSide side) {
+    trimPlaySide_ = side == model::TrimSide::A ? model::TrimSide::A : model::TrimSide::B;
 }
 
 // Loading stops playback and makes the monitor active.
@@ -1056,21 +1145,32 @@ void Composer::setTrimDisplay(const TrimDisplay& display) {
     // outgoing frames on the left and the incoming on the right, with their
     // frame counters and the Trim buttons; the position bars and button rows
     // give way.
+    // Small Trim display keeps the Source monitor with its controls and puts the two trim pictures in
+    // place of the Record monitor (p.648); single-monitor view has no Source monitor to keep, so it
+    // stays with Big Trim (ours).
+    if (!display.on) trimPlaySide_ = model::TrimSide::B;
     trim_ = display;
+    const bool small = display.on && display.small && !single_;
+    trim_.small = small;
+    // "The counter is purple when the side is active" (p.651).
+    auto paintCounter = [&](QToolButton* counter, bool a) {
+        counter->setText(display.on ? QString::number(a ? display.aFrames : display.bFrames) : QString());
+        QPalette pal = counter->palette();
+        pal.setColor(QPalette::ButtonText, (a ? display.aActive : display.bActive) ? QColor(kTrimActive) : QColor(kInfoText));
+        counter->setPalette(pal);
+        counter->setAutoFillBackground(true);
+    };
     for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
         Column& c = column(m);
-        c.bar->setVisible(!display.on);
-        c.controls->setVisible(!display.on && display_.buttonRows > 0);
-        c.trimCounter->setVisible(display.on);
-        const bool a = m == MonitorId::Source;
-        const std::int64_t frames = a ? display.aFrames : display.bFrames;
-        c.trimCounter->setText(display.on ? QString::number(frames) : QString());
-        // "The counter is purple when the side is active" (p.651).
-        QPalette pal = c.trimCounter->palette();
-        pal.setColor(QPalette::ButtonText, (a ? display.aActive : display.bActive) ? QColor(kTrimActive) : QColor(kInfoText));
-        c.trimCounter->setPalette(pal);
-        c.trimCounter->setAutoFillBackground(true);
+        const bool trimHere = display.on && (!small || m == MonitorId::Record);
+        c.bar->setVisible(!trimHere);
+        c.controls->setVisible(!trimHere && display_.buttonRows > 0);
+        c.trimCounter->setVisible(trimHere && !small);
+        c.picture->setVisible(!(small && m == MonitorId::Record));
+        paintCounter(c.trimCounter, m == MonitorId::Source);
     }
+    smallTrim_->setVisible(small);
+    for (int i = 0; i < smallCounters_.size(); ++i) paintCounter(smallCounters_.at(i), i == 0);
     column(MonitorId::Source).widget->setVisible(display.on || !single_);
     trimBar_->setVisible(display.on);
     refresh();
@@ -1703,6 +1803,7 @@ void Composer::refresh() {
         }
         c.picture->update();
         c.bar->update();
+        if (smallTrim_) smallTrim_->update();
     }
     if (center_) center_->setText(centerDuration());
     emit changed();
