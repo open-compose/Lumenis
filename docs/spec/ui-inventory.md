@@ -72,6 +72,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Timeline and Markers tabs list, and Ctrl+G as a keyboard-only Find Again command.
 * AutoSequence (docs/spec/autosequence.md): which of two related clips is kept, the track layout of
   Camera groups, and the name when there is no Tape or Source File.
+* Set Font and Help > Shortcuts (docs/spec/set-font.md): the size range, nothing for other windows, and
+  the Shortcuts window's columns and Find box.
 * Unmount (docs/spec/media-unmount.md): the Mount All button, the list not being saved, no ejecting;
   Center Current and Send Current Home acting on any floating panel, and what "home" is.
 * Bin > Select (docs/spec/bin-select.md): what counts as a reference (subclips through their Clip

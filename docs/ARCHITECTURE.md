@@ -44,7 +44,8 @@ headers in `include/lumenis/<library>/`.
   (shared-storage lock and history files, docs/spec/bin-locking.md),
   `bin_relations.*` (Bin > Select's Media Relatives, Sources and Unreferenced
   Clips, docs/spec/bin-select.md). UI (also `unmount_dialog.*`, File > Media >
-  Unmount, docs/spec/media-unmount.md):
+  Unmount, docs/spec/media-unmount.md; `set_font_dialog.*` and
+  `shortcuts_window.*`, Set Font and Help > Shortcuts, docs/spec/set-font.md):
   `bin_view.*`
   (Text, Frame and Script views, `BinDocument`), `bin_container.*` (the
   Bin Container and its sidebar), `bin_dock.*` (docking bins),

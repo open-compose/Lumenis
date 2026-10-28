@@ -702,6 +702,8 @@ std::optional<Bin> BinFile::read(const QString& path, QString* error) {
     bin.display.showUserClips = d.value(QStringLiteral("showUserClips")).toBool(true);
     bin.display.showReferenceClips = d.value(QStringLiteral("showReferenceClips")).toBool();
     bin.display.statusBar = d.value(QStringLiteral("statusBar")).toBool();
+    bin.display.fontFamily = d.value(QStringLiteral("fontFamily")).toString();
+    bin.display.fontSize = d.value(QStringLiteral("fontSize")).toInt();
     return bin;
 }
 
@@ -745,6 +747,8 @@ bool BinFile::write(const QString& path, const Bin& bin, QString* error) {
         {QStringLiteral("showUserClips"), bin.display.showUserClips},
         {QStringLiteral("showReferenceClips"), bin.display.showReferenceClips},
         {QStringLiteral("statusBar"), bin.display.statusBar},
+        {QStringLiteral("fontFamily"), bin.display.fontFamily},
+        {QStringLiteral("fontSize"), bin.display.fontSize},
     };
     const QJsonObject o{
         {QStringLiteral("format"), QLatin1String(kFileFormat)},

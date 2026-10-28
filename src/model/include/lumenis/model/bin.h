@@ -159,6 +159,10 @@ struct BinDisplay {
     BinSift sift;
     bool sifted = false;    // Show Sifted / Show Unsifted
     bool statusBar = false; // Show Status Bar (p.254)
+    // Windows > Set Font (p.81-82): "Bin fonts are stored in each bin". Empty family and 0 size: the
+    // application's.
+    QString fontFamily;
+    int fontSize = 0;
     // Set Bin Display (p.288): object types not shown. By default "all
     // existing media objects except source clips and rendered effects".
     QList<BinItemKind> hiddenKinds = defaultHiddenKinds();

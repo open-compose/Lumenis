@@ -1400,6 +1400,20 @@ QWidget* Composer::dragCounter() const {
     return dragCounter_;
 }
 
+void Composer::setNameFont(const QString& family, int pointSize) {
+    for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
+        QToolButton* b = column(m).clipName;
+        QFont f = column(m).tracking->font(); // the information row's own font
+        if (!family.isEmpty()) f.setFamily(family);
+        if (pointSize > 0) f.setPointSize(pointSize);
+        b->setFont(f);
+    }
+}
+
+QFont Composer::nameFont() const {
+    return column(MonitorId::Source).clipName->font();
+}
+
 QToolButton* Composer::trimCounter(MonitorId monitor) const {
     return column(monitor).trimCounter;
 }

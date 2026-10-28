@@ -65,6 +65,8 @@
 #include "lumenis/ui/timecode_window.h"
 #include "lumenis/ui/timeline.h"
 #include "lumenis/ui/unmount_dialog.h"
+#include "lumenis/ui/set_font_dialog.h"
+#include "lumenis/ui/shortcuts_window.h"
 #include "lumenis/ui/tool_windows.h"
 #include "lumenis/ui/workspace.h"
 #include "lumenis/ui/workspace_bar.h"
@@ -265,6 +267,60 @@ QJsonObject MainWindow::defaultLayout() {
 // Composer's resolvers find bin items and media frames, its play signals drive the sound, and the
 // Timeline stores its sequences in bins. The tools come after, in createTools().
 // The bin's clips in the view's order; AutoSequence itself is model::autoSequence.
+bool MainWindow::chooseFont() {
+    // "Click the Bin, Composer monitor, Script, or Timeline window to make it active" (p.82).
+    const Panel* active = panels_->activePanel();
+    BinDocument* doc = binsActive() ? binContainer_->activeDocument() : nullptr;
+    BinView* view = doc ? binContainer_->viewFor(doc) : nullptr;
+    enum class Target { Bin, Composer, Timeline } target;
+    QFont current;
+    if (view) {
+        target = Target::Bin;
+        current = view->font();
+        const model::BinDisplay& d = doc->bin().display;
+        if (!d.fontFamily.isEmpty()) current.setFamily(d.fontFamily);
+        if (d.fontSize > 0) current.setPointSize(d.fontSize);
+    } else if (active && active->id() == QLatin1String("Composer")) {
+        target = Target::Composer;
+        current = composer_->nameFont();
+    } else if (active && active->id() == QLatin1String("Timeline")) {
+        target = Target::Timeline;
+        current = timeline_->clipFont();
+    } else {
+        return false;
+    }
+    SetFontDialog dialog(current, this);
+    const bool ok = fontHook_ ? fontHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok) return false;
+    const QString family = dialog.family();
+    const int size = dialog.pointSize();
+    switch (target) {
+    case Target::Bin: {
+        // "saves as a Bin setting (not a Bin View setting)" (p.81); "Bin fonts are stored in each bin" (p.82).
+        model::BinDisplay d = doc->bin().display;
+        d.fontFamily = family;
+        d.fontSize = size;
+        doc->setDisplay(d);
+        break;
+    }
+    case Target::Composer:
+        // "saves as a Composer setting" (p.81).
+        composer_->setNameFont(family, size);
+        settings_->setValue(QStringLiteral("Composer"), QStringLiteral("fontFamily"), family);
+        settings_->setValue(QStringLiteral("Composer"), QStringLiteral("fontSize"), size);
+        break;
+    case Target::Timeline: {
+        // "saves as a Timeline View setting" (p.82): kept in the display a Timeline View saves.
+        Timeline::Display d = timeline_->display();
+        d.clipFontFamily = family;
+        d.clipFontSize = size;
+        timeline_->setDisplay(d);
+        break;
+    }
+    }
+    return true;
+}
+
 bool MainWindow::placeCurrentWindow(bool home) {
     Panel* panel = panels_->activePanel();
     if (!panel || !panels_->isFloating(panel)) return false;
@@ -3727,6 +3783,8 @@ void MainWindow::applySettings() {
     d.flowData = dataDisplay == QLatin1String("flow");
     d.tickMarks = s.flag(composer, QStringLiteral("tickMarks"));
     d.middlePanel = s.flag(composer, QStringLiteral("middlePanel"));
+    composer_->setNameFont(s.value(composer, QStringLiteral("fontFamily")).toString(),
+                           s.value(composer, QStringLiteral("fontSize")).toInt());
     const QString rows = s.text(composer, QStringLiteral("buttonDisplay"));
     d.buttonRows = rows == QLatin1String("off") ? 0 : rows == QLatin1String("one") ? 1 : 2;
     d.centerDuration = s.flag(composer, QStringLiteral("centerDuration"));
@@ -4026,6 +4084,13 @@ void MainWindow::installPanelHandlers() {
     // position is the one a floated panel first gets, its preferred size centred on the main window; a
     // docked panel has no window of its own to move.
     handle("windows.center_current", [this] { placeCurrentWindow(false); });
+    handle("windows.set_font", [this] { chooseFont(); });
+    handle("help.shortcuts", [this] {
+        if (!shortcutsWindow_) shortcutsWindow_ = new ShortcutsWindow(commands_, *keyboard_, this);
+        shortcutsWindow_->show();
+        shortcutsWindow_->raise();
+        shortcutsWindow_->activateWindow();
+    });
     handle("windows.send_current_home", [this] { placeCurrentWindow(true); });
     handle("windows.add_blank_panel", [this] { panels_->addBlankPanel(); });
     handle("windows.workspaces.new_workspace", [this] { newWorkspace(); });

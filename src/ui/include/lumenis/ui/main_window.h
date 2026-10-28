@@ -47,6 +47,8 @@ class BackgroundQueueWindow;
 class CalculatorWindow;
 class ConsolidateDialog;
 class UnmountDialog;
+class SetFontDialog;
+class ShortcutsWindow;
 class AudioMixdownDialog;
 class MultiMixDialog;
 class ExportAsDialog;
@@ -234,6 +236,13 @@ public:
     // window centred on its screen, or put back at its preferred size centred on the main window.
     // False when the active panel is not floating.
     bool placeCurrentWindow(bool home);
+    // Windows > Set Font (p.81-82): the Set Font dialog for the active Bin, Composer or Timeline; the
+    // font goes into the bin, the Composer setting or the Timeline's display (its Timeline View).
+    // False when no such window is active or the dialog is cancelled. The hook answers the dialog.
+    bool chooseFont();
+    // Help > Shortcuts (p.97), once opened.
+    ShortcutsWindow* shortcutsWindow() const { return shortcutsWindow_; }
+    void setFontHook(std::function<bool(SetFontDialog&)> hook) { fontHook_ = std::move(hook); }
     void setUnmountHook(std::function<bool(UnmountDialog&)> hook) { unmountHook_ = std::move(hook); }
     // Deleting managed clips from a bin (p.359): the clips, their media
     // files, or both. The hook answers the Delete dialog (tests; nothing:
@@ -560,6 +569,8 @@ private:
     std::function<int(const QStringList&)> binChoiceHook_;
     std::function<void(const QString&)> revealHook_;
     std::function<bool(UnmountDialog&)> unmountHook_;
+    std::function<bool(SetFontDialog&)> fontHook_;
+    ShortcutsWindow* shortcutsWindow_ = nullptr;
     std::function<bool(ModifyDialog&)> modifyHook_;
     ClipAudioHooks clipAudioHooks_;
     std::function<bool(MultiMixDialog&)> multiMixHook_;

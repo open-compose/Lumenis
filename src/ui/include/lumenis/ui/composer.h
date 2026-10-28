@@ -415,6 +415,10 @@ public:
     // command, or null; none of these transfer ownership.
     QToolButton* button(MonitorId monitor, const QString& commandId) const;
     QToolButton* clipNameButton(MonitorId monitor) const;
+    // Windows > Set Font for the Composer (p.81-82): "the font and point size of the sequence or source
+    // clip name text; saves as a Composer setting". An empty family and size 0 restore the default.
+    void setNameFont(const QString& family, int pointSize);
+    QFont nameFont() const;
     QToolButton* trackingButton(MonitorId monitor) const;
     PositionBar* positionBar(MonitorId monitor) const;
     MonitorPicture* picture(MonitorId monitor) const;

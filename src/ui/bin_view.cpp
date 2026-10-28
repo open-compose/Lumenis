@@ -1397,6 +1397,14 @@ void BinView::applyDisplay() {
     frames_->setPalette(p);
     script_->setPalette(p);
 
+    // Set Font (p.81-82): the bin's own font, or the application's.
+    QFont f = QApplication::font();
+    if (!d.fontFamily.isEmpty()) f.setFamily(d.fontFamily);
+    if (d.fontSize > 0) f.setPointSize(d.fontSize);
+    for (QWidget* w : {static_cast<QWidget*>(table_), static_cast<QWidget*>(frames_), static_cast<QWidget*>(script_)}) {
+        if (w->font() != f) w->setFont(f);
+    }
+
     stack_->setCurrentIndex(static_cast<int>(d.mode));
     if (QAbstractButton* b = modes_->button(static_cast<int>(d.mode))) b->setChecked(true);
     frames_->applyDisplay();

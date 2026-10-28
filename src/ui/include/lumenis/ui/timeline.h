@@ -860,6 +860,9 @@ public:
 
     // Fast menu display options (p.592-593).
     // What the Timeline draws; changed from the Fast menu, kept per Timeline (not a setting).
+    struct Display;
+    // The clip text's font (Set Font, p.81-82; Display::clipFontFamily and clipFontSize).
+    QFont clipFont() const;
     struct Display {
         bool trackPanel = true;
         bool clipNames = true;
@@ -903,6 +906,10 @@ public:
         bool mediaFullNames = false;
         bool clipResolution = false;
         bool clipNotes = false; // Timeline Clip Notes (p.483)
+        // Windows > Set Font (p.81-82): the clip text's font, "saves as a Timeline View setting".
+        // Empty family and 0 size: the Timeline's own.
+        QString clipFontFamily;
+        int clipFontSize = 0;
         bool operator==(const Display&) const = default;
     };
     // The Fast menu's settings as a Timeline view keeps them (p.604), and back. Values missing from

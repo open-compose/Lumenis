@@ -638,10 +638,13 @@ void TimelineView::paintEvent(QPaintEvent*) {
                     // Clip text (Fast menu, p.592).
                     const QString clipText = textArea.width() > 12 ? timeline_.clipText(*t, s) : QString();
                     if (!clipText.isEmpty()) {
+                        p.save();
+                        p.setFont(timeline_.clipFont());
                         p.setPen(clipTextColor(segFill, bright, timeline_.options().textColor));
                         const QRectF textBox = textArea.adjusted(4, 0, -3, 0);
                         p.drawText(textBox, Qt::AlignVCenter | Qt::AlignLeft,
                                    p.fontMetrics().elidedText(clipText, Qt::ElideRight, static_cast<int>(textBox.width())));
+                        p.restore();
                     }
                 }
                 previous = &s;
@@ -5774,6 +5777,8 @@ QJsonObject Timeline::displayToJson(const Display& d) {
         {QStringLiteral("mediaFullNames"), d.mediaFullNames},
         {QStringLiteral("clipResolution"), d.clipResolution},
         {QStringLiteral("clipNotes"), d.clipNotes},
+        {QStringLiteral("clipFontFamily"), d.clipFontFamily},
+        {QStringLiteral("clipFontSize"), d.clipFontSize},
         {QStringLiteral("syncBreaks"), d.syncBreaks == SyncBreaks::Video   ? QStringLiteral("video")
                                        : d.syncBreaks == SyncBreaks::Audio ? QStringLiteral("audio")
                                        : d.syncBreaks == SyncBreaks::None  ? QStringLiteral("none")
@@ -5842,7 +5847,16 @@ Timeline::Display Timeline::displayFromJson(const QJsonObject& o) {
     d.viewType = view == QLatin1String("heads")        ? ViewType::Heads
                  : view == QLatin1String("headsTails") ? ViewType::HeadsTails
                                                        : ViewType::Standard;
+    d.clipFontFamily = o.value(QStringLiteral("clipFontFamily")).toString();
+    d.clipFontSize = std::max(0, o.value(QStringLiteral("clipFontSize")).toInt());
     return d;
+}
+
+QFont Timeline::clipFont() const {
+    QFont f = view_->font();
+    if (!display_.clipFontFamily.isEmpty()) f.setFamily(display_.clipFontFamily);
+    if (display_.clipFontSize > 0) f.setPointSize(display_.clipFontSize);
+    return f;
 }
 
 void Timeline::setDisplay(const Display& d) {
