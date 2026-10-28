@@ -106,7 +106,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Duplicate | Ctrl+D | p.260 | works | ☐ | | |
 | Select All | Ctrl+A | p.180 | works | ☐ | | |
 | Select All Tracks |  | p.627 | works | ☐ | | |
-| Find | Ctrl+F | p.417 | *later* | ☐ | | |
+| Find | Ctrl+F | p.417 | works | ☐ | | |
 | Enlarge Frame | Ctrl+L | p.250 | works | ☐ | | |
 | Reduce Frame | Ctrl+K | p.250 | works | ☐ | | |
 | Enlarge HeadFrames |  | p.1016 | *later* | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 122 of them working with a project open; the
+* 211 menu commands, 123 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.
