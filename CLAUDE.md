@@ -428,7 +428,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   test `tst_media_unmount`), is done. U3c, Set Font and Help > Shortcuts
   (docs/spec/set-font.md: `set_font_dialog.*`, `MainWindow::chooseFont`, fonts
   in `BinDisplay`, the Composer setting and `Timeline::Display`;
-  `shortcuts_window.*`; test `tst_set_font`), is done.
+  `shortcuts_window.*`; test `tst_set_font`), is done. U3d, Bin Layouts
+  (docs/spec/bin-layout.md: `BinContainer::binLayout`/`applyBinLayout`, the
+  "Bin Layout" Project setting, `MainWindow::openBinLayout` and the Workspace
+  View link; test `tst_bin_layout`), is done.
   Next: the rest of the UI completion pass (U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.

@@ -10,6 +10,7 @@
 #include <QDateTime>
 #include <QHash>
 #include <QList>
+#include <QJsonObject>
 #include <QWidget>
 
 #include <functional>
@@ -251,6 +252,13 @@ public:
     FloatingBinContainer* floatBin(BinDocument* document, const QRect& geometry = {});
     // The area showing `view`; null if none.
     BinDockArea* areaOf(const BinView* view) const;
+    // Bin layouts (Windows > Bin Layout, p.92-93; docs/spec/bin-layout.md): the open bins and where they
+    // are, as {"main": [bin ids], "floating": [{"geometry": [x, y, w, h], "bins": [bin ids]}]}, in tab
+    // order. applyBinLayout() "opens all bins saved in the bin layout and places them in the position
+    // configured in the layout" (p.92); bins it does not name are closed (ours) and ids that are no
+    // longer bins are skipped.
+    QJsonObject binLayout() const;
+    void applyBinLayout(const QJsonObject& layout);
     // The main area and those of floating Bin Containers.
     QList<BinDockArea*> areas() const;
     QList<FloatingBinContainer*> floatingContainers() const { return floating_; }

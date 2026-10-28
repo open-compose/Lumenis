@@ -267,6 +267,75 @@ QJsonObject MainWindow::defaultLayout() {
 // Composer's resolvers find bin items and media frames, its play signals drive the sound, and the
 // Timeline stores its sequences in bins. The tools come after, in createTools().
 // The bin's clips in the view's order; AutoSequence itself is model::autoSequence.
+QStringList MainWindow::binLayouts() const {
+    // "Bin layouts are project settings" (p.92).
+    const model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
+    QStringList names;
+    for (int i : f.versions(QStringLiteral("Bin Layout"))) {
+        const QString n = f.entries.at(i).name.trimmed();
+        if (!n.isEmpty() && !names.contains(n, Qt::CaseInsensitive)) names << n;
+    }
+    std::sort(names.begin(), names.end(), [](const QString& a, const QString& b) { return QString::compare(a, b, Qt::CaseInsensitive) < 0; });
+    return names;
+}
+
+bool MainWindow::newBinLayout(const QString& name) {
+    const QString n = name.trimmed();
+    if (n.isEmpty()) return false;
+    // "The application saves the bin layout, and the layout appears in the Bin Layout menu and in the
+    // Settings list" (p.93).
+    model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
+    const QJsonObject values{{QStringLiteral("layout"), binContainer_->binLayout()}};
+    int index = -1;
+    for (int i : f.versions(QStringLiteral("Bin Layout"))) {
+        if (f.entries.at(i).name.trimmed().compare(n, Qt::CaseInsensitive) == 0) index = i;
+    }
+    if (index >= 0) {
+        f.entries[index].values = values;
+    } else {
+        index = f.add(model::SettingEntry{QStringLiteral("Bin Layout"), n, false, values});
+    }
+    f.setActive(index);
+    settings_->commit(model::SettingsScope::Project);
+    currentBinLayout_ = n;
+    return true;
+}
+
+bool MainWindow::saveCurrentBinLayout() {
+    // "To modify a bin layout: Arrange and size your bins. Select Windows > Bin Layout > Save Current"
+    // (p.93): into the layout last opened or made (ours).
+    if (currentBinLayout_.isEmpty() || !binLayouts().contains(currentBinLayout_, Qt::CaseInsensitive)) return false;
+    return newBinLayout(currentBinLayout_);
+}
+
+bool MainWindow::deleteBinLayout(const QString& name) {
+    // "If you delete a bin layout, the layout is deleted from your project" (p.92).
+    model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
+    QList<int> gone;
+    for (int i : f.versions(QStringLiteral("Bin Layout"))) {
+        if (f.entries.at(i).name.trimmed().compare(name.trimmed(), Qt::CaseInsensitive) == 0) gone << i;
+    }
+    if (gone.isEmpty()) return false;
+    f.remove(gone);
+    settings_->commit(model::SettingsScope::Project);
+    if (currentBinLayout_.compare(name.trimmed(), Qt::CaseInsensitive) == 0) currentBinLayout_.clear();
+    return true;
+}
+
+bool MainWindow::openBinLayout(const QString& name) {
+    const model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
+    for (int i : f.versions(QStringLiteral("Bin Layout"))) {
+        const model::SettingEntry& e = f.entries.at(i);
+        if (e.name.trimmed().compare(name.trimmed(), Qt::CaseInsensitive) != 0) continue;
+        // "Media Composer opens all bins saved in the bin layout and places them in the position
+        // configured in the layout" (p.92).
+        binContainer_->applyBinLayout(e.values.value(QStringLiteral("layout")).toObject());
+        currentBinLayout_ = e.name.trimmed();
+        return true;
+    }
+    return false;
+}
+
 bool MainWindow::chooseFont() {
     // "Click the Bin, Composer monitor, Script, or Timeline window to make it active" (p.82).
     const Panel* active = panels_->activePanel();
@@ -1057,6 +1126,12 @@ SettingsWindow* MainWindow::showSettings() {
             if (tool == QLatin1String("keyboard")) showTool(QStringLiteral("Keyboard"));
             // An Audio Multi-Mix setting opens the tool to change it, without Mix (p.734).
             if (tool == QLatin1String("multiMix")) multipleMixes(false);
+            // A Bin Layout setting: opened (p.92).
+            if (tool == QLatin1String("binLayout")) {
+                const model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
+                const int i = f.activeIndex(QStringLiteral("Bin Layout"));
+                if (i >= 0) openBinLayout(f.entries.at(i).name);
+            }
             // A Timeline View setting: made active, which applies it (applySettings, p.604).
         });
         // Its own window: give it the commands so Edit's shortcuts work.
@@ -1255,6 +1330,10 @@ void MainWindow::linkSettings(const QString& workspace) {
     QJsonObject values;
     for (int i : f.versions(kind)) {
         if (f.entries.at(i).name.compare(workspace, Qt::CaseInsensitive) == 0) values = f.entries.at(i).values;
+    }
+    // "Click the Bin Layout menu and select a layout you want to link to the workspace" (p.91).
+    if (const QString layout = values.value(QStringLiteral("binLayout")).toString().trimmed(); !layout.isEmpty()) {
+        openBinLayout(layout);
     }
     if (!values.value(QStringLiteral("linkNamed")).toBool()) return;
     // The settings named in the box; with nothing typed, the unnamed ones
@@ -4085,6 +4164,63 @@ void MainWindow::installPanelHandlers() {
     // docked panel has no window of its own to move.
     handle("windows.center_current", [this] { placeCurrentWindow(false); });
     handle("windows.set_font", [this] { chooseFont(); });
+    handle("windows.bin_layout.new_bin_layout", [this] {
+        // "The New Bin Layout dialog box opens. Type a name for the bin layout, and then click OK" (p.93).
+        std::optional<QString> name;
+        if (binLayoutHook_) {
+            name = binLayoutHook_({});
+        } else {
+            bool ok = false;
+            const QString n = QInputDialog::getText(this, tr("New Bin Layout"), tr("Bin layout name:"), QLineEdit::Normal, {}, &ok);
+            if (ok) name = n;
+        }
+        if (name) newBinLayout(*name);
+    });
+    handle("windows.bin_layout.save_current", [this] {
+        if (!saveCurrentBinLayout()) {
+            QMessageBox::information(this, tr("Save Current"), tr("Open or make a bin layout first."));
+        }
+    });
+    handle("windows.bin_layout.delete_bin_layout", [this] {
+        // "The Delete Bin Layout dialog box opens. Click OK" (p.93): the layout to delete is chosen in it (ours).
+        const QStringList layouts = binLayouts();
+        if (layouts.isEmpty()) return;
+        std::optional<QString> name;
+        if (binLayoutHook_) {
+            name = binLayoutHook_(layouts);
+        } else {
+            bool ok = false;
+            const int current = std::max(0, static_cast<int>(layouts.indexOf(currentBinLayout_)));
+            const QString n = QInputDialog::getItem(this, tr("Delete Bin Layout"), tr("Bin layout:"), layouts, current, false, &ok);
+            if (ok) name = n;
+        }
+        if (name) deleteBinLayout(*name);
+    });
+    // Windows > Bin Layout lists the layouts above its commands (p.92).
+    if (auto* menu = menuBar()->findChild<QMenu*>(QStringLiteral("menu:windows_bin_layout"))) {
+        connect(menu, &QMenu::aboutToShow, this, [this, menu] {
+            qDeleteAll(binLayoutActions_);
+            binLayoutActions_.clear();
+            QAction* first = menu->actions().value(0);
+            const QStringList layouts = binLayouts();
+            for (const QString& name : layouts) {
+                auto* a = new QAction(name, menu);
+                a->setCheckable(true);
+                a->setChecked(name.compare(currentBinLayout_, Qt::CaseInsensitive) == 0);
+                a->setProperty(kDynamicMenuItem, true);
+                connect(a, &QAction::triggered, this, [this, name] { openBinLayout(name); });
+                menu->insertAction(first, a);
+                binLayoutActions_ << a;
+            }
+            if (!layouts.isEmpty()) {
+                auto* separator = new QAction(menu);
+                separator->setSeparator(true);
+                separator->setProperty(kDynamicMenuItem, true);
+                menu->insertAction(first, separator);
+                binLayoutActions_ << separator;
+            }
+        });
+    }
     handle("help.shortcuts", [this] {
         if (!shortcutsWindow_) shortcutsWindow_ = new ShortcutsWindow(commands_, *keyboard_, this);
         shortcutsWindow_->show();

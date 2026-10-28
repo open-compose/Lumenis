@@ -29,6 +29,7 @@
 #include <QScreen>
 #include <QSettings>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QSplitter>
 #include <QTimer>
 #include <QToolButton>
@@ -1060,6 +1061,53 @@ void BinContainer::placeView(BinView* view, BinDockArea* area, BinTabGroup* targ
     removeEmptyFloating();
     setActiveView(view);
     saveTree();
+}
+
+QJsonObject BinContainer::binLayout() const {
+    auto ids = [](const BinDockArea* area) {
+        QJsonArray out;
+        for (const BinView* v : area->views()) out.append(v->document().nodeId());
+        return out;
+    };
+    QJsonArray floating;
+    for (const FloatingBinContainer* f : floating_) {
+        const QRect g = f->geometry();
+        floating.append(QJsonObject{{QStringLiteral("geometry"), QJsonArray{g.x(), g.y(), g.width(), g.height()}},
+                                    {QStringLiteral("bins"), ids(f->area())}});
+    }
+    return QJsonObject{{QStringLiteral("main"), ids(area_)}, {QStringLiteral("floating"), floating}};
+}
+
+void BinContainer::applyBinLayout(const QJsonObject& layout) {
+    QStringList wanted;
+    for (const QJsonValue& v : layout.value(QStringLiteral("main")).toArray()) wanted << v.toString();
+    const QJsonArray floating = layout.value(QStringLiteral("floating")).toArray();
+    for (const QJsonValue& f : floating) {
+        for (const QJsonValue& v : f.toObject().value(QStringLiteral("bins")).toArray()) wanted << v.toString();
+    }
+    for (BinDocument* d : QList<BinDocument*>(documents_)) {
+        if (!wanted.contains(d->nodeId())) closeBin(d);
+    }
+    for (const QJsonValue& v : layout.value(QStringLiteral("main")).toArray()) {
+        BinDocument* d = openBin(v.toString());
+        if (!d) continue;
+        if (BinView* view = viewFor(d); view && areaOf(view) != area_) dockBin(d, nullptr, BinDropSide::Tab);
+    }
+    for (const QJsonValue& fv : floating) {
+        const QJsonObject f = fv.toObject();
+        const QJsonArray g = f.value(QStringLiteral("geometry")).toArray();
+        const QRect rect(g.at(0).toInt(), g.at(1).toInt(), g.at(2).toInt(520), g.at(3).toInt(360));
+        FloatingBinContainer* window = nullptr;
+        for (const QJsonValue& v : f.value(QStringLiteral("bins")).toArray()) {
+            BinDocument* d = openBin(v.toString());
+            if (!d) continue;
+            if (!window) {
+                window = floatBin(d, rect);
+            } else if (!window->area()->groups().isEmpty()) {
+                dockBin(d, window->area()->groups().first(), BinDropSide::Tab);
+            }
+        }
+    }
 }
 
 void BinContainer::dockBin(BinDocument* document, BinTabGroup* target, BinDropSide side) {

@@ -240,6 +240,24 @@ public:
     // font goes into the bin, the Composer setting or the Timeline's display (its Timeline View).
     // False when no such window is active or the dialog is cancelled. The hook answers the dialog.
     bool chooseFont();
+    // Windows > Bin Layout (p.92-93; docs/spec/bin-layout.md): named Bin Layout Project settings, each
+    // holding BinContainer::binLayout(). New saves the current arrangement under a name (replacing one of
+    // that name), Save Current saves it into the layout last opened or made, Delete removes one, Open
+    // applies one. Each returns false when there is no such layout (or no name).
+    QStringList binLayouts() const;
+    bool newBinLayout(const QString& name);
+    bool saveCurrentBinLayout();
+    bool deleteBinLayout(const QString& name);
+    bool openBinLayout(const QString& name);
+    QString currentBinLayout() const { return currentBinLayout_; }
+    // Called when a workspace becomes active (public for tests). Its Workspace View's Bin Layout opens
+    // (p.91); with Link to Named settings (p.89-90) the linked workspace's settings versions become
+    // active.
+    void linkSettings(const QString& workspace);
+    // Answers the New Bin Layout (no choices: a name) and Delete Bin Layout (a choice) dialogs in tests;
+    // nullopt is Cancel.
+    using BinLayoutAsk = std::function<std::optional<QString>(const QStringList& choices)>;
+    void setBinLayoutHook(BinLayoutAsk hook) { binLayoutHook_ = std::move(hook); }
     // Help > Shortcuts (p.97), once opened.
     ShortcutsWindow* shortcutsWindow() const { return shortcutsWindow_; }
     void setFontHook(std::function<bool(SetFontDialog&)> hook) { fontHook_ = std::move(hook); }
@@ -503,9 +521,6 @@ private:
     // p.89-90): written when they change, read when a user's settings load.
     void writeWorkspaces();
     void readWorkspaces();
-    // Link to Named settings (p.89-90): the linked workspace's settings
-    // versions become active.
-    void linkSettings(const QString& workspace);
     void updateWorkspaceButtons();
     // Gives the Timeline, the Command Palette and the TV buttons the views as they are now.
     void updateTimelineViews();
@@ -571,6 +586,9 @@ private:
     std::function<bool(UnmountDialog&)> unmountHook_;
     std::function<bool(SetFontDialog&)> fontHook_;
     ShortcutsWindow* shortcutsWindow_ = nullptr;
+    BinLayoutAsk binLayoutHook_;
+    QString currentBinLayout_;
+    QList<QAction*> binLayoutActions_;
     std::function<bool(ModifyDialog&)> modifyHook_;
     ClipAudioHooks clipAudioHooks_;
     std::function<bool(MultiMixDialog&)> multiMixHook_;

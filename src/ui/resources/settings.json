@@ -514,6 +514,13 @@
       ]
     },
     {
+      "kind": "Bin Layout",
+      "scope": "project",
+      "page": 92,
+      "opens": "binLayout",
+      "tabs": []
+    },
+    {
       "kind": "Timeline View",
       "scope": "user",
       "page": 1137,
@@ -558,7 +565,7 @@
           "options": [
             {"key": "linkNamed", "type": "bool", "label": "Link to Named settings", "default": false, "page": 90},
             {"key": "linkName", "type": "text", "label": "", "default": "", "page": 90},
-            {"key": "binLayout", "type": "text", "label": "Bin Layout:", "default": "", "page": 90, "later": true}
+            {"key": "binLayout", "type": "text", "label": "Bin Layout:", "default": "", "page": 90}
           ]
         }
       ]

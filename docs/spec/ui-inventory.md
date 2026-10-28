@@ -72,6 +72,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Timeline and Markers tabs list, and Ctrl+G as a keyboard-only Find Again command.
 * AutoSequence (docs/spec/autosequence.md): which of two related clips is kept, the track layout of
   Camera groups, and the name when there is no Tape or Source File.
+* Bin Layout (docs/spec/bin-layout.md): closing bins a layout does not name, split groups coming back as
+  tabs, Save Current saving into the last layout, the Delete dialog's list, a name reused replacing, and
+  the Workspace View's Bin Layout as a text box.
 * Set Font and Help > Shortcuts (docs/spec/set-font.md): the size range, nothing for other windows, and
   the Shortcuts window's columns and Find box.
 * Unmount (docs/spec/media-unmount.md): the Mount All button, the list not being saved, no ejecting;
