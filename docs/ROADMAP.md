@@ -857,7 +857,7 @@ phase of their own. They are done in three steps:
   Overwrite (p.496) and the Composer settings' Edit tab (U2a,
   docs/spec/composer-edit.md, is done but for Undo Only Record Events and
   Color Framing), AutoSequence (p.499), Loop Selected Clips (p.393), the
-  Timecode Window (p.389), Edit > Find (p.417); the Composer and Trim
+  Timecode Window (p.389) (U2b, docs/spec/timecode-window.md, is done), Edit > Find (p.417); the Composer and Trim
   settings still dimmed (Single Mark Editing, Phantom Marks, trim loop,
   Dual Image Play, J-K-L Trim ...); from the Timeline settings, Display During
   Segment Drag (the four-frame display) and Dynamic Play Forward/Reverse

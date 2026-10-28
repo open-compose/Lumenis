@@ -76,6 +76,7 @@ class KeyboardMap;
 class KeyboardPalette;
 class MarkersWindow;
 class ClipNotesWindow;
+class TimecodeWindow;
 class Panel;
 class PanelManager;
 class Settings;
@@ -146,6 +147,8 @@ public:
     AudioMixer& audioMixer() const { return *audioMixer_; }
     // The Timeline Clip Notes window, once Tools > Timeline Clip Notes has opened it (p.484).
     ClipNotesWindow* clipNotesWindow() const { return clipNotesWindow_; }
+    // The Timecode window, once Tools > Timecode Window has opened it (p.389).
+    TimecodeWindow* timecodeWindow() const { return timecodeWindow_; }
     AudioEqTool& audioEq() const { return *audioEq_; }
     AudioPunchInTool& audioPunchIn() const { return *audioPunchIn_; }
     AudioTrackEffectTool& audioTrackEffect() const { return *audioTrackEffect_; }
@@ -485,6 +488,7 @@ private:
     Timeline* timeline_ = nullptr;
     MarkersWindow* markersWindow_ = nullptr;
     ClipNotesWindow* clipNotesWindow_ = nullptr; // Tools > Timeline Clip Notes
+    TimecodeWindow* timecodeWindow_ = nullptr;   // Tools > Timecode Window
     CommandPalette* commandPalette_ = nullptr;
     ToolPalette* toolPalette_ = nullptr;
     CalculatorWindow* calculator_ = nullptr;

@@ -65,6 +65,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Point editing are refused; Single Mark Editing off; a source IN with the position on it running to
   the clip's end; phantom marks as blue brackets; spanned copied markers cut short; Load Filler's
   tracks.
+* The Timecode window (docs/spec/timecode-window.md): its labels, font sizes, starting line and the
+  dimmed empty-monitor submenus; Loop Selected Clips' Tab working anywhere while it plays.
 * The Sequence Map (docs/spec/sequence-map.md): the defaults of its four Timeline settings, the
   overlay's place and size, the effect band, a press off the white box moving it, and the window
   staying open when clicking elsewhere.

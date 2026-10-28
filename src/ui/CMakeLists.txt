@@ -42,6 +42,7 @@ add_library(lumenis_ui STATIC
     relink_dialog.cpp
     select_project_dialog.cpp
     sequence_map.cpp
+    timecode_window.cpp
     source_browser.cpp
     settings.cpp
     settings_window.cpp
@@ -92,6 +93,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/relink_dialog.h
     include/lumenis/ui/select_project_dialog.h
     include/lumenis/ui/sequence_map.h
+    include/lumenis/ui/timecode_window.h
     include/lumenis/ui/source_browser.h
     include/lumenis/ui/settings.h
     include/lumenis/ui/settings_window.h

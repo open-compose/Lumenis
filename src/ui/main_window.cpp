@@ -59,6 +59,7 @@
 #include "lumenis/ui/settings_window.h"
 #include "lumenis/ui/source_browser.h"
 #include "lumenis/ui/theme.h"
+#include "lumenis/ui/timecode_window.h"
 #include "lumenis/ui/timeline.h"
 #include "lumenis/ui/tool_windows.h"
 #include "lumenis/ui/workspace.h"
@@ -3826,6 +3827,27 @@ void MainWindow::installPanelHandlers() {
         clipNotesWindow_->refresh();
         clipNotesWindow_->show();
         clipNotesWindow_->raise();
+    });
+    // Tools > Timecode Window (p.389), one window, kept.
+    handle("tools.timecode_window", [this] {
+        if (!timecodeWindow_) timecodeWindow_ = new TimecodeWindow(*composer_, this);
+        timecodeWindow_->refresh();
+        timecodeWindow_->show();
+        timecodeWindow_->raise();
+    });
+    // Clip > Loop Selected Clips (p.393): the active bin's selected clips, in the bin's order; Alt plays
+    // each from start to end instead of IN to OUT.
+    handle("clip.loop_selected_clips", [this] {
+        BinView* view = binContainer_->activeView();
+        if (!view) return;
+        const QStringList selected = view->selectedIds();
+        QList<Composer::LoopClip> clips;
+        for (const QString& id : view->visibleIds()) {
+            const model::BinItem* item = selected.contains(id) ? view->document().bin().item(id) : nullptr;
+            if (item && item->kind != model::BinItemKind::Effect) clips.append({view->document().nodeId(), *item});
+        }
+        if (clips.isEmpty()) return;
+        composer_->playClipLoop(clips, QApplication::keyboardModifiers() & Qt::AltModifier);
     });
     // Tools > Markers (p.420), one window, kept.
     handle("tools.markers", [this] {

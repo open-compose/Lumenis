@@ -300,6 +300,17 @@ public:
     // ends the loop.
     void playLoop(MonitorId monitor, std::int64_t start, std::int64_t end);
     bool isLooping() const { return loop_.has_value(); }
+    // Clip > Loop Selected Clips (p.393): the clips play one after another in the Source monitor, each
+    // from its IN to its OUT (`whole`, with Alt: start to end), round and round until stop(). Tab jumps
+    // to the next clip and Shift+Tab to the previous one while the loop plays.
+    struct LoopClip {
+        QString binId;
+        model::BinItem item;
+    };
+    void playClipLoop(const QList<LoopClip>& clips, bool whole);
+    // Moves the clip loop `delta` clips on (round), and plays from there.
+    void stepClipLoop(int delta);
+    bool isClipLooping() const { return !clipLoop_.isEmpty(); }
     // Advances playback by `ms` milliseconds (also used by tests).
     void advance(qint64 ms);
 
@@ -358,6 +369,8 @@ signals:
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
+    // While a clip loop plays, Tab and Shift+Tab anywhere in the application step it (p.393).
+    bool eventFilter(QObject* watched, QEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
 
 private:
@@ -382,6 +395,13 @@ private:
     int speed_ = 0;
     bool slow_ = false; // slow play (playSlow())
     std::optional<std::int64_t> stopAt_; // Play In to Out
+    // Loop Selected Clips: the clips, the one playing, and whether each plays whole.
+    QList<LoopClip> clipLoop_;
+    int clipLoopIndex_ = 0;
+    bool clipLoopWhole_ = false;
+    bool startingLoopClip_ = false; // load() inside the loop must not end it
+    void startLoopClip(int index);
+    void endClipLoop();
     std::optional<std::int64_t> loop_;   // Audio Loop Play: where each pass starts; it ends at stopAt_
     // Play reached its end going forward: the next pass of a loop, or a stop.
     void reachedEnd();

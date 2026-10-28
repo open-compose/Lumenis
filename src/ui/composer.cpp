@@ -1181,6 +1181,7 @@ Composer::PlayDisplay Composer::playDisplay() const {
 // Stops playback and forgets a Play In to Out end point; emits playStopped() only if it was playing.
 void Composer::stop() {
     endLoop();
+    if (!startingLoopClip_) endClipLoop();
     if (speed_ == 0 && !timer_->isActive()) return;
     stopAt_.reset();
     speed_ = 0;
@@ -1208,8 +1209,62 @@ void Composer::endLoop() {
     emit loopChanged(false);
 }
 
-// The next pass starts like play(1) from the loop's start, so the sound restarts there.
+void Composer::playClipLoop(const QList<LoopClip>& clips, bool whole) {
+    stop();
+    if (clips.isEmpty()) return;
+    clipLoop_ = clips;
+    clipLoopWhole_ = whole;
+    qApp->installEventFilter(this);
+    startLoopClip(0);
+}
+
+void Composer::stepClipLoop(int delta) {
+    if (clipLoop_.isEmpty()) return;
+    const auto n = static_cast<int>(clipLoop_.size());
+    startLoopClip(((clipLoopIndex_ + delta) % n + n) % n);
+}
+
+// Loads the clip into the Source monitor and plays its IN to OUT (or all of it); reachedEnd() goes on
+// to the next.
+void Composer::startLoopClip(int index) {
+    clipLoopIndex_ = index;
+    const LoopClip& c = clipLoop_.at(index);
+    startingLoopClip_ = true;
+    load(MonitorId::Source, c.binId, c.item);
+    model::MonitorState& s = state(MonitorId::Source);
+    const std::int64_t last = std::max<std::int64_t>(s.duration() - 1, 0);
+    const std::int64_t from = clipLoopWhole_ ? 0 : s.in().value_or(0);
+    const std::int64_t to = clipLoopWhole_ ? last : s.out().value_or(last);
+    moveTo(MonitorId::Source, from);
+    stopAt_ = to;
+    play(1);
+    startingLoopClip_ = false;
+}
+
+void Composer::endClipLoop() {
+    if (clipLoop_.isEmpty()) return;
+    clipLoop_.clear();
+    qApp->removeEventFilter(this);
+}
+
+bool Composer::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::KeyPress && !clipLoop_.isEmpty()) {
+        const auto* key = static_cast<QKeyEvent*>(event);
+        if (key->key() == Qt::Key_Tab || key->key() == Qt::Key_Backtab) {
+            stepClipLoop(key->key() == Qt::Key_Backtab || (key->modifiers() & Qt::ShiftModifier) ? -1 : 1);
+            return true;
+        }
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+// The next pass starts like play(1) from the loop's start, so the sound restarts there. In a clip
+// loop the next clip starts.
 void Composer::reachedEnd() {
+    if (!clipLoop_.isEmpty()) {
+        startLoopClip((clipLoopIndex_ + 1) % static_cast<int>(clipLoop_.size()));
+        return;
+    }
     if (!loop_) {
         stop();
         return;

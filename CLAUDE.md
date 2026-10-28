@@ -400,7 +400,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   (docs/spec/composer-edit.md: `planSyncPoint`, `planEdit(..., singleMark)`,
   phantom marks through `Composer::setPhantomResolver`, the orange mark
   `ButtonMapper::setMarked`, `Timeline::loadFiller`; test `tst_composer_edit`,
-  scenario `23-composer-edit.json`), is done.
+  scenario `23-composer-edit.json`), is done. U2b, the Timecode window and Loop
+  Selected Clips (docs/spec/timecode-window.md: `src/ui/timecode_window.*`,
+  `Composer::playClipLoop`; test `tst_timecode_window`), is done.
   Next: the rest of the UI completion pass (U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.
