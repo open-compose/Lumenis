@@ -13,6 +13,7 @@
 #include "lumenis/ui/clip_color_dialog.h"
 #include "lumenis/ui/marker_dialogs.h"
 #include "lumenis/ui/media_frames.h"
+#include "lumenis/ui/sequence_map.h"
 #include "lumenis/ui/theme.h"
 
 #include <QActionGroup>
@@ -486,6 +487,7 @@ void TimelineView::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
     setTopOffset(top_);
     timeline_.syncScrollBars();
+    timeline_.placeSequenceMap();
 }
 
 // Paints in layers, back to front: the tracks and their segments and effects, the IN to OUT
@@ -548,11 +550,7 @@ void TimelineView::paintEvent(QPaintEvent*) {
         } else if (const model::Track* t = r.exists ? seq.track(r.track) : nullptr) {
             // Track Color (p.597) takes the place of the kind's colour; an inactive track is
             // drawn darker (ours).
-            QColor fill(t->kind == model::TrackKind::Video   ? kVideoSegment
-                        : t->kind == model::TrackKind::Audio ? kAudioSegment
-                                                             : kDataSegment);
-            if (!t->color.isEmpty()) fill = QColor(t->color);
-            if (t->inactive) fill = fill.darker(170);
+            const QColor fill = Timeline::trackColor(*t);
             const QString selectionColor = timeline_.display().segmentSelectionColor;
             if (t->locked) p.fillRect(rowRect, QColor(kTimecodeRowColor));
             std::int64_t at = 0;
@@ -2025,6 +2023,12 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     v->addWidget(toolbar_);
 
     connect(&composer_, &Composer::changed, this, &Timeline::sync);
+    // The Sequence Map follows the sequence, the position and the selection.
+    auto mapUpdate = [this] {
+        if (map_) map_->update();
+    };
+    connect(&composer_, &Composer::changed, this, mapUpdate);
+    connect(this, &Timeline::changed, this, mapUpdate);
     connect(&composer_, &Composer::performed, this, &Timeline::composerPerformed);
     // The Composer's buttons for the Timeline's commands (Splice-in, the Trim
     // buttons, Add Marker, ...).
@@ -2089,6 +2093,7 @@ void Timeline::setOptions(const Options& options) {
     topbar_->setVisible(options.toolbar);
     if (options.onlyOneSegmentTool && liftTool_ && spliceTool_) setSegmentTool(model::EditKind::SpliceIn, false);
     view_->update();
+    if (map_) map_->update();
 }
 
 bool Timeline::hasShown() const {
@@ -2203,6 +2208,7 @@ void Timeline::syncScrollBars() {
     vscroll_->setPageStep(std::max(view_->height(), 1));
     vscroll_->setVisible(extra > 0);
     syncing_ = false;
+    if (map_) map_->update();
 }
 
 double Timeline::fitScale() const {
@@ -2255,6 +2261,63 @@ void Timeline::setFirstFrame(double frame) {
     first_ = std::clamp(frame, 0.0, std::max(static_cast<double>(shown_.duration()), 0.0));
     syncScrollBars();
     view_->update();
+}
+
+void Timeline::scrollTo(double firstFrame, int topOffset) {
+    if (scale_ > 0) first_ = std::clamp(firstFrame, 0.0, std::max(static_cast<double>(shown_.duration()), 0.0));
+    view_->setTopOffset(topOffset);
+    syncScrollBars();
+    view_->update();
+}
+
+void Timeline::placeSequenceMap() {
+    if (!map_ || mapInWindow_) return;
+    const int w = std::clamp(view_->width() * 2 / 5, 160, 480);
+    const int h = std::clamp(view_->height() * 2 / 5, 60, 220);
+    map_->setGeometry(std::max(view_->width() - w - 8, 0), std::max(view_->height() - h - 8, 0), w, h);
+    map_->raise();
+}
+
+void Timeline::showSequenceMap(bool on) {
+    if (!on) {
+        mapShown_ = false;
+        if (map_) map_->hide();
+        if (mapWindow_) mapWindow_->hide();
+        return;
+    }
+    // Shown afresh, it opens where the setting says (p.1219).
+    if (!mapShown_) mapInWindow_ = !options_.mapOverlay;
+    setSequenceMapInWindow(mapInWindow_);
+}
+
+void Timeline::setSequenceMapInWindow(bool inWindow) {
+    if (!map_) map_ = new SequenceMap(*this, view_);
+    mapInWindow_ = inWindow;
+    mapShown_ = true;
+    map_->hide(); // shown again below, so it sets up its click filter for the new place
+    if (inWindow) {
+        if (!mapWindow_) {
+            mapWindow_ = new SequenceMapWindow(this);
+            connect(mapWindow_, &SequenceMapWindow::closed, this, [this] {
+                if (mapInWindow_) showSequenceMap(false);
+            });
+        }
+        if (map_->parentWidget() != mapWindow_) {
+            map_->setParent(mapWindow_);
+            mapWindow_->layout()->addWidget(map_);
+        }
+        map_->show();
+        mapWindow_->show();
+        mapWindow_->raise();
+    } else {
+        if (mapWindow_) mapWindow_->hide();
+        if (map_->parentWidget() != view_) {
+            if (mapWindow_) mapWindow_->layout()->removeWidget(map_);
+            map_->setParent(view_);
+        }
+        placeSequenceMap();
+        map_->show();
+    }
 }
 
 void Timeline::showEntireSequence() {
@@ -2570,6 +2633,7 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("clip.audio.split_all_tracks"),
         QStringLiteral("timeline.restore_default_patch"),
         QStringLiteral("timeline.add_filler_at_start"),
+        QStringLiteral("timeline.show_sequence_map"),
         QStringLiteral("timeline.find_black_hole"),
         QStringLiteral("timeline.find_flash_frame"),
         QStringLiteral("timeline.remove_match_frame_edits"),
@@ -2629,6 +2693,10 @@ bool Timeline::perform(const QString& id) {
         return zoomWaveform(id == QLatin1String("timeline.enlarge_waveform") ? 1 : -1);
     }
     if (id == QLatin1String("timeline.add_filler_at_start")) return addFillerAtStart();
+    if (id == QLatin1String("timeline.show_sequence_map")) {
+        showSequenceMap(!mapShown_);
+        return true;
+    }
     if (id == QLatin1String("timeline.find_black_hole")) return findGap(false);
     if (id == QLatin1String("timeline.find_flash_frame")) return findGap(true);
     if (id == QLatin1String("play.audio_loop_play")) {
@@ -5001,6 +5069,15 @@ std::optional<model::ClipFacts> Timeline::clipFacts(const model::Segment& segmen
         if (lines > 0) f.otherDefinition = (lines <= 576) != (projectHeight_ <= 576);
     }
     return f;
+}
+
+QColor Timeline::trackColor(const model::Track& track) {
+    QColor fill(track.kind == model::TrackKind::Video   ? kVideoSegment
+                : track.kind == model::TrackKind::Audio ? kAudioSegment
+                                                        : kDataSegment);
+    if (!track.color.isEmpty()) fill = QColor(track.color);
+    if (track.inactive) fill = fill.darker(170);
+    return fill;
 }
 
 QString Timeline::segmentColor(const model::Segment& segment) const {

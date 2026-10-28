@@ -37,6 +37,8 @@ class QToolButton;
 namespace lumenis::ui {
 
 class ClipColorDialog;
+class SequenceMap;
+class SequenceMapWindow;
 class Timeline;
 
 // The tracks area of the Timeline: the Track Selector panel on the left
@@ -248,6 +250,11 @@ public:
         bool proToolsChannelOrder = false;
         // Timeline settings: Dupe Detection Handles, frames added at both ends of each clip (p.1220).
         double dupeHandles = 0;
+        // Timeline settings: Sequence Map (p.1219). Ours: the defaults.
+        bool mapOverlay = true;    // Open Sequence Map as overlay on Timeline
+        bool mapClickHides = true; // Clicking Elsewhere Hides the Sequence Map
+        bool mapWaveforms = false; // Display waveforms
+        bool mapEffects = true;    // Display effects
     };
     // Applies new settings at once: shows or hides the top toolbar and, with Only One Segment
     // Tool, turns Extract/Splice-in off if both segment tools were on.
@@ -384,6 +391,9 @@ public:
     // The facts about a segment's clip the colours depend on (model::ClipFacts); nothing when the clip
     // cannot be found. Whether media is online is checked at most every two seconds per clip.
     std::optional<model::ClipFacts> clipFacts(const model::Segment& segment) const;
+    // The colour a track's segments are drawn in: its kind's, or its Track Color (p.597); an
+    // inactive track's darker (ours).
+    static QColor trackColor(const model::Track& track);
     // The colour a segment is drawn in; empty for its track's own.
     QString segmentColor(const model::Segment& segment) const;
     // The project's picture height, for SD/HD (SD up to 576 lines).
@@ -768,6 +778,21 @@ public:
     // (p.608).
     void toggleFocus();
     bool isFocused() const { return focusBack_.has_value(); }
+    // Scrolls across (as setFirstFrame) and down (as TimelineView::setTopOffset) at once, and moves
+    // the scroll bars with it.
+    void scrollTo(double firstFrame, int topOffset);
+    // Timeline > Show Sequence Map (p.606; sequence_map.h). It opens as an overlay in the tracks area
+    // or in its own window, as the Timeline settings say (p.1219); the command shows it, or hides it if
+    // it is showing ("the user must manually hide the Sequence Map using menu pick or mapped key").
+    void showSequenceMap(bool on);
+    bool sequenceMapShown() const { return mapShown_; }
+    // Moves it into its own window or back into the Timeline (its right-click menu, p.606), and shows it.
+    void setSequenceMapInWindow(bool inWindow);
+    bool sequenceMapInWindow() const { return mapInWindow_; }
+    // The map, made the first time it is shown; nullptr before.
+    SequenceMap* sequenceMap() const { return map_; }
+    // The map's window, while it is in one.
+    SequenceMapWindow* sequenceMapWindow() const { return mapWindow_; }
     // Shows the frames from..to across the tracks area, keeping the old view for zoomBack().
     void zoomTo(std::int64_t from, std::int64_t to);
     void zoomBack();
@@ -972,6 +997,13 @@ private:
     Options options_;
     QList<std::pair<double, double>> zoomStack_;
     Display display_;
+    // The Sequence Map (showSequenceMap): where it is and whether it shows.
+    SequenceMap* map_ = nullptr;
+    SequenceMapWindow* mapWindow_ = nullptr;
+    bool mapShown_ = false;
+    bool mapInWindow_ = false;
+    // Puts the overlay at the bottom right of the tracks area (ours).
+    void placeSequenceMap();
     bool liftTool_ = false;
     bool spliceTool_ = false;
     QList<model::SegmentRef> selection_;

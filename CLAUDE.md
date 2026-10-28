@@ -386,7 +386,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   (docs/spec/timeline-commands.md: `Sequence::addFillerAtStart`,
   `findBlackHole`, `findFlashFrame`, `selectionCopy`, `Track::customName`;
   test `tst_timeline_commands`, scenario `21-filler-at-start.json`), is done.
-  Next: the rest of the UI completion pass (U1d2 Sequence Map, U1e Timeline settings, U2 Composer and
+  U1d2, the Sequence Map (docs/spec/sequence-map.md: `src/ui/sequence_map.*`,
+  `Timeline::showSequenceMap`, the Timeline settings' Sequence Map options;
+  test `tst_sequence_map`), is done.
+  Next: the rest of the UI completion pass (U1e Timeline settings, U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.
 

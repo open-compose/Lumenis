@@ -3559,6 +3559,10 @@ void MainWindow::applySettings() {
     o.dupeHandles = s.text(tl, QStringLiteral("dupeHandles")).toDouble();
     o.startFillerSeconds = s.value(tl, QStringLiteral("startFiller")).toInt();
     o.flashFrames = s.value(tl, QStringLiteral("flashFrames")).toInt(10);
+    o.mapOverlay = s.value(tl, QStringLiteral("mapOverlay")).toBool();
+    o.mapClickHides = s.value(tl, QStringLiteral("mapClickHides")).toBool();
+    o.mapWaveforms = s.value(tl, QStringLiteral("mapWaveforms")).toBool();
+    o.mapEffects = s.value(tl, QStringLiteral("mapEffects")).toBool();
     o.proToolsChannelOrder = s.text(QStringLiteral("Audio"), QStringLiteral("channelOrder")) == QLatin1String("protools");
     const QString movement = s.text(tl, QStringLiteral("movementDuringPlay"));
     o.movement = movement == QLatin1String("scroll") ? Timeline::Options::Movement::Scroll

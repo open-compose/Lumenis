@@ -39,6 +39,7 @@ lumenis_add_test(tst_timeline_views SOURCES tst_timeline_views.cpp LIBS ${ui_tes
 lumenis_add_test(tst_sync_dupes SOURCES tst_sync_dupes.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_clip_notes SOURCES tst_clip_notes.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_timeline_commands SOURCES tst_timeline_commands.cpp LIBS ${ui_test_libs})
+lumenis_add_test(tst_sequence_map SOURCES tst_sequence_map.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_audio_suite_ui SOURCES tst_audio_suite_ui.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_multichannel_ui SOURCES tst_multichannel_ui.cpp LIBS ${ui_test_libs})
 # Clip colours in the Timeline (docs/spec/timeline-colors.md).

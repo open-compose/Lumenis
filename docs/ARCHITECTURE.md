@@ -56,6 +56,7 @@ headers in `include/lumenis/<library>/`.
   UI: `timeline.*` (the Timeline panel and its edit commands;
   `timeline_automation.cpp` its keyframe graph and editing), `clip_notes.*` (the
   Timeline Clip Notes window, docs/spec/clip-notes.md),
+  `sequence_map.*` (the Sequence Map, docs/spec/sequence-map.md),
   `clip_color_dialog.*` (the Timeline's Clip Color dialog),
   `surround_panner.*` (the Pan grid and Advanced Panner; the pans
   themselves are `src/model/surround_pan.*`) and

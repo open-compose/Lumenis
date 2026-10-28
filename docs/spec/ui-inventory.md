@@ -56,6 +56,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   for ten rates, the layout, and Default Colors also resetting Linked Clips.
 * Start Filler Duration in seconds, 2 by default; the name of a sequence made
   by Create Sequence Based on Selection (docs/spec/timeline-commands.md).
+* The Sequence Map (docs/spec/sequence-map.md): the defaults of its four Timeline settings, the
+  overlay's place and size, the effect band, a press off the white box moving it, and the window
+  staying open when clicking elsewhere.
 * Sync breaks and Dupe Detection (docs/spec/sync-dupes.md): what counts as
   a sync partner and the sign of the offset; the Sync Breaks submenu's item
   names; dupes per clip and source track; the dupe colours after orange and
@@ -1221,7 +1224,7 @@ These are recorded now so they are not entered from memory later.
   * Messages for edits that cannot be made show as a tooltip.
 * **Not yet built.**
   * Trim mode (1.4d), Solo, Sync Point edits, markers, Add Filler at
-    Start, Load Filler, the Track Control panel (U1b1), Timeline views (U1b2), the Sequence Map, Search,
+    Start, Load Filler, the Track Control panel (U1b1), Timeline views (U1b2), Search,
     Video Quality, Step In/Out (nesting), clip colours, waveforms (U1a) and the
     other Fast menu options (shown disabled).
 
