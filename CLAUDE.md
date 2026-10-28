@@ -412,7 +412,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_trim_settings`, scenario `24-jkl-trim.json`), is done. U2e2, the trim
   monitors' outgoing and incoming frames, Small Trim display, Dual Image Play
   and Sync Rollers (`Composer::TrimDisplay`, `trimFrame`, the PictureResolver
-  taking a frame, `Timeline::syncRollers`), is done.
+  taking a frame, `Timeline::syncRollers`), is done. U2e3, the Composer settings'
+  Window tab (docs/spec/composer-display.md: two rows of data with a second
+  tracking display, Flow Data, position bar tick marks, the middle button panel
+  under "middle" in the button layout; test `tst_composer_display`), is done.
   Next: the rest of the UI completion pass (U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.

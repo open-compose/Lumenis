@@ -155,10 +155,10 @@ private slots:
     void unavailableOptionsKeepTheirDefaults() {
         Settings settings;
         settings.setValue("Bin", "inactivitySeconds", 99);           // later
-        settings.setValue("Composer", "dataDisplay", QStringLiteral("two")); // later choice
+        settings.setValue("Bin", "doubleClickLoads", QStringLiteral("popup")); // later choice
         settings.setValue("Bin", "autoSaveMinutes", QStringLiteral("x")); // wrong type
         QCOMPARE(settings.number("Bin", "inactivitySeconds"), 15);
-        QCOMPARE(settings.text("Composer", "dataDisplay"), QStringLiteral("one"));
+        QCOMPARE(settings.text("Bin", "doubleClickLoads"), QStringLiteral("monitor"));
         QCOMPARE(settings.number("Bin", "autoSaveMinutes"), 15);
         QVERIFY(settings.value("Nope", "nothing").isNull());
     }

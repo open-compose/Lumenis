@@ -3577,7 +3577,12 @@ void MainWindow::applySettings() {
     // Composer settings (p.1158-1160).
     const QString composer = QStringLiteral("Composer");
     Composer::Display d;
-    d.infoRow = s.text(composer, QStringLiteral("dataDisplay")) != QLatin1String("off");
+    const QString dataDisplay = s.text(composer, QStringLiteral("dataDisplay"));
+    d.infoRow = dataDisplay != QLatin1String("off");
+    d.twoRows = dataDisplay == QLatin1String("two");
+    d.flowData = dataDisplay == QLatin1String("flow");
+    d.tickMarks = s.flag(composer, QStringLiteral("tickMarks"));
+    d.middlePanel = s.flag(composer, QStringLiteral("middlePanel"));
     const QString rows = s.text(composer, QStringLiteral("buttonDisplay"));
     d.buttonRows = rows == QLatin1String("off") ? 0 : rows == QLatin1String("one") ? 1 : 2;
     d.centerDuration = s.flag(composer, QStringLiteral("centerDuration"));

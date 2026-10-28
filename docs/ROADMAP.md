@@ -860,7 +860,8 @@ phase of their own. They are done in three steps:
   Timecode Window (p.389) (U2b, docs/spec/timecode-window.md, is done), Edit > Find (p.417) (U2c, docs/spec/find.md, is done); the Composer and Trim
   settings still dimmed (the trim loop, Edit Review and J-K-L Trim, U2e1,
   and the trim frames, Small Trim, Dual Image Play and Sync Rollers, U2e2,
-  docs/spec/trim-settings.md, are done; the Composer Display tab is left); from the Timeline settings, Display During
+  docs/spec/trim-settings.md, are done; so is the Composer Window tab, U2e3,
+  docs/spec/composer-display.md, but for multicamera icons); from the Timeline settings, Display During
   Segment Drag (the four-frame display) and Dynamic Play Forward/Reverse
   with Dynamic Play Acceleration and Slow start speed (p.401-402, p.1219).
 * U3, bins, media, windows and interface: Bin > Select's Offline Items,

@@ -110,12 +110,12 @@
           "options": [
             {"key": "dataDisplay", "type": "choice", "style": "radio", "label": "Data Display at Top", "default": "one", "page": 1158,
              "choices": [{"value": "off", "label": "Off"}, {"value": "one", "label": "Always Display One Row of Data"},
-                         {"value": "two", "label": "Always Display Two Rows of Data", "later": true}, {"value": "flow", "label": "Flow Data Dynamically", "later": true}]},
+                         {"value": "two", "label": "Always Display Two Rows of Data"}, {"value": "flow", "label": "Flow Data Dynamically"}]},
             {"key": "buttonDisplay", "type": "choice", "style": "radio", "label": "Button Display at Bottom", "default": "two", "page": 1158,
              "choices": [{"value": "off", "label": "Off"}, {"value": "one", "label": "One Row"}, {"value": "two", "label": "Two Rows"}]},
             {"key": "centerDuration", "type": "bool", "label": "Center Duration", "default": true, "page": 1159},
-            {"key": "tickMarks", "type": "bool", "label": "Tick Marks in Position Bars", "default": false, "page": 1159, "later": true},
-            {"key": "middlePanel", "type": "bool", "label": "Display middle Composer button panel", "default": false, "page": 1159, "later": true}
+            {"key": "tickMarks", "type": "bool", "label": "Tick Marks in Position Bars", "default": false, "page": 1159},
+            {"key": "middlePanel", "type": "bool", "label": "Display middle Composer button panel", "default": false, "page": 1159}
           ]
         },
         {

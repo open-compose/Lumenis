@@ -199,6 +199,18 @@ public:
     void setTracking(MonitorId monitor, model::TrackingFormat format);
     model::TrackingFormat tracking(MonitorId monitor) const;
     QString trackingText(MonitorId monitor) const;
+    // The second row's tracking display (Always Display Two Rows of Data, p.385, p.1158): "you can
+    // display two different types of tracking information for the footage in each monitor".
+    void setSecondTracking(MonitorId monitor, model::TrackingFormat format);
+    model::TrackingFormat secondTracking(MonitorId monitor) const;
+    QString secondTrackingText(MonitorId monitor) const;
+    // Whether the second row of data shows now: Two Rows, or Flow Data Dynamically with the Composer
+    // at least kFlowHeight pixels high (ours: the guide says only that the data shows "in either one
+    // or two rows, depending on the size of the Composer window", p.380).
+    bool showsSecondRow() const;
+    static constexpr int kFlowHeight = 420;
+    // The middle Composer button panel (p.1159): 3 or 6 buttons between the monitors' button rows.
+    QWidget* middlePanel() const { return middle_; }
     QString centerDuration() const;
 
     // Trim mode's Big Trim display (p.648-651), set by the Timeline.
@@ -241,6 +253,10 @@ public:
     // p.1158-1160).
     struct Display {
         bool infoRow = true;       // Data Display at Top: Off, or one row
+        bool twoRows = false;      // Always Display Two Rows of Data (p.1158)
+        bool flowData = false;     // Flow Data Dynamically (p.380, p.1158)
+        bool tickMarks = false;    // Tick Marks in Position Bars (p.1159)
+        bool middlePanel = false;  // Display middle Composer button panel (p.1159)
         int buttonRows = 2;        // Button Display at Bottom: 0, 1 or 2
         bool centerDuration = true;
         bool markers = true;       // Show Composer Markers
@@ -258,6 +274,8 @@ public:
     QJsonObject buttonLayout() const;
     void setButtonLayout(const QJsonObject& layout); // {} for the defaults
 
+    // The middle panel's slots are under "middle" (ours: Lift, Extract and Trim Mode, then Replace,
+    // Fit to Fill and Copy to Clipboard; the guide does not name them).
     // The built-in commands of every slot, in the same format.
     static QJsonObject defaultButtonLayout();
 
@@ -416,6 +434,7 @@ protected:
     // While a clip loop plays, Tab and Shift+Tab anywhere in the application step it (p.393).
     bool eventFilter(QObject* watched, QEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
 
 private:
     struct Column;
@@ -461,6 +480,12 @@ private:
     QLabel* center_ = nullptr;
     QWidget* trimBar_ = nullptr;
     QWidget* smallTrim_ = nullptr;
+    QWidget* middle_ = nullptr;
+    QList<QWidget*> middleRows_;
+    QList<QStringList> middleLayout_;
+    model::TrackingFormat sourceTracking2_ = model::TrackingFormat::None;
+    model::TrackingFormat recordTracking2_ = model::TrackingFormat::None;
+    void applyRows();
     QList<QToolButton*> smallCounters_; // A, B
     TrimDisplay trim_;
     model::TrimSide trimPlaySide_ = model::TrimSide::B;

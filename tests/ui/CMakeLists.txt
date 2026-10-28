@@ -42,6 +42,7 @@ lumenis_add_test(tst_timeline_commands SOURCES tst_timeline_commands.cpp LIBS ${
 lumenis_add_test(tst_sequence_map SOURCES tst_sequence_map.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_timeline_settings SOURCES tst_timeline_settings.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_trim_settings SOURCES tst_trim_settings.cpp LIBS ${ui_test_libs})
+lumenis_add_test(tst_composer_display SOURCES tst_composer_display.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_composer_edit SOURCES tst_composer_edit.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_timecode_window SOURCES tst_timecode_window.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_find_window SOURCES tst_find_window.cpp LIBS ${ui_test_libs})

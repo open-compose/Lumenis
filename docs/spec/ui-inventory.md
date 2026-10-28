@@ -72,6 +72,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Timeline and Markers tabs list, and Ctrl+G as a keyboard-only Find Again command.
 * AutoSequence (docs/spec/autosequence.md): which of two related clips is kept, the track layout of
   Camera groups, and the name when there is no Tape or Source File.
+* The Composer Window tab (docs/spec/composer-display.md): the second row's layout and Fast Menu,
+  the Flow Data height, the tick intervals, and the middle panel's six buttons.
 * Trim settings (docs/spec/trim-settings.md): Preroll, Postroll and Intermission in seconds, the
   Intermission as a pause between passes (the guide calls it "a transition effect duration"), the
   Play Loop button in the Big Trim display, which transition Edit Review takes and that J-K-L Trim

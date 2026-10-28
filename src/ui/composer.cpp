@@ -19,6 +19,7 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QPainterPath>
+#include <QResizeEvent>
 #include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -305,6 +306,13 @@ double framesPerSecond(const model::MonitorState& s) {
 
 // A button of the information row (Clip Name menu, tracking display): green text on near-black, a
 // popup menu on click, and a width set by the layout, not by its text.
+// The middle Composer button panel's built-in commands (ours, p.1159).
+const QList<QStringList>& middleDefaults() {
+    static const QList<QStringList> rows{
+        {QStringLiteral("edit.lift"), QStringLiteral("edit.extract"), QStringLiteral("trim.trim_mode")},
+        {QStringLiteral("edit.replace_edit"), QStringLiteral("edit.fit_to_fill"), QStringLiteral("edit.copy_to_clipboard")}};
+    return rows;
+}
 QToolButton* infoBox(QWidget* parent, const QString& name) {
     auto* b = new QToolButton(parent);
     b->setObjectName(name);
@@ -417,6 +425,13 @@ struct Composer::Column {
     QToolButton* trimCounter = nullptr;
     QToolButton* clipName = nullptr;
     QToolButton* tracking = nullptr;
+    // The second row of data (p.385, p.1158): the Fast Menu, the second tracking display and, over the
+    // Source monitor, the gang icon.
+    QWidget* info2 = nullptr;
+    QToolButton* tracking2 = nullptr;
+    QMenu* trackingMenu2 = nullptr;
+    QToolButton* fastMenu = nullptr;
+    QLabel* gangIcon = nullptr;
     MonitorPicture* picture = nullptr;
     PositionBar* bar = nullptr;
     QMenu* clipMenu = nullptr;
@@ -463,12 +478,24 @@ void PositionBar::paintEvent(QPaintEvent*) {
     QColor base(kPlainBar);
     if (composer_.sourceRecordColors()) base = QColor(monitor_ == MonitorId::Source ? kSourceBar : kRecordBar);
     p.fillRect(rect(), base);
-    p.setPen(base.darker(150));
-    for (int i = 1; i < 24; ++i) {
-        const int x = width() * i / 24;
-        p.drawLine(x, height() - 4, x, height() - 1);
-    }
     if (s.isEmpty()) return;
+    // Tick Marks in Position Bars (p.1159): "duration indicators that appear incrementally along the
+    // position bars". Ours: one every 1, 2, 5, 10 or 30 seconds, or 1, 5, 10 or 30 minutes, the first
+    // interval that leaves at least 6 pixels between them.
+    if (composer_.display().tickMarks && s.duration() > 1) {
+        const std::int64_t fps = std::max(TimecodeFormat::forRate(s.current()->item.editRate, false).nominalFps, 1);
+        static constexpr int kSeconds[] = {1, 2, 5, 10, 30, 60, 300, 600, 1800, 3600};
+        std::int64_t step = 0;
+        for (int sec : kSeconds) {
+            step = sec * fps;
+            if (static_cast<double>(step) * width() / static_cast<double>(s.duration()) >= 6.0) break;
+        }
+        p.setPen(base.darker(150));
+        for (std::int64_t f = step; f < s.duration(); f += step) {
+            const int x = xFor(f);
+            p.drawLine(x, height() - 4, x, height() - 1);
+        }
+    }
     // Marked material, then the indicator.
     if (s.in() || s.out()) p.fillRect(QRect(QPoint(xFor(s.markedStart()), 2), QPoint(xFor(s.markedEnd()), height() - 3)), QColor::fromRgba(kMarkedSpan));
     // Markers: ovals in their colours (p.413); spanned ones as bars.
@@ -737,6 +764,42 @@ Composer::Composer(QWidget* parent) : QWidget(parent) {
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(6);
     layout->addWidget(sourceColumn, 1);
+    // The middle Composer button panel (p.1159): one row of three per button row, level with them.
+    middle_ = new QWidget(this);
+    middle_->setObjectName(QStringLiteral("middlePanel"));
+    auto* middleRows = new QVBoxLayout(middle_);
+    middleRows->setContentsMargins(0, 0, 0, 0);
+    middleRows->setSpacing(1);
+    if (middleLayout_.isEmpty()) middleLayout_ = middleDefaults();
+    for (int r = 0; r < middleLayout_.size(); ++r) {
+        auto* rowWidget = new QWidget(middle_);
+        auto* h = new QHBoxLayout(rowWidget);
+        h->setContentsMargins(0, 0, 0, 0);
+        h->setSpacing(0);
+        for (int i = 0; i < middleLayout_.at(r).size(); ++i) {
+            auto* b = new MappableButton(rowWidget);
+            b->setFixedSize(kButtonWidth, kToolButtonHeight);
+            b->setIconSize(QSize(16, 16));
+            b->setProperty("slot", QPoint(r, i));
+            const QString id = middleLayout_.at(r).at(i);
+            b->setCommand(id);
+            b->setObjectName(id.isEmpty() ? QStringLiteral("blankButton") : id);
+            connect(b, &MappableButton::commandClicked, this, [this](const QString& command) {
+                if (!perform(command)) emit commandRequested(command);
+            });
+            connect(b, &MappableButton::commandMapped, this, [this, b, r, i](const QString& command) {
+                middleLayout_[r][i] = command;
+                b->setCommand(command);
+                b->setObjectName(command.isEmpty() ? QStringLiteral("blankButton") : command);
+                emit buttonsChanged();
+            });
+            h->addWidget(b);
+        }
+        middleRows->addWidget(rowWidget);
+        middleRows_ << rowWidget;
+    }
+    middle_->hide();
+    layout->addWidget(middle_, 0, Qt::AlignBottom);
     layout->addWidget(recordColumn, 1);
     outer->addLayout(layout, 1);
 
@@ -837,6 +900,50 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
         info->addWidget(c->clipName, 3);
     }
 
+    // The second row of data, above the first (the picture on p.384).
+    c->info2 = new QWidget(c->widget);
+    c->info2->setObjectName(source ? QStringLiteral("sourceInfo2") : QStringLiteral("recordInfo2"));
+    auto* info2 = new QHBoxLayout(c->info2);
+    info2->setContentsMargins(0, 0, 0, 0);
+    info2->setSpacing(4);
+    c->tracking2 = infoBox(c->info2, source ? QStringLiteral("sourceTracking2") : QStringLiteral("recordTracking2"));
+    c->trackingMenu2 = new QMenu(c->tracking2);
+    for (model::TrackingFormat f : model::trackingFormats()) {
+        QAction* a = c->trackingMenu2->addAction(model::trackingLabel(f));
+        a->setCheckable(true);
+        connect(a, &QAction::triggered, this, [this, monitor, f] { setSecondTracking(monitor, f); });
+    }
+    connect(c->trackingMenu2, &QMenu::aboutToShow, this, [this, c, monitor] {
+        for (QAction* a : c->trackingMenu2->actions()) a->setChecked(a->text() == model::trackingLabel(secondTracking(monitor)));
+    });
+    c->tracking2->setMenu(c->trackingMenu2);
+    // The Fast Menu: the monitor's right-click menu (ours: the guide names "Fast Menu icons" only).
+    c->fastMenu = new QToolButton(c->info2);
+    c->fastMenu->setObjectName(source ? QStringLiteral("sourceFastMenu") : QStringLiteral("recordFastMenu"));
+    c->fastMenu->setAutoRaise(true);
+    c->fastMenu->setFixedSize(kInfoHeight + 4, kInfoHeight);
+    c->fastMenu->setIcon(glyphIcon(GlyphIcon::FastMenu, QColor(kInfoText)));
+    connect(c->fastMenu, &QToolButton::clicked, this, [this, monitor, c] {
+        setActiveMonitor(monitor);
+        contextMenu()->exec(c->fastMenu->mapToGlobal(QPoint(0, c->fastMenu->height())));
+    });
+    if (source) {
+        c->gangIcon = new QLabel(c->info2);
+        c->gangIcon->setObjectName(QStringLiteral("gangIcon"));
+        c->gangIcon->setPixmap(glyph(Glyph::Gang, QColor(kInfoText)).pixmap(QSize(16, 16)));
+        c->gangIcon->setToolTip(tr("Ganged"));
+        info2->addWidget(c->fastMenu);
+        info2->addWidget(c->gangIcon);
+        info2->addStretch(3);
+        info2->addWidget(c->tracking2, 3);
+        info2->addSpacing(64 + 4); // under the center duration display
+    } else {
+        info2->addWidget(c->tracking2, 3);
+        info2->addStretch(3);
+        info2->addWidget(c->fastMenu);
+    }
+    c->info2->hide();
+
     c->picture = new MonitorPicture(*this, monitor, c->widget);
     c->bar = new PositionBar(*this, monitor, c->widget);
 
@@ -881,6 +988,7 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
     auto* v = new QVBoxLayout(c->widget);
     v->setContentsMargins(0, 0, 0, 0);
     v->setSpacing(3);
+    v->addWidget(c->info2);
     v->addLayout(info);
     v->addWidget(c->picture, 1);
     v->addWidget(c->bar);
@@ -964,6 +1072,9 @@ QJsonObject Composer::buttonLayout() const {
         for (const QStringList& row : layout_[m == MonitorId::Source ? 0 : 1]) rows.append(QJsonArray::fromStringList(row));
         out.insert(m == MonitorId::Source ? QStringLiteral("source") : QStringLiteral("record"), rows);
     }
+    QJsonArray middle;
+    for (const QStringList& row : middleLayout_) middle.append(QJsonArray::fromStringList(row));
+    out.insert(QStringLiteral("middle"), middle);
     return out;
 }
 
@@ -979,6 +1090,9 @@ QJsonObject Composer::defaultButtonLayout() {
         }
         out.insert(m == MonitorId::Source ? QStringLiteral("source") : QStringLiteral("record"), rows);
     }
+    QJsonArray middle;
+    for (const QStringList& row : middleDefaults()) middle.append(QJsonArray::fromStringList(row));
+    out.insert(QStringLiteral("middle"), middle);
     return out;
 }
 
@@ -1006,6 +1120,24 @@ void Composer::setButtonLayout(const QJsonObject& layout) {
             if (id != b->command()) setupButton(m, b, id);
         }
     }
+    const QJsonArray middle = layout.value(QStringLiteral("middle")).toArray();
+    middleLayout_.clear();
+    for (int r = 0; r < middleDefaults().size(); ++r) {
+        QStringList row;
+        for (int i = 0; i < middleDefaults().at(r).size(); ++i) {
+            const QJsonValue v = middle.at(r).toArray().at(i);
+            row << (v.isString() ? v.toString() : middleDefaults().at(r).at(i));
+        }
+        middleLayout_ << row;
+    }
+    if (middle_) {
+        for (MappableButton* b : middle_->findChildren<MappableButton*>()) {
+            const QPoint slot = b->property("slot").toPoint();
+            const QString id = middleLayout_.value(slot.x()).value(slot.y());
+            b->setCommand(id);
+            b->setObjectName(id.isEmpty() ? QStringLiteral("blankButton") : id);
+        }
+    }
     refresh();
 }
 
@@ -1022,7 +1154,48 @@ void Composer::setDisplay(const Display& display) {
         c.controls->setVisible(!trimHere && display.buttonRows > 0);
     }
     center_->setVisible(display.infoRow && display.centerDuration);
+    applyRows();
     refresh();
+}
+
+bool Composer::showsSecondRow() const {
+    if (!display_.infoRow) return false;
+    return display_.twoRows || (display_.flowData && height() >= kFlowHeight);
+}
+
+// Shows or hides the second row of data and the middle panel's rows after a setting or a resize.
+void Composer::applyRows() {
+    const bool second = showsSecondRow();
+    for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
+        if (!columns_[m == MonitorId::Source ? 0 : 1]) continue;
+        column(m).info2->setVisible(second);
+    }
+    if (middle_) {
+        for (int i = 0; i < middleRows_.size(); ++i) middleRows_.at(i)->setVisible(i < display_.buttonRows);
+        middle_->setVisible(display_.middlePanel && display_.buttonRows > 0 && !trim_.on);
+    }
+}
+
+void Composer::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    if (display_.flowData) applyRows();
+}
+
+void Composer::setSecondTracking(MonitorId monitor, model::TrackingFormat format) {
+    (monitor == MonitorId::Source ? sourceTracking2_ : recordTracking2_) = format;
+    refresh();
+}
+
+model::TrackingFormat Composer::secondTracking(MonitorId monitor) const {
+    return monitor == MonitorId::Source ? sourceTracking2_ : recordTracking2_;
+}
+
+QString Composer::secondTrackingText(MonitorId monitor) const {
+    const model::TrackingFormat f = secondTracking(monitor);
+    const QString value = state(monitor).tracking(f);
+    if (value.isEmpty()) return {};
+    const QString prefix = trackingPrefix(f);
+    return prefix.isEmpty() ? value : prefix + QStringLiteral("  ") + value;
 }
 
 // The current clip's markers, filtered by the Show Composer Markers and spanned-marker settings.
@@ -1170,6 +1343,7 @@ void Composer::setTrimDisplay(const TrimDisplay& display) {
         paintCounter(c.trimCounter, m == MonitorId::Source);
     }
     smallTrim_->setVisible(small);
+    applyRows();
     for (int i = 0; i < smallCounters_.size(); ++i) paintCounter(smallCounters_.at(i), i == 0);
     column(MonitorId::Source).widget->setVisible(display.on || !single_);
     trimBar_->setVisible(display.on);
@@ -1793,6 +1967,8 @@ void Composer::refresh() {
         const model::LoadedClip* clip = state(m).current();
         c.clipName->setText(clip ? clip->item.name + QStringLiteral("  ") : QString());
         c.tracking->setText(trackingText(m));
+        c.tracking2->setText(secondTrackingText(m));
+        if (c.gangIcon) c.gangIcon->setVisible(ganged_);
         if (QToolButton* gang = c.buttons.value(QStringLiteral("other.gang"))) gang->setChecked(ganged_);
         // The playing monitor's Play button shows how it plays.
         QToolButton* playButton = c.buttons.value(QStringLiteral("play.play"));
