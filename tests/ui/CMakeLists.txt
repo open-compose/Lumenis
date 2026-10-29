@@ -51,6 +51,7 @@ lumenis_add_test(tst_bin_attic_ui SOURCES tst_bin_attic_ui.cpp LIBS ${ui_test_li
 lumenis_add_test(tst_bin_editing SOURCES tst_bin_editing.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_interface_colors SOURCES tst_interface_colors.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_bin_settings SOURCES tst_bin_settings.cpp LIBS ${ui_test_libs})
+lumenis_add_test(tst_monitor_markers SOURCES tst_monitor_markers.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_composer_edit SOURCES tst_composer_edit.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_timecode_window SOURCES tst_timecode_window.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_find_window SOURCES tst_find_window.cpp LIBS ${ui_test_libs})

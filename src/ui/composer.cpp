@@ -328,6 +328,20 @@ QToolButton* infoBox(QWidget* parent, const QString& name) {
     return b;
 }
 
+// A marker on the shown frame (p.413): "it appears as an oval ... at the bottom of the frame in the
+// monitor", with its text under it (the picture on p.413). The oval stands upright, sized to the
+// picture, above a band one line of text high at the picture's bottom edge.
+int markerTextBand(const QFontMetrics& metrics) {
+    return metrics.height() + 4;
+}
+
+QRectF markerOval(const QRect& picture, const QFontMetrics& metrics) {
+    const double h = std::clamp(picture.height() / 12.0, 10.0, 28.0);
+    const double w = h * 0.55;
+    const double bottom = picture.bottom() - markerTextBand(metrics) - 2;
+    return {picture.center().x() - w / 2, bottom - h, w, h};
+}
+
 } // namespace
 
 // ---------------------------------------------------------------- Column
@@ -671,20 +685,33 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
         };
         if (s.in() && *s.in() == s.position()) saw(pic.left() + 6, 1);
         if (s.out() && *s.out() == s.position()) saw(pic.right() - 6, -1);
-        // A marker on this frame: an oval at the bottom of the picture
-        // (p.413).
+        // A marker on this frame: an upright oval in its colour at the bottom of the picture and its
+        // comment under it on a dark band (p.413). Only the oval takes the colour; the picture stays.
         for (const model::Marker& m : composer_.shownMarkers(monitor_)) {
             if (s.position() < m.frame || s.position() >= m.end()) continue;
+            p.save();
             p.setRenderHint(QPainter::Antialiasing);
             const QColor c = QColor::fromRgb(model::markerColor(m.color));
             p.setPen(QPen(c.darker(150), 1));
             p.setBrush(c);
-            p.drawEllipse(QRectF(pic.center().x() - 12, pic.bottom() - 18, 24, 12));
+            p.drawEllipse(markerOval(pic, p.fontMetrics()));
+            const QString text = m.comment.simplified();
+            if (!text.isEmpty()) {
+                const int band = markerTextBand(p.fontMetrics());
+                const QRect strip(pic.left(), pic.bottom() - band + 1, pic.width(), band);
+                p.fillRect(strip, QColor(0, 0, 0, 150));
+                // Drawn with the palette's text colour, as custom-painted text is (the screenshots hide it).
+                p.setPen(palette().color(QPalette::BrightText));
+                p.drawText(strip.adjusted(6, 0, -6, 0), Qt::AlignCenter,
+                           p.fontMetrics().elidedText(text, Qt::ElideRight, strip.width() - 12));
+            }
+            p.restore();
             break;
         }
     }
     if (composer_.activeMonitor() == monitor_ && !composer_.isSingleMonitor()) {
         p.setPen(QPen(palette().color(QPalette::Highlight), 1));
+        p.setBrush(Qt::NoBrush); // an outline only, whatever was drawn before
         p.drawRect(rect().adjusted(0, 0, -1, -1));
     }
 }
@@ -704,7 +731,8 @@ void MonitorPicture::mousePressEvent(QMouseEvent* event) {
     // Clicking the oval of a marker opens Edit Marker (p.416).
     const model::MonitorState& s = composer_.state(monitor_);
     const QRect pic = pictureRect();
-    const QRectF oval(pic.center().x() - 12, pic.bottom() - 18, 24, 12);
+    // The oval, with a few pixels around it to aim at.
+    const QRectF oval = markerOval(pic, fontMetrics()).adjusted(-4, -4, 4, 4);
     if (s.isEmpty() || !oval.contains(event->position())) return;
     for (const model::Marker& m : composer_.shownMarkers(monitor_)) {
         if (s.position() >= m.frame && s.position() < m.end()) {

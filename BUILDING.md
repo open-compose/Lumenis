@@ -356,6 +356,15 @@ assigned that way, and the I and O keys did not change. `tst_composer`'s `button
 checks the order. If a saved button mapping (Command Palette) still puts a mark on the wrong
 button, map that button again.
 
+### A marker turns the whole monitor frame its colour
+
+Before this was fixed, a monitor showing a marked frame was painted all over in the marker's colour
+in two-monitor view: the marker oval left the painter's fill set, and the active monitor's outline,
+drawn next, filled the frame with it. The oval also lay on its side and the marker's comment was not
+shown. Now the picture is untouched, an upright oval in the marker's colour sits at the bottom of the
+frame and the comment is written under it on a dark band (Editing Guide p.413). `tst_monitor_markers`
+checks the frame, the oval, the comment and clicking the oval.
+
 ### "Artifact storage quota has been hit"
 
 GitHub keeps a private repository's CI artifacts in a small storage quota.

@@ -156,6 +156,10 @@ What 2026.8 changed, and where it is here:
   Creation setting lists it; rendering is later. The Editing Guide's
   settings table (2026.8 guide p.1212) still lists 8-bit, 16-bit and
   Automatic.
+* Markers in the monitors (p.413, p.416): an upright oval in the marker's colour, sized to the
+  picture, above a one-line dark band at the bottom of the frame holding the marker's comment (the
+  picture on p.413; ours: the comment, not the name, and nothing when it is empty); clicking the oval
+  opens Edit Marker. Test `tst_monitor_markers`.
 * Markers keep User Name and Marker Name apart (2026.8 guide p.418), as
   ours always have (`model::Marker`).
 * Avid DNx targets in Consolidate/Transcode are "Resolution Independent";
