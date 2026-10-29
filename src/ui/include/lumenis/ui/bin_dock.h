@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QColor>
 #include <QList>
 #include <QRect>
 #include <QString>
@@ -141,6 +142,8 @@ public:
     void takeView(BinView* view);
     // The text of the bin's tab.
     void setTitle(BinView* view, const QString& title);
+    // A colour swatch on the view's tab; an invalid colour removes it.
+    void setTabColor(BinView* view, const QColor& color);
     // Brings the bin's tab to the front and makes its group current.
     void showView(BinView* view);
 

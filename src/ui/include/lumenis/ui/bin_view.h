@@ -310,6 +310,18 @@ private:
 // One bin as shown in the Bin Container (p.245-257): the Bin View menu,
 // the Text, Frame and Script view buttons, the quick filter and the fast
 // menu above the view, and an optional status bar. The three views share one
+// The Interface settings' Bins tab (p.1201), for every bin: whether bins show their own background
+// colour (Allow custom bin backgrounds), and only on their tabs; and a font and size that override
+// each bin's own (Override all bin fonts, Override all bin font sizes). BinContainer sets it.
+struct BinAppearance {
+    bool backgrounds = true;
+    bool tabsOnly = false;
+    QString fontFamily; // empty: each bin's own
+    int fontSize = 0;   // 0: each bin's own
+    bool operator==(const BinAppearance&) const = default;
+    static BinAppearance& current();
+};
+
 // BinFilterModel and one selection model, so a selection survives switching
 // views. Everything the view changes goes through the BinDocument, and the
 // view redraws itself from displayChanged().
@@ -318,6 +330,8 @@ class BinView : public QWidget {
 
 public:
     // File > Input, offered in the fast menu and on right-click (p.315).
+    // Redraws after BinAppearance::current() changed.
+    void refreshAppearance() { applyDisplay(); }
     void setInputMenu(QMenu* menu) { inputMenu_ = menu; }
     // `fastMenu` is the Bin menu, also offered from the bin (p.259); its
     // actions are shared, not copied, and it may be null. The document must

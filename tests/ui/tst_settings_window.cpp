@@ -100,7 +100,7 @@ private slots:
                              qPrintable(where));
                     QVERIFY2(!keys.contains(where), qPrintable(where));
                     keys << where;
-                    QVERIFY2(QStringList({"bool", "int", "choice", "timecode", "text", "info", "drive"}).contains(o.type),
+                    QVERIFY2(QStringList({"bool", "int", "choice", "timecode", "text", "info", "drive", "color", "font"}).contains(o.type),
                              qPrintable(where));
                     if (o.type == QLatin1String("choice")) {
                         bool found = false;

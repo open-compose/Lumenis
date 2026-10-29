@@ -875,7 +875,8 @@ phase of their own. They are done in three steps:
   docs/spec/bin-editing.md, is done); Bin Layout (p.93; U3d, docs/spec/bin-layout.md, is done but for its
   buttons), Set Font (p.82) and Help > Shortcuts (p.97) (U3c,
   docs/spec/set-font.md, is done), the Interface colour
-  and font settings.
+  and font settings (U3g, docs/spec/interface-colors.md, is done but for the brightness sliders and
+  the Default Timeline track options).
 
 ### Phase 6 — Effects and rendering
 * Transitions, motion effects, timewarps, Color Correction (HSL and curves),

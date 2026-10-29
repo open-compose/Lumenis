@@ -5,6 +5,7 @@
 #include "lumenis/model/monitor.h"
 #include "lumenis/model/sequence.h"
 
+#include <QColor>
 #include <QElapsedTimer>
 #include <QImage>
 #include <QKeySequence>
@@ -251,6 +252,10 @@ public:
         std::int64_t offset = 0;
     };
     void setDragDisplay(const DragDisplay& display);
+    // Use custom viewer background (Interface settings, p.1201): the area around the pictures;
+    // invalid for the default.
+    void setViewerBackground(const QColor& color);
+    QColor viewerBackground() const;
     const DragDisplay& dragDisplay() const { return drag_; }
     QWidget* dragCounter() const;
     // A trim picture was clicked: that side plays in real time (p.659).
@@ -516,6 +521,7 @@ private:
     QWidget* smallTrim_ = nullptr;
     QWidget* middle_ = nullptr;
     DragDisplay drag_;
+    QColor viewerBackground_;
     class QLabel* dragCounter_ = nullptr;
     QList<QWidget*> middleRows_;
     QList<QStringList> middleLayout_;

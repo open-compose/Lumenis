@@ -6,8 +6,10 @@
 #include "lumenis/model/bin_lock.h"
 #include "lumenis/model/project_bins.h"
 #include "lumenis/ui/bin_dock.h"
+#include "lumenis/ui/bin_view.h"
 
 #include <QAbstractItemModel>
+#include <QColor>
 #include <QDateTime>
 #include <QHash>
 #include <QList>
@@ -362,6 +364,18 @@ public:
     void setAtticLimits(const model::AtticLimits& limits) { atticLimits_ = limits; }
     // The attic folder this project's copies go into; empty without one.
     QString atticRoot() const;
+
+    // The Interface settings' Bins tab (p.1201; docs/spec/interface-colors.md). For every bin:
+    // BinAppearance::current(), applied to the open bins and their tabs.
+    void setBinAppearance(const BinAppearance& appearance);
+    // Every Sidebar's background (invalid: the theme's), font family and size (empty, 0: the
+    // application's).
+    void setSidebarAppearance(const QColor& background, const QString& fontFamily, int fontSize);
+    // New bins start with this background colour and font (empty: none, the application's).
+    void setNewBinDefaults(const QString& background, const QString& fontFamily) {
+        newBinBackground_ = background;
+        newBinFont_ = fontFamily;
+    }
     // Bin settings (p.1153): where Favorite Bins show, whether bins opened
     // from the sidebar float, and what the quick filter searches.
     void setFavoritesAtTop(bool top);
@@ -497,6 +511,12 @@ private:
     QDateTime lastAutoSaveAt_;
     bool skipLockedPrompts_ = false;
     QString atticRoot_;
+    QColor sidebarBackground_;
+    QString sidebarFont_;
+    int sidebarFontSize_ = 0;
+    QString newBinBackground_;
+    QString newBinFont_;
+    void applySidebarAppearance(BinSidebar* sidebar) const;
     model::AtticLimits atticLimits_;
     QString projectFolder_;
     QString projectName_;

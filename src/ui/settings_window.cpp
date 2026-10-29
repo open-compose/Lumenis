@@ -6,16 +6,19 @@
 
 #include <QButtonGroup>
 #include <QCheckBox>
+#include <QColorDialog>
 #include <QComboBox>
 #include <QContextMenuEvent>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
 #include <QDir>
 #include <QDragEnterEvent>
+#include <QFontDatabase>
 #include <QFormLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QIcon>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLabel>
@@ -23,14 +26,15 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QPixmap>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QRegularExpressionValidator>
 #include <QSpinBox>
-#include <QToolButton>
 #include <QStandardItemModel>
 #include <QStyledItemDelegate>
 #include <QTabWidget>
+#include <QToolButton>
 #include <QUrl>
 #include <QVBoxLayout>
 
@@ -183,6 +187,38 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                     const QString chosen = media::chooseDrive(current.toString());
                     menu->setCurrentIndex(std::max(menu->findData(chosen), 0));
                     editor = menu;
+                } else if (o.type == QLatin1String("color")) {
+                    // A swatch button: click for the colour picker; its menu also clears it when the
+                    // option may be empty (no colour). The value is the "color" property, "#rrggbb".
+                    auto* button = new QToolButton(row);
+                    button->setPopupMode(QToolButton::MenuButtonPopup);
+                    auto show = [button](const QString& hex) {
+                        button->setProperty("color", hex);
+                        QPixmap swatch(28, 14);
+                        swatch.fill(hex.isEmpty() ? QColor(Qt::transparent) : QColor(hex));
+                        button->setIcon(QIcon(swatch));
+                        button->setText(hex.isEmpty() ? tr("None") : hex);
+                        button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+                    };
+                    show(current.toString());
+                    auto pick = [button, show] {
+                        const QColor start(button->property("color").toString());
+                        const QColor c = QColorDialog::getColor(start.isValid() ? start : QColor(Qt::gray), button);
+                        if (c.isValid()) show(c.name());
+                    };
+                    QObject::connect(button, &QToolButton::clicked, button, pick);
+                    auto* menu = new QMenu(button);
+                    menu->addAction(tr("Choose Color..."), button, pick);
+                    if (o.defaultValue.toString().isEmpty()) menu->addAction(tr("No Color"), button, [show] { show(QString()); });
+                    button->setMenu(menu);
+                    editor = button;
+                } else if (o.type == QLatin1String("font")) {
+                    // The system's font families, after "Default" (empty: the application's font).
+                    auto* menu = new QComboBox(row);
+                    menu->addItem(tr("Default"), QString());
+                    for (const QString& family : QFontDatabase::families()) menu->addItem(family, family);
+                    menu->setCurrentIndex(std::max(menu->findData(current.toString()), 0));
+                    editor = menu;
                 } else if (o.type == QLatin1String("info")) {
                     editor = new QLabel(row);
                 } else {
@@ -248,6 +284,8 @@ QJsonObject SettingsDialog::values() const {
                 out.insert(o.key, spin->value());
             } else if (auto* menu = qobject_cast<QComboBox*>(e)) {
                 out.insert(o.key, menu->currentData().toString());
+            } else if (o.type == QLatin1String("color") && e) {
+                out.insert(o.key, e->property("color").toString());
             } else if (auto* line = qobject_cast<QLineEdit*>(e)) {
                 QString text = line->text().trimmed();
                 if (o.type == QLatin1String("timecode")) {

@@ -298,6 +298,11 @@ public:
         bool positionBarSnap = false;      // Position Bar Snap (p.397)
         bool segmentDragSnap = false;      // Segment Drag Snap: bin clips dragged in snap (p.1220)
         bool editFromBin = false;          // Bin settings: Enable edit from bin (p.1153, p.624)
+        // Interface settings, Timeline and Viewers tab (p.1201-1202): Use Timeline Background Color
+        // (invalid: the default), and Use Blending Based on Skin, which mixes it half and half with
+        // the default grey.
+        QColor background;
+        bool blendBackground = true;
         bool defaultSyncLocks = false;     // Default Sync Locks On
         bool selectFiller = true;          // Select Filler with Segment Tools (p.616); ours: on
         bool openEffectEditor = false;     // Applying Effects opens Effect Editor
@@ -386,6 +391,8 @@ public:
     // Enable edit from bin. The edit a bin drag makes: the one segment tool that is on, otherwise
     // (neither or both) the Default Segment Tool.
     model::EditKind binEditKind() const;
+    // The tracks area's background: the Interface setting's colour, blended or not, or the default.
+    QColor backgroundColor() const;
     // The clip a bin drag carries (binItemsMime): one master clip, subclip, audio clip, group or
     // sequence, resolved through the Composer; nothing for several items or other kinds.
     std::optional<std::pair<QString, model::BinItem>> droppedClip(const QMimeData* mime) const;

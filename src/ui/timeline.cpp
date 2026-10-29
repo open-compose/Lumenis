@@ -513,7 +513,7 @@ void TimelineView::resizeEvent(QResizeEvent* event) {
 // a patch arrow being dragged. firstVisible and lastVisible bound the frames worth drawing.
 void TimelineView::paintEvent(QPaintEvent*) {
     QPainter p(this);
-    p.fillRect(rect(), QColor(kBackground));
+    p.fillRect(rect(), timeline_.backgroundColor());
     if (timeline_.showsHeads()) {
         paintHeads(p);
         return;
@@ -4607,6 +4607,15 @@ void TimelineView::dropEvent(QDropEvent* event) {
     std::optional<std::int64_t> cut;
     if (const auto roller = transitionAt(pos)) cut = roller->frame;
     if (timeline_.dropEffect(row->track, frameAt(pos.x()), *effect, cut)) event->acceptProposedAction();
+}
+
+QColor Timeline::backgroundColor() const {
+    const QColor base(kBackground);
+    const QColor& c = options_.background;
+    if (!c.isValid()) return base;
+    if (!options_.blendBackground) return c;
+    // "blended with the current skin's background gray for a softer look" (p.1202): half and half.
+    return QColor((c.red() + base.red()) / 2, (c.green() + base.green()) / 2, (c.blue() + base.blue()) / 2);
 }
 
 model::EditKind Timeline::binEditKind() const {

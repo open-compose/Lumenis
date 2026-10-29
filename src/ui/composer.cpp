@@ -588,7 +588,7 @@ std::optional<model::TrimSide> MonitorPicture::shownTrimSide() const {
 
 void MonitorPicture::paintEvent(QPaintEvent*) {
     QPainter p(this);
-    p.fillRect(rect(), QColor(18, 18, 18));
+    p.fillRect(rect(), composer_.viewerBackground());
     const QRect pic = pictureRect();
     p.fillRect(pic, Qt::black);
     const Composer::DragDisplay& drag = composer_.dragDisplay();
@@ -1386,6 +1386,16 @@ void Composer::setTrimDisplay(const TrimDisplay& display) {
     column(MonitorId::Source).widget->setVisible(display.on || !single_);
     trimBar_->setVisible(display.on);
     refresh();
+}
+
+void Composer::setViewerBackground(const QColor& color) {
+    if (viewerBackground_ == color) return;
+    viewerBackground_ = color;
+    refresh();
+}
+
+QColor Composer::viewerBackground() const {
+    return viewerBackground_.isValid() ? viewerBackground_ : QColor(18, 18, 18);
 }
 
 void Composer::setDragDisplay(const DragDisplay& display) {

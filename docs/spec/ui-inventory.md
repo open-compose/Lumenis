@@ -72,6 +72,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Timeline and Markers tabs list, and Ctrl+G as a keyboard-only Find Again command.
 * AutoSequence (docs/spec/autosequence.md): which of two related clips is kept, the track layout of
   Camera groups, and the name when there is no Tape or Source File.
+* Interface colours and fonts (docs/spec/interface-colors.md): a colour option of its own under each
+  check box, the Sidebar's quick filter keeping the theme, tabs-only bin colour as a square icon, the
+  viewer background only around the pictures, and blending half and half.
 * Bin editing (docs/spec/bin-editing.md): the clip loaded into the Source monitor and keeping its marks
   there, the outline on the selected record tracks with the patch choosing the tracks, the drop picking
   only the frame, a 12-pixel snap, and V and B taking the bin's clip whenever a bin is active.

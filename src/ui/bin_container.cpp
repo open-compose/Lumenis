@@ -664,6 +664,7 @@ BinContainer::~BinContainer() {
 // reaches them all; it leaves the list when it is destroyed.
 void BinContainer::registerSidebar(BinSidebar* sidebar) {
     sidebars_ << sidebar;
+    applySidebarAppearance(sidebar);
     connect(sidebar, &QObject::destroyed, this, [this, sidebar] { sidebars_.removeAll(sidebar); });
 }
 
@@ -957,8 +958,47 @@ void BinContainer::updateTab(BinDocument* document) {
         // "the bin title provides a status in parentheses indicating that the
         // locked bin has been modified" (p.302).
         if (document->lockState() == BinDocument::LockState::Modified) text += tr(" (modified)");
-        if (BinDockArea* a = areaOf(v)) a->setTitle(v, text);
+        if (BinDockArea* a = areaOf(v)) {
+            a->setTitle(v, text);
+            // "apply the bin background color to tabs only" (p.1201).
+            const BinAppearance& look = BinAppearance::current();
+            const QString& background = document->bin().display.background;
+            a->setTabColor(v, look.backgrounds && look.tabsOnly && !background.isEmpty() ? QColor(background) : QColor());
+        }
     }
+}
+
+void BinContainer::setBinAppearance(const BinAppearance& appearance) {
+    if (BinAppearance::current() == appearance) return;
+    BinAppearance::current() = appearance;
+    for (BinDocument* d : documents_) {
+        if (BinView* v = viewFor(d)) v->refreshAppearance();
+        updateTab(d);
+    }
+}
+
+void BinContainer::setSidebarAppearance(const QColor& background, const QString& fontFamily, int fontSize) {
+    sidebarBackground_ = background;
+    sidebarFont_ = fontFamily;
+    sidebarFontSize_ = fontSize;
+    for (BinSidebar* s : sidebars_) applySidebarAppearance(s);
+}
+
+// The list's Base colour and its font; the quick filter keeps the theme's. Roles and font attributes
+// not set here are not resolved, so they keep following the theme.
+void BinContainer::applySidebarAppearance(BinSidebar* sidebar) const {
+    QTreeView* list = sidebar->tree();
+    if (!list) return;
+    QPalette p;
+    if (sidebarBackground_.isValid()) {
+        p.setColor(QPalette::Base, sidebarBackground_);
+        p.setColor(QPalette::AlternateBase, sidebarBackground_.darker(110));
+    }
+    list->setPalette(p);
+    QFont f;
+    if (!sidebarFont_.isEmpty()) f.setFamily(sidebarFont_);
+    if (sidebarFontSize_ > 0) f.setPointSize(sidebarFontSize_);
+    list->setFont(f);
 }
 
 QString BinContainer::canonicalBin(const QString& id) const {
@@ -1290,6 +1330,15 @@ QString BinContainer::newBin(const QString& parentFolder) {
     if (!bins_) return {};
     const QString id = bins_->createBin(parentFolder);
     if (id.isEmpty()) return {};
+    // "Default background color for new bins", "Default font for new bins" (p.1201).
+    if (!newBinBackground_.isEmpty() || !newBinFont_.isEmpty()) {
+        const QString path = bins_->binPath(id);
+        if (auto bin = model::BinFile::read(path)) {
+            if (!newBinBackground_.isEmpty()) bin->display.background = newBinBackground_;
+            if (!newBinFont_.isEmpty()) bin->display.fontFamily = newBinFont_;
+            model::BinFile::write(path, *bin);
+        }
+    }
     // "a backup copy is placed in the Avid Attic folder" (p.295).
     if (const QString root = atticRoot(); !root.isEmpty()) {
         model::saveToAttic(root, projectName_, bins_->node(id)->name, bins_->binPath(id), atticLimits_);

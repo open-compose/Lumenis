@@ -383,19 +383,32 @@
         {
           "name": "Bins",
           "options": [
-            {"key": "customSidebarBackground", "type": "bool", "label": "Use a custom background color for all Bin Container Sidebars", "default": false, "page": 1201, "later": true},
-            {"key": "overrideSidebarFont", "type": "bool", "label": "Override Bin Container Sidebar font", "default": false, "page": 1201, "later": true},
-            {"key": "customBinBackgrounds", "type": "bool", "label": "Allow custom bin backgrounds", "default": true, "page": 1201, "later": true},
-            {"key": "overrideBinFonts", "type": "bool", "label": "Override all bin fonts", "default": false, "page": 1201, "later": true}
+            {"key": "customSidebarBackground", "type": "bool", "label": "Use a custom background color for all Bin Container Sidebars", "default": false, "page": 1201},
+            {"key": "sidebarBackground", "type": "color", "label": "Sidebar background:", "default": "#2b3a4a", "page": 1201},
+            {"key": "overrideSidebarFont", "type": "bool", "label": "Override Bin Container Sidebar font", "default": false, "page": 1201},
+            {"key": "sidebarFont", "type": "font", "label": "Sidebar font:", "default": "", "page": 1201},
+            {"key": "overrideSidebarFontSize", "type": "bool", "label": "Override font size for all Bin Container Sidebars", "default": false, "page": 1201},
+            {"key": "sidebarFontSize", "type": "int", "label": "Sidebar font size:", "min": 6, "max": 48, "default": 11, "page": 1201},
+            {"key": "customBinBackgrounds", "type": "bool", "label": "Allow custom bin backgrounds", "default": true, "page": 1201},
+            {"key": "binBackgroundTabsOnly", "type": "bool", "label": "Apply bin background colors to tabs only", "default": false, "page": 1201},
+            {"key": "newBinBackground", "type": "color", "label": "Default background color for new bins:", "default": "", "page": 1201},
+            {"key": "newBinFont", "type": "font", "label": "Default font for new bins:", "default": "", "page": 1201},
+            {"key": "overrideBinFonts", "type": "bool", "label": "Override all bin fonts", "default": false, "page": 1201},
+            {"key": "overrideBinFont", "type": "font", "label": "Bin font:", "default": "", "page": 1201},
+            {"key": "overrideBinFontSizes", "type": "bool", "label": "Override all bin font sizes", "default": false, "page": 1201},
+            {"key": "overrideBinFontSize", "type": "int", "label": "Bin font size:", "min": 6, "max": 48, "default": 11, "page": 1201}
           ]
         },
         {
           "name": "Timeline and Viewers",
           "options": [
-            {"key": "customViewerBackground", "type": "bool", "label": "Use custom viewer background", "default": false, "page": 1201, "later": true},
+            {"key": "customViewerBackground", "type": "bool", "label": "Use custom viewer background", "default": false, "page": 1201},
+            {"key": "viewerBackground", "type": "color", "label": "Viewer background:", "default": "#26303a", "page": 1201},
             {"key": "composerColors", "type": "bool", "label": "Show Source/Record colors in Composer", "default": false, "page": 1201},
             {"key": "timelineColors", "type": "bool", "label": "Show Source/Record colors in Timeline", "default": false, "page": 1201},
-            {"key": "timelineBackground", "type": "bool", "label": "Use Timeline Background Color", "default": false, "page": 1201, "later": true}
+            {"key": "timelineBackground", "type": "bool", "label": "Use Timeline Background Color", "default": false, "page": 1201},
+            {"key": "timelineBackgroundColor", "type": "color", "label": "Timeline background:", "default": "#30405a", "page": 1201},
+            {"key": "timelineBlend", "type": "bool", "label": "Use Blending Based on Skin", "default": true, "page": 1202}
           ]
         }
       ]

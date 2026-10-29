@@ -437,7 +437,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   is done. U3f, bin editing into the Timeline (docs/spec/bin-editing.md:
   `Timeline::editClip`/`droppedClip`/`binEditKind`, `MainWindow::editFromBin`,
   Enable edit from bin and Segment Drag Snap; test `tst_bin_editing`, scenario
-  `25-bin-editing.json`), is done.
+  `25-bin-editing.json`), is done. U3g, the Interface settings' colours and
+  fonts (docs/spec/interface-colors.md: "color" and "font" options in
+  `SettingsDialog`, `BinAppearance`, `BinContainer::setSidebarAppearance`,
+  `Composer::setViewerBackground`, `Timeline::backgroundColor`; test
+  `tst_interface_colors`), is done.
   Next: the rest of the UI completion pass (U2 Composer and
   trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
   Batch Import, AutoSync ...) comes before Phase 10, hardening.

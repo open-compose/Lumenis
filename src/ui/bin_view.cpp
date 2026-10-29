@@ -697,6 +697,11 @@ void BinFilterModel::setQuickFilter(const QString& text, const QStringList& head
 
 // One setting for all bins (Bin settings), set by
 // BinContainer::setQuickFilterAllColumns.
+BinAppearance& BinAppearance::current() {
+    static BinAppearance appearance;
+    return appearance;
+}
+
 bool& BinFilterModel::searchAllColumns() {
     static bool all = false;
     return all;
@@ -1388,9 +1393,11 @@ void BinView::applyDisplay() {
     selectedHeadings_.removeIf([&](const QString& h) { return model_->columnOf(h) < 0; });
     model_->setSelectedHeadings(selectedHeadings_);
 
-    // Bin background colour (p.263).
+    // Bin background colour (p.263), unless the Interface settings turn bin backgrounds off or show
+    // them on the tabs only (p.1201).
+    const BinAppearance& look = BinAppearance::current();
     QPalette p = palette();
-    if (!d.background.isEmpty()) {
+    if (!d.background.isEmpty() && look.backgrounds && !look.tabsOnly) {
         p.setColor(QPalette::Base, QColor(d.background));
         p.setColor(QPalette::AlternateBase, QColor(d.background).darker(110));
     }
@@ -1402,6 +1409,9 @@ void BinView::applyDisplay() {
     QFont f = QApplication::font();
     if (!d.fontFamily.isEmpty()) f.setFamily(d.fontFamily);
     if (d.fontSize > 0) f.setPointSize(d.fontSize);
+    // Override all bin fonts and font sizes (p.1201).
+    if (!look.fontFamily.isEmpty()) f.setFamily(look.fontFamily);
+    if (look.fontSize > 0) f.setPointSize(look.fontSize);
     for (QWidget* w : {static_cast<QWidget*>(table_), static_cast<QWidget*>(frames_), static_cast<QWidget*>(script_)}) {
         if (w->font() != f) w->setFont(f);
     }

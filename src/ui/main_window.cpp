@@ -3854,6 +3854,24 @@ void MainWindow::applySettings() {
     binContainer_->setAutoSaveTiming(s.number(QStringLiteral("Bin"), QStringLiteral("autoSaveMinutes")) * 60 * 1000,
                                      s.number(QStringLiteral("Bin"), QStringLiteral("inactivitySeconds")) * 1000,
                                      s.number(QStringLiteral("Bin"), QStringLiteral("forceAutoSaveMinutes")) * 60 * 1000);
+    // Interface settings, Bins tab (p.1201), and the viewer background (Timeline and Viewers tab).
+    {
+        const QString ui = QStringLiteral("Interface");
+        BinAppearance look;
+        look.backgrounds = s.flag(ui, QStringLiteral("customBinBackgrounds"));
+        look.tabsOnly = s.flag(ui, QStringLiteral("binBackgroundTabsOnly"));
+        if (s.flag(ui, QStringLiteral("overrideBinFonts"))) look.fontFamily = s.text(ui, QStringLiteral("overrideBinFont"));
+        if (s.flag(ui, QStringLiteral("overrideBinFontSizes"))) look.fontSize = s.number(ui, QStringLiteral("overrideBinFontSize"));
+        binContainer_->setBinAppearance(look);
+        binContainer_->setSidebarAppearance(
+            s.flag(ui, QStringLiteral("customSidebarBackground")) ? QColor(s.text(ui, QStringLiteral("sidebarBackground"))) : QColor(),
+            s.flag(ui, QStringLiteral("overrideSidebarFont")) ? s.text(ui, QStringLiteral("sidebarFont")) : QString(),
+            s.flag(ui, QStringLiteral("overrideSidebarFontSize")) ? s.number(ui, QStringLiteral("sidebarFontSize")) : 0);
+        binContainer_->setNewBinDefaults(s.text(ui, QStringLiteral("newBinBackground")), s.text(ui, QStringLiteral("newBinFont")));
+        composer_->setViewerBackground(s.flag(ui, QStringLiteral("customViewerBackground"))
+                                           ? QColor(s.text(ui, QStringLiteral("viewerBackground")))
+                                           : QColor());
+    }
     binContainer_->setSkipLockedPrompts(s.flag(QStringLiteral("Bin"), QStringLiteral("skipLockedPrompts")));
     binContainer_->setAtticLimits({s.number(QStringLiteral("Bin"), QStringLiteral("atticMaxFiles")),
                                    s.number(QStringLiteral("Bin"), QStringLiteral("atticMaxVersions")),
@@ -3942,6 +3960,10 @@ void MainWindow::applySettings() {
     o.positionBarSnap = s.value(tl, QStringLiteral("positionBarSnap")).toBool();
     o.segmentDragSnap = s.value(tl, QStringLiteral("segmentDragSnap")).toBool();
     o.editFromBin = s.flag(QStringLiteral("Bin"), QStringLiteral("editFromBin"));
+    // Interface settings, Timeline and Viewers tab (p.1201-1202).
+    const QString iface = QStringLiteral("Interface");
+    o.background = s.flag(iface, QStringLiteral("timelineBackground")) ? QColor(s.text(iface, QStringLiteral("timelineBackgroundColor"))) : QColor();
+    o.blendBackground = s.flag(iface, QStringLiteral("timelineBlend"));
     o.defaultSyncLocks = s.value(tl, QStringLiteral("defaultSyncLocks")).toBool();
     o.selectFiller = s.value(tl, QStringLiteral("selectFiller")).toBool();
     o.openEffectEditor = s.value(tl, QStringLiteral("openEffectEditor")).toBool();

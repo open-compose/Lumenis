@@ -4,12 +4,14 @@
 #include "lumenis/ui/theme.h"
 
 #include <QApplication>
-#include <QDragEnterEvent>
 #include <QDrag>
+#include <QDragEnterEvent>
+#include <QIcon>
 #include <QMenu>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPixmap>
 #include <QSplitter>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -355,6 +357,18 @@ void BinDockArea::removeGroup(BinTabGroup* group) {
 
 void BinDockArea::setTitle(BinView* view, const QString& title) {
     if (BinTabGroup* g = groupOf(view)) g->setTabText(g->indexOf(view), title);
+}
+
+void BinDockArea::setTabColor(BinView* view, const QColor& color) {
+    BinTabGroup* g = groupOf(view);
+    if (!g) return;
+    QIcon icon;
+    if (color.isValid()) {
+        QPixmap swatch(12, 12);
+        swatch.fill(color);
+        icon = QIcon(swatch);
+    }
+    g->setTabIcon(g->indexOf(view), icon);
 }
 
 void BinDockArea::showView(BinView* view) {
