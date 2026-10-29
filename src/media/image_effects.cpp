@@ -94,6 +94,23 @@ QJsonValue parameterDefault(const model::Effect& e, const QString& category, con
         if (name == QLatin1String("Opac.")) return 100;
         if (name == QLatin1String("Hor") || name == QLatin1String("Vert")) return 10;
     }
+    // Ours, so a key keys something until it is set: blue screens (black for Luma Key), Gain 20, Soft
+    // 10; the RGB Keyer's Level and SpectraMatte's Opacity at 100.
+    if (category == QLatin1String("Key Effects Key Parameters")) {
+        if (name == QLatin1String("Color controls")) return e.name == QLatin1String("Luma Key") ? QStringLiteral("#000000") : QStringLiteral("#0000ff");
+        if (name == QLatin1String("Gain")) return 20;
+        if (name == QLatin1String("Soft")) return 10;
+    }
+    if (category == QLatin1String("RGB Keyer Parameters")) {
+        if (name == QLatin1String("Key Color")) return QStringLiteral("#0000ff");
+        if (name == QLatin1String("Gain")) return 20;
+        if (name == QLatin1String("Soft")) return 10;
+        if (name == QLatin1String("Level")) return 100;
+    }
+    if (category == QLatin1String("SpectraMatte Parameters")) {
+        if (name == QLatin1String("Key Color")) return QStringLiteral("#0000ff");
+        if (name == QLatin1String("Opacity")) return 100;
+    }
     if (category == QLatin1String("14:9 Letterbox Position H Parameter") && name == QLatin1String("Position H")) {
         return 50; // ours: the slider's middle keeps the picture centred
     }
@@ -107,6 +124,10 @@ bool isImageEffect(const model::Effect& e) {
                                           QStringLiteral("Field Swap"), QStringLiteral("Resize"),      QStringLiteral("Mask"),
                                           QStringLiteral("Color Effect"), QStringLiteral("Blur Effect"), QStringLiteral("Mosaic Effect")};
         return names.contains(e.name);
+    }
+    if (e.category == QLatin1String("Key")) {
+        return e.name == QLatin1String("Luma Key") || e.name == QLatin1String("Chroma Key") || e.name == QLatin1String("RGB Keyer") ||
+               e.name == QLatin1String("SpectraMatte");
     }
     return filmMaskRatio(e) || is(e, "Film", "Mask") || is(e, "Film", "Blowup");
 }
@@ -125,6 +146,9 @@ Picture imageEffectPicture(const model::Effect& e, const Picture& layer, double 
     Picture out(width, height);
 
     if (e.name == QLatin1String("Color Effect")) return detail::colorEffectPicture(e, layer, time, span);
+    if (e.name == QLatin1String("Luma Key") || e.name == QLatin1String("Chroma Key")) return detail::lumaChromaKeyPicture(e, layer, time, span);
+    if (e.name == QLatin1String("RGB Keyer")) return detail::rgbKeyerPicture(e, layer, time, span);
+    if (e.name == QLatin1String("SpectraMatte")) return detail::spectraMattePicture(e, layer, time, span);
     if (e.name == QLatin1String("Blur Effect") || e.name == QLatin1String("Mosaic Effect")) {
         return detail::detailEffectPicture(e, layer, time, span);
     }

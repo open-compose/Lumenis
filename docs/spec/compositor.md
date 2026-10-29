@@ -43,7 +43,8 @@ picture resolver in `MainWindow::createPanels`. Test: `tst_compositor`.
   does; black ends stay black.
 * Swap Sources "Swaps the image source for the foreground and background layers of the effect" (p.495).
 * The 2D transitions (Box Wipe to Squeeze) are in docs/spec/wipes.md, the geometric image effects
-  (Picture-in-Picture, Resize, masks, Reformat) in docs/spec/image-effects.md. A transition effect not built
+  (Picture-in-Picture, Resize, masks, Reformat) in docs/spec/image-effects.md, the keys in
+  docs/spec/keys.md. A transition effect not built
   yet is a cut at the cut point until its step.
 
 ## Segment effects

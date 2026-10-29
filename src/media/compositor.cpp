@@ -200,6 +200,10 @@ Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture 
         // "On a transition, the incoming video appears inside the outgoing video" (p.458).
         return over(imageEffectPicture(e, incoming, time, model::EffectSpan(t.duration, true)), outgoing);
     }
+    if (e.category == QLatin1String("Key") && isImageEffect(e)) {
+        // Chroma Key on a transition (p.473). Ours: the incoming video keyed over the outgoing.
+        return over(imageEffectPicture(e, incoming, time, model::EffectSpan(t.duration, true)), outgoing);
+    }
     if (isWipe(e)) return wipePicture(e, std::move(outgoing), std::move(incoming), progress, time, model::EffectSpan(t.duration, true));
     const QString& name = e.name;
     if (name == QLatin1String("Dissolve")) return mix(outgoing, incoming, progress);
@@ -214,6 +218,34 @@ Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture 
     return {};
 }
 
+// Matte Key: "A three-layer track effect. The bottom layer is the background image, the middle layer is
+// the foreground image, and the top layer contains the grayscale matte or alpha channel" (FX Guide
+// p.474). `withForeground` is the foreground over the background, `background` what lay under the
+// foreground. Ours: the matte's brightness is the foreground's opacity; the Foreground's Invert Key,
+// Level and Show Alpha (p.495) apply.
+Picture matteKeyPicture(const model::Effect& e, const Picture& background, const Picture& withForeground, const Picture& matte,
+                        double time, const model::EffectSpan& span) {
+    const QString fg = QStringLiteral("Foreground");
+    const bool invert = parameterFlag(e, fg, QStringLiteral("Invert Key"));
+    const bool showAlpha = parameterFlag(e, fg, QStringLiteral("Show Alpha"));
+    const float level = static_cast<float>(std::clamp(model::numberAt(e, fg, QStringLiteral("Level"), time, span).value_or(100.0), 0.0, 100.0) / 100.0);
+    Picture out(withForeground.width(), withForeground.height());
+    for (std::size_t i = 0; i < out.data().size(); i += 4) {
+        const float* m = &matte.data()[i];
+        float a = std::clamp(0.2126f * m[0] + 0.7152f * m[1] + 0.0722f * m[2], 0.0f, 1.0f);
+        if (invert) a = 1.0f - a;
+        a *= level;
+        float* o = &out.data()[i];
+        if (showAlpha) {
+            o[0] = o[1] = o[2] = a;
+            o[3] = 1.0f;
+            continue;
+        }
+        for (std::size_t c = 0; c < 4; ++c) o[c] = background.data()[i + c] * (1.0f - a) + withForeground.data()[i + c] * a;
+    }
+    return out;
+}
+
 } // namespace
 
 Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
@@ -221,7 +253,12 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
     const int h = c.size.height();
     Picture result(w, h);
     if (!c.sequence || w <= 0 || h <= 0) return result;
+    // What lay below the track under the one being added, for Matte Key's three layers.
+    Picture beneath(w, h);
+    Picture lastStart(w, h);
     for (const QString& name : c.tracks) {
+        beneath = std::move(lastStart);
+        lastStart = result;
         const auto tf = trackFrame(*c.sequence, name, frame);
         if (!tf) continue;
         Picture layer;
@@ -246,6 +283,11 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             const std::int64_t length = tf->segment->length;
             const double time = length > 1 ? static_cast<double>(tf->offset) / static_cast<double>(length - 1) : 0.0;
             const bool keyed = !model::keyframesOf(e, foreground, level).keys.isEmpty();
+            if (e.category == QLatin1String("Key") && e.name == QLatin1String("Matte Key")) {
+                result = matteKeyPicture(e, beneath, result, layer, time, length);
+                result.quantize(c.precision);
+                continue;
+            }
             if (isImageEffect(e)) {
                 layer = imageEffectPicture(e, layer, time, length);
                 layer.quantize(c.precision);

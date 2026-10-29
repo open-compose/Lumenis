@@ -367,6 +367,15 @@ private slots:
         QVERIFY(rig.v1(1).effect->parameters.value(color).toObject().value("Chroma Adjust Parameters: Invert").toBool());
         QVERIFY(!luma->isChecked());
         QCOMPARE(rig.editor.slider(color, QStringLiteral("Red"))->value(), 100);
+        // A Chroma Key's Gain starts at 20 (ours); its Secondary Key and Spill Suppression Gains, which
+        // share the name, are stored apart.
+        QVERIFY(rig.timeline.dropEffect(QStringLiteral("V1"), 70, effect("Key", "Chroma Key")));
+        rig.composer.moveTo(MonitorId::Record, 73);
+        QCOMPARE(rig.editor.effectName(), QStringLiteral("Chroma Key"));
+        QCOMPARE(rig.editor.slider(QStringLiteral("Key Effects Key Parameters"), QStringLiteral("Gain"))->value(), 20);
+        const QString more = QStringLiteral("Chroma Key Profile, Secondary Key, and Spill Suppression Parameters");
+        QVERIFY(rig.editor.slider(more, QStringLiteral("Gain")));
+        QVERIFY(rig.editor.slider(more, QStringLiteral("Spill Suppression Parameters: Gain")));
     }
 
     void transitionParameters() {

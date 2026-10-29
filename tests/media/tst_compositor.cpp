@@ -512,6 +512,100 @@ private slots:
         QCOMPARE(tiled.pixelColor(30, 0), tiled.pixelColor(47, 23));
     }
 
+    void keys() {
+        // The Key effects (docs/spec/keys.md) on single pixels: their alpha says what of the tracks below
+        // shows through.
+        auto keyed = [](const QString& name, const QColor& in, QJsonObject params = {}) {
+            const Effect e{QStringLiteral("Key"), name, std::move(params)};
+            return imageEffectPicture(e, Picture::solid(1, 1, in), 0.0, EffectSpan(10));
+        };
+        auto alpha = [&](const QString& name, const QColor& in, QJsonObject params = {}) {
+            return keyed(name, in, std::move(params)).pixel(0, 0)[3];
+        };
+        const QColor blue(0, 0, 255), red(255, 0, 0), green(0, 255, 0), black(0, 0, 0), white(255, 255, 255);
+        const QString chroma = QStringLiteral("Chroma Key");
+        const QString luma = QStringLiteral("Luma Key");
+        // Until set, Chroma Key keys blue and Luma Key black (ours).
+        QCOMPARE(alpha(chroma, blue), 0.0f);
+        QCOMPARE(alpha(chroma, red), 1.0f);
+        QCOMPARE(alpha(luma, black), 0.0f);
+        QCOMPARE(alpha(luma, white), 1.0f);
+        // Gain "0 (shows only the foreground) to 63 (replaces all the foreground video ...)" (p.548).
+        const QString keyCat = QStringLiteral("Key Effects Key Parameters");
+        QCOMPARE(alpha(chroma, blue, {{keyCat, QJsonObject{{QStringLiteral("Gain"), 0}}}}), 1.0f);
+        QCOMPARE(alpha(chroma, red, {{keyCat, QJsonObject{{QStringLiteral("Gain"), 63}}}}), 0.0f);
+        // A green key colour keys green, not blue.
+        const QJsonObject greenKey{{keyCat, QJsonObject{{QStringLiteral("Color controls"), QStringLiteral("#00ff00")}}}};
+        QCOMPARE(alpha(chroma, green, greenKey), 0.0f);
+        QCOMPARE(alpha(chroma, blue, greenKey), 1.0f);
+        // The Secondary Key keys a second colour (p.549).
+        const QString more = QStringLiteral("Chroma Key Profile, Secondary Key, and Spill Suppression Parameters");
+        QJsonObject both = greenKey;
+        both.insert(more, QJsonObject{{QStringLiteral("Color controls"), QStringLiteral("#0000ff")}, {QStringLiteral("Gain"), 20}});
+        QCOMPARE(alpha(chroma, blue, both), 0.0f);
+        // Spill Suppression greys colours near its own (p.550).
+        const QJsonObject spill{{keyCat, QJsonObject{{QStringLiteral("Color controls"), QStringLiteral("#00ff00")}}},
+                                {more, QJsonObject{{QStringLiteral("Spill Suppression Parameters: Color controls"), QStringLiteral("#0000ff")},
+                                                   {QStringLiteral("Spill Suppression Parameters: Gain"), 30}}}};
+        const QColor spilt = keyed(chroma, QColor(60, 60, 200), spill).toImage().pixelColor(0, 0);
+        QVERIFY(std::abs(spilt.red() - spilt.blue()) < 5);
+        // Foreground: Invert Key, Level and Show Alpha (p.495).
+        const QString fg = QStringLiteral("Foreground");
+        QCOMPARE(alpha(chroma, blue, {{fg, QJsonObject{{QStringLiteral("Invert Key"), true}}}}), 1.0f);
+        QCOMPARE(alpha(chroma, red, {{fg, QJsonObject{{QStringLiteral("Level"), 50}}}}), 0.5f);
+        QCOMPARE(keyed(chroma, red, {{fg, QJsonObject{{QStringLiteral("Show Alpha"), true}}}}).toImage().pixelColor(0, 0), white);
+        // The RGB Keyer (p.550-551): blue keyed, Reverse and Level.
+        const QString rgb = QStringLiteral("RGB Keyer");
+        const QString rgbCat = QStringLiteral("RGB Keyer Parameters");
+        QCOMPARE(alpha(rgb, blue), 0.0f);
+        QCOMPARE(alpha(rgb, red), 1.0f);
+        QCOMPARE(alpha(rgb, blue, {{rgbCat, QJsonObject{{QStringLiteral("Reverse"), true}}}}), 1.0f);
+        QCOMPARE(alpha(rgb, red, {{rgbCat, QJsonObject{{QStringLiteral("Level"), 25}}}}), 0.25f);
+        // SpectraMatte (p.551-556): blue keyed by its wedge; Bypass shows the foreground; Opacity.
+        const QString spectra = QStringLiteral("SpectraMatte");
+        const QString spectraCat = QStringLiteral("SpectraMatte Parameters");
+        QCOMPARE(alpha(spectra, blue), 0.0f);
+        QCOMPARE(alpha(spectra, red), 1.0f);
+        QVERIFY(alpha(spectra, QColor(40, 40, 255)) < 0.2f); // near the key colour: mostly keyed
+        QCOMPARE(alpha(spectra, blue, {{spectraCat, QJsonObject{{QStringLiteral("Bypass"), true}}}}), 1.0f);
+        QCOMPARE(alpha(spectra, red, {{spectraCat, QJsonObject{{QStringLiteral("Opacity"), 50}}}}), 0.5f);
+        // A narrow wedge (Tolerance 10) leaves a purple-blue alone that the default 90 keys.
+        const QColor violet(90, 0, 255);
+        QVERIFY(alpha(spectra, violet) < 0.5f);
+        QCOMPARE(alpha(spectra, violet, {{spectraCat, QJsonObject{{QStringLiteral("Tolerance"), 10}}}}), 1.0f);
+        // Alpha Offset +100 brings the foreground back.
+        QCOMPARE(alpha(spectra, blue, {{spectraCat, QJsonObject{{QStringLiteral("Alpha Offset"), 100}}}}), 1.0f);
+    }
+
+    void keysInSequences() {
+        // Chroma Key on V2: the blue clip keyed out, V1's red shows.
+        Sequence seq = Sequence::withDefaultTracks();
+        seq.addTrack(TrackKind::Video);
+        seq.splice(QStringLiteral("V1"), 0, {clip(QStringLiteral("red"), 10)});
+        Segment top = clip(QStringLiteral("blue"), 10);
+        top.effect = Effect{QStringLiteral("Key"), QStringLiteral("Chroma Key"), {}};
+        seq.splice(QStringLiteral("V2"), 0, {top});
+        QCOMPARE(centre(composeImage(composition(seq, {QStringLiteral("V1"), QStringLiteral("V2")}), 3)), QColor(255, 0, 0));
+        // Matte Key (p.474): background V1 red, foreground V2 blue, matte V3. A white matte shows the
+        // foreground; inverted, the background; grey, half of each.
+        Sequence three = Sequence::withDefaultTracks();
+        three.addTrack(TrackKind::Video);
+        three.addTrack(TrackKind::Video);
+        three.splice(QStringLiteral("V1"), 0, {clip(QStringLiteral("red"), 10)});
+        three.splice(QStringLiteral("V2"), 0, {clip(QStringLiteral("blue"), 10)});
+        Segment matte = clip(QStringLiteral("white"), 10);
+        matte.effect = Effect{QStringLiteral("Key"), QStringLiteral("Matte Key"), {}};
+        three.splice(QStringLiteral("V3"), 0, {matte});
+        const Composition c = composition(three, {QStringLiteral("V1"), QStringLiteral("V2"), QStringLiteral("V3")});
+        QCOMPARE(centre(composeImage(c, 3)), QColor(0, 0, 255));
+        three.track(QStringLiteral("V3"))->segments[0].effect->parameters =
+            QJsonObject{{QStringLiteral("Foreground"), QJsonObject{{QStringLiteral("Invert Key"), true}}}};
+        QCOMPARE(centre(composeImage(c, 3)), QColor(255, 0, 0));
+        three.track(QStringLiteral("V3"))->segments[0].effect->parameters = {};
+        three.track(QStringLiteral("V3"))->segments[0].clipId = QStringLiteral("grey");
+        QVERIFY(near(centre(composeImage(c, 3)), QColor(127, 0, 128), 2));
+    }
+
     void reformat() {
         // "A Reformat effect works on all tracks below the track to which you apply it" (p.229): on
         // filler on V2, 16:9 Letterbox squeezes V1 to three quarters of the height, black bands above

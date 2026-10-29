@@ -919,7 +919,9 @@ phase of their own. They are done in three steps:
     6.3b2, the Color Effect, Blur and Mosaic over the whole picture, and Acceleration
     (`src/media/color_effects.cpp`, `model::numberAt`). So 6.3b is done. Pan and Scan's tools come with the Effect Preview's
     effect tools.
-  * 6.3c, Key: Luma Key, Chroma Key, RGB Keyer, Matte Key and SpectraMatte.
+  * 6.3c, Key: Luma Key, Chroma Key, RGB Keyer, Matte Key and SpectraMatte. Done (docs/spec/keys.md:
+    `src/media/key_effects.cpp`, Matte Key in the compositor); SpectraMatte's SpectraGraph and Luma
+    Curve wait.
   * 6.3d, Illusion FX (p.463-468) and the Generator's Timecode Burn-In (SubCap is Phase 7).
   Peel (a page curl) goes with the 3D effects (6.7); PlasmaWipe with 6.9; AniMatte, Paint, Scratch
   Removal and Stabilize with their chapters (6.7, 6.9).

@@ -6,6 +6,7 @@ add_library(lumenis_media STATIC
     effect_drawing.h
     image_effects.cpp
     color_effects.cpp
+    key_effects.cpp
     audio_fx.cpp
     audio_suite.cpp
     audio_input.cpp

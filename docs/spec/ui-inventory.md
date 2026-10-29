@@ -146,6 +146,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Cont, Gamma, Post, Solar, Hue direction) and order; Blur and Mosaic over the
   whole picture; Acceleration as a smoothstep blend; repeated parameter names
   stored as "<subcategory>: <name>".
+* The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
+  Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
+  colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as
+  the keyed incoming over the outgoing, Matte Key's matte as luma.
 * Volume and pan automation (docs/spec/automation.md):
   * pan automation takes the place of the clip pan instead of adding to it;
   * a -∞ keyframe ramps from -96 dB;

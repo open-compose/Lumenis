@@ -83,7 +83,8 @@ headers in `include/lumenis/<library>/`.
   rendering, docs/spec/audiosuite.md), `compositor.*` (sequence frames
   from the video tracks with their effects, docs/spec/compositor.md), `wipes.cpp` (the 2D
   transitions, docs/spec/wipes.md), `image_effects.cpp` and `color_effects.cpp` (Picture-in-Picture,
-  Resize, masks, Reformat, Color Effect, Blur, Mosaic, docs/spec/image-effects.md), `effect_drawing.*` (their shared sampling and borders), `mixdown.*`
+  Resize, masks, Reformat, Color Effect, Blur, Mosaic, docs/spec/image-effects.md), `key_effects.cpp`
+  (the keys, docs/spec/keys.md), `effect_drawing.*` (their shared sampling and borders), `mixdown.*`
   (Audio Mixdown, docs/spec/audio-mixdown.md), `surround.*` (speakers,
   monitor mixes and their folds, docs/spec/surround.md), `ltc.*` (audio
   timecode, docs/spec/clip-audio.md), `tone.*` (the calibration tone,

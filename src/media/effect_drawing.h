@@ -37,4 +37,10 @@ Picture colorEffectPicture(const model::Effect& effect, const Picture& layer, do
 // The Blur Effect and Mosaic Effect over the whole picture (color_effects.cpp).
 Picture detailEffectPicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
 
+// The Key effects (key_effects.cpp): Luma Key and Chroma Key, the RGB Keyer and SpectraMatte, each
+// keying the segment's picture so what is below shows through.
+Picture lumaChromaKeyPicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
+Picture rgbKeyerPicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
+Picture spectraMattePicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
+
 } // namespace lumenis::media::detail
