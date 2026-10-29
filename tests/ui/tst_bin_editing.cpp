@@ -25,6 +25,7 @@
 #include <QTreeView>
 
 #include <cmath>
+#include <memory>
 
 using namespace lumenis;
 using namespace lumenis::model;
@@ -106,8 +107,10 @@ struct Fixture {
         }
         return {};
     }
-    // Drags `mime` to `pos` and drops it there; whether the drop was taken.
-    bool drop(QMimeData* mime, const QPoint& pos) {
+    // Drags `data` to `pos` and drops it there; whether the drop was taken. Takes `data`.
+    bool drop(QMimeData* data, const QPoint& pos) {
+        const std::unique_ptr<QMimeData> owned(data);
+        const QMimeData* mime = owned.get();
         QWidget* view = timeline.view();
         QDragEnterEvent enter(pos, Qt::CopyAction, mime, Qt::LeftButton, Qt::NoModifier);
         QCoreApplication::sendEvent(view, &enter);
