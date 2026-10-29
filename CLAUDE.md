@@ -441,9 +441,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   fonts (docs/spec/interface-colors.md: "color" and "font" options in
   `SettingsDialog`, `BinAppearance`, `BinContainer::setSidebarAppearance`,
   `Composer::setViewerBackground`, `Timeline::backgroundColor`; test
-  `tst_interface_colors`), is done.
-  Next: the rest of U3 (Save single floating Bin Containers, Show local
-  media icons, Frame View borders and icons), then the monitor marker fix
+  `tst_interface_colors`), is done. U3h, the last Bin settings
+  (docs/spec/bin-settings.md: Frame view borders and icons, Show local media
+  icons with `MediaDatabase::hasMixedResolution`, single floating Bin
+  Containers in workspaces through `WorkspaceManager::setExtras`; test
+  `tst_bin_settings`), is done, so U3 is.
+  Next: the monitor marker fix
   (the oval and the marker's comment over the frame, no colour over the whole
   picture), then Phases 6, 7 and 8 in order. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before

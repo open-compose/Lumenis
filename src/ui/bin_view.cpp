@@ -107,8 +107,8 @@ QToolButton* toolButton(QWidget* parent, const QString& name, const QIcon& icon,
 }
 
 // A clip's frame: the head frame of a linked clip (p.250), once decoded;
-// otherwise black with the object's icon.
-void paintFrame(QPainter& p, const QRect& frame, model::BinItemKind kind, const QImage& picture = {}) {
+// otherwise black, with the object's icon unless `withIcon` is false.
+void paintFrame(QPainter& p, const QRect& frame, model::BinItemKind kind, const QImage& picture = {}, bool withIcon = true) {
     p.fillRect(frame, QColor(12, 12, 12));
     if (!picture.isNull()) {
         const QSize fit = picture.size().scaled(frame.size(), Qt::KeepAspectRatio);
@@ -119,6 +119,7 @@ void paintFrame(QPainter& p, const QRect& frame, model::BinItemKind kind, const 
     }
     p.setPen(QColor(70, 70, 70));
     p.drawRect(frame.adjusted(0, 0, -1, -1));
+    if (!withIcon) return;
     const int s = std::max(12, std::min(frame.width(), frame.height()) / 3);
     const QRect icon(frame.center() - QPoint(s / 2, s / 2), QSize(s, s));
     glyphIcon(iconFor(kind)).paint(&p, icon, Qt::AlignCenter, QIcon::Disabled);
@@ -153,8 +154,21 @@ public:
                           f.height());
         const bool selected = option.state & QStyle::State_Selected;
         if (selected) p->fillRect(frame.adjusted(-3, -3, 3, 3), option.palette.color(QPalette::Highlight));
-        paintFrame(*p, frame, static_cast<model::BinItemKind>(index.data(BinItemModel::kKindRole).toInt()),
-                   view_->picture(index.data(BinItemModel::kIdRole).toString(), f));
+        const auto kind = static_cast<model::BinItemKind>(index.data(BinItemModel::kKindRole).toInt());
+        const BinAppearance& look = BinAppearance::current();
+        // Frame View: Show Border Colors (p.1154): by object type, or the clip's colour.
+        const QColor border = look.frameBorders == BinAppearance::FrameBorders::Type
+                                  ? BinAppearance::typeColor(kind)
+                                  : index.data(BinItemModel::kColorRole).value<QColor>();
+        if (border.isValid()) p->fillRect(frame.adjusted(-2, -2, 2, 2), border);
+        const QImage picture = view_->picture(index.data(BinItemModel::kIdRole).toString(), f);
+        paintFrame(*p, frame, kind, picture, look.frameIcons);
+        // "Show icons displays the applicable bin item icon" (p.1154): in the corner of a picture.
+        if (look.frameIcons && !picture.isNull()) {
+            const QRect corner(frame.left() + 3, frame.top() + 3, 14, 14);
+            p->fillRect(corner.adjusted(-1, -1, 1, 1), QColor(0, 0, 0, 150));
+            glyphIcon(iconFor(kind)).paint(p, corner);
+        }
         const QRect text(cell.left() + 2, frame.bottom() + 3, cell.width() - 4, kRowHeight);
         p->setPen(option.palette.color(selected ? QPalette::BrightText : QPalette::WindowText));
         p->drawText(text, Qt::AlignHCenter | Qt::AlignTop,
@@ -538,7 +552,14 @@ QVariant BinItemModel::data(const QModelIndex& index, int role) const {
     }
     const QString h = heading(index.column());
     if (index.column() == kIconColumn) {
-        if (role == Qt::DecorationRole) return glyphIcon(iconFor(item.kind));
+        if (role == Qt::DecorationRole) {
+            // Show local media icons (p.1154): the icon in the colour the media calls for.
+            const BinAppearance& look = BinAppearance::current();
+            if (look.localMediaIcons && BinAppearance::mediaTint()) {
+                if (const QColor tint = BinAppearance::mediaTint()(item); tint.isValid()) return glyphIcon(iconFor(item.kind), tint);
+            }
+            return glyphIcon(iconFor(item.kind));
+        }
         return {};
     }
     if (h == QLatin1String("Color")) {
@@ -700,6 +721,27 @@ void BinFilterModel::setQuickFilter(const QString& text, const QStringList& head
 BinAppearance& BinAppearance::current() {
     static BinAppearance appearance;
     return appearance;
+}
+
+std::function<QColor(const model::BinItem&)>& BinAppearance::mediaTint() {
+    static std::function<QColor(const model::BinItem&)> tint;
+    return tint;
+}
+
+// "Blue - Precomputes and source side motion effects; Green - Master clips; Dark Green - Subclips and
+// Group clips; Red - Sequences" (p.1154). Ours: audio clips count as master clips; other objects get
+// no border.
+QColor BinAppearance::typeColor(model::BinItemKind kind) {
+    switch (kind) {
+    case model::BinItemKind::MotionEffect:
+    case model::BinItemKind::RenderedEffect: return QColor(60, 110, 220);
+    case model::BinItemKind::MasterClip:
+    case model::BinItemKind::AudioClip: return QColor(60, 190, 80);
+    case model::BinItemKind::Subclip:
+    case model::BinItemKind::Group: return QColor(30, 110, 50);
+    case model::BinItemKind::Sequence: return QColor(210, 50, 50);
+    default: return {};
+    }
 }
 
 bool& BinFilterModel::searchAllColumns() {
@@ -1363,6 +1405,12 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
 // column order and widths, selected headings, background colour, the view
 // mode, the Frame view, the status bar and the Bin View menu. `applying_`
 // stops the header's signals from writing these back into the document.
+void BinView::refreshAppearance() {
+    applyDisplay();
+    table_->viewport()->update();
+    frames_->viewport()->update();
+}
+
 void BinView::applyDisplay() {
     applying_ = true;
     const model::BinDisplay& d = document_.bin().display;

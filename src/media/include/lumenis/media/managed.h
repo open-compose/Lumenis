@@ -8,6 +8,7 @@
 #include <QHash>
 #include <QJsonObject>
 #include <QList>
+#include <QSet>
 #include <QSize>
 #include <QString>
 #include <QStringList>
@@ -225,6 +226,9 @@ public:
     // The media of the master clip with this MobID (its files' material
     // package), as for a clip imported from AAF (p.547).
     std::optional<MediaSet> setOf(const MobId& master) const;
+    // Whether the master clip with this MobID has video media at more than one resolution (Show local
+    // media icons' "mixed resolution", p.1154). Worked out once per change to the files.
+    bool hasMixedResolution(const MobId& master) const;
     // The projects with media on the drives.
     QStringList projects() const;
     // Points a managed clip at where its files are now. False if it is not
@@ -235,6 +239,8 @@ public:
 
 private:
     QHash<QString, MediaFileInfo> files_; // by path
+    // MobID (as text) -> the resolutions of its video files; rebuilt after files_ changes.
+    mutable std::optional<QHash<QString, QSet<QString>>> resolutions_;
 };
 
 // Deletes media files and forgets them (Delete Media, p.347-348). Only

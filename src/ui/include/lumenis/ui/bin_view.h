@@ -4,11 +4,14 @@
 #include "lumenis/model/bin_lock.h"
 
 #include <QAbstractTableModel>
+#include <QColor>
 #include <QListView>
 #include <QObject>
 #include <QScrollArea>
 #include <QSortFilterProxyModel>
 #include <QWidget>
+
+#include <functional>
 
 class QButtonGroup;
 class QComboBox;
@@ -313,13 +316,25 @@ private:
 // The Interface settings' Bins tab (p.1201), for every bin: whether bins show their own background
 // colour (Allow custom bin backgrounds), and only on their tabs; and a font and size that override
 // each bin's own (Override all bin fonts, Override all bin font sizes). BinContainer sets it.
+//
+// From the Bin settings (p.1154): Frame view borders coloured by object type or by clip colour, and
+// the object icons on the frames; and Show local media icons, which colours a clip's icon by what
+// `mediaTint` says (MainWindow gives it the media: blue for local, pink for mixed resolution).
 struct BinAppearance {
     bool backgrounds = true;
     bool tabsOnly = false;
     QString fontFamily; // empty: each bin's own
     int fontSize = 0;   // 0: each bin's own
+    enum class FrameBorders { Type, ClipColor };
+    FrameBorders frameBorders = FrameBorders::Type;
+    bool frameIcons = true;
+    bool localMediaIcons = false;
     bool operator==(const BinAppearance&) const = default;
     static BinAppearance& current();
+    // The icon colour for a clip with Show local media icons; an invalid colour leaves it as it is.
+    static std::function<QColor(const model::BinItem&)>& mediaTint();
+    // A frame's border colour in the Frame view by object type (p.1154); invalid for no border.
+    static QColor typeColor(model::BinItemKind kind);
 };
 
 // BinFilterModel and one selection model, so a selection survives switching
@@ -331,7 +346,7 @@ class BinView : public QWidget {
 public:
     // File > Input, offered in the fast menu and on right-click (p.315).
     // Redraws after BinAppearance::current() changed.
-    void refreshAppearance() { applyDisplay(); }
+    void refreshAppearance();
     void setInputMenu(QMenu* menu) { inputMenu_ = menu; }
     // `fastMenu` is the Bin menu, also offered from the bin (p.259); its
     // actions are shared, not copied, and it may be null. The document must

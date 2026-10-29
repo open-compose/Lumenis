@@ -92,6 +92,7 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPlainTextEdit>
+#include <QPointer>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QScreen>
@@ -174,6 +175,29 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     for (const QString& name : workspaces_->names()) {
         workspaces_->setDefaultLayout(name, defaultLayout());
     }
+    // "Save single floating Bin Containers in Workspaces" (p.1153): a floating Bin Container holding
+    // one bin is kept with the workspace, its bin and place, and opens again with it. Others are left
+    // as they are.
+    workspaces_->setExtras(
+        [this]() -> QJsonObject {
+            if (!settings_ || !binContainer_ || !settings_->flag(QStringLiteral("Bin"), QStringLiteral("saveSingleFloating"))) return {};
+            QJsonArray single;
+            for (const QJsonValue& f : binContainer_->binLayout().value(QStringLiteral("floating")).toArray()) {
+                if (f.toObject().value(QStringLiteral("bins")).toArray().size() == 1) single.append(f);
+            }
+            return single.isEmpty() ? QJsonObject() : QJsonObject{{QStringLiteral("floatingBins"), single}};
+        },
+        [this](const QJsonObject& extras) {
+            if (!settings_ || !binContainer_ || !settings_->flag(QStringLiteral("Bin"), QStringLiteral("saveSingleFloating"))) return;
+            for (const QJsonValue& fv : extras.value(QStringLiteral("floatingBins")).toArray()) {
+                const QJsonObject f = fv.toObject();
+                const QJsonArray g = f.value(QStringLiteral("geometry")).toArray();
+                const QRect rect(g.at(0).toInt(), g.at(1).toInt(), g.at(2).toInt(520), g.at(3).toInt(360));
+                if (BinDocument* d = binContainer_->openBin(f.value(QStringLiteral("bins")).toArray().at(0).toString())) {
+                    binContainer_->floatBin(d, rect);
+                }
+            }
+        });
 
     // The central area: the docked panels, with the workspace toolbar along its right edge.
     auto* area = new QWidget(this);
@@ -201,6 +225,26 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     frames_ = new MediaFrames(this);
     audio_ = std::make_unique<media::AudioPlayer>();
     createPanels();
+    // Show local media icons (p.1154): "Clip icons will appear blue to indicate the media is local or
+    // pink to indicate mixed resolution." Ours: local is every one of the clip's files there and none
+    // on shared storage (model::isSharedLocation); mixed resolution is video media of the clip's MobID
+    // at more than one resolution in the media database.
+    BinAppearance::mediaTint() = [self = QPointer<MainWindow>(this)](const model::BinItem& item) -> QColor {
+        if (!self) return {};
+        if (item.kind != model::BinItemKind::MasterClip && item.kind != model::BinItemKind::Subclip &&
+            item.kind != model::BinItemKind::AudioClip) {
+            return {};
+        }
+        if (self->mediaDb_.hasMixedResolution(model::mobIdOf(item))) return QColor(235, 120, 200);
+        const auto link = media::linkOf(item);
+        if (!link || link->unlinked) return {};
+        const QStringList files = link->files();
+        if (files.isEmpty()) return {};
+        for (const QString& file : files) {
+            if (!QFileInfo::exists(file) || model::isSharedLocation(file)) return {};
+        }
+        return QColor(80, 140, 240);
+    };
     createTools();
     settings_ = new Settings(this);
     toolTips_ = new ToolTipFilter(this);
@@ -231,6 +275,7 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
 }
 
 MainWindow::~MainWindow() {
+    BinAppearance::mediaTint() = nullptr;
     // An edit in progress (a bin being named) is committed now, while every
     // view is alive, not by the focus change as the window comes down.
     if (QWidget* focused = QApplication::focusWidget(); focused && isAncestorOf(focused)) focused->clearFocus();
@@ -3862,6 +3907,12 @@ void MainWindow::applySettings() {
         look.tabsOnly = s.flag(ui, QStringLiteral("binBackgroundTabsOnly"));
         if (s.flag(ui, QStringLiteral("overrideBinFonts"))) look.fontFamily = s.text(ui, QStringLiteral("overrideBinFont"));
         if (s.flag(ui, QStringLiteral("overrideBinFontSizes"))) look.fontSize = s.number(ui, QStringLiteral("overrideBinFontSize"));
+        // Bin settings (p.1154): the Frame view's borders and icons, and Show local media icons.
+        const QString bin = QStringLiteral("Bin");
+        look.frameBorders = s.text(bin, QStringLiteral("frameBorders")) == QLatin1String("clip") ? BinAppearance::FrameBorders::ClipColor
+                                                                                                 : BinAppearance::FrameBorders::Type;
+        look.frameIcons = s.flag(bin, QStringLiteral("frameIcons"));
+        look.localMediaIcons = s.flag(bin, QStringLiteral("localMediaIcons"));
         binContainer_->setBinAppearance(look);
         binContainer_->setSidebarAppearance(
             s.flag(ui, QStringLiteral("customSidebarBackground")) ? QColor(s.text(ui, QStringLiteral("sidebarBackground"))) : QColor(),

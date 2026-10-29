@@ -72,6 +72,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Timeline and Markers tabs list, and Ctrl+G as a keyboard-only Find Again command.
 * AutoSequence (docs/spec/autosequence.md): which of two related clips is kept, the track layout of
   Camera groups, and the name when there is no Tape or Source File.
+* The last Bin settings (docs/spec/bin-settings.md): no Frame view border for objects the guide does not
+  colour, the icon in a frame's corner, what local and mixed resolution mean, and only one-bin floating
+  Bin Containers kept with workspaces, others left as they are.
 * Interface colours and fonts (docs/spec/interface-colors.md): a colour option of its own under each
   check box, the Sidebar's quick filter keeping the theme, tabs-only bin colour as a square icon, the
   viewer background only around the pictures, and blending half and half.

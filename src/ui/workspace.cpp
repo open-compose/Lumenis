@@ -100,6 +100,15 @@ QJsonObject WorkspaceManager::defaultFor(const QString& name) const {
 
 void WorkspaceManager::apply(const QJsonObject& layout) {
     panels_.restoreLayout(layout);
+    if (restoreExtras_) restoreExtras_(layout.value(QStringLiteral("extras")).toObject());
+}
+
+QJsonObject WorkspaceManager::capture() const {
+    QJsonObject layout = panels_.saveLayout();
+    if (saveExtras_) {
+        if (const QJsonObject extras = saveExtras_(); !extras.isEmpty()) layout.insert(QStringLiteral("extras"), extras);
+    }
+    return layout;
 }
 
 // The layout used is the first that exists of: last known (with Last Known State), saved, default.
@@ -108,7 +117,7 @@ bool WorkspaceManager::activate(const QString& name) {
     if (!target) return false;
     if (target->name == active_) return true;
     if (Workspace* current = find(active_)) {
-        current->lastKnown = panels_.saveLayout();
+        current->lastKnown = capture();
     }
     QJsonObject layout = moveBehavior_ == MoveBehavior::LastKnownState ? target->lastKnown : QJsonObject();
     if (layout.isEmpty()) layout = target->saved;
@@ -142,9 +151,9 @@ bool WorkspaceManager::create(const QString& requested, const QString& basedOn, 
     if (base) {
         w.saved = base->saved.isEmpty() ? defaultFor(base->name) : base->saved;
     } else {
-        w.saved = panels_.saveLayout();
+        w.saved = capture();
     }
-    if (Workspace* current = find(active_)) current->lastKnown = panels_.saveLayout();
+    if (Workspace* current = find(active_)) current->lastKnown = capture();
     workspaces_.push_back(w);
     active_ = name;
     if (base) apply(w.saved);
@@ -175,7 +184,7 @@ bool WorkspaceManager::removeActive() {
 // Also makes it the last known layout, so switching back shows what was saved.
 void WorkspaceManager::saveCurrent() {
     if (Workspace* w = find(active_)) {
-        w->saved = panels_.saveLayout();
+        w->saved = capture();
         w->lastKnown = w->saved;
         emit changed();
     }
@@ -209,7 +218,7 @@ void WorkspaceManager::setBarMode(BarMode mode) {
 
 // Not const: it first records the current arrangement as the active workspace's last known layout.
 QList<WorkspaceManager::Entry> WorkspaceManager::entries() {
-    if (Workspace* w = find(active_)) w->lastKnown = panels_.saveLayout();
+    if (Workspace* w = find(active_)) w->lastKnown = capture();
     QList<Entry> out;
     for (const Workspace& w : workspaces_) out << Entry{w.name, w.basedOn, w.saved, w.lastKnown};
     return out;
@@ -299,7 +308,7 @@ void WorkspaceManager::load(QSettings& settings) {
 }
 
 void WorkspaceManager::save(QSettings& settings) {
-    if (Workspace* w = find(active_)) w->lastKnown = panels_.saveLayout();
+    if (Workspace* w = find(active_)) w->lastKnown = capture();
     settings.remove(QLatin1String(kGroup));
     settings.beginGroup(QLatin1String(kGroup));
     settings.setValue(QStringLiteral("version"), kStoreVersion);

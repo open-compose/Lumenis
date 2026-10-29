@@ -6,6 +6,7 @@
 #include <QString>
 #include <QStringList>
 
+#include <functional>
 #include <vector>
 
 class QSettings;
@@ -32,6 +33,14 @@ public:
     // Starts with the built-in workspaces, Edit active. A workspace's layout is a PanelManager::saveLayout()
     // object, applied with restoreLayout().
     explicit WorkspaceManager(PanelManager& panels, QObject* parent = nullptr);
+
+    // What a layout keeps besides the panels: `save` gives an object stored under "extras" each time a
+    // layout is taken, and `restore` gets it back (an empty object when the layout has none) each time
+    // one is applied. MainWindow keeps single floating Bin Containers this way (Bin settings, p.1153).
+    void setExtras(std::function<QJsonObject()> save, std::function<void(const QJsonObject&)> restore) {
+        saveExtras_ = std::move(save);
+        restoreExtras_ = std::move(restore);
+    }
 
     // The layout a built-in workspace starts with. Workspaces without their
     // own default use the first one set.
@@ -103,6 +112,10 @@ signals:
     void changed();
 
 private:
+    // The panels' layout with the extras.
+    QJsonObject capture() const;
+    std::function<QJsonObject()> saveExtras_;
+    std::function<void(const QJsonObject&)> restoreExtras_;
     struct Workspace {
         QString name;
         QString basedOn; // for Restore Current to Default

@@ -86,16 +86,16 @@
              "choices": [{"value": "top", "label": "Top of the Bin Container Sidebar"}, {"value": "bottom", "label": "Bottom of the Bin Container Sidebar"}]},
             {"key": "quickFilter", "type": "choice", "style": "menu", "label": "If no column is selected in the Bin, typing in the Quick Filter text box will:", "default": "name", "page": 1153,
              "choices": [{"value": "name", "label": "Search the Name column only"}, {"value": "all", "label": "Search all columns"}]},
-            {"key": "saveSingleFloating", "type": "bool", "label": "Save single floating Bin Containers in Workspaces", "default": false, "page": 1153, "later": true},
+            {"key": "saveSingleFloating", "type": "bool", "label": "Save single floating Bin Containers in Workspaces", "default": false, "page": 1153},
             {"key": "openBin", "type": "choice", "style": "radio", "label": "Creating a new Bin or opening a closed Bin:", "default": "tab", "page": 1153,
              "choices": [{"value": "tab", "label": "Tabs the Bin into the active pane in a Bin Container"}, {"value": "float", "label": "Float the bin"}]},
             {"key": "editFromBin", "type": "bool", "label": "Enable edit from bin (Splice, Overwrite)", "default": false, "page": 1153},
             {"key": "atticKeepOne", "type": "bool", "label": "Always keep at least one version in Attic", "default": true, "page": 1154},
-            {"key": "localMediaIcons", "type": "bool", "label": "Show local media icons", "default": false, "page": 1154, "later": true},
+            {"key": "localMediaIcons", "type": "bool", "label": "Show local media icons", "default": false, "page": 1154},
             {"key": "skipLockedPrompts", "type": "bool", "label": "Skip prompts to save locked bins on Auto-Save", "default": false, "page": 1154},
-            {"key": "frameBorders", "type": "choice", "style": "radio", "label": "Frame View: Show Border Colors:", "default": "type", "page": 1154, "later": true,
+            {"key": "frameBorders", "type": "choice", "style": "radio", "label": "Frame View: Show Border Colors:", "default": "type", "page": 1154,
              "choices": [{"value": "type", "label": "Use color based on object type"}, {"value": "clip", "label": "Use clip color"}]},
-            {"key": "frameIcons", "type": "bool", "label": "Show icons", "default": true, "page": 1154, "later": true}
+            {"key": "frameIcons", "type": "bool", "label": "Show icons", "default": true, "page": 1154}
           ]
         }
       ]

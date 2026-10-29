@@ -1024,6 +1024,20 @@ Link MediaSet::link(std::int64_t first) const {
 
 void MediaDatabase::clear() {
     files_.clear();
+    resolutions_.reset();
+}
+
+bool MediaDatabase::hasMixedResolution(const MobId& master) const {
+    if (master.isNull()) return false;
+    if (!resolutions_) {
+        resolutions_.emplace();
+        for (const MediaFileInfo& f : files_) {
+            if (!f.material.isNull() && f.track.startsWith(QLatin1Char('V'))) {
+                (*resolutions_)[QString::fromStdString(f.material.toString())].insert(f.resolution);
+            }
+        }
+    }
+    return resolutions_->value(QString::fromStdString(master.toString())).size() > 1;
 }
 
 // Reads every MXF folder of each drive. A file is read again (readMediaFile()) only when its size or
@@ -1032,6 +1046,7 @@ void MediaDatabase::clear() {
 // What earlier scans found on the drives scanned now is forgotten first, so deleted files go; files on
 // other drives are kept (clear() forgets them too).
 void MediaDatabase::scan(const QStringList& drives) {
+    resolutions_.reset();
     for (const QString& drive : drives) {
         const QDir mxf(QDir(mediaFilesFolder(drive)).filePath(QStringLiteral("MXF")));
         const QString under = QDir::cleanPath(mxf.absolutePath()) + QLatin1Char('/');
@@ -1142,6 +1157,7 @@ QStringList MediaDatabase::projects() const {
 
 void MediaDatabase::remove(const QString& path) {
     files_.remove(path);
+    resolutions_.reset();
 }
 
 // The set of the first file whose material package is that MobID.
