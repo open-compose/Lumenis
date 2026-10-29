@@ -6,6 +6,7 @@
 // redone to its end, and each state is compared by hash with the one recorded on the way (gate 2).
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/automation.h"
+#include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/surround_pan.h"
@@ -129,9 +130,13 @@ struct Run {
         s.clipId = c.id;
         s.binId = QStringLiteral("bin");
         s.name = c.name;
-        s.sourceTrack = a.size() > 3 ? a.at(3).toString() : track;
+        s.sourceTrack = a.size() > 3 && a.at(3).isString() ? a.at(3).toString() : track;
         s.sourceIn = a.at(1).toInteger();
         s.length = a.at(2).toInteger();
+        // A trailing object can give the segment an effect, as model::Effect::toJson writes it.
+        if (a.last().isObject() && a.last().toObject().contains(QStringLiteral("effect"))) {
+            s.effect = model::Effect::fromJson(a.last().toObject().value(QStringLiteral("effect")).toObject());
+        }
         return s;
     }
 
@@ -595,6 +600,21 @@ struct Run {
                         extra.insert(QLatin1String(name), list);
                     }
                     if (g.eq) extra.insert(QStringLiteral("eq"), eqToJson(*g.eq));
+                    // Effect keyframes by parameter as [[position, value], ...]: frames for Fixed
+                    // keyframes, else the effect's time rounded to 1/1000 (FX Guide p.124).
+                    if (g.effect) {
+                        QJsonObject keyed;
+                        for (const QString& k : model::keyframedParameters(*g.effect)) {
+                            const model::ParameterKeyframes p =
+                                model::keyframesOf(*g.effect, k.section(QLatin1Char('/'), 0, 0), k.section(QLatin1Char('/'), 1));
+                            QJsonArray list;
+                            for (const model::EffectKeyframe& key : p.keys) {
+                                list.append(QJsonArray{p.fixed ? key.at : std::round(key.at * 1000.0) / 1000.0, key.value});
+                            }
+                            keyed.insert(k, list);
+                        }
+                        if (!keyed.isEmpty()) extra.insert(QStringLiteral("keyframes"), keyed);
+                    }
                     if (g.audioSuite) {
                         // [plug-in, {the values not at their defaults}].
                         QJsonObject params;

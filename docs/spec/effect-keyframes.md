@@ -2,12 +2,19 @@
 
 Pages are the FX Guide's (2025.12, the same in 2026.8).
 
-Code: `src/model/effect_keyframes.*` (the model and evaluation), the compositor's use of them in
-`src/media/compositor.cpp`, and the Fade Effect button, `Timeline::fadeEffects` (`src/ui/timeline.*`).
-Tests: `tst_effect_keyframes`, `tst_compositor` (`keyframedLevels`), `tst_effects` (`fadeEffect`).
+Code: `src/model/effect_keyframes.*` (the model, evaluation and the keyframe operations), the
+compositor's use of them in `src/media/compositor.cpp`, Fixed keyframes through trims in
+`src/model/sequence.cpp`, the Effect Editor's keyframe tracks and graphs
+(`src/ui/effect_editor_keyframes.cpp`, `KeyframeTrack` in `effect_editor.h`), and the Fade Effect
+button, `Timeline::fadeEffects` (`src/ui/timeline.*`). Tests: `tst_effect_keyframes`,
+`tst_compositor` (`keyframedLevels`), `tst_effects` (`fadeEffect`), `tst_effect_keyframes_ui`,
+scenario `26-fixed-keyframes-trim.json`.
 
-6.2a, this page, is the model, evaluation and the Fade Effect button. 6.2b is the Effect Editor's
-keyframe tracks and graphs, and trims keeping Fixed keyframes in place.
+6.2a was the model, evaluation and the Fade Effect button; 6.2b1 the keyframe operations, the Effect
+Editor's keyframe tracks, graphs and menus, and trims keeping Fixed keyframes in place. 6.2b2 is graph
+zoom and scroll, Zoom to Curve Height, Reset All Graph Views, copying and pasting keyframes, Bézier
+handles in the graphs, the rest of the Effect Editor shortcut menu and settings (p.131-132), and
+standard keyframes (p.132-134).
 
 ## The model
 
@@ -18,6 +25,21 @@ keyframe tracks and graphs, and trims keeping Fixed keyframes in place.
 * A keyframe has a position, a value (a number or a colour "#rrggbb") and, for Bézier, two
   direction handles. Each parameter has one interpolation, Elastic or Fixed timing, and Extrapolate
   or Hold.
+* "Effect parameters are keyframeable unless otherwise noted" (p.491).
+  `resources/effect_parameters.json` marks the parameters the Effects Reference says are not
+  (`"keyframeable": false`, 177 of them, p.491-581). Two notes are left unmarked because it is unclear
+  which parameters they cover: Paint's and FluidMotion's Mode parameters (p.537, p.567). SubCap's
+  Global Properties dialog (p.504) is marked under SubCap's "SubCap effect parameters are not
+  keyframeable" (p.501).
+* Ours: only sliders and colours take keyframes for now; flags and menus keep one value.
+
+## Time (`model::EffectSpan`)
+
+* A segment effect's frame f of n is at time f / (n - 1): its first frame is 0 and its last 1.
+* A transition's frame f of n is at its progress, (f + 1) / (n + 1), as the compositor blends it
+  (docs/spec/compositor.md), so Level keyed 0 and 100 at its ends is the same as no keyframes (ours).
+* Fixed keyframes are kept in frames and turned into times through the span; switching between Fixed
+  and Elastic keeps every keyframe at its time.
 
 ## Interpolation (p.120-122)
 
@@ -29,7 +51,7 @@ keyframe tracks and graphs, and trims keeping Fixed keyframes in place.
 * Bézier: smooth like Spline, with handles that shape the curve on each side of a keyframe (p.122).
   Ours: a handle left at zero follows the Spline's tangent, a third of the span long; the curve is
   solved for time by bisection.
-* Colours change channel by channel. Flags are not keyframed yet (6.2b).
+* Colours change channel by channel.
 
 ## Elastic and Fixed (p.124-125)
 
@@ -39,7 +61,9 @@ keyframe tracks and graphs, and trims keeping Fixed keyframes in place.
 * "When you use the Fixed option, Media Composer leaves the existing duration of your keyframe
   animation intact ... Fixed keyframes let you 'pin' a parameter change to a particular timecode"
   (p.124). Fixed positions are frames from the effect's first frame. Trims that add or remove frames
-  at the head move them by the frames added or removed (6.2b).
+  at a segment's head (roller trims and slides) move them by the frames added or removed, so they stay
+  on the same material (`model::shiftFixedKeyframes`); a slip leaves them (ours: p.124 speaks only of
+  trims).
 * "All keyframes for a parameter are either elastic or fixed" (p.125).
 
 ## Extrapolate and Hold (p.125-127)
@@ -54,15 +78,89 @@ keyframe tracks and graphs, and trims keeping Fixed keyframes in place.
   keyframes in time", over "the entire effect duration", for one parameter, a group or the whole
   effect. On "a transition effect that contains a Swap Sources button, Media Composer automatically
   enables the Swap Sources button when you reverse the keyframes on the entire effect" (p.124).
-  Ours: reversing it again turns Swap Sources off. `model::reverseKeyframes`; the Effect Editor's
-  menus come with 6.2b. Reverse Animation, its standard-keyframe form (p.124), is the same command.
+  Ours: reversing it again turns Swap Sources off. `model::reverseKeyframes`. Reverse Animation,
+  its standard-keyframe form (p.124), is the same command.
+
+## Moving, aligning and removing (p.106-116)
+
+* "You cannot move a keyframe past another keyframe" (p.114): a moved keyframe stops a frame short of
+  its neighbours (`model::moveKeyframe`). Keyframes can be moved outside the effect (p.113).
+* Align Keyframes moves the reference keyframe (the one selected last) to the position; other
+  selected keyframes keep their distance from it and deselected ones stay (p.114-116). "Align
+  Keyframes does not move the reference keyframe beyond an intervening keyframe ... the reference
+  keyframe moves to within one frame or field of it" (p.115). Ours: the selected keyframes move as a
+  group, so the nearest deselected keyframe stops them all. With every keyframe selected it is a slip.
+* Slip Keyframes moves every keyframe of the parameter so that the reference keyframe is at the
+  position (p.116).
+* Remove Redundant Keyframes (p.106-107): with Linear, a keyframe on the straight line between its
+  neighbours; with Shelf, one with its predecessor's value; with Spline and Bézier (where "Media
+  Composer might leave some keyframes that could be removed", p.107), only one in a flat run without
+  handles. The first and last stay.
+
+## The Effect Editor's keyframe tracks (p.94-105)
+
+* The Show/Hide Keyframe Graphs button "in the bottom right corner of the Effect Editor" shows them;
+  "Keyframe graphs are hidden when the Effect Editor first opens" (p.96).
+* "Effect track (gray), parameter group tracks (darker blue), parameter tracks (lighter blue)"
+  (p.95), each beside its row: the effect track by the top, a group track by each category's opener,
+  a parameter track by each parameter. Parameters that are not keyframeable have a plain dark track
+  in which the position can be dragged but no keyframe added (p.96); so does a group with none.
+  Ours: the tracks take 45% of the editor's width, the same for every row.
+* A slider's track has a triangular opener for its keyframe graph (p.96-97): the curve across the
+  effect, its height the parameter's range, its background "very dark grey" and darker while its
+  parameter is the active one (p.97). Ours: colours have tracks but no graphs.
+* Keyframes are triangles; a Fixed one also has a pin below it (ours: the guide's picture is not
+  described). Keyframe indicators in group and effect tracks stand for every keyframe of the group or
+  effect at that time and are darker (p.102). Selected keyframes are pink (p.111); a group or effect
+  indicator is pink only when all its keyframes are (p.103).
+* Selecting (p.111-112): clicking a keyframe selects it alone; Ctrl+click adds it or takes it away.
+  Clicking a keyframe that is already selected keeps the selection, so several can be dragged, and
+  makes it the reference (ours). With Set Position To Keyframe, on by default (ours), clicking a
+  keyframe moves the position to it (p.132). Clicking a track elsewhere moves the position (p.96).
+* Dragging (p.112-113): in a track a keyframe moves in time with every selected keyframe; in a graph a
+  drag changes the value of the selected keyframes of that parameter by the same amount, within its
+  range; Alt+Shift+drag moves in time only and Alt+drag both. A drag is one undo step.
+* Delete deletes the selected keyframes (p.105); Edit > Deselect All Keyframes deselects the active
+  parameter's keyframes, or with none active every keyframe (p.112).
+* Sliders show the value at the position. Changing a keyframed parameter sets its selected keyframes,
+  else the keyframe at the position, else adds one there: "You can also add keyframes automatically
+  by adjusting a parameter when you place the position indicator in a part of the keyframe graph that
+  has no keyframe" (p.103). The active parameter is the control last used, its name in bold (ours for
+  "a slider that you clicked is highlighted", p.107).
+
+## The tracks' shortcut menu (p.130)
+
+* Add Keyframe, Delete Keyframe, Add Start and End Keyframes ("at the first and last frames of your
+  effect"), Remove Redundant Keyframes, Select All Keyframes, Deselect All Keyframes, Align Keyframes,
+  Slip Keyframes, Reverse Keyframes, Shelf/Linear/Spline/Bézier, Fixed/Elastic and
+  Extrapolate/Hold, for the track's parameter, its group ("Apply to Group") or the whole effect
+  ("Apply to All"), the text shown on the track while the menu is open (p.104).
+* The options are checked when every keyframed parameter of the track has them. Ours: an option is
+  kept with a parameter's keyframes, so it applies to parameters that have keyframes.
+* Reverse Keyframes on the effect track reverses the whole effect, which also swaps a transition's
+  sources (p.124).
+
+## The Add Keyframe button and Go to Previous/Next Event (p.103-111, p.128, p.131-132)
+
+* The bottom row's Go to Previous Event and Go to Next Event move the position one keyframe left or
+  right and select the keyframes there; with none, the position does not move (p.128).
+* Add Keyframe opens the Add Keyframe Mode menu with the default command checked, and active so that a
+  second click runs it (p.104-105); Alt+click opens the Delete Keyframe Mode menu, which deletes the
+  selected keyframes of the parameters the command covers (p.105-106). The command chosen becomes the
+  default of both (p.105, p.107). Without Show Add Keyframe Mode Menu the button runs the default at
+  once (p.132).
+* The commands (p.107-111): Active Parameter; Active Group (a parameter in a subcategory takes only
+  its subcategory); Open Groups ("whether or not the group is enabled"); Enabled Groups (ours: groups
+  have no enable switches yet, so all); Open Graphs; All Parameters. Ours: the default is Add to Open
+  Groups, the guide's own example (p.107).
+* New keyframes take the parameter's value at the position and are selected (p.104).
+* The Effect Editor shortcut menu (right-click outside the tracks) has Set Position To Keyframe, Show
+  Add Keyframe Mode Menu and the six "Add Keyframes to ..." defaults (p.131-132); the rest of it
+  comes with 6.2b2.
 
 ## Where the compositor reads them
 
-* A segment effect at a frame is at (frames into the segment) / (its length - 1).
-* A transition's keyframes are placed in its progress, (frames into it + 1) / (its length + 1)
-  (docs/spec/compositor.md), so Level keyed 0 at the start and 100 at the end is the same as no
-  keyframes (ours).
+* At the effect's time (above) for the frame shown.
 * The dissolve family: the Foreground Level, when keyed, is how far through the blend the
   transition is; the Background Color can be keyed.
 * A segment effect with a keyed Foreground Level, and Superimpose, fade their layer by the Level

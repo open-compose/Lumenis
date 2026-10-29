@@ -4226,6 +4226,12 @@ void MainWindow::installPanelHandlers() {
     handle("tools.console", [this] { showTool(QStringLiteral("Console")); });
     handle("tools.effect_palette", [this] { showTool(QStringLiteral("EffectPalette")); });
     handle("tools.effect_editor", [this] { showTool(QStringLiteral("EffectEditor")); });
+    // Edit > Deselect All Keyframes (FX Guide p.112): "All keyframes in the enabled parameter's
+    // parameter track are deselected"; with no parameter active, every keyframe of the effect.
+    handle("edit.deselect_all_keyframes", [this] {
+        const QString active = effectEditor_->activeParameter();
+        effectEditor_->deselectAllKeyframes(active.isEmpty() ? QStringList() : QStringList{active});
+    });
     handle("tools.audio_mixer", [this] { showTool(QStringLiteral("AudioMixer")); });
     handle("tools.audio_eq", [this] { showTool(QStringLiteral("AudioEQ")); });
     handle("tools.audio_tool", [this] { showTool(QStringLiteral("AudioTool")); });

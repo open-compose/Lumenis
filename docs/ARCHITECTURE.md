@@ -103,7 +103,8 @@ headers in `include/lumenis/<library>/`.
   `interchange_dialogs.*` the Import EDL and Export Bin As dialogs.
 * **Effects.** The Effect Palette's list is `src/ui/resources/effects.json`
   and the Effect Editor's parameters `effect_parameters.json`; UI in
-  `effect_palette.*` and `effect_editor.*`; the model keeps effects on
+  `effect_palette.*` and `effect_editor.*` (its keyframe tracks and graphs in
+  `effect_editor_keyframes.cpp`); the model keeps effects on
   segments (`model::Effect`, `model::Transition`), their parameters'
   keyframes in `src/model/effect_keyframes.*` (docs/spec/effect-keyframes.md).
 * **Audio tools.** `audio_tools.*` (the Audio Mixer, docs/spec/audio-mixer.md, and the Audio Tool), `audio_groups.cpp` (the mixer's track sidebar and groups), `clip_audio_dialogs.*` (Apply Gain and Auto VO, with `src/model/clip_audio.*`, docs/spec/clip-audio.md), `multi_mix_dialog.*` (the Multi-Mix Tool, docs/spec/multi-mix.md),

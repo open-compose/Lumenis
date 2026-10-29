@@ -5,6 +5,8 @@
 
 #include <QTest>
 
+#include <cmath>
+
 using namespace lumenis::model;
 
 namespace {
@@ -124,7 +126,7 @@ private slots:
         QCOMPARE(level(e, 1.0), 0.0);
         QVERIFY(!e.parameters.value(kFg).toObject().value(QStringLiteral("Swap Sources")).toBool());
         // The whole of a transition: Swap Sources turns on.
-        reverseKeyframes(e, 101, {}, true);
+        reverseKeyframes(e, EffectSpan(101, true));
         QVERIFY(e.parameters.value(kFg).toObject().value(QStringLiteral("Swap Sources")).toBool());
         QCOMPARE(level(e, 0.25), 100.0);
         // Only the parameters named.
@@ -166,6 +168,127 @@ private slots:
         // Neither: no keyframes.
         fadeEffect(e, 101, 0, 0);
         QVERIFY(keyframedParameters(e).isEmpty());
+    }
+
+    void spans() {
+        // A segment effect's frames run 0 to 1; a transition's at its progress (ours, as the compositor).
+        const EffectSpan seg(11);
+        QCOMPARE(seg.timeOf(0), 0.0);
+        QCOMPARE(seg.timeOf(10), 1.0);
+        QCOMPARE(seg.frameOf(0.5), 5.0);
+        const EffectSpan tr(4, true);
+        QCOMPARE(tr.timeOf(0), 0.2);
+        QCOMPARE(tr.timeOf(3), 0.8);
+        QCOMPARE(tr.frameOf(0.4), 1.0);
+        // Fixed keyframes on a transition are in its frames.
+        Effect e;
+        setKeyframe(e, kFg, kLevel, tr.timeOf(1), tr, 0);
+        ParameterKeyframes p = keyframesOf(e, kFg, kLevel);
+        setFixed(p, true, tr);
+        QCOMPARE(p.keys.at(0).at, 1.0);
+        QCOMPARE(keyframeTime(p, p.keys.at(0), tr), 0.4);
+        setFixed(p, false, tr);
+        QCOMPARE(p.keys.at(0).at, 0.4);
+    }
+
+    void fixedThroughTrims() {
+        // "Fixed keyframes let you 'pin' a parameter change to a particular timecode" (p.124): a
+        // segment of 11 frames with Level 0 at frame 0 and 100 at frame 10; adding 5 frames at the
+        // head leaves the change on the same material, now at frames 5 to 15.
+        Effect e;
+        setKeyframe(e, kFg, kLevel, 0.0, 11, 0);
+        setKeyframe(e, kFg, kLevel, 1.0, 11, 100);
+        Effect elastic = e;
+        ParameterKeyframes p = keyframesOf(e, kFg, kLevel);
+        setFixed(p, true, 11);
+        setKeyframes(e, kFg, kLevel, p);
+        shiftFixedKeyframes(e, 5);
+        QCOMPARE(level(e, 0.0, 16), 0.0);
+        QCOMPARE(level(e, 5.0 / 15, 16), 0.0);
+        QCOMPARE(level(e, 10.0 / 15, 16), 50.0);
+        QCOMPARE(level(e, 1.0, 16), 100.0);
+        // Elastic keyframes scale with the new length (p.124) and do not move.
+        shiftFixedKeyframes(elastic, 5);
+        QCOMPARE(level(elastic, 0.5, 16), 50.0);
+    }
+
+    void moving() {
+        // "You cannot move a keyframe past another keyframe" (p.114): a frame short.
+        Effect e = withKeys(Interpolation::Linear, {{0.0, 0.0}, {0.5, 50.0}, {1.0, 100.0}});
+        ParameterKeyframes p = keyframesOf(e, kFg, kLevel);
+        QVERIFY(moveKeyframe(p, 1, 0.95, std::nullopt, 11));
+        QCOMPARE(p.keys.at(1).at, 0.9);
+        QVERIFY(moveKeyframe(p, 1, std::nullopt, 70.0, 11));
+        QCOMPARE(p.keys.at(1).value.toDouble(), 70.0);
+        QVERIFY(!moveKeyframe(p, 1, 0.9, 70.0, 11));
+        // The last keyframe can go outside the effect (p.113).
+        QVERIFY(moveKeyframe(p, 2, 1.3, std::nullopt, 11));
+        QCOMPARE(p.keys.at(2).at, 1.3);
+        QVERIFY(!moveKeyframe(p, 5, 0.2, std::nullopt, 11));
+    }
+
+    void alignAndSlip() {
+        // Keyframes at frames 0, 2, 6 and 10 of an 11-frame effect; the position at frame 4.
+        const EffectSpan span(11);
+        auto keysAt = [&](QList<double> frames) {
+            ParameterKeyframes p;
+            for (double f : frames) {
+                EffectKeyframe k;
+                k.at = span.timeOf(f);
+                k.value = f;
+                p.keys << k;
+            }
+            return p;
+        };
+        auto frames = [&](const ParameterKeyframes& p) {
+            QList<double> out;
+            for (const EffectKeyframe& k : p.keys) out << std::round(span.frameOf(k.at) * 1000) / 1000;
+            return out;
+        };
+        // Align: the reference keyframe to the position; the others stay (p.114).
+        ParameterKeyframes p = keysAt({0, 2, 6, 10});
+        QVERIFY(alignKeyframes(p, {1}, 1, span.timeOf(4), span, false));
+        QCOMPARE(frames(p), (QList<double>{0, 4, 6, 10}));
+        // An intervening keyframe stops it a frame short (p.115).
+        p = keysAt({0, 2, 6, 10});
+        QVERIFY(alignKeyframes(p, {1}, 1, span.timeOf(8), span, false));
+        QCOMPARE(frames(p), (QList<double>{0, 5, 6, 10}));
+        // Selected keyframes move together; deselected ones stay (p.115-116).
+        p = keysAt({0, 2, 6, 10});
+        QVERIFY(alignKeyframes(p, {0, 1}, 1, span.timeOf(3), span, false));
+        QCOMPARE(frames(p), (QList<double>{1, 3, 6, 10}));
+        // All selected is a slip; Slip moves every keyframe, even out of the effect (p.115-116).
+        p = keysAt({0, 2, 6, 10});
+        QVERIFY(alignKeyframes(p, {0, 1, 2, 3}, 1, span.timeOf(4), span, false));
+        QCOMPARE(frames(p), (QList<double>{2, 4, 8, 12}));
+        p = keysAt({0, 2, 6, 10});
+        QVERIFY(alignKeyframes(p, {}, 2, span.timeOf(4), span, true));
+        QCOMPARE(frames(p), (QList<double>{-2, 0, 4, 8}));
+    }
+
+    void redundant() {
+        // "If three or more keyframes lie on a straight line segment ... only the first and last
+        // keyframes are necessary" (p.106).
+        Effect e = withKeys(Interpolation::Linear, {{0.0, 0.0}, {0.25, 25.0}, {0.5, 50.0}, {0.75, 20.0}, {1.0, 20.0}});
+        ParameterKeyframes p = keyframesOf(e, kFg, kLevel);
+        QCOMPARE(removeRedundantKeyframes(p), 1);
+        QCOMPARE(p.keys.size(), 4);
+        QCOMPARE(p.keys.at(1).at, 0.5);
+        // Shelf: a keyframe holding its predecessor's value.
+        p = keyframesOf(withKeys(Interpolation::Shelf, {{0.0, 10.0}, {0.5, 10.0}, {1.0, 30.0}}), kFg, kLevel);
+        QCOMPARE(removeRedundantKeyframes(p), 1);
+        // Spline: only a flat run (p.107, conservative).
+        p = keyframesOf(withKeys(Interpolation::Spline, {{0.0, 0.0}, {0.5, 50.0}, {1.0, 100.0}}), kFg, kLevel);
+        QCOMPARE(removeRedundantKeyframes(p), 0);
+        p = keyframesOf(withKeys(Interpolation::Spline, {{0.0, 5.0}, {0.5, 5.0}, {1.0, 5.0}}), kFg, kLevel);
+        QCOMPARE(removeRedundantKeyframes(p), 1);
+        // Colours channel by channel.
+        Effect c;
+        for (const auto& [t, v] : QList<std::pair<double, QString>>{{0.0, "#000000"}, {0.5, "#808080"}, {1.0, "#ffffff"}}) {
+            setKeyframe(c, QStringLiteral("Background Color"), QStringLiteral("Background Color"), t, 11, v);
+        }
+        p = keyframesOf(c, QStringLiteral("Background Color"), QStringLiteral("Background Color"));
+        QCOMPARE(removeRedundantKeyframes(p), 0); // 0x80 is not exactly halfway
     }
 
     void json() {

@@ -112,7 +112,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Enlarge HeadFrames |  | p.1016 | *later* | ☐ | | |
 | Reduce HeadFrames |  | p.1016 | *later* | ☐ | | |
 | Cut | Ctrl+X | p.355 | works | ☐ | | |
-| Deselect All Keyframes |  | p.112 | *later* | ☐ | | |
+| Deselect All Keyframes |  | p.112 | works | ☐ | | |
 
 ## Bin menu
 
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 140 of them working with a project open; the
+* 211 menu commands, 141 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

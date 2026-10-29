@@ -24,6 +24,7 @@ add_library(lumenis_ui STATIC
     interchange_dialogs.cpp
     list_tool.cpp
     effect_editor.cpp
+    effect_editor_keyframes.cpp
     effect_palette.cpp
     capture.cpp
     command_registry.cpp

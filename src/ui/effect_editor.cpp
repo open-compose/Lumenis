@@ -2,6 +2,7 @@
 
 #include "lumenis/ui/timeline.h"
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QComboBox>
@@ -15,6 +16,7 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QPainter>
+#include <QPainterPath>
 #include <QScrollArea>
 #include <QSlider>
 #include <QToolButton>
@@ -52,6 +54,7 @@ const Catalog& catalog() {
                 p.max = static_cast<int>(po.value(QStringLiteral("max")).toDouble(100));
                 if (p.max < p.min) std::swap(p.min, p.max); // a range printed backwards
                 p.defaultValue = po.value(QStringLiteral("default"));
+                p.keyframeable = po.value(QStringLiteral("keyframeable")).toBool(true);
                 for (const QJsonValue& opt : po.value(QStringLiteral("options")).toArray()) p.options << opt.toString();
                 list << p;
             }
@@ -111,6 +114,40 @@ QIcon alignmentIcon(std::optional<model::TransitionAlignment> a, const QColor& c
                                                                               : 5;
         p.fillRect(QRectF(from, 5, 7, 4), color);
     }
+    return QIcon(pm);
+}
+
+// Our own keyframe button icons: a keyframe triangle, with an arrow to its left (Go to Previous Event,
+// -1), its right (Go to Next Event, 1) or a plus (Add Keyframe, 0).
+QIcon keyframeIcon(int direction, const QColor& color) {
+    QPixmap pm(18, 14);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(Qt::NoPen);
+    p.setBrush(color);
+    const double x = direction < 0 ? 12 : direction > 0 ? 6 : 6;
+    p.drawPolygon(QPolygonF{QPointF(x - 4, 2), QPointF(x + 4, 2), QPointF(x, 10)});
+    p.setPen(QPen(color, 1.5));
+    if (direction < 0) p.drawLine(QPointF(1, 7), QPointF(6, 7));
+    if (direction > 0) p.drawLine(QPointF(12, 7), QPointF(17, 7));
+    if (direction == 0) {
+        p.drawLine(QPointF(13, 4), QPointF(13, 12));
+        p.drawLine(QPointF(9, 8), QPointF(17, 8));
+    }
+    return QIcon(pm);
+}
+
+// Ours: a small curve for Show/Hide Keyframe Graphs.
+QIcon graphIcon(const QColor& color) {
+    QPixmap pm(18, 14);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(color, 1.5));
+    QPainterPath path(QPointF(1, 12));
+    path.cubicTo(QPointF(6, 12), QPointF(10, 2), QPointF(17, 2));
+    p.drawPath(path);
     return QIcon(pm);
 }
 
@@ -201,7 +238,32 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     bottom->addWidget(duration_);
     bottom->addStretch(1);
     bottom->addWidget(offButton(QStringLiteral("effectPromote3D"), tr("3D Promote"), this));
-    bottom->addWidget(offButton(QStringLiteral("effectKeyframes"), tr("Show/Hide Keyframe Graph"), this));
+    // The advanced keyframe controls (p.128): Go to Previous Event, Go to Next Event, Add Keyframe; and
+    // the Show/Hide Keyframe Graphs button "in the bottom right corner" (p.96).
+    auto keyButton = [this](const QString& name, const QString& tip, const QIcon& icon) {
+        auto* b = new QToolButton(this);
+        b->setObjectName(name);
+        b->setToolTip(tip);
+        b->setIcon(icon);
+        b->setAutoRaise(true);
+        b->setFixedSize(26, 22);
+        return b;
+    };
+    const QColor ink = palette().color(QPalette::WindowText);
+    prevEvent_ = keyButton(QStringLiteral("effectPrevEvent"), tr("Go to Previous Event"), keyframeIcon(-1, ink));
+    nextEvent_ = keyButton(QStringLiteral("effectNextEvent"), tr("Go to Next Event"), keyframeIcon(1, ink));
+    addKeyframe_ = keyButton(QStringLiteral("effectAddKeyframe"), tr("Add Keyframe"), keyframeIcon(0, ink));
+    graphsButton_ = keyButton(QStringLiteral("effectKeyframes"), tr("Show/Hide Keyframe Graphs"), graphIcon(ink));
+    graphsButton_->setCheckable(true);
+    connect(prevEvent_, &QToolButton::clicked, this, [this] { goToEvent(false); });
+    connect(nextEvent_, &QToolButton::clicked, this, [this] { goToEvent(true); });
+    connect(addKeyframe_, &QToolButton::clicked, this,
+            [this] { addKeyframeButton(QApplication::keyboardModifiers() & Qt::AltModifier); });
+    connect(graphsButton_, &QToolButton::toggled, this, &EffectEditor::setKeyframeGraphsShown);
+    bottom->addWidget(prevEvent_);
+    bottom->addWidget(nextEvent_);
+    bottom->addWidget(addKeyframe_);
+    bottom->addWidget(graphsButton_);
 
     auto* middle = new QHBoxLayout;
     middle->addWidget(scroll, 1);
@@ -267,6 +329,26 @@ void EffectEditor::refresh() {
     }
     if (!effect) ref.reset(); // also with no sequence loaded
 
+    // Where the effect lies and how its frames map to its time (model::EffectSpan).
+    current_.reset();
+    preview_.reset();
+    if (effect) {
+        current_ = *effect;
+        if (ref->target == model::EffectTarget::Transition) {
+            if (const model::Transition* t = model::transitionFor(seq, *ref)) {
+                span_ = model::EffectSpan(t->duration, true);
+                effectStart_ = ref->frame - t->before();
+            }
+        } else if (const model::Track* track = seq.track(ref->track)) {
+            std::int64_t start = 0;
+            const int i = track->segmentAt(ref->frame, &start);
+            if (i >= 0) {
+                span_ = model::EffectSpan(track->segments.at(i).length);
+                effectStart_ = start;
+            }
+        }
+    }
+
     // From the new ref, not shown_, which still holds the effect shown before.
     const bool transitionOnly = !ref && !trimCuts().isEmpty();
     const QString name = effect ? effect->category + QLatin1Char('/') + effect->name : QString();
@@ -276,9 +358,16 @@ void EffectEditor::refresh() {
         transitionOnly_ = transitionOnly;
         rebuild(effect);
     } else if (effect) {
+        // Keyframes an undo took away are no longer selected.
+        selection_.removeIf([&](const KeyframeId& id) {
+            return id.index >= model::keyframesOf(*effect, id.parameter.section(QLatin1Char('/'), 0, 0),
+                                                  id.parameter.section(QLatin1Char('/'), 1))
+                                    .keys.size();
+        });
         syncValues(*effect);
     }
     syncTransition();
+    updateTracks();
 }
 
 bool EffectEditor::isBlank() const {
@@ -302,6 +391,12 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     openers_.clear();
     controls_.clear();
     valueLabels_.clear();
+    categoryOrder_.clear();
+    tracks_.clear();
+    graphOpeners_.clear();
+    openGraphs_.clear();
+    selection_.clear();
+    activeParameter_.clear();
     title_->setText(effect ? effect->name : QString());
     title_->setVisible(effect != nullptr);
     titleIcon_->setVisible(effect != nullptr);
@@ -319,6 +414,30 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     const EffectInfo* info = EffectCatalog::builtin().find(effect->category, effect->name);
     const QStringList categories = info ? info->parameters : QStringList();
     int at = 0;
+    // A row of controls with its keyframe track at the right, behind a graph opener's place.
+    auto withTrack = [this](QHBoxLayout* row, QWidget* rowParent, KeyframeTrack::Kind kind, const QString& which,
+                            QToolButton* graphOpener) {
+        row->addStretch(0);
+        if (graphOpener) {
+            row->addWidget(graphOpener);
+        } else {
+            auto* gap = new QWidget(rowParent);
+            gap->setFixedWidth(16);
+            row->addWidget(gap);
+        }
+        auto* track = new KeyframeTrack(*this, kind, which, rowParent);
+        row->addWidget(track);
+        tracks_.insert(which.isEmpty() ? QStringLiteral("static:%1").arg(tracks_.size()) : which, track);
+    };
+    // The effect track beside the top of the parameters (p.95).
+    {
+        auto* row = new QWidget(body_);
+        auto* h = new QHBoxLayout(row);
+        h->setContentsMargins(0, 0, 0, 0);
+        h->addStretch(1);
+        withTrack(h, row, KeyframeTrack::Kind::Effect, QStringLiteral("effect"), nullptr);
+        groups_->insertWidget(at++, row);
+    }
     for (const QString& category : categories) {
         const QList<EffectParameter>* params = effectParameters(category);
         if (!params) continue;
@@ -338,6 +457,8 @@ void EffectEditor::rebuild(const model::Effect* effect) {
         for (const EffectParameter& p : *params) {
             auto* row = new QHBoxLayout;
             const QString k = key(category, p.name);
+            const bool keyframed = p.keyframeable && (p.kind == QLatin1String("slider") || p.kind == QLatin1String("color"));
+            QLabel* nameLabel = nullptr;
             if (p.kind == QLatin1String("checkbox")) {
                 auto* c = new QCheckBox(p.name, box);
                 c->setObjectName(QStringLiteral("param:") + k);
@@ -351,6 +472,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                 auto* label = new QLabel(p.name, box);
                 label->setMinimumWidth(64);
                 row->addWidget(label);
+                nameLabel = label;
                 if (p.kind == QLatin1String("slider")) {
                     auto* s = new QSlider(Qt::Horizontal, box);
                     s->setObjectName(QStringLiteral("param:") + k);
@@ -399,14 +521,52 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     row->addWidget(later, 1);
                 }
             }
+            if (QWidget* control = controls_.value(k)) {
+                control->setProperty("parameterKey", k);
+                control->setProperty("nameLabel", QVariant::fromValue(nameLabel));
+                control->installEventFilter(this);
+            }
+            // The parameter's keyframe track; a slider's has an opener for its graph (p.96-97).
+            QToolButton* graphOpener = nullptr;
+            if (keyframed && p.kind == QLatin1String("slider")) {
+                graphOpener = new QToolButton(box);
+                graphOpener->setObjectName(QStringLiteral("graphOpener:") + k);
+                graphOpener->setArrowType(Qt::RightArrow);
+                graphOpener->setAutoRaise(true);
+                graphOpener->setCheckable(true);
+                graphOpener->setFixedSize(16, 16);
+                connect(graphOpener, &QToolButton::toggled, this, [this, k](bool open) { setGraphOpen(k, open); });
+                graphOpeners_.insert(k, graphOpener);
+            }
+            withTrack(row, box, KeyframeTrack::Kind::Parameter, keyframed ? k : QString(), graphOpener);
             grid->addLayout(row);
+            if (graphOpener) {
+                auto* graphRow = new QHBoxLayout;
+                graphRow->addStretch(1);
+                auto* gap = new QWidget(box);
+                gap->setFixedWidth(16);
+                graphRow->addWidget(gap);
+                auto* graph = new KeyframeTrack(*this, KeyframeTrack::Kind::Graph, QStringLiteral("graph:") + k, box);
+                graphRow->addWidget(graph);
+                tracks_.insert(QStringLiteral("graph:") + k, graph);
+                grid->addLayout(graphRow);
+            }
         }
         connect(opener, &QToolButton::toggled, this, [opener, box](bool open) {
             opener->setArrowType(open ? Qt::DownArrow : Qt::RightArrow);
             box->setVisible(open);
         });
-        groups_->insertWidget(at++, opener);
+        // The category's opener and its group track (p.95).
+        auto* header = new QWidget(body_);
+        auto* h = new QHBoxLayout(header);
+        h->setContentsMargins(0, 0, 0, 0);
+        opener->setParent(header);
+        h->addWidget(opener);
+        h->addStretch(1);
+        withTrack(h, header, KeyframeTrack::Kind::Group, QStringLiteral("group:") + category, nullptr);
+        groups_->insertWidget(at++, header);
         groups_->insertWidget(at++, box);
+        categoryOrder_ << category;
         groupBodies_.insert(category, box);
         openers_.insert(category, opener);
     }
@@ -419,12 +579,14 @@ void EffectEditor::syncValues(const model::Effect& effect) {
     for (auto it = controls_.cbegin(); it != controls_.cend(); ++it) {
         const QString category = it.key().section(QLatin1Char('/'), 0, 0);
         const QString name = it.key().section(QLatin1Char('/'), 1);
-        const QJsonValue v = effect.parameters.value(category).toObject().value(name);
+        // Keyframed parameters show their value at the position (p.95).
+        QJsonValue v = effect.parameters.value(category).toObject().value(name);
+        if (!model::keyframesOf(effect, category, name).keys.isEmpty()) v = valueAt(effect, it.key(), positionTime());
         if (v.isUndefined()) continue;
         QWidget* w = it.value();
         const QSignalBlocker block(w);
         if (auto* s = qobject_cast<QSlider*>(w)) {
-            s->setValue(static_cast<int>(v.toDouble()));
+            s->setValue(static_cast<int>(std::lround(v.toDouble())));
             if (QLabel* l = valueLabels_.value(it.key())) l->setNum(s->value());
         } else if (auto* c = qobject_cast<QCheckBox*>(w)) {
             c->setChecked(v.toBool());
@@ -461,8 +623,32 @@ void EffectEditor::syncTransition() {
     alignment_->setIcon(alignmentIcon(shownAlignment, palette().color(QPalette::WindowText)));
 }
 
+// A keyframed parameter's change goes to its selected keyframes, else to the keyframe at the position,
+// else to a new keyframe there ("You can also add keyframes automatically by adjusting a parameter when
+// you place the position indicator in a part of the keyframe graph that has no keyframe", p.103).
 void EffectEditor::setValue(const QString& category, const QString& parameter, const QJsonValue& value) {
     if (syncing_ || !shown_) return;
+    const QString k = key(category, parameter);
+    setActiveParameter(k);
+    if (current_ && !model::keyframesOf(*current_, category, parameter).keys.isEmpty()) {
+        const double t = positionTime();
+        changeKeyframes(tr("Modify Effect"), [&](model::Effect& e) {
+            model::ParameterKeyframes keys = model::keyframesOf(e, category, parameter);
+            bool any = false;
+            for (const KeyframeId& id : selection_) {
+                if (id.parameter != k || id.index >= keys.keys.size()) continue;
+                keys.keys[id.index].value = value;
+                any = true;
+            }
+            if (any) {
+                model::setKeyframes(e, category, parameter, keys);
+            } else {
+                model::setKeyframe(e, category, parameter, t, span_, value);
+            }
+            return true;
+        });
+        return;
+    }
     const model::EffectRef ref = *shown_;
     timeline_.changeEffect(ref, tr("Modify Effect"), [&](model::Effect& e, model::Transition*) {
         QJsonObject group = e.parameters.value(category).toObject();
@@ -521,13 +707,8 @@ bool EffectEditor::setDuration(const QString& text) {
     return done;
 }
 
-// The openers are the group layout's tool buttons; their text is the category.
 QStringList EffectEditor::categories() const {
-    QStringList out;
-    for (int i = 0; i < groups_->count(); ++i) {
-        if (auto* b = qobject_cast<QToolButton*>(groups_->itemAt(i)->widget())) out << b->text();
-    }
-    return out;
+    return categoryOrder_;
 }
 
 bool EffectEditor::isOpen(const QString& category) const {
@@ -548,6 +729,10 @@ QCheckBox* EffectEditor::checkBox(const QString& category, const QString& parame
 }
 
 bool EffectEditor::eventFilter(QObject* watched, QEvent* event) {
+    if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::FocusIn) {
+        const QString k = watched->property("parameterKey").toString();
+        if (!k.isEmpty()) setActiveParameter(k);
+    }
     // Arrow keys move a slider by one, with Shift by ten (FX guide p.87).
     if (event->type() == QEvent::KeyPress) {
         auto* s = qobject_cast<QSlider*>(watched);

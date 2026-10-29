@@ -117,7 +117,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Bézier tangents; Extrapolate as a straight line; a segment effect's time
   as frames into it over its length - 1, a transition's as its progress;
   Superimpose at 50 until a level is set; Fade Effect with both lengths 0
-  removing the Level's keyframes; reversing twice turning Swap Sources off.
+  removing the Level's keyframes; reversing twice turning Swap Sources off;
+  Align moving the selected keyframes as a group; a slip leaving Fixed
+  keyframes; the track colours and widths, the Fixed indicator's pin; clicking
+  a selected keyframe keeping the selection; Set Position To Keyframe on and
+  Add to Open Groups as the defaults; Enabled Groups as all groups; options
+  kept only with keyframes; only sliders and colours keyframed.
 * Volume and pan automation (docs/spec/automation.md):
   * pan automation takes the place of the clip pan instead of adding to it;
   * a -∞ keyframe ramps from -96 dB;

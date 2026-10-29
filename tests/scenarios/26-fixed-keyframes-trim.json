@@ -1,0 +1,24 @@
+[
+  {
+    "name": "Fixed keyframes stay on their timecode when frames are trimmed onto the segment's head",
+    "guide": "FX Guide p.124",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 10, 50, {"effect": {"category": "Blend", "name": "Superimpose", "parameters": {"_keyframes": {"Foreground/Level": {"fixed": true, "keys": [{"at": 0, "value": 0}, {"at": 10, "value": 100}]}}}}}]]}},
+    "steps": [
+      {"rollers": [["V1", 50, "b"]], "kind": "ripple"},
+      {"trim": -5}
+    ],
+    "expect": {"V1": [["A", 0, 50], ["B", 5, 55, {"keyframes": {"Foreground/Level": [[5, 0], [15, 100]]}}]]}
+  },
+  {
+    "name": "Elastic keyframes scale with a trim instead",
+    "guide": "FX Guide p.124",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 10, 50, {"effect": {"category": "Blend", "name": "Superimpose", "parameters": {"_keyframes": {"Foreground/Level": {"keys": [{"at": 0, "value": 0}, {"at": 0.5, "value": 100}]}}}}}]]}},
+    "steps": [
+      {"rollers": [["V1", 50, "b"]], "kind": "ripple"},
+      {"trim": -5}
+    ],
+    "expect": {"V1": [["A", 0, 50], ["B", 5, 55, {"keyframes": {"Foreground/Level": [[0, 0], [0.5, 100]]}}]]}
+  }
+]

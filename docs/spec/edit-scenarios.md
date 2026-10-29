@@ -26,7 +26,9 @@ Each file is a JSON list of scenarios:
 * **sequence:** the Record monitor's sequence at the start, track by track
   (V1, A1 and A2 always exist; others are added). A segment is
   `[clip, source IN, length]`, with the clip's track as a fourth member
-  when it is not the record track, or `["filler", length]`. Without it the
+  when it is not the record track, or `["filler", length]`. A trailing
+  `{"effect": {...}}` gives the segment an effect as `model::Effect::toJson`
+  writes it (with keyframes under `_keyframes`). Without it the
   Record monitor starts empty, and the first edit makes the sequence.
 * **steps**, in order, as the user gives them:
   * `{"load": "source"|"record", "clip": name}`;
@@ -108,7 +110,10 @@ Each file is a JSON list of scenarios:
   with automation `{"volume": [[clip frame, value], ...], "pan": [...]}`,
   and one with an Audio EQ `{"eq": {...}}` (the values not at their
   defaults), and one with an AudioSuite effect `{"audiosuite": [plug-in,
-  {the values not at their defaults}]}`.
+  {the values not at their defaults}]}`, and one whose effect has
+  keyframes `{"keyframes": {"Category/Name": [[position, value], ...]}}`
+  (frames for Fixed keyframes, else the effect's time to 1/1000; FX Guide
+  p.124).
   **expect_monitors:** a monitor's position, clip, and marks (`null`: no
   mark). **expect_formats** gives tracks' audio formats ("mono", "stereo",
   "5.1", "7.1") and **expect_channels** the channels a track's segments

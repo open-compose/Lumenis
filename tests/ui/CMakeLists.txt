@@ -30,6 +30,7 @@ lumenis_add_test(tst_settings_window SOURCES tst_settings_window.cpp LIBS ${ui_t
 lumenis_add_test(tst_tools SOURCES tst_tools.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_keyboard_workspaces SOURCES tst_keyboard_workspaces.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_effects SOURCES tst_effects.cpp LIBS ${ui_test_libs})
+lumenis_add_test(tst_effect_keyframes_ui SOURCES tst_effect_keyframes_ui.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_audio_media SOURCES tst_audio_media.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_automation_ui SOURCES tst_automation_ui.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_audio_eq_ui SOURCES tst_audio_eq_ui.cpp LIBS ${ui_test_libs} lumenis::media)

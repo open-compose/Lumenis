@@ -190,10 +190,10 @@ Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture 
     // progress, so Level keyed 0 and 100 at its ends is the same as no keyframes.
     double progress = time;
     if (!model::keyframesOf(e, foreground, QStringLiteral("Level")).keys.isEmpty()) {
-        progress = std::clamp(model::numberAt(e, foreground, QStringLiteral("Level"), time, t.duration).value_or(time * 100.0) / 100.0, 0.0, 1.0);
+        progress = std::clamp(model::numberAt(e, foreground, QStringLiteral("Level"), time, model::EffectSpan(t.duration, true)).value_or(time * 100.0) / 100.0, 0.0, 1.0);
     }
     QColor colour(Qt::black);
-    if (const auto rgb = model::colorAt(e, QStringLiteral("Background Color"), QStringLiteral("Background Color"), time, t.duration)) {
+    if (const auto rgb = model::colorAt(e, QStringLiteral("Background Color"), QStringLiteral("Background Color"), time, model::EffectSpan(t.duration, true))) {
         colour = QColor::fromRgbF(static_cast<float>(rgb->red), static_cast<float>(rgb->green), static_cast<float>(rgb->blue));
     }
     const QString& name = e.name;

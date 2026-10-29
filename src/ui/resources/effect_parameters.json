@@ -1,5 +1,5 @@
 {
-  "comment": "The Effect Editor's parameter categories and their controls (FX guide, Effects Parameter Reference, p.491-586), named as printed. 'min', 'max' and 'default' only where the text states them; 'kind' is slider, checkbox, color, menu, button or other.",
+  "comment": "The Effect Editor's parameter categories and their controls (FX guide, Effects Parameter Reference, p.491-586), named as printed. 'min', 'max' and 'default' only where the text states them; 'kind' is slider, checkbox, color, menu, button or other; 'keyframeable': false where the reference says a parameter is not keyframeable (p.491).",
   "categories": [
     {"name": "Color Parameter Controls", "page": 491, "parameters": [
       {"name": "Other Options", "kind": "button"},
@@ -12,7 +12,7 @@
       {"name": "B", "kind": "slider", "label": "blue", "min": 0, "max": 255}
     ]},
     {"name": "Acceleration", "page": 492, "parameters": [
-      {"name": "Acceleration", "kind": "slider", "min": 0, "max": 100}
+      {"name": "Acceleration", "kind": "slider", "keyframeable": false, "min": 0, "max": 100}
     ]},
     {"name": "Background Color", "page": 492, "parameters": [
       {"name": "Background Color", "kind": "color"}
@@ -25,11 +25,11 @@
       {"name": "Fixed Border", "kind": "checkbox"}
     ]},
     {"name": "Brush", "page": 493, "parameters": [
-      {"name": "Path", "kind": "slider", "min": 0, "max": 100},
-      {"name": "Soft", "kind": "slider", "label": "softness", "min": 0, "max": 100},
-      {"name": "Size", "kind": "slider", "min": 0, "max": 100},
-      {"name": "Shape buttons", "kind": "button"},
-      {"name": "Spin", "kind": "slider", "min": -360, "max": 360, "default": 0}
+      {"name": "Path", "kind": "slider", "keyframeable": false, "min": 0, "max": 100},
+      {"name": "Soft", "kind": "slider", "label": "softness", "keyframeable": false, "min": 0, "max": 100},
+      {"name": "Size", "kind": "slider", "keyframeable": false, "min": 0, "max": 100},
+      {"name": "Shape buttons", "kind": "button", "keyframeable": false},
+      {"name": "Spin", "kind": "slider", "keyframeable": false, "min": -360, "max": 360, "default": 0}
     ]},
     {"name": "Crop", "page": 494, "parameters": [
       {"name": "T", "kind": "slider", "label": "top", "min": 0, "max": 999},
@@ -55,14 +55,14 @@
       {"name": "Show Alpha", "kind": "checkbox"}
     ]},
     {"name": "Grid", "page": 496, "parameters": [
-      {"name": "Enable", "kind": "button", "label": "Enable button"},
-      {"name": "Type", "kind": "menu", "label": "Type menu", "options": ["Square", "Standard Film", "Academy", "Super 35", "Anamorphic"]},
-      {"name": "Fields", "kind": "slider", "min": 8, "max": 32},
-      {"name": "Sub", "kind": "slider", "label": "subfields", "min": 0, "max": 10},
-      {"name": "Source Scan Size Horizontal", "kind": "slider", "label": "Source Scan Size", "min": 720, "max": 9999},
-      {"name": "Source Scan Size Vertical", "kind": "slider", "label": "Source Scan Size", "min": 243, "max": 9999},
-      {"name": "Source Grid Offset", "kind": "slider"},
-      {"name": "Transfer", "kind": "menu", "label": "Transfer menu", "options": ["Full Aperture", "Academy"]}
+      {"name": "Enable", "kind": "button", "label": "Enable button", "keyframeable": false},
+      {"name": "Type", "kind": "menu", "label": "Type menu", "keyframeable": false, "options": ["Square", "Standard Film", "Academy", "Super 35", "Anamorphic"]},
+      {"name": "Fields", "kind": "slider", "keyframeable": false, "min": 8, "max": 32},
+      {"name": "Sub", "kind": "slider", "label": "subfields", "keyframeable": false, "min": 0, "max": 10},
+      {"name": "Source Scan Size Horizontal", "kind": "slider", "label": "Source Scan Size", "keyframeable": false, "min": 720, "max": 9999},
+      {"name": "Source Scan Size Vertical", "kind": "slider", "label": "Source Scan Size", "keyframeable": false, "min": 243, "max": 9999},
+      {"name": "Source Grid Offset", "kind": "slider", "keyframeable": false},
+      {"name": "Transfer", "kind": "menu", "label": "Transfer menu", "keyframeable": false, "options": ["Full Aperture", "Academy"]}
     ]},
     {"name": "Magic Mask", "page": 497, "parameters": [
       {"name": "Color controls", "kind": "color"},
@@ -84,8 +84,8 @@
       {"name": "Tracker selectors", "kind": "other"}
     ]},
     {"name": "Transition Parameters", "page": 500, "parameters": [
-      {"name": "Transition Effect Alignment", "kind": "menu", "options": ["Ending at Cut", "Centered on Cut", "Starting at Cut", "Custom Start"]},
-      {"name": "Transition Effect Duration", "kind": "other"}
+      {"name": "Transition Effect Alignment", "kind": "menu", "keyframeable": false, "options": ["Ending at Cut", "Centered on Cut", "Starting at Cut", "Custom Start"]},
+      {"name": "Transition Effect Duration", "kind": "other", "keyframeable": false}
     ]},
     {"name": "Film Effects Blowup Parameter", "page": 500, "parameters": [
       {"name": "Field", "kind": "slider", "min": 0, "max": 12},
@@ -93,75 +93,75 @@
       {"name": "Y Pos", "kind": "slider", "label": "Y position", "min": -18, "max": 18}
     ]},
     {"name": "SubCap Effect Parameters", "page": 501, "parameters": [
-      {"name": "Edit Global Properties", "kind": "button"},
-      {"name": "Bypass Effect", "kind": "checkbox"},
-      {"name": "Import Caption Data", "kind": "button", "subcategory": "Caption Files"},
-      {"name": "Export Caption Data", "kind": "button", "subcategory": "Caption Files"},
-      {"name": "Color", "kind": "color", "subcategory": "Text Appearance"},
-      {"name": "Opacity", "kind": "slider", "subcategory": "Text Appearance", "min": 0, "max": 1},
-      {"name": "Font Face", "kind": "menu", "subcategory": "Text Appearance"},
-      {"name": "Font Size", "kind": "other", "subcategory": "Text Appearance", "min": 0, "max": 999},
-      {"name": "Line Weight", "kind": "other", "subcategory": "Text Appearance", "min": 0, "max": 999},
-      {"name": "Outline Weight", "kind": "other", "subcategory": "Text Appearance", "min": 0, "max": 999},
-      {"name": "Outline", "kind": "menu", "label": "Outline menu", "subcategory": "Text Appearance", "options": ["Basic Outline", "No Outline"]},
-      {"name": "Color", "kind": "color", "subcategory": "Text Appearance"},
-      {"name": "Text Shadow", "kind": "menu", "subcategory": "Text Appearance", "options": ["No Shadow", "Standard Shadow", "Custom Shadow"]},
-      {"name": "Radius", "kind": "slider", "subcategory": "Text Appearance", "min": 0, "max": 1},
-      {"name": "Angle", "kind": "slider", "subcategory": "Text Appearance", "min": 0, "max": 6.3},
-      {"name": "Text Alignment", "kind": "menu", "subcategory": "Text Appearance", "options": ["Left", "Center", "Right"]},
-      {"name": "Color", "kind": "color", "subcategory": "Box Appearance"},
-      {"name": "Opacity", "kind": "slider", "subcategory": "Box Appearance", "min": 0, "max": 1},
-      {"name": "Box Style", "kind": "menu", "subcategory": "Box Appearance", "options": ["One Box", "Separate Boxes for Each Row"]},
-      {"name": "Anchor Box to", "kind": "menu", "subcategory": "Box Appearance", "options": ["Anchor to Bottom of Text", "Anchor to Top of Text"]},
-      {"name": "Justify Anchor", "kind": "menu", "subcategory": "Box Appearance", "options": ["Anchor Left", "Anchor Center", "Anchor Right"]},
-      {"name": "X", "kind": "slider", "label": "Anchor Position X", "subcategory": "Box Appearance", "min": -999, "max": 999},
-      {"name": "Y", "kind": "slider", "label": "Anchor Position Y", "subcategory": "Box Appearance", "min": -999, "max": 999},
-      {"name": "Box Width", "kind": "menu", "subcategory": "Box Appearance", "options": ["Fixed Width (Clip)", "Fixed Width (Wrap)", "Each row as wide as widest", "Each row as wide as needed"]},
-      {"name": "Box Width thumbwheel", "kind": "other", "subcategory": "Box Appearance", "min": 0, "max": 2000},
-      {"name": "Number of Rows of Text", "kind": "menu", "subcategory": "Box Appearance", "options": ["As Many Rows as Needed", "Exactly N Rows", "At Most N Rows"]},
-      {"name": "Row Count", "kind": "other", "subcategory": "Box Appearance", "min": 1, "max": 25},
-      {"name": "Vertical", "kind": "slider", "label": "Padding Vertical", "subcategory": "Box Appearance", "min": 0, "max": 999},
-      {"name": "Horizontal", "kind": "slider", "label": "Padding Horizontal", "subcategory": "Box Appearance", "min": 0, "max": 999},
-      {"name": "Row Spacing", "kind": "slider", "subcategory": "Box Appearance", "min": -10, "max": 50},
-      {"name": "Edit Master Caption List", "kind": "button", "subcategory": "Caption Text"},
-      {"name": "Caption text box", "kind": "other", "subcategory": "Caption Text"}
+      {"name": "Edit Global Properties", "kind": "button", "keyframeable": false},
+      {"name": "Bypass Effect", "kind": "checkbox", "keyframeable": false},
+      {"name": "Import Caption Data", "kind": "button", "keyframeable": false, "subcategory": "Caption Files"},
+      {"name": "Export Caption Data", "kind": "button", "keyframeable": false, "subcategory": "Caption Files"},
+      {"name": "Color", "kind": "color", "keyframeable": false, "subcategory": "Text Appearance"},
+      {"name": "Opacity", "kind": "slider", "keyframeable": false, "subcategory": "Text Appearance", "min": 0, "max": 1},
+      {"name": "Font Face", "kind": "menu", "keyframeable": false, "subcategory": "Text Appearance"},
+      {"name": "Font Size", "kind": "other", "keyframeable": false, "subcategory": "Text Appearance", "min": 0, "max": 999},
+      {"name": "Line Weight", "kind": "other", "keyframeable": false, "subcategory": "Text Appearance", "min": 0, "max": 999},
+      {"name": "Outline Weight", "kind": "other", "keyframeable": false, "subcategory": "Text Appearance", "min": 0, "max": 999},
+      {"name": "Outline", "kind": "menu", "label": "Outline menu", "keyframeable": false, "subcategory": "Text Appearance", "options": ["Basic Outline", "No Outline"]},
+      {"name": "Color", "kind": "color", "keyframeable": false, "subcategory": "Text Appearance"},
+      {"name": "Text Shadow", "kind": "menu", "keyframeable": false, "subcategory": "Text Appearance", "options": ["No Shadow", "Standard Shadow", "Custom Shadow"]},
+      {"name": "Radius", "kind": "slider", "keyframeable": false, "subcategory": "Text Appearance", "min": 0, "max": 1},
+      {"name": "Angle", "kind": "slider", "keyframeable": false, "subcategory": "Text Appearance", "min": 0, "max": 6.3},
+      {"name": "Text Alignment", "kind": "menu", "keyframeable": false, "subcategory": "Text Appearance", "options": ["Left", "Center", "Right"]},
+      {"name": "Color", "kind": "color", "keyframeable": false, "subcategory": "Box Appearance"},
+      {"name": "Opacity", "kind": "slider", "keyframeable": false, "subcategory": "Box Appearance", "min": 0, "max": 1},
+      {"name": "Box Style", "kind": "menu", "keyframeable": false, "subcategory": "Box Appearance", "options": ["One Box", "Separate Boxes for Each Row"]},
+      {"name": "Anchor Box to", "kind": "menu", "keyframeable": false, "subcategory": "Box Appearance", "options": ["Anchor to Bottom of Text", "Anchor to Top of Text"]},
+      {"name": "Justify Anchor", "kind": "menu", "keyframeable": false, "subcategory": "Box Appearance", "options": ["Anchor Left", "Anchor Center", "Anchor Right"]},
+      {"name": "X", "kind": "slider", "label": "Anchor Position X", "keyframeable": false, "subcategory": "Box Appearance", "min": -999, "max": 999},
+      {"name": "Y", "kind": "slider", "label": "Anchor Position Y", "keyframeable": false, "subcategory": "Box Appearance", "min": -999, "max": 999},
+      {"name": "Box Width", "kind": "menu", "keyframeable": false, "subcategory": "Box Appearance", "options": ["Fixed Width (Clip)", "Fixed Width (Wrap)", "Each row as wide as widest", "Each row as wide as needed"]},
+      {"name": "Box Width thumbwheel", "kind": "other", "keyframeable": false, "subcategory": "Box Appearance", "min": 0, "max": 2000},
+      {"name": "Number of Rows of Text", "kind": "menu", "keyframeable": false, "subcategory": "Box Appearance", "options": ["As Many Rows as Needed", "Exactly N Rows", "At Most N Rows"]},
+      {"name": "Row Count", "kind": "other", "keyframeable": false, "subcategory": "Box Appearance", "min": 1, "max": 25},
+      {"name": "Vertical", "kind": "slider", "label": "Padding Vertical", "keyframeable": false, "subcategory": "Box Appearance", "min": 0, "max": 999},
+      {"name": "Horizontal", "kind": "slider", "label": "Padding Horizontal", "keyframeable": false, "subcategory": "Box Appearance", "min": 0, "max": 999},
+      {"name": "Row Spacing", "kind": "slider", "keyframeable": false, "subcategory": "Box Appearance", "min": -10, "max": 50},
+      {"name": "Edit Master Caption List", "kind": "button", "keyframeable": false, "subcategory": "Caption Text"},
+      {"name": "Caption text box", "kind": "other", "keyframeable": false, "subcategory": "Caption Text"}
     ]},
     {"name": "SubCap Effect Global Properties", "page": 504, "parameters": [
-      {"name": "Publisher", "kind": "other", "subcategory": "Contacts"},
-      {"name": "Country of Origin", "kind": "menu", "subcategory": "Contacts"},
-      {"name": "Editor's Name", "kind": "other", "subcategory": "Contacts"},
-      {"name": "Editor's Contact Details", "kind": "other", "subcategory": "Contacts"},
-      {"name": "Translator's Name", "kind": "other", "subcategory": "Contacts"},
-      {"name": "Translator's Contact Details", "kind": "other", "subcategory": "Contacts"},
-      {"name": "Custom", "kind": "other", "subcategory": "Custom"},
-      {"name": "Revision Date", "kind": "other", "subcategory": "Program"},
-      {"name": "Creation Date", "kind": "other", "subcategory": "Program"},
-      {"name": "Language", "kind": "menu", "subcategory": "Program"},
-      {"name": "Original Program Title", "kind": "other", "subcategory": "Program"},
-      {"name": "Original Episode Title", "kind": "other", "subcategory": "Program"},
-      {"name": "Translated Program Title", "kind": "other", "subcategory": "Program"},
-      {"name": "Translated Episode Title", "kind": "other", "subcategory": "Program"},
-      {"name": "Stylesheets", "kind": "other", "subcategory": "Stylesheets"},
-      {"name": "Synchronize", "kind": "other", "subcategory": "Synchronize"}
+      {"name": "Publisher", "kind": "other", "keyframeable": false, "subcategory": "Contacts"},
+      {"name": "Country of Origin", "kind": "menu", "keyframeable": false, "subcategory": "Contacts"},
+      {"name": "Editor's Name", "kind": "other", "keyframeable": false, "subcategory": "Contacts"},
+      {"name": "Editor's Contact Details", "kind": "other", "keyframeable": false, "subcategory": "Contacts"},
+      {"name": "Translator's Name", "kind": "other", "keyframeable": false, "subcategory": "Contacts"},
+      {"name": "Translator's Contact Details", "kind": "other", "keyframeable": false, "subcategory": "Contacts"},
+      {"name": "Custom", "kind": "other", "keyframeable": false, "subcategory": "Custom"},
+      {"name": "Revision Date", "kind": "other", "keyframeable": false, "subcategory": "Program"},
+      {"name": "Creation Date", "kind": "other", "keyframeable": false, "subcategory": "Program"},
+      {"name": "Language", "kind": "menu", "keyframeable": false, "subcategory": "Program"},
+      {"name": "Original Program Title", "kind": "other", "keyframeable": false, "subcategory": "Program"},
+      {"name": "Original Episode Title", "kind": "other", "keyframeable": false, "subcategory": "Program"},
+      {"name": "Translated Program Title", "kind": "other", "keyframeable": false, "subcategory": "Program"},
+      {"name": "Translated Episode Title", "kind": "other", "keyframeable": false, "subcategory": "Program"},
+      {"name": "Stylesheets", "kind": "other", "keyframeable": false, "subcategory": "Stylesheets"},
+      {"name": "Synchronize", "kind": "other", "keyframeable": false, "subcategory": "Synchronize"}
     ]},
     {"name": "Timecode Burn-In Effect Parameters", "page": 505, "parameters": [
-      {"name": "Enable", "kind": "button", "subcategory": "Display 1, Display 2, Display 3"},
-      {"name": "Reader", "kind": "menu", "label": "Reader menu", "options": ["Timecode", "Source Timecode", "Edgecode", "Source Edgecode", "Frames", "Source Clip Name", "Sequence Name", "Source Bin Column", "Sequence Bin Column", "Other Counters", "Timeline Clip Text"]},
-      {"name": "Type", "kind": "menu", "label": "Type menu", "options": ["Current", "End", "Duration", "Mark IN", "Mark OUT", "I/O", "Remaining", "Absolute"]},
-      {"name": "Display Label", "kind": "checkbox"},
-      {"name": "Display Fields", "kind": "checkbox"},
-      {"name": "Local Frame Count", "kind": "checkbox"},
-      {"name": "Start Counting From", "kind": "other"},
-      {"name": "Timecode Display", "kind": "other"},
-      {"name": "Position", "kind": "slider", "subcategory": "Appearance"},
-      {"name": "Font Size", "kind": "other", "subcategory": "Appearance"},
-      {"name": "Text", "kind": "color", "subcategory": "Appearance"},
-      {"name": "Text Opacity", "kind": "slider", "subcategory": "Appearance", "min": 0, "max": 1},
-      {"name": "Line Weight", "kind": "other", "subcategory": "Appearance"},
-      {"name": "Use Text Outline", "kind": "checkbox", "subcategory": "Appearance"},
-      {"name": "Background", "kind": "color", "subcategory": "Appearance"},
-      {"name": "Border Opacity", "kind": "slider", "subcategory": "Appearance", "min": 0, "max": 1},
-      {"name": "Text", "kind": "other", "label": "Notes Track text box"}
+      {"name": "Enable", "kind": "button", "keyframeable": false, "subcategory": "Display 1, Display 2, Display 3"},
+      {"name": "Reader", "kind": "menu", "label": "Reader menu", "keyframeable": false, "options": ["Timecode", "Source Timecode", "Edgecode", "Source Edgecode", "Frames", "Source Clip Name", "Sequence Name", "Source Bin Column", "Sequence Bin Column", "Other Counters", "Timeline Clip Text"]},
+      {"name": "Type", "kind": "menu", "label": "Type menu", "keyframeable": false, "options": ["Current", "End", "Duration", "Mark IN", "Mark OUT", "I/O", "Remaining", "Absolute"]},
+      {"name": "Display Label", "kind": "checkbox", "keyframeable": false},
+      {"name": "Display Fields", "kind": "checkbox", "keyframeable": false},
+      {"name": "Local Frame Count", "kind": "checkbox", "keyframeable": false},
+      {"name": "Start Counting From", "kind": "other", "keyframeable": false},
+      {"name": "Timecode Display", "kind": "other", "keyframeable": false},
+      {"name": "Position", "kind": "slider", "keyframeable": false, "subcategory": "Appearance"},
+      {"name": "Font Size", "kind": "other", "keyframeable": false, "subcategory": "Appearance"},
+      {"name": "Text", "kind": "color", "keyframeable": false, "subcategory": "Appearance"},
+      {"name": "Text Opacity", "kind": "slider", "keyframeable": false, "subcategory": "Appearance", "min": 0, "max": 1},
+      {"name": "Line Weight", "kind": "other", "keyframeable": false, "subcategory": "Appearance"},
+      {"name": "Use Text Outline", "kind": "checkbox", "keyframeable": false, "subcategory": "Appearance"},
+      {"name": "Background", "kind": "color", "keyframeable": false, "subcategory": "Appearance"},
+      {"name": "Border Opacity", "kind": "slider", "keyframeable": false, "subcategory": "Appearance", "min": 0, "max": 1},
+      {"name": "Text", "kind": "other", "label": "Notes Track text box", "keyframeable": false}
     ]},
     {"name": "Border Parameter for Illusion FX Effects", "page": 508, "parameters": [
       {"name": "Left", "kind": "slider"},
@@ -176,8 +176,8 @@
     {"name": "Crystal Effect Input Parameters", "page": 509, "parameters": [
       {"name": "Size", "kind": "slider"},
       {"name": "Jitter", "kind": "slider"},
-      {"name": "Random Seed", "kind": "slider"},
-      {"name": "Anti-alias", "kind": "checkbox"}
+      {"name": "Random Seed", "kind": "slider", "keyframeable": false},
+      {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Film Grain Effect Input Parameters", "page": 509, "parameters": [
       {"name": "Level", "kind": "slider"},
@@ -192,7 +192,7 @@
       {"name": "Size", "kind": "slider"},
       {"name": "Width", "kind": "slider"},
       {"name": "Amount", "kind": "slider"},
-      {"name": "Random Seed", "kind": "slider"},
+      {"name": "Random Seed", "kind": "slider", "keyframeable": false},
       {"name": "X", "kind": "slider"},
       {"name": "Y", "kind": "slider"}
     ]},
@@ -213,7 +213,7 @@
     {"name": "FluidMorph Effect Source and Input Parameters", "page": 511, "parameters": [
       {"name": "Source", "kind": "menu", "label": "Source Menu", "subcategory": "Source Menu", "options": ["Still->Still", "Stream->Stream", "Stream->Still", "Still->Stream"]},
       {"name": "Feature Match", "kind": "checkbox", "subcategory": "Input Parameters"},
-      {"name": "Swap Sources", "kind": "checkbox", "subcategory": "Input Parameters"},
+      {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false, "subcategory": "Input Parameters"},
       {"name": "Progressive Source", "kind": "checkbox", "subcategory": "Input Parameters"}
     ]},
     {"name": "Iris Effect Input Parameters", "page": 512, "parameters": [
@@ -221,7 +221,7 @@
       {"name": "Softness", "kind": "slider"},
       {"name": "X", "kind": "slider"},
       {"name": "Y", "kind": "slider"},
-      {"name": "Swap Sources", "kind": "checkbox"}
+      {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Kaleidoscope Effect Input, Center, and Offset Parameters", "page": 513, "parameters": [
       {"name": "Symmetry", "kind": "slider", "subcategory": "Input Parameters"},
@@ -231,12 +231,12 @@
       {"name": "Y", "kind": "slider", "subcategory": "Center Parameters"},
       {"name": "X", "kind": "slider", "subcategory": "Offset Parameters"},
       {"name": "Y", "kind": "slider", "subcategory": "Offset Parameters"},
-      {"name": "Anti-alias", "kind": "checkbox", "subcategory": "Offset Parameters"}
+      {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false, "subcategory": "Offset Parameters"}
     ]},
     {"name": "Lightning Effect Generation, Core, and Glow Parameters", "page": 513, "parameters": [
       {"name": "Amount", "kind": "slider", "subcategory": "Generation Parameters", "min": 0, "max": 100},
       {"name": "Branch Probability", "kind": "slider", "subcategory": "Generation Parameters"},
-      {"name": "Random Seed", "kind": "slider", "subcategory": "Generation Parameters"},
+      {"name": "Random Seed", "kind": "slider", "keyframeable": false, "subcategory": "Generation Parameters"},
       {"name": "Render Mode", "kind": "menu", "label": "Render Mode menu", "subcategory": "Generation Parameters", "options": ["Quick", "Standard", "Anti-aliased"]},
       {"name": "Width", "kind": "slider", "subcategory": "Core Parameters"},
       {"name": "Color controls", "kind": "color", "subcategory": "Core Parameters"},
@@ -248,43 +248,43 @@
       {"name": "Melt Up", "kind": "checkbox"},
       {"name": "Amount", "kind": "slider"},
       {"name": "Strength", "kind": "slider"},
-      {"name": "Random Seed", "kind": "slider"},
-      {"name": "Anti-alias", "kind": "checkbox"},
-      {"name": "Swap Sources", "kind": "checkbox"}
+      {"name": "Random Seed", "kind": "slider", "keyframeable": false},
+      {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false},
+      {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Motion Blur Effect Input Parameters", "page": 515, "parameters": [
       {"name": "Amount", "kind": "slider"},
       {"name": "Direction", "kind": "slider"}
     ]},
     {"name": "Pagecurl Effect Input Parameters", "page": 515, "parameters": [
-      {"name": "Turn Left", "kind": "checkbox"},
-      {"name": "Reverse", "kind": "checkbox"},
-      {"name": "Swap Sources", "kind": "checkbox"}
+      {"name": "Turn Left", "kind": "checkbox", "keyframeable": false},
+      {"name": "Reverse", "kind": "checkbox", "keyframeable": false},
+      {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Particle Blast Effect Input Parameters", "page": 517, "parameters": [
       {"name": "Amount", "kind": "slider"},
       {"name": "Size", "kind": "slider"},
-      {"name": "Spacing", "kind": "slider"},
+      {"name": "Spacing", "kind": "slider", "keyframeable": false},
       {"name": "Front Speed", "kind": "slider"},
       {"name": "Front Randomness", "kind": "slider"},
       {"name": "Speed", "kind": "slider"},
       {"name": "Speed Randomness", "kind": "slider"},
       {"name": "Acceleration", "kind": "slider"},
       {"name": "Bumpiness", "kind": "slider"},
-      {"name": "Swap Sources", "kind": "checkbox"}
+      {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Particle Orbit Effect Input Parameters", "page": 517, "parameters": [
       {"name": "Amount", "kind": "slider"},
       {"name": "Size", "kind": "slider"},
-      {"name": "Spacing", "kind": "slider"},
+      {"name": "Spacing", "kind": "slider", "keyframeable": false},
       {"name": "Bumpiness", "kind": "slider"},
       {"name": "Speed", "kind": "slider"},
-      {"name": "Swap Sources", "kind": "checkbox"}
+      {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Particle Wind Effect Input Parameters", "page": 519, "parameters": [
       {"name": "Amount", "kind": "slider"},
       {"name": "Size", "kind": "slider"},
-      {"name": "Spacing", "kind": "slider"},
+      {"name": "Spacing", "kind": "slider", "keyframeable": false},
       {"name": "Front Speed", "kind": "slider"},
       {"name": "Front Randomness", "kind": "slider"},
       {"name": "Speed", "kind": "slider"},
@@ -292,7 +292,7 @@
       {"name": "Acceleration", "kind": "slider"},
       {"name": "Angle", "kind": "slider"},
       {"name": "Bumpiness", "kind": "slider"},
-      {"name": "Swap Sources", "kind": "checkbox"}
+      {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Pattern Generator Effect Background, Number, and Circle Parameters", "page": 520, "parameters": [
       {"name": "Pattern Type", "kind": "menu", "label": "Pattern Type menu", "subcategory": "Background Parameters", "options": ["Solid color", "EBU bars (75%)", "Color bars (75%)", "Color bars (100%)", "EIA bars", "SMPTE bars", "Color ramps", "Cross ramp", "Grid"]},
@@ -314,7 +314,7 @@
       {"name": "Amount", "kind": "slider"},
       {"name": "Size", "kind": "slider"},
       {"name": "Position", "kind": "slider"},
-      {"name": "Anti-alias", "kind": "checkbox"}
+      {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Radial Blur Effect Input Parameters", "page": 522, "parameters": [
       {"name": "Zoom", "kind": "slider"},
@@ -325,7 +325,7 @@
     {"name": "Random Blend Effect Input Parameters", "page": 522, "parameters": [
       {"name": "Amount", "kind": "slider"},
       {"name": "Random Scale", "kind": "slider"},
-      {"name": "Swap Sources", "kind": "checkbox"}
+      {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Ripple Effect Motion, Generation, and Illumination Parameters", "page": 523, "parameters": [
       {"name": "Amount", "kind": "slider", "subcategory": "Motion Parameters"},
@@ -335,8 +335,8 @@
       {"name": "Strength", "kind": "slider", "subcategory": "Generation Parameters"},
       {"name": "Length", "kind": "slider", "subcategory": "Generation Parameters"},
       {"name": "Number of Ripples", "kind": "slider", "subcategory": "Generation Parameters"},
-      {"name": "Random Seed", "kind": "slider", "subcategory": "Generation Parameters"},
-      {"name": "Anti-alias", "kind": "checkbox", "subcategory": "Generation Parameters"},
+      {"name": "Random Seed", "kind": "slider", "keyframeable": false, "subcategory": "Generation Parameters"},
+      {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false, "subcategory": "Generation Parameters"},
       {"name": "Color controls", "kind": "color", "subcategory": "Illumination Parameters"},
       {"name": "Angle", "kind": "slider", "subcategory": "Illumination Parameters"}
     ]},
@@ -344,8 +344,8 @@
       {"name": "Amount", "kind": "slider", "min": 0, "max": 100},
       {"name": "Curl Size", "kind": "slider"},
       {"name": "Direction", "kind": "slider"},
-      {"name": "Anti-alias", "kind": "checkbox"},
-      {"name": "Swap Sources", "kind": "checkbox"}
+      {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false},
+      {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Shear Effect Input Parameters", "page": 524, "parameters": [
       {"name": "Amount", "kind": "slider", "min": 0, "max": 100},
@@ -354,9 +354,9 @@
       {"name": "Width Randomness", "kind": "slider"},
       {"name": "Spread", "kind": "slider"},
       {"name": "Angle", "kind": "slider"},
-      {"name": "Random Seed", "kind": "slider"},
-      {"name": "Anti-alias", "kind": "checkbox"},
-      {"name": "Swap Sources", "kind": "checkbox"}
+      {"name": "Random Seed", "kind": "slider", "keyframeable": false},
+      {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false},
+      {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Sparkler Effect Generation, Movement, Core, and Glow Parameters", "page": 525, "parameters": [
       {"name": "Birth Rate", "kind": "slider", "subcategory": "Generation Parameters"},
@@ -382,21 +382,21 @@
       {"name": "Size", "kind": "slider"},
       {"name": "X", "kind": "slider"},
       {"name": "Y", "kind": "slider"},
-      {"name": "Anti-alias", "kind": "checkbox"}
+      {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Swirl Effect Input Parameters", "page": 527, "parameters": [
       {"name": "Amount", "kind": "slider"},
       {"name": "Size", "kind": "slider"},
       {"name": "X", "kind": "slider"},
       {"name": "Y", "kind": "slider"},
-      {"name": "Anti-alias", "kind": "checkbox"}
+      {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Twist Effect Input Parameters", "page": 527, "parameters": [
       {"name": "Amount", "kind": "slider"},
       {"name": "X", "kind": "slider"},
       {"name": "Y", "kind": "slider"},
       {"name": "Axis", "kind": "menu", "label": "Axis menu"},
-      {"name": "Anti-alias", "kind": "checkbox"}
+      {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Wave Effect Input Parameters", "page": 528, "parameters": [
       {"name": "Amount", "kind": "slider"},
@@ -406,27 +406,27 @@
       {"name": "Vertical Factor", "kind": "slider", "min": 0, "max": 100},
       {"name": "Number of Waves", "kind": "slider"},
       {"name": "Speed", "kind": "slider"},
-      {"name": "Random Seed", "kind": "slider"},
-      {"name": "Anti-alias", "kind": "checkbox"}
+      {"name": "Random Seed", "kind": "slider", "keyframeable": false},
+      {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Avid Pan & Zoom Effect Parameters", "page": 528, "parameters": [
-      {"name": "Import Image", "kind": "button", "subcategory": "Import Image"},
-      {"name": "Display", "kind": "menu", "label": "Display Menu", "subcategory": "Display Menu", "options": ["Source", "Target"]},
-      {"name": "Show Safe Action", "kind": "checkbox", "subcategory": "Display Options"},
-      {"name": "Use Subres in Preview", "kind": "checkbox", "subcategory": "Display Options"},
+      {"name": "Import Image", "kind": "button", "keyframeable": false, "subcategory": "Import Image"},
+      {"name": "Display", "kind": "menu", "label": "Display Menu", "keyframeable": false, "subcategory": "Display Menu", "options": ["Source", "Target"]},
+      {"name": "Show Safe Action", "kind": "checkbox", "keyframeable": false, "subcategory": "Display Options"},
+      {"name": "Use Subres in Preview", "kind": "checkbox", "keyframeable": false, "subcategory": "Display Options"},
       {"name": "Zoom Factor", "kind": "slider", "subcategory": "Size", "min": 0.1, "max": 20},
       {"name": "X", "kind": "slider", "subcategory": "Position"},
       {"name": "Y", "kind": "slider", "subcategory": "Position"},
       {"name": "Velocity In", "kind": "menu", "subcategory": "Velocity", "options": ["Linear", "Constant", "Ease In"]},
       {"name": "Velocity Out", "kind": "menu", "subcategory": "Velocity", "options": ["Linear", "Ease Out", "Constant", "Hold"]},
-      {"name": "Path", "kind": "menu", "label": "Path Menu", "subcategory": "Path Menu", "options": ["Linear", "Spline"]},
-      {"name": "Filtering", "kind": "menu", "label": "Filtering Menu", "subcategory": "Filtering Menu", "options": ["Real-Time", "Triangle", "Quadratic", "Cubic", "B-Spline Catmull", "Gaussian", "Avid High Qual", "Avid Ultra Qual"]},
-      {"name": "Background", "kind": "menu", "label": "Background Menu", "subcategory": "Background", "options": ["Color", "Video"]},
-      {"name": "Color controls", "kind": "color", "subcategory": "Background"},
-      {"name": "Source Has Square Pixels", "kind": "checkbox", "subcategory": "Advanced", "default": true},
-      {"name": "Source Levels", "kind": "menu", "subcategory": "Advanced", "default": "RGB", "options": ["RGB", "601"]},
-      {"name": "Cache", "kind": "menu", "label": "Cache Menu", "subcategory": "Cache Menu", "options": ["Free Current Cache", "Free All Caches"]},
-      {"name": "Progressive", "kind": "checkbox", "subcategory": "Render Mode"}
+      {"name": "Path", "kind": "menu", "label": "Path Menu", "keyframeable": false, "subcategory": "Path Menu", "options": ["Linear", "Spline"]},
+      {"name": "Filtering", "kind": "menu", "label": "Filtering Menu", "keyframeable": false, "subcategory": "Filtering Menu", "options": ["Real-Time", "Triangle", "Quadratic", "Cubic", "B-Spline Catmull", "Gaussian", "Avid High Qual", "Avid Ultra Qual"]},
+      {"name": "Background", "kind": "menu", "label": "Background Menu", "keyframeable": false, "subcategory": "Background", "options": ["Color", "Video"]},
+      {"name": "Color controls", "kind": "color", "keyframeable": false, "subcategory": "Background"},
+      {"name": "Source Has Square Pixels", "kind": "checkbox", "keyframeable": false, "subcategory": "Advanced", "default": true},
+      {"name": "Source Levels", "kind": "menu", "keyframeable": false, "subcategory": "Advanced", "default": "RGB", "options": ["RGB", "601"]},
+      {"name": "Cache", "kind": "menu", "label": "Cache Menu", "keyframeable": false, "subcategory": "Cache Menu", "options": ["Free Current Cache", "Free All Caches"]},
+      {"name": "Progressive", "kind": "checkbox", "keyframeable": false, "subcategory": "Render Mode"}
     ]},
     {"name": "Blur Effect Blur Parameters", "page": 532, "parameters": [
       {"name": "Opac.", "kind": "slider", "label": "opacity", "min": 0, "max": 100},
@@ -476,7 +476,7 @@
       {"name": "Use NaturalMatch", "kind": "button", "subcategory": "Color Match"}
     ]},
     {"name": "Paint Effect Color Parameters", "page": 544, "parameters": [
-      {"name": "Color controls", "kind": "color"}
+      {"name": "Color controls", "kind": "color", "keyframeable": false}
     ]},
     {"name": "Safe Color Limiter Parameters", "page": 545, "parameters": [
       {"name": "422 Safe", "kind": "checkbox", "subcategory": "422 Safe Parameter", "default": false},
@@ -507,9 +507,9 @@
       {"name": "Use NaturalMatch", "kind": "button"}
     ]},
     {"name": "Key Effects Key Parameters", "page": 548, "parameters": [
-      {"name": "Color controls", "kind": "color"},
-      {"name": "Gain", "kind": "slider", "min": 0, "max": 63},
-      {"name": "Soft", "kind": "slider", "label": "softness"}
+      {"name": "Color controls", "kind": "color", "keyframeable": false},
+      {"name": "Gain", "kind": "slider", "keyframeable": false, "min": 0, "max": 63},
+      {"name": "Soft", "kind": "slider", "label": "softness", "keyframeable": false}
     ]},
     {"name": "AniMatte Effect Mode Parameters", "page": 548, "parameters": [
       {"name": "Fast menu", "kind": "menu", "options": ["Key In", "Key Out"]},
@@ -518,27 +518,27 @@
     ]},
     {"name": "Chroma Key Profile, Secondary Key, and Spill Suppression Parameters", "page": 549, "parameters": [
       {"name": "Profile", "kind": "other", "subcategory": "Profile Parameter"},
-      {"name": "Color controls", "kind": "color", "subcategory": "Secondary Key Parameters"},
-      {"name": "Gain", "kind": "slider", "subcategory": "Secondary Key Parameters", "min": 0, "max": 63},
-      {"name": "Soft", "kind": "slider", "label": "softness", "subcategory": "Secondary Key Parameters"},
-      {"name": "Color controls", "kind": "color", "subcategory": "Spill Suppression Parameters"},
-      {"name": "Gain", "kind": "slider", "subcategory": "Spill Suppression Parameters", "min": 0, "max": 63},
-      {"name": "Soft", "kind": "slider", "label": "softness", "subcategory": "Spill Suppression Parameters"}
+      {"name": "Color controls", "kind": "color", "keyframeable": false, "subcategory": "Secondary Key Parameters"},
+      {"name": "Gain", "kind": "slider", "keyframeable": false, "subcategory": "Secondary Key Parameters", "min": 0, "max": 63},
+      {"name": "Soft", "kind": "slider", "label": "softness", "keyframeable": false, "subcategory": "Secondary Key Parameters"},
+      {"name": "Color controls", "kind": "color", "keyframeable": false, "subcategory": "Spill Suppression Parameters"},
+      {"name": "Gain", "kind": "slider", "keyframeable": false, "subcategory": "Spill Suppression Parameters", "min": 0, "max": 63},
+      {"name": "Soft", "kind": "slider", "label": "softness", "keyframeable": false, "subcategory": "Spill Suppression Parameters"}
     ]},
     {"name": "RGB Keyer Parameters", "page": 550, "parameters": [
-      {"name": "Key Color", "kind": "color", "subcategory": "Key Color Parameters"},
-      {"name": "Gain", "kind": "slider", "subcategory": "Chroma Key Parameters", "min": 0, "max": 100},
-      {"name": "Soft", "kind": "slider", "label": "softness", "subcategory": "Chroma Key Parameters", "min": 0, "max": 100},
-      {"name": "Show Alpha", "kind": "checkbox", "subcategory": "Chroma Key Parameters"},
-      {"name": "Spill", "kind": "slider", "subcategory": "Chroma Key Parameters", "min": 0, "max": 100},
-      {"name": "Level", "kind": "slider", "subcategory": "Chroma Key Parameters"},
-      {"name": "Reverse", "kind": "checkbox", "subcategory": "Chroma Key Parameters"},
-      {"name": "Blur", "kind": "slider", "subcategory": "Matte Control Parameters", "max": 100},
-      {"name": "Erode", "kind": "slider", "subcategory": "Matte Control Parameters"},
-      {"name": "Hue", "kind": "slider", "subcategory": "Color Correction Parameters", "min": -180, "max": 180},
-      {"name": "Sat", "kind": "slider", "label": "saturation", "subcategory": "Color Correction Parameters", "min": -100, "max": 100},
-      {"name": "Bright", "kind": "slider", "label": "brightness", "subcategory": "Color Correction Parameters", "min": -100, "max": 100},
-      {"name": "Cont", "kind": "slider", "label": "contrast", "subcategory": "Color Correction Parameters", "min": -100, "max": 100}
+      {"name": "Key Color", "kind": "color", "keyframeable": false, "subcategory": "Key Color Parameters"},
+      {"name": "Gain", "kind": "slider", "keyframeable": false, "subcategory": "Chroma Key Parameters", "min": 0, "max": 100},
+      {"name": "Soft", "kind": "slider", "label": "softness", "keyframeable": false, "subcategory": "Chroma Key Parameters", "min": 0, "max": 100},
+      {"name": "Show Alpha", "kind": "checkbox", "keyframeable": false, "subcategory": "Chroma Key Parameters"},
+      {"name": "Spill", "kind": "slider", "keyframeable": false, "subcategory": "Chroma Key Parameters", "min": 0, "max": 100},
+      {"name": "Level", "kind": "slider", "keyframeable": false, "subcategory": "Chroma Key Parameters"},
+      {"name": "Reverse", "kind": "checkbox", "keyframeable": false, "subcategory": "Chroma Key Parameters"},
+      {"name": "Blur", "kind": "slider", "keyframeable": false, "subcategory": "Matte Control Parameters", "max": 100},
+      {"name": "Erode", "kind": "slider", "keyframeable": false, "subcategory": "Matte Control Parameters"},
+      {"name": "Hue", "kind": "slider", "keyframeable": false, "subcategory": "Color Correction Parameters", "min": -180, "max": 180},
+      {"name": "Sat", "kind": "slider", "label": "saturation", "keyframeable": false, "subcategory": "Color Correction Parameters", "min": -100, "max": 100},
+      {"name": "Bright", "kind": "slider", "label": "brightness", "keyframeable": false, "subcategory": "Color Correction Parameters", "min": -100, "max": 100},
+      {"name": "Cont", "kind": "slider", "label": "contrast", "keyframeable": false, "subcategory": "Color Correction Parameters", "min": -100, "max": 100}
     ]},
     {"name": "SpectraMatte Parameters", "page": 551, "parameters": [
       {"name": "Bypass", "kind": "checkbox", "subcategory": "Bypass Parameter"},
@@ -564,38 +564,38 @@
       {"name": "Spill Angle Offset", "kind": "slider", "subcategory": "Spill Parameter", "min": 0, "max": 100}
     ]},
     {"name": "Freeze Frame Parameters", "page": 561, "parameters": [
-      {"name": "Duration", "kind": "other"},
-      {"name": "Two Field Freeze Frames", "kind": "menu", "options": ["Using Duplicated Field", "Using Both Fields", "Using Interpolated Field"]}
+      {"name": "Duration", "kind": "other", "keyframeable": false},
+      {"name": "Two Field Freeze Frames", "kind": "menu", "keyframeable": false, "options": ["Using Duplicated Field", "Using Both Fields", "Using Interpolated Field"]}
     ]},
     {"name": "Variable Speed and Strobe Motion Parameters", "page": 562, "parameters": [
-      {"name": "Duration n Frames", "kind": "other", "label": "Variable Speed"},
-      {"name": "Rate n FPS", "kind": "other", "label": "Variable Speed"},
-      {"name": "% Speed", "kind": "other", "label": "Variable Speed"},
-      {"name": "Fit To Fill", "kind": "checkbox", "label": "Variable Speed"},
-      {"name": "Update every n frames", "kind": "other", "label": "Strobe Motion"},
-      {"name": "Render 2-Field Motion Effect Using", "kind": "menu", "options": ["Duplicated Field", "Both Fields", "Interpolated Field", "VTR-Style"]},
-      {"name": "Ignore Render Setting", "kind": "checkbox"},
-      {"name": "Target Drive", "kind": "menu"}
+      {"name": "Duration n Frames", "kind": "other", "label": "Variable Speed", "keyframeable": false},
+      {"name": "Rate n FPS", "kind": "other", "label": "Variable Speed", "keyframeable": false},
+      {"name": "% Speed", "kind": "other", "label": "Variable Speed", "keyframeable": false},
+      {"name": "Fit To Fill", "kind": "checkbox", "label": "Variable Speed", "keyframeable": false},
+      {"name": "Update every n frames", "kind": "other", "label": "Strobe Motion", "keyframeable": false},
+      {"name": "Render 2-Field Motion Effect Using", "kind": "menu", "keyframeable": false, "options": ["Duplicated Field", "Both Fields", "Interpolated Field", "VTR-Style"]},
+      {"name": "Ignore Render Setting", "kind": "checkbox", "keyframeable": false},
+      {"name": "Target Drive", "kind": "menu", "keyframeable": false}
     ]},
     {"name": "14:9 Letterbox Position H Parameter", "page": 564, "parameters": [
       {"name": "Position H", "kind": "slider"}
     ]},
     {"name": "Pan and Scan Aspect Ratios and Actions Parameters", "page": 564, "parameters": [
-      {"name": "Source", "kind": "menu", "label": "Source Fast menu", "subcategory": "Aspect Ratios Parameters", "options": ["1.33 (4:3)", "1.66", "1.78 (16:9)", "1.85", "2.35", "15:9 anamorphic", "16:9 anamorphic"]},
-      {"name": "Target", "kind": "menu", "label": "Target Fast menu", "subcategory": "Aspect Ratios Parameters", "options": ["1.33 (4:3)", "16:9 anamorphic"]},
-      {"name": "Establish Origin", "kind": "button", "subcategory": "Actions Parameters"},
-      {"name": "Subdivide Effect", "kind": "button", "subcategory": "Actions Parameters"},
-      {"name": "Reset to Origin", "kind": "button", "subcategory": "Actions Parameters"}
+      {"name": "Source", "kind": "menu", "label": "Source Fast menu", "keyframeable": false, "subcategory": "Aspect Ratios Parameters", "options": ["1.33 (4:3)", "1.66", "1.78 (16:9)", "1.85", "2.35", "15:9 anamorphic", "16:9 anamorphic"]},
+      {"name": "Target", "kind": "menu", "label": "Target Fast menu", "keyframeable": false, "subcategory": "Aspect Ratios Parameters", "options": ["1.33 (4:3)", "16:9 anamorphic"]},
+      {"name": "Establish Origin", "kind": "button", "keyframeable": false, "subcategory": "Actions Parameters"},
+      {"name": "Subdivide Effect", "kind": "button", "keyframeable": false, "subcategory": "Actions Parameters"},
+      {"name": "Reset to Origin", "kind": "button", "keyframeable": false, "subcategory": "Actions Parameters"}
     ]},
     {"name": "FluidMotion Edit Parameters for Timewarp Effects", "page": 565, "parameters": [
-      {"name": "Fast menu", "kind": "menu", "subcategory": "Display Parameters", "options": ["Color Warp 50%", "Warp 50%", "Image A", "Image B"]},
-      {"name": "Show Vectors", "kind": "checkbox", "subcategory": "Display Parameters"},
-      {"name": "Min", "kind": "slider", "label": "Motion Color Threshold minimum", "subcategory": "Display Parameters"},
-      {"name": "Max", "kind": "slider", "label": "Motion Color Threshold maximum", "subcategory": "Display Parameters"},
-      {"name": "T", "kind": "slider", "label": "top", "subcategory": "Mask Parameters"},
-      {"name": "B", "kind": "slider", "label": "bottom", "subcategory": "Mask Parameters"},
-      {"name": "L", "kind": "slider", "label": "left", "subcategory": "Mask Parameters"},
-      {"name": "R", "kind": "slider", "label": "right", "subcategory": "Mask Parameters"},
+      {"name": "Fast menu", "kind": "menu", "keyframeable": false, "subcategory": "Display Parameters", "options": ["Color Warp 50%", "Warp 50%", "Image A", "Image B"]},
+      {"name": "Show Vectors", "kind": "checkbox", "keyframeable": false, "subcategory": "Display Parameters"},
+      {"name": "Min", "kind": "slider", "label": "Motion Color Threshold minimum", "keyframeable": false, "subcategory": "Display Parameters"},
+      {"name": "Max", "kind": "slider", "label": "Motion Color Threshold maximum", "keyframeable": false, "subcategory": "Display Parameters"},
+      {"name": "T", "kind": "slider", "label": "top", "keyframeable": false, "subcategory": "Mask Parameters"},
+      {"name": "B", "kind": "slider", "label": "bottom", "keyframeable": false, "subcategory": "Mask Parameters"},
+      {"name": "L", "kind": "slider", "label": "left", "keyframeable": false, "subcategory": "Mask Parameters"},
+      {"name": "R", "kind": "slider", "label": "right", "keyframeable": false, "subcategory": "Mask Parameters"},
       {"name": "Fast menu", "kind": "menu", "subcategory": "Mode Parameters", "options": ["Set Vector", "Add Vector", "Erase"]},
       {"name": "Opac.", "kind": "slider", "label": "opacity", "subcategory": "Mode Parameters", "min": 0, "max": 100},
       {"name": "Object Visible", "kind": "checkbox", "subcategory": "Mode Parameters"},
@@ -649,12 +649,12 @@
       {"name": "Offset", "kind": "slider", "min": -100, "max": 100}
     ]},
     {"name": "Erode/Expand", "page": 573, "parameters": [
-      {"name": "Filter", "kind": "slider", "min": 1, "max": 7},
-      {"name": "Center", "kind": "slider", "min": 0, "max": 255},
-      {"name": "Soft", "kind": "slider", "label": "softness", "min": 0, "max": 255}
+      {"name": "Filter", "kind": "slider", "keyframeable": false, "min": 1, "max": 7},
+      {"name": "Center", "kind": "slider", "keyframeable": false, "min": 0, "max": 255},
+      {"name": "Soft", "kind": "slider", "label": "softness", "keyframeable": false, "min": 0, "max": 255}
     ]},
     {"name": "Foreground (3D)", "page": 573, "parameters": [
-      {"name": "Type", "kind": "menu", "label": "Type menu", "subcategory": "Parameters Common to All Key Types", "default": "Full Key", "options": ["Full Key", "Luma Key", "Chroma Key", "SpectraMatte Key"]},
+      {"name": "Type", "kind": "menu", "label": "Type menu", "keyframeable": false, "subcategory": "Parameters Common to All Key Types", "default": "Full Key", "options": ["Full Key", "Luma Key", "Chroma Key", "SpectraMatte Key"]},
       {"name": "Opac.", "kind": "slider", "label": "opacity", "subcategory": "Parameters Common to All Key Types", "min": 0, "max": 100},
       {"name": "Invert", "kind": "checkbox", "subcategory": "Parameters Common to All Key Types"},
       {"name": "Swap Sources", "kind": "button", "subcategory": "Parameters Common to All Key Types"},
@@ -721,7 +721,7 @@
       {"name": "Y", "kind": "slider", "min": -100, "max": 0, "default": -50}
     ]},
     {"name": "Shape", "page": 579, "parameters": [
-      {"name": "Type", "kind": "menu", "label": "Type menu", "subcategory": "Common Parameters for Shapes", "options": ["Page Fold", "Ball", "Slats"]},
+      {"name": "Type", "kind": "menu", "label": "Type menu", "keyframeable": false, "subcategory": "Common Parameters for Shapes", "options": ["Page Fold", "Ball", "Slats"]},
       {"name": "Highlight", "kind": "menu", "label": "Highlight menu", "subcategory": "Common Parameters for Shapes", "options": ["Auto Highlight", "Manual Highlight", "Reverse Manual Highlight"]},
       {"name": "Curl", "kind": "slider", "subcategory": "Additional Parameters for the Page Fold Shape", "min": 0, "max": 100},
       {"name": "Radius", "kind": "slider", "subcategory": "Additional Parameters for the Page Fold Shape", "min": 0, "max": 100, "default": 15},

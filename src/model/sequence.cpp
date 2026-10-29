@@ -3,6 +3,7 @@
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/clip_audio.h"
+#include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
 
@@ -1680,9 +1681,11 @@ QList<TrimRoller> trim(Sequence& sequence, const QList<TrimRoller>& all, TrimKin
         Segment* a = e.a >= 0 ? &t->segments[e.a] : nullptr;
         Segment* b = e.b >= 0 ? &t->segments[e.b] : nullptr;
         auto trimHead = [](Segment* s, std::int64_t by) {
-            // Takes `by` frames off the start (negative: adds them).
+            // Takes `by` frames off the start (negative: adds them). Fixed effect keyframes stay with
+            // the material (FX Guide p.124).
             if (!s->isFiller()) s->sourceIn += by;
             s->length -= by;
+            if (s->effect) shiftFixedKeyframes(*s->effect, -by);
         };
         if (r.side == TrimSide::Both) {
             a->length += delta;
@@ -1790,6 +1793,7 @@ std::int64_t slideSegments(Sequence& sequence, QList<SegmentRef>& segments, std:
         Segment& next = t->segments[i + 1];
         if (!next.isFiller()) next.sourceIn += delta;
         next.length -= delta;
+        if (next.effect) shiftFixedKeyframes(*next.effect, -delta);
         ref.start += delta;
         sequence.normalize(ref.track);
     }
