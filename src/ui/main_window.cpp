@@ -1477,6 +1477,11 @@ void MainWindow::createTools() {
         if (timeline_->options().openEffectEditor) showTool(QStringLiteral("EffectEditor"));
     });
     effectEditor_ = new EffectEditor(*timeline_);
+    // "Media Composer opens the Effect Editor and the Record monitor becomes the Effect Preview monitor"
+    // (FX Guide p.49).
+    connect(timeline_, &Timeline::effectModeChanged, this, [this](bool on) {
+        if (on) showTool(QStringLiteral("EffectEditor"));
+    });
     // The Effect Editor shortcut menu changes the Effect Editor setting too (p.131).
     connect(effectEditor_, &EffectEditor::optionsChanged, this, [this] {
         const EffectEditor::Options o = effectEditor_->options();

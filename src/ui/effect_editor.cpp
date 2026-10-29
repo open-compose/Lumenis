@@ -311,6 +311,18 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     layout->addLayout(bottom);
 
     connect(&timeline_, &Timeline::changed, this, &EffectEditor::refresh);
+    connect(&timeline_, &Timeline::effectModeChanged, this, &EffectEditor::refresh);
+    // The Effect Preview monitor's keyframes and buttons (FX Guide p.76-77, p.103-106): its Add Keyframe
+    // button runs the default command without the menu; Alt+click deletes the selected keyframes.
+    connect(&timeline_.composer(), &Composer::effectKeyframePressed, this, &EffectEditor::previewKeyframePressed);
+    connect(&timeline_.composer(), &Composer::effectCommandRequested, this, [this](const QString& id, bool alt) {
+        if (id == QLatin1String("effect.add_keyframe")) {
+            if (alt) deleteKeyframes(mode_);
+            else addKeyframes(mode_);
+        } else if (id == QLatin1String("effect.previous_event") || id == QLatin1String("effect.next_event")) {
+            goToEvent(id == QLatin1String("effect.next_event"));
+        }
+    });
     connect(&timeline_.composer(), &Composer::changed, this, &EffectEditor::refresh);
     refresh();
 }
@@ -398,6 +410,7 @@ void EffectEditor::refresh() {
     syncTransition();
     // The position in the tracks moves while playing only with Update Position While Playing (p.132).
     if (updateWhilePlaying_ || !timeline_.composer().isPlaying()) updateTracks();
+    else syncPreview();
 }
 
 bool EffectEditor::isBlank() const {

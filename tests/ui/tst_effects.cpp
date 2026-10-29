@@ -414,6 +414,12 @@ private slots:
         // Remove Effect is on the Command Palette's FX tab (p.97, FX p.46).
         QVERIFY(window.commandPalette().commandsOn(QStringLiteral("FX")).contains(QStringLiteral("fx.remove_effect")));
         QVERIFY(window.commandPalette().commandsOn(QStringLiteral("FX")).contains(QStringLiteral("fx.fade_effect")));
+        // The Effect Mode button opens the Effect Editor (FX p.49).
+        window.panels().closePanel(window.panels().panel(QStringLiteral("EffectEditor")));
+        QVERIFY(!window.panels().isOpen(window.panels().panel(QStringLiteral("EffectEditor"))));
+        commands.action(QStringLiteral("fx.effect_mode"))->trigger();
+        QVERIFY(window.panels().isOpen(window.panels().panel(QStringLiteral("EffectEditor"))));
+        commands.action(QStringLiteral("edit.source_record_mode"))->trigger();
     }
 };
 

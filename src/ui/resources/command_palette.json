@@ -28,7 +28,7 @@
       ["trim.select_nearest_transition", "trim.select_previous_transition", "trim.select_next_transition", "trim.play_loop"]
     ]},
     {"name": "FX", "page": 97, "columns": [
-      ["fx.remove_effect", "fx.add_keyframe", "fx.fade_effect"]
+      ["fx.remove_effect", "fx.add_keyframe", "fx.fade_effect", "fx.effect_mode"]
     ]},
     {"name": "3D", "page": 96, "columns": []},
     {"name": "CC", "page": 96, "columns": []},
@@ -47,7 +47,7 @@
        {"id": "other.add_option_key", "platforms": ["macos"]}]
     ]},
     {"name": "More", "page": 96, "columns": [
-      ["more.add_marker", "edit.toggle_source_record"],
+      ["more.add_marker", "edit.toggle_source_record", "edit.source_record_mode"],
       ["timeline.view.tv1", "timeline.view.tv2", "timeline.view.tv3", "timeline.view.tv4"],
       ["timeline.view.tv5", "timeline.view.tv6", "timeline.view.tv7", "timeline.view.tv8"]
     ]},

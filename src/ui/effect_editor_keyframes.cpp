@@ -648,6 +648,55 @@ void EffectEditor::updateTracks() {
     for (QToolButton* b : {addKeyframe_, prevEvent_, nextEvent_}) {
         if (b) b->setEnabled(keyed);
     }
+    syncPreview();
+}
+
+void EffectEditor::syncPreview() {
+    Composer::EffectPreview preview;
+    const model::Effect* e = shownEffect();
+    if (timeline_.isEffectMode() && shown_ && e) {
+        preview.on = true;
+        preview.start = effectStart_;
+        preview.length = span_.length;
+        // "Keyframe indicators in the Effect Preview monitor's position bar behave in the same way as
+        // keyframe indicators in the effect track"; it is highlighted "only if all the keyframes in the
+        // column are highlighted" (p.103).
+        QList<std::pair<double, bool>> columns;
+        for (const QString& p : keyframeableParameters()) {
+            const model::ParameterKeyframes keys = model::keyframesOf(*e, categoryOf(p), nameOf(p));
+            for (int i = 0; i < keys.keys.size(); ++i) {
+                const double t = model::keyframeTime(keys, keys.keys.at(i), span_);
+                const bool selected = selection_.contains(KeyframeId{p, i});
+                auto same = std::find_if(columns.begin(), columns.end(), [&](const auto& c) { return std::abs(c.first - t) <= span_.halfFrame(); });
+                if (same == columns.end()) columns.append({t, selected});
+                else same->second = same->second && selected;
+            }
+        }
+        for (const auto& [t, selected] : columns) preview.keyframes << Composer::EffectPreview::Keyframe{span_.frameOf(t), selected};
+    }
+    timeline_.composer().setEffectPreview(preview);
+}
+
+void EffectEditor::previewKeyframePressed(double frame, bool extend) {
+    const model::Effect* e = shownEffect();
+    if (!e) return;
+    const double t = span_.timeOf(frame);
+    QList<KeyframeId> column;
+    for (const QString& p : keyframeableParameters()) {
+        const int i = model::keyframeAt(model::keyframesOf(*e, categoryOf(p), nameOf(p)), t, span_);
+        if (i >= 0) column << KeyframeId{p, i};
+    }
+    if (extend) {
+        const bool all = std::all_of(column.begin(), column.end(), [&](const KeyframeId& id) { return selection_.contains(id); });
+        for (const KeyframeId& id : column) {
+            selection_.removeAll(id);
+            if (!all) selection_ << id;
+        }
+    } else {
+        selection_ = column;
+    }
+    if (positionToKeyframe_) moveToTime(t);
+    updateTracks();
 }
 
 void EffectEditor::resizeEvent(QResizeEvent* event) {

@@ -585,6 +585,11 @@ public:
     // Trim mode (ch. 20). Rollers sit on edit points; single-roller trims
     // are Ripple or Overwrite (the trim tools, p.650).
     bool isTrimMode() const { return trimMode_; }
+    // Effect mode (FX Guide p.48-50): the Effect Mode button opens the Effect Editor and turns the
+    // Record monitor into the Effect Preview monitor (the Effect Editor drives it). It leaves Trim mode;
+    // Trim mode, slipping and the Source/Record Mode button leave it (Editing Guide p.457, p.652).
+    bool isEffectMode() const { return effectMode_; }
+    void setEffectMode(bool on);
     // The rollers on the record sequence, empty when slipping.
     const QList<model::TrimRoller>& rollers() const { return rollers_; }
     model::TrimKind trimKind() const { return trimKind_; }
@@ -982,6 +987,8 @@ public:
 signals:
     // The shown item, the selection, the patch or Trim mode changed.
     void changed();
+    // Effect mode was entered or left.
+    void effectModeChanged(bool on);
     // An effect was put on segments or transitions (Applying Effects opens Effect Editor, p.1220).
     void effectApplied();
     // The Track Control panel's Solo (`solo`) or Mute button for `track` was clicked (p.602).
@@ -1138,6 +1145,7 @@ private:
     bool spliceTool_ = false;
     QList<model::SegmentRef> selection_;
     bool trimMode_ = false;
+    bool effectMode_ = false;
     QList<model::TrimRoller> rollers_;
     QList<model::TrimRoller> lastRollers_;
     model::TrimKind trimKind_ = model::TrimKind::Ripple;

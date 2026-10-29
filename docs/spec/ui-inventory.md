@@ -127,6 +127,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   thumbwheel, pasted offsets in frames, handle lengths measured on screen,
   the handle method staying until changed, Indent Rows on by default, and
   the shortcut menu writing the setting.
+* Effect mode (docs/spec/effect-mode.md): the Effect Mode button on the
+  FX tab and Source/Record Mode on the More tab; a second click on Effect
+  Mode leaving it; the Effect Preview's Go to Previous/Next Event going to
+  keyframes (p.128) where p.77's table says the sequence's first and last
+  frames; the Record monitor returning outside an effect; the zoom steps;
+  the toolbar's pictures; no field numbers in the position box.
 * Volume and pan automation (docs/spec/automation.md):
   * pan automation takes the place of the clip pan instead of adding to it;
   * a -∞ keyframe ramps from -96 dB;
@@ -1763,8 +1769,10 @@ p.610–640, ch. 13 p.432–434).**
   * The Effect Editor's parameters and Transition parameters, all
     undoable.
 * **Not yet:**
-  * Effect mode and the Effect Preview monitor.
-  * Rendering, keyframes and effect templates.
+  * Effect mode and the Effect Preview monitor: done in 6.2c
+    (docs/spec/effect-mode.md).
+  * Keyframes: done in 6.2 (docs/spec/effect-keyframes.md). Rendering and
+    effect templates.
   * Quick Transition, Head Fade and Tail Fade.
   * Audio effects.
   * Applying effects to clips in the Source monitor.

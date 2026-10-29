@@ -154,6 +154,33 @@ bool later(const QString&) {
 }
 
 // Trim buttons: one or two arrowheads pointing back or forward.
+// Our Effect Preview toolbar pictures: a magnifier with minus (Reduce, -1) or plus (Enlarge, 1), a
+// keyframe triangle with a plus (Add Keyframe, 0), and a split frame (Dual Split, 2).
+QIcon previewIcon(int which, const QColor& color) {
+    QPixmap pm(32, 32);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(color, 2.5));
+    if (which == 1 || which == -1) {
+        p.drawEllipse(QPointF(13, 13), 8, 8);
+        p.drawLine(QPointF(19, 19), QPointF(27, 27));
+        p.drawLine(QPointF(9, 13), QPointF(17, 13));
+        if (which == 1) p.drawLine(QPointF(13, 9), QPointF(13, 17));
+    } else if (which == 0) {
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(0xff, 0x8c, 0xc8));
+        p.drawPolygon(QPolygonF{QPointF(4, 8), QPointF(18, 8), QPointF(11, 22)});
+        p.setPen(QPen(color, 2.5));
+        p.drawLine(QPointF(24, 10), QPointF(24, 24));
+        p.drawLine(QPointF(17, 17), QPointF(31, 17));
+    } else {
+        p.drawRect(QRectF(4, 7, 24, 18));
+        p.drawLine(QPointF(16, 7), QPointF(16, 25));
+    }
+    return QIcon(pm);
+}
+
 QIcon trimGlyph(const QString& label) {
     QPixmap pm(48, 32);
     pm.fill(Qt::transparent);
@@ -469,19 +496,28 @@ QSize PositionBar::sizeHint() const {
     return {200, kBarHeight};
 }
 
-// The bar spans the whole clip: x = 0 is frame 0 and the right edge the last frame (duration - 1).
-// x outside the bar is clamped; frameAt and xFor are each other's inverse up to rounding.
+// The clip's frames, or in the Effect Preview monitor the effect's: "The position bar below the
+// Effect Preview monitor represents the length of the selected effect, not of the entire sequence"
+// (FX Guide p.49).
+std::pair<std::int64_t, std::int64_t> PositionBar::span() const {
+    const Composer::EffectPreview& e = composer_.effectPreview();
+    if (monitor_ == MonitorId::Record && e.on) return {e.start, e.start + std::max<std::int64_t>(e.length - 1, 0)};
+    return {0, composer_.state(monitor_).duration() - 1};
+}
+
+// The bar spans the whole clip (or effect, span()): x = 0 is its first frame and the right edge its
+// last. x outside the bar is clamped; frameAt and xFor are each other's inverse up to rounding.
 std::int64_t PositionBar::frameAt(int x) const {
-    const std::int64_t d = composer_.state(monitor_).duration();
-    if (d <= 1 || width() <= 1) return 0;
+    const auto [first, last] = span();
+    if (last <= first || width() <= 1) return first;
     const double t = std::clamp(static_cast<double>(x) / static_cast<double>(width() - 1), 0.0, 1.0);
-    return std::llround(t * static_cast<double>(d - 1));
+    return first + std::llround(t * static_cast<double>(last - first));
 }
 
 int PositionBar::xFor(std::int64_t frame) const {
-    const std::int64_t d = composer_.state(monitor_).duration();
-    if (d <= 1) return 0;
-    return static_cast<int>(std::lround(static_cast<double>(frame) / static_cast<double>(d - 1) * (width() - 1)));
+    const auto [first, last] = span();
+    if (last <= first) return 0;
+    return static_cast<int>(std::lround(static_cast<double>(frame - first) / static_cast<double>(last - first) * (width() - 1)));
 }
 
 // Background (Source/Record colour or plain grey) with 24 tick marks, then the marked span, the
@@ -493,6 +529,20 @@ void PositionBar::paintEvent(QPaintEvent*) {
     if (composer_.sourceRecordColors()) base = QColor(monitor_ == MonitorId::Source ? kSourceBar : kRecordBar);
     p.fillRect(rect(), base);
     if (s.isEmpty()) return;
+    // The Effect Preview monitor's bar: the effect, its keyframes as triangles (pink when selected,
+    // p.76) and the position indicator.
+    if (const Composer::EffectPreview& e = composer_.effectPreview(); monitor_ == MonitorId::Record && e.on) {
+        const auto [first, last] = span();
+        p.setRenderHint(QPainter::Antialiasing);
+        for (const Composer::EffectPreview::Keyframe& k : e.keyframes) {
+            const double x = last > first ? k.frame / static_cast<double>(last - first) * (width() - 1) : 0.0;
+            p.setPen(Qt::NoPen);
+            p.setBrush(k.selected ? QColor(0xff, 0x8c, 0xc8) : QColor(0xc4, 0xc4, 0xc4));
+            p.drawPolygon(QPolygonF{QPointF(x - 4, 1), QPointF(x + 4, 1), QPointF(x, height() - 2)});
+        }
+        p.fillRect(QRect(xFor(s.position()) - 1, 0, 2, height()), QColor(kIndicator));
+        return;
+    }
     // Tick Marks in Position Bars (p.1159): "duration indicators that appear incrementally along the
     // position bars". Ours: one every 1, 2, 5, 10 or 30 seconds, or 1, 5, 10 or 30 minutes, the first
     // interval that leaves at least 6 pixels between them.
@@ -557,6 +607,16 @@ void PositionBar::mouseDoubleClickEvent(QMouseEvent* event) {
 // Clicking the bar activates its monitor, stops playback and jumps there; dragging with the left
 // button held keeps moving (mouseMoveEvent).
 void PositionBar::mousePressEvent(QMouseEvent* event) {
+    // A keyframe indicator in the Effect Preview monitor's bar selects as the effect track does (p.103).
+    if (const Composer::EffectPreview& e = composer_.effectPreview(); monitor_ == MonitorId::Record && e.on) {
+        const auto [first, last] = span();
+        for (const Composer::EffectPreview::Keyframe& k : e.keyframes) {
+            const double x = last > first ? k.frame / static_cast<double>(last - first) * (width() - 1) : 0.0;
+            if (std::abs(x - event->position().x()) > 5.0) continue;
+            emit composer_.effectKeyframePressed(k.frame, event->modifiers() & Qt::ControlModifier);
+            return;
+        }
+    }
     composer_.setActiveMonitor(monitor_);
     composer_.stop();
     composer_.moveTo(monitor_, frameAt(event->position().toPoint().x()));
@@ -586,7 +646,16 @@ QRect MonitorPicture::pictureRect() const {
         h = height();
         w = static_cast<int>(std::lround(h * ratio));
     }
-    return {(width() - w) / 2, (height() - h) / 2, w, h};
+    QRect r((width() - w) / 2, (height() - h) / 2, w, h);
+    // The Effect Preview's Reduce and Enlarge (FX Guide p.76-77, p.81-82): scaled about the middle and
+    // moved as dragged.
+    if (monitor_ == MonitorId::Record && composer_.effectPreview().on && composer_.previewZoom() != 0) {
+        const double scale = std::pow(2.0, composer_.previewZoom());
+        const QSizeF size(w * scale, h * scale);
+        const QPointF centre = QPointF(width() / 2.0, height() / 2.0) + composer_.previewPan();
+        r = QRectF(centre - QPointF(size.width() / 2.0, size.height() / 2.0), size).toRect();
+    }
+    return r;
 }
 
 // Draws, in order: the dark surround and the black picture area, the frame from the PictureResolver
@@ -717,6 +786,17 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
 }
 
 void MonitorPicture::mousePressEvent(QMouseEvent* event) {
+    if (monitor_ == MonitorId::Record && composer_.effectPreview().on && (event->modifiers() & Qt::ControlModifier)) {
+        // Ctrl+Alt: "The pointer changes to a hand. Drag the hand ... to reposition the image" (p.82);
+        // Ctrl alone: "Ctrl+click ... in the Effect Preview monitor to enlarge the image" (p.77).
+        if (event->modifiers() & Qt::AltModifier) {
+            panFrom_ = event->position();
+            setCursor(Qt::ClosedHandCursor);
+        } else {
+            composer_.setPreviewZoom(composer_.previewZoom() + 1);
+        }
+        return;
+    }
     if (const std::optional<model::TrimSide> side = shownTrimSide()) {
         // "Click either the outgoing (A-side) or incoming (B-side) monitor to play in real time during
         // the trim" (p.659): the Record monitor plays the sequence; the clicked side follows it.
@@ -740,6 +820,19 @@ void MonitorPicture::mousePressEvent(QMouseEvent* event) {
             return;
         }
     }
+}
+
+void MonitorPicture::mouseMoveEvent(QMouseEvent* event) {
+    // "This feature applies only to an enlarged image" (p.82).
+    const bool panning = monitor_ == MonitorId::Record && composer_.effectPreview().on && composer_.previewZoom() > 0 &&
+                         (event->buttons() & Qt::LeftButton) && (event->modifiers() & Qt::ControlModifier) &&
+                         (event->modifiers() & Qt::AltModifier);
+    if (!panning) {
+        unsetCursor();
+        return;
+    }
+    composer_.panPreview(event->position() - panFrom_);
+    panFrom_ = event->position();
 }
 
 void MonitorPicture::contextMenuEvent(QContextMenuEvent* event) {
@@ -898,6 +991,50 @@ Composer::Composer(QWidget* parent) : QWidget(parent) {
     trims->addStretch(1);
     trimBar_->hide();
     outer->addWidget(trimBar_);
+
+    // The Effect Preview monitor's toolbar (FX Guide p.76-77), under the monitors in Effect mode.
+    effectBar_ = new QWidget(this);
+    effectBar_->setObjectName(QStringLiteral("effectBar"));
+    auto* fx = new QHBoxLayout(effectBar_);
+    fx->setContentsMargins(0, 0, 0, 0);
+    fx->setSpacing(2);
+    fx->addStretch(1);
+    const QColor ink(0xc8, 0xc8, 0xc8);
+    struct EffectButton {
+        const char* id;
+        const char* tip;
+        QIcon icon;
+        bool enabled;
+    };
+    const EffectButton effectButtons[] = {
+        {"effect.reduce", QT_TR_NOOP("Reduce"), previewIcon(-1, ink), true},
+        {"effect.enlarge", QT_TR_NOOP("Enlarge"), previewIcon(1, ink), true},
+        {"effect.add_keyframe", QT_TR_NOOP("Add Keyframe"), previewIcon(0, ink), true},
+        {"effect.step_backward", QT_TR_NOOP("Step Backward One Frame"), glyph(Glyph::StepBack, ink), true},
+        {"effect.step_forward", QT_TR_NOOP("Step Forward One Frame"), glyph(Glyph::StepForward, ink), true},
+        {"effect.play", QT_TR_NOOP("Play"), glyph(Glyph::Play, ink), true},
+        // Play Preview needs wire frames and Dual Split the frame without its effect; both come later.
+        {"effect.play_preview", QT_TR_NOOP("Play Preview"), glyph(Glyph::Play, ink.darker(180)), false},
+        {"effect.play_loop", QT_TR_NOOP("Play Loop"), glyph(Glyph::PlayInToOut, ink), true},
+        {"effect.dual_split", QT_TR_NOOP("Dual Split"), previewIcon(2, ink), false},
+        {"effect.previous_event", QT_TR_NOOP("Go to Previous Event"), glyph(Glyph::PrevEvent, ink), true},
+        {"effect.next_event", QT_TR_NOOP("Go to Next Event"), glyph(Glyph::NextEvent, ink), true},
+    };
+    for (const EffectButton& e : effectButtons) {
+        auto* b = new QToolButton(effectBar_);
+        b->setObjectName(QString::fromLatin1(e.id));
+        b->setToolTip(tr(e.tip));
+        b->setAutoRaise(true);
+        b->setFixedSize(kButtonWidth + 4, kToolButtonHeight);
+        b->setIcon(e.icon);
+        b->setEnabled(e.enabled);
+        const QString id = QString::fromLatin1(e.id);
+        connect(b, &QToolButton::clicked, this, [this, id] { effectButton(id); });
+        fx->addWidget(b);
+    }
+    fx->addStretch(1);
+    effectBar_->hide();
+    outer->addWidget(effectBar_);
     // The four-frame display's offset counter, centred below the monitors (p.617).
     dragCounter_ = new QLabel(this);
     dragCounter_->setObjectName(QStringLiteral("dragCounter"));
@@ -964,6 +1101,17 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
     } else {
         info->addWidget(c->tracking, 3);
         info->addWidget(c->clipName, 3);
+        // In the Effect Preview: "The two boxes above the Effect Preview monitor display the length of
+        // the effect in seconds and frames and the current position in the effect's position bar ...
+        // These boxes replace the name of the sequence" (FX Guide p.77-78).
+        effectLength_ = infoBox(c->widget, QStringLiteral("effectLength"));
+        effectPosition_ = infoBox(c->widget, QStringLiteral("effectPosition"));
+        effectLength_->setToolTip(tr("Length of effect"));
+        effectPosition_->setToolTip(tr("Current position in effect"));
+        effectLength_->hide();
+        effectPosition_->hide();
+        info->addWidget(effectLength_, 1);
+        info->addWidget(effectPosition_, 1);
     }
 
     // The second row of data, above the first (the picture on p.384).
@@ -1221,6 +1369,7 @@ void Composer::setDisplay(const Display& display) {
     }
     center_->setVisible(display.infoRow && display.centerDuration);
     applyRows();
+    applyEffectPreview();
     refresh();
 }
 
@@ -1413,7 +1562,79 @@ void Composer::setTrimDisplay(const TrimDisplay& display) {
     for (int i = 0; i < smallCounters_.size(); ++i) paintCounter(smallCounters_.at(i), i == 0);
     column(MonitorId::Source).widget->setVisible(display.on || !single_);
     trimBar_->setVisible(display.on);
+    applyEffectPreview();
     refresh();
+}
+
+void Composer::setEffectPreview(const EffectPreview& preview) {
+    if (preview == effect_) return;
+    effect_ = preview;
+    if (!effect_.on) {
+        zoom_ = 0;
+        pan_ = {};
+    }
+    applyEffectPreview();
+    refresh();
+}
+
+// The Record column in the Effect Preview: its boxes instead of the sequence's name, the toolbar
+// instead of its buttons; otherwise as the display and Trim mode have them.
+void Composer::applyEffectPreview() {
+    if (!effectBar_) return;
+    Column& c = column(MonitorId::Record);
+    const bool on = effect_.on;
+    c.clipName->setVisible(display_.infoRow && !on);
+    effectLength_->setVisible(display_.infoRow && on);
+    effectPosition_->setVisible(display_.infoRow && on);
+    const bool trimHere = trim_.on;
+    c.controls->setVisible(!on && !trimHere && display_.buttonRows > 0);
+    effectBar_->setVisible(on && !trimHere);
+}
+
+void Composer::setPreviewZoom(int steps) {
+    // Ours: from a quarter of the monitor's size to eight times it.
+    zoom_ = std::clamp(steps, -2, 3);
+    if (zoom_ <= 0) pan_ = {};
+    picture(MonitorId::Record)->update();
+}
+
+void Composer::panPreview(const QPointF& by) {
+    if (zoom_ <= 0) return;
+    pan_ += by;
+    picture(MonitorId::Record)->update();
+}
+
+void Composer::effectButton(const QString& id) {
+    const std::int64_t first = effect_.start;
+    const std::int64_t last = effect_.start + std::max<std::int64_t>(effect_.length - 1, 0);
+    model::MonitorState& rec = state(MonitorId::Record);
+    if (id == QLatin1String("effect.reduce") || id == QLatin1String("effect.enlarge")) {
+        setPreviewZoom(zoom_ + (id == QLatin1String("effect.enlarge") ? 1 : -1));
+    } else if (id == QLatin1String("effect.step_backward") || id == QLatin1String("effect.step_forward")) {
+        stop();
+        moveTo(MonitorId::Record, std::clamp(rec.position() + (id == QLatin1String("effect.step_forward") ? 1 : -1), first, last));
+    } else if (id == QLatin1String("effect.play")) {
+        // "Plays the effect from the current position in the effect's position bar. Click again or press
+        // the space bar to stop play" (p.77); "Play continues until the end of the effect" (p.55).
+        if (isPlaying()) {
+            stop();
+            return;
+        }
+        setActiveMonitor(MonitorId::Record);
+        if (rec.position() >= last) moveTo(MonitorId::Record, first);
+        stopAt_ = last;
+        play(1);
+    } else if (id == QLatin1String("effect.play_loop")) {
+        // "Plays back the current effect repeatedly in a loop" (p.77), from its start (p.55).
+        if (isPlaying()) {
+            stop();
+            return;
+        }
+        setActiveMonitor(MonitorId::Record);
+        playLoop(MonitorId::Record, first, last);
+    } else {
+        emit effectCommandRequested(id, QApplication::keyboardModifiers() & Qt::AltModifier);
+    }
 }
 
 void Composer::setViewerBackground(const QColor& color) {
@@ -2150,6 +2371,16 @@ void Composer::refresh() {
         if (smallTrim_) smallTrim_->update();
     }
     if (center_) center_->setText(centerDuration());
+    if (effect_.on && effectLength_) {
+        // Seconds and frames (p.77): "5:07" in the picture on p.76.
+        const model::LoadedClip* rec = state(MonitorId::Record).current();
+        const std::int64_t fps = rec ? std::max(TimecodeFormat::forRate(rec->item.editRate, false).nominalFps, 1) : 30;
+        auto text = [fps](std::int64_t frames) {
+            return QStringLiteral("%1:%2").arg(frames / fps).arg(frames % fps, 2, 10, QLatin1Char('0'));
+        };
+        effectLength_->setText(text(effect_.length));
+        effectPosition_->setText(text(std::clamp<std::int64_t>(state(MonitorId::Record).position() - effect_.start, 0, effect_.length)));
+    }
     emit changed();
 }
 

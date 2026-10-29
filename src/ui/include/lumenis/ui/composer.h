@@ -51,6 +51,8 @@ protected:
 
 private:
     std::optional<model::Marker> markerAt(int x) const;
+    // The frames the bar spans: the clip, or in the Effect Preview monitor only the effect.
+    std::pair<std::int64_t, std::int64_t> span() const;
 
     Composer& composer_;
     MonitorId monitor_;
@@ -76,6 +78,8 @@ public:
 protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    // Ctrl+Alt+drag moves an enlarged Effect Preview picture (FX Guide p.82).
+    void mouseMoveEvent(QMouseEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dropEvent(QDropEvent* event) override;
@@ -89,6 +93,7 @@ private:
     Composer& composer_;
     MonitorId monitor_;
     std::optional<model::TrimSide> trimSide_;
+    QPointF panFrom_; // the last point of a Ctrl+Alt drag
 };
 
 // The Composer window (p.379-387): the Source and Record monitors, each with
@@ -213,6 +218,37 @@ public:
     // The middle Composer button panel (p.1159): 3 or 6 buttons between the monitors' button rows.
     QWidget* middlePanel() const { return middle_; }
     QString centerDuration() const;
+
+    // Effect mode's Effect Preview monitor (FX Guide p.49-50, p.75-78), set by the Effect Editor while
+    // the Timeline is in Effect mode and an effect is shown: the Record monitor's position bar spans
+    // only the effect and shows its keyframes (the effect track's, p.102-103), two boxes above it show
+    // the effect's length and the position in it (p.77-78), and the Effect Preview toolbar takes the
+    // place of the Record monitor's buttons (p.76-77).
+    struct EffectPreview {
+        bool on = false;
+        std::int64_t start = 0;  // the Record frame of the effect's first frame
+        std::int64_t length = 0; // in frames
+        struct Keyframe {
+            double frame = 0.0; // frames into the effect
+            bool selected = false;
+            bool operator==(const Keyframe&) const = default;
+        };
+        QList<Keyframe> keyframes;
+        bool operator==(const EffectPreview&) const = default;
+    };
+    void setEffectPreview(const EffectPreview& preview);
+    const EffectPreview& effectPreview() const { return effect_; }
+    // The Effect Preview toolbar, and the effect's length and position boxes (for tests).
+    QWidget* effectBar() const { return effectBar_; }
+    QToolButton* effectLengthBox() const { return effectLength_; }
+    QToolButton* effectPositionBox() const { return effectPosition_; }
+    // Reduce and Enlarge (p.76-77): the Effect Preview picture's size in steps of two, 0 being the
+    // monitor's size (ours: from a quarter to eight times), and where an enlarged picture was moved to
+    // (p.81-82). Leaving the Effect Preview resets both.
+    int previewZoom() const { return zoom_; }
+    void setPreviewZoom(int steps);
+    QPointF previewPan() const { return pan_; }
+    void panPreview(const QPointF& by);
 
     // Trim mode's Big Trim display (p.648-651), set by the Timeline.
     struct TrimDisplay {
@@ -441,6 +477,11 @@ signals:
     void commandRequested(const QString& commandId);
     // A command the Composer carried out, after it did.
     void performed(const QString& commandId);
+    // The Effect Preview: a keyframe indicator in the position bar was clicked (Ctrl: `extend`), at
+    // `frame` frames into the effect (p.103); a toolbar button the Composer does not carry out itself
+    // (Add Keyframe, Go to Previous/Next Event), with Alt held or not.
+    void effectKeyframePressed(double frame, bool extend);
+    void effectCommandRequested(const QString& id, bool alt);
     // A trim counter was clicked: that side, or both with Shift (p.651).
     void trimSideRequested(model::TrimSide side);
     // Play started or changed speed, and play stopped.
@@ -518,6 +559,17 @@ private:
     QTimer* timer_ = nullptr;
     QLabel* center_ = nullptr;
     QWidget* trimBar_ = nullptr;
+    QWidget* effectBar_ = nullptr;
+    QToolButton* effectLength_ = nullptr;
+    QToolButton* effectPosition_ = nullptr;
+    EffectPreview effect_;
+    int zoom_ = 0;
+    QPointF pan_;
+    // Shows the Effect Preview's widgets or the normal ones.
+    void applyEffectPreview();
+    // An Effect Preview toolbar button: the Composer's own (Reduce, Enlarge, steps, Play, Play Loop) or
+    // effectCommandRequested().
+    void effectButton(const QString& id);
     QWidget* smallTrim_ = nullptr;
     QWidget* middle_ = nullptr;
     DragDisplay drag_;

@@ -67,7 +67,8 @@ headers in `include/lumenis/<library>/`.
   `clip_color_dialog.*` (the Timeline's Clip Color dialog),
   `surround_panner.*` (the Pan grid and Advanced Panner; the pans
   themselves are `src/model/surround_pan.*`) and
-  `composer.*` (the Source and Record monitors).
+  `composer.*` (the Source and Record monitors, and the Effect Preview in
+  Effect mode, docs/spec/effect-mode.md).
 * **Panels and workspaces.** Our own docking framework (`panels.*`,
   `panel_manager.cpp`), not QDockWidget, because Qt cannot draw vertical
   title bars, green drop zones or Alt-drag tabbing. Workspaces:

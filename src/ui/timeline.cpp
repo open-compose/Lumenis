@@ -187,7 +187,7 @@ enum class Picture {
     FastMenu, Focus, SourceRecord, VideoQuality, ClientMonitor, StepIn, StepOut,
     ViewMenu, FindLeft, FindRight, ZoomOut, ZoomIn,
     SegmentSplice, SegmentOverwrite, Lift, Extract, CopyClipboard, AddEdit, Replace, Top, Tail, MatchFrame,
-    TrimMode, RippleTrim, OverwriteTrim
+    TrimMode, RippleTrim, OverwriteTrim, SourceRecordMode, EffectMode
 };
 
 // The Video Quality Menu button's picture for each quality (p.404): green
@@ -344,6 +344,17 @@ QIcon picture(Picture which) {
         p.drawLine(QPointF(19, 6), QPointF(19, 26));
         p.drawLine(QPointF(19, 6), QPointF(25, 6));
         p.drawLine(QPointF(19, 26), QPointF(25, 26));
+        break;
+    }
+    case Picture::SourceRecordMode:
+        // Two monitors side by side (ours).
+        p.drawRect(QRectF(4, 9, 11, 14));
+        p.drawRect(QRectF(17, 9, 11, 14));
+        break;
+    case Picture::EffectMode: {
+        // A monitor with an effect's purple square (ours).
+        p.drawRect(QRectF(5, 7, 22, 18));
+        p.fillRect(QRectF(11, 11, 10, 10), QColor(0x8e, 0x5c, 0xd6));
         break;
     }
     case Picture::MatchFrame:
@@ -2127,8 +2138,11 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     command("smart.ripple_trim", Picture::RippleTrim, tr("Ripple Trim"), true);
     command("smart.overwrite_trim", Picture::OverwriteTrim, tr("Overwrite Trim"), true);
     top->addSpacing(8);
+    // The mode buttons: "Source/Record Mode button (left) and Effect Mode button (right)" (p.652) and
     // "The Trim Mode button in the Timeline" (p.644).
+    command("edit.source_record_mode", Picture::SourceRecordMode, tr("Source/Record Mode"), true)->setChecked(true);
     command("trim.trim_mode", Picture::TrimMode, tr("Trim Mode"), true);
+    command("fx.effect_mode", Picture::EffectMode, tr("Effect Mode"), true);
     top->addSpacing(8);
     command("edit.lift", Picture::Lift, tr("Lift"), false);
     command("edit.extract", Picture::Extract, tr("Extract"), false);
@@ -2918,6 +2932,8 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("smart.overwrite_trim"),
         QStringLiteral("smart.ripple_trim"),
         QStringLiteral("trim.trim_mode"),
+        QStringLiteral("fx.effect_mode"),
+        QStringLiteral("edit.source_record_mode"),
         QStringLiteral("trim.trim_backward_10_frames"),
         QStringLiteral("trim.trim_backward_1_frame"),
         QStringLiteral("trim.trim_forward_1_frame"),
@@ -3091,6 +3107,9 @@ bool Timeline::perform(const QString& id) {
                     commitSequence(tr("Delete Keyframes"), seq);
                 }
             }
+        } else if (effectMode_ && selection_.isEmpty()) {
+            // "In Effect mode, select the effect and press Delete" (FX p.47).
+            perform(QStringLiteral("fx.remove_effect"));
         } else {
             deleteSelection();
         }
@@ -3111,6 +3130,20 @@ bool Timeline::perform(const QString& id) {
         setTrimTool(model::TrimKind::Overwrite, !overwriteTrimTool_);
     } else if (id == QLatin1String("smart.ripple_trim")) {
         setTrimTool(model::TrimKind::Ripple, !rippleTrimTool_);
+    } else if (id == QLatin1String("fx.effect_mode")) {
+        // A second click leaves it (ours; FX p.684 says only that it cannot close the Effect Editor in
+        // Color Correction mode).
+        setEffectMode(!effectMode_);
+    } else if (id == QLatin1String("edit.source_record_mode")) {
+        // Alt: between the single Record monitor and the Source/Record monitors (p.381).
+        if (QApplication::keyboardModifiers() & Qt::AltModifier) {
+            composer_.setSingleMonitor(!composer_.isSingleMonitor());
+        } else {
+            // "To enter Source/Record mode from another mode" (p.457); it clears trim selections (p.652).
+            exitTrimMode();
+            setEffectMode(false);
+            syncTrimDisplay();
+        }
     } else if (id == QLatin1String("trim.trim_mode")) {
         if (trimMode_) {
             exitTrimMode();
@@ -4088,6 +4121,20 @@ bool Timeline::enterTrimMode(int direction) {
     return true;
 }
 
+void Timeline::setEffectMode(bool on) {
+    if (on == effectMode_) {
+        syncTrimDisplay();
+        return;
+    }
+    if (on) {
+        composer_.stop();
+        exitTrimMode();
+    }
+    effectMode_ = on;
+    syncTrimDisplay();
+    emit effectModeChanged(on);
+}
+
 void Timeline::exitTrimMode() {
     if (!trimMode_) return;
     if (trimFocused_) {
@@ -4399,7 +4446,14 @@ void Timeline::syncTrimDisplay() {
     d.small = options_.smallTrim == Options::SmallTrim::Always || (options_.smallTrim == Options::SmallTrim::GoTo && goToTrim_);
     d.dualImage = options_.dualImagePlay;
     composer_.setTrimDisplay(d);
+    // Trim mode and Effect mode exclude each other.
+    if (trimMode_ && effectMode_) {
+        effectMode_ = false;
+        emit effectModeChanged(false);
+    }
     if (QToolButton* b = toolButton(QStringLiteral("trim.trim_mode"))) b->setChecked(trimMode_);
+    if (QToolButton* b = toolButton(QStringLiteral("fx.effect_mode"))) b->setChecked(effectMode_);
+    if (QToolButton* b = toolButton(QStringLiteral("edit.source_record_mode"))) b->setChecked(!trimMode_ && !effectMode_);
     view_->update();
     emit changed();
 }

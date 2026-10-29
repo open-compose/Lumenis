@@ -269,8 +269,13 @@ private:
     bool changeKeyframes(const QString& description, const std::function<bool(model::Effect&)>& change);
     // Moves the Record monitor's position to time `t` of the shown effect.
     void moveToTime(double t);
-    // Shows or hides the tracks and graphs, and repaints them.
+    // Shows or hides the tracks and graphs, and repaints them; then syncPreview().
     void updateTracks();
+    // In Effect mode, gives the Composer's Effect Preview monitor the shown effect, its keyframes (the
+    // effect track's indicators) and their selection; outside it, or with no effect shown, none.
+    void syncPreview();
+    // A keyframe indicator in the Effect Preview monitor's position bar was clicked (p.103).
+    void previewKeyframePressed(double frame, bool extend);
     // Pops up the Add Keyframe Mode menu (or with `remove` the Delete one) for the Add Keyframe button.
     void addKeyframeButton(bool remove);
 

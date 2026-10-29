@@ -902,8 +902,9 @@ phase of their own. They are done in three steps:
   model, its evaluation in the compositor and the Fade Effect button (docs/spec/effect-keyframes.md),
   is done; so is 6.2b1, the Effect Editor's keyframe tracks, graphs, menus and Add Keyframe modes, and
   trims keeping Fixed keyframes, and 6.2b2, graph zoom and scroll, copy and paste, Bézier handles and
-  the Effect Editor setting. 6.2c, Effect mode (ch.2-3) with the Effect Preview monitor and standard
-  keyframes in its position bar (p.95, p.132-134), is next.
+  the Effect Editor setting. 6.2c, Effect mode (ch.2-3) with the Effect Preview monitor and its
+  toolbar (docs/spec/effect-mode.md), is done; standard keyframes wait until the guide names an effect
+  that uses them. So 6.2 is done; 6.3, the effect families, is next.
 * 6.3, the effect families of the Effects Reference (ch.17-18, p.454-586): wipes and pushes,
   squeezes, Blend (Picture-in-Picture, Superimpose), Image (Blur, Color Effect, Flip-Flop, Mask,
   Mosaic, Resize, Letterbox and the rest), Key (chroma, luma, matte keys).
