@@ -88,6 +88,7 @@
 #include <QJsonArray>
 #include <QLabel>
 #include <QMenu>
+#include <QMimeData>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QPlainTextEdit>
@@ -925,6 +926,23 @@ void MainWindow::clearProject() {
     if (siteSettingsWindow_) siteSettingsWindow_->hide();
     settings_->setProject({});
     installProjectHandlers(false);
+}
+
+bool MainWindow::editFromBin(bool splice) {
+    BinDocument* doc = binContainer_->activeDocument();
+    BinView* view = doc ? binContainer_->viewFor(doc) : nullptr;
+    if (!view) return false;
+    const QStringList ids = view->selectedIds();
+    // "Select a clip in the bin" (p.624): one.
+    if (ids.size() != 1) return false;
+    const model::BinItem* item = doc->bin().item(ids.first());
+    if (!item) return false;
+    QMimeData probe;
+    probe.setData(binItemsMime(), QStringList{doc->nodeId(), item->id}.join(QLatin1Char('\n')).toUtf8());
+    if (!timeline_->droppedClip(&probe)) return false;
+    // A failed edit says why through the Timeline, as the Splice-in and Overwrite buttons do.
+    timeline_->editClip(splice ? model::EditKind::SpliceIn : model::EditKind::Overwrite, doc->nodeId(), *item);
+    return true;
 }
 
 bool MainWindow::binsActive() const {
@@ -3922,6 +3940,8 @@ void MainWindow::applySettings() {
     o.autoMonitoring = s.value(tl, QStringLiteral("autoMonitoring")).toBool();
     o.segmentDragSyncLocks = s.value(tl, QStringLiteral("segmentDragSyncLocks")).toBool();
     o.positionBarSnap = s.value(tl, QStringLiteral("positionBarSnap")).toBool();
+    o.segmentDragSnap = s.value(tl, QStringLiteral("segmentDragSnap")).toBool();
+    o.editFromBin = s.flag(QStringLiteral("Bin"), QStringLiteral("editFromBin"));
     o.defaultSyncLocks = s.value(tl, QStringLiteral("defaultSyncLocks")).toBool();
     o.selectFiller = s.value(tl, QStringLiteral("selectFiller")).toBool();
     o.openEffectEditor = s.value(tl, QStringLiteral("openEffectEditor")).toBool();
@@ -4350,6 +4370,9 @@ void MainWindow::installPanelHandlers() {
                 const bool clipboard = id == QLatin1String("edit.copy") || id == QLatin1String("edit.cut") ||
                                        id == QLatin1String("edit.paste");
                 if (clipboard && binsActive()) return;
+                // With Enable edit from bin, V and B edit the bin's selected clip (p.624).
+                const bool edit = id == QLatin1String("edit.splice_in") || id == QLatin1String("edit.overwrite");
+                if (edit && binsActive() && timeline_->options().editFromBin && editFromBin(id == QLatin1String("edit.splice_in"))) return;
                 timeline_->perform(id);
             });
         }

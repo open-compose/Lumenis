@@ -1,0 +1,31 @@
+[
+  {
+    "name": "Bin editing: a clip dragged in with Lift/Overwrite overwrites at the drop, with the marks it has in the Source monitor",
+    "guide": "p.624",
+    "clips": [{"name": "A"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 100]], "A1": [["A", 0, 100]], "A2": [["A", 0, 100]]}},
+    "steps": [
+      {"load": "source", "clip": "C"},
+      {"mark": "source", "in": 10, "out": 29, "at": 10},
+      {"bin_edit": "overwrite", "clip": "C", "at": 40}
+    ],
+    "expect": {
+      "V1": [["A", 0, 40], ["C", 10, 20], ["A", 60, 40]],
+      "A1": [["A", 0, 40], ["C", 10, 20], ["A", 60, 40]],
+      "A2": [["A", 0, 40], ["C", 10, 20], ["A", 60, 40]]}
+  },
+  {
+    "name": "Bin editing: V splices the clip in at the record position",
+    "guide": "p.624",
+    "clips": [{"name": "A"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 100]], "A1": [["A", 0, 100]], "A2": [["A", 0, 100]]}},
+    "steps": [
+      {"position": "record", "frame": 30},
+      {"bin_edit": "splice", "clip": "C"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 30], ["C", 0, 100], ["A", 30, 70]],
+      "A1": [["A", 0, 30], ["C", 0, 100], ["A", 30, 70]],
+      "A2": [["A", 0, 30], ["C", 0, 100], ["A", 30, 70]]}
+  }
+]

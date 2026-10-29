@@ -72,6 +72,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Timeline and Markers tabs list, and Ctrl+G as a keyboard-only Find Again command.
 * AutoSequence (docs/spec/autosequence.md): which of two related clips is kept, the track layout of
   Camera groups, and the name when there is no Tape or Source File.
+* Bin editing (docs/spec/bin-editing.md): the clip loaded into the Source monitor and keeping its marks
+  there, the outline on the selected record tracks with the patch choosing the tracks, the drop picking
+  only the frame, a 12-pixel snap, and V and B taking the bin's clip whenever a bin is active.
 * The attic (docs/spec/bin-attic.md): its folder names, copies keeping the `.cthbin` suffix, the newest
   copy replaced within two hours, one zero limit keeping old copies, shared projects' attic beside the
   project, and an auto-save interval of 0 turning it off.

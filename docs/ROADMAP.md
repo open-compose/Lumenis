@@ -870,8 +870,9 @@ phase of their own. They are done in three steps:
   Enlarge and Reduce HeadFrames, p.1016, are the NRCS Tool's); Input > Link (p.328),
   Media > Unmount (p.344) and Center Current/Send Current Home (p.601) (U3b,
   docs/spec/media-unmount.md, is done); the bin attic and auto-save (U3e, docs/spec/bin-attic.md, is
-  done) and the other Bin settings (with bin editing
-  into the Timeline, p.623-624, and the Timeline's Segment Drag Snap); Bin Layout (p.93; U3d, docs/spec/bin-layout.md, is done but for its
+  done) and the other Bin settings (bin editing
+  into the Timeline, p.623-624, and the Timeline's Segment Drag Snap: U3f,
+  docs/spec/bin-editing.md, is done); Bin Layout (p.93; U3d, docs/spec/bin-layout.md, is done but for its
   buttons), Set Font (p.82) and Help > Shortcuts (p.97) (U3c,
   docs/spec/set-font.md, is done), the Interface colour
   and font settings.

@@ -53,8 +53,8 @@ Code:
   correspond to the new location of the segment you moved."
   * Ours: this applies when the track the segment goes to is sync-locked.
   * Tracks that are locked, or that end before the new place, get no filler.
-* **Segment Drag Snap**: about dragging clips from a bin into the Timeline (bin editing, p.623-624),
-  which is not built yet. It stays dimmed until bin editing comes with the bins in U3.
+* **Segment Drag Snap**: dragging clips from a bin into the Timeline (bin editing, p.623-624) snaps them;
+  docs/spec/bin-editing.md.
 * **Position Bar Snap**: "clicking in the Timeline will snap the position indicator to the nearest
   event, such as IN and OUT points, markers, and segment start and end points"; p.397: "to the nearest
   transition."

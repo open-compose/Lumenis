@@ -500,6 +500,9 @@ private:
     QStringList importTimelines(const QString& binId, const QStringList& paths, bool fcp);
 
     // Whether the Bin Container (docked, floating, or the Project panel) is the active panel.
+    // Splice-in (or Overwrite) of the active bin's one selected clip, with Enable edit from bin (p.624):
+    // true when the bin had one to edit, whether or not the edit was made.
+    bool editFromBin(bool splice);
     bool binsActive() const;
     void createPanels();
 

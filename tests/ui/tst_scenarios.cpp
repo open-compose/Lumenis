@@ -519,6 +519,20 @@ struct Run {
             timeline.setTracksLocked({o.value(QStringLiteral("lock")).toString()}, true);
             return true;
         }
+        if (o.contains(QStringLiteral("bin_edit"))) {
+            // Bin editing into the Timeline (p.623-624): the clip from the bin, spliced in or
+            // overwritten at a frame (a drag) or at the Record monitor's marks (V and B).
+            const QString name = o.value(QStringLiteral("clip")).toString();
+            if (!clips.contains(name)) return fail(QStringLiteral("no clip %1").arg(name));
+            const auto kind = o.value(QStringLiteral("bin_edit")).toString() == QLatin1String("splice") ? model::EditKind::SpliceIn
+                                                                                                      : model::EditKind::Overwrite;
+            std::optional<std::int64_t> at;
+            if (o.contains(QStringLiteral("at"))) at = o.value(QStringLiteral("at")).toInteger();
+            if (!timeline.editClip(kind, QStringLiteral("bin"), clips.value(name), at)) {
+                return fail(QStringLiteral("the bin edit was not made: %1").arg(timeline.lastMessage()));
+            }
+            return true;
+        }
         if (o.contains(QStringLiteral("jkl"))) {
             // J-K-L Trim (p.658-659): L (or J for a negative count) plays the Record monitor from the
             // transition, which is moved n frames on before K stops it.

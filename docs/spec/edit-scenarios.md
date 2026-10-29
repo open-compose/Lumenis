@@ -47,6 +47,9 @@ Each file is a JSON list of scenarios:
     `{"trim": n}` moves them (positive: earlier material, or to the right);
     `{"jkl": n}` plays n frames from the transition with L (J when
     negative) and stops with K, the J-K-L Trim (p.658);
+  * `{"bin_edit": "splice"|"overwrite", "clip": name, "at": frame}` edits a
+    clip from the bin into the Timeline, at a frame as a drag does or,
+    without `at`, at the Record monitor's marks as V and B do (p.624);
   * `{"lock": track}` locks a track (p.633);
   * `{"source_track": [track, start, source track]}`: the segment's
     right-click Change Source Track (p.595; 2026.8 guide p.507);

@@ -835,6 +835,21 @@ void TimelineView::paintEvent(QPaintEvent*) {
         p.restore();
     }
 
+    // A bin clip being dragged in: "a white outline of the clip indicates the segment position" (p.624).
+    // Ours: on the selected record tracks.
+    if (binDrop_) {
+        p.save();
+        p.setClipRect(tracksArea);
+        p.setPen(QPen(QColor(Qt::white), 2));
+        p.setBrush(Qt::NoBrush);
+        const QStringList on = timeline_.patch().selectedRecordTracks(seq);
+        for (const Row& r : rowList) {
+            if (!on.contains(r.track)) continue;
+            p.drawRect(QRectF(xFor(binDrop_->frame), r.top + 2, xFor(binDrop_->frame + binDrop_->length) - xFor(binDrop_->frame), r.height - 4));
+        }
+        p.restore();
+    }
+
     // Segments being dragged: their outlines at the new place (p.612).
     if (dragging_) {
         const std::int64_t frames = dragFrames(QApplication::keyboardModifiers());
@@ -3153,17 +3168,17 @@ bool Timeline::perform(const QString& id) {
 // comes from the two monitors' marks (three-point editing, model::planEdit) and the patch picks
 // the tracks (model::applyEdit). Fit to Fill plans from all four marks instead and puts a motion
 // effect on the new segments.
-void Timeline::edit(model::EditKind kind, bool fitToFill) {
+bool Timeline::edit(model::EditKind kind, bool fitToFill) {
     composer_.stop();
     const model::MonitorState& source = composer_.state(MonitorId::Source);
     if (source.isEmpty()) {
         fail(tr("Load a clip into the Source monitor first."));
-        return;
+        return false;
     }
     // A clip from the Source Browser goes into a bin as it is cut in (p.316).
     if (!composer_.commitSource()) {
         fail(tr("Open a bin for the clip first."));
-        return;
+        return false;
     }
     model::MonitorState& record = composer_.state(MonitorId::Record);
     if (record.isEmpty()) {
@@ -3171,7 +3186,7 @@ void Timeline::edit(model::EditKind kind, bool fitToFill) {
         const auto made = maker_ ? maker_() : std::nullopt;
         if (!made) {
             fail(tr("Open a bin for the new sequence first."));
-            return;
+            return false;
         }
         if (store_) store_(made->first, made->second, true);
         composer_.load(MonitorId::Record, made->first, made->second);
@@ -3179,10 +3194,10 @@ void Timeline::edit(model::EditKind kind, bool fitToFill) {
     }
     const model::LoadedClip* rec = record.current();
     const model::LoadedClip* src = source.current();
-    if (!rec || !src) return;
+    if (!rec || !src) return false;
     if (rec->item.id == src->item.id) {
         fail(tr("A sequence cannot be edited into itself."));
-        return;
+        return false;
     }
     const model::BinItem before = rec->item;
     model::Sequence seq = model::Sequence::fromItem(before);
@@ -3196,21 +3211,21 @@ void Timeline::edit(model::EditKind kind, bool fitToFill) {
                                              : model::planEdit(sourceMarks, recordMarks, options_.singleMarkEditing);
     if (!plan.ok()) {
         fail(plan.error);
-        return;
+        return false;
     }
     if (fitToFill && src->item.kind == model::BinItemKind::Sequence) {
         fail(tr("Fit to Fill needs a clip in the Source monitor."));
-        return;
+        return false;
     }
     // Multichannel tracks edit only onto tracks of their format (p.629).
     if (const QString mismatch = model::editFormatMismatch(seq, src->item, patch_); !mismatch.isEmpty()) {
         fail(mismatch);
-        return;
+        return false;
     }
     const QStringList edited = model::applyEdit(seq, kind, plan, src->binId, src->item, patch_, options_.autoCreateTracks);
     if (edited.isEmpty()) {
         fail(tr("Select a source track and a record track to edit."));
-        return;
+        return false;
     }
     if (fitToFill && speed != 1.0) {
         // The overwrite made one segment per edited track at the record IN.
@@ -3253,6 +3268,7 @@ void Timeline::edit(model::EditKind kind, bool fitToFill) {
     record.clearBoth();
     composer_.moveTo(MonitorId::Record, plan.recordStart + plan.length);
     if (options_.activateRecordAfterEdit) composer_.setActiveMonitor(MonitorId::Record);
+    return true;
 }
 
 // Lift (extract false) or Extract between the record marks.
@@ -4489,11 +4505,56 @@ void Timeline::keyPressEvent(QKeyEvent* event) {
 void TimelineView::dragEnterEvent(QDragEnterEvent* event) {
     if ((effectFromMime(event->mimeData()) || timeline_.droppedEq(event->mimeData())) && !timeline_.showsSource()) {
         event->acceptProposedAction();
+        return;
     }
+    // A clip from a bin, with Enable edit from bin (p.624).
+    if (timeline_.options().editFromBin && !timeline_.showsSource() && timeline_.droppedClip(event->mimeData())) {
+        event->acceptProposedAction();
+    }
+}
+
+void TimelineView::dragLeaveEvent(QDragLeaveEvent* event) {
+    binDrop_.reset();
+    update();
+    QWidget::dragLeaveEvent(event);
+}
+
+std::int64_t TimelineView::binDropFrame(int x) const {
+    std::int64_t frame = std::max<std::int64_t>(frameAt(x), 0);
+    if (!timeline_.options().segmentDragSnap) return frame;
+    // "clips snap to an existing transition endpoint or to the position bar" (p.1220). Ours: within
+    // kSnapPixels.
+    const MonitorId monitor = timeline_.shownMonitor();
+    QList<std::int64_t> points = timeline_.composer().events(monitor);
+    points << timeline_.composer().state(monitor).position();
+    constexpr double kSnapPixels = 12;
+    double best = kSnapPixels;
+    for (std::int64_t e : points) {
+        const double d = std::abs(xFor(e) - x);
+        if (d <= best) {
+            best = d;
+            frame = e;
+        }
+    }
+    return frame;
 }
 
 void TimelineView::dragMoveEvent(QDragMoveEvent* event) {
     const auto row = rowAt(event->position().toPoint());
+    if (!effectFromMime(event->mimeData()) && !timeline_.droppedEq(event->mimeData())) {
+        // "As you drag, a white outline of the clip indicates the segment position" (p.624).
+        const auto clip = timeline_.options().editFromBin && !timeline_.showsSource()
+                              ? timeline_.droppedClip(event->mimeData())
+                              : std::nullopt;
+        if (!clip) {
+            event->ignore();
+            return;
+        }
+        binDrop_ = BinDrop{binDropFrame(event->position().toPoint().x()), std::max<std::int64_t>(clip->second.durationFrames, 1)};
+        update();
+        event->acceptProposedAction();
+        return;
+    }
     // An EQ goes on an audio segment (p.740).
     if (timeline_.droppedEq(event->mimeData())) {
         if (row && row->exists && row->track.startsWith(QLatin1Char('A')) && !timeline_.showsSource()) {
@@ -4518,6 +4579,18 @@ void TimelineView::dropEvent(QDropEvent* event) {
     const auto effect = effectFromMime(event->mimeData());
     const QPoint pos = event->position().toPoint();
     const auto row = rowAt(pos);
+    binDrop_.reset();
+    update();
+    if (!effect && !timeline_.droppedEq(event->mimeData())) {
+        // A bin clip, edited in with the segment tool's edit (p.624).
+        const auto clip = timeline_.options().editFromBin && !timeline_.showsSource()
+                              ? timeline_.droppedClip(event->mimeData())
+                              : std::nullopt;
+        if (clip && timeline_.editClip(timeline_.binEditKind(), clip->first, clip->second, binDropFrame(pos.x()))) {
+            event->acceptProposedAction();
+        }
+        return;
+    }
     if (const auto eq = timeline_.droppedEq(event->mimeData())) {
         if (row && row->exists && !timeline_.showsSource() && timeline_.dropEq(row->track, frameAt(pos.x()), *eq)) {
             event->acceptProposedAction();
@@ -4534,6 +4607,54 @@ void TimelineView::dropEvent(QDropEvent* event) {
     std::optional<std::int64_t> cut;
     if (const auto roller = transitionAt(pos)) cut = roller->frame;
     if (timeline_.dropEffect(row->track, frameAt(pos.x()), *effect, cut)) event->acceptProposedAction();
+}
+
+model::EditKind Timeline::binEditKind() const {
+    // "If you do not select a segment tool, or if you select both tools, Media Composer defaults to the
+    // segment tool specified in the Timeline Settings dialog box" (p.624).
+    if (liftTool_ != spliceTool_) return liftTool_ ? model::EditKind::Overwrite : model::EditKind::SpliceIn;
+    return options_.defaultSegmentTool;
+}
+
+std::optional<std::pair<QString, model::BinItem>> Timeline::droppedClip(const QMimeData* mime) const {
+    if (!mime || !mime->hasFormat(binItemsMime())) return std::nullopt;
+    const QStringList lines = QString::fromUtf8(mime->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    // "You can edit only one clip at a time" (p.624).
+    if (lines.size() != 2) return std::nullopt;
+    const auto item = composer_.resolve(lines.at(0), lines.at(1));
+    if (!item) return std::nullopt;
+    switch (item->kind) {
+    case model::BinItemKind::MasterClip:
+    case model::BinItemKind::Subclip:
+    case model::BinItemKind::AudioClip:
+    case model::BinItemKind::Group:
+    case model::BinItemKind::Sequence:
+        break;
+    default:
+        return std::nullopt;
+    }
+    if (model::eqTemplateOf(*item)) return std::nullopt;
+    return std::pair{lines.at(0), *item};
+}
+
+bool Timeline::editClip(model::EditKind kind, const QString& binId, const model::BinItem& item,
+                        std::optional<std::int64_t> recordAt) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (rec && rec->item.id == item.id) {
+        fail(tr("A sequence cannot be edited into itself."));
+        return false;
+    }
+    composer_.load(MonitorId::Source, binId, item);
+    model::MonitorState& source = composer_.state(MonitorId::Source);
+    // Without marks, all of it (p.624).
+    if (!source.in() && !source.out()) composer_.moveTo(MonitorId::Source, 0);
+    if (recordAt) {
+        model::MonitorState& record = composer_.state(MonitorId::Record);
+        record.clearBoth();
+        composer_.moveTo(MonitorId::Record, *recordAt);
+    }
+    return edit(kind);
 }
 
 std::int64_t Timeline::defaultTransitionLength() const {

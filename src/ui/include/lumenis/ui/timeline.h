@@ -138,6 +138,7 @@ protected:
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dragMoveEvent(QDragMoveEvent* event) override;
     void dropEvent(QDropEvent* event) override;
+    void dragLeaveEvent(QDragLeaveEvent* event) override;
 
 private:
     void paintEffects(QPainter& p, const Row& r, const model::Track& t) const;
@@ -192,6 +193,15 @@ private:
         QPoint from;
     };
     std::optional<InsertPress> insertFrom_;
+    // A bin clip being dragged in (p.624): its first frame and length, for the white outline.
+    struct BinDrop {
+        std::int64_t frame = 0;
+        std::int64_t length = 0;
+    };
+    std::optional<BinDrop> binDrop_;
+    // The frame a bin clip dragged to x goes to: with Segment Drag Snap, the nearest edit point or the
+    // position indicator within a few pixels (p.1220).
+    std::int64_t binDropFrame(int x) const;
     // A clip being Alt+dragged in a Heads view (p.639), and where the mouse is.
     std::optional<int> headsFrom_;
     QPoint headsPos_;
@@ -286,6 +296,8 @@ public:
         bool autoMonitoring = true;        // Auto-Monitoring: "selected by default"
         bool segmentDragSyncLocks = false; // Segment Drag Sync Locks (p.618)
         bool positionBarSnap = false;      // Position Bar Snap (p.397)
+        bool segmentDragSnap = false;      // Segment Drag Snap: bin clips dragged in snap (p.1220)
+        bool editFromBin = false;          // Bin settings: Enable edit from bin (p.1153, p.624)
         bool defaultSyncLocks = false;     // Default Sync Locks On
         bool selectFiller = true;          // Select Filler with Segment Tools (p.616); ours: on
         bool openEffectEditor = false;     // Applying Effects opens Effect Editor
@@ -369,6 +381,21 @@ public:
     // A segment drag of the selection by `frames` is under way (or, with nullopt, has ended): shows it
     // in the Composer as Display During Segment Drag says (p.617-618, p.1219).
     void showSegmentDrag(std::optional<std::int64_t> frames);
+
+    // Bin editing into the Timeline (p.623-624; docs/spec/bin-editing.md), with the Bin setting
+    // Enable edit from bin. The edit a bin drag makes: the one segment tool that is on, otherwise
+    // (neither or both) the Default Segment Tool.
+    model::EditKind binEditKind() const;
+    // The clip a bin drag carries (binItemsMime): one master clip, subclip, audio clip, group or
+    // sequence, resolved through the Composer; nothing for several items or other kinds.
+    std::optional<std::pair<QString, model::BinItem>> droppedClip(const QMimeData* mime) const;
+    // Edits `item` (from bin `binId`) into the record sequence: it is loaded into the Source monitor,
+    // which keeps the marks it had there ("Otherwise, the entire clip is edited", p.624: without marks
+    // the whole clip), then spliced in or overwritten at `recordAt` (a drop), or without one at the
+    // Record monitor's marks or position (the V and B keys). False, with lastMessage(), if no edit
+    // was made.
+    bool editClip(model::EditKind kind, const QString& binId, const model::BinItem& item,
+                  std::optional<std::int64_t> recordAt = std::nullopt);
     // Turns every edit tool of the Smart Tool off: both segment tools and both trim tools (p.1220).
     void disableSmartTools();
     // The kind of edit the segment tools make: the one tool that is on, else Lift/Overwrite.
@@ -982,7 +1009,7 @@ private:
     // contextMenu()'s Change Source Track submenu for the audio segment `ref`.
     void addChangeSourceTrack(QMenu* menu, const model::SegmentRef& ref);
     // `fitToFill`: Fit to Fill, an overwrite with a Variable Speed effect (FX guide p.170).
-    void edit(model::EditKind kind, bool fitToFill = false);
+    bool edit(model::EditKind kind, bool fitToFill = false); // true: the edit was made
     void remove(bool extract);
     void replaceEdit();
     void addEdit(bool fillerOnly);
