@@ -442,9 +442,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `SettingsDialog`, `BinAppearance`, `BinContainer::setSidebarAppearance`,
   `Composer::setViewerBackground`, `Timeline::backgroundColor`; test
   `tst_interface_colors`), is done.
-  Next: the rest of the UI completion pass (U2 Composer and
-  trim, U3 bins, windows and interface); Phase 9 "Left over stuff" (printing,
-  Batch Import, AutoSync ...) comes before Phase 10, hardening.
+  Next: the rest of U3 (Save single floating Bin Containers, Show local
+  media icons, Frame View borders and icons), then the monitor marker fix
+  (the oval and the marker's comment over the frame, no colour over the whole
+  picture), then Phases 6, 7 and 8 in order. Phase 9 "Left over stuff"
+  (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
+  Phase 10, hardening (owner's decision, 2026-10-27).
 
 Spec sections 3, 4, 7, 11, 12, 13, 14, 15 and 17 list details left for later.
 
