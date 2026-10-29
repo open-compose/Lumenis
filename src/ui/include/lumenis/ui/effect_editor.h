@@ -123,6 +123,9 @@ public:
     // Shape Wipes, in columns and rows, at least 2 x 2 (default 8 x 6). The button asks for them;
     // setCustomGrid() sets them on the shown effect.
     void setCustomGrid(int columns, int rows);
+    // A parameter's ("Category/Name") value until it is set: the effect's own default
+    // (media::parameterDefault), else the parameter's (effect_parameters.json); undefined if neither.
+    QJsonValue defaultValue(const model::Effect& effect, const QString& parameter) const;
 
     // ---- Advanced keyframes
     // The Show/Hide Keyframe Graphs button (p.96): the keyframe tracks and graphs, hidden at first.

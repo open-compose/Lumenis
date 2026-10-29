@@ -138,6 +138,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   default grid as 8 columns by 6 rows and no preset grids; the Edge, Clock,
   Bands, Matrix order, Sawtooth and L-Conceal geometry; a segment wipe running
   over the segment's length.
+* The geometric image effects (docs/spec/image-effects.md): Position in pixels
+  of a picture 1920 wide; Picture-in-Picture at Scaling 50 until set; the crop
+  scaled about the frame's centre; the film masks as wide as the picture;
+  Blowup's Field 12 as three times the size; the Reformat factors and Position
+  H's range; the shapes' Scaling and Position.
 * Volume and pan automation (docs/spec/automation.md):
   * pan automation takes the place of the clip pan instead of adding to it;
   * a -∞ keyframe ramps from -96 dB;

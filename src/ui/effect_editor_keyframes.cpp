@@ -479,10 +479,11 @@ QJsonValue EffectEditor::valueAt(const model::Effect& effect, const QString& par
     if (const auto v = model::numberAt(effect, category, name, t, span_)) return std::round(*v * 1000.0) / 1000.0;
     const QJsonValue stored = effect.parameters.value(category).toObject().value(name);
     if (!stored.isUndefined()) return stored;
+    const QJsonValue fallback = defaultValue(effect, parameter);
     if (info && info->kind == QLatin1String("slider")) {
-        return std::clamp(info->defaultValue.isDouble() ? info->defaultValue.toDouble() : 0.0, double(info->min), double(info->max));
+        return std::clamp(fallback.isDouble() ? fallback.toDouble() : 0.0, double(info->min), double(info->max));
     }
-    return info ? info->defaultValue : QJsonValue();
+    return fallback;
 }
 
 QStringList EffectEditor::keyframeableParameters() const {

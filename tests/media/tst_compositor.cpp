@@ -376,6 +376,138 @@ private slots:
         QCOMPARE(composeImage(both, 5).pixelColor(13, 4), QColor(0, 0, 255));
     }
 
+    void imageEffects() {
+        // The geometric segment effects (docs/spec/image-effects.md) on a picture red on the left and
+        // blue on the right.
+        Picture halves = Picture::solid(64, 36, QColor(0, 0, 255));
+        const Picture left = Picture::solid(32, 36, QColor(255, 0, 0));
+        for (int y = 0; y < 36; ++y) {
+            for (int x = 0; x < 32; ++x) std::copy(left.pixel(x, y), left.pixel(x, y) + 4, halves.pixel(x, y));
+        }
+        auto at = [&](const QString& category, const QString& name, int x, int y, QJsonObject params = {}) {
+            const Effect e{category, name, std::move(params)};
+            return imageEffectPicture(e, halves, 0.0, EffectSpan(10)).toImage().pixelColor(x, y);
+        };
+        auto alphaAt = [&](const QString& category, const QString& name, int x, int y, QJsonObject params = {}) {
+            const Effect e{category, name, std::move(params)};
+            return imageEffectPicture(e, halves, 0.0, EffectSpan(10)).pixel(x, y)[3];
+        };
+        const QColor r(255, 0, 0), b(0, 0, 255), black(0, 0, 0);
+        // Flop flips across, Flip up and down (p.469).
+        QCOMPARE(at(QStringLiteral("Image"), QStringLiteral("Flop"), 5, 5), b);
+        QCOMPARE(at(QStringLiteral("Image"), QStringLiteral("Flip"), 5, 5), r);
+        QCOMPARE(at(QStringLiteral("Image"), QStringLiteral("Flip-Flop"), 60, 30), r);
+        // Picture-in-Picture (p.458): half size in the middle by default (ours), transparent around it.
+        const QString blend = QStringLiteral("Blend");
+        const QString pip = QStringLiteral("Picture-in-Picture");
+        QCOMPARE(at(blend, pip, 24, 18), r);
+        QCOMPARE(at(blend, pip, 40, 18), b);
+        QCOMPARE(alphaAt(blend, pip, 4, 4), 0.0f);
+        // Scaling 100 with Position X 960 (half of 1920): the picture's left half lands on the right.
+        const QJsonObject moved{{QStringLiteral("Scaling"), QJsonObject{{QStringLiteral("X"), 100}, {QStringLiteral("Y"), 100}}},
+                                {QStringLiteral("Position"), QJsonObject{{QStringLiteral("X"), 960}}}};
+        QCOMPARE(at(blend, pip, 40, 18, moved), r);
+        QCOMPARE(alphaAt(blend, pip, 10, 18, moved), 0.0f);
+        // Crop L at 999/2: only the right half is kept (p.494).
+        const QJsonObject cropped{{QStringLiteral("Scaling"), QJsonObject{{QStringLiteral("X"), 100}, {QStringLiteral("Y"), 100}}},
+                                  {QStringLiteral("Crop"), QJsonObject{{QStringLiteral("L"), 500}}}};
+        QCOMPARE(alphaAt(blend, pip, 10, 18, cropped), 0.0f);
+        QCOMPARE(at(blend, pip, 50, 18, cropped), b);
+        // Foreground Level: the picture's opacity.
+        const QJsonObject half{{QStringLiteral("Foreground"), QJsonObject{{QStringLiteral("Level"), 50}}}};
+        QCOMPARE(alphaAt(blend, pip, 32, 18, half), 0.5f);
+        // Border (p.493) around it: Width 100 is 4 pixels, white.
+        const QJsonObject bordered{{QStringLiteral("Border"), QJsonObject{{QStringLiteral("Width"), 100}}}};
+        QCOMPARE(at(blend, pip, 32, 7, bordered), QColor(255, 255, 255));
+        // Resize (p.470): the Background Color where there is no picture.
+        const QJsonObject green{{QStringLiteral("Background Color"), QJsonObject{{QStringLiteral("Background Color"), QStringLiteral("#00ff00")}}},
+                                {QStringLiteral("Scaling"), QJsonObject{{QStringLiteral("X"), 50}, {QStringLiteral("Y"), 50}}}};
+        QCOMPARE(at(QStringLiteral("Image"), QStringLiteral("Resize"), 2, 2, green), QColor(0, 255, 0));
+        QCOMPARE(at(QStringLiteral("Image"), QStringLiteral("Resize"), 2, 2), r);
+        QCOMPARE(at(QStringLiteral("Image"), QStringLiteral("Resize"), 24, 18, green), r);
+        // Mask (p.470): the picture inside the rectangle, black outside.
+        const QJsonObject narrow{{QStringLiteral("Scaling"), QJsonObject{{QStringLiteral("X"), 50}, {QStringLiteral("Y"), 100}}}};
+        QCOMPARE(at(QStringLiteral("Image"), QStringLiteral("Mask"), 4, 18, narrow), black);
+        QCOMPARE(at(QStringLiteral("Image"), QStringLiteral("Mask"), 20, 18, narrow), r);
+        // The 1.85 Mask (p.461): 64 / 1.85 = 34.6 lines of 36, so the first line is partly masked.
+        QVERIFY(at(QStringLiteral("Film"), QStringLiteral("1.85 Mask"), 10, 0).red() < 128);
+        QCOMPARE(at(QStringLiteral("Film"), QStringLiteral("1.85 Mask"), 10, 5), r);
+        // The Anamorphic Mask: 64 / 2.35 = 27 lines, 4.5 black at each side.
+        QCOMPARE(at(QStringLiteral("Film"), QStringLiteral("Anamorphic Mask"), 10, 2), black);
+        QCOMPARE(at(QStringLiteral("Film"), QStringLiteral("Anamorphic Mask"), 10, 30), r);
+        // Blowup (p.500): Field 12 is three times the size (ours); X Pos -24 shows the left edge.
+        const QJsonObject blown{{QStringLiteral("Film Effects Blowup Parameter"),
+                                 QJsonObject{{QStringLiteral("Field"), 12}, {QStringLiteral("X Pos"), -24}}}};
+        QCOMPARE(at(QStringLiteral("Film"), QStringLiteral("Blowup"), 60, 18, blown), r);
+        QCOMPARE(at(QStringLiteral("Film"), QStringLiteral("Blowup"), 60, 18), b);
+        // Field Swap (p.469): each pair of lines changes places.
+        Picture lines = Picture::solid(2, 2, QColor(0, 0, 0));
+        lines.pixel(0, 0)[0] = 1.0f;
+        const Picture swapped = imageEffectPicture(Effect{QStringLiteral("Image"), QStringLiteral("Field Swap"), {}}, lines, 0.0, EffectSpan(10));
+        QCOMPARE(swapped.pixel(0, 1)[0], 1.0f);
+        QCOMPARE(swapped.pixel(0, 0)[0], 0.0f);
+    }
+
+    void reformat() {
+        // "A Reformat effect works on all tracks below the track to which you apply it" (p.229): on
+        // filler on V2, 16:9 Letterbox squeezes V1 to three quarters of the height, black bands above
+        // and below.
+        Sequence seq = Sequence::withDefaultTracks();
+        seq.addTrack(TrackKind::Video);
+        seq.splice(QStringLiteral("V1"), 0, {clip(QStringLiteral("red"), 10)});
+        Segment vertical = Segment::filler(10);
+        vertical.effect = Effect{QStringLiteral("Reformat"), QStringLiteral("16:9 Letterbox"), {}};
+        seq.splice(QStringLiteral("V2"), 0, {vertical});
+        const Composition c = composition(seq, {QStringLiteral("V1"), QStringLiteral("V2")});
+        const QImage frame = composeImage(c, 3);
+        QCOMPARE(frame.pixelColor(8, 0), QColor(0, 0, 0));
+        QCOMPARE(frame.pixelColor(8, 4), QColor(255, 0, 0));
+        QCOMPARE(frame.pixelColor(8, 8), QColor(0, 0, 0));
+        // 4:3 Sidebar: bands at the sides.
+        seq.track(QStringLiteral("V2"))->segments[0].effect->name = QStringLiteral("4:3 Sidebar");
+        const QImage side = composeImage(c, 3);
+        QCOMPARE(side.pixelColor(0, 4), QColor(0, 0, 0));
+        QCOMPARE(side.pixelColor(8, 4), QColor(255, 0, 0));
+        // A Picture-in-Picture on V2 over V1, and as a transition (the incoming inside the outgoing).
+        Sequence pip = Sequence::withDefaultTracks();
+        pip.addTrack(TrackKind::Video);
+        pip.splice(QStringLiteral("V1"), 0, {clip(QStringLiteral("red"), 10)});
+        Segment top = clip(QStringLiteral("blue"), 10);
+        top.effect = Effect{QStringLiteral("Blend"), QStringLiteral("Picture-in-Picture"), {}};
+        pip.splice(QStringLiteral("V2"), 0, {top});
+        const QImage inset = composeImage(composition(pip, {QStringLiteral("V1"), QStringLiteral("V2")}), 3);
+        QCOMPARE(inset.pixelColor(8, 4), QColor(0, 0, 255));
+        QCOMPARE(inset.pixelColor(1, 1), QColor(255, 0, 0));
+        Transition t = transition(QStringLiteral("Picture-in-Picture"), 4);
+        const QImage across = composeImage(composition(cutWith(t), {QStringLiteral("V1")}), 9);
+        QCOMPARE(across.pixelColor(8, 4), QColor(0, 0, 255));
+        QCOMPARE(across.pixelColor(1, 1), QColor(255, 0, 0));
+    }
+
+    void shapeScalingAndPosition() {
+        // The Shape Wipes' Scaling and Position (p.482) and the diagonal Edge Wipes' Scaling (p.461).
+        const Picture red = Picture::solid(64, 36, QColor(255, 0, 0));
+        const Picture blue = Picture::solid(64, 36, QColor(0, 0, 255));
+        auto at = [&](const QString& category, const QString& name, double p, int x, int y, QJsonObject params = {}) {
+            return wipePicture(Effect{category, name, std::move(params)}, red, blue, p, p, EffectSpan(10, true)).toImage().pixelColor(x, y);
+        };
+        const QColor r(255, 0, 0), b(0, 0, 255);
+        const QString shape = QStringLiteral("Shape Wipe");
+        // A circle moved to the left (Position X -480 of 1920 is 16 pixels of 64) starts there.
+        const QJsonObject left{{QStringLiteral("Position"), QJsonObject{{QStringLiteral("X"), -480}}}};
+        QCOMPARE(at(shape, QStringLiteral("Circle"), 0.1, 16, 18, left), b);
+        QCOMPARE(at(shape, QStringLiteral("Circle"), 0.1, 32, 18, left), r);
+        // It still covers the whole picture at the end.
+        QCOMPARE(at(shape, QStringLiteral("Circle"), 1.0, 63, 0, left), b);
+        // A box made narrow by Scaling X 25.
+        const QJsonObject narrow{{QStringLiteral("Scaling"), QJsonObject{{QStringLiteral("X"), 25}, {QStringLiteral("Y"), 100}}}};
+        QCOMPARE(at(shape, QStringLiteral("Center Box"), 0.25, 32, 4, narrow), b);
+        QCOMPARE(at(shape, QStringLiteral("Center Box"), 0.25, 44, 18, narrow), r);
+        QCOMPARE(at(shape, QStringLiteral("Center Box"), 1.0, 0, 0, narrow), b);
+        // The diagonal at the default scaling reaches the far corner at the end.
+        QCOMPARE(at(QStringLiteral("Edge Wipe"), QStringLiteral("Upper Left Diagonal"), 1.0, 63, 35, narrow), b);
+    }
+
     void precision() {
         // 8-bit processing rounds each result to 1/255.
         Picture p = Picture::solid(1, 1, QColor(0, 0, 0));

@@ -337,6 +337,25 @@ private slots:
         QCOMPARE(grid.value("Rows").toInt(), 2);
     }
 
+    void effectDefaults() {
+        // The Effect Editor shows the values the compositor uses until they are set
+        // (media::parameterDefault): a Picture-in-Picture at half size (ours).
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(100, 40));
+        settle();
+        QVERIFY(rig.timeline.dropEffect(QStringLiteral("V1"), 70, effect("Blend", "Picture-in-Picture")));
+        rig.composer.moveTo(MonitorId::Record, 70);
+        QCOMPARE(rig.editor.slider(QStringLiteral("Scaling"), QStringLiteral("X"))->value(), 50);
+        QVERIFY(rig.timeline.dropEffect(QStringLiteral("V1"), 70, effect("Image", "Resize")));
+        rig.composer.moveTo(MonitorId::Record, 71);
+        QCOMPARE(rig.editor.effectName(), QStringLiteral("Resize"));
+        QCOMPARE(rig.editor.slider(QStringLiteral("Scaling"), QStringLiteral("Y"))->value(), 100);
+        // Fixed Aspect gangs X and Y (p.499).
+        rig.editor.checkBox(QStringLiteral("Scaling"), QStringLiteral("Fixed Aspect"))->setChecked(true);
+        rig.editor.slider(QStringLiteral("Scaling"), QStringLiteral("X"))->setValue(70);
+        QCOMPARE(rig.editor.slider(QStringLiteral("Scaling"), QStringLiteral("Y"))->value(), 70);
+    }
+
     void transitionParameters() {
         // p.63, p.500: a duration typed for a cut in Trim mode adds a
         // Dissolve; the alignment menu moves it.

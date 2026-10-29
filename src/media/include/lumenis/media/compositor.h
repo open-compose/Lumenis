@@ -5,6 +5,7 @@
 
 #include <QColor>
 #include <QImage>
+#include <QJsonValue>
 #include <QSize>
 #include <QStringList>
 
@@ -78,6 +79,24 @@ bool isWipe(const model::Effect& effect);
 // its Border and Foreground parameters (p.493, p.495) at `time` of `span`. Pictures of one size.
 Picture wipePicture(const model::Effect& effect, Picture outgoing, Picture incoming, double progress, double time,
                     const model::EffectSpan& span);
+
+// The segment effects that change a segment's own picture by geometry (ROADMAP 6.3b1;
+// docs/spec/image-effects.md, image_effects.cpp): Picture-in-Picture, Flip, Flop, Flip-Flop, Field Swap,
+// Resize, Mask, the Film masks and Blowup. True when `effect` is one of them.
+bool isImageEffect(const model::Effect& effect);
+// `layer` through such an effect at `time` of `span`: the picture moved, cropped or masked, transparent
+// where Picture-in-Picture leaves the tracks below to show and the Background Color where the others
+// leave no picture. Picture-in-Picture's Foreground Level is applied.
+Picture imageEffectPicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
+// The Reformat effects that work "on all tracks below the track to which you apply it" (FX Guide
+// p.229): 16:9 Letterbox, 14:9 Letterbox and 4:3 Sidebar.
+bool isReformat(const model::Effect& effect);
+// `picture`, everything at and below the effect's track, reformatted.
+Picture reformatPicture(const model::Effect& effect, const Picture& picture, double time, const model::EffectSpan& span);
+// The value a parameter has until it is set, where the effect gives it one of its own (ours, said in
+// docs/spec/image-effects.md): Scaling 100, or 50 for Picture-in-Picture; 14:9 Letterbox's Position H
+// 50. Undefined otherwise. The Effect Editor shows the same values.
+QJsonValue parameterDefault(const model::Effect& effect, const QString& category, const QString& name);
 
 // What one track shows at a frame: a segment, or a transition between the outgoing and incoming
 // segments at a cut. Frames of the segments are counted from their clips' starts.

@@ -82,7 +82,8 @@ headers in `include/lumenis/<library>/`.
   docs/spec/clap-host.md), `audio_suite.*` (AudioSuite processes and
   rendering, docs/spec/audiosuite.md), `compositor.*` (sequence frames
   from the video tracks with their effects, docs/spec/compositor.md), `wipes.cpp` (the 2D
-  transitions, docs/spec/wipes.md), `mixdown.*`
+  transitions, docs/spec/wipes.md), `image_effects.cpp` (Picture-in-Picture, Resize, masks,
+  Reformat, docs/spec/image-effects.md), `effect_drawing.*` (their shared sampling and borders), `mixdown.*`
   (Audio Mixdown, docs/spec/audio-mixdown.md), `surround.*` (speakers,
   monitor mixes and their folds, docs/spec/surround.md), `ltc.*` (audio
   timecode, docs/spec/clip-audio.md), `tone.*` (the calibration tone,

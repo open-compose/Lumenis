@@ -912,9 +912,12 @@ phase of their own. They are done in three steps:
     Acceleration p.492, Custom Grid p.494) and the comparison of similar effects (p.490). Done
     (docs/spec/wipes.md: `src/media/wipes.cpp`, the Custom Grid's More Options); Acceleration is not
     among their parameters and comes with 6.3b-c.
-  * 6.3b, Blend and Image: Picture-in-Picture (Border, Foreground, Scaling, Position, Crop); Flip,
-    Flop and Flip-Flop; Resize; Mask; Blur and Mosaic; Color Effect; Field Swap; the Film masks and
-    Blowup; Reformat (the letterboxes, 4:3 Sidebar, Pan and Scan).
+  * 6.3b, Blend and Image, in two parts: 6.3b1, the geometric ones (Picture-in-Picture with Border,
+    Foreground, Scaling, Position and Crop; Flip, Flop and Flip-Flop; Field Swap; Resize; Mask; the Film
+    masks and Blowup; the Reformat letterboxes and 4:3 Sidebar; Scaling and Position on the Shape and
+    diagonal Edge Wipes), is done (docs/spec/image-effects.md: `src/media/image_effects.cpp`); 6.3b2,
+    Color Effect, Blur and Mosaic, Acceleration. Pan and Scan's tools come with the Effect Preview's
+    effect tools.
   * 6.3c, Key: Luma Key, Chroma Key, RGB Keyer, Matte Key and SpectraMatte.
   * 6.3d, Illusion FX (p.463-468) and the Generator's Timecode Burn-In (SubCap is Phase 7).
   Peel (a page curl) goes with the 3D effects (6.7); PlasmaWipe with 6.9; AniMatte, Paint, Scratch

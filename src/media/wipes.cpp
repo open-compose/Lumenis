@@ -1,4 +1,4 @@
-#include "lumenis/media/compositor.h"
+#include "effect_drawing.h"
 
 #include "lumenis/model/effect_keyframes.h"
 
@@ -11,9 +11,12 @@
 // Guide p.459-490). Each is a geometry: for every pixel, how far it lies from the incoming picture's
 // region (negative inside), and where in the incoming and outgoing pictures it comes from. One routine
 // then draws the outgoing picture, the border band around the incoming region (Border, p.493) and the
-// incoming picture, with soft edges. Where the guide shows a picture but no numbers, the geometry is ours
+// incoming picture, with soft edges (effect_drawing.h). Where the guide shows a picture but no numbers, the geometry is ours
 // and is said so.
 namespace lumenis::media {
+
+using detail::boxDistance;
+using detail::sample;
 
 namespace {
 
@@ -26,14 +29,6 @@ struct Place {
     double outX = 0, outY = 0;  // and in the outgoing one
     bool outgoingShown = true;  // false where the outgoing picture has been squeezed away (Spin)
 };
-
-// Signed distance from (x, y) to the box [x0, x1] x [y0, y1].
-double boxDistance(double x, double y, double x0, double y0, double x1, double y1) {
-    const double dx = std::max(x0 - x, x - x1);
-    const double dy = std::max(y0 - y, y - y1);
-    if (dx <= 0 && dy <= 0) return std::max(dx, dy);
-    return std::hypot(std::max(dx, 0.0), std::max(dy, 0.0));
-}
 
 // Distance from (x, y) to the ray from (cx, cy) in direction (ux, uy) (a unit vector).
 double rayDistance(double x, double y, double cx, double cy, double ux, double uy) {
@@ -97,28 +92,6 @@ QList<int> matrixOrder(const QString& name, int columns, int rows) {
     return order;
 }
 
-// The bilinear sample of `p` at (x, y), pixel centres at whole numbers + 0.5; transparent outside it.
-void sample(const Picture& p, double x, double y, float out[4]) {
-    std::fill(out, out + 4, 0.0f);
-    const double fx = x - 0.5;
-    const double fy = y - 0.5;
-    const int x0 = static_cast<int>(std::floor(fx));
-    const int y0 = static_cast<int>(std::floor(fy));
-    const float ax = static_cast<float>(fx - x0);
-    const float ay = static_cast<float>(fy - y0);
-    // Edge pixels are held out to the picture's edge, so a whole picture is opaque to its border.
-    if (x < 0 || y < 0 || x > p.width() || y > p.height()) return;
-    for (int j = 0; j < 2; ++j) {
-        for (int i = 0; i < 2; ++i) {
-            const int px = std::clamp(x0 + i, 0, p.width() - 1);
-            const int py = std::clamp(y0 + j, 0, p.height() - 1);
-            const float w = (i ? ax : 1.0f - ax) * (j ? ay : 1.0f - ay);
-            const float* s = p.pixel(px, py);
-            for (int c = 0; c < 4; ++c) out[c] += s[c] * w;
-        }
-    }
-}
-
 int gridValue(const model::Effect& e, const QString& name, int fallback) {
     const int v = e.parameters.value(QStringLiteral("Custom Grid")).toObject().value(name).toInt(fallback);
     return std::max(v, 2); // "The minimum number of rows and columns is 2 x 2" (p.494)
@@ -161,19 +134,15 @@ Picture wipePicture(const model::Effect& e, Picture outgoing, Picture incoming, 
     const int rows = gridValue(e, QStringLiteral("Rows"), 6);
     const QList<int> order = category == QLatin1String("Matrix Wipe") ? matrixOrder(name, columns, rows) : QList<int>{};
 
-    // Border (p.493). Ours: Width 100 and Soft 255 are each a sixteenth of the picture's width; the
-    // border's colour runs from Color at the incoming edge to Blend Color at its outer edge unless
-    // Fixed Border is on ("Turns off the Blending option").
-    const QString border = QStringLiteral("Border");
-    const double unit = W / 16.0;
-    const double borderWidth = std::max(model::numberAt(e, border, QStringLiteral("Width"), time, span).value_or(0.0), 0.0) / 100.0 * unit;
-    const double soft = std::max(model::numberAt(e, border, QStringLiteral("Soft"), time, span).value_or(0.0), 0.0) / 255.0 * unit;
-    const model::Rgb white{1.0, 1.0, 1.0};
-    const model::Rgb colour = model::colorAt(e, border, QStringLiteral("Color"), time, span).value_or(white);
-    const bool fixedBorder = flag(border, QStringLiteral("Fixed Border"));
-    const model::Rgb blend = fixedBorder ? colour : model::colorAt(e, border, QStringLiteral("Blend Color"), time, span).value_or(colour);
-    // Edges always have a pixel of softness, so they are not jagged.
-    const double edge = std::max(soft, 1.0);
+    // Border (p.493), as effect_drawing.h has it.
+    const detail::Border border = detail::Border::of(e, time, span, width);
+
+    // Scaling and Position (p.498-499) of the Shape Wipes and the diagonal Edge Wipes: 100 is normal
+    // size; ours, Position in pixels of a picture 1920 wide.
+    const double scaleX = std::max(model::numberAt(e, QStringLiteral("Scaling"), QStringLiteral("X"), time, span).value_or(100.0), 1.0) / 100.0;
+    const double scaleY = std::max(model::numberAt(e, QStringLiteral("Scaling"), QStringLiteral("Y"), time, span).value_or(100.0), 1.0) / 100.0;
+    const double positionX = model::numberAt(e, QStringLiteral("Position"), QStringLiteral("X"), time, span).value_or(0.0) * W / 1920.0;
+    const double positionY = model::numberAt(e, QStringLiteral("Position"), QStringLiteral("Y"), time, span).value_or(0.0) * W / 1920.0;
 
     auto place = [&](double x, double y) {
         Place pl;
@@ -265,9 +234,13 @@ Picture wipePicture(const model::Effect& e, Picture outgoing, Picture incoming, 
             } else if (name == QLatin1String("Vertical Open")) {
                 pl.distance = std::abs(y - H / 2.0) - p * H / 2.0;
             } else {
+                // The diagonals take Scaling (p.461). Ours: X and Y stretch the edge's slope; at 100 it
+                // runs through the picture's corners.
                 const double u = anchor.x > 0.5 ? W - x : x;
                 const double v = anchor.y > 0.5 ? H - y : y;
-                pl.distance = (u / W + v / H - 2.0 * p) / std::hypot(1.0 / W, 1.0 / H);
+                const double a = W * scaleX;
+                const double b = H * scaleY;
+                pl.distance = (u / a + v / b - p * (W / a + H / b)) / std::hypot(1.0 / a, 1.0 / b);
             }
         } else if (category == QLatin1String("Shape Wipe")) {
             // "Incoming video uses a geometric shape to fill the screen and wipe out the outgoing video"
@@ -278,17 +251,34 @@ Picture wipePicture(const model::Effect& e, Picture outgoing, Picture incoming, 
                 const double u = x < cx ? x : W - x;
                 const double v = y < cy ? y : H - y;
                 pl.distance = boxDistance(u, v, -kOutside, -kOutside, p * cx, p * cy);
-            } else if (name == QLatin1String("Center Box")) {
-                pl.distance = boxDistance(x, y, cx - p * cx, cy - p * cy, cx + p * cx, cy + p * cy);
-            } else if (name == QLatin1String("Circle")) {
-                pl.distance = std::hypot(x - cx, y - cy) - p * std::hypot(cx, cy);
-            } else if (name == QLatin1String("Ellipse")) {
-                // Ours: the picture's shape, reaching its corners at the end.
-                const double a = std::max(p * cx * std::numbers::sqrt2, 1e-6);
-                const double b = std::max(p * cy * std::numbers::sqrt2, 1e-6);
-                pl.distance = (std::hypot((x - cx) / a, (y - cy) / b) - 1.0) * std::min(a, b);
-            } else if (name == QLatin1String("Diamond")) {
-                pl.distance = (std::abs(x - cx) / W + std::abs(y - cy) / H - p) / std::hypot(1.0 / W, 1.0 / H);
+            } else if (name == QLatin1String("Center Box") || name == QLatin1String("Circle") ||
+                       name == QLatin1String("Ellipse") || name == QLatin1String("Diamond")) {
+                // These take Scaling and Position (p.482). Ours: Position moves the shape's centre,
+                // Scaling stretches it, and it grows until it covers the picture's farthest corner. At
+                // 100 and 0 the box is the picture's shape, the circle reaches the corners, the ellipse
+                // is the picture's shape and the diamond's points touch the middles of the edges.
+                const double ox = cx + positionX;
+                const double oy = cy + positionY;
+                const bool circle = name == QLatin1String("Circle");
+                const double ax = std::max((circle ? std::hypot(cx, cy) : cx) * scaleX, 1e-6);
+                const double ay = std::max((circle ? std::hypot(cx, cy) : cy) * scaleY, 1e-6);
+                auto metric = [&](double px, double py) {
+                    const double dx = std::abs(px - ox) / ax;
+                    const double dy = std::abs(py - oy) / ay;
+                    if (name == QLatin1String("Center Box")) return std::max(dx, dy);
+                    if (name == QLatin1String("Diamond")) return dx + dy;
+                    return std::hypot(dx, dy);
+                };
+                const double reach = std::max({metric(0, 0), metric(W, 0), metric(0, H), metric(W, H)});
+                const double t = p * reach;
+                const double m = metric(x, y);
+                if (name == QLatin1String("Center Box")) {
+                    pl.distance = boxDistance(x, y, ox - t * ax, oy - t * ay, ox + t * ax, oy + t * ay);
+                } else if (name == QLatin1String("Diamond")) {
+                    pl.distance = (m - t) / std::hypot(1.0 / ax, 1.0 / ay);
+                } else {
+                    pl.distance = (m - t) * std::min(ax, ay);
+                }
             } else if (name == QLatin1String("Clock")) {
                 // Ours: a hand sweeping clockwise from twelve o'clock.
                 double a = std::atan2(x - cx, cy - y);
@@ -363,21 +353,8 @@ Picture wipePicture(const model::Effect& e, Picture outgoing, Picture incoming, 
                 sample(outgoing, pl.outX, pl.outY, out);
                 std::copy(out, out + 4, o);
             }
-            // The border band, outside the incoming region and under its soft edge.
-            if (borderWidth > 0 && pl.distance < borderWidth + edge) {
-                const float a = static_cast<float>(std::clamp(0.5 - (pl.distance - borderWidth) / edge, 0.0, 1.0));
-                const double t = std::clamp(pl.distance / borderWidth, 0.0, 1.0);
-                const float rgb[3] = {static_cast<float>(colour.red + (blend.red - colour.red) * t),
-                                      static_cast<float>(colour.green + (blend.green - colour.green) * t),
-                                      static_cast<float>(colour.blue + (blend.blue - colour.blue) * t)};
-                for (int c = 0; c < 3; ++c) o[c] = rgb[c] * a + o[c] * (1.0f - a);
-                o[3] = a + o[3] * (1.0f - a);
-            }
-            const float a = static_cast<float>(std::clamp(0.5 - pl.distance / edge, 0.0, 1.0));
-            if (a > 0.0f) {
-                sample(incoming, pl.inX, pl.inY, in);
-                for (int c = 0; c < 4; ++c) o[c] = in[c] * a + o[c] * (1.0f - a * in[3]);
-            }
+            sample(incoming, pl.inX, pl.inY, in);
+            border.draw(o, pl.distance, in);
         }
     }
     return result;

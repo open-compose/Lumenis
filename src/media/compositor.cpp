@@ -196,6 +196,10 @@ Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture 
     if (const auto rgb = model::colorAt(e, QStringLiteral("Background Color"), QStringLiteral("Background Color"), time, model::EffectSpan(t.duration, true))) {
         colour = QColor::fromRgbF(static_cast<float>(rgb->red), static_cast<float>(rgb->green), static_cast<float>(rgb->blue));
     }
+    if (e.category == QLatin1String("Blend") && e.name == QLatin1String("Picture-in-Picture")) {
+        // "On a transition, the incoming video appears inside the outgoing video" (p.458).
+        return over(imageEffectPicture(e, incoming, time, model::EffectSpan(t.duration, true)), outgoing);
+    }
     if (isWipe(e)) return wipePicture(e, std::move(outgoing), std::move(incoming), progress, time, model::EffectSpan(t.duration, true));
     const QString& name = e.name;
     if (name == QLatin1String("Dissolve")) return mix(outgoing, incoming, progress);
@@ -242,6 +246,20 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             const std::int64_t length = tf->segment->length;
             const double time = length > 1 ? static_cast<double>(tf->offset) / static_cast<double>(length - 1) : 0.0;
             const bool keyed = !model::keyframesOf(e, foreground, level).keys.isEmpty();
+            if (isImageEffect(e)) {
+                layer = imageEffectPicture(e, layer, time, length);
+                layer.quantize(c.precision);
+                result = over(layer, result);
+                result.quantize(c.precision);
+                continue;
+            }
+            if (isReformat(e)) {
+                // "A Reformat effect works on all tracks below the track to which you apply it" (p.229),
+                // and on its own segment.
+                result = reformatPicture(e, over(layer, result), time, length);
+                result.quantize(c.precision);
+                continue;
+            }
             if (isWipe(e)) {
                 // A 2D transition on a segment ("multilayer segments", p.459) wipes from the tracks below
                 // to the segment. Ours: over the segment's length unless its Level is keyframed, as a

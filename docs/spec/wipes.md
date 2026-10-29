@@ -5,7 +5,8 @@ sentence and shows its middle in a picture; it gives no numbers. Where the geome
 says so. The comparison of the Box Wipe, Conceal, Push and Squeeze (p.490) is the reference picture for
 those four.
 
-Code: `media::isWipe` and `media::wipePicture` (`src/media/wipes.cpp`), called by the compositor
+Code: `media::isWipe` and `media::wipePicture` (`src/media/wipes.cpp`, drawing with
+`src/media/effect_drawing.*`), called by the compositor
 (`src/media/compositor.cpp`) for transitions and segment effects; the Custom Grid's More Options in the
 Effect Editor (`EffectEditor::setCustomGrid`). Tests: `tst_compositor` (`wipeShapes`, `movingWipes`,
 `wipesInSequences`), `tst_effects` (`customGrid`).
@@ -66,13 +67,13 @@ Named for the corner or side they start from, unless said otherwise.
 * Edge Wipe (p.460-461): "Incoming video begins at the edge or center of the screen and moves out to
   wipe away the outgoing video". Ours: Horizontal moves left to right and Vertical top to bottom; the
   Open ones from the centre out; a diagonal from its corner to the opposite one, its edge through the
-  picture's corners. The diagonals' Scaling waits for 6.3b.
+  picture's corners. The diagonals' Scaling: docs/spec/image-effects.md.
 * Shape Wipe (p.481-482), as the pictures on p.482 show: 4 Corners (a box from each corner), Center Box,
   Circle (reaching the corners), Diamond, Ellipse (the picture's shape, ours), Clock (ours: a hand
   sweeping clockwise from twelve o'clock), Horizontal Bands (ours: bands of the grid's rows from the
   left and the right in turn), Horizontal Blinds and Vertical Blinds (each row or column of the grid
-  filling from its top or left). Center Box, Circle, Diamond and Ellipse take Scaling and Position;
-  these wait for 6.3b.
+  filling from its top or left). Center Box, Circle, Diamond and Ellipse take Scaling and Position
+  (docs/spec/image-effects.md).
 * Matrix Wipe (p.476): "Incoming video begins as blocks or bands that follow a pattern while wiping out
   the outgoing video", in the Custom Grid's cells. Grid: every cell grows from its centre at once (the
   picture). The others: one cell after another, each growing from its centre in its turn (ours):

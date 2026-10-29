@@ -2,6 +2,9 @@ add_library(lumenis_media STATIC
     media.cpp
     compositor.cpp
     wipes.cpp
+    effect_drawing.cpp
+    effect_drawing.h
+    image_effects.cpp
     audio_fx.cpp
     audio_suite.cpp
     audio_input.cpp

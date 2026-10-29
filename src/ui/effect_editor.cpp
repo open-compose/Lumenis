@@ -2,6 +2,8 @@
 
 #include "lumenis/ui/timeline.h"
 
+#include "lumenis/media/compositor.h"
+
 #include <QApplication>
 #include <QCheckBox>
 #include <QColorDialog>
@@ -11,6 +13,7 @@
 #include <QFormLayout>
 #include <QFile>
 #include <QHBoxLayout>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -687,7 +690,8 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     syncValues(*effect);
 }
 
-// Parameters without a stored value keep what the control shows (its default after a rebuild).
+// Parameters without a stored value show their default (defaultValue()), or keep what the control shows
+// when there is none.
 void EffectEditor::syncValues(const model::Effect& effect) {
     syncing_ = true;
     for (auto it = controls_.cbegin(); it != controls_.cend(); ++it) {
@@ -696,6 +700,7 @@ void EffectEditor::syncValues(const model::Effect& effect) {
         // Keyframed parameters show their value at the position (p.95).
         QJsonValue v = effect.parameters.value(category).toObject().value(name);
         if (!model::keyframesOf(effect, category, name).keys.isEmpty()) v = valueAt(effect, it.key(), positionTime());
+        if (v.isUndefined()) v = defaultValue(effect, it.key());
         if (v.isUndefined()) continue;
         QWidget* w = it.value();
         const QSignalBlocker block(w);
@@ -740,6 +745,15 @@ void EffectEditor::syncTransition() {
 // A keyframed parameter's change goes to its selected keyframes, else to the keyframe at the position,
 // else to a new keyframe there ("You can also add keyframes automatically by adjusting a parameter when
 // you place the position indicator in a part of the keyframe graph that has no keyframe", p.103).
+QJsonValue EffectEditor::defaultValue(const model::Effect& effect, const QString& parameter) const {
+    // The effect's own default, as the compositor uses it, else the parameter's from
+    // effect_parameters.json.
+    const QJsonValue own = media::parameterDefault(effect, parameter.section(QLatin1Char('/'), 0, 0), parameter.section(QLatin1Char('/'), 1));
+    if (!own.isUndefined()) return own;
+    const EffectParameter* info = parameterInfo(parameter);
+    return info ? info->defaultValue : QJsonValue();
+}
+
 void EffectEditor::setCustomGrid(int columns, int rows) {
     // "The minimum number of rows and columns is 2 x 2" (p.494).
     setValue(QStringLiteral("Custom Grid"), QStringLiteral("Columns"), std::max(columns, 2));
@@ -750,6 +764,14 @@ void EffectEditor::setValue(const QString& category, const QString& parameter, c
     if (syncing_ || !shown_) return;
     const QString k = key(category, parameter);
     setActiveParameter(k);
+    // Fixed Aspect "Gangs the X and Y sliders together so that they move in unison when you drag either
+    // one" (Scaling p.499; Feathering's Hor and Vert p.495, Blur's p.533).
+    QString ganged;
+    if (current_ && current_->parameters.value(category).toObject().value(QStringLiteral("Fixed Aspect")).toBool()) {
+        static const QHash<QString, QString> pairs = {{QStringLiteral("X"), QStringLiteral("Y")}, {QStringLiteral("Y"), QStringLiteral("X")},
+                                                      {QStringLiteral("Hor"), QStringLiteral("Vert")}, {QStringLiteral("Vert"), QStringLiteral("Hor")}};
+        ganged = pairs.value(parameter);
+    }
     if (current_ && !model::keyframesOf(*current_, category, parameter).keys.isEmpty()) {
         const double t = positionTime();
         changeKeyframes(tr("Modify Effect"), [&](model::Effect& e) {
@@ -765,6 +787,7 @@ void EffectEditor::setValue(const QString& category, const QString& parameter, c
             } else {
                 model::setKeyframe(e, category, parameter, t, span_, value);
             }
+            if (!ganged.isEmpty()) model::setKeyframe(e, category, ganged, t, span_, value);
             return true;
         });
         return;
@@ -773,6 +796,7 @@ void EffectEditor::setValue(const QString& category, const QString& parameter, c
     timeline_.changeEffect(ref, tr("Modify Effect"), [&](model::Effect& e, model::Transition*) {
         QJsonObject group = e.parameters.value(category).toObject();
         group.insert(parameter, value);
+        if (!ganged.isEmpty()) group.insert(ganged, value);
         e.parameters.insert(category, group);
     });
 }
