@@ -80,13 +80,15 @@ private slots:
         // choice's default is one of its choices (guide ch.33).
         const SettingsSchema& schema = SettingsSchema::builtIn();
         QCOMPARE(schema.kindNames(SettingsScope::Project),
-                 (QStringList{"Audio Project", "Audio Multi-Mix", "General", "Media Creation", "Video Display"}));
+                 (QStringList{"Audio Project", "Audio Multi-Mix", "General", "Media Creation", "Bin Layout", "Video Display"}));
         QCOMPARE(schema.kindNames(SettingsScope::User),
                  (QStringList{"Audio", "Bin", "Composer", "Export", "Full Screen Playback", "Import", "Interface", "Keyboard", "Link",
                               "Timeline", "Timeline View", "Tool Palette", "Workspace View", "Trim"}));
         QSet<QString> keys;
         for (const SettingKind& k : schema.kinds()) {
-            QVERIFY2(k.page >= 1136, qPrintable(k.kind));
+            // Bin layouts are Project settings the Settings chapter does not
+            // list; the Bin Layout menu's pages describe them (p.92).
+            QVERIFY2(k.page >= 1136 || k.kind == QLatin1String("Bin Layout"), qPrintable(k.kind));
             // Without tabs a setting opens a tool instead (the Tool Palette).
             QVERIFY2(!k.tabs.isEmpty() || !k.opens.isEmpty(), qPrintable(k.kind));
             for (const SettingTab& t : k.tabs) {

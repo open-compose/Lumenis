@@ -277,9 +277,9 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Workspaces > Restore Current to Default |  | p.86 | works | ☐ | | |
 | Workspaces > Properties |  | p.93 | works | ☐ | | |
 | Workspaces > Show Workspace Toolbar |  | p.89 | works | ☐ | | |
-| Bin Layout > New Bin Layout |  | p.93 | *later* | ☐ | | |
-| Bin Layout > Save Current |  | p.93 | *later* | ☐ | | |
-| Bin Layout > Delete Bin Layout |  | p.93 | *later* | ☐ | | |
+| Bin Layout > New Bin Layout |  | p.93 | works | ☐ | | |
+| Bin Layout > Save Current |  | p.93 | works | ☐ | | |
+| Bin Layout > Delete Bin Layout |  | p.93 | works | ☐ | | |
 | Close All But Active |  | p.296 | works | ☐ | | |
 | Close All Bins But Active |  | p.296 | works | ☐ | | |
 | Center Current |  | p.601 | works | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 137 of them working with a project open; the
+* 211 menu commands, 140 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.
