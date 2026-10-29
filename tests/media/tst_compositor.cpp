@@ -2,6 +2,7 @@
 // through, the dissolve family of transitions and Superimpose, effects processing precision, and
 // offline media. Clips are solid colours, one per clip id, so every pixel is known.
 #include "lumenis/media/compositor.h"
+#include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
 
 #include <QTest>
@@ -180,6 +181,34 @@ private slots:
         // Without a level: half and half (ours).
         seq.track(QStringLiteral("V2"))->segments[0].effect->parameters = {};
         QVERIFY(near(centre(composeImage(composition(seq, {QStringLiteral("V1"), QStringLiteral("V2")}), 5)), QColor(128, 0, 128)));
+    }
+
+    void keyframedLevels() {
+        // A transition's keyframed Foreground Level is its progress (FX Guide p.94), keyframes placed in
+        // the transition's progress (ours): held at 0 for its first half, then up to 100. Frames 8 to 11
+        // are at 0.2, 0.4, 0.6 and 0.8.
+        Transition held = transition(QStringLiteral("Dissolve"), 4);
+        setKeyframe(held.effect, QStringLiteral("Foreground"), QStringLiteral("Level"), 0.0, 4, 0);
+        setKeyframe(held.effect, QStringLiteral("Foreground"), QStringLiteral("Level"), 0.5, 4, 0);
+        setKeyframe(held.effect, QStringLiteral("Foreground"), QStringLiteral("Level"), 1.0, 4, 100);
+        const Sequence seq = cutWith(held);
+        const Composition c = composition(seq, {QStringLiteral("V1")});
+        QVERIFY(near(centre(composeImage(c, 9)), QColor(255, 0, 0)));
+        QVERIFY(near(centre(composeImage(c, 10)), QColor(204, 0, 51)));
+        QVERIFY(near(centre(composeImage(c, 11)), QColor(102, 0, 153)));
+        // A segment effect's Level, as the Fade Effect button keys it (p.46): Superimpose fading up
+        // over V1 across its 11 frames.
+        Sequence two = Sequence::withDefaultTracks();
+        two.addTrack(TrackKind::Video);
+        two.splice(QStringLiteral("V1"), 0, {clip(QStringLiteral("red"), 11)});
+        Segment top = clip(QStringLiteral("blue"), 11);
+        top.effect = Effect{QStringLiteral("Blend"), QStringLiteral("Superimpose"), {}};
+        fadeEffect(*top.effect, 11, 10, 0);
+        two.splice(QStringLiteral("V2"), 0, {top});
+        const Composition both = composition(two, {QStringLiteral("V1"), QStringLiteral("V2")});
+        QVERIFY(near(centre(composeImage(both, 0)), QColor(255, 0, 0)));
+        QVERIFY(near(centre(composeImage(both, 5)), QColor(128, 0, 128)));
+        QVERIFY(near(centre(composeImage(both, 10)), QColor(0, 0, 255)));
     }
 
     void notBuiltYetIsACut() {

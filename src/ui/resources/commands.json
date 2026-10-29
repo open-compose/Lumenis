@@ -262,6 +262,7 @@
     {"id": "timeline.view.tv8", "text": "TV8", "palette": "more"},
     {"id": "fx.remove_effect", "text": "Remove Effect", "palette": "fx"},
     {"id": "fx.add_keyframe", "text": "Add Keyframe", "palette": "fx"},
+    {"id": "fx.fade_effect", "text": "Fade Effect", "palette": "fx"},
     {"id": "edit.lift", "text": "Lift", "palette": "edit"},
     {"id": "edit.extract", "text": "Extract", "palette": "edit"},
     {"id": "edit.copy_to_clipboard", "text": "Copy to Clipboard", "palette": "edit"},

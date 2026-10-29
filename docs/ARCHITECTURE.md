@@ -104,7 +104,8 @@ headers in `include/lumenis/<library>/`.
 * **Effects.** The Effect Palette's list is `src/ui/resources/effects.json`
   and the Effect Editor's parameters `effect_parameters.json`; UI in
   `effect_palette.*` and `effect_editor.*`; the model keeps effects on
-  segments (`model::Effect`, `model::Transition`).
+  segments (`model::Effect`, `model::Transition`), their parameters'
+  keyframes in `src/model/effect_keyframes.*` (docs/spec/effect-keyframes.md).
 * **Audio tools.** `audio_tools.*` (the Audio Mixer, docs/spec/audio-mixer.md, and the Audio Tool), `audio_groups.cpp` (the mixer's track sidebar and groups), `clip_audio_dialogs.*` (Apply Gain and Auto VO, with `src/model/clip_audio.*`, docs/spec/clip-audio.md), `multi_mix_dialog.*` (the Multi-Mix Tool, docs/spec/multi-mix.md),
   `audio_eq.*` (the Audio EQ tool, docs/spec/audio-eq.md),
   `audio_punch_in.*` (Audio Punch-In, docs/spec/punch-in.md),

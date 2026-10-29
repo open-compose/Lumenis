@@ -113,6 +113,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Full Durations, Source Names, Media Full Names and Clip Resolution show.
 * Choose Columns: Search matches anywhere in a heading; All/None acts on
   the headings shown; the width is fixed (§9).
+* Effect keyframes (docs/spec/effect-keyframes.md): the Spline and default
+  Bézier tangents; Extrapolate as a straight line; a segment effect's time
+  as frames into it over its length - 1, a transition's as its progress;
+  Superimpose at 50 until a level is set; Fade Effect with both lengths 0
+  removing the Level's keyframes; reversing twice turning Swap Sources off.
 * Volume and pan automation (docs/spec/automation.md):
   * pan automation takes the place of the clip pan instead of adding to it;
   * a -∞ keyframe ramps from -96 dB;
@@ -1688,6 +1693,10 @@ p.610–640, ch. 13 p.432–434).**
   * Remove Effect is one of the effect buttons pictured on p.97. We put it
     on the Command Palette's FX tab, where the guide puts the Fade Effect
     button (FX p.46).
+* **Fade Effect (FX p.46-47):** the FX tab's Fade Effect button keys the
+  Foreground Level of the segment effect at the position, or of the
+  segments selected in Segment mode, from the frames typed to fade up and
+  down (docs/spec/effect-keyframes.md).
 * **Timeline (FX p.36, p.40):**
   * A transition shades its span and shows its icon on the cut. A segment
     effect shows its icon in the segment.

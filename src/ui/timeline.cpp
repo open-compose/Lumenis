@@ -4,6 +4,7 @@
 #include "lumenis/media/link.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
+#include "lumenis/model/effect_keyframes.h"
 #include "lumenis/media/surround.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
@@ -19,22 +20,23 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QContextMenuEvent>
+#include <QCursor>
 #include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDropEvent>
 #include <QFileInfo>
+#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
-#include <QMessageBox>
-#include <QCursor>
 #include <QMenu>
-#include <QJsonDocument>
-#include <QJsonObject>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
@@ -44,6 +46,7 @@
 #include <QScrollBar>
 #include <QSet>
 #include <QSlider>
+#include <QSpinBox>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QWheelEvent>
@@ -2933,6 +2936,7 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("move.go_to_next_marker"),
         QStringLiteral("edit.mark_markers"),
         QStringLiteral("fx.add_keyframe"),
+        QStringLiteral("fx.fade_effect"),
         QStringLiteral("edit.paste_audio_keyframes"),
         QStringLiteral("play.audio_loop_play"),
     };
@@ -2967,6 +2971,34 @@ bool Timeline::perform(const QString& id) {
     if (id == QLatin1String("timeline.find_flash_frame")) return findGap(true);
     if (id == QLatin1String("play.audio_loop_play")) {
         toggleAudioLoopPlay();
+    } else if (id == QLatin1String("fx.fade_effect")) {
+        // "The Fade Effect dialog box opens. Type the number of frames to fade up and fade down" (p.47).
+        std::optional<std::pair<std::int64_t, std::int64_t>> frames;
+        if (fadeAsk_) {
+            frames = fadeAsk_();
+        } else {
+            QDialog dialog(this);
+            dialog.setObjectName(QStringLiteral("fadeEffectDialog"));
+            dialog.setWindowTitle(tr("Fade Effect"));
+            auto* form = new QFormLayout(&dialog);
+            auto* upBox = new QSpinBox(&dialog);
+            auto* downBox = new QSpinBox(&dialog);
+            for (QSpinBox* b : {upBox, downBox}) {
+                b->setRange(0, 99999);
+                b->setSuffix(tr(" frames"));
+            }
+            upBox->setObjectName(QStringLiteral("fadeUp"));
+            downBox->setObjectName(QStringLiteral("fadeDown"));
+            form->addRow(tr("Fade Up:"), upBox);
+            form->addRow(tr("Fade Down:"), downBox);
+            auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+            connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+            connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+            form->addRow(buttons);
+            if (dialog.exec() == QDialog::Accepted) frames = std::pair{std::int64_t{upBox->value()}, std::int64_t{downBox->value()}};
+        }
+        if (frames) fadeEffects(frames->first, frames->second);
+        return true;
     } else if (id == QLatin1String("fx.remove_effect")) {
         removeEffectAtPosition();
         return true;
@@ -4839,6 +4871,45 @@ std::optional<model::EffectRef> Timeline::currentEffect() const {
         }
     }
     return model::effectAt(seq, tracks, record.position());
+}
+
+int Timeline::fadeEffects(std::int64_t up, std::int64_t down) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) {
+        fail(tr("There is no sequence in the Record monitor."));
+        return 0;
+    }
+    const model::Sequence now = model::Sequence::fromItem(rec->item);
+    // "To fade multiple segment effects ... Shift+click the segments"; "To fade a single segment effect,
+    // move the position indicator to the segment" (p.46).
+    QList<model::SegmentRef> targets;
+    for (const model::SegmentRef& ref : selection_) {
+        if (const auto seg = model::segmentFor(now, ref); seg && seg->effect) targets << ref;
+    }
+    if (targets.isEmpty()) {
+        if (const auto ref = currentEffect(); ref && ref->target == model::EffectTarget::Segment) {
+            targets << model::SegmentRef{ref->track, ref->frame};
+        }
+    }
+    if (targets.isEmpty()) {
+        fail(tr("Select a segment with an effect to fade."));
+        return 0;
+    }
+    int count = 0;
+    changeRecordSequence(tr("Fade Effect"), [&](model::Sequence& seq) {
+        for (const model::SegmentRef& ref : targets) {
+            model::Track* t = seq.track(ref.track);
+            std::int64_t start = 0;
+            const int i = t ? t->segmentAt(ref.start, &start) : -1;
+            if (i < 0 || start != ref.start || !t->segments[i].effect || t->locked) continue;
+            model::fadeEffect(*t->segments[i].effect, t->segments[i].length, up, down);
+            ++count;
+        }
+        return count > 0;
+    });
+    if (count == 0) fail(tr("The selected effects are on locked tracks."));
+    return count;
 }
 
 bool Timeline::removeEffectAtPosition() {

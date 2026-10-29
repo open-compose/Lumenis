@@ -1,5 +1,7 @@
 #include "lumenis/media/compositor.h"
 
+#include "lumenis/model/effect_keyframes.h"
+
 #include <QPainter>
 
 #include <algorithm>
@@ -13,16 +15,6 @@ namespace lumenis::media {
 namespace {
 
 constexpr float kDensityFloor = 1e-3f; // the darkest light the film blend works with
-
-QColor parameterColor(const model::Effect& effect, const QString& category, const QString& name, const QColor& fallback) {
-    const QColor c(effect.parameters.value(category).toObject().value(name).toString());
-    return c.isValid() ? c : fallback;
-}
-
-double parameterNumber(const model::Effect& effect, const QString& category, const QString& name, double fallback) {
-    const QJsonValue v = effect.parameters.value(category).toObject().value(name);
-    return v.isDouble() ? v.toDouble() : fallback;
-}
 
 bool parameterFlag(const model::Effect& effect, const QString& category, const QString& name) {
     return effect.parameters.value(category).toObject().value(name).toBool();
@@ -149,6 +141,7 @@ std::optional<TrackFrame> trackFrame(const model::Sequence& sequence, const QStr
     TrackFrame out;
     out.segment = &seg;
     out.frame = seg.sourceIn + (frame - start);
+    out.offset = frame - start;
     // A transition sits on the cut where its segment starts (model::Segment::transition), `before()`
     // frames on the outgoing side and `after()` on the incoming.
     auto inTransition = [&](int incoming, std::int64_t cut) {
@@ -163,6 +156,7 @@ std::optional<TrackFrame> trackFrame(const model::Sequence& sequence, const QStr
         out.segment = &b;
         out.frame = b.sourceIn + (frame - cut);
         out.transition = &t;
+        out.offset = frame - begin;
         out.progress = static_cast<double>(frame - begin + 1) / static_cast<double>(t.duration + 1);
         return true;
     };
@@ -186,12 +180,22 @@ Picture segmentPicture(const Composition& c, const model::Segment* segment, std:
 
 // The transitions of the dissolve family (FX Guide p.457, p.462); any other is a cut at the cut point
 // until its step comes.
-Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture incoming, double progress, int width, int height) {
+Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture incoming, double time, int width, int height) {
     const model::Effect& e = t.effect;
     const QString foreground = QStringLiteral("Foreground");
     // "Swaps the image source for the foreground and background layers of the effect" (p.495).
     if (parameterFlag(e, foreground, QStringLiteral("Swap Sources"))) std::swap(outgoing, incoming);
-    const QColor colour = parameterColor(e, QStringLiteral("Background Color"), QStringLiteral("Background Color"), Qt::black);
+    // The Foreground Level keyframed, when it is, says how far through the blend the effect is; else
+    // straight from 0 to 100 over its length (ch.4). Ours: a transition's keyframes are placed in its
+    // progress, so Level keyed 0 and 100 at its ends is the same as no keyframes.
+    double progress = time;
+    if (!model::keyframesOf(e, foreground, QStringLiteral("Level")).keys.isEmpty()) {
+        progress = std::clamp(model::numberAt(e, foreground, QStringLiteral("Level"), time, t.duration).value_or(time * 100.0) / 100.0, 0.0, 1.0);
+    }
+    QColor colour(Qt::black);
+    if (const auto rgb = model::colorAt(e, QStringLiteral("Background Color"), QStringLiteral("Background Color"), time, t.duration)) {
+        colour = QColor::fromRgbF(static_cast<float>(rgb->red), static_cast<float>(rgb->green), static_cast<float>(rgb->blue));
+    }
     const QString& name = e.name;
     if (name == QLatin1String("Dissolve")) return mix(outgoing, incoming, progress);
     if (name == QLatin1String("Fade to Color")) return mix(outgoing, Picture::solid(width, height, colour), progress);
@@ -231,11 +235,18 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
         }
         if (tf->segment && tf->segment->effect && !tf->transition) {
             const model::Effect& e = *tf->segment->effect;
-            if (e.name == QLatin1String("Superimpose")) {
+            const QString foreground = QStringLiteral("Foreground");
+            const QString level = QStringLiteral("Level");
+            // Where in the segment the frame is, 0 at its first frame and 1 at its last.
+            const std::int64_t length = tf->segment->length;
+            const double time = length > 1 ? static_cast<double>(tf->offset) / static_cast<double>(length - 1) : 0.0;
+            const bool keyed = !model::keyframesOf(e, foreground, level).keys.isEmpty();
+            if (e.name == QLatin1String("Superimpose") || keyed) {
                 // "The Foreground Level slider controls the blend percentage ... When Level=100, only the
-                // top image is visible, and when Level=0, only the bottom image is visible" (p.458).
-                // Ours: 50 until a level is set.
-                layer = faded(layer, parameterNumber(e, QStringLiteral("Foreground"), QStringLiteral("Level"), 50.0) / 100.0);
+                // top image is visible, and when Level=0, only the bottom image is visible" (p.458); the Fade
+                // Effect button keyframes it (p.46-47). Ours: Superimpose is 50 until a level is set.
+                const double fallback = e.name == QLatin1String("Superimpose") ? 50.0 : 100.0;
+                layer = faded(layer, model::numberAt(e, foreground, level, time, length).value_or(fallback) / 100.0);
                 layer.quantize(c.precision);
             }
         }

@@ -1,5 +1,6 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/command_palette.h"
 #include "lumenis/ui/command_registry.h"
@@ -256,6 +257,35 @@ private slots:
         QVERIFY(!rig.v1(1).effect);
     }
 
+    void fadeEffect() {
+        // The Fade Effect button (FX Guide p.46-47): Foreground Level keyframes on the effect at the
+        // position, from the frames typed for fading up and down; undoable.
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(100, 40));
+        settle();
+        QVERIFY(rig.timeline.dropEffect(QStringLiteral("V1"), 70, effect("Blend", "Picture-in-Picture")));
+        rig.composer.moveTo(MonitorId::Record, 70);
+        int asked = 0;
+        rig.timeline.setFadeAsk([&]() -> std::optional<std::pair<std::int64_t, std::int64_t>> {
+            ++asked;
+            return std::pair<std::int64_t, std::int64_t>{10, 5};
+        });
+        QVERIFY(rig.timeline.perform(QStringLiteral("fx.fade_effect")));
+        QCOMPARE(asked, 1);
+        const model::Effect fx = *rig.v1(1).effect;
+        QCOMPARE(model::keyframedParameters(fx), QStringList{QStringLiteral("Foreground/Level")});
+        // 50 frames long: up over frames 0-10, down over frames 44-49.
+        QCOMPARE(*model::numberAt(fx, QStringLiteral("Foreground"), QStringLiteral("Level"), 0.0, 50), 0.0);
+        QCOMPARE(*model::numberAt(fx, QStringLiteral("Foreground"), QStringLiteral("Level"), 10.0 / 49, 50), 100.0);
+        QCOMPARE(*model::numberAt(fx, QStringLiteral("Foreground"), QStringLiteral("Level"), 1.0, 50), 0.0);
+        QVERIFY(rig.timeline.perform(QStringLiteral("edit.undo")));
+        QVERIFY(model::keyframedParameters(*rig.v1(1).effect).isEmpty());
+        // Cancelled: nothing changes.
+        rig.timeline.setFadeAsk([]() -> std::optional<std::pair<std::int64_t, std::int64_t>> { return std::nullopt; });
+        rig.timeline.perform(QStringLiteral("fx.fade_effect"));
+        QVERIFY(model::keyframedParameters(*rig.v1(1).effect).isEmpty());
+    }
+
     void effectEditor() {
         // p.83-84: the effect under the position; blank otherwise.
         Rig rig;
@@ -383,6 +413,7 @@ private slots:
         QVERIFY(window.panels().isOpen(window.panels().panel(QStringLiteral("EffectEditor"))));
         // Remove Effect is on the Command Palette's FX tab (p.97, FX p.46).
         QVERIFY(window.commandPalette().commandsOn(QStringLiteral("FX")).contains(QStringLiteral("fx.remove_effect")));
+        QVERIFY(window.commandPalette().commandsOn(QStringLiteral("FX")).contains(QStringLiteral("fx.fade_effect")));
     }
 };
 

@@ -74,6 +74,7 @@ Picture filmMix(const Picture& a, const Picture& b, double t);
 struct TrackFrame {
     const model::Segment* segment = nullptr; // the segment, or the incoming one in a transition
     std::int64_t frame = 0;
+    std::int64_t offset = 0; // frames into the segment (into the transition, in a transition)
     const model::Segment* outgoing = nullptr; // only in a transition
     std::int64_t outgoingFrame = 0;
     const model::Transition* transition = nullptr;

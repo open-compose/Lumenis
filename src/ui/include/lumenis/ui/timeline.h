@@ -765,6 +765,14 @@ public:
     bool dropEq(const QString& track, std::int64_t frame, const model::AudioEq& eq);
     using SelectInsertAsk = std::function<std::optional<int>(const QString& track)>;
     void setSelectInsertAsk(SelectInsertAsk ask) { selectInsertAsk_ = std::move(ask); }
+    // The Fade Effect button (FX Guide p.46-47; docs/spec/effect-keyframes.md): the segment effects
+    // selected in Segment mode, or else the one at the position on the selected tracks, get their
+    // Foreground Level keyframed to fade up over `up` frames and down over `down` (model::fadeEffect),
+    // one undo step. How many effects changed; 0 with a message when there is none.
+    int fadeEffects(std::int64_t up, std::int64_t down);
+    // The Fade Effect dialog box: the frames to fade up and down; nothing when cancelled.
+    using FadeAsk = std::function<std::optional<std::pair<std::int64_t, std::int64_t>>()>;
+    void setFadeAsk(FadeAsk ask) { fadeAsk_ = std::move(ask); }
     // Audio Loop Play (p.712): the frames to loop in the record sequence. IN to OUT when both are
     // marked; with neither, the shortest segment under the position on the selected audio tracks
     // (any audio track when none of those has one); with only an IN, from it to the end of that
@@ -1063,6 +1071,7 @@ private:
     double scaleFor(int slider) const;
 
     SelectInsertAsk selectInsertAsk_;
+    FadeAsk fadeAsk_;
     Composer& composer_;
     TimelineView* view_ = nullptr;
     QWidget* toolbar_ = nullptr;
