@@ -122,7 +122,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   keyframes; the track colours and widths, the Fixed indicator's pin; clicking
   a selected keyframe keeping the selection; Set Position To Keyframe on and
   Add to Open Groups as the defaults; Enabled Groups as all groups; options
-  kept only with keyframes; only sliders and colours keyframed.
+  kept only with keyframes; only sliders and colours keyframed; the graph
+  zoom steps, Zoom to Curve Height's margins, the scroll bar for the
+  thumbwheel, pasted offsets in frames, handle lengths measured on screen,
+  the handle method staying until changed, Indent Rows on by default, and
+  the shortcut menu writing the setting.
 * Volume and pan automation (docs/spec/automation.md):
   * pan automation takes the place of the clip pan instead of adding to it;
   * a -∞ keyframe ramps from -96 dB;
@@ -1560,6 +1564,8 @@ p.610–640, ch. 13 p.432–434).**
   * **Bin** (p.1152–1154).
   * **Composer** (p.1158–1161): Window, Edit, Move, MultiCam and Viewer
     tabs.
+  * **Effect Editor** (p.1171–1172): the Effect Editor's options
+    (docs/spec/effect-keyframes.md).
   * **General** (p.1191–1193).
   * **Interface** (p.1199–1202): General, Bins, and Timeline and Viewers
     tabs.

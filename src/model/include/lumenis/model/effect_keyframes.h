@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <optional>
+#include <utility>
 
 // Keyframes on effect parameters (FX Guide ch.4, p.94-134; docs/spec/effect-keyframes.md). Each
 // keyframeable parameter of an effect can have keyframes of its own ("advanced keyframes", p.94):
@@ -100,6 +101,17 @@ void setKeyframe(Effect& effect, const QString& category, const QString& name, d
 bool removeKeyframe(Effect& effect, const QString& category, const QString& name, double t, const EffectSpan& span);
 // The index of the parameter's keyframe within half a frame of `t`; -1 if none.
 int keyframeAt(const ParameterKeyframes& keys, double t, const EffectSpan& span);
+
+// A Bézier direction handle (p.122): where it points from its keyframe, in time and value.
+struct BezierHandle {
+    double time = 0.0;
+    double value = 0.0;
+};
+// A numeric keyframe's way in and way out as the Bézier curve uses them: its handles, or where they are
+// when not set (the Spline's tangent, a third of the way to the neighbour on that side).
+std::pair<BezierHandle, BezierHandle> effectiveHandles(const ParameterKeyframes& keys, int index, const EffectSpan& span);
+// Sets a keyframe's handles (the way in at or before it in time, the way out at or after it).
+void setHandles(ParameterKeyframes& keys, int index, const BezierHandle& in, const BezierHandle& out, const EffectSpan& span);
 
 // Fixed or Elastic (p.124-125), keeping every keyframe at the time it is at now.
 void setFixed(ParameterKeyframes& keys, bool fixed, const EffectSpan& span);

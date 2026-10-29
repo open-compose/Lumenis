@@ -6,16 +6,21 @@
 #include <QContextMenuEvent>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QLayout>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QResizeEvent>
+#include <QScrollBar>
+#include <QSlider>
 #include <QToolButton>
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <memory>
+#include <tuple>
 
 // The Effect Editor's advanced keyframes (effect_editor.h; FX Guide ch.4, p.94-131;
 // docs/spec/effect-keyframes.md): the keyframe tracks and graphs (KeyframeTrack), the selection, the
@@ -108,20 +113,38 @@ KeyframeTrack::KeyframeTrack(EffectEditor& editor, Kind kind, const QString& whi
     setMouseTracking(false);
 }
 
+// Time runs over the editor's view (viewStart() .. + viewSpan()), the same in every track.
 double KeyframeTrack::xFor(double t) const {
-    return kMargin + t * (width() - 2.0 * kMargin);
+    return kMargin + (t - editor_.viewStart_) / editor_.viewSpan_ * (width() - 2.0 * kMargin);
 }
 
 double KeyframeTrack::timeAt(double x) const {
     const double w = std::max(width() - 2.0 * kMargin, 1.0);
-    return (x - kMargin) / w;
+    return editor_.viewStart_ + (x - kMargin) / w * editor_.viewSpan_;
 }
 
 std::pair<double, double> KeyframeTrack::range() const {
-    const QString p = which_.startsWith(QLatin1String("graph:")) ? which_.mid(6) : which_;
-    const EffectParameter* info = editor_.parameterInfo(p);
-    if (!info) return {0.0, 100.0};
-    return {static_cast<double>(info->min), static_cast<double>(std::max(info->max, info->min + 1))};
+    return editor_.graphRange(which_.startsWith(QLatin1String("graph:")) ? which_.mid(6) : which_);
+}
+
+QList<KeyframeTrack::HandlePoints> KeyframeTrack::handlePoints() const {
+    QList<HandlePoints> out;
+    const model::Effect* e = editor_.shownEffect();
+    if (kind_ != Kind::Graph || !e) return out;
+    const QString p = which_.mid(6);
+    const model::ParameterKeyframes keys = model::keyframesOf(*e, categoryOf(p), nameOf(p));
+    if (keys.interpolation != model::Interpolation::Bezier) return out;
+    // "Click a keyframe indicator to activate it ... a direction bar with direction handles appears"
+    // (p.123).
+    for (const EffectEditor::KeyframeId& id : editor_.selectedKeyframes()) {
+        if (id.parameter != p || id.index >= keys.keys.size()) continue;
+        const double t = model::keyframeTime(keys, keys.keys.at(id.index), editor_.span_);
+        const double v = keys.keys.at(id.index).value.toDouble();
+        const auto [in, handleOut] = model::effectiveHandles(keys, id.index, editor_.span_);
+        out << HandlePoints{id, QPointF(xFor(t), yFor(v)), QPointF(xFor(t + in.time), yFor(v + in.value)),
+                            QPointF(xFor(t + handleOut.time), yFor(v + handleOut.value))};
+    }
+    return out;
 }
 
 double KeyframeTrack::yFor(double value) const {
@@ -219,6 +242,14 @@ void KeyframeTrack::paintEvent(QPaintEvent*) {
             p.setBrush(selected(c) ? kSelected : kKeyframe);
             p.drawEllipse(at, 4.0, 4.0);
         }
+        // The direction bars of selected Bézier keyframes (p.123).
+        for (const HandlePoints& h : handlePoints()) {
+            p.setPen(QPen(kSelected, 1.0));
+            p.drawLine(h.in, h.out);
+            p.setBrush(kSelected);
+            p.drawRect(QRectF(h.in.x() - 3, h.in.y() - 3, 6, 6));
+            p.drawRect(QRectF(h.out.x() - 3, h.out.y() - 3, 6, 6));
+        }
     } else {
         // Triangles hanging from the top (an elastic keyframe is "a simple triangle", p.124); a fixed
         // one also has a pin below it (ours: the guide's picture is not described).
@@ -257,7 +288,40 @@ void KeyframeTrack::mousePressEvent(QMouseEvent* event) {
     pressPoint_ = event->position();
     dragging_ = false;
     pressed_.reset();
+    handleKey_.reset();
     movingPosition_ = false;
+    scrolling_ = false;
+    resizing_ = false;
+    if (kind_ == Kind::Graph) {
+        // "Position the pointer over the bottom border of the keyframe graph ... drag it up or down"
+        // (p.98); a keyframe at the bottom of the range is near it and comes first.
+        if (hit < 0 && event->position().y() >= height() - 3.0) {
+            resizing_ = true;
+            return;
+        }
+        // A direction handle (p.123); Alt+click moves to the next way of adjusting first.
+        for (const HandlePoints& h : handlePoints()) {
+            for (const bool out : {false, true}) {
+                if (QLineF(out ? h.out : h.in, event->position()).length() > 5.0) continue;
+                if (event->modifiers() & Qt::AltModifier) {
+                    const auto next = static_cast<int>(editor_.handleMode()) + 1;
+                    editor_.setHandleMode(static_cast<EffectEditor::HandleMode>(next % 3));
+                }
+                const model::ParameterKeyframes keys =
+                    model::keyframesOf(*editor_.shownEffect(), categoryOf(h.key.parameter), nameOf(h.key.parameter));
+                std::tie(pressIn_, pressOut_) = model::effectiveHandles(keys, h.key.index, editor_.span_);
+                handleKey_ = h.key;
+                handleOut_ = out;
+                return;
+            }
+        }
+        // "Alt+click ... the keyframe graph. The pointer changes to a hand. Drag the hand to reposition
+        // the view" (p.101), away from keyframes.
+        if (hit < 0 && (event->modifiers() & Qt::AltModifier)) {
+            scrolling_ = true;
+            return;
+        }
+    }
     if (hit < 0) {
         movingPosition_ = true;
         editor_.moveToTime(std::clamp(timeAt(event->position().x()), 0.0, 1.0));
@@ -287,6 +351,55 @@ void KeyframeTrack::mousePressEvent(QMouseEvent* event) {
 }
 
 void KeyframeTrack::mouseMoveEvent(QMouseEvent* event) {
+    const QString parameter = which_.startsWith(QLatin1String("graph:")) ? which_.mid(6) : which_;
+    if (resizing_) {
+        setFixedHeight(std::max(36, static_cast<int>(event->position().y())));
+        return;
+    }
+    if (scrolling_) {
+        const auto [lo, hi] = range();
+        const double dv = valueAt(event->position().y()) - valueAt(pressPoint_.y());
+        const double dt = timeAt(event->position().x()) - timeAt(pressPoint_.x());
+        editor_.scrollView(-dt);
+        editor_.setGraphRange(parameter, lo - dv, hi - dv);
+        pressPoint_ = event->position();
+        return;
+    }
+    if (handleKey_) {
+        // The handle dragged follows the pointer; the other one follows the way of adjusting (p.122).
+        const double t = timeAt(event->position().x());
+        const double v = valueAt(event->position().y());
+        const model::ParameterKeyframes keys =
+            model::keyframesOf(*editor_.shownEffect(), categoryOf(handleKey_->parameter), nameOf(handleKey_->parameter));
+        if (handleKey_->index >= keys.keys.size()) return;
+        const double kt = model::keyframeTime(keys, keys.keys.at(handleKey_->index), editor_.span_);
+        const double kv = keys.keys.at(handleKey_->index).value.toDouble();
+        model::BezierHandle moved{t - kt, v - kv};
+        if (handleOut_) moved.time = std::max(moved.time, 0.0);
+        else moved.time = std::min(moved.time, 0.0);
+        model::BezierHandle other = handleOut_ ? pressIn_ : pressOut_;
+        // Lengths and turns are measured on screen, where the user sees them.
+        const double sx = (width() - 2.0 * kMargin) / editor_.viewSpan_;
+        const auto [lo, hi] = range();
+        const double sy = std::max(height() - 8.0, 1.0) / (hi - lo);
+        const QPointF dragged(moved.time * sx, moved.value * sy);
+        const QPointF before = handleOut_ ? QPointF(pressOut_.time * sx, pressOut_.value * sy) : QPointF(pressIn_.time * sx, pressIn_.value * sy);
+        const QPointF opposite(other.time * sx, other.value * sy);
+        const double length = std::hypot(dragged.x(), dragged.y());
+        if (editor_.handleMode() != EffectEditor::HandleMode::Independent && length > 0.0) {
+            const QPointF unit(-dragged.x() / length, -dragged.y() / length);
+            double otherLength = std::hypot(opposite.x(), opposite.y());
+            // Symmetrical: both change alike; Asymmetrical: the other only turns.
+            if (editor_.handleMode() == EffectEditor::HandleMode::Symmetrical) {
+                const double was = std::hypot(before.x(), before.y());
+                otherLength = was > 0.0 ? otherLength * length / was : length;
+            }
+            other = {unit.x() * otherLength / sx, unit.y() * otherLength / sy};
+        }
+        editor_.setKeyframeHandles(*handleKey_, handleOut_ ? other : moved, handleOut_ ? moved : other, true);
+        dragging_ = true;
+        return;
+    }
     if (movingPosition_) {
         editor_.moveToTime(std::clamp(timeAt(event->position().x()), 0.0, 1.0));
         return;
@@ -314,8 +427,19 @@ void KeyframeTrack::mouseReleaseEvent(QMouseEvent* event) {
     if (dragging_) editor_.finishDrag();
     dragging_ = false;
     movingPosition_ = false;
+    scrolling_ = false;
+    resizing_ = false;
     pressed_.reset();
+    handleKey_.reset();
     QWidget::mouseReleaseEvent(event);
+}
+
+void KeyframeTrack::keyPressEvent(QKeyEvent* event) {
+    if (event->key() == Qt::Key_C && (event->modifiers() & Qt::ControlModifier) && (event->modifiers() & Qt::AltModifier)) {
+        editor_.copyAllValues();
+        return;
+    }
+    QWidget::keyPressEvent(event);
 }
 
 void KeyframeTrack::contextMenuEvent(QContextMenuEvent* event) {
@@ -513,9 +637,13 @@ void EffectEditor::updateTracks() {
         bool visible = graphsShown_;
         if (it.key().startsWith(QLatin1String("graph:"))) visible = visible && openGraphs_.contains(it.key().mid(6));
         t->setVisible(visible);
+        if (auto* side = t->property("side").value<QWidget*>()) side->setVisible(visible);
         t->update();
     }
     for (QToolButton* b : std::as_const(graphOpeners_)) b->setVisible(graphsShown_);
+    for (QWidget* bar : {static_cast<QWidget*>(hScale_), static_cast<QWidget*>(hScroll_)}) {
+        if (bar) bar->setVisible(graphsShown_);
+    }
     const bool keyed = shown_ && !keyframeableParameters().isEmpty();
     for (QToolButton* b : {addKeyframe_, prevEvent_, nextEvent_}) {
         if (b) b->setEnabled(keyed);
@@ -682,8 +810,215 @@ void EffectEditor::finishDrag() {
     }
 }
 
-// The shortcut menu for the keyframe track (p.130). Zoom to Curve Height, Reset All Graph Views and
-// Copy All Values at Position come with 6.2b2.
+// ---------------------------------------------------------------- options
+
+EffectEditor::Options EffectEditor::options() const {
+    Options o;
+    o.indentRows = indentRows_;
+    o.largeText = largeText_;
+    o.setPositionToKeyframe = positionToKeyframe_;
+    o.updatePositionWhilePlaying = updateWhilePlaying_;
+    o.showModeMenu = showModeMenu_;
+    o.mode = mode_;
+    return o;
+}
+
+void EffectEditor::setOptions(const Options& o) {
+    positionToKeyframe_ = o.setPositionToKeyframe;
+    updateWhilePlaying_ = o.updatePositionWhilePlaying;
+    showModeMenu_ = o.showModeMenu;
+    mode_ = o.mode;
+    if (indentRows_ != o.indentRows || largeText_ != o.largeText) {
+        indentRows_ = o.indentRows;
+        largeText_ = o.largeText;
+        applyLook();
+    }
+}
+
+// Indent Rows: "parameter rows are indented from the parameter category row"; Large Text: "text in the
+// Effect Editor appears in 12-point size", else the default size (p.131).
+void EffectEditor::applyLook() {
+    for (QWidget* box : std::as_const(groupBodies_)) {
+        if (auto* layout = box->layout()) layout->setContentsMargins(indentRows_ ? 18 : 0, 0, 0, 4);
+    }
+    QFont f = QApplication::font(this);
+    if (largeText_) f.setPointSize(12);
+    setFont(f);
+}
+
+// ---------------------------------------------------------------- graph views
+
+void EffectEditor::scrollView(double by) {
+    viewStart_ += by;
+    syncScrollBar();
+    updateTracks();
+}
+
+void EffectEditor::syncScrollBar() {
+    if (!hScroll_) return;
+    const QSignalBlocker block(hScroll_);
+    // In thousandths of the effect; the view can go past either end to keyframes outside it (p.113).
+    const int start = static_cast<int>(std::lround(viewStart_ * 1000.0));
+    const int page = static_cast<int>(std::lround(viewSpan_ * 1000.0));
+    hScroll_->setRange(std::min(0, start), std::max(1000 - page, start));
+    hScroll_->setPageStep(page);
+    hScroll_->setSingleStep(std::max(1, page / 20));
+    hScroll_->setValue(start);
+}
+
+std::pair<double, double> EffectEditor::graphRange(const QString& parameter) const {
+    if (const auto it = graphRanges_.constFind(parameter); it != graphRanges_.constEnd()) return *it;
+    const EffectParameter* info = parameterInfo(parameter);
+    if (!info) return {0.0, 100.0};
+    return {static_cast<double>(info->min), static_cast<double>(std::max(info->max, info->min + 1))};
+}
+
+void EffectEditor::setGraphRange(const QString& parameter, double low, double high) {
+    if (high - low < 1e-6) high = low + 1e-6;
+    graphRanges_.insert(parameter, {low, high});
+    if (QWidget* g = tracks_.value(QStringLiteral("graph:") + parameter)) g->update();
+}
+
+void EffectEditor::zoomToCurveHeight(const QString& parameter) {
+    const model::Effect* e = shownEffect();
+    if (!e) return;
+    double lo = std::numeric_limits<double>::infinity();
+    double hi = -lo;
+    // The curve over the time shown (it "takes account of the horizontal zoom setting", p.100).
+    for (int i = 0; i <= 200; ++i) {
+        const double v = valueAt(*e, parameter, viewStart_ + viewSpan_ * i / 200.0).toDouble();
+        lo = std::min(lo, v);
+        hi = std::max(hi, v);
+    }
+    // "If the curve passing through a selected keyframe uses the Bézier interpolation option, the
+    // scaling ensures that the Bézier handles for the keyframe are also visible" (p.100).
+    const model::ParameterKeyframes keys = model::keyframesOf(*e, categoryOf(parameter), nameOf(parameter));
+    if (keys.interpolation == model::Interpolation::Bezier) {
+        for (const KeyframeId& id : selection_) {
+            if (id.parameter != parameter || id.index >= keys.keys.size()) continue;
+            const double v = keys.keys.at(id.index).value.toDouble();
+            const auto [in, out] = model::effectiveHandles(keys, id.index, span_);
+            lo = std::min({lo, v + in.value, v + out.value});
+            hi = std::max({hi, v + in.value, v + out.value});
+        }
+    }
+    // Ours: a tenth of the height spare at each edge; a flat curve gets a band one unit high.
+    const double pad = hi - lo > 1e-9 ? (hi - lo) * 0.1 : 0.5;
+    setGraphRange(parameter, lo - pad, hi + pad);
+    graphZoomBase_.insert(parameter, graphRange(parameter));
+    if (auto* scale = findChild<QSlider*>(QStringLiteral("graphScale:") + parameter)) {
+        const QSignalBlocker block(scale);
+        scale->setValue(50);
+    }
+}
+
+void EffectEditor::resetGraphViews() {
+    viewStart_ = 0.0;
+    viewSpan_ = 1.0;
+    graphRanges_.clear();
+    graphZoomBase_.clear();
+    if (hScale_) {
+        const QSignalBlocker block(hScale_);
+        hScale_->setValue(0);
+    }
+    for (QSlider* scale : findChildren<QSlider*>()) {
+        if (!scale->objectName().startsWith(QLatin1String("graphScale:"))) continue;
+        const QSignalBlocker block(scale);
+        scale->setValue(50);
+    }
+    syncScrollBar();
+    updateTracks();
+}
+
+// ---------------------------------------------------------------- copy and paste
+
+bool EffectEditor::copyKeyframes() {
+    const model::Effect* e = shownEffect();
+    if (!e || selection_.isEmpty()) return false;
+    QList<CopiedKeyframe> copied;
+    double first = std::numeric_limits<double>::infinity();
+    for (const KeyframeId& id : selection_) {
+        const model::ParameterKeyframes keys = model::keyframesOf(*e, categoryOf(id.parameter), nameOf(id.parameter));
+        if (id.index >= keys.keys.size()) continue;
+        const double frame = span_.frameOf(model::keyframeTime(keys, keys.keys.at(id.index), span_));
+        first = std::min(first, frame);
+        copied << CopiedKeyframe{id.parameter, frame, keys.keys.at(id.index).value};
+    }
+    if (copied.isEmpty()) return false;
+    // "the pasted keyframes preserve the offset" (p.117), from the leftmost one.
+    for (CopiedKeyframe& c : copied) c.frames -= first;
+    clipboard_ = copied;
+    copiedOne_ = copied.size() == 1;
+    return true;
+}
+
+void EffectEditor::copyAllValues() {
+    const model::Effect* e = shownEffect();
+    if (!e) return;
+    // "This option does not require a keyframe in any parameter at the location you are copying from"
+    // (p.117): every parameter's value there.
+    clipboard_.clear();
+    const double t = positionTime();
+    for (const QString& p : keyframeableParameters()) clipboard_ << CopiedKeyframe{p, 0.0, valueAt(*e, p, t)};
+    copiedOne_ = false;
+}
+
+bool EffectEditor::pasteKeyframes() {
+    if (clipboard_.isEmpty() || !current_) return false;
+    const QStringList here = keyframeableParameters();
+    // One keyframe's values go onto the selected keyframes of its parameter (p.117).
+    if (copiedOne_) {
+        const CopiedKeyframe& c = clipboard_.first();
+        QList<int> targets;
+        for (const KeyframeId& id : selection_) {
+            if (id.parameter == c.parameter) targets << id.index;
+        }
+        if (!targets.isEmpty()) {
+            return changeKeyframes(tr("Paste Keyframes"), [&](model::Effect& e) {
+                model::ParameterKeyframes keys = model::keyframesOf(e, categoryOf(c.parameter), nameOf(c.parameter));
+                for (int i : targets) {
+                    if (i < keys.keys.size()) keys.keys[i].value = c.value;
+                }
+                model::setKeyframes(e, categoryOf(c.parameter), nameOf(c.parameter), keys);
+                return true;
+            });
+        }
+    }
+    // Otherwise new keyframes, or replaced ones, the leftmost at the position (p.117-118).
+    const double start = span_.frameOf(positionTime());
+    const bool done = changeKeyframes(tr("Paste Keyframes"), [&](model::Effect& e) {
+        for (const CopiedKeyframe& c : clipboard_) {
+            if (!here.contains(c.parameter)) continue; // from an effect without this parameter
+            model::setKeyframe(e, categoryOf(c.parameter), nameOf(c.parameter), span_.timeOf(start + c.frames), span_, c.value);
+        }
+        return true;
+    });
+    if (done) deselectAllKeyframes();
+    return done;
+}
+
+// ---------------------------------------------------------------- Bézier handles
+
+void EffectEditor::setKeyframeHandles(const KeyframeId& id, const model::BezierHandle& in, const model::BezierHandle& out,
+                                      bool previewOnly) {
+    if (!current_) return;
+    model::Effect e = *current_;
+    model::ParameterKeyframes keys = model::keyframesOf(e, categoryOf(id.parameter), nameOf(id.parameter));
+    if (id.index >= keys.keys.size()) return;
+    model::setHandles(keys, id.index, in, out, span_);
+    model::setKeyframes(e, categoryOf(id.parameter), nameOf(id.parameter), keys);
+    if (previewOnly) {
+        preview_ = e;
+        updateTracks();
+        return;
+    }
+    const QJsonObject parameters = e.parameters;
+    changeKeyframes(tr("Move Direction Handle"), [&](model::Effect& edited) {
+        edited.parameters = parameters;
+        return true;
+    });
+}
+
 QMenu* EffectEditor::keyframeMenu(const QString& which, QWidget* parent) {
     auto* menu = new QMenu(parent ? parent : this);
     menu->setObjectName(QStringLiteral("keyframeMenu"));
@@ -753,6 +1088,7 @@ QMenu* EffectEditor::keyframeMenu(const QString& which, QWidget* parent) {
         deselectAllKeyframes(params);
     });
     menu->addSeparator();
+    menu->addAction(tr("Copy All Values at Position"), this, [this] { copyAllValues(); });
     menu->addAction(tr("Select All Keyframes"), this, [this, params] {
         const model::Effect* e = shownEffect();
         if (!e) return;
@@ -859,6 +1195,15 @@ QMenu* EffectEditor::keyframeMenu(const QString& which, QWidget* parent) {
     option(tr("Hold"), [](const model::ParameterKeyframes& k) { return !k.extrapolate; },
            [](model::ParameterKeyframes& k) { k.extrapolate = false; });
 
+    menu->addSeparator();
+    // The graph views (p.100-101): Zoom to Curve Height for the track's open graphs.
+    menu->addAction(tr("Zoom to Curve Height"), this, [this, params] {
+        for (const QString& p : params) {
+            if (openGraphs_.contains(p)) zoomToCurveHeight(p);
+        }
+    });
+    menu->addAction(tr("Reset All Graph Views"), this, [this] { resetGraphViews(); });
+
     // "Apply to Group" or "Apply to All" while the menu is open (p.104).
     applyTo_ = which;
     updateTracks();
@@ -905,27 +1250,42 @@ void EffectEditor::keyPressEvent(QKeyEvent* event) {
     QWidget::keyPressEvent(event);
 }
 
+// The Effect Editor shortcut menu's options (p.131-132), as the setting has them. Thumbwheels and
+// Real-Time Update wait for their controls and for rendering.
+QMenu* EffectEditor::effectEditorMenu() {
+    auto* menu = new QMenu(this);
+    menu->setObjectName(QStringLiteral("effectEditorMenu"));
+    auto toggle = [this, menu](const QString& text, bool on, const std::function<void(Options&, bool)>& set) {
+        QAction* a = menu->addAction(text);
+        a->setCheckable(true);
+        a->setChecked(on);
+        connect(a, &QAction::toggled, this, [this, set](bool value) {
+            Options o = options();
+            set(o, value);
+            setOptions(o);
+            emit optionsChanged();
+        });
+        return a;
+    };
+    toggle(tr("Indent Rows"), indentRows_, [](Options& o, bool v) { o.indentRows = v; });
+    toggle(tr("Large Text"), largeText_, [](Options& o, bool v) { o.largeText = v; });
+    toggle(tr("Thumbwheels"), false, [](Options&, bool) {})->setEnabled(false);
+    toggle(tr("Real-Time Update"), true, [](Options&, bool) {})->setEnabled(false);
+    toggle(tr("Set Position To Keyframe"), positionToKeyframe_, [](Options& o, bool v) { o.setPositionToKeyframe = v; });
+    toggle(tr("Update Position While Playing"), updateWhilePlaying_, [](Options& o, bool v) { o.updatePositionWhilePlaying = v; });
+    toggle(tr("Show Add Keyframe Mode Menu"), showModeMenu_, [](Options& o, bool v) { o.showModeMenu = v; });
+    menu->addSeparator();
+    for (KeyframeMode m : kModes) {
+        toggle(tr(shortcutModeText(m)), m == mode_, [m](Options& o, bool) { o.mode = m; });
+    }
+    return menu;
+}
+
 void EffectEditor::contextMenuEvent(QContextMenuEvent* event) {
     // "The Effect Editor shortcut menu is available only for effects with advanced keyframes" (p.131).
     if (!shown_ || keyframeableParameters().isEmpty()) return;
-    QMenu menu(this);
-    menu.setObjectName(QStringLiteral("effectEditorMenu"));
-    QAction* setPosition = menu.addAction(tr("Set Position To Keyframe"));
-    setPosition->setCheckable(true);
-    setPosition->setChecked(positionToKeyframe_);
-    connect(setPosition, &QAction::toggled, this, [this](bool on) { positionToKeyframe_ = on; });
-    QAction* showMenu = menu.addAction(tr("Show Add Keyframe Mode Menu"));
-    showMenu->setCheckable(true);
-    showMenu->setChecked(showModeMenu_);
-    connect(showMenu, &QAction::toggled, this, [this](bool on) { showModeMenu_ = on; });
-    menu.addSeparator();
-    for (KeyframeMode m : kModes) {
-        QAction* a = menu.addAction(tr(shortcutModeText(m)));
-        a->setCheckable(true);
-        a->setChecked(m == mode_);
-        connect(a, &QAction::triggered, this, [this, m] { mode_ = m; });
-    }
-    menu.exec(event->globalPos());
+    std::unique_ptr<QMenu> menu(effectEditorMenu());
+    menu->exec(event->globalPos());
 }
 
 } // namespace lumenis::ui

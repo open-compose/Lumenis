@@ -18,9 +18,12 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QScrollArea>
+#include <QScrollBar>
 #include <QSlider>
 #include <QToolButton>
 #include <QVBoxLayout>
+
+#include <cmath>
 
 // The Effect Editor (effect_editor.h). It builds its controls from resources/effect_parameters.json
 // (the parameter categories) and resources/effects.json (which categories an effect has, through
@@ -260,9 +263,35 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     connect(addKeyframe_, &QToolButton::clicked, this,
             [this] { addKeyframeButton(QApplication::keyboardModifiers() & Qt::AltModifier); });
     connect(graphsButton_, &QToolButton::toggled, this, &EffectEditor::setKeyframeGraphsShown);
+    // The horizontal scale bar and the scroll thumbwheel (p.128): ours, a slider and a scroll bar.
+    hScale_ = new QSlider(Qt::Horizontal, this);
+    hScale_->setObjectName(QStringLiteral("effectGraphZoom"));
+    hScale_->setToolTip(tr("Horizontal scale bar"));
+    hScale_->setRange(0, 100);
+    hScale_->setFixedWidth(60);
+    connect(hScale_, &QSlider::valueChanged, this, [this](int v) {
+        // "expands or contracts the view in the keyframe graphs centered around the position
+        // indicator" (p.99): the position keeps its place; 100 shows a thirty-second of the effect.
+        const double span = std::pow(2.0, -v / 20.0);
+        const double at = positionTime();
+        viewStart_ = v == 0 ? 0.0 : at - (at - viewStart_) * span / viewSpan_;
+        viewSpan_ = span;
+        syncScrollBar();
+        updateTracks();
+    });
+    hScroll_ = new QScrollBar(Qt::Horizontal, this);
+    hScroll_->setObjectName(QStringLiteral("effectGraphScroll"));
+    hScroll_->setToolTip(tr("Scroll thumbwheel"));
+    hScroll_->setFixedWidth(60);
+    connect(hScroll_, &QScrollBar::valueChanged, this, [this](int v) {
+        viewStart_ = v / 1000.0;
+        updateTracks();
+    });
     bottom->addWidget(prevEvent_);
     bottom->addWidget(nextEvent_);
     bottom->addWidget(addKeyframe_);
+    bottom->addWidget(hScale_);
+    bottom->addWidget(hScroll_);
     bottom->addWidget(graphsButton_);
 
     auto* middle = new QHBoxLayout;
@@ -367,7 +396,8 @@ void EffectEditor::refresh() {
         syncValues(*effect);
     }
     syncTransition();
-    updateTracks();
+    // The position in the tracks moves while playing only with Update Position While Playing (p.132).
+    if (updateWhilePlaying_ || !timeline_.composer().isPlaying()) updateTracks();
 }
 
 bool EffectEditor::isBlank() const {
@@ -392,6 +422,15 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     controls_.clear();
     valueLabels_.clear();
     categoryOrder_.clear();
+    graphRanges_.clear();
+    graphZoomBase_.clear();
+    viewStart_ = 0.0;
+    viewSpan_ = 1.0;
+    if (hScale_) {
+        const QSignalBlocker block(hScale_);
+        hScale_->setValue(0);
+    }
+    syncScrollBar();
     tracks_.clear();
     graphOpeners_.clear();
     openGraphs_.clear();
@@ -543,12 +582,42 @@ void EffectEditor::rebuild(const model::Effect* effect) {
             if (graphOpener) {
                 auto* graphRow = new QHBoxLayout;
                 graphRow->addStretch(1);
+                // Left of the graph: Zoom to Curve Height and the vertical scale bar (p.99-100).
                 auto* gap = new QWidget(box);
                 gap->setFixedWidth(16);
+                auto* side = new QVBoxLayout(gap);
+                side->setContentsMargins(0, 0, 0, 0);
+                side->setSpacing(1);
+                auto* fit = new QToolButton(gap);
+                fit->setObjectName(QStringLiteral("graphFit:") + k);
+                fit->setToolTip(tr("Zoom to Curve Height"));
+                fit->setAutoRaise(true);
+                fit->setFixedSize(16, 14);
+                fit->setIcon(graphIcon(palette().color(QPalette::WindowText)));
+                connect(fit, &QToolButton::clicked, this, [this, k] { zoomToCurveHeight(k); });
+                auto* scale = new QSlider(Qt::Vertical, gap);
+                scale->setObjectName(QStringLiteral("graphScale:") + k);
+                scale->setToolTip(tr("Vertical scale bar"));
+                scale->setRange(0, 100);
+                scale->setValue(50);
+                // "Drag the vertical scale bar down (to zoom in) or up (to zoom out)" (p.99), around
+                // the middle of the values shown.
+                connect(scale, &QSlider::valueChanged, this, [this, k](int v) {
+                    if (!graphZoomBase_.contains(k)) graphZoomBase_.insert(k, graphRange(k));
+                    const auto [baseLo, baseHi] = graphZoomBase_.value(k);
+                    const auto [lo, hi] = graphRange(k);
+                    const double middle = (lo + hi) / 2.0;
+                    const double half = (baseHi - baseLo) / 2.0 * std::pow(2.0, (v - 50) / 25.0);
+                    setGraphRange(k, middle - half, middle + half);
+                });
+                side->addWidget(fit);
+                side->addWidget(scale, 1);
                 graphRow->addWidget(gap);
                 auto* graph = new KeyframeTrack(*this, KeyframeTrack::Kind::Graph, QStringLiteral("graph:") + k, box);
                 graphRow->addWidget(graph);
                 tracks_.insert(QStringLiteral("graph:") + k, graph);
+                // The side controls come and go with their graph.
+                graph->setProperty("side", QVariant::fromValue(gap));
                 grid->addLayout(graphRow);
             }
         }
@@ -570,6 +639,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
         groupBodies_.insert(category, box);
         openers_.insert(category, opener);
     }
+    applyLook();
     syncValues(*effect);
 }
 

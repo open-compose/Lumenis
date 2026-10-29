@@ -13,6 +13,7 @@
 
 class QCheckBox;
 class QMenu;
+class QScrollBar;
 class QLabel;
 class QLineEdit;
 class QSlider;
@@ -73,6 +74,19 @@ public:
         QString parameter;
         int index = 0;
         bool operator==(const KeyframeId&) const = default;
+    };
+    // How dragging a Bézier direction handle changes the other one (p.122-123): both alike
+    // (Symmetrical, the default), the other only turning (Asymmetrical), or not at all (Independent).
+    enum class HandleMode { Symmetrical, Asymmetrical, Independent };
+    // The Effect Editor settings (Editing Guide p.1171-1172; FX Guide p.131-132) that are built.
+    struct Options {
+        bool indentRows = true; // ours: the guide gives no default
+        bool largeText = false;
+        bool setPositionToKeyframe = true;
+        bool updatePositionWhilePlaying = false; // "deselected by default"
+        bool showModeMenu = true;
+        KeyframeMode mode = KeyframeMode::OpenGroups;
+        bool operator==(const Options&) const = default;
     };
 
     // `timeline` must outlive the editor.
@@ -142,6 +156,10 @@ public:
     // Set Position To Keyframe (p.132): clicking a keyframe moves the position to it.
     bool setsPositionToKeyframe() const { return positionToKeyframe_; }
     void setSetsPositionToKeyframe(bool on) { positionToKeyframe_ = on; }
+    // All of them at once. The Effect Editor shortcut menu changes them too and then says so with
+    // optionsChanged(), so that the setting can follow.
+    Options options() const;
+    void setOptions(const Options& options);
     // The parameters a mode covers.
     QStringList parametersFor(KeyframeMode mode) const;
     // Adds keyframes at the position to the mode's parameters, with their values there; deletes the
@@ -156,6 +174,8 @@ public:
     // The caller owns the menu. Group and effect tracks say "Apply to Group" or "Apply to All" while
     // it is open (p.104).
     QMenu* keyframeMenu(const QString& which, QWidget* parent = nullptr);
+    // The Effect Editor shortcut menu (p.131-132; right-click outside the tracks), owned by the caller.
+    QMenu* effectEditorMenu();
     // The parameters a track covers: its parameter, its category's or all of them.
     QStringList parametersOf(const QString& which) const;
 
@@ -166,11 +186,54 @@ public:
     // previewed drag as one undo step.
     void dragKeyframes(const KeyframeId& id, double frames, double value, bool previewOnly);
     void finishDrag();
+
+    // ---- Keyframe graph views (p.97-101)
+    // The time shown across the tracks and graphs: from viewStart() over viewSpan(); the whole effect
+    // (0, 1) at first. The horizontal scale bar zooms it around the position indicator (p.99), the
+    // scroll thumbwheel and Alt+drag in a graph move it (p.101).
+    double viewStart() const { return viewStart_; }
+    double viewSpan() const { return viewSpan_; }
+    QSlider* horizontalScaleBar() const { return hScale_; }
+    QScrollBar* scrollThumbwheel() const { return hScroll_; }
+    void scrollView(double by);
+    // A graph's range of values shown, its parameter's range at first (p.97); its vertical scale bar
+    // zooms it and may go beyond that range (p.99).
+    std::pair<double, double> graphRange(const QString& parameter) const;
+    void setGraphRange(const QString& parameter, double low, double high);
+    // Zoom to Curve Height (p.100): the curve, and the direction handles of a selected Bézier keyframe,
+    // fill the graph over the time shown.
+    void zoomToCurveHeight(const QString& parameter);
+    // Reset All Graph Views (p.101): the whole effect and every graph's full range.
+    void resetGraphViews();
+
+    // ---- Copy and paste (p.116-119)
+    // Edit > Copy with keyframes selected: copies them, keeping their distance from the leftmost one.
+    // False with none selected.
+    bool copyKeyframes();
+    // Copy All Values at Position (p.118, Ctrl+Alt+C in a graph): every keyframeable parameter's value
+    // at the position.
+    void copyAllValues();
+    // Edit > Paste: values copied from one keyframe go to the selected keyframes of its parameter;
+    // otherwise the keyframes are made (or replaced) with the leftmost at the position. One undo step;
+    // false when nothing was copied or nothing changed.
+    bool pasteKeyframes();
+    bool hasCopiedKeyframes() const { return !clipboard_.isEmpty(); }
+
+    // ---- Bézier direction handles (p.122-123)
+    HandleMode handleMode() const { return handleMode_; }
+    void setHandleMode(HandleMode mode) { handleMode_ = mode; }
+    // Sets keyframe `id`'s handles (in its parameter's time and value), previewed or as one undo step.
+    void setKeyframeHandles(const KeyframeId& id, const model::BezierHandle& in, const model::BezierHandle& out, bool previewOnly);
+
+signals:
+    // The Effect Editor shortcut menu changed options().
+    void optionsChanged();
+
 protected:
     // Shift+Left and Shift+Right on a slider move it by ten; clicking a control makes its parameter
     // the active one.
     bool eventFilter(QObject* watched, QEvent* event) override;
-    // Delete deletes the selected keyframes (p.105).
+    // Delete deletes the selected keyframes (p.105); Ctrl+Alt+C copies all values at the position.
     void keyPressEvent(QKeyEvent* event) override;
     // The keyframe tracks keep a share of the width.
     void resizeEvent(QResizeEvent* event) override;
@@ -251,6 +314,32 @@ private:
     std::optional<model::Effect> current_; // the shown effect as stored, from the last refresh()
     std::optional<model::Effect> preview_; // the shown effect with a drag not yet stored
     QString applyTo_; // the track whose shortcut menu is open, which shows "Apply to ..."
+
+    // Graph views.
+    double viewStart_ = 0.0;
+    double viewSpan_ = 1.0;
+    QSlider* hScale_ = nullptr;
+    QScrollBar* hScroll_ = nullptr;
+    QHash<QString, std::pair<double, double>> graphRanges_; // set by zooming; else the parameter's range
+    QHash<QString, std::pair<double, double>> graphZoomBase_; // the range the vertical scale bar zooms from
+    // Keeps the scroll thumbwheel's range and value with the view.
+    void syncScrollBar();
+
+    // Copied keyframes: a parameter, the frames after the leftmost copied keyframe, and the value.
+    struct CopiedKeyframe {
+        QString parameter;
+        double frames = 0.0;
+        QJsonValue value;
+    };
+    QList<CopiedKeyframe> clipboard_;
+    bool copiedOne_ = false; // one keyframe copied: its value pastes onto selected keyframes
+
+    HandleMode handleMode_ = HandleMode::Symmetrical;
+    bool indentRows_ = true;
+    bool largeText_ = false;
+    bool updateWhilePlaying_ = false;
+    // Applies Indent Rows and Large Text to the controls built.
+    void applyLook();
 };
 
 // One keyframe track or graph of the Effect Editor (FX Guide p.95-97): the effect track (gray), a
@@ -279,6 +368,8 @@ protected:
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
+    // Ctrl+Alt+C in a graph copies all values at the position (p.118).
+    void keyPressEvent(QKeyEvent* event) override;
 
 private:
     // The keyframes shown, by time: one per keyframe in a parameter track or graph, and in a group or
@@ -304,6 +395,21 @@ private:
     QPointF pressPoint_;
     bool dragging_ = false;
     bool movingPosition_ = false;
+    // Alt+drag on a graph away from keyframes scrolls it (p.101); its bottom border resizes it (p.98).
+    bool scrolling_ = false;
+    bool resizing_ = false;
+    // A Bézier direction handle being dragged: its keyframe and side (true: the way out), and both
+    // handles at the press.
+    std::optional<EffectEditor::KeyframeId> handleKey_;
+    bool handleOut_ = false;
+    model::BezierHandle pressIn_;
+    model::BezierHandle pressOut_;
+    // The selected Bézier keyframes of a graph and their handles' places, for drawing and hitting.
+    struct HandlePoints {
+        EffectEditor::KeyframeId key;
+        QPointF at, in, out;
+    };
+    QList<HandlePoints> handlePoints() const;
 };
 
 } // namespace lumenis::ui

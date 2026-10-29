@@ -54,7 +54,9 @@ double cubic(double a, double b, double c, double d, double s) {
     return r * r * r * a + 3 * r * r * s * b + 3 * r * s * s * c + s * s * s * d;
 }
 
-double evaluate(const ParameterKeyframes& p, const QList<Point>& pts, double t) {
+// The value at time t. Handle times are in the units of `at`: `handleScale` turns them into time (the
+// time of one frame for Fixed keyframes, 1 for Elastic ones).
+double evaluate(const ParameterKeyframes& p, const QList<Point>& pts, double t, double handleScale) {
     const Point& first = pts.first();
     const Point& last = pts.last();
     auto slopeOf = [](const Point& a, const Point& b) { return b.t > a.t ? (b.v - a.v) / (b.t - a.t) : 0.0; };
@@ -87,7 +89,7 @@ double evaluate(const ParameterKeyframes& p, const QList<Point>& pts, double t) 
     }
     case Interpolation::Bezier: {
         // The handles, or the Spline's tangents a third of the way when they are not set.
-        double ot = a.key->outTime, ov = a.key->outValue, it = b.key->inTime, iv = b.key->inValue;
+        double ot = a.key->outTime * handleScale, ov = a.key->outValue, it = b.key->inTime * handleScale, iv = b.key->inValue;
         if (ot == 0.0 && ov == 0.0) {
             ot = dt / 3.0;
             ov = splineSlope(pts, i) * dt / 3.0;
@@ -108,6 +110,11 @@ double evaluate(const ParameterKeyframes& p, const QList<Point>& pts, double t) 
     }
     }
     return a.v;
+}
+
+// Time per unit of a handle's time: a frame's for Fixed keyframes (kept in frames), else 1.
+double handleScaleOf(const ParameterKeyframes& p, const EffectSpan& span) {
+    return p.fixed ? span.timeOf(1.0) - span.timeOf(0.0) : 1.0;
 }
 
 QList<Point> pointsOf(const ParameterKeyframes& p, const EffectSpan& span, const std::function<std::optional<double>(const QJsonValue&)>& number) {
@@ -220,7 +227,7 @@ std::optional<double> numberAt(const Effect& effect, const QString& category, co
         if (v.isDouble()) return v.toDouble();
         return std::nullopt;
     };
-    if (const QList<Point> pts = pointsOf(p, span, number); !pts.isEmpty()) return evaluate(p, pts, t);
+    if (const QList<Point> pts = pointsOf(p, span, number); !pts.isEmpty()) return evaluate(p, pts, t, handleScaleOf(p, span));
     return number(effect.parameters.value(category).toObject().value(name));
 }
 
@@ -246,7 +253,7 @@ std::optional<Rgb> colorAt(const Effect& effect, const QString& category, const 
             };
             const QList<Point> pts = pointsOf(p, span, channel);
             if (pts.isEmpty()) return std::nullopt;
-            rgb[c] = std::clamp(evaluate(p, pts, t), 0.0, 1.0);
+            rgb[c] = std::clamp(evaluate(p, pts, t, handleScaleOf(p, span)), 0.0, 1.0);
         }
         return Rgb{rgb[0], rgb[1], rgb[2]};
     }
@@ -283,6 +290,40 @@ bool removeKeyframe(Effect& effect, const QString& category, const QString& name
     if (p.keys.size() == before) return false;
     setKeyframes(effect, category, name, p);
     return true;
+}
+
+std::pair<BezierHandle, BezierHandle> effectiveHandles(const ParameterKeyframes& keys, int index, const EffectSpan& span) {
+    if (index < 0 || index >= keys.keys.size()) return {};
+    QList<Point> pts;
+    for (const EffectKeyframe& k : keys.keys) pts.append({keyframeTime(keys, k, span), k.value.toDouble(), &k});
+    const double scale = handleScaleOf(keys, span);
+    const EffectKeyframe& k = keys.keys.at(index);
+    const Point& here = pts.at(index);
+    // As evaluate() takes them: the handles set, or the Spline's tangent a third of the way to the
+    // neighbour on that side.
+    BezierHandle in{k.inTime * scale, k.inValue};
+    BezierHandle out{k.outTime * scale, k.outValue};
+    const double slope = splineSlope(pts, index);
+    if (k.inTime == 0.0 && k.inValue == 0.0 && index > 0) {
+        const double dt = here.t - pts.at(index - 1).t;
+        in = {-dt / 3.0, -slope * dt / 3.0};
+    }
+    if (k.outTime == 0.0 && k.outValue == 0.0 && index + 1 < pts.size()) {
+        const double dt = pts.at(index + 1).t - here.t;
+        out = {dt / 3.0, slope * dt / 3.0};
+    }
+    return {in, out};
+}
+
+void setHandles(ParameterKeyframes& keys, int index, const BezierHandle& in, const BezierHandle& out, const EffectSpan& span) {
+    if (index < 0 || index >= keys.keys.size()) return;
+    const double scale = handleScaleOf(keys, span);
+    EffectKeyframe& k = keys.keys[index];
+    // The way in comes from before the keyframe and the way out goes after it.
+    k.inTime = std::min(in.time, 0.0) / scale;
+    k.inValue = in.value;
+    k.outTime = std::max(out.time, 0.0) / scale;
+    k.outValue = out.value;
 }
 
 void setFixed(ParameterKeyframes& keys, bool fixed, const EffectSpan& span) {

@@ -291,6 +291,29 @@ private slots:
         QCOMPARE(removeRedundantKeyframes(p), 0); // 0x80 is not exactly halfway
     }
 
+    void handles() {
+        // Bézier handles (p.122-123): the defaults are the Spline's tangents; set ones bend the curve,
+        // and are kept through Fixed (in frames) without moving the curve.
+        Effect e = withKeys(Interpolation::Bezier, {{0.0, 0.0}, {0.5, 50.0}, {1.0, 0.0}});
+        ParameterKeyframes p = keyframesOf(e, kFg, kLevel);
+        const auto [in, out] = effectiveHandles(p, 1, 11);
+        QCOMPARE(in.time, -0.5 / 3);
+        QCOMPARE(in.value, 0.0); // flat at the top of the arc
+        QCOMPARE(out.time, 0.5 / 3);
+        const double before = level(e, 0.25, 11);
+        setHandles(p, 0, {}, {0.1, 40.0}, 11);
+        setKeyframes(e, kFg, kLevel, p);
+        const double bent = level(e, 0.25, 11);
+        QVERIFY(bent > before);
+        setFixed(p, true, 11);
+        setKeyframes(e, kFg, kLevel, p);
+        QVERIFY(std::abs(level(e, 0.25, 11) - bent) < 1e-6);
+        QCOMPARE(effectiveHandles(p, 0, 11).second.time, 0.1);
+        // A way in after its keyframe is pulled back to it.
+        setHandles(p, 1, {0.2, 5.0}, {0.1, 0.0}, 11);
+        QCOMPARE(p.keys.at(1).inTime, 0.0);
+    }
+
     void json() {
         Effect e = withKeys(Interpolation::Bezier, {{0.0, 0.0}, {1.0, 100.0}}, true);
         ParameterKeyframes p = keyframesOf(e, kFg, kLevel);

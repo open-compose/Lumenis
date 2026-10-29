@@ -11,7 +11,9 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QLayout>
 #include <QMenu>
+#include <QScrollBar>
 #include <QSlider>
 #include <QTest>
 #include <QToolButton>
@@ -361,6 +363,187 @@ private slots:
         QCOMPARE(rig.editor.selectedKeyframes().size(), 3);
         QVERIFY(rig.menu(kLevel, QStringLiteral("Delete Keyframe")));
         QVERIFY(rig.keys(kLevel).keys.isEmpty());
+    }
+
+    void graphViews() {
+        Rig rig;
+        rig.editor.setKeyframeGraphsShown(true);
+        rig.editor.setGraphOpen(kLevel, true);
+        rig.editor.setActiveParameter(kLevel);
+        for (const auto& [f, v] : QList<std::pair<std::int64_t, int>>{{0, 20}, {49, 40}}) {
+            rig.at(f);
+            QVERIFY(rig.editor.addKeyframes(EffectEditor::KeyframeMode::ActiveParameter));
+            rig.editor.slider(QStringLiteral("Foreground"), QStringLiteral("Level"))->setValue(v);
+        }
+        // The horizontal scale bar zooms around the position indicator (p.99).
+        rig.at(25);
+        const double at = rig.editor.positionTime();
+        const int before = rig.editor.keyframePoint(kLevel, at).x();
+        rig.editor.horizontalScaleBar()->setValue(20);
+        settle();
+        QCOMPARE(rig.editor.viewSpan(), 0.5);
+        QCOMPARE(rig.editor.keyframePoint(kLevel, at).x(), before);
+        // The scroll thumbwheel moves the view (p.101).
+        QVERIFY(rig.editor.scrollThumbwheel()->isVisible());
+        const double start = rig.editor.viewStart();
+        rig.editor.scrollThumbwheel()->setValue(rig.editor.scrollThumbwheel()->value() + 100);
+        QVERIFY(std::abs(rig.editor.viewStart() - (start + 0.1)) < 0.002); // in thousandths
+        // A graph shows its parameter's range at first (p.97); the vertical scale bar zooms it, beyond
+        // the range too (p.99).
+        QCOMPARE(rig.editor.graphRange(kLevel), (std::pair<double, double>{0.0, 100.0}));
+        auto* scale = rig.editor.findChild<QSlider*>(QStringLiteral("graphScale:") + kLevel);
+        QVERIFY(scale);
+        scale->setValue(75);
+        QCOMPARE(rig.editor.graphRange(kLevel), (std::pair<double, double>{-50.0, 150.0}));
+        // Zoom to Curve Height: the curve, 20 to 40, over the time shown, with a tenth spare (p.100).
+        rig.editor.resetGraphViews();
+        QCOMPARE(rig.editor.viewSpan(), 1.0);
+        QCOMPARE(rig.editor.graphRange(kLevel), (std::pair<double, double>{0.0, 100.0}));
+        rig.editor.findChild<QToolButton*>(QStringLiteral("graphFit:") + kLevel)->click();
+        const auto [lo, hi] = rig.editor.graphRange(kLevel);
+        QVERIFY(std::abs(lo - 18.0) < 0.01 && std::abs(hi - 42.0) < 0.01);
+        // Alt+drag on the graph away from keyframes scrolls it (p.101).
+        const QString graph = QStringLiteral("graph:") + kLevel;
+        QWidget* g = rig.editor.keyframeTrack(graph);
+        const QPoint from = rig.editor.keyframePoint(graph, 0.5, 35);
+        const QPoint to = from + QPoint(-30, 0);
+        QTest::mousePress(g, Qt::LeftButton, Qt::AltModifier, from);
+        QMouseEvent move(QEvent::MouseMove, to, g->mapToGlobal(to), Qt::NoButton, Qt::LeftButton, Qt::AltModifier);
+        QApplication::sendEvent(g, &move);
+        QTest::mouseRelease(g, Qt::LeftButton, Qt::AltModifier, to);
+        QVERIFY(rig.editor.viewStart() > 0.0);
+        QCOMPARE(rig.keys(kLevel).keys.size(), 2); // no keyframe touched
+        // The menu has Zoom to Curve Height and Reset All Graph Views (p.130).
+        QVERIFY(rig.menu(kLevel, QStringLiteral("Reset All Graph Views")));
+        QCOMPARE(rig.editor.viewStart(), 0.0);
+    }
+
+    void copyAndPaste() {
+        Rig rig;
+        rig.editor.setKeyframeGraphsShown(true);
+        rig.editor.setActiveParameter(kLevel);
+        for (const auto& [f, v] : QList<std::pair<std::int64_t, int>>{{0, 10}, {10, 30}, {40, 70}}) {
+            rig.at(f);
+            QVERIFY(rig.editor.addKeyframes(EffectEditor::KeyframeMode::ActiveParameter));
+            rig.editor.slider(QStringLiteral("Foreground"), QStringLiteral("Level"))->setValue(v);
+        }
+        // Nothing selected: nothing to copy.
+        rig.editor.deselectAllKeyframes();
+        QVERIFY(!rig.editor.copyKeyframes());
+        // One keyframe's value onto the selected keyframe (p.117).
+        rig.editor.selectKeyframe({kLevel, 1}, false);
+        QVERIFY(rig.editor.copyKeyframes());
+        rig.editor.selectKeyframe({kLevel, 2}, false);
+        QVERIFY(rig.editor.pasteKeyframes());
+        QCOMPARE(rig.keys(kLevel).keys.at(2).value.toDouble(), 30.0);
+        // Several keyframes keep their distance; the leftmost goes to the position (p.117).
+        rig.editor.selectKeyframe({kLevel, 0}, false);
+        rig.editor.selectKeyframe({kLevel, 1}, true);
+        QVERIFY(rig.editor.copyKeyframes());
+        rig.editor.deselectAllKeyframes();
+        rig.at(20);
+        QVERIFY(rig.editor.pasteKeyframes());
+        const model::ParameterKeyframes keys = rig.keys(kLevel);
+        QCOMPARE(keys.keys.size(), 5);
+        QCOMPARE(model::keyframeAt(keys, rig.time(20), rig.editor.span()) >= 0, true);
+        QCOMPARE(keys.keys.at(model::keyframeAt(keys, rig.time(30), rig.editor.span())).value.toDouble(), 30.0);
+        QVERIFY(rig.undo());
+        QCOMPARE(rig.keys(kLevel).keys.size(), 3);
+        // Copy All Values at Position: every parameter gets a keyframe with its value there (p.118).
+        rig.at(5);
+        QVERIFY(rig.menu(kLevel, QStringLiteral("Copy All Values at Position")));
+        rig.at(30);
+        QVERIFY(rig.editor.pasteKeyframes());
+        for (const QString& p : rig.editor.keyframeableParameters()) {
+            QVERIFY2(model::keyframeAt(rig.keys(p), rig.time(30), rig.editor.span()) >= 0, qPrintable(p));
+        }
+        const model::ParameterKeyframes level = rig.keys(kLevel);
+        QCOMPARE(level.keys.at(model::keyframeAt(level, rig.time(30), rig.editor.span())).value.toDouble(), 20.0);
+        // Ctrl+Alt+C in a graph copies all values too.
+        rig.editor.setGraphOpen(kLevel, true);
+        QWidget* g = rig.editor.keyframeTrack(QStringLiteral("graph:") + kLevel);
+        rig.at(0);
+        QTest::keyClick(g, Qt::Key_C, Qt::ControlModifier | Qt::AltModifier);
+        QVERIFY(rig.editor.hasCopiedKeyframes());
+    }
+
+    void bezierHandles() {
+        Rig rig;
+        rig.editor.setKeyframeGraphsShown(true);
+        rig.editor.setGraphOpen(kLevel, true);
+        rig.editor.setActiveParameter(kLevel);
+        for (const auto& [f, v] : QList<std::pair<std::int64_t, int>>{{0, 0}, {20, 50}, {40, 100}}) {
+            rig.at(f);
+            QVERIFY(rig.editor.addKeyframes(EffectEditor::KeyframeMode::ActiveParameter));
+            rig.editor.slider(QStringLiteral("Foreground"), QStringLiteral("Level"))->setValue(v);
+        }
+        QVERIFY(rig.menu(kLevel, QStringLiteral("Bézier")));
+        rig.editor.selectKeyframe({kLevel, 1}, false);
+        // A selected Bézier keyframe shows its direction handles (p.123); dragging the way out turns
+        // both, symmetrically by default (p.122).
+        QCOMPARE(rig.editor.handleMode(), EffectEditor::HandleMode::Symmetrical);
+        const QString graph = QStringLiteral("graph:") + kLevel;
+        QWidget* g = rig.editor.keyframeTrack(graph);
+        const auto [in0, out0] = model::effectiveHandles(rig.keys(kLevel), 1, rig.editor.span());
+        const double t1 = rig.time(20);
+        const QPoint outPoint = rig.editor.keyframePoint(graph, t1 + out0.time, 50 + out0.value);
+        const QPoint to = rig.editor.keyframePoint(graph, t1 + out0.time, 50 + out0.value + 30);
+        auto drag = [&](const QPoint& a, const QPoint& b, Qt::KeyboardModifiers m) {
+            QTest::mousePress(g, Qt::LeftButton, m, a);
+            QMouseEvent move(QEvent::MouseMove, b, g->mapToGlobal(b), Qt::NoButton, Qt::LeftButton, m);
+            QApplication::sendEvent(g, &move);
+            QTest::mouseRelease(g, Qt::LeftButton, m, b);
+            settle();
+        };
+        drag(outPoint, to, Qt::NoModifier);
+        const auto [in1, out1] = model::effectiveHandles(rig.keys(kLevel), 1, rig.editor.span());
+        QVERIFY(out1.value > out0.value + 20);
+        QVERIFY(in1.value < in0.value - 20); // the way in turned and grew alike
+        QVERIFY(std::abs(in1.value + out1.value) < 1.0);
+        QVERIFY(rig.undo());
+        // Alt+click moves to the next way of adjusting: Asymmetrical, the other handle keeps its length.
+        drag(outPoint, to, Qt::AltModifier);
+        QCOMPARE(rig.editor.handleMode(), EffectEditor::HandleMode::Asymmetrical);
+        const auto [in2, out2] = model::effectiveHandles(rig.keys(kLevel), 1, rig.editor.span());
+        QVERIFY(in2.value < in0.value);
+        QVERIFY(std::abs(in2.value) < std::abs(out2.value));
+        // And Independent: the other handle stays.
+        QVERIFY(rig.undo());
+        drag(outPoint, to, Qt::AltModifier);
+        QCOMPARE(rig.editor.handleMode(), EffectEditor::HandleMode::Independent);
+        const auto [in3, out3] = model::effectiveHandles(rig.keys(kLevel), 1, rig.editor.span());
+        QVERIFY(std::abs(in3.value - in0.value) < 1e-6);
+        QVERIFY(out3.value > out0.value + 20);
+    }
+
+    void options() {
+        Rig rig;
+        // The Effect Editor shortcut menu (p.131-132) sets the options and says so.
+        int changed = 0;
+        connect(&rig.editor, &EffectEditor::optionsChanged, [&] { ++changed; });
+        std::unique_ptr<QMenu> menu(rig.editor.effectEditorMenu());
+        auto action = [&](const char* text) -> QAction* {
+            for (QAction* a : menu->actions()) {
+                if (a->text() == QString::fromUtf8(text)) return a;
+            }
+            return nullptr;
+        };
+        QVERIFY(action("Indent Rows") && action("Indent Rows")->isChecked());
+        QVERIFY(action("Thumbwheels") && !action("Thumbwheels")->isEnabled());
+        action("Large Text")->trigger();
+        QVERIFY(rig.editor.options().largeText);
+        QCOMPARE(rig.editor.font().pointSize(), 12);
+        action("Add Keyframes to All Parameters")->trigger();
+        QCOMPARE(rig.editor.keyframeMode(), EffectEditor::KeyframeMode::AllParameters);
+        action("Set Position To Keyframe")->trigger();
+        QVERIFY(!rig.editor.setsPositionToKeyframe());
+        QCOMPARE(changed, 3);
+        // Indent Rows off: the parameter rows line up with the category rows.
+        EffectEditor::Options o = rig.editor.options();
+        o.indentRows = false;
+        rig.editor.setOptions(o);
+        QSlider* level = rig.editor.slider(QStringLiteral("Foreground"), QStringLiteral("Level"));
+        QCOMPARE(level->parentWidget()->layout()->contentsMargins().left(), 0);
     }
 
     void blankEditor() {

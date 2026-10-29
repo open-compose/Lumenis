@@ -1118,6 +1118,9 @@ void MainWindow::installProjectHandlers(bool projectOpen) {
             list->deleteSelection();
         } else if (binsActive()) {
             bins->deleteSelection();
+        } else if (const Panel* fx = panels_->activePanel(); fx && fx->id() == QLatin1String("EffectEditor")) {
+            // The selected keyframes (FX Guide p.105).
+            effectEditor_->deleteKeyframes(EffectEditor::KeyframeMode::AllParameters);
         } else if (const Panel* active = panels_->activePanel(); active && active->id() == QLatin1String("MediaTool")) {
             // Edit > Delete in the Media Tool: the Delete Media dialog (p.347).
             mediaTool_->deleteSelected();
@@ -1474,6 +1477,18 @@ void MainWindow::createTools() {
         if (timeline_->options().openEffectEditor) showTool(QStringLiteral("EffectEditor"));
     });
     effectEditor_ = new EffectEditor(*timeline_);
+    // The Effect Editor shortcut menu changes the Effect Editor setting too (p.131).
+    connect(effectEditor_, &EffectEditor::optionsChanged, this, [this] {
+        const EffectEditor::Options o = effectEditor_->options();
+        const QString kind = QStringLiteral("Effect Editor");
+        static const char* const modes[] = {"activeParameter", "activeGroup", "openGroups", "enabledGroups", "openGraphs", "allParameters"};
+        settings_->setValue(kind, QStringLiteral("indentRows"), o.indentRows);
+        settings_->setValue(kind, QStringLiteral("largeText"), o.largeText);
+        settings_->setValue(kind, QStringLiteral("setPositionToKeyframe"), o.setPositionToKeyframe);
+        settings_->setValue(kind, QStringLiteral("updatePositionWhilePlaying"), o.updatePositionWhilePlaying);
+        settings_->setValue(kind, QStringLiteral("showAddKeyframeModeMenu"), o.showModeMenu);
+        settings_->setValue(kind, QStringLiteral("addKeyframeCommand"), QString::fromLatin1(modes[static_cast<int>(o.mode)]));
+    });
     panels_->addPanel(new Panel(QStringLiteral("EffectEditor"), tr("Effect Editor"), effectEditor_));
     // Audio (ch. 21) and media (p.344-348).
     audioMixer_ = new AudioMixer(*timeline_);
@@ -4091,6 +4106,23 @@ void MainWindow::applySettings() {
     o.stopAtTail = s.flag(composer, QStringLiteral("stopAtTail"));
     o.stopAtMarkers = s.flag(composer, QStringLiteral("stopAtMarkers"));
     o.ignoreTrackSelectors = s.flag(composer, QStringLiteral("ignoreTrackSelectors"));
+    // The Effect Editor setting (p.1171-1172).
+    {
+        const QString fx = QStringLiteral("Effect Editor");
+        EffectEditor::Options e;
+        e.indentRows = s.flag(fx, QStringLiteral("indentRows"));
+        e.largeText = s.flag(fx, QStringLiteral("largeText"));
+        e.setPositionToKeyframe = s.flag(fx, QStringLiteral("setPositionToKeyframe"));
+        e.updatePositionWhilePlaying = s.flag(fx, QStringLiteral("updatePositionWhilePlaying"));
+        e.showModeMenu = s.flag(fx, QStringLiteral("showAddKeyframeModeMenu"));
+        const QString mode = s.text(fx, QStringLiteral("addKeyframeCommand"));
+        static const char* const modes[] = {"activeParameter", "activeGroup", "openGroups", "enabledGroups", "openGraphs", "allParameters"};
+        for (int i = 0; i < 6; ++i) {
+            if (mode == QLatin1String(modes[i])) e.mode = static_cast<EffectEditor::KeyframeMode>(i);
+        }
+        const QSignalBlocker quiet(effectEditor_);
+        effectEditor_->setOptions(e);
+    }
     const QString trim = QStringLiteral("Trim");
     o.trimAutoFocus = s.flag(trim, QStringLiteral("autoFocus"));
     o.trimPreroll = s.value(trim, QStringLiteral("preroll")).toInt(2);
@@ -4482,6 +4514,11 @@ void MainWindow::installPanelHandlers() {
                 // next or previous audio keyframe (p.720).
                 const bool event = id == QLatin1String("move.go_to_next_event") || id == QLatin1String("move.go_to_previous_event");
                 const Panel* active = panels_->activePanel();
+                // In the Effect Editor they go to its keyframes (FX Guide p.128).
+                if (event && active && active->id() == QLatin1String("EffectEditor") &&
+                    effectEditor_->goToEvent(id == QLatin1String("move.go_to_next_event"))) {
+                    return;
+                }
                 if (event && active && active->id() == QLatin1String("AudioMixer") &&
                     audioMixer_->goToKeyframe(id == QLatin1String("move.go_to_next_event") ? 1 : -1)) {
                     return;
@@ -4496,6 +4533,11 @@ void MainWindow::installPanelHandlers() {
                 const bool clipboard = id == QLatin1String("edit.copy") || id == QLatin1String("edit.cut") ||
                                        id == QLatin1String("edit.paste");
                 if (clipboard && binsActive()) return;
+                // In the Effect Editor, Copy and Paste take its keyframes (FX Guide p.116-119).
+                if (const Panel* active = panels_->activePanel(); clipboard && active && active->id() == QLatin1String("EffectEditor")) {
+                    if (id == QLatin1String("edit.copy") && effectEditor_->copyKeyframes()) return;
+                    if (id == QLatin1String("edit.paste") && effectEditor_->pasteKeyframes()) return;
+                }
                 // With Enable edit from bin, V and B edit the bin's selected clip (p.624).
                 const bool edit = id == QLatin1String("edit.splice_in") || id == QLatin1String("edit.overwrite");
                 if (edit && binsActive() && timeline_->options().editFromBin && editFromBin(id == QLatin1String("edit.splice_in"))) return;

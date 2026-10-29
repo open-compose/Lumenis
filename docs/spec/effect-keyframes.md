@@ -8,13 +8,12 @@ compositor's use of them in `src/media/compositor.cpp`, Fixed keyframes through 
 (`src/ui/effect_editor_keyframes.cpp`, `KeyframeTrack` in `effect_editor.h`), and the Fade Effect
 button, `Timeline::fadeEffects` (`src/ui/timeline.*`). Tests: `tst_effect_keyframes`,
 `tst_compositor` (`keyframedLevels`), `tst_effects` (`fadeEffect`), `tst_effect_keyframes_ui`,
-scenario `26-fixed-keyframes-trim.json`.
+`tst_settings_window` (the Effect Editor setting), scenario `26-fixed-keyframes-trim.json`.
 
 6.2a was the model, evaluation and the Fade Effect button; 6.2b1 the keyframe operations, the Effect
-Editor's keyframe tracks, graphs and menus, and trims keeping Fixed keyframes in place. 6.2b2 is graph
-zoom and scroll, Zoom to Curve Height, Reset All Graph Views, copying and pasting keyframes, Bézier
-handles in the graphs, the rest of the Effect Editor shortcut menu and settings (p.131-132), and
-standard keyframes (p.132-134).
+Editor's keyframe tracks, graphs and menus, and trims keeping Fixed keyframes in place; 6.2b2 the graph
+views, copying and pasting, Bézier handles and the Effect Editor setting. Standard keyframes (p.132-134)
+live in the Effect Preview monitor's position bar and come with Effect mode (6.2c).
 
 ## The model
 
@@ -154,9 +153,67 @@ standard keyframes (p.132-134).
   have no enable switches yet, so all); Open Graphs; All Parameters. Ours: the default is Add to Open
   Groups, the guide's own example (p.107).
 * New keyframes take the parameter's value at the position and are selected (p.104).
-* The Effect Editor shortcut menu (right-click outside the tracks) has Set Position To Keyframe, Show
-  Add Keyframe Mode Menu and the six "Add Keyframes to ..." defaults (p.131-132); the rest of it
-  comes with 6.2b2.
+* Alt+click on the Add Keyframe button opens the Delete menu; Delete and Edit > Delete with the Effect
+  Editor active delete the selected keyframes, and Go to Previous/Next Event there go to its keyframes.
+
+## Graph views (p.97-101)
+
+* The horizontal scale bar "expands or contracts the view in the keyframe graphs centered around the
+  position indicator" (p.99): every track and graph shows the same time; the position keeps its place.
+  Ours: the bar runs from the whole effect to a thirty-second of it.
+* The scroll thumbwheel moves the view (p.101). Ours: a scroll bar, in thousandths of the effect,
+  that can go past either end to keyframes outside the effect.
+* Each open graph has a vertical scale bar to its left: "Drag the vertical scale bar down (to zoom in)
+  or up (to zoom out)"; "You can zoom out beyond the limits of the parameter value range" (p.99).
+  Ours: around the middle of the values shown, from half to double per quarter of the bar.
+* Zoom to Curve Height (its button above the scale bar, or the shortcut menu) fits the curve over the
+  time shown, with the direction handles of a selected Bézier keyframe (p.100). Ours: a tenth of the
+  height spare at each edge, and a band one unit high for a flat curve.
+* "Alt+click ... the keyframe graph. The pointer changes to a hand. Drag the hand to reposition the
+  view" (p.101): Alt+drag away from keyframes scrolls the graph in time and value.
+* Dragging a graph's bottom border changes its height (p.98).
+* Reset All Graph Views (p.101) shows the whole effect and every graph's full range again.
+
+## Copying and pasting (p.116-119)
+
+* With the Effect Editor active, Edit > Copy (Ctrl+C) copies the selected keyframes and Edit > Paste
+  (Ctrl+V) pastes them; with none selected the Timeline's Copy and Paste work as before.
+* One keyframe copied: "Media Composer pastes the parameters from the keyframe that you copy to the
+  keyframes that you select, or creates a new keyframe using the parameters that you copy at the
+  location of the position indicator" (p.117).
+* Several: "pastes the leftmost keyframe at the location that you select and pastes the other keyframes
+  in locations that preserve the original offset" (p.117); the location is the position. Ours: the
+  offset is kept in frames, so pasting into a longer or shorter effect keeps the timing.
+* Copy All Values at Position (the tracks' shortcut menu, Ctrl+Alt+C in a graph) takes every
+  keyframeable parameter's value at the position, "regardless of whether a keyframe already exists",
+  and Paste gives every parameter a keyframe with that value (p.118-119).
+* Pasting into another effect pastes the parameters it has. One undo step.
+
+## Bézier direction handles (p.122-123)
+
+* A selected keyframe of a Bézier parameter shows a direction bar with two handles in its open graph
+  (p.123). Handles not set show where the curve's default tangents are.
+* Dragging a handle: Symmetrical "changes the length and rotation of both direction handles
+  symmetrically"; Asymmetrical changes the dragged handle's length and turns both; Independent
+  changes only the dragged one (p.122-123). "The default adjustment method is symmetrical"; Alt+click
+  on a handle moves to the next method, which stays until changed (p.123). Ours: lengths and turns are
+  measured on screen. The way in stays at or before its keyframe in time and the way out at or after.
+* Handles are kept in the units of the keyframe's position (frames for Fixed keyframes) and keep the
+  curve's shape when switching between Fixed and Elastic (`model::setHandles`,
+  `model::effectiveHandles`).
+
+## The Effect Editor setting (Editing Guide p.1171-1172; FX Guide p.131-132)
+
+* A User setting, "Effect Editor": Indent Rows, Large Text ("12-point size"), Set Position To
+  Keyframe, Update Position While Playing ("deselected by default"), Show Add Keyframe Mode Menu, and
+  the Add Keyframe button commands. Thumbwheels, Real Time Update and Open the color info tool when
+  picking color are dimmed until their controls, rendering and the Color Info tool come.
+* The Effect Editor shortcut menu (right-click outside the tracks) has the same options, mirrored:
+  "The Effect Editor settings and the commands in the Effect Editor shortcut menu are similar but not
+  identical" (p.1171). Ours: changing one in the menu changes the setting.
+* The Editing Guide's list of Add Keyframe commands (p.1172) leaves out Enabled Groups, which the FX
+  Guide's has (p.109-110, p.132); ours has all six.
+* Ours: Indent Rows is on by default; the guide gives no default.
 
 ## Where the compositor reads them
 

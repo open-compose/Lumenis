@@ -146,6 +146,30 @@
       ]
     },
     {
+      "kind": "Effect Editor",
+      "scope": "user",
+      "page": 1171,
+      "tabs": [
+        {
+          "name": "",
+          "options": [
+            {"key": "indentRows", "type": "bool", "label": "Indent Rows", "default": true, "page": 1171},
+            {"key": "largeText", "type": "bool", "label": "Large Text", "default": false, "page": 1171},
+            {"key": "thumbwheels", "type": "bool", "label": "Thumbwheels", "default": false, "page": 1171, "later": true},
+            {"key": "realTimeUpdate", "type": "bool", "label": "Real Time Update", "default": true, "page": 1171, "later": true},
+            {"key": "setPositionToKeyframe", "type": "bool", "label": "Set Position To Keyframe", "default": true, "page": 1171},
+            {"key": "updatePositionWhilePlaying", "type": "bool", "label": "Update Position While Playing", "default": false, "page": 1171},
+            {"key": "showAddKeyframeModeMenu", "type": "bool", "label": "Show Add Keyframe Mode Menu", "default": true, "page": 1171},
+            {"key": "addKeyframeCommand", "type": "choice", "style": "radio", "label": "Add Keyframe button commands", "default": "openGroups", "page": 1172,
+             "choices": [{"value": "activeParameter", "label": "Add Keyframe To Active Parameter"}, {"value": "activeGroup", "label": "Add Keyframes To Active Group"},
+                         {"value": "openGroups", "label": "Add Keyframes To Open Groups"}, {"value": "enabledGroups", "label": "Add Keyframes To Enabled Groups"},
+                         {"value": "openGraphs", "label": "Add Keyframes To Open Graphs"}, {"value": "allParameters", "label": "Add Keyframes To All Parameters"}]},
+            {"key": "openColorInfoTool", "type": "bool", "label": "Open the color info tool when picking color", "default": true, "page": 1172, "later": true}
+          ]
+        }
+      ]
+    },
+    {
       "kind": "Export",
       "scope": "user",
       "page": 1173,

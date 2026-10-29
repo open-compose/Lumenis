@@ -462,8 +462,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `KeyframeTrack`; keyframe operations and `model::EffectSpan`; Fixed keyframes
   through trims; `"keyframeable": false` in effect_parameters.json; test
   `tst_effect_keyframes_ui`, scenario `26-fixed-keyframes-trim.json`), is done.
-  Next: 6.2b2 (graph zoom, copy/paste, Bézier handles, Effect Editor settings,
-  standard keyframes), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.2b2, graph views, copy/paste, Bézier handles and the "Effect Editor"
+  User setting (`EffectEditor::Options`), is done. Next: 6.2c, Effect mode and
+  the Effect Preview monitor with standard keyframes, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 
