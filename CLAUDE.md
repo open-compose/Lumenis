@@ -449,7 +449,8 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   The monitor marker fix (an upright oval and the comment over the frame,
   no colour over the whole picture; `markerOval` in `composer.cpp`, test
   `tst_monitor_markers`) is done.
-  Next: Phases 6, 7 and 8 in order. Phase 9 "Left over stuff"
+  Next: Phases 6, 7 and 8 in order. Phase 6's steps (6.1 the compositor and
+  dissolves to 6.11 the OFX host) are in docs/ROADMAP.md. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

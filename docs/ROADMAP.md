@@ -890,6 +890,33 @@ phase of their own. They are done in three steps:
 * OFX host, with OCIO colour management covering Rec.709, Rec.2020, PQ/HLG and
   ACES.
 
+**Steps** (planned 2026-10-29 from the FX Guide's chapters; pages are the FX Guide's):
+* 6.1, the compositor: a sequence frame made from every monitored video track, bottom to top, each
+  segment's picture through its effect and transitions blended across cuts, in floating point and
+  at the 8-, 16- or 32-bit processing the setting picks; the monitors, Full Screen Playback and
+  output take their frames from it. With it the dissolve family (Dissolve, Fade to/from Color, Dip
+  to Color, Film Dissolve and Fade, Superimpose) and the Fade Effect button (p.46). Tests check the
+  pixels; gate 1's reference-frame comparison is ready for Media Composer's frames (M).
+* 6.2, keyframes on effect parameters: standard and advanced keyframes and the Effect Editor's
+  graphs (ch.4, p.94-134).
+* 6.3, the effect families of the Effects Reference (ch.17-18, p.454-586): wipes and pushes,
+  squeezes, Blend (Picture-in-Picture, Superimpose), Image (Blur, Color Effect, Flip-Flop, Mask,
+  Mosaic, Resize, Letterbox and the rest), Key (chroma, luma, matte keys).
+* 6.4, rendering (p.57-61, p.135-156): Render Effect, ExpertRender, partial render, render
+  settings, precomputes as effect media files, render-on-the-fly, the real-time playback
+  indicators, and the Timeline's Render Ranges and Show Adapters moved here from the UI pass.
+* 6.5, motion effects and Timewarp (ch.7, p.165-205): freeze frames, variable speed, strobe, the
+  Motion Effect Editor's speed and position graphs.
+* 6.6, layered and nested effects (ch.8, p.206-228): nesting and stepping in, Collapse,
+  Submaster, Double-Click to Show Nesting.
+* 6.7, 3D effects, camera effects, and tracking and stabilization (ch.9-11, p.229-300).
+* 6.8, titles (ch.12-13, p.301-377): the Title Tool and Titler+, with keyframes kept through trims,
+  splits and duplicates (2026.8). SubCap (ch.14) goes to Phase 7 with the captions.
+* 6.9, intraframe effects (Paint, AniMatte, Blur, Scratch Removal; ch.15) and PlasmaWipe (ch.16).
+* 6.10, colour correction (ch.19-24, p.587-733): Color Correction mode, HSL and curves, safe
+  colours, and the Symphony option's spot colour.
+* 6.11, the OFX host in place of AVX (ch.6, p.157-164), with OCIO colour management.
+
 **Gates**
 1. Each effect's output matches the reference frames from Media Composer with
    ΔE2000 ≤ 1.0 mean and ≤ 3.0 max.
@@ -900,7 +927,7 @@ phase of their own. They are done in three steps:
 * Export (QuickTime, MXF OP1a, AS-11, DCP via an open library, IMF later).
 * EDL Manager and Send-To templates.
 * Output to AJA/Blackmagic devices.
-* Captions (SCC, SRT, STL) and the Titler+ equivalent.
+* Captions (SCC, SRT, STL) and the SubCap effect (FX Guide ch.14, p.378-390); Titler+ is in Phase 6.8.
 
 **Gates**
 1. Exports validate against the relevant spec checkers (AS-11 DPP, DCP checker
