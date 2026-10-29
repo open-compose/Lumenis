@@ -79,7 +79,8 @@ headers in `include/lumenis/<library>/`.
   (recording from an input), `audio_fx.*` (the audio effect interface and
   the built-in effects), `clap_host.*` (CLAP plug-ins as audio effects,
   docs/spec/clap-host.md), `audio_suite.*` (AudioSuite processes and
-  rendering, docs/spec/audiosuite.md), `mixdown.*`
+  rendering, docs/spec/audiosuite.md), `compositor.*` (sequence frames
+  from the video tracks with their effects, docs/spec/compositor.md), `mixdown.*`
   (Audio Mixdown, docs/spec/audio-mixdown.md), `surround.*` (speakers,
   monitor mixes and their folds, docs/spec/surround.md), `ltc.*` (audio
   timecode, docs/spec/clip-audio.md), `tone.*` (the calibration tone,

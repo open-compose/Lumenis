@@ -895,10 +895,10 @@ phase of their own. They are done in three steps:
   segment's picture through its effect and transitions blended across cuts, in floating point and
   at the 8-, 16- or 32-bit processing the setting picks; the monitors, Full Screen Playback and
   output take their frames from it. With it the dissolve family (Dissolve, Fade to/from Color, Dip
-  to Color, Film Dissolve and Fade, Superimpose) and the Fade Effect button (p.46). Tests check the
-  pixels; gate 1's reference-frame comparison is ready for Media Composer's frames (M).
+  to Color, Film Dissolve and Fade, Superimpose). Tests check the pixels; gate 1's reference-frame
+  comparison waits for Media Composer's frames (M). (6.1, docs/spec/compositor.md, is done.)
 * 6.2, keyframes on effect parameters: standard and advanced keyframes and the Effect Editor's
-  graphs (ch.4, p.94-134).
+  graphs (ch.4, p.94-134), with the Fade Effect button (p.46) and Reverse Animation.
 * 6.3, the effect families of the Effects Reference (ch.17-18, p.454-586): wipes and pushes,
   squeezes, Blend (Picture-in-Picture, Superimpose), Image (Blur, Color Effect, Flip-Flop, Mask,
   Mosaic, Resize, Letterbox and the rest), Key (chroma, luma, matte keys).

@@ -577,6 +577,8 @@ private:
     void scrubIfMoved();
 
     // What a monitor shows at a position: a linked clip and its frame.
+    // The video tracks of `seq` the monitor shows, bottom to top (Track Monitor buttons, p.627).
+    QStringList shownVideoTracks(MonitorId monitor, const model::Sequence& seq) const;
     std::optional<std::pair<model::BinItem, std::int64_t>> frameAt(MonitorId monitor, std::int64_t position) const;
 
     // Starts the monitor's sound at `speed` for playback, or none above three times normal.

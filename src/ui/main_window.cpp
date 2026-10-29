@@ -9,6 +9,7 @@
 #include "lumenis/ui/main_window.h"
 
 #include "lumenis/media/audio_input.h"
+#include "lumenis/media/compositor.h"
 #include "lumenis/media/consolidate.h"
 #include "lumenis/media/playback.h"
 
@@ -637,6 +638,32 @@ void MainWindow::createPanels() {
     // video track's (p.432-434 orders the tracks the same way).
     composer_->setPictureResolver([this](MonitorId monitor, std::int64_t at, QSize size, bool* offline) -> QImage {
         const model::MonitorState& state = composer_->state(monitor);
+        // A sequence: its video tracks composited with their effects (Phase 6.1, media::composeImage).
+        if (const model::LoadedClip* loaded = state.current(); loaded && loaded->item.kind == model::BinItemKind::Sequence) {
+            const model::Sequence seq = model::Sequence::fromItem(loaded->item);
+            media::Composition c;
+            c.sequence = &seq;
+            c.tracks = shownVideoTracks(monitor, seq);
+            c.size = size;
+            c.source = [this](const model::Segment& segment, std::int64_t clipFrame, QSize want) -> std::optional<QImage> {
+                const auto clip = composer_->resolve(segment.binId, segment.clipId);
+                if (!clip || !media::isLinked(*clip)) return QImage();
+                if (frames_->isOffline(*clip)) return std::nullopt;
+                return frames_->frame(*clip, clipFrame, want);
+            };
+            bool missing = false;
+            const QImage image = media::composeImage(c, at, &missing);
+            if (image.isNull() && missing && offline) *offline = true;
+            if (composer_->isPlaying() && monitor == composer_->activeMonitor() && at == state.position()) {
+                const int step = composer_->speed() > 0 ? 1 : -1;
+                for (int k = 1; k <= 2; ++k) {
+                    if (const auto next = frameAt(monitor, state.position() + k * step * std::abs(composer_->speed()))) {
+                        frames_->prefetch(next->first, next->second, size);
+                    }
+                }
+            }
+            return image;
+        }
         const auto shown = frameAt(monitor, at);
         if (!shown) return {};
         const auto& [item, frame] = *shown;
@@ -1686,6 +1713,26 @@ void MainWindow::createTools() {
     connect(composer_, &Composer::buttonsChanged, this, [this] {
         settings_->setValue(QStringLiteral("Composer"), QStringLiteral("buttons"), composer_->buttonLayout());
     });
+}
+
+// The video tracks a monitor shows, bottom to top: in the Record monitor those at and below the top
+// monitored video track ("all tracks below the monitored track are active during playback", Editing
+// Guide p.627), the unmonitored ones left out; every one in the Source monitor.
+QStringList MainWindow::shownVideoTracks(MonitorId monitor, const model::Sequence& seq) const {
+    QStringList video;
+    for (const model::Track& t : seq.tracks()) {
+        if (t.kind == model::TrackKind::Video) video << t.name();
+    }
+    if (monitor != MonitorId::Record || !timeline_) return video;
+    int top = -1;
+    for (int i = 0; i < video.size(); ++i) {
+        if (timeline_->isMonitored(video.at(i))) top = i;
+    }
+    QStringList shown;
+    for (int i = 0; i <= top; ++i) {
+        if (timeline_->isMonitored(video.at(i))) shown << video.at(i);
+    }
+    return shown;
 }
 
 std::optional<std::pair<model::BinItem, std::int64_t>> MainWindow::frameAt(MonitorId monitor,
