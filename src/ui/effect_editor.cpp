@@ -30,6 +30,7 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cmath>
 
 // The Effect Editor (effect_editor.h). It builds its controls from resources/effect_parameters.json
@@ -57,9 +58,12 @@ const Catalog& catalog() {
             for (const QJsonValue& pv : o.value(QStringLiteral("parameters")).toArray()) {
                 const QJsonObject po = pv.toObject();
                 EffectParameter p;
-                p.name = po.value(QStringLiteral("name")).toString();
-                p.kind = po.value(QStringLiteral("kind")).toString();
+                p.text = po.value(QStringLiteral("name")).toString();
                 p.subcategory = po.value(QStringLiteral("subcategory")).toString();
+                p.name = p.text;
+                const bool taken = std::any_of(list.cbegin(), list.cend(), [&](const EffectParameter& q) { return q.name == p.text; });
+                if (taken) p.name = (p.subcategory.isEmpty() ? QStringLiteral("2") : p.subcategory) + QStringLiteral(": ") + p.text;
+                p.kind = po.value(QStringLiteral("kind")).toString();
                 p.min = static_cast<int>(po.value(QStringLiteral("min")).toDouble(0));
                 p.max = static_cast<int>(po.value(QStringLiteral("max")).toDouble(100));
                 if (p.max < p.min) std::swap(p.min, p.max); // a range printed backwards
@@ -519,7 +523,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
             const bool keyframed = p.keyframeable && (p.kind == QLatin1String("slider") || p.kind == QLatin1String("color"));
             QLabel* nameLabel = nullptr;
             if (p.kind == QLatin1String("checkbox")) {
-                auto* c = new QCheckBox(p.name, box);
+                auto* c = new QCheckBox(p.text, box);
                 c->setObjectName(QStringLiteral("param:") + k);
                 c->setChecked(p.defaultValue.toBool());
                 connect(c, &QCheckBox::toggled, this, [this, category, name = p.name](bool on) {
@@ -528,7 +532,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                 row->addWidget(c);
                 controls_.insert(k, c);
             } else {
-                auto* label = new QLabel(p.name, box);
+                auto* label = new QLabel(p.text, box);
                 label->setMinimumWidth(64);
                 row->addWidget(label);
                 nameLabel = label;

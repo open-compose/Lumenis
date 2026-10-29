@@ -448,6 +448,70 @@ private slots:
         QCOMPARE(swapped.pixel(0, 0)[0], 0.0f);
     }
 
+    void colorEffect() {
+        // The Color Effect (FX Guide p.533-536) on one pixel.
+        auto apply = [](const QColor& in, QJsonObject params) {
+            const Effect e{QStringLiteral("Image"), QStringLiteral("Color Effect"),
+                           QJsonObject{{QStringLiteral("Color Effect Parameters"), std::move(params)}}};
+            return imageEffectPicture(e, Picture::solid(1, 1, in), 0.0, EffectSpan(10)).toImage().pixelColor(0, 0);
+        };
+        const QColor grey(128, 128, 128);
+        // At its defaults it changes nothing.
+        QVERIFY(near(apply(grey, {}), grey, 1));
+        QVERIFY(near(apply(QColor(200, 30, 90), {}), QColor(200, 30, 90), 1));
+        // Bright and Cont (p.533).
+        QVERIFY(apply(grey, {{QStringLiteral("Bright"), 50}}).red() > 170);
+        QVERIFY(near(apply(QColor(250, 250, 250), {{QStringLiteral("Cont"), -100}}), apply(QColor(5, 5, 5), {{QStringLiteral("Cont"), -100}}), 1));
+        // Luma Adjust's Invert: white to black.
+        QVERIFY(near(apply(QColor(255, 255, 255), {{QStringLiteral("Invert"), true}}), QColor(0, 0, 0), 1));
+        // Sat -100: grey (p.535).
+        const QColor flat = apply(QColor(255, 0, 0), {{QStringLiteral("Sat"), -100}});
+        QVERIFY(std::abs(flat.red() - flat.green()) <= 1 && std::abs(flat.green() - flat.blue()) <= 1);
+        // The second Invert, Chroma Adjust's, is kept apart from Luma Adjust's: red's complement.
+        const QColor comp = apply(QColor(255, 0, 0), {{QStringLiteral("Chroma Adjust Parameters: Invert"), true}});
+        QVERIFY(comp.red() < comp.green() && comp.red() < comp.blue());
+        // Color Gain (p.536): Red 0 takes red out.
+        QCOMPARE(apply(QColor(255, 0, 0), {{QStringLiteral("Red"), 0}}).red(), 0);
+        // Solar 255 inverts everything; Post 25 leaves two steps (p.535-536).
+        QVERIFY(near(apply(QColor(255, 255, 255), {{QStringLiteral("Solar"), 255}}), QColor(0, 0, 0), 1));
+        const int posted = apply(QColor(100, 100, 100), {{QStringLiteral("Post"), 25}}).red();
+        QVERIFY(posted == 0 || posted == 255);
+        // Luma Clip High at 128: white comes down to code 128 (p.535).
+        QVERIFY(near(apply(QColor(255, 255, 255), {{QStringLiteral("High"), 128}}), QColor(130, 130, 130), 2));
+        // Luma Range 0 to 255 with the white point at 200: light grey becomes white (p.534).
+        QVERIFY(near(apply(QColor(210, 210, 210), {{QStringLiteral("Fast Menu"), QStringLiteral("0 to 255")}, {QStringLiteral("W Point"), 200}}),
+                     QColor(255, 255, 255), 1));
+    }
+
+    void blurAndMosaic() {
+        // Blur and Mosaic (p.468, p.532-536) over the whole picture (ours until Intraframe objects).
+        Picture halves = Picture::solid(64, 36, QColor(0, 0, 255));
+        const Picture left = Picture::solid(32, 36, QColor(255, 0, 0));
+        for (int y = 0; y < 36; ++y) {
+            for (int x = 0; x < 32; ++x) std::copy(left.pixel(x, y), left.pixel(x, y) + 4, halves.pixel(x, y));
+        }
+        // Hor 300 of 1920 is 10 pixels of 64: the edge softens, the far sides stay.
+        const Effect blur{QStringLiteral("Image"), QStringLiteral("Blur Effect"),
+                          QJsonObject{{QStringLiteral("Blur Effect Blur Parameters"), QJsonObject{{QStringLiteral("Hor"), 300}, {QStringLiteral("Vert"), 0}}}}};
+        const QImage blurred = imageEffectPicture(blur, halves, 0.0, EffectSpan(10)).toImage();
+        QVERIFY(blurred.pixelColor(31, 18).red() < 220 && blurred.pixelColor(31, 18).blue() > 35);
+        QCOMPARE(blurred.pixelColor(0, 18), QColor(255, 0, 0));
+        // Opac. 0: no blur.
+        Effect none = blur;
+        QJsonObject params = none.parameters.value(QStringLiteral("Blur Effect Blur Parameters")).toObject();
+        params.insert(QStringLiteral("Opac."), 0);
+        none.parameters.insert(QStringLiteral("Blur Effect Blur Parameters"), params);
+        QCOMPARE(imageEffectPicture(none, halves, 0.0, EffectSpan(10)).toImage().pixelColor(31, 18), QColor(255, 0, 0));
+        // Mosaic tiles of 24 pixels (Hor and Vert 720): the tile across the middle (x 24 to 47, a third
+        // red) is the average.
+        const Effect mosaic{QStringLiteral("Image"), QStringLiteral("Mosaic Effect"),
+                            QJsonObject{{QStringLiteral("Mosaic Effect Mosaic Parameters"), QJsonObject{{QStringLiteral("Hor"), 720}, {QStringLiteral("Vert"), 720}}}}};
+        const QImage tiled = imageEffectPicture(mosaic, halves, 0.0, EffectSpan(10)).toImage();
+        QCOMPARE(tiled.pixelColor(0, 0), QColor(255, 0, 0));
+        QVERIFY(near(tiled.pixelColor(30, 0), QColor(85, 0, 170), 1));
+        QCOMPARE(tiled.pixelColor(30, 0), tiled.pixelColor(47, 23));
+    }
+
     void reformat() {
         // "A Reformat effect works on all tracks below the track to which you apply it" (p.229): on
         // filler on V2, 16:9 Letterbox squeezes V1 to three quarters of the height, black bands above

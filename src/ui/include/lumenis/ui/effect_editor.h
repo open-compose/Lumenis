@@ -28,7 +28,11 @@ class Timeline;
 // A control of the Effect Editor (FX guide p.491-586), from
 // resources/effect_parameters.json.
 struct EffectParameter {
+    // The parameter's key in model::Effect::parameters: its name as printed, or, when an earlier
+    // parameter of its category has that name, "<subcategory>: <name>" (ours; e.g. the Color Effect's
+    // second Invert, "Chroma Adjust Parameters: Invert").
     QString name;
+    QString text; // the name as printed, shown beside its control
     QString kind; // slider, checkbox, color, menu, button, other
     QString subcategory;
     int min = 0;   // a slider's range; min <= max

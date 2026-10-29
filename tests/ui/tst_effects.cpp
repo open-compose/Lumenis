@@ -354,6 +354,19 @@ private slots:
         rig.editor.checkBox(QStringLiteral("Scaling"), QStringLiteral("Fixed Aspect"))->setChecked(true);
         rig.editor.slider(QStringLiteral("Scaling"), QStringLiteral("X"))->setValue(70);
         QCOMPARE(rig.editor.slider(QStringLiteral("Scaling"), QStringLiteral("Y"))->value(), 70);
+        // The Color Effect's two Invert boxes (p.533, p.535) are kept apart; its gains start at 100.
+        QVERIFY(rig.timeline.dropEffect(QStringLiteral("V1"), 70, effect("Image", "Color Effect")));
+        rig.composer.moveTo(MonitorId::Record, 72);
+        QCOMPARE(rig.editor.effectName(), QStringLiteral("Color Effect"));
+        const QString color = QStringLiteral("Color Effect Parameters");
+        QCheckBox* luma = rig.editor.checkBox(color, QStringLiteral("Invert"));
+        QCheckBox* chroma = rig.editor.checkBox(color, QStringLiteral("Chroma Adjust Parameters: Invert"));
+        QVERIFY(luma && chroma && luma != chroma);
+        QCOMPARE(chroma->text(), QStringLiteral("Invert"));
+        chroma->setChecked(true);
+        QVERIFY(rig.v1(1).effect->parameters.value(color).toObject().value("Chroma Adjust Parameters: Invert").toBool());
+        QVERIFY(!luma->isChecked());
+        QCOMPARE(rig.editor.slider(color, QStringLiteral("Red"))->value(), 100);
     }
 
     void transitionParameters() {

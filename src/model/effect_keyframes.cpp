@@ -40,6 +40,24 @@ struct Point {
     const EffectKeyframe* key = nullptr;
 };
 
+// Acceleration (FX Guide p.492): "adjusts the speed of an effect over time by having the effect ease in
+// and ease out of every keyframe", from 0 (constant speed) to 100 (most easing); not keyframeable. Ours:
+// the time between two keyframes is blended by that much towards a smoothstep, so the value leaves and
+// reaches each keyframe slowly.
+double eased(const Effect& effect, const QList<Point>& pts, double t) {
+    const double a = std::clamp(effect.parameters.value(QStringLiteral("Acceleration")).toObject().value(QStringLiteral("Acceleration")).toDouble(0.0), 0.0, 100.0) / 100.0;
+    if (a <= 0.0 || pts.size() < 2) return t;
+    for (qsizetype i = 0; i + 1 < pts.size(); ++i) {
+        const double t0 = pts.at(i).t;
+        const double t1 = pts.at(i + 1).t;
+        if (t < t0 || t > t1 || t1 <= t0) continue;
+        const double s = (t - t0) / (t1 - t0);
+        const double smooth = s * s * (3.0 - 2.0 * s);
+        return t0 + (s + a * (smooth - s)) * (t1 - t0);
+    }
+    return t;
+}
+
 // The Spline's slope at point i: the chord between its neighbours, flat at the first and last
 // keyframes so that two keyframes ease in and out (p.121).
 double splineSlope(const QList<Point>& p, qsizetype i) {
@@ -227,7 +245,7 @@ std::optional<double> numberAt(const Effect& effect, const QString& category, co
         if (v.isDouble()) return v.toDouble();
         return std::nullopt;
     };
-    if (const QList<Point> pts = pointsOf(p, span, number); !pts.isEmpty()) return evaluate(p, pts, t, handleScaleOf(p, span));
+    if (const QList<Point> pts = pointsOf(p, span, number); !pts.isEmpty()) return evaluate(p, pts, eased(effect, pts, t), handleScaleOf(p, span));
     return number(effect.parameters.value(category).toObject().value(name));
 }
 
@@ -253,7 +271,7 @@ std::optional<Rgb> colorAt(const Effect& effect, const QString& category, const 
             };
             const QList<Point> pts = pointsOf(p, span, channel);
             if (pts.isEmpty()) return std::nullopt;
-            rgb[c] = std::clamp(evaluate(p, pts, t, handleScaleOf(p, span)), 0.0, 1.0);
+            rgb[c] = std::clamp(evaluate(p, pts, eased(effect, pts, t), handleScaleOf(p, span)), 0.0, 1.0);
         }
         return Rgb{rgb[0], rgb[1], rgb[2]};
     }

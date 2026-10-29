@@ -85,6 +85,15 @@ QJsonValue parameterDefault(const model::Effect& e, const QString& category, con
         // everything else at normal size.
         return is(e, "Blend", "Picture-in-Picture") ? 50 : 100;
     }
+    if (category == QLatin1String("Color Effect Parameters") &&
+        (name == QLatin1String("Red") || name == QLatin1String("Green") || name == QLatin1String("Blue"))) {
+        return 100; // Color Gain: "100 leaves the color unchanged" (p.536)
+    }
+    if (category == QLatin1String("Blur Effect Blur Parameters") || category == QLatin1String("Mosaic Effect Mosaic Parameters")) {
+        // Ours: at full strength, 10 pixels of a picture 1920 wide.
+        if (name == QLatin1String("Opac.")) return 100;
+        if (name == QLatin1String("Hor") || name == QLatin1String("Vert")) return 10;
+    }
     if (category == QLatin1String("14:9 Letterbox Position H Parameter") && name == QLatin1String("Position H")) {
         return 50; // ours: the slider's middle keeps the picture centred
     }
@@ -94,8 +103,9 @@ QJsonValue parameterDefault(const model::Effect& e, const QString& category, con
 bool isImageEffect(const model::Effect& e) {
     if (is(e, "Blend", "Picture-in-Picture")) return true;
     if (e.category == QLatin1String("Image")) {
-        static const QStringList names = {QStringLiteral("Flip"), QStringLiteral("Flop"), QStringLiteral("Flip-Flop"),
-                                          QStringLiteral("Field Swap"), QStringLiteral("Resize"), QStringLiteral("Mask")};
+        static const QStringList names = {QStringLiteral("Flip"),       QStringLiteral("Flop"),        QStringLiteral("Flip-Flop"),
+                                          QStringLiteral("Field Swap"), QStringLiteral("Resize"),      QStringLiteral("Mask"),
+                                          QStringLiteral("Color Effect"), QStringLiteral("Blur Effect"), QStringLiteral("Mosaic Effect")};
         return names.contains(e.name);
     }
     return filmMaskRatio(e) || is(e, "Film", "Mask") || is(e, "Film", "Blowup");
@@ -114,6 +124,10 @@ Picture imageEffectPicture(const model::Effect& e, const Picture& layer, double 
     const double H = height;
     Picture out(width, height);
 
+    if (e.name == QLatin1String("Color Effect")) return detail::colorEffectPicture(e, layer, time, span);
+    if (e.name == QLatin1String("Blur Effect") || e.name == QLatin1String("Mosaic Effect")) {
+        return detail::detailEffectPicture(e, layer, time, span);
+    }
     if (e.name == QLatin1String("Field Swap")) {
         // "Inverts the fields of any interlaced media" (p.469): each pair of lines changes places.
         for (int y = 0; y + 1 < height; y += 2) {

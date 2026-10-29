@@ -86,7 +86,7 @@ double keyframeTime(const ParameterKeyframes& keys, const EffectKeyframe& key, c
 double storedPosition(const ParameterKeyframes& keys, double t, const EffectSpan& span);
 
 // The parameter's value at time `t` of the effect: from its keyframes, else the value stored for it,
-// else nothing.
+// else nothing. The effect's Acceleration (FX Guide p.492) eases the value in and out of each keyframe.
 std::optional<double> numberAt(const Effect& effect, const QString& category, const QString& name, double t, const EffectSpan& span);
 // A colour parameter's red, green and blue, 0 to 1 ("#rrggbb" values, each channel on its own curve).
 struct Rgb {

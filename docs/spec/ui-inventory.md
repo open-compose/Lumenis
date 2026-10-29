@@ -142,7 +142,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   of a picture 1920 wide; Picture-in-Picture at Scaling 50 until set; the crop
   scaled about the frame's centre; the film masks as wide as the picture;
   Blowup's Field 12 as three times the size; the Reformat factors and Position
-  H's range; the shapes' Scaling and Position.
+  H's range; the shapes' Scaling and Position; the Color Effect's curves (Bright,
+  Cont, Gamma, Post, Solar, Hue direction) and order; Blur and Mosaic over the
+  whole picture; Acceleration as a smoothstep blend; repeated parameter names
+  stored as "<subcategory>: <name>".
 * Volume and pan automation (docs/spec/automation.md):
   * pan automation takes the place of the clip pan instead of adding to it;
   * a -∞ keyframe ramps from -96 dB;

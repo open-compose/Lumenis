@@ -32,4 +32,9 @@ struct Border {
     void draw(float* o, double distance, const float in[4], float level = 1.0f) const;
 };
 
+// The Color Effect (color_effects.cpp).
+Picture colorEffectPicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
+// The Blur Effect and Mosaic Effect over the whole picture (color_effects.cpp).
+Picture detailEffectPicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
+
 } // namespace lumenis::media::detail

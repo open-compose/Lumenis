@@ -915,8 +915,9 @@ phase of their own. They are done in three steps:
   * 6.3b, Blend and Image, in two parts: 6.3b1, the geometric ones (Picture-in-Picture with Border,
     Foreground, Scaling, Position and Crop; Flip, Flop and Flip-Flop; Field Swap; Resize; Mask; the Film
     masks and Blowup; the Reformat letterboxes and 4:3 Sidebar; Scaling and Position on the Shape and
-    diagonal Edge Wipes), is done (docs/spec/image-effects.md: `src/media/image_effects.cpp`); 6.3b2,
-    Color Effect, Blur and Mosaic, Acceleration. Pan and Scan's tools come with the Effect Preview's
+    diagonal Edge Wipes), is done (docs/spec/image-effects.md: `src/media/image_effects.cpp`); so is
+    6.3b2, the Color Effect, Blur and Mosaic over the whole picture, and Acceleration
+    (`src/media/color_effects.cpp`, `model::numberAt`). So 6.3b is done. Pan and Scan's tools come with the Effect Preview's
     effect tools.
   * 6.3c, Key: Luma Key, Chroma Key, RGB Keyer, Matte Key and SpectraMatte.
   * 6.3d, Illusion FX (p.463-468) and the Generator's Timecode Burn-In (SubCap is Phase 7).

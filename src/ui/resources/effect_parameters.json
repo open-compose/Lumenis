@@ -1,5 +1,5 @@
 {
-  "comment": "The Effect Editor's parameter categories and their controls (FX guide, Effects Parameter Reference, p.491-586), named as printed. 'min', 'max' and 'default' only where the text states them; 'kind' is slider, checkbox, color, menu, button or other; 'keyframeable': false where the reference says a parameter is not keyframeable (p.491).",
+  "comment": "The Effect Editor's parameter categories and their controls (FX guide, Effects Parameter Reference, p.491-586), named as printed. 'min', 'max' and 'default' only where the text states them; 'kind' is slider, checkbox, color, menu, button or other; 'keyframeable': false where the reference says a parameter is not keyframeable (p.491); Where two parameters of a category share a name, the later one is stored under '<subcategory>: <name>' (ours; EffectParameter::name).",
   "categories": [
     {"name": "Color Parameter Controls", "page": 491, "parameters": [
       {"name": "Other Options", "kind": "button"},

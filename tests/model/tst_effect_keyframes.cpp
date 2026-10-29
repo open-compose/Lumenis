@@ -314,6 +314,20 @@ private slots:
         QCOMPARE(p.keys.at(1).inTime, 0.0);
     }
 
+    void acceleration() {
+        // Acceleration (FX Guide p.492) eases in and out of every keyframe: 0 keeps a constant speed.
+        Effect e{QStringLiteral("Image"), QStringLiteral("Blur Effect"), {}};
+        const EffectSpan span(11);
+        setKeyframe(e, QStringLiteral("Blur Effect Blur Parameters"), QStringLiteral("Hor"), 0.0, span, 0);
+        setKeyframe(e, QStringLiteral("Blur Effect Blur Parameters"), QStringLiteral("Hor"), 1.0, span, 100);
+        QCOMPARE(*numberAt(e, QStringLiteral("Blur Effect Blur Parameters"), QStringLiteral("Hor"), 0.25, span), 25.0);
+        e.parameters.insert(QStringLiteral("Acceleration"), QJsonObject{{QStringLiteral("Acceleration"), 100}});
+        // At 100, a smoothstep: 0.25 is 0.15625 of the way.
+        QVERIFY(std::abs(*numberAt(e, QStringLiteral("Blur Effect Blur Parameters"), QStringLiteral("Hor"), 0.25, span) - 15.625) < 1e-9);
+        QCOMPARE(*numberAt(e, QStringLiteral("Blur Effect Blur Parameters"), QStringLiteral("Hor"), 0.5, span), 50.0);
+        QCOMPARE(*numberAt(e, QStringLiteral("Blur Effect Blur Parameters"), QStringLiteral("Hor"), 1.0, span), 100.0);
+    }
+
     void json() {
         Effect e = withKeys(Interpolation::Bezier, {{0.0, 0.0}, {1.0, 100.0}}, true);
         ParameterKeyframes p = keyframesOf(e, kFg, kLevel);
