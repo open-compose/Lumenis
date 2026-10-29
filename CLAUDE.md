@@ -467,7 +467,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   (docs/spec/effect-mode.md: `Timeline::setEffectMode`, the Source/Record Mode
   and Effect Mode buttons, `Composer::EffectPreview` driven by
   `EffectEditor::syncPreview`; test `tst_effect_mode`), is done, so 6.2 is.
-  Next: 6.3, the effect families, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.3a, the 2D transitions (docs/spec/wipes.md: `src/media/wipes.cpp`, Box, Edge, Shape, Matrix and
+  Sawtooth wipes, Conceal, L-Conceal, Push, Squeeze and Spin with Border and Foreground; the Custom
+  Grid's More Options; tests `tst_compositor`, `tst_effects`), is done.
+  Next: 6.3b-d, the rest of the effect families, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

@@ -322,6 +322,21 @@ private slots:
         QVERIFY(rig.editor.isBlank());
     }
 
+    void customGrid() {
+        // The Custom Grid's More Options (p.494): columns and rows on the shown Matrix Wipe, 2 x 2 at least.
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(100, 40));
+        settle();
+        QVERIFY(rig.timeline.dropEffect(QStringLiteral("V1"), 70, effect("Matrix Wipe", "Spiral")));
+        rig.composer.moveTo(MonitorId::Record, 70);
+        QCOMPARE(rig.editor.effectName(), QStringLiteral("Spiral"));
+        QVERIFY(rig.editor.findChild<QToolButton*>(QStringLiteral("param:Custom Grid/More Options")));
+        rig.editor.setCustomGrid(4, 1);
+        const QJsonObject grid = rig.v1(1).effect->parameters.value("Custom Grid").toObject();
+        QCOMPARE(grid.value("Columns").toInt(), 4);
+        QCOMPARE(grid.value("Rows").toInt(), 2);
+    }
+
     void transitionParameters() {
         // p.63, p.500: a duration typed for a cut in Trim mode adds a
         // Dissolve; the alignment menu moves it.

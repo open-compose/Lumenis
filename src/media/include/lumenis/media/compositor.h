@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
 
 #include <QColor>
@@ -18,7 +19,7 @@
 // and incoming segments (FX Guide p.33). Pictures are worked on in floating point with premultiplied
 // alpha; filler is transparent, so lower tracks show through it, and black shows where no track has a
 // picture. The monitors, Full Screen Playback and output take sequence frames from here; the effects
-// themselves come step by step (Phase 6.1 the dissolve family and Superimpose), and an effect not built
+// themselves come step by step (Phase 6.1 the dissolve family and Superimpose, 6.3a the 2D transitions), and an effect not built
 // yet leaves the picture as it is (a transition: a cut at the cut point).
 namespace lumenis::media {
 
@@ -68,6 +69,15 @@ Picture faded(const Picture& picture, double level);
 // (log10 of the light), which, as film does, darkens the middle of a dissolve between two bright
 // pictures.
 Picture filmMix(const Picture& a, const Picture& b, double t);
+
+// The 2D transitions (ROADMAP 6.3a; docs/spec/wipes.md, wipes.cpp): the Box Wipe, Conceal, Edge Wipe,
+// L-Conceal, Matrix Wipe, Push, Sawtooth Wipe, Shape Wipe, Spin and Squeeze categories (FX Guide
+// p.459-490). True when `effect` is one of them.
+bool isWipe(const model::Effect& effect);
+// `outgoing` to `incoming` by the wipe `effect` at `progress` (0: all outgoing, 1: all incoming), with
+// its Border and Foreground parameters (p.493, p.495) at `time` of `span`. Pictures of one size.
+Picture wipePicture(const model::Effect& effect, Picture outgoing, Picture incoming, double progress, double time,
+                    const model::EffectSpan& span);
 
 // What one track shows at a frame: a segment, or a transition between the outgoing and incoming
 // segments at a cut. Frames of the segments are counted from their clips' starts.

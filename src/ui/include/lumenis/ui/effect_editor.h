@@ -119,6 +119,10 @@ public:
     // false, and shows the old value again, when it cannot be read or applied.
     void setAlignment(model::TransitionAlignment alignment);
     bool setDuration(const QString& text);
+    // The Custom Grid's More Options (FX Guide p.494): the grid of a Matrix Wipe, Sawtooth Wipe or some
+    // Shape Wipes, in columns and rows, at least 2 x 2 (default 8 x 6). The button asks for them;
+    // setCustomGrid() sets them on the shown effect.
+    void setCustomGrid(int columns, int rows);
 
     // ---- Advanced keyframes
     // The Show/Hide Keyframe Graphs button (p.96): the keyframe tracks and graphs, hidden at first.

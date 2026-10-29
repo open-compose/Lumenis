@@ -133,6 +133,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   keyframes (p.128) where p.77's table says the sequence's first and last
   frames; the Record monitor returning outside an effect; the zoom steps;
   the toolbar's pictures; no field numbers in the position box.
+* The 2D transitions (docs/spec/wipes.md): Border Width and Soft in sixteenths
+  of the picture's width, white until set, Blend Color across the band; the
+  default grid as 8 columns by 6 rows and no preset grids; the Edge, Clock,
+  Bands, Matrix order, Sawtooth and L-Conceal geometry; a segment wipe running
+  over the segment's length.
 * Volume and pan automation (docs/spec/automation.md):
   * pan automation takes the place of the clip pan instead of adding to it;
   * a -∞ keyframe ramps from -96 dB;

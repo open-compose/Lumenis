@@ -905,9 +905,20 @@ phase of their own. They are done in three steps:
   the Effect Editor setting. 6.2c, Effect mode (ch.2-3) with the Effect Preview monitor and its
   toolbar (docs/spec/effect-mode.md), is done; standard keyframes wait until the guide names an effect
   that uses them. So 6.2 is done; 6.3, the effect families, is next.
-* 6.3, the effect families of the Effects Reference (ch.17-18, p.454-586): wipes and pushes,
-  squeezes, Blend (Picture-in-Picture, Superimpose), Image (Blur, Color Effect, Flip-Flop, Mask,
-  Mosaic, Resize, Letterbox and the rest), Key (chroma, luma, matte keys).
+* 6.3, the effect families of the Effects Reference (ch.17-18, p.454-586), in four parts (planned
+  2026-10-29 from p.456-490):
+  * 6.3a, the 2D transitions: Box, Edge, Shape, Matrix and Sawtooth wipes; Conceal and L-Conceal;
+    Push; Squeeze; X, Y and Z Spin; with the parameters they share (Border p.493, Foreground p.495,
+    Acceleration p.492, Custom Grid p.494) and the comparison of similar effects (p.490). Done
+    (docs/spec/wipes.md: `src/media/wipes.cpp`, the Custom Grid's More Options); Acceleration is not
+    among their parameters and comes with 6.3b-c.
+  * 6.3b, Blend and Image: Picture-in-Picture (Border, Foreground, Scaling, Position, Crop); Flip,
+    Flop and Flip-Flop; Resize; Mask; Blur and Mosaic; Color Effect; Field Swap; the Film masks and
+    Blowup; Reformat (the letterboxes, 4:3 Sidebar, Pan and Scan).
+  * 6.3c, Key: Luma Key, Chroma Key, RGB Keyer, Matte Key and SpectraMatte.
+  * 6.3d, Illusion FX (p.463-468) and the Generator's Timecode Burn-In (SubCap is Phase 7).
+  Peel (a page curl) goes with the 3D effects (6.7); PlasmaWipe with 6.9; AniMatte, Paint, Scratch
+  Removal and Stabilize with their chapters (6.7, 6.9).
 * 6.4, rendering (p.57-61, p.135-156): Render Effect, ExpertRender, partial render, render
   settings, precomputes as effect media files, render-on-the-fly, the real-time playback
   indicators, and the Timeline's Render Ranges and Show Adapters moved here from the UI pass.

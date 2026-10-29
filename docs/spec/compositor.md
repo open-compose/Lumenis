@@ -42,7 +42,8 @@ picture resolver in `MainWindow::createPanels`. Test: `tst_compositor`.
   density (log10 of the light), which darkens the middle of a dissolve between bright pictures as film
   does; black ends stay black.
 * Swap Sources "Swaps the image source for the foreground and background layers of the effect" (p.495).
-* A transition effect not built yet is a cut at the cut point until its step.
+* The 2D transitions (Box Wipe to Squeeze) are in docs/spec/wipes.md. A transition effect not built
+  yet is a cut at the cut point until its step.
 
 ## Segment effects
 

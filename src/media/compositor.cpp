@@ -178,8 +178,8 @@ Picture segmentPicture(const Composition& c, const model::Segment* segment, std:
     return Picture::fromImage(*image, c.size.width(), c.size.height());
 }
 
-// The transitions of the dissolve family (FX Guide p.457, p.462); any other is a cut at the cut point
-// until its step comes.
+// The transitions of the dissolve family (FX Guide p.457, p.462) and the 2D transitions (wipes.cpp); any
+// other is a cut at the cut point until its step comes.
 Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture incoming, double time, int width, int height) {
     const model::Effect& e = t.effect;
     const QString foreground = QStringLiteral("Foreground");
@@ -196,6 +196,7 @@ Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture 
     if (const auto rgb = model::colorAt(e, QStringLiteral("Background Color"), QStringLiteral("Background Color"), time, model::EffectSpan(t.duration, true))) {
         colour = QColor::fromRgbF(static_cast<float>(rgb->red), static_cast<float>(rgb->green), static_cast<float>(rgb->blue));
     }
+    if (isWipe(e)) return wipePicture(e, std::move(outgoing), std::move(incoming), progress, time, model::EffectSpan(t.duration, true));
     const QString& name = e.name;
     if (name == QLatin1String("Dissolve")) return mix(outgoing, incoming, progress);
     if (name == QLatin1String("Fade to Color")) return mix(outgoing, Picture::solid(width, height, colour), progress);
@@ -241,6 +242,17 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             const std::int64_t length = tf->segment->length;
             const double time = length > 1 ? static_cast<double>(tf->offset) / static_cast<double>(length - 1) : 0.0;
             const bool keyed = !model::keyframesOf(e, foreground, level).keys.isEmpty();
+            if (isWipe(e)) {
+                // A 2D transition on a segment ("multilayer segments", p.459) wipes from the tracks below
+                // to the segment. Ours: over the segment's length unless its Level is keyframed, as a
+                // transition's is.
+                const double progress = keyed ? model::numberAt(e, foreground, level, time, length).value_or(100.0) / 100.0 : time;
+                Picture below = std::move(result);
+                if (parameterFlag(e, foreground, QStringLiteral("Swap Sources"))) std::swap(below, layer);
+                result = wipePicture(e, std::move(below), std::move(layer), progress, time, length);
+                result.quantize(c.precision);
+                continue;
+            }
             if (e.name == QLatin1String("Superimpose") || keyed) {
                 // "The Foreground Level slider controls the blend percentage ... When Level=100, only the
                 // top image is visible, and when Level=0, only the bottom image is visible" (p.458); the Fade

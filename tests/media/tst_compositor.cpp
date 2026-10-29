@@ -1,6 +1,6 @@
 // The compositor (ROADMAP Phase 6.1; docs/spec/compositor.md): tracks bottom to top, filler showing
-// through, the dissolve family of transitions and Superimpose, effects processing precision, and
-// offline media. Clips are solid colours, one per clip id, so every pixel is known.
+// through, the dissolve family of transitions and Superimpose, the 2D transitions (wipes.cpp), effects
+// processing precision, and offline media. Clips are solid colours, one per clip id, so every pixel is known.
 #include "lumenis/media/compositor.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
@@ -212,13 +212,168 @@ private slots:
     }
 
     void notBuiltYetIsACut() {
-        // A wipe comes with its step; until then it is a cut at the cut point.
-        Transition box = transition(QStringLiteral("Box Wipe"), 4);
-        box.effect.category = QStringLiteral("Box Wipe");
-        const Sequence seq = cutWith(box);
+        // A Peel comes with its step (6.7); until then it is a cut at the cut point.
+        Transition peel = transition(QStringLiteral("Bottom to Top"), 4);
+        peel.effect.category = QStringLiteral("Peel");
+        const Sequence seq = cutWith(peel);
         const Composition c = composition(seq, {QStringLiteral("V1")});
         QCOMPARE(centre(composeImage(c, 9)), QColor(255, 0, 0));
         QCOMPARE(centre(composeImage(c, 10)), QColor(0, 0, 255));
+    }
+
+    void wipeShapes() {
+        // The 2D transitions (docs/spec/wipes.md) at given progress, red going out and blue coming in.
+        const Picture red = Picture::solid(64, 36, QColor(255, 0, 0));
+        const Picture blue = Picture::solid(64, 36, QColor(0, 0, 255));
+        auto at = [&](const QString& category, const QString& name, double p, int x, int y, QJsonObject params = {}) {
+            const Effect e{category, name, std::move(params)};
+            return wipePicture(e, red, blue, p, p, EffectSpan(10, true)).toImage().pixelColor(x, y);
+        };
+        const QColor r(255, 0, 0), b(0, 0, 255), black(0, 0, 0);
+        // Edge Wipe Horizontal, left to right (p.460).
+        QCOMPARE(at(QStringLiteral("Edge Wipe"), QStringLiteral("Horizontal"), 0.5, 10, 18), b);
+        QCOMPARE(at(QStringLiteral("Edge Wipe"), QStringLiteral("Horizontal"), 0.5, 50, 18), r);
+        QCOMPARE(at(QStringLiteral("Edge Wipe"), QStringLiteral("Vertical Open"), 0.5, 5, 18), b);
+        QCOMPARE(at(QStringLiteral("Edge Wipe"), QStringLiteral("Vertical Open"), 0.5, 5, 2), r);
+        QCOMPARE(at(QStringLiteral("Edge Wipe"), QStringLiteral("Upper Left Diagonal"), 0.5, 5, 5), b);
+        QCOMPARE(at(QStringLiteral("Edge Wipe"), QStringLiteral("Upper Left Diagonal"), 0.5, 60, 32), r);
+        // Box Wipe from its corner (p.459).
+        const QString box = QStringLiteral("Box Wipe");
+        QCOMPARE(at(box, QStringLiteral("Top Left to Bottom Right"), 0.5, 10, 5), b);
+        QCOMPARE(at(box, QStringLiteral("Top Left to Bottom Right"), 0.5, 50, 5), r);
+        QCOMPARE(at(box, QStringLiteral("Top Left to Bottom Right"), 0.5, 50, 30), r);
+        QCOMPARE(at(box, QStringLiteral("Bottom Box"), 0.5, 32, 30), b);
+        QCOMPARE(at(box, QStringLiteral("Bottom Box"), 0.5, 5, 30), r);
+        QCOMPARE(at(box, QStringLiteral("Bottom Box"), 1.0, 0, 0), b);
+        QCOMPARE(at(box, QStringLiteral("Bottom Box"), 0.0, 32, 35), r);
+        // Shape Wipes (p.481-482).
+        const QString shape = QStringLiteral("Shape Wipe");
+        QCOMPARE(at(shape, QStringLiteral("Circle"), 0.5, 32, 18), b);
+        QCOMPARE(at(shape, QStringLiteral("Circle"), 0.5, 1, 1), r);
+        QCOMPARE(at(shape, QStringLiteral("Clock"), 0.25, 48, 9), b);
+        QCOMPARE(at(shape, QStringLiteral("Clock"), 0.25, 16, 27), r);
+        QCOMPARE(at(shape, QStringLiteral("4 Corners"), 0.5, 3, 3), b);
+        QCOMPARE(at(shape, QStringLiteral("4 Corners"), 0.5, 60, 33), b);
+        QCOMPARE(at(shape, QStringLiteral("4 Corners"), 0.5, 32, 18), r);
+        QCOMPARE(at(shape, QStringLiteral("Diamond"), 0.5, 32, 18), b);
+        QCOMPARE(at(shape, QStringLiteral("Diamond"), 0.5, 2, 2), r);
+        QCOMPARE(at(shape, QStringLiteral("Horizontal Bands"), 0.25, 3, 2), b);  // the first band from the left
+        QCOMPARE(at(shape, QStringLiteral("Horizontal Bands"), 0.25, 3, 8), r);  // the second from the right
+        QCOMPARE(at(shape, QStringLiteral("Horizontal Bands"), 0.25, 60, 8), b);
+        // Matrix One-WayRow on the default 8 x 6 grid (p.494): half way, the top three rows are in.
+        const QString matrix = QStringLiteral("Matrix Wipe");
+        QCOMPARE(at(matrix, QStringLiteral("One-WayRow"), 0.5, 60, 15), b);
+        QCOMPARE(at(matrix, QStringLiteral("One-WayRow"), 0.5, 4, 20), r);
+        // A Custom Grid of 2 x 2: half way, the top two cells.
+        const QJsonObject grid{{QStringLiteral("Custom Grid"), QJsonObject{{QStringLiteral("Columns"), 2}, {QStringLiteral("Rows"), 2}}}};
+        QCOMPARE(at(matrix, QStringLiteral("One-WayRow"), 0.5, 40, 5, grid), b);
+        QCOMPARE(at(matrix, QStringLiteral("One-WayRow"), 0.5, 40, 30, grid), r);
+        // Zig-Zag: the second row from the right.
+        QCOMPARE(at(matrix, QStringLiteral("Zig-Zag"), 0.75, 40, 30, grid), b);
+        QCOMPARE(at(matrix, QStringLiteral("Zig-Zag"), 0.75, 10, 30, grid), r);
+        // Speckle: every cell in at the end, none at the start.
+        QCOMPARE(at(matrix, QStringLiteral("Speckle"), 1.0, 30, 20), b);
+        QCOMPARE(at(matrix, QStringLiteral("Speckle"), 0.0, 30, 20), r);
+        // Sawtooth (p.480): Horizontal moves left to right.
+        QCOMPARE(at(QStringLiteral("Sawtooth Wipe"), QStringLiteral("Horizontal Sawtooth"), 0.5, 5, 18), b);
+        QCOMPARE(at(QStringLiteral("Sawtooth Wipe"), QStringLiteral("Horizontal Sawtooth"), 0.5, 60, 18), r);
+        // X Spin (p.482): the outgoing squeezed to a line, black beside it; then the incoming opens out.
+        QCOMPARE(at(QStringLiteral("Spin"), QStringLiteral("X Spin"), 0.25, 32, 18), r);
+        QCOMPARE(at(QStringLiteral("Spin"), QStringLiteral("X Spin"), 0.25, 4, 18), black);
+        QCOMPARE(at(QStringLiteral("Spin"), QStringLiteral("X Spin"), 0.75, 32, 18), b);
+        QCOMPARE(at(QStringLiteral("Spin"), QStringLiteral("X Spin"), 0.75, 4, 18), black);
+        // Z Spin (p.483): from a dot to the whole picture.
+        QCOMPARE(at(QStringLiteral("Spin"), QStringLiteral("Z Spin"), 0.0, 32, 18), r);
+        QCOMPARE(at(QStringLiteral("Spin"), QStringLiteral("Z Spin"), 1.0, 1, 1), b);
+        QCOMPARE(at(QStringLiteral("Spin"), QStringLiteral("Z Spin"), 0.5, 32, 18), b);
+        QCOMPARE(at(QStringLiteral("Spin"), QStringLiteral("Z Spin"), 0.5, 1, 1), r);
+        // Border (p.493): Width 100 is 64/16 = 4 pixels outside the incoming edge, white by default.
+        const QJsonObject bordered{{QStringLiteral("Border"), QJsonObject{{QStringLiteral("Width"), 100}}}};
+        QCOMPARE(at(QStringLiteral("Edge Wipe"), QStringLiteral("Horizontal"), 0.5, 33, 18, bordered), QColor(255, 255, 255));
+        QCOMPARE(at(QStringLiteral("Edge Wipe"), QStringLiteral("Horizontal"), 0.5, 38, 18, bordered), r);
+        // Blend Color from the inner to the outer edge, unless Fixed Border.
+        QJsonObject blended = bordered;
+        blended[QStringLiteral("Border")] = QJsonObject{{QStringLiteral("Width"), 100},
+                                                        {QStringLiteral("Color"), QStringLiteral("#ffffff")},
+                                                        {QStringLiteral("Blend Color"), QStringLiteral("#000000")}};
+        QVERIFY(at(QStringLiteral("Edge Wipe"), QStringLiteral("Horizontal"), 0.5, 34, 18, blended).red() < 200);
+        QJsonObject fixed = blended;
+        QJsonObject b2 = fixed.value(QStringLiteral("Border")).toObject();
+        b2[QStringLiteral("Fixed Border")] = true;
+        fixed[QStringLiteral("Border")] = b2;
+        QCOMPARE(at(QStringLiteral("Edge Wipe"), QStringLiteral("Horizontal"), 0.5, 34, 18, fixed), QColor(255, 255, 255));
+        // Reverse Animation (p.495): the effect backwards with the sources the other way round.
+        const QJsonObject reversed{{QStringLiteral("Foreground"), QJsonObject{{QStringLiteral("Reverse Animation"), true}}}};
+        QCOMPARE(at(QStringLiteral("Edge Wipe"), QStringLiteral("Horizontal"), 0.25, 10, 18, reversed), r);
+        QCOMPARE(at(QStringLiteral("Edge Wipe"), QStringLiteral("Horizontal"), 0.25, 60, 18, reversed), b);
+    }
+
+    void movingWipes() {
+        // Conceal, Push, Squeeze and L-Conceal move or scale the pictures: halves of two colours show
+        // which part is where.
+        auto halves = [](const QColor& left, const QColor& right) {
+            Picture p = Picture::solid(64, 36, right);
+            const Picture l = Picture::solid(32, 36, left);
+            for (int y = 0; y < 36; ++y) {
+                for (int x = 0; x < 32; ++x) std::copy(l.pixel(x, y), l.pixel(x, y) + 4, p.pixel(x, y));
+            }
+            return p;
+        };
+        const QColor yellow(255, 255, 0), r(255, 0, 0), g(0, 255, 0), b(0, 0, 255);
+        const Picture out = halves(yellow, r);
+        const Picture in = halves(g, b);
+        auto at = [&](const QString& category, const QString& name, double p, int x, int y) {
+            return wipePicture(Effect{category, name, {}}, out, in, p, p, EffectSpan(10, true)).toImage().pixelColor(x, y);
+        };
+        // Conceal Left to Right half way: the incoming picture's right half on the left (p.459); the
+        // outgoing picture stays where it is.
+        QCOMPARE(at(QStringLiteral("Conceal"), QStringLiteral("Left to Right"), 0.5, 10, 18), b);
+        QCOMPARE(at(QStringLiteral("Conceal"), QStringLiteral("Left to Right"), 0.5, 50, 18), r);
+        // Push: the outgoing picture pushed right, its left half now on the right (p.479).
+        QCOMPARE(at(QStringLiteral("Push"), QStringLiteral("Left to Right"), 0.5, 10, 18), b);
+        QCOMPARE(at(QStringLiteral("Push"), QStringLiteral("Left to Right"), 0.5, 50, 18), yellow);
+        // Squeeze Centered Zoom: the whole incoming picture at half size in the middle (p.484).
+        QCOMPARE(at(QStringLiteral("Squeeze"), QStringLiteral("Centered Zoom"), 0.5, 20, 18), g);
+        QCOMPARE(at(QStringLiteral("Squeeze"), QStringLiteral("Centered Zoom"), 0.5, 44, 18), b);
+        QCOMPARE(at(QStringLiteral("Squeeze"), QStringLiteral("Centered Zoom"), 0.5, 2, 2), yellow);
+        // Squeeze Right to Left: the full height, squeezed from the right.
+        QCOMPARE(at(QStringLiteral("Squeeze"), QStringLiteral("Right to Left"), 0.5, 40, 2), g);
+        QCOMPARE(at(QStringLiteral("Squeeze"), QStringLiteral("Right to Left"), 0.5, 60, 33), b);
+        // L-Conceal Bottom Right (p.475): first up the right half, showing the incoming left half...
+        QCOMPARE(at(QStringLiteral("L-Conceal"), QStringLiteral("Bottom Right"), 0.5, 40, 4), g);
+        QCOMPARE(at(QStringLiteral("L-Conceal"), QStringLiteral("Bottom Right"), 0.5, 10, 4), yellow);
+        // ...then across to the left.
+        QCOMPARE(at(QStringLiteral("L-Conceal"), QStringLiteral("Bottom Right"), 1.0, 10, 4), g);
+        QCOMPARE(at(QStringLiteral("L-Conceal"), QStringLiteral("Bottom Right"), 1.0, 50, 4), b);
+    }
+
+    void wipesInSequences() {
+        // A Horizontal edge wipe as a transition: the left of the picture shows the incoming clip first.
+        Transition edge = transition(QStringLiteral("Horizontal"), 4);
+        edge.effect.category = QStringLiteral("Edge Wipe");
+        const Sequence seq = cutWith(edge);
+        const Composition c = composition(seq, {QStringLiteral("V1")});
+        // Frame 9 is at 2/5.
+        const QImage frame = composeImage(c, 9);
+        QCOMPARE(frame.pixelColor(1, 4), QColor(0, 0, 255));
+        QCOMPARE(frame.pixelColor(14, 4), QColor(255, 0, 0));
+        // On a segment of V2 ("multilayer segments", p.459): from V1 to V2 across the segment.
+        Sequence two = Sequence::withDefaultTracks();
+        two.addTrack(TrackKind::Video);
+        two.splice(QStringLiteral("V1"), 0, {clip(QStringLiteral("red"), 11)});
+        Segment top = clip(QStringLiteral("blue"), 11);
+        top.effect = Effect{QStringLiteral("Edge Wipe"), QStringLiteral("Horizontal"), {}};
+        two.splice(QStringLiteral("V2"), 0, {top});
+        const Composition both = composition(two, {QStringLiteral("V1"), QStringLiteral("V2")});
+        QCOMPARE(composeImage(both, 0).pixelColor(8, 4), QColor(255, 0, 0));
+        QCOMPARE(composeImage(both, 5).pixelColor(2, 4), QColor(0, 0, 255));
+        QCOMPARE(composeImage(both, 5).pixelColor(13, 4), QColor(255, 0, 0));
+        QCOMPARE(composeImage(both, 10).pixelColor(15, 8), QColor(0, 0, 255));
+        // Swap Sources (p.495) on the segment: from V2 to V1.
+        two.track(QStringLiteral("V2"))->segments[0].effect->parameters =
+            QJsonObject{{QStringLiteral("Foreground"), QJsonObject{{QStringLiteral("Swap Sources"), true}}}};
+        QCOMPARE(composeImage(both, 5).pixelColor(2, 4), QColor(255, 0, 0));
+        QCOMPARE(composeImage(both, 5).pixelColor(13, 4), QColor(0, 0, 255));
     }
 
     void precision() {

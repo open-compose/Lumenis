@@ -6,6 +6,9 @@
 #include <QCheckBox>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
 #include <QFile>
 #include <QHBoxLayout>
 #include <QJsonArray>
@@ -20,6 +23,7 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSlider>
+#include <QSpinBox>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -565,6 +569,33 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                             [this, category, name = p.name](const QString& t) { setValue(category, name, t); });
                     row->addWidget(m, 1);
                     controls_.insert(k, m);
+                } else if (category == QLatin1String("Custom Grid") && p.name == QLatin1String("More Options")) {
+                    // "You define the grid by clicking the More Options button to open a dialog box"
+                    // (p.494).
+                    auto* more = new QToolButton(box);
+                    more->setObjectName(QStringLiteral("param:") + k);
+                    more->setText(tr("More Options..."));
+                    connect(more, &QToolButton::clicked, this, [this] {
+                        const QJsonObject custom = current_ ? current_->parameters.value(QStringLiteral("Custom Grid")).toObject() : QJsonObject{};
+                        QDialog dialog(this);
+                        dialog.setWindowTitle(tr("Custom Grid"));
+                        auto* form = new QFormLayout(&dialog);
+                        auto* columns = new QSpinBox(&dialog);
+                        columns->setRange(2, 64);
+                        columns->setValue(custom.value(QStringLiteral("Columns")).toInt(8));
+                        auto* rows = new QSpinBox(&dialog);
+                        rows->setRange(2, 64);
+                        rows->setValue(custom.value(QStringLiteral("Rows")).toInt(6));
+                        form->addRow(tr("Columns"), columns);
+                        form->addRow(tr("Rows"), rows);
+                        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+                        connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+                        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+                        form->addRow(buttons);
+                        if (dialog.exec() == QDialog::Accepted) setCustomGrid(columns->value(), rows->value());
+                    });
+                    row->addWidget(more);
+                    row->addStretch(1);
                 } else {
                     // Buttons and other controls need the Effect Preview
                     // monitor or tools that come later.
@@ -709,6 +740,12 @@ void EffectEditor::syncTransition() {
 // A keyframed parameter's change goes to its selected keyframes, else to the keyframe at the position,
 // else to a new keyframe there ("You can also add keyframes automatically by adjusting a parameter when
 // you place the position indicator in a part of the keyframe graph that has no keyframe", p.103).
+void EffectEditor::setCustomGrid(int columns, int rows) {
+    // "The minimum number of rows and columns is 2 x 2" (p.494).
+    setValue(QStringLiteral("Custom Grid"), QStringLiteral("Columns"), std::max(columns, 2));
+    setValue(QStringLiteral("Custom Grid"), QStringLiteral("Rows"), std::max(rows, 2));
+}
+
 void EffectEditor::setValue(const QString& category, const QString& parameter, const QJsonValue& value) {
     if (syncing_ || !shown_) return;
     const QString k = key(category, parameter);
