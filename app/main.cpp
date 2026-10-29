@@ -1557,6 +1557,8 @@ int main(int argc, char** argv) {
     // Site settings (p.1141), and the user chosen in Select Project
     // (p.1138).
     window.settings().setSiteFolder(locations.siteSettings);
+    // Bins are backed up into the attic as they are saved (p.71).
+    window.binContainer().setAttic(locations.attic);
     // Opens a project file in the main window; false (with the reason on stderr) if it cannot be read.
     auto openProjectFile = [&window](const QString& file) {
         QString error;

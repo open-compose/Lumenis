@@ -12,7 +12,8 @@ namespace lumenis::model {
 //   macOS         ~/Documents/<P> Projects       /Users/Shared/<P>/Shared <P> Projects    /Users/Shared/<P>/Users
 //   Linux         ~/Documents/<P> Projects       /srv/<P>/Shared <P> Projects             ~/.local/share/<org>/<app>/Users
 //
-// Site settings (p.1137) are in a Settings folder beside Users.
+// Site settings (p.1137) are in a Settings folder beside Users, and the attic (p.71, p.298: "Avid
+// Attic" beside the Users folder's parent) is "<P> Attic" there too.
 //
 // <P> is the product name. Tests and screenshot runs construct their own.
 struct Locations {
@@ -21,6 +22,7 @@ struct Locations {
     QString sharedProjects;
     QString users;
     QString siteSettings; // empty: no site settings
+    QString attic;        // bin backups (model::saveToAttic); empty: none
 
     // The defaults for this platform, from the table above. The folders are not created here.
     static Locations defaults();

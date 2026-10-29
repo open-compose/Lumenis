@@ -2,6 +2,7 @@
 
 #include "lumenis/core/rational.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/bin_attic.h"
 #include "lumenis/model/bin_lock.h"
 #include "lumenis/model/project_bins.h"
 #include "lumenis/ui/bin_dock.h"
@@ -11,6 +12,7 @@
 #include <QHash>
 #include <QList>
 #include <QJsonObject>
+#include <QElapsedTimer>
 #include <QWidget>
 
 #include <functional>
@@ -341,8 +343,25 @@ public:
     QList<BinSidebar*> sidebars() const { return sidebars_; }
 
     // Bin settings "Auto-Save interval" (p.299), in minutes; 0 or less turns
-    // it off. Each tick is a Save All.
+    // it off. When it is due, the Save All waits for the "Inactivity period"
+    // without a key or mouse press, but no longer than "Force Auto-Save at"
+    // after the last auto-save (p.1152-1153; docs/spec/bin-attic.md).
     void setAutoSaveMinutes(int minutes);
+    void setAutoSaveTiming(int intervalMs, int inactivityMs, int forceMs);
+    // When the last auto-save ran; invalid before the first.
+    QDateTime lastAutoSave() const { return lastAutoSaveAt_; }
+    // "Skip prompts to save locked bins on Auto-Save" (p.1154): an auto-save
+    // that a lock refuses is not reported with saveFailed().
+    void setSkipLockedPrompts(bool skip) { skipLockedPrompts_ = skip; }
+    // The attic (model::saveToAttic, p.71): `root` holds the private
+    // projects' copies; empty keeps none. A project on shared storage keeps
+    // its copies in a "<product> Attic" folder beside its own folder (ours,
+    // for the guide's Unity Attic, p.301). Each save of a project bin, and
+    // each new bin, is copied there within `limits` (p.1153-1154).
+    void setAttic(const QString& root) { atticRoot_ = root; }
+    void setAtticLimits(const model::AtticLimits& limits) { atticLimits_ = limits; }
+    // The attic folder this project's copies go into; empty without one.
+    QString atticRoot() const;
     // Bin settings (p.1153): where Favorite Bins show, whether bins opened
     // from the sidebar float, and what the quick filter searches.
     void setFavoritesAtTop(bool top);
@@ -469,6 +488,21 @@ private:
     QList<FloatingBinContainer*> floating_;
     BinView* active_ = nullptr;
     QTimer* autoSave_ = nullptr;
+    // Auto-save timing, in milliseconds (setAutoSaveTiming()).
+    int autoSaveInterval_ = 0;
+    int autoSaveInactivity_ = 15000;
+    int autoSaveForce_ = 17 * 60 * 1000;
+    QElapsedTimer sinceAutoSave_;
+    QElapsedTimer sinceInput_;
+    QDateTime lastAutoSaveAt_;
+    bool skipLockedPrompts_ = false;
+    QString atticRoot_;
+    model::AtticLimits atticLimits_;
+    QString projectFolder_;
+    QString projectName_;
+    void autoSaveTick();
+    void copyToAttic(const BinDocument* document);
+    bool eventFilter(QObject* watched, QEvent* event) override;
     bool sized_ = false;
 };
 

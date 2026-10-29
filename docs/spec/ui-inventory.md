@@ -72,6 +72,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Timeline and Markers tabs list, and Ctrl+G as a keyboard-only Find Again command.
 * AutoSequence (docs/spec/autosequence.md): which of two related clips is kept, the track layout of
   Camera groups, and the name when there is no Tape or Source File.
+* The attic (docs/spec/bin-attic.md): its folder names, copies keeping the `.cthbin` suffix, the newest
+  copy replaced within two hours, one zero limit keeping old copies, shared projects' attic beside the
+  project, and an auto-save interval of 0 turning it off.
 * Bin Layout (docs/spec/bin-layout.md): closing bins a layout does not name, split groups coming back as
   tabs, Save Current saving into the last layout, the Delete dialog's list, a name reused replacing, and
   the Workspace View's Bin Layout as a text box.

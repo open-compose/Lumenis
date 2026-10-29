@@ -474,6 +474,7 @@ bool BinDocument::save(QString* error) {
         dirty_ = false;
         emit dirtyChanged(false);
     }
+    emit saved();
     return true;
 }
 

@@ -1,5 +1,6 @@
 #include "lumenis/ui/bin_container.h"
 
+#include "lumenis/core/branding.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/bin_lock.h"
 #include "lumenis/model/sequence.h"
@@ -620,11 +621,13 @@ BinContainer::BinContainer(QWidget* parent) : QWidget(parent) {
         }
     });
 
+    // The auto-save is checked on a short tick; key and mouse presses
+    // anywhere in the application restart the inactivity period.
     autoSave_ = new QTimer(this);
-    connect(autoSave_, &QTimer::timeout, this, [this] {
-        if (QString error; !saveAll(&error)) emit saveFailed({}, error);
-    });
-    // The guide does not give the default interval; ours is 15 minutes.
+    connect(autoSave_, &QTimer::timeout, this, &BinContainer::autoSaveTick);
+    qApp->installEventFilter(this);
+    sinceInput_.start();
+    // The defaults are the guide's: 15 minutes, 15 seconds, 17 minutes (p.1152-1153).
     setAutoSaveMinutes(15);
 
     // Until MainWindow names the User profile's user: the system's.
@@ -729,11 +732,77 @@ BinDocument* BinContainer::openBinAsSet(const QString& id, bool takeLock) {
 }
 
 void BinContainer::setAutoSaveMinutes(int minutes) {
-    if (minutes <= 0) {
+    setAutoSaveTiming(minutes * 60 * 1000, autoSaveInactivity_, autoSaveForce_);
+}
+
+void BinContainer::setAutoSaveTiming(int intervalMs, int inactivityMs, int forceMs) {
+    const bool changed = intervalMs != autoSaveInterval_;
+    autoSaveInterval_ = intervalMs;
+    autoSaveInactivity_ = std::max(0, inactivityMs);
+    autoSaveForce_ = forceMs;
+    if (intervalMs <= 0) {
         autoSave_->stop();
-    } else {
-        autoSave_->start(minutes * 60 * 1000);
+        return;
     }
+    // A new interval counts from now; the inactivity and force values only
+    // change when the save that is waiting runs.
+    if (changed || !sinceAutoSave_.isValid()) sinceAutoSave_.start();
+    autoSave_->start(std::clamp(std::min(intervalMs, std::max(autoSaveInactivity_, 1)) / 4, 10, 1000));
+}
+
+// Due once the interval has passed; then saved after the inactivity period,
+// or at once when "Force Auto-Save at" has passed too (p.1152-1153).
+void BinContainer::autoSaveTick() {
+    if (!sinceAutoSave_.isValid() || sinceAutoSave_.elapsed() < autoSaveInterval_) return;
+    const bool idle = sinceInput_.elapsed() >= autoSaveInactivity_;
+    const bool forced = autoSaveForce_ > 0 && sinceAutoSave_.elapsed() >= std::max(autoSaveForce_, autoSaveInterval_);
+    if (!idle && !forced) return;
+    sinceAutoSave_.start();
+    lastAutoSaveAt_ = QDateTime::currentDateTime();
+    QString error;
+    bool reported = false;
+    for (BinDocument* d : documents_) {
+        if (!d->isDirty()) continue;
+        if (QString why; !d->save(&why)) {
+            // A lock refusing the save is not shown with the setting on (p.1154).
+            if (skipLockedPrompts_ && d->isReadOnly()) continue;
+            error = why;
+            reported = true;
+        }
+    }
+    saveTree();
+    refreshTree();
+    if (reported) emit saveFailed({}, error);
+}
+
+bool BinContainer::eventFilter(QObject* watched, QEvent* event) {
+    switch (event->type()) {
+    case QEvent::KeyPress:
+    case QEvent::MouseButtonPress:
+    case QEvent::Wheel:
+        sinceInput_.start();
+        break;
+    default:
+        break;
+    }
+    return QWidget::eventFilter(watched, event);
+}
+
+QString BinContainer::atticRoot() const {
+    if (projectFolder_.isEmpty()) return {};
+    if (projectShared_) {
+        return QDir::cleanPath(QDir(projectFolder_).filePath(QStringLiteral("../%1 Attic").arg(QString::fromUtf8(branding::kProductName))));
+    }
+    return atticRoot_;
+}
+
+// Only the project's own bins: a Favorite Bin belongs to another project.
+void BinContainer::copyToAttic(const BinDocument* document) {
+    if (!bins_ || FavoriteBins::isFavoriteId(document->nodeId())) return;
+    const QString root = atticRoot();
+    if (root.isEmpty()) return;
+    // A failed copy does not fail the save: the bin itself is written.
+    model::saveToAttic(root, projectName_, document->name(), document->path(), atticLimits_);
 }
 
 void BinContainer::setProject(const QString& folder, const QString& name, const Rational& editRate) {
@@ -758,6 +827,8 @@ void BinContainer::setProject(const QString& folder, const QString& name, const 
         bins_.reset();
     }
     editRate_ = editRate;
+    projectFolder_ = folder;
+    projectName_ = name;
     locks_.clear();
     lockTimer_->stop();
     projectShared_ = false;
@@ -954,6 +1025,7 @@ BinDocument* BinContainer::openBin(const QString& requested, bool takeLock) {
         emit dirtyChanged();
     });
     connect(doc, &BinDocument::displayChanged, this, [this, doc] { updateTab(doc); });
+    connect(doc, &BinDocument::saved, this, [this, doc] { copyToAttic(doc); });
     connect(view, &BinView::deleteRequested, this, [this] { deleteSelection(); });
     connect(view, &BinView::lockButtonClicked, this, [this, doc](bool alt) { lockButtonClicked(doc, alt); });
     connect(doc, &BinDocument::lockChanged, this, [this, doc] {
@@ -1218,6 +1290,10 @@ QString BinContainer::newBin(const QString& parentFolder) {
     if (!bins_) return {};
     const QString id = bins_->createBin(parentFolder);
     if (id.isEmpty()) return {};
+    // "a backup copy is placed in the Avid Attic folder" (p.295).
+    if (const QString root = atticRoot(); !root.isEmpty()) {
+        model::saveToAttic(root, projectName_, bins_->node(id)->name, bins_->binPath(id), atticLimits_);
+    }
     saveTree();
     refreshTree();
     sidebar_->expand(parentFolder);

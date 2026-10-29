@@ -3833,7 +3833,13 @@ void MainWindow::applySettings() {
         view->setFullScreenScaling(s.flag(QStringLiteral("Full Screen Playback"), QStringLiteral("fullScreen")));
     }
     // Bin settings (p.1152-1154).
-    binContainer_->setAutoSaveMinutes(s.number(QStringLiteral("Bin"), QStringLiteral("autoSaveMinutes")));
+    binContainer_->setAutoSaveTiming(s.number(QStringLiteral("Bin"), QStringLiteral("autoSaveMinutes")) * 60 * 1000,
+                                     s.number(QStringLiteral("Bin"), QStringLiteral("inactivitySeconds")) * 1000,
+                                     s.number(QStringLiteral("Bin"), QStringLiteral("forceAutoSaveMinutes")) * 60 * 1000);
+    binContainer_->setSkipLockedPrompts(s.flag(QStringLiteral("Bin"), QStringLiteral("skipLockedPrompts")));
+    binContainer_->setAtticLimits({s.number(QStringLiteral("Bin"), QStringLiteral("atticMaxFiles")),
+                                   s.number(QStringLiteral("Bin"), QStringLiteral("atticMaxVersions")),
+                                   s.flag(QStringLiteral("Bin"), QStringLiteral("atticKeepOne"))});
     binContainer_->setFavoritesAtTop(s.text(QStringLiteral("Bin"), QStringLiteral("favoritesAt")) != QLatin1String("bottom"));
     binContainer_->setOpenBinsFloating(s.text(QStringLiteral("Bin"), QStringLiteral("openBin")) == QLatin1String("float"));
     binContainer_->setQuickFilterAllColumns(s.text(QStringLiteral("Bin"), QStringLiteral("quickFilter")) == QLatin1String("all"));

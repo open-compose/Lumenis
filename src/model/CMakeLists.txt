@@ -17,6 +17,7 @@ add_library(lumenis_model STATIC
     surround_pan.cpp
     sync_dupes.cpp
     text_find.cpp
+    bin_attic.cpp
     bin_relations.cpp
     settings.cpp
     calculator.cpp
@@ -39,6 +40,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/surround_pan.h
     include/lumenis/model/sync_dupes.h
     include/lumenis/model/text_find.h
+    include/lumenis/model/bin_attic.h
     include/lumenis/model/bin_relations.h
     include/lumenis/model/settings.h
     include/lumenis/model/calculator.h

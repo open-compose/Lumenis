@@ -42,6 +42,7 @@ headers in `include/lumenis/<library>/`.
 * **Bins.** Model: `src/model/bin.*` (items, columns, sort, sift, the
   `.cthbin` JSON format), `project_bins.*` (the bin tree), `bin_lock.*`
   (shared-storage lock and history files, docs/spec/bin-locking.md),
+  `bin_attic.*` (the attic's bin copies, docs/spec/bin-attic.md),
   `bin_relations.*` (Bin > Select's Media Relatives, Sources and Unreferenced
   Clips, docs/spec/bin-select.md). UI (also `unmount_dialog.*`, File > Media >
   Unmount, docs/spec/media-unmount.md; `set_font_dialog.*` and

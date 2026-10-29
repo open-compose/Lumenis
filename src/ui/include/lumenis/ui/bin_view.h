@@ -122,6 +122,8 @@ signals:
     void itemsChanged();
     void displayChanged();
     void dirtyChanged(bool dirty);
+    // save() wrote the file.
+    void saved();
     void lockChanged();
     // A change to the items was refused: the bin is read-only.
     void writeRefused();
