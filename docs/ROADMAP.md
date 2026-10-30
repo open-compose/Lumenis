@@ -927,7 +927,7 @@ phase of their own. They are done in three steps:
     `src/media/burn_in.cpp`, the Effect Editor's display tabs), is done; so is 6.3d2, the Illusion FX
     segment effects that change colour and texture or draw (Color Mix, Film Grain, Crystal, Flare,
     Pattern Generator, Lightning, Sparkler, Kaleidoscope, Motion Blur; docs/spec/illusion-fx.md:
-    `src/media/illusion_fx.cpp`); 6.3d3, the distortions (Pinch, Radial
+    `src/media/illusion_fx.cpp`); and so is 6.3d3, the distortions (Pinch, Radial
     Blur, Ripple, Sphere, Swirl, Twist, Wave) with the Illusion FX Border; 6.3d4, the Illusion FX
     transitions (Iris, Melt, Pagecurl, Particle Blast, Particle Orbit, Particle Wind, Random Blend,
     Rollup, Shear). FluidBlur, FluidColorMap and FluidMorph need motion estimation and go with the

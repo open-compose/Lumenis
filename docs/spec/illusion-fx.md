@@ -53,3 +53,49 @@ Code: `detail::isIllusionSegmentEffect`, `illusionDefault`, `illusionSegmentPict
 * Motion Blur "lets you blur the edges of moving objects": Amount "the length of the blur", Direction "0
   degrees is 3 o'clock. Positive values move counterclockwise" (p.515). A blur along the direction,
   centred on each pixel.
+
+## 6.3d3: the distortions (segment effects)
+
+Code: the same file; `warp` maps each pixel to the source point it shows, held inside `SourceBox`, the
+Illusion FX Border. Test: `tst_illusion_fx`.
+
+* The Border's Left, Right, Top and Bottom "prevent black edges of the source clip from warping into
+  the effect" (p.508): ours, each insets the source by percent of the picture (0 to 50), and every
+  sample a distortion takes is held inside what is left. Kaleidoscope and Crystal (p.465) use it too.
+* Anti-alias "Sets whether or not transformed areas are smoothed" (p.521-528): on, bilinear samples
+  (until set); off, the nearest pixel.
+* Pinch "pinches the image in toward, or pushes it out from a user-defined point": Amount, Size "the
+  diameter of the affected area", Position (p.464, p.521). Ours: Amount -100 to 100; Size is percent of
+  the picture's height (60 until set); Position is two sliders, X and Y. A pixel at d (its distance over
+  the circle's radius) shows the source at d(1 + k(1 - d)), k = Amount/100: toward the centre for
+  positive values, out from it for negative.
+* Sphere: Amount "Negative values distort the image inward. Positive values distort it outward"; Size
+  "the diameter of the circle as a normalized proportion of the vertical size", ours in percent (p.526-
+  527). A lens: the source at d(1 - k sqrt(1 - d^2)/2).
+* Swirl: Amount "Negative values swirl the image counterclockwise. Positive values swirl it clockwise";
+  Size as Sphere's (p.527). Ours: Amount 100 is a whole turn at the centre, easing as (1 - d)^2 to none
+  at the circle's edge.
+* Twist "twisting the two ends in opposite directions", with the Axis menu, X axis or Y axis (p.464,
+  p.527). Ours: the picture is a ribbon along the axis, turned about it in opposite directions either
+  side of the centre by up to Amount/100 half turns at the picture's ends; edge on it is gone
+  (transparent), and turned past a quarter it shows mirrored.
+* Wave: "a user-defined number of waves", Amount, Minimum and Maximum Size (the wavelengths, ours in
+  pixels), Horizontal and Vertical Factor "0 (no distortion) to 100 (maximum distortion)", Number of
+  Waves "superimposed upon each other", Speed "the progress of the effect", Random Seed (p.465, p.528).
+  Ours: each wave has a random direction, wavelength and phase; at Amount 100 it moves pixels by up to a
+  quarter of its wavelength (divided by the square root of the number of waves); Speed 100 is four
+  periods. The reference's Amount text is Swirl's ("the scale of swirl"), read as the waves' scale.
+* Radial Blur "blurs the image inward or outward from a user-defined point, and around a user-defined
+  rotation": Zoom "Smaller values zoom in and larger values zoom out", Angle, Position, and the Render
+  Mode menu, where "Locate shows the center marker" (p.464, p.522). Ours: Zoom -100 to 100 (0 none)
+  blurs over up to a quarter of each pixel's distance from the centre, outward for positive values;
+  Angle in degrees; Low, Medium (until set) and High Quality take 8, 16 and 32 samples; Locate shows the
+  picture with a white cross at the centre.
+* Ripple "creates ripples on the image, as if you dropped a stone into a pond" (p.464, p.523-524). Ours:
+  each of Number of Ripples starts at a random point (Random Seed) and at a random Amount in its first
+  third; its front moves out with Amount, at Wave Speed 100 across the diagonal twice over Amount 0 to
+  100; Ripple Spread is the band behind the front (100: half the diagonal, at least one Length), with
+  peaks Length pixels apart and Strength 100 moving pixels by half of Length. Reflections add each
+  ripple mirrored in the four edges, as waves off a wall. The light (colour, Angle with 0 at 3 o'clock
+  and counterclockwise positive) brightens the slopes facing it and darkens the others. Amount is 50
+  until set, so the effect shows; keyframe it from 0 to 100 to drop the stone.

@@ -1,4 +1,4 @@
-// The Illusion FX segment effects that colour, texture or draw (ROADMAP 6.3d2;
+// The Illusion FX segment effects: colour, texture, drawing and distortions (ROADMAP 6.3d2-3;
 // docs/spec/illusion-fx.md). A GUI test: Pattern Generator's number needs fonts.
 #include "lumenis/media/compositor.h"
 
@@ -25,6 +25,25 @@ Picture halves(int w = 96, int h = 54) {
 QImage apply(const QString& name, const Picture& in, QJsonObject params = {}, double time = 0.5, std::int64_t length = 11) {
     const Effect e{QStringLiteral("Illusion FX"), name, std::move(params)};
     return imageEffectPicture(e, in, time, EffectSpan(length)).toImage();
+}
+
+// Red across and green down, so the colour tells where a pixel was taken from.
+Picture ramp(int w = 100, int h = 100) {
+    Picture p(w, h);
+    for (int y = 0; y < h; ++y) {
+        for (int x = 0; x < w; ++x) {
+            float* px = p.pixel(x, y);
+            px[0] = (static_cast<float>(x) + 0.5f) / static_cast<float>(w);
+            px[1] = (static_cast<float>(y) + 0.5f) / static_cast<float>(h);
+            px[2] = 0.0f;
+            px[3] = 1.0f;
+        }
+    }
+    return p;
+}
+
+QJsonObject in(const QString& category, const QJsonObject& values) {
+    return QJsonObject{{category, values}};
 }
 
 int brightest(const QImage& image) {
@@ -142,6 +161,93 @@ private slots:
         const QJsonObject along{{QStringLiteral("Motion Blur Effect Input Parameters"),
                                  QJsonObject{{QStringLiteral("Amount"), 400}, {QStringLiteral("Direction"), 90}}}};
         QCOMPARE(apply(QStringLiteral("Motion Blur"), halves(), along).pixelColor(40, 27), QColor(255, 0, 0));
+    }
+    void pinchAndSphere() {
+        // Pinch pulls toward its point and pushes out with a negative Amount; Sphere the other way
+        // round; nothing moves outside the circle (p.521, p.526). A pixel right of the centre, halfway
+        // to the circle's edge (radius 30 at Size 60).
+        const QString pinch = QStringLiteral("Pinch Effect Input Parameters");
+        const int own = ramp().toImage().pixelColor(65, 50).red();
+        QVERIFY(apply(QStringLiteral("Pinch"), ramp(), in(pinch, {{QStringLiteral("Amount"), 80}})).pixelColor(65, 50).red() > own + 5);
+        QVERIFY(apply(QStringLiteral("Pinch"), ramp(), in(pinch, {{QStringLiteral("Amount"), -80}})).pixelColor(65, 50).red() < own - 5);
+        QCOMPARE(apply(QStringLiteral("Pinch"), ramp(), in(pinch, {{QStringLiteral("Amount"), 80}})).pixelColor(90, 50),
+                 ramp().toImage().pixelColor(90, 50));
+        const QString sphere = QStringLiteral("Sphere Effect Input Parameters");
+        QVERIFY(apply(QStringLiteral("Sphere"), ramp(), in(sphere, {{QStringLiteral("Amount"), 80}})).pixelColor(65, 50).red() < own - 5);
+        QVERIFY(apply(QStringLiteral("Sphere"), ramp(), in(sphere, {{QStringLiteral("Amount"), -80}})).pixelColor(65, 50).red() > own + 5);
+    }
+
+    void swirl() {
+        // "Positive values swirl it clockwise" (p.527): right of the centre shows what was above it.
+        const QString cat = QStringLiteral("Swirl Effect Input Parameters");
+        const int own = ramp().toImage().pixelColor(65, 50).green();
+        QVERIFY(apply(QStringLiteral("Swirl"), ramp(), in(cat, {{QStringLiteral("Amount"), 30}})).pixelColor(65, 50).green() < own - 5);
+        QVERIFY(apply(QStringLiteral("Swirl"), ramp(), in(cat, {{QStringLiteral("Amount"), -30}})).pixelColor(65, 50).green() > own + 5);
+        // Anti-alias off takes whole pixels: only the two colours of the halves.
+        const QImage hard = apply(QStringLiteral("Swirl"), halves(), in(cat, {{QStringLiteral("Anti-alias"), false}}));
+        for (int y = 0; y < hard.height(); ++y) {
+            for (int x = 0; x < hard.width(); ++x) {
+                const QColor c = hard.pixelColor(x, y);
+                QVERIFY(c == QColor(255, 0, 0) || c == QColor(0, 0, 255));
+            }
+        }
+    }
+
+    void twist() {
+        // "twisting the two ends in opposite directions" (p.527): the centre's column stays, the ends
+        // turn edge on and away (Amount 50: a quarter turn at the picture's ends).
+        const QString cat = QStringLiteral("Twist Effect Input Parameters");
+        const QImage out = apply(QStringLiteral("Twist"), ramp(), in(cat, {{QStringLiteral("Amount"), 50}}));
+        QCOMPARE(out.pixelColor(50, 20), ramp().toImage().pixelColor(50, 20));
+        QCOMPARE(out.pixelColor(99, 20), QColor(0, 0, 0));
+        // Along Y the rows turn instead.
+        const QImage alongY = apply(QStringLiteral("Twist"), ramp(), in(cat, {{QStringLiteral("Amount"), 50}, {QStringLiteral("Axis"), QStringLiteral("Y axis")}}));
+        QCOMPARE(alongY.pixelColor(20, 99), QColor(0, 0, 0));
+        QCOMPARE(alongY.pixelColor(20, 50), ramp().toImage().pixelColor(20, 50));
+    }
+
+    void wave() {
+        // Random waves, the same for the same Random Seed; no distortion at both Factors 0 (p.528).
+        const QString cat = QStringLiteral("Wave Effect Input Parameters");
+        const QImage a = apply(QStringLiteral("Wave"), ramp());
+        QVERIFY(a != ramp().toImage());
+        QCOMPARE(apply(QStringLiteral("Wave"), ramp()), a);
+        QVERIFY(apply(QStringLiteral("Wave"), ramp(), in(cat, {{QStringLiteral("Random Seed"), 7}})) != a);
+        QCOMPARE(apply(QStringLiteral("Wave"), ramp(), in(cat, {{QStringLiteral("Horizontal Factor"), 0}, {QStringLiteral("Vertical Factor"), 0}})),
+                 ramp().toImage());
+    }
+
+    void radialBlur() {
+        // A blur out from the centre (p.522): across the halves' edge when the centre is left of it.
+        const QString cat = QStringLiteral("Radial Blur Effect Input Parameters");
+        const QColor blurred = apply(QStringLiteral("Radial Blur"), halves(), in(cat, {{QStringLiteral("Zoom"), 100}, {QStringLiteral("X"), 25}})).pixelColor(44, 27);
+        QVERIFY(blurred.red() > 40 && blurred.blue() > 40);
+        QCOMPARE(apply(QStringLiteral("Radial Blur"), halves(), in(cat, {{QStringLiteral("Zoom"), 0}})).pixelColor(44, 27), QColor(255, 0, 0));
+        // Locate shows the picture with the centre marker.
+        const QImage locate = apply(QStringLiteral("Radial Blur"), halves(), in(cat, {{QStringLiteral("Render Mode"), QStringLiteral("Locate")}}));
+        QCOMPARE(locate.pixelColor(48, 27), QColor(255, 255, 255));
+        QCOMPARE(locate.pixelColor(10, 10), QColor(255, 0, 0));
+    }
+
+    void ripple() {
+        // Ripples that spread with Amount (p.523): none at Amount 0, the same for the same seed, and
+        // more with Reflections.
+        const QString cat = QStringLiteral("Ripple Effect Motion, Generation, and Illumination Parameters");
+        QCOMPARE(apply(QStringLiteral("Ripple"), ramp(), in(cat, {{QStringLiteral("Amount"), 0}})), ramp().toImage());
+        const QImage a = apply(QStringLiteral("Ripple"), ramp());
+        QVERIFY(a != ramp().toImage());
+        QCOMPARE(apply(QStringLiteral("Ripple"), ramp()), a);
+        QVERIFY(apply(QStringLiteral("Ripple"), ramp(), in(cat, {{QStringLiteral("Reflections"), true}})) != a);
+    }
+
+    void illusionBorder() {
+        // The Border keeps the source's edges out (p.508): with Left at 25 nothing left of a quarter of
+        // the picture is taken, here by a Twist that moves nothing.
+        QJsonObject params = in(QStringLiteral("Twist Effect Input Parameters"), {{QStringLiteral("Amount"), 0}});
+        params.insert(QStringLiteral("Border Parameter for Illusion FX Effects"), QJsonObject{{QStringLiteral("Left"), 25}});
+        const QImage out = apply(QStringLiteral("Twist"), ramp(), params);
+        QVERIFY(std::abs(out.pixelColor(5, 50).red() - 64) <= 2);
+        QCOMPARE(out.pixelColor(80, 50), ramp().toImage().pixelColor(80, 50));
     }
 };
 

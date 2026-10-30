@@ -12,9 +12,10 @@
 #include <numbers>
 #include <vector>
 
-// The Illusion FX segment effects that colour, texture or draw (ROADMAP 6.3d2;
-// docs/spec/illusion-fx.md): Color Mix, Film Grain, Crystal, Flare, Pattern Generator, Lightning,
-// Sparkler, Kaleidoscope and Motion Blur (FX Guide p.464-465, parameters p.508-527). The reference says
+// The Illusion FX segment effects (ROADMAP 6.3d2-3; docs/spec/illusion-fx.md): those that colour,
+// texture or draw (Color Mix, Film Grain, Crystal, Flare, Pattern Generator, Lightning, Sparkler,
+// Kaleidoscope, Motion Blur) and the distortions (Pinch, Radial Blur, Ripple, Sphere, Swirl, Twist,
+// Wave) with the Illusion FX Border (FX Guide p.464-465, parameters p.508-527). The reference says
 // what each control does but rarely its range, and never a formula: the ranges are ours ("ours" in
 // effect_parameters.json), the values until set are in parameterDefault(), and the pictures below are
 // ours too. Random effects are the same for the same Random Seed on every platform (our own hash).
@@ -72,6 +73,56 @@ struct Random {
     }
 };
 
+// A checkbox, `fallback` until set.
+bool flag(const model::Effect& e, const QString& category, const QString& name, bool fallback) {
+    const QJsonValue v = e.parameters.value(category).toObject().value(name);
+    return v.isBool() ? v.toBool() : fallback;
+}
+
+// The Illusion FX Border's Left, Right, Top and Bottom (p.508), "to prevent black edges of the source
+// clip from warping into the effect": ours, each insets the source by percent of the picture (0 to 50),
+// and a sample is held inside what is left.
+struct SourceBox {
+    double left, right, top, bottom;
+    static SourceBox of(const model::Effect& e, double time, const model::EffectSpan& span, double W, double H) {
+        const QString border = QStringLiteral("Border Parameter for Illusion FX Effects");
+        auto inset = [&](const char* side) { return std::clamp(num(e, border, QLatin1String(side), time, span), 0.0, 50.0) / 100.0; };
+        return {inset("Left") * W + 0.5, W - inset("Right") * W - 0.5, inset("Top") * H + 0.5, H - inset("Bottom") * H - 0.5};
+    }
+    double x(double v) const { return std::clamp(v, left, std::max(left, right)); }
+    double y(double v) const { return std::clamp(v, top, std::max(top, bottom)); }
+};
+
+// The pixel of `p` nearest to (x, y), for Anti-alias off ("whether or not transformed areas are
+// smoothed").
+void nearest(const Picture& p, double x, double y, float out[4]) {
+    const int ix = std::clamp(static_cast<int>(std::floor(x)), 0, p.width() - 1);
+    const int iy = std::clamp(static_cast<int>(std::floor(y)), 0, p.height() - 1);
+    std::copy(p.pixel(ix, iy), p.pixel(ix, iy) + 4, out);
+}
+
+// A distortion: each pixel of the result takes the source at map(x, y) (pixel centres), held inside
+// the Border's box, smoothed or not. `map` returns false where nothing shows (transparent).
+template <typename Map>
+Picture warp(const Picture& layer, const SourceBox& box, bool antiAlias, Map map) {
+    Picture out(layer.width(), layer.height());
+    float in[4];
+    for (int y = 0; y < layer.height(); ++y) {
+        for (int x = 0; x < layer.width(); ++x) {
+            double sx = x + 0.5;
+            double sy = y + 0.5;
+            if (!map(sx, sy)) continue;
+            if (antiAlias) {
+                sample(layer, box.x(sx), box.y(sy), in);
+            } else {
+                nearest(layer, box.x(sx), box.y(sy), in);
+            }
+            std::copy(in, in + 4, out.pixel(x, y));
+        }
+    }
+    return out;
+}
+
 // Adds `light` (premultiplied) to `picture`, as light adds: each channel capped at 1, the alpha the
 // larger of the two.
 void addLight(Picture& picture, const QImage& light) {
@@ -91,7 +142,9 @@ bool isIllusionSegmentEffect(const model::Effect& e) {
     static const QStringList names = {QStringLiteral("Color Mix"),         QStringLiteral("Film Grain"), QStringLiteral("Crystal"),
                                       QStringLiteral("Flare"),             QStringLiteral("Pattern Generator"),
                                       QStringLiteral("Lightning"),         QStringLiteral("Sparkler"),   QStringLiteral("Kaleidoscope"),
-                                      QStringLiteral("Motion Blur")};
+                                      QStringLiteral("Motion Blur"),       QStringLiteral("Pinch"),      QStringLiteral("Radial Blur"),
+                                      QStringLiteral("Ripple"),            QStringLiteral("Sphere"),     QStringLiteral("Swirl"),
+                                      QStringLiteral("Twist"),             QStringLiteral("Wave")};
     return names.contains(e.name);
 }
 
@@ -152,6 +205,41 @@ QJsonValue illusionDefault(const model::Effect& e, const QString& category, cons
         if (name == QLatin1String("Core Radius")) return 2;
         if (name == QLatin1String("Glow Radius")) return 6;
         if (name == QLatin1String("Color controls")) return QStringLiteral("#ffcc66");
+    }
+    if (category == QLatin1String("Pinch Effect Input Parameters")) {
+        if (name == QLatin1String("Amount")) return 50;
+        if (name == QLatin1String("Size")) return 60;
+        if (name == QLatin1String("X") || name == QLatin1String("Y")) return 50;
+    }
+    if (category == QLatin1String("Radial Blur Effect Input Parameters")) {
+        if (name == QLatin1String("Zoom")) return 20;
+        if (name == QLatin1String("X") || name == QLatin1String("Y")) return 50;
+        if (name == QLatin1String("Render Mode")) return QStringLiteral("Render Medium Quality");
+    }
+    if (category == QLatin1String("Ripple Effect Motion, Generation, and Illumination Parameters")) {
+        if (name == QLatin1String("Amount") || name == QLatin1String("Wave Speed")) return 50;
+        if (name == QLatin1String("Ripple Spread") || name == QLatin1String("Strength")) return 30;
+        if (name == QLatin1String("Length")) return 40;
+        if (name == QLatin1String("Number of Ripples")) return 3;
+        if (name == QLatin1String("Color controls")) return QStringLiteral("#ffffff");
+        if (name == QLatin1String("Angle")) return 45;
+    }
+    if (category == QLatin1String("Sphere Effect Input Parameters") || category == QLatin1String("Swirl Effect Input Parameters")) {
+        if (name == QLatin1String("Amount")) return 50;
+        if (name == QLatin1String("Size")) return 60;
+        if (name == QLatin1String("X") || name == QLatin1String("Y")) return 50;
+    }
+    if (category == QLatin1String("Twist Effect Input Parameters")) {
+        if (name == QLatin1String("Amount")) return 30;
+        if (name == QLatin1String("X") || name == QLatin1String("Y")) return 50;
+        if (name == QLatin1String("Axis")) return QStringLiteral("X axis");
+    }
+    if (category == QLatin1String("Wave Effect Input Parameters")) {
+        if (name == QLatin1String("Amount")) return 50;
+        if (name == QLatin1String("Minimum Size")) return 40;
+        if (name == QLatin1String("Maximum Size")) return 160;
+        if (name == QLatin1String("Horizontal Factor") || name == QLatin1String("Vertical Factor")) return 50;
+        if (name == QLatin1String("Number of Waves")) return 3;
     }
     (void)e;
     return {};
@@ -218,7 +306,8 @@ Picture illusionSegmentPicture(const model::Effect& e, const Picture& layer, dou
     if (name == QLatin1String("Crystal")) {
         // "uses polygons to create a mosaic effect": Size "the radius of the polygons in pixels"; Jitter
         // "A value of 0 creates regular hexagons — the higher the value, the more random the shapes";
-        // Random Seed (p.509). Ours: each polygon takes the colour under its centre.
+        // Random Seed (p.509). Ours: each polygon takes the colour under its centre, held inside the
+        // Illusion FX Border.
         const QString cat = QStringLiteral("Crystal Effect Input Parameters");
         const double r = std::max(num(e, cat, QStringLiteral("Size"), time, span) * unit, 1.0);
         const double jitter = std::clamp(num(e, cat, QStringLiteral("Jitter"), time, span), 0.0, 100.0) / 100.0;
@@ -229,6 +318,7 @@ Picture illusionSegmentPicture(const model::Effect& e, const Picture& layer, dou
             cx = static_cast<double>(col) * dx + ((row & 1) ? dx / 2.0 : 0.0) + (hash01(row, col, 0, seed) - 0.5) * jitter * r;
             cy = static_cast<double>(row) * dy + (hash01(row, col, 1, seed) - 0.5) * jitter * r;
         };
+        const SourceBox box = SourceBox::of(e, time, span, W, H); // the Border (p.465, p.508)
         Picture out(width, height);
         float in[4];
         for (int y = 0; y < height; ++y) {
@@ -253,7 +343,7 @@ Picture illusionSegmentPicture(const model::Effect& e, const Picture& layer, dou
                         }
                     }
                 }
-                sample(layer, std::clamp(bx, 0.5, W - 0.5), std::clamp(by, 0.5, H - 0.5), in);
+                sample(layer, box.x(bx), box.y(by), in);
                 std::copy(in, in + 4, out.pixel(x, y));
             }
         }
@@ -302,11 +392,7 @@ Picture illusionSegmentPicture(const model::Effect& e, const Picture& layer, dou
         const double cy = num(e, cat, QStringLiteral("Y"), time, span) / 100.0 * H;
         const double ox = (num(e, cat, QStringLiteral("Offset Parameters: X"), time, span) - 50.0) / 100.0 * W;
         const double oy = (num(e, cat, QStringLiteral("Offset Parameters: Y"), time, span) - 50.0) / 100.0 * H;
-        const QString border = QStringLiteral("Border Parameter for Illusion FX Effects");
-        const double left = std::clamp(num(e, border, QStringLiteral("Left"), time, span), 0.0, 50.0) / 100.0 * W + 0.5;
-        const double right = W - std::clamp(num(e, border, QStringLiteral("Right"), time, span), 0.0, 50.0) / 100.0 * W - 0.5;
-        const double top = std::clamp(num(e, border, QStringLiteral("Top"), time, span), 0.0, 50.0) / 100.0 * H + 0.5;
-        const double bottom = H - std::clamp(num(e, border, QStringLiteral("Bottom"), time, span), 0.0, 50.0) / 100.0 * H - 0.5;
+        const SourceBox box = SourceBox::of(e, time, span, W, H);
         const double wedge = 2.0 * kPi / mirrors;
         Picture out(width, height);
         float in[4];
@@ -320,10 +406,261 @@ Picture illusionSegmentPicture(const model::Effect& e, const Picture& layer, dou
                 if (a < 0) a += wedge;
                 if (mirrors > 1 && a > wedge / 2.0) a = wedge - a;
                 a += angle;
-                const double sx = std::clamp(cx + ox + r * std::cos(a), left, right);
-                const double sy = std::clamp(cy + oy + r * std::sin(a), top, bottom);
+                const double sx = box.x(cx + ox + r * std::cos(a));
+                const double sy = box.y(cy + oy + r * std::sin(a));
                 sample(layer, sx, sy, in);
                 std::copy(in, in + 4, out.pixel(x, y));
+            }
+        }
+        return out;
+    }
+
+    if (name == QLatin1String("Pinch") || name == QLatin1String("Sphere") || name == QLatin1String("Swirl")) {
+        // Pinch "pinches the image in toward, or pushes it out from a user-defined point"; Sphere "a
+        // spherical distortion" ("Negative values distort the image inward. Positive values distort it
+        // outward"); Swirl "swirling the pixels within a circular area" ("Negative values swirl the image
+        // counterclockwise. Positive values swirl it clockwise") (p.464, p.521, p.526-527). Size is the
+        // circle's diameter: percent of the picture's height (ours, for the reference's "normalized
+        // proportion of the vertical size"). Ours: Amount -100 to 100, the source radius
+        // d(1 + k(1 - d)) for Pinch (k = Amount/100, d the distance over the radius: a pull toward the
+        // centre for k > 0), d(1 - k sqrt(1 - d^2)/2) for Sphere (a lens), and Swirl turning by up to
+        // k whole turns at the centre, easing to none at the circle's edge.
+        const QString cat = name + QStringLiteral(" Effect Input Parameters");
+        const double k = std::clamp(num(e, cat, QStringLiteral("Amount"), time, span), -100.0, 100.0) / 100.0;
+        const double radius = std::max(num(e, cat, QStringLiteral("Size"), time, span), 0.0) / 200.0 * H;
+        const double cx = num(e, cat, QStringLiteral("X"), time, span) / 100.0 * W;
+        const double cy = num(e, cat, QStringLiteral("Y"), time, span) / 100.0 * H;
+        const int kind = name == QLatin1String("Pinch") ? 0 : name == QLatin1String("Sphere") ? 1 : 2;
+        return warp(layer, SourceBox::of(e, time, span, W, H), flag(e, cat, QStringLiteral("Anti-alias"), true),
+                    [=](double& x, double& y) {
+                        const double dx = x - cx;
+                        const double dy = y - cy;
+                        const double r = std::hypot(dx, dy);
+                        if (radius <= 0 || r >= radius || r <= 0) return true;
+                        const double d = r / radius;
+                        if (kind == 2) {
+                            // Clockwise on the screen (y down) is the positive angle: the source is
+                            // turned back by it.
+                            const double turn = -k * 2.0 * kPi * (1.0 - d) * (1.0 - d);
+                            const double c = std::cos(turn);
+                            const double s = std::sin(turn);
+                            x = cx + dx * c - dy * s;
+                            y = cy + dx * s + dy * c;
+                            return true;
+                        }
+                        const double scale = kind == 0 ? 1.0 + k * (1.0 - d) : 1.0 - k * std::sqrt(1.0 - d * d) / 2.0;
+                        x = cx + dx * scale;
+                        y = cy + dy * scale;
+                        return true;
+                    });
+    }
+
+    if (name == QLatin1String("Twist")) {
+        // "Twist distorts the image by twisting the two ends in opposite directions": Amount, the centre,
+        // and the Axis menu "whether the twist applies horizontally (X axis) or vertically (Y axis)"
+        // (p.464, p.527). Ours: the picture as a ribbon along the axis, turned about it by up to Amount/100
+        // half turns at the picture's ends and in opposite directions either side of the centre; seen
+        // edge on it is gone, and turned past a quarter it shows mirrored.
+        const QString cat = QStringLiteral("Twist Effect Input Parameters");
+        const double turns = std::clamp(num(e, cat, QStringLiteral("Amount"), time, span), -100.0, 100.0) / 100.0;
+        const double cx = num(e, cat, QStringLiteral("X"), time, span) / 100.0 * W;
+        const double cy = num(e, cat, QStringLiteral("Y"), time, span) / 100.0 * H;
+        const bool alongY = text(e, cat, QStringLiteral("Axis")) == QLatin1String("Y axis");
+        return warp(layer, SourceBox::of(e, time, span, W, H), flag(e, cat, QStringLiteral("Anti-alias"), true),
+                    [=](double& x, double& y) {
+                        const double along = alongY ? (y - cy) / (H / 2.0) : (x - cx) / (W / 2.0);
+                        const double c = std::cos(turns * kPi * along);
+                        if (std::abs(c) < 1e-3) return false;
+                        if (alongY) {
+                            x = cx + (x - cx) / c;
+                            return x >= 0 && x <= W;
+                        }
+                        y = cy + (y - cy) / c;
+                        return y >= 0 && y <= H;
+                    });
+    }
+
+    if (name == QLatin1String("Wave")) {
+        // "Wave distorts the image by applying a user-defined number of waves to it": Amount, Minimum
+        // and Maximum Size "the minimum wavelength and the maximum wavelength", the Horizontal and
+        // Vertical Factor "0 (no distortion) to 100 (maximum distortion)", Number of Waves
+        // "superimposed upon each other", Speed "the progress of the effect", Random Seed (p.465, p.528).
+        // Ours: each wave runs in a random direction with a random wavelength between the sizes (pixels)
+        // and phase; at Amount 100 a wave moves pixels by up to a quarter of its wavelength; Speed 100 is
+        // four periods.
+        const QString cat = QStringLiteral("Wave Effect Input Parameters");
+        const double amount = std::clamp(num(e, cat, QStringLiteral("Amount"), time, span), -100.0, 100.0) / 100.0;
+        const double minSize = std::max(num(e, cat, QStringLiteral("Minimum Size"), time, span), 1.0) * unit;
+        const double maxSize = std::max(num(e, cat, QStringLiteral("Maximum Size"), time, span) * unit, minSize);
+        const double hf = std::clamp(num(e, cat, QStringLiteral("Horizontal Factor"), time, span), 0.0, 100.0) / 100.0;
+        const double vf = std::clamp(num(e, cat, QStringLiteral("Vertical Factor"), time, span), 0.0, 100.0) / 100.0;
+        const int count = std::clamp(static_cast<int>(std::lround(num(e, cat, QStringLiteral("Number of Waves"), time, span))), 0, 20);
+        const double progress = num(e, cat, QStringLiteral("Speed"), time, span) / 100.0 * 4.0 * 2.0 * kPi;
+        const auto seed = static_cast<std::int64_t>(std::lround(num(e, cat, QStringLiteral("Random Seed"), time, span)));
+        struct Wave {
+            double ux, uy, k, phase, amplitude;
+        };
+        std::vector<Wave> waves;
+        for (int i = 0; i < count; ++i) {
+            const double direction = hash01(i, 1, 0, seed) * 2.0 * kPi;
+            const double length = minSize + (maxSize - minSize) * hash01(i, 2, 0, seed);
+            waves.push_back({std::cos(direction), std::sin(direction), 2.0 * kPi / length, hash01(i, 3, 0, seed) * 2.0 * kPi + progress,
+                             amount * length / 4.0 / std::sqrt(static_cast<double>(count))});
+        }
+        return warp(layer, SourceBox::of(e, time, span, W, H), flag(e, cat, QStringLiteral("Anti-alias"), true),
+                    [&waves, hf, vf](double& x, double& y) {
+                        double dx = 0.0;
+                        double dy = 0.0;
+                        for (const Wave& w : waves) {
+                            const double at = (x * w.ux + y * w.uy) * w.k + w.phase;
+                            dx += w.amplitude * std::sin(at);
+                            dy += w.amplitude * std::cos(at);
+                        }
+                        x += dx * hf;
+                        y += dy * vf;
+                        return true;
+                    });
+    }
+
+    if (name == QLatin1String("Radial Blur")) {
+        // "blurs the image inward or outward from a user-defined point, and around a user-defined
+        // rotation": Zoom "Smaller values zoom in and larger values zoom out", Angle "the rotation of the
+        // blur", the centre, and the Render Mode menu, where "Locate shows the center marker" (p.464,
+        // p.522). Ours: Zoom -100 to 100 (0 none) blurs over up to a quarter of the distance to the
+        // centre, Angle in degrees; Low, Medium and High Quality take 8, 16 and 32 samples a pixel.
+        const QString cat = QStringLiteral("Radial Blur Effect Input Parameters");
+        const double zoom = std::clamp(num(e, cat, QStringLiteral("Zoom"), time, span), -100.0, 100.0) / 100.0 * 0.25;
+        const double angle = num(e, cat, QStringLiteral("Angle"), time, span) * kPi / 180.0;
+        const double cx = num(e, cat, QStringLiteral("X"), time, span) / 100.0 * W;
+        const double cy = num(e, cat, QStringLiteral("Y"), time, span) / 100.0 * H;
+        const QString mode = text(e, cat, QStringLiteral("Render Mode"));
+        if (mode == QLatin1String("Locate")) {
+            // The picture as it is with a cross at the centre, white edged with black.
+            Picture out = layer;
+            const double arm = 24.0 * unit;
+            const double half = std::max(1.5 * unit, 0.75);
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    const double ax = std::abs(x + 0.5 - cx);
+                    const double ay = std::abs(y + 0.5 - cy);
+                    const bool line = (ax <= arm && ay <= half) || (ay <= arm && ax <= half);
+                    const bool edge = (ax <= arm + half && ay <= 2 * half) || (ay <= arm + half && ax <= 2 * half);
+                    if (!line && !edge) continue;
+                    float* o = out.pixel(x, y);
+                    const float v = line ? 1.0f : 0.0f;
+                    o[0] = o[1] = o[2] = v;
+                    o[3] = 1.0f;
+                }
+            }
+            return out;
+        }
+        const int taps = mode == QLatin1String("Render Low Quality") ? 8 : mode == QLatin1String("Render High Quality") ? 32 : 16;
+        const SourceBox box = SourceBox::of(e, time, span, W, H);
+        Picture out(width, height);
+        float in[4];
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                const double dx = x + 0.5 - cx;
+                const double dy = y + 0.5 - cy;
+                float sum[4] = {0, 0, 0, 0};
+                for (int t = 0; t < taps; ++t) {
+                    const double f = static_cast<double>(t) / (taps - 1);
+                    const double s = 1.0 + zoom * f;
+                    const double c = std::cos(angle * f);
+                    const double n = std::sin(angle * f);
+                    sample(layer, box.x(cx + (dx * c - dy * n) * s), box.y(cy + (dx * n + dy * c) * s), in);
+                    for (int i = 0; i < 4; ++i) sum[i] += in[i];
+                }
+                float* o = out.pixel(x, y);
+                for (int i = 0; i < 4; ++i) o[i] = sum[i] / static_cast<float>(taps);
+            }
+        }
+        return out;
+    }
+
+    if (name == QLatin1String("Ripple")) {
+        // "ripples on the image, as if you dropped a stone into a pond": Amount "the progression of the
+        // effect", Wave Speed, Ripple Spread "the width of the ripple from the inner ring to the outer
+        // ring", Reflections ("waves reflect off the edges of the image, as though hitting a wall"),
+        // Strength "the height of the waves", Length "the distance between the wave peaks", Number of
+        // Ripples, Random Seed, and the light's colour and Angle ("0 degrees is 3 o'clock. Positive
+        // values move counterclockwise") (p.464, p.523-524). Ours: each ripple starts at a random point
+        // and time in the first third of Amount; its front moves out, at Wave Speed 100 across the
+        // picture's diagonal twice over Amount 0 to 100; Spread 100 is half the diagonal; Strength 100
+        // moves pixels by half of Length (pixels). Reflections add the ripples mirrored in the four edges.
+        // The light brightens the slopes facing it and darkens the others.
+        const QString cat = QStringLiteral("Ripple Effect Motion, Generation, and Illumination Parameters");
+        const double amount = num(e, cat, QStringLiteral("Amount"), time, span) / 100.0;
+        const double diagonal = std::hypot(W, H);
+        const double speed = std::max(num(e, cat, QStringLiteral("Wave Speed"), time, span), 0.0) / 100.0 * 2.0 * diagonal;
+        const double length = std::max(num(e, cat, QStringLiteral("Length"), time, span), 1.0) * unit;
+        const double spread = std::max(std::max(num(e, cat, QStringLiteral("Ripple Spread"), time, span), 0.0) / 100.0 * diagonal / 2.0, length);
+        const double strength = std::max(num(e, cat, QStringLiteral("Strength"), time, span), 0.0) / 100.0 * length / 2.0;
+        const int count = std::clamp(static_cast<int>(std::lround(num(e, cat, QStringLiteral("Number of Ripples"), time, span))), 0, 20);
+        const auto seed = static_cast<std::int64_t>(std::lround(num(e, cat, QStringLiteral("Random Seed"), time, span)));
+        const bool reflect = flag(e, cat, QStringLiteral("Reflections"), false);
+        const QColor light = colourOf(e, cat, QStringLiteral("Color controls"), time, span);
+        const double lightAngle = num(e, cat, QStringLiteral("Angle"), time, span) * kPi / 180.0;
+        const double lx = std::cos(lightAngle);
+        const double ly = -std::sin(lightAngle); // counterclockwise on the screen, y down
+        struct Ring {
+            double x, y, front;
+        };
+        std::vector<Ring> rings;
+        for (int i = 0; i < count; ++i) {
+            const double front = (amount - hash01(i, 3, 0, seed) / 3.0) * speed;
+            if (front <= 0) continue;
+            const double x = (0.2 + 0.6 * hash01(i, 1, 0, seed)) * W;
+            const double y = (0.2 + 0.6 * hash01(i, 2, 0, seed)) * H;
+            rings.push_back({x, y, front});
+            if (reflect) {
+                rings.push_back({-x, y, front});
+                rings.push_back({2 * W - x, y, front});
+                rings.push_back({x, -y, front});
+                rings.push_back({x, 2 * H - y, front});
+            }
+        }
+        const SourceBox box = SourceBox::of(e, time, span, W, H);
+        const bool antiAlias = flag(e, cat, QStringLiteral("Anti-alias"), true);
+        const float lr = static_cast<float>(light.redF());
+        const float lg = static_cast<float>(light.greenF());
+        const float lb = static_cast<float>(light.blueF());
+        Picture out(width, height);
+        float in[4];
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                double sx = x + 0.5;
+                double sy = y + 0.5;
+                double shade = 0.0;
+                for (const Ring& ring : rings) {
+                    const double dx = x + 0.5 - ring.x;
+                    const double dy = y + 0.5 - ring.y;
+                    const double r = std::hypot(dx, dy);
+                    const double behind = ring.front - r; // how far behind the front this pixel is
+                    if (r <= 0 || behind < 0 || behind > spread) continue;
+                    const double envelope = std::sin(kPi * behind / spread);
+                    const double phase = 2.0 * kPi * behind / length;
+                    const double shift = strength * envelope * std::sin(phase);
+                    sx += shift * dx / r;
+                    sy += shift * dy / r;
+                    // The surface's slope along the ring's radius, toward or away from the light.
+                    shade += envelope * std::cos(phase) * (strength / length) * (dx * lx + dy * ly) / r;
+                }
+                if (antiAlias) {
+                    sample(layer, box.x(sx), box.y(sy), in);
+                } else {
+                    nearest(layer, box.x(sx), box.y(sy), in);
+                }
+                float* o = out.pixel(x, y);
+                const float s = static_cast<float>(std::clamp(shade, -1.0, 1.0));
+                if (s >= 0) {
+                    o[0] = std::min(in[0] + lr * s * in[3], in[3]);
+                    o[1] = std::min(in[1] + lg * s * in[3], in[3]);
+                    o[2] = std::min(in[2] + lb * s * in[3], in[3]);
+                } else {
+                    for (int i = 0; i < 3; ++i) o[i] = in[i] * (1.0f + s);
+                }
+                o[3] = in[3];
             }
         }
         return out;

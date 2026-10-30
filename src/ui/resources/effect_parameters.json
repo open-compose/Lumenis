@@ -313,15 +313,17 @@
       {"name": "Y", "kind": "slider", "label": "Position (vertical)", "subcategory": "Circle Parameters", "ours": {"min": 0, "max": 100}}
     ]},
     {"name": "Pinch Effect Input Parameters", "page": 521, "parameters": [
-      {"name": "Amount", "kind": "slider"},
-      {"name": "Size", "kind": "slider"},
-      {"name": "Position", "kind": "slider"},
+      {"name": "Amount", "kind": "slider", "ours": {"min": -100, "max": 100}},
+      {"name": "Size", "kind": "slider", "ours": {"min": 0, "max": 200}},
+      {"name": "X", "kind": "slider", "label": "Position (horizontal)", "ours": {"min": 0, "max": 100}},
+      {"name": "Y", "kind": "slider", "label": "Position (vertical)", "ours": {"min": 0, "max": 100}},
       {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Radial Blur Effect Input Parameters", "page": 522, "parameters": [
-      {"name": "Zoom", "kind": "slider"},
-      {"name": "Angle", "kind": "slider"},
-      {"name": "Position", "kind": "slider"},
+      {"name": "Zoom", "kind": "slider", "ours": {"min": -100, "max": 100}},
+      {"name": "Angle", "kind": "slider", "ours": {"min": -180, "max": 180}},
+      {"name": "X", "kind": "slider", "label": "Position (horizontal)", "ours": {"min": 0, "max": 100}},
+      {"name": "Y", "kind": "slider", "label": "Position (vertical)", "ours": {"min": 0, "max": 100}},
       {"name": "Render Mode", "kind": "menu", "label": "Render Mode menu", "options": ["Locate", "Render Low Quality", "Render Medium Quality", "Render High Quality"]}
     ]},
     {"name": "Random Blend Effect Input Parameters", "page": 522, "parameters": [
@@ -330,17 +332,17 @@
       {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Ripple Effect Motion, Generation, and Illumination Parameters", "page": 523, "parameters": [
-      {"name": "Amount", "kind": "slider", "subcategory": "Motion Parameters"},
-      {"name": "Wave Speed", "kind": "slider", "subcategory": "Motion Parameters"},
-      {"name": "Ripple Spread", "kind": "slider", "subcategory": "Motion Parameters"},
+      {"name": "Amount", "kind": "slider", "subcategory": "Motion Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Wave Speed", "kind": "slider", "subcategory": "Motion Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Ripple Spread", "kind": "slider", "subcategory": "Motion Parameters", "ours": {"min": 0, "max": 100}},
       {"name": "Reflections", "kind": "checkbox", "subcategory": "Motion Parameters"},
-      {"name": "Strength", "kind": "slider", "subcategory": "Generation Parameters"},
-      {"name": "Length", "kind": "slider", "subcategory": "Generation Parameters"},
-      {"name": "Number of Ripples", "kind": "slider", "subcategory": "Generation Parameters"},
-      {"name": "Random Seed", "kind": "slider", "keyframeable": false, "subcategory": "Generation Parameters"},
+      {"name": "Strength", "kind": "slider", "subcategory": "Generation Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Length", "kind": "slider", "subcategory": "Generation Parameters", "ours": {"min": 1, "max": 200}},
+      {"name": "Number of Ripples", "kind": "slider", "subcategory": "Generation Parameters", "ours": {"min": 0, "max": 20}},
+      {"name": "Random Seed", "kind": "slider", "keyframeable": false, "subcategory": "Generation Parameters", "ours": {"min": 0, "max": 1000}},
       {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false, "subcategory": "Generation Parameters"},
       {"name": "Color controls", "kind": "color", "subcategory": "Illumination Parameters"},
-      {"name": "Angle", "kind": "slider", "subcategory": "Illumination Parameters"}
+      {"name": "Angle", "kind": "slider", "subcategory": "Illumination Parameters", "ours": {"min": -180, "max": 180}}
     ]},
     {"name": "Rollup Effect Input Parameters", "page": 524, "parameters": [
       {"name": "Amount", "kind": "slider", "min": 0, "max": 100},
@@ -380,35 +382,35 @@
       {"name": "Color controls", "kind": "color", "subcategory": "Core and Glow Parameters"}
     ]},
     {"name": "Sphere Effect Input Parameters", "page": 526, "parameters": [
-      {"name": "Amount", "kind": "slider"},
-      {"name": "Size", "kind": "slider"},
-      {"name": "X", "kind": "slider"},
-      {"name": "Y", "kind": "slider"},
+      {"name": "Amount", "kind": "slider", "ours": {"min": -100, "max": 100}},
+      {"name": "Size", "kind": "slider", "ours": {"min": 0, "max": 200}},
+      {"name": "X", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Y", "kind": "slider", "ours": {"min": 0, "max": 100}},
       {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Swirl Effect Input Parameters", "page": 527, "parameters": [
-      {"name": "Amount", "kind": "slider"},
-      {"name": "Size", "kind": "slider"},
-      {"name": "X", "kind": "slider"},
-      {"name": "Y", "kind": "slider"},
+      {"name": "Amount", "kind": "slider", "ours": {"min": -100, "max": 100}},
+      {"name": "Size", "kind": "slider", "ours": {"min": 0, "max": 200}},
+      {"name": "X", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Y", "kind": "slider", "ours": {"min": 0, "max": 100}},
       {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Twist Effect Input Parameters", "page": 527, "parameters": [
-      {"name": "Amount", "kind": "slider"},
-      {"name": "X", "kind": "slider"},
-      {"name": "Y", "kind": "slider"},
-      {"name": "Axis", "kind": "menu", "label": "Axis menu"},
+      {"name": "Amount", "kind": "slider", "ours": {"min": -100, "max": 100}},
+      {"name": "X", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Y", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Axis", "kind": "menu", "label": "Axis menu", "options": ["X axis", "Y axis"]},
       {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Wave Effect Input Parameters", "page": 528, "parameters": [
-      {"name": "Amount", "kind": "slider"},
-      {"name": "Minimum Size", "kind": "slider"},
-      {"name": "Maximum Size", "kind": "slider"},
+      {"name": "Amount", "kind": "slider", "ours": {"min": -100, "max": 100}},
+      {"name": "Minimum Size", "kind": "slider", "ours": {"min": 1, "max": 500}},
+      {"name": "Maximum Size", "kind": "slider", "ours": {"min": 1, "max": 500}},
       {"name": "Horizontal Factor", "kind": "slider", "min": 0, "max": 100},
       {"name": "Vertical Factor", "kind": "slider", "min": 0, "max": 100},
-      {"name": "Number of Waves", "kind": "slider"},
-      {"name": "Speed", "kind": "slider"},
-      {"name": "Random Seed", "kind": "slider", "keyframeable": false},
+      {"name": "Number of Waves", "kind": "slider", "ours": {"min": 0, "max": 20}},
+      {"name": "Speed", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Random Seed", "kind": "slider", "keyframeable": false, "ours": {"min": 0, "max": 1000}},
       {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Avid Pan & Zoom Effect Parameters", "page": 528, "parameters": [
