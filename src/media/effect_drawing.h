@@ -48,5 +48,7 @@ Picture spectraMattePicture(const model::Effect& effect, const Picture& layer, d
 bool isIllusionSegmentEffect(const model::Effect& effect);
 QJsonValue illusionDefault(const model::Effect& effect, const QString& category, const QString& name);
 Picture illusionSegmentPicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
+// The Illusion FX transitions' values until set (illusion_transitions.cpp).
+QJsonValue illusionTransitionDefault(const model::Effect& effect, const QString& category, const QString& name);
 
 } // namespace lumenis::media::detail

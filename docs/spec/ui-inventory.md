@@ -157,7 +157,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   kaleidoscope's folding, Motion Blur's taps, each distortion's mapping,
   Ripple's rings and light, the Border as an inset); "Color Mix Effect Input
   Parameters" read as each effect's own; Pinch's and Radial Blur's Position
-  as X and Y; Sphere's and Swirl's Size in percent of the height.
+  as X and Y; Sphere's and Swirl's Size in percent of the height; the
+  transitions' pictures (the iris, the melt's columns and Bleed, Pagecurl's
+  corner and Turn Left, the particles' starts and speeds, Random Blend's
+  cells, Rollup's roll, Shear's strips), Amount following the transition
+  until set, and Particle Bumpiness 0 until set.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

@@ -928,9 +928,9 @@ phase of their own. They are done in three steps:
     segment effects that change colour and texture or draw (Color Mix, Film Grain, Crystal, Flare,
     Pattern Generator, Lightning, Sparkler, Kaleidoscope, Motion Blur; docs/spec/illusion-fx.md:
     `src/media/illusion_fx.cpp`); and so is 6.3d3, the distortions (Pinch, Radial
-    Blur, Ripple, Sphere, Swirl, Twist, Wave) with the Illusion FX Border; 6.3d4, the Illusion FX
+    Blur, Ripple, Sphere, Swirl, Twist, Wave) with the Illusion FX Border; and so is 6.3d4, the Illusion FX
     transitions (Iris, Melt, Pagecurl, Particle Blast, Particle Orbit, Particle Wind, Random Blend,
-    Rollup, Shear). FluidBlur, FluidColorMap and FluidMorph need motion estimation and go with the
+    Rollup, Shear; `src/media/illusion_transitions.cpp`). So 6.3d is done. FluidBlur, FluidColorMap and FluidMorph need motion estimation and go with the
     FluidMotion work (6.5).
   Peel (a page curl) goes with the 3D effects (6.7); PlasmaWipe with 6.9; AniMatte, Paint, Scratch
   Removal and Stabilize with their chapters (6.7, 6.9).

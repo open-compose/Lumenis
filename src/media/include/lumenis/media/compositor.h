@@ -81,6 +81,15 @@ bool isWipe(const model::Effect& effect);
 Picture wipePicture(const model::Effect& effect, Picture outgoing, Picture incoming, double progress, double time,
                     const model::EffectSpan& span);
 
+// The Illusion FX transitions (ROADMAP 6.3d4; docs/spec/illusion-fx.md, illusion_transitions.cpp):
+// Iris, Melt, Pagecurl, Particle Blast, Particle Orbit, Particle Wind, Random Blend, Rollup and Shear
+// (FX Guide p.466-467). True when `effect` is one of them.
+bool isIllusionTransition(const model::Effect& effect);
+// `outgoing` to `incoming` by the Illusion FX transition `effect` at `progress` (0 to 1; its Amount
+// until that is set) and `time` of `span`. Pictures of one size.
+Picture illusionTransitionPicture(const model::Effect& effect, Picture outgoing, Picture incoming, double progress, double time,
+                                  const model::EffectSpan& span);
+
 // The segment effects that change a segment's own picture by geometry (ROADMAP 6.3b1;
 // docs/spec/image-effects.md, image_effects.cpp): Picture-in-Picture, Flip, Flop, Flip-Flop, Field Swap,
 // Resize, Mask, the Film masks and Blowup; (6.3b2) the Color Effect, Blur Effect and Mosaic Effect; and

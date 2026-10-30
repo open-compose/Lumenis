@@ -1,5 +1,5 @@
-// The Illusion FX segment effects: colour, texture, drawing and distortions (ROADMAP 6.3d2-3;
-// docs/spec/illusion-fx.md). A GUI test: Pattern Generator's number needs fonts.
+// The Illusion FX effects: the segment effects that colour, texture, draw and distort, and the
+// transitions (ROADMAP 6.3d2-4; docs/spec/illusion-fx.md). A GUI test: Pattern Generator's number needs fonts.
 #include "lumenis/media/compositor.h"
 
 #include <QTest>
@@ -248,6 +248,100 @@ private slots:
         const QImage out = apply(QStringLiteral("Twist"), ramp(), params);
         QVERIFY(std::abs(out.pixelColor(5, 50).red() - 64) <= 2);
         QCOMPARE(out.pixelColor(80, 50), ramp().toImage().pixelColor(80, 50));
+    }
+    // The transitions (6.3d4): red going out, blue coming in, at `p` of the way through.
+    static QImage transition(const QString& name, double p, QJsonObject params = {}, int w = 96, int h = 54) {
+        const Effect e{QStringLiteral("Illusion FX"), name, std::move(params)};
+        return illusionTransitionPicture(e, Picture::solid(w, h, QColor(255, 0, 0)), Picture::solid(w, h, QColor(0, 0, 255)), p, p,
+                                         EffectSpan(10, true))
+            .toImage();
+    }
+
+    void transitionsRunFromOutgoingToIncoming() {
+        // Every Illusion FX transition starts on the outgoing clip and ends on the incoming one, its
+        // Amount following the transition until set (p.512); Swap Sources swaps them.
+        const QStringList names = {QStringLiteral("Iris"),          QStringLiteral("Melt"),           QStringLiteral("Pagecurl"),
+                                   QStringLiteral("Particle Blast"), QStringLiteral("Particle Orbit"), QStringLiteral("Particle Wind"),
+                                   QStringLiteral("Random Blend"),  QStringLiteral("Rollup"),         QStringLiteral("Shear")};
+        // (A picture 480 wide, so the particles at their sizes until set cover it at rest.)
+        const QImage red = Picture::solid(480, 270, QColor(255, 0, 0)).toImage();
+        const QImage blue = Picture::solid(480, 270, QColor(0, 0, 255)).toImage();
+        for (const QString& name : names) {
+            QVERIFY2(isIllusionTransition(Effect{QStringLiteral("Illusion FX"), name, {}}), qPrintable(name));
+            QVERIFY2(transition(name, 0.0, {}, 480, 270) == red, qPrintable(name));
+            QVERIFY2(transition(name, 1.0, {}, 480, 270) == blue, qPrintable(name));
+            const QImage half = transition(name, 0.5, {}, 480, 270);
+            QVERIFY2(half != red && half != blue, qPrintable(name));
+            const QJsonObject swap{{name + QStringLiteral(" Effect Input Parameters"), QJsonObject{{QStringLiteral("Swap Sources"), true}}}};
+            if (name != QLatin1String("Pagecurl")) QVERIFY2(transition(name, 0.0, swap, 480, 270) == blue, qPrintable(name));
+        }
+        QVERIFY(!isIllusionTransition(Effect{QStringLiteral("Illusion FX"), QStringLiteral("Swirl"), {}}));
+    }
+
+    void iris() {
+        // "a circle that radiates out from the center" (p.466): the incoming clip in the middle first.
+        const QImage half = transition(QStringLiteral("Iris"), 0.3);
+        QCOMPARE(half.pixelColor(48, 27), QColor(0, 0, 255));
+        QCOMPARE(half.pixelColor(1, 1), QColor(255, 0, 0));
+        // Amount, once set, places it.
+        const QJsonObject set = in(QStringLiteral("Iris Effect Input Parameters"), {{QStringLiteral("Amount"), 0}});
+        QCOMPARE(transition(QStringLiteral("Iris"), 0.7, set).pixelColor(48, 27), QColor(255, 0, 0));
+    }
+
+    void melt() {
+        // The foreground "melts downward off the screen" (p.466): the incoming clip shows at the top
+        // first; with Melt Up at the bottom.
+        const QImage down = transition(QStringLiteral("Melt"), 0.3);
+        QCOMPARE(down.pixelColor(48, 1), QColor(0, 0, 255));
+        QCOMPARE(down.pixelColor(48, 52), QColor(255, 0, 0));
+        const QImage up = transition(QStringLiteral("Melt"), 0.3, in(QStringLiteral("Melt Effect Input Parameters"), {{QStringLiteral("Melt Up"), true}}));
+        QCOMPARE(up.pixelColor(48, 52), QColor(0, 0, 255));
+        QCOMPARE(up.pixelColor(48, 1), QColor(255, 0, 0));
+    }
+
+    void pagecurl() {
+        // The page lifts from the bottom left corner (ours), or the bottom right with Turn Left (p.515).
+        const QImage curl = transition(QStringLiteral("Pagecurl"), 0.25);
+        QCOMPARE(curl.pixelColor(1, 52), QColor(0, 0, 255));
+        QCOMPARE(curl.pixelColor(94, 1), QColor(255, 0, 0));
+        const QImage left = transition(QStringLiteral("Pagecurl"), 0.25, in(QStringLiteral("Pagecurl Effect Input Parameters"), {{QStringLiteral("Turn Left"), true}}));
+        QCOMPARE(left.pixelColor(94, 52), QColor(0, 0, 255));
+        QCOMPARE(left.pixelColor(1, 1), QColor(255, 0, 0));
+        // Reverse: the incoming page peels on, from the far corner.
+        const QImage on = transition(QStringLiteral("Pagecurl"), 0.75, in(QStringLiteral("Pagecurl Effect Input Parameters"), {{QStringLiteral("Reverse"), true}}));
+        QCOMPARE(on.pixelColor(1, 52), QColor(255, 0, 0));
+        QCOMPARE(on.pixelColor(94, 1), QColor(0, 0, 255));
+    }
+
+    void rollupAndShear() {
+        // Rollup toward Direction 0 (3 o'clock) uncovers the left first (p.524).
+        const QImage roll = transition(QStringLiteral("Rollup"), 0.4);
+        QCOMPARE(roll.pixelColor(2, 27), QColor(0, 0, 255));
+        QCOMPARE(roll.pixelColor(93, 27), QColor(255, 0, 0));
+        // Shear's strips move apart along Angle 0: horizontal strips, some showing blue, some red.
+        const QImage strips = transition(QStringLiteral("Shear"), 0.3, in(QStringLiteral("Shear Effect Input Parameters"), {{QStringLiteral("Spread"), 0}}));
+        bool red = false;
+        bool blue = false;
+        for (int y = 0; y < 54; ++y) {
+            red = red || strips.pixelColor(2, y) == QColor(255, 0, 0);
+            blue = blue || strips.pixelColor(2, y) == QColor(0, 0, 255);
+        }
+        QVERIFY(red && blue);
+    }
+
+    void particlesAndRandomBlend() {
+        // Particle Blast blows from the centre outward: the middle clears first (p.466).
+        const QImage blast = transition(QStringLiteral("Particle Blast"), 0.15, {}, 480, 270);
+        QCOMPARE(blast.pixelColor(240, 135), QColor(0, 0, 255));
+        QCOMPARE(blast.pixelColor(2, 2), QColor(255, 0, 0));
+        // Random Blend at Random Scale 0 is a plain dissolve.
+        const QColor mid = transition(QStringLiteral("Random Blend"), 0.5,
+                                      in(QStringLiteral("Random Blend Effect Input Parameters"), {{QStringLiteral("Random Scale"), 0}}))
+                               .pixelColor(10, 10);
+        QVERIFY(std::abs(mid.red() - 128) <= 2 && std::abs(mid.blue() - 128) <= 2);
+        // Above it, cells blend at different moments.
+        const QImage random = transition(QStringLiteral("Random Blend"), 0.5);
+        QVERIFY(random.pixelColor(10, 10) != random.pixelColor(11, 30) || random.pixelColor(40, 3) != random.pixelColor(70, 40));
     }
 };
 

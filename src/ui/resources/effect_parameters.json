@@ -218,9 +218,9 @@
     ]},
     {"name": "Iris Effect Input Parameters", "page": 512, "parameters": [
       {"name": "Amount", "kind": "slider", "min": 0, "max": 100},
-      {"name": "Softness", "kind": "slider"},
-      {"name": "X", "kind": "slider"},
-      {"name": "Y", "kind": "slider"},
+      {"name": "Softness", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "X", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Y", "kind": "slider", "ours": {"min": 0, "max": 100}},
       {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Kaleidoscope Effect Input, Center, and Offset Parameters", "page": 513, "parameters": [
@@ -246,9 +246,9 @@
     {"name": "Melt Effect Input Parameters", "page": 515, "parameters": [
       {"name": "Bleed", "kind": "checkbox"},
       {"name": "Melt Up", "kind": "checkbox"},
-      {"name": "Amount", "kind": "slider"},
-      {"name": "Strength", "kind": "slider"},
-      {"name": "Random Seed", "kind": "slider", "keyframeable": false},
+      {"name": "Amount", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Strength", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Random Seed", "kind": "slider", "keyframeable": false, "ours": {"min": 0, "max": 1000}},
       {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false},
       {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
@@ -262,36 +262,36 @@
       {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Particle Blast Effect Input Parameters", "page": 517, "parameters": [
-      {"name": "Amount", "kind": "slider"},
-      {"name": "Size", "kind": "slider"},
-      {"name": "Spacing", "kind": "slider", "keyframeable": false},
-      {"name": "Front Speed", "kind": "slider"},
-      {"name": "Front Randomness", "kind": "slider"},
-      {"name": "Speed", "kind": "slider"},
-      {"name": "Speed Randomness", "kind": "slider"},
-      {"name": "Acceleration", "kind": "slider"},
-      {"name": "Bumpiness", "kind": "slider"},
+      {"name": "Amount", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Size", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Spacing", "kind": "slider", "keyframeable": false, "ours": {"min": 1, "max": 100}},
+      {"name": "Front Speed", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Front Randomness", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Speed", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Speed Randomness", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Acceleration", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Bumpiness", "kind": "slider", "ours": {"min": 0, "max": 100}},
       {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Particle Orbit Effect Input Parameters", "page": 517, "parameters": [
-      {"name": "Amount", "kind": "slider"},
-      {"name": "Size", "kind": "slider"},
-      {"name": "Spacing", "kind": "slider", "keyframeable": false},
-      {"name": "Bumpiness", "kind": "slider"},
-      {"name": "Speed", "kind": "slider"},
+      {"name": "Amount", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Size", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Spacing", "kind": "slider", "keyframeable": false, "ours": {"min": 1, "max": 100}},
+      {"name": "Bumpiness", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Speed", "kind": "slider", "ours": {"min": 0, "max": 100}},
       {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Particle Wind Effect Input Parameters", "page": 519, "parameters": [
-      {"name": "Amount", "kind": "slider"},
-      {"name": "Size", "kind": "slider"},
-      {"name": "Spacing", "kind": "slider", "keyframeable": false},
-      {"name": "Front Speed", "kind": "slider"},
-      {"name": "Front Randomness", "kind": "slider"},
-      {"name": "Speed", "kind": "slider"},
-      {"name": "Speed Randomness", "kind": "slider"},
-      {"name": "Acceleration", "kind": "slider"},
-      {"name": "Angle", "kind": "slider"},
-      {"name": "Bumpiness", "kind": "slider"},
+      {"name": "Amount", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Size", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Spacing", "kind": "slider", "keyframeable": false, "ours": {"min": 1, "max": 100}},
+      {"name": "Front Speed", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Front Randomness", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Speed", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Speed Randomness", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Acceleration", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Angle", "kind": "slider", "ours": {"min": -180, "max": 180}},
+      {"name": "Bumpiness", "kind": "slider", "ours": {"min": 0, "max": 100}},
       {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Pattern Generator Effect Background, Number, and Circle Parameters", "page": 520, "parameters": [
@@ -327,8 +327,8 @@
       {"name": "Render Mode", "kind": "menu", "label": "Render Mode menu", "options": ["Locate", "Render Low Quality", "Render Medium Quality", "Render High Quality"]}
     ]},
     {"name": "Random Blend Effect Input Parameters", "page": 522, "parameters": [
-      {"name": "Amount", "kind": "slider"},
-      {"name": "Random Scale", "kind": "slider"},
+      {"name": "Amount", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Random Scale", "kind": "slider", "ours": {"min": 0, "max": 100}},
       {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Ripple Effect Motion, Generation, and Illumination Parameters", "page": 523, "parameters": [
@@ -346,19 +346,19 @@
     ]},
     {"name": "Rollup Effect Input Parameters", "page": 524, "parameters": [
       {"name": "Amount", "kind": "slider", "min": 0, "max": 100},
-      {"name": "Curl Size", "kind": "slider"},
-      {"name": "Direction", "kind": "slider"},
+      {"name": "Curl Size", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Direction", "kind": "slider", "ours": {"min": -180, "max": 180}},
       {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false},
       {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Shear Effect Input Parameters", "page": 524, "parameters": [
       {"name": "Amount", "kind": "slider", "min": 0, "max": 100},
-      {"name": "Min Width", "kind": "slider"},
-      {"name": "Max Width", "kind": "slider"},
-      {"name": "Width Randomness", "kind": "slider"},
-      {"name": "Spread", "kind": "slider"},
-      {"name": "Angle", "kind": "slider"},
-      {"name": "Random Seed", "kind": "slider", "keyframeable": false},
+      {"name": "Min Width", "kind": "slider", "ours": {"min": 1, "max": 500}},
+      {"name": "Max Width", "kind": "slider", "ours": {"min": 1, "max": 500}},
+      {"name": "Width Randomness", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Spread", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Angle", "kind": "slider", "ours": {"min": -180, "max": 180}},
+      {"name": "Random Seed", "kind": "slider", "keyframeable": false, "ours": {"min": 0, "max": 1000}},
       {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false},
       {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},

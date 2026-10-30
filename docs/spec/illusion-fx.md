@@ -99,3 +99,58 @@ Illusion FX Border. Test: `tst_illusion_fx`.
   ripple mirrored in the four edges, as waves off a wall. The light (colour, Angle with 0 at 3 o'clock
   and counterclockwise positive) brightens the slopes facing it and darkens the others. Amount is 50
   until set, so the effect shows; keyframe it from 0 to 100 to drop the stone.
+
+## 6.3d4: the transitions
+
+Code: `media::isIllusionTransition` and `illusionTransitionPicture` (`src/media/illusion_transitions.cpp`),
+reached from the compositor's `transitionPicture`; the helpers they share with the segment effects are
+in `illusion_common.h`. Test: `tst_illusion_fx`.
+
+* The foreground is the outgoing clip and the background the incoming one. Each effect's Swap Sources
+  "Specifies whether to apply the effect to incoming or outgoing video" (p.512-525): it swaps them.
+* Amount: "Typical keyframing has a value of 0 at the first keyframe and 100 at the last keyframe"
+  (p.512). Ours: until it is set or keyframed, Amount follows the transition from 0 to 100, so every
+  transition runs from the outgoing clip to the incoming one when applied. Pagecurl has no Amount and
+  always follows the transition.
+* Iris "wipes the foreground clip away to reveal the background clip, using a circle that radiates out
+  from the center": Amount, Softness, X and Y (p.466, p.512). Ours: at Amount 100 the circle reaches
+  the farthest corner; Softness 100 is a quarter of the width (5 until set).
+* Melt: "The foreground clip 'melts' downward off the screen, while being distorted in a random 'liquid'
+  manner along the horizontal lines; the vertical lines are not distorted": Bleed, Melt Up, Amount,
+  Strength, Random Seed, Anti-alias, and the Border (p.466, p.515). Ours: each column falls by its own
+  smoothly random distance (four sines across the picture), at Amount 100 at least the height; Strength
+  100 lets columns differ by the height (30 until set); Bleed smears the falling picture's top edge
+  down behind it, fading, gone by Amount 100.
+* Pagecurl "treats the foreground video channel as though it were a sheet of paper being rolled over to
+  reveal another page beneath ... adds a highlight along the curled edge": Turn Left, Reverse
+  ("incoming video peels on"), Swap Sources (p.466, p.515-516; the table's pictures are not described).
+  Ours: the page lifts from the bottom left corner toward the top right at 45 degrees, or from the
+  bottom right toward the top left with Turn Left; it curls over a cylinder a tenth of the height
+  across and lies back flat over itself, its back showing paler; the curl's outer edge is highlighted.
+  Reverse runs the curl backward with the incoming clip as the page.
+* Rollup "rolls up the foreground clip to reveal the background clip": Amount, Curl Size, Direction
+  ("0 degrees is 3 o'clock. Positive values move counterclockwise"), Anti-alias, the Border (p.466,
+  p.524). Ours: the page winds round a cylinder moving toward Direction, the outermost turn showing;
+  Curl Size 100 is a roll a quarter of the height across (30 until set).
+* Particle Blast, Particle Orbit and Particle Wind divide "the foreground image into circular particles"
+  (Size their radius, Spacing between their centres, in pixels; Bumpiness "a shadow to the edge"), which
+  Blast "blows away ... from the center outward", Wind "blows ... away directionally" (Angle "the source
+  direction of the wind") and Orbit moves "around their original position" (p.466, p.517-519). Ours:
+  Size 12 and Spacing 12 until set, so the particles overlap at rest; Bumpiness 0 until set (the
+  reference's example starts it at 0 "so the transition begins smoothly", p.518). Blast and Wind: a
+  particle starts up to 0.9 of Amount late at Front Speed 100 (80 until set) by its distance from the
+  centre or from the side the wind comes from, plus up to a quarter at random with Front Randomness;
+  Speed 100 moves four times as far as the farthest a particle must go (half the diagonal, or across
+  the picture with the wind); Speed Randomness varies that by up to half; Acceleration 100 is full speed
+  at once, 0 over a third of Amount. Orbit: each particle circles up to three spacings out, Speed 100
+  being two turns over Amount, and shrinks to nothing with Amount, as the reference's example
+  keyframes Size (p.518).
+* Random Blend "uses a random pattern to blend the image of the incoming and outgoing video": Amount,
+  Random Scale "This allows Media Composer to blend different portions of the image at different
+  rates" (p.466, p.522). Ours: cells two pixels of a 1920 picture square; at Random Scale 0 a plain
+  dissolve; the higher, the more each cell's moment varies and the quicker it blends (50 until set).
+* Shear "divides the foreground clip into strips and moves alternate strips away in opposite
+  directions": Amount, Min and Max Width, Width Randomness, Spread ("0 causes all strips to start at the
+  same time"), Angle, Random Seed, Anti-alias, the Border (p.466, p.524-525). Ours: the strips run
+  along Angle, between 20 and 80 pixels wide until set; Width Randomness 0 makes them all midway;
+  Spread 100 starts them over the first half of Amount; each then leaves the picture by the end.

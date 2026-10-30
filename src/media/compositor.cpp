@@ -2,6 +2,8 @@
 
 #include "lumenis/model/effect_keyframes.h"
 
+#include "effect_drawing.h"
+
 #include <QPainter>
 
 #include <algorithm>
@@ -203,6 +205,9 @@ Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture 
     if (e.category == QLatin1String("Key") && isImageEffect(e)) {
         // Chroma Key on a transition (p.473). Ours: the incoming video keyed over the outgoing.
         return over(imageEffectPicture(e, incoming, time, model::EffectSpan(t.duration, true)), outgoing);
+    }
+    if (isIllusionTransition(e)) {
+        return illusionTransitionPicture(e, std::move(outgoing), std::move(incoming), progress, time, model::EffectSpan(t.duration, true));
     }
     if (isWipe(e)) return wipePicture(e, std::move(outgoing), std::move(incoming), progress, time, model::EffectSpan(t.duration, true));
     const QString& name = e.name;
