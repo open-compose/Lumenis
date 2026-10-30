@@ -16,6 +16,7 @@
 #include "lumenis/ui/timeline.h"
 
 #include <QAction>
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
@@ -97,6 +98,10 @@ private slots:
         const QString binId = window.binContainer().newBin();
         BinDocument* bin = window.binContainer().openBin(binId);
         QVERIFY(bin);
+        // The new bin's name editor commits (a rename, which saves the bin) when it loses focus; done
+        // now, so that no save comes between the renders below (autodeletion, FX Guide p.155).
+        if (QWidget* editing = QApplication::focusWidget()) editing->clearFocus();
+        settle();
         const QStringList ids = window.linkFiles(binId, {movie});
         QCOMPARE(ids.size(), 1);
         Composer& composer = window.composer();
@@ -132,9 +137,13 @@ private slots:
         QCOMPARE(clip->kind, model::BinItemKind::RenderedEffect);
         QVERIFY(clip->link.value(QStringLiteral("path")).toString().startsWith(QDir::cleanPath(drive)));
         QCOMPARE(window.timeline().history().undoCount(), before + 1);
-        media::VideoReader reader;
-        QVERIFY(reader.open(clip->link.value(QStringLiteral("path")).toString()));
-        QCOMPARE(reader.info().width, 320);
+        {
+            // Closed again at once: Windows cannot delete an open file, and the precompute is deleted
+            // below.
+            media::VideoReader reader;
+            QVERIFY(reader.open(clip->link.value(QStringLiteral("path")).toString()));
+            QCOMPARE(reader.info().width, 320);
+        }
         // The precompute is in the sequence's bin as a reference clip, shown only with Show reference
         // clips (FX Guide p.155); Reveal File finds its media; the Media Tool lists it with Precompute
         // Clips - Rendered Effects (p.153).

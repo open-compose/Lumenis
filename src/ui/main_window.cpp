@@ -3374,20 +3374,29 @@ void MainWindow::keepPrecomputes(const QString& binId, const QList<model::Effect
     // Render an effect two or more times with the Render Effect button ... deletes the earlier,
     // unreferenced versions. This autodeletion applies only to effects rendered since the last save"
     // (FX Guide p.154-155). Ours: when the render is replaced; Undo then shows the effect unrendered.
+    // A precompute whose files could not all be deleted (Windows keeps open files) stays in the bin,
+    // so its media can still be found and deleted there.
+    QHash<QString, QStringList> filesOf; // precompute id -> its files
     QStringList files;
-    QStringList gone;
     for (const model::EffectRender& render : replaced) {
         for (const QJsonObject& json : render.clips) {
             const auto item = model::binItemFromJson(json);
             if (!item || kept.contains(item->id) || !unsavedPrecomputes_.contains(item->id)) continue;
-            if (const auto link = media::linkOf(*item)) files += link->files();
-            gone << item->id;
+            const auto link = media::linkOf(*item);
+            filesOf.insert(item->id, link ? link->files() : QStringList{});
+            files += filesOf.value(item->id);
             unsavedPrecomputes_.remove(item->id);
         }
     }
+    QStringList deleted;
     if (!files.isEmpty()) {
         frames_->clear();
-        media::deleteMediaFiles(files, &mediaDb_);
+        deleted = media::deleteMediaFiles(files, &mediaDb_);
+    }
+    QStringList gone;
+    for (auto it = filesOf.cbegin(); it != filesOf.cend(); ++it) {
+        const QStringList& own = it.value();
+        if (std::all_of(own.begin(), own.end(), [&](const QString& f) { return deleted.contains(f); })) gone << it.key();
     }
     if (doc && !gone.isEmpty()) doc->removeItems(gone);
 }
