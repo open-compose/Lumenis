@@ -489,7 +489,8 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.3d4, the Illusion FX transitions (Iris, Melt, Pagecurl, Particle Blast/Orbit/Wind, Random Blend,
   Rollup, Shear: `src/media/illusion_transitions.cpp`, `media::illusionTransitionPicture` from the
   compositor's `transitionPicture`; helpers shared in `illusion_common.h`), is done, so 6.3d is.
-  Next: the rest of the effect families (ROADMAP 6.3), the rest of the effect families, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  So 6.3, the effect families, is done.
+  Next: 6.4, rendering (ROADMAP), the rest of the effect families, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

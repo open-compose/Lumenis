@@ -933,7 +933,7 @@ phase of their own. They are done in three steps:
     Rollup, Shear; `src/media/illusion_transitions.cpp`). So 6.3d is done. FluidBlur, FluidColorMap and FluidMorph need motion estimation and go with the
     FluidMotion work (6.5).
   Peel (a page curl) goes with the 3D effects (6.7); PlasmaWipe with 6.9; AniMatte, Paint, Scratch
-  Removal and Stabilize with their chapters (6.7, 6.9).
+  Removal and Stabilize with their chapters (6.7, 6.9). So 6.3 is done; 6.4 is next.
 * 6.4, rendering (p.57-61, p.135-156): Render Effect, ExpertRender, partial render, render
   settings, precomputes as effect media files, render-on-the-fly, the real-time playback
   indicators, and the Timeline's Render Ranges and Show Adapters moved here from the UI pass.
