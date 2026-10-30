@@ -507,7 +507,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `src/model/motion_effect.*` followed by `MainWindow::followMotion`; `model::segmentSourceFrame` playing a
   segment's Motion Effect; Composer > Freeze Frame > Other and the Motion Effect dialog,
   `motion_effect_dialogs.*`; tests `tst_motion_effect`, `tst_motion_effect_ui`), is done.
-  Next: 6.5b, Timewarp (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.5b, Timewarp (`src/model/timewarp.*`: speed and position graphs as keyframed parameters, anchor,
+  strobe, Type, templates set by `applySegmentEffect`, `promoteToTimewarp`; `model::segmentSourcePosition`
+  and blended frames `media::segmentBlend`), is done.
+  Next: 6.5c, the Motion Effect Editor (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

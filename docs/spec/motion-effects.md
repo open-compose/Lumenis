@@ -58,5 +58,56 @@ Timeline's icons in `TimelineView::paintEffects`. Tests: `tst_motion_effect`, `t
 * A segment's own Motion Effect: Fit to Fill's (4.1) and the imports' speed changes (EDL M2, OTIO
   LinearTimeWarp and FreezeFrame) are kept on the segment rather than as a clip; they now play at their
   speed from the segment's source IN (`model::segmentSourceFrame`), in the monitors, the compositor and
-  Match Frame. Fit to Fill making a motion effect clip and its Alt "unrendered" choice (p.170) come with
-  6.5b, when such effects render in the Timeline. Their sound still plays at normal speed.
+  Match Frame. They render in the Timeline as any segment effect does (Render Effect, 6.4), and Clear
+  Renders' Skip Motion Effects keeps them. Fit to Fill keeps making such a segment Motion Effect rather
+  than a motion effect clip: unrendered, as Alt makes it (p.170), until rendered. Their sound still plays
+  at normal speed.
+
+## 6.5b: Timewarp
+
+Code: `src/model/timewarp.*` (`Timewarp`, `timewarpForSegment`, `timewarpPosition`, `blendsFrames`,
+`promoteToTimewarp`); `model::segmentSourcePosition` and `applySegmentEffect` in `sequence.*`;
+`media::segmentBlend` and the blended `segmentPicture` in `compositor.cpp`. Tests: `tst_motion_effect`,
+`tst_motion_effect_ui`.
+
+* "You apply Timewarp effects to segments in a sequence, and then use keyframes and other controls in the
+  Motion Effect Editor to control the speed and the position of any image in the effect" (p.174). The
+  Timewarp category's effects (p.484-488) are applied from the Effect Palette as any segment effect is;
+  "the duration of the segment in the sequence does not change" (p.175), and the Timeline shows no speed.
+* The two graphs (p.175, p.187-189), kept as keyframed parameters (docs/spec/effect-keyframes.md):
+  "Speed/Percent Speed", the percent speed at each output frame (100 without keyframes), and
+  "Position/Input Position", the source frame (from the segment's source IN) at each output frame (each
+  output frame's own without keyframes). One is active: "When you render a Timewarp effect, Media
+  Composer applies only the information from the active graph" (p.175); the other is kept.
+* The Speed graph's frames (ours, for p.181 and p.187): the source position at output frame o is the
+  Source Anchor Frame plus the speeds of the frames from the anchor to o, each speed / 100. "The default
+  Source Anchor Frame is the first frame or field of the source, and the default point for anchoring the
+  Source Anchor Frame is timecode 0" (p.181). The anchor is kept as a source frame and the point as the
+  effect's time (0 to 1), so it stays at the same place in the effect when the segment is trimmed.
+* Strobe ("Strobe n frames", p.184; p.193-194): each nth output frame is held for n.
+* Type (p.185-186): Duplicated Field, Both Fields, Interpolated Field and VTR-Style show the whole source
+  frame at or before the position (our media has no fields); Blended Interpolated and Blended VTR "blend,
+  or average, pixels from the original frames": the two frames around the position, weighted by how far
+  between them it lies. FluidMotion and FluidMotion Draft blend the same way until 6.5d brings motion
+  estimation. Duplicated Field until changed (ours).
+* The templates (p.203-204, p.484-488), whose graphs the guide shows only in pictures, ours: 0% To 100%
+  ramps the speed from 0 to 100; "100% to 0% ... The last frame of the clip is the last frame of the
+  motion effect" (anchored at the end); Reverse Motion's Position graph runs from the last source frame to
+  the first; Speed Boost "starts out at half speed, reaches approximately double speed at the midpoint, and
+  returns to half speed" (50, 200, 50 on a Spline); Speed Bump "starts out at full speed, slows to
+  approximately half speed at the midpoint, and returns to full speed" (100, 50, 100); Trim to Fill a
+  Position graph from the first source frame to the last, which trimming stretches ("You can adjust the
+  speed by entering Trim mode and trimming the effect"); the FluidFilm templates render with FluidMotion
+  (p.204). The graphs are set when the effect is applied, for the segment's length then. Pulldown Insertion
+  and Removal and the FluidFilm format conversions are 6.5d's.
+* Rendering: a Timewarp renders as any segment effect (Render Effect, 6.4); Clear Renders' Skip Motion
+  Effects keeps it. The Render setting's Timewarps Render Using comes with the Motion Effect Editor's Type
+  menu and Ignore Render Setting (6.5c).
+* Promote to Timewarp (p.177): "The Motion Effect Editor uses the duration and speed information from the
+  traditional motion effect to create a Timewarp effect ... Strobe motion information does not carry
+  over." A segment's Motion Effect becomes a Timewarp at its speed; a motion effect clip's segment shows
+  the clip's source from the frame it showed, at the clip's speed. The Promote button is the Motion Effect
+  Editor's (6.5c).
+* Clip > Refresh Sequence > Motion Adapters/Timewarps "Refreshes the sequence so that media with Motion
+  Adapters or Timewarps use the current Field Motion attribute value from their source clip" (Editing Guide
+  p.478): with no Field Motion attribute in our progressive media it stays dimmed until 6.5d.

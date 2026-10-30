@@ -6,6 +6,7 @@
 #include "lumenis/media/media.h"
 #include "lumenis/model/motion_effect.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/timewarp.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
@@ -200,6 +201,29 @@ private slots:
         }));
         settle();
         QCOMPARE(shownFrame(composer, MonitorId::Record, 6), 7);
+
+        // Timewarp (p.174-196): Reverse Motion applied to the 20-frame segment plays it backwards ...
+        QVERIFY(window.timeline().changeRecordSequence(QStringLiteral("Apply"), [&](model::Sequence& s) {
+            return model::applySegmentEffect(s, QStringLiteral("V1"), 0,
+                                             model::Effect{QLatin1String(model::kTimewarpCategory), QStringLiteral("Reverse Motion"), {}});
+        }));
+        settle();
+        QCOMPARE(shownFrame(composer, MonitorId::Record, 0), 23);
+        QCOMPARE(shownFrame(composer, MonitorId::Record, 19), 4);
+        // ... and a blended Type at 50% shows in-between frames as a mix of the two around them (p.186).
+        QVERIFY(window.timeline().changeRecordSequence(QStringLiteral("Type"), [&](model::Sequence& s) {
+            model::Effect e = model::promotedTimewarp(0.5);
+            model::Timewarp t = model::timewarpOf(e);
+            t.type = model::TimewarpType::BlendedInterpolated;
+            model::setTimewarp(e, t);
+            s.track(QStringLiteral("V1"))->segments[0].effect = e;
+            return true;
+        }));
+        settle();
+        const QImage between = composer.pictureAt(MonitorId::Record, 3, QSize(64, 36)); // source 5.5
+        QVERIFY(!between.isNull());
+        QVERIFY2(std::abs(qRed(between.pixel(32, 18)) - 27) <= 2, qPrintable(QString::number(qRed(between.pixel(32, 18)))));
+        QCOMPARE(shownFrame(composer, MonitorId::Record, 4), 6);
         media::setExtraMediaDrives({});
     }
 };

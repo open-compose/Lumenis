@@ -1,5 +1,7 @@
 #include "lumenis/model/effect_render.h"
 
+#include "lumenis/model/timewarp.h"
+
 #include <QCryptographicHash>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -272,7 +274,8 @@ int clearRenders(Sequence& sequence, const QList<RenderTarget>& targets, const C
     for (const RenderTarget& target : targets) {
         const Effect* effect = effectOf(sequence, target);
         if (!effect || !renderOf(sequence, target)) continue;
-        if (options.skipMotionEffects && motionSpeed(*effect)) continue;
+        // Motion effects: a segment's Motion Effect and Timewarps (FX Guide p.165).
+        if (options.skipMotionEffects && (motionSpeed(*effect) || isTimewarp(*effect))) continue;
         if (options.skipUnknownEffects && options.known && !options.known(*effect)) continue;
         if (setRender(sequence, target, std::nullopt)) ++cleared;
     }

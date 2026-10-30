@@ -2,6 +2,7 @@
 
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/effect_render.h"
+#include "lumenis/model/timewarp.h"
 
 #include "effect_drawing.h"
 
@@ -138,6 +139,12 @@ std::int64_t segmentClipFrame(const model::Segment& segment, std::int64_t offset
     return model::segmentSourceFrame(segment, offset);
 }
 
+double segmentBlend(const model::Segment& segment, std::int64_t offset) {
+    if (!segment.effect || !model::blendsFrames(*segment.effect)) return 0.0;
+    const double position = model::segmentSourcePosition(segment, offset);
+    return std::clamp(position - static_cast<double>(model::segmentSourceFrame(segment, offset)), 0.0, 1.0);
+}
+
 std::optional<TrackFrame> trackFrame(const model::Sequence& sequence, const QString& name, std::int64_t frame) {
     const model::Track* track = sequence.track(name);
     if (!track || frame < 0) return std::nullopt;
@@ -149,6 +156,7 @@ std::optional<TrackFrame> trackFrame(const model::Sequence& sequence, const QStr
     TrackFrame out;
     out.segment = &seg;
     out.frame = segmentClipFrame(seg, frame - start);
+    out.blend = segmentBlend(seg, frame - start);
     out.offset = frame - start;
     // A transition sits on the cut where its segment starts (model::Segment::transition), `before()`
     // frames on the outgoing side and `after()` on the incoming.
@@ -161,8 +169,10 @@ std::optional<TrackFrame> trackFrame(const model::Sequence& sequence, const QStr
         const std::int64_t aStart = cut - a.length;
         out.outgoing = &a;
         out.outgoingFrame = segmentClipFrame(a, frame - aStart);
+        out.outgoingBlend = segmentBlend(a, frame - aStart);
         out.segment = &b;
         out.frame = segmentClipFrame(b, frame - cut);
+        out.blend = segmentBlend(b, frame - cut);
         out.transition = &t;
         out.offset = frame - begin;
         out.progress = static_cast<double>(frame - begin + 1) / static_cast<double>(t.duration + 1);
@@ -176,14 +186,22 @@ std::optional<TrackFrame> trackFrame(const model::Sequence& sequence, const QStr
 namespace {
 
 // A segment's own picture: transparent for filler and for media that cannot be had.
-Picture segmentPicture(const Composition& c, const model::Segment* segment, std::int64_t frame, bool* missing) {
+// `blend` (0 to 1) mixes in the next source frame: a blended Timewarp's in-between frame ("Blends, or
+// averages, pixels from the original frames", FX Guide p.186).
+Picture segmentPicture(const Composition& c, const model::Segment* segment, std::int64_t frame, bool* missing, double blend = 0.0) {
     if (!segment || segment->isFiller() || !c.source) return Picture(c.size.width(), c.size.height());
     const std::optional<QImage> image = c.source(*segment, frame, c.size);
     if (!image) {
         if (missing) *missing = true;
         return Picture(c.size.width(), c.size.height());
     }
-    return Picture::fromImage(*image, c.size.width(), c.size.height(), c.interpolation);
+    Picture picture = Picture::fromImage(*image, c.size.width(), c.size.height(), c.interpolation);
+    if (blend > 1e-3) {
+        if (const std::optional<QImage> next = c.source(*segment, frame + 1, c.size); next && !next->isNull()) {
+            picture = mix(picture, Picture::fromImage(*next, c.size.width(), c.size.height(), c.interpolation), blend);
+        }
+    }
+    return picture;
 }
 
 // The transitions of the dissolve family (FX Guide p.457, p.462) and the 2D transitions (wipes.cpp); any
@@ -291,8 +309,8 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
         if (!tf) continue;
         Picture layer;
         if (tf->transition) {
-            Picture out = segmentPicture(c, tf->outgoing, tf->outgoingFrame, missing);
-            Picture in = segmentPicture(c, tf->segment, tf->frame, missing);
+            Picture out = segmentPicture(c, tf->outgoing, tf->outgoingFrame, missing, tf->outgoingBlend);
+            Picture in = segmentPicture(c, tf->segment, tf->frame, missing, tf->blend);
             // Without effects (Render On-the-Fly off) a transition is its cut.
             if (c.effects) layer = transitionPicture(*tf->transition, out, in, tf->progress, w, h);
             if (layer.isNull()) {
@@ -302,7 +320,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             }
             layer.quantize(c.precision);
         } else {
-            layer = segmentPicture(c, tf->segment, tf->frame, missing);
+            layer = segmentPicture(c, tf->segment, tf->frame, missing, tf->blend);
         }
         if (c.effects && tf->segment && tf->segment->effect && !tf->transition) {
             const model::Effect& e = *tf->segment->effect;

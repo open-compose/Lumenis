@@ -127,6 +127,9 @@ struct TrackFrame {
     std::int64_t offset = 0; // frames into the segment (into the transition, in a transition)
     const model::Segment* outgoing = nullptr; // only in a transition
     std::int64_t outgoingFrame = 0;
+    // How much of the next source frame is mixed in (segmentBlend), for the segment and the outgoing one.
+    double blend = 0.0;
+    double outgoingBlend = 0.0;
     const model::Transition* transition = nullptr;
     // How far through the transition: (frames into it + 1) / (its length + 1), so that neither end
     // shows only one side (ours).
@@ -135,6 +138,9 @@ struct TrackFrame {
 // The frame of its clip a segment shows `offset` frames into it: sourceIn + offset, or with a Motion
 // Effect (model::motionSpeed) sourceIn + offset × speed, toward sourceIn (FX Guide p.168).
 std::int64_t segmentClipFrame(const model::Segment& segment, std::int64_t offset);
+// For a Timewarp of a blending Type (model::blendsFrames), the fraction of the way from that frame to
+// the next; 0 otherwise.
+double segmentBlend(const model::Segment& segment, std::int64_t offset);
 // What `track` of `sequence` shows at `frame`; nothing past its end.
 std::optional<TrackFrame> trackFrame(const model::Sequence& sequence, const QString& track, std::int64_t frame);
 

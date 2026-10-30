@@ -1,11 +1,14 @@
 #include "lumenis/model/sequence.h"
 
+#include "lumenis/model/timewarp.h"
+
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
+#include "lumenis/model/timewarp.h"
 
 #include <QJsonArray>
 #include <QRegularExpression>
@@ -793,7 +796,18 @@ std::optional<double> motionSpeed(const Effect& e) {
     return v.isDouble() ? std::optional<double>(v.toDouble()) : std::nullopt;
 }
 
+double segmentSourcePosition(const Segment& segment, std::int64_t offset) {
+    if (segment.effect && isTimewarp(*segment.effect)) {
+        return static_cast<double>(segment.sourceIn) + timewarpPosition(*segment.effect, offset, segment.length);
+    }
+    return static_cast<double>(segmentSourceFrame(segment, offset));
+}
+
 std::int64_t segmentSourceFrame(const Segment& segment, std::int64_t offset) {
+    if (segment.effect && isTimewarp(*segment.effect)) {
+        // The nudge keeps whole positions (2.0 computed as 1.9999...) on their frame.
+        return static_cast<std::int64_t>(std::floor(segmentSourcePosition(segment, offset) + 1e-6));
+    }
     if (segment.effect) {
         if (const auto speed = motionSpeed(*segment.effect)) {
             // The nudge keeps exact products (0.5 x 4 = 2) from falling a frame short.
@@ -1902,7 +1916,8 @@ bool applySegmentEffect(Sequence& sequence, const QString& name, std::int64_t fr
     if (!t || t->kind != TrackKind::Video || t->locked) return false;
     const int i = t->segmentAt(frame);
     if (i < 0) return false;
-    t->segments[i].effect = effect;
+    // A Timewarp gets its template's graphs for the segment's length (timewarpForSegment).
+    t->segments[i].effect = timewarpForSegment(effect, t->segments.at(i).length);
     return true;
 }
 

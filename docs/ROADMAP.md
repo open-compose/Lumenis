@@ -970,7 +970,9 @@ phase of their own. They are done in three steps:
   * 6.5b, Timewarp: the effect's speed and position keyframes (Source Anchor Frame, Strobe, Type),
     output frames to source frames with Duplicated Field, Both Fields and the Blended frame mixes, the
     presets (0% To 100%, 100% to 0%, Reverse Motion, Speed Boost, Speed Bump, Trim to Fill), Promote to
-    Timewarp and Clip > Refresh Sequence > Motion Adapters/Timewarps.
+    Timewarp and Clip > Refresh Sequence > Motion Adapters/Timewarps. Done (docs/spec/motion-effects.md),
+    but Promote's button comes with the Motion Effect Editor (6.5c) and Refresh Sequence with fields (6.5d);
+    Fit to Fill keeps its segment Motion Effect, which renders in the Timeline.
   * 6.5c, the Motion Effect Editor: the Speed and Position graphs with the advanced keyframe tools of
     6.2b, Edit Graph, Type and Ignore Render Setting (with the Render setting's Render Using menus), the
     anchor, Strobe and Duration, its toolbar, and dragging its icon to a bin as a template.

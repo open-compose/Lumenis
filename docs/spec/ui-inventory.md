@@ -183,7 +183,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   asked for an unrendered motion effect clip, the rate in names to two
   decimals, no two-field options, reverse and strobe clips computed rather
   than black, the bin a new clip goes into, the "(12.5 FPS)" Timeline text,
-  segment Motion Effects' sound at normal speed.
+  segment Motion Effects' sound at normal speed; the Timewarp templates'
+  graphs, the Speed graph's sum from the anchor, Duplicated Field as the
+  Timewarp Type until changed, FluidMotion blending until 6.5d.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as
