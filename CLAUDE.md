@@ -510,7 +510,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.5b, Timewarp (`src/model/timewarp.*`: speed and position graphs as keyframed parameters, anchor,
   strobe, Type, templates set by `applySegmentEffect`, `promoteToTimewarp`; `model::segmentSourcePosition`
   and blended frames `media::segmentBlend`), is done.
-  Next: 6.5c, the Motion Effect Editor (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.5c, the Motion Effect Editor (`src/ui/motion_effect_editor.*`, `MotionGraph`; Timewarps Render
+  Using applied by `MainWindow::applyTimewarpRenderTypes`), is done.
+  Next: 6.5d, FluidMotion, format conversion and motion adapters (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

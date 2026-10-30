@@ -5,6 +5,7 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/media.h"
 #include "lumenis/model/motion_effect.h"
+#include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/timewarp.h"
 #include "lumenis/ui/bin_container.h"
@@ -12,11 +13,16 @@
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/motion_effect_dialogs.h"
+#include "lumenis/ui/motion_effect_editor.h"
+#include "lumenis/ui/render_dialogs.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QAction>
 #include <QCheckBox>
+#include <QComboBox>
+#include <QLabel>
+#include <QPushButton>
 #include <QDir>
 #include <QDoubleSpinBox>
 #include <QLineEdit>
@@ -50,6 +56,13 @@ bool writeMovie(const QString& path, int frames) {
         if (!w.writeVideo(image)) return false;
     }
     return w.finish();
+}
+
+// The Record monitor's V1 segment at its position.
+model::Segment recordSegment(Composer& composer) {
+    const model::Sequence seq = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item);
+    const model::Track* v1 = seq.track(QStringLiteral("V1"));
+    return v1->segments.at(v1->segmentAt(composer.state(MonitorId::Record).position()));
 }
 
 // The source frame a monitor shows at `frame`, from its grey level; -1 for none.
@@ -224,6 +237,89 @@ private slots:
         QVERIFY(!between.isNull());
         QVERIFY2(std::abs(qRed(between.pixel(32, 18)) - 27) <= 2, qPrintable(QString::number(qRed(between.pixel(32, 18)))));
         QCOMPARE(shownFrame(composer, MonitorId::Record, 4), 6);
+
+        // The Motion Effect Editor (p.178-189): the Motion Effect button with the Record monitor active
+        // opens it on the Timewarp at the position.
+        MotionEffectEditor& editor = window.motionEffectEditor();
+        composer.moveTo(MonitorId::Record, 0);
+        composer.setActiveMonitor(MonitorId::Record);
+        QVERIFY(!window.motionEffect());
+        settle();
+        QCOMPARE(editor.shown(), MotionEffectEditor::Shown::Timewarp);
+        QVERIFY(!editor.promoteButton()->isVisible());
+        QCOMPARE(editor.speedGraph()->values().size(), 20);
+        QCOMPARE(editor.speedGraph()->values().at(5), 50.0);
+        QCOMPARE(editor.positionGraph()->values().at(4), 2.0);
+        // Add Keyframe at 0 and at 10, then 200% at the second: frames after it go twice as fast.
+        editor.addKeyframe();
+        composer.moveTo(MonitorId::Record, 10);
+        settle();
+        editor.addKeyframe();
+        QCOMPARE(editor.selectedKeyframe(), 1);
+        editor.valueField()->setValue(200);
+        emit editor.valueField()->editingFinished();
+        settle();
+        auto timewarp = [&] { return *recordSegment(composer).effect; };
+        QCOMPARE(model::keyframesOf(timewarp(), QLatin1String(model::kSpeedCategory), QLatin1String(model::kSpeedParameter)).keys.size(), 2);
+        // Shelf holds 50% until the second keyframe, then 200%.
+        editor.setInterpolation(model::Interpolation::Shelf);
+        settle();
+        QCOMPARE(model::timewarpPosition(timewarp(), 10, 20), 5.0);
+        QCOMPARE(model::timewarpPosition(timewarp(), 12, 20), 9.0);
+        // Go to Previous Event; the Source Anchor Frame at the active keyframe keeps the picture.
+        editor.goToEvent(false);
+        settle();
+        QCOMPARE(composer.state(MonitorId::Record).position(), 0);
+        editor.selectKeyframe(1);
+        editor.anchorAtActiveKeyframe();
+        settle();
+        QCOMPARE(model::timewarpOf(timewarp()).anchor, 5.0);
+        QCOMPARE(model::timewarpPosition(timewarp(), 12, 20), 9.0);
+        // Edit Graph: Position is kept apart; the effect now follows it (identity without keyframes).
+        editor.editGraphMenu()->setCurrentIndex(1);
+        settle();
+        QVERIFY(model::timewarpOf(timewarp()).positionGraph);
+        QCOMPARE(model::timewarpPosition(timewarp(), 12, 20), 12.0);
+        editor.editGraphMenu()->setCurrentIndex(0);
+        settle();
+        // Strobe and Type.
+        editor.strobeField()->setValue(2);
+        emit editor.strobeField()->editingFinished();
+        editor.typeMenu()->setCurrentIndex(editor.typeMenu()->findData(QStringLiteral("both")));
+        settle();
+        QCOMPARE(model::timewarpOf(timewarp()).strobe, 2);
+        QCOMPARE(model::timewarpOf(timewarp()).type, model::TimewarpType::BothFields);
+        // The Render setting's Timewarps Render Using dims the Type and offers Ignore Render Setting
+        // (p.183); a render then changes the Type (p.173).
+        window.settings().setValue(QStringLiteral("Render"), QStringLiteral("timewarpsRenderUsing"), QStringLiteral("blendedVtr"));
+        settle();
+        QVERIFY(!editor.typeMenu()->isEnabled());
+        QVERIFY(editor.ignoreRenderSettingBox()->isVisibleTo(&editor));
+        QCOMPARE(model::renderTypeFor(timewarp(), QStringLiteral("blendedVtr")), model::TimewarpType::BlendedVtr);
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("renderVideoDrive"), drive);
+        window.setRenderHook([](RenderEffectDialog&) { return true; });
+        window.renderEffects(true);
+        settle();
+        QCOMPARE(model::timewarpOf(timewarp()).type, model::TimewarpType::BlendedVtr);
+        QVERIFY(recordSegment(composer).render);
+        window.settings().setValue(QStringLiteral("Render"), QStringLiteral("timewarpsRenderUsing"), QStringLiteral("original"));
+        settle();
+        QVERIFY(editor.typeMenu()->isEnabled());
+
+        // A traditional motion effect shows its speed and the Promote button (p.177).
+        QVERIFY(window.timeline().changeRecordSequence(QStringLiteral("Speed"), [&](model::Sequence& s) {
+            s.track(QStringLiteral("V1"))->segments[0].effect = model::motionEffect(0.5);
+            return true;
+        }));
+        settle();
+        QCOMPARE(editor.shown(), MotionEffectEditor::Shown::Traditional);
+        QVERIFY(editor.promoteButton()->isVisibleTo(&editor));
+        QCOMPARE(editor.speedLabel()->text(), QStringLiteral("50%"));
+        editor.promote();
+        settle();
+        QCOMPARE(editor.shown(), MotionEffectEditor::Shown::Timewarp);
+        QVERIFY(model::isTimewarp(timewarp()));
+        QCOMPARE(shownFrame(composer, MonitorId::Record, 6), 7);
         media::setExtraMediaDrives({});
     }
 };

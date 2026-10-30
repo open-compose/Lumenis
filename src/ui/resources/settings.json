@@ -229,7 +229,7 @@
             {"key": "targetMask", "type": "choice", "style": "menu", "label": "Target Mask", "default": "none", "page": 1191, "later": true,
              "choices": [{"value": "none", "label": "No Mask"}, {"value": "white", "label": "Mix to White"}, {"value": "black", "label": "Mix to Black"}, {"value": "blackMask", "label": "Black Mask"}]},
             {"key": "fullScreen", "type": "bool", "label": "Full Screen", "default": true, "page": 1191},
-            {"key": "bothFields", "type": "bool", "label": "Display Both Fields", "default": false, "page": 1191, "later": true}
+            {"key": "both", "type": "bool", "label": "Display Both Fields", "default": false, "page": 1191, "later": true}
           ]
         }
       ]
@@ -504,13 +504,13 @@
           "options": [
             {"key": "imageInterpolation", "type": "choice", "style": "menu", "label": "Image Interpolation", "default": "advanced", "page": 1214,
              "choices": [{"value": "advanced", "label": "Advanced (Polyphase)"}, {"value": "standard", "label": "Standard (Bilinear)"}, {"value": "draft", "label": "Draft (Nearest Neighbor)"}]},
-            {"key": "timewarpsRenderUsing", "type": "choice", "style": "menu", "label": "Timewarps Render Using", "default": "original", "page": 1214, "later": true,
-             "choices": [{"value": "original", "label": "Original Preference"}, {"value": "duplicatedField", "label": "Duplicated Field"}, {"value": "bothFields", "label": "Both Fields"},
-                         {"value": "interpolatedField", "label": "Interpolated Field"}, {"value": "vtrStyle", "label": "VTR-Style"},
+            {"key": "timewarpsRenderUsing", "type": "choice", "style": "menu", "label": "Timewarps Render Using", "default": "original", "page": 1214,
+             "choices": [{"value": "original", "label": "Original Preference"}, {"value": "duplicated", "label": "Duplicated Field"}, {"value": "both", "label": "Both Fields"},
+                         {"value": "interpolated", "label": "Interpolated Field"}, {"value": "vtr", "label": "VTR-Style"},
                          {"value": "blendedInterpolated", "label": "Blended Interpolated"}, {"value": "blendedVtr", "label": "Blended VTR"}]},
             {"key": "motionEffectsRenderUsing", "type": "choice", "style": "menu", "label": "Motion Effects Render Using", "default": "original", "page": 1215, "later": true,
-             "choices": [{"value": "original", "label": "Original Preference"}, {"value": "duplicatedField", "label": "Duplicated Field"}, {"value": "bothFields", "label": "Both Fields"},
-                         {"value": "interpolatedField", "label": "Interpolated Field"}, {"value": "vtrStyle", "label": "VTR-Style"}]},
+             "choices": [{"value": "original", "label": "Original Preference"}, {"value": "duplicated", "label": "Duplicated Field"}, {"value": "both", "label": "Both Fields"},
+                         {"value": "interpolated", "label": "Interpolated Field"}, {"value": "vtr", "label": "VTR-Style"}]},
             {"key": "effectsQualityRenderUsing", "type": "choice", "style": "menu", "label": "Effects Quality Render Using", "default": "eachEffect", "page": 1215, "later": true,
              "choices": [{"value": "eachEffect", "label": "Quality Set In Each Effect"}, {"value": "standard", "label": "Standard Quality"}, {"value": "highest", "label": "Highest Quality"}]},
             {"key": "renderCompletionSound", "type": "choice", "style": "menu", "label": "Render Completion Sound", "default": "none", "page": 1216,

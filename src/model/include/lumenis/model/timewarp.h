@@ -46,6 +46,9 @@ struct Timewarp {
     // "Strobe n frames": the frames the image is held before it updates (p.184); 1 for none.
     int strobe = 1;
     TimewarpType type = TimewarpType::DuplicatedField;
+    // Ignore Render Setting (p.183): keep `type` when the Render setting's Timewarps Render Using names
+    // another; without it a render changes the type to the setting's (p.173; model::renderTypeFor).
+    bool ignoreRenderSetting = false;
     bool operator==(const Timewarp&) const = default;
 };
 
@@ -75,6 +78,11 @@ double timewarpPosition(const Effect& effect, std::int64_t offset, std::int64_t 
 // (Blended Interpolated, Blended VTR and, until 6.5d, FluidMotion: "Blends, or averages, pixels from the
 // original frames", p.186). The others show whole source frames.
 bool blendsFrames(const Effect& effect);
+// "If the option is set to a specific motion effect type, Media Composer changes all motion effects to
+// that type when it renders them" (p.173): the Type a Timewarp renders with under the Render setting's
+// Timewarps Render Using (`renderUsing`, "original" or a timewarpTypeName()), or nothing when it keeps
+// its own (Original Preference, or Ignore Render Setting).
+std::optional<TimewarpType> renderTypeFor(const Effect& effect, const QString& renderUsing);
 
 // Promote to Timewarp (p.177): a Timewarp effect from a traditional motion effect's speed ("The Motion
 // Effect Editor uses the duration and speed information from the traditional motion effect to create a

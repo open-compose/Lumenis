@@ -59,6 +59,7 @@ class ExpertRenderDialog;
 class BinDocument;
 class FreezeFrameDialog;
 class MotionEffectDialog;
+class MotionEffectEditor;
 class RenderEffectDialog;
 class MultiMixDialog;
 class ExportAsDialog;
@@ -369,6 +370,8 @@ public:
     // does and into the Source monitor. The hook answers the dialog (tests). Returns the new clip.
     std::optional<model::BinItem> motionEffect();
     void setMotionEffectHook(std::function<void(MotionEffectDialog&)> hook) { motionHook_ = std::move(hook); }
+    // Tools' Motion Effect Editor (FX Guide p.178-189), the "MotionEffectEditor" panel.
+    MotionEffectEditor& motionEffectEditor() const { return *motionEditor_; }
     // Modify Selection's end: "click the Render Effect button in the Effect Editor or in the Tool
     // palette" (p.145) renders the highlighted effects, through the Render Effect dialog unless
     // `useLastDrive` (Alt).
@@ -681,6 +684,11 @@ private:
     std::function<bool(FreezeFrameDialog&)> freezeHook_;
     std::int64_t lastFreezeDuration_ = 0; // the last Freeze Frame duration, offered next time
     std::function<void(MotionEffectDialog&)> motionHook_;
+    MotionEffectEditor* motionEditor_ = nullptr;
+    // The Render setting's Timewarps Render Using (FX Guide p.173): the Timewarps among `targets` take
+    // its Type before they render, as one undo step of their own ("Changes to motion effect types are
+    // permanent", p.174). True when any changed.
+    bool applyTimewarpRenderTypes(const QList<model::RenderTarget>& targets);
     // The bin a new clip made from `binId`'s clip goes in: that bin when it is open and writable, else
     // the open bin the user picks (the active one when it is the only one). Null when none is open.
     BinDocument* binForNewClip(const QString& binId);

@@ -975,12 +975,14 @@ phase of their own. They are done in three steps:
     Fit to Fill keeps its segment Motion Effect, which renders in the Timeline.
   * 6.5c, the Motion Effect Editor: the Speed and Position graphs with the advanced keyframe tools of
     6.2b, Edit Graph, Type and Ignore Render Setting (with the Render setting's Render Using menus), the
-    anchor, Strobe and Duration, its toolbar, and dragging its icon to a bin as a template.
+    anchor, Strobe and Duration, its toolbar, and dragging its icon to a bin as a template. Done
+    (docs/spec/motion-effects.md), but the icon's drag to a bin comes with effect templates (6.6).
   * 6.5d, FluidMotion (our own optical flow), FluidMotion Edit, the Source and Output formats with
     pulldown (FluidFilm, Pulldown Insertion and Removal), motion adapters for mixed-rate clips with the
     Timeline's Show Adapters, and the FluidBlur, FluidColorMap and FluidMorph Illusion FX.
 * 6.6, layered and nested effects (ch.8, p.206-228): nesting and stepping in, Collapse,
-  Submaster, Double-Click to Show Nesting.
+  Submaster, Double-Click to Show Nesting; and effect templates in bins (p.52-55), with the Motion
+  Effect Editor's Timewarp icon (p.182).
 * 6.7, 3D effects, camera effects, and tracking and stabilization (ch.9-11, p.229-300).
 * 6.8, titles (ch.12-13, p.301-377): the Title Tool and Titler+, with keyframes kept through trims,
   splits and duplicates (2026.8). SubCap (ch.14) goes to Phase 7 with the captions.

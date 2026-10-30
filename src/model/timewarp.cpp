@@ -48,6 +48,7 @@ Timewarp timewarpOf(const Effect& effect) {
     t.anchorAt = std::clamp(o.value(QStringLiteral("Anchor At")).toDouble(0.0), 0.0, 1.0);
     t.strobe = std::max(1, o.value(QStringLiteral("Strobe")).toInt(1));
     t.type = timewarpTypeFromName(o.value(QStringLiteral("Type")).toString());
+    t.ignoreRenderSetting = o.value(QStringLiteral("Ignore Render Setting")).toBool();
     return t;
 }
 
@@ -57,7 +58,8 @@ void setTimewarp(Effect& effect, const Timewarp& t) {
                                          {QStringLiteral("Anchor"), t.anchor},
                                          {QStringLiteral("Anchor At"), t.anchorAt},
                                          {QStringLiteral("Strobe"), t.strobe},
-                                         {QStringLiteral("Type"), timewarpTypeName(t.type)}});
+                                         {QStringLiteral("Type"), timewarpTypeName(t.type)},
+                                         {QStringLiteral("Ignore Render Setting"), t.ignoreRenderSetting}});
 }
 
 namespace {
@@ -146,6 +148,14 @@ bool blendsFrames(const Effect& effect) {
     case TimewarpType::FluidMotion: return true;
     default: return false;
     }
+}
+
+std::optional<TimewarpType> renderTypeFor(const Effect& effect, const QString& renderUsing) {
+    if (!isTimewarp(effect) || renderUsing.isEmpty() || renderUsing == QLatin1String("original")) return std::nullopt;
+    const Timewarp t = timewarpOf(effect);
+    if (t.ignoreRenderSetting) return std::nullopt;
+    const TimewarpType wanted = timewarpTypeFromName(renderUsing);
+    return wanted == t.type ? std::nullopt : std::optional<TimewarpType>(wanted);
 }
 
 Effect promotedTimewarp(double speed) {

@@ -101,8 +101,7 @@ Code: `src/model/timewarp.*` (`Timewarp`, `timewarpForSegment`, `timewarpPositio
   (p.204). The graphs are set when the effect is applied, for the segment's length then. Pulldown Insertion
   and Removal and the FluidFilm format conversions are 6.5d's.
 * Rendering: a Timewarp renders as any segment effect (Render Effect, 6.4); Clear Renders' Skip Motion
-  Effects keeps it. The Render setting's Timewarps Render Using comes with the Motion Effect Editor's Type
-  menu and Ignore Render Setting (6.5c).
+  Effects keeps it. The Render setting's Timewarps Render Using applies when it renders (6.5c, below).
 * Promote to Timewarp (p.177): "The Motion Effect Editor uses the duration and speed information from the
   traditional motion effect to create a Timewarp effect ... Strobe motion information does not carry
   over." A segment's Motion Effect becomes a Timewarp at its speed; a motion effect clip's segment shows
@@ -111,3 +110,47 @@ Code: `src/model/timewarp.*` (`Timewarp`, `timewarpForSegment`, `timewarpPositio
 * Clip > Refresh Sequence > Motion Adapters/Timewarps "Refreshes the sequence so that media with Motion
   Adapters or Timewarps use the current Field Motion attribute value from their source clip" (Editing Guide
   p.478): with no Field Motion attribute in our progressive media it stays dimmed until 6.5d.
+
+## 6.5c: the Motion Effect Editor
+
+Code: `src/ui/motion_effect_editor.*` (`MotionEffectEditor`, `MotionGraph`), the "MotionEffectEditor"
+panel and `MainWindow::applyTimewarpRenderTypes`; `model::renderTypeFor` and `Timewarp::ignoreRenderSetting`
+in `timewarp.*`. Test: `tst_motion_effect_ui`.
+
+* Opening it: "If the Record monitor is active, clicking the Motion Effect button opens the Motion Effect
+  Editor" (p.168); "You do not have to be in Effect mode to use the Motion Effect Editor" (p.178). It follows
+  the Record monitor's position: the segment there on the topmost selected video track (all video tracks
+  when none is selected; ours).
+* "The initial appearance of the Motion Effect Editor depends on whether there is no motion effect, a
+  Timewarp effect, or a traditional motion effect in the segment at the position indicator" (p.182): a
+  blank message; the Timewarp's controls; or the traditional effect's speed (and strobe) with the
+  Promote button ("The Promote button appears ... only when you have the position indicator on a
+  traditional motion effect", p.177), which uses `model::promoteToTimewarp` as one undo step.
+* The controls (p.182-185): the Speed Graph and Position Graph display buttons ("Clicking a graph display
+  button does not activate the graph"); Edit Graph (Speed or Position); Type; Ignore Render Setting; the
+  Anchor text box (ours: the source clip's frame number, not timecode) and the Source Anchor Frame button,
+  which anchors at the active keyframe where the effect is now, so the picture does not jump; Strobe; the
+  Duration display; the Source and Output menus, dimmed until format conversion (6.5d).
+* The graphs (p.180, p.187-190): the Speed graph's line is the percent speed, the Position graph's the
+  input position over the output frames, with the blue position indicator; the active graph shows its
+  keyframes, the active one pink. Click a keyframe to make it active and drag it up or down; with Alt,
+  sideways too (p.188). A click elsewhere moves the position. The inactive graph draws what the active
+  one makes (p.176). The value scale fits the line (ours; no scale sliders yet).
+* Under the active graph (p.184-185): the Fast menu's interpolations (Shelf, Linear, Spline, Bézier;
+  p.120), Go to Previous/Next Event ("If there is no keyframe to the left, nothing happens"), Add Keyframe
+  ("Alt+click ... to delete a keyframe"), and the active keyframe's Percent Speed (or Input Position) and
+  Output Position text boxes (ours: frames, not timecode). A new keyframe keeps the value the graph has
+  there.
+* The toolbar (p.184): Render Effect (Render at Position), Remove Effect, Match Frame, Play Loop (the
+  segment), Play, Trim Mode.
+* Ignore Render Setting (p.173, p.183): "The Ignore Render Setting check box appears below the Type menu
+  when you have made a rendering selection other than Original Preference ... In this situation, the Type
+  menu is dimmed." When a render starts, each Timewarp being rendered takes the Render setting's Timewarps
+  Render Using type unless its Ignore Render Setting is on: "If the option is set to a specific motion
+  effect type, Media Composer changes all motion effects to that type when it renders them" (p.173);
+  "Changes to motion effect types are permanent" (p.174); ours, as an undo step of its own before the
+  render. Motion Effects Render Using stays dimmed: it chooses among field types our progressive media
+  does not have.
+* Not yet: dragging the Timewarp Effect icon to a bin as a template (p.182) comes with effect templates in
+  bins (ROADMAP 6.6); the Value and Position scale sliders and Ctrl+Alt hand dragging (p.180-181); the Motion
+  Effect button in the Tool palette and the Timeline's top toolbar (p.179).

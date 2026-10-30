@@ -115,7 +115,8 @@ headers in `include/lumenis/<library>/`.
   keyframes in `src/model/effect_keyframes.*` (docs/spec/effect-keyframes.md), and their renders in
   `src/model/effect_render.*` with Render Effect and Clear Renders in `MainWindow::renderEffects` and
   `render_dialogs.*` (docs/spec/rendering.md); traditional motion effect clips in `src/model/motion_effect.*`
-  with `motion_effect_dialogs.*` (docs/spec/motion-effects.md).
+  with `motion_effect_dialogs.*`, Timewarps in `src/model/timewarp.*` with the Motion Effect Editor
+  `motion_effect_editor.*` (docs/spec/motion-effects.md).
 * **Audio tools.** `audio_tools.*` (the Audio Mixer, docs/spec/audio-mixer.md, and the Audio Tool), `audio_groups.cpp` (the mixer's track sidebar and groups), `clip_audio_dialogs.*` (Apply Gain and Auto VO, with `src/model/clip_audio.*`, docs/spec/clip-audio.md), `multi_mix_dialog.*` (the Multi-Mix Tool, docs/spec/multi-mix.md),
   `audio_eq.*` (the Audio EQ tool, docs/spec/audio-eq.md),
   `audio_punch_in.*` (Audio Punch-In, docs/spec/punch-in.md),

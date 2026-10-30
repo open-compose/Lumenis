@@ -25,6 +25,7 @@
 #include "lumenis/model/bin_relations.h"
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/model/motion_effect.h"
+#include "lumenis/model/timewarp.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/media/render.h"
 #include "lumenis/ext/provider.h"
@@ -68,6 +69,7 @@
 #include "lumenis/ui/timecode_window.h"
 #include "lumenis/ui/timeline.h"
 #include "lumenis/ui/motion_effect_dialogs.h"
+#include "lumenis/ui/motion_effect_editor.h"
 #include "lumenis/ui/render_dialogs.h"
 #include "lumenis/ui/unmount_dialog.h"
 #include "lumenis/ui/set_font_dialog.h"
@@ -1511,6 +1513,21 @@ void MainWindow::createTools() {
         settings_->setValue(kind, QStringLiteral("addKeyframeCommand"), QString::fromLatin1(modes[static_cast<int>(o.mode)]));
     });
     panels_->addPanel(new Panel(QStringLiteral("EffectEditor"), tr("Effect Editor"), effectEditor_));
+    // The Motion Effect Editor (FX Guide p.178-189) and its toolbar (p.184).
+    motionEditor_ = new MotionEffectEditor(*timeline_);
+    panels_->addPanel(new Panel(QStringLiteral("MotionEffectEditor"), tr("Motion Effect Editor"), motionEditor_));
+    connect(motionEditor_, &MotionEffectEditor::renderRequested, this, [this] { renderEffects(true); });
+    connect(motionEditor_, &MotionEffectEditor::removeRequested, this, [this] { timeline_->perform(QStringLiteral("fx.remove_effect")); });
+    connect(motionEditor_, &MotionEffectEditor::matchFrameRequested, this, [this] {
+        if (QAction* a = commands_.action(QStringLiteral("other.match_frame"))) a->trigger();
+    });
+    connect(motionEditor_, &MotionEffectEditor::playLoopRequested, this,
+            [this](std::int64_t start, std::int64_t end) { composer_->playLoop(MonitorId::Record, start, end); });
+    connect(motionEditor_, &MotionEffectEditor::playRequested, this, [this] {
+        composer_->setActiveMonitor(MonitorId::Record);
+        composer_->play(1);
+    });
+    connect(motionEditor_, &MotionEffectEditor::trimRequested, this, [this] { timeline_->perform(QStringLiteral("trim.trim_mode")); });
     // Audio (ch. 21) and media (p.344-348).
     audioMixer_ = new AudioMixer(*timeline_);
     panels_->addPanel(new Panel(QStringLiteral("AudioMixer"), tr("Audio Mixer"), audioMixer_));
@@ -3274,6 +3291,14 @@ media::EffectPrecision MainWindow::renderPrecision(const media::MediaCreation& c
 void MainWindow::renderTargetsNow(const model::LoadedClip& loaded, const model::Sequence& seq,
                                   const QList<model::RenderTarget>& targets, media::MediaCreation creation, bool rerender,
                                   bool background) {
+    // Timewarps take the Render setting's type first; then the render starts again from the sequence
+    // as it is now.
+    if (applyTimewarpRenderTypes(targets)) {
+        if (const model::LoadedClip* now = composer_->state(MonitorId::Record).current()) {
+            renderTargetsNow(*now, model::Sequence::fromItem(now->item), targets, std::move(creation), rerender, background);
+        }
+        return;
+    }
     if (background) {
         renderInBackground(loaded, seq, targets, std::move(creation), rerender);
         return;
@@ -3366,6 +3391,27 @@ void MainWindow::renderTargetsNow(const model::LoadedClip& loaded, const model::
     ConsoleLog::instance().append(interrupted ? tr("Render Effect: interrupted; %n effect(s) kept.", "", static_cast<int>(made.size()))
                                               : tr("Render Effect: %n effect(s) rendered.", "", static_cast<int>(made.size())));
     renderFinished(!interrupted);
+}
+
+bool MainWindow::applyTimewarpRenderTypes(const QList<model::RenderTarget>& targets) {
+    const QString renderUsing = settings_->text(QStringLiteral("Render"), QStringLiteral("timewarpsRenderUsing"));
+    if (renderUsing.isEmpty() || renderUsing == QLatin1String("original")) return false;
+    return timeline_->changeRecordSequence(tr("Timewarp Render Type"), [&](model::Sequence& s) {
+        bool any = false;
+        for (const model::RenderTarget& target : targets) {
+            if (target.transition) continue;
+            model::Track* t = s.track(target.track);
+            if (!t || target.segment >= t->segments.size() || !t->segments[target.segment].effect) continue;
+            model::Effect& e = *t->segments[target.segment].effect;
+            if (const auto type = model::renderTypeFor(e, renderUsing)) {
+                model::Timewarp tw = model::timewarpOf(e);
+                tw.type = *type;
+                model::setTimewarp(e, tw);
+                any = true;
+            }
+        }
+        return any;
+    });
 }
 
 void MainWindow::renderFinished(bool completed) {
@@ -3693,9 +3739,10 @@ std::optional<model::BinItem> MainWindow::freezeFrame() {
 std::optional<model::BinItem> MainWindow::motionEffect() {
     // "If you do not activate the Source monitor, clicking the Motion Effect button does not open the
     // Motion Effect dialog box. If the Record monitor is active, clicking the Motion Effect button opens
-    // the Motion Effect Editor for Timewarp effects" (p.168). The Motion Effect Editor comes with 6.5c.
+    // the Motion Effect Editor for Timewarp effects" (p.168).
     if (composer_->activeMonitor() != MonitorId::Source) {
-        ConsoleLog::instance().append(tr("Motion Effect: click in the Source monitor first to make a motion effect clip."));
+        showTool(QStringLiteral("MotionEffectEditor"));
+        motionEditor_->refresh();
         return std::nullopt;
     }
     const model::LoadedClip* src = composer_->state(MonitorId::Source).current();
@@ -4623,6 +4670,7 @@ Panel* MainWindow::showTool(const QString& panelId) {
     if (panelId == QLatin1String("Keyboard")) size = QSize(720, 320);
     if (panelId == QLatin1String("EffectPalette")) size = QSize(480, 420);
     if (panelId == QLatin1String("EffectEditor")) size = QSize(340, 520);
+    if (panelId == QLatin1String("MotionEffectEditor")) size = QSize(380, 560);
     if (panelId == QLatin1String("AudioMixer")) size = QSize(560, 440);
     if (panelId == QLatin1String("AudioEQ")) size = QSize(620, 300);
     if (panelId == QLatin1String("AudioTrackEffect")) size = QSize(460, 360);
@@ -4711,6 +4759,8 @@ void MainWindow::applySettings() {
     // Writing them fires Settings::changed, which applies everything again with them in place.
     if (legacyBinListsPending() && writeLegacyBinLists()) return;
     const Settings& s = *settings_;
+    // The Render setting's Timewarps Render Using, shown by the Motion Effect Editor's Type (FX p.183).
+    if (motionEditor_) motionEditor_->setRenderUsing(s.text(QStringLiteral("Render"), QStringLiteral("timewarpsRenderUsing")));
     // Video Display (p.1224) and Full Screen Playback (p.1190-1191) settings.
     composer_->setHighQualityScaling(s.flag(QStringLiteral("Video Display"), QStringLiteral("highQualityScaling")));
     if (FullScreenView* view = fullScreen_.data()) {
