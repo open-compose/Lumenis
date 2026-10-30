@@ -124,14 +124,13 @@ Picture finish(const model::Effect& e, const Picture& layer, std::vector<double>
                         e.parameters.contains(QStringLiteral("Crop"));
     if (!placed) return keyed;
     model::Effect pip{QStringLiteral("Blend"), QStringLiteral("Picture-in-Picture"), {}};
-    for (const char* category : {"Scaling", "Position", "Crop"}) {
-        const QString c = QLatin1String(category);
+    const QStringList placing = {QStringLiteral("Scaling"), QStringLiteral("Position"), QStringLiteral("Crop")};
+    for (const QString& c : placing) {
         if (e.parameters.contains(c)) pip.parameters.insert(c, e.parameters.value(c));
     }
     QJsonObject scaling = pip.parameters.value(QStringLiteral("Scaling")).toObject();
-    for (const char* axis : {"X", "Y"}) {
-        if (!scaling.contains(QLatin1String(axis))) scaling.insert(QLatin1String(axis), 100);
-    }
+    if (!scaling.contains(QStringLiteral("X"))) scaling.insert(QStringLiteral("X"), 100);
+    if (!scaling.contains(QStringLiteral("Y"))) scaling.insert(QStringLiteral("Y"), 100);
     pip.parameters.insert(QStringLiteral("Scaling"), scaling);
     return imageEffectPicture(pip, keyed, time, span);
 }
@@ -236,15 +235,21 @@ Picture rgbKeyerPicture(const model::Effect& e, const Picture& layer, double tim
     const int blur = static_cast<int>(std::lround(std::clamp(num(e, cat, QStringLiteral("Blur"), time, span, 0.0), 0.0, 100.0) / 10.0 * unit));
     const int erode = static_cast<int>(std::lround(std::max(num(e, cat, QStringLiteral("Erode"), time, span, 0.0), 0.0) / 10.0 * unit));
     // The key colour's strongest channel is the one spill shows in.
-    const double keyRgb[3] = {key.red, key.green, key.blue};
-    const int spillChannel = static_cast<int>(std::max_element(keyRgb, keyRgb + 3) - keyRgb);
+    // (Written out plainly: MSVC 14.44 failed with an internal compiler error on max_element over a
+    // local array here; BUILDING.md.)
+    int spillChannel = 0;
+    if (key.green > key.red && key.green >= key.blue) spillChannel = 1;
+    else if (key.blue > key.red && key.blue > key.green) spillChannel = 2;
     Picture work = layer;
     std::vector<double> matte(static_cast<std::size_t>(layer.width()) * static_cast<std::size_t>(layer.height()), 1.0);
     for (std::size_t i = 0; i < matte.size(); ++i) {
         float* px = &work.data()[i * 4];
         double rgb[3];
         colourOf(px, rgb);
-        const double d = std::sqrt((std::pow(rgb[0] - key.red, 2) + std::pow(rgb[1] - key.green, 2) + std::pow(rgb[2] - key.blue, 2)) / 3.0);
+        const double dr = rgb[0] - key.red;
+        const double dg = rgb[1] - key.green;
+        const double db = rgb[2] - key.blue;
+        const double d = std::sqrt((dr * dr + dg * dg + db * db) / 3.0);
         matte[i] = threshold <= 0.0 ? 1.0 : ramp(d, threshold, threshold + soft);
         if (spill > 0) {
             const double others = std::max(rgb[(spillChannel + 1) % 3], rgb[(spillChannel + 2) % 3]);
@@ -261,8 +266,9 @@ Picture rgbKeyerPicture(const model::Effect& e, const Picture& layer, double tim
     // Post-key colour correction, as the Color Effect does it.
     const QJsonObject params = e.parameters.value(cat).toObject();
     QJsonObject correction;
-    for (const char* name : {"Hue", "Sat", "Bright", "Cont"}) {
-        if (params.contains(QLatin1String(name))) correction.insert(QLatin1String(name), params.value(QLatin1String(name)));
+    const QStringList corrections = {QStringLiteral("Hue"), QStringLiteral("Sat"), QStringLiteral("Bright"), QStringLiteral("Cont")};
+    for (const QString& name : corrections) {
+        if (params.contains(name)) correction.insert(name, params.value(name));
     }
     if (!correction.isEmpty()) {
         const model::Effect color{QStringLiteral("Image"), QStringLiteral("Color Effect"), QJsonObject{{QStringLiteral("Color Effect Parameters"), correction}}};
