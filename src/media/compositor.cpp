@@ -1,6 +1,7 @@
 #include "lumenis/media/compositor.h"
 
 #include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/effect_render.h"
 
 #include "effect_drawing.h"
 
@@ -261,7 +262,24 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
     // What lay below the track under the one being added, for Matte Key's three layers.
     Picture beneath(w, h);
     Picture lastStart(w, h);
-    for (const QString& name : c.tracks) {
+    // The topmost track with a render in date here holds everything up to it ("Media Composer renders
+    // the composite result of all tracks into the top track", FX Guide p.57): start from its picture.
+    qsizetype first = 0;
+    if (c.rendered) {
+        for (qsizetype i = c.tracks.size() - 1; i >= 0; --i) {
+            const auto target = model::renderTargetAt(*c.sequence, c.tracks.at(i), frame);
+            if (!target || !model::isRendered(*c.sequence, *target)) continue;
+            const std::optional<QImage> image = c.rendered(*model::renderOf(*c.sequence, *target), frame - target->start, c.size);
+            if (!image) continue; // offline: the effect is computed
+            result = Picture::fromImage(*image, w, h);
+            result.quantize(c.precision);
+            lastStart = result;
+            first = i + 1;
+            break;
+        }
+    }
+    for (qsizetype i = first; i < c.tracks.size(); ++i) {
+        const QString& name = c.tracks.at(i);
         beneath = std::move(lastStart);
         lastStart = result;
         const auto tf = trackFrame(*c.sequence, name, frame);

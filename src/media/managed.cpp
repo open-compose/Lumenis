@@ -254,6 +254,26 @@ public:
         return writer.finish(error);
     }
 
+    // V1 from rendered pictures (renderedVideoClip()), in the creation's resolution and raster.
+    bool writeRenderedVideo(const QString& path, const RenderVideo& render, QString* error) {
+        WriterSettings s = settingsFor(QStringLiteral("V1"));
+        s.videoCodec = QStringLiteral("dnxhd");
+        s.videoProfile = creation_.resolution.profile;
+        s.pixelFormat = creation_.resolution.pixelFormat;
+        s.width = creation_.raster.width();
+        s.height = creation_.raster.height();
+        MediaWriter writer;
+        if (!writer.open(path, s, error)) return false;
+        for (std::int64_t f = in_; f < out_; ++f) {
+            if (!writer.writeVideo(fitted(render(f), creation_.raster))) {
+                if (error) *error = writer.lastError();
+                return false;
+            }
+            if (!step()) return cancelled(error);
+        }
+        return writer.finish(error);
+    }
+
     // V1 copied packet for packet (Consolidate; canConsolidate() made sure that is exact).
     bool copyVideo(const QString& path, QString* error) {
         WriterSettings s = settingsFor(QStringLiteral("V1"));
@@ -702,6 +722,66 @@ std::optional<model::BinItem> renderedAudioClip(const QString& name, const Ratio
     item.fields.insert(QStringLiteral("Audio Bit Depth"), QStringLiteral("%1 bit").arg(creation.bitDepth <= 16 ? 16 : 24));
     item.fields.insert(QStringLiteral("Audio Format"), QStringLiteral("PCM"));
     item.fields.insert(QStringLiteral("Video File Format"), rate == kManagedSampleRate ? QStringLiteral("MXF") : QStringLiteral("WAV"));
+    return item;
+}
+
+std::optional<model::BinItem> renderedVideoClip(const QString& name, const Rational& editRate, std::int64_t frames,
+                                                const RenderVideo& render, const MediaCreation& creation,
+                                                model::BinItemKind kind, QString* error) {
+    auto failed = [&](const QString& text) -> std::optional<model::BinItem> {
+        if (error) *error = text;
+        return std::nullopt;
+    };
+    if (frames <= 0) return failed(QObject::tr("There is no picture to make media of."));
+    if (creation.videoDrive.isEmpty()) return failed(QObject::tr("No target drive is chosen."));
+    const QString folder = mxfFolder(creation.videoDrive, error);
+    if (folder.isEmpty()) return std::nullopt;
+    model::BinItem clip;
+    clip.name = name;
+    clip.editRate = editRate;
+    clip.durationFrames = frames;
+    const Link none;
+    Maker maker(clip, none, 0, frames, creation);
+    maker.setResolution(creation.resolution.name);
+    maker.setWork(frames);
+    Link made;
+    made.rate = editRate;
+    made.frames = frames;
+    made.mediaId = maker.id();
+    QString err;
+    const QString path = maker.pathFor(folder, QStringLiteral("V1"));
+    if (!maker.writeRenderedVideo(path, render, &err)) return failed(err);
+    made.path = path;
+    made.videoStream = 0;
+    maker.keep();
+
+    model::BinItem item;
+    item.id = model::newItemId();
+    item.mobId = maker.master();
+    model::ClipSource file;
+    file.kind = model::ClipSource::Kind::File;
+    file.mob = maker.fileMob(QStringLiteral("V1"));
+    file.track = QStringLiteral("V1");
+    file.name = QFileInfo(path).fileName();
+    file.path = path;
+    file.from = maker.origin().mob;
+    item.sources << file << maker.origin();
+    item.kind = kind;
+    item.name = name;
+    item.created = creation.when.isValid() ? creation.when : QDateTime::currentDateTimeUtc();
+    item.modified = item.created;
+    item.editRate = editRate;
+    item.durationFrames = frames;
+    item.link = made.toJson();
+    const double fps = editRate.toDouble();
+    item.fields.insert(QStringLiteral("Start"), timecodeText(0, editRate));
+    item.fields.insert(QStringLiteral("End"), timecodeText(frames, editRate));
+    item.fields.insert(QStringLiteral("Tracks"), trackList(true, 0));
+    item.fields.insert(QStringLiteral("FPS"), fpsText(fps));
+    item.fields.insert(QStringLiteral("Video"), creation.resolution.name);
+    item.fields.insert(QStringLiteral("Format"), QStringLiteral("%1p/%2").arg(creation.raster.height()).arg(fpsText(fps)));
+    item.fields.insert(QStringLiteral("Color Space"), creation.resolution.rgb ? QStringLiteral("RGB 709") : QStringLiteral("YCbCr 709"));
+    item.fields.insert(QStringLiteral("Drive"), driveName(folder));
     return item;
 }
 

@@ -67,6 +67,19 @@ Effect motionEffect(double speed);
 // The speed of a motionEffect(), or nothing for another effect.
 std::optional<double> motionSpeed(const Effect& e);
 
+// A rendered video effect (FX Guide p.57-61; docs/spec/rendering.md): the precompute master clip the
+// render made ("Media Composer stores a rendered effect and its media file as a precomputed master
+// clip", p.57), as BinItem::toJson() gives it, and what it was rendered from (model::renderKey in
+// lumenis/model/effect_render.h). The precompute shows what the effect's track and every track below
+// it composite to over the effect's frames ("Media Composer renders the composite result of all tracks
+// into the top track", p.57). A render whose key no longer matches is out of date: the effect plays
+// unrendered.
+struct EffectRender {
+    QJsonObject clip;
+    QString key;
+    bool operator==(const EffectRender&) const = default;
+};
+
 // Where a transition effect lies relative to its cut (Transition Effect
 // Alignment, FX guide p.500).
 enum class TransitionAlignment { EndingAtCut, CenteredOnCut, StartingAtCut, CustomStart };
@@ -80,6 +93,8 @@ struct Transition {
     std::int64_t duration = 0;
     TransitionAlignment alignment = TransitionAlignment::CenteredOnCut;
     std::int64_t start = 0;
+    // Its render (FX Guide p.57-61), if it has been rendered.
+    std::optional<EffectRender> render;
 
     // Frames before and after the cut.
     // before() is clamped to 0..duration for CustomStart.
@@ -190,6 +205,8 @@ struct Segment {
     bool addEdit = false;
     // A segment effect (FX guide p.44); filler can have one too.
     std::optional<Effect> effect;
+    // The segment effect's render (FX Guide p.57-61), if it has been rendered.
+    std::optional<EffectRender> render;
     // The transition effect at the cut where this segment starts.
     std::optional<Transition> transition;
     // Clip Volume and Pan (p.702): the segment's clip gain in dB and its
@@ -318,7 +335,7 @@ public:
     // The composition JSON: {tracks: [{name, segments: [...], locked?, syncLocked?, format?,
     // lfeOnly?, inserts?: [{slot (0-4), effect, name, params: {id: value}, bypass?}]}],
     // timecode, mix? ("5.1" or "7.1": mixFormat())}. A segment is {length, gain?, pan?,
-    // volumeKeys?, panKeys?, eq?, effect?, transition?} (keys as [[frame, value], ...]) plus
+    // volumeKeys?, panKeys?, eq?, effect?, render?, transition?} (keys as [[frame, value], ...]) plus
     // addEdit? for filler or {clip, mob?, bin?, name, track, in, localColor?, surround?: [{front,
     // rear, fr, center?, side?, lfe?}]} for material.
     // fromJson() skips unreadable and duplicate tracks, tidies each track and sorts the tracks.

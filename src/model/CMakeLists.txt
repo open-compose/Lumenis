@@ -11,6 +11,7 @@ add_library(lumenis_model STATIC
     auto_sequence.cpp
     audio_eq.cpp
     audio_suite.cpp
+    effect_render.cpp
     marker.cpp
     multichannel.cpp
     clip_coloring.cpp
@@ -35,6 +36,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/auto_sequence.h
     include/lumenis/model/audio_eq.h
     include/lumenis/model/audio_suite.h
+    include/lumenis/model/effect_render.h
     include/lumenis/model/marker.h
     include/lumenis/model/multichannel.h
     include/lumenis/model/clip_coloring.h

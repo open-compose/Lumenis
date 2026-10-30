@@ -59,7 +59,17 @@ const std::pair<TransitionAlignment, const char*> kAlignments[] = {
     {TransitionAlignment::CustomStart, "custom"},
 };
 
-// {effect, duration, alignment} plus start for CustomStart.
+// A render as {clip, key}; nothing for JSON without a clip.
+QJsonObject renderToJson(const EffectRender& r) {
+    return {{QStringLiteral("clip"), r.clip}, {QStringLiteral("key"), r.key}};
+}
+std::optional<EffectRender> renderFromJson(const QJsonValue& v) {
+    const QJsonObject o = v.toObject();
+    if (o.value(QStringLiteral("clip")).toObject().isEmpty()) return std::nullopt;
+    return EffectRender{o.value(QStringLiteral("clip")).toObject(), o.value(QStringLiteral("key")).toString()};
+}
+
+// {effect, duration, alignment, render?} plus start for CustomStart.
 QJsonObject transitionToJson(const Transition& t) {
     QJsonObject o{{QStringLiteral("effect"), t.effect.toJson()},
                   {QStringLiteral("duration"), static_cast<qint64>(t.duration)}};
@@ -67,6 +77,7 @@ QJsonObject transitionToJson(const Transition& t) {
         if (a == t.alignment) o.insert(QStringLiteral("alignment"), QString::fromLatin1(text));
     }
     if (t.alignment == TransitionAlignment::CustomStart) o.insert(QStringLiteral("start"), static_cast<qint64>(t.start));
+    if (t.render) o.insert(QStringLiteral("render"), renderToJson(*t.render));
     return o;
 }
 
@@ -79,6 +90,7 @@ Transition transitionFromJson(const QJsonObject& o) {
         if (alignment == QLatin1String(text)) t.alignment = a;
     }
     t.start = o.value(QStringLiteral("start")).toInteger();
+    t.render = renderFromJson(o.value(QStringLiteral("render")));
     return t;
 }
 
@@ -148,6 +160,7 @@ void effectsToJson(const Segment& s, QJsonObject& o) {
     if (s.eq) o.insert(QStringLiteral("eq"), eqToJson(*s.eq));
     if (s.audioSuite) o.insert(QStringLiteral("audioSuite"), audioSuiteToJson(*s.audioSuite));
     if (s.effect) o.insert(QStringLiteral("effect"), s.effect->toJson());
+    if (s.effect && s.render) o.insert(QStringLiteral("render"), renderToJson(*s.render));
     if (s.transition) o.insert(QStringLiteral("transition"), transitionToJson(*s.transition));
 }
 
@@ -204,6 +217,7 @@ Segment segmentFromJson(const QJsonObject& o) {
     if (o.contains(QStringLiteral("eq"))) s.eq = eqFromJson(o.value(QStringLiteral("eq")).toObject());
     if (o.contains(QStringLiteral("audioSuite"))) s.audioSuite = audioSuiteFromJson(o.value(QStringLiteral("audioSuite")).toObject());
     if (o.contains(QStringLiteral("effect"))) s.effect = Effect::fromJson(o.value(QStringLiteral("effect")).toObject());
+    if (s.effect) s.render = renderFromJson(o.value(QStringLiteral("render")));
     if (o.contains(QStringLiteral("transition"))) {
         s.transition = transitionFromJson(o.value(QStringLiteral("transition")).toObject());
     }

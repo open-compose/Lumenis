@@ -292,6 +292,10 @@ std::optional<BinItem> subclipItem(const Bin& bin, const BinItem& master, std::i
 
 // A unique id for new objects.
 QString newItemId();
+// An item as bins keep it, and back (nothing for JSON that is not an item). Rendered effects keep
+// their precompute clips this way (EffectRender::clip in sequence.h).
+QJsonObject binItemToJson(const BinItem& item);
+std::optional<BinItem> binItemFromJson(const QJsonObject& o);
 // A clip's MobID: its own, else the one derived from its id.
 MobId mobIdOf(const BinItem& item);
 // The MobID for an item id that has none of its own: the same every time,

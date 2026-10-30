@@ -369,6 +369,14 @@ int highestNumber(const Bin& bin, const QString& base) {
 
 } // namespace
 
+QJsonObject binItemToJson(const BinItem& item) {
+    return itemToJson(item);
+}
+
+std::optional<BinItem> binItemFromJson(const QJsonObject& o) {
+    return itemFromJson(o);
+}
+
 QString kindName(BinItemKind kind) {
     for (const auto& [k, name] : kKinds) {
         if (k == kind) return QString::fromLatin1(name);

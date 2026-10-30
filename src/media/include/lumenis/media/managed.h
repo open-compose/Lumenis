@@ -6,6 +6,7 @@
 
 #include <QDateTime>
 #include <QHash>
+#include <QImage>
 #include <QJsonObject>
 #include <QList>
 #include <QSet>
@@ -155,6 +156,17 @@ using RenderAudio = std::function<void(std::int64_t at, int count, std::vector<s
 std::optional<model::BinItem> renderedAudioClip(const QString& name, const Rational& editRate, std::int64_t frames,
                                                 int channels, const RenderAudio& render, const QString& startTimecode,
                                                 const MediaCreation& creation, QString* error = nullptr);
+
+// A picture made frame by frame (rendered effects, FX Guide p.57-59): a master clip `name` of
+// `frames` frames at `editRate` with only V1, whose frame `f` is what `render(f)` gives (fitted to the
+// creation's raster on black), written as managed media in the creation's resolution on its video
+// drive. `kind` is the new item's kind (RenderedEffect for a precompute). On failure, or when
+// MediaCreation::progress cancels, the file is removed and `error` says why.
+using RenderVideo = std::function<QImage(std::int64_t frame)>;
+std::optional<model::BinItem> renderedVideoClip(const QString& name, const Rational& editRate, std::int64_t frames,
+                                                const RenderVideo& render, const MediaCreation& creation,
+                                                model::BinItemKind kind = model::BinItemKind::MasterClip,
+                                                QString* error = nullptr);
 
 // Which clip and track a managed media file holds, from its metadata, and
 // what it holds: for relinking by source name and timecode (p.362-363).
