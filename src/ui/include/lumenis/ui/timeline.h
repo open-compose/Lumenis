@@ -222,6 +222,9 @@ public:
     // Sync Breaks (p.491-492): sync-break numbers and match-frame signs on every track, video tracks
     // only, audio tracks only, or none.
     enum class SyncBreaks { All, Video, Audio, None };
+    // Render Ranges (FX Guide p.150): no red lines; on the unrendered part of partly rendered effects
+    // ("the default option"); or also on every effect that is not rendered at all.
+    enum class RenderRanges { None, PartialOnly, All };
     // Stores a changed or new sequence in its bin.
     using SequenceStore = std::function<bool(const QString& binId, const model::BinItem& item, bool isNew)>;
     // Makes a new, empty sequence for the first edit (p.463): its bin and
@@ -337,6 +340,11 @@ public:
     // The Track Selector state: which source tracks there are, which are patched to which record
     // tracks, and which are selected.
     model::TrackPatch& patch() { return patch_; }
+    // The playback performance indicators (FX Guide p.136-137) shown in TC1 after playing the Record
+    // monitor, while the Timeline setting Highlight Suggested Render Areas After Playback is on; the next
+    // play or change of sequence clears them.
+    void setPlaybackIndicators(const QList<Composer::PlaybackRange>& ranges);
+    const QList<Composer::PlaybackRange>& playbackIndicators() const { return indicators_; }
     const model::TrackPatch& patch() const { return patch_; }
     // The undo history of the record sequence's changes.
     model::EditHistory& history() { return history_; }
@@ -941,6 +949,7 @@ public:
         QString markIOColor;
         ViewType viewType = ViewType::Standard;
         SyncBreaks syncBreaks = SyncBreaks::All;
+        RenderRanges renderRanges = RenderRanges::PartialOnly;
         // Dupe Detection on video, audio and data tracks (p.641).
         bool dupeVideo = false;
         bool dupeAudio = false;
@@ -1122,6 +1131,7 @@ private:
     Options options_;
     QList<std::pair<double, double>> zoomStack_;
     Display display_;
+    QList<Composer::PlaybackRange> indicators_;
     // The Sequence Map (showSequenceMap): where it is and whether it shows.
     SequenceMap* map_ = nullptr;
     SequenceMapWindow* mapWindow_ = nullptr;

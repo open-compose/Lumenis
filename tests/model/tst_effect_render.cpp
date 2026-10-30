@@ -2,6 +2,7 @@
 // keys going out of date, renders kept through JSON, and Clear Renders with its two options.
 #include "lumenis/model/effect_render.h"
 
+#include <QJsonArray>
 #include <QTest>
 
 using namespace lumenis::model;
@@ -40,8 +41,19 @@ Sequence sample() {
     return s;
 }
 
+// A precompute clip `frames` long.
+QJsonObject precompute(std::int64_t frames) {
+    BinItem item;
+    item.id = newItemId();
+    item.kind = BinItemKind::RenderedEffect;
+    item.name = QStringLiteral("precompute");
+    item.editRate = lumenis::Rational(25);
+    item.durationFrames = frames;
+    return binItemToJson(item);
+}
+
 EffectRender rendered(const Sequence& s, const RenderTarget& t) {
-    return EffectRender{QJsonObject{{QStringLiteral("name"), QStringLiteral("precompute")}}, renderKey(s, t)};
+    return EffectRender{{precompute(t.length)}, renderKey(s, t)};
 }
 
 } // namespace
@@ -108,6 +120,42 @@ private slots:
         for (const RenderTarget& t : renderTargets(back, {QStringLiteral("V1"), QStringLiteral("V2")}, 0, 100)) {
             QVERIFY(isRendered(back, t));
         }
+    }
+
+    void partial() {
+        // A render shorter than its effect is partial (p.150); a second precompute finishes it, the two
+        // laid end to end.
+        Sequence s = sample();
+        const RenderTarget pip = *renderTargetAt(s, QStringLiteral("V2"), 30); // 40 frames
+        QVERIFY(setRender(s, pip, EffectRender{{precompute(15)}, renderKey(s, pip)}));
+        QVERIFY(!isRendered(s, pip));
+        QVERIFY(isPartlyRendered(s, pip));
+        QVERIFY(isRenderedAt(s, pip, 14));
+        QVERIFY(!isRenderedAt(s, pip, 15));
+        EffectRender whole = *renderOf(s, pip);
+        whole.clips << precompute(25);
+        QCOMPARE(renderedFrames(whole), 40);
+        QCOMPARE(renderedClipAt(whole, 20)->second, 5);
+        QVERIFY(!renderedClipAt(whole, 40));
+        QVERIFY(setRender(s, pip, whole));
+        QVERIFY(isRendered(s, pip));
+        QVERIFY(!isPartlyRendered(s, pip));
+        QCOMPARE(Sequence::fromJson(s.toJson()).toJson(), s.toJson());
+        // 6.4a's single {clip} still reads.
+        QJsonObject json = s.toJson();
+        QJsonArray tracks = json.value(QStringLiteral("tracks")).toArray();
+        for (int i = 0; i < tracks.size(); ++i) {
+            QJsonObject t = tracks.at(i).toObject();
+            if (t.value(QStringLiteral("name")).toString() != QLatin1String("V2")) continue;
+            QJsonArray segments = t.value(QStringLiteral("segments")).toArray();
+            QJsonObject seg = segments.at(1).toObject();
+            seg.insert(QStringLiteral("render"), QJsonObject{{QStringLiteral("clip"), precompute(40)}, {QStringLiteral("key"), renderKey(s, pip)}});
+            segments.replace(1, seg);
+            t.insert(QStringLiteral("segments"), segments);
+            tracks.replace(i, t);
+        }
+        json.insert(QStringLiteral("tracks"), tracks);
+        QVERIFY(isRendered(Sequence::fromJson(json), pip));
     }
 
     void clear() {

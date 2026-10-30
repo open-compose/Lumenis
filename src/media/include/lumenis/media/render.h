@@ -23,9 +23,13 @@ QString precomputeName(const QString& sequence, const QString& effect);
 // in the creation's resolution on its video drive at `editRate`. Renders of effects on lower
 // tracks that are in date are used; the target's own is not. The result is the render to keep with the
 // effect (model::setRender), its clip a RenderedEffect item named precomputeName(sequenceName, effect).
-// MediaCreation::progress can cancel; on failure nothing is kept and `error` says why.
+// MediaCreation::progress can cancel; on failure nothing is kept and `error` says why. Partial render
+// (p.150): `from` renders only the effect's frames from that one on (the rest of a partial render; the
+// result is that one clip, for the caller to add to the earlier ones), and with `keepOnCancel` a cancel
+// returns what was rendered so far.
 std::optional<model::EffectRender> renderEffect(const Composition& composition, const model::RenderTarget& target,
                                                 const QString& sequenceName, const Rational& editRate,
-                                                const MediaCreation& creation, QString* error = nullptr);
+                                                const MediaCreation& creation, QString* error = nullptr,
+                                                std::int64_t from = 0, bool keepOnCancel = false);
 
 } // namespace lumenis::media

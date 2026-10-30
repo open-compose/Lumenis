@@ -97,6 +97,8 @@
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QPushButton>
+#include <QKeySequence>
+#include <QShortcut>
 #include <QRegularExpression>
 #include <QScreen>
 #include <QSet>
@@ -648,6 +650,7 @@ void MainWindow::createPanels() {
             c.tracks = shownVideoTracks(monitor, seq);
             c.size = size;
             fillComposition(c, *loaded);
+            c.effects = renderOnTheFly_ || composer_->isPlaying();
             bool missing = false;
             const QImage image = media::composeImage(c, at, &missing);
             if (image.isNull() && missing && offline) *offline = true;
@@ -1480,6 +1483,12 @@ void MainWindow::createTools() {
         if (on) showTool(QStringLiteral("EffectEditor"));
     });
     // The Effect Editor shortcut menu changes the Effect Editor setting too (p.131).
+    // The playback performance indicators (FX Guide p.136-137): after playing the Record monitor's
+    // sequence, in TC1, while the setting is on; a new play clears them.
+    connect(composer_, &Composer::playStarted, this, [this] { timeline_->setPlaybackIndicators({}); });
+    connect(composer_, &Composer::playbackDifficulties, this, [this](MonitorId monitor, const QList<Composer::PlaybackRange>& ranges) {
+        if (monitor == MonitorId::Record && highlightRenderAreas_) timeline_->setPlaybackIndicators(ranges);
+    });
     connect(effectEditor_, &EffectEditor::renderRequested, this, [this](Qt::KeyboardModifiers m) {
         renderEffects(true, m.testFlag(Qt::ShiftModifier), m.testFlag(Qt::AltModifier));
     });
@@ -3148,8 +3157,11 @@ void MainWindow::fillComposition(media::Composition& c, const model::LoadedClip&
     c.burnIn.markOut = loaded.out;
     c.burnIn.clip = [this](const model::Segment& segment) { return composer_->resolve(segment.binId, segment.clipId); };
     // Rendered effects play from their precomputes (6.4a); offline ones are computed again.
-    c.rendered = [this](const model::EffectRender& render, std::int64_t frame, QSize want) -> std::optional<QImage> {
-        auto clip = model::binItemFromJson(render.clip);
+    c.rendered = [this](const model::EffectRender& render, std::int64_t at, QSize want) -> std::optional<QImage> {
+        const auto piece = model::renderedClipAt(render, at);
+        if (!piece) return std::nullopt;
+        auto clip = model::binItemFromJson(piece->first);
+        const std::int64_t frame = piece->second;
         if (!clip) return std::nullopt;
         if (frames_->isOffline(*clip)) {
             // Media moved since: the media database may know where it is now.
@@ -3224,31 +3236,75 @@ void MainWindow::renderEffects(bool atPosition, bool rerender, bool useLastDrive
         c.precision = creation.resolution.pixelFormat.contains(QLatin1String("10")) ? media::EffectPrecision::Bits16
                                                                                    : media::EffectPrecision::Bits8;
     }
-    // The renders, made one after the other and kept together; Cancel keeps none (partial render is
-    // ROADMAP 6.4b).
+    // The renders, made one after the other and kept together. A partial render in date is finished:
+    // "Media Composer then renders only the part of the effect that has not rendered previously and
+    // saves that part as a separate precompute" (p.150); Shift starts again from the first frame.
+    // "Press Ctrl+period ... to interrupt the render" (p.150): Cancel and Ctrl+period ask Keep or
+    // Discard for the material already rendered.
     QProgressDialog progress(tr("Rendering..."), tr("Cancel"), 0, 1000, this);
     progress.setObjectName(QStringLiteral("renderProgress"));
+    auto* interrupt = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Period), &progress);
+    connect(interrupt, &QShortcut::activated, &progress, &QProgressDialog::cancel);
     QList<std::pair<model::RenderTarget, model::EffectRender>> made;
-    for (qsizetype i = 0; i < targets.size(); ++i) {
+    bool interrupted = false;
+    for (qsizetype i = 0; i < targets.size() && !interrupted; ++i) {
+        const model::RenderTarget& target = targets.at(i);
         const auto share = static_cast<double>(targets.size());
         const std::function<bool(double)> step = progressOn(progress);
         creation.progress = [step, i, share](double done) { return step((static_cast<double>(i) + done) / share); };
+        model::EffectRender earlier;
+        std::int64_t start = 0;
+        if (!rerender && model::isPartlyRendered(seq, target)) {
+            earlier = *model::renderOf(seq, target);
+            start = model::renderedFrames(earlier);
+        }
         QString error;
-        const auto render = media::renderEffect(c, targets.at(i), rec->item.name, rec->item.editRate, creation, &error);
+        const auto render = media::renderEffect(c, target, rec->item.name, rec->item.editRate, creation, &error, start, true);
+        interrupted = progress.wasCanceled();
         if (!render) {
+            if (interrupted) break; // nothing of this one was made
             progress.reset();
-            if (!progress.wasCanceled()) fail(error);
+            fail(error);
             return;
         }
-        made.append({targets.at(i), *render});
+        model::EffectRender whole = *render;
+        whole.clips = earlier.clips + render->clips;
+        made.append({target, whole});
     }
     progress.reset();
+    if (interrupted && !made.isEmpty()) {
+        // "Click Keep to save the material already rendered. Click Discard to end the render without
+        // saving the material already rendered" (p.150).
+        const bool keep = renderInterruptHook_ ? renderInterruptHook_()
+                                               : [this] {
+                                                     QMessageBox box(QMessageBox::Question, tr("Render Effect"),
+                                                                     tr("The render was interrupted."), QMessageBox::NoButton, this);
+                                                     QPushButton* k = box.addButton(tr("Keep"), QMessageBox::AcceptRole);
+                                                     box.addButton(tr("Discard"), QMessageBox::RejectRole);
+                                                     box.exec();
+                                                     return box.clickedButton() == k;
+                                                 }();
+        if (!keep) {
+            // The precomputes this render made go (the earlier parts of partial renders stay).
+            QStringList files;
+            for (const auto& [target, render] : made) {
+                const qsizetype before = render.clips.size() - 1;
+                const auto item = model::binItemFromJson(render.clips.at(before));
+                if (item) files << item->link.value(QStringLiteral("path")).toString();
+            }
+            media::deleteMediaFiles(files);
+            return;
+        }
+    } else if (interrupted) {
+        return;
+    }
     timeline_->changeRecordSequence(tr("Render Effect"), [&made](model::Sequence& s) {
         bool any = false;
         for (const auto& [target, render] : made) any = model::setRender(s, target, render) || any;
         return any;
     });
-    ConsoleLog::instance().append(tr("Render Effect: %n effect(s) rendered.", "", static_cast<int>(made.size())));
+    ConsoleLog::instance().append(interrupted ? tr("Render Effect: interrupted; %n effect(s) kept.", "", static_cast<int>(made.size()))
+                                              : tr("Render Effect: %n effect(s) rendered.", "", static_cast<int>(made.size())));
 }
 
 void MainWindow::clearRenders(bool atPosition) {
@@ -4200,6 +4256,9 @@ void MainWindow::applySettings() {
     o.markedRegion = s.flag(tl, QStringLiteral("showMarkedRegion"));
     o.markedWaveforms = s.flag(tl, QStringLiteral("showMarkedWaveforms"));
     o.dupeHandles = s.text(tl, QStringLiteral("dupeHandles")).toDouble();
+    // "This option is selected by default" (FX Guide p.137).
+    highlightRenderAreas_ = s.flag(tl, QStringLiteral("highlightRenderAreas"));
+    if (!highlightRenderAreas_) timeline_->setPlaybackIndicators({});
     o.startFillerSeconds = s.value(tl, QStringLiteral("startFiller")).toInt();
     o.flashFrames = s.value(tl, QStringLiteral("flashFrames")).toInt(10);
     // Dynamic Play Acceleration and Slow start speed (Timeline settings, p.1219), for the Composer.
@@ -4474,6 +4533,18 @@ void MainWindow::installPanelHandlers() {
     // The Digital Audio Scrub button (Play tab, p.676) turns scrubbing on
     // and off.
     commands_.action(QStringLiteral("play.digital_audio_scrub"))->setCheckable(true);
+    // Composer > Render On-the-Fly (FX Guide p.56-57): on, a stationary frame shows its effects;
+    // off, "as if no effects are applied to it". On until turned off (ours: the guide gives no
+    // default). Playback is not affected (p.57).
+    handle("composer.render_on_the_fly", [] {}); // the action's check mark is the state (below)
+    if (QAction* fly = commands_.action(QStringLiteral("composer.render_on_the_fly"))) {
+        fly->setCheckable(true);
+        fly->setChecked(true);
+        connect(fly, &QAction::toggled, this, [this](bool on) {
+            renderOnTheFly_ = on;
+            composer_->refreshDisplay();
+        });
+    }
     handle("clip.modify.unlink_media", [this] { unlinkSelection(); });
     handle("clip.modify.modify_clip", [this] { modifySelection(); });
     handle("clip.audio.apply_gain", [this] { applyClipGain(); });

@@ -493,8 +493,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.4a, Render Effect (docs/spec/rendering.md: `EffectRender` on segments in `sequence.h`,
   `src/model/effect_render.*`, `src/media/render.*` with `media::renderedVideoClip`, renders played
   through `Composition::rendered`, `MainWindow::renderEffects`/`clearRenders`, `render_dialogs.*`; tests
-  `tst_effect_render`, `tst_render`, `tst_render_ui`), is done.
-  Next: 6.4b-d (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  `tst_effect_render`, `tst_render`, `tst_render_ui`), is done. 6.4b, partial render (Keep/Discard,
+  `EffectRender::clips`), Render Ranges (`Timeline::RenderRanges`), the playback indicators
+  (`Composer::playbackDifficulties`, `Timeline::setPlaybackIndicators`) and Render On-the-Fly
+  (`Composition::effects`), is done.
+  Next: 6.4c-d (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

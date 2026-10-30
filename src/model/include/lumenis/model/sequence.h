@@ -67,15 +67,17 @@ Effect motionEffect(double speed);
 // The speed of a motionEffect(), or nothing for another effect.
 std::optional<double> motionSpeed(const Effect& e);
 
-// A rendered video effect (FX Guide p.57-61; docs/spec/rendering.md): the precompute master clip the
+// A rendered video effect (FX Guide p.57-61; docs/spec/rendering.md): the precompute master clips the
 // render made ("Media Composer stores a rendered effect and its media file as a precomputed master
-// clip", p.57), as BinItem::toJson() gives it, and what it was rendered from (model::renderKey in
-// lumenis/model/effect_render.h). The precompute shows what the effect's track and every track below
+// clip", p.57), as binItemToJson() gives them, and what it was rendered from (model::renderKey in
+// lumenis/model/effect_render.h). The clips lie end to end from the effect's first frame; together
+// shorter than the effect, the render is partial ("Media Composer then renders only the part of the
+// effect that has not rendered previously and saves that part as a separate precompute", p.150). The precompute shows what the effect's track and every track below
 // it composite to over the effect's frames ("Media Composer renders the composite result of all tracks
 // into the top track", p.57). A render whose key no longer matches is out of date: the effect plays
 // unrendered.
 struct EffectRender {
-    QJsonObject clip;
+    QList<QJsonObject> clips;
     QString key;
     bool operator==(const EffectRender&) const = default;
 };

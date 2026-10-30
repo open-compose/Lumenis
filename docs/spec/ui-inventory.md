@@ -166,7 +166,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   below; what makes a render out of date (the key); precompute names; the
   Render Effect dialog's drive menu and dimmed processing; the Clear Renders
   options selected until changed; Clear Renders In/Out without marks taking
-  the whole sequence; Automatic processing by the render resolution's depth.
+  the whole sequence; Automatic processing by the render resolution's depth;
+  Discard deleting this render's precomputes; the Render Ranges line along
+  the track's foot; what counts as a red or yellow playback range, and no
+  blue; Render On-the-Fly on until turned off, not kept between sessions.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

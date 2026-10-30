@@ -30,8 +30,8 @@ dialogs in `MainWindow::renderEffects`, `clearRenders` and `src/ui/render_dialog
   Resolution, at the project's raster whatever size the monitors show. Its pictures are computed at the
   Render tab's Effects Processing: 8-bit, 16-bit, 32-bit, or Automatic, which "Effects render at 16-bit for
   10-bit media and at 8-bit for 8-bit media" (p.152); ours, by the depth of the render resolution. The
-  precompute clip is kept with its effect in the sequence (the segment's `render`, or `transitionRender`
-  for its transition). Showing it in bins with "Show reference clips" comes with 6.4d.
+  precompute clips are kept with the effect in the sequence (the segment's `render`, or
+  `transitionRender` for its transition). Showing it in bins with "Show reference clips" comes with 6.4d.
 * In date or not. A render keeps a key of what it was made from (ours): the effect and its parameters,
   and the clips, source frames, lengths, effects and transitions on its track and those below over its
   frames, relative to its start. Moving the whole picture keeps the key; changing a parameter, trimming
@@ -51,7 +51,7 @@ dialogs in `MainWindow::renderEffects`, `clearRenders` and `src/ui/render_dialog
   and hold the Alt key ... Media Composer uses the last drive selected" (p.58).
 * The Effect Editor's Render Effect button (p.84) renders at the position, with Shift and Alt as above.
 * Rendering shows a progress dialog; all the renders are kept with their effects as one undo step
-  (Render Effect). Cancel keeps none (Keep or Discard is 6.4b's partial render). The "not enough room on
+  (Render Effect). Interrupting it is 6.4b's partial render, below. The "not enough room on
   the drive" message (Stop, Continue, p.59) is not shown: the write fails with the disk's error instead.
 * Clear Renders In/Out and at Position (p.60-61): "Clearing rendered effects does not delete the effects
   or their precomputes, but it disassociates the precomputes from the sequence so that the effects appear
@@ -64,3 +64,37 @@ dialogs in `MainWindow::renderEffects`, `clearRenders` and `src/ui/render_dialog
 * The dots (p.36): "Non-real-time effects have no dot in the Effect Palette. In the Timeline, the effect
   icon shows a blue dot until you render the effect"; "All colored dots disappear in the Timeline when you
   render effects". A render in date hides the effect icon's dot.
+
+## 6.4b: partial render, Render Ranges, playback indicators, Render On-the-Fly
+
+Code: `EffectRender::clips`, `model::renderedFrames`, `renderedClipAt`, `isPartlyRendered`,
+`isRenderedAt`; `media::renderEffect`'s `from` and `keepOnCancel` (and `renderedVideoClip`'s); the
+Composer's `PlaybackRange`, `playbackDifficulties`; `Timeline::RenderRanges`, `setPlaybackIndicators`;
+`Composition::effects`. Tests: `tst_effect_render`, `tst_render`, `tst_render_ui`.
+
+* Partial render (p.150): "If you interrupt a render that is not complete, Media Composer lets you save
+  the completed portion of the render. You can finish the render later by resubmitting the effect for
+  rendering. Media Composer then renders only the part of the effect that has not rendered previously
+  and saves that part as a separate precompute." Ctrl+period or Cancel interrupts; "Click Keep to save the
+  material already rendered. Click Discard to end the render without saving" (ours: Discard deletes the
+  precomputes this render made; earlier parts stay). A render holds its precompute clips end to end from
+  the effect's first frame. Rendering again finishes a partial render in date from where it stopped;
+  Shift renders it all again. "If playback begins at a rendered frame ... You see the rendered portion"
+  (p.150): ours, each frame plays its render where it has one and is computed where it has not.
+* Render Ranges, in the Timeline Fast menu (p.150): None; Partial Only, "a red line on the portion of any
+  partially rendered effect that is currently unrendered ... This is the default option"; All, also "on
+  all completely unrendered effects". Ours: the line runs along the foot of the effect's track; the
+  choice is kept with the Timeline's display (and Timeline views).
+* The playback performance indicators (p.136-137): "colored bars appear in the timecode track of the
+  Timeline when playback ends". Red "Marks the ranges where Media Composer was unable to display frames":
+  ours, the frames the Composer passed over while playing the Record monitor. Yellow "Marks the ranges
+  that caused difficulty ... because of processing power. No frames were dropped": ours, a frame shown
+  more than half a frame period late. Blue (disk speed) is not told apart from yellow: ours cannot know
+  which held a frame up. They show while the Timeline setting Highlight Suggested Render Areas After
+  Playback is on ("This option is selected by default", p.137), until the next play.
+* Composer > Render On-the-Fly (p.56-57): "When Render On-the-Fly is deselected, Media Composer shows the
+  monitored frame as if no effects are applied to it"; it "only controls how Media Composer displays a
+  frame when the position indicator is stationary". Ours: on until turned off (the guide gives no
+  default), not kept between sessions; off, a stationary frame leaves out segment effects and shows
+  transitions as cuts, while renders in date still show; playback is unchanged. Dragging the position
+  indicator does not yet turn it off for the drag.

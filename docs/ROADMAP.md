@@ -944,7 +944,7 @@ phase of their own. They are done in three steps:
     Done (`src/model/effect_render.*`, `src/media/render.*`, `render_dialogs.*`).
   * 6.4b, partial render (Ctrl+period, Keep or Discard), the Timeline's Render Ranges (None, Partial
     Only, All), the playback performance indicators (red, yellow and blue bars; Highlight Suggested Render
-    Areas After Playback) and Composer > Render On-the-Fly.
+    Areas After Playback) and Composer > Render On-the-Fly. Done (blue is not told apart from yellow).
   * 6.4c, ExpertRender at Position and In/Out: the analysis, the Expert Render dialog (recommended
     ranges, entire selection, Prepare effects for Digital Cut) and Modify Selection.
   * 6.4d, the Render settings (Image Interpolation, the Render Using menus, Effects Quality and HQ,

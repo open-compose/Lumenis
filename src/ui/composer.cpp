@@ -1733,7 +1733,10 @@ void Composer::play(int speed) {
         stop();
         return;
     }
-    if (speed_ == 0) stats_ = {};
+    if (speed_ == 0) {
+        stats_ = {};
+        playRanges_.clear();
+    }
     if (loop_ && speed != 1) {
         stopAt_.reset();
         endLoop();
@@ -1771,7 +1774,10 @@ void Composer::playDynamic(int direction, bool slowStart) {
     if (std::abs(multiple - whole) < 1e-9) {
         play(dir * static_cast<int>(whole)); // with sound, as J and L
     } else {
-        if (speed_ == 0) stats_ = {};
+        if (speed_ == 0) {
+            stats_ = {};
+            playRanges_.clear();
+        }
         if (loop_) {
             stopAt_.reset();
             endLoop();
@@ -1808,7 +1814,10 @@ void Composer::playSlow(int direction) {
         stop();
         return;
     }
-    if (speed_ == 0) stats_ = {};
+    if (speed_ == 0) {
+        stats_ = {};
+        playRanges_.clear();
+    }
     if (loop_) {
         stopAt_.reset();
         endLoop();
@@ -1848,10 +1857,25 @@ Composer::PlayDisplay Composer::playDisplay() const {
 }
 
 // Stops playback and forgets a Play In to Out end point; emits playStopped() only if it was playing.
+void Composer::notePlayback(std::int64_t start, std::int64_t length, bool dropped) {
+    for (auto it = playRanges_.rbegin(); it != playRanges_.rend(); ++it) {
+        if (it->dropped != dropped) continue;
+        if (start <= it->start + it->length && start + length >= it->start) {
+            const std::int64_t end = std::max(it->start + it->length, start + length);
+            it->start = std::min(it->start, start);
+            it->length = end - it->start;
+            return;
+        }
+        break;
+    }
+    playRanges_.append({start, length, dropped});
+}
+
 void Composer::stop() {
     endLoop();
     if (!startingLoopClip_) endClipLoop();
     if (speed_ == 0 && !timer_->isActive()) return;
+    emit playbackDifficulties(active_, playRanges_);
     stopAt_.reset();
     speed_ = 0;
     slow_ = false;
@@ -2021,10 +2045,17 @@ void Composer::tick() {
     }
     // Frames shown and skipped: a tick moves |speed| frames on time; more
     // means the picture fell behind (the real-time gate, ROADMAP 2.5).
-    const std::int64_t moved = std::abs(state(active_).position() - before);
+    const std::int64_t after = state(active_).position();
+    const std::int64_t moved = std::abs(after - before);
     if (moved > 0 && speed != 0) {
         ++stats_.shown;
-        stats_.dropped += std::max<std::int64_t>(0, moved - std::abs(speed));
+        const std::int64_t skipped = std::max<std::int64_t>(0, moved - std::abs(speed));
+        stats_.dropped += skipped;
+        // The frames passed over without being shown, between the last shown and this one.
+        if (skipped > 0) notePlayback(speed > 0 ? before + std::abs(speed) : after + 1, skipped, true);
+        // A step well over a frame period late: shown, but with difficulty.
+        const double period = 1000.0 / std::max(framesPerSecond(state(active_)), 1.0);
+        if (skipped == 0 && !slow_ && fraction_ == 0 && static_cast<double>(ms) > period * 1.5) notePlayback(after, 1, false);
     }
 }
 

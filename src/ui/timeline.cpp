@@ -573,6 +573,15 @@ void TimelineView::paintEvent(QPaintEvent*) {
         if (r.track == QLatin1String("TC1")) {
             // TC1: the project's timecode (p.598).
             p.fillRect(rowRect, QColor(kTimecodeRowColor));
+            // The playback performance indicators (FX Guide p.136): red where frames could not be shown,
+            // yellow where play had difficulty, along the foot of the row.
+            for (const Composer::PlaybackRange& b : timeline_.playbackIndicators()) {
+                const double x0 = std::max(xFor(b.start), static_cast<double>(header));
+                const double x1 = std::min(xFor(b.start + b.length), static_cast<double>(width()));
+                if (x1 <= x0) continue;
+                p.fillRect(QRectF(x0, r.top + r.height - 5, std::max(x1 - x0, 2.0), 4),
+                           QColor(b.dropped ? 0xffe03030 : 0xffe0c030));
+            }
             p.setPen(text);
             for (std::int64_t f = (firstVisible / interval) * interval; f <= lastVisible; f += interval) {
                 if (f < 0) continue;
@@ -1383,9 +1392,32 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
     };
     p.save();
     p.setRenderHint(QPainter::Antialiasing);
+    // Render Ranges (p.150): "a red line on the portion of any partially rendered effect that is
+    // currently unrendered" and, with All, "on all completely unrendered effects", along the row's foot.
+    auto renderRange = [&](const model::RenderTarget& target) {
+        const Timeline::RenderRanges mode = timeline_.display().renderRanges;
+        if (mode == Timeline::RenderRanges::None || t.kind != model::TrackKind::Video) return;
+        std::int64_t from = 0;
+        if (model::isRendered(seq, target)) return;
+        if (model::isPartlyRendered(seq, target)) {
+            from = model::renderedFrames(*model::renderOf(seq, target));
+        } else if (mode != Timeline::RenderRanges::All) {
+            return;
+        }
+        const double x0 = std::max(xFor(target.start + from), static_cast<double>(headerWidth()));
+        const double x1 = std::min(xFor(target.end()), static_cast<double>(width()));
+        if (x1 <= x0) return;
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(0xffe03030));
+        p.drawRect(QRectF(x0, r.top + r.height - 4, x1 - x0, 2));
+    };
     std::int64_t at = 0;
     for (int index = 0; index < t.segments.size(); ++index) {
         const model::Segment& s = t.segments.at(index);
+        if (s.transition && s.transition->duration > 0) {
+            renderRange(model::RenderTarget{t.name(), index, true, at - s.transition->before(), s.transition->duration});
+        }
+        if (s.effect) renderRange(model::RenderTarget{t.name(), index, false, at, s.length});
         if (s.effect) {
             const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
             const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));
@@ -2660,7 +2692,17 @@ QMenu* Timeline::fastMenu() {
             if (a->text() == tr("Dissolve Icons")) a->setEnabled(v);
         }
     });
-    later(tr("Render Ranges"));
+    // Render Ranges (FX Guide p.150): None, Partial Only (the default) or All.
+    QMenu* rangesMenu = m->addMenu(tr("Render Ranges"));
+    rangesMenu->setObjectName(QStringLiteral("renderRanges"));
+    auto* rangesGroup = new QActionGroup(rangesMenu);
+    for (const auto& [which, text] : {std::pair{RenderRanges::None, tr("None")}, std::pair{RenderRanges::PartialOnly, tr("Partial Only")},
+                                      std::pair{RenderRanges::All, tr("All")}}) {
+        check(rangesMenu, text, display_.renderRanges == which, [this, w = which](bool v) {
+            if (v) display_.renderRanges = w;
+        });
+        rangesGroup->addAction(rangesMenu->actions().constLast());
+    }
     check(m, tr("Dissolve Icons"), display_.dissolveIcons, [this](bool v) { display_.dissolveIcons = v; });
     m->actions().constLast()->setEnabled(display_.effectIcons);
     check(m, tr("Clip Frames"), display_.clipFrames, [this](bool v) { display_.clipFrames = v; });
@@ -6051,6 +6093,9 @@ QJsonObject Timeline::displayToJson(const Display& d) {
                                        : d.syncBreaks == SyncBreaks::Audio ? QStringLiteral("audio")
                                        : d.syncBreaks == SyncBreaks::None  ? QStringLiteral("none")
                                                                                     : QStringLiteral("all")},
+        {QStringLiteral("renderRanges"), d.renderRanges == RenderRanges::None  ? QStringLiteral("none")
+                                         : d.renderRanges == RenderRanges::All ? QStringLiteral("all")
+                                                                               : QStringLiteral("partial")},
     };
     if (d.automation) {
         o.insert(QStringLiteral("automation"),
@@ -6101,6 +6146,10 @@ Timeline::Display Timeline::displayFromJson(const QJsonObject& o) {
                    : sync == QLatin1String("audio") ? SyncBreaks::Audio
                    : sync == QLatin1String("none")  ? SyncBreaks::None
                                                     : SyncBreaks::All;
+    const QString ranges = o.value(QStringLiteral("renderRanges")).toString();
+    d.renderRanges = ranges == QLatin1String("none") ? RenderRanges::None
+                     : ranges == QLatin1String("all") ? RenderRanges::All
+                                                      : RenderRanges::PartialOnly;
     d.waveformZoom = std::clamp(o.value(QStringLiteral("waveformZoom")).toInt(), -3, 4);
     const QString automation = o.value(QStringLiteral("automation")).toString();
     if (automation == QLatin1String("volume")) d.automation = model::AutomationParam::Volume;
@@ -6160,6 +6209,12 @@ QList<std::pair<std::int64_t, std::int64_t>> Timeline::headsSpans() const {
 // "If you rearrange a split edit ... the system cuts all tracks to the same edit point" (p.638):
 // model::Sequence::moveSpan moves the clip's frames on every selected track.
 // ---------------------------------------------------------------- Sync Breaks, Dupe Detection, Clip Text (U1c1)
+
+void Timeline::setPlaybackIndicators(const QList<Composer::PlaybackRange>& ranges) {
+    if (indicators_ == ranges) return;
+    indicators_ = ranges;
+    view_->update();
+}
 
 void Timeline::setSyncBreaks(SyncBreaks which) {
     display_.syncBreaks = which;

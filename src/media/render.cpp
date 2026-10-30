@@ -14,14 +14,15 @@ QString precomputeName(const QString& sequence, const QString& effect) {
 
 std::optional<model::EffectRender> renderEffect(const Composition& composition, const model::RenderTarget& target,
                                                 const QString& sequenceName, const Rational& editRate,
-                                                const MediaCreation& creation, QString* error) {
+                                                const MediaCreation& creation, QString* error, std::int64_t from,
+                                                bool keepOnCancel) {
     auto failed = [&](const QString& text) -> std::optional<model::EffectRender> {
         if (error) *error = text;
         return std::nullopt;
     };
     if (!composition.sequence) return failed(QObject::tr("There is no sequence."));
     const model::Effect* effect = model::effectOf(*composition.sequence, target);
-    if (!effect || target.length <= 0) return failed(QObject::tr("There is no effect to render there."));
+    if (!effect || target.length <= 0 || from < 0 || from >= target.length) return failed(QObject::tr("There is no effect to render there."));
     const auto ref = model::parseTrackName(target.track);
     if (!ref) return failed(QObject::tr("There is no effect to render there."));
 
@@ -44,11 +45,12 @@ std::optional<model::EffectRender> renderEffect(const Composition& composition, 
     MediaCreation made = creation;
     made.raster = c.size;
     const auto clip = renderedVideoClip(
-        precomputeName(sequenceName, effect->name), editRate, target.length,
-        [&](std::int64_t frame) { return composeFrame(c, target.start + frame).toImage(); }, made,
-        model::BinItemKind::RenderedEffect, error);
+        precomputeName(sequenceName, effect->name), editRate, target.length - from,
+        [&](std::int64_t frame) { return composeFrame(c, target.start + from + frame).toImage(); }, made,
+        model::BinItemKind::RenderedEffect, error, keepOnCancel);
     if (!clip) return std::nullopt;
-    return model::EffectRender{model::binItemToJson(*clip), model::renderKey(*composition.sequence, target)};
+    if (clip->durationFrames <= 0) return failed(QObject::tr("Nothing was rendered."));
+    return model::EffectRender{{model::binItemToJson(*clip)}, model::renderKey(*composition.sequence, target)};
 }
 
 } // namespace lumenis::media

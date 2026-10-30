@@ -144,8 +144,9 @@ struct BurnInInfo {
     std::function<std::optional<model::BinItem>(const model::Segment&)> clip;
 };
 
-// A rendered effect's picture (FX Guide p.57; docs/spec/rendering.md): frame `frame` of the precompute
-// master clip, at about `size`; nothing when its media is offline (the effect then plays unrendered).
+// A rendered effect's picture (FX Guide p.57; docs/spec/rendering.md): the effect's frame `frame` from
+// its precompute clips (model::renderedClipAt), at about `size`; nothing when that media is offline (the
+// effect then plays unrendered).
 using RenderSource = std::function<std::optional<QImage>(const model::EffectRender& render, std::int64_t frame, QSize size)>;
 
 struct Composition {
@@ -158,9 +159,13 @@ struct Composition {
     FrameSource source;
     BurnInInfo burnIn;
     // Where rendered effects' pictures come from; without it every effect is computed. A track whose
-    // effect has a render in date at the frame (model::isRendered) shows it in place of itself and
+    // effect has a render in date at the frame (model::isRenderedAt) shows it in place of itself and
     // every track below it.
     RenderSource rendered;
+    // Whether effects are computed. Without them (Composer > Render On-the-Fly off, FX Guide p.56: "shows
+    // the monitored frame as if no effects are applied to it") segment effects are left out and
+    // transitions show their cut; renders in date still play, being media.
+    bool effects = true;
 };
 
 // Timecode Burn-In (ROADMAP 6.3d1; docs/spec/burn-in.md, burn_in.cpp). Its parameters live under

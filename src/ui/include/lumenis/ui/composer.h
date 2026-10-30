@@ -368,6 +368,17 @@ public:
         std::int64_t dropped = 0;
     };
     const PlayStats& playStats() const { return stats_; }
+    // Where the last playback had trouble (FX Guide p.136): frames it could not show (`dropped`, the red
+    // bars) and frames shown late (the yellow ones, ours: a step that came more than half a frame period
+    // late without skipping), in the played monitor's frames, joined into ranges. Reported with
+    // playbackDifficulties() when play stops.
+    struct PlaybackRange {
+        std::int64_t start = 0;
+        std::int64_t length = 0;
+        bool dropped = true;
+        bool operator==(const PlaybackRange&) const = default;
+    };
+    const QList<PlaybackRange>& playbackRanges() const { return playRanges_; }
 
     // The current speed: 0 when stopped, otherwise a multiple of normal (negative: reverse). In slow
     // play it is 1 or -1 and isSlow() is true.
@@ -489,6 +500,8 @@ signals:
 
     // playStopped() fires only when play was running.
     void playStopped();
+    // Play stopped on `monitor` with these difficulties (empty when it played smoothly).
+    void playbackDifficulties(MonitorId monitor, const QList<Composer::PlaybackRange>& ranges);
     // Audio Loop Play started or ended.
     void loopChanged(bool looping);
 
@@ -597,6 +610,10 @@ private:
     VideoQuality quality_ = VideoQuality::Full;
     bool smoothScaling_ = true;
     PlayStats stats_;
+    QList<PlaybackRange> playRanges_;
+    // Adds frames [start, start + length) of one kind to playRanges_, joined to the last range of the
+    // kind when they touch.
+    void notePlayback(std::int64_t start, std::int64_t length, bool dropped);
     Committer committer_;
     KeyResolver keys_;
     EventResolver events_;

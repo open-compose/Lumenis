@@ -224,7 +224,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Show Single/Dual Monitor |  | p.381 | works | ☐ | | |
 | Sync Point Overwrite |  | p.496 | works | ☐ | | |
 | Freeze Frame > Other |  | p.562 | *later* | ☐ | | |
-| Render On-the-Fly |  | p.370 | *later* | ☐ | | |
+| Render On-the-Fly |  | p.370 | works | ☐ | | |
 
 ## Tools menu
 
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 145 of them working with a project open; the
+* 211 menu commands, 146 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

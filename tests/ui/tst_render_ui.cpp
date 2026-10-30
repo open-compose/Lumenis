@@ -14,11 +14,14 @@
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/timeline.h"
 
+#include <QAction>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
 #include <QMessageBox>
+#include <QProgressDialog>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <QTest>
 
 using namespace lumenis;
@@ -121,7 +124,7 @@ private slots:
         QCOMPARE(shown, 1);
         model::Sequence seq = recordSequence(composer);
         QVERIFY(model::isRendered(seq, pipTarget(seq)));
-        const auto clip = model::binItemFromJson(model::renderOf(seq, pipTarget(seq))->clip);
+        const auto clip = model::binItemFromJson(model::renderOf(seq, pipTarget(seq))->clips.at(0));
         QVERIFY(clip);
         QCOMPARE(clip->kind, model::BinItemKind::RenderedEffect);
         QVERIFY(clip->link.value(QStringLiteral("path")).toString().startsWith(QDir::cleanPath(drive)));
@@ -182,6 +185,67 @@ private slots:
         QVERIFY(!model::renderOf(recordSequence(composer), pipTarget(recordSequence(composer))));
         QVERIFY(window.timeline().perform(QStringLiteral("edit.undo")));
         QVERIFY(model::isRendered(recordSequence(composer), pipTarget(recordSequence(composer))));
+
+        // Partial render (p.150): interrupted, Keep saves what was rendered; the next render finishes
+        // it as a second precompute.
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.redo")));
+        QVERIFY(!model::renderOf(recordSequence(composer), pipTarget(recordSequence(composer))));
+        auto interruptSoon = [&window] {
+            QTimer::singleShot(0, &window, [&window] {
+                if (auto* p = window.findChild<QProgressDialog*>(QStringLiteral("renderProgress"))) p->cancel();
+            });
+        };
+        bool askedKeep = false;
+        window.setRenderInterruptHook([&] {
+            askedKeep = true;
+            return true;
+        });
+        interruptSoon();
+        window.renderEffects(true, false, true);
+        settle();
+        QVERIFY(askedKeep);
+        seq = recordSequence(composer);
+        QVERIFY(model::isPartlyRendered(seq, pipTarget(seq)));
+        const std::int64_t kept = model::renderedFrames(*model::renderOf(seq, pipTarget(seq)));
+        QVERIFY(kept > 0 && kept < 20);
+        window.renderEffects(true, false, true);
+        settle();
+        seq = recordSequence(composer);
+        QVERIFY(model::isRendered(seq, pipTarget(seq)));
+        QCOMPARE(model::renderOf(seq, pipTarget(seq))->clips.size(), 2);
+        // Discard keeps nothing and removes the file.
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.undo")));
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.undo")));
+        window.setRenderInterruptHook([] { return false; });
+        interruptSoon();
+        window.renderEffects(true, false, true);
+        settle();
+        QVERIFY(!model::renderOf(recordSequence(composer), pipTarget(recordSequence(composer))));
+
+        // The playback performance indicators (p.136): reported when play stops, shown in TC1, cleared
+        // when play starts again.
+        const QList<Composer::PlaybackRange> trouble{{4, 3, true}, {12, 1, false}};
+        emit composer.playbackDifficulties(MonitorId::Record, trouble);
+        QCOMPARE(window.timeline().playbackIndicators(), trouble);
+        emit composer.playStarted(MonitorId::Record, 1);
+        QVERIFY(window.timeline().playbackIndicators().isEmpty());
+        window.settings().setValue(QStringLiteral("Timeline"), QStringLiteral("highlightRenderAreas"), false);
+        settle();
+        emit composer.playbackDifficulties(MonitorId::Record, trouble);
+        QVERIFY(window.timeline().playbackIndicators().isEmpty());
+
+        // Render Ranges (p.150) is kept with the Timeline's display.
+        Timeline::Display d;
+        QCOMPARE(d.renderRanges, Timeline::RenderRanges::PartialOnly);
+        d.renderRanges = Timeline::RenderRanges::All;
+        QCOMPARE(Timeline::displayFromJson(Timeline::displayToJson(d)).renderRanges, Timeline::RenderRanges::All);
+
+        // Composer > Render On-the-Fly (p.56) toggles.
+        QAction* fly = commands.action(QStringLiteral("composer.render_on_the_fly"));
+        QVERIFY(fly->isCheckable() && fly->isChecked());
+        fly->trigger();
+        QVERIFY(!fly->isChecked());
+        fly->trigger();
         media::setExtraMediaDrives({});
     }
 };

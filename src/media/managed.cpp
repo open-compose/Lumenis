@@ -254,8 +254,9 @@ public:
         return writer.finish(error);
     }
 
-    // V1 from rendered pictures (renderedVideoClip()), in the creation's resolution and raster.
-    bool writeRenderedVideo(const QString& path, const RenderVideo& render, QString* error) {
+    // V1 from rendered pictures (renderedVideoClip()), in the creation's resolution and raster. With
+    // `keep`, a cancel ends the file at the frames written so far (`written`) instead of failing.
+    bool writeRenderedVideo(const QString& path, const RenderVideo& render, QString* error, bool keep, std::int64_t& written) {
         WriterSettings s = settingsFor(QStringLiteral("V1"));
         s.videoCodec = QStringLiteral("dnxhd");
         s.videoProfile = creation_.resolution.profile;
@@ -264,12 +265,17 @@ public:
         s.height = creation_.raster.height();
         MediaWriter writer;
         if (!writer.open(path, s, error)) return false;
+        written = 0;
         for (std::int64_t f = in_; f < out_; ++f) {
             if (!writer.writeVideo(fitted(render(f), creation_.raster))) {
                 if (error) *error = writer.lastError();
                 return false;
             }
-            if (!step()) return cancelled(error);
+            ++written;
+            if (!step()) {
+                if (keep) return writer.finish(error);
+                return cancelled(error);
+            }
         }
         return writer.finish(error);
     }
@@ -727,7 +733,7 @@ std::optional<model::BinItem> renderedAudioClip(const QString& name, const Ratio
 
 std::optional<model::BinItem> renderedVideoClip(const QString& name, const Rational& editRate, std::int64_t frames,
                                                 const RenderVideo& render, const MediaCreation& creation,
-                                                model::BinItemKind kind, QString* error) {
+                                                model::BinItemKind kind, QString* error, bool keepOnCancel) {
     auto failed = [&](const QString& text) -> std::optional<model::BinItem> {
         if (error) *error = text;
         return std::nullopt;
@@ -750,7 +756,10 @@ std::optional<model::BinItem> renderedVideoClip(const QString& name, const Ratio
     made.mediaId = maker.id();
     QString err;
     const QString path = maker.pathFor(folder, QStringLiteral("V1"));
-    if (!maker.writeRenderedVideo(path, render, &err)) return failed(err);
+    std::int64_t written = 0;
+    if (!maker.writeRenderedVideo(path, render, &err, keepOnCancel, written)) return failed(err);
+    frames = written;
+    made.frames = frames;
     made.path = path;
     made.videoStream = 0;
     maker.keep();

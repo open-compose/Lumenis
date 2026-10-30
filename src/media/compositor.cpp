@@ -268,7 +268,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
     if (c.rendered) {
         for (qsizetype i = c.tracks.size() - 1; i >= 0; --i) {
             const auto target = model::renderTargetAt(*c.sequence, c.tracks.at(i), frame);
-            if (!target || !model::isRendered(*c.sequence, *target)) continue;
+            if (!target || !model::isRenderedAt(*c.sequence, *target, frame - target->start)) continue;
             const std::optional<QImage> image = c.rendered(*model::renderOf(*c.sequence, *target), frame - target->start, c.size);
             if (!image) continue; // offline: the effect is computed
             result = Picture::fromImage(*image, w, h);
@@ -288,7 +288,8 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
         if (tf->transition) {
             Picture out = segmentPicture(c, tf->outgoing, tf->outgoingFrame, missing);
             Picture in = segmentPicture(c, tf->segment, tf->frame, missing);
-            layer = transitionPicture(*tf->transition, out, in, tf->progress, w, h);
+            // Without effects (Render On-the-Fly off) a transition is its cut.
+            if (c.effects) layer = transitionPicture(*tf->transition, out, in, tf->progress, w, h);
             if (layer.isNull()) {
                 // Not built yet: the cut, which lies after the outgoing side's frames.
                 const double cutAt = static_cast<double>(tf->transition->before() + 1) / static_cast<double>(tf->transition->duration + 1);
@@ -298,7 +299,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
         } else {
             layer = segmentPicture(c, tf->segment, tf->frame, missing);
         }
-        if (tf->segment && tf->segment->effect && !tf->transition) {
+        if (c.effects && tf->segment && tf->segment->effect && !tf->transition) {
             const model::Effect& e = *tf->segment->effect;
             const QString foreground = QStringLiteral("Foreground");
             const QString level = QStringLiteral("Level");

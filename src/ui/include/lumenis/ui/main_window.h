@@ -338,6 +338,9 @@ public:
     // Cancel during the render keeps nothing. The hook stands in for the dialog (tests; true: OK).
     void renderEffects(bool atPosition, bool rerender = false, bool useLastDrive = false);
     void setRenderHook(std::function<bool(RenderEffectDialog&)> hook) { renderHook_ = std::move(hook); }
+    // Partial render (p.150): an interrupted render asks whether to Keep or Discard what was rendered;
+    // tests answer here (true: Keep).
+    void setRenderInterruptHook(std::function<bool()> hook) { renderInterruptHook_ = std::move(hook); }
     // Clear Renders at Position and In/Out (p.60-61): the renders of the effects there on the selected
     // video tracks forgotten (the precomputes stay), as one undo step ("Undo Clear Renders"). The hook
     // answers the Clear Renders dialog (tests; true: OK).
@@ -606,8 +609,11 @@ private:
     std::function<bool(ConsolidateDialog&)> consolidateHook_;
     std::function<bool(AudioMixdownDialog&)> mixdownHook_;
     std::function<bool(RenderEffectDialog&)> renderHook_;
+    std::function<bool()> renderInterruptHook_;
     std::function<bool(ClearRendersDialog&)> clearRendersHook_;
     QString lastRenderDrive_; // the drive the last Render Effect dialog chose (Alt-click renders there)
+    bool renderOnTheFly_ = true; // Composer > Render On-the-Fly
+    bool highlightRenderAreas_ = true; // the Timeline setting Highlight Suggested Render Areas After Playback
     std::function<int(const QStringList&)> binChoiceHook_;
     std::function<void(const QString&)> revealHook_;
     std::function<bool(UnmountDialog&)> unmountHook_;

@@ -161,12 +161,13 @@ std::optional<model::BinItem> renderedAudioClip(const QString& name, const Ratio
 // `frames` frames at `editRate` with only V1, whose frame `f` is what `render(f)` gives (fitted to the
 // creation's raster on black), written as managed media in the creation's resolution on its video
 // drive. `kind` is the new item's kind (RenderedEffect for a precompute). On failure, or when
-// MediaCreation::progress cancels, the file is removed and `error` says why.
+// MediaCreation::progress cancels, the file is removed and `error` says why; with `keepOnCancel` a cancel
+// keeps the frames made so far instead, the clip as long as they are (partial render, FX Guide p.150).
 using RenderVideo = std::function<QImage(std::int64_t frame)>;
 std::optional<model::BinItem> renderedVideoClip(const QString& name, const Rational& editRate, std::int64_t frames,
                                                 const RenderVideo& render, const MediaCreation& creation,
                                                 model::BinItemKind kind = model::BinItemKind::MasterClip,
-                                                QString* error = nullptr);
+                                                QString* error = nullptr, bool keepOnCancel = false);
 
 // Which clip and track a managed media file holds, from its metadata, and
 // what it holds: for relinking by source name and timecode (p.362-363).

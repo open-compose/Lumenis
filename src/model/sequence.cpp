@@ -59,14 +59,24 @@ const std::pair<TransitionAlignment, const char*> kAlignments[] = {
     {TransitionAlignment::CustomStart, "custom"},
 };
 
-// A render as {clip, key}; nothing for JSON without a clip.
+// A render as {clips: [...], key}; nothing for JSON without a clip. (6.4a's single {clip} is read too.)
 QJsonObject renderToJson(const EffectRender& r) {
-    return {{QStringLiteral("clip"), r.clip}, {QStringLiteral("key"), r.key}};
+    QJsonArray clips;
+    for (const QJsonObject& c : r.clips) clips.append(c);
+    return {{QStringLiteral("clips"), clips}, {QStringLiteral("key"), r.key}};
 }
 std::optional<EffectRender> renderFromJson(const QJsonValue& v) {
     const QJsonObject o = v.toObject();
-    if (o.value(QStringLiteral("clip")).toObject().isEmpty()) return std::nullopt;
-    return EffectRender{o.value(QStringLiteral("clip")).toObject(), o.value(QStringLiteral("key")).toString()};
+    EffectRender r;
+    for (const QJsonValue& c : o.value(QStringLiteral("clips")).toArray()) {
+        if (!c.toObject().isEmpty()) r.clips << c.toObject();
+    }
+    if (o.value(QStringLiteral("clip")).isObject() && !o.value(QStringLiteral("clip")).toObject().isEmpty()) {
+        r.clips << o.value(QStringLiteral("clip")).toObject();
+    }
+    if (r.clips.isEmpty()) return std::nullopt;
+    r.key = o.value(QStringLiteral("key")).toString();
+    return r;
 }
 
 // {effect, duration, alignment} plus start for CustomStart.
