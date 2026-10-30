@@ -135,6 +135,40 @@ Picture finish(const model::Effect& e, const Picture& layer, std::vector<double>
     return imageEffectPicture(pip, keyed, time, span);
 }
 
+// One pixel of the RGB Keyer: its matte value, and its spill taken out (rgbKeyerPicture). A function
+// of its own, with the optimizer off for it under MSVC: MSVC 14.44 failed with an internal compiler
+// error (C1001) on this loop inside rgbKeyerPicture (BUILDING.md).
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma optimize("", off)
+#endif
+double rgbKeyPixel(float* px, const model::Rgb& key, double threshold, double soft, double spill, int spillChannel) {
+    // No local arrays: with the optimizer off, MSVC warns (C4748) about arrays it cannot guard.
+    const double alpha = static_cast<double>(px[3]);
+    double r = alpha > 0 ? static_cast<double>(px[0]) / alpha : 0.0;
+    double g = alpha > 0 ? static_cast<double>(px[1]) / alpha : 0.0;
+    double b = alpha > 0 ? static_cast<double>(px[2]) / alpha : 0.0;
+    const double dr = r - key.red;
+    const double dg = g - key.green;
+    const double db = b - key.blue;
+    const double d = std::sqrt((dr * dr + dg * dg + db * db) / 3.0);
+    if (spill > 0) {
+        double& strongest = spillChannel == 0 ? r : spillChannel == 1 ? g : b;
+        const double first = spillChannel == 0 ? g : r;
+        const double second = spillChannel == 2 ? g : b;
+        const double others = first > second ? first : second;
+        if (strongest > others) {
+            strongest -= (strongest - others) * spill;
+            px[0] = static_cast<float>(r * alpha);
+            px[1] = static_cast<float>(g * alpha);
+            px[2] = static_cast<float>(b * alpha);
+        }
+    }
+    return threshold <= 0.0 ? 1.0 : ramp(d, threshold, threshold + soft);
+}
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma optimize("", on)
+#endif
+
 } // namespace
 
 // ---------------------------------------------------------------- Luma Key and Chroma Key
@@ -235,27 +269,13 @@ Picture rgbKeyerPicture(const model::Effect& e, const Picture& layer, double tim
     const int blur = static_cast<int>(std::lround(std::clamp(num(e, cat, QStringLiteral("Blur"), time, span, 0.0), 0.0, 100.0) / 10.0 * unit));
     const int erode = static_cast<int>(std::lround(std::max(num(e, cat, QStringLiteral("Erode"), time, span, 0.0), 0.0) / 10.0 * unit));
     // The key colour's strongest channel is the one spill shows in.
-    // (Written out plainly: MSVC 14.44 failed with an internal compiler error on max_element over a
-    // local array here; BUILDING.md.)
     int spillChannel = 0;
     if (key.green > key.red && key.green >= key.blue) spillChannel = 1;
     else if (key.blue > key.red && key.blue > key.green) spillChannel = 2;
     Picture work = layer;
     std::vector<double> matte(static_cast<std::size_t>(layer.width()) * static_cast<std::size_t>(layer.height()), 1.0);
     for (std::size_t i = 0; i < matte.size(); ++i) {
-        float* px = &work.data()[i * 4];
-        double rgb[3];
-        colourOf(px, rgb);
-        const double dr = rgb[0] - key.red;
-        const double dg = rgb[1] - key.green;
-        const double db = rgb[2] - key.blue;
-        const double d = std::sqrt((dr * dr + dg * dg + db * db) / 3.0);
-        matte[i] = threshold <= 0.0 ? 1.0 : ramp(d, threshold, threshold + soft);
-        if (spill > 0) {
-            const double others = std::max(rgb[(spillChannel + 1) % 3], rgb[(spillChannel + 2) % 3]);
-            if (rgb[spillChannel] > others) rgb[spillChannel] -= (rgb[spillChannel] - others) * spill;
-            for (int k = 0; k < 3; ++k) px[k] = static_cast<float>(rgb[k]) * px[3];
-        }
+        matte[i] = rgbKeyPixel(&work.data()[i * 4], key, threshold, soft, spill, spillChannel);
     }
     if (flag(e, cat, QStringLiteral("Reverse"))) {
         for (double& m : matte) m = 1.0 - m;

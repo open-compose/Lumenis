@@ -648,8 +648,9 @@ there too.
 ### Windows: "fatal error C1001: Internal compiler error"
 
 MSVC 14.44 (Visual Studio 2022 17.14) crashed compiling `src/media/key_effects.cpp` at the RGB
-Keyer, where `std::max_element` ran over a local `double[3]` and `std::pow(x, 2)` sat in a pixel loop.
-Writing them out plainly (comparisons, `x * x`) avoided it. An internal compiler error is the
+Keyer's pixel loop. Writing it out plainly was not enough (CI run 219); moving the loop's body into a
+function of its own, `rgbKeyPixel`, compiled with `#pragma optimize("", off)` under MSVC only,
+avoided it. An internal compiler error is the
 compiler's fault, not the code's: GCC and Clang build the same file cleanly. Simplify the statement
 at or just before the line the error names, keep the same result (the tests check it), and leave a
 comment saying why, so nobody "tidies" it back. The self-hosted Windows job is the check: it is the
