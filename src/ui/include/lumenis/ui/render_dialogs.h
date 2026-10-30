@@ -16,8 +16,8 @@ namespace lumenis::ui {
 // The Render Effect dialog box (FX Guide p.58-59; docs/spec/rendering.md): "Click the Drive button, and
 // select a drive for the rendered media" and "In the Processing field, select the processing method";
 // "Greyed-out options are not available". Ours: the drives are the media drives (the one given first
-// chosen), the count of effects to render shown above; Application is the only processing available
-// until background rendering (ROADMAP 6.4d2), Background Process and Distributed Processing are dimmed.
+// chosen), the count of effects to render shown above; Application or Background Process ("The render
+// operation is performed in the background", p.59); Distributed Processing is dimmed.
 class RenderEffectDialog : public QDialog {
     Q_OBJECT
 
@@ -26,6 +26,8 @@ public:
 
     // The chosen drive's root.
     QString drive() const;
+    // Whether Background Process is chosen.
+    bool background() const;
     QComboBox* driveMenu() const { return drive_; }
     QComboBox* processingMenu() const { return processing_; }
 
@@ -70,6 +72,9 @@ public:
     model::ExpertMode mode() const;
     void setMode(model::ExpertMode mode);
     QString drive() const;
+    // Whether Background Process is chosen.
+    bool background() const;
+    QComboBox* processingMenu() const { return processing_; }
     Choice choice() const { return choice_; }
     void choose(Choice c);
     QLabel* message() const { return message_; }
@@ -85,6 +90,7 @@ private:
     QRadioButton* entire_ = nullptr;
     QRadioButton* digitalCut_ = nullptr;
     QComboBox* drive_ = nullptr;
+    QComboBox* processing_ = nullptr;
     Choice choice_ = Choice::Cancel;
 };
 

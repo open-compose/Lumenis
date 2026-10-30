@@ -112,6 +112,9 @@ struct MediaCreation {
     MobId master;
     // The fraction done; returning false cancels.
     std::function<bool(double)> progress;
+    // The folder under "Avid MediaFiles/MXF" the picture goes in, when not the one mxfFolder()
+    // chooses: background renders go in "__bg.1" (FX Guide p.59). Only renderedVideoClip() reads it.
+    QString folder;
 };
 // Whether `rate` is a pullup or pulldown of `nominal` (times 1001/1000 or 1000/1001, to the sample):
 // 48048 and 47952 for 48 kHz, 44144 and 44056 for 44.1 kHz.

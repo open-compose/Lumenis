@@ -46,8 +46,7 @@ dialogs in `MainWindow::renderEffects`, `clearRenders` and `src/ui/render_dialog
 * The Render Effect dialog box (p.58-59). "Click the Drive button, and select a drive for the rendered
   media"; "In the Processing field, select the processing method"; "Greyed-out options are not
   available". Ours: a Drive menu of the media drives (the Render tab's Video Drive, or the last one
-  chosen); Processing offers Application, with Background Process and Distributed Processing dimmed until
-  6.4d2; the number of effects is shown. "To prevent the Render Effects dialog box from opening, press
+  chosen); Processing offers Application and Background Process (6.4d2), with Distributed Processing dimmed; the number of effects is shown. "To prevent the Render Effects dialog box from opening, press
   and hold the Alt key ... Media Composer uses the last drive selected" (p.58).
 * The Effect Editor's Render Effect button (p.84) renders at the position, with Shift and Alt as above.
 * Rendering shows a progress dialog; all the renders are kept with their effects as one undo step
@@ -173,3 +172,30 @@ and Save after Render in `renderTargetsNow`; the Media Tool's Precompute Clips i
   spatial and motion adapters, have these effects indicated by separate icons ... Temporal (motion)
   adapters appear with a T, spatial (FrameFlex) adapters appear with an S, and Color adapters appear with a
   C." We have no adapters yet; the menu stays dimmed until the motion adapters (6.5) bring the first.
+
+## 6.4d2: background rendering
+
+Code: `MainWindow::renderInBackground` and `applyBackgroundRenders`; `MediaCreation::folder` read by
+`media::renderedVideoClip`; `BackgroundQueue::add`'s `done`; `background()` on the Render Effect and Expert
+Render dialogs. Test: `tst_render_ui`.
+
+* "To render effects in the background: ... Select Background Process. Click OK. The render operation is
+  performed in the background. You can continue working without having to wait for the background
+  operation to complete. When the effects are rendered, the sequence will link to the new pre-computes and
+  the effect icons in the Timeline will reflect the rendered state" (FX Guide p.59). Background Process is
+  offered in the Render Effect dialog and the Expert Render dialog; Alt (the last drive) also takes the
+  last processing chosen.
+* The job goes on the Background Queue (Tools > Background Queue, p.59; Editing Guide p.356-357) named
+  "Render: <sequence>", with its progress, Cancel and Priority. It works from a copy of the sequence and its
+  clips as they were when it was queued, with a frame cache of its own; a partial render in date is
+  finished, as in the application. A cancelled job keeps what it finished: renders of whole effects done
+  before the cancel are linked, the one in progress is discarded.
+* "With Background Render, a new directory is created where the background media is located ...
+  drive:AvidMediaFiles/MXF/__bg.1" (p.59). The shared-storage form "computername__bg.1" (p.60) is not
+  used: we do not tell shared storage apart yet.
+* Linking (ours, for "the sequence will link to the new pre-computes"): each render goes to the effect,
+  on the track it was made for, whose render key is the render's, so edits made meanwhile that keep the
+  effect and what lies under it (moving it, changing other tracks) still link it, and an effect changed
+  meanwhile stays unrendered. In the Record monitor it is one Render Effect undo step; otherwise the
+  sequence in its bin is changed. Its precomputes go into the bin either way (6.4d1), the completion sound
+  and Save after Render follow.

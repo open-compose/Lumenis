@@ -954,7 +954,7 @@ phase of their own. They are done in three steps:
       Render, and precompute management: precomputes as reference clips in the sequence's bin (Show
       reference clips, Reveal File, Delete), the Media Tool's Precompute Clips, and deleting a
       precompute rendered again before a save. Done. Show Adapters goes with the first adapters, motion adapters (6.5).
-    * 6.4d2, Background Process rendering (the __bg folders, the Background Queue).
+    * 6.4d2, Background Process rendering (the __bg folders, the Background Queue). Done, so 6.4 is.
 * 6.5, motion effects and Timewarp (ch.7, p.165-205): freeze frames, variable speed, strobe, the
   Motion Effect Editor's speed and position graphs.
 * 6.6, layered and nested effects (ch.8, p.206-228): nesting and stepping in, Collapse,

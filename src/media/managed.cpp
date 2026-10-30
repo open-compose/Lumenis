@@ -740,7 +740,13 @@ std::optional<model::BinItem> renderedVideoClip(const QString& name, const Ratio
     };
     if (frames <= 0) return failed(QObject::tr("There is no picture to make media of."));
     if (creation.videoDrive.isEmpty()) return failed(QObject::tr("No target drive is chosen."));
-    const QString folder = mxfFolder(creation.videoDrive, error);
+    QString folder;
+    if (creation.folder.isEmpty()) {
+        folder = mxfFolder(creation.videoDrive, error);
+    } else {
+        folder = QDir(QDir(mediaFilesFolder(creation.videoDrive)).filePath(QStringLiteral("MXF"))).filePath(creation.folder);
+        if (!QDir().mkpath(folder)) return failed(QObject::tr("Cannot make the folder %1.").arg(QDir::toNativeSeparators(folder)));
+    }
     if (folder.isEmpty()) return std::nullopt;
     model::BinItem clip;
     clip.name = name;

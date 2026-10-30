@@ -3174,6 +3174,10 @@ void MainWindow::fillComposition(media::Composition& c, const model::LoadedClip&
         }
         return frames_->frame(*clip, frame, want);
     };
+    fillCompositionQuality(c);
+}
+
+void MainWindow::fillCompositionQuality(media::Composition& c) const {
     // The Render setting's Image Interpolation (p.1214).
     const QString interpolation = settings_->text(QStringLiteral("Render"), QStringLiteral("imageInterpolation"));
     c.interpolation = interpolation == QLatin1String("draft")      ? media::ImageInterpolation::Draft
@@ -3229,12 +3233,29 @@ void MainWindow::renderEffects(bool atPosition, bool rerender, bool useLastDrive
         if (!ok) return;
         creation.videoDrive = dialog.drive();
         lastRenderDrive_ = creation.videoDrive;
+        lastRenderBackground_ = dialog.background();
     }
-    renderTargetsNow(*rec, seq, targets, creation, rerender);
+    renderTargetsNow(*rec, seq, targets, creation, rerender, lastRenderBackground_);
+}
+
+// The Render tab's Effects Processing (p.151-152): "Automatic ... Effects render at 16-bit for 10-bit
+// media and at 8-bit for 8-bit media" (ours: by the render resolution's depth); 32-bit is 2026.8's.
+media::EffectPrecision MainWindow::renderPrecision(const media::MediaCreation& creation) const {
+    const QString processing = settings_->text(QStringLiteral("Media Creation"), QStringLiteral("renderEffectsProcessing"));
+    if (processing == QLatin1String("8bit")) return media::EffectPrecision::Bits8;
+    if (processing == QLatin1String("16bit")) return media::EffectPrecision::Bits16;
+    if (processing == QLatin1String("32bit")) return media::EffectPrecision::Bits32;
+    return creation.resolution.pixelFormat.contains(QLatin1String("10")) ? media::EffectPrecision::Bits16
+                                                                        : media::EffectPrecision::Bits8;
 }
 
 void MainWindow::renderTargetsNow(const model::LoadedClip& loaded, const model::Sequence& seq,
-                                  const QList<model::RenderTarget>& targets, media::MediaCreation creation, bool rerender) {
+                                  const QList<model::RenderTarget>& targets, media::MediaCreation creation, bool rerender,
+                                  bool background) {
+    if (background) {
+        renderInBackground(loaded, seq, targets, std::move(creation), rerender);
+        return;
+    }
     const model::LoadedClip* rec = &loaded;
     auto fail = [this](const QString& text) {
         auto* box = new QMessageBox(QMessageBox::Warning, tr("Render Effect"), text, QMessageBox::Ok, this);
@@ -3245,19 +3266,7 @@ void MainWindow::renderTargetsNow(const model::LoadedClip& loaded, const model::
     media::Composition c;
     c.sequence = &seq;
     fillComposition(c, *rec);
-    // The Render tab's Effects Processing (p.151-152): "Automatic ... Effects render at 16-bit for 10-bit
-    // media and at 8-bit for 8-bit media" (ours: by the render resolution's depth); 32-bit is 2026.8's.
-    const QString processing = settings_->text(QStringLiteral("Media Creation"), QStringLiteral("renderEffectsProcessing"));
-    if (processing == QLatin1String("8bit")) {
-        c.precision = media::EffectPrecision::Bits8;
-    } else if (processing == QLatin1String("16bit")) {
-        c.precision = media::EffectPrecision::Bits16;
-    } else if (processing == QLatin1String("32bit")) {
-        c.precision = media::EffectPrecision::Bits32;
-    } else {
-        c.precision = creation.resolution.pixelFormat.contains(QLatin1String("10")) ? media::EffectPrecision::Bits16
-                                                                                   : media::EffectPrecision::Bits8;
-    }
+    c.precision = renderPrecision(creation);
     // The renders, made one after the other and kept together. A partial render in date is finished:
     // "Media Composer then renders only the part of the effect that has not rendered previously and
     // saves that part as a separate precompute" (p.150); Shift starts again from the first frame.
@@ -3334,13 +3343,157 @@ void MainWindow::renderTargetsNow(const model::LoadedClip& loaded, const model::
     keepPrecomputes(rec->binId, renders, replaced);
     ConsoleLog::instance().append(interrupted ? tr("Render Effect: interrupted; %n effect(s) kept.", "", static_cast<int>(made.size()))
                                               : tr("Render Effect: %n effect(s) rendered.", "", static_cast<int>(made.size())));
+    renderFinished(!interrupted);
+}
+
+void MainWindow::renderFinished(bool completed) {
     // "Save after Render: When this option is selected, Media Composer saves open bins after you
     // perform a render operation" (p.1208).
     if (settings_->flag(QStringLiteral("Media Creation"), QStringLiteral("saveAfterRender"))) {
         QString error;
         if (!binContainer_->saveAll(&error)) ConsoleLog::instance().append(tr("Save after Render: %1").arg(error));
     }
-    if (!interrupted) playRenderCompletionSound();
+    if (completed) playRenderCompletionSound();
+}
+
+// "Select Background Process ... The render operation is performed in the background. You can continue
+// working without having to wait for the background operation to complete. When the effects are
+// rendered, the sequence will link to the new pre-computes and the effect icons in the Timeline will
+// reflect the rendered state" (FX Guide p.59); the media goes in "drive:AvidMediaFiles/MXF/__bg.1"
+// (p.59). The job runs on the Background Queue's thread, so everything it reads is copied first: the
+// sequence, its clips (resolved now), and a frame cache of its own. On completion each render goes to
+// the effect it was made from, found again by its key, wherever the sequence is now.
+void MainWindow::renderInBackground(const model::LoadedClip& loaded, const model::Sequence& seq,
+                                    const QList<model::RenderTarget>& targets, media::MediaCreation creation, bool rerender) {
+    auto sequence = std::make_shared<const model::Sequence>(seq);
+    // The clips the sequence uses, by bin and clip id.
+    auto clips = std::make_shared<QHash<QString, model::BinItem>>();
+    auto key = [](const QString& binId, const QString& clipId) { return binId + QLatin1Char('\n') + clipId; };
+    for (const model::Track& t : seq.tracks()) {
+        for (const model::Segment& segment : t.segments) {
+            if (segment.isFiller() || clips->contains(key(segment.binId, segment.clipId))) continue;
+            if (const auto clip = composer_->resolve(segment.binId, segment.clipId)) {
+                clips->insert(key(segment.binId, segment.clipId), *clip);
+            }
+        }
+    }
+    auto cache = std::make_shared<media::FrameCache>();
+    media::Composition c;
+    c.sequence = sequence.get();
+    c.source = [clips, cache, key](const model::Segment& segment, std::int64_t clipFrame, QSize want) -> std::optional<QImage> {
+        const auto it = clips->constFind(key(segment.binId, segment.clipId));
+        if (it == clips->cend() || !media::isLinked(*it)) return QImage();
+        if (!cache->isOnline(*it)) return std::nullopt;
+        return cache->frame(*it, clipFrame, want);
+    };
+    c.burnIn.sequence = loaded.item;
+    c.burnIn.markIn = loaded.in;
+    c.burnIn.markOut = loaded.out;
+    c.burnIn.clip = [clips, key](const model::Segment& segment) -> std::optional<model::BinItem> {
+        const auto it = clips->constFind(key(segment.binId, segment.clipId));
+        if (it == clips->cend()) return std::nullopt;
+        return *it;
+    };
+    c.rendered = [cache](const model::EffectRender& render, std::int64_t at, QSize want) -> std::optional<QImage> {
+        const auto piece = model::renderedClipAt(render, at);
+        if (!piece) return std::nullopt;
+        const auto clip = model::binItemFromJson(piece->first);
+        if (!clip || !cache->isOnline(*clip)) return std::nullopt;
+        return cache->frame(*clip, piece->second, want);
+    };
+    // The Image Interpolation and Effects Processing of now.
+    fillCompositionQuality(c);
+    c.precision = renderPrecision(creation);
+    creation.folder = QStringLiteral("__bg.1");
+    creation.progress = {};
+
+    const QString name = loaded.item.name;
+    const Rational rate = loaded.item.editRate;
+    // The renders made, each with the target it was made for, written by the worker and read once
+    // the job is done (the queue's done flag orders the two).
+    auto made = std::make_shared<QList<std::pair<model::RenderTarget, model::EffectRender>>>();
+    BackgroundQueue::Work work = [sequence, c, targets, name, rate, creation, rerender, made](const std::function<bool(double)>& progress) {
+        media::ConsolidateResult result;
+        media::MediaCreation mc = creation;
+        for (qsizetype i = 0; i < targets.size(); ++i) {
+            const model::RenderTarget& target = targets.at(i);
+            const auto share = static_cast<double>(targets.size());
+            mc.progress = [&progress, i, share](double done) { return progress((static_cast<double>(i) + done) / share); };
+            model::EffectRender earlier;
+            std::int64_t start = 0;
+            if (!rerender && model::isPartlyRendered(*sequence, target)) {
+                earlier = *model::renderOf(*sequence, target);
+                start = model::renderedFrames(earlier);
+            }
+            QString error;
+            const auto render = media::renderEffect(c, target, name, rate, mc, &error, start, false);
+            if (!render) {
+                result.error = error;
+                break;
+            }
+            model::EffectRender whole = *render;
+            whole.clips = earlier.clips + render->clips;
+            made->append({target, whole});
+        }
+        return result;
+    };
+    const QString binId = loaded.binId;
+    const QString sequenceId = loaded.item.id;
+    backgroundQueue_->add(tr("Render: %1").arg(name), binId, std::move(work), BackgroundQueue::Priority::Normal,
+                          [this, binId, sequenceId, made](const media::ConsolidateResult& result) {
+                              applyBackgroundRenders(binId, sequenceId, *made);
+                              if (!result.error.isEmpty()) ConsoleLog::instance().append(tr("Render Effect: %1").arg(result.error));
+                              renderFinished(result.error.isEmpty());
+                          });
+    ConsoleLog::instance().append(tr("Render Effect: %n effect(s) queued in the background.", "", static_cast<int>(targets.size())));
+}
+
+void MainWindow::applyBackgroundRenders(const QString& binId, const QString& sequenceId,
+                                        const QList<std::pair<model::RenderTarget, model::EffectRender>>& made) {
+    if (made.isEmpty()) return;
+    // The effect each render was made from: the target of the same track whose key is the render's
+    // (the sequence may have been edited meanwhile; a render that no longer matches is not linked).
+    auto link = [&made](model::Sequence& s, QList<model::EffectRender>* linked, QList<model::EffectRender>* replaced) {
+        bool any = false;
+        for (const auto& [target, render] : made) {
+            for (const model::RenderTarget& t : model::renderTargets(s, {target.track}, 0, s.duration())) {
+                if (model::renderKey(s, t) != render.key) continue;
+                if (replaced) {
+                    if (const auto before = model::renderOf(s, t)) replaced->append(*before);
+                }
+                if (model::setRender(s, t, render)) {
+                    any = true;
+                    if (linked) linked->append(render);
+                }
+                break;
+            }
+        }
+        return any;
+    };
+    QList<model::EffectRender> linked;
+    QList<model::EffectRender> replaced;
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (rec && rec->item.id == sequenceId) {
+        // In the Record monitor: one undo step, as a render in the application is.
+        model::Sequence probe = model::Sequence::fromItem(rec->item);
+        link(probe, &linked, &replaced);
+        timeline_->changeRecordSequence(tr("Render Effect"), [&](model::Sequence& s) { return link(s, nullptr, nullptr); });
+    } else if (BinDocument* doc = binContainer_->document(binId)) {
+        // In its bin only: the bin item changes.
+        if (const model::BinItem* item = doc->bin().item(sequenceId)) {
+            model::Sequence s = model::Sequence::fromItem(*item);
+            if (link(s, &linked, &replaced)) {
+                model::BinItem changed = *item;
+                s.storeIn(changed);
+                doc->replaceItem(changed);
+            }
+        }
+    }
+    // Precomputes of renders that matched nothing still go in the bin, to be found and deleted.
+    QList<model::EffectRender> all;
+    for (const auto& [target, render] : made) all << render;
+    keepPrecomputes(binId, all, replaced);
+    ConsoleLog::instance().append(tr("Render Effect: %n effect(s) rendered in the background.", "", static_cast<int>(linked.size())));
 }
 
 void MainWindow::keepPrecomputes(const QString& binId, const QList<model::EffectRender>& renders,
@@ -3486,6 +3639,7 @@ void MainWindow::expertRender() {
     case ExpertRenderDialog::Choice::Modify:
         // "The effects identified for rendering remain highlighted, and you can modify the set".
         lastRenderDrive_ = dialog.drive();
+        lastRenderBackground_ = dialog.background();
         timeline_->setExpertSelection(targets, true);
         return;
     case ExpertRenderDialog::Choice::Ok:
@@ -3498,7 +3652,8 @@ void MainWindow::expertRender() {
     }
     creation.videoDrive = dialog.drive();
     lastRenderDrive_ = creation.videoDrive;
-    renderTargetsNow(*rec, seq, targets, creation, false);
+    lastRenderBackground_ = dialog.background();
+    renderTargetsNow(*rec, seq, targets, creation, false, lastRenderBackground_);
 }
 
 void MainWindow::renderExpertSelection(bool useLastDrive) {
@@ -3516,8 +3671,9 @@ void MainWindow::renderExpertSelection(bool useLastDrive) {
         if (!ok) return;
         creation.videoDrive = dialog.drive();
         lastRenderDrive_ = creation.videoDrive;
+        lastRenderBackground_ = dialog.background();
     }
-    renderTargetsNow(*rec, seq, targets, creation, false);
+    renderTargetsNow(*rec, seq, targets, creation, false, lastRenderBackground_);
 }
 
 void MainWindow::clearRenders(bool atPosition) {

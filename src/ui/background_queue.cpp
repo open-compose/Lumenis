@@ -34,13 +34,14 @@ BackgroundQueue::~BackgroundQueue() {
     if (worker_.joinable()) worker_.join();
 }
 
-int BackgroundQueue::add(const QString& name, const QString& binId, Work work, Priority priority) {
+int BackgroundQueue::add(const QString& name, const QString& binId, Work work, Priority priority, Done done) {
     Entry e;
     e.job.id = nextId_++;
     e.job.name = name;
     e.job.binId = binId;
     e.job.priority = priority;
     e.work = std::move(work);
+    e.onDone = std::move(done);
     entries_ << e;
     startNext();
     emit changed();
@@ -165,9 +166,18 @@ void BackgroundQueue::poll() {
         }
         e->job.progress = 1.0;
         const QString binId = e->job.binId;
+        const Done done = e->onDone;
+        // What the work held (a render's frame cache keeps files open, which Windows will not delete)
+        // goes with it.
+        e->work = {};
+        e->onDone = {};
         running_ = -1;
-        // What was made goes in the bin, cancelled or not.
-        emit finished(binId, result);
+        // What was made goes in the bin (or to the job's own `done`), cancelled or not.
+        if (done) {
+            done(result);
+        } else {
+            emit finished(binId, result);
+        }
         startNext();
     }
     emit changed();

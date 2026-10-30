@@ -30,6 +30,7 @@ class QToolButton;
 namespace lumenis::media {
 class AudioPlayer;
 struct Composition;
+enum class EffectPrecision;
 struct AudioPiece;
 }
 
@@ -619,9 +620,24 @@ private:
     void fillComposition(media::Composition& c, const model::LoadedClip& loaded);
     // Renders `targets` of the Record monitor's sequence `seq` (loaded as `loaded`) with `creation`'s
     // drive and resolution: the progress, partial render and Keep or Discard, one undo step
-    // (renderEffects() and the ExpertRender carry on here).
+    // (renderEffects() and the ExpertRender carry on here). With `background`, renderInBackground().
     void renderTargetsNow(const model::LoadedClip& loaded, const model::Sequence& seq, const QList<model::RenderTarget>& targets,
-                          media::MediaCreation creation, bool rerender);
+                          media::MediaCreation creation, bool rerender, bool background = false);
+    // Background Process (FX Guide p.59): the same renders as a Background Queue job, into the drive's
+    // "MXF/__bg.1" folder; applyBackgroundRenders() links them when the job is done.
+    void renderInBackground(const model::LoadedClip& loaded, const model::Sequence& seq, const QList<model::RenderTarget>& targets,
+                            media::MediaCreation creation, bool rerender);
+    // Links background renders to the effects they were made from in the sequence `sequenceId` of bin
+    // `binId` (through the Timeline when it is in the Record monitor, else in the bin), matching each by
+    // its key, and keeps their precomputes in the bin.
+    void applyBackgroundRenders(const QString& binId, const QString& sequenceId,
+                                const QList<std::pair<model::RenderTarget, model::EffectRender>>& made);
+    // After a render: Save after Render, and the completion sound when it was not interrupted.
+    void renderFinished(bool completed);
+    // The Render tab's Effects Processing for `creation`.
+    media::EffectPrecision renderPrecision(const media::MediaCreation& creation) const;
+    // The Render setting's Image Interpolation into `c`.
+    void fillCompositionQuality(media::Composition& c) const;
     std::optional<std::pair<model::BinItem, std::int64_t>> frameAt(MonitorId monitor, std::int64_t position) const;
 
     // Starts the monitor's sound at `speed` for playback, or none above three times normal.
@@ -646,6 +662,7 @@ private:
     std::function<void(ExpertRenderDialog&)> expertHook_;
     std::function<bool(ClearRendersDialog&)> clearRendersHook_;
     QString lastRenderDrive_; // the drive the last Render Effect dialog chose (Alt-click renders there)
+    bool lastRenderBackground_ = false; // and whether it chose Background Process
     bool renderOnTheFly_ = true; // Composer > Render On-the-Fly
     bool highlightRenderAreas_ = true; // the Timeline setting Highlight Suggested Render Areas After Playback
     std::function<int(const QStringList&)> binChoiceHook_;

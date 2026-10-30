@@ -6,6 +6,7 @@
 #include "lumenis/media/media.h"
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/ui/background_queue.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
@@ -347,6 +348,43 @@ private slots:
         window.expertRender();
         settle();
         QVERIFY(model::isRendered(recordSequence(composer), pipTarget(recordSequence(composer))));
+
+        // Background Process (FX Guide p.59): a Background Queue job writes into MXF/__bg.1 while
+        // editing goes on; when done, the render is linked to its effect, which an edit made meanwhile
+        // has moved (filler before everything keeps the render's key).
+        window.clearRenders(false);
+        settle();
+        QVERIFY(!model::renderOf(recordSequence(composer), pipTarget(recordSequence(composer))));
+        bool offered = false;
+        window.setRenderHook([&](RenderEffectDialog& dialog) {
+            offered = dialog.processingMenu()->itemText(1) == QLatin1String("Background Process");
+            dialog.processingMenu()->setCurrentIndex(1);
+            return dialog.background();
+        });
+        window.renderEffects(true);
+        QVERIFY(offered);
+        const QList<BackgroundQueue::Job> jobs = window.backgroundQueue().jobs();
+        QVERIFY(!jobs.isEmpty());
+        QVERIFY(jobs.last().name.contains(QStringLiteral("Render")));
+        QVERIFY(window.timeline().changeRecordSequence(QStringLiteral("Add Filler"), [](model::Sequence& s) {
+            QStringList video;
+            for (const model::Track& t : s.tracks()) {
+                if (t.kind == model::TrackKind::Video) video << model::trackName(t.kind, t.number);
+            }
+            for (const QString& name : video) s.track(name)->segments.prepend(model::Segment::filler(10));
+            return true;
+        }));
+        window.backgroundQueue().waitForIdle();
+        settle();
+        QCOMPARE(window.backgroundQueue().jobs().last().state, BackgroundQueue::State::Completed);
+        seq = recordSequence(composer);
+        const model::RenderTarget moved = *model::renderTargetAt(seq, QStringLiteral("V1"), 15);
+        QCOMPARE(moved.start, 10);
+        QVERIFY(model::isRendered(seq, moved));
+        const auto background = model::binItemFromJson(model::renderOf(seq, moved)->clips.at(0));
+        QVERIFY(background);
+        QVERIFY(background->link.value(QStringLiteral("path")).toString().contains(QStringLiteral("/MXF/__bg.1/")));
+        QVERIFY(bin->bin().item(background->id));
         media::setExtraMediaDrives({});
     }
 };

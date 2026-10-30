@@ -175,7 +175,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   ExpertRender at Position left out (not in the menu); Image Interpolation's
   Standard filtering as Advanced does; the Render Sound as two tones;
   precomputes going into the sequence's bin, Rendered Effects standing for
-  Set Bin Display's "Effects"; autodeletion when a render is replaced.
+  Set Bin Display's "Effects"; autodeletion when a render is replaced;
+  background renders linked by their key, a cancelled job keeping the
+  effects it finished, no "computername__bg.1" on shared storage.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

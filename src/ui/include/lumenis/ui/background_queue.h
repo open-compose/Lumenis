@@ -51,8 +51,13 @@ public:
     // Asks every job to stop and waits for the running one.
     ~BackgroundQueue() override;
 
-    // Queues `work` for the bin `binId` and starts it if nothing runs. Returns the job's id.
-    int add(const QString& name, const QString& binId, Work work, Priority priority = Priority::Normal);
+    // What to do with a job's result on the UI thread, in place of finished() (a background render
+    // links its precomputes to the sequence rather than adding clips to the bin).
+    using Done = std::function<void(const media::ConsolidateResult& result)>;
+
+    // Queues `work` for the bin `binId` and starts it if nothing runs. Returns the job's id. With
+    // `done`, the result goes there rather than to finished().
+    int add(const QString& name, const QString& binId, Work work, Priority priority = Priority::Normal, Done done = {});
     // The Cancel button: a waiting job is dropped, a running one stops.
     void cancel(int id);
     // The Priority menu; a running job is not affected (p.357).
@@ -79,6 +84,7 @@ private:
     struct Entry {
         Job job;
         Work work;
+        Done onDone; // the result's handler, if not finished()
         std::shared_ptr<std::atomic<int>> permille = std::make_shared<std::atomic<int>>(0);
         std::shared_ptr<std::atomic<bool>> stop = std::make_shared<std::atomic<bool>>(false);    // asked to stop
         std::shared_ptr<std::atomic<bool>> stopped = std::make_shared<std::atomic<bool>>(false); // the work was told

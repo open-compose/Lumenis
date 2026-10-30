@@ -32,11 +32,8 @@ RenderEffectDialog::RenderEffectDialog(int effects, const QString& drive, QWidge
     processing_ = new QComboBox(this);
     processing_->setObjectName(QStringLiteral("processing"));
     processing_->addItems({tr("Application"), tr("Background Process"), tr("Distributed Processing")});
-    // Only rendering within the application for now; the others are dimmed (p.59).
-    if (auto* model = qobject_cast<QStandardItemModel*>(processing_->model())) {
-        model->item(1)->setEnabled(false);
-        model->item(2)->setEnabled(false);
-    }
+    // Distributed Processing (other machines) is dimmed (p.59).
+    if (auto* model = qobject_cast<QStandardItemModel*>(processing_->model())) model->item(2)->setEnabled(false);
     form->addRow(tr("Processing:"), processing_);
     layout->addLayout(form);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
@@ -48,6 +45,10 @@ RenderEffectDialog::RenderEffectDialog(int effects, const QString& drive, QWidge
 
 QString RenderEffectDialog::drive() const {
     return drive_->currentData().toString();
+}
+
+bool RenderEffectDialog::background() const {
+    return processing_->currentIndex() == 1;
 }
 
 ClearRendersDialog::ClearRendersDialog(QWidget* parent) : QDialog(parent) {
@@ -101,14 +102,11 @@ ExpertRenderDialog::ExpertRenderDialog(const std::function<int(model::ExpertMode
     for (const media::MediaDrive& d : media::mediaDrives()) drive_->addItem(d.name == d.root ? d.root : d.name, d.root);
     if (const int at = drive_->findData(drive); at >= 0) drive_->setCurrentIndex(at);
     form->addRow(tr("Drive:"), drive_);
-    auto* processing = new QComboBox(this);
-    processing->setObjectName(QStringLiteral("processing"));
-    processing->addItems({tr("Application"), tr("Background Process"), tr("Distributed Processing")});
-    if (auto* model = qobject_cast<QStandardItemModel*>(processing->model())) {
-        model->item(1)->setEnabled(false);
-        model->item(2)->setEnabled(false);
-    }
-    form->addRow(tr("Processing:"), processing);
+    processing_ = new QComboBox(this);
+    processing_->setObjectName(QStringLiteral("processing"));
+    processing_->addItems({tr("Application"), tr("Background Process"), tr("Distributed Processing")});
+    if (auto* model = qobject_cast<QStandardItemModel*>(processing_->model())) model->item(2)->setEnabled(false);
+    form->addRow(tr("Processing:"), processing_);
     layout->addLayout(form);
     auto* buttons = new QDialogButtonBox(this);
     buttons->addButton(QDialogButtonBox::Cancel);
@@ -137,6 +135,10 @@ void ExpertRenderDialog::setMode(model::ExpertMode mode) {
 
 QString ExpertRenderDialog::drive() const {
     return drive_->currentData().toString();
+}
+
+bool ExpertRenderDialog::background() const {
+    return processing_->currentIndex() == 1;
 }
 
 void ExpertRenderDialog::choose(Choice c) {

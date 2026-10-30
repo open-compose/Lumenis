@@ -501,7 +501,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.4d1, the Render setting (Image Interpolation `media::ImageInterpolation`, Render Completion Sound
   `MainWindow::playRenderCompletionSound`), Save after Render and precomputes as reference clips in the
   sequence's bin with the Media Tool's Precompute Clips (`MainWindow::keepPrecomputes`), is done.
-  Next: 6.4d2, background rendering (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.4d2, Background Process rendering (`MainWindow::renderInBackground`, `applyBackgroundRenders`; media in
+  `MXF/__bg.1` through `MediaCreation::folder`; `BackgroundQueue::add`'s `done`), is done, so 6.4 is.
+  Next: 6.5 (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 
