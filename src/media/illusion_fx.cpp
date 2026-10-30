@@ -49,12 +49,16 @@ std::int64_t frameOf(double time, const model::EffectSpan& span) {
 
 // A hash of integers to 0..1, the same everywhere.
 double hash01(std::int64_t a, std::int64_t b, std::int64_t c, std::int64_t seed) {
+    // (Written out, not looped over a braced list: MSVC 14.44 has failed on such loops; BUILDING.md.)
     std::uint64_t h = 0x9E3779B97F4A7C15ull ^ static_cast<std::uint64_t>(seed);
-    for (const std::int64_t v : {a, b, c}) {
+    auto mixIn = [&h](std::int64_t v) {
         h ^= static_cast<std::uint64_t>(v) + 0x9E3779B97F4A7C15ull + (h << 6) + (h >> 2);
         h *= 0xBF58476D1CE4E5B9ull;
         h ^= h >> 31;
-    }
+    };
+    mixIn(a);
+    mixIn(b);
+    mixIn(c);
     return static_cast<double>(h >> 11) / 9007199254740992.0; // 2^53
 }
 
