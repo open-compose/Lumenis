@@ -169,7 +169,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   the whole sequence; Automatic processing by the render resolution's depth;
   Discard deleting this render's precomputes; the Render Ranges line along
   the track's foot; what counts as a red or yellow playback range, and no
-  blue; Render On-the-Fly on until turned off, not kept between sessions.
+  blue; Render On-the-Fly on until turned off, not kept between sessions;
+  ExpertRender's analysis (non-real-time effects, more than two stacked,
+  the topmost selected track's effect), its three choices always offered,
+  ExpertRender at Position left out (not in the menu).
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

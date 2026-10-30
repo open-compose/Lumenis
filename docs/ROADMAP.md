@@ -946,7 +946,8 @@ phase of their own. They are done in three steps:
     Only, All), the playback performance indicators (red, yellow and blue bars; Highlight Suggested Render
     Areas After Playback) and Composer > Render On-the-Fly. Done (blue is not told apart from yellow).
   * 6.4c, ExpertRender at Position and In/Out: the analysis, the Expert Render dialog (recommended
-    ranges, entire selection, Prepare effects for Digital Cut) and Modify Selection.
+    ranges, entire selection, Prepare effects for Digital Cut) and Modify Selection. Done (In/Out, the
+    menu's only one).
   * 6.4d, the Render settings (Image Interpolation, the Render Using menus, Effects Quality and HQ,
     Render Completion Sound), Background Process rendering (the __bg folders, the Background Queue),
     precompute management (Show reference clips, Reveal File, the Media Tool's precompute clips, Save

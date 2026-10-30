@@ -18,6 +18,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
+#include <QLabel>
 #include <QMessageBox>
 #include <QProgressDialog>
 #include <QTemporaryDir>
@@ -246,6 +247,51 @@ private slots:
         fly->trigger();
         QVERIFY(!fly->isChecked());
         fly->trigger();
+
+        // ExpertRender In/Out (p.140-147), marks 0-19. The PIP plays in real time, so only Prepare
+        // effects for Digital Cut asks for it.
+        window.setClearRendersHook([](ClearRendersDialog&) { return true; });
+        window.clearRenders(false);
+        settle();
+        QVERIFY(!model::isRendered(recordSequence(composer), pipTarget(recordSequence(composer))));
+        QString message;
+        window.setExpertRenderHook([&](ExpertRenderDialog& dialog) {
+            message = dialog.message()->text();
+            dialog.setMode(model::ExpertMode::DigitalCut);
+            dialog.choose(ExpertRenderDialog::Choice::Modify);
+        });
+        commands.action(QStringLiteral("timeline.render.expertrender_in_out"))->trigger();
+        settle();
+        QCOMPARE(message, QStringLiteral("No effects need rendering."));
+        // Modify Selection: the PIP stays highlighted; Shift+click takes it out and puts it back.
+        QVERIFY(window.timeline().isModifyingExpertSelection());
+        QCOMPARE(window.timeline().expertSelection().size(), 1);
+        QVERIFY(window.timeline().toggleExpertTarget(QStringLiteral("V1"), 5));
+        QVERIFY(window.timeline().expertSelection().isEmpty());
+        QVERIFY(window.timeline().toggleExpertTarget(QStringLiteral("V1"), 5));
+        // The Render Effect button renders the set (Alt: the last drive).
+        window.renderExpertSelection(true);
+        settle();
+        QVERIFY(!window.timeline().isModifyingExpertSelection());
+        QVERIFY(model::isRendered(recordSequence(composer), pipTarget(recordSequence(composer))));
+        // Cancel takes the highlighting away; OK renders.
+        window.clearRenders(false);
+        settle();
+        window.setExpertRenderHook([](ExpertRenderDialog& dialog) {
+            dialog.setMode(model::ExpertMode::DigitalCut);
+            dialog.choose(ExpertRenderDialog::Choice::Cancel);
+        });
+        window.expertRender();
+        settle();
+        QVERIFY(window.timeline().expertSelection().isEmpty());
+        QVERIFY(!model::renderOf(recordSequence(composer), pipTarget(recordSequence(composer))));
+        window.setExpertRenderHook([](ExpertRenderDialog& dialog) {
+            dialog.setMode(model::ExpertMode::DigitalCut);
+            dialog.choose(ExpertRenderDialog::Choice::Ok);
+        });
+        window.expertRender();
+        settle();
+        QVERIFY(model::isRendered(recordSequence(composer), pipTarget(recordSequence(composer))));
         media::setExtraMediaDrives({});
     }
 };

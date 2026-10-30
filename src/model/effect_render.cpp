@@ -200,6 +200,73 @@ bool setRender(Sequence& sequence, const RenderTarget& target, const std::option
     return true;
 }
 
+QList<RenderTarget> expertRender(const Sequence& sequence, const QStringList& selected, std::int64_t from, std::int64_t to,
+                                 const ExpertRender& options) {
+    // The video tracks taken into account: those at or below the topmost selected one, top first.
+    int top = 0;
+    for (const QString& name : selected) {
+        const auto ref = parseTrackName(name);
+        const Track* t = sequence.track(name);
+        if (ref && t && t->kind == TrackKind::Video) top = std::max(top, ref->number);
+    }
+    QList<const Track*> tracks;
+    for (const Track& t : sequence.tracks()) {
+        if (t.kind == TrackKind::Video && t.number <= top) tracks << &t;
+    }
+    std::sort(tracks.begin(), tracks.end(), [](const Track* a, const Track* b) { return a->number > b->number; });
+    QStringList names;
+    for (const Track* t : tracks) names << t->name();
+    // Where the effects there begin and end: between two such points the same effects show.
+    const QList<RenderTarget> all = renderTargets(sequence, names, from, to);
+    QList<std::int64_t> cuts{from, to};
+    for (const RenderTarget& t : all) {
+        if (t.start > from && t.start < to) cuts << t.start;
+        if (t.end() > from && t.end() < to) cuts << t.end();
+    }
+    for (const auto& [a, b] : options.recommended) {
+        if (a > from && a < to) cuts << a;
+        if (b > from && b < to) cuts << b;
+    }
+    std::sort(cuts.begin(), cuts.end());
+    cuts.erase(std::unique(cuts.begin(), cuts.end()), cuts.end());
+    QList<RenderTarget> out;
+    for (qsizetype i = 0; i + 1 < cuts.size(); ++i) {
+        const std::int64_t a = cuts.at(i);
+        const std::int64_t b = cuts.at(i + 1);
+        if (options.mode == ExpertMode::RecommendedRanges) {
+            bool inside = false;
+            for (const auto& [ra, rb] : options.recommended) inside = inside || (a < rb && b > ra);
+            if (!inside) continue;
+        }
+        // The unrendered effects showing over [a, b), top track first.
+        QList<RenderTarget> here;
+        bool slow = false;
+        for (const Track* t : tracks) {
+            const auto target = renderTargetAt(sequence, t->name(), a);
+            if (!target || isRendered(sequence, *target)) continue;
+            here << *target;
+            const Effect* e = effectOf(sequence, *target);
+            if (e && options.realTime && !options.realTime(*e)) slow = true;
+        }
+        if (here.isEmpty()) continue;
+        if (options.mode != ExpertMode::DigitalCut && !slow && here.size() <= options.realTimeLimit) continue;
+        // The topmost selected track's effect takes in everything below it.
+        for (const RenderTarget& t : here) {
+            if (!selected.contains(t.track)) continue;
+            if (!out.contains(t)) out << t;
+            break;
+        }
+    }
+    std::sort(out.begin(), out.end(), [](const RenderTarget& x, const RenderTarget& y) {
+        const auto rx = parseTrackName(x.track);
+        const auto ry = parseTrackName(y.track);
+        const int nx = rx ? rx->number : 0;
+        const int ny = ry ? ry->number : 0;
+        return nx != ny ? nx < ny : x.start < y.start;
+    });
+    return out;
+}
+
 int clearRenders(Sequence& sequence, const QList<RenderTarget>& targets, const ClearRenders& options) {
     int cleared = 0;
     for (const RenderTarget& target : targets) {

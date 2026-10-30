@@ -158,6 +158,52 @@ private slots:
         QVERIFY(isRendered(Sequence::fromJson(json), pip));
     }
 
+    void expert() {
+        // ExpertRender (p.140-147). sample(): V1 a dissolve at 45-55, V2 a PIP over 20-60.
+        Sequence s = sample();
+        const QStringList both{QStringLiteral("V1"), QStringLiteral("V2")};
+        ExpertRender options;
+        // Two real-time effects stacked play in real time: nothing to render.
+        QVERIFY(expertRender(s, both, 0, 100, options).isEmpty());
+        // A third over 45-55 (on V3) is too many there: its own effect, the topmost, takes them all in.
+        Track* v3 = s.ensureTrack(QStringLiteral("V3"));
+        Segment d = clip(QStringLiteral("d"), 0, 10);
+        d.effect = effect(QStringLiteral("Flop"));
+        v3->segments = {Segment::filler(45), d};
+        const QStringList all{QStringLiteral("V1"), QStringLiteral("V2"), QStringLiteral("V3")};
+        QList<RenderTarget> got = expertRender(s, all, 0, 100, options);
+        QCOMPARE(got.size(), 1);
+        QCOMPARE(got.at(0).track, QStringLiteral("V3"));
+        // Only V1 and V2 selected: V3 is above them and not looked at.
+        QVERIFY(expertRender(s, both, 0, 100, options).isEmpty());
+        // A non-real-time effect needs rendering on its own: the PIP, say.
+        options.realTime = [](const Effect& e) { return e.name != QLatin1String("Picture-in-Picture"); };
+        got = expertRender(s, both, 0, 100, options);
+        QCOMPARE(got.size(), 1);
+        QCOMPARE(got.at(0).track, QStringLiteral("V2"));
+        // ... unless V2 is not selected: V1's dissolve is not slow, and the PIP is not V1's to render.
+        QVERIFY(expertRender(s, {QStringLiteral("V1")}, 0, 100, options).isEmpty());
+        // Recommended ranges only: none there, nothing.
+        options.mode = ExpertMode::RecommendedRanges;
+        options.recommended = {{70, 80}};
+        QVERIFY(expertRender(s, both, 0, 100, options).isEmpty());
+        options.recommended = {{25, 30}};
+        QCOMPARE(expertRender(s, both, 0, 100, options).size(), 1);
+        // Prepare for Digital Cut: every unrendered effect, the top one where they stack.
+        options = ExpertRender{};
+        options.mode = ExpertMode::DigitalCut;
+        got = expertRender(s, both, 0, 100, options);
+        QCOMPARE(got.size(), 1); // the PIP over 20-60 takes in the dissolve beneath it
+        QCOMPARE(got.at(0).track, QStringLiteral("V2"));
+        got = expertRender(s, {QStringLiteral("V1")}, 0, 100, options);
+        QCOMPARE(got.size(), 1);
+        QVERIFY(got.at(0).transition);
+        // Rendered effects are not recommended again.
+        const RenderTarget pip = got.at(0);
+        QVERIFY(setRender(s, pip, rendered(s, pip)));
+        QVERIFY(expertRender(s, {QStringLiteral("V1")}, 0, 100, options).isEmpty());
+    }
+
     void clear() {
         Sequence s = sample();
         // A motion effect on V2 instead of the PIP, rendered too.

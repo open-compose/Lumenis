@@ -5,6 +5,7 @@
 #include "lumenis/media/managed.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/effect_render.h"
 #include "lumenis/model/project_store.h"
 #include "lumenis/ui/audio_punch_in.h"
 #include "lumenis/ui/audio_suite.h"
@@ -52,6 +53,7 @@ class SetFontDialog;
 class ShortcutsWindow;
 class AudioMixdownDialog;
 class ClearRendersDialog;
+class ExpertRenderDialog;
 class RenderEffectDialog;
 class MultiMixDialog;
 class ExportAsDialog;
@@ -341,6 +343,16 @@ public:
     // Partial render (p.150): an interrupted render asks whether to Keep or Discard what was rendered;
     // tests answer here (true: Keep).
     void setRenderInterruptHook(std::function<bool()> hook) { renderInterruptHook_ = std::move(hook); }
+    // Timeline > Render > ExpertRender In/Out (FX Guide p.140-147): the effects needing rendering on the
+    // selected video tracks between the Record monitor's marks (model::expertRender), highlighted in the
+    // Timeline; the Expert Render dialog renders them (OK), leaves them highlighted for Modify Selection
+    // (then the Render Effect button renders the set) or cancels. The hook answers the dialog (tests).
+    void expertRender();
+    void setExpertRenderHook(std::function<void(ExpertRenderDialog&)> hook) { expertHook_ = std::move(hook); }
+    // Modify Selection's end: "click the Render Effect button in the Effect Editor or in the Tool
+    // palette" (p.145) renders the highlighted effects, through the Render Effect dialog unless
+    // `useLastDrive` (Alt).
+    void renderExpertSelection(bool useLastDrive = false);
     // Clear Renders at Position and In/Out (p.60-61): the renders of the effects there on the selected
     // video tracks forgotten (the precomputes stay), as one undo step ("Undo Clear Renders"). The hook
     // answers the Clear Renders dialog (tests; true: OK).
@@ -601,6 +613,11 @@ private:
     // Where a sequence loaded in a monitor gets its pictures from: its clips' frames, Timecode
     // Burn-In's sequence, marks and source clips, and its rendered effects' precomputes.
     void fillComposition(media::Composition& c, const model::LoadedClip& loaded);
+    // Renders `targets` of the Record monitor's sequence `seq` (loaded as `loaded`) with `creation`'s
+    // drive and resolution: the progress, partial render and Keep or Discard, one undo step
+    // (renderEffects() and the ExpertRender carry on here).
+    void renderTargetsNow(const model::LoadedClip& loaded, const model::Sequence& seq, const QList<model::RenderTarget>& targets,
+                          media::MediaCreation creation, bool rerender);
     std::optional<std::pair<model::BinItem, std::int64_t>> frameAt(MonitorId monitor, std::int64_t position) const;
 
     // Starts the monitor's sound at `speed` for playback, or none above three times normal.
@@ -610,6 +627,7 @@ private:
     std::function<bool(AudioMixdownDialog&)> mixdownHook_;
     std::function<bool(RenderEffectDialog&)> renderHook_;
     std::function<bool()> renderInterruptHook_;
+    std::function<void(ExpertRenderDialog&)> expertHook_;
     std::function<bool(ClearRendersDialog&)> clearRendersHook_;
     QString lastRenderDrive_; // the drive the last Render Effect dialog chose (Alt-click renders there)
     bool renderOnTheFly_ = true; // Composer > Render On-the-Fly

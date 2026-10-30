@@ -1411,6 +1411,16 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
         p.setBrush(QColor(0xffe03030));
         p.drawRect(QRectF(x0, r.top + r.height - 4, x1 - x0, 2));
     };
+    // ExpertRender's choice (p.142): "highlights the effects that require rendering in the Timeline".
+    for (const model::RenderTarget& target : timeline_.expertSelection()) {
+        if (target.track != t.name()) continue;
+        const double x0 = std::max(xFor(target.start), static_cast<double>(headerWidth()));
+        const double x1 = std::min(xFor(target.end()), static_cast<double>(width()));
+        if (x1 <= x0) continue;
+        p.setPen(QPen(QColor(0xffffd040), 2));
+        p.setBrush(QColor(0x40ffd040));
+        p.drawRect(QRectF(x0 + 1, r.top + 1, x1 - x0 - 2, r.height - 2));
+    }
     std::int64_t at = 0;
     for (int index = 0; index < t.segments.size(); ++index) {
         const model::Segment& s = t.segments.at(index);
@@ -1627,6 +1637,17 @@ void TimelineView::mousePressEvent(QMouseEvent* event) {
             composer.moveTo(MonitorId::Record, timeline_.headsSpans().at(index).first);
         }
         return;
+    }
+    // ExpertRender's Modify Selection (FX Guide p.145): "Shift+click effects in the Timeline to add them
+    // or remove them from the set of effects to render"; "Click in the timecode track" cancels.
+    if (timeline_.isModifyingExpertSelection() && pos.x() >= headerWidth()) {
+        const auto row = rowAt(pos);
+        if (row && row->track == QLatin1String("TC1")) {
+            timeline_.cancelExpertSelection();
+        } else if (row && row->exists && (event->modifiers() & Qt::ShiftModifier)) {
+            timeline_.toggleExpertTarget(row->track, frameAt(pos.x()));
+            return;
+        }
     }
     if (pos.x() >= headerWidth()) {
         if (zoomSelecting_) {
@@ -6209,6 +6230,28 @@ QList<std::pair<std::int64_t, std::int64_t>> Timeline::headsSpans() const {
 // "If you rearrange a split edit ... the system cuts all tracks to the same edit point" (p.638):
 // model::Sequence::moveSpan moves the clip's frames on every selected track.
 // ---------------------------------------------------------------- Sync Breaks, Dupe Detection, Clip Text (U1c1)
+
+void Timeline::setExpertSelection(const QList<model::RenderTarget>& targets, bool modifying) {
+    expert_ = targets;
+    modifyingExpert_ = modifying;
+    view_->update();
+}
+
+void Timeline::cancelExpertSelection() {
+    if (expert_.isEmpty() && !modifyingExpert_) return;
+    expert_.clear();
+    modifyingExpert_ = false;
+    view_->update();
+    emit expertSelectionCancelled();
+}
+
+bool Timeline::toggleExpertTarget(const QString& track, std::int64_t frame) {
+    const auto target = model::renderTargetAt(shown(), track, frame);
+    if (!target) return false;
+    if (!expert_.removeOne(*target)) expert_ << *target;
+    view_->update();
+    return true;
+}
 
 void Timeline::setPlaybackIndicators(const QList<Composer::PlaybackRange>& ranges) {
     if (indicators_ == ranges) return;

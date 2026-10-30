@@ -98,3 +98,34 @@ Composer's `PlaybackRange`, `playbackDifficulties`; `Timeline::RenderRanges`, `s
   default), not kept between sessions; off, a stationary frame leaves out segment effects and shows
   transitions as cuts, while renders in date still show; playback is unchanged. Dragging the position
   indicator does not yet turn it off for the drag.
+
+## 6.4c: ExpertRender
+
+Code: `model::expertRender` (`ExpertRender`, `ExpertMode`); `ExpertRenderDialog` in `render_dialogs.*`;
+`MainWindow::expertRender`, `renderExpertSelection`, `renderTargetsNow`; the Timeline's
+`setExpertSelection`, `toggleExpertTarget`, `cancelExpertSelection`. Tests: `tst_effect_render`,
+`tst_render_ui`.
+
+* "ExpertRender determines which effects need to be rendered to achieve successful playback of a
+  sequence" (p.140). Timeline > Render > ExpertRender In/Out (the Editing Guide's menu, p.926). The FX
+  Guide also names ExpertRender at Position (p.142), which that menu does not show; it is left out
+  until a guide's menu shows it.
+* The analysis (ours, for "ExpertRender attempts to generate a minimum set of effects to render", p.141).
+  The marked frames of the selected video tracks are looked at, with every video track at or below the
+  topmost selected one ("Media Composer considers tracks V1 and V2 when determining playback
+  possibilities but highlights effects to render only from tracks V3 and V4", p.146). A frame cannot
+  play in real time when an unrendered effect there is not real-time (no green dot in the Effect
+  Palette, p.35-36) or when more than two unrendered effects stack there (ours: our CPU compositor's
+  limit). Each such frame is helped by the unrendered effect on the topmost selected track there,
+  whose render takes in the tracks below it (p.141).
+* The Expert Render dialog box (p.142-144): it "indicates how many of the effects require rendering"
+  and its message changes with the choice; Drive and Processing as in the Render Effect dialog; Cancel,
+  Modify Selection and OK. "Render recommended ranges" (only after a playback attempt left red
+  indicators; only frames in them), "Render entire selection" and "Prepare effects for Digital Cut"
+  (every unrendered effect, as "On systems without Avid input/output hardware, you must render all
+  effects before performing a digital cut", p.141). Ours: the three choices are offered whenever they
+  apply, not only after a playback attempt.
+* Highlighting and Modify Selection (p.142, p.145): the chosen effects are highlighted in the Timeline;
+  Cancel removes the highlighting; Modify Selection keeps it, "Shift+click effects in the Timeline to add
+  them or remove them", and the Effect Editor's Render Effect button renders the set (through the Render
+  Effect dialog; Alt skips it). "Click in the timecode track" cancels.

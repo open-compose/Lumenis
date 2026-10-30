@@ -1490,6 +1490,11 @@ void MainWindow::createTools() {
         if (monitor == MonitorId::Record && highlightRenderAreas_) timeline_->setPlaybackIndicators(ranges);
     });
     connect(effectEditor_, &EffectEditor::renderRequested, this, [this](Qt::KeyboardModifiers m) {
+        // While ExpertRender's selection is being modified, the button renders that set (p.145).
+        if (timeline_->isModifyingExpertSelection()) {
+            renderExpertSelection(m.testFlag(Qt::AltModifier));
+            return;
+        }
         renderEffects(true, m.testFlag(Qt::ShiftModifier), m.testFlag(Qt::AltModifier));
     });
     connect(effectEditor_, &EffectEditor::optionsChanged, this, [this] {
@@ -3220,6 +3225,18 @@ void MainWindow::renderEffects(bool atPosition, bool rerender, bool useLastDrive
         creation.videoDrive = dialog.drive();
         lastRenderDrive_ = creation.videoDrive;
     }
+    renderTargetsNow(*rec, seq, targets, creation, rerender);
+}
+
+void MainWindow::renderTargetsNow(const model::LoadedClip& loaded, const model::Sequence& seq,
+                                  const QList<model::RenderTarget>& targets, media::MediaCreation creation, bool rerender) {
+    const model::LoadedClip* rec = &loaded;
+    auto fail = [this](const QString& text) {
+        auto* box = new QMessageBox(QMessageBox::Warning, tr("Render Effect"), text, QMessageBox::Ok, this);
+        box->setObjectName(QStringLiteral("renderFailed"));
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        box->open();
+    };
     media::Composition c;
     c.sequence = &seq;
     fillComposition(c, *rec);
@@ -3305,6 +3322,95 @@ void MainWindow::renderEffects(bool atPosition, bool rerender, bool useLastDrive
     });
     ConsoleLog::instance().append(interrupted ? tr("Render Effect: interrupted; %n effect(s) kept.", "", static_cast<int>(made.size()))
                                               : tr("Render Effect: %n effect(s) rendered.", "", static_cast<int>(made.size())));
+}
+
+void MainWindow::expertRender() {
+    auto fail = [this](const QString& text) {
+        auto* box = new QMessageBox(QMessageBox::Information, tr("Expert Render"), text, QMessageBox::Ok, this);
+        box->setObjectName(QStringLiteral("expertRenderMessage"));
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        box->open();
+    };
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence || !project_) {
+        fail(tr("Load a sequence into the Record monitor first."));
+        return;
+    }
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::MonitorState& state = composer_->state(MonitorId::Record);
+    if (!state.in() && !state.out()) {
+        fail(tr("Mark IN and OUT points around the effects for ExpertRender to analyze."));
+        return;
+    }
+    const std::int64_t from = state.markedStart();
+    const std::int64_t to = state.markedEnd() + 1;
+    const QStringList tracks = timeline_->patch().selectedRecordTracks(seq);
+    model::ExpertRender options;
+    // "A real-time effect has a small green dot in the Effect Palette" (p.35).
+    options.realTime = [](const model::Effect& e) {
+        const EffectInfo* info = EffectCatalog::builtin().find(e.category, e.name);
+        return !info || info->realTime;
+    };
+    // The red indicators of the last playback attempt (p.136, p.143).
+    for (const Composer::PlaybackRange& r : timeline_->playbackIndicators()) {
+        if (r.dropped) options.recommended.append({r.start, r.start + r.length});
+    }
+    auto targetsFor = [&](model::ExpertMode mode) {
+        model::ExpertRender o = options;
+        o.mode = mode;
+        return model::expertRender(seq, tracks, from, to, o);
+    };
+    media::MediaCreation creation = mediaCreation(QStringLiteral("render"));
+    ExpertRenderDialog dialog([&](model::ExpertMode mode) { return static_cast<int>(targetsFor(mode).size()); },
+                              !options.recommended.isEmpty(), lastRenderDrive_.isEmpty() ? creation.videoDrive : lastRenderDrive_, this);
+    // "ExpertRender analyzes the selected effects and highlights the effects that require rendering" (p.142).
+    timeline_->setExpertSelection(targetsFor(dialog.mode()), false);
+    if (expertHook_) {
+        expertHook_(dialog);
+    } else {
+        dialog.exec();
+    }
+    const QList<model::RenderTarget> targets = targetsFor(dialog.mode());
+    switch (dialog.choice()) {
+    case ExpertRenderDialog::Choice::Cancel:
+        // "Media Composer removes all ExpertRender highlighting and cancels the ExpertRender process".
+        timeline_->setExpertSelection({}, false);
+        return;
+    case ExpertRenderDialog::Choice::Modify:
+        // "The effects identified for rendering remain highlighted, and you can modify the set".
+        lastRenderDrive_ = dialog.drive();
+        timeline_->setExpertSelection(targets, true);
+        return;
+    case ExpertRenderDialog::Choice::Ok:
+        break;
+    }
+    timeline_->setExpertSelection({}, false);
+    if (targets.isEmpty()) {
+        fail(tr("No effects need rendering."));
+        return;
+    }
+    creation.videoDrive = dialog.drive();
+    lastRenderDrive_ = creation.videoDrive;
+    renderTargetsNow(*rec, seq, targets, creation, false);
+}
+
+void MainWindow::renderExpertSelection(bool useLastDrive) {
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    const QList<model::RenderTarget> targets = timeline_->expertSelection();
+    timeline_->setExpertSelection({}, false);
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence || targets.isEmpty()) return;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    media::MediaCreation creation = mediaCreation(QStringLiteral("render"));
+    if (useLastDrive && !lastRenderDrive_.isEmpty()) {
+        creation.videoDrive = lastRenderDrive_;
+    } else {
+        RenderEffectDialog dialog(static_cast<int>(targets.size()), lastRenderDrive_.isEmpty() ? creation.videoDrive : lastRenderDrive_, this);
+        const bool ok = renderHook_ ? renderHook_(dialog) : dialog.exec() == QDialog::Accepted;
+        if (!ok) return;
+        creation.videoDrive = dialog.drive();
+        lastRenderDrive_ = creation.videoDrive;
+    }
+    renderTargetsNow(*rec, seq, targets, creation, false);
 }
 
 void MainWindow::clearRenders(bool atPosition) {
@@ -4515,6 +4621,7 @@ void MainWindow::installPanelHandlers() {
     handle("timeline.render.render_in_out", [renderWith] { renderWith(false); });
     handle("timeline.render.clear_renders_at_position", [this] { clearRenders(true); });
     handle("timeline.render.clear_renders_in_out", [this] { clearRenders(false); });
+    handle("timeline.render.expertrender_in_out", [this] { expertRender(); });
     // File > Output > Export to File (p.868).
     handle("file.output.export_to_file", [this] { exportToFile(); });
     handle("tools.background_queue_window", [this] { showTool(QStringLiteral("BackgroundQueue")); });

@@ -4,6 +4,7 @@
 #include "lumenis/media/waveform.h"
 #include "lumenis/model/automation.h"
 #include "lumenis/model/clip_coloring.h"
+#include "lumenis/model/effect_render.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
@@ -344,6 +345,14 @@ public:
     // monitor, while the Timeline setting Highlight Suggested Render Areas After Playback is on; the next
     // play or change of sequence clears them.
     void setPlaybackIndicators(const QList<Composer::PlaybackRange>& ranges);
+    // ExpertRender (FX Guide p.142-146): the effects it chose, highlighted; while `modifying` (Modify
+    // Selection), Shift+click on an effect adds it or takes it out (toggleExpertTarget) and a click in
+    // TC1 cancels (cancelExpertSelection, which emits expertSelectionCancelled()).
+    void setExpertSelection(const QList<model::RenderTarget>& targets, bool modifying);
+    const QList<model::RenderTarget>& expertSelection() const { return expert_; }
+    bool isModifyingExpertSelection() const { return modifyingExpert_; }
+    void cancelExpertSelection();
+    bool toggleExpertTarget(const QString& track, std::int64_t frame);
     const QList<Composer::PlaybackRange>& playbackIndicators() const { return indicators_; }
     const model::TrackPatch& patch() const { return patch_; }
     // The undo history of the record sequence's changes.
@@ -994,6 +1003,8 @@ public:
     QMenu* undoRedoMenu();
 
 signals:
+    // ExpertRender's highlighting was cancelled (a click in TC1, p.145).
+    void expertSelectionCancelled();
     // The shown item, the selection, the patch or Trim mode changed.
     void changed();
     // Effect mode was entered or left.
@@ -1132,6 +1143,8 @@ private:
     QList<std::pair<double, double>> zoomStack_;
     Display display_;
     QList<Composer::PlaybackRange> indicators_;
+    QList<model::RenderTarget> expert_;
+    bool modifyingExpert_ = false;
     // The Sequence Map (showSequenceMap): where it is and whether it shows.
     SequenceMap* map_ = nullptr;
     SequenceMapWindow* mapWindow_ = nullptr;

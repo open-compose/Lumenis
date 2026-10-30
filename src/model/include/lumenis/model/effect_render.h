@@ -58,6 +58,29 @@ bool isRenderedAt(const Sequence& sequence, const RenderTarget& target, std::int
 // Sets (or with nothing, removes) the target's render. False when the sequence has no such effect.
 bool setRender(Sequence& sequence, const RenderTarget& target, const std::optional<EffectRender>& render);
 
+// ExpertRender (p.140-147): "ExpertRender attempts to generate a minimum set of effects to render for
+// successful playback". The marked frames [from, to) of the selected video tracks are looked at, with
+// every video track at or below the topmost selected one ("Media Composer considers tracks V1 and V2
+// when determining playback possibilities but highlights effects to render only from tracks V3 and
+// V4", p.146). Ours: a frame cannot play in real time when an unrendered effect there is not real-time
+// (`realTime` says, the Effect Palette's green dot), or when more than `realTimeLimit` unrendered
+// effects stack there. EntireSelection renders what such frames need; RecommendedRanges only within
+// `recommended` (the red playback indicators, p.143); DigitalCut every unrendered effect ("you must
+// render all effects before performing a digital cut", p.141, without Avid hardware). Each frame that
+// needs it is helped by the effect on the topmost selected track there that is not rendered, which
+// takes in the tracks below it ("ExpertRender can calculate when the rendering of an effect on an upper
+// track will incorporate picture information from lower tracks", p.141). The targets come once each,
+// in order of track then time.
+enum class ExpertMode { EntireSelection, RecommendedRanges, DigitalCut };
+struct ExpertRender {
+    ExpertMode mode = ExpertMode::EntireSelection;
+    QList<std::pair<std::int64_t, std::int64_t>> recommended; // [start, end) frames
+    std::function<bool(const Effect&)> realTime;              // every effect is real-time without it
+    int realTimeLimit = 2;
+};
+QList<RenderTarget> expertRender(const Sequence& sequence, const QStringList& selected, std::int64_t from, std::int64_t to,
+                                 const ExpertRender& options);
+
 // Clear Renders (p.60-61): the renders of `targets` removed, except, when asked, motion effects ("Skip
 // Motion Effects") and effects `known` says are not installed ("Skip Unknown Effects"; every effect is
 // known without `known`). The precomputes themselves are kept ("does not delete the effects or their
