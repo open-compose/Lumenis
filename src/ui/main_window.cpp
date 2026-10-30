@@ -25,6 +25,7 @@
 #include "lumenis/model/bin_relations.h"
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/media/mixdown.h"
+#include "lumenis/media/render.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
@@ -65,6 +66,7 @@
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timecode_window.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/render_dialogs.h"
 #include "lumenis/ui/unmount_dialog.h"
 #include "lumenis/ui/set_font_dialog.h"
 #include "lumenis/ui/shortcuts_window.h"
@@ -645,17 +647,7 @@ void MainWindow::createPanels() {
             c.sequence = &seq;
             c.tracks = shownVideoTracks(monitor, seq);
             c.size = size;
-            c.source = [this](const model::Segment& segment, std::int64_t clipFrame, QSize want) -> std::optional<QImage> {
-                const auto clip = composer_->resolve(segment.binId, segment.clipId);
-                if (!clip || !media::isLinked(*clip)) return QImage();
-                if (frames_->isOffline(*clip)) return std::nullopt;
-                return frames_->frame(*clip, clipFrame, want);
-            };
-            // For Timecode Burn-In: the sequence, its marks and the source clips (6.3d1).
-            c.burnIn.sequence = loaded->item;
-            c.burnIn.markIn = loaded->in;
-            c.burnIn.markOut = loaded->out;
-            c.burnIn.clip = [this](const model::Segment& segment) { return composer_->resolve(segment.binId, segment.clipId); };
+            fillComposition(c, *loaded);
             bool missing = false;
             const QImage image = media::composeImage(c, at, &missing);
             if (image.isNull() && missing && offline) *offline = true;
@@ -1488,6 +1480,9 @@ void MainWindow::createTools() {
         if (on) showTool(QStringLiteral("EffectEditor"));
     });
     // The Effect Editor shortcut menu changes the Effect Editor setting too (p.131).
+    connect(effectEditor_, &EffectEditor::renderRequested, this, [this](Qt::KeyboardModifiers m) {
+        renderEffects(true, m.testFlag(Qt::ShiftModifier), m.testFlag(Qt::AltModifier));
+    });
     connect(effectEditor_, &EffectEditor::optionsChanged, this, [this] {
         const EffectEditor::Options o = effectEditor_->options();
         const QString kind = QStringLiteral("Effect Editor");
@@ -3140,6 +3135,149 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
 // The dialog (from the Record monitor's sequence, its marks and the selected tracks), then the mix
 // with a progress dialog, the new clip into its bin (after the premix copy, when asked for) and the
 // clip overwritten into the targets, new tracks added when there are none.
+void MainWindow::fillComposition(media::Composition& c, const model::LoadedClip& loaded) {
+    c.source = [this](const model::Segment& segment, std::int64_t clipFrame, QSize want) -> std::optional<QImage> {
+        const auto clip = composer_->resolve(segment.binId, segment.clipId);
+        if (!clip || !media::isLinked(*clip)) return QImage();
+        if (frames_->isOffline(*clip)) return std::nullopt;
+        return frames_->frame(*clip, clipFrame, want);
+    };
+    // For Timecode Burn-In: the sequence, its marks and the source clips (6.3d1).
+    c.burnIn.sequence = loaded.item;
+    c.burnIn.markIn = loaded.in;
+    c.burnIn.markOut = loaded.out;
+    c.burnIn.clip = [this](const model::Segment& segment) { return composer_->resolve(segment.binId, segment.clipId); };
+    // Rendered effects play from their precomputes (6.4a); offline ones are computed again.
+    c.rendered = [this](const model::EffectRender& render, std::int64_t frame, QSize want) -> std::optional<QImage> {
+        auto clip = model::binItemFromJson(render.clip);
+        if (!clip) return std::nullopt;
+        if (frames_->isOffline(*clip)) {
+            // Media moved since: the media database may know where it is now.
+            if (!mediaDb_.resolve(*clip) || frames_->isOffline(*clip)) return std::nullopt;
+        }
+        return frames_->frame(*clip, frame, want);
+    };
+}
+
+void MainWindow::renderEffects(bool atPosition, bool rerender, bool useLastDrive) {
+    auto fail = [this](const QString& text) {
+        auto* box = new QMessageBox(QMessageBox::Warning, tr("Render Effect"), text, QMessageBox::Ok, this);
+        box->setObjectName(QStringLiteral("renderFailed"));
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        box->open();
+    };
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence || !project_) {
+        fail(tr("Load a sequence into the Record monitor first."));
+        return;
+    }
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    // "Make sure the track containing the effect is selected" (p.58).
+    const QStringList tracks = timeline_->patch().selectedRecordTracks(seq);
+    std::int64_t from = 0;
+    std::int64_t to = 0;
+    const model::MonitorState& state = composer_->state(MonitorId::Record);
+    if (atPosition) {
+        from = state.position();
+        to = from + 1;
+    } else {
+        // "Mark an IN point before the start of the first effect ... and then mark an OUT point after
+        // the last" (p.59).
+        if (!state.in() && !state.out()) {
+            fail(tr("Mark IN and OUT points around the effects to render."));
+            return;
+        }
+        from = state.markedStart();
+        to = state.markedEnd() + 1;
+    }
+    QList<model::RenderTarget> targets;
+    for (const model::RenderTarget& t : model::renderTargets(seq, tracks, from, to)) {
+        if (rerender || !model::isRendered(seq, t)) targets << t;
+    }
+    if (targets.isEmpty()) {
+        fail(tr("There are no effects to render on the selected tracks."));
+        return;
+    }
+    media::MediaCreation creation = mediaCreation(QStringLiteral("render"));
+    if (useLastDrive && !lastRenderDrive_.isEmpty()) {
+        creation.videoDrive = lastRenderDrive_;
+    } else {
+        RenderEffectDialog dialog(static_cast<int>(targets.size()), lastRenderDrive_.isEmpty() ? creation.videoDrive : lastRenderDrive_, this);
+        const bool ok = renderHook_ ? renderHook_(dialog) : dialog.exec() == QDialog::Accepted;
+        if (!ok) return;
+        creation.videoDrive = dialog.drive();
+        lastRenderDrive_ = creation.videoDrive;
+    }
+    media::Composition c;
+    c.sequence = &seq;
+    fillComposition(c, *rec);
+    // The Render tab's Effects Processing (p.151-152): "Automatic ... Effects render at 16-bit for 10-bit
+    // media and at 8-bit for 8-bit media" (ours: by the render resolution's depth); 32-bit is 2026.8's.
+    const QString processing = settings_->text(QStringLiteral("Media Creation"), QStringLiteral("renderEffectsProcessing"));
+    if (processing == QLatin1String("8bit")) {
+        c.precision = media::EffectPrecision::Bits8;
+    } else if (processing == QLatin1String("16bit")) {
+        c.precision = media::EffectPrecision::Bits16;
+    } else if (processing == QLatin1String("32bit")) {
+        c.precision = media::EffectPrecision::Bits32;
+    } else {
+        c.precision = creation.resolution.pixelFormat.contains(QLatin1String("10")) ? media::EffectPrecision::Bits16
+                                                                                   : media::EffectPrecision::Bits8;
+    }
+    // The renders, made one after the other and kept together; Cancel keeps none (partial render is
+    // ROADMAP 6.4b).
+    QProgressDialog progress(tr("Rendering..."), tr("Cancel"), 0, 1000, this);
+    progress.setObjectName(QStringLiteral("renderProgress"));
+    QList<std::pair<model::RenderTarget, model::EffectRender>> made;
+    for (qsizetype i = 0; i < targets.size(); ++i) {
+        const auto share = static_cast<double>(targets.size());
+        const std::function<bool(double)> step = progressOn(progress);
+        creation.progress = [step, i, share](double done) { return step((static_cast<double>(i) + done) / share); };
+        QString error;
+        const auto render = media::renderEffect(c, targets.at(i), rec->item.name, rec->item.editRate, creation, &error);
+        if (!render) {
+            progress.reset();
+            if (!progress.wasCanceled()) fail(error);
+            return;
+        }
+        made.append({targets.at(i), *render});
+    }
+    progress.reset();
+    timeline_->changeRecordSequence(tr("Render Effect"), [&made](model::Sequence& s) {
+        bool any = false;
+        for (const auto& [target, render] : made) any = model::setRender(s, target, render) || any;
+        return any;
+    });
+    ConsoleLog::instance().append(tr("Render Effect: %n effect(s) rendered.", "", static_cast<int>(made.size())));
+}
+
+void MainWindow::clearRenders(bool atPosition) {
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const QStringList tracks = timeline_->patch().selectedRecordTracks(seq);
+    const model::MonitorState& state = composer_->state(MonitorId::Record);
+    std::int64_t from = state.position();
+    std::int64_t to = from + 1;
+    if (!atPosition) {
+        // Without marks, the whole sequence (ours).
+        from = state.in() || state.out() ? state.markedStart() : 0;
+        to = state.in() || state.out() ? state.markedEnd() + 1 : seq.duration();
+    }
+    const QList<model::RenderTarget> targets = model::renderTargets(seq, tracks, from, to);
+    ClearRendersDialog dialog(this);
+    const bool ok = clearRendersHook_ ? clearRendersHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok) return;
+    model::ClearRenders options;
+    options.skipMotionEffects = dialog.skipMotionEffects();
+    options.skipUnknownEffects = dialog.skipUnknownEffects();
+    // "Effects that Media Composer does not recognize": those not in the Effect Palette.
+    options.known = [](const model::Effect& e) {
+        return EffectCatalog::builtin().find(e.category, e.name) != nullptr || model::motionSpeed(e).has_value();
+    };
+    timeline_->changeRecordSequence(tr("Clear Renders"), [&](model::Sequence& s) { return model::clearRenders(s, targets, options) > 0; });
+}
+
 void MainWindow::audioMixdown() {
     auto fail = [this](const QString& text) {
         auto* box = new QMessageBox(QMessageBox::Warning, tr("Audio Mixdown"), text, QMessageBox::Ok, this);
@@ -4308,6 +4446,16 @@ void MainWindow::installPanelHandlers() {
     });
     handle("clip.consolidate_transcode", [this] { consolidateTranscode(); });
     handle("timeline.mixdown.audio.to_sequence", [this] { audioMixdown(); });
+    // Render (FX Guide p.58-61): Shift renders again what is rendered (p.61), Alt skips the dialog
+    // with the last drive (p.58).
+    auto renderWith = [this](bool atPosition) {
+        const Qt::KeyboardModifiers m = QGuiApplication::keyboardModifiers();
+        renderEffects(atPosition, m.testFlag(Qt::ShiftModifier), m.testFlag(Qt::AltModifier));
+    };
+    handle("timeline.render.render_at_position", [renderWith] { renderWith(true); });
+    handle("timeline.render.render_in_out", [renderWith] { renderWith(false); });
+    handle("timeline.render.clear_renders_at_position", [this] { clearRenders(true); });
+    handle("timeline.render.clear_renders_in_out", [this] { clearRenders(false); });
     // File > Output > Export to File (p.868).
     handle("file.output.export_to_file", [this] { exportToFile(); });
     handle("tools.background_queue_window", [this] { showTool(QStringLiteral("BackgroundQueue")); });

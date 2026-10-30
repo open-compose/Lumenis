@@ -5,6 +5,7 @@
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/effect_render.h"
 #include "lumenis/media/surround.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
@@ -1349,11 +1350,12 @@ void TimelineView::paintWaveform(QPainter& p, const QRectF& box, const model::Tr
 void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t) const {
     // Transitions shade their span with the effect icon on the cut;
     // segment effects show their icon in the segment. Real-time effects
-    // have a green dot, others a blue one until rendered (FX guide p.36).
+    // have a green dot, others a blue one until rendered (FX guide p.36); "All colored dots disappear in
+    // the Timeline when you render effects" (p.36): a render in date has none.
     const int iconHeight = std::min(r.height - 4, 14);
     if (iconHeight < 8) return;
     const int iconWidth = iconHeight * 3 / 2;
-    auto icon = [&](double centre, const model::Effect& e, bool transition) {
+    auto icon = [&](double centre, const model::Effect& e, bool transition, bool rendered) {
         const EffectInfo* info = EffectCatalog::builtin().find(e.category, e.name);
         const QRectF box(centre - iconWidth / 2.0, r.top + (r.height - iconHeight) / 2.0, iconWidth, iconHeight);
         p.setPen(QPen(QColor(0xff4b2f72), 1));
@@ -1365,18 +1367,29 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
         } else {
             p.drawRect(box.adjusted(iconWidth / 4.0, iconHeight / 4.0, -iconWidth / 4.0, -iconHeight / 4.0));
         }
+        if (rendered) return;
         p.setPen(Qt::NoPen);
         p.setBrush(QColor(!info || info->realTime ? 0xff3cc85a : 0xff3c78dc));
         p.drawEllipse(QRectF(box.left() - 5, box.center().y() - 2, 4, 4));
     };
+    const model::Sequence& seq = timeline_.shown();
+    // Whether segment `i` (starting at `start`)'s effect, or its transition, has a render in date.
+    auto rendered = [&](int i, std::int64_t start, bool transition) {
+        const model::Segment& s = t.segments.at(i);
+        if (transition ? !(s.transition && s.transitionRender) : !s.render) return false;
+        const model::RenderTarget target = transition ? model::RenderTarget{t.name(), i, true, start - s.transition->before(), s.transition->duration}
+                                                      : model::RenderTarget{t.name(), i, false, start, s.length};
+        return model::isRendered(seq, target);
+    };
     p.save();
     p.setRenderHint(QPainter::Antialiasing);
     std::int64_t at = 0;
-    for (const model::Segment& s : t.segments) {
+    for (int index = 0; index < t.segments.size(); ++index) {
+        const model::Segment& s = t.segments.at(index);
         if (s.effect) {
             const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
             const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));
-            if (x1 - x0 > iconWidth + 8) icon((x0 + x1) / 2, *s.effect, false);
+            if (x1 - x0 > iconWidth + 8) icon((x0 + x1) / 2, *s.effect, false, rendered(index, at, false));
         }
         if (s.eq) {
             // Audio EQ (p.740): a teal icon with three bars for the bands. Without text, so the
@@ -1428,7 +1441,7 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
             const double x1 = xFor(at + s.transition->after());
             p.fillRect(QRectF(x0, r.top + 1, std::max(x1 - x0, 1.0), r.height - 2), QColor::fromRgba(0x50000000));
             const bool dissolve = s.transition->effect.name == QLatin1String("Dissolve");
-            if (!dissolve || timeline_.display().dissolveIcons) icon(xFor(at), s.transition->effect, true);
+            if (!dissolve || timeline_.display().dissolveIcons) icon(xFor(at), s.transition->effect, true, rendered(index, at, true));
         }
         at += s.length;
     }

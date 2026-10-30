@@ -1,0 +1,190 @@
+// Rendering in the application (FX Guide p.57-61; docs/spec/rendering.md): Timeline > Render > Render at
+// Position and Render In/Out through the Render Effect dialog, the render kept with the effect as an undo
+// step, Clear Renders with its dialog and Undo, and renders going out of date when the effect changes.
+#include "lumenis/ext/provider.h"
+#include "lumenis/media/managed.h"
+#include "lumenis/media/media.h"
+#include "lumenis/model/effect_render.h"
+#include "lumenis/model/sequence.h"
+#include "lumenis/ui/bin_container.h"
+#include "lumenis/ui/command_registry.h"
+#include "lumenis/ui/composer.h"
+#include "lumenis/ui/main_window.h"
+#include "lumenis/ui/render_dialogs.h"
+#include "lumenis/ui/settings.h"
+#include "lumenis/ui/timeline.h"
+
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDir>
+#include <QMessageBox>
+#include <QTemporaryDir>
+#include <QTest>
+
+using namespace lumenis;
+using namespace lumenis::ui;
+
+namespace {
+
+void settle() {
+    for (int i = 0; i < 3; ++i) QCoreApplication::processEvents();
+}
+
+// A 25 fps QuickTime file of red frames, picture only.
+bool writeMovie(const QString& path, int frames) {
+    media::WriterSettings s;
+    s.format = QStringLiteral("mov");
+    s.videoCodec = QStringLiteral("ffv1");
+    s.pixelFormat = QStringLiteral("bgr0");
+    s.width = 64;
+    s.height = 36;
+    s.frameRate = Rational(25);
+    media::MediaWriter w;
+    if (!w.open(path, s)) return false;
+    for (int i = 0; i < frames; ++i) {
+        QImage image(64, 36, QImage::Format_RGBA8888);
+        image.fill(QColor(255, 0, 0));
+        if (!w.writeVideo(image)) return false;
+    }
+    return w.finish();
+}
+
+model::Sequence recordSequence(Composer& composer) {
+    return model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item);
+}
+
+model::RenderTarget pipTarget(const model::Sequence& seq) {
+    return *model::renderTargetAt(seq, QStringLiteral("V1"), 5);
+}
+
+} // namespace
+
+class TestRenderUi : public QObject {
+    Q_OBJECT
+
+private slots:
+    void renderAndClear() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString movie = dir.filePath(QStringLiteral("red.mov"));
+        QVERIFY(writeMovie(movie, 20));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 320;
+        project.settings.format.height = 180;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("renderVideoDrive"), drive);
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        const QStringList ids = window.linkFiles(binId, {movie});
+        QCOMPARE(ids.size(), 1);
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, *bin->bin().item(ids.first()));
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.splice_in")));
+        // A Picture-in-Picture on V1's segment.
+        QVERIFY(window.timeline().changeRecordSequence(QStringLiteral("Apply"), [](model::Sequence& s) {
+            s.track(QStringLiteral("V1"))->segments[0].effect =
+                model::Effect{QStringLiteral("Blend"), QStringLiteral("Picture-in-Picture"), {}};
+            return true;
+        }));
+        composer.moveTo(MonitorId::Record, 5);
+        settle();
+        QVERIFY(!model::isRendered(recordSequence(composer), pipTarget(recordSequence(composer))));
+
+        // Render at Position: the Render Effect dialog names one effect and the drives.
+        int shown = 0;
+        window.setRenderHook([&](RenderEffectDialog& d) {
+            ++shown;
+            const int at = d.driveMenu()->findData(QDir::cleanPath(drive));
+            if (at < 0) return false;
+            d.driveMenu()->setCurrentIndex(at);
+            return true;
+        });
+        const int before = window.timeline().history().undoCount();
+        commands.action(QStringLiteral("timeline.render.render_at_position"))->trigger();
+        settle();
+        QCOMPARE(shown, 1);
+        model::Sequence seq = recordSequence(composer);
+        QVERIFY(model::isRendered(seq, pipTarget(seq)));
+        const auto clip = model::binItemFromJson(model::renderOf(seq, pipTarget(seq))->clip);
+        QVERIFY(clip);
+        QCOMPARE(clip->kind, model::BinItemKind::RenderedEffect);
+        QVERIFY(clip->link.value(QStringLiteral("path")).toString().startsWith(QDir::cleanPath(drive)));
+        QCOMPARE(window.timeline().history().undoCount(), before + 1);
+        media::VideoReader reader;
+        QVERIFY(reader.open(clip->link.value(QStringLiteral("path")).toString()));
+        QCOMPARE(reader.info().width, 320);
+        // Rendered effects are not rendered again unless asked (Shift, p.61).
+        shown = 0;
+        window.renderEffects(true);
+        settle();
+        QCOMPARE(shown, 0);
+        auto* nothing = window.findChild<QMessageBox*>(QStringLiteral("renderFailed"));
+        QVERIFY(nothing);
+        nothing->close();
+        settle();
+
+        // Undo forgets the render; redo brings it back.
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.undo")));
+        QVERIFY(!model::renderOf(recordSequence(composer), pipTarget(recordSequence(composer))));
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.redo")));
+        QVERIFY(model::isRendered(recordSequence(composer), pipTarget(recordSequence(composer))));
+
+        // A changed parameter: out of date, and Render In/Out needs marks.
+        QVERIFY(window.timeline().changeRecordSequence(QStringLiteral("Change"), [](model::Sequence& s) {
+            s.track(QStringLiteral("V1"))->segments[0].effect->parameters =
+                QJsonObject{{QStringLiteral("Foreground"), QJsonObject{{QStringLiteral("Level"), 60}}}};
+            return true;
+        }));
+        QVERIFY(!model::isRendered(recordSequence(composer), pipTarget(recordSequence(composer))));
+        window.renderEffects(false);
+        settle();
+        auto* marks = window.findChild<QMessageBox*>(QStringLiteral("renderFailed"));
+        QVERIFY(marks);
+        marks->close();
+        settle();
+        composer.moveTo(MonitorId::Record, 0);
+        composer.state(MonitorId::Record).markIn();
+        composer.moveTo(MonitorId::Record, 19);
+        composer.state(MonitorId::Record).markOut();
+        composer.moveTo(MonitorId::Record, 5);
+        shown = 0;
+        // Alt-click: the last drive, no dialog (p.58).
+        window.renderEffects(false, false, true);
+        settle();
+        QCOMPARE(shown, 0);
+        QVERIFY(model::isRendered(recordSequence(composer), pipTarget(recordSequence(composer))));
+
+        // Clear Renders at Position, then Undo Clear Renders (p.60-61).
+        bool asked = false;
+        window.setClearRendersHook([&](ClearRendersDialog& d) {
+            asked = true;
+            return d.motionBox()->isChecked() && d.unknownBox()->isChecked();
+        });
+        commands.action(QStringLiteral("timeline.render.clear_renders_at_position"))->trigger();
+        settle();
+        QVERIFY(asked);
+        QVERIFY(!model::renderOf(recordSequence(composer), pipTarget(recordSequence(composer))));
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.undo")));
+        QVERIFY(model::isRendered(recordSequence(composer), pipTarget(recordSequence(composer))));
+        media::setExtraMediaDrives({});
+    }
+};
+
+QTEST_MAIN(TestRenderUi)
+#include "tst_render_ui.moc"

@@ -936,7 +936,21 @@ phase of their own. They are done in three steps:
   Removal and Stabilize with their chapters (6.7, 6.9). So 6.3 is done; 6.4 is next.
 * 6.4, rendering (p.57-61, p.135-156): Render Effect, ExpertRender, partial render, render
   settings, precomputes as effect media files, render-on-the-fly, the real-time playback
-  indicators, and the Timeline's Render Ranges and Show Adapters moved here from the UI pass.
+  indicators, and the Timeline's Render Ranges and Show Adapters moved here from the UI pass. In four
+  parts (planned 2026-10-30 from p.57-61 and p.135-156; docs/spec/rendering.md):
+  * 6.4a, Render Effect: Render at Position and In/Out with the Render Effect dialog and the Effect
+    Editor's button, precomputes as managed media holding the effect's track and those below, played in
+    place of the effect while in date, Clear Renders with its dialog and Undo, the Timeline's dots.
+    Done (`src/model/effect_render.*`, `src/media/render.*`, `render_dialogs.*`).
+  * 6.4b, partial render (Ctrl+period, Keep or Discard), the Timeline's Render Ranges (None, Partial
+    Only, All), the playback performance indicators (red, yellow and blue bars; Highlight Suggested Render
+    Areas After Playback) and Composer > Render On-the-Fly.
+  * 6.4c, ExpertRender at Position and In/Out: the analysis, the Expert Render dialog (recommended
+    ranges, entire selection, Prepare effects for Digital Cut) and Modify Selection.
+  * 6.4d, the Render settings (Image Interpolation, the Render Using menus, Effects Quality and HQ,
+    Render Completion Sound), Background Process rendering (the __bg folders, the Background Queue),
+    precompute management (Show reference clips, Reveal File, the Media Tool's precompute clips, Save
+    after Render) and Show Adapters.
 * 6.5, motion effects and Timewarp (ch.7, p.165-205): freeze frames, variable speed, strobe, the
   Motion Effect Editor's speed and position graphs.
 * 6.6, layered and nested effects (ch.8, p.206-228): nesting and stepping in, Collapse,

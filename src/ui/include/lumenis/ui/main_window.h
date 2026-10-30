@@ -27,6 +27,7 @@ class QToolButton;
 
 namespace lumenis::media {
 class AudioPlayer;
+struct Composition;
 struct AudioPiece;
 }
 
@@ -50,6 +51,8 @@ class UnmountDialog;
 class SetFontDialog;
 class ShortcutsWindow;
 class AudioMixdownDialog;
+class ClearRendersDialog;
+class RenderEffectDialog;
 class MultiMixDialog;
 class ExportAsDialog;
 class ExportBinDialog;
@@ -327,6 +330,19 @@ public:
     // dialog (tests; true: OK).
     void audioMixdown();
     void setMixdownHook(std::function<bool(AudioMixdownDialog&)> hook) { mixdownHook_ = std::move(hook); }
+    // Rendering video effects (FX Guide p.57-61; docs/spec/rendering.md). Render at Position renders
+    // the effects at the Record monitor's position on the selected video tracks, Render In/Out those
+    // between its marks; effects already rendered are left unless `rerender` (Shift, p.61). The Render
+    // Effect dialog chooses the drive unless `useLastDrive` (Alt, p.58), which takes the last one
+    // chosen. Each render is written as a precompute and kept with its effect, all in one undo step;
+    // Cancel during the render keeps nothing. The hook stands in for the dialog (tests; true: OK).
+    void renderEffects(bool atPosition, bool rerender = false, bool useLastDrive = false);
+    void setRenderHook(std::function<bool(RenderEffectDialog&)> hook) { renderHook_ = std::move(hook); }
+    // Clear Renders at Position and In/Out (p.60-61): the renders of the effects there on the selected
+    // video tracks forgotten (the precomputes stay), as one undo step ("Undo Clear Renders"). The hook
+    // answers the Clear Renders dialog (tests; true: OK).
+    void clearRenders(bool atPosition);
+    void setClearRendersHook(std::function<bool(ClearRendersDialog&)> hook) { clearRendersHook_ = std::move(hook); }
     // Create Sequence Based on Selection's Select a Bin dialog (p.614): tests answer it here with the
     // index of the chosen bin name, or -1 for Cancel.
     void setBinChoiceHook(std::function<int(const QStringList& bins)> hook) { binChoiceHook_ = std::move(hook); }
@@ -579,6 +595,9 @@ private:
     // What a monitor shows at a position: a linked clip and its frame.
     // The video tracks of `seq` the monitor shows, bottom to top (Track Monitor buttons, p.627).
     QStringList shownVideoTracks(MonitorId monitor, const model::Sequence& seq) const;
+    // Where a sequence loaded in a monitor gets its pictures from: its clips' frames, Timecode
+    // Burn-In's sequence, marks and source clips, and its rendered effects' precomputes.
+    void fillComposition(media::Composition& c, const model::LoadedClip& loaded);
     std::optional<std::pair<model::BinItem, std::int64_t>> frameAt(MonitorId monitor, std::int64_t position) const;
 
     // Starts the monitor's sound at `speed` for playback, or none above three times normal.
@@ -586,6 +605,9 @@ private:
     std::function<void(LinkedMediaDialog&)> linkedMediaHook_;
     std::function<bool(ConsolidateDialog&)> consolidateHook_;
     std::function<bool(AudioMixdownDialog&)> mixdownHook_;
+    std::function<bool(RenderEffectDialog&)> renderHook_;
+    std::function<bool(ClearRendersDialog&)> clearRendersHook_;
+    QString lastRenderDrive_; // the drive the last Render Effect dialog chose (Alt-click renders there)
     std::function<int(const QStringList&)> binChoiceHook_;
     std::function<void(const QString&)> revealHook_;
     std::function<bool(UnmountDialog&)> unmountHook_;

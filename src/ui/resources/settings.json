@@ -358,11 +358,11 @@
         {
           "name": "Render",
           "options": [
-            {"key": "renderResolution", "type": "choice", "style": "menu", "label": "Video Resolution", "default": "dnx_hq", "page": 1207, "later": true,
+            {"key": "renderResolution", "type": "choice", "style": "menu", "label": "Video Resolution", "default": "dnx_hq", "page": 1207,
              "choices": [{"value": "dnx_lb", "label": "Avid DNx LB"}, {"value": "dnx_sq", "label": "Avid DNx SQ"}, {"value": "dnx_hq", "label": "Avid DNx HQ"}, {"value": "dnx_hqx", "label": "Avid DNx HQX"}, {"value": "dnx_444", "label": "Avid DNx 444"}]},
-            {"key": "renderVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207, "later": true},
+            {"key": "renderVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207},
             {"key": "renderAudioDrive", "type": "drive", "label": "Audio Drive", "default": "", "page": 1207, "later": true},
-            {"key": "renderEffectsProcessing", "type": "choice", "style": "menu", "label": "Effects Processing", "default": "automatic", "page": 1208, "later": true,
+            {"key": "renderEffectsProcessing", "type": "choice", "style": "menu", "label": "Effects Processing", "default": "automatic", "page": 1208,
              "choices": [{"value": "8bit", "label": "8-bit"}, {"value": "16bit", "label": "16-bit"}, {"value": "32bit", "label": "32-bit"}, {"value": "automatic", "label": "Automatic"}]},
             {"key": "saveAfterRender", "type": "bool", "label": "Save after Render", "default": false, "page": 1208, "later": true}
           ]

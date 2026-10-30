@@ -245,6 +245,8 @@ public:
 signals:
     // The Effect Editor shortcut menu changed options().
     void optionsChanged();
+    // The Render Effect button was clicked, with these keys held (FX Guide p.58, p.61).
+    void renderRequested(Qt::KeyboardModifiers modifiers);
 
 protected:
     // Shift+Left and Shift+Right on a slider move it by ten; clicking a control makes its parameter

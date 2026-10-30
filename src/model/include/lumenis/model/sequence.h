@@ -93,8 +93,6 @@ struct Transition {
     std::int64_t duration = 0;
     TransitionAlignment alignment = TransitionAlignment::CenteredOnCut;
     std::int64_t start = 0;
-    // Its render (FX Guide p.57-61), if it has been rendered.
-    std::optional<EffectRender> render;
 
     // Frames before and after the cut.
     // before() is clamped to 0..duration for CustomStart.
@@ -207,8 +205,10 @@ struct Segment {
     std::optional<Effect> effect;
     // The segment effect's render (FX Guide p.57-61), if it has been rendered.
     std::optional<EffectRender> render;
-    // The transition effect at the cut where this segment starts.
+    // The transition effect at the cut where this segment starts, and its render, if it has been
+    // rendered.
     std::optional<Transition> transition;
+    std::optional<EffectRender> transitionRender;
     // Clip Volume and Pan (p.702): the segment's clip gain in dB and its
     // pan, -100 (left) to 100 (right).
     double gain = 0.0;
@@ -335,7 +335,7 @@ public:
     // The composition JSON: {tracks: [{name, segments: [...], locked?, syncLocked?, format?,
     // lfeOnly?, inserts?: [{slot (0-4), effect, name, params: {id: value}, bypass?}]}],
     // timecode, mix? ("5.1" or "7.1": mixFormat())}. A segment is {length, gain?, pan?,
-    // volumeKeys?, panKeys?, eq?, effect?, render?, transition?} (keys as [[frame, value], ...]) plus
+    // volumeKeys?, panKeys?, eq?, effect?, render?, transition?, transitionRender?} (keys as [[frame, value], ...]) plus
     // addEdit? for filler or {clip, mob?, bin?, name, track, in, localColor?, surround?: [{front,
     // rear, fr, center?, side?, lfe?}]} for material.
     // fromJson() skips unreadable and duplicate tracks, tidies each track and sorts the tracks.

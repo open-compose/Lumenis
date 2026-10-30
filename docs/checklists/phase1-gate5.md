@@ -205,10 +205,10 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Mixdown > Video |  | p.228 | *later* | ☐ | | |
 | Remove Match Frame Edits |  | p.495 | works | ☐ | | |
 | Render > ExpertRender In/Out |  | p.926 | *later* | ☐ | | |
-| Render > Render In/Out |  | p.59 | *later* | ☐ | | |
-| Render > Render at Position |  | p.58 | *later* | ☐ | | |
-| Render > Clear Renders In/Out |  | p.60 | *later* | ☐ | | |
-| Render > Clear Renders at Position |  | p.61 | *later* | ☐ | | |
+| Render > Render In/Out |  | p.59 | works | ☐ | | |
+| Render > Render at Position |  | p.58 | works | ☐ | | |
+| Render > Clear Renders In/Out |  | p.60 | works | ☐ | | |
+| Render > Clear Renders at Position |  | p.61 | works | ☐ | | |
 | Restore Default Patch |  | p.630 | works | ☐ | | |
 | Show Sequence Map |  | p.606 | works | ☐ | | |
 | Split All Tracks |  | p.736 | works | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 141 of them working with a project open; the
+* 211 menu commands, 145 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

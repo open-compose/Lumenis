@@ -85,7 +85,8 @@ headers in `include/lumenis/<library>/`.
   transitions, docs/spec/wipes.md), `image_effects.cpp` and `color_effects.cpp` (Picture-in-Picture,
   Resize, masks, Reformat, Color Effect, Blur, Mosaic, docs/spec/image-effects.md), `key_effects.cpp`
   (the keys, docs/spec/keys.md), `burn_in.cpp` (Timecode Burn-In, docs/spec/burn-in.md), `illusion_fx.cpp` and `illusion_transitions.cpp` (the Illusion FX segment effects
-  and transitions, sharing `illusion_common.h`; docs/spec/illusion-fx.md), `effect_drawing.*` (their shared sampling and borders), `mixdown.*`
+  and transitions, sharing `illusion_common.h`; docs/spec/illusion-fx.md), `effect_drawing.*` (their shared sampling and borders), `render.*` (Render Effect's precomputes,
+  docs/spec/rendering.md), `mixdown.*`
   (Audio Mixdown, docs/spec/audio-mixdown.md), `surround.*` (speakers,
   monitor mixes and their folds, docs/spec/surround.md), `ltc.*` (audio
   timecode, docs/spec/clip-audio.md), `tone.*` (the calibration tone,
@@ -111,7 +112,9 @@ headers in `include/lumenis/<library>/`.
   `effect_palette.*` and `effect_editor.*` (its keyframe tracks and graphs in
   `effect_editor_keyframes.cpp`); the model keeps effects on
   segments (`model::Effect`, `model::Transition`), their parameters'
-  keyframes in `src/model/effect_keyframes.*` (docs/spec/effect-keyframes.md).
+  keyframes in `src/model/effect_keyframes.*` (docs/spec/effect-keyframes.md), and their renders in
+  `src/model/effect_render.*` with Render Effect and Clear Renders in `MainWindow::renderEffects` and
+  `render_dialogs.*` (docs/spec/rendering.md).
 * **Audio tools.** `audio_tools.*` (the Audio Mixer, docs/spec/audio-mixer.md, and the Audio Tool), `audio_groups.cpp` (the mixer's track sidebar and groups), `clip_audio_dialogs.*` (Apply Gain and Auto VO, with `src/model/clip_audio.*`, docs/spec/clip-audio.md), `multi_mix_dialog.*` (the Multi-Mix Tool, docs/spec/multi-mix.md),
   `audio_eq.*` (the Audio EQ tool, docs/spec/audio-eq.md),
   `audio_punch_in.*` (Audio Punch-In, docs/spec/punch-in.md),

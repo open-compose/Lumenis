@@ -110,7 +110,7 @@ const Effect* effectOf(const Sequence& sequence, const RenderTarget& target) {
 std::optional<EffectRender> renderOf(const Sequence& sequence, const RenderTarget& target) {
     const Segment* s = segmentOf(sequence, target);
     if (!s) return std::nullopt;
-    if (target.transition) return s->transition ? s->transition->render : std::nullopt;
+    if (target.transition) return s->transition ? s->transitionRender : std::nullopt;
     return s->effect ? s->render : std::nullopt;
 }
 
@@ -150,7 +150,7 @@ bool setRender(Sequence& sequence, const RenderTarget& target, const std::option
     Segment& s = t->segments[target.segment];
     if (target.transition) {
         if (!s.transition) return false;
-        s.transition->render = render;
+        s.transitionRender = render;
         return true;
     }
     if (!s.effect) return false;

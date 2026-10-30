@@ -249,7 +249,13 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     });
     auto* bottom = new QHBoxLayout;
     bottom->setSpacing(2);
-    bottom->addWidget(offButton(QStringLiteral("effectRender"), tr("Render Effect"), this));
+    // Render Effect (p.84; FX Guide p.58): renders the effect at the position, as Render at Position
+    // does; MainWindow carries it out (Shift renders again, Alt skips the dialog).
+    QToolButton* render = offButton(QStringLiteral("effectRender"), tr("Render Effect"), this);
+    render->setToolTip(tr("Render Effect"));
+    render->setEnabled(true);
+    connect(render, &QToolButton::clicked, this, [this] { emit renderRequested(QGuiApplication::keyboardModifiers()); });
+    bottom->addWidget(render);
     bottom->addWidget(offButton(QStringLiteral("effectOutline"), tr("Outline/Path"), this));
     bottom->addWidget(alignment_);
     bottom->addWidget(duration_);
