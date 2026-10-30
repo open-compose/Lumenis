@@ -1,5 +1,5 @@
 {
-  "comment": "The Effect Editor's parameter categories and their controls (FX guide, Effects Parameter Reference, p.491-586), named as printed. 'min', 'max' and 'default' only where the text states them; 'kind' is slider, checkbox, color, menu, button or other; 'keyframeable': false where the reference says a parameter is not keyframeable (p.491); Where two parameters of a category share a name, the later one is stored under '<subcategory>: <name>' (ours; EffectParameter::name).",
+  "comment": "The Effect Editor's parameter categories and their controls (FX guide, Effects Parameter Reference, p.491-586), named as printed. 'min', 'max' and 'default' only where the text states them; 'kind' is slider, checkbox, color, menu, button or other; 'keyframeable': false where the reference says a parameter is not keyframeable (p.491); Where two parameters of a category share a name, the later one is stored under '<subcategory>: <name>' (ours; EffectParameter::name). 'ours' holds a slider's range where the reference gives none (ours), and options the text describes without listing (Pattern Generator's Axis menu, p.520); Pattern Generator's Position is two sliders, as its text says (\"the horizontal (X) and vertical (Y) position\", p.521).",
   "categories": [
     {"name": "Color Parameter Controls", "page": 491, "parameters": [
       {"name": "Other Options", "kind": "button"},
@@ -164,37 +164,37 @@
       {"name": "Text", "kind": "other", "label": "Notes Track text box", "keyframeable": false}
     ]},
     {"name": "Border Parameter for Illusion FX Effects", "page": 508, "parameters": [
-      {"name": "Left", "kind": "slider"},
-      {"name": "Right", "kind": "slider"},
-      {"name": "Top", "kind": "slider"},
-      {"name": "Bottom", "kind": "slider"}
+      {"name": "Left", "kind": "slider", "ours": {"min": 0, "max": 50}},
+      {"name": "Right", "kind": "slider", "ours": {"min": 0, "max": 50}},
+      {"name": "Top", "kind": "slider", "ours": {"min": 0, "max": 50}},
+      {"name": "Bottom", "kind": "slider", "ours": {"min": 0, "max": 50}}
     ]},
     {"name": "Color Mix Effect Input Parameters", "page": 508, "parameters": [
       {"name": "Color Level", "kind": "slider", "min": 0, "max": 100},
       {"name": "Color controls", "kind": "color"}
     ]},
     {"name": "Crystal Effect Input Parameters", "page": 509, "parameters": [
-      {"name": "Size", "kind": "slider"},
-      {"name": "Jitter", "kind": "slider"},
-      {"name": "Random Seed", "kind": "slider", "keyframeable": false},
+      {"name": "Size", "kind": "slider", "ours": {"min": 2, "max": 200}},
+      {"name": "Jitter", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Random Seed", "kind": "slider", "keyframeable": false, "ours": {"min": 0, "max": 1000}},
       {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Film Grain Effect Input Parameters", "page": 509, "parameters": [
-      {"name": "Level", "kind": "slider"},
-      {"name": "Size", "kind": "slider"},
-      {"name": "Color", "kind": "slider"},
+      {"name": "Level", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Size", "kind": "slider", "ours": {"min": 1, "max": 20}},
+      {"name": "Color", "kind": "slider", "ours": {"min": 0, "max": 100}},
       {"name": "Field Mode", "kind": "checkbox"},
-      {"name": "Hilite Grain", "kind": "slider"},
-      {"name": "Shadow Grain", "kind": "slider"}
+      {"name": "Hilite Grain", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Shadow Grain", "kind": "slider", "ours": {"min": 0, "max": 100}}
     ]},
     {"name": "Flare Effect Input Parameters", "page": 510, "parameters": [
       {"name": "Brightness", "kind": "slider", "min": 0, "max": 100},
-      {"name": "Size", "kind": "slider"},
-      {"name": "Width", "kind": "slider"},
-      {"name": "Amount", "kind": "slider"},
-      {"name": "Random Seed", "kind": "slider", "keyframeable": false},
-      {"name": "X", "kind": "slider"},
-      {"name": "Y", "kind": "slider"}
+      {"name": "Size", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Width", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Amount", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Random Seed", "kind": "slider", "keyframeable": false, "ours": {"min": 0, "max": 1000}},
+      {"name": "X", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Y", "kind": "slider", "ours": {"min": 0, "max": 100}}
     ]},
     {"name": "FluidBlur Effect Input Parameters", "page": 510, "parameters": [
       {"name": "Blur Amount", "kind": "slider"},
@@ -224,23 +224,23 @@
       {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Kaleidoscope Effect Input, Center, and Offset Parameters", "page": 513, "parameters": [
-      {"name": "Symmetry", "kind": "slider", "subcategory": "Input Parameters"},
-      {"name": "Angle", "kind": "slider", "subcategory": "Input Parameters"},
-      {"name": "Scale", "kind": "slider", "subcategory": "Input Parameters"},
-      {"name": "X", "kind": "slider", "subcategory": "Center Parameters"},
-      {"name": "Y", "kind": "slider", "subcategory": "Center Parameters"},
-      {"name": "X", "kind": "slider", "subcategory": "Offset Parameters"},
-      {"name": "Y", "kind": "slider", "subcategory": "Offset Parameters"},
+      {"name": "Symmetry", "kind": "slider", "subcategory": "Input Parameters", "ours": {"min": 1, "max": 32}},
+      {"name": "Angle", "kind": "slider", "subcategory": "Input Parameters", "ours": {"min": -180, "max": 180}},
+      {"name": "Scale", "kind": "slider", "subcategory": "Input Parameters", "ours": {"min": 10, "max": 400}},
+      {"name": "X", "kind": "slider", "subcategory": "Center Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Y", "kind": "slider", "subcategory": "Center Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "X", "kind": "slider", "subcategory": "Offset Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Y", "kind": "slider", "subcategory": "Offset Parameters", "ours": {"min": 0, "max": 100}},
       {"name": "Anti-alias", "kind": "checkbox", "keyframeable": false, "subcategory": "Offset Parameters"}
     ]},
     {"name": "Lightning Effect Generation, Core, and Glow Parameters", "page": 513, "parameters": [
       {"name": "Amount", "kind": "slider", "subcategory": "Generation Parameters", "min": 0, "max": 100},
-      {"name": "Branch Probability", "kind": "slider", "subcategory": "Generation Parameters"},
-      {"name": "Random Seed", "kind": "slider", "keyframeable": false, "subcategory": "Generation Parameters"},
+      {"name": "Branch Probability", "kind": "slider", "subcategory": "Generation Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Random Seed", "kind": "slider", "keyframeable": false, "subcategory": "Generation Parameters", "ours": {"min": 0, "max": 1000}},
       {"name": "Render Mode", "kind": "menu", "label": "Render Mode menu", "subcategory": "Generation Parameters", "options": ["Quick", "Standard", "Anti-aliased"]},
-      {"name": "Width", "kind": "slider", "subcategory": "Core Parameters"},
+      {"name": "Width", "kind": "slider", "subcategory": "Core Parameters", "ours": {"min": 0, "max": 50}},
       {"name": "Color controls", "kind": "color", "subcategory": "Core Parameters"},
-      {"name": "Width", "kind": "slider", "subcategory": "Glow Parameters"},
+      {"name": "Width", "kind": "slider", "subcategory": "Glow Parameters", "ours": {"min": 0, "max": 50}},
       {"name": "Color controls", "kind": "color", "subcategory": "Glow Parameters"}
     ]},
     {"name": "Melt Effect Input Parameters", "page": 515, "parameters": [
@@ -253,8 +253,8 @@
       {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Motion Blur Effect Input Parameters", "page": 515, "parameters": [
-      {"name": "Amount", "kind": "slider"},
-      {"name": "Direction", "kind": "slider"}
+      {"name": "Amount", "kind": "slider", "ours": {"min": 0, "max": 200}},
+      {"name": "Direction", "kind": "slider", "ours": {"min": -180, "max": 180}}
     ]},
     {"name": "Pagecurl Effect Input Parameters", "page": 515, "parameters": [
       {"name": "Turn Left", "kind": "checkbox", "keyframeable": false},
@@ -296,19 +296,21 @@
     ]},
     {"name": "Pattern Generator Effect Background, Number, and Circle Parameters", "page": 520, "parameters": [
       {"name": "Pattern Type", "kind": "menu", "label": "Pattern Type menu", "subcategory": "Background Parameters", "options": ["Solid color", "EBU bars (75%)", "Color bars (75%)", "Color bars (100%)", "EIA bars", "SMPTE bars", "Color ramps", "Cross ramp", "Grid"]},
-      {"name": "Axis", "kind": "menu", "label": "Axis menu", "subcategory": "Background Parameters"},
+      {"name": "Axis", "kind": "menu", "label": "Axis menu", "subcategory": "Background Parameters", "options": ["X axis", "Y axis"]},
       {"name": "Color controls", "kind": "color", "subcategory": "Background Parameters"},
-      {"name": "Number Offset", "kind": "slider", "subcategory": "Number Parameters"},
-      {"name": "Opacity", "kind": "slider", "subcategory": "Number Parameters"},
-      {"name": "Text Size", "kind": "slider", "subcategory": "Number Parameters"},
-      {"name": "Stroke Width", "kind": "slider", "subcategory": "Number Parameters"},
+      {"name": "Number Offset", "kind": "slider", "subcategory": "Number Parameters", "ours": {"min": -10000, "max": 10000}},
+      {"name": "Opacity", "kind": "slider", "subcategory": "Number Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Text Size", "kind": "slider", "subcategory": "Number Parameters", "ours": {"min": 4, "max": 400}},
+      {"name": "Stroke Width", "kind": "slider", "subcategory": "Number Parameters", "ours": {"min": 0, "max": 20}},
       {"name": "Color controls", "kind": "color", "subcategory": "Number Parameters"},
-      {"name": "Position", "kind": "slider", "subcategory": "Number Parameters"},
-      {"name": "Size", "kind": "slider", "subcategory": "Circle Parameters"},
-      {"name": "Width", "kind": "slider", "subcategory": "Circle Parameters"},
-      {"name": "Opacity", "kind": "slider", "subcategory": "Circle Parameters"},
+      {"name": "X", "kind": "slider", "label": "Position (horizontal)", "subcategory": "Number Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Y", "kind": "slider", "label": "Position (vertical)", "subcategory": "Number Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Size", "kind": "slider", "subcategory": "Circle Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Width", "kind": "slider", "subcategory": "Circle Parameters", "ours": {"min": 0, "max": 50}},
+      {"name": "Opacity", "kind": "slider", "subcategory": "Circle Parameters", "ours": {"min": 0, "max": 100}},
       {"name": "Color controls", "kind": "color", "subcategory": "Circle Parameters"},
-      {"name": "Position", "kind": "slider", "subcategory": "Circle Parameters"}
+      {"name": "X", "kind": "slider", "label": "Position (horizontal)", "subcategory": "Circle Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Y", "kind": "slider", "label": "Position (vertical)", "subcategory": "Circle Parameters", "ours": {"min": 0, "max": 100}}
     ]},
     {"name": "Pinch Effect Input Parameters", "page": 521, "parameters": [
       {"name": "Amount", "kind": "slider"},
@@ -359,22 +361,22 @@
       {"name": "Swap Sources", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Sparkler Effect Generation, Movement, Core, and Glow Parameters", "page": 525, "parameters": [
-      {"name": "Birth Rate", "kind": "slider", "subcategory": "Generation Parameters"},
-      {"name": "Lifetime", "kind": "slider", "subcategory": "Generation Parameters"},
-      {"name": "X", "kind": "slider", "subcategory": "Generation Parameters"},
-      {"name": "Y", "kind": "slider", "subcategory": "Generation Parameters"},
+      {"name": "Birth Rate", "kind": "slider", "subcategory": "Generation Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Lifetime", "kind": "slider", "subcategory": "Generation Parameters", "ours": {"min": 1, "max": 100}},
+      {"name": "X", "kind": "slider", "subcategory": "Generation Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Y", "kind": "slider", "subcategory": "Generation Parameters", "ours": {"min": 0, "max": 100}},
       {"name": "Link Speed", "kind": "checkbox", "subcategory": "Generation Parameters"},
-      {"name": "Length", "kind": "slider", "subcategory": "Generation Parameters"},
-      {"name": "Speed Bias X", "kind": "slider", "subcategory": "Generation Parameters"},
-      {"name": "Speed Bias Y", "kind": "slider", "subcategory": "Generation Parameters"},
-      {"name": "Speed", "kind": "slider", "subcategory": "Movement Parameters"},
-      {"name": "Gravity", "kind": "slider", "subcategory": "Movement Parameters"},
-      {"name": "Air Resistance", "kind": "slider", "subcategory": "Movement Parameters"},
-      {"name": "Wind X", "kind": "slider", "subcategory": "Movement Parameters"},
-      {"name": "Wind Y", "kind": "slider", "subcategory": "Movement Parameters"},
-      {"name": "Turbulence", "kind": "slider", "subcategory": "Movement Parameters"},
-      {"name": "Core Radius", "kind": "slider", "subcategory": "Core and Glow Parameters"},
-      {"name": "Glow Radius", "kind": "slider", "subcategory": "Core and Glow Parameters"},
+      {"name": "Length", "kind": "slider", "subcategory": "Generation Parameters", "ours": {"min": 1, "max": 10}},
+      {"name": "Speed Bias X", "kind": "slider", "subcategory": "Generation Parameters", "ours": {"min": -100, "max": 100}},
+      {"name": "Speed Bias Y", "kind": "slider", "subcategory": "Generation Parameters", "ours": {"min": -100, "max": 100}},
+      {"name": "Speed", "kind": "slider", "subcategory": "Movement Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Gravity", "kind": "slider", "subcategory": "Movement Parameters", "ours": {"min": -100, "max": 100}},
+      {"name": "Air Resistance", "kind": "slider", "subcategory": "Movement Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Wind X", "kind": "slider", "subcategory": "Movement Parameters", "ours": {"min": -100, "max": 100}},
+      {"name": "Wind Y", "kind": "slider", "subcategory": "Movement Parameters", "ours": {"min": -100, "max": 100}},
+      {"name": "Turbulence", "kind": "slider", "subcategory": "Movement Parameters", "ours": {"min": 0, "max": 100}},
+      {"name": "Core Radius", "kind": "slider", "subcategory": "Core and Glow Parameters", "ours": {"min": 0, "max": 50}},
+      {"name": "Glow Radius", "kind": "slider", "subcategory": "Core and Glow Parameters", "ours": {"min": 0, "max": 100}},
       {"name": "Color controls", "kind": "color", "subcategory": "Core and Glow Parameters"}
     ]},
     {"name": "Sphere Effect Input Parameters", "page": 526, "parameters": [

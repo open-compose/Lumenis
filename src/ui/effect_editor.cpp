@@ -65,8 +65,10 @@ const Catalog& catalog() {
                 const bool taken = std::any_of(list.cbegin(), list.cend(), [&](const EffectParameter& q) { return q.name == p.text; });
                 if (taken) p.name = (p.subcategory.isEmpty() ? QStringLiteral("2") : p.subcategory) + QStringLiteral(": ") + p.text;
                 p.kind = po.value(QStringLiteral("kind")).toString();
-                p.min = static_cast<int>(po.value(QStringLiteral("min")).toDouble(0));
-                p.max = static_cast<int>(po.value(QStringLiteral("max")).toDouble(100));
+                // A range the reference gives, else ours ("ours"), else 0 to 100.
+                const QJsonObject own = po.value(QStringLiteral("ours")).toObject();
+                p.min = static_cast<int>(po.value(QStringLiteral("min")).toDouble(own.value(QStringLiteral("min")).toDouble(0)));
+                p.max = static_cast<int>(po.value(QStringLiteral("max")).toDouble(own.value(QStringLiteral("max")).toDouble(100)));
                 if (p.max < p.min) std::swap(p.min, p.max); // a range printed backwards
                 p.defaultValue = po.value(QStringLiteral("default"));
                 p.keyframeable = po.value(QStringLiteral("keyframeable")).toBool(true);

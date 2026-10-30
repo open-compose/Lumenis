@@ -84,8 +84,9 @@ Picture wipePicture(const model::Effect& effect, Picture outgoing, Picture incom
 // The segment effects that change a segment's own picture by geometry (ROADMAP 6.3b1;
 // docs/spec/image-effects.md, image_effects.cpp): Picture-in-Picture, Flip, Flop, Flip-Flop, Field Swap,
 // Resize, Mask, the Film masks and Blowup; (6.3b2) the Color Effect, Blur Effect and Mosaic Effect; and
-// (6.3c, docs/spec/keys.md) Luma Key, Chroma Key, RGB Keyer and SpectraMatte. True when `effect` is
-// one of them.
+// (6.3c, docs/spec/keys.md) Luma Key, Chroma Key, RGB Keyer and SpectraMatte; and (6.3d2,
+// docs/spec/illusion-fx.md) the Illusion FX segment effects that colour, texture or draw. True when
+// `effect` is one of them.
 bool isImageEffect(const model::Effect& effect);
 // `layer` through such an effect at `time` of `span`: the picture moved, cropped or masked, transparent
 // where Picture-in-Picture leaves the tracks below to show and the Background Color where the others

@@ -35,3 +35,5 @@ lumenis_add_test(tst_audio_project SOURCES tst_audio_project.cpp LIBS lumenis::m
 lumenis_add_test(tst_compositor SOURCES tst_compositor.cpp LIBS lumenis::media)
 # Timecode Burn-In (docs/spec/burn-in.md); draws text, so a GUI test.
 lumenis_add_test(tst_burn_in SOURCES tst_burn_in.cpp LIBS lumenis::media)
+# The Illusion FX segment effects (docs/spec/illusion-fx.md).
+lumenis_add_test(tst_illusion_fx SOURCES tst_illusion_fx.cpp LIBS lumenis::media)

@@ -150,6 +150,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   set, the labels other than "Mas TC1", Source Timecode's Types, Timeline Clip
   Text as the Clip Note, the positions, Font Size scaled from 1920 wide, the
   appearance values until set, the Effect Editor's tabs.
+* The Illusion FX effects (docs/spec/illusion-fx.md): every slider range the
+  reference omits ("ours" in effect_parameters.json), the values until set,
+  and each picture (Film Grain's noise, Crystal's cells, Flare's ring, the
+  test patterns' levels, the bolt's path, the spark physics, the
+  kaleidoscope's folding, Motion Blur's taps); "Color Mix Effect Input
+  Parameters" read as each effect's own.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

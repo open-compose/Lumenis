@@ -481,7 +481,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.3d1, Timecode Burn-In (docs/spec/burn-in.md: `src/media/burn_in.cpp`, `media::BurnInInfo` filled
   by the Composer's picture resolver, the Effect Editor's Display/Notes tabs; tests `tst_burn_in`,
   `tst_effects`), is done.
-  Next: 6.3d2-4 (Illusion FX; ROADMAP), the rest of the effect families, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.3d2, the Illusion FX colour, texture and drawing effects (docs/spec/illusion-fx.md:
+  `src/media/illusion_fx.cpp`; slider ranges the guide omits as `"ours"` in effect_parameters.json;
+  test `tst_illusion_fx`), is done.
+  Next: 6.3d3-4 (the Illusion FX distortions and transitions; ROADMAP), the rest of the effect families, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

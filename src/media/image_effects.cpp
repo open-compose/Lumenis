@@ -80,6 +80,7 @@ std::optional<double> filmMaskRatio(const model::Effect& e) {
 } // namespace
 
 QJsonValue parameterDefault(const model::Effect& e, const QString& category, const QString& name) {
+    if (e.category == QLatin1String("Illusion FX")) return detail::illusionDefault(e, category, name);
     if (category == kScaling && (name == QLatin1String("X") || name == QLatin1String("Y"))) {
         // Ours: a Picture-in-Picture starts at half size, as its illustration (p.458) shows it smaller;
         // everything else at normal size.
@@ -125,6 +126,7 @@ bool isImageEffect(const model::Effect& e) {
                                           QStringLiteral("Color Effect"), QStringLiteral("Blur Effect"), QStringLiteral("Mosaic Effect")};
         return names.contains(e.name);
     }
+    if (detail::isIllusionSegmentEffect(e)) return true;
     if (e.category == QLatin1String("Key")) {
         return e.name == QLatin1String("Luma Key") || e.name == QLatin1String("Chroma Key") || e.name == QLatin1String("RGB Keyer") ||
                e.name == QLatin1String("SpectraMatte");
@@ -145,6 +147,7 @@ Picture imageEffectPicture(const model::Effect& e, const Picture& layer, double 
     const double H = height;
     Picture out(width, height);
 
+    if (detail::isIllusionSegmentEffect(e)) return detail::illusionSegmentPicture(e, layer, time, span);
     if (e.name == QLatin1String("Color Effect")) return detail::colorEffectPicture(e, layer, time, span);
     if (e.name == QLatin1String("Luma Key") || e.name == QLatin1String("Chroma Key")) return detail::lumaChromaKeyPicture(e, layer, time, span);
     if (e.name == QLatin1String("RGB Keyer")) return detail::rgbKeyerPicture(e, layer, time, span);
