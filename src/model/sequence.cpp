@@ -793,6 +793,17 @@ std::optional<double> motionSpeed(const Effect& e) {
     return v.isDouble() ? std::optional<double>(v.toDouble()) : std::nullopt;
 }
 
+std::int64_t segmentSourceFrame(const Segment& segment, std::int64_t offset) {
+    if (segment.effect) {
+        if (const auto speed = motionSpeed(*segment.effect)) {
+            // The nudge keeps exact products (0.5 x 4 = 2) from falling a frame short.
+            const double moved = static_cast<double>(offset) * *speed;
+            return segment.sourceIn + static_cast<std::int64_t>(std::trunc(moved + (moved >= 0 ? 1e-6 : -1e-6)));
+        }
+    }
+    return segment.sourceIn + offset;
+}
+
 // The record marks give the length and place; the source marks only the start and the speed.
 EditPlan planFitToFill(const EditMarks& source, const EditMarks& record, double* speed) {
     EditPlan plan;
@@ -1461,7 +1472,7 @@ std::optional<MatchedFrame> matchFrame(const Sequence& sequence, const QStringLi
         const int i = t->segmentAt(position, &start);
         if (i < 0 || t->segments.at(i).isFiller()) continue;
         const Segment& s = t->segments.at(i);
-        return MatchedFrame{s, s.sourceIn + position - start};
+        return MatchedFrame{s, segmentSourceFrame(s, position - start)};
     }
     return std::nullopt;
 }

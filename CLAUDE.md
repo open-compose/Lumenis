@@ -503,7 +503,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   sequence's bin with the Media Tool's Precompute Clips (`MainWindow::keepPrecomputes`), is done.
   6.4d2, Background Process rendering (`MainWindow::renderInBackground`, `applyBackgroundRenders`; media in
   `MXF/__bg.1` through `MediaCreation::folder`; `BackgroundQueue::add`'s `done`), is done, so 6.4 is.
-  Next: 6.5 (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.5a, traditional motion effects (docs/spec/motion-effects.md: Motion Effect clips in
+  `src/model/motion_effect.*` followed by `MainWindow::followMotion`; `model::segmentSourceFrame` playing a
+  segment's Motion Effect; Composer > Freeze Frame > Other and the Motion Effect dialog,
+  `motion_effect_dialogs.*`; tests `tst_motion_effect`, `tst_motion_effect_ui`), is done.
+  Next: 6.5b, Timewarp (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

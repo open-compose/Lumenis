@@ -5,6 +5,7 @@ lumenis_add_test(tst_bin_attic SOURCES tst_bin_attic.cpp LIBS lumenis::model)
 lumenis_add_test(tst_effect_keyframes SOURCES tst_effect_keyframes.cpp LIBS lumenis::model)
 # Rendering video effects: targets, keys and Clear Renders (docs/spec/rendering.md).
 lumenis_add_test(tst_effect_render SOURCES tst_effect_render.cpp LIBS lumenis::model)
+lumenis_add_test(tst_motion_effect SOURCES tst_motion_effect.cpp LIBS lumenis::model)
 lumenis_add_test(tst_monitor SOURCES tst_monitor.cpp LIBS lumenis::model)
 lumenis_add_test(tst_sequence SOURCES tst_sequence.cpp LIBS lumenis::model)
 lumenis_add_test(tst_multichannel SOURCES tst_multichannel.cpp LIBS lumenis::model)

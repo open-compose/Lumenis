@@ -24,6 +24,7 @@
 #include "lumenis/model/auto_sequence.h"
 #include "lumenis/model/bin_relations.h"
 #include "lumenis/model/clip_audio.h"
+#include "lumenis/model/motion_effect.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/media/render.h"
 #include "lumenis/ext/provider.h"
@@ -66,6 +67,7 @@
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timecode_window.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/motion_effect_dialogs.h"
 #include "lumenis/ui/render_dialogs.h"
 #include "lumenis/ui/unmount_dialog.h"
 #include "lumenis/ui/set_font_dialog.h"
@@ -1792,8 +1794,21 @@ std::optional<std::pair<model::BinItem, std::int64_t>> MainWindow::frameAt(Monit
     } else if (frame >= item.durationFrames) {
         return std::nullopt;
     }
+    if (auto source = followMotion(item, frame)) return source;
     if (!media::isLinked(item)) return std::nullopt;
     return std::make_pair(item, frame);
+}
+
+std::optional<std::pair<model::BinItem, std::int64_t>> MainWindow::followMotion(const model::BinItem& clip,
+                                                                               std::int64_t frame) const {
+    // A rendered motion effect plays its own media; an unrendered one its source clip's frames.
+    if (media::isLinked(clip)) return std::nullopt;
+    const auto motion = model::motionEffectOf(clip);
+    if (!motion) return std::nullopt;
+    auto source = composer_->resolve(motion->sourceBin, motion->sourceClip);
+    if (!source || !media::isLinked(*source)) return std::nullopt;
+    const std::int64_t last = std::max<std::int64_t>(source->durationFrames - 1, 0);
+    return std::make_pair(*source, std::clamp<std::int64_t>(motion->sourceFrame(frame), 0, last));
 }
 
 // The audio of a loaded clip or sequence as pieces for media::AudioMix (media::audioPieces).
@@ -3151,7 +3166,14 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
 // clip overwritten into the targets, new tracks added when there are none.
 void MainWindow::fillComposition(media::Composition& c, const model::LoadedClip& loaded) {
     c.source = [this](const model::Segment& segment, std::int64_t clipFrame, QSize want) -> std::optional<QImage> {
-        const auto clip = composer_->resolve(segment.binId, segment.clipId);
+        auto clip = composer_->resolve(segment.binId, segment.clipId);
+        if (clip) {
+            // A motion effect clip shows its source clip's frames (FX Guide p.165).
+            if (auto source = followMotion(*clip, clipFrame)) {
+                clip = source->first;
+                clipFrame = source->second;
+            }
+        }
         if (!clip || !media::isLinked(*clip)) return QImage();
         if (frames_->isOffline(*clip)) return std::nullopt;
         return frames_->frame(*clip, clipFrame, want);
@@ -3374,6 +3396,12 @@ void MainWindow::renderInBackground(const model::LoadedClip& loaded, const model
             if (segment.isFiller() || clips->contains(key(segment.binId, segment.clipId))) continue;
             if (const auto clip = composer_->resolve(segment.binId, segment.clipId)) {
                 clips->insert(key(segment.binId, segment.clipId), *clip);
+                // A motion effect clip's source, which it shows.
+                if (const auto motion = model::motionEffectOf(*clip)) {
+                    if (const auto source = composer_->resolve(motion->sourceBin, motion->sourceClip)) {
+                        clips->insert(key(motion->sourceBin, motion->sourceClip), *source);
+                    }
+                }
             }
         }
     }
@@ -3381,8 +3409,14 @@ void MainWindow::renderInBackground(const model::LoadedClip& loaded, const model
     media::Composition c;
     c.sequence = sequence.get();
     c.source = [clips, cache, key](const model::Segment& segment, std::int64_t clipFrame, QSize want) -> std::optional<QImage> {
-        const auto it = clips->constFind(key(segment.binId, segment.clipId));
-        if (it == clips->cend() || !media::isLinked(*it)) return QImage();
+        auto it = clips->constFind(key(segment.binId, segment.clipId));
+        if (it == clips->cend()) return QImage();
+        if (const auto motion = model::motionEffectOf(*it); motion && !media::isLinked(*it)) {
+            it = clips->constFind(key(motion->sourceBin, motion->sourceClip));
+            if (it == clips->cend()) return QImage();
+            clipFrame = std::clamp<std::int64_t>(motion->sourceFrame(clipFrame), 0, std::max<std::int64_t>(it->durationFrames - 1, 0));
+        }
+        if (!media::isLinked(*it)) return QImage();
         if (!cache->isOnline(*it)) return std::nullopt;
         return cache->frame(*it, clipFrame, want);
     };
@@ -3582,6 +3616,159 @@ void MainWindow::playRenderCompletionSound() {
     QTimer::singleShot(500, this, [this] {
         if (!composer_->isPlaying() && !playingTone_ && !scrubbing_) audio_->stop();
     });
+}
+
+BinDocument* MainWindow::binForNewClip(const QString& binId) {
+    if (BinDocument* doc = binId.isEmpty() ? nullptr : binContainer_->document(binId); doc && !doc->isReadOnly()) return doc;
+    QList<BinDocument*> open;
+    for (BinDocument* doc : binContainer_->openDocuments()) {
+        if (!doc->isReadOnly()) open << doc;
+    }
+    if (open.isEmpty()) return nullptr;
+    if (BinDocument* active = binContainer_->activeDocument(); active && open.contains(active)) {
+        open.removeAll(active);
+        open.prepend(active);
+    }
+    if (open.size() == 1) return open.first();
+    QStringList names;
+    for (BinDocument* doc : open) names << doc->name();
+    int index = -1;
+    if (binChoiceHook_) {
+        index = binChoiceHook_(names);
+    } else {
+        bool ok = false;
+        const QString chosen = QInputDialog::getItem(this, tr("Select a Bin"), tr("Bin:"), names, 0, false, &ok);
+        if (ok) index = static_cast<int>(names.indexOf(chosen));
+    }
+    return index >= 0 && index < open.size() ? open.at(index) : nullptr;
+}
+
+void MainWindow::placeMotionClip(const QString& sourceBin, const model::BinItem& item) {
+    BinDocument* doc = binForNewClip(sourceBin);
+    if (!doc) {
+        ConsoleLog::instance().append(tr("Motion Effect: open a bin for the new clip."));
+        return;
+    }
+    doc->addItem(item);
+    if (BinView* view = binContainer_->viewFor(doc)) view->selectIds({item.id});
+    // "A new clip appears in the Source monitor and in the current bin" (FX Guide p.167).
+    composer_->loadDefault(doc->nodeId(), item);
+}
+
+// "Cue the clip to the frame that you want to freeze. Select Composer > Freeze Frame ... Select Other,
+// type a custom duration in the dialog box ... A new clip appears in the Source monitor and in the
+// current bin preceded by a Motion Effect icon. The new clip has the original clip name followed by the
+// letters FF" (FX Guide p.166-167). Ours: no drive is asked for, since the clip has no media of its own
+// until it is rendered.
+std::optional<model::BinItem> MainWindow::freezeFrame() {
+    const model::LoadedClip* src = composer_->state(MonitorId::Source).current();
+    if (!src || src->item.kind == model::BinItemKind::Sequence || !frameAt(MonitorId::Source, src->position)) {
+        ConsoleLog::instance().append(tr("Freeze Frame: load a clip with picture into the Source monitor."));
+        return std::nullopt;
+    }
+    // Two seconds until changed (ours; the guide gives no default).
+    const std::int64_t twoSeconds = std::llround(2.0 * src->item.editRate.toDouble());
+    FreezeFrameDialog dialog(src->item.editRate, lastFreezeDuration_ > 0 ? lastFreezeDuration_ : twoSeconds, this);
+    const bool ok = freezeHook_ ? freezeHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok || !dialog.duration()) return std::nullopt;
+    lastFreezeDuration_ = *dialog.duration();
+    // A freeze frame of a motion effect clip freezes the source frame it shows.
+    model::BinItem source = src->item;
+    QString sourceBin = src->binId;
+    std::int64_t frame = src->position;
+    if (const auto motion = model::motionEffectOf(source); motion && !media::isLinked(source)) {
+        if (const auto clip = composer_->resolve(motion->sourceBin, motion->sourceClip)) {
+            frame = motion->sourceFrame(frame);
+            source = *clip;
+            sourceBin = motion->sourceBin;
+        }
+    }
+    model::BinItem item = model::freezeFrameClip(source, sourceBin, frame, *dialog.duration(),
+                                                  model::FieldMotion::DuplicatedField, QDateTime::currentDateTimeUtc());
+    item.name = src->item.name + QStringLiteral(" FF");
+    placeMotionClip(src->binId, item);
+    return item;
+}
+
+std::optional<model::BinItem> MainWindow::motionEffect() {
+    // "If you do not activate the Source monitor, clicking the Motion Effect button does not open the
+    // Motion Effect dialog box. If the Record monitor is active, clicking the Motion Effect button opens
+    // the Motion Effect Editor for Timewarp effects" (p.168). The Motion Effect Editor comes with 6.5c.
+    if (composer_->activeMonitor() != MonitorId::Source) {
+        ConsoleLog::instance().append(tr("Motion Effect: click in the Source monitor first to make a motion effect clip."));
+        return std::nullopt;
+    }
+    const model::LoadedClip* src = composer_->state(MonitorId::Source).current();
+    if (!src || src->item.kind == model::BinItemKind::Sequence || !frameAt(MonitorId::Source, 0)) {
+        ConsoleLog::instance().append(tr("Motion Effect: load a clip with picture into the Source monitor."));
+        return std::nullopt;
+    }
+    const model::MonitorState& state = composer_->state(MonitorId::Source);
+    // "If you want to use only part of the source clip for the motion effect, mark IN and OUT points in
+    // the Source monitor" (p.168).
+    const std::int64_t in = state.in() ? *state.in() : 0;
+    const std::int64_t out = state.out() ? *state.out() : src->item.durationFrames - 1;
+    if (out < in) return std::nullopt;
+    std::optional<std::int64_t> fit;
+    const model::MonitorState& record = composer_->state(MonitorId::Record);
+    if (record.current() && record.in() && record.out() && *record.out() >= *record.in()) fit = *record.out() - *record.in() + 1;
+    // The Motion Effects tab's drive; "The resolution options are not available in the Motion Effects
+    // tab" (Editing Guide p.1207): ours, the Render tab's.
+    media::MediaCreation creation = mediaCreation(QStringLiteral("motionEffects"));
+    if (const media::Resolution* r = media::findResolution(settings_->text(QStringLiteral("Media Creation"), QStringLiteral("renderResolution")))) {
+        creation.resolution = *r;
+    }
+    MotionEffectDialog dialog(out - in + 1, src->item.editRate, fit, creation.videoDrive, this);
+    if (motionHook_) {
+        motionHook_(dialog);
+    } else {
+        dialog.exec();
+    }
+    if (dialog.choice() == MotionEffectDialog::Choice::Cancel) return std::nullopt;
+    // Made from what the Source monitor shows: a motion effect clip's source and frames when it is one.
+    model::BinItem source = src->item;
+    QString sourceBin = src->binId;
+    std::int64_t from = in;
+    std::int64_t to = out;
+    if (const auto motion = model::motionEffectOf(source); motion && !media::isLinked(source)) {
+        if (const auto clip = composer_->resolve(motion->sourceBin, motion->sourceClip)) {
+            from = motion->sourceFrame(in);
+            to = motion->sourceFrame(out);
+            if (to < from) std::swap(from, to);
+            source = *clip;
+            sourceBin = motion->sourceBin;
+        }
+    }
+    model::BinItem item = model::motionEffectClip(source, sourceBin, from, to, dialog.speed(), dialog.strobe(),
+                                                  model::FieldMotion::DuplicatedField, QDateTime::currentDateTimeUtc());
+    if (dialog.choice() == MotionEffectDialog::Choice::CreateAndRender) {
+        // "Click Create and Render to render the clip (creating new media files)" (p.169): its frames,
+        // written as managed media; the clip then plays its own media.
+        creation.videoDrive = dialog.drive();
+        creation.raster = creation.raster.expandedTo(media::kMinimumRaster);
+        const auto motion = *model::motionEffectOf(item);
+        const std::int64_t last = std::max<std::int64_t>(source.durationFrames - 1, 0);
+        QProgressDialog progress(tr("Rendering..."), tr("Cancel"), 0, 1000, this);
+        progress.setObjectName(QStringLiteral("motionRenderProgress"));
+        creation.progress = progressOn(progress);
+        QString error;
+        const auto rendered = media::renderedVideoClip(
+            item.name, item.editRate, item.durationFrames,
+            [&](std::int64_t frame) {
+                return frames_->frame(source, std::clamp<std::int64_t>(motion.sourceFrame(frame), 0, last), creation.raster);
+            },
+            creation, model::BinItemKind::MotionEffect, &error);
+        progress.reset();
+        if (!rendered) {
+            ConsoleLog::instance().append(tr("Motion Effect: %1").arg(error));
+            return std::nullopt;
+        }
+        item.link = rendered->link;
+        item.sources = rendered->sources;
+        item.mobId = rendered->mobId;
+    }
+    placeMotionClip(src->binId, item);
+    return item;
 }
 
 void MainWindow::expertRender() {
@@ -4907,6 +5094,8 @@ void MainWindow::installPanelHandlers() {
     // off, "as if no effects are applied to it". On until turned off (ours: the guide gives no
     // default). Playback is not affected (p.57).
     handle("composer.render_on_the_fly", [] {}); // the action's check mark is the state (below)
+    handle("composer.freeze_frame.other", [this] { freezeFrame(); });
+    handle("fx.motion_effect", [this] { motionEffect(); });
     if (QAction* fly = commands_.action(QStringLiteral("composer.render_on_the_fly"))) {
         fly->setCheckable(true);
         fly->setChecked(true);

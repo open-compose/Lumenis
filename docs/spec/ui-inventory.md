@@ -178,6 +178,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Set Bin Display's "Effects"; autodeletion when a render is replaced;
   background renders linked by their key, a cancelled job keeping the
   effects it finished, no "computername__bg.1" on shared storage.
+* Traditional motion effects (docs/spec/motion-effects.md): the Freeze Frame
+  duration of two seconds, only Other in the Freeze Frame menu, no drive
+  asked for an unrendered motion effect clip, the rate in names to two
+  decimals, no two-field options, reverse and strobe clips computed rather
+  than black, the bin a new clip goes into, the "(12.5 FPS)" Timeline text,
+  segment Motion Effects' sound at normal speed.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as
@@ -1726,7 +1732,7 @@ p.610–640, ch. 13 p.432–434).**
   * The PlasmaWipe presets are not named (FX p.478).
   * Only 4 of the 15 Squeeze effects are named (FX p.483–484, p.490).
   * Motion effects (Freeze Frame and others, FX p.476–477) are made from the
-    Source monitor, not from the palette.
+    Source monitor, not from the palette (docs/spec/motion-effects.md).
 * **Ours:** the Filters tab lists every video effect, because the picture
   shows Illusion FX transitions under Filters. The Transitions tab lists the
   effects that apply to transitions. The audio tabs are empty until audio

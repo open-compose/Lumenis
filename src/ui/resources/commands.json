@@ -260,6 +260,7 @@
     {"id": "timeline.view.tv6", "text": "TV6", "palette": "more"},
     {"id": "timeline.view.tv7", "text": "TV7", "palette": "more"},
     {"id": "timeline.view.tv8", "text": "TV8", "palette": "more"},
+    {"id": "fx.motion_effect", "text": "Motion Effect", "palette": "fx"},
     {"id": "fx.remove_effect", "text": "Remove Effect", "palette": "fx"},
     {"id": "fx.add_keyframe", "text": "Add Keyframe", "palette": "fx"},
     {"id": "fx.fade_effect", "text": "Fade Effect", "palette": "fx"},

@@ -956,7 +956,27 @@ phase of their own. They are done in three steps:
       precompute rendered again before a save. Done. Show Adapters goes with the first adapters, motion adapters (6.5).
     * 6.4d2, Background Process rendering (the __bg folders, the Background Queue). Done, so 6.4 is.
 * 6.5, motion effects and Timewarp (ch.7, p.165-205): freeze frames, variable speed, strobe, the
-  Motion Effect Editor's speed and position graphs.
+  Motion Effect Editor's speed and position graphs. In four parts (planned 2026-10-30 from p.165-205,
+  p.476-488 and p.561-563):
+  * 6.5a, traditional motion effects: playing a segment's speed (the Motion Effect of Fit to Fill and
+    the imports, until now shown at normal speed) in the compositor and the sound; Composer > Freeze
+    Frame (Other, the duration dialog, the two-field choices) making an "FF" clip; the Motion Effect
+    dialog from the Command palette's FX tab with Active Palette and the Source monitor (Variable Speed
+    by Frames, FPS, % Speed or Fit To Fill; Strobe Motion; the 2-field options, none in progressive
+    projects; Create or Create and Render) making Motion Effect clips named as p.170-172 say; the
+    Timeline's speed in parentheses and the green or blue dots of p.172. Done
+    (docs/spec/motion-effects.md); Fit to Fill making such a clip (Alt unrendered, p.170) and rendering
+    motion effects in the Timeline move to 6.5b.
+  * 6.5b, Timewarp: the effect's speed and position keyframes (Source Anchor Frame, Strobe, Type),
+    output frames to source frames with Duplicated Field, Both Fields and the Blended frame mixes, the
+    presets (0% To 100%, 100% to 0%, Reverse Motion, Speed Boost, Speed Bump, Trim to Fill), Promote to
+    Timewarp and Clip > Refresh Sequence > Motion Adapters/Timewarps.
+  * 6.5c, the Motion Effect Editor: the Speed and Position graphs with the advanced keyframe tools of
+    6.2b, Edit Graph, Type and Ignore Render Setting (with the Render setting's Render Using menus), the
+    anchor, Strobe and Duration, its toolbar, and dragging its icon to a bin as a template.
+  * 6.5d, FluidMotion (our own optical flow), FluidMotion Edit, the Source and Output formats with
+    pulldown (FluidFilm, Pulldown Insertion and Removal), motion adapters for mixed-rate clips with the
+    Timeline's Show Adapters, and the FluidBlur, FluidColorMap and FluidMorph Illusion FX.
 * 6.6, layered and nested effects (ch.8, p.206-228): nesting and stepping in, Collapse,
   Submaster, Double-Click to Show Nesting.
 * 6.7, 3D effects, camera effects, and tracking and stabilization (ch.9-11, p.229-300).

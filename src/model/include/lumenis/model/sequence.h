@@ -66,6 +66,10 @@ struct Effect {
 Effect motionEffect(double speed);
 // The speed of a motionEffect(), or nothing for another effect.
 std::optional<double> motionSpeed(const Effect& e);
+// The frame of its clip a segment shows `offset` frames into it: sourceIn + offset, or with a
+// motionEffect() sourceIn + offset × speed toward sourceIn ("slow-motion effects by duplicating
+// frames ... fast-motion effects by eliminating frames", FX Guide p.168).
+std::int64_t segmentSourceFrame(const struct Segment& segment, std::int64_t offset);
 
 // A rendered video effect (FX Guide p.57-61; docs/spec/rendering.md): the precompute master clips the
 // render made ("Media Composer stores a rendered effect and its media file as a precomputed master

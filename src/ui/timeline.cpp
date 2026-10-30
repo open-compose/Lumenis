@@ -6,6 +6,7 @@
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/effect_render.h"
+#include "lumenis/model/motion_effect.h"
 #include "lumenis/media/surround.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
@@ -1364,7 +1365,8 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
     const int iconHeight = std::min(r.height - 4, 14);
     if (iconHeight < 8) return;
     const int iconWidth = iconHeight * 3 / 2;
-    auto icon = [&](double centre, const model::Effect& e, bool transition, bool rendered) {
+    // `realTime` overrides the Effect Palette's dot (a motion effect clip's own, FX Guide p.172).
+    auto icon = [&](double centre, const model::Effect& e, bool transition, bool rendered, std::optional<bool> realTime = {}) {
         const EffectInfo* info = EffectCatalog::builtin().find(e.category, e.name);
         const QRectF box(centre - iconWidth / 2.0, r.top + (r.height - iconHeight) / 2.0, iconWidth, iconHeight);
         p.setPen(QPen(QColor(0xff4b2f72), 1));
@@ -1378,8 +1380,18 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
         }
         if (rendered) return;
         p.setPen(Qt::NoPen);
-        p.setBrush(QColor(!info || info->realTime ? 0xff3cc85a : 0xff3c78dc));
+        p.setBrush(QColor(realTime.value_or(!info || info->realTime) ? 0xff3cc85a : 0xff3c78dc));
         p.drawEllipse(QRectF(box.left() - 5, box.center().y() - 2, 4, 4));
+    };
+    // "Traditional motion effects display the effect speed in parentheses beside the effect icon in the
+    // Timeline" (FX Guide p.175): the rate in frames per second, after the icon.
+    auto speedText = [&](double centre, double speed, const Rational& rate, double right) {
+        const QString text = QStringLiteral("(%1 FPS)").arg(QString::number(model::motionFps(speed, rate), 'g', 4));
+        const QFontMetrics fm(font());
+        const double x = centre + iconWidth / 2.0 + 3;
+        if (x + fm.horizontalAdvance(text) > right) return;
+        p.setPen(palette().color(QPalette::WindowText));
+        p.drawText(QPointF(x, r.top + (r.height + fm.ascent() - fm.descent()) / 2.0), text);
     };
     const model::Sequence& seq = timeline_.shown();
     // Whether segment `i` (starting at `start`)'s effect, or its transition, has a render in date.
@@ -1431,7 +1443,29 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
         if (s.effect) {
             const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
             const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));
-            if (x1 - x0 > iconWidth + 8) icon((x0 + x1) / 2, *s.effect, false, rendered(index, at, false));
+            if (x1 - x0 > iconWidth + 8) {
+                icon((x0 + x1) / 2, *s.effect, false, rendered(index, at, false));
+                if (const auto speed = model::motionSpeed(*s.effect)) {
+                    // The rate of the clip the speed applies to (the sequence's when it cannot be found).
+                    const auto clip = timeline_.composer().resolve(s.binId, s.clipId);
+                    const model::LoadedClip* rec = timeline_.composer().state(MonitorId::Record).current();
+                    const Rational rate = clip ? clip->editRate : rec ? rec->item.editRate : Rational(25);
+                    speedText((x0 + x1) / 2, *speed, rate, x1);
+                }
+            }
+        } else if (!s.isFiller() && t.kind == model::TrackKind::Video) {
+            // A motion effect clip: "Freeze Frame ... No icon appears on a Freeze Frame clip in the
+            // Timeline. Variable Speed, forward motion ... a motion effect icon and a green dot ...
+            // reverse motion [and] Strobe Motion ... a motion effect icon and a blue dot" (p.172); none
+            // once rendered.
+            const auto clip = timeline_.composer().resolve(s.binId, s.clipId);
+            const auto motion = clip ? model::motionEffectOf(*clip) : std::nullopt;
+            const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
+            const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));
+            if (motion && !motion->isFreeze() && x1 - x0 > iconWidth + 8) {
+                icon((x0 + x1) / 2, model::motionEffect(motion->speed), false, media::isLinked(*clip), motion->isRealTime());
+                speedText((x0 + x1) / 2, motion->speed, clip->editRate, x1);
+            }
         }
         if (s.eq) {
             // Audio EQ (p.740): a teal icon with three bars for the bands. Without text, so the

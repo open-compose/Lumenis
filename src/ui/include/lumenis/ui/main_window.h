@@ -56,6 +56,9 @@ class ShortcutsWindow;
 class AudioMixdownDialog;
 class ClearRendersDialog;
 class ExpertRenderDialog;
+class BinDocument;
+class FreezeFrameDialog;
+class MotionEffectDialog;
 class RenderEffectDialog;
 class MultiMixDialog;
 class ExportAsDialog;
@@ -354,6 +357,18 @@ public:
     // (then the Render Effect button renders the set) or cancels. The hook answers the dialog (tests).
     void expertRender();
     void setExpertRenderHook(std::function<void(ExpertRenderDialog&)> hook) { expertHook_ = std::move(hook); }
+    // Composer > Freeze Frame > Other (FX Guide p.166-167): a Freeze Frame clip of the Source monitor's
+    // frame, the duration from the dialog (the hook answers it in tests; true: OK), put in the source
+    // clip's bin (or a bin chosen) and loaded into the Source monitor. Returns the new clip.
+    std::optional<model::BinItem> freezeFrame();
+    void setFreezeFrameHook(std::function<bool(FreezeFrameDialog&)> hook) { freezeHook_ = std::move(hook); }
+    // The Motion Effect button with the Source monitor active (FX Guide p.168-172): the Motion Effect
+    // dialog for the Source monitor's clip between its marks (all of it without), Fit To Fill from the
+    // Record monitor's marks; Create makes the Variable Speed and/or Strobe Motion clip, Create and
+    // Render also renders its media to the Target Drive. The new clip goes to a bin as Freeze Frame's
+    // does and into the Source monitor. The hook answers the dialog (tests). Returns the new clip.
+    std::optional<model::BinItem> motionEffect();
+    void setMotionEffectHook(std::function<void(MotionEffectDialog&)> hook) { motionHook_ = std::move(hook); }
     // Modify Selection's end: "click the Render Effect button in the Effect Editor or in the Tool
     // palette" (p.145) renders the highlighted effects, through the Render Effect dialog unless
     // `useLastDrive` (Alt).
@@ -639,6 +654,9 @@ private:
     // The Render setting's Image Interpolation into `c`.
     void fillCompositionQuality(media::Composition& c) const;
     std::optional<std::pair<model::BinItem, std::int64_t>> frameAt(MonitorId monitor, std::int64_t position) const;
+    // An unrendered motion effect clip's frame as its source clip and that clip's frame
+    // (model::motionEffectOf); nothing for other clips.
+    std::optional<std::pair<model::BinItem, std::int64_t>> followMotion(const model::BinItem& clip, std::int64_t frame) const;
 
     // Starts the monitor's sound at `speed` for playback, or none above three times normal.
     void startSound(MonitorId monitor, int speed);
@@ -660,6 +678,14 @@ private:
     // The Render setting's Render Completion Sound (p.1215-1216).
     void playRenderCompletionSound();
     std::function<void(ExpertRenderDialog&)> expertHook_;
+    std::function<bool(FreezeFrameDialog&)> freezeHook_;
+    std::int64_t lastFreezeDuration_ = 0; // the last Freeze Frame duration, offered next time
+    std::function<void(MotionEffectDialog&)> motionHook_;
+    // The bin a new clip made from `binId`'s clip goes in: that bin when it is open and writable, else
+    // the open bin the user picks (the active one when it is the only one). Null when none is open.
+    BinDocument* binForNewClip(const QString& binId);
+    // Puts a new motion effect clip in its bin, selects it there and loads it into the Source monitor.
+    void placeMotionClip(const QString& sourceBin, const model::BinItem& item);
     std::function<bool(ClearRendersDialog&)> clearRendersHook_;
     QString lastRenderDrive_; // the drive the last Render Effect dialog chose (Alt-click renders there)
     bool lastRenderBackground_ = false; // and whether it chose Background Process

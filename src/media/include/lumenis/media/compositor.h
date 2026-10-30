@@ -132,6 +132,9 @@ struct TrackFrame {
     // shows only one side (ours).
     double progress = 0.0;
 };
+// The frame of its clip a segment shows `offset` frames into it: sourceIn + offset, or with a Motion
+// Effect (model::motionSpeed) sourceIn + offset × speed, toward sourceIn (FX Guide p.168).
+std::int64_t segmentClipFrame(const model::Segment& segment, std::int64_t offset);
 // What `track` of `sequence` shows at `frame`; nothing past its end.
 std::optional<TrackFrame> trackFrame(const model::Sequence& sequence, const QString& track, std::int64_t frame);
 

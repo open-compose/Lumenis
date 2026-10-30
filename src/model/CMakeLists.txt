@@ -12,6 +12,7 @@ add_library(lumenis_model STATIC
     audio_eq.cpp
     audio_suite.cpp
     effect_render.cpp
+    motion_effect.cpp
     marker.cpp
     multichannel.cpp
     clip_coloring.cpp
@@ -37,6 +38,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/audio_eq.h
     include/lumenis/model/audio_suite.h
     include/lumenis/model/effect_render.h
+    include/lumenis/model/motion_effect.h
     include/lumenis/model/marker.h
     include/lumenis/model/multichannel.h
     include/lumenis/model/clip_coloring.h

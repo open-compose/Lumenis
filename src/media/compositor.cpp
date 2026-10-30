@@ -134,6 +134,10 @@ Picture filmMix(const Picture& a, const Picture& b, double t) {
 
 // ---------------------------------------------------------------- tracks
 
+std::int64_t segmentClipFrame(const model::Segment& segment, std::int64_t offset) {
+    return model::segmentSourceFrame(segment, offset);
+}
+
 std::optional<TrackFrame> trackFrame(const model::Sequence& sequence, const QString& name, std::int64_t frame) {
     const model::Track* track = sequence.track(name);
     if (!track || frame < 0) return std::nullopt;
@@ -144,7 +148,7 @@ std::optional<TrackFrame> trackFrame(const model::Sequence& sequence, const QStr
     const model::Segment& seg = segs.at(i);
     TrackFrame out;
     out.segment = &seg;
-    out.frame = seg.sourceIn + (frame - start);
+    out.frame = segmentClipFrame(seg, frame - start);
     out.offset = frame - start;
     // A transition sits on the cut where its segment starts (model::Segment::transition), `before()`
     // frames on the outgoing side and `after()` on the incoming.
@@ -156,9 +160,9 @@ std::optional<TrackFrame> trackFrame(const model::Sequence& sequence, const QStr
         const model::Segment& b = segs.at(incoming);
         const std::int64_t aStart = cut - a.length;
         out.outgoing = &a;
-        out.outgoingFrame = a.sourceIn + (frame - aStart);
+        out.outgoingFrame = segmentClipFrame(a, frame - aStart);
         out.segment = &b;
-        out.frame = b.sourceIn + (frame - cut);
+        out.frame = segmentClipFrame(b, frame - cut);
         out.transition = &t;
         out.offset = frame - begin;
         out.progress = static_cast<double>(frame - begin + 1) / static_cast<double>(t.duration + 1);

@@ -352,7 +352,7 @@
         {
           "name": "Motion Effects",
           "options": [
-            {"key": "motionEffectsVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207, "later": true}
+            {"key": "motionEffectsVideoDrive", "type": "drive", "label": "Video Drive", "default": "", "page": 1207}
           ]
         },
         {

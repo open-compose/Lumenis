@@ -44,6 +44,7 @@ add_library(lumenis_ui STATIC
     relink_dialog.cpp
     unmount_dialog.cpp
     render_dialogs.cpp
+    motion_effect_dialogs.cpp
     set_font_dialog.cpp
     shortcuts_window.cpp
     select_project_dialog.cpp
@@ -100,6 +101,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/relink_dialog.h
     include/lumenis/ui/unmount_dialog.h
     include/lumenis/ui/render_dialogs.h
+    include/lumenis/ui/motion_effect_dialogs.h
     include/lumenis/ui/set_font_dialog.h
     include/lumenis/ui/shortcuts_window.h
     include/lumenis/ui/select_project_dialog.h
