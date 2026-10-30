@@ -10,6 +10,7 @@
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/main_window.h"
+#include "lumenis/ui/media_tool.h"
 #include "lumenis/ui/render_dialogs.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/timeline.h"
@@ -18,6 +19,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
+#include <QFileInfo>
 #include <QLabel>
 #include <QMessageBox>
 #include <QProgressDialog>
@@ -133,6 +135,36 @@ private slots:
         media::VideoReader reader;
         QVERIFY(reader.open(clip->link.value(QStringLiteral("path")).toString()));
         QCOMPARE(reader.info().width, 320);
+        // The precompute is in the sequence's bin as a reference clip, shown only with Show reference
+        // clips (FX Guide p.155); Reveal File finds its media; the Media Tool lists it with Precompute
+        // Clips - Rendered Effects (p.153).
+        const QString firstPrecompute = clip->link.value(QStringLiteral("path")).toString();
+        const model::BinItem* reference = bin->bin().item(clip->id);
+        QVERIFY(reference);
+        QVERIFY(!reference->userPlaced);
+        QCOMPARE(reference->kind, model::BinItemKind::RenderedEffect);
+        QString revealed;
+        window.setRevealHook([&](const QString& f) { revealed = f; });
+        window.binContainer().viewFor(bin)->selectIds({clip->id});
+        QVERIFY(window.revealFile().isEmpty()); // not shown, so not selected
+        // "Select Effects and Show reference clips" (p.155): ours, Rendered Effects.
+        model::BinDisplay shownDisplay = bin->bin().display;
+        shownDisplay.showReferenceClips = true;
+        QVERIFY(shownDisplay.hiddenKinds.removeAll(model::BinItemKind::RenderedEffect) == 1);
+        bin->setDisplay(shownDisplay);
+        window.binContainer().viewFor(bin)->selectIds({clip->id});
+        QCOMPARE(window.revealFile(), firstPrecompute);
+        QCOMPARE(revealed, firstPrecompute);
+        MediaTool tool;
+        MediaToolDisplay display;
+        display.project = QStringLiteral("Film");
+        tool.setItems(bin->bin().items, display);
+        QVERIFY(!tool.names().contains(clip->name));
+        display.renderedEffects = true;
+        display.masterClips = false;
+        display.linkedMasterClips = false;
+        tool.setItems(bin->bin().items, display);
+        QCOMPARE(tool.names(), QStringList{clip->name});
         // Rendered effects are not rendered again unless asked (Shift, p.61).
         shown = 0;
         window.renderEffects(true);
@@ -168,11 +200,25 @@ private slots:
         composer.state(MonitorId::Record).markOut();
         composer.moveTo(MonitorId::Record, 5);
         shown = 0;
+        // Save after Render (p.1208) and the Render setting's Render Completion Sound (p.1215-1216).
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("saveAfterRender"), true);
+        window.settings().setValue(QStringLiteral("Render"), QStringLiteral("renderCompletionSound"), QStringLiteral("systemBeep"));
+        QStringList sounds;
+        window.setRenderSoundHook([&](const QString& sound) { sounds << sound; });
+        QVERIFY(bin->isDirty());
         // Alt-click: the last drive, no dialog (p.58).
         window.renderEffects(false, false, true);
         settle();
         QCOMPARE(shown, 0);
         QVERIFY(model::isRendered(recordSequence(composer), pipTarget(recordSequence(composer))));
+        QVERIFY(!bin->isDirty());
+        QCOMPARE(sounds, QStringList{QStringLiteral("systemBeep")});
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("saveAfterRender"), false);
+        window.settings().setValue(QStringLiteral("Render"), QStringLiteral("renderCompletionSound"), QStringLiteral("none"));
+        // The effect rendered a second time since the last save: the earlier precompute is deleted
+        // (FX Guide p.154-155), from the drive and the bin.
+        QVERIFY(!QFileInfo::exists(firstPrecompute));
+        QVERIFY(!bin->bin().item(clip->id));
 
         // Clear Renders at Position, then Undo Clear Renders (p.60-61).
         bool asked = false;

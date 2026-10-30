@@ -5,9 +5,9 @@ finished look of an effect so that the effect always plays in real time at full 
 stores a rendered effect and its media file as a precomputed master clip (often referred to as a
 precompute)" (p.57).
 
-ROADMAP 6.4 is in four parts: 6.4a, Render Effect and Clear Renders (this page); 6.4b, partial render,
-Render Ranges, the playback performance indicators and Render On-the-Fly; 6.4c, ExpertRender; 6.4d, the
-Render settings, background rendering and precompute management.
+ROADMAP 6.4 is in four parts: 6.4a, Render Effect and Clear Renders; 6.4b, partial render, Render Ranges,
+the playback performance indicators and Render On-the-Fly; 6.4c, ExpertRender; 6.4d, the Render setting
+and precompute management (6.4d1) and background rendering (6.4d2).
 
 ## 6.4a: Render Effect and Clear Renders
 
@@ -31,7 +31,7 @@ dialogs in `MainWindow::renderEffects`, `clearRenders` and `src/ui/render_dialog
   Render tab's Effects Processing: 8-bit, 16-bit, 32-bit, or Automatic, which "Effects render at 16-bit for
   10-bit media and at 8-bit for 8-bit media" (p.152); ours, by the depth of the render resolution. The
   precompute clips are kept with the effect in the sequence (the segment's `render`, or
-  `transitionRender` for its transition). Showing it in bins with "Show reference clips" comes with 6.4d.
+  `transitionRender` for its transition), and in the sequence's bin as a reference clip (6.4d1).
 * In date or not. A render keeps a key of what it was made from (ours): the effect and its parameters,
   and the clips, source frames, lengths, effects and transitions on its track and those below over its
   frames, relative to its start. Moving the whole picture keeps the key; changing a parameter, trimming
@@ -47,7 +47,7 @@ dialogs in `MainWindow::renderEffects`, `clearRenders` and `src/ui/render_dialog
   media"; "In the Processing field, select the processing method"; "Greyed-out options are not
   available". Ours: a Drive menu of the media drives (the Render tab's Video Drive, or the last one
   chosen); Processing offers Application, with Background Process and Distributed Processing dimmed until
-  6.4d; the number of effects is shown. "To prevent the Render Effects dialog box from opening, press
+  6.4d2; the number of effects is shown. "To prevent the Render Effects dialog box from opening, press
   and hold the Alt key ... Media Composer uses the last drive selected" (p.58).
 * The Effect Editor's Render Effect button (p.84) renders at the position, with Shift and Alt as above.
 * Rendering shows a progress dialog; all the renders are kept with their effects as one undo step
@@ -129,3 +129,47 @@ Code: `model::expertRender` (`ExpertRender`, `ExpertMode`); `ExpertRenderDialog`
   Cancel removes the highlighting; Modify Selection keeps it, "Shift+click effects in the Timeline to add
   them or remove them", and the Effect Editor's Render Effect button renders the set (through the Render
   Effect dialog; Alt skips it). "Click in the timecode track" cancels.
+
+## 6.4d1: the Render setting, Save after Render, precompute clips
+
+Code: the "Render" User setting in `settings.json`; `media::ImageInterpolation` and
+`Composition::interpolation` in `compositor.*`; `MainWindow::keepPrecomputes`, `playRenderCompletionSound`
+and Save after Render in `renderTargetsNow`; the Media Tool's Precompute Clips in `media_tool.cpp`. Tests:
+`tst_render_ui`, `tst_compositor` (`imageInterpolation`), `tst_settings_window`.
+
+* The Render setting (User settings; Editing Guide p.1214-1216, FX Guide p.147-150 and the pictures on
+  p.148 and p.154, which give the defaults).
+  * Image Interpolation, "filtering quality vs. speed": Advanced (Polyphase), the default; Standard
+    (Bilinear); Draft (Nearest Neighbor). Ours: Advanced and Standard both filter (Qt's smooth scaling,
+    which averages when shrinking; no polyphase filter yet), Draft takes the nearest pixel. It applies to
+    every picture the compositor resizes to the frame, played or rendered.
+  * Render Completion Sound: None ("This is the default"), System Beep ("matches the sound set for your
+    operating system": the platform's beep), Render Sound ("a customized sound": ours, two short rising
+    tones through the audio output, not over playback). It sounds when a render finishes, not when it
+    is interrupted.
+  * Timewarps Render Using and Motion Effects Render Using (Original Preference, Duplicated Field, Both
+    Fields, Interpolated Field, VTR-Style; Timewarps also Blended Interpolated and Blended VTR), Use frame
+    blending in Motion Adapters: shown dimmed until motion effects and Timewarps (6.5). Effects Quality
+    Render Using (Quality Set In Each Effect, Standard Quality, Highest Quality, p.154) and the Effect
+    Editor's HQ button: until the 3D effects that have an HQ render (6.7). Disable GPU effects: dimmed, as
+    in the guide's picture; our effects run on the CPU.
+* Save after Render (Media Creation, Render tab, p.1208): "Media Composer saves open bins after you
+  perform a render operation", an interrupted render that is kept too.
+* Precompute clips (FX Guide p.154-156). Each render's precomputes go into the bin of the sequence it
+  was made for, not placed by the user, so they show only with Set Bin Display's Show reference clips and
+  "Effects" ("Select Effects and Show reference clips ... Any rendered effect clips appear in the bin. The
+  clips are named with the sequence name and effect type"; ours: the Rendered Effects box). There File >
+  Reveal File finds its media file and Delete offers to delete it (the bin's Delete dialog). The Media
+  Tool lists them with Precompute Clips - Rendered Effects (p.153: "Deselect Master Clips and Media
+  Files. Select Precompute Clips"), and Delete there deletes their media. A render whose precompute is
+  deleted plays computed, as an offline one does.
+* Autodeletion (p.154-155): "Media Composer overwrites or automatically deletes a media file from your
+  drive only if you: Render an effect two or more times with the Render Effect button ... deletes the
+  earlier, unreferenced versions. This autodeletion applies only to effects rendered since the last save
+  or project close." Ours: when a render replaces one whose precomputes were made since their bin was
+  last saved, those precomputes are deleted, from the drive and the bin; Undo then shows that render's
+  effect computed. The earlier parts of a partial render being finished are kept.
+* Show Adapters (the Timeline Fast menu, Editing Guide p.599): "Clips that have source-side color,
+  spatial and motion adapters, have these effects indicated by separate icons ... Temporal (motion)
+  adapters appear with a T, spatial (FrameFlex) adapters appear with an S, and Color adapters appear with a
+  C." We have no adapters yet; the menu stays dimmed until the motion adapters (6.5) bring the first.

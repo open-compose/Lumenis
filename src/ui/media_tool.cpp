@@ -226,12 +226,14 @@ void MediaTool::setItems(const QList<model::BinItem>& items, const MediaToolDisp
     // Managed clips are filtered by the drive of their Avid MediaFiles folder, clips linked in place
     // by the drive their file is on.
     for (const model::BinItem& item : items) {
-        // Master clips (p.345); no sequences or subclips.
+        // Master clips (p.345) and, when asked, rendered effects' precompute clips (FX Guide p.153:
+        // "Deselect Master Clips and Media Files. Select Precompute Clips"); no sequences or subclips.
         const bool master = item.kind == model::BinItemKind::MasterClip || item.kind == model::BinItemKind::AudioClip;
-        if (!master) continue;
+        const bool precompute = item.kind == model::BinItemKind::RenderedEffect;
+        if (!master && !(precompute && display.renderedEffects)) continue;
         const auto link = media::linkOf(item);
         const bool linked = link && !link->isManaged();
-        if (linked ? !display.linkedMasterClips : !display.masterClips) continue;
+        if (master && (linked ? !display.linkedMasterClips : !display.masterClips)) continue;
         // A managed clip's files are its media; a linked clip's are not ours
         // to delete.
         QStringList media;

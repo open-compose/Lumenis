@@ -3174,6 +3174,11 @@ void MainWindow::fillComposition(media::Composition& c, const model::LoadedClip&
         }
         return frames_->frame(*clip, frame, want);
     };
+    // The Render setting's Image Interpolation (p.1214).
+    const QString interpolation = settings_->text(QStringLiteral("Render"), QStringLiteral("imageInterpolation"));
+    c.interpolation = interpolation == QLatin1String("draft")      ? media::ImageInterpolation::Draft
+                      : interpolation == QLatin1String("standard") ? media::ImageInterpolation::Standard
+                                                                   : media::ImageInterpolation::Advanced;
 }
 
 void MainWindow::renderEffects(bool atPosition, bool rerender, bool useLastDrive) {
@@ -3315,13 +3320,106 @@ void MainWindow::renderTargetsNow(const model::LoadedClip& loaded, const model::
     } else if (interrupted) {
         return;
     }
+    QList<model::EffectRender> renders;
+    QList<model::EffectRender> replaced;
+    for (const auto& [target, render] : made) {
+        renders << render;
+        if (const auto before = model::renderOf(seq, target)) replaced << *before;
+    }
     timeline_->changeRecordSequence(tr("Render Effect"), [&made](model::Sequence& s) {
         bool any = false;
         for (const auto& [target, render] : made) any = model::setRender(s, target, render) || any;
         return any;
     });
+    keepPrecomputes(rec->binId, renders, replaced);
     ConsoleLog::instance().append(interrupted ? tr("Render Effect: interrupted; %n effect(s) kept.", "", static_cast<int>(made.size()))
                                               : tr("Render Effect: %n effect(s) rendered.", "", static_cast<int>(made.size())));
+    // "Save after Render: When this option is selected, Media Composer saves open bins after you
+    // perform a render operation" (p.1208).
+    if (settings_->flag(QStringLiteral("Media Creation"), QStringLiteral("saveAfterRender"))) {
+        QString error;
+        if (!binContainer_->saveAll(&error)) ConsoleLog::instance().append(tr("Save after Render: %1").arg(error));
+    }
+    if (!interrupted) playRenderCompletionSound();
+}
+
+void MainWindow::keepPrecomputes(const QString& binId, const QList<model::EffectRender>& renders,
+                                 const QList<model::EffectRender>& replaced) {
+    BinDocument* doc = binId.isEmpty() ? nullptr : binContainer_->document(binId);
+    QSet<QString> kept;
+    for (const model::EffectRender& render : renders) {
+        for (const QJsonObject& json : render.clips) {
+            auto item = model::binItemFromJson(json);
+            if (!item) continue;
+            kept.insert(item->id);
+            if (!doc || doc->bin().item(item->id)) continue; // an earlier part of a partial render
+            // Not placed by the user: shown only with Show reference clips (p.155, p.288).
+            item->userPlaced = false;
+            doc->addItem(*item);
+            unsavedPrecomputes_.insert(item->id, binId);
+        }
+    }
+    // Saving the bin ends the time its precomputes may be deleted. Watched once per open bin: the mark
+    // goes with the document.
+    static const char* const kWatched = "lumenisPrecomputesWatched";
+    if (doc && !doc->property(kWatched).toBool()) {
+        doc->setProperty(kWatched, true);
+        connect(doc, &BinDocument::saved, this, [this, binId] {
+            for (auto it = unsavedPrecomputes_.begin(); it != unsavedPrecomputes_.end();) {
+                it = it.value() == binId ? unsavedPrecomputes_.erase(it) : std::next(it);
+            }
+        });
+    }
+    // "Media Composer overwrites or automatically deletes a media file from your drive only if you:
+    // Render an effect two or more times with the Render Effect button ... deletes the earlier,
+    // unreferenced versions. This autodeletion applies only to effects rendered since the last save"
+    // (FX Guide p.154-155). Ours: when the render is replaced; Undo then shows the effect unrendered.
+    QStringList files;
+    QStringList gone;
+    for (const model::EffectRender& render : replaced) {
+        for (const QJsonObject& json : render.clips) {
+            const auto item = model::binItemFromJson(json);
+            if (!item || kept.contains(item->id) || !unsavedPrecomputes_.contains(item->id)) continue;
+            if (const auto link = media::linkOf(*item)) files += link->files();
+            gone << item->id;
+            unsavedPrecomputes_.remove(item->id);
+        }
+    }
+    if (!files.isEmpty()) {
+        frames_->clear();
+        media::deleteMediaFiles(files, &mediaDb_);
+    }
+    if (doc && !gone.isEmpty()) doc->removeItems(gone);
+}
+
+// "None: Disables the rendering completion sound. This is the default. System Beep: ... matches the
+// sound set for your operating system. Render Sound: ... a customized sound" (p.1215-1216). Ours: the
+// Render Sound is two short rising tones through the audio output.
+void MainWindow::playRenderCompletionSound() {
+    const QString sound = settings_->text(QStringLiteral("Render"), QStringLiteral("renderCompletionSound"));
+    if (sound != QLatin1String("systemBeep") && sound != QLatin1String("renderSound")) return;
+    if (renderSoundHook_) {
+        renderSoundHook_(sound);
+        return;
+    }
+    if (sound == QLatin1String("systemBeep")) {
+        QApplication::beep();
+        return;
+    }
+    if (composer_->isPlaying() || playingTone_) return; // not over playback
+    std::vector<media::AudioPiece> notes(2);
+    const std::int64_t length = media::kPlaybackRate / 6;
+    for (std::size_t i = 0; i < notes.size(); ++i) {
+        notes[i].tone = media::Tone{-14, i == 0 ? 880 : 1320};
+        notes[i].at = static_cast<std::int64_t>(i) * length;
+        notes[i].length = length;
+    }
+    audio_->stop();
+    if (!audio_->start(std::make_shared<media::AudioMix>(notes), 0, {})) return;
+    // The device is let go once the notes are over, unless something else plays by then.
+    QTimer::singleShot(500, this, [this] {
+        if (!composer_->isPlaying() && !playingTone_ && !scrubbing_) audio_->stop();
+    });
 }
 
 void MainWindow::expertRender() {

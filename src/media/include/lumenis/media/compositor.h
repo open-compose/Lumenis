@@ -29,6 +29,11 @@ namespace lumenis::media {
 // effect the picture is rounded to 8 or 16 bits a channel, or kept in 32-bit floating point.
 enum class EffectPrecision { Bits8, Bits16, Bits32 };
 
+// The Render setting's Image Interpolation (Editing Guide p.1214): "filtering quality vs. speed" when a
+// picture is resized to the frame. Ours: Advanced (Polyphase) and Standard (Bilinear) both filter
+// (Qt's smooth scaling, which averages when shrinking); Draft (Nearest Neighbor) takes the nearest pixel.
+enum class ImageInterpolation { Advanced, Standard, Draft };
+
 // A picture being composited: width x height pixels of red, green, blue and alpha, 0 to 1,
 // premultiplied by alpha, row by row.
 class Picture {
@@ -37,7 +42,9 @@ public:
     Picture(int width, int height); // transparent
     static Picture solid(int width, int height, const QColor& color);
     // `image` fitted inside width x height, keeping its shape and centred; the rest transparent.
-    static Picture fromImage(const QImage& image, int width, int height);
+    // `interpolation` says how it is resized.
+    static Picture fromImage(const QImage& image, int width, int height,
+                             ImageInterpolation interpolation = ImageInterpolation::Advanced);
 
     int width() const { return width_; }
     int height() const { return height_; }
@@ -166,6 +173,8 @@ struct Composition {
     // the monitored frame as if no effects are applied to it") segment effects are left out and
     // transitions show their cut; renders in date still play, being media.
     bool effects = true;
+    // How source frames and renders are resized to `size` (the Render setting).
+    ImageInterpolation interpolation = ImageInterpolation::Advanced;
 };
 
 // Timecode Burn-In (ROADMAP 6.3d1; docs/spec/burn-in.md, burn_in.cpp). Its parameters live under

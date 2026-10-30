@@ -17,7 +17,7 @@ namespace lumenis::ui {
 // select a drive for the rendered media" and "In the Processing field, select the processing method";
 // "Greyed-out options are not available". Ours: the drives are the media drives (the one given first
 // chosen), the count of effects to render shown above; Application is the only processing available
-// until background rendering (ROADMAP 6.4d), Background Process and Distributed Processing are dimmed.
+// until background rendering (ROADMAP 6.4d2), Background Process and Distributed Processing are dimmed.
 class RenderEffectDialog : public QDialog {
     Q_OBJECT
 

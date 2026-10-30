@@ -364,7 +364,7 @@
             {"key": "renderAudioDrive", "type": "drive", "label": "Audio Drive", "default": "", "page": 1207, "later": true},
             {"key": "renderEffectsProcessing", "type": "choice", "style": "menu", "label": "Effects Processing", "default": "automatic", "page": 1208,
              "choices": [{"value": "8bit", "label": "8-bit"}, {"value": "16bit", "label": "16-bit"}, {"value": "32bit", "label": "32-bit"}, {"value": "automatic", "label": "Automatic"}]},
-            {"key": "saveAfterRender", "type": "bool", "label": "Save after Render", "default": false, "page": 1208, "later": true}
+            {"key": "saveAfterRender", "type": "bool", "label": "Save after Render", "default": false, "page": 1208}
           ]
         },
         {
@@ -490,6 +490,33 @@
              "choices": [{"value": "zero", "label": "Start frame count at 0"}, {"value": "one", "label": "Start frame count at 1"}, {"value": "timecode", "label": "Convert timecode to frames"}, {"value": "fileName", "label": "From the File name"}]},
             {"key": "startTimecode", "type": "choice", "style": "radio", "label": "Timecode for Start column", "default": "embedded", "page": 1205, "later": true,
              "choices": [{"value": "embedded", "label": "Embedded in source file"}, {"value": "fileName", "label": "From file name"}]}
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "Render",
+      "scope": "user",
+      "page": 1214,
+      "tabs": [
+        {
+          "name": "",
+          "options": [
+            {"key": "imageInterpolation", "type": "choice", "style": "menu", "label": "Image Interpolation", "default": "advanced", "page": 1214,
+             "choices": [{"value": "advanced", "label": "Advanced (Polyphase)"}, {"value": "standard", "label": "Standard (Bilinear)"}, {"value": "draft", "label": "Draft (Nearest Neighbor)"}]},
+            {"key": "timewarpsRenderUsing", "type": "choice", "style": "menu", "label": "Timewarps Render Using", "default": "original", "page": 1214, "later": true,
+             "choices": [{"value": "original", "label": "Original Preference"}, {"value": "duplicatedField", "label": "Duplicated Field"}, {"value": "bothFields", "label": "Both Fields"},
+                         {"value": "interpolatedField", "label": "Interpolated Field"}, {"value": "vtrStyle", "label": "VTR-Style"},
+                         {"value": "blendedInterpolated", "label": "Blended Interpolated"}, {"value": "blendedVtr", "label": "Blended VTR"}]},
+            {"key": "motionEffectsRenderUsing", "type": "choice", "style": "menu", "label": "Motion Effects Render Using", "default": "original", "page": 1215, "later": true,
+             "choices": [{"value": "original", "label": "Original Preference"}, {"value": "duplicatedField", "label": "Duplicated Field"}, {"value": "bothFields", "label": "Both Fields"},
+                         {"value": "interpolatedField", "label": "Interpolated Field"}, {"value": "vtrStyle", "label": "VTR-Style"}]},
+            {"key": "effectsQualityRenderUsing", "type": "choice", "style": "menu", "label": "Effects Quality Render Using", "default": "eachEffect", "page": 1215, "later": true,
+             "choices": [{"value": "eachEffect", "label": "Quality Set In Each Effect"}, {"value": "standard", "label": "Standard Quality"}, {"value": "highest", "label": "Highest Quality"}]},
+            {"key": "renderCompletionSound", "type": "choice", "style": "menu", "label": "Render Completion Sound", "default": "none", "page": 1216,
+             "choices": [{"value": "none", "label": "None"}, {"value": "systemBeep", "label": "System Beep"}, {"value": "renderSound", "label": "Render Sound"}]},
+            {"key": "motionAdapterBlending", "type": "bool", "label": "Use frame blending in Motion Adapters", "default": true, "page": 1216, "later": true},
+            {"key": "disableGpuEffects", "type": "bool", "label": "Disable GPU effects", "default": false, "page": 1216, "later": true}
           ]
         }
       ]

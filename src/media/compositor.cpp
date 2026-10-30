@@ -40,12 +40,13 @@ Picture Picture::solid(int width, int height, const QColor& color) {
     return p;
 }
 
-Picture Picture::fromImage(const QImage& image, int width, int height) {
+Picture Picture::fromImage(const QImage& image, int width, int height, ImageInterpolation interpolation) {
     Picture p(width, height);
     if (image.isNull() || p.isNull()) return p;
     QImage fitted = image;
     if (image.size() != QSize(width, height)) {
-        fitted = image.scaled(width, height, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        fitted = image.scaled(width, height, Qt::KeepAspectRatio,
+                              interpolation == ImageInterpolation::Draft ? Qt::FastTransformation : Qt::SmoothTransformation);
     }
     fitted = fitted.convertToFormat(QImage::Format_RGBA8888_Premultiplied);
     const int ox = (width - fitted.width()) / 2;
@@ -178,7 +179,7 @@ Picture segmentPicture(const Composition& c, const model::Segment* segment, std:
         if (missing) *missing = true;
         return Picture(c.size.width(), c.size.height());
     }
-    return Picture::fromImage(*image, c.size.width(), c.size.height());
+    return Picture::fromImage(*image, c.size.width(), c.size.height(), c.interpolation);
 }
 
 // The transitions of the dissolve family (FX Guide p.457, p.462) and the 2D transitions (wipes.cpp); any
@@ -271,7 +272,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             if (!target || !model::isRenderedAt(*c.sequence, *target, frame - target->start)) continue;
             const std::optional<QImage> image = c.rendered(*model::renderOf(*c.sequence, *target), frame - target->start, c.size);
             if (!image) continue; // offline: the effect is computed
-            result = Picture::fromImage(*image, w, h);
+            result = Picture::fromImage(*image, w, h, c.interpolation);
             result.quantize(c.precision);
             lastStart = result;
             first = i + 1;

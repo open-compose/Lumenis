@@ -684,6 +684,30 @@ private slots:
         QVERIFY(composeImage(composition(seq, {QStringLiteral("V1")}), 3, &missing).isNull());
         QVERIFY(missing);
     }
+
+    void imageInterpolation() {
+        // The Render setting's Image Interpolation (Editing Guide p.1214): Draft (Nearest Neighbor)
+        // takes the nearest pixel, so an enlarged black and white checkerboard stays black and white;
+        // Advanced (Polyphase) filters, giving greys between.
+        QImage checker(2, 2, QImage::Format_RGB32);
+        checker.setPixel(0, 0, qRgb(0, 0, 0));
+        checker.setPixel(1, 0, qRgb(255, 255, 255));
+        checker.setPixel(0, 1, qRgb(255, 255, 255));
+        checker.setPixel(1, 1, qRgb(0, 0, 0));
+        auto greys = [&](ImageInterpolation mode) {
+            const QImage out = Picture::fromImage(checker, 16, 16, mode).toImage();
+            int n = 0;
+            for (int y = 0; y < out.height(); ++y) {
+                for (int x = 0; x < out.width(); ++x) {
+                    const int v = qRed(out.pixel(x, y));
+                    if (v > 8 && v < 247) ++n;
+                }
+            }
+            return n;
+        };
+        QCOMPARE(greys(ImageInterpolation::Draft), 0);
+        QVERIFY(greys(ImageInterpolation::Advanced) > 0);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestCompositor)

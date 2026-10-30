@@ -498,7 +498,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   (`Composer::playbackDifficulties`, `Timeline::setPlaybackIndicators`) and Render On-the-Fly
   (`Composition::effects`), is done. 6.4c, ExpertRender In/Out (`model::expertRender`,
   `ExpertRenderDialog`, `MainWindow::expertRender`, the Timeline's expert selection), is done.
-  Next: 6.4d (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.4d1, the Render setting (Image Interpolation `media::ImageInterpolation`, Render Completion Sound
+  `MainWindow::playRenderCompletionSound`), Save after Render and precomputes as reference clips in the
+  sequence's bin with the Media Tool's Precompute Clips (`MainWindow::keepPrecomputes`), is done.
+  Next: 6.4d2, background rendering (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

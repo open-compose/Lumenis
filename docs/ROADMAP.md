@@ -948,10 +948,13 @@ phase of their own. They are done in three steps:
   * 6.4c, ExpertRender at Position and In/Out: the analysis, the Expert Render dialog (recommended
     ranges, entire selection, Prepare effects for Digital Cut) and Modify Selection. Done (In/Out, the
     menu's only one).
-  * 6.4d, the Render settings (Image Interpolation, the Render Using menus, Effects Quality and HQ,
-    Render Completion Sound), Background Process rendering (the __bg folders, the Background Queue),
-    precompute management (Show reference clips, Reveal File, the Media Tool's precompute clips, Save
-    after Render) and Show Adapters.
+  * 6.4d, in two parts:
+    * 6.4d1, the Render setting (Image Interpolation and Render Completion Sound; the Render Using
+      menus, Effects Quality and HQ wait for motion effects (6.5) and the 3D effects (6.7)), Save after
+      Render, and precompute management: precomputes as reference clips in the sequence's bin (Show
+      reference clips, Reveal File, Delete), the Media Tool's Precompute Clips, and deleting a
+      precompute rendered again before a save. Done. Show Adapters goes with the first adapters, motion adapters (6.5).
+    * 6.4d2, Background Process rendering (the __bg folders, the Background Queue).
 * 6.5, motion effects and Timewarp (ch.7, p.165-205): freeze frames, variable speed, strobe, the
   Motion Effect Editor's speed and position graphs.
 * 6.6, layered and nested effects (ch.8, p.206-228): nesting and stepping in, Collapse,

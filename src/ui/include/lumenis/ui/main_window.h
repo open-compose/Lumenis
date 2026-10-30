@@ -11,6 +11,7 @@
 #include "lumenis/ui/audio_suite.h"
 
 #include <QDateTime>
+#include <QHash>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QList>
@@ -343,6 +344,9 @@ public:
     // Partial render (p.150): an interrupted render asks whether to Keep or Discard what was rendered;
     // tests answer here (true: Keep).
     void setRenderInterruptHook(std::function<bool()> hook) { renderInterruptHook_ = std::move(hook); }
+    // The Render setting's Render Completion Sound (p.1215-1216) when a render finishes: the hook is
+    // given "systemBeep" or "renderSound" in place of the sound (tests); nothing for None.
+    void setRenderSoundHook(std::function<void(const QString&)> hook) { renderSoundHook_ = std::move(hook); }
     // Timeline > Render > ExpertRender In/Out (FX Guide p.140-147): the effects needing rendering on the
     // selected video tracks between the Record monitor's marks (model::expertRender), highlighted in the
     // Timeline; the Expert Render dialog renders them (OK), leaves them highlighted for Modify Selection
@@ -627,6 +631,18 @@ private:
     std::function<bool(AudioMixdownDialog&)> mixdownHook_;
     std::function<bool(RenderEffectDialog&)> renderHook_;
     std::function<bool()> renderInterruptHook_;
+    std::function<void(const QString&)> renderSoundHook_;
+    // Precomputes rendered since their bin was last saved, by id, with that bin's id: "Media Composer
+    // automatically saves the last-rendered effect and deletes the earlier, unreferenced versions. This
+    // autodeletion applies only to effects rendered since the last save" (FX Guide p.155).
+    QHash<QString, QString> unsavedPrecomputes_;
+    // Puts the precomputes of `renders` in the bin `binId` as reference clips (FX Guide p.155: shown
+    // with Set Bin Display's Effects and Show reference clips), and deletes those of `replaced`
+    // that were rendered since that bin was last saved.
+    void keepPrecomputes(const QString& binId, const QList<model::EffectRender>& renders,
+                         const QList<model::EffectRender>& replaced);
+    // The Render setting's Render Completion Sound (p.1215-1216).
+    void playRenderCompletionSound();
     std::function<void(ExpertRenderDialog&)> expertHook_;
     std::function<bool(ClearRendersDialog&)> clearRendersHook_;
     QString lastRenderDrive_; // the drive the last Render Effect dialog chose (Alt-click renders there)

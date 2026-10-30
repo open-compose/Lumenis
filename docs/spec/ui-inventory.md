@@ -172,7 +172,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   blue; Render On-the-Fly on until turned off, not kept between sessions;
   ExpertRender's analysis (non-real-time effects, more than two stacked,
   the topmost selected track's effect), its three choices always offered,
-  ExpertRender at Position left out (not in the menu).
+  ExpertRender at Position left out (not in the menu); Image Interpolation's
+  Standard filtering as Advanced does; the Render Sound as two tones;
+  precomputes going into the sequence's bin, Rendered Effects standing for
+  Set Bin Display's "Effects"; autodeletion when a render is replaced.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as
