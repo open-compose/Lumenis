@@ -23,6 +23,8 @@
 #include <QSlider>
 #include <QTabBar>
 #include <QTest>
+#include <QComboBox>
+#include <QSpinBox>
 #include <QToolButton>
 
 using namespace lumenis;
@@ -376,6 +378,37 @@ private slots:
         const QString more = QStringLiteral("Chroma Key Profile, Secondary Key, and Spill Suppression Parameters");
         QVERIFY(rig.editor.slider(more, QStringLiteral("Gain")));
         QVERIFY(rig.editor.slider(more, QStringLiteral("Spill Suppression Parameters: Gain")));
+    }
+
+    void burnInPanel() {
+        // Timecode Burn-In's Display 1-3 and Notes tabs (FX Guide p.505-508; docs/spec/burn-in.md).
+        Rig rig;
+        rig.composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(100, 40));
+        settle();
+        QVERIFY(rig.timeline.dropEffect(QStringLiteral("V1"), 70, effect("Generator", "Timecode Burn-In")));
+        rig.composer.moveTo(MonitorId::Record, 70);
+        QCOMPARE(rig.editor.effectName(), QStringLiteral("Timecode Burn-In"));
+        auto* reader = qobject_cast<QComboBox*>(rig.editor.burnInControl(QStringLiteral("Display 1/Reader")));
+        QVERIFY(reader);
+        QCOMPARE(reader->currentText(), QStringLiteral("Timecode"));
+        auto* enable2 = qobject_cast<QCheckBox*>(rig.editor.burnInControl(QStringLiteral("Display 2/Enable")));
+        QVERIFY(enable2 && !enable2->isChecked());
+        QVERIFY(qobject_cast<QCheckBox*>(rig.editor.burnInControl(QStringLiteral("Display 1/Enable")))->isChecked());
+        reader->setCurrentText(QStringLiteral("Source Clip Name"));
+        const QJsonObject stored = rig.v1(1).effect->parameters.value("Timecode Burn-In Effect Parameters").toObject();
+        QCOMPARE(stored.value("Display 1").toObject().value("Reader").toString(), QStringLiteral("Source Clip Name"));
+        // Opacities in tenths.
+        auto* opacity = qobject_cast<QSpinBox*>(rig.editor.burnInControl(QStringLiteral("Display 1/Border Opacity")));
+        QVERIFY(opacity);
+        QCOMPARE(opacity->value(), 5);
+        opacity->setValue(8);
+        QCOMPARE(rig.v1(1).effect->parameters.value("Timecode Burn-In Effect Parameters").toObject().value("Display 1").toObject()
+                     .value("Border Opacity").toDouble(), 0.8);
+        // The Notes Track's text.
+        rig.editor.setBurnIn(0, QStringLiteral("Text"), QStringLiteral("DRAFT"));
+        QCOMPARE(qobject_cast<QLineEdit*>(rig.editor.burnInControl(QStringLiteral("Notes/Text")))->text(), QStringLiteral("DRAFT"));
+        QVERIFY(rig.timeline.perform(QStringLiteral("edit.undo")));
+        QCOMPARE(qobject_cast<QLineEdit*>(rig.editor.burnInControl(QStringLiteral("Notes/Text")))->text(), QString());
     }
 
     void transitionParameters() {

@@ -2,6 +2,7 @@
 
 #include "lumenis/core/mob_id.h"
 #include "lumenis/core/rational.h"
+#include "lumenis/core/timecode.h"
 
 #include <QDateTime>
 #include <QHash>
@@ -231,6 +232,11 @@ std::optional<std::int64_t> timecodeFrames(const QString& text, const Rational& 
 // Whether an item's timecode is drop-frame: its Start is written with a ';'
 // (as drop-frame timecode is, "01:00:00;00") and its edit rate allows it.
 bool isDropFrame(const BinItem& item);
+// An item's timecode format: its edit rate, drop-frame when isDropFrame().
+TimecodeFormat timecodeFormatOf(const BinItem& item);
+// Where an item's timecode starts, in frames: its Start column; else, for a sequence, the default
+// start (kDefaultStartHours); else 0.
+std::int64_t startFrameOf(const BinItem& item);
 
 // Set Bin Display: the object types the dialog lists (p.243-244, p.288).
 // The plural label of a kind in Set Bin Display ("Master Clips", ...), and every kind in its order.

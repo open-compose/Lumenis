@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lumenis/model/bin.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
 
@@ -122,6 +123,17 @@ std::optional<TrackFrame> trackFrame(const model::Sequence& sequence, const QStr
 // offline. FrameSource must not keep the segment.
 using FrameSource = std::function<std::optional<QImage>(const model::Segment& segment, std::int64_t clipFrame, QSize size)>;
 
+// What Timecode Burn-In (burn_in.cpp) reads besides the sequence: the sequence's bin item (its name,
+// start timecode, edit rate and columns), its marks in the monitor, and a way to find a segment's
+// source clip (its start timecode, name and columns). All may be left empty; the displays that need
+// them then show nothing.
+struct BurnInInfo {
+    model::BinItem sequence;
+    std::optional<std::int64_t> markIn;
+    std::optional<std::int64_t> markOut;
+    std::function<std::optional<model::BinItem>(const model::Segment&)> clip;
+};
+
 struct Composition {
     const model::Sequence* sequence = nullptr;
     // The video tracks to show, bottom to top (the Video Track Monitor shows its track and those
@@ -130,7 +142,22 @@ struct Composition {
     QSize size;
     EffectPrecision precision = EffectPrecision::Bits16;
     FrameSource source;
+    BurnInInfo burnIn;
 };
+
+// Timecode Burn-In (ROADMAP 6.3d1; docs/spec/burn-in.md, burn_in.cpp). Its parameters live under
+// "Timecode Burn-In Effect Parameters" as {"Display 1".."Display 3", "Notes"} objects (ours).
+bool isBurnIn(const model::Effect& effect);
+// The text Display `display` (1 to 3) shows, or the Notes' text (display 0), at sequence frame
+// `frame` for the effect on `track`; empty when it is off or has nothing to show.
+QString burnInText(const model::Effect& effect, int display, const Composition& composition, const QString& track,
+                   std::int64_t frame);
+// A display's (1 to 3; 0 the Notes) setting, or the value it has until set (ours,
+// docs/spec/burn-in.md); the Effect Editor shows the same.
+QJsonValue burnInSetting(const model::Effect& effect, int display, const QString& name);
+// The displays drawn over `layer` at `frame`.
+Picture burnInPicture(const model::Effect& effect, const Picture& layer, const Composition& composition,
+                      const QString& track, std::int64_t frame);
 
 // The sequence's picture at `frame`. Sets `missing` when a segment's media is offline.
 Picture composeFrame(const Composition& composition, std::int64_t frame, bool* missing = nullptr);

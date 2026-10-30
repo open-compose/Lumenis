@@ -33,3 +33,5 @@ lumenis_add_test(tst_waveform SOURCES tst_waveform.cpp LIBS lumenis::media)
 lumenis_add_test(tst_audio_project SOURCES tst_audio_project.cpp LIBS lumenis::media)
 # The compositor: tracks, the dissolve family, Superimpose and precision (docs/spec/compositor.md).
 lumenis_add_test(tst_compositor SOURCES tst_compositor.cpp LIBS lumenis::media)
+# Timecode Burn-In (docs/spec/burn-in.md); draws text, so a GUI test.
+lumenis_add_test(tst_burn_in SOURCES tst_burn_in.cpp LIBS lumenis::media)

@@ -146,6 +146,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Cont, Gamma, Post, Solar, Hue direction) and order; Blur and Mosaic over the
   whole picture; Acceleration as a smoothstep blend; repeated parameter names
   stored as "<subcategory>: <name>".
+* Timecode Burn-In (docs/spec/burn-in.md): Display 1 on and the rest off until
+  set, the labels other than "Mas TC1", Source Timecode's Types, Timeline Clip
+  Text as the Clip Note, the positions, Font Size scaled from 1920 wide, the
+  appearance values until set, the Effect Editor's tabs.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

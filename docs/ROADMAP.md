@@ -922,7 +922,15 @@ phase of their own. They are done in three steps:
   * 6.3c, Key: Luma Key, Chroma Key, RGB Keyer, Matte Key and SpectraMatte. Done (docs/spec/keys.md:
     `src/media/key_effects.cpp`, Matte Key in the compositor); SpectraMatte's SpectraGraph and Luma
     Curve wait.
-  * 6.3d, Illusion FX (p.463-468) and the Generator's Timecode Burn-In (SubCap is Phase 7).
+  * 6.3d, Illusion FX (p.463-468) and the Generator's Timecode Burn-In (SubCap is Phase 7), in four
+    parts (planned 2026-10-30 from p.463-527): 6.3d1, Timecode Burn-In (docs/spec/burn-in.md:
+    `src/media/burn_in.cpp`, the Effect Editor's display tabs), is done; 6.3d2, the Illusion FX segment
+    effects that change colour and texture or draw (Color Mix, Film Grain, Crystal, Flare, Pattern
+    Generator, Lightning, Sparkler, Kaleidoscope, Motion Blur); 6.3d3, the distortions (Pinch, Radial
+    Blur, Ripple, Sphere, Swirl, Twist, Wave) with the Illusion FX Border; 6.3d4, the Illusion FX
+    transitions (Iris, Melt, Pagecurl, Particle Blast, Particle Orbit, Particle Wind, Random Blend,
+    Rollup, Shear). FluidBlur, FluidColorMap and FluidMorph need motion estimation and go with the
+    FluidMotion work (6.5).
   Peel (a page curl) goes with the 3D effects (6.7); PlasmaWipe with 6.9; AniMatte, Paint, Scratch
   Removal and Stabilize with their chapters (6.7, 6.9).
 * 6.4, rendering (p.57-61, p.135-156): Render Effect, ExpertRender, partial render, render

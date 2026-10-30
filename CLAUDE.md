@@ -478,7 +478,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   category are stored as "<subcategory>: <name>" (`EffectParameter::name`).
   6.3c, the Key effects (docs/spec/keys.md: `src/media/key_effects.cpp` for Luma/Chroma Key, RGB
   Keyer and SpectraMatte; Matte Key's three layers in `compositor.cpp`; tests `tst_compositor`), is done.
-  Next: 6.3d (Illusion FX, Timecode Burn-In), the rest of the effect families, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.3d1, Timecode Burn-In (docs/spec/burn-in.md: `src/media/burn_in.cpp`, `media::BurnInInfo` filled
+  by the Composer's picture resolver, the Effect Editor's Display/Notes tabs; tests `tst_burn_in`,
+  `tst_effects`), is done.
+  Next: 6.3d2-4 (Illusion FX; ROADMAP), the rest of the effect families, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

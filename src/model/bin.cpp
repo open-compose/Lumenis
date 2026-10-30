@@ -589,6 +589,16 @@ bool isDropFrame(const BinItem& item) {
         .dropFrame;
 }
 
+TimecodeFormat timecodeFormatOf(const BinItem& item) {
+    return TimecodeFormat::forRate(item.editRate, isDropFrame(item));
+}
+
+std::int64_t startFrameOf(const BinItem& item) {
+    if (const auto frames = timecodeFrames(item.fields.value(QStringLiteral("Start")), item.editRate)) return *frames;
+    if (item.kind == BinItemKind::Sequence) return kDefaultStartHours * 3600 * timecodeFormatOf(item).nominalFps;
+    return 0;
+}
+
 QString kindLabel(BinItemKind kind) {
     switch (kind) {
     case BinItemKind::MasterClip: return QStringLiteral("Master Clips");

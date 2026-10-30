@@ -283,6 +283,14 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             const std::int64_t length = tf->segment->length;
             const double time = length > 1 ? static_cast<double>(tf->offset) / static_cast<double>(length - 1) : 0.0;
             const bool keyed = !model::keyframesOf(e, foreground, level).keys.isEmpty();
+            if (isBurnIn(e)) {
+                // Timecode Burn-In's displays over the segment's own picture (burn_in.cpp).
+                layer = burnInPicture(e, layer, c, name, frame);
+                layer.quantize(c.precision);
+                result = over(layer, result);
+                result.quantize(c.precision);
+                continue;
+            }
             if (e.category == QLatin1String("Key") && e.name == QLatin1String("Matte Key")) {
                 result = matteKeyPicture(e, beneath, result, layer, time, length);
                 result.quantize(c.precision);

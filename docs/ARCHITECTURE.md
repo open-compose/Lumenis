@@ -84,7 +84,7 @@ headers in `include/lumenis/<library>/`.
   from the video tracks with their effects, docs/spec/compositor.md), `wipes.cpp` (the 2D
   transitions, docs/spec/wipes.md), `image_effects.cpp` and `color_effects.cpp` (Picture-in-Picture,
   Resize, masks, Reformat, Color Effect, Blur, Mosaic, docs/spec/image-effects.md), `key_effects.cpp`
-  (the keys, docs/spec/keys.md), `effect_drawing.*` (their shared sampling and borders), `mixdown.*`
+  (the keys, docs/spec/keys.md), `burn_in.cpp` (Timecode Burn-In, docs/spec/burn-in.md), `effect_drawing.*` (their shared sampling and borders), `mixdown.*`
   (Audio Mixdown, docs/spec/audio-mixdown.md), `surround.*` (speakers,
   monitor mixes and their folds, docs/spec/surround.md), `ltc.*` (audio
   timecode, docs/spec/clip-audio.md), `tone.*` (the calibration tone,

@@ -127,6 +127,12 @@ public:
     // Shape Wipes, in columns and rows, at least 2 x 2 (default 8 x 6). The button asks for them;
     // setCustomGrid() sets them on the shown effect.
     void setCustomGrid(int columns, int rows);
+    // Timecode Burn-In (FX Guide p.505-508; docs/spec/burn-in.md): its Display 1-3 and Notes tabs
+    // stand in for the generic controls. setBurnIn() sets one setting of a display (1 to 3; 0 the
+    // Notes) on the shown effect; burnInControl() is the control for it ("Display 1/Reader",
+    // "Notes/Text"), null when not shown.
+    void setBurnIn(int display, const QString& name, const QJsonValue& value);
+    QWidget* burnInControl(const QString& which) const { return burnInControls_.value(which); }
     // A parameter's ("Category/Name") value until it is set: the effect's own default
     // (media::parameterDefault), else the parameter's (effect_parameters.json); undefined if neither.
     QJsonValue defaultValue(const model::Effect& effect, const QString& parameter) const;
@@ -307,6 +313,9 @@ private:
     QHash<QString, QWidget*> groupBodies_;   // category -> its controls
     QHash<QString, QToolButton*> openers_;   // category -> its opener
     QHash<QString, QWidget*> controls_;      // "category/parameter" -> control
+    QHash<QString, QWidget*> burnInControls_; // "Display 1/Reader", "Notes/Text", ... (Timecode Burn-In)
+    QWidget* burnInPanel(QWidget* parent);
+    void syncBurnIn(const model::Effect& effect);
     QHash<QString, QLabel*> valueLabels_;    // "category/parameter" -> value
     model::TransitionAlignment shownAlignment_ = model::TransitionAlignment::CenteredOnCut;
     bool syncing_ = false; // controls are being set from the model; their changes are not stored

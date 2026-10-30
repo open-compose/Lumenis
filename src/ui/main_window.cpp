@@ -651,6 +651,11 @@ void MainWindow::createPanels() {
                 if (frames_->isOffline(*clip)) return std::nullopt;
                 return frames_->frame(*clip, clipFrame, want);
             };
+            // For Timecode Burn-In: the sequence, its marks and the source clips (6.3d1).
+            c.burnIn.sequence = loaded->item;
+            c.burnIn.markIn = loaded->in;
+            c.burnIn.markOut = loaded->out;
+            c.burnIn.clip = [this](const model::Segment& segment) { return composer_->resolve(segment.binId, segment.clipId); };
             bool missing = false;
             const QImage image = media::composeImage(c, at, &missing);
             if (image.isNull() && missing && offline) *offline = true;

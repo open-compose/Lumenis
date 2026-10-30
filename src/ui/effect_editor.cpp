@@ -27,6 +27,7 @@
 #include <QScrollBar>
 #include <QSlider>
 #include <QSpinBox>
+#include <QTabWidget>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -444,6 +445,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     groupBodies_.clear();
     openers_.clear();
     controls_.clear();
+    burnInControls_.clear();
     valueLabels_.clear();
     categoryOrder_.clear();
     graphRanges_.clear();
@@ -517,7 +519,9 @@ void EffectEditor::rebuild(const model::Effect* effect) {
         auto* grid = new QVBoxLayout(box);
         grid->setContentsMargins(18, 0, 0, 4);
         grid->setSpacing(1);
-        for (const EffectParameter& p : *params) {
+        // Timecode Burn-In's displays have controls of their own (burnInPanel()).
+        if (category == QLatin1String("Timecode Burn-In Effect Parameters")) grid->addWidget(burnInPanel(box));
+        else for (const EffectParameter& p : *params) {
             auto* row = new QHBoxLayout;
             const QString k = key(category, p.name);
             const bool keyframed = p.keyframeable && (p.kind == QLatin1String("slider") || p.kind == QLatin1String("color"));
@@ -694,6 +698,135 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     syncValues(*effect);
 }
 
+QWidget* EffectEditor::burnInPanel(QWidget* parent) {
+    // "Display 1, Display 2, Display 3: Let you add up to three timecode displays to the video"; the
+    // Notes Track's text annotation (p.505-508). Ours: a tab for each.
+    auto* tabs = new QTabWidget(parent);
+    tabs->setObjectName(QStringLiteral("burnInTabs"));
+    const QStringList readers = {QStringLiteral("Timecode"),       QStringLiteral("Source Timecode"),  QStringLiteral("Edgecode"),
+                                 QStringLiteral("Source Edgecode"), QStringLiteral("Frames"),          QStringLiteral("Source Clip Name"),
+                                 QStringLiteral("Sequence Name"),   QStringLiteral("Source Bin Column"), QStringLiteral("Sequence Bin Column"),
+                                 QStringLiteral("Other Counters"),  QStringLiteral("Timeline Clip Text")};
+    const QStringList types = {QStringLiteral("Current"), QStringLiteral("End"),  QStringLiteral("Duration"),  QStringLiteral("Mark IN"),
+                               QStringLiteral("Mark OUT"), QStringLiteral("I/O"), QStringLiteral("Remaining"), QStringLiteral("Absolute")};
+    QStringList tracks = {QStringLiteral("Current Track")};
+    tracks << recordSequence().trackNames();
+    for (int display = 1; display <= 4; ++display) {
+        const int which = display % 4; // Display 1-3, then the Notes (0)
+        const QString tab = which == 0 ? QStringLiteral("Notes") : QStringLiteral("Display %1").arg(which);
+        auto* page = new QWidget(tabs);
+        auto* form = new QFormLayout(page);
+        form->setContentsMargins(4, 4, 4, 4);
+        auto key = [tab](const QString& name) { return tab + QLatin1Char('/') + name; };
+        auto check = [&](const QString& name, const QString& text) {
+            auto* c = new QCheckBox(text, page);
+            c->setObjectName(QStringLiteral("burnIn:") + key(name));
+            connect(c, &QCheckBox::toggled, this, [this, which, name](bool on) { setBurnIn(which, name, on); });
+            form->addRow(c);
+            burnInControls_.insert(key(name), c);
+        };
+        auto menu = [&](const QString& name, const QStringList& options) {
+            auto* m = new QComboBox(page);
+            m->setObjectName(QStringLiteral("burnIn:") + key(name));
+            m->addItems(options);
+            connect(m, &QComboBox::currentTextChanged, this, [this, which, name](const QString& t) { setBurnIn(which, name, t); });
+            form->addRow(name, m);
+            burnInControls_.insert(key(name), m);
+        };
+        auto number = [&](const QString& name, int lo, int hi, double scale) {
+            // Opacities are 0 to 1 "in 0.1 increments" (p.507-508): a slider of tenths.
+            auto* n = new QSpinBox(page);
+            n->setObjectName(QStringLiteral("burnIn:") + key(name));
+            n->setRange(lo, hi);
+            n->setProperty("scale", scale);
+            connect(n, &QSpinBox::valueChanged, this, [this, which, name, scale](int v) {
+                setBurnIn(which, name, scale == 1.0 ? QJsonValue(v) : QJsonValue(v * scale));
+            });
+            form->addRow(name, n);
+            burnInControls_.insert(key(name), n);
+        };
+        auto line = [&](const QString& name, const QString& label) {
+            auto* l = new QLineEdit(page);
+            l->setObjectName(QStringLiteral("burnIn:") + key(name));
+            connect(l, &QLineEdit::editingFinished, this, [this, which, name, l] { setBurnIn(which, name, l->text()); });
+            form->addRow(label, l);
+            burnInControls_.insert(key(name), l);
+        };
+        auto colour = [&](const QString& name, const QString& label) {
+            auto* swatch = new QToolButton(page);
+            swatch->setObjectName(QStringLiteral("burnIn:") + key(name));
+            swatch->setFixedSize(18, 14);
+            connect(swatch, &QToolButton::clicked, this, [this, which, name, swatch] {
+                const QColor c = QColorDialog::getColor(swatch->property("color").value<QColor>(), this);
+                if (c.isValid()) setBurnIn(which, name, c.name());
+            });
+            form->addRow(label, swatch);
+            burnInControls_.insert(key(name), swatch);
+        };
+        if (which == 0) {
+            line(QStringLiteral("Text"), tr("Text"));
+        } else {
+            check(QStringLiteral("Enable"), tr("Enable"));
+            menu(QStringLiteral("Reader"), readers);
+            menu(QStringLiteral("Type"), types);
+            check(QStringLiteral("Display Label"), tr("Display Label"));
+            check(QStringLiteral("Display Fields"), tr("Display Fields"));
+            check(QStringLiteral("Local Frame Count"), tr("Local Frame Count"));
+            number(QStringLiteral("Start Counting From"), 0, 9999999, 1.0);
+            menu(QStringLiteral("Source Track"), tracks);
+            line(QStringLiteral("Column Name"), tr("Column Name"));
+        }
+        // Appearance (p.507-508).
+        number(QStringLiteral("X"), 0, 100, 1.0);
+        number(QStringLiteral("Y"), 0, 100, 1.0);
+        number(QStringLiteral("Font Size"), 4, 400, 1.0);
+        colour(which == 0 ? QStringLiteral("Text Color") : QStringLiteral("Text"), tr("Text"));
+        number(QStringLiteral("Text Opacity"), 0, 10, 0.1);
+        check(QStringLiteral("Use Text Outline"), tr("Use Text Outline"));
+        number(QStringLiteral("Line Weight"), 0, 10, 1.0);
+        colour(QStringLiteral("Background"), tr("Background"));
+        number(QStringLiteral("Border Opacity"), 0, 10, 0.1);
+        tabs->addTab(page, tab);
+    }
+    return tabs;
+}
+
+void EffectEditor::syncBurnIn(const model::Effect& effect) {
+    for (auto it = burnInControls_.cbegin(); it != burnInControls_.cend(); ++it) {
+        const QString tab = it.key().section(QLatin1Char('/'), 0, 0);
+        const QString name = it.key().section(QLatin1Char('/'), 1);
+        const int display = tab == QLatin1String("Notes") ? 0 : tab.right(1).toInt();
+        const QJsonValue v = media::burnInSetting(effect, display, name);
+        QWidget* w = it.value();
+        const QSignalBlocker block(w);
+        if (auto* c = qobject_cast<QCheckBox*>(w)) {
+            c->setChecked(v.toBool());
+        } else if (auto* m = qobject_cast<QComboBox*>(w)) {
+            m->setCurrentText(v.toString());
+        } else if (auto* n = qobject_cast<QSpinBox*>(w)) {
+            n->setValue(static_cast<int>(std::lround(v.toDouble() / n->property("scale").toDouble())));
+        } else if (auto* l = qobject_cast<QLineEdit*>(w)) {
+            l->setText(v.toString());
+        } else if (auto* b = qobject_cast<QToolButton*>(w)) {
+            const QColor color(v.toString());
+            if (color.isValid()) setSwatch(b, color);
+        }
+    }
+}
+
+void EffectEditor::setBurnIn(int display, const QString& name, const QJsonValue& value) {
+    if (syncing_ || !shown_) return;
+    const QString category = QStringLiteral("Timecode Burn-In Effect Parameters");
+    const QString tab = display == 0 ? QStringLiteral("Notes") : QStringLiteral("Display %1").arg(display);
+    timeline_.changeEffect(*shown_, tr("Modify Effect"), [&](model::Effect& e, model::Transition*) {
+        QJsonObject all = e.parameters.value(category).toObject();
+        QJsonObject d = all.value(tab).toObject();
+        d.insert(name, value);
+        all.insert(tab, d);
+        e.parameters.insert(category, all);
+    });
+}
+
 // Parameters without a stored value show their default (defaultValue()), or keep what the control shows
 // when there is none.
 void EffectEditor::syncValues(const model::Effect& effect) {
@@ -720,6 +853,7 @@ void EffectEditor::syncValues(const model::Effect& effect) {
             if (color.isValid()) setSwatch(b, color);
         }
     }
+    syncBurnIn(effect);
     syncing_ = false;
 }
 

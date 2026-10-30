@@ -11,10 +11,7 @@ namespace lumenis::model {
 
 namespace {
 
-// The timecode format of an item: its edit rate, drop-frame when its Start is (isDropFrame()).
-TimecodeFormat formatOf(const BinItem& item) {
-    return TimecodeFormat::forRate(item.editRate, isDropFrame(item));
-}
+TimecodeFormat formatOf(const BinItem& item) { return timecodeFormatOf(item); }
 
 } // namespace
 
@@ -243,13 +240,7 @@ int MonitorState::removeUncommitted() {
 // The Start column is parsed as timecode at the item's edit rate.
 std::int64_t MonitorState::startFrame() const {
     const LoadedClip* c = current();
-    if (!c) return 0;
-    const QString start = c->item.fields.value(QStringLiteral("Start"));
-    if (const auto frames = timecodeFrames(start, c->item.editRate)) return *frames;
-    if (c->item.kind == BinItemKind::Sequence) {
-        return kDefaultStartHours * 3600 * formatOf(c->item).nominalFps;
-    }
-    return 0;
+    return c ? startFrameOf(c->item) : 0;
 }
 
 QString MonitorState::durationText(std::int64_t frames) const {
