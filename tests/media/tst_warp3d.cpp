@@ -140,6 +140,75 @@ private slots:
         QCOMPARE(at(p, 10, 50), 'k');
     }
 
+    void shapes() {
+        // Page Fold, Angle 90 ("the right edge", p.583), half curled: the right side is folded over onto the
+        // left, so the left shows the flap (the green right half, mirrored) and the right the background.
+        auto shape = [](const QJsonObject& o) { return warp({{QStringLiteral("Shape"), o}}); };
+        Picture p = render(shape({{QStringLiteral("Type"), QStringLiteral("Page Fold")}, {QStringLiteral("Angle"), 90},
+                                  {QStringLiteral("Curl"), 30}, {QStringLiteral("Radius"), 1}}));
+        QCOMPARE(at(p, 185, 54), 'k');
+        QCOMPARE(at(p, 10, 54), 'r');   // far from the fold: the page as it was
+        // Curl 0: no rollup (p.581); Curl 100: off the screen.
+        p = render(shape({{QStringLiteral("Type"), QStringLiteral("Page Fold")}, {QStringLiteral("Curl"), 0}}));
+        QCOMPARE(at(p, 10, 54), 'r');
+        QCOMPARE(at(p, 185, 54), 'g');
+        p = render(shape({{QStringLiteral("Type"), QStringLiteral("Page Fold")}, {QStringLiteral("Curl"), 100}}));
+        QCOMPARE(at(p, 10, 54), 'k');
+        QCOMPARE(at(p, 96, 54), 'k');
+        // Show Top Only hides the flap: the folded part leaves the background.
+        p = render(shape({{QStringLiteral("Type"), QStringLiteral("Page Fold")}, {QStringLiteral("Angle"), 90},
+                          {QStringLiteral("Curl"), 30}, {QStringLiteral("Tuck and Flap"), QStringLiteral("Show Top Only")}}));
+        QCOMPARE(at(p, 185, 54), 'k');
+        // Ball with Curve 0, "a flat circle" (p.581): a small radius leaves the corners empty.
+        p = render(shape({{QStringLiteral("Type"), QStringLiteral("Ball")},
+                          {QStringLiteral("Additional Parameters for the Ball Shape: Radius"), 30}, {QStringLiteral("Curve"), 0}}));
+        QCOMPARE(at(p, 2, 2), 'k');
+        QCOMPARE(at(p, 190, 105), 'k');
+        QVERIFY(at(p, 96, 54) != 'k');
+        // Slats with Ampl: alternating bands move opposite ways (p.581-582); Ampl 0 leaves the picture.
+        p = render(shape({{QStringLiteral("Type"), QStringLiteral("Slats")}, {QStringLiteral("Ampl"), 0}}));
+        QCOMPARE(at(p, 10, 54), 'r');
+        p = render(shape({{QStringLiteral("Type"), QStringLiteral("Slats")}, {QStringLiteral("Ampl"), 30}, {QStringLiteral("Freq"), 2}}));
+        // Two horizontal bands moving left and right: one side of each band shows the background.
+        const char topLeft = at(p, 10, 30), bottomLeft = at(p, 10, 80);
+        QVERIFY(topLeft != bottomLeft);
+        // The Xpress 3D effects name their shape: 3D Page Fold at the end of a segment is off the screen.
+        const Picture end = warp3dPicture(model::Effect{QStringLiteral("Xpress 3D Effect"), QStringLiteral("3D Page Fold"), {}},
+                                          foreground(), grey(), 1.0, model::EffectSpan(10));
+        QCOMPARE(at(end, 96, 54), 'k');
+        const Picture start = warp3dPicture(model::Effect{QStringLiteral("Xpress 3D Effect"), QStringLiteral("3D Page Fold"), {}},
+                                            foreground(), grey(), 0.0, model::EffectSpan(10));
+        QCOMPARE(at(start, 10, 54), 'r');
+    }
+
+    void keysAndBorders() {
+        auto fgParams = [](const QJsonObject& o) { return warp({{QStringLiteral("Foreground (3D)"), o}}); };
+        // Luma Key: "All brightness values above the Thresh value display" (p.575): the green half (bright)
+        // stays, the red half and blue band (dark) let the background through.
+        Picture p = render(fgParams({{QStringLiteral("Type"), QStringLiteral("Luma Key")}}));
+        QCOMPARE(at(p, 180, 54), 'g');
+        QCOMPARE(at(p, 10, 54), 'k');
+        // Chroma Key takes out its colour, blue until set (p.575).
+        p = render(fgParams({{QStringLiteral("Type"), QStringLiteral("Chroma Key")}}));
+        QCOMPARE(at(p, 100, 2), 'k');
+        QCOMPARE(at(p, 10, 54), 'r');
+        // Invert turns the key around.
+        p = render(fgParams({{QStringLiteral("Type"), QStringLiteral("Chroma Key")}, {QStringLiteral("Invert"), true}}));
+        QCOMPARE(at(p, 100, 2), 'b');
+        QCOMPARE(at(p, 10, 54), 'k');
+        // Show Alpha: the key as grey levels (p.574).
+        p = render(fgParams({{QStringLiteral("Type"), QStringLiteral("Chroma Key")}, {QStringLiteral("Show Alpha"), true}}));
+        const float* white = p.pixel(10, 54);
+        const float* black = p.pixel(100, 2);
+        QVERIFY(white[0] > 0.9f && white[1] > 0.9f);
+        QVERIFY(black[0] < 0.1f && black[1] < 0.1f);
+        // Border types (p.570-571): Bevel 1 lit along the top and left, dark along the bottom and right.
+        p = render(warp({{QStringLiteral("Border (3D)"), QJsonObject{{QStringLiteral("Wid"), 100}, {QStringLiteral("Type"), QStringLiteral("Bevel 1")}}}}));
+        QVERIFY(p.pixel(1, 54)[0] > 0.7f);
+        QVERIFY(p.pixel(190, 54)[0] < 0.4f);
+        QVERIFY(p.pixel(190, 54)[0] > 0.2f);
+    }
+
     void promotion() {
         // "if you have a 2D Picture-in-Picture effect, you can promote the effect to 3D" (p.289): it looks the same.
         model::Effect pip{QStringLiteral("Blend"), QStringLiteral("Picture-in-Picture"), {}};

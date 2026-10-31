@@ -221,7 +221,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   picture, ±999 across for Crop, Skew and Corner Pin), the viewer's
   distance, a category on once a value is set, the border, highlight and
   shadow sizes, Corner Pin overriding the other geometry, and 3D Promote
-  for Picture-in-Picture only until titles and matte keys come.
+  for Picture-in-Picture only until titles and matte keys come. 6.7a2:
+  the shapes' default animations and sizes, the Slats' Freq and Ampl,
+  the key types' units and defaults, and the look of each border type.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

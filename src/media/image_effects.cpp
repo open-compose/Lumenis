@@ -105,7 +105,18 @@ QJsonValue parameterDefault(const model::Effect& e, const QString& category, con
             if (name.endsWith(QLatin1String(": X"))) return right ? 999 : -999;
             if (name.endsWith(QLatin1String(": Y"))) return topCorner ? 999 : -999;
         }
-        return {};
+        // Foreground (3D)'s keys (ours, so a key keys something until set): Luma Key keeps what is brighter
+        // than half (Soft 10, Range 20); Chroma Key takes out blue (H Tol. 20, H Soft 10, S Low 20, L Tol. 100).
+        if (category == QLatin1String("Foreground (3D)")) {
+            if (name == QLatin1String("Thresh")) return 50;
+            if (name == QLatin1String("Soft") || name == QLatin1String("H Soft")) return 10;
+            if (name == QLatin1String("Range") || name.endsWith(QLatin1String(": Range")) || name == QLatin1String("H Tol.") ||
+                name == QLatin1String("S Low")) {
+                return 20;
+            }
+            if (name == QLatin1String("L Tol.")) return 100;
+            if (name == QLatin1String("Color")) return QStringLiteral("#0000ff");
+        }
     }
     if (category == kScaling && (name == QLatin1String("X") || name == QLatin1String("Y"))) {
         // Ours: a Picture-in-Picture starts at half size, as its illustration (p.458) shows it smaller;

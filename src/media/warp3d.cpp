@@ -21,8 +21,9 @@
 // Units (ours, as for the 2D effects, docs/spec/image-effects.md): Position, Axis and Target in pixels of a
 // picture 1920 wide, X to the right and Y up (p.577); Crop and Skew from -999 to 999 across the picture;
 // rotation in degrees, positive clockwise (p.291). The viewer stands two picture widths in front of the
-// screen; Perspective moves that point. Shapes (Ball, Page Fold, Slats), Trail, Stamp and the Luma and
-// Chroma key types come in 6.7a2; until then the effect draws as a flat plane, the key type as Full Key.
+// screen; Perspective moves that point. The shapes (Ball, Page Fold, Slats) bend the plane, which is then
+// drawn as a mesh of triangles into a depth buffer. Trail, Stamp, Erode/Expand, Spill Suppression and direct
+// manipulation come in 6.7a3.
 namespace lumenis::media {
 
 namespace {
@@ -153,6 +154,7 @@ struct Placement {
     double left = 0, right = 0, bottom = 0, top = 0;
     // The plane: point = L * (x, y, 0) + c, seen from `viewer`.
     Vec col0{}, col1{}, c{}, viewer{};
+    Vec col2{}; // where a local Z goes (a shape's depth)
     double targetX = 0, targetY = 0, targetSize = 1;
     // Corner Pin: screen -> plane by homography instead.
     bool pinned = false;
@@ -232,6 +234,7 @@ Placement placementOf(const model::Effect& e, double time, const model::EffectSp
     const Vec position{n("Position (3D)", "X") * p.unit, n("Position (3D)", "Y") * p.unit, n("Position (3D)", "Z") * p.unit};
     p.col0 = {linear[0][0], linear[1][0], linear[2][0]};
     p.col1 = {linear[0][1], linear[1][1], linear[2][1]};
+    p.col2 = {linear[0][2], linear[1][2], linear[2][2]};
     p.c = add(sub(axis, apply(rotation, axis)), position);
     // Perspective: "moves the perspective point (where parallel lines appear to converge)" (p.577). Ours: the
     // viewer two widths away; Z (positive closer) brings it in, to a fifth of a width at most.
@@ -249,11 +252,90 @@ struct Look {
     double border = 0;    // Border (3D) width in pixels, inside the crop
     double borderSoft = 0;
     float borderColour[4] = {0, 0, 0, 1};
+    int borderType = 0; // BorderType
     bool highlight = false;
     double hx = 0, hy = 0, hr = 1, hsoft = 0.5, hintensity = 0.5, hangle = 0, haspect = 0;
     float highlightColour[3] = {1, 1, 1};
     float opacity = 1.0f;
 };
+
+// Foreground (3D)'s key types (p.574-575), worked on the foreground before it is placed: what is keyed out
+// becomes transparent so the background shows. Ours: Thresh, Soft and Range in percent of the brightness;
+// H Tol. and H Soft in percent of half the colour wheel; S Low in percent of the saturation; L Tol. keeps what
+// is brighter than it (100: nothing).
+void keyForeground(const model::Effect& e, Picture& fg, double time, const model::EffectSpan& span) {
+    const QString cat = QStringLiteral("Foreground (3D)");
+    const QString type = e.parameters.value(cat).toObject().value(QStringLiteral("Type")).toString();
+    const bool invert = flag(e, cat, QStringLiteral("Invert"));
+    if (type == QLatin1String("SpectraMatte Key")) {
+        // "access all the parameters of the high-quality SpectraMatte chroma key effect" (p.574).
+        fg = detail::spectraMattePicture(e, fg, time, span);
+    } else if (type == QLatin1String("Luma Key") || type == QLatin1String("Chroma Key")) {
+        const bool luma = type == QLatin1String("Luma Key");
+        auto n = [&](const QString& name) { return number(e, cat, name, time, span); };
+        const double thresh = n(QStringLiteral("Thresh")) / 100.0;
+        const double soft = std::max(n(QStringLiteral("Soft")) / 100.0, 1e-3);
+        const bool lumRange = flag(e, cat, luma ? QStringLiteral("Lum Range") : QStringLiteral("Additional Parameters for Chroma Key Key Type: Lum Range"));
+        const double range = n(luma ? QStringLiteral("Range") : QStringLiteral("Additional Parameters for Chroma Key Key Type: Range")) / 100.0;
+        const QColor keyColour = colourOf(e, cat, QStringLiteral("Color"), time, span, Qt::blue);
+        const double keyHue = keyColour.hsvHueF() < 0 ? 0.0 : static_cast<double>(keyColour.hsvHueF()) * 360.0;
+        const double hTol = n(QStringLiteral("H Tol.")) / 100.0 * 180.0;
+        const double hSoft = std::max(n(QStringLiteral("H Soft")) / 100.0 * 180.0, 1e-3);
+        const double sLow = n(QStringLiteral("S Low")) / 100.0;
+        const double lTol = n(QStringLiteral("L Tol.")) / 100.0;
+        for (std::size_t i = 0; i < fg.data().size(); i += 4) {
+            float* px = &fg.data()[i];
+            if (px[3] <= 0.0f) continue;
+            const double r = static_cast<double>(px[0] / px[3]), g = static_cast<double>(px[1] / px[3]), b = static_cast<double>(px[2] / px[3]);
+            const double y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            double keep = 1.0; // 1: foreground shows
+            if (luma) {
+                // "All brightness values above the Thresh value display"; with Lum Range, Thresh is the middle of
+                // the range kept (p.575).
+                keep = lumRange ? std::clamp((range / 2.0 - std::abs(y - thresh)) / soft + 0.5, 0.0, 1.0)
+                                : std::clamp((y - thresh) / soft + 0.5, 0.0, 1.0);
+            } else {
+                const QColor c = QColor::fromRgbF(static_cast<float>(std::clamp(r, 0.0, 1.0)), static_cast<float>(std::clamp(g, 0.0, 1.0)),
+                                                  static_cast<float>(std::clamp(b, 0.0, 1.0)));
+                const double hue = c.hsvHueF() < 0 ? 0.0 : static_cast<double>(c.hsvHueF()) * 360.0;
+                double dh = std::abs(hue - keyHue);
+                dh = std::min(dh, 360.0 - dh);
+                const double hueKey = std::clamp((hTol + hSoft - dh) / hSoft, 0.0, 1.0);
+                const double satKey = std::clamp((static_cast<double>(c.hsvSaturationF()) - sLow) / 0.05 + 0.5, 0.0, 1.0);
+                double key = hueKey * satKey;
+                if (y > lTol) key = 0.0;
+                if (lumRange && std::abs(y - 0.5) > range / 2.0) key = 0.0;
+                keep = 1.0 - key;
+            }
+            if (invert) keep = 1.0 - keep;
+            for (int c = 0; c < 4; ++c) px[c] *= static_cast<float>(keep);
+        }
+    } else if (invert) {
+        // Full Key inverted: what was opaque is clear and the reverse.
+        for (std::size_t i = 0; i < fg.data().size(); i += 4) {
+            float* px = &fg.data()[i];
+            const float a = px[3];
+            const float scale = a > 0.0f ? (1.0f - a) / a : 0.0f;
+            for (int c = 0; c < 3; ++c) px[c] *= scale;
+            px[3] = 1.0f - a;
+        }
+    }
+    // "Show Alpha: Displays the grayscale alpha channel Media Composer uses to apply the key effect" (p.574).
+    if (flag(e, cat, QStringLiteral("Show Alpha"))) {
+        for (std::size_t i = 0; i < fg.data().size(); i += 4) {
+            float* px = &fg.data()[i];
+            px[0] = px[1] = px[2] = px[3];
+            px[3] = 1.0f;
+        }
+    }
+}
+
+// The Border (3D) types (p.570-571): the colour of the band at `t` (0 at the picture's outer edge, 1 at the
+// band's inner edge), `nearLight` when the nearest edge is the top or left. "The default border color is
+// black for Plain borders and shades of gray for other border types." Ours: Metal a brushed grey, Bevel 1 lit
+// from the top left and Bevel 2 from the bottom right, 3D Frame both in turn, Round a rounded profile, Video
+// the picture itself at half brightness.
+enum class BorderType { Plain, Metal, Bevel1, Bevel2, Frame3D, Round, Video };
 
 void lookAt(const Picture& fg, const Placement& p, const Look& look, double x, double y, float out[4]) {
     std::fill(out, out + 4, 0.0f);
@@ -264,7 +346,29 @@ void lookAt(const Picture& fg, const Placement& p, const Look& look, double x, d
         const double inside = std::min({x - p.left, p.right - x, y - p.bottom, p.top - y});
         if (inside < look.border + look.borderSoft) {
             const double w = look.borderSoft > 0 ? std::clamp((look.border + look.borderSoft - inside) / look.borderSoft, 0.0, 1.0) : 1.0;
-            for (int c = 0; c < 4; ++c) out[c] = out[c] * static_cast<float>(1.0 - w) + look.borderColour[c] * static_cast<float>(w);
+            float band[4] = {look.borderColour[0], look.borderColour[1], look.borderColour[2], 1.0f};
+            const auto type = static_cast<BorderType>(look.borderType);
+            if (type != BorderType::Plain) {
+                const double t = std::clamp(inside / std::max(look.border, 1e-6), 0.0, 1.0);
+                const bool nearLight = std::min(x - p.left, p.top - y) < std::min(p.right - x, y - p.bottom);
+                double grey = 0.6;
+                switch (type) {
+                case BorderType::Metal: grey = 0.65 + 0.15 * std::sin(t * std::numbers::pi * 6.0); break;
+                case BorderType::Bevel1: grey = nearLight ? 0.85 : 0.3; break;
+                case BorderType::Bevel2: grey = nearLight ? 0.3 : 0.85; break;
+                case BorderType::Frame3D: grey = (t < 0.5) == nearLight ? 0.85 : 0.3; break;
+                case BorderType::Round: grey = 0.25 + 0.65 * std::sin(t * std::numbers::pi); break;
+                case BorderType::Video:
+                case BorderType::Plain: break;
+                }
+                if (type == BorderType::Video) {
+                    for (int c = 0; c < 3; ++c) band[c] = out[c] * 0.5f;
+                    band[3] = out[3];
+                } else {
+                    for (int c = 0; c < 3; ++c) band[c] = static_cast<float>(grey);
+                }
+            }
+            for (int c = 0; c < 4; ++c) out[c] = out[c] * static_cast<float>(1.0 - w) + band[c] * static_cast<float>(w);
         }
     }
     if (look.highlight && out[3] > 0.0f) {
@@ -283,6 +387,260 @@ void lookAt(const Picture& fg, const Placement& p, const Look& look, double x, d
         for (int c = 0; c < 3; ++c) out[c] = std::min(out[3], out[c] + static_cast<float>(w) * look.highlightColour[c] * out[3]);
     }
     for (int c = 0; c < 4; ++c) out[c] *= look.opacity;
+}
+
+// ---------------------------------------------------------------- shapes (6.7a2)
+
+// "3D shape effects let you map the foreground video channel to various geometric shapes" (p.579): the
+// plane is bent, so it is drawn as a fine mesh of triangles (each vertex bent, placed and projected) into a
+// depth buffer instead of being met ray by ray.
+enum class ShapeType { None, PageFold, Ball, Slats };
+
+struct Shape {
+    ShapeType type = ShapeType::None;
+    // Page Fold: the curl's direction (where it starts, unit), how far the fold line has come in the plane's
+    // units, the cylinder's radius, and the Tuck and Flap choice (0 over, 1 under, 2 top only, 3 bottom only).
+    double dx = 0, dy = 1, line = 0, radius = 1;
+    int tuck = 0;
+    // Ball: centre, radius, depth (Curve, 0-1), the aspect's stretch along `angle`.
+    double cx = 0, cy = 0, ballRadius = 1, curve = 1, stretch = 1, angle = 0;
+    // Slats: the direction the slats move (unit), their width across it, how far they move, offset, weave.
+    double mx = 1, my = 0, slat = 1, amplitude = 0, offset = 0, weave = 0, tilt = 0;
+    // Auto Highlight (p.581): shade by how the surface faces the viewer; else manual.
+    bool autoHighlight = true;
+};
+
+// The point a plane point (centred, Y up) goes to, with its depth; nothing where the shape hides it.
+std::optional<Vec> bend(const Shape& sh, double x, double y) {
+    switch (sh.type) {
+    case ShapeType::None:
+        return Vec{x, y, 0.0};
+    case ShapeType::PageFold: {
+        // The part of the page past the fold line rolls over a cylinder and, past half a turn, lies flat on top.
+        const double along = x * sh.dx + y * sh.dy;
+        const double excess = along - sh.line;
+        if (excess <= 0) {
+            if (sh.tuck == 3) return std::nullopt; // Show Bottom Only: the flap alone
+            return Vec{x, y, 0.0};
+        }
+        if (sh.tuck == 2) return std::nullopt; // Show Top Only
+        const double side = sh.tuck == 1 ? -1.0 : 1.0;
+        double back = 0, z = 0;
+        if (excess < std::numbers::pi * sh.radius) {
+            const double theta = excess / sh.radius;
+            back = sh.radius * std::sin(theta);
+            z = sh.radius * (1.0 - std::cos(theta));
+        } else {
+            back = -(excess - std::numbers::pi * sh.radius);
+            z = 2.0 * sh.radius;
+        }
+        const double newAlong = sh.line + back;
+        return Vec{x + (newAlong - along) * sh.dx, y + (newAlong - along) * sh.dy, side * z};
+    }
+    case ShapeType::Ball: {
+        // "a rubbery, rectangular sheet stretched around a sphere ... If the radius is small, the corners
+        // disappear, wrapping completely around the sphere's surface" (p.580).
+        const double ca = std::cos(sh.angle), sa = std::sin(sh.angle);
+        const double u = ((x - sh.cx) * ca + (y - sh.cy) * sa) / sh.stretch;
+        const double v = -(x - sh.cx) * sa + (y - sh.cy) * ca;
+        const double rho = std::hypot(u, v);
+        const double phi = rho / std::max(sh.ballRadius, 1e-6);
+        if (phi >= std::numbers::pi) return std::nullopt;
+        const double k = rho > 1e-9 ? sh.ballRadius * std::sin(phi) / rho : 1.0;
+        const double bu = u * k * sh.stretch, bv = v * k;
+        const double z = sh.curve * sh.ballRadius * (std::cos(phi) - 1.0);
+        return Vec{sh.cx + bu * ca - bv * sa, sh.cy + bu * sa + bv * ca, z};
+    }
+    case ShapeType::Slats: {
+        // "Splits the image into alternating bands of video that enter the screen from opposite directions"
+        // (p.581): each band moves along the slats' direction, every other one the other way.
+        const double across = -x * sh.my + y * sh.mx + sh.offset;
+        const auto band = static_cast<long long>(std::floor(across / sh.slat));
+        const double dir = (band % 2 == 0) ? 1.0 : -1.0;
+        const double along = x * sh.mx + y * sh.my;
+        const double z = sh.weave * dir * std::sin(along / std::max(sh.slat, 1e-6) * std::numbers::pi) +
+                         sh.tilt * (across - (static_cast<double>(band) + 0.5) * sh.slat);
+        return Vec{x + dir * sh.amplitude * sh.mx, y + dir * sh.amplitude * sh.my, z};
+    }
+    }
+    return std::nullopt;
+}
+
+double parameterOr(const model::Effect& e, const QString& category, const QString& name, double time, const model::EffectSpan& span,
+                   double fallback) {
+    return model::numberAt(e, category, name, time, span).value_or(fallback);
+}
+
+QString menuValue(const model::Effect& e, const QString& category, const QString& name) {
+    return e.parameters.value(category).toObject().value(name).toString();
+}
+
+// The shape the effect asks for at `time`. The Xpress 3D effects name theirs; 3D Warp's Shape category is
+// on once set, a Page Fold until another Type is chosen. "Each shape effect contains a default template ...
+// when you first apply a Page Fold shape effect, Media Composer creates a simple page curl" (p.580). Ours:
+// until set, the curl (Page Fold), the slats' Ampl and the ball's Radius run over the effect, taking the
+// picture off the screen on a segment and bringing the incoming one on over a transition.
+Shape shapeOf(const model::Effect& e, double time, const model::EffectSpan& span, double W, double H) {
+    Shape sh;
+    const QString cat = QStringLiteral("Shape");
+    QString type = menuValue(e, cat, QStringLiteral("Type"));
+    if (type.isEmpty()) {
+        if (e.name == QLatin1String("3D Ball")) type = QStringLiteral("Ball");
+        else if (e.name == QLatin1String("3D Page Fold")) type = QStringLiteral("Page Fold");
+        else if (e.name == QLatin1String("3D Slats")) type = QStringLiteral("Slats");
+        else if (enabled(e, cat)) type = QStringLiteral("Page Fold");
+    }
+    const double progress = span.transition ? 1.0 - time : time;
+    const QString highlight = menuValue(e, cat, QStringLiteral("Highlight"));
+    sh.autoHighlight = highlight.isEmpty() || highlight == QLatin1String("Auto Highlight");
+    const double half = std::hypot(W, H) / 2.0;
+    if (type == QLatin1String("Page Fold")) {
+        sh.type = ShapeType::PageFold;
+        // Angle: 0 folds the top edge down, 90 the right edge, 45 the top right corner (the pictures on p.583).
+        const double a = radians(parameterOr(e, cat, QStringLiteral("Angle"), time, span, 45.0));
+        sh.dx = std::sin(a);
+        sh.dy = std::cos(a);
+        // Radius 0-100, "15 is the default"; ours, 100 is a quarter of the picture's height.
+        sh.radius = std::max(parameterOr(e, cat, QStringLiteral("Radius"), time, span, 15.0), 0.5) / 100.0 * H / 4.0;
+        // Curl 0-100, "0 represents no rollup"; 100 takes the page off the screen (p.581).
+        const double curl = std::clamp(parameterOr(e, cat, QStringLiteral("Curl"), time, span, progress * 100.0), 0.0, 100.0) / 100.0;
+        double hi = -1e300, lo = 1e300;
+        for (const double cx : {-W / 2.0, W / 2.0}) {
+            for (const double cy : {-H / 2.0, H / 2.0}) {
+                const double s = cx * sh.dx + cy * sh.dy;
+                hi = std::max(hi, s);
+                lo = std::min(lo, s);
+            }
+        }
+        // At 100 the fold line is half a turn past the far edge: the whole page has rolled over and its flap
+        // lies beyond that edge, off the screen.
+        sh.line = hi - curl * (hi - lo + std::numbers::pi * sh.radius);
+        const QString tuck = menuValue(e, cat, QStringLiteral("Tuck and Flap"));
+        sh.tuck = tuck == QLatin1String("Tuck Under") ? 1 : tuck == QLatin1String("Show Top Only") ? 2 : tuck == QLatin1String("Show Bottom Only") ? 3 : 0;
+    } else if (type == QLatin1String("Ball")) {
+        sh.type = ShapeType::Ball;
+        const QString sub = QStringLiteral("Additional Parameters for the Ball Shape: ");
+        // Ours: Radius 100 is half the picture's diagonal; Curve 0-100 the depth; X Pos and Y Pos ±999 to the
+        // edges, Y Pos increasing down (p.581).
+        sh.ballRadius = std::max(parameterOr(e, cat, sub + QStringLiteral("Radius"), time, span, (1.0 - progress) * 100.0), 0.5) / 100.0 * half;
+        sh.curve = std::clamp(parameterOr(e, cat, QStringLiteral("Curve"), time, span, 50.0), 0.0, 100.0) / 100.0;
+        sh.cx = parameterOr(e, cat, QStringLiteral("X Pos"), time, span, 0.0) / 999.0 * W / 2.0;
+        sh.cy = -parameterOr(e, cat, QStringLiteral("Y Pos"), time, span, 0.0) / 999.0 * H / 2.0;
+        const double aspect = std::clamp(parameterOr(e, cat, QStringLiteral("Aspct"), time, span, 0.0), -100.0, 100.0) / 100.0;
+        sh.stretch = aspect >= 0 ? 1.0 + aspect * 3.0 : 1.0 / (1.0 - aspect * 3.0);
+        sh.angle = radians(parameterOr(e, cat, sub + QStringLiteral("Angle"), time, span, 0.0));
+    } else if (type == QLatin1String("Slats")) {
+        sh.type = ShapeType::Slats;
+        const QString sub = QStringLiteral("Additional Parameters for the Slats Shape: ");
+        // "Use 0 for horizontal and 90 for vertical" (p.582). Ours: Freq is how many slats cross the picture
+        // (4 until set), Ampl 100 moves them a picture's width (off the screen), Offset 100 a slat's width,
+        // Sk Amp the weave's depth (100: a slat's width) and Sk Angl each slat's tilt in degrees.
+        const double a = radians(parameterOr(e, cat, sub + QStringLiteral("Angle"), time, span, 0.0));
+        sh.mx = std::cos(a);
+        sh.my = std::sin(a);
+        const double freq = std::max(parameterOr(e, cat, QStringLiteral("Freq"), time, span, 4.0), 1.0);
+        const double extent = std::abs(-W / 2.0 * sh.my) + std::abs(H / 2.0 * sh.mx);
+        sh.slat = 2.0 * extent / freq;
+        sh.amplitude = parameterOr(e, cat, QStringLiteral("Ampl"), time, span, progress * 100.0) / 100.0 * std::hypot(W, H);
+        sh.offset = parameterOr(e, cat, QStringLiteral("Offset"), time, span, 0.0) / 100.0 * sh.slat;
+        sh.weave = parameterOr(e, cat, QStringLiteral("Sk Amp"), time, span, 0.0) / 100.0 * sh.slat;
+        sh.tilt = std::tan(radians(std::clamp(parameterOr(e, cat, QStringLiteral("Sk Angl"), time, span, 0.0), -80.0, 80.0)));
+    }
+    return sh;
+}
+
+// A mesh vertex: where it lands on the screen (pixels), its depth (larger is nearer), the plane point it
+// shows, and a shade from how it faces the viewer.
+struct Vertex {
+    double sx = 0, sy = 0, depth = 0, u = 0, v = 0, shade = 1;
+    bool shown = false;
+};
+
+// Draws the bent plane into `layer` (premultiplied, transparent where it does not cover).
+void drawMesh(Picture& layer, const Picture& fg, const Placement& p, const Look& look, const Shape& sh, double lightAmount) {
+    const int W = layer.width();
+    const int H = layer.height();
+    const int cols = std::max(8, W / 6);
+    const int rows = std::max(8, H / 6);
+    std::vector<Vertex> verts(static_cast<std::size_t>((cols + 1) * (rows + 1)));
+    auto index = [cols](int i, int j) { return static_cast<std::size_t>(j * (cols + 1) + i); };
+    auto place = [&](const Vec& local, Vertex& out) {
+        const Vec world = add(add(add({p.col0[0] * local[0], p.col0[1] * local[0], p.col0[2] * local[0]},
+                                      Vec{p.col1[0] * local[1], p.col1[1] * local[1], p.col1[2] * local[1]}),
+                                  Vec{p.col2[0] * local[2], p.col2[1] * local[2], p.col2[2] * local[2]}),
+                              p.c);
+        const double denom = p.viewer[2] - world[2];
+        if (denom <= 1e-6) return false;
+        const double f = p.viewer[2] / denom;
+        const double x = p.viewer[0] + (world[0] - p.viewer[0]) * f;
+        const double y = p.viewer[1] + (world[1] - p.viewer[1]) * f;
+        out.sx = p.targetX + x * p.targetSize + W / 2.0;
+        out.sy = H / 2.0 - (p.targetY + y * p.targetSize);
+        out.depth = world[2];
+        return true;
+    };
+    for (int j = 0; j <= rows; ++j) {
+        for (int i = 0; i <= cols; ++i) {
+            Vertex& v = verts[index(i, j)];
+            v.u = p.left + (p.right - p.left) * i / cols;
+            v.v = p.top - (p.top - p.bottom) * j / rows;
+            const auto bent = bend(sh, v.u, v.v);
+            v.shown = bent && place(*bent, v);
+        }
+    }
+    // Shading from the bent surface's slope (Auto Highlight): flat parts as they are, slopes darker, the
+    // tops of curls brighter.
+    if (sh.autoHighlight && lightAmount > 0) {
+        for (int j = 0; j <= rows; ++j) {
+            for (int i = 0; i <= cols; ++i) {
+                const auto here = bend(sh, verts[index(i, j)].u, verts[index(i, j)].v);
+                const auto right = bend(sh, verts[index(std::min(i + 1, cols), j)].u + (i == cols ? 1e-3 : 0), verts[index(std::min(i + 1, cols), j)].v);
+                const auto down = bend(sh, verts[index(i, std::min(j + 1, rows))].u, verts[index(i, std::min(j + 1, rows))].v - (j == rows ? 1e-3 : 0));
+                if (!here || !right || !down) continue;
+                const Vec n = cross(sub(*right, *here), sub(*down, *here));
+                const double len = std::sqrt(dot(n, n));
+                if (len < 1e-12) continue;
+                const double facing = std::abs(n[2]) / len;
+                verts[index(i, j)].shade = 1.0 + lightAmount * (facing - 0.85);
+            }
+        }
+    }
+    std::vector<double> depth(static_cast<std::size_t>(W) * static_cast<std::size_t>(H), -1e300);
+    auto triangle = [&](const Vertex& a, const Vertex& b, const Vertex& c) {
+        if (!a.shown || !b.shown || !c.shown) return;
+        const double area = (b.sx - a.sx) * (c.sy - a.sy) - (c.sx - a.sx) * (b.sy - a.sy);
+        if (std::abs(area) < 1e-12) return;
+        const int x0 = std::max(0, static_cast<int>(std::floor(std::min({a.sx, b.sx, c.sx}))));
+        const int x1 = std::min(W - 1, static_cast<int>(std::ceil(std::max({a.sx, b.sx, c.sx}))));
+        const int y0 = std::max(0, static_cast<int>(std::floor(std::min({a.sy, b.sy, c.sy}))));
+        const int y1 = std::min(H - 1, static_cast<int>(std::ceil(std::max({a.sy, b.sy, c.sy}))));
+        for (int y = y0; y <= y1; ++y) {
+            for (int x = x0; x <= x1; ++x) {
+                const double px = x + 0.5, py = y + 0.5;
+                const double w0 = ((b.sx - px) * (c.sy - py) - (c.sx - px) * (b.sy - py)) / area;
+                const double w1 = ((c.sx - px) * (a.sy - py) - (a.sx - px) * (c.sy - py)) / area;
+                const double w2 = 1.0 - w0 - w1;
+                if (w0 < -1e-9 || w1 < -1e-9 || w2 < -1e-9) continue;
+                const double z = w0 * a.depth + w1 * b.depth + w2 * c.depth;
+                double& zb = depth[static_cast<std::size_t>(y) * static_cast<std::size_t>(W) + static_cast<std::size_t>(x)];
+                if (z <= zb) continue;
+                float s[4];
+                lookAt(fg, p, look, w0 * a.u + w1 * b.u + w2 * c.u, w0 * a.v + w1 * b.v + w2 * c.v, s);
+                if (s[3] <= 0.0f) continue;
+                zb = z;
+                const float shade = static_cast<float>(std::clamp(w0 * a.shade + w1 * b.shade + w2 * c.shade, 0.0, 2.0));
+                float* o = layer.pixel(x, y);
+                for (int k = 0; k < 3; ++k) o[k] = std::min(s[3], s[k] * shade);
+                o[3] = s[3];
+            }
+        }
+    };
+    for (int j = 0; j < rows; ++j) {
+        for (int i = 0; i < cols; ++i) {
+            triangle(verts[index(i, j)], verts[index(i + 1, j)], verts[index(i + 1, j + 1)]);
+            triangle(verts[index(i, j)], verts[index(i + 1, j + 1)], verts[index(i, j + 1)]);
+        }
+    }
 }
 
 } // namespace
@@ -308,6 +666,7 @@ Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const P
     if (enabled(e, QStringLiteral("Background Color (3D)"))) {
         bg = Picture::solid(w, h, colourOf(e, QStringLiteral("Background Color (3D)"), QStringLiteral("Background Color"), time, span, Qt::black));
     }
+    keyForeground(e, fg, time, span);
     // Defocus, Internal: "blurs the entire image" (p.572). Ours: Horz and V of 15 blur 15 pixels of a 1920-wide picture.
     const double unit = w / 1920.0;
     if (enabled(e, QStringLiteral("Defocus"))) {
@@ -324,6 +683,11 @@ Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const P
         const QString cat = QStringLiteral("Border (3D)");
         look.border = std::clamp(number(e, cat, QStringLiteral("Wid"), time, span), 0.0, 100.0) * 0.4 * unit;
         look.borderSoft = std::clamp(number(e, cat, QStringLiteral("Sft"), time, span), 0.0, 255.0) / 255.0 * 25.0 * unit;
+        static const char* const kTypes[] = {"Plain", "Metal", "Bevel 1", "Bevel 2", "3D Frame", "Round", "Video"};
+        const QString type = e.parameters.value(cat).toObject().value(QStringLiteral("Type")).toString();
+        for (int k = 0; k < 7; ++k) {
+            if (type == QLatin1String(kTypes[k])) look.borderType = k;
+        }
         const QColor colour = colourOf(e, cat, QStringLiteral("Color controls"), time, span, Qt::black);
         look.borderColour[0] = static_cast<float>(colour.redF());
         look.borderColour[1] = static_cast<float>(colour.greenF());
@@ -354,6 +718,30 @@ Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const P
     const float shadowOpacity = shadow ? static_cast<float>(std::clamp(number(e, QStringLiteral("Shadow"), QStringLiteral("Opac."), time, span), 0.0, 100.0) / 100.0) : 0.0f;
 
     Picture out = bg.isNull() ? Picture(w, h) : bg;
+    const Shape shape = place.pinned ? Shape{} : shapeOf(e, time, span, w, h);
+    if (shape.type != ShapeType::None) {
+        // A shape: the bent plane drawn as a mesh, its shadow the layer's alpha moved by the offset.
+        Look shaped = look;
+        if (shape.autoHighlight) shaped.highlight = false; // the manual disc only with Manual Highlight
+        const double light = enabled(e, QStringLiteral("Highlight")) ? number(e, QStringLiteral("Highlight"), QStringLiteral("Inty"), time, span) / 50.0 : 1.0;
+        Picture layer(w, h);
+        drawMesh(layer, fg, place, shaped, shape, light);
+        if (shadow) {
+            const int ox = static_cast<int>(std::lround(shadowX));
+            const int oy = static_cast<int>(std::lround(-shadowY));
+            for (int py = 0; py < h; ++py) {
+                for (int px = 0; px < w; ++px) {
+                    const int qx = px - ox, qy = py - oy;
+                    if (qx < 0 || qy < 0 || qx >= w || qy >= h) continue;
+                    const float a = layer.pixel(qx, qy)[3] * shadowOpacity;
+                    float* o = out.pixel(px, py);
+                    for (int c = 0; c < 4; ++c) o[c] *= 1.0f - a;
+                    o[3] += a;
+                }
+            }
+        }
+        return over(layer, out);
+    }
     for (int py = 0; py < h; ++py) {
         for (int px = 0; px < w; ++px) {
             const double sx = px + 0.5 - w / 2.0;

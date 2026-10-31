@@ -1022,9 +1022,10 @@ phase of their own. They are done in three steps:
       perspective, target, Corner Pin, border, shadow, highlight, defocus, opacity and Swap Sources), the
       Xpress 3D effects through it, and the 3D Promote button for Picture-in-Picture. Done
       (docs/spec/3d-effects.md, `src/media/warp3d.cpp`, `src/model/promote3d.*`).
-    * 6.7a2, the shapes (Ball, Page Fold, Slats, curl), Trail, Stamp, the key types, the other border types,
-      Erode/Expand and Spill Suppression, and direct manipulation in the Effect Preview monitor with
-      Outline/Path.
+    * 6.7a2, the shapes (Ball, Page Fold, Slats) drawn as a mesh, the Foreground's key types and the other
+      border types. Done (docs/spec/3d-effects.md).
+    * 6.7a3, Trail, Stamp, Erode/Expand and Spill Suppression, and direct manipulation in the Effect Preview
+      monitor with Outline/Path.
   * 6.7b, camera effects (ch.9, p.229-247): Pan and Scan (source and target aspect ratios, origin,
     subdividing, the wire frame, with transitions) and Avid Pan & Zoom (image files, field of view, camera
     speed, path changes at keyframes, filtering, background, pixel aspect and colour levels).

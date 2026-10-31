@@ -35,7 +35,7 @@ transitions), defaults in `media::parameterDefault`, `src/model/promote3d.*` (`c
   * Background Color (3D): "replace the bottom video track with a background color" (p.570).
   * Border (3D): the Plain type, a band inside the cropped edges; Wid 0-100 (50), ours 40 pixels of a
     1920-wide picture at 100; Sft 0-255, ours 25 pixels at 255; black until a colour is set (p.570-571). The
-    other border types wait for 6.7a2.
+    other border types are 6.7a2's.
   * Defocus, Internal: "blurs the entire image", Horz and V 10 until set (p.572-573); ours, a value of 15
     blurs 15 pixels of a 1920-wide picture.
   * Highlight: "The default manual highlight creates a blurred disk in the center of the image" (p.576); Soft,
@@ -45,8 +45,7 @@ transitions), defaults in `media::parameterDefault`, `src/model/promote3d.*` (`c
     is 40 pixels of a 1920-wide picture.
 * Foreground (3D) (p.573-574): Opac. (100 until set), Swap Sources ("Switches the foreground and background
   sources"), Reverse Animation ("the entire effect to be reversed, including the direction of movement as
-  well as the incoming and outgoing sources"). The key types other than Full Key, Show Alpha and Invert wait
-  for 6.7a2.
+  well as the incoming and outgoing sources"). The key types are 6.7a2's.
 * On a transition "Media Composer applies the effect to the incoming video. To apply the effect to the
   outgoing video, click the Swap Sources button" (p.294): the incoming warped over the outgoing.
 * 3D Promote: "Promotes the effect to a 3D effect. Available for some effects, including titles,
@@ -55,10 +54,48 @@ transitions), defaults in `media::parameterDefault`, `src/model/promote3d.*` (`c
   and imported matte keys come with them); the 3D Warp takes its Position (Y turned up), Scaling (its 50
   made explicit), Crop and Foreground Level as Opac., keyframes and all, and looks the same.
 
-## Not yet (6.7a2)
+## 6.7a2: shapes, key types and border types
 
-* The shapes (Ball, Page Fold, Slats and the Shape category's curl and wave, p.579-583), Trail, Stamp,
-  Erode/Expand and Spill Suppression; the Luma, Chroma and SpectraMatte key types; the other border types.
+* "3D shape effects let you map the foreground video channel to various geometric shapes. You can create either
+  a Page Fold, a Ball, or a Slats shape effect" (p.579). A shape bends the plane, which is then drawn as a fine
+  mesh of triangles into a depth buffer (both sides seen). The Xpress 3D effects 3D Ball, 3D Page Fold and 3D
+  Slats have their shape; 3D Warp's Shape category is on once set, a Page Fold until another Type is chosen.
+  Corner Pin draws the picture flat.
+* "Each shape effect contains a default template ... when you first apply a Page Fold shape effect, Media
+  Composer creates a simple page curl" (p.580). Ours: until set, the Page Fold's Curl, the Slats' Ampl and the
+  Ball's Radius run over the effect, taking the picture off the screen on a segment and bringing the incoming
+  one on over a transition.
+* Page Fold (p.581-583): "Curl ... 0 represents no rollup"; "animate the Curl value from 0 to 100 and keep the
+  Radius parameter at its default value" to go "from a flat, centered image to one that is completely off the
+  screen". Radius 0-100 (15; ours, 100 is a quarter of the picture's height); Angle -180 to 180 (45), which
+  edge or corner folds as in the pictures on p.583 (0 the top edge, 90 the right, -90 the left, 45 the top
+  right corner); Tuck and Flap: Tuck Over (the flap over the top, the default), Tuck Under, Show Top Only,
+  Show Bottom Only. The page rolls over a cylinder of the radius and, past half a turn, lies flat on top.
+* Ball (p.580-582): "a rubbery, rectangular sheet stretched around a sphere ... If the radius is small, the
+  corners disappear, wrapping completely around the sphere's surface"; Curve "A value of 0 looks like a flat
+  circle"; X Pos and Y Pos ("Values increase as you go down"), Aspct and Angle. Ours: Radius 100 is half the
+  picture's diagonal, Curve 50 until set, Aspct ±100 a stretch of four.
+* Slats (p.581-582): "alternating bands of video that enter the screen from opposite directions"; Angle "0 for
+  horizontal and 90 for vertical". Ours: Freq is how many slats cross the picture (4 until set), Ampl 100 moves
+  them a diagonal's length (off the screen), Offset 100 a slat's width, Sk Amp weaves them in depth (100: a
+  slat's width) and Sk Angl tilts each in degrees.
+* The Shape's Highlight menu (p.581): Auto Highlight (until set) shades the bent surface by how it faces the
+  viewer, at the Highlight category's Inty when that is on; Manual Highlight draws the Highlight category's disc.
+  Reverse Manual Highlight is drawn as Manual for now.
+* Foreground (3D)'s key types (p.574-575), keyed before the picture is placed: Luma Key ("All brightness values
+  above the Thresh value display"; with Lum Range, "Thresh becomes the median point of a range"), Chroma Key
+  (Color, H Tol., H Soft, S Low, L Tol., Lum Range and Range), SpectraMatte Key (the SpectraMatte effect's
+  parameters, docs/spec/keys.md); Invert and Show Alpha. Ours: Thresh, Soft and Range in percent of the
+  brightness (50, 10 and 20 until set); H Tol. and H Soft in percent of half the colour wheel (20 and 10);
+  S Low in percent of the saturation (20); L Tol. keeps what is brighter (100: nothing); blue until a colour is
+  set. Invert on a Full Key turns the picture's own transparency around.
+* Border (3D)'s types (p.570-571): "The default border color is black for Plain borders and shades of gray for
+  other border types." Ours: Metal a brushed grey, Bevel 1 lit from the top left and Bevel 2 from the bottom
+  right, 3D Frame both in turn, Round a rounded profile, Video the picture itself at half brightness.
+
+## Not yet (6.7a3)
+
+* Trail, Stamp, Erode/Expand and Spill Suppression (p.573, p.584-585).
 * Direct manipulation: the handle buttons (Corner Pin, Crop, Scale, Axis, Rotation, Position) and their
   handles in the Effect Preview monitor, and Outline/Path (p.292-293).
 * Real-time playback limits (p.290): our 3D effects render on the fly like the others.
