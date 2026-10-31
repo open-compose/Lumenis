@@ -4,7 +4,7 @@ FX Guide ch.11 (p.287-300), the 3D parameters (p.568-585), the 3D Promote button
 `src/media/warp3d.cpp` (`media::is3DEffect`, `warp3dPicture`, called from the compositor for segments and
 transitions), defaults in `media::parameterDefault`, `src/model/promote3d.*` (`canPromoteTo3D`,
 `promoteTo3D`), the Effect Editor's 3D Promote button (`EffectEditor::promoteTo3D`). Tests: `tst_warp3d`,
-`tst_effect_keyframes_ui` (`promoteTo3D`).
+`tst_compositor` (`stamps`), `tst_effect_keyframes_ui` (`promoteTo3D`).
 
 ## 6.7a1: the 3D Warp renderer and 3D Promote
 
@@ -109,10 +109,25 @@ transitions), defaults in `media::parameterDefault`, `src/model/promote3d.*` (`c
   Color (the Chroma Key's), Gain and Soft 0-63. Ours: green and grey until set; Gain the hue tolerance up to a
   quarter of the colour wheel, Soft a blend over up to another quarter; colours of low saturation are left.
 
+## 6.7a3b: Stamp
+
+* "The Stamp category of the 3D Warp effect lets you make certain effects — such as titles and Matte Key effects
+  — remain on screen while other effects come and go, even though the effect segment itself has ended"; "Each
+  one has Stamp enabled on the last keyframe, which lets each element remain in place as the next element
+  appears on the screen ... you could add additional stamps until you enable Clear to clear the Stamp buffer"
+  (p.298-299). Stamp Image "Lets you add the stamp on one or more keyframes"; Clear "Lets you clear the stamp
+  buffer of everything in it"; Opac. 0-100 (100); "Foregnd. On Top: Switches the image in the Stamp buffer to
+  the background. If Foregnd. On Top is not enabled, the Stamp buffer is always in the foreground" (p.585).
+* Ours: the Effect Editor's Stamp Image and Clear buttons keep each press at the position's time in the effect
+  (the Stamp category's "Stamps" and "Clears"; `EffectEditor::stampImage`, `clearStamps`, one undo step each).
+  The compositor keeps a stamp buffer for each track (`stampsOf` in compositor.cpp): every press on the
+  track's 3D effects up to the frame, after the last Clear, each the effect's picture as it was at that moment
+  (`media::warp3dLayer`) at the Stamp's Opac., over the track's own picture, or under it with Foregnd. On Top.
+  A Clear on the same frame as a stamp clears it. With any stamp on the shown tracks every frame is composed,
+  as the stamp may outlast its segment. Stamps are drawn on the fly ("You cannot render Stamp effects").
+
 ## Not yet
 
-* Stamp (p.584-585, p.298-299, 6.7a3b): a stamp stays "on screen while other effects come and go, even though
-  the effect segment itself has ended", so it needs the compositor to remember stamps across segments.
 * Direct manipulation (6.7a4, with the 2D effects' handles, p.92): the handle buttons (Corner Pin, Crop, Scale, Axis, Rotation, Position) and their
   handles in the Effect Preview monitor, and Outline/Path (p.292-293).
 * Real-time playback limits (p.290): our 3D effects render on the fly like the others.

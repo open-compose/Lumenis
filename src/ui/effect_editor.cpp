@@ -659,6 +659,16 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                             [this, category, name = p.name](const QString& t) { setValue(category, name, t); });
                     row->addWidget(m, 1);
                     controls_.insert(k, m);
+                } else if (category == QLatin1String("Stamp") && (p.name == QLatin1String("Stamp Image") || p.name == QLatin1String("Clear"))) {
+                    // "Stamp Image: Lets you add the stamp on one or more keyframes"; "Clear: Lets you clear the
+                    // stamp buffer" (p.585). Ours: each press is kept at the position's time in the effect.
+                    auto* press = new QToolButton(box);
+                    press->setObjectName(QStringLiteral("param:") + k);
+                    press->setText(p.text);
+                    const bool stamp = p.name == QLatin1String("Stamp Image");
+                    connect(press, &QToolButton::clicked, this, [this, stamp] { stamp ? stampImage() : clearStamps(); });
+                    row->addWidget(press);
+                    row->addStretch(1);
                 } else if (category == QLatin1String("Custom Grid") && p.name == QLatin1String("More Options")) {
                     // "You define the grid by clicking the More Options button to open a dialog box"
                     // (p.494).
@@ -1185,6 +1195,34 @@ bool EffectEditor::eventFilter(QObject* watched, QEvent* event) {
 }
 
 // ---------------------------------------------------------------- 3D
+
+namespace {
+
+// Adds `time` to the Stamp category's list `key` ("Stamps" or "Clears"), once.
+void addStampTime(model::Effect& e, const char* key, double time) {
+    QJsonObject stamp = e.parameters.value(QStringLiteral("Stamp")).toObject();
+    QJsonArray times = stamp.value(QLatin1String(key)).toArray();
+    for (const QJsonValue& v : times) {
+        if (std::abs(v.toDouble() - time) < 1e-9) return;
+    }
+    times.append(time);
+    stamp.insert(QLatin1String(key), times);
+    e.parameters.insert(QStringLiteral("Stamp"), stamp);
+}
+
+} // namespace
+
+bool EffectEditor::stampImage() {
+    if (!current_ || !media::is3DEffect(*current_)) return false;
+    const double t = positionTime();
+    return changeShown(tr("Stamp Image"), [&](model::Effect& e) { addStampTime(e, "Stamps", t); });
+}
+
+bool EffectEditor::clearStamps() {
+    if (!current_ || !media::is3DEffect(*current_)) return false;
+    const double t = positionTime();
+    return changeShown(tr("Clear Stamps"), [&](model::Effect& e) { addStampTime(e, "Clears", t); });
+}
 
 bool EffectEditor::promoteTo3D() {
     if (!current_) return false;

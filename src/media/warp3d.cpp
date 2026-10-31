@@ -3,6 +3,7 @@
 #include "effect_drawing.h"
 
 #include <QColor>
+#include <QJsonArray>
 #include <QJsonObject>
 
 #include <algorithm>
@@ -790,6 +791,30 @@ float sparkle(int x, int y, int k) {
 }
 
 } // namespace
+
+Picture warp3dLayer(const model::Effect& effect, const Picture& foreground, double time, const model::EffectSpan& span) {
+    return placedLayer(effect, foreground, time, span);
+}
+
+namespace {
+
+QList<double> timesOf(const model::Effect& e, const char* key) {
+    QList<double> out;
+    for (const QJsonValue& v : e.parameters.value(QStringLiteral("Stamp")).toObject().value(QLatin1String(key)).toArray()) {
+        if (v.isDouble()) out << v.toDouble();
+    }
+    return out;
+}
+
+} // namespace
+
+QList<double> stampTimes(const model::Effect& effect) {
+    return is3D(effect) ? timesOf(effect, "Stamps") : QList<double>{};
+}
+
+QList<double> clearTimes(const model::Effect& effect) {
+    return is3D(effect) ? timesOf(effect, "Clears") : QList<double>{};
+}
 
 Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const Picture& background, double time,
                       const model::EffectSpan& span) {

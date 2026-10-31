@@ -1,6 +1,7 @@
 // The Effect Editor's advanced keyframes (FX Guide ch.4, p.94-131; docs/spec/effect-keyframes.md):
 // the keyframe tracks and graphs, selection, dragging, the tracks' shortcut menus, the Add Keyframe
 // button and its modes, Go to Previous/Next Event, and sliders following the keyframes.
+#include "lumenis/media/compositor.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
@@ -562,6 +563,15 @@ private slots:
         QVERIFY(!model::keyframesOf(rig.effect(), QStringLiteral("Foreground (3D)"), QStringLiteral("Opac.")).keys.isEmpty());
         QVERIFY(!button->isEnabled());
         QVERIFY(!rig.editor.promoteTo3D());
+        // Stamp Image and Clear (p.585) keep the position's time in the effect.
+        rig.at(49);
+        QVERIFY(rig.editor.stampImage());
+        QCOMPARE(media::stampTimes(rig.effect()), QList<double>{1.0});
+        QVERIFY(rig.editor.clearStamps());
+        QCOMPARE(media::clearTimes(rig.effect()), QList<double>{1.0});
+        QVERIFY(rig.undo());
+        QVERIFY(rig.undo());
+        settle();
         QVERIFY(rig.undo());
         settle();
         QCOMPARE(rig.effect().name, QStringLiteral("Picture-in-Picture"));

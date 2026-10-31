@@ -1026,7 +1026,7 @@ phase of their own. They are done in three steps:
       border types. Done (docs/spec/3d-effects.md).
     * 6.7a3a, Trail, Erode/Expand and Spill Suppression. Done (docs/spec/3d-effects.md).
     * 6.7a3b, Stamp: stamps kept by the compositor across segments until cleared, with the Effect Editor's
-      Stamp Image and Clear buttons (p.298-299, p.584-585).
+      Stamp Image and Clear buttons (p.298-299, p.584-585). Done (docs/spec/3d-effects.md).
     * 6.7a4, direct manipulation in the Effect Preview monitor for 2D (p.92) and 3D (p.292-293) effects, with
       Outline/Path.
   * 6.7b, camera effects (ch.9, p.229-247): Pan and Scan (source and target aspect ratios, origin,

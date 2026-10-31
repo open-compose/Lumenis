@@ -367,6 +367,62 @@ Picture matteKeyPicture(const model::Effect& e, const Picture& background, const
     return out;
 }
 
+// Stamp (FX Guide p.298-299, p.584-585): "The Stamp category of the 3D Warp effect lets you make certain
+// effects ... remain on screen while other effects come and go, even though the effect segment itself has
+// ended." The track's stamp buffer at `frame`: every Stamp Image press on the track's 3D effects at or before
+// the frame, after its last Clear, each the effect's picture as it was at that moment at the Stamp's Opac.;
+// those whose effect has Foregnd. On Top go `under` the track's own picture ("If Foregnd. On Top is not
+// enabled, the Stamp buffer is always in the foreground"), the rest `over` it.
+struct Stamps {
+    Picture under;
+    Picture over;
+};
+
+Stamps stampsOf(const Composition& c, const QString& name, std::int64_t frame) {
+    Stamps out;
+    const model::Track* track = c.sequence->track(name);
+    if (!track) return out;
+    struct Press {
+        std::int64_t at;
+        const model::Segment* segment;
+        std::int64_t offset;
+        double time;
+    };
+    QList<Press> presses;
+    std::int64_t cleared = -1;
+    std::int64_t pos = 0;
+    for (const model::Segment& g : track->segments) {
+        if (pos > frame) break;
+        if (g.effect && g.length > 0) {
+            const model::EffectSpan span(g.length);
+            auto offsetOf = [&](double t) {
+                return std::clamp<std::int64_t>(static_cast<std::int64_t>(std::llround(span.frameOf(t))), 0, g.length - 1);
+            };
+            for (const double t : clearTimes(*g.effect)) {
+                const std::int64_t at = pos + offsetOf(t);
+                if (at <= frame) cleared = std::max(cleared, at);
+            }
+            for (const double t : stampTimes(*g.effect)) {
+                const std::int64_t o = offsetOf(t);
+                if (pos + o <= frame) presses.push_back(Press{pos + o, &g, o, t});
+            }
+        }
+        pos += g.length;
+    }
+    for (const Press& p : presses) {
+        if (p.at <= cleared) continue; // "Clear: Lets you clear the stamp buffer of everything in it" (p.585)
+        const model::Effect& e = *p.segment->effect;
+        Picture picture = segmentPicture(c, p.segment, segmentClipFrame(*p.segment, p.offset), nullptr,
+                                         segmentBlend(*p.segment, p.offset), p.offset);
+        const double opacity = std::clamp(model::numberAt(e, QStringLiteral("Stamp"), QStringLiteral("Opac."), p.time,
+                                                          model::EffectSpan(p.segment->length)).value_or(100.0), 0.0, 100.0) / 100.0;
+        Picture layer = faded(warp3dLayer(e, picture, p.time, model::EffectSpan(p.segment->length)), opacity);
+        Picture& into = parameterFlag(e, QStringLiteral("Stamp"), QStringLiteral("Foregnd. On Top")) ? out.under : out.over;
+        into = into.isNull() ? std::move(layer) : over(layer, into);
+    }
+    return out;
+}
+
 } // namespace
 
 Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
@@ -393,8 +449,19 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             break;
         }
     }
+    // A track's stamps over its own picture go on before the next track (or at the end).
+    Picture pendingStamps;
     for (qsizetype i = first; i < c.tracks.size(); ++i) {
         const QString& name = c.tracks.at(i);
+        if (!pendingStamps.isNull()) {
+            result = over(pendingStamps, result);
+            pendingStamps = {};
+        }
+        if (c.effects) {
+            Stamps stamps = stampsOf(c, name, frame);
+            if (!stamps.under.isNull()) result = over(stamps.under, result);
+            pendingStamps = std::move(stamps.over);
+        }
         beneath = std::move(lastStart);
         lastStart = result;
         const auto tf = trackFrame(*c.sequence, name, frame);
@@ -536,11 +603,22 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
         result = over(layer, result);
         result.quantize(c.precision);
     }
+    if (!pendingStamps.isNull()) result = over(pendingStamps, result);
     return result;
 }
 
 QImage composeImage(const Composition& c, std::int64_t frame, bool* missing) {
     if (!c.sequence) return {};
+    // Stamps outlive their segments (p.298): with any on the tracks, every frame is composed.
+    if (c.effects) {
+        for (const QString& name : c.tracks) {
+            const model::Track* t = c.sequence->track(name);
+            if (!t) continue;
+            for (const model::Segment& g : t->segments) {
+                if (g.effect && !stampTimes(*g.effect).isEmpty()) return composeFrame(c, frame, missing).toImage();
+            }
+        }
+    }
     // From the top down: the first track with a picture hides those below when it is a plain segment.
     for (auto it = c.tracks.crbegin(); it != c.tracks.crend(); ++it) {
         const auto tf = trackFrame(*c.sequence, *it, frame);

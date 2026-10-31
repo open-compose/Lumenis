@@ -250,6 +250,10 @@ public:
     // enabled only for an effect that can be. False when the shown effect cannot be promoted.
     bool promoteTo3D();
     QToolButton* promote3DButton() const { return promote3D_; }
+    // Stamp's buttons (p.585): a Stamp Image or a Clear at the position's time in the shown 3D effect, one undo
+    // step each (media::stampTimes). False when no 3D effect is shown.
+    bool stampImage();
+    bool clearStamps();
 
     // ---- Nested effects (p.221-222; docs/spec/nesting.md)
     // "Nested effects on a segment are fully available in the Effect Editor": the shown segment effect's

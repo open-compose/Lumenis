@@ -6,6 +6,7 @@
 #include "lumenis/model/nest.h"
 #include "lumenis/model/sequence.h"
 
+#include <QJsonArray>
 #include <QTest>
 
 using namespace lumenis;
@@ -732,6 +733,44 @@ private slots:
                                        QJsonObject{{QStringLiteral("Source"), QStringLiteral("Still->Still")}});
         const QColor stillMid = centre(composeImage(composition(cutWith(still), {QStringLiteral("V1")}), 9));
         QVERIFY(near(stillMid, mid, 3));
+    }
+
+    void stamps() {
+        // Stamp (FX Guide p.298-299, p.584-585): A, a half-size red picture stamped at its last frame, stays on
+        // screen over the next segment until C's Clear.
+        auto warpOf = [](int scale) {
+            Effect e{QStringLiteral("Blend"), QStringLiteral("3D Warp"), {}};
+            e.parameters.insert(QStringLiteral("Scaling (3D)"), QJsonObject{{QStringLiteral("X"), scale}, {QStringLiteral("Y"), scale}});
+            return e;
+        };
+        Sequence seq = Sequence::withDefaultTracks();
+        seq.addTrack(TrackKind::Video);
+        seq.overwrite(QStringLiteral("V1"), 0, {clip(QStringLiteral("blue"), 20)});
+        Segment a = clip(QStringLiteral("red"), 10);
+        a.effect = warpOf(50);
+        QJsonObject stamp{{QStringLiteral("Stamps"), QJsonArray{1.0}}};
+        a.effect->parameters.insert(QStringLiteral("Stamp"), stamp);
+        Segment cc = clip(QStringLiteral("green"), 10);
+        cc.effect = warpOf(25);
+        cc.effect->parameters.insert(QStringLiteral("Stamp"), QJsonObject{{QStringLiteral("Clears"), QJsonArray{0.5}}});
+        seq.overwrite(QStringLiteral("V2"), 0, {a, cc});
+        QCOMPARE(stampTimes(*a.effect), QList<double>{1.0});
+        const Composition c = composition(seq, {QStringLiteral("V1"), QStringLiteral("V2")});
+        auto colour = [&](std::int64_t frame, int x, int y) { return composeImage(c, frame, nullptr).pixelColor(x, y); };
+        // In C before its Clear: C's quarter-size green under the stamp ("the Stamp buffer is always in the
+        // foreground" without Foregnd. On Top).
+        QCOMPARE(colour(12, 8, 4), QColor(255, 0, 0));
+        QCOMPARE(colour(12, 5, 4), QColor(255, 0, 0));
+        QCOMPARE(colour(12, 0, 0), QColor(0, 0, 255));
+        // After the Clear: C alone.
+        QCOMPARE(colour(17, 8, 4), QColor(0, 255, 0));
+        QCOMPARE(colour(17, 5, 4), QColor(0, 0, 255));
+        // Foregnd. On Top: the stamp goes under the track's own picture.
+        stamp.insert(QStringLiteral("Foregnd. On Top"), true);
+        seq.track(QStringLiteral("V2"))->segments[0].effect->parameters.insert(QStringLiteral("Stamp"), stamp);
+        const Composition under = composition(seq, {QStringLiteral("V1"), QStringLiteral("V2")});
+        QCOMPARE(composeImage(under, 12, nullptr).pixelColor(8, 4), QColor(0, 255, 0));
+        QCOMPARE(composeImage(under, 12, nullptr).pixelColor(5, 4), QColor(255, 0, 0));
     }
 
     void nests() {

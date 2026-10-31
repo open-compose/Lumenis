@@ -116,6 +116,13 @@ bool is3DEffect(const model::Effect& effect);
 // tracks below, or the outgoing video of a transition). Pictures of one size.
 Picture warp3dPicture(const model::Effect& effect, const Picture& foreground, const Picture& background, double time,
                       const model::EffectSpan& span);
+// The foreground alone placed by a 3D effect at `time` of `span`, on a transparent picture (no shadow, trail
+// or background): what Stamp keeps.
+Picture warp3dLayer(const model::Effect& effect, const Picture& foreground, double time, const model::EffectSpan& span);
+// Stamp (FX Guide p.298-299, p.584-585; docs/spec/3d-effects.md): the effect times (0 to 1) of a 3D effect's
+// Stamp Image and Clear presses, as the Effect Editor stores them under the Stamp category ("Stamps", "Clears").
+QList<double> stampTimes(const model::Effect& effect);
+QList<double> clearTimes(const model::Effect& effect);
 // The Reformat effects that work "on all tracks below the track to which you apply it" (FX Guide
 // p.229): 16:9 Letterbox, 14:9 Letterbox and 4:3 Sidebar.
 bool isReformat(const model::Effect& effect);
