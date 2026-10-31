@@ -5960,6 +5960,49 @@ bool Timeline::changeEffect(const model::EffectRef& ref, const QString& descript
     });
 }
 
+bool Timeline::changeNestedEffect(const model::EffectRef& ref, std::int64_t offset, int level, const QString& description,
+                                  const std::function<void(model::Effect&)>& change) {
+    if (level == 0) return changeEffect(ref, description, [&](model::Effect& e, model::Transition*) { change(e); });
+    if (ref.target != model::EffectTarget::Segment) return false;
+    return changeItem(MonitorId::Record, description, [&](model::BinItem& item) {
+        model::Sequence seq = model::Sequence::fromItem(item);
+        model::Track* t = seq.track(ref.track);
+        if (!t || t->locked) return false;
+        const int i = t->segmentAt(ref.frame);
+        if (i < 0) return false;
+        model::Segment& segment = t->segments[i];
+        const QList<model::NestedEffect> chain = model::nestedEffects(segment, offset);
+        if (level < 0 || level >= chain.size()) return false;
+        model::Effect e = chain.at(level).effect;
+        change(e);
+        if (e == chain.at(level).effect || !model::setNestedEffect(segment, offset, level, e)) return false;
+        seq.storeIn(item);
+        return true;
+    });
+}
+
+bool Timeline::moveNestedEffect(const model::EffectRef& ref, std::int64_t offset, int from, int to) {
+    message_.clear();
+    if (ref.target != model::EffectTarget::Segment) return false;
+    QString error;
+    const bool ok = changeItem(MonitorId::Record, tr("Change Order of Nested Effects"), [&](model::BinItem& item) {
+        model::Sequence seq = model::Sequence::fromItem(item);
+        model::Track* t = seq.track(ref.track);
+        if (!t) return false;
+        if (t->locked) {
+            error = tr("The track is locked.");
+            return false;
+        }
+        const int i = t->segmentAt(ref.frame);
+        if (i < 0 || from == to) return false;
+        if (!model::moveNestedEffect(t->segments[i], offset, from, to, &error)) return false;
+        seq.storeIn(item);
+        return true;
+    });
+    if (!ok && !error.isEmpty()) return fail(error);
+    return ok;
+}
+
 } // namespace lumenis::ui
 
 namespace lumenis::ui {

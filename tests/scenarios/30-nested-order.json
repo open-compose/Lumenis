@@ -1,0 +1,26 @@
+[
+  {
+    "name": "dragging a nested effect to another place in the nest changes their order; Undo puts it back",
+    "guide": "FX Guide p.222",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 30, {"effect": {"category": "Image", "name": "Flop"}, "nested": [{"category": "Blend", "name": "Picture-in-Picture"}, {"category": "Image", "name": "Mosaic Effect"}]}]]}},
+    "steps": [
+      {"nested_move": ["V1", 5, 2, 0]},
+      {"nested_move": ["V1", 5, 1, 2]},
+      {"command": "edit.undo"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 30, {"nested": ["Flop", "Mosaic Effect", "Picture-in-Picture"]}]]}
+  },
+  {
+    "name": "a Timewarp must stay the innermost nested effect",
+    "guide": "FX Guide p.177, p.222",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 30, {"effect": {"category": "Timewarp", "name": "Timewarp"}, "nested": [{"category": "Image", "name": "Flop"}]}]]}},
+    "steps": [
+      {"nested_move": ["V1", 5, 1, 0], "refused": true}
+    ],
+    "expect": {
+      "V1": [["A", 0, 30, {"nested": ["Flop", "Timewarp"]}]]}
+  }
+]

@@ -1,5 +1,6 @@
 // Nested effects (FX Guide p.219-227; lumenis/model/nest.h): a segment's nest, made for Step In and by
 // nesting an effect inside another, kept through JSON, trims and Add Edits; Collapse into a Submaster.
+#include "lumenis/model/effect_render.h"
 #include "lumenis/model/nest.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/timewarp.h"
@@ -117,6 +118,84 @@ private slots:
         QVERIFY(kept.hasNest());
         QCOMPARE(kept.nestIn, 4);
         QCOMPARE(Sequence::fromJson(fill.toJson()).track(QStringLiteral("V1"))->segments.at(1).nestIn, 4);
+    }
+
+    void nestedEffectsInTheEditor() {
+        // "if you have a Picture-in-Picture effect with a Color Correction effect nested inside it, you can see
+        // both effects" (p.221): the outer effect first, then in.
+        const Effect mosaic{QStringLiteral("Image"), QStringLiteral("Mosaic Effect"), {}};
+        Segment s = clip(QStringLiteral("a"), 0, 30);
+        QVERIFY(nestedEffects(s, 0).isEmpty());
+        s.effect = kFlop;
+        nestEffect(s, kPip);
+        nestEffect(s, mosaic);
+        auto names = [](const QList<NestedEffect>& chain) {
+            QStringList out;
+            for (const NestedEffect& e : chain) out << e.effect.name;
+            return out;
+        };
+        QCOMPARE(names(nestedEffects(s, 5)), (QStringList{QStringLiteral("Mosaic Effect"), QStringLiteral("Picture-in-Picture"), QStringLiteral("Flop")}));
+        QCOMPARE(nestedEffects(s, 5).at(2).length, 30);
+        // A nested effect's parameters change where it is.
+        Effect flop = kFlop;
+        flop.parameters.insert(QStringLiteral("Grid"), QJsonObject{{QStringLiteral("Show Grid"), true}});
+        QVERIFY(setNestedEffect(s, 5, 2, flop));
+        QCOMPARE(nestedEffects(s, 5).at(2).effect, flop);
+        QCOMPARE(s.effect, mosaic);
+        QVERIFY(!setNestedEffect(s, 5, 3, flop));
+        // "Drag the effect icon for the effect you want to move to the position you want it to occupy" (p.222).
+        QString error;
+        QVERIFY(moveNestedEffect(s, 5, 2, 0, &error));
+        QCOMPARE(names(nestedEffects(s, 5)), (QStringList{QStringLiteral("Flop"), QStringLiteral("Mosaic Effect"), QStringLiteral("Picture-in-Picture")}));
+        QCOMPARE(nestedEffects(s, 5).at(0).effect, flop); // with its parameters
+        QCOMPARE(nestOf(nestOf(s).track(QStringLiteral("V1"))->segments.at(0)).track(QStringLiteral("V1"))->segments.at(0).clipId,
+                 QStringLiteral("a")); // the clip stays innermost
+        QVERIFY(moveNestedEffect(s, 5, 0, 1, &error));
+        QCOMPARE(names(nestedEffects(s, 5)).first(), QStringLiteral("Mosaic Effect"));
+        // A Timewarp stays innermost (p.177).
+        Sequence seq = Sequence::withDefaultTracks();
+        seq.overwrite(QStringLiteral("V1"), 0, {clip(QStringLiteral("b"), 0, 20)});
+        QVERIFY(applySegmentEffect(seq, QStringLiteral("V1"), 0, Effect{QStringLiteral("Timewarp"), QStringLiteral("Timewarp"), {}}));
+        QVERIFY(applySegmentEffect(seq, QStringLiteral("V1"), 0, kPip, true));
+        Segment warped = seq.track(QStringLiteral("V1"))->segments.at(0);
+        QCOMPARE(nestedEffects(warped, 0).size(), 2);
+        QVERIFY(!moveNestedEffect(warped, 0, 1, 0, &error));
+        QVERIFY(error.contains(QStringLiteral("innermost")));
+        // A Submaster over several tracks keeps its inputs (p.222).
+        Sequence layered = Sequence::withDefaultTracks();
+        layered.addTrack(TrackKind::Video);
+        layered.overwrite(QStringLiteral("V1"), 0, {clip(QStringLiteral("c"), 0, 20)});
+        layered.overwrite(QStringLiteral("V2"), 0, {clip(QStringLiteral("d"), 0, 20)});
+        QVERIFY(collapseTracks(layered, {QStringLiteral("V1"), QStringLiteral("V2")}, 0, 20));
+        Segment sub = layered.track(QStringLiteral("V1"))->segments.at(0);
+        nestEffect(sub, kFlop);
+        QCOMPARE(names(nestedEffects(sub, 0)), (QStringList{QStringLiteral("Flop"), QStringLiteral("Submaster")}));
+        QVERIFY(!moveNestedEffect(sub, 0, 1, 0, &error));
+        QVERIFY(error.contains(QStringLiteral("inputs")));
+        // After an Add Edit the second part's nested effects start before it.
+        Sequence cut = Sequence::withDefaultTracks();
+        cut.overwrite(QStringLiteral("V1"), 0, {s});
+        QVERIFY(cut.addEdit(QStringLiteral("V1"), 12));
+        const QList<NestedEffect> second = nestedEffects(cut.track(QStringLiteral("V1"))->segments.at(1), 0);
+        QCOMPARE(second.size(), 3);
+        QCOMPARE(second.at(1).start, -12);
+        QCOMPARE(second.at(1).length, 30);
+    }
+
+    void nestInRenderKey() {
+        // A change inside a nest puts the outer effect's render out of date.
+        Sequence seq = Sequence::withDefaultTracks();
+        Segment s = clip(QStringLiteral("k"), 0, 10);
+        s.effect = kFlop;
+        nestEffect(s, kPip);
+        seq.overwrite(QStringLiteral("V1"), 0, {s});
+        const QList<RenderTarget> targets = renderTargets(seq, {QStringLiteral("V1")}, 0, 10);
+        QVERIFY(!targets.isEmpty());
+        const QString before = renderKey(seq, targets.first());
+        Effect flop = kFlop;
+        flop.parameters.insert(QStringLiteral("Grid"), QJsonObject{{QStringLiteral("Show Grid"), true}});
+        QVERIFY(setNestedEffect(seq.track(QStringLiteral("V1"))->segments[0], 0, 1, flop));
+        QVERIFY(renderKey(seq, targets.first()) != before);
     }
 
     void collapse() {

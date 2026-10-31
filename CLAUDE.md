@@ -533,8 +533,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Effect Editor's Timewarp icon, `Timeline::dropTemplate`, the Effect Palette's template bins,
   `BinView::promoteEffects`; tests `tst_effect_template`, `tst_effect_template_ui`, scenario
   `29-effect-template.json`), is done.
-  Next: 6.6b2, nested effects in the Effect Editor and their order, then 6.6b3, expanding nests in the
-  Timeline (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.6b2, nested effects in the Effect Editor (docs/spec/nesting.md: `model::nestedEffects`,
+  `setNestedEffect`, `moveNestedEffect`; the editor's title rows, `EffectEditor::setNestedLevel`,
+  `Timeline::changeNestedEffect`; nests in render keys; tests `tst_nest`, `tst_nest_ui`, scenario
+  `30-nested-order.json`), is done.
+  Next: 6.6b3, expanding nests in the Timeline (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

@@ -24,7 +24,9 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMimeData>
+#include <QMouseEvent>
 #include <QMenu>
+#include <QMessageBox>
 #include <QPainter>
 #include <QPainterPath>
 #include <QScrollArea>
@@ -400,8 +402,10 @@ void EffectEditor::refresh() {
     // Where the effect lies and how its frames map to its time (model::EffectSpan).
     current_.reset();
     preview_.reset();
+    chain_.clear();
+    // Another effect opens at its outermost level.
+    if (ref != shown_) level_ = 0;
     if (effect) {
-        current_ = *effect;
         if (ref->target == model::EffectTarget::Transition) {
             if (const model::Transition* t = model::transitionFor(seq, *ref)) {
                 span_ = model::EffectSpan(t->duration, true);
@@ -413,13 +417,30 @@ void EffectEditor::refresh() {
             if (i >= 0) {
                 span_ = model::EffectSpan(track->segments.at(i).length);
                 effectStart_ = start;
+                // The nested effects at the position (p.221); the open one is shown.
+                nestOffset_ = timeline_.composer().state(MonitorId::Record).position() - start;
+                chain_ = model::nestedEffects(track->segments.at(i), nestOffset_);
+                if (level_ >= chain_.size()) level_ = 0;
+                if (level_ > 0) {
+                    const model::NestedEffect& n = chain_.at(level_);
+                    effect = &n.effect;
+                    span_ = model::EffectSpan(std::max<std::int64_t>(n.length, 1));
+                    effectStart_ = start + n.start;
+                }
             }
         }
+        current_ = *effect;
     }
+    if (chain_.isEmpty()) level_ = 0;
 
-    // From the new ref, not shown_, which still holds the effect shown before.
+    // From the new ref, not shown_, which still holds the effect shown before. The nested effects (their
+    // order, the one open) are part of what is shown.
     const bool transitionOnly = !ref && !trimCuts().isEmpty();
-    const QString name = effect ? effect->category + QLatin1Char('/') + effect->name : QString();
+    QString name = effect ? effect->category + QLatin1Char('/') + effect->name : QString();
+    if (chain_.size() > 1) {
+        name += QStringLiteral("|%1").arg(level_);
+        for (const model::NestedEffect& n : chain_) name += QLatin1Char('|') + n.effect.category + QLatin1Char('/') + n.effect.name;
+    }
     if (ref != shown_ || name != shownName_ || transitionOnly != transitionOnly_) {
         shown_ = ref;
         shownName_ = name;
@@ -509,6 +530,38 @@ void EffectEditor::rebuild(const model::Effect* effect) {
         row->addWidget(track);
         tracks_.insert(which.isEmpty() ? QStringLiteral("static:%1").arg(tracks_.size()) : which, track);
     };
+    // Nested effects (p.221): a title row for each, indented level by level, the open one's groups under
+    // its row. A title row is clicked to open its effect and dragged onto another to change the order
+    // (p.222).
+    auto nestedRow = [this](int level) {
+        const model::NestedEffect& n = chain_.at(level);
+        auto* row = new QWidget(body_);
+        auto* h = new QHBoxLayout(row);
+        h->setContentsMargins(12 * level, 0, 0, 0);
+        auto* b = new QToolButton(row);
+        b->setObjectName(QStringLiteral("nested:%1").arg(level));
+        b->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        b->setAutoRaise(true);
+        b->setCheckable(true);
+        b->setChecked(level == level_);
+        const EffectInfo* nestedInfo = EffectCatalog::builtin().find(n.effect.category, n.effect.name);
+        b->setIcon(effectIcon(false, nestedInfo ? nestedInfo->realTime : true));
+        b->setIconSize(QSize(26, 18));
+        b->setText((level == level_ ? QStringLiteral("\u25BE ") : QStringLiteral("\u25B8 ")) + n.effect.name);
+        b->setToolTip(tr("Click to show its parameters; drag onto another nested effect to change their order"));
+        b->setProperty("nestedLevel", level);
+        b->setAcceptDrops(true);
+        b->installEventFilter(this);
+        // Queued: opening another effect rebuilds the rows, this button with them.
+        connect(b, &QToolButton::clicked, this, [this, level] { setNestedLevel(level); }, Qt::QueuedConnection);
+        h->addWidget(b);
+        h->addStretch(1);
+        return row;
+    };
+    const bool nested = chain_.size() > 1;
+    if (nested) {
+        for (int k = 0; k <= level_; ++k) groups_->insertWidget(at++, nestedRow(k));
+    }
     // The effect track beside the top of the parameters (p.95).
     {
         auto* row = new QWidget(body_);
@@ -713,6 +766,10 @@ void EffectEditor::rebuild(const model::Effect* effect) {
         groupBodies_.insert(category, box);
         openers_.insert(category, opener);
     }
+    // The nested effects inside the open one, after its groups.
+    if (nested) {
+        for (int k = level_ + 1; k < chain_.size(); ++k) groups_->insertWidget(at++, nestedRow(k));
+    }
     applyLook();
     syncValues(*effect);
 }
@@ -837,7 +894,7 @@ void EffectEditor::setBurnIn(int display, const QString& name, const QJsonValue&
     if (syncing_ || !shown_) return;
     const QString category = QStringLiteral("Timecode Burn-In Effect Parameters");
     const QString tab = display == 0 ? QStringLiteral("Notes") : QStringLiteral("Display %1").arg(display);
-    timeline_.changeEffect(*shown_, tr("Modify Effect"), [&](model::Effect& e, model::Transition*) {
+    changeShown(tr("Modify Effect"), [&](model::Effect& e) {
         QJsonObject all = e.parameters.value(category).toObject();
         QJsonObject d = all.value(tab).toObject();
         d.insert(name, value);
@@ -949,8 +1006,7 @@ void EffectEditor::setValue(const QString& category, const QString& parameter, c
         });
         return;
     }
-    const model::EffectRef ref = *shown_;
-    timeline_.changeEffect(ref, tr("Modify Effect"), [&](model::Effect& e, model::Transition*) {
+    changeShown(tr("Modify Effect"), [&](model::Effect& e) {
         QJsonObject group = e.parameters.value(category).toObject();
         group.insert(parameter, value);
         if (!ganged.isEmpty()) group.insert(ganged, value);
@@ -1051,6 +1107,43 @@ bool EffectEditor::eventFilter(QObject* watched, QEvent* event) {
         }
         if (event->type() == QEvent::MouseButtonRelease) iconPress_ = {};
     }
+    // A nested effect's title row dragged onto another (p.222).
+    if (const QVariant lv = watched->property("nestedLevel"); lv.isValid()) {
+        const int level = lv.toInt();
+        const QString mimeType = QStringLiteral("application/x-cutthulhu-nested-effect");
+        if (event->type() == QEvent::MouseButtonPress && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+            nestedPress_ = static_cast<QMouseEvent*>(event)->position().toPoint();
+            nestedPressLevel_ = level;
+        } else if (event->type() == QEvent::MouseMove && nestedPressLevel_ == level &&
+                   (static_cast<QMouseEvent*>(event)->position().toPoint() - nestedPress_).manhattanLength() >= QApplication::startDragDistance()) {
+            nestedPressLevel_ = -1;
+            auto* mime = new QMimeData;
+            mime->setData(mimeType, QByteArray::number(level));
+            auto* drag = new QDrag(this);
+            drag->setMimeData(mime);
+            drag->exec(Qt::MoveAction);
+            return true;
+        } else if (event->type() == QEvent::MouseButtonRelease) {
+            nestedPressLevel_ = -1;
+        } else if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove) {
+            auto* d = static_cast<QDropEvent*>(event);
+            if (d->mimeData()->hasFormat(mimeType)) {
+                d->acceptProposedAction();
+            } else {
+                d->ignore();
+            }
+            return true;
+        } else if (event->type() == QEvent::Drop) {
+            auto* d = static_cast<QDropEvent*>(event);
+            if (d->mimeData()->hasFormat(mimeType)) {
+                const int from = d->mimeData()->data(mimeType).toInt();
+                d->acceptProposedAction();
+                // Later: the rows are rebuilt by the move.
+                QMetaObject::invokeMethod(this, [this, from, level] { moveNestedEffect(from, level); }, Qt::QueuedConnection);
+            }
+            return true;
+        }
+    }
     // An effect template on a parameter group's opener (p.54).
     if (const QString group = watched->property("templateGroup").toString(); !group.isEmpty()) {
         if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove) {
@@ -1084,12 +1177,57 @@ bool EffectEditor::eventFilter(QObject* watched, QEvent* event) {
     return QWidget::eventFilter(watched, event);
 }
 
+// ---------------------------------------------------------------- nested effects
+
+bool EffectEditor::changeShown(const QString& description, const std::function<void(model::Effect&)>& change) {
+    if (!shown_) return false;
+    if (level_ == 0) return timeline_.changeEffect(*shown_, description, [&](model::Effect& e, model::Transition*) { change(e); });
+    return timeline_.changeNestedEffect(*shown_, nestOffset_, level_, description, change);
+}
+
+QStringList EffectEditor::nestedEffects() const {
+    QStringList out;
+    for (const model::NestedEffect& n : chain_) out << n.effect.name;
+    return out;
+}
+
+void EffectEditor::setNestedLevel(int level) {
+    if (level < 0 || level >= std::max<qsizetype>(chain_.size(), 1)) return;
+    level_ = level;
+    refresh();
+}
+
+bool EffectEditor::moveNestedEffect(int from, int to) {
+    if (!shown_ || from == to) return false;
+    if (!timeline_.moveNestedEffect(*shown_, nestOffset_, from, to)) {
+        if (!timeline_.lastMessage().isEmpty()) {
+            auto* box = new QMessageBox(QMessageBox::Information, tr("Change Order of Nested Effects"), timeline_.lastMessage(),
+                                        QMessageBox::Ok, this);
+            box->setObjectName(QStringLiteral("nestedOrderRefused"));
+            box->setAttribute(Qt::WA_DeleteOnClose);
+            box->open();
+        }
+        return false;
+    }
+    // The moved effect stays open.
+    if (level_ == from) level_ = to;
+    refresh();
+    return true;
+}
+
 // ---------------------------------------------------------------- effect templates
 
 std::optional<model::EffectTemplate> EffectEditor::shownTemplate(bool withSource) const {
     if (!shown_) return std::nullopt;
     const model::Sequence seq = recordSequence();
     const Rational rate = timeline_.composer().projectRate();
+    // A nested effect open: its own template, without source media.
+    if (level_ > 0 && current_) {
+        model::Segment s;
+        s.length = span_.length;
+        s.effect = current_;
+        return model::segmentTemplate(s, rate, false);
+    }
     if (shown_->target == model::EffectTarget::Transition) {
         const model::Transition* t = model::transitionFor(seq, *shown_);
         if (!t) return std::nullopt;
@@ -1118,13 +1256,11 @@ bool EffectEditor::applyTemplateGroup(const QString& category, const model::Effe
     const EffectInfo* info = EffectCatalog::builtin().find(t.effect.category, t.effect.name);
     const bool has = info ? info->parameters.contains(category) : t.effect.parameters.contains(category);
     if (!has) return false;
-    const model::Sequence seq = recordSequence();
-    const model::Effect* now = model::effectFor(seq, *shown_);
-    if (!now) return false;
-    model::Effect changed = *now;
+    if (!current_) return false;
+    model::Effect changed = *current_;
     const Rational rate = timeline_.composer().projectRate();
     if (!model::applyTemplateGroup(changed, t, category, rate)) return false;
-    return timeline_.changeEffect(*shown_, tr("Apply Effect Template"), [&](model::Effect& e, model::Transition*) { e = changed; });
+    return changeShown(tr("Apply Effect Template"), [&](model::Effect& e) { e = changed; });
 }
 
 } // namespace lumenis::ui

@@ -39,6 +39,32 @@ bool isSubmaster(const Effect& effect);
 // Locked tracks refuse it. `error` says why it could not be done.
 bool collapseTracks(Sequence& sequence, const QStringList& tracks, std::int64_t start, std::int64_t end, QString* error = nullptr);
 
+// ---- Nested effects in the Effect Editor (p.221-222; ROADMAP 6.6b2)
+// One effect of a segment's nested effects: the effect, where its segment starts relative to the outer
+// segment's first frame (in the outer segment's frames; negative when it starts before), and its length.
+struct NestedEffect {
+    Effect effect;
+    std::int64_t start = 0;
+    std::int64_t length = 0;
+    bool operator==(const NestedEffect&) const = default;
+};
+// "Nested effects on a segment are fully available in the Effect Editor ... if you have a Picture-in-Picture
+// effect with a Color Correction effect nested inside it, you can see both effects" (p.221): the segment's
+// effect, then the effect of the segment on its nest's V1 at the same frame (`offset` frames into the outer
+// segment), and so on in, while a nest holds that one video track; a nest of several tracks (a Submaster's,
+// a Matte Key's) ends the list, as does a nested segment without an effect. Empty without an effect.
+QList<NestedEffect> nestedEffects(const Segment& segment, std::int64_t offset);
+// Sets the effect at `level` of nestedEffects(segment, offset) (0: the segment's own). False when there is
+// no such level. Renders on the way in are dropped.
+bool setNestedEffect(Segment& segment, std::int64_t offset, int level, const Effect& effect);
+// "Drag the effect icon for the effect you want to move to the position you want it to occupy in the nest"
+// (p.222): the effect at level `from` moves to level `to`, the others keeping their order. "If you attempt a
+// change in order that is not possible, a message box opens that explains why" (p.222): refused, with
+// `error` saying why, when a Timewarp would not stay innermost ("it must be the innermost effect", p.177) or
+// the innermost effect works on a nest of several tracks ("you cannot change the order of nested effects if
+// the result would not provide enough video inputs for the effect", p.222).
+bool moveNestedEffect(Segment& segment, std::int64_t offset, int from, int to, QString* error = nullptr);
+
 // "N2 indicates that you are two levels in from the outermost track level" (p.220): the label for a nest
 // level, empty at the top.
 QString nestLevelLabel(int level);

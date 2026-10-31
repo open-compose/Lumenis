@@ -137,9 +137,13 @@ struct Run {
         s.sourceTrack = a.size() > 3 && a.at(3).isString() ? a.at(3).toString() : track;
         s.sourceIn = a.at(1).toInteger();
         s.length = a.at(2).toInteger();
-        // A trailing object can give the segment an effect, as model::Effect::toJson writes it.
+        // A trailing object can give the segment an effect, as model::Effect::toJson writes it, and
+        // "nested": effects nested over it in turn, the last outermost (Alt+drag, FX Guide p.216).
         if (a.last().isObject() && a.last().toObject().contains(QStringLiteral("effect"))) {
             s.effect = model::Effect::fromJson(a.last().toObject().value(QStringLiteral("effect")).toObject());
+            for (const QJsonValue& v : a.last().toObject().value(QStringLiteral("nested")).toArray()) {
+                model::nestEffect(s, model::Effect::fromJson(v.toObject()));
+            }
         }
         return s;
     }
@@ -453,6 +457,22 @@ struct Run {
             }
             return true;
         }
+        if (o.contains(QStringLiteral("nested_move"))) {
+            // [track, record frame, from, to]: a nested effect's title row dragged in the Effect Editor
+            // (FX Guide p.222), on the segment effect at the frame.
+            const QJsonArray a = o.value(QStringLiteral("nested_move")).toArray();
+            const model::Sequence seq = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item);
+            const model::Track* t = seq.track(a.at(0).toString());
+            std::int64_t start = 0;
+            const int i = t ? t->segmentAt(a.at(1).toInteger(), &start) : -1;
+            const bool ok = i >= 0 &&
+                            timeline.moveNestedEffect(model::EffectRef{a.at(0).toString(), start, model::EffectTarget::Segment},
+                                                      a.at(1).toInteger() - start, a.at(2).toInt(), a.at(3).toInt());
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the move was not refused") : timeline.lastMessage());
+            }
+            return true;
+        }
         if (o.contains(QStringLiteral("template_drop"))) {
             // An effect template dragged from a bin to [track, record frame] of the Timeline (FX Guide p.53):
             // "template" as model::EffectTemplate::toJson writes it; "source": [clip, source IN, length] saves
@@ -651,6 +671,12 @@ struct Run {
                         extra.insert(QLatin1String(name), list);
                     }
                     if (g.eq) extra.insert(QStringLiteral("eq"), eqToJson(*g.eq));
+                    // Nested effects (FX Guide p.221), outermost first, at the segment's first frame.
+                    if (g.hasNest()) {
+                        QJsonArray names;
+                        for (const model::NestedEffect& n : model::nestedEffects(g, 0)) names.append(n.effect.name);
+                        extra.insert(QStringLiteral("nested"), names);
+                    }
                     // A Motion Adapter: the clip's own rate (p.469).
                     if (g.adapter) extra.insert(QStringLiteral("adapter"), QString::fromStdString(frameRateText(g.adapter->clipRate)));
                     // Effect keyframes by parameter as [[position, value], ...]: frames for Fixed

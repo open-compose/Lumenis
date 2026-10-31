@@ -205,7 +205,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Nests (docs/spec/nesting.md): which segment Step In takes, the nest
   shown as a sequence of its own, the FX tab for Step In, Step Out and
   Collapse, Collapse onto the lowest track, Video Mixdown's clip name and
-  the whole sequence without marks.
+  the whole sequence without marks. Nested effects in the Effect Editor
+  (6.6b2): one open at a time under indented title rows, the list going in
+  only through nests of one video track, the refusals' wording.
 * Effect templates (docs/spec/effect-templates.md): a template named after
   its effect, Alt keeping the segment without its transition or renders, a
   template with its source media edited in as an overwrite, a parameter

@@ -1010,7 +1010,8 @@ phase of their own. They are done in three steps:
       segments, transitions or one parameter group, the Effect Palette's bin icons, Promote Effects, with
       the Motion Effect Editor's Timewarp icon. Done (docs/spec/effect-templates.md,
       `src/model/effect_template.*`).
-    * 6.6b2, nested effects in the Effect Editor and changing their order (p.221-222).
+    * 6.6b2, nested effects in the Effect Editor and changing their order (p.221-222). Done
+      (docs/spec/nesting.md, `model::nestedEffects`).
     * 6.6b3, expanding a nest in the Timeline by double-clicking, and the Double-Click to Show Nesting
       setting (p.220-221, Editing Guide p.1219).
 * 6.7, 3D effects, camera effects, and tracking and stabilization (ch.9-11, p.229-300).

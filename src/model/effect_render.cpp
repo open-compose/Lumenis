@@ -49,6 +49,11 @@ QJsonObject piece(const Segment& s, std::int64_t at, std::int64_t origin) {
         o.insert(QStringLiteral("in"), static_cast<qint64>(s.sourceIn));
     }
     if (s.effect) o.insert(QStringLiteral("effect"), s.effect->toJson());
+    // A nest is the effect's picture (6.6a): an edit inside it puts the render out of date.
+    if (s.hasNest()) {
+        o.insert(QStringLiteral("nest"), s.nest);
+        o.insert(QStringLiteral("nestIn"), static_cast<qint64>(s.nestIn));
+    }
     if (s.transition) {
         o.insert(QStringLiteral("transition"), QJsonObject{{QStringLiteral("effect"), s.transition->effect.toJson()},
                                                            {QStringLiteral("before"), static_cast<qint64>(s.transition->before())},

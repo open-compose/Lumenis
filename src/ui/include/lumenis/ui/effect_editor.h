@@ -2,6 +2,7 @@
 
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/effect_template.h"
+#include "lumenis/model/nest.h"
 #include "lumenis/model/sequence.h"
 
 #include <QHash>
@@ -244,6 +245,20 @@ public:
     // Sets keyframe `id`'s handles (in its parameter's time and value), previewed or as one undo step.
     void setKeyframeHandles(const KeyframeId& id, const model::BezierHandle& in, const model::BezierHandle& out, bool previewOnly);
 
+    // ---- Nested effects (p.221-222; docs/spec/nesting.md)
+    // "Nested effects on a segment are fully available in the Effect Editor": the shown segment effect's
+    // nested effects (model::nestedEffects at the position), outermost first, each with a title row and
+    // opener. One is open at a time (ours): its parameter groups and keyframes are shown under its row.
+    // One name, or none, when nothing is nested.
+    QStringList nestedEffects() const;
+    int nestedLevel() const { return level_; }
+    // Opens the nested effect at `level` (0: the segment's own).
+    void setNestedLevel(int level);
+    // Dragging a nested effect's title row onto another's (p.222): the order changes, one undo step. "If
+    // you attempt a change in order that is not possible, a message box opens that explains why" (a
+    // window named "nestedOrderRefused", not modal); false then.
+    bool moveNestedEffect(int from, int to);
+
     // ---- Effect templates (p.52-54; docs/spec/effect-templates.md)
     // "Drag the effect icon from the Effect Editor to a bin": the template of the effect shown, with its
     // source media when `withSource` (Alt held, a segment effect only); nothing when blank.
@@ -322,6 +337,16 @@ private:
     QVBoxLayout* groups_ = nullptr;
     QLabel* title_ = nullptr;
     QLabel* titleIcon_ = nullptr;
+    // The nested effects at the position (model::nestedEffects), the one open, and the position's offset into
+    // the outer segment, from the last refresh().
+    QList<model::NestedEffect> chain_;
+    int level_ = 0;
+    std::int64_t nestOffset_ = 0;
+    QPoint nestedPress_; // where a drag of a nested effect's title row began
+    int nestedPressLevel_ = -1;
+    // Changes the shown effect (the open nested one) as one undo step: Timeline::changeEffect or
+    // changeNestedEffect.
+    bool changeShown(const QString& description, const std::function<void(model::Effect&)>& change);
     QPoint iconPress_; // where a drag of the effect icon began; null when none
     QLabel* blank_ = nullptr;
     QToolButton* alignment_ = nullptr;

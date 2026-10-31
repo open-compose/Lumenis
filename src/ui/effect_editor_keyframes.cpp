@@ -711,7 +711,7 @@ bool EffectEditor::changeKeyframes(const QString& description, const std::functi
     if (!change(edited) || edited.parameters == current_->parameters) return false;
     const QJsonObject parameters = edited.parameters;
     preview_.reset();
-    return timeline_.changeEffect(*shown_, description, [&](model::Effect& e, model::Transition*) { e.parameters = parameters; });
+    return changeShown(description, [&](model::Effect& e) { e.parameters = parameters; });
 }
 
 bool EffectEditor::addKeyframes(KeyframeMode mode) {

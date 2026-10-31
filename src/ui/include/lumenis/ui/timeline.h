@@ -705,6 +705,14 @@ public:
     // Returns false if there is no such effect or its track is locked.
     bool changeEffect(const model::EffectRef& ref, const QString& description,
                       const std::function<void(model::Effect&, model::Transition*)>& change);
+    // Nested effects (FX Guide p.221-222; model::nestedEffects): changes the effect at `level` of the
+    // segment effect `ref`, `offset` frames into its segment (level 0 is the segment's own, as
+    // changeEffect), with an undo step. False when there is no such effect or the track is locked.
+    bool changeNestedEffect(const model::EffectRef& ref, std::int64_t offset, int level, const QString& description,
+                            const std::function<void(model::Effect&)>& change);
+    // "Drag the effect icon for the effect you want to move to the position you want it to occupy in the
+    // nest" (p.222): model::moveNestedEffect, one undo step; false with lastMessage() saying why not.
+    bool moveNestedEffect(const model::EffectRef& ref, std::int64_t offset, int from, int to);
     // The Transition parameters (p.63, p.500): the duration and alignment
     // of the transitions at the cuts; a Dissolve where there is none.
     bool setTransitions(const QList<model::TrimRoller>& cuts, std::int64_t duration,

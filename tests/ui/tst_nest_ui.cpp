@@ -10,6 +10,7 @@
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
+#include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/mixdown_dialog.h"
 #include "lumenis/ui/settings.h"
@@ -18,6 +19,8 @@
 #include <QAction>
 #include <QDir>
 #include <QLabel>
+#include <QMessageBox>
+#include <QToolButton>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -143,6 +146,102 @@ private slots:
         QVERIFY(bin->bin().item(mixed->id));
         QVERIFY(media::isLinked(*mixed));
         QVERIFY(firstV1(*bin->bin().item(sequenceId)).hasNest());
+    }
+
+    void nestedEffectsInTheEditor() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString movie = dir.filePath(QStringLiteral("grey.mov"));
+        QVERIFY(writeMovie(movie, 20));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        const QStringList ids = window.linkFiles(binId, {movie});
+        QCOMPARE(ids.size(), 1);
+        Composer& composer = window.composer();
+        Timeline& timeline = window.timeline();
+        composer.loadDefault(binId, *bin->bin().item(ids.first()));
+        composer.moveTo(MonitorId::Source, 0);
+        commands.action(QStringLiteral("edit.splice_in"))->trigger();
+        settle();
+        const QString sequenceId = composer.state(MonitorId::Record).current()->item.id;
+        // A Flop nested inside a Picture-in-Picture inside a Mosaic, as Alt+drag makes them (p.216).
+        QVERIFY(timeline.changeRecordSequence(QStringLiteral("Nest"), [](model::Sequence& s) {
+            model::Segment& g = s.track(QStringLiteral("V1"))->segments[0];
+            g.effect = model::Effect{QStringLiteral("Image"), QStringLiteral("Flop"), {}};
+            model::nestEffect(g, model::Effect{QStringLiteral("Blend"), QStringLiteral("Picture-in-Picture"), {}});
+            model::nestEffect(g, model::Effect{QStringLiteral("Image"), QStringLiteral("Mosaic Effect"), {}});
+            return true;
+        }));
+        settle();
+        auto chain = [&] {
+            QStringList out;
+            for (const model::NestedEffect& n : model::nestedEffects(firstV1(*bin->bin().item(sequenceId)), 5)) out << n.effect.name;
+            return out;
+        };
+
+        // "you can see both effects and their parameters in the Effect Editor" (p.221).
+        EffectEditor& editor = window.effectEditor();
+        composer.moveTo(MonitorId::Record, 5);
+        editor.refresh();
+        QCOMPARE(editor.nestedEffects(), (QStringList{QStringLiteral("Mosaic Effect"), QStringLiteral("Picture-in-Picture"), QStringLiteral("Flop")}));
+        QCOMPARE(editor.nestedLevel(), 0);
+        QCOMPARE(editor.effectName(), QStringLiteral("Mosaic Effect"));
+        QVERIFY(editor.findChild<QToolButton*>(QStringLiteral("nested:2")));
+        // Opening the Picture-in-Picture shows its groups; a change goes to it, inside the nest.
+        editor.findChild<QToolButton*>(QStringLiteral("nested:1"))->click();
+        settle();
+        QCOMPARE(editor.nestedLevel(), 1);
+        QCOMPARE(editor.effectName(), QStringLiteral("Picture-in-Picture"));
+        QVERIFY(editor.categories().contains(QStringLiteral("Position")));
+        QVERIFY(editor.slider(QStringLiteral("Position"), QStringLiteral("X")));
+        editor.slider(QStringLiteral("Position"), QStringLiteral("X"))->setValue(300);
+        settle();
+        const QList<model::NestedEffect> nested = model::nestedEffects(firstV1(*bin->bin().item(sequenceId)), 5);
+        QCOMPARE(nested.at(1).effect.parameters.value(QStringLiteral("Position")).toObject().value(QStringLiteral("X")).toInt(), 300);
+        QVERIFY(nested.at(0).effect.parameters.isEmpty());
+        // Undo takes it back.
+        commands.action(QStringLiteral("edit.undo"))->trigger();
+        settle();
+        QVERIFY(model::nestedEffects(firstV1(*bin->bin().item(sequenceId)), 5).at(1).effect.parameters.isEmpty());
+
+        // "Drag the effect icon for the effect you want to move to the position you want it to occupy" (p.222).
+        QVERIFY(editor.moveNestedEffect(2, 0));
+        settle();
+        QCOMPARE(chain(), (QStringList{QStringLiteral("Flop"), QStringLiteral("Mosaic Effect"), QStringLiteral("Picture-in-Picture")}));
+        QCOMPARE(editor.nestedEffects(), chain());
+        QCOMPARE(firstV1(*bin->bin().item(sequenceId)).effect->name, QStringLiteral("Flop")); // the Timeline's too
+        commands.action(QStringLiteral("edit.undo"))->trigger();
+        settle();
+        QCOMPARE(chain().first(), QStringLiteral("Mosaic Effect"));
+
+        // "If you attempt a change in order that is not possible, a message box opens that explains why" (p.222).
+        QVERIFY(timeline.changeRecordSequence(QStringLiteral("Timewarp"), [](model::Sequence& s) {
+            model::Segment& g = s.track(QStringLiteral("V1"))->segments[0];
+            return model::setNestedEffect(g, 5, 2, model::Effect{QStringLiteral("Timewarp"), QStringLiteral("Timewarp"), {}});
+        }));
+        settle();
+        editor.refresh();
+        QVERIFY(!editor.moveNestedEffect(2, 1));
+        settle();
+        auto* box = editor.findChild<QMessageBox*>(QStringLiteral("nestedOrderRefused"));
+        QVERIFY(box);
+        QVERIFY(box->text().contains(QStringLiteral("innermost")));
+        box->close();
+        settle();
     }
 };
 
