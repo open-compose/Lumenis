@@ -551,7 +551,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_warp3d`), is done.
   6.7a3b, Stamp (the compositor's per-track stamp buffer `stampsOf`, `media::warp3dLayer`/`stampTimes`, the
   Effect Editor's Stamp Image and Clear; tests `tst_compositor`, `tst_effect_keyframes_ui`), is done.
-  Next: 6.7a4, direct manipulation in the Effect Preview (2D and 3D), then 6.7b-d, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.7a4, direct manipulation in the Effect Preview (docs/spec/3d-effects.md: outlines, handles, drags solved
+  numerically and the motion path in `src/media/effect_handles.*`; the 3D handle buttons and Outline/Path in
+  `effect_editor_handles.cpp`; the overlay and `Composer::effectHandleDragged`; tests `tst_effect_handles`,
+  `tst_effect_keyframes_ui`), is done, so 6.7a is.
+  Next: 6.7b (Pan and Scan, Avid Pan & Zoom), then 6.7c-d, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

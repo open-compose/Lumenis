@@ -235,6 +235,38 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     side->addWidget(offButton(QStringLiteral("effectHQ"), tr("HQ"), this));
     side->addWidget(offButton(QStringLiteral("effectTracking"), tr("Tracking"), this));
     side->addWidget(offButton(QStringLiteral("effectGrid"), tr("Grid"), this));
+    // The 3D effect handle buttons (p.292): checkable, one at a time, shown for 3D effects. Ours: lettered.
+    struct HandleButton {
+        media::HandleTool tool;
+        const char* name;
+        const char* text;
+        const char* tip;
+    };
+    static const HandleButton kHandleButtons[] = {
+        {media::HandleTool::CornerPin, "effectCornerPin", "CP", QT_TR_NOOP("Corner Pin")},
+        {media::HandleTool::Crop, "effectCrop", "Cr", QT_TR_NOOP("Crop")},
+        {media::HandleTool::Scale, "effectScale", "Sc", QT_TR_NOOP("Scale")},
+        {media::HandleTool::Axis, "effectAxis", "Ax", QT_TR_NOOP("Axis")},
+        {media::HandleTool::ZRotation, "effectZRotation", "Rz", QT_TR_NOOP("Z Rotation")},
+        {media::HandleTool::XRotation, "effectXRotation", "Rx", QT_TR_NOOP("X Rotation")},
+        {media::HandleTool::YRotation, "effectYRotation", "Ry", QT_TR_NOOP("Y Rotation")},
+        {media::HandleTool::XYPosition, "effectXYPosition", "XY", QT_TR_NOOP("XY Position")},
+        {media::HandleTool::XZPosition, "effectXZPosition", "XZ", QT_TR_NOOP("XZ Position")},
+    };
+    for (const HandleButton& h : kHandleButtons) {
+        auto* b = new QToolButton(this);
+        b->setObjectName(QLatin1String(h.name));
+        b->setText(QLatin1String(h.text));
+        b->setToolTip(tr(h.tip));
+        b->setCheckable(true);
+        b->setAutoRaise(true);
+        b->setFixedSize(26, 22);
+        b->setVisible(false);
+        const media::HandleTool tool = h.tool;
+        connect(b, &QToolButton::clicked, this, [this, tool](bool on) { setHandleTool(on ? tool : media::HandleTool::None); });
+        handleButtons_.insert(static_cast<int>(tool), b);
+        side->addWidget(b);
+    }
     side->addStretch(1);
 
     // The bottom row (p.84, 6-11): Render Effect, Outline/Path, the
@@ -265,7 +297,12 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     render->setEnabled(true);
     connect(render, &QToolButton::clicked, this, [this] { emit renderRequested(QGuiApplication::keyboardModifiers()); });
     bottom->addWidget(render);
-    bottom->addWidget(offButton(QStringLiteral("effectOutline"), tr("Outline/Path"), this));
+    // Outline/Path (p.84, p.92-93, p.293): the wire frame and the motion path in the Effect Preview.
+    outline_ = offButton(QStringLiteral("effectOutline"), tr("Outline/Path"), this);
+    outline_->setToolTip(tr("Outline/Path"));
+    outline_->setCheckable(true);
+    connect(outline_, &QToolButton::toggled, this, &EffectEditor::setOutlineShown);
+    bottom->addWidget(outline_);
     bottom->addWidget(alignment_);
     bottom->addWidget(duration_);
     bottom->addStretch(1);
@@ -359,6 +396,9 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
         }
     });
     connect(&timeline_.composer(), &Composer::changed, this, &EffectEditor::refresh);
+    // Handles dragged in the Effect Preview monitor (p.92, p.292).
+    connect(&timeline_.composer(), &Composer::effectHandleDragged, this,
+            [this](const QString& id, const QPointF& from, const QPointF& to, bool finished) { dragHandle(id, from, to, finished); });
     refresh();
 }
 
@@ -407,7 +447,9 @@ void EffectEditor::refresh() {
 
     // Where the effect lies and how its frames map to its time (model::EffectSpan).
     current_.reset();
-    preview_.reset();
+    // A handle drag in the Effect Preview keeps its preview while the Composer redraws (its refresh says
+    // changed() too); anything else previewed is dropped.
+    if (!handleStart_) preview_.reset();
     chain_.clear();
     // Another effect opens at its outermost level.
     if (ref != shown_) level_ = 0;
@@ -451,6 +493,8 @@ void EffectEditor::refresh() {
         shown_ = ref;
         shownName_ = name;
         transitionOnly_ = transitionOnly;
+        handleStart_.reset();
+        preview_.reset();
         rebuild(effect);
     } else if (effect) {
         // Keyframes an undo took away are no longer selected.
@@ -459,10 +503,11 @@ void EffectEditor::refresh() {
                                                   id.parameter.section(QLatin1Char('/'), 1))
                                     .keys.size();
         });
-        syncValues(*effect);
+        syncValues(preview_ ? *preview_ : *effect);
     }
     syncTransition();
     promote3D_->setEnabled(current_ && model::canPromoteTo3D(*current_));
+    syncHandleButtons();
     // The position in the tracks moves while playing only with Update Position While Playing (p.132).
     if (updateWhilePlaying_ || !timeline_.composer().isPlaying()) updateTracks();
     else syncPreview();

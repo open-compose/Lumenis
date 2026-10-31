@@ -126,8 +126,48 @@ transitions), defaults in `media::parameterDefault`, `src/model/promote3d.*` (`c
   A Clear on the same frame as a stamp clears it. With any stamp on the shown tracks every frame is composed,
   as the stamp may outlast its segment. Stamps are drawn on the fly ("You cannot render Stamp effects").
 
+## 6.7a4: direct manipulation
+
+* 2D effects: "You can make some adjustments to effects by manipulating them directly in the Effect Preview
+  monitor. These adjustments use handles and wire-frame outlines that you can display in the monitor ... You
+  can define a motion path on multilayer video effects such as Picture-in-Picture effects. Use the wire-frame
+  preview feature when you want to see the path an image takes on the screen. You can also use the resize
+  handles to set the size of the effect image at each keyframe location"; "Create keyframes where you need
+  them, make sure that the appropriate keyframe is selected, and then manipulate the wire frame and handles ...
+  Drag the wire frame to reposition the effect. Drag the resize handles to resize the image — the top handle
+  adjusts the height of the effect image, the side handle adjusts the width, and the corner handle adjusts
+  width and height together, maintaining the aspect ratio"; Reduce shows "the area outside the background
+  image and lets you extend the motion path into that area"; "Each dot on the path represents the location of
+  the center of the PIP at a keyframe. The center handle and the resize handles are highlighted" (p.92-93).
+* 3D effects: "Various 3D effect handle buttons appear along the right side of the Effect Editor": Corner Pin,
+  Crop, Scale, Axis, Z Rotation, X Rotation, Y Rotation, XY Position, XZ Position. "click one of the image
+  manipulation buttons to activate the specific handles ... Click the handles, and drag them ... Click the
+  image manipulation button a second time to turn off the handles"; "Use the Outline/Path button when you want
+  to see the path a moving effect takes on the screen"; p.293's illustrations show the Scale handles (top, side,
+  corner), the Axis cross, X Rotation's handles above and below the centre, Y Rotation's left and right, and Z
+  Rotation's on a line to a corner (p.292-293).
+* Ours, the geometry (`src/media/effect_handles.*`): the outline is where the effect puts its foreground: the
+  2D placement of Picture-in-Picture, Resize and the masks (as image_effects.cpp draws them), and for 3D effects
+  the cropped plane projected through the hierarchy, Perspective and Target (`warp3dScreenPoint`, the inverse
+  of the renderer's ray-plane mapping; a shape's flat plane before it is bent; Corner Pin's homography). A
+  handle drag is solved numerically: the parameters the handle stands for (Position X/Y, Scaling X or Y, one
+  factor on both for the corner, a Crop edge, Axis X/Y) change until the handle lies under the pointer, so it
+  follows through rotation and perspective. Corner Pin's corners follow the pointer directly; the first drag
+  of an effect without Corner Pin pins all four where they are seen. X and Y Rotation turn half a turn per
+  picture height or width dragged (the top handle dragged down tips the top towards the viewer; the right
+  handle dragged left takes the right edge away), Z Rotation by the angle swept about the centre, clockwise
+  positive (p.291). XZ Position: X follows the pointer, dragging down brings the picture closer (two units
+  of a 1920-wide picture per pixel).
+* Ours, the Effect Editor (`effect_editor_handles.cpp`): in Effect mode a 2D effect with an outline always shows
+  its wire frame and its centre, top, side and corner handles; a 3D effect shows those of the handle button
+  selected (lettered buttons, shown only for 3D effects); Outline/Path adds the outline and the centre's path
+  over the effect with a dot at each keyframe time. Values are rounded to whole numbers within the controls'
+  ranges and go where a control's value would (the selected keyframes of their parameter, a keyframe at the
+  position when the parameter has keyframes but none is selected, else the plain value); Fixed Aspect does not
+  gang them. A drag is shown as it goes (the outline and the controls) and stored as one undo step on release.
+  The Composer draws the overlay over the Record monitor's picture (also beyond it, when reduced) and reports
+  drags (`Composer::effectHandleDragged`); pressing inside the outline drags the centre handle.
+
 ## Not yet
 
-* Direct manipulation (6.7a4, with the 2D effects' handles, p.92): the handle buttons (Corner Pin, Crop, Scale, Axis, Rotation, Position) and their
-  handles in the Effect Preview monitor, and Outline/Path (p.292-293).
 * Real-time playback limits (p.290): our 3D effects render on the fly like the others.

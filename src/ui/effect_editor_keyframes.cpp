@@ -674,6 +674,7 @@ void EffectEditor::syncPreview() {
             }
         }
         for (const auto& [t, selected] : columns) preview.keyframes << Composer::EffectPreview::Keyframe{span_.frameOf(t), selected};
+        fillOverlay(*e, preview);
     }
     timeline_.composer().setEffectPreview(preview);
 }

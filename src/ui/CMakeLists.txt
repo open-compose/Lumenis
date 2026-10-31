@@ -25,6 +25,7 @@ add_library(lumenis_ui STATIC
     list_tool.cpp
     effect_editor.cpp
     effect_editor_keyframes.cpp
+    effect_editor_handles.cpp
     effect_palette.cpp
     capture.cpp
     command_registry.cpp

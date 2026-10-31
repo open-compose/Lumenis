@@ -1,4 +1,5 @@
 #include "lumenis/media/compositor.h"
+#include "lumenis/media/effect_handles.h"
 
 #include "effect_drawing.h"
 
@@ -24,8 +25,8 @@
 // picture 1920 wide, X to the right and Y up (p.577); Crop and Skew from -999 to 999 across the picture;
 // rotation in degrees, positive clockwise (p.291). The viewer stands two picture widths in front of the
 // screen; Perspective moves that point. The shapes (Ball, Page Fold, Slats) bend the plane, which is then
-// drawn as a mesh of triangles into a depth buffer. Trail, Stamp, Erode/Expand, Spill Suppression and direct
-// manipulation come in 6.7a3.
+// drawn as a mesh of triangles into a depth buffer. Trail, Stamp, Erode/Expand and Spill Suppression
+// came in 6.7a3; the forward geometry at the end serves direct manipulation (effect_handles.cpp, 6.7a4).
 namespace lumenis::media {
 
 namespace {
@@ -160,7 +161,30 @@ struct Placement {
     double targetX = 0, targetY = 0, targetSize = 1;
     // Corner Pin: screen -> plane by homography instead.
     bool pinned = false;
-    std::array<double, 9> unpin{};
+    std::array<double, 9> pin{}, unpin{};
+    Vec pivot{}; // where the Axis lands before it is seen (Axis plus Position), for its handle
+
+    // Where a point in space (centred, Y up, Z towards the viewer) is seen on the screen (centred, Y up), with
+    // Target; nothing behind the viewer.
+    std::optional<std::pair<double, double>> project(const Vec& point) const {
+        const double dz = viewer[2] - point[2];
+        if (dz <= 1e-9) return std::nullopt;
+        const double t = viewer[2] / dz;
+        const double qx = viewer[0] + t * (point[0] - viewer[0]);
+        const double qy = viewer[1] + t * (point[1] - viewer[1]);
+        return std::pair{targetX + targetSize * qx, targetY + targetSize * qy};
+    }
+    // The screen point (centred, Y up) a plane point (centred, Y up) is seen at: planePoint()'s inverse.
+    std::optional<std::pair<double, double>> screenPoint(double x, double y) const {
+        if (pinned) {
+            const double X = pin[0] * x + pin[1] * y + pin[2];
+            const double Y = pin[3] * x + pin[4] * y + pin[5];
+            const double Z = pin[6] * x + pin[7] * y + pin[8];
+            if (std::abs(Z) < 1e-12) return std::nullopt;
+            return std::pair{X / Z, Y / Z};
+        }
+        return project(add(add(Vec{col0[0] * x, col0[1] * x, col0[2] * x}, Vec{col1[0] * y, col1[1] * y, col1[2] * y}), c));
+    }
 
     // The plane point (centred, Y up) a screen point (centred, Y up) shows; nothing when none.
     std::optional<std::pair<double, double>> planePoint(double sx, double sy) const {
@@ -213,6 +237,7 @@ Placement placementOf(const model::Effect& e, double time, const model::EffectSp
         }
         std::array<double, 9> pin{};
         if (homography(from, to, pin) && invert(pin, p.unpin)) {
+            p.pin = pin;
             p.pinned = true;
             return p;
         }
@@ -238,6 +263,7 @@ Placement placementOf(const model::Effect& e, double time, const model::EffectSp
     p.col1 = {linear[0][1], linear[1][1], linear[2][1]};
     p.col2 = {linear[0][2], linear[1][2], linear[2][2]};
     p.c = add(sub(axis, apply(rotation, axis)), position);
+    p.pivot = add(axis, position);
     // Perspective: "moves the perspective point (where parallel lines appear to converge)" (p.577). Ours: the
     // viewer two widths away; Z (positive closer) brings it in, to a fifth of a width at most.
     const double distance = std::max(2.0 * p.W * (1.0 - n("Perspective", "Z") / 1000.0), 0.2 * p.W);
@@ -883,6 +909,43 @@ Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const P
         }
     }
     return over(layer, out);
+}
+
+// ---------------------------------------------------------------- forward geometry (6.7a4)
+
+namespace {
+
+// The placement the picture is drawn with at `time` ("Reverse Animation" runs the effect backwards, as
+// warp3dPicture does).
+Placement shownPlacement(const model::Effect& e, double time, const model::EffectSpan& span, const QSizeF& size) {
+    if (flag(e, QStringLiteral("Foreground (3D)"), QStringLiteral("Reverse Animation"))) time = 1.0 - time;
+    return placementOf(e, time, span, static_cast<int>(std::lround(size.width())), static_cast<int>(std::lround(size.height())));
+}
+
+QPointF toPixels(const std::pair<double, double>& p, const QSizeF& size) {
+    return {size.width() / 2.0 + p.first, size.height() / 2.0 - p.second};
+}
+
+} // namespace
+
+std::optional<QPointF> warp3dScreenPoint(const model::Effect& effect, double time, const model::EffectSpan& span, const QSizeF& size,
+                                         double x, double y) {
+    const auto s = shownPlacement(effect, time, span, size).screenPoint(x, y);
+    if (!s) return std::nullopt;
+    return toPixels(*s, size);
+}
+
+std::optional<QPointF> warp3dAxisPoint(const model::Effect& effect, double time, const model::EffectSpan& span, const QSizeF& size) {
+    const Placement p = shownPlacement(effect, time, span, size);
+    if (p.pinned) return std::nullopt;
+    const auto s = p.project(p.pivot);
+    if (!s) return std::nullopt;
+    return toPixels(*s, size);
+}
+
+std::array<double, 4> warp3dCropBox(const model::Effect& effect, double time, const model::EffectSpan& span, const QSizeF& size) {
+    const Placement p = shownPlacement(effect, time, span, size);
+    return {p.left, p.right, p.bottom, p.top};
 }
 
 } // namespace lumenis::media

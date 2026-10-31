@@ -20,6 +20,7 @@
 #include <QMimeData>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPolygonF>
 #include <QResizeEvent>
 #include <QTimer>
 #include <QToolButton>
@@ -779,11 +780,93 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
             break;
         }
     }
+    if (monitor_ == MonitorId::Record && composer_.effectPreview().on) paintOverlay(p);
     if (composer_.activeMonitor() == monitor_ && !composer_.isSingleMonitor()) {
         p.setPen(QPen(palette().color(QPalette::Highlight), 1));
         p.setBrush(Qt::NoBrush); // an outline only, whatever was drawn before
         p.drawRect(rect().adjusted(0, 0, -1, -1));
     }
+}
+
+QPointF MonitorPicture::overlayPoint(const QPointF& fraction) const {
+    const QRectF pic = pictureRect();
+    return {pic.left() + fraction.x() * pic.width(), pic.top() + fraction.y() * pic.height()};
+}
+
+QPointF MonitorPicture::overlayFraction(const QPointF& point) const {
+    const QRectF pic = pictureRect();
+    if (pic.width() <= 0.0 || pic.height() <= 0.0) return {};
+    return {(point.x() - pic.left()) / pic.width(), (point.y() - pic.top()) / pic.height()};
+}
+
+// The nearest handle within 6 pixels; else "move" inside the outline when that handle is shown ("Drag the
+// wire frame to reposition the effect", FX Guide p.92).
+QString MonitorPicture::overlayHandleAt(const QPointF& point) const {
+    const Composer::EffectPreview& e = composer_.effectPreview();
+    QString best;
+    double nearest = 6.0;
+    bool moves = false;
+    for (const Composer::EffectPreview::Handle& h : e.handles) {
+        moves = moves || h.id == QLatin1String("move");
+        const QPointF at = overlayPoint(h.at);
+        const double d = std::hypot(at.x() - point.x(), at.y() - point.y());
+        if (d <= nearest) {
+            nearest = d;
+            best = h.id;
+        }
+    }
+    if (best.isEmpty() && moves && e.outline.size() == 4) {
+        QPolygonF quad;
+        for (const QPointF& c : e.outline) quad << overlayPoint(c);
+        if (quad.containsPoint(point, Qt::OddEvenFill)) best = QStringLiteral("move");
+    }
+    return best;
+}
+
+// The wire frame, the motion path with its keyframe dots, and the handles (p.92-93, p.293): light lines on
+// a dark edge so that they show on any picture.
+void MonitorPicture::paintOverlay(QPainter& p) const {
+    const Composer::EffectPreview& e = composer_.effectPreview();
+    if (e.outline.isEmpty() && e.handles.isEmpty() && e.path.isEmpty() && e.pathDots.isEmpty()) return;
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setBrush(Qt::NoBrush);
+    auto twice = [&](const std::function<void()>& draw, const QColor& colour) {
+        p.setPen(QPen(QColor(0, 0, 0, 160), 3));
+        draw();
+        p.setPen(QPen(colour, 1));
+        draw();
+    };
+    const QColor wire(235, 235, 235);
+    const QColor path(255, 210, 0);
+    if (e.outline.size() == 4) {
+        QPolygonF quad;
+        for (const QPointF& c : e.outline) quad << overlayPoint(c);
+        twice([&] { p.drawPolygon(quad); }, wire);
+    }
+    if (e.path.size() > 1) {
+        QPolygonF line;
+        for (const QPointF& c : e.path) line << overlayPoint(c);
+        twice([&] { p.drawPolyline(line); }, path);
+    }
+    p.setPen(QPen(QColor(0, 0, 0, 160), 1));
+    p.setBrush(path);
+    for (const QPointF& d : e.pathDots) p.drawEllipse(overlayPoint(d), 3.0, 3.0);
+    for (const Composer::EffectPreview::Handle& h : e.handles) {
+        const QPointF at = overlayPoint(h.at);
+        if (h.from) twice([&] { p.drawLine(overlayPoint(*h.from), at); }, wire);
+        if (h.id == QLatin1String("axis")) {
+            // The Axis handle: a cross (p.293).
+            twice([&] {
+                p.drawLine(at - QPointF(10, 0), at + QPointF(10, 0));
+                p.drawLine(at - QPointF(0, 10), at + QPointF(0, 10));
+            }, wire);
+        }
+        p.setPen(QPen(Qt::black, 1));
+        p.setBrush(wire);
+        p.drawEllipse(at, 3.5, 3.5);
+    }
+    p.restore();
 }
 
 void MonitorPicture::mousePressEvent(QMouseEvent* event) {
@@ -797,6 +880,16 @@ void MonitorPicture::mousePressEvent(QMouseEvent* event) {
             composer_.setPreviewZoom(composer_.previewZoom() + 1);
         }
         return;
+    }
+    if (monitor_ == MonitorId::Record && composer_.effectPreview().on && event->button() == Qt::LeftButton) {
+        // A handle of the overlay (FX Guide p.92, p.292).
+        const QString id = overlayHandleAt(event->position());
+        if (!id.isEmpty()) {
+            handleDrag_ = id;
+            handleFrom_ = overlayFraction(event->position());
+            composer_.setActiveMonitor(monitor_);
+            return;
+        }
     }
     if (const std::optional<model::TrimSide> side = shownTrimSide()) {
         // "Click either the outgoing (A-side) or incoming (B-side) monitor to play in real time during
@@ -824,6 +917,10 @@ void MonitorPicture::mousePressEvent(QMouseEvent* event) {
 }
 
 void MonitorPicture::mouseMoveEvent(QMouseEvent* event) {
+    if (!handleDrag_.isEmpty()) {
+        if (event->buttons() & Qt::LeftButton) emit composer_.effectHandleDragged(handleDrag_, handleFrom_, overlayFraction(event->position()), false);
+        return;
+    }
     // "This feature applies only to an enlarged image" (p.82).
     const bool panning = monitor_ == MonitorId::Record && composer_.effectPreview().on && composer_.previewZoom() > 0 &&
                          (event->buttons() & Qt::LeftButton) && (event->modifiers() & Qt::ControlModifier) &&
@@ -834,6 +931,13 @@ void MonitorPicture::mouseMoveEvent(QMouseEvent* event) {
     }
     composer_.panPreview(event->position() - panFrom_);
     panFrom_ = event->position();
+}
+
+void MonitorPicture::mouseReleaseEvent(QMouseEvent* event) {
+    if (handleDrag_.isEmpty()) return;
+    const QString id = handleDrag_;
+    handleDrag_.clear();
+    emit composer_.effectHandleDragged(id, handleFrom_, overlayFraction(event->position()), true);
 }
 
 void MonitorPicture::contextMenuEvent(QContextMenuEvent* event) {

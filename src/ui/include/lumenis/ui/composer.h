@@ -20,6 +20,8 @@ class QMenu;
 class QTimer;
 class QToolButton;
 
+class QPainter;
+
 namespace lumenis::ui {
 
 class Composer;
@@ -78,8 +80,10 @@ public:
 protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
-    // Ctrl+Alt+drag moves an enlarged Effect Preview picture (FX Guide p.82).
+    // Ctrl+Alt+drag moves an enlarged Effect Preview picture (FX Guide p.82); dragging a handle of the
+    // Effect Preview's overlay manipulates the effect (Composer::effectHandleDragged).
     void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dropEvent(QDropEvent* event) override;
@@ -94,6 +98,14 @@ private:
     MonitorId monitor_;
     std::optional<model::TrimSide> trimSide_;
     QPointF panFrom_; // the last point of a Ctrl+Alt drag
+    // The Effect Preview overlay: a point's place in the widget and back (fractions of pictureRect()), the
+    // handle under a widget point, and the drag under way (its handle and where it began, as a fraction).
+    QPointF overlayPoint(const QPointF& fraction) const;
+    QPointF overlayFraction(const QPointF& point) const;
+    QString overlayHandleAt(const QPointF& point) const;
+    void paintOverlay(QPainter& p) const;
+    QString handleDrag_;
+    QPointF handleFrom_;
 };
 
 // The Composer window (p.379-387): the Source and Record monitors, each with
@@ -246,6 +258,19 @@ public:
             bool operator==(const Keyframe&) const = default;
         };
         QList<Keyframe> keyframes;
+        // Direct manipulation (FX Guide p.92-93, p.292-293; media/effect_handles.h): the wire-frame outline
+        // (four corners), the handles and the Outline/Path button's motion path, drawn over the picture.
+        // Points are fractions of the picture (0 to 1 across and down; outside it beyond them, as Reduce shows).
+        struct Handle {
+            QString id;
+            QPointF at;
+            std::optional<QPointF> from; // a line from here to the handle (the rotation handles)
+            bool operator==(const Handle&) const = default;
+        };
+        QList<QPointF> outline;
+        QList<Handle> handles;
+        QList<QPointF> path;     // the centre's line over the effect
+        QList<QPointF> pathDots; // the centre at each keyframe
         bool operator==(const EffectPreview&) const = default;
     };
     void setEffectPreview(const EffectPreview& preview);
@@ -505,6 +530,10 @@ signals:
     // (Add Keyframe, Go to Previous/Next Event), with Alt held or not.
     void effectKeyframePressed(double frame, bool extend);
     void effectCommandRequested(const QString& id, bool alt);
+    // A handle of the Effect Preview's overlay (EffectPreview::handles; "move" also for a press inside the
+    // outline when a handle of that name is shown) dragged from `from` to `to` (fractions of the picture,
+    // from where the drag began); `finished` on the release.
+    void effectHandleDragged(const QString& id, const QPointF& from, const QPointF& to, bool finished);
     // A trim counter was clicked: that side, or both with Shift (p.651).
     void trimSideRequested(model::TrimSide side);
     // Play started or changed speed, and play stopped.

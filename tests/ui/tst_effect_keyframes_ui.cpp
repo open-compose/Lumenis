@@ -12,6 +12,8 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QJsonObject>
+#include <QMouseEvent>
 #include <QLayout>
 #include <QMenu>
 #include <QScrollBar>
@@ -575,6 +577,85 @@ private slots:
         QVERIFY(rig.undo());
         settle();
         QCOMPARE(rig.effect().name, QStringLiteral("Picture-in-Picture"));
+    }
+
+    void directManipulation() {
+        // "manipulate the wire frame and handles in the Effect Preview monitor" (FX Guide p.92): the PIP's
+        // outline and handles in Effect mode, its wire frame dragged with the mouse (one undo step on release).
+        Rig rig;
+        rig.composer.resize(900, 520);
+        rig.composer.show();
+        rig.timeline.setEffectMode(true);
+        rig.at(0);
+        const Composer::EffectPreview& preview = rig.composer.effectPreview();
+        QVERIFY(preview.on);
+        QCOMPARE(preview.outline.size(), 4);
+        QCOMPARE(preview.handles.size(), 4);
+        QVERIFY(preview.path.isEmpty());
+        QVERIFY(rig.editor.outlineButton()->isEnabled());
+        QVERIFY(rig.editor.handleButton(media::HandleTool::Scale)->isHidden());
+
+        MonitorPicture* picture = rig.composer.picture(MonitorId::Record);
+        const QRect r = picture->pictureRect();
+        const QPoint start = r.center() + QPoint(4, 4); // inside the outline, off its handles
+        const int dx = r.width() / 4;
+        auto mouse = [&](QEvent::Type type, const QPoint& at, Qt::MouseButtons buttons) {
+            QMouseEvent e(type, at, picture->mapToGlobal(at), Qt::LeftButton, buttons, Qt::NoModifier);
+            QApplication::sendEvent(picture, &e);
+            settle();
+        };
+        mouse(QEvent::MouseButtonPress, start, Qt::LeftButton);
+        mouse(QEvent::MouseMove, start + QPoint(dx, 0), Qt::LeftButton);
+        // While dragging, the outline moves but nothing is stored.
+        QVERIFY(!rig.effect().parameters.contains(QStringLiteral("Position")));
+        QVERIFY(preview.outline.first().x() > 0.25 + 0.2);
+        mouse(QEvent::MouseButtonRelease, start + QPoint(dx, 0), Qt::NoButton);
+        const int expected = qRound(static_cast<double>(dx) / r.width() * 1920.0);
+        QCOMPARE(rig.effect().parameters.value(QStringLiteral("Position")).toObject().value(QStringLiteral("X")).toInt(), expected);
+        QVERIFY(rig.undo());
+        settle();
+        QVERIFY(!rig.effect().parameters.contains(QStringLiteral("Position")));
+
+        // Keyframed: the handle sets the keyframe at the position; Outline/Path shows the path with a dot per
+        // keyframe (p.93).
+        QVERIFY(rig.editor.addKeyframes(EffectEditor::KeyframeMode::AllParameters));
+        rig.at(49);
+        QVERIFY(rig.editor.addKeyframes(EffectEditor::KeyframeMode::AllParameters));
+        rig.editor.deselectAllKeyframes();
+        QVERIFY(rig.editor.dragHandle(QStringLiteral("move"), QPointF(0.5, 0.5), QPointF(0.75, 0.5), true));
+        settle();
+        const model::ParameterKeyframes x = rig.keys(QStringLiteral("Position/X"));
+        QCOMPARE(x.keys.size(), 2);
+        QCOMPARE(x.keys.at(1).value.toInt(), 480);
+        QCOMPARE(x.keys.at(0).value.toInt(), 0);
+        rig.editor.outlineButton()->click();
+        QVERIFY(rig.editor.outlineShown());
+        QCOMPARE(preview.pathDots.size(), 2);
+        QCOMPARE(preview.path.size(), 50);
+
+        // A 3D effect: its handle buttons; the selected one's handles, off when clicked again (p.292).
+        QVERIFY(rig.editor.promoteTo3D());
+        settle();
+        QToolButton* scale = rig.editor.handleButton(media::HandleTool::Scale);
+        QVERIFY(!scale->isHidden());
+        QVERIFY(rig.composer.effectPreview().handles.isEmpty());
+        scale->click();
+        QCOMPARE(rig.editor.handleTool(), media::HandleTool::Scale);
+        QCOMPARE(rig.composer.effectPreview().handles.size(), 3);
+        scale->click();
+        QCOMPARE(rig.editor.handleTool(), media::HandleTool::None);
+        QVERIFY(rig.composer.effectPreview().handles.isEmpty());
+        rig.editor.handleButton(media::HandleTool::ZRotation)->click();
+        // About the picture's centre (the middle of its outline; it was moved right).
+        const QList<QPointF>& quad = rig.composer.effectPreview().outline;
+        QCOMPARE(quad.size(), 4);
+        const QPointF centre = (quad.at(0) + quad.at(2)) / 2.0;
+        QVERIFY(rig.editor.dragHandle(QStringLiteral("rotZ"), centre + QPointF(0.1, 0.0), centre + QPointF(0.0, 0.1 * 16.0 / 9.0), true));
+        settle();
+        QCOMPARE(model::numberAt(rig.effect(), QStringLiteral("Rotation"), QStringLiteral("Z"), rig.editor.positionTime(), rig.editor.span()).value_or(0), 90.0);
+        rig.timeline.setEffectMode(false);
+        settle();
+        QVERIFY(!rig.composer.effectPreview().on);
     }
 
     void blankEditor() {

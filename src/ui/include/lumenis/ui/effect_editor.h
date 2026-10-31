@@ -1,9 +1,11 @@
 #pragma once
 
+#include "lumenis/media/effect_handles.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/effect_template.h"
 #include "lumenis/model/nest.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/ui/composer.h"
 
 #include <QHash>
 #include <QSet>
@@ -255,6 +257,29 @@ public:
     bool stampImage();
     bool clearStamps();
 
+    // ---- Direct manipulation (p.92-93, p.292-293; media/effect_handles.h, docs/spec/3d-effects.md)
+    // In Effect mode the Effect Preview monitor shows the shown effect's wire frame and handles: always for a
+    // 2D effect that places a picture (Picture-in-Picture, Resize, the masks), and for a 3D effect those of
+    // the handle button selected. "Click the image manipulation button a second time to turn off the
+    // handles" (p.292): setHandleTool(None). The buttons show only for a 3D effect; another effect turns them
+    // off.
+    media::HandleTool handleTool() const { return handleTool_; }
+    void setHandleTool(media::HandleTool tool);
+    QToolButton* handleButton(media::HandleTool tool) const { return handleButtons_.value(static_cast<int>(tool)); }
+    // The Outline/Path button (p.84, p.92-93): the outline and "the path a moving effect takes on the
+    // screen", with a dot at each keyframe; enabled for an effect that has an outline.
+    bool outlineShown() const { return outlineShown_; }
+    void setOutlineShown(bool shown);
+    QToolButton* outlineButton() const { return outline_; }
+    // The picture the handles are worked out in: 1920 pixels wide at the project's aspect ratio.
+    QSizeF previewSize() const;
+    // Dragging handle `id` from `from` to `to` (fractions of the picture, as Composer::effectHandleDragged
+    // gives them): the shown effect as it was when the drag began, with the values media::dragEffectHandle
+    // gives, rounded and kept to the controls' ranges, put on the selected keyframes of their parameters (or
+    // a keyframe at the position when they are keyframed; as the controls do). Previewed until `finished`,
+    // then stored as one undo step. False when nothing changes.
+    bool dragHandle(const QString& id, const QPointF& from, const QPointF& to, bool finished);
+
     // ---- Nested effects (p.221-222; docs/spec/nesting.md)
     // "Nested effects on a segment are fully available in the Effect Editor": the shown segment effect's
     // nested effects (model::nestedEffects at the position), outermost first, each with a title row and
@@ -348,6 +373,19 @@ private:
     QLabel* title_ = nullptr;
     QLabel* titleIcon_ = nullptr;
     QToolButton* promote3D_ = nullptr;
+    // Direct manipulation.
+    QHash<int, QToolButton*> handleButtons_; // media::HandleTool -> its button
+    media::HandleTool handleTool_ = media::HandleTool::None;
+    QToolButton* outline_ = nullptr;
+    bool outlineShown_ = false;
+    std::optional<model::Effect> handleStart_; // the effect as it was when a handle drag began
+    // Shows the handle buttons for a 3D effect only, and Outline/Path for an effect with an outline.
+    void syncHandleButtons();
+    // The Effect Preview overlay of `effect` at the position (syncPreview()).
+    void fillOverlay(const model::Effect& effect, Composer::EffectPreview& preview) const;
+    // Puts a value on `effect` as a control would: on the parameter's selected keyframes, a keyframe at the
+    // position when it has keyframes but none is selected, else the plain value.
+    void putValue(model::Effect& effect, const QString& category, const QString& parameter, const QJsonValue& value) const;
     // The nested effects at the position (model::nestedEffects), the one open, and the position's offset into
     // the outer segment, from the last refresh().
     QList<model::NestedEffect> chain_;

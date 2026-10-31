@@ -228,7 +228,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Shadow before Trail when both are set, Erode/Expand's cut levels, Spill
   Suppression's colours and tolerances. 6.7a3b: stamps kept as press times
   at the position (not on keyframes), a same-frame Clear clearing the
-  stamp, stamps redrawn from their segment's picture at the press.
+  stamp, stamps redrawn from their segment's picture at the press. 6.7a4:
+  2D handles always shown in Effect mode, lettered handle buttons, the
+  rotation and XZ drag rates and directions, Corner Pin's first drag
+  pinning all four corners, values rounded and not ganged by Fixed
+  Aspect, a shape's handles on its flat plane, the overlay's colours.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as
