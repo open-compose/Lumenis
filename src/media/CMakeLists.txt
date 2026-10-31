@@ -7,6 +7,7 @@ add_library(lumenis_media STATIC
     render.cpp
     wipes.cpp
     warp3d.cpp
+    pan_scan.cpp
     effect_handles.cpp
     effect_drawing.cpp
     effect_drawing.h

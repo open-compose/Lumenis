@@ -233,6 +233,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   rotation and XZ drag rates and directions, Corner Pin's first drag
   pinning all four corners, values rounded and not ganged by Fixed
   Aspect, a shape's handles on its flat plane, the overlay's colours.
+* Pan and Scan (docs/spec/pan-scan.md): square frame pixels, the
+  sources' and targets' placement in the frame, a non-anamorphic Target
+  output boxed in black, Source 1.78 and Target 1.33 until chosen, the
+  Target's defaults (Scaling 100, Position 0), the wire frame kept inside
+  the source picture, Scaling X and Y ganged, the origin kept as values
+  at the position, subdivided pieces keeping the effect as it was.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

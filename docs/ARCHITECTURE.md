@@ -121,7 +121,8 @@ headers in `include/lumenis/<library>/`.
   groups) in `src/model/effect_template.*` with docs/spec/effect-templates.md, the 3D effects' renderer in
   `src/media/warp3d.cpp` with 3D Promote in `src/model/promote3d.*` (docs/spec/3d-effects.md), direct
   manipulation's outlines, handles and drags in `src/media/effect_handles.*` with the Effect Editor's side in
-  `effect_editor_handles.cpp` and the Effect Preview's overlay in `composer.cpp`,
+  `effect_editor_handles.cpp` and the Effect Preview's overlay in `composer.cpp`, Pan and Scan in
+  `src/media/pan_scan.cpp` with its Actions in `src/model/pan_scan.*` (docs/spec/pan-scan.md),
   and mixed rate clips' Motion Adapters in `src/model/motion_adapter.*`: the
   monitors load a clip at another rate as its adapted copy at the project's rate, the segments edited
   from it carry `Segment::adapter`, and `BinDocument` stores the clip itself back (docs/spec/motion-effects.md).

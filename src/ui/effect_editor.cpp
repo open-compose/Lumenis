@@ -2,6 +2,7 @@
 
 #include "lumenis/ui/timeline.h"
 #include "lumenis/ui/bin_dock.h"
+#include "lumenis/model/pan_scan.h"
 #include "lumenis/model/promote3d.h"
 
 #include "lumenis/media/compositor.h"
@@ -398,7 +399,9 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     connect(&timeline_.composer(), &Composer::changed, this, &EffectEditor::refresh);
     // Handles dragged in the Effect Preview monitor (p.92, p.292).
     connect(&timeline_.composer(), &Composer::effectHandleDragged, this,
-            [this](const QString& id, const QPointF& from, const QPointF& to, bool finished) { dragHandle(id, from, to, finished); });
+            [this](const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift) {
+                dragHandle(id, from, to, finished, shift);
+            });
     refresh();
 }
 
@@ -702,6 +705,12 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     m->addItems(p.options);
                     connect(m, &QComboBox::currentTextChanged, this,
                             [this, category, name = p.name](const QString& t) { setValue(category, name, t); });
+                    if (category == QLatin1String(model::kPanScanCategory) && p.name == QLatin1String("Target")) {
+                        // Choosing the Target already chosen also resets the wire frame (p.235).
+                        connect(m, &QComboBox::textActivated, this, [this, m](const QString& t) {
+                            if (t == m->currentText()) chooseTarget(t);
+                        });
+                    }
                     row->addWidget(m, 1);
                     controls_.insert(k, m);
                 } else if (category == QLatin1String("Stamp") && (p.name == QLatin1String("Stamp Image") || p.name == QLatin1String("Clear"))) {
@@ -712,6 +721,19 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     press->setText(p.text);
                     const bool stamp = p.name == QLatin1String("Stamp Image");
                     connect(press, &QToolButton::clicked, this, [this, stamp] { stamp ? stampImage() : clearStamps(); });
+                    row->addWidget(press);
+                    row->addStretch(1);
+                } else if (category == QLatin1String(model::kPanScanCategory) && p.kind == QLatin1String("button")) {
+                    // Establish Origin, Subdivide Effect and Reset to Origin (p.564).
+                    auto* press = new QToolButton(box);
+                    press->setObjectName(QStringLiteral("param:") + k);
+                    press->setText(p.text);
+                    const QString action = p.name;
+                    connect(press, &QToolButton::clicked, this, [this, action] {
+                        if (action == QLatin1String("Establish Origin")) establishOrigin();
+                        else if (action == QLatin1String("Reset to Origin")) resetToOrigin();
+                        else if (action == QLatin1String("Subdivide Effect")) subdivideEffect();
+                    });
                     row->addWidget(press);
                     row->addStretch(1);
                 } else if (category == QLatin1String("Custom Grid") && p.name == QLatin1String("More Options")) {
@@ -1038,12 +1060,19 @@ void EffectEditor::setCustomGrid(int columns, int rows) {
 
 void EffectEditor::setValue(const QString& category, const QString& parameter, const QJsonValue& value) {
     if (syncing_ || !shown_) return;
+    if (current_ && model::isPanAndScanEffect(*current_) && category == QLatin1String(model::kPanScanCategory) &&
+        parameter == QLatin1String("Target")) {
+        chooseTarget(value.toString());
+        return;
+    }
     const QString k = key(category, parameter);
     setActiveParameter(k);
     // Fixed Aspect "Gangs the X and Y sliders together so that they move in unison when you drag either
     // one" (Scaling p.499; Feathering's Hor and Vert p.495, Blur's p.533).
     QString ganged;
-    if (current_ && current_->parameters.value(category).toObject().value(QStringLiteral("Fixed Aspect")).toBool()) {
+    // Pan and Scan's wire frame keeps the Target's shape (p.236): its Scaling X and Y move together too.
+    const bool panScanScaling = current_ && model::isPanAndScanEffect(*current_) && category == QLatin1String("Scaling");
+    if (current_ && (panScanScaling || current_->parameters.value(category).toObject().value(QStringLiteral("Fixed Aspect")).toBool())) {
         static const QHash<QString, QString> pairs = {{QStringLiteral("X"), QStringLiteral("Y")}, {QStringLiteral("Y"), QStringLiteral("X")},
                                                       {QStringLiteral("Hor"), QStringLiteral("Vert")}, {QStringLiteral("Vert"), QStringLiteral("Hor")}};
         ganged = pairs.value(parameter);

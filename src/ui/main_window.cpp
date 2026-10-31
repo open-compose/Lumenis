@@ -658,6 +658,9 @@ void MainWindow::createPanels() {
             c.size = size;
             fillComposition(c, *loaded);
             c.effects = renderOnTheFly_ || composer_->isPlaying();
+            // The Effect Preview shows Pan and Scan's original picture with its wire frame; "To see the results
+            // of the Pan and Scan effect while in Effect mode, click the Play button" (FX Guide p.234).
+            c.panScanOriginal = monitor == MonitorId::Record && composer_->effectPreview().on && !composer_->isPlaying();
             bool missing = false;
             const QImage image = media::composeImage(c, at, &missing);
             if (image.isNull() && missing && offline) *offline = true;

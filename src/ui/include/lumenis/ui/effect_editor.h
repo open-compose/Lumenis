@@ -278,7 +278,19 @@ public:
     // gives, rounded and kept to the controls' ranges, put on the selected keyframes of their parameters (or
     // a keyframe at the position when they are keyframed; as the controls do). Previewed until `finished`,
     // then stored as one undo step. False when nothing changes.
-    bool dragHandle(const QString& id, const QPointF& from, const QPointF& to, bool finished);
+    // `shift`: Pan and Scan's wire frame moves in all directions (p.237).
+    bool dragHandle(const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift = false);
+
+    // ---- Pan and Scan (p.230-238, p.564; docs/spec/pan-scan.md)
+    // The Actions buttons, each one undo step; false when no Pan and Scan is shown (or, for Subdivide Effect,
+    // nothing to split). Establish Origin keeps the Scaling and Position at the position (model::establishOrigin);
+    // Reset to Origin puts the origin's values (or the Target's defaults) where the controls would; Subdivide
+    // Effect splits the effect at the cuts of the selected video tracks below it (model::subdivideEffect).
+    // Choosing a Target, also the one chosen, resets the wire frame to the Target's defaults (p.235).
+    bool establishOrigin();
+    bool resetToOrigin();
+    bool subdivideEffect();
+    bool chooseTarget(const QString& target);
 
     // ---- Nested effects (p.221-222; docs/spec/nesting.md)
     // "Nested effects on a segment are fully available in the Effect Editor": the shown segment effect's

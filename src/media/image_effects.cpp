@@ -81,6 +81,11 @@ std::optional<double> filmMaskRatio(const model::Effect& e) {
 
 QJsonValue parameterDefault(const model::Effect& e, const QString& category, const QString& name) {
     if (e.category == QLatin1String("Illusion FX")) return detail::illusionDefault(e, category, name);
+    // Pan and Scan's ratios until chosen (ours, docs/spec/pan-scan.md): a 16:9 source made 4:3.
+    if (isPanAndScan(e) && category == QLatin1String("Pan and Scan Aspect Ratios and Actions Parameters")) {
+        if (name == QLatin1String("Source")) return QStringLiteral("1.78 (16:9)");
+        if (name == QLatin1String("Target")) return QStringLiteral("1.33 (4:3)");
+    }
     // The 3D effects (p.569-585): normal size, the whole picture, opaque; Defocus 10 (p.573), Border width 50
     // (p.571), Shadow X 50, Y -50 and Opac. 50 (p.579), the highlight's 50s (p.576). Corner Pin's corners (ours,
     // ±999 the screen's edges) where the picture's are.

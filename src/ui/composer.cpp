@@ -918,7 +918,10 @@ void MonitorPicture::mousePressEvent(QMouseEvent* event) {
 
 void MonitorPicture::mouseMoveEvent(QMouseEvent* event) {
     if (!handleDrag_.isEmpty()) {
-        if (event->buttons() & Qt::LeftButton) emit composer_.effectHandleDragged(handleDrag_, handleFrom_, overlayFraction(event->position()), false);
+        if (event->buttons() & Qt::LeftButton) {
+            emit composer_.effectHandleDragged(handleDrag_, handleFrom_, overlayFraction(event->position()), false,
+                                               event->modifiers() & Qt::ShiftModifier);
+        }
         return;
     }
     // "This feature applies only to an enlarged image" (p.82).
@@ -937,7 +940,7 @@ void MonitorPicture::mouseReleaseEvent(QMouseEvent* event) {
     if (handleDrag_.isEmpty()) return;
     const QString id = handleDrag_;
     handleDrag_.clear();
-    emit composer_.effectHandleDragged(id, handleFrom_, overlayFraction(event->position()), true);
+    emit composer_.effectHandleDragged(id, handleFrom_, overlayFraction(event->position()), true, event->modifiers() & Qt::ShiftModifier);
 }
 
 void MonitorPicture::contextMenuEvent(QContextMenuEvent* event) {

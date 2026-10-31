@@ -532,8 +532,9 @@ signals:
     void effectCommandRequested(const QString& id, bool alt);
     // A handle of the Effect Preview's overlay (EffectPreview::handles; "move" also for a press inside the
     // outline when a handle of that name is shown) dragged from `from` to `to` (fractions of the picture,
-    // from where the drag began); `finished` on the release.
-    void effectHandleDragged(const QString& id, const QPointF& from, const QPointF& to, bool finished);
+    // from where the drag began); `finished` on the release; `shift` with Shift held (Pan and Scan moves its
+    // wire frame in all directions, FX Guide p.237).
+    void effectHandleDragged(const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift);
     // A trim counter was clicked: that side, or both with Shift (p.651).
     void trimSideRequested(model::TrimSide side);
     // Play started or changed speed, and play stopped.

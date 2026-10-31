@@ -255,14 +255,60 @@ std::optional<QPointF> handleOn(const EffectOutline& o, const QString& id) {
     return std::nullopt;
 }
 
+// Pan and Scan's wire frame (p.236-237): "You cannot change the shape of the wire frame, which is determined by
+// the Target aspect ratio. Media Composer maintains the shape during scaling", so each resize handle scales both
+// ways; dragging inside it moves it along "the most important axis" (across when the source is wider than the
+// Target, else up and down), Shift in all directions; and "You cannot drag the wire frame off the screen"
+// (ours: it stays within the source picture; centred where it is larger).
+QList<HandleValue> dragPanScan(const model::Effect& effect, const QString& id, const QPointF& from, const QPointF& to, double time,
+                               const model::EffectSpan& span, const QSizeF& size, bool shift) {
+    const Locator onOutline = [&](const model::Effect& e) -> std::optional<QPointF> {
+        const auto o = effectOutline(e, time, span, size);
+        return o ? handleOn(*o, id) : std::nullopt;
+    };
+    const QString position = QStringLiteral("Position");
+    if (id == QLatin1String("top") || id == QLatin1String("side") || id == QLatin1String("corner")) {
+        return scaleCorner(effect, QStringLiteral("Scaling"), onOutline, from, to, time, span);
+    }
+    if (id != QLatin1String("move")) return {};
+    const auto f = panScanFrames(effect, time, span, size);
+    if (!f) return {};
+    const bool across = f->source.width() / f->source.height() - f->wire.width() / f->wire.height() >= -1e-9;
+    QPointF by = to - from;
+    if (!shift) {
+        if (across) by.setY(0.0);
+        else by.setX(0.0);
+    }
+    // The wire frame's centre, kept inside the source picture.
+    QPointF centre = f->wire.center() + by;
+    auto keep = [](double c, double half, double low, double high) {
+        return high - low <= 2.0 * half ? (low + high) / 2.0 : std::clamp(c, low + half, high - half);
+    };
+    centre.setX(keep(centre.x(), f->wire.width() / 2.0, f->source.left(), f->source.right()));
+    centre.setY(keep(centre.y(), f->wire.height() / 2.0, f->source.top(), f->source.bottom()));
+    const double unit = 1920.0 / size.width();
+    const QPointF offset = (centre - f->source.center()) * unit;
+    QList<HandleValue> out;
+    if (shift || across) out << HandleValue{position, QStringLiteral("X"), offset.x()};
+    if (shift || !across) out << HandleValue{position, QStringLiteral("Y"), offset.y()};
+    return out;
+}
+
 } // namespace
 
 bool hasEffectOutline(const model::Effect& effect) {
-    return is2D(effect) || is3DEffect(effect);
+    return is2D(effect) || isPanAndScan(effect) || is3DEffect(effect);
 }
 
 std::optional<EffectOutline> effectOutline(const model::Effect& effect, double time, const model::EffectSpan& span, const QSizeF& size) {
     if (size.width() <= 0.0 || size.height() <= 0.0) return std::nullopt;
+    if (const auto f = panScanFrames(effect, time, span, size)) {
+        // Pan and Scan's wire frame over the original picture (p.233-236).
+        EffectOutline o;
+        o.corners = {f->wire.topLeft(), f->wire.topRight(), f->wire.bottomRight(), f->wire.bottomLeft()};
+        o.center = f->wire.center();
+        return o;
+    }
     if (is2D(effect)) return outline2D(effect, time, span, size.width(), size.height());
     if (is3DEffect(effect)) return outline3D(effect, time, span, size);
     return std::nullopt;
@@ -273,7 +319,7 @@ QList<EffectHandle> effectHandles(const model::Effect& effect, HandleTool tool, 
     const auto o = effectOutline(effect, time, span, size);
     if (!o) return {};
     QStringList ids;
-    if (is2D(effect)) {
+    if (is2D(effect) || isPanAndScan(effect)) {
         ids = {QStringLiteral("move"), QStringLiteral("top"), QStringLiteral("side"), QStringLiteral("corner")};
     } else {
         switch (tool) {
@@ -328,7 +374,7 @@ QString effectHandleAt(const model::Effect& effect, HandleTool tool, double time
 }
 
 QList<HandleValue> dragEffectHandle(const model::Effect& effect, HandleTool tool, const QString& id, const QPointF& from,
-                                    const QPointF& to, double time, const model::EffectSpan& span, const QSizeF& size) {
+                                    const QPointF& to, double time, const model::EffectSpan& span, const QSizeF& size, bool shift) {
     if (!effectOutline(effect, time, span, size)) return {};
     const Locator onOutline = [&](const model::Effect& e) -> std::optional<QPointF> {
         const auto o = effectOutline(e, time, span, size);
@@ -337,6 +383,7 @@ QList<HandleValue> dragEffectHandle(const model::Effect& effect, HandleTool tool
     const QString X = QStringLiteral("X");
     const QString Y = QStringLiteral("Y");
     const QString Z = QStringLiteral("Z");
+    if (isPanAndScan(effect)) return dragPanScan(effect, id, from, to, time, span, size, shift);
     if (is2D(effect)) {
         const QString position = QStringLiteral("Position");
         const QString scaling = QStringLiteral("Scaling");

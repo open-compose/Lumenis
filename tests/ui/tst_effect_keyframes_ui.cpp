@@ -4,6 +4,7 @@
 #include "lumenis/media/compositor.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/pan_scan.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/effect_editor.h"
@@ -656,6 +657,53 @@ private slots:
         rig.timeline.setEffectMode(false);
         settle();
         QVERIFY(!rig.composer.effectPreview().on);
+    }
+
+    void panAndScan() {
+        // Pan and Scan in the Effect Editor (FX Guide p.235-237, p.564): its Scaling sliders move together, the
+        // Actions buttons, and choosing the Target again resetting the wire frame.
+        Composer composer;
+        Timeline timeline{composer};
+        EffectEditor editor{timeline};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence());
+        const EffectInfo* info = EffectCatalog::builtin().find(QStringLiteral("Reformat"), QStringLiteral("Pan and Scan"));
+        QVERIFY(info);
+        timeline.dropEffect(QStringLiteral("V1"), 70, *info);
+        composer.moveTo(MonitorId::Record, 60);
+        editor.resize(700, 900);
+        editor.show();
+        settle();
+        QCOMPARE(editor.effectName(), QStringLiteral("Pan and Scan"));
+        auto effect = [&] {
+            return *model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(1).effect;
+        };
+        auto value = [&](const char* group, const char* name) {
+            return effect().parameters.value(QLatin1String(group)).toObject().value(QLatin1String(name)).toDouble();
+        };
+        QSlider* x = editor.slider(QStringLiteral("Scaling"), QStringLiteral("X"));
+        QVERIFY(x);
+        x->setValue(80);
+        settle();
+        QCOMPARE(value("Scaling", "Y"), 80.0);
+        editor.slider(QStringLiteral("Position"), QStringLiteral("X"))->setValue(-40);
+        settle();
+        QVERIFY(editor.findChild<QToolButton*>(QStringLiteral("param:Pan and Scan Aspect Ratios and Actions Parameters/Establish Origin")));
+        QVERIFY(editor.establishOrigin());
+        editor.slider(QStringLiteral("Position"), QStringLiteral("X"))->setValue(30);
+        settle();
+        QVERIFY(editor.resetToOrigin());
+        settle();
+        QCOMPARE(value("Position", "X"), -40.0);
+        QCOMPARE(model::panScanOrigin(effect()).scaleX, 80.0);
+        // The Target chosen again: the defaults, and no origin.
+        QVERIFY(editor.chooseTarget(QStringLiteral("1.33 (4:3)")));
+        settle();
+        QVERIFY(!effect().parameters.contains(QStringLiteral("Scaling")));
+        QCOMPARE(model::panScanOrigin(effect()), model::PanScanOrigin{});
+        QVERIFY(!editor.chooseTarget(QStringLiteral("1.33 (4:3)")));
+        // On V1 itself there is no track below to subdivide by.
+        QVERIFY(!editor.subdivideEffect());
     }
 
     void blankEditor() {

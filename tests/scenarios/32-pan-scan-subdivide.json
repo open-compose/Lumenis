@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Subdivide Effect splits a Pan and Scan effect at the cuts of the selected tracks below it; Undo joins it again",
+    "guide": "FX Guide p.235-236",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 15], ["C", 0, 25]], "V2": [["filler", 60, {"effect": {"category": "Reformat", "name": "Pan and Scan"}}]]}},
+    "steps": [
+      {"record_tracks": ["V1", "V2"]},
+      {"subdivide": ["V2", 30]},
+      {"command": "edit.undo"},
+      {"subdivide": ["V2", 5]}
+    ],
+    "expect": {
+      "V1": [["A", 0, 20], ["B", 0, 15], ["C", 0, 25]],
+      "V2": [["filler", 20, {"effect": "Pan and Scan"}], ["filler", 15, {"effect": "Pan and Scan"}], ["filler", 25, {"effect": "Pan and Scan"}]]
+    }
+  },
+  {
+    "name": "only the selected tracks below guide Subdivide Effect: with V1 off there is nothing to split",
+    "guide": "FX Guide p.236",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 20]], "V2": [["filler", 40, {"effect": {"category": "Reformat", "name": "Pan and Scan"}}]]}},
+    "steps": [
+      {"record_tracks": ["V2"]},
+      {"subdivide": ["V2", 10], "refused": true}
+    ],
+    "expect": {
+      "V1": [["A", 0, 20], ["B", 0, 20]],
+      "V2": [["filler", 40, {"effect": "Pan and Scan"}]]
+    }
+  }
+]

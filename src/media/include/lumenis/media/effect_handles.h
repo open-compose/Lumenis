@@ -26,7 +26,7 @@ enum class HandleTool { None, CornerPin, Crop, Scale, Axis, ZRotation, XRotation
 
 // The effects that can be manipulated directly: the 2D effects that place a picture with Position and
 // Scaling (Picture-in-Picture, Resize, Mask and the Film masks; p.92 "multilayer video effects such as
-// Picture-in-Picture effects") and the 3D effects (is3DEffect).
+// Picture-in-Picture effects"), Pan and Scan's wire frame (p.236) and the 3D effects (is3DEffect).
 bool hasEffectOutline(const model::Effect& effect);
 
 // The wire-frame outline (p.92-93): the foreground's four corners as placed at `time` (top left, top right,
@@ -70,8 +70,11 @@ struct HandleValue {
 // under the pointer through perspective, rotation and Target; rotation handles turn by the distance dragged
 // (X and Y: half a turn across the picture; Z: the angle swept about the centre). Values are not rounded or
 // clamped to the controls' ranges. Empty when the handle does nothing for this effect.
+// Pan and Scan's wire frame keeps its shape, moves along one axis unless `shift` is held (FX Guide p.236-237)
+// and stays on the source picture.
 QList<HandleValue> dragEffectHandle(const model::Effect& effect, HandleTool tool, const QString& id, const QPointF& from,
-                                    const QPointF& to, double time, const model::EffectSpan& span, const QSizeF& size);
+                                    const QPointF& to, double time, const model::EffectSpan& span, const QSizeF& size,
+                                    bool shift = false);
 
 // The Outline/Path button's motion path (p.92-93): the centre's track over the effect as a line, and a dot
 // "on the path [for] the location of the center of the PIP at a keyframe" at each keyframe time of the

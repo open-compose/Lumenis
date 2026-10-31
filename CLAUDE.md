@@ -555,7 +555,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   numerically and the motion path in `src/media/effect_handles.*`; the 3D handle buttons and Outline/Path in
   `effect_editor_handles.cpp`; the overlay and `Composer::effectHandleDragged`; tests `tst_effect_handles`,
   `tst_effect_keyframes_ui`), is done, so 6.7a is.
-  Next: 6.7b (Pan and Scan, Avid Pan & Zoom), then 6.7c-d, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.7b1, Pan and Scan (docs/spec/pan-scan.md: `src/media/pan_scan.cpp` and `media::panScanFrames`, the Effect
+  Preview's original through `Composition::panScanOriginal`, the wire frame's drags in `effect_handles.cpp`,
+  Establish/Reset Origin and Subdivide Effect in `src/model/pan_scan.*` and `effect_editor_handles.cpp`; tests
+  `tst_pan_scan`, scenario `32-pan-scan-subdivide.json`), is done.
+  Next: 6.7b2 (Avid Pan & Zoom), then 6.7c-d, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

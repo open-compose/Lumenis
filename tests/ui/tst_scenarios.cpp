@@ -10,6 +10,7 @@
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/nest.h"
+#include "lumenis/model/pan_scan.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/surround_pan.h"
 #include "lumenis/ui/audio_eq.h"
@@ -128,7 +129,14 @@ struct Run {
 
     // ["A", sourceIn, length] or ["filler", length], with `track` the clip's track used.
     model::Segment segmentOf(const QJsonArray& a, const QString& track) {
-        if (a.at(0).toString() == QLatin1String("filler")) return model::Segment::filler(a.at(1).toInteger());
+        if (a.at(0).toString() == QLatin1String("filler")) {
+            // Filler can carry an effect too (Pan and Scan on a track of its own, FX Guide p.231).
+            model::Segment f = model::Segment::filler(a.at(1).toInteger());
+            if (a.last().isObject() && a.last().toObject().contains(QStringLiteral("effect"))) {
+                f.effect = model::Effect::fromJson(a.last().toObject().value(QStringLiteral("effect")).toObject());
+            }
+            return f;
+        }
         const BinItem c = clips.value(a.at(0).toString());
         model::Segment s;
         s.clipId = c.id;
@@ -471,6 +479,18 @@ struct Run {
             if (!timeline.closeNest()) return fail(timeline.lastMessage());
             return true;
         }
+        if (o.contains(QStringLiteral("subdivide"))) {
+            // [track, record frame]: the Pan and Scan effect there divided at the cuts of the selected tracks
+            // below it, as the Effect Editor's Subdivide Effect does (FX Guide p.235-236).
+            const QJsonArray a = o.value(QStringLiteral("subdivide")).toArray();
+            const bool ok = timeline.changeRecordSequence(QStringLiteral("Subdivide Effect"), [&](model::Sequence& s) {
+                return model::subdivideEffect(s, a.at(0).toString(), a.at(1).toInteger(), timeline.patch().selectedRecordTracks(s));
+            });
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the subdivision was not refused") : QStringLiteral("nothing was subdivided"));
+            }
+            return true;
+        }
         if (o.contains(QStringLiteral("nested_move"))) {
             // [track, record frame, from, to]: a nested effect's title row dragged in the Effect Editor
             // (FX Guide p.222), on the segment effect at the frame.
@@ -666,6 +686,8 @@ struct Run {
                     // A Submaster's nest (FX Guide p.226): its effect and tracks as [clip, in, length].
                     if (g.hasNest()) f.append(QJsonObject{{QStringLiteral("effect"), g.effect ? g.effect->name : QString()},
                                                           {QStringLiteral("nest"), plainTracks(model::nestOf(g))}});
+                    // Another effect on filler (Pan and Scan, FX Guide p.231): its name.
+                    else if (g.effect) f.append(QJsonObject{{QStringLiteral("effect"), g.effect->name}});
                     segs.append(f);
                 } else {
                     QJsonArray a{g.name, qint64(g.sourceIn), qint64(g.length)};
@@ -724,8 +746,10 @@ struct Run {
                     segs.append(a);
                 }
             }
-            // Trailing filler is not part of a track's material.
-            while (!segs.isEmpty() && segs.last().toArray().at(0).toString() == QLatin1String("filler")) segs.removeLast();
+            // Trailing filler is not part of a track's material (filler with an effect is).
+            while (!segs.isEmpty() && segs.last().toArray().at(0).toString() == QLatin1String("filler") && segs.last().toArray().size() == 2) {
+                segs.removeLast();
+            }
             out.insert(t.name(), segs);
         }
         return out;

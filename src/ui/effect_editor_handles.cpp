@@ -2,10 +2,11 @@
 // "Direct manipulation"): the 3D handle buttons and Outline/Path, the overlay it gives the Composer's Effect
 // Preview monitor, and handle drags turned into the shown effect's values. The geometry is media's
 // (effect_handles.h); this file keeps the Effect Editor's ways of storing values (keyframes, ranges, one undo
-// step per drag).
+// step per drag). Also Pan and Scan's wire frame actions (6.7b1, p.235-236, p.564; docs/spec/pan-scan.md).
 #include "lumenis/ui/effect_editor.h"
 
 #include "lumenis/media/compositor.h"
+#include "lumenis/model/pan_scan.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QJsonObject>
@@ -105,7 +106,7 @@ void EffectEditor::putValue(model::Effect& effect, const QString& category, cons
     }
 }
 
-bool EffectEditor::dragHandle(const QString& id, const QPointF& from, const QPointF& to, bool finished) {
+bool EffectEditor::dragHandle(const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift) {
     if (!shown_ || !current_ || !timeline_.isEffectMode() || !media::hasEffectOutline(*current_)) {
         handleStart_.reset();
         return false;
@@ -116,7 +117,7 @@ bool EffectEditor::dragHandle(const QString& id, const QPointF& from, const QPoi
     const QSizeF size = previewSize();
     const QPointF a(from.x() * size.width(), from.y() * size.height());
     const QPointF b(to.x() * size.width(), to.y() * size.height());
-    const QList<media::HandleValue> values = media::dragEffectHandle(start, handleTool_, id, a, b, positionTime(), span_, size);
+    const QList<media::HandleValue> values = media::dragEffectHandle(start, handleTool_, id, a, b, positionTime(), span_, size, shift);
     model::Effect edited = start;
     for (const media::HandleValue& v : values) {
         // Whole numbers within the control's range, as the sliders give them.
@@ -141,6 +142,70 @@ bool EffectEditor::dragHandle(const QString& id, const QPointF& from, const QPoi
     }
     const QJsonObject parameters = edited.parameters;
     return changeShown(tr("Modify Effect"), [&](model::Effect& e) { e.parameters = parameters; });
+}
+
+// ---------------------------------------------------------------- Pan and Scan
+
+namespace {
+
+const QString kScaling = QStringLiteral("Scaling");
+const QString kPosition = QStringLiteral("Position");
+
+} // namespace
+
+bool EffectEditor::establishOrigin() {
+    if (!shown_ || !current_ || !model::isPanAndScanEffect(*current_)) return false;
+    model::Effect edited = *current_;
+    model::establishOrigin(edited, positionTime(), span_);
+    if (edited.parameters == current_->parameters) return false;
+    const QJsonObject parameters = edited.parameters;
+    return changeShown(tr("Establish Origin"), [&](model::Effect& e) { e.parameters = parameters; });
+}
+
+bool EffectEditor::resetToOrigin() {
+    if (!shown_ || !current_ || !model::isPanAndScanEffect(*current_)) return false;
+    // "Reset to Origin is useful for quickly centering the wire frame after you move it" (p.235): the values go
+    // where the controls would put them.
+    const model::PanScanOrigin o = model::panScanOrigin(*current_);
+    model::Effect edited = *current_;
+    putValue(edited, kScaling, QStringLiteral("X"), o.scaleX);
+    putValue(edited, kScaling, QStringLiteral("Y"), o.scaleY);
+    putValue(edited, kPosition, QStringLiteral("X"), o.x);
+    putValue(edited, kPosition, QStringLiteral("Y"), o.y);
+    if (edited.parameters == current_->parameters) return false;
+    const QJsonObject parameters = edited.parameters;
+    return changeShown(tr("Reset to Origin"), [&](model::Effect& e) { e.parameters = parameters; });
+}
+
+bool EffectEditor::chooseTarget(const QString& target) {
+    if (!shown_ || !current_ || !model::isPanAndScanEffect(*current_)) return false;
+    // "Each Target aspect ratio has default position and scaling settings. You can return to these default
+    // settings at any time by selecting the aspect ratio again" (p.235): the wire frame's values, keyframes and
+    // origin go.
+    model::Effect edited = *current_;
+    QJsonObject ratios = edited.parameters.value(QLatin1String(model::kPanScanCategory)).toObject();
+    ratios.insert(QStringLiteral("Target"), target);
+    edited.parameters.insert(QLatin1String(model::kPanScanCategory), ratios);
+    model::clearOrigin(edited);
+    for (const QString& group : {kScaling, kPosition}) {
+        edited.parameters.remove(group);
+        for (const QString& name : {QStringLiteral("X"), QStringLiteral("Y")}) model::setKeyframes(edited, group, name, {});
+    }
+    if (edited.parameters == current_->parameters) {
+        if (current_) syncValues(*current_); // the menu shows the stored Target again
+        return false;
+    }
+    const QJsonObject parameters = edited.parameters;
+    return changeShown(tr("Modify Effect"), [&](model::Effect& e) { e.parameters = parameters; });
+}
+
+bool EffectEditor::subdivideEffect() {
+    if (!shown_ || !current_ || !model::isPanAndScanEffect(*current_) || level_ != 0) return false;
+    const QString track = shown_->track;
+    const std::int64_t frame = shown_->frame;
+    return timeline_.changeRecordSequence(tr("Subdivide Effect"), [&](model::Sequence& s) {
+        return model::subdivideEffect(s, track, frame, timeline_.patch().selectedRecordTracks(s));
+    });
 }
 
 } // namespace lumenis::ui

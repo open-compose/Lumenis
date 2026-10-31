@@ -573,6 +573,14 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 result.quantize(c.precision);
                 continue;
             }
+            if (isPanAndScan(e)) {
+                // Pan and Scan reformats its segment and the tracks below, as the other Reformat effects do
+                // (p.229-231), unless the Effect Preview shows the original.
+                result = over(layer, result);
+                if (!c.panScanOriginal) result = panScanPicture(e, result, time, length);
+                result.quantize(c.precision);
+                continue;
+            }
             if (isReformat(e)) {
                 // "A Reformat effect works on all tracks below the track to which you apply it" (p.229),
                 // and on its own segment.

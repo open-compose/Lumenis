@@ -7,7 +7,9 @@
 #include <QColor>
 #include <QImage>
 #include <QJsonValue>
+#include <QRectF>
 #include <QSize>
+#include <QSizeF>
 #include <QStringList>
 
 #include <cstdint>
@@ -123,6 +125,18 @@ Picture warp3dLayer(const model::Effect& effect, const Picture& foreground, doub
 // Stamp Image and Clear presses, as the Effect Editor stores them under the Stamp category ("Stamps", "Clears").
 QList<double> stampTimes(const model::Effect& effect);
 QList<double> clearTimes(const model::Effect& effect);
+// Pan and Scan (ROADMAP 6.7b1; FX Guide p.230-238, p.480, p.564; docs/spec/pan-scan.md, pan_scan.cpp): a Reformat
+// effect on its segment and every track below it. panScanFrames() gives, in a frame of `size`, where the source
+// picture lies (its Source ratio), the wire frame (the Target's ratio, Scaling and Position) and where the output
+// picture goes (the Target picture); panScanPicture() fills the Target picture with the wire frame's contents.
+bool isPanAndScan(const model::Effect& effect);
+struct PanScanFrames {
+    QRectF source;
+    QRectF wire;
+    QRectF target;
+};
+std::optional<PanScanFrames> panScanFrames(const model::Effect& effect, double time, const model::EffectSpan& span, const QSizeF& size);
+Picture panScanPicture(const model::Effect& effect, const Picture& picture, double time, const model::EffectSpan& span);
 // The Reformat effects that work "on all tracks below the track to which you apply it" (FX Guide
 // p.229): 16:9 Letterbox, 14:9 Letterbox and 4:3 Sidebar.
 bool isReformat(const model::Effect& effect);
@@ -208,6 +222,9 @@ struct Composition {
     // (media::convertedFrame).
     bool interlaced = false;
     std::function<bool(const model::Segment&)> topFieldFirst;
+    // "In Effect mode, the Effect Preview monitor displays your original media and the Pan and Scan wire
+    // frame" (FX Guide p.233): Pan and Scan effects pass the picture through unchanged.
+    bool panScanOriginal = false;
 };
 
 // Timecode Burn-In (ROADMAP 6.3d1; docs/spec/burn-in.md, burn_in.cpp). Its parameters live under

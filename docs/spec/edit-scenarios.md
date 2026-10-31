@@ -28,8 +28,8 @@ Each file is a JSON list of scenarios:
   (V1, A1 and A2 always exist; others are added). A segment is
   `[clip, source IN, length]`, with the clip's track as a fourth member
   when it is not the record track, or `["filler", length]`. A trailing
-  `{"effect": {...}}` gives the segment an effect as `model::Effect::toJson`
-  writes it (with keyframes under `_keyframes`). Without it the
+  `{"effect": {...}}` gives the segment (filler too) an effect as
+  `model::Effect::toJson` writes it (with keyframes under `_keyframes`). Without it the
   Record monitor starts empty, and the first edit makes the sequence.
 * **steps**, in order, as the user gives them:
   * `{"load": "source"|"record", "clip": name}`;
@@ -103,10 +103,14 @@ Each file is a JSON list of scenarios:
     (false) Default Clip Pan on Track and `{"adjust_clip_audio": [[tracks],
     dB, pan]}` Adjust Pan/Vols on Track (p.711); `expect_clip_audio` gives
     each material segment's `[gain, pan or null]`;
+  * `{"subdivide": [track, record frame]}` is the Effect Editor's Subdivide
+    Effect on the Pan and Scan effect there (FX Guide p.235-236), guided by
+    the selected record tracks;
   * `{"command": id}`: any command of `commands.json` that the Timeline or
     the Composer carries out.
   * `"refused": true` on a command or trim step: it must be refused.
-* **expect:** tracks as `sequence` writes them, without trailing filler; a
+* **expect:** tracks as `sequence` writes them, without trailing filler
+  (filler with an effect stays, as `["filler", length, {"effect": name}]`); a
   segment with a motion effect adds `{"speed": s}` (Fit to Fill), and one
   with automation `{"volume": [[clip frame, value], ...], "pan": [...]}`,
   and one with an Audio EQ `{"eq": {...}}` (the values not at their
