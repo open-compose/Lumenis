@@ -2,6 +2,7 @@
 
 #include "lumenis/ui/timeline.h"
 #include "lumenis/ui/bin_dock.h"
+#include "lumenis/model/promote3d.h"
 
 #include "lumenis/media/compositor.h"
 
@@ -70,6 +71,8 @@ const Catalog& catalog() {
                 p.name = p.text;
                 const bool taken = std::any_of(list.cbegin(), list.cend(), [&](const EffectParameter& q) { return q.name == p.text; });
                 if (taken) p.name = (p.subcategory.isEmpty() ? QStringLiteral("2") : p.subcategory) + QStringLiteral(": ") + p.text;
+                // "key": the stored name given outright (Corner Pin's "Corner 1: X" ...).
+                if (po.contains(QStringLiteral("key"))) p.name = po.value(QStringLiteral("key")).toString();
                 p.kind = po.value(QStringLiteral("kind")).toString();
                 // A range the reference gives, else ours ("ours"), else 0 to 100.
                 const QJsonObject own = po.value(QStringLiteral("ours")).toObject();
@@ -266,7 +269,10 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     bottom->addWidget(alignment_);
     bottom->addWidget(duration_);
     bottom->addStretch(1);
-    bottom->addWidget(offButton(QStringLiteral("effectPromote3D"), tr("3D Promote"), this));
+    // 3D Promote (p.86, p.289): the 2D effect becomes a 3D Warp (model::promoteTo3D).
+    promote3D_ = offButton(QStringLiteral("effectPromote3D"), tr("3D Promote"), this);
+    connect(promote3D_, &QToolButton::clicked, this, [this] { promoteTo3D(); });
+    bottom->addWidget(promote3D_);
     // The advanced keyframe controls (p.128): Go to Previous Event, Go to Next Event, Add Keyframe; and
     // the Show/Hide Keyframe Graphs button "in the bottom right corner" (p.96).
     auto keyButton = [this](const QString& name, const QString& tip, const QIcon& icon) {
@@ -456,6 +462,7 @@ void EffectEditor::refresh() {
         syncValues(*effect);
     }
     syncTransition();
+    promote3D_->setEnabled(current_ && model::canPromoteTo3D(*current_));
     // The position in the tracks moves while playing only with Update Position While Playing (p.132).
     if (updateWhilePlaying_ || !timeline_.composer().isPlaying()) updateTracks();
     else syncPreview();
@@ -1175,6 +1182,17 @@ bool EffectEditor::eventFilter(QObject* watched, QEvent* event) {
         }
     }
     return QWidget::eventFilter(watched, event);
+}
+
+// ---------------------------------------------------------------- 3D
+
+bool EffectEditor::promoteTo3D() {
+    if (!current_) return false;
+    const auto promoted = model::promoteTo3D(*current_);
+    if (!promoted) return false;
+    const bool ok = changeShown(tr("3D Promote"), [&](model::Effect& e) { e = *promoted; });
+    if (ok) refresh();
+    return ok;
 }
 
 // ---------------------------------------------------------------- nested effects

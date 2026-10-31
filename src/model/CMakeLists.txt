@@ -17,6 +17,7 @@ add_library(lumenis_model STATIC
     motion_adapter.cpp
     nest.cpp
     effect_template.cpp
+    promote3d.cpp
     marker.cpp
     multichannel.cpp
     clip_coloring.cpp

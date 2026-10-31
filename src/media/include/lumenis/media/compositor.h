@@ -108,6 +108,14 @@ bool isImageEffect(const model::Effect& effect);
 // where Picture-in-Picture leaves the tracks below to show and the Background Color where the others
 // leave no picture. Picture-in-Picture's Foreground Level is applied.
 Picture imageEffectPicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
+// The 3D effects (ROADMAP 6.7a; docs/spec/3d-effects.md, warp3d.cpp): the 3D Warp effect (Blend, FX Guide
+// p.457) and the Xpress 3D effects (p.489), and effects promoted to 3D (model::promoteTo3D). True when `effect`
+// is one of them.
+bool is3DEffect(const model::Effect& effect);
+// `foreground` placed in 3D by such an effect at `time` of `span`, with its shadow, over `background` (the
+// tracks below, or the outgoing video of a transition). Pictures of one size.
+Picture warp3dPicture(const model::Effect& effect, const Picture& foreground, const Picture& background, double time,
+                      const model::EffectSpan& span);
 // The Reformat effects that work "on all tracks below the track to which you apply it" (FX Guide
 // p.229): 16:9 Letterbox, 14:9 Letterbox and 4:3 Sidebar.
 bool isReformat(const model::Effect& effect);

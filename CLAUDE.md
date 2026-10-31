@@ -541,7 +541,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `Timeline::expandNest`/`closeNest`/`doubleClickTrack` with the expanded sequence as a Record item of its
   own, Double-Click to Show Nesting; `Timeline::storeDetached` for undo after leaving a nest; tests
   `tst_nest`, `tst_nest_ui`, scenario `31-expanded-nest.json`), is done, so 6.6 is.
-  Next: 6.7, 3D effects, camera effects, and tracking and stabilization (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.7 is in four parts (ROADMAP). 6.7a1, the 3D Warp renderer (docs/spec/3d-effects.md: `src/media/warp3d.cpp`,
+  `media::is3DEffect`/`warp3dPicture` from the compositor; Corner Pin's per-corner "key"s in
+  effect_parameters.json; 3D Promote with `src/model/promote3d.*` and `EffectEditor::promoteTo3D`; tests
+  `tst_warp3d`, `tst_effect_keyframes_ui`), is done.
+  Next: 6.7a2, the 3D shapes, Trail, Stamp, key types and direct manipulation, then 6.7b-d, then the rest of
+  Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

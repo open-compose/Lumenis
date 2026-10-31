@@ -217,6 +217,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   group the template's effect lacks refused, Fixed keyframes scaled by the
   rates, the template bins listed under the categories, and Promote
   Effects' copy unchanged.
+* 3D effects (docs/spec/3d-effects.md): the units (pixels of a 1920-wide
+  picture, ±999 across for Crop, Skew and Corner Pin), the viewer's
+  distance, a category on once a value is set, the border, highlight and
+  shadow sizes, Corner Pin overriding the other geometry, and 3D Promote
+  for Picture-in-Picture only until titles and matte keys come.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

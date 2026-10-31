@@ -309,6 +309,11 @@ Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture 
     if (const auto rgb = model::colorAt(e, QStringLiteral("Background Color"), QStringLiteral("Background Color"), time, model::EffectSpan(t.duration, true))) {
         colour = QColor::fromRgbF(static_cast<float>(rgb->red), static_cast<float>(rgb->green), static_cast<float>(rgb->blue));
     }
+    if (is3DEffect(e)) {
+        // "When you use the 3D Warp effect as a transition ... Media Composer applies the effect to the incoming
+        // video. To apply the effect to the outgoing video, click the Swap Sources button" (p.294).
+        return warp3dPicture(e, incoming, outgoing, time, model::EffectSpan(t.duration, true));
+    }
     if (e.category == QLatin1String("Blend") && e.name == QLatin1String("Picture-in-Picture")) {
         // "On a transition, the incoming video appears inside the outgoing video" (p.458).
         return over(imageEffectPicture(e, incoming, time, model::EffectSpan(t.duration, true)), outgoing);
@@ -485,6 +490,12 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 if (!made.isNull()) layer = Picture::fromImage(made, w, h, c.interpolation);
                 layer.quantize(c.precision);
                 result = over(layer, result);
+                result.quantize(c.precision);
+                continue;
+            }
+            if (is3DEffect(e)) {
+                // A 3D effect places the segment in 3D over the tracks below (FX Guide ch.11; warp3d.cpp).
+                result = warp3dPicture(e, layer, result, time, length);
                 result.quantize(c.precision);
                 continue;
             }

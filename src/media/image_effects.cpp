@@ -81,6 +81,32 @@ std::optional<double> filmMaskRatio(const model::Effect& e) {
 
 QJsonValue parameterDefault(const model::Effect& e, const QString& category, const QString& name) {
     if (e.category == QLatin1String("Illusion FX")) return detail::illusionDefault(e, category, name);
+    // The 3D effects (p.569-585): normal size, the whole picture, opaque; Defocus 10 (p.573), Border width 50
+    // (p.571), Shadow X 50, Y -50 and Opac. 50 (p.579), the highlight's 50s (p.576). Corner Pin's corners (ours,
+    // ±999 the screen's edges) where the picture's are.
+    if (is3DEffect(e)) {
+        if (category == QLatin1String("Scaling (3D)") && (name == QLatin1String("X") || name == QLatin1String("Y"))) return 100;
+        if (category == QLatin1String("Crop (3D)")) {
+            if (name == QLatin1String("T") || name == QLatin1String("R")) return 999;
+            if (name == QLatin1String("B") || name == QLatin1String("L")) return -999;
+        }
+        if (category == QLatin1String("Foreground (3D)") && name == QLatin1String("Opac.")) return 100;
+        if (category == QLatin1String("Target") && name == QLatin1String("Size")) return 100;
+        if (category == QLatin1String("Defocus") && (name == QLatin1String("Horz") || name == QLatin1String("V"))) return 10;
+        if (category == QLatin1String("Border (3D)") && name == QLatin1String("Wid")) return 50;
+        if (category == QLatin1String("Shadow")) {
+            if (name == QLatin1String("X") || name == QLatin1String("Opac.")) return 50;
+            if (name == QLatin1String("Y")) return -50;
+        }
+        if (category == QLatin1String("Highlight") && (name == QLatin1String("Soft") || name == QLatin1String("Inty") || name == QLatin1String("Rad"))) return 50;
+        if (category == QLatin1String("Corner Pin")) {
+            const bool right = name.startsWith(QLatin1String("Corner 2")) || name.startsWith(QLatin1String("Corner 3"));
+            const bool topCorner = name.startsWith(QLatin1String("Corner 1")) || name.startsWith(QLatin1String("Corner 2"));
+            if (name.endsWith(QLatin1String(": X"))) return right ? 999 : -999;
+            if (name.endsWith(QLatin1String(": Y"))) return topCorner ? 999 : -999;
+        }
+        return {};
+    }
     if (category == kScaling && (name == QLatin1String("X") || name == QLatin1String("Y"))) {
         // Ours: a Picture-in-Picture starts at half size, as its illustration (p.458) shows it smaller;
         // everything else at normal size.

@@ -546,6 +546,27 @@ private slots:
         QCOMPARE(level->parentWidget()->layout()->contentsMargins().left(), 0);
     }
 
+    void promoteTo3D() {
+        // "In the Effect Editor, click the 3D Promote button" (FX Guide p.289): the Picture-in-Picture becomes a
+        // 3D Warp with its keyframes, one undo step; "You cannot demote a 3D effect".
+        Rig rig;
+        rig.at(0);
+        QVERIFY(rig.editor.addKeyframes(EffectEditor::KeyframeMode::AllParameters));
+        QToolButton* button = rig.editor.promote3DButton();
+        QVERIFY(button->isEnabled());
+        button->click();
+        settle();
+        QCOMPARE(rig.effect().name, QStringLiteral("3D Warp"));
+        QCOMPARE(rig.editor.effectName(), QStringLiteral("3D Warp"));
+        QVERIFY(rig.editor.categories().contains(QStringLiteral("Position (3D)")));
+        QVERIFY(!model::keyframesOf(rig.effect(), QStringLiteral("Foreground (3D)"), QStringLiteral("Opac.")).keys.isEmpty());
+        QVERIFY(!button->isEnabled());
+        QVERIFY(!rig.editor.promoteTo3D());
+        QVERIFY(rig.undo());
+        settle();
+        QCOMPARE(rig.effect().name, QStringLiteral("Picture-in-Picture"));
+    }
+
     void blankEditor() {
         // No effect: the keyframe buttons are off.
         Composer composer;

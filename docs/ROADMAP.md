@@ -1015,7 +1015,23 @@ phase of their own. They are done in three steps:
     * 6.6b3, expanding a nest in the Timeline by double-clicking, and the Double-Click to Show Nesting
       setting (p.220-221, Editing Guide p.1219). Done (docs/spec/nesting.md, `model::expandNest`), so 6.6
       is.
-* 6.7, 3D effects, camera effects, and tracking and stabilization (ch.9-11, p.229-300).
+* 6.7, 3D effects, camera effects, and tracking and stabilization (ch.9-11, p.229-300). In four parts
+  (planned 2026-10-31 from the FX Guide's contents, p.229-300):
+  * 6.7a, 3D effects (ch.11, p.287-300), in two parts:
+    * 6.7a1, the 3D Warp renderer (the parameter hierarchy, axis, rotation, position, scaling, skew, crop,
+      perspective, target, Corner Pin, border, shadow, highlight, defocus, opacity and Swap Sources), the
+      Xpress 3D effects through it, and the 3D Promote button for Picture-in-Picture. Done
+      (docs/spec/3d-effects.md, `src/media/warp3d.cpp`, `src/model/promote3d.*`).
+    * 6.7a2, the shapes (Ball, Page Fold, Slats, curl), Trail, Stamp, the key types, the other border types,
+      Erode/Expand and Spill Suppression, and direct manipulation in the Effect Preview monitor with
+      Outline/Path.
+  * 6.7b, camera effects (ch.9, p.229-247): Pan and Scan (source and target aspect ratios, origin,
+    subdividing, the wire frame, with transitions) and Avid Pan & Zoom (image files, field of view, camera
+    speed, path changes at keyframes, filtering, background, pixel aspect and colour levels).
+  * 6.7c, motion tracking (ch.10, p.248-275): our own tracking engine, the Tracking window, trackers mapped
+    to effect parameters, offset tracking and regions, tracking data editing, SteadyGlide and smoothing.
+  * 6.7d, stabilization (p.275-284): Stabilize and Region Stabilize, editing segments that use tracking
+    data, reusing and copying tracking data, the examples.
 * 6.8, titles (ch.12-13, p.301-377): the Title Tool and Titler+, with keyframes kept through trims,
   splits and duplicates (2026.8). SubCap (ch.14) goes to Phase 7 with the captions.
 * 6.9, intraframe effects (Paint, AniMatte, Blur, Scratch Removal; ch.15) and PlasmaWipe (ch.16).

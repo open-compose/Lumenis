@@ -245,6 +245,12 @@ public:
     // Sets keyframe `id`'s handles (in its parameter's time and value), previewed or as one undo step.
     void setKeyframeHandles(const KeyframeId& id, const model::BezierHandle& in, const model::BezierHandle& out, bool previewOnly);
 
+    // ---- 3D (FX Guide ch.11; docs/spec/3d-effects.md)
+    // The 3D Promote button (p.86): "Promotes the effect to a 3D effect" (model::promoteTo3D), one undo step;
+    // enabled only for an effect that can be. False when the shown effect cannot be promoted.
+    bool promoteTo3D();
+    QToolButton* promote3DButton() const { return promote3D_; }
+
     // ---- Nested effects (p.221-222; docs/spec/nesting.md)
     // "Nested effects on a segment are fully available in the Effect Editor": the shown segment effect's
     // nested effects (model::nestedEffects at the position), outermost first, each with a title row and
@@ -337,6 +343,7 @@ private:
     QVBoxLayout* groups_ = nullptr;
     QLabel* title_ = nullptr;
     QLabel* titleIcon_ = nullptr;
+    QToolButton* promote3D_ = nullptr;
     // The nested effects at the position (model::nestedEffects), the one open, and the position's offset into
     // the outer segment, from the last refresh().
     QList<model::NestedEffect> chain_;

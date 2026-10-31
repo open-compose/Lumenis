@@ -6,6 +6,7 @@ add_library(lumenis_media STATIC
     fluid_fx.cpp
     render.cpp
     wipes.cpp
+    warp3d.cpp
     effect_drawing.cpp
     effect_drawing.h
     image_effects.cpp

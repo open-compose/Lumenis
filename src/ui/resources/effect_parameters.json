@@ -630,12 +630,14 @@
       {"name": "Sft", "kind": "slider", "label": "softness", "min": 0, "max": 255, "default": 0}
     ]},
     {"name": "Corner Pin", "page": 571, "parameters": [
-      {"name": "Corner 1", "kind": "other", "label": "Corner subcategories"},
-      {"name": "Corner 2", "kind": "other", "label": "Corner subcategories"},
-      {"name": "Corner 3", "kind": "other", "label": "Corner subcategories"},
-      {"name": "Corner 4", "kind": "other", "label": "Corner subcategories"},
-      {"name": "X", "kind": "slider"},
-      {"name": "Y", "kind": "slider"}
+      {"name": "X", "kind": "slider", "subcategory": "Corner 1", "key": "Corner 1: X", "ours": {"min": -999, "max": 999}},
+      {"name": "Y", "kind": "slider", "subcategory": "Corner 1", "key": "Corner 1: Y", "ours": {"min": -999, "max": 999}},
+      {"name": "X", "kind": "slider", "subcategory": "Corner 2", "key": "Corner 2: X", "ours": {"min": -999, "max": 999}},
+      {"name": "Y", "kind": "slider", "subcategory": "Corner 2", "key": "Corner 2: Y", "ours": {"min": -999, "max": 999}},
+      {"name": "X", "kind": "slider", "subcategory": "Corner 3", "key": "Corner 3: X", "ours": {"min": -999, "max": 999}},
+      {"name": "Y", "kind": "slider", "subcategory": "Corner 3", "key": "Corner 3: Y", "ours": {"min": -999, "max": 999}},
+      {"name": "X", "kind": "slider", "subcategory": "Corner 4", "key": "Corner 4: X", "ours": {"min": -999, "max": 999}},
+      {"name": "Y", "kind": "slider", "subcategory": "Corner 4", "key": "Corner 4: Y", "ours": {"min": -999, "max": 999}}
     ]},
     {"name": "Corner Tracking", "page": 571, "parameters": [
       {"name": "Tracker selectors", "kind": "other"}
