@@ -1013,7 +1013,8 @@ phase of their own. They are done in three steps:
     * 6.6b2, nested effects in the Effect Editor and changing their order (p.221-222). Done
       (docs/spec/nesting.md, `model::nestedEffects`).
     * 6.6b3, expanding a nest in the Timeline by double-clicking, and the Double-Click to Show Nesting
-      setting (p.220-221, Editing Guide p.1219).
+      setting (p.220-221, Editing Guide p.1219). Done (docs/spec/nesting.md, `model::expandNest`), so 6.6
+      is.
 * 6.7, 3D effects, camera effects, and tracking and stabilization (ch.9-11, p.229-300).
 * 6.8, titles (ch.12-13, p.301-377): the Title Tool and Titler+, with keyframes kept through trims,
   splits and duplicates (2026.8). SubCap (ch.14) goes to Phase 7 with the captions.

@@ -1,0 +1,29 @@
+[
+  {
+    "name": "a nest expanded in the Timeline shows its track above the segment's; a lift there goes into the nest, and the tracks above come back when it closes",
+    "guide": "FX Guide p.220-221",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "T"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 60]], "V2": [["filler", 10], ["B", 100, 30, {"effect": {"category": "Image", "name": "Flop"}, "nested": [{"category": "Blend", "name": "Picture-in-Picture"}]}]], "V3": [["T", 0, 60]]}},
+    "steps": [
+      {"expand": ["V2", 15]},
+      {"record_tracks": ["V3"]},
+      {"mark": "record", "in": 20, "out": 24},
+      {"command": "edit.lift"},
+      {"close_nest": true}
+    ],
+    "expect": {
+      "V1": [["A", 0, 60]],
+      "V2": [["filler", 10], ["B", 100, 30, {"nested": ["Picture-in-Picture", "Flop"], "nest": {"V1": [["B", 100, 10], ["filler", 5], ["B", 115, 15]]}}]],
+      "V3": [["T", 0, 60]]}
+  },
+  {
+    "name": "only a segment effect expands",
+    "guide": "FX Guide p.220",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 60]]}},
+    "steps": [
+      {"expand": ["V1", 15], "refused": true}
+    ],
+    "expect": {"V1": [["A", 0, 60]]}
+  }
+]

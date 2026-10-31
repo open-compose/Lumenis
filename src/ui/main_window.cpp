@@ -5070,6 +5070,7 @@ void MainWindow::applySettings() {
     o.segmentDragSyncLocks = s.value(tl, QStringLiteral("segmentDragSyncLocks")).toBool();
     o.positionBarSnap = s.value(tl, QStringLiteral("positionBarSnap")).toBool();
     o.segmentDragSnap = s.value(tl, QStringLiteral("segmentDragSnap")).toBool();
+    o.doubleClickNesting = s.value(tl, QStringLiteral("doubleClickNesting")).toBool();
     o.editFromBin = s.flag(QStringLiteral("Bin"), QStringLiteral("editFromBin"));
     // Interface settings, Timeline and Viewers tab (p.1201-1202).
     const QString iface = QStringLiteral("Interface");

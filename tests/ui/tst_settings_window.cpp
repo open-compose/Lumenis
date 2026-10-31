@@ -176,8 +176,8 @@ private slots:
         auto* toolbar = qobject_cast<QCheckBox*>(dialog.editor("showToolbar"));
         QVERIFY(toolbar);
         QVERIFY(!toolbar->isChecked());
-        // Options not available yet are dimmed.
-        QVERIFY(!dialog.editor("doubleClickNesting")->isEnabledTo(&dialog));
+        // Every Timeline option is built now (Double-Click to Show Nesting last, FX Guide p.220).
+        QVERIFY(dialog.editor("doubleClickNesting")->isEnabledTo(&dialog));
         QVERIFY(dialog.editor("showToolbar")->isEnabledTo(&dialog));
         toolbar->setChecked(true);
         dialog.findChild<QRadioButton*>(QStringLiteral("movementDuringPlay:scroll"))->setChecked(true);
@@ -187,7 +187,12 @@ private slots:
         QCOMPARE(v.value("movementDuringPlay").toString(), QStringLiteral("scroll"));
         QCOMPARE(v.value("defaultSegmentTool").toString(), QStringLiteral("insert"));
         QCOMPARE(v.value("custom").toInt(), 1);           // unknown values are kept
-        QVERIFY(!v.contains("doubleClickNesting"));       // later: not stored
+        QCOMPARE(v.value("doubleClickNesting").toBool(), true);
+        // Options not available yet are dimmed and not stored.
+        SettingsDialog iface(kind("Interface"), SettingEntry{QStringLiteral("Interface"), {}, true, {}});
+        QVERIFY(iface.editor("launchLastProject"));
+        QVERIFY(!iface.editor("launchLastProject")->isEnabledTo(&iface));
+        QVERIFY(!iface.values().contains("launchLastProject"));
 
         // Number boxes, menus and timecodes.
         SettingsDialog bin(kind("Bin"), SettingEntry{QStringLiteral("Bin"), {}, true, {}});

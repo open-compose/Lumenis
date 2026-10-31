@@ -198,6 +198,76 @@ private slots:
         QVERIFY(renderKey(seq, targets.first()) != before);
     }
 
+    void expandingInTheTimeline() {
+        // "The nested tracks appear in the Timeline above the track you double-clicked" (p.220).
+        Sequence seq = Sequence::withDefaultTracks();
+        seq.addTrack(TrackKind::Video);
+        seq.addTrack(TrackKind::Video);
+        seq.overwrite(QStringLiteral("V1"), 0, {clip(QStringLiteral("bg"), 0, 60)});
+        Segment top = clip(QStringLiteral("top"), 100, 30);
+        top.effect = kFlop;
+        QVERIFY(ensureNest(top));
+        seq.overwrite(QStringLiteral("V2"), 10, {top});
+        seq.overwrite(QStringLiteral("V3"), 0, {clip(QStringLiteral("title"), 0, 60)});
+        QVERIFY(!expandNest(seq, QStringLiteral("V1"), 5)); // no nest there
+        const auto opened = expandNest(seq, QStringLiteral("V2"), 15);
+        QVERIFY(opened);
+        Sequence shown = opened->first;
+        const NestExpansion e = opened->second;
+        QCOMPARE(e.start, 10);
+        QCOMPARE(e.length, 30);
+        QCOMPARE(e.nested, 1);
+        QCOMPARE(e.nestedTrack(1), QStringLiteral("V3"));
+        QVERIFY(e.isNested(QStringLiteral("V3")));
+        QVERIFY(!e.isNested(QStringLiteral("V4")));
+        // The nest's track "2.1" between V2 and the old V3, shown as "V3".
+        QCOMPARE(shown.track(QStringLiteral("V3"))->customName, QStringLiteral("2.1"));
+        std::int64_t at = 0;
+        const Track* nested = shown.track(QStringLiteral("V3"));
+        QCOMPARE(nested->segments.at(nested->segmentAt(15, &at)).clipId, QStringLiteral("top"));
+        QCOMPARE(at, 10);
+        QCOMPARE(nested->segments.at(nested->segmentAt(15)).sourceIn, 100);
+        QCOMPARE(shown.track(QStringLiteral("V4"))->customName, QStringLiteral("V3"));
+        QCOMPARE(shown.track(QStringLiteral("V4"))->segments.at(0).clipId, QStringLiteral("title"));
+        // Unchanged, it closes to the same sequence.
+        std::optional<NestExpansion> follow = e;
+        QCOMPARE(collapseExpansion(shown, follow).toJson(), seq.toJson());
+        QVERIFY(follow);
+
+        // "Edit new footage into the nested tracks" (p.221): it goes into the nest.
+        shown.overwrite(QStringLiteral("V3"), 20, {clip(QStringLiteral("x"), 0, 5)});
+        follow = e;
+        const Sequence edited = collapseExpansion(shown, follow);
+        QVERIFY(follow);
+        QCOMPARE(edited.track(QStringLiteral("V3"))->customName, QString());
+        QCOMPARE(edited.track(QStringLiteral("V3"))->segments.at(0).clipId, QStringLiteral("title"));
+        QVERIFY(!edited.track(QStringLiteral("V4")));
+        const Segment& outer = edited.track(QStringLiteral("V2"))->segments.at(edited.track(QStringLiteral("V2"))->segmentAt(15));
+        const Sequence innerNest = nestOf(outer);
+        const Track* inner = innerNest.track(QStringLiteral("V1"));
+        QCOMPARE(inner->segments.size(), 3);
+        QCOMPARE(inner->segments.at(1).clipId, QStringLiteral("x"));
+        QCOMPARE(inner->segments.at(2).sourceIn, 115);
+        QCOMPARE(follow->nest, outer.nest);
+
+        // Moving the segment alone leaves its nest; the expansion follows it.
+        Sequence again = expandNest(edited, QStringLiteral("V2"), 15)->first;
+        follow = expandNest(edited, QStringLiteral("V2"), 15)->second;
+        again.splice(QStringLiteral("V2"), 0, {Segment::filler(5)});
+        const Sequence moved = collapseExpansion(again, follow);
+        QVERIFY(follow);
+        QCOMPARE(follow->start, 15);
+        QCOMPARE(moved.track(QStringLiteral("V2"))->segments.at(moved.track(QStringLiteral("V2"))->segmentAt(20)).nest, outer.nest);
+        // The segment removed: the expansion ends, the nested tracks go.
+        Sequence lifted = expandNest(moved, QStringLiteral("V2"), 20)->first;
+        follow = expandNest(moved, QStringLiteral("V2"), 20)->second;
+        lifted.lift(QStringLiteral("V2"), 15, 30);
+        const Sequence closed = collapseExpansion(lifted, follow);
+        QVERIFY(!follow);
+        QCOMPARE(closed.track(QStringLiteral("V3"))->segments.at(0).clipId, QStringLiteral("title"));
+        QVERIFY(!closed.track(QStringLiteral("V4")));
+    }
+
     void collapse() {
         // Two layers collapsed between 10 and 30 (p.226-227): a Submaster on V1 whose nest holds both, in order.
         Sequence seq = Sequence::withDefaultTracks();

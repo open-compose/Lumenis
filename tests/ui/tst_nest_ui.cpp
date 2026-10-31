@@ -135,6 +135,18 @@ private slots:
         QCOMPARE(composer.state(MonitorId::Record).position(), 5);
         QVERIFY(!timeline.findChild<QLabel*>(QStringLiteral("timelineTimecode"))->text().startsWith(QStringLiteral("N")));
         QVERIFY(!timeline.stepOut());
+        // Redo after Step Out still goes into the segment, not into the bin as an item of its own.
+        const qsizetype items = bin->bin().items.size();
+        commands.action(QStringLiteral("edit.redo"))->trigger();
+        settle();
+        QCOMPARE(bin->bin().items.size(), items);
+        QCOMPARE(model::nestOf(firstV1(*bin->bin().item(sequenceId))).track(QStringLiteral("V1"))->segments.at(0).effect->name,
+                 QStringLiteral("Mosaic Effect"));
+        QCOMPARE(composer.state(MonitorId::Record).current()->item.id, sequenceId);
+        commands.action(QStringLiteral("edit.undo"))->trigger();
+        settle();
+        QCOMPARE(bin->bin().items.size(), items);
+        QVERIFY(!model::nestOf(firstV1(*bin->bin().item(sequenceId))).track(QStringLiteral("V1"))->segments.at(0).effect);
 
         // Timeline > Mixdown > Video (p.227-228): a master clip of what the monitor shows, the sequence left.
         window.setVideoMixdownHook([](VideoMixdownDialog&) { return true; });
@@ -242,6 +254,108 @@ private slots:
         QVERIFY(box->text().contains(QStringLiteral("innermost")));
         box->close();
         settle();
+    }
+
+    void expandingInTheTimeline() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString movie = dir.filePath(QStringLiteral("grey.mov"));
+        QVERIFY(writeMovie(movie, 20));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        const QStringList ids = window.linkFiles(binId, {movie});
+        QCOMPARE(ids.size(), 1);
+        Composer& composer = window.composer();
+        Timeline& timeline = window.timeline();
+        composer.loadDefault(binId, *bin->bin().item(ids.first()));
+        composer.moveTo(MonitorId::Source, 0);
+        commands.action(QStringLiteral("edit.splice_in"))->trigger();
+        settle();
+        const QString sequenceId = composer.state(MonitorId::Record).current()->item.id;
+        QVERIFY(timeline.changeRecordSequence(QStringLiteral("Flop"), [](model::Sequence& s) {
+            s.track(QStringLiteral("V1"))->segments[0].effect = model::Effect{QStringLiteral("Image"), QStringLiteral("Flop"), {}};
+            return true;
+        }));
+        settle();
+        composer.moveTo(MonitorId::Record, 6);
+
+        // "In Source/Record mode, click one of the segment tools ... and then double-click the nested effect" (p.220).
+        QVERIFY(!timeline.doubleClickTrack(QStringLiteral("V1"), 6)); // no segment tool
+        timeline.setSegmentTool(model::EditKind::Overwrite, true);
+        QVERIFY(timeline.doubleClickTrack(QStringLiteral("V1"), 6));
+        settle();
+        QVERIFY(timeline.isNestExpanded());
+        QCOMPARE(timeline.expandedTrack(), QStringLiteral("V1"));
+        QCOMPARE(composer.state(MonitorId::Record).position(), 6);
+        QVERIFY(composer.state(MonitorId::Record).current()->item.id != sequenceId);
+        // "The nested tracks appear in the Timeline above the track you double-clicked" (p.220), as "1.1".
+        QCOMPARE(timeline.shown().track(QStringLiteral("V2"))->customName, QStringLiteral("1.1"));
+        QVERIFY(timeline.isNestedRow(QStringLiteral("V2")));
+        // "You cannot monitor individual tracks when you expand nested tracks" (p.220).
+        QVERIFY(!timeline.isMonitored(QStringLiteral("V2")));
+        timeline.toggleMonitor(QStringLiteral("V2"));
+        QVERIFY(!timeline.isMonitored(QStringLiteral("V2")));
+        QCOMPARE(timeline.expandedFrames(), (std::pair<std::int64_t, std::int64_t>{0, 20}));
+
+        // An edit on the nested track goes into the nest, and the sequence in the bin.
+        QVERIFY(timeline.changeRecordSequence(QStringLiteral("Lift"), [](model::Sequence& s) {
+            s.lift(QStringLiteral("V2"), 5, 3);
+            return true;
+        }));
+        settle();
+        QVERIFY(timeline.isNestExpanded());
+        {
+            const model::Sequence nest = model::nestOf(firstV1(*bin->bin().item(sequenceId)));
+            const model::Track* v1 = nest.track(QStringLiteral("V1"));
+            QVERIFY(v1->segments.at(v1->segmentAt(6)).isFiller());
+        }
+        QCOMPARE(firstV1(*bin->bin().item(sequenceId)).effect->name, QStringLiteral("Flop"));
+        // Undo puts it back, still expanded.
+        commands.action(QStringLiteral("edit.undo"))->trigger();
+        settle();
+        QVERIFY(timeline.isNestExpanded());
+        {
+            const model::Sequence nest = model::nestOf(firstV1(*bin->bin().item(sequenceId)));
+            const model::Track* v1 = nest.track(QStringLiteral("V1"));
+            QVERIFY(!v1->segments.at(v1->segmentAt(6)).isFiller());
+        }
+
+        // "Double-click the main track for the nested effect ... to close the nested tracks again" (p.221).
+        QVERIFY(timeline.doubleClickTrack(QStringLiteral("V1"), 6));
+        settle();
+        QVERIFY(!timeline.isNestExpanded());
+        QCOMPARE(composer.state(MonitorId::Record).current()->item.id, sequenceId);
+        QCOMPARE(composer.state(MonitorId::Record).position(), 6);
+        QVERIFY(!timeline.shown().track(QStringLiteral("V2")));
+
+        // "In Effect mode, double-click the nested effect"; Step In closes it first.
+        timeline.setSegmentTool(model::EditKind::Overwrite, false);
+        timeline.setEffectMode(true);
+        QVERIFY(timeline.doubleClickTrack(QStringLiteral("V1"), 6));
+        settle();
+        QVERIFY(timeline.isNestExpanded());
+        QVERIFY(timeline.stepIn());
+        settle();
+        QVERIFY(!timeline.isNestExpanded());
+        QCOMPARE(timeline.nestLevel(), 1);
+        QVERIFY(timeline.stepOut());
+        settle();
+        QCOMPARE(composer.state(MonitorId::Record).current()->item.id, sequenceId);
+        timeline.setEffectMode(false);
     }
 };
 

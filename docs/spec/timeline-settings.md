@@ -33,8 +33,8 @@ Code:
   * **Dynamic Play Acceleration** and **Slow start speed** (p.401-402) belong to Dynamic Play
     Forward and Reverse. Those need play speeds between the J-K-L steps and go to U2 with them.
     The default acceleration is 3 steps per keystroke, 12 steps doubling the speed (p.402).
-  * **Double-Click to Show Nesting** waits for nesting, and **Highlight Suggested Render Areas
-    After Playback** for real-time effects (Phase 6).
+  * **Highlight Suggested Render Areas After Playback** waits for real-time effects (Phase 6).
+    **Double-Click to Show Nesting** is built in 6.6b3 (docs/spec/nesting.md).
 
 ## Edit tab (p.1220-1221)
 

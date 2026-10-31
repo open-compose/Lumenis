@@ -207,7 +207,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Collapse, Collapse onto the lowest track, Video Mixdown's clip name and
   the whole sequence without marks. Nested effects in the Effect Editor
   (6.6b2): one open at a time under indented title rows, the list going in
-  only through nests of one video track, the refusals' wording.
+  only through nests of one video track, the refusals' wording. Expanded
+  nests (6.6b3): the nested tracks named "<track>.<n>" with the clip on the
+  nest's V1 (the pictures on p.221 show it on 1.2), one nest at a time,
+  Double-Click to Show Nesting on by default.
 * Effect templates (docs/spec/effect-templates.md): a template named after
   its effect, Alt keeping the segment without its transition or renders, a
   template with its source media edited in as an overwrite, a parameter

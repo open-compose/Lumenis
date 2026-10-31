@@ -10,7 +10,7 @@
       {"command": "edit.undo"}
     ],
     "expect": {
-      "V1": [["A", 0, 30, {"nested": ["Flop", "Mosaic Effect", "Picture-in-Picture"]}]]}
+      "V1": [["A", 0, 30, {"nested": ["Flop", "Mosaic Effect", "Picture-in-Picture"], "nest": {"V1": [["A", 0, 30]]}}]]}
   },
   {
     "name": "a Timewarp must stay the innermost nested effect",
@@ -21,6 +21,6 @@
       {"nested_move": ["V1", 5, 1, 0], "refused": true}
     ],
     "expect": {
-      "V1": [["A", 0, 30, {"nested": ["Flop", "Timewarp"]}]]}
+      "V1": [["A", 0, 30, {"nested": ["Flop", "Timewarp"], "nest": {"V1": [["A", 0, 30]]}}]]}
   }
 ]

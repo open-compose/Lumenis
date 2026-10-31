@@ -592,6 +592,17 @@ void TimelineView::paintEvent(QPaintEvent*) {
                 p.drawText(QRect(x + 3, r.top, kLabelSpacing, r.height), Qt::AlignVCenter | Qt::AlignLeft, tc(f));
             }
         } else if (const model::Track* t = r.exists ? seq.track(r.track) : nullptr) {
+            // An expanded nest's tracks hold its material only over the segment (pictures on p.221): grey
+            // outside it.
+            if (timeline_.isNestedRow(r.track)) {
+                if (const auto frames = timeline_.expandedFrames()) {
+                    const double x0 = std::clamp(xFor(frames->first), static_cast<double>(header), static_cast<double>(width()));
+                    const double x1 = std::clamp(xFor(frames->second), static_cast<double>(header), static_cast<double>(width()));
+                    const QColor outside(0x88, 0x88, 0x88);
+                    p.fillRect(QRectF(header, r.top, x0 - header, r.height), outside);
+                    p.fillRect(QRectF(x1, r.top, width() - x1, r.height), outside);
+                }
+            }
             // Track Color (p.597) takes the place of the kind's colour; an inactive track is
             // drawn darker (ours).
             const QColor fill = Timeline::trackColor(*t);
@@ -1687,6 +1698,17 @@ model::TrimKind TimelineView::trimKindAt(const QPoint& pos) const {
 // and drag with a segment tool, else scrubbing; in the Track Selector, a patch drag from a
 // source button or a click on a record, sync or monitor button. The state set here (zoomFrom_,
 // trimFrom_, lassoFrom_, dragFrom_, scrubbing_, patchFrom_) is finished in mouseReleaseEvent().
+void TimelineView::mouseDoubleClickEvent(QMouseEvent* event) {
+    // Expanding a nest, or closing it (FX Guide p.220-221).
+    const QPoint pos = event->position().toPoint();
+    const auto row = rowAt(pos);
+    if (event->button() == Qt::LeftButton && row && row->exists && pos.y() >= kRulerHeight &&
+        timeline_.doubleClickTrack(row->track, pos.x() >= headerWidth() ? frameAt(pos.x()) : -1)) {
+        return;
+    }
+    QWidget::mouseDoubleClickEvent(event);
+}
+
 void TimelineView::mousePressEvent(QMouseEvent* event) {
     if (event->button() != Qt::LeftButton) return;
     const QPoint pos = event->position().toPoint();
@@ -2480,6 +2502,11 @@ void Timeline::sync() {
         const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
         if (!rec || rec->item.id != nests_.last().itemId) nests_.clear();
     }
+    // Likewise an expanded nest.
+    if (expanded_) {
+        const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+        if (!rec || rec->item.id != expanded_->itemId) expanded_.reset();
+    }
     const model::MonitorState& s = composer_.state(shownMonitor());
     const model::LoadedClip* clip = s.current();
     if (clip) {
@@ -2993,6 +3020,7 @@ bool Timeline::movePatch(const QString& source, const QString& record) {
 }
 
 void Timeline::toggleMonitor(const QString& track) {
+    if (isNestedRow(track)) return; // "You cannot monitor individual tracks" of an expanded nest (p.220)
     if (unmonitored_.contains(track)) {
         unmonitored_.remove(track);
     } else {
@@ -3588,6 +3616,18 @@ void Timeline::restore(const QString& binId, const model::BinItem& item) {
         emit sequenceEdited();
         return;
     }
+    // Nor is an expanded nest's (expandNest()).
+    if (expanded_ && item.id == expanded_->itemId) {
+        storeExpanded(item);
+        emit sequenceEdited();
+        return;
+    }
+    // Nor those of nests the Timeline has left (an undo after Step Out or closing an expanded nest).
+    if (storeDetached(binId, item)) {
+        composer_.updateItem(item);
+        emit sequenceEdited();
+        return;
+    }
     if (store_) store_(binId, item, false);
     composer_.updateItem(item);
     emit sequenceEdited();
@@ -3615,7 +3655,183 @@ void Timeline::storeNest(const model::BinItem& item) {
     }
 }
 
+namespace {
+
+// The parts of a nest or expanded nest item's id (Timeline::storeDetached): the parent's id, whether it is an
+// expanded nest, the track and the segment's first frame. Nothing for another id.
+struct DetachedId {
+    QString parent;
+    bool expanded = false;
+    QString track;
+    std::int64_t start = 0;
+};
+std::optional<DetachedId> detachedId(const QString& id) {
+    const qsizetype nest = id.lastIndexOf(QLatin1String("/nest:"));
+    const qsizetype expand = id.lastIndexOf(QLatin1String("/expand:"));
+    const qsizetype at = std::max(nest, expand);
+    if (at < 0) return std::nullopt;
+    DetachedId d;
+    d.parent = id.left(at);
+    d.expanded = expand > nest;
+    const QStringList parts = id.mid(at + 1).split(QLatin1Char(':'));
+    if (parts.size() != 3) return std::nullopt;
+    d.track = parts.at(1);
+    bool ok = false;
+    d.start = parts.at(2).toLongLong(&ok);
+    if (!ok) return std::nullopt;
+    return d;
+}
+
+} // namespace
+
+std::optional<model::BinItem> Timeline::currentItem(const QString& binId, const QString& id) const {
+    const auto d = detachedId(id);
+    if (!d) return composer_.resolve(binId, id);
+    auto parent = currentItem(binId, d->parent);
+    if (!parent) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(*parent);
+    model::BinItem item = *parent;
+    item.id = id;
+    if (d->expanded) {
+        const auto expanded = model::expandNest(seq, d->track, d->start);
+        if (!expanded) return std::nullopt;
+        expanded->first.storeIn(item);
+        return item;
+    }
+    const model::Track* t = seq.track(d->track);
+    const int i = t ? t->segmentAt(d->start) : -1;
+    if (i < 0 || !t->segments.at(i).hasNest()) return std::nullopt;
+    model::nestOf(t->segments.at(i)).storeIn(item);
+    return item;
+}
+
+bool Timeline::storeDetached(const QString& binId, const model::BinItem& item) {
+    const auto d = detachedId(item.id);
+    if (!d) return false;
+    auto parent = currentItem(binId, d->parent);
+    if (!parent) return true; // nowhere to go: dropped rather than stored as a bin item
+    model::Sequence seq = model::Sequence::fromItem(*parent);
+    if (d->expanded) {
+        if (!pastExpansions_.contains(item.id)) return true;
+        std::optional<model::NestExpansion> e = pastExpansions_.value(item.id);
+        seq = model::collapseExpansion(model::Sequence::fromItem(item), e);
+    } else {
+        model::Track* t = seq.track(d->track);
+        const int i = t ? t->segmentAt(d->start) : -1;
+        if (i < 0) return true;
+        model::setNest(t->segments[i], model::Sequence::fromItem(item));
+    }
+    seq.storeIn(*parent);
+    parent->modified = QDateTime::currentDateTimeUtc();
+    // On out: another nest, an expanded nest, or the bin.
+    restore(binId, *parent);
+    return true;
+}
+
+void Timeline::storeExpanded(const model::BinItem& item) {
+    if (!expanded_) return;
+    std::optional<model::NestExpansion> e = expanded_->expansion;
+    const model::Sequence outer = model::collapseExpansion(model::Sequence::fromItem(item), e);
+    outer.storeIn(expanded_->parent);
+    expanded_->parent.modified = QDateTime::currentDateTimeUtc();
+    if (store_) store_(expanded_->binId, expanded_->parent, false);
+    composer_.updateItem(expanded_->parent);
+    const auto again = e ? model::expandNest(outer, e->track, e->start) : std::nullopt;
+    if (!again) {
+        // The segment is gone: the sequence is shown again.
+        const Expanded gone = *expanded_;
+        expanded_.reset();
+        const std::int64_t position = composer_.state(MonitorId::Record).position();
+        composer_.load(MonitorId::Record, gone.binId, gone.parent);
+        composer_.state(MonitorId::Record).remove(gone.itemId);
+        composer_.moveTo(MonitorId::Record, position);
+        sync();
+        emit changed();
+        return;
+    }
+    expanded_->expansion = again->second;
+    pastExpansions_.insert(expanded_->itemId, again->second);
+    model::BinItem shown = item;
+    again->first.storeIn(shown);
+    composer_.updateItem(shown);
+}
+
+std::optional<std::pair<std::int64_t, std::int64_t>> Timeline::expandedFrames() const {
+    if (!expanded_) return std::nullopt;
+    return std::pair{expanded_->expansion.start, expanded_->expansion.start + expanded_->expansion.length};
+}
+
+std::optional<model::Sequence> Timeline::collapsedSequence() const {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!expanded_ || !rec || rec->item.id != expanded_->itemId) return std::nullopt;
+    std::optional<model::NestExpansion> e = expanded_->expansion;
+    return model::collapseExpansion(model::Sequence::fromItem(rec->item), e);
+}
+
+bool Timeline::expandNest(const QString& track, std::int64_t frame) {
+    message_.clear();
+    if (expanded_) closeNest();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(track);
+    std::int64_t start = 0;
+    const int i = t && t->kind == model::TrackKind::Video ? t->segmentAt(frame, &start) : -1;
+    if (i < 0 || !t->segments.at(i).effect) return fail(tr("There is no segment effect there to expand."));
+    // "You can expand any segment effect in this way" (p.220).
+    if (!t->segments.at(i).hasNest()) {
+        changeRecordSequence(tr("Expand Nest"), [&](model::Sequence& s) {
+            model::Track* x = s.track(track);
+            return model::ensureNest(x->segments[x->segmentAt(start)]);
+        });
+        rec = composer_.state(MonitorId::Record).current();
+        if (!rec) return false;
+        seq = model::Sequence::fromItem(rec->item);
+    }
+    const auto expanded = model::expandNest(seq, track, start);
+    if (!expanded) return fail(tr("The sequence has no room for the nested tracks."));
+    model::BinItem item = rec->item;
+    item.id = QStringLiteral("%1/expand:%2:%3").arg(rec->item.id, track).arg(start);
+    expanded->first.storeIn(item);
+    expanded_ = Expanded{rec->binId, rec->item, item.id, expanded->second};
+    pastExpansions_.insert(item.id, expanded->second);
+    const std::int64_t position = composer_.state(MonitorId::Record).position();
+    composer_.load(MonitorId::Record, rec->binId, item);
+    composer_.moveTo(MonitorId::Record, position);
+    sync();
+    emit changed();
+    return true;
+}
+
+bool Timeline::closeNest() {
+    if (!expanded_) return fail(tr("No nest is expanded."));
+    const Expanded e = *expanded_;
+    expanded_.reset();
+    const std::int64_t position = composer_.state(MonitorId::Record).position();
+    composer_.load(MonitorId::Record, e.binId, e.parent);
+    composer_.state(MonitorId::Record).remove(e.itemId);
+    composer_.moveTo(MonitorId::Record, position);
+    sync();
+    emit changed();
+    return true;
+}
+
+bool Timeline::doubleClickTrack(const QString& track, std::int64_t frame) {
+    if (showSource_) return false;
+    // "Double-click the main track for the nested effect ... to close the nested tracks again" (p.221), or
+    // "Double-click the effect's icon in the Timeline" (p.220).
+    if (expanded_ && track == expanded_->expansion.track) return closeNest();
+    const bool tools = isSegmentTool(model::EditKind::Overwrite) || isSegmentTool(model::EditKind::SpliceIn);
+    if (!effectMode_ && !(tools && options_.doubleClickNesting)) return false;
+    const model::Track* t = shown_.track(track);
+    const int i = t ? t->segmentAt(frame) : -1;
+    if (i < 0 || !t->segments.at(i).effect || t->kind != model::TrackKind::Video) return false;
+    return expandNest(track, frame);
+}
+
 bool Timeline::stepIn() {
+    // Step In works on the sequence itself: an expanded nest is closed first.
+    if (expanded_) closeNest();
     const model::LoadedClip* rec = recordSequence();
     if (!rec) return false;
     const model::Sequence seq = model::Sequence::fromItem(rec->item);

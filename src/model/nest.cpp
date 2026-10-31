@@ -230,6 +230,149 @@ bool moveNestedEffect(Segment& segment, std::int64_t offset, int from, int to, Q
     return true;
 }
 
+// ---------------------------------------------------------------- expanded nests
+
+QString NestExpansion::nestedTrack(int k) const {
+    const auto ref = parseTrackName(track);
+    return ref ? trackName(TrackKind::Video, ref->number + k) : QString();
+}
+
+bool NestExpansion::isNested(const QString& name) const {
+    for (int k = 1; k <= nested; ++k) {
+        if (nestedTrack(k) == name) return true;
+    }
+    return false;
+}
+
+namespace {
+
+// Moves the video tracks numbered above `above` by `by` (up when positive), keeping their order.
+void shiftVideoTracks(Sequence& sequence, int above, int by) {
+    QList<Track> moved;
+    for (const Track& t : sequence.tracks()) {
+        if (t.kind == TrackKind::Video && t.number > above) moved << t;
+    }
+    for (const Track& t : moved) sequence.removeTrack(t.name());
+    for (Track t : moved) {
+        t.number += by;
+        sequence.restoreTrack(t);
+    }
+}
+
+} // namespace
+
+std::optional<std::pair<Sequence, NestExpansion>> expandNest(const Sequence& sequence, const QString& track, std::int64_t frame) {
+    const auto ref = parseTrackName(track);
+    const Track* t = sequence.track(track);
+    if (!ref || !t || t->kind != TrackKind::Video) return std::nullopt;
+    std::int64_t start = 0;
+    const int i = t->segmentAt(frame, &start);
+    if (i < 0 || !t->segments.at(i).hasNest()) return std::nullopt;
+    const Segment& segment = t->segments.at(i);
+    const Sequence nest = nestOf(segment);
+    // Every video track of the nest, up to its highest.
+    int count = 1;
+    int top = 0;
+    for (const Track& n : nest.tracks()) {
+        if (n.kind == TrackKind::Video) count = std::max(count, n.number);
+    }
+    for (const Track& o : sequence.tracks()) {
+        if (o.kind == TrackKind::Video) top = std::max(top, o.number);
+    }
+    if (std::max(top, ref->number) + count > kMaxTracks) return std::nullopt;
+    NestExpansion e;
+    e.track = track;
+    e.start = start;
+    e.length = segment.length;
+    e.nestIn = segment.nestIn;
+    e.nested = count;
+    e.nest = segment.nest;
+    Sequence out = sequence;
+    shiftVideoTracks(out, ref->number, count);
+    for (const Track& o : out.tracks()) {
+        if (o.kind == TrackKind::Video && o.number > ref->number + count && o.customName.isEmpty()) e.named << o.name();
+    }
+    for (const QString& name : e.named) {
+        Track* o = out.track(name);
+        o->customName = trackName(TrackKind::Video, o->number - count);
+    }
+    for (int k = 1; k <= count; ++k) {
+        Track n;
+        n.kind = TrackKind::Video;
+        n.number = ref->number + k;
+        n.customName = QStringLiteral("%1.%2").arg(ref->number).arg(k);
+        if (start > 0) n.segments << Segment::filler(start);
+        n.segments << nest.material(trackName(TrackKind::Video, k), segment.nestIn, segment.length);
+        out.restoreTrack(n);
+        // Through JSON, as stored sequences are, so the track is tidied (filler joined, trailing filler kept
+        // as the material had it).
+    }
+    out = Sequence::fromJson(out.toJson());
+    return std::pair{out, e};
+}
+
+Sequence collapseExpansion(const Sequence& expanded, std::optional<NestExpansion>& expansion) {
+    if (!expansion) return expanded;
+    const NestExpansion e = *expansion;
+    const auto ref = parseTrackName(e.track);
+    if (!ref) {
+        expansion.reset();
+        return expanded;
+    }
+    Sequence out = expanded;
+    // The segment again: where it was, else anywhere on its track with the same nest.
+    Track* t = out.track(e.track);
+    int found = -1;
+    std::int64_t at = 0;
+    if (t) {
+        std::int64_t pos = 0;
+        for (int i = 0; i < t->segments.size(); ++i) {
+            const Segment& g = t->segments.at(i);
+            // At its place any segment with a nest (an undo brings back an older nest); elsewhere one with
+            // the same nest.
+            if (g.hasNest() && (pos == e.start || (found < 0 && g.nest == e.nest))) {
+                found = i;
+                at = pos;
+            }
+            pos += g.length;
+        }
+    }
+    if (found >= 0) {
+        Segment& g = t->segments[found];
+        Sequence nest = nestOf(g);
+        // The nested tracks as they were laid out: an edit that moved or trimmed the segment alone (they
+        // were not in it) leaves the nest as it is; otherwise they are read over the segment's frames now.
+        bool laidOut = at != e.start || g.length != e.length;
+        for (int k = 1; laidOut && k <= e.nested; ++k) {
+            const QString inner = trackName(TrackKind::Video, k);
+            laidOut = out.material(e.nestedTrack(k), e.start, e.length) == nest.material(inner, e.nestIn, e.length);
+        }
+        if (!laidOut) {
+            for (int k = 1; k <= e.nested; ++k) {
+                const QString inner = trackName(TrackKind::Video, k);
+                nest.ensureTrack(inner);
+                nest.overwrite(inner, g.nestIn, out.material(e.nestedTrack(k), at, g.length));
+            }
+            setNest(g, nest);
+        }
+        NestExpansion next = e;
+        next.start = at;
+        next.length = g.length;
+        next.nestIn = g.nestIn;
+        next.nest = g.nest;
+        expansion = next;
+    } else {
+        expansion.reset();
+    }
+    for (int k = 1; k <= e.nested; ++k) out.removeTrack(e.nestedTrack(k));
+    for (const QString& name : e.named) {
+        if (Track* o = out.track(name)) o->customName.clear();
+    }
+    shiftVideoTracks(out, ref->number + e.nested, -e.nested);
+    if (expansion) expansion->named.clear();
+    return out;
+}
+
 QString nestLevelLabel(int level) {
     return level > 0 ? QStringLiteral("N%1").arg(level) : QString();
 }

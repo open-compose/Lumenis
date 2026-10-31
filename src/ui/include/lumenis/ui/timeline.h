@@ -7,6 +7,7 @@
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/effect_template.h"
 #include "lumenis/model/marker.h"
+#include "lumenis/model/nest.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/effect_palette.h"
@@ -131,6 +132,8 @@ public:
 protected:
     void paintEvent(QPaintEvent* event) override;
     void mousePressEvent(QMouseEvent* event) override;
+    // Expands or closes a nest (Timeline::doubleClickTrack).
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
@@ -302,6 +305,9 @@ public:
         bool segmentDragSyncLocks = false; // Segment Drag Sync Locks (p.618)
         bool positionBarSnap = false;      // Position Bar Snap (p.397)
         bool segmentDragSnap = false;      // Segment Drag Snap: bin clips dragged in snap (p.1220)
+        // Display tab: Double-Click to Show Nesting, "lets you double-click segments in the Timeline to display
+        // the nested effects" (p.1219); in Effect mode a double-click always does (FX Guide p.220).
+        bool doubleClickNesting = true;
         bool editFromBin = false;          // Bin settings: Enable edit from bin (p.1153, p.624)
         // Interface settings, Timeline and Viewers tab (p.1201-1202): Use Timeline Background Color
         // (invalid: the default), and Use Blending Based on Skin, which mixes it half and half with
@@ -379,6 +385,30 @@ public:
     // How many levels in the Timeline is (0 at the sequence itself): "N2 indicates that you are two levels
     // in from the outermost track level" (p.220), shown in the Timecode display.
     int nestLevel() const { return static_cast<int>(nests_.size()); }
+    // Expanding nested effects in the Timeline (FX Guide p.220-221; docs/spec/nesting.md): "The nested tracks
+    // appear in the Timeline above the track you double-clicked. Editing and patching features are available
+    // for changing the content of the track's effect." expandNest() opens the segment effect under `frame` on
+    // `track` (one without a nest gets one, an undo step "Expand Nest", as Step In does): the Record monitor
+    // shows the expanded sequence (model::expandNest) as an item of its own, and every change to it (edits,
+    // undo) goes back into the sequence in its bin (model::collapseExpansion). One nest is expanded at a time
+    // (ours): expanding another closes the first. closeNest() closes it, the position kept; it closes by
+    // itself when another sequence is loaded or its segment is removed. False when there is nothing there.
+    bool expandNest(const QString& track, std::int64_t frame);
+    bool closeNest();
+    bool isNestExpanded() const { return expanded_.has_value(); }
+    // The expanded segment's track ("V2"), and whether a row is one of its nested tracks ("You cannot monitor
+    // individual tracks when you expand nested tracks", p.220: they are never monitored).
+    QString expandedTrack() const { return expanded_ ? expanded_->expansion.track : QString(); }
+    bool isNestedRow(const QString& track) const { return expanded_ && expanded_->expansion.isNested(track); }
+    // The expanded segment's frames [first, end); the nested rows hold the nest's material there.
+    std::optional<std::pair<std::int64_t, std::int64_t>> expandedFrames() const;
+    // With a nest expanded, the sequence as it goes to its bin (model::collapseExpansion of what is shown);
+    // nothing otherwise.
+    std::optional<model::Sequence> collapsedSequence() const;
+    // A double-click in the tracks (p.220): on the expanded segment's track, closes it; on a segment
+    // effect, expands it in Effect mode, or in Source/Record mode with a segment tool on and Double-Click
+    // to Show Nesting (Options::doubleClickNesting). False when it did neither.
+    bool doubleClickTrack(const QString& track, std::int64_t frame);
     // Collapse (p.226-227): the selected video tracks (adjacent) between the marks, or the segments selected
     // in segment mode, into a Submaster effect (model::collapseTracks).
     bool collapse();
@@ -402,7 +432,7 @@ public:
     void toggleSourceTrack(const QString& track);
     void toggleRecordTrack(const QString& track);
     // Track Monitor buttons (p.627-628): which tracks are heard and seen.
-    bool isMonitored(const QString& track) const { return !unmonitored_.contains(track); }
+    bool isMonitored(const QString& track) const { return !unmonitored_.contains(track) && !isNestedRow(track); }
     void toggleMonitor(const QString& track);
 
     // Track locks (p.633) and sync locks (p.493).
@@ -1169,6 +1199,25 @@ private:
         QString itemId;          // the nest's item in the Record monitor
     };
     QList<NestLevel> nests_;
+    // The expanded nest (expandNest()): the sequence as stored, its bin, the expanded item's id in the Record
+    // monitor and how it was expanded.
+    struct Expanded {
+        QString binId;
+        model::BinItem parent;
+        QString itemId;
+        model::NestExpansion expansion;
+    };
+    std::optional<Expanded> expanded_;
+    // The last expansion of each expanded item, by its id, for an undo or redo that comes after it was closed.
+    QHash<QString, model::NestExpansion> pastExpansions_;
+    // An undo or redo of a step made in a nest stepped into ("<parent>/nest:<track>:<start>") or an expanded
+    // nest ("<parent>/expand:<track>:<start>") the Timeline has since left: the item goes back into its
+    // parent, and that through restore() on to its bin. Nothing for another id.
+    bool storeDetached(const QString& binId, const model::BinItem& item);
+    // An item as it is now: a bin's, or one inside a nest or expanded nest of one (ids as above).
+    std::optional<model::BinItem> currentItem(const QString& binId, const QString& id) const;
+    // The expanded item changed: the sequence takes it and goes to its bin; the expanded item is made again.
+    void storeExpanded(const model::BinItem& item);
     // A nest's item changed: its segment in the level out takes it, and so on out to the bin.
     void storeNest(const model::BinItem& item);
     model::EditHistory history_;

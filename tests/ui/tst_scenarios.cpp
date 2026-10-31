@@ -457,6 +457,20 @@ struct Run {
             }
             return true;
         }
+        if (o.contains(QStringLiteral("expand"))) {
+            // [track, record frame]: the segment effect there expanded in the Timeline (FX Guide p.220).
+            const QJsonArray a = o.value(QStringLiteral("expand")).toArray();
+            const bool ok = timeline.expandNest(a.at(0).toString(), a.at(1).toInteger());
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the expansion was not refused") : timeline.lastMessage());
+            }
+            return true;
+        }
+        if (o.contains(QStringLiteral("close_nest"))) {
+            // The expanded nest closed again (p.221).
+            if (!timeline.closeNest()) return fail(timeline.lastMessage());
+            return true;
+        }
         if (o.contains(QStringLiteral("nested_move"))) {
             // [track, record frame, from, to]: a nested effect's title row dragged in the Effect Editor
             // (FX Guide p.222), on the segment effect at the frame.
@@ -676,6 +690,8 @@ struct Run {
                         QJsonArray names;
                         for (const model::NestedEffect& n : model::nestedEffects(g, 0)) names.append(n.effect.name);
                         extra.insert(QStringLiteral("nested"), names);
+                        // And the nest's tracks, as a Submaster's are.
+                        extra.insert(QStringLiteral("nest"), plainTracks(model::nestOf(g)));
                     }
                     // A Motion Adapter: the clip's own rate (p.469).
                     if (g.adapter) extra.insert(QStringLiteral("adapter"), QString::fromStdString(frameRateText(g.adapter->clipRate)));
@@ -719,7 +735,9 @@ struct Run {
         // Before the first edit makes a sequence there is none; undoing that edit leaves the new
         // sequence empty (undo does not cover the bin), which is the same state.
         const model::LoadedClip* c = composer.state(MonitorId::Record).current();
-        const QJsonObject j = c ? model::Sequence::fromItem(c->item).toJson() : model::Sequence::withDefaultTracks().toJson();
+        // An expanded nest is a view of the sequence (FX Guide p.220): its state is the sequence as stored.
+        QJsonObject j = c ? model::Sequence::fromItem(c->item).toJson() : model::Sequence::withDefaultTracks().toJson();
+        if (const auto stored = timeline.collapsedSequence()) j = stored->toJson();
         return QCryptographicHash::hash(QJsonDocument(j).toJson(QJsonDocument::Compact), QCryptographicHash::Sha256).toHex();
     }
 };

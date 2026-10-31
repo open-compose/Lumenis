@@ -5,7 +5,8 @@ FX Guide ch.8, p.216-228. Code: `src/model/nest.*` (`nestOf`, `setNest`, `ensure
 in `sequence.h`, the compositor's nest in `segmentPicture`, `Timeline::stepIn`/`stepOut`/`collapse`,
 `MainWindow::videoMixdown` with `VideoMixdownDialog` (`mixdown_dialog.*`). The Effect Editor's nested effects: `EffectEditor::nestedEffects`, `setNestedLevel`, `moveNestedEffect`,
 `Timeline::changeNestedEffect`/`moveNestedEffect`. Tests: `tst_nest`, `tst_compositor`, `tst_nest_ui`,
-scenarios `28-collapse.json` and `30-nested-order.json`.
+expanding: `model::expandNest`, `collapseExpansion`, `Timeline::expandNest`, `closeNest`, `doubleClickTrack`.
+Scenarios `28-collapse.json`, `30-nested-order.json` and `31-expanded-nest.json`.
 
 ## 6.6a: nests
 
@@ -76,8 +77,37 @@ scenarios `28-collapse.json` and `30-nested-order.json`.
   of several tracks, or another effect onto it, and a Timewarp anywhere but innermost (p.177). The Symphony
   Option's colour correction relationships wait for 6.10.
 
+## 6.6b3: expanding nests in the Timeline
+
+* "You can expand an existing nested effect for editing within the Timeline. You can then add new tracks,
+  edit source material into the tracks, and apply and adjust effects on the nested tracks. You can expand any
+  segment effect in this way" (p.220). "The nested tracks appear in the Timeline above the track you
+  double-clicked. Editing and patching features are available for changing the content of the track's
+  effect." Ours (`model::expandNest`, `Timeline::expandNest`): the Record monitor shows an expanded sequence
+  as an item of its own: the sequence's tracks, the video tracks above the segment's moved up, and the nest's
+  video tracks between them named "<track>.<n>" ("2.1" over V2, as in the pictures on p.221), holding the
+  nest's material over the segment's frames and grey outside them. Every edit to it (and its undo) goes back
+  into the sequence in its bin (`model::collapseExpansion`): the nested tracks' material over the segment
+  into its nest, the moved tracks back. An edit that moves or trims the segment alone leaves its nest, and the
+  expansion follows the segment; when the segment is removed the expansion closes. A segment effect without
+  a nest gets one first (an undo step "Expand Nest").
+* "To expand a nested effect, do one of the following: In Effect mode, double-click the nested effect. In
+  Source/Record mode, click one of the segment tools on the Timeline palette, and then double-click the
+  nested effect" (p.220). The Timeline settings' Double-Click to Show Nesting, "lets you double-click
+  segments in the Timeline to display the nested effects" (Editing Guide p.1219), allows the second; on by
+  default (ours: the guide gives no default, and the FX Guide's steps need it).
+* "Double-click the effect's icon in the Timeline" (p.220) or "Double-click the main track for the nested
+  effect (V2 in this example) to close the nested tracks again" (p.221): a double-click on the expanded
+  segment's track closes it.
+* "You cannot monitor individual tracks when you expand nested tracks in the Timeline" (p.220): the nested
+  tracks are never monitored, and the Record monitor shows the sequence as it plays.
+* Ours: one nest is expanded at a time (expanding another closes the first); Step In closes it first. New
+  tracks added while a nest is expanded are the sequence's. While expanded, renders of effects on the tracks
+  above count the moved tracks' numbers, so they show as needing a render until it is closed.
+* Undo and redo of a step made in a nest stepped into or expanded, after the Timeline has left it, go back
+  into its segment (`Timeline::storeDetached`).
+
 ## Not yet
 
-* Expanding a nest in the Timeline by double-clicking (6.6b3); effect templates are 6.6b1
-  (docs/spec/effect-templates.md). Nests are not written to AAF, `.avb`, EDL or OTIO
+* Effect templates are 6.6b1 (docs/spec/effect-templates.md). Nests are not written to AAF, `.avb`, EDL or OTIO
   ("Nested effects do not appear in edit decision lists", p.219): those keep the segment as it is.
