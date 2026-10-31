@@ -1,6 +1,7 @@
 add_library(lumenis_media STATIC
     media.cpp
     compositor.cpp
+    optical_flow.cpp
     render.cpp
     wipes.cpp
     effect_drawing.cpp
@@ -28,6 +29,7 @@ add_library(lumenis_media STATIC
     surround.cpp
     include/lumenis/media/media.h
     include/lumenis/media/compositor.h
+    include/lumenis/media/optical_flow.h
     include/lumenis/media/render.h
     include/lumenis/media/audio_fx.h
     include/lumenis/media/audio_suite.h

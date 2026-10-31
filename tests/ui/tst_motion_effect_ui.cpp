@@ -237,6 +237,18 @@ private slots:
         QVERIFY(!between.isNull());
         QVERIFY2(std::abs(qRed(between.pixel(32, 18)) - 27) <= 2, qPrintable(QString::number(qRed(between.pixel(32, 18)))));
         QCOMPARE(shownFrame(composer, MonitorId::Record, 4), 6);
+        // FluidMotion follows the motion between them (6.5d1); these frames are flat, so it is the mix too.
+        QVERIFY(window.timeline().changeRecordSequence(QStringLiteral("Type"), [&](model::Sequence& s) {
+            model::Effect e = *s.track(QStringLiteral("V1"))->segments[0].effect;
+            model::Timewarp t = model::timewarpOf(e);
+            t.type = model::TimewarpType::FluidMotion;
+            model::setTimewarp(e, t);
+            s.track(QStringLiteral("V1"))->segments[0].effect = e;
+            return true;
+        }));
+        settle();
+        const QImage fluid = composer.pictureAt(MonitorId::Record, 3, QSize(64, 36));
+        QVERIFY2(std::abs(qRed(fluid.pixel(32, 18)) - 27) <= 2, qPrintable(QString::number(qRed(fluid.pixel(32, 18)))));
 
         // The Motion Effect Editor (p.178-189): the Motion Effect button with the Record monitor active
         // opens it on the Timewarp at the position.

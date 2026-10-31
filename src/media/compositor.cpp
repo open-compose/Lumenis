@@ -1,5 +1,6 @@
 #include "lumenis/media/compositor.h"
 
+#include "lumenis/media/optical_flow.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/timewarp.h"
@@ -195,13 +196,20 @@ Picture segmentPicture(const Composition& c, const model::Segment* segment, std:
         if (missing) *missing = true;
         return Picture(c.size.width(), c.size.height());
     }
-    Picture picture = Picture::fromImage(*image, c.size.width(), c.size.height(), c.interpolation);
     if (blend > 1e-3) {
         if (const std::optional<QImage> next = c.source(*segment, frame + 1, c.size); next && !next->isNull()) {
-            picture = mix(picture, Picture::fromImage(*next, c.size.width(), c.size.height(), c.interpolation), blend);
+            // FluidMotion follows the motion between the two frames (optical_flow.h); the blended
+            // types mix them.
+            const model::TimewarpType type = model::timewarpOf(*segment->effect).type;
+            if (type == model::TimewarpType::FluidMotion || type == model::TimewarpType::FluidMotionDraft) {
+                return Picture::fromImage(interpolateFrames(*image, *next, blend, type == model::TimewarpType::FluidMotionDraft),
+                                          c.size.width(), c.size.height(), c.interpolation);
+            }
+            return mix(Picture::fromImage(*image, c.size.width(), c.size.height(), c.interpolation),
+                       Picture::fromImage(*next, c.size.width(), c.size.height(), c.interpolation), blend);
         }
     }
-    return picture;
+    return Picture::fromImage(*image, c.size.width(), c.size.height(), c.interpolation);
 }
 
 // The transitions of the dissolve family (FX Guide p.457, p.462) and the 2D transitions (wipes.cpp); any

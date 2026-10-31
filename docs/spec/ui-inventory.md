@@ -185,7 +185,7 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   than black, the bin a new clip goes into, the "(12.5 FPS)" Timeline text,
   segment Motion Effects' sound at normal speed; the Timewarp templates'
   graphs, the Speed graph's sum from the anchor, Duplicated Field as the
-  Timewarp Type until changed, FluidMotion blending until 6.5d; the
+  Timewarp Type until changed, our FluidMotion (block matching); the
   Motion Effect Editor's track choice, frame numbers for the anchor and
   keyframe positions, its graph scales, the render type change as an undo
   step of its own.

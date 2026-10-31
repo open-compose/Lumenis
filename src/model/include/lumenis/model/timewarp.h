@@ -20,8 +20,8 @@
 // model::segmentSourcePosition, which the compositor plays.
 namespace lumenis::model {
 
-// The Type menu's rendering options (p.185-186). FluidMotion is 6.5d's; until then it blends as
-// Blended Interpolated does.
+// The Type menu's rendering options (p.185-186). FluidMotion and FluidMotion Draft make their in-between
+// frames along the motion between the source frames (media::interpolateFrames, 6.5d1).
 enum class TimewarpType { DuplicatedField, BothFields, InterpolatedField, VtrStyle, BlendedInterpolated, BlendedVtr, FluidMotionDraft, FluidMotion };
 QString timewarpTypeName(TimewarpType t); // "duplicated", "both", ..., "fluidMotion"
 TimewarpType timewarpTypeFromName(const QString& name);
@@ -74,9 +74,10 @@ Effect timewarpForSegment(const Effect& effect, std::int64_t length);
 // then at 2:15 after the start of the effect, the speed of the effect is twice the speed (200%) of the
 // source", p.187-188). Strobe holds the output frame at each multiple of the strobe.
 double timewarpPosition(const Effect& effect, std::int64_t offset, std::int64_t length);
-// Whether the Type makes in-between frames by blending the two source frames around the position
-// (Blended Interpolated, Blended VTR and, until 6.5d, FluidMotion: "Blends, or averages, pixels from the
-// original frames", p.186). The others show whole source frames.
+// Whether the Type makes in-between frames from the two source frames around the position: Blended
+// Interpolated and Blended VTR mix them ("Blends, or averages, pixels from the original frames", p.186),
+// FluidMotion follows the motion between them (the compositor tells them apart). The others show whole
+// source frames.
 bool blendsFrames(const Effect& effect);
 // "If the option is set to a specific motion effect type, Media Composer changes all motion effects to
 // that type when it renders them" (p.173): the Type a Timewarp renders with under the Render setting's

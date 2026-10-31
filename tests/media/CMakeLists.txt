@@ -37,5 +37,6 @@ lumenis_add_test(tst_compositor SOURCES tst_compositor.cpp LIBS lumenis::media)
 lumenis_add_test(tst_burn_in SOURCES tst_burn_in.cpp LIBS lumenis::media)
 # The Illusion FX segment effects (docs/spec/illusion-fx.md).
 lumenis_add_test(tst_illusion_fx SOURCES tst_illusion_fx.cpp LIBS lumenis::media)
+lumenis_add_test(tst_optical_flow SOURCES tst_optical_flow.cpp LIBS lumenis::media)
 # Render Effect: precomputes and playing them (docs/spec/rendering.md).
 lumenis_add_test(tst_render SOURCES tst_render.cpp LIBS lumenis::media)

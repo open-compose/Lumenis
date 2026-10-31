@@ -977,9 +977,19 @@ phase of their own. They are done in three steps:
     6.2b, Edit Graph, Type and Ignore Render Setting (with the Render setting's Render Using menus), the
     anchor, Strobe and Duration, its toolbar, and dragging its icon to a bin as a template. Done
     (docs/spec/motion-effects.md), but the icon's drag to a bin comes with effect templates (6.6).
-  * 6.5d, FluidMotion (our own optical flow), FluidMotion Edit, the Source and Output formats with
-    pulldown (FluidFilm, Pulldown Insertion and Removal), motion adapters for mixed-rate clips with the
-    Timeline's Show Adapters, and the FluidBlur, FluidColorMap and FluidMorph Illusion FX.
+  * 6.5d, in three parts (planned 2026-10-30 from FX p.197-205 and Editing Guide p.468-480):
+    * 6.5d1, FluidMotion: our own optical flow (no new dependency) making the in-between frames of the
+      FluidMotion and FluidMotion Draft Types (p.186, p.197). FluidMotion Edit's regions are drawn with
+      the intraframe tools, so it goes with them (6.9). Done (`src/media/optical_flow.*`).
+    * 6.5d2, motion adapters (Editing Guide p.468-478): mixed rate clips play at the project's rate in
+      the monitors and sequences (until now frame for frame), the green dot and "(59.94 fps)" names in the
+      Timeline, the adapter in the Motion Effect Editor (Type and Promote only), the Field Motion bin
+      column, Show Adapters, Refresh Sequence > Motion Adapters/Timewarps and the Render setting's Use
+      frame blending in Motion Adapters.
+    * 6.5d3, fields and format conversion: the Source and Output formats with pulldown (FluidFilm,
+      Pulldown Insertion and Removal, Adaptive Deinterlace Source, the two-field options of 6.5a) once
+      clips carry field motion; and the FluidBlur, FluidColorMap and FluidMorph Illusion FX on 6.5d1's
+      flow.
 * 6.6, layered and nested effects (ch.8, p.206-228): nesting and stepping in, Collapse,
   Submaster, Double-Click to Show Nesting; and effect templates in bins (p.52-55), with the Motion
   Effect Editor's Timewarp icon (p.182).
