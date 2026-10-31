@@ -1355,26 +1355,35 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
         if (!codecAllowed(s.videoCodec)) return failed(QStringLiteral("%1 is not available in this build").arg(s.videoCodec));
         const AVCodec* codec = avcodec_find_encoder_by_name(s.videoCodec.toUtf8().constData());
         if (!codec) return failed(QStringLiteral("no encoder %1").arg(s.videoCodec));
-        d.venc = avcodec_alloc_context3(codec);
-        d.venc->width = s.width;
-        d.venc->height = s.height;
-        d.venc->time_base = inverse(toAv(s.frameRate));
-        d.venc->framerate = toAv(s.frameRate);
-        d.venc->pix_fmt = s.pixelFormat.isEmpty() ? firstPixelFormat(codec)
-                                                  : av_get_pix_fmt(s.pixelFormat.toUtf8().constData());
-        d.venc->sample_aspect_ratio = AVRational{1, 1};
-        // Rec. 709 for HD and larger, and for DNx, which declares 709 at any
-        // size; Rec. 601 otherwise. The stream says which, so readers agree.
-        d.rec709 = s.height > 576 || s.videoCodec == QLatin1String("dnxhd");
-        d.venc->colorspace = d.rec709 ? AVCOL_SPC_BT709 : AVCOL_SPC_SMPTE170M;
-        d.venc->color_primaries = d.rec709 ? AVCOL_PRI_BT709 : AVCOL_PRI_SMPTE170M;
-        d.venc->color_trc = d.rec709 ? AVCOL_TRC_BT709 : AVCOL_TRC_SMPTE170M;
-        d.venc->color_range = AVCOL_RANGE_MPEG;
-        if (s.bitRate > 0) d.venc->bit_rate = s.bitRate;
-        d.venc->thread_count = 0;
-        if (globalHeader) d.venc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
-        if (!s.videoProfile.isEmpty()) av_opt_set(d.venc->priv_data, "profile", s.videoProfile.toUtf8().constData(), 0);
-        const int rc = avcodec_open2(d.venc, codec, nullptr);
+        // Set up and opened with `threads` (0: automatic). An encoder whose per-thread buffers do not fit in
+        // the memory there is (DNx on a many-core machine running other jobs: "Cannot allocate memory") is
+        // opened again with one thread (BUILDING.md, Troubleshooting).
+        auto openEncoder = [&](int threads) {
+            if (d.venc) avcodec_free_context(&d.venc);
+            d.venc = avcodec_alloc_context3(codec);
+            if (!d.venc) return AVERROR(ENOMEM);
+            d.venc->width = s.width;
+            d.venc->height = s.height;
+            d.venc->time_base = inverse(toAv(s.frameRate));
+            d.venc->framerate = toAv(s.frameRate);
+            d.venc->pix_fmt = s.pixelFormat.isEmpty() ? firstPixelFormat(codec)
+                                                      : av_get_pix_fmt(s.pixelFormat.toUtf8().constData());
+            d.venc->sample_aspect_ratio = AVRational{1, 1};
+            // Rec. 709 for HD and larger, and for DNx, which declares 709 at any
+            // size; Rec. 601 otherwise. The stream says which, so readers agree.
+            d.rec709 = s.height > 576 || s.videoCodec == QLatin1String("dnxhd");
+            d.venc->colorspace = d.rec709 ? AVCOL_SPC_BT709 : AVCOL_SPC_SMPTE170M;
+            d.venc->color_primaries = d.rec709 ? AVCOL_PRI_BT709 : AVCOL_PRI_SMPTE170M;
+            d.venc->color_trc = d.rec709 ? AVCOL_TRC_BT709 : AVCOL_TRC_SMPTE170M;
+            d.venc->color_range = AVCOL_RANGE_MPEG;
+            if (s.bitRate > 0) d.venc->bit_rate = s.bitRate;
+            d.venc->thread_count = threads;
+            if (globalHeader) d.venc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+            if (!s.videoProfile.isEmpty()) av_opt_set(d.venc->priv_data, "profile", s.videoProfile.toUtf8().constData(), 0);
+            return avcodec_open2(d.venc, codec, nullptr);
+        };
+        int rc = openEncoder(0);
+        if (rc == AVERROR(ENOMEM)) rc = openEncoder(1);
         if (rc < 0) return failed(QStringLiteral("cannot open the %1 encoder: %2").arg(s.videoCodec, errorText(rc)));
         d.vst = avformat_new_stream(d.out, nullptr);
         avcodec_parameters_from_context(d.vst->codecpar, d.venc);

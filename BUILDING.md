@@ -592,6 +592,15 @@ An arm64 FFmpeg can be tried on Linux: unpack an arm64 Ubuntu with
 aarch64 PyAV and numpy wheels, and run
 `qemu-aarch64 -L <root> <root>/usr/bin/python3.12`.
 
+### `transcodeRoundTrips`: "cannot open the dnxhd encoder: Cannot allocate memory"
+
+Seen on the self-hosted Windows runner (runs 236 and 237), where a re-run of the job alone passed. FFmpeg's
+DNx encoder sets up buffers for every thread it starts. With automatic threads on a many-core machine
+that is already running other tests or jobs, those allocations can fail. `MediaWriter::open` now opens such
+an encoder again with one thread when the first open fails for want of memory, so transcodes, renders and
+consolidations go on, more slowly. If it still fails, the machine is out of memory: close other programs
+or run fewer tests at once (`ctest -j`).
+
 ### macOS: "implicit conversion from 'std::int64_t' to 'long double' may lose precision"
 
 On Apple arm64 `long double` is a plain 64-bit `double`, so Apple Clang's
