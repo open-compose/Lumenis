@@ -36,6 +36,81 @@ TimewarpType timewarpTypeFromName(const QString& name) {
     return TimewarpType::DuplicatedField;
 }
 
+QString timewarpFormatName(TimewarpFormat f) {
+    switch (f) {
+    case TimewarpFormat::Interlaced: return QStringLiteral("interlaced");
+    case TimewarpFormat::Progressive: return QStringLiteral("progressive");
+    case TimewarpFormat::Film: return QStringLiteral("film");
+    case TimewarpFormat::Repeated: return QStringLiteral("repeated");
+    }
+    return QStringLiteral("progressive");
+}
+
+std::optional<TimewarpFormat> timewarpFormatFromName(const QString& name) {
+    static const TimewarpFormat all[] = {TimewarpFormat::Interlaced, TimewarpFormat::Progressive, TimewarpFormat::Film, TimewarpFormat::Repeated};
+    for (const TimewarpFormat f : all) {
+        if (timewarpFormatName(f) == name) return f;
+    }
+    return std::nullopt;
+}
+
+QString timewarpFormatText(TimewarpFormat f) {
+    switch (f) {
+    case TimewarpFormat::Interlaced: return QStringLiteral("Interlaced");
+    case TimewarpFormat::Progressive: return QStringLiteral("Progressive");
+    case TimewarpFormat::Film: return QStringLiteral("Film with pulldown");
+    case TimewarpFormat::Repeated: return QStringLiteral("Progressive Repeated");
+    }
+    return QStringLiteral("Progressive");
+}
+
+TimewarpFormat sourceFormat(const Timewarp& t, bool interlacedProject) {
+    return t.source.value_or(interlacedProject ? TimewarpFormat::Interlaced : TimewarpFormat::Progressive);
+}
+
+TimewarpFormat outputFormat(const Timewarp& t, bool interlacedProject) {
+    if (!interlacedProject) return TimewarpFormat::Progressive;
+    const TimewarpFormat out = t.output.value_or(TimewarpFormat::Interlaced);
+    return out == TimewarpFormat::Repeated ? TimewarpFormat::Progressive : out;
+}
+
+QList<TimewarpFormat> sourceFormats(int nominalFps, bool interlacedProject, bool filmProject) {
+    if (filmProject) return {};
+    QList<TimewarpFormat> out{TimewarpFormat::Interlaced, TimewarpFormat::Progressive};
+    if (nominalFps == 30 || nominalFps == 60) out << TimewarpFormat::Film;
+    out << TimewarpFormat::Repeated;
+    (void)interlacedProject;
+    return out;
+}
+
+QList<TimewarpFormat> outputFormats(TimewarpFormat source, int nominalFps, bool interlacedProject) {
+    if (!interlacedProject) return {TimewarpFormat::Progressive};
+    const bool thirty = nominalFps == 30 || nominalFps == 60;
+    QList<TimewarpFormat> out;
+    // The table (p.205): each source's own format first, then its conversions.
+    switch (source) {
+    case TimewarpFormat::Interlaced:
+        out << TimewarpFormat::Interlaced << TimewarpFormat::Progressive;
+        if (thirty) out << TimewarpFormat::Film;
+        break;
+    case TimewarpFormat::Progressive:
+        out << TimewarpFormat::Progressive << TimewarpFormat::Interlaced;
+        if (thirty) out << TimewarpFormat::Film;
+        break;
+    case TimewarpFormat::Film: out << TimewarpFormat::Film << TimewarpFormat::Interlaced << TimewarpFormat::Progressive; break;
+    case TimewarpFormat::Repeated:
+        out << TimewarpFormat::Interlaced << TimewarpFormat::Progressive;
+        if (thirty) out << TimewarpFormat::Film;
+        break;
+    }
+    return out;
+}
+
+bool adaptiveAvailable(TimewarpFormat source, TimewarpFormat output, TimewarpType type) {
+    return source == TimewarpFormat::Interlaced && output == TimewarpFormat::Progressive &&
+           (type == TimewarpType::BothFields || type == TimewarpType::BlendedInterpolated || type == TimewarpType::BlendedVtr);
+}
+
 bool isTimewarp(const Effect& effect) {
     return effect.category == QLatin1String(kTimewarpCategory);
 }
@@ -49,6 +124,12 @@ Timewarp timewarpOf(const Effect& effect) {
     t.strobe = std::max(1, o.value(QStringLiteral("Strobe")).toInt(1));
     t.type = timewarpTypeFromName(o.value(QStringLiteral("Type")).toString());
     t.ignoreRenderSetting = o.value(QStringLiteral("Ignore Render Setting")).toBool();
+    t.source = timewarpFormatFromName(o.value(QStringLiteral("Source")).toString());
+    t.output = timewarpFormatFromName(o.value(QStringLiteral("Output")).toString());
+    t.pulldownPhase = std::clamp(o.value(QStringLiteral("Pulldown Phase")).toInt(0), 0, 4);
+    t.repeatCount = std::clamp(o.value(QStringLiteral("Repeat Count")).toInt(2), 1, 30);
+    t.autoPattern = o.value(QStringLiteral("Auto Pattern")).toBool(true);
+    t.adaptiveDeinterlace = o.value(QStringLiteral("Adaptive Deinterlace Source")).toBool();
     return t;
 }
 
@@ -60,6 +141,15 @@ void setTimewarp(Effect& effect, const Timewarp& t) {
                                          {QStringLiteral("Strobe"), t.strobe},
                                          {QStringLiteral("Type"), timewarpTypeName(t.type)},
                                          {QStringLiteral("Ignore Render Setting"), t.ignoreRenderSetting}});
+    QJsonObject o = effect.parameters.value(QLatin1String(kTimewarpCategory)).toObject();
+    // The formats only when set, so Timewarps made before them stay as they were.
+    if (t.source) o.insert(QStringLiteral("Source"), timewarpFormatName(*t.source));
+    if (t.output) o.insert(QStringLiteral("Output"), timewarpFormatName(*t.output));
+    if (t.pulldownPhase != 0) o.insert(QStringLiteral("Pulldown Phase"), t.pulldownPhase);
+    if (t.repeatCount != 2) o.insert(QStringLiteral("Repeat Count"), t.repeatCount);
+    if (!t.autoPattern) o.insert(QStringLiteral("Auto Pattern"), false);
+    if (t.adaptiveDeinterlace) o.insert(QStringLiteral("Adaptive Deinterlace Source"), true);
+    effect.parameters.insert(QLatin1String(kTimewarpCategory), o);
 }
 
 namespace {
@@ -104,8 +194,21 @@ Effect timewarpForSegment(const Effect& effect, std::int64_t length) {
         t.positionGraph = true;
         setGraph(out, true, {{0.0, 0.0}, {1.0, last}}, length, Interpolation::Linear);
     } else if (name.startsWith(QLatin1String("FluidFilm"))) {
-        // "Rendering option: FluidMotion" (p.204).
+        // "Source format: Interlaced. Output format: Film with 2:3 Pulldown (for FluidFilm 2:3 Cadence effect),
+        // Progressive (for FluidFilm Progressive effect). Rendering option: FluidMotion" (p.204).
         t.type = TimewarpType::FluidMotion;
+        t.source = TimewarpFormat::Interlaced;
+        t.output = name.contains(QLatin1String("2:3")) ? TimewarpFormat::Film : TimewarpFormat::Progressive;
+    } else if (name == QLatin1String("Pulldown Insertion")) {
+        // "Inserts or removes pulldown in a sequence" (p.203). Ours: progressive frames into 2:3 film fields,
+        // and back, with Both Fields.
+        t.type = TimewarpType::BothFields;
+        t.source = TimewarpFormat::Progressive;
+        t.output = TimewarpFormat::Film;
+    } else if (name == QLatin1String("Pulldown Removal")) {
+        t.type = TimewarpType::BothFields;
+        t.source = TimewarpFormat::Film;
+        t.output = TimewarpFormat::Progressive;
     }
     setTimewarp(out, t);
     return out;

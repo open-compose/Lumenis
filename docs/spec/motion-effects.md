@@ -248,3 +248,59 @@ Editor's `Shown::Adapter`, the Field Motion column's menu in `BinView::contextMe
 * Not yet: AAF and `.avb` interchange of adapters (their sequences keep counting the clip's frames), the
   Modify dialog's sequence format (p.1294), grouped clips (Phase 9), and the 2:3 pulldown and field
   options (6.5d3).
+
+## 6.5d3a: fields and format conversion
+
+FX Guide p.181-186, p.203-205; Editing Guide p.472-473. Code: `src/media/fields.*` (field pictures, weaving,
+2:3 pulldown and finding its phase, repeated frames, adaptive deinterlacing, `convertedFrame`), the Timewarp's
+formats in `src/model/timewarp.*` (`TimewarpFormat`, `sourceFormats`, `outputFormats`, `adaptiveAvailable`),
+the compositor's `convertedPicture`, `media::FrameCache::convertedFrame` for adapters,
+`MainWindow::motionFieldFrame` for two-field motion effects, the Motion Effect Editor's Source, Pattern,
+Output and Adaptive Deinterlace Source controls, and the field order of linked media
+(`media::Link::topFieldFirst`). Tests: `tst_fields`, `tst_motion_effect`, `tst_motion_adapter`,
+`tst_motion_adapter_ui`.
+
+* Pictures are whole frames as the media gives them; an interlaced frame holds its two fields line by line,
+  the first in time on the even lines unless the media says it is bottom field first (FFmpeg's field order,
+  kept in the link as `"fieldOrder": "bottom"`).
+* The Types at field level, on an interlaced Source (p.185-186): "Duplicated Field: Displays a single field"
+  (the first, each line twice); "Both Fields" whole frames; "Interpolated Field ... combining scan line pairs
+  from the first field" and "calculates the motion effect at the field level" (each field at its own time,
+  the lines between it averaged); "VTR-Style ... shifting selected video fields of the original media by a
+  full scan line" (ours: each pair of lines shows the field's line of the pair, so the second field sits where
+  the first does); Blended Interpolated and Blended VTR mix two of those fields, FluidMotion follows the
+  motion between them (6.5d1). On a progressive Source they are as before.
+* Source and Output menus (p.183, p.205), filled from the p.205 table: "Film with pulldown" only in 30 fps
+  projects; the source's own format first. "Progressive projects do not allow format conversions": there the
+  Output stays Progressive, while the Source may still be Interlaced, so "an interlaced clip within a
+  progressive project" is deinterlaced ("set the Source menu to Interlaced and the Output menu to
+  Progressive", p.183). "The Source and Output menus are not available in Film projects": dimmed. Until set,
+  a Timewarp's formats are the project's (Interlaced or Progressive), so Timewarps made before keep their
+  pictures in progressive projects.
+* How a frame is made (`media::convertedFrame`): the Timewarp maps output time to source position (its
+  graphs, 6.5b; between frames for the second field and for film frames). Output Progressive shows the
+  source's picture at the frame's time; Interlaced weaves the pictures of the frame's two field times; Film
+  with pulldown samples film frames every 5/4 output frames and lays them down in 2:3 cadence (AA BB BC CD DD)
+  from the effect's first frame. A Film source rebuilds its film frames from their fields with its 2:3 phase,
+  a Progressive Repeated source takes one picture every so many frames.
+* "If you select Film with Pulldown as the source format, additional options display that lets you either
+  manually or automatically set the pulldown pattern ... Progressive Repeated ... the repeated frame count"
+  (p.205): the Pattern row's Auto, the phase (the cycle frame the clip starts on: AA, BB, BC, CD, DD) and the
+  count. Auto finds them in the segment's first frames when the Source is chosen: the phase whose split
+  frames show their fields most unlike and whose whole frames least; the commonest run of identical frames.
+* Adaptive Deinterlace Source (p.181): offered for Interlaced to Progressive with Both Fields, Blended
+  Interpolated or Blended VTR. Ours: a pixel of the other field stays where the frames before and after show
+  it still (a change under 12 of 255), and is interpolated where it moves.
+* The templates (p.203-204): FluidFilm 2:3 Cadence (Interlaced to Film with pulldown, FluidMotion), FluidFilm
+  Progressive (Interlaced to Progressive, FluidMotion), and ours for Pulldown Insertion (Progressive to Film
+  with pulldown) and Pulldown Removal (Film with pulldown to Progressive), both with Both Fields.
+* Motion adapters now follow their Field Motion (Editing Guide p.469, p.472-473): an interlaced clip in a
+  progressive project, a 2:3 Film clip and a Progressive Strobe clip get an adapter at the project's rate
+  too (the green dot), made from the media's fields, film frames (phase found in the file once) or pictures
+  (repeat count found once) with the adapter's Type; an interlaced project's adapters make interlaced
+  frames (`MotionAdapter::interlaced`). Adaptive Deinterlace Source for adapters ("In some circumstances")
+  is not offered yet.
+* Traditional motion effects (6.5a) of an interlaced source clip use their Render 2-Field Motion Effect Using
+  choice (FX Guide p.563): Duplicated Field, Both Fields, Interpolated Field or VTR-Style at field level.
+* Not yet: FluidBlur, FluidColorMap and FluidMorph (6.5d3b); "You must render FluidMotion effects before
+  combining with any other effects" (p.187) is not enforced.

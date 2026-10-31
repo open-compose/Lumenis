@@ -251,6 +251,51 @@ private slots:
         QCOMPARE(segmentSourceFrame(m, 4), 35);
         QCOMPARE(timewarpOf(*m.effect).strobe, 1);
     }
+
+    void timewarpFormats() {
+        // The Source and Output formats (FX Guide p.183, p.205) are kept with the effect, and only when set.
+        Effect e = promotedTimewarp(1.0);
+        Timewarp t = timewarpOf(e);
+        QVERIFY(!t.source && !t.output);
+        QCOMPARE(sourceFormat(t, true), TimewarpFormat::Interlaced);
+        QCOMPARE(sourceFormat(t, false), TimewarpFormat::Progressive);
+        QVERIFY(!e.parameters.value(QStringLiteral("Timewarp")).toObject().contains(QStringLiteral("Source")));
+        t.source = TimewarpFormat::Film;
+        t.output = TimewarpFormat::Progressive;
+        t.pulldownPhase = 3;
+        t.autoPattern = false;
+        t.adaptiveDeinterlace = true;
+        setTimewarp(e, t);
+        QCOMPARE(timewarpOf(e), t);
+        // "Progressive projects do not allow format conversions": the Output stays Progressive there.
+        QCOMPARE(outputFormat(t, false), TimewarpFormat::Progressive);
+        QCOMPARE(outputFormats(TimewarpFormat::Interlaced, 30, false), QList<TimewarpFormat>{TimewarpFormat::Progressive});
+        // The table (p.205): Film with pulldown in 30 fps projects only.
+        QVERIFY(sourceFormats(30, true, false).contains(TimewarpFormat::Film));
+        QVERIFY(!sourceFormats(25, true, false).contains(TimewarpFormat::Film));
+        QVERIFY(!outputFormats(TimewarpFormat::Interlaced, 25, true).contains(TimewarpFormat::Film));
+        QCOMPARE(outputFormats(TimewarpFormat::Interlaced, 30, true),
+                 (QList<TimewarpFormat>{TimewarpFormat::Interlaced, TimewarpFormat::Progressive, TimewarpFormat::Film}));
+        // "The Source and Output menus are not available in Film projects."
+        QVERIFY(sourceFormats(24, false, true).isEmpty());
+        // Adaptive Deinterlace Source: Interlaced to Progressive with Both Fields or a blend (p.181).
+        QVERIFY(adaptiveAvailable(TimewarpFormat::Interlaced, TimewarpFormat::Progressive, TimewarpType::BothFields));
+        QVERIFY(adaptiveAvailable(TimewarpFormat::Interlaced, TimewarpFormat::Progressive, TimewarpType::BlendedVtr));
+        QVERIFY(!adaptiveAvailable(TimewarpFormat::Interlaced, TimewarpFormat::Progressive, TimewarpType::FluidMotion));
+        QVERIFY(!adaptiveAvailable(TimewarpFormat::Progressive, TimewarpFormat::Progressive, TimewarpType::BothFields));
+        // The templates' formats (p.203-204).
+        const Timewarp fluid = timewarpOf(timewarpForSegment(Effect{QStringLiteral("Timewarp"), QStringLiteral("FluidFilm 2:3 Cadence"), {}}, 50));
+        QCOMPARE(fluid.source, TimewarpFormat::Interlaced);
+        QCOMPARE(fluid.output, TimewarpFormat::Film);
+        QCOMPARE(fluid.type, TimewarpType::FluidMotion);
+        QCOMPARE(timewarpOf(timewarpForSegment(Effect{QStringLiteral("Timewarp"), QStringLiteral("FluidFilm Progressive"), {}}, 50)).output,
+                 TimewarpFormat::Progressive);
+        const Timewarp removal = timewarpOf(timewarpForSegment(Effect{QStringLiteral("Timewarp"), QStringLiteral("Pulldown Removal"), {}}, 50));
+        QCOMPARE(removal.source, TimewarpFormat::Film);
+        QCOMPARE(removal.output, TimewarpFormat::Progressive);
+        QCOMPARE(timewarpOf(timewarpForSegment(Effect{QStringLiteral("Timewarp"), QStringLiteral("Pulldown Insertion"), {}}, 50)).output,
+                 TimewarpFormat::Film);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestMotionEffect)

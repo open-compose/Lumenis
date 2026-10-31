@@ -10,6 +10,7 @@
 
 #include "lumenis/media/audio_input.h"
 #include "lumenis/media/compositor.h"
+#include "lumenis/media/fields.h"
 #include "lumenis/media/consolidate.h"
 #include "lumenis/media/playback.h"
 
@@ -668,6 +669,9 @@ void MainWindow::createPanels() {
                 }
             }
             return image;
+        }
+        if (const model::LoadedClip* loaded = state.current()) {
+            if (auto field = motionFieldFrame(loaded->item, at, size)) return *field;
         }
         const auto shown = frameAt(monitor, at);
         if (!shown) return {};
@@ -1827,6 +1831,43 @@ std::optional<std::pair<model::BinItem, std::int64_t>> MainWindow::followMotion(
     if (!source || !media::isLinked(*source)) return std::nullopt;
     const std::int64_t last = std::max<std::int64_t>(source->durationFrames - 1, 0);
     return std::make_pair(*source, std::clamp<std::int64_t>(motion->sourceFrame(frame), 0, last));
+}
+
+// "Render 2-Field Motion Effect Using" (p.563): Duplicated Field, Both Fields, Interpolated Field or VTR-Style,
+// for two-field media (a source clip whose Field Motion is Interlaced); the frames at the effect's speed,
+// held by its strobe, the output the project's scan.
+std::optional<QImage> MainWindow::motionFieldFrame(const model::BinItem& clip, std::int64_t frame, QSize size) const {
+    if (media::isLinked(clip)) return std::nullopt;
+    const auto motion = model::motionEffectOf(clip);
+    if (!motion || !project_) return std::nullopt;
+    const bool interlaced = project_->settings.format.scan == ScanMode::Interlaced;
+    const auto source = composer_->resolve(motion->sourceBin, motion->sourceClip);
+    if (!source || !media::isLinked(*source) || model::clipFieldMotion(*source, interlaced) != model::FieldMotionAttribute::Interlaced) {
+        return std::nullopt;
+    }
+    media::FieldConversion conv;
+    conv.source = media::SourceFormat::Interlaced;
+    conv.output = interlaced ? media::OutputFormat::Interlaced : media::OutputFormat::Progressive;
+    switch (motion->field) {
+    case model::FieldMotion::DuplicatedField: conv.rendering = media::FieldRendering::DuplicatedField; break;
+    case model::FieldMotion::BothFields: conv.rendering = media::FieldRendering::BothFields; break;
+    case model::FieldMotion::InterpolatedField: conv.rendering = media::FieldRendering::InterpolatedField; break;
+    case model::FieldMotion::VtrStyle: conv.rendering = media::FieldRendering::VtrStyle; break;
+    }
+    conv.topFirst = source->link.value(QStringLiteral("fieldOrder")).toString() != QLatin1String("bottom");
+    const std::int64_t last = std::max<std::int64_t>(source->durationFrames - 1, 0);
+    const media::FrameGetter frameAt = [&](std::int64_t n) {
+        return n < 0 || n > last ? QImage() : frames_->frame(*source, n, size);
+    };
+    const model::MotionEffect& m = *motion;
+    const auto positionAt = [&m](double t) {
+        // The strobe holds whole pictures, both fields (MotionEffect::sourceFrame).
+        const double held = m.strobe > 1 ? std::floor(std::floor(t) / m.strobe) * m.strobe : t;
+        return static_cast<double>(m.sourceStart) + held * m.speed;
+    };
+    const QImage image = media::convertedFrame(frameAt, positionAt, static_cast<double>(frame), conv);
+    if (image.isNull()) return std::nullopt;
+    return image;
 }
 
 // The audio of a loaded clip or sequence as pieces for media::AudioMix (media::audioPieces).
@@ -3223,6 +3264,7 @@ void MainWindow::fillComposition(media::Composition& c, const model::LoadedClip&
         if (clip) {
             // A mixed rate clip at the sequence's rate (motion_adapter.h).
             clip = model::clipForSegment(*clip, segment);
+            if (auto field = motionFieldFrame(*clip, clipFrame, want)) return *field;
             // A motion effect clip shows its source clip's frames (FX Guide p.165).
             if (auto source = followMotion(*clip, clipFrame)) {
                 clip = source->first;
@@ -3238,6 +3280,12 @@ void MainWindow::fillComposition(media::Composition& c, const model::LoadedClip&
     c.burnIn.markIn = loaded.in;
     c.burnIn.markOut = loaded.out;
     c.burnIn.clip = [this](const model::Segment& segment) { return composer_->resolve(segment.binId, segment.clipId); };
+    // Timewarps' Source and Output formats (6.5d3a): the project's scan and the media's field order.
+    c.interlaced = project_ && project_->settings.format.scan == ScanMode::Interlaced;
+    c.topFieldFirst = [this](const model::Segment& segment) {
+        const auto clip = composer_->resolve(segment.binId, segment.clipId);
+        return !clip || clip->link.value(QStringLiteral("fieldOrder")).toString() != QLatin1String("bottom");
+    };
     // Rendered effects play from their precomputes (6.4a); offline ones are computed again.
     c.rendered = [this](const model::EffectRender& render, std::int64_t at, QSize want) -> std::optional<QImage> {
         const auto piece = model::renderedClipAt(render, at);
@@ -3508,6 +3556,11 @@ void MainWindow::renderInBackground(const model::LoadedClip& loaded, const model
     c.burnIn.sequence = loaded.item;
     c.burnIn.markIn = loaded.in;
     c.burnIn.markOut = loaded.out;
+    c.interlaced = project_ && project_->settings.format.scan == ScanMode::Interlaced;
+    c.topFieldFirst = [clips, key](const model::Segment& segment) {
+        const auto it = clips->constFind(key(segment.binId, segment.clipId));
+        return it == clips->cend() || it->link.value(QStringLiteral("fieldOrder")).toString() != QLatin1String("bottom");
+    };
     c.burnIn.clip = [clips, key](const model::Segment& segment) -> std::optional<model::BinItem> {
         const auto it = clips->constFind(key(segment.binId, segment.clipId));
         if (it == clips->cend()) return std::nullopt;
@@ -4800,6 +4853,11 @@ void MainWindow::applySettings() {
     const Settings& s = *settings_;
     // The Render setting's Timewarps Render Using, shown by the Motion Effect Editor's Type (FX p.183).
     if (motionEditor_) motionEditor_->setRenderUsing(s.text(QStringLiteral("Render"), QStringLiteral("timewarpsRenderUsing")));
+    // Its Source and Output menus follow the project's format (FX p.183, p.205).
+    if (motionEditor_ && project_) {
+        motionEditor_->setProjectFormat(TimecodeFormat::forRate(project_->settings.format.editRate, false).nominalFps,
+                                        project_->settings.format.scan == ScanMode::Interlaced, !project_->settings.filmType.isEmpty());
+    }
     // Video Display (p.1224) and Full Screen Playback (p.1190-1191) settings.
     composer_->setHighQualityScaling(s.flag(QStringLiteral("Video Display"), QStringLiteral("highQualityScaling")));
     // Mixed rate clips load at the project's rate, through Motion Adapters of the Render setting's Type

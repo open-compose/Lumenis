@@ -32,10 +32,12 @@ std::optional<Rational> rateFrom(const QString& text) {
 }
 
 QJsonObject adapterToJson(const MotionAdapter& a) {
-    return {{QStringLiteral("rate"), rateString(a.clipRate)},
-            {QStringLiteral("sequenceRate"), rateString(a.sequenceRate)},
-            {QStringLiteral("fieldMotion"), a.fieldMotion},
-            {QStringLiteral("type"), a.type}};
+    QJsonObject o{{QStringLiteral("rate"), rateString(a.clipRate)},
+                  {QStringLiteral("sequenceRate"), rateString(a.sequenceRate)},
+                  {QStringLiteral("fieldMotion"), a.fieldMotion},
+                  {QStringLiteral("type"), a.type}};
+    if (a.interlaced) o.insert(QStringLiteral("interlaced"), true);
+    return o;
 }
 
 std::optional<MotionAdapter> adapterFromJson(const QJsonObject& o) {
@@ -43,7 +45,7 @@ std::optional<MotionAdapter> adapterFromJson(const QJsonObject& o) {
     const auto sequenceRate = rateFrom(o.value(QStringLiteral("sequenceRate")).toString());
     if (!clipRate || !sequenceRate) return std::nullopt;
     return MotionAdapter{*clipRate, *sequenceRate, o.value(QStringLiteral("fieldMotion")).toString(),
-                         o.value(QStringLiteral("type")).toString()};
+                         o.value(QStringLiteral("type")).toString(), o.value(QStringLiteral("interlaced")).toBool()};
 }
 
 // frames × to / from, rounded down: the frame of rate `to` showing at the time of frame `frames` of
@@ -163,13 +165,22 @@ std::optional<MotionAdapter> adapterFor(const BinItem& clip, const Rational& pro
     // Clips without a picture at another rate are counted at the project's too, so their sound stays
     // where it is; they show no adapter (isMixedRate).
     const bool audioOnly = clip.kind == BinItemKind::AudioClip && !(clip.editRate == projectRate);
-    if (!isMixedRate(clip, projectRate) && !audioOnly) return std::nullopt;
     const FieldMotionAttribute source = clipFieldMotion(clip, interlacedProject);
-    return MotionAdapter{clipFrameRate(clip), projectRate, fieldMotionText(source), timewarpTypeName(defaultAdapterType(source, blending))};
+    // A clip at the project's rate whose field motion does not match it (6.5d3a): an interlaced one in a
+    // progressive project, one with 2:3 pulldown or repeated frames.
+    const bool fields = hasFieldMotion(clip) && ((source == FieldMotionAttribute::Interlaced && !interlacedProject) ||
+                                                 source == FieldMotionAttribute::Film23 || source == FieldMotionAttribute::ProgressiveStrobe);
+    if (!isMixedRate(clip, projectRate) && !audioOnly && !fields) return std::nullopt;
+    return MotionAdapter{clipFrameRate(clip), projectRate, fieldMotionText(source), timewarpTypeName(defaultAdapterType(source, blending)),
+                         interlacedProject};
 }
 
 TimewarpType adapterType(const MotionAdapter& adapter) {
     return timewarpTypeFromName(adapter.type);
+}
+
+bool adapterShown(const MotionAdapter& adapter) {
+    return !(adapter.clipRate == adapter.sequenceRate) || fieldMotionFromText(adapter.fieldMotion) != FieldMotionAttribute::Progressive;
 }
 
 bool adapterBlends(const MotionAdapter& adapter) {

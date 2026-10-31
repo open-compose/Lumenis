@@ -22,8 +22,9 @@
 // with nothing else to do. Segments edited from it count in those frames too and carry the adapter
 // (Segment::adapter); clipForSegment() gives the copy back for playing them. A clip linked to media at
 // another rate is already at the project's rate (media::linkClip) and needs no copy of its frames, but is a
-// mixed rate clip all the same. Field motion itself (interlaced material, 2:3 pulldown) waits for 6.5d3: the
-// Field Motion attribute is kept and chooses the default Type, as the Render setting says.
+// mixed rate clip all the same. So is a clip whose Field Motion does not match the project (an interlaced clip
+// in a progressive project, 2:3 pulldown, repeated frames; 6.5d3a): its adapter makes the project's frames
+// from the clip's fields, film frames or pictures (media::FrameCache::frame, media::convertedFrame).
 namespace lumenis::model {
 
 // The Field Motion bin column (p.472-473): "whether the clip is interlaced or progressive, or whether it
@@ -57,6 +58,10 @@ TimewarpType defaultAdapterType(FieldMotionAttribute source, bool blending);
 // own rate, its Field Motion and the default Type.
 std::optional<MotionAdapter> adapterFor(const BinItem& clip, const Rational& projectRate, bool interlacedProject, bool blending);
 TimewarpType adapterType(const MotionAdapter& adapter);
+// Whether a segment's adapter changes how its clip plays, and so is shown (the green dot, the Motion Effect
+// Editor): a clip at another rate, or one whose Field Motion is not Progressive (6.5d3a). Audio segments'
+// adapters of clips at the project's rate only keep their units.
+bool adapterShown(const MotionAdapter& adapter);
 // Whether the adapter's Type makes in-between frames from the two frames of the clip around a project
 // frame's time (Blended Interpolated, Blended VTR, the FluidMotion types).
 bool adapterBlends(const MotionAdapter& adapter);

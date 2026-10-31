@@ -206,6 +206,8 @@ struct MotionAdapter {
     Rational sequenceRate;
     QString fieldMotion;
     QString type;
+    // The sequence's scan: an interlaced project's adapter makes interlaced frames (6.5d3a).
+    bool interlaced = false;
     bool operator==(const MotionAdapter&) const = default;
 };
 
@@ -366,7 +368,7 @@ public:
     // timecode, mix? ("5.1" or "7.1": mixFormat())}. A segment is {length, gain?, pan?,
     // volumeKeys?, panKeys?, eq?, effect?, render?, transition?, transitionRender?} (keys as [[frame, value], ...]) plus
     // addEdit? for filler or {clip, mob?, bin?, name, track, in, localColor?, surround?: [{front,
-    // rear, fr, center?, side?, lfe?}], adapter?: {rate, sequenceRate, fieldMotion, type}} for
+    // rear, fr, center?, side?, lfe?}], adapter?: {rate, sequenceRate, fieldMotion, type, interlaced?}} for
     // material.
     // fromJson() skips unreadable and duplicate tracks, tidies each track and sorts the tracks.
     QJsonObject toJson() const;

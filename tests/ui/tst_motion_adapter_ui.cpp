@@ -9,6 +9,7 @@
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/timewarp.h"
+#include "lumenis/core/project_format.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
@@ -19,6 +20,7 @@
 #include "lumenis/ui/timeline.h"
 
 #include <QAction>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
 #include <QPushButton>
@@ -59,6 +61,35 @@ int grey(Composer& composer, MonitorId monitor, std::int64_t frame) {
     const QImage image = composer.pictureAt(monitor, frame, QSize(64, 36));
     if (image.isNull()) return -1;
     return qRed(image.pixel(32, 18));
+}
+
+// A 25 fps file whose frame n has its even lines at grey 20n and its odd lines at 20n + 10: two fields.
+bool writeFields(const QString& path, int frames) {
+    media::WriterSettings s;
+    s.format = QStringLiteral("mov");
+    s.videoCodec = QStringLiteral("ffv1");
+    s.pixelFormat = QStringLiteral("bgr0");
+    s.width = 64;
+    s.height = 36;
+    s.frameRate = Rational(25);
+    media::MediaWriter w;
+    if (!w.open(path, s)) return false;
+    for (int i = 0; i < frames; ++i) {
+        QImage image(64, 36, QImage::Format_RGBA8888);
+        for (int y = 0; y < 36; ++y) {
+            const int v = 20 * i + (y % 2 == 0 ? 0 : 10);
+            for (int x = 0; x < 64; ++x) image.setPixel(x, y, qRgb(v, v, v));
+        }
+        if (!w.writeVideo(image)) return false;
+    }
+    return w.finish();
+}
+
+// A line's grey level in a monitor's picture at `frame`.
+int lineGrey(Composer& composer, MonitorId monitor, std::int64_t frame, int line) {
+    const QImage image = composer.pictureAt(monitor, frame, QSize(64, 36));
+    if (image.isNull()) return -1;
+    return qRed(image.pixel(32, line));
 }
 
 model::Segment firstV1(Composer& composer) {
@@ -188,6 +219,138 @@ private slots:
         settle();
         QVERIFY(firstV1(composer).adapter);
         QCOMPARE(editor.shown(), MotionEffectEditor::Shown::Adapter);
+    }
+
+    void fields() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString movie = dir.filePath(QStringLiteral("fields.mov"));
+        QVERIFY(writeFields(movie, 10));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        // A 25i project.
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.scan = ScanMode::Interlaced;
+        project.settings.format.width = 320;
+        project.settings.format.height = 180;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        const QStringList ids = window.linkFiles(binId, {movie});
+        QCOMPARE(ids.size(), 1);
+        const model::BinItem clip = *bin->bin().item(ids.first());
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, clip);
+        composer.moveTo(MonitorId::Source, 0);
+        commands.action(QStringLiteral("edit.splice_in"))->trigger();
+        settle();
+        QVERIFY(composer.state(MonitorId::Record).current());
+        // A 50% Timewarp, Interpolated Field, Source Interlaced and Output Progressive: each frame one field
+        // in time order (FX Guide p.185-186, p.183).
+        QVERIFY(window.timeline().changeRecordSequence(QStringLiteral("Timewarp"), [](model::Sequence& s) {
+            model::Effect e = model::promotedTimewarp(0.5);
+            model::Timewarp t = model::timewarpOf(e);
+            t.type = model::TimewarpType::InterpolatedField;
+            t.source = model::TimewarpFormat::Interlaced;
+            t.output = model::TimewarpFormat::Progressive;
+            model::setTimewarp(e, t);
+            s.track(QStringLiteral("V1"))->segments[0].effect = e;
+            return true;
+        }));
+        settle();
+        QCOMPARE(lineGrey(composer, MonitorId::Record, 1, 4), 10);
+        QCOMPARE(lineGrey(composer, MonitorId::Record, 1, 5), 10);
+        QCOMPARE(lineGrey(composer, MonitorId::Record, 2, 4), 20);
+        // Output Interlaced at the project's own scan: the fields of two times woven.
+        QVERIFY(window.timeline().changeRecordSequence(QStringLiteral("Output"), [](model::Sequence& s) {
+            model::Effect& e = *s.track(QStringLiteral("V1"))->segments[0].effect;
+            model::Timewarp t = model::timewarpOf(e);
+            t.output.reset();
+            model::setTimewarp(e, t);
+            return true;
+        }));
+        settle();
+        QCOMPARE(lineGrey(composer, MonitorId::Record, 1, 4), 10); // the first field at 0.5 frames: frame 0's second
+        QCOMPARE(lineGrey(composer, MonitorId::Record, 1, 5), 10); // the second at 0.75: still frame 0's second
+        QCOMPARE(lineGrey(composer, MonitorId::Record, 2, 5), 20); // at 1.25: frame 1's first
+        // The Motion Effect Editor's Source and Output menus (p.183, p.205: no Film with pulldown at 25 fps).
+        MotionEffectEditor& editor = window.motionEffectEditor();
+        composer.moveTo(MonitorId::Record, 1);
+        composer.setActiveMonitor(MonitorId::Record);
+        QVERIFY(!window.motionEffect());
+        settle();
+        QCOMPARE(editor.shown(), MotionEffectEditor::Shown::Timewarp);
+        QVERIFY(editor.sourceMenu()->isEnabled());
+        QCOMPARE(editor.sourceMenu()->currentData().toString(), QStringLiteral("interlaced"));
+        QCOMPARE(editor.sourceMenu()->findData(QStringLiteral("film")), -1);
+        QCOMPARE(editor.outputMenu()->currentData().toString(), QStringLiteral("interlaced"));
+        QVERIFY(!editor.adaptiveDeinterlaceBox()->isVisible());
+        // Output Progressive with Both Fields offers Adaptive Deinterlace Source (p.181).
+        editor.outputMenu()->setCurrentIndex(editor.outputMenu()->findData(QStringLiteral("progressive")));
+        editor.typeMenu()->setCurrentIndex(editor.typeMenu()->findData(model::timewarpTypeName(model::TimewarpType::BothFields)));
+        settle();
+        QCOMPARE(model::timewarpOf(*firstV1(composer).effect).output, model::TimewarpFormat::Progressive);
+        QVERIFY(editor.adaptiveDeinterlaceBox()->isVisible());
+        editor.adaptiveDeinterlaceBox()->setChecked(true);
+        settle();
+        QVERIFY(model::timewarpOf(*firstV1(composer).effect).adaptiveDeinterlace);
+        // Progressive Repeated: its count found in the clip (every frame differs: 1).
+        editor.sourceMenu()->setCurrentIndex(editor.sourceMenu()->findData(QStringLiteral("repeated")));
+        settle();
+        QCOMPARE(model::timewarpOf(*firstV1(composer).effect).source, model::TimewarpFormat::Repeated);
+        QCOMPARE(model::timewarpOf(*firstV1(composer).effect).repeatCount, 1);
+        QVERIFY(editor.repeatCountField()->isVisible());
+    }
+
+    void interlacedClipInProgressiveProject() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString movie = dir.filePath(QStringLiteral("fields.mov"));
+        QVERIFY(writeFields(movie, 10));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 320;
+        project.settings.format.height = 180;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        const QStringList ids = window.linkFiles(binId, {movie});
+        QCOMPARE(ids.size(), 1);
+        // As it is, a progressive clip of the project's rate: no adapter, both fields shown.
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, *bin->bin().item(ids.first()));
+        QVERIFY(!model::isAdapted(composer.state(MonitorId::Source).current()->item));
+        QCOMPARE(lineGrey(composer, MonitorId::Source, 3, 5), 70);
+        // Field Motion Interlaced (p.472): an adapter deinterlaces it, its first field filled in.
+        QVERIFY(bin->setField(ids.first(), QLatin1String(model::kFieldMotionHeading), QStringLiteral("Interlaced")));
+        settle();
+        composer.loadDefault(binId, *bin->bin().item(ids.first()));
+        const model::LoadedClip* src = composer.state(MonitorId::Source).current();
+        QVERIFY(src && model::isAdapted(src->item));
+        QCOMPARE(model::adapterOf(src->item)->fieldMotion, QStringLiteral("Interlaced"));
+        QCOMPARE(lineGrey(composer, MonitorId::Source, 3, 4), 60);
+        QVERIFY(std::abs(lineGrey(composer, MonitorId::Source, 3, 5) - 60) <= 1);
     }
 };
 

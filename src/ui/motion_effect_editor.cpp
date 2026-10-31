@@ -2,10 +2,12 @@
 
 #include "lumenis/core/project_format.h"
 #include "lumenis/core/timecode.h"
+#include "lumenis/media/fields.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
 #include "lumenis/model/timewarp.h"
 #include "lumenis/ui/composer.h"
+#include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QCheckBox>
@@ -274,17 +276,34 @@ MotionEffectEditor::MotionEffectEditor(Timeline& timeline, QWidget* parent) : QW
     ignore_ = new QCheckBox(tr("Ignore Render Setting"), body_);
     ignore_->setObjectName(QStringLiteral("ignoreRenderSetting"));
     form->addRow(ignore_);
-    // "The Source and Output menus ... a format conversion" (p.183-184): 6.5d's, dimmed.
+    // "Source menu ... Output menu" (p.183-184) and the format conversions (p.205): filled by syncControls()
+    // from the project's format.
     source_ = new QComboBox(body_);
     source_->setObjectName(QStringLiteral("sourceFormat"));
-    source_->addItem(tr("Progressive"));
-    source_->setEnabled(false);
     outputFormat_ = new QComboBox(body_);
     outputFormat_->setObjectName(QStringLiteral("outputFormat"));
-    outputFormat_->addItem(tr("Progressive"));
-    outputFormat_->setEnabled(false);
     form->addRow(tr("Source:"), source_);
+    // "If you select Film with Pulldown as the source format, additional options display that lets you either
+    // manually or automatically set the pulldown pattern ... Progressive Repeated ... the repeated frame
+    // count" (p.205): Auto finds it in the clip; else the phase menu (the 2:3 cycle frame the clip starts on)
+    // or the count.
+    auto* pattern = new QHBoxLayout;
+    autoPattern_ = new QCheckBox(tr("Auto"), body_);
+    autoPattern_->setObjectName(QStringLiteral("autoPattern"));
+    phase_ = new QComboBox(body_);
+    phase_->setObjectName(QStringLiteral("pulldownPhase"));
+    phase_->addItems({QStringLiteral("AA"), QStringLiteral("BB"), QStringLiteral("BC"), QStringLiteral("CD"), QStringLiteral("DD")});
+    repeat_ = new QSpinBox(body_);
+    repeat_->setObjectName(QStringLiteral("repeatCount"));
+    repeat_->setRange(1, 30);
+    pattern->addWidget(autoPattern_);
+    pattern->addWidget(phase_);
+    pattern->addWidget(repeat_);
+    form->addRow(tr("Pattern:"), pattern);
     form->addRow(tr("Output:"), outputFormat_);
+    adaptive_ = new QCheckBox(tr("Adaptive Deinterlace Source"), body_);
+    adaptive_->setObjectName(QStringLiteral("adaptiveDeinterlace"));
+    form->addRow(adaptive_);
     auto* anchorRow = new QHBoxLayout;
     anchor_ = new QDoubleSpinBox(body_);
     anchor_->setObjectName(QStringLiteral("anchor"));
@@ -395,6 +414,56 @@ MotionEffectEditor::MotionEffectEditor(Timeline& timeline, QWidget* parent) : QW
         editTimewarp(tr("Type"), [name](model::Effect& e, std::int64_t) {
             model::Timewarp t = model::timewarpOf(e);
             t.type = model::timewarpTypeFromName(name);
+            model::setTimewarp(e, t);
+        });
+    });
+    connect(source_, &QComboBox::currentIndexChanged, this, [this](int) {
+        if (!syncing_) setSource(source_->currentData().toString());
+    });
+    connect(outputFormat_, &QComboBox::currentIndexChanged, this, [this](int) {
+        if (syncing_) return;
+        const auto f = model::timewarpFormatFromName(outputFormat_->currentData().toString());
+        editTimewarp(tr("Output"), [f](model::Effect& e, std::int64_t) {
+            model::Timewarp t = model::timewarpOf(e);
+            t.output = f;
+            model::setTimewarp(e, t);
+        });
+    });
+    connect(adaptive_, &QCheckBox::toggled, this, [this](bool on) {
+        if (syncing_) return;
+        if (shownKind_ != Shown::Timewarp) return;
+        editTimewarp(tr("Adaptive Deinterlace Source"), [on](model::Effect& e, std::int64_t) {
+            model::Timewarp t = model::timewarpOf(e);
+            t.adaptiveDeinterlace = on;
+            model::setTimewarp(e, t);
+        });
+    });
+    connect(autoPattern_, &QCheckBox::toggled, this, [this](bool on) {
+        if (syncing_) return;
+        editTimewarp(tr("Pattern"), [on](model::Effect& e, std::int64_t) {
+            model::Timewarp t = model::timewarpOf(e);
+            t.autoPattern = on;
+            model::setTimewarp(e, t);
+        });
+        // Auto finds the pattern again.
+        if (on && effect_) setSource(model::timewarpFormatName(model::sourceFormat(model::timewarpOf(*effect_), interlaced_)));
+    });
+    connect(phase_, &QComboBox::currentIndexChanged, this, [this](int index) {
+        if (syncing_) return;
+        editTimewarp(tr("Pattern"), [index](model::Effect& e, std::int64_t) {
+            model::Timewarp t = model::timewarpOf(e);
+            t.pulldownPhase = index;
+            t.autoPattern = false;
+            model::setTimewarp(e, t);
+        });
+    });
+    connect(repeat_, &QSpinBox::editingFinished, this, [this] {
+        if (syncing_) return;
+        const int n = repeat_->value();
+        editTimewarp(tr("Pattern"), [n](model::Effect& e, std::int64_t) {
+            model::Timewarp t = model::timewarpOf(e);
+            t.repeatCount = n;
+            t.autoPattern = false;
             model::setTimewarp(e, t);
         });
     });
@@ -529,7 +598,7 @@ void MotionEffectEditor::refresh() {
             shownKind_ = Shown::Traditional;
             speedText = QStringLiteral("%1%").arg(motion->speed * 100.0, 0, 'g', 4);
             if (motion->strobe > 1) speedText += tr(", strobe %1").arg(motion->strobe);
-        } else if (s->adapter && !(s->adapter->clipRate == s->adapter->sequenceRate)) {
+        } else if (s->adapter && model::adapterShown(*s->adapter)) {
             // "You can check the values Media Composer has calculated, but you cannot change them" (p.471):
             // the speed, and the clip's rate and Field Motion (the Source).
             shownKind_ = Shown::Adapter;
@@ -558,6 +627,52 @@ QString MotionEffectEditor::activeCategory() const {
 
 QString MotionEffectEditor::activeParameter() const {
     return QLatin1String(effect_ && model::timewarpOf(*effect_).positionGraph ? model::kPositionParameter : model::kSpeedParameter);
+}
+
+void MotionEffectEditor::setProjectFormat(int nominalFps, bool interlaced, bool film) {
+    nominalFps_ = nominalFps;
+    interlaced_ = interlaced;
+    film_ = film;
+    syncControls();
+}
+
+void MotionEffectEditor::setSource(const QString& format) {
+    const auto f = model::timewarpFormatFromName(format);
+    if (!f || !target_ || shownKind_ != Shown::Timewarp) return;
+    // The pattern found in the clip's first frames, from the segment's source IN.
+    std::optional<int> phase;
+    std::optional<int> repeat;
+    const model::Segment* s = targetSegment(timeline_.shown());
+    const bool autoPattern = effect_ && model::timewarpOf(*effect_).autoPattern;
+    if (s && autoPattern && (*f == model::TimewarpFormat::Film || *f == model::TimewarpFormat::Repeated)) {
+        const auto clip = timeline_.composer().resolveForSegment(*s);
+        MediaFrames* frames = MediaFrames::instance();
+        if (clip && frames) {
+            const std::int64_t in = s->sourceIn;
+            const media::FrameGetter frameAt = [&](std::int64_t n) { return frames->frame(*clip, in + n, QSize(160, 90)); };
+            const bool topFirst = clip->link.value(QStringLiteral("fieldOrder")).toString() != QLatin1String("bottom");
+            if (*f == model::TimewarpFormat::Film) phase = media::detectPulldownPhase(frameAt, s->length, topFirst);
+            if (*f == model::TimewarpFormat::Repeated) repeat = media::detectRepeatCount(frameAt, s->length);
+        }
+    }
+    const QList<model::TimewarpFormat> outputs = model::outputFormats(*f, nominalFps_, interlaced_);
+    editTimewarp(tr("Source"), [&](model::Effect& e, std::int64_t) {
+        model::Timewarp t = model::timewarpOf(e);
+        t.source = *f;
+        if (!outputs.contains(model::outputFormat(t, interlaced_))) t.output = outputs.value(0, model::TimewarpFormat::Progressive);
+        if (phase) t.pulldownPhase = *phase;
+        if (repeat) t.repeatCount = *repeat;
+        model::setTimewarp(e, t);
+    });
+}
+
+void MotionEffectEditor::hideFormats() {
+    source_->setEnabled(false);
+    outputFormat_->setEnabled(false);
+    autoPattern_->setVisible(false);
+    phase_->setVisible(false);
+    repeat_->setVisible(false);
+    adaptive_->setVisible(false);
 }
 
 void MotionEffectEditor::syncControls() {
@@ -591,6 +706,33 @@ void MotionEffectEditor::syncControls() {
         type_->setCurrentIndex(std::max(0, type_->findData(shownType)));
         const model::Segment* s = targetSegment(timeline_.shown());
         anchor_->setValue(t.anchor + (s ? static_cast<double>(s->sourceIn) : 0.0));
+        // The formats (p.183, p.205), "not available in Film projects".
+        const QList<model::TimewarpFormat> sources = model::sourceFormats(nominalFps_, interlaced_, film_);
+        const model::TimewarpFormat src = model::sourceFormat(t, interlaced_);
+        const model::TimewarpFormat out = model::outputFormat(t, interlaced_);
+        source_->clear();
+        for (const model::TimewarpFormat f : sources) source_->addItem(model::timewarpFormatText(f), model::timewarpFormatName(f));
+        source_->setEnabled(!sources.isEmpty());
+        source_->setCurrentIndex(std::max(0, source_->findData(model::timewarpFormatName(src))));
+        outputFormat_->clear();
+        for (const model::TimewarpFormat f : model::outputFormats(src, nominalFps_, interlaced_)) {
+            outputFormat_->addItem(model::timewarpFormatText(f), model::timewarpFormatName(f));
+        }
+        outputFormat_->setEnabled(!sources.isEmpty() && outputFormat_->count() > 1);
+        outputFormat_->setCurrentIndex(std::max(0, outputFormat_->findData(model::timewarpFormatName(out))));
+        const bool film = src == model::TimewarpFormat::Film;
+        const bool repeated = src == model::TimewarpFormat::Repeated;
+        autoPattern_->setVisible(film || repeated);
+        autoPattern_->setChecked(t.autoPattern);
+        phase_->setVisible(film);
+        phase_->setCurrentIndex(t.pulldownPhase);
+        phase_->setEnabled(!t.autoPattern);
+        repeat_->setVisible(repeated);
+        repeat_->setValue(t.repeatCount);
+        repeat_->setEnabled(!t.autoPattern);
+        const bool adaptive = model::adaptiveAvailable(src, out, t.type);
+        adaptive_->setVisible(adaptive);
+        adaptive_->setChecked(t.adaptiveDeinterlace);
         strobe_->setValue(t.strobe);
         strobe_->setEnabled(true);
         speedGraph_->setData(effect_, length_, position_, !t.positionGraph, t.positionGraph ? -1 : selected_);
@@ -606,6 +748,7 @@ void MotionEffectEditor::syncControls() {
         }
     } else if (shownKind_ == Shown::Adapter) {
         ignore_->setVisible(false);
+        hideFormats();
         const model::Segment* s = targetSegment(timeline_.shown());
         type_->setEnabled(s != nullptr);
         if (s && s->adapter) type_->setCurrentIndex(std::max(0, type_->findData(s->adapter->type)));
@@ -614,6 +757,7 @@ void MotionEffectEditor::syncControls() {
         ignore_->setVisible(false);
         type_->setEnabled(false);
         strobe_->setEnabled(false);
+        hideFormats();
     }
     syncing_ = false;
 }

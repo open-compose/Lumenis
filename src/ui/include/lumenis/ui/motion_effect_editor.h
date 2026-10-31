@@ -101,6 +101,9 @@ public:
     // The Render setting's Timewarps Render Using ("original" or a Type's name, model::timewarpTypeName):
     // other than Original Preference it fixes the Type unless Ignore Render Setting is on (p.183).
     void setRenderUsing(const QString& type);
+    // The project's timecode rate (TimecodeFormat::nominalFps), scan and whether it is a Film project: what
+    // the Source and Output menus offer (model::sourceFormats, outputFormats, FX Guide p.183, p.205).
+    void setProjectFormat(int nominalFps, bool interlaced, bool film);
 
     // The controls (tests).
     MotionGraph* speedGraph() const { return speedGraph_; }
@@ -112,6 +115,12 @@ public:
     QCheckBox* ignoreRenderSettingBox() const { return ignore_; }
     QDoubleSpinBox* anchorField() const { return anchor_; }
     QSpinBox* strobeField() const { return strobe_; }
+    QComboBox* sourceMenu() const { return source_; }
+    QComboBox* outputMenu() const { return outputFormat_; }
+    QCheckBox* adaptiveDeinterlaceBox() const { return adaptive_; }
+    QCheckBox* autoPatternBox() const { return autoPattern_; }
+    QComboBox* pulldownPhaseMenu() const { return phase_; }
+    QSpinBox* repeatCountField() const { return repeat_; }
     QLabel* durationLabel() const { return duration_; }
     QLabel* speedLabel() const { return speedText_; }
     QPushButton* promoteButton() const { return promote_; }
@@ -130,6 +139,10 @@ public:
     // "Click to promote a traditional motion effect to a Timewarp effect" (p.183); a Motion Adapter too
     // (Editing Guide p.472).
     void promote();
+    // Source menu: the format chosen, the Output kept when it is still offered (else the first that is),
+    // and with Auto the pulldown phase or repeat count found in the clip (media::detectPulldownPhase,
+    // detectRepeatCount).
+    void setSource(const QString& format);
 
 signals:
     void renderRequested();
@@ -153,6 +166,8 @@ private:
     QString activeCategory() const;
     QString activeParameter() const;
     void syncControls();
+    // The format controls dimmed and hidden, for anything but a Timewarp.
+    void hideFormats();
 
     Timeline& timeline_;
     std::optional<Target> target_;
@@ -173,6 +188,13 @@ private:
     QCheckBox* ignore_ = nullptr;
     QComboBox* source_ = nullptr;
     QComboBox* outputFormat_ = nullptr;
+    QCheckBox* adaptive_ = nullptr;
+    QCheckBox* autoPattern_ = nullptr;
+    QComboBox* phase_ = nullptr;
+    QSpinBox* repeat_ = nullptr;
+    int nominalFps_ = 30;
+    bool interlaced_ = false;
+    bool film_ = false;
     QDoubleSpinBox* anchor_ = nullptr;
     QToolButton* anchorButton_ = nullptr;
     QSpinBox* strobe_ = nullptr;

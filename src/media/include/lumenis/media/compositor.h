@@ -125,6 +125,9 @@ struct TrackFrame {
     const model::Segment* segment = nullptr; // the segment, or the incoming one in a transition
     std::int64_t frame = 0;
     std::int64_t offset = 0; // frames into the segment (into the transition, in a transition)
+    // Frames into the segment and into the outgoing one, for Timewarps' format conversions.
+    std::int64_t segmentOffset = 0;
+    std::int64_t outgoingOffset = 0;
     const model::Segment* outgoing = nullptr; // only in a transition
     std::int64_t outgoingFrame = 0;
     // How much of the next source frame is mixed in (segmentBlend), for the segment and the outgoing one.
@@ -184,6 +187,12 @@ struct Composition {
     bool effects = true;
     // How source frames and renders are resized to `size` (the Render setting).
     ImageInterpolation interpolation = ImageInterpolation::Advanced;
+    // The project's scan, the formats a Timewarp has until its Source and Output are set (model::sourceFormat),
+    // and whether a segment's clip has its first field on the even lines (the media's field order; true
+    // without one). Timewarps whose formats are not both Progressive are made field by field
+    // (media::convertedFrame).
+    bool interlaced = false;
+    std::function<bool(const model::Segment&)> topFieldFirst;
 };
 
 // Timecode Burn-In (ROADMAP 6.3d1; docs/spec/burn-in.md, burn_in.cpp). Its parameters live under

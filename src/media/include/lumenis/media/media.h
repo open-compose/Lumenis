@@ -55,6 +55,9 @@ struct StreamInfo {
     Rational aspect{1, 1}; // display aspect ratio, e.g. 16:9
     QString pixelFormat;  // "yuv422p10le", ...
     bool interlaced = false;
+    // Interlaced: whether the first field in time is on the even lines (FFmpeg's field order tt or tb);
+    // true when the media does not say.
+    bool topFieldFirst = true;
     // Audio.
     int sampleRate = 0;
     int channels = 0;

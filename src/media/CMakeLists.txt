@@ -2,6 +2,7 @@ add_library(lumenis_media STATIC
     media.cpp
     compositor.cpp
     optical_flow.cpp
+    fields.cpp
     render.cpp
     wipes.cpp
     effect_drawing.cpp

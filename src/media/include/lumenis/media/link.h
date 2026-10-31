@@ -21,6 +21,10 @@
 // Linking file-based media (Editing Guide ch.11, p.310-330): master clips
 // that point at media files where they are, with the files' metadata in the
 // bin columns.
+namespace lumenis::model {
+struct MotionAdapter;
+}
+
 namespace lumenis::media {
 
 // The "Plug-In" column of linked clips (p.277, "the plug-in name used for
@@ -53,6 +57,9 @@ struct Link {
     // The file frame (at `rate`) clip frame 0 shows: managed clips relinked
     // to media that starts earlier (Relink > Managed Media, p.361).
     std::int64_t first = 0;
+    // An interlaced picture's field order (StreamInfo::topFieldFirst): false when its first field is on the
+    // odd lines. Kept as "fieldOrder": "bottom" (media::convertedFrame, fields.h).
+    bool topFieldFirst = true;
     bool isManaged() const { return !mediaId.isEmpty(); }
 
     // The file to look for: the path, or a sequence's first file.
@@ -166,6 +173,9 @@ public:
 private:
     struct Reader;
     std::shared_ptr<Reader> reader(const Link& link);
+    // A Motion Adapter's frame made from the file's fields (fields.h).
+    QImage convertedFrame(const model::BinItem& item, const Link& link, const model::MotionAdapter& adapter, std::int64_t clipFrame,
+                          QSize size);
 
     // Guards readers_ and the image cache; each Reader has its own lock for decoding.
     QMutex mutex_;
@@ -173,6 +183,8 @@ private:
     int frames_;
     std::list<std::shared_ptr<Reader>> readers_; // most recently used first
     QHash<QString, QImage> images_;
+    // Each file's 2:3 phase ("path") and repeat count ("path|repeat"), found once.
+    QHash<QString, int> patterns_;
     QList<QString> imageOrder_;
 };
 

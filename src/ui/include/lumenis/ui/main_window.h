@@ -664,6 +664,10 @@ private:
     // An unrendered motion effect clip's frame as its source clip and that clip's frame
     // (model::motionEffectOf); nothing for other clips.
     std::optional<std::pair<model::BinItem, std::int64_t>> followMotion(const model::BinItem& clip, std::int64_t frame) const;
+    // An unrendered motion effect clip's frame `frame` made from its interlaced source clip's fields with the
+    // clip's Render 2-Field Motion Effect Using choice (FX Guide p.563, 6.5d3a); nothing for other clips and
+    // for progressive sources, which followMotion() shows.
+    std::optional<QImage> motionFieldFrame(const model::BinItem& clip, std::int64_t frame, QSize size) const;
 
     // Starts the monitor's sound at `speed` for playback, or none above three times normal.
     void startSound(MonitorId monitor, int speed);

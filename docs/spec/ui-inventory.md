@@ -192,7 +192,13 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   rate counted as mixed rate by its media's rate, the adapter's 100% speed,
   the Field Motion default from the Format column, 2:3 Film for clips at a
   30 fps rate, the green dot's place, the T icon, "(25 fps)" on video
-  tracks only, Refresh Sequence keeping a chosen Type.
+  tracks only, Refresh Sequence keeping a chosen Type. Fields (6.5d3a):
+  the even lines as the first field unless the media says otherwise,
+  VTR-Style's line pairs, the Source menu in progressive projects with the
+  Output fixed, the formats a Timewarp has until set, the Pulldown
+  Insertion and Removal templates' formats and Both Fields, the pattern
+  detection, Adaptive Deinterlace's stillness test, adapters' patterns
+  found once per file.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

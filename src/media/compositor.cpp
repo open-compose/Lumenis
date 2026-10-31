@@ -1,5 +1,6 @@
 #include "lumenis/media/compositor.h"
 
+#include "lumenis/media/fields.h"
 #include "lumenis/media/optical_flow.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/effect_render.h"
@@ -159,6 +160,7 @@ std::optional<TrackFrame> trackFrame(const model::Sequence& sequence, const QStr
     out.frame = segmentClipFrame(seg, frame - start);
     out.blend = segmentBlend(seg, frame - start);
     out.offset = frame - start;
+    out.segmentOffset = frame - start;
     // A transition sits on the cut where its segment starts (model::Segment::transition), `before()`
     // frames on the outgoing side and `after()` on the incoming.
     auto inTransition = [&](int incoming, std::int64_t cut) {
@@ -171,9 +173,11 @@ std::optional<TrackFrame> trackFrame(const model::Sequence& sequence, const QStr
         out.outgoing = &a;
         out.outgoingFrame = segmentClipFrame(a, frame - aStart);
         out.outgoingBlend = segmentBlend(a, frame - aStart);
+        out.outgoingOffset = frame - aStart;
         out.segment = &b;
         out.frame = segmentClipFrame(b, frame - cut);
         out.blend = segmentBlend(b, frame - cut);
+        out.segmentOffset = frame - cut;
         out.transition = &t;
         out.offset = frame - begin;
         out.progress = static_cast<double>(frame - begin + 1) / static_cast<double>(t.duration + 1);
@@ -189,8 +193,57 @@ namespace {
 // A segment's own picture: transparent for filler and for media that cannot be had.
 // `blend` (0 to 1) mixes in the next source frame: a blended Timewarp's in-between frame ("Blends, or
 // averages, pixels from the original frames", FX Guide p.186).
-Picture segmentPicture(const Composition& c, const model::Segment* segment, std::int64_t frame, bool* missing, double blend = 0.0) {
+// A Timewarp whose Source or Output is not Progressive (FX Guide p.183, p.205): its frame made field by field
+// from its source frames; nothing when the formats are both Progressive (the plain path below).
+std::optional<Picture> convertedPicture(const Composition& c, const model::Segment& segment, std::int64_t offset, bool* missing) {
+    if (!segment.effect || !model::isTimewarp(*segment.effect)) return std::nullopt;
+    const model::Timewarp t = model::timewarpOf(*segment.effect);
+    const model::TimewarpFormat source = model::sourceFormat(t, c.interlaced);
+    const model::TimewarpFormat output = model::outputFormat(t, c.interlaced);
+    if (source == model::TimewarpFormat::Progressive && output == model::TimewarpFormat::Progressive) return std::nullopt;
+    FieldConversion conv;
+    conv.source = source == model::TimewarpFormat::Interlaced ? SourceFormat::Interlaced
+                  : source == model::TimewarpFormat::Film     ? SourceFormat::FilmPulldown
+                  : source == model::TimewarpFormat::Repeated ? SourceFormat::ProgressiveRepeated
+                                                              : SourceFormat::Progressive;
+    conv.output = output == model::TimewarpFormat::Interlaced ? OutputFormat::Interlaced
+                  : output == model::TimewarpFormat::Film     ? OutputFormat::FilmPulldown
+                                                              : OutputFormat::Progressive;
+    conv.rendering = fieldRendering(t.type);
+    conv.adaptive = t.adaptiveDeinterlace && model::adaptiveAvailable(source, output, t.type);
+    conv.topFirst = c.topFieldFirst ? c.topFieldFirst(segment) : true;
+    conv.phase = t.pulldownPhase;
+    conv.repeat = t.repeatCount;
+    bool lost = false;
+    const FrameGetter frameAt = [&](std::int64_t frame) -> QImage {
+        if (frame < 0) return {};
+        const std::optional<QImage> image = c.source(segment, frame, c.size);
+        if (!image) lost = true;
+        return image.value_or(QImage());
+    };
+    // The source position at an output time with a fraction: between the positions of the frames around it.
+    const std::int64_t length = std::max<std::int64_t>(segment.length, 1);
+    const auto positionAt = [&](double time) {
+        const auto o = static_cast<std::int64_t>(std::floor(time));
+        const double a = model::timewarpPosition(*segment.effect, o, length);
+        const double b = model::timewarpPosition(*segment.effect, o + 1, length);
+        return static_cast<double>(segment.sourceIn) + a + (b - a) * (time - static_cast<double>(o));
+    };
+    const QImage image = convertedFrame(frameAt, positionAt, static_cast<double>(offset), conv);
+    if (lost && image.isNull()) {
+        if (missing) *missing = true;
+        return Picture(c.size.width(), c.size.height());
+    }
+    if (image.isNull()) return Picture(c.size.width(), c.size.height());
+    return Picture::fromImage(image, c.size.width(), c.size.height(), c.interpolation);
+}
+
+Picture segmentPicture(const Composition& c, const model::Segment* segment, std::int64_t frame, bool* missing, double blend = 0.0,
+                       std::int64_t offset = -1) {
     if (!segment || segment->isFiller() || !c.source) return Picture(c.size.width(), c.size.height());
+    if (offset >= 0) {
+        if (auto converted = convertedPicture(c, *segment, offset, missing)) return *converted;
+    }
     const std::optional<QImage> image = c.source(*segment, frame, c.size);
     if (!image) {
         if (missing) *missing = true;
@@ -317,8 +370,8 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
         if (!tf) continue;
         Picture layer;
         if (tf->transition) {
-            Picture out = segmentPicture(c, tf->outgoing, tf->outgoingFrame, missing, tf->outgoingBlend);
-            Picture in = segmentPicture(c, tf->segment, tf->frame, missing, tf->blend);
+            Picture out = segmentPicture(c, tf->outgoing, tf->outgoingFrame, missing, tf->outgoingBlend, tf->outgoingOffset);
+            Picture in = segmentPicture(c, tf->segment, tf->frame, missing, tf->blend, tf->segmentOffset);
             // Without effects (Render On-the-Fly off) a transition is its cut.
             if (c.effects) layer = transitionPicture(*tf->transition, out, in, tf->progress, w, h);
             if (layer.isNull()) {
@@ -328,7 +381,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             }
             layer.quantize(c.precision);
         } else {
-            layer = segmentPicture(c, tf->segment, tf->frame, missing, tf->blend);
+            layer = segmentPicture(c, tf->segment, tf->frame, missing, tf->blend, tf->segmentOffset);
         }
         if (c.effects && tf->segment && tf->segment->effect && !tf->transition) {
             const model::Effect& e = *tf->segment->effect;

@@ -282,6 +282,7 @@ StreamInfo describe(const AVFormatContext* fmt, const AVStream* st) {
             s.pixelFormat = QString::fromUtf8(pf);
         }
         s.interlaced = par->field_order != AV_FIELD_PROGRESSIVE && par->field_order != AV_FIELD_UNKNOWN;
+        s.topFieldFirst = par->field_order != AV_FIELD_BB && par->field_order != AV_FIELD_BT;
         if (st->nb_frames > 0) {
             s.length = st->nb_frames;
         } else if (st->duration != kNoPts && st->duration > 0) {

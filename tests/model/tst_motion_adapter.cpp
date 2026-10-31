@@ -259,6 +259,36 @@ private slots:
         QCOMPARE(refreshMotionAdapters(seq, resolve, false, false), 0);
     }
 
+    void fieldMotionAdapters() {
+        // "Clips with field motion that need adjustment to be compatible with the project" (p.469): an
+        // interlaced clip at the project's rate in a progressive project gets an adapter; in an interlaced
+        // project it needs none.
+        BinItem clip = fiftyClip();
+        clip.editRate = kProject;
+        QVERIFY(!adapterFor(clip, kProject, false, true));
+        clip.fields.insert(QLatin1String(kFieldMotionHeading), QStringLiteral("Interlaced"));
+        const auto a = adapterFor(clip, kProject, false, true);
+        QVERIFY(a);
+        QVERIFY(adapterShown(*a));
+        QVERIFY(!a->interlaced);
+        QVERIFY(!adapterFor(clip, kProject, true, true));
+        // 2:3 Film and Progressive Strobe clips always do.
+        clip.fields.insert(QLatin1String(kFieldMotionHeading), QStringLiteral("Progressive Strobe"));
+        QVERIFY(adapterFor(clip, kProject, true, true));
+        QVERIFY(adapterFor(clip, kProject, true, true)->interlaced);
+        // A Progressive clip at another rate is shown; one at the project's rate (an audio segment's) is not.
+        MotionAdapter same{kProject, kProject, QStringLiteral("Progressive"), QStringLiteral("both")};
+        QVERIFY(!adapterShown(same));
+        // The scan travels with the segment.
+        Segment s;
+        s.clipId = QStringLiteral("clip");
+        s.length = 5;
+        s.adapter = *adapterFor(clip, kProject, true, true);
+        Sequence seq = Sequence::withDefaultTracks();
+        seq.overwrite(QStringLiteral("V1"), 0, {s});
+        QVERIFY(Sequence::fromJson(seq.toJson()).track(QStringLiteral("V1"))->segments.at(0).adapter->interlaced);
+    }
+
     void names() {
         // "the clip name displays as playtime (59.94 fps)" (p.470).
         QCOMPARE(mixedRateName(QStringLiteral("playtime"), Rational(60000, 1001)), QStringLiteral("playtime (59.94 fps)"));

@@ -1473,7 +1473,7 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
         // Motion its icon, a T, shows too (p.599), left of an effect icon or in the middle; "If there is a
         // render dot on the clip it will appear on the effect icon. If there is no effect icon, the render
         // dot will appear on the adapters." A render in date of the segment's effect has none.
-        if (s.adapter && t.kind == model::TrackKind::Video && !(s.adapter->clipRate == s.adapter->sequenceRate) &&
+        if (s.adapter && t.kind == model::TrackKind::Video && model::adapterShown(*s.adapter) &&
             !(s.effect && rendered(index, at, false))) {
             const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
             const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));

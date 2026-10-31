@@ -3,6 +3,7 @@
 #include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
 
+#include <QList>
 #include <QString>
 
 #include <cstdint>
@@ -25,6 +26,16 @@ namespace lumenis::model {
 enum class TimewarpType { DuplicatedField, BothFields, InterpolatedField, VtrStyle, BlendedInterpolated, BlendedVtr, FluidMotionDraft, FluidMotion };
 QString timewarpTypeName(TimewarpType t); // "duplicated", "both", ..., "fluidMotion"
 TimewarpType timewarpTypeFromName(const QString& name);
+
+// The Source and Output menus (p.183, p.205): "Your selection should match the format of the original source
+// material"; the Output "lets you create a film look from interlaced video sources". Film is "Film with
+// pulldown" (2:3), Repeated "Progressive Repeated" (repeated progressive frames, a source only). The pictures
+// are made by media::convertedFrame (lumenis/media/fields.h).
+enum class TimewarpFormat { Interlaced, Progressive, Film, Repeated };
+QString timewarpFormatName(TimewarpFormat f); // "interlaced", "progressive", "film", "repeated"
+std::optional<TimewarpFormat> timewarpFormatFromName(const QString& name);
+// The menus' text: "Interlaced", "Progressive", "Film with pulldown", "Progressive Repeated".
+QString timewarpFormatText(TimewarpFormat f);
 
 inline constexpr char kTimewarpCategory[] = "Timewarp";
 inline constexpr char kSpeedCategory[] = "Speed";
@@ -49,9 +60,36 @@ struct Timewarp {
     // Ignore Render Setting (p.183): keep `type` when the Render setting's Timewarps Render Using names
     // another; without it a render changes the type to the setting's (p.173; model::renderTypeFor).
     bool ignoreRenderSetting = false;
+    // The Source and Output formats; nothing for the project's own (Interlaced in an interlaced project,
+    // else Progressive).
+    std::optional<TimewarpFormat> source;
+    std::optional<TimewarpFormat> output;
+    // A Film source's 2:3 phase (0-4: the cycle frame AA, BB, BC, CD or DD of its first frame) and a Repeated
+    // source's frames per picture, "manually or automatically" set (p.205): `autoPattern` has them found in
+    // the clip (media::detectPulldownPhase, detectRepeatCount) when the Source is chosen.
+    int pulldownPhase = 0;
+    int repeatCount = 2;
+    bool autoPattern = true;
+    // Adaptive Deinterlace Source (p.181), used only where adaptiveAvailable() allows it.
+    bool adaptiveDeinterlace = false;
     bool operator==(const Timewarp&) const = default;
 };
 
+// The formats in effect: the Timewarp's, or the project's.
+TimewarpFormat sourceFormat(const Timewarp& t, bool interlacedProject);
+TimewarpFormat outputFormat(const Timewarp& t, bool interlacedProject);
+// The Source menu's choices (p.205 table) for a project of `nominalFps` (TimecodeFormat's) and scan. "Progressive
+// projects do not allow format conversions": there only the Output is fixed, at Progressive, so that "an
+// interlaced clip within a progressive project" can have "the Source menu set to Interlaced and the Output menu
+// to Progressive" (p.183). Film with pulldown only in 30 fps projects. Empty in Film projects: "The Source and
+// Output menus are not available in Film projects".
+QList<TimewarpFormat> sourceFormats(int nominalFps, bool interlacedProject, bool filmProject);
+// The Output menu's choices for a Source: the source's own format, and the conversions of the p.205 table.
+QList<TimewarpFormat> outputFormats(TimewarpFormat source, int nominalFps, bool interlacedProject);
+// "The Adaptive Deinterlace Source check box is available ... when ... The Source parameter value is
+// Interlaced. The Output parameter value is Progressive. The Type parameter value is one of the following:
+// Both Fields, Blended Interpolated, Blended VTR" (p.181).
+bool adaptiveAvailable(TimewarpFormat source, TimewarpFormat output, TimewarpType type);
 // Whether an effect is a Timewarp (any of the Timewarp category's effects, which are its templates).
 bool isTimewarp(const Effect& effect);
 // The settings kept with a Timewarp effect; the defaults for one that has none.

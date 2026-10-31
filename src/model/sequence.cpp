@@ -215,6 +215,11 @@ QJsonObject segmentToJson(const Segment& s) {
                                                        {QStringLiteral("sequenceRate"), QString::fromStdString(s.adapter->sequenceRate.toString())},
                                                        {QStringLiteral("fieldMotion"), s.adapter->fieldMotion},
                                                        {QStringLiteral("type"), s.adapter->type}});
+        if (s.adapter->interlaced) {
+            QJsonObject a = o.value(QStringLiteral("adapter")).toObject();
+            a.insert(QStringLiteral("interlaced"), true);
+            o.insert(QStringLiteral("adapter"), a);
+        }
     }
     return o;
 }
@@ -242,7 +247,7 @@ Segment segmentFromJson(const QJsonObject& o) {
         const auto sequenceRate = rateFromText(a.value(QStringLiteral("sequenceRate")).toString());
         if (clipRate && sequenceRate) {
             s.adapter = MotionAdapter{*clipRate, *sequenceRate, a.value(QStringLiteral("fieldMotion")).toString(),
-                                      a.value(QStringLiteral("type")).toString()};
+                                      a.value(QStringLiteral("type")).toString(), a.value(QStringLiteral("interlaced")).toBool()};
         }
     }
     s.length = std::max<std::int64_t>(o.value(QStringLiteral("length")).toInteger(), 0);

@@ -1,6 +1,7 @@
 #include "lumenis/media/link.h"
 
 #include "lumenis/core/timecode.h"
+#include "lumenis/media/fields.h"
 #include "lumenis/model/motion_adapter.h"
 
 #include <QDir>
@@ -207,6 +208,7 @@ QJsonObject Link::toJson() const {
         o.insert(QStringLiteral("audioPaths"), QJsonArray::fromStringList(audioPaths));
     }
     if (first != 0) o.insert(QStringLiteral("first"), static_cast<qint64>(first));
+    if (!topFieldFirst) o.insert(QStringLiteral("fieldOrder"), QStringLiteral("bottom"));
     return o;
 }
 
@@ -228,6 +230,7 @@ std::optional<Link> Link::fromJson(const QJsonObject& json) {
     l.mediaId = json.value(QStringLiteral("mediaId")).toString();
     for (const QJsonValue& v : json.value(QStringLiteral("audioPaths")).toArray()) l.audioPaths << v.toString();
     l.first = json.value(QStringLiteral("first")).toInteger();
+    l.topFieldFirst = json.value(QStringLiteral("fieldOrder")).toString() != QLatin1String("bottom");
     return l;
 }
 
@@ -351,6 +354,7 @@ std::optional<model::BinItem> linkClipUnchecked(const MediaInfo& info, const Lin
     Rational fileRate = editRate;
     if (video) {
         link.videoStream = video->index;
+        link.topFieldFirst = !video->interlaced || video->topFieldFirst;
         if (video->frameRate.num() > 0) fileRate = video->frameRate;
         link.rate = fileRate;
         link.frames = video->length > 0 ? video->length
@@ -775,6 +779,12 @@ QImage FrameCache::frame(const model::BinItem& item, std::int64_t clipFrame, QSi
     // next one by how far the clip frame's time is between them ("Blended Interpolated", p.1215): the
     // in-between frames of a clip played at a rate other than its own. FluidMotion is the compositor's
     // (6.5d1) and blends here too.
+    // A Motion Adapter that follows the clip's Field Motion, or makes an interlaced project's frames (6.5d3a):
+    // the frame made field by field from the file's frames at the clip frame's time.
+    if (const auto adapter = model::adapterOf(item);
+        adapter && (adapter->interlaced || model::fieldMotionFromText(adapter->fieldMotion) != model::FieldMotionAttribute::Progressive)) {
+        return convertedFrame(item, *link, *adapter, clipFrame, size);
+    }
     double blend = 0.0;
     if (const auto adapter = model::adapterOf(item); adapter && model::adapterBlends(*adapter) && !(link->rate == item.editRate) &&
                                                      item.editRate.num() > 0 && n + 1 < link->frames) {
@@ -811,6 +821,78 @@ QImage FrameCache::frame(const model::BinItem& item, std::int64_t clipFrame, QSi
     if (size.isValid() && image.size() != size) {
         image = image.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
+    QMutexLocker lock(&mutex_);
+    images_.insert(key, image);
+    imageOrder_.removeAll(key);
+    imageOrder_.append(key);
+    while (imageOrder_.size() > frames_) images_.remove(imageOrder_.takeFirst());
+    return image;
+}
+
+// The source format from the Field Motion (Editing Guide p.472-473): 2:3 Film with its phase and Progressive
+// Strobe with its repeat count found in the file's first frames once (ours: the adapter has no pattern of its
+// own), Interlaced and Progressive as they are; the output the project's scan.
+QImage FrameCache::convertedFrame(const model::BinItem& item, const Link& link, const model::MotionAdapter& adapter,
+                                  std::int64_t clipFrame, QSize size) {
+    const QString key = QStringLiteral("%1|%2|f%3|%4x%5|%6|%7|%8|%9")
+                            .arg(link.path, QString::number(link.videoStream), QString::number(clipFrame), QString::number(size.width()),
+                                 QString::number(size.height()), QString::fromStdString(item.editRate.toString()), adapter.fieldMotion,
+                                 adapter.type, adapter.interlaced ? QStringLiteral("i") : QStringLiteral("p"));
+    std::shared_ptr<Reader> r;
+    {
+        QMutexLocker lock(&mutex_);
+        if (const auto it = images_.constFind(key); it != images_.constEnd()) return *it;
+        r = reader(link);
+    }
+    const FrameGetter frameAt = [&](std::int64_t n) -> QImage {
+        if (n < 0 || (link.frames > 0 && n >= link.frames)) return {};
+        QMutexLocker lock(&r->mutex);
+        return r->ok ? r->video.frame(n) : QImage();
+    };
+    FieldConversion conv;
+    conv.rendering = fieldRendering(model::adapterType(adapter));
+    conv.output = adapter.interlaced ? OutputFormat::Interlaced : OutputFormat::Progressive;
+    conv.topFirst = link.topFieldFirst;
+    switch (model::fieldMotionFromText(adapter.fieldMotion).value_or(model::FieldMotionAttribute::Progressive)) {
+    case model::FieldMotionAttribute::Interlaced: conv.source = SourceFormat::Interlaced; break;
+    case model::FieldMotionAttribute::Progressive: conv.source = SourceFormat::Progressive; break;
+    case model::FieldMotionAttribute::Film23: {
+        conv.source = SourceFormat::FilmPulldown;
+        QMutexLocker lock(&mutex_);
+        const auto it = patterns_.constFind(link.path);
+        const bool known = it != patterns_.constEnd();
+        lock.unlock();
+        const int phase = known ? *it : detectPulldownPhase([&](std::int64_t n) { return frameAt(link.first + n); }, link.frames, link.topFieldFirst);
+        if (!known) {
+            lock.relock();
+            patterns_.insert(link.path, phase);
+        }
+        conv.phase = phase;
+        break;
+    }
+    case model::FieldMotionAttribute::ProgressiveStrobe: {
+        conv.source = SourceFormat::ProgressiveRepeated;
+        QMutexLocker lock(&mutex_);
+        const QString repeatKey = link.path + QStringLiteral("|repeat");
+        const auto it = patterns_.constFind(repeatKey);
+        const bool known = it != patterns_.constEnd();
+        lock.unlock();
+        const int repeat = known ? *it : detectRepeatCount([&](std::int64_t n) { return frameAt(link.first + n); }, link.frames);
+        if (!known) {
+            lock.relock();
+            patterns_.insert(repeatKey, repeat);
+        }
+        conv.repeat = repeat;
+        break;
+    }
+    }
+    // The file frame (with a fraction) at a clip frame's time; the cadence and repeats count from its first
+    // frame the clip uses.
+    const double ratio = item.editRate.num() > 0 ? link.rate.toDouble() / item.editRate.toDouble() : 1.0;
+    const FrameGetter fromFirst = [&](std::int64_t n) { return frameAt(link.first + n); };
+    QImage image = media::convertedFrame(fromFirst, [&](double t) { return t * ratio; }, static_cast<double>(clipFrame), conv);
+    if (image.isNull()) return {};
+    if (size.isValid() && image.size() != size) image = image.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     QMutexLocker lock(&mutex_);
     images_.insert(key, image);
     imageOrder_.removeAll(key);

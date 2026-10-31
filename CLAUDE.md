@@ -518,7 +518,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   project's rate, `Segment::adapter`, blends in `media::FrameCache::frame`, the green dot and Show
   Adapters, the Field Motion column, Refresh Sequence; tests `tst_motion_adapter`,
   `tst_motion_adapter_ui`, scenario `27-motion-adapter.json`), is done.
-  Next: 6.5d3, fields and format conversion (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.5d3a, fields and format conversion (`src/media/fields.*`: field-level Types, the Timewarp's Source and
+  Output formats with 2:3 pulldown and repeated frames, Adaptive Deinterlace Source, the FluidFilm and
+  Pulldown templates, adapters following Field Motion, two-field motion effects; tests `tst_fields`,
+  `tst_motion_adapter_ui`), is done.
+  Next: 6.5d3b, FluidBlur, FluidColorMap and FluidMorph (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

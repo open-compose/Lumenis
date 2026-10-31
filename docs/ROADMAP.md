@@ -987,10 +987,16 @@ phase of their own. They are done in three steps:
       column, Show Adapters, Refresh Sequence > Motion Adapters/Timewarps and the Render setting's Use
       frame blending in Motion Adapters. Done (`src/model/motion_adapter.*`; adapters in AAF and `.avb`
       interchange are left for later).
-    * 6.5d3, fields and format conversion: the Source and Output formats with pulldown (FluidFilm,
-      Pulldown Insertion and Removal, Adaptive Deinterlace Source, the two-field options of 6.5a) once
-      clips carry field motion; and the FluidBlur, FluidColorMap and FluidMorph Illusion FX on 6.5d1's
-      flow.
+    * 6.5d3, fields and format conversion, in two parts (planned 2026-10-31 from FX p.181-186,
+      p.203-205 and Editing Guide p.472-473):
+      * 6.5d3a, fields: the field-level Types (Duplicated Field, Interpolated Field, VTR-Style and the
+        blends at field times) on interlaced sources; the Timewarp's Source and Output formats
+        (Interlaced, Progressive, Film with pulldown, Progressive Repeated) with the pulldown phase and
+        repeat count, the FluidFilm and Pulldown Insertion/Removal templates, Adaptive Deinterlace
+        Source; motion adapters following their Field Motion (Interlaced, 2:3 Film, Progressive
+        Strobe); the field order of linked media; and the two-field options of 6.5a's motion effects.
+        Done (`src/media/fields.*`).
+      * 6.5d3b, the FluidBlur, FluidColorMap and FluidMorph Illusion FX on 6.5d1's flow.
 * 6.6, layered and nested effects (ch.8, p.206-228): nesting and stepping in, Collapse,
   Submaster, Double-Click to Show Nesting; and effect templates in bins (p.52-55), with the Motion
   Effect Editor's Timewarp icon (p.182).
