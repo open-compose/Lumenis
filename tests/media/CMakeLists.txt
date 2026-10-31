@@ -40,5 +40,7 @@ lumenis_add_test(tst_illusion_fx SOURCES tst_illusion_fx.cpp LIBS lumenis::media
 lumenis_add_test(tst_optical_flow SOURCES tst_optical_flow.cpp LIBS lumenis::media)
 # Fields, pulldown and format conversions (FX Guide p.181-186, p.203-205).
 lumenis_add_test(tst_fields SOURCES tst_fields.cpp LIBS lumenis::media)
+# FluidBlur, FluidColorMap and FluidMorph (FX Guide p.467, p.510-512).
+lumenis_add_test(tst_fluid_fx SOURCES tst_fluid_fx.cpp LIBS lumenis::media)
 # Render Effect: precomputes and playing them (docs/spec/rendering.md).
 lumenis_add_test(tst_render SOURCES tst_render.cpp LIBS lumenis::media)

@@ -708,6 +708,30 @@ private slots:
         QCOMPARE(greys(ImageInterpolation::Draft), 0);
         QVERIFY(greys(ImageInterpolation::Advanced) > 0);
     }
+
+    void fluidEffects() {
+        // FluidColorMap of a still picture: no motion, black (FX Guide p.467).
+        Sequence seq = Sequence::withDefaultTracks();
+        Segment s = clip(QStringLiteral("white"), 10);
+        s.effect = Effect{QStringLiteral("Illusion FX"), QStringLiteral("FluidColorMap"), {}};
+        seq.splice(QStringLiteral("V1"), 0, {s});
+        QCOMPARE(centre(composeImage(composition(seq, {QStringLiteral("V1")}), 4)), QColor(0, 0, 0));
+        // FluidBlur of a still picture leaves it as it is.
+        seq.track(QStringLiteral("V1"))->segments[0].effect = Effect{QStringLiteral("Illusion FX"), QStringLiteral("FluidBlur"), {}};
+        QVERIFY(near(centre(composeImage(composition(seq, {QStringLiteral("V1")}), 4)), QColor(255, 255, 255)));
+        // FluidMorph from red to blue: half way, some of each (p.467, p.511).
+        Transition t = transition(QStringLiteral("FluidMorph"), 4);
+        t.effect.category = QStringLiteral("Illusion FX");
+        const Sequence morph = cutWith(t);
+        const QColor mid = centre(composeImage(composition(morph, {QStringLiteral("V1")}), 9));
+        QVERIFY(mid.red() > 40 && mid.blue() > 40);
+        // Still->Still: the transition's last outgoing frame and first incoming one, the same here.
+        Transition still = t;
+        still.effect.parameters.insert(QStringLiteral("FluidMorph Effect Source and Input Parameters"),
+                                       QJsonObject{{QStringLiteral("Source"), QStringLiteral("Still->Still")}});
+        const QColor stillMid = centre(composeImage(composition(cutWith(still), {QStringLiteral("V1")}), 9));
+        QVERIFY(near(stillMid, mid, 3));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestCompositor)

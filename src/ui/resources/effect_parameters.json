@@ -197,17 +197,17 @@
       {"name": "Y", "kind": "slider", "ours": {"min": 0, "max": 100}}
     ]},
     {"name": "FluidBlur Effect Input Parameters", "page": 510, "parameters": [
-      {"name": "Blur Amount", "kind": "slider"},
-      {"name": "Lower Motion Threshold", "kind": "slider"},
-      {"name": "Upper Motion Threshold", "kind": "slider"},
-      {"name": "Trail", "kind": "slider"},
+      {"name": "Blur Amount", "kind": "slider", "ours": {"min": 0, "max": 100}},
+      {"name": "Lower Motion Threshold", "kind": "slider", "ours": {"min": 0, "max": 200}},
+      {"name": "Upper Motion Threshold", "kind": "slider", "ours": {"min": 0, "max": 200}},
+      {"name": "Trail", "kind": "slider", "ours": {"min": 0, "max": 100}},
       {"name": "Sharpen Leading Edge", "kind": "checkbox"},
       {"name": "Progressive Source", "kind": "checkbox"}
     ]},
     {"name": "FluidColorMap Effect Input Parameters", "page": 511, "parameters": [
-      {"name": "Min Motion Threshold", "kind": "slider"},
-      {"name": "Max Motion Threshold", "kind": "slider"},
-      {"name": "Constant Saturation", "kind": "slider"},
+      {"name": "Min Motion Threshold", "kind": "slider", "ours": {"min": 0, "max": 200}},
+      {"name": "Max Motion Threshold", "kind": "slider", "ours": {"min": 0, "max": 200}},
+      {"name": "Constant Saturation", "kind": "slider", "ours": {"min": 0, "max": 100}},
       {"name": "Progressive Source", "kind": "checkbox"}
     ]},
     {"name": "FluidMorph Effect Source and Input Parameters", "page": 511, "parameters": [

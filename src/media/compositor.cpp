@@ -1,6 +1,7 @@
 #include "lumenis/media/compositor.h"
 
 #include "lumenis/media/fields.h"
+#include "lumenis/media/fluid_fx.h"
 #include "lumenis/media/optical_flow.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/effect_render.h"
@@ -24,6 +25,16 @@ constexpr float kDensityFloor = 1e-3f; // the darkest light the film blend works
 
 bool parameterFlag(const model::Effect& effect, const QString& category, const QString& name) {
     return effect.parameters.value(category).toObject().value(name).toBool();
+}
+
+// A number parameter of the Fluid effects at `time`, else its value until set.
+double fluidNumber(const model::Effect& e, const QString& category, const QString& name, double time, std::int64_t length) {
+    return model::numberAt(e, category, name, time, model::EffectSpan(std::max<std::int64_t>(length, 1)))
+        .value_or(parameterDefault(e, category, name).toDouble());
+}
+
+bool isFluid(const model::Effect& e, const char* name) {
+    return e.category == QLatin1String("Illusion FX") && e.name == QLatin1String(name);
 }
 
 } // namespace
@@ -373,7 +384,29 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             Picture out = segmentPicture(c, tf->outgoing, tf->outgoingFrame, missing, tf->outgoingBlend, tf->outgoingOffset);
             Picture in = segmentPicture(c, tf->segment, tf->frame, missing, tf->blend, tf->segmentOffset);
             // Without effects (Render On-the-Fly off) a transition is its cut.
-            if (c.effects) layer = transitionPicture(*tf->transition, out, in, tf->progress, w, h);
+            if (c.effects && isFluid(tf->transition->effect, "FluidMorph")) {
+                // FluidMorph (FX Guide p.467, p.511-512): "Still" takes the outgoing clip's last frame of the
+                // transition, or the incoming clip's first, for every frame; "Stream" each frame as it comes.
+                const model::Effect& e = tf->transition->effect;
+                const QString cat = QStringLiteral("FluidMorph Effect Source and Input Parameters");
+                const QString source = e.parameters.value(cat).toObject().value(QStringLiteral("Source")).toString(QStringLiteral("Stream->Stream"));
+                const std::int64_t last = tf->transition->duration - 1 - tf->offset; // frames to the transition's end
+                Picture a = out;
+                Picture b = in;
+                if (source.startsWith(QLatin1String("Still"))) {
+                    const std::int64_t o = tf->outgoingOffset + last;
+                    a = segmentPicture(c, tf->outgoing, segmentClipFrame(*tf->outgoing, o), missing, segmentBlend(*tf->outgoing, o), o);
+                }
+                if (source.endsWith(QLatin1String("Still"))) {
+                    const std::int64_t o = tf->segmentOffset - tf->offset;
+                    b = segmentPicture(c, tf->segment, segmentClipFrame(*tf->segment, o), missing, segmentBlend(*tf->segment, o), o);
+                }
+                if (parameterFlag(e, cat, QStringLiteral("Swap Sources"))) std::swap(a, b);
+                const bool feature = e.parameters.value(cat).toObject().value(QStringLiteral("Feature Match")).toBool(true);
+                layer = Picture::fromImage(fluidMorph(a.toImage(), b.toImage(), tf->progress, feature), w, h, c.interpolation);
+            } else if (c.effects) {
+                layer = transitionPicture(*tf->transition, out, in, tf->progress, w, h);
+            }
             if (layer.isNull()) {
                 // Not built yet: the cut, which lies after the outgoing side's frames.
                 const double cutAt = static_cast<double>(tf->transition->before() + 1) / static_cast<double>(tf->transition->duration + 1);
@@ -401,6 +434,42 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             }
             if (e.category == QLatin1String("Key") && e.name == QLatin1String("Matte Key")) {
                 result = matteKeyPicture(e, beneath, result, layer, time, length);
+                result.quantize(c.precision);
+                continue;
+            }
+            if (isFluid(e, "FluidBlur") || isFluid(e, "FluidColorMap")) {
+                // FluidBlur and FluidColorMap (FX Guide p.467, p.510-511): the motion between the segment's
+                // frames, this one and the next (at its last frame, the one before).
+                const model::Segment& seg = *tf->segment;
+                auto pictureAt = [&](std::int64_t o) -> QImage {
+                    if (o < 0 || o >= seg.length) return {};
+                    return segmentPicture(c, &seg, segmentClipFrame(seg, o), nullptr, segmentBlend(seg, o), o).toImage();
+                };
+                const QImage current = layer.toImage();
+                const QImage before = pictureAt(tf->offset - 1);
+                QImage after = pictureAt(tf->offset + 1);
+                if (after.isNull()) after = before;
+                QImage made;
+                if (e.name == QLatin1String("FluidBlur")) {
+                    const QString cat = QStringLiteral("FluidBlur Effect Input Parameters");
+                    FluidBlurOptions o;
+                    o.amount = fluidNumber(e, cat, QStringLiteral("Blur Amount"), time, length);
+                    o.lower = fluidNumber(e, cat, QStringLiteral("Lower Motion Threshold"), time, length);
+                    o.upper = fluidNumber(e, cat, QStringLiteral("Upper Motion Threshold"), time, length);
+                    o.trail = fluidNumber(e, cat, QStringLiteral("Trail"), time, length);
+                    o.sharpenLeadingEdge = parameterFlag(e, cat, QStringLiteral("Sharpen Leading Edge"));
+                    made = fluidBlur(before, current, after, o);
+                } else {
+                    const QString cat = QStringLiteral("FluidColorMap Effect Input Parameters");
+                    FluidColorMapOptions o;
+                    o.minMotion = fluidNumber(e, cat, QStringLiteral("Min Motion Threshold"), time, length);
+                    o.maxMotion = fluidNumber(e, cat, QStringLiteral("Max Motion Threshold"), time, length);
+                    o.constantSaturation = fluidNumber(e, cat, QStringLiteral("Constant Saturation"), time, length);
+                    made = fluidColorMap(current, after, o);
+                }
+                if (!made.isNull()) layer = Picture::fromImage(made, w, h, c.interpolation);
+                layer.quantize(c.precision);
+                result = over(layer, result);
                 result.quantize(c.precision);
                 continue;
             }

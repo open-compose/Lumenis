@@ -53,6 +53,19 @@ bool isIllusionSegmentEffect(const model::Effect& e) {
 QJsonValue illusionDefault(const model::Effect& e, const QString& category, const QString& name) {
     if (isIllusionTransition(e)) return illusionTransitionDefault(e, category, name);
     // The values until set: ours, chosen so each effect shows itself when applied.
+    if (category == QLatin1String("FluidBlur Effect Input Parameters")) {
+        if (name == QLatin1String("Blur Amount")) return 50;
+        if (name == QLatin1String("Lower Motion Threshold")) return 1;
+        if (name == QLatin1String("Upper Motion Threshold")) return 100;
+    }
+    if (category == QLatin1String("FluidColorMap Effect Input Parameters")) {
+        if (name == QLatin1String("Max Motion Threshold")) return 20;
+        if (name == QLatin1String("Constant Saturation")) return 50;
+    }
+    if (category == QLatin1String("FluidMorph Effect Source and Input Parameters")) {
+        if (name == QLatin1String("Source")) return QStringLiteral("Stream->Stream");
+        if (name == QLatin1String("Feature Match")) return true;
+    }
     if (category == QLatin1String("Color Mix Effect Input Parameters")) {
         if (name == QLatin1String("Color Level")) return 50;
         if (name == QLatin1String("Color controls")) return QStringLiteral("#ff8000");

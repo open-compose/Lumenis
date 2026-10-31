@@ -3,6 +3,7 @@ add_library(lumenis_media STATIC
     compositor.cpp
     optical_flow.cpp
     fields.cpp
+    fluid_fx.cpp
     render.cpp
     wipes.cpp
     effect_drawing.cpp

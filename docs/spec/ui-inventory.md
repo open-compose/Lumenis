@@ -198,7 +198,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Output fixed, the formats a Timewarp has until set, the Pulldown
   Insertion and Removal templates' formats and Both Fields, the pattern
   detection, Adaptive Deinterlace's stillness test, adapters' patterns
-  found once per file.
+  found once per file. The Fluid effects (6.5d3b): thresholds in pixels
+  of a 1920-wide picture, Blur Amount as a percent of the motion, the
+  colour map's brightness up to 70% and its Cb/Cr compass, FluidMorph's
+  Stream->Stream and Feature Match until set and its brightness morph.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

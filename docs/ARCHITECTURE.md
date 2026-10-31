@@ -86,7 +86,7 @@ headers in `include/lumenis/<library>/`.
   Resize, masks, Reformat, Color Effect, Blur, Mosaic, docs/spec/image-effects.md), `key_effects.cpp`
   (the keys, docs/spec/keys.md), `burn_in.cpp` (Timecode Burn-In, docs/spec/burn-in.md), `illusion_fx.cpp` and `illusion_transitions.cpp` (the Illusion FX segment effects
   and transitions, sharing `illusion_common.h`; docs/spec/illusion-fx.md), `effect_drawing.*` (their shared sampling and borders), `render.*` (Render Effect's precomputes,
-  docs/spec/rendering.md), `optical_flow.*` (FluidMotion's in-between frames, docs/spec/motion-effects.md), `fields.*` (interlaced fields, pulldown and the format conversions of Timewarps and adapters), `mixdown.*`
+  docs/spec/rendering.md), `optical_flow.*` (FluidMotion's in-between frames, docs/spec/motion-effects.md), `fields.*` (interlaced fields, pulldown and the format conversions of Timewarps and adapters), `fluid_fx.*` (FluidBlur, FluidColorMap and FluidMorph on the optical flow), `mixdown.*`
   (Audio Mixdown, docs/spec/audio-mixdown.md), `surround.*` (speakers,
   monitor mixes and their folds, docs/spec/surround.md), `ltc.*` (audio
   timecode, docs/spec/clip-audio.md), `tone.*` (the calibration tone,

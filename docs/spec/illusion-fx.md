@@ -154,3 +154,33 @@ in `illusion_common.h`. Test: `tst_illusion_fx`.
   same time"), Angle, Random Seed, Anti-alias, the Border (p.466, p.524-525). Ours: the strips run
   along Angle, between 20 and 80 pixels wide until set; Width Randomness 0 makes them all midway;
   Spread 100 starts them over the first half of Amount; each then leaves the picture by the end.
+
+## 6.5d3b: FluidBlur, FluidColorMap and FluidMorph
+
+FX Guide p.467, p.510-512. Code: `src/media/fluid_fx.*` (`fluidBlur`, `fluidColorMap`, `fluidMorph`) on our
+optical flow (`src/media/optical_flow.*`, 6.5d1), called by the compositor with the frames around the one
+shown. Tests: `tst_fluid_fx`, `tst_compositor`.
+
+* FluidBlur: "The amount of blur is based on the amount of motion in the clip. Only objects that are moving
+  from one frame to the next are blurred ... it blurs in the direction of travel" (p.467). Each pixel is
+  averaged along its motion to the next frame. Blur Amount is the blur's length as a percent of the motion,
+  ramped "from 0 to the Blur Amount value as the pixel motion increases from the Lower Motion Threshold value
+  to the Upper Motion Threshold value", with nothing blurred outside them (p.510). Thresholds count pixels
+  of a picture 1920 wide (ours). Trail adds a reach back along the previous frame's motion; Sharpen Leading
+  Edge puts the whole blur behind the motion. At a segment's last frame the motion is the one from the frame
+  before.
+* FluidColorMap: "Direction of movement maps to unique chroma (color) values ... the Vectorscope layout ...
+  as a compass of color values. Motion magnitude maps to luminance (brightness) and color saturation"
+  (p.467). Ours: the direction (up the picture as up the scope) is the angle of Cb across and Cr up;
+  brightness rises to 70% at the Max Motion Threshold, so the fastest motion keeps its colour; saturation
+  rises from Constant Saturation to full, so at its maximum "motion has no effect on color saturation"
+  (p.511). Where nothing moves the picture is black.
+* FluidMorph: the Source menu's Still->Still, Stream->Stream (the default, ours), Stream->Still and
+  Still->Stream (p.511): a still is the outgoing clip's frame at the transition's end, or the incoming
+  clip's at its start. Feature Match (on until set, ours) moves both pictures along the flow between them
+  and mixes them (media::interpolateFrames); without it "the morph [is] based on the brightness of the two
+  images": each pixel changes over in a quarter of the transition, earlier the brighter the incoming
+  picture is there. Swap Sources swaps them.
+* Progressive Source (all three, p.510-512) is kept but changes nothing: ours always finds motion between
+  frames. The Illusion FX Border and Grid are not used by these three yet. "You must render this effect to
+  see the result" (p.467): ours shows them unrendered too, slowly.

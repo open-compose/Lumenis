@@ -522,7 +522,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Output formats with 2:3 pulldown and repeated frames, Adaptive Deinterlace Source, the FluidFilm and
   Pulldown templates, adapters following Field Motion, two-field motion effects; tests `tst_fields`,
   `tst_motion_adapter_ui`), is done.
-  Next: 6.5d3b, FluidBlur, FluidColorMap and FluidMorph (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.5d3b, FluidBlur, FluidColorMap and FluidMorph (docs/spec/illusion-fx.md: `src/media/fluid_fx.*` on the
+  optical flow, from the compositor; test `tst_fluid_fx`), is done, so 6.5 is.
+  Next: 6.6, layered and nested effects and effect templates (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

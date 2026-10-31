@@ -996,7 +996,8 @@ phase of their own. They are done in three steps:
         Source; motion adapters following their Field Motion (Interlaced, 2:3 Film, Progressive
         Strobe); the field order of linked media; and the two-field options of 6.5a's motion effects.
         Done (`src/media/fields.*`).
-      * 6.5d3b, the FluidBlur, FluidColorMap and FluidMorph Illusion FX on 6.5d1's flow.
+      * 6.5d3b, the FluidBlur, FluidColorMap and FluidMorph Illusion FX on 6.5d1's flow. Done
+        (`src/media/fluid_fx.*`), so 6.5 is.
 * 6.6, layered and nested effects (ch.8, p.206-228): nesting and stepping in, Collapse,
   Submaster, Double-Click to Show Nesting; and effect templates in bins (p.52-55), with the Motion
   Effect Editor's Timewarp icon (p.182).
