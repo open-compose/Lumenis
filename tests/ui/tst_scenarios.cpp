@@ -453,6 +453,29 @@ struct Run {
             }
             return true;
         }
+        if (o.contains(QStringLiteral("template_drop"))) {
+            // An effect template dragged from a bin to [track, record frame] of the Timeline (FX Guide p.53):
+            // "template" as model::EffectTemplate::toJson writes it; "source": [clip, source IN, length] saves
+            // it with its source media (Alt+drag of the effect icon).
+            const QJsonArray at = o.value(QStringLiteral("template_drop")).toArray();
+            auto t = model::EffectTemplate::fromJson(o.value(QStringLiteral("template")).toObject());
+            if (!t) return fail(QStringLiteral("the template cannot be read"));
+            if (o.contains(QStringLiteral("source"))) {
+                model::Segment source = segmentOf(o.value(QStringLiteral("source")).toArray(), at.at(0).toString());
+                source.effect = t->effect;
+                t = model::segmentTemplate(source, kRate, true);
+            }
+            QMimeData mime;
+            mime.setData(effectTemplateMime(),
+                         QJsonDocument(QJsonObject{{QStringLiteral("name"), t->effect.name}, {QStringLiteral("template"), t->toJson()}})
+                             .toJson(QJsonDocument::Compact));
+            const auto dropped = timeline.droppedTemplate(&mime);
+            const bool ok = dropped && timeline.dropTemplate(at.at(0).toString(), at.at(1).toInteger(), *dropped);
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the template drop was not refused") : timeline.lastMessage());
+            }
+            return true;
+        }
         if (o.contains(QStringLiteral("eq_menu"))) {
             // An item of the Audio EQ tool's Fast menu (p.740).
             for (QAction* a : eq.fastMenu()->actions()) {

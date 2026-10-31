@@ -47,6 +47,6 @@ in `sequence.h`, the compositor's nest in `segmentPicture`, `Timeline::stepIn`/`
   master clip named after the sequence (ours: "<sequence> Mixdown") in the chosen bin, on the chosen drive
   and resolution. Without marks, ours mixes the whole sequence, as Audio Mixdown does. The sequence is left
   as it is; the data track is not mixed down.
-* Not yet (6.6b): expanding a nest in the Timeline by double-clicking, nested effects in the Effect Editor
-  and their order, effect templates in bins. Nests are not written to AAF, `.avb`, EDL or OTIO
+* Not yet: nested effects in the Effect Editor and their order (6.6b2), expanding a nest in the Timeline by
+  double-clicking (6.6b3); effect templates are 6.6b1 (docs/spec/effect-templates.md). Nests are not written to AAF, `.avb`, EDL or OTIO
   ("Nested effects do not appear in edit decision lists", p.219): those keep the segment as it is.

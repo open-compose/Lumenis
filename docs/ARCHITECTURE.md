@@ -117,6 +117,8 @@ headers in `include/lumenis/<library>/`.
   `render_dialogs.*` (docs/spec/rendering.md); traditional motion effect clips in `src/model/motion_effect.*`
   with `motion_effect_dialogs.*`, Timewarps in `src/model/timewarp.*` with the Motion Effect Editor
   `motion_effect_editor.*`, nests (a segment effect's own tracks, Step In and Collapse) in `src/model/nest.*` with docs/spec/nesting.md,
+  effect templates (Effect items in bins holding an effect, applied to segments, transitions and parameter
+  groups) in `src/model/effect_template.*` with docs/spec/effect-templates.md,
   and mixed rate clips' Motion Adapters in `src/model/motion_adapter.*`: the
   monitors load a clip at another rate as its adapted copy at the project's rate, the segments edited
   from it carry `Segment::adapter`, and `BinDocument` stores the clip itself back (docs/spec/motion-effects.md).

@@ -2,6 +2,7 @@
 
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
+#include "lumenis/model/effect_template.h"
 #include "lumenis/model/motion_adapter.h"
 
 #include "lumenis/ui/bin_dialogs.h"
@@ -617,7 +618,8 @@ Qt::DropActions BinItemModel::supportedDropActions() const {
 
 QStringList BinItemModel::mimeTypes() const {
     // text/uri-list: files dragged in from the desktop (an .otio dropped into a bin, p.969).
-    return {binItemsMime(), mediaFilesMime(), audioSuiteTemplateMime(), eqTemplateMime(), QStringLiteral("text/uri-list")};
+    return {binItemsMime(), mediaFilesMime(), audioSuiteTemplateMime(), eqTemplateMime(), effectTemplateMime(),
+            QStringLiteral("text/uri-list")};
 }
 
 namespace {
@@ -635,15 +637,24 @@ QStringList localFiles(const QMimeData* data) {
 
 namespace {
 
-// An effect template dropped from the AudioSuite tool (p.798) or the Audio EQ tool (p.740): a new
-// Effect item. False if the bin is locked or the data holds no template.
+// An effect template dropped from the AudioSuite tool (p.798), the Audio EQ tool (p.740), the Effect
+// Editor or the Motion Effect Editor (FX Guide p.53, p.182): a new Effect item. False if the bin is locked
+// or the data holds no template.
 bool hasTemplate(const QMimeData* data) {
-    return data->hasFormat(audioSuiteTemplateMime()) || data->hasFormat(eqTemplateMime());
+    return data->hasFormat(audioSuiteTemplateMime()) || data->hasFormat(eqTemplateMime()) ||
+           data->hasFormat(effectTemplateMime());
 }
 
 bool addTemplate(BinDocument& document, const QMimeData* data) {
     if (document.isReadOnly()) return false;
     const QDateTime now = QDateTime::currentDateTimeUtc();
+    if (data->hasFormat(effectTemplateMime())) {
+        const QJsonObject o = QJsonDocument::fromJson(data->data(effectTemplateMime())).object();
+        const auto t = model::EffectTemplate::fromJson(o.value(QStringLiteral("template")).toObject());
+        if (!t) return false;
+        document.addItem(model::effectTemplateItem(*t, o.value(QStringLiteral("name")).toString(), now));
+        return true;
+    }
     if (data->hasFormat(eqTemplateMime())) {
         const QJsonObject o = QJsonDocument::fromJson(data->data(eqTemplateMime())).object();
         if (!o.value(QStringLiteral("eq")).isObject()) return false;
@@ -2018,6 +2029,28 @@ QMenu* BinView::colorMenu(QMenu* parent, const QString& title, bool background) 
     return menu;
 }
 
+QStringList BinView::promoteEffects(const QStringList& ids) {
+    QStringList made;
+    if (document_.isReadOnly()) return made;
+    QStringList names;
+    for (const model::BinItem& item : document_.bin().items) names << item.name;
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    for (const QString& id : ids) {
+        const model::BinItem* item = document_.bin().item(id);
+        if (!item || !model::effectTemplateOf(*item)) continue;
+        model::BinItem copy = *item;
+        copy.id = model::newItemId();
+        copy.mobId = {};
+        copy.name = model::promotedTemplateName(item->name, names);
+        copy.created = now;
+        copy.modified = now;
+        names << copy.name;
+        document_.addItem(copy);
+        made << copy.id;
+    }
+    return made;
+}
+
 QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
     auto* menu = new QMenu(this);
     menu->setObjectName(QStringLiteral("binContextMenu"));
@@ -2062,6 +2095,27 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
     }
     QMenu* clip = colorMenu(menu, tr("Set Clip Color"), false);
     clip->setEnabled(!selectedIds().isEmpty());
+    // "Right-click the template in the bin, select Promote Effects, and then click OK in the Promote
+    // Effects dialog box" (FX Guide p.54).
+    {
+        QStringList templates;
+        for (const QString& id : selectedIds()) {
+            const model::BinItem* item = document_.bin().item(id);
+            if (item && model::effectTemplateOf(*item)) templates << id;
+        }
+        if (!templates.isEmpty()) {
+            QAction* promote = menu->addAction(tr("Promote Effects"), this, [this, templates] {
+                QMessageBox box(QMessageBox::Question, tr("Promote Effects"),
+                                tr("Promote the selected effect templates to advanced keyframes? A promoted copy of each is "
+                                   "made in the bin."),
+                                QMessageBox::Ok | QMessageBox::Cancel, this);
+                box.setObjectName(QStringLiteral("promoteEffects"));
+                if (box.exec() == QMessageBox::Ok) promoteEffects(templates);
+            });
+            promote->setObjectName(QStringLiteral("promoteEffects"));
+            promote->setEnabled(!document_.isReadOnly());
+        }
+    }
     colorMenu(menu, tr("Set Background Color"), true);
     if (mode() == model::BinViewMode::Frame) {
         // Snap to Grid (p.252).

@@ -179,6 +179,8 @@ public:
     // Guide p.469: "Media Composer applies Motion Adapter effects when they load into a Source or pop-up
     // monitor"). Without a rate clips load as they are.
     void setAdapterOptions(const Rational& projectRate, bool interlaced, bool blending);
+    // The project's edit rate as setAdapterOptions() gave it; 0/1 until then.
+    Rational projectRate() const { return projectRate_; }
     // The item as the monitors show it: a mixed rate clip's adapted copy, else the item.
     model::BinItem monitorItem(const model::BinItem& item) const;
     // HD projects are 16:9; SD 4:3 or 16:9 (p.379).

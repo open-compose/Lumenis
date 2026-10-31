@@ -362,6 +362,12 @@ public:
 
     // Selected item ids, in the order shown.
     QStringList selectedIds() const;
+    // Promote Effects (FX Guide p.54-55; docs/spec/effect-templates.md): "Media Composer creates a copy of
+    // the template in the bin and promotes the effect information in the copy to advanced keyframes",
+    // named "<name>.Promoted.NN". Our templates have only advanced keyframes, so the copy's effect is the
+    // same. The ids of the copies, one for each video effect template among `ids`; none in a locked bin.
+    // The bin's shortcut menu offers it, after the Promote Effects dialog, when templates are selected.
+    QStringList promoteEffects(const QStringList& ids);
     // Replaces the selection; ids that are not shown are ignored.
     void selectIds(const QStringList& ids);
     // Every item shown (not those filtered or sifted out).

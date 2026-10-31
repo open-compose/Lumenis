@@ -1,0 +1,28 @@
+[
+  {
+    "name": "an effect template dragged from a bin puts its effect, keyframes and all, on the segment; a video effect refuses an audio track, and Undo takes it off",
+    "guide": "FX Guide p.53",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 20]], "A1": [["A", 0, 20]]}},
+    "steps": [
+      {"template_drop": ["V1", 25], "template": {"effect": {"category": "Blend", "name": "Superimpose", "parameters": {"_keyframes": {"Foreground/Level": {"keys": [{"at": 0, "value": 0}, {"at": 1, "value": 100}]}}}}}},
+      {"template_drop": ["A1", 5], "template": {"effect": {"category": "Blend", "name": "Superimpose"}}, "refused": true},
+      {"template_drop": ["V1", 5], "template": {"effect": {"category": "Blend", "name": "Superimpose", "parameters": {"_keyframes": {"Foreground/Level": {"keys": [{"at": 0, "value": 50}]}}}}}},
+      {"command": "edit.undo"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 20], ["B", 0, 20, {"keyframes": {"Foreground/Level": [[0, 0], [1, 100]]}}]],
+      "A1": [["A", 0, 20]]}
+  },
+  {
+    "name": "a template saved with its source media is edited in over the track, effect and all",
+    "guide": "FX Guide p.53",
+    "clips": [{"name": "A"}, {"name": "M"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 60]]}},
+    "steps": [
+      {"template_drop": ["V1", 10], "source": ["M", 100, 15], "template": {"effect": {"category": "Blend", "name": "Superimpose", "parameters": {"_keyframes": {"Foreground/Level": {"keys": [{"at": 0, "value": 0}, {"at": 1, "value": 100}]}}}}}}
+    ],
+    "expect": {
+      "V1": [["A", 0, 10], ["M", 100, 15, {"keyframes": {"Foreground/Level": [[0, 0], [1, 100]]}}], ["A", 25, 35]]}
+  }
+]

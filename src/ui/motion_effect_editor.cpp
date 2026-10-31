@@ -5,19 +5,25 @@
 #include "lumenis/media/fields.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
+#include "lumenis/model/effect_template.h"
 #include "lumenis/model/timewarp.h"
+#include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/media_frames.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QCheckBox>
+#include <QApplication>
 #include <QComboBox>
+#include <QDrag>
 #include <QDoubleSpinBox>
 #include <QFormLayout>
 #include <QGuiApplication>
 #include <QHBoxLayout>
+#include <QJsonDocument>
 #include <QLabel>
 #include <QMenu>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -252,6 +258,13 @@ MotionEffectEditor::MotionEffectEditor(Timeline& timeline, QWidget* parent) : QW
     promote_ = new QPushButton(tr("Promote"), body_);
     promote_->setObjectName(QStringLiteral("promote"));
     connect(promote_, &QPushButton::clicked, this, &MotionEffectEditor::promote);
+    // The Timewarp Effect icon (p.182): ours, the effect icon, dragged to a bin.
+    timewarpIcon_ = new QLabel(body_);
+    timewarpIcon_->setObjectName(QStringLiteral("timewarpIcon"));
+    timewarpIcon_->setPixmap(effectIcon(false, false).pixmap(26, 18));
+    timewarpIcon_->setToolTip(tr("Drag to a bin to save a Timewarp Effect template"));
+    timewarpIcon_->installEventFilter(this);
+    top->addWidget(timewarpIcon_);
     top->addWidget(speedButton_);
     top->addWidget(positionButton_);
     top->addWidget(promote_);
@@ -613,7 +626,46 @@ void MotionEffectEditor::refresh() {
     }
     if (!effect_) selected_ = -1;
     speedText_->setText(speedText);
+    timewarpIcon_->setEnabled(shownKind_ == Shown::Timewarp);
     syncControls();
+}
+
+QMimeData* MotionEffectEditor::timewarpTemplateMime() const {
+    if (shownKind_ != Shown::Timewarp || !effect_) return nullptr;
+    model::Segment s;
+    s.length = length_;
+    s.effect = effect_;
+    const auto t = model::segmentTemplate(s, timeline_.composer().projectRate(), false);
+    if (!t) return nullptr;
+    auto* mime = new QMimeData;
+    const QJsonObject o{{QStringLiteral("name"), model::effectTemplateName(*t)}, {QStringLiteral("template"), t->toJson()}};
+    mime->setData(effectTemplateMime(), QJsonDocument(o).toJson(QJsonDocument::Compact));
+    mime->setText(model::effectTemplateName(*t));
+    return mime;
+}
+
+bool MotionEffectEditor::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == timewarpIcon_) {
+        if (event->type() == QEvent::MouseButtonPress && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+            iconPress_ = static_cast<QMouseEvent*>(event)->position().toPoint();
+            return true;
+        }
+        if (event->type() == QEvent::MouseMove && !iconPress_.isNull()) {
+            auto* m = static_cast<QMouseEvent*>(event);
+            if ((m->position().toPoint() - iconPress_).manhattanLength() >= QApplication::startDragDistance()) {
+                iconPress_ = {};
+                if (QMimeData* mime = timewarpTemplateMime()) {
+                    auto* drag = new QDrag(this);
+                    drag->setMimeData(mime);
+                    drag->setPixmap(timewarpIcon_->pixmap());
+                    drag->exec(Qt::CopyAction);
+                }
+            }
+            return true;
+        }
+        if (event->type() == QEvent::MouseButtonRelease) iconPress_ = {};
+    }
+    return QWidget::eventFilter(watched, event);
 }
 
 void MotionEffectEditor::setRenderUsing(const QString& type) {

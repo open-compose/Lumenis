@@ -25,6 +25,7 @@
 #include "lumenis/model/auto_sequence.h"
 #include "lumenis/model/bin_relations.h"
 #include "lumenis/model/clip_audio.h"
+#include "lumenis/model/effect_template.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
 #include "lumenis/model/timewarp.h"
@@ -1481,6 +1482,14 @@ void MainWindow::createTools() {
     panels_->addPanel(new Panel(QStringLiteral("EffectPalette"), tr("Effect Palette"), effectPalette_));
     connect(effectPalette_, &EffectPalette::effectActivated, this,
             [this](const EffectInfo& effect) { timeline_->applyEffectToSelection(effect); });
+    // The open bins' effect templates in the palette (FX Guide p.37-38, p.53); double-clicked, as an effect.
+    connect(effectPalette_, &EffectPalette::templateActivated, this, [this](const QString& binId, const QString& itemId) {
+        const BinDocument* doc = binContainer_->document(binId);
+        const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr;
+        if (const auto t = item ? model::effectTemplateOf(*item) : std::nullopt) timeline_->applyTemplateToSelection(*t);
+    });
+    connect(binContainer_, &BinContainer::binItemsChanged, this, [this] { refreshTemplateBins(); });
+    connect(binContainer_, &BinContainer::activeBinChanged, this, [this] { refreshTemplateBins(); });
     // Applying Effects opens Effect Editor (Timeline settings, p.1220).
     connect(timeline_, &Timeline::effectApplied, this, [this] {
         if (timeline_->options().openEffectEditor) showTool(QStringLiteral("EffectEditor"));
@@ -2375,6 +2384,19 @@ int MainWindow::autoVo() {
 // "Load the sequence into the Record monitor and then, with either the Composer window or the Timeline
 // window active, select Clip > Refresh Sequence"; or "select multiple sequences in the bin" (p.478). The
 // Record monitor's sequence changes as an undoable edit; a bin's sequences are stored as they are.
+void MainWindow::refreshTemplateBins() {
+    if (!effectPalette_) return;
+    QList<TemplateBin> bins;
+    for (const BinDocument* doc : binContainer_->openDocuments()) {
+        TemplateBin bin{doc->nodeId(), doc->bin().name, {}};
+        for (const model::BinItem& item : doc->bin().items) {
+            if (const auto t = model::effectTemplateOf(item)) bin.templates << TemplateBin::Entry{item.id, item.name, t->transition};
+        }
+        bins << bin;
+    }
+    effectPalette_->setTemplateBins(bins);
+}
+
 int MainWindow::refreshMotionAdapters() {
     if (!project_) return 0;
     const bool interlaced = project_->settings.format.scan == ScanMode::Interlaced;

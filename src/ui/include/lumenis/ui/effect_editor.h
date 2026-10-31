@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/effect_template.h"
 #include "lumenis/model/sequence.h"
 
 #include <QHash>
@@ -15,6 +16,7 @@ class QCheckBox;
 class QMenu;
 class QScrollBar;
 class QLabel;
+class QMimeData;
 class QLineEdit;
 class QSlider;
 class QToolButton;
@@ -242,6 +244,18 @@ public:
     // Sets keyframe `id`'s handles (in its parameter's time and value), previewed or as one undo step.
     void setKeyframeHandles(const KeyframeId& id, const model::BezierHandle& in, const model::BezierHandle& out, bool previewOnly);
 
+    // ---- Effect templates (p.52-54; docs/spec/effect-templates.md)
+    // "Drag the effect icon from the Effect Editor to a bin": the template of the effect shown, with its
+    // source media when `withSource` (Alt held, a segment effect only); nothing when blank.
+    std::optional<model::EffectTemplate> shownTemplate(bool withSource) const;
+    // What dragging the effect icon carries (effectTemplateMime); null when blank. The caller owns it.
+    QMimeData* templateMime(bool withSource) const;
+    // "drag it to the specific parameter group in the Effect Editor ... Media Composer applies the effect
+    // template only to the effect parameter group you selected" (p.54): the group `category` of the shown
+    // effect takes the template's values, one undo step. False when blank, when the template's effect has
+    // no such group or nothing changes.
+    bool applyTemplateGroup(const QString& category, const model::EffectTemplate& t);
+
 signals:
     // The Effect Editor shortcut menu changed options().
     void optionsChanged();
@@ -308,6 +322,7 @@ private:
     QVBoxLayout* groups_ = nullptr;
     QLabel* title_ = nullptr;
     QLabel* titleIcon_ = nullptr;
+    QPoint iconPress_; // where a drag of the effect icon began; null when none
     QLabel* blank_ = nullptr;
     QToolButton* alignment_ = nullptr;
     QLineEdit* duration_ = nullptr;

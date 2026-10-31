@@ -5,6 +5,7 @@
 #include "lumenis/model/automation.h"
 #include "lumenis/model/clip_coloring.h"
 #include "lumenis/model/effect_render.h"
+#include "lumenis/model/effect_template.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
@@ -801,6 +802,21 @@ public:
     // on the whole segment at record frame `frame` of audio track `track`, one undo step; already so:
     // true without a step. False for filler, a locked track or anything but an audio track.
     bool dropEq(const QString& track, std::int64_t frame, const model::AudioEq& eq);
+    // ---- Effect templates (FX Guide p.52-55; docs/spec/effect-templates.md)
+    // The video effect template a drag carries: the Effect Editor's effect icon or the Motion Effect
+    // Editor's Timewarp icon (effectTemplateMime), or one template item from a bin or the Effect Palette
+    // (binItemsMime, resolved through the Composer); nothing otherwise.
+    std::optional<model::EffectTemplate> droppedTemplate(const QMimeData* mime) const;
+    // "apply an effect template with all its parameters directly to segments or transitions as you would
+    // any other effect" (p.53): model::applyTemplate at record frame `frame` of `track` (with Alt held,
+    // nested inside the segment's effect); a transition template on the cut `cut`, else the segment's
+    // nearer cut, asking about insufficient source as palette effects do. One undo step.
+    bool dropTemplate(const QString& track, std::int64_t frame, const model::EffectTemplate& t,
+                      std::optional<std::int64_t> cut = std::nullopt);
+    // A template double-clicked in the Effect Palette: on the selected segments (one with its source media
+    // at the position on the selected video tracks' top one), or a transition template on the trim
+    // rollers' cuts or the selected segments' head cuts.
+    bool applyTemplateToSelection(const model::EffectTemplate& t);
     using SelectInsertAsk = std::function<std::optional<int>(const QString& track)>;
     void setSelectInsertAsk(SelectInsertAsk ask) { selectInsertAsk_ = std::move(ask); }
     // The Fade Effect button (FX Guide p.46-47; docs/spec/effect-keyframes.md): the segment effects
@@ -1104,6 +1120,8 @@ private:
     bool fail(const QString& text);
     // Puts transitions on cuts of `seq`, asking about insufficient source.
     bool addTransitions(model::Sequence& seq, const QList<model::TrimRoller>& cuts, const EffectInfo& effect);
+    // The same with the transition given (an effect template's duration and alignment).
+    bool addTransitions(model::Sequence& seq, const QList<model::TrimRoller>& cuts, const model::Transition& transition);
     bool commitSequence(const QString& description, const model::Sequence& seq);
     // The selected record audio tracks of `seq`, in order.
     QStringList selectedAudioTracks(const model::Sequence& seq) const;

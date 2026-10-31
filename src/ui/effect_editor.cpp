@@ -1,6 +1,7 @@
 #include "lumenis/ui/effect_editor.h"
 
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/bin_dock.h"
 
 #include "lumenis/media/compositor.h"
 
@@ -10,6 +11,8 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDrag>
+#include <QDragEnterEvent>
 #include <QFormLayout>
 #include <QFile>
 #include <QHBoxLayout>
@@ -20,6 +23,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMimeData>
 #include <QMenu>
 #include <QPainter>
 #include <QPainterPath>
@@ -323,6 +327,9 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     auto* titleRow = new QHBoxLayout;
     titleRow->setSpacing(4);
     titleIcon_ = new QLabel(this);
+    titleIcon_->setObjectName(QStringLiteral("effectIcon"));
+    titleIcon_->setToolTip(tr("Drag to a bin to save an effect template (Alt: with its source media)"));
+    titleIcon_->installEventFilter(this);
     titleRow->addWidget(titleIcon_);
     titleRow->addWidget(title_, 1);
     layout->addLayout(titleRow);
@@ -523,6 +530,10 @@ void EffectEditor::rebuild(const model::Effect* effect) {
         opener->setAutoRaise(true);
         opener->setCheckable(true);
         opener->setChecked(true);
+        // An effect template dropped on the opener sets this group alone (p.54).
+        opener->setAcceptDrops(true);
+        opener->setProperty("templateGroup", category);
+        opener->installEventFilter(this);
         auto* box = new QWidget(body_);
         auto* grid = new QVBoxLayout(box);
         grid->setContentsMargins(18, 0, 0, 4);
@@ -1019,6 +1030,44 @@ QCheckBox* EffectEditor::checkBox(const QString& category, const QString& parame
 }
 
 bool EffectEditor::eventFilter(QObject* watched, QEvent* event) {
+    // Dragging the effect icon to a bin (p.53).
+    if (watched == titleIcon_) {
+        if (event->type() == QEvent::MouseButtonPress && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+            iconPress_ = static_cast<QMouseEvent*>(event)->position().toPoint();
+            return true;
+        }
+        if (event->type() == QEvent::MouseMove && !iconPress_.isNull()) {
+            auto* m = static_cast<QMouseEvent*>(event);
+            if ((m->position().toPoint() - iconPress_).manhattanLength() >= QApplication::startDragDistance()) {
+                iconPress_ = {};
+                if (QMimeData* mime = templateMime(m->modifiers().testFlag(Qt::AltModifier))) {
+                    auto* drag = new QDrag(this);
+                    drag->setMimeData(mime);
+                    if (!titleIcon_->pixmap().isNull()) drag->setPixmap(titleIcon_->pixmap());
+                    drag->exec(Qt::CopyAction);
+                }
+            }
+            return true;
+        }
+        if (event->type() == QEvent::MouseButtonRelease) iconPress_ = {};
+    }
+    // An effect template on a parameter group's opener (p.54).
+    if (const QString group = watched->property("templateGroup").toString(); !group.isEmpty()) {
+        if (event->type() == QEvent::DragEnter || event->type() == QEvent::DragMove) {
+            auto* d = static_cast<QDropEvent*>(event);
+            if (timeline_.droppedTemplate(d->mimeData())) {
+                d->acceptProposedAction();
+            } else {
+                d->ignore();
+            }
+            return true;
+        }
+        if (event->type() == QEvent::Drop) {
+            auto* d = static_cast<QDropEvent*>(event);
+            if (const auto t = timeline_.droppedTemplate(d->mimeData()); t && applyTemplateGroup(group, *t)) d->acceptProposedAction();
+            return true;
+        }
+    }
     if (event->type() == QEvent::MouseButtonPress || event->type() == QEvent::FocusIn) {
         const QString k = watched->property("parameterKey").toString();
         if (!k.isEmpty()) setActiveParameter(k);
@@ -1033,6 +1082,49 @@ bool EffectEditor::eventFilter(QObject* watched, QEvent* event) {
         }
     }
     return QWidget::eventFilter(watched, event);
+}
+
+// ---------------------------------------------------------------- effect templates
+
+std::optional<model::EffectTemplate> EffectEditor::shownTemplate(bool withSource) const {
+    if (!shown_) return std::nullopt;
+    const model::Sequence seq = recordSequence();
+    const Rational rate = timeline_.composer().projectRate();
+    if (shown_->target == model::EffectTarget::Transition) {
+        const model::Transition* t = model::transitionFor(seq, *shown_);
+        if (!t) return std::nullopt;
+        return model::transitionTemplate(*t, rate);
+    }
+    const model::Track* track = seq.track(shown_->track);
+    if (!track) return std::nullopt;
+    const int i = track->segmentAt(shown_->frame);
+    if (i < 0) return std::nullopt;
+    return model::segmentTemplate(track->segments.at(i), rate, withSource);
+}
+
+QMimeData* EffectEditor::templateMime(bool withSource) const {
+    const auto t = shownTemplate(withSource);
+    if (!t) return nullptr;
+    auto* mime = new QMimeData;
+    const QJsonObject o{{QStringLiteral("name"), model::effectTemplateName(*t)}, {QStringLiteral("template"), t->toJson()}};
+    mime->setData(effectTemplateMime(), QJsonDocument(o).toJson(QJsonDocument::Compact));
+    mime->setText(model::effectTemplateName(*t));
+    return mime;
+}
+
+bool EffectEditor::applyTemplateGroup(const QString& category, const model::EffectTemplate& t) {
+    if (!shown_) return false;
+    // Only a group the template's effect has: its values there, or its defaults.
+    const EffectInfo* info = EffectCatalog::builtin().find(t.effect.category, t.effect.name);
+    const bool has = info ? info->parameters.contains(category) : t.effect.parameters.contains(category);
+    if (!has) return false;
+    const model::Sequence seq = recordSequence();
+    const model::Effect* now = model::effectFor(seq, *shown_);
+    if (!now) return false;
+    model::Effect changed = *now;
+    const Rational rate = timeline_.composer().projectRate();
+    if (!model::applyTemplateGroup(changed, t, category, rate)) return false;
+    return timeline_.changeEffect(*shown_, tr("Apply Effect Template"), [&](model::Effect& e, model::Transition*) { e = changed; });
 }
 
 } // namespace lumenis::ui

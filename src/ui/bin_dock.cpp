@@ -53,6 +53,10 @@ QString eqTemplateMime() {
     return QStringLiteral("application/x-cutthulhu-eq-template");
 }
 
+QString effectTemplateMime() {
+    return QStringLiteral("application/x-cutthulhu-effect-template");
+}
+
 bool isCopyDrop(Qt::DropAction action, Qt::KeyboardModifiers modifiers) {
     return action == Qt::CopyAction || (modifiers & (Qt::AltModifier | Qt::ControlModifier));
 }

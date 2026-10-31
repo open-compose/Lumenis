@@ -206,6 +206,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   shown as a sequence of its own, the FX tab for Step In, Step Out and
   Collapse, Collapse onto the lowest track, Video Mixdown's clip name and
   the whole sequence without marks.
+* Effect templates (docs/spec/effect-templates.md): a template named after
+  its effect, Alt keeping the segment without its transition or renders, a
+  template with its source media edited in as an overwrite, a parameter
+  group the template's effect lacks refused, Fixed keyframes scaled by the
+  rates, the template bins listed under the categories, and Promote
+  Effects' copy unchanged.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

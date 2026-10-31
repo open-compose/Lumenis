@@ -412,6 +412,9 @@ public:
     // the active bin when it has the focus, else the Record monitor's sequence, take their clips' current
     // Field Motion (model::refreshMotionAdapters). Returns how many adapters changed.
     int refreshMotionAdapters();
+    // The Effect Palette's template bins (FX Guide p.37-38): every open bin's video effect templates
+    // (model::effectTemplateOf), in the order the bins were opened.
+    void refreshTemplateBins();
     // Change Sample Rate (p.731): new media for the selected audio clips, and the clips the selected
     // sequences' audio segments use, at the chosen rate (media::resampleClipAudio).
     int changeSampleRate();

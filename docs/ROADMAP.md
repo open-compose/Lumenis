@@ -1005,10 +1005,14 @@ phase of their own. They are done in three steps:
     Step Out with the nesting level (N1, N2 ...); nesting an effect inside another (Alt+drag or
     Alt+double-click); Collapse into a Submaster effect; and Timeline > Mixdown > Video. Done
     (docs/spec/nesting.md, `src/model/nest.*`).
-  * 6.6b, the rest: expanding a nest in the Timeline (double-click), nested effects in the Effect Editor
-    and changing their order, and effect templates in bins (drag the effect icon to a bin, Alt for source
-    media, apply to segments, transitions or one parameter group, the Effect Palette's bin icons,
-    Promote Effects), with the Motion Effect Editor's Timewarp icon.
+  * 6.6b, the rest, in three parts:
+    * 6.6b1, effect templates in bins: drag the effect icon to a bin, Alt for source media, apply to
+      segments, transitions or one parameter group, the Effect Palette's bin icons, Promote Effects, with
+      the Motion Effect Editor's Timewarp icon. Done (docs/spec/effect-templates.md,
+      `src/model/effect_template.*`).
+    * 6.6b2, nested effects in the Effect Editor and changing their order (p.221-222).
+    * 6.6b3, expanding a nest in the Timeline by double-clicking, and the Double-Click to Show Nesting
+      setting (p.220-221, Editing Guide p.1219).
 * 6.7, 3D effects, camera effects, and tracking and stabilization (ch.9-11, p.229-300).
 * 6.8, titles (ch.12-13, p.301-377): the Title Tool and Titler+, with keyframes kept through trims,
   splits and duplicates (2026.8). SubCap (ch.14) goes to Phase 7 with the captions.

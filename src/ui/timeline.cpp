@@ -4889,7 +4889,8 @@ void Timeline::keyPressEvent(QKeyEvent* event) {
 // ---------------------------------------------------------------- effects
 
 void TimelineView::dragEnterEvent(QDragEnterEvent* event) {
-    if ((effectFromMime(event->mimeData()) || timeline_.droppedEq(event->mimeData())) && !timeline_.showsSource()) {
+    if ((effectFromMime(event->mimeData()) || timeline_.droppedEq(event->mimeData()) || timeline_.droppedTemplate(event->mimeData())) &&
+        !timeline_.showsSource()) {
         event->acceptProposedAction();
         return;
     }
@@ -4927,6 +4928,15 @@ std::int64_t TimelineView::binDropFrame(int x) const {
 
 void TimelineView::dragMoveEvent(QDragMoveEvent* event) {
     const auto row = rowAt(event->position().toPoint());
+    // An effect template goes on a video track (FX Guide p.53).
+    if (timeline_.droppedTemplate(event->mimeData())) {
+        if (row && row->exists && row->track.startsWith(QLatin1Char('V')) && !timeline_.showsSource()) {
+            event->acceptProposedAction();
+        } else {
+            event->ignore();
+        }
+        return;
+    }
     if (!effectFromMime(event->mimeData()) && !timeline_.droppedEq(event->mimeData())) {
         // "As you drag, a white outline of the clip indicates the segment position" (p.624).
         const auto clip = timeline_.options().editFromBin && !timeline_.showsSource()
@@ -4967,6 +4977,13 @@ void TimelineView::dropEvent(QDropEvent* event) {
     const auto row = rowAt(pos);
     binDrop_.reset();
     update();
+    if (const auto t = timeline_.droppedTemplate(event->mimeData())) {
+        if (!row || !row->exists || timeline_.showsSource()) return;
+        std::optional<std::int64_t> cut;
+        if (const auto roller = transitionAt(pos)) cut = roller->frame;
+        if (timeline_.dropTemplate(row->track, frameAt(pos.x()), *t, cut)) event->acceptProposedAction();
+        return;
+    }
     if (!effect && !timeline_.droppedEq(event->mimeData())) {
         // A bin clip, edited in with the segment tool's edit (p.624).
         const auto clip = timeline_.options().editFromBin && !timeline_.showsSource()
@@ -5080,8 +5097,11 @@ bool Timeline::commitSequence(const QString& description, const model::Sequence&
 // committed). Cuts without room are skipped; it fails if none takes the effect, or when the
 // user cancels the Insufficient Source question.
 bool Timeline::addTransitions(model::Sequence& seq, const QList<model::TrimRoller>& cuts, const EffectInfo& effect) {
+    return addTransitions(seq, cuts, model::Transition{effect.effect(), defaultTransitionLength(), model::TransitionAlignment::CenteredOnCut, 0});
+}
+
+bool Timeline::addTransitions(model::Sequence& seq, const QList<model::TrimRoller>& cuts, const model::Transition& t) {
     const model::SourceLength length = sourceLength();
-    model::Transition t{effect.effect(), defaultTransitionLength(), model::TransitionAlignment::CenteredOnCut, 0};
     bool asked = false;
     bool fit = false;
     int applied = 0;
@@ -5210,6 +5230,101 @@ bool Timeline::applyEffectToSelection(const EffectInfo& effect) {
         return fail(tr("Select segments or transitions in the Timeline first."));
     }
     if (!commitSequence(tr("Apply Effect"), seq)) return false;
+    emit effectApplied();
+    return true;
+}
+
+// ---------------------------------------------------------------- effect templates
+
+std::optional<model::EffectTemplate> Timeline::droppedTemplate(const QMimeData* mime) const {
+    if (!mime) return std::nullopt;
+    if (mime->hasFormat(effectTemplateMime())) {
+        const QJsonObject o = QJsonDocument::fromJson(mime->data(effectTemplateMime())).object();
+        return model::EffectTemplate::fromJson(o.value(QStringLiteral("template")).toObject());
+    }
+    if (!mime->hasFormat(binItemsMime())) return std::nullopt;
+    const QStringList lines = QString::fromUtf8(mime->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    if (lines.size() != 2) return std::nullopt;
+    const auto item = composer_.resolve(lines.at(0), lines.at(1));
+    return item ? model::effectTemplateOf(*item) : std::nullopt;
+}
+
+bool Timeline::dropTemplate(const QString& track, std::int64_t frame, const model::EffectTemplate& t,
+                            std::optional<std::int64_t> cut) {
+    message_.clear();
+    if (showSource_ || !recordSequence()) return false;
+    model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+    const model::Track* trk = seq.track(track);
+    if (!trk) return false;
+    if (trk->kind != model::TrackKind::Video) return fail(tr("Video effects go on video tracks."));
+    if (trk->locked) return fail(tr("The track is locked."));
+    const Rational rate = composer_.projectRate();
+    if (t.transition && !t.hasSource()) {
+        std::int64_t start = 0;
+        const int i = trk->segmentAt(frame, &start);
+        std::int64_t at = cut.value_or(start);
+        if (!cut && i >= 0) {
+            // The segment's nearer cut that has a segment after it, as for palette effects.
+            const std::int64_t end = start + trk->segments.at(i).length;
+            if (frame - start > end - frame && i + 1 < trk->segments.size()) at = end;
+        }
+        model::Transition transition{model::adaptedEffect(t, rate), std::max<std::int64_t>(t.duration, 1), t.alignment, t.start};
+        if (!addTransitions(seq, {model::TrimRoller{track, at, model::TrimSide::Both}}, transition)) return false;
+    } else {
+        // Alt+drag nests it inside the segment's effect, as with palette effects (FX Guide p.216).
+        const bool nest = QGuiApplication::keyboardModifiers().testFlag(Qt::AltModifier);
+        if (!model::applyTemplate(seq, track, frame, t, rate, nest, false, sourceLength())) {
+            return fail(t.hasSource() ? tr("The template cannot be edited in there.") : tr("There is no segment there."));
+        }
+    }
+    if (!commitSequence(tr("Apply Effect Template"), seq)) return false;
+    emit effectApplied();
+    return true;
+}
+
+bool Timeline::applyTemplateToSelection(const model::EffectTemplate& t) {
+    message_.clear();
+    if (!recordSequence()) return false;
+    model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+    const Rational rate = composer_.projectRate();
+    auto video = [&](const QString& name) {
+        const model::Track* trk = seq.track(name);
+        return trk && trk->kind == model::TrackKind::Video && !trk->locked;
+    };
+    if (t.hasSource()) {
+        // Edited in at the position on the top selected video track.
+        QString top;
+        for (const QString& name : patch_.selectedRecordTracks(seq)) {
+            if (video(name) && (top.isEmpty() || model::parseTrackName(name)->number > model::parseTrackName(top)->number)) top = name;
+        }
+        if (top.isEmpty()) return fail(tr("Select a video track first."));
+        if (!model::applyTemplate(seq, top, composer_.state(MonitorId::Record).position(), t, rate)) {
+            return fail(tr("The template cannot be edited in there."));
+        }
+    } else if (t.transition) {
+        QList<model::TrimRoller> cuts;
+        if (trimMode_ && !rollers_.isEmpty()) {
+            for (const model::TrimRoller& r : rollers_) {
+                if (video(r.track)) cuts << r;
+            }
+        } else {
+            for (const model::SegmentRef& ref : selection_) {
+                if (video(ref.track)) cuts << model::TrimRoller{ref.track, ref.start, model::TrimSide::Both};
+            }
+        }
+        if (cuts.isEmpty()) return fail(tr("Select segments or transitions in the Timeline first."));
+        model::Transition transition{model::adaptedEffect(t, rate), std::max<std::int64_t>(t.duration, 1), t.alignment, t.start};
+        if (!addTransitions(seq, cuts, transition)) return false;
+    } else {
+        if (selection_.isEmpty()) return fail(tr("Select segments in the Timeline first."));
+        const bool nest = QGuiApplication::keyboardModifiers().testFlag(Qt::AltModifier);
+        int applied = 0;
+        for (const model::SegmentRef& ref : selection_) {
+            if (video(ref.track) && model::applyTemplate(seq, ref.track, ref.start, t, rate, nest)) ++applied;
+        }
+        if (applied == 0) return fail(tr("Select segments on video tracks first."));
+    }
+    if (!commitSequence(tr("Apply Effect Template"), seq)) return false;
     emit effectApplied();
     return true;
 }

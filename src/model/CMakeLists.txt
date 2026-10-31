@@ -16,6 +16,7 @@ add_library(lumenis_model STATIC
     timewarp.cpp
     motion_adapter.cpp
     nest.cpp
+    effect_template.cpp
     marker.cpp
     multichannel.cpp
     clip_coloring.cpp

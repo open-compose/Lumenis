@@ -1065,6 +1065,7 @@ BinDocument* BinContainer::openBin(const QString& requested, bool takeLock) {
         emit dirtyChanged();
     });
     connect(doc, &BinDocument::displayChanged, this, [this, doc] { updateTab(doc); });
+    connect(doc, &BinDocument::itemsChanged, this, &BinContainer::binItemsChanged);
     connect(doc, &BinDocument::saved, this, [this, doc] { copyToAttic(doc); });
     connect(view, &BinView::deleteRequested, this, [this] { deleteSelection(); });
     connect(view, &BinView::lockButtonClicked, this, [this, doc](bool alt) { lockButtonClicked(doc, alt); });

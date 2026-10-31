@@ -12,6 +12,7 @@ class QCheckBox;
 class QComboBox;
 class QDoubleSpinBox;
 class QLabel;
+class QMimeData;
 class QPushButton;
 class QSpinBox;
 class QToolButton;
@@ -94,6 +95,8 @@ public:
     // other parameters inactive" (Editing Guide p.471).
     enum class Shown { None, Timewarp, Traditional, Adapter };
     explicit MotionEffectEditor(Timeline& timeline, QWidget* parent = nullptr);
+    // Drags the Timewarp icon (timewarpTemplateMime).
+    bool eventFilter(QObject* watched, QEvent* event) override;
 
     // Follows the Record monitor's sequence and position.
     void refresh();
@@ -127,6 +130,12 @@ public:
     QDoubleSpinBox* valueField() const { return value_; }
     QSpinBox* outputField() const { return output_; }
     int selectedKeyframe() const { return selected_; }
+    // "Timewarp Effect icon: Drag the icon to a bin to create a Timewarp Effect template from the current
+    // settings in the Speed graph and Position graph" (p.182; docs/spec/effect-templates.md). The icon, on
+    // only while a Timewarp is shown, and what dragging it carries (effectTemplateMime; null without a
+    // Timewarp, owned by the caller).
+    QLabel* timewarpIcon() const { return timewarpIcon_; }
+    QMimeData* timewarpTemplateMime() const;
 
     // The active graph's toolbar (p.184-185): "Creates a keyframe at the current position. Alt+click
     // ... to delete a keyframe"; Go to Previous/Next Event; the Fast menu's interpolations (p.120).
@@ -180,6 +189,8 @@ private:
     QString renderUsing_ = QStringLiteral("original");
 
     QLabel* blank_ = nullptr;
+    QLabel* timewarpIcon_ = nullptr;
+    QPoint iconPress_; // where a drag of the Timewarp icon began; null when none
     QWidget* body_ = nullptr;
     QToolButton* speedButton_ = nullptr;
     QToolButton* positionButton_ = nullptr;

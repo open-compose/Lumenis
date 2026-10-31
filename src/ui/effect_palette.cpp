@@ -1,6 +1,7 @@
 #include "lumenis/ui/effect_palette.h"
 
 #include "lumenis/media/audio_fx.h"
+#include "lumenis/ui/bin_dock.h"
 
 #include <QContextMenuEvent>
 #include <QDrag>
@@ -34,6 +35,10 @@ const QString kAll = QStringLiteral("All");
 constexpr QRgb kTile = 0xff8f5fc8;
 constexpr QRgb kTileDark = 0xff4b2f72;
 constexpr QRgb kRealTime = 0xff3cc85a;
+
+// The effect list's item data for a bin's template: its bin and item ids.
+constexpr int kTemplateBinRole = Qt::UserRole + 2;
+constexpr int kTemplateItemRole = Qt::UserRole + 3;
 
 } // namespace
 
@@ -163,6 +168,17 @@ QIcon effectIcon(bool transition, bool realTimeDot) {
 void EffectList::startDrag(Qt::DropActions) {
     QListWidgetItem* item = currentItem();
     if (!item) return;
+    // A bin's effect template: the item itself, as a bin drags it.
+    if (const QString bin = item->data(kTemplateBinRole).toString(); !bin.isEmpty()) {
+        auto* mime = new QMimeData;
+        mime->setData(binItemsMime(), (bin + QLatin1Char('\n') + item->data(kTemplateItemRole).toString()).toUtf8());
+        mime->setText(item->text());
+        auto* drag = new QDrag(this);
+        drag->setMimeData(mime);
+        drag->setPixmap(item->icon().pixmap(26, 18));
+        drag->exec(Qt::CopyAction);
+        return;
+    }
     const EffectInfo* e = EffectCatalog::builtin().find(item->data(Qt::UserRole).toString(), item->text());
     if (!e) return;
     auto* drag = new QDrag(this);
@@ -193,8 +209,18 @@ EffectPalette::EffectPalette(QWidget* parent) : QWidget(parent) {
     effects_->setDragEnabled(true);
     effects_->setDragDropMode(QAbstractItemView::DragOnly);
     effects_->setIconSize(QSize(26, 18));
+    // The open bins with templates, below the categories (p.38).
+    bins_ = new QListWidget(this);
+    bins_->setObjectName(QStringLiteral("effectTemplateBins"));
+    bins_->setToolTip(tr("Open bins with effect templates"));
+    bins_->setVisible(false);
+    auto* left = new QSplitter(Qt::Vertical, this);
+    left->addWidget(categories_);
+    left->addWidget(bins_);
+    left->setChildrenCollapsible(false);
+    left->setSizes({300, 90});
     auto* split = new QSplitter(Qt::Horizontal, this);
-    split->addWidget(categories_);
+    split->addWidget(left);
     split->addWidget(effects_);
     split->setChildrenCollapsible(false);
     split->setSizes({200, 240});
@@ -210,10 +236,24 @@ EffectPalette::EffectPalette(QWidget* parent) : QWidget(parent) {
     layout->addWidget(split, 1);
 
     connect(tabs_, &QTabBar::currentChanged, this, [this] { fillCategories(); });
-    connect(categories_, &QListWidget::currentRowChanged, this, [this] { fillEffects(); });
+    connect(categories_, &QListWidget::currentRowChanged, this, [this] {
+        bins_->setCurrentRow(-1);
+        fillEffects();
+    });
+    // Clicking the category already current leaves a bin's templates too.
+    connect(categories_, &QListWidget::itemClicked, this, [this] {
+        if (bins_->currentRow() < 0) return;
+        bins_->setCurrentRow(-1);
+        fillEffects();
+    });
+    connect(bins_, &QListWidget::currentRowChanged, this, [this] { fillEffects(); });
     connect(find_, &QLineEdit::textChanged, this, [this] { fillEffects(); });
     connect(effects_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
-        if (const auto e = effectAt(effects_->row(item))) emit effectActivated(*e);
+        if (const auto t = templateAt(effects_->row(item))) {
+            emit templateActivated(t->first, t->second);
+        } else if (const auto e = effectAt(effects_->row(item))) {
+            emit effectActivated(*e);
+        }
     });
     fillCategories();
 }
@@ -267,6 +307,21 @@ void EffectPalette::fillCategories() {
 // category too.
 void EffectPalette::fillEffects() {
     effects_->clear();
+    // A bin's templates (p.38), by the effect icon and the template's name.
+    if (const QString binId = templateBin(); !binId.isEmpty()) {
+        for (const TemplateBin& bin : templateBins_) {
+            if (bin.binId != binId) continue;
+            const QString text = find_->text().trimmed();
+            for (const TemplateBin::Entry& e : bin.templates) {
+                if (!text.isEmpty() && !e.name.contains(text, Qt::CaseInsensitive)) continue;
+                auto* item = new QListWidgetItem(effectIcon(e.transition, false), e.name, effects_);
+                item->setData(kTemplateBinRole, bin.binId);
+                item->setData(kTemplateItemRole, e.itemId);
+                item->setToolTip(bin.name + QStringLiteral(": ") + e.name);
+            }
+        }
+        return;
+    }
     const QString cat = category();
     const QString text = find_->text().trimmed();
     QList<EffectInfo> list;
@@ -307,9 +362,52 @@ QStringList EffectPalette::shownEffects() const {
     return out;
 }
 
+void EffectPalette::setTemplateBins(const QList<TemplateBin>& bins) {
+    QList<TemplateBin> kept;
+    for (const TemplateBin& b : bins) {
+        if (!b.templates.isEmpty()) kept << b;
+    }
+    if (kept == templateBins_) return;
+    const QString was = templateBin();
+    templateBins_ = kept;
+    bins_->blockSignals(true);
+    bins_->clear();
+    int selected = -1;
+    for (const TemplateBin& b : templateBins_) {
+        auto* item = new QListWidgetItem(b.name, bins_);
+        item->setData(Qt::UserRole, b.binId);
+        if (b.binId == was) selected = bins_->count() - 1;
+    }
+    bins_->setCurrentRow(selected);
+    bins_->blockSignals(false);
+    bins_->setVisible(!templateBins_.isEmpty());
+    fillEffects();
+}
+
+void EffectPalette::setTemplateBin(const QString& binId) {
+    for (int i = 0; i < bins_->count(); ++i) {
+        if (bins_->item(i)->data(Qt::UserRole).toString() == binId) {
+            bins_->setCurrentRow(i);
+            return;
+        }
+    }
+    bins_->setCurrentRow(-1);
+}
+
+QString EffectPalette::templateBin() const {
+    const QListWidgetItem* item = bins_->currentRow() >= 0 ? bins_->currentItem() : nullptr;
+    return item ? item->data(Qt::UserRole).toString() : QString();
+}
+
+std::optional<std::pair<QString, QString>> EffectPalette::templateAt(int row) const {
+    const QListWidgetItem* item = effects_->item(row);
+    if (!item || item->data(kTemplateBinRole).toString().isEmpty()) return std::nullopt;
+    return std::pair{item->data(kTemplateBinRole).toString(), item->data(kTemplateItemRole).toString()};
+}
+
 std::optional<EffectInfo> EffectPalette::effectAt(int row) const {
     const QListWidgetItem* item = effects_->item(row);
-    if (!item) return std::nullopt;
+    if (!item || !item->data(kTemplateBinRole).toString().isEmpty()) return std::nullopt;
     for (const EffectInfo& a : audioTrackEffects()) {
         if (a.audioEffect == item->data(Qt::UserRole + 1).toString() && !a.audioEffect.isEmpty()) return a;
     }

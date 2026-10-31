@@ -75,7 +75,23 @@ std::optional<EffectInfo> effectFromMime(const QMimeData* mime);
 // real-time dot for the palette (p.36).
 QIcon effectIcon(bool transition, bool realTimeDot);
 
-// The palette's list of effects; its items drag effects.
+// The effect templates of one open bin, as the Effect Palette lists them: "If you save any effect templates to
+// a bin, and have that bin open, those templates also display in the Effect Palette" (FX Guide p.37).
+struct TemplateBin {
+    struct Entry {
+        QString itemId;
+        QString name;
+        bool transition = false; // a transition template gets the transition icon
+        bool operator==(const Entry&) const = default;
+    };
+    QString binId;
+    QString name;
+    QList<Entry> templates;
+    bool operator==(const TemplateBin&) const = default;
+};
+
+// The palette's list of effects; its items drag effects, or, for a bin's templates, the template item
+// (binItemsMime: the bin's id, then the item's).
 class EffectList : public QListWidget {
     Q_OBJECT
 
@@ -116,12 +132,26 @@ public:
     void setQuickFind(const QString& text);
     // The effects shown, by name.
     QStringList shownEffects() const;
-    // The effect in row `row` of the effect list; nothing if out of range.
+    // The effect in row `row` of the effect list; nothing if out of range or a template.
     std::optional<EffectInfo> effectAt(int row) const;
+
+    // The open bins with effect templates, listed below the categories (p.38: "Click the bin name below
+    // the effect category list to view the effect templates in the bin"). Bins without templates are left
+    // out; the bin selected stays selected while it is listed.
+    void setTemplateBins(const QList<TemplateBin>& bins);
+    const QList<TemplateBin>& templateBins() const { return templateBins_; }
+    QListWidget* templateBinList() const { return bins_; }
+    // Shows a bin's templates on the right (by id; empty: the categories again).
+    void setTemplateBin(const QString& binId);
+    QString templateBin() const;
+    // The template item in row `row` of the effect list: {bin id, item id}; nothing for an effect.
+    std::optional<std::pair<QString, QString>> templateAt(int row) const;
 
 signals:
     // An effect was double-clicked.
     void effectActivated(const EffectInfo& effect);
+    // A bin's effect template was double-clicked.
+    void templateActivated(const QString& binId, const QString& itemId);
 
 protected:
     // The palette's menu: Set Font (p.38), for both lists.
@@ -142,6 +172,8 @@ private:
     QLineEdit* find_ = nullptr;
     QListWidget* categories_ = nullptr;
     EffectList* effects_ = nullptr;
+    QListWidget* bins_ = nullptr;
+    QList<TemplateBin> templateBins_;
 };
 
 } // namespace lumenis::ui
