@@ -3,6 +3,7 @@
 // processing precision, and offline media. Clips are solid colours, one per clip id, so every pixel is known.
 #include "lumenis/media/compositor.h"
 #include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/nest.h"
 #include "lumenis/model/sequence.h"
 
 #include <QTest>
@@ -731,6 +732,35 @@ private slots:
                                        QJsonObject{{QStringLiteral("Source"), QStringLiteral("Still->Still")}});
         const QColor stillMid = centre(composeImage(composition(cutWith(still), {QStringLiteral("V1")}), 9));
         QVERIFY(near(stillMid, mid, 3));
+    }
+
+    void nests() {
+        // A Submaster on filler whose nest holds red under blue at a quarter (Superimpose 25): the nest's
+        // composite is the picture (FX Guide p.219, p.224).
+        Sequence nest = Sequence::withDefaultTracks();
+        nest.addTrack(TrackKind::Video);
+        nest.overwrite(QStringLiteral("V1"), 0, {clip(QStringLiteral("red"), 10)});
+        Segment top = clip(QStringLiteral("blue"), 10);
+        top.effect = Effect{QStringLiteral("Blend"), QStringLiteral("Superimpose"), {}};
+        nest.overwrite(QStringLiteral("V2"), 0, {top});
+        Segment sub = Segment::filler(10);
+        sub.effect = Effect{QStringLiteral("Image"), QStringLiteral("Submaster"), {}};
+        setNest(sub, nest);
+        Sequence seq = Sequence::withDefaultTracks();
+        seq.overwrite(QStringLiteral("V1"), 0, {sub});
+        const QColor nested = centre(composeImage(composition(seq, {QStringLiteral("V1")}), 4));
+        const QColor direct = centre(composeImage(composition(nest, {QStringLiteral("V1"), QStringLiteral("V2")}), 4));
+        QVERIFY(near(nested, direct));
+        // The nest's frames follow nestIn: a nest of red (0-4) then blue, shown from its frame 5.
+        Sequence two = Sequence::withDefaultTracks();
+        two.overwrite(QStringLiteral("V1"), 0, {clip(QStringLiteral("red"), 5), clip(QStringLiteral("blue"), 5)});
+        Segment later = Segment::filler(5);
+        later.effect = sub.effect;
+        setNest(later, two);
+        later.nestIn = 5;
+        Sequence outer = Sequence::withDefaultTracks();
+        outer.overwrite(QStringLiteral("V1"), 0, {later});
+        QCOMPARE(centre(composeImage(composition(outer, {QStringLiteral("V1")}), 1)), QColor(0, 0, 255));
     }
 };
 

@@ -64,4 +64,28 @@ private:
     QCheckBox* premix_ = nullptr;
 };
 
+// Timeline > Mixdown > Video's dialog (FX Guide p.228; docs/spec/nesting.md): "Select a target bin, target
+// drive, and resolution for storing the new master clip". The layout is ours.
+class VideoMixdownDialog : public QDialog {
+    Q_OBJECT
+
+public:
+    struct Setup {
+        QList<QPair<QString, QString>> bins; // (id, name) of the open bins
+        QString activeBin;                   // the one chosen first
+        QString drive;                       // the Media Creation setting's drive root, chosen first
+        QString resolution;                  // its resolution id, chosen first
+    };
+    explicit VideoMixdownDialog(const Setup& setup, QWidget* parent = nullptr);
+
+    QString bin() const;
+    QString drive() const;
+    QString resolution() const; // a media::Resolution id
+
+private:
+    QComboBox* bins_ = nullptr;
+    QComboBox* drives_ = nullptr;
+    QComboBox* resolutions_ = nullptr;
+};
+
 } // namespace lumenis::ui

@@ -365,6 +365,22 @@ public:
     // Changes the Record monitor's sequence as one undo step named `description` (Audio Mixdown):
     // `change` edits a copy and returns false to leave it as it was. False without a sequence.
     bool changeRecordSequence(const QString& description, const std::function<bool(model::Sequence&)>& change);
+
+    // Nests (FX Guide p.219-227; docs/spec/nesting.md). Step In: "Media Composer replaces the full sequence
+    // in the Timeline with just the tracks that make up the nested effect" (p.220) — the segment with an
+    // effect under the position on the highest selected video track (the highest video track with one
+    // when none is selected), which gets a nest of its own picture when it has none (model::ensureNest).
+    // The nest is shown as a sequence of its own in the Record monitor; every change to it is stored back
+    // into its segment, and up through the levels to the sequence in its bin. Step Out goes back a level,
+    // the position on the same frame. False when there is nothing to step into or out of.
+    bool stepIn();
+    bool stepOut();
+    // How many levels in the Timeline is (0 at the sequence itself): "N2 indicates that you are two levels
+    // in from the outermost track level" (p.220), shown in the Timecode display.
+    int nestLevel() const { return static_cast<int>(nests_.size()); }
+    // Collapse (p.226-227): the selected video tracks (adjacent) between the marks, or the segments selected
+    // in segment mode, into a Submaster effect (model::collapseTracks).
+    bool collapse();
     // Whether perform() takes this command ID (from commands.json).
     static bool handles(const QString& commandId);
     // Why the last command did nothing, for the status line.
@@ -1116,6 +1132,19 @@ private:
     TimecodeFormat format_;
     QString shownId_;
     model::TrackPatch patch_;
+    // The levels stepped into, outermost first: the item one level out (the sequence, or the nest it is
+    // in), its bin, and where the nested segment is in it.
+    struct NestLevel {
+        QString binId;
+        model::BinItem parent;
+        QString track;
+        std::int64_t start = 0;  // the segment's first frame in the parent
+        std::int64_t nestIn = 0; // the nest frame of that first frame
+        QString itemId;          // the nest's item in the Record monitor
+    };
+    QList<NestLevel> nests_;
+    // A nest's item changed: its segment in the level out takes it, and so on out to the bin.
+    void storeNest(const model::BinItem& item);
     model::EditHistory history_;
     QSet<QString> unmonitored_;
     std::function<bool(const QString&, bool)> soloMuteState_;

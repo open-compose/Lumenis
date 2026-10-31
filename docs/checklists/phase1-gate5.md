@@ -202,7 +202,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Mixdown > Audio > To Sequence |  | p.732 | works | ☐ | | |
 | Mixdown > Audio > Multiple Mixes |  | p.732 | works | ☐ | | |
 | Mixdown > Data |  | p.982 | *later* | ☐ | | |
-| Mixdown > Video |  | p.228 | *later* | ☐ | | |
+| Mixdown > Video |  | p.228 | works | ☐ | | |
 | Remove Match Frame Edits |  | p.495 | works | ☐ | | |
 | Render > ExpertRender In/Out |  | p.926 | works | ☐ | | |
 | Render > Render In/Out |  | p.59 | works | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 149 of them working with a project open; the
+* 211 menu commands, 150 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

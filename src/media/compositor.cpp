@@ -5,6 +5,7 @@
 #include "lumenis/media/optical_flow.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/effect_render.h"
+#include "lumenis/model/nest.h"
 #include "lumenis/model/timewarp.h"
 
 #include "effect_drawing.h"
@@ -251,6 +252,20 @@ std::optional<Picture> convertedPicture(const Composition& c, const model::Segme
 
 Picture segmentPicture(const Composition& c, const model::Segment* segment, std::int64_t frame, bool* missing, double blend = 0.0,
                        std::int64_t offset = -1) {
+    if (segment && segment->hasNest() && c.source) {
+        // A nest (FX Guide p.219): its tracks composited at the segment's frame stand in for the clip.
+        const model::Sequence nest = model::nestOf(*segment);
+        Composition inner = c;
+        inner.sequence = &nest;
+        inner.tracks.clear();
+        for (const model::Track& t : nest.tracks()) {
+            if (t.kind == model::TrackKind::Video) inner.tracks << t.name();
+        }
+        std::sort(inner.tracks.begin(), inner.tracks.end(), [](const QString& a, const QString& b) {
+            return model::parseTrackName(a)->number < model::parseTrackName(b)->number;
+        });
+        return composeFrame(inner, segment->nestIn + std::max<std::int64_t>(offset, 0), missing);
+    }
     if (!segment || segment->isFiller() || !c.source) return Picture(c.size.width(), c.size.height());
     if (offset >= 0) {
         if (auto converted = convertedPicture(c, *segment, offset, missing)) return *converted;

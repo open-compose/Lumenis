@@ -157,4 +157,44 @@ void AudioMixdownDialog::setSavePremixSequence(bool on) {
     premix_->setChecked(on);
 }
 
+VideoMixdownDialog::VideoMixdownDialog(const Setup& setup, QWidget* parent) : QDialog(parent) {
+    setObjectName(QStringLiteral("videoMixdownDialog"));
+    setWindowTitle(tr("Video Mixdown"));
+    auto* form = new QFormLayout;
+    bins_ = new QComboBox(this);
+    bins_->setObjectName(QStringLiteral("videoMixdownBin"));
+    for (const auto& [id, name] : setup.bins) bins_->addItem(name, id);
+    if (const int i = bins_->findData(setup.activeBin); i >= 0) bins_->setCurrentIndex(i);
+    drives_ = new QComboBox(this);
+    drives_->setObjectName(QStringLiteral("videoMixdownDrive"));
+    for (const media::MediaDrive& d : media::mediaDrives()) drives_->addItem(d.name, d.root);
+    if (const int i = drives_->findData(setup.drive); i >= 0) drives_->setCurrentIndex(i);
+    resolutions_ = new QComboBox(this);
+    resolutions_->setObjectName(QStringLiteral("videoMixdownResolution"));
+    for (const media::Resolution& r : media::resolutions()) resolutions_->addItem(r.name, r.id);
+    if (const int i = resolutions_->findData(setup.resolution); i >= 0) resolutions_->setCurrentIndex(i);
+    form->addRow(tr("Target Bin"), bins_);
+    form->addRow(tr("Target Drive"), drives_);
+    form->addRow(tr("Resolution"), resolutions_);
+    auto* box = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+    connect(box, &QDialogButtonBox::accepted, this, &QDialog::accept);
+    connect(box, &QDialogButtonBox::rejected, this, &QDialog::reject);
+    box->button(QDialogButtonBox::Ok)->setEnabled(bins_->count() > 0 && drives_->count() > 0);
+    auto* layout = new QVBoxLayout(this);
+    layout->addLayout(form);
+    layout->addWidget(box);
+}
+
+QString VideoMixdownDialog::bin() const {
+    return bins_->currentData().toString();
+}
+
+QString VideoMixdownDialog::drive() const {
+    return drives_->currentData().toString();
+}
+
+QString VideoMixdownDialog::resolution() const {
+    return resolutions_->currentData().toString();
+}
+
 } // namespace lumenis::ui

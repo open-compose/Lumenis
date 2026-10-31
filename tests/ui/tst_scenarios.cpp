@@ -9,6 +9,7 @@
 #include "lumenis/model/automation.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/multichannel.h"
+#include "lumenis/model/nest.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/surround_pan.h"
 #include "lumenis/ui/audio_eq.h"
@@ -580,6 +581,21 @@ struct Run {
     }
 
     // The Record monitor's sequence, as the scenario files write it.
+    // A nest's tracks: [clip, source IN, length] and ["filler", length], without trailing filler.
+    static QJsonObject plainTracks(const model::Sequence& seq) {
+        QJsonObject out;
+        for (const model::Track& t : seq.tracks()) {
+            QJsonArray segs;
+            for (const model::Segment& g : t.segments) {
+                segs.append(g.isFiller() ? QJsonArray{QStringLiteral("filler"), qint64(g.length)}
+                                         : QJsonArray{g.name, qint64(g.sourceIn), qint64(g.length)});
+            }
+            while (!segs.isEmpty() && segs.last().toArray().at(0).toString() == QLatin1String("filler")) segs.removeLast();
+            if (!segs.isEmpty()) out.insert(t.name(), segs);
+        }
+        return out;
+    }
+
     QJsonObject recordTracks() const {
         QJsonObject out;
         const model::LoadedClip* c = composer.state(MonitorId::Record).current();
@@ -589,7 +605,11 @@ struct Run {
             QJsonArray segs;
             for (const model::Segment& g : t.segments) {
                 if (g.isFiller()) {
-                    segs.append(QJsonArray{QStringLiteral("filler"), qint64(g.length)});
+                    QJsonArray f{QStringLiteral("filler"), qint64(g.length)};
+                    // A Submaster's nest (FX Guide p.226): its effect and tracks as [clip, in, length].
+                    if (g.hasNest()) f.append(QJsonObject{{QStringLiteral("effect"), g.effect ? g.effect->name : QString()},
+                                                          {QStringLiteral("nest"), plainTracks(model::nestOf(g))}});
+                    segs.append(f);
                 } else {
                     QJsonArray a{g.name, qint64(g.sourceIn), qint64(g.length)};
                     if (g.sourceTrack != t.name()) a.append(g.sourceTrack);

@@ -78,6 +78,7 @@ lumenis_add_test(tst_managed_media SOURCES tst_managed_media.cpp LIBS ${ui_test_
 lumenis_add_test(tst_render_ui SOURCES tst_render_ui.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_motion_effect_ui SOURCES tst_motion_effect_ui.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_motion_adapter_ui SOURCES tst_motion_adapter_ui.cpp LIBS ${ui_test_libs} lumenis::media)
+lumenis_add_test(tst_nest_ui SOURCES tst_nest_ui.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_playback SOURCES tst_playback.cpp LIBS ${ui_test_libs} lumenis::media)
 # File > Input > Import EDL, Tools > List Tool, shot logs (Phase 3.6a).
 lumenis_add_test(tst_interchange SOURCES tst_interchange.cpp LIBS ${ui_test_libs})

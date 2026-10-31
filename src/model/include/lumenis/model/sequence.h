@@ -269,7 +269,19 @@ struct Segment {
     // sequence's rate, and for segments edited before adapters (6.5d2), which count the clip's own
     // frames. Not an effect: Remove Effect leaves it (p.469).
     std::optional<MotionAdapter> adapter;
+    // Nested tracks (FX Guide p.219-224; lumenis/model/nest.h): the segment effect's own tracks, as a
+    // sequence's composition (Sequence::toJson) whose frame nestIn + n is the segment's frame n. Filler with
+    // an effect (a Submaster) can have them too. Empty: none.
+    QJsonObject nest;
+    std::int64_t nestIn = 0;
 
+    bool hasNest() const { return !nest.isEmpty(); }
+    // Takes `by` frames off the segment's start (negative: puts them back) for what it shows: its clip's
+    // source IN and its nest's. The length is the caller's.
+    void shiftStart(std::int64_t by) {
+        if (!isFiller()) sourceIn += by;
+        if (hasNest()) nestIn += by;
+    }
     bool hasEffects() const { return effect || transition; }
     bool hasAutomation() const { return !volumeKeys.isEmpty() || !panKeys.isEmpty(); }
     bool isFiller() const { return clipId.isEmpty(); }
@@ -368,7 +380,8 @@ public:
     // timecode, mix? ("5.1" or "7.1": mixFormat())}. A segment is {length, gain?, pan?,
     // volumeKeys?, panKeys?, eq?, effect?, render?, transition?, transitionRender?} (keys as [[frame, value], ...]) plus
     // addEdit? for filler or {clip, mob?, bin?, name, track, in, localColor?, surround?: [{front,
-    // rear, fr, center?, side?, lfe?}], adapter?: {rate, sequenceRate, fieldMotion, type, interlaced?}} for
+    // rear, fr, center?, side?, lfe?}], adapter?: {rate, sequenceRate, fieldMotion, type, interlaced?}}, and nest? (a composition like this one)
+    // with nestIn? on any segment for
     // material.
     // fromJson() skips unreadable and duplicate tracks, tidies each track and sorts the tracks.
     QJsonObject toJson() const;
@@ -747,7 +760,10 @@ enum class EffectTarget { Segment, Transition };
 
 // Puts a segment effect on the segment at `frame`, replacing any there.
 // Video tracks only; false on any other track, a locked track or past the end of the track.
-bool applySegmentEffect(Sequence& sequence, const QString& track, std::int64_t frame, const Effect& effect);
+// With `nest` (Alt+drag or Alt+double-click, FX Guide p.216, p.276) a segment that has an effect keeps it
+// inside a nest under the new one (model::nestEffect, lumenis/model/nest.h); a Timewarp cannot be the outer
+// effect ("it must be the innermost effect", p.177).
+bool applySegmentEffect(Sequence& sequence, const QString& track, std::int64_t frame, const Effect& effect, bool nest = false);
 
 // How much material a transition at the cut `frame` may use: frames of
 // the outgoing clip past its end (Media A) and of the incoming clip before

@@ -28,7 +28,8 @@
       ["trim.select_nearest_transition", "trim.select_previous_transition", "trim.select_next_transition", "trim.play_loop"]
     ]},
     {"name": "FX", "page": 97, "columns": [
-      ["fx.motion_effect", "fx.remove_effect", "fx.add_keyframe", "fx.fade_effect", "fx.effect_mode"]
+      ["fx.motion_effect", "fx.remove_effect", "fx.add_keyframe", "fx.fade_effect", "fx.effect_mode"],
+      ["fx.step_in", "fx.step_out", "fx.collapse"]
     ]},
     {"name": "3D", "page": 96, "columns": []},
     {"name": "CC", "page": 96, "columns": []},

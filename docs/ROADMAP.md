@@ -1000,7 +1000,15 @@ phase of their own. They are done in three steps:
         (`src/media/fluid_fx.*`), so 6.5 is.
 * 6.6, layered and nested effects (ch.8, p.206-228): nesting and stepping in, Collapse,
   Submaster, Double-Click to Show Nesting; and effect templates in bins (p.52-55), with the Motion
-  Effect Editor's Timewarp icon (p.182).
+  Effect Editor's Timewarp icon (p.182). In two parts (planned 2026-10-31 from FX p.52-55, p.219-228):
+  * 6.6a, nests: nested tracks inside a segment effect, composited as the effect's picture; Step In and
+    Step Out with the nesting level (N1, N2 ...); nesting an effect inside another (Alt+drag or
+    Alt+double-click); Collapse into a Submaster effect; and Timeline > Mixdown > Video. Done
+    (docs/spec/nesting.md, `src/model/nest.*`).
+  * 6.6b, the rest: expanding a nest in the Timeline (double-click), nested effects in the Effect Editor
+    and changing their order, and effect templates in bins (drag the effect icon to a bin, Alt for source
+    media, apply to segments, transitions or one parameter group, the Effect Palette's bin icons,
+    Promote Effects), with the Motion Effect Editor's Timewarp icon.
 * 6.7, 3D effects, camera effects, and tracking and stabilization (ch.9-11, p.229-300).
 * 6.8, titles (ch.12-13, p.301-377): the Title Tool and Titler+, with keyframes kept through trims,
   splits and duplicates (2026.8). SubCap (ch.14) goes to Phase 7 with the captions.

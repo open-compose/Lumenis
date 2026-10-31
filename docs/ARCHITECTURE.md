@@ -116,7 +116,8 @@ headers in `include/lumenis/<library>/`.
   `src/model/effect_render.*` with Render Effect and Clear Renders in `MainWindow::renderEffects` and
   `render_dialogs.*` (docs/spec/rendering.md); traditional motion effect clips in `src/model/motion_effect.*`
   with `motion_effect_dialogs.*`, Timewarps in `src/model/timewarp.*` with the Motion Effect Editor
-  `motion_effect_editor.*`, and mixed rate clips' Motion Adapters in `src/model/motion_adapter.*`: the
+  `motion_effect_editor.*`, nests (a segment effect's own tracks, Step In and Collapse) in `src/model/nest.*` with docs/spec/nesting.md,
+  and mixed rate clips' Motion Adapters in `src/model/motion_adapter.*`: the
   monitors load a clip at another rate as its adapted copy at the project's rate, the segments edited
   from it carry `Segment::adapter`, and `BinDocument` stores the clip itself back (docs/spec/motion-effects.md).
 * **Audio tools.** `audio_tools.*` (the Audio Mixer, docs/spec/audio-mixer.md, and the Audio Tool), `audio_groups.cpp` (the mixer's track sidebar and groups), `clip_audio_dialogs.*` (Apply Gain and Auto VO, with `src/model/clip_audio.*`, docs/spec/clip-audio.md), `multi_mix_dialog.*` (the Multi-Mix Tool, docs/spec/multi-mix.md),

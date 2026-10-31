@@ -59,6 +59,9 @@ public:
     // Browser); returns how many (p.315, "Clear Source Monitor Upon
     // Closing Source Browser").
     int removeUncommitted();
+    // Takes the item out of the menu (a nest stepped out of, lumenis/ui/timeline.h). The shown clip stays
+    // shown unless it is the one taken out.
+    bool remove(const QString& itemId);
     // The shown clip, or null when the monitor is empty (cleared or nothing loaded).
     const LoadedClip* current() const;
 

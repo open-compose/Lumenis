@@ -8,6 +8,7 @@
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
+#include "lumenis/model/nest.h"
 #include "lumenis/media/surround.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
@@ -2190,8 +2191,9 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     connect(&composer_, &Composer::videoQualityChanged, quality,
             [quality](Composer::VideoQuality q) { quality->setIcon(qualityIcon(q)); });
     tool("clientMonitor", Picture::ClientMonitor, tr("Client Monitor"), false);
-    tool("stepIn", Picture::StepIn, tr("Step In"), false);
-    tool("stepOut", Picture::StepOut, tr("Step Out"), false);
+    // "The Step In and Step Out buttons appear by default in the Timeline top toolbar" (FX Guide p.220).
+    connect(tool("stepIn", Picture::StepIn, tr("Step In"), true), &QToolButton::clicked, this, [this] { perform(QStringLiteral("fx.step_in")); });
+    connect(tool("stepOut", Picture::StepOut, tr("Step Out"), true), &QToolButton::clicked, this, [this] { perform(QStringLiteral("fx.step_out")); });
     // The View Menu button (p.604): the Timeline view in use, and a menu of the views; with Alt, the
     // views to replace.
     QToolButton* viewButton = tool("viewMenu", Picture::ViewMenu, tr("Timeline View"), true);
@@ -2473,6 +2475,11 @@ void Timeline::setShowSource(bool on) {
 // tracks of the patch, the selection, the timecode display and the horizontal view.
 void Timeline::sync() {
     if (syncing_) return;
+    // Another item in the Record monitor than the nest stepped into: the levels are left.
+    if (!nests_.isEmpty()) {
+        const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+        if (!rec || rec->item.id != nests_.last().itemId) nests_.clear();
+    }
     const model::MonitorState& s = composer_.state(shownMonitor());
     const model::LoadedClip* clip = s.current();
     if (clip) {
@@ -2519,7 +2526,11 @@ void Timeline::sync() {
     // Selected segments that are gone are dropped.
     selection_.removeIf([this](const model::SegmentRef& ref) { return showSource_ || !model::segmentFor(shown_, ref); });
     // The master timecode at the position (picture on p.607).
-    timecode_->setText(clip ? s.tracking(model::TrackingFormat::Master) : QString());
+    // In a nest, its level before the timecode (p.220).
+    const QString level = model::nestLevelLabel(nestLevel());
+    timecode_->setText(clip ? (level.isEmpty() ? s.tracking(model::TrackingFormat::Master)
+                                               : level + QLatin1Char(' ') + s.tracking(model::TrackingFormat::Master))
+                            : QString());
     const QString id = clip ? clip->item.id : QString();
     if (id != shownId_) {
         shownId_ = id;
@@ -3085,6 +3096,9 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("smart.ripple_trim"),
         QStringLiteral("trim.trim_mode"),
         QStringLiteral("fx.effect_mode"),
+        QStringLiteral("fx.step_in"),
+        QStringLiteral("fx.step_out"),
+        QStringLiteral("fx.collapse"),
         QStringLiteral("edit.source_record_mode"),
         QStringLiteral("trim.trim_backward_10_frames"),
         QStringLiteral("trim.trim_backward_1_frame"),
@@ -3282,6 +3296,12 @@ bool Timeline::perform(const QString& id) {
         setTrimTool(model::TrimKind::Overwrite, !overwriteTrimTool_);
     } else if (id == QLatin1String("smart.ripple_trim")) {
         setTrimTool(model::TrimKind::Ripple, !rippleTrimTool_);
+    } else if (id == QLatin1String("fx.step_in")) {
+        stepIn();
+    } else if (id == QLatin1String("fx.step_out")) {
+        stepOut();
+    } else if (id == QLatin1String("fx.collapse")) {
+        collapse();
     } else if (id == QLatin1String("fx.effect_mode")) {
         // A second click leaves it (ours; FX p.684 says only that it cannot close the Effect Editor in
         // Color Correction mode).
@@ -3561,9 +3581,137 @@ void Timeline::commit(const QString& description, const model::BinItem& before, 
 }
 
 void Timeline::restore(const QString& binId, const model::BinItem& item) {
+    // A nest's item is no bin's: it goes back into its segment (stepIn()).
+    if (std::any_of(nests_.cbegin(), nests_.cend(), [&](const NestLevel& n) { return n.itemId == item.id; })) {
+        storeNest(item);
+        composer_.updateItem(item);
+        emit sequenceEdited();
+        return;
+    }
     if (store_) store_(binId, item, false);
     composer_.updateItem(item);
     emit sequenceEdited();
+}
+
+void Timeline::storeNest(const model::BinItem& item) {
+    for (qsizetype k = nests_.size() - 1; k >= 0; --k) {
+        NestLevel& level = nests_[k];
+        if (level.itemId != item.id) continue;
+        model::Sequence parent = model::Sequence::fromItem(level.parent);
+        model::Track* track = parent.track(level.track);
+        const int i = track ? track->segmentAt(level.start) : -1;
+        if (i < 0) return;
+        model::setNest(track->segments[i], model::Sequence::fromItem(item));
+        parent.storeIn(level.parent);
+        level.parent.modified = QDateTime::currentDateTimeUtc();
+        // Up a level: another nest's item, or the sequence in its bin.
+        if (k > 0) {
+            storeNest(level.parent);
+        } else if (store_) {
+            store_(level.binId, level.parent, false);
+        }
+        composer_.updateItem(level.parent);
+        return;
+    }
+}
+
+bool Timeline::stepIn() {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const std::int64_t position = composer_.state(MonitorId::Record).position();
+    // The video tracks to look on, highest first.
+    QStringList tracks;
+    for (const QString& t : patch_.selectedRecordTracks(seq)) {
+        if (t.startsWith(QLatin1Char('V'))) tracks << t;
+    }
+    if (tracks.isEmpty()) {
+        for (const model::Track& t : seq.tracks()) {
+            if (t.kind == model::TrackKind::Video) tracks << t.name();
+        }
+    }
+    std::sort(tracks.begin(), tracks.end(), [](const QString& a, const QString& b) {
+        return model::parseTrackName(a)->number > model::parseTrackName(b)->number;
+    });
+    QString name;
+    std::int64_t start = 0;
+    for (const QString& t : tracks) {
+        std::int64_t at = 0;
+        const model::Track* track = seq.track(t);
+        const int i = track ? track->segmentAt(position, &at) : -1;
+        if (i < 0 || !track->segments.at(i).effect) continue;
+        name = t;
+        start = at;
+        break;
+    }
+    if (name.isEmpty()) return fail(tr("There is no segment effect to step into at the position."));
+    if (!seq.track(name)->segments.at(seq.track(name)->segmentAt(start)).hasNest()) {
+        const QString track = name;
+        changeRecordSequence(tr("Step In"), [&](model::Sequence& s) {
+            model::Track* t = s.track(track);
+            return model::ensureNest(t->segments[t->segmentAt(start)]);
+        });
+        rec = composer_.state(MonitorId::Record).current();
+        if (!rec) return false;
+    }
+    const model::Sequence current = model::Sequence::fromItem(rec->item);
+    const model::Segment& segment = current.track(name)->segments.at(current.track(name)->segmentAt(start));
+    model::BinItem nestItem = rec->item;
+    nestItem.id = QStringLiteral("%1/nest:%2:%3").arg(rec->item.id, name).arg(start);
+    model::nestOf(segment).storeIn(nestItem);
+    NestLevel level{rec->binId, rec->item, name, start, segment.nestIn, nestItem.id};
+    nests_ << level;
+    composer_.load(MonitorId::Record, rec->binId, nestItem);
+    composer_.moveTo(MonitorId::Record, segment.nestIn + position - start);
+    sync();
+    emit changed();
+    return true;
+}
+
+bool Timeline::stepOut() {
+    if (nests_.isEmpty()) return fail(tr("The Timeline is not inside a nest."));
+    const NestLevel level = nests_.takeLast();
+    const std::int64_t position = composer_.state(MonitorId::Record).position();
+    composer_.load(MonitorId::Record, level.binId, level.parent);
+    composer_.state(MonitorId::Record).remove(level.itemId);
+    composer_.moveTo(MonitorId::Record, level.start + position - level.nestIn);
+    sync();
+    emit changed();
+    return true;
+}
+
+bool Timeline::collapse() {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    QStringList tracks;
+    std::int64_t from = 0;
+    std::int64_t to = 0;
+    if (!selection_.isEmpty()) {
+        // "Select the segments you want to collapse" (p.227): their tracks, from the first to the end of the last.
+        bool first = true;
+        for (const model::SegmentRef& ref : selection_) {
+            const auto segment = model::segmentFor(seq, ref);
+            if (!segment || !ref.track.startsWith(QLatin1Char('V'))) continue;
+            if (!tracks.contains(ref.track)) tracks << ref.track;
+            from = first ? ref.start : std::min(from, ref.start);
+            to = first ? ref.start + segment->length : std::max(to, ref.start + segment->length);
+            first = false;
+        }
+    } else {
+        const model::MonitorState& state = composer_.state(MonitorId::Record);
+        if (!state.in() || !state.out()) return fail(tr("Mark an IN point and an OUT point around the area to collapse."));
+        from = *state.in();
+        to = *state.out() + 1;
+        for (const QString& t : patch_.selectedRecordTracks(seq)) {
+            if (t.startsWith(QLatin1Char('V'))) tracks << t;
+        }
+    }
+    QString error;
+    model::Sequence changed = seq;
+    if (!model::collapseTracks(changed, tracks, from, to, &error)) return fail(error);
+    selection_.clear();
+    return commitSequence(tr("Collapse"), changed);
 }
 
 const model::LoadedClip* Timeline::recordSequence() {
@@ -4987,7 +5135,9 @@ bool Timeline::dropEffect(const QString& track, std::int64_t frame, const Effect
         }
         if (!addTransitions(seq, {model::TrimRoller{track, at, model::TrimSide::Both}}, effect)) return false;
     } else if (effect.segment) {
-        if (i < 0 || !model::applySegmentEffect(seq, track, frame, effect.effect())) {
+        // Alt+drag nests it inside the segment's effect (FX Guide p.216).
+        const bool nest = QGuiApplication::keyboardModifiers().testFlag(Qt::AltModifier);
+        if (i < 0 || !model::applySegmentEffect(seq, track, frame, effect.effect(), nest)) {
             return fail(tr("There is no segment there."));
         }
     } else {
@@ -5042,7 +5192,9 @@ bool Timeline::applyEffectToSelection(const EffectInfo& effect) {
         int applied = 0;
         if (effect.segment) {
             for (const model::SegmentRef& ref : selection_) {
-                if (video(ref.track) && model::applySegmentEffect(seq, ref.track, ref.start, effect.effect())) ++applied;
+                // Alt+double-click nests it inside the segment's effect (FX Guide p.276).
+                const bool nest = QGuiApplication::keyboardModifiers().testFlag(Qt::AltModifier);
+                if (video(ref.track) && model::applySegmentEffect(seq, ref.track, ref.start, effect.effect(), nest)) ++applied;
             }
         } else {
             // A transition effect goes on the selected segments' head cuts.

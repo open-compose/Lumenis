@@ -7,6 +7,7 @@
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/motion_adapter.h"
+#include "lumenis/model/nest.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
 #include "lumenis/model/timewarp.h"
@@ -186,6 +187,10 @@ void effectsToJson(const Segment& s, QJsonObject& o) {
     if (s.effect && s.render) o.insert(QStringLiteral("render"), renderToJson(*s.render));
     if (s.transition) o.insert(QStringLiteral("transition"), transitionToJson(*s.transition));
     if (s.transition && s.transitionRender) o.insert(QStringLiteral("transitionRender"), renderToJson(*s.transitionRender));
+    if (s.hasNest()) {
+        o.insert(QStringLiteral("nest"), s.nest);
+        if (s.nestIn != 0) o.insert(QStringLiteral("nestIn"), static_cast<qint64>(s.nestIn));
+    }
 }
 
 // See Sequence::toJson() in sequence.h for the layout. Defaults (0 gain and pan, no MobID of its
@@ -237,6 +242,8 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.name = o.value(QStringLiteral("name")).toString();
     s.sourceTrack = o.value(QStringLiteral("track")).toString();
     s.sourceIn = o.value(QStringLiteral("in")).toInteger();
+    s.nest = o.value(QStringLiteral("nest")).toObject();
+    s.nestIn = s.nest.isEmpty() ? 0 : o.value(QStringLiteral("nestIn")).toInteger();
     if (!s.isFiller()) s.localColor = o.value(QStringLiteral("localColor")).toString();
     if (!s.isFiller()) s.note = o.value(QStringLiteral("note")).toString();
     for (const QJsonValue& v : o.value(QStringLiteral("surround")).toArray()) {
@@ -596,6 +603,7 @@ QList<Segment> Sequence::material(const QString& name, std::int64_t start, std::
             if (from < to) {
                 Segment piece = s;
                 piece.sourceIn += from - at;
+                if (piece.hasNest()) piece.nestIn += from - at;
                 piece.length = to - from;
                 out << piece;
                 covered = to;
@@ -622,7 +630,7 @@ int Sequence::cut(Track& t, std::int64_t frame) {
     tail.addEdit = false;
     tail.transition.reset(); // the cut's transition stays with the head
     const std::int64_t head = frame - start;
-    if (!tail.isFiller()) tail.sourceIn += head;
+    tail.shiftStart(head);
     tail.length -= head;
     t.segments[i].length = head;
     t.segments.insert(i + 1, tail);
@@ -634,15 +642,20 @@ void Sequence::tidy(Track& t) {
     for (const Segment& s : t.segments) {
         if (s.length <= 0) continue;
         // Filler joins the filler before it, unless effects tell them apart.
-        if (s.isFiller() && !s.addEdit && !s.hasEffects() && !out.isEmpty() && out.last().isFiller() &&
-            !out.last().effect) {
+        if (s.isFiller() && !s.addEdit && !s.hasEffects() && !s.hasNest() && !out.isEmpty() && out.last().isFiller() &&
+            !out.last().effect && !out.last().hasNest()) {
             out.last().length += s.length;
         } else {
             Segment kept = s;
             if (s.isFiller()) {
+                // Filler keeps only what filler can have: its effects, their renders and a nest.
                 kept = Segment::filler(s.length);
                 kept.effect = s.effect;
+                kept.render = s.render;
                 kept.transition = s.transition;
+                kept.transitionRender = s.transitionRender;
+                kept.nest = s.nest;
+                kept.nestIn = s.nestIn;
             }
             kept.addEdit = s.isFiller() && s.addEdit && !out.isEmpty() && out.last().isFiller();
             out << kept;
@@ -1765,7 +1778,7 @@ QList<TrimRoller> trim(Sequence& sequence, const QList<TrimRoller>& all, TrimKin
         auto trimHead = [](Segment* s, std::int64_t by) {
             // Takes `by` frames off the start (negative: adds them). Fixed effect keyframes stay with
             // the material (FX Guide p.124).
-            if (!s->isFiller()) s->sourceIn += by;
+            s->shiftStart(by);
             s->length -= by;
             if (s->effect) shiftFixedKeyframes(*s->effect, -by);
         };
@@ -1873,7 +1886,7 @@ std::int64_t slideSegments(Sequence& sequence, QList<SegmentRef>& segments, std:
         const int i = t->segmentAt(ref.start);
         t->segments[i - 1].length += delta;
         Segment& next = t->segments[i + 1];
-        if (!next.isFiller()) next.sourceIn += delta;
+        next.shiftStart(delta);
         next.length -= delta;
         if (next.effect) shiftFixedKeyframes(*next.effect, -delta);
         ref.start += delta;
@@ -1943,14 +1956,22 @@ QStringList EditHistory::descriptions() const {
 // ---------------------------------------------------------------- effects
 
 // The segment effect replaces any there; filler can take one.
-bool applySegmentEffect(Sequence& sequence, const QString& name, std::int64_t frame, const Effect& effect) {
+bool applySegmentEffect(Sequence& sequence, const QString& name, std::int64_t frame, const Effect& effect, bool nest) {
     Track* t = sequence.track(name);
     // Video effects go on video tracks; never on data tracks (FX guide p.44).
     if (!t || t->kind != TrackKind::Video || t->locked) return false;
     const int i = t->segmentAt(frame);
     if (i < 0) return false;
     // A Timewarp gets its template's graphs for the segment's length (timewarpForSegment).
-    t->segments[i].effect = timewarpForSegment(effect, t->segments.at(i).length);
+    const Effect applied = timewarpForSegment(effect, t->segments.at(i).length);
+    if (nest && t->segments.at(i).effect) {
+        // "If you apply the Timewarp effect as part of a nested effect, it must be the innermost effect"
+        // (FX Guide p.177).
+        if (isTimewarp(applied)) return false;
+        nestEffect(t->segments[i], applied);
+        return true;
+    }
+    t->segments[i].effect = applied;
     return true;
 }
 

@@ -237,6 +237,16 @@ int MonitorState::removeUncommitted() {
     return removed;
 }
 
+bool MonitorState::remove(const QString& itemId) {
+    const QString shown = current() ? current()->item.id : QString();
+    const auto removed = loaded_.removeIf([&](const LoadedClip& c) { return c.item.id == itemId; });
+    current_ = -1;
+    for (int i = 0; i < loaded_.size(); ++i) {
+        if (loaded_.at(i).item.id == shown) current_ = i;
+    }
+    return removed > 0;
+}
+
 // The Start column is parsed as timecode at the item's edit rate.
 std::int64_t MonitorState::startFrame() const {
     const LoadedClip* c = current();

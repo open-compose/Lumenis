@@ -4029,6 +4029,66 @@ void MainWindow::clearRenders(bool atPosition) {
     timeline_->changeRecordSequence(tr("Clear Renders"), [&](model::Sequence& s) { return model::clearRenders(s, targets, options) > 0; });
 }
 
+// "Mark an IN point and an OUT point around the area to mix down" (p.228): without marks, ours mixes the
+// whole sequence down, as Audio Mixdown does. The clip is named after the sequence (ours).
+std::optional<model::BinItem> MainWindow::videoMixdown() {
+    auto fail = [this](const QString& text) {
+        auto* box = new QMessageBox(QMessageBox::Warning, tr("Video Mixdown"), text, QMessageBox::Ok, this);
+        box->setObjectName(QStringLiteral("videoMixdownFailed"));
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        box->open();
+        return std::optional<model::BinItem>();
+    };
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence || !project_) return fail(tr("Load a sequence into the Record monitor first."));
+    const model::LoadedClip loaded = *rec;
+    const model::Sequence seq = model::Sequence::fromItem(loaded.item);
+    const QStringList tracks = shownVideoTracks(MonitorId::Record, seq);
+    if (tracks.isEmpty()) return fail(tr("There are no video tracks to mix down."));
+    const model::MonitorState& marks = composer_->state(MonitorId::Record);
+    std::int64_t start = 0;
+    std::int64_t end = seq.duration();
+    if (marks.in() || marks.out()) {
+        start = marks.markedStart();
+        end = marks.markedEnd() + 1;
+    }
+    if (end <= start) return fail(tr("There is nothing to mix down."));
+    media::MediaCreation creation = mediaCreation(QStringLiteral("transcode"));
+    VideoMixdownDialog::Setup setup;
+    for (const BinDocument* d : binContainer_->openDocuments()) {
+        if (!d->isReadOnly()) setup.bins << qMakePair(d->nodeId(), d->name());
+    }
+    setup.activeBin = loaded.binId;
+    setup.drive = creation.videoDrive;
+    setup.resolution = creation.resolution.id;
+    VideoMixdownDialog dialog(setup, this);
+    const bool ok = videoMixdownHook_ ? videoMixdownHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok) return std::nullopt;
+    BinDocument* doc = binContainer_->document(dialog.bin());
+    if (!doc || doc->isReadOnly()) return fail(tr("Choose a bin that can be changed."));
+    creation.videoDrive = dialog.drive();
+    if (const media::Resolution* r = media::findResolution(dialog.resolution())) creation.resolution = *r;
+    creation.raster = QSize(project_->settings.format.width, project_->settings.format.height).expandedTo(media::kMinimumRaster);
+    media::Composition c;
+    c.sequence = &seq;
+    c.tracks = tracks;
+    c.size = creation.raster;
+    fillComposition(c, loaded);
+    fillCompositionQuality(c);
+    QProgressDialog progress(tr("Mixing down..."), tr("Cancel"), 0, 1000, this);
+    progress.setObjectName(QStringLiteral("videoMixdownProgress"));
+    creation.progress = progressOn(progress);
+    QString error;
+    const auto clip = media::renderedVideoClip(
+        tr("%1 Mixdown").arg(loaded.item.name), loaded.item.editRate, end - start,
+        [&](std::int64_t frame) { return media::composeImage(c, start + frame); }, creation, model::BinItemKind::MasterClip, &error);
+    progress.reset();
+    if (!clip) return fail(tr("The video mixdown failed: %1").arg(error));
+    doc->addItem(*clip);
+    if (BinView* v = binContainer_->viewFor(doc)) v->selectIds({clip->id});
+    return clip;
+}
+
 void MainWindow::audioMixdown() {
     auto fail = [this](const QString& text) {
         auto* box = new QMessageBox(QMessageBox::Warning, tr("Audio Mixdown"), text, QMessageBox::Ok, this);
@@ -5214,6 +5274,7 @@ void MainWindow::installPanelHandlers() {
     });
     handle("clip.consolidate_transcode", [this] { consolidateTranscode(); });
     handle("timeline.mixdown.audio.to_sequence", [this] { audioMixdown(); });
+    handle("timeline.mixdown.video", [this] { videoMixdown(); });
     // Render (FX Guide p.58-61): Shift renders again what is rendered (p.61), Alt skips the dialog
     // with the last drive (p.58).
     auto renderWith = [this](bool atPosition) {

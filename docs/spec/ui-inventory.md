@@ -202,6 +202,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   of a 1920-wide picture, Blur Amount as a percent of the motion, the
   colour map's brightness up to 70% and its Cb/Cr compass, FluidMorph's
   Stream->Stream and Feature Match until set and its brightness morph.
+* Nests (docs/spec/nesting.md): which segment Step In takes, the nest
+  shown as a sequence of its own, the FX tab for Step In, Step Out and
+  Collapse, Collapse onto the lowest track, Video Mixdown's clip name and
+  the whole sequence without marks.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

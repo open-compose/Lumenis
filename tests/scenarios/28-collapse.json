@@ -1,0 +1,28 @@
+[
+  {
+    "name": "Collapse puts the selected video tracks between the marks into a Submaster on the lowest",
+    "guide": "FX Guide p.226-227",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 60]], "V2": [["B", 0, 60]]}},
+    "steps": [
+      {"record_tracks": ["V1", "V2"]},
+      {"mark": "record", "in": 20, "out": 39},
+      {"command": "fx.collapse"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 20], ["filler", 20, {"effect": "Submaster", "nest": {"V1": [["A", 20, 20]], "V2": [["B", 20, 20]]}}], ["A", 40, 20]],
+      "V2": [["B", 0, 20], ["filler", 20], ["B", 40, 20]]}
+  },
+  {
+    "name": "Collapse needs adjacent tracks",
+    "guide": "FX Guide p.226",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 30]], "V3": [["A", 0, 30]]}},
+    "steps": [
+      {"record_tracks": ["V1", "V3"]},
+      {"mark": "record", "in": 0, "out": 9},
+      {"command": "fx.collapse", "refused": true}
+    ],
+    "expect": {"V1": [["A", 0, 30]], "V3": [["A", 0, 30]]}
+  }
+]

@@ -524,7 +524,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_motion_adapter_ui`), is done.
   6.5d3b, FluidBlur, FluidColorMap and FluidMorph (docs/spec/illusion-fx.md: `src/media/fluid_fx.*` on the
   optical flow, from the compositor; test `tst_fluid_fx`), is done, so 6.5 is.
-  Next: 6.6, layered and nested effects and effect templates (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.6a, nests (docs/spec/nesting.md: `Segment::nest`/`nestIn` and `src/model/nest.*`, the compositor's
+  nest, `Timeline::stepIn`/`stepOut` with N1 in the Timecode display, Alt-nesting in
+  `applySegmentEffect`, `Timeline::collapse`, `MainWindow::videoMixdown`; tests `tst_nest`, `tst_nest_ui`,
+  scenario `28-collapse.json`), is done.
+  Next: 6.6b, expanding nests, nested effects in the Effect Editor and effect templates (ROADMAP), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

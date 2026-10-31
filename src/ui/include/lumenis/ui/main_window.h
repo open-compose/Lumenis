@@ -54,6 +54,7 @@ class UnmountDialog;
 class SetFontDialog;
 class ShortcutsWindow;
 class AudioMixdownDialog;
+class VideoMixdownDialog;
 class ClearRendersDialog;
 class ExpertRenderDialog;
 class BinDocument;
@@ -338,6 +339,12 @@ public:
     // dialog (tests; true: OK).
     void audioMixdown();
     void setMixdownHook(std::function<bool(AudioMixdownDialog&)> hook) { mixdownHook_ = std::move(hook); }
+    // Timeline > Mixdown > Video (FX Guide p.227-228): the Record monitor's sequence as the monitor shows it
+    // ("collapses the selected track and all tracks under it"), between its marks, rendered into a new master
+    // clip in the chosen bin, on the chosen drive and resolution. The sequence is left as it is. Returns the
+    // clip; the hook stands in for the dialog (tests; true: OK).
+    std::optional<model::BinItem> videoMixdown();
+    void setVideoMixdownHook(std::function<bool(VideoMixdownDialog&)> hook) { videoMixdownHook_ = std::move(hook); }
     // Rendering video effects (FX Guide p.57-61; docs/spec/rendering.md). Render at Position renders
     // the effects at the Record monitor's position on the selected video tracks, Render In/Out those
     // between its marks; effects already rendered are left unless `rerender` (Shift, p.61). The Render
@@ -674,6 +681,7 @@ private:
     std::function<void(LinkedMediaDialog&)> linkedMediaHook_;
     std::function<bool(ConsolidateDialog&)> consolidateHook_;
     std::function<bool(AudioMixdownDialog&)> mixdownHook_;
+    std::function<bool(VideoMixdownDialog&)> videoMixdownHook_;
     std::function<bool(RenderEffectDialog&)> renderHook_;
     std::function<bool()> renderInterruptHook_;
     std::function<void(const QString&)> renderSoundHook_;
