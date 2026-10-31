@@ -547,8 +547,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_warp3d`, `tst_effect_keyframes_ui`), is done.
   6.7a2, the 3D shapes (Page Fold, Ball, Slats bent and drawn as a depth-buffered mesh, `drawMesh`), the
   Foreground (3D) key types and the Border (3D) types (same file; test `tst_warp3d`), is done.
-  Next: 6.7a3, Trail, Stamp, Erode/Expand, Spill Suppression and direct manipulation, then 6.7b-d, then the
-  rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.7a3a, Trail, Erode/Expand and Spill Suppression (`placedLayer` renders the effect at any time; test
+  `tst_warp3d`), is done.
+  Next: 6.7a3b, Stamp, then 6.7a4, direct manipulation in the Effect Preview (2D and 3D), then 6.7b-d, then
+  the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

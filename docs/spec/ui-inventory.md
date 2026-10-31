@@ -224,6 +224,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   for Picture-in-Picture only until titles and matte keys come. 6.7a2:
   the shapes' default animations and sizes, the Slats' Freq and Ampl,
   the key types' units and defaults, and the look of each border type.
+  6.7a3a: Trail drawn from the effect's earlier times (also when stepping),
+  Shadow before Trail when both are set, Erode/Expand's cut levels, Spill
+  Suppression's colours and tolerances.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

@@ -209,6 +209,34 @@ private slots:
         QVERIFY(p.pixel(190, 54)[0] > 0.2f);
     }
 
+    void trailErodeSpill() {
+        // Trail (p.585): a half-size picture moving right leaves fading copies of where it was.
+        model::Effect moving = warp({{QStringLiteral("Scaling (3D)"), QJsonObject{{QStringLiteral("X"), 30}, {QStringLiteral("Y"), 30}}},
+                                     {QStringLiteral("Trail"), QJsonObject{{QStringLiteral("Decay"), 75}}}});
+        model::ParameterKeyframes keys;
+        keys.keys = {model::EffectKeyframe{0.0, -900}, model::EffectKeyframe{1.0, 900}};
+        model::setKeyframes(moving, QStringLiteral("Position (3D)"), QStringLiteral("X"), keys);
+        // Over 10 frames each frame moves 200 units (20 pixels here); at frame 5 the picture (58 pixels wide)
+        // spans pixels 77-135, a frame back 57-115.
+        const model::EffectSpan span(10);
+        const Picture p = warp3dPicture(moving, foreground(), grey(), span.timeOf(5), span);
+        QCOMPARE(at(p, 120, 60), 'g'); // the picture itself, right half
+        const float* behind = p.pixel(70, 60); // a frame back: a faded red copy over the grey
+        QVERIFY(behind[0] > 0.55f && behind[0] < 0.95f);
+        model::Effect still = moving;
+        still.parameters.remove(QStringLiteral("Trail"));
+        QCOMPARE(at(warp3dPicture(still, foreground(), grey(), span.timeOf(5), span), 70, 60), 'k');
+        // Erode/Expand, Center 0 ("maximum erosion", p.573): the edges shrink.
+        Picture e = render(warp({{QStringLiteral("Scaling (3D)"), QJsonObject{{QStringLiteral("X"), 50}, {QStringLiteral("Y"), 50}}},
+                                 {QStringLiteral("Erode/Expand"), QJsonObject{{QStringLiteral("Center"), 0}, {QStringLiteral("Filter"), 7}}}}));
+        QCOMPARE(at(e, 49, 54), 'k'); // the picture's first column, eaten
+        QCOMPARE(at(e, 70, 54), 'r');
+        // Spill Suppression (p.584): green replaced with grey.
+        Picture sp = render(warp({{QStringLiteral("Spill Suppression"), QJsonObject{{QStringLiteral("Gain"), 63}}}}));
+        QCOMPARE(at(sp, 180, 54), 'k');
+        QCOMPARE(at(sp, 10, 54), 'r');
+    }
+
     void promotion() {
         // "if you have a 2D Picture-in-Picture effect, you can promote the effect to 3D" (p.289): it looks the same.
         model::Effect pip{QStringLiteral("Blend"), QStringLiteral("Picture-in-Picture"), {}};

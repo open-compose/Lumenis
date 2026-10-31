@@ -93,9 +93,26 @@ transitions), defaults in `media::parameterDefault`, `src/model/promote3d.*` (`c
   other border types." Ours: Metal a brushed grey, Bevel 1 lit from the top left and Bevel 2 from the bottom
   right, 3D Frame both in turn, Round a rounded profile, Video the picture itself at half brightness.
 
-## Not yet (6.7a3)
+## 6.7a3a: Trail, Erode/Expand and Spill Suppression
 
-* Trail, Stamp, Erode/Expand and Spill Suppression (p.573, p.584-585).
-* Direct manipulation: the handle buttons (Corner Pin, Crop, Scale, Axis, Rotation, Position) and their
+* Trail: "Use Trail to add a trail to an effect as it moves across the screen. You do not see the trail when you
+  step through the effect because it is a cumulative effect" (p.585); Decay 0-100 (75). Ours: the effect as it
+  was on the frames before, each copy Decay percent as opaque as the one after it until they fade below 5%,
+  worked from the effect's own times (so stepping shows it too) with the foreground as it is now; Use Sparkle
+  breaks the copies into glittering dots. "The Stamp, Shadow, and Trail parameters are mutually exclusive"
+  (p.585): with more than one set, Shadow wins, then Trail.
+* Erode/Expand "controls the blending of the edges on 3D Warp effects. This parameter is not keyframeable"
+  (p.573): Filter 1-7 pixels each side, Center 0 (most erosion) to 255 (most expansion), Soft 0-255. Ours: the
+  placed picture's alpha blurred over Filter pixels of a 1920-wide picture and cut at a level from 0.98
+  (Center 0) to 0.02 (255), softened by Soft.
+* Spill Suppression "replaces one color with another color" (p.584): Target Color and Replace Color, Use Key
+  Color (the Chroma Key's), Gain and Soft 0-63. Ours: green and grey until set; Gain the hue tolerance up to a
+  quarter of the colour wheel, Soft a blend over up to another quarter; colours of low saturation are left.
+
+## Not yet
+
+* Stamp (p.584-585, p.298-299, 6.7a3b): a stamp stays "on screen while other effects come and go, even though
+  the effect segment itself has ended", so it needs the compositor to remember stamps across segments.
+* Direct manipulation (6.7a4, with the 2D effects' handles, p.92): the handle buttons (Corner Pin, Crop, Scale, Axis, Rotation, Position) and their
   handles in the Effect Preview monitor, and Outline/Path (p.292-293).
 * Real-time playback limits (p.290): our 3D effects render on the fly like the others.

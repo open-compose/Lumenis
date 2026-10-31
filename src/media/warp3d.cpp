@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
 #include <numbers>
 #include <optional>
 
@@ -649,23 +650,74 @@ bool is3DEffect(const model::Effect& effect) {
     return is3D(effect);
 }
 
-Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const Picture& background, double time,
-                      const model::EffectSpan& span) {
-    const int w = foreground.width();
-    const int h = foreground.height();
-    // "Reverse Animation: Causes the entire effect to be reversed, including the direction of movement as
-    // well as the incoming and outgoing sources" (p.574).
-    const QString fgCat = QStringLiteral("Foreground (3D)");
-    const bool reverse = flag(e, fgCat, QStringLiteral("Reverse Animation"));
-    if (reverse) time = 1.0 - time;
-    Picture fg = foreground;
-    Picture bg = background;
-    // "Swap Sources: Switches the foreground and background sources for the effect" (p.574).
-    if (flag(e, fgCat, QStringLiteral("Swap Sources")) != reverse) std::swap(fg, bg);
-    // "Use Background Color to replace the bottom video track with a background color" (p.570).
-    if (enabled(e, QStringLiteral("Background Color (3D)"))) {
-        bg = Picture::solid(w, h, colourOf(e, QStringLiteral("Background Color (3D)"), QStringLiteral("Background Color"), time, span, Qt::black));
+namespace {
+
+// Spill Suppression (p.584): "replaces one color with another color" in the foreground. Ours: Target Color
+// green until set (or the Chroma Key's colour with Use Key Color), Replace Color grey; Gain 0-63 the hue
+// tolerance up to a quarter of the colour wheel, Soft 0-63 a blend over another quarter.
+void suppressSpill(const model::Effect& e, Picture& fg, double time, const model::EffectSpan& span) {
+    const QString cat = QStringLiteral("Spill Suppression");
+    if (!enabled(e, cat)) return;
+    const QColor target = flag(e, cat, QStringLiteral("Use Key Color"))
+                              ? colourOf(e, QStringLiteral("Foreground (3D)"), QStringLiteral("Color"), time, span, Qt::blue)
+                              : colourOf(e, cat, QStringLiteral("Target Color"), time, span, Qt::green);
+    const QColor replace = colourOf(e, cat, QStringLiteral("Replace Color"), time, span, QColor(128, 128, 128));
+    const double targetHue = target.hsvHueF() < 0 ? 0.0 : static_cast<double>(target.hsvHueF()) * 360.0;
+    const double tolerance = std::clamp(number(e, cat, QStringLiteral("Gain"), time, span), 0.0, 63.0) / 63.0 * 90.0;
+    const double soft = std::max(std::clamp(number(e, cat, QStringLiteral("Soft"), time, span), 0.0, 63.0) / 63.0 * 90.0, 1.0);
+    const float rr = static_cast<float>(replace.redF()), rg = static_cast<float>(replace.greenF()), rb = static_cast<float>(replace.blueF());
+    for (std::size_t i = 0; i < fg.data().size(); i += 4) {
+        float* px = &fg.data()[i];
+        if (px[3] <= 0.0f) continue;
+        const QColor c = QColor::fromRgbF(std::clamp(px[0] / px[3], 0.0f, 1.0f), std::clamp(px[1] / px[3], 0.0f, 1.0f),
+                                          std::clamp(px[2] / px[3], 0.0f, 1.0f));
+        if (c.hsvSaturationF() < 0.1f) continue;
+        double dh = std::abs((c.hsvHueF() < 0 ? 0.0 : static_cast<double>(c.hsvHueF()) * 360.0) - targetHue);
+        dh = std::min(dh, 360.0 - dh);
+        const float w = static_cast<float>(std::clamp((tolerance + soft - dh) / soft, 0.0, 1.0));
+        if (w <= 0.0f) continue;
+        px[0] += (rr * px[3] - px[0]) * w;
+        px[1] += (rg * px[3] - px[1]) * w;
+        px[2] += (rb * px[3] - px[2]) * w;
     }
+}
+
+// Erode/Expand: "controls the blending of the edges on 3D Warp effects ... not keyframeable" (p.573): Filter
+// 1-7 pixels each side, Center 0 (most erosion) to 255 (most expansion), Soft 0 (a vertical slope) to 255.
+// Ours: the layer's alpha blurred over the Filter's pixels (of a 1920-wide picture), cut at a level set by
+// Center (128 leaves the edge where it was) and softened by Soft.
+void erodeExpand(const model::Effect& e, Picture& layer, double time, const model::EffectSpan& span) {
+    const QString cat = QStringLiteral("Erode/Expand");
+    if (!enabled(e, cat)) return;
+    const double unit = layer.width() / 1920.0;
+    const int radius = std::max(1, static_cast<int>(std::lround(std::clamp(number(e, cat, QStringLiteral("Filter"), time, span), 1.0, 7.0) * unit)));
+    const double center = std::clamp(number(e, cat, QStringLiteral("Center"), time, span), 0.0, 255.0) / 255.0;
+    const double soft = std::max(std::clamp(number(e, cat, QStringLiteral("Soft"), time, span), 0.0, 255.0) / 255.0, 0.02);
+    Picture blurred = layer;
+    blur(blurred, radius);
+    // The alpha level kept as the edge: 0.98 at Center 0 (only what is fully inside stays) to 0.02 at 255.
+    const double level = 0.98 - 0.96 * center;
+    for (std::size_t i = 0; i < layer.data().size(); i += 4) {
+        const float* b = &blurred.data()[i];
+        float* o = &layer.data()[i];
+        const float a = static_cast<float>(std::clamp((static_cast<double>(b[3]) - level) / soft + 0.5, 0.0, 1.0));
+        if (b[3] <= 1e-6f) {
+            std::fill(o, o + 4, 0.0f);
+            continue;
+        }
+        for (int c = 0; c < 3; ++c) o[c] = b[c] / b[3] * a;
+        o[3] = a;
+    }
+}
+
+// The foreground placed by the effect at `time`, on a transparent picture: spill, key and defocus, then the
+// plane or the shape with its border and highlight.
+Picture placedLayer(const model::Effect& e, const Picture& source, double time, const model::EffectSpan& span) {
+    const int w = source.width();
+    const int h = source.height();
+    const QString fgCat = QStringLiteral("Foreground (3D)");
+    Picture fg = source;
+    suppressSpill(e, fg, time, span);
     keyForeground(e, fg, time, span);
     // Defocus, Internal: "blurs the entire image" (p.572). Ours: Horz and V of 15 blur 15 pixels of a 1920-wide picture.
     const double unit = w / 1920.0;
@@ -710,60 +762,102 @@ Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const P
         look.highlightColour[1] = static_cast<float>(colour.greenF());
         look.highlightColour[2] = static_cast<float>(colour.blueF());
     }
-    // Shadow: "places a shadow beneath an image ... offset and transparency" (p.579): X ±100 (50), Y -100 to 0
-    // (-50), Opac. 50. Ours: an offset of 100 is 40 pixels of a 1920-wide picture.
-    const bool shadow = enabled(e, QStringLiteral("Shadow"));
-    const double shadowX = shadow ? number(e, QStringLiteral("Shadow"), QStringLiteral("X"), time, span) * 0.4 * unit : 0.0;
-    const double shadowY = shadow ? number(e, QStringLiteral("Shadow"), QStringLiteral("Y"), time, span) * 0.4 * unit : 0.0;
-    const float shadowOpacity = shadow ? static_cast<float>(std::clamp(number(e, QStringLiteral("Shadow"), QStringLiteral("Opac."), time, span), 0.0, 100.0) / 100.0) : 0.0f;
-
-    Picture out = bg.isNull() ? Picture(w, h) : bg;
+    Picture layer(w, h);
     const Shape shape = place.pinned ? Shape{} : shapeOf(e, time, span, w, h);
     if (shape.type != ShapeType::None) {
-        // A shape: the bent plane drawn as a mesh, its shadow the layer's alpha moved by the offset.
+        // A shape: the bent plane drawn as a mesh.
         Look shaped = look;
         if (shape.autoHighlight) shaped.highlight = false; // the manual disc only with Manual Highlight
         const double light = enabled(e, QStringLiteral("Highlight")) ? number(e, QStringLiteral("Highlight"), QStringLiteral("Inty"), time, span) / 50.0 : 1.0;
-        Picture layer(w, h);
         drawMesh(layer, fg, place, shaped, shape, light);
-        if (shadow) {
-            const int ox = static_cast<int>(std::lround(shadowX));
-            const int oy = static_cast<int>(std::lround(-shadowY));
-            for (int py = 0; py < h; ++py) {
-                for (int px = 0; px < w; ++px) {
-                    const int qx = px - ox, qy = py - oy;
-                    if (qx < 0 || qy < 0 || qx >= w || qy >= h) continue;
-                    const float a = layer.pixel(qx, qy)[3] * shadowOpacity;
-                    float* o = out.pixel(px, py);
-                    for (int c = 0; c < 4; ++c) o[c] *= 1.0f - a;
-                    o[3] += a;
-                }
-            }
-        }
-        return over(layer, out);
+        return layer;
     }
     for (int py = 0; py < h; ++py) {
         for (int px = 0; px < w; ++px) {
-            const double sx = px + 0.5 - w / 2.0;
-            const double sy = h / 2.0 - (py + 0.5);
-            float* o = out.pixel(px, py);
-            if (shadow) {
-                if (const auto at = place.planePoint(sx - shadowX, sy - shadowY)) {
-                    float s[4];
-                    lookAt(fg, place, look, at->first, at->second, s);
-                    const float a = s[3] * shadowOpacity;
-                    for (int c = 0; c < 4; ++c) o[c] *= 1.0f - a;
-                    o[3] += a;
-                }
-            }
-            if (const auto at = place.planePoint(sx, sy)) {
-                float s[4];
-                lookAt(fg, place, look, at->first, at->second, s);
-                for (int c = 0; c < 4; ++c) o[c] = s[c] + o[c] * (1.0f - s[3]);
-            }
+            if (const auto at = place.planePoint(px + 0.5 - w / 2.0, h / 2.0 - (py + 0.5))) lookAt(fg, place, look, at->first, at->second, layer.pixel(px, py));
         }
     }
-    return out;
+    return layer;
+}
+
+// A cheap hash of a pixel and a copy's number, 0 to 1, for Trail's sparkle.
+float sparkle(int x, int y, int k) {
+    auto v = static_cast<std::uint32_t>(x) * 73856093u ^ static_cast<std::uint32_t>(y) * 19349663u ^ static_cast<std::uint32_t>(k) * 83492791u;
+    v ^= v >> 13;
+    v *= 0x5bd1e995u;
+    v ^= v >> 15;
+    return static_cast<float>(v & 0xffffu) / 65535.0f;
+}
+
+} // namespace
+
+Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const Picture& background, double time,
+                      const model::EffectSpan& span) {
+    const int w = foreground.width();
+    const int h = foreground.height();
+    // "Reverse Animation: Causes the entire effect to be reversed, including the direction of movement as
+    // well as the incoming and outgoing sources" (p.574).
+    const QString fgCat = QStringLiteral("Foreground (3D)");
+    const bool reverse = flag(e, fgCat, QStringLiteral("Reverse Animation"));
+    if (reverse) time = 1.0 - time;
+    Picture fg = foreground;
+    Picture bg = background;
+    // "Swap Sources: Switches the foreground and background sources for the effect" (p.574).
+    if (flag(e, fgCat, QStringLiteral("Swap Sources")) != reverse) std::swap(fg, bg);
+    // "Use Background Color to replace the bottom video track with a background color" (p.570).
+    if (enabled(e, QStringLiteral("Background Color (3D)"))) {
+        bg = Picture::solid(w, h, colourOf(e, QStringLiteral("Background Color (3D)"), QStringLiteral("Background Color"), time, span, Qt::black));
+    }
+    Picture out = bg.isNull() ? Picture(w, h) : bg;
+    Picture layer = placedLayer(e, fg, time, span);
+    erodeExpand(e, layer, time, span);
+    const double unit = w / 1920.0;
+    // "Shadow, Trail, and Stamp are mutually exclusive, so you can have only one enabled at a time" (p.579).
+    // Ours: with more than one set, Shadow wins, then Trail.
+    const bool shadow = enabled(e, QStringLiteral("Shadow"));
+    const bool trail = !shadow && enabled(e, QStringLiteral("Trail"));
+    if (shadow) {
+        // Shadow: "places a shadow beneath an image ... offset and transparency" (p.579): X ±100 (50), Y -100 to
+        // 0 (-50), Opac. 50. Ours: an offset of 100 is 40 pixels of a 1920-wide picture.
+        const int ox = static_cast<int>(std::lround(number(e, QStringLiteral("Shadow"), QStringLiteral("X"), time, span) * 0.4 * unit));
+        const int oy = static_cast<int>(std::lround(-number(e, QStringLiteral("Shadow"), QStringLiteral("Y"), time, span) * 0.4 * unit));
+        const float opacity = static_cast<float>(std::clamp(number(e, QStringLiteral("Shadow"), QStringLiteral("Opac."), time, span), 0.0, 100.0) / 100.0);
+        for (int py = 0; py < h; ++py) {
+            for (int px = 0; px < w; ++px) {
+                const int qx = px - ox, qy = py - oy;
+                if (qx < 0 || qy < 0 || qx >= w || qy >= h) continue;
+                const float a = layer.pixel(qx, qy)[3] * opacity;
+                float* o = out.pixel(px, py);
+                for (int c = 0; c < 4; ++c) o[c] *= 1.0f - a;
+                o[3] += a;
+            }
+        }
+    } else if (trail) {
+        // "Use Trail to add a trail to an effect as it moves across the screen ... it is a cumulative effect"
+        // (p.585); Decay 0-100 (75). Ours: the effect as it was on the frames before, each copy Decay percent
+        // as opaque as the one after it, until they fade below 5%; Use Sparkle breaks the copies into
+        // glittering dots. Worked from the effect's own times, so the trail shows when stepping through too.
+        const double decay = std::clamp(number(e, QStringLiteral("Trail"), QStringLiteral("Decay"), time, span), 0.0, 99.0) / 100.0;
+        const bool sparkly = flag(e, QStringLiteral("Trail"), QStringLiteral("Use Sparkle"));
+        const double step = span.timeOf(1.0) - span.timeOf(0.0);
+        std::vector<std::pair<int, double>> copies;
+        double opacity = decay;
+        for (int k = 1; k <= 32 && opacity >= 0.05 && time - k * step >= -1e-9; ++k, opacity *= decay) copies.push_back({k, opacity});
+        for (auto it = copies.rbegin(); it != copies.rend(); ++it) {
+            Picture copy = faded(placedLayer(e, fg, time - it->first * step, span), it->second);
+            if (sparkly) {
+                for (int py = 0; py < h; ++py) {
+                    for (int px = 0; px < w; ++px) {
+                        const float keep = sparkle(px, py, it->first) > 0.7f ? 1.0f : 0.0f;
+                        float* c = copy.pixel(px, py);
+                        for (int ch = 0; ch < 4; ++ch) c[ch] *= keep;
+                    }
+                }
+            }
+            out = over(copy, out);
+        }
+    }
+    return over(layer, out);
 }
 
 } // namespace lumenis::media

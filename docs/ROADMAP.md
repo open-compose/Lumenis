@@ -1024,8 +1024,11 @@ phase of their own. They are done in three steps:
       (docs/spec/3d-effects.md, `src/media/warp3d.cpp`, `src/model/promote3d.*`).
     * 6.7a2, the shapes (Ball, Page Fold, Slats) drawn as a mesh, the Foreground's key types and the other
       border types. Done (docs/spec/3d-effects.md).
-    * 6.7a3, Trail, Stamp, Erode/Expand and Spill Suppression, and direct manipulation in the Effect Preview
-      monitor with Outline/Path.
+    * 6.7a3a, Trail, Erode/Expand and Spill Suppression. Done (docs/spec/3d-effects.md).
+    * 6.7a3b, Stamp: stamps kept by the compositor across segments until cleared, with the Effect Editor's
+      Stamp Image and Clear buttons (p.298-299, p.584-585).
+    * 6.7a4, direct manipulation in the Effect Preview monitor for 2D (p.92) and 3D (p.292-293) effects, with
+      Outline/Path.
   * 6.7b, camera effects (ch.9, p.229-247): Pan and Scan (source and target aspect ratios, origin,
     subdividing, the wire frame, with transitions) and Avid Pan & Zoom (image files, field of view, camera
     speed, path changes at keyframes, filtering, background, pixel aspect and colour levels).
