@@ -24,6 +24,7 @@
 #include "lumenis/model/auto_sequence.h"
 #include "lumenis/model/bin_relations.h"
 #include "lumenis/model/clip_audio.h"
+#include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
 #include "lumenis/model/timewarp.h"
 #include "lumenis/media/mixdown.h"
@@ -2330,6 +2331,41 @@ int MainWindow::autoVo() {
     return 1;
 }
 
+// "Load the sequence into the Record monitor and then, with either the Composer window or the Timeline
+// window active, select Clip > Refresh Sequence"; or "select multiple sequences in the bin" (p.478). The
+// Record monitor's sequence changes as an undoable edit; a bin's sequences are stored as they are.
+int MainWindow::refreshMotionAdapters() {
+    if (!project_) return 0;
+    const bool interlaced = project_->settings.format.scan == ScanMode::Interlaced;
+    const bool blending = settings_->flag(QStringLiteral("Render"), QStringLiteral("motionAdapterBlending"));
+    const auto resolve = [this](const QString& bin, const QString& clip) { return composer_->resolve(bin, clip); };
+    int changed = 0;
+    BinView* view = binContainer_->activeView();
+    const QWidget* focus = QApplication::focusWidget();
+    if (view && focus && (view == focus || view->isAncestorOf(focus))) {
+        for (const QString& id : view->selectedIds()) {
+            const model::BinItem* found = view->document().bin().item(id);
+            if (!found || found->kind != model::BinItemKind::Sequence) continue;
+            model::BinItem item = *found;
+            model::Sequence seq = model::Sequence::fromItem(item);
+            const int n = model::refreshMotionAdapters(seq, resolve, interlaced, blending);
+            if (n == 0) continue;
+            seq.storeIn(item);
+            item.modified = QDateTime::currentDateTimeUtc();
+            storeClip(view->document().nodeId(), item);
+            changed += n;
+        }
+        return changed;
+    }
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return 0;
+    timeline_->changeRecordSequence(tr("Refresh Sequence"), [&](model::Sequence& seq) {
+        changed = model::refreshMotionAdapters(seq, resolve, interlaced, blending);
+        return changed > 0;
+    });
+    return changed;
+}
+
 int MainWindow::readAudioTimecode() {
     BinView* view = binContainer_->activeView();
     if (!view) return 0;
@@ -3185,6 +3221,8 @@ void MainWindow::fillComposition(media::Composition& c, const model::LoadedClip&
     c.source = [this](const model::Segment& segment, std::int64_t clipFrame, QSize want) -> std::optional<QImage> {
         auto clip = composer_->resolve(segment.binId, segment.clipId);
         if (clip) {
+            // A mixed rate clip at the sequence's rate (motion_adapter.h).
+            clip = model::clipForSegment(*clip, segment);
             // A motion effect clip shows its source clip's frames (FX Guide p.165).
             if (auto source = followMotion(*clip, clipFrame)) {
                 clip = source->first;
@@ -3464,7 +3502,8 @@ void MainWindow::renderInBackground(const model::LoadedClip& loaded, const model
         }
         if (!media::isLinked(*it)) return QImage();
         if (!cache->isOnline(*it)) return std::nullopt;
-        return cache->frame(*it, clipFrame, want);
+        // A mixed rate clip at the sequence's rate (motion_adapter.h).
+        return cache->frame(model::clipForSegment(*it, segment), clipFrame, want);
     };
     c.burnIn.sequence = loaded.item;
     c.burnIn.markIn = loaded.in;
@@ -4490,7 +4529,7 @@ std::optional<model::AudioSuiteEffect> MainWindow::renderAudioSuite(const model:
         creation.videoDrive = drive;
         creation.audioDrive = drive;
     }
-    return media::renderAudioSuite(segment, *clip, rec ? rec->item.editRate : clip->editRate, creation, error);
+    return media::renderAudioSuite(segment, model::clipForSegment(*clip, segment), rec ? rec->item.editRate : clip->editRate, creation, error);
 }
 
 // A punch-in take as managed media: "<sequence> Voice Over.<n>" (the picture on p.751), n one more than
@@ -4763,6 +4802,12 @@ void MainWindow::applySettings() {
     if (motionEditor_) motionEditor_->setRenderUsing(s.text(QStringLiteral("Render"), QStringLiteral("timewarpsRenderUsing")));
     // Video Display (p.1224) and Full Screen Playback (p.1190-1191) settings.
     composer_->setHighQualityScaling(s.flag(QStringLiteral("Video Display"), QStringLiteral("highQualityScaling")));
+    // Mixed rate clips load at the project's rate, through Motion Adapters of the Render setting's Type
+    // (Editing Guide p.469, p.1215).
+    if (project_) {
+        composer_->setAdapterOptions(project_->settings.format.editRate, project_->settings.format.scan == ScanMode::Interlaced,
+                                     s.flag(QStringLiteral("Render"), QStringLiteral("motionAdapterBlending")));
+    }
     if (FullScreenView* view = fullScreen_.data()) {
         view->setReformat(FullScreenView::reformatFrom(s.text(QStringLiteral("Full Screen Playback"), QStringLiteral("reformat"))));
         view->setFullScreenScaling(s.flag(QStringLiteral("Full Screen Playback"), QStringLiteral("fullScreen")));
@@ -5160,6 +5205,7 @@ void MainWindow::installPanelHandlers() {
     handle("clip.audio.center_pan", [this] { centerPan(); });
     handle("clip.auto_vo", [this] { autoVo(); });
     handle("clip.read_audio_timecode", [this] { readAudioTimecode(); });
+    handle("clip.refresh_sequence.motion_adapters_timewarps", [this] { refreshMotionAdapters(); });
     handle("timeline.mixdown.audio.multiple_mixes", [this] { multipleMixes(); });
     handle("clip.audio.change_sample_rate", [this] { changeSampleRate(); });
     handle("tools.source_browser", [this] { showSourceBrowser(); });

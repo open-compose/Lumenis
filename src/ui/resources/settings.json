@@ -515,7 +515,7 @@
              "choices": [{"value": "eachEffect", "label": "Quality Set In Each Effect"}, {"value": "standard", "label": "Standard Quality"}, {"value": "highest", "label": "Highest Quality"}]},
             {"key": "renderCompletionSound", "type": "choice", "style": "menu", "label": "Render Completion Sound", "default": "none", "page": 1216,
              "choices": [{"value": "none", "label": "None"}, {"value": "systemBeep", "label": "System Beep"}, {"value": "renderSound", "label": "Render Sound"}]},
-            {"key": "motionAdapterBlending", "type": "bool", "label": "Use frame blending in Motion Adapters", "default": true, "page": 1216, "later": true},
+            {"key": "motionAdapterBlending", "type": "bool", "label": "Use frame blending in Motion Adapters", "default": true, "page": 1216},
             {"key": "disableGpuEffects", "type": "bool", "label": "Disable GPU effects", "default": false, "page": 1216, "later": true}
           ]
         }

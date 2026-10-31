@@ -1,0 +1,36 @@
+[
+  {
+    "name": "a mixed rate clip is edited at the sequence's rate through a Motion Adapter",
+    "guide": "p.469",
+    "clips": [{"name": "A"}, {"name": "M", "rate": "50", "frames": 100}],
+    "sequence": {"tracks": {
+      "V1": [["A", 0, 60]], "A1": [["A", 0, 60]], "A2": [["A", 0, 60]]}},
+    "steps": [
+      {"load": "source", "clip": "M"},
+      {"mark": "source", "in": 10, "out": 29},
+      {"position": "record", "frame": 20},
+      {"command": "edit.overwrite"}
+    ],
+    "expect": {
+      "V1": [["A", 0, 20], ["M", 10, 20, {"adapter": "50"}], ["A", 40, 20]],
+      "A1": [["A", 0, 20], ["M", 10, 20, {"adapter": "50"}], ["A", 40, 20]],
+      "A2": [["A", 0, 20], ["M", 10, 20, {"adapter": "50"}], ["A", 40, 20]]},
+    "expect_monitors": {"source": {"clip": "M", "position": 29, "in": 10, "out": 29}}
+  },
+  {
+    "name": "an Add Edit in a mixed rate segment keeps the adapter on both parts",
+    "guide": "p.469",
+    "clips": [{"name": "M", "rate": "50", "frames": 100}],
+    "steps": [
+      {"load": "source", "clip": "M"},
+      {"mark": "source", "in": 0, "out": 49},
+      {"command": "edit.splice_in"},
+      {"position": "record", "frame": 20},
+      {"command": "edit.add_edit"}
+    ],
+    "expect": {
+      "V1": [["M", 0, 20, {"adapter": "50"}], ["M", 20, 30, {"adapter": "50"}]],
+      "A1": [["M", 0, 20, {"adapter": "50"}], ["M", 20, 30, {"adapter": "50"}]],
+      "A2": [["M", 0, 20, {"adapter": "50"}], ["M", 20, 30, {"adapter": "50"}]]}
+  }
+]

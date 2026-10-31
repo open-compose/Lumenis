@@ -1,6 +1,7 @@
 #include "lumenis/media/link.h"
 
 #include "lumenis/core/timecode.h"
+#include "lumenis/model/motion_adapter.h"
 
 #include <QDir>
 #include <QDirIterator>
@@ -9,6 +10,7 @@
 #include <QMap>
 #include <QMutexLocker>
 #include <QObject>
+#include <QPainter>
 #include <QRegularExpression>
 #include <QSet>
 #include <QStorageInfo>
@@ -769,10 +771,21 @@ QImage FrameCache::frame(const model::BinItem& item, std::int64_t clipFrame, QSi
     const auto link = linkOf(item);
     if (!link || link->videoStream < 0 || link->unlinked) return {};
     const std::int64_t n = link->fileFrame(clipFrame, item.editRate);
+    // A mixed rate clip's adapter of a blending Type (model::adapterBlends) mixes the file frame with the
+    // next one by how far the clip frame's time is between them ("Blended Interpolated", p.1215): the
+    // in-between frames of a clip played at a rate other than its own. FluidMotion is the compositor's
+    // (6.5d1) and blends here too.
+    double blend = 0.0;
+    if (const auto adapter = model::adapterOf(item); adapter && model::adapterBlends(*adapter) && !(link->rate == item.editRate) &&
+                                                     item.editRate.num() > 0 && n + 1 < link->frames) {
+        const double at = static_cast<double>(clipFrame) * link->rate.toDouble() / item.editRate.toDouble() + static_cast<double>(link->first);
+        blend = std::clamp(at - static_cast<double>(n), 0.0, 1.0);
+        if (blend < 1e-3 || blend > 1.0 - 1e-3) blend = 0.0;
+    }
     // One arg() call: a sequence's path holds a %04d of its own.
-    const QString key = QStringLiteral("%1|%2|%3|%4x%5")
+    const QString key = QStringLiteral("%1|%2|%3|%4x%5|%6")
                             .arg(link->path, QString::number(link->videoStream), QString::number(n),
-                                 QString::number(size.width()), QString::number(size.height()));
+                                 QString::number(size.width()), QString::number(size.height()), QString::number(blend, 'f', 3));
     std::shared_ptr<Reader> r;
     {
         QMutexLocker lock(&mutex_);
@@ -780,12 +793,21 @@ QImage FrameCache::frame(const model::BinItem& item, std::int64_t clipFrame, QSi
         r = reader(*link);
     }
     QImage image;
+    QImage next;
     {
         QMutexLocker lock(&r->mutex);
         if (!r->ok) return {};
         image = r->video.frame(n);
+        if (blend > 0.0) next = r->video.frame(n + 1);
     }
     if (image.isNull()) return {};
+    if (!next.isNull() && next.size() == image.size()) {
+        // Drawn over at the blend's opacity: (1 - blend) of this frame and `blend` of the next.
+        image = image.convertToFormat(QImage::Format_RGB32);
+        QPainter p(&image);
+        p.setOpacity(blend);
+        p.drawImage(0, 0, next);
+    }
     if (size.isValid() && image.size() != size) {
         image = image.scaled(size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }

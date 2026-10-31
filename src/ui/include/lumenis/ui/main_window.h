@@ -401,6 +401,10 @@ public:
     // track, into the chosen Auxiliary TC column (media::ltc::readClipTimecode); other items are
     // ignored with a message.
     int readAudioTimecode();
+    // Clip > Refresh Sequence > Motion Adapters/Timewarps (Editing Guide p.478): the sequences selected in
+    // the active bin when it has the focus, else the Record monitor's sequence, take their clips' current
+    // Field Motion (model::refreshMotionAdapters). Returns how many adapters changed.
+    int refreshMotionAdapters();
     // Change Sample Rate (p.731): new media for the selected audio clips, and the clips the selected
     // sequences' audio segments use, at the chosen rate (media::resampleClipAudio).
     int changeSampleRate();

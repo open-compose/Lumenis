@@ -6,6 +6,7 @@
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
 #include "lumenis/model/timewarp.h"
@@ -27,6 +28,17 @@
 namespace lumenis::model {
 
 namespace {
+
+// "num/den" or a whole number, positive; nothing otherwise.
+std::optional<Rational> rateFromText(const QString& text) {
+    const QStringList parts = text.split(QLatin1Char('/'));
+    bool okNum = false;
+    bool okDen = true;
+    const qint64 num = parts.value(0).toLongLong(&okNum);
+    const qint64 den = parts.size() > 1 ? parts.value(1).toLongLong(&okDen) : 1;
+    if (!okNum || !okDen || num <= 0 || den <= 0 || parts.size() > 2) return std::nullopt;
+    return Rational(num, den);
+}
 
 // The letter of a track name, and the order of the kinds in a sequence.
 QChar kindLetter(TrackKind kind) {
@@ -198,6 +210,12 @@ QJsonObject segmentToJson(const Segment& s) {
         for (const SurroundPan& p : s.surround) pans.append(surroundPanToJson(p));
         o.insert(QStringLiteral("surround"), pans);
     }
+    if (s.adapter) {
+        o.insert(QStringLiteral("adapter"), QJsonObject{{QStringLiteral("rate"), QString::fromStdString(s.adapter->clipRate.toString())},
+                                                       {QStringLiteral("sequenceRate"), QString::fromStdString(s.adapter->sequenceRate.toString())},
+                                                       {QStringLiteral("fieldMotion"), s.adapter->fieldMotion},
+                                                       {QStringLiteral("type"), s.adapter->type}});
+    }
     return o;
 }
 
@@ -218,6 +236,14 @@ Segment segmentFromJson(const QJsonObject& o) {
     if (!s.isFiller()) s.note = o.value(QStringLiteral("note")).toString();
     for (const QJsonValue& v : o.value(QStringLiteral("surround")).toArray()) {
         if (!s.isFiller() && s.surround.size() < 2) s.surround << surroundPanFromJson(v.toObject());
+    }
+    if (const QJsonObject a = o.value(QStringLiteral("adapter")).toObject(); !s.isFiller() && !a.isEmpty()) {
+        const auto clipRate = rateFromText(a.value(QStringLiteral("rate")).toString());
+        const auto sequenceRate = rateFromText(a.value(QStringLiteral("sequenceRate")).toString());
+        if (clipRate && sequenceRate) {
+            s.adapter = MotionAdapter{*clipRate, *sequenceRate, a.value(QStringLiteral("fieldMotion")).toString(),
+                                      a.value(QStringLiteral("type")).toString()};
+        }
     }
     s.length = std::max<std::int64_t>(o.value(QStringLiteral("length")).toInteger(), 0);
     s.addEdit = s.isFiller() && o.value(QStringLiteral("addEdit")).toBool();
@@ -956,6 +982,8 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
             s.sourceTrack = sourceChannel(source, from);
             s.sourceIn = plan.sourceStart;
             s.length = plan.length;
+            // A mixed rate clip as the monitor shows it, at the sequence's rate (motion_adapter.h).
+            s.adapter = adapterOf(source);
             // "Levels set in master clips carry across to the sequence after you edit the clips"
             // (p.711): Apply Gain and Center Pan (clip_audio.h).
             if (s.sourceTrack.startsWith(QLatin1Char('A'))) {

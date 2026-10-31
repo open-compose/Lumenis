@@ -6,6 +6,7 @@
 #include "lumenis/media/media.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/clip_audio.h"
+#include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/automation.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/sequence.h"
@@ -106,7 +107,9 @@ namespace {
 // inserts on its own (channelTrackKey()). AudioSuite effects are not used on multichannel tracks yet.
 void multichannelPieces(const model::Track& track, const model::Segment& s, std::int64_t start, const Rational& rate,
                         model::AudioFormat mix, const ClipLookup& clips, std::vector<AudioPiece>& out) {
-    const auto clip = clips(s.binId, s.clipId);
+    auto clip = clips(s.binId, s.clipId);
+    // A mixed rate clip's segment counts the clip at the sequence's rate (motion_adapter.h).
+    if (clip) clip = model::clipForSegment(*clip, s);
     const auto ref = model::parseTrackName(s.sourceTrack);
     if (!clip || !ref || ref->kind != model::TrackKind::Audio) return;
     // Pans and gains in Pro Tools channel order: L C R Ls Rs Lfe; L C R Lss Rss Lsr Rsr Lfe.
@@ -232,9 +235,10 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
                 p->channel = s.audioSuite->renderedChannel;
                 gainDb = 0.0;
             } else {
-                const auto clip = clips(s.binId, s.clipId);
+                auto clip = clips(s.binId, s.clipId);
                 const auto ref = model::parseTrackName(s.sourceTrack);
                 if (!clip || !ref || ref->kind != model::TrackKind::Audio) continue;
+                clip = model::clipForSegment(*clip, s);
                 p = pieceFor(*clip, ref->number - 1);
                 if (!p) continue;
                 p->sourceStart += framesToSamples(s.sourceIn, clip->editRate);

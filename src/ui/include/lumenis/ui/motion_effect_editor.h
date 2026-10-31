@@ -90,7 +90,9 @@ class MotionEffectEditor : public QWidget {
     Q_OBJECT
 
 public:
-    enum class Shown { None, Timewarp, Traditional };
+    // Adapter: a mixed rate clip's Motion Adapter, "with the Type list and the Promote button active, and
+    // other parameters inactive" (Editing Guide p.471).
+    enum class Shown { None, Timewarp, Traditional, Adapter };
     explicit MotionEffectEditor(Timeline& timeline, QWidget* parent = nullptr);
 
     // Follows the Record monitor's sequence and position.
@@ -125,7 +127,8 @@ public:
     void selectKeyframe(int index);
     // "Click to set the Source Anchor Frame at the active keyframe" (p.183).
     void anchorAtActiveKeyframe();
-    // "Click to promote a traditional motion effect to a Timewarp effect" (p.183).
+    // "Click to promote a traditional motion effect to a Timewarp effect" (p.183); a Motion Adapter too
+    // (Editing Guide p.472).
     void promote();
 
 signals:

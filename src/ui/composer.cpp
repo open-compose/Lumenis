@@ -1,6 +1,7 @@
 #include "lumenis/ui/composer.h"
 
 #include "lumenis/core/timecode.h"
+#include "lumenis/model/motion_adapter.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/theme.h"
@@ -1479,9 +1480,28 @@ void Composer::setTrimPlaySide(model::TrimSide side) {
 }
 
 // Loading stops playback and makes the monitor active.
+std::optional<model::BinItem> Composer::resolveForSegment(const model::Segment& segment) const {
+    auto clip = resolve(segment.binId, segment.clipId);
+    if (clip) clip = model::clipForSegment(*clip, segment);
+    return clip;
+}
+
+void Composer::setAdapterOptions(const Rational& projectRate, bool interlaced, bool blending) {
+    projectRate_ = projectRate;
+    interlacedProject_ = interlaced;
+    adapterBlending_ = blending;
+}
+
+model::BinItem Composer::monitorItem(const model::BinItem& item) const {
+    // An adapted copy (an edit to the monitor's own) stays as it is.
+    if (projectRate_.num() <= 0 || model::isAdapted(item)) return item;
+    const auto adapter = model::adapterFor(item, projectRate_, interlacedProject_, adapterBlending_);
+    return adapter ? model::adaptedClip(item, *adapter) : item;
+}
+
 void Composer::load(MonitorId monitor, const QString& binId, const model::BinItem& item) {
     stop();
-    state(monitor).load(binId, item);
+    state(monitor).load(binId, monitorItem(item));
     setActiveMonitor(monitor);
     refresh();
 }
@@ -1499,8 +1519,9 @@ void Composer::loadFromBin(MonitorId monitor, const QString& binId, const QStrin
 }
 
 void Composer::updateItem(const model::BinItem& item) {
-    const bool source = source_.replaceItem(item);
-    const bool record = record_.replaceItem(item);
+    const model::BinItem shown = monitorItem(item);
+    const bool source = source_.replaceItem(shown);
+    const bool record = record_.replaceItem(shown);
     if (source || record) refresh();
 }
 

@@ -22,7 +22,8 @@ Each file is a JSON list of scenarios:
 ```
 
 * **clips:** master clips at 25 fps; `frames` defaults to 100, `tracks` to
-  V1, A1 and A2.
+  V1, A1 and A2; `rate` ("50", "30000/1001") makes a mixed rate clip, which
+  the monitors show at 25 fps through a Motion Adapter (Editing Guide p.469).
 * **sequence:** the Record monitor's sequence at the start, track by track
   (V1, A1 and A2 always exist; others are added). A segment is
   `[clip, source IN, length]`, with the clip's track as a fourth member
@@ -113,7 +114,7 @@ Each file is a JSON list of scenarios:
   {the values not at their defaults}]}`, and one whose effect has
   keyframes `{"keyframes": {"Category/Name": [[position, value], ...]}}`
   (frames for Fixed keyframes, else the effect's time to 1/1000; FX Guide
-  p.124).
+  p.124), and one with a Motion Adapter `{"adapter": clip rate}`.
   **expect_monitors:** a monitor's position, clip, and marks (`null`: no
   mark). **expect_formats** gives tracks' audio formats ("mono", "stereo",
   "5.1", "7.1") and **expect_channels** the channels a track's segments

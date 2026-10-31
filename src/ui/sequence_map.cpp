@@ -130,7 +130,7 @@ void SequenceMap::paintEvent(QPaintEvent*) {
 // The first channel of the segment's sound, as the Timeline reads it (TimelineView::paintWaveform),
 // one column of peaks a pixel.
 void SequenceMap::paintWaveform(QPainter& p, const QRectF& box, const model::Track& t, const model::Segment& s) const {
-    const auto clip = timeline_.composer().resolve(s.binId, s.clipId);
+    const auto clip = timeline_.composer().resolveForSegment(s);
     const auto link = clip ? media::linkOf(*clip) : std::nullopt;
     const auto ref = model::parseTrackName(s.sourceTrack);
     if (!clip || !link || link->unlinked || !ref || clip->editRate.num() <= 0) return;

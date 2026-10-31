@@ -1,6 +1,8 @@
 #include "lumenis/ui/motion_effect_editor.h"
 
+#include "lumenis/core/project_format.h"
 #include "lumenis/core/timecode.h"
+#include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
 #include "lumenis/model/timewarp.h"
 #include "lumenis/ui/composer.h"
@@ -375,6 +377,21 @@ MotionEffectEditor::MotionEffectEditor(Timeline& timeline, QWidget* parent) : QW
     connect(type_, &QComboBox::currentIndexChanged, this, [this](int) {
         if (syncing_) return;
         const QString name = type_->currentData().toString();
+        if (shownKind_ == Shown::Adapter) {
+            // "To change the appearance of a mixed rate clip, you can select a different rendering option
+            // from the Type list" (Editing Guide p.471).
+            if (!target_) return;
+            const Target target = *target_;
+            timeline_.changeRecordSequence(tr("Type"), [&](model::Sequence& seq) {
+                model::Track* t = seq.track(target.track);
+                if (!t || target.index >= t->segments.size() || !t->segments[target.index].adapter) return false;
+                std::optional<model::MotionAdapter>& adapter = t->segments[target.index].adapter;
+                if (adapter->type == name) return false;
+                adapter->type = name;
+                return true;
+            });
+            return;
+        }
         editTimewarp(tr("Type"), [name](model::Effect& e, std::int64_t) {
             model::Timewarp t = model::timewarpOf(e);
             t.type = model::timewarpTypeFromName(name);
@@ -507,12 +524,18 @@ void MotionEffectEditor::refresh() {
         } else if (s->effect && model::motionSpeed(*s->effect)) {
             shownKind_ = Shown::Traditional;
             speedText = QStringLiteral("%1%").arg(*model::motionSpeed(*s->effect) * 100.0, 0, 'g', 4);
-        } else if (const auto clip = timeline_.composer().resolve(s->binId, s->clipId)) {
-            if (const auto motion = model::motionEffectOf(*clip)) {
-                shownKind_ = Shown::Traditional;
-                speedText = QStringLiteral("%1%").arg(motion->speed * 100.0, 0, 'g', 4);
-                if (motion->strobe > 1) speedText += tr(", strobe %1").arg(motion->strobe);
-            }
+        } else if (const auto clip = timeline_.composer().resolve(s->binId, s->clipId); clip && model::motionEffectOf(*clip)) {
+            const auto motion = model::motionEffectOf(*clip);
+            shownKind_ = Shown::Traditional;
+            speedText = QStringLiteral("%1%").arg(motion->speed * 100.0, 0, 'g', 4);
+            if (motion->strobe > 1) speedText += tr(", strobe %1").arg(motion->strobe);
+        } else if (s->adapter && !(s->adapter->clipRate == s->adapter->sequenceRate)) {
+            // "You can check the values Media Composer has calculated, but you cannot change them" (p.471):
+            // the speed, and the clip's rate and Field Motion (the Source).
+            shownKind_ = Shown::Adapter;
+            speedText = tr("%1%, %2 fps %3 source")
+                            .arg(model::adapterSpeed(*s->adapter), 0, 'g', 4)
+                            .arg(QString::fromStdString(frameRateText(s->adapter->clipRate)), s->adapter->fieldMotion);
         }
     }
     if (selected_ >= 0 && effect_ &&
@@ -544,7 +567,7 @@ void MotionEffectEditor::syncControls() {
     const bool timewarp = shownKind_ == Shown::Timewarp;
     // "The Promote button appears in the Motion Effect Editor only when you have the position indicator
     // on a traditional motion effect" (p.177).
-    promote_->setVisible(shownKind_ == Shown::Traditional);
+    promote_->setVisible(shownKind_ == Shown::Traditional || shownKind_ == Shown::Adapter);
     QWidget* const timewarpOnly[] = {editGraph_, anchor_, anchorButton_, graphTools_, speedButton_, positionButton_};
     for (QWidget* w : timewarpOnly) w->setEnabled(timewarp);
     speedGraph_->setVisible(timewarp && speedButton_->isChecked());
@@ -581,6 +604,12 @@ void MotionEffectEditor::syncControls() {
             value_->setValue(keys.keys.at(selected_).value.toDouble());
             output_->setValue(static_cast<int>(std::llround(span.frameOf(model::keyframeTime(keys, keys.keys.at(selected_), span)))));
         }
+    } else if (shownKind_ == Shown::Adapter) {
+        ignore_->setVisible(false);
+        const model::Segment* s = targetSegment(timeline_.shown());
+        type_->setEnabled(s != nullptr);
+        if (s && s->adapter) type_->setCurrentIndex(std::max(0, type_->findData(s->adapter->type)));
+        strobe_->setEnabled(false);
     } else {
         ignore_->setVisible(false);
         type_->setEnabled(false);
@@ -689,12 +718,14 @@ void MotionEffectEditor::anchorAtActiveKeyframe() {
 }
 
 void MotionEffectEditor::promote() {
-    if (!target_ || shownKind_ != Shown::Traditional) return;
+    if (!target_ || (shownKind_ != Shown::Traditional && shownKind_ != Shown::Adapter)) return;
     const Target target = *target_;
     Composer& composer = timeline_.composer();
+    const bool adapter = shownKind_ == Shown::Adapter;
     timeline_.changeRecordSequence(tr("Promote to Timewarp"), [&](model::Sequence& seq) {
         model::Track* t = seq.track(target.track);
         if (!t || target.index >= t->segments.size()) return false;
+        if (adapter) return model::promoteAdapter(t->segments[target.index]);
         return model::promoteToTimewarp(t->segments[target.index], [&composer](const QString& bin, const QString& clip) {
             return composer.resolve(bin, clip);
         });

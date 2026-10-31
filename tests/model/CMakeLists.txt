@@ -6,6 +6,8 @@ lumenis_add_test(tst_effect_keyframes SOURCES tst_effect_keyframes.cpp LIBS lume
 # Rendering video effects: targets, keys and Clear Renders (docs/spec/rendering.md).
 lumenis_add_test(tst_effect_render SOURCES tst_effect_render.cpp LIBS lumenis::model)
 lumenis_add_test(tst_motion_effect SOURCES tst_motion_effect.cpp LIBS lumenis::model)
+# Mixed rate clips and Motion Adapters (Editing Guide p.468-478).
+lumenis_add_test(tst_motion_adapter SOURCES tst_motion_adapter.cpp LIBS lumenis::model)
 lumenis_add_test(tst_monitor SOURCES tst_monitor.cpp LIBS lumenis::model)
 lumenis_add_test(tst_sequence SOURCES tst_sequence.cpp LIBS lumenis::model)
 lumenis_add_test(tst_multichannel SOURCES tst_multichannel.cpp LIBS lumenis::model)

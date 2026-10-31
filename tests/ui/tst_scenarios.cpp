@@ -4,6 +4,7 @@
 // give them) and the sequence expected at the end. A Composer and Timeline of their own run them.
 // After the last step every scenario is undone step by step back to its starting sequence and
 // redone to its end, and each state is compared by hash with the one recorded on the way (gate 2).
+#include "lumenis/core/project_format.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/automation.h"
 #include "lumenis/model/effect_keyframes.h"
@@ -111,6 +112,8 @@ struct Run {
             return std::make_pair(QStringLiteral("bin"), s);
         });
         timeline.resize(900, 300);
+        // Clips at another rate than the sequences' are mixed rate clips (motion_adapter.h).
+        composer.setAdapterOptions(kRate, false, true);
     }
 
     bool fail(const QString& why) {
@@ -149,6 +152,11 @@ struct Run {
             i.kind = BinItemKind::MasterClip;
             i.durationFrames = o.value(QStringLiteral("frames")).toInteger(100);
             i.editRate = kRate;
+            // "rate": a mixed rate clip's own frame rate, "50" or "30000/1001" (p.469).
+            if (o.contains(QStringLiteral("rate"))) {
+                const QStringList r = o.value(QStringLiteral("rate")).toString().split(QLatin1Char('/'));
+                i.editRate = Rational(r.value(0).toLongLong(), r.size() > 1 ? r.value(1).toLongLong() : 1);
+            }
             i.fields.insert(QStringLiteral("Tracks"), o.value(QStringLiteral("tracks")).toString(QStringLiteral("V1 A1-2")));
             // Multichannel groups, as the Track Formats column has them (p.671).
             if (o.contains(QStringLiteral("formats"))) i.fields.insert(QStringLiteral("Track Formats"), o.value(QStringLiteral("formats")).toString());
@@ -600,6 +608,8 @@ struct Run {
                         extra.insert(QLatin1String(name), list);
                     }
                     if (g.eq) extra.insert(QStringLiteral("eq"), eqToJson(*g.eq));
+                    // A Motion Adapter: the clip's own rate (p.469).
+                    if (g.adapter) extra.insert(QStringLiteral("adapter"), QString::fromStdString(frameRateText(g.adapter->clipRate)));
                     // Effect keyframes by parameter as [[position, value], ...]: frames for Fixed
                     // keyframes, else the effect's time rounded to 1/1000 (FX Guide p.124).
                     if (g.effect) {

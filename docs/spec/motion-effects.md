@@ -180,3 +180,71 @@ Code: `src/media/optical_flow.*` (`estimateFlow`, `interpolateFrames`), used by 
   time to update the Effect Preview monitor" (p.186): ours too, on the CPU.
 * FluidMotion Edit (p.198-203), whose regions are drawn with the intraframe drawing tools, comes with them
   (6.9).
+
+## 6.5d2: motion adapters and mixed rate clips
+
+Editing Guide p.468-478 and the Render setting's Use frame blending in Motion Adapters (p.1215-1216). Code:
+`src/model/motion_adapter.*` (the Field Motion attribute, `adapterFor`, `adaptedClip`/`unadaptedClip`,
+`promoteAdapter`, `refreshMotionAdapters`), `model::MotionAdapter` and `Segment::adapter` in `sequence.h`,
+the blends in `media::FrameCache::frame`, `Composer::setAdapterOptions`/`monitorItem`/`resolveForSegment`,
+`BinDocument::addItem`/`replaceItem`, the Timeline's green dot, Show Adapters and names, the Motion Effect
+Editor's `Shown::Adapter`, the Field Motion column's menu in `BinView::contextMenu` and
+`MainWindow::refreshMotionAdapters`. Tests: `tst_motion_adapter`, `tst_motion_adapter_ui`, scenario
+`27-motion-adapter.json`.
+
+* "Clips that do not match the frame rate or field motion type of the project are known as mixed rate
+  clips ... Mixed rate clips always play at the project's frame rate, both in Source or pop-up monitors and
+  in sequences. Audio remains synchronized with video" (p.469). Ours: a master clip or subclip with a
+  picture whose own frames are at another rate (`isMixedRate`). A clip linked to a file is made at the
+  project's rate (2.2) and its own frames are the file's; a clip from AAF, a `.avb` bin or another project
+  keeps its edit rate. Stills and image sequences take the clip's rate. Field motion alone (an interlaced
+  clip in a progressive project) makes no adapter until 6.5d3, which brings fields.
+* How ours plays them: a mixed rate clip is seen as its adapted copy, the same clip (same id) at the
+  project's rate, its duration, Start and End, markers and a subclip's offset counted in the project's
+  frames, the adapter kept in its composition. Media is read by time (`media::Link::fileFrame`), so the
+  copy plays its pictures and sound at the project's rate. "Media Composer applies Motion Adapter effects
+  when they load into a Source or pop-up monitor ... as well as when they are edited into a sequence"
+  (p.469): the Composer loads the copy, and segments edited from it count in those frames and carry the
+  adapter (`Segment::adapter`: the clip's own rate, the sequence's, the Field Motion it was edited with and
+  the Type), so every edit, trim and keyframe works as for any clip. Audio segments carry it too, for their
+  units; only video segments show it. Segments edited before adapters keep counting the clip's own frames.
+  The copy never goes into a bin: `BinDocument` stores the clip it came from, a marker added in the monitor
+  converted to the clip's frame at its time and one left as it was keeping its own frame.
+* "You do not apply Motion Adapter effects manually. The Motion Adapter effect does not appear in the
+  Effect Palette and does not have an effect icon"; "You cannot remove a Motion Adapter effect ... with the
+  Remove Effect button" (p.469): the adapter is not the segment's effect, and a segment effect goes on top
+  of it.
+* The Type: "When this option is selected, the Blended Interpolated mode is used ... When it is not
+  selected, the Interpolated Field mode is used for interlaced clips, and Both Fields mode is used for
+  progressive clips"; "Changing this setting does not have any effect on existing motion adapters ...
+  reload the cross-rate source clips into the source viewer" (p.1215-1216). Ours, on progressive media:
+  Blended Interpolated, Blended VTR and the FluidMotion types mix the two media frames around the project
+  frame's time by how near it is to each (`media::FrameCache::frame`; FluidMotion's own motion path is
+  the Timewarp's, 6.5d1); the others show the media frame at the time.
+* Timeline (p.470, p.599): "Mixed rate clips that are unrendered always appear with a green dot that
+  represents the Motion Adapter effect"; ours draws it in the middle of a video segment without an effect
+  icon (an effect's icon has its own dot). "Mixed rate clips also display with their original frame rate
+  appended to the clip name ... playtime (59.94 fps)": on video tracks. Show Adapters (Fast menu) > Motion:
+  "Temporal (motion) adapters appear with a T"; ours a grey box with a T, left of an effect icon, with
+  the render dot when there is no effect icon. Spatial (FrameFlex) and Color stay dimmed until those
+  adapters exist. The Clip Color dialog's Mixed Rates colours (p.596) were there already.
+* Motion Effect Editor (p.471-472): "with the Type list and the Promote button active, and other
+  parameters inactive". Ours shows the speed, the clip's rate and its Field Motion as text: "a Speed
+  percentage value that adjusts the clip's speed to the project's rate" is 100% in ours, as the segment
+  already counts the project's frames (ours: the guide gives no number). Adaptive Deinterlace Source waits
+  for fields (6.5d3). Promote makes a 100% Timewarp of the adapter's Type over the adapter; removing it
+  leaves the adapter ("Media Composer re-applies a Motion Adapter effect", p.469).
+* Field Motion column (p.472-473): Interlaced, 2:3 Film ("Only available for clips or subclips created in
+  30 fps projects": ours, clips at a 30 fps rate), Progressive and Progressive Strobe, from the cell's
+  right-click menu on every selected clip with a picture. Its default ("set to either Interlaced or
+  Progressive, depending on the project type") is ours: the format in the clip's Format column, else the
+  project's scan. "Edits that you made from that clip before you change the Field Motion attribute
+  continue to use the old value"; the attribute only chooses the default Type until 6.5d3.
+* Clip > Refresh Sequence > Motion Adapters/Timewarps (p.478): "Refreshes the sequence so that media with
+  Motion Adapters or Timewarps use the current Field Motion attribute value from their source clip". The
+  Record monitor's sequence (an undoable edit), or the sequences selected in a bin that has the focus.
+  Ours: an adapter whose Type was the old Field Motion's default takes the new one's; a chosen Type stays.
+  The other refresh commands of p.478 come with their features.
+* Not yet: AAF and `.avb` interchange of adapters (their sequences keep counting the clip's frames), the
+  Modify dialog's sequence format (p.1294), grouped clips (Phase 9), and the 2:3 pulldown and field
+  options (6.5d3).

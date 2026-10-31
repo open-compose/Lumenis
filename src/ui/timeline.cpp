@@ -6,6 +6,7 @@
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/effect_render.h"
+#include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
 #include "lumenis/media/surround.h"
 #include "lumenis/model/multichannel.h"
@@ -647,7 +648,7 @@ void TimelineView::paintEvent(QPaintEvent*) {
                             const QRectF frame(box.left() + 2, box.top() + 1, size.width(), size.height());
                             p.fillRect(frame, Qt::black);
                             if (MediaFrames* frames = MediaFrames::instance()) {
-                                const auto clip = timeline_.composer().resolve(s.binId, s.clipId);
+                                const auto clip = timeline_.composer().resolveForSegment(s);
                                 const QImage image = clip ? frames->thumbnail(*clip, s.sourceIn, size) : QImage();
                                 if (!image.isNull()) {
                                     const QSize fit = image.size().scaled(size, Qt::KeepAspectRatio);
@@ -1171,7 +1172,7 @@ void TimelineView::paintHeads(QPainter& p) {
             if (i < 0 || t->segments.at(i).isFiller()) continue;
             const model::Segment& s = t->segments.at(i);
             if (MediaFrames* frames = MediaFrames::instance()) {
-                const auto clip = timeline_.composer().resolve(s.binId, s.clipId);
+                const auto clip = timeline_.composer().resolveForSegment(s);
                 const QImage image = clip ? frames->thumbnail(*clip, s.sourceIn + frame - segStart, box.size()) : QImage();
                 if (!image.isNull()) {
                     const QSize fit = image.size().scaled(box.size(), Qt::KeepAspectRatio);
@@ -1290,7 +1291,7 @@ double TimelineView::exactFrameAt(double x) const {
 // height (ours: the guide only says it "visually extends audio peaks"); the plot zoom doubles or halves.
 void TimelineView::paintWaveform(QPainter& p, const QRectF& box, const model::Track& t, const model::Segment& s,
                                  std::int64_t at) const {
-    const auto clip = timeline_.composer().resolve(s.binId, s.clipId);
+    const auto clip = timeline_.composer().resolveForSegment(s);
     const auto link = clip ? media::linkOf(*clip) : std::nullopt;
     const auto ref = model::parseTrackName(s.sourceTrack);
     if (!clip || !link || link->unlinked || !ref || clip->editRate.num() <= 0) return;
@@ -1447,7 +1448,7 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
                 icon((x0 + x1) / 2, *s.effect, false, rendered(index, at, false));
                 if (const auto speed = model::motionSpeed(*s.effect)) {
                     // The rate of the clip the speed applies to (the sequence's when it cannot be found).
-                    const auto clip = timeline_.composer().resolve(s.binId, s.clipId);
+                    const auto clip = timeline_.composer().resolveForSegment(s);
                     const model::LoadedClip* rec = timeline_.composer().state(MonitorId::Record).current();
                     const Rational rate = clip ? clip->editRate : rec ? rec->item.editRate : Rational(25);
                     speedText((x0 + x1) / 2, *speed, rate, x1);
@@ -1458,13 +1459,46 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
             // Timeline. Variable Speed, forward motion ... a motion effect icon and a green dot ...
             // reverse motion [and] Strobe Motion ... a motion effect icon and a blue dot" (p.172); none
             // once rendered.
-            const auto clip = timeline_.composer().resolve(s.binId, s.clipId);
+            const auto clip = timeline_.composer().resolveForSegment(s);
             const auto motion = clip ? model::motionEffectOf(*clip) : std::nullopt;
             const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
             const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));
             if (motion && !motion->isFreeze() && x1 - x0 > iconWidth + 8) {
                 icon((x0 + x1) / 2, model::motionEffect(motion->speed), false, media::isLinked(*clip), motion->isRealTime());
                 speedText((x0 + x1) / 2, motion->speed, clip->editRate, x1);
+            }
+        }
+        // A mixed rate clip's Motion Adapter: "Mixed rate clips that are unrendered always appear with a
+        // green dot that represents the Motion Adapter effect" (Editing Guide p.470). With Show Adapters >
+        // Motion its icon, a T, shows too (p.599), left of an effect icon or in the middle; "If there is a
+        // render dot on the clip it will appear on the effect icon. If there is no effect icon, the render
+        // dot will appear on the adapters." A render in date of the segment's effect has none.
+        if (s.adapter && t.kind == model::TrackKind::Video && !(s.adapter->clipRate == s.adapter->sequenceRate) &&
+            !(s.effect && rendered(index, at, false))) {
+            const double x0 = std::max(xFor(at), static_cast<double>(headerWidth()));
+            const double x1 = std::min(xFor(at + s.length), static_cast<double>(width()));
+            const bool effectIcon = s.effect.has_value();
+            const double centre = (x0 + x1) / 2;
+            const double y = r.top + r.height / 2.0;
+            p.setPen(Qt::NoPen);
+            if (timeline_.display().motionAdapters && x1 - x0 > (effectIcon ? 3 : 1) * iconWidth + 8) {
+                const double c = effectIcon ? centre - iconWidth - 8 : centre;
+                const QRectF box(c - iconHeight / 2.0, r.top + (r.height - iconHeight) / 2.0, iconHeight, iconHeight);
+                p.setPen(QPen(QColor(0xff3a3a3a), 1));
+                p.setBrush(QColor(0xffb8b8b8));
+                p.drawRoundedRect(box, 2, 2);
+                // The T, drawn (not a letter, so the text-free screenshots keep it).
+                p.setPen(QPen(QColor(0xff2a2a2a), 1.5));
+                p.drawLine(QPointF(box.left() + 2.5, box.top() + 3), QPointF(box.right() - 2.5, box.top() + 3));
+                p.drawLine(QPointF(box.center().x(), box.top() + 3), QPointF(box.center().x(), box.bottom() - 2.5));
+                if (!effectIcon) {
+                    p.setPen(Qt::NoPen);
+                    p.setBrush(QColor(0xff3cc85a));
+                    p.drawEllipse(QRectF(box.left() - 5, y - 2, 4, 4));
+                }
+            } else if (!effectIcon && x1 - x0 > 10) {
+                p.setBrush(QColor(0xff3cc85a));
+                p.drawEllipse(QRectF(centre - 2, y - 2, 4, 4));
             }
         }
         if (s.eq) {
@@ -2458,6 +2492,9 @@ void Timeline::sync() {
                     seg.name = item.name;
                     seg.sourceTrack = t;
                     seg.length = item.durationFrames;
+                    // "If you use the Toggle Source/Record button to view the Timeline for a mixed rate
+                    // clip loaded in the Source monitor, you also see the green dot" (p.470).
+                    seg.adapter = model::adapterOf(item);
                     if (seg.length > 0) track->segments << seg;
                 }
             }
@@ -2850,7 +2887,12 @@ QMenu* Timeline::fastMenu() {
     for (const model::MarkerColor& c : model::markerColors()) {
         check(markers, c.name, showsMarkers(c.name), [this, name = c.name](bool v) { setMarkersShown(name, v); });
     }
-    later(tr("Show Adapters"));
+    // Show Adapters (p.599): the adapters whose icons are drawn. Only Motion adapters are kept yet.
+    QMenu* adapters = m->addMenu(tr("Show Adapters"));
+    adapters->setObjectName(QStringLiteral("showAdapters"));
+    check(adapters, tr("Motion"), display_.motionAdapters, [this](bool v) { display_.motionAdapters = v; });
+    adapters->addAction(tr("Spatial"))->setEnabled(false);
+    adapters->addAction(tr("Color"))->setEnabled(false);
     QMenu* showTrack = m->addMenu(tr("Show Track"));
     check(showTrack, tr("TC1"), display_.timecodeTrack, [this](bool v) { display_.timecodeTrack = v; });
     check(m, tr("Track Control Panel"), display_.trackControlPanel, [this](bool v) { setTrackControlPanel(v); });
@@ -6142,6 +6184,7 @@ QJsonObject Timeline::displayToJson(const Display& d) {
         {QStringLiteral("mediaFullNames"), d.mediaFullNames},
         {QStringLiteral("clipResolution"), d.clipResolution},
         {QStringLiteral("clipNotes"), d.clipNotes},
+        {QStringLiteral("motionAdapters"), d.motionAdapters},
         {QStringLiteral("clipFontFamily"), d.clipFontFamily},
         {QStringLiteral("clipFontSize"), d.clipFontSize},
         {QStringLiteral("syncBreaks"), d.syncBreaks == SyncBreaks::Video   ? QStringLiteral("video")
@@ -6196,6 +6239,7 @@ Timeline::Display Timeline::displayFromJson(const QJsonObject& o) {
     flag("mediaFullNames", d.mediaFullNames);
     flag("clipResolution", d.clipResolution);
     flag("clipNotes", d.clipNotes);
+    flag("motionAdapters", d.motionAdapters);
     const QString sync = o.value(QStringLiteral("syncBreaks")).toString();
     d.syncBreaks = sync == QLatin1String("video")  ? SyncBreaks::Video
                    : sync == QLatin1String("audio") ? SyncBreaks::Audio
@@ -6321,7 +6365,12 @@ QString Timeline::clipText(const model::Track& track, const model::Segment& s) c
     const auto& d = display_;
     const model::MonitorState& state = composer_.state(shownMonitor());
     QStringList parts;
-    if (d.clipNames) parts << s.name;
+    // "Mixed rate clips also display with their original frame rate appended to the clip name"
+    // (p.470): on video tracks (ours: the guide's picture shows a video track).
+    if (d.clipNames) {
+        const bool mixed = s.adapter && track.kind == model::TrackKind::Video && !(s.adapter->clipRate == s.adapter->sequenceRate);
+        parts << (mixed ? model::mixedRateName(s.name, s.adapter->clipRate) : s.name);
+    }
     if (d.clipTracks) parts << s.sourceTrack;
     if (d.clipDurations) parts << state.durationText(s.length);
     const bool needClip = d.clipFullDurations || d.sourceNames || d.mediaFullNames || d.clipResolution;

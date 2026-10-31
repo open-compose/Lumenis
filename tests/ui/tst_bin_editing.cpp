@@ -210,6 +210,8 @@ private slots:
         model::ProjectEntry project;
         project.folder = dir.filePath("Film");
         project.settings.name = QStringLiteral("Film");
+        // The clips' rate, so they are not mixed rate clips (6.5d2).
+        project.settings.format.editRate = Rational(25);
         QDir().mkpath(project.folder);
         window.setProject(project);
         settle();

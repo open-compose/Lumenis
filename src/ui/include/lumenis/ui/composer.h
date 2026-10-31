@@ -116,6 +116,9 @@ public:
     std::optional<model::BinItem> resolve(const QString& binId, const QString& itemId) const {
         return resolver_ ? resolver_(binId, itemId) : std::nullopt;
     }
+    // A segment's clip as the segment plays it: a mixed rate clip at the sequence's rate
+    // (model::clipForSegment). Never to be stored back in its bin.
+    std::optional<model::BinItem> resolveForSegment(const model::Segment& segment) const;
     // A clip by its MobID, from the open bins: its bin and the item. The Timeline's Change Source
     // Track > More finds a subclip's master clip with it. Set by MainWindow.
     using MobResolver = std::function<std::optional<std::pair<QString, model::BinItem>>(const MobId& mob)>;
@@ -171,6 +174,13 @@ public:
     // position decides it (segments selected in the Timeline, p.622).
     using MarkResolver = std::function<std::optional<std::pair<std::int64_t, std::int64_t>>(MonitorId)>;
     void setMarkResolver(MarkResolver resolver) { marks_ = std::move(resolver); }
+    // The project's rate and scan, and the Render setting's Use frame blending in Motion Adapters
+    // (p.1215): mixed rate clips load as their adapted copies at that rate (model::adaptedClip, Editing
+    // Guide p.469: "Media Composer applies Motion Adapter effects when they load into a Source or pop-up
+    // monitor"). Without a rate clips load as they are.
+    void setAdapterOptions(const Rational& projectRate, bool interlaced, bool blending);
+    // The item as the monitors show it: a mixed rate clip's adapted copy, else the item.
+    model::BinItem monitorItem(const model::BinItem& item) const;
     // HD projects are 16:9; SD 4:3 or 16:9 (p.379).
     void setAspectRatio(const Rational& aspect);
     Rational aspectRatio() const { return aspect_; }
@@ -555,6 +565,9 @@ private:
     QList<LoopClip> clipLoop_;
     int clipLoopIndex_ = 0;
     bool clipLoopWhole_ = false;
+    Rational projectRate_{0, 1};
+    bool interlacedProject_ = false;
+    bool adapterBlending_ = true;
     bool startingLoopClip_ = false; // load() inside the loop must not end it
     void startLoopClip(int index);
     void endClipLoop();

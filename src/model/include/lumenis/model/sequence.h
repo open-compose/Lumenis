@@ -193,6 +193,22 @@ struct SurroundPan {
 
 // One piece of a track: material from a source clip, or filler (black,
 // silence) where `clipId` is empty.
+// A Motion Adapter (Editing Guide p.469-473; lumenis/model/motion_adapter.h): what lets a segment from
+// a mixed rate clip, one whose own frames are at another rate, play at the sequence's rate. Such a
+// segment counts the clip's time in frames of `sequenceRate` (its sourceIn, length and keyframes), as
+// the monitors show the clip; `clipRate` is the rate of the clip's own frames (its media's, for a clip
+// linked at the project's rate). "Media Composer applies Motion Adapter effects and sets their
+// parameter values automatically" (p.469): the Field Motion the clip had when it was edited in ("The
+// Field Motion attribute sets the default Source parameter value", p.472) and the render Type, a
+// timewarpTypeName().
+struct MotionAdapter {
+    Rational clipRate;
+    Rational sequenceRate;
+    QString fieldMotion;
+    QString type;
+    bool operator==(const MotionAdapter&) const = default;
+};
+
 struct Segment {
     // The source clip's BinItem::id (empty for filler) and the bin it was in when edited in (may be
     // empty, e.g. for material from AAF).
@@ -247,6 +263,10 @@ struct Segment {
     // Add Timeline Clip Note (p.483): the segment's note, empty for none. A segment cut in two keeps
     // it on both parts.
     QString note;
+    // Its Motion Adapter, on video and audio segments from a mixed rate clip. None for a clip at the
+    // sequence's rate, and for segments edited before adapters (6.5d2), which count the clip's own
+    // frames. Not an effect: Remove Effect leaves it (p.469).
+    std::optional<MotionAdapter> adapter;
 
     bool hasEffects() const { return effect || transition; }
     bool hasAutomation() const { return !volumeKeys.isEmpty() || !panKeys.isEmpty(); }
@@ -346,7 +366,8 @@ public:
     // timecode, mix? ("5.1" or "7.1": mixFormat())}. A segment is {length, gain?, pan?,
     // volumeKeys?, panKeys?, eq?, effect?, render?, transition?, transitionRender?} (keys as [[frame, value], ...]) plus
     // addEdit? for filler or {clip, mob?, bin?, name, track, in, localColor?, surround?: [{front,
-    // rear, fr, center?, side?, lfe?}]} for material.
+    // rear, fr, center?, side?, lfe?}], adapter?: {rate, sequenceRate, fieldMotion, type}} for
+    // material.
     // fromJson() skips unreadable and duplicate tracks, tidies each track and sorts the tracks.
     QJsonObject toJson() const;
     static Sequence fromJson(const QJsonObject& o);

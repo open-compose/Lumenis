@@ -1,6 +1,7 @@
 #include "lumenis/model/bin.h"
 
 #include "lumenis/core/timecode.h"
+#include "lumenis/model/motion_adapter.h"
 
 #include <QFile>
 #include <QJsonArray>
@@ -503,6 +504,8 @@ QString cellText(const BinItem& item, const QString& h) {
     if (h == QLatin1String("Duration")) return durationText(item.durationFrames, item.editRate);
     if (h == QLatin1String("Lock")) return item.locked ? QStringLiteral("Locked") : QString();
     if (h == QLatin1String("Color")) return clipColorName(item.color);
+    // The Field Motion column (p.472): the clip's attribute, its default until one is chosen.
+    if (h == QLatin1String(kFieldMotionHeading) && hasFieldMotion(item)) return fieldMotionText(clipFieldMotion(item, false));
     return item.fields.value(h);
 }
 

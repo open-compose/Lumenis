@@ -188,7 +188,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Timewarp Type until changed, our FluidMotion (block matching); the
   Motion Effect Editor's track choice, frame numbers for the anchor and
   keyframe positions, its graph scales, the render type change as an undo
-  step of its own.
+  step of its own. Motion adapters (6.5d2): a clip linked at the project's
+  rate counted as mixed rate by its media's rate, the adapter's 100% speed,
+  the Field Motion default from the Format column, 2:3 Film for clips at a
+  30 fps rate, the green dot's place, the T icon, "(25 fps)" on video
+  tracks only, Refresh Sequence keeping a chosen Type.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

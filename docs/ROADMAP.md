@@ -985,7 +985,8 @@ phase of their own. They are done in three steps:
       the monitors and sequences (until now frame for frame), the green dot and "(59.94 fps)" names in the
       Timeline, the adapter in the Motion Effect Editor (Type and Promote only), the Field Motion bin
       column, Show Adapters, Refresh Sequence > Motion Adapters/Timewarps and the Render setting's Use
-      frame blending in Motion Adapters.
+      frame blending in Motion Adapters. Done (`src/model/motion_adapter.*`; adapters in AAF and `.avb`
+      interchange are left for later).
     * 6.5d3, fields and format conversion: the Source and Output formats with pulldown (FluidFilm,
       Pulldown Insertion and Removal, Adaptive Deinterlace Source, the two-field options of 6.5a) once
       clips carry field motion; and the FluidBlur, FluidColorMap and FluidMorph Illusion FX on 6.5d1's

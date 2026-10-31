@@ -2,6 +2,7 @@
 
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
+#include "lumenis/model/motion_adapter.h"
 
 #include "lumenis/ui/bin_dialogs.h"
 #include "lumenis/ui/bin_dock.h"
@@ -304,9 +305,11 @@ void BinDocument::setName(const QString& name) {
     emit displayChanged();
 }
 
+// A mixed rate clip's adapted copy (the monitors', model::adaptedClip) goes into the bin as its own
+// clip again, here and in replaceItem().
 void BinDocument::addItem(const model::BinItem& item) {
     if (refused()) return;
-    bin_.items.append(item);
+    bin_.items.append(model::unadaptedClip(item));
     touch();
     emit itemsChanged();
 }
@@ -315,7 +318,7 @@ bool BinDocument::replaceItem(const model::BinItem& item) {
     if (refused()) return false;
     model::BinItem* existing = bin_.item(item.id);
     if (!existing) return false;
-    *existing = item;
+    *existing = model::isAdapted(item) ? model::unadaptedClip(item, *existing) : item;
     touch();
     emit itemsChanged();
     return true;
@@ -337,6 +340,12 @@ bool BinDocument::setField(const QString& id, const QString& heading, const QStr
     if (heading == QLatin1String("Name")) {
         if (value.trimmed().isEmpty() || value == item->name) return false;
         item->name = value;
+    } else if (heading == QLatin1String(model::kFieldMotionHeading)) {
+        // One of the Field Motion choices (p.472-473), as the column shows it.
+        const auto f = model::fieldMotionFromText(value);
+        if (!f || !model::hasFieldMotion(*item) || !model::fieldMotionChoices(*item).contains(*f)) return false;
+        if (item->fields.value(heading) == model::fieldMotionText(*f)) return false;
+        item->fields.insert(heading, model::fieldMotionText(*f));
     } else if (bin_.display.customColumns.contains(heading) || model::isEditableHeading(heading)) {
         if (item->fields.value(heading) == value) return false;
         item->fields.insert(heading, value);
@@ -2020,6 +2029,32 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
             if (!table_->selectionModel()->isSelected(at)) selectIds({at.data(BinItemModel::kIdRole).toString()});
             menu->deleteLater();
             return colorMenu(nullptr, tr("Color"), false);
+        }
+        // "In the Field Motion bin column, right click the menu to change the Field Motion attribute value
+        // for the clip" (Editing Guide p.472): the choices for the clicked clip, set on every selected
+        // clip that has the attribute.
+        if (at.isValid() && model_->heading(at.column()) == QLatin1String(model::kFieldMotionHeading)) {
+            const QString id = at.data(BinItemModel::kIdRole).toString();
+            const model::BinItem* item = document_.bin().item(id);
+            if (item && model::hasFieldMotion(*item)) {
+                if (!table_->selectionModel()->isSelected(at)) selectIds({id});
+                menu->deleteLater();
+                auto* fields = new QMenu(this);
+                fields->setObjectName(QStringLiteral("fieldMotionMenu"));
+                const QString current = model::cellText(*item, QLatin1String(model::kFieldMotionHeading));
+                for (const model::FieldMotionAttribute f : model::fieldMotionChoices(*item)) {
+                    QAction* a = fields->addAction(model::fieldMotionText(f));
+                    a->setCheckable(true);
+                    a->setChecked(a->text() == current);
+                    connect(a, &QAction::triggered, this, [this, text = a->text()] {
+                        for (const QString& selected : selectedIds()) {
+                            const model::BinItem* clip = document_.bin().item(selected);
+                            if (clip && model::hasFieldMotion(*clip)) document_.setField(selected, QLatin1String(model::kFieldMotionHeading), text);
+                        }
+                    });
+                }
+                return fields;
+            }
         }
         if (at.isValid() && !table_->selectionModel()->isSelected(at)) {
             selectIds({at.data(BinItemModel::kIdRole).toString()});

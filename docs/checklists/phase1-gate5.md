@@ -178,7 +178,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Modify > Unlink Media |  | p.210 | works | ☐ | | |
 | Read Audio Timecode |  | p.668 | works | ☐ | | |
 | Recreate Title Media |  | p.475 | *later* | ☐ | | |
-| Refresh Sequence > Motion Adapters/Timewarps |  | p.545 | *later* | ☐ | | |
+| Refresh Sequence > Motion Adapters/Timewarps |  | p.545 | works | ☐ | | |
 | Relink > Linked Media |  | p.364 | works | ☐ | | |
 | Relink > Managed Media |  | p.361 | works | ☐ | | |
 | Split All Tracks |  | p.637 | works | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 148 of them working with a project open; the
+* 211 menu commands, 149 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

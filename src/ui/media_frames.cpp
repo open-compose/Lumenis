@@ -1,5 +1,6 @@
 #include "lumenis/ui/media_frames.h"
 
+#include <QJsonObject>
 #include <QMetaObject>
 
 // MediaFrames: the application's source of clip pictures (media_frames.h). Monitors call frame() on
@@ -44,10 +45,13 @@ bool MediaFrames::isOffline(const model::BinItem& item) {
 }
 
 QString MediaFrames::key(const model::BinItem& item, std::int64_t clipFrame, QSize size) {
-    // One arg() call: a sequence's path holds a %04d of its own.
-    return QStringLiteral("%1|%2|%3x%4")
+    // One arg() call: a sequence's path holds a %04d of its own. The rate tells a mixed rate clip's
+    // frames from its adapted copy's (model::adaptedClip), the adapter's Type its blends.
+    const QJsonObject adapter = item.composition.value(QStringLiteral("adapter")).toObject();
+    return QStringLiteral("%1|%2|%3x%4|%5|%6")
         .arg(item.link.value(QStringLiteral("path")).toString(), QString::number(clipFrame),
-             QString::number(size.width()), QString::number(size.height()));
+             QString::number(size.width()), QString::number(size.height()), QString::fromStdString(item.editRate.toString()),
+             adapter.value(QStringLiteral("type")).toString());
 }
 
 // Returns a decoded thumbnail, or starts decoding it once (pending_) and returns null; the result is

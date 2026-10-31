@@ -971,6 +971,9 @@ public:
         bool mediaFullNames = false;
         bool clipResolution = false;
         bool clipNotes = false; // Timeline Clip Notes (p.483)
+        // Show Adapters (p.599): "Temporal (motion) adapters appear with a T". Spatial (FrameFlex) and
+        // Color adapters come with FrameFlex and color management.
+        bool motionAdapters = false;
         // Windows > Set Font (p.81-82): the clip text's font, "saves as a Timeline View setting".
         // Empty family and 0 size: the Timeline's own.
         QString clipFontFamily;
