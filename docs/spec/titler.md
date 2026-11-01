@@ -3,7 +3,8 @@
 Avid Titler+, "the preferred tool for creating titles" (FX Guide ch.12, p.302-326). Ours is called **Titler+**,
 as its Tools menu item is (docs/spec/ui-inventory.md, "Renamed"). Code: `src/model/titler.*` (the title kept with
 the effect, layer order, groups, applying it), `src/media/titler.cpp` (its picture), `Timeline::applyTitler`.
-The Record monitor's tools are `src/ui/titler_tool.*` with `effect_editor_titler.cpp`.
+The Record monitor's tools are `src/ui/titler_tool.*` with `effect_editor_titler.cpp`; the Dashboard and the Effect
+Editor's controls `src/ui/titler_panel.*`.
 Tests: `tst_titler`, `tst_titler_ui`, scenario `34-titler-marks.json`.
 
 ## From the guide
@@ -83,9 +84,36 @@ Ours:
 * Drawing: from corner to corner, or from the centre with Ctrl+Shift; shorter than 4 pixels makes nothing.
 * Page Up and Page Down go round the top-level objects; Delete or Backspace removes the selection; Escape clears it.
 
+## 6.8b2: the Dashboard and the Effect Editor's controls
+From the guide (p.302, p.306-324):
+* "The Avid Titler+ Dashboard design includes dedicated Font, Transform, and Style sections" (p.302); "The Effect
+  Editor and the Dashboard update to dynamically reflect the current selection with only the relevant parameters"
+  (p.320); the Effect Editor's Selected Object Parameters (Title Text, Font, Transform, Fill, Outline, Shadow) and Global
+  Group Parameters (Foreground, Background, Roll / Crawl) (p.321-324).
+* Alignment: "Options for Align H include Align Left, Align Center, Align Right, and Align Horizontal Center. Options
+  for Align V include Align Top, Align Center, Align Bottom, and Align Vertical Center"; "If multiple objects are
+  selected, alignment is relative to the selected objects, not to the frame"; with the Grid on the first click aligns to
+  the grid, the second to the frame edges (p.312).
+* The Anchor Point presets Center ... Bottom Left and "Custom (appears automatically after manually moving the
+  sliders)" (p.313).
+* "Click the Grid button ... to quickly display the Safe Action/Title grid" (p.319).
+
+Ours:
+* One widget, `TitlerPanel`, across in the Dashboard (a tool window the Effect Editor keeps, shown when Titler+ is
+  applied) and down at the top of the Effect Editor, which adds the Title Text box (stored when it loses the focus).
+  Number fields store their value when it is entered (one undo step each); dragging the numbers is not ours yet.
+* The panel shows the first selected object and changes all the selected ones; during typing a change joins the text's
+  undo step. The Font section is for text objects only; Transform and Style need a selection; Background and
+  Foreground are the title's.
+* Align Center centres on the reference (the frame, or the selection's bounds with several selected); Align Horizontal
+  Center and Align Vertical Center always on the frame. The grid's first stop is the Safe Title area, 80% of the frame;
+  the Grid shows the Safe Action (90%) and Safe Title (80%) areas. Right-clicking the Grid button for the Grid Settings
+  (p.319) is not ours yet.
+* Anchor presets are points of the object's own bounds; the object shifts with its anchor.
+* A solid colour also sets the gradient's four corners until they are set one by one.
+
 ## Not yet
-* 6.8b2: the Dashboard and the Effect Editor's object parameters, alignment, anchor presets, formatting selected
-  characters, the Grid button.
-* 6.8c: keyframes, Roll and Crawl, tracking, templates and presets, promotion from the classic Title Tool, EDLs and
-  Find.
+* 6.8c: formatting selected characters (p.304), keyframes, Roll and Crawl, tracking, templates and presets, promotion
+  from the classic Title Tool, EDLs and Find.
+* Dragging the panel's numbers; the Grid button's Grid Settings; the Color Info Tool from a colour box (p.315).
 * Fill Overlay (media on the effect's subtrack, p.324).

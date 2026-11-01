@@ -515,8 +515,136 @@ bool TitlerTool::selectAdjacent(bool next) {
     return true;
 }
 
+bool TitlerTool::modifySelected(const QString& description, const std::function<void(TitleObject&)>& change) {
+    Title t = title();
+    bool any = false;
+    for (const QString& id : selected_) {
+        if (TitleObject* o = t.object(id)) {
+            change(*o);
+            any = true;
+        }
+    }
+    if (!any || t == editor_.storedTitle().value_or(Title{})) return false;
+    // During typing the change joins the text being typed (its undo step comes when typing ends).
+    if (!editing_.isEmpty()) {
+        preview(t);
+        return true;
+    }
+    return commit(description, t);
+}
+
+bool TitlerTool::modifyTitle(const QString& description, const std::function<void(Title&)>& change) {
+    Title t = title();
+    change(t);
+    if (t == editor_.storedTitle().value_or(Title{})) return false;
+    if (!editing_.isEmpty()) {
+        preview(t);
+        return true;
+    }
+    return commit(description, t);
+}
+
+bool TitlerTool::align(Align how) {
+    finishEditing();
+    Title t = title();
+    QRectF frame;
+    {
+        // The frame in title pixels; with the Grid on, its Safe Title area first: "If the Grid overlay is enabled, the
+        // first time you click on an alignment button, it will align to the grid. The second time ... to the frame
+        // edges" (p.312).
+        const QSizeF size = editor_.previewSize();
+        const double width = size.height() > 0 ? 1080.0 * size.width() / size.height() : 1920.0;
+        frame = QRectF(-width / 2.0, -540.0, width, 1080.0);
+    }
+    QRectF reference = frame;
+    QList<std::pair<QString, QRectF>> bounds;
+    QRectF all;
+    for (const QString& id : selected_) {
+        if (const auto outline = media::titleObjectOutline(t, id)) {
+            bounds << std::pair{id, outline->boundingRect()};
+            all = all.united(outline->boundingRect());
+        }
+    }
+    if (bounds.isEmpty()) return false;
+    // "If multiple objects are selected, alignment is relative to the selected objects, not to the frame" (p.312);
+    // the two Center options centre on the frame always (ours).
+    const bool onFrame = how == Align::HorizontalCenter || how == Align::VerticalCenter;
+    if (bounds.size() > 1 && !onFrame) reference = all;
+    if (grid_ && bounds.size() == 1 && !onFrame) {
+        const QRectF safe(frame.center() - QPointF(frame.width() * 0.4, frame.height() * 0.4), frame.size() * 0.8);
+        const QRectF b = bounds.first().second;
+        const bool atSafe = (how == Align::Left && std::abs(b.left() - safe.left()) < 0.5) || (how == Align::Right && std::abs(b.right() - safe.right()) < 0.5) ||
+                            (how == Align::Top && std::abs(b.top() - safe.top()) < 0.5) || (how == Align::Bottom && std::abs(b.bottom() - safe.bottom()) < 0.5);
+        if (!atSafe) reference = safe;
+    }
+    for (const auto& [id, b] : bounds) {
+        QPointF by;
+        switch (how) {
+        case Align::Left: by.setX(reference.left() - b.left()); break;
+        case Align::Right: by.setX(reference.right() - b.right()); break;
+        case Align::Center:
+        case Align::HorizontalCenter: by.setX(reference.center().x() - b.center().x()); break;
+        case Align::Top: by.setY(reference.top() - b.top()); break;
+        case Align::Bottom: by.setY(reference.bottom() - b.bottom()); break;
+        case Align::Middle:
+        case Align::VerticalCenter: by.setY(reference.center().y() - b.center().y()); break;
+        }
+        if (TitleObject* o = t.object(id)) o->transform.position += by;
+    }
+    if (t == editor_.storedTitle().value_or(Title{})) return false;
+    return commit(tr("Align"), t);
+}
+
+namespace {
+
+QPointF anchorPoint(const QRectF& b, TitlerTool::Anchor where) {
+    switch (where) {
+    case TitlerTool::Anchor::Center: return b.center();
+    case TitlerTool::Anchor::Right: return {b.right(), b.center().y()};
+    case TitlerTool::Anchor::Left: return {b.left(), b.center().y()};
+    case TitlerTool::Anchor::TopCenter: return {b.center().x(), b.top()};
+    case TitlerTool::Anchor::TopRight: return b.topRight();
+    case TitlerTool::Anchor::TopLeft: return b.topLeft();
+    case TitlerTool::Anchor::BottomCenter: return {b.center().x(), b.bottom()};
+    case TitlerTool::Anchor::BottomRight: return b.bottomRight();
+    case TitlerTool::Anchor::BottomLeft: return b.bottomLeft();
+    }
+    return b.center();
+}
+
+} // namespace
+
+bool TitlerTool::setAnchor(Anchor where) {
+    // "a presets submenu for Anchor Point Position is available for quick and easy placement" (p.313): the point on
+    // the object's own bounds; the object shifts with its anchor ("Changing the Anchor Point Position will shift the
+    // object relative to the anchor point", p.311).
+    return modifySelected(tr("Anchor Point"), [&](TitleObject& o) { o.transform.anchor = anchorPoint(media::titleObjectBounds(o), where); });
+}
+
+std::optional<TitlerTool::Anchor> TitlerTool::anchorOf(const TitleObject& object) const {
+    const QRectF b = media::titleObjectBounds(object);
+    for (int k = 0; k <= static_cast<int>(Anchor::BottomLeft); ++k) {
+        const QPointF p = anchorPoint(b, static_cast<Anchor>(k));
+        if (std::abs(p.x() - object.transform.anchor.x()) < 0.01 && std::abs(p.y() - object.transform.anchor.y()) < 0.01) return static_cast<Anchor>(k);
+    }
+    return std::nullopt;
+}
+
+void TitlerTool::setGridShown(bool shown) {
+    grid_ = shown;
+    emit changed();
+    editor_.refreshTitleOverlay();
+}
+
 void TitlerTool::fillOverlay(Composer::EffectPreview& preview) const {
     const Title t = title();
+    if (grid_) {
+        // "the Safe Action/Title grid" (p.319): ours, the areas 90% and 80% of the frame.
+        for (const double share : {0.9, 0.8}) {
+            const double m = (1.0 - share) / 2.0;
+            preview.guides << QList<QPointF>{QPointF(m, m), QPointF(1.0 - m, m), QPointF(1.0 - m, 1.0 - m), QPointF(m, 1.0 - m)};
+        }
+    }
     auto fractions = [&](const QPolygonF& polygon) {
         QList<QPointF> out;
         for (const QPointF& p : polygon) out << toFraction(p);

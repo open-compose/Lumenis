@@ -33,6 +33,8 @@ namespace lumenis::ui {
 
 class KeyframeTrack;
 class Timeline;
+class TitlerDashboard;
+class TitlerPanel;
 class TitlerTool;
 class TrackingWindow;
 
@@ -294,6 +296,10 @@ public:
     // ---- Titler+ (6.8b; titler_tool.h)
     // The tools working on a shown Titler+ title in the Record monitor; made with the editor.
     TitlerTool* titlerTool() const { return titler_; }
+    // The Dashboard (FX Guide p.302), made when first asked for; and the Effect Editor's own Titler+ controls while a
+    // title is shown (null otherwise).
+    TitlerDashboard* titlerDashboard();
+    TitlerPanel* titlerPanel() const { return titlerPanel_; }
     // The shown Titler+ effect's title (with a drag or typing in progress); nothing when another effect is shown.
     std::optional<model::Title> shownTitle() const;
     // The title as stored (without any preview).
@@ -519,6 +525,8 @@ private:
     TrackingFrames trackingFrames_;
     TrackingWindow* trackingWindow_ = nullptr;
     TitlerTool* titler_ = nullptr;
+    TitlerDashboard* titlerDashboard_ = nullptr;
+    TitlerPanel* titlerPanel_ = nullptr;
     PointRange pointRange_ = PointRange::All; // "All ... This is the default option" (p.268)
     bool showTrackingData_ = true;
     bool tracking_ = false;

@@ -1,6 +1,7 @@
 #include "lumenis/ui/effect_editor.h"
 
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/titler_panel.h"
 #include "lumenis/ui/titler_tool.h"
 #include "lumenis/ui/tracking_window.h"
 #include "lumenis/ui/bin_dock.h"
@@ -583,6 +584,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
         delete item;
     }
     groupBodies_.clear();
+    titlerPanel_ = nullptr;
     openers_.clear();
     controls_.clear();
     trackingControls_.clear();
@@ -616,6 +618,12 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     blank_->setVisible(isBlank());
     blank_->setText(isBlank() ? tr("No effect at the position on the selected tracks.") : QString());
     if (!effect) return;
+    // Titler+: its controls for the selected objects, above its catalogue categories ("The Effect Editor and the
+    // Dashboard update to dynamically reflect the current selection with only the relevant parameters", FX Guide p.320).
+    if (model::isTitlerEffect(*effect) && level_ == 0) {
+        titlerPanel_ = new TitlerPanel(*titler_, false, this);
+        groups_->insertWidget(0, titlerPanel_);
+    }
 
     const EffectInfo* info = EffectCatalog::builtin().find(effect->category, effect->name);
     const QStringList categories = info ? info->parameters : QStringList();

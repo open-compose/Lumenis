@@ -687,6 +687,7 @@ void EffectEditor::syncPreview() {
     timeline_.composer().setEffectPreview(preview);
     // A Titler+ title is edited in the Effect Preview (titler_tool.h).
     timeline_.composer().setOverlayInput(preview.on && e && model::isTitlerEffect(*e) && level_ == 0 ? titler_ : nullptr);
+    if (titler_ && e && model::isTitlerEffect(*e)) titler_->notifyShown();
 }
 
 void EffectEditor::previewKeyframePressed(double frame, bool extend) {

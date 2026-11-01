@@ -3,9 +3,15 @@
 #include "lumenis/ui/effect_editor.h"
 
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/titler_panel.h"
 #include "lumenis/ui/titler_tool.h"
 
 namespace lumenis::ui {
+
+TitlerDashboard* EffectEditor::titlerDashboard() {
+    if (!titlerDashboard_) titlerDashboard_ = new TitlerDashboard(*titler_, this);
+    return titlerDashboard_;
+}
 
 std::optional<model::Title> EffectEditor::shownTitle() const {
     const model::Effect* e = shownEffect();

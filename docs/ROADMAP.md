@@ -1072,9 +1072,9 @@ phase of their own. They are done in three steps:
       text, moving, scaling and rotating with their modifier keys, layer order, groups and the keyboard
       shortcuts. Done (docs/spec/titler.md, `src/ui/titler_tool.*`, `Composer::OverlayInput`).
     * 6.8b2, the Dashboard and the Effect Editor's selected object parameters (Font, Transform with
-      alignment and anchor presets, Fill, Outline, Shadow, Background, Foreground), formatting selected
-      characters, the Grid button.
-  * 6.8c, Titler+ animation: keyframes on objects (kept through trims, splits and duplicates, 2026.8),
+      alignment and anchor presets, Fill, Outline, Shadow, Background, Foreground), the Grid button. Done
+      (docs/spec/titler.md, `src/ui/titler_panel.*`). Formatting selected characters moves to 6.8c.
+  * 6.8c, Titler+ animation: formatting selected characters (p.304), keyframes on objects (kept through trims, splits and duplicates, 2026.8),
     Roll and Crawl, tracking data on objects, templates and presets in bins, promotion from the classic
     Title Tool, titles in EDLs and Find (p.319-326).
   * 6.8d, the classic Title Tool: the drawing environment, text and graphic objects, colour, transparency

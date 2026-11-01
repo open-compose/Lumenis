@@ -591,7 +591,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `34-titler-marks.json`), is done.
   6.8b1, the Record monitor's Titler+ tools (`src/ui/titler_tool.*` through `Composer::OverlayInput`, previews via
   `EffectEditor::previewTitle`/`pictureOverride` in `effect_editor_titler.cpp`; test `tst_titler_ui`), is done.
-  Next: 6.8b2 (the Dashboard and the Effect Editor's object parameters), then the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.8b2, the Dashboard and the Effect Editor's Titler+ controls (`src/ui/titler_panel.*`, alignment, anchor presets
+  and the grid in `titler_tool.*`; test `tst_titler_ui`), is done, so 6.8b is.
+  Next: 6.8c (Titler+ character formatting, animation, Roll/Crawl, templates), then the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

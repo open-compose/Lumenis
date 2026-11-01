@@ -12,6 +12,8 @@
 #include <QObject>
 #include <QStringList>
 
+#include <functional>
+
 #include <optional>
 
 namespace lumenis::ui {
@@ -51,6 +53,27 @@ public:
     bool removeSelected();
     // "Select Previous Object (Page Down ...) or Select Next Object (Page Up ...)" (p.319), in layer order.
     bool selectAdjacent(bool next);
+
+    // Changes to the selected objects (each of them; a group as a whole) or to the whole title, one undo step each
+    // (the Dashboard's and the Effect Editor's controls, p.306-324); false when nothing changes.
+    bool modifySelected(const QString& description, const std::function<void(model::TitleObject&)>& change);
+    bool modifyTitle(const QString& description, const std::function<void(model::Title&)>& change);
+    // "Options for Align H include Align Left, Align Center, Align Right, and Align Horizontal Center. Options for
+    // Align V include Align Top, Align Center, Align Bottom, and Align Vertical Center" (p.312).
+    enum class Align { Left, Center, Right, HorizontalCenter, Top, Middle, Bottom, VerticalCenter };
+    bool align(Align how);
+    // The Anchor Point presets (p.313): where on the selected objects' own bounds their anchor point goes.
+    enum class Anchor { Center, Right, Left, TopCenter, TopRight, TopLeft, BottomCenter, BottomRight, BottomLeft };
+    bool setAnchor(Anchor where);
+    // The preset an object's anchor point is at, or nothing ("Custom ... after manually moving the sliders").
+    std::optional<Anchor> anchorOf(const model::TitleObject& object) const;
+    // The Grid button (p.319): the Safe Action and Safe Title areas over the Record monitor (ours: 90% and 80%).
+    bool gridShown() const { return grid_; }
+    void setGridShown(bool shown);
+    // Tells the panels the shown title may have changed (an undo, another effect shown).
+    void notifyShown() { emit changed(); }
+    // The title as the panels show it (a drag's or the typing's in progress, else the stored one).
+    model::Title shownTitle() const { return title(); }
 
     // The selection's boxes, handles, anchors and the text cursor for the Effect Preview.
     void fillOverlay(Composer::EffectPreview& preview) const;
@@ -92,6 +115,7 @@ private:
     QPointF dragFrom_;
     int corner_ = 0;
     model::Title dragStart_;
+    bool grid_ = false;
 };
 
 } // namespace lumenis::ui

@@ -29,6 +29,7 @@ add_library(lumenis_ui STATIC
     effect_editor_tracking.cpp
     effect_editor_titler.cpp
     titler_tool.cpp
+    titler_panel.cpp
     tracking_window.cpp
     effect_palette.cpp
     capture.cpp
@@ -91,6 +92,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/effect_editor.h
     include/lumenis/ui/tracking_window.h
     include/lumenis/ui/titler_tool.h
+    include/lumenis/ui/titler_panel.h
     include/lumenis/ui/effect_palette.h
     include/lumenis/ui/capture.h
     include/lumenis/ui/command_registry.h

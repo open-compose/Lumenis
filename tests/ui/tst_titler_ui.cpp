@@ -9,10 +9,15 @@
 #include "lumenis/media/titler.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/effect_editor.h"
+#include "lumenis/ui/titler_panel.h"
 #include "lumenis/ui/titler_tool.h"
 #include "lumenis/ui/timeline.h"
 
+#include <QCheckBox>
+#include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QKeyEvent>
+#include <QPlainTextEdit>
 #include <QSignalSpy>
 #include <QTest>
 #include <QToolButton>
@@ -268,6 +273,143 @@ private slots:
         timeline.setEffectMode(false);
         settle();
         QVERIFY(!composer.overlayInput());
+    }
+
+    // The Dashboard and the Effect Editor's controls (6.8b2, p.306-324).
+    void panel() {
+        Composer composer;
+        Timeline timeline{composer};
+        EffectEditor editor{timeline};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence());
+        editor.resize(700, 900);
+        editor.show();
+        auto settle = [] {
+            for (int i = 0; i < 3; ++i) QCoreApplication::processEvents();
+        };
+        auto title = [&] {
+            const model::Segment s = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(1);
+            return model::titleOf(*s.effect);
+        };
+        composer.moveTo(MonitorId::Record, 60);
+        QVERIFY(timeline.perform(QStringLiteral("tools.titler")));
+        timeline.setEffectMode(true);
+        settle();
+        TitlerTool* tool = editor.titlerTool();
+        // A text object, typed and selected.
+        tool->overlayPress(tool->toFraction(QPointF(0, 0)), Qt::NoModifier, false);
+        tool->overlayRelease(tool->toFraction(QPointF(0, 0)), Qt::NoModifier);
+        for (const QChar c : QStringLiteral("Title")) {
+            QKeyEvent e(QEvent::KeyPress, c.toUpper().unicode(), Qt::NoModifier, QString(c));
+            tool->overlayKey(&e);
+        }
+        tool->setTool(TitlerTool::Tool::Selection);
+        const QString text = title().objects.first().id;
+        tool->select({text});
+        settle();
+        TitlerPanel* panel = editor.titlerPanel();
+        QVERIFY(panel);
+        QVERIFY(panel->control(QStringLiteral("section:Font"))->isEnabled());
+        auto number = [&](const QString& name, double v) {
+            auto* box = qobject_cast<QDoubleSpinBox*>(panel->control(name));
+            QVERIFY(box);
+            box->setValue(v);
+            emit box->editingFinished();
+            settle();
+        };
+
+        // Font: "click the current number in the Size field and enter a new number" (p.307); one undo step.
+        number(QStringLiteral("size"), 120);
+        QCOMPARE(title().objects.first().font.size, 120.0);
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        QCOMPARE(title().objects.first().font.size, 72.0);
+        QCOMPARE(qobject_cast<QDoubleSpinBox*>(panel->control(QStringLiteral("size")))->value(), 72.0);
+        QVERIFY(timeline.perform(QStringLiteral("edit.redo")));
+        qobject_cast<QToolButton*>(panel->control(QStringLiteral("justify:center")))->click();
+        QCOMPARE(title().objects.first().font.horizontal, model::HorizontalJustify::Center);
+        // Transform: Scale with Fixed Aspect keeps both (p.322); Opacity; Rotation.
+        number(QStringLiteral("scaleX"), 200);
+        QCOMPARE(title().objects.first().transform.scaleY, 200.0);
+        number(QStringLiteral("rotation"), 10);
+        QCOMPARE(title().objects.first().transform.rotation, 10.0);
+        number(QStringLiteral("rotation"), 0);
+        number(QStringLiteral("scaleX"), 100);
+        // Style: Fill colour, Outline, Shadow (p.315-317).
+        QVERIFY(panel->chooseColor(QStringLiteral("fill"), QColor(Qt::red)));
+        QCOMPARE(title().objects.first().fill.color.color, QStringLiteral("#ff0000"));
+        qobject_cast<QCheckBox*>(panel->control(QStringLiteral("outline")))->setChecked(true);
+        QVERIFY(title().objects.first().outline.on);
+        number(QStringLiteral("outlineSize"), 9);
+        QCOMPARE(title().objects.first().outline.size, 9.0);
+        qobject_cast<QCheckBox*>(panel->control(QStringLiteral("shadow")))->setChecked(true);
+        number(QStringLiteral("shadowAngle"), 90);
+        QVERIFY(title().objects.first().shadow.on);
+        QCOMPARE(title().objects.first().shadow.angle, 90.0);
+
+        // Align Left puts the object's left edge on the frame's (p.312).
+        auto* alignH = qobject_cast<QComboBox*>(panel->control(QStringLiteral("alignH")));
+        alignH->setCurrentIndex(1);
+        emit alignH->activated(1);
+        settle();
+        const double width = 1080.0 * editor.previewSize().width() / editor.previewSize().height();
+        QVERIFY(std::abs(media::titleObjectOutline(title(), text)->boundingRect().left() + width / 2.0) < 0.5);
+        // With the Grid on, first to the Safe Title area (ours: 80%), then to the frame again (p.312).
+        qobject_cast<QToolButton*>(panel->control(QStringLiteral("grid")))->click();
+        settle();
+        QVERIFY(tool->gridShown());
+        QCOMPARE(composer.effectPreview().guides.size(), 2);
+        emit alignH->activated(1);
+        settle();
+        QVERIFY(std::abs(media::titleObjectOutline(title(), text)->boundingRect().left() + width * 0.4) < 0.5);
+        emit alignH->activated(1);
+        settle();
+        QVERIFY(std::abs(media::titleObjectOutline(title(), text)->boundingRect().left() + width / 2.0) < 0.5);
+        // Anchor Point presets (p.313), and Custom after the sliders.
+        auto* anchor = qobject_cast<QComboBox*>(panel->control(QStringLiteral("anchor")));
+        emit anchor->activated(5); // Top Left
+        settle();
+        const QRectF bounds = media::titleObjectBounds(title().objects.first());
+        QCOMPARE(title().objects.first().transform.anchor, bounds.topLeft());
+        QCOMPARE(anchor->currentIndex(), 5);
+        number(QStringLiteral("anchorX"), bounds.left() + 3);
+        QCOMPARE(anchor->currentIndex(), anchor->count() - 1);
+
+        // The Background and Foreground of the whole title (p.317, p.324).
+        qobject_cast<QCheckBox*>(panel->control(QStringLiteral("background")))->setChecked(true);
+        QVERIFY(panel->chooseColor(QStringLiteral("background"), QColor(Qt::blue)));
+        QVERIFY(title().background.on);
+        QCOMPARE(title().background.color.color, QStringLiteral("#0000ff"));
+        number(QStringLiteral("cropTop"), 25);
+        QCOMPARE(title().foreground.cropTop, 25.0);
+
+        // The Title Text box (p.321).
+        auto* box = qobject_cast<QPlainTextEdit*>(panel->control(QStringLiteral("text")));
+        QVERIFY(box);
+        QCOMPARE(box->toPlainText(), QStringLiteral("Title"));
+        box->setFocus();
+        box->setPlainText(QStringLiteral("Credits\nRoll"));
+        QFocusEvent out(QEvent::FocusOut);
+        QCoreApplication::sendEvent(box, &out);
+        settle();
+        QCOMPARE(title().objects.first().text, QStringLiteral("Credits\nRoll"));
+
+        // A rectangle has no Font; the arrange buttons work on it.
+        tool->setTool(TitlerTool::Tool::Rectangle);
+        tool->overlayPress(tool->toFraction(QPointF(-100, -100)), Qt::NoModifier, false);
+        tool->overlayRelease(tool->toFraction(QPointF(100, 100)), Qt::NoModifier);
+        settle();
+        QVERIFY(!panel->control(QStringLiteral("section:Font"))->isEnabled());
+        qobject_cast<QToolButton*>(panel->control(QStringLiteral("backward")))->click();
+        QCOMPARE(title().objects.first().kind, model::TitleObjectKind::Rectangle);
+        QVERIFY(qobject_cast<QToolButton*>(panel->control(QStringLiteral("tool:rectangle")))->isChecked());
+
+        // The Dashboard shows the same.
+        TitlerDashboard* dashboard = editor.titlerDashboard();
+        QVERIFY(dashboard && dashboard->panel());
+        dashboard->panel()->refresh();
+        QVERIFY(!dashboard->panel()->control(QStringLiteral("section:Font"))->isEnabled());
+        QVERIFY(!dashboard->panel()->control(QStringLiteral("text")));
+        timeline.setEffectMode(false);
     }
 };
 

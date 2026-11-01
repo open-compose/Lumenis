@@ -71,6 +71,7 @@
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timecode_window.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/titler_panel.h"
 #include "lumenis/ui/motion_effect_dialogs.h"
 #include "lumenis/ui/motion_effect_editor.h"
 #include "lumenis/ui/render_dialogs.h"
@@ -1509,6 +1510,9 @@ void MainWindow::createTools() {
     connect(timeline_, &Timeline::titlerApplied, this, [this] {
         showTool(QStringLiteral("EffectEditor"));
         timeline_->setEffectMode(true);
+        TitlerDashboard* dashboard = effectEditor_->titlerDashboard();
+        dashboard->show();
+        dashboard->raise();
     });
     // AutoStabilize "Opens the Effect Editor (if necessary) and the Tracking window", then tracks (FX Guide p.277).
     // After the drop or double-click that applied the effect has finished.

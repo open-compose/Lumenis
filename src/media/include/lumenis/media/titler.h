@@ -22,6 +22,8 @@ QImage titleImage(const model::Title& title, const QSize& size);
 // Where object `id` is drawn: its shape's bounds placed by its Transform (and its groups'), in title pixels; for the
 // Record monitor's bounding boxes and clicks (6.8b). Nothing for no such object.
 std::optional<QPolygonF> titleObjectOutline(const model::Title& title, const QString& id);
+// An object's own shape's bounds in its own coordinates (a group's: its children's, placed), for anchor presets.
+QRectF titleObjectBounds(const model::TitleObject& object);
 // Where object `id`'s own coordinates go in title pixels (its Transform and its groups'); nothing for no such object.
 std::optional<QTransform> titleObjectPlacement(const model::Title& title, const QString& id);
 // A text object's cursor before text index `index` (0 to the text's length), a line from the top of its line to

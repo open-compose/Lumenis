@@ -388,6 +388,13 @@ std::optional<QPolygonF> titleObjectOutline(const Title& title, const QString& i
     return find(title.objects, QTransform());
 }
 
+QRectF titleObjectBounds(const TitleObject& object) {
+    if (object.kind != TitleObjectKind::Group) return shapeOf(object).boundingRect();
+    QRectF bounds;
+    for (const TitleObject& child : object.children) bounds = bounds.united(placementOf(child.transform).map(shapeOf(child)).boundingRect());
+    return bounds;
+}
+
 std::optional<QTransform> titleObjectPlacement(const Title& title, const QString& id) {
     std::function<std::optional<QTransform>(const QList<TitleObject>&, const QTransform&)> find =
         [&](const QList<TitleObject>& list, const QTransform& outer) -> std::optional<QTransform> {
