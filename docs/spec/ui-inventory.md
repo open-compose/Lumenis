@@ -239,6 +239,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Target's defaults (Scaling 100, Position 0), the wire frame kept inside
   the source picture, Scaling X and Y ganged, the origin kept as values
   at the position, subdivided pieces keeping the effect as it was.
+* Avid Pan & Zoom (docs/spec/pan-zoom.md): Zoom Factor 1 as the image
+  fitted to the frame, Position in percent of the image's half-size (Y
+  down), Display Source until set, the filters behind each Filtering
+  entry, 601 levels stretched to full range, Square Pixels without
+  effect, an eight-image cache, Use Subres also when rendering, Safe
+  Action at 90%, the Qt locate dialog.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

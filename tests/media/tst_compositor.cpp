@@ -629,12 +629,12 @@ private slots:
         QCOMPARE(side.pixelColor(0, 4), QColor(0, 0, 0));
         QCOMPARE(side.pixelColor(8, 4), QColor(255, 0, 0));
         // Pan and Scan (FX Guide p.230-234): until set, the 4:3 middle of the 16:9 picture, pillarboxed; the Effect
-        // Preview's original (Composition::panScanOriginal) leaves the picture as it is.
+        // Preview's original (Composition::effectPreview) leaves the picture as it is.
         seq.track(QStringLiteral("V2"))->segments[0].effect->name = QStringLiteral("Pan and Scan");
         QCOMPARE(composeImage(c, 3).pixelColor(0, 4), QColor(0, 0, 0));
         QCOMPARE(composeImage(c, 3).pixelColor(8, 4), QColor(255, 0, 0));
         Composition original = c;
-        original.panScanOriginal = true;
+        original.effectPreview = true;
         QCOMPARE(composeImage(original, 3).pixelColor(0, 4), QColor(255, 0, 0));
         // A Picture-in-Picture on V2 over V1, and as a transition (the incoming inside the outgoing).
         Sequence pip = Sequence::withDefaultTracks();

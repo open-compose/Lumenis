@@ -137,6 +137,27 @@ struct PanScanFrames {
 };
 std::optional<PanScanFrames> panScanFrames(const model::Effect& effect, double time, const model::EffectSpan& span, const QSizeF& size);
 Picture panScanPicture(const model::Effect& effect, const Picture& picture, double time, const model::EffectSpan& span);
+// Avid Pan & Zoom (ROADMAP 6.7b2; FX Guide p.239-247, p.468, p.528-531; docs/spec/pan-zoom.md, pan_zoom.cpp): a
+// still image ("Image" in its parameters: the file's path) seen through a field of view. panZoomView() gives, in
+// a frame of `size`, where the whole image is fitted (Zoom Factor 1), the field of view in that picture, the
+// zoom and the Display and Show Safe Action settings; nothing without a readable image. panZoomPicture() draws
+// the effect over its segment (the placeholder, or the Background Video); `preview` in the Effect Preview, where
+// Display Source shows the whole image. freePanZoomCache() forgets a cached image (all with an empty path), as
+// the Cache menu's Free Current Cache and Free All Caches do (p.247).
+bool isPanAndZoom(const model::Effect& effect);
+QString panZoomImagePath(const model::Effect& effect);
+QSize panZoomImageSize(const QString& path);
+struct PanZoomView {
+    QSize imageSize;
+    QRectF fitted; // the whole image at Zoom Factor 1, centred
+    QRectF field;  // the field of view, in the same picture
+    double zoom = 1.0;
+    bool sourceDisplay = false;
+    bool safeAction = false;
+};
+std::optional<PanZoomView> panZoomView(const model::Effect& effect, double time, const model::EffectSpan& span, const QSizeF& size);
+Picture panZoomPicture(const model::Effect& effect, const Picture& segment, double time, const model::EffectSpan& span, bool preview);
+void freePanZoomCache(const QString& path = {});
 // The Reformat effects that work "on all tracks below the track to which you apply it" (FX Guide
 // p.229): 16:9 Letterbox, 14:9 Letterbox and 4:3 Sidebar.
 bool isReformat(const model::Effect& effect);
@@ -222,9 +243,11 @@ struct Composition {
     // (media::convertedFrame).
     bool interlaced = false;
     std::function<bool(const model::Segment&)> topFieldFirst;
-    // "In Effect mode, the Effect Preview monitor displays your original media and the Pan and Scan wire
-    // frame" (FX Guide p.233): Pan and Scan effects pass the picture through unchanged.
-    bool panScanOriginal = false;
+    // The frame is for Effect mode's Effect Preview monitor, not playing (FX Guide p.48-50): "In Effect mode, the
+    // Effect Preview monitor displays your original media and the Pan and Scan wire frame" (p.233), so Pan and
+    // Scan effects pass the picture through unchanged; Avid Pan & Zoom's Display Source shows its whole image
+    // (p.241).
+    bool effectPreview = false;
 };
 
 // Timecode Burn-In (ROADMAP 6.3d1; docs/spec/burn-in.md, burn_in.cpp). Its parameters live under

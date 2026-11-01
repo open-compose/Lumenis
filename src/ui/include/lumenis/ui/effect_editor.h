@@ -12,6 +12,7 @@
 #include <QJsonValue>
 #include <QWidget>
 
+#include <cmath>
 #include <functional>
 #include <optional>
 
@@ -40,8 +41,19 @@ struct EffectParameter {
     QString text; // the name as printed, shown beside its control
     QString kind; // slider, checkbox, color, menu, button, other
     QString subcategory;
-    int min = 0;   // a slider's range; min <= max
-    int max = 100;
+    double min = 0.0; // a slider's range in the parameter's units; min <= max
+    double max = 100.0;
+    // Decimal places a slider's values have (Avid Pan & Zoom's Zoom Factor, 0.1 to 20, p.529); 0 for whole
+    // numbers. The slider itself counts in steps of 10^-decimals.
+    int decimals = 0;
+    double scale() const { return std::pow(10.0, decimals); }
+    // A value as the slider's position, and back (a whole number with no decimals).
+    int sliderPosition(double value) const { return static_cast<int>(std::lround(value * scale())); }
+    QJsonValue fromSlider(int position) const { return decimals > 0 ? QJsonValue(position / scale()) : QJsonValue(position); }
+    // A value as the slider's label shows it.
+    QString shown(double value) const { return QString::number(value, 'f', decimals); }
+    // A value rounded to the slider's steps.
+    double rounded(double value) const { return std::round(value * scale()) / scale(); }
     QJsonValue defaultValue; // as in the file; may be missing
     QStringList options;     // a menu's entries
     // "Effect parameters are keyframeable unless otherwise noted" (FX Guide p.491); the file marks the
@@ -291,6 +303,13 @@ public:
     bool resetToOrigin();
     bool subdivideEffect();
     bool chooseTarget(const QString& target);
+
+    // ---- Avid Pan & Zoom (p.239-247, p.528-531; docs/spec/pan-zoom.md)
+    // The Import Image button's file (its Other Options button, p.240): kept with the shown effect as an absolute
+    // path, one undo step; false (and nothing done) when it is not an image or no Pan & Zoom is shown. "If you move
+    // an image file after you associate it with the effect ... The next time you open the effect a dialog box
+    // opens asking you to locate the file" (p.239): a file dialog named "panZoomLocate", not modal.
+    bool importImage(const QString& path);
 
     // ---- Nested effects (p.221-222; docs/spec/nesting.md)
     // "Nested effects on a segment are fully available in the Effect Editor": the shown segment effect's

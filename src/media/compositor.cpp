@@ -566,6 +566,14 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 result.quantize(c.precision);
                 continue;
             }
+            if (isPanAndZoom(e)) {
+                // Avid Pan & Zoom: the image over the placeholder segment (FX Guide p.239-241).
+                layer = panZoomPicture(e, layer, time, length, c.effectPreview);
+                layer.quantize(c.precision);
+                result = over(layer, result);
+                result.quantize(c.precision);
+                continue;
+            }
             if (isImageEffect(e)) {
                 layer = imageEffectPicture(e, layer, time, length);
                 layer.quantize(c.precision);
@@ -577,7 +585,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 // Pan and Scan reformats its segment and the tracks below, as the other Reformat effects do
                 // (p.229-231), unless the Effect Preview shows the original.
                 result = over(layer, result);
-                if (!c.panScanOriginal) result = panScanPicture(e, result, time, length);
+                if (!c.effectPreview) result = panScanPicture(e, result, time, length);
                 result.quantize(c.precision);
                 continue;
             }

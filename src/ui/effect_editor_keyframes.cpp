@@ -831,7 +831,8 @@ void EffectEditor::dragKeyframes(const KeyframeId& id, double frames, double val
         const double hi = info ? info->max : 1e9;
         for (const KeyframeId& s : selection_) {
             if (s.parameter != id.parameter || s.index >= keys.keys.size()) continue;
-            const double v = std::clamp(std::round(keys.keys.at(s.index).value.toDouble() + value), lo, hi);
+            const double raw = keys.keys.at(s.index).value.toDouble() + value;
+            const double v = std::clamp(info ? info->rounded(raw) : std::round(raw), lo, hi);
             model::moveKeyframe(keys, s.index, std::nullopt, v, span_);
         }
         model::setKeyframes(e, categoryOf(id.parameter), nameOf(id.parameter), keys);
@@ -921,7 +922,7 @@ std::pair<double, double> EffectEditor::graphRange(const QString& parameter) con
     if (const auto it = graphRanges_.constFind(parameter); it != graphRanges_.constEnd()) return *it;
     const EffectParameter* info = parameterInfo(parameter);
     if (!info) return {0.0, 100.0};
-    return {static_cast<double>(info->min), static_cast<double>(std::max(info->max, info->min + 1))};
+    return {info->min, std::max(info->max, info->min + 1.0 / info->scale())};
 }
 
 void EffectEditor::setGraphRange(const QString& parameter, double low, double high) {

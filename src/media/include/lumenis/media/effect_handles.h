@@ -12,6 +12,7 @@
 
 #include <QList>
 #include <QPointF>
+#include <QPolygonF>
 #include <QSizeF>
 #include <QString>
 
@@ -44,7 +45,9 @@ std::optional<EffectOutline> effectOutline(const model::Effect& effect, double t
 // corner handle adjusts width and height together, maintaining the aspect ratio"). 3D effects, by tool:
 // Corner Pin "corner1".."corner4"; Crop "crop:T", "crop:B", "crop:L", "crop:R"; Scale "top", "side", "corner"
 // (p.293); Axis "axis"; X Rotation "rotX:top" and "rotX:bottom"; Y Rotation "rotY:left" and "rotY:right"; Z
-// Rotation "rotZ"; XY and XZ Position "move".
+// Rotation "rotZ"; XY and XZ Position "move". Avid Pan & Zoom: "crosshair", the field of view's centre in Display
+// Source and the picture's in Display Target ("click the crosshair, and drag it to a new location", p.242), with
+// the field of view as the outline in Display Source.
 struct EffectHandle {
     QString id;
     QPointF at;
@@ -75,6 +78,10 @@ struct HandleValue {
 QList<HandleValue> dragEffectHandle(const model::Effect& effect, HandleTool tool, const QString& id, const QPointF& from,
                                     const QPointF& to, double time, const model::EffectSpan& span, const QSizeF& size,
                                     bool shift = false);
+
+// Guides drawn with the outline: Avid Pan & Zoom's Safe Action area, "a rectangle superimposed on the field of
+// view" (FX Guide p.529) in Display Source, or on the picture in Display Target; ours, 90% of it. Each a polygon.
+QList<QPolygonF> effectGuides(const model::Effect& effect, double time, const model::EffectSpan& span, const QSizeF& size);
 
 // The Outline/Path button's motion path (p.92-93): the centre's track over the effect as a line, and a dot
 // "on the path [for] the location of the center of the PIP at a keyframe" at each keyframe time of the

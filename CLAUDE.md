@@ -556,10 +556,13 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `effect_editor_handles.cpp`; the overlay and `Composer::effectHandleDragged`; tests `tst_effect_handles`,
   `tst_effect_keyframes_ui`), is done, so 6.7a is.
   6.7b1, Pan and Scan (docs/spec/pan-scan.md: `src/media/pan_scan.cpp` and `media::panScanFrames`, the Effect
-  Preview's original through `Composition::panScanOriginal`, the wire frame's drags in `effect_handles.cpp`,
+  Preview's original through `Composition::effectPreview`, the wire frame's drags in `effect_handles.cpp`,
   Establish/Reset Origin and Subdivide Effect in `src/model/pan_scan.*` and `effect_editor_handles.cpp`; tests
   `tst_pan_scan`, scenario `32-pan-scan-subdivide.json`), is done.
-  Next: 6.7b2 (Avid Pan & Zoom), then 6.7c-d, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.7b2a, Avid Pan & Zoom's image and view (docs/spec/pan-zoom.md: `src/media/pan_zoom.cpp` with its image cache,
+  `Composition::effectPreview` for Display Source, the crosshair and Safe Action in `effect_handles.cpp`,
+  `EffectEditor::importImage` and the locate dialog; sliders with `"decimals"`; test `tst_pan_zoom`), is done.
+  Next: 6.7b2b (Pan & Zoom's Velocity and Path), then 6.7c-d, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

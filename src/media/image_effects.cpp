@@ -81,6 +81,15 @@ std::optional<double> filmMaskRatio(const model::Effect& e) {
 
 QJsonValue parameterDefault(const model::Effect& e, const QString& category, const QString& name) {
     if (e.category == QLatin1String("Illusion FX")) return detail::illusionDefault(e, category, name);
+    // Avid Pan & Zoom until set (docs/spec/pan-zoom.md): no magnification (p.242), the first entry of each menu.
+    if (isPanAndZoom(e) && category == QLatin1String("Avid Pan & Zoom Effect Parameters")) {
+        if (name == QLatin1String("Zoom Factor")) return 1.0;
+        if (name == QLatin1String("Display")) return QStringLiteral("Source");
+        if (name == QLatin1String("Filtering")) return QStringLiteral("Real-Time");
+        if (name == QLatin1String("Background")) return QStringLiteral("Color");
+        if (name == QLatin1String("Path") || name == QLatin1String("Velocity In") || name == QLatin1String("Velocity Out")) return QStringLiteral("Linear");
+        if (name == QLatin1String("Source Levels")) return QStringLiteral("RGB");
+    }
     // Pan and Scan's ratios until chosen (ours, docs/spec/pan-scan.md): a 16:9 source made 4:3.
     if (isPanAndScan(e) && category == QLatin1String("Pan and Scan Aspect Ratios and Actions Parameters")) {
         if (name == QLatin1String("Source")) return QStringLiteral("1.78 (16:9)");

@@ -271,6 +271,7 @@ public:
         QList<Handle> handles;
         QList<QPointF> path;     // the centre's line over the effect
         QList<QPointF> pathDots; // the centre at each keyframe
+        QList<QList<QPointF>> guides; // dashed polygons (Avid Pan & Zoom's Safe Action area)
         bool operator==(const EffectPreview&) const = default;
     };
     void setEffectPreview(const EffectPreview& preview);

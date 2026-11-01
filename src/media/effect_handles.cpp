@@ -297,11 +297,20 @@ QList<HandleValue> dragPanScan(const model::Effect& effect, const QString& id, c
 } // namespace
 
 bool hasEffectOutline(const model::Effect& effect) {
-    return is2D(effect) || isPanAndScan(effect) || is3DEffect(effect);
+    return is2D(effect) || isPanAndScan(effect) || is3DEffect(effect) || isPanAndZoom(effect);
 }
 
 std::optional<EffectOutline> effectOutline(const model::Effect& effect, double time, const model::EffectSpan& span, const QSizeF& size) {
     if (size.width() <= 0.0 || size.height() <= 0.0) return std::nullopt;
+    if (isPanAndZoom(effect)) {
+        // The field of view over the whole image (Display Source); no outline over the result (Display Target).
+        const auto v = panZoomView(effect, time, span, size);
+        if (!v || !v->sourceDisplay) return std::nullopt;
+        EffectOutline o;
+        o.corners = {v->field.topLeft(), v->field.topRight(), v->field.bottomRight(), v->field.bottomLeft()};
+        o.center = v->field.center();
+        return o;
+    }
     if (const auto f = panScanFrames(effect, time, span, size)) {
         // Pan and Scan's wire frame over the original picture (p.233-236).
         EffectOutline o;
@@ -316,6 +325,12 @@ std::optional<EffectOutline> effectOutline(const model::Effect& effect, double t
 
 QList<EffectHandle> effectHandles(const model::Effect& effect, HandleTool tool, double time, const model::EffectSpan& span,
                                   const QSizeF& size) {
+    if (isPanAndZoom(effect)) {
+        const auto v = panZoomView(effect, time, span, size);
+        if (!v) return {};
+        const QPointF at = v->sourceDisplay ? v->field.center() : QPointF(size.width() / 2.0, size.height() / 2.0);
+        return {EffectHandle{QStringLiteral("crosshair"), at, std::nullopt}};
+    }
     const auto o = effectOutline(effect, time, span, size);
     if (!o) return {};
     QStringList ids;
@@ -384,6 +399,16 @@ QList<HandleValue> dragEffectHandle(const model::Effect& effect, HandleTool tool
     const QString Y = QStringLiteral("Y");
     const QString Z = QStringLiteral("Z");
     if (isPanAndScan(effect)) return dragPanScan(effect, id, from, to, time, span, size, shift);
+    if (isPanAndZoom(effect)) {
+        // The crosshair pans: in Display Source the field of view follows it over the image; in Display Target
+        // (where the crosshair stays in the middle) the view moves by what the drag covers at the zoom.
+        const auto v = panZoomView(effect, time, span, size);
+        if (!v || id != QLatin1String("crosshair")) return {};
+        const QPointF by = (to - from) / (v->sourceDisplay ? 1.0 : v->zoom);
+        const QString category = QStringLiteral("Avid Pan & Zoom Effect Parameters");
+        return {{category, X, number(effect, category, X, time, span) + by.x() / (v->fitted.width() / 2.0) * 100.0},
+                {category, Y, number(effect, category, Y, time, span) + by.y() / (v->fitted.height() / 2.0) * 100.0}};
+    }
     if (is2D(effect)) {
         const QString position = QStringLiteral("Position");
         const QString scaling = QStringLiteral("Scaling");
@@ -469,6 +494,14 @@ QList<HandleValue> dragEffectHandle(const model::Effect& effect, HandleTool tool
     }
     }
     return {};
+}
+
+QList<QPolygonF> effectGuides(const model::Effect& effect, double time, const model::EffectSpan& span, const QSizeF& size) {
+    const auto v = panZoomView(effect, time, span, size);
+    if (!v || !v->safeAction) return {};
+    const QRectF area = v->sourceDisplay ? v->field : QRectF(QPointF(0, 0), size);
+    const QRectF safe = area.adjusted(area.width() * 0.05, area.height() * 0.05, -area.width() * 0.05, -area.height() * 0.05);
+    return {QPolygonF(safe)};
 }
 
 EffectPath effectPath(const model::Effect& effect, const model::EffectSpan& span, const QSizeF& size) {

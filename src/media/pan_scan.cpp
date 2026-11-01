@@ -2,7 +2,7 @@
 // effect that keeps the part of the picture inside a wire frame of the Target aspect ratio and fills the
 // output with it. Like the other Reformat effects it works on its own segment and every track below it
 // (compositor.cpp). The Effect Preview shows the original picture with the wire frame instead
-// (Composition::panScanOriginal); direct manipulation of the wire frame is in effect_handles.cpp.
+// (Composition::effectPreview); direct manipulation of the wire frame is in effect_handles.cpp.
 //
 // Geometry (ours; the guide gives the ratios, not the arithmetic). The frame is taken to have square pixels,
 // so its aspect ratio is its width over its height. The Source ratio says where the source picture lies in

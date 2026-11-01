@@ -1032,8 +1032,10 @@ phase of their own. They are done in three steps:
   * 6.7b, camera effects (ch.9, p.229-247), in two parts:
     * 6.7b1, Pan and Scan (source and target aspect ratios, origin, subdividing, the wire frame, with
       transitions). Done (docs/spec/pan-scan.md, `src/media/pan_scan.cpp`, `src/model/pan_scan.*`).
-    * 6.7b2, Avid Pan & Zoom (image files, field of view, camera speed, path changes at keyframes, filtering,
-      background, pixel aspect and colour levels).
+    * 6.7b2, Avid Pan & Zoom, in two parts:
+      * 6.7b2a, the image files, field of view, display modes, filtering, background, pixel aspect and colour
+        levels. Done (docs/spec/pan-zoom.md, `src/media/pan_zoom.cpp`).
+      * 6.7b2b, camera speed (Velocity In and Out) and path changes at keyframes (Linear, Spline).
   * 6.7c, motion tracking (ch.10, p.248-275): our own tracking engine, the Tracking window, trackers mapped
     to effect parameters, offset tracking and regions, tracking data editing, SteadyGlide and smoothing.
   * 6.7d, stabilization (p.275-284): Stabilize and Region Stabilize, editing segments that use tracking

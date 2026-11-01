@@ -9,6 +9,8 @@
 #include "lumenis/model/pan_scan.h"
 #include "lumenis/ui/timeline.h"
 
+#include <QFileInfo>
+#include <QImageReader>
 #include <QJsonObject>
 #include <QToolButton>
 
@@ -75,6 +77,11 @@ void EffectEditor::fillOverlay(const model::Effect& effect, Composer::EffectPrev
                 h.id, fraction(h.at, size), h.from ? std::optional<QPointF>(fraction(*h.from, size)) : std::nullopt};
         }
     }
+    for (const QPolygonF& guide : media::effectGuides(effect, t, span_, size)) {
+        QList<QPointF> points;
+        for (const QPointF& p : guide) points << fraction(p, size);
+        preview.guides << points;
+    }
     if (outlineShown_) {
         const media::EffectPath path = media::effectPath(effect, span_, size);
         for (const QPointF& p : path.line) preview.path << fraction(p, size);
@@ -120,12 +127,12 @@ bool EffectEditor::dragHandle(const QString& id, const QPointF& from, const QPoi
     const QList<media::HandleValue> values = media::dragEffectHandle(start, handleTool_, id, a, b, positionTime(), span_, size, shift);
     model::Effect edited = start;
     for (const media::HandleValue& v : values) {
-        // Whole numbers within the control's range, as the sliders give them.
-        double value = std::round(v.value);
+        // The slider's steps within its range, as the sliders give them.
+        QJsonValue value = static_cast<int>(std::lround(v.value));
         if (const EffectParameter* info = parameterInfo(v.category + QLatin1Char('/') + v.name)) {
-            value = std::clamp(value, static_cast<double>(info->min), static_cast<double>(info->max));
+            value = info->fromSlider(info->sliderPosition(std::clamp(v.value, info->min, info->max)));
         }
-        putValue(edited, v.category, v.name, static_cast<int>(value));
+        putValue(edited, v.category, v.name, value);
     }
     if (!values.isEmpty()) setActiveParameter(values.first().category + QLatin1Char('/') + values.first().name);
     if (!finished) {
@@ -206,6 +213,23 @@ bool EffectEditor::subdivideEffect() {
     return timeline_.changeRecordSequence(tr("Subdivide Effect"), [&](model::Sequence& s) {
         return model::subdivideEffect(s, track, frame, timeline_.patch().selectedRecordTracks(s));
     });
+}
+
+// ---------------------------------------------------------------- Avid Pan & Zoom
+
+bool EffectEditor::importImage(const QString& path) {
+    if (!shown_ || !current_ || !media::isPanAndZoom(*current_)) return false;
+    // "If you select a file that Media Composer does not recognize as an image file, Media Composer takes no
+    // action and no error message appears" (p.240).
+    if (QImageReader(path).size().isEmpty()) return false;
+    const QString absolute = QFileInfo(path).absoluteFilePath();
+    model::Effect edited = *current_;
+    QJsonObject group = edited.parameters.value(QStringLiteral("Avid Pan & Zoom Effect Parameters")).toObject();
+    if (group.value(QStringLiteral("Image")).toString() == absolute) return false;
+    group.insert(QStringLiteral("Image"), absolute);
+    edited.parameters.insert(QStringLiteral("Avid Pan & Zoom Effect Parameters"), group);
+    const QJsonObject parameters = edited.parameters;
+    return changeShown(tr("Import Image"), [&](model::Effect& e) { e.parameters = parameters; });
 }
 
 } // namespace lumenis::ui

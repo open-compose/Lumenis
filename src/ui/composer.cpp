@@ -827,7 +827,7 @@ QString MonitorPicture::overlayHandleAt(const QPointF& point) const {
 // a dark edge so that they show on any picture.
 void MonitorPicture::paintOverlay(QPainter& p) const {
     const Composer::EffectPreview& e = composer_.effectPreview();
-    if (e.outline.isEmpty() && e.handles.isEmpty() && e.path.isEmpty() && e.pathDots.isEmpty()) return;
+    if (e.outline.isEmpty() && e.handles.isEmpty() && e.path.isEmpty() && e.pathDots.isEmpty() && e.guides.isEmpty()) return;
     p.save();
     p.setRenderHint(QPainter::Antialiasing);
     p.setBrush(Qt::NoBrush);
@@ -844,6 +844,12 @@ void MonitorPicture::paintOverlay(QPainter& p) const {
         for (const QPointF& c : e.outline) quad << overlayPoint(c);
         twice([&] { p.drawPolygon(quad); }, wire);
     }
+    for (const QList<QPointF>& guide : e.guides) {
+        QPolygonF line;
+        for (const QPointF& c : guide) line << overlayPoint(c);
+        p.setPen(QPen(wire, 1, Qt::DashLine));
+        p.drawPolygon(line);
+    }
     if (e.path.size() > 1) {
         QPolygonF line;
         for (const QPointF& c : e.path) line << overlayPoint(c);
@@ -855,8 +861,8 @@ void MonitorPicture::paintOverlay(QPainter& p) const {
     for (const Composer::EffectPreview::Handle& h : e.handles) {
         const QPointF at = overlayPoint(h.at);
         if (h.from) twice([&] { p.drawLine(overlayPoint(*h.from), at); }, wire);
-        if (h.id == QLatin1String("axis")) {
-            // The Axis handle: a cross (p.293).
+        if (h.id == QLatin1String("axis") || h.id == QLatin1String("crosshair")) {
+            // The Axis handle (p.293) and Avid Pan & Zoom's crosshair (p.241): a cross.
             twice([&] {
                 p.drawLine(at - QPointF(10, 0), at + QPointF(10, 0));
                 p.drawLine(at - QPointF(0, 10), at + QPointF(0, 10));

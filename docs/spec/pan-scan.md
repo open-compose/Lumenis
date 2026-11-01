@@ -50,7 +50,7 @@ Tests: `tst_pan_scan`, `tst_compositor` (reformat), `tst_effect_keyframes_ui` (p
   Target's ratio with black around it.
 * Until chosen, Source is 1.78 (16:9) and Target 1.33 (4:3).
 * Effect mode: while the Effect Preview is shown and not playing, the Record monitor composes with
-  `Composition::panScanOriginal`, which passes Pan and Scan effects by; the wire frame and its handles (centre,
+  `Composition::effectPreview`, which passes Pan and Scan effects by; the wire frame and its handles (centre,
   top, side, corner) are the Effect Preview's overlay (6.7a4).
 * Handles: each resize handle scales both ways by one factor; Scaling X and Y are ganged in the Effect Editor.
   The move follows the axis the source is wider in than the Target (across when equal), Shift both; the wire

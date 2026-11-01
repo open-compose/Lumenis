@@ -8,6 +8,7 @@ add_library(lumenis_media STATIC
     wipes.cpp
     warp3d.cpp
     pan_scan.cpp
+    pan_zoom.cpp
     effect_handles.cpp
     effect_drawing.cpp
     effect_drawing.h

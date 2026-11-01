@@ -13,8 +13,13 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QFile>
+#include <QFileInfo>
+#include <QImage>
+#include <QTemporaryDir>
 #include <QJsonObject>
 #include <QMouseEvent>
+#include <QLabel>
 #include <QLayout>
 #include <QMenu>
 #include <QScrollBar>
@@ -704,6 +709,67 @@ private slots:
         QVERIFY(!editor.chooseTarget(QStringLiteral("1.33 (4:3)")));
         // On V1 itself there is no track below to subdivide by.
         QVERIFY(!editor.subdivideEffect());
+    }
+
+    void panAndZoom() {
+        // Avid Pan & Zoom in the Effect Editor (FX Guide p.239-247): Import Image, the Zoom Factor slider in tenths
+        // (0.1 to 20, p.529), the crosshair in the Effect Preview, and a moved image asked for again (p.239).
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString image = dir.filePath(QStringLiteral("still.png"));
+        QImage still(200, 100, QImage::Format_RGB32);
+        still.fill(Qt::red);
+        QVERIFY(still.save(image));
+        Composer composer;
+        Timeline timeline{composer};
+        EffectEditor editor{timeline};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence());
+        const EffectInfo* info = EffectCatalog::builtin().find(QStringLiteral("Image"), QStringLiteral("Avid Pan & Zoom"));
+        QVERIFY(info);
+        timeline.dropEffect(QStringLiteral("V1"), 70, *info);
+        composer.moveTo(MonitorId::Record, 60);
+        editor.resize(700, 900);
+        editor.show();
+        settle();
+        auto group = [&] {
+            const model::Effect e =
+                *model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(1).effect;
+            return e.parameters.value(QStringLiteral("Avid Pan & Zoom Effect Parameters")).toObject();
+        };
+        // Not an image: nothing happens (p.240).
+        const QString text = dir.filePath(QStringLiteral("notes.txt"));
+        QFile notes(text);
+        QVERIFY(notes.open(QIODevice::WriteOnly));
+        notes.write("not a picture");
+        notes.close();
+        QVERIFY(!editor.importImage(text));
+        QVERIFY(editor.importImage(image));
+        settle();
+        QCOMPARE(group().value(QStringLiteral("Image")).toString(), QFileInfo(image).absoluteFilePath());
+        QCOMPARE(editor.findChild<QLabel*>(QStringLiteral("panZoomFile"))->text(), QStringLiteral("still.png"));
+        QSlider* zoom = editor.slider(QStringLiteral("Avid Pan & Zoom Effect Parameters"), QStringLiteral("Zoom Factor"));
+        QVERIFY(zoom);
+        QCOMPARE(zoom->minimum(), 1);
+        QCOMPARE(zoom->maximum(), 200);
+        QCOMPARE(zoom->value(), 10);
+        zoom->setValue(25);
+        settle();
+        QCOMPARE(group().value(QStringLiteral("Zoom Factor")).toDouble(), 2.5);
+        // The crosshair in the Effect Preview, at the field of view's centre (Display Source).
+        timeline.setEffectMode(true);
+        settle();
+        QCOMPARE(composer.effectPreview().handles.size(), 1);
+        QCOMPARE(composer.effectPreview().handles.first().id, QStringLiteral("crosshair"));
+        QCOMPARE(composer.effectPreview().outline.size(), 4);
+        // The image moved: shown again, the effect asks for it.
+        QVERIFY(QFile::rename(image, dir.filePath(QStringLiteral("moved.png"))));
+        composer.moveTo(MonitorId::Record, 10);
+        settle();
+        composer.moveTo(MonitorId::Record, 60);
+        settle();
+        QVERIFY(editor.findChild<QWidget*>(QStringLiteral("panZoomLocate")));
+        timeline.setEffectMode(false);
     }
 
     void blankEditor() {

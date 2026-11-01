@@ -17,6 +17,8 @@
 #include <QDragEnterEvent>
 #include <QFormLayout>
 #include <QFile>
+#include <QFileDialog>
+#include <QFileInfo>
 #include <QHBoxLayout>
 #include <QHash>
 #include <QJsonArray>
@@ -77,8 +79,14 @@ const Catalog& catalog() {
                 p.kind = po.value(QStringLiteral("kind")).toString();
                 // A range the reference gives, else ours ("ours"), else 0 to 100.
                 const QJsonObject own = po.value(QStringLiteral("ours")).toObject();
-                p.min = static_cast<int>(po.value(QStringLiteral("min")).toDouble(own.value(QStringLiteral("min")).toDouble(0)));
-                p.max = static_cast<int>(po.value(QStringLiteral("max")).toDouble(own.value(QStringLiteral("max")).toDouble(100)));
+                p.decimals = po.value(QStringLiteral("decimals")).toInt(0);
+                // Whole-number sliders keep whole ranges (a range printed with decimals, as -3000.0, is whole).
+                auto bound = [&](const char* which, double fallback) {
+                    const double got = po.value(QLatin1String(which)).toDouble(own.value(QLatin1String(which)).toDouble(fallback));
+                    return p.decimals > 0 ? got : std::trunc(got);
+                };
+                p.min = bound("min", 0.0);
+                p.max = bound("max", 100.0);
                 if (p.max < p.min) std::swap(p.min, p.max); // a range printed backwards
                 p.defaultValue = po.value(QStringLiteral("default"));
                 p.keyframeable = po.value(QStringLiteral("keyframeable")).toBool(true);
@@ -99,8 +107,8 @@ QString key(const QString& category, const QString& parameter) {
 
 // A slider's starting value: the default if it is a number, within the range.
 int defaultInt(const EffectParameter& p) {
-    const int v = p.defaultValue.isDouble() ? static_cast<int>(p.defaultValue.toDouble()) : 0;
-    return std::clamp(v, p.min, p.max);
+    const double v = p.defaultValue.isDouble() ? p.defaultValue.toDouble() : 0.0;
+    return p.sliderPosition(std::clamp(v, p.min, p.max));
 }
 
 // A colour parameter's starting colour: the default if the file gives one ("#rrggbb" or a colour
@@ -499,6 +507,19 @@ void EffectEditor::refresh() {
         handleStart_.reset();
         preview_.reset();
         rebuild(effect);
+        // An Avid Pan & Zoom whose image has moved asks for it (p.239).
+        if (effect && media::isPanAndZoom(*effect)) {
+            const QString path = media::panZoomImagePath(*effect);
+            if (!path.isEmpty() && !QFileInfo::exists(path)) {
+                auto* locate = new QFileDialog(this, tr("Locate %1").arg(QFileInfo(path).fileName()), QFileInfo(path).absolutePath());
+                locate->setObjectName(QStringLiteral("panZoomLocate"));
+                // Ours: Qt's own dialog, which also opens where no window server runs native panels (CI's Mac).
+                locate->setOption(QFileDialog::DontUseNativeDialog);
+                locate->setAttribute(Qt::WA_DeleteOnClose);
+                connect(locate, &QFileDialog::fileSelected, this, [this](const QString& found) { importImage(found); });
+                locate->open();
+            }
+        }
     } else if (effect) {
         // Keyframes an undo took away are no longer selected.
         selection_.removeIf([&](const KeyframeId& id) {
@@ -670,19 +691,19 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                 if (p.kind == QLatin1String("slider")) {
                     auto* s = new QSlider(Qt::Horizontal, box);
                     s->setObjectName(QStringLiteral("param:") + k);
-                    s->setRange(p.min, p.max);
+                    s->setRange(p.sliderPosition(p.min), p.sliderPosition(p.max));
                     s->setValue(defaultInt(p));
                     s->setPageStep(10);
                     s->installEventFilter(this);
-                    auto* value = new QLabel(QString::number(s->value()), box);
+                    auto* value = new QLabel(p.shown(p.fromSlider(s->value()).toDouble()), box);
                     value->setMinimumWidth(36);
                     value->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
-                    connect(s, &QSlider::valueChanged, this, [this, s, value, category, name = p.name](int v) {
-                        value->setNum(v);
-                        if (!s->isSliderDown()) setValue(category, name, v);
+                    connect(s, &QSlider::valueChanged, this, [this, s, value, category, p](int v) {
+                        value->setText(p.shown(p.fromSlider(v).toDouble()));
+                        if (!s->isSliderDown()) setValue(category, p.name, p.fromSlider(v));
                     });
                     connect(s, &QSlider::sliderReleased, this,
-                            [this, s, category, name = p.name] { setValue(category, name, s->value()); });
+                            [this, s, category, p] { setValue(category, p.name, p.fromSlider(s->value())); });
                     row->addWidget(s, 1);
                     row->addWidget(value);
                     controls_.insert(k, s);
@@ -723,6 +744,20 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     connect(press, &QToolButton::clicked, this, [this, stamp] { stamp ? stampImage() : clearStamps(); });
                     row->addWidget(press);
                     row->addStretch(1);
+                } else if (p.name == QLatin1String("Import Image") && effect && media::isPanAndZoom(*effect)) {
+                    // "click the Other Options button. A file selection dialog box opens" (p.240); the file's name
+                    // beside it.
+                    auto* import = new QToolButton(box);
+                    import->setObjectName(QStringLiteral("param:") + k);
+                    import->setText(tr("Other Options..."));
+                    connect(import, &QToolButton::clicked, this, [this] {
+                        const QString file = QFileDialog::getOpenFileName(this, tr("Import Image"));
+                        if (!file.isEmpty()) importImage(file);
+                    });
+                    auto* file = new QLabel(QFileInfo(media::panZoomImagePath(*effect)).fileName(), box);
+                    file->setObjectName(QStringLiteral("panZoomFile"));
+                    row->addWidget(import);
+                    row->addWidget(file, 1);
                 } else if (category == QLatin1String(model::kPanScanCategory) && p.kind == QLatin1String("button")) {
                     // Establish Origin, Subdivide Effect and Reset to Origin (p.564).
                     auto* press = new QToolButton(box);
@@ -991,6 +1026,7 @@ void EffectEditor::setBurnIn(int display, const QString& name, const QJsonValue&
 // when there is none.
 void EffectEditor::syncValues(const model::Effect& effect) {
     syncing_ = true;
+    if (auto* file = findChild<QLabel*>(QStringLiteral("panZoomFile"))) file->setText(QFileInfo(media::panZoomImagePath(effect)).fileName());
     for (auto it = controls_.cbegin(); it != controls_.cend(); ++it) {
         const QString category = it.key().section(QLatin1Char('/'), 0, 0);
         const QString name = it.key().section(QLatin1Char('/'), 1);
@@ -1002,8 +1038,9 @@ void EffectEditor::syncValues(const model::Effect& effect) {
         QWidget* w = it.value();
         const QSignalBlocker block(w);
         if (auto* s = qobject_cast<QSlider*>(w)) {
-            s->setValue(static_cast<int>(std::lround(v.toDouble())));
-            if (QLabel* l = valueLabels_.value(it.key())) l->setNum(s->value());
+            const EffectParameter* info = parameterInfo(it.key());
+            s->setValue(info ? info->sliderPosition(v.toDouble()) : static_cast<int>(std::lround(v.toDouble())));
+            if (QLabel* l = valueLabels_.value(it.key())) l->setText(info ? info->shown(v.toDouble()) : QString::number(s->value()));
         } else if (auto* c = qobject_cast<QCheckBox*>(w)) {
             c->setChecked(v.toBool());
         } else if (auto* m = qobject_cast<QComboBox*>(w)) {
@@ -1063,6 +1100,12 @@ void EffectEditor::setValue(const QString& category, const QString& parameter, c
     if (current_ && model::isPanAndScanEffect(*current_) && category == QLatin1String(model::kPanScanCategory) &&
         parameter == QLatin1String("Target")) {
         chooseTarget(value.toString());
+        return;
+    }
+    if (current_ && media::isPanAndZoom(*current_) && parameter == QLatin1String("Cache")) {
+        // The Cache menu's entries are actions (p.247): Free Current Cache, Free All Caches.
+        if (value.toString() == QLatin1String("Free All Caches")) media::freePanZoomCache();
+        else if (value.toString() == QLatin1String("Free Current Cache")) media::freePanZoomCache(media::panZoomImagePath(*current_));
         return;
     }
     const QString k = key(category, parameter);
