@@ -1035,7 +1035,8 @@ phase of their own. They are done in three steps:
     * 6.7b2, Avid Pan & Zoom, in two parts:
       * 6.7b2a, the image files, field of view, display modes, filtering, background, pixel aspect and colour
         levels. Done (docs/spec/pan-zoom.md, `src/media/pan_zoom.cpp`).
-      * 6.7b2b, camera speed (Velocity In and Out) and path changes at keyframes (Linear, Spline).
+      * 6.7b2b, camera speed (Velocity In and Out) and path changes at keyframes (Linear, Spline). Done
+        (docs/spec/pan-zoom.md, `media::panZoomMotion`), so 6.7b is.
   * 6.7c, motion tracking (ch.10, p.248-275): our own tracking engine, the Tracking window, trackers mapped
     to effect parameters, offset tracking and regions, tracking data editing, SteadyGlide and smoothing.
   * 6.7d, stabilization (p.275-284): Stabilize and Region Stabilize, editing segments that use tracking

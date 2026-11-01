@@ -136,6 +136,58 @@ private slots:
         QVERIFY(video.pixel(96, 54)[0] < 0.005f);
     }
 
+    // Velocity In and Out, Path and the zoom between keyframes (p.242-245, p.530).
+    void motion() {
+        auto keyed = [](const QList<std::pair<double, double>>& xs, const QJsonObject& more = {}) {
+            model::Effect e = panZoom(QString(), more);
+            for (const auto& [t, x] : xs) model::setKeyframe(e, kCategory, QStringLiteral("X"), t, kSpan, x);
+            return e;
+        };
+        auto x = [](const model::Effect& e, double t) { return panZoomMotion(e, t, kSpan).x; };
+        // Linear: even steps; before the first and after the last keyframe the values hold.
+        const model::Effect linear = keyed({{0.0, -100}, {1.0, 100}});
+        QVERIFY(std::abs(x(linear, 0.5)) < 1e-9);
+        QVERIFY(std::abs(x(linear, 0.25) + 50.0) < 1e-9);
+        // Ease In: "a slight acceleration at the beginning"; Ease Out: "a slight deceleration into the next keyframe".
+        const model::Effect easeIn = keyed({{0.0, -100}, {1.0, 100}}, {{QStringLiteral("Velocity In"), QStringLiteral("Ease In")}});
+        QVERIFY(x(easeIn, 0.1) < x(linear, 0.1) - 5.0);
+        QVERIFY(std::abs(x(easeIn, 0.5)) < 1e-9);
+        QVERIFY(std::abs(x(easeIn, 0.9) - x(linear, 0.9)) < 1e-9);
+        const model::Effect easeOut = keyed({{0.0, -100}, {1.0, 100}}, {{QStringLiteral("Velocity Out"), QStringLiteral("Ease Out")}});
+        QVERIFY(x(easeOut, 0.9) > x(linear, 0.9) + 5.0);
+        // Hold: "At the midpoint ... the image freezes ... Movement resumes at the next keyframe".
+        const model::Effect hold = keyed({{0.0, -100}, {1.0, 100}}, {{QStringLiteral("Velocity Out"), QStringLiteral("Hold")}});
+        QVERIFY(std::abs(x(hold, 0.8)) < 1e-9);
+        QVERIFY(std::abs(x(hold, 1.0) - 100.0) < 1e-9);
+        // A velocity set at one keyframe only: the first piece eases in, the second does not.
+        model::Effect one = keyed({{0.0, 0}, {0.5, 50}, {1.0, 100}});
+        model::setKeyframe(one, kCategory, QStringLiteral("Velocity In"), 0.0, kSpan, QStringLiteral("Ease In"));
+        QVERIFY(x(one, 0.05) < 4.0);
+        QVERIFY(std::abs(x(one, 0.75) - 75.0) < 1e-9);
+        // Constant: one speed along the path, whatever the keyframes' times: at half the time, half the way.
+        const model::Effect uneven = keyed({{0.0, 0}, {0.25, 75}, {1.0, 100}});
+        QVERIFY(x(uneven, 0.5) > 80.0);
+        const model::Effect constant = keyed({{0.0, 0}, {0.25, 75}, {1.0, 100}}, {{QStringLiteral("Velocity In"), QStringLiteral("Constant")}});
+        QVERIFY(std::abs(x(constant, 0.5) - 50.0) < 0.5);
+        // Spline: through every keyframe, curving between them.
+        model::Effect corner = keyed({{0.0, 0}, {0.5, 100}, {1.0, 100}});
+        model::setKeyframe(corner, kCategory, QStringLiteral("Y"), 0.0, kSpan, 0);
+        model::setKeyframe(corner, kCategory, QStringLiteral("Y"), 0.5, kSpan, 0);
+        model::setKeyframe(corner, kCategory, QStringLiteral("Y"), 1.0, kSpan, 100);
+        model::Effect curved = corner;
+        QJsonObject g = curved.parameters.value(kCategory).toObject();
+        g.insert(QStringLiteral("Path"), QStringLiteral("Spline"));
+        curved.parameters.insert(kCategory, g);
+        QVERIFY(std::abs(panZoomMotion(corner, 0.25, kSpan).y) < 1e-9);
+        QVERIFY(std::abs(panZoomMotion(curved, 0.25, kSpan).y) > 1.0);
+        QVERIFY(std::abs(panZoomMotion(curved, 0.5, kSpan).x - 100.0) < 1e-9);
+        // The zoom changes by equal factors: 1 to 4 is 2 halfway.
+        model::Effect zoom = panZoom(QString());
+        model::setKeyframe(zoom, kCategory, QStringLiteral("Zoom Factor"), 0.0, kSpan, 1.0);
+        model::setKeyframe(zoom, kCategory, QStringLiteral("Zoom Factor"), 1.0, kSpan, 4.0);
+        QVERIFY(std::abs(panZoomMotion(zoom, 0.5, kSpan).zoom - 2.0) < 1e-9);
+    }
+
     // Free Current Cache: the file is read again (p.247).
     void cache() {
         const QString path = dir_.filePath(QStringLiteral("changing.png"));

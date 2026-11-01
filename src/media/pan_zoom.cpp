@@ -1,8 +1,8 @@
 // The Avid Pan & Zoom effect (ROADMAP 6.7b2; FX Guide p.239-247, p.468, p.528-531; docs/spec/pan-zoom.md): a still
 // image, imported by the Effect Editor, seen through a field of view that pans (Position) and zooms (Zoom Factor)
 // over it, with a background outside it. Images are kept in a small cache of downsized copies (mip levels) so
-// that zooming out stays clean and fast. The keyframe interpolation of Velocity and Path is 6.7b2b; here the
-// values come from the usual keyframes.
+// that zooming out stays clean and fast. The keyframes of Position and Zoom Factor are joined by the effect's own
+// motion (panZoomMotion): Velocity In and Out at each keyframe and the Path's line or spline (6.7b2b).
 //
 // Geometry (ours; the guide gives the controls, not the arithmetic): at Zoom Factor 1 the whole image is fitted
 // into the frame (the largest rectangle of its shape, centred); a larger factor magnifies around the field of
@@ -167,7 +167,166 @@ int filterOf(const QString& filtering) {
     return 2;
 }
 
+// ---------------------------------------------------------------- the camera's motion (6.7b2b)
+
+// Where the field of view is at a keyframe: Position X and Y and the Zoom Factor.
+struct Knot {
+    double t = 0.0;
+    double x = 0.0, y = 0.0, zoom = 1.0;
+    QString in, out; // Velocity In and Out at this keyframe
+};
+
+// A Velocity's value at keyframe time `t`: the one set at that keyframe, else the one set for the effect,
+// else Linear. "When you select Constant for Velocity In, Media Composer automatically selects Constant for
+// Velocity Out" (p.530).
+QString velocityAt(const model::Effect& e, const QString& name, double t, const model::EffectSpan& span) {
+    const model::ParameterKeyframes keys = model::keyframesOf(e, kCategory, name);
+    const int i = model::keyframeAt(keys, t, span);
+    if (i >= 0 && keys.keys.at(i).value.isString()) return keys.keys.at(i).value.toString();
+    return menu(e, name);
+}
+
+// The keyframes of the motion: every time X, Y or the Zoom Factor has one (each value there as the effect has
+// it then), in order.
+QList<Knot> knotsOf(const model::Effect& e, const model::EffectSpan& span) {
+    QList<double> times;
+    for (const QString& name : {QStringLiteral("X"), QStringLiteral("Y"), QStringLiteral("Zoom Factor")}) {
+        const model::ParameterKeyframes keys = model::keyframesOf(e, kCategory, name);
+        for (const model::EffectKeyframe& k : keys.keys) {
+            const double t = model::keyframeTime(keys, k, span);
+            if (std::none_of(times.begin(), times.end(), [&](double u) { return std::abs(u - t) <= span.halfFrame(); })) times << t;
+        }
+    }
+    std::sort(times.begin(), times.end());
+    QList<Knot> knots;
+    for (double t : times) {
+        Knot k;
+        k.t = t;
+        k.x = number(e, QStringLiteral("X"), t, span);
+        k.y = number(e, QStringLiteral("Y"), t, span);
+        k.zoom = std::clamp(number(e, QStringLiteral("Zoom Factor"), t, span), 0.1, 20.0);
+        k.in = velocityAt(e, QStringLiteral("Velocity In"), t, span);
+        k.out = k.in == QLatin1String("Constant") ? k.in : velocityAt(e, QStringLiteral("Velocity Out"), t, span);
+        knots << k;
+    }
+    return knots;
+}
+
+// A cubic Hermite piece from (0, a) to (1, b) with slopes ma and mb, at v.
+double hermite(double a, double b, double ma, double mb, double v) {
+    const double v2 = v * v, v3 = v2 * v;
+    return (2 * v3 - 3 * v2 + 1) * a + (v3 - 2 * v2 + v) * ma + (-2 * v3 + 3 * v2) * b + (v3 - v2) * mb;
+}
+
+// How far the motion from keyframe k to the next has gone at u (0 to 1 of the time between them): "Velocity In
+// controls the rate of movement from the selected keyframe to the midpoint ... Velocity Out ... from the
+// midpoint ... to the next keyframe" (p.530). Ours: each half a cubic through the midpoint at full speed,
+// starting (Ease In) or ending (Ease Out) at rest; Hold stops at the midpoint until the next keyframe.
+double progress(const Knot& k, double u) {
+    u = std::clamp(u, 0.0, 1.0);
+    if (k.out == QLatin1String("Hold") && u >= 0.5) u = 0.5;
+    if (u <= 0.5) {
+        const double start = k.in == QLatin1String("Ease In") ? 0.0 : 1.0;
+        return 0.5 * hermite(0.0, 1.0, start, 1.0, u / 0.5);
+    }
+    const double end = k.out == QLatin1String("Ease Out") ? 0.0 : 1.0;
+    return 0.5 + 0.5 * hermite(0.0, 1.0, 1.0, end, (u - 0.5) / 0.5);
+}
+
+// The path's point between knots i and i+1 at p: a straight line, or with Spline a Catmull-Rom curve "smooth
+// through all points" (p.244).
+QPointF pathPoint(const QList<Knot>& knots, qsizetype i, double p, bool spline) {
+    const QPointF p1(knots.at(i).x, knots.at(i).y);
+    const QPointF p2(knots.at(i + 1).x, knots.at(i + 1).y);
+    if (!spline) return p1 + (p2 - p1) * p;
+    const QPointF p0 = i > 0 ? QPointF(knots.at(i - 1).x, knots.at(i - 1).y) : p1;
+    const QPointF p3 = i + 2 < knots.size() ? QPointF(knots.at(i + 2).x, knots.at(i + 2).y) : p2;
+    const double p2_ = p * p, p3_ = p2_ * p;
+    return 0.5 * ((2.0 * p1) + (p2 - p0) * p + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * p2_ + (3.0 * p1 - p0 - 3.0 * p2 + p3) * p3_);
+}
+
+double pieceLength(const QList<Knot>& knots, qsizetype i, bool spline) {
+    double length = 0.0;
+    QPointF last = pathPoint(knots, i, 0.0, spline);
+    for (int s = 1; s <= 32; ++s) {
+        const QPointF p = pathPoint(knots, i, s / 32.0, spline);
+        length += std::hypot(p.x() - last.x(), p.y() - last.y());
+        last = p;
+    }
+    return length;
+}
+
+// The fraction p of piece i at which the path has covered `along` of its length.
+double atLength(const QList<Knot>& knots, qsizetype i, bool spline, double along) {
+    double covered = 0.0;
+    QPointF last = pathPoint(knots, i, 0.0, spline);
+    for (int s = 1; s <= 32; ++s) {
+        const QPointF p = pathPoint(knots, i, s / 32.0, spline);
+        const double step = std::hypot(p.x() - last.x(), p.y() - last.y());
+        if (covered + step >= along && step > 0.0) return (s - 1 + (along - covered) / step) / 32.0;
+        covered += step;
+        last = p;
+    }
+    return 1.0;
+}
+
 } // namespace
+
+PanZoomMotion panZoomMotion(const model::Effect& e, double time, const model::EffectSpan& span) {
+    PanZoomMotion m;
+    m.x = number(e, QStringLiteral("X"), time, span);
+    m.y = number(e, QStringLiteral("Y"), time, span);
+    m.zoom = std::clamp(number(e, QStringLiteral("Zoom Factor"), time, span), 0.1, 20.0);
+    const QList<Knot> knots = knotsOf(e, span);
+    if (knots.size() < 2 || time <= knots.first().t || time >= knots.last().t) {
+        // Before the first keyframe or after the last the values hold (as keyframes do, p.94).
+        if (!knots.isEmpty()) {
+            const Knot& k = time <= knots.first().t ? knots.first() : knots.last();
+            m = {k.x, k.y, k.zoom};
+        }
+        return m;
+    }
+    const bool spline = menu(e, QStringLiteral("Path")) == QLatin1String("Spline");
+    qsizetype i = 0;
+    while (i + 2 < knots.size() && time >= knots.at(i + 1).t) ++i;
+    // Constant: "Does not use the keyframe's Position parameters to calculate the speed of the effect, but uses
+    // the keyframe's Position parameters to determine the path" (p.530). Ours: over a run of keyframes set to
+    // Constant the field of view moves along the path at one speed, from the run's first keyframe to the one
+    // after its last; the zoom follows the piece it is on.
+    if (knots.at(i).in == QLatin1String("Constant")) {
+        qsizetype a = i, b = i;
+        while (a > 0 && knots.at(a - 1).in == QLatin1String("Constant")) --a;
+        while (b + 1 < knots.size() - 1 && knots.at(b + 1).in == QLatin1String("Constant")) ++b;
+        QList<double> lengths;
+        double total = 0.0;
+        for (qsizetype k = a; k <= b; ++k) {
+            lengths << pieceLength(knots, k, spline);
+            total += lengths.last();
+        }
+        if (total > 1e-9) {
+            double along = (time - knots.at(a).t) / (knots.at(b + 1).t - knots.at(a).t) * total;
+            qsizetype k = a;
+            while (k < b && along > lengths.at(k - a)) {
+                along -= lengths.at(k - a);
+                ++k;
+            }
+            const double p = atLength(knots, k, spline, along);
+            const QPointF at = pathPoint(knots, k, p, spline);
+            m.x = at.x();
+            m.y = at.y();
+            m.zoom = knots.at(k).zoom * std::pow(knots.at(k + 1).zoom / knots.at(k).zoom, p);
+            return m;
+        }
+    }
+    const double u = (time - knots.at(i).t) / std::max(knots.at(i + 1).t - knots.at(i).t, 1e-12);
+    const double p = progress(knots.at(i), u);
+    const QPointF at = pathPoint(knots, i, p, spline);
+    m.x = at.x();
+    m.y = at.y();
+    // Ours: the zoom changes by the same factor in equal steps (as a camera's zoom looks even).
+    m.zoom = knots.at(i).zoom * std::pow(knots.at(i + 1).zoom / knots.at(i).zoom, p);
+    return m;
+}
 
 bool isPanAndZoom(const model::Effect& effect) {
     return effect.category == QLatin1String("Image") && effect.name == QLatin1String("Avid Pan & Zoom");
@@ -205,9 +364,9 @@ std::optional<PanZoomView> panZoomView(const model::Effect& e, double time, cons
     if (ratio >= W / H) v.fitted = QRectF(0.0, (H - W / ratio) / 2.0, W, W / ratio);
     else v.fitted = QRectF((W - H * ratio) / 2.0, 0.0, H * ratio, H);
     // "Zoom Factor ranges from 0.1 to 20" (p.242).
-    v.zoom = std::clamp(number(e, QStringLiteral("Zoom Factor"), time, span), 0.1, 20.0);
-    const QPointF centre = v.fitted.center() + QPointF(number(e, QStringLiteral("X"), time, span) / 100.0 * v.fitted.width() / 2.0,
-                                                      number(e, QStringLiteral("Y"), time, span) / 100.0 * v.fitted.height() / 2.0);
+    const PanZoomMotion m = panZoomMotion(e, time, span);
+    v.zoom = m.zoom;
+    const QPointF centre = v.fitted.center() + QPointF(m.x / 100.0 * v.fitted.width() / 2.0, m.y / 100.0 * v.fitted.height() / 2.0);
     v.field = QRectF(centre.x() - W / v.zoom / 2.0, centre.y() - H / v.zoom / 2.0, W / v.zoom, H / v.zoom);
     v.sourceDisplay = menu(e, QStringLiteral("Display")) == QLatin1String("Source");
     v.safeAction = flag(e, QStringLiteral("Show Safe Action"), false);

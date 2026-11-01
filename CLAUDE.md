@@ -562,7 +562,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.7b2a, Avid Pan & Zoom's image and view (docs/spec/pan-zoom.md: `src/media/pan_zoom.cpp` with its image cache,
   `Composition::effectPreview` for Display Source, the crosshair and Safe Action in `effect_handles.cpp`,
   `EffectEditor::importImage` and the locate dialog; sliders with `"decimals"`; test `tst_pan_zoom`), is done.
-  Next: 6.7b2b (Pan & Zoom's Velocity and Path), then 6.7c-d, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.7b2b, Pan & Zoom's Velocity In/Out and Path (`media::panZoomMotion`; the Velocity menus kept as keyframes of
+  the menu at the selected keyframes' times; test `tst_pan_zoom`), is done, so 6.7b is.
+  Next: 6.7c (motion tracking, FX Guide ch.10 p.248-275), then 6.7d, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

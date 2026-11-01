@@ -1102,6 +1102,34 @@ void EffectEditor::setValue(const QString& category, const QString& parameter, c
         chooseTarget(value.toString());
         return;
     }
+    if (current_ && media::isPanAndZoom(*current_) && (parameter == QLatin1String("Velocity In") || parameter == QLatin1String("Velocity Out"))) {
+        // "Click the keyframe indicator for the keyframe you want to adjust. Click the In Fast Menu button, and then
+        // select a Velocity In option" (p.243): the selected keyframes' times take it, kept as keyframes of the
+        // menu; with none selected the effect does. "When you select Constant for Velocity In, Media Composer
+        // automatically selects Constant for Velocity Out" (p.530).
+        QList<double> times;
+        for (const KeyframeId& id : selection_) {
+            const QString cat = id.parameter.section(QLatin1Char('/'), 0, 0);
+            const model::ParameterKeyframes keys = model::keyframesOf(*current_, cat, id.parameter.section(QLatin1Char('/'), 1));
+            if (id.index >= keys.keys.size()) continue;
+            const double t = model::keyframeTime(keys, keys.keys.at(id.index), span_);
+            if (std::none_of(times.begin(), times.end(), [&](double u) { return std::abs(u - t) <= span_.halfFrame(); })) times << t;
+        }
+        QStringList names{parameter};
+        if (parameter == QLatin1String("Velocity In") && value.toString() == QLatin1String("Constant")) names << QStringLiteral("Velocity Out");
+        changeShown(tr("Modify Effect"), [&](model::Effect& e) {
+            for (const QString& name : names) {
+                if (times.isEmpty()) {
+                    QJsonObject group = e.parameters.value(category).toObject();
+                    group.insert(name, value);
+                    e.parameters.insert(category, group);
+                } else {
+                    for (double t : times) model::setKeyframe(e, category, name, t, span_, value);
+                }
+            }
+        });
+        return;
+    }
     if (current_ && media::isPanAndZoom(*current_) && parameter == QLatin1String("Cache")) {
         // The Cache menu's entries are actions (p.247): Free Current Cache, Free All Caches.
         if (value.toString() == QLatin1String("Free All Caches")) media::freePanZoomCache();

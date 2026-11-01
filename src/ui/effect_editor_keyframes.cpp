@@ -477,6 +477,13 @@ QJsonValue EffectEditor::valueAt(const model::Effect& effect, const QString& par
         return d.isValid() ? d.name() : QStringLiteral("#000000");
     }
     if (const auto v = model::numberAt(effect, category, name, t, span_)) return std::round(*v * 1000.0) / 1000.0;
+    if (info && info->kind == QLatin1String("menu")) {
+        // A menu kept at keyframes (Avid Pan & Zoom's Velocity, p.243): the entry of the keyframe at the
+        // position, else the one set for the effect.
+        const model::ParameterKeyframes keys = model::keyframesOf(effect, category, name);
+        const int i = model::keyframeAt(keys, t, span_);
+        if (i >= 0 && keys.keys.at(i).value.isString()) return keys.keys.at(i).value;
+    }
     const QJsonValue stored = effect.parameters.value(category).toObject().value(name);
     if (!stored.isUndefined()) return stored;
     const QJsonValue fallback = defaultValue(effect, parameter);

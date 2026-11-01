@@ -158,6 +158,15 @@ struct PanZoomView {
 std::optional<PanZoomView> panZoomView(const model::Effect& effect, double time, const model::EffectSpan& span, const QSizeF& size);
 Picture panZoomPicture(const model::Effect& effect, const Picture& segment, double time, const model::EffectSpan& span, bool preview);
 void freePanZoomCache(const QString& path = {});
+// Where the field of view is at `time` (ROADMAP 6.7b2b; p.242-245, p.530): Position X, Y and the Zoom Factor
+// between their keyframes as Velocity In and Out at each keyframe (Linear, Constant, Ease In, Ease Out, Hold;
+// stored as keyframes of those menus, or once for the effect) and the Path (Linear or Spline) have them move.
+struct PanZoomMotion {
+    double x = 0.0;
+    double y = 0.0;
+    double zoom = 1.0;
+};
+PanZoomMotion panZoomMotion(const model::Effect& effect, double time, const model::EffectSpan& span);
 // The Reformat effects that work "on all tracks below the track to which you apply it" (FX Guide
 // p.229): 16:9 Letterbox, 14:9 Letterbox and 4:3 Sidebar.
 bool isReformat(const model::Effect& effect);

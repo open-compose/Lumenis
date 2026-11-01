@@ -13,6 +13,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QComboBox>
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
@@ -756,6 +757,23 @@ private slots:
         zoom->setValue(25);
         settle();
         QCOMPARE(group().value(QStringLiteral("Zoom Factor")).toDouble(), 2.5);
+        // Velocity on the selected keyframe (p.243); Constant sets Velocity Out too (p.530).
+        const QString cat = QStringLiteral("Avid Pan & Zoom Effect Parameters");
+        editor.setActiveParameter(cat + QStringLiteral("/X"));
+        QVERIFY(editor.addKeyframes(EffectEditor::KeyframeMode::ActiveParameter));
+        settle();
+        editor.selectKeyframe(EffectEditor::KeyframeId{cat + QStringLiteral("/X"), 0}, false);
+        auto* velocityIn = editor.findChild<QComboBox*>(QStringLiteral("param:") + cat + QStringLiteral("/Velocity In"));
+        QVERIFY(velocityIn);
+        velocityIn->setCurrentText(QStringLiteral("Constant"));
+        settle();
+        {
+            const model::Effect e =
+                *model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(1).effect;
+            QCOMPARE(model::keyframesOf(e, cat, QStringLiteral("Velocity In")).keys.size(), 1);
+            QCOMPARE(model::keyframesOf(e, cat, QStringLiteral("Velocity Out")).keys.first().value.toString(), QStringLiteral("Constant"));
+        }
+        QCOMPARE(velocityIn->currentText(), QStringLiteral("Constant"));
         // The crosshair in the Effect Preview, at the field of view's centre (Display Source).
         timeline.setEffectMode(true);
         settle();

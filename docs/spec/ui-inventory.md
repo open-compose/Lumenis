@@ -244,7 +244,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   down), Display Source until set, the filters behind each Filtering
   entry, 601 levels stretched to full range, Square Pixels without
   effect, an eight-image cache, Use Subres also when rendering, Safe
-  Action at 90%, the Qt locate dialog.
+  Action at 90%, the Qt locate dialog; 6.7b2b: the ease curves, Hold at the
+  midpoint, Constant runs by path length, a Catmull-Rom Spline, the zoom
+  by equal factors, Velocity kept at the selected keyframes' times.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

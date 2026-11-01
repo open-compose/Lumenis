@@ -5,7 +5,7 @@ p.239-247; reference p.468, p.528-531). Code: `src/media/pan_zoom.cpp` (`media::
 `panZoomPicture`, the image cache), the compositor's branch, the crosshair and Safe Action in
 `src/media/effect_handles.cpp`, Import Image and the locate dialog in `src/ui/effect_editor*.cpp`. Tests:
 `tst_pan_zoom`, `tst_effect_keyframes_ui` (panAndZoom). 6.7b2a is the image and its view; 6.7b2b the Velocity and
-Path interpolation.
+Path interpolation (`media::panZoomMotion`).
 
 ## From the guide
 
@@ -52,8 +52,27 @@ Path interpolation.
 * Sliders with decimals (`"decimals"` in effect_parameters.json): Zoom Factor counts in tenths; values are stored
   as numbers with that many decimals.
 
-## Not yet (6.7b2b)
+## 6.7b2b: Velocity and Path
 
-* Velocity In and Out at each keyframe (Linear, Constant, Ease In, Ease Out, Hold) and Path Linear or Spline
-  (p.242-245, p.530).
+* From the guide: "The Velocity parameters divide the time between keyframes in half"; Velocity In "Controls the
+  rate of movement from the selected keyframe to the midpoint between the selected keyframe and the next
+  keyframe" (Linear, Constant, Ease In), Velocity Out "from the midpoint ... to the next keyframe" (Linear, Ease
+  Out, Constant, Hold); "When you select Constant for Velocity In, Media Composer automatically selects Constant
+  for Velocity Out"; Hold: "At the midpoint ... the image freezes ... Movement resumes at the next keyframe";
+  Constant "uses the keyframe's Position parameters to determine the path" but not the speed (p.530); "Click the
+  keyframe indicator for the keyframe you want to adjust. Click the In Fast Menu button" (p.243); Path Linear
+  "straight-line changes", Spline "smooth through all points. If you move a point the effect recalculates the
+  entire path" (p.244, p.530). The velocities apply to "changes in the Zoom Factor setting in the same way" (p.242).
+* Ours (`media::panZoomMotion`): the motion's keyframes are the times at which X, Y or the Zoom Factor has one,
+  with each value as the effect has it there. Each half of the time between two keyframes is a cubic through the
+  midpoint at full speed; Ease In starts the first half at rest, Ease Out ends the second at rest; Hold keeps the
+  midpoint's place until the next keyframe. A run of keyframes set to Constant moves along the path at one speed
+  (by its length in Position units) from the run's first keyframe to the one after its last. Spline is a
+  Catmull-Rom curve through the keyframes. The zoom changes by equal factors (1 to 4 passes 2 halfway).
+* In the Effect Editor the Velocity menus set the selected keyframes' times (kept as keyframes of the menu), or
+  the effect's own value when none is selected; they show the value at the position. Before the first keyframe
+  and after the last the values hold.
+
+## Not yet
+
 * Render Mode's Progressive check box (p.245, p.532): not in our parameter file yet.
