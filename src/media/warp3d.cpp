@@ -1,5 +1,6 @@
 #include "lumenis/media/compositor.h"
 #include "lumenis/media/effect_handles.h"
+#include "lumenis/media/tracking.h"
 
 #include "effect_drawing.h"
 
@@ -861,6 +862,8 @@ Picture warp3dPicture(const model::Effect& e, const Picture& foreground, const P
     }
     Picture out = bg.isNull() ? Picture(w, h) : bg;
     Picture layer = placedLayer(e, fg, time, span);
+    // Corner Tracking (p.571): the placed picture moved as the trackers move from their reference frame.
+    if (const auto map = trackedTransform(e, time, span, h > 0 ? static_cast<double>(w) / h : 1.0)) layer = transformed(layer, *map);
     erodeExpand(e, layer, time, span);
     const double unit = w / 1920.0;
     // "Shadow, Trail, and Stamp are mutually exclusive, so you can have only one enabled at a time" (p.579).

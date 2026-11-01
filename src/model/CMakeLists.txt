@@ -19,6 +19,7 @@ add_library(lumenis_model STATIC
     effect_template.cpp
     promote3d.cpp
     pan_scan.cpp
+    tracking.cpp
     marker.cpp
     multichannel.cpp
     clip_coloring.cpp

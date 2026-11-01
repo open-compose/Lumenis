@@ -1,4 +1,5 @@
 #include "lumenis/media/compositor.h"
+#include "lumenis/media/tracking.h"
 
 #include "lumenis/media/fields.h"
 #include "lumenis/media/fluid_fx.h"
@@ -504,12 +505,15 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             layer = segmentPicture(c, tf->segment, tf->frame, missing, tf->blend, tf->segmentOffset);
         }
         if (c.effects && tf->segment && tf->segment->effect && !tf->transition) {
-            const model::Effect& e = *tf->segment->effect;
-            const QString foreground = QStringLiteral("Foreground");
-            const QString level = QStringLiteral("Level");
             // Where in the segment the frame is, 0 at its first frame and 1 at its last.
             const std::int64_t length = tf->segment->length;
             const double time = length > 1 ? static_cast<double>(tf->offset) / static_cast<double>(length - 1) : 0.0;
+            // The effect with its tracking data's Position, Scaling and Rotation folded in (FX Guide ch.10).
+            const model::Effect tracked =
+                trackedEffect(*tf->segment->effect, time, length, w > 0 && h > 0 ? static_cast<double>(w) / h : 16.0 / 9.0);
+            const model::Effect& e = tracked;
+            const QString foreground = QStringLiteral("Foreground");
+            const QString level = QStringLiteral("Level");
             const bool keyed = !model::keyframesOf(e, foreground, level).keys.isEmpty();
             if (isBurnIn(e)) {
                 // Timecode Burn-In's displays over the segment's own picture (burn_in.cpp).

@@ -123,7 +123,8 @@ headers in `include/lumenis/<library>/`.
   manipulation's outlines, handles and drags in `src/media/effect_handles.*` with the Effect Editor's side in
   `effect_editor_handles.cpp` and the Effect Preview's overlay in `composer.cpp`, Pan and Scan in
   `src/media/pan_scan.cpp` with its Actions in `src/model/pan_scan.*` (docs/spec/pan-scan.md), Avid Pan & Zoom
-  in `src/media/pan_zoom.cpp` (docs/spec/pan-zoom.md),
+  in `src/media/pan_zoom.cpp` (docs/spec/pan-zoom.md), motion tracking's data in `src/model/tracking.*` with its
+  engines and its effect on the picture in `src/media/tracking.*` (docs/spec/tracking.md),
   and mixed rate clips' Motion Adapters in `src/model/motion_adapter.*`: the
   monitors load a clip at another rate as its adapted copy at the project's rate, the segments edited
   from it carry `Segment::adapter`, and `BinDocument` stores the clip itself back (docs/spec/motion-effects.md).

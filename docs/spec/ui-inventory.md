@@ -247,6 +247,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Action at 90%, the Qt locate dialog; 6.7b2b: the ease curves, Hold at the
   midpoint, Constant runs by path length, a Catmull-Rom Spline, the zoom
   by equal factors, Velocity kept at the selected keyframes' times.
+* Motion tracking (docs/spec/tracking.md): tracking data kept with the
+  effect, the new trackers' boxes and colours, offset tracking's join at
+  the frame before a region, Smoothing's and SteadyGlide's Gaussians,
+  the nearest data between and beyond points, distances and angles in
+  the frame's proportions, the engines' methods (a fixed correlation
+  pattern, the optical flow, a 4 x 4 grid's median).
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

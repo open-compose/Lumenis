@@ -1038,7 +1038,14 @@ phase of their own. They are done in three steps:
       * 6.7b2b, camera speed (Velocity In and Out) and path changes at keyframes (Linear, Spline). Done
         (docs/spec/pan-zoom.md, `media::panZoomMotion`), so 6.7b is.
   * 6.7c, motion tracking (ch.10, p.248-275): our own tracking engine, the Tracking window, trackers mapped
-    to effect parameters, offset tracking and regions, tracking data editing, SteadyGlide and smoothing.
+    to effect parameters, offset tracking and regions, tracking data editing, SteadyGlide and smoothing. In
+    three parts:
+    * 6.7c1, the tracking data (trackers, regions, offset tracking, SteadyGlide, Smoothing, the reference frame,
+      mappings to Position, Scaling, Rotation and Corner Tracking) and the engines. Done (docs/spec/tracking.md,
+      `src/model/tracking.*`, `src/media/tracking.*`).
+    * 6.7c2, the Tracking window, the Effect Editor's tracker controls, the Effect Preview's tracking boxes and
+      generating tracking data.
+    * 6.7c3, editing tracking data (points, regions, the reference frame, the display range).
   * 6.7d, stabilization (p.275-284): Stabilize and Region Stabilize, editing segments that use tracking
     data, reusing and copying tracking data, the examples.
 * 6.8, titles (ch.12-13, p.301-377): the Title Tool and Titler+, with keyframes kept through trims,
