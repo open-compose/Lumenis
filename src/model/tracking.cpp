@@ -478,6 +478,112 @@ bool deleteTracker(Effect& effect, const QString& name) {
     return true;
 }
 
+QList<std::int64_t> pointFrames(const Tracker& tracker) {
+    QList<std::int64_t> out;
+    for (qsizetype r = 0; r < tracker.regions.size(); ++r) {
+        const std::int64_t end = r + 1 < tracker.regions.size() ? tracker.regions.at(r + 1).start : std::numeric_limits<std::int64_t>::max();
+        for (const TrackPoint& p : tracker.regions.at(r).points) {
+            if (p.frame >= tracker.regions.at(r).start && p.frame < end) out << p.frame;
+        }
+    }
+    return out;
+}
+
+bool deletePoints(Tracker& tracker, const QList<std::int64_t>& frames) {
+    const QList<std::int64_t> all = pointFrames(tracker);
+    bool changed = false;
+    for (std::int64_t f : frames) {
+        if (!tracker.pointAt(f)) continue;
+        // The nearest unselected points either side, in the frame's region.
+        const int r = tracker.regionAt(f);
+        std::optional<std::pair<std::int64_t, QPointF>> before, after;
+        for (std::int64_t g : all) {
+            if (frames.contains(g) || tracker.regionAt(g) != r) continue;
+            if (g < f && (!before || g > before->first)) before = std::pair{g, *tracker.pointAt(g)};
+            if (g > f && (!after || g < after->first)) after = std::pair{g, *tracker.pointAt(g)};
+        }
+        QPointF at;
+        if (before && after) {
+            const double u = static_cast<double>(f - before->first) / static_cast<double>(after->first - before->first);
+            at = before->second + (after->second - before->second) * u;
+        } else if (before) {
+            at = before->second;
+        } else if (after) {
+            at = after->second;
+        } else {
+            continue;
+        }
+        if (*tracker.pointAt(f) == at) continue;
+        tracker.setPoint(f, at);
+        changed = true;
+    }
+    return changed;
+}
+
+bool movePoints(Tracker& tracker, const QList<std::int64_t>& frames, const QPointF& by) {
+    if (by.isNull()) return false;
+    bool changed = false;
+    for (std::int64_t f : frames) {
+        if (const auto at = tracker.pointAt(f)) {
+            tracker.setPoint(f, *at + by);
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+bool stretchPoints(Tracker& tracker, const QList<std::int64_t>& frames, std::int64_t dragged, const QPointF& by) {
+    if (by.isNull() || frames.isEmpty() || !frames.contains(dragged)) return false;
+    const auto [lo, hi] = std::minmax_element(frames.begin(), frames.end());
+    const std::int64_t first = *lo, last = *hi;
+    bool changed = false;
+    for (std::int64_t f : frames) {
+        const auto at = tracker.pointAt(f);
+        if (!at) continue;
+        double weight = 1.0;
+        if (dragged == first && dragged != last) {
+            weight = static_cast<double>(last - f) / static_cast<double>(last - first);
+        } else if (dragged == last && dragged != first) {
+            weight = static_cast<double>(f - first) / static_cast<double>(last - first);
+        } else if (dragged != first && dragged != last) {
+            weight = f <= dragged ? static_cast<double>(f - first) / static_cast<double>(dragged - first)
+                                  : static_cast<double>(last - f) / static_cast<double>(last - dragged);
+        }
+        if (weight == 0.0) continue;
+        tracker.setPoint(f, *at + by * weight);
+        changed = true;
+    }
+    return changed;
+}
+
+bool addRegion(Tracker& tracker, std::int64_t frame) {
+    const int r = tracker.regionAt(frame);
+    if (r < 0 || tracker.regions.at(r).start == frame) return false;
+    TrackerRegion region;
+    region.start = frame;
+    region.target = tracker.regions.at(r).target;
+    region.search = tracker.regions.at(r).search;
+    if (const auto at = tracker.pointAt(frame)) {
+        const QPointF by = *at - region.target.center();
+        region.target.translate(by);
+        region.search.translate(by);
+    }
+    tracker.regions.insert(r + 1, region);
+    return true;
+}
+
+bool deleteRegion(Tracker& tracker, std::int64_t frame) {
+    const int r = tracker.regionAt(frame);
+    if (r < 0) return false;
+    if (r == 0) {
+        if (tracker.regions.first().points.isEmpty()) return false;
+        tracker.regions.first().points.clear();
+        return true;
+    }
+    tracker.regions.removeAt(r);
+    return true;
+}
+
 std::optional<QPointF> trackerPath(const Tracker& tracker, std::int64_t frame) {
     return sampled(processedPoints(tracker), frame);
 }

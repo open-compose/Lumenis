@@ -815,6 +815,21 @@ QString MonitorPicture::overlayHandleAt(const QPointF& point) const {
             best = h.id;
         }
     }
+    // Tracking data points (p.271).
+    if (best.isEmpty()) {
+        double nearestPoint = 5.0;
+        for (qsizetype i = 0; i < e.trackers.size(); ++i) {
+            const Composer::EffectPreview::TrackerShow& t = e.trackers.at(i);
+            for (qsizetype k = 0; k < t.points.size() && k < t.frames.size(); ++k) {
+                const QPointF at = overlayPoint(t.points.at(k));
+                const double d = std::hypot(at.x() - point.x(), at.y() - point.y());
+                if (d <= nearestPoint) {
+                    nearestPoint = d;
+                    best = QStringLiteral("trackpoint:%1:%2").arg(i).arg(t.frames.at(k));
+                }
+            }
+        }
+    }
     // Tracking boxes: their corner handles, then inside them (p.261: "Click anywhere within the boxes except
     // the adjustment handles, and drag the boxes").
     if (best.isEmpty()) {
@@ -844,6 +859,13 @@ QString MonitorPicture::overlayHandleAt(const QPointF& point) const {
 // a dark edge so that they show on any picture.
 void MonitorPicture::paintOverlay(QPainter& p) const {
     const Composer::EffectPreview& e = composer_.effectPreview();
+    if (lassoFrom_) {
+        p.save();
+        p.setPen(QPen(QColor(235, 235, 235), 1, Qt::DashLine));
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(QRectF(*lassoFrom_, lassoTo_).normalized());
+        p.restore();
+    }
     if (e.outline.isEmpty() && e.handles.isEmpty() && e.path.isEmpty() && e.pathDots.isEmpty() && e.guides.isEmpty() &&
         e.trackers.isEmpty()) {
         return;
@@ -883,6 +905,10 @@ void MonitorPicture::paintOverlay(QPainter& p) const {
         p.setPen(Qt::NoPen);
         p.setBrush(t.color);
         for (const QPointF& d : t.points) p.drawEllipse(overlayPoint(d), 2.0, 2.0);
+        p.setBrush(Qt::NoBrush);
+        for (qsizetype k = 0; k < t.points.size() && k < t.selected.size(); ++k) {
+            if (t.selected.at(k)) twice([&] { p.drawEllipse(overlayPoint(t.points.at(k)), 5.0, 5.0); }, QColor(255, 255, 255));
+        }
         if (t.current) {
             const QPointF at = overlayPoint(*t.current);
             twice([&] {
@@ -944,6 +970,14 @@ void MonitorPicture::mousePressEvent(QMouseEvent* event) {
             composer_.setActiveMonitor(monitor_);
             return;
         }
+        // "Drag the pointer across the range of data points that you want to select to lasso them" (p.271).
+        const auto& shown = composer_.effectPreview().trackers;
+        if (std::any_of(shown.begin(), shown.end(), [](const Composer::EffectPreview::TrackerShow& t) { return !t.points.isEmpty(); })) {
+            lassoFrom_ = event->position();
+            lassoTo_ = event->position();
+            composer_.setActiveMonitor(monitor_);
+            return;
+        }
     }
     if (const std::optional<model::TrimSide> side = shownTrimSide()) {
         // "Click either the outgoing (A-side) or incoming (B-side) monitor to play in real time during
@@ -971,6 +1005,11 @@ void MonitorPicture::mousePressEvent(QMouseEvent* event) {
 }
 
 void MonitorPicture::mouseMoveEvent(QMouseEvent* event) {
+    if (lassoFrom_) {
+        lassoTo_ = event->position();
+        update();
+        return;
+    }
     if (!handleDrag_.isEmpty()) {
         if (event->buttons() & Qt::LeftButton) {
             emit composer_.effectHandleDragged(handleDrag_, handleFrom_, overlayFraction(event->position()), false,
@@ -991,10 +1030,23 @@ void MonitorPicture::mouseMoveEvent(QMouseEvent* event) {
 }
 
 void MonitorPicture::mouseReleaseEvent(QMouseEvent* event) {
+    if (lassoFrom_) {
+        const QRectF area = QRectF(overlayFraction(*lassoFrom_), overlayFraction(event->position())).normalized();
+        lassoFrom_.reset();
+        update();
+        emit composer_.effectLasso(area, event->modifiers() & Qt::ShiftModifier);
+        return;
+    }
     if (handleDrag_.isEmpty()) return;
     const QString id = handleDrag_;
     handleDrag_.clear();
     emit composer_.effectHandleDragged(id, handleFrom_, overlayFraction(event->position()), true, event->modifiers() & Qt::ShiftModifier);
+}
+
+void MonitorPicture::mouseDoubleClickEvent(QMouseEvent* event) {
+    if (monitor_ != MonitorId::Record || !composer_.effectPreview().on) return;
+    const QString id = overlayHandleAt(event->position());
+    if (id.startsWith(QLatin1String("trackpoint:"))) emit composer_.effectPointDoubleClicked(id);
 }
 
 void MonitorPicture::contextMenuEvent(QContextMenuEvent* event) {

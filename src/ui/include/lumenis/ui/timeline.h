@@ -243,6 +243,9 @@ public:
     // The callbacks MainWindow supplies: where sequences are stored, how the first edit makes
     // one, and which command a key press means. Without a store, changes reach only the Composer.
     void setSequenceStore(SequenceStore store) { store_ = std::move(store); }
+    // Asked first when Delete (edit.delete) runs: true when it deleted something of its own (the Effect Editor's
+    // selected tracking data points), so the Timeline does nothing more.
+    void setDeleteHook(std::function<bool()> hook) { deleteHook_ = std::move(hook); }
     void setSequenceMaker(SequenceMaker maker) { maker_ = std::move(maker); }
     void setKeyResolver(Composer::KeyResolver resolver) { keys_ = std::move(resolver); }
 
@@ -1300,6 +1303,7 @@ private:
     QString message_;
     bool syncing_ = false;
     SequenceStore store_;
+    std::function<bool()> deleteHook_;
     SequenceMaker maker_;
     Composer::KeyResolver keys_;
     InsufficientSource insufficient_;

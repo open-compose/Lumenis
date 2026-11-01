@@ -150,6 +150,49 @@ private slots:
         QVERIFY(near(*trackerMovement(line, 0), QPointF(-0.2, -0.5)));
     }
 
+    // Editing the data points (p.266, p.271-274).
+    void editing() {
+        Tracker t = withPoints(QStringLiteral("Point A"), {{0, 0.0, 0.0}, {1, 0.5, 0.9}, {2, 0.1, 0.9}, {3, 0.3, 0.3}, {4, 0.4, 0.4}});
+        QCOMPARE(pointFrames(t), (QList<std::int64_t>{0, 1, 2, 3, 4}));
+        // Delete: onto the straight line between the unselected points around them.
+        QVERIFY(deletePoints(t, {1, 2}));
+        QVERIFY(near(*t.pointAt(1), QPointF(0.1, 0.1)));
+        QVERIFY(near(*t.pointAt(2), QPointF(0.2, 0.2)));
+        QVERIFY(!deletePoints(t, {1, 2}));
+        // Move: all by the same amount.
+        QVERIFY(movePoints(t, {3, 4}, QPointF(0.1, 0.0)));
+        QVERIFY(near(*t.pointAt(4), QPointF(0.5, 0.4)));
+        QVERIFY(near(*t.pointAt(0), QPointF(0.0, 0.0)));
+        // Stretch from an end: the other end stays.
+        Tracker line = withPoints(QStringLiteral("Point A"), {{0, 0.0, 0.0}, {1, 0.1, 0.0}, {2, 0.2, 0.0}, {3, 0.3, 0.0}, {4, 0.4, 0.0}});
+        Tracker end = line;
+        QVERIFY(stretchPoints(end, {0, 1, 2, 3, 4}, 4, QPointF(0.0, 0.4)));
+        QVERIFY(near(*end.pointAt(0), QPointF(0.0, 0.0)));
+        QVERIFY(near(*end.pointAt(2), QPointF(0.2, 0.2)));
+        QVERIFY(near(*end.pointAt(4), QPointF(0.4, 0.4)));
+        // From the middle: both ends stay.
+        Tracker middle = line;
+        QVERIFY(stretchPoints(middle, {0, 1, 2, 3, 4}, 2, QPointF(0.0, 0.2)));
+        QVERIFY(near(*middle.pointAt(0), QPointF(0.0, 0.0)));
+        QVERIFY(near(*middle.pointAt(1), QPointF(0.1, 0.1)));
+        QVERIFY(near(*middle.pointAt(2), QPointF(0.2, 0.2)));
+        QVERIFY(near(*middle.pointAt(4), QPointF(0.4, 0.0)));
+        // Regions: a new one from the position, its boxes on the tracker there; deleting it takes its data.
+        Tracker regions = line;
+        regions.regions[0].target = QRectF(0.0, 0.0, 0.1, 0.1);
+        QVERIFY(addRegion(regions, 3));
+        QCOMPARE(regions.regions.size(), 2);
+        QVERIFY(near(regions.regions.at(1).target.center(), QPointF(0.3, 0.0)));
+        QVERIFY(!regions.pointAt(3)); // to be tracked
+        QVERIFY(!addRegion(regions, 3));
+        regions.setPoint(3, QPointF(0.9, 0.9));
+        QVERIFY(deleteRegion(regions, 3));
+        QCOMPARE(regions.regions.size(), 1);
+        QVERIFY(regions.pointAt(3)); // the first region's own point shows again
+        QVERIFY(deleteRegion(regions, 0));
+        QVERIFY(!regions.hasData());
+    }
+
     // What the data does: Position (with the Axis menu, p.275), Scaling and Rotation from two trackers, the
     // Tracking category's map (p.259).
     void changes() {

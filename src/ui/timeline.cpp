@@ -3292,7 +3292,9 @@ bool Timeline::perform(const QString& id) {
             pasteClipboard();
         }
     } else if (id == QLatin1String("edit.delete")) {
-        if (!keySelection_.isEmpty()) {
+        if (deleteHook_ && deleteHook_()) {
+            // deleted by the hook's owner
+        } else if (!keySelection_.isEmpty()) {
             const QList<model::KeyRef> keys = keySelection_;
             if (const model::LoadedClip* rec = recordSequence()) {
                 model::Sequence seq = model::Sequence::fromItem(rec->item);

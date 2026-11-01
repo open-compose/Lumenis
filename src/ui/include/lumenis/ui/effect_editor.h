@@ -352,8 +352,33 @@ public:
     bool startTracking();
     void stopTracking() { stopTracking_ = true; }
     bool isTracking() const { return tracking_; }
-    // The effect's frame at the position (tracking data's frames).
+    // The effect's frame at the position (tracking data's frames), and moving the position to one.
     std::int64_t positionFrame() const;
+    void moveToFrame(std::int64_t frame);
+
+    // ---- Editing tracking data (p.265-274)
+    // The selected data points of tracker `index` (by frame, in order). Clicking a point selects it alone,
+    // Shift+click the range from the last one selected, a lasso the points inside it (Shift adds); double-clicking
+    // also goes to its frame (p.271). The selection is shown circled in the Effect Preview and white on the tracker
+    // timeline (p.267).
+    QList<std::int64_t> selectedPoints(int index) const { return pointSelection_.value(index); }
+    void selectPoints(int index, const QList<std::int64_t>& frames, bool extend = false);
+    void clearPointSelection();
+    void lassoPoints(const QRectF& area, bool extend);
+    // Delete with points selected: onto the straight line between the points around them (p.272); one undo step.
+    bool deleteSelectedPoints();
+    // Stretch Points Mode (p.273): dragging a selected point stretches the selection instead of moving it.
+    bool stretchMode() const { return stretchMode_; }
+    void setStretchMode(bool on);
+    // The tracker timeline's right-click commands at the position (p.266, p.269), one undo step each, and the
+    // Go to Previous Region and Go to Next Region buttons (p.266); false when nothing changes.
+    bool addTrackerRegion(int index);
+    bool deleteTrackerRegion(int index);
+    bool setReferenceFrame(int index);
+    bool goToRegion(bool next);
+    // The Display Markers (p.268): the range In to Out shows, frames of the effect; the whole effect at first.
+    std::pair<std::int64_t, std::int64_t> displayRange() const;
+    void setDisplayRange(std::int64_t in, std::int64_t out);
 
     // ---- Nested effects (p.221-222; docs/spec/nesting.md)
     // "Nested effects on a segment are fully available in the Effect Editor": the shown segment effect's
@@ -462,6 +487,15 @@ private:
     bool tracking_ = false;
     bool stopTracking_ = false;
     QHash<QString, QWidget*> trackingControls_; // "tracking:<Parameter>[:T<n>|:Axis|:Stabilize]" -> control
+    QHash<int, QList<std::int64_t>> pointSelection_; // tracker index -> selected frames
+    std::optional<std::pair<int, std::int64_t>> lastPoint_; // the point last clicked, for Shift+click ranges
+    bool stretchMode_ = false;
+    std::optional<std::pair<std::int64_t, std::int64_t>> displayRange_;
+    // A data point's click or drag (dragHandle's "trackpoint:<n>:<frame>").
+    bool dragTrackPoint(const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift);
+    // The frames of a tracker's data points the Point Range menu shows (p.268).
+    QList<std::int64_t> shownPointFrames(const model::Tracker& tracker) const;
+    void selectionChanged();
     // The tracking controls of one parameter in the editor (enable, selectors, Axis), and keeping them in step.
     QWidget* trackingControls(model::TrackedParameter parameter, QWidget* parent);
     void syncTracking(const model::Effect& effect);

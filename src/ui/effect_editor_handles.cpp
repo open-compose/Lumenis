@@ -116,6 +116,7 @@ void EffectEditor::putValue(model::Effect& effect, const QString& category, cons
 
 bool EffectEditor::dragHandle(const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift) {
     if (id.startsWith(QLatin1String("track:"))) return dragTrackerBox(id, from, to, finished);
+    if (id.startsWith(QLatin1String("trackpoint:"))) return dragTrackPoint(id, from, to, finished, shift);
     if (!shown_ || !current_ || !timeline_.isEffectMode() || !media::hasEffectOutline(*current_)) {
         handleStart_.reset();
         return false;

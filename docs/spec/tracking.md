@@ -6,7 +6,8 @@ SteadyGlide, Smoothing, the reference frame, parameter mappings and the change a
 `src/media/tracking.*` (the engines, `media::trackedEffect` and the Tracking category's map), the compositor and
 `warp3d.cpp` hooks. Test: `tst_tracking`. 6.7c1 is the data and the engines; 6.7c2 the Tracking window, the Effect
 Editor's tracker controls and the Effect Preview's boxes (`src/ui/effect_editor_tracking.cpp`,
-`src/ui/tracking_window.*`; test `tst_tracking_ui`); 6.7c3 editing the data.
+`src/ui/tracking_window.*`; test `tst_tracking_ui`); 6.7c3 editing the data (the same files, `model::deletePoints`
+and friends; tests `tst_tracking`, `tst_tracking_ui`).
 
 ## From the guide
 
@@ -82,12 +83,42 @@ Editor's tracker controls and the Effect Preview's boxes (`src/ui/effect_editor_
 * The Effect Preview shows each enabled tracker's data points and the position's cross, and its boxes at its
   region's first frame (ours: also while the region has no data); dragging inside the search box moves both boxes,
   a box's bottom-right corner resizes it (the target at least 1% of the frame; the search area grows to hold the
-  target). Display Effect Results hides tracking data; In to Out shows all points until 6.7c3's Display Markers.
+  target). Display Effect Results hides tracking data; In to Out shows the points between the Display Markers (6.7c3).
 * Start Tracking (`EffectEditor::startTracking`) runs each enabled tracker from the position to the end of its
   region with the chosen engine over frames MainWindow composes (480 pixels wide): the video tracks below the
   effect's own, or with Track Foreground the effect's own segment without its effects. Data already there is
   replaced; the run is one undo step and what was tracked before a stop is kept.
 
+## 6.7c3: editing the data
+From the guide (p.265-274):
+* "Click the data point"; "Shift+click the first and last data points in the range"; lasso them; double-clicking a
+  point moves to its frame. Selected points are "highlighted with a circle" and white on the tracker timeline
+  (p.267, p.271).
+* "Media Composer repositions the selected data points along a straight line between the two unselected points
+  that bound the selected points" (Delete, p.272); dragging one "All the data points move along with the one you
+  drag and maintain their positions relative to one another" (p.272).
+* Stretch Points Mode: the others move "proportionally along the path between the point you have moved and the
+  anchor point or points. If you move a point at either end of the selected range, the point at the opposite end
+  becomes the anchor. If you move a point in the middle of the range, the two end points become anchors" (p.273-274).
+* The tracker timeline's right-click menu: Add New Tracker Region (to "the start of the next tracker region or the
+  end of the timeline"), Delete Tracker Region ("deletes the tracker region and any tracking data for it"), Set
+  Reference Frame (p.266, p.269); Go to Previous/Next Region "move to the previous or next region boundary".
+* "Drag the Display Markers in any one of the tracker timelines to define the beginning and end of the range"; In
+  to Out shows the data points between them (p.268).
+
+Ours:
+* Points are kept per tracker by frame (`EffectEditor::selectedPoints`); a click on a selected point keeps the
+  selection for a drag and, without a drag, selects that point alone. Shift+lasso adds to the selection. The
+  selection belongs to the effect shown and clears when another one is.
+* Delete with a bound on one side only puts the selected points on it; the Delete key reaches the editor through
+  `Timeline::setDeleteHook` before the Timeline's own uses of it.
+* Stretch Points moves each point in proportion to its frame's distance from the anchors.
+* A new region's boxes are where the tracker is at its first frame (else its region's). Deleting the first region
+  only deletes its data.
+* Go to Previous/Next Region uses every tracker's region starts. Clicking a tracker timeline moves the position.
+  The Display Markers are brackets, dragged within 4 pixels; the whole effect at first. Moving them with Mark IN
+  and Mark OUT (p.268) is not yet.
+
 ## Not yet
-* 6.7c3: selecting, moving, deleting and stretching points, regions, the reference frame, the display range.
+* The Display Markers from Mark IN and Mark OUT (p.268).
 * The Tracking category on 2D effects (the Intraframe effects, Blur and Mosaic), and Stabilize (6.7d).

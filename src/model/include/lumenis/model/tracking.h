@@ -132,6 +132,25 @@ bool renameTracker(Effect& effect, const QString& from, const QString& to);
 // from the selectors it was mapped to.
 bool deleteTracker(Effect& effect, const QString& name);
 
+// Editing a tracker's data points (p.271-274), by frame; each returns false when nothing changes.
+// "Media Composer repositions the selected data points along a straight line between the two unselected points
+// that bound the selected points" (Delete, p.272); with a bound on one side only they take its place.
+bool deletePoints(Tracker& tracker, const QList<std::int64_t>& frames);
+// "All the data points move along with the one you drag and maintain their positions relative to one another".
+bool movePoints(Tracker& tracker, const QList<std::int64_t>& frames, const QPointF& by);
+// Stretch Points mode: the dragged point moves by `by` and the others "proportionally along the path between the
+// point you have moved and the anchor point or points. If you move a point at either end of the selected range, the
+// point at the opposite end becomes the anchor. If you move a point in the middle of the range, the two end points
+// become anchors" (p.273-274). Ours: in proportion to their frames' distance from the anchors.
+bool stretchPoints(Tracker& tracker, const QList<std::int64_t>& frames, std::int64_t dragged, const QPointF& by);
+// "Add New Tracker Region": a region from `frame` to the next region's start, its boxes where the tracker is at
+// `frame` (or as its region's); "Delete Tracker Region" deletes the region at `frame` and its data (the first region
+// only loses its data) (p.266). "Set Reference Frame" (p.269).
+bool addRegion(Tracker& tracker, std::int64_t frame);
+bool deleteRegion(Tracker& tracker, std::int64_t frame);
+// The frames with data points (in their regions), in order.
+QList<std::int64_t> pointFrames(const Tracker& tracker);
+
 // A tracker's path at a frame: its points joined across regions by offset tracking ("Media Composer calculates
 // the offset from the first set of tracking points to the second", p.265), then smoothed (Smoothing) or with its
 // jitter taken out (SteadyGlide) by its value; between points, and beyond the first and last, the nearest data

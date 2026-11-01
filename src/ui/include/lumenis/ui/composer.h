@@ -85,6 +85,8 @@ protected:
     // Effect Preview's overlay manipulates the effect (Composer::effectHandleDragged).
     void mouseMoveEvent(QMouseEvent* event) override;
     void mouseReleaseEvent(QMouseEvent* event) override;
+    // Double-clicking a tracking data point selects it and goes to its frame (FX Guide p.271).
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dropEvent(QDropEvent* event) override;
@@ -107,6 +109,9 @@ private:
     void paintOverlay(QPainter& p) const;
     QString handleDrag_;
     QPointF handleFrom_;
+    // A lasso over the Effect Preview's tracking data points: where it began and is now (widget points).
+    std::optional<QPointF> lassoFrom_;
+    QPointF lassoTo_;
 };
 
 // The Composer window (p.379-387): the Source and Record monitors, each with
@@ -284,6 +289,8 @@ public:
             QRectF target;
             QRectF search;
             QList<QPointF> points;
+            QList<std::int64_t> frames; // each point's frame (of the effect)
+            QList<bool> selected;       // each point's selection, "highlighted with a circle" (p.271)
             std::optional<QPointF> current;
             bool operator==(const TrackerShow&) const = default;
         };
@@ -552,6 +559,10 @@ signals:
     // from where the drag began); `finished` on the release; `shift` with Shift held (Pan and Scan moves its
     // wire frame in all directions, FX Guide p.237).
     void effectHandleDragged(const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift);
+    // Tracking data points (FX Guide p.271): a data point ("trackpoint:<tracker>:<frame>") double-clicked, and a
+    // lasso dragged over the Effect Preview (`area` in fractions of the picture; `shift` held).
+    void effectPointDoubleClicked(const QString& id);
+    void effectLasso(const QRectF& area, bool shift);
     // A trim counter was clicked: that side, or both with Shift (p.651).
     void trimSideRequested(model::TrimSide side);
     // Play started or changed speed, and play stopped.

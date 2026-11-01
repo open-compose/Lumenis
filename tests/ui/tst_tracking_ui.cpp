@@ -1,7 +1,9 @@
 // Motion tracking in the Effect Editor (FX Guide ch.10, p.253-269; effect_editor_tracking.cpp, tracking_window.*):
 // enabling tracking for Position opens the Tracking window with Point A, the tracking boxes in the Effect Preview
 // are moved over the target, Start Tracking follows it through synthetic frames (and stops on the space bar), the
-// data drives the Picture-in-Picture, and the Tracking window's rows and menus change the trackers.
+// data drives the Picture-in-Picture, and the Tracking window's rows and menus change the trackers. Then editing
+// the data (6.7c3, p.265-274): selecting, moving, deleting and stretching points, regions, the reference frame and
+// the Display Markers.
 #include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/tracking.h"
@@ -16,11 +18,13 @@
 #include <QComboBox>
 #include <QKeyEvent>
 #include <QLineEdit>
+#include <QMenu>
 #include <QRandomGenerator>
 #include <QTest>
 #include <QToolButton>
 
 #include <cmath>
+#include <memory>
 
 using namespace lumenis;
 using namespace lumenis::ui;
@@ -192,6 +196,133 @@ private slots:
         settle();
         QCOMPARE(model::trackingOf(effect()).trackers.size(), 1);
         QVERIFY(model::trackerMapping(effect(), model::TrackedParameter::Position).selectors.first().isEmpty());
+        timeline.setEffectMode(false);
+    }
+
+    void editing() {
+        Composer composer;
+        Timeline timeline{composer};
+        EffectEditor editor{timeline};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence());
+        const EffectInfo* pip = EffectCatalog::builtin().find(QStringLiteral("Blend"), QStringLiteral("Picture-in-Picture"));
+        QVERIFY(pip);
+        timeline.dropEffect(QStringLiteral("V1"), 70, *pip);
+        composer.moveTo(MonitorId::Record, 50);
+        editor.resize(700, 900);
+        editor.show();
+        settle();
+        auto effect = [&] {
+            return *model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(1).effect;
+        };
+        auto point = [&](std::int64_t f) { return *model::trackingOf(effect()).trackers.first().pointAt(f); };
+        editor.findChild<QCheckBox*>(QStringLiteral("tracking:Position"))->click();
+        settle();
+        // Data on every frame: x = 0.2 + f / 100, y = 0.5.
+        QVERIFY(editor.changeTracking(QStringLiteral("data"), [](model::TrackingSetup& s) {
+            for (std::int64_t f = 0; f < 50; ++f) s.trackers[0].setPoint(f, QPointF(0.2 + static_cast<double>(f) / 100.0, 0.5));
+        }));
+        timeline.setEffectMode(true);
+        settle();
+        QCOMPARE(composer.effectPreview().trackers.first().points.size(), 50);
+        QCOMPARE(composer.effectPreview().trackers.first().frames.at(7), std::int64_t(7));
+
+        // "Click the data point"; "Shift+click the first and last data points in the range" (p.271).
+        QVERIFY(editor.dragHandle(QStringLiteral("trackpoint:0:10"), point(10), point(10), true));
+        QCOMPARE(editor.selectedPoints(0), (QList<std::int64_t>{10}));
+        QVERIFY(composer.effectPreview().trackers.first().selected.at(10));
+        QVERIFY(!composer.effectPreview().trackers.first().selected.at(11));
+        QVERIFY(editor.dragHandle(QStringLiteral("trackpoint:0:14"), point(14), point(14), true, true));
+        QCOMPARE(editor.selectedPoints(0), (QList<std::int64_t>{10, 11, 12, 13, 14}));
+
+        // Dragging one moves them all (p.272), one undo step.
+        QVERIFY(editor.dragHandle(QStringLiteral("trackpoint:0:12"), point(12), point(12) + QPointF(0, 0.05), false));
+        QVERIFY(editor.dragHandle(QStringLiteral("trackpoint:0:12"), point(12), point(12) + QPointF(0, 0.1), true));
+        settle();
+        QVERIFY(std::abs(point(10).y() - 0.6) < 1e-9 && std::abs(point(14).y() - 0.6) < 1e-9);
+        QVERIFY(std::abs(point(15).y() - 0.5) < 1e-9);
+        QCOMPARE(editor.selectedPoints(0).size(), 5);
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        settle();
+        QVERIFY(std::abs(point(12).y() - 0.5) < 1e-9);
+
+        // Stretch Points Mode: the middle point dragged, the ends anchored (p.273).
+        TrackingWindow* window = editor.trackingWindow();
+        window->stretchButton()->click();
+        QVERIFY(editor.stretchMode());
+        QVERIFY(editor.dragHandle(QStringLiteral("trackpoint:0:12"), point(12), point(12) + QPointF(0, 0.1), true));
+        settle();
+        QVERIFY(std::abs(point(12).y() - 0.6) < 1e-9);
+        QVERIFY(point(11).y() > 0.5 && point(11).y() < 0.6);
+        window->stretchButton()->click();
+        QVERIFY(!editor.stretchMode());
+
+        // Delete: onto the straight line between the points around the selection (p.272).
+        QVERIFY(timeline.perform(QStringLiteral("edit.delete")));
+        settle();
+        QVERIFY(std::abs(point(12).y() - 0.5) < 1e-9);
+        QVERIFY(std::abs(point(12).x() - 0.32) < 1e-9);
+        // The Effect Editor's own effect is still there (Delete did not remove it).
+        QVERIFY(model::trackingOf(effect()).trackers.size() == 1);
+
+        // A lasso selects the points inside it; Shift adds (p.271).
+        editor.lassoPoints(QRectF(QPointF(0.195, 0.45), QPointF(0.225, 0.55)), false);
+        QCOMPARE(editor.selectedPoints(0), (QList<std::int64_t>{0, 1, 2}));
+        editor.lassoPoints(QRectF(QPointF(0.475, 0.45), QPointF(0.485, 0.55)), true);
+        QCOMPARE(editor.selectedPoints(0), (QList<std::int64_t>{0, 1, 2, 28}));
+        editor.lassoPoints(QRectF(QPointF(0.9, 0.9), QPointF(0.95, 0.95)), false);
+        QVERIFY(editor.selectedPoints(0).isEmpty());
+        // Double-click: selected, and the position on its frame.
+        emit composer.effectPointDoubleClicked(QStringLiteral("trackpoint:0:20"));
+        settle();
+        QCOMPARE(editor.selectedPoints(0), (QList<std::int64_t>{20}));
+        QCOMPARE(editor.positionFrame(), std::int64_t(20));
+
+        // The tracker timeline: clicking moves the position; its menu adds a region there (p.266).
+        auto* track = dynamic_cast<TrackerTimeline*>(window->control(QStringLiteral("timeline"), 0));
+        QVERIFY(track);
+        window->show();
+        settle();
+        QTest::mouseClick(track, Qt::LeftButton, {}, QPoint(static_cast<int>(track->xOf(30)), track->height() / 2));
+        settle();
+        QCOMPARE(editor.positionFrame(), std::int64_t(30));
+        std::unique_ptr<QMenu> menu(track->makeMenu());
+        menu->findChild<QAction*>(QStringLiteral("addRegion"))->trigger();
+        settle();
+        QCOMPARE(model::trackingOf(effect()).trackers.first().regions.size(), 2);
+        QCOMPARE(model::trackingOf(effect()).trackers.first().regions.at(1).start, std::int64_t(30));
+        // Set Reference Frame (p.269).
+        menu->findChild<QAction*>(QStringLiteral("setReference"))->trigger();
+        settle();
+        QCOMPARE(model::trackingOf(effect()).trackers.first().reference, std::int64_t(30));
+        // Go to Previous/Next Region (p.266).
+        window->previousRegionButton()->click();
+        settle();
+        QCOMPARE(editor.positionFrame(), std::int64_t(0));
+        window->nextRegionButton()->click();
+        settle();
+        QCOMPARE(editor.positionFrame(), std::int64_t(30));
+        QVERIFY(!editor.goToRegion(true));
+        // Delete Tracker Region: the region and its data go.
+        menu->findChild<QAction*>(QStringLiteral("deleteRegion"))->trigger();
+        settle();
+        QCOMPARE(model::trackingOf(effect()).trackers.first().regions.size(), 1);
+
+        // The Display Markers and In to Out (p.268): only the points in the range.
+        editor.setDisplayRange(5, 9);
+        QCOMPARE(editor.displayRange(), (std::pair<std::int64_t, std::int64_t>{5, 9}));
+        window->pointRangeMenu()->setCurrentIndex(1);
+        settle();
+        QCOMPARE(composer.effectPreview().trackers.first().frames, (QList<std::int64_t>{5, 6, 7, 8, 9}));
+        // Dragging the end marker in the timeline.
+        const QPoint end(static_cast<int>(static_cast<double>(10) / 50.0 * track->width()), track->height() / 2);
+        QTest::mousePress(track, Qt::LeftButton, {}, end);
+        QTest::mouseMove(track, QPoint(static_cast<int>(track->xOf(14)), track->height() / 2));
+        QMouseEvent move(QEvent::MouseMove, QPointF(track->xOf(14), track->height() / 2.0), track->mapToGlobal(QPointF(track->xOf(14), track->height() / 2.0)),
+                         Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(track, &move);
+        QTest::mouseRelease(track, Qt::LeftButton, {}, QPoint(static_cast<int>(track->xOf(14)), track->height() / 2));
+        QCOMPARE(editor.displayRange(), (std::pair<std::int64_t, std::int64_t>{5, 14}));
         timeline.setEffectMode(false);
     }
 };

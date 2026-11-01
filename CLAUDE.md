@@ -571,7 +571,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   the Effect Editor's On boxes and tracker selectors, tracking boxes and data points in the Effect Preview through
   `Composer::EffectPreview::trackers`, `EffectEditor::startTracking` over frames from
   `MainWindow`'s `setTrackingFrames`; test `tst_tracking_ui`), is done.
-  Next: 6.7c3 (editing tracking data), then 6.7d, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.7c3, editing tracking data (selection, lasso and double-click in the Effect Preview, Delete through
+  `Timeline::setDeleteHook`, moving and Stretch Points Mode, the tracker timeline's region and reference frame
+  menu, Go to Previous/Next Region, the Display Markers; `model::deletePoints` and friends; tests `tst_tracking`,
+  `tst_tracking_ui`), is done, so 6.7c is.
+  Next: 6.7d (stabilization), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

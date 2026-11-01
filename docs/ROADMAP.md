@@ -1046,7 +1046,9 @@ phase of their own. They are done in three steps:
     * 6.7c2, the Tracking window, the Effect Editor's tracker controls, the Effect Preview's tracking boxes and
       generating tracking data. Done (docs/spec/tracking.md, `src/ui/tracking_window.*`,
       `src/ui/effect_editor_tracking.cpp`).
-    * 6.7c3, editing tracking data (points, regions, the reference frame, the display range).
+    * 6.7c3, editing tracking data (points, regions, the reference frame, the display range). Done
+      (docs/spec/tracking.md).
+    So 6.7c is done.
   * 6.7d, stabilization (p.275-284): Stabilize and Region Stabilize, editing segments that use tracking
     data, reusing and copying tracking data, the examples.
 * 6.8, titles (ch.12-13, p.301-377): the Title Tool and Titler+, with keyframes kept through trims,

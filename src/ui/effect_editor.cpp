@@ -416,6 +416,18 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
             [this](const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift) {
                 dragHandle(id, from, to, finished, shift);
             });
+    // Data points lassoed or double-clicked there (p.271).
+    connect(&timeline_.composer(), &Composer::effectLasso, this, &EffectEditor::lassoPoints);
+    connect(&timeline_.composer(), &Composer::effectPointDoubleClicked, this, [this](const QString& id) {
+        const QStringList parts = id.split(QLatin1Char(':'));
+        if (parts.size() != 3) return;
+        const int index = parts.at(1).toInt();
+        const std::int64_t frame = parts.at(2).toLongLong();
+        selectPoints(index, {frame});
+        moveToFrame(frame);
+    });
+    // The Delete key with data points selected (p.272), before the Timeline's own uses of it.
+    timeline_.setDeleteHook([this] { return deleteSelectedPoints(); });
     refresh();
 }
 
@@ -512,6 +524,10 @@ void EffectEditor::refresh() {
         transitionOnly_ = transitionOnly;
         handleStart_.reset();
         preview_.reset();
+        // Selected data points and the Display Markers belong to the effect shown.
+        pointSelection_.clear();
+        lastPoint_.reset();
+        displayRange_.reset();
         rebuild(effect);
         // An Avid Pan & Zoom whose image has moved asks for it (p.239).
         if (effect && media::isPanAndZoom(*effect)) {

@@ -67,6 +67,12 @@ std::int64_t EffectEditor::positionFrame() const {
     return model::trackingFrame(positionTime(), span_);
 }
 
+void EffectEditor::moveToFrame(std::int64_t frame) {
+    if (!shown_) return;
+    const std::int64_t last = std::max<std::int64_t>(span_.length - 1, 0);
+    timeline_.composer().moveTo(MonitorId::Record, effectStart_ + std::clamp<std::int64_t>(frame, 0, last));
+}
+
 bool EffectEditor::changeEffectParameters(const QString& description, const std::function<bool(model::Effect&)>& change) {
     if (!shown_ || !current_) return false;
     model::Effect edited = *current_;
@@ -254,19 +260,17 @@ void EffectEditor::fillTrackers(const model::Effect& effect, Composer::EffectPre
     if (!showTrackingData_) return;
     const model::TrackingSetup setup = model::trackingOf(effect);
     const std::int64_t frame = positionFrame();
-    for (const model::Tracker& t : setup.trackers) {
+    for (int index = 0; index < setup.trackers.size(); ++index) {
+        const model::Tracker& t = setup.trackers.at(index);
         Composer::EffectPreview::TrackerShow show;
         show.color = QColor(t.color);
         // "When this button is active for a tracker, tracking boxes and tracking data points display" (p.254).
         if (t.enabled) {
-            if (pointRange_ != PointRange::Current) {
-                // All the data points (In to Out's Display Markers come in 6.7c3; ours shows all meanwhile).
-                for (qsizetype r = 0; r < t.regions.size(); ++r) {
-                    const std::int64_t end = r + 1 < t.regions.size() ? t.regions.at(r + 1).start : std::numeric_limits<std::int64_t>::max();
-                    for (const model::TrackPoint& p : t.regions.at(r).points) {
-                        if (p.frame >= t.regions.at(r).start && p.frame < end) show.points << QPointF(p.x, p.y);
-                    }
-                }
+            const QList<std::int64_t> selected = pointSelection_.value(index);
+            for (std::int64_t f : shownPointFrames(t)) {
+                show.points << *t.pointAt(f);
+                show.frames << f;
+                show.selected << selected.contains(f);
             }
             show.current = t.pointAt(frame);
             // "Move the position indicator to the first frame or field of the segment, or to the first frame or
@@ -378,6 +382,213 @@ bool EffectEditor::startTracking() {
     model::setTracking(edited, setup);
     const QJsonObject parameters = edited.parameters;
     return changeShown(tr("Tracking"), [&](model::Effect& e) { e.parameters = parameters; });
+}
+
+// ---------------------------------------------------------------- editing tracking data
+
+QList<std::int64_t> EffectEditor::shownPointFrames(const model::Tracker& tracker) const {
+    // "Current: Displays the data point for the current frame only. In to Out: Displays the data points between the
+    // Display Markers ... All: Displays all data points for the segment" (p.268).
+    QList<std::int64_t> out;
+    if (pointRange_ == PointRange::Current) return out;
+    const auto [in, last] = displayRange();
+    for (std::int64_t f : model::pointFrames(tracker)) {
+        if (pointRange_ == PointRange::All || (f >= in && f <= last)) out << f;
+    }
+    return out;
+}
+
+void EffectEditor::selectionChanged() {
+    if (trackingWindow_) trackingWindow_->refresh();
+    syncPreview();
+}
+
+void EffectEditor::selectPoints(int index, const QList<std::int64_t>& frames, bool extend) {
+    if (!extend) pointSelection_.clear();
+    QList<std::int64_t>& selected = pointSelection_[index];
+    for (std::int64_t f : frames) {
+        if (!selected.contains(f)) selected << f;
+    }
+    std::sort(selected.begin(), selected.end());
+    if (selected.isEmpty()) pointSelection_.remove(index);
+    if (!frames.isEmpty()) lastPoint_ = std::pair{index, frames.last()};
+    selectionChanged();
+}
+
+void EffectEditor::clearPointSelection() {
+    if (pointSelection_.isEmpty()) return;
+    pointSelection_.clear();
+    lastPoint_.reset();
+    selectionChanged();
+}
+
+void EffectEditor::lassoPoints(const QRectF& area, bool extend) {
+    // "Lasso the data points" (p.271); Shift+lasso adds to the selection (ours, as Shift+click does).
+    if (!extend) pointSelection_.clear();
+    const model::TrackingSetup setup = tracking();
+    for (int i = 0; i < setup.trackers.size(); ++i) {
+        const model::Tracker& t = setup.trackers.at(i);
+        if (!t.enabled || !showTrackingData_) continue;
+        QList<std::int64_t> inside;
+        for (std::int64_t f : shownPointFrames(t)) {
+            if (area.contains(*t.pointAt(f))) inside << f;
+        }
+        if (!inside.isEmpty()) selectPoints(i, inside, true);
+    }
+    selectionChanged();
+}
+
+bool EffectEditor::dragTrackPoint(const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift) {
+    const QStringList parts = id.split(QLatin1Char(':'));
+    if (!shown_ || !current_ || parts.size() != 3) {
+        handleStart_.reset();
+        return false;
+    }
+    const int index = parts.at(1).toInt();
+    const std::int64_t frame = parts.at(2).toLongLong();
+    if (!handleStart_) {
+        handleStart_ = *current_;
+        const model::TrackingSetup setup = model::trackingOf(*current_);
+        if (index < 0 || index >= setup.trackers.size()) {
+            handleStart_.reset();
+            return false;
+        }
+        if (shift && lastPoint_ && lastPoint_->first == index) {
+            // "Shift+click the first and last data points in the range" (p.271).
+            const auto [lo, hi] = std::minmax(lastPoint_->second, frame);
+            QList<std::int64_t> range;
+            for (std::int64_t f : model::pointFrames(setup.trackers.at(index))) {
+                if (f >= lo && f <= hi) range << f;
+            }
+            const std::pair<int, std::int64_t> anchor = *lastPoint_;
+            selectPoints(index, range, true);
+            lastPoint_ = anchor;
+        } else if (shift) {
+            selectPoints(index, {frame}, true);
+        } else if (!pointSelection_.value(index).contains(frame)) {
+            // "Click the data point" (p.271); a selected one is dragged with the rest of the selection.
+            selectPoints(index, {frame});
+        }
+    }
+    const model::Effect start = *handleStart_;
+    if (finished) handleStart_.reset();
+    const QPointF by = to - from;
+    if (finished && by.isNull()) {
+        // A click: the point clicked without Shift becomes the selection, even if it was part of a larger one.
+        const bool alone = pointSelection_.size() == 1 && pointSelection_.value(index) == QList<std::int64_t>{frame};
+        if (!shift && !alone) selectPoints(index, {frame});
+        preview_.reset();
+        syncPreview();
+        return true;
+    }
+    model::TrackingSetup setup = model::trackingOf(start);
+    if (index < 0 || index >= setup.trackers.size()) return false;
+    const QList<std::int64_t> frames = pointSelection_.value(index);
+    model::Tracker& t = setup.trackers[index];
+    // "drag the data point to a new position. All the data points move along with the one you drag" (p.272), or
+    // in Stretch Points Mode stretch between the anchors (p.273).
+    const bool changed = stretchMode_ ? model::stretchPoints(t, frames, frame, by) : model::movePoints(t, frames, by);
+    model::Effect edited = start;
+    model::setTracking(edited, setup);
+    if (!finished) {
+        preview_ = edited;
+        syncPreview();
+        return changed;
+    }
+    preview_.reset();
+    if (!changed || edited.parameters == start.parameters) {
+        syncPreview();
+        return false;
+    }
+    const QJsonObject parameters = edited.parameters;
+    return changeShown(stretchMode_ ? tr("Stretch Points") : tr("Move Points"), [&](model::Effect& e) { e.parameters = parameters; });
+}
+
+bool EffectEditor::deleteSelectedPoints() {
+    if (pointSelection_.isEmpty() || !shown_ || !current_) return false;
+    const QHash<int, QList<std::int64_t>> selection = pointSelection_;
+    return changeEffectParameters(tr("Delete Points"), [&](model::Effect& e) {
+        model::TrackingSetup setup = model::trackingOf(e);
+        bool any = false;
+        for (auto it = selection.cbegin(); it != selection.cend(); ++it) {
+            if (it.key() < 0 || it.key() >= setup.trackers.size()) continue;
+            any = model::deletePoints(setup.trackers[it.key()], it.value()) || any;
+        }
+        if (any) model::setTracking(e, setup);
+        return any;
+    });
+}
+
+void EffectEditor::setStretchMode(bool on) {
+    stretchMode_ = on;
+    if (trackingWindow_) trackingWindow_->refresh();
+}
+
+bool EffectEditor::addTrackerRegion(int index) {
+    const std::int64_t frame = positionFrame();
+    return changeEffectParameters(tr("Add New Tracker Region"), [&](model::Effect& e) {
+        model::TrackingSetup setup = model::trackingOf(e);
+        if (index < 0 || index >= setup.trackers.size() || !model::addRegion(setup.trackers[index], frame)) return false;
+        model::setTracking(e, setup);
+        return true;
+    });
+}
+
+bool EffectEditor::deleteTrackerRegion(int index) {
+    const std::int64_t frame = positionFrame();
+    const bool done = changeEffectParameters(tr("Delete Tracker Region"), [&](model::Effect& e) {
+        model::TrackingSetup setup = model::trackingOf(e);
+        if (index < 0 || index >= setup.trackers.size() || !model::deleteRegion(setup.trackers[index], frame)) return false;
+        model::setTracking(e, setup);
+        return true;
+    });
+    if (done) {
+        // Its points may be gone.
+        pointSelection_.remove(index);
+        selectionChanged();
+    }
+    return done;
+}
+
+bool EffectEditor::setReferenceFrame(int index) {
+    const std::int64_t frame = positionFrame();
+    return changeEffectParameters(tr("Set Reference Frame"), [&](model::Effect& e) {
+        model::TrackingSetup setup = model::trackingOf(e);
+        if (index < 0 || index >= setup.trackers.size() || setup.trackers.at(index).reference == frame) return false;
+        setup.trackers[index].reference = frame;
+        model::setTracking(e, setup);
+        return true;
+    });
+}
+
+bool EffectEditor::goToRegion(bool next) {
+    // "Go to Previous Region / Go to Next Region": the nearest region start of any tracker (ours, as all trackers'
+    // regions are shown together).
+    const std::int64_t frame = positionFrame();
+    std::optional<std::int64_t> target;
+    for (const model::Tracker& t : tracking().trackers) {
+        for (const model::TrackerRegion& r : t.regions) {
+            if (next ? r.start > frame && (!target || r.start < *target) : r.start < frame && (!target || r.start > *target)) {
+                target = r.start;
+            }
+        }
+    }
+    if (!target) return false;
+    moveToFrame(*target);
+    return true;
+}
+
+std::pair<std::int64_t, std::int64_t> EffectEditor::displayRange() const {
+    const std::int64_t last = std::max<std::int64_t>(span_.length - 1, 0);
+    if (!displayRange_) return {0, last};
+    return {std::clamp<std::int64_t>(displayRange_->first, 0, last), std::clamp<std::int64_t>(displayRange_->second, 0, last)};
+}
+
+void EffectEditor::setDisplayRange(std::int64_t in, std::int64_t out) {
+    if (out < in) std::swap(in, out);
+    displayRange_ = std::pair{in, out};
+    if (trackingWindow_) trackingWindow_->refresh();
+    syncPreview();
 }
 
 } // namespace lumenis::ui
