@@ -659,7 +659,9 @@ there too.
 MSVC 14.44 (Visual Studio 2022 17.14) crashed compiling `src/media/key_effects.cpp` at the RGB
 Keyer's pixel loop. Writing it out plainly was not enough (CI run 219); moving the loop's body into a
 function of its own, `rgbKeyPixel`, compiled with `#pragma optimize("", off)` under MSVC only,
-avoided it. An internal compiler error is the
+avoided it, until an unrelated header change made MSVC rebuild the file and crash a few lines further on,
+at the matte blur (CI run 250). Now all of `rgbKeyerPicture` is compiled with the optimizer off under MSVC;
+when the error moves within one function, cover the whole function rather than the next line. An internal compiler error is the
 compiler's fault, not the code's: GCC and Clang build the same file cleanly. Simplify the statement
 at or just before the line the error names, keep the same result (the tests check it), and leave a
 comment saying why, so nobody "tidies" it back. The self-hosted Windows job is the check: it is the

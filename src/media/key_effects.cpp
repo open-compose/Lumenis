@@ -250,6 +250,12 @@ Picture lumaChromaKeyPicture(const model::Effect& e, const Picture& layer, doubl
 
 // ---------------------------------------------------------------- RGB Keyer
 
+// The optimizer is off for this whole function under MSVC too: with only the pixel loop's body moved out
+// (rgbKeyPixel), MSVC 14.44 still failed with C1001 a few lines further on, at the matte blur (CI run 250;
+// BUILDING.md). The heavy work is in rgbKeyPixel and blurMatte, so little speed is lost.
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma optimize("", off)
+#endif
 Picture rgbKeyerPicture(const model::Effect& e, const Picture& layer, double time, const model::EffectSpan& span) {
     // "Replaces part of the video image with another video image based on color ... You can also perform
     // post-key color correction" (p.474). Gain "Adjusts the threshold of the key", Soft "Softens the edge",
@@ -296,6 +302,9 @@ Picture rgbKeyerPicture(const model::Effect& e, const Picture& layer, double tim
     }
     return applyMatte(work, matte, flag(e, cat, QStringLiteral("Show Alpha")));
 }
+#if defined(_MSC_VER) && !defined(__clang__)
+#pragma optimize("", on)
+#endif
 
 // ---------------------------------------------------------------- SpectraMatte
 
