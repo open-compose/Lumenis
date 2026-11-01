@@ -815,6 +815,23 @@ QString MonitorPicture::overlayHandleAt(const QPointF& point) const {
             best = h.id;
         }
     }
+    // Tracking boxes: their corner handles, then inside them (p.261: "Click anywhere within the boxes except
+    // the adjustment handles, and drag the boxes").
+    if (best.isEmpty()) {
+        for (qsizetype i = 0; i < e.trackers.size(); ++i) {
+            const Composer::EffectPreview::TrackerShow& t = e.trackers.at(i);
+            if (!t.boxes) continue;
+            for (const auto& [box, which] : {std::pair{t.target, "target"}, std::pair{t.search, "search"}}) {
+                const QPointF corner = overlayPoint(box.bottomRight());
+                if (std::hypot(corner.x() - point.x(), corner.y() - point.y()) <= 6.0) {
+                    return QStringLiteral("track:%1:%2").arg(i).arg(QLatin1String(which));
+                }
+            }
+            if (QRectF(overlayPoint(t.search.topLeft()), overlayPoint(t.search.bottomRight())).contains(point)) {
+                return QStringLiteral("track:%1:move").arg(i);
+            }
+        }
+    }
     if (best.isEmpty() && moves && e.outline.size() == 4) {
         QPolygonF quad;
         for (const QPointF& c : e.outline) quad << overlayPoint(c);
@@ -827,7 +844,10 @@ QString MonitorPicture::overlayHandleAt(const QPointF& point) const {
 // a dark edge so that they show on any picture.
 void MonitorPicture::paintOverlay(QPainter& p) const {
     const Composer::EffectPreview& e = composer_.effectPreview();
-    if (e.outline.isEmpty() && e.handles.isEmpty() && e.path.isEmpty() && e.pathDots.isEmpty() && e.guides.isEmpty()) return;
+    if (e.outline.isEmpty() && e.handles.isEmpty() && e.path.isEmpty() && e.pathDots.isEmpty() && e.guides.isEmpty() &&
+        e.trackers.isEmpty()) {
+        return;
+    }
     p.save();
     p.setRenderHint(QPainter::Antialiasing);
     p.setBrush(Qt::NoBrush);
@@ -858,6 +878,34 @@ void MonitorPicture::paintOverlay(QPainter& p) const {
     p.setPen(QPen(QColor(0, 0, 0, 160), 1));
     p.setBrush(path);
     for (const QPointF& d : e.pathDots) p.drawEllipse(overlayPoint(d), 3.0, 3.0);
+    // Trackers: dots for the data points, a cross for the position's (p.267), the boxes with corner handles.
+    for (const Composer::EffectPreview::TrackerShow& t : e.trackers) {
+        p.setPen(Qt::NoPen);
+        p.setBrush(t.color);
+        for (const QPointF& d : t.points) p.drawEllipse(overlayPoint(d), 2.0, 2.0);
+        if (t.current) {
+            const QPointF at = overlayPoint(*t.current);
+            twice([&] {
+                p.drawLine(at - QPointF(6, 0), at + QPointF(6, 0));
+                p.drawLine(at - QPointF(0, 6), at + QPointF(0, 6));
+            }, t.color);
+        }
+        if (!t.boxes) continue;
+        p.setBrush(Qt::NoBrush);
+        for (const QRectF& box : {t.target, t.search}) {
+            const QRectF r(overlayPoint(box.topLeft()), overlayPoint(box.bottomRight()));
+            twice([&] { p.drawRect(r); }, t.color);
+            p.setPen(QPen(Qt::black, 1));
+            p.setBrush(t.color);
+            p.drawRect(QRectF(r.bottomRight() - QPointF(3, 3), QSizeF(6, 6)));
+            p.setBrush(Qt::NoBrush);
+        }
+        const QPointF centre = overlayPoint(t.target.center());
+        twice([&] {
+            p.drawLine(centre - QPointF(3, 0), centre + QPointF(3, 0));
+            p.drawLine(centre - QPointF(0, 3), centre + QPointF(0, 3));
+        }, t.color);
+    }
     for (const Composer::EffectPreview::Handle& h : e.handles) {
         const QPointF at = overlayPoint(h.at);
         if (h.from) twice([&] { p.drawLine(overlayPoint(*h.from), at); }, wire);

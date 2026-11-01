@@ -26,6 +26,8 @@ add_library(lumenis_ui STATIC
     effect_editor.cpp
     effect_editor_keyframes.cpp
     effect_editor_handles.cpp
+    effect_editor_tracking.cpp
+    tracking_window.cpp
     effect_palette.cpp
     capture.cpp
     command_registry.cpp
@@ -85,6 +87,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/interchange_dialogs.h
     include/lumenis/ui/list_tool.h
     include/lumenis/ui/effect_editor.h
+    include/lumenis/ui/tracking_window.h
     include/lumenis/ui/effect_palette.h
     include/lumenis/ui/capture.h
     include/lumenis/ui/command_registry.h

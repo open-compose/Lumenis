@@ -5,9 +5,11 @@
 #include "lumenis/model/effect_template.h"
 #include "lumenis/model/nest.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/tracking.h"
 #include "lumenis/ui/composer.h"
 
 #include <QHash>
+#include <QImage>
 #include <QSet>
 #include <QJsonValue>
 #include <QWidget>
@@ -30,6 +32,7 @@ namespace lumenis::ui {
 
 class KeyframeTrack;
 class Timeline;
+class TrackingWindow;
 
 // A control of the Effect Editor (FX guide p.491-586), from
 // resources/effect_parameters.json.
@@ -311,6 +314,47 @@ public:
     // opens asking you to locate the file" (p.239): a file dialog named "panZoomLocate", not modal.
     bool importImage(const QString& path);
 
+    // ---- Motion tracking (p.248-275; docs/spec/tracking.md)
+    // Where tracking's frames come from: the picture tracked at Record frame `frame` for the effect `effect`, the
+    // tracks below its track ("you almost always want to track the background") or, with `foreground`, its own
+    // segment without the effect (p.262). MainWindow sets it; without it Start Tracking does nothing.
+    using TrackingFrames = std::function<QImage(const model::EffectRef& effect, std::int64_t frame, bool foreground)>;
+    void setTrackingFrames(TrackingFrames frames) { trackingFrames_ = std::move(frames); }
+    // The shown effect's trackers and a parameter's mapping (empty when no effect is shown).
+    model::TrackingSetup tracking() const;
+    model::TrackerMapping trackerMapping(model::TrackedParameter parameter) const;
+    // The Effect Editor's tracking controls, each one undo step, false when nothing changes: a parameter's enable
+    // button (with `selector`, one of the Tracking category's selectors; p.257-258), which opens the Tracking
+    // window ("Once you enable tracking for a parameter, the Tracking window opens"); a selector's Fast menu
+    // (p.260); Position's Axis menu (p.275); Stabilize Tracking (p.577-578).
+    bool setParameterTracking(model::TrackedParameter parameter, bool on, int selector = -1);
+    bool mapTracker(model::TrackedParameter parameter, int selector, const QString& tracker);
+    bool setTrackingAxis(const QString& axis);
+    bool setStabilizeTracking(model::TrackedParameter parameter, bool on);
+    // Changes the shown effect's trackers as one undo step; false when nothing changes.
+    bool changeTracking(const QString& description, const std::function<void(model::TrackingSetup&)>& change);
+    bool renameTracker(const QString& from, const QString& to);
+    bool deleteTracker(const QString& name);
+    // The Tracking window (p.253-255), made when first asked for; the Tracking Tool button shows it.
+    TrackingWindow* trackingWindow();
+    void showTrackingWindow();
+    // The Tracking window's Point Range and Display menus (p.268-269): which data points the Effect Preview
+    // shows, and whether it shows tracking data or only the effect's results.
+    enum class PointRange { Current, InToOut, All };
+    PointRange pointRange() const { return pointRange_; }
+    void setPointRange(PointRange range);
+    bool showsTrackingData() const { return showTrackingData_; }
+    void setShowsTrackingData(bool show);
+    // Start Tracking (p.264-265): each enabled tracker tracked from the position to the end of its region (or of
+    // the effect) with the Tracking Engine chosen; at a region's first frame it "steps back one frame from the
+    // region boundary". Data already there is replaced; one undo step at the end. The space bar, Ctrl+period
+    // or a click stops it (stopTracking). False when nothing was tracked.
+    bool startTracking();
+    void stopTracking() { stopTracking_ = true; }
+    bool isTracking() const { return tracking_; }
+    // The effect's frame at the position (tracking data's frames).
+    std::int64_t positionFrame() const;
+
     // ---- Nested effects (p.221-222; docs/spec/nesting.md)
     // "Nested effects on a segment are fully available in the Effect Editor": the shown segment effect's
     // nested effects (model::nestedEffects at the position), outermost first, each with a title row and
@@ -410,6 +454,23 @@ private:
     QToolButton* outline_ = nullptr;
     bool outlineShown_ = false;
     std::optional<model::Effect> handleStart_; // the effect as it was when a handle drag began
+    // Motion tracking.
+    TrackingFrames trackingFrames_;
+    TrackingWindow* trackingWindow_ = nullptr;
+    PointRange pointRange_ = PointRange::All; // "All ... This is the default option" (p.268)
+    bool showTrackingData_ = true;
+    bool tracking_ = false;
+    bool stopTracking_ = false;
+    QHash<QString, QWidget*> trackingControls_; // "tracking:<Parameter>[:T<n>|:Axis|:Stabilize]" -> control
+    // The tracking controls of one parameter in the editor (enable, selectors, Axis), and keeping them in step.
+    QWidget* trackingControls(model::TrackedParameter parameter, QWidget* parent);
+    void syncTracking(const model::Effect& effect);
+    // Changes the shown effect as one undo step (`change` returns whether it changed anything).
+    bool changeEffectParameters(const QString& description, const std::function<bool(model::Effect&)>& change);
+    // The tracker overlay of the Effect Preview (fillOverlay).
+    void fillTrackers(const model::Effect& effect, Composer::EffectPreview& preview) const;
+    // A tracking box drag (dragHandle's "track:<n>:..." handles).
+    bool dragTrackerBox(const QString& id, const QPointF& from, const QPointF& to, bool finished);
     // Shows the handle buttons for a 3D effect only, and Outline/Path for an effect with an outline.
     void syncHandleButtons();
     // The Effect Preview overlay of `effect` at the position (syncPreview()).

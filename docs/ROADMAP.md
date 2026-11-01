@@ -1044,7 +1044,8 @@ phase of their own. They are done in three steps:
       mappings to Position, Scaling, Rotation and Corner Tracking) and the engines. Done (docs/spec/tracking.md,
       `src/model/tracking.*`, `src/media/tracking.*`).
     * 6.7c2, the Tracking window, the Effect Editor's tracker controls, the Effect Preview's tracking boxes and
-      generating tracking data.
+      generating tracking data. Done (docs/spec/tracking.md, `src/ui/tracking_window.*`,
+      `src/ui/effect_editor_tracking.cpp`).
     * 6.7c3, editing tracking data (points, regions, the reference frame, the display range).
   * 6.7d, stabilization (p.275-284): Stabilize and Region Stabilize, editing segments that use tracking
     data, reusing and copying tracking data, the examples.

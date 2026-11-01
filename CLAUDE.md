@@ -567,7 +567,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.7c1, motion tracking's data and engines (docs/spec/tracking.md: `src/model/tracking.*` kept under the effect's
   "Trackers", `model::trackedChange`; `src/media/tracking.*` with `media::trackTarget`, `trackedEffect` used by the
   compositor and Corner Tracking in `warp3d.cpp`; test `tst_tracking`), is done.
-  Next: 6.7c2 (the Tracking window and tracking boxes), 6.7c3, then 6.7d, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.7c2, the Tracking window and the tracking controls (`src/ui/tracking_window.*`, `effect_editor_tracking.cpp`:
+  the Effect Editor's On boxes and tracker selectors, tracking boxes and data points in the Effect Preview through
+  `Composer::EffectPreview::trackers`, `EffectEditor::startTracking` over frames from
+  `MainWindow`'s `setTrackingFrames`; test `tst_tracking_ui`), is done.
+  Next: 6.7c3 (editing tracking data), then 6.7d, then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

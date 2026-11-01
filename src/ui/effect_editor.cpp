@@ -1,6 +1,7 @@
 #include "lumenis/ui/effect_editor.h"
 
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/tracking_window.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/model/pan_scan.h"
 #include "lumenis/model/promote3d.h"
@@ -242,7 +243,12 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     side->addWidget(offButton(QStringLiteral("effectPlayLoop"), tr("Play Loop"), this));
     side->addWidget(offButton(QStringLiteral("effectPlay"), tr("Play"), this));
     side->addWidget(offButton(QStringLiteral("effectHQ"), tr("HQ"), this));
-    side->addWidget(offButton(QStringLiteral("effectTracking"), tr("Tracking"), this));
+    // The Tracking Tool button (p.253): the Tracking window.
+    QToolButton* trackingTool = offButton(QStringLiteral("effectTracking"), tr("Tracking Tool"), this);
+    trackingTool->setToolTip(tr("Tracking Tool"));
+    trackingTool->setEnabled(true);
+    connect(trackingTool, &QToolButton::clicked, this, [this] { showTrackingWindow(); });
+    side->addWidget(trackingTool);
     side->addWidget(offButton(QStringLiteral("effectGrid"), tr("Grid"), this));
     // The 3D effect handle buttons (p.292): checkable, one at a time, shown for 3D effects. Ours: lettered.
     struct HandleButton {
@@ -532,6 +538,7 @@ void EffectEditor::refresh() {
     syncTransition();
     promote3D_->setEnabled(current_ && model::canPromoteTo3D(*current_));
     syncHandleButtons();
+    if (trackingWindow_) trackingWindow_->refresh();
     // The position in the tracks moves while playing only with Update Position While Playing (p.132).
     if (updateWhilePlaying_ || !timeline_.composer().isPlaying()) updateTracks();
     else syncPreview();
@@ -557,6 +564,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     groupBodies_.clear();
     openers_.clear();
     controls_.clear();
+    trackingControls_.clear();
     burnInControls_.clear();
     valueLabels_.clear();
     categoryOrder_.clear();
@@ -688,7 +696,46 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                 label->setMinimumWidth(64);
                 row->addWidget(label);
                 nameLabel = label;
-                if (p.kind == QLatin1String("slider")) {
+                // Motion tracking's controls (p.257-260, p.275, p.498-499, p.571, p.577-578).
+                static const struct {
+                    const char* category;
+                    const char* name;
+                    model::TrackedParameter parameter;
+                } kTracked[] = {{"Position", "Tracking", model::TrackedParameter::Position},
+                                {"Scaling", "Tracking", model::TrackedParameter::Scaling},
+                                {"Tracking", "Tracker selectors", model::TrackedParameter::Tracking},
+                                {"Corner Tracking", "Tracker selectors", model::TrackedParameter::Tracking},
+                                {"Position (3D)", "Tracker Selector", model::TrackedParameter::Position},
+                                {"Rotation", "Tracker Selector", model::TrackedParameter::Rotation},
+                                {"Scaling (3D)", "Tracker Selector", model::TrackedParameter::Scaling}};
+                const auto tracked = std::find_if(std::begin(kTracked), std::end(kTracked), [&](const auto& t) {
+                    return category == QLatin1String(t.category) && p.name == QLatin1String(t.name);
+                });
+                const bool stabilize = p.name == QLatin1String("Stabilize Tracking");
+                const bool axis3D = category == QLatin1String("Position (3D)") && p.name == QLatin1String("Axis");
+                if (tracked != std::end(kTracked)) {
+                    row->addWidget(trackingControls(tracked->parameter, box), 1);
+                } else if (axis3D || stabilize) {
+                    // The 3D Axis menu and Stabilize Tracking belong to their category's tracking.
+                    const model::TrackedParameter tp = category == QLatin1String("Rotation") ? model::TrackedParameter::Rotation
+                                                       : category.startsWith(QLatin1String("Scaling")) ? model::TrackedParameter::Scaling
+                                                                                                        : model::TrackedParameter::Position;
+                    if (axis3D) {
+                        auto* m = new QComboBox(box);
+                        m->setObjectName(QStringLiteral("tracking:Position:Axis"));
+                        m->addItems({QStringLiteral("X and Y"), QStringLiteral("X Tracking Only"), QStringLiteral("Y Tracking Only")});
+                        connect(m, &QComboBox::textActivated, this, [this](const QString& t) { setTrackingAxis(t); });
+                        trackingControls_.insert(m->objectName(), m);
+                        row->addWidget(m, 1);
+                    } else {
+                        auto* c = new QCheckBox(box);
+                        c->setObjectName(QStringLiteral("tracking:%1:Stabilize").arg(model::trackedParameterKey(tp)));
+                        connect(c, &QCheckBox::clicked, this, [this, tp](bool on) { setStabilizeTracking(tp, on); });
+                        trackingControls_.insert(c->objectName(), c);
+                        row->addWidget(c);
+                        row->addStretch(1);
+                    }
+                } else if (p.kind == QLatin1String("slider")) {
                     auto* s = new QSlider(Qt::Horizontal, box);
                     s->setObjectName(QStringLiteral("param:") + k);
                     s->setRange(p.sliderPosition(p.min), p.sliderPosition(p.max));
@@ -1027,6 +1074,7 @@ void EffectEditor::setBurnIn(int display, const QString& name, const QJsonValue&
 void EffectEditor::syncValues(const model::Effect& effect) {
     syncing_ = true;
     if (auto* file = findChild<QLabel*>(QStringLiteral("panZoomFile"))) file->setText(QFileInfo(media::panZoomImagePath(effect)).fileName());
+    syncTracking(effect);
     for (auto it = controls_.cbegin(); it != controls_.cend(); ++it) {
         const QString category = it.key().section(QLatin1Char('/'), 0, 0);
         const QString name = it.key().section(QLatin1Char('/'), 1);

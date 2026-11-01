@@ -125,6 +125,13 @@ int selectorCount(TrackedParameter parameter);
 bool enableTracking(Effect& effect, TrackedParameter parameter, int selector = -1);
 bool disableTracking(Effect& effect, TrackedParameter parameter);
 
+// Renames a tracker (the Tracker Name text box, p.255) and the selectors mapped to it; false when the name is
+// empty, taken or unknown.
+bool renameTracker(Effect& effect, const QString& from, const QString& to);
+// "Closes the tracker and permanently deletes any information within it" (p.255): the tracker, and its name
+// from the selectors it was mapped to.
+bool deleteTracker(Effect& effect, const QString& name);
+
 // A tracker's path at a frame: its points joined across regions by offset tracking ("Media Composer calculates
 // the offset from the first set of tracking points to the second", p.265), then smoothed (Smoothing) or with its
 // jitter taken out (SteadyGlide) by its value; between points, and beyond the first and last, the nearest data

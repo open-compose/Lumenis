@@ -5,7 +5,8 @@ reference p.498-499, p.571, p.577-578). Code: `src/model/tracking.*` (trackers, 
 SteadyGlide, Smoothing, the reference frame, parameter mappings and the change at a frame),
 `src/media/tracking.*` (the engines, `media::trackedEffect` and the Tracking category's map), the compositor and
 `warp3d.cpp` hooks. Test: `tst_tracking`. 6.7c1 is the data and the engines; 6.7c2 the Tracking window, the Effect
-Editor's tracker controls and the Effect Preview's boxes; 6.7c3 editing the data.
+Editor's tracker controls and the Effect Preview's boxes (`src/ui/effect_editor_tracking.cpp`,
+`src/ui/tracking_window.*`; test `tst_tracking_ui`); 6.7c3 editing the data.
 
 ## From the guide
 
@@ -59,9 +60,34 @@ Editor's tracker controls and the Effect Preview's boxes; 6.7c3 editing the data
   place, to a tenth of a pixel; FluidTracker follows our optical flow at the point; FluidStabilizer takes the
   median of a 4 x 4 grid's flow.
 
-## Not yet
+## 6.7c2: the Tracking window, the controls and the boxes
 
-* 6.7c2: the Tracking window, the Effect Editor's tracker controls, the Effect Preview's tracking boxes and data
-  points, generating data from the tracks below (or the segment itself).
+* From the guide: tracking controls "appear in three locations: the Effect Editor, the Effect Preview monitor, and
+  the Tracking window" (p.251); the Tracking window opens when tracking is enabled for a tracker not yet mapped, or
+  from the Tracking Tool button (p.253); its components (Start Tracking, New Tracker, Tracking Engine, Track
+  Background/Foreground, Point Range, Display, and per tracker Enable Tracker, Offset Tracking, SteadyGlide,
+  Smoothing, Smoothing Value, Tracker Color, Tracker Name, timeline and Close) (p.254-255); the tracking box display,
+  "An inner rectangle used to define the target area, An outer rectangle used to define the search area, A data
+  point locator", moved by dragging inside and resized by each rectangle's corner handle, shown at the first frame
+  of the segment or region (p.260-261); generating data from the position, stopped by the space bar, Ctrl+period or
+  a click (p.264-265); the tracker timeline's black (data), red (none), region bars and reference diamond, the data
+  points as dots with the position's as a cross, Point Range Current/In to Out/All and Display Tracking Data/Effect
+  Results (p.267-269).
+* Ours: the Effect Editor's rows for Position and Scaling (2D "Tracking"), the 3D Tracker Selector rows, and the
+  Tracking and Corner Tracking categories show an On box (the parameter's enable), a Fast menu per selector T1-T4
+  (the Tracking category's each with its own On box), Position's Axis menu, and Stabilize Tracking; each change is
+  one undo step (`EffectEditor::setParameterTracking`, `mapTracker`, `setTrackingAxis`, `setStabilizeTracking`).
+  Enabling opens the Tracking window (`src/ui/tracking_window.*`, a tool window kept by the Effect Editor); the
+  Tracking Tool button shows it. Alt+click on an Enable Tracker button sets every tracker.
+* The Effect Preview shows each enabled tracker's data points and the position's cross, and its boxes at its
+  region's first frame (ours: also while the region has no data); dragging inside the search box moves both boxes,
+  a box's bottom-right corner resizes it (the target at least 1% of the frame; the search area grows to hold the
+  target). Display Effect Results hides tracking data; In to Out shows all points until 6.7c3's Display Markers.
+* Start Tracking (`EffectEditor::startTracking`) runs each enabled tracker from the position to the end of its
+  region with the chosen engine over frames MainWindow composes (480 pixels wide): the video tracks below the
+  effect's own, or with Track Foreground the effect's own segment without its effects. Data already there is
+  replaced; the run is one undo step and what was tracked before a stop is kept.
+
+## Not yet
 * 6.7c3: selecting, moving, deleting and stretching points, regions, the reference frame, the display range.
 * The Tracking category on 2D effects (the Intraframe effects, Blur and Mosaic), and Stabilize (6.7d).

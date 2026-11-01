@@ -59,6 +59,7 @@ void EffectEditor::syncHandleButtons() {
 }
 
 void EffectEditor::fillOverlay(const model::Effect& effect, Composer::EffectPreview& preview) const {
+    fillTrackers(effect, preview);
     if (!media::hasEffectOutline(effect)) return;
     const QSizeF size = previewSize();
     const double t = positionTime();
@@ -114,6 +115,7 @@ void EffectEditor::putValue(model::Effect& effect, const QString& category, cons
 }
 
 bool EffectEditor::dragHandle(const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift) {
+    if (id.startsWith(QLatin1String("track:"))) return dragTrackerBox(id, from, to, finished);
     if (!shown_ || !current_ || !timeline_.isEffectMode() || !media::hasEffectOutline(*current_)) {
         handleStart_.reset();
         return false;

@@ -6,6 +6,7 @@
 #include "lumenis/model/sequence.h"
 
 #include <QColor>
+#include <QRectF>
 #include <QElapsedTimer>
 #include <QImage>
 #include <QKeySequence>
@@ -272,6 +273,21 @@ public:
         QList<QPointF> path;     // the centre's line over the effect
         QList<QPointF> pathDots; // the centre at each keyframe
         QList<QList<QPointF>> guides; // dashed polygons (Avid Pan & Zoom's Safe Action area)
+        // Motion tracking (FX Guide p.260-261, p.267-268): each shown tracker's tracking boxes (the target area
+        // inside the search area, with a data point locator in the middle, when `boxes`), its data points as dots
+        // and the position's as a cross, in its colour. Dragging inside the boxes moves them (handle
+        // "track:<n>:move"), their corners resize them ("track:<n>:target", "track:<n>:search"), n being the
+        // tracker's index in this list.
+        struct TrackerShow {
+            QColor color;
+            bool boxes = false;
+            QRectF target;
+            QRectF search;
+            QList<QPointF> points;
+            std::optional<QPointF> current;
+            bool operator==(const TrackerShow&) const = default;
+        };
+        QList<TrackerShow> trackers;
         bool operator==(const EffectPreview&) const = default;
     };
     void setEffectPreview(const EffectPreview& preview);

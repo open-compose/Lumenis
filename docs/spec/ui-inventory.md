@@ -252,7 +252,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   the frame before a region, Smoothing's and SteadyGlide's Gaussians,
   the nearest data between and beyond points, distances and angles in
   the frame's proportions, the engines' methods (a fixed correlation
-  pattern, the optical flow, a 4 x 4 grid's median).
+  pattern, the optical flow, a 4 x 4 grid's median); 6.7c2: the On boxes
+  and selector Fast menus as rows in the Effect Editor, lettered buttons in
+  the Tracking window, boxes also shown while a region has no data, the
+  target's 1% minimum, tracking frames 480 pixels wide.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

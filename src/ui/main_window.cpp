@@ -1498,6 +1498,31 @@ void MainWindow::createTools() {
         if (timeline_->options().openEffectEditor) showTool(QStringLiteral("EffectEditor"));
     });
     effectEditor_ = new EffectEditor(*timeline_);
+    // Motion tracking's frames (FX Guide p.256, p.262): the video tracks below the effect's own ("you almost
+    // always want to track the background"), or with Track Foreground the effect's own segment without its effect.
+    // Ours: 480 pixels wide, at the project's shape.
+    effectEditor_->setTrackingFrames([this](const model::EffectRef& ref, std::int64_t frame, bool foreground) -> QImage {
+        const model::LoadedClip* loaded = composer_->state(MonitorId::Record).current();
+        if (!loaded || loaded->item.kind != model::BinItemKind::Sequence) return {};
+        const model::Sequence seq = model::Sequence::fromItem(loaded->item);
+        const model::Track* own = seq.track(ref.track);
+        if (!own) return {};
+        media::Composition c;
+        c.sequence = &seq;
+        const Rational aspect = composer_->aspectRatio();
+        const double ratio = aspect.num() > 0 && aspect.den() > 0 ? static_cast<double>(aspect.num()) / static_cast<double>(aspect.den()) : 16.0 / 9.0;
+        c.size = QSize(480, std::max(1, static_cast<int>(std::lround(480.0 / ratio))));
+        fillComposition(c, *loaded);
+        if (foreground) {
+            c.tracks = {ref.track};
+            c.effects = false;
+        } else {
+            for (const model::Track& t : seq.tracks()) {
+                if (t.kind == model::TrackKind::Video && t.number < own->number) c.tracks << t.name();
+            }
+        }
+        return media::composeImage(c, std::max<std::int64_t>(frame, 0));
+    });
     // "Media Composer opens the Effect Editor and the Record monitor becomes the Effect Preview monitor"
     // (FX Guide p.49).
     connect(timeline_, &Timeline::effectModeChanged, this, [this](bool on) {

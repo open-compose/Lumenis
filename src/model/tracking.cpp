@@ -437,6 +437,47 @@ bool disableTracking(Effect& effect, TrackedParameter parameter) {
     return true;
 }
 
+namespace {
+
+const TrackedParameter kAllParameters[] = {TrackedParameter::Position, TrackedParameter::Scaling, TrackedParameter::Rotation,
+                                           TrackedParameter::Tracking};
+
+// Every mapping's selectors named `from` become `to` (cleared and off when `to` is empty).
+void remap(Effect& effect, const QString& from, const QString& to) {
+    for (TrackedParameter p : kAllParameters) {
+        TrackerMapping m = trackerMapping(effect, p);
+        bool changed = false;
+        for (qsizetype i = 0; i < m.selectors.size(); ++i) {
+            if (m.selectors.at(i) != from) continue;
+            m.selectors[i] = to;
+            if (to.isEmpty()) m.selectorOn[i] = false;
+            changed = true;
+        }
+        if (changed) setTrackerMapping(effect, p, m);
+    }
+}
+
+} // namespace
+
+bool renameTracker(Effect& effect, const QString& from, const QString& to) {
+    TrackingSetup setup = trackingOf(effect);
+    Tracker* t = setup.tracker(from);
+    if (!t || to.trimmed().isEmpty() || from == to || setup.tracker(to)) return false;
+    t->name = to.trimmed();
+    setTracking(effect, setup);
+    remap(effect, from, to.trimmed());
+    return true;
+}
+
+bool deleteTracker(Effect& effect, const QString& name) {
+    TrackingSetup setup = trackingOf(effect);
+    const auto removed = setup.trackers.removeIf([&](const Tracker& t) { return t.name == name; });
+    if (removed == 0) return false;
+    setTracking(effect, setup);
+    remap(effect, name, QString());
+    return true;
+}
+
 std::optional<QPointF> trackerPath(const Tracker& tracker, std::int64_t frame) {
     return sampled(processedPoints(tracker), frame);
 }
