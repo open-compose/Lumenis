@@ -6,6 +6,7 @@
 #include <cstdint>
 
 class QComboBox;
+class QKeyEvent;
 class QMenu;
 class QLineEdit;
 class QSpinBox;
@@ -72,6 +73,10 @@ public:
     // A tracker row's controls by kind ("enable", "offset", "steadyglide", "smoothing", "value", "color", "name",
     // "timeline", "close") and the tracker's index; null when there is no such row.
     QWidget* control(const QString& kind, int index) const;
+
+protected:
+    // Ctrl+C and Ctrl+V (Command on macOS) copy and paste trackers while the window is active (p.283-284).
+    void keyPressEvent(QKeyEvent* event) override;
 
 private:
     EffectEditor& editor_;

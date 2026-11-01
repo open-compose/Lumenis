@@ -5587,6 +5587,12 @@ void MainWindow::installPanelHandlers() {
                 const bool clipboard = id == QLatin1String("edit.copy") || id == QLatin1String("edit.cut") ||
                                        id == QLatin1String("edit.paste");
                 if (clipboard && binsActive()) return;
+                // "Make sure that the Tracking window is active", then Copy or Paste its trackers (FX Guide p.283).
+                if (clipboard && effectEditor_->trackingWindowActive()) {
+                    if (id == QLatin1String("edit.copy")) effectEditor_->copyTrackers();
+                    if (id == QLatin1String("edit.paste")) effectEditor_->pasteTrackers();
+                    return;
+                }
                 // In the Effect Editor, Copy and Paste take its keyframes (FX Guide p.116-119).
                 if (const Panel* active = panels_->activePanel(); clipboard && active && active->id() == QLatin1String("EffectEditor")) {
                     if (id == QLatin1String("edit.copy") && effectEditor_->copyKeyframes()) return;

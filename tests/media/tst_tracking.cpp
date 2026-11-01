@@ -3,6 +3,7 @@
 // tracking data does to Position, Scaling, Rotation and the Tracking category, and the engines following a moving
 // target.
 #include "lumenis/media/tracking.h"
+#include "lumenis/model/sequence.h"
 #include "lumenis/model/tracking.h"
 
 #include <QJsonObject>
@@ -191,6 +192,70 @@ private slots:
         QVERIFY(regions.pointAt(3)); // the first region's own point shows again
         QVERIFY(deleteRegion(regions, 0));
         QVERIFY(!regions.hasData());
+    }
+
+    // Tracking data through segment edits (p.281-282): trims keep the data with the material, both parts of a
+    // split keep theirs; and pasting trackers (p.283).
+    void throughEdits() {
+        QList<TrackPoint> points;
+        for (std::int64_t f = 0; f < 40; ++f) points << TrackPoint{f, 0.01 * static_cast<double>(f), 0.5};
+        auto tracked = [&] {
+            model::Effect e = pip();
+            TrackingSetup setup;
+            setup.trackers << withPoints(QStringLiteral("Point A"), points);
+            setup.trackers[0].reference = 5;
+            setTracking(e, setup);
+            return e;
+        };
+        // shiftTrackingData itself: the head trimmed in by 10 frames.
+        model::Effect e = tracked();
+        shiftTrackingData(e, -10);
+        Tracker t = trackingOf(e).trackers.first();
+        QVERIFY(near(*t.pointAt(0), QPointF(0.10, 0.5)));
+        QVERIFY(near(*t.pointAt(-10), QPointF(0.0, 0.5))); // the trimmed material keeps its data
+        QCOMPARE(t.reference, std::int64_t(-5));
+        // Trimmed back out: as before.
+        shiftTrackingData(e, 10);
+        QCOMPARE(trackingOf(e), trackingOf(tracked()));
+        // Trimmed out beyond the data: the first region still starts at the effect's first frame.
+        shiftTrackingData(e, 4);
+        t = trackingOf(e).trackers.first();
+        QCOMPARE(t.regions.first().start, std::int64_t(0));
+        QVERIFY(!t.pointAt(3));
+        QVERIFY(near(*t.pointAt(4), QPointF(0.0, 0.5)));
+
+        // In a sequence: a segment with the tracked effect, split by an Add Edit and trimmed at its head.
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        model::Segment a;
+        a.clipId = QStringLiteral("a");
+        a.name = QStringLiteral("A");
+        a.sourceTrack = QStringLiteral("V1");
+        a.sourceIn = 20;
+        a.length = 40;
+        a.effect = tracked();
+        seq.splice(QStringLiteral("V1"), 0, {a});
+        QVERIFY(seq.addEdit(QStringLiteral("V1"), 15));
+        const model::Track* v1 = seq.track(QStringLiteral("V1"));
+        QCOMPARE(v1->segments.size(), 2);
+        // "tracking data is preserved on all parts of the segment for the range of frames in each part".
+        QVERIFY(near(*trackingOf(*v1->segments.at(0).effect).trackers.first().pointAt(14), QPointF(0.14, 0.5)));
+        QVERIFY(near(*trackingOf(*v1->segments.at(1).effect).trackers.first().pointAt(0), QPointF(0.15, 0.5)));
+        // Trimming the second part's head in by 5 (the roller's B side): its first frame is material frame 20.
+        model::trim(seq, {model::TrimRoller{QStringLiteral("V1"), 15, model::TrimSide::B}}, model::TrimKind::Overwrite, 5);
+        v1 = seq.track(QStringLiteral("V1"));
+        const model::Segment& second = v1->segments.at(v1->segments.size() - 1);
+        QCOMPARE(second.sourceIn, std::int64_t(40));
+        QVERIFY(near(*trackingOf(*second.effect).trackers.first().pointAt(0), QPointF(0.20, 0.5)));
+
+        // Pasting: below the others; a name in use gets a number; no more than eight.
+        TrackingSetup setup = trackingOf(tracked());
+        const QList<Tracker> copied = setup.trackers;
+        QCOMPARE(pasteTrackers(setup, copied), 1);
+        QCOMPARE(setup.trackers.size(), 2);
+        QCOMPARE(setup.trackers.last().name, QStringLiteral("Point A 2"));
+        QCOMPARE(setup.trackers.last().regions, setup.trackers.first().regions);
+        for (int i = 0; i < 10; ++i) pasteTrackers(setup, copied);
+        QCOMPARE(setup.trackers.size(), kMaxTrackers);
     }
 
     // What the data does: Position (with the Axis menu, p.275), Scaling and Rotation from two trackers, the

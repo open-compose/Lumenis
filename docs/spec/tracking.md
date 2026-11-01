@@ -119,6 +119,28 @@ Ours:
   The Display Markers are brackets, dragged within 4 pixels; the whole effect at first. Moving them with Mark IN
   and Mark OUT (p.268) is not yet.
 
+## 6.7d1: tracking data through edits, copying and pasting trackers
+From the guide (p.281-284):
+* "Tracking data persists during Segment editing ... If you lift a portion of the segment out of your sequence,
+  tracking data is preserved on all parts of the segment for the range of frames in each part"; "If you trim in from
+  the edges of a segment, tracking data is preserved for both the new length of the segment and for the material you
+  have trimmed. If you later trim the edges of the segment back out, the tracking data is still available"; "If you
+  trim out beyond the tracked data ... you must track over the range of these new frames".
+* Copy: "Enable the trackers you want to copy in the Tracking window", Edit > Copy or Ctrl+C; Paste with "the
+  Tracking window ... active": "The trackers appear in the Tracking window below any existing trackers", in the same
+  effect as "Duplicate copies of the enabled trackers ... with new tracker numbers".
+
+Ours:
+* The data counts frames from the effect's first frame, so `model::shiftTrackingData` moves points, region starts
+  and the reference frame wherever material is added to or taken off a segment's head (`Sequence::cut` for the
+  second part of a split, trims, slides). The first region always reaches back to the effect's first frame. Data
+  outside the segment stays and comes back when it is trimmed out again.
+* Copied trackers are kept for the session (not on the system clipboard); a pasted tracker whose name is taken gets
+  " 2", " 3" ..., since the selectors find trackers by name; at most eight in all. Ctrl+C and Ctrl+V in the Tracking
+  window, and Edit > Copy and Paste while it is the active window.
+* Scenario `33-tracking-through-edits.json`.
+
 ## Not yet
 * The Display Markers from Mark IN and Mark OUT (p.268).
-* The Tracking category on 2D effects (the Intraframe effects, Blur and Mosaic), and Stabilize (6.7d).
+* Stabilize (6.7d2) and Region Stabilize (6.7d3).
+* The Tracking category on 2D effects (the Intraframe effects, Blur and Mosaic).

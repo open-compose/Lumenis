@@ -10,6 +10,7 @@
 #include "lumenis/model/nest.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
+#include "lumenis/model/tracking.h"
 #include "lumenis/model/timewarp.h"
 
 #include <QJsonArray>
@@ -632,6 +633,8 @@ int Sequence::cut(Track& t, std::int64_t frame) {
     const std::int64_t head = frame - start;
     tail.shiftStart(head);
     tail.length -= head;
+    // The second part's tracking data keeps following its material (FX Guide p.281-282).
+    if (tail.effect) shiftTrackingData(*tail.effect, -head);
     t.segments[i].length = head;
     t.segments.insert(i + 1, tail);
     return i + 1;
@@ -1780,7 +1783,10 @@ QList<TrimRoller> trim(Sequence& sequence, const QList<TrimRoller>& all, TrimKin
             // the material (FX Guide p.124).
             s->shiftStart(by);
             s->length -= by;
-            if (s->effect) shiftFixedKeyframes(*s->effect, -by);
+            if (s->effect) {
+                shiftFixedKeyframes(*s->effect, -by);
+                shiftTrackingData(*s->effect, -by); // "tracking data is preserved" (p.282)
+            }
         };
         if (r.side == TrimSide::Both) {
             a->length += delta;
@@ -1888,7 +1894,10 @@ std::int64_t slideSegments(Sequence& sequence, QList<SegmentRef>& segments, std:
         Segment& next = t->segments[i + 1];
         next.shiftStart(delta);
         next.length -= delta;
-        if (next.effect) shiftFixedKeyframes(*next.effect, -delta);
+        if (next.effect) {
+            shiftFixedKeyframes(*next.effect, -delta);
+            shiftTrackingData(*next.effect, -delta);
+        }
         ref.start += delta;
         sequence.normalize(ref.track);
     }

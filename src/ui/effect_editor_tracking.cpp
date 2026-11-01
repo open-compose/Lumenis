@@ -47,6 +47,12 @@ private:
     EffectEditor& editor_;
 };
 
+// The trackers Copy took (p.283), for any effect of the session.
+QList<model::Tracker>& copiedTrackers() {
+    static QList<model::Tracker> copied;
+    return copied;
+}
+
 QString selectorName(int i) {
     return QStringLiteral("T%1").arg(i + 1);
 }
@@ -576,6 +582,37 @@ bool EffectEditor::goToRegion(bool next) {
     if (!target) return false;
     moveToFrame(*target);
     return true;
+}
+
+bool EffectEditor::copyTrackers() {
+    // "Enable the trackers you want to copy in the Tracking window" (p.283).
+    QList<model::Tracker> enabled;
+    for (const model::Tracker& t : tracking().trackers) {
+        if (t.enabled) enabled << t;
+    }
+    if (enabled.isEmpty()) return false;
+    copiedTrackers() = enabled;
+    return true;
+}
+
+bool EffectEditor::hasCopiedTrackers() const {
+    return !copiedTrackers().isEmpty();
+}
+
+bool EffectEditor::pasteTrackers() {
+    if (copiedTrackers().isEmpty() || !shown_ || !current_) return false;
+    // "The trackers appear in the Tracking window below any existing trackers" (p.283).
+    const QList<model::Tracker> copied = copiedTrackers();
+    return changeEffectParameters(tr("Paste Trackers"), [&](model::Effect& e) {
+        model::TrackingSetup setup = model::trackingOf(e);
+        if (model::pasteTrackers(setup, copied) == 0) return false;
+        model::setTracking(e, setup);
+        return true;
+    });
+}
+
+bool EffectEditor::trackingWindowActive() const {
+    return trackingWindow_ && trackingWindow_->isVisible() && trackingWindow_->isActiveWindow();
 }
 
 std::pair<std::int64_t, std::int64_t> EffectEditor::displayRange() const {

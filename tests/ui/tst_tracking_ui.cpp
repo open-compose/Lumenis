@@ -307,6 +307,7 @@ private slots:
         menu->findChild<QAction*>(QStringLiteral("deleteRegion"))->trigger();
         settle();
         QCOMPARE(model::trackingOf(effect()).trackers.first().regions.size(), 1);
+        menu.reset(); // a child of the row's timeline, which goes when the rows are rebuilt
 
         // The Display Markers and In to Out (p.268): only the points in the range.
         editor.setDisplayRange(5, 9);
@@ -323,6 +324,20 @@ private slots:
         QCoreApplication::sendEvent(track, &move);
         QTest::mouseRelease(track, Qt::LeftButton, {}, QPoint(static_cast<int>(track->xOf(14)), track->height() / 2));
         QCOMPARE(editor.displayRange(), (std::pair<std::int64_t, std::int64_t>{5, 14}));
+
+        track = nullptr; // Paste rebuilds the rows
+        // Copy and Paste in the Tracking window (p.283-284): the enabled trackers, below the others, renamed when
+        // the name is taken; one undo step.
+        QTest::keyClick(window, Qt::Key_C, Qt::ControlModifier);
+        QVERIFY(editor.hasCopiedTrackers());
+        QTest::keyClick(window, Qt::Key_V, Qt::ControlModifier);
+        settle();
+        QCOMPARE(model::trackingOf(effect()).trackers.size(), 2);
+        QCOMPARE(model::trackingOf(effect()).trackers.last().name, QStringLiteral("Point A 2"));
+        QCOMPARE(model::trackingOf(effect()).trackers.last().regions, model::trackingOf(effect()).trackers.first().regions);
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        settle();
+        QCOMPARE(model::trackingOf(effect()).trackers.size(), 1);
         timeline.setEffectMode(false);
     }
 };

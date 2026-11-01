@@ -12,6 +12,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
+#include <QKeyEvent>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
@@ -230,6 +231,18 @@ TrackingWindow::TrackingWindow(EffectEditor& editor, QWidget* parent) : QWidget(
     layout->addStretch(1);
     resize(640, 220);
     refresh();
+}
+
+void TrackingWindow::keyPressEvent(QKeyEvent* event) {
+    if (event->matches(QKeySequence::Copy)) {
+        editor_.copyTrackers();
+        return;
+    }
+    if (event->matches(QKeySequence::Paste)) {
+        editor_.pasteTrackers();
+        return;
+    }
+    QWidget::keyPressEvent(event);
 }
 
 QWidget* TrackingWindow::control(const QString& kind, int index) const {

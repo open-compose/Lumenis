@@ -575,7 +575,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `Timeline::setDeleteHook`, moving and Stretch Points Mode, the tracker timeline's region and reference frame
   menu, Go to Previous/Next Region, the Display Markers; `model::deletePoints` and friends; tests `tst_tracking`,
   `tst_tracking_ui`), is done, so 6.7c is.
-  Next: 6.7d (stabilization), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.7d is in three parts (ROADMAP). 6.7d1, tracking data through trims and splits (`model::shiftTrackingData`
+  from `Sequence::cut` and the trims) and copying and pasting trackers (`model::pasteTrackers`,
+  `EffectEditor::copyTrackers`; scenario `33-tracking-through-edits.json`), is done.
+  Next: 6.7d2 (the Stabilize effect), 6.7d3 (Region Stabilize), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

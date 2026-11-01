@@ -1,0 +1,25 @@
+[
+  {
+    "name": "tracking data stays with the material when the segment's head is trimmed in",
+    "guide": "FX Guide p.282",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 10, 50, {"effect": {"category": "Blend", "name": "Picture-in-Picture", "parameters": {"Trackers": {"list": [{"name": "Point A", "reference": 1, "regions": [{"start": 0, "target": [0.45, 0.45, 0.1, 0.1], "search": [0.4, 0.4, 0.2, 0.2], "points": [[0, 0.5, 0.5], [1, 0.5, 0.5], [2, 0.5, 0.5], [3, 0.5, 0.5], [4, 0.5, 0.5], [5, 0.5, 0.5]]}]}]}}}}]]}},
+    "steps": [
+      {"rollers": [["V1", 50, "b"]], "kind": "ripple"},
+      {"trim": 2}
+    ],
+    "expect": {"V1": [["A", 0, 50], ["B", 12, 48, {"tracking": {"Point A": [[-2, -1, 0, 1, 2, 3], -1]}}]]}
+  },
+  {
+    "name": "an add edit leaves each part the tracking data for its frames",
+    "guide": "FX Guide p.281-282",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["B", 10, 50, {"effect": {"category": "Blend", "name": "Picture-in-Picture", "parameters": {"Trackers": {"list": [{"name": "Point A", "reference": 1, "regions": [{"start": 0, "target": [0.45, 0.45, 0.1, 0.1], "search": [0.4, 0.4, 0.2, 0.2], "points": [[0, 0.5, 0.5], [1, 0.5, 0.5], [2, 0.5, 0.5], [3, 0.5, 0.5], [4, 0.5, 0.5], [5, 0.5, 0.5]]}]}]}}}}]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"position": "record", "frame": 53},
+      {"command": "edit.add_edit"}
+    ],
+    "expect": {"V1": [["A", 0, 50], ["B", 10, 3, {"tracking": {"Point A": [[0, 1, 2, 3, 4, 5], 1]}}], ["B", 13, 47, {"tracking": {"Point A": [[-3, -2, -1, 0, 1, 2], -2]}}]]}
+  }
+]

@@ -613,6 +613,32 @@ std::int64_t trackingFrame(double time, const EffectSpan& span) {
     return std::clamp<std::int64_t>(std::llround(span.frameOf(time)), 0, std::max<std::int64_t>(span.length - 1, 0));
 }
 
+void shiftTrackingData(Effect& effect, std::int64_t frames) {
+    if (frames == 0 || !effect.parameters.contains(kKey)) return;
+    TrackingSetup setup = trackingOf(effect);
+    for (Tracker& t : setup.trackers) {
+        for (TrackerRegion& r : t.regions) {
+            r.start += frames;
+            for (TrackPoint& p : r.points) p.frame += frames;
+        }
+        if (!t.regions.isEmpty()) t.regions.first().start = std::min<std::int64_t>(t.regions.first().start, 0);
+        t.reference += frames;
+    }
+    setTracking(effect, setup);
+}
+
+int pasteTrackers(TrackingSetup& setup, const QList<Tracker>& trackers) {
+    int added = 0;
+    for (Tracker t : trackers) {
+        if (setup.trackers.size() >= kMaxTrackers) break;
+        const QString base = t.name;
+        for (int n = 2; setup.tracker(t.name); ++n) t.name = QStringLiteral("%1 %2").arg(base).arg(n);
+        setup.trackers << t;
+        ++added;
+    }
+    return added;
+}
+
 TrackedChange trackedChange(const Effect& effect, std::int64_t frame, double aspect) {
     TrackedChange change;
     const TrackingSetup setup = trackingOf(effect);

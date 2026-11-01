@@ -8,6 +8,7 @@
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/automation.h"
 #include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/tracking.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/nest.h"
 #include "lumenis/model/pan_scan.h"
@@ -731,6 +732,15 @@ struct Run {
                             keyed.insert(k, list);
                         }
                         if (!keyed.isEmpty()) extra.insert(QStringLiteral("keyframes"), keyed);
+                        // Tracking data by tracker as [[the frames with data points], reference frame], frames
+                        // counted from the segment's first (FX Guide p.281-282).
+                        QJsonObject tracked;
+                        for (const model::Tracker& tracker : model::trackingOf(*g.effect).trackers) {
+                            QJsonArray frames;
+                            for (std::int64_t f : model::pointFrames(tracker)) frames.append(qint64(f));
+                            tracked.insert(tracker.name, QJsonArray{frames, qint64(tracker.reference)});
+                        }
+                        if (!tracked.isEmpty()) extra.insert(QStringLiteral("tracking"), tracked);
                     }
                     if (g.audioSuite) {
                         // [plug-in, {the values not at their defaults}].

@@ -118,7 +118,10 @@ Each file is a JSON list of scenarios:
   {the values not at their defaults}]}`, and one whose effect has
   keyframes `{"keyframes": {"Category/Name": [[position, value], ...]}}`
   (frames for Fixed keyframes, else the effect's time to 1/1000; FX Guide
-  p.124), and one with a Motion Adapter `{"adapter": clip rate}`.
+  p.124), and one whose effect has tracking data `{"tracking": {"Tracker
+  name": [[frames with data points], reference frame]}}` (frames from the
+  segment's first; FX Guide p.281-282), and one with a Motion Adapter
+  `{"adapter": clip rate}`.
   **expect_monitors:** a monitor's position, clip, and marks (`null`: no
   mark). **expect_formats** gives tracks' audio formats ("mono", "stereo",
   "5.1", "7.1") and **expect_channels** the channels a track's segments

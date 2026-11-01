@@ -376,6 +376,13 @@ public:
     bool deleteTrackerRegion(int index);
     bool setReferenceFrame(int index);
     bool goToRegion(bool next);
+    // Copy and Paste with the Tracking window active (p.283-284): the enabled trackers with their data, kept for the
+    // session; pasted below the shown effect's trackers (one undo step). False when there is nothing to copy or
+    // paste. `trackingWindowActive` says whether Copy and Paste are the Tracking window's.
+    bool copyTrackers();
+    bool pasteTrackers();
+    bool hasCopiedTrackers() const;
+    bool trackingWindowActive() const;
     // The Display Markers (p.268): the range In to Out shows, frames of the effect; the whole effect at first.
     std::pair<std::int64_t, std::int64_t> displayRange() const;
     void setDisplayRange(std::int64_t in, std::int64_t out);

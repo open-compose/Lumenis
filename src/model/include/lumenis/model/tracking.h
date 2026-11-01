@@ -151,6 +151,19 @@ bool deleteRegion(Tracker& tracker, std::int64_t frame);
 // The frames with data points (in their regions), in order.
 QList<std::int64_t> pointFrames(const Tracker& tracker);
 
+// After `frames` were added at the head of the effect's segment (negative: taken off, or the head of a split's
+// second part), its tracking data moves with the material: "If you trim in from the edges of a segment, tracking
+// data is preserved for both the new length of the segment and for the material you have trimmed"; "If you lift a
+// portion of the segment out of your sequence, tracking data is preserved on all parts of the segment for the range
+// of frames in each part" (p.281-282). Points, region starts and the reference frame shift; the first region still
+// starts at the effect's first frame or before.
+void shiftTrackingData(Effect& effect, std::int64_t frames);
+
+// Copies of trackers to paste into an effect "below any existing trackers" (p.283): up to the eight an effect can
+// have; a name already in use gets " 2", " 3" ... (ours: the selectors find trackers by name). Returns how many
+// were added.
+int pasteTrackers(TrackingSetup& setup, const QList<Tracker>& trackers);
+
 // A tracker's path at a frame: its points joined across regions by offset tracking ("Media Composer calculates
 // the offset from the first set of tracking points to the second", p.265), then smoothed (Smoothing) or with its
 // jitter taken out (SteadyGlide) by its value; between points, and beyond the first and last, the nearest data

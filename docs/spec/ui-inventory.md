@@ -258,7 +258,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   target's 1% minimum, tracking frames 480 pixels wide; 6.7c3: Shift+lasso
   adding, Delete with one bound, Stretch Points in proportion to frames,
   a new region's boxes, region starts of every tracker for Go to
-  Previous/Next Region, the Display Markers as brackets.
+  Previous/Next Region, the Display Markers as brackets; 6.7d1: copied
+  trackers kept for the session, pasted names numbered, the first region
+  reaching back to the effect's first frame after a trim.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as
