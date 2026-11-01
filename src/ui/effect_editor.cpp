@@ -1,6 +1,7 @@
 #include "lumenis/ui/effect_editor.h"
 
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/titler_tool.h"
 #include "lumenis/ui/tracking_window.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/model/pan_scan.h"
@@ -411,6 +412,8 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
         }
     });
     connect(&timeline_.composer(), &Composer::changed, this, &EffectEditor::refresh);
+    // Titler+'s tools in the Record monitor (FX Guide p.303-319).
+    titler_ = new TitlerTool(*this);
     // Handles dragged in the Effect Preview monitor (p.92, p.292).
     connect(&timeline_.composer(), &Composer::effectHandleDragged, this,
             [this](const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift) {
@@ -478,7 +481,7 @@ void EffectEditor::refresh() {
     current_.reset();
     // A handle drag in the Effect Preview keeps its preview while the Composer redraws (its refresh says
     // changed() too); anything else previewed is dropped.
-    if (!handleStart_) preview_.reset();
+    if (!handleStart_ && !(titler_ && titler_->busy())) preview_.reset();
     chain_.clear();
     // Another effect opens at its outermost level.
     if (ref != shown_) level_ = 0;
@@ -524,6 +527,8 @@ void EffectEditor::refresh() {
         transitionOnly_ = transitionOnly;
         handleStart_.reset();
         preview_.reset();
+        // A title's selection and typing belong to the effect shown (ours: typing not finished goes).
+        if (titler_) titler_->reset();
         // Selected data points and the Display Markers belong to the effect shown.
         pointSelection_.clear();
         lastPoint_.reset();

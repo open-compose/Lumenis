@@ -1,4 +1,5 @@
 #include "lumenis/ui/effect_editor.h"
+#include "lumenis/ui/titler_tool.h"
 
 #include "lumenis/ui/timeline.h"
 
@@ -684,6 +685,8 @@ void EffectEditor::syncPreview() {
         fillOverlay(*e, preview);
     }
     timeline_.composer().setEffectPreview(preview);
+    // A Titler+ title is edited in the Effect Preview (titler_tool.h).
+    timeline_.composer().setOverlayInput(preview.on && e && model::isTitlerEffect(*e) && level_ == 0 ? titler_ : nullptr);
 }
 
 void EffectEditor::previewKeyframePressed(double frame, bool extend) {

@@ -109,6 +109,7 @@ private:
     void paintOverlay(QPainter& p) const;
     QString handleDrag_;
     QPointF handleFrom_;
+    bool overlayDrag_ = false; // a press the Composer's OverlayInput took
     // A lasso over the Effect Preview's tracking data points: where it began and is now (widget points).
     std::optional<QPointF> lassoFrom_;
     QPointF lassoTo_;
@@ -295,9 +296,30 @@ public:
             bool operator==(const TrackerShow&) const = default;
         };
         QList<TrackerShow> trackers;
+        // Titler+ (FX Guide p.303-313): the selected objects' bounding boxes (solid), highlighted text (filled), the
+        // text cursor and the anchor points' crosshairs.
+        QList<QList<QPointF>> boxes;
+        QList<QList<QPointF>> highlights;
+        std::optional<std::pair<QPointF, QPointF>> caret;
+        QList<QPointF> anchors;
         bool operator==(const EffectPreview&) const = default;
     };
     void setEffectPreview(const EffectPreview& preview);
+    // Something that takes the Effect Preview's mouse and keys before the Composer does (the Titler+ tools, FX Guide
+    // p.303-319). Points are fractions of the picture, as EffectPreview's. `press` returns true to take the press and
+    // the moves and release that follow it; `key` true when it used the key, `wantsKey` true for keys it takes before
+    // shortcuts. The input must outlive its use or be cleared with setOverlayInput(nullptr).
+    class OverlayInput {
+    public:
+        virtual ~OverlayInput() = default;
+        virtual bool overlayPress(const QPointF& at, Qt::KeyboardModifiers modifiers, bool doubleClick) = 0;
+        virtual void overlayMove(const QPointF& at, Qt::KeyboardModifiers modifiers) = 0;
+        virtual void overlayRelease(const QPointF& at, Qt::KeyboardModifiers modifiers) = 0;
+        virtual bool overlayKey(QKeyEvent* event) = 0;
+        virtual bool overlayWantsKey(const QKeyEvent* event) const = 0;
+    };
+    void setOverlayInput(OverlayInput* input) { overlayInput_ = input; }
+    OverlayInput* overlayInput() const { return effect_.on ? overlayInput_ : nullptr; }
     const EffectPreview& effectPreview() const { return effect_; }
     // The Effect Preview toolbar, and the effect's length and position boxes (for tests).
     QWidget* effectBar() const { return effectBar_; }
@@ -589,6 +611,8 @@ signals:
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
+    // Keys the OverlayInput takes beat the menus' shortcuts (Ctrl+G groups Titler+ objects there).
+    bool event(QEvent* event) override;
     // While a clip loop plays, Tab and Shift+Tab anywhere in the application step it (p.393).
     bool eventFilter(QObject* watched, QEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
@@ -649,6 +673,7 @@ private:
     QToolButton* effectLength_ = nullptr;
     QToolButton* effectPosition_ = nullptr;
     EffectPreview effect_;
+    OverlayInput* overlayInput_ = nullptr;
     int zoom_ = 0;
     QPointF pan_;
     // Shows the Effect Preview's widgets or the normal ones.

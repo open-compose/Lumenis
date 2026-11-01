@@ -5,6 +5,7 @@
 #include "lumenis/model/effect_template.h"
 #include "lumenis/model/nest.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/titler.h"
 #include "lumenis/model/tracking.h"
 #include "lumenis/ui/composer.h"
 
@@ -32,6 +33,7 @@ namespace lumenis::ui {
 
 class KeyframeTrack;
 class Timeline;
+class TitlerTool;
 class TrackingWindow;
 
 // A control of the Effect Editor (FX guide p.491-586), from
@@ -288,6 +290,23 @@ public:
     QToolButton* outlineButton() const { return outline_; }
     // The picture the handles are worked out in: 1920 pixels wide at the project's aspect ratio.
     QSizeF previewSize() const;
+
+    // ---- Titler+ (6.8b; titler_tool.h)
+    // The tools working on a shown Titler+ title in the Record monitor; made with the editor.
+    TitlerTool* titlerTool() const { return titler_; }
+    // The shown Titler+ effect's title (with a drag or typing in progress); nothing when another effect is shown.
+    std::optional<model::Title> shownTitle() const;
+    // The title as stored (without any preview).
+    std::optional<model::Title> storedTitle() const;
+    // Shows `title` in the Record monitor and the parameters without an undo step yet; drops that again; stores it as
+    // one undo step.
+    void previewTitle(const model::Title& title);
+    void cancelTitlePreview();
+    bool commitTitle(const QString& description, const model::Title& title);
+    void refreshTitleOverlay() { syncPreview(); }
+    // The shown effect as previewed, for the Record monitor's picture: its place and the effect, while a preview is
+    // under way at the outermost level.
+    std::optional<std::pair<model::EffectRef, model::Effect>> pictureOverride() const;
     // Dragging handle `id` from `from` to `to` (fractions of the picture, as Composer::effectHandleDragged
     // gives them): the shown effect as it was when the drag began, with the values media::dragEffectHandle
     // gives, rounded and kept to the controls' ranges, put on the selected keyframes of their parameters (or
@@ -499,6 +518,7 @@ private:
     // Motion tracking.
     TrackingFrames trackingFrames_;
     TrackingWindow* trackingWindow_ = nullptr;
+    TitlerTool* titler_ = nullptr;
     PointRange pointRange_ = PointRange::All; // "All ... This is the default option" (p.268)
     bool showTrackingData_ = true;
     bool tracking_ = false;

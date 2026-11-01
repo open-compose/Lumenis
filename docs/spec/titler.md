@@ -3,6 +3,7 @@
 Avid Titler+, "the preferred tool for creating titles" (FX Guide ch.12, p.302-326). Ours is called **Titler+**,
 as its Tools menu item is (docs/spec/ui-inventory.md, "Renamed"). Code: `src/model/titler.*` (the title kept with
 the effect, layer order, groups, applying it), `src/media/titler.cpp` (its picture), `Timeline::applyTitler`.
+The Record monitor's tools are `src/ui/titler_tool.*` with `effect_editor_titler.cpp`.
 Tests: `tst_titler`, `tst_titler_ui`, scenario `34-titler-marks.json`.
 
 ## From the guide
@@ -47,9 +48,44 @@ Tests: `tst_titler`, `tst_titler_ui`, scenario `34-titler-marks.json`.
 * The effect is in the Effect Palette's Title category as "Titler+" (it is not in the Effects Reference).
 * The Timeline top toolbar's Titler+ button (a T with a plus, our drawing) runs Tools > Titler+.
 
+## 6.8b1: the Record monitor's tools
+From the guide (p.303-319):
+* Text Tool: "you can type anywhere and create a text layer at that location ... by simply double-clicking in an
+  empty area of the viewer or by pressing T ... You can also return to an existing text layer to edit the text by
+  clicking inside its bounding box while in text mode. If you click in an empty area but do not type anything, that
+  empty layer gets deleted"; "Double-clicking the title text allows you to enter text mode"; "click and drag inside a
+  text box to highlight any text"; "Highlighted text is indicated by an overlay" (p.303-304).
+* Selection Tool: "pressing M ... The bounding box appears, and you may click and drag the text to move it around";
+  resizing a text's bounding box makes "a defined paragraph text box" that wraps; "Command (macOS) or Alt (Windows):
+  Freeform scale; Shift: Constrained scale (maintain aspect ratio); Command+Shift (macOS) or Ctrl+Shift (Windows):
+  Constrained scale from Anchor Point" (p.304, p.311); "Shift+Drag Up or Down: Moves the object along the Y axis"
+  (p.311); "hover next to one of the bounding box corners to activate the Rotation icon ... hold down the Shift key
+  while dragging to rotate the shape in increments of 15 degrees" (p.312).
+* Rectangle and Ellipse Tools: "Click and drag in the viewer"; Shift for a square or circle, Ctrl+Shift (Command+Shift)
+  "will originate from the Anchor Point" (p.306).
+* Anchor points "appear in the viewer as crosshairs on selected objects" (p.313).
+* Bring Forward "+" and Send Backward "-"; Group Ctrl+G, Ungroup Ctrl+Shift+G, Shift+click to pick several, Alt+click
+  to "deep pick" inside a group; Select Previous Object (Page Down) and Next (Page Up) (p.318-319).
+* "When no object is selected ... pressing the spacebar will start playback" (p.305).
+
+Ours:
+* The tools work in the Effect Preview: Titler+ turns Effect mode on when it is applied, and the Effect Editor gives
+  the Record monitor a `Composer::OverlayInput` (`TitlerTool`) that takes its presses, drags and keys before the
+  Composer does (keys it wants also beat the menus' shortcuts, so Ctrl+G groups there instead of Find Again).
+* Typing and drags are previews (`EffectEditor::previewTitle`, shown in the Record monitor through
+  `EffectEditor::pictureOverride`) and become one undo step at their end: typing when Escape, another click or another
+  tool ends it (the text is lost if the shown effect changes first); a drag on release.
+* Text editing: Left, Right, Home and End (the text's start and end), with Shift to select; Return a new line;
+  Backspace and Delete; Ctrl+A selects all. Clicking in a text being typed does not move the cursor.
+* Scaling is always from the anchor point, by how far the handle moved along the object's own axes: a text without
+  modifiers gets a paragraph width; Alt scales it freely and Shift evenly; a rectangle or ellipse changes size
+  (Shift evenly). The rotation zone is 40 title pixels just outside a corner; handles take presses within 16.
+* Drawing: from corner to corner, or from the centre with Ctrl+Shift; shorter than 4 pixels makes nothing.
+* Page Up and Page Down go round the top-level objects; Delete or Backspace removes the selection; Escape clears it.
+
 ## Not yet
-* 6.8b: the Record monitor's tools (Text, Selection, Rectangle, Ellipse), the Dashboard, the Effect Editor's object
-  parameters, alignment and the keyboard shortcuts.
+* 6.8b2: the Dashboard and the Effect Editor's object parameters, alignment, anchor presets, formatting selected
+  characters, the Grid button.
 * 6.8c: keyframes, Roll and Crawl, tracking, templates and presets, promotion from the classic Title Tool, EDLs and
   Find.
 * Fill Overlay (media on the effect's subtrack, p.324).

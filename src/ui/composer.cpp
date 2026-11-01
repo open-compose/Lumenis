@@ -867,7 +867,7 @@ void MonitorPicture::paintOverlay(QPainter& p) const {
         p.restore();
     }
     if (e.outline.isEmpty() && e.handles.isEmpty() && e.path.isEmpty() && e.pathDots.isEmpty() && e.guides.isEmpty() &&
-        e.trackers.isEmpty()) {
+        e.trackers.isEmpty() && e.boxes.isEmpty() && e.highlights.isEmpty() && !e.caret && e.anchors.isEmpty()) {
         return;
     }
     p.save();
@@ -885,6 +885,33 @@ void MonitorPicture::paintOverlay(QPainter& p) const {
         QPolygonF quad;
         for (const QPointF& c : e.outline) quad << overlayPoint(c);
         twice([&] { p.drawPolygon(quad); }, wire);
+    }
+    // Titler+: highlighted text, the selection's boxes, the anchor points and the text cursor (ours: drawn as the
+    // wire frame is).
+    for (const QList<QPointF>& h : e.highlights) {
+        QPolygonF area;
+        for (const QPointF& c : h) area << overlayPoint(c);
+        p.save();
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(80, 140, 255, 110));
+        p.drawPolygon(area);
+        p.restore();
+    }
+    for (const QList<QPointF>& box : e.boxes) {
+        QPolygonF quad;
+        for (const QPointF& c : box) quad << overlayPoint(c);
+        twice([&] { p.drawPolygon(quad); }, wire);
+    }
+    for (const QPointF& a : e.anchors) {
+        const QPointF at = overlayPoint(a);
+        twice([&] {
+            p.drawLine(at - QPointF(6, 0), at + QPointF(6, 0));
+            p.drawLine(at - QPointF(0, 6), at + QPointF(0, 6));
+        }, wire);
+    }
+    if (e.caret) {
+        const QPointF a = overlayPoint(e.caret->first), b = overlayPoint(e.caret->second);
+        twice([&] { p.drawLine(a, b); }, wire);
     }
     for (const QList<QPointF>& guide : e.guides) {
         QPolygonF line;
@@ -961,6 +988,15 @@ void MonitorPicture::mousePressEvent(QMouseEvent* event) {
         }
         return;
     }
+    if (Composer::OverlayInput* input = monitor_ == MonitorId::Record ? composer_.overlayInput() : nullptr;
+        input && event->button() == Qt::LeftButton) {
+        composer_.setActiveMonitor(monitor_);
+        composer_.setFocus();
+        if (input->overlayPress(overlayFraction(event->position()), event->modifiers(), false)) {
+            overlayDrag_ = true;
+            return;
+        }
+    }
     if (monitor_ == MonitorId::Record && composer_.effectPreview().on && event->button() == Qt::LeftButton) {
         // A handle of the overlay (FX Guide p.92, p.292).
         const QString id = overlayHandleAt(event->position());
@@ -1005,6 +1041,10 @@ void MonitorPicture::mousePressEvent(QMouseEvent* event) {
 }
 
 void MonitorPicture::mouseMoveEvent(QMouseEvent* event) {
+    if (overlayDrag_) {
+        if (Composer::OverlayInput* input = composer_.overlayInput()) input->overlayMove(overlayFraction(event->position()), event->modifiers());
+        return;
+    }
     if (lassoFrom_) {
         lassoTo_ = event->position();
         update();
@@ -1030,6 +1070,11 @@ void MonitorPicture::mouseMoveEvent(QMouseEvent* event) {
 }
 
 void MonitorPicture::mouseReleaseEvent(QMouseEvent* event) {
+    if (overlayDrag_) {
+        overlayDrag_ = false;
+        if (Composer::OverlayInput* input = composer_.overlayInput()) input->overlayRelease(overlayFraction(event->position()), event->modifiers());
+        return;
+    }
     if (lassoFrom_) {
         const QRectF area = QRectF(overlayFraction(*lassoFrom_), overlayFraction(event->position())).normalized();
         lassoFrom_.reset();
@@ -1045,6 +1090,12 @@ void MonitorPicture::mouseReleaseEvent(QMouseEvent* event) {
 
 void MonitorPicture::mouseDoubleClickEvent(QMouseEvent* event) {
     if (monitor_ != MonitorId::Record || !composer_.effectPreview().on) return;
+    if (Composer::OverlayInput* input = composer_.overlayInput(); input && event->button() == Qt::LeftButton) {
+        if (input->overlayPress(overlayFraction(event->position()), event->modifiers(), true)) {
+            overlayDrag_ = true;
+            return;
+        }
+    }
     const QString id = overlayHandleAt(event->position());
     if (id.startsWith(QLatin1String("trackpoint:"))) emit composer_.effectPointDoubleClicked(id);
 }
@@ -2500,7 +2551,18 @@ bool Composer::perform(const QString& id) {
 
 // Keys reach the Composer when it has focus: K is tracked for K+J / K+L, and every other key is
 // looked up in the Keyboard settings (KeyResolver) and run as a command.
+bool Composer::event(QEvent* event) {
+    if (event->type() == QEvent::ShortcutOverride) {
+        if (OverlayInput* input = overlayInput(); input && input->overlayWantsKey(static_cast<QKeyEvent*>(event))) {
+            event->accept();
+            return true;
+        }
+    }
+    return QWidget::event(event);
+}
+
 void Composer::keyPressEvent(QKeyEvent* event) {
+    if (OverlayInput* input = overlayInput(); input && input->overlayKey(event)) return;
     if (event->isAutoRepeat() && event->key() == Qt::Key_K) return;
     if (event->key() == Qt::Key_K) kHeld_ = true;
     // Holding K and tapping J or L steps one frame; holding both plays slowly (p.401): the key's

@@ -651,7 +651,13 @@ void MainWindow::createPanels() {
         const model::MonitorState& state = composer_->state(monitor);
         // A sequence: its video tracks composited with their effects (Phase 6.1, media::composeImage).
         if (const model::LoadedClip* loaded = state.current(); loaded && loaded->item.kind == model::BinItemKind::Sequence) {
-            const model::Sequence seq = model::Sequence::fromItem(loaded->item);
+            model::Sequence seq = model::Sequence::fromItem(loaded->item);
+            // A title being made shows as it is, before its undo step (EffectEditor::pictureOverride, 6.8b).
+            if (monitor == MonitorId::Record && effectEditor_) {
+                if (const auto o = effectEditor_->pictureOverride()) {
+                    if (model::Effect* e = model::effectFor(seq, o->first)) *e = o->second;
+                }
+            }
             media::Composition c;
             c.sequence = &seq;
             c.tracks = shownVideoTracks(monitor, seq);
@@ -1499,7 +1505,11 @@ void MainWindow::createTools() {
     });
     effectEditor_ = new EffectEditor(*timeline_);
     // "The Avid Titler+ Dashboard and the Effect Editor open" (FX Guide p.303; the Dashboard comes in 6.8b).
-    connect(timeline_, &Timeline::titlerApplied, this, [this] { showTool(QStringLiteral("EffectEditor")); });
+    // Ours: in Effect mode, whose Effect Preview the title is edited in (titler_tool.h).
+    connect(timeline_, &Timeline::titlerApplied, this, [this] {
+        showTool(QStringLiteral("EffectEditor"));
+        timeline_->setEffectMode(true);
+    });
     // AutoStabilize "Opens the Effect Editor (if necessary) and the Tracking window", then tracks (FX Guide p.277).
     // After the drop or double-click that applied the effect has finished.
     connect(timeline_, &Timeline::autoStabilizeRequested, this, [this](const QString& track, std::int64_t frame) {

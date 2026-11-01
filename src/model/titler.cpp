@@ -223,7 +223,16 @@ const TitleObject* Title::object(const QString& id) const {
 }
 
 TitleObject* Title::object(const QString& id) {
-    return const_cast<TitleObject*>(find(objects, id));
+    // Searched without const, so that the lists detach: a pointer into data shared with another Title's copy (QList
+    // is implicitly shared) would change that copy too.
+    std::function<TitleObject*(QList<TitleObject>&)> search = [&](QList<TitleObject>& list) -> TitleObject* {
+        for (TitleObject& o : list) {
+            if (o.id == id) return &o;
+            if (TitleObject* inner = search(o.children)) return inner;
+        }
+        return nullptr;
+    };
+    return search(objects);
 }
 
 QString Title::newId(TitleObjectKind kind) const {

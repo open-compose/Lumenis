@@ -5605,6 +5605,16 @@ bool Timeline::applyTitler() {
         return fail(tr("Select a clip or an empty track segment first."));
     }
     if (!commitSequence(tr("Titler+"), seq)) return false;
+    // The position on a new title, so that the Effect Editor shows it (ours).
+    const std::int64_t first = marks ? marks->first
+                                     : std::min_element(targets.begin(), targets.end(), [](const model::SegmentRef& a, const model::SegmentRef& b) {
+                                           return a.start < b.start;
+                                       })->start;
+    const model::Track* titledTrack = seq.track(marks ? track : targets.first().track);
+    std::int64_t at = 0;
+    const int here = titledTrack ? titledTrack->segmentAt(record.position(), &at) : -1;
+    const bool onTitle = here >= 0 && titledTrack->segments.at(here).effect && model::isTitlerEffect(*titledTrack->segments.at(here).effect);
+    if (!onTitle) composer_.moveTo(MonitorId::Record, first);
     emit effectApplied();
     // "The Avid Titler+ Dashboard and the Effect Editor open" (p.303).
     emit titlerApplied();

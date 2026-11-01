@@ -8,6 +8,7 @@
 #include "lumenis/media/compositor.h"
 #include "lumenis/model/pan_scan.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/titler_tool.h"
 
 #include <QFileInfo>
 #include <QImageReader>
@@ -59,6 +60,10 @@ void EffectEditor::syncHandleButtons() {
 }
 
 void EffectEditor::fillOverlay(const model::Effect& effect, Composer::EffectPreview& preview) const {
+    if (model::isTitlerEffect(effect)) {
+        if (titler_) titler_->fillOverlay(preview);
+        return;
+    }
     fillTrackers(effect, preview);
     if (!media::hasEffectOutline(effect)) return;
     const QSizeF size = previewSize();

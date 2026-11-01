@@ -273,7 +273,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   black outline, shadow 75% 8 pixels at 45 degrees), vertical justification
   by baselines, Right To Left and Top To Bottom by characters, the coats'
   order and box blur, the Foreground crop in percent, titles on segments
-  with effects nesting those, the toolbar button's drawing.
+  with effects nesting those, the toolbar button's drawing; 6.8b1: editing
+  in Effect mode's Effect Preview, typing and drags as one undo step at their
+  end, Home/End over the whole text, scaling always from the anchor point,
+  the handle and rotation reaches (16 and 40 title pixels), drawn shapes of
+  at least 4 pixels, Page Up/Down going round.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

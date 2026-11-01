@@ -7,6 +7,7 @@
 #include "lumenis/model/titler.h"
 
 #include <QImage>
+#include <QLineF>
 #include <QPolygonF>
 #include <QTransform>
 
@@ -21,6 +22,12 @@ QImage titleImage(const model::Title& title, const QSize& size);
 // Where object `id` is drawn: its shape's bounds placed by its Transform (and its groups'), in title pixels; for the
 // Record monitor's bounding boxes and clicks (6.8b). Nothing for no such object.
 std::optional<QPolygonF> titleObjectOutline(const model::Title& title, const QString& id);
+// Where object `id`'s own coordinates go in title pixels (its Transform and its groups'); nothing for no such object.
+std::optional<QTransform> titleObjectPlacement(const model::Title& title, const QString& id);
+// A text object's cursor before text index `index` (0 to the text's length), a line from the top of its line to
+// the bottom, and the boxes over the characters [from, to), both in the object's own coordinates (6.8b).
+QLineF titleTextCaret(const model::TitleObject& object, qsizetype index);
+QList<QPolygonF> titleTextRange(const model::TitleObject& object, qsizetype from, qsizetype to);
 // An Avid Titler+ effect's segment picture: its title over `layer`.
 Picture titlePicture(const model::Effect& effect, const Picture& layer);
 
