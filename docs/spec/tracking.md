@@ -4,7 +4,7 @@ Following a pattern through a segment and letting its movement drive an effect (
 reference p.498-499, p.571, p.577-578). Code: `src/model/tracking.*` (trackers, regions, points, offset tracking,
 SteadyGlide, Smoothing, the reference frame, parameter mappings and the change at a frame),
 `src/media/tracking.*` (the engines, `media::trackedEffect` and the Tracking category's map), the compositor and
-`warp3d.cpp` hooks. Test: `tst_tracking`. 6.7c1 is the data and the engines; 6.7c2 the Tracking window, the Effect
+`warp3d.cpp` hooks, `src/media/region_stabilize.cpp` (Region Stabilize). Test: `tst_tracking`. 6.7c1 is the data and the engines; 6.7c2 the Tracking window, the Effect
 Editor's tracker controls and the Effect Preview's boxes (`src/ui/effect_editor_tracking.cpp`,
 `src/ui/tracking_window.*`; test `tst_tracking_ui`); 6.7c3 editing the data (the same files, `model::deletePoints`
 and friends; tests `tst_tracking`, `tst_tracking_ui`).
@@ -177,9 +177,35 @@ Ours:
 * Promoting Stabilize or Picture-in-Picture to 3D carries the tracking data (`model::promoteTo3D`); Stabilize's with
   Stabilize Tracking on and Auto-Zoom off.
 
+## 6.7d3: the Region Stabilize effect
+From the guide (p.279-281; the Effects Reference has no entry for it):
+* It "does not work automatically, and has fewer controls than Stabilize"; "the Progressive Source option ... lets
+  you specify that the footage you are tracking is progressive material so that it is tracked correctly in an
+  interlaced project" (p.276, p.279).
+* "A wire frame appears in the Effect Preview monitor to indicate the region of interest"; "Use the sliders in the
+  Region of Interest parameter category" or "Click the wire frame, and drag it"; the Model Fast Menu: Translational
+  "steady along both the horizontal and the vertical axes", Horizontal "Features in the region of interest can move
+  vertically but not horizontally", Vertical the other way; Options' Auto Zoom "compensates by resizing and, if
+  necessary, repositioning the clip"; "Render and review the effect"; "add keyframes to reestablish or refine the
+  region of interest over the course of the clip" (p.280-281).
+
+Ours:
+* Its categories (effect_parameters.json): Region of Interest's X and Y (its centre from the frame's) and Width and
+  Height, percent of the frame (a quarter of the frame, centred, until set); Model; Options' Auto Zoom and
+  Progressive Source.
+* `media::regionMotion` follows the region from each frame to the next with the Correlation Tracker (the region of
+  the frame before, a search area twice its size) through the segment's own pictures at most 480 pixels wide, and
+  adds the moves up from the effect's first frame. The motion is kept per clip, first frame, picture size and region
+  (values and keyframes), so each frame is tracked once.
+* `media::regionStabilizePicture` moves the picture back on the Model's axes; Auto Zoom enlarges and centres it to
+  cover every frame's move, as the Stabilize effect's Auto-Zoom does. Uncovered parts show what lies below.
+* In the Effect Preview the original picture shows under the region's wire frame (as Pan and Scan's): inside drags
+  it, the top, side and corner handles size it about its centre.
+* Progressive Source is kept; our tracking follows whole frames, so it changes nothing yet.
+
 ## Not yet
 * The Display Markers from Mark IN and Mark OUT (p.268).
-* Region Stabilize (6.7d3).
+* Region Stabilize's Progressive Source (field-based tracking for interlaced projects).
 * FluidStabilizer drifts on pictures of pixel-sized noise (a test pattern, not footage); a smooth pattern tracks
   exactly.
 * The Tracking category on 2D effects (the Intraframe effects, Blur and Mosaic).

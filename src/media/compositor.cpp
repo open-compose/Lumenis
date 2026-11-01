@@ -528,6 +528,25 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 result.quantize(c.precision);
                 continue;
             }
+            if (isRegionStabilize(e)) {
+                // Region Stabilize (p.279-281) tracks its own segment's pictures; the Effect Preview shows the original
+                // picture under the region of interest's wire frame (ours, as Pan and Scan's).
+                if (!c.effectPreview) {
+                    const model::Segment& seg = *tf->segment;
+                    const int trackWidth = std::min(w, 480); // as Start Tracking's frames (MainWindow)
+                    auto pictureAt = [&](std::int64_t o) -> QImage {
+                        if (o < 0 || o >= seg.length) return {};
+                        const QImage image = segmentPicture(c, &seg, segmentClipFrame(seg, o), nullptr, segmentBlend(seg, o), o).toImage();
+                        return image.width() > trackWidth ? image.scaledToWidth(trackWidth, Qt::SmoothTransformation) : image;
+                    };
+                    const QString material = QStringLiteral("%1:%2:%3x%4").arg(seg.clipId).arg(seg.sourceIn).arg(w).arg(h);
+                    layer = regionStabilizePicture(e, layer, tf->offset, seg.length, material, pictureAt);
+                }
+                layer.quantize(c.precision);
+                result = over(layer, result);
+                result.quantize(c.precision);
+                continue;
+            }
             if (isFluid(e, "FluidBlur") || isFluid(e, "FluidColorMap")) {
                 // FluidBlur and FluidColorMap (FX Guide p.467, p.510-511): the motion between the segment's
                 // frames, this one and the next (at its last frame, the one before).

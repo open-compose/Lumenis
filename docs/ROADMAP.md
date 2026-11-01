@@ -1057,7 +1057,8 @@ phase of their own. They are done in three steps:
       Auto-Zoom (p.275-279). Done (docs/spec/tracking.md, `model::stabilizes`, `model::applyAutoZoom`,
       `EffectEditor::autoStabilize`).
     * 6.7d3, the Region Stabilize effect: its region of interest, Model menu, Auto Zoom and Progressive
-      Source (p.279-281).
+      Source (p.279-281). Done (docs/spec/tracking.md, `src/media/region_stabilize.cpp`).
+    So 6.7d, and with it 6.7, is done.
 * 6.8, titles (ch.12-13, p.301-377): the Title Tool and Titler+, with keyframes kept through trims,
   splits and duplicates (2026.8). SubCap (ch.14) goes to Phase 7 with the captions.
 * 6.9, intraframe effects (Paint, AniMatte, Blur, Scratch Removal; ch.15) and PlasmaWipe (ch.16).

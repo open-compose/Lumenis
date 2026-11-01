@@ -1,5 +1,5 @@
 {
-  "comment": "The Effect Editor's parameter categories and their controls (FX guide, Effects Parameter Reference, p.491-586), named as printed. 'min', 'max' and 'default' only where the text states them; 'kind' is slider, checkbox, color, menu, button or other; 'keyframeable': false where the reference says a parameter is not keyframeable (p.491); Where two parameters of a category share a name, the later one is stored under '<subcategory>: <name>' (ours; EffectParameter::name). 'ours' holds a slider's range where the reference gives none (ours), and options the text describes without listing (Pattern Generator's Axis menu, p.520); Pattern Generator's Position is two sliders, as its text says (\"the horizontal (X) and vertical (Y) position\", p.521).",
+  "comment": "The Effect Editor's parameter categories and their controls (FX guide, Effects Parameter Reference, p.491-586), named as printed. 'min', 'max' and 'default' only where the text states them; 'kind' is slider, checkbox, color, menu, button or other; 'keyframeable': false where the reference says a parameter is not keyframeable (p.491); Where two parameters of a category share a name, the later one is stored under '<subcategory>: <name>' (ours; EffectParameter::name). 'ours' holds a slider's range where the reference gives none (ours), and options the text describes without listing (Pattern Generator's Axis menu, p.520); Pattern Generator's Position is two sliders, as its text says (\"the horizontal (X) and vertical (Y) position\", p.521). Region Stabilize's categories (p.280-281) are not in the reference: the Region of Interest sliders' names and ranges are ours (its centre from the frame's and its size, percent of the frame); 'Not keyframeable' for Model and Options is ours.",
   "categories": [
     {"name": "Color Parameter Controls", "page": 491, "parameters": [
       {"name": "Other Options", "kind": "button"},
@@ -68,6 +68,19 @@
       {"name": "Color controls", "kind": "color"},
       {"name": "Gain", "kind": "slider", "min": 0, "max": 63},
       {"name": "Soft", "kind": "slider", "label": "softness", "min": 0, "max": 63}
+    ]},
+    {"name": "Region of Interest", "page": 280, "parameters": [
+      {"name": "X", "kind": "slider", "ours": {"min": -50, "max": 50}},
+      {"name": "Y", "kind": "slider", "ours": {"min": -50, "max": 50}},
+      {"name": "Width", "kind": "slider", "ours": {"min": 1, "max": 100}},
+      {"name": "Height", "kind": "slider", "ours": {"min": 1, "max": 100}}
+    ]},
+    {"name": "Model", "page": 280, "parameters": [
+      {"name": "Model", "kind": "menu", "label": "Model Fast Menu", "keyframeable": false, "options": ["Translational", "Horizontal", "Vertical"]}
+    ]},
+    {"name": "Options", "page": 281, "parameters": [
+      {"name": "Auto Zoom", "kind": "checkbox", "keyframeable": false},
+      {"name": "Progressive Source", "kind": "checkbox", "keyframeable": false}
     ]},
     {"name": "Position", "page": 498, "parameters": [
       {"name": "X", "kind": "slider", "min": -3000.0, "max": 3000.0},

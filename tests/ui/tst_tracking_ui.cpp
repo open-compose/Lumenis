@@ -441,7 +441,31 @@ private slots:
         QVERIFY(model::trackingOf(effect()).autoZoom);
         QVERIFY(std::abs(effect().parameters.value(QStringLiteral("Scaling")).toObject().value(QStringLiteral("X")).toDouble() - unsmoothed) < 1e-6);
 
-        // Two segments selected: no AutoStabilize (p.276).
+        // Two segments selected: no AutoStabilize (p.276); Region Stabilize never runs it.
+        requestedFrame = -1;
+        const EffectInfo* region = EffectCatalog::builtin().find(QStringLiteral("Image"), QStringLiteral("Region Stabilize"));
+        QVERIFY(region);
+        QVERIFY(timeline.dropEffect(QStringLiteral("V1"), 10, *region));
+        settle();
+        QCOMPARE(requestedFrame, std::int64_t(-1));
+        // Its wire frame in the Effect Preview (p.280), dragged; the Model Fast Menu.
+        composer.moveTo(MonitorId::Record, 10);
+        timeline.setEffectMode(true);
+        settle();
+        QCOMPARE(editor.effectName(), QStringLiteral("Region Stabilize"));
+        QCOMPARE(composer.effectPreview().outline.size(), 4);
+        const QPointF centre = (composer.effectPreview().outline.at(0) + composer.effectPreview().outline.at(2)) / 2.0;
+        QVERIFY(editor.dragHandle(QStringLiteral("move"), centre, centre + QPointF(0.1, 0.0), true));
+        settle();
+        const model::Effect regionEffect =
+            *model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(0).effect;
+        QVERIFY(std::abs(regionEffect.parameters.value(QStringLiteral("Region of Interest")).toObject().value(QStringLiteral("X")).toDouble() - 10.0) < 0.5);
+        auto* model = editor.findChild<QComboBox*>(QStringLiteral("param:Model/Model"));
+        QVERIFY(model);
+        QCOMPARE(model->currentText(), QStringLiteral("Translational"));
+        timeline.setEffectMode(false);
+
+        requestedFrame = -1;
         requestedFrame = -1;
         timeline.setSelection({model::SegmentRef{QStringLiteral("V1"), 0}, model::SegmentRef{QStringLiteral("V1"), 50}});
         QVERIFY(timeline.applyEffectToSelection(*stabilize));

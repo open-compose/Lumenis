@@ -10,6 +10,7 @@ add_library(lumenis_media STATIC
     pan_scan.cpp
     pan_zoom.cpp
     tracking.cpp
+    region_stabilize.cpp
     effect_handles.cpp
     effect_drawing.cpp
     effect_drawing.h

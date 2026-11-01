@@ -264,7 +264,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   stabilizing with SteadyGlide undoing only its jitter, Auto-Zoom from
   Position's moves alone with one scale for both axes, "too far" past
   400%, the Auto-Zoom button and its messages' wording, Picture-in-Picture's
-  tracking data kept on promotion.
+  tracking data kept on promotion; 6.7d3: Region Stabilize's sliders
+  (names, ranges, a quarter of the frame until set), frame-to-frame
+  correlation with a search area twice the region, the original picture
+  in the Effect Preview, Progressive Source without effect yet.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

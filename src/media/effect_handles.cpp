@@ -6,6 +6,8 @@
 // the pointer whatever else the effect does to the picture.
 #include "lumenis/media/effect_handles.h"
 
+#include "lumenis/media/tracking.h"
+
 #include "lumenis/media/compositor.h"
 
 #include <QJsonObject>
@@ -297,7 +299,7 @@ QList<HandleValue> dragPanScan(const model::Effect& effect, const QString& id, c
 } // namespace
 
 bool hasEffectOutline(const model::Effect& effect) {
-    return is2D(effect) || isPanAndScan(effect) || is3DEffect(effect) || isPanAndZoom(effect);
+    return is2D(effect) || isPanAndScan(effect) || is3DEffect(effect) || isPanAndZoom(effect) || isRegionStabilize(effect);
 }
 
 std::optional<EffectOutline> effectOutline(const model::Effect& effect, double time, const model::EffectSpan& span, const QSizeF& size) {
@@ -309,6 +311,15 @@ std::optional<EffectOutline> effectOutline(const model::Effect& effect, double t
         EffectOutline o;
         o.corners = {v->field.topLeft(), v->field.topRight(), v->field.bottomRight(), v->field.bottomLeft()};
         o.center = v->field.center();
+        return o;
+    }
+    if (isRegionStabilize(effect)) {
+        // "A wire frame appears in the Effect Preview monitor to indicate the region of interest" (p.280).
+        const QRectF r = regionOfInterest(effect, time, span);
+        const QRectF at(r.x() * size.width(), r.y() * size.height(), r.width() * size.width(), r.height() * size.height());
+        EffectOutline o;
+        o.corners = {at.topLeft(), at.topRight(), at.bottomRight(), at.bottomLeft()};
+        o.center = at.center();
         return o;
     }
     if (const auto f = panScanFrames(effect, time, span, size)) {
@@ -334,7 +345,7 @@ QList<EffectHandle> effectHandles(const model::Effect& effect, HandleTool tool, 
     const auto o = effectOutline(effect, time, span, size);
     if (!o) return {};
     QStringList ids;
-    if (is2D(effect) || isPanAndScan(effect)) {
+    if (is2D(effect) || isPanAndScan(effect) || isRegionStabilize(effect)) {
         ids = {QStringLiteral("move"), QStringLiteral("top"), QStringLiteral("side"), QStringLiteral("corner")};
     } else {
         switch (tool) {
@@ -399,6 +410,18 @@ QList<HandleValue> dragEffectHandle(const model::Effect& effect, HandleTool tool
     const QString Y = QStringLiteral("Y");
     const QString Z = QStringLiteral("Z");
     if (isPanAndScan(effect)) return dragPanScan(effect, id, from, to, time, span, size, shift);
+    if (isRegionStabilize(effect)) {
+        // "Click the wire frame, and drag it" (p.280): inside it moves the region, the handles size it about its
+        // centre (ours).
+        const QString region = QStringLiteral("Region of Interest");
+        if (id == QLatin1String("move")) return follow(effect, {{region, X}, {region, Y}}, onOutline, from, to, time, span);
+        if (id == QLatin1String("top")) return follow(effect, {{region, QStringLiteral("Height")}}, onOutline, from, to, time, span);
+        if (id == QLatin1String("side")) return follow(effect, {{region, QStringLiteral("Width")}}, onOutline, from, to, time, span);
+        if (id == QLatin1String("corner")) {
+            return follow(effect, {{region, QStringLiteral("Width")}, {region, QStringLiteral("Height")}}, onOutline, from, to, time, span);
+        }
+        return {};
+    }
     if (isPanAndZoom(effect)) {
         // The crosshair pans: in Display Source the field of view follows it over the image; in Display Target
         // (where the crosshair stays in the middle) the view moves by what the drag covers at the zoom.

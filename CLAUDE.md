@@ -582,7 +582,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   AutoStabilize through `Timeline::autoStabilizeRequested` and `EffectEditor::autoStabilize`, Auto-Zoom kept by
   `EffectEditor::keepAutoZoom`; promotion to 3D with Stabilize Tracking; tests `tst_tracking`, `tst_tracking_ui`),
   is done.
-  Next: 6.7d3 (Region Stabilize), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.7d3, the Region Stabilize effect (`src/media/region_stabilize.cpp`: the region followed frame to frame and kept
+  per segment, the Model menu, Auto Zoom; its wire frame in `effect_handles.cpp`; categories from p.280-281 in
+  effect_parameters.json), is done, so 6.7d and 6.7 are.
+  Next: 6.8 (titles), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

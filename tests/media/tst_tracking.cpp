@@ -3,6 +3,7 @@
 // tracking data does to Position, Scaling, Rotation and the Tracking category, and the engines following a moving
 // target.
 #include "lumenis/media/compositor.h"
+#include "lumenis/media/effect_handles.h"
 #include "lumenis/media/tracking.h"
 #include "lumenis/model/promote3d.h"
 #include "lumenis/model/sequence.h"
@@ -331,6 +332,62 @@ private slots:
         setTracking(followed, trackingOf(zoom));
         const auto pip3D = promoteTo3D(followed);
         QVERIFY(pip3D && !trackerMapping(*pip3D, TrackedParameter::Position).stabilize);
+    }
+
+    // Region Stabilize (p.279-281): the region followed frame to frame, the picture moved back on the Model's axes,
+    // Auto Zoom, and the wire frame's drags.
+    void regionStabilize() {
+        media::clearRegionMotion();
+        model::Effect e{QStringLiteral("Image"), QStringLiteral("Region Stabilize"), {}};
+        QVERIFY(media::isRegionStabilize(e));
+        const model::EffectSpan span(9);
+        QCOMPARE(media::regionOfInterest(e, 0.0, span), QRectF(0.375, 0.375, 0.25, 0.25));
+        // The region over the square at frame 0 (its centre (45, 35) of 160 x 90), 14 x 14 pixels.
+        QJsonObject region{{QStringLiteral("X"), (45.0 / 160.0 - 0.5) * 100.0},
+                           {QStringLiteral("Y"), (35.0 / 90.0 - 0.5) * 100.0},
+                           {QStringLiteral("Width"), 14.0 / 160.0 * 100.0},
+                           {QStringLiteral("Height"), 14.0 / 90.0 * 100.0}};
+        e.parameters.insert(QStringLiteral("Region of Interest"), region);
+        QVERIFY(near(media::regionOfInterest(e, 0.0, span).center(), QPointF(45.0 / 160.0, 35.0 / 90.0)));
+        int asked = 0;
+        const media::TrackedFrame frames = [&](std::int64_t f) {
+            ++asked;
+            return squareFrame(f);
+        };
+        // The square moves 3 and 1 pixels a frame.
+        const QPointF moved = media::regionMotion(e, QStringLiteral("clip"), 4, 9, frames);
+        QVERIFY2(near(moved, QPointF(12.0 / 160.0, 4.0 / 90.0), 0.2 / 90.0), qPrintable(QStringLiteral("%1 %2").arg(moved.x() * 160).arg(moved.y() * 90)));
+        // Kept: asking again tracks nothing.
+        const int before = asked;
+        QVERIFY(near(media::regionMotion(e, QStringLiteral("clip"), 4, 9, frames), moved));
+        QCOMPARE(asked, before);
+        // Frame 4's square back where frame 0's was.
+        const media::Picture out = media::regionStabilizePicture(e, media::Picture::fromImage(squareFrame(4), 160, 90), 4, 9, QStringLiteral("clip"), frames);
+        QVERIFY(out.pixel(46, 36)[0] > 0.8f);
+        QVERIFY(out.pixel(57, 39)[0] < 0.5f);
+        // Horizontal: "Features in the region of interest can move vertically but not horizontally" (p.280).
+        model::Effect horizontal = e;
+        horizontal.parameters.insert(QStringLiteral("Model"), QJsonObject{{QStringLiteral("Model"), QStringLiteral("Horizontal")}});
+        const media::Picture h = media::regionStabilizePicture(horizontal, media::Picture::fromImage(squareFrame(4), 160, 90), 4, 9, QStringLiteral("clip"), frames);
+        QVERIFY(h.pixel(46, 40)[0] > 0.8f);  // x back, y as it was (top 34)
+        QVERIFY(h.pixel(46, 31)[0] < 0.5f);
+        // Auto Zoom covers the frame: no transparent corner.
+        model::Effect zoomed = e;
+        zoomed.parameters.insert(QStringLiteral("Options"), QJsonObject{{QStringLiteral("Auto Zoom"), true}});
+        const media::Picture z = media::regionStabilizePicture(zoomed, media::Picture::fromImage(squareFrame(8), 160, 90), 8, 9, QStringLiteral("clip"), frames);
+        for (const QPoint p : {QPoint(0, 0), QPoint(159, 0), QPoint(0, 89), QPoint(159, 89)}) QVERIFY(z.pixel(p.x(), p.y())[3] > 0.99f);
+        QVERIFY(e.parameters != zoomed.parameters);
+
+        // The wire frame: its outline is the region; dragging inside moves it (p.280).
+        const QSizeF size(1920, 1080);
+        const auto outline = media::effectOutline(e, 0.0, span, size);
+        QVERIFY(outline);
+        QVERIFY(near(outline->center, QPointF(45.0 / 160.0 * 1920.0, 35.0 / 90.0 * 1080.0), 1e-6));
+        const QList<media::HandleValue> values =
+            media::dragEffectHandle(e, media::HandleTool::None, QStringLiteral("move"), outline->center, outline->center + QPointF(192, 0), 0.0, span, size);
+        QVERIFY(!values.isEmpty());
+        QCOMPARE(values.first().category, QStringLiteral("Region of Interest"));
+        QVERIFY(std::abs(values.first().value - (region.value(QStringLiteral("X")).toDouble() + 10.0)) < 1e-3);
     }
 
     // What the data does: Position (with the Axis menu, p.275), Scaling and Rotation from two trackers, the

@@ -81,6 +81,12 @@ std::optional<double> filmMaskRatio(const model::Effect& e) {
 
 QJsonValue parameterDefault(const model::Effect& e, const QString& category, const QString& name) {
     if (e.category == QLatin1String("Illusion FX")) return detail::illusionDefault(e, category, name);
+    // Region Stabilize until set (ours): a quarter of the frame across, centred; Translational, the Model menu's
+    // first entry (p.280).
+    if (e.category == QLatin1String("Image") && e.name == QLatin1String("Region Stabilize")) {
+        if (category == QLatin1String("Region of Interest")) return name == QLatin1String("Width") || name == QLatin1String("Height") ? 25 : 0;
+        if (category == QLatin1String("Model")) return QStringLiteral("Translational");
+    }
     // Avid Pan & Zoom until set (docs/spec/pan-zoom.md): no magnification (p.242), the first entry of each menu.
     if (isPanAndZoom(e) && category == QLatin1String("Avid Pan & Zoom Effect Parameters")) {
         if (name == QLatin1String("Zoom Factor")) return 1.0;

@@ -52,4 +52,22 @@ std::optional<std::array<double, 9>> trackedTransform(const model::Effect& effec
 // `picture` moved by such a map (each output pixel fetched from where the map's inverse puts it).
 Picture transformed(const Picture& picture, const std::array<double, 9>& map);
 
+// ---- Region Stabilize (p.279-281; region_stabilize.cpp)
+bool isRegionStabilize(const model::Effect& effect);
+// The region of interest at `time` (fractions of the frame): "the area you want to use in stabilizing the image"
+// (p.280), from the Region of Interest sliders (ours: its centre from the frame's and its size, percent of the frame;
+// a quarter of the frame, centred, until set).
+QRectF regionOfInterest(const model::Effect& effect, double time, const model::EffectSpan& span);
+// How the picture inside the region moved from the effect's first frame to `offset` (fractions of the frame), frame
+// to frame with the region of each frame before (so its keyframes "reestablish or refine the region of interest over
+// the course of the clip", p.281). `frames` gives the segment's own pictures by offset; `material` names them (the
+// clip and its first frame), with the region's values making the key the motion is kept under.
+QPointF regionMotion(const model::Effect& effect, const QString& material, std::int64_t offset, std::int64_t length, const TrackedFrame& frames);
+// The segment's picture at `offset` of `length` moved back by that motion on the axes of the Model menu (p.280), and
+// with Options' Auto Zoom enlarged and centred to cover every frame's move (p.281); uncovered parts transparent.
+Picture regionStabilizePicture(const model::Effect& effect, const Picture& layer, std::int64_t offset, std::int64_t length, const QString& material,
+                               const TrackedFrame& frames);
+// Forgets every kept motion (tests).
+void clearRegionMotion();
+
 } // namespace lumenis::media
