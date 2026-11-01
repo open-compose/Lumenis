@@ -585,7 +585,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.7d3, the Region Stabilize effect (`src/media/region_stabilize.cpp`: the region followed frame to frame and kept
   per segment, the Model menu, Auto Zoom; its wire frame in `effect_handles.cpp`; categories from p.280-281 in
   effect_parameters.json), is done, so 6.7d and 6.7 are.
-  Next: 6.8 (titles), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.8, titles, is in five parts (ROADMAP). 6.8a, Titler+'s title model and picture (docs/spec/titler.md:
+  `src/model/titler.*` kept under the effect's "Titler", `src/media/titler.cpp`, `Timeline::applyTitler` from Tools >
+  Titler+ and the Timeline's button, the Title Text Clip Text label; tests `tst_titler`, `tst_titler_ui`, scenario
+  `34-titler-marks.json`), is done.
+  Next: 6.8b (editing titles in the Record monitor and the Dashboard), then the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

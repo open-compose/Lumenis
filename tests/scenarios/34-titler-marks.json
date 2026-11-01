@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Titler+ between marks makes the marked part of the track its own segments",
+    "guide": "FX Guide p.303",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["filler", 30], ["B", 0, 40]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"mark": "record", "in": 40, "out": 89},
+      {"command": "tools.titler"}
+    ],
+    "expect": {"V1": [["A", 0, 40], ["A", 40, 10], ["filler", 30, {"effect": "Titler+"}], ["B", 0, 10], ["B", 10, 30]]}
+  },
+  {
+    "name": "Titler+ without marks goes on the empty track segment at the position",
+    "guide": "FX Guide p.303",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50], ["filler", 30], ["A", 50, 20]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"position": "record", "frame": 60},
+      {"command": "tools.titler"}
+    ],
+    "expect": {"V1": [["A", 0, 50], ["filler", 30, {"effect": "Titler+"}], ["A", 50, 20]]}
+  }
+]

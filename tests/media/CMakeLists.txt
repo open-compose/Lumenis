@@ -38,6 +38,7 @@ lumenis_add_test(tst_effect_handles SOURCES tst_effect_handles.cpp LIBS lumenis:
 lumenis_add_test(tst_pan_scan SOURCES tst_pan_scan.cpp LIBS lumenis::media)
 lumenis_add_test(tst_pan_zoom SOURCES tst_pan_zoom.cpp LIBS lumenis::media)
 lumenis_add_test(tst_tracking SOURCES tst_tracking.cpp LIBS lumenis::media)
+lumenis_add_test(tst_titler SOURCES tst_titler.cpp LIBS lumenis::media)
 # Timecode Burn-In (docs/spec/burn-in.md); draws text, so a GUI test.
 lumenis_add_test(tst_burn_in SOURCES tst_burn_in.cpp LIBS lumenis::media)
 # The Illusion FX segment effects (docs/spec/illusion-fx.md).

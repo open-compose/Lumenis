@@ -733,6 +733,10 @@ public:
     // The effect at the Record monitor's position on the selected tracks,
     // top down (p.84).
     std::optional<model::EffectRef> currentEffect() const;
+    // Tools > Titler+ and the Timeline's Titler+ button (FX Guide p.303): a Titler+ effect, empty, on the marked part
+    // of the highest selected video track, else on the selected segments, else on the segment at the position there
+    // (filler included; model::applyTitler). One undo step; false with a message when there is nowhere to put it.
+    bool applyTitler();
     // Changes an effect of the record sequence, with an undo step.
     // `change` gets the effect and, for a transition, the transition itself (else nullptr).
     // Returns false if there is no such effect or its track is locked.
@@ -1044,6 +1048,8 @@ public:
         bool mediaFullNames = false;
         bool clipResolution = false;
         bool clipNotes = false; // Timeline Clip Notes (p.483)
+        // Title Text (FX Guide p.305): "enabled by default", a Titler+ segment's topmost text.
+        bool titleText = true;
         // Show Adapters (p.599): "Temporal (motion) adapters appear with a T". Spatial (FrameFlex) and
         // Color adapters come with FrameFlex and color management.
         bool motionAdapters = false;
@@ -1091,6 +1097,8 @@ signals:
     // segment's first frame on `track`. "AutoStabilize does not function when you apply the Stabilize effect to
     // multiple selected segments ... [or] use the Alt key modifier ... to nest an effect" (p.276).
     void autoStabilizeRequested(const QString& track, std::int64_t frame);
+    // A Titler+ effect was applied (applyTitler): its tools open (FX Guide p.303).
+    void titlerApplied();
     // The Track Control panel's Solo (`solo`) or Mute button for `track` was clicked (p.602).
     void soloMuteRequested(const QString& track, bool solo);
     // The View Menu: a view was chosen, or the current display is to be saved as view `name` (Save

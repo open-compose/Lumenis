@@ -13,6 +13,7 @@
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
 #include "lumenis/model/sync_dupes.h"
+#include "lumenis/model/titler.h"
 #include "lumenis/model/tracking.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/button_mapping.h"
@@ -192,7 +193,7 @@ enum class Picture {
     FastMenu, Focus, SourceRecord, VideoQuality, ClientMonitor, StepIn, StepOut,
     ViewMenu, FindLeft, FindRight, ZoomOut, ZoomIn,
     SegmentSplice, SegmentOverwrite, Lift, Extract, CopyClipboard, AddEdit, Replace, Top, Tail, MatchFrame,
-    TrimMode, RippleTrim, OverwriteTrim, SourceRecordMode, EffectMode
+    TrimMode, RippleTrim, OverwriteTrim, SourceRecordMode, EffectMode, Titler
 };
 
 // The Video Quality Menu button's picture for each quality (p.404): green
@@ -362,6 +363,13 @@ QIcon picture(Picture which) {
         p.fillRect(QRectF(11, 11, 10, 10), QColor(0x8e, 0x5c, 0xd6));
         break;
     }
+    case Picture::Titler:
+        // A T with a plus (ours).
+        p.drawLine(QPointF(5, 7), QPointF(19, 7));
+        p.drawLine(QPointF(12, 7), QPointF(12, 25));
+        p.drawLine(QPointF(19, 19), QPointF(27, 19));
+        p.drawLine(QPointF(23, 15), QPointF(23, 23));
+        break;
     case Picture::MatchFrame:
         p.drawRect(QRectF(4, 8, 10, 16));
         p.drawRect(QRectF(18, 8, 10, 16));
@@ -2312,6 +2320,9 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     command("edit.top", Picture::Top, tr("Top"), false);
     command("edit.tail", Picture::Tail, tr("Tail"), false);
     command("other.match_frame", Picture::MatchFrame, tr("Match Frame"), false);
+    top->addSpacing(8);
+    // "Click the Avid Titler+ icon at the top of the Timeline" (FX Guide p.303).
+    command("tools.titler", Picture::Titler, tr("Titler+"), false);
     top->addStretch(1);
 
     auto* upper = new QHBoxLayout;
@@ -2849,6 +2860,7 @@ QMenu* Timeline::fastMenu() {
     check(clipTextMenu, tr("Clip Full Durations"), display_.clipFullDurations, [this](bool v) { display_.clipFullDurations = v; });
     check(clipTextMenu, tr("Clip Trans Duration"), display_.clipTransDuration, [this](bool v) { display_.clipTransDuration = v; });
     check(clipTextMenu, tr("Timeline Clip Notes"), display_.clipNotes, [this](bool v) { display_.clipNotes = v; });
+    check(clipTextMenu, tr("Title Text"), display_.titleText, [this](bool v) { display_.titleText = v; });
     check(clipTextMenu, tr("Source Names"), display_.sourceNames, [this](bool v) { display_.sourceNames = v; });
     check(clipTextMenu, tr("Media Full Names"), display_.mediaFullNames, [this](bool v) { display_.mediaFullNames = v; });
     check(clipTextMenu, tr("Clip Resolution"), display_.clipResolution, [this](bool v) { display_.clipResolution = v; });
@@ -3076,6 +3088,7 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("timeline.enlarge_waveform"),
         QStringLiteral("timeline.reduce_waveform"),
         QStringLiteral("fx.remove_effect"),
+        QStringLiteral("tools.titler"),
         QStringLiteral("edit.splice_in"),
         QStringLiteral("edit.overwrite"),
         QStringLiteral("edit.fit_to_fill"),
@@ -3212,6 +3225,9 @@ bool Timeline::perform(const QString& id) {
         return true;
     } else if (id == QLatin1String("fx.remove_effect")) {
         removeEffectAtPosition();
+        return true;
+    } else if (id == QLatin1String("tools.titler")) {
+        applyTitler();
         return true;
     }
     if (id == QLatin1String("edit.splice_in")) {
@@ -5557,6 +5573,44 @@ bool Timeline::applyTemplateToSelection(const model::EffectTemplate& t) {
     return true;
 }
 
+bool Timeline::applyTitler() {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return fail(tr("There is no sequence in the Record monitor."));
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    // The highest selected video track (ours, as the Effect Editor's effect is found top down, p.84).
+    QString track;
+    for (const QString& t : patch_.selectedRecordTracks(seq)) {
+        const model::Track* candidate = seq.track(t);
+        if (candidate && candidate->kind == model::TrackKind::Video && !candidate->locked) track = t;
+    }
+    // "Select the clip or an empty track segment where you want to add a title. If you want to create a new clip
+    // containing your title, set in and out marks in the Timeline to highlight a portion of the track" (p.303).
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    std::optional<std::pair<std::int64_t, std::int64_t>> marks;
+    if (record.in() && record.out() && *record.out() >= *record.in()) marks = std::pair{*record.in(), *record.out() + 1};
+    QList<model::SegmentRef> targets;
+    for (const model::SegmentRef& ref : selection_) {
+        const model::Track* t = seq.track(ref.track);
+        if (t && t->kind == model::TrackKind::Video) targets << ref;
+    }
+    if (targets.isEmpty() && !track.isEmpty()) {
+        std::int64_t start = 0;
+        if (const model::Track* t = seq.track(track); t && t->segmentAt(record.position(), &start) >= 0) {
+            targets << model::SegmentRef{track, start};
+        }
+    }
+    if ((marks && track.isEmpty()) || (!marks && targets.isEmpty())) return fail(tr("Select a clip or an empty track segment first."));
+    if (model::applyTitler(seq, track, marks, marks ? QList<model::SegmentRef>{} : targets) == 0) {
+        return fail(tr("Select a clip or an empty track segment first."));
+    }
+    if (!commitSequence(tr("Titler+"), seq)) return false;
+    emit effectApplied();
+    // "The Avid Titler+ Dashboard and the Effect Editor open" (p.303).
+    emit titlerApplied();
+    return true;
+}
+
 std::optional<model::EffectRef> Timeline::currentEffect() const {
     const model::MonitorState& record = composer_.state(MonitorId::Record);
     const model::LoadedClip* rec = record.current();
@@ -6722,6 +6776,7 @@ QJsonObject Timeline::displayToJson(const Display& d) {
         {QStringLiteral("mediaFullNames"), d.mediaFullNames},
         {QStringLiteral("clipResolution"), d.clipResolution},
         {QStringLiteral("clipNotes"), d.clipNotes},
+        {QStringLiteral("titleText"), d.titleText},
         {QStringLiteral("motionAdapters"), d.motionAdapters},
         {QStringLiteral("clipFontFamily"), d.clipFontFamily},
         {QStringLiteral("clipFontSize"), d.clipFontSize},
@@ -6777,6 +6832,7 @@ Timeline::Display Timeline::displayFromJson(const QJsonObject& o) {
     flag("mediaFullNames", d.mediaFullNames);
     flag("clipResolution", d.clipResolution);
     flag("clipNotes", d.clipNotes);
+    flag("titleText", d.titleText);
     flag("motionAdapters", d.motionAdapters);
     const QString sync = o.value(QStringLiteral("syncBreaks")).toString();
     d.syncBreaks = sync == QLatin1String("video")  ? SyncBreaks::Video
@@ -6918,6 +6974,9 @@ QString Timeline::clipText(const model::Track& track, const model::Segment& s) c
     // "You must enable the Timeline Fast menu > Clip Text > Timeline Clip Notes to display the notes
     // in the Timeline" (p.483).
     if (d.clipNotes) parts << s.note;
+    // "A label called "Title Text" appears in the Timeline on segments created with Avid Titler+ ... based on their
+    // topmost Titler+ text content" (FX Guide p.305).
+    if (d.titleText && s.effect && model::isTitlerEffect(*s.effect)) parts << model::titleOf(*s.effect).topText();
     if (d.sourceNames && clip) {
         const QString tape = model::cellText(*clip, QStringLiteral("Tape"));
         parts << (tape.isEmpty() ? model::cellText(*clip, QStringLiteral("Source File")) : tape);

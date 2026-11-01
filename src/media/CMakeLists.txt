@@ -11,6 +11,7 @@ add_library(lumenis_media STATIC
     pan_zoom.cpp
     tracking.cpp
     region_stabilize.cpp
+    titler.cpp
     effect_handles.cpp
     effect_drawing.cpp
     effect_drawing.h

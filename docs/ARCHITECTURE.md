@@ -126,7 +126,8 @@ headers in `include/lumenis/<library>/`.
   in `src/media/pan_zoom.cpp` (docs/spec/pan-zoom.md), motion tracking's data in `src/model/tracking.*` with its
   engines and its effect on the picture in `src/media/tracking.*` (Region Stabilize in `region_stabilize.cpp`) with the Tracking window
   `tracking_window.*` and the Effect Editor's side in `effect_editor_tracking.cpp` (docs/spec/tracking.md),
-  and mixed rate clips' Motion Adapters in `src/model/motion_adapter.*`: the
+  Titler+ titles in `src/model/titler.*` with their picture in `src/media/titler.cpp` and
+  `Timeline::applyTitler` (docs/spec/titler.md), and mixed rate clips' Motion Adapters in `src/model/motion_adapter.*`: the
   monitors load a clip at another rate as its adapted copy at the project's rate, the segments edited
   from it carry `Segment::adapter`, and `BinDocument` stores the clip itself back (docs/spec/motion-effects.md).
 * **Audio tools.** `audio_tools.*` (the Audio Mixer, docs/spec/audio-mixer.md, and the Audio Tool), `audio_groups.cpp` (the mixer's track sidebar and groups), `clip_audio_dialogs.*` (Apply Gain and Auto VO, with `src/model/clip_audio.*`, docs/spec/clip-audio.md), `multi_mix_dialog.*` (the Multi-Mix Tool, docs/spec/multi-mix.md),

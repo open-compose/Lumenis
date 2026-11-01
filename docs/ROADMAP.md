@@ -1060,7 +1060,25 @@ phase of their own. They are done in three steps:
       Source (p.279-281). Done (docs/spec/tracking.md, `src/media/region_stabilize.cpp`).
     So 6.7d, and with it 6.7, is done.
 * 6.8, titles (ch.12-13, p.301-377): the Title Tool and Titler+, with keyframes kept through trims,
-  splits and duplicates (2026.8). SubCap (ch.14) goes to Phase 7 with the captions.
+  splits and duplicates (2026.8). SubCap (ch.14) goes to Phase 7 with the captions. Marquee (p.327) and
+  NewBlue Titler Express (p.301) are other companies' tools: not ours. In five parts:
+  * 6.8a, Avid Titler+'s title model and renderer: text, rectangle and ellipse objects with Font,
+    Transform (anchor points), Fill, Outline and Shadow, z-order and groups, the Background and
+    Foreground; the title effect on a segment or between marks (Tools > Avid Titler+), the "Title Text"
+    Clip Text label (p.302-319, p.321-324). Done (docs/spec/titler.md, `src/model/titler.*`,
+    `src/media/titler.cpp`).
+  * 6.8b, editing titles in the Record monitor and the Dashboard: the Text, Selection, Rectangle and
+    Ellipse tools, typing and selections of text, moving, scaling and rotating with their modifier keys,
+    alignment, the keyboard shortcuts, the Effect Editor's selected object parameters (p.303-319,
+    p.320-324).
+  * 6.8c, Titler+ animation: keyframes on objects (kept through trims, splits and duplicates, 2026.8),
+    Roll and Crawl, tracking data on objects, templates and presets in bins, promotion from the classic
+    Title Tool, titles in EDLs and Find (p.319-326).
+  * 6.8d, the classic Title Tool: the drawing environment, text and graphic objects, colour, transparency
+    and shadows, rolling and crawling titles, styles, saving titles as fill and matte clips (p.326-364).
+  * 6.8e, editing with titles: title clips in bins, editing them in, fading, marks and trims of rolls and
+    crawls, revising and replacing, re-creating title media, the troubleshooting options (ch.13,
+    p.365-377).
 * 6.9, intraframe effects (Paint, AniMatte, Blur, Scratch Removal; ch.15) and PlasmaWipe (ch.16).
 * 6.10, colour correction (ch.19-24, p.587-733): Color Correction mode, HSL and curves, safe
   colours, and the Symphony option's spot colour.

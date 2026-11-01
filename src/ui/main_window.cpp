@@ -1498,6 +1498,8 @@ void MainWindow::createTools() {
         if (timeline_->options().openEffectEditor) showTool(QStringLiteral("EffectEditor"));
     });
     effectEditor_ = new EffectEditor(*timeline_);
+    // "The Avid Titler+ Dashboard and the Effect Editor open" (FX Guide p.303; the Dashboard comes in 6.8b).
+    connect(timeline_, &Timeline::titlerApplied, this, [this] { showTool(QStringLiteral("EffectEditor")); });
     // AutoStabilize "Opens the Effect Editor (if necessary) and the Tracking window", then tracks (FX Guide p.277).
     // After the drop or double-click that applied the effect has finished.
     connect(timeline_, &Timeline::autoStabilizeRequested, this, [this](const QString& track, std::int64_t frame) {

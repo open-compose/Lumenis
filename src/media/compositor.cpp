@@ -1,4 +1,5 @@
 #include "lumenis/media/compositor.h"
+#include "lumenis/media/titler.h"
 #include "lumenis/media/tracking.h"
 
 #include "lumenis/media/fields.h"
@@ -515,6 +516,14 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             const QString foreground = QStringLiteral("Foreground");
             const QString level = QStringLiteral("Level");
             const bool keyed = !model::keyframesOf(e, foreground, level).keys.isEmpty();
+            if (model::isTitlerEffect(e)) {
+                // Avid Titler+ (p.302-324): the title over the segment, filler's empty picture included.
+                layer = titlePicture(e, layer);
+                layer.quantize(c.precision);
+                result = over(layer, result);
+                result.quantize(c.precision);
+                continue;
+            }
             if (isBurnIn(e)) {
                 // Timecode Burn-In's displays over the segment's own picture (burn_in.cpp).
                 layer = burnInPicture(e, layer, c, name, frame);
