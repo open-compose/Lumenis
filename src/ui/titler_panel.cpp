@@ -327,7 +327,8 @@ QWidget* TitlerPanel::control(const QString& name) const {
 QString TitlerPanel::colorOf(const QString& which) const {
     const Title t = tool_.shownTitle();
     if (which == QLatin1String("background")) return t.background.color.color;
-    const TitleObject* o = tool_.selection().isEmpty() ? nullptr : t.object(tool_.selection().first());
+    const std::optional<TitleObject> shown = tool_.shownObject();
+    const TitleObject* o = shown ? &*shown : nullptr;
     if (!o) return QStringLiteral("#ffffff");
     TitleObject copy = *o;
     int corner = -1;
@@ -357,7 +358,9 @@ bool TitlerPanel::chooseColor(const QString& which, const QColor& color) {
 void TitlerPanel::refresh() {
     syncing_ = true;
     const Title t = tool_.shownTitle();
-    const TitleObject* o = tool_.selection().isEmpty() ? nullptr : t.object(tool_.selection().first());
+    // The first selected object, or the highlighted characters' format (6.8c2).
+    const std::optional<TitleObject> shown = tool_.shownObject();
+    const TitleObject* o = shown ? &*shown : nullptr;
     const bool text = o && o->kind == TitleObjectKind::Text;
     auto set = [&](const QString& name, double v) {
         if (auto* box = qobject_cast<QDoubleSpinBox*>(controls_.value(name)); box && !box->hasFocus()) box->setValue(v);

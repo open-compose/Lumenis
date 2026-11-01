@@ -136,9 +136,33 @@ Ours:
   show in the Effect Preview's position bar and Go to Previous/Next Event stops at them
   (`EffectEditor::positionBarParameters`). Keyframes of a removed object go with it (`model::setTitle`).
 
+## 6.8c2: formatting selected characters
+From the guide: "With the Text Tool activated, click and drag inside a text box to highlight any text you want to
+modify, and adjust the properties for the selected text. Highlighted text is indicated by an overlay. Once selected,
+specific properties may be applied to the highlighted portions of text, including individual letters and words, such
+as fonts, colors, and more" (p.304); "Changing the properties (fill, shadow, etc.) when the outer bounding box is
+selected affects the entire text in the box" (p.303-304); the font steps start "Select the text you want to change"
+(p.307), and "you can kern individual characters or strings of characters" (p.309).
+
+Ours:
+* A text object's runs (`model::TitleRun`, kept under the object's "runs") override, for characters [from, to), the
+  Font Family, Font Style, Size, Underline, Kerning, and the Fill and Outline colours. The rest (justification,
+  orientation, Leading, Skew, Transform, opacities, softness, the Shadow) stays the whole object's.
+* The Text tool's press puts the cursor where it is in the text and a drag highlights to where it goes
+  (`media::titleTextIndexAt`); Shift+click extends the highlight.
+* With characters highlighted, the panels' controls change those characters (`model::changeCharacters` from
+  `TitlerTool::modifySelected`) and show the first highlighted character's format (`TitlerTool::shownObject`);
+  controls for whole-object properties still change the whole object. The changes join the typing session's undo step.
+* Typing keeps runs with their characters; new characters take the format of the one before them
+  (`model::replaceText`). A value equal to the object's own is no override.
+* Layout goes by characters (`layoutText` in `src/media/titler.cpp`): each style's characters are measured and drawn
+  with their own font; a line is as tall as its tallest character and lines are spaced by the taller neighbour plus
+  the Leading. A colour gradient spans the characters of one colour.
+
 ## Not yet
 * Title keyframes as Effect Editor tracks and graphs (they live in the position bar and the panel only).
-* 6.8c2-c4: formatting selected characters (p.304), Roll and Crawl, tracking, templates and presets, promotion from
+* Character formatting of the Shadow, the opacities and the softness (whole objects only).
+* 6.8c3-c4: Roll and Crawl, tracking, templates and presets, promotion from
   the classic Title Tool, EDLs and Find.
 * Dragging the panel's numbers; the Grid button's Grid Settings; the Color Info Tool from a colour box (p.315).
 * Fill Overlay (media on the effect's subtrack, p.324).

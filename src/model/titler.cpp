@@ -113,6 +113,22 @@ QJsonObject objectJson(const TitleObject& t) {
                                                        {QStringLiteral("angle"), t.shadow.angle},
                                                        {QStringLiteral("softness"), t.shadow.softness}});
     }
+    if (!t.runs.isEmpty()) {
+        QJsonArray runs;
+        for (const TitleRun& r : t.runs) {
+            QJsonObject j{{QStringLiteral("from"), r.from}, {QStringLiteral("to"), r.to}};
+            const TitleCharFormat& f = r.format;
+            if (f.family) j.insert(QStringLiteral("family"), *f.family);
+            if (f.style) j.insert(QStringLiteral("style"), *f.style);
+            if (f.size) j.insert(QStringLiteral("size"), *f.size);
+            if (f.kerning) j.insert(QStringLiteral("kerning"), *f.kerning);
+            if (f.underline) j.insert(QStringLiteral("underline"), *f.underline);
+            if (f.fill) j.insert(QStringLiteral("fill"), colorJson(*f.fill));
+            if (f.outline) j.insert(QStringLiteral("outline"), colorJson(*f.outline));
+            runs.append(j);
+        }
+        o.insert(QStringLiteral("runs"), runs);
+    }
     if (!t.children.isEmpty()) {
         QJsonArray children;
         for (const TitleObject& c : t.children) children.append(objectJson(c));
@@ -178,6 +194,22 @@ TitleObject objectFrom(const QJsonObject& o) {
     t.shadow.distance = shadow.value(QStringLiteral("distance")).toDouble(dshadow.distance);
     t.shadow.angle = shadow.value(QStringLiteral("angle")).toDouble(dshadow.angle);
     t.shadow.softness = shadow.value(QStringLiteral("softness")).toDouble(dshadow.softness);
+    for (const QJsonValue& r : o.value(QStringLiteral("runs")).toArray()) {
+        const QJsonObject j = r.toObject();
+        TitleRun run;
+        run.from = static_cast<qsizetype>(j.value(QStringLiteral("from")).toInteger());
+        run.to = static_cast<qsizetype>(j.value(QStringLiteral("to")).toInteger());
+        TitleCharFormat& rf = run.format;
+        if (j.contains(QStringLiteral("family"))) rf.family = j.value(QStringLiteral("family")).toString();
+        if (j.contains(QStringLiteral("style"))) rf.style = j.value(QStringLiteral("style")).toString();
+        if (j.contains(QStringLiteral("size"))) rf.size = j.value(QStringLiteral("size")).toDouble();
+        if (j.contains(QStringLiteral("kerning"))) rf.kerning = j.value(QStringLiteral("kerning")).toDouble();
+        if (j.contains(QStringLiteral("underline"))) rf.underline = j.value(QStringLiteral("underline")).toBool();
+        if (j.contains(QStringLiteral("fill"))) rf.fill = colorFromJson(j.value(QStringLiteral("fill")), t.fill.color);
+        if (j.contains(QStringLiteral("outline"))) rf.outline = colorFromJson(j.value(QStringLiteral("outline")), t.outline.color);
+        t.runs << run;
+    }
+    normalizeRuns(t);
     for (const QJsonValue& c : o.value(QStringLiteral("children")).toArray()) t.children << objectFrom(c.toObject());
     return t;
 }
@@ -212,7 +244,133 @@ void collectIds(const QList<TitleObject>& list, QStringList& ids) {
 
 bool TitleObject::operator==(const TitleObject& o) const {
     return id == o.id && kind == o.kind && text == o.text && size == o.size && font == o.font && transform == o.transform && fill == o.fill &&
-           outline == o.outline && shadow == o.shadow && children == o.children;
+           outline == o.outline && shadow == o.shadow && runs == o.runs && children == o.children;
+}
+
+// ---------------------------------------------------------------- character formatting
+
+namespace {
+
+// The format of every character of the text, and back to runs.
+QList<TitleCharFormat> perCharacter(const TitleObject& o) {
+    QList<TitleCharFormat> out(o.text.size());
+    for (const TitleRun& r : o.runs) {
+        for (qsizetype i = std::max<qsizetype>(r.from, 0); i < std::min(r.to, o.text.size()); ++i) out[i] = r.format;
+    }
+    return out;
+}
+
+void setPerCharacter(TitleObject& o, const QList<TitleCharFormat>& formats) {
+    o.runs.clear();
+    for (qsizetype i = 0; i < formats.size(); ++i) {
+        if (formats.at(i).isEmpty()) continue;
+        if (!o.runs.isEmpty() && o.runs.last().to == i && o.runs.last().format == formats.at(i)) {
+            o.runs.last().to = i + 1;
+        } else {
+            o.runs << TitleRun{i, i + 1, formats.at(i)};
+        }
+    }
+}
+
+} // namespace
+
+TitleCharFormat formatAt(const TitleObject& object, qsizetype index) {
+    for (const TitleRun& r : object.runs) {
+        if (index >= r.from && index < r.to) return r.format;
+    }
+    return {};
+}
+
+TitleCharStyle styleAt(const TitleObject& object, qsizetype index) {
+    TitleCharStyle s{object.font, object.fill.color, object.outline.color};
+    const TitleCharFormat f = formatAt(object, index);
+    if (f.family) s.font.family = *f.family;
+    if (f.style) s.font.style = *f.style;
+    if (f.size) s.font.size = *f.size;
+    if (f.kerning) s.font.kerning = *f.kerning;
+    if (f.underline) s.font.underline = *f.underline;
+    if (f.fill) s.fill = *f.fill;
+    if (f.outline) s.outline = *f.outline;
+    return s;
+}
+
+TitleObject characterView(const TitleObject& object, qsizetype index) {
+    TitleObject view = object;
+    const TitleCharStyle s = styleAt(object, index);
+    view.font = s.font;
+    view.fill.color = s.fill;
+    view.outline.color = s.outline;
+    return view;
+}
+
+bool changeCharacters(TitleObject& object, qsizetype from, qsizetype to, const std::function<void(TitleObject&)>& change) {
+    if (to < from) std::swap(from, to);
+    from = std::clamp<qsizetype>(from, 0, object.text.size());
+    to = std::clamp<qsizetype>(to, 0, object.text.size());
+    const TitleObject before = object;
+    const TitleObject view = characterView(object, from);
+    TitleObject after = view;
+    change(after);
+    // The character properties that changed, for the range.
+    TitleCharFormat set;
+    if (after.font.family != view.font.family) set.family = after.font.family;
+    if (after.font.style != view.font.style) set.style = after.font.style;
+    if (after.font.size != view.font.size) set.size = after.font.size;
+    if (after.font.kerning != view.font.kerning) set.kerning = after.font.kerning;
+    if (after.font.underline != view.font.underline) set.underline = after.font.underline;
+    if (after.fill.color != view.fill.color) set.fill = after.fill.color;
+    if (after.outline.color != view.outline.color) set.outline = after.outline.color;
+    // Everything else for the whole object, its own character properties kept.
+    TitleObject whole = after;
+    whole.font.family = object.font.family;
+    whole.font.style = object.font.style;
+    whole.font.size = object.font.size;
+    whole.font.kerning = object.font.kerning;
+    whole.font.underline = object.font.underline;
+    whole.fill.color = object.fill.color;
+    whole.outline.color = object.outline.color;
+    whole.runs = object.runs;
+    object = whole;
+    if (!set.isEmpty() && from < to) {
+        QList<TitleCharFormat> formats = perCharacter(object);
+        for (qsizetype i = from; i < to; ++i) {
+            TitleCharFormat& f = formats[i];
+            if (set.family) f.family = set.family;
+            if (set.style) f.style = set.style;
+            if (set.size) f.size = set.size;
+            if (set.kerning) f.kerning = set.kerning;
+            if (set.underline) f.underline = set.underline;
+            if (set.fill) f.fill = set.fill;
+            if (set.outline) f.outline = set.outline;
+            // A value the same as the object's own is no override.
+            if (f.family == object.font.family) f.family.reset();
+            if (f.style == object.font.style) f.style.reset();
+            if (f.size == object.font.size) f.size.reset();
+            if (f.kerning == object.font.kerning) f.kerning.reset();
+            if (f.underline == object.font.underline) f.underline.reset();
+            if (f.fill == object.fill.color) f.fill.reset();
+            if (f.outline == object.outline.color) f.outline.reset();
+        }
+        setPerCharacter(object, formats);
+    }
+    normalizeRuns(object); // a changed text keeps only the runs it still has room for
+    return !(object == before);
+}
+
+void replaceText(TitleObject& object, qsizetype from, qsizetype to, const QString& text) {
+    if (to < from) std::swap(from, to);
+    from = std::clamp<qsizetype>(from, 0, object.text.size());
+    to = std::clamp<qsizetype>(to, 0, object.text.size());
+    QList<TitleCharFormat> formats = perCharacter(object);
+    const TitleCharFormat inherited = from > 0 ? formats.value(from - 1) : formats.value(0);
+    formats.remove(from, to - from);
+    for (qsizetype i = 0; i < text.size(); ++i) formats.insert(from + i, inherited);
+    object.text.replace(from, to - from, text);
+    setPerCharacter(object, formats);
+}
+
+void normalizeRuns(TitleObject& object) {
+    setPerCharacter(object, perCharacter(object));
 }
 
 bool isTitlerEffect(const Effect& effect) {

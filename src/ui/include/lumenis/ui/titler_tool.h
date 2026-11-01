@@ -58,7 +58,8 @@ public:
     bool setKeyframes(bool add);
 
     // Changes to the selected objects (each of them; a group as a whole) or to the whole title, one undo step each
-    // (the Dashboard's and the Effect Editor's controls, p.306-324); false when nothing changes.
+    // (the Dashboard's and the Effect Editor's controls, p.306-324); false when nothing changes. With characters
+    // highlighted, modifySelected changes their character properties (model::changeCharacters).
     bool modifySelected(const QString& description, const std::function<void(model::TitleObject&)>& change);
     bool modifyTitle(const QString& description, const std::function<void(model::Title&)>& change);
     // "Options for Align H include Align Left, Align Center, Align Right, and Align Horizontal Center. Options for
@@ -77,6 +78,11 @@ public:
     void notifyShown() { emit changed(); }
     // The title as the panels show it (a drag's or the typing's in progress, else the stored one).
     model::Title shownTitle() const { return title(); }
+    // The highlighted characters [from, to) of the text being typed, if any (6.8c2).
+    std::optional<std::pair<qsizetype, qsizetype>> highlighted() const;
+    // The object the panels show: the first selected, or with characters highlighted the typed text as its first
+    // highlighted character is formatted (model::characterView).
+    std::optional<model::TitleObject> shownObject() const;
 
     // The selection's boxes, handles, anchors and the text cursor for the Effect Preview.
     void fillOverlay(Composer::EffectPreview& preview) const;
@@ -106,7 +112,7 @@ private:
     std::optional<int> cornerAt(const model::Title& title, const QPointF& point, bool* rotate) const;
     void startEditing(const model::Title& title, const QString& id, std::optional<qsizetype> at = std::nullopt);
 
-    enum class Drag { None, Move, Scale, Rotate, Draw };
+    enum class Drag { None, Move, Scale, Rotate, Draw, Highlight };
     EffectEditor& editor_;
     Tool tool_ = Tool::Text;
     QStringList selected_;

@@ -260,6 +260,66 @@ private slots:
         QCOMPARE(at(over, ink.x(), ink.y()), QColor(255, 255, 255));
     }
 
+    // Formatting selected characters (6.8c2, p.304-309): runs of overrides that follow their characters.
+    void characters() {
+        Title t;
+        t.objects << textObject(t, QStringLiteral("HHHHHH"), QPointF(-300, 0));
+        TitleObject& o = t.objects[0];
+        o.font.size = 200;
+        // Characters 2-4 red and larger; the rest as the object.
+        QVERIFY(changeCharacters(o, 2, 4, [](TitleObject& v) {
+            v.fill.color.color = QStringLiteral("#ff0000");
+            v.font.size = 300;
+        }));
+        QCOMPARE(o.runs.size(), 1);
+        QCOMPARE(o.runs.at(0).from, 2);
+        QCOMPARE(o.runs.at(0).to, 4);
+        QCOMPARE(o.font.size, 200.0);
+        QCOMPARE(styleAt(o, 3).font.size, 300.0);
+        QCOMPARE(styleAt(o, 1).fill.color, QStringLiteral("#ffffff"));
+        QCOMPARE(characterView(o, 2).fill.color.color, QStringLiteral("#ff0000"));
+        QVERIFY(!changeCharacters(o, 2, 4, [](TitleObject& v) { v.font.size = 300; }));
+        // A paragraph property goes to the whole object.
+        QVERIFY(changeCharacters(o, 2, 4, [](TitleObject& v) { v.font.horizontal = HorizontalJustify::Center; }));
+        QCOMPARE(o.font.horizontal, HorizontalJustify::Center);
+        o.font.horizontal = HorizontalJustify::Left;
+        // Typing inside the run widens it; before it shifts it; the object's own value ends an override.
+        replaceText(o, 3, 3, QStringLiteral("H"));
+        QCOMPARE(o.runs.at(0).to, 5);
+        replaceText(o, 0, 1, QString());
+        QCOMPARE(o.runs.at(0).from, 1);
+        QCOMPARE(o.runs.at(0).to, 4);
+        QCOMPARE(o.text, QStringLiteral("HHHHHH"));
+        // Kept in the effect.
+        Effect e = titlerEffect();
+        setTitle(e, t);
+        QCOMPARE(titleOf(e), t);
+        // The picture: red characters among white, taller than the white ones.
+        const QImage image = media::titleImage(t, kSize);
+        int redTop = 1000, whiteTop = 1000;
+        for (int y = 0; y < image.height(); ++y) {
+            for (int x = 0; x < image.width(); ++x) {
+                const QColor c = at(image, x, y);
+                if (c.alpha() < 250) continue;
+                if (c.red() > 200 && c.green() < 60) redTop = std::min(redTop, y);
+                if (c.red() > 200 && c.green() > 200) whiteTop = std::min(whiteTop, y);
+            }
+        }
+        QVERIFY2(redTop < 1000 && whiteTop < 1000 && redTop + 3 < whiteTop, qPrintable(QStringLiteral("%1 %2").arg(redTop).arg(whiteTop)));
+        // The cursor goes between characters: a click left of the text is the start, right of it the end, and the
+        // larger characters are wider.
+        const TitleObject& laid = t.objects.at(0);
+        QCOMPARE(media::titleTextIndexAt(laid, QPointF(-50, -20)), 0);
+        QCOMPARE(media::titleTextIndexAt(laid, QPointF(5000, -20)), 6);
+        const auto small = media::titleTextRange(laid, 0, 1);
+        const auto big = media::titleTextRange(laid, 1, 2);
+        QVERIFY(small.size() == 1 && big.size() == 1);
+        QVERIFY(big.first().boundingRect().width() > small.first().boundingRect().width() * 1.3);
+        QVERIFY(big.first().boundingRect().height() > small.first().boundingRect().height() * 0.99);
+        const QRectF second = big.first().boundingRect();
+        QCOMPARE(media::titleTextIndexAt(laid, QPointF(second.left() + 2, -20)), 1);
+    }
+
     // Keyframes on a title's numbers (6.8c1; p.320; What's New 2026.8 p.9).
     void keyframes() {
         Effect e = titlerEffect();

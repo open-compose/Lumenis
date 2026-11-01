@@ -186,13 +186,28 @@ bool TitlerTool::overlayPress(const QPointF& at, Qt::KeyboardModifiers modifiers
     }
     switch (tool_) {
     case Tool::Text: {
-        if (!editing_.isEmpty() && hit == editing_) return true;
+        // "With the Text Tool activated, click and drag inside a text box to highlight any text you want to modify"
+        // (p.304): the press puts the cursor where it is, a drag highlights to where it goes (6.8c2).
+        auto indexAt = [&](const Title& in, const QString& id) -> qsizetype {
+            const TitleObject* o = in.object(id);
+            const auto placed = media::titleObjectPlacement(in, id);
+            return o && placed ? media::titleTextIndexAt(*o, placed->inverted().map(p)) : 0;
+        };
+        if (!editing_.isEmpty() && hit == editing_) {
+            caret_ = indexAt(t, hit);
+            if (!(modifiers & Qt::ShiftModifier)) anchor_ = caret_;
+            drag_ = Drag::Highlight;
+            emit changed();
+            editor_.refreshTitleOverlay();
+            return true;
+        }
         finishEditing();
         t = title();
         // "You can also return to an existing text layer to edit the text by clicking inside its bounding box while in
         // text mode" (p.303); a shape is selected.
         if (!hit.isEmpty() && isText(t, hit)) {
-            startEditing(t, hit);
+            startEditing(t, hit, indexAt(t, hit));
+            drag_ = Drag::Highlight;
             return true;
         }
         if (!hit.isEmpty()) {
@@ -252,6 +267,19 @@ bool TitlerTool::overlayPress(const QPointF& at, Qt::KeyboardModifiers modifiers
 void TitlerTool::overlayMove(const QPointF& at, Qt::KeyboardModifiers modifiers) {
     if (drag_ == Drag::None) return;
     const QPointF p = toTitle(at);
+    if (drag_ == Drag::Highlight) {
+        const Title t = title();
+        const TitleObject* o = t.object(editing_);
+        const auto placed = media::titleObjectPlacement(t, editing_);
+        if (!o || !placed) return;
+        const qsizetype index = media::titleTextIndexAt(*o, placed->inverted().map(p));
+        if (index != caret_) {
+            caret_ = index;
+            emit changed();
+            editor_.refreshTitleOverlay();
+        }
+        return;
+    }
     Title t = dragStart_;
     const bool shift = modifiers & Qt::ShiftModifier;
     if (drag_ == Drag::Move) {
@@ -326,6 +354,7 @@ void TitlerTool::overlayRelease(const QPointF& at, Qt::KeyboardModifiers modifie
     overlayMove(at, modifiers);
     const Drag drag = drag_;
     drag_ = Drag::None;
+    if (drag == Drag::Highlight) return; // highlighting is no change to the title
     if (!working_) return;
     if (drag == Drag::Draw) {
         const TitleObject* o = selected_.isEmpty() ? nullptr : working_->object(selected_.first());
@@ -380,10 +409,11 @@ bool TitlerTool::overlayKey(QKeyEvent* event) {
             editing_.clear();
             return false;
         }
-        QString text = o->text;
+        const QString text = o->text;
         const qsizetype from = std::min(anchor_, caret_), to = std::max(anchor_, caret_);
+        // Text changes keep the formatted characters' runs with their characters (6.8c2).
         auto replace = [&](const QString& with) {
-            text.replace(from, to - from, with);
+            model::replaceText(*o, from, to, with);
             caret_ = anchor_ = from + with.size();
         };
         const bool extend = mods & Qt::ShiftModifier;
@@ -393,14 +423,14 @@ bool TitlerTool::overlayKey(QKeyEvent* event) {
         case Qt::Key_Enter: replace(QStringLiteral("\n")); break;
         case Qt::Key_Backspace:
             if (from == to && from > 0) {
-                text.remove(from - 1, 1);
+                model::replaceText(*o, from - 1, from, QString());
                 caret_ = anchor_ = from - 1;
             } else {
                 replace(QString());
             }
             break;
         case Qt::Key_Delete:
-            if (from == to && from < text.size()) text.remove(from, 1);
+            if (from == to && from < text.size()) model::replaceText(*o, from, from + 1, QString());
             else replace(QString());
             break;
         case Qt::Key_Left:
@@ -426,7 +456,6 @@ bool TitlerTool::overlayKey(QKeyEvent* event) {
             replace(event->text());
             break;
         }
-        o->text = text;
         preview(t);
         editor_.refreshTitleOverlay();
         return true;
@@ -524,10 +553,16 @@ bool TitlerTool::selectAdjacent(bool next) {
 bool TitlerTool::modifySelected(const QString& description, const std::function<void(TitleObject&)>& change) {
     Title t = title();
     bool any = false;
-    for (const QString& id : selected_) {
-        if (TitleObject* o = t.object(id)) {
-            change(*o);
-            any = true;
+    // With characters highlighted in the text being typed, their properties change and not the whole text's
+    // ("specific properties may be applied to the highlighted portions of text", p.304; 6.8c2).
+    if (const auto range = highlighted()) {
+        if (TitleObject* o = t.object(editing_)) any = model::changeCharacters(*o, range->first, range->second, change);
+    } else {
+        for (const QString& id : selected_) {
+            if (TitleObject* o = t.object(id)) {
+                change(*o);
+                any = true;
+            }
         }
     }
     if (!any || t == editor_.storedTitle().value_or(Title{})) return false;
@@ -537,6 +572,21 @@ bool TitlerTool::modifySelected(const QString& description, const std::function<
         return true;
     }
     return commit(description, t);
+}
+
+std::optional<std::pair<qsizetype, qsizetype>> TitlerTool::highlighted() const {
+    if (editing_.isEmpty() || anchor_ == caret_) return std::nullopt;
+    return std::pair{std::min(anchor_, caret_), std::max(anchor_, caret_)};
+}
+
+std::optional<TitleObject> TitlerTool::shownObject() const {
+    if (selected_.isEmpty()) return std::nullopt;
+    const Title t = title();
+    const QString id = highlighted() ? editing_ : selected_.first();
+    const TitleObject* o = t.object(id);
+    if (!o) return std::nullopt;
+    if (const auto range = highlighted()) return model::characterView(*o, range->first);
+    return *o;
 }
 
 bool TitlerTool::modifyTitle(const QString& description, const std::function<void(Title&)>& change) {

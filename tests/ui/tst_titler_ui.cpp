@@ -413,6 +413,74 @@ private slots:
         timeline.setEffectMode(false);
     }
 
+    // Formatting highlighted characters (6.8c2, p.304): drag in the text to highlight, the panel's Size and Fill
+    // colour go to those characters only, and the panel shows their format.
+    void characters() {
+        Composer composer;
+        Timeline timeline{composer};
+        EffectEditor editor{timeline};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence());
+        editor.resize(700, 900);
+        editor.show();
+        auto settle = [] {
+            for (int i = 0; i < 3; ++i) QCoreApplication::processEvents();
+        };
+        auto title = [&] {
+            const model::Segment s = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(1);
+            return model::titleOf(*s.effect);
+        };
+        composer.moveTo(MonitorId::Record, 60);
+        QVERIFY(timeline.perform(QStringLiteral("tools.titler")));
+        timeline.setEffectMode(true);
+        settle();
+        TitlerTool* tool = editor.titlerTool();
+        tool->overlayPress(tool->toFraction(QPointF(-300, 0)), Qt::NoModifier, false);
+        tool->overlayRelease(tool->toFraction(QPointF(-300, 0)), Qt::NoModifier);
+        for (const QChar c : QStringLiteral("ABCDEF")) {
+            QKeyEvent e(QEvent::KeyPress, c.unicode(), Qt::NoModifier, QString(c));
+            tool->overlayKey(&e);
+        }
+        tool->finishEditing();
+        settle();
+        const model::TitleObject typed = title().objects.first();
+        // Highlight the characters 1-3 by dragging from before B to after D.
+        const QPointF origin = typed.transform.position;
+        const QRectF b = media::titleTextRange(typed, 1, 2).first().boundingRect();
+        const QRectF d = media::titleTextRange(typed, 3, 4).first().boundingRect();
+        const QPointF from = origin + QPointF(b.left() + 1, b.center().y());
+        const QPointF to = origin + QPointF(d.right() - 1, d.center().y());
+        QVERIFY(tool->overlayPress(tool->toFraction(from), Qt::NoModifier, false));
+        tool->overlayMove(tool->toFraction(to), Qt::NoModifier);
+        tool->overlayRelease(tool->toFraction(to), Qt::NoModifier);
+        settle();
+        QCOMPARE(tool->editing(), typed.id);
+        const auto range = tool->highlighted();
+        QVERIFY(range);
+        QCOMPARE(range->first, 1);
+        QCOMPARE(range->second, 4);
+        TitlerPanel* panel = editor.titlerPanel();
+        auto* size = qobject_cast<QDoubleSpinBox*>(panel->control(QStringLiteral("size")));
+        QVERIFY(size);
+        size->setValue(150);
+        emit size->editingFinished();
+        QVERIFY(panel->chooseColor(QStringLiteral("fill"), QColor(Qt::red)));
+        settle();
+        QCOMPARE(size->value(), 150.0);
+        tool->finishEditing();
+        settle();
+        const model::TitleObject formatted = title().objects.first();
+        QCOMPARE(formatted.font.size, 72.0);
+        QCOMPARE(formatted.runs.size(), 1);
+        QCOMPARE(formatted.runs.at(0).from, 1);
+        QCOMPARE(formatted.runs.at(0).to, 4);
+        QCOMPARE(model::styleAt(formatted, 2).font.size, 150.0);
+        QCOMPARE(model::styleAt(formatted, 2).fill.color, QStringLiteral("#ff0000"));
+        // One undo step for the typing session's formatting.
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        QVERIFY(title().objects.first().runs.isEmpty());
+    }
+
     // Keyframes on a title (6.8c1, p.320): the panel's Add Keyframe at one end, a change at the other makes a
     // keyframe there, the Effect Preview's position bar shows both, and the panel follows the position.
     void keyframes() {

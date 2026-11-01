@@ -268,6 +268,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   (names, ranges, a quarter of the frame until set), frame-to-frame
   correlation with a search area twice the region, the original picture
   in the Effect Preview, Progressive Source without effect yet.
+* Titler+ character formatting (docs/spec/titler.md, 6.8c2): which properties
+  characters can have (family, style, size, underline, kerning, fill and
+  outline colours), new characters taking the format before them, a line as
+  tall as its tallest character, Shift+click extending the highlight.
 * Titler+ keyframes (docs/spec/titler.md, 6.8c1): the keyframed numbers and
   their `Titler:<object id>` categories, always Fixed, the panel's Add/Delete
   Keyframe buttons working on the selection or the whole title, keyframes in

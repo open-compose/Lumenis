@@ -17,6 +17,7 @@
 #include <QSizeF>
 #include <QString>
 
+#include <functional>
 #include <optional>
 
 namespace lumenis::model {
@@ -92,6 +93,31 @@ struct TitleFont {
     bool operator==(const TitleFont&) const = default;
 };
 
+// Formatting of selected characters (6.8c2): "Once selected, specific properties may be applied to the highlighted
+// portions of text, including individual letters and words, such as fonts, colors, and more" (p.304). A run of a
+// text object's characters [from, to) overrides the object's own Font Family, Font Style, Size, Underline and Kerning
+// ("you can kern individual characters or strings of characters", p.309) and its Fill and Outline colours (ours:
+// which properties). Unset fields take the object's.
+struct TitleCharFormat {
+    std::optional<QString> family, style;
+    std::optional<double> size, kerning;
+    std::optional<bool> underline;
+    std::optional<TitleColor> fill, outline;
+    bool isEmpty() const { return *this == TitleCharFormat{}; }
+    bool operator==(const TitleCharFormat&) const = default;
+};
+struct TitleRun {
+    qsizetype from = 0, to = 0;
+    TitleCharFormat format;
+    bool operator==(const TitleRun&) const = default;
+};
+// What a character is drawn with: the object's font and colours with its run's overrides.
+struct TitleCharStyle {
+    TitleFont font;
+    TitleColor fill, outline;
+    bool operator==(const TitleCharStyle&) const = default;
+};
+
 // Transform (p.310-314, p.322): Opacity 0-100, Position (pixels from the frame's centre), Scale (percent), Rotation
 // (degrees clockwise), and the Anchor Point, "the points where position, scale, and rotation occur", relative to
 // the object's own origin (a text's origin is where its justification puts it, p.313).
@@ -119,6 +145,8 @@ struct TitleObject {
     TitleFill fill;
     TitleOutline outline;
     TitleShadow shadow;
+    // A text's formatted characters (6.8c2): sorted, apart, each with something set; see normalizeRuns.
+    QList<TitleRun> runs;
     QList<TitleObject> children; // a group's, back to front
     // By hand: a defaulted comparison cannot see through the list of its own type.
     bool operator==(const TitleObject& o) const;
@@ -165,6 +193,23 @@ Effect titlerEffect();
 TitleObject textObject(const Title& title, const QString& text, const QPointF& position);
 // A new rectangle or ellipse `size` large centred at `position`.
 TitleObject shapeObject(const Title& title, TitleObjectKind kind, const QPointF& position, const QSizeF& size);
+
+// ---- Formatting selected characters (6.8c2)
+// The run format of character `index` (empty when none), and what it is drawn with.
+TitleCharFormat formatAt(const TitleObject& object, qsizetype index);
+TitleCharStyle styleAt(const TitleObject& object, qsizetype index);
+// The object as the Dashboard shows it for its character `index`: its Font and Fill and Outline colours replaced by
+// that character's.
+TitleObject characterView(const TitleObject& object, qsizetype index);
+// Changes the characters [from, to): `change` works on characterView(object, from); whatever character property it
+// changes goes to the characters' runs, anything else (Transform, Justification, opacities ...) to the whole object.
+// False when nothing changes.
+bool changeCharacters(TitleObject& object, qsizetype from, qsizetype to, const std::function<void(TitleObject&)>& change);
+// Replaces the text [from, to) with `text`, keeping the runs with their characters; new characters take the format
+// of the one before them (the first character's at the start), as typing does in text editors (ours).
+void replaceText(TitleObject& object, qsizetype from, qsizetype to, const QString& text);
+// Sorts and merges the runs, drops empty ones and clips them to the text.
+void normalizeRuns(TitleObject& object);
 
 // Layer order (p.318): one level up or down among its siblings; false at the top or bottom, or for no such object.
 bool bringForward(Title& title, const QString& id);

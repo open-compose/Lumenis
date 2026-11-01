@@ -30,6 +30,9 @@ std::optional<QTransform> titleObjectPlacement(const model::Title& title, const 
 // A text object's cursor before text index `index` (0 to the text's length), a line from the top of its line to
 // the bottom, and the boxes over the characters [from, to), both in the object's own coordinates (6.8b).
 QLineF titleTextCaret(const model::TitleObject& object, qsizetype index);
+// The text index (0 to the text's length) whose cursor is nearest a point in the object's own coordinates: where a
+// click puts the cursor and a drag highlights to (p.304, 6.8c2).
+qsizetype titleTextIndexAt(const model::TitleObject& object, const QPointF& point);
 QList<QPolygonF> titleTextRange(const model::TitleObject& object, qsizetype from, qsizetype to);
 // An Avid Titler+ effect's segment picture: its title at `time` of the effect (its keyframes applied, 6.8c1) over
 // `layer`.

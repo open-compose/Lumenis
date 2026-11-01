@@ -1,6 +1,6 @@
 // Avid Titler+'s picture (ROADMAP 6.8a; FX Guide p.302-324; docs/spec/titler.md): each object of a title
-// (model::Title) is made a path in its own coordinates (text through QPainterPath::addText, rectangles and
-// ellipses), placed by its Transform about its Anchor Point, and drawn as its own layer — Shadow, then Fill,
+// (model::Title) is made a path in its own coordinates (text through QPainterPath::addText, a piece for each style
+// of its formatted characters, rectangles and ellipses), placed by its Transform about its Anchor Point, and drawn as its own layer — Shadow, then Fill,
 // then Outline, each softened by blurring its coverage — at its Opacity; the Background goes under all of them and
 // the Foreground's Opacity and Crop over the whole. Coordinates are pixels of a 1920 x 1080 frame from its centre
 // (titler.h), scaled to the picture's height.
@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <limits>
 #include <cmath>
 #include <numbers>
 #include <vector>
@@ -50,32 +51,73 @@ QFont fontOf(const model::TitleFont& f) {
     return font;
 }
 
-// A text object laid out: each shown line with where it starts and the index in the object's text of each of its
-// characters, so that the caret and selections find their places (6.8b).
+// A text object laid out: each shown line with where it starts, the index in the object's text of each of its
+// characters and the x of each character boundary, so that the caret and selections find their places (6.8b), and
+// its pieces: runs of shown characters drawn with one style (6.8c2's formatted characters).
 struct LaidText {
-    QFont font;
-    double ascent = 0.0, descent = 0.0;
+    QFont font; // the object's own
+    struct Piece {
+        qsizetype from = 0, to = 0; // shown positions
+        int style = 0;              // index in styles
+    };
     struct Line {
         QString shown;
         QList<qsizetype> source; // per shown character
         qsizetype start = 0, end = 0; // the text indexes the line covers, [start, end]
         double x = 0.0, baseline = 0.0;
+        double ascent = 0.0, descent = 0.0, height = 0.0;
+        QList<double> xs; // boundaries from the line's x, one more than the characters
+        QList<Piece> pieces;
     };
     QList<Line> lines;
+    QList<model::TitleCharStyle> styles;
+    QList<QFont> fonts; // per style
+    QList<int> styleOf; // per text index
     QTransform skew;
 };
+
+// The x of each boundary of shown characters `source` (text indexes in shown order), and the pieces of one style.
+void measure(const LaidText& laid, const QList<qsizetype>& source, const QString& text, QList<double>& xs, QList<LaidText::Piece>* pieces) {
+    xs = {0.0};
+    qsizetype k = 0;
+    while (k < source.size()) {
+        const int style = laid.styleOf.value(source.at(k));
+        qsizetype end = k + 1;
+        while (end < source.size() && laid.styleOf.value(source.at(end)) == style) ++end;
+        QString piece;
+        for (qsizetype m = k; m < end; ++m) piece += text.at(source.at(m));
+        const QFontMetricsF metrics(laid.fonts.at(style));
+        const double start = xs.last();
+        for (qsizetype m = 1; m <= piece.size(); ++m) xs << start + metrics.horizontalAdvance(piece.left(m));
+        if (pieces) *pieces << LaidText::Piece{k, end, style};
+        k = end;
+    }
+}
 
 // The lines: the text's own lines, and with a box width words wrapped to it ("Changing the size of the text box wraps
 // the text appropriately", p.304). The first line's baseline is at y 0, each line placed by the justification
 // ("left justified text ... its anchor point will be at the baseline left", p.307, p.313); Vertical Center and
 // Bottom move the lines up so that the middle or the last baseline is at 0 (ours). Right To Left shows each line's
-// characters from the right; Top To Bottom one character under the other (ours).
+// characters from the right; Top To Bottom one character under the other (ours). A line is as tall as its tallest
+// character (ours), and lines are spaced by the taller of two neighbours plus the Leading.
 LaidText layoutText(const TitleObject& o) {
     LaidText laid;
     laid.font = fontOf(o.font);
-    const QFontMetricsF metrics(laid.font);
-    laid.ascent = metrics.ascent();
-    laid.descent = metrics.descent();
+    for (qsizetype i = 0; i < o.text.size(); ++i) {
+        const model::TitleCharStyle style = model::styleAt(o, i);
+        qsizetype at = laid.styles.indexOf(style);
+        if (at < 0) {
+            at = laid.styles.size();
+            laid.styles << style;
+            laid.fonts << fontOf(style.font);
+        }
+        laid.styleOf << static_cast<int>(at);
+    }
+    auto width = [&](const QList<qsizetype>& source) {
+        QList<double> xs;
+        measure(laid, source, o.text, xs, nullptr);
+        return xs.last();
+    };
     QList<LaidText::Line> lines;
     qsizetype offset = 0;
     for (const QString& paragraph : o.text.split(QLatin1Char('\n'))) {
@@ -92,8 +134,10 @@ LaidText layoutText(const TitleObject& o) {
         } else {
             qsizetype at = offset;
             for (const QString& word : paragraph.split(QLatin1Char(' '))) {
-                const QString longer = line.shown.isEmpty() ? word : line.shown + QLatin1Char(' ') + word;
-                if (!line.shown.isEmpty() && metrics.horizontalAdvance(longer) > o.size.width()) {
+                QList<qsizetype> longer = line.source;
+                if (!longer.isEmpty()) longer << at - 1;
+                for (qsizetype i = at; i < at + word.size(); ++i) longer << i;
+                if (!line.shown.isEmpty() && width(longer) > o.size.width()) {
                     line.end = at - 1;
                     lines << line;
                     line = LaidText::Line{};
@@ -129,18 +173,38 @@ LaidText layoutText(const TitleObject& o) {
             std::reverse(line.source.begin(), line.source.end());
         }
     }
-    const double lineHeight = metrics.height() + o.font.leading;
-    const auto n = static_cast<double>(std::max<qsizetype>(lines.size(), 1));
+    // Each line's boundaries, pieces and height (an empty line the object's own font's).
+    for (LaidText::Line& line : lines) {
+        measure(laid, line.source, o.text, line.xs, &line.pieces);
+        QList<int> styles;
+        for (const qsizetype i : line.source) {
+            if (!styles.contains(laid.styleOf.value(i))) styles << laid.styleOf.value(i);
+        }
+        QList<QFont> fonts;
+        for (const int st : styles) fonts << laid.fonts.at(st);
+        if (fonts.isEmpty()) fonts << laid.font;
+        for (const QFont& font : fonts) {
+            const QFontMetricsF metrics(font);
+            line.ascent = std::max(line.ascent, metrics.ascent());
+            line.descent = std::max(line.descent, metrics.descent());
+            line.height = std::max(line.height, metrics.height());
+        }
+    }
+    QList<double> steps;
+    for (qsizetype i = 1; i < lines.size(); ++i) steps << std::max(lines.at(i - 1).height, lines.at(i).height) + o.font.leading;
+    double total = 0.0;
+    for (const double step : steps) total += step;
     double top = 0.0;
-    if (o.font.vertical == model::VerticalJustify::Center) top = -(n - 1.0) * lineHeight / 2.0;
-    if (o.font.vertical == model::VerticalJustify::Bottom) top = -(n - 1.0) * lineHeight;
+    if (o.font.vertical == model::VerticalJustify::Center) top = -total / 2.0;
+    if (o.font.vertical == model::VerticalJustify::Bottom) top = -total;
     for (qsizetype i = 0; i < lines.size(); ++i) {
-        const double width = metrics.horizontalAdvance(lines.at(i).shown);
+        const double w = lines.at(i).xs.last();
         double x = 0.0;
-        if (o.font.horizontal == model::HorizontalJustify::Center) x = -width / 2.0;
-        if (o.font.horizontal == model::HorizontalJustify::Right) x = -width;
+        if (o.font.horizontal == model::HorizontalJustify::Center) x = -w / 2.0;
+        if (o.font.horizontal == model::HorizontalJustify::Right) x = -w;
         lines[i].x = x;
-        lines[i].baseline = top + static_cast<double>(i) * lineHeight;
+        lines[i].baseline = top;
+        if (i < steps.size()) top += steps.at(i);
     }
     laid.lines = lines;
     // Skew "slants an object along its horizontal axis" (p.310), about the baseline.
@@ -148,24 +212,36 @@ LaidText layoutText(const TitleObject& o) {
     return laid;
 }
 
+// A text's paths, one for each style of its characters (6.8c2), in its own coordinates.
+QList<std::pair<QPainterPath, int>> textPieces(const LaidText& laid) {
+    QList<std::pair<QPainterPath, int>> out;
+    for (qsizetype st = 0; st < laid.styles.size(); ++st) out << std::pair{QPainterPath(), static_cast<int>(st)};
+    for (const LaidText::Line& line : laid.lines) {
+        for (const LaidText::Piece& piece : line.pieces) {
+            out[piece.style].first.addText(QPointF(line.x + line.xs.at(piece.from), line.baseline), laid.fonts.at(piece.style),
+                                           line.shown.mid(piece.from, piece.to - piece.from));
+        }
+    }
+    for (auto& [path, style] : out) path = laid.skew.map(path);
+    return out;
+}
+
 QPainterPath textPath(const TitleObject& o) {
-    const LaidText laid = layoutText(o);
     QPainterPath path;
-    for (const LaidText::Line& line : laid.lines) path.addText(QPointF(line.x, line.baseline), laid.font, line.shown);
-    return laid.skew.map(path);
+    for (const auto& piece : textPieces(layoutText(o))) path.addPath(piece.first);
+    return path;
 }
 
 // The x where the caret before text index `index` stands on `line`, if the line holds it.
-std::optional<double> caretX(const LaidText& laid, const LaidText::Line& line, qsizetype index, bool rightToLeft) {
+std::optional<double> caretX(const LaidText::Line& line, qsizetype index, bool rightToLeft) {
     if (index < line.start || index > line.end) return std::nullopt;
-    const QFontMetricsF metrics(laid.font);
     for (qsizetype k = 0; k < line.source.size(); ++k) {
         if (line.source.at(k) != index) continue;
         // Before a character: its left edge, or its right edge when the line runs from the right.
-        return line.x + metrics.horizontalAdvance(line.shown.left(rightToLeft ? k + 1 : k));
+        return line.x + line.xs.at(rightToLeft ? k + 1 : k);
     }
     // After the line's last character.
-    return rightToLeft ? line.x : line.x + metrics.horizontalAdvance(line.shown);
+    return rightToLeft ? line.x : line.x + line.xs.last();
 }
 
 // The object's own shape, in its coordinates; empty for groups.
@@ -281,14 +357,27 @@ void drawObject(QPainter& canvas, const TitleObject& o, const QTransform& outer,
         for (const TitleObject& child : o.children) drawObject(canvas, child, m, scale, size, level);
         return;
     }
-    const QPainterPath local = shapeOf(o);
-    if (local.isEmpty()) return;
-    const QPainterPath shape = m.map(local);
+    // The object's parts: a text's characters of each style (6.8c2) with their Fill and Outline colours, else its
+    // one shape.
+    struct Part {
+        QPainterPath shape, ring;
+        TitleColor fill, outline;
+    };
+    QList<Part> parts;
+    if (o.kind == TitleObjectKind::Text) {
+        const LaidText laid = layoutText(o);
+        for (const auto& [path, style] : textPieces(laid)) {
+            if (!path.isEmpty()) parts << Part{m.map(path), {}, laid.styles.at(style).fill, laid.styles.at(style).outline};
+        }
+    } else {
+        const QPainterPath local = shapeOf(o);
+        if (!local.isEmpty()) parts << Part{m.map(local), {}, o.fill.color, o.outline.color};
+    }
+    if (parts.isEmpty()) return;
     QImage layer(size, QImage::Format_ARGB32_Premultiplied);
     layer.fill(Qt::transparent);
     QPainter p(&layer);
     // Outline (p.316, p.323): Outer around the shape, Inner within it, Border astride its edge; Round or Square.
-    QPainterPath ring;
     const bool square = o.outline.shape == model::OutlineShape::Square;
     if (o.outline.on && o.outline.size > 0.0) {
         QPainterPathStroker stroker;
@@ -296,23 +385,30 @@ void drawObject(QPainter& canvas, const TitleObject& o, const QTransform& outer,
         stroker.setCapStyle(square ? Qt::SquareCap : Qt::RoundCap);
         const double width = o.outline.size * scale;
         stroker.setWidth(o.outline.type == model::OutlineType::Border ? width : 2.0 * width);
-        const QPainterPath stroke = stroker.createStroke(shape);
-        switch (o.outline.type) {
-        case model::OutlineType::Outer: ring = stroke.united(shape).subtracted(shape); break;
-        case model::OutlineType::Inner: ring = stroke.intersected(shape); break;
-        case model::OutlineType::Border: ring = stroke; break;
+        for (Part& part : parts) {
+            const QPainterPath stroke = stroker.createStroke(part.shape);
+            switch (o.outline.type) {
+            case model::OutlineType::Outer: part.ring = stroke.united(part.shape).subtracted(part.shape); break;
+            case model::OutlineType::Inner: part.ring = stroke.intersected(part.shape); break;
+            case model::OutlineType::Border: part.ring = stroke; break;
+            }
         }
     }
     // Shadow (p.316-317): the whole object's shape moved by Distance at Angle (in the frame, ours).
     if (o.shadow.on) {
         const double a = o.shadow.angle * std::numbers::pi / 180.0;
         const QPointF by(std::cos(a) * o.shadow.distance * scale, std::sin(a) * o.shadow.distance * scale);
-        const QPainterPath whole = ring.isEmpty() ? shape : shape.united(ring);
+        QPainterPath whole;
+        for (const Part& part : parts) whole = whole.united(part.ring.isEmpty() ? part.shape : part.shape.united(part.ring));
         p.drawImage(0, 0, coat(whole.translated(by), o.shadow.color, o.shadow.opacity, o.shadow.softness * scale, size, false));
     }
     // The fill, then the outline over it (an Inner or Border outline lies on the fill).
-    if (o.fill.on) p.drawImage(0, 0, coat(shape, o.fill.color, o.fill.opacity, o.fill.softness * scale, size, false));
-    if (!ring.isEmpty()) p.drawImage(0, 0, coat(ring, o.outline.color, o.outline.opacity, o.outline.softness * scale, size, square));
+    if (o.fill.on) {
+        for (const Part& part : parts) p.drawImage(0, 0, coat(part.shape, part.fill, o.fill.opacity, o.fill.softness * scale, size, false));
+    }
+    for (const Part& part : parts) {
+        if (!part.ring.isEmpty()) p.drawImage(0, 0, coat(part.ring, part.outline, o.outline.opacity, o.outline.softness * scale, size, square));
+    }
     p.end();
     canvas.setOpacity(level);
     canvas.drawImage(0, 0, layer);
@@ -412,13 +508,40 @@ QLineF titleTextCaret(const TitleObject& object, qsizetype index) {
     const LaidText laid = layoutText(object);
     const bool rtl = object.font.orientation == model::FontOrientation::RightToLeft;
     for (const LaidText::Line& line : laid.lines) {
-        if (const auto x = caretX(laid, line, index, rtl)) {
-            return laid.skew.map(QLineF(*x, line.baseline - laid.ascent, *x, line.baseline + laid.descent));
+        if (const auto x = caretX(line, index, rtl)) {
+            return laid.skew.map(QLineF(*x, line.baseline - line.ascent, *x, line.baseline + line.descent));
         }
     }
-    const double x = laid.lines.isEmpty() ? 0.0 : laid.lines.last().x;
-    const double baseline = laid.lines.isEmpty() ? 0.0 : laid.lines.last().baseline;
-    return laid.skew.map(QLineF(x, baseline - laid.ascent, x, baseline + laid.descent));
+    if (laid.lines.isEmpty()) {
+        const QFontMetricsF metrics(laid.font);
+        return QLineF(0, -metrics.ascent(), 0, metrics.descent());
+    }
+    const LaidText::Line& last = laid.lines.last();
+    return laid.skew.map(QLineF(last.x, last.baseline - last.ascent, last.x, last.baseline + last.descent));
+}
+
+qsizetype titleTextIndexAt(const TitleObject& object, const QPointF& point) {
+    const LaidText laid = layoutText(object);
+    if (laid.lines.isEmpty()) return 0;
+    const QPointF p = laid.skew.inverted().map(point);
+    // The line nearest the point up and down, then the character boundary nearest it across.
+    const LaidText::Line* best = &laid.lines.first();
+    double far = std::numeric_limits<double>::max();
+    for (const LaidText::Line& line : laid.lines) {
+        const double top = line.baseline - line.ascent, bottom = line.baseline + line.descent;
+        const double d = p.y() < top ? top - p.y() : p.y() > bottom ? p.y() - bottom : 0.0;
+        if (d < far) {
+            far = d;
+            best = &line;
+        }
+    }
+    const bool rtl = object.font.orientation == model::FontOrientation::RightToLeft;
+    qsizetype k = 0;
+    for (qsizetype m = 1; m < best->xs.size(); ++m) {
+        if (std::abs(best->x + best->xs.at(m) - p.x()) < std::abs(best->x + best->xs.at(k) - p.x())) k = m;
+    }
+    if (rtl) return k == 0 ? best->end : best->source.at(k - 1);
+    return k < best->source.size() ? best->source.at(k) : best->end;
 }
 
 QList<QPolygonF> titleTextRange(const TitleObject& object, qsizetype from, qsizetype to) {
@@ -426,21 +549,20 @@ QList<QPolygonF> titleTextRange(const TitleObject& object, qsizetype from, qsize
     if (to < from) std::swap(from, to);
     if (to == from) return out;
     const LaidText laid = layoutText(object);
-    const QFontMetricsF metrics(laid.font);
     for (const LaidText::Line& line : laid.lines) {
         // The line's characters in the range, as one span of their shown positions.
         double left = 0.0, right = 0.0;
         bool any = false;
         for (qsizetype k = 0; k < line.source.size(); ++k) {
             if (line.source.at(k) < from || line.source.at(k) >= to) continue;
-            const double a = line.x + metrics.horizontalAdvance(line.shown.left(k));
-            const double b = line.x + metrics.horizontalAdvance(line.shown.left(k + 1));
+            const double a = line.x + line.xs.at(k);
+            const double b = line.x + line.xs.at(k + 1);
             left = any ? std::min(left, a) : a;
             right = any ? std::max(right, b) : b;
             any = true;
         }
         if (!any) continue;
-        out << laid.skew.map(QPolygonF(QRectF(QPointF(left, line.baseline - laid.ascent), QPointF(right, line.baseline + laid.descent))));
+        out << laid.skew.map(QPolygonF(QRectF(QPointF(left, line.baseline - line.ascent), QPointF(right, line.baseline + line.descent))));
     }
     return out;
 }
