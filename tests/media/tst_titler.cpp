@@ -3,6 +3,7 @@
 // Transform about the Anchor Point, the Background and the Foreground.
 #include "lumenis/media/compositor.h"
 #include "lumenis/media/titler.h"
+#include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/titler.h"
 
 #include <QGuiApplication>
@@ -257,6 +258,71 @@ private slots:
         }
         QVERIFY(ink.x() >= 0);
         QCOMPARE(at(over, ink.x(), ink.y()), QColor(255, 255, 255));
+    }
+
+    // Keyframes on a title's numbers (6.8c1; p.320; What's New 2026.8 p.9).
+    void keyframes() {
+        Effect e = titlerEffect();
+        Title t;
+        t.objects << textObject(t, QStringLiteral("HH"), QPointF(-400, 0));
+        t.objects.last().font.size = 200;
+        setTitle(e, t);
+        const EffectSpan span(31);
+        QCOMPARE(titleParameters(TitleObjectKind::Text).size(), 21);
+        QVERIFY(!titleParameters(TitleObjectKind::Rectangle).contains(QStringLiteral("Size")));
+        QVERIFY(titleParameters().contains(QStringLiteral("Background Opacity")));
+        // Keyframes at the start for every number of the object; then moved at the end.
+        QVERIFY(addTitleKeyframes(e, {QStringLiteral("Text 1")}, 0.0, span));
+        QVERIFY(!addTitleKeyframes(e, {QStringLiteral("Text 1")}, 0.0, span));
+        const QString cat = titleCategory(QStringLiteral("Text 1"));
+        QCOMPARE(cat, QStringLiteral("Titler:Text 1"));
+        QVERIFY(keyframesOf(e, cat, QStringLiteral("Position X")).fixed);
+        Title end = titleAt(e, 1.0, span);
+        end.objects[0].transform.position.setX(400);
+        storeTitleAt(e, end, 1.0, span);
+        QCOMPARE(keyframesOf(e, cat, QStringLiteral("Position X")).keys.size(), 2);
+        // Numbers that did not change get no keyframe.
+        QCOMPARE(keyframesOf(e, cat, QStringLiteral("Rotation")).keys.size(), 1);
+        QVERIFY(std::abs(titleAt(e, 0.5, span).objects.at(0).transform.position.x()) < 1e-6);
+        QCOMPARE(titleAt(e, 0.0, span).objects.at(0).transform.position.x(), -400.0);
+        // Not keyframed: stored as it is.
+        Title colour = titleAt(e, 0.5, span);
+        colour.objects[0].fill.color.color = QStringLiteral("#ff0000");
+        storeTitleAt(e, colour, 0.5, span);
+        QCOMPARE(titleOf(e).objects.at(0).fill.color.color, QStringLiteral("#ff0000"));
+        QCOMPARE(keyframesOf(e, cat, QStringLiteral("Position X")).keys.size(), 2);
+        // The picture follows: the text moves right over the effect.
+        auto inkX = [&](double time) {
+            const QImage image = media::titlePicture(e, media::Picture::solid(kSize.width(), kSize.height(), Qt::black), time, span).toImage();
+            int sum = 0, n = 0;
+            for (int y = 0; y < image.height(); ++y) {
+                for (int x = 0; x < image.width(); ++x) {
+                    if (at(image, x, y).red() > 128) {
+                        sum += x;
+                        ++n;
+                    }
+                }
+            }
+            return n ? sum / n : -1;
+        };
+        const int start = inkX(0.0);
+        const int middle = inkX(0.5);
+        const int last = inkX(1.0);
+        QVERIFY2(start >= 0 && start + 20 < middle && middle + 20 < last, qPrintable(QStringLiteral("%1 %2 %3").arg(start).arg(middle).arg(last)));
+        // Delete Keyframe at the end; the title's own numbers.
+        QVERIFY(removeTitleKeyframes(e, {QStringLiteral("Text 1")}, 1.0, span));
+        QCOMPARE(keyframesOf(e, cat, QStringLiteral("Position X")).keys.size(), 1);
+        QVERIFY(addTitleKeyframes(e, {}, 0.0, span));
+        QCOMPARE(keyframesOf(e, titleCategory(QString()), QStringLiteral("Crop Top")).keys.size(), 1);
+        QVERIFY(setTitleValue(end, QString(), QStringLiteral("Crop Top"), 12));
+        QCOMPARE(titleValue(end, QString(), QStringLiteral("Crop Top")).value_or(0), 12.0);
+        QVERIFY(!titleValue(end, QStringLiteral("Nope"), QStringLiteral("Opacity")));
+        // Removing the object removes its keyframes.
+        Title gone = titleOf(e);
+        gone.objects.clear();
+        setTitle(e, gone);
+        QVERIFY(keyframesOf(e, cat, QStringLiteral("Position X")).keys.isEmpty());
+        QCOMPARE(keyframesOf(e, titleCategory(QString()), QStringLiteral("Crop Top")).keys.size(), 1);
     }
 };
 

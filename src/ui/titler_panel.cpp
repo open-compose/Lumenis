@@ -168,9 +168,16 @@ TitlerPanel::TitlerPanel(TitlerTool& tool, bool across, QWidget* parent) : QWidg
     button(arrange, QStringLiteral("previous"), tr("Select Previous Object"), [this] { tool_.selectAdjacent(false); });
     button(arrange, QStringLiteral("next"), tr("Select Next Object"), [this] { tool_.selectAdjacent(true); });
     button(arrange, QStringLiteral("grid"), tr("Grid"), [this] { tool_.setGridShown(!tool_.gridShown()); }, true);
+    // Keyframes on the selection, or on the whole title with nothing selected (6.8c1): the title's numbers are
+    // keyframed through the Effect Editor (p.320).
+    auto* keys = new QHBoxLayout;
+    keys->setSpacing(1);
+    button(keys, QStringLiteral("addKeyframe"), tr("Add Keyframe"), [this] { tool_.setKeyframes(true); });
+    button(keys, QStringLiteral("deleteKeyframe"), tr("Delete Keyframe"), [this] { tool_.setKeyframes(false); });
     auto* head = new QVBoxLayout;
     head->addLayout(tools);
     head->addLayout(arrange);
+    head->addLayout(keys);
     outer->addLayout(head);
 
     // The Effect Editor's Title Text (p.321).

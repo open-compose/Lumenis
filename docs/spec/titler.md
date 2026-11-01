@@ -112,8 +112,33 @@ Ours:
 * Anchor presets are points of the object's own bounds; the object shifts with its anchor.
 * A solid colour also sets the gradient's four corners until they are set one by one.
 
+## 6.8c1: keyframes on titles
+From the guide: the Effect Editor gives "access to animation and other standard Effect Editor controls" (p.320); "You
+can animate text and graphic objects in Avid Titler+ by applying keyframes to supported parameters in the Effect
+Editor. When title segments are modified during editorial operations such as trimming, overwriting, splitting, or
+duplicating, Avid Titler+ preserves the relationship between the title and its associated keyframes" (2026.8 p.325,
+pointing to "Working with Keyframes" p.94 and "Controlling Advanced Keyframe Behavior with Trimmed Effects" p.124).
+
+Ours:
+* An object's numbers are effect keyframes of the category `Titler:<object id>` (`model::titleCategory`), the title's
+  own of `Titler`: every object's Opacity, Position X/Y, Scale X/Y, Rotation, Anchor X/Y, Fill Opacity/Softness,
+  Outline Opacity/Size/Softness and Shadow Opacity/Distance/Angle/Softness, a text's Size, Kerning, Leading and Skew;
+  the title's Background Opacity, Foreground Opacity, Fill Overlay and Crop Top/Bottom/Left/Right
+  (`model::titleParameters`). Colours, fonts, text and on/off choices are not keyframed.
+* Title keyframes are always Fixed (p.124), so trims keep them on their frames; a split (add edit) now moves the second
+  half's Fixed keyframes with its material, for every effect (`Sequence::cut`; scenario
+  `35-title-keyframes-split.json`).
+* `model::titleAt` is the title at a time; the picture (`media::titlePicture`), the Record monitor's tools and the
+  panels all see the title at the position. `model::storeTitleAt` stores an edited title: a keyframed number that
+  changed gets a keyframe at the position (or its keyframe there replaced), everything else is stored as it is.
+* The panel's Add Keyframe and Delete Keyframe buttons work on every number of the selected objects, or on the
+  title's own numbers with nothing selected (`EffectEditor::setTitleKeyframes`); one undo step each. The keyframes
+  show in the Effect Preview's position bar and Go to Previous/Next Event stops at them
+  (`EffectEditor::positionBarParameters`). Keyframes of a removed object go with it (`model::setTitle`).
+
 ## Not yet
-* 6.8c: formatting selected characters (p.304), keyframes, Roll and Crawl, tracking, templates and presets, promotion
-  from the classic Title Tool, EDLs and Find.
+* Title keyframes as Effect Editor tracks and graphs (they live in the position bar and the panel only).
+* 6.8c2-c4: formatting selected characters (p.304), Roll and Crawl, tracking, templates and presets, promotion from
+  the classic Title Tool, EDLs and Find.
 * Dragging the panel's numbers; the Grid button's Grid Settings; the Color Info Tool from a colour box (p.315).
 * Fill Overlay (media on the effect's subtrack, p.324).

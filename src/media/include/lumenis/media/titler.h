@@ -4,6 +4,7 @@
 // (lumenis/model/titler.h); this draws it.
 
 #include "lumenis/media/compositor.h"
+#include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/titler.h"
 
 #include <QImage>
@@ -30,7 +31,8 @@ std::optional<QTransform> titleObjectPlacement(const model::Title& title, const 
 // the bottom, and the boxes over the characters [from, to), both in the object's own coordinates (6.8b).
 QLineF titleTextCaret(const model::TitleObject& object, qsizetype index);
 QList<QPolygonF> titleTextRange(const model::TitleObject& object, qsizetype from, qsizetype to);
-// An Avid Titler+ effect's segment picture: its title over `layer`.
-Picture titlePicture(const model::Effect& effect, const Picture& layer);
+// An Avid Titler+ effect's segment picture: its title at `time` of the effect (its keyframes applied, 6.8c1) over
+// `layer`.
+Picture titlePicture(const model::Effect& effect, const Picture& layer, double time = 0.0, const model::EffectSpan& span = {});
 
 } // namespace lumenis::media

@@ -4,6 +4,7 @@
 // monitor's tools (6.8b1, p.303-319): typing, the Selection tool's moves, scaling and rotation, drawing shapes, and the
 // keyboard shortcuts.
 #include "lumenis/model/bin.h"
+#include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/titler.h"
 #include "lumenis/media/titler.h"
@@ -410,6 +411,82 @@ private slots:
         QVERIFY(!dashboard->panel()->control(QStringLiteral("section:Font"))->isEnabled());
         QVERIFY(!dashboard->panel()->control(QStringLiteral("text")));
         timeline.setEffectMode(false);
+    }
+
+    // Keyframes on a title (6.8c1, p.320): the panel's Add Keyframe at one end, a change at the other makes a
+    // keyframe there, the Effect Preview's position bar shows both, and the panel follows the position.
+    void keyframes() {
+        Composer composer;
+        Timeline timeline{composer};
+        EffectEditor editor{timeline};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence());
+        editor.resize(700, 900);
+        editor.show();
+        auto settle = [] {
+            for (int i = 0; i < 3; ++i) QCoreApplication::processEvents();
+        };
+        auto effect = [&] {
+            const model::Segment s = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(1);
+            return *s.effect;
+        };
+        composer.moveTo(MonitorId::Record, 50);
+        QVERIFY(timeline.perform(QStringLiteral("tools.titler")));
+        timeline.setEffectMode(true);
+        settle();
+        TitlerTool* tool = editor.titlerTool();
+        tool->overlayPress(tool->toFraction(QPointF(0, 0)), Qt::NoModifier, false);
+        tool->overlayRelease(tool->toFraction(QPointF(0, 0)), Qt::NoModifier);
+        for (const QChar c : QStringLiteral("Hi")) {
+            QKeyEvent e(QEvent::KeyPress, c.toUpper().unicode(), Qt::NoModifier, QString(c));
+            tool->overlayKey(&e);
+        }
+        tool->setTool(TitlerTool::Tool::Selection);
+        const QString id = model::titleOf(effect()).objects.first().id;
+        tool->select({id});
+        settle();
+        TitlerPanel* panel = editor.titlerPanel();
+        QVERIFY(panel);
+        const QString cat = model::titleCategory(id);
+        auto* add = qobject_cast<QToolButton*>(panel->control(QStringLiteral("addKeyframe")));
+        QVERIFY(add);
+        add->click();
+        settle();
+        QCOMPARE(model::keyframesOf(effect(), cat, QStringLiteral("Position X")).keys.size(), 1);
+        QCOMPARE(composer.effectPreview().keyframes.size(), 1);
+        // At the segment's last frame, a new Position X makes a second keyframe; one undo step.
+        composer.moveTo(MonitorId::Record, 79);
+        settle();
+        auto* x = qobject_cast<QDoubleSpinBox*>(panel->control(QStringLiteral("x")));
+        QVERIFY(x);
+        x->setValue(300);
+        emit x->editingFinished();
+        settle();
+        QCOMPARE(model::keyframesOf(effect(), cat, QStringLiteral("Position X")).keys.size(), 2);
+        QCOMPARE(model::keyframesOf(effect(), cat, QStringLiteral("Rotation")).keys.size(), 1);
+        QCOMPARE(composer.effectPreview().keyframes.size(), 2);
+        // The panel follows the position: the first keyframe's value at the start, the second's at the end.
+        composer.moveTo(MonitorId::Record, 50);
+        settle();
+        QCOMPARE(x->value(), 0.0);
+        composer.moveTo(MonitorId::Record, 79);
+        settle();
+        QCOMPARE(x->value(), 300.0);
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        settle();
+        QCOMPARE(model::keyframesOf(effect(), cat, QStringLiteral("Position X")).keys.size(), 1);
+        QVERIFY(timeline.perform(QStringLiteral("edit.redo")));
+        settle();
+        // Delete Keyframe at the position removes the object's keyframes there.
+        qobject_cast<QToolButton*>(panel->control(QStringLiteral("deleteKeyframe")))->click();
+        settle();
+        QCOMPARE(model::keyframesOf(effect(), cat, QStringLiteral("Position X")).keys.size(), 1);
+        QCOMPARE(composer.effectPreview().keyframes.size(), 1);
+        // With nothing selected, the title's own numbers.
+        tool->select({});
+        add->click();
+        settle();
+        QCOMPARE(model::keyframesOf(effect(), model::titleCategory(QString()), QStringLiteral("Background Opacity")).keys.size(), 1);
     }
 };
 

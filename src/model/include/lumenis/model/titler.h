@@ -9,6 +9,7 @@
 // always the center of the frame" (p.313); we count pixels of a 1920 x 1080 frame, x to the right and y down, and
 // font sizes in those pixels, so a title looks the same in every raster.
 
+#include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
 
 #include <QList>
@@ -175,6 +176,31 @@ std::optional<QString> groupObjects(Title& title, const QStringList& ids);
 bool ungroupObject(Title& title, const QString& id);
 // Removes an object (and a group's children).
 bool removeObject(Title& title, const QString& id);
+
+// ---- Keyframes on titles (6.8c1)
+// The Effect Editor gives Titler+ "access to animation and other standard Effect Editor controls" (p.320): an object's
+// numbers are keyframed as effect parameters of the category "Titler:<object id>", the whole title's of "Titler"
+// (ours). They are Fixed, so that "When title segments are modified during editorial operations such as trimming,
+// overwriting, splitting, or duplicating, Avid Titler+ preserves the relationship between the title and its associated
+// keyframes" (2026.8 FX Guide p.325; What's New 2026.8 p.9).
+QString titleCategory(const QString& objectId);
+// The names of an object's (or, with an empty id, the title's) keyframeable numbers: Opacity, Position X ... for every
+// object, Size, Kerning, Leading and Skew for text; Background Opacity, Foreground Opacity, Fill Overlay and the Crops
+// for the title.
+QStringList titleParameters(TitleObjectKind kind);
+QStringList titleParameters();
+// A number's value in a title, and setting it; nothing / false for an unknown object or name.
+std::optional<double> titleValue(const Title& title, const QString& objectId, const QString& name);
+bool setTitleValue(Title& title, const QString& objectId, const QString& name, double value);
+// The title at time `t` of the effect: its keyframed numbers at their values then.
+Title titleAt(const Effect& effect, double t, const EffectSpan& span);
+// Stores `shown`, the title as it is at time `t` (edited from titleAt), in the effect: its numbers that have keyframes
+// get (or replace) a keyframe at `t` where they changed, the rest are stored as they are.
+void storeTitleAt(Effect& effect, const Title& shown, double t, const EffectSpan& span);
+// Keyframes at `t` for every number of the objects `ids` (empty: the title's), at their values then; and removing
+// the keyframes there. False when nothing changes.
+bool addTitleKeyframes(Effect& effect, const QStringList& ids, double t, const EffectSpan& span);
+bool removeTitleKeyframes(Effect& effect, const QStringList& ids, double t, const EffectSpan& span);
 
 // The title effect on segments (Tools > Avid Titler+, p.303): "Select the clip or an empty track segment where you
 // want to add a title. If you want to create a new clip containing your title, set in and out marks in the Timeline

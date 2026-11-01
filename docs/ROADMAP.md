@@ -1074,9 +1074,13 @@ phase of their own. They are done in three steps:
     * 6.8b2, the Dashboard and the Effect Editor's selected object parameters (Font, Transform with
       alignment and anchor presets, Fill, Outline, Shadow, Background, Foreground), the Grid button. Done
       (docs/spec/titler.md, `src/ui/titler_panel.*`). Formatting selected characters moves to 6.8c.
-  * 6.8c, Titler+ animation: formatting selected characters (p.304), keyframes on objects (kept through trims, splits and duplicates, 2026.8),
-    Roll and Crawl, tracking data on objects, templates and presets in bins, promotion from the classic
-    Title Tool, titles in EDLs and Find (p.319-326).
+  * 6.8c, Titler+ animation, in four parts:
+    * 6.8c1, keyframes on title objects and the title, Fixed so that they stay with the title through
+      trims, splits and duplicates (p.320, 2026.8 p.325; docs/spec/titler.md). Done.
+    * 6.8c2, formatting selected characters (p.304).
+    * 6.8c3, Roll and Crawl with the Effect Position, and tracking data on objects (p.324-326).
+    * 6.8c4, templates and presets in bins, promotion from the classic Title Tool, titles in EDLs and
+      Find (p.319-326).
   * 6.8d, the classic Title Tool: the drawing environment, text and graphic objects, colour, transparency
     and shadows, rolling and crawling titles, styles, saving titles as fill and matte clips (p.326-364).
   * 6.8e, editing with titles: title clips in bins, editing them in, fading, marks and trims of rolls and

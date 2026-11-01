@@ -633,8 +633,13 @@ int Sequence::cut(Track& t, std::int64_t frame) {
     const std::int64_t head = frame - start;
     tail.shiftStart(head);
     tail.length -= head;
-    // The second part's tracking data keeps following its material (FX Guide p.281-282).
-    if (tail.effect) shiftTrackingData(*tail.effect, -head);
+    // The second part's tracking data keeps following its material (FX Guide p.281-282), and so do its Fixed
+    // keyframes: "Keyframes are now preserved more reliably when performing operations such as trimming, splitting,
+    // and duplicating clips" (What's New 2026.8 p.9).
+    if (tail.effect) {
+        shiftTrackingData(*tail.effect, -head);
+        shiftFixedKeyframes(*tail.effect, -head);
+    }
     t.segments[i].length = head;
     t.segments.insert(i + 1, tail);
     return i + 1;

@@ -671,7 +671,7 @@ void EffectEditor::syncPreview() {
         // keyframe indicators in the effect track"; it is highlighted "only if all the keyframes in the
         // column are highlighted" (p.103).
         QList<std::pair<double, bool>> columns;
-        for (const QString& p : keyframeableParameters()) {
+        for (const QString& p : positionBarParameters()) {
             const model::ParameterKeyframes keys = model::keyframesOf(*e, categoryOf(p), nameOf(p));
             for (int i = 0; i < keys.keys.size(); ++i) {
                 const double t = model::keyframeTime(keys, keys.keys.at(i), span_);
@@ -695,7 +695,7 @@ void EffectEditor::previewKeyframePressed(double frame, bool extend) {
     if (!e) return;
     const double t = span_.timeOf(frame);
     QList<KeyframeId> column;
-    for (const QString& p : keyframeableParameters()) {
+    for (const QString& p : positionBarParameters()) {
         const int i = model::keyframeAt(model::keyframesOf(*e, categoryOf(p), nameOf(p)), t, span_);
         if (i >= 0) column << KeyframeId{p, i};
     }
@@ -788,7 +788,7 @@ bool EffectEditor::goToEvent(bool next) {
     const double now = positionTime();
     const double half = span_.halfFrame();
     std::optional<double> target;
-    for (const QString& p : keyframeableParameters()) {
+    for (const QString& p : positionBarParameters()) {
         const model::ParameterKeyframes keys = model::keyframesOf(*e, categoryOf(p), nameOf(p));
         for (const model::EffectKeyframe& k : keys.keys) {
             const double t = model::keyframeTime(keys, k, span_);
@@ -800,7 +800,7 @@ bool EffectEditor::goToEvent(bool next) {
     if (!target) return false;
     // "Moves the position indicator one keyframe to the left [right] and activates the keyframe" (p.128).
     selection_.clear();
-    for (const QString& p : keyframeableParameters()) {
+    for (const QString& p : positionBarParameters()) {
         const int i = model::keyframeAt(model::keyframesOf(*e, categoryOf(p), nameOf(p)), *target, span_);
         if (i >= 0) selection_ << KeyframeId{p, i};
     }

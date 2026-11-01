@@ -175,6 +175,9 @@ public:
     void setGraphOpen(const QString& parameter, bool open);
     // The keyframeable parameters of the shown effect ("Category/Name"), in order.
     QStringList keyframeableParameters() const;
+    // keyframeableParameters and a title's keyframed numbers: what the Effect Preview's position bar and Go to
+    // Previous/Next Event go through.
+    QStringList positionBarParameters() const { return keyframeableParameters() + titleKeyframed(); }
     // The active parameter (the control last used, p.107); empty if none.
     QString activeParameter() const { return activeParameter_; }
     void setActiveParameter(const QString& parameter);
@@ -309,6 +312,12 @@ public:
     void previewTitle(const model::Title& title);
     void cancelTitlePreview();
     bool commitTitle(const QString& description, const model::Title& title);
+    // Add Keyframe / Delete Keyframe for a title (6.8c1): keyframes at the position for every number of the selected
+    // objects (`wholeTitle`: the title's Background and Foreground), or removing those there; one undo step.
+    bool setTitleKeyframes(bool add, bool wholeTitle);
+    // The title's keyframed numbers ("Titler:<id>/<name>", "Titler/<name>"), shown in the Effect Preview's position bar
+    // with the catalog's parameters.
+    QStringList titleKeyframed() const;
     void refreshTitleOverlay() { syncPreview(); }
     // The shown effect as previewed, for the Record monitor's picture: its place and the effect, while a preview is
     // under way at the outermost level.

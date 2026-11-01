@@ -518,7 +518,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             const bool keyed = !model::keyframesOf(e, foreground, level).keys.isEmpty();
             if (model::isTitlerEffect(e)) {
                 // Avid Titler+ (p.302-324): the title over the segment, filler's empty picture included.
-                layer = titlePicture(e, layer);
+                layer = titlePicture(e, layer, time, model::EffectSpan(std::max<std::int64_t>(length, 1)));
                 layer.quantize(c.precision);
                 result = over(layer, result);
                 result.quantize(c.precision);

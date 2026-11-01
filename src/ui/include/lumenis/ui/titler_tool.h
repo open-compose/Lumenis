@@ -53,6 +53,9 @@ public:
     bool removeSelected();
     // "Select Previous Object (Page Down ...) or Select Next Object (Page Up ...)" (p.319), in layer order.
     bool selectAdjacent(bool next);
+    // Add Keyframe / Delete Keyframe at the position (6.8c1) for the selected objects' numbers, or the title's own with
+    // nothing selected (EffectEditor::setTitleKeyframes).
+    bool setKeyframes(bool add);
 
     // Changes to the selected objects (each of them; a group as a whole) or to the whole title, one undo step each
     // (the Dashboard's and the Effect Editor's controls, p.306-324); false when nothing changes.

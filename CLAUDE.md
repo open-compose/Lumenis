@@ -593,7 +593,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `EffectEditor::previewTitle`/`pictureOverride` in `effect_editor_titler.cpp`; test `tst_titler_ui`), is done.
   6.8b2, the Dashboard and the Effect Editor's Titler+ controls (`src/ui/titler_panel.*`, alignment, anchor presets
   and the grid in `titler_tool.*`; test `tst_titler_ui`), is done, so 6.8b is.
-  Next: 6.8c (Titler+ character formatting, animation, Roll/Crawl, templates), then the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.8c is in four parts (ROADMAP). 6.8c1, keyframes on Titler+ objects and the title (`Titler:<id>` effect keyframes,
+  Fixed; `model::titleAt`/`storeTitleAt`/`addTitleKeyframes`, `media::titlePicture` at a time, the panel's Add/Delete
+  Keyframe through `EffectEditor::setTitleKeyframes`; splits move Fixed keyframes in `Sequence::cut`; tests
+  `tst_titler`, `tst_titler_ui`, scenario `35-title-keyframes-split.json`), is done.
+  Next: 6.8c2 (formatting selected characters), 6.8c3 (Roll/Crawl, tracking), 6.8c4 (templates), then the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

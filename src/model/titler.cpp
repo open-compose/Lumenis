@@ -6,6 +6,7 @@
 #include <QJsonObject>
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 
 namespace lumenis::model {
@@ -277,6 +278,22 @@ Title titleOf(const Effect& effect) {
 }
 
 void setTitle(Effect& effect, const Title& title) {
+    // The keyframes of objects that are gone go too.
+    {
+        QStringList ids;
+        collectIds(title.objects, ids);
+        QJsonObject keys = effect.parameters.value(QStringLiteral("_keyframes")).toObject();
+        bool pruned = false;
+        for (const QString& k : keys.keys()) {
+            if (!k.startsWith(kKey + QLatin1Char(':'))) continue;
+            const QString id = k.section(QLatin1Char('/'), 0, 0).mid(kKey.size() + 1);
+            if (!ids.contains(id)) {
+                keys.remove(k);
+                pruned = true;
+            }
+        }
+        if (pruned) effect.parameters.insert(QStringLiteral("_keyframes"), keys);
+    }
     QJsonArray objects;
     for (const TitleObject& o : title.objects) objects.append(objectJson(o));
     const TitleForeground& fg = title.foreground;
@@ -366,6 +383,185 @@ bool removeObject(Title& title, const QString& id) {
     if (!at) return false;
     at->first->removeAt(at->second);
     return true;
+}
+
+// ---------------------------------------------------------------- keyframes
+
+namespace {
+
+// The keyframeable numbers and where they are kept.
+struct TitleNumber {
+    const char* name;
+    double (*get)(const TitleObject&);
+    void (*set)(TitleObject&, double);
+    bool textOnly;
+};
+
+constexpr TitleNumber kObjectNumbers[] = {
+    {"Opacity", [](const TitleObject& o) { return o.transform.opacity; }, [](TitleObject& o, double v) { o.transform.opacity = v; }, false},
+    {"Position X", [](const TitleObject& o) { return o.transform.position.x(); }, [](TitleObject& o, double v) { o.transform.position.setX(v); }, false},
+    {"Position Y", [](const TitleObject& o) { return o.transform.position.y(); }, [](TitleObject& o, double v) { o.transform.position.setY(v); }, false},
+    {"Scale X", [](const TitleObject& o) { return o.transform.scaleX; }, [](TitleObject& o, double v) { o.transform.scaleX = v; }, false},
+    {"Scale Y", [](const TitleObject& o) { return o.transform.scaleY; }, [](TitleObject& o, double v) { o.transform.scaleY = v; }, false},
+    {"Rotation", [](const TitleObject& o) { return o.transform.rotation; }, [](TitleObject& o, double v) { o.transform.rotation = v; }, false},
+    {"Anchor X", [](const TitleObject& o) { return o.transform.anchor.x(); }, [](TitleObject& o, double v) { o.transform.anchor.setX(v); }, false},
+    {"Anchor Y", [](const TitleObject& o) { return o.transform.anchor.y(); }, [](TitleObject& o, double v) { o.transform.anchor.setY(v); }, false},
+    {"Fill Opacity", [](const TitleObject& o) { return o.fill.opacity; }, [](TitleObject& o, double v) { o.fill.opacity = v; }, false},
+    {"Fill Softness", [](const TitleObject& o) { return o.fill.softness; }, [](TitleObject& o, double v) { o.fill.softness = v; }, false},
+    {"Outline Opacity", [](const TitleObject& o) { return o.outline.opacity; }, [](TitleObject& o, double v) { o.outline.opacity = v; }, false},
+    {"Outline Size", [](const TitleObject& o) { return o.outline.size; }, [](TitleObject& o, double v) { o.outline.size = v; }, false},
+    {"Outline Softness", [](const TitleObject& o) { return o.outline.softness; }, [](TitleObject& o, double v) { o.outline.softness = v; }, false},
+    {"Shadow Opacity", [](const TitleObject& o) { return o.shadow.opacity; }, [](TitleObject& o, double v) { o.shadow.opacity = v; }, false},
+    {"Shadow Distance", [](const TitleObject& o) { return o.shadow.distance; }, [](TitleObject& o, double v) { o.shadow.distance = v; }, false},
+    {"Shadow Angle", [](const TitleObject& o) { return o.shadow.angle; }, [](TitleObject& o, double v) { o.shadow.angle = v; }, false},
+    {"Shadow Softness", [](const TitleObject& o) { return o.shadow.softness; }, [](TitleObject& o, double v) { o.shadow.softness = v; }, false},
+    {"Size", [](const TitleObject& o) { return o.font.size; }, [](TitleObject& o, double v) { o.font.size = v; }, true},
+    {"Kerning", [](const TitleObject& o) { return o.font.kerning; }, [](TitleObject& o, double v) { o.font.kerning = v; }, true},
+    {"Leading", [](const TitleObject& o) { return o.font.leading; }, [](TitleObject& o, double v) { o.font.leading = v; }, true},
+    {"Skew", [](const TitleObject& o) { return o.font.skew; }, [](TitleObject& o, double v) { o.font.skew = v; }, true},
+};
+
+struct TitleWideNumber {
+    const char* name;
+    double (*get)(const Title&);
+    void (*set)(Title&, double);
+};
+
+constexpr TitleWideNumber kTitleNumbers[] = {
+    {"Background Opacity", [](const Title& t) { return t.background.opacity; }, [](Title& t, double v) { t.background.opacity = v; }},
+    {"Foreground Opacity", [](const Title& t) { return t.foreground.opacity; }, [](Title& t, double v) { t.foreground.opacity = v; }},
+    {"Fill Overlay", [](const Title& t) { return t.foreground.fillOverlay; }, [](Title& t, double v) { t.foreground.fillOverlay = v; }},
+    {"Crop Top", [](const Title& t) { return t.foreground.cropTop; }, [](Title& t, double v) { t.foreground.cropTop = v; }},
+    {"Crop Bottom", [](const Title& t) { return t.foreground.cropBottom; }, [](Title& t, double v) { t.foreground.cropBottom = v; }},
+    {"Crop Left", [](const Title& t) { return t.foreground.cropLeft; }, [](Title& t, double v) { t.foreground.cropLeft = v; }},
+    {"Crop Right", [](const Title& t) { return t.foreground.cropRight; }, [](Title& t, double v) { t.foreground.cropRight = v; }},
+};
+
+// Every (object id, name) pair a title has, the title's own with an empty id.
+QList<std::pair<QString, QString>> allNumbers(const Title& title) {
+    QList<std::pair<QString, QString>> out;
+    for (const QString& n : titleParameters()) out << std::pair{QString(), n};
+    std::function<void(const QList<TitleObject>&)> walk = [&](const QList<TitleObject>& list) {
+        for (const TitleObject& o : list) {
+            for (const QString& n : titleParameters(o.kind)) out << std::pair{o.id, n};
+            walk(o.children);
+        }
+    };
+    walk(title.objects);
+    return out;
+}
+
+} // namespace
+
+QString titleCategory(const QString& objectId) {
+    return objectId.isEmpty() ? kKey : kKey + QLatin1Char(':') + objectId;
+}
+
+QStringList titleParameters(TitleObjectKind kind) {
+    QStringList out;
+    for (const TitleNumber& n : kObjectNumbers) {
+        if (!n.textOnly || kind == TitleObjectKind::Text) out << QLatin1String(n.name);
+    }
+    return out;
+}
+
+QStringList titleParameters() {
+    QStringList out;
+    for (const TitleWideNumber& n : kTitleNumbers) out << QLatin1String(n.name);
+    return out;
+}
+
+std::optional<double> titleValue(const Title& title, const QString& objectId, const QString& name) {
+    if (objectId.isEmpty()) {
+        for (const TitleWideNumber& n : kTitleNumbers) {
+            if (name == QLatin1String(n.name)) return n.get(title);
+        }
+        return std::nullopt;
+    }
+    const TitleObject* o = title.object(objectId);
+    if (!o) return std::nullopt;
+    for (const TitleNumber& n : kObjectNumbers) {
+        if (name == QLatin1String(n.name)) return n.get(*o);
+    }
+    return std::nullopt;
+}
+
+bool setTitleValue(Title& title, const QString& objectId, const QString& name, double value) {
+    if (objectId.isEmpty()) {
+        for (const TitleWideNumber& n : kTitleNumbers) {
+            if (name == QLatin1String(n.name)) {
+                n.set(title, value);
+                return true;
+            }
+        }
+        return false;
+    }
+    TitleObject* o = title.object(objectId);
+    if (!o) return false;
+    for (const TitleNumber& n : kObjectNumbers) {
+        if (name == QLatin1String(n.name)) {
+            n.set(*o, value);
+            return true;
+        }
+    }
+    return false;
+}
+
+Title titleAt(const Effect& effect, double t, const EffectSpan& span) {
+    Title title = titleOf(effect);
+    for (const auto& [id, name] : allNumbers(title)) {
+        if (keyframesOf(effect, titleCategory(id), name).keys.isEmpty()) continue;
+        if (const auto v = numberAt(effect, titleCategory(id), name, t, span)) setTitleValue(title, id, name, *v);
+    }
+    return title;
+}
+
+void storeTitleAt(Effect& effect, const Title& shown, double t, const EffectSpan& span) {
+    const Title before = titleAt(effect, t, span);
+    setTitle(effect, shown);
+    for (const auto& [id, name] : allNumbers(shown)) {
+        const ParameterKeyframes keys = keyframesOf(effect, titleCategory(id), name);
+        if (keys.keys.isEmpty()) continue;
+        const auto now = titleValue(shown, id, name);
+        const auto was = titleValue(before, id, name);
+        if (now && (!was || std::abs(*now - *was) > 1e-9)) setKeyframe(effect, titleCategory(id), name, t, span, *now);
+    }
+}
+
+bool addTitleKeyframes(Effect& effect, const QStringList& ids, double t, const EffectSpan& span) {
+    const Title at = titleAt(effect, t, span);
+    const Effect before = effect;
+    for (const QString& id : ids.isEmpty() ? QStringList{QString()} : ids) {
+        const TitleObject* o = id.isEmpty() ? nullptr : at.object(id);
+        if (!id.isEmpty() && !o) continue;
+        for (const QString& name : id.isEmpty() ? titleParameters() : titleParameters(o->kind)) {
+            const auto v = titleValue(at, id, name);
+            if (!v) continue;
+            ParameterKeyframes keys = keyframesOf(effect, titleCategory(id), name);
+            const bool first = keys.keys.isEmpty();
+            setKeyframe(effect, titleCategory(id), name, t, span, *v);
+            if (first) {
+                // Fixed, as the title's keyframes always are (titleCategory's note).
+                keys = keyframesOf(effect, titleCategory(id), name);
+                setFixed(keys, true, span);
+                setKeyframes(effect, titleCategory(id), name, keys);
+            }
+        }
+    }
+    return effect.parameters != before.parameters;
+}
+
+bool removeTitleKeyframes(Effect& effect, const QStringList& ids, double t, const EffectSpan& span) {
+    bool any = false;
+    const Title title = titleOf(effect);
+    for (const QString& id : ids.isEmpty() ? QStringList{QString()} : ids) {
+        const TitleObject* o = id.isEmpty() ? nullptr : title.object(id);
+        if (!id.isEmpty() && !o) continue;
+        for (const QString& name : id.isEmpty() ? titleParameters() : titleParameters(o->kind)) {
+            any = removeKeyframe(effect, titleCategory(id), name, t, span) || any;
+        }
+    }
+    return any;
 }
 
 int applyTitler(Sequence& sequence, const QString& track, std::optional<std::pair<std::int64_t, std::int64_t>> marks,

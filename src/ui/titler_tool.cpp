@@ -453,6 +453,12 @@ bool TitlerTool::overlayKey(QKeyEvent* event) {
     }
 }
 
+bool TitlerTool::setKeyframes(bool add) {
+    const bool done = editor_.setTitleKeyframes(add, selected_.isEmpty());
+    emit changed();
+    return done;
+}
+
 bool TitlerTool::bringForward() {
     finishEditing();
     Title t = title();

@@ -16,18 +16,19 @@ TitlerDashboard* EffectEditor::titlerDashboard() {
 std::optional<model::Title> EffectEditor::shownTitle() const {
     const model::Effect* e = shownEffect();
     if (!e || !model::isTitlerEffect(*e)) return std::nullopt;
-    return model::titleOf(*e);
+    // The title as it is at the position: its keyframed numbers at their values there (6.8c1).
+    return model::titleAt(*e, positionTime(), span_);
 }
 
 std::optional<model::Title> EffectEditor::storedTitle() const {
     if (!current_ || !model::isTitlerEffect(*current_)) return std::nullopt;
-    return model::titleOf(*current_);
+    return model::titleAt(*current_, positionTime(), span_);
 }
 
 void EffectEditor::previewTitle(const model::Title& title) {
     if (!current_ || !model::isTitlerEffect(*current_)) return;
     model::Effect e = *current_;
-    model::setTitle(e, title);
+    model::storeTitleAt(e, title, positionTime(), span_);
     preview_ = e;
     syncPreview();
     // The Record monitor shows the title as it is being made (MainWindow's picture resolver, pictureOverride).
@@ -43,9 +44,33 @@ void EffectEditor::cancelTitlePreview() {
 
 bool EffectEditor::commitTitle(const QString& description, const model::Title& title) {
     preview_.reset();
-    const bool done = changeShown(description, [&](model::Effect& e) { model::setTitle(e, title); });
+    const bool done = changeShown(description, [&](model::Effect& e) { model::storeTitleAt(e, title, positionTime(), span_); });
     syncPreview();
     return done;
+}
+
+bool EffectEditor::setTitleKeyframes(bool add, bool wholeTitle) {
+    if (!current_ || !model::isTitlerEffect(*current_) || !titler_) return false;
+    // The selected objects' numbers, or the title's own (the Background and Foreground) with none selected.
+    const QStringList ids = wholeTitle ? QStringList{} : titler_->selection();
+    const double t = positionTime();
+    titler_->finishEditing();
+    const bool done = changeKeyframes(add ? tr("Add Keyframe") : tr("Delete Keyframe"), [&](model::Effect& e) {
+        return add ? model::addTitleKeyframes(e, ids, t, span_) : model::removeTitleKeyframes(e, ids, t, span_);
+    });
+    syncPreview();
+    return done;
+}
+
+QStringList EffectEditor::titleKeyframed() const {
+    QStringList out;
+    const model::Effect* e = shownEffect();
+    if (!e || !model::isTitlerEffect(*e)) return out;
+    const QString prefix = model::titleCategory(QString());
+    for (const QString& key : model::keyframedParameters(*e)) {
+        if (key.startsWith(prefix + QLatin1Char('/')) || key.startsWith(prefix + QLatin1Char(':'))) out << key;
+    }
+    return out;
 }
 
 std::optional<std::pair<model::EffectRef, model::Effect>> EffectEditor::pictureOverride() const {

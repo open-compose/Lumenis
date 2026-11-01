@@ -445,8 +445,8 @@ QList<QPolygonF> titleTextRange(const TitleObject& object, qsizetype from, qsize
     return out;
 }
 
-Picture titlePicture(const model::Effect& effect, const Picture& layer) {
-    const Title title = model::titleOf(effect);
+Picture titlePicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span) {
+    const Title title = model::titleAt(effect, time, span);
     if (layer.isNull()) return layer;
     // "the background can be either frames of your video (utilizing an alpha channel that is automatically applied
     // with the Avid Titler+ effect), a solid color, or some combination of both" (p.317): the title over the segment.

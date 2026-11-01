@@ -1,0 +1,14 @@
+[
+  {
+    "name": "an add edit through a title keeps each half's Fixed title keyframes on their frames",
+    "guide": "What's New 2026.8 p.9",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50, {"effect": {"category": "Title", "name": "Titler+", "parameters": {"_keyframes": {"Titler:Text 1/Opacity": {"fixed": true, "keys": [{"at": 0, "value": 0}, {"at": 30, "value": 100}]}}}}}]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"position": "record", "frame": 20},
+      {"command": "edit.add_edit"}
+    ],
+    "expect": {"V1": [["A", 0, 20, {"keyframes": {"Titler:Text 1/Opacity": [[0, 0], [30, 100]]}}], ["A", 20, 30, {"keyframes": {"Titler:Text 1/Opacity": [[-20, 0], [10, 100]]}}]]}
+  }
+]

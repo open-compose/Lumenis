@@ -268,6 +268,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   (names, ranges, a quarter of the frame until set), frame-to-frame
   correlation with a search area twice the region, the original picture
   in the Effect Preview, Progressive Source without effect yet.
+* Titler+ keyframes (docs/spec/titler.md, 6.8c1): the keyframed numbers and
+  their `Titler:<object id>` categories, always Fixed, the panel's Add/Delete
+  Keyframe buttons working on the selection or the whole title, keyframes in
+  the position bar only, Fixed keyframes moving with a split's second half.
 * Titler+ (docs/spec/titler.md): 1920 x 1080 pixel coordinates with y
   down, font sizes in those pixels, the defaults (72-pixel font, 4-pixel
   black outline, shadow 75% 8 pixels at 45 degrees), vertical justification
