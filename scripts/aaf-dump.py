@@ -162,7 +162,11 @@ def main():
     for path in args.files:
         ours = subprocess.run([args.app, "--dump-aaf", path, "--canonical"], capture_output=True, text=True)
         if ours.returncode != 0:
-            print(f"{path}: cutthulhu failed: {ours.stderr.strip()}")
+            # The exit code too: a crash prints nothing (on Windows a code such as 0xC0000005).
+            code = ours.returncode if ours.returncode >= 0 else f"{ours.returncode} (signal)"
+            if isinstance(code, int) and code > 255:
+                code = f"{code} (0x{code & 0xFFFFFFFF:08X})"
+            print(f"{path}: cutthulhu failed (exit code {code}): {ours.stderr.strip()}")
             failed += 1
             continue
         theirs = dump(path)
