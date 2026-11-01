@@ -357,7 +357,9 @@ void TestCfb::corpus() {
         };
         copy(cfb::Reader::root(), cfb::Writer::root());
         cfb::Reader copied;
-        QVERIFY2(copied.open(write(writer, dir, QStringLiteral("copy.aaf")), &error), qPrintable(error));
+        // A file of its own for each copy: on Windows, replacing the copy just closed can be refused while
+        // another process (the virus scanner) still holds it ("Access is denied").
+        QVERIFY2(copied.open(write(writer, dir, QStringLiteral("copy-%1.aaf").arg(read)), &error), qPrintable(error));
         QCOMPARE(listing(copied), listing(reader));
         for (const QString& p : reader.paths()) {
             QCOMPARE(copied.entry(copied.find(p)).clsid, reader.entry(reader.find(p)).clsid);
