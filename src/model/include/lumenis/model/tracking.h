@@ -80,6 +80,8 @@ struct TrackingSetup {
     QList<Tracker> trackers;
     QString engine = QStringLiteral("Correlation Tracker");
     bool foreground = false;
+    // Auto-Zoom is on (the Stabilize effect, p.278-279): its Position and Scaling follow the data.
+    bool autoZoom = false;
     const Tracker* tracker(const QString& name) const;
     Tracker* tracker(const QString& name);
     bool operator==(const TrackingSetup&) const = default;
@@ -179,6 +181,31 @@ std::optional<QPointF> trackerMovement(const Tracker& tracker, std::int64_t fram
 // (p.269): the jitter it takes out at a frame (the path before processing less after); zero for other trackers.
 // Stabilizing with SteadyGlide (6.7d) cancels only this.
 std::optional<QPointF> trackerJitter(const Tracker& tracker, std::int64_t frame);
+
+// The Stabilize effect (Image, p.472; p.276-279). Its tracking data always stabilizes.
+bool isStabilizeEffect(const Effect& effect);
+// Whether tracking data for `parameter` stabilizes the picture instead of following the target: always for the
+// Stabilize effect, else the parameter's Stabilize Tracking (3D Warp, p.577-578). Stabilizing "use[s] the tracking
+// data to move each frame of the video enough to keep the tracked object stationary" (p.275): the change is undone
+// instead of applied; with SteadyGlide only the jitter it takes out is undone, which keeps "underlying motion such as
+// a pan" (p.278).
+bool stabilizes(const Effect& effect, TrackedParameter parameter);
+
+// Auto-Zoom (p.278-279): "generates values for the Position and Scaling parameters that reposition and enlarge the
+// image enough to remove black edges. Any existing keyframes on the Position and Scaling parameters are removed".
+// Ours: from the stabilizing Position over every frame of the effect (`length` frames, `aspect` its width over its
+// height): the smallest scale, for both axes, and the offset that keep the moved picture over the whole frame.
+enum class AutoZoomResult { Applied, NoData, TooFar };
+struct AutoZoomFit {
+    double scale = 1.0;   // the picture's size, 1 as it is
+    QPointF offset;       // the picture's centre from the frame's, fractions of the frame
+};
+std::optional<AutoZoomFit> autoZoomFit(const Effect& effect, std::int64_t length, double aspect);
+// Sets the fit as the effect's Position (pixels of a 1920-wide frame, as the parameter counts) and Scaling (percent)
+// without keyframes, and turns Auto-Zoom on. "A warning message appears if no tracking data exists. A warning message
+// also appears if the stabilized image moves too far offscreen" (ours: more than the 400% Scaling allows); then nothing
+// changes.
+AutoZoomResult applyAutoZoom(Effect& effect, std::int64_t length, double aspect);
 
 // What the tracking data does to an effect at a frame (`aspect` is the frame's width over its height):
 // Position's movement (fractions of the frame, after the Axis menu), Scaling's and Rotation's change from two

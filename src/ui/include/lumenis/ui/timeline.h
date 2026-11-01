@@ -1087,6 +1087,10 @@ signals:
     void effectModeChanged(bool on);
     // An effect was put on segments or transitions (Applying Effects opens Effect Editor, p.1220).
     void effectApplied();
+    // The Stabilize effect was put on one segment, not nested: AutoStabilize runs (FX Guide p.276-277). `frame` is the
+    // segment's first frame on `track`. "AutoStabilize does not function when you apply the Stabilize effect to
+    // multiple selected segments ... [or] use the Alt key modifier ... to nest an effect" (p.276).
+    void autoStabilizeRequested(const QString& track, std::int64_t frame);
     // The Track Control panel's Solo (`solo`) or Mute button for `track` was clicked (p.602).
     void soloMuteRequested(const QString& track, bool solo);
     // The View Menu: a view was chosen, or the current display is to be saved as view `name` (Save

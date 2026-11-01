@@ -579,6 +579,12 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 continue;
             }
             if (isImageEffect(e)) {
+                // Stabilize's Tracking category moves the picture back onto its reference frame's (p.276-279).
+                if (model::isStabilizeEffect(e)) {
+                    if (const auto map = trackedTransform(e, time, length, w > 0 && h > 0 ? static_cast<double>(w) / h : 16.0 / 9.0)) {
+                        layer = transformed(layer, *map);
+                    }
+                }
                 layer = imageEffectPicture(e, layer, time, length);
                 layer.quantize(c.precision);
                 result = over(layer, result);

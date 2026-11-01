@@ -1446,8 +1446,26 @@ bool EffectEditor::promoteTo3D() {
 
 bool EffectEditor::changeShown(const QString& description, const std::function<void(model::Effect&)>& change) {
     if (!shown_) return false;
-    if (level_ == 0) return timeline_.changeEffect(*shown_, description, [&](model::Effect& e, model::Transition*) { change(e); });
-    return timeline_.changeNestedEffect(*shown_, nestOffset_, level_, description, change);
+    // Every change of the shown effect keeps a Stabilize effect's Auto-Zoom current (p.279).
+    auto changed = [&](model::Effect& e) {
+        const model::Effect before = e;
+        change(e);
+        keepAutoZoom(before, e);
+    };
+    autoZoomOff_ = false;
+    const bool done = level_ == 0 ? timeline_.changeEffect(*shown_, description, [&](model::Effect& e, model::Transition*) { changed(e); })
+                                  : timeline_.changeNestedEffect(*shown_, nestOffset_, level_, description, changed);
+    if (done && autoZoomOff_) {
+        // "A message box appears, informing you that Auto-Zoom will be turned off. If you want to use the Auto-Zoom
+        // option again later, you must click Auto-Zoom" (p.279).
+        auto* box = new QMessageBox(QMessageBox::Information, tr("Auto-Zoom"),
+                                    tr("Auto-Zoom is turned off. Click Auto-Zoom to use it again."), QMessageBox::Ok, this);
+        box->setObjectName(QStringLiteral("autoZoomOff"));
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        box->open();
+    }
+    autoZoomOff_ = false;
+    return done;
 }
 
 QStringList EffectEditor::nestedEffects() const {

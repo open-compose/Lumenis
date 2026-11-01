@@ -376,6 +376,16 @@ public:
     bool deleteTrackerRegion(int index);
     bool setReferenceFrame(int index);
     bool goToRegion(bool next);
+    // ---- Stabilizing (p.275-279)
+    // Auto-Zoom (the button in Stabilize's Position Tracking): Position and Scaling that remove the exposed edges,
+    // kept up to date while the tracking data changes; a warning without data or when the picture moves too far
+    // (objectName "autoZoomWarning"). Adjusting Position or Scaling by hand turns it off, with a message
+    // ("autoZoomOff"). False when nothing changed.
+    bool autoZoom();
+    // AutoStabilize (p.277) on the Stabilize effect of `track`'s segment starting at `frame`: Point A enabled in
+    // Position, the FluidStabilizer engine, SteadyGlide, tracking from the first frame (the space bar or a click
+    // stops it, keeping the setup) and Auto-Zoom; one undo step. Opens the Tracking window.
+    bool autoStabilize(const QString& track, std::int64_t frame);
     // Copy and Paste with the Tracking window active (p.283-284): the enabled trackers with their data, kept for the
     // session; pasted below the shown effect's trackers (one undo step). False when there is nothing to copy or
     // paste. `trackingWindowActive` says whether Copy and Paste are the Tracking window's.
@@ -500,6 +510,14 @@ private:
     std::optional<std::pair<std::int64_t, std::int64_t>> displayRange_;
     // A data point's click or drag (dragHandle's "trackpoint:<n>:<frame>").
     bool dragTrackPoint(const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift);
+    // Runs Start Tracking on `edited` (startTracking's work, without the undo step); true when it tracked anything.
+    bool runTracking(model::Effect& edited);
+    // After `before` became `after` in an undo step: a Stabilize effect with Auto-Zoom follows new tracking data, and
+    // Auto-Zoom goes off when Position or Scaling changed by hand (`autoZoomOff_` then says to tell).
+    void keepAutoZoom(const model::Effect& before, model::Effect& after);
+    bool autoZooming_ = false;
+    bool autoZoomOff_ = false;
+    double frameAspect() const;
     // The frames of a tracker's data points the Point Range menu shows (p.268).
     QList<std::int64_t> shownPointFrames(const model::Tracker& tracker) const;
     void selectionChanged();

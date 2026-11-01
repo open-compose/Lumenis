@@ -5,7 +5,7 @@
 
 // The segment effects that change a segment's own picture by geometry (ROADMAP 6.3b1;
 // docs/spec/image-effects.md): Picture-in-Picture (FX Guide p.458), Flip, Flop and Flip-Flop (p.469),
-// Field Swap (p.469), Resize and Mask (p.470), the Film masks and Blowup (p.461-462, p.500), and the
+// Field Swap (p.469), Resize and Mask (p.470), Stabilize (p.472, p.276), the Film masks and Blowup (p.461-462, p.500), and the
 // Reformat letterboxes and sidebar (p.229-230, p.479-480). Each maps a pixel of the result back into the
 // segment's picture; where the guide gives no numbers, the mapping is ours and is said so.
 namespace lumenis::media {
@@ -173,7 +173,7 @@ bool isImageEffect(const model::Effect& e) {
     if (is(e, "Blend", "Picture-in-Picture")) return true;
     if (e.category == QLatin1String("Image")) {
         static const QStringList names = {QStringLiteral("Flip"),       QStringLiteral("Flop"),        QStringLiteral("Flip-Flop"),
-                                          QStringLiteral("Field Swap"), QStringLiteral("Resize"),      QStringLiteral("Mask"),
+                                          QStringLiteral("Field Swap"), QStringLiteral("Resize"),      QStringLiteral("Mask"),   QStringLiteral("Stabilize"),
                                           QStringLiteral("Color Effect"), QStringLiteral("Blur Effect"), QStringLiteral("Mosaic Effect")};
         return names.contains(e.name);
     }
@@ -237,15 +237,18 @@ Picture imageEffectPicture(const model::Effect& e, const Picture& layer, double 
         return out;
     }
 
-    if (is(e, "Blend", "Picture-in-Picture") || is(e, "Image", "Resize")) {
+    if (is(e, "Blend", "Picture-in-Picture") || is(e, "Image", "Resize") || is(e, "Image", "Stabilize")) {
         // Picture-in-Picture: "Video on the top layer, where you apply the effect, appears inside the
         // video on the bottom layer" (p.458), with Border, Foreground, Scaling, Position and Crop. Resize:
         // "Modifies the size and position of the video. The background color displays where no video is
-        // present" (p.470). Ours: the cropped picture is scaled about the frame's centre, then moved.
+        // present" (p.470). Stabilize the same with its Border, the tracking data already in Position
+        // (trackedEffect) and its Tracking category's map in `layer` (compositor.cpp): "The tracking process exposes
+        // black around the edges of the frames" (p.276). Ours: the cropped picture is scaled about the frame's
+        // centre, then moved.
         const bool pip = e.name == QLatin1String("Picture-in-Picture");
         const Rect crop = cropOf(e, time, span, W, H);
         const Placement pl = placementOf(e, time, span, W);
-        const detail::Border border = pip ? detail::Border::of(e, time, span, width) : detail::Border{};
+        const detail::Border border = pip || e.name == QLatin1String("Stabilize") ? detail::Border::of(e, time, span, width) : detail::Border{};
         const float level = pip ? static_cast<float>(std::clamp(model::numberAt(e, QStringLiteral("Foreground"), QStringLiteral("Level"), time, span).value_or(100.0), 0.0, 100.0) / 100.0)
                                 : 1.0f;
         // The crop's rectangle where it lands.

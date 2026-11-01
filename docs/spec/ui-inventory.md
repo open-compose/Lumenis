@@ -260,7 +260,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   a new region's boxes, region starts of every tracker for Go to
   Previous/Next Region, the Display Markers as brackets; 6.7d1: copied
   trackers kept for the session, pasted names numbered, the first region
-  reaching back to the effect's first frame after a trim.
+  reaching back to the effect's first frame after a trim; 6.7d2:
+  stabilizing with SteadyGlide undoing only its jitter, Auto-Zoom from
+  Position's moves alone with one scale for both axes, "too far" past
+  400%, the Auto-Zoom button and its messages' wording, Picture-in-Picture's
+  tracking data kept on promotion.
 * The Key effects (docs/spec/keys.md): the mattes' formulas (distances,
   Gain and Soft ranges, the SpectraMatte wedge, spill), blue and black key
   colours with Gain 20 and Soft 10 until set, Chroma Key on a transition as

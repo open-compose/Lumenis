@@ -52,7 +52,8 @@ transitions), defaults in `media::parameterDefault`, `src/model/promote3d.*` (`c
   Picture-in-Picture, and imported matte keys" (p.86); "You cannot demote a 3D effect to a 2D effect (although
   you can immediately undo the promotion)" (p.289). Ours: the button is on for a Picture-in-Picture (titles
   and imported matte keys come with them); the 3D Warp takes its Position (Y turned up), Scaling (its 50
-  made explicit), Crop and Foreground Level as Opac., keyframes and all, and looks the same.
+  made explicit), Crop and Foreground Level as Opac., keyframes and all, and looks the same. Since 6.7d2 the
+  Stabilize effect promotes too (p.277), and tracking data comes along (docs/spec/tracking.md).
 
 ## 6.7a2: shapes, key types and border types
 

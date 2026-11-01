@@ -140,7 +140,46 @@ Ours:
   window, and Edit > Copy and Paste while it is the active window.
 * Scenario `33-tracking-through-edits.json`.
 
+## 6.7d2: the Stabilize effect
+From the guide (p.275-279, p.472):
+* "Stabilizing lets you track an object in a shot that should not be in motion and then use the tracking data to
+  keep that object stationary ... using the tracking data to move each frame of the video enough to keep the tracked
+  object stationary" (p.275); "The tracking process exposes black around the edges of the frames" (p.276).
+* AutoStabilize, on applying Stabilize to one segment (not to several, not Alt-nested): "Opens the Effect Editor
+  (if necessary) and the Tracking window. Creates a tracker and enables the tracker in the Position parameter for
+  the effect. Tracks the image using the FluidStabilizer tracking engine. Processes the tracking data using the
+  SteadyGlide option and applies the data to the image. Uses the Auto-Zoom option"; stopping it keeps the setup for
+  stabilizing by hand (p.276-277).
+* SteadyGlide is "particularly useful if you want to remove jittery motion ... while retaining underlying motion such
+  as a pan" (p.278).
+* Auto-Zoom, "In the Tracking subcategory of the Position parameter category": Position and Scaling that "remove black
+  edges. Any existing keyframes on the Position and Scaling parameters are removed"; recalculated when the data, its
+  SteadyGlide or Smoothing change; warnings without data or when the image "moves too far offscreen"; moving the
+  Position or Scaling sliders turns it off with a message (p.279).
+* "When you promote the Stabilize effect to 3D, Stabilize Tracking is automatically activated for all effect
+  parameters that use tracking data. The Run Auto-Zoom option is not available after you promote" (p.277); 3D Warp's
+  Stabilize Tracking "Enables tracking for stabilizing the image" (p.577-578).
+
+Ours:
+* `model::stabilizes`: the Stabilize effect's tracking always stabilizes, other effects' where Stabilize Tracking is
+  on. `trackedChange` then undoes the change: Position the movement from the reference frame (with SteadyGlide only
+  the jitter SteadyGlide takes out, measured from the reference frame's), Scaling's factor inverted, Rotation's turn
+  reversed, the Tracking category's map from the current points back to the reference frame's.
+* Stabilize renders as Resize does (`imageEffectPicture`) with its Border, the Tracking category's map applied first
+  (compositor).
+* Auto-Zoom (`model::applyAutoZoom`) takes the stabilizing Position over every frame: the scale (the same on both
+  axes) that covers the largest range of moves, the offset that centres it; rotation and scale changes are not
+  counted. "Too far" is more than 400%, Scaling's maximum. It is kept as `autoZoom` with the tracking data; any change
+  to the trackers recalculates it (`EffectEditor::keepAutoZoom`, in every undo step of the shown effect), and a change
+  to Position or Scaling (values or keyframes) otherwise turns it off.
+* AutoStabilize (`Timeline::autoStabilizeRequested`, `EffectEditor::autoStabilize`) runs after the drop or
+  double-click, moves the position to the segment's first frame and is one undo step.
+* Promoting Stabilize or Picture-in-Picture to 3D carries the tracking data (`model::promoteTo3D`); Stabilize's with
+  Stabilize Tracking on and Auto-Zoom off.
+
 ## Not yet
 * The Display Markers from Mark IN and Mark OUT (p.268).
-* Stabilize (6.7d2) and Region Stabilize (6.7d3).
+* Region Stabilize (6.7d3).
+* FluidStabilizer drifts on pictures of pixel-sized noise (a test pattern, not footage); a smooth pattern tracks
+  exactly.
 * The Tracking category on 2D effects (the Intraframe effects, Blur and Mosaic).

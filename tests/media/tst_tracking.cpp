@@ -2,7 +2,9 @@
 // mapping them to parameters, offset tracking across regions, Smoothing and SteadyGlide, the reference frame, what
 // tracking data does to Position, Scaling, Rotation and the Tracking category, and the engines following a moving
 // target.
+#include "lumenis/media/compositor.h"
 #include "lumenis/media/tracking.h"
+#include "lumenis/model/promote3d.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/tracking.h"
 
@@ -256,6 +258,79 @@ private slots:
         QCOMPARE(setup.trackers.last().regions, setup.trackers.first().regions);
         for (int i = 0; i < 10; ++i) pasteTrackers(setup, copied);
         QCOMPARE(setup.trackers.size(), kMaxTrackers);
+    }
+
+    // Stabilizing (p.275-279): the Stabilize effect undoes the tracked movement (only the jitter with SteadyGlide),
+    // Auto-Zoom fits Position and Scaling, promoting keeps the data with Stabilize Tracking on.
+    void stabilizing() {
+        const double aspect = 160.0 / 90.0;
+        model::Effect e{QStringLiteral("Image"), QStringLiteral("Stabilize"), {}};
+        QVERIFY(isStabilizeEffect(e));
+        QCOMPARE(applyAutoZoom(e, 9, aspect), AutoZoomResult::NoData);
+        QVERIFY(enableTracking(e, TrackedParameter::Position));
+        // The square's centre through squareFrame's 9 frames.
+        TrackingSetup setup = trackingOf(e);
+        for (std::int64_t f = 0; f < 9; ++f) setup.trackers[0].setPoint(f, QPointF((45.0 + 3.0 * static_cast<double>(f)) / 160.0, (35.0 + static_cast<double>(f)) / 90.0));
+        setTracking(e, setup);
+        QVERIFY(stabilizes(e, TrackedParameter::Position));
+        QVERIFY(near(trackedChange(e, 4, aspect).position, QPointF(-12.0 / 160.0, -4.0 / 90.0)));
+        // The picture moved back: frame 4's square where frame 0's was.
+        const model::EffectSpan span(9);
+        const model::Effect at4 = media::trackedEffect(e, span.timeOf(4), span, aspect);
+        const media::Picture out = media::imageEffectPicture(at4, media::Picture::fromImage(squareFrame(4), 160, 90), span.timeOf(4), span);
+        QVERIFY(out.pixel(46, 36)[0] > 0.8f);
+        QVERIFY(out.pixel(57, 39)[0] < 0.5f);
+
+        // SteadyGlide: a steady pan stays; only the jitter is undone.
+        model::Effect glide{QStringLiteral("Image"), QStringLiteral("Stabilize"), {}};
+        enableTracking(glide, TrackedParameter::Position);
+        setup = trackingOf(glide);
+        for (std::int64_t f = 0; f < 60; ++f) setup.trackers[0].setPoint(f, QPointF(0.2 + 0.005 * static_cast<double>(f), 0.5));
+        setup.trackers[0].process = TrackProcess::SteadyGlide;
+        setup.trackers[0].reference = 30;
+        setTracking(glide, setup);
+        QVERIFY(std::abs(trackedChange(glide, 25, aspect).position.x()) < 1e-3);
+        setup.trackers[0].setPoint(25, QPointF(0.2 + 0.005 * 25.0 + 0.02, 0.5));
+        setTracking(glide, setup);
+        QVERIFY(trackedChange(glide, 25, aspect).position.x() < -0.01);
+
+        // Auto-Zoom: the pan of 0.39 of the frame over 40 frames, undone, needs 139%, centred.
+        model::Effect zoom{QStringLiteral("Image"), QStringLiteral("Stabilize"), {}};
+        enableTracking(zoom, TrackedParameter::Position);
+        setup = trackingOf(zoom);
+        for (std::int64_t f = 0; f < 40; ++f) setup.trackers[0].setPoint(f, QPointF(0.3 + 0.01 * static_cast<double>(f), 0.5));
+        setTracking(zoom, setup);
+        model::setKeyframe(zoom, QStringLiteral("Position"), QStringLiteral("X"), 0.5, model::EffectSpan(40), 100.0);
+        const auto fit = autoZoomFit(zoom, 40, aspect);
+        QVERIFY(fit);
+        QVERIFY(std::abs(fit->scale - 1.39) < 1e-9);
+        QVERIFY(near(fit->offset, QPointF(0.195, 0.0)));
+        QCOMPARE(applyAutoZoom(zoom, 40, aspect), AutoZoomResult::Applied);
+        QVERIFY(trackingOf(zoom).autoZoom);
+        QVERIFY(model::keyframesOf(zoom, QStringLiteral("Position"), QStringLiteral("X")).keys.isEmpty());
+        QVERIFY(std::abs(zoom.parameters.value(QStringLiteral("Scaling")).toObject().value(QStringLiteral("X")).toDouble() - 139.0) < 1e-6);
+        QVERIFY(std::abs(zoom.parameters.value(QStringLiteral("Position")).toObject().value(QStringLiteral("X")).toDouble() - 0.195 * 1920.0) < 1e-6);
+        // Too far: a move of nearly four frames' widths.
+        model::Effect distant{QStringLiteral("Image"), QStringLiteral("Stabilize"), {}};
+        enableTracking(distant, TrackedParameter::Position);
+        setup = trackingOf(distant);
+        for (std::int64_t f = 0; f < 40; ++f) setup.trackers[0].setPoint(f, QPointF(0.1 * static_cast<double>(f), 0.5));
+        setTracking(distant, setup);
+        QCOMPARE(applyAutoZoom(distant, 40, aspect), AutoZoomResult::TooFar);
+
+        // Promoting Stabilize to 3D: the data and Stabilize Tracking on, Auto-Zoom off (p.277).
+        const auto promoted = promoteTo3D(zoom);
+        QVERIFY(promoted);
+        QCOMPARE(promoted->name, QStringLiteral("3D Warp"));
+        QVERIFY(trackerMapping(*promoted, TrackedParameter::Position).stabilize);
+        QVERIFY(!trackingOf(*promoted).autoZoom);
+        QVERIFY(trackedChange(*promoted, 20, aspect).position.x() < -0.1);
+        // A Picture-in-Picture's tracking data comes along too, still following.
+        model::Effect followed = pip();
+        enableTracking(followed, TrackedParameter::Position);
+        setTracking(followed, trackingOf(zoom));
+        const auto pip3D = promoteTo3D(followed);
+        QVERIFY(pip3D && !trackerMapping(*pip3D, TrackedParameter::Position).stabilize);
     }
 
     // What the data does: Position (with the Axis menu, p.275), Scaling and Rotation from two trackers, the

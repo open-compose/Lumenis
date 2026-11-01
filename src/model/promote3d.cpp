@@ -3,6 +3,7 @@
 #include "lumenis/model/promote3d.h"
 
 #include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/tracking.h"
 
 #include <QJsonObject>
 
@@ -41,23 +42,28 @@ constexpr Mapping kPip[] = {
 } // namespace
 
 bool canPromoteTo3D(const Effect& effect) {
-    return effect.category == QLatin1String("Blend") && effect.name == QLatin1String("Picture-in-Picture");
+    // "You can promote the Stabilize effect to 3D" (p.277).
+    return (effect.category == QLatin1String("Blend") && effect.name == QLatin1String("Picture-in-Picture")) || isStabilizeEffect(effect);
 }
 
 std::optional<Effect> promoteTo3D(const Effect& effect) {
     if (!canPromoteTo3D(effect)) return std::nullopt;
+    const bool stabilize = isStabilizeEffect(effect);
     Effect out{QStringLiteral("Blend"), QStringLiteral("3D Warp"), {}};
     for (const Mapping& m : kPip) {
         const QString cat = QLatin1String(m.category);
         const QString name = QLatin1String(m.name);
         const QString cat3 = QLatin1String(m.category3D);
         const QString name3 = QLatin1String(m.name3D);
+        // Stabilize has no Foreground, and its Scaling starts at 100.
+        if (stabilize && cat == QLatin1String("Foreground")) continue;
+        const double fallback = stabilize && cat == QLatin1String("Scaling") && m.fallback != 0.0 ? 100.0 : m.fallback;
         const QJsonValue stored = effect.parameters.value(cat).toObject().value(name);
         QJsonObject group = out.parameters.value(cat3).toObject();
         if (stored.isBool()) {
             group.insert(name3, stored);
-        } else if (stored.isDouble() || m.fallback != 0.0) {
-            const double v = stored.isDouble() ? stored.toDouble() : m.fallback;
+        } else if (stored.isDouble() || fallback != 0.0) {
+            const double v = stored.isDouble() ? stored.toDouble() : fallback;
             group.insert(name3, m.offset + m.scale * v);
         }
         if (!group.isEmpty()) out.parameters.insert(cat3, group);
@@ -69,6 +75,23 @@ std::optional<Effect> promoteTo3D(const Effect& effect) {
             k.outValue *= m.scale;
         }
         setKeyframes(out, cat3, name3, keys);
+    }
+    // The tracking data comes along ("promote an effect that uses tracking data to 3D", p.277). "When you promote
+    // the Stabilize effect to 3D, Stabilize Tracking is automatically activated for all effect parameters that use
+    // tracking data. The Run Auto-Zoom option is not available after you promote" (p.277).
+    if (effect.parameters.contains(QStringLiteral("Trackers"))) {
+        out.parameters.insert(QStringLiteral("Trackers"), effect.parameters.value(QStringLiteral("Trackers")));
+        if (stabilize) {
+            for (TrackedParameter p : {TrackedParameter::Position, TrackedParameter::Scaling, TrackedParameter::Rotation, TrackedParameter::Tracking}) {
+                TrackerMapping m = trackerMapping(out, p);
+                if (!m.on) continue;
+                m.stabilize = true;
+                setTrackerMapping(out, p, m);
+            }
+            TrackingSetup setup = trackingOf(out);
+            setup.autoZoom = false;
+            setTracking(out, setup);
+        }
     }
     return out;
 }

@@ -19,10 +19,14 @@
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QMenu>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QSlider>
 #include <QRandomGenerator>
 #include <QTest>
 #include <QToolButton>
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 
@@ -74,6 +78,20 @@ QImage squareFrame(std::int64_t f) {
     }
     for (int y = 30; y < 40; ++y) {
         for (int x = 40 + static_cast<int>(f); x < 50 + static_cast<int>(f); ++x) image.setPixelColor(x, y, QColor(230, 230, 230));
+    }
+    return image;
+}
+
+// 160 x 90: a smooth fixed pattern moved right by `shift` pixels, as an unsteady camera moves a shot.
+QImage shakenFrame(int shift) {
+    QImage image(160, 90, QImage::Format_RGB32);
+    for (int y = 0; y < 90; ++y) {
+        for (int x = 0; x < 160; ++x) {
+            const double u = x - shift;
+            const double v = 128.0 + 50.0 * std::sin(0.21 * u + 0.13 * y) + 40.0 * std::cos(0.17 * y - 0.11 * u) + 30.0 * std::sin(0.37 * u);
+            const int g = std::clamp(static_cast<int>(v), 0, 255);
+            image.setPixelColor(x, y, QColor(g, g, g));
+        }
     }
     return image;
 }
@@ -339,6 +357,96 @@ private slots:
         settle();
         QCOMPARE(model::trackingOf(effect()).trackers.size(), 1);
         timeline.setEffectMode(false);
+    }
+
+    // The Stabilize effect (p.275-279): applied to one segment, AutoStabilize tracks it with FluidStabilizer and
+    // SteadyGlide and zooms; Auto-Zoom follows the data until Position or Scaling is changed by hand.
+    void stabilize() {
+        Composer composer;
+        Timeline timeline{composer};
+        EffectEditor editor{timeline};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence());
+        editor.resize(700, 900);
+        editor.show();
+        settle();
+        // The shot shakes: 0, 3, 0, 3 ... pixels.
+        editor.setTrackingFrames([](const model::EffectRef& ref, std::int64_t frame, bool) {
+            if (ref.track != QStringLiteral("V1")) return QImage();
+            return shakenFrame((frame - 50) % 2 == 0 ? 0 : 3);
+        });
+        QString requestedTrack;
+        std::int64_t requestedFrame = -1;
+        connect(&timeline, &Timeline::autoStabilizeRequested, &editor, [&](const QString& track, std::int64_t frame) {
+            requestedTrack = track;
+            requestedFrame = frame;
+            editor.autoStabilize(track, frame);
+        });
+        auto effect = [&] {
+            return *model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(1).effect;
+        };
+        const EffectInfo* stabilize = EffectCatalog::builtin().find(QStringLiteral("Image"), QStringLiteral("Stabilize"));
+        QVERIFY(stabilize);
+        QVERIFY(timeline.dropEffect(QStringLiteral("V1"), 70, *stabilize));
+        settle();
+        QCOMPARE(requestedTrack, QStringLiteral("V1"));
+        QCOMPARE(requestedFrame, std::int64_t(50));
+        // "Creates a tracker and enables the tracker in the Position parameter ... FluidStabilizer ... SteadyGlide ...
+        // Auto-Zoom" (p.277); the Tracking window open.
+        model::TrackingSetup setup = model::trackingOf(effect());
+        QCOMPARE(setup.trackers.size(), 1);
+        QCOMPARE(setup.engine, QStringLiteral("FluidStabilizer"));
+        QCOMPARE(setup.trackers.first().process, model::TrackProcess::SteadyGlide);
+        QVERIFY(setup.trackers.first().pointAt(49));
+        QVERIFY(setup.autoZoom);
+        QVERIFY(model::trackerMapping(effect(), model::TrackedParameter::Position).on);
+        QVERIFY(editor.trackingWindow()->isVisible());
+        // The shake undone: odd frames moved back by the 3 pixels (frame 0 is the reference).
+        QVERIFY2(std::abs(model::trackedChange(effect(), 1, 16.0 / 9.0).position.x() * 160.0 + 3.0) < 1.0,
+                 qPrintable(QString::number(model::trackedChange(effect(), 1, 16.0 / 9.0).position.x() * 160.0)));
+        const double scale = effect().parameters.value(QStringLiteral("Scaling")).toObject().value(QStringLiteral("X")).toDouble();
+        QVERIFY2(scale > 101.0 && scale < 106.0, qPrintable(QString::number(scale)));
+        // One undo step takes it all back.
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        settle();
+        QVERIFY(!effect().parameters.contains(QStringLiteral("Trackers")));
+        QVERIFY(timeline.perform(QStringLiteral("edit.redo")));
+        settle();
+        QVERIFY(model::trackingOf(effect()).autoZoom);
+
+        // Turning SteadyGlide off recalculates Auto-Zoom (p.279): the full shake is undone now, a little more zoom.
+        composer.moveTo(MonitorId::Record, 50);
+        settle();
+        TrackingWindow* window = editor.trackingWindow();
+        qobject_cast<QToolButton*>(window->control(QStringLiteral("steadyglide"), 0))->click();
+        settle();
+        QCOMPARE(model::trackingOf(effect()).trackers.first().process, model::TrackProcess::None);
+        const double unsmoothed = effect().parameters.value(QStringLiteral("Scaling")).toObject().value(QStringLiteral("X")).toDouble();
+        QVERIFY2(unsmoothed > 101.0, qPrintable(QString::number(unsmoothed)));
+        QVERIFY(model::trackingOf(effect()).autoZoom);
+
+        // A Scaling slider moved by hand: Auto-Zoom off, with the message (p.279); the Auto-Zoom button again.
+        QSlider* x = editor.slider(QStringLiteral("Scaling"), QStringLiteral("X"));
+        QVERIFY(x);
+        x->setValue(150);
+        settle();
+        QVERIFY(!model::trackingOf(effect()).autoZoom);
+        QMessageBox* off = editor.findChild<QMessageBox*>(QStringLiteral("autoZoomOff"));
+        QVERIFY(off);
+        off->close();
+        auto* zoom = editor.findChild<QPushButton*>(QStringLiteral("tracking:Position:AutoZoom"));
+        QVERIFY(zoom);
+        zoom->click();
+        settle();
+        QVERIFY(model::trackingOf(effect()).autoZoom);
+        QVERIFY(std::abs(effect().parameters.value(QStringLiteral("Scaling")).toObject().value(QStringLiteral("X")).toDouble() - unsmoothed) < 1e-6);
+
+        // Two segments selected: no AutoStabilize (p.276).
+        requestedFrame = -1;
+        timeline.setSelection({model::SegmentRef{QStringLiteral("V1"), 0}, model::SegmentRef{QStringLiteral("V1"), 50}});
+        QVERIFY(timeline.applyEffectToSelection(*stabilize));
+        settle();
+        QCOMPARE(requestedFrame, std::int64_t(-1));
     }
 };
 

@@ -310,6 +310,7 @@ TrackingSetup trackingOf(const Effect& effect) {
     TrackingSetup s;
     if (o.contains(QStringLiteral("engine"))) s.engine = o.value(QStringLiteral("engine")).toString();
     s.foreground = o.value(QStringLiteral("foreground")).toBool();
+    s.autoZoom = o.value(QStringLiteral("autoZoom")).toBool();
     for (const QJsonValue& v : o.value(QStringLiteral("list")).toArray()) s.trackers << trackerFrom(v.toObject());
     return s;
 }
@@ -321,6 +322,11 @@ void setTracking(Effect& effect, const TrackingSetup& setup) {
     o.insert(QStringLiteral("list"), list);
     o.insert(QStringLiteral("engine"), setup.engine);
     o.insert(QStringLiteral("foreground"), setup.foreground);
+    if (setup.autoZoom) {
+        o.insert(QStringLiteral("autoZoom"), true);
+    } else {
+        o.remove(QStringLiteral("autoZoom"));
+    }
     effect.parameters.insert(kKey, o);
 }
 
@@ -639,6 +645,62 @@ int pasteTrackers(TrackingSetup& setup, const QList<Tracker>& trackers) {
     return added;
 }
 
+bool isStabilizeEffect(const Effect& effect) {
+    return effect.category == QLatin1String("Image") && effect.name == QLatin1String("Stabilize");
+}
+
+bool stabilizes(const Effect& effect, TrackedParameter parameter) {
+    return isStabilizeEffect(effect) || trackerMapping(effect, parameter).stabilize;
+}
+
+std::optional<AutoZoomFit> autoZoomFit(const Effect& effect, std::int64_t length, double aspect) {
+    if (!stabilizes(effect, TrackedParameter::Position)) return std::nullopt;
+    // Only with data on an enabled selector of Position.
+    const TrackerMapping m = trackerMapping(effect, TrackedParameter::Position);
+    const TrackingSetup setup = trackingOf(effect);
+    bool data = false;
+    for (qsizetype i = 0; i < m.selectors.size(); ++i) {
+        const Tracker* t = setup.tracker(m.selectors.at(i));
+        data = data || (t && t->hasData() && m.selectorOn.value(i));
+    }
+    if (!m.on || !data) return std::nullopt;
+    double x0 = 0.0, x1 = 0.0, y0 = 0.0, y1 = 0.0;
+    for (std::int64_t f = 0; f < std::max<std::int64_t>(length, 1); ++f) {
+        const QPointF d = trackedChange(effect, f, aspect).position;
+        x0 = f == 0 ? d.x() : std::min(x0, d.x());
+        x1 = f == 0 ? d.x() : std::max(x1, d.x());
+        y0 = f == 0 ? d.y() : std::min(y0, d.y());
+        y1 = f == 0 ? d.y() : std::max(y1, d.y());
+    }
+    // The picture, `scale` times the frame about the frame's centre and moved by offset + d (fractions), covers the
+    // frame on an axis while |offset + d| <= (scale - 1) / 2: the offset centres the moves' range, the scale holds it.
+    AutoZoomFit fit;
+    fit.offset = QPointF(-(x0 + x1) / 2.0, -(y0 + y1) / 2.0);
+    fit.scale = 1.0 + std::max(x1 - x0, y1 - y0);
+    return fit;
+}
+
+AutoZoomResult applyAutoZoom(Effect& effect, std::int64_t length, double aspect) {
+    const auto fit = autoZoomFit(effect, length, aspect);
+    if (!fit) return AutoZoomResult::NoData;
+    if (fit->scale > 4.0) return AutoZoomResult::TooFar;
+    for (const char* group : {"Position", "Scaling"}) {
+        for (const char* name : {"X", "Y"}) setKeyframes(effect, QLatin1String(group), QLatin1String(name), {});
+    }
+    QJsonObject position = effect.parameters.value(QStringLiteral("Position")).toObject();
+    position.insert(QStringLiteral("X"), fit->offset.x() * 1920.0);
+    position.insert(QStringLiteral("Y"), fit->offset.y() * 1920.0 / aspect);
+    effect.parameters.insert(QStringLiteral("Position"), position);
+    QJsonObject scaling = effect.parameters.value(QStringLiteral("Scaling")).toObject();
+    scaling.insert(QStringLiteral("X"), fit->scale * 100.0);
+    scaling.insert(QStringLiteral("Y"), fit->scale * 100.0);
+    effect.parameters.insert(QStringLiteral("Scaling"), scaling);
+    TrackingSetup setup = trackingOf(effect);
+    setup.autoZoom = true;
+    setTracking(effect, setup);
+    return AutoZoomResult::Applied;
+}
+
 TrackedChange trackedChange(const Effect& effect, std::int64_t frame, double aspect) {
     TrackedChange change;
     const TrackingSetup setup = trackingOf(effect);
@@ -658,7 +720,18 @@ TrackedChange trackedChange(const Effect& effect, std::int64_t frame, double asp
     // Distances and angles are measured with the frame's own proportions (x scaled by its aspect).
     auto unit = [&](const QPointF& p) { return QPointF(p.x() * aspect, p.y()); };
     if (const QList<const Tracker*> ts = mapped(TrackedParameter::Position); !ts.isEmpty()) {
-        if (const auto m = trackerMovement(*ts.first(), frame)) {
+        const Tracker& t = *ts.first();
+        std::optional<QPointF> m;
+        if (!stabilizes(effect, TrackedParameter::Position)) {
+            m = trackerMovement(t, frame);
+        } else if (t.process == TrackProcess::SteadyGlide) {
+            // Only the jitter, from the reference frame's.
+            const auto j = trackerJitter(t, frame), j0 = trackerJitter(t, t.reference);
+            if (j && j0) m = -(*j - *j0);
+        } else if (const auto moved = trackerMovement(t, frame)) {
+            m = -*moved;
+        }
+        if (m) {
             change.position = *m;
             const QString axis = trackerMapping(effect, TrackedParameter::Position).axis;
             if (axis == QLatin1String("X Tracking Only")) change.position.setY(0.0);
@@ -676,12 +749,13 @@ TrackedChange trackedChange(const Effect& effect, std::int64_t frame, double asp
     if (const auto ab = pair(TrackedParameter::Scaling)) {
         const double was = std::hypot(ab->second.x(), ab->second.y());
         if (was > 1e-12) change.scale = std::hypot(ab->first.x(), ab->first.y()) / was;
+        if (stabilizes(effect, TrackedParameter::Scaling) && change.scale > 1e-12) change.scale = 1.0 / change.scale;
     }
     if (const auto ab = pair(TrackedParameter::Rotation)) {
         double turn = (std::atan2(ab->first.y(), ab->first.x()) - std::atan2(ab->second.y(), ab->second.x())) * 180.0 / std::numbers::pi;
         while (turn > 180.0) turn -= 360.0;
         while (turn <= -180.0) turn += 360.0;
-        change.rotation = turn; // y down: a growing angle turns clockwise
+        change.rotation = stabilizes(effect, TrackedParameter::Rotation) ? -turn : turn; // y down: a growing angle turns clockwise
     }
     if (const QList<const Tracker*> ts = mapped(TrackedParameter::Tracking); !ts.isEmpty()) {
         QList<QPointF> from, to;
@@ -691,7 +765,9 @@ TrackedChange trackedChange(const Effect& effect, std::int64_t frame, double asp
             from << unit(*ref);
             to << unit(*now);
         }
-        if (const auto map = pointMap(from, to)) {
+        // Stabilizing maps the picture back onto the reference frame's.
+        const bool back = stabilizes(effect, TrackedParameter::Tracking);
+        if (const auto map = back ? pointMap(to, from) : pointMap(from, to)) {
             // Back to fractions of the frame: S^-1 M S with S scaling x by the aspect.
             const Mat3 s{aspect, 0, 0, 0, 1, 0, 0, 0, 1};
             const Mat3 sInverse{1.0 / aspect, 0, 0, 0, 1, 0, 0, 0, 1};

@@ -13,6 +13,7 @@
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
 #include "lumenis/model/sync_dupes.h"
+#include "lumenis/model/tracking.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/clip_color_dialog.h"
@@ -5364,6 +5365,7 @@ bool Timeline::dropEffect(const QString& track, std::int64_t frame, const Effect
     if (t->locked) return fail(tr("The track is locked."));
     std::int64_t start = 0;
     const int i = t->segmentAt(frame, &start);
+    std::optional<std::pair<QString, std::int64_t>> stabilize; // AutoStabilize's segment
     if (effect.transition && (cut || !effect.segment)) {
         std::int64_t at = cut.value_or(start);
         if (!cut && i >= 0) {
@@ -5378,11 +5380,13 @@ bool Timeline::dropEffect(const QString& track, std::int64_t frame, const Effect
         if (i < 0 || !model::applySegmentEffect(seq, track, frame, effect.effect(), nest)) {
             return fail(tr("There is no segment there."));
         }
+        if (!nest && model::isStabilizeEffect(effect.effect())) stabilize = std::pair{track, start};
     } else {
         return fail(tr("This effect cannot be applied there."));
     }
     if (!commitSequence(tr("Apply Effect"), seq)) return false;
     emit effectApplied();
+    if (stabilize) emit autoStabilizeRequested(stabilize->first, stabilize->second);
     return true;
 }
 
@@ -5414,6 +5418,7 @@ bool Timeline::applyEffectToSelection(const EffectInfo& effect) {
         return true;
     }
     model::Sequence seq = model::Sequence::fromItem(composer_.state(MonitorId::Record).current()->item);
+    std::optional<std::pair<QString, std::int64_t>> stabilize; // AutoStabilize's segment, when it is the only one
     auto video = [&](const QString& name) {
         const model::Track* t = seq.track(name);
         return t && t->kind == model::TrackKind::Video && !t->locked;
@@ -5432,8 +5437,12 @@ bool Timeline::applyEffectToSelection(const EffectInfo& effect) {
             for (const model::SegmentRef& ref : selection_) {
                 // Alt+double-click nests it inside the segment's effect (FX Guide p.276).
                 const bool nest = QGuiApplication::keyboardModifiers().testFlag(Qt::AltModifier);
-                if (video(ref.track) && model::applySegmentEffect(seq, ref.track, ref.start, effect.effect(), nest)) ++applied;
+                if (video(ref.track) && model::applySegmentEffect(seq, ref.track, ref.start, effect.effect(), nest)) {
+                    ++applied;
+                    if (!nest && model::isStabilizeEffect(effect.effect())) stabilize = std::pair{ref.track, ref.start};
+                }
             }
+            if (applied != 1) stabilize.reset();
         } else {
             // A transition effect goes on the selected segments' head cuts.
             QList<model::TrimRoller> cuts;
@@ -5449,6 +5458,7 @@ bool Timeline::applyEffectToSelection(const EffectInfo& effect) {
     }
     if (!commitSequence(tr("Apply Effect"), seq)) return false;
     emit effectApplied();
+    if (stabilize) emit autoStabilizeRequested(stabilize->first, stabilize->second);
     return true;
 }
 

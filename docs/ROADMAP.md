@@ -1054,7 +1054,8 @@ phase of their own. They are done in three steps:
     * 6.7d1, tracking data through segment edits (trims, splits) and copying and pasting trackers
       (p.281-284). Done (docs/spec/tracking.md, `model::shiftTrackingData`, `model::pasteTrackers`).
     * 6.7d2, the Stabilize effect: AutoStabilize, Stabilize Tracking (also in 3D Warp and on promotion),
-      Auto-Zoom (p.275-279).
+      Auto-Zoom (p.275-279). Done (docs/spec/tracking.md, `model::stabilizes`, `model::applyAutoZoom`,
+      `EffectEditor::autoStabilize`).
     * 6.7d3, the Region Stabilize effect: its region of interest, Model menu, Auto Zoom and Progressive
       Source (p.279-281).
 * 6.8, titles (ch.12-13, p.301-377): the Title Tool and Titler+, with keyframes kept through trims,

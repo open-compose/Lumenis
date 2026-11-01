@@ -15,6 +15,8 @@
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QMessageBox>
+#include <QPushButton>
 
 #include <algorithm>
 
@@ -204,6 +206,14 @@ QWidget* EffectEditor::trackingControls(model::TrackedParameter parameter, QWidg
         trackingControls_.insert(menu->objectName(), menu);
         layout->addWidget(menu, 1);
     }
+    // Stabilize's Auto-Zoom (p.279): "In the Tracking subcategory of the Position parameter category, click Auto-Zoom".
+    if (parameter == model::TrackedParameter::Position && current_ && model::isStabilizeEffect(*current_)) {
+        auto* zoom = new QPushButton(tr("Auto-Zoom"), box);
+        zoom->setObjectName(QStringLiteral("tracking:Position:AutoZoom"));
+        connect(zoom, &QPushButton::clicked, this, [this] { autoZoom(); });
+        trackingControls_.insert(zoom->objectName(), zoom);
+        layout->addWidget(zoom);
+    }
     // Position's Axis menu, here for 2D effects (3D ones have their own row, p.577).
     if (parameter == model::TrackedParameter::Position && !(current_ && media::is3DEffect(*current_))) {
         auto* axis = new QComboBox(box);
@@ -346,6 +356,13 @@ bool EffectEditor::dragTrackerBox(const QString& id, const QPointF& from, const 
 bool EffectEditor::startTracking() {
     if (!shown_ || !current_ || !trackingFrames_ || tracking_) return false;
     model::Effect edited = *current_;
+    if (!runTracking(edited)) return false;
+    const QJsonObject parameters = edited.parameters;
+    return changeShown(tr("Tracking"), [&](model::Effect& e) { e.parameters = parameters; });
+}
+
+bool EffectEditor::runTracking(model::Effect& edited) {
+    if (!shown_ || !trackingFrames_ || tracking_) return false;
     model::TrackingSetup setup = model::trackingOf(edited);
     if (setup.trackers.isEmpty()) return false;
     const media::TrackingEngine engine = media::trackingEngine(setup.engine);
@@ -384,10 +401,95 @@ bool EffectEditor::startTracking() {
         }
     }
     tracking_ = false;
-    if (!any) return false;
-    model::setTracking(edited, setup);
+    if (any) model::setTracking(edited, setup);
+    return any;
+}
+
+// ---------------------------------------------------------------- stabilizing
+
+double EffectEditor::frameAspect() const {
+    const QSizeF size = previewSize();
+    return size.height() > 0 ? size.width() / size.height() : 16.0 / 9.0;
+}
+
+void EffectEditor::keepAutoZoom(const model::Effect& before, model::Effect& after) {
+    if (autoZooming_ || !model::isStabilizeEffect(after) || !model::trackingOf(before).autoZoom || !model::trackingOf(after).autoZoom) return;
+    // Position and Scaling, with their keyframes.
+    auto placed = [](const model::Effect& e) {
+        QJsonObject o;
+        for (const char* group : {"Position", "Scaling"}) {
+            o.insert(QLatin1String(group), e.parameters.value(QLatin1String(group)));
+            for (const char* name : {"X", "Y"}) {
+                o.insert(QStringLiteral("%1/%2").arg(QLatin1String(group), QLatin1String(name)),
+                         model::keyframesOf(e, QLatin1String(group), QLatin1String(name)).toJson());
+            }
+        }
+        return o;
+    };
+    if (placed(before) != placed(after)) {
+        model::TrackingSetup setup = model::trackingOf(after);
+        setup.autoZoom = false;
+        model::setTracking(after, setup);
+        autoZoomOff_ = true;
+        return;
+    }
+    // "If you retrack, turn SteadyGlide or Smoothing on or off, or change the smoothing values ... Auto-Zoom
+    // recalculates Position and Scaling values so that black edges continue to be removed" (p.279).
+    if (before.parameters.value(QStringLiteral("Trackers")) != after.parameters.value(QStringLiteral("Trackers"))) {
+        model::applyAutoZoom(after, span_.length, frameAspect());
+    }
+}
+
+bool EffectEditor::autoZoom() {
+    if (!shown_ || !current_ || !model::isStabilizeEffect(*current_)) return false;
+    model::Effect edited = *current_;
+    const model::AutoZoomResult result = model::applyAutoZoom(edited, span_.length, frameAspect());
+    if (result != model::AutoZoomResult::Applied) {
+        // "A warning message appears if no tracking data exists. A warning message also appears if the stabilized
+        // image moves too far offscreen to allow Auto-Zoom to calculate usable values" (p.279).
+        auto* box = new QMessageBox(QMessageBox::Warning, tr("Auto-Zoom"),
+                                    result == model::AutoZoomResult::NoData
+                                        ? tr("There is no tracking data for Auto-Zoom.")
+                                        : tr("The stabilized image moves too far offscreen for Auto-Zoom."),
+                                    QMessageBox::Ok, this);
+        box->setObjectName(QStringLiteral("autoZoomWarning"));
+        box->setAttribute(Qt::WA_DeleteOnClose);
+        box->open();
+        return false;
+    }
+    if (edited.parameters == current_->parameters) return false;
     const QJsonObject parameters = edited.parameters;
-    return changeShown(tr("Tracking"), [&](model::Effect& e) { e.parameters = parameters; });
+    autoZooming_ = true;
+    const bool done = changeShown(tr("Auto-Zoom"), [&](model::Effect& e) { e.parameters = parameters; });
+    autoZooming_ = false;
+    return done;
+}
+
+bool EffectEditor::autoStabilize(const QString& track, std::int64_t frame) {
+    // The segment's first frame, so that the Effect Editor shows its Stabilize effect.
+    timeline_.composer().moveTo(MonitorId::Record, frame);
+    refresh();
+    if (!shown_ || !current_ || shown_->track != track || !model::isStabilizeEffect(*current_) || level_ != 0) return false;
+    // "Creates a tracker and enables the tracker in the Position parameter for the effect. Tracks the image using
+    // the FluidStabilizer tracking engine. Processes the tracking data using the SteadyGlide option and applies the
+    // data to the image. Uses the Auto-Zoom option to adjust the Scaling and Position parameters" (p.277).
+    model::Effect edited = *current_;
+    model::enableTracking(edited, model::TrackedParameter::Position);
+    model::TrackingSetup setup = model::trackingOf(edited);
+    setup.engine = QStringLiteral("FluidStabilizer");
+    const model::TrackerMapping m = model::trackerMapping(edited, model::TrackedParameter::Position);
+    if (model::Tracker* t = m.selectors.isEmpty() ? nullptr : setup.tracker(m.selectors.first())) t->process = model::TrackProcess::SteadyGlide;
+    model::setTracking(edited, setup);
+    // "Opens the Effect Editor (if necessary) and the Tracking window."
+    showTrackingWindow();
+    // "You can stop the tracking process at any time ... This lets you set different tracking options, and then
+    // track and stabilize manually": what was set up stays.
+    if (runTracking(edited) && !stopTracking_) model::applyAutoZoom(edited, span_.length, frameAspect());
+    const QJsonObject parameters = edited.parameters;
+    autoZooming_ = true;
+    const bool done = changeShown(tr("AutoStabilize"), [&](model::Effect& e) { e.parameters = parameters; });
+    autoZooming_ = false;
+    return done;
 }
 
 // ---------------------------------------------------------------- editing tracking data

@@ -578,7 +578,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.7d is in three parts (ROADMAP). 6.7d1, tracking data through trims and splits (`model::shiftTrackingData`
   from `Sequence::cut` and the trims) and copying and pasting trackers (`model::pasteTrackers`,
   `EffectEditor::copyTrackers`; scenario `33-tracking-through-edits.json`), is done.
-  Next: 6.7d2 (the Stabilize effect), 6.7d3 (Region Stabilize), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.7d2, the Stabilize effect (`model::stabilizes`/`applyAutoZoom` in `src/model/tracking.*`, rendered as Resize;
+  AutoStabilize through `Timeline::autoStabilizeRequested` and `EffectEditor::autoStabilize`, Auto-Zoom kept by
+  `EffectEditor::keepAutoZoom`; promotion to 3D with Stabilize Tracking; tests `tst_tracking`, `tst_tracking_ui`),
+  is done.
+  Next: 6.7d3 (Region Stabilize), then the rest of Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

@@ -1498,6 +1498,14 @@ void MainWindow::createTools() {
         if (timeline_->options().openEffectEditor) showTool(QStringLiteral("EffectEditor"));
     });
     effectEditor_ = new EffectEditor(*timeline_);
+    // AutoStabilize "Opens the Effect Editor (if necessary) and the Tracking window", then tracks (FX Guide p.277).
+    // After the drop or double-click that applied the effect has finished.
+    connect(timeline_, &Timeline::autoStabilizeRequested, this, [this](const QString& track, std::int64_t frame) {
+        QTimer::singleShot(0, this, [this, track, frame] {
+            showTool(QStringLiteral("EffectEditor"));
+            effectEditor_->autoStabilize(track, frame);
+        });
+    });
     // Motion tracking's frames (FX Guide p.256, p.262): the video tracks below the effect's own ("you almost
     // always want to track the background"), or with Track Foreground the effect's own segment without its effect.
     // Ours: 480 pixels wide, at the project's shape.
