@@ -1,0 +1,57 @@
+# The classic Title Tool
+
+ROADMAP 6.8d. Sources: FX Guide p.326-364 (2025.12 and 2026.8 editions, same pages). Code: `src/model/classic_title.*`
+(the title), `src/media/classic_title.*` (its picture), `src/ui/title_tool.*` (the window), `MainWindow::openTitleTool`.
+Tests: `tst_classic_title`, `tst_title_tool`.
+
+## 6.8d1: the window, the drawing environment, text and graphic objects
+
+### From the guide
+* "Select Clip > New Title or Tools > Title Tool Application. The New Title dialog box opens" with Marquee and Title
+  Tool; "select Persist before you click Marquee or Title Tool. For the rest of your editing session, Media Composer
+  automatically opens the title tool you selected" (p.327). "The Text tool is automatically selected" (p.327).
+* "The Title Tool application is not supported with greater than HD projects" (p.328).
+* The components (p.329-331): a video or colour background, the title, the safe title and safe action guidelines,
+  "The toolbar at the bottom of the screen", and "title-related menu commands appear in the File, Edit, Object, and
+  Alignment menus". The toolbar: Selection tool, Text tool, Video Placement tool ("lets you pan around the entire video
+  clip"), the drawing tools, the text formatting tools, colour and transparency, shadows, styles, line attributes,
+  templates, the Background Selection tools, the Crawling and Rolling Title buttons.
+* Selection and Text tools (p.331-332): click to select, Shift+click or a lasso for more; "Press the Alt key ... and
+  click anywhere in the Title tool" to switch between them; "Press and hold the Ctrl and Alt keys" for the Selection
+  tool for now; "After you use a tool in the toolbar, the Title tool reverts to the Selection tool ... double-click the
+  tool's icon" to keep it.
+* The drawing environment (p.332-335): anti-aliased Preview ("When you click a text object for editing, the Title tool
+  displays the text without anti-aliasing"), Safe Colors ("By default, Safe Colors is turned on"), the safe title and
+  safe action guidelines (on by default), the alignment grid ("The snap grid has four lines for each line in the visible
+  grid"), the Video Background button ("green when you are creating a title for display over a video background"; the
+  frame at the Record monitor's position; "Click again in the Title tool to activate its window. The background
+  updates"), the Background Color window ("The default background color is black"). Object > Preview, Safe Colors,
+  Safe Title Area/Global Grid; Alignment > Show Alignment Grid, Align to Grid.
+* Text (p.335-340): click and type, Enter for a line return, word wrap at the object's width; "You can resize only the
+  width of a text object"; arrow keys move a selected object a pixel; Cut, Copy and Paste; the Font Selection button,
+  the point size ("between 5 and 999", a menu of standard sizes, arrows), Bold and Italic (also Object > Bold, Italic),
+  Left, Center and Right justification, kerning ("Values are a percentage of the point size"; Alt+Left/Right on
+  characters; Loose, Normal, Tight, Pair Kerning), leading ("measured in points, from baseline to baseline ... Positive
+  leading values add space"). With the Selection tool a click formats the whole object; with the Text tool highlighted
+  characters. Default text attributes: "Click in the Title tool but do not select any text. Change any of the text
+  attributes" (p.337).
+* Graphic objects (p.340-341): the Square and Rectangle, Oval and Line tools; Shift-drag constrains to a square, a
+  circle, a horizontal or vertical line.
+
+### Ours
+* A title is objects back to front in pixels of a 1920 x 1080 frame from its top-left, with its background
+  (`model::ClassicTitle`); points are those pixels. Text objects keep their left, top and width; their height follows
+  the text. Formatted characters are Titler+ runs (titler.h) with the kerning in percent.
+* Text is laid out by Titler+'s layout (`media::classicTextObject`), so wrapping, kerning, leading and formatted
+  characters are drawn alike in both titlers. A line is two frame pixels wide until 6.8d3's line attributes; objects
+  are white and opaque until 6.8d3's colour controls.
+* The window's own menu bar holds Edit (Undo, Redo, Cut, Copy, Paste, Delete, Select All: the tool's own steps while it
+  is open), Object and Alignment. Pair Kerning is shown on and dimmed: the font's kerning is always used. Loose and
+  Tight are 10 and -10 percent; Alt+Right adds and Alt+Left takes away one percent on the highlighted characters, or
+  on the character before the cursor.
+* A new text object reaches from the click to the safe title area's right edge (at least 120 pixels). An empty text
+  object goes when typing ends. The safe action and title areas are 90% and 80% of the frame; the visible grid is 16 by
+  9 squares of 120 pixels, the snap grid 30 pixels. Safe Colors holds saturation and brightness to 75% and 90%.
+* The New Title dialog's Marquee button is dimmed: Marquee is Avid's own application. The Marquee Title setting's
+  Ask Me, Windows > Title Tool and the Font Replacement dialog are not ours yet.
+* Saving the title (File > Save Title ...) comes with 6.8d4; until then the window keeps the title while it is open.

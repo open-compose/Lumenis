@@ -72,6 +72,7 @@
 #include "lumenis/ui/theme.h"
 #include "lumenis/ui/timecode_window.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/title_tool.h"
 #include "lumenis/ui/titler_panel.h"
 #include "lumenis/ui/motion_effect_dialogs.h"
 #include "lumenis/ui/motion_effect_editor.h"
@@ -5317,6 +5318,9 @@ void MainWindow::installPanelHandlers() {
     };
     handle("clip.lock_project_bin", [projectBins] { projectBins(true); });
     handle("clip.unlock_project_bin", [projectBins] { projectBins(false); });
+    // The classic Title Tool (FX Guide p.327).
+    handle("clip.new_title", [this] { openTitleTool(); });
+    handle("tools.title_tool_application", [this] { openTitleTool(); });
     // Tools (ch.5).
     // Tools menu: each opens its panel through showTool().
     handle("tools.command_palette", [this] { showTool(QStringLiteral("CommandPalette")); });
@@ -5879,6 +5883,34 @@ void MainWindow::checkTitleTemplate() {
                                        : QMessageBox::question(this, tr("Titler+"), tr("Save the changes to the template \"%1\"?").arg(name),
                                                                QMessageBox::Save | QMessageBox::Discard) == QMessageBox::Save;
     if (save) storeTitleTemplate(edit, false);
+}
+
+// ---------------------------------------------------------------- the classic Title Tool (6.8d1)
+
+TitleToolWindow* MainWindow::titleTool() const {
+    return titleTool_.data();
+}
+
+void MainWindow::openTitleTool(bool ask) {
+    // "If you know you want to create only Marquee titles or only standard titles for the current session, select
+    // Persist" (p.327).
+    if (ask && !titleToolPersist_) {
+        bool persist = false;
+        if (!askNewTitle(this, &persist)) return;
+        titleToolPersist_ = persist;
+    }
+    TitleToolWindow* tool = titleTool_;
+    if (!tool) {
+        tool = new TitleToolWindow(this);
+        titleTool_ = tool;
+        // The Record monitor's frame at the position, for the video background (p.333).
+        tool->setFrameSource([this](QSize size) { return composer_->picture(MonitorId::Record, size); });
+    }
+    if (!tool->isVisible()) tool->newTitle();
+    tool->updateBackground();
+    tool->show();
+    tool->raise();
+    tool->activateWindow();
 }
 
 } // namespace lumenis::ui

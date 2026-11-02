@@ -1086,9 +1086,16 @@ phase of their own. They are done in three steps:
       docs/spec/edl.md), done, so 6.8c is. Promote Titles
       from the classic Title Tool (p.326) moves to 6.8d, which makes the classic titles; titles in Find are
       dropped (neither guide says so).
-  * 6.8d, the classic Title Tool: the drawing environment, text and graphic objects, colour, transparency
-    and shadows, rolling and crawling titles, styles, saving titles as fill and matte clips (p.326-364).
-    Then Promote Titles > Avid Titler+ (p.326).
+  * 6.8d, the classic Title Tool (p.326-364), in four parts:
+    * 6.8d1, the window: Clip > New Title and the New Title dialog, the drawing environment (video or
+      colour background, Preview, Safe Colors, the safe areas, the alignment grid), the Selection, Text
+      and Video Placement tools, text and its formatting, boxes, ovals and lines (p.327-341;
+      docs/spec/title-tool.md). Done.
+    * 6.8d2, rolling and crawling titles (p.341-346).
+    * 6.8d3, modifying and manipulating objects: corners, lines and borders, colour and transparency with
+      blends, drop and depth shadows, layers, alignment and grouping (p.346-357).
+    * 6.8d4, saving titles as fill and matte clips, revising, templates, styles, exporting a title as a
+      graphics file (p.357-364); then Promote Titles > Avid Titler+ (p.326).
   * 6.8e, editing with titles: title clips in bins, editing them in, fading, marks and trims of rolls and
     crawls, revising and replacing, re-creating title media, the troubleshooting options (ch.13,
     p.365-377).

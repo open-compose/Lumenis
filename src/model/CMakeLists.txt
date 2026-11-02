@@ -21,6 +21,7 @@ add_library(lumenis_model STATIC
     pan_scan.cpp
     tracking.cpp
     titler.cpp
+    classic_title.cpp
     marker.cpp
     multichannel.cpp
     clip_coloring.cpp

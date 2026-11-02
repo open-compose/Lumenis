@@ -53,6 +53,7 @@ class ConsolidateDialog;
 class UnmountDialog;
 class SetFontDialog;
 class ShortcutsWindow;
+class TitleToolWindow;
 class AudioMixdownDialog;
 class VideoMixdownDialog;
 class ClearRendersDialog;
@@ -533,6 +534,12 @@ public:
     // with `replace` (or a name already used) in place of that view's; it becomes the one in use.
     void saveTimelineView(const QString& name, bool replace);
 
+    // The classic Title Tool (FX Guide p.327, ROADMAP 6.8d1): Clip > New Title and Tools > Title Tool Application open
+    // the New Title dialog (unless Persist was chosen this session), then the Title Tool over the Record monitor's
+    // frame; with `ask` false the dialog is skipped. The window, made when first opened, or null.
+    void openTitleTool(bool ask = true);
+    TitleToolWindow* titleTool() const;
+
     // Titler+ templates (FX Guide p.319-320, ROADMAP 6.8c4a). Edit Template, or a template dragged to the Record
     // monitor, "opens the template in the Record monitor" (model::titleTemplateSequence, under the bin id
     // kTitleTemplateBin, which keeps no items). False when the item is not a Titler+ template.
@@ -578,6 +585,8 @@ private:
         bool dirty = false;
     };
     std::optional<TitleTemplateEdit> templateEdit_;
+    QPointer<TitleToolWindow> titleTool_;
+    bool titleToolPersist_ = false; // the New Title dialog's Persist (p.327)
     std::function<bool(const QString&)> askTemplateSave_;
     // Saves an edited template (Save, or Save As a copy, which then is the one edited); false when it cannot.
     bool storeTitleTemplate(TitleTemplateEdit& edit, bool saveAs);

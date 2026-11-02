@@ -129,7 +129,9 @@ headers in `include/lumenis/<library>/`.
   Titler+ titles in `src/model/titler.*` with their picture in `src/media/titler.cpp`,
   `Timeline::applyTitler`, the Record monitor's tools in `titler_tool.*` (through
   `Composer::OverlayInput`) and the Dashboard and Effect Editor controls in `titler_panel.*`
-  (docs/spec/titler.md), and mixed rate clips' Motion Adapters in `src/model/motion_adapter.*`: the
+  (docs/spec/titler.md), the classic Title Tool's titles in `src/model/classic_title.*` drawn by
+  `src/media/classic_title.cpp` through Titler+'s text layout and edited in `title_tool.*`
+  (docs/spec/title-tool.md), and mixed rate clips' Motion Adapters in `src/model/motion_adapter.*`: the
   monitors load a clip at another rate as its adapted copy at the project's rate, the segments edited
   from it carry `Segment::adapter`, and `BinDocument` stores the clip itself back (docs/spec/motion-effects.md).
 * **Audio tools.** `audio_tools.*` (the Audio Mixer, docs/spec/audio-mixer.md, and the Audio Tool), `audio_groups.cpp` (the mixer's track sidebar and groups), `clip_audio_dialogs.*` (Apply Gain and Auto VO, with `src/model/clip_audio.*`, docs/spec/clip-audio.md), `multi_mix_dialog.*` (the Multi-Mix Tool, docs/spec/multi-mix.md),

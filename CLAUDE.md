@@ -609,7 +609,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.8c4b, templates as presets (`model::applyTitlePreset`, drops on `TitlerPanel` by section, `TitlerTool::applyPreset`)
   and titles in EDLs (`titlePieces` in `src/interop/edl.cpp`; tests `tst_titler`, `tst_titler_ui`, `tst_edl`), is done,
   so 6.8c is.
-  Next: 6.8d (the classic Title Tool, then Promote Titles), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.8d is in four parts (ROADMAP). 6.8d1, the classic Title Tool's window (docs/spec/title-tool.md:
+  `src/model/classic_title.*`, `src/media/classic_title.*` through Titler+'s layout, `src/ui/title_tool.*` with its own
+  Edit/Object/Alignment menus, `MainWindow::openTitleTool` from Clip > New Title and Tools > Title Tool Application;
+  tests `tst_classic_title`, `tst_title_tool`), is done.
+  Next: 6.8d2 (rolling and crawling titles), 6.8d3, 6.8d4 (then Promote Titles), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

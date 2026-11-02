@@ -182,7 +182,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Relink > Linked Media |  | p.364 | works | ☐ | | |
 | Relink > Managed Media |  | p.361 | works | ☐ | | |
 | Split All Tracks |  | p.637 | works | ☐ | | |
-| New Title |  | p.327 | *later* | ☐ | | |
+| New Title |  | p.327 | works | ☐ | | |
 
 ## Timeline menu
 
@@ -261,7 +261,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Titler+ |  | p.303 | works | ☐ | | |
 | Color Info Tool |  | p.697 | *later* | ☐ | | |
 | Effect Editor |  | p.54 | works | ☐ | | |
-| Title Tool Application |  | p.343 | *later* | ☐ | | |
+| Title Tool Application |  | p.343 | works | ☐ | | |
 | Timeline | Ctrl+0 | p.766 | works | ☐ | | |
 
 ## Windows menu
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 151 of them working with a project open; the
+* 211 menu commands, 153 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

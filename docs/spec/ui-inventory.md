@@ -268,6 +268,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   (names, ranges, a quarter of the frame until set), frame-to-frame
   correlation with a search area twice the region, the original picture
   in the Effect Preview, Progressive Source without effect yet.
+* The classic Title Tool (docs/spec/title-tool.md, 6.8d1): 1920 x 1080 frame
+  pixels from the top-left with points as pixels, Titler+'s text layout, the
+  window's own Edit/Object/Alignment menus and undo, Pair Kerning always on,
+  Loose/Tight as +/-10 percent and Alt+arrows by one percent, new text out to
+  the safe title edge, the grid sizes, the Safe Colors limits, Marquee dimmed.
 * Titler+ presets and EDL titles (docs/spec/titler.md, edl.md; 6.8c4b): the
   sections a preset drop picks, the whole style elsewhere without the
   Transform, the source object by kind, title events with reel BL, their
@@ -745,6 +750,8 @@ The full inventory, with a page for every item, is
   * While the legacy Title Tool is open, the File menu offers *Save Title*,
     *Save Title As* and *Export Title* (FX p.358–364).
   * The Windows menu offers *Title Tool* (FX p.327).
+  * The Title Tool's Edit, Object and Alignment menus (FX p.330, p.334, p.338) are in the
+    Title Tool window's own menu bar (ours), not the main one.
   * The Edit menu's Undo item names the last action, for example *Undo Clear
     Renders* (FX p.61).
 
