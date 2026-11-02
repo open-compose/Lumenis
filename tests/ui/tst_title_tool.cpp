@@ -1,7 +1,8 @@
 // The classic Title Tool's window (ROADMAP 6.8d1; FX Guide p.327-341; src/ui/title_tool.*): typing text, the Selection
 // tool's moves, lassos and handles, the drawing tools with Shift and sticky tools, the text formatting tools on objects,
 // characters and the defaults, the drawing environment and its menus, the Edit menu, and opening the tool from the
-// main window; rolling and crawling titles (6.8d2); line attributes, colours with blends and shadows (6.8d3).
+// main window; rolling and crawling titles (6.8d2); line attributes, colours with blends and shadows (6.8d3a); layers,
+// groups, locks, alignment and Duplicate (6.8d3b).
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/classic_title.h"
 #include "lumenis/ui/command_registry.h"
@@ -16,6 +17,7 @@
 #include <QMenuBar>
 #include <QScrollBar>
 #include <QDialog>
+#include <QKeySequence>
 #include <QSlider>
 #include <QSpinBox>
 #include <QTimer>
@@ -426,6 +428,87 @@ private slots:
         }
         QApplication::processEvents();
         tool.repaint();
+    }
+
+    // Layers, groups, locks, alignment, Duplicate (6.8d3b, p.355-357).
+    void manipulating() {
+        TitleToolWindow tool;
+        tool.show();
+        model::ClassicTitle t;
+        for (int i = 0; i < 3; ++i) {
+            model::ClassicObject o;
+            o.kind = ClassicKind::Box;
+            o.id = t.newId(ClassicKind::Box);
+            o.rect = QRectF(300 + 400 * i, 300 + 100 * i, 200, 100);
+            t.objects << o;
+        }
+        tool.setTitle(t);
+        tool.setTool(TitleToolWindow::Tool::Selection);
+        auto action = [&](const char* name) { return tool.menuBar()->findChild<QAction*>(QStringLiteral("title:") + QLatin1String(name)); };
+        // Group: clicking one selects both; moving moves both.
+        tool.select({QStringLiteral("Box 1"), QStringLiteral("Box 2")});
+        action("group")->trigger();
+        tool.select({});
+        tool.press(QPointF(350, 350), Qt::NoModifier);
+        QCOMPARE(tool.selection().size(), 2);
+        tool.move(QPointF(360, 370), Qt::NoModifier);
+        tool.release(QPointF(360, 370), Qt::NoModifier);
+        QCOMPARE(tool.title().objects.at(1).rect.topLeft(), QPointF(710, 420));
+        action("ungroup")->trigger();
+        tool.select({QStringLiteral("Box 2")});
+        QCOMPARE(tool.selection(), QStringList{QStringLiteral("Box 2")});
+        // Layers.
+        action("bringToFront")->trigger();
+        QCOMPARE(tool.title().objects.last().id, QStringLiteral("Box 2"));
+        action("sendBackward")->trigger();
+        QCOMPARE(tool.title().objects.at(1).id, QStringLiteral("Box 2"));
+        // Lock: no moves, nudges, attributes or deleting; the handles hollow (painted).
+        action("lock")->trigger();
+        QVERIFY(tool.title().object(QStringLiteral("Box 2"))->locked);
+        const QRectF locked = tool.title().object(QStringLiteral("Box 2"))->rect;
+        tool.key(Qt::Key_Right, Qt::NoModifier, QString());
+        tool.setColor(TitleToolWindow::Coat::Fill, QStringLiteral("#ff0000"));
+        tool.press(locked.center(), Qt::NoModifier);
+        tool.move(locked.center() + QPointF(100, 100), Qt::NoModifier);
+        tool.release(locked.center() + QPointF(100, 100), Qt::NoModifier);
+        QCOMPARE(tool.title().object(QStringLiteral("Box 2"))->rect, locked);
+        QCOMPARE(tool.title().object(QStringLiteral("Box 2"))->fill.color, QStringLiteral("#ffffff"));
+        tool.select({QStringLiteral("Box 2")});
+        tool.deleteSelection();
+        QVERIFY(tool.title().object(QStringLiteral("Box 2")));
+        tool.repaint();
+        tool.select({QStringLiteral("Box 2")});
+        action("unlock")->trigger();
+        QVERIFY(!tool.title().object(QStringLiteral("Box 2"))->locked);
+        // Align To Frame Bottom (Shift+Ctrl+Z) to the safe title area; to the last selected object.
+        QCOMPARE(action("frameBottom")->shortcut(), QKeySequence(Qt::SHIFT | Qt::CTRL | Qt::Key_Z));
+        QCOMPARE(action("centerHorizontal")->shortcut(), QKeySequence(Qt::SHIFT | Qt::CTRL | Qt::Key_C));
+        action("frameBottom")->trigger();
+        QCOMPARE(tool.title().object(QStringLiteral("Box 2"))->rect.bottom(), 972.0);
+        tool.select({QStringLiteral("Box 1"), QStringLiteral("Box 3")});
+        action("objectsLeft")->trigger();
+        QCOMPARE(tool.title().object(QStringLiteral("Box 1"))->rect.left(), tool.title().object(QStringLiteral("Box 3"))->rect.left());
+        tool.selectAll();
+        action("distributeLeftToRight")->trigger();
+        double left = 1e9, right = -1e9;
+        for (const model::ClassicObject& o : tool.title().objects) {
+            left = std::min(left, o.rect.left());
+            right = std::max(right, o.rect.right());
+        }
+        QCOMPARE(left, 192.0);
+        QCOMPARE(right, 1728.0);
+        // Duplicate: copies moved down and right, selected; Deselect All.
+        tool.select({QStringLiteral("Box 1")});
+        const QRectF one = tool.title().object(QStringLiteral("Box 1"))->rect;
+        action("duplicate")->trigger();
+        QCOMPARE(tool.title().objects.size(), 4);
+        QCOMPARE(tool.title().objects.last().rect, one.translated(20, 20));
+        QCOMPARE(tool.selection(), QStringList{tool.title().objects.last().id});
+        action("deselectAll")->trigger();
+        QVERIFY(tool.selection().isEmpty());
+        // Undo takes back the duplicate.
+        QVERIFY(tool.undo());
+        QCOMPARE(tool.title().objects.size(), 3);
     }
 
     void fromMainWindow() {

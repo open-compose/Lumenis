@@ -620,7 +620,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   arrow and shadow fields of `ClassicObject`; `media::classicObjectShape`/`classicBorderShape` with Titler+'s
   `titleTextPath`/`softenImage`; the window's attribute row and Object > Soften Shadow; tests `tst_classic_title`,
   `tst_title_tool`), is done.
-  Next: 6.8d3b (layers, groups, locks, alignment), 6.8d4 (then Promote Titles), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.8d3b, layers, groups, locks, alignment and distributing (`ClassicObject::group`/`locked`,
+  `model::reorderClassicObjects`/`groupClassicObjects`/`keepLockedObjects`, `media::alignClassicObjects`/
+  `distributeClassicObjects`, Edit > Duplicate), is done, so 6.8d3 is.
+  Next: 6.8d4 (then Promote Titles), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

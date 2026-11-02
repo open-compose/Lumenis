@@ -7,6 +7,7 @@
 // File, Edit, Object, and Alignment menus", p.330; ours: in the window's own menu bar). It edits a model::ClassicTitle;
 // saving it as a title clip comes with 6.8d4.
 
+#include "lumenis/media/classic_title.h"
 #include "lumenis/model/classic_title.h"
 
 #include <QHash>
@@ -135,6 +136,19 @@ public:
     // future Title tool sessions" (p.354): ours, for the application's session.
     static int defaultShadowSoftness();
 
+    // ---- Manipulating objects (6.8d3b; p.355-357), on the selected objects; one undo step each, false when nothing
+    // changes. Selecting an object selects its group's others too; locked objects keep still and show hollow handles.
+    bool reorder(model::ClassicLayer layer);
+    bool group();
+    bool ungroup();
+    bool setLocked(bool locked);
+    // The Alignment menu: to the safe title area of the page shown, to the last object selected, or distributed.
+    bool align(media::ClassicAlign how);
+    bool distribute(media::ClassicDistribute how);
+    // Edit > Duplicate (ours: the copies 20 pixels down and right, in new groups, unlocked) and Deselect All.
+    void duplicate();
+    void deselectAll();
+
     // Edit menu (ours: the tool keeps its own undo steps while it is open).
     bool undo();
     bool redo();
@@ -219,6 +233,8 @@ private:
     // A new graphic object of `kind` with the defaults' attributes.
     model::ClassicObject freshObject(model::ClassicKind kind) const;
     void buildAttributeBar();
+    // Adds copies of `objects` moved by `by` (new ids, their groups new, unlocked) and selects them.
+    void insertCopies(const QList<model::ClassicObject>& objects, const QPointF& by);
     void openSoftenShadow();
 
     model::ClassicTitle title_;

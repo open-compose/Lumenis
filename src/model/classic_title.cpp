@@ -101,6 +101,8 @@ QJsonObject ClassicTitle::toJson() const {
             j.insert(QStringLiteral("borderWidth"), o.borderWidth);
             paintJson(j, QStringLiteral("border"), o.border);
         }
+        if (!o.group.isEmpty()) j.insert(QStringLiteral("group"), o.group);
+        if (o.locked) j.insert(QStringLiteral("locked"), true);
         if (o.kind == ClassicKind::Box && o.cornerRadius > 0.0) j.insert(QStringLiteral("cornerRadius"), o.cornerRadius);
         if (o.shadowDepth > 0.0 || o.shadowSoftness > 0) {
             j.insert(QStringLiteral("depthShadow"), o.depthShadow);
@@ -151,6 +153,8 @@ ClassicTitle ClassicTitle::fromJson(const QJsonObject& o) {
         c.borderWidth = j.value(QStringLiteral("borderWidth")).toDouble();
         c.border = paintFrom(j, QStringLiteral("border"), c.border);
         c.cornerRadius = j.value(QStringLiteral("cornerRadius")).toDouble();
+        c.group = j.value(QStringLiteral("group")).toString();
+        c.locked = j.value(QStringLiteral("locked")).toBool();
         c.depthShadow = j.value(QStringLiteral("depthShadow")).toBool();
         c.shadowDepth = j.value(QStringLiteral("shadowDepth")).toDouble();
         c.shadowAngle = j.value(QStringLiteral("shadowAngle")).toDouble(c.shadowAngle);
@@ -206,6 +210,85 @@ QPointF ClassicObject::shadowOffset() const {
 void ClassicObject::setShadowOffset(const QPointF& offset) {
     shadowDepth = std::hypot(offset.x(), offset.y());
     if (shadowDepth > 1e-9) shadowAngle = std::atan2(offset.y(), offset.x()) * 180.0 / std::numbers::pi;
+}
+
+QString ClassicTitle::newGroupId() const {
+    for (int n = 1;; ++n) {
+        const QString id = QStringLiteral("Group %1").arg(n);
+        if (std::none_of(objects.begin(), objects.end(), [&](const ClassicObject& o) { return o.group == id; })) return id;
+    }
+}
+
+QStringList ClassicTitle::withGroups(const QStringList& ids) const {
+    QStringList out;
+    for (const QString& id : ids) {
+        const ClassicObject* o = object(id);
+        if (!o || out.contains(id)) continue;
+        out << id;
+        if (o->group.isEmpty()) continue;
+        for (const ClassicObject& other : objects) {
+            if (other.group == o->group && !out.contains(other.id)) out << other.id;
+        }
+    }
+    return out;
+}
+
+bool reorderClassicObjects(ClassicTitle& title, const QStringList& ids, ClassicLayer layer) {
+    const QList<ClassicObject> before = title.objects;
+    auto chosen = [&](const ClassicObject& o) { return ids.contains(o.id); };
+    QList<ClassicObject> picked, rest;
+    for (const ClassicObject& o : title.objects) (chosen(o) ? picked : rest) << o;
+    if (picked.isEmpty()) return false;
+    switch (layer) {
+    case ClassicLayer::ToFront: title.objects = rest + picked; break;
+    case ClassicLayer::ToBack: title.objects = picked + rest; break;
+    case ClassicLayer::Forward:
+        // Each chosen object past the next unchosen one, the frontmost first.
+        for (qsizetype i = title.objects.size() - 2; i >= 0; --i) {
+            if (chosen(title.objects.at(i)) && !chosen(title.objects.at(i + 1))) title.objects.swapItemsAt(i, i + 1);
+        }
+        break;
+    case ClassicLayer::Backward:
+        for (qsizetype i = 1; i < title.objects.size(); ++i) {
+            if (chosen(title.objects.at(i)) && !chosen(title.objects.at(i - 1))) title.objects.swapItemsAt(i, i - 1);
+        }
+        break;
+    }
+    return title.objects != before;
+}
+
+bool groupClassicObjects(ClassicTitle& title, const QStringList& ids) {
+    const QStringList all = title.withGroups(ids);
+    if (all.size() < 2) return false;
+    const QString group = title.newGroupId();
+    for (const QString& id : all) title.object(id)->group = group;
+    return true;
+}
+
+bool ungroupClassicObjects(ClassicTitle& title, const QStringList& ids) {
+    bool any = false;
+    for (const QString& id : title.withGroups(ids)) {
+        ClassicObject* o = title.object(id);
+        any = any || !o->group.isEmpty();
+        o->group.clear();
+    }
+    return any;
+}
+
+void keepLockedObjects(ClassicTitle& title, const ClassicTitle& before) {
+    for (qsizetype i = 0; i < before.objects.size(); ++i) {
+        const ClassicObject& was = before.objects.at(i);
+        if (!was.locked) continue;
+        ClassicObject* now = title.object(was.id);
+        if (!now) {
+            // Deleted: back at its place among the objects kept.
+            title.objects.insert(std::min(i, title.objects.size()), was);
+            continue;
+        }
+        const bool locked = now->locked;
+        *now = was;
+        now->locked = locked;
+    }
 }
 
 int classicPageLimit(ClassicMotion motion, int lines) {

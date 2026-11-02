@@ -1,7 +1,8 @@
 // Classic Title Tool titles (ROADMAP 6.8d1; FX Guide p.327-341; src/model/classic_title.*, src/media/classic_title.*):
 // the title's JSON, Safe Colors, and the picture: text placed from its top-left with its justification, kerning and
 // leading, boxes, ovals and lines, transparency and the Preview's hard edges; rolling and crawling titles' pages
-// (6.8d2); line attributes, colour and transparency blends and shadows (6.8d3).
+// (6.8d2); line attributes, colour and transparency blends and shadows (6.8d3a); layers, groups, locks, alignment and
+// distributing (6.8d3b).
 #include "lumenis/media/classic_title.h"
 #include "lumenis/model/classic_title.h"
 
@@ -344,6 +345,127 @@ private slots:
         const QRect borderInk = inked(draw(word));
         QVERIFY(borderInk.contains(plainInk));
         QVERIFY(borderInk.width() >= plainInk.width() + 4);
+    }
+
+    // Layers, groups, locks, alignment and distributing (6.8d3b, p.355-357).
+    void manipulating() {
+        ClassicTitle t;
+        auto add = [&](const QRectF& r) {
+            ClassicObject o;
+            o.kind = ClassicKind::Box;
+            o.id = t.newId(ClassicKind::Box);
+            o.rect = r;
+            t.objects << o;
+            return o.id;
+        };
+        const QString a = add(QRectF(100, 100, 100, 100)), b = add(QRectF(400, 300, 200, 100)), c = add(QRectF(900, 500, 50, 50)),
+                      d = add(QRectF(1200, 200, 100, 300));
+        auto order = [&] {
+            QStringList ids;
+            for (const ClassicObject& o : t.objects) ids << o.id;
+            return ids;
+        };
+        // Layers: the chosen keep their order among themselves.
+        QVERIFY(reorderClassicObjects(t, {a, b}, ClassicLayer::ToFront));
+        QCOMPARE(order(), (QStringList{c, d, a, b}));
+        QVERIFY(reorderClassicObjects(t, {b}, ClassicLayer::ToBack));
+        QCOMPARE(order(), (QStringList{b, c, d, a}));
+        QVERIFY(reorderClassicObjects(t, {c}, ClassicLayer::Forward));
+        QCOMPARE(order(), (QStringList{b, d, c, a}));
+        QVERIFY(reorderClassicObjects(t, {a}, ClassicLayer::Backward));
+        QCOMPARE(order(), (QStringList{b, d, a, c}));
+        QVERIFY(!reorderClassicObjects(t, {b}, ClassicLayer::ToBack));
+        // Groups: one level, members found from any of them; the JSON keeps them.
+        QVERIFY(!groupClassicObjects(t, {a}));
+        QVERIFY(groupClassicObjects(t, {a, b}));
+        QCOMPARE(t.object(a)->group, QStringLiteral("Group 1"));
+        QCOMPARE(t.withGroups({b}), (QStringList{b, a}));
+        QCOMPARE(t.newGroupId(), QStringLiteral("Group 2"));
+        QVERIFY(groupClassicObjects(t, {b, c})); // merging
+        QCOMPARE(t.withGroups({c}).size(), 3);
+        QCOMPARE(ClassicTitle::fromJson(t.toJson()), t);
+        QVERIFY(ungroupClassicObjects(t, {a}));
+        QVERIFY(t.object(c)->group.isEmpty());
+        QVERIFY(!ungroupClassicObjects(t, {a}));
+        // Locks: changes and deletions put back; locking and unlocking go through.
+        t.object(d)->locked = true;
+        ClassicTitle before = t;
+        t.object(d)->rect.translate(50, 0);
+        t.object(d)->fill.color = QStringLiteral("#ff0000");
+        t.objects.removeIf([&](const ClassicObject& o) { return o.id == d || o.id == a; });
+        keepLockedObjects(t, before);
+        QVERIFY(t.object(d));
+        QCOMPARE(t.object(d)->rect, QRectF(1200, 200, 100, 300));
+        QCOMPARE(t.object(d)->fill.color, QStringLiteral("#ffffff"));
+        QVERIFY(!t.object(a)); // not locked: gone
+        before = t;
+        t.object(d)->locked = false;
+        keepLockedObjects(t, before);
+        QVERIFY(!t.object(d)->locked);
+        QCOMPARE(ClassicTitle::fromJson(before.toJson()), before);
+
+        // Alignment to the frame's safe title area and to the last selected object.
+        ClassicTitle m;
+        auto box = [&](const QRectF& r) {
+            ClassicObject o;
+            o.kind = ClassicKind::Box;
+            o.id = m.newId(ClassicKind::Box);
+            o.rect = r;
+            m.objects << o;
+            return o.id;
+        };
+        const QString p = box(QRectF(300, 300, 100, 100)), q = box(QRectF(700, 500, 200, 50)), r = box(QRectF(1000, 200, 50, 300));
+        const QRectF safe(192, 108, 1536, 864);
+        QVERIFY(media::alignClassicObjects(m, {p, q}, media::ClassicAlign::FrameLeft, safe));
+        QCOMPARE(m.object(p)->rect.left(), 192.0);
+        QCOMPARE(m.object(q)->rect.left(), 192.0);
+        QVERIFY(media::alignClassicObjects(m, {q}, media::ClassicAlign::FrameBottom, safe));
+        QCOMPARE(m.object(q)->rect.bottom(), 972.0);
+        QVERIFY(media::alignClassicObjects(m, {r}, media::ClassicAlign::FrameCenterH, safe));
+        QCOMPARE(m.object(r)->rect.center().x(), 960.0);
+        QVERIFY(media::alignClassicObjects(m, {r}, media::ClassicAlign::FrameCenterV, safe));
+        QCOMPARE(m.object(r)->rect.center().y(), 540.0);
+        // The reference is the last selected; one object alone has nothing to align to.
+        QVERIFY(!media::alignClassicObjects(m, {p}, media::ClassicAlign::ObjectsTop, safe));
+        QVERIFY(media::alignClassicObjects(m, {p, q, r}, media::ClassicAlign::ObjectsTop, safe));
+        QCOMPARE(m.object(p)->rect.top(), m.object(r)->rect.top());
+        QCOMPARE(m.object(q)->rect.top(), m.object(r)->rect.top());
+        QVERIFY(media::alignClassicObjects(m, {r, p}, media::ClassicAlign::ObjectsRight, safe));
+        QCOMPARE(m.object(r)->rect.right(), m.object(p)->rect.right());
+        // A group moves as one; a locked object stays.
+        QVERIFY(groupClassicObjects(m, {p, q}));
+        const double gap = m.object(q)->rect.left() - m.object(p)->rect.left();
+        m.object(r)->locked = true;
+        const QRectF stays = m.object(r)->rect;
+        QVERIFY(media::alignClassicObjects(m, {p, r}, media::ClassicAlign::FrameRight, safe));
+        QCOMPARE(m.object(r)->rect, stays);
+        QCOMPARE(std::max(m.object(p)->rect.right(), m.object(q)->rect.right()), 1728.0);
+        QCOMPARE(m.object(q)->rect.left() - m.object(p)->rect.left(), gap);
+
+        // Distributing: "at least three objects".
+        ClassicTitle n;
+        auto item = [&](const QRectF& rect) {
+            ClassicObject o;
+            o.kind = ClassicKind::Oval;
+            o.id = n.newId(ClassicKind::Oval);
+            o.rect = rect;
+            n.objects << o;
+            return o.id;
+        };
+        const QString o1 = item(QRectF(800, 100, 100, 100)), o2 = item(QRectF(300, 400, 200, 100)), o3 = item(QRectF(1000, 700, 100, 100));
+        QVERIFY(!media::distributeClassicObjects(n, {o1, o2}, media::ClassicDistribute::LeftToRight, safe));
+        QVERIFY(media::distributeClassicObjects(n, {o1, o2, o3}, media::ClassicDistribute::LeftToRight, safe));
+        // Ordered by place: o2, o1, o3; the first at the left edge, the last at the right, gaps equal.
+        QCOMPARE(n.object(o2)->rect.left(), 192.0);
+        QCOMPARE(n.object(o3)->rect.right(), 1728.0);
+        QVERIFY(std::abs((n.object(o1)->rect.left() - n.object(o2)->rect.right()) - (n.object(o3)->rect.left() - n.object(o1)->rect.right())) < 1e-6);
+        QVERIFY(media::distributeClassicObjects(n, {o1, o2, o3}, media::ClassicDistribute::TopToBottom, safe));
+        QCOMPARE(n.object(o1)->rect.top(), 108.0);
+        QCOMPARE(n.object(o3)->rect.bottom(), 972.0);
+        // First to Last: the middle one halfway between the first and the last selected.
+        QVERIFY(media::distributeClassicObjects(n, {o1, o2, o3}, media::ClassicDistribute::FirstToLast, safe));
+        const QPointF mid = (n.object(o1)->rect.center() + n.object(o3)->rect.center()) / 2.0;
+        QVERIFY(QLineF(n.object(o2)->rect.center(), mid).length() < 1e-6);
     }
 
     void textPlaces() {

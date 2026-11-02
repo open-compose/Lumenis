@@ -14,6 +14,7 @@
 #include <QPolygonF>
 #include <QRectF>
 #include <QSize>
+#include <QStringList>
 #include <QTransform>
 
 namespace lumenis::media {
@@ -54,6 +55,19 @@ bool placeOnClassicPage(model::ClassicTitle& title, const QString& id, int page,
 // "Select Object > Make Crawl ... transform the title into a single-line text object and position it on the lower
 // third of the screen" (p.344): its lines joined by spaces, as wide as its text, its top two thirds down the frame.
 bool makeClassicCrawl(model::ClassicObject& object);
+// ---- Alignment and distributing (6.8d3b; p.356-357). Each group moves as one; locked objects stay.
+// The Alignment menu's commands: to the frame ("The Title tool aligns the objects within the safe title area", `area`)
+// or to each other ("uses the last object you selected as the reference object to which it aligns the others").
+enum class ClassicAlign { FrameLeft, FrameRight, FrameTop, FrameBottom, FrameCenterH, FrameCenterV, ObjectsLeft, ObjectsRight, ObjectsTop, ObjectsBottom };
+// "Distribute Left to Right ... Top to Bottom ... evenly" (ours: the first object's edge at the area's, the last's at
+// its other edge, equal gaps between), and "Distribute First to Last ... evenly between the position of the first
+// object you select and the position of the last" (their centres evenly along the way, in the order selected); "at
+// least three objects".
+enum class ClassicDistribute { LeftToRight, TopToBottom, FirstToLast };
+// The objects `ids` (in the order selected) moved; false when nothing moves.
+bool alignClassicObjects(model::ClassicTitle& title, const QStringList& ids, ClassicAlign align, const QRectF& area);
+bool distributeClassicObjects(model::ClassicTitle& title, const QStringList& ids, ClassicDistribute how, const QRectF& area);
+
 // For the Text tool: the text index (0 to the text's length) whose cursor is nearest a point (title pixels), the
 // cursor before an index, and the boxes over the characters [from, to), in title pixels.
 qsizetype classicTextIndexAt(const model::ClassicObject& object, const QPointF& point);

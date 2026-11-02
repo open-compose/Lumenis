@@ -355,6 +355,103 @@ bool placeOnClassicPage(model::ClassicTitle& title, const QString& id, int page,
     return true;
 }
 
+// ---------------------------------------------------------------- alignment
+
+namespace {
+
+// The units alignment moves: each group (its members) or lone object among `ids`, in the order first selected, with
+// their bounds; locked objects are left out.
+struct Unit {
+    QStringList ids;
+    QRectF bounds;
+};
+
+QList<Unit> unitsOf(const model::ClassicTitle& title, const QStringList& ids) {
+    QList<Unit> units;
+    QStringList seen;
+    for (const QString& id : ids) {
+        const model::ClassicObject* o = title.object(id);
+        if (!o || seen.contains(id)) continue;
+        Unit u;
+        u.ids = title.withGroups({id});
+        seen += u.ids;
+        for (const QString& member : u.ids) {
+            const model::ClassicObject* m = title.object(member);
+            if (m->locked) continue;
+            u.bounds = u.bounds.isNull() ? classicObjectBounds(*m) : u.bounds.united(classicObjectBounds(*m));
+        }
+        u.ids.erase(std::remove_if(u.ids.begin(), u.ids.end(), [&](const QString& m) { return title.object(m)->locked; }), u.ids.end());
+        if (!u.ids.isEmpty()) units << u;
+    }
+    return units;
+}
+
+bool moveUnit(model::ClassicTitle& title, const Unit& u, const QPointF& by) {
+    if (std::abs(by.x()) < 1e-9 && std::abs(by.y()) < 1e-9) return false;
+    for (const QString& id : u.ids) title.object(id)->rect.translate(by);
+    return true;
+}
+
+} // namespace
+
+bool alignClassicObjects(model::ClassicTitle& title, const QStringList& ids, ClassicAlign align, const QRectF& area) {
+    const QList<Unit> units = unitsOf(title, ids);
+    if (units.isEmpty()) return false;
+    const bool toObjects = align == ClassicAlign::ObjectsLeft || align == ClassicAlign::ObjectsRight || align == ClassicAlign::ObjectsTop ||
+                           align == ClassicAlign::ObjectsBottom;
+    if (toObjects && units.size() < 2) return false;
+    // The reference: the safe title area, or the unit of the last object selected.
+    const QRectF ref = toObjects ? units.last().bounds : area;
+    bool any = false;
+    for (const Unit& u : units) {
+        const QRectF b = u.bounds;
+        QPointF by;
+        switch (align) {
+        case ClassicAlign::FrameLeft:
+        case ClassicAlign::ObjectsLeft: by.setX(ref.left() - b.left()); break;
+        case ClassicAlign::FrameRight:
+        case ClassicAlign::ObjectsRight: by.setX(ref.right() - b.right()); break;
+        case ClassicAlign::FrameTop:
+        case ClassicAlign::ObjectsTop: by.setY(ref.top() - b.top()); break;
+        case ClassicAlign::FrameBottom:
+        case ClassicAlign::ObjectsBottom: by.setY(ref.bottom() - b.bottom()); break;
+        case ClassicAlign::FrameCenterH: by.setX(ref.center().x() - b.center().x()); break;
+        case ClassicAlign::FrameCenterV: by.setY(ref.center().y() - b.center().y()); break;
+        }
+        any = moveUnit(title, u, by) || any;
+    }
+    return any;
+}
+
+bool distributeClassicObjects(model::ClassicTitle& title, const QStringList& ids, ClassicDistribute how, const QRectF& area) {
+    QList<Unit> units = unitsOf(title, ids);
+    if (units.size() < 3) return false;
+    bool any = false;
+    if (how == ClassicDistribute::FirstToLast) {
+        const QPointF from = units.first().bounds.center(), to = units.last().bounds.center();
+        const auto n = static_cast<double>(units.size() - 1);
+        for (qsizetype i = 1; i + 1 < units.size(); ++i) {
+            const QPointF want = from + (to - from) * (static_cast<double>(i) / n);
+            any = moveUnit(title, units.at(i), want - units.at(i).bounds.center()) || any;
+        }
+        return any;
+    }
+    const bool across = how == ClassicDistribute::LeftToRight;
+    auto start = [&](const QRectF& r) { return across ? r.left() : r.top(); };
+    auto length = [&](const QRectF& r) { return across ? r.width() : r.height(); };
+    std::stable_sort(units.begin(), units.end(), [&](const Unit& a, const Unit& b) { return start(a.bounds) < start(b.bounds); });
+    double total = 0.0;
+    for (const Unit& u : units) total += length(u.bounds);
+    const double gap = ((across ? area.width() : area.height()) - total) / static_cast<double>(units.size() - 1);
+    double at = across ? area.left() : area.top();
+    for (const Unit& u : units) {
+        const double by = at - start(u.bounds);
+        any = moveUnit(title, u, across ? QPointF(by, 0.0) : QPointF(0.0, by)) || any;
+        at += length(u.bounds) + gap;
+    }
+    return any;
+}
+
 bool makeClassicCrawl(model::ClassicObject& object) {
     if (object.kind != model::ClassicKind::Text || object.text.isEmpty()) return false;
     const model::ClassicObject before = object;

@@ -1095,7 +1095,7 @@ phase of their own. They are done in three steps:
     * 6.8d3, modifying and manipulating objects (p.346-357), in two parts: 6.8d3a, corners, lines and
       borders, colour and transparency with blends, drop and depth shadows (p.346-355;
       docs/spec/title-tool.md), done; 6.8d3b, layers, grouping, locking, alignment and distributing
-      (p.355-357).
+      (p.355-357), done.
     * 6.8d4, saving titles as fill and matte clips, revising, templates, styles, exporting a title as a
       graphics file (p.357-364); then Promote Titles > Avid Titler+ (p.326).
   * 6.8e, editing with titles: title clips in bins, editing them in, fading, marks and trims of rolls and

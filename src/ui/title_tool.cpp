@@ -367,6 +367,8 @@ void TitleCanvas::paintEvent(QPaintEvent*) {
                     << QPointF(b.center().x(), b.bottom()) << QPointF(b.left(), b.center().y()) << QPointF(b.right(), b.center().y());
         }
         if (id != tool_.editing_) {
+            // "A locked object displays hollow selection handles" (p.356).
+            if (o->locked) p.setBrush(Qt::NoBrush);
             for (const QPointF& h : handles) p.drawRect(QRectF(h - QPointF(3, 3), QSizeF(6, 6)));
         }
     }
@@ -453,6 +455,8 @@ void TitleToolWindow::buildMenus() {
     add(edit, QStringLiteral("paste"), tr("Paste"), [this](bool) { paste(); }, false, QKeySequence::Paste);
     add(edit, QStringLiteral("clear"), tr("Delete"), [this](bool) { deleteSelection(); });
     add(edit, QStringLiteral("selectAll"), tr("Select All"), [this](bool) { selectAll(); }, false, QKeySequence::SelectAll);
+    add(edit, QStringLiteral("deselectAll"), tr("Deselect All"), [this](bool) { deselectAll(); });
+    add(edit, QStringLiteral("duplicate"), tr("Duplicate"), [this](bool) { duplicate(); });
     // Object (p.334, p.338).
     QMenu* object = menuBar_->addMenu(tr("Object"));
     add(object, QStringLiteral("preview"), tr("Preview"), [this](bool on) { setPreview(on); }, true);
@@ -490,6 +494,40 @@ void TitleToolWindow::buildMenus() {
     // Shadows (p.354).
     object->addSeparator();
     add(object, QStringLiteral("softenShadow"), tr("Soften Shadow..."), [this](bool) { openSoftenShadow(); });
+    // Layers, groups and locks (p.356).
+    object->addSeparator();
+    add(object, QStringLiteral("bringToFront"), tr("Bring To Front"), [this](bool) { reorder(model::ClassicLayer::ToFront); });
+    add(object, QStringLiteral("sendToBack"), tr("Send To Back"), [this](bool) { reorder(model::ClassicLayer::ToBack); });
+    add(object, QStringLiteral("bringForward"), tr("Bring Forward"), [this](bool) { reorder(model::ClassicLayer::Forward); });
+    add(object, QStringLiteral("sendBackward"), tr("Send Backward"), [this](bool) { reorder(model::ClassicLayer::Backward); });
+    object->addSeparator();
+    add(object, QStringLiteral("group"), tr("Group"), [this](bool) { group(); });
+    add(object, QStringLiteral("ungroup"), tr("UnGroup"), [this](bool) { ungroup(); });
+    add(object, QStringLiteral("lock"), tr("Lock"), [this](bool) { setLocked(true); });
+    add(object, QStringLiteral("unlock"), tr("Unlock"), [this](bool) { setLocked(false); });
+    // Aligning and distributing (p.356-357).
+    alignment->addSeparator();
+    using media::ClassicAlign;
+    const std::tuple<QString, QString, ClassicAlign, QKeySequence> aligns[] = {
+        {QStringLiteral("frameLeft"), tr("Align To Frame Left"), ClassicAlign::FrameLeft, {}},
+        {QStringLiteral("frameRight"), tr("Align To Frame Right"), ClassicAlign::FrameRight, {}},
+        {QStringLiteral("frameTop"), tr("Align To Frame Top"), ClassicAlign::FrameTop, {}},
+        {QStringLiteral("frameBottom"), tr("Align To Frame Bottom"), ClassicAlign::FrameBottom, QKeySequence(Qt::SHIFT | Qt::CTRL | Qt::Key_Z)},
+        {QStringLiteral("centerHorizontal"), tr("Center in Frame Horiz."), ClassicAlign::FrameCenterH, QKeySequence(Qt::SHIFT | Qt::CTRL | Qt::Key_C)},
+        {QStringLiteral("centerVertical"), tr("Center in Frame Vert."), ClassicAlign::FrameCenterV, {}},
+        {QStringLiteral("objectsLeft"), tr("Align Objects Left"), ClassicAlign::ObjectsLeft, {}},
+        {QStringLiteral("objectsRight"), tr("Align Objects Right"), ClassicAlign::ObjectsRight, {}},
+        {QStringLiteral("objectsTop"), tr("Align Objects Top"), ClassicAlign::ObjectsTop, {}},
+        {QStringLiteral("objectsBottom"), tr("Align Objects Bottom"), ClassicAlign::ObjectsBottom, {}}};
+    for (const auto& [name, text, how, keys] : aligns) {
+        if (name == QStringLiteral("objectsLeft")) alignment->addSeparator();
+        const ClassicAlign which = how;
+        add(alignment, name, text, [this, which](bool) { align(which); }, false, keys);
+    }
+    alignment->addSeparator();
+    add(alignment, QStringLiteral("distributeLeftToRight"), tr("Distribute Left to Right"), [this](bool) { distribute(media::ClassicDistribute::LeftToRight); });
+    add(alignment, QStringLiteral("distributeTopToBottom"), tr("Distribute Top to Bottom"), [this](bool) { distribute(media::ClassicDistribute::TopToBottom); });
+    add(alignment, QStringLiteral("distributeFirstToLast"), tr("Distribute First to Last"), [this](bool) { distribute(media::ClassicDistribute::FirstToLast); });
 }
 
 void TitleToolWindow::buildAttributeBar() {
@@ -823,10 +861,7 @@ void TitleToolWindow::setTool(Tool tool, bool sticky) {
 
 void TitleToolWindow::select(const QStringList& ids) {
     finishEditing();
-    selected_.clear();
-    for (const QString& id : ids) {
-        if (title_.object(id)) selected_ << id;
-    }
+    selected_ = title_.withGroups(ids);
     refreshControls();
     canvas_->update();
 }
@@ -906,6 +941,8 @@ QWidget* TitleToolWindow::limitMessage() const {
 }
 
 void TitleToolWindow::commit(const ClassicTitle& before) {
+    // "You cannot change the object until you unlock it" (p.356).
+    model::keepLockedObjects(title_, before);
     if (!withinLimit()) {
         title_ = before;
         showLimit();
@@ -1259,7 +1296,7 @@ QString TitleToolWindow::objectAt(const QPointF& at) const {
 std::optional<int> TitleToolWindow::handleAt(const QPointF& at) const {
     if (selected_.size() != 1) return std::nullopt;
     const ClassicObject* o = title_.object(selected_.first());
-    if (!o) return std::nullopt;
+    if (!o || o->locked) return std::nullopt;
     QList<QPointF> handles;
     const QRectF b = media::classicObjectBounds(*o);
     if (o->kind == ClassicKind::Line) {
@@ -1308,11 +1345,19 @@ void TitleToolWindow::press(const QPointF& at, Qt::KeyboardModifiers modifiers) 
             if (!shift) selected_.clear();
             drag_ = Drag::Lasso;
         } else {
+            // An object's group comes with it (p.356).
+            const QStringList unit = title_.withGroups({hit});
             if (shift) {
-                if (selected_.contains(hit)) selected_.removeAll(hit);
-                else selected_ << hit;
+                if (selected_.contains(hit)) {
+                    for (const QString& id : unit) selected_.removeAll(id);
+                } else {
+                    for (const QString& id : unit) {
+                        selected_.removeAll(id);
+                        selected_ << id;
+                    }
+                }
             } else if (!selected_.contains(hit)) {
-                selected_ = {hit};
+                selected_ = unit;
             }
             drag_ = Drag::Move;
         }
@@ -1323,7 +1368,7 @@ void TitleToolWindow::press(const QPointF& at, Qt::KeyboardModifiers modifiers) 
     case Tool::Text: {
         const QString hit = objectAt(at);
         const ClassicObject* o = title_.object(hit);
-        if (o && o->kind == ClassicKind::Text) {
+        if (o && o->kind == ClassicKind::Text && !o->locked) {
             if (editing_ != hit) {
                 finishEditing();
                 editStart_ = title_;
@@ -1335,7 +1380,7 @@ void TitleToolWindow::press(const QPointF& at, Qt::KeyboardModifiers modifiers) 
             drag_ = Drag::Highlight;
         } else if (o) {
             finishEditing();
-            selected_ = {hit};
+            selected_ = title_.withGroups({hit});
         } else {
             // "Click the position in the frame where you want to add text. An insertion point appears" (p.335): a new
             // text object with the defaults, as wide as from there to the safe title area's right edge (ours).
@@ -1389,7 +1434,7 @@ void TitleToolWindow::move(const QPointF& at, Qt::KeyboardModifiers modifiers) {
             }
         }
         for (const QString& id : selected_) {
-            if (ClassicObject* o = title_.object(id)) o->rect.translate(by);
+            if (ClassicObject* o = title_.object(id); o && !o->locked) o->rect.translate(by);
         }
         break;
     }
@@ -1480,6 +1525,7 @@ void TitleToolWindow::release(const QPointF& at, Qt::KeyboardModifiers modifiers
             for (const ClassicObject& o : title_.objects) {
                 if (area.contains(media::classicObjectBounds(o)) && !selected_.contains(o.id)) selected_ << o.id;
             }
+            selected_ = title_.withGroups(selected_);
         }
         refreshControls();
         break;
@@ -1624,7 +1670,7 @@ bool TitleToolWindow::key(int key, Qt::KeyboardModifiers modifiers, const QStrin
         const ClassicTitle before = title_;
         const QPointF by(key == Qt::Key_Left ? -1 : key == Qt::Key_Right ? 1 : 0, key == Qt::Key_Up ? -1 : key == Qt::Key_Down ? 1 : 0);
         for (const QString& id : selected_) {
-            if (ClassicObject* c = title_.object(id)) c->rect.translate(by);
+            if (ClassicObject* c = title_.object(id); c && !c->locked) c->rect.translate(by);
         }
         commit(before);
         return true;
@@ -1672,15 +1718,91 @@ void TitleToolWindow::paste() {
         return;
     }
     if (clipboard_.isEmpty()) return;
-    const ClassicTitle copied = ClassicTitle::fromJson(QJsonDocument::fromJson(clipboard_.toUtf8()).object());
+    insertCopies(ClassicTitle::fromJson(QJsonDocument::fromJson(clipboard_.toUtf8()).object()).objects, QPointF());
+}
+
+void TitleToolWindow::insertCopies(const QList<ClassicObject>& objects, const QPointF& by) {
     const ClassicTitle before = title_;
     selected_.clear();
-    for (ClassicObject o : copied.objects) {
+    QHash<QString, QString> groups; // the copied groups' new ids
+    for (ClassicObject o : objects) {
         o.id = title_.newId(o.kind);
+        o.rect.translate(by);
+        o.locked = false;
+        if (!o.group.isEmpty()) {
+            if (!groups.contains(o.group)) groups.insert(o.group, title_.newGroupId());
+            o.group = groups.value(o.group);
+        }
         title_.objects << o;
         selected_ << o.id;
     }
     commit(before);
+}
+
+void TitleToolWindow::duplicate() {
+    finishEditing();
+    QList<ClassicObject> copies;
+    for (const ClassicObject& o : title_.objects) {
+        if (selected_.contains(o.id)) copies << o;
+    }
+    if (!copies.isEmpty()) insertCopies(copies, QPointF(20.0, 20.0));
+}
+
+void TitleToolWindow::deselectAll() {
+    select({});
+}
+
+bool TitleToolWindow::reorder(model::ClassicLayer layer) {
+    finishEditing();
+    const ClassicTitle before = title_;
+    if (!model::reorderClassicObjects(title_, selected_, layer)) return false;
+    commit(before);
+    return true;
+}
+
+bool TitleToolWindow::group() {
+    finishEditing();
+    const ClassicTitle before = title_;
+    if (!model::groupClassicObjects(title_, selected_)) return false;
+    commit(before);
+    return title_ != before;
+}
+
+bool TitleToolWindow::ungroup() {
+    finishEditing();
+    const ClassicTitle before = title_;
+    if (!model::ungroupClassicObjects(title_, selected_)) return false;
+    commit(before);
+    return title_ != before;
+}
+
+bool TitleToolWindow::setLocked(bool locked) {
+    finishEditing();
+    const ClassicTitle before = title_;
+    for (const QString& id : selected_) {
+        if (ClassicObject* o = title_.object(id)) o->locked = locked;
+    }
+    commit(before);
+    return title_ != before;
+}
+
+bool TitleToolWindow::align(media::ClassicAlign how) {
+    finishEditing();
+    const ClassicTitle before = title_;
+    // "Aligning to the frame and distributing refers to the safe title area" (p.355), of the page shown.
+    const QRectF area = safeArea(0.8).translated(model::classicPageOrigin(title_.motion, page()));
+    if (!media::alignClassicObjects(title_, selected_, how, area)) return false;
+    commit(before);
+    return true;
+}
+
+bool TitleToolWindow::distribute(media::ClassicDistribute how) {
+    finishEditing();
+    const ClassicTitle before = title_;
+    const QRectF area = safeArea(0.8).translated(model::classicPageOrigin(title_.motion, page()));
+    if (!media::distributeClassicObjects(title_, selected_, how, area)) return false;
+    commit(before);
+    return true;
 }
 
 void TitleToolWindow::deleteSelection() {

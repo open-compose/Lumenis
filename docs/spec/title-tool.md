@@ -131,3 +131,33 @@ Tests: `tst_classic_title`, `tst_title_tool`.
   border default. Shift+arrows move the shadow a pixel (the object stays); Shift+Alt+Up/Down change the softness; a
   softness of 1 to 3 goes to 4 when rising and to 0 when falling. The softness default lasts for the application's
   session (future sessions: not kept).
+
+## 6.8d3b: layers, groups, locks, alignment and distributing
+
+### From the guide
+* "You can manipulate title objects in the following ways using commands in the Edit, Object, and Alignment menus"
+  (p.355): cut, copy, paste, select all and deselect; Edit > Delete ("You cannot delete locked objects") and Edit >
+  Duplicate (p.356).
+* Layers (p.356): "The last object created occupies the top layer"; Object > Bring To Front, Send To Back, Bring
+  Forward, Send Backward.
+* Groups (p.356): Object > Group ("Changes to any individual object in the group affect all objects in the group") and
+  UnGroup.
+* Locks (p.355-356): Object > Lock ("You cannot change the object until you unlock it. A locked object displays hollow
+  selection handles") and Unlock; locked objects are not affected by changes to the defaults.
+* Alignment (p.356-357): Align To Frame Left, Right, Top, Bottom (Shift+Ctrl+Z), Center in Frame Horiz. (Shift+Ctrl+C)
+  and Vert., "within the safe title area"; Align Objects Left, Right, Top, Bottom to "the last object you selected as
+  the reference object"; Distribute Left to Right, Top to Bottom and First to Last ("between the position of the first
+  object you select and the position of the last"), with at least three objects.
+
+### Ours
+* `ClassicObject::group` (one level: grouping objects of different groups merges them) and `locked`;
+  `ClassicTitle::withGroups`, `newGroupId`; `model::reorderClassicObjects`, `groupClassicObjects`,
+  `ungroupClassicObjects`, and `keepLockedObjects`, which the window's every undo step runs, putting back any locked
+  object changed or deleted (locking and unlocking go through). Locked text cannot be typed in.
+* `media::alignClassicObjects` and `distributeClassicObjects` move groups as units and leave locked objects. Distribute
+  Left to Right and Top to Bottom put the first unit's edge on the safe title area's and the last unit's on the other
+  edge with equal gaps; First to Last spaces the units' centres evenly from the first selected to the last. The safe
+  title area is the page shown's.
+* Clicking a grouped object selects its group; Shift+click adds or takes away the whole group, and the last group
+  clicked is the reference. Edit > Duplicate copies 20 pixels down and right (copies unlocked, in new groups); Edit >
+  Deselect All.

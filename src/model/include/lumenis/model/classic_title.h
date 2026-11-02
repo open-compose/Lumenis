@@ -16,6 +16,7 @@
 #include <QRectF>
 #include <QSizeF>
 #include <QString>
+#include <QStringList>
 
 #include <optional>
 
@@ -101,6 +102,12 @@ struct ClassicObject {
     QString shadowColor = QStringLiteral("#000000");
     double shadowTransparency = 0.0;
 
+    // "Combining objects into a group means that actions, such as moving or applying color, affect all objects in the
+    // group" (p.355): the group's id (empty: none; ours, one level: grouping groups merges them). "You cannot change the
+    // object until you unlock it" (p.356).
+    QString group;
+    bool locked = false;
+
     // The shadow's offset in pixels.
     QPointF shadowOffset() const;
     // Sets the depth and direction from an offset (the direction kept when it is zero).
@@ -133,8 +140,11 @@ struct ClassicTitle {
     // The object with `id`; null if none.
     const ClassicObject* object(const QString& id) const;
     ClassicObject* object(const QString& id);
-    // An id no object has ("Text 1", "Box 2" ...).
+    // An id no object has ("Text 1", "Box 2" ...), and a group id no object's group has ("Group 1" ...).
     QString newId(ClassicKind kind) const;
+    QString newGroupId() const;
+    // `ids` with every object in the same group as one of them, in the order given (the group's others after it).
+    QStringList withGroups(const QStringList& ids) const;
 };
 
 inline constexpr double kClassicWidth = 1920.0;
@@ -146,6 +156,17 @@ int classicPageLimit(ClassicMotion motion, int lines = 1080);
 // Where page `page` (from 1) begins, and the page a point is on (from 1).
 QPointF classicPageOrigin(ClassicMotion motion, int page);
 int classicPageAt(ClassicMotion motion, const QPointF& point);
+
+// "To adjust the layering of objects in a title" (p.356): Bring To Front, Send To Back, Bring Forward (one layer up)
+// and Send Backward. The objects `ids` move keeping their order among themselves; false when nothing moves.
+enum class ClassicLayer { ToFront, ToBack, Forward, Backward };
+bool reorderClassicObjects(ClassicTitle& title, const QStringList& ids, ClassicLayer layer);
+// Object > Group and UnGroup (p.356): the objects `ids` made one group, or freed of theirs; false when nothing changes.
+bool groupClassicObjects(ClassicTitle& title, const QStringList& ids);
+bool ungroupClassicObjects(ClassicTitle& title, const QStringList& ids);
+// Puts back every object that was locked in `before` (its place in the list aside): "You cannot change the object
+// until you unlock it" (p.356), "You cannot delete locked objects" (p.356). Locking and unlocking themselves go through.
+void keepLockedObjects(ClassicTitle& title, const ClassicTitle& before);
 
 // The style name of a Titler+ font for Bold and Italic ("Regular", "Bold", "Italic", "Bold Italic").
 QString classicStyle(bool bold, bool italic);

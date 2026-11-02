@@ -268,6 +268,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   (names, ranges, a quarter of the frame until set), frame-to-frame
   correlation with a search area twice the region, the original picture
   in the Effect Preview, Progressive Source without effect yet.
+* Classic title manipulation (docs/spec/title-tool.md, 6.8d3b): one level of
+  groups (grouping groups merges them), locked text not typed in, groups
+  aligned as units, Distribute Left to Right/Top to Bottom spanning the safe
+  title area, First to Last by centres, Duplicate's 20-pixel offset with
+  copies unlocked in new groups, the name Deselect All.
 * Classic title attributes (docs/spec/title-tool.md, 6.8d3a): the standard
   corner radii (10-80) and widths (1-10), borders outside the edge, arrowhead
   sizes in line widths (3 by 3 until set) and the Arrowhead Size dialog's scale,
