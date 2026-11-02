@@ -503,6 +503,14 @@ std::optional<QPolygonF> titleObjectOutline(const Title& title, const QString& i
     return find(title.objects, QTransform::fromTranslate(scroll.x(), scroll.y()));
 }
 
+QPainterPath titleTextPath(const TitleObject& object) {
+    return object.kind == TitleObjectKind::Text ? textPath(object) : QPainterPath();
+}
+
+void softenImage(QImage& image, double radius) {
+    soften(image, radius);
+}
+
 QRectF titleObjectBounds(const TitleObject& object) {
     if (object.kind != TitleObjectKind::Group) return shapeOf(object).boundingRect();
     QRectF bounds;

@@ -268,6 +268,15 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   (names, ranges, a quarter of the frame until set), frame-to-frame
   correlation with a search area twice the region, the original picture
   in the Effect Preview, Progressive Source without effect yet.
+* Classic title attributes (docs/spec/title-tool.md, 6.8d3a): the standard
+  corner radii (10-80) and widths (1-10), borders outside the edge, arrowhead
+  sizes in line widths (3 by 3 until set) and the Arrowhead Size dialog's scale,
+  blend directions as degrees clockwise from left to right, Remove Border
+  leaving a line's width, a width with nothing selected setting both the
+  line and the border default, shadow direction as an angle (45 until set),
+  softness 1-3 rounded to 4 or 0, the session (not the next one) keeping the
+  softness, QColorDialog for the Color Picker, the attribute row above the
+  toolbar.
 * Classic rolling and crawling titles (docs/spec/title-tool.md, 6.8d2): pages
   under or beside each other with page 1 at the origin, the limits by frame
   height, Insert Page refused across an object, Make Crawl's place and width,
@@ -755,7 +764,7 @@ The full inventory, with a page for every item, is
   * While the legacy Title Tool is open, the File menu offers *Save Title*,
     *Save Title As* and *Export Title* (FX p.358–364).
   * The Windows menu offers *Title Tool* (FX p.327).
-  * The Title Tool's Edit, Object and Alignment menus (FX p.330, p.334, p.338) are in the
+  * The Title Tool's Edit, Object (with Soften Shadow, p.354) and Alignment menus (FX p.330, p.334, p.338) are in the
     Title Tool window's own menu bar (ours), not the main one.
   * The Edit menu's Undo item names the last action, for example *Undo Clear
     Renders* (FX p.61).

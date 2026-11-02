@@ -616,7 +616,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.8d2, classic rolling and crawling titles (`ClassicTitle::motion`/`pages`/`autoSize`, `model::classicPageLimit`,
   the page operations and Make Crawl in `src/media/classic_title.*`, the window's buttons, Page Number box, scroll bars
   and Object menu page commands; tests `tst_classic_title`, `tst_title_tool`), is done.
-  Next: 6.8d3, 6.8d4 (then Promote Titles), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.8d3a, classic line attributes, colour and transparency blends and shadows (`ClassicPaint`, the line, border, corner,
+  arrow and shadow fields of `ClassicObject`; `media::classicObjectShape`/`classicBorderShape` with Titler+'s
+  `titleTextPath`/`softenImage`; the window's attribute row and Object > Soften Shadow; tests `tst_classic_title`,
+  `tst_title_tool`), is done.
+  Next: 6.8d3b (layers, groups, locks, alignment), 6.8d4 (then Promote Titles), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

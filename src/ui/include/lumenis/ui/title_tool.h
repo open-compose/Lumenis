@@ -11,6 +11,8 @@
 
 #include <QHash>
 #include <QImage>
+#include <QPointer>
+#include <QSizeF>
 #include <QStringList>
 #include <QWidget>
 
@@ -95,6 +97,44 @@ public:
     // The defaults new text takes.
     const model::ClassicObject& defaults() const { return defaults_; }
 
+    // ---- Line attributes, colour and transparency, shadows (6.8d3; p.346-355). Like the text formatting tools they
+    // change the selected objects (any kind) or, with nothing selected, the defaults new objects take: "If you do not
+    // select an object and you select a line attribute, the Title tool makes that attribute the default for any new
+    // objects that you create" (p.347). One undo step each.
+    // The Box Corner button: a box's corner radius, "The maximum custom radius is 200" (p.347).
+    void setCornerRadius(double pixels);
+    // The Border Width button (p.348): a line's width, the border's round other objects; 0 is Remove Border.
+    void setLineWidth(double pixels);
+    // The Arrowhead button (p.348-349): the arrowheads and, from Edit Arrowhead, their size in line widths.
+    void setArrows(model::ClassicArrows arrows);
+    void setArrowSize(const QSizeF& size);
+    // The Color Selection and Transparency Level boxes: "fill (Fill), shadow (Shad), and border (Bord)" (p.350).
+    enum class Coat { Fill, Shadow, Border };
+    // A colour or transparency for the whole coat (ending its blend); with Safe Colors on, the colour made safe.
+    void setColor(Coat coat, const QString& color);
+    void setTransparency(Coat coat, double transparency);
+    // The Color and Transparency Blend tools (p.351-352; "You cannot blend the shadow"): the first (0) or second (1)
+    // value of a fill's or border's blend, and the Blend Direction box's direction (degrees clockwise from left to
+    // right).
+    void setBlendColor(Coat coat, int which, const QString& color);
+    void setBlendTransparency(Coat coat, int which, double transparency);
+    void setBlendAngle(Coat coat, bool transparency, double degrees);
+    // The box the Color and Transparency Blend tools follow: the coat, whether its Transparency Level box (else its
+    // Color Selection box), and which blend value (-1 none, 0 or 1) the picker or slider sets.
+    void chooseBox(Coat coat, bool transparency, int blend = -1);
+    Coat activeCoat() const { return activeCoat_; }
+    bool activeTransparency() const { return activeTransparency_; }
+    // Shadows (p.353-355): the Drop and Depth Shadow button, the Shadow Depth text box, the Shadow Depth and Direction
+    // button's drag (an offset in pixels), and Object > Soften Shadow ("integer values between 4 and 40 ... If you set
+    // the value to zero, shadows on title objects have no softening"; ours: 1 to 3 go to 4 up from 0, to 0 down).
+    void setDepthShadow(bool depth);
+    void setShadowDepth(double pixels);
+    void setShadowOffset(const QPointF& offset);
+    void setShadowSoftness(int softness);
+    // "The value also becomes the new default setting and applies to any new title objects you create in current and
+    // future Title tool sessions" (p.354): ours, for the application's session.
+    static int defaultShadowSoftness();
+
     // Edit menu (ours: the tool keeps its own undo steps while it is open).
     bool undo();
     bool redo();
@@ -172,6 +212,14 @@ private:
     std::optional<int> handleAt(const QPointF& at) const;
     QPointF snapped(const QPointF& at) const;
     QString pickColor(const QString& current, const QString& title);
+    // Changes the selected objects (the edited one while typing) or, with none, the defaults; one undo step.
+    void attribute(const std::function<void(model::ClassicObject&)>& change);
+    // The object whose attributes the controls show: the first selected, else the defaults.
+    const model::ClassicObject& shownObject() const;
+    // A new graphic object of `kind` with the defaults' attributes.
+    model::ClassicObject freshObject(model::ClassicKind kind) const;
+    void buildAttributeBar();
+    void openSoftenShadow();
 
     model::ClassicTitle title_;
     QList<model::ClassicTitle> undo_, redo_;
@@ -192,7 +240,7 @@ private:
     QPointF videoOffset_;
     QPointF scroll_;
     int lines_ = 1080;
-    QWidget* limitMessage_ = nullptr;
+    QPointer<QWidget> limitMessage_;
     QScrollBar* rollBar_ = nullptr;
     QScrollBar* crawlBar_ = nullptr;
     // Whether the title keeps within the page limit; the pages fitted to the objects with Auto Size.
@@ -218,6 +266,9 @@ private:
     QHash<QString, QWidget*> controls_;
     QHash<QString, QAction*> actions_;
     bool syncing_ = false;
+    Coat activeCoat_ = Coat::Fill;
+    bool activeTransparency_ = false;
+    int activeBlend_ = -1;
 };
 
 // "Select Clip > New Title or Tools > Title Tool Application. The New Title dialog box opens" (p.327): Marquee or Title

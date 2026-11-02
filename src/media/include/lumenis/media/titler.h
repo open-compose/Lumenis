@@ -9,6 +9,7 @@
 
 #include <QImage>
 #include <QLineF>
+#include <QPainterPath>
 #include <QPolygonF>
 #include <QTransform>
 
@@ -37,6 +38,11 @@ QLineF titleTextCaret(const model::TitleObject& object, qsizetype index);
 // click puts the cursor and a drag highlights to (p.304, 6.8c2).
 qsizetype titleTextIndexAt(const model::TitleObject& object, const QPointF& point);
 QList<QPolygonF> titleTextRange(const model::TitleObject& object, qsizetype from, qsizetype to);
+// A text object's characters as one path in its own coordinates (before its Transform), for the classic Title Tool's
+// fills, borders and shadows (6.8d3).
+QPainterPath titleTextPath(const model::TitleObject& object);
+// Softens an image: a box blur of every channel three times (close to a Gaussian), `radius` in pixels.
+void softenImage(QImage& image, double radius);
 // A Titler+ template's still in a bin's Frame and Script views: "Avid Titler+ templates are displayed as a still image
 // of the template's first frame, with titles displayed over a black background" (p.319; 6.8c4a).
 QImage titleFirstFrame(const model::Effect& effect, std::int64_t length, const QSize& size);

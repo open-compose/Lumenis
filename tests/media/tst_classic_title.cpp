@@ -1,12 +1,16 @@
 // Classic Title Tool titles (ROADMAP 6.8d1; FX Guide p.327-341; src/model/classic_title.*, src/media/classic_title.*):
 // the title's JSON, Safe Colors, and the picture: text placed from its top-left with its justification, kerning and
-// leading, boxes, ovals and lines, transparency and the Preview's hard edges.
+// leading, boxes, ovals and lines, transparency and the Preview's hard edges; rolling and crawling titles' pages
+// (6.8d2); line attributes, colour and transparency blends and shadows (6.8d3).
 #include "lumenis/media/classic_title.h"
 #include "lumenis/model/classic_title.h"
 
 #include <QColor>
 #include <QGuiApplication>
+#include <QLineF>
 #include <QTest>
+
+#include <cmath>
 
 using namespace lumenis;
 using namespace lumenis::model;
@@ -60,8 +64,8 @@ private slots:
         box.id = t.newId(ClassicKind::Box);
         box.kind = ClassicKind::Box;
         box.rect = QRectF(10, 20, 30, 40);
-        box.color = QStringLiteral("#ff0000");
-        box.transparency = 50;
+        box.fill.color = QStringLiteral("#ff0000");
+        box.fill.transparency = 50;
         t.objects << box;
         t.videoBackground = false;
         t.backgroundColor = QStringLiteral("#0000ff");
@@ -118,8 +122,8 @@ private slots:
         box.kind = ClassicKind::Box;
         box.id = QStringLiteral("Box 1");
         box.rect = QRectF(100, 100, 400, 300);
-        box.color = QStringLiteral("#ff0000");
-        box.transparency = 50;
+        box.fill.color = QStringLiteral("#ff0000");
+        box.fill.transparency = 50;
         shapes.objects << box;
         const QImage boxed = media::classicTitleImage(shapes, kSize).convertToFormat(QImage::Format_ARGB32);
         QVERIFY(std::abs(at(boxed, 30, 25).alpha() - 128) <= 2);
@@ -127,11 +131,11 @@ private slots:
         QCOMPARE(at(boxed, 60, 25).alpha(), 0);
         ClassicObject oval = box;
         oval.kind = ClassicKind::Oval;
-        oval.transparency = 0;
+        oval.fill.transparency = 0;
         oval.rect = QRectF(1000, 100, 400, 400);
         ClassicObject line = box;
         line.kind = ClassicKind::Line;
-        line.transparency = 0;
+        line.fill.transparency = 0;
         line.rect = QRectF(QPointF(100, 800), QPointF(1800, 800));
         shapes.objects << oval << line;
         const QImage drawn = media::classicTitleImage(shapes, kSize);
@@ -212,6 +216,136 @@ private slots:
     }
 
     // The Text tool's places: the cursor between characters, highlights over them.
+    // Line attributes, colour and transparency blends, shadows (6.8d3, p.346-355).
+    void attributes() {
+        // The JSON keeps them.
+        ClassicTitle t;
+        ClassicObject box;
+        box.id = QStringLiteral("Box 1");
+        box.kind = ClassicKind::Box;
+        box.rect = QRectF(100, 100, 800, 800);
+        box.cornerRadius = 300;
+        box.borderWidth = 20;
+        box.border.color = QStringLiteral("#ff0000");
+        box.border.transparency2 = 50;
+        box.border.transparencyAngle = 90;
+        box.fill.color2 = QStringLiteral("#0000ff");
+        box.fill.colorAngle = 45;
+        box.depthShadow = true;
+        box.shadowDepth = 12;
+        box.shadowAngle = 90;
+        box.shadowSoftness = 8;
+        box.shadowColor = QStringLiteral("#123456");
+        box.shadowTransparency = 25;
+        ClassicObject line;
+        line.id = QStringLiteral("Line 1");
+        line.kind = ClassicKind::Line;
+        line.rect = QRectF(QPointF(200, 500), QPointF(1600, 500));
+        line.lineWidth = 20;
+        line.arrows = ClassicArrows::Both;
+        line.arrowSize = QSizeF(4, 2);
+        t.objects << box << line;
+        QCOMPARE(ClassicTitle::fromJson(t.toJson()), t);
+        // The shadow's offset from its depth and direction, and back.
+        ClassicObject s;
+        s.shadowDepth = 10;
+        s.shadowAngle = 0;
+        QVERIFY(QLineF(s.shadowOffset(), QPointF(10, 0)).length() < 1e-9);
+        s.setShadowOffset(QPointF(0, 5));
+        QCOMPARE(s.shadowDepth, 5.0);
+        QCOMPARE(s.shadowAngle, 90.0);
+        s.setShadowOffset(QPointF()); // the direction stays
+        QCOMPARE(s.shadowAngle, 90.0);
+
+        auto draw = [](const ClassicObject& o) {
+            ClassicTitle one;
+            one.objects << o;
+            return media::classicTitleImage(one, kSize);
+        };
+        // Rounded corners: the corner's pixel is clear, the square box's is not.
+        ClassicObject square;
+        square.id = QStringLiteral("Box 1");
+        square.kind = ClassicKind::Box;
+        square.rect = QRectF(100, 100, 800, 800);
+        QVERIFY(at(draw(square), 11, 11).alpha() == 255);
+        ClassicObject round = square;
+        round.cornerRadius = 300;
+        QCOMPARE(at(draw(round), 11, 11).alpha(), 0);
+        QCOMPARE(at(draw(round), 50, 50).alpha(), 255);
+        // A border outside the box; the fill over it inside.
+        ClassicObject bordered = square;
+        bordered.borderWidth = 50;
+        bordered.border.color = QStringLiteral("#ff0000");
+        const QImage b = draw(bordered);
+        QCOMPARE(at(b, 92, 50), QColor(Qt::red));
+        QCOMPARE(at(b, 88, 50), QColor(Qt::white));
+        QCOMPARE(at(draw(square), 92, 50).alpha(), 0);
+        // Remove Border: none for lines either.
+        QVERIFY(media::classicBorderShape(line).isEmpty());
+        // An arrowhead wider than the line at its end.
+        ClassicObject plain = line;
+        plain.arrows = ClassicArrows::None;
+        ClassicObject arrow = plain;
+        arrow.arrows = ClassicArrows::End;
+        arrow.arrowSize = QSizeF(3, 3);
+        QCOMPARE(at(draw(plain), 155, 51).alpha(), 0);
+        QVERIFY(at(draw(arrow), 155, 51).alpha() > 200);
+        QVERIFY(at(draw(arrow), 100, 50).alpha() > 200);  // the line itself
+        QCOMPARE(at(draw(arrow), 100, 52).alpha(), 0);     // as wide as its width
+        QVERIFY(media::classicObjectShape(arrow).boundingRect().height() >= 59.0);
+        // A colour blend from red at the left to blue at the right.
+        ClassicObject full = square;
+        full.rect = QRectF(0, 0, model::kClassicWidth, model::kClassicHeight);
+        full.fill.color = QStringLiteral("#ff0000");
+        full.fill.color2 = QStringLiteral("#0000ff");
+        QImage g = draw(full);
+        QVERIFY(at(g, 1, 50).red() > 240 && at(g, 1, 50).blue() < 15);
+        QVERIFY(at(g, 190, 50).blue() > 240 && at(g, 190, 50).red() < 15);
+        QVERIFY(std::abs(at(g, 96, 50).red() - at(g, 96, 50).blue()) < 12);
+        // Turned to run downwards.
+        full.fill.colorAngle = 90;
+        g = draw(full);
+        QVERIFY(at(g, 96, 1).red() > 240 && at(g, 96, 106).blue() > 240);
+        // A transparency blend, opaque at the top to clear at the bottom.
+        full.fill.color2.clear();
+        full.fill.transparency2 = 100;
+        full.fill.transparencyAngle = 90;
+        g = draw(full);
+        QVERIFY(at(g, 96, 1).alpha() > 245);
+        QVERIFY(at(g, 96, 106).alpha() < 10);
+        QVERIFY(std::abs(at(g, 96, 54).alpha() - 127) < 8);
+        // A drop shadow moved by its offset; a depth shadow swept from the object to it.
+        ClassicObject lit = square;
+        lit.rect = QRectF(500, 500, 200, 200);
+        lit.shadowDepth = std::hypot(70.0, 70.0);
+        lit.shadowAngle = 45;
+        QCOMPARE(at(draw(lit), 71, 53).alpha(), 0);
+        QCOMPARE(at(draw(lit), 75, 75), QColor(Qt::black));
+        lit.depthShadow = true;
+        QCOMPARE(at(draw(lit), 71, 53), QColor(Qt::black));
+        // Its colour and transparency.
+        lit.shadowColor = QStringLiteral("#00ff00");
+        lit.shadowTransparency = 50;
+        const QColor half = at(draw(lit).convertToFormat(QImage::Format_ARGB32), 75, 75);
+        QVERIFY(std::abs(half.alpha() - 128) < 4);
+        QVERIFY(half.green() > 240 && half.red() < 10);
+        // A glow: no depth, some softness; soft beyond the object's edge.
+        ClassicObject glow = square;
+        glow.rect = QRectF(500, 500, 200, 200);
+        QCOMPARE(at(draw(glow), 72, 60).alpha(), 0);
+        glow.shadowSoftness = 20;
+        const int soft = at(draw(glow), 72, 60).alpha();
+        QVERIFY2(soft > 0 && soft < 255, qPrintable(QString::number(soft)));
+        // Text with a border.
+        ClassicObject word = text(QStringLiteral("I"), QRectF(800, 300, 800, 0));
+        word.size = 400;
+        const QRect plainInk = inked(draw(word));
+        word.borderWidth = 30;
+        const QRect borderInk = inked(draw(word));
+        QVERIFY(borderInk.contains(plainInk));
+        QVERIFY(borderInk.width() >= plainInk.width() + 4);
+    }
+
     void textPlaces() {
         const ClassicObject o = text(QStringLiteral("HHHH"), QRectF(400, 300, 1200, 0));
         QCOMPARE(media::classicTextIndexAt(o, QPointF(380, 350)), 0);

@@ -89,3 +89,45 @@ Tests: `tst_classic_title`, `tst_title_tool`.
   pixels when nothing is selected (with a selection they move it). Clicking the lit Rolling or Crawling Title button
   makes the title still again. Saving and playing rolls and crawls come with 6.8d4 and 6.8e.
 
+
+## 6.8d3a: line attributes, colour and transparency, shadows
+
+### From the guide
+* The line attribute tools (p.347-349): the Box Corner button (standard roundings, Custom Radius "whole number (in
+  pixels) ... The maximum custom radius is 200"), the Border Width button ("change the width of lines created with the
+  drawing tools or to apply a border outline to text or graphic objects"; Remove Border first, Custom Width last), the
+  Arrowhead button (Remove Arrowhead, standard styles, Edit Arrowhead with the Arrowhead Size dialog box whose handle
+  drags "vertically or horizontally to resize and reshape it. The shape of the arrowhead is in proportion to the line
+  width"). "If you do not select an object and you select a line attribute, the Title tool makes that attribute the
+  default for any new objects that you create" (p.347).
+* Colour and transparency (p.349-352): Color Selection boxes and Transparency Level boxes for Fill, Shad and Bord; the
+  Color and Transparency Blend tools "appear when you select a Fill or Border Color Selection box or Transparency Level
+  box ... You cannot blend the shadow"; two blend boxes and the Blend Direction box, dragged "clockwise or
+  counterclockwise ... The change takes effect as soon as you release the mouse button"; the Transparency Level box
+  "displays the text "Hi" with a background that changes from black to white", with a slider (p.352).
+* Shadows (p.353-355): depth ("extends from the edges of the object, as though the object were three-dimensional") or
+  drop ("offset from the object itself"); the Drop and Depth Shadow button, the Shadow Depth and Direction button
+  (Shift-drag for 45-degree angles), Shift+arrow keys, the Shadow Depth text box. Object > Soften Shadow: "integer
+  values between 4 and 40 ... If you set the value to zero, shadows on title objects have no softening", Apply and OK,
+  Shift+Alt+Up/Down by one; the value "becomes the new default". Depth 0 with softness makes a glow (p.355).
+
+### Ours
+* The model: `ClassicPaint` (colour, second colour, transparency, second transparency, two directions) for the fill and
+  the border; `ClassicObject::lineWidth`, `borderWidth`, `cornerRadius`, `arrows`/`arrowSize` (in line widths),
+  `depthShadow`, `shadowDepth`/`shadowAngle` (`shadowOffset()`), `shadowSoftness`, `shadowColor`,
+  `shadowTransparency`. The JSON keeps the old "color" and "transparency" keys for the fill.
+* The picture (`media::classicObjectShape`, `classicBorderShape`, `classicTitleImage`): each object's shape (text
+  through Titler+'s `titleTextPath`) as a coverage mask; the border is a stroke twice its width outside the fill; the
+  shadow is the silhouette (fill and border) drawn once at the offset (drop) or every half pixel along the way (depth),
+  coloured and softened (`softenImage`, Titler+'s blur) by the softness in pixels; then the border, then the fill. A
+  blend runs across the coat's bounds in its direction, degrees clockwise from left to right. Preview off draws the
+  masks without anti-aliasing.
+* The window: a row above the toolbar with the Box Corner (Square, radii 10, 20, 30, 50, 80, Custom Radius...), Border
+  Width (Remove Border, 1, 2, 3, 4, 6, 8, 10, Custom Width...) and Arrowhead buttons, the Fill/Shad/Bord colour and
+  "Hi" boxes (the chosen one framed green), the blend tools and transparency slider, the shadow pad, Shadow Depth box
+  and Drop/Depth button. Clicking a colour box chooses it and opens QColorDialog (its Pick Screen Color is the
+  eyedropper); clicking a blend box chooses a blend value (a colour opens the dialog; a transparency is set with the
+  slider). Remove Border leaves a line's width; a width chosen with nothing selected becomes both the line and the
+  border default. Shift+arrows move the shadow a pixel (the object stays); Shift+Alt+Up/Down change the softness; a
+  softness of 1 to 3 goes to 4 when rising and to 0 when falling. The softness default lasts for the application's
+  session (future sessions: not kept).

@@ -1,7 +1,7 @@
 // The classic Title Tool's window (ROADMAP 6.8d1; FX Guide p.327-341; src/ui/title_tool.*): typing text, the Selection
 // tool's moves, lassos and handles, the drawing tools with Shift and sticky tools, the text formatting tools on objects,
 // characters and the defaults, the drawing environment and its menus, the Edit menu, and opening the tool from the
-// main window.
+// main window; rolling and crawling titles (6.8d2); line attributes, colours with blends and shadows (6.8d3).
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/classic_title.h"
 #include "lumenis/ui/command_registry.h"
@@ -10,10 +10,15 @@
 #include "lumenis/ui/title_tool.h"
 
 #include <QAction>
+#include <QApplication>
+#include <QLineF>
 #include <QDoubleSpinBox>
 #include <QMenuBar>
 #include <QScrollBar>
+#include <QDialog>
+#include <QSlider>
 #include <QSpinBox>
+#include <QTimer>
 #include <QTest>
 #include <QToolButton>
 
@@ -305,6 +310,121 @@ private slots:
         QCOMPARE(tool.title().motion, model::ClassicMotion::Still);
         QCOMPARE(tool.title().pages, 1);
         QVERIFY(tool.control(QStringLiteral("page"))->isHidden());
+        tool.repaint();
+    }
+
+    // Line attributes, colours and transparency with blends, shadows (6.8d3, p.346-355).
+    void attributes() {
+        TitleToolWindow tool;
+        tool.show();
+        tool.setSafeColors(false);
+        model::ClassicTitle t;
+        model::ClassicObject box;
+        box.id = QStringLiteral("Box 1");
+        box.kind = ClassicKind::Box;
+        box.rect = QRectF(100, 100, 400, 300);
+        t.objects << box;
+        tool.setTitle(t);
+        tool.select({QStringLiteral("Box 1")});
+        // The Box Corner button, up to 200; one undo step.
+        tool.setCornerRadius(40);
+        QCOMPARE(tool.title().objects.at(0).cornerRadius, 40.0);
+        tool.setCornerRadius(500);
+        QCOMPARE(tool.title().objects.at(0).cornerRadius, 200.0);
+        QVERIFY(tool.undo());
+        QCOMPARE(tool.title().objects.at(0).cornerRadius, 40.0);
+        // The Border Width button gives a box a border; Remove Border takes it away.
+        tool.setLineWidth(6);
+        QCOMPARE(tool.title().objects.at(0).borderWidth, 6.0);
+        tool.setLineWidth(0);
+        QCOMPARE(tool.title().objects.at(0).borderWidth, 0.0);
+        // Colours: the whole fill, then a blend to a second colour, its direction; the shadow's colour.
+        tool.setColor(TitleToolWindow::Coat::Fill, QStringLiteral("#ff0000"));
+        QCOMPARE(tool.title().objects.at(0).fill.color, QStringLiteral("#ff0000"));
+        tool.setBlendColor(TitleToolWindow::Coat::Fill, 1, QStringLiteral("#0000ff"));
+        QCOMPARE(tool.title().objects.at(0).fill.color2, QStringLiteral("#0000ff"));
+        tool.setBlendAngle(TitleToolWindow::Coat::Fill, false, -90);
+        QCOMPARE(tool.title().objects.at(0).fill.colorAngle, 270.0);
+        tool.setColor(TitleToolWindow::Coat::Fill, QStringLiteral("#00ff00"));
+        QVERIFY(tool.title().objects.at(0).fill.color2.isEmpty());
+        // "You cannot blend the shadow" (p.350).
+        tool.setBlendColor(TitleToolWindow::Coat::Shadow, 1, QStringLiteral("#0000ff"));
+        tool.setColor(TitleToolWindow::Coat::Shadow, QStringLiteral("#202020"));
+        QCOMPARE(tool.title().objects.at(0).shadowColor, QStringLiteral("#202020"));
+        // With Safe Colors on, colours are made safe.
+        tool.setSafeColors(true);
+        tool.setColor(TitleToolWindow::Coat::Border, QStringLiteral("#ffffff"));
+        QCOMPARE(tool.title().objects.at(0).border.color, model::safeColor(QStringLiteral("#ffffff")));
+        // The blend tools follow the Fill and Border boxes; the slider the Transparency Level boxes.
+        tool.chooseBox(TitleToolWindow::Coat::Shadow, false);
+        QVERIFY(!tool.control(QStringLiteral("blendTools"))->isVisible());
+        QVERIFY(!tool.control(QStringLiteral("transparencySlider"))->isVisible());
+        tool.chooseBox(TitleToolWindow::Coat::Fill, true);
+        QVERIFY(tool.control(QStringLiteral("blendTools"))->isVisible());
+        auto* slider = qobject_cast<QSlider*>(tool.control(QStringLiteral("transparencySlider")));
+        QVERIFY(slider && slider->isVisible());
+        slider->setValue(30);
+        QCOMPARE(tool.title().objects.at(0).fill.transparency, 30.0);
+        // The second blend value from the slider.
+        tool.chooseBox(TitleToolWindow::Coat::Fill, true, 1);
+        slider->setValue(90);
+        QCOMPARE(tool.title().objects.at(0).fill.transparency, 30.0);
+        QCOMPARE(tool.title().objects.at(0).fill.transparency2.value_or(-1), 90.0);
+        tool.setTransparency(TitleToolWindow::Coat::Fill, 10);
+        QVERIFY(!tool.title().objects.at(0).fill.transparency2);
+        // Shadows: depth, the drop or depth button, Shift+arrows and the softness.
+        tool.setShadowDepth(10);
+        QCOMPARE(tool.title().objects.at(0).shadowDepth, 10.0);
+        QCOMPARE(qobject_cast<QSpinBox*>(tool.control(QStringLiteral("shadowDepth")))->value(), 10);
+        tool.setShadowOffset(QPointF(5, 0));
+        QVERIFY(tool.key(Qt::Key_Down, Qt::ShiftModifier, QString()));
+        QVERIFY(QLineF(tool.title().objects.at(0).shadowOffset(), QPointF(5, 1)).length() < 1e-6);
+        QCOMPARE(tool.title().objects.at(0).rect, box.rect); // the object stays
+        qobject_cast<QToolButton*>(tool.control(QStringLiteral("shadowType")))->click();
+        QVERIFY(tool.title().objects.at(0).depthShadow);
+        tool.setShadowSoftness(2); // up from 0: 4
+        QCOMPARE(tool.title().objects.at(0).shadowSoftness, 4);
+        QCOMPARE(TitleToolWindow::defaultShadowSoftness(), 4);
+        QVERIFY(tool.key(Qt::Key_Up, Qt::ShiftModifier | Qt::AltModifier, QString()));
+        QCOMPARE(tool.title().objects.at(0).shadowSoftness, 5);
+        tool.key(Qt::Key_Down, Qt::ShiftModifier | Qt::AltModifier, QString());
+        tool.key(Qt::Key_Down, Qt::ShiftModifier | Qt::AltModifier, QString()); // 3: down to 0
+        QCOMPARE(tool.title().objects.at(0).shadowSoftness, 0);
+        // Object > Soften Shadow's dialog box.
+        QTimer::singleShot(0, &tool, [&tool] {
+            auto* dialog = tool.findChild<QDialog*>(QStringLiteral("title:softShadow"));
+            QVERIFY(dialog);
+            dialog->findChild<QSpinBox*>(QStringLiteral("title:shadowSoftness"))->setValue(12);
+            dialog->accept();
+        });
+        tool.menuBar()->findChild<QAction*>(QStringLiteral("title:softenShadow"))->trigger();
+        QCOMPARE(tool.title().objects.at(0).shadowSoftness, 12);
+        // With nothing selected, the attributes become the defaults new objects take (p.347).
+        tool.select({});
+        tool.setLineWidth(8);
+        tool.setArrows(model::ClassicArrows::Both);
+        tool.setTool(TitleToolWindow::Tool::Line);
+        tool.press(QPointF(100, 900), Qt::NoModifier);
+        tool.release(QPointF(900, 900), Qt::NoModifier);
+        const model::ClassicObject& line = tool.title().objects.last();
+        QCOMPARE(line.kind, ClassicKind::Line);
+        QCOMPARE(line.lineWidth, 8.0);
+        QCOMPARE(line.arrows, model::ClassicArrows::Both);
+        QCOMPARE(line.shadowSoftness, 12);
+        // On a line, Border Width changes its width; arrowheads and their size apply to lines.
+        tool.select({line.id});
+        tool.setLineWidth(3);
+        QCOMPARE(tool.title().objects.last().lineWidth, 3.0);
+        QCOMPARE(tool.title().objects.last().borderWidth, 8.0); // a border is not a line's
+        tool.setArrowSize(QSizeF(5, 4));
+        QCOMPARE(tool.title().objects.last().arrowSize, QSizeF(5, 4));
+        // The controls are there.
+        for (const QString& name : {QStringLiteral("boxCorner"), QStringLiteral("borderWidth"), QStringLiteral("arrowhead"), QStringLiteral("fillColor"),
+                                    QStringLiteral("shadowColor"), QStringLiteral("borderColor"), QStringLiteral("fillTransparency"),
+                                    QStringLiteral("blend1"), QStringLiteral("blend2"), QStringLiteral("blendDirection"), QStringLiteral("shadowDirection")}) {
+            QVERIFY2(tool.control(name), qPrintable(name));
+        }
+        QApplication::processEvents();
         tool.repaint();
     }
 

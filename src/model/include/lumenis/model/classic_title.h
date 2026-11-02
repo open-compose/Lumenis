@@ -12,7 +12,9 @@
 
 #include <QJsonObject>
 #include <QList>
+#include <QPointF>
 #include <QRectF>
+#include <QSizeF>
 #include <QString>
 
 #include <optional>
@@ -23,6 +25,32 @@ namespace lumenis::model {
 enum class ClassicKind { Text, Box, Oval, Line };
 // "The text justification buttons" (p.338).
 enum class ClassicJustify { Left, Center, Right };
+
+// A colour and a transparency, each one value or a blend of two (p.349-352): "You can use these tools to blend two
+// colors in a text or graphic object or in a border to create a color gradient, and to specify the direction of the
+// blend". Transparency is 0 (opaque) to 100 (clear). A blend runs from the first value to the second across the
+// object's bounds in its direction (ours: degrees clockwise from left to right).
+struct ClassicPaint {
+    QString color = QStringLiteral("#ffffff");
+    QString color2; // empty: no colour blend
+    double colorAngle = 0.0;
+    double transparency = 0.0;
+    std::optional<double> transparency2; // none: no transparency blend
+    double transparencyAngle = 0.0;
+
+    bool operator==(const ClassicPaint&) const = default;
+};
+
+// A paint of black (a border's until set).
+inline ClassicPaint blackPaint() {
+    ClassicPaint p;
+    p.color = QStringLiteral("#000000");
+    return p;
+}
+
+// "Arrowhead button and options, including Remove Arrowhead option (top)" (p.349): an arrow at the line's end (its
+// bottom-right point in ClassicObject::rect), at its start, or both.
+enum class ClassicArrows { None, End, Start, Both };
 
 // One object of a classic title.
 struct ClassicObject {
@@ -47,11 +75,36 @@ struct ClassicObject {
     // characters or words", p.336), as Titler+ keeps them (titler.h): family, style ("Bold", "Italic", "Bold Italic"),
     // size and kerning (here a percentage, as the object's).
     QList<TitleRun> runs;
-    // The object's colour (the text's, a box's or oval's fill, a line's) and its transparency (0 opaque, 100 clear);
-    // their controls come with 6.8d3.
-    QString color = QStringLiteral("#ffffff");
-    double transparency = 0.0;
+    // The fill (the text's colour, a box's or oval's inside, a line's colour), with its blends (6.8d3).
+    ClassicPaint fill;
+    // "You can use the Border Width button to change the width of lines created with the drawing tools or to apply a
+    // border outline to text or graphic objects" (p.347): a line's width, and the border's (0: none) round the others,
+    // in pixels; the border's paint (black until set, ours).
+    double lineWidth = 2.0;
+    double borderWidth = 0.0;
+    ClassicPaint border = blackPaint();
+    // "You can use the line attribute tools to round the corners of a box" (p.347): the corner radius in pixels, "The
+    // maximum custom radius is 200".
+    double cornerRadius = 0.0;
+    // "add arrowheads to lines" (p.348): which ends have one, and their shape as multiples of the line's width ("The
+    // shape of the arrowhead is in proportion to the line width", p.349): its length along the line and its width
+    // across (ours: 3 and 3 until set).
+    ClassicArrows arrows = ClassicArrows::None;
+    QSizeF arrowSize{3.0, 3.0};
+    // The shadow (p.353-355): drop or depth, its depth in pixels and direction (ours: degrees clockwise from the right,
+    // 45 until set, down and to the right), its softness ("integer values between 4 and 40 ... zero ... no softening")
+    // and paint (no blends: "You cannot blend the shadow for a title object", p.350).
+    bool depthShadow = false;
+    double shadowDepth = 0.0;
+    double shadowAngle = 45.0;
+    int shadowSoftness = 0;
+    QString shadowColor = QStringLiteral("#000000");
+    double shadowTransparency = 0.0;
 
+    // The shadow's offset in pixels.
+    QPointF shadowOffset() const;
+    // Sets the depth and direction from an offset (the direction kept when it is zero).
+    void setShadowOffset(const QPointF& offset);
     bool operator==(const ClassicObject&) const = default;
 };
 

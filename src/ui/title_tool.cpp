@@ -21,6 +21,7 @@
 #include <QJsonDocument>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QLinearGradient>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -28,12 +29,14 @@
 #include <QPainter>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QSlider>
 #include <QSpinBox>
 #include <QToolButton>
 #include <QVBoxLayout>
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 namespace lumenis::ui {
 
@@ -81,6 +84,167 @@ double distanceToSegment(const QPointF& p, const QPointF& a, const QPointF& b) {
     const QPointF q = a + t * ab;
     return std::hypot(p.x() - q.x(), p.y() - q.y());
 }
+
+// The session's shadow softness for new objects (p.354; ours: kept while the application runs).
+int sessionSoftness = 0;
+
+// "Shadow softness values must be integer values between 4 and 40 ... If you set the value to zero, shadows on title
+// objects have no softening" (p.354): 1 to 3 go up to 4 from below, down to 0 from above (ours).
+int legalSoftness(int value, int previous) {
+    value = std::clamp(value, 0, 40);
+    if (value > 0 && value < 4) return value > previous ? 4 : 0;
+    return value;
+}
+
+// The Shadow Depth and Direction button (p.353): a sample with its shadow; dragging the sample's shadow sets the
+// offset ("Shift-click ... to restrict shadow placement to 45-degree angles"), shown softened by the softness.
+class ShadowPad : public QWidget {
+public:
+    ShadowPad(QWidget* parent, std::function<void(QPointF)> changed) : QWidget(parent), changed_(std::move(changed)) {
+        setFixedSize(56, 56);
+        setToolTip(QObject::tr("Shadow Depth and Direction"));
+    }
+    void display(const QPointF& offset, int softness) {
+        offset_ = offset;
+        softness_ = softness;
+        update();
+    }
+
+protected:
+    // A pad pixel is a title pixel, the sample's shadow kept within the pad.
+    QPointF shown() const {
+        const double reach = 20.0, length = std::hypot(offset_.x(), offset_.y());
+        return length > reach ? offset_ * (reach / length) : offset_;
+    }
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this);
+        p.fillRect(rect(), palette().color(QPalette::Mid));
+        const QRectF sample(width() / 2.0 - 8, height() / 2.0 - 8, 16, 16);
+        // The softness as a halo of fainter squares (ours).
+        const int rings = std::min(softness_ / 4, 5);
+        for (int r = rings; r >= 0; --r) {
+            QColor c = palette().color(QPalette::Shadow);
+            c.setAlpha(rings ? 60 + (255 - 60) * (rings - r) / rings : 255);
+            p.fillRect(sample.translated(shown()).adjusted(-r, -r, r, r), c);
+        }
+        p.fillRect(sample, palette().color(QPalette::Light));
+    }
+    void mousePressEvent(QMouseEvent* e) override { mouseMoveEvent(e); }
+    void mouseMoveEvent(QMouseEvent* e) override {
+        QPointF d = e->position() - QPointF(width() / 2.0, height() / 2.0);
+        if (e->modifiers() & Qt::ShiftModifier) {
+            const double a = std::round(std::atan2(d.y(), d.x()) / (std::numbers::pi / 4.0)) * (std::numbers::pi / 4.0);
+            const double length = std::hypot(d.x(), d.y());
+            d = QPointF(std::cos(a) * length, std::sin(a) * length);
+        }
+        offset_ = QPointF(std::round(d.x()), std::round(d.y()));
+        update();
+    }
+    void mouseReleaseEvent(QMouseEvent* e) override {
+        mouseMoveEvent(e);
+        changed_(offset_);
+    }
+
+private:
+    std::function<void(QPointF)> changed_;
+    QPointF offset_;
+    int softness_ = 0;
+};
+
+// The Blend Direction box (p.352): the blend between two colours (or transparencies as greys); "Click the Blend
+// Direction box, and drag clockwise or counterclockwise ... The change takes effect as soon as you release the mouse
+// button" (the direction where the pointer is from the box's centre).
+class BlendBox : public QWidget {
+public:
+    BlendBox(QWidget* parent, std::function<void(double)> changed) : QWidget(parent), changed_(std::move(changed)) {
+        setFixedSize(48, 48);
+        setToolTip(QObject::tr("Blend Direction"));
+    }
+    void display(const QColor& a, const QColor& b, double degrees) {
+        a_ = a;
+        b_ = b;
+        angle_ = degrees;
+        update();
+    }
+    double angle() const { return angle_; }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this);
+        const double a = angle_ * std::numbers::pi / 180.0;
+        const QPointF c = rect().center(), d(std::cos(a) * width() / 2.0, std::sin(a) * height() / 2.0);
+        QLinearGradient g(c - d, c + d);
+        g.setColorAt(0, a_);
+        g.setColorAt(1, b_);
+        p.fillRect(rect(), g);
+        p.setPen(palette().color(QPalette::Dark));
+        p.drawRect(rect().adjusted(0, 0, -1, -1));
+    }
+    void mouseMoveEvent(QMouseEvent* e) override {
+        const QPointF d = e->position() - QPointF(rect().center());
+        if (std::hypot(d.x(), d.y()) < 2.0) return;
+        angle_ = std::atan2(d.y(), d.x()) * 180.0 / std::numbers::pi;
+        update();
+    }
+    void mouseReleaseEvent(QMouseEvent* e) override {
+        mouseMoveEvent(e);
+        changed_(angle_);
+    }
+
+private:
+    std::function<void(double)> changed_;
+    QColor a_ = Qt::white, b_ = Qt::black;
+    double angle_ = 0.0;
+};
+
+// The Arrowhead Size dialog box (p.349): an arrow with a handle; "drag it vertically or horizontally to resize and
+// reshape it. The shape of the arrowhead is in proportion to the line width": the handle's distance back along the
+// arrow is its length, its distance from the arrow's middle half its width, both in line widths (ours: a line width is
+// 8 of the dialog's pixels).
+class ArrowheadSizeDialog : public QDialog {
+public:
+    ArrowheadSizeDialog(QWidget* parent, const QSizeF& size) : QDialog(parent), size_(size) {
+        setObjectName(QStringLiteral("title:arrowheadSize"));
+        setWindowTitle(QObject::tr("Arrowhead Size"));
+        auto* layout = new QVBoxLayout(this);
+        layout->addSpacing(110);
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
+        connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
+        layout->addWidget(buttons);
+        setMinimumWidth(220);
+    }
+    QSizeF arrowSize() const { return size_; }
+
+protected:
+    static constexpr double kUnit = 8.0;
+    QPointF tip() const { return QPointF(width() - 24.0, 60.0); }
+    QPointF handle() const { return tip() + QPointF(-size_.width() * kUnit, -size_.height() * kUnit / 2.0); }
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this);
+        p.fillRect(QRectF(8, 8, width() - 16, 104), palette().color(QPalette::Base));
+        p.setPen(palette().color(QPalette::Text));
+        const QPointF t = tip(), h = handle();
+        const double half = kUnit / 2.0;
+        const QPolygonF arrow{QPointF(24, t.y() - half), QPointF(h.x(), t.y() - half), h, t, QPointF(h.x(), 2 * t.y() - h.y()),
+                              QPointF(h.x(), t.y() + half), QPointF(24, t.y() + half)};
+        p.drawPolygon(arrow);
+        p.setBrush(palette().color(QPalette::Text));
+        p.drawRect(QRectF(h - QPointF(3, 3), QSizeF(6, 6)));
+    }
+    void mousePressEvent(QMouseEvent* e) override { dragging_ = QLineF(e->position(), handle()).length() <= 8.0; }
+    void mouseMoveEvent(QMouseEvent* e) override {
+        if (!dragging_) return;
+        const QPointF d = tip() - e->position();
+        size_ = QSizeF(std::clamp(d.x() / kUnit, 1.0, 12.0), std::clamp(2.0 * d.y() / kUnit, 1.0, 12.0));
+        update();
+    }
+    void mouseReleaseEvent(QMouseEvent*) override { dragging_ = false; }
+
+private:
+    QSizeF size_;
+    bool dragging_ = false;
+};
 
 } // namespace
 
@@ -258,8 +422,10 @@ TitleToolWindow::TitleToolWindow(QWidget* parent) : QWidget(parent, Qt::Window) 
     });
     // "When you first open the Title tool, the font listed is the preferred system font" (p.337).
     defaults_.family = QFontDatabase::systemFont(QFontDatabase::GeneralFont).family();
+    defaults_.shadowSoftness = sessionSoftness;
     buildMenus();
     buildToolbar();
+    buildAttributeBar();
     refreshControls();
 }
 
@@ -321,6 +487,152 @@ void TitleToolWindow::buildMenus() {
         if (const int n = askPage(tr("Move to Page"))) moveToPage(n);
     });
     add(object, QStringLiteral("makeCrawl"), tr("Make Crawl"), [this](bool) { makeCrawl(); });
+    // Shadows (p.354).
+    object->addSeparator();
+    add(object, QStringLiteral("softenShadow"), tr("Soften Shadow..."), [this](bool) { openSoftenShadow(); });
+}
+
+void TitleToolWindow::buildAttributeBar() {
+    auto* bar = new QHBoxLayout;
+    bar->setContentsMargins(4, 0, 4, 2);
+    bar->setSpacing(2);
+    static_cast<QVBoxLayout*>(layout())->insertLayout(layout()->count() - 1, bar);
+    auto named = [&](QWidget* w, const QString& name) {
+        w->setObjectName(QStringLiteral("title:") + name);
+        controls_.insert(name, w);
+    };
+    auto menuButton = [&](const QString& name, const QString& tip) {
+        auto* b = new QToolButton(this);
+        b->setToolTip(tip);
+        b->setPopupMode(QToolButton::InstantPopup);
+        b->setMenu(new QMenu(b));
+        named(b, name);
+        bar->addWidget(b);
+        return b;
+    };
+    // The line attribute tools (p.347-349). Ours: the standard radii and widths below, as many as the guide pictures.
+    QToolButton* corner = menuButton(QStringLiteral("boxCorner"), tr("Box Corner"));
+    corner->menu()->addAction(tr("Square"), this, [this] { setCornerRadius(0); });
+    for (const int r : {10, 20, 30, 50, 80}) corner->menu()->addAction(tr("Radius %1").arg(r), this, [this, r] { setCornerRadius(r); });
+    corner->menu()->addAction(tr("Custom Radius..."), this, [this] {
+        bool ok = false;
+        const int r = QInputDialog::getInt(this, tr("Enter New Corner Radius"), tr("Corner radius (pixels):"),
+                                           static_cast<int>(shownObject().cornerRadius), 0, 200, 1, &ok);
+        if (ok) setCornerRadius(r);
+    });
+    QToolButton* width = menuButton(QStringLiteral("borderWidth"), tr("Border Width"));
+    width->menu()->addAction(tr("Remove Border"), this, [this] { setLineWidth(0); });
+    for (const int w : {1, 2, 3, 4, 6, 8, 10}) width->menu()->addAction(tr("%1 pixels").arg(w), this, [this, w] { setLineWidth(w); });
+    width->menu()->addAction(tr("Custom Width..."), this, [this] {
+        bool ok = false;
+        const ClassicObject& o = shownObject();
+        const int w = QInputDialog::getInt(this, tr("Enter New Line Width"), tr("Width (pixels):"),
+                                           static_cast<int>(o.kind == ClassicKind::Line ? o.lineWidth : o.borderWidth), 1, 200, 1, &ok);
+        if (ok) setLineWidth(w);
+    });
+    QToolButton* arrows = menuButton(QStringLiteral("arrowhead"), tr("Arrowhead"));
+    arrows->menu()->addAction(tr("Remove Arrowhead"), this, [this] { setArrows(model::ClassicArrows::None); });
+    arrows->menu()->addAction(QString(QChar(0x2192)), this, [this] { setArrows(model::ClassicArrows::End); });
+    arrows->menu()->addAction(QString(QChar(0x2190)), this, [this] { setArrows(model::ClassicArrows::Start); });
+    arrows->menu()->addAction(QString(QChar(0x2194)), this, [this] { setArrows(model::ClassicArrows::Both); });
+    arrows->menu()->addAction(tr("Edit Arrowhead..."), this, [this] {
+        ArrowheadSizeDialog box(this, shownObject().arrowSize);
+        if (box.exec() == QDialog::Accepted) setArrowSize(box.arrowSize());
+    });
+    bar->addSpacing(8);
+    // The Color Selection and Transparency Level boxes (p.350): Fill, Shad, Bord.
+    auto* boxes = new QGridLayout;
+    boxes->setSpacing(1);
+    bar->addLayout(boxes);
+    const std::pair<Coat, QString> coats[] = {{Coat::Fill, tr("Fill")}, {Coat::Shadow, tr("Shad")}, {Coat::Border, tr("Bord")}};
+    const QStringList coatNames = {QStringLiteral("fill"), QStringLiteral("shadow"), QStringLiteral("border")};
+    for (int i = 0; i < 3; ++i) {
+        const Coat coat = coats[i].first;
+        boxes->addWidget(new QLabel(coats[i].second, this), i, 0);
+        auto* color = new QToolButton(this);
+        color->setToolTip(tr("%1 Color").arg(coats[i].second));
+        color->setFixedSize(28, 16);
+        named(color, coatNames.at(i) + QStringLiteral("Color"));
+        boxes->addWidget(color, i, 1);
+        connect(color, &QToolButton::clicked, this, [this, coat] {
+            chooseBox(coat, false);
+            const ClassicObject& o = shownObject();
+            const QString now = coat == Coat::Fill ? o.fill.color : coat == Coat::Border ? o.border.color : o.shadowColor;
+            const QString c = pickColor(now, tr("Color"));
+            if (!c.isEmpty()) setColor(coat, c);
+        });
+        auto* level = new QToolButton(this);
+        level->setText(QStringLiteral("Hi"));
+        level->setToolTip(tr("%1 Transparency").arg(coats[i].second));
+        level->setFixedSize(28, 16);
+        named(level, coatNames.at(i) + QStringLiteral("Transparency"));
+        boxes->addWidget(level, i, 2);
+        connect(level, &QToolButton::clicked, this, [this, coat] { chooseBox(coat, true); });
+    }
+    // The Color and Transparency Blend tools (p.350-352): the two blend values over the Blend Direction box, and the
+    // transparency control's slider.
+    auto* blend = new QWidget(this);
+    named(blend, QStringLiteral("blendTools"));
+    auto* blendLayout = new QGridLayout(blend);
+    blendLayout->setContentsMargins(0, 0, 0, 0);
+    blendLayout->setSpacing(1);
+    for (int which = 0; which < 2; ++which) {
+        auto* b = new QToolButton(blend);
+        b->setFixedSize(22, 14);
+        b->setToolTip(tr("Blend Selection"));
+        named(b, QStringLiteral("blend%1").arg(which + 1));
+        blendLayout->addWidget(b, 0, which);
+        connect(b, &QToolButton::clicked, this, [this, which] {
+            chooseBox(activeCoat_, activeTransparency_, which);
+            if (activeTransparency_) return; // the slider sets it
+            const ClassicObject& o = shownObject();
+            const model::ClassicPaint& paint = activeCoat_ == Coat::Border ? o.border : o.fill;
+            const QString c = pickColor(which == 0 || paint.color2.isEmpty() ? paint.color : paint.color2, tr("Blend Color"));
+            if (!c.isEmpty()) setBlendColor(activeCoat_, which, c);
+        });
+    }
+    auto* direction = new BlendBox(blend, [this](double degrees) { setBlendAngle(activeCoat_, activeTransparency_, degrees); });
+    named(direction, QStringLiteral("blendDirection"));
+    blendLayout->addWidget(direction, 1, 0, 1, 2);
+    bar->addWidget(blend);
+    auto* slider = new QSlider(Qt::Horizontal, this);
+    slider->setRange(0, 100);
+    slider->setFixedWidth(100);
+    slider->setToolTip(tr("Opaque - Transparent"));
+    named(slider, QStringLiteral("transparencySlider"));
+    bar->addWidget(slider);
+    auto applySlider = [this, slider] {
+        if (syncing_) return;
+        if (activeBlend_ >= 0 && activeCoat_ != Coat::Shadow) setBlendTransparency(activeCoat_, activeBlend_, slider->value());
+        else setTransparency(activeCoat_, slider->value());
+    };
+    connect(slider, &QSlider::sliderReleased, this, applySlider);
+    connect(slider, &QSlider::valueChanged, this, [slider, applySlider] {
+        if (!slider->isSliderDown()) applySlider();
+    });
+    bar->addSpacing(8);
+    // The shadow tools (p.353).
+    auto* pad = new ShadowPad(this, [this](QPointF offset) { setShadowOffset(offset); });
+    named(pad, QStringLiteral("shadowDirection"));
+    bar->addWidget(pad);
+    auto* depth = new QSpinBox(this);
+    depth->setRange(0, 500);
+    depth->setKeyboardTracking(false);
+    depth->setToolTip(tr("Shadow Depth"));
+    named(depth, QStringLiteral("shadowDepth"));
+    bar->addWidget(depth);
+    connect(depth, &QSpinBox::valueChanged, this, [this](int v) {
+        if (!syncing_) setShadowDepth(v);
+    });
+    auto* kind = new QToolButton(this);
+    kind->setCheckable(true);
+    kind->setToolTip(tr("Drop and Depth Shadow"));
+    named(kind, QStringLiteral("shadowType"));
+    bar->addWidget(kind);
+    connect(kind, &QToolButton::clicked, this, [this] {
+        if (!syncing_) setDepthShadow(!shownObject().depthShadow);
+    });
+    bar->addStretch(1);
 }
 
 void TitleToolWindow::buildToolbar() {
@@ -583,10 +895,9 @@ void TitleToolWindow::showLimit() {
                                 QMessageBox::Ok, this);
     box->setObjectName(QStringLiteral("title:pageLimit"));
     box->setAttribute(Qt::WA_DeleteOnClose);
+    // A QPointer, not a connection to destroyed(): the box is a child that dies inside the window's own destructor,
+    // when a slot on the window would run on a half-destroyed object.
     limitMessage_ = box;
-    connect(box, &QObject::destroyed, this, [this, box] {
-        if (limitMessage_ == box) limitMessage_ = nullptr;
-    });
     box->open();
 }
 
@@ -743,6 +1054,193 @@ void TitleToolWindow::setLeading(double points) {
     if (editing_.isEmpty()) commit(before);
     refreshControls();
     canvas_->update();
+}
+
+// ---- line attributes, colour and transparency, shadows (6.8d3)
+
+void TitleToolWindow::attribute(const std::function<void(ClassicObject&)>& change) {
+    const ClassicTitle before = title_;
+    QList<ClassicObject*> targets;
+    if (ClassicObject* edited = title_.object(editing_)) {
+        targets << edited;
+    } else {
+        for (const QString& id : selected_) {
+            if (ClassicObject* o = title_.object(id)) targets << o;
+        }
+    }
+    if (targets.isEmpty()) {
+        change(defaults_);
+        refreshControls();
+        return;
+    }
+    for (ClassicObject* o : targets) change(*o);
+    if (editing_.isEmpty()) {
+        commit(before);
+    } else {
+        // Typing makes one undo step when it ends (finishEditing).
+        refreshControls();
+        canvas_->update();
+    }
+}
+
+const ClassicObject& TitleToolWindow::shownObject() const {
+    if (const ClassicObject* o = title_.object(editing_)) return *o;
+    for (const QString& id : selected_) {
+        if (const ClassicObject* o = title_.object(id)) return *o;
+    }
+    return defaults_;
+}
+
+ClassicObject TitleToolWindow::freshObject(ClassicKind kind) const {
+    ClassicObject o = defaults_;
+    o.kind = kind;
+    o.text.clear();
+    o.runs.clear();
+    o.id = title_.newId(kind);
+    return o;
+}
+
+void TitleToolWindow::setCornerRadius(double pixels) {
+    pixels = std::clamp(pixels, 0.0, 200.0);
+    attribute([&](ClassicObject& o) { o.cornerRadius = pixels; });
+}
+
+void TitleToolWindow::setLineWidth(double pixels) {
+    pixels = std::clamp(pixels, 0.0, 200.0);
+    attribute([&](ClassicObject& o) {
+        // "If you selected a line for modification, the width of the line changes. If you selected an object for
+        // modification, the width of the border changes" (p.348); a line keeps its width on Remove Border (ours).
+        if (o.kind != ClassicKind::Line || &o == &defaults_) o.borderWidth = pixels;
+        if ((o.kind == ClassicKind::Line || &o == &defaults_) && pixels > 0.0) o.lineWidth = pixels;
+    });
+}
+
+void TitleToolWindow::setArrows(model::ClassicArrows arrows) {
+    attribute([&](ClassicObject& o) {
+        if (o.kind == ClassicKind::Line || &o == &defaults_) o.arrows = arrows;
+    });
+}
+
+void TitleToolWindow::setArrowSize(const QSizeF& size) {
+    const QSizeF clamped(std::clamp(size.width(), 0.5, 20.0), std::clamp(size.height(), 0.5, 20.0));
+    attribute([&](ClassicObject& o) {
+        if (o.kind == ClassicKind::Line || &o == &defaults_) o.arrowSize = clamped;
+    });
+}
+
+void TitleToolWindow::setColor(Coat coat, const QString& color) {
+    const QString c = safeColors_ ? model::safeColor(color) : color;
+    attribute([&](ClassicObject& o) {
+        if (coat == Coat::Shadow) {
+            o.shadowColor = c;
+            return;
+        }
+        model::ClassicPaint& paint = coat == Coat::Fill ? o.fill : o.border;
+        paint.color = c;
+        paint.color2.clear();
+    });
+}
+
+void TitleToolWindow::setTransparency(Coat coat, double transparency) {
+    transparency = std::clamp(transparency, 0.0, 100.0);
+    attribute([&](ClassicObject& o) {
+        if (coat == Coat::Shadow) {
+            o.shadowTransparency = transparency;
+            return;
+        }
+        model::ClassicPaint& paint = coat == Coat::Fill ? o.fill : o.border;
+        paint.transparency = transparency;
+        paint.transparency2.reset();
+    });
+}
+
+void TitleToolWindow::setBlendColor(Coat coat, int which, const QString& color) {
+    if (coat == Coat::Shadow) return; // "You cannot blend the shadow for a title object" (p.350)
+    const QString c = safeColors_ ? model::safeColor(color) : color;
+    attribute([&](ClassicObject& o) {
+        model::ClassicPaint& paint = coat == Coat::Fill ? o.fill : o.border;
+        if (paint.color2.isEmpty()) paint.color2 = paint.color;
+        (which == 0 ? paint.color : paint.color2) = c;
+    });
+}
+
+void TitleToolWindow::setBlendTransparency(Coat coat, int which, double transparency) {
+    if (coat == Coat::Shadow) return;
+    transparency = std::clamp(transparency, 0.0, 100.0);
+    attribute([&](ClassicObject& o) {
+        model::ClassicPaint& paint = coat == Coat::Fill ? o.fill : o.border;
+        if (!paint.transparency2) paint.transparency2 = paint.transparency;
+        if (which == 0) paint.transparency = transparency;
+        else paint.transparency2 = transparency;
+    });
+}
+
+void TitleToolWindow::setBlendAngle(Coat coat, bool transparency, double degrees) {
+    if (coat == Coat::Shadow) return;
+    degrees = std::fmod(std::fmod(degrees, 360.0) + 360.0, 360.0);
+    attribute([&](ClassicObject& o) {
+        model::ClassicPaint& paint = coat == Coat::Fill ? o.fill : o.border;
+        (transparency ? paint.transparencyAngle : paint.colorAngle) = degrees;
+    });
+}
+
+void TitleToolWindow::chooseBox(Coat coat, bool transparency, int blend) {
+    activeCoat_ = coat;
+    activeTransparency_ = transparency;
+    activeBlend_ = coat == Coat::Shadow ? -1 : blend;
+    refreshControls();
+}
+
+void TitleToolWindow::setDepthShadow(bool depth) {
+    attribute([&](ClassicObject& o) { o.depthShadow = depth; });
+}
+
+void TitleToolWindow::setShadowDepth(double pixels) {
+    pixels = std::clamp(pixels, 0.0, 500.0);
+    attribute([&](ClassicObject& o) { o.shadowDepth = pixels; });
+}
+
+void TitleToolWindow::setShadowOffset(const QPointF& offset) {
+    attribute([&](ClassicObject& o) { o.setShadowOffset(offset); });
+}
+
+void TitleToolWindow::setShadowSoftness(int softness) {
+    // "The value that you set applies immediately to any selected title. The value also becomes the new default"
+    // (p.354).
+    const int value = legalSoftness(softness, shownObject().shadowSoftness);
+    sessionSoftness = value;
+    defaults_.shadowSoftness = value;
+    attribute([&](ClassicObject& o) { o.shadowSoftness = value; });
+}
+
+int TitleToolWindow::defaultShadowSoftness() {
+    return sessionSoftness;
+}
+
+void TitleToolWindow::openSoftenShadow() {
+    // "Select Object > Soften Shadow. The Soft Shadow dialog box opens. Type a number in the Shadow Softness text box
+    // ... Click Apply ... Click OK" (p.354).
+    QDialog box(this);
+    box.setObjectName(QStringLiteral("title:softShadow"));
+    box.setWindowTitle(tr("Soft Shadow"));
+    auto* layout = new QVBoxLayout(&box);
+    auto* row = new QHBoxLayout;
+    row->addWidget(new QLabel(tr("Shadow Softness:"), &box));
+    auto* value = new QSpinBox(&box);
+    value->setObjectName(QStringLiteral("title:shadowSoftness"));
+    value->setRange(0, 40);
+    value->setValue(shownObject().shadowSoftness);
+    row->addWidget(value);
+    layout->addLayout(row);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Apply | QDialogButtonBox::Cancel, &box);
+    layout->addWidget(buttons);
+    connect(buttons->button(QDialogButtonBox::Apply), &QPushButton::clicked, this, [this, value] {
+        setShadowSoftness(value->value());
+        value->setValue(shownObject().shadowSoftness);
+    });
+    connect(buttons, &QDialogButtonBox::accepted, &box, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &box, &QDialog::reject);
+    if (box.exec() == QDialog::Accepted) setShadowSoftness(value->value());
 }
 
 // ---- mouse
@@ -964,9 +1462,7 @@ void TitleToolWindow::release(const QPointF& at, Qt::KeyboardModifiers modifiers
         const QRectF r(dragFrom_, dragTo_);
         const bool line = tool_ == Tool::Line;
         if (line ? std::hypot(r.width(), r.height()) >= 4.0 : (std::abs(r.width()) >= 4.0 && std::abs(r.height()) >= 4.0)) {
-            ClassicObject o;
-            o.kind = tool_ == Tool::Box ? ClassicKind::Box : tool_ == Tool::Oval ? ClassicKind::Oval : ClassicKind::Line;
-            o.id = title_.newId(o.kind);
+            ClassicObject o = freshObject(tool_ == Tool::Box ? ClassicKind::Box : tool_ == Tool::Oval ? ClassicKind::Oval : ClassicKind::Line);
             o.rect = line ? r : r.normalized();
             title_.objects << o;
             selected_ = {o.id};
@@ -1082,6 +1578,18 @@ bool TitleToolWindow::key(int key, Qt::KeyboardModifiers modifiers, const QStrin
         }
         refreshControls();
         canvas_->update();
+        return true;
+    }
+    // "Press the Shift key, and use the arrow keys to move the shadow to any position around the title" (p.353); with
+    // Alt too, Up and Down change the shadow softness by one (p.354).
+    if (shift && (key == Qt::Key_Left || key == Qt::Key_Right || key == Qt::Key_Up || key == Qt::Key_Down)) {
+        if (alt) {
+            if (key == Qt::Key_Up || key == Qt::Key_Down) setShadowSoftness(shownObject().shadowSoftness + (key == Qt::Key_Up ? 1 : -1));
+            return true;
+        }
+        const QPointF by(key == Qt::Key_Left ? -1 : key == Qt::Key_Right ? 1 : 0, key == Qt::Key_Up ? -1 : key == Qt::Key_Down ? 1 : 0);
+        const QPointF now = shownObject().shadowOffset();
+        setShadowOffset(QPointF(std::round(now.x()), std::round(now.y())) + by);
         return true;
     }
     // Scrolling a rolling or crawling title (p.344): Home and End, Page Up and Page Down by a page, and (rolling titles,
@@ -1393,6 +1901,78 @@ void TitleToolWindow::refreshControls() {
         if (QAction* a = actions_.value(name)) a->setEnabled(moving);
     }
     if (QAction* a = actions_.value(QStringLiteral("addPage"))) a->setEnabled(moving && !title_.autoSize);
+    // The line attribute tools, colour and transparency boxes and shadow tools show the first selected object's.
+    const ClassicObject& shownAll = shownObject();
+    if (auto* b = qobject_cast<QToolButton*>(controls_.value(QStringLiteral("boxCorner")))) {
+        b->setText(shownAll.cornerRadius > 0 ? QString(QChar(0x256F)) + QString::number(shownAll.cornerRadius) : QString(QChar(0x2518)));
+    }
+    if (auto* b = qobject_cast<QToolButton*>(controls_.value(QStringLiteral("borderWidth")))) {
+        const double w = shownAll.kind == ClassicKind::Line ? shownAll.lineWidth : shownAll.borderWidth;
+        b->setText(w > 0 ? QString::number(w) : QString(QChar(0x2508)));
+    }
+    if (auto* b = qobject_cast<QToolButton*>(controls_.value(QStringLiteral("arrowhead")))) {
+        const QChar arrows[] = {QChar(0x2014), QChar(0x2192), QChar(0x2190), QChar(0x2194)};
+        b->setText(QString(arrows[static_cast<int>(shownAll.arrows)]));
+    }
+    auto swatch = [&](const QString& name, const QString& color, bool active) {
+        if (QWidget* w = controls_.value(name)) {
+            w->setStyleSheet(QStringLiteral("background-color: %1; border: 2px solid %2;")
+                                 .arg(QColor(color).name(), active ? QStringLiteral("#2e8b3e") : QStringLiteral("#606060")));
+        }
+    };
+    auto level = [&](const QString& name, double transparency, bool active) {
+        // "The Transparency Level box displays the text "Hi" with a background that changes from black to white. A
+        // completely white background represents a fully transparent object" (p.352).
+        const int grey = static_cast<int>(std::lround(std::clamp(transparency, 0.0, 100.0) * 2.55));
+        if (QWidget* w = controls_.value(name)) {
+            w->setStyleSheet(QStringLiteral("background-color: rgb(%1,%1,%1); color: %2; border: 2px solid %3;")
+                                 .arg(grey)
+                                 .arg(grey > 128 ? QStringLiteral("black") : QStringLiteral("white"), active ? QStringLiteral("#2e8b3e") : QStringLiteral("#606060")));
+        }
+    };
+    const bool colorBox = !activeTransparency_;
+    swatch(QStringLiteral("fillColor"), shownAll.fill.color, colorBox && activeCoat_ == Coat::Fill);
+    swatch(QStringLiteral("shadowColor"), shownAll.shadowColor, colorBox && activeCoat_ == Coat::Shadow);
+    swatch(QStringLiteral("borderColor"), shownAll.border.color, colorBox && activeCoat_ == Coat::Border);
+    level(QStringLiteral("fillTransparency"), shownAll.fill.transparency, !colorBox && activeCoat_ == Coat::Fill);
+    level(QStringLiteral("shadowTransparency"), shownAll.shadowTransparency, !colorBox && activeCoat_ == Coat::Shadow);
+    level(QStringLiteral("borderTransparency"), shownAll.border.transparency, !colorBox && activeCoat_ == Coat::Border);
+    // "The Color and Transparency Blend tools appear when you select a Fill or Border Color Selection box or
+    // Transparency Level box" (p.350); the slider with a Transparency Level box (p.352).
+    const bool blending = activeCoat_ != Coat::Shadow;
+    if (QWidget* w = controls_.value(QStringLiteral("blendTools"))) w->setVisible(blending);
+    if (QWidget* w = controls_.value(QStringLiteral("transparencySlider"))) w->setVisible(activeTransparency_);
+    if (blending) {
+        const model::ClassicPaint& paint = activeCoat_ == Coat::Border ? shownAll.border : shownAll.fill;
+        QColor a, b;
+        if (activeTransparency_) {
+            const double t1 = paint.transparency, t2 = paint.transparency2.value_or(t1);
+            a = QColor::fromRgbF(static_cast<float>(t1 / 100.0), static_cast<float>(t1 / 100.0), static_cast<float>(t1 / 100.0));
+            b = QColor::fromRgbF(static_cast<float>(t2 / 100.0), static_cast<float>(t2 / 100.0), static_cast<float>(t2 / 100.0));
+        } else {
+            a = QColor(paint.color);
+            b = QColor(paint.color2.isEmpty() ? paint.color : paint.color2);
+        }
+        swatch(QStringLiteral("blend1"), a.name(), activeBlend_ == 0);
+        swatch(QStringLiteral("blend2"), b.name(), activeBlend_ == 1);
+        if (auto* d = dynamic_cast<BlendBox*>(controls_.value(QStringLiteral("blendDirection")))) {
+            d->display(a, b, activeTransparency_ ? paint.transparencyAngle : paint.colorAngle);
+        }
+    }
+    if (auto* slider = qobject_cast<QSlider*>(controls_.value(QStringLiteral("transparencySlider")))) {
+        double value = shownAll.shadowTransparency;
+        if (activeCoat_ != Coat::Shadow) {
+            const model::ClassicPaint& paint = activeCoat_ == Coat::Border ? shownAll.border : shownAll.fill;
+            value = activeBlend_ == 1 ? paint.transparency2.value_or(paint.transparency) : paint.transparency;
+        }
+        slider->setValue(static_cast<int>(std::lround(value)));
+    }
+    if (auto* pad = dynamic_cast<ShadowPad*>(controls_.value(QStringLiteral("shadowDirection")))) pad->display(shownAll.shadowOffset(), shownAll.shadowSoftness);
+    if (auto* d = qobject_cast<QSpinBox*>(controls_.value(QStringLiteral("shadowDepth")))) d->setValue(static_cast<int>(std::lround(shownAll.shadowDepth)));
+    if (auto* k = qobject_cast<QToolButton*>(controls_.value(QStringLiteral("shadowType")))) {
+        k->setChecked(shownAll.depthShadow);
+        k->setText(shownAll.depthShadow ? tr("Depth") : tr("Drop"));
+    }
     if (QAction* a = actions_.value(QStringLiteral("undo"))) a->setEnabled(!undo_.isEmpty() || !editing_.isEmpty());
     if (QAction* a = actions_.value(QStringLiteral("redo"))) a->setEnabled(!redo_.isEmpty());
     syncing_ = false;

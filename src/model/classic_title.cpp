@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 namespace lumenis::model {
 
@@ -14,6 +15,7 @@ namespace {
 constexpr const char* kKinds[] = {"Text", "Box", "Oval", "Line"};
 constexpr const char* kJustify[] = {"Left", "Center", "Right"};
 constexpr const char* kMotions[] = {"Still", "Rolling", "Crawling"};
+constexpr const char* kArrows[] = {"None", "End", "Start", "Both"};
 
 template <typename E, std::size_t N>
 E enumFrom(const QJsonValue& v, const char* const (&names)[N], E fallback) {
@@ -44,6 +46,38 @@ TitleRun runFrom(const QJsonObject& j) {
     return r;
 }
 
+// A paint's key: `name`, or after a prefix with its first letter upper case ("borderColor").
+QString paintKey(const QString& prefix, const char* name) {
+    if (prefix.isEmpty()) return QLatin1String(name);
+    return prefix + QChar(QLatin1Char(name[0])).toUpper() + QLatin1String(name + 1);
+}
+
+// A paint's keys, each with `prefix` ("" for the fill, which keeps the plain "color" and "transparency").
+void paintJson(QJsonObject& j, const QString& prefix, const ClassicPaint& p) {
+    auto key = [&](const char* name) { return paintKey(prefix, name); };
+    j.insert(key("color"), p.color);
+    j.insert(key("transparency"), p.transparency);
+    if (!p.color2.isEmpty()) {
+        j.insert(key("color2"), p.color2);
+        j.insert(key("colorAngle"), p.colorAngle);
+    }
+    if (p.transparency2) {
+        j.insert(key("transparency2"), *p.transparency2);
+        j.insert(key("transparencyAngle"), p.transparencyAngle);
+    }
+}
+
+ClassicPaint paintFrom(const QJsonObject& j, const QString& prefix, ClassicPaint p) {
+    auto key = [&](const char* name) { return paintKey(prefix, name); };
+    p.color = j.value(key("color")).toString(p.color);
+    p.transparency = j.value(key("transparency")).toDouble(p.transparency);
+    p.color2 = j.value(key("color2")).toString();
+    p.colorAngle = j.value(key("colorAngle")).toDouble();
+    if (j.contains(key("transparency2"))) p.transparency2 = j.value(key("transparency2")).toDouble();
+    p.transparencyAngle = j.value(key("transparencyAngle")).toDouble();
+    return p;
+}
+
 QString hex(int r, int g, int b) {
     return QStringLiteral("#%1%2%3").arg(r, 2, 16, QLatin1Char('0')).arg(g, 2, 16, QLatin1Char('0')).arg(b, 2, 16, QLatin1Char('0'));
 }
@@ -55,9 +89,27 @@ QJsonObject ClassicTitle::toJson() const {
     for (const ClassicObject& o : objects) {
         QJsonObject j{{QStringLiteral("id"), o.id},
                       {QStringLiteral("kind"), QLatin1String(kKinds[static_cast<int>(o.kind)])},
-                      {QStringLiteral("rect"), QJsonArray{o.rect.x(), o.rect.y(), o.rect.width(), o.rect.height()}},
-                      {QStringLiteral("color"), o.color},
-                      {QStringLiteral("transparency"), o.transparency}};
+                      {QStringLiteral("rect"), QJsonArray{o.rect.x(), o.rect.y(), o.rect.width(), o.rect.height()}}};
+        paintJson(j, QString(), o.fill);
+        if (o.kind == ClassicKind::Line) {
+            j.insert(QStringLiteral("lineWidth"), o.lineWidth);
+            if (o.arrows != ClassicArrows::None) {
+                j.insert(QStringLiteral("arrows"), QLatin1String(kArrows[static_cast<int>(o.arrows)]));
+                j.insert(QStringLiteral("arrowSize"), QJsonArray{o.arrowSize.width(), o.arrowSize.height()});
+            }
+        } else if (o.borderWidth > 0.0) {
+            j.insert(QStringLiteral("borderWidth"), o.borderWidth);
+            paintJson(j, QStringLiteral("border"), o.border);
+        }
+        if (o.kind == ClassicKind::Box && o.cornerRadius > 0.0) j.insert(QStringLiteral("cornerRadius"), o.cornerRadius);
+        if (o.shadowDepth > 0.0 || o.shadowSoftness > 0) {
+            j.insert(QStringLiteral("depthShadow"), o.depthShadow);
+            j.insert(QStringLiteral("shadowDepth"), o.shadowDepth);
+            j.insert(QStringLiteral("shadowAngle"), o.shadowAngle);
+            j.insert(QStringLiteral("shadowSoftness"), o.shadowSoftness);
+            j.insert(QStringLiteral("shadowColor"), o.shadowColor);
+            j.insert(QStringLiteral("shadowTransparency"), o.shadowTransparency);
+        }
         if (o.kind == ClassicKind::Text) {
             j.insert(QStringLiteral("text"), o.text);
             j.insert(QStringLiteral("family"), o.family);
@@ -92,8 +144,19 @@ ClassicTitle ClassicTitle::fromJson(const QJsonObject& o) {
         c.kind = enumFrom(j.value(QStringLiteral("kind")), kKinds, ClassicKind::Text);
         const QJsonArray r = j.value(QStringLiteral("rect")).toArray();
         if (r.size() == 4) c.rect = QRectF(r.at(0).toDouble(), r.at(1).toDouble(), r.at(2).toDouble(), r.at(3).toDouble());
-        c.color = j.value(QStringLiteral("color")).toString(c.color);
-        c.transparency = j.value(QStringLiteral("transparency")).toDouble();
+        c.fill = paintFrom(j, QString(), c.fill);
+        c.lineWidth = j.value(QStringLiteral("lineWidth")).toDouble(c.lineWidth);
+        c.arrows = enumFrom(j.value(QStringLiteral("arrows")), kArrows, ClassicArrows::None);
+        if (const QJsonArray a = j.value(QStringLiteral("arrowSize")).toArray(); a.size() == 2) c.arrowSize = QSizeF(a.at(0).toDouble(), a.at(1).toDouble());
+        c.borderWidth = j.value(QStringLiteral("borderWidth")).toDouble();
+        c.border = paintFrom(j, QStringLiteral("border"), c.border);
+        c.cornerRadius = j.value(QStringLiteral("cornerRadius")).toDouble();
+        c.depthShadow = j.value(QStringLiteral("depthShadow")).toBool();
+        c.shadowDepth = j.value(QStringLiteral("shadowDepth")).toDouble();
+        c.shadowAngle = j.value(QStringLiteral("shadowAngle")).toDouble(c.shadowAngle);
+        c.shadowSoftness = j.value(QStringLiteral("shadowSoftness")).toInt();
+        c.shadowColor = j.value(QStringLiteral("shadowColor")).toString(c.shadowColor);
+        c.shadowTransparency = j.value(QStringLiteral("shadowTransparency")).toDouble();
         c.text = j.value(QStringLiteral("text")).toString();
         c.family = j.value(QStringLiteral("family")).toString();
         c.size = j.value(QStringLiteral("size")).toDouble(c.size);
@@ -133,6 +196,16 @@ QString ClassicTitle::newId(ClassicKind kind) const {
         const QString id = QStringLiteral("%1 %2").arg(base).arg(n);
         if (!object(id)) return id;
     }
+}
+
+QPointF ClassicObject::shadowOffset() const {
+    const double a = shadowAngle * std::numbers::pi / 180.0;
+    return {std::cos(a) * shadowDepth, std::sin(a) * shadowDepth};
+}
+
+void ClassicObject::setShadowOffset(const QPointF& offset) {
+    shadowDepth = std::hypot(offset.x(), offset.y());
+    if (shadowDepth > 1e-9) shadowAngle = std::atan2(offset.y(), offset.x()) * 180.0 / std::numbers::pi;
 }
 
 int classicPageLimit(ClassicMotion motion, int lines) {

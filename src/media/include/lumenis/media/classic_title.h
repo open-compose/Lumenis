@@ -10,6 +10,7 @@
 #include <QImage>
 #include <QLineF>
 #include <QList>
+#include <QPainterPath>
 #include <QPolygonF>
 #include <QRectF>
 #include <QSize>
@@ -25,8 +26,15 @@ model::TitleObject classicTextObject(const model::ClassicObject& object);
 // Where an object is: a text object's left, top and width with the height of its lines; a box's or oval's bounds; a
 // line's bounds (normalized).
 QRectF classicObjectBounds(const model::ClassicObject& object);
+// An object's own shape in title pixels (6.8d3): a text object's characters, a box with its rounded corners, an oval,
+// a line as wide as its width with its arrowheads. Empty for empty text.
+QPainterPath classicObjectShape(const model::ClassicObject& object);
+// The border round a text, box or oval object (p.347): its outline stroked twice the border width wide (the fill
+// drawn over its inner half); empty without a border and for lines.
+QPainterPath classicBorderShape(const model::ClassicObject& object);
 // The title alone over transparency, `size` large. "Media Composer creates text and objects in titles anti-aliased with
-// an 8-bit alpha channel" (p.333); without `antiAliased` (Preview off) the edges are hard.
+// an 8-bit alpha channel" (p.333); without `antiAliased` (Preview off) the edges are hard. Each object is drawn with its
+// shadow under its border under its fill, each coat with its colour and transparency blends (6.8d3).
 // `origin` is the title point drawn at the picture's top-left: a rolling or crawling title's page or scroll place.
 QImage classicTitleImage(const model::ClassicTitle& title, const QSize& size, bool antiAliased = true, const QPointF& origin = {});
 
