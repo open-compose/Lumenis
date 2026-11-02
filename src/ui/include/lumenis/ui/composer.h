@@ -601,6 +601,8 @@ signals:
     void videoQualityChanged(VideoQuality quality);
     // Media files dropped on a monitor from the Source Browser (p.316).
     void filesDropped(MonitorId monitor, const QStringList& paths);
+    // A Titler+ template was dragged to the Record monitor, to be edited there (FX Guide p.320).
+    void titleTemplateDropped(const QString& binId, const QString& itemId);
     // A marker was double-clicked (p.416).
     void markerEditRequested(MonitorId monitor, const QString& markerId);
 

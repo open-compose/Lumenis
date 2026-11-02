@@ -49,6 +49,10 @@ public:
     explicit TitlerDashboard(TitlerTool& tool, QWidget* parent = nullptr);
     TitlerPanel* panel() const { return panel_; }
 
+signals:
+    // The Save or Save As button (p.319-320): the template being edited is updated, or a copy made.
+    void saveRequested(bool saveAs);
+
 private:
     TitlerPanel* panel_;
 };

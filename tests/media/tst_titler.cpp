@@ -321,6 +321,39 @@ private slots:
         QCOMPARE(media::titleTextIndexAt(laid, QPointF(second.left() + 2, -20)), 1);
     }
 
+    // Templates (6.8c4a, p.319-320): the sequence a template is edited in and back; the Frame view's still.
+    void templates() {
+        Effect e = titlerEffect();
+        Title t;
+        t.objects << textObject(t, QStringLiteral("HHH"), QPointF(-200, 0));
+        t.objects[0].font.size = 200;
+        setTitle(e, t);
+        EffectTemplate tpl;
+        tpl.effect = e;
+        tpl.length = 40;
+        tpl.editRate = Rational(25);
+        const BinItem item = effectTemplateItem(tpl, QStringLiteral("Name"), QDateTime::currentDateTimeUtc());
+        QVERIFY(isTitleTemplate(item));
+        QVERIFY(!isTitleTemplate(BinItem{}));
+        const BinItem seq = titleTemplateSequence(tpl, Rational(25), QStringLiteral("Name"), QDateTime::currentDateTimeUtc());
+        QCOMPARE(seq.kind, BinItemKind::Sequence);
+        const auto back = titleTemplateFromSequence(seq, Rational(25));
+        QVERIFY(back);
+        QCOMPARE(back->length, 40);
+        QCOMPARE(titleOf(back->effect), t);
+        // Unknown length: ten seconds.
+        tpl.length = 0;
+        QCOMPARE(titleTemplateFromSequence(titleTemplateSequence(tpl, Rational(25), QString(), {}), Rational(25))->length, 250);
+        // "displayed as a still image of the template's first frame, with titles displayed over a black background".
+        const QImage still = media::titleFirstFrame(e, 40, kSize);
+        QCOMPARE(at(still, 2, 2), QColor(0, 0, 0));
+        bool white = false;
+        for (int y = 0; y < still.height() && !white; ++y) {
+            for (int x = 0; x < still.width() && !white; ++x) white = at(still, x, y) == QColor(255, 255, 255);
+        }
+        QVERIFY(white);
+    }
+
     // Roll / Crawl (6.8c3, p.324-326): turning it on makes a linear Effect Position from 0 to 100; the objects go from
     // just below the frame to just above it (Crawl Left: from the right to the left).
     void rollCrawl() {

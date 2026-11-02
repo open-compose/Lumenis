@@ -183,10 +183,33 @@ Ours:
   again, so a drag changes the object's own position. While the Tracking window is open, the Effect Preview's tracking
   boxes take the mouse instead of the Titler+ tools.
 
+## 6.8c4a: templates
+From the guide: "you can drag the Avid Titler+ effect icon from the Effect Editor into a bin, which creates a template of
+that effect ... When a bin is in Frame View or Script View mode, Avid Titler+ templates are displayed as a still image of
+the template's first frame, with titles displayed over a black background"; "At the bottom left [of the Dashboard],
+you'll find options to: Save: Update the current template with new changes. Save As: Create a duplicate with the new
+changes" (p.319-320); "Right-click on a template in the bin and choose Edit Template. Drag the template to the Record
+monitor. Either method opens the template in the Record monitor ... To save your changes: Click the Save button ... Open
+another sequence in the Record monitor, which prompts you to save" (p.320).
+
+Ours:
+* Templates are the effect templates of 6.6b1 (docs/spec/effect-templates.md) whose effect is Titler+
+  (`model::isTitleTemplate`); `media::titleFirstFrame` is their still in the Frame and Script views.
+* Editing a template (the bin's Edit Template, or a drop on the Record monitor through `Composer::titleTemplateDropped`)
+  loads a sequence named after it with its effect on filler on V1, as long as the template (`model::titleTemplateSequence`;
+  ten seconds when it does not say), under the bin id `MainWindow::kTitleTemplateBin`, which keeps it out of every bin;
+  the Effect Editor opens in Effect mode with the Dashboard.
+* Save writes the title back into the template (`model::titleTemplateFromSequence`, `MainWindow::saveTitleTemplate`);
+  Save As adds "<name> Copy" to the template's bin, which is then the one edited. With no template open, Save and Save
+  As keep the shown title as a new template in the active bin.
+* When the edited template with changes leaves the Record monitor, a box asks to save it (`setTemplateSavePrompt` in
+  tests); either way the edit is then over.
+
 ## Not yet
 * The Roll / Crawl scroll bar in Edit Mode (p.325).
 * Title keyframes as Effect Editor tracks and graphs (they live in the position bar and the panel only).
 * Character formatting of the Shadow, the opacities and the softness (whole objects only).
-* 6.8c4: templates and presets, promotion from the classic Title Tool, EDLs and Find.
+* 6.8c4b: templates as presets on parameters (p.320), titles in EDLs (p.327). Promote Titles comes with the classic
+  Title Tool (6.8d).
 * Dragging the panel's numbers; the Grid button's Grid Settings; the Color Info Tool from a colour box (p.315).
 * Fill Overlay (media on the effect's subtrack, p.324).

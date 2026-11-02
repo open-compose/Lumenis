@@ -15,6 +15,7 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QPlainTextEdit>
+#include <QPushButton>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -510,6 +511,18 @@ TitlerDashboard::TitlerDashboard(TitlerTool& tool, QWidget* parent) : QWidget(pa
     layout->setContentsMargins(0, 0, 0, 0);
     panel_ = new TitlerPanel(tool, true, this);
     layout->addWidget(panel_);
+    // "At the bottom left, you'll find options to: Save: Update the current template with new changes. Save As:
+    // Create a duplicate with the new changes" (p.319-320).
+    auto* buttons = new QHBoxLayout;
+    buttons->setContentsMargins(4, 0, 4, 4);
+    for (const bool as : {false, true}) {
+        auto* b = new QPushButton(as ? tr("Save As") : tr("Save"), this);
+        b->setObjectName(as ? QStringLiteral("titler:saveAs") : QStringLiteral("titler:save"));
+        connect(b, &QPushButton::clicked, this, [this, as] { emit saveRequested(as); });
+        buttons->addWidget(b);
+    }
+    buttons->addStretch(1);
+    layout->addLayout(buttons);
 }
 
 } // namespace lumenis::ui

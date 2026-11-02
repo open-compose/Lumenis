@@ -596,4 +596,10 @@ Picture titlePicture(const model::Effect& effect, const Picture& layer, double t
     return over(Picture::fromImage(titleImage(title, size), size.width(), size.height()), layer);
 }
 
+QImage titleFirstFrame(const model::Effect& effect, std::int64_t length, const QSize& size) {
+    if (size.isEmpty()) return {};
+    const Picture black = Picture::solid(size.width(), size.height(), Qt::black);
+    return titlePicture(effect, black, 0.0, model::EffectSpan(std::max<std::int64_t>(length, 1))).toImage();
+}
+
 } // namespace lumenis::media

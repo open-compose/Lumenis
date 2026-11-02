@@ -323,6 +323,8 @@ public:
     bool setTitleRollCrawl(bool on);
     QStringList trackerNames() const;
     bool trackingWindowShown() const;
+    // The shown Titler+ effect as it is stored, and its length in frames; nothing when another effect is shown.
+    std::optional<std::pair<model::Effect, std::int64_t>> shownTitlerEffect() const;
     void refreshTitleOverlay() { syncPreview(); }
     // The shown effect as previewed, for the Record monitor's picture: its place and the effect, while a preview is
     // under way at the outermost level.
@@ -467,6 +469,8 @@ signals:
     void optionsChanged();
     // The Render Effect button was clicked, with these keys held (FX Guide p.58, p.61).
     void renderRequested(Qt::KeyboardModifiers modifiers);
+    // The Titler+ Dashboard's Save or Save As (FX Guide p.319-320; MainWindow keeps templates).
+    void titleTemplateSaveRequested(bool saveAs);
 
 protected:
     // Shift+Left and Shift+Right on a slider move it by ten; clicking a control makes its parameter

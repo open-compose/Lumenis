@@ -815,4 +815,43 @@ int applyTitler(Sequence& sequence, const QString& track, std::optional<std::pai
     return applied;
 }
 
+// ---------------------------------------------------------------- templates
+
+bool isTitleTemplate(const BinItem& item) {
+    const auto t = effectTemplateOf(item);
+    return t && !t->transition && isTitlerEffect(t->effect);
+}
+
+BinItem titleTemplateSequence(const EffectTemplate& t, const Rational& editRate, const QString& name, const QDateTime& when) {
+    BinItem item;
+    item.id = newItemId();
+    item.name = name;
+    item.kind = BinItemKind::Sequence;
+    item.editRate = editRate;
+    item.created = when;
+    item.modified = when;
+    Sequence seq = Sequence::withDefaultTracks();
+    const std::int64_t length = t.length > 0 ? t.length : static_cast<std::int64_t>(std::lround(10.0 * editRate.toDouble()));
+    Segment s = Segment::filler(std::max<std::int64_t>(length, 1));
+    s.effect = adaptedEffect(t, editRate);
+    seq.splice(QStringLiteral("V1"), 0, {s});
+    seq.storeIn(item);
+    return item;
+}
+
+std::optional<EffectTemplate> titleTemplateFromSequence(const BinItem& sequence, const Rational& editRate) {
+    const Sequence seq = Sequence::fromItem(sequence);
+    const Track* v1 = seq.track(QStringLiteral("V1"));
+    if (!v1) return std::nullopt;
+    for (const Segment& s : v1->segments) {
+        if (!s.effect || !isTitlerEffect(*s.effect)) continue;
+        EffectTemplate t;
+        t.effect = *s.effect;
+        t.length = s.length;
+        t.editRate = editRate;
+        return t;
+    }
+    return std::nullopt;
+}
+
 } // namespace lumenis::model

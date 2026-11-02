@@ -1,9 +1,11 @@
 #include "lumenis/ui/bin_view.h"
 
+#include "lumenis/media/titler.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/effect_template.h"
 #include "lumenis/model/motion_adapter.h"
+#include "lumenis/model/titler.h"
 
 #include "lumenis/ui/bin_dialogs.h"
 #include "lumenis/ui/bin_dock.h"
@@ -125,6 +127,13 @@ void paintFrame(QPainter& p, const QRect& frame, model::BinItemKind kind, const 
     const int s = std::max(12, std::min(frame.width(), frame.height()) / 3);
     const QRect icon(frame.center() - QPoint(s / 2, s / 2), QSize(s, s));
     glyphIcon(iconFor(kind)).paint(&p, icon, Qt::AlignCenter, QIcon::Disabled);
+}
+
+// A Titler+ template's first frame over black (FX Guide p.319); null for other items.
+QImage titleTemplatePicture(const model::BinItem& item, QSize size) {
+    if (!model::isTitleTemplate(item)) return {};
+    const auto t = model::effectTemplateOf(item);
+    return media::titleFirstFrame(t->effect, t->length, size);
 }
 
 // A 14-pixel colour square for the colour menus; an invalid colour (None) is
@@ -825,6 +834,9 @@ BinFrameView::BinFrameView(BinDocument& document, QWidget* parent) : QListView(p
 
 QImage BinFrameView::picture(const QString& id, QSize size) const {
     const model::BinItem* item = document_.bin().item(id);
+    if (item) {
+        if (const QImage title = titleTemplatePicture(*item, size); !title.isNull()) return title;
+    }
     MediaFrames* frames = MediaFrames::instance();
     return item && frames ? frames->thumbnail(*item, 0, size) : QImage();
 }
@@ -1093,7 +1105,8 @@ QPixmap BinScriptView::scriptPicture(const model::BinItem& item, QSize size) con
     pm.fill(Qt::transparent);
     QPainter p(&pm);
     MediaFrames* frames = MediaFrames::instance();
-    paintFrame(p, QRect(QPoint(0, 0), size), item.kind, frames ? frames->thumbnail(item, 0, size) : QImage());
+    const QImage title = titleTemplatePicture(item, size);
+    paintFrame(p, QRect(QPoint(0, 0), size), item.kind, !title.isNull() ? title : frames ? frames->thumbnail(item, 0, size) : QImage());
     return pm;
 }
 
@@ -2114,6 +2127,15 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
             });
             promote->setObjectName(QStringLiteral("promoteEffects"));
             promote->setEnabled(!document_.isReadOnly());
+        }
+    }
+    // "Right-click on a template in the bin and choose Edit Template" (FX Guide p.320).
+    if (selectedIds().size() == 1) {
+        const model::BinItem* item = document_.bin().item(selectedIds().first());
+        if (item && model::isTitleTemplate(*item)) {
+            const QString id = item->id;
+            QAction* edit = menu->addAction(tr("Edit Template"), this, [this, id] { emit editTemplateRequested(id); });
+            edit->setObjectName(QStringLiteral("editTemplate"));
         }
     }
     colorMenu(menu, tr("Set Background Color"), true);

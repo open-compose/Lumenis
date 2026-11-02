@@ -29,6 +29,7 @@
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
 #include "lumenis/model/timewarp.h"
+#include "lumenis/model/titler.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/media/render.h"
 #include "lumenis/ext/provider.h"
@@ -633,6 +634,11 @@ void MainWindow::createPanels() {
     composer_ = new Composer;
     // Bin items are looked up in the bins open in the Bin Container; items in closed bins are not found.
     composer_->setItemResolver([this](const QString& binId, const QString& itemId) -> std::optional<model::BinItem> {
+        // The Titler+ template being edited lives in no bin (editTitleTemplate).
+        if (binId == QLatin1String(kTitleTemplateBin)) {
+            if (templateEdit_ && templateEdit_->sequence.id == itemId) return templateEdit_->sequence;
+            return std::nullopt;
+        }
         const BinDocument* doc = binContainer_->document(binId);
         const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr;
         if (!item) return std::nullopt;
@@ -879,6 +885,14 @@ void MainWindow::createPanels() {
         return range;
     });
     timeline_->setSequenceStore([this](const QString& binId, const model::BinItem& item, bool isNew) {
+        // Edits to a Titler+ template being edited stay with it until Save (p.320).
+        if (binId == QLatin1String(kTitleTemplateBin)) {
+            if (templateEdit_ && templateEdit_->sequence.id == item.id) {
+                templateEdit_->sequence = item;
+                templateEdit_->dirty = true;
+            }
+            return true;
+        }
         BinDocument* doc = binContainer_->document(binId);
         if (!doc) doc = binContainer_->openBin(binId);
         if (!doc) return false;
@@ -1507,13 +1521,14 @@ void MainWindow::createTools() {
     effectEditor_ = new EffectEditor(*timeline_);
     // "The Avid Titler+ Dashboard and the Effect Editor open" (FX Guide p.303; the Dashboard comes in 6.8b).
     // Ours: in Effect mode, whose Effect Preview the title is edited in (titler_tool.h).
-    connect(timeline_, &Timeline::titlerApplied, this, [this] {
-        showTool(QStringLiteral("EffectEditor"));
-        timeline_->setEffectMode(true);
-        TitlerDashboard* dashboard = effectEditor_->titlerDashboard();
-        dashboard->show();
-        dashboard->raise();
-    });
+    connect(timeline_, &Timeline::titlerApplied, this, [this] { openTitleEditing(); });
+    // Titler+ templates: Edit Template, a drop on the Record monitor, the Dashboard's Save and Save As (p.319-320).
+    connect(binContainer_, &BinContainer::editTemplateRequested, this,
+            [this](const QString& binId, const QString& itemId) { editTitleTemplate(binId, itemId); });
+    connect(composer_, &Composer::titleTemplateDropped, this,
+            [this](const QString& binId, const QString& itemId) { editTitleTemplate(binId, itemId); });
+    connect(effectEditor_, &EffectEditor::titleTemplateSaveRequested, this, [this](bool as) { saveTitleTemplate(as); });
+    connect(composer_, &Composer::changed, this, [this] { checkTitleTemplate(); });
     // AutoStabilize "Opens the Effect Editor (if necessary) and the Tracking window", then tracks (FX Guide p.277).
     // After the drop or double-click that applied the effect has finished.
     connect(timeline_, &Timeline::autoStabilizeRequested, this, [this](const QString& track, std::int64_t frame) {
@@ -5782,6 +5797,88 @@ void MainWindow::showAbout() {
     QMessageBox* box = createAboutBox();
     box->setAttribute(Qt::WA_DeleteOnClose);
     box->exec();
+}
+
+// ---------------------------------------------------------------- Titler+ templates (6.8c4a)
+
+void MainWindow::openTitleEditing() {
+    showTool(QStringLiteral("EffectEditor"));
+    timeline_->setEffectMode(true);
+    TitlerDashboard* dashboard = effectEditor_->titlerDashboard();
+    dashboard->show();
+    dashboard->raise();
+}
+
+bool MainWindow::editTitleTemplate(const QString& binId, const QString& itemId) {
+    BinDocument* doc = binContainer_->document(binId);
+    const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr;
+    if (!item || !model::isTitleTemplate(*item)) return false;
+    const model::EffectTemplate t = *model::effectTemplateOf(*item);
+    const Rational rate = project_ ? project_->settings.format.editRate : t.editRate.num() > 0 ? t.editRate : Rational(25);
+    const model::BinItem sequence = model::titleTemplateSequence(t, rate, item->name, QDateTime::currentDateTimeUtc());
+    // A template edited before goes first (and asks to be saved when it has changes).
+    templateEdit_ = TitleTemplateEdit{binId, itemId, sequence, false};
+    composer_->load(MonitorId::Record, QLatin1String(kTitleTemplateBin), sequence);
+    composer_->moveTo(MonitorId::Record, 0);
+    openTitleEditing();
+    return true;
+}
+
+bool MainWindow::storeTitleTemplate(TitleTemplateEdit& edit, bool saveAs) {
+    BinDocument* doc = binContainer_->document(edit.binId);
+    if (!doc) doc = binContainer_->openBin(edit.binId);
+    const model::BinItem* old = doc ? doc->bin().item(edit.templateId) : nullptr;
+    if (!old || doc->isReadOnly()) return false;
+    const Rational rate = project_ ? project_->settings.format.editRate : Rational(25);
+    const auto t = model::titleTemplateFromSequence(edit.sequence, rate);
+    if (!t) return false;
+    const QDateTime now = QDateTime::currentDateTimeUtc();
+    if (saveAs) {
+        // "Create a duplicate with the new changes" (ours: named "<name> Copy"); the copy is edited from now on.
+        const model::BinItem copy = model::effectTemplateItem(*t, tr("%1 Copy").arg(old->name), now);
+        doc->addItem(copy);
+        edit.templateId = copy.id;
+    } else {
+        model::BinItem updated = model::effectTemplateItem(*t, old->name, now);
+        updated.id = old->id;
+        updated.created = old->created;
+        if (!doc->replaceItem(updated)) return false;
+    }
+    edit.dirty = false;
+    return true;
+}
+
+bool MainWindow::saveTitleTemplate(bool saveAs) {
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (templateEdit_ && rec && rec->item.id == templateEdit_->sequence.id) return storeTitleTemplate(*templateEdit_, saveAs);
+    // No template open: the shown title becomes a new one in the active bin.
+    const auto shown = effectEditor_->shownTitlerEffect();
+    BinDocument* doc = binContainer_->activeDocument();
+    if (!doc && !binContainer_->openDocuments().isEmpty()) doc = binContainer_->openDocuments().first();
+    if (!shown || !doc || doc->isReadOnly()) return false;
+    model::EffectTemplate t;
+    t.effect = shown->first;
+    t.length = shown->second;
+    t.editRate = project_ ? project_->settings.format.editRate : Rational(25);
+    doc->addItem(model::effectTemplateItem(t, model::effectTemplateName(t), QDateTime::currentDateTimeUtc()));
+    return true;
+}
+
+void MainWindow::checkTitleTemplate() {
+    if (!templateEdit_) return;
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (rec && rec->item.id == templateEdit_->sequence.id) return;
+    // The template left the Record monitor; forgotten first, so that what the prompt does comes back to nothing here.
+    TitleTemplateEdit edit = *templateEdit_;
+    templateEdit_.reset();
+    if (!edit.dirty) return;
+    const BinDocument* doc = binContainer_->document(edit.binId);
+    const model::BinItem* item = doc ? doc->bin().item(edit.templateId) : nullptr;
+    const QString name = item ? item->name : QString();
+    const bool save = askTemplateSave_ ? askTemplateSave_(name)
+                                       : QMessageBox::question(this, tr("Titler+"), tr("Save the changes to the template \"%1\"?").arg(name),
+                                                               QMessageBox::Save | QMessageBox::Discard) == QMessageBox::Save;
+    if (save) storeTitleTemplate(edit, false);
 }
 
 } // namespace lumenis::ui

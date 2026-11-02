@@ -472,6 +472,8 @@ signals:
     void filesDropped(const QStringList& paths);
     // Double-click on an item: it loads into a monitor (p.394).
     void itemActivated(const QString& itemId);
+    // Edit Template on a Titler+ template (FX Guide p.320).
+    void editTemplateRequested(const QString& itemId);
     // saveViewAs() changed BinViewLibrary.
     void viewSaved();
     // The Bin Lock Status button was clicked, `alt` with Alt (Option) held

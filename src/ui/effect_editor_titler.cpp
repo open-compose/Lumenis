@@ -11,8 +11,19 @@
 namespace lumenis::ui {
 
 TitlerDashboard* EffectEditor::titlerDashboard() {
-    if (!titlerDashboard_) titlerDashboard_ = new TitlerDashboard(*titler_, this);
+    if (!titlerDashboard_) {
+        titlerDashboard_ = new TitlerDashboard(*titler_, this);
+        connect(titlerDashboard_, &TitlerDashboard::saveRequested, this, [this](bool as) {
+            titler_->finishEditing();
+            emit titleTemplateSaveRequested(as);
+        });
+    }
     return titlerDashboard_;
+}
+
+std::optional<std::pair<model::Effect, std::int64_t>> EffectEditor::shownTitlerEffect() const {
+    if (!current_ || !model::isTitlerEffect(*current_)) return std::nullopt;
+    return std::pair{*current_, span_.length};
 }
 
 std::optional<model::Title> EffectEditor::shownTitle() const {

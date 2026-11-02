@@ -1081,6 +1081,8 @@ BinDocument* BinContainer::openBin(const QString& requested, bool takeLock) {
     });
     connect(view, &BinView::itemActivated, this,
             [this, doc](const QString& itemId) { emit itemActivated(doc->nodeId(), itemId); });
+    connect(view, &BinView::editTemplateRequested, this,
+            [this, doc](const QString& itemId) { emit editTemplateRequested(doc->nodeId(), itemId); });
     // Items dragged in from another bin, after the drag has finished.
     connect(view, &BinView::itemsDropped, this,
             [this, doc](const QString& from, const QStringList& ids, bool copy) {

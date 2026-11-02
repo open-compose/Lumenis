@@ -2,6 +2,7 @@
 
 #include "lumenis/core/timecode.h"
 #include "lumenis/model/motion_adapter.h"
+#include "lumenis/model/titler.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/button_mapping.h"
 #include "lumenis/ui/theme.h"
@@ -1778,7 +1779,14 @@ void Composer::loadDefault(const QString& binId, const model::BinItem& item) {
 void Composer::loadFromBin(MonitorId monitor, const QString& binId, const QStringList& itemIds) {
     if (!resolver_) return;
     for (const QString& id : itemIds) {
-        if (const auto item = resolver_(binId, id)) load(monitor, binId, *item);
+        const auto item = resolver_(binId, id);
+        if (!item) continue;
+        // "Drag the template to the Record monitor" opens it there to be edited (FX Guide p.320).
+        if (model::isTitleTemplate(*item)) {
+            if (monitor == MonitorId::Record) emit titleTemplateDropped(binId, id);
+            continue;
+        }
+        load(monitor, binId, *item);
     }
 }
 

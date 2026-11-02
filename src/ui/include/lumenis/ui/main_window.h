@@ -533,6 +533,19 @@ public:
     // with `replace` (or a name already used) in place of that view's; it becomes the one in use.
     void saveTimelineView(const QString& name, bool replace);
 
+    // Titler+ templates (FX Guide p.319-320, ROADMAP 6.8c4a). Edit Template, or a template dragged to the Record
+    // monitor, "opens the template in the Record monitor" (model::titleTemplateSequence, under the bin id
+    // kTitleTemplateBin, which keeps no items). False when the item is not a Titler+ template.
+    bool editTitleTemplate(const QString& binId, const QString& itemId);
+    // The Dashboard's Save ("Update the current template with new changes") and Save As ("Create a duplicate with the
+    // new changes"); with no template being edited both keep the shown Titler+ effect as a new template in the active
+    // bin (ours). False when there is nothing to save.
+    bool saveTitleTemplate(bool saveAs);
+    // "Open another sequence in the Record monitor, which prompts you to save": asked with the template's name when
+    // an edited template with changes leaves the Record monitor; true saves. A message box until set (tests set it).
+    void setTemplateSavePrompt(std::function<bool(const QString&)> ask) { askTemplateSave_ = std::move(ask); }
+    static constexpr const char* kTitleTemplateBin = "titleTemplate";
+
     // The layout of a new user (p.74): Bin Container top left, Composer to
     // its right, Timeline along the bottom.
     static QJsonObject defaultLayout();
@@ -556,6 +569,22 @@ protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
 private:
+    // The Titler+ template open in the Record monitor (editTitleTemplate): where it is, its sequence as edited, and
+    // whether that has changes not yet saved.
+    struct TitleTemplateEdit {
+        QString binId;
+        QString templateId;
+        model::BinItem sequence;
+        bool dirty = false;
+    };
+    std::optional<TitleTemplateEdit> templateEdit_;
+    std::function<bool(const QString&)> askTemplateSave_;
+    // Saves an edited template (Save, or Save As a copy, which then is the one edited); false when it cannot.
+    bool storeTitleTemplate(TitleTemplateEdit& edit, bool saveAs);
+    // After the Record monitor changed: an edited template that left it is forgotten, saved first if asked.
+    void checkTitleTemplate();
+    // The Effect Editor in Effect mode with the Dashboard, as after applying Titler+ (p.303).
+    void openTitleEditing();
     // Command handlers: application-wide (installHandlers), needing the panels (installPanelHandlers),
     // and needing a project, cleared again with false (installProjectHandlers).
     void installHandlers();

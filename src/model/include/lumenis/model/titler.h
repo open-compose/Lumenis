@@ -10,6 +10,7 @@
 // font sizes in those pixels, so a title looks the same in every raster.
 
 #include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/effect_template.h"
 #include "lumenis/model/sequence.h"
 
 #include <QList>
@@ -282,5 +283,17 @@ bool setRollCrawl(Effect& effect, bool on, const EffectSpan& span);
 // keeps it in a nest under the title, as Alt-nesting does (ours; FX Guide p.216). Returns how many segments got one.
 int applyTitler(Sequence& sequence, const QString& track, std::optional<std::pair<std::int64_t, std::int64_t>> marks,
                 const QList<SegmentRef>& targets);
+
+// ---- Titler+ templates (6.8c4a; p.319-320)
+// "you can drag the Avid Titler+ effect icon from the Effect Editor into a bin, which creates a template of that
+// effect" (p.319): an effect template (effect_template.h) whose effect is Titler+.
+bool isTitleTemplate(const BinItem& item);
+// The sequence a template is edited in: "Either method opens the template in the Record monitor, where you can make
+// adjustments to text, colors, animation timing, and other properties" (p.320). Ours: a sequence named after the
+// template with its effect on filler on V1, as long as the template was (10 seconds when it does not say).
+BinItem titleTemplateSequence(const EffectTemplate& t, const Rational& editRate, const QString& name, const QDateTime& when);
+// The template such a sequence holds now: its first Titler+ segment on V1, with that segment's length. Nothing when
+// there is none.
+std::optional<EffectTemplate> titleTemplateFromSequence(const BinItem& sequence, const Rational& editRate);
 
 } // namespace lumenis::model

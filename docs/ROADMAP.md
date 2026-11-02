@@ -1080,10 +1080,14 @@ phase of their own. They are done in three steps:
     * 6.8c2, formatting selected characters (p.304, p.309; docs/spec/titler.md). Done.
     * 6.8c3, Roll and Crawl with the Effect Position, and tracking data on objects (p.324-326;
       docs/spec/titler.md). Done.
-    * 6.8c4, templates and presets in bins, promotion from the classic Title Tool, titles in EDLs and
-      Find (p.319-326).
+    * 6.8c4, in two parts: 6.8c4a, templates (the Frame view's still, Edit Template and dropping on the
+      Record monitor, the Dashboard's Save and Save As, the save prompt; p.319-320; docs/spec/titler.md),
+      done; 6.8c4b, templates as presets on parameters (p.320) and titles in EDLs (p.327). Promote Titles
+      from the classic Title Tool (p.326) moves to 6.8d, which makes the classic titles; titles in Find are
+      dropped (neither guide says so).
   * 6.8d, the classic Title Tool: the drawing environment, text and graphic objects, colour, transparency
     and shadows, rolling and crawling titles, styles, saving titles as fill and matte clips (p.326-364).
+    Then Promote Titles > Avid Titler+ (p.326).
   * 6.8e, editing with titles: title clips in bins, editing them in, fading, marks and trims of rolls and
     crawls, revising and replacing, re-creating title media, the troubleshooting options (ch.13,
     p.365-377).

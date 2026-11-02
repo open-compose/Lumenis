@@ -268,6 +268,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   (names, ranges, a quarter of the frame until set), frame-to-frame
   correlation with a search area twice the region, the original picture
   in the Effect Preview, Progressive Source without effect yet.
+* Titler+ templates (docs/spec/titler.md, 6.8c4a): a template edited as a
+  sequence of its length (ten seconds when unknown) kept out of the bins,
+  Save As naming its copy "<name> Copy" and editing that, Save and Save As
+  with no template open making a new one in the active bin, the save prompt
+  coming after the other sequence is loaded.
 * Titler+ Roll / Crawl and tracking (docs/spec/titler.md, 6.8c3): the path's
   ends (bounds just outside a 1920 x 1080 frame), the default linear keyframes
   being Fixed, Edit Mode off leaving the tools inactive, the Effect Position
