@@ -10,6 +10,7 @@
 #include "lumenis/model/nest.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
+#include "lumenis/model/title_clip.h"
 #include "lumenis/model/tracking.h"
 #include "lumenis/model/timewarp.h"
 
@@ -727,7 +728,8 @@ QList<Segment> Sequence::extract(const QString& name, std::int64_t start, std::i
 
 // Audio clips without a Tracks column offer A1 and A2.
 QStringList sourceTracksOf(const BinItem& item) {
-    if (item.kind == BinItemKind::Sequence) return Sequence::fromItem(item).trackNames();
+    // A Title Effect clip is a one-track composition (title_clip.h): V1.
+    if (item.kind == BinItemKind::Sequence || item.kind == BinItemKind::Title) return Sequence::fromItem(item).trackNames();
     QStringList tracks = parseTrackList(item.fields.value(QStringLiteral("Tracks")));
     if (!tracks.isEmpty() && !trackFormatsOf(item).isEmpty()) {
         // The audio channels as grouped by the Track Formats.
@@ -987,7 +989,7 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
     if (!plan.ok()) return changed;
     const bool anyTracks = !sequence.tracks().isEmpty();
     const std::optional<Sequence> nested =
-        source.kind == BinItemKind::Sequence ? std::optional<Sequence>(Sequence::fromItem(source)) : std::nullopt;
+        source.kind == BinItemKind::Sequence || source.kind == BinItemKind::Title ? std::optional<Sequence>(Sequence::fromItem(source)) : std::nullopt;
     for (const auto& [from, to] : patch.editPairs(sequence)) {
         const AudioFormat format = sourceFormat(source, from);
         if (const Track* existing = sequence.track(to); existing && (existing->locked || (existing->kind == TrackKind::Audio && existing->format != format))) {
@@ -998,6 +1000,14 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
         QList<Segment> material;
         if (nested) {
             material = nested->material(from, plan.sourceStart, plan.length);
+            // A rolling or crawling title starts where the source IN is in its roll (title_clip.h, FX Guide p.370).
+            if (source.kind == BinItemKind::Title) {
+                for (Segment& s : material) {
+                    if (s.effect && isClassicTitleEffect(*s.effect) && source.durationFrames > 0) {
+                        setTitleRollStart(*s.effect, static_cast<double>(plan.sourceStart) / static_cast<double>(source.durationFrames));
+                    }
+                }
+            }
         } else {
             Segment s;
             s.clipId = source.id;

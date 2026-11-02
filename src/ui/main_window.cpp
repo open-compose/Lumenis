@@ -1893,9 +1893,13 @@ QStringList MainWindow::shownVideoTracks(MonitorId monitor, const model::Sequenc
     for (int i = 0; i < video.size(); ++i) {
         if (timeline_->isMonitored(video.at(i))) top = i;
     }
+    // "When there are multiple video tracks, all tracks below the monitored track are active during playback"
+    // (p.627): the topmost monitored track and every one under it, whether or not Auto-Monitoring took the
+    // monitor off them (p.629).
+    // An expanded nest's rows are the nest's own (p.220): not tracks of their own.
     QStringList shown;
     for (int i = 0; i <= top; ++i) {
-        if (timeline_->isMonitored(video.at(i))) shown << video.at(i);
+        if (!timeline_->isNestedRow(video.at(i))) shown << video.at(i);
     }
     return shown;
 }
@@ -5979,7 +5983,22 @@ QString MainWindow::saveClassicTitle(const model::ClassicTitle& title, const Tit
     }
     // "Media Composer loads titles into the Source monitor as they are saved" (p.359).
     composer_->load(MonitorId::Source, doc->nodeId(), item);
+    if (!request.placeTrack.isEmpty()) placeTitle(item, request.placeTrack);
     return item.id;
+}
+
+bool MainWindow::placeTitle(const model::BinItem& clip, const QString& track) {
+    // "The title is placed in the Timeline between the In and Out marks" (p.359): overwritten on `track`.
+    const model::MonitorState& rec = composer_->state(MonitorId::Record);
+    auto segment = model::titleSegmentOf(clip);
+    if (!segment || !rec.in() || !rec.out() || *rec.out() < *rec.in()) return false;
+    const std::int64_t in = *rec.in();
+    segment->length = *rec.out() - in + 1; // marks are inclusive
+    return timeline_->changeRecordSequence(tr("Place Title"), [&](model::Sequence& seq) {
+        if (!seq.ensureTrack(track)) return false;
+        seq.overwrite(track, in, {*segment});
+        return true;
+    });
 }
 
 QList<model::ClassicTitleStyle> MainWindow::titleStyles() const {
@@ -6054,6 +6073,22 @@ void MainWindow::openTitleTool(bool ask) {
         };
         saver.save = [this](const model::ClassicTitle& title, const TitleToolWindow::SaveRequest& request, const QString& replaceId, QString* error) {
             return saveClassicTitle(title, request, replaceId, error);
+        };
+        saver.placeTracks = [this] {
+            // The record sequence's video tracks and the next one, with both marks set (p.359).
+            const model::MonitorState& rec = composer_->state(MonitorId::Record);
+            const model::LoadedClip* loaded = rec.current();
+            if (!loaded || loaded->item.kind != model::BinItemKind::Sequence || !rec.in() || !rec.out()) return QStringList();
+            const model::Sequence seq = model::Sequence::fromItem(loaded->item);
+            QStringList tracks;
+            int top = 0;
+            for (const model::Track& t : seq.tracks()) {
+                if (t.kind != model::TrackKind::Video) continue;
+                tracks << t.name();
+                top = std::max(top, t.number);
+            }
+            tracks << model::trackName(model::TrackKind::Video, top + 1);
+            return tracks;
         };
         tool->setSaver(saver);
         tool->setClipOpener([this](const QString& bin, const QString& itemId) { return reviseTitle(bin, itemId); });

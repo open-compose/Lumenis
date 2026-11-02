@@ -3499,7 +3499,7 @@ bool Timeline::edit(model::EditKind kind, bool fitToFill) {
         fail(plan.error);
         return false;
     }
-    if (fitToFill && src->item.kind == model::BinItemKind::Sequence) {
+    if (fitToFill && (src->item.kind == model::BinItemKind::Sequence || src->item.kind == model::BinItemKind::Title)) {
         fail(tr("Fit to Fill needs a clip in the Source monitor."));
         return false;
     }
@@ -5327,6 +5327,7 @@ std::optional<std::pair<QString, model::BinItem>> Timeline::droppedClip(const QM
     case model::BinItemKind::AudioClip:
     case model::BinItemKind::Group:
     case model::BinItemKind::Sequence:
+    case model::BinItemKind::Title: // "Click the Title Effect Clip icon in the bin, and drag it to the Timeline" (FX p.368)
         break;
     default:
         return std::nullopt;

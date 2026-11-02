@@ -3,13 +3,16 @@
 // and the clip in the chosen bin and loads it into the Source monitor, which shows the title over black; Fast Save makes
 // an "unrendered." clip without media, found by Bin > Select > Unrendered Titles; revising replaces the clip, and Save
 // Title As keeping the name numbers the new one. Title styles are kept as User settings (6.8d4b). Promote Titles > Avid Titler+
-// turns a classic title segment into a Titler+ one (6.8d4c).
+// turns a classic title segment into a Titler+ one (6.8d4c). Title clips edited into sequences, faded and placed
+// (6.8e1).
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/managed.h"
+#include "lumenis/media/media.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/title_clip.h"
 #include "lumenis/model/titler.h"
 #include "lumenis/ui/bin_container.h"
+#include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
@@ -23,6 +26,7 @@
 #include <QDateTime>
 #include <QDir>
 #include <QMenu>
+#include <QMimeData>
 #include <QMessageBox>
 #include <QTemporaryDir>
 #include <QTest>
@@ -34,6 +38,32 @@ namespace {
 
 void settle() {
     for (int i = 0; i < 3; ++i) QCoreApplication::processEvents();
+}
+
+bool writeMovie(const QString& path, int frames) {
+    media::WriterSettings s;
+    s.format = QStringLiteral("mov");
+    s.videoCodec = QStringLiteral("ffv1");
+    s.pixelFormat = QStringLiteral("bgr0");
+    s.width = 64;
+    s.height = 36;
+    s.frameRate = Rational(25);
+    media::MediaWriter w;
+    if (!w.open(path, s)) return false;
+    for (int i = 0; i < frames; ++i) {
+        QImage image(64, 36, QImage::Format_RGBA8888);
+        image.fill(QColor(0, 0, 255));
+        if (!w.writeVideo(image)) return false;
+    }
+    return w.finish();
+}
+
+bool isRed(const QColor& c) {
+    return c.red() > 200 && c.green() < 60 && c.blue() < 60;
+}
+
+bool isBlue(const QColor& c) {
+    return c.blue() > 200 && c.red() < 60 && c.green() < 60;
 }
 
 } // namespace
@@ -180,6 +210,142 @@ private slots:
         const model::Sequence undone = model::Sequence::fromItem(window.composer().state(MonitorId::Record).current()->item);
         QVERIFY(model::isClassicTitleEffect(*undone.track(QStringLiteral("V2"))->segments.at(0).effect));
         tool->hide();
+        media::setExtraMediaDrives({});
+    }
+
+    // Editing Title Effect clips into a sequence (6.8e1, FX Guide p.365-371): overwriting from the Source monitor with
+    // marks, keyed over the video below; the Fade Effect button; Place in Timeline; a rolling title's start from its
+    // source IN; a title dragged from a bin.
+    void editingTitles() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        const QString movie = dir.filePath(QStringLiteral("blue.mov"));
+        QVERIFY(writeMovie(movie, 60));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 320;
+        project.settings.format.height = 180;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        if (QWidget* editing = QApplication::focusWidget()) editing->clearFocus();
+        settle();
+        // A sequence of the blue clip on V1.
+        const QStringList ids = window.linkFiles(binId, {movie});
+        QCOMPARE(ids.size(), 1);
+        Composer& composer = window.composer();
+        Timeline& timeline = window.timeline();
+        composer.loadDefault(binId, *bin->bin().item(ids.first()));
+        QVERIFY(timeline.perform(QStringLiteral("edit.splice_in")));
+        QVERIFY(timeline.perform(QStringLiteral("timeline.new.video_track")));
+        auto record = [&] { return model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item); };
+        QVERIFY(record().track(QStringLiteral("V2")));
+
+        // A red box over the top-left quarter, saved: it loads into the Source monitor.
+        model::ClassicTitle title;
+        model::ClassicObject box;
+        box.id = QStringLiteral("Box 1");
+        box.kind = model::ClassicKind::Box;
+        box.rect = QRectF(0, 0, 960, 540);
+        box.fill.color = QStringLiteral("#ff0000");
+        title.objects << box;
+        TitleToolWindow::SaveRequest request;
+        request.name = QStringLiteral("Lower Third");
+        request.bin = binId;
+        request.drive = drive;
+        request.resolution = QStringLiteral("dnx_hq");
+        QString error;
+        const QString titleId = window.saveClassicTitle(title, request, QString(), &error);
+        QVERIFY2(!titleId.isEmpty(), qPrintable(error));
+        QCOMPARE(composer.state(MonitorId::Source).current()->item.id, titleId);
+        // Patched to V2 (p.366), marked, overwritten.
+        QVERIFY(timeline.patchTracks(QStringLiteral("V1"), QStringLiteral("V2")));
+        model::MonitorState& source = composer.state(MonitorId::Source);
+        composer.moveTo(MonitorId::Source, 100);
+        source.markIn();
+        model::MonitorState& rec = composer.state(MonitorId::Record);
+        composer.moveTo(MonitorId::Record, 5);
+        rec.markIn();
+        composer.moveTo(MonitorId::Record, 14);
+        rec.markOut();
+        QVERIFY2(timeline.perform(QStringLiteral("edit.overwrite")), qPrintable(timeline.lastMessage()));
+        model::Sequence seq = record();
+        const auto placed = model::segmentFor(seq, model::SegmentRef{QStringLiteral("V2"), 5});
+        QVERIFY(placed && placed->length == 10 && placed->effect && model::isClassicTitleEffect(*placed->effect));
+        QVERIFY(placed->hasNest());
+        QVERIFY(model::segmentFor(seq, model::SegmentRef{QStringLiteral("V1"), 0})); // the video stays
+        // "Media Composer keys the title over the underlying video layers" (p.488).
+        bool offline = false;
+        QImage shown = composer.pictureAt(MonitorId::Record, 8, QSize(320, 180), &offline);
+        QVERIFY(!offline);
+        QVERIFY2(isRed(shown.pixelColor(40, 40)), qPrintable(shown.pixelColor(40, 40).name()));
+        // Patching to V2 moved the monitor there (Auto-Monitoring, p.629); V1 below it still plays (p.627).
+        QVERIFY(timeline.isMonitored(QStringLiteral("V2")));
+        QVERIFY2(isBlue(shown.pixelColor(280, 150)), qPrintable(shown.pixelColor(280, 150).name()));
+        // Fading a title (p.370): it starts from nothing.
+        timeline.setSelection({model::SegmentRef{QStringLiteral("V2"), 5}});
+        QCOMPARE(timeline.fadeEffects(4, 4), 1);
+        shown = composer.pictureAt(MonitorId::Record, 5, QSize(320, 180));
+        QVERIFY2(isBlue(shown.pixelColor(40, 40)), qPrintable(shown.pixelColor(40, 40).name()));
+        shown = composer.pictureAt(MonitorId::Record, 9, QSize(320, 180));
+        QVERIFY(isRed(shown.pixelColor(40, 40)));
+        timeline.setSelection({});
+
+        // Place in Timeline (In -> Out) on V3 (p.359).
+        composer.moveTo(MonitorId::Record, 20);
+        rec.markIn();
+        composer.moveTo(MonitorId::Record, 29);
+        rec.markOut();
+        request.placeTrack = QStringLiteral("V3");
+        request.name = QStringLiteral("Placed");
+        QVERIFY(!window.saveClassicTitle(title, request, QString(), &error).isEmpty());
+        seq = record();
+        const auto onV3 = model::segmentFor(seq, model::SegmentRef{QStringLiteral("V3"), 20});
+        QVERIFY(onV3 && onV3->length == 10 && onV3->effect && model::isClassicTitleEffect(*onV3->effect));
+
+        // A rolling title marked halfway in the Source monitor starts halfway through its roll (p.370).
+        model::ClassicTitle roll = title;
+        roll.motion = model::ClassicMotion::Rolling;
+        roll.pages = 2;
+        request.placeTrack.clear();
+        request.name = QStringLiteral("Roll");
+        const QString rollId = window.saveClassicTitle(roll, request, QString(), &error);
+        QVERIFY2(!rollId.isEmpty(), qPrintable(error));
+        const std::int64_t clipLength = bin->bin().item(rollId)->durationFrames;
+        composer.moveTo(MonitorId::Source, clipLength / 2);
+        composer.state(MonitorId::Source).markIn();
+        composer.moveTo(MonitorId::Record, 40);
+        rec.clearBoth();
+        rec.markIn();
+        composer.moveTo(MonitorId::Record, 49);
+        rec.markOut();
+        QVERIFY(timeline.patchTracks(QStringLiteral("V1"), QStringLiteral("V2")));
+        QVERIFY2(timeline.perform(QStringLiteral("edit.overwrite")), qPrintable(timeline.lastMessage()));
+        const auto rolled = model::segmentFor(record(), model::SegmentRef{QStringLiteral("V2"), 40});
+        QVERIFY(rolled && rolled->effect);
+        QVERIFY(std::abs(model::titleRollStart(*rolled->effect) - 0.5) < 0.01);
+
+        // Dragged from a bin (p.367-368).
+        auto* mime = new QMimeData;
+        mime->setData(binItemsMime(), (binId + QLatin1Char('\n') + titleId + QLatin1Char('\n')).toUtf8());
+        const auto dropped = timeline.droppedClip(mime);
+        QVERIFY(dropped && dropped->second.kind == model::BinItemKind::Title);
+        delete mime;
         media::setExtraMediaDrives({});
     }
 };

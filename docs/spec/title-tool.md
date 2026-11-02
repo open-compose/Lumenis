@@ -255,3 +255,33 @@ Tests: `tst_classic_title`, `tst_title_tool`, `tst_title_clips`. Title Effect cl
 * `Timeline::promoteTitles` (the Timeline's context menu, Promote Titles > Avid Titler+, enabled when a selected or
   clicked segment is a classic Title effect): the segment's effect becomes Avid Titler+, its precompute nest and render
   go; one undo step for all of them.
+
+## 6.8e1: editing titles into sequences
+
+### From the guide
+* Three ways in (p.365-368): mark and splice or overwrite the Title Effect clip from the Source monitor, patched to a
+  track above the video ("You must place titles on a track above the video that forms the background"); drag a marked
+  title from the bin; drag an unmarked one to the position. "The Title Effect segment appears in the top video track."
+  Removing and replacing titles use the segment tools and Mark Clip (p.369).
+* Fading (p.370): the Fade Effect button keyframes the title's level.
+* Rolling and crawling titles (p.370): "By default, a rolling or crawling title clip begins with the visible title just
+  off screen and ends after the last element disappears off screen"; source marks "change the start and finish
+  points"; "the entire roll shrinks to fit within the duration of the marked segment"; "trimming a rolling or crawling
+  title does not remove any part of the title contents".
+* Save Title's Place in Timeline (In -> Out) and its track (p.359).
+* "Media Composer keys the title over the underlying video layers" (p.488).
+
+### Ours
+* A Title item is an edit source like a one-track sequence (`model::sourceTracksOf`, `applyEdit`): edits copy its title
+  segment (filler with the Title effect and its precompute nest); the Timeline takes it from bin drags
+  (`Timeline::droppedClip`); Fit to Fill refuses it.
+* Rolls and crawls: `model::titleRollStart` ("Roll Start" under the Title Tool parameters) is where in the roll the
+  segment starts, the source IN over the clip's length; the compositor plays from there to the roll's end over the
+  segment's length (the finish stays the roll's end, ours), so trims change only the speed.
+* Place in Timeline: `MainWindow::placeTitle` overwrites the segment between the Record monitor's marks on the chosen
+  track (the record sequence's video tracks and the next one; the option dimmed without both marks), one undo step.
+* While adding this, `MainWindow::shownVideoTracks` was corrected to the guide: "all tracks below the monitored track
+  are active during playback" (Editing Guide p.627), so Auto-Monitoring's move to the patched track no longer hides the
+  tracks under it.
+* Tests: `tst_title_clips` (overwrite, keying over V1, fade, Place in Timeline, roll start, bin drag), scenario
+  `36-title-clip.json` (the harness's `"title"` clips).

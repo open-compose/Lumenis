@@ -1103,9 +1103,16 @@ phase of their own. They are done in three steps:
       (the Styles and Save Style Parameter buttons, the Title Style Sheet dialog, function keys, the Title
       Style settings), done; 6.8d4c, Promote Titles > Avid Titler+ (p.326), done. Place in Timeline (In -> Out) comes
       with 6.8e.
-  * 6.8e, editing with titles: title clips in bins, editing them in, fading, marks and trims of rolls and
-    crawls, revising and replacing, re-creating title media, the troubleshooting options (ch.13,
-    p.365-377).
+  * 6.8e, editing with titles (ch.13, p.365-377), in three parts:
+    * 6.8e1, editing Title Effect clips into sequences: splicing, overwriting and dragging them in
+      (marked and unmarked), replacing and removing, Place in Timeline (In -> Out) from the Save Title
+      dialog, marks and trims of rolling and crawling titles, fading (p.365-371). Done.
+    * 6.8e2, revising a title in a sequence (the Effect Editor's Edit Title button, the Timeline's Edit
+      Title), the Title effect's parameters (Foreground, Scaling, Position, Crop; 3D promotion) and
+      replacing a title's fill track (p.371-374).
+    * 6.8e3, rendering titles, Clip > Recreate Title Media and Timeline > Create Unrendered Title Media,
+      and the troubleshooting options (HDTitleFilter, Use Classic Character Mapping, Wrong Format;
+      p.374-377).
 * 6.9, intraframe effects (Paint, AniMatte, Blur, Scratch Removal; ch.15) and PlasmaWipe (ch.16).
 * 6.10, colour correction (ch.19-24, p.587-733): Color Correction mode, HSL and curves, safe
   colours, and the Symphony option's spot colour.

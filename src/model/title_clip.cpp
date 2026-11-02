@@ -6,6 +6,7 @@
 
 #include <QJsonObject>
 
+#include <algorithm>
 #include <cmath>
 
 namespace lumenis::model {
@@ -60,6 +61,17 @@ std::optional<ClassicTitle> classicTitleOf(const Effect& effect) {
 
 bool isUnrenderedTitle(const Effect& effect) {
     return isClassicTitleEffect(effect) && effect.parameters.value(kClassicTitleParameters).toObject().value(kUnrenderedKey).toBool();
+}
+
+double titleRollStart(const Effect& effect) {
+    return std::clamp(effect.parameters.value(kClassicTitleParameters).toObject().value(QStringLiteral("Roll Start")).toDouble(), 0.0, 1.0);
+}
+
+void setTitleRollStart(Effect& effect, double start) {
+    QJsonObject tool = effect.parameters.value(kClassicTitleParameters).toObject();
+    if (start > 0.0) tool.insert(QStringLiteral("Roll Start"), std::clamp(start, 0.0, 1.0));
+    else tool.remove(QStringLiteral("Roll Start"));
+    effect.parameters.insert(kClassicTitleParameters, tool);
 }
 
 std::int64_t titleClipLength(const Rational& rate) {

@@ -1,0 +1,16 @@
+[
+  {
+    "name": "a Title Effect clip overwritten onto V2 keys over V1 as one title segment",
+    "guide": "FX Guide p.366-367",
+    "clips": [{"name": "A"}, {"name": "T", "title": true, "frames": 3000, "tracks": "V1"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50]], "V2": [["filler", 50]]}},
+    "steps": [
+      {"load": "source", "clip": "T"},
+      {"patch": ["V1", "V2"]},
+      {"mark": "source", "in": 1500},
+      {"mark": "record", "in": 10, "out": 19},
+      {"command": "edit.overwrite"}
+    ],
+    "expect": {"V1": [["A", 0, 50]], "V2": [["filler", 10], ["filler", 10, {"effect": "Title", "nest": {}}]]}
+  }
+]

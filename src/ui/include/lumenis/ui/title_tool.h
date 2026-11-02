@@ -158,6 +158,9 @@ public:
         QString drive;      // a media drive's root
         QString resolution; // media::Resolution id
         bool fastSave = false;
+        // "Select the Place in Timeline (In -> Out) option. Select the track where you want to place the title" (p.359):
+        // the record track, empty for none.
+        QString placeTrack;
     };
     // What saving needs from the application: the open bins (node id, name), the defaults (the Media Creation
     // setting's Titles tab, the active bin), and the save itself, which makes or (with `replaceId`) revises the Title
@@ -166,6 +169,9 @@ public:
         std::function<QList<std::pair<QString, QString>>()> bins;
         std::function<SaveRequest()> defaults;
         std::function<QString(const model::ClassicTitle&, const SaveRequest&, const QString& replaceId, QString* error)> save;
+        // The tracks a title can be placed on between the Record monitor's IN and OUT ("The tracks listed are based on
+        // the tracks available for the current sequence", p.359); empty without both marks (the option dimmed).
+        std::function<QStringList()> placeTracks;
     };
     void setSaver(Saver saver) { saver_ = std::move(saver); }
     // "If the Title tool is already open, you can drag a Title Effect clip from the bin directly into the Title tool"

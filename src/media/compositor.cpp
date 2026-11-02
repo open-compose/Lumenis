@@ -387,7 +387,9 @@ Picture classicTitleLayer(const Composition& c, const model::Segment& segment, s
     };
     if (!title || media.isEmpty() || !c.source) return offline();
     const std::int64_t length = std::max<std::int64_t>(segment.length, 1);
-    const double progress = length > 1 ? static_cast<double>(offset) / static_cast<double>(length - 1) : 0.0;
+    // The whole roll from where the segment starts in it, fitted to the segment (p.370).
+    const double from = model::titleRollStart(*segment.effect);
+    const double progress = from + (1.0 - from) * (length > 1 ? static_cast<double>(offset) / static_cast<double>(length - 1) : 0.0);
     const QPointF scroll = classicTitleScroll(*title, progress);
     const int pages = title->motion == model::ClassicMotion::Still ? 1 : std::max(1, title->pages);
     // The pages in view, drawn where the scroll puts them.

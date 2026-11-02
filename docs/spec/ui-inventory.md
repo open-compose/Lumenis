@@ -268,6 +268,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   (names, ranges, a quarter of the frame until set), frame-to-frame
   correlation with a search area twice the region, the original picture
   in the Effect Preview, Progressive Source without effect yet.
+* Editing titles in (docs/spec/title-tool.md, 6.8e1): a roll's finish staying
+  the roll's end whatever the source OUT, Place in Timeline's tracks (the
+  sequence's video tracks and the next one).
 * Promote Titles (docs/spec/title-tool.md, 6.8d4c): lines as turned rectangles,
   blends as four-corner gradients, transparency blends as their mean, depth
   shadows as drop shadows, rounded corners, arrowheads, groups and locks left

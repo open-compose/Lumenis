@@ -13,6 +13,7 @@
 #include "lumenis/model/nest.h"
 #include "lumenis/model/pan_scan.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/title_clip.h"
 #include "lumenis/model/surround_pan.h"
 #include "lumenis/ui/audio_eq.h"
 #include "lumenis/ui/audio_tools.h"
@@ -177,6 +178,21 @@ struct Run {
             // Apply Gain and Center Pan (p.216, p.714).
             i.audioGain = o.value(QStringLiteral("gain")).toDouble();
             if (o.contains(QStringLiteral("pan"))) i.audioPan = o.value(QStringLiteral("pan")).toInt();
+            // "title": a fast-saved classic Title Effect clip of `frames` (FX Guide p.357, p.365; title_clip.h).
+            if (o.value(QStringLiteral("title")).toBool()) {
+                i.fields.clear();
+                model::ClassicTitle t;
+                model::ClassicObject words;
+                words.id = QStringLiteral("Text 1");
+                words.text = i.name;
+                words.rect = QRectF(200, 200, 800, 0);
+                t.objects << words;
+                if (o.value(QStringLiteral("roll")).toBool()) {
+                    t.motion = model::ClassicMotion::Rolling;
+                    t.pages = 2;
+                }
+                model::reviseClassicTitleClip(i, t, {}, QDateTime::currentDateTimeUtc());
+            }
             clips.insert(i.name, i);
             items.insert(i.id, i);
         }

@@ -966,10 +966,19 @@ std::optional<TitleToolWindow::SaveRequest> TitleToolWindow::askSaveRequest(cons
     fast->setObjectName(QStringLiteral("title:fastSave"));
     fast->setChecked(suggestion.fastSave);
     form->addRow(fast);
-    // Ours: the title aspect ratios (multiformat 24p and 25p projects) and Place in Timeline (6.8e) are not offered yet.
+    // Place in Timeline (In -> Out) and its track (p.359). Ours: the title aspect ratios (multiformat 24p and 25p
+    // projects) are not offered.
     auto* place = new QCheckBox(tr("Place in Timeline (In -> Out)"), &box);
-    place->setEnabled(false);
-    form->addRow(place);
+    place->setObjectName(QStringLiteral("title:placeInTimeline"));
+    auto* placeTrack = new QComboBox(&box);
+    placeTrack->setObjectName(QStringLiteral("title:placeTrack"));
+    const QStringList tracks = saver_.placeTracks ? saver_.placeTracks() : QStringList();
+    placeTrack->addItems(tracks);
+    if (!tracks.isEmpty()) placeTrack->setCurrentIndex(static_cast<int>(tracks.size()) - 1);
+    place->setEnabled(!tracks.isEmpty());
+    placeTrack->setEnabled(false);
+    connect(place, &QCheckBox::toggled, placeTrack, &QWidget::setEnabled);
+    form->addRow(place, placeTrack);
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &box);
     form->addRow(buttons);
     connect(buttons, &QDialogButtonBox::accepted, &box, &QDialog::accept);
@@ -981,6 +990,7 @@ std::optional<TitleToolWindow::SaveRequest> TitleToolWindow::askSaveRequest(cons
     r.drive = drive->currentData().toString();
     r.resolution = resolution->currentData().toString();
     r.fastSave = fast->isChecked();
+    if (place->isChecked()) r.placeTrack = placeTrack->currentText();
     return r;
 }
 

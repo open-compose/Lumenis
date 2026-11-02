@@ -40,6 +40,13 @@ Effect classicTitleEffect(const ClassicTitle& title, bool unrendered);
 std::optional<ClassicTitle> classicTitleOf(const Effect& effect);
 bool isUnrenderedTitle(const Effect& effect);
 
+// Rolling and crawling titles in a sequence (6.8e1, p.370): "the entire roll shrinks to fit within the duration of
+// the marked segment in the sequence", and marks in the Source monitor "change the start and finish points". Where in
+// the whole roll (0 to 1) the segment's first frame is: its source IN over the clip's length when it was edited in
+// (ours: the finish stays the roll's end). Trimming changes how fast it plays, not where it starts.
+double titleRollStart(const Effect& effect);
+void setTitleRollStart(Effect& effect, double start);
+
 // "A 2-minute Title Effect clip that corresponds to the new title appears in the bin" (p.358): its length in frames
 // at `rate`.
 std::int64_t titleClipLength(const Rational& rate);

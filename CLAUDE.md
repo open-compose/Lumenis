@@ -633,7 +633,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   settings through `MainWindow::titleStyles`/`saveTitleStyle`), is done.
   6.8d4c, Promote Titles > Avid Titler+ (`media::promoteClassicTitle`, `Timeline::promoteTitles` from the Timeline's
   context menu; tests `tst_classic_title`, `tst_title_clips`), is done, so 6.8d is.
-  Next: 6.8e (editing with titles), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.8e1, editing Title Effect clips into sequences (Title items as edit sources in `model::applyEdit`, bin drags,
+  `model::titleRollStart` for rolls and crawls, `MainWindow::placeTitle` for Place in Timeline; tests
+  `tst_title_clips`, scenario `36-title-clip.json`), is done; `shownVideoTracks` now shows every track under the
+  monitored one (Editing Guide p.627).
+  Next: 6.8e2 (revising titles in sequences, Title effect parameters, fill tracks), 6.8e3 (title media, troubleshooting), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 
