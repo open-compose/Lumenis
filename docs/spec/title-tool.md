@@ -237,3 +237,21 @@ Tests: `tst_classic_title`, `tst_title_tool`, `tst_title_clips`. Title Effect cl
   As. Recalling a style applies it to the selected objects (any kind, ours), else to the defaults. F1-F12 without
   modifiers recall a style. `titleStyleSheet()`: the sample follows the check boxes (no Refresh button), Convert to
   Marquee dimmed.
+
+## 6.8d4c: Promote Titles > Avid Titler+
+
+### From the guide
+* "Titles created in previous versions of Avid Media Composer using the classic Avid Title Tool can be promoted for use
+  in Avid Titler+ ... Select a classic Avid Title Tool clip in the Timeline and right-click on it. Multiple clips may be
+  selected and promoted at the same time. From the context menu, choose Promote Titles > Avid Titler+" (p.326).
+
+### Ours
+* `media::promoteClassicTitle`: text objects through `classicTextObject` (font, characters, placing), boxes as
+  rectangles, ovals as ellipses, lines as rectangles their width high turned to their angle; a colour blend as the
+  four-corner gradient it makes over the object's bounds (exact for a linear blend); borders as Outer outlines;
+  shadows as Titler+ shadows (depth shadows become drop shadows); the colour background as the Background; rolling and
+  crawling titles as Roll and Crawl Left. Left out: rounded corners, arrowheads, transparency blends (their mean is the
+  opacity), groups and locks.
+* `Timeline::promoteTitles` (the Timeline's context menu, Promote Titles > Avid Titler+, enabled when a selected or
+  clicked segment is a classic Title effect): the segment's effect becomes Avid Titler+, its precompute nest and render
+  go; one undo step for all of them.

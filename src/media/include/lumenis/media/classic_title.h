@@ -90,6 +90,15 @@ std::optional<std::pair<model::BinItem, model::BinItem>> renderClassicTitleMedia
 // past its top (left), evenly.
 QPointF classicTitleScroll(const model::ClassicTitle& title, double progress);
 
+// ---- Promote Titles > Avid Titler+ (6.8d4c; p.326): "Titles created ... using the classic Avid Title Tool can be
+// promoted for use in Avid Titler+". The title as a Titler+ title: text objects with their font, characters and
+// placing, boxes as rectangles, ovals as ellipses, lines as thin rectangles turned to their angle (ours); fills (a
+// colour blend as the four-corner gradient it makes over the object's bounds), borders as Outer outlines, shadows;
+// a colour background as Titler+'s Background; a rolling or crawling title as Roll or Crawl Left. What Titler+ has no
+// place for is left out (ours): rounded corners, arrowheads, transparency blends (their mean is kept), depth shadows
+// (as drop shadows), groups and locks.
+model::Title promoteClassicTitle(const model::ClassicTitle& title);
+
 // For the Text tool: the text index (0 to the text's length) whose cursor is nearest a point (title pixels), the
 // cursor before an index, and the boxes over the characters [from, to), in title pixels.
 qsizetype classicTextIndexAt(const model::ClassicObject& object, const QPointF& point);

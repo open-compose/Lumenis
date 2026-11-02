@@ -1,6 +1,7 @@
 #include "lumenis/ui/timeline.h"
 
 #include "lumenis/media/audio_fx.h"
+#include "lumenis/media/classic_title.h"
 #include "lumenis/media/link.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
@@ -9,6 +10,7 @@
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
 #include "lumenis/model/nest.h"
+#include "lumenis/model/title_clip.h"
 #include "lumenis/media/surround.h"
 #include "lumenis/model/multichannel.h"
 #include "lumenis/model/surround_pan.h"
@@ -4526,7 +4528,56 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
     connect(fromSelection, &QAction::triggered, this, &Timeline::createSequenceFromSelection);
     // "Right-click in the Timeline, and select Add Filler at Start" (p.462).
     run(menu, tr("Add Filler at Start"), QStringLiteral("timeline.add_filler_at_start"));
+    // "Select a classic Avid Title Tool clip in the Timeline and right-click on it ... choose Promote Titles > Avid
+    // Titler+" (FX Guide p.326).
+    QMenu* promote = menu->addMenu(tr("Promote Titles"));
+    promote->setObjectName(QStringLiteral("promoteTitles"));
+    QAction* titler = promote->addAction(tr("Avid Titler+"));
+    titler->setObjectName(QStringLiteral("promoteTitles:titler"));
+    {
+        const model::Sequence seq = recordSequenceOf(composer_);
+        QList<model::SegmentRef> refs = selection_;
+        if (refs.isEmpty() && segment) refs << *segment;
+        bool any = false;
+        for (const model::SegmentRef& ref : refs) {
+            const auto seg = model::segmentFor(seq, ref);
+            any = any || (seg && seg->effect && model::isClassicTitleEffect(*seg->effect));
+        }
+        titler->setEnabled(any && !showSource_);
+    }
+    connect(titler, &QAction::triggered, this, [this, segment] { promoteTitles(segment); });
     return menu;
+}
+
+int Timeline::promoteTitles(const std::optional<model::SegmentRef>& clicked) {
+    QList<model::SegmentRef> refs = selection_;
+    if (refs.isEmpty() && clicked) refs << *clicked;
+    int promoted = 0;
+    changeRecordSequence(tr("Promote Titles"), [&](model::Sequence& seq) {
+        for (const model::SegmentRef& ref : refs) {
+            model::Track* track = seq.track(ref.track);
+            if (!track) continue;
+            std::int64_t start = 0;
+            for (model::Segment& s : track->segments) {
+                if (start == ref.start && s.effect && model::isClassicTitleEffect(*s.effect)) {
+                    if (const auto title = model::classicTitleOf(*s.effect)) {
+                        model::Effect titler = model::titlerEffect();
+                        model::setTitle(titler, media::promoteClassicTitle(*title));
+                        s.effect = titler;
+                        // The fill and matte precomputes are no longer what plays.
+                        s.nest = {};
+                        s.nestIn = 0;
+                        s.render.reset();
+                        ++promoted;
+                    }
+                    break;
+                }
+                start += s.length;
+            }
+        }
+        return promoted > 0;
+    });
+    return promoted;
 }
 
 // Change Source Track (p.595; 2026.8 guide p.507; What's New 2026.8 p.7): the clip's audio

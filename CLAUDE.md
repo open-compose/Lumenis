@@ -631,7 +631,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Templates menu, `.ttpl` files in the user's Title_Templates) and title styles (`model::ClassicTitleStyle`,
   `applyClassicStyle`, the Styles and Save Style Parameter buttons, `titleStyleSheet()`, F-keys, "Title Style" User
   settings through `MainWindow::titleStyles`/`saveTitleStyle`), is done.
-  Next: 6.8d4c (Promote Titles), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.8d4c, Promote Titles > Avid Titler+ (`media::promoteClassicTitle`, `Timeline::promoteTitles` from the Timeline's
+  context menu; tests `tst_classic_title`, `tst_title_clips`), is done, so 6.8d is.
+  Next: 6.8e (editing with titles), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

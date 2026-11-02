@@ -2,21 +2,27 @@
 // src/model/title_clip.*, MainWindow::saveClassicTitle and reviseTitle): saving makes the fill and matte precomputes
 // and the clip in the chosen bin and loads it into the Source monitor, which shows the title over black; Fast Save makes
 // an "unrendered." clip without media, found by Bin > Select > Unrendered Titles; revising replaces the clip, and Save
-// Title As keeping the name numbers the new one. Title styles are kept as User settings (6.8d4b).
+// Title As keeping the name numbers the new one. Title styles are kept as User settings (6.8d4b). Promote Titles > Avid Titler+
+// turns a classic title segment into a Titler+ one (6.8d4c).
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/managed.h"
+#include "lumenis/model/sequence.h"
 #include "lumenis/model/title_clip.h"
+#include "lumenis/model/titler.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/settings.h"
+#include "lumenis/ui/timeline.h"
 #include "lumenis/ui/title_tool.h"
 
 #include <QAction>
 #include <QApplication>
+#include <QDateTime>
 #include <QDir>
+#include <QMenu>
 #include <QMessageBox>
 #include <QTemporaryDir>
 #include <QTest>
@@ -145,6 +151,34 @@ private slots:
         QCOMPARE(tool->styles().first().functionKey, 4);
         QVERIFY(tool->templateFolder().endsWith(QLatin1String("Title_Templates")));
         tool->setClosePrompt([] { return int(QMessageBox::Discard); });
+
+        // Promote Titles > Avid Titler+ (FX Guide p.326, 6.8d4c): a sequence with the title on V2 over a filler V1.
+        model::BinItem sequenceItem = model::newSequence(bin->bin(), Rational(25), QDateTime::currentDateTimeUtc());
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        seq.ensureTrack(QStringLiteral("V2"));
+        seq.track(QStringLiteral("V1"))->segments = {model::Segment::filler(100)};
+        seq.track(QStringLiteral("V2"))->segments = {*model::titleSegmentOf(*bin->bin().item(id))};
+        seq.track(QStringLiteral("V2"))->segments[0].length = 100;
+        seq.storeIn(sequenceItem);
+        bin->addItem(sequenceItem);
+        window.composer().load(MonitorId::Record, binId, sequenceItem);
+        settle();
+        QMenu* menu = window.timeline().contextMenu(QString(), model::SegmentRef{QStringLiteral("V2"), 0});
+        QAction* promote = menu->findChild<QAction*>(QStringLiteral("promoteTitles:titler"));
+        QVERIFY(promote && promote->isEnabled());
+        promote->trigger();
+        delete menu;
+        const model::Sequence after = model::Sequence::fromItem(window.composer().state(MonitorId::Record).current()->item);
+        const model::Segment& promoted = after.track(QStringLiteral("V2"))->segments.at(0);
+        QVERIFY(promoted.effect && model::isTitlerEffect(*promoted.effect));
+        QVERIFY(!promoted.hasNest());
+        QCOMPARE(model::titleOf(*promoted.effect).objects.size(), 1);
+        QCOMPARE(model::titleOf(*promoted.effect).objects.at(0).kind, model::TitleObjectKind::Rectangle);
+        // Nothing classic is left to promote; one undo step brings the classic title back.
+        QCOMPARE(window.timeline().promoteTitles(model::SegmentRef{QStringLiteral("V2"), 0}), 0);
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.undo")));
+        const model::Sequence undone = model::Sequence::fromItem(window.composer().state(MonitorId::Record).current()->item);
+        QVERIFY(model::isClassicTitleEffect(*undone.track(QStringLiteral("V2"))->segments.at(0).effect));
         tool->hide();
         media::setExtraMediaDrives({});
     }

@@ -5,6 +5,7 @@
 // distributing (6.8d3b); Title Effect clips, their precomputes' pictures and the compositor's keying (6.8d4a).
 #include "lumenis/media/classic_title.h"
 #include "lumenis/media/compositor.h"
+#include "lumenis/media/titler.h"
 #include "lumenis/model/classic_title.h"
 #include "lumenis/model/title_clip.h"
 
@@ -652,6 +653,81 @@ private slots:
         QCOMPARE(target.border.color, QStringLiteral("#00ff00"));
         QCOMPARE(target.text, QStringLiteral("Hello"));
         QCOMPARE(classicStyleFieldName(ClassicStyleField::ShadowType), QStringLiteral("Shadow Type"));
+    }
+
+    // Promote Titles > Avid Titler+ (6.8d4c, p.326).
+    void promote() {
+        ClassicTitle t;
+        ClassicObject words = text(QStringLiteral("Hello"), QRectF(200, 100, 1000, 0));
+        words.borderWidth = 6;
+        words.shadowDepth = 10;
+        words.shadowSoftness = 4;
+        ClassicObject box;
+        box.id = QStringLiteral("Box 1");
+        box.kind = ClassicKind::Box;
+        box.rect = QRectF(100, 600, 400, 200);
+        box.fill.color = QStringLiteral("#ff0000");
+        box.fill.color2 = QStringLiteral("#0000ff");
+        ClassicObject oval = box;
+        oval.id = QStringLiteral("Oval 1");
+        oval.kind = ClassicKind::Oval;
+        oval.fill.color2.clear();
+        oval.fill.transparency = 20;
+        oval.fill.transparency2 = 60;
+        ClassicObject line;
+        line.id = QStringLiteral("Line 1");
+        line.kind = ClassicKind::Line;
+        line.rect = QRectF(QPointF(1000, 900), QPointF(1400, 500)); // up and to the right, 45 degrees
+        line.lineWidth = 8;
+        t.objects << words << box << oval << line;
+        t.videoBackground = false;
+        t.backgroundColor = QStringLiteral("#203040");
+        const Title p = media::promoteClassicTitle(t);
+        QCOMPARE(p.objects.size(), 4);
+        // Text where the classic text was, with its border and shadow.
+        const TitleObject& w = p.objects.at(0);
+        QCOMPARE(w.kind, TitleObjectKind::Text);
+        QCOMPARE(w.transform.position, media::classicTextObject(words).transform.position);
+        QVERIFY(w.outline.on && w.outline.size == 6.0 && w.outline.type == OutlineType::Outer);
+        QVERIFY(w.shadow.on && w.shadow.distance == 10.0 && w.shadow.softness == 4.0);
+        // The box: a rectangle at its place, its blend the gradient over its corners (red at the left, blue at the right).
+        const TitleObject& r = p.objects.at(1);
+        QCOMPARE(r.kind, TitleObjectKind::Rectangle);
+        QCOMPARE(r.size, QSizeF(400, 200));
+        QCOMPARE(r.transform.position, QPointF(300 - 960, 700 - 540));
+        QVERIFY(r.fill.color.gradient);
+        QCOMPARE(r.fill.color.topLeft, QStringLiteral("#ff0000"));
+        QCOMPARE(r.fill.color.bottomRight, QStringLiteral("#0000ff"));
+        // The oval: an ellipse with the mean of its transparency blend.
+        QCOMPARE(p.objects.at(2).kind, TitleObjectKind::Ellipse);
+        QCOMPARE(p.objects.at(2).fill.opacity, 60.0);
+        // The line: a thin rectangle turned to its angle.
+        const TitleObject& l = p.objects.at(3);
+        QCOMPARE(l.kind, TitleObjectKind::Rectangle);
+        QVERIFY(std::abs(l.size.width() - std::hypot(400.0, 400.0)) < 1e-6);
+        QCOMPARE(l.size.height(), 8.0);
+        QVERIFY(std::abs(l.transform.rotation + 45.0) < 1e-6);
+        // The colour background.
+        QVERIFY(p.background.on);
+        QCOMPARE(p.background.color.color, QStringLiteral("#203040"));
+        QVERIFY(!p.rollCrawl.on);
+        // Drawn by Titler+, the box is where it was.
+        Title boxOnly;
+        boxOnly.objects << p.objects.at(1);
+        const QImage promoted = media::titleImage(boxOnly, kSize);
+        ClassicTitle classicBox;
+        classicBox.objects << box;
+        const QImage classic = media::classicTitleImage(classicBox, kSize);
+        QCOMPARE(inked(promoted), inked(classic));
+        // A rolling title rolls.
+        ClassicTitle roll;
+        roll.motion = ClassicMotion::Rolling;
+        roll.pages = 2;
+        roll.objects << words;
+        const Title rolled = media::promoteClassicTitle(roll);
+        QVERIFY(rolled.rollCrawl.on);
+        QCOMPARE(rolled.rollCrawl.type, RollCrawlType::Roll);
+        QVERIFY(!rolled.background.on);
     }
 
     void textPlaces() {

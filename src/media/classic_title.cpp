@@ -512,6 +512,105 @@ QPointF classicTitleScroll(const model::ClassicTitle& title, double progress) {
     return {};
 }
 
+// ---------------------------------------------------------------- Promote Titles
+
+namespace {
+
+QString mixColor(const QString& a, const QString& b, double t) {
+    const QColor ca = colorFrom(a), cb = colorFrom(b);
+    auto ch = [&](int x, int y) { return static_cast<int>(std::lround(x + (y - x) * t)); };
+    return QColor(ch(ca.red(), cb.red()), ch(ca.green(), cb.green()), ch(ca.blue(), cb.blue())).name();
+}
+
+// A classic paint's colours as a Titler+ colour: one colour, or the gradient its blend makes at the bounds' corners
+// (a linear blend over a rectangle is exactly bilinear between its corners).
+model::TitleColor titlerColor(const model::ClassicPaint& paint, const QRectF& bounds) {
+    model::TitleColor c;
+    c.color = paint.color;
+    c.topLeft = c.topRight = c.bottomLeft = c.bottomRight = paint.color;
+    if (paint.color2.isEmpty() || paint.color2 == paint.color) return c;
+    c.gradient = true;
+    auto at = [&](const QPointF& p) { return mixColor(paint.color, paint.color2, blendAt(p, bounds, paint.colorAngle)); };
+    c.topLeft = at(bounds.topLeft());
+    c.topRight = at(bounds.topRight());
+    c.bottomLeft = at(bounds.bottomLeft());
+    c.bottomRight = at(bounds.bottomRight());
+    return c;
+}
+
+double opacityOf(const model::ClassicPaint& paint) {
+    const double t = paint.transparency2 ? (paint.transparency + *paint.transparency2) / 2.0 : paint.transparency;
+    return 100.0 - std::clamp(t, 0.0, 100.0);
+}
+
+} // namespace
+
+model::Title promoteClassicTitle(const model::ClassicTitle& title) {
+    model::Title out;
+    const QPointF centre(model::kClassicWidth / 2.0, model::kClassicHeight / 2.0);
+    for (const model::ClassicObject& o : title.objects) {
+        model::TitleObject t;
+        const QRectF bounds = classicObjectBounds(o);
+        switch (o.kind) {
+        case model::ClassicKind::Text:
+            if (o.text.isEmpty()) continue;
+            t = classicTextObject(o);
+            t.id = out.newId(model::TitleObjectKind::Text);
+            break;
+        case model::ClassicKind::Box:
+        case model::ClassicKind::Oval: {
+            const QRectF r = o.rect.normalized();
+            t.kind = o.kind == model::ClassicKind::Box ? model::TitleObjectKind::Rectangle : model::TitleObjectKind::Ellipse;
+            t.id = out.newId(t.kind);
+            t.size = r.size();
+            t.transform.position = r.center() - centre;
+            break;
+        }
+        case model::ClassicKind::Line: {
+            const QLineF line(o.rect.topLeft(), o.rect.bottomRight());
+            if (line.length() <= 0.0) continue;
+            t.kind = model::TitleObjectKind::Rectangle;
+            t.id = out.newId(t.kind);
+            t.size = QSizeF(line.length(), std::max(1.0, o.lineWidth));
+            t.transform.position = line.center() - centre;
+            t.transform.rotation = -line.angle(); // QLineF's angle is counterclockwise; Titler+'s rotation clockwise
+            break;
+        }
+        }
+        t.fill.on = true;
+        t.fill.color = titlerColor(o.fill, bounds);
+        t.fill.opacity = opacityOf(o.fill);
+        if (o.kind != model::ClassicKind::Line && o.borderWidth > 0.0) {
+            t.outline.on = true;
+            t.outline.type = model::OutlineType::Outer;
+            t.outline.size = o.borderWidth;
+            t.outline.color = titlerColor(o.border, bounds);
+            t.outline.opacity = opacityOf(o.border);
+        }
+        if (o.shadowDepth > 0.0 || o.shadowSoftness > 0) {
+            t.shadow.on = true;
+            t.shadow.distance = o.shadowDepth;
+            t.shadow.angle = o.shadowAngle;
+            t.shadow.softness = o.shadowSoftness;
+            t.shadow.color = model::TitleColor{o.shadowColor};
+            t.shadow.color.topLeft = t.shadow.color.topRight = t.shadow.color.bottomLeft = t.shadow.color.bottomRight = o.shadowColor;
+            t.shadow.opacity = 100.0 - std::clamp(o.shadowTransparency, 0.0, 100.0);
+        }
+        out.objects << t;
+    }
+    if (!title.videoBackground) {
+        out.background.on = true;
+        out.background.color = model::TitleColor{title.backgroundColor};
+        out.background.color.topLeft = out.background.color.topRight = out.background.color.bottomLeft = out.background.color.bottomRight =
+            title.backgroundColor;
+    }
+    if (title.motion != model::ClassicMotion::Still) {
+        out.rollCrawl.on = true;
+        out.rollCrawl.type = title.motion == model::ClassicMotion::Rolling ? model::RollCrawlType::Roll : model::RollCrawlType::CrawlLeft;
+    }
+    return out;
+}
+
 bool makeClassicCrawl(model::ClassicObject& object) {
     if (object.kind != model::ClassicKind::Text || object.text.isEmpty()) return false;
     const model::ClassicObject before = object;

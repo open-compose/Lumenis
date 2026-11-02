@@ -375,6 +375,10 @@ public:
     // Changes the Record monitor's sequence as one undo step named `description` (Audio Mixdown):
     // `change` edits a copy and returns false to leave it as it was. False without a sequence.
     bool changeRecordSequence(const QString& description, const std::function<bool(model::Sequence&)>& change);
+    // Promote Titles > Avid Titler+ (FX Guide p.326, ROADMAP 6.8d4c): the selected segments (or `clicked` without a
+    // selection) that are classic Title effects become Avid Titler+ effects of the same title
+    // (media::promoteClassicTitle), their precompute tracks gone; one undo step. How many were promoted.
+    int promoteTitles(const std::optional<model::SegmentRef>& clicked = std::nullopt);
 
     // Nests (FX Guide p.219-227; docs/spec/nesting.md). Step In: "Media Composer replaces the full sequence
     // in the Timeline with just the tracks that make up the nested effect" (p.220) — the segment with an

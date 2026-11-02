@@ -268,6 +268,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   (names, ranges, a quarter of the frame until set), frame-to-frame
   correlation with a search area twice the region, the original picture
   in the Effect Preview, Progressive Source without effect yet.
+* Promote Titles (docs/spec/title-tool.md, 6.8d4c): lines as turned rectangles,
+  blends as four-corner gradients, transparency blends as their mean, depth
+  shadows as drop shadows, rounded corners, arrowheads, groups and locks left
+  out, rolls and crawls as Roll and Crawl Left.
 * Classic title templates and styles (docs/spec/title-tool.md, 6.8d4b): `.ttpl`
   JSON files, templates fixed but for their text (fonts too), moved by dragging
   and arrow keys instead of Arrow buttons, styles applied to any selected object,
@@ -780,6 +784,7 @@ The full inventory, with a page for every item, is
   * While the legacy Title Tool is open, the File menu offers *Save Title*,
     *Save Title As* and *Export Title* (FX p.358–364).
   * The Windows menu offers *Title Tool* (FX p.327).
+  * The Timeline's context menu offers *Promote Titles > Avid Titler+* (FX p.326).
   * The Title Tool's Edit, Object (with Soften Shadow, p.354), Alignment and Templates (p.360) menus (FX p.330, p.334, p.338) are in the
     Title Tool window's own menu bar (ours), not the main one.
   * The Edit menu's Undo item names the last action, for example *Undo Clear
