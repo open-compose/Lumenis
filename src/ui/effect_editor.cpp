@@ -7,6 +7,7 @@
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/model/pan_scan.h"
 #include "lumenis/model/promote3d.h"
+#include "lumenis/model/title_clip.h"
 
 #include "lumenis/media/compositor.h"
 
@@ -35,6 +36,7 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
+#include <QPushButton>
 #include <QPainterPath>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -623,6 +625,15 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     if (model::isTitlerEffect(*effect) && level_ == 0) {
         titlerPanel_ = new TitlerPanel(*titler_, false, this);
         groups_->insertWidget(0, titlerPanel_);
+    }
+    // A classic Title effect: "Click the Edit Title button" (FX Guide p.372) opens it in the Title Tool.
+    if (model::isClassicTitleEffect(*effect) && level_ == 0) {
+        auto* edit = new QPushButton(tr("Edit Title"), body_);
+        edit->setObjectName(QStringLiteral("effectEditor:editTitle"));
+        connect(edit, &QPushButton::clicked, this, [this] {
+            if (shown_) emit editTitleRequested(model::SegmentRef{shown_->track, shown_->frame});
+        });
+        groups_->insertWidget(0, edit);
     }
 
     const EffectInfo* info = EffectCatalog::builtin().find(effect->category, effect->name);

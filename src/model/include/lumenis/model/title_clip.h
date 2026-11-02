@@ -47,6 +47,21 @@ bool isUnrenderedTitle(const Effect& effect);
 double titleRollStart(const Effect& effect);
 void setTitleRollStart(Effect& effect, double start);
 
+// The Title Effect clip a sequence's title segment was edited in from (6.8e2): "If you want to revise a title after
+// you edit it into a sequence, you must reopen the title in the Title tool directly from the sequence" (p.372), and
+// Save Title then "replaces the previous clip in the sequence ... and saves the new title to the bin" (p.373). Empty
+// when not known (titles placed before 6.8e2, promoted ones).
+struct TitleSource {
+    QString bin;
+    QString clip;
+    bool isEmpty() const { return clip.isEmpty(); }
+};
+TitleSource titleSourceOf(const Effect& effect);
+void setTitleSource(Effect& effect, const TitleSource& source);
+// A sequence's title segment given the revised clip's title and precomputes, keeping its length, roll start and the
+// effect's own parameters (Foreground, Scaling, Position, Crop and their keyframes).
+void reviseTitleSegment(Segment& segment, const BinItem& clip, const QString& bin);
+
 // "A 2-minute Title Effect clip that corresponds to the new title appears in the bin" (p.358): its length in frames
 // at `rate`.
 std::int64_t titleClipLength(const Rational& rate);

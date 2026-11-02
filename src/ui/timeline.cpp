@@ -4528,6 +4528,15 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
     connect(fromSelection, &QAction::triggered, this, &Timeline::createSequenceFromSelection);
     // "Right-click in the Timeline, and select Add Filler at Start" (p.462).
     run(menu, tr("Add Filler at Start"), QStringLiteral("timeline.add_filler_at_start"));
+    // "Place your cursor over the Title in the sequence that you want to edit. Right-click and select Edit Title" (FX
+    // Guide p.372).
+    QAction* editTitle = menu->addAction(tr("Edit Title"));
+    editTitle->setObjectName(QStringLiteral("timeline:editTitle"));
+    {
+        const auto seg = segment ? model::segmentFor(recordSequenceOf(composer_), *segment) : std::nullopt;
+        editTitle->setEnabled(!showSource_ && seg && seg->effect && model::isClassicTitleEffect(*seg->effect));
+    }
+    if (segment) connect(editTitle, &QAction::triggered, this, [this, ref = *segment] { emit editTitleRequested(ref); });
     // "Select a classic Avid Title Tool clip in the Timeline and right-click on it ... choose Promote Titles > Avid
     // Titler+" (FX Guide p.326).
     QMenu* promote = menu->addMenu(tr("Promote Titles"));

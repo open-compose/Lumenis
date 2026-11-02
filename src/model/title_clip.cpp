@@ -74,6 +74,40 @@ void setTitleRollStart(Effect& effect, double start) {
     effect.parameters.insert(kClassicTitleParameters, tool);
 }
 
+TitleSource titleSourceOf(const Effect& effect) {
+    const QJsonObject tool = effect.parameters.value(kClassicTitleParameters).toObject();
+    return {tool.value(QStringLiteral("Bin")).toString(), tool.value(QStringLiteral("Clip")).toString()};
+}
+
+void setTitleSource(Effect& effect, const TitleSource& source) {
+    QJsonObject tool = effect.parameters.value(kClassicTitleParameters).toObject();
+    tool.insert(QStringLiteral("Bin"), source.bin);
+    tool.insert(QStringLiteral("Clip"), source.clip);
+    effect.parameters.insert(kClassicTitleParameters, tool);
+}
+
+void reviseTitleSegment(Segment& segment, const BinItem& clip, const QString& bin) {
+    const auto revised = titleSegmentOf(clip);
+    if (!revised || !segment.effect) return;
+    const double start = titleRollStart(*segment.effect);
+    Effect e = *segment.effect;
+    // The revised title and its fast-save state; the rest of the effect stays.
+    e.name = revised->effect->name;
+    e.parameters.insert(kClassicTitleParameters, revised->effect->parameters.value(kClassicTitleParameters));
+    setTitleRollStart(e, start);
+    setTitleSource(e, {bin, clip.id});
+    segment.effect = e;
+    // The new precomputes, as long as the segment.
+    Sequence nest = nestOf(*revised);
+    for (const Track& t : nest.tracks()) {
+        Track* mine = nest.track(t.name());
+        for (Segment& s : mine->segments) s.length = segment.length;
+    }
+    setNest(segment, nest);
+    segment.nestIn = 0;
+    segment.render.reset();
+}
+
 std::int64_t titleClipLength(const Rational& rate) {
     const double fps = rate.den() != 0 ? rate.toDouble() : 25.0;
     return std::max<std::int64_t>(1, std::llround(120.0 * fps));
@@ -91,17 +125,31 @@ TitleMedia titleMediaOf(const Segment& segment) {
         }
         return nullptr;
     };
+    // The matte names the bin; the fill is the one the effect names (titles saved before 6.8e2: the nest's first
+    // V1 clip), whatever was edited onto V1 since.
+    const QString stored = segment.effect ? segment.effect->parameters.value(kClassicTitleParameters).toObject().value(QStringLiteral("Fill")).toString()
+                                          : QString();
     if (const Segment* fill = first(QStringLiteral("V1"))) {
         m.fill = fill->clipId;
         m.binId = fill->binId;
     }
-    if (const Segment* matte = first(QStringLiteral("V2"))) m.matte = matte->clipId;
+    if (!stored.isEmpty()) m.fill = stored;
+    if (const Segment* matte = first(QStringLiteral("V2"))) {
+        m.matte = matte->clipId;
+        m.binId = matte->binId;
+    }
     return m;
 }
 
 Segment classicTitleSegment(const ClassicTitle& title, std::int64_t length, const TitleMedia& media) {
     Segment s = Segment::filler(length);
     s.effect = classicTitleEffect(title, media.isEmpty());
+    if (!media.isEmpty()) {
+        // The fill precompute by name, so that a fill track replaced in the nest (FX Guide p.373) is told from it.
+        QJsonObject tool = s.effect->parameters.value(kClassicTitleParameters).toObject();
+        tool.insert(QStringLiteral("Fill"), media.fill);
+        s.effect->parameters.insert(kClassicTitleParameters, tool);
+    }
     // The graphic (fill) and alpha (matte) tracks, filler for a fast-saved title.
     Sequence nest;
     // (Track pointers last only until the next track is added.)

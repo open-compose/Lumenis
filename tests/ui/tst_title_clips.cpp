@@ -8,6 +8,8 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
+#include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/nest.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/title_clip.h"
 #include "lumenis/model/titler.h"
@@ -16,6 +18,7 @@
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
+#include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/timeline.h"
@@ -25,9 +28,12 @@
 #include <QApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QJsonObject>
 #include <QMenu>
 #include <QMimeData>
 #include <QMessageBox>
+#include <QPushButton>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTest>
 
@@ -305,6 +311,117 @@ private slots:
         shown = composer.pictureAt(MonitorId::Record, 9, QSize(320, 180));
         QVERIFY(isRed(shown.pixelColor(40, 40)));
         timeline.setSelection({});
+
+        // The segment knows the clip it came from, for Edit Title (6.8e2).
+        QCOMPARE(model::titleSourceOf(*placed->effect).clip, titleId);
+        QCOMPARE(model::titleSourceOf(*placed->effect).bin, binId);
+
+        // The Title effect's Position (FX Guide p.489, p.498): half a frame to the right moves the box to the top right.
+        const model::SegmentRef titleRef{QStringLiteral("V2"), 5};
+        QVERIFY(timeline.changeRecordSequence(QStringLiteral("Position"), [&](model::Sequence& s) {
+            model::Segment& t = s.track(QStringLiteral("V2"))->segments[1];
+            QJsonObject position;
+            position.insert(QStringLiteral("X"), 960);
+            t.effect->parameters.insert(QStringLiteral("Position"), position);
+            return true;
+        }));
+        shown = composer.pictureAt(MonitorId::Record, 9, QSize(320, 180));
+        QVERIFY2(isBlue(shown.pixelColor(40, 40)), qPrintable(shown.pixelColor(40, 40).name()));
+        QVERIFY2(isRed(shown.pixelColor(200, 40)), qPrintable(shown.pixelColor(200, 40).name()));
+
+        // Edit Title from the Timeline's context menu and the Effect Editor (p.372).
+        QMenu* menu = timeline.contextMenu(QString(), titleRef);
+        QAction* editAction = menu->findChild<QAction*>(QStringLiteral("timeline:editTitle"));
+        QVERIFY(editAction && editAction->isEnabled());
+        QSignalSpy asked(&timeline, &Timeline::editTitleRequested);
+        editAction->trigger();
+        QCOMPARE(asked.count(), 1);
+        delete menu;
+        TitleToolWindow* tool = window.titleTool();
+        QVERIFY(tool && tool->isVisible() && tool->revisingInSequence());
+        QCOMPARE(tool->clipId(), titleId);
+        QCOMPARE(tool->title().objects.size(), 1);
+        // Save Title asks to save and exit (p.373): Cancel keeps the tool open and the sequence as it was.
+        int exits = 0;
+        bool exitAnswer = false;
+        tool->setExitPrompt([&] {
+            ++exits;
+            return exitAnswer;
+        });
+        model::ClassicTitle green = tool->title();
+        green.objects[0].fill.color = QStringLiteral("#00ff00");
+        tool->setTitle(green);
+        QVERIFY(!tool->saveTitle());
+        QCOMPARE(exits, 1);
+        QVERIFY(tool->isVisible());
+        // Save: the clip is revised in its bin and replaces the segment's title, keeping its place, length, Position
+        // and fades; the tool closes.
+        exitAnswer = true;
+        QVERIFY(tool->saveTitle());
+        QVERIFY(!tool->isVisible() && !tool->revisingInSequence());
+        seq = record();
+        auto revised = model::segmentFor(seq, titleRef);
+        QVERIFY(revised && revised->length == 10 && revised->effect && model::isClassicTitleEffect(*revised->effect));
+        QCOMPARE(model::classicTitleOf(*revised->effect)->objects.at(0).fill.color, QStringLiteral("#00ff00"));
+        QCOMPARE(model::classicTitleOf(*bin->bin().item(titleId))->objects.at(0).fill.color, QStringLiteral("#00ff00"));
+        QCOMPARE(model::titleSourceOf(*revised->effect).clip, titleId);
+        QCOMPARE(revised->effect->parameters.value(QStringLiteral("Position")).toObject().value(QStringLiteral("X")).toInt(), 960);
+        QVERIFY(!model::keyframesOf(*revised->effect, QStringLiteral("Foreground"), QStringLiteral("Level")).keys.isEmpty());
+        shown = composer.pictureAt(MonitorId::Record, 9, QSize(320, 180));
+        QVERIFY2(shown.pixelColor(200, 40).green() > 200 && shown.pixelColor(200, 40).red() < 60, qPrintable(shown.pixelColor(200, 40).name()));
+        // One undo step brings the red title back.
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        QCOMPARE(model::classicTitleOf(*model::segmentFor(record(), titleRef)->effect)->objects.at(0).fill.color, QStringLiteral("#ff0000"));
+        QVERIFY(timeline.perform(QStringLiteral("edit.redo")));
+
+        // The Effect Editor's Edit Title button; Save Title As makes a new clip (no Fast Save, p.373), and the old one
+        // stays in the bin.
+        timeline.setSelection({titleRef});
+        composer.moveTo(MonitorId::Record, 9);
+        timeline.setEffectMode(true);
+        settle();
+        auto* editButton = window.effectEditor().findChild<QPushButton*>(QStringLiteral("effectEditor:editTitle"));
+        QVERIFY(editButton);
+        editButton->click();
+        QVERIFY(tool->isVisible() && tool->revisingInSequence());
+        tool->setSaveDialog([&](const TitleToolWindow::SaveRequest& suggestion) {
+            TitleToolWindow::SaveRequest r = suggestion;
+            r.bin = binId;
+            r.drive = drive;
+            r.resolution = QStringLiteral("dnx_hq");
+            r.fastSave = true; // ignored
+            return std::optional<TitleToolWindow::SaveRequest>(r);
+        });
+        QVERIFY(tool->saveTitleAs());
+        QCOMPARE(exits, 3);
+        seq = record();
+        revised = model::segmentFor(seq, titleRef);
+        QVERIFY(revised && revised->effect);
+        const QString newId = model::titleSourceOf(*revised->effect).clip;
+        QVERIFY(!newId.isEmpty() && newId != titleId);
+        QVERIFY(bin->bin().item(titleId));
+        QCOMPARE(bin->bin().item(newId)->name, QStringLiteral("Lower Third.01"));
+        QVERIFY(!model::isUnrenderedTitle(*bin->bin().item(newId)));
+        timeline.setEffectMode(false);
+        timeline.setSelection({});
+
+        // Replacing the fill track (p.373): the nest's V1 holds filler instead of the fill precompute, so the box shows
+        // that (black) keyed over the video.
+        QVERIFY(timeline.changeRecordSequence(QStringLiteral("Fill"), [&](model::Sequence& s) {
+            model::Segment& t = s.track(QStringLiteral("V2"))->segments[1];
+            model::Sequence nest = model::nestOf(t);
+            model::Track* fill = nest.track(QStringLiteral("V1"));
+            if (!fill) return false;
+            const std::int64_t length = fill->segments.at(0).length;
+            fill->segments = {model::Segment::filler(length)};
+            model::setNest(t, nest);
+            return true;
+        }));
+        shown = composer.pictureAt(MonitorId::Record, 9, QSize(320, 180));
+        const QColor replaced = shown.pixelColor(200, 40);
+        QVERIFY2(replaced.red() < 40 && replaced.green() < 40 && replaced.blue() < 40, qPrintable(replaced.name()));
+        QVERIFY2(isBlue(shown.pixelColor(40, 40)), qPrintable(shown.pixelColor(40, 40).name()));
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
 
         // Place in Timeline (In -> Out) on V3 (p.359).
         composer.moveTo(MonitorId::Record, 20);

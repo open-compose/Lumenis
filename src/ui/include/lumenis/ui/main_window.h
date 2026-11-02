@@ -548,8 +548,14 @@ public:
     // Revising a title in a bin (p.359): the Title Tool opens with Title Effect clip `itemId`; false for other items.
     bool reviseTitle(const QString& binId, const QString& itemId);
     // Save Title's Place in Timeline (In -> Out) (FX Guide p.359): the Title Effect clip's segment overwritten on
-    // `track` of the record sequence between its marks, one undo step; false without both marks.
-    bool placeTitle(const model::BinItem& clip, const QString& track);
+    // `track` of the record sequence between its marks, one undo step; false without both marks. `bin` is the clip's
+    // bin, kept as the segment's source for Edit Title.
+    bool placeTitle(const model::BinItem& clip, const QString& bin, const QString& track);
+    // Revising a title in a sequence (FX Guide p.372-373): the Effect Editor's Edit Title button and the Timeline's
+    // Edit Title open the record sequence's title segment at `segment` in the Title Tool; saving revises (Save Title)
+    // or adds (Save Title As) the Title Effect clip and puts it in the segment's place, one undo step. False if the
+    // segment is not a classic title.
+    bool editTitleInSequence(const model::SegmentRef& segment);
     // Title styles (FX Guide p.361-364) kept as "Title Style" User settings, one a style, named as it; saving one of an
     // existing name replaces it.
     QList<model::ClassicTitleStyle> titleStyles() const;

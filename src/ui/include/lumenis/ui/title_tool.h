@@ -181,6 +181,13 @@ public:
     std::function<bool(const QString&, const QString&)> clipOpener() const { return openClip_; }
     // Revising a title in a bin (p.359-360): the title and the clip it came from.
     void openClip(const model::ClassicTitle& title, const QString& bin, const QString& itemId, const QString& name, bool fastSaved);
+    // Revising a title in a sequence (FX Guide p.372-373): as openClip, and Save Title and Save Title As ask "if you
+    // want to save the title and exit the Title tool", cannot Fast Save, and after saving hand `replaced` the saved
+    // clip (bin, id) for the segment and close the tool. Closing without saving leaves the sequence alone. An empty
+    // `itemId` (the title's clip is not known) saves as a new clip.
+    void openInSequence(const model::ClassicTitle& title, const QString& bin, const QString& itemId, const QString& name,
+                        std::function<void(const QString& bin, const QString& clipId)> replaced);
+    bool revisingInSequence() const { return static_cast<bool>(sequenceReplace_); }
     // The clip being revised (bin and id; empty for a new title) and whether the title changed since it was opened or
     // saved.
     const QString& clipBin() const { return clipBin_; }
@@ -205,6 +212,9 @@ public:
     // (default: a message box; QMessageBox::Save, Discard or Cancel).
     void setSaveDialog(std::function<std::optional<SaveRequest>(const SaveRequest&)> ask) { askSave_ = std::move(ask); }
     void setClosePrompt(std::function<int()> ask) { askClose_ = std::move(ask); }
+    // For tests: the "save the title and exit the Title tool?" prompt of a revision in a sequence (default: a message
+    // box); true to save.
+    void setExitPrompt(std::function<bool()> ask) { askExit_ = std::move(ask); }
 
     // ---- Title templates (6.8d4b; p.360-361): the Templates menu. "By default, the Title tool saves the template in a
     // Title_Templates folder within the Settings folder" (ours: the folder set here, the user's settings folder's).
@@ -378,6 +388,8 @@ private:
     Saver saver_;
     std::function<std::optional<SaveRequest>(const SaveRequest&)> askSave_;
     std::function<int()> askClose_;
+    std::function<bool()> askExit_;
+    std::function<void(const QString&, const QString&)> sequenceReplace_; // set while revising a title in a sequence
     std::function<bool(const QString&, const QString&)> openClip_;
     QString templateFolder_;
     bool moveableTemplates_ = false;
@@ -391,6 +403,11 @@ private:
     SaveRequest lastSave_; // the last request's bin, drive and resolution for the next new title
     bool fastSave_ = false;
     std::optional<SaveRequest> askSaveRequest(const SaveRequest& suggestion);
+    // Save Title As's dialog and save, after any prompt.
+    bool askAndSave();
+    // A revision in a sequence: the "save and exit?" prompt (true outside one, and when the Close prompt already asked).
+    bool confirmSequenceSave();
+    bool closing_ = false;
     Coat activeCoat_ = Coat::Fill;
     bool activeTransparency_ = false;
     int activeBlend_ = -1;

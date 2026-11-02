@@ -920,6 +920,7 @@ void TitleToolWindow::newTitle() {
     clipBin_.clear();
     clipId_.clear();
     clipName_.clear();
+    sequenceReplace_ = nullptr;
     setTool(Tool::Text);
 }
 
@@ -932,7 +933,24 @@ void TitleToolWindow::openClip(const ClassicTitle& title, const QString& bin, co
     clipName_ = name;
     // Fast Save stays on "until you ... load a title that was saved without Fast Save selected" (p.358).
     if (!fastSaved) fastSave_ = false;
+    sequenceReplace_ = nullptr;
     setTool(Tool::Selection);
+}
+
+void TitleToolWindow::openInSequence(const ClassicTitle& title, const QString& bin, const QString& itemId, const QString& name,
+                                     std::function<void(const QString&, const QString&)> replaced) {
+    openClip(title, bin, itemId, name, false);
+    // "You cannot select Fast Save when revising a title in a sequence" (p.373).
+    fastSave_ = false;
+    sequenceReplace_ = std::move(replaced);
+}
+
+bool TitleToolWindow::confirmSequenceSave() {
+    if (!sequenceReplace_ || closing_) return true;
+    // "A message box opens, asking if you want to save the title and exit the Title tool" (p.373).
+    if (askExit_) return askExit_();
+    return QMessageBox::question(this, tr("Title Tool"), tr("Save the title and exit the Title tool?"), QMessageBox::Save | QMessageBox::Cancel) ==
+           QMessageBox::Save;
 }
 
 std::optional<TitleToolWindow::SaveRequest> TitleToolWindow::askSaveRequest(const SaveRequest& suggestion) {
@@ -964,7 +982,8 @@ std::optional<TitleToolWindow::SaveRequest> TitleToolWindow::askSaveRequest(cons
     form->addRow(tr("Resolution:"), resolution);
     auto* fast = new QCheckBox(tr("Fast Save (Unrendered)"), &box);
     fast->setObjectName(QStringLiteral("title:fastSave"));
-    fast->setChecked(suggestion.fastSave);
+    fast->setChecked(suggestion.fastSave && !sequenceReplace_);
+    fast->setEnabled(!sequenceReplace_); // "You cannot select Fast Save when revising a title in a sequence" (p.373)
     form->addRow(fast);
     // Place in Timeline (In -> Out) and its track (p.359). Ours: the title aspect ratios (multiformat 24p and 25p
     // projects) are not offered.
@@ -975,7 +994,8 @@ std::optional<TitleToolWindow::SaveRequest> TitleToolWindow::askSaveRequest(cons
     const QStringList tracks = saver_.placeTracks ? saver_.placeTracks() : QStringList();
     placeTrack->addItems(tracks);
     if (!tracks.isEmpty()) placeTrack->setCurrentIndex(static_cast<int>(tracks.size()) - 1);
-    place->setEnabled(!tracks.isEmpty());
+    // Ours: a revision in a sequence takes the segment's place, so it is not placed again.
+    place->setEnabled(!tracks.isEmpty() && !sequenceReplace_);
     placeTrack->setEnabled(false);
     connect(place, &QCheckBox::toggled, placeTrack, &QWidget::setEnabled);
     form->addRow(place, placeTrack);
@@ -1002,8 +1022,13 @@ bool TitleToolWindow::save(const SaveRequest& request, bool replace) {
         QMessageBox::warning(this, tr("Save Title"), tr("A rolling or crawling title cannot be saved with a color background."));
         return false;
     }
+    SaveRequest asked = request;
+    if (sequenceReplace_) {
+        asked.fastSave = false;
+        asked.placeTrack.clear();
+    }
     QString error;
-    const QString id = saver_.save(title_, request, replace ? clipId_ : QString(), &error);
+    const QString id = saver_.save(title_, asked, replace ? clipId_ : QString(), &error);
     if (id.isEmpty()) {
         if (!error.isEmpty()) QMessageBox::warning(this, tr("Save Title"), error);
         return false;
@@ -1013,14 +1038,23 @@ bool TitleToolWindow::save(const SaveRequest& request, bool replace) {
     clipId_ = id;
     clipName_ = request.name;
     fastSave_ = request.fastSave;
-    lastSave_ = request;
+    lastSave_ = asked;
     emit titleSaved(request.bin, id);
+    if (sequenceReplace_) {
+        // "The Title tool closes. The revised Title Effect clip replaces the previous clip in the sequence" (p.373).
+        const auto replaced = std::move(sequenceReplace_);
+        sequenceReplace_ = nullptr;
+        replaced(request.bin, id);
+        fastSave_ = false;
+        hide();
+    }
     return true;
 }
 
 bool TitleToolWindow::saveTitle() {
     // "Save the title with the same name and media parameters ... by choosing File > Save Title. The revised Title
     // Effect clip replaces the previous clip in the bin" (p.360).
+    if (!confirmSequenceSave()) return false;
     if (!clipId_.isEmpty() && !lastSave_.name.isEmpty() && lastSave_.bin == clipBin_) {
         SaveRequest r = lastSave_;
         r.name = clipName_;
@@ -1033,10 +1067,15 @@ bool TitleToolWindow::saveTitle() {
         r.fastSave = fastSave_;
         return save(r, true);
     }
-    return saveTitleAs();
+    return askAndSave();
 }
 
 bool TitleToolWindow::saveTitleAs() {
+    if (!confirmSequenceSave()) return false;
+    return askAndSave();
+}
+
+bool TitleToolWindow::askAndSave() {
     SaveRequest suggestion = saver_.defaults ? saver_.defaults() : SaveRequest{};
     if (!lastSave_.bin.isEmpty()) {
         // "If you are saving a new title, the resolution you select becomes the default for future new title saves"
@@ -1060,10 +1099,16 @@ bool TitleToolWindow::closeTitle() {
                                      : QMessageBox::question(this, tr("Title Tool"), tr("Save the changes to this title?"),
                                                              QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
         if (answer == QMessageBox::Cancel) return false;
-        if (answer == QMessageBox::Save && !saveTitle()) return false;
+        if (answer == QMessageBox::Save) {
+            closing_ = true;
+            const bool saved = saveTitle();
+            closing_ = false;
+            if (!saved) return false;
+        }
     }
     // "Fast Save remains in effect until you ... exit the Title tool" (p.358).
     fastSave_ = false;
+    sequenceReplace_ = nullptr;
     hide();
     return true;
 }

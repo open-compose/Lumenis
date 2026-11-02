@@ -423,10 +423,36 @@ Picture classicTitleLayer(const Composition& c, const model::Segment& segment, s
     }
     pf.end();
     pm.end();
-    const Picture fillPicture = Picture::fromImage(fill, w, h, c.interpolation);
-    const Picture mattePicture = Picture::fromImage(matte, w, h, c.interpolation);
+    Picture fillPicture = Picture::fromImage(fill, w, h, c.interpolation);
+    Picture mattePicture = Picture::fromImage(matte, w, h, c.interpolation);
+    // "You can replace the fill track of Title effects with video or graphics. The moving video or graphic effect then
+    // appears inside the title itself" (p.373): material edited onto the nest's V1 other than the fill precompute is
+    // the fill.
+    const model::Sequence nest = model::nestOf(segment);
+    if (const model::Track* v1 = nest.track(QStringLiteral("V1"))) {
+        std::int64_t start = 0;
+        const int i = v1->segmentAt(segment.nestIn + offset, &start);
+        if (i >= 0 && v1->segments.at(i).clipId != media.fill) {
+            Composition inner = c;
+            inner.sequence = &nest;
+            inner.tracks = {QStringLiteral("V1")};
+            fillPicture = composeFrame(inner, segment.nestIn + offset, missing);
+        }
+    }
     const double time = length > 1 ? static_cast<double>(offset) / static_cast<double>(length - 1) : 0.0;
-    return matteKeyPicture(*segment.effect, below, fillPicture, mattePicture, time, model::EffectSpan(length));
+    const model::EffectSpan span(length);
+    // The Title effect's Scaling, Position and Crop (p.489; p.494, p.498, p.499) move the fill and the matte alike, as
+    // Resize moves a picture (black where they leave none, so the matte keys nothing there).
+    const QJsonObject& p = segment.effect->parameters;
+    if (p.contains(QStringLiteral("Scaling")) || p.contains(QStringLiteral("Position")) || p.contains(QStringLiteral("Crop"))) {
+        model::Effect placed{QStringLiteral("Image"), QStringLiteral("Resize"), {}};
+        for (const char* cat : {"Scaling", "Position", "Crop", model::kKeyframesKey}) {
+            if (p.contains(QLatin1String(cat))) placed.parameters.insert(QLatin1String(cat), p.value(QLatin1String(cat)));
+        }
+        fillPicture = imageEffectPicture(placed, fillPicture, time, span);
+        mattePicture = imageEffectPicture(placed, mattePicture, time, span);
+    }
+    return matteKeyPicture(*segment.effect, below, fillPicture, mattePicture, time, span);
 }
 
 // Stamp (FX Guide p.298-299, p.584-585): "The Stamp category of the 3D Warp effect lets you make certain

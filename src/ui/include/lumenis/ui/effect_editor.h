@@ -473,6 +473,8 @@ signals:
     void renderRequested(Qt::KeyboardModifiers modifiers);
     // The Titler+ Dashboard's Save or Save As (FX Guide p.319-320; MainWindow keeps templates).
     void titleTemplateSaveRequested(bool saveAs);
+    // The Edit Title button of a classic Title effect (FX Guide p.372): the segment to revise in the Title Tool.
+    void editTitleRequested(const model::SegmentRef& segment);
 
 protected:
     // Shift+Left and Shift+Right on a slider move it by ten; clicking a control makes its parameter

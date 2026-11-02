@@ -1005,6 +1005,8 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
                 for (Segment& s : material) {
                     if (s.effect && isClassicTitleEffect(*s.effect) && source.durationFrames > 0) {
                         setTitleRollStart(*s.effect, static_cast<double>(plan.sourceStart) / static_cast<double>(source.durationFrames));
+                        // Which clip it came from, for revising it from the sequence (p.372).
+                        setTitleSource(*s.effect, {binId, source.id});
                     }
                 }
             }

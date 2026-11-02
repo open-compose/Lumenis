@@ -1559,6 +1559,9 @@ void MainWindow::createTools() {
     connect(composer_, &Composer::titleTemplateDropped, this,
             [this](const QString& binId, const QString& itemId) { editTitleTemplate(binId, itemId); });
     connect(effectEditor_, &EffectEditor::titleTemplateSaveRequested, this, [this](bool as) { saveTitleTemplate(as); });
+    // Edit Title (FX Guide p.372): the Effect Editor's button and the Timeline's context menu.
+    connect(effectEditor_, &EffectEditor::editTitleRequested, this, [this](const model::SegmentRef& ref) { editTitleInSequence(ref); });
+    connect(timeline_, &Timeline::editTitleRequested, this, [this](const model::SegmentRef& ref) { editTitleInSequence(ref); });
     connect(composer_, &Composer::changed, this, [this] { checkTitleTemplate(); });
     // AutoStabilize "Opens the Effect Editor (if necessary) and the Tracking window", then tracks (FX Guide p.277).
     // After the drop or double-click that applied the effect has finished.
@@ -5983,17 +5986,18 @@ QString MainWindow::saveClassicTitle(const model::ClassicTitle& title, const Tit
     }
     // "Media Composer loads titles into the Source monitor as they are saved" (p.359).
     composer_->load(MonitorId::Source, doc->nodeId(), item);
-    if (!request.placeTrack.isEmpty()) placeTitle(item, request.placeTrack);
+    if (!request.placeTrack.isEmpty()) placeTitle(item, doc->nodeId(), request.placeTrack);
     return item.id;
 }
 
-bool MainWindow::placeTitle(const model::BinItem& clip, const QString& track) {
+bool MainWindow::placeTitle(const model::BinItem& clip, const QString& bin, const QString& track) {
     // "The title is placed in the Timeline between the In and Out marks" (p.359): overwritten on `track`.
     const model::MonitorState& rec = composer_->state(MonitorId::Record);
     auto segment = model::titleSegmentOf(clip);
     if (!segment || !rec.in() || !rec.out() || *rec.out() < *rec.in()) return false;
     const std::int64_t in = *rec.in();
     segment->length = *rec.out() - in + 1; // marks are inclusive
+    if (segment->effect) model::setTitleSource(*segment->effect, {bin, clip.id});
     return timeline_->changeRecordSequence(tr("Place Title"), [&](model::Sequence& seq) {
         if (!seq.ensureTrack(track)) return false;
         seq.overwrite(track, in, {*segment});
@@ -6025,6 +6029,55 @@ void MainWindow::saveTitleStyle(const model::ClassicTitleStyle& style) {
     else index = f.add(model::SettingEntry{kind, style.name, false, style.toJson()});
     f.setActive(index);
     settings_->commit(model::SettingsScope::User);
+}
+
+bool MainWindow::editTitleInSequence(const model::SegmentRef& ref) {
+    const model::MonitorState& rec = composer_->state(MonitorId::Record);
+    const model::LoadedClip* loaded = rec.current();
+    if (!loaded || loaded->item.kind != model::BinItemKind::Sequence) return false;
+    const auto segment = model::segmentFor(model::Sequence::fromItem(loaded->item), ref);
+    if (!segment || !segment->effect || !model::isClassicTitleEffect(*segment->effect)) return false;
+    const auto title = model::classicTitleOf(*segment->effect);
+    if (!title) return false;
+    // The clip it was edited from, when its bin is open; otherwise Save Title makes a new clip (ours).
+    const model::TitleSource source = model::titleSourceOf(*segment->effect);
+    const BinDocument* doc = source.isEmpty() ? nullptr : binContainer_->document(source.bin);
+    const model::BinItem* clip = doc ? doc->bin().item(source.clip) : nullptr;
+    QString name = clip ? clip->name : tr("Title");
+    if (name.startsWith(QLatin1String("unrendered."))) name = name.mid(11);
+    // "A dialog box opens, asking if you want to promote the title to Marquee" (p.372): ours, without Marquee, it
+    // opens in the Title tool directly.
+    openTitleTool(false);
+    TitleToolWindow* tool = titleTool_;
+    if (!tool) return false;
+    const QString sequenceId = loaded->item.id;
+    tool->openInSequence(*title, clip ? source.bin : QString(), clip ? source.clip : QString(), name,
+                         [this, ref, sequenceId](const QString& bin, const QString& clipId) {
+        const BinDocument* saved = binContainer_->document(bin);
+        if (!saved) saved = binContainer_->activeDocument();
+        const model::BinItem* item = saved ? saved->bin().item(clipId) : nullptr;
+        const model::LoadedClip* now = composer_->state(MonitorId::Record).current();
+        // The sequence may have been closed while the Title tool was open: the clip is saved, the sequence unchanged.
+        if (!item || !now || now->item.id != sequenceId) return;
+        const QString binId = saved->nodeId();
+        // "The revised Title Effect clip replaces the previous clip in the sequence" (p.373).
+        timeline_->changeRecordSequence(tr("Revise Title"), [&](model::Sequence& seq) {
+            model::Track* track = seq.track(ref.track);
+            if (!track) return false;
+            std::int64_t start = 0;
+            for (model::Segment& s : track->segments) {
+                if (start == ref.start) {
+                    if (!s.effect || !model::isClassicTitleEffect(*s.effect)) return false;
+                    model::reviseTitleSegment(s, *item, binId);
+                    return true;
+                }
+                start += s.length;
+            }
+            return false;
+        });
+    });
+    tool->updateBackground();
+    return true;
 }
 
 bool MainWindow::reviseTitle(const QString& binId, const QString& itemId) {

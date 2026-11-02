@@ -271,6 +271,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Editing titles in (docs/spec/title-tool.md, 6.8e1): a roll's finish staying
   the roll's end whatever the source OUT, Place in Timeline's tracks (the
   sequence's video tracks and the next one).
+* Revising titles in sequences (docs/spec/title-tool.md, 6.8e2): no Marquee
+  prompt, the Edit Title button above the parameter groups, Place in Timeline
+  dimmed while revising, a segment whose clip's bin is closed saved as a new
+  clip, a fill track replaced by whatever is on the nest's V1 that is not the
+  fill precompute, the Title effect's Scaling, Position and Crop applied as
+  Resize to fill and matte alike.
 * Promote Titles (docs/spec/title-tool.md, 6.8d4c): lines as turned rectangles,
   blends as four-corner gradients, transparency blends as their mean, depth
   shadows as drop shadows, rounded corners, arrowheads, groups and locks left
@@ -788,6 +794,8 @@ The full inventory, with a page for every item, is
     *Save Title As* and *Export Title* (FX p.358–364).
   * The Windows menu offers *Title Tool* (FX p.327).
   * The Timeline's context menu offers *Promote Titles > Avid Titler+* (FX p.326).
+  * The Timeline's context menu offers *Edit Title* on a classic title, and the Effect Editor shows an Edit Title
+    button for one (FX p.372).
   * The Title Tool's Edit, Object (with Soften Shadow, p.354), Alignment and Templates (p.360) menus (FX p.330, p.334, p.338) are in the
     Title Tool window's own menu bar (ours), not the main one.
   * The Edit menu's Undo item names the last action, for example *Undo Clear

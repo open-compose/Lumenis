@@ -1089,6 +1089,8 @@ public:
     QMenu* undoRedoMenu();
 
 signals:
+    // "Right-click and select Edit Title" on a classic title (FX Guide p.372): the segment to revise in the Title Tool.
+    void editTitleRequested(const model::SegmentRef& segment);
     // ExpertRender's highlighting was cancelled (a click in TC1, p.145).
     void expertSelectionCancelled();
     // The shown item, the selection, the patch or Trim mode changed.

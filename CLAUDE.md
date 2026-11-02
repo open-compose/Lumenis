@@ -637,7 +637,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `model::titleRollStart` for rolls and crawls, `MainWindow::placeTitle` for Place in Timeline; tests
   `tst_title_clips`, scenario `36-title-clip.json`), is done; `shownVideoTracks` now shows every track under the
   monitored one (Editing Guide p.627).
-  Next: 6.8e2 (revising titles in sequences, Title effect parameters, fill tracks), 6.8e3 (title media, troubleshooting), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.8e2, revising titles in sequences (`MainWindow::editTitleInSequence` from the Effect Editor's Edit Title button and
+  the Timeline's Edit Title, `TitleToolWindow::openInSequence`, `model::titleSourceOf`/`reviseTitleSegment`; the Title
+  effect's Scaling/Position/Crop and replaced fill tracks in `classicTitleLayer`; test `tst_title_clips`), is done.
+  Next: 6.8e3 (title media, troubleshooting, titles promoted to 3D), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

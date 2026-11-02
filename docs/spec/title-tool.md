@@ -285,3 +285,36 @@ Tests: `tst_classic_title`, `tst_title_tool`, `tst_title_clips`. Title Effect cl
   tracks under it.
 * Tests: `tst_title_clips` (overwrite, keying over V1, fade, Place in Timeline, roll start, bin drag), scenario
   `36-title-clip.json` (the harness's `"title"` clips).
+
+## 6.8e2: revising titles in sequences
+
+### From the guide
+* "If you want to revise a title after you edit it into a sequence, you must reopen the title in the Title tool
+  directly from the sequence rather than revise the Title Effect clip in the bin" (FX p.372): select the segment, enter
+  Effect mode and click the Effect Editor's Edit Title button, or right-click the title in the Timeline and select Edit
+  Title. A prompt offers promotion to Marquee.
+* Save Title (p.373) asks "if you want to save the title and exit the Title tool"; "The Title tool closes. The revised
+  Title Effect clip replaces the previous clip in the sequence and the Source monitor and saves the new title to the
+  bin." Save Title As opens the Save Title dialog; "You cannot select Fast Save when revising a title in a sequence";
+  "The previous Title Effect clip is preserved in the bin."
+* The Title effect's parameters (p.371-372, p.489): Foreground, Scaling, Position, Crop, keyframeable, in effect
+  templates.
+* Replacing fill tracks (p.373): step into the effect, patch source video to the title's fill track and edit it there;
+  "The moving video or graphic effect then appears inside the title itself, keyed over the background."
+
+### Ours
+* The segment's effect keeps its source clip ("Bin" and "Clip" under the Title Tool parameters, `model::titleSourceOf`;
+  set by `applyEdit` and `MainWindow::placeTitle`).
+* `MainWindow::editTitleInSequence` (from `EffectEditor::editTitleRequested`, the "Edit Title" button over the
+  parameter groups of a classic title at level 0, and `Timeline::editTitleRequested`, the context menu's Edit Title)
+  opens the title with `TitleToolWindow::openInSequence`: no Marquee prompt (no Marquee). Save Title revises the clip
+  in its bin when it is open (else saves a new clip in the active bin); Save Title As makes a new one. Either asks
+  first (`setExitPrompt` for tests), forces Fast Save off and dims it and Place in Timeline in the dialog, then
+  `model::reviseTitleSegment` puts the clip in the segment as one undo step ("Revise Title"): the effect's other
+  parameters and keyframes, the roll start and the segment's length stay; the nest and the render are new. Closing
+  without saving leaves the sequence alone.
+* The compositor's `classicTitleLayer` applies Scaling, Position and Crop (and their keyframes) as Resize to the fill
+  and the matte before keying, and takes as the fill the nest's V1 wherever it holds something other than the fill
+  precompute (named by the effect's "Fill" under the Title Tool parameters; `model::titleMediaOf`).
+* Tests: `tst_title_clips` (`editingTitles`: the source clip, Position, Edit Title from the menu and the button, the
+  exit prompt, revising and undo, Save Title As, a replaced fill).
