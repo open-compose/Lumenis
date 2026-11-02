@@ -5,6 +5,7 @@
 #include "lumenis/media/titler.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/titler.h"
+#include "lumenis/model/tracking.h"
 
 #include <QGuiApplication>
 #include <QTest>
@@ -318,6 +319,81 @@ private slots:
         QVERIFY(big.first().boundingRect().height() > small.first().boundingRect().height() * 0.99);
         const QRectF second = big.first().boundingRect();
         QCOMPARE(media::titleTextIndexAt(laid, QPointF(second.left() + 2, -20)), 1);
+    }
+
+    // Roll / Crawl (6.8c3, p.324-326): turning it on makes a linear Effect Position from 0 to 100; the objects go from
+    // just below the frame to just above it (Crawl Left: from the right to the left).
+    void rollCrawl() {
+        Effect e = titlerEffect();
+        Title t;
+        t.objects << textObject(t, QStringLiteral("Credits\nMore\nAnd more"), QPointF(0, 0));
+        setTitle(e, t);
+        const EffectSpan span(31);
+        QVERIFY(setRollCrawl(e, true, span));
+        QVERIFY(!setRollCrawl(e, true, span));
+        QCOMPARE(keyframesOf(e, titleCategory(QString()), QStringLiteral("Effect Position")).keys.size(), 2);
+        QVERIFY(std::abs(titleAt(e, 0.5, span).rollCrawl.position - 50.0) < 1e-6);
+        const Title start = titleAt(e, 0.0, span), end = titleAt(e, 1.0, span), middle = titleAt(e, 0.5, span);
+        auto bounds = [](const Title& at) { return media::titleObjectOutline(at, QStringLiteral("Text 1"))->boundingRect(); };
+        QVERIFY2(bounds(start).top() >= 539.9, qPrintable(QString::number(bounds(start).top())));
+        QVERIFY2(bounds(end).bottom() <= -539.9, qPrintable(QString::number(bounds(end).bottom())));
+        QVERIFY(bounds(middle).top() < 540 && bounds(middle).bottom() > -540);
+        auto inked = [](const Title& at) {
+            const QImage image = media::titleImage(at, kSize);
+            for (int y = 0; y < image.height(); ++y) {
+                for (int x = 0; x < image.width(); ++x) {
+                    if (qAlpha(image.pixel(x, y)) > 0) return true;
+                }
+            }
+            return false;
+        };
+        QVERIFY(!inked(start));
+        QVERIFY(!inked(end));
+        QVERIFY(inked(middle));
+        // Crawl Left: from the right edge out to the left.
+        Title crawl = titleOf(e);
+        crawl.rollCrawl.type = RollCrawlType::CrawlLeft;
+        setTitle(e, crawl);
+        QCOMPARE(titleOf(e).rollCrawl.type, RollCrawlType::CrawlLeft);
+        QVERIFY(bounds(titleAt(e, 0.0, span)).left() >= 959.9);
+        QVERIFY(bounds(titleAt(e, 1.0, span)).right() <= -959.9);
+        // Off: no movement.
+        QVERIFY(setRollCrawl(e, false, span));
+        QCOMPARE(media::titleScroll(titleAt(e, 0.0, span)), QPointF());
+    }
+
+    // An object attached to a tracker moves with it from the reference frame (6.8c3, p.326); edits keep its own position.
+    void tracking() {
+        Effect e = titlerEffect();
+        Title t;
+        t.objects << textObject(t, QStringLiteral("Tag"), QPointF(100, 50));
+        t.objects[0].tracking = true;
+        t.objects[0].tracker = QStringLiteral("Point A");
+        setTitle(e, t);
+        QCOMPARE(titleOf(e), t);
+        TrackingSetup setup;
+        Tracker tracker;
+        tracker.name = QStringLiteral("Point A");
+        tracker.regions << TrackerRegion{};
+        tracker.setPoint(0, QPointF(0.5, 0.5));
+        tracker.setPoint(10, QPointF(0.6, 0.45));
+        setup.trackers << tracker;
+        setTracking(e, setup);
+        const EffectSpan span(11);
+        const Title atStart = titleAt(e, 0.0, span), atEnd = titleAt(e, 1.0, span);
+        QCOMPARE(atStart.objects.at(0).transform.position, QPointF(100, 50));
+        QVERIFY(std::abs(atEnd.objects.at(0).transform.position.x() - (100 + 0.1 * 1920)) < 1e-6);
+        QVERIFY(std::abs(atEnd.objects.at(0).transform.position.y() - (50 - 0.05 * 1080)) < 1e-6);
+        // Dragging it at the end by 10 pixels moves its own position by 10.
+        Title moved = atEnd;
+        moved.objects[0].transform.position += QPointF(10, 0);
+        storeTitleAt(e, moved, 1.0, span);
+        QVERIFY(std::abs(titleOf(e).objects.at(0).transform.position.x() - 110) < 1e-6);
+        // Not tracking: where it is.
+        Title off = titleOf(e);
+        off.objects[0].tracking = false;
+        setTitle(e, off);
+        QVERIFY(std::abs(titleAt(e, 1.0, span).objects.at(0).transform.position.x() - 110) < 1e-6);
     }
 
     // Keyframes on a title's numbers (6.8c1; p.320; What's New 2026.8 p.9).

@@ -314,6 +314,33 @@ TitlerPanel::TitlerPanel(TitlerTool& tool, bool across, QWidget* parent) : QWidg
     number(foreground, QStringLiteral("cropBottom"), tr("Bottom"), 0, 100, 1, {}, [](Title& t, double v) { t.foreground.cropBottom = v; });
     number(foreground, QStringLiteral("cropLeft"), tr("Left"), 0, 100, 1, {}, [](Title& t, double v) { t.foreground.cropLeft = v; });
     number(foreground, QStringLiteral("cropRight"), tr("Right"), 0, 100, 1, {}, [](Title& t, double v) { t.foreground.cropRight = v; });
+    // Roll / Crawl (p.324-325, 6.8c3).
+    QFormLayout* roll = section(tr("Roll / Crawl"));
+    {
+        auto* box = new QCheckBox(tr("Roll / Crawl"), this);
+        named(box, QStringLiteral("rollCrawl"));
+        roll->addRow(box);
+        // Through the tool: turning it on also gives the Effect Position its linear keyframes (p.325).
+        connect(box, &QCheckBox::toggled, this, [this](bool on) {
+            if (!syncing_) tool_.setRollCrawl(on);
+        });
+    }
+    menu(roll, QStringLiteral("rollType"), tr("Effect Type"), {tr("Roll"), tr("Crawl Left"), tr("Crawl Right")}, [this](int i) {
+        tool_.modifyTitle(tr("Effect Type"), [&](Title& t) { t.rollCrawl.type = static_cast<model::RollCrawlType>(i); });
+    });
+    number(roll, QStringLiteral("effectPosition"), tr("Effect Position"), 0, 100, 1, {}, [](Title& t, double v) { t.rollCrawl.position = v; });
+    check(roll, QStringLiteral("editMode"), tr("Edit Mode"), {}, [](Title& t, bool on) { t.rollCrawl.editMode = on; });
+    // Tracking for the Selected Object (p.326).
+    QFormLayout* tracking = section(tr("Tracking"));
+    check(tracking, QStringLiteral("tracking"), tr("Tracking"), [](TitleObject& o, bool on) { o.tracking = on; });
+    menu(tracking, QStringLiteral("tracker"), tr("Tracker"), {}, [this](int) {
+        const auto* box = qobject_cast<QComboBox*>(controls_.value(QStringLiteral("tracker")));
+        const QString name = box ? box->currentText() : QString();
+        tool_.modifySelected(tr("Tracker"), [&](TitleObject& o) {
+            o.tracker = name;
+            o.tracking = !name.isEmpty();
+        });
+    });
     if (!across) outer->addStretch(1);
 
     connect(&tool_, &TitlerTool::changed, this, &TitlerPanel::refresh);
@@ -381,7 +408,7 @@ void TitlerPanel::refresh() {
     for (const QString& s : {tr("Font")}) {
         if (QWidget* w = controls_.value(QStringLiteral("section:") + s)) w->setEnabled(text);
     }
-    for (const QString& s : {tr("Transform"), tr("Fill"), tr("Outline"), tr("Shadow")}) {
+    for (const QString& s : {tr("Transform"), tr("Fill"), tr("Outline"), tr("Shadow"), tr("Tracking")}) {
         if (QWidget* w = controls_.value(QStringLiteral("section:") + s)) w->setEnabled(o != nullptr);
     }
     if (text_) {
@@ -446,6 +473,21 @@ void TitlerPanel::refresh() {
             if (QWidget* w = controls_.value(QStringLiteral("fill%1Color").arg(k))) w->setEnabled(o->fill.color.gradient);
         }
     }
+    // Roll / Crawl and the tracked object's tracker.
+    tick(QStringLiteral("rollCrawl"), t.rollCrawl.on);
+    if (auto* v = qobject_cast<QComboBox*>(controls_.value(QStringLiteral("rollType")))) v->setCurrentIndex(static_cast<int>(t.rollCrawl.type));
+    set(QStringLiteral("effectPosition"), t.rollCrawl.position);
+    tick(QStringLiteral("editMode"), t.rollCrawl.editMode);
+    for (const QString& name : {QStringLiteral("rollType"), QStringLiteral("effectPosition"), QStringLiteral("editMode")}) {
+        if (QWidget* w = controls_.value(name)) w->setEnabled(t.rollCrawl.on);
+    }
+    if (auto* trackers = qobject_cast<QComboBox*>(controls_.value(QStringLiteral("tracker")))) {
+        trackers->clear();
+        trackers->addItem(QString());
+        trackers->addItems(tool_.trackerNames());
+        trackers->setCurrentText(o ? o->tracker : QString());
+    }
+    tick(QStringLiteral("tracking"), o && o->tracking);
     tick(QStringLiteral("background"), t.background.on);
     swatchColor(QStringLiteral("background"));
     set(QStringLiteral("backgroundOpacity"), t.background.opacity);

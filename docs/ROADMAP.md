@@ -1078,7 +1078,8 @@ phase of their own. They are done in three steps:
     * 6.8c1, keyframes on title objects and the title, Fixed so that they stay with the title through
       trims, splits and duplicates (p.320, 2026.8 p.325; docs/spec/titler.md). Done.
     * 6.8c2, formatting selected characters (p.304, p.309; docs/spec/titler.md). Done.
-    * 6.8c3, Roll and Crawl with the Effect Position, and tracking data on objects (p.324-326).
+    * 6.8c3, Roll and Crawl with the Effect Position, and tracking data on objects (p.324-326;
+      docs/spec/titler.md). Done.
     * 6.8c4, templates and presets in bins, promotion from the classic Title Tool, titles in EDLs and
       Find (p.319-326).
   * 6.8d, the classic Title Tool: the drawing environment, text and graphic objects, colour, transparency

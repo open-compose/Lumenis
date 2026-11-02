@@ -417,6 +417,23 @@ void drawObject(QPainter& canvas, const TitleObject& o, const QTransform& outer,
 
 } // namespace
 
+QPointF titleScroll(const Title& title) {
+    const model::TitleRollCrawl& rc = title.rollCrawl;
+    if (!rc.on || title.objects.isEmpty()) return {};
+    // The objects' bounds where they are, unscrolled.
+    QRectF all;
+    for (const TitleObject& o : title.objects) all = all.united(placementOf(o.transform).map(titleObjectBounds(o)).boundingRect());
+    if (all.isEmpty()) return {};
+    const double p = std::clamp(rc.position, 0.0, 100.0) / 100.0;
+    auto lerp = [p](double a, double b) { return a + (b - a) * p; };
+    switch (rc.type) {
+    case model::RollCrawlType::Roll: return {0.0, lerp(540.0 - all.top(), -540.0 - all.bottom())};
+    case model::RollCrawlType::CrawlLeft: return {lerp(960.0 - all.left(), -960.0 - all.right()), 0.0};
+    case model::RollCrawlType::CrawlRight: return {lerp(-960.0 - all.right(), 960.0 - all.left()), 0.0};
+    }
+    return {};
+}
+
 QTransform titleToPicture(const QSize& size) {
     // Title pixels (a 1080-line frame, its centre at 0, 0) to the picture's, by its height (ours).
     const double scale = size.height() / 1080.0;
@@ -441,7 +458,8 @@ QImage titleImage(const Title& title, const QSize& size) {
             all.addRect(QRectF(QPointF(0, 0), QSizeF(size)));
             canvas.drawImage(0, 0, coat(all, title.background.color, title.background.opacity, 0.0, size, true));
         }
-        const QTransform outer = titleToPicture(size);
+        // A Roll or Crawl moves every object along its path (6.8c3).
+        const QTransform outer = QTransform::fromTranslate(titleScroll(title).x(), titleScroll(title).y()) * titleToPicture(size);
         for (const TitleObject& o : title.objects) drawObject(canvas, o, outer, scale, size, 1.0);
     }
     // Foreground: "change the opacity and crop the entire composition" (p.324); crop in percent of the frame.
@@ -481,7 +499,8 @@ std::optional<QPolygonF> titleObjectOutline(const Title& title, const QString& i
         }
         return std::nullopt;
     };
-    return find(title.objects, QTransform());
+    const QPointF scroll = titleScroll(title);
+    return find(title.objects, QTransform::fromTranslate(scroll.x(), scroll.y()));
 }
 
 QRectF titleObjectBounds(const TitleObject& object) {
@@ -501,7 +520,8 @@ std::optional<QTransform> titleObjectPlacement(const Title& title, const QString
         }
         return std::nullopt;
     };
-    return find(title.objects, QTransform());
+    const QPointF scroll = titleScroll(title);
+    return find(title.objects, QTransform::fromTranslate(scroll.x(), scroll.y()));
 }
 
 QLineF titleTextCaret(const TitleObject& object, qsizetype index) {

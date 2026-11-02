@@ -2,7 +2,9 @@
 // previews while the Record monitor's tools work (titler_tool.*) and its undo steps.
 #include "lumenis/ui/effect_editor.h"
 
+#include "lumenis/model/tracking.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/tracking_window.h"
 #include "lumenis/ui/titler_panel.h"
 #include "lumenis/ui/titler_tool.h"
 
@@ -60,6 +62,25 @@ bool EffectEditor::setTitleKeyframes(bool add, bool wholeTitle) {
     });
     syncPreview();
     return done;
+}
+
+bool EffectEditor::setTitleRollCrawl(bool on) {
+    if (!current_ || !model::isTitlerEffect(*current_)) return false;
+    preview_.reset();
+    const bool done = changeKeyframes(tr("Roll / Crawl"), [&](model::Effect& e) { return model::setRollCrawl(e, on, span_); });
+    syncPreview();
+    return done;
+}
+
+QStringList EffectEditor::trackerNames() const {
+    QStringList out;
+    if (!current_) return out;
+    for (const model::Tracker& t : model::trackingOf(*current_).trackers) out << t.name;
+    return out;
+}
+
+bool EffectEditor::trackingWindowShown() const {
+    return trackingWindow_ && trackingWindow_->isVisible();
 }
 
 QStringList EffectEditor::titleKeyframed() const {

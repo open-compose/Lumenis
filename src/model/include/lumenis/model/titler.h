@@ -147,6 +147,11 @@ struct TitleObject {
     TitleShadow shadow;
     // A text's formatted characters (6.8c2): sorted, apart, each with something set; see normalizeRuns.
     QList<TitleRun> runs;
+    // "activate the Tracking toggle for the Selected Object ... select from the available tracking data. The object
+    // is now attached to the selected tracking data" (p.326, 6.8c3): the effect's tracker (by name) the object moves
+    // with, from the tracker's reference frame.
+    bool tracking = false;
+    QString tracker;
     QList<TitleObject> children; // a group's, back to front
     // By hand: a defaulted comparison cannot see through the list of its own type.
     bool operator==(const TitleObject& o) const;
@@ -168,10 +173,25 @@ struct TitleForeground {
     double cropTop = 0.0, cropBottom = 0.0, cropLeft = 0.0, cropRight = 0.0;
     bool operator==(const TitleForeground&) const = default;
 };
+// Roll / Crawl (p.324-326, 6.8c3): "When selected, allows you to set the title to either Roll, Crawl Left, or Crawl
+// Right". The Effect Position (0-100, keyframeable as the title's "Effect Position") moves every object "along its
+// predetermined path": from just outside the frame's bottom (right for Crawl Left, left for Crawl Right) at 0 to just
+// outside its top (left, right) at 100 (ours: the objects' bounds just leave the 1920 x 1080 frame). Edit Mode
+// "allows you to continue modifying the text while the toggle is enabled" (on by default).
+enum class RollCrawlType { Roll, CrawlLeft, CrawlRight };
+struct TitleRollCrawl {
+    bool on = false;
+    RollCrawlType type = RollCrawlType::Roll;
+    double position = 0.0;
+    bool editMode = true;
+    bool operator==(const TitleRollCrawl&) const = default;
+};
+
 struct Title {
     QList<TitleObject> objects;
     TitleBackground background;
     TitleForeground foreground;
+    TitleRollCrawl rollCrawl;
     bool operator==(const Title&) const = default;
 
     // The object with `id`, also inside groups; null if none.
@@ -230,22 +250,30 @@ bool removeObject(Title& title, const QString& id);
 // keyframes" (2026.8 FX Guide p.325; What's New 2026.8 p.9).
 QString titleCategory(const QString& objectId);
 // The names of an object's (or, with an empty id, the title's) keyframeable numbers: Opacity, Position X ... for every
-// object, Size, Kerning, Leading and Skew for text; Background Opacity, Foreground Opacity, Fill Overlay and the Crops
-// for the title.
+// object, Size, Kerning, Leading and Skew for text; Background Opacity, Foreground Opacity, Fill Overlay, the Crops and
+// the Roll / Crawl's Effect Position for the title.
 QStringList titleParameters(TitleObjectKind kind);
 QStringList titleParameters();
 // A number's value in a title, and setting it; nothing / false for an unknown object or name.
 std::optional<double> titleValue(const Title& title, const QString& objectId, const QString& name);
 bool setTitleValue(Title& title, const QString& objectId, const QString& name, double value);
-// The title at time `t` of the effect: its keyframed numbers at their values then.
+// The title at time `t` of the effect: its keyframed numbers at their values then, and its tracked objects moved by
+// their trackers' movement at that frame (6.8c3; fractions of the frame times the 1920 x 1080 title frame, ours).
 Title titleAt(const Effect& effect, double t, const EffectSpan& span);
 // Stores `shown`, the title as it is at time `t` (edited from titleAt), in the effect: its numbers that have keyframes
-// get (or replace) a keyframe at `t` where they changed, the rest are stored as they are.
+// get (or replace) a keyframe at `t` where they changed, the rest are stored as they are; tracked objects' positions
+// are stored without the tracking.
 void storeTitleAt(Effect& effect, const Title& shown, double t, const EffectSpan& span);
 // Keyframes at `t` for every number of the objects `ids` (empty: the title's), at their values then; and removing
 // the keyframes there. False when nothing changes.
 bool addTitleKeyframes(Effect& effect, const QStringList& ids, double t, const EffectSpan& span);
 bool removeTitleKeyframes(Effect& effect, const QStringList& ids, double t, const EffectSpan& span);
+
+// Turns Roll / Crawl on or off (one effect change). "By default, applying a Roll will create a linear animation that
+// animates all of the objects from outside of the frame (bottom) to outside of the frame (top)" (p.325): turning it
+// on gives the Effect Position keyframes 0 at the effect's start and 100 at its end when it has none. False when
+// nothing changes.
+bool setRollCrawl(Effect& effect, bool on, const EffectSpan& span);
 
 // The title effect on segments (Tools > Avid Titler+, p.303): "Select the clip or an empty track segment where you
 // want to add a title. If you want to create a new clip containing your title, set in and out marks in the Timeline

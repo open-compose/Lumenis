@@ -160,6 +160,9 @@ std::optional<int> TitlerTool::cornerAt(const Title& t, const QPointF& point, bo
 bool TitlerTool::overlayPress(const QPointF& at, Qt::KeyboardModifiers modifiers, bool doubleClick) {
     const QPointF p = toTitle(at);
     Title t = title();
+    // With the Tracking window open the Effect Preview's tracking boxes take the mouse (p.326 step 3); a Roll or
+    // Crawl out of Edit Mode is not edited (ours).
+    if (editor_.trackingWindowShown() || (t.rollCrawl.on && !t.rollCrawl.editMode)) return false;
     const bool deep = modifiers & Qt::AltModifier;
     if (!doubleClick && tool_ == Tool::Selection) {
         bool rotate = false;
@@ -480,6 +483,17 @@ bool TitlerTool::overlayKey(QKeyEvent* event) {
     case Qt::Key_Escape: select({}); return true;
     default: return false;
     }
+}
+
+bool TitlerTool::setRollCrawl(bool on) {
+    finishEditing();
+    const bool done = editor_.setTitleRollCrawl(on);
+    emit changed();
+    return done;
+}
+
+QStringList TitlerTool::trackerNames() const {
+    return editor_.trackerNames();
 }
 
 bool TitlerTool::setKeyframes(bool add) {

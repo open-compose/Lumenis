@@ -481,6 +481,70 @@ private slots:
         QVERIFY(title().objects.first().runs.isEmpty());
     }
 
+    // Roll / Crawl from the panel (6.8c3, p.325): the toggle gives the Effect Position its two keyframes in one undo
+    // step; out of Edit Mode the Record monitor does not edit the title; the Tracking toggle for the selected object.
+    void rollCrawl() {
+        Composer composer;
+        Timeline timeline{composer};
+        EffectEditor editor{timeline};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence());
+        editor.resize(700, 900);
+        editor.show();
+        auto settle = [] {
+            for (int i = 0; i < 3; ++i) QCoreApplication::processEvents();
+        };
+        auto effect = [&] {
+            const model::Segment s = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(1);
+            return *s.effect;
+        };
+        composer.moveTo(MonitorId::Record, 60);
+        QVERIFY(timeline.perform(QStringLiteral("tools.titler")));
+        timeline.setEffectMode(true);
+        settle();
+        TitlerTool* tool = editor.titlerTool();
+        tool->overlayPress(tool->toFraction(QPointF(0, 0)), Qt::NoModifier, false);
+        tool->overlayRelease(tool->toFraction(QPointF(0, 0)), Qt::NoModifier);
+        for (const QChar c : QStringLiteral("Roll")) {
+            QKeyEvent e(QEvent::KeyPress, c.unicode(), Qt::NoModifier, QString(c));
+            tool->overlayKey(&e);
+        }
+        tool->finishEditing();
+        settle();
+        TitlerPanel* panel = editor.titlerPanel();
+        auto* toggle = qobject_cast<QCheckBox*>(panel->control(QStringLiteral("rollCrawl")));
+        QVERIFY(toggle);
+        QVERIFY(!panel->control(QStringLiteral("effectPosition"))->isEnabled());
+        toggle->setChecked(true);
+        settle();
+        QVERIFY(model::titleOf(effect()).rollCrawl.on);
+        QCOMPARE(model::keyframesOf(effect(), model::titleCategory(QString()), QStringLiteral("Effect Position")).keys.size(), 2);
+        QVERIFY(panel->control(QStringLiteral("effectPosition"))->isEnabled());
+        QCOMPARE(composer.effectPreview().keyframes.size(), 2);
+        // Edit Mode off: presses go past the title.
+        qobject_cast<QCheckBox*>(panel->control(QStringLiteral("editMode")))->setChecked(false);
+        settle();
+        QVERIFY(!model::titleOf(effect()).rollCrawl.editMode);
+        QVERIFY(!tool->overlayPress(tool->toFraction(QPointF(0, 0)), Qt::NoModifier, false));
+        qobject_cast<QCheckBox*>(panel->control(QStringLiteral("editMode")))->setChecked(true);
+        settle();
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        settle();
+        QVERIFY(!model::titleOf(effect()).rollCrawl.on);
+        QVERIFY(model::keyframesOf(effect(), model::titleCategory(QString()), QStringLiteral("Effect Position")).keys.isEmpty());
+        // The Tracking toggle for the selected object.
+        tool->setTool(TitlerTool::Tool::Selection);
+        tool->select({model::titleOf(effect()).objects.first().id});
+        settle();
+        auto* tracking = qobject_cast<QCheckBox*>(panel->control(QStringLiteral("tracking")));
+        QVERIFY(tracking && tracking->isEnabled());
+        tracking->setChecked(true);
+        settle();
+        QVERIFY(model::titleOf(effect()).objects.first().tracking);
+    }
+
     // Keyframes on a title (6.8c1, p.320): the panel's Add Keyframe at one end, a change at the other makes a
     // keyframe there, the Effect Preview's position bar shows both, and the panel follows the position.
     void keyframes() {

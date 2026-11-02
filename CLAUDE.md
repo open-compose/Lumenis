@@ -600,7 +600,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.8c2, formatting selected characters (`TitleObject::runs`, `model::changeCharacters`/`replaceText`/`styleAt`,
   layout by characters in `src/media/titler.cpp` with `media::titleTextIndexAt`, drag highlighting and
   `TitlerTool::highlighted`/`shownObject`; tests `tst_titler`, `tst_titler_ui`), is done.
-  Next: 6.8c3 (Roll/Crawl, tracking), 6.8c4 (templates), then the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.8c3, Roll / Crawl and tracking on title objects (`Title::rollCrawl`, `model::setRollCrawl`, the keyframeable
+  "Effect Position", `media::titleScroll`; `TitleObject::tracking`/`tracker` applied in `model::titleAt`; tests
+  `tst_titler`, `tst_titler_ui`), is done.
+  Next: 6.8c4 (templates), then the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

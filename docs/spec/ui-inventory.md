@@ -268,6 +268,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   (names, ranges, a quarter of the frame until set), frame-to-frame
   correlation with a search area twice the region, the original picture
   in the Effect Preview, Progressive Source without effect yet.
+* Titler+ Roll / Crawl and tracking (docs/spec/titler.md, 6.8c3): the path's
+  ends (bounds just outside a 1920 x 1080 frame), the default linear keyframes
+  being Fixed, Edit Mode off leaving the tools inactive, the Effect Position
+  number standing in for the scroll bar, tracked positions in 1920 x 1080
+  title pixels, the Tracking window taking the mouse.
 * Titler+ character formatting (docs/spec/titler.md, 6.8c2): which properties
   characters can have (family, style, size, underline, kerning, fill and
   outline colours), new characters taking the format before them, a line as

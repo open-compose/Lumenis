@@ -53,6 +53,10 @@ public:
     bool removeSelected();
     // "Select Previous Object (Page Down ...) or Select Next Object (Page Up ...)" (p.319), in layer order.
     bool selectAdjacent(bool next);
+    // Roll / Crawl on or off (6.8c3; EffectEditor::setTitleRollCrawl), one undo step; and the names of the effect's
+    // trackers, for a tracked object's Tracker menu (p.326).
+    bool setRollCrawl(bool on);
+    QStringList trackerNames() const;
     // Add Keyframe / Delete Keyframe at the position (6.8c1) for the selected objects' numbers, or the title's own with
     // nothing selected (EffectEditor::setTitleKeyframes).
     bool setKeyframes(bool add);

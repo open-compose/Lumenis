@@ -23,6 +23,9 @@ QImage titleImage(const model::Title& title, const QSize& size);
 // Where object `id` is drawn: its shape's bounds placed by its Transform (and its groups'), in title pixels; for the
 // Record monitor's bounding boxes and clicks (6.8b). Nothing for no such object.
 std::optional<QPolygonF> titleObjectOutline(const model::Title& title, const QString& id);
+// Where a Roll or Crawl has moved the title's objects at its Effect Position (title pixels; nothing when it is off,
+// 6.8c3). titleImage, titleObjectOutline and titleObjectPlacement include it.
+QPointF titleScroll(const model::Title& title);
 // An object's own shape's bounds in its own coordinates (a group's: its children's, placed), for anchor presets.
 QRectF titleObjectBounds(const model::TitleObject& object);
 // Where object `id`'s own coordinates go in title pixels (its Transform and its groups'); nothing for no such object.

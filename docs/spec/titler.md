@@ -159,10 +159,34 @@ Ours:
   with their own font; a line is as tall as its tallest character and lines are spaced by the taller neighbour plus
   the Leading. A colour gradient spans the characters of one colour.
 
+## 6.8c3: Roll / Crawl and tracking
+From the guide: Roll / Crawl "allows you to set the title to either Roll, Crawl Left, or Crawl Right"; its Effect
+Position "allows you to move an object along its predetermined path (roll or crawl), in order to change its motion and
+add keyframes at specific positions"; "Enabling Edit Mode allows you to make changes to selected objects" (p.324).
+"Roll is selected by default ... The Edit Mode checkbox is also activated by default"; "By default, applying a Roll will
+create a linear animation that animates all of the objects from outside of the frame (bottom) to outside of the frame
+(top)", a Crawl "from right to left (Crawl Left) or left to right (Crawl Right)" (p.325-326). Tracking: "active the
+Tracking toggle for the Selected Object. Click on the Tracker submenu to select from the available tracking data. The
+object is now atttached to the selected tracking data", then drag it into place (p.326).
+
+Ours:
+* `Title::rollCrawl` (on, Effect Type, Effect Position 0-100, Edit Mode). The Effect Position is the title's
+  keyframeable "Effect Position"; turning Roll / Crawl on (`model::setRollCrawl`) gives it Fixed keyframes 0 at the
+  effect's first frame and 100 at its last when it has none, so the default is linear.
+* `media::titleScroll`: at 0 the objects' bounds lie just outside the 1920 x 1080 frame (below for Roll, right for Crawl
+  Left, left for Crawl Right), at 100 just outside the other side; the picture, outlines and placements include it, so
+  the Record monitor's tools work on the moving title.
+* Out of Edit Mode the Record monitor's tools leave the title alone. The guide's scroll bar for editing is the Effect
+  Position number for now.
+* `TitleObject::tracking` and `tracker`: the object's position moves by the tracker's movement from its reference frame
+  (`model::trackerMovement`), times 1920 x 1080 title pixels; `model::titleAt` adds it and `storeTitleAt` takes it away
+  again, so a drag changes the object's own position. While the Tracking window is open, the Effect Preview's tracking
+  boxes take the mouse instead of the Titler+ tools.
+
 ## Not yet
+* The Roll / Crawl scroll bar in Edit Mode (p.325).
 * Title keyframes as Effect Editor tracks and graphs (they live in the position bar and the panel only).
 * Character formatting of the Shadow, the opacities and the softness (whole objects only).
-* 6.8c3-c4: Roll and Crawl, tracking, templates and presets, promotion from
-  the classic Title Tool, EDLs and Find.
+* 6.8c4: templates and presets, promotion from the classic Title Tool, EDLs and Find.
 * Dragging the panel's numbers; the Grid button's Grid Settings; the Color Info Tool from a colour box (p.315).
 * Fill Overlay (media on the effect's subtrack, p.324).

@@ -2,6 +2,8 @@
 // "Titler", object lookup and layer order, groups, and applying the effect to segments.
 #include "lumenis/model/titler.h"
 
+#include "lumenis/model/tracking.h"
+
 #include <QJsonArray>
 #include <QJsonObject>
 
@@ -69,6 +71,7 @@ constexpr std::initializer_list<const char*> kVertical = {"Top", "Center", "Bott
 constexpr std::initializer_list<const char*> kOrientation = {"Left To Right", "Right To Left", "Top To Bottom"};
 constexpr std::initializer_list<const char*> kOutlineType = {"Outer", "Inner", "Border"};
 constexpr std::initializer_list<const char*> kOutlineShape = {"Round", "Square"};
+constexpr std::initializer_list<const char*> kRollCrawl = {"Roll", "Crawl Left", "Crawl Right"};
 
 QJsonObject objectJson(const TitleObject& t) {
     QJsonObject o{{QStringLiteral("id"), t.id}, {QStringLiteral("kind"), enumName(t.kind, kKinds)}};
@@ -113,6 +116,8 @@ QJsonObject objectJson(const TitleObject& t) {
                                                        {QStringLiteral("angle"), t.shadow.angle},
                                                        {QStringLiteral("softness"), t.shadow.softness}});
     }
+    if (t.tracking) o.insert(QStringLiteral("tracking"), true);
+    if (!t.tracker.isEmpty()) o.insert(QStringLiteral("tracker"), t.tracker);
     if (!t.runs.isEmpty()) {
         QJsonArray runs;
         for (const TitleRun& r : t.runs) {
@@ -194,6 +199,8 @@ TitleObject objectFrom(const QJsonObject& o) {
     t.shadow.distance = shadow.value(QStringLiteral("distance")).toDouble(dshadow.distance);
     t.shadow.angle = shadow.value(QStringLiteral("angle")).toDouble(dshadow.angle);
     t.shadow.softness = shadow.value(QStringLiteral("softness")).toDouble(dshadow.softness);
+    t.tracking = o.value(QStringLiteral("tracking")).toBool();
+    t.tracker = o.value(QStringLiteral("tracker")).toString();
     for (const QJsonValue& r : o.value(QStringLiteral("runs")).toArray()) {
         const QJsonObject j = r.toObject();
         TitleRun run;
@@ -244,7 +251,8 @@ void collectIds(const QList<TitleObject>& list, QStringList& ids) {
 
 bool TitleObject::operator==(const TitleObject& o) const {
     return id == o.id && kind == o.kind && text == o.text && size == o.size && font == o.font && transform == o.transform && fill == o.fill &&
-           outline == o.outline && shadow == o.shadow && runs == o.runs && children == o.children;
+           outline == o.outline && shadow == o.shadow && runs == o.runs && tracking == o.tracking && tracker == o.tracker &&
+           children == o.children;
 }
 
 // ---------------------------------------------------------------- character formatting
@@ -432,6 +440,11 @@ Title titleOf(const Effect& effect) {
     t.foreground.cropBottom = fg.value(QStringLiteral("cropBottom")).toDouble();
     t.foreground.cropLeft = fg.value(QStringLiteral("cropLeft")).toDouble();
     t.foreground.cropRight = fg.value(QStringLiteral("cropRight")).toDouble();
+    const QJsonObject rc = o.value(QStringLiteral("rollCrawl")).toObject();
+    t.rollCrawl.on = rc.value(QStringLiteral("on")).toBool();
+    t.rollCrawl.type = enumFrom(rc.value(QStringLiteral("type")), kRollCrawl, RollCrawlType::Roll);
+    t.rollCrawl.position = rc.value(QStringLiteral("position")).toDouble();
+    t.rollCrawl.editMode = rc.value(QStringLiteral("editMode")).toBool(true);
     return t;
 }
 
@@ -464,7 +477,11 @@ void setTitle(Effect& effect, const Title& title) {
                                                                                           {QStringLiteral("cropTop"), fg.cropTop},
                                                                                           {QStringLiteral("cropBottom"), fg.cropBottom},
                                                                                           {QStringLiteral("cropLeft"), fg.cropLeft},
-                                                                                          {QStringLiteral("cropRight"), fg.cropRight}}}});
+                                                                                          {QStringLiteral("cropRight"), fg.cropRight}}},
+                                               {QStringLiteral("rollCrawl"), QJsonObject{{QStringLiteral("on"), title.rollCrawl.on},
+                                                                                         {QStringLiteral("type"), enumName(title.rollCrawl.type, kRollCrawl)},
+                                                                                         {QStringLiteral("position"), title.rollCrawl.position},
+                                                                                         {QStringLiteral("editMode"), title.rollCrawl.editMode}}}});
 }
 
 Effect titlerEffect() {
@@ -593,6 +610,7 @@ constexpr TitleWideNumber kTitleNumbers[] = {
     {"Crop Bottom", [](const Title& t) { return t.foreground.cropBottom; }, [](Title& t, double v) { t.foreground.cropBottom = v; }},
     {"Crop Left", [](const Title& t) { return t.foreground.cropLeft; }, [](Title& t, double v) { t.foreground.cropLeft = v; }},
     {"Crop Right", [](const Title& t) { return t.foreground.cropRight; }, [](Title& t, double v) { t.foreground.cropRight = v; }},
+    {"Effect Position", [](const Title& t) { return t.rollCrawl.position; }, [](Title& t, double v) { t.rollCrawl.position = v; }},
 };
 
 // Every (object id, name) pair a title has, the title's own with an empty id.
@@ -665,17 +683,62 @@ bool setTitleValue(Title& title, const QString& objectId, const QString& name, d
     return false;
 }
 
+namespace {
+
+// Moves the tracked objects by their trackers' movement at time `t` (`sign` -1 takes it away again).
+void trackObjects(Title& title, const Effect& effect, double t, const EffectSpan& span, double sign) {
+    const TrackingSetup setup = trackingOf(effect);
+    if (setup.trackers.isEmpty()) return;
+    const std::int64_t frame = trackingFrame(t, span);
+    std::function<void(QList<TitleObject>&)> walk = [&](QList<TitleObject>& list) {
+        for (TitleObject& o : list) {
+            if (o.tracking && !o.tracker.isEmpty()) {
+                if (const Tracker* tracker = setup.tracker(o.tracker)) {
+                    if (const auto moved = trackerMovement(*tracker, frame)) {
+                        o.transform.position += sign * QPointF(moved->x() * 1920.0, moved->y() * 1080.0);
+                    }
+                }
+            }
+            walk(o.children);
+        }
+    };
+    walk(title.objects);
+}
+
+} // namespace
+
 Title titleAt(const Effect& effect, double t, const EffectSpan& span) {
     Title title = titleOf(effect);
     for (const auto& [id, name] : allNumbers(title)) {
         if (keyframesOf(effect, titleCategory(id), name).keys.isEmpty()) continue;
         if (const auto v = numberAt(effect, titleCategory(id), name, t, span)) setTitleValue(title, id, name, *v);
     }
+    trackObjects(title, effect, t, span, 1.0);
     return title;
 }
 
-void storeTitleAt(Effect& effect, const Title& shown, double t, const EffectSpan& span) {
-    const Title before = titleAt(effect, t, span);
+bool setRollCrawl(Effect& effect, bool on, const EffectSpan& span) {
+    const Effect before = effect;
+    Title title = titleOf(effect);
+    title.rollCrawl.on = on;
+    setTitle(effect, title);
+    const QString position = QStringLiteral("Effect Position");
+    if (on && keyframesOf(effect, kKey, position).keys.isEmpty()) {
+        setKeyframe(effect, kKey, position, 0.0, span, 0.0);
+        setKeyframe(effect, kKey, position, 1.0, span, 100.0);
+        ParameterKeyframes keys = keyframesOf(effect, kKey, position);
+        setFixed(keys, true, span); // as every title keyframe (titleCategory)
+        setKeyframes(effect, kKey, position, keys);
+    }
+    return effect.parameters != before.parameters;
+}
+
+void storeTitleAt(Effect& effect, const Title& edited, double t, const EffectSpan& span) {
+    Title before = titleAt(effect, t, span);
+    // The positions as kept, without what the tracking adds at `t`.
+    Title shown = edited;
+    trackObjects(shown, effect, t, span, -1.0);
+    trackObjects(before, effect, t, span, -1.0);
     setTitle(effect, shown);
     for (const auto& [id, name] : allNumbers(shown)) {
         const ParameterKeyframes keys = keyframesOf(effect, titleCategory(id), name);

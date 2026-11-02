@@ -318,6 +318,11 @@ public:
     // The title's keyframed numbers ("Titler:<id>/<name>", "Titler/<name>"), shown in the Effect Preview's position bar
     // with the catalog's parameters.
     QStringList titleKeyframed() const;
+    // Roll / Crawl on or off for the shown title (model::setRollCrawl), one undo step; the shown effect's trackers'
+    // names; whether the Tracking window is open (6.8c3).
+    bool setTitleRollCrawl(bool on);
+    QStringList trackerNames() const;
+    bool trackingWindowShown() const;
     void refreshTitleOverlay() { syncPreview(); }
     // The shown effect as previewed, for the Record monitor's picture: its place and the effect, while a preview is
     // under way at the outermost level.
