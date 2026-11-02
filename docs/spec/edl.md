@@ -131,6 +131,15 @@ Number.
   segment effects are left out with a warning.
 * Lines end in CR LF.
 
+### Titles (6.8c4b)
+"Beginning with Media Composer v2025.6, all titles used in the Timeline can be exported as part of an Edit Decision List
+(EDL). Each Titler+ effect is assigned a dedicated event timecode and a unique name (based on the Clip Text label)" (FX
+Guide p.327). Ours: every Titler+ segment on a listed video track, also one past the single video track an EDL lists, is
+a video event over its record times with reel BL and source timecode from 00:00:00:00; its name is the title's topmost
+text ("Titler+" when it has none), with " 2", " 3" ... after a name already used, and is written as `* FROM CLIP NAME:`
+even with Clip Names off. A title on filler is not also a black event; a title over a clip does not warn that the
+segment's effect is left out.
+
 ## In the application
 
 The menus and dialogs are in ui-inventory.md §19.

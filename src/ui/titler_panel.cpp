@@ -8,11 +8,14 @@
 #include <QColorDialog>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QEvent>
 #include <QFontComboBox>
 #include <QFontDatabase>
 #include <QFormLayout>
 #include <QGroupBox>
+#include <QHash>
 #include <QHBoxLayout>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -72,11 +75,19 @@ QString& cornerOf(TitleColor& c, int corner) {
 
 TitlerPanel::TitlerPanel(TitlerTool& tool, bool across, QWidget* parent) : QWidget(parent), tool_(tool) {
     setObjectName(QStringLiteral("titlerPanel"));
+    setAcceptDrops(true); // templates as presets (p.320)
     auto* outer = across ? static_cast<QBoxLayout*>(new QHBoxLayout(this)) : static_cast<QBoxLayout*>(new QVBoxLayout(this));
     outer->setContentsMargins(2, 2, 2, 2);
     outer->setSpacing(4);
     auto section = [&](const QString& title) {
         auto* box = new QGroupBox(title, this);
+        // Where a template dropped as a preset applies (presetPartAt).
+        static const QHash<QString, model::TitlePresetPart> parts = {{QStringLiteral("Font"), model::TitlePresetPart::Font},
+                                                                    {QStringLiteral("Transform"), model::TitlePresetPart::Transform},
+                                                                    {QStringLiteral("Fill"), model::TitlePresetPart::Fill},
+                                                                    {QStringLiteral("Outline"), model::TitlePresetPart::Outline},
+                                                                    {QStringLiteral("Shadow"), model::TitlePresetPart::Shadow}};
+        if (const auto p = parts.find(title); p != parts.end()) box->setProperty("presetPart", static_cast<int>(*p));
         auto* form = new QFormLayout(box);
         form->setContentsMargins(4, 4, 4, 4);
         form->setSpacing(2);
@@ -346,6 +357,32 @@ TitlerPanel::TitlerPanel(TitlerTool& tool, bool across, QWidget* parent) : QWidg
 
     connect(&tool_, &TitlerTool::changed, this, &TitlerPanel::refresh);
     refresh();
+}
+
+model::TitlePresetPart TitlerPanel::presetPartAt(const QPoint& at) const {
+    for (const QWidget* w = childAt(at); w && w != this; w = w->parentWidget()) {
+        const QVariant part = w->property("presetPart");
+        if (part.isValid()) return static_cast<model::TitlePresetPart>(part.toInt());
+    }
+    return model::TitlePresetPart::All;
+}
+
+void TitlerPanel::dragEnterEvent(QDragEnterEvent* event) {
+    dragMoveEvent(event); // a QDragEnterEvent is a QDragMoveEvent
+}
+
+void TitlerPanel::dragMoveEvent(QDragMoveEvent* event) {
+    const auto t = tool_.droppedTemplate(event->mimeData());
+    if (t && model::isTitlerEffect(t->effect) && !tool_.selection().isEmpty()) {
+        event->acceptProposedAction();
+    } else {
+        event->ignore();
+    }
+}
+
+void TitlerPanel::dropEvent(QDropEvent* event) {
+    const auto t = tool_.droppedTemplate(event->mimeData());
+    if (t && tool_.applyPreset(*t, presetPartAt(event->position().toPoint()))) event->acceptProposedAction();
 }
 
 QWidget* TitlerPanel::control(const QString& name) const {

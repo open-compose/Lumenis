@@ -1082,7 +1082,8 @@ phase of their own. They are done in three steps:
       docs/spec/titler.md). Done.
     * 6.8c4, in two parts: 6.8c4a, templates (the Frame view's still, Edit Template and dropping on the
       Record monitor, the Dashboard's Save and Save As, the save prompt; p.319-320; docs/spec/titler.md),
-      done; 6.8c4b, templates as presets on parameters (p.320) and titles in EDLs (p.327). Promote Titles
+      done; 6.8c4b, templates as presets on parameters (p.320) and titles in EDLs (p.327;
+      docs/spec/edl.md), done, so 6.8c is. Promote Titles
       from the classic Title Tool (p.326) moves to 6.8d, which makes the classic titles; titles in Find are
       dropped (neither guide says so).
   * 6.8d, the classic Title Tool: the drawing environment, text and graphic objects, colour, transparency

@@ -5,6 +5,7 @@
 // keyboard shortcuts.
 #include "lumenis/model/bin.h"
 #include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/effect_template.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/titler.h"
 #include "lumenis/media/titler.h"
@@ -479,6 +480,65 @@ private slots:
         // One undo step for the typing session's formatting.
         QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
         QVERIFY(title().objects.first().runs.isEmpty());
+    }
+
+    // A template dropped on the panel as a preset (6.8c4b, p.320): the section under the drop decides what changes.
+    void presets() {
+        Composer composer;
+        Timeline timeline{composer};
+        EffectEditor editor{timeline};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence());
+        editor.resize(700, 900);
+        editor.show();
+        auto settle = [] {
+            for (int i = 0; i < 3; ++i) QCoreApplication::processEvents();
+        };
+        auto title = [&] {
+            const model::Segment s = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(1);
+            return model::titleOf(*s.effect);
+        };
+        composer.moveTo(MonitorId::Record, 60);
+        QVERIFY(timeline.perform(QStringLiteral("tools.titler")));
+        timeline.setEffectMode(true);
+        settle();
+        TitlerTool* tool = editor.titlerTool();
+        tool->overlayPress(tool->toFraction(QPointF(0, 0)), Qt::NoModifier, false);
+        tool->overlayRelease(tool->toFraction(QPointF(0, 0)), Qt::NoModifier);
+        for (const QChar c : QStringLiteral("Name")) {
+            QKeyEvent e(QEvent::KeyPress, c.unicode(), Qt::NoModifier, QString(c));
+            tool->overlayKey(&e);
+        }
+        tool->finishEditing();
+        settle();
+        TitlerPanel* panel = editor.titlerPanel();
+        auto partOf = [&](const QString& control) {
+            QWidget* w = panel->control(control);
+            return panel->presetPartAt(w->mapTo(panel, w->rect().center()));
+        };
+        QCOMPARE(partOf(QStringLiteral("fillOpacity")), model::TitlePresetPart::Fill);
+        QCOMPARE(partOf(QStringLiteral("size")), model::TitlePresetPart::Font);
+        QCOMPARE(partOf(QStringLiteral("shadowAngle")), model::TitlePresetPart::Shadow);
+        QCOMPARE(partOf(QStringLiteral("backgroundOpacity")), model::TitlePresetPart::All);
+        model::Effect e = model::titlerEffect();
+        model::Title t;
+        t.objects << model::textObject(t, QStringLiteral("Preset"), QPointF(300, 300));
+        t.objects[0].fill.color.color = QStringLiteral("#ff00ff");
+        t.objects[0].font.size = 30;
+        model::setTitle(e, t);
+        model::EffectTemplate preset;
+        preset.effect = e;
+        // Nothing selected: nothing to apply to.
+        tool->select({});
+        QVERIFY(!tool->applyPreset(preset, model::TitlePresetPart::Fill));
+        tool->select({title().objects.first().id});
+        QVERIFY(tool->applyPreset(preset, model::TitlePresetPart::Fill));
+        settle();
+        QCOMPARE(title().objects.first().fill.color.color, QStringLiteral("#ff00ff"));
+        QCOMPARE(title().objects.first().font.size, 72.0);
+        QCOMPARE(title().objects.first().text, QStringLiteral("Name"));
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        QCOMPARE(title().objects.first().fill.color.color, QStringLiteral("#ffffff"));
     }
 
     // Roll / Crawl from the panel (6.8c3, p.325): the toggle gives the Effect Position its two keyframes in one undo

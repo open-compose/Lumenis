@@ -90,6 +90,10 @@ QStringList EffectEditor::trackerNames() const {
     return out;
 }
 
+std::optional<model::EffectTemplate> EffectEditor::droppedTemplate(const QMimeData* mime) const {
+    return timeline_.droppedTemplate(mime);
+}
+
 bool EffectEditor::trackingWindowShown() const {
     return trackingWindow_ && trackingWindow_->isVisible();
 }

@@ -268,6 +268,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   (names, ranges, a quarter of the frame until set), frame-to-frame
   correlation with a search area twice the region, the original picture
   in the Effect Preview, Progressive Source without effect yet.
+* Titler+ presets and EDL titles (docs/spec/titler.md, edl.md; 6.8c4b): the
+  sections a preset drop picks, the whole style elsewhere without the
+  Transform, the source object by kind, title events with reel BL, their
+  names numbered and written with Clip Names off.
 * Titler+ templates (docs/spec/titler.md, 6.8c4a): a template edited as a
   sequence of its length (ten seconds when unknown) kept out of the bins,
   Save As naming its copy "<name> Copy" and editing that, Save and Save As

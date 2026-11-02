@@ -323,6 +323,8 @@ public:
     bool setTitleRollCrawl(bool on);
     QStringList trackerNames() const;
     bool trackingWindowShown() const;
+    // A template dragged from a bin or the effect icon (Timeline::droppedTemplate), for Titler+ presets.
+    std::optional<model::EffectTemplate> droppedTemplate(const QMimeData* mime) const;
     // The shown Titler+ effect as it is stored, and its length in frames; nothing when another effect is shown.
     std::optional<std::pair<model::Effect, std::int64_t>> shownTitlerEffect() const;
     void refreshTitleOverlay() { syncPreview(); }

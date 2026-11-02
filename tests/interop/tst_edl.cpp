@@ -2,6 +2,7 @@
 #include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/structure.h"
+#include "lumenis/model/titler.h"
 
 #include <QDir>
 #include <algorithm>
@@ -104,6 +105,7 @@ private slots:
     void optimize();
     void masterClips();
     void reuseSources();
+    void titles();
     void corpus();
 };
 
@@ -634,6 +636,62 @@ void TestEdl::reuseSources() {
     const model::Sequence s = model::Sequence::fromItem(sequenceOf(second));
     QCOMPARE(trackOf(s, QStringLiteral("V1")).segments.at(0).clipId, first.items.at(0).id);
     QCOMPARE(trackOf(s, QStringLiteral("V1")).segments.at(1).clipId, second.items.at(0).id);
+}
+
+// "all titles used in the Timeline can be exported as part of an Edit Decision List (EDL). Each Titler+ effect is
+// assigned a dedicated event timecode and a unique name (based on the Clip Text label)" (FX Guide p.327): titles on
+// V2, over the picture of V1, are events of their own with their names.
+void TestEdl::titles() {
+    model::BinItem a;
+    a.id = QStringLiteral("a");
+    a.kind = model::BinItemKind::MasterClip;
+    a.name = QStringLiteral("Interview");
+    a.editRate = Rational(25);
+    a.durationFrames = 1000;
+    a.fields.insert(QStringLiteral("Start"), QStringLiteral("14:00:00:00"));
+    model::BinItem seq;
+    seq.id = QStringLiteral("s");
+    seq.kind = model::BinItemKind::Sequence;
+    seq.name = QStringLiteral("Cut");
+    seq.editRate = Rational(25);
+    seq.fields.insert(QStringLiteral("Start"), QStringLiteral("10:00:00:00"));
+    model::Sequence s;
+    s.ensureTrack(QStringLiteral("V1"));
+    s.ensureTrack(QStringLiteral("V2"));
+    model::Segment sa;
+    sa.clipId = a.id;
+    sa.name = a.name;
+    sa.sourceTrack = QStringLiteral("V1");
+    sa.length = 100;
+    s.overwrite(QStringLiteral("V1"), 0, {sa});
+    auto title = [](const QString& text, std::int64_t length) {
+        model::Effect e = model::titlerEffect();
+        model::Title t;
+        t.objects << model::textObject(t, text, QPointF());
+        model::setTitle(e, t);
+        model::Segment f = model::Segment::filler(length);
+        f.effect = e;
+        return f;
+    };
+    s.overwrite(QStringLiteral("V2"), 0, {model::Segment::filler(25), title(QStringLiteral("Jane Doe"), 25), model::Segment::filler(10), title(QStringLiteral("Jane Doe"), 15)});
+    s.storeIn(seq);
+    edl::ExportOptions o;
+    o.resolve = [&](const MobId&, const QString& id) -> std::optional<model::BinItem> {
+        if (id == a.id) return a;
+        return std::nullopt;
+    };
+    o.clipNames = false;
+    const auto out = edl::exportText(seq, o);
+    QCOMPARE(out.events, 3);
+    QVERIFY2(out.text.contains(QStringLiteral("002  BL       V     C        00:00:00:00 00:00:01:00 10:00:01:00 10:00:02:00\r\n"
+                                              "* FROM CLIP NAME:  JANE DOE")),
+             qPrintable(out.text));
+    QVERIFY2(out.text.contains(QStringLiteral("003  BL       V     C        00:00:00:00 00:00:00:15 10:00:02:10 10:00:03:00\r\n"
+                                              "* FROM CLIP NAME:  JANE DOE 2")),
+             qPrintable(out.text));
+    // The picture's event keeps no clip name (Clip Names off); no note about a left-out effect.
+    QVERIFY(!out.text.contains(QStringLiteral("INTERVIEW")));
+    QVERIFY2(out.warnings.join(QLatin1Char(' ')).contains(QStringLiteral("V2 left out")), qPrintable(out.warnings.join(QLatin1Char(' '))));
 }
 
 // OpenTimelineIO's sample lists: each is read, and what Cutthulhu writes from it reads back the same.

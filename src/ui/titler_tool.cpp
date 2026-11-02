@@ -485,6 +485,22 @@ bool TitlerTool::overlayKey(QKeyEvent* event) {
     }
 }
 
+bool TitlerTool::applyPreset(const model::EffectTemplate& preset, model::TitlePresetPart part) {
+    if (!model::isTitlerEffect(preset.effect) || selected_.isEmpty()) return false;
+    finishEditing();
+    const Title source = model::titleOf(preset.effect);
+    Title t = title();
+    bool any = false;
+    for (const QString& id : selected_) {
+        if (TitleObject* o = t.object(id)) any = model::applyTitlePreset(*o, source, part) || any;
+    }
+    return any && commit(tr("Titler+ Template"), t);
+}
+
+std::optional<model::EffectTemplate> TitlerTool::droppedTemplate(const QMimeData* mime) const {
+    return editor_.droppedTemplate(mime);
+}
+
 bool TitlerTool::setRollCrawl(bool on) {
     finishEditing();
     const bool done = editor_.setTitleRollCrawl(on);

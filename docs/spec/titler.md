@@ -205,11 +205,24 @@ Ours:
 * When the edited template with changes leaves the Record monitor, a box asks to save it (`setTemplateSavePrompt` in
   tests); either way the edit is then over.
 
+## 6.8c4b: presets and EDLs
+From the guide: "Saved templates can also be used as presets. When a text object is selected, you can drag an already
+saved Titler+ template from a bin and drop it onto a specific effect parameter for a different clip in the Effect Editor.
+This will replace the properties of the object (font, colors, shadow, etc.) while preserving the text" (p.320).
+
+Ours:
+* The Titler+ controls take a template dragged from a bin (`TitlerPanel::dropEvent`, through `Timeline::droppedTemplate`)
+  while an object is selected. On the Font, Transform, Fill, Outline or Shadow section, that section's properties change
+  (`TitlerPanel::presetPartAt`); anywhere else, Font, Fill, Outline and Shadow together, the position staying.
+* `model::applyTitlePreset` takes them from the template's first object of the selected object's kind (else its first
+  object); the selected object's formatted characters lose the properties replaced. One undo step
+  (`TitlerTool::applyPreset`).
+* Titles in EDLs: docs/spec/edl.md, "Titles".
+
 ## Not yet
 * The Roll / Crawl scroll bar in Edit Mode (p.325).
 * Title keyframes as Effect Editor tracks and graphs (they live in the position bar and the panel only).
 * Character formatting of the Shadow, the opacities and the softness (whole objects only).
-* 6.8c4b: templates as presets on parameters (p.320), titles in EDLs (p.327). Promote Titles comes with the classic
-  Title Tool (6.8d).
+* Promote Titles comes with the classic Title Tool (6.8d).
 * Dragging the panel's numbers; the Grid button's Grid Settings; the Color Info Tool from a colour box (p.315).
 * Fill Overlay (media on the effect's subtrack, p.324).

@@ -854,4 +854,43 @@ std::optional<EffectTemplate> titleTemplateFromSequence(const BinItem& sequence,
     return std::nullopt;
 }
 
+bool applyTitlePreset(TitleObject& target, const Title& preset, TitlePresetPart part) {
+    if (target.kind == TitleObjectKind::Group) return false;
+    const TitleObject* source = nullptr;
+    std::function<void(const QList<TitleObject>&)> find = [&](const QList<TitleObject>& list) {
+        for (const TitleObject& o : list) {
+            if (source && source->kind == target.kind) return;
+            if (o.kind != TitleObjectKind::Group && (!source || o.kind == target.kind)) source = &o;
+            find(o.children);
+        }
+    };
+    find(preset.objects);
+    if (!source) return false;
+    const TitleObject before = target;
+    const bool all = part == TitlePresetPart::All;
+    QList<TitleCharFormat> formats = perCharacter(target);
+    if ((all || part == TitlePresetPart::Font) && target.kind == TitleObjectKind::Text && source->kind == TitleObjectKind::Text) {
+        target.font = source->font;
+        for (TitleCharFormat& f : formats) {
+            f.family.reset();
+            f.style.reset();
+            f.size.reset();
+            f.kerning.reset();
+            f.underline.reset();
+        }
+    }
+    if (part == TitlePresetPart::Transform) target.transform = source->transform;
+    if (all || part == TitlePresetPart::Fill) {
+        target.fill = source->fill;
+        for (TitleCharFormat& f : formats) f.fill.reset();
+    }
+    if (all || part == TitlePresetPart::Outline) {
+        target.outline = source->outline;
+        for (TitleCharFormat& f : formats) f.outline.reset();
+    }
+    if (all || part == TitlePresetPart::Shadow) target.shadow = source->shadow;
+    setPerCharacter(target, formats);
+    return !(target == before);
+}
+
 } // namespace lumenis::model

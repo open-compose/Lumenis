@@ -321,6 +321,49 @@ private slots:
         QCOMPARE(media::titleTextIndexAt(laid, QPointF(second.left() + 2, -20)), 1);
     }
 
+    // Templates as presets (6.8c4b, p.320): a section's properties, or all the style, from the template's object of
+    // the same kind; the text stays.
+    void presets() {
+        Title preset;
+        preset.objects << shapeObject(preset, TitleObjectKind::Rectangle, QPointF(), QSizeF(10, 10));
+        preset.objects << textObject(preset, QStringLiteral("Template"), QPointF(500, 500));
+        preset.objects[1].font.size = 150;
+        preset.objects[1].font.family = QStringLiteral("Serif");
+        preset.objects[1].fill.color.color = QStringLiteral("#0000ff");
+        preset.objects[1].shadow.on = true;
+        preset.objects[1].outline.on = true;
+        preset.objects[0].fill.color.color = QStringLiteral("#00ff00");
+        Title t;
+        t.objects << textObject(t, QStringLiteral("Mine"), QPointF(-100, 0));
+        TitleObject& o = t.objects[0];
+        QVERIFY(changeCharacters(o, 0, 2, [](TitleObject& v) {
+            v.fill.color.color = QStringLiteral("#ff0000");
+            v.font.size = 40;
+        }));
+        // The Fill section: only the fill, and the characters' own fill goes.
+        QVERIFY(applyTitlePreset(o, preset, TitlePresetPart::Fill));
+        QCOMPARE(o.fill.color.color, QStringLiteral("#0000ff"));
+        QCOMPARE(o.font.size, 72.0);
+        QCOMPARE(styleAt(o, 0).fill.color, QStringLiteral("#0000ff"));
+        QCOMPARE(styleAt(o, 0).font.size, 40.0);
+        QVERIFY(!applyTitlePreset(o, preset, TitlePresetPart::Fill));
+        // All: font, outline and shadow too; the text and the place stay.
+        QVERIFY(applyTitlePreset(o, preset, TitlePresetPart::All));
+        QCOMPARE(o.text, QStringLiteral("Mine"));
+        QCOMPARE(o.transform.position, QPointF(-100, 0));
+        QCOMPARE(o.font.size, 150.0);
+        QCOMPARE(o.font.family, QStringLiteral("Serif"));
+        QVERIFY(o.shadow.on && o.outline.on);
+        QVERIFY(o.runs.isEmpty());
+        // Transform only when asked.
+        QVERIFY(applyTitlePreset(o, preset, TitlePresetPart::Transform));
+        QCOMPARE(o.transform.position, QPointF(500, 500));
+        // A shape takes the template's shape: no ellipse there, so its first object, the rectangle.
+        TitleObject box = shapeObject(t, TitleObjectKind::Ellipse, QPointF(), QSizeF(5, 5));
+        QVERIFY(applyTitlePreset(box, preset, TitlePresetPart::All));
+        QCOMPARE(box.fill.color.color, QStringLiteral("#00ff00"));
+    }
+
     // Templates (6.8c4a, p.319-320): the sequence a template is edited in and back; the Frame view's still.
     void templates() {
         Effect e = titlerEffect();

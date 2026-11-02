@@ -6,6 +6,7 @@
 #include "lumenis/core/timecode.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/titler.h"
 
 #include <QFileInfo>
 #include <QHash>
@@ -598,6 +599,7 @@ struct Piece {
     std::int64_t fromSource = 0;
     QString fromName;
     QList<model::Marker> markers;
+    bool title = false; // a Titler+ title's event (titlePieces)
 
     // Whether two pieces are the same edit and can share an event (Optimize EDL).
     bool sameEdit(const Piece& o) const {
@@ -651,6 +653,7 @@ public:
         for (const QString& name : (video.isEmpty() ? QStringList() : QStringList{video}) + audio) {
             pieces += piecesOf(*sequence.track(name), order++);
         }
+        pieces += titlePieces(sequence, listed);
         attachMarkers(pieces);
         std::stable_sort(pieces.begin(), pieces.end(), [](const Piece& a, const Piece& b) {
             return a.recIn != b.recIn ? a.recIn < b.recIn : a.order < b.order;
@@ -758,7 +761,9 @@ private:
             const bool dissolves = track.kind == model::TrackKind::Video ? options_.pictureDissolves : options_.soundDissolves;
             const bool transition = s.transition && dissolves && s.transition->duration > 0;
             const bool last = i + 1 == track.segments.size();
-            if (s.isFiller() && !(options_.blackEdits && !last) && !transition) {
+            // A title on filler is an event of its own (titlePieces), not black.
+            const bool title = s.isFiller() && s.effect && model::isTitlerEffect(*s.effect);
+            if ((s.isFiller() && !(options_.blackEdits && !last) && !transition) || title) {
                 before.reset();
                 continue;
             }
@@ -782,7 +787,7 @@ private:
                 p.srcOut = p.srcIn + (p.speed ? std::max<std::int64_t>(1, std::llround(static_cast<double>(s.length) * std::abs(*p.speed) /
                                                                                          static_cast<double>(nominal_)))
                                                : s.length);
-                if (s.effect && !p.speed) {
+                if (s.effect && !p.speed && !model::isTitlerEffect(*s.effect)) {
                     notes_.add(QStringLiteral("segment effects left out (%1/%2)").arg(s.effect->category, s.effect->name));
                 }
             }
@@ -821,6 +826,43 @@ private:
             }
             out << p;
             before = out.size() - 1;
+        }
+        return out;
+    }
+
+    // "Beginning with Media Composer v2025.6, all titles used in the Timeline can be exported as part of an Edit
+    // Decision List (EDL). Each Titler+ effect is assigned a dedicated event timecode and a unique name (based on the
+    // Clip Text label)" (FX Guide p.327): every Titler+ segment on a listed video track, the one listed or not, is a
+    // video event over its record times. Ours: its reel is BL (a title has no tape) and its source 00:00:00:00 on;
+    // the name is the title's topmost text ("Titler+" without text), " 2", " 3" ... after a name already given,
+    // written as its clip name even with Clip Names off.
+    QList<Piece> titlePieces(const model::Sequence& sequence, const QStringList& listed) {
+        QList<Piece> out;
+        QHash<QString, int> used;
+        for (const QString& name : sequence.trackNames()) {
+            const auto ref = model::parseTrackName(name);
+            if (!listed.contains(name) || !ref || ref->kind != model::TrackKind::Video) continue;
+            std::int64_t pos = 0;
+            for (const model::Segment& s : sequence.track(name)->segments) {
+                const std::int64_t at = pos;
+                pos += s.length;
+                if (!s.effect || !model::isTitlerEffect(*s.effect)) continue;
+                QString label = model::titleOf(*s.effect).topText().simplified();
+                if (label.isEmpty()) label = QString::fromLatin1(model::kTitlerName);
+                const int n = ++used[label.toUpper()];
+                if (n > 1) label += QStringLiteral(" %1").arg(n);
+                Piece p;
+                p.order = 0;
+                p.track = name;
+                p.recIn = start_ + at;
+                p.recOut = start_ + pos;
+                p.reel = QStringLiteral("BL");
+                p.srcIn = 0;
+                p.srcOut = s.length;
+                p.name = label;
+                p.title = true;
+                out << p;
+            }
         }
         return out;
     }
@@ -883,7 +925,7 @@ private:
                                                          QString::number(std::abs(*p.speed), 'f', 1).rightJustified(5, QLatin1Char('0'))))
                          .arg(tc(p.srcIn));
         }
-        if (options_.clipNames) {
+        if (options_.clipNames || p.title) {
             // Media Composer writes two spaces before the name (as OpenTimelineIO notes).
             if (!p.transition.isEmpty()) {
                 if (!p.fromName.isEmpty()) lines << QStringLiteral("* FROM CLIP NAME:  %1").arg(text(p.fromName));

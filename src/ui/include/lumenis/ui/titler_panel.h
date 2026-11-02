@@ -31,6 +31,14 @@ public:
     // A colour swatch's choice without its colour dialog (`which`: fill, fill0-3 for the gradient's corners, outline,
     // shadow, background).
     bool chooseColor(const QString& which, const QColor& color);
+    // A Titler+ template dropped as a preset (p.320, 6.8c4b) where a drop at `at` (the panel's coordinates) lands:
+    // on the Font, Transform, Fill, Outline or Shadow section that section, elsewhere all of them but Transform.
+    model::TitlePresetPart presetPartAt(const QPoint& at) const;
+
+protected:
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
     TitlerTool& tool_;

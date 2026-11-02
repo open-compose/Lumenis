@@ -292,6 +292,15 @@ bool isTitleTemplate(const BinItem& item);
 // adjustments to text, colors, animation timing, and other properties" (p.320). Ours: a sequence named after the
 // template with its effect on filler on V1, as long as the template was (10 seconds when it does not say).
 BinItem titleTemplateSequence(const EffectTemplate& t, const Rational& editRate, const QString& name, const QDateTime& when);
+// "Saved templates can also be used as presets. When a text object is selected, you can drag an already saved
+// Titler+ template from a bin and drop it onto a specific effect parameter ... This will replace the properties of the
+// object (font, colors, shadow, etc.) while preserving the text. For example ... drag the template from your bin onto
+// the Fill Color parameter of those selected objects" (p.320). Ours: dropped on a section of the controls, that
+// section's properties; elsewhere, Font, Fill, Outline and Shadow together (All). The source is the template's first
+// object of the target's kind (else its first object that is not a group); a target's own formatted characters lose
+// what is replaced. False when nothing changes.
+enum class TitlePresetPart { All, Font, Transform, Fill, Outline, Shadow };
+bool applyTitlePreset(TitleObject& target, const Title& preset, TitlePresetPart part);
 // The template such a sequence holds now: its first Titler+ segment on V1, with that segment's length. Nothing when
 // there is none.
 std::optional<EffectTemplate> titleTemplateFromSequence(const BinItem& sequence, const Rational& editRate);
