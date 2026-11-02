@@ -205,3 +205,35 @@ Tests: `tst_classic_title`, `tst_title_tool`, `tst_title_clips`. Title Effect cl
 * The Source monitor composites a Title clip like a sequence (the title over black). Frame and Script views show a
   Title clip's title over black always (the guide's Home key is not needed). Titles are not edited into sequences yet
   (6.8e).
+
+## 6.8d4b: title templates and title styles
+
+### From the guide
+* Templates (p.360-361): "Title templates let you create a standard format for text and graphics ... The template
+  prevents you from changing the position, colors, shadows, or graphics, which ensures consistency. You can use the
+  Moveable Templates option in the Templates menu to change the position of a template." Templates > Save Template
+  ("By default, the Title tool saves the template in a Title_Templates folder within the Settings folder") and Include
+  Template; with Moveable Templates, "click the Arrow buttons to move the template".
+* Styles (p.361-364): the parameters a style can hold (font, style, size, justification, kerning, leading; fill colour
+  and transparency; shadow colour, transparency, depth, direction, softness and type; border colour, transparency and
+  width); the Styles button ("a scaled visual representation of each style") and the Save Style Parameter button
+  (existing styles or Save As); the Title Style Sheet dialog box (check boxes, Function Key, Style Name, Refresh, Select
+  All, Select None, Revert, Done, Convert to Marquee, Close asking to save); "The Title tool uses the values from the
+  currently selected object or from the current defaults if no object is selected"; function keys apply a style; styles
+  are listed on the Settings window's User tab, where they are deleted, duplicated and renamed.
+
+### Ours
+* `ClassicObject::fromTemplate`; `model::includeClassicTemplate`, `keepTemplateObjects` (run with every undo step: the
+  text stays, everything else is put back; with Moveable Templates the place goes through, not the size);
+  `classicTemplateJson`/`classicTemplateFrom`. Template files are JSON with the extension `.ttpl`, in
+  `<user settings folder>/Title_Templates`. The window's own menu bar gets Templates (Save Template..., Include
+  Template..., Moveable Templates); a template's objects can't be resized, and with Moveable Templates they move by
+  dragging and the arrow keys (the guide's Arrow buttons).
+* `model::ClassicTitleStyle` (name, function key 1-12, the fields and their values), `classicStyleOf`,
+  `applyClassicStyle` (characters lose their own font, style, size or kerning where the style sets it). Styles are
+  "Title Style" User settings (`MainWindow::titleStyles`/`saveTitleStyle`, settings.json kind with "opens":
+  "titleStyle"; FX Guide p.364), one entry a style, named as it; opening one in the Settings window opens its style
+  sheet. The Styles button's menu shows "Aa" in each style; the Save Style Parameter button ("+") lists them and Save
+  As. Recalling a style applies it to the selected objects (any kind, ours), else to the defaults. F1-F12 without
+  modifiers recall a style. `titleStyleSheet()`: the sample follows the check boxes (no Refresh button), Convert to
+  Marquee dimmed.

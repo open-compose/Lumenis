@@ -1,6 +1,7 @@
 // The classic Title Tool's titles (classic_title.h): their JSON, lookups and the Safe Colors limit.
 #include "lumenis/model/classic_title.h"
 
+#include <QHash>
 #include <QJsonArray>
 #include <QStringList>
 
@@ -97,14 +98,18 @@ QJsonObject ClassicTitle::toJson() const {
                 j.insert(QStringLiteral("arrows"), QLatin1String(kArrows[static_cast<int>(o.arrows)]));
                 j.insert(QStringLiteral("arrowSize"), QJsonArray{o.arrowSize.width(), o.arrowSize.height()});
             }
-        } else if (o.borderWidth > 0.0) {
+        } else if (o.borderWidth > 0.0 || o.border != blackPaint()) {
             j.insert(QStringLiteral("borderWidth"), o.borderWidth);
             paintJson(j, QStringLiteral("border"), o.border);
         }
         if (!o.group.isEmpty()) j.insert(QStringLiteral("group"), o.group);
         if (o.locked) j.insert(QStringLiteral("locked"), true);
+        if (o.fromTemplate) j.insert(QStringLiteral("template"), true);
         if (o.kind == ClassicKind::Box && o.cornerRadius > 0.0) j.insert(QStringLiteral("cornerRadius"), o.cornerRadius);
-        if (o.shadowDepth > 0.0 || o.shadowSoftness > 0) {
+        // The shadow when it shows or any of it was set (a title style keeps them all).
+        const ClassicObject plain;
+        if (o.shadowDepth > 0.0 || o.shadowSoftness > 0 || o.depthShadow || o.shadowAngle != plain.shadowAngle ||
+            o.shadowColor != plain.shadowColor || o.shadowTransparency != plain.shadowTransparency) {
             j.insert(QStringLiteral("depthShadow"), o.depthShadow);
             j.insert(QStringLiteral("shadowDepth"), o.shadowDepth);
             j.insert(QStringLiteral("shadowAngle"), o.shadowAngle);
@@ -155,6 +160,7 @@ ClassicTitle ClassicTitle::fromJson(const QJsonObject& o) {
         c.cornerRadius = j.value(QStringLiteral("cornerRadius")).toDouble();
         c.group = j.value(QStringLiteral("group")).toString();
         c.locked = j.value(QStringLiteral("locked")).toBool();
+        c.fromTemplate = j.value(QStringLiteral("template")).toBool();
         c.depthShadow = j.value(QStringLiteral("depthShadow")).toBool();
         c.shadowDepth = j.value(QStringLiteral("shadowDepth")).toDouble();
         c.shadowAngle = j.value(QStringLiteral("shadowAngle")).toDouble(c.shadowAngle);
@@ -289,6 +295,171 @@ void keepLockedObjects(ClassicTitle& title, const ClassicTitle& before) {
         *now = was;
         now->locked = locked;
     }
+}
+
+QStringList includeClassicTemplate(ClassicTitle& title, const ClassicTitle& templ) {
+    QStringList ids;
+    QHash<QString, QString> groups;
+    for (ClassicObject o : templ.objects) {
+        o.id = title.newId(o.kind);
+        o.fromTemplate = true;
+        o.locked = false;
+        if (!o.group.isEmpty()) {
+            if (!groups.contains(o.group)) groups.insert(o.group, title.newGroupId());
+            o.group = groups.value(o.group);
+        }
+        title.objects << o;
+        ids << o.id;
+    }
+    return ids;
+}
+
+void keepTemplateObjects(ClassicTitle& title, const ClassicTitle& before, bool moveable) {
+    for (qsizetype i = 0; i < before.objects.size(); ++i) {
+        const ClassicObject& was = before.objects.at(i);
+        if (!was.fromTemplate) continue;
+        ClassicObject* now = title.object(was.id);
+        if (!now) {
+            title.objects.insert(std::min(i, title.objects.size()), was);
+            continue;
+        }
+        ClassicObject kept = was;
+        // The text, typed in; the place, with Moveable Templates (the size stays).
+        kept.text = now->text;
+        kept.runs = now->runs;
+        if (moveable) kept.rect.moveTopLeft(now->rect.topLeft());
+        // Lines keep their two ends' offset: moveTopLeft on their rect moves both.
+        *now = kept;
+    }
+}
+
+QJsonObject classicTemplateJson(const ClassicTitle& templ) {
+    return QJsonObject{{QStringLiteral("titleTemplate"), templ.toJson()}};
+}
+
+std::optional<ClassicTitle> classicTemplateFrom(const QJsonObject& json) {
+    const QJsonValue v = json.value(QStringLiteral("titleTemplate"));
+    if (!v.isObject()) return std::nullopt;
+    return ClassicTitle::fromJson(v.toObject());
+}
+
+namespace {
+
+constexpr const char* kStyleFields[] = {"Font", "Style", "Size", "Justification", "Kerning", "Leading",
+                                        "Fill Color", "Fill Transparency",
+                                        "Shadow Color", "Shadow Transparency", "Shadow Depth", "Shadow Direction", "Shadow Softness", "Shadow Type",
+                                        "Border Color", "Border Transparency", "Border Width"};
+
+} // namespace
+
+QString classicStyleFieldName(ClassicStyleField field) {
+    return QLatin1String(kStyleFields[static_cast<int>(field)]);
+}
+
+QJsonObject ClassicTitleStyle::toJson() const {
+    QJsonArray names;
+    for (ClassicStyleField f : fields) names.append(classicStyleFieldName(f));
+    ClassicTitle holder;
+    holder.objects << values;
+    return QJsonObject{{QStringLiteral("name"), name},
+                       {QStringLiteral("functionKey"), functionKey},
+                       {QStringLiteral("fields"), names},
+                       {QStringLiteral("values"), holder.toJson().value(QStringLiteral("objects")).toArray().at(0)}};
+}
+
+ClassicTitleStyle ClassicTitleStyle::fromJson(const QJsonObject& o) {
+    ClassicTitleStyle s;
+    s.name = o.value(QStringLiteral("name")).toString();
+    s.functionKey = std::clamp(o.value(QStringLiteral("functionKey")).toInt(), 0, 12);
+    for (const QJsonValue& v : o.value(QStringLiteral("fields")).toArray()) {
+        for (int i = 0; i < kClassicStyleFields; ++i) {
+            if (v.toString() == QLatin1String(kStyleFields[i])) s.fields << static_cast<ClassicStyleField>(i);
+        }
+    }
+    const ClassicTitle holder = ClassicTitle::fromJson(QJsonObject{{QStringLiteral("objects"), QJsonArray{o.value(QStringLiteral("values"))}}});
+    if (!holder.objects.isEmpty()) s.values = holder.objects.first();
+    return s;
+}
+
+ClassicTitleStyle classicStyleOf(const ClassicObject& object, const QString& name) {
+    ClassicTitleStyle s;
+    s.name = name;
+    for (int i = 0; i < kClassicStyleFields; ++i) s.fields << static_cast<ClassicStyleField>(i);
+    s.values = object;
+    s.values.id.clear();
+    s.values.text.clear();
+    s.values.runs.clear();
+    s.values.rect = QRectF();
+    s.values.group.clear();
+    s.values.locked = false;
+    s.values.fromTemplate = false;
+    // A style holds only what it saves (the kind and the rest stay a text object's defaults).
+    s.values.kind = ClassicKind::Text;
+    return s;
+}
+
+void applyClassicStyle(ClassicObject& o, const ClassicTitleStyle& style) {
+    const ClassicObject& v = style.values;
+    using F = ClassicStyleField;
+    auto clearRuns = [&](auto member) {
+        for (TitleRun& r : o.runs) (r.format.*member).reset();
+    };
+    if (style.includes(F::Font)) {
+        o.family = v.family;
+        clearRuns(&TitleCharFormat::family);
+    }
+    if (style.includes(F::Style)) {
+        o.bold = v.bold;
+        o.italic = v.italic;
+        clearRuns(&TitleCharFormat::style);
+    }
+    if (style.includes(F::Size)) {
+        o.size = v.size;
+        clearRuns(&TitleCharFormat::size);
+    }
+    if (style.includes(F::Justification)) o.justify = v.justify;
+    if (style.includes(F::Kerning)) {
+        o.kerning = v.kerning;
+        clearRuns(&TitleCharFormat::kerning);
+    }
+    if (style.includes(F::Leading)) o.leading = v.leading;
+    if (style.includes(F::FillColor)) {
+        o.fill.color = v.fill.color;
+        o.fill.color2 = v.fill.color2;
+        o.fill.colorAngle = v.fill.colorAngle;
+    }
+    if (style.includes(F::FillTransparency)) {
+        o.fill.transparency = v.fill.transparency;
+        o.fill.transparency2 = v.fill.transparency2;
+        o.fill.transparencyAngle = v.fill.transparencyAngle;
+    }
+    if (style.includes(F::ShadowColor)) o.shadowColor = v.shadowColor;
+    if (style.includes(F::ShadowTransparency)) o.shadowTransparency = v.shadowTransparency;
+    if (style.includes(F::ShadowDepth)) o.shadowDepth = v.shadowDepth;
+    if (style.includes(F::ShadowDirection)) o.shadowAngle = v.shadowAngle;
+    if (style.includes(F::ShadowSoftness)) o.shadowSoftness = v.shadowSoftness;
+    if (style.includes(F::ShadowType)) o.depthShadow = v.depthShadow;
+    if (style.includes(F::BorderColor)) {
+        o.border.color = v.border.color;
+        o.border.color2 = v.border.color2;
+        o.border.colorAngle = v.border.colorAngle;
+    }
+    if (style.includes(F::BorderTransparency)) {
+        o.border.transparency = v.border.transparency;
+        o.border.transparency2 = v.border.transparency2;
+        o.border.transparencyAngle = v.border.transparencyAngle;
+    }
+    if (style.includes(F::BorderWidth)) {
+        o.borderWidth = v.borderWidth;
+        if (o.kind == ClassicKind::Line && v.borderWidth > 0.0) o.lineWidth = v.borderWidth;
+    }
+    // Runs left with nothing of their own go.
+    TitleObject twin;
+    twin.kind = TitleObjectKind::Text;
+    twin.text = o.text;
+    twin.runs = o.runs;
+    normalizeRuns(twin);
+    o.runs = twin.runs;
 }
 
 int classicPageLimit(ClassicMotion motion, int lines) {

@@ -2,7 +2,8 @@
 // tool's moves, lassos and handles, the drawing tools with Shift and sticky tools, the text formatting tools on objects,
 // characters and the defaults, the drawing environment and its menus, the Edit menu, and opening the tool from the
 // main window; rolling and crawling titles (6.8d2); line attributes, colours with blends and shadows (6.8d3a); layers,
-// groups, locks, alignment and Duplicate (6.8d3b); saving, closing, exporting and dropped clips (6.8d4a).
+// groups, locks, alignment and Duplicate (6.8d3b); saving, closing, exporting and dropped clips (6.8d4a); templates
+// and styles (6.8d4b).
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/classic_title.h"
 #include "lumenis/ui/bin_dock.h"
@@ -17,7 +18,10 @@
 #include <QDoubleSpinBox>
 #include <QMenuBar>
 #include <QScrollBar>
+#include <QCheckBox>
 #include <QDialog>
+#include <QLineEdit>
+#include <QPushButton>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QMessageBox>
@@ -622,6 +626,109 @@ private slots:
         tool.openClip(t, QStringLiteral("b1"), QStringLiteral("clip9"), QStringLiteral("Credits"), false);
         QCOMPARE(tool.clipId(), QStringLiteral("clip9"));
         QVERIFY(!tool.isModified());
+        tool.hide();
+    }
+
+    // Title templates and title styles (6.8d4b, p.360-364).
+    void templatesAndStyles() {
+        TitleToolWindow tool;
+        tool.show();
+        tool.setSafeColors(false);
+        auto action = [&](const char* name) { return tool.menuBar()->findChild<QAction*>(QStringLiteral("title:") + QLatin1String(name)); };
+        QVERIFY(action("saveTemplate") && action("includeTemplate") && action("moveableTemplates"));
+        // A template: a box and a name.
+        tool.setTool(TitleToolWindow::Tool::Box);
+        tool.press(QPointF(200, 800), Qt::NoModifier);
+        tool.release(QPointF(1000, 950), Qt::NoModifier);
+        tool.setTool(TitleToolWindow::Tool::Text);
+        tool.press(QPointF(1200, 300), Qt::NoModifier);
+        type(tool, QStringLiteral("NAME"));
+        tool.setTool(TitleToolWindow::Tool::Selection);
+        QTemporaryDir dir;
+        const QString path = dir.filePath(QStringLiteral("lower.ttpl"));
+        QVERIFY(tool.saveTemplate(path));
+        // Included in a new title: fixed but for their text.
+        tool.newTitle();
+        QVERIFY(tool.includeTemplate(path));
+        QCOMPARE(tool.title().objects.size(), 2);
+        QVERIFY(tool.title().objects.at(0).fromTemplate);
+        const QRectF place = tool.title().objects.at(0).rect;
+        tool.setTool(TitleToolWindow::Tool::Selection);
+        tool.select({tool.title().objects.at(0).id});
+        tool.press(place.center(), Qt::NoModifier);
+        tool.move(place.center() + QPointF(100, 0), Qt::NoModifier);
+        tool.release(place.center() + QPointF(100, 0), Qt::NoModifier);
+        QCOMPARE(tool.title().objects.at(0).rect, place);
+        tool.setColor(TitleToolWindow::Coat::Fill, QStringLiteral("#ff0000"));
+        QCOMPARE(tool.title().objects.at(0).fill.color, QStringLiteral("#ffffff"));
+        tool.deleteSelection();
+        QCOMPARE(tool.title().objects.size(), 2);
+        // Its text can be typed in.
+        const model::ClassicObject name = tool.title().objects.at(1);
+        tool.setTool(TitleToolWindow::Tool::Text);
+        tool.press(media::classicObjectBounds(name).center(), Qt::NoModifier);
+        tool.key(Qt::Key_End, Qt::NoModifier, QString());
+        type(tool, QStringLiteral("!"));
+        tool.key(Qt::Key_Escape, Qt::NoModifier, QString());
+        QCOMPARE(tool.title().objects.at(1).text, QStringLiteral("NAME!"));
+        // Moveable Templates: the arrow keys move it.
+        action("moveableTemplates")->trigger();
+        QVERIFY(tool.moveableTemplates());
+        tool.setTool(TitleToolWindow::Tool::Selection);
+        tool.select({tool.title().objects.at(0).id});
+        QVERIFY(tool.key(Qt::Key_Right, Qt::NoModifier, QString()));
+        QCOMPARE(tool.title().objects.at(0).rect, place.translated(1, 0));
+        QVERIFY(!tool.includeTemplate(dir.filePath(QStringLiteral("missing.ttpl"))));
+
+        // Styles: Save Style Parameter > Save As through the Title Style Sheet; the Styles menu; a function key.
+        tool.newTitle();
+        tool.setFont(QStringLiteral("Serif"));
+        tool.setPointSize(144);
+        tool.setColor(TitleToolWindow::Coat::Fill, QStringLiteral("#ffcc00"));
+        tool.setStyleSheetDialog([](const model::ClassicTitleStyle& suggestion) -> std::optional<model::ClassicTitleStyle> {
+            model::ClassicTitleStyle s = suggestion;
+            s.name = QStringLiteral("Gold");
+            s.functionKey = 3;
+            s.fields = {model::ClassicStyleField::Size, model::ClassicStyleField::FillColor};
+            return s;
+        });
+        auto* saveButton = qobject_cast<QToolButton*>(tool.control(QStringLiteral("saveStyle")));
+        QVERIFY(saveButton && saveButton->menu());
+        QAction* saveAs = saveButton->menu()->findChild<QAction*>(QStringLiteral("title:saveStyleAs"));
+        QVERIFY(saveAs);
+        saveAs->trigger();
+        QCOMPARE(tool.styles().size(), 1);
+        QCOMPARE(tool.styles().first().values.size, 144.0);
+        auto* stylesButton = qobject_cast<QToolButton*>(tool.control(QStringLiteral("styles")));
+        QCOMPARE(stylesButton->menu()->actions().size(), 1);
+        // A new text object with other defaults, then the style on it.
+        tool.setPointSize(48);
+        tool.setColor(TitleToolWindow::Coat::Fill, QStringLiteral("#ffffff"));
+        tool.setTool(TitleToolWindow::Tool::Text);
+        tool.press(QPointF(300, 300), Qt::NoModifier);
+        type(tool, QStringLiteral("Hi"));
+        tool.key(Qt::Key_Escape, Qt::NoModifier, QString());
+        tool.select({tool.title().objects.last().id});
+        QVERIFY(tool.key(Qt::Key_F3, Qt::NoModifier, QString()));
+        QCOMPARE(tool.title().objects.last().size, 144.0);
+        QCOMPARE(tool.title().objects.last().fill.color, QStringLiteral("#ffcc00"));
+        QVERIFY(!tool.key(Qt::Key_F4, Qt::NoModifier, QString()));
+        // With nothing selected it becomes the defaults.
+        tool.select({});
+        stylesButton->menu()->actions().first()->trigger();
+        QCOMPARE(tool.defaults().size, 144.0);
+        // The Title Style Sheet dialog itself: Done keeps what is checked.
+        QTimer::singleShot(0, &tool, [] {
+            for (QWidget* w : QApplication::topLevelWidgets()) {
+                if (w->objectName() != QLatin1String("title:styleSheet")) continue;
+                w->findChild<QCheckBox*>(QStringLiteral("title:styleField0"))->setChecked(false);
+                w->findChild<QLineEdit*>(QStringLiteral("title:styleName"))->setText(QStringLiteral("Plain"));
+                w->findChild<QPushButton*>(QStringLiteral("title:styleDone"))->click();
+            }
+        });
+        const auto edited = titleStyleSheet(&tool, tool.styles().first());
+        QVERIFY(edited);
+        QCOMPARE(edited->name, QStringLiteral("Plain"));
         tool.hide();
     }
 

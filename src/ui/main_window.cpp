@@ -1279,6 +1279,17 @@ SettingsWindow* MainWindow::showSettings() {
                 const int i = f.activeIndex(QStringLiteral("Bin Layout"));
                 if (i >= 0) openBinLayout(f.entries.at(i).name);
             }
+            // A Title Style setting: "Open the Title Style Sheet dialog box for the style from the Settings list" (FX Guide
+            // p.363).
+            if (tool == QLatin1String("titleStyle")) {
+                const model::SettingsFile& f = settings_->file(model::SettingsScope::User);
+                const int i = f.activeIndex(QStringLiteral("Title Style"));
+                if (i >= 0) {
+                    model::ClassicTitleStyle style = model::ClassicTitleStyle::fromJson(f.entries.at(i).values);
+                    style.name = f.entries.at(i).name.trimmed();
+                    if (const auto edited = titleStyleSheet(settingsWindow_, style)) saveTitleStyle(*edited);
+                }
+            }
             // A Timeline View setting: made active, which applies it (applySettings, p.604).
         });
         // Its own window: give it the commands so Edit's shortcuts work.
@@ -5971,6 +5982,32 @@ QString MainWindow::saveClassicTitle(const model::ClassicTitle& title, const Tit
     return item.id;
 }
 
+QList<model::ClassicTitleStyle> MainWindow::titleStyles() const {
+    QList<model::ClassicTitleStyle> out;
+    const model::SettingsFile& f = settings_->file(model::SettingsScope::User);
+    for (int i : f.versions(QStringLiteral("Title Style"))) {
+        model::ClassicTitleStyle style = model::ClassicTitleStyle::fromJson(f.entries.at(i).values);
+        // The setting's name is the style's ("This name appears in the Style list in the Title tool and in the Settings
+        // list", p.363): renamed in the Settings window, it follows.
+        style.name = f.entries.at(i).name.trimmed();
+        if (!style.name.isEmpty()) out << style;
+    }
+    return out;
+}
+
+void MainWindow::saveTitleStyle(const model::ClassicTitleStyle& style) {
+    const QString kind = QStringLiteral("Title Style");
+    model::SettingsFile& f = settings_->file(model::SettingsScope::User);
+    int index = -1;
+    for (int i : f.versions(kind)) {
+        if (f.entries.at(i).name.trimmed().compare(style.name, Qt::CaseInsensitive) == 0) index = i;
+    }
+    if (index >= 0) f.entries[index].values = style.toJson();
+    else index = f.add(model::SettingEntry{kind, style.name, false, style.toJson()});
+    f.setActive(index);
+    settings_->commit(model::SettingsScope::User);
+}
+
 bool MainWindow::reviseTitle(const QString& binId, const QString& itemId) {
     const BinDocument* doc = binContainer_->document(binId);
     const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr;
@@ -6020,6 +6057,15 @@ void MainWindow::openTitleTool(bool ask) {
         };
         tool->setSaver(saver);
         tool->setClipOpener([this](const QString& bin, const QString& itemId) { return reviseTitle(bin, itemId); });
+        // Title templates in the user's settings folder ("a Title_Templates folder within the Settings folder", p.360)
+        // and title styles as "Title Style" User settings (p.364).
+        const QString userSettings = settings_->path(model::SettingsScope::User);
+        tool->setTemplateFolder(userSettings.isEmpty() ? QDir::home().filePath(QStringLiteral("Title_Templates"))
+                                                       : QFileInfo(userSettings).dir().filePath(QStringLiteral("Title_Templates")));
+        TitleToolWindow::StyleStore store;
+        store.styles = [this] { return titleStyles(); };
+        store.save = [this](const model::ClassicTitleStyle& style) { saveTitleStyle(style); };
+        tool->setStyleStore(store);
     }
     if (!tool->isVisible()) tool->newTitle();
     tool->updateBackground();

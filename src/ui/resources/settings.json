@@ -592,6 +592,13 @@
       "tabs": []
     },
     {
+      "kind": "Title Style",
+      "scope": "user",
+      "page": 364,
+      "opens": "titleStyle",
+      "tabs": []
+    },
+    {
       "kind": "Tool Palette",
       "scope": "user",
       "page": 1221,

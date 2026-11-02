@@ -83,12 +83,13 @@ private slots:
                  (QStringList{"Audio Project", "Audio Multi-Mix", "General", "Media Creation", "Bin Layout", "Video Display"}));
         QCOMPARE(schema.kindNames(SettingsScope::User),
                  (QStringList{"Audio", "Bin", "Composer", "Effect Editor", "Export", "Full Screen Playback", "Import", "Interface", "Keyboard", "Link",
-                              "Render", "Timeline", "Timeline View", "Tool Palette", "Workspace View", "Trim"}));
+                              "Render", "Timeline", "Timeline View", "Title Style", "Tool Palette", "Workspace View", "Trim"}));
         QSet<QString> keys;
         for (const SettingKind& k : schema.kinds()) {
             // Bin layouts are Project settings the Settings chapter does not
-            // list; the Bin Layout menu's pages describe them (p.92).
-            QVERIFY2(k.page >= 1136 || k.kind == QLatin1String("Bin Layout"), qPrintable(k.kind));
+            // list; the Bin Layout menu's pages describe them (p.92). Title
+            // styles are the FX Guide's (p.364).
+            QVERIFY2(k.page >= 1136 || k.kind == QLatin1String("Bin Layout") || k.kind == QLatin1String("Title Style"), qPrintable(k.kind));
             // Without tabs a setting opens a tool instead (the Tool Palette).
             QVERIFY2(!k.tabs.isEmpty() || !k.opens.isEmpty(), qPrintable(k.kind));
             for (const SettingTab& t : k.tabs) {
@@ -267,7 +268,7 @@ private slots:
         // Picture on p.1136: one row per setting; versions under it.
         Settings settings;
         SettingsList list(settings, SettingsScope::User);
-        QCOMPARE(list.topLevelItemCount(), 16);
+        QCOMPARE(list.topLevelItemCount(), 17);
         QCOMPARE(list.topLevelItem(0)->text(SettingsList::kSettingColumn), QStringLiteral("Audio"));
         const int timeline = settings.file(SettingsScope::User).activeIndex("Timeline");
         list.selectEntries({timeline});

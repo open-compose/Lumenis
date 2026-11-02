@@ -200,6 +200,38 @@ public:
     void setSaveDialog(std::function<std::optional<SaveRequest>(const SaveRequest&)> ask) { askSave_ = std::move(ask); }
     void setClosePrompt(std::function<int()> ask) { askClose_ = std::move(ask); }
 
+    // ---- Title templates (6.8d4b; p.360-361): the Templates menu. "By default, the Title tool saves the template in a
+    // Title_Templates folder within the Settings folder" (ours: the folder set here, the user's settings folder's).
+    void setTemplateFolder(const QString& folder) { templateFolder_ = folder; }
+    const QString& templateFolder() const { return templateFolder_; }
+    // Save Template: the whole title as a template file; Include Template: a template's objects added to the title,
+    // fixed but for their text; Moveable Templates: they can be moved (dragged or with the arrow keys; ours).
+    bool saveTemplate(const QString& path);
+    bool includeTemplate(const QString& path);
+    bool moveableTemplates() const { return moveableTemplates_; }
+    void setMoveableTemplates(bool on);
+
+    // ---- Title styles (6.8d4b; p.361-364): the Styles button and the Save Style Parameter button. Where the styles are
+    // kept: the application's "Title Style" User settings (without a store, the window's own list).
+    struct StyleStore {
+        std::function<QList<model::ClassicTitleStyle>()> styles;
+        std::function<void(const model::ClassicTitleStyle&)> save;
+    };
+    void setStyleStore(StyleStore store) { styleStore_ = std::move(store); }
+    QList<model::ClassicTitleStyle> styles() const;
+    // Recalling a style (the Styles menu, the Save Style Parameter menu or its function key): its attributes on the
+    // selected objects, else as the defaults ("The style attributes appear in the Title tool toolbar", p.363). False
+    // when there is no such style.
+    bool applyStyle(const QString& name);
+    // Save Style Parameter > Save As: "The Title tool uses the values from the currently selected object or from the
+    // current defaults if no object is selected" (p.362); the Title Style Sheet dialog box chooses what it keeps.
+    model::ClassicTitleStyle styleOfSelection(const QString& name) const;
+    void saveStyle(const model::ClassicTitleStyle& style);
+    // For tests: what asks for the Title Style Sheet's answers (default: titleStyleSheet()).
+    void setStyleSheetDialog(std::function<std::optional<model::ClassicTitleStyle>(const model::ClassicTitleStyle&)> ask) {
+        askStyle_ = std::move(ask);
+    }
+
     // Edit menu (ours: the tool keeps its own undo steps while it is open).
     bool undo();
     bool redo();
@@ -341,6 +373,13 @@ private:
     std::function<std::optional<SaveRequest>(const SaveRequest&)> askSave_;
     std::function<int()> askClose_;
     std::function<bool(const QString&, const QString&)> openClip_;
+    QString templateFolder_;
+    bool moveableTemplates_ = false;
+    StyleStore styleStore_;
+    QList<model::ClassicTitleStyle> ownStyles_;
+    std::function<std::optional<model::ClassicTitleStyle>(const model::ClassicTitleStyle&)> askStyle_;
+    void saveStyleAs();
+    void fillStyleMenus();
     model::ClassicTitle savedTitle_;
     QString clipBin_, clipId_, clipName_;
     SaveRequest lastSave_; // the last request's bin, drive and resolution for the next new title
@@ -355,5 +394,11 @@ private:
 // Tool, and Persist. Marquee is Avid's own application and stays dimmed (ours). Returns whether the Title Tool was
 // chosen; `persist` tells whether Persist was selected.
 bool askNewTitle(QWidget* parent, bool* persist);
+
+// The Title Style Sheet dialog box (p.361-363): a sample window, the attributes' check boxes with Select All and Select
+// None, the Function Key and Style Name text boxes; Done keeps the changes, Close asks whether to save them. Revert
+// returns to `style`; Refresh is not needed (ours: the sample follows the boxes) and Convert to Marquee stays dimmed.
+// The edited style, or nothing when cancelled.
+std::optional<model::ClassicTitleStyle> titleStyleSheet(QWidget* parent, const model::ClassicTitleStyle& style);
 
 } // namespace lumenis::ui

@@ -2,7 +2,7 @@
 // src/model/title_clip.*, MainWindow::saveClassicTitle and reviseTitle): saving makes the fill and matte precomputes
 // and the clip in the chosen bin and loads it into the Source monitor, which shows the title over black; Fast Save makes
 // an "unrendered." clip without media, found by Bin > Select > Unrendered Titles; revising replaces the clip, and Save
-// Title As keeping the name numbers the new one.
+// Title As keeping the name numbers the new one. Title styles are kept as User settings (6.8d4b).
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/model/title_clip.h"
@@ -133,6 +133,17 @@ private slots:
         tool->setSaveDialog([](const TitleToolWindow::SaveRequest& r) -> std::optional<TitleToolWindow::SaveRequest> { return r; });
         QVERIFY(tool->saveTitleAs());
         QCOMPARE(bin->bin().item(tool->clipId())->name, QStringLiteral("Lower Third.01"));
+        // Title styles are "Title Style" User settings (FX Guide p.364): saved from the tool, listed back, replaced by name.
+        model::ClassicTitleStyle style = model::classicStyleOf(title.objects.at(0), QStringLiteral("Red"));
+        style.functionKey = 2;
+        tool->saveStyle(style);
+        QCOMPARE(window.titleStyles().size(), 1);
+        QCOMPARE(window.titleStyles().first(), style);
+        style.functionKey = 4;
+        window.saveTitleStyle(style);
+        QCOMPARE(window.titleStyles().size(), 1);
+        QCOMPARE(tool->styles().first().functionKey, 4);
+        QVERIFY(tool->templateFolder().endsWith(QLatin1String("Title_Templates")));
         tool->setClosePrompt([] { return int(QMessageBox::Discard); });
         tool->hide();
         media::setExtraMediaDrives({});

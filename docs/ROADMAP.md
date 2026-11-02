@@ -1101,7 +1101,7 @@ phase of their own. They are done in three steps:
       Title), the Save Title dialog with Fast Save, revising a title in a bin, Bin > Select > Unrendered
       Titles (docs/spec/title-tool.md), done; 6.8d4b, title templates (the Templates menu) and title styles
       (the Styles and Save Style Parameter buttons, the Title Style Sheet dialog, function keys, the Title
-      Style settings); 6.8d4c, Promote Titles > Avid Titler+ (p.326). Place in Timeline (In -> Out) comes
+      Style settings), done; 6.8d4c, Promote Titles > Avid Titler+ (p.326). Place in Timeline (In -> Out) comes
       with 6.8e.
   * 6.8e, editing with titles: title clips in bins, editing them in, fading, marks and trims of rolls and
     crawls, revising and replacing, re-creating title media, the troubleshooting options (ch.13,

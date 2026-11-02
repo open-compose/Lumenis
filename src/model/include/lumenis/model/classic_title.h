@@ -107,6 +107,9 @@ struct ClassicObject {
     // object until you unlock it" (p.356).
     QString group;
     bool locked = false;
+    // An object a title template brought in (6.8d4b): "The template prevents you from changing the position, colors,
+    // shadows, or graphics, which ensures consistency", only the text changes; Moveable Templates lets it move (p.360).
+    bool fromTemplate = false;
 
     // The shadow's offset in pixels.
     QPointF shadowOffset() const;
@@ -167,6 +170,50 @@ bool ungroupClassicObjects(ClassicTitle& title, const QStringList& ids);
 // Puts back every object that was locked in `before` (its place in the list aside): "You cannot change the object
 // until you unlock it" (p.356), "You cannot delete locked objects" (p.356). Locking and unlocking themselves go through.
 void keepLockedObjects(ClassicTitle& title, const ClassicTitle& before);
+
+// ---- Title templates (6.8d4b; p.360-361)
+// Templates > Include Template: the template's objects added to the title (new ids, their groups new), marked as the
+// template's; their ids.
+QStringList includeClassicTemplate(ClassicTitle& title, const ClassicTitle& templ);
+// Puts back what a change did to the template's objects in `before` but their text (and, with `moveable`, where they
+// are: Moveable Templates, p.361): the window runs it with every undo step, as keepLockedObjects.
+void keepTemplateObjects(ClassicTitle& title, const ClassicTitle& before, bool moveable);
+// A template file's contents ({"titleTemplate": the title}) and back; nothing for other JSON.
+QJsonObject classicTemplateJson(const ClassicTitle& templ);
+std::optional<ClassicTitle> classicTemplateFrom(const QJsonObject& json);
+
+// ---- Title styles (6.8d4b; p.361-364): "You can save the following style parameters in the form of a title style:
+// Font, style, size, justification, kerning, and leading. Fill color and transparency. Shadow color, transparency,
+// depth, direction, softness, and type. Border color, transparency, and width."
+enum class ClassicStyleField {
+    Font, Style, Size, Justification, Kerning, Leading,
+    FillColor, FillTransparency,
+    ShadowColor, ShadowTransparency, ShadowDepth, ShadowDirection, ShadowSoftness, ShadowType,
+    BorderColor, BorderTransparency, BorderWidth,
+};
+inline constexpr int kClassicStyleFields = 17;
+// The field's check box label in the Title Style Sheet dialog box (ours: the guide's words).
+QString classicStyleFieldName(ClassicStyleField field);
+struct ClassicTitleStyle {
+    // "This name appears in the Style list in the Title tool and in the Settings list" (p.363).
+    QString name;
+    // "(Option) Lets you designate a function key that you can use to apply the title style" (p.362): 1-12, 0 none.
+    int functionKey = 0;
+    // The attributes the style holds ("Select the current attributes of the object that you want to include", p.362)
+    // and their values (the object's other members are not used).
+    QList<ClassicStyleField> fields;
+    ClassicObject values;
+
+    bool includes(ClassicStyleField field) const { return fields.contains(field); }
+    QJsonObject toJson() const;
+    static ClassicTitleStyle fromJson(const QJsonObject& o);
+    bool operator==(const ClassicTitleStyle&) const = default;
+};
+// A style named `name` of an object's attributes (every field unless `fields` says).
+ClassicTitleStyle classicStyleOf(const ClassicObject& object, const QString& name);
+// An object given a style's attributes; a text object's characters lose their own font, style, size and kerning where
+// the style sets them.
+void applyClassicStyle(ClassicObject& object, const ClassicTitleStyle& style);
 
 // The style name of a Titler+ font for Bold and Italic ("Regular", "Bold", "Italic", "Bold Italic").
 QString classicStyle(bool bold, bool italic);

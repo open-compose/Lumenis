@@ -547,6 +547,10 @@ public:
                              QString* error = nullptr);
     // Revising a title in a bin (p.359): the Title Tool opens with Title Effect clip `itemId`; false for other items.
     bool reviseTitle(const QString& binId, const QString& itemId);
+    // Title styles (FX Guide p.361-364) kept as "Title Style" User settings, one a style, named as it; saving one of an
+    // existing name replaces it.
+    QList<model::ClassicTitleStyle> titleStyles() const;
+    void saveTitleStyle(const model::ClassicTitleStyle& style);
 
     // Titler+ templates (FX Guide p.319-320, ROADMAP 6.8c4a). Edit Template, or a template dragged to the Record
     // monitor, "opens the template in the Record monitor" (model::titleTemplateSequence, under the bin id

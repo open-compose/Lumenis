@@ -18,6 +18,8 @@
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFontComboBox>
+#include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFontDatabase>
 #include <QFormLayout>
@@ -36,6 +38,7 @@
 #include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPixmap>
 #include <QPushButton>
 #include <QScrollBar>
 #include <QSlider>
@@ -564,6 +567,21 @@ void TitleToolWindow::buildMenus() {
     add(alignment, QStringLiteral("distributeLeftToRight"), tr("Distribute Left to Right"), [this](bool) { distribute(media::ClassicDistribute::LeftToRight); });
     add(alignment, QStringLiteral("distributeTopToBottom"), tr("Distribute Top to Bottom"), [this](bool) { distribute(media::ClassicDistribute::TopToBottom); });
     add(alignment, QStringLiteral("distributeFirstToLast"), tr("Distribute First to Last"), [this](bool) { distribute(media::ClassicDistribute::FirstToLast); });
+    // Templates (p.360-361; ours: in the window's own menu bar).
+    QMenu* templates = menuBar_->addMenu(tr("Templates"));
+    const QString filter = tr("Title Templates (*.ttpl)");
+    add(templates, QStringLiteral("saveTemplate"), tr("Save Template..."), [this, filter](bool) {
+        QDir().mkpath(templateFolder_);
+        QString path = QFileDialog::getSaveFileName(this, tr("Save Template"), templateFolder_, filter);
+        if (path.isEmpty()) return;
+        if (!path.endsWith(QLatin1String(".ttpl"))) path += QLatin1String(".ttpl");
+        if (!saveTemplate(path)) QMessageBox::warning(this, tr("Save Template"), tr("The template could not be saved."));
+    });
+    add(templates, QStringLiteral("includeTemplate"), tr("Include Template..."), [this, filter](bool) {
+        const QString path = QFileDialog::getOpenFileName(this, tr("Open"), templateFolder_, filter);
+        if (!path.isEmpty() && !includeTemplate(path)) QMessageBox::warning(this, tr("Include Template"), tr("The template could not be read."));
+    });
+    add(templates, QStringLiteral("moveableTemplates"), tr("Moveable Templates"), [this](bool on) { setMoveableTemplates(on); }, true);
 }
 
 void TitleToolWindow::buildAttributeBar() {
@@ -584,6 +602,15 @@ void TitleToolWindow::buildAttributeBar() {
         bar->addWidget(b);
         return b;
     };
+    // The Styles button and the Save Style Parameter button (p.361-363): their menus list the styles when opened.
+    QToolButton* stylesButton = menuButton(QStringLiteral("styles"), tr("Styles"));
+    stylesButton->setText(tr("Styles"));
+    QToolButton* saveStyleButton = menuButton(QStringLiteral("saveStyle"), tr("Save Style Parameter"));
+    saveStyleButton->setText(QStringLiteral("+"));
+    connect(stylesButton->menu(), &QMenu::aboutToShow, this, &TitleToolWindow::fillStyleMenus);
+    connect(saveStyleButton->menu(), &QMenu::aboutToShow, this, &TitleToolWindow::fillStyleMenus);
+    fillStyleMenus();
+    bar->addSpacing(8);
     // The line attribute tools (p.347-349). Ours: the standard radii and widths below, as many as the guide pictures.
     QToolButton* corner = menuButton(QStringLiteral("boxCorner"), tr("Box Corner"));
     corner->menu()->addAction(tr("Square"), this, [this] { setCornerRadius(0); });
@@ -1130,6 +1157,8 @@ QWidget* TitleToolWindow::limitMessage() const {
 void TitleToolWindow::commit(const ClassicTitle& before) {
     // "You cannot change the object until you unlock it" (p.356).
     model::keepLockedObjects(title_, before);
+    // "The template prevents you from changing the position, colors, shadows, or graphics" (p.360).
+    model::keepTemplateObjects(title_, before, moveableTemplates_);
     if (!withinLimit()) {
         title_ = before;
         showLimit();
@@ -1467,6 +1496,105 @@ void TitleToolWindow::openSoftenShadow() {
     if (box.exec() == QDialog::Accepted) setShadowSoftness(value->value());
 }
 
+// ---- templates and styles (6.8d4b)
+
+bool TitleToolWindow::saveTemplate(const QString& path) {
+    finishEditing();
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
+    // The template is the title itself, its objects no longer marked as another template's.
+    ClassicTitle templ = title_;
+    for (ClassicObject& o : templ.objects) o.fromTemplate = false;
+    return file.write(QJsonDocument(model::classicTemplateJson(templ)).toJson()) > 0;
+}
+
+bool TitleToolWindow::includeTemplate(const QString& path) {
+    finishEditing();
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return false;
+    const auto templ = model::classicTemplateFrom(QJsonDocument::fromJson(file.readAll()).object());
+    if (!templ) return false;
+    const ClassicTitle before = title_;
+    selected_ = model::includeClassicTemplate(title_, *templ);
+    commit(before);
+    return true;
+}
+
+void TitleToolWindow::setMoveableTemplates(bool on) {
+    moveableTemplates_ = on;
+    refreshControls();
+}
+
+QList<model::ClassicTitleStyle> TitleToolWindow::styles() const {
+    return styleStore_.styles ? styleStore_.styles() : ownStyles_;
+}
+
+bool TitleToolWindow::applyStyle(const QString& name) {
+    for (const model::ClassicTitleStyle& style : styles()) {
+        if (style.name != name) continue;
+        attribute([&](ClassicObject& o) { model::applyClassicStyle(o, style); });
+        return true;
+    }
+    return false;
+}
+
+model::ClassicTitleStyle TitleToolWindow::styleOfSelection(const QString& name) const {
+    return model::classicStyleOf(shownObject(), name);
+}
+
+void TitleToolWindow::saveStyle(const model::ClassicTitleStyle& style) {
+    if (style.name.trimmed().isEmpty()) return;
+    if (styleStore_.save) {
+        styleStore_.save(style);
+    } else {
+        ownStyles_.erase(std::remove_if(ownStyles_.begin(), ownStyles_.end(), [&](const model::ClassicTitleStyle& s) { return s.name == style.name; }),
+                         ownStyles_.end());
+        ownStyles_ << style;
+    }
+    fillStyleMenus();
+}
+
+void TitleToolWindow::saveStyleAs() {
+    // "Select Save As. The Title Style Sheet dialog box opens" (p.362).
+    const model::ClassicTitleStyle suggestion = styleOfSelection(QString());
+    const auto style = askStyle_ ? askStyle_(suggestion) : titleStyleSheet(this, suggestion);
+    if (style) saveStyle(*style);
+}
+
+void TitleToolWindow::fillStyleMenus() {
+    auto* stylesButton = qobject_cast<QToolButton*>(controls_.value(QStringLiteral("styles")));
+    auto* saveButton = qobject_cast<QToolButton*>(controls_.value(QStringLiteral("saveStyle")));
+    if (!stylesButton || !saveButton) return;
+    QMenu* stylesMenu = stylesButton->menu();
+    QMenu* saveMenu = saveButton->menu();
+    stylesMenu->clear();
+    saveMenu->clear();
+    // "The menu contains a scaled visual representation of each style" (p.363): ours, "Aa" in the style.
+    for (const model::ClassicTitleStyle& style : styles()) {
+        model::ClassicObject sample = defaults_;
+        sample.kind = ClassicKind::Text;
+        sample.text = QStringLiteral("Aa");
+        sample.size = 72;
+        sample.rect = QRectF(20, 10, 400, 0);
+        model::applyClassicStyle(sample, style);
+        sample.size = 72;
+        ClassicTitle t;
+        t.objects << sample;
+        QPixmap icon(48, 27);
+        icon.fill(Qt::darkGray);
+        {
+            QPainter p(&icon);
+            p.drawImage(0, 0, media::classicTitleImage(t, icon.size()));
+        }
+        const QString label = style.functionKey > 0 ? QStringLiteral("%1\tF%2").arg(style.name).arg(style.functionKey) : style.name;
+        const QString name = style.name;
+        stylesMenu->addAction(QIcon(icon), label, this, [this, name] { applyStyle(name); });
+        saveMenu->addAction(label, this, [this, name] { applyStyle(name); });
+    }
+    if (!saveMenu->isEmpty()) saveMenu->addSeparator();
+    saveMenu->addAction(tr("Save As..."), this, &TitleToolWindow::saveStyleAs)->setObjectName(QStringLiteral("title:saveStyleAs"));
+}
+
 // ---- mouse
 
 QString TitleToolWindow::objectAt(const QPointF& at) const {
@@ -1483,7 +1611,7 @@ QString TitleToolWindow::objectAt(const QPointF& at) const {
 std::optional<int> TitleToolWindow::handleAt(const QPointF& at) const {
     if (selected_.size() != 1) return std::nullopt;
     const ClassicObject* o = title_.object(selected_.first());
-    if (!o || o->locked) return std::nullopt;
+    if (!o || o->locked || o->fromTemplate) return std::nullopt;
     QList<QPointF> handles;
     const QRectF b = media::classicObjectBounds(*o);
     if (o->kind == ClassicKind::Line) {
@@ -1621,7 +1749,7 @@ void TitleToolWindow::move(const QPointF& at, Qt::KeyboardModifiers modifiers) {
             }
         }
         for (const QString& id : selected_) {
-            if (ClassicObject* o = title_.object(id); o && !o->locked) o->rect.translate(by);
+            if (ClassicObject* o = title_.object(id); o && !o->locked && (!o->fromTemplate || moveableTemplates_)) o->rect.translate(by);
         }
         break;
     }
@@ -1726,6 +1854,14 @@ void TitleToolWindow::release(const QPointF& at, Qt::KeyboardModifiers modifiers
 
 bool TitleToolWindow::key(int key, Qt::KeyboardModifiers modifiers, const QString& text) {
     const bool ctrl = modifiers & Qt::ControlModifier, alt = modifiers & Qt::AltModifier, shift = modifiers & Qt::ShiftModifier;
+    // "If the style is assigned to a function key, press the appropriate function key" (p.364).
+    if (key >= Qt::Key_F1 && key <= Qt::Key_F12 && !ctrl && !alt && !shift) {
+        const int number = key - Qt::Key_F1 + 1;
+        for (const model::ClassicTitleStyle& style : styles()) {
+            if (style.functionKey == number) return applyStyle(style.name);
+        }
+        return false;
+    }
     if ((key == Qt::Key_Control || key == Qt::Key_Alt) && ctrl && alt) {
         temporary_ = Tool::Selection;
         return true;
@@ -2288,6 +2424,108 @@ void TitleToolWindow::refreshControls() {
 }
 
 // ---------------------------------------------------------------- New Title
+
+std::optional<model::ClassicTitleStyle> titleStyleSheet(QWidget* parent, const model::ClassicTitleStyle& style) {
+    QDialog box(parent);
+    box.setObjectName(QStringLiteral("title:styleSheet"));
+    box.setWindowTitle(QObject::tr("Title Style Sheet"));
+    auto* layout = new QVBoxLayout(&box);
+    // The sample window: "Aa" in the style's checked attributes.
+    auto* sample = new QLabel(&box);
+    sample->setObjectName(QStringLiteral("title:styleSample"));
+    sample->setFixedSize(256, 144);
+    layout->addWidget(sample, 0, Qt::AlignHCenter);
+    auto* grid = new QGridLayout;
+    QList<QCheckBox*> boxes;
+    for (int i = 0; i < model::kClassicStyleFields; ++i) {
+        const auto field = static_cast<model::ClassicStyleField>(i);
+        auto* check = new QCheckBox(model::classicStyleFieldName(field), &box);
+        check->setObjectName(QStringLiteral("title:styleField%1").arg(i));
+        check->setChecked(style.includes(field));
+        grid->addWidget(check, i % 9, i / 9);
+        boxes << check;
+    }
+    layout->addLayout(grid);
+    auto* all = new QPushButton(QObject::tr("Select All"), &box);
+    auto* none = new QPushButton(QObject::tr("Select None"), &box);
+    auto* revert = new QPushButton(QObject::tr("Revert"), &box);
+    auto* marquee = new QPushButton(QObject::tr("Convert to Marquee"), &box);
+    marquee->setEnabled(false); // ours: no Marquee
+    auto* row = new QHBoxLayout;
+    for (QPushButton* b : {all, none, revert, marquee}) row->addWidget(b);
+    layout->addLayout(row);
+    auto* form = new QFormLayout;
+    auto* key = new QSpinBox(&box);
+    key->setObjectName(QStringLiteral("title:styleKey"));
+    key->setRange(0, 12);
+    key->setSpecialValueText(QObject::tr("None"));
+    key->setValue(style.functionKey);
+    form->addRow(QObject::tr("Function Key:"), key);
+    auto* name = new QLineEdit(style.name, &box);
+    name->setObjectName(QStringLiteral("title:styleName"));
+    form->addRow(QObject::tr("Style Name:"), name);
+    layout->addLayout(form);
+    auto* buttons = new QDialogButtonBox(&box);
+    QPushButton* done = buttons->addButton(QObject::tr("Done"), QDialogButtonBox::AcceptRole);
+    done->setObjectName(QStringLiteral("title:styleDone"));
+    buttons->addButton(QObject::tr("Close"), QDialogButtonBox::RejectRole);
+    layout->addWidget(buttons);
+    auto current = [&] {
+        model::ClassicTitleStyle s = style;
+        s.fields.clear();
+        for (int i = 0; i < boxes.size(); ++i) {
+            if (boxes.at(i)->isChecked()) s.fields << static_cast<model::ClassicStyleField>(i);
+        }
+        s.functionKey = key->value();
+        s.name = name->text().trimmed();
+        return s;
+    };
+    auto refresh = [&] {
+        model::ClassicObject o;
+        o.kind = ClassicKind::Text;
+        o.text = QStringLiteral("Aa");
+        o.size = 400;
+        o.rect = QRectF(560, 300, 1400, 0);
+        model::applyClassicStyle(o, current());
+        ClassicTitle t;
+        t.objects << o;
+        QPixmap pm(sample->size());
+        pm.fill(Qt::darkGray);
+        QPainter p(&pm);
+        p.drawImage(0, 0, media::classicTitleImage(t, pm.size()));
+        p.end();
+        sample->setPixmap(pm);
+    };
+    for (QCheckBox* c : boxes) QObject::connect(c, &QCheckBox::toggled, &box, refresh);
+    QObject::connect(all, &QPushButton::clicked, &box, [&] {
+        for (QCheckBox* c : boxes) c->setChecked(true);
+    });
+    QObject::connect(none, &QPushButton::clicked, &box, [&] {
+        for (QCheckBox* c : boxes) c->setChecked(false);
+    });
+    QObject::connect(revert, &QPushButton::clicked, &box, [&] {
+        for (int i = 0; i < boxes.size(); ++i) boxes.at(i)->setChecked(style.includes(static_cast<model::ClassicStyleField>(i)));
+        key->setValue(style.functionKey);
+        name->setText(style.name);
+    });
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &box, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &box, [&] {
+        // "Close ... A message box opens, asking whether you want to cancel or save your changes" (p.363).
+        if (current() == style) {
+            box.reject();
+            return;
+        }
+        const auto answer = QMessageBox::question(&box, QObject::tr("Title Style Sheet"), QObject::tr("Save the changes to this style?"),
+                                                  QMessageBox::Save | QMessageBox::Cancel);
+        if (answer == QMessageBox::Save) box.accept();
+        else box.reject();
+    });
+    refresh();
+    if (box.exec() != QDialog::Accepted) return std::nullopt;
+    const model::ClassicTitleStyle result = current();
+    if (result.name.isEmpty()) return std::nullopt;
+    return result;
+}
 
 bool askNewTitle(QWidget* parent, bool* persist) {
     QDialog box(parent);

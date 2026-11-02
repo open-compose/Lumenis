@@ -627,7 +627,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   precomputes; `media::renderClassicTitleMedia`, the compositor's `classicTitleLayer`), the Title Tool's File menu and
   Save Title dialog, Fast Save, revising (`MainWindow::saveClassicTitle`/`reviseTitle`, Ctrl+double-click, drops) and
   Bin > Select > Unrendered Titles (tests `tst_classic_title`, `tst_title_tool`, `tst_title_clips`), is done.
-  Next: 6.8d4b (title templates and styles), 6.8d4c (Promote Titles), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.8d4b, title templates (`ClassicObject::fromTemplate`, `model::includeClassicTemplate`/`keepTemplateObjects`, the
+  Templates menu, `.ttpl` files in the user's Title_Templates) and title styles (`model::ClassicTitleStyle`,
+  `applyClassicStyle`, the Styles and Save Style Parameter buttons, `titleStyleSheet()`, F-keys, "Title Style" User
+  settings through `MainWindow::titleStyles`/`saveTitleStyle`), is done.
+  Next: 6.8d4c (Promote Titles), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

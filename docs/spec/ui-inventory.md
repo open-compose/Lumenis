@@ -268,6 +268,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   (names, ranges, a quarter of the frame until set), frame-to-frame
   correlation with a search area twice the region, the original picture
   in the Effect Preview, Progressive Source without effect yet.
+* Classic title templates and styles (docs/spec/title-tool.md, 6.8d4b): `.ttpl`
+  JSON files, templates fixed but for their text (fonts too), moved by dragging
+  and arrow keys instead of Arrow buttons, styles applied to any selected object,
+  F1-F12 without modifiers, "Aa" samples, no Refresh button, the Title Style
+  setting kind listed with the User settings (FX p.364).
 * Classic Title Effect clips (docs/spec/title-tool.md, 6.8d4a): two precompute
   clips "<name> Fill"/"<name> Matte" instead of one, "unrendered.<name>",
   Save Title As numbering when the bin has a Title clip of the name, rolls and
@@ -775,7 +780,7 @@ The full inventory, with a page for every item, is
   * While the legacy Title Tool is open, the File menu offers *Save Title*,
     *Save Title As* and *Export Title* (FX p.358–364).
   * The Windows menu offers *Title Tool* (FX p.327).
-  * The Title Tool's Edit, Object (with Soften Shadow, p.354) and Alignment menus (FX p.330, p.334, p.338) are in the
+  * The Title Tool's Edit, Object (with Soften Shadow, p.354), Alignment and Templates (p.360) menus (FX p.330, p.334, p.338) are in the
     Title Tool window's own menu bar (ours), not the main one.
   * The Edit menu's Undo item names the last action, for example *Undo Clear
     Renders* (FX p.61).

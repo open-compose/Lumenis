@@ -10,6 +10,7 @@
 
 #include <QColor>
 #include <QDateTime>
+#include <QJsonArray>
 #include <QGuiApplication>
 #include <QLineF>
 #include <QTest>
@@ -573,6 +574,84 @@ private slots:
         // Two thirds of the way (frame 66 of 0-99): the view's top at 1080, page 2 fills it.
         picture = composeWith(roll, media, 66, &missing);
         QCOMPARE(at(picture, 96, 54), QColor(Qt::red));
+    }
+
+    // Title templates and title styles (6.8d4b, p.360-364).
+    void templatesAndStyles() {
+        ClassicTitle templ;
+        ClassicObject name = text(QStringLiteral("NAME"), QRectF(200, 800, 800, 0));
+        ClassicObject bar;
+        bar.id = QStringLiteral("Box 1");
+        bar.kind = ClassicKind::Box;
+        bar.rect = QRectF(180, 780, 900, 200);
+        bar.fill.color = QStringLiteral("#203060");
+        templ.objects << bar << name;
+        // The file's JSON.
+        QCOMPARE(classicTemplateFrom(classicTemplateJson(templ)).value_or(ClassicTitle{}), templ);
+        QVERIFY(!classicTemplateFrom(QJsonObject{{QStringLiteral("objects"), QJsonArray{}}}));
+        // Included: new ids, marked as the template's.
+        ClassicTitle t;
+        t.objects << text(QStringLiteral("Mine"), QRectF(100, 100, 400, 0));
+        const QStringList ids = includeClassicTemplate(t, templ);
+        QCOMPARE(ids, (QStringList{QStringLiteral("Box 1"), QStringLiteral("Text 2")}));
+        QVERIFY(t.object(QStringLiteral("Text 2"))->fromTemplate);
+        QVERIFY(!t.object(QStringLiteral("Text 1"))->fromTemplate);
+        QCOMPARE(ClassicTitle::fromJson(t.toJson()), t);
+        // Only the text changes: colours, places and deletions are put back.
+        ClassicTitle before = t;
+        t.object(QStringLiteral("Text 2"))->text = QStringLiteral("Jane Doe");
+        t.object(QStringLiteral("Text 2"))->fill.color = QStringLiteral("#ff0000");
+        t.object(QStringLiteral("Box 1"))->rect.translate(50, 0);
+        t.object(QStringLiteral("Text 1"))->rect.translate(50, 0); // not the template's
+        t.objects.removeIf([](const ClassicObject& o) { return o.id == QLatin1String("Box 1"); });
+        keepTemplateObjects(t, before, false);
+        QCOMPARE(t.object(QStringLiteral("Text 2"))->text, QStringLiteral("Jane Doe"));
+        QCOMPARE(t.object(QStringLiteral("Text 2"))->fill.color, QStringLiteral("#ffffff"));
+        QVERIFY(t.object(QStringLiteral("Box 1")));
+        QCOMPARE(t.object(QStringLiteral("Box 1"))->rect, QRectF(180, 780, 900, 200));
+        QCOMPARE(t.object(QStringLiteral("Text 1"))->rect.left(), 150.0);
+        // Moveable Templates: the place goes through, the size does not.
+        before = t;
+        t.object(QStringLiteral("Box 1"))->rect = QRectF(200, 700, 50, 50);
+        keepTemplateObjects(t, before, true);
+        QCOMPARE(t.object(QStringLiteral("Box 1"))->rect, QRectF(200, 700, 900, 200));
+
+        // Styles: an object's attributes, a chosen few of them applied.
+        ClassicObject source = text(QStringLiteral("x"), QRectF());
+        source.family = QStringLiteral("Serif");
+        source.bold = true;
+        source.size = 120;
+        source.fill.color = QStringLiteral("#ffcc00");
+        source.shadowDepth = 6;
+        source.shadowColor = QStringLiteral("#101010");
+        source.borderWidth = 3;
+        source.border.color = QStringLiteral("#00ff00");
+        ClassicTitleStyle style = classicStyleOf(source, QStringLiteral("Gold"));
+        QCOMPARE(style.fields.size(), kClassicStyleFields);
+        QVERIFY(style.values.text.isEmpty());
+        style.functionKey = 5;
+        QCOMPARE(ClassicTitleStyle::fromJson(style.toJson()), style);
+        ClassicObject target = text(QStringLiteral("Hello"), QRectF(0, 0, 500, 0));
+        target.runs << TitleRun{0, 2, TitleCharFormat{}};
+        target.runs[0].format.size = 300;
+        target.runs[0].format.kerning = 5;
+        ClassicTitleStyle some = style;
+        some.fields = {ClassicStyleField::Size, ClassicStyleField::FillColor, ClassicStyleField::ShadowDepth};
+        applyClassicStyle(target, some);
+        QCOMPARE(target.size, 120.0);
+        QCOMPARE(target.fill.color, QStringLiteral("#ffcc00"));
+        QCOMPARE(target.shadowDepth, 6.0);
+        QVERIFY(target.family.isEmpty() && !target.bold);    // not in the style
+        QCOMPARE(target.shadowColor, QStringLiteral("#000000"));
+        QCOMPARE(target.runs.size(), 1);                    // the characters' own size went, their kerning stays
+        QVERIFY(!target.runs.at(0).format.size && target.runs.at(0).format.kerning);
+        applyClassicStyle(target, style);
+        QCOMPARE(target.family, QStringLiteral("Serif"));
+        QVERIFY(target.bold);
+        QCOMPARE(target.borderWidth, 3.0);
+        QCOMPARE(target.border.color, QStringLiteral("#00ff00"));
+        QCOMPARE(target.text, QStringLiteral("Hello"));
+        QCOMPARE(classicStyleFieldName(ClassicStyleField::ShadowType), QStringLiteral("Shadow Type"));
     }
 
     void textPlaces() {
