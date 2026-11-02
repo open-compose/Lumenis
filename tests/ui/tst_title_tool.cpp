@@ -12,6 +12,8 @@
 #include <QAction>
 #include <QDoubleSpinBox>
 #include <QMenuBar>
+#include <QScrollBar>
+#include <QSpinBox>
 #include <QTest>
 #include <QToolButton>
 
@@ -219,6 +221,91 @@ private slots:
         QVERIFY(!tool.safeAreas());
         QApplication::processEvents();
         tool.repaint(); // the canvas draws with all of it
+    }
+
+    // Rolling and crawling titles (6.8d2, p.341-346).
+    void rollingAndCrawling() {
+        TitleToolWindow tool;
+        tool.show();
+        tool.setBackgroundColor(QStringLiteral("#203040"));
+        QVERIFY(!tool.title().videoBackground);
+        // The Rolling Title button: green, Video Background, Auto Size, the Page Number box.
+        auto* roll = qobject_cast<QToolButton*>(tool.control(QStringLiteral("roll")));
+        QVERIFY(roll);
+        roll->click();
+        QCOMPARE(tool.title().motion, model::ClassicMotion::Rolling);
+        QVERIFY(roll->isChecked());
+        QVERIFY(tool.title().videoBackground);
+        QVERIFY(tool.title().autoSize);
+        QVERIFY(!tool.control(QStringLiteral("page"))->isHidden());
+        QVERIFY(!tool.findChild<QScrollBar*>(QStringLiteral("title:rollScroll"))->isHidden());
+        // Typing past a page: Auto Size adds pages and the title scrolls down with the text.
+        tool.setTool(TitleToolWindow::Tool::Text);
+        tool.setPointSize(200);
+        tool.press(QPointF(200, 150), Qt::NoModifier);
+        for (int i = 0; i < 8; ++i) {
+            type(tool, QStringLiteral("Line"));
+            tool.key(Qt::Key_Return, Qt::NoModifier, QString());
+        }
+        type(tool, QStringLiteral("End"));
+        QVERIFY2(tool.title().pages >= 2, qPrintable(QString::number(tool.title().pages)));
+        QVERIFY(tool.scroll().y() > 0);
+        tool.key(Qt::Key_Escape, Qt::NoModifier, QString());
+        const int pages = tool.title().pages;
+        // Home, End, Page Up, Page Down and the Page Number box (p.344-345).
+        tool.key(Qt::Key_Home, Qt::NoModifier, QString());
+        QCOMPARE(tool.page(), 1);
+        tool.key(Qt::Key_PageDown, Qt::NoModifier, QString());
+        QCOMPARE(tool.page(), 2);
+        tool.key(Qt::Key_End, Qt::NoModifier, QString());
+        QCOMPARE(tool.page(), pages);
+        auto* pageBox = qobject_cast<QSpinBox*>(tool.control(QStringLiteral("page")));
+        pageBox->setValue(1);
+        QCOMPARE(tool.page(), 1);
+        // With nothing selected the arrows go through the roll a line at a time.
+        tool.select({});
+        tool.key(Qt::Key_Down, Qt::NoModifier, QString());
+        QCOMPARE(tool.scroll().y(), 54.0);
+        // Add Page only with Auto Size off.
+        QAction* addPage = tool.menuBar()->findChild<QAction*>(QStringLiteral("title:addPage"));
+        QVERIFY(!addPage->isEnabled());
+        QVERIFY(!tool.addPage());
+        tool.setAutoSize(false);
+        QVERIFY(addPage->isEnabled());
+        QVERIFY(tool.addPage());
+        QCOMPARE(tool.title().pages, pages + 1);
+        // Auto Size again removes the extra page.
+        tool.setAutoSize(true);
+        QCOMPARE(tool.title().pages, pages);
+        // Move to Page: the text object on to page 3 (pages added).
+        tool.setTool(TitleToolWindow::Tool::Selection);
+        tool.select({QStringLiteral("Text 1")});
+        QVERIFY(tool.moveToPage(pages + 1));
+        QVERIFY(tool.title().pages >= pages + 1);
+        // The page limit: Copy to Page past 29 is refused.
+        QVERIFY(!tool.copyToPage(30));
+        // Crawling: the horizontal scroll bar; Make Crawl puts the text on one line on the lower third.
+        tool.setMotion(model::ClassicMotion::Crawling);
+        QVERIFY(qobject_cast<QToolButton*>(tool.control(QStringLiteral("crawl")))->isChecked());
+        QVERIFY(!tool.findChild<QScrollBar*>(QStringLiteral("title:crawlScroll"))->isHidden());
+        QVERIFY(tool.findChild<QScrollBar*>(QStringLiteral("title:rollScroll"))->isHidden());
+        QVERIFY(tool.makeCrawl());
+        const model::ClassicObject* text = tool.title().object(QStringLiteral("Text 1"));
+        QVERIFY(text && !text->text.contains(QLatin1Char('\n')));
+        QCOMPARE(text->rect.top(), 720.0);
+        // "1080i and 1080p ... Crawling 4" (p.342): a fifth page is refused, with a message.
+        tool.setAutoSize(false);
+        while (tool.title().pages < 4) QVERIFY(tool.addPage());
+        QVERIFY(!tool.limitMessage());
+        QVERIFY(!tool.addPage());
+        QCOMPARE(tool.title().pages, 4);
+        QVERIFY(tool.limitMessage());
+        // The lit button again: a still title.
+        qobject_cast<QToolButton*>(tool.control(QStringLiteral("crawl")))->click();
+        QCOMPARE(tool.title().motion, model::ClassicMotion::Still);
+        QCOMPARE(tool.title().pages, 1);
+        QVERIFY(tool.control(QStringLiteral("page"))->isHidden());
+        tool.repaint();
     }
 
     void fromMainWindow() {

@@ -1091,7 +1091,7 @@ phase of their own. They are done in three steps:
       colour background, Preview, Safe Colors, the safe areas, the alignment grid), the Selection, Text
       and Video Placement tools, text and its formatting, boxes, ovals and lines (p.327-341;
       docs/spec/title-tool.md). Done.
-    * 6.8d2, rolling and crawling titles (p.341-346).
+    * 6.8d2, rolling and crawling titles (p.341-346; docs/spec/title-tool.md). Done.
     * 6.8d3, modifying and manipulating objects: corners, lines and borders, colour and transparency with
       blends, drop and depth shadows, layers, alignment and grouping (p.346-357).
     * 6.8d4, saving titles as fill and matte clips, revising, templates, styles, exporting a title as a

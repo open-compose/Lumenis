@@ -13,6 +13,7 @@ namespace {
 
 constexpr const char* kKinds[] = {"Text", "Box", "Oval", "Line"};
 constexpr const char* kJustify[] = {"Left", "Center", "Right"};
+constexpr const char* kMotions[] = {"Still", "Rolling", "Crawling"};
 
 template <typename E, std::size_t N>
 E enumFrom(const QJsonValue& v, const char* const (&names)[N], E fallback) {
@@ -76,7 +77,10 @@ QJsonObject ClassicTitle::toJson() const {
     }
     return QJsonObject{{QStringLiteral("objects"), list},
                        {QStringLiteral("videoBackground"), videoBackground},
-                       {QStringLiteral("backgroundColor"), backgroundColor}};
+                       {QStringLiteral("backgroundColor"), backgroundColor},
+                       {QStringLiteral("motion"), QLatin1String(kMotions[static_cast<int>(motion)])},
+                       {QStringLiteral("pages"), pages},
+                       {QStringLiteral("autoSize"), autoSize}};
 }
 
 ClassicTitle ClassicTitle::fromJson(const QJsonObject& o) {
@@ -103,6 +107,9 @@ ClassicTitle ClassicTitle::fromJson(const QJsonObject& o) {
     }
     t.videoBackground = o.value(QStringLiteral("videoBackground")).toBool(true);
     t.backgroundColor = o.value(QStringLiteral("backgroundColor")).toString(t.backgroundColor);
+    t.motion = enumFrom(o.value(QStringLiteral("motion")), kMotions, ClassicMotion::Still);
+    t.pages = std::max(1, o.value(QStringLiteral("pages")).toInt(1));
+    t.autoSize = o.value(QStringLiteral("autoSize")).toBool(true);
     return t;
 }
 
@@ -126,6 +133,28 @@ QString ClassicTitle::newId(ClassicKind kind) const {
         const QString id = QStringLiteral("%1 %2").arg(base).arg(n);
         if (!object(id)) return id;
     }
+}
+
+int classicPageLimit(ClassicMotion motion, int lines) {
+    if (motion == ClassicMotion::Still) return 1;
+    const bool roll = motion == ClassicMotion::Rolling;
+    if (lines <= 486) return roll ? 67 : 11;
+    if (lines <= 576) return roll ? 56 : 11;
+    if (lines <= 720) return roll ? 44 : 6;
+    return roll ? 29 : 4;
+}
+
+QPointF classicPageOrigin(ClassicMotion motion, int page) {
+    const double n = std::max(0, page - 1);
+    if (motion == ClassicMotion::Rolling) return {0.0, n * kClassicHeight};
+    if (motion == ClassicMotion::Crawling) return {n * kClassicWidth, 0.0};
+    return {};
+}
+
+int classicPageAt(ClassicMotion motion, const QPointF& point) {
+    if (motion == ClassicMotion::Rolling) return std::max(1, static_cast<int>(std::floor(point.y() / kClassicHeight)) + 1);
+    if (motion == ClassicMotion::Crawling) return std::max(1, static_cast<int>(std::floor(point.x() / kClassicWidth)) + 1);
+    return 1;
 }
 
 QString classicStyle(bool bold, bool italic) {

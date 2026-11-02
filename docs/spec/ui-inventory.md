@@ -268,6 +268,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   (names, ranges, a quarter of the frame until set), frame-to-frame
   correlation with a search area twice the region, the original picture
   in the Effect Preview, Progressive Source without effect yet.
+* Classic rolling and crawling titles (docs/spec/title-tool.md, 6.8d2): pages
+  under or beside each other with page 1 at the origin, the limits by frame
+  height, Insert Page refused across an object, Make Crawl's place and width,
+  the arrows scrolling 54 pixels only with nothing selected, the lit button
+  making the title still.
 * The classic Title Tool (docs/spec/title-tool.md, 6.8d1): 1920 x 1080 frame
   pixels from the top-left with points as pixels, Titler+'s text layout, the
   window's own Edit/Object/Alignment menus and undo, Pair Kerning always on,

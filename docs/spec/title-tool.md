@@ -55,3 +55,37 @@ Tests: `tst_classic_title`, `tst_title_tool`.
 * The New Title dialog's Marquee button is dimmed: Marquee is Avid's own application. The Marquee Title setting's
   Ask Me, Windows > Title Tool and the Font Replacement dialog are not ours yet.
 * Saving the title (File > Save Title ...) comes with 6.8d4; until then the window keeps the title while it is open.
+
+## 6.8d2: rolling and crawling titles
+
+### From the guide
+* "Rolling titles scroll vertically ... Crawling titles scroll horizontally"; "Rolling and crawling titles are
+  non-real-time effects" (p.341-342). "You cannot save a rolling or crawling title with a color background" (p.342).
+* Pages: "A page in a rolling or crawling title is a unit the size of a PAL, NTSC, or HD frame", with limits (1080:
+  29 rolling, 4 crawling; 720p: 44 and 6; NTSC 67 and 11; PAL 56 and 11); "If you reach the page count limit while you
+  are typing text, the title stops getting bigger and text entry stops"; a formatting change that would pass it opens
+  a message box (p.342).
+* Auto Size mode "adds or removes pages automatically ... on by default when you click the Rolling Title button or the
+  Crawling Title button" (Object > Auto Size Mode, p.343). Typing: "lines of text wrap within the safe title area, and
+  the title scrolls down as you type"; the button "changes to green, and a Page Number text box appears"; the
+  Background Selection tools are set to Video Background (p.343-344). Timeline > New > Title opens the tool (p.343).
+* Only the width of a rolling or crawling title resizes (p.344). Object > Make Crawl makes "a single-line text object"
+  on "the lower third of the screen" (p.344).
+* Scrolling: a scroll bar on the right for a roll, at the bottom for a crawl; Home and End, Page Up and Page Down, and
+  for rolls the Up and Down Arrows a line at a time (p.344).
+* Pages (p.344-346): the Page Number text box; Object > Add Page ("not available when Auto Size mode is on"), Insert
+  Page ("only if the left boundary of an object appears on the page"), Remove Page (an empty one), Copy to Page and
+  Move to Page ("automatically adds pages if necessary").
+
+### Ours
+* `ClassicTitle::motion`, `pages` and `autoSize`. Pages lie under each other (roll) or side by side (crawl), page 1 at
+  the origin (`model::classicPageOrigin`); objects keep title coordinates across all pages. Page limits follow the
+  project's frame height (`model::classicPageLimit`; 1080 lines until set).
+* The page operations measure text and so are media's: `media::classicContentPages`, `insertClassicPage` (refused where
+  an object reaches across the page's start), `removeClassicPage`, `placeOnClassicPage`, `makeClassicCrawl` (its top
+  two thirds down the frame, as wide as its one line). `classicTitleImage` draws from any place in the title.
+* In the window, every change goes through the limit: a change past it is taken back (typing stops; other changes show
+  the message box `title:pageLimit`). The dashed lines are the page edges. The Up and Down Arrows scroll a roll by 54
+  pixels when nothing is selected (with a selection they move it). Clicking the lit Rolling or Crawling Title button
+  makes the title still again. Saving and playing rolls and crawls come with 6.8d4 and 6.8e.
+

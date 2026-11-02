@@ -195,7 +195,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | New > Audio Track > 5.1 Surround |  | p.634 | works | ☐ | | |
 | New > Audio Track > 7.1 Surround |  | p.634 | works | ☐ | | |
 | New > Data Track |  | p.634 | works | ☐ | | |
-| New > Title |  | p.343 | *later* | ☐ | | |
+| New > Title |  | p.343 | works | ☐ | | |
 | Add Filler at Start |  | p.462 | works | ☐ | | |
 | Find Black Hole |  | p.645 | works | ☐ | | |
 | Find Flash Frame |  | p.645 | works | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 153 of them working with a project open; the
+* 211 menu commands, 154 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

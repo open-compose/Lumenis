@@ -87,11 +87,11 @@ QRectF classicObjectBounds(const model::ClassicObject& object) {
     return QRectF(object.rect.left(), object.rect.top(), object.rect.width(), std::max(1.0, bottom - object.rect.top()));
 }
 
-QImage classicTitleImage(const model::ClassicTitle& title, const QSize& size, bool antiAliased) {
+QImage classicTitleImage(const model::ClassicTitle& title, const QSize& size, bool antiAliased, const QPointF& origin) {
     QImage image(size, QImage::Format_ARGB32_Premultiplied);
     image.fill(Qt::transparent);
     if (size.isEmpty()) return image;
-    const QTransform m = classicToPicture(size);
+    const QTransform m = QTransform::fromTranslate(-origin.x(), -origin.y()) * classicToPicture(size);
     QPainter p(&image);
     p.setRenderHint(QPainter::Antialiasing, antiAliased);
     p.setRenderHint(QPainter::TextAntialiasing, antiAliased);
@@ -100,6 +100,7 @@ QImage classicTitleImage(const model::ClassicTitle& title, const QSize& size, bo
             if (o.text.isEmpty()) continue;
             model::Title one;
             one.objects << classicTextObject(o);
+            one.objects[0].transform.position -= origin;
             // Titler+ draws centred on the picture's own centre; the frame's centre is the same point.
             QImage text = titleImage(one, size);
             if (!antiAliased) {
@@ -158,6 +159,94 @@ QList<QPolygonF> classicTextRange(const model::ClassicObject& object, qsizetype 
     QList<QPolygonF> out;
     for (const QPolygonF& p : titleTextRange(t, from, to)) out << p.translated(origin);
     return out;
+}
+
+// ---------------------------------------------------------------- pages
+
+namespace {
+
+// Along the title's motion: an object's start and end, and a page's length.
+std::pair<double, double> span(const model::ClassicTitle& t, const model::ClassicObject& o) {
+    const QRectF b = classicObjectBounds(o);
+    return t.motion == model::ClassicMotion::Crawling ? std::pair{b.left(), b.right()} : std::pair{b.top(), b.bottom()};
+}
+
+double pageLength(const model::ClassicTitle& t) {
+    return t.motion == model::ClassicMotion::Crawling ? model::kClassicWidth : model::kClassicHeight;
+}
+
+void shift(model::ClassicObject& o, const model::ClassicTitle& t, double by) {
+    if (t.motion == model::ClassicMotion::Crawling) o.rect.translate(by, 0.0);
+    else o.rect.translate(0.0, by);
+}
+
+} // namespace
+
+int classicContentPages(const model::ClassicTitle& title) {
+    if (title.motion == model::ClassicMotion::Still) return 1;
+    double end = 0.0;
+    for (const model::ClassicObject& o : title.objects) end = std::max(end, span(title, o).second);
+    // An end on a page's very edge belongs to the page before.
+    return std::max(1, static_cast<int>(std::ceil(end / pageLength(title) - 1e-9)));
+}
+
+bool insertClassicPage(model::ClassicTitle& title, int page, int lines) {
+    if (title.motion == model::ClassicMotion::Still || page < 1 || page > title.pages) return false;
+    if (title.pages + 1 > model::classicPageLimit(title.motion, lines)) return false;
+    const double at = (page - 1) * pageLength(title);
+    for (const model::ClassicObject& o : title.objects) {
+        const auto [a, b] = span(title, o);
+        if (a < at && b > at) return false;
+    }
+    for (model::ClassicObject& o : title.objects) {
+        if (span(title, o).first >= at) shift(o, title, pageLength(title));
+    }
+    ++title.pages;
+    return true;
+}
+
+bool removeClassicPage(model::ClassicTitle& title, int page) {
+    if (title.motion == model::ClassicMotion::Still || page < 1 || page > title.pages || title.pages <= 1) return false;
+    const double from = (page - 1) * pageLength(title), to = page * pageLength(title);
+    for (const model::ClassicObject& o : title.objects) {
+        const auto [a, b] = span(title, o);
+        if (a < to && b > from) return false; // not empty
+    }
+    for (model::ClassicObject& o : title.objects) {
+        if (span(title, o).first >= to) shift(o, title, -pageLength(title));
+    }
+    --title.pages;
+    return true;
+}
+
+bool placeOnClassicPage(model::ClassicTitle& title, const QString& id, int page, bool copy, int lines) {
+    const model::ClassicObject* found = title.object(id);
+    if (!found || title.motion == model::ClassicMotion::Still || page < 1) return false;
+    if (page > model::classicPageLimit(title.motion, lines)) return false;
+    model::ClassicObject o = *found;
+    const int now = model::classicPageAt(title.motion, classicObjectBounds(o).topLeft());
+    shift(o, title, (page - now) * pageLength(title));
+    if (copy) {
+        o.id = title.newId(o.kind);
+        title.objects << o;
+    } else {
+        *title.object(id) = o;
+    }
+    title.pages = std::max(title.pages, page);
+    return true;
+}
+
+bool makeClassicCrawl(model::ClassicObject& object) {
+    if (object.kind != model::ClassicKind::Text || object.text.isEmpty()) return false;
+    const model::ClassicObject before = object;
+    object.text.replace(QLatin1Char('\n'), QLatin1Char(' '));
+    // As wide as the one line: laid out without wrapping, then the box made that wide.
+    object.rect.setWidth(1.0e7);
+    double right = object.rect.left();
+    for (const QPolygonF& p : classicTextRange(object, 0, object.text.size())) right = std::max(right, p.boundingRect().right());
+    object.rect.setWidth(std::max(10.0, right - object.rect.left() + 2.0));
+    object.rect.moveTop(std::floor(model::kClassicHeight * 2.0 / 3.0));
+    return !(object == before);
 }
 
 } // namespace lumenis::media

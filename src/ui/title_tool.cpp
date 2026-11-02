@@ -14,16 +14,21 @@
 #include <QDoubleSpinBox>
 #include <QFontComboBox>
 #include <QFontDatabase>
+#include <QGridLayout>
 #include <QHBoxLayout>
+#include <QInputDialog>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMenu>
 #include <QMenuBar>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
+#include <QScrollBar>
+#include <QSpinBox>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -98,13 +103,15 @@ public:
         if (w / std::max(1.0, h) > aspect) return QRectF((w - h * aspect) / 2.0, 0.0, h * aspect, h);
         return QRectF(0.0, (h - w / aspect) / 2.0, w, w / aspect);
     }
-    QTransform titleToWidget() const {
+    // One frame's pixels to the widget's; with the view's place in a rolling or crawling title, the title's.
+    QTransform frameToWidget() const {
         const QRectF f = frameRect();
         QTransform m;
         m.translate(f.left(), f.top());
         m.scale(f.width() / model::kClassicWidth, f.height() / model::kClassicHeight);
         return m;
     }
+    QTransform titleToWidget() const { return QTransform::fromTranslate(-tool_.scroll_.x(), -tool_.scroll_.y()) * frameToWidget(); }
 
 protected:
     void paintEvent(QPaintEvent*) override;
@@ -151,19 +158,31 @@ void TitleCanvas::paintEvent(QPaintEvent*) {
     }
     // "When you click a text object for editing, the Title tool displays the text without anti-aliasing" (p.333).
     const bool smooth = tool_.preview_ && tool_.editing_.isEmpty();
-    p.drawImage(f.topLeft(), media::classicTitleImage(t, f.size().toSize(), smooth));
+    p.drawImage(f.topLeft(), media::classicTitleImage(t, f.size().toSize(), smooth, tool_.scroll_));
     const QTransform m = titleToWidget();
-    // The alignment grid and the safe areas (p.333).
+    const QTransform view = frameToWidget();
+    // The alignment grid and the safe areas (p.333), on the frame shown.
     if (tool_.grid_) {
         p.setPen(QPen(QColor(255, 255, 255, 60), 1.0));
-        for (double x = kGrid; x < model::kClassicWidth; x += kGrid) p.drawLine(m.map(QLineF(x, 0, x, model::kClassicHeight)));
-        for (double y = kGrid; y < model::kClassicHeight; y += kGrid) p.drawLine(m.map(QLineF(0, y, model::kClassicWidth, y)));
+        for (double x = kGrid; x < model::kClassicWidth; x += kGrid) p.drawLine(view.map(QLineF(x, 0, x, model::kClassicHeight)));
+        for (double y = kGrid; y < model::kClassicHeight; y += kGrid) p.drawLine(view.map(QLineF(0, y, model::kClassicWidth, y)));
     }
     if (tool_.safeAreas_) {
         p.setPen(QPen(QColor(255, 255, 255, 160), 1.0, Qt::DotLine));
         p.setBrush(Qt::NoBrush);
-        p.drawPolygon(m.map(QPolygonF(safeArea(0.9))));
-        p.drawPolygon(m.map(QPolygonF(safeArea(0.8))));
+        p.drawPolygon(view.map(QPolygonF(safeArea(0.9))));
+        p.drawPolygon(view.map(QPolygonF(safeArea(0.8))));
+    }
+    // A rolling or crawling title's page edges (ours: dashed).
+    if (t.motion != model::ClassicMotion::Still) {
+        p.save();
+        p.setClipRect(f);
+        p.setPen(QPen(QColor(255, 255, 255, 120), 1.0, Qt::DashLine));
+        for (int page = 2; page <= t.pages + 1; ++page) {
+            const QPointF o = model::classicPageOrigin(t.motion, page);
+            p.drawLine(m.map(t.motion == model::ClassicMotion::Rolling ? QLineF(0, o.y(), model::kClassicWidth, o.y()) : QLineF(o.x(), 0, o.x(), model::kClassicHeight)));
+        }
+        p.restore();
     }
     // The selection's handles, the text cursor and its highlight.
     p.setPen(QPen(palette().color(QPalette::Highlight), 1.0));
@@ -219,7 +238,24 @@ TitleToolWindow::TitleToolWindow(QWidget* parent) : QWidget(parent, Qt::Window) 
     menuBar_ = new QMenuBar(this);
     layout->setMenuBar(menuBar_);
     canvas_ = new TitleCanvas(*this);
-    layout->addWidget(canvas_, 1);
+    // "a scroll bar appears along the right side of the Title tool video background for moving vertically through the
+    // rolling title, and at the bottom for moving horizontally through a crawling title" (p.344).
+    auto* view = new QGridLayout;
+    view->setSpacing(0);
+    view->addWidget(canvas_, 0, 0);
+    rollBar_ = new QScrollBar(Qt::Vertical, this);
+    rollBar_->setObjectName(QStringLiteral("title:rollScroll"));
+    crawlBar_ = new QScrollBar(Qt::Horizontal, this);
+    crawlBar_->setObjectName(QStringLiteral("title:crawlScroll"));
+    view->addWidget(rollBar_, 0, 1);
+    view->addWidget(crawlBar_, 1, 0);
+    layout->addLayout(view, 1);
+    connect(rollBar_, &QScrollBar::valueChanged, this, [this](int v) {
+        if (!syncing_) setScroll(QPointF(scroll_.x(), v));
+    });
+    connect(crawlBar_, &QScrollBar::valueChanged, this, [this](int v) {
+        if (!syncing_) setScroll(QPointF(v, scroll_.y()));
+    });
     // "When you first open the Title tool, the font listed is the preferred system font" (p.337).
     defaults_.family = QFontDatabase::systemFont(QFontDatabase::GeneralFont).family();
     buildMenus();
@@ -263,6 +299,28 @@ void TitleToolWindow::buildMenus() {
     QMenu* alignment = menuBar_->addMenu(tr("Alignment"));
     add(alignment, QStringLiteral("showGrid"), tr("Show Alignment Grid"), [this](bool on) { setGridShown(on); }, true);
     add(alignment, QStringLiteral("alignToGrid"), tr("Align to Grid"), [this](bool on) { setAlignToGrid(on); }, true);
+    // Rolling and crawling titles' pages (p.343-346).
+    object->addSeparator();
+    add(object, QStringLiteral("autoSize"), tr("Auto Size Mode"), [this](bool on) { setAutoSize(on); }, true);
+    add(object, QStringLiteral("addPage"), tr("Add Page"), [this](bool) { addPage(); });
+    auto askPage = [this](const QString& title) {
+        bool ok = false;
+        const int n = QInputDialog::getInt(this, title, tr("Page:"), page(), 1, model::classicPageLimit(title_.motion, lines_), 1, &ok);
+        return ok ? n : 0;
+    };
+    add(object, QStringLiteral("insertPage"), tr("Insert Page..."), [this, askPage](bool) {
+        if (const int n = askPage(tr("Insert Page"))) insertPage(n);
+    });
+    add(object, QStringLiteral("removePage"), tr("Remove Page..."), [this, askPage](bool) {
+        if (const int n = askPage(tr("Remove Page"))) removePage(n);
+    });
+    add(object, QStringLiteral("copyToPage"), tr("Copy to Page..."), [this, askPage](bool) {
+        if (const int n = askPage(tr("Copy to Page"))) copyToPage(n);
+    });
+    add(object, QStringLiteral("moveToPage"), tr("Move to Page..."), [this, askPage](bool) {
+        if (const int n = askPage(tr("Move to Page"))) moveToPage(n);
+    });
+    add(object, QStringLiteral("makeCrawl"), tr("Make Crawl"), [this](bool) { makeCrawl(); });
 }
 
 void TitleToolWindow::buildToolbar() {
@@ -368,7 +426,24 @@ void TitleToolWindow::buildToolbar() {
         const QString c = pickColor(title_.backgroundColor, tr("Background Color"));
         if (!c.isEmpty()) setBackgroundColor(c);
     });
+    bar->addSpacing(8);
+    // The Crawling Title and Rolling Title buttons and the Page Number text box (p.343-345).
+    button(QStringLiteral("crawl"), tr("Crawling Title"), [this] {
+        setMotion(title_.motion == model::ClassicMotion::Crawling ? model::ClassicMotion::Still : model::ClassicMotion::Crawling);
+    }, true);
+    button(QStringLiteral("roll"), tr("Rolling Title"), [this] {
+        setMotion(title_.motion == model::ClassicMotion::Rolling ? model::ClassicMotion::Still : model::ClassicMotion::Rolling);
+    }, true);
+    auto* pageBox = new QSpinBox(this);
+    pageBox->setRange(1, 1);
+    pageBox->setKeyboardTracking(false);
+    pageBox->setToolTip(tr("Page Number"));
+    named(pageBox, QStringLiteral("page"));
     bar->addStretch(1);
+    bar->addWidget(pageBox);
+    connect(pageBox, &QSpinBox::valueChanged, this, [this](int v) {
+        if (!syncing_) setPage(v);
+    });
 }
 
 QWidget* TitleToolWindow::canvas() const {
@@ -492,7 +567,40 @@ QString TitleToolWindow::pickColor(const QString& current, const QString& captio
     return safeColors_ ? model::safeColor(c.name()) : c.name();
 }
 
+bool TitleToolWindow::withinLimit() const {
+    return media::classicContentPages(title_) <= model::classicPageLimit(title_.motion, lines_);
+}
+
+void TitleToolWindow::fitPages() {
+    if (title_.motion != model::ClassicMotion::Still && title_.autoSize) title_.pages = media::classicContentPages(title_);
+    if (title_.motion == model::ClassicMotion::Still) title_.pages = 1;
+}
+
+void TitleToolWindow::showLimit() {
+    // "a message box opens. To cancel the operation and keep the title within the page count limit, click OK" (p.342).
+    auto* box = new QMessageBox(QMessageBox::Information, tr("Title Tool"),
+                                tr("This would make the title longer than its %1 pages.").arg(model::classicPageLimit(title_.motion, lines_)),
+                                QMessageBox::Ok, this);
+    box->setObjectName(QStringLiteral("title:pageLimit"));
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    limitMessage_ = box;
+    connect(box, &QObject::destroyed, this, [this, box] {
+        if (limitMessage_ == box) limitMessage_ = nullptr;
+    });
+    box->open();
+}
+
+QWidget* TitleToolWindow::limitMessage() const {
+    return limitMessage_;
+}
+
 void TitleToolWindow::commit(const ClassicTitle& before) {
+    if (!withinLimit()) {
+        title_ = before;
+        showLimit();
+    }
+    fitPages();
+    syncScrollBars();
     if (title_ == before) {
         refreshControls();
         canvas_->update();
@@ -741,7 +849,9 @@ void TitleToolWindow::press(const QPointF& at, Qt::KeyboardModifiers modifiers) 
             t.text.clear();
             t.runs.clear();
             const QPointF p = snapped(at);
-            t.rect = QRectF(p.x(), p.y(), std::max(120.0, safeArea(0.8).right() - p.x()), 0.0);
+            // In a rolling or crawling title, "lines of text wrap within the safe title area" (p.343) of the page.
+            const QPointF page = model::classicPageOrigin(title_.motion, model::classicPageAt(title_.motion, p));
+            t.rect = QRectF(p.x(), p.y(), std::max(120.0, page.x() + safeArea(0.8).right() - p.x()), 0.0);
             title_.objects << t;
             editing_ = t.id;
             selected_ = {t.id};
@@ -893,6 +1003,10 @@ bool TitleToolWindow::key(int key, Qt::KeyboardModifiers modifiers, const QStrin
     }
     if (ClassicObject* o = title_.object(editing_)) {
         const qsizetype from = std::min(caret_, anchor_), to = std::max(caret_, anchor_);
+        // "If you reach the page count limit while you are typing text, the title stops getting bigger and text entry
+        // stops" (p.342): a change that would pass it is taken back.
+        const ClassicObject saved = *o;
+        const qsizetype savedCaret = caret_, savedAnchor = anchor_;
         auto replace = [&](const QString& with) {
             model::TitleObject twin = characterTwin(*o);
             model::replaceText(twin, from, to, with);
@@ -951,9 +1065,46 @@ bool TitleToolWindow::key(int key, Qt::KeyboardModifiers modifiers, const QStrin
             replace(text);
             break;
         }
+        if (ClassicObject* now = title_.object(editing_); now && !withinLimit()) {
+            *now = saved;
+            caret_ = savedCaret;
+            anchor_ = savedAnchor;
+        }
+        if (ClassicObject* now = title_.object(editing_)) {
+            fitPages();
+            // "the title scrolls down as you type" (p.343): the cursor kept in view.
+            if (title_.motion == model::ClassicMotion::Rolling) {
+                const QLineF c = media::classicTextCaret(*now, caret_);
+                if (c.y2() > scroll_.y() + model::kClassicHeight) setScroll(QPointF(scroll_.x(), c.y2() - model::kClassicHeight * 0.8));
+                if (c.y1() < scroll_.y()) setScroll(QPointF(scroll_.x(), c.y1() - model::kClassicHeight * 0.2));
+            }
+            syncScrollBars();
+        }
         refreshControls();
         canvas_->update();
         return true;
+    }
+    // Scrolling a rolling or crawling title (p.344): Home and End, Page Up and Page Down by a page, and (rolling titles,
+    // ours: with nothing selected) the Up and Down Arrows by a line (ours: 54 pixels, a twentieth of the frame).
+    if (title_.motion != model::ClassicMotion::Still) {
+        const bool roll = title_.motion == model::ClassicMotion::Rolling;
+        const double pageLength = roll ? model::kClassicHeight : model::kClassicWidth;
+        auto along = [&](double v) { setScroll(roll ? QPointF(scroll_.x(), v) : QPointF(v, scroll_.y())); };
+        const double now = roll ? scroll_.y() : scroll_.x();
+        switch (key) {
+        case Qt::Key_Home: along(0.0); return true;
+        case Qt::Key_End: along((title_.pages - 1) * pageLength); return true;
+        case Qt::Key_PageDown: along(now + pageLength); return true;
+        case Qt::Key_PageUp: along(now - pageLength); return true;
+        case Qt::Key_Down:
+        case Qt::Key_Up:
+            if (roll && selected_.isEmpty()) {
+                along(now + (key == Qt::Key_Down ? 1 : -1) * model::kClassicHeight / 20.0);
+                return true;
+            }
+            break;
+        default: break;
+        }
     }
     switch (key) {
     case Qt::Key_Left:
@@ -1049,6 +1200,128 @@ void TitleToolWindow::selectAll() {
     canvas_->update();
 }
 
+// ---- rolling and crawling titles
+
+void TitleToolWindow::setMotion(model::ClassicMotion motion) {
+    finishEditing();
+    const ClassicTitle before = title_;
+    title_.motion = motion;
+    if (motion != model::ClassicMotion::Still) {
+        title_.videoBackground = true;
+        title_.autoSize = true;
+    }
+    scroll_ = {};
+    commit(before);
+    if (title_.videoBackground) updateBackground();
+}
+
+void TitleToolWindow::setAutoSize(bool on) {
+    const ClassicTitle before = title_;
+    title_.autoSize = on;
+    commit(before);
+}
+
+bool TitleToolWindow::addPage() {
+    if (title_.motion == model::ClassicMotion::Still || title_.autoSize) return false;
+    if (title_.pages + 1 > model::classicPageLimit(title_.motion, lines_)) {
+        showLimit();
+        return false;
+    }
+    const ClassicTitle before = title_;
+    ++title_.pages;
+    commit(before);
+    return true;
+}
+
+bool TitleToolWindow::insertPage(int page) {
+    finishEditing();
+    const ClassicTitle before = title_;
+    if (!media::insertClassicPage(title_, page, lines_)) return false;
+    commit(before);
+    return true;
+}
+
+bool TitleToolWindow::removePage(int page) {
+    finishEditing();
+    const ClassicTitle before = title_;
+    if (!media::removeClassicPage(title_, page)) return false;
+    commit(before);
+    return true;
+}
+
+bool TitleToolWindow::copyToPage(int page) {
+    finishEditing();
+    const ClassicTitle before = title_;
+    QStringList copies;
+    for (const QString& id : selected_) {
+        const int count = static_cast<int>(title_.objects.size());
+        if (media::placeOnClassicPage(title_, id, page, true, lines_)) copies << title_.objects.at(count).id;
+    }
+    if (copies.isEmpty()) return false;
+    selected_ = copies;
+    commit(before);
+    return true;
+}
+
+bool TitleToolWindow::moveToPage(int page) {
+    finishEditing();
+    const ClassicTitle before = title_;
+    bool any = false;
+    for (const QString& id : selected_) any = media::placeOnClassicPage(title_, id, page, false, lines_) || any;
+    if (!any) return false;
+    commit(before);
+    return true;
+}
+
+bool TitleToolWindow::makeCrawl() {
+    finishEditing();
+    const ClassicTitle before = title_;
+    bool any = false;
+    for (const QString& id : selected_) {
+        if (ClassicObject* o = title_.object(id)) any = media::makeClassicCrawl(*o) || any;
+    }
+    if (!any) return false;
+    commit(before);
+    return true;
+}
+
+void TitleToolWindow::setScroll(const QPointF& at) {
+    // Within the title's pages, and only along its motion.
+    const double maxY = title_.motion == model::ClassicMotion::Rolling ? (title_.pages - 1) * model::kClassicHeight : 0.0;
+    const double maxX = title_.motion == model::ClassicMotion::Crawling ? (title_.pages - 1) * model::kClassicWidth : 0.0;
+    scroll_ = QPointF(std::clamp(at.x(), 0.0, maxX), std::clamp(at.y(), 0.0, maxY));
+    syncScrollBars();
+    refreshControls();
+    canvas_->update();
+}
+
+int TitleToolWindow::page() const {
+    return model::classicPageAt(title_.motion, scroll_ + QPointF(1, 1));
+}
+
+void TitleToolWindow::setPage(int page) {
+    // "Type a page number for a specific page ... The selected page appears" (p.345).
+    setScroll(model::classicPageOrigin(title_.motion, std::clamp(page, 1, title_.pages)));
+}
+
+void TitleToolWindow::syncScrollBars() {
+    if (!rollBar_ || !crawlBar_) return;
+    const bool wasSyncing = syncing_;
+    syncing_ = true;
+    const bool roll = title_.motion == model::ClassicMotion::Rolling, crawl = title_.motion == model::ClassicMotion::Crawling;
+    rollBar_->setVisible(roll);
+    crawlBar_->setVisible(crawl);
+    rollBar_->setRange(0, roll ? static_cast<int>((title_.pages - 1) * model::kClassicHeight) : 0);
+    rollBar_->setPageStep(static_cast<int>(model::kClassicHeight));
+    rollBar_->setSingleStep(static_cast<int>(model::kClassicHeight / 20.0));
+    rollBar_->setValue(static_cast<int>(scroll_.y()));
+    crawlBar_->setRange(0, crawl ? static_cast<int>((title_.pages - 1) * model::kClassicWidth) : 0);
+    crawlBar_->setPageStep(static_cast<int>(model::kClassicWidth));
+    crawlBar_->setSingleStep(static_cast<int>(model::kClassicWidth / 20.0));
+    crawlBar_->setValue(static_cast<int>(scroll_.x()));
+    syncing_ = wasSyncing;
+}
+
 // ---- controls
 
 void TitleToolWindow::refreshControls() {
@@ -1103,6 +1376,23 @@ void TitleToolWindow::refreshControls() {
     tick(QStringLiteral("safeTitleArea"), safeAreas_);
     tick(QStringLiteral("showGrid"), grid_);
     tick(QStringLiteral("alignToGrid"), snap_);
+    const bool moving = title_.motion != model::ClassicMotion::Still;
+    tick(QStringLiteral("roll"), title_.motion == model::ClassicMotion::Rolling);
+    tick(QStringLiteral("crawl"), title_.motion == model::ClassicMotion::Crawling);
+    for (const QString& name : {QStringLiteral("roll"), QStringLiteral("crawl")}) {
+        if (auto* b = qobject_cast<QToolButton*>(controls_.value(name))) b->setStyleSheet(b->isChecked() ? QStringLiteral("background-color: #2e8b3e;") : QString());
+    }
+    if (auto* p = qobject_cast<QSpinBox*>(controls_.value(QStringLiteral("page")))) {
+        p->setVisible(moving);
+        p->setRange(1, std::max(1, title_.pages));
+        p->setValue(page());
+    }
+    tick(QStringLiteral("autoSize"), title_.autoSize);
+    for (const QString& name : {QStringLiteral("autoSize"), QStringLiteral("insertPage"), QStringLiteral("removePage"), QStringLiteral("copyToPage"),
+                                QStringLiteral("moveToPage")}) {
+        if (QAction* a = actions_.value(name)) a->setEnabled(moving);
+    }
+    if (QAction* a = actions_.value(QStringLiteral("addPage"))) a->setEnabled(moving && !title_.autoSize);
     if (QAction* a = actions_.value(QStringLiteral("undo"))) a->setEnabled(!undo_.isEmpty() || !editing_.isEmpty());
     if (QAction* a = actions_.value(QStringLiteral("redo"))) a->setEnabled(!redo_.isEmpty());
     syncing_ = false;

@@ -21,6 +21,7 @@ class QAction;
 class QComboBox;
 class QFontComboBox;
 class QMenuBar;
+class QScrollBar;
 class QSpinBox;
 class QToolButton;
 
@@ -103,6 +104,32 @@ public:
     void deleteSelection();
     void selectAll();
 
+    // Rolling and crawling titles (6.8d2; p.341-346). The Rolling Title and Crawling Title buttons: "The button changes
+    // to green, and a Page Number text box appears", "the Background Selection tools are set to Video Background" and
+    // Auto Size is on (p.343-344); clicking the lit button again makes the title still (ours). One undo step.
+    void setMotion(model::ClassicMotion motion);
+    // Object > Auto Size Mode (p.343): the pages follow the objects.
+    void setAutoSize(bool on);
+    // Object > Add Page ("not available when Auto Size mode is on"), Insert Page, Remove Page, Copy to Page, Move to
+    // Page (the selected objects) and Make Crawl (the selected text objects), p.344-346; false when refused.
+    bool addPage();
+    bool insertPage(int page);
+    bool removePage(int page);
+    bool copyToPage(int page);
+    bool moveToPage(int page);
+    bool makeCrawl();
+    // The view's place in a rolling or crawling title (the title point at the view's top-left), and the page shown, the
+    // Page Number text box's (from 1).
+    QPointF scroll() const { return scroll_; }
+    void setScroll(const QPointF& at);
+    int page() const;
+    void setPage(int page);
+    // The project's frame height, for the page limits (p.342; 1080 until set).
+    void setFrameLines(int lines) { lines_ = lines; }
+    // "If you attempt to change the text formatting in a way that would make the title exceed the page count limit, a
+    // message box opens" (p.342): shown once each time (null until then), for tests.
+    QWidget* limitMessage() const;
+
     // Title pixels and the canvas's widget pixels, both ways (the canvas shows the whole frame, letterboxed).
     QPointF toTitle(const QPointF& widget) const;
     QPointF toWidget(const QPointF& title) const;
@@ -163,6 +190,16 @@ private:
     bool grid_ = false;
     bool snap_ = false;
     QPointF videoOffset_;
+    QPointF scroll_;
+    int lines_ = 1080;
+    QWidget* limitMessage_ = nullptr;
+    QScrollBar* rollBar_ = nullptr;
+    QScrollBar* crawlBar_ = nullptr;
+    // Whether the title keeps within the page limit; the pages fitted to the objects with Auto Size.
+    bool withinLimit() const;
+    void fitPages();
+    void showLimit();
+    void syncScrollBars();
     std::function<QImage(QSize)> frames_;
     QImage frame_;
     QString clipboard_; // ours: objects copied inside the tool, as JSON

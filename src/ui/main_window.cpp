@@ -5321,6 +5321,8 @@ void MainWindow::installPanelHandlers() {
     // The classic Title Tool (FX Guide p.327).
     handle("clip.new_title", [this] { openTitleTool(); });
     handle("tools.title_tool_application", [this] { openTitleTool(); });
+    // "Select Timeline > New > Title" also opens it (FX Guide p.343).
+    handle("timeline.new.title", [this] { openTitleTool(); });
     // Tools (ch.5).
     // Tools menu: each opens its panel through showTool().
     handle("tools.command_palette", [this] { showTool(QStringLiteral("CommandPalette")); });

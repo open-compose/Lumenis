@@ -93,8 +93,11 @@ private slots:
         t.objects[0].justify = ClassicJustify::Center;
         const QRect centre = inked(media::classicTitleImage(t, kSize));
         QVERIFY(std::abs(centre.center().x() - 100) <= 2);
+        // Right justified: the line's advance ends at the object's right; the ink stops short of it by the last
+        // glyph's side bearing, which differs between the systems' default fonts.
         t.objects[0].justify = ClassicJustify::Right;
-        QVERIFY(std::abs(inked(media::classicTitleImage(t, kSize)).right() - 160) <= 2);
+        const int right = inked(media::classicTitleImage(t, kSize)).right();
+        QVERIFY2(right <= 161 && right >= 154, qPrintable(QString::number(right)));
         t.objects[0].justify = ClassicJustify::Left;
         // Kerning in percent of the point size widens the line; leading spaces the lines.
         t.objects[0].kerning = 50;
@@ -145,6 +148,67 @@ private slots:
                 QVERIFY2(a == 0 || a == 255, qPrintable(QStringLiteral("%1,%2: %3").arg(x).arg(y).arg(a)));
             }
         }
+    }
+
+    // Rolling and crawling titles' pages (6.8d2, p.342-346).
+    void pages() {
+        QCOMPARE(classicPageLimit(ClassicMotion::Rolling), 29);
+        QCOMPARE(classicPageLimit(ClassicMotion::Crawling), 4);
+        QCOMPARE(classicPageLimit(ClassicMotion::Rolling, 720), 44);
+        QCOMPARE(classicPageLimit(ClassicMotion::Crawling, 486), 11);
+        QCOMPARE(classicPageLimit(ClassicMotion::Rolling, 576), 56);
+        QCOMPARE(classicPageOrigin(ClassicMotion::Rolling, 3), QPointF(0, 2160));
+        QCOMPARE(classicPageAt(ClassicMotion::Crawling, QPointF(1920, 10)), 2);
+        ClassicTitle t;
+        t.motion = ClassicMotion::Rolling;
+        ClassicObject a;
+        a.kind = ClassicKind::Box;
+        a.id = QStringLiteral("Box 1");
+        a.rect = QRectF(100, 100, 200, 200);
+        ClassicObject b = a;
+        b.id = QStringLiteral("Box 2");
+        b.rect = QRectF(100, 2200, 200, 200); // page 3
+        t.objects << a << b;
+        QCOMPARE(media::classicContentPages(t), 3);
+        t.pages = 3;
+        QCOMPARE(ClassicTitle::fromJson(t.toJson()), t);
+        // Insert a page at 2: Box 2 moves down a page; not at a place an object crosses.
+        QVERIFY(media::insertClassicPage(t, 2));
+        QCOMPARE(t.pages, 4);
+        QCOMPARE(t.objects.at(1).rect.top(), 3280.0);
+        t.objects[0].rect = QRectF(100, 1000, 200, 200); // across page 2's start
+        QVERIFY(!media::insertClassicPage(t, 2));
+        t.objects[0].rect = QRectF(100, 100, 200, 200);
+        // Remove an empty page; not one with something on it.
+        QVERIFY(!media::removeClassicPage(t, 4));
+        QVERIFY(media::removeClassicPage(t, 2));
+        QCOMPARE(t.objects.at(1).rect.top(), 2200.0);
+        QCOMPARE(t.pages, 3);
+        // Copy and move to a page, adding pages; not past the limit.
+        QVERIFY(media::placeOnClassicPage(t, QStringLiteral("Box 1"), 5, true));
+        QCOMPARE(t.objects.size(), 3);
+        QCOMPARE(t.objects.at(2).rect.top(), 4420.0);
+        QCOMPARE(t.pages, 5);
+        QVERIFY(media::placeOnClassicPage(t, QStringLiteral("Box 1"), 2, false));
+        QCOMPARE(t.objects.at(0).rect.top(), 1180.0);
+        QVERIFY(!media::placeOnClassicPage(t, QStringLiteral("Box 1"), 30, false));
+        // Drawn from a page down: what is on page 2 shows at the top.
+        ClassicTitle shown;
+        shown.motion = ClassicMotion::Rolling;
+        ClassicObject box = a;
+        box.rect = QRectF(0, 1080, 1920, 540);
+        shown.objects << box;
+        const QImage page2 = media::classicTitleImage(shown, kSize, true, QPointF(0, 1080));
+        QCOMPARE(qAlpha(page2.pixel(10, 10)), 255);
+        QCOMPARE(qAlpha(page2.pixel(10, 80)), 0);
+        QCOMPARE(qAlpha(media::classicTitleImage(shown, kSize).pixel(10, 10)), 0);
+        // Make Crawl: one line, as wide as its text, on the lower third.
+        ClassicObject crawl = text(QStringLiteral("One\nTwo"), QRectF(100, 100, 500, 0));
+        QVERIFY(media::makeClassicCrawl(crawl));
+        QCOMPARE(crawl.text, QStringLiteral("One Two"));
+        QCOMPARE(crawl.rect.top(), 720.0);
+        QVERIFY(crawl.rect.width() > 500);
+        QVERIFY(media::classicObjectBounds(crawl).height() < 300); // one line
     }
 
     // The Text tool's places: the cursor between characters, highlights over them.

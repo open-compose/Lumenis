@@ -59,10 +59,20 @@ struct ClassicObject {
 // settings are the tool's; what a title keeps is its objects and its background: "You use the Video Background button
 // to switch between a video background and an opaque color background" (p.333), "The default background color is
 // black" (p.335).
+// "Rolling titles scroll vertically ... Crawling titles scroll horizontally" (p.341-342, 6.8d2). Their objects lie on
+// pages, "a unit the size of a PAL, NTSC, or HD frame" (p.342): a rolling title's pages one under the other, a crawling
+// title's side by side, page 1 at the origin.
+enum class ClassicMotion { Still, Rolling, Crawling };
+
 struct ClassicTitle {
     QList<ClassicObject> objects; // back to front
     bool videoBackground = true;
     QString backgroundColor = QStringLiteral("#000000");
+    ClassicMotion motion = ClassicMotion::Still;
+    int pages = 1;
+    // "Auto Size mode adds or removes pages automatically as you add, delete, or reformat the text. Auto Size mode is
+    // on by default when you click the Rolling Title button or the Crawling Title button" (p.343).
+    bool autoSize = true;
 
     bool operator==(const ClassicTitle&) const = default;
     QJsonObject toJson() const;
@@ -76,6 +86,13 @@ struct ClassicTitle {
 
 inline constexpr double kClassicWidth = 1920.0;
 inline constexpr double kClassicHeight = 1080.0;
+
+// The page limits (p.342): "1080i and 1080p Rolling 29, Crawling 4; 720p Rolling 44, Crawling 6"; NTSC 67 and 11, PAL
+// 56 and 11. `lines` is the project's frame height (ours: 486 or fewer is NTSC, up to 576 PAL); a still title has one.
+int classicPageLimit(ClassicMotion motion, int lines = 1080);
+// Where page `page` (from 1) begins, and the page a point is on (from 1).
+QPointF classicPageOrigin(ClassicMotion motion, int page);
+int classicPageAt(ClassicMotion motion, const QPointF& point);
 
 // The style name of a Titler+ font for Bold and Italic ("Regular", "Bold", "Italic", "Bold Italic").
 QString classicStyle(bool bold, bool italic);
