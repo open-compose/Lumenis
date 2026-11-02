@@ -133,7 +133,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Select > Reverse |  | p.260 | works | ☐ | | |
 | Select > Sources |  | p.267 | works | ☐ | | |
 | Select > Unreferenced Clips |  | p.267 | works | ☐ | | |
-| Select > Unrendered Titles |  | p.359 | *later* | ☐ | | |
+| Select > Unrendered Titles |  | p.359 | works | ☐ | | |
 | Set Bin Display |  | p.288 | works | ☐ | | |
 | Show Sidebar Only |  | p.243 | works | ☐ | | |
 | Sift Bin Contents |  | p.288 | works | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 154 of them working with a project open; the
+* 211 menu commands, 155 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

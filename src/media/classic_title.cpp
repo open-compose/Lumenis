@@ -2,6 +2,7 @@
 // from their top-left corner, so that both titlers share one text layout; the other objects are drawn here.
 #include "lumenis/media/classic_title.h"
 
+#include "lumenis/media/link.h"
 #include "lumenis/media/titler.h"
 
 #include <QColor>
@@ -450,6 +451,65 @@ bool distributeClassicObjects(model::ClassicTitle& title, const QStringList& ids
         at += length(u.bounds) + gap;
     }
     return any;
+}
+
+// ---------------------------------------------------------------- Title Effect clips' media
+
+QImage classicTitleFill(const model::ClassicTitle& title, const QSize& size, int page) {
+    const QImage image = classicTitleImage(title, size, true, model::classicPageOrigin(title.motion, page)).convertToFormat(QImage::Format_ARGB32);
+    QImage fill(size, QImage::Format_RGB32);
+    for (int y = 0; y < size.height(); ++y) {
+        const auto* in = reinterpret_cast<const QRgb*>(image.constScanLine(y));
+        auto* out = reinterpret_cast<QRgb*>(fill.scanLine(y));
+        // The colour where the title has any; black elsewhere (the matte keeps it out).
+        for (int x = 0; x < size.width(); ++x) out[x] = qAlpha(in[x]) ? qRgb(qRed(in[x]), qGreen(in[x]), qBlue(in[x])) : qRgb(0, 0, 0);
+    }
+    return fill;
+}
+
+QImage classicTitleMatte(const model::ClassicTitle& title, const QSize& size, int page) {
+    const QImage image = classicTitleImage(title, size, true, model::classicPageOrigin(title.motion, page));
+    QImage matte(size, QImage::Format_RGB32);
+    for (int y = 0; y < size.height(); ++y) {
+        const auto* in = reinterpret_cast<const QRgb*>(image.constScanLine(y));
+        auto* out = reinterpret_cast<QRgb*>(matte.scanLine(y));
+        for (int x = 0; x < size.width(); ++x) out[x] = qRgb(qAlpha(in[x]), qAlpha(in[x]), qAlpha(in[x]));
+    }
+    return matte;
+}
+
+std::optional<std::pair<model::BinItem, model::BinItem>> renderClassicTitleMedia(const model::ClassicTitle& title, const QString& name,
+                                                                                 const Rational& rate, const MediaCreation& creation,
+                                                                                 QString* error) {
+    const int pages = title.motion == model::ClassicMotion::Still ? 1 : std::max(1, title.pages);
+    const QSize size = creation.raster.isEmpty() ? QSize(1920, 1080) : creation.raster;
+    auto fill = renderedVideoClip(name + QStringLiteral(" Fill"), rate, pages,
+                                  [&](std::int64_t f) { return classicTitleFill(title, size, static_cast<int>(f) + 1); }, creation,
+                                  model::BinItemKind::RenderedEffect, error);
+    if (!fill) return std::nullopt;
+    auto matte = renderedVideoClip(name + QStringLiteral(" Matte"), rate, pages,
+                                   [&](std::int64_t f) { return classicTitleMatte(title, size, static_cast<int>(f) + 1); }, creation,
+                                   model::BinItemKind::RenderedEffect, error);
+    if (!matte) {
+        // Not half a title: the fill's file goes too.
+        if (const auto link = linkOf(*fill)) deleteMediaFiles(link->files());
+        return std::nullopt;
+    }
+    fill->userPlaced = false;
+    matte->userPlaced = false;
+    return std::pair{*fill, *matte};
+}
+
+QPointF classicTitleScroll(const model::ClassicTitle& title, double progress) {
+    progress = std::clamp(progress, 0.0, 1.0);
+    const double pages = std::max(1, title.pages);
+    if (title.motion == model::ClassicMotion::Rolling) {
+        return {0.0, -model::kClassicHeight + progress * (pages + 1.0) * model::kClassicHeight};
+    }
+    if (title.motion == model::ClassicMotion::Crawling) {
+        return {-model::kClassicWidth + progress * (pages + 1.0) * model::kClassicWidth, 0.0};
+    }
+    return {};
 }
 
 bool makeClassicCrawl(model::ClassicObject& object) {

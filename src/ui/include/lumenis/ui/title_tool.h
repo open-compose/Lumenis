@@ -149,6 +149,57 @@ public:
     void duplicate();
     void deselectAll();
 
+    // ---- Saving titles (6.8d4a; p.357-360, p.364). What the Save Title dialog box asks: "a name to identify the title
+    // in the bin ... a bin, drive, and resolution", Fast Save (Unrendered) (p.358). Title aspect ratios and Place in
+    // Timeline are not offered yet (ours: dimmed; Place in Timeline comes with 6.8e).
+    struct SaveRequest {
+        QString name;
+        QString bin;        // a bin's node id
+        QString drive;      // a media drive's root
+        QString resolution; // media::Resolution id
+        bool fastSave = false;
+    };
+    // What saving needs from the application: the open bins (node id, name), the defaults (the Media Creation
+    // setting's Titles tab, the active bin), and the save itself, which makes or (with `replaceId`) revises the Title
+    // Effect clip and returns its id, or nothing with the reason.
+    struct Saver {
+        std::function<QList<std::pair<QString, QString>>()> bins;
+        std::function<SaveRequest()> defaults;
+        std::function<QString(const model::ClassicTitle&, const SaveRequest&, const QString& replaceId, QString* error)> save;
+    };
+    void setSaver(Saver saver) { saver_ = std::move(saver); }
+    // "If the Title tool is already open, you can drag a Title Effect clip from the bin directly into the Title tool"
+    // (p.360): what opens a dropped bin item (bin, item id) for revising; false for items that are not Title Effect
+    // clips.
+    void setClipOpener(std::function<bool(const QString& bin, const QString& itemId)> open) { openClip_ = std::move(open); }
+    std::function<bool(const QString&, const QString&)> clipOpener() const { return openClip_; }
+    // Revising a title in a bin (p.359-360): the title and the clip it came from.
+    void openClip(const model::ClassicTitle& title, const QString& bin, const QString& itemId, const QString& name, bool fastSaved);
+    // The clip being revised (bin and id; empty for a new title) and whether the title changed since it was opened or
+    // saved.
+    const QString& clipBin() const { return clipBin_; }
+    const QString& clipId() const { return clipId_; }
+    bool isModified() const { return title_ != savedTitle_; }
+    // File > Save Title: a revised title saved "with the same name and media parameters" in place of its clip; a new
+    // title asks first. File > Save Title As (Shift+Ctrl+S, p.359) always asks; keeping the name of the clip being
+    // revised makes a new clip "with the same name plus a two-digit extension" (p.360). True when saved.
+    bool saveTitle();
+    bool saveTitleAs();
+    // The save without the dialog: as asked, revising the open clip with `replace`.
+    bool save(const SaveRequest& request, bool replace);
+    // File > Close: "If the contents of the title have changed since the last time it was saved, a dialog box opens,
+    // asking if you want to save" (p.358); false when cancelled.
+    bool closeTitle();
+    // File > Export Title (p.364): the title as a graphics file (ours: PNG or TIFF with its alpha, the frame's size).
+    bool exportTitle(const QString& path);
+    // Fast Save "remains in effect until you deselect it, load a title that was saved without Fast Save selected, or
+    // exit the Title tool" (p.358).
+    bool fastSave() const { return fastSave_; }
+    // For tests: what asks for the Save Title dialog's answers (default: the dialog box) and for the Close prompt's
+    // (default: a message box; QMessageBox::Save, Discard or Cancel).
+    void setSaveDialog(std::function<std::optional<SaveRequest>(const SaveRequest&)> ask) { askSave_ = std::move(ask); }
+    void setClosePrompt(std::function<int()> ask) { askClose_ = std::move(ask); }
+
     // Edit menu (ours: the tool keeps its own undo steps while it is open).
     bool undo();
     bool redo();
@@ -202,9 +253,13 @@ public:
 signals:
     // The title changed (an undo step was made).
     void titleChanged();
+    // A title was saved as clip `itemId` in bin `bin`.
+    void titleSaved(const QString& bin, const QString& itemId);
 
 protected:
     bool event(QEvent* event) override;
+    // Closing the window is File > Close (p.358).
+    void closeEvent(QCloseEvent* event) override;
     // Double-clicks on the tool buttons make the tool sticky.
     bool eventFilter(QObject* watched, QEvent* event) override;
 
@@ -282,6 +337,15 @@ private:
     QHash<QString, QWidget*> controls_;
     QHash<QString, QAction*> actions_;
     bool syncing_ = false;
+    Saver saver_;
+    std::function<std::optional<SaveRequest>(const SaveRequest&)> askSave_;
+    std::function<int()> askClose_;
+    std::function<bool(const QString&, const QString&)> openClip_;
+    model::ClassicTitle savedTitle_;
+    QString clipBin_, clipId_, clipName_;
+    SaveRequest lastSave_; // the last request's bin, drive and resolution for the next new title
+    bool fastSave_ = false;
+    std::optional<SaveRequest> askSaveRequest(const SaveRequest& suggestion);
     Coat activeCoat_ = Coat::Fill;
     bool activeTransparency_ = false;
     int activeBlend_ = -1;

@@ -623,7 +623,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.8d3b, layers, groups, locks, alignment and distributing (`ClassicObject::group`/`locked`,
   `model::reorderClassicObjects`/`groupClassicObjects`/`keepLockedObjects`, `media::alignClassicObjects`/
   `distributeClassicObjects`, Edit > Duplicate), is done, so 6.8d3 is.
-  Next: 6.8d4 (then Promote Titles), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.8d4a, Title Effect clips (`src/model/title_clip.*`: a Title item with the effect and a nest of fill and matte
+  precomputes; `media::renderClassicTitleMedia`, the compositor's `classicTitleLayer`), the Title Tool's File menu and
+  Save Title dialog, Fast Save, revising (`MainWindow::saveClassicTitle`/`reviseTitle`, Ctrl+double-click, drops) and
+  Bin > Select > Unrendered Titles (tests `tst_classic_title`, `tst_title_tool`, `tst_title_clips`), is done.
+  Next: 6.8d4b (title templates and styles), 6.8d4c (Promote Titles), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

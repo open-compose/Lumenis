@@ -2,7 +2,8 @@
 
 ROADMAP 6.8d. Sources: FX Guide p.326-364 (2025.12 and 2026.8 editions, same pages). Code: `src/model/classic_title.*`
 (the title), `src/media/classic_title.*` (its picture), `src/ui/title_tool.*` (the window), `MainWindow::openTitleTool`.
-Tests: `tst_classic_title`, `tst_title_tool`.
+Tests: `tst_classic_title`, `tst_title_tool`, `tst_title_clips`. Title Effect clips: `src/model/title_clip.*`,
+`MainWindow::saveClassicTitle`/`reviseTitle`.
 
 ## 6.8d1: the window, the drawing environment, text and graphic objects
 
@@ -161,3 +162,46 @@ Tests: `tst_classic_title`, `tst_title_tool`.
 * Clicking a grouped object selects its group; Shift+click adds or takes away the whole group, and the last group
   clicked is the reference. Edit > Duplicate copies 20 pixels down and right (copies unlocked, in new groups); Edit >
   Deselect All.
+
+## 6.8d4a: Title Effect clips and saving
+
+### From the guide
+* "When the Title tool or Marquee saves a title, it creates a Title Effect clip and saves it in the bin you select. One
+  media object, referred to as a precompute, has references to the RGB and alpha channel information. Every time you
+  make a change, Media Composer creates two additional media files. The original media files are not changed" (p.365).
+  Re-creating title media replaces nested edits "with the new title's graphic and alpha tracks" (p.374).
+* Saving (p.357-359): File > Close asks to save a changed title; the Save Title dialog box takes a name, a bin, drive
+  and resolution, Fast Save (Unrendered), title aspect ratios and Place in Timeline (In -> Out) with a track; "The Title
+  tool closes, and Media Composer loads the new title into the Source monitor. A 2-minute Title Effect clip ... appears
+  in the bin"; File > Save Title and Save Title As keep the tool open; Shift+Ctrl+S saves a version. "If you are saving
+  a new title, the resolution you select becomes the default for future new title saves" (p.358); the Media Creation
+  setting's Titles tab sets drives and resolution.
+* Fast Save (p.357-358): "just the raw title objects (text and graphics) are saved in the bin, with the prefix
+  "unrendered"", "Fast-saved titles appear as black in the monitors and are labeled as "media offline""; it "remains in
+  effect until you deselect it, load a title that was saved without Fast Save selected, or exit the Title tool"; Bin >
+  Select > Unrendered Titles (p.359).
+* Revising (p.359-360): Ctrl+double-click the Title Effect icon, or drag the clip into an open Title tool; Save Title
+  replaces the clip; Save Title As keeping the name "creates a new clip with the same name plus a two-digit extension".
+* "You cannot save a rolling or crawling title with a color background" (p.342). File > Export Title saves "a PICT
+  graphics file" (p.364). "Rolling titles scroll from the bottom to the top of the screen" and crawling titles "from
+  right to left" (p.488); Title effects key over the video below (p.488).
+
+### Ours
+* `model::classicTitleClip` (title_clip.h): a BinItem of kind Title whose composition is one track with one filler
+  segment carrying the Title, Rolling Title or Crawling Title effect (the title's JSON under the "Title Tool" parameters,
+  "Unrendered" when fast saved) and a nest: V1 the fill precompute, V2 the matte precompute. `reviseClassicTitleClip`
+  replaces it in place; `isUnrenderedTitle`, `unrenderedTitleName` ("unrendered.<name>"), `revisionTitleName`.
+* `media::renderClassicTitleMedia`: two RenderedEffect reference clips "<name> Fill" and "<name> Matte" (one frame a
+  page, the title's colours over black and its alpha as grey; `classicTitleFill`/`classicTitleMatte`) at the project's
+  raster in the chosen resolution and drive. The compositor's `classicTitleLayer` keys the fill by the matte over the
+  tracks below with Matte Key's Foreground parameters; rolls and crawls move evenly from just outside the frame to just
+  past it over the segment (`classicTitleScroll`; their parameters, p.567, come with 6.8e). Offline or fast saved: black
+  and offline.
+* The Title Tool's own menu bar gets File (Save Title, Save Title As... Shift+Ctrl+S, Export Title..., Close); closing
+  the window is Close. The Save Title dialog: Name, Bin (open bins), Drive, Resolution, Fast Save; Place in Timeline
+  dimmed until 6.8e, no aspect ratio choices. The suggested bin, drive and resolution are the last save's, else the
+  Media Creation Titles tab's and the active bin. Save Title As makes "<name>.NN" when the bin already has a Title clip
+  of that name. Export Title writes PNG or TIFF with alpha, 1920 x 1080, the page shown.
+* The Source monitor composites a Title clip like a sequence (the title over black). Frame and Script views show a
+  Title clip's title over black always (the guide's Home key is not needed). Titles are not edited into sequences yet
+  (6.8e).

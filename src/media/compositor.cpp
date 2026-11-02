@@ -1,4 +1,5 @@
 #include "lumenis/media/compositor.h"
+#include "lumenis/media/classic_title.h"
 #include "lumenis/media/titler.h"
 #include "lumenis/media/tracking.h"
 
@@ -9,6 +10,7 @@
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/nest.h"
 #include "lumenis/model/timewarp.h"
+#include "lumenis/model/title_clip.h"
 
 #include "effect_drawing.h"
 
@@ -369,6 +371,62 @@ Picture matteKeyPicture(const model::Effect& e, const Picture& background, const
     return out;
 }
 
+// A classic Title, Rolling Title or Crawling Title effect (ROADMAP 6.8d4a; FX Guide p.365, p.488-489;
+// lumenis/model/title_clip.h): "Media Composer keys the title over the underlying video layers" (p.488). Its fill
+// precompute keyed by its matte precompute over `below`, the pages placed where the segment's frame `offset` scrolls them
+// (classicTitleScroll); the Foreground parameters apply as Matte Key's. A fast-saved title, or precomputes offline, show
+// black and count as missing ("Fast-saved titles appear as black in the monitors and are labeled as "media offline"",
+// p.358).
+Picture classicTitleLayer(const Composition& c, const model::Segment& segment, std::int64_t offset, const Picture& below, bool* missing) {
+    const int w = c.size.width(), h = c.size.height();
+    const auto title = model::classicTitleOf(*segment.effect);
+    const model::TitleMedia media = model::titleMediaOf(segment);
+    auto offline = [&] {
+        if (missing) *missing = true;
+        return Picture::solid(w, h, Qt::black);
+    };
+    if (!title || media.isEmpty() || !c.source) return offline();
+    const std::int64_t length = std::max<std::int64_t>(segment.length, 1);
+    const double progress = length > 1 ? static_cast<double>(offset) / static_cast<double>(length - 1) : 0.0;
+    const QPointF scroll = classicTitleScroll(*title, progress);
+    const int pages = title->motion == model::ClassicMotion::Still ? 1 : std::max(1, title->pages);
+    // The pages in view, drawn where the scroll puts them.
+    QImage fill(c.size, QImage::Format_RGB32), matte(c.size, QImage::Format_RGB32);
+    fill.fill(Qt::black);
+    matte.fill(Qt::black);
+    const QTransform m = QTransform::fromTranslate(-scroll.x(), -scroll.y()) * classicToPicture(c.size);
+    QPainter pf(&fill), pm(&matte);
+    pf.setRenderHint(QPainter::SmoothPixmapTransform);
+    pm.setRenderHint(QPainter::SmoothPixmapTransform);
+    for (int page = 1; page <= pages; ++page) {
+        const QPointF origin = model::classicPageOrigin(title->motion, page);
+        const QRectF where = m.mapRect(QRectF(origin, QSizeF(model::kClassicWidth, model::kClassicHeight)));
+        if (!where.intersects(QRectF(0, 0, w, h))) continue;
+        auto pageOf = [&](const QString& clip) {
+            model::Segment s;
+            s.clipId = clip;
+            s.binId = media.binId;
+            s.sourceTrack = QStringLiteral("V1");
+            s.length = pages;
+            return c.source(s, page - 1, c.size);
+        };
+        const std::optional<QImage> f = pageOf(media.fill), a = pageOf(media.matte);
+        if (!f || !a) {
+            pf.end();
+            pm.end();
+            return offline();
+        }
+        if (!f->isNull()) pf.drawImage(where, *f);
+        if (!a->isNull()) pm.drawImage(where, *a);
+    }
+    pf.end();
+    pm.end();
+    const Picture fillPicture = Picture::fromImage(fill, w, h, c.interpolation);
+    const Picture mattePicture = Picture::fromImage(matte, w, h, c.interpolation);
+    const double time = length > 1 ? static_cast<double>(offset) / static_cast<double>(length - 1) : 0.0;
+    return matteKeyPicture(*segment.effect, below, fillPicture, mattePicture, time, model::EffectSpan(length));
+}
+
 // Stamp (FX Guide p.298-299, p.584-585): "The Stamp category of the 3D Warp effect lets you make certain
 // effects ... remain on screen while other effects come and go, even though the effect segment itself has
 // ended." The track's stamp buffer at `frame`: every Stamp Image press on the track's 3D effects at or before
@@ -502,6 +560,11 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 layer = tf->progress < cutAt ? std::move(out) : std::move(in);
             }
             layer.quantize(c.precision);
+        } else if (tf->segment && tf->segment->effect && model::isClassicTitleEffect(*tf->segment->effect)) {
+            // A Title Effect clip's segment is media, keyed whether or not effects are computed.
+            result = classicTitleLayer(c, *tf->segment, tf->offset, result, missing);
+            result.quantize(c.precision);
+            continue;
         } else {
             layer = segmentPicture(c, tf->segment, tf->frame, missing, tf->blend, tf->segmentOffset);
         }

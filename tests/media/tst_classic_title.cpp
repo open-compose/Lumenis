@@ -2,11 +2,14 @@
 // the title's JSON, Safe Colors, and the picture: text placed from its top-left with its justification, kerning and
 // leading, boxes, ovals and lines, transparency and the Preview's hard edges; rolling and crawling titles' pages
 // (6.8d2); line attributes, colour and transparency blends and shadows (6.8d3a); layers, groups, locks, alignment and
-// distributing (6.8d3b).
+// distributing (6.8d3b); Title Effect clips, their precomputes' pictures and the compositor's keying (6.8d4a).
 #include "lumenis/media/classic_title.h"
+#include "lumenis/media/compositor.h"
 #include "lumenis/model/classic_title.h"
+#include "lumenis/model/title_clip.h"
 
 #include <QColor>
+#include <QDateTime>
 #include <QGuiApplication>
 #include <QLineF>
 #include <QTest>
@@ -466,6 +469,110 @@ private slots:
         QVERIFY(media::distributeClassicObjects(n, {o1, o2, o3}, media::ClassicDistribute::FirstToLast, safe));
         const QPointF mid = (n.object(o1)->rect.center() + n.object(o3)->rect.center()) / 2.0;
         QVERIFY(QLineF(n.object(o2)->rect.center(), mid).length() < 1e-6);
+    }
+
+    // Title Effect clips (6.8d4a, p.357-360, p.365, p.488): the clip, its precomputes' pictures, and the compositor.
+    void titleClips() {
+        ClassicTitle title;
+        ClassicObject box;
+        box.id = QStringLiteral("Box 1");
+        box.kind = ClassicKind::Box;
+        box.rect = QRectF(0, 0, 960, 540); // the top-left quarter
+        box.fill.color = QStringLiteral("#ff0000");
+        title.objects << box;
+        // The clip: kind Title, two minutes, the title kept for revising, its precomputes in the nest.
+        const model::TitleMedia media{QStringLiteral("bin"), QStringLiteral("fill"), QStringLiteral("matte")};
+        const BinItem clip = classicTitleClip(title, QStringLiteral("Lower Third"), Rational(25), media, QDateTime::currentDateTimeUtc());
+        QCOMPARE(clip.kind, BinItemKind::Title);
+        QCOMPARE(clip.durationFrames, 3000);
+        QCOMPARE(titleClipLength(Rational(30000, 1001)), 3596);
+        const auto segment = titleSegmentOf(clip);
+        QVERIFY(segment && segment->isFiller() && segment->effect);
+        QCOMPARE(segment->effect->name, QStringLiteral("Title"));
+        QVERIFY(isClassicTitleEffect(*segment->effect));
+        QCOMPARE(titleMediaOf(*segment), media);
+        QCOMPARE(classicTitleOf(clip).value_or(ClassicTitle{}), title);
+        QVERIFY(!isUnrenderedTitle(clip));
+        // Revised in place keeps the clip, its length and id.
+        BinItem revised = clip;
+        ClassicTitle changed = title;
+        changed.objects[0].fill.color = QStringLiteral("#00ff00");
+        reviseClassicTitleClip(revised, changed, {}, QDateTime::currentDateTimeUtc());
+        QCOMPARE(revised.id, clip.id);
+        QCOMPARE(revised.durationFrames, 3000);
+        QVERIFY(isUnrenderedTitle(revised)); // without precomputes: fast saved
+        QCOMPARE(classicTitleOf(revised)->objects.at(0).fill.color, QStringLiteral("#00ff00"));
+        // Names.
+        QCOMPARE(unrenderedTitleName(QStringLiteral("Credits")), QStringLiteral("unrendered.Credits"));
+        QCOMPARE(unrenderedTitleName(QStringLiteral("unrendered.Credits")), QStringLiteral("unrendered.Credits"));
+        Bin bin;
+        bin.items << clip;
+        BinItem first = clip;
+        first.name = QStringLiteral("Lower Third.01");
+        bin.items << first;
+        QCOMPARE(revisionTitleName(bin, QStringLiteral("Lower Third")), QStringLiteral("Lower Third.02"));
+        QCOMPARE(classicTitleEffectName(ClassicMotion::Rolling), QStringLiteral("Rolling Title"));
+
+        // The precomputes' pictures: the fill's colours over black, the matte's alpha as grey.
+        const QImage fill = media::classicTitleFill(title, kSize), matte = media::classicTitleMatte(title, kSize);
+        QCOMPARE(at(fill, 20, 20), QColor(Qt::red));
+        QCOMPARE(at(fill, 150, 80), QColor(Qt::black));
+        QCOMPARE(at(matte, 20, 20), QColor(Qt::white));
+        QCOMPARE(at(matte, 150, 80), QColor(Qt::black));
+
+        // Keyed over what lies below: a blue V1 under the title on V2.
+        auto composeWith = [&](const ClassicTitle& t, const model::TitleMedia& m, std::int64_t frame, bool* missing) {
+            Sequence seq;
+            seq.ensureTrack(QStringLiteral("V1"));
+            seq.ensureTrack(QStringLiteral("V2"));
+            Segment blue;
+            blue.clipId = QStringLiteral("blue");
+            blue.length = 100;
+            seq.track(QStringLiteral("V1"))->segments = {blue};
+            seq.track(QStringLiteral("V2"))->segments = {classicTitleSegment(t, 100, m)};
+            media::Composition c;
+            c.sequence = &seq;
+            c.tracks = {QStringLiteral("V1"), QStringLiteral("V2")};
+            c.size = kSize;
+            c.source = [&](const Segment& s, std::int64_t f, QSize size) -> std::optional<QImage> {
+                if (s.clipId == QLatin1String("blue")) {
+                    QImage b(size, QImage::Format_RGB32);
+                    b.fill(Qt::blue);
+                    return b;
+                }
+                if (s.clipId == QLatin1String("fill")) return media::classicTitleFill(t, size, static_cast<int>(f) + 1);
+                if (s.clipId == QLatin1String("matte")) return media::classicTitleMatte(t, size, static_cast<int>(f) + 1);
+                return std::nullopt;
+            };
+            return media::composeImage(c, frame, missing);
+        };
+        bool missing = false;
+        QImage picture = composeWith(title, media, 10, &missing);
+        QVERIFY(!missing);
+        QCOMPARE(at(picture, 20, 20), QColor(Qt::red));
+        QCOMPARE(at(picture, 150, 80), QColor(Qt::blue));
+        // Fast saved: black, offline.
+        picture = composeWith(title, {}, 10, &missing);
+        QVERIFY(missing);
+        QCOMPARE(at(picture, 150, 80), QColor(Qt::black));
+
+        // A rolling title of two pages rises from below the frame to past its top: at the start nothing is in view, two
+        // thirds of the way its second page fills the frame.
+        ClassicTitle roll;
+        roll.motion = ClassicMotion::Rolling;
+        roll.pages = 2;
+        ClassicObject band = box;
+        band.rect = QRectF(0, 1080, 1920, 1080); // all of page 2
+        roll.objects << band;
+        QCOMPARE(media::classicTitleScroll(roll, 0.0), QPointF(0, -1080));
+        QCOMPARE(media::classicTitleScroll(roll, 1.0), QPointF(0, 2160));
+        missing = false;
+        picture = composeWith(roll, media, 0, &missing);
+        QVERIFY(!missing);
+        QCOMPARE(at(picture, 96, 54), QColor(Qt::blue));
+        // Two thirds of the way (frame 66 of 0-99): the view's top at 1080, page 2 fills it.
+        picture = composeWith(roll, media, 66, &missing);
+        QCOMPARE(at(picture, 96, 54), QColor(Qt::red));
     }
 
     void textPlaces() {

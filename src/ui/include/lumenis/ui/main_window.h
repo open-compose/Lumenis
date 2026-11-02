@@ -9,6 +9,7 @@
 #include "lumenis/model/project_store.h"
 #include "lumenis/ui/audio_punch_in.h"
 #include "lumenis/ui/audio_suite.h"
+#include "lumenis/ui/title_tool.h"
 
 #include <QDateTime>
 #include <QHash>
@@ -53,7 +54,7 @@ class ConsolidateDialog;
 class UnmountDialog;
 class SetFontDialog;
 class ShortcutsWindow;
-class TitleToolWindow;
+
 class AudioMixdownDialog;
 class VideoMixdownDialog;
 class ClearRendersDialog;
@@ -539,6 +540,13 @@ public:
     // frame; with `ask` false the dialog is skipped. The window, made when first opened, or null.
     void openTitleTool(bool ask = true);
     TitleToolWindow* titleTool() const;
+    // Saving a classic title (6.8d4a; FX Guide p.357-360): its fill and matte precomputes (unless fast saved) and its
+    // Title Effect clip in the request's bin, or with `replaceId` that clip revised; loaded into the Source monitor.
+    // The clip's id, or empty with the reason.
+    QString saveClassicTitle(const model::ClassicTitle& title, const TitleToolWindow::SaveRequest& request, const QString& replaceId,
+                             QString* error = nullptr);
+    // Revising a title in a bin (p.359): the Title Tool opens with Title Effect clip `itemId`; false for other items.
+    bool reviseTitle(const QString& binId, const QString& itemId);
 
     // Titler+ templates (FX Guide p.319-320, ROADMAP 6.8c4a). Edit Template, or a template dragged to the Record
     // monitor, "opens the template in the Record monitor" (model::titleTemplateSequence, under the bin id

@@ -1,10 +1,12 @@
 #include "lumenis/ui/bin_view.h"
 
+#include "lumenis/media/classic_title.h"
 #include "lumenis/media/titler.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/effect_template.h"
 #include "lumenis/model/motion_adapter.h"
+#include "lumenis/model/title_clip.h"
 #include "lumenis/model/titler.h"
 
 #include "lumenis/ui/bin_dialogs.h"
@@ -129,8 +131,17 @@ void paintFrame(QPainter& p, const QRect& frame, model::BinItemKind kind, const 
     glyphIcon(iconFor(kind)).paint(&p, icon, Qt::AlignCenter, QIcon::Disabled);
 }
 
-// A Titler+ template's first frame over black (FX Guide p.319); null for other items.
+// A Titler+ template's first frame over black (FX Guide p.319), or a classic Title Effect clip's title over black ("you
+// can display a frame from the title itself rather than display the Title Effect Clip icon", p.365; ours: always, from
+// the title itself, its first page); null for other items.
 QImage titleTemplatePicture(const model::BinItem& item, QSize size) {
+    if (const auto classic = model::classicTitleOf(item)) {
+        QImage picture(size, QImage::Format_ARGB32_Premultiplied);
+        picture.fill(Qt::black);
+        QPainter p(&picture);
+        p.drawImage(0, 0, media::classicTitleImage(*classic, size));
+        return picture;
+    }
     if (!model::isTitleTemplate(item)) return {};
     const auto t = model::effectTemplateOf(item);
     return media::titleFirstFrame(t->effect, t->length, size);

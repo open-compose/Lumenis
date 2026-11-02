@@ -2,9 +2,10 @@
 // tool's moves, lassos and handles, the drawing tools with Shift and sticky tools, the text formatting tools on objects,
 // characters and the defaults, the drawing environment and its menus, the Edit menu, and opening the tool from the
 // main window; rolling and crawling titles (6.8d2); line attributes, colours with blends and shadows (6.8d3a); layers,
-// groups, locks, alignment and Duplicate (6.8d3b).
+// groups, locks, alignment and Duplicate (6.8d3b); saving, closing, exporting and dropped clips (6.8d4a).
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/classic_title.h"
+#include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/theme.h"
@@ -17,6 +18,12 @@
 #include <QMenuBar>
 #include <QScrollBar>
 #include <QDialog>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMessageBox>
+#include <QMimeData>
+#include <QSignalSpy>
+#include <QTemporaryDir>
 #include <QKeySequence>
 #include <QSlider>
 #include <QSpinBox>
@@ -509,6 +516,113 @@ private slots:
         // Undo takes back the duplicate.
         QVERIFY(tool.undo());
         QCOMPARE(tool.title().objects.size(), 3);
+    }
+
+    // Saving (6.8d4a, p.357-360, p.364): the File menu, Save Title and Save Title As, the Close prompt, Export Title and
+    // a Title Effect clip dropped on the tool.
+    void saving() {
+        TitleToolWindow tool;
+        tool.show();
+        struct Call {
+            TitleToolWindow::SaveRequest request;
+            QString replace;
+        };
+        QList<Call> calls;
+        TitleToolWindow::Saver saver;
+        saver.bins = [] { return QList<std::pair<QString, QString>>{{QStringLiteral("b1"), QStringLiteral("Titles")}}; };
+        saver.defaults = [] {
+            TitleToolWindow::SaveRequest r;
+            r.bin = QStringLiteral("b1");
+            r.resolution = QStringLiteral("dnx_hq");
+            return r;
+        };
+        saver.save = [&](const model::ClassicTitle&, const TitleToolWindow::SaveRequest& r, const QString& replace, QString*) {
+            calls << Call{r, replace};
+            return QStringLiteral("clip%1").arg(calls.size());
+        };
+        tool.setSaver(saver);
+        int asked = 0;
+        tool.setSaveDialog([&](const TitleToolWindow::SaveRequest& suggestion) -> std::optional<TitleToolWindow::SaveRequest> {
+            ++asked;
+            TitleToolWindow::SaveRequest r = suggestion;
+            r.name = QStringLiteral("Lower Third");
+            r.fastSave = true;
+            return r;
+        });
+        QSignalSpy saved(&tool, &TitleToolWindow::titleSaved);
+        // A new title: Save Title asks first.
+        tool.setTool(TitleToolWindow::Tool::Box);
+        tool.press(QPointF(100, 100), Qt::NoModifier);
+        tool.release(QPointF(500, 300), Qt::NoModifier);
+        QVERIFY(tool.isModified());
+        auto action = [&](const char* name) { return tool.menuBar()->findChild<QAction*>(QStringLiteral("title:") + QLatin1String(name)); };
+        QCOMPARE(tool.menuBar()->actions().first()->text(), QStringLiteral("File"));
+        action("saveTitle")->trigger();
+        QCOMPARE(asked, 1);
+        QCOMPARE(calls.size(), 1);
+        QCOMPARE(calls.at(0).request.bin, QStringLiteral("b1"));
+        QVERIFY(calls.at(0).replace.isEmpty());
+        QCOMPARE(saved.size(), 1);
+        QCOMPARE(tool.clipId(), QStringLiteral("clip1"));
+        QVERIFY(!tool.isModified());
+        // Fast Save stays on (p.358).
+        QVERIFY(tool.fastSave());
+        // Revised: Save Title replaces the clip without asking.
+        tool.setCornerRadius(20);
+        tool.saveTitle();
+        QCOMPARE(asked, 1);
+        QCOMPARE(calls.size(), 2);
+        QCOMPARE(calls.at(1).replace, QStringLiteral("clip1"));
+        QCOMPARE(calls.at(1).request.name, QStringLiteral("Lower Third"));
+        // Save Title As (Shift+Ctrl+S) always asks and makes a new clip.
+        QCOMPARE(action("saveTitleAs")->shortcut(), QKeySequence(Qt::SHIFT | Qt::CTRL | Qt::Key_S));
+        action("saveTitleAs")->trigger();
+        QCOMPARE(asked, 2);
+        QVERIFY(calls.at(2).replace.isEmpty());
+        // Close: a changed title asks; Cancel keeps the window, Don't Save closes it.
+        tool.setCornerRadius(40);
+        int prompts = 0;
+        tool.setClosePrompt([&] {
+            ++prompts;
+            return prompts == 1 ? int(QMessageBox::Cancel) : int(QMessageBox::Discard);
+        });
+        QVERIFY(!tool.closeTitle());
+        QVERIFY(tool.isVisible());
+        QVERIFY(tool.closeTitle());
+        QVERIFY(!tool.isVisible());
+        QVERIFY(!tool.fastSave()); // "until you ... exit the Title tool"
+        // Export Title: the frame with its alpha.
+        QTemporaryDir dir;
+        const QString png = dir.filePath(QStringLiteral("title.png"));
+        QVERIFY(tool.exportTitle(png));
+        const QImage exported(png);
+        QCOMPARE(exported.size(), QSize(1920, 1080));
+        QVERIFY(exported.hasAlphaChannel());
+        QCOMPARE(qAlpha(exported.pixel(1800, 1000)), 0);
+        QCOMPARE(qAlpha(exported.pixel(300, 200)), 255);
+        // A Title Effect clip dropped from a bin opens for revising (p.360).
+        QStringList opened;
+        tool.setClipOpener([&](const QString& bin, const QString& id) {
+            opened << bin + QLatin1Char('/') + id;
+            return true;
+        });
+        tool.show();
+        auto* data = new QMimeData;
+        data->setData(binItemsMime(), QByteArrayLiteral("b1\nclip2\n"));
+        QDragEnterEvent enter(QPoint(10, 10), Qt::CopyAction, data, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(tool.canvas(), &enter);
+        QVERIFY(enter.isAccepted());
+        QDropEvent drop(QPointF(10, 10), Qt::CopyAction, data, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(tool.canvas(), &drop);
+        QCOMPARE(opened, QStringList{QStringLiteral("b1/clip2")});
+        delete data;
+        // openClip: the clip's title, not modified, Fast Save off for a title saved without it.
+        model::ClassicTitle t;
+        t.objects << tool.title().objects;
+        tool.openClip(t, QStringLiteral("b1"), QStringLiteral("clip9"), QStringLiteral("Credits"), false);
+        QCOMPARE(tool.clipId(), QStringLiteral("clip9"));
+        QVERIFY(!tool.isModified());
+        tool.hide();
     }
 
     void fromMainWindow() {

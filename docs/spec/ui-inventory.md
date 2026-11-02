@@ -268,6 +268,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   (names, ranges, a quarter of the frame until set), frame-to-frame
   correlation with a search area twice the region, the original picture
   in the Effect Preview, Progressive Source without effect yet.
+* Classic Title Effect clips (docs/spec/title-tool.md, 6.8d4a): two precompute
+  clips "<name> Fill"/"<name> Matte" instead of one, "unrendered.<name>",
+  Save Title As numbering when the bin has a Title clip of the name, rolls and
+  crawls moving evenly through the clip until 6.8e, Place in Timeline dimmed
+  and no aspect ratio choices, Export Title as PNG/TIFF (not PICT), Frame view
+  showing the title without the Home key.
 * Classic title manipulation (docs/spec/title-tool.md, 6.8d3b): one level of
   groups (grouping groups merges them), locked text not typed in, groups
   aligned as units, Distribute Left to Right/Top to Bottom spanning the safe

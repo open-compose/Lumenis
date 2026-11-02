@@ -29,6 +29,7 @@
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
 #include "lumenis/model/timewarp.h"
+#include "lumenis/model/title_clip.h"
 #include "lumenis/model/titler.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/media/render.h"
@@ -518,6 +519,18 @@ QString MainWindow::revealFile() {
 
 int MainWindow::binSelect(const QString& what) {
     BinContainer& bins = *binContainer_;
+    if (what == QLatin1String("unrendered_titles")) {
+        // "Select Bin > Select > Unrendered Titles. The fast-saved titles are highlighted in the bin" (p.359).
+        BinDocument* doc = bins.activeDocument();
+        BinView* view = doc ? bins.viewFor(doc) : nullptr;
+        if (!view) return 0;
+        QStringList ids;
+        for (const model::BinItem& item : doc->bin().items) {
+            if (model::isUnrenderedTitle(item)) ids << item.id;
+        }
+        view->selectIds(ids);
+        return static_cast<int>(ids.size());
+    }
     if (what == QLatin1String("offline_items")) {
         // "The bin highlights all items that are missing media files" (p.266): clips whose media is
         // missing, unlinked or never there, and sequences that use such a clip (ours).
@@ -658,7 +671,9 @@ void MainWindow::createPanels() {
     composer_->setPictureResolver([this](MonitorId monitor, std::int64_t at, QSize size, bool* offline) -> QImage {
         const model::MonitorState& state = composer_->state(monitor);
         // A sequence: its video tracks composited with their effects (Phase 6.1, media::composeImage).
-        if (const model::LoadedClip* loaded = state.current(); loaded && loaded->item.kind == model::BinItemKind::Sequence) {
+        // A Title Effect clip (6.8d4a) is composited as its one-segment sequence: the title over black.
+        if (const model::LoadedClip* loaded = state.current();
+            loaded && (loaded->item.kind == model::BinItemKind::Sequence || loaded->item.kind == model::BinItemKind::Title)) {
             model::Sequence seq = model::Sequence::fromItem(loaded->item);
             // A title being made shows as it is, before its undo step (EffectEditor::pictureOverride, 6.8b).
             if (monitor == MonitorId::Record && effectEditor_) {
@@ -678,6 +693,8 @@ void MainWindow::createPanels() {
             bool missing = false;
             const QImage image = media::composeImage(c, at, &missing);
             if (image.isNull() && missing && offline) *offline = true;
+            // A fast-saved title, or one whose precomputes are gone, is "media offline" (FX Guide p.358).
+            if (missing && offline && loaded->item.kind == model::BinItemKind::Title) *offline = true;
             if (composer_->isPlaying() && monitor == composer_->activeMonitor() && at == state.position()) {
                 const int step = composer_->speed() > 0 ? 1 : -1;
                 for (int k = 1; k <= 2; ++k) {
@@ -850,6 +867,8 @@ void MainWindow::createPanels() {
     // Double-click in a bin loads the item (p.394).
     connect(binContainer_, &BinContainer::itemActivated, this, [this](const QString& binId, const QString& itemId) {
         const BinDocument* doc = binContainer_->document(binId);
+        // "Ctrl+double-click the Title Effect icon in the bin. The title opens in the Title tool" (p.359).
+        if ((QApplication::keyboardModifiers() & Qt::ControlModifier) && reviseTitle(binId, itemId)) return;
         if (const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr) {
             composer_->loadDefault(binId, *item);
             panels_->showPanel(panels_->panel(QStringLiteral("Composer")));
@@ -5562,7 +5581,7 @@ void MainWindow::installPanelHandlers() {
             }
         });
     }
-    for (const char* what : {"offline_items", "media_relatives", "sources", "unreferenced_clips"}) {
+    for (const char* what : {"offline_items", "media_relatives", "sources", "unreferenced_clips", "unrendered_titles"}) {
         const QString kind = QString::fromLatin1(what);
         handle(("bin.select." + kind).toLatin1().constData(), [this, kind] {
             // "A message informs you that unreferenced clips highlight in open bins only (items in
@@ -5893,6 +5912,79 @@ TitleToolWindow* MainWindow::titleTool() const {
     return titleTool_.data();
 }
 
+QString MainWindow::saveClassicTitle(const model::ClassicTitle& title, const TitleToolWindow::SaveRequest& request, const QString& replaceId,
+                                     QString* error) {
+    auto fail = [error](const QString& text) {
+        if (error) *error = text;
+        return QString();
+    };
+    if (!project_) return fail(tr("Open a project first."));
+    BinDocument* doc = binContainer_->document(request.bin);
+    if (!doc) doc = binContainer_->activeDocument();
+    if (!doc) return fail(tr("Open a bin to save the title in."));
+    if (doc->isReadOnly()) return fail(tr("The bin is locked by another user."));
+    const Rational rate = project_->settings.format.editRate;
+    const QDateTime when = QDateTime::currentDateTimeUtc();
+    // The precomputes, unless fast saved: "Fast Save skips the steps that create anti-aliased images from title
+    // objects" (p.357).
+    model::TitleMedia media;
+    if (!request.fastSave) {
+        media::MediaCreation creation = mediaCreation(QStringLiteral("titles"));
+        if (!request.drive.isEmpty()) creation.videoDrive = request.drive;
+        if (const media::Resolution* r = media::findResolution(request.resolution)) creation.resolution = *r;
+        QString why;
+        QApplication::setOverrideCursor(Qt::WaitCursor);
+        const auto clips = media::renderClassicTitleMedia(title, request.name, rate, creation, &why);
+        QApplication::restoreOverrideCursor();
+        if (!clips) return fail(why.isEmpty() ? tr("The title's media could not be made.") : why);
+        doc->addItem(clips->first);
+        doc->addItem(clips->second);
+        media.binId = doc->nodeId();
+        media.fill = clips->first.id;
+        media.matte = clips->second.id;
+    }
+    const model::BinItem* old = replaceId.isEmpty() ? nullptr : doc->bin().item(replaceId);
+    model::BinItem item;
+    if (old && old->kind == model::BinItemKind::Title) {
+        // "The revised Title Effect clip replaces the previous clip in the bin" (p.360); the old media stays ("The
+        // original media files are not changed", p.365).
+        item = *old;
+        model::reviseClassicTitleClip(item, title, media, when);
+        QString base = item.name;
+        if (base.startsWith(QLatin1String("unrendered."))) base = base.mid(11);
+        item.name = request.fastSave ? model::unrenderedTitleName(base) : base;
+        doc->replaceItem(item);
+    } else {
+        QString name = request.name;
+        // Save Title As keeping a title's name: "<name>.01" and on (p.360).
+        for (const model::BinItem& i : doc->bin().items) {
+            if (i.kind == model::BinItemKind::Title && (i.name == name || i.name == model::unrenderedTitleName(name))) {
+                name = model::revisionTitleName(doc->bin(), name);
+                break;
+            }
+        }
+        item = model::classicTitleClip(title, request.fastSave ? model::unrenderedTitleName(name) : name, rate, media, when);
+        doc->addItem(item);
+    }
+    // "Media Composer loads titles into the Source monitor as they are saved" (p.359).
+    composer_->load(MonitorId::Source, doc->nodeId(), item);
+    return item.id;
+}
+
+bool MainWindow::reviseTitle(const QString& binId, const QString& itemId) {
+    const BinDocument* doc = binContainer_->document(binId);
+    const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr;
+    const auto title = item ? model::classicTitleOf(*item) : std::nullopt;
+    if (!title) return false;
+    openTitleTool(false);
+    TitleToolWindow* tool = titleTool_;
+    if (!tool) return false;
+    QString name = item->name;
+    if (name.startsWith(QLatin1String("unrendered."))) name = name.mid(11);
+    tool->openClip(*title, binId, itemId, name, model::isUnrenderedTitle(*item));
+    return true;
+}
+
 void MainWindow::openTitleTool(bool ask) {
     // "If you know you want to create only Marquee titles or only standard titles for the current session, select
     // Persist" (p.327).
@@ -5907,6 +5999,27 @@ void MainWindow::openTitleTool(bool ask) {
         titleTool_ = tool;
         // The Record monitor's frame at the position, for the video background (p.333).
         tool->setFrameSource([this](QSize size) { return composer_->picture(MonitorId::Record, size); });
+        if (project_) tool->setFrameLines(project_->settings.format.height);
+        // Saving (6.8d4a): the open bins, the Media Creation setting's Titles tab, and the save itself.
+        TitleToolWindow::Saver saver;
+        saver.bins = [this] {
+            QList<std::pair<QString, QString>> out;
+            for (BinDocument* doc : binContainer_->openDocuments()) out.append({doc->nodeId(), doc->name()});
+            return out;
+        };
+        saver.defaults = [this] {
+            TitleToolWindow::SaveRequest r;
+            const media::MediaCreation c = mediaCreation(QStringLiteral("titles"));
+            r.drive = c.videoDrive;
+            r.resolution = c.resolution.id;
+            if (BinDocument* doc = binContainer_->activeDocument()) r.bin = doc->nodeId();
+            return r;
+        };
+        saver.save = [this](const model::ClassicTitle& title, const TitleToolWindow::SaveRequest& request, const QString& replaceId, QString* error) {
+            return saveClassicTitle(title, request, replaceId, error);
+        };
+        tool->setSaver(saver);
+        tool->setClipOpener([this](const QString& bin, const QString& itemId) { return reviseTitle(bin, itemId); });
     }
     if (!tool->isVisible()) tool->newTitle();
     tool->updateBackground();

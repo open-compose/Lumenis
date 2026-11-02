@@ -3,17 +3,24 @@
 #include "lumenis/ui/title_tool.h"
 
 #include "lumenis/media/classic_title.h"
+#include "lumenis/media/managed.h"
+#include "lumenis/ui/bin_dock.h"
 
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
 #include <QClipboard>
+#include <QCloseEvent>
 #include <QColorDialog>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDoubleSpinBox>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFontComboBox>
+#include <QFileDialog>
 #include <QFontDatabase>
+#include <QFormLayout>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -21,10 +28,12 @@
 #include <QJsonDocument>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QLineEdit>
 #include <QLinearGradient>
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPushButton>
@@ -258,6 +267,7 @@ public:
         setFocusPolicy(Qt::StrongFocus);
         setMouseTracking(false);
         setMinimumSize(320, 180);
+        setAcceptDrops(true);
     }
 
     // The frame's place in the widget, letterboxed.
@@ -287,6 +297,20 @@ protected:
     void mouseReleaseEvent(QMouseEvent* e) override { tool_.release(titleToWidget().inverted().map(e->position()), e->modifiers()); }
     void keyPressEvent(QKeyEvent* e) override {
         if (!tool_.key(e->key(), e->modifiers(), e->text())) QWidget::keyPressEvent(e);
+    }
+    // A Title Effect clip dragged from a bin opens for revising (p.360).
+    void dragEnterEvent(QDragEnterEvent* e) override {
+        if (e->mimeData()->hasFormat(binItemsMime()) && tool_.openClip_) e->acceptProposedAction();
+    }
+    void dropEvent(QDropEvent* e) override {
+        const QStringList lines = QString::fromUtf8(e->mimeData()->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+        if (lines.size() < 2 || !tool_.openClip_) return;
+        for (qsizetype i = 1; i < lines.size(); ++i) {
+            if (tool_.openClip_(lines.first(), lines.at(i))) {
+                e->acceptProposedAction();
+                return;
+            }
+        }
     }
     void keyReleaseEvent(QKeyEvent* e) override {
         // Releasing Ctrl or Alt ends the temporary Selection tool (p.332).
@@ -445,6 +469,18 @@ void TitleToolWindow::buildMenus() {
         actions_.insert(name, a);
         return a;
     };
+    // File (p.358-364): "While the legacy Title Tool is open, the File menu offers Save Title, Save Title As and Export
+    // Title" (ours: in the window's own menu bar).
+    QMenu* file = menuBar_->addMenu(tr("File"));
+    add(file, QStringLiteral("saveTitle"), tr("Save Title"), [this](bool) { saveTitle(); });
+    add(file, QStringLiteral("saveTitleAs"), tr("Save Title As..."), [this](bool) { saveTitleAs(); }, false,
+        QKeySequence(Qt::SHIFT | Qt::CTRL | Qt::Key_S));
+    add(file, QStringLiteral("exportTitle"), tr("Export Title..."), [this](bool) {
+        const QString path = QFileDialog::getSaveFileName(this, tr("Export Title"), QString(), tr("Images (*.png *.tif *.tiff)"));
+        if (!path.isEmpty() && !exportTitle(path)) QMessageBox::warning(this, tr("Export Title"), tr("The title could not be exported."));
+    });
+    file->addSeparator();
+    add(file, QStringLiteral("close"), tr("Close"), [this](bool) { closeTitle(); });
     // Edit (ours: the tool's own steps).
     QMenu* edit = menuBar_->addMenu(tr("Edit"));
     add(edit, QStringLiteral("undo"), tr("Undo"), [this](bool) { undo(); }, false, QKeySequence::Undo);
@@ -828,6 +864,11 @@ bool TitleToolWindow::event(QEvent* event) {
     return QWidget::event(event);
 }
 
+void TitleToolWindow::closeEvent(QCloseEvent* event) {
+    if (closeTitle()) event->accept();
+    else event->ignore();
+}
+
 bool TitleToolWindow::eventFilter(QObject* watched, QEvent* event) {
     if (event->type() == QEvent::MouseButtonDblClick && watched->property("titleTool").isValid()) {
         setTool(static_cast<Tool>(watched->property("titleTool").toInt()), true);
@@ -839,6 +880,7 @@ bool TitleToolWindow::eventFilter(QObject* watched, QEvent* event) {
 void TitleToolWindow::setTitle(const ClassicTitle& title) {
     finishEditing();
     title_ = title;
+    savedTitle_ = title;
     undo_.clear();
     redo_.clear();
     selected_.clear();
@@ -848,7 +890,152 @@ void TitleToolWindow::setTitle(const ClassicTitle& title) {
 
 void TitleToolWindow::newTitle() {
     setTitle(ClassicTitle{});
+    clipBin_.clear();
+    clipId_.clear();
+    clipName_.clear();
     setTool(Tool::Text);
+}
+
+// ---- saving (6.8d4a)
+
+void TitleToolWindow::openClip(const ClassicTitle& title, const QString& bin, const QString& itemId, const QString& name, bool fastSaved) {
+    setTitle(title);
+    clipBin_ = bin;
+    clipId_ = itemId;
+    clipName_ = name;
+    // Fast Save stays on "until you ... load a title that was saved without Fast Save selected" (p.358).
+    if (!fastSaved) fastSave_ = false;
+    setTool(Tool::Selection);
+}
+
+std::optional<TitleToolWindow::SaveRequest> TitleToolWindow::askSaveRequest(const SaveRequest& suggestion) {
+    if (askSave_) return askSave_(suggestion);
+    // The Save Title dialog box (p.358).
+    QDialog box(this);
+    box.setObjectName(QStringLiteral("title:saveTitle"));
+    box.setWindowTitle(tr("Save Title"));
+    auto* form = new QFormLayout(&box);
+    auto* name = new QLineEdit(suggestion.name, &box);
+    name->setObjectName(QStringLiteral("title:saveName"));
+    form->addRow(tr("Name:"), name);
+    auto* bin = new QComboBox(&box);
+    bin->setObjectName(QStringLiteral("title:saveBin"));
+    if (saver_.bins) {
+        for (const auto& [id, binName] : saver_.bins()) bin->addItem(binName, id);
+    }
+    bin->setCurrentIndex(std::max(0, bin->findData(suggestion.bin)));
+    form->addRow(tr("Bin:"), bin);
+    auto* drive = new QComboBox(&box);
+    drive->setObjectName(QStringLiteral("title:saveDrive"));
+    for (const media::MediaDrive& d : media::mediaDrives()) drive->addItem(d.name.isEmpty() ? d.root : d.name, d.root);
+    drive->setCurrentIndex(std::max(0, drive->findData(suggestion.drive)));
+    form->addRow(tr("Drive:"), drive);
+    auto* resolution = new QComboBox(&box);
+    resolution->setObjectName(QStringLiteral("title:saveResolution"));
+    for (const media::Resolution& r : media::resolutions()) resolution->addItem(r.name, r.id);
+    resolution->setCurrentIndex(std::max(0, resolution->findData(suggestion.resolution)));
+    form->addRow(tr("Resolution:"), resolution);
+    auto* fast = new QCheckBox(tr("Fast Save (Unrendered)"), &box);
+    fast->setObjectName(QStringLiteral("title:fastSave"));
+    fast->setChecked(suggestion.fastSave);
+    form->addRow(fast);
+    // Ours: the title aspect ratios (multiformat 24p and 25p projects) and Place in Timeline (6.8e) are not offered yet.
+    auto* place = new QCheckBox(tr("Place in Timeline (In -> Out)"), &box);
+    place->setEnabled(false);
+    form->addRow(place);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Save | QDialogButtonBox::Cancel, &box);
+    form->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &box, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &box, &QDialog::reject);
+    if (box.exec() != QDialog::Accepted || name->text().trimmed().isEmpty()) return std::nullopt;
+    SaveRequest r;
+    r.name = name->text().trimmed();
+    r.bin = bin->currentData().toString();
+    r.drive = drive->currentData().toString();
+    r.resolution = resolution->currentData().toString();
+    r.fastSave = fast->isChecked();
+    return r;
+}
+
+bool TitleToolWindow::save(const SaveRequest& request, bool replace) {
+    finishEditing();
+    if (!saver_.save) return false;
+    // "You cannot save a rolling or crawling title with a color background" (p.342).
+    if (title_.motion != model::ClassicMotion::Still && !title_.videoBackground) {
+        QMessageBox::warning(this, tr("Save Title"), tr("A rolling or crawling title cannot be saved with a color background."));
+        return false;
+    }
+    QString error;
+    const QString id = saver_.save(title_, request, replace ? clipId_ : QString(), &error);
+    if (id.isEmpty()) {
+        if (!error.isEmpty()) QMessageBox::warning(this, tr("Save Title"), error);
+        return false;
+    }
+    savedTitle_ = title_;
+    clipBin_ = request.bin;
+    clipId_ = id;
+    clipName_ = request.name;
+    fastSave_ = request.fastSave;
+    lastSave_ = request;
+    emit titleSaved(request.bin, id);
+    return true;
+}
+
+bool TitleToolWindow::saveTitle() {
+    // "Save the title with the same name and media parameters ... by choosing File > Save Title. The revised Title
+    // Effect clip replaces the previous clip in the bin" (p.360).
+    if (!clipId_.isEmpty() && !lastSave_.name.isEmpty() && lastSave_.bin == clipBin_) {
+        SaveRequest r = lastSave_;
+        r.name = clipName_;
+        return save(r, true);
+    }
+    if (!clipId_.isEmpty()) {
+        SaveRequest r = saver_.defaults ? saver_.defaults() : SaveRequest{};
+        r.name = clipName_;
+        r.bin = clipBin_;
+        r.fastSave = fastSave_;
+        return save(r, true);
+    }
+    return saveTitleAs();
+}
+
+bool TitleToolWindow::saveTitleAs() {
+    SaveRequest suggestion = saver_.defaults ? saver_.defaults() : SaveRequest{};
+    if (!lastSave_.bin.isEmpty()) {
+        // "If you are saving a new title, the resolution you select becomes the default for future new title saves"
+        // (p.358).
+        suggestion.bin = lastSave_.bin;
+        suggestion.drive = lastSave_.drive;
+        suggestion.resolution = lastSave_.resolution;
+    }
+    suggestion.name = clipName_.isEmpty() ? tr("Title") : clipName_;
+    suggestion.fastSave = fastSave_;
+    const auto request = askSaveRequest(suggestion);
+    if (!request) return false;
+    // Keeping the clip's name makes a numbered revision (p.360): the saver gives it its number.
+    return save(*request, false);
+}
+
+bool TitleToolWindow::closeTitle() {
+    finishEditing();
+    if (isModified() && !title_.objects.isEmpty()) {
+        const int answer = askClose_ ? askClose_()
+                                     : QMessageBox::question(this, tr("Title Tool"), tr("Save the changes to this title?"),
+                                                             QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+        if (answer == QMessageBox::Cancel) return false;
+        if (answer == QMessageBox::Save && !saveTitle()) return false;
+    }
+    // "Fast Save remains in effect until you ... exit the Title tool" (p.358).
+    fastSave_ = false;
+    hide();
+    return true;
+}
+
+bool TitleToolWindow::exportTitle(const QString& path) {
+    finishEditing();
+    const QImage image = media::classicTitleImage(title_, QSize(static_cast<int>(model::kClassicWidth), static_cast<int>(model::kClassicHeight)), true,
+                                                  model::classicPageOrigin(title_.motion, page()));
+    return image.convertToFormat(QImage::Format_ARGB32).save(path);
 }
 
 void TitleToolWindow::setTool(Tool tool, bool sticky) {

@@ -5,6 +5,7 @@
 // leading come out the same, boxes, ovals and lines with QPainter. Coordinates are the model's (classic_title.h): pixels
 // of a 1920 x 1080 frame from its top-left corner, scaled to the picture's height.
 
+#include "lumenis/media/managed.h"
 #include "lumenis/model/classic_title.h"
 
 #include <QImage>
@@ -14,8 +15,12 @@
 #include <QPolygonF>
 #include <QRectF>
 #include <QSize>
+#include <QPointF>
 #include <QStringList>
 #include <QTransform>
+
+#include <optional>
+#include <utility>
 
 namespace lumenis::media {
 
@@ -67,6 +72,23 @@ enum class ClassicDistribute { LeftToRight, TopToBottom, FirstToLast };
 // The objects `ids` (in the order selected) moved; false when nothing moves.
 bool alignClassicObjects(model::ClassicTitle& title, const QStringList& ids, ClassicAlign align, const QRectF& area);
 bool distributeClassicObjects(model::ClassicTitle& title, const QStringList& ids, ClassicDistribute how, const QRectF& area);
+
+// ---- Title Effect clips' media (6.8d4a; p.357-358, p.365; model/title_clip.h)
+// Page `page` (from 1; a still title's one) of the title as its precomputes hold it, `size` large: the fill, its colours
+// over black (unpremultiplied, opaque), and the matte, its alpha as grey.
+QImage classicTitleFill(const model::ClassicTitle& title, const QSize& size, int page = 1);
+QImage classicTitleMatte(const model::ClassicTitle& title, const QSize& size, int page = 1);
+// Saving a title (p.357-358): its precomputes written as managed media in the creation's resolution on its video drive,
+// one frame per page at `rate`: RenderedEffect master clips "<name> Fill" and "<name> Matte" (ours). Nothing, with the
+// reason in `error`, on failure (the files made are removed).
+std::optional<std::pair<model::BinItem, model::BinItem>> renderClassicTitleMedia(const model::ClassicTitle& title, const QString& name,
+                                                                                 const Rational& rate, const MediaCreation& creation,
+                                                                                 QString* error = nullptr);
+// Where a Title Effect segment shows the title's pages at `progress` (0 at its first frame, 1 at its last): the title
+// point at the frame's top-left. A still title stays at its origin; "rolling titles scroll from the bottom to the top of
+// the screen", "crawling titles scroll from right to left" (p.488): ours, from just below (right of) the frame to just
+// past its top (left), evenly.
+QPointF classicTitleScroll(const model::ClassicTitle& title, double progress);
 
 // For the Text tool: the text index (0 to the text's length) whose cursor is nearest a point (title pixels), the
 // cursor before an index, and the boxes over the characters [from, to), in title pixels.
