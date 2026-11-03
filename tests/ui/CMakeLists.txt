@@ -34,6 +34,7 @@ lumenis_add_test(tst_effect_mode SOURCES tst_effect_mode.cpp LIBS ${ui_test_libs
 lumenis_add_test(tst_effect_keyframes_ui SOURCES tst_effect_keyframes_ui.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_tracking_ui SOURCES tst_tracking_ui.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_titler_ui SOURCES tst_titler_ui.cpp LIBS ${ui_test_libs})
+lumenis_add_test(tst_intraframe_ui SOURCES tst_intraframe_ui.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_titler_templates SOURCES tst_titler_templates.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_title_tool SOURCES tst_title_tool.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_title_clips SOURCES tst_title_clips.cpp LIBS ${ui_test_libs})

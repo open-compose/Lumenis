@@ -3,11 +3,13 @@
 #include "lumenis/ui/timeline.h"
 #include "lumenis/ui/titler_panel.h"
 #include "lumenis/ui/titler_tool.h"
+#include "lumenis/ui/intraframe_tool.h"
 #include "lumenis/ui/tracking_window.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/model/pan_scan.h"
 #include "lumenis/model/promote3d.h"
 #include "lumenis/model/title_clip.h"
+#include "lumenis/model/intraframe.h"
 
 #include "lumenis/media/compositor.h"
 
@@ -286,6 +288,48 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
         handleButtons_.insert(static_cast<int>(tool), b);
         side->addWidget(b);
     }
+    // The Intraframe tools (p.394-396, p.439): Selection, Bring Forward, Send Backward (Alt+click: to the front or back),
+    // and the Rectangle, Oval, Polygon, Curve and Brush tools. Ours: lettered, shown for Intraframe effects.
+    struct DrawButton {
+        int tool; // IntraframeTool::Tool, or -1/-2 for Bring Forward/Send Backward
+        const char* name;
+        const char* text;
+        const char* tip;
+    };
+    static const DrawButton kDrawButtons[] = {
+        {static_cast<int>(IntraframeTool::Tool::Selection), "intraframeSelection", "Sel", QT_TR_NOOP("Selection tool")},
+        {-1, "intraframeBringForward", "BF", QT_TR_NOOP("Bring Forward")},
+        {-2, "intraframeSendBackward", "SB", QT_TR_NOOP("Send Backward")},
+        {static_cast<int>(IntraframeTool::Tool::Rectangle), "intraframeRectangle", "Re", QT_TR_NOOP("Rectangle tool")},
+        {static_cast<int>(IntraframeTool::Tool::Oval), "intraframeOval", "Ov", QT_TR_NOOP("Oval tool")},
+        {static_cast<int>(IntraframeTool::Tool::Polygon), "intraframePolygon", "Po", QT_TR_NOOP("Polygon tool")},
+        {static_cast<int>(IntraframeTool::Tool::Curve), "intraframeCurve", "Cu", QT_TR_NOOP("Curve tool")},
+        {static_cast<int>(IntraframeTool::Tool::Brush), "intraframeBrush", "Br", QT_TR_NOOP("Brush tool")},
+    };
+    for (const DrawButton& d : kDrawButtons) {
+        auto* b = new QToolButton(this);
+        b->setObjectName(QLatin1String(d.name));
+        b->setText(QLatin1String(d.text));
+        b->setToolTip(tr(d.tip));
+        b->setAutoRaise(true);
+        b->setFixedSize(26, 22);
+        b->setVisible(false);
+        if (d.tool >= 0) {
+            b->setCheckable(true);
+            const auto tool = static_cast<IntraframeTool::Tool>(d.tool);
+            connect(b, &QToolButton::clicked, this, [this, tool] { intraframe_->setTool(tool); });
+            intraframeButtons_.insert(d.tool, b);
+        } else {
+            const bool forward = d.tool == -1;
+            connect(b, &QToolButton::clicked, this, [this, forward] {
+                const bool all = (QApplication::keyboardModifiers() & Qt::AltModifier) != 0;
+                if (forward) intraframe_->bringForward(all);
+                else intraframe_->sendBackward(all);
+            });
+            (forward ? bringForward_ : sendBackward_) = b;
+        }
+        side->addWidget(b);
+    }
     side->addStretch(1);
 
     // The bottom row (p.84, 6-11): Render Effect, Outline/Path, the
@@ -417,6 +461,9 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     connect(&timeline_.composer(), &Composer::changed, this, &EffectEditor::refresh);
     // Titler+'s tools in the Record monitor (FX Guide p.303-319).
     titler_ = new TitlerTool(*this);
+    // The Intraframe drawing tools (FX Guide p.395-418).
+    intraframe_ = new IntraframeTool(*this);
+    connect(intraframe_, &IntraframeTool::changed, this, [this] { syncIntraframeButtons(); });
     // Handles dragged in the Effect Preview monitor (p.92, p.292).
     connect(&timeline_.composer(), &Composer::effectHandleDragged, this,
             [this](const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift) {
@@ -515,6 +562,27 @@ void EffectEditor::refresh() {
         current_ = *effect;
     }
     if (chain_.isEmpty()) level_ = 0;
+    // An Intraframe effect's objects (6.9b): the whole effect for the drawing tools; with one object selected, the
+    // controls show that object's parameters. Another effect starts with nothing selected.
+    if (ref != shown_) {
+        intraframeSelection_.clear();
+        intraframePreview_.reset();
+        if (intraframe_) intraframe_->reset();
+    }
+    wholeIntraframe_.reset();
+    if (current_ && level_ == 0 && model::isIntraframeEffect(*current_)) {
+        wholeIntraframe_ = current_;
+        const QList<model::IntraframeObject> objects = model::intraframeObjects(*current_);
+        intraframeSelection_.removeIf([&](const QString& id) {
+            return std::none_of(objects.cbegin(), objects.cend(), [&](const model::IntraframeObject& o) { return o.id == id; });
+        });
+        if (intraframe_) intraframe_->keepSelection(intraframeSelection_);
+        if (intraframeSelection_.size() == 1) {
+            for (const model::IntraframeObject& o : objects) {
+                if (o.id == intraframeSelection_.constFirst()) current_ = model::objectEffect(*current_, o);
+            }
+        }
+    }
 
     // From the new ref, not shown_, which still holds the effect shown before. The nested effects (their
     // order, the one open) are part of what is shown.
@@ -536,7 +604,7 @@ void EffectEditor::refresh() {
         pointSelection_.clear();
         lastPoint_.reset();
         displayRange_.reset();
-        rebuild(effect);
+        rebuild(current_ ? &*current_ : effect);
         // An Avid Pan & Zoom whose image has moved asks for it (p.239).
         if (effect && media::isPanAndZoom(*effect)) {
             const QString path = media::panZoomImagePath(*effect);
@@ -557,11 +625,12 @@ void EffectEditor::refresh() {
                                                   id.parameter.section(QLatin1Char('/'), 1))
                                     .keys.size();
         });
-        syncValues(preview_ ? *preview_ : *effect);
+        syncValues(preview_ ? *preview_ : (current_ ? *current_ : *effect));
     }
     syncTransition();
     promote3D_->setEnabled(current_ && model::canPromoteTo3D(*current_));
     syncHandleButtons();
+    syncIntraframeButtons();
     if (trackingWindow_) trackingWindow_->refresh();
     // The position in the tracks moves while playing only with Update Position While Playing (p.132).
     if (updateWhilePlaying_ || !timeline_.composer().isPlaying()) updateTracks();
@@ -1473,6 +1542,18 @@ bool EffectEditor::changeShown(const QString& description, const std::function<v
     // Every change of the shown effect keeps a Stabilize effect's Auto-Zoom current (p.279).
     auto changed = [&](model::Effect& e) {
         const model::Effect before = e;
+        // With one Intraframe object selected, the change is that object's (6.9b).
+        if (level_ == 0 && model::isIntraframeEffect(e) && intraframeSelection_.size() == 1) {
+            QList<model::IntraframeObject> objects = model::intraframeObjects(e);
+            for (model::IntraframeObject& o : objects) {
+                if (o.id != intraframeSelection_.constFirst()) continue;
+                model::Effect oe = model::objectEffect(e, o);
+                change(oe);
+                o.parameters = oe.parameters;
+                model::setIntraframeObjects(e, objects);
+                return;
+            }
+        }
         change(e);
         keepAutoZoom(before, e);
     };
@@ -1568,6 +1649,54 @@ bool EffectEditor::applyTemplateGroup(const QString& category, const model::Effe
     const Rational rate = timeline_.composer().projectRate();
     if (!model::applyTemplateGroup(changed, t, category, rate)) return false;
     return changeShown(tr("Apply Effect Template"), [&](model::Effect& e) { e = changed; });
+}
+
+} // namespace lumenis::ui
+
+namespace lumenis::ui {
+
+// ---------------------------------------------------------------- Intraframe objects (6.9b)
+
+void EffectEditor::previewIntraframe(const std::optional<model::Effect>& effect) {
+    intraframePreview_ = effect;
+    syncPreview();
+    timeline_.composer().refreshDisplay();
+}
+
+bool EffectEditor::changeIntraframe(const QString& description, const model::Effect& effect) {
+    if (!shown_ || level_ != 0) return false;
+    intraframePreview_.reset();
+    const bool done = timeline_.changeEffect(*shown_, description, [&](model::Effect& e, model::Transition*) { e = effect; });
+    syncPreview();
+    return done;
+}
+
+void EffectEditor::setIntraframeSelection(const QStringList& ids) {
+    if (ids == intraframeSelection_) return;
+    intraframeSelection_ = ids;
+    refresh();
+}
+
+double EffectEditor::previewAspect() const {
+    const Rational a = timeline_.composer().aspectRatio();
+    return a.num() > 0 && a.den() > 0 ? static_cast<double>(a.num()) / static_cast<double>(a.den()) : 16.0 / 9.0;
+}
+
+void EffectEditor::syncIntraframeButtons() {
+    const bool on = wholeIntraframe_.has_value();
+    // The Blur and Mosaic effects have the Selection, layer, Rectangle and Oval tools (p.439).
+    const bool shapesOnly = on && (wholeIntraframe_->name == QLatin1String("Blur Effect") || wholeIntraframe_->name == QLatin1String("Mosaic Effect"));
+    for (auto it = intraframeButtons_.cbegin(); it != intraframeButtons_.cend(); ++it) {
+        const auto tool = static_cast<IntraframeTool::Tool>(it.key());
+        const bool freehand = tool == IntraframeTool::Tool::Polygon || tool == IntraframeTool::Tool::Curve || tool == IntraframeTool::Tool::Brush;
+        it.value()->setVisible(on && !(shapesOnly && freehand));
+        it.value()->setChecked(on && intraframe_ && intraframe_->tool() == tool);
+    }
+    for (QToolButton* b : {bringForward_, sendBackward_}) {
+        if (!b) continue;
+        b->setVisible(on);
+        b->setEnabled(on && intraframe_ && !intraframe_->selection().isEmpty());
+    }
 }
 
 } // namespace lumenis::ui

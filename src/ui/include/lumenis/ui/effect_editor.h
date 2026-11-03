@@ -36,6 +36,7 @@ class Timeline;
 class TitlerDashboard;
 class TitlerPanel;
 class TitlerTool;
+class IntraframeTool;
 class TrackingWindow;
 
 // A control of the Effect Editor (FX guide p.491-586), from
@@ -328,6 +329,24 @@ public:
     // The shown Titler+ effect as it is stored, and its length in frames; nothing when another effect is shown.
     std::optional<std::pair<model::Effect, std::int64_t>> shownTitlerEffect() const;
     void refreshTitleOverlay() { syncPreview(); }
+
+    // ---- Intraframe objects (ROADMAP 6.9b; intraframe_tool.h, docs/spec/intraframe.md)
+    // The drawing tools in the Effect Preview, for an Intraframe effect at the outermost level.
+    IntraframeTool* intraframeTool() const { return intraframe_; }
+    // The shown Intraframe effect with all its objects as stored; nothing for other effects.
+    std::optional<model::Effect> intraframeEffect() const { return wholeIntraframe_; }
+    // The effect as a drag shows it in the Record monitor before its undo step (pictureOverride); nothing ends it.
+    void previewIntraframe(const std::optional<model::Effect>& effect);
+    // The whole effect replaced by `effect` as one undo step.
+    bool changeIntraframe(const QString& description, const model::Effect& effect);
+    // The objects selected: with one, the editor's controls show and change that object's parameters ("Select the
+    // object ... and perform any of the following procedures", p.404); with none or several, the effect's own, which
+    // new objects take.
+    void setIntraframeSelection(const QStringList& ids);
+    const QStringList& intraframeSelection() const { return intraframeSelection_; }
+    // The Effect Preview picture's width over its height.
+    double previewAspect() const;
+    void refreshIntraframeOverlay() { syncPreview(); }
     // The shown effect as previewed, for the Record monitor's picture: its place and the effect, while a preview is
     // under way at the outermost level.
     std::optional<std::pair<model::EffectRef, model::Effect>> pictureOverride() const;
@@ -547,6 +566,15 @@ private:
     TrackingFrames trackingFrames_;
     TrackingWindow* trackingWindow_ = nullptr;
     TitlerTool* titler_ = nullptr;
+    IntraframeTool* intraframe_ = nullptr;
+    std::optional<model::Effect> wholeIntraframe_;     // the shown Intraframe effect, all objects
+    std::optional<model::Effect> intraframePreview_;   // a drag's effect before its undo step
+    QStringList intraframeSelection_;
+    QHash<int, QToolButton*> intraframeButtons_;       // IntraframeTool::Tool -> its button
+    QToolButton* bringForward_ = nullptr;
+    QToolButton* sendBackward_ = nullptr;
+    // Shows the drawing tool buttons for the shown effect and checks the active one.
+    void syncIntraframeButtons();
     TitlerDashboard* titlerDashboard_ = nullptr;
     TitlerPanel* titlerPanel_ = nullptr;
     PointRange pointRange_ = PointRange::All; // "All ... This is the default option" (p.268)

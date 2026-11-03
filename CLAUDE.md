@@ -650,7 +650,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `src/model/intraframe.*` under the effect's "Intraframe" category, each object with its own parameters and keyframed
   shapes; `src/media/intraframe.cpp` with the Paint modes, Blur and Mosaic within objects and AniMatte on segments and
   transitions; tests `tst_intraframe`, `tst_compositor`), is done.
-  Next: 6.9b (the drawing tools), 6.9c-e, 6.10 and 6.11, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.9b1, the drawing and selection tools (`src/ui/intraframe_tool.*` through `Composer::OverlayInput`, the Effect
+  Editor's lettered tool buttons, `EffectEditor::setIntraframeSelection` showing one object's parameters,
+  `previewIntraframe`/`changeIntraframe`; test `tst_intraframe_ui`), is done.
+  Next: 6.9b2 (Z-Rotation, Reshape, the Object menu), 6.9c-e, 6.10 and 6.11, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

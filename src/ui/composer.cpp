@@ -868,7 +868,7 @@ void MonitorPicture::paintOverlay(QPainter& p) const {
         p.restore();
     }
     if (e.outline.isEmpty() && e.handles.isEmpty() && e.path.isEmpty() && e.pathDots.isEmpty() && e.guides.isEmpty() &&
-        e.trackers.isEmpty() && e.boxes.isEmpty() && e.highlights.isEmpty() && !e.caret && e.anchors.isEmpty()) {
+        e.trackers.isEmpty() && e.boxes.isEmpty() && e.lines.isEmpty() && e.highlights.isEmpty() && !e.caret && e.anchors.isEmpty()) {
         return;
     }
     p.save();
@@ -902,6 +902,11 @@ void MonitorPicture::paintOverlay(QPainter& p) const {
         QPolygonF quad;
         for (const QPointF& c : box) quad << overlayPoint(c);
         twice([&] { p.drawPolygon(quad); }, wire);
+    }
+    for (const QList<QPointF>& open : e.lines) {
+        QPolygonF line;
+        for (const QPointF& c : open) line << overlayPoint(c);
+        twice([&] { p.drawPolyline(line); }, wire);
     }
     for (const QPointF& a : e.anchors) {
         const QPointF at = overlayPoint(a);

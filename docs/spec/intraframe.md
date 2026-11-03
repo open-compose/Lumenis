@@ -60,3 +60,39 @@ Code: `src/model/intraframe.*` (the objects), `src/media/intraframe.cpp` (their 
 * AniMatte: objects combine in layer order, Key In adding to the foreground's area and Key Out taking from it; with
   only Key Out objects the foreground shows outside them. Foreground's Level, Invert Key, Swap Sources and Show Alpha
   apply. On a transition the incoming clip is the foreground.
+
+## 6.9b1: drawing and selecting objects
+
+### From the guide
+* Applying the Paint Effect or AniMatte in Effect mode (p.393); the Effect Editor's Selection tool, Bring Forward and
+  Send Backward ("With the Alt key ... bring a painted object to the front or send an object to the back"), and the
+  painting tools (p.394-395); "Top to bottom: Rectangle, Oval, Polygon, Curve, and Brush tools" (p.396).
+* "After you use the Rectangle, Oval, Polygon, and Curve tools, Media Composer reverts to the Selection tool ... After
+  you use the Brush tool, it remains the active tool" (p.396).
+* Rectangles and ovals by dragging their diagonal, anchored where the drag starts (p.400); polygons by clicks, a drag
+  after a click making a curved segment, "double-click ... or click the initial control point" to close (p.400-402);
+  freehand curves with the Curve tool (p.403).
+* Selecting: click, Shift+click, a lasso; "When you select multiple objects, one set of selection handles appears
+  around all the objects"; Go to Next/Previous Event changes the selection; Delete (p.403). Moving by dragging inside
+  the outline; rescaling by a selection handle, Alt from the centre (p.404, p.415); the object's colour and feathering
+  as its own parameters (p.404).
+* The Blur and Mosaic effects' tools: Selection, Z-rotation, Reshape, Bring Forward, Send Backward, Rectangle, Oval
+  (p.439).
+
+### Ours
+* `IntraframeTool` (`src/ui/intraframe_tool.*`) is the Effect Preview's `Composer::OverlayInput` for an Intraframe
+  effect at the outermost level. The Effect Editor's lettered buttons (`intraframeSelection`, `intraframeBringForward`,
+  `intraframeSendBackward`, `intraframeRectangle`, ...) show for Intraframe effects; Blur and Mosaic show no Polygon,
+  Curve or Brush.
+* Every object shows as a wire frame (strokes as open lines, `Composer::EffectPreview::lines`); the selection has four
+  corner handles. While a drag goes on the Record monitor shows it (`EffectEditor::pictureOverride`); its end is one
+  undo step ("Add Rectangle", "Move", "Scale", ...).
+* A polygon point dragged after its click gets smooth direction handles; Return also closes a polygon, Escape drops
+  it. The Curve and Brush tools keep a point every 1.5% of the width with Catmull-Rom handles (`smoothCurve`).
+* Moving and scaling change the objects' "Intraframe Object" X, Y and Scale (a keyframe at the position when the
+  parameter has keyframes); scaling keeps the opposite corner (or the centre with Alt) where it was.
+* The lasso selects the objects whose bounds lie inside it. `selectAdjacent` steps through the objects in layer order.
+* With one object selected, the editor's controls show and change that object's parameters
+  (`EffectEditor::setIntraframeSelection`, the object branch of `changeShown`); with none, the effect's own, which new
+  objects take.
+* Tests: `tst_intraframe_ui`.

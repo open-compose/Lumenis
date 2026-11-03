@@ -1,5 +1,7 @@
 #include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/titler_tool.h"
+#include "lumenis/ui/intraframe_tool.h"
+#include "lumenis/model/intraframe.h"
 
 #include "lumenis/ui/timeline.h"
 
@@ -683,10 +685,17 @@ void EffectEditor::syncPreview() {
         }
         for (const auto& [t, selected] : columns) preview.keyframes << Composer::EffectPreview::Keyframe{span_.frameOf(t), selected};
         fillOverlay(*e, preview);
+        // The Intraframe objects' wire frames and the selection's handles (intraframe_tool.h).
+        if (intraframe_ && wholeIntraframe_) intraframe_->fillOverlay(preview);
     }
     timeline_.composer().setEffectPreview(preview);
-    // A Titler+ title is edited in the Effect Preview (titler_tool.h).
-    timeline_.composer().setOverlayInput(preview.on && e && model::isTitlerEffect(*e) && level_ == 0 ? titler_ : nullptr);
+    // A Titler+ title or Intraframe objects are edited in the Effect Preview (titler_tool.h, intraframe_tool.h).
+    Composer::OverlayInput* input = nullptr;
+    if (preview.on && e && level_ == 0) {
+        if (model::isTitlerEffect(*e)) input = titler_;
+        else if (wholeIntraframe_) input = intraframe_;
+    }
+    timeline_.composer().setOverlayInput(input);
     if (titler_ && e && model::isTitlerEffect(*e)) titler_->notifyShown();
 }
 
@@ -783,6 +792,9 @@ bool EffectEditor::deleteKeyframes(KeyframeMode mode) {
 }
 
 bool EffectEditor::goToEvent(bool next) {
+    // With Intraframe objects selected, "To change the selection from one object to another: Click one of the following
+    // buttons: Go to Next Event, Go to Previous Event" (FX Guide p.403).
+    if (wholeIntraframe_ && intraframe_ && !intraframe_->selection().isEmpty()) return intraframe_->selectAdjacent(next);
     const model::Effect* e = shownEffect();
     if (!e) return false;
     const double now = positionTime();

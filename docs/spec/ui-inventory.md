@@ -271,6 +271,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Editing titles in (docs/spec/title-tool.md, 6.8e1): a roll's finish staying
   the roll's end whatever the source OUT, Place in Timeline's tracks (the
   sequence's video tracks and the next one).
+* Intraframe tools (docs/spec/intraframe.md, 6.9b1): lettered tool buttons,
+  wire frames for every object, Return and Escape for polygons, freehand points
+  every 1.5% of the width, the lasso taking objects wholly inside it, moves and
+  scales as the objects' X, Y and Scale.
 * Intraframe objects (docs/spec/intraframe.md, 6.9a): shapes interpolated
   linearly between keyframes, objects keeping their own parameters (copied from
   the effect's when drawn), offsets in pixels of a frame 1920 wide, the brush

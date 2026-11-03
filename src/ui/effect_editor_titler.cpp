@@ -110,6 +110,7 @@ QStringList EffectEditor::titleKeyframed() const {
 }
 
 std::optional<std::pair<model::EffectRef, model::Effect>> EffectEditor::pictureOverride() const {
+    if (intraframePreview_ && shown_ && level_ == 0) return std::pair{*shown_, *intraframePreview_};
     if (!preview_ || !shown_ || level_ != 0) return std::nullopt;
     return std::pair{*shown_, *preview_};
 }

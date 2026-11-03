@@ -299,6 +299,8 @@ public:
         // Titler+ (FX Guide p.303-313): the selected objects' bounding boxes (solid), highlighted text (filled), the
         // text cursor and the anchor points' crosshairs.
         QList<QList<QPointF>> boxes;
+        // Open wire frames: Intraframe Brush strokes and objects being drawn (6.9b, intraframe_tool.h).
+        QList<QList<QPointF>> lines;
         QList<QList<QPointF>> highlights;
         std::optional<std::pair<QPointF, QPointF>> caret;
         QList<QPointF> anchors;
