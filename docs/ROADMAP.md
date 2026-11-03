@@ -1144,7 +1144,8 @@ phase of their own. They are done in three steps:
     Luma Ranges tabs (p.631-644), done (docs/spec/color-correction.md: `src/model/color_correction.*`,
     `src/media/color_correction.*`, the Color Correction effect in the compositor; test `tst_color_correction`); 6.10a2, the Channels, Levels and Curves groups (p.644-667), done (the same files: `model::levelsValue`, `colorCurve`,
     `curveValue`; the groups applied in the tool's order); 6.10a3, the Secondary
-    group's vectors (p.668-683).
+    group's vectors (p.668-683), done (`model::secondaryVector`, `vectorMembership`, `syringeVector`,
+    `addToVector`/`subtractFromVector`, `media::wheelHueSaturation`).
   * 6.10b, Color Correction mode: entering and leaving it, the three monitors with their Source menus, dual split
     and buttons, Play Loop and Edit Review, the Color Correction Tool with its group and subdividing tabs and buttons,
     and the Correction Mode settings (p.587-609).

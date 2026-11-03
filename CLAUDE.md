@@ -673,7 +673,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `media::colorCorrectedPicture` for the Color Correction effect; test `tst_color_correction`), is done.
   6.10a2, the Channels, Levels and Curves groups (paths "channels/...", "levels/...", "curves/...";
   `model::levelsValue`, `colorCurve`/`curveValue`; groups applied in the tab order in `colorCorrectedPixel`), is done.
-  Next: 6.10a3 (Secondary), 6.10b-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.10a3, the Secondary group's vectors ("secondary/vectors/<vector>/input|output/...", `model::vectorMembership`,
+  `syringeVector`, `addToVector`/`subtractFromVector`, `media::wheelHueSaturation`), is done, so 6.10a is.
+  Next: 6.10b-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

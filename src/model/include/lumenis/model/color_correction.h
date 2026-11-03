@@ -3,7 +3,8 @@
 // Colour corrections (ROADMAP 6.10; FX Guide ch.19-20; docs/spec/color-correction.md): what the Color Correction tool's
 // controls hold, for the Color Correction effect and (6.10d) the relationship corrections. 6.10a1 has the HSL group:
 // the Controls tab for the Master, Highlights, Midtones and Shadows ranges, the Hue Offsets tab's ChromaWheels and the
-// Luma Ranges curves (p.631-644). 6.10a2 adds the Channels, Levels and Curves groups (p.644-667).
+// Luma Ranges curves (p.631-644). 6.10a2 adds the Channels, Levels and Curves groups (p.644-667), 6.10a3 the Secondary
+// group (p.668-683).
 //
 // Ours: a correction is a set of controls named by their place in the tool, "hsl/controls/master/hue", each with a
 // value only once adjusted (unset controls have their defaults), and the Enable buttons that are turned off, named by
@@ -13,6 +14,9 @@
 // Offsets subtab ... enable both the Hue Offsets and the Controls subtabs" (p.603); the Curves tab's Master Saturation,
 // Gain, Gamma and Setup are the same controls ("When you adjust any of these sliders, you enable the equivalent slider
 // in the HSL group and the tab hierarchy containing it", p.659).
+//
+// Secondary: "secondary/vectors/red/input/hue" and so on (below), "secondary/isolate", "secondary/invertLast" and
+// "secondary/selected" (the selected vector's name).
 //
 // Paths of the other groups (ours): "channels/red/2/amount", "channels/red/2/type" and "channels/red/2/invert" for the
 // Channel Blending pane's four components of each channel; "levels/master/inGray" for the Levels tabs' points;
@@ -117,6 +121,41 @@ QList<QPointF> defaultLumaRangeCurve(LumaRange range);
 // How much of each range a brightness (0-255) is: the curves' values made to add up to one (ours).
 std::array<double, 3> lumaRangeWeights(const ColorCorrection& c, double brightness);
 QString lumaRangeKey(LumaRange range); // "shadows", "midtones", "highlights"
+
+// The Secondary group (p.668-683): twelve vectors, "The first six are standard vectors that represent the following
+// major colors: Green, Yellow, Red, Magenta, Blue, Cyan. The remaining six are custom vectors" (p.670), in the Selected
+// Vectors panel's order, which is the order they apply in (p.683). Hue is in degrees on the wheel of p.635 (0 red, -180
+// and 180 cyan, p.675), saturation 0-100 from the centre to the edge.
+QStringList secondaryVectors(); // "green", "yellow", "red", "magenta", "blue", "cyan", "1" ... "6"
+bool isStandardVector(const QString& vector);
+// "secondary/vectors/<vector>/input/<control>": hue, saturation, hueWidth, satMin (standard) or satWidth (custom),
+// softness; "secondary/vectors/<vector>/output/<control>": hue, saturation, luminance. A vector's own Enable button is
+// "secondary/vectors/<vector>".
+QString vectorPath(const QString& vector, const QString& side, const QString& control);
+// The vector's input region and its output, each value the correction's or the default. The output's hue and saturation
+// default to the input's, so a vector does nothing until its output is changed.
+struct SecondaryVector {
+    bool standard = true;
+    double hue = 0, saturation = 0, hueWidth = 30, satMin = 0, satWidth = 40, softness = 30;
+    double outHue = 0, outSaturation = 0, outLuminance = 0;
+};
+SecondaryVector secondaryVector(const ColorCorrection& c, const QString& vector);
+// The vectors that count (any control adjusted and its buttons on), in the panel's order.
+QStringList enabledVectors(const ColorCorrection& c);
+// How much a colour (hue, saturation) belongs to a vector, 0 to 1. Standard vectors are wedges of hueWidth degrees
+// from satMin outwards, custom vectors ellipses of satWidth across and hueWidth degrees along (scaling with saturation,
+// p.670). Softness blends beyond the edge (positive) or within it (negative), -255 to 255 (p.676; ours: 255 is the
+// vector's own size, see docs/spec/color-correction.md).
+double vectorMembership(const SecondaryVector& v, double hue, double saturation);
+// Adjusting an input slider; with Lock Vectors on, the output's hue and saturation move by as much (p.676).
+void setVectorInput(ColorCorrection& c, const QString& vector, const QString& control, double value, bool lockVectors);
+// The syringe (p.678): the vector closest to the sampled (hue, saturation) colours is selected, enabled and adjusted to
+// hold them all, its output set to its input, and Isolate selected. Returns the vector, empty with no samples.
+QString syringeVector(ColorCorrection& c, const QList<QPointF>& samples);
+// Add to Selection and Subtract from Selection on the selected vector (p.679): the vector's shape grows to hold the
+// colour or shrinks to leave it out.
+void addToVector(ColorCorrection& c, const QString& vector, QPointF sample);
+void subtractFromVector(ColorCorrection& c, const QString& vector, QPointF sample);
 
 // The Color Correction effect keeps its correction under this category (ours).
 inline const QString kColorCorrectionCategory = QStringLiteral("Color Correction");

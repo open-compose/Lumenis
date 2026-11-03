@@ -209,7 +209,61 @@ std::array<double, 3> curvesPixel(const ColorCorrection& c, std::array<double, 3
     return rgb;
 }
 
+// A chroma's place on the wheels: hue from red counterclockwise, saturation 100 at half the chroma range (ours).
+std::pair<double, double> wheelPlace(const Ycc& p) {
+    double hue = (std::atan2(p.cr, p.cb) - redAngle()) * 180.0 / std::numbers::pi;
+    hue = std::remainder(hue, 360.0);
+    return {hue, std::hypot(p.cb, p.cr) / 0.5 * 100.0};
+}
+
+Ycc fromWheel(double y, double hue, double saturation) {
+    const double a = redAngle() + rad(hue), m = saturation / 100.0 * 0.5;
+    return {y, std::cos(a) * m, std::sin(a) * m};
+}
+
+// The Secondary group (p.668-683): each enabled vector in the panel's order, on the result of those before it ("your
+// original green object is red in the final image", p.683), blended by the pixel's membership; Invert Last Vector
+// takes the last enabled vector's complement (p.682); Isolate shows what is outside the selected vector in grey
+// (p.679).
+std::array<double, 3> secondaryPixel(const ColorCorrection& c, const std::array<double, 3>& rgb) {
+    const QStringList vectors = model::enabledVectors(c);
+    const bool isolate = c.applies(QStringLiteral("secondary/isolate")) && c.number(QStringLiteral("secondary/isolate")) > 0.5;
+    if (vectors.isEmpty() && !isolate) return rgb;
+    const bool invertLast = c.applies(QStringLiteral("secondary/invertLast")) && c.number(QStringLiteral("secondary/invertLast")) > 0.5;
+    const QString last = vectors.isEmpty() ? QString() : vectors.constLast();
+    const Ycc original = toYcc(rgb);
+    auto membership = [&](const QString& name, const Ycc& p) {
+        const auto [hue, saturation] = wheelPlace(p);
+        const double w = model::vectorMembership(model::secondaryVector(c, name), hue, saturation);
+        return invertLast && name == last ? 1.0 - w : w;
+    };
+    Ycc p = original;
+    for (const QString& name : vectors) {
+        const double w = membership(name, p);
+        if (w <= 0.0) continue;
+        const model::SecondaryVector v = model::secondaryVector(c, name);
+        const auto [hue, saturation] = wheelPlace(p);
+        // The output moves the colour by the vector's change of hue and saturation; Luminance "reduces the luminance by
+        // 10% of the full black-to-white luminance range" at -10 (p.681).
+        const double outHue = hue + std::remainder(v.outHue - v.hue, 360.0);
+        const double outSaturation = std::max(0.0, saturation + v.outSaturation - v.saturation);
+        const Ycc corrected = fromWheel(p.y + v.outLuminance / 100.0 * 219.0, outHue, outSaturation);
+        p = blend(p, corrected, w);
+    }
+    if (isolate) {
+        const QString selected = c.text(QStringLiteral("secondary/selected"));
+        const double w = membership(selected, original);
+        p = blend({p.y, 0.0, 0.0}, p, w);
+    }
+    return toRgb(p);
+}
+
 } // namespace
+
+QPointF wheelHueSaturation(const std::array<double, 3>& rgb) {
+    const auto [hue, saturation] = wheelPlace(toYcc(rgb));
+    return {hue, saturation};
+}
 
 std::array<double, 3> colorCorrectedPixel(const ColorCorrection& c, const std::array<double, 3>& rgb) {
     if (c.values.isEmpty()) return rgb;
@@ -220,6 +274,7 @@ std::array<double, 3> colorCorrectedPixel(const ColorCorrection& c, const std::a
     if (c.adjusted(QStringLiteral("channels"))) out = channelsPixel(c, out);
     if (c.adjusted(QStringLiteral("levels"))) out = levelsPixel(c, out);
     if (c.adjusted(QStringLiteral("curves"))) out = curvesPixel(c, out);
+    if (c.adjusted(QStringLiteral("secondary"))) out = secondaryPixel(c, out);
     return out;
 }
 

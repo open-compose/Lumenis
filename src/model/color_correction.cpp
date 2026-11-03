@@ -55,6 +55,63 @@ int componentOf(const QString& path) {
     return parts.at(2).toInt();
 }
 
+// The vectors' predefined input values (ours, but for the standard vectors' 30 degrees of hue, p.671, custom vector 3's
+// saturation 35 and width 40, p.671, and the Softness of 30, p.676). Hue: "0 ... represents red and –180 or 180 ...
+// cyan" (p.675), green +120 and blue -120 as on the ChromaWheels (p.636).
+struct VectorDefault {
+    const char* name;
+    double hue, saturation;
+};
+const VectorDefault kVectors[] = {
+    {"green", 120, 60}, {"yellow", 60, 60}, {"red", 0, 60}, {"magenta", -60, 60}, {"blue", -120, 60}, {"cyan", 180, 60},
+    {"1", 25, 35},      {"2", 100, 35},     {"3", -150, 35}, {"4", 45, 50},      {"5", -90, 35},   {"6", 150, 35},
+};
+constexpr double kStandardSatMin = 10;
+
+const VectorDefault* vectorDefault(const QString& name) {
+    for (const VectorDefault& v : kVectors) {
+        if (name == QLatin1String(v.name)) return &v;
+    }
+    return nullptr;
+}
+
+// "secondary/vectors/red/input/hue" -> {"red", "input"}; empty when the path is not a vector control's.
+std::pair<QString, QString> vectorOf(const QString& path) {
+    const QStringList parts = path.split(QLatin1Char('/'));
+    if (parts.size() != 5 || parts.at(0) != QLatin1String("secondary") || parts.at(1) != QLatin1String("vectors")) return {};
+    return {parts.at(2), parts.at(3)};
+}
+
+// a - b in degrees, wrapped to -180..180.
+double hueDifference(double a, double b) {
+    double d = std::fmod(a - b, 360.0);
+    if (d > 180.0) d -= 360.0;
+    if (d < -180.0) d += 360.0;
+    return d;
+}
+
+double wrapHue(double h) {
+    return hueDifference(h, 0.0);
+}
+
+constexpr double kPi = 3.14159265358979323846;
+double radians(double degrees) {
+    return degrees * kPi / 180.0;
+}
+
+// How far a colour lies outside a vector's region, in the vector's own units: below 0 inside, 0 on the edge, 1 a
+// vector's size beyond it (ours). Wedges count 90 degrees of hue or 50 of saturation as their size.
+double vectorDistance(const SecondaryVector& v, double hue, double saturation) {
+    const double dh = hueDifference(hue, v.hue);
+    if (v.standard) return std::max((std::abs(dh) - v.hueWidth / 2.0) / 90.0, (v.satMin - saturation) / 50.0);
+    // The ellipse about the centre point: satWidth across the radius, hueWidth degrees along it as seen from the
+    // wheel's centre, so its hue range narrows as saturation grows.
+    const double radial = saturation * std::cos(radians(dh)) - v.saturation;
+    const double along = saturation * std::sin(radians(dh));
+    const double ar = std::max(0.5, v.satWidth / 2.0), at = std::max(0.5, v.saturation * std::tan(radians(std::min(v.hueWidth, 179.0) / 2.0)));
+    return std::hypot(radial / ar, along / at) - 1.0;
+}
+
 // [[in, out], ...] as points, sorted by input.
 QList<QPointF> pointsOf(const QJsonValue& value) {
     QList<QPointF> curve;
@@ -84,6 +141,12 @@ ColorCorrection ColorCorrection::fromJson(const QJsonObject& o) {
 
 double ColorCorrection::number(const QString& path) const {
     const QString p = canonical(path);
+    if (!values.contains(p) && p.startsWith(QLatin1String("secondary/vectors/")) && p.contains(QLatin1String("/output/"))) {
+        // A vector's output hue and saturation are its input's until changed.
+        const QString name = leaf(p);
+        if (name == QLatin1String("hue") || name == QLatin1String("saturation"))
+            return number(QString(p).replace(QLatin1String("/output/"), QLatin1String("/input/")));
+    }
     return values.value(p).toDouble(colorControlDefault(p).value_or(0.0));
 }
 
@@ -153,6 +216,19 @@ std::optional<double> colorControlDefault(const QString& path) {
         if (name == QLatin1String("invert")) return 0.0;
         return std::nullopt;
     }
+    if (const auto [vector, side] = vectorOf(path); !vector.isEmpty()) {
+        const VectorDefault* v = vectorDefault(vector);
+        if (!v) return std::nullopt;
+        if (side == QLatin1String("output")) return name == QLatin1String("luminance") ? std::optional<double>(0.0) : std::nullopt;
+        if (name == QLatin1String("hue")) return v->hue;
+        if (name == QLatin1String("saturation")) return v->saturation;
+        if (name == QLatin1String("hueWidth")) return 30.0;
+        if (name == QLatin1String("satMin")) return kStandardSatMin;
+        if (name == QLatin1String("satWidth")) return 40.0;
+        if (name == QLatin1String("softness")) return 30.0;
+        return std::nullopt;
+    }
+    if (path == QLatin1String("secondary/isolate") || path == QLatin1String("secondary/invertLast")) return 0.0;
     if (path.startsWith(QLatin1String("levels/"))) {
         if (name.endsWith(QLatin1String("Black"))) return 16.0;
         if (name.endsWith(QLatin1String("Gray"))) return 128.0;
@@ -179,6 +255,17 @@ std::optional<std::pair<double, double>> colorControlRange(const QString& path) 
         return std::nullopt;
     }
     if (path.startsWith(QLatin1String("levels/"))) return std::pair{0.0, 255.0}; // "on a scale from 0 to 255" (p.657)
+    if (const auto [vector, side] = vectorOf(path); !vector.isEmpty()) {
+        // p.675-676 and p.681.
+        if (name == QLatin1String("hue")) return std::pair{-180.0, 180.0};
+        if (name == QLatin1String("saturation") || name == QLatin1String("satMin") || name == QLatin1String("satWidth"))
+            return std::pair{0.0, 100.0};
+        if (name == QLatin1String("hueWidth")) return std::pair{0.0, isStandardVector(vector) ? 180.0 : 100.0};
+        if (name == QLatin1String("softness")) return std::pair{-255.0, 255.0};
+        if (name == QLatin1String("luminance")) return std::pair{-10.0, 10.0};
+        return std::nullopt;
+    }
+    if (path == QLatin1String("secondary/isolate") || path == QLatin1String("secondary/invertLast")) return std::pair{0.0, 1.0};
     if (name == QLatin1String("hue")) return std::pair{-180.0, 180.0};
     if (name == QLatin1String("amount")) return std::pair{0.0, 100.0};
     if (name == QLatin1String("saturation") || name == QLatin1String("gain")) return std::pair{0.0, 200.0};
@@ -191,6 +278,7 @@ std::optional<std::pair<double, double>> colorControlRange(const QString& path) 
 }
 
 QString colorControlTextDefault(const QString& path) {
+    if (path == QLatin1String("secondary/selected")) return QStringLiteral("green"); // p.674's illustration
     const int n = componentOf(path);
     if (n == 0 || leaf(path) != QLatin1String("type")) return {};
     return n == kChannelComponents ? QStringLiteral("offset") : path.section(QLatin1Char('/'), 1, 1);
@@ -313,6 +401,188 @@ double curveValue(const QList<QPointF>& points, double x) {
     const double t2 = t * t, t3 = t2 * t;
     return (2 * t3 - 3 * t2 + 1) * a.y() + (t3 - 2 * t2 + t) * h * tangent(i - 1) + (-2 * t3 + 3 * t2) * b.y() +
            (t3 - t2) * h * tangent(i);
+}
+
+QStringList secondaryVectors() {
+    QStringList out;
+    for (const VectorDefault& v : kVectors) out << QLatin1String(v.name);
+    return out;
+}
+
+bool isStandardVector(const QString& vector) {
+    return secondaryVectors().indexOf(vector) < 6;
+}
+
+QString vectorPath(const QString& vector, const QString& side, const QString& control) {
+    return QStringLiteral("secondary/vectors/%1/%2/%3").arg(vector, side, control);
+}
+
+SecondaryVector secondaryVector(const ColorCorrection& c, const QString& vector) {
+    auto in = [&](const char* name) { return c.number(vectorPath(vector, QStringLiteral("input"), QLatin1String(name))); };
+    auto out = [&](const char* name) { return c.number(vectorPath(vector, QStringLiteral("output"), QLatin1String(name))); };
+    SecondaryVector v;
+    v.standard = isStandardVector(vector);
+    v.hue = in("hue");
+    v.saturation = in("saturation");
+    v.hueWidth = in("hueWidth");
+    v.satMin = in("satMin");
+    v.satWidth = in("satWidth");
+    v.softness = in("softness");
+    v.outHue = out("hue");
+    v.outSaturation = out("saturation");
+    v.outLuminance = out("luminance");
+    return v;
+}
+
+QStringList enabledVectors(const ColorCorrection& c) {
+    QStringList out;
+    for (const QString& v : secondaryVectors()) {
+        if (c.adjusted(QStringLiteral("secondary/vectors/") + v)) out << v;
+    }
+    return out;
+}
+
+double vectorMembership(const SecondaryVector& v, double hue, double saturation) {
+    const double dist = vectorDistance(v, hue, saturation);
+    const double margin = std::abs(v.softness) / 255.0;
+    if (margin <= 0.0) return dist <= 0.0 ? 1.0 : 0.0;
+    // "Positive values blend the corrected color into areas of the image beyond the limits of the defined input vector
+    // ... Negative values blend the uncorrected color into parts of the area defined by the input vector" (p.676).
+    if (v.softness > 0.0) return dist <= 0.0 ? 1.0 : std::clamp(1.0 - dist / margin, 0.0, 1.0);
+    return dist >= 0.0 ? 0.0 : std::clamp(-dist / margin, 0.0, 1.0);
+}
+
+void setVectorInput(ColorCorrection& c, const QString& vector, const QString& control, double value, bool lockVectors) {
+    const QString path = vectorPath(vector, QStringLiteral("input"), control);
+    const bool hue = control == QLatin1String("hue");
+    if (hue) value = wrapHue(value);
+    if (lockVectors && (hue || control == QLatin1String("saturation"))) {
+        // "any changes you make to the Input Hue and Saturation values ... are matched by equivalent changes to the
+        // Output Hue and Saturation values" (p.676).
+        const QString outPath = vectorPath(vector, QStringLiteral("output"), control);
+        const double old = c.number(path), out = c.number(outPath);
+        const double delta = hue ? hueDifference(value, old) : value - old;
+        c.set(outPath, hue ? wrapHue(out + delta) : out + delta);
+    }
+    c.set(path, value);
+}
+
+QString syringeVector(ColorCorrection& c, const QList<QPointF>& samples) {
+    if (samples.isEmpty()) return {};
+    // The samples' centre in the wheel's plane, then their hues about it and their saturations.
+    double x = 0, y = 0;
+    for (const QPointF& p : samples) {
+        x += p.y() * std::cos(radians(p.x()));
+        y += p.y() * std::sin(radians(p.x()));
+    }
+    x /= static_cast<double>(samples.size());
+    y /= static_cast<double>(samples.size());
+    const double centreHue = std::atan2(y, x) * 180.0 / kPi;
+    double lo = 0, hi = 0, satLo = samples.constFirst().y(), satHi = satLo;
+    for (const QPointF& p : samples) {
+        const double d = hueDifference(p.x(), centreHue);
+        lo = std::min(lo, d);
+        hi = std::max(hi, d);
+        satLo = std::min(satLo, p.y());
+        satHi = std::max(satHi, p.y());
+    }
+    // "Selects and enables the closest vector to the range of colors you have sampled" (p.678): the predefined centre
+    // nearest to the samples' centre (ours).
+    QString best;
+    double bestDistance = 0;
+    for (const VectorDefault& v : kVectors) {
+        const double d = std::hypot(v.saturation * std::cos(radians(v.hue)) - x, v.saturation * std::sin(radians(v.hue)) - y);
+        if (best.isEmpty() || d < bestDistance) {
+            best = QLatin1String(v.name);
+            bestDistance = d;
+        }
+    }
+    c.reset(QStringLiteral("secondary/vectors/") + best);
+    // "Adjusts the Input Vector values for the vector so that it includes the full range of colors" (p.678), with a
+    // little room (ours).
+    const double hue = wrapHue(centreHue + (lo + hi) / 2.0), span = hi - lo + 2.0;
+    auto in = [&](const char* name, double value) { c.set(vectorPath(best, QStringLiteral("input"), QLatin1String(name)), value); };
+    in("hue", hue);
+    in("saturation", (satLo + satHi) / 2.0);
+    if (isStandardVector(best)) {
+        in("hueWidth", std::min(180.0, span));
+        in("satMin", std::max(0.0, satLo - 2.0));
+    } else {
+        in("hueWidth", std::min(100.0, span));
+        in("satWidth", std::min(100.0, satHi - satLo + 4.0));
+    }
+    // "Sets the Output Vector values to match the Input Vector values" and "Automatically selects Isolate".
+    c.set(vectorPath(best, QStringLiteral("output"), QStringLiteral("hue")), c.number(vectorPath(best, QStringLiteral("input"), QStringLiteral("hue"))));
+    c.set(vectorPath(best, QStringLiteral("output"), QStringLiteral("saturation")),
+          c.number(vectorPath(best, QStringLiteral("input"), QStringLiteral("saturation"))));
+    c.set(QStringLiteral("secondary/isolate"), 1);
+    c.set(QStringLiteral("secondary/selected"), best);
+    return best;
+}
+
+namespace {
+
+// A vector's hue range as offsets from its hue, and its saturation range (custom vectors).
+void setHueRange(ColorCorrection& c, const QString& vector, double lo, double hi) {
+    const SecondaryVector v = secondaryVector(c, vector);
+    const double limit = v.standard ? 180.0 : 100.0;
+    const double width = std::clamp(hi - lo, 0.0, limit);
+    setVectorInput(c, vector, QStringLiteral("hue"), v.hue + (lo + hi) / 2.0, false);
+    c.set(vectorPath(vector, QStringLiteral("input"), QStringLiteral("hueWidth")), width);
+}
+
+void setSaturationRange(ColorCorrection& c, const QString& vector, double lo, double hi) {
+    c.set(vectorPath(vector, QStringLiteral("input"), QStringLiteral("saturation")), (lo + hi) / 2.0);
+    c.set(vectorPath(vector, QStringLiteral("input"), QStringLiteral("satWidth")), std::max(0.0, hi - lo));
+}
+
+} // namespace
+
+void addToVector(ColorCorrection& c, const QString& vector, QPointF sample) {
+    const SecondaryVector v = secondaryVector(c, vector);
+    const double dh = hueDifference(sample.x(), v.hue), s = sample.y();
+    // Grown within the vector's shape (p.679): its hue range to the colour's hue, then its saturation range.
+    if (std::abs(dh) > v.hueWidth / 2.0)
+        setHueRange(c, vector, std::min(-v.hueWidth / 2.0, dh - 1.0), std::max(v.hueWidth / 2.0, dh + 1.0));
+    if (v.standard) {
+        if (s < v.satMin) c.set(vectorPath(vector, QStringLiteral("input"), QStringLiteral("satMin")), std::max(0.0, s - 1.0));
+    } else {
+        const double lo = v.saturation - v.satWidth / 2.0, hi = v.saturation + v.satWidth / 2.0;
+        if (s < lo || s > hi) setSaturationRange(c, vector, std::min(lo, s - 1.0), std::max(hi, s + 1.0));
+    }
+    // The ellipse may still leave the colour out at its ends: widen until it holds it.
+    for (int i = 0; i < 20 && vectorDistance(secondaryVector(c, vector), sample.x(), s) > 0.0; ++i) {
+        const SecondaryVector w = secondaryVector(c, vector);
+        setHueRange(c, vector, -w.hueWidth / 2.0 - 2.0, w.hueWidth / 2.0 + 2.0);
+        setSaturationRange(c, vector, w.saturation - w.satWidth / 2.0 - 1.0, w.saturation + w.satWidth / 2.0 + 1.0);
+    }
+}
+
+void subtractFromVector(ColorCorrection& c, const QString& vector, QPointF sample) {
+    const SecondaryVector v = secondaryVector(c, vector);
+    const double dh = hueDifference(sample.x(), v.hue), s = sample.y();
+    if (vectorDistance(v, sample.x(), s) > 0.0) return;
+    // Shrunk by the smaller change: the hue range's nearer end to just past the colour, or the saturation range's.
+    const double hueCost = (v.hueWidth / 2.0 - std::abs(dh)) / 90.0;
+    double satCost = 0;
+    double satLo = 0, satHi = 0;
+    if (v.standard) {
+        satCost = (s - v.satMin) / 50.0;
+    } else {
+        satLo = v.saturation - v.satWidth / 2.0;
+        satHi = v.saturation + v.satWidth / 2.0;
+        satCost = std::min(s - satLo, satHi - s) / 50.0;
+    }
+    if (hueCost <= satCost) {
+        if (dh >= 0.0) setHueRange(c, vector, -v.hueWidth / 2.0, std::max(-v.hueWidth / 2.0, dh - 1.0));
+        else setHueRange(c, vector, std::min(v.hueWidth / 2.0, dh + 1.0), v.hueWidth / 2.0);
+    } else if (v.standard) {
+        c.set(vectorPath(vector, QStringLiteral("input"), QStringLiteral("satMin")), std::min(100.0, s + 1.0));
+    } else if (s - satLo < satHi - s) {
+        setSaturationRange(c, vector, std::min(satHi, s + 1.0), satHi);
+    } else {
+        setSaturationRange(c, vector, satLo, std::max(satLo, s - 1.0));
+    }
 }
 
 QString lumaRangeKey(LumaRange range) {

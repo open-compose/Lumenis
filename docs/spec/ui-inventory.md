@@ -282,6 +282,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Levels tabs' order (Master, Red/Green/Blue, Luma, Composite) and Composite as
   the levels on both ends of the composite swing; the Curves graphs as monotone
   cubics, Master before the colour graphs.
+  6.10a3: the vectors' predefined centres (but standard Red's 30 degrees and
+  custom 3's 35/40), the saturation scale (100 at half the chroma range), the
+  membership and Softness formulas, the output as added hue and saturation
+  changes, the syringe's choice of the nearest predefined centre, Secondary
+  after Curves.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

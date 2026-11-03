@@ -1,5 +1,5 @@
-// Colour corrections (ROADMAP 6.10a; FX Guide p.598-605, p.631-667; docs/spec/color-correction.md): the controls,
-// their Enable buttons and resets, the luminance ranges, and the HSL, Channels, Levels and Curves groups' pictures.
+// Colour corrections (ROADMAP 6.10a; FX Guide p.598-605, p.631-683; docs/spec/color-correction.md): the controls,
+// their Enable buttons and resets, the luminance ranges, and the HSL, Channels, Levels, Curves and Secondary groups' pictures.
 #include "lumenis/media/color_correction.h"
 #include "lumenis/model/color_correction.h"
 #include "lumenis/model/sequence.h"
@@ -20,6 +20,10 @@ double luma(const std::array<double, 3>& c) {
 
 bool near(double a, double b, double tolerance = 0.01) {
     return std::abs(a - b) <= tolerance;
+}
+
+bool sameColor(const std::array<double, 3>& a, const std::array<double, 3>& b) {
+    return near(a[0], b[0], 1e-6) && near(a[1], b[1], 1e-6) && near(a[2], b[2], 1e-6);
 }
 
 } // namespace
@@ -288,6 +292,126 @@ private slots:
         model::setColorCurve(both, QStringLiteral("red"), {QPointF(0, 0), QPointF(127.5, 255), QPointF(255, 255)});
         QVERIFY(near(media::colorCorrectedPixel(both, {1.0, 0.0, 0.0})[0], 1.0));
         QCOMPARE(ColorCorrection::fromJson(both.toJson()), both);
+    }
+
+    void secondaryVectors() {
+        // Twelve vectors, six standard then six custom (p.670); standard Red 30 degrees wide, custom 3 saturation 35 and
+        // width 40 (p.671), Softness 30 (p.676).
+        const QStringList vectors = model::secondaryVectors();
+        QCOMPARE(vectors.size(), 12);
+        QCOMPARE(vectors.mid(0, 6), (QStringList{QStringLiteral("green"), QStringLiteral("yellow"), QStringLiteral("red"),
+                                                 QStringLiteral("magenta"), QStringLiteral("blue"), QStringLiteral("cyan")}));
+        ColorCorrection c;
+        const model::SecondaryVector red = model::secondaryVector(c, QStringLiteral("red"));
+        QVERIFY(red.standard);
+        QCOMPARE(red.hue, 0.0);
+        QCOMPARE(red.hueWidth, 30.0);
+        QCOMPARE(red.softness, 30.0);
+        const model::SecondaryVector three = model::secondaryVector(c, QStringLiteral("3"));
+        QVERIFY(!three.standard);
+        QCOMPARE(three.saturation, 35.0);
+        QCOMPARE(three.satWidth, 40.0);
+        QCOMPARE(model::colorControlRange(model::vectorPath(QStringLiteral("3"), QStringLiteral("input"), QStringLiteral("hueWidth")))->second, 100.0);
+        QCOMPARE(model::colorControlRange(model::vectorPath(QStringLiteral("red"), QStringLiteral("input"), QStringLiteral("hueWidth")))->second, 180.0);
+        // The output follows the input until changed.
+        QCOMPARE(red.outHue, red.hue);
+        // Membership: a wedge for standard vectors, "15 degrees either side of pure red" (p.671), with no upper
+        // saturation limit (p.670).
+        model::SecondaryVector hard = red;
+        hard.softness = 0;
+        QCOMPARE(model::vectorMembership(hard, 14, 90), 1.0);
+        QCOMPARE(model::vectorMembership(hard, 16, 90), 0.0);
+        QCOMPARE(model::vectorMembership(hard, 0, 5), 0.0); // under the saturation minimum
+        // Softness: positive blends beyond the edge, negative within it (p.676).
+        QVERIFY(model::vectorMembership(red, 20, 90) > 0.0 && model::vectorMembership(red, 20, 90) < 1.0);
+        model::SecondaryVector inner = red;
+        inner.softness = -128;
+        QVERIFY(model::vectorMembership(inner, 12, 90) < 1.0);
+        QCOMPARE(model::vectorMembership(inner, 20, 90), 0.0);
+        // A custom vector is an ellipse: inside at its centre, outside at a saturation beyond its width.
+        model::SecondaryVector ellipse = three;
+        ellipse.softness = 0;
+        QCOMPARE(model::vectorMembership(ellipse, three.hue, 35), 1.0);
+        QCOMPARE(model::vectorMembership(ellipse, three.hue, 60), 0.0);
+        QCOMPARE(model::vectorMembership(ellipse, three.hue + 60, 35), 0.0);
+        // Lock Vectors: input hue changes carry the output with them (p.676).
+        model::setVectorInput(c, QStringLiteral("red"), QStringLiteral("hue"), 10, false);
+        c.set(model::vectorPath(QStringLiteral("red"), QStringLiteral("output"), QStringLiteral("hue")), 40);
+        model::setVectorInput(c, QStringLiteral("red"), QStringLiteral("hue"), 20, true);
+        QCOMPARE(c.number(model::vectorPath(QStringLiteral("red"), QStringLiteral("output"), QStringLiteral("hue"))), 50.0);
+        QCOMPARE(model::enabledVectors(c), QStringList{QStringLiteral("red")});
+        // Alt+click resets the vector (p.675).
+        c.reset(QStringLiteral("secondary/vectors/red"));
+        QVERIFY(model::enabledVectors(c).isEmpty());
+    }
+
+    void secondaryPictures() {
+        const std::array<double, 3> green{0.1, 0.8, 0.1}, red{0.85, 0.1, 0.1}, grey{0.5, 0.5, 0.5};
+        // Wheel places: red at 0, green near +120 (p.636).
+        QVERIFY(near(media::wheelHueSaturation(red).x(), 0.0, 1.0));
+        QVERIFY(near(media::wheelHueSaturation(green).x(), 120.0, 12.0));
+        QVERIFY(near(media::wheelHueSaturation(grey).y(), 0.0));
+        // The Green vector's hue shifted by 180 turns green magenta and leaves red alone (p.677).
+        ColorCorrection c;
+        const QString hue = model::vectorPath(QStringLiteral("green"), QStringLiteral("output"), QStringLiteral("hue"));
+        c.set(hue, -60);
+        auto out = media::colorCorrectedPixel(c, green);
+        QVERIFY(out[0] > out[1] && out[2] > out[1]);
+        const std::array<double, 3> mild{0.35, 0.55, 0.35};
+        QVERIFY(near(luma(media::colorCorrectedPixel(c, mild)), luma(mild), 0.01)); // the luminance kept within the gamut
+        QVERIFY(sameColor(media::colorCorrectedPixel(c, red), red));
+        // Output Luminance +10 adds 10% of the range.
+        ColorCorrection lum;
+        lum.set(model::vectorPath(QStringLiteral("red"), QStringLiteral("output"), QStringLiteral("luminance")), 10);
+        QVERIFY(near(luma(media::colorCorrectedPixel(lum, red)), luma(red) + 0.1, 0.01));
+        // Vectors apply in order: green made yellow, then yellow made red (p.683).
+        ColorCorrection chain;
+        chain.set(model::vectorPath(QStringLiteral("green"), QStringLiteral("output"), QStringLiteral("hue")), 60);
+        chain.set(model::vectorPath(QStringLiteral("yellow"), QStringLiteral("output"), QStringLiteral("hue")), 0);
+        out = media::colorCorrectedPixel(chain, green);
+        QVERIFY2(near(media::wheelHueSaturation(out).x(), 0.0, 15.0), qPrintable(QString::number(media::wheelHueSaturation(out).x())));
+        // Invert Last Vector: everything but the vector is corrected (p.682); desaturating the rest leaves red red.
+        ColorCorrection invert;
+        invert.set(model::vectorPath(QStringLiteral("red"), QStringLiteral("output"), QStringLiteral("saturation")), 0);
+        invert.set(QStringLiteral("secondary/invertLast"), 1);
+        QVERIFY(sameColor(media::colorCorrectedPixel(invert, red), red));
+        out = media::colorCorrectedPixel(invert, green);
+        QVERIFY(media::wheelHueSaturation(out).y() < media::wheelHueSaturation(green).y() - 40.0);
+        // Isolate: outside the selected vector in grey (p.679).
+        ColorCorrection isolate;
+        isolate.set(QStringLiteral("secondary/isolate"), 1);
+        isolate.set(QStringLiteral("secondary/selected"), QStringLiteral("red"));
+        QVERIFY(sameColor(media::colorCorrectedPixel(isolate, red), red));
+        out = media::colorCorrectedPixel(isolate, green);
+        QVERIFY(near(out[0], out[1]) && near(out[1], out[2]));
+        // The syringe: samples of a green pick the Green vector, set its output to its input and select Isolate (p.678).
+        ColorCorrection syringe;
+        const QList<QPointF> samples{media::wheelHueSaturation({0.15, 0.7, 0.15}), media::wheelHueSaturation({0.2, 0.75, 0.1}),
+                                     media::wheelHueSaturation({0.1, 0.65, 0.2})};
+        QCOMPARE(model::syringeVector(syringe, samples), QStringLiteral("green"));
+        QCOMPARE(syringe.text(QStringLiteral("secondary/selected")), QStringLiteral("green"));
+        QCOMPARE(syringe.number(QStringLiteral("secondary/isolate")), 1.0);
+        const model::SecondaryVector v = model::secondaryVector(syringe, QStringLiteral("green"));
+        QCOMPARE(v.outHue, v.hue);
+        for (const QPointF& p : samples) QCOMPARE(model::vectorMembership(v, p.x(), p.y()), 1.0);
+        // Add to and Subtract from Selection (p.679).
+        const QPointF yellowish = media::wheelHueSaturation({0.6, 0.75, 0.1});
+        QVERIFY(model::vectorMembership(v, yellowish.x(), yellowish.y()) < 1.0);
+        model::addToVector(syringe, QStringLiteral("green"), yellowish);
+        QCOMPARE(model::vectorMembership(model::secondaryVector(syringe, QStringLiteral("green")), yellowish.x(), yellowish.y()), 1.0);
+        model::subtractFromVector(syringe, QStringLiteral("green"), yellowish);
+        model::SecondaryVector after = model::secondaryVector(syringe, QStringLiteral("green"));
+        after.softness = 0;
+        QCOMPARE(model::vectorMembership(after, yellowish.x(), yellowish.y()), 0.0);
+        // A custom vector grows and shrinks too.
+        ColorCorrection custom;
+        model::addToVector(custom, QStringLiteral("3"), QPointF(-150, 80));
+        QCOMPARE(model::vectorMembership(model::secondaryVector(custom, QStringLiteral("3")), -150, 80), 1.0);
+        model::subtractFromVector(custom, QStringLiteral("3"), QPointF(-150, 70));
+        after = model::secondaryVector(custom, QStringLiteral("3"));
+        after.softness = 0;
+        QCOMPARE(model::vectorMembership(after, -150, 70), 0.0);
+        QCOMPARE(ColorCorrection::fromJson(syringe.toJson()), syringe);
     }
 };
 

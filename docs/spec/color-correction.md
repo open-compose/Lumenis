@@ -70,3 +70,40 @@ ROADMAP 6.10. FX Guide (2025.12) ch.19-24, p.587-733. Code: `src/model/color_cor
 * Curves: on 0-255; a monotone cubic through the points (Fritsch-Carlson), flat past the end points; Master first, then
   each colour's graph.
 * The Color Correction tool (6.10b) and the Secondary group (6.10a3) come later.
+
+## 6.10a3: the Secondary group
+
+### From the guide
+* Twelve vectors: six standard (Green, Yellow, Red, Magenta, Blue, Cyan) and six custom (p.670). Standard vectors are
+  wedges with no upper saturation limit and constant hue ranges; custom vectors are ellipses whose "hue ranges scale with
+  the saturation level" (p.670). The standard Red vector covers 30 degrees; custom vector 3 has saturation 35 and
+  saturation width 40 (p.671).
+* Input Vector sliders (p.675-676): Hue (0 red, ±180 cyan), Saturation 0-100 from centre to edge, Hue Width (0-180
+  standard, 0-100 custom), Saturation Minimum (standard), Saturation Width (custom), Softness -255 to 255, 30 by
+  default ("Positive values blend the corrected color into areas of the image beyond the limits ... Negative values
+  blend the uncorrected color into parts of the area defined by the input vector"). Lock Vectors moves the Output Hue
+  and Saturation with the Input's (p.676).
+* Output Vector (p.680-681): Hue, Saturation, and Luminance -10 to +10 (10% of the black-to-white range).
+* The syringe (p.678): selects and enables the closest vector, adjusts its input to hold every sampled colour, sets
+  the output to the input and selects Isolate. Add to and Subtract from Selection grow or shrink the vector within its
+  shape (p.679).
+* Isolate shows what is outside the selected vector in grey, after the output adjustment (p.679-680). Invert Last
+  Vector inverts "the enabled vector furthest to the right" (p.673, p.682). Vectors apply cumulatively from left to
+  right (p.683).
+
+### Ours
+* Paths: "secondary/vectors/<vector>/input/hue|saturation|hueWidth|satMin|satWidth|softness",
+  "secondary/vectors/<vector>/output/hue|saturation|luminance", "secondary/isolate", "secondary/invertLast",
+  "secondary/selected" (Green by default, p.674's illustration). The output's hue and saturation follow the input's
+  until set, so a vector changes nothing until its output does. A vector is enabled when anything in it is set.
+* The wheel: hue from red counterclockwise (green +120, as the ChromaWheels), saturation 100 at half the chroma range
+  (`media::wheelHueSaturation`).
+* The predefined centres: the standard vectors at saturation 60 with Saturation Minimum 10; custom 1 hue 25 sat 35
+  (skin), 2 hue 100 (foliage), 3 hue -150 (sky), 4 hue 45 sat 50, 5 hue -90, 6 hue 150; custom Hue Width 30.
+* Membership: a distance outside the vector in its own size (wedges: 90 degrees of hue or 50 of saturation; ellipses:
+  the normalized radius, with Hue Width the angle the ellipse spans as seen from the wheel's centre); Softness 255 is
+  one size of blending outside (positive) or inside (negative), linear.
+* The output moves each member colour by the vector's change of hue and saturation (added), and its luminance; blended
+  by membership. The Secondary group comes after Curves, in Y'CbCr.
+* The syringe picks the predefined centre nearest the samples' mean, with 2 degrees and 2-4 of saturation to spare;
+  Subtract shrinks whichever of the hue or saturation range needs the smaller change.
