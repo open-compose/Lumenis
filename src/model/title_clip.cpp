@@ -38,8 +38,16 @@ QString classicTitleEffectName(ClassicMotion motion) {
 }
 
 bool isClassicTitleEffect(const Effect& effect) {
-    return effect.category == kTitleEffectCategory &&
-           (effect.name == QLatin1String("Title") || effect.name == QLatin1String("Rolling Title") || effect.name == QLatin1String("Crawling Title"));
+    return (effect.category == kTitleEffectCategory &&
+            (effect.name == QLatin1String("Title") || effect.name == QLatin1String("Rolling Title") || effect.name == QLatin1String("Crawling Title"))) ||
+           is3DClassicTitle(effect);
+}
+
+bool is3DClassicTitle(const Effect& effect) {
+    // "You can also promote a 2D title to 3D in the same way that you promote other effects" (FX Guide p.371): the 3D Warp
+    // effect keeping the title and its media (ours).
+    return effect.category == QLatin1String("Blend") && effect.name == QLatin1String("3D Warp") &&
+           effect.parameters.value(kClassicTitleParameters).toObject().value(kTitleKey).isObject();
 }
 
 Effect classicTitleEffect(const ClassicTitle& title, bool unrendered) {
@@ -91,8 +99,8 @@ void reviseTitleSegment(Segment& segment, const BinItem& clip, const QString& bi
     if (!revised || !segment.effect) return;
     const double start = titleRollStart(*segment.effect);
     Effect e = *segment.effect;
-    // The revised title and its fast-save state; the rest of the effect stays.
-    e.name = revised->effect->name;
+    // The revised title and its fast-save state; the rest of the effect stays (a title promoted to 3D stays 3D).
+    if (!is3DClassicTitle(e)) e.name = revised->effect->name;
     e.parameters.insert(kClassicTitleParameters, revised->effect->parameters.value(kClassicTitleParameters));
     setTitleRollStart(e, start);
     setTitleSource(e, {bin, clip.id});

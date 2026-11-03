@@ -271,6 +271,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Editing titles in (docs/spec/title-tool.md, 6.8e1): a roll's finish staying
   the roll's end whatever the source OUT, Place in Timeline's tracks (the
   sequence's video tracks and the next one).
+* Titles promoted to 3D (docs/spec/title-tool.md, 6.8e3b): a 3D Warp effect that
+  keeps the title and its media, still revised as a title; Scaling starting at
+  100; Rolling and Crawling titles promoted too.
 * Title media (docs/spec/title-tool.md, 6.8e3a): Re-create Title Media on the
   whole sequence without marks, its precomputes in the sequence's bin, no
   multiformat check boxes; Wrong Format for media made at another raster than

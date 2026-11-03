@@ -10,6 +10,7 @@
 #include "lumenis/media/media.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/nest.h"
+#include "lumenis/model/promote3d.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/title_clip.h"
 #include "lumenis/model/titler.h"
@@ -565,6 +566,39 @@ private slots:
         QVERIFY2(isRed(shown.pixelColor(40, 40)), qPrintable(shown.pixelColor(40, 40).name()));
         // Rendering titles (p.374): the title segment is an effect to render like any other.
         QVERIFY(!model::renderTargets(record(), {QStringLiteral("V2")}, 0, 50).isEmpty());
+
+        // Promoted to 3D (p.371): a 3D Warp that keeps the title (still a title, not promoted again); its Position (3D)
+        // moves the keyed title.
+        QVERIFY(model::canPromoteTo3D(*model::segmentFor(record(), ref)->effect));
+        QVERIFY(timeline.changeRecordSequence(QStringLiteral("3D Promote"), [](model::Sequence& s) {
+            model::Segment& t = s.track(QStringLiteral("V2"))->segments[0];
+            const auto promoted = model::promoteTo3D(*t.effect);
+            if (!promoted) return false;
+            t.effect = *promoted;
+            return true;
+        }));
+        auto promoted = model::segmentFor(record(), ref);
+        QVERIFY(promoted && promoted->effect);
+        QCOMPARE(promoted->effect->name, QStringLiteral("3D Warp"));
+        QVERIFY(model::isClassicTitleEffect(*promoted->effect) && model::is3DClassicTitle(*promoted->effect));
+        QVERIFY(!model::canPromoteTo3D(*promoted->effect));
+        QVERIFY(model::classicTitleOf(*promoted->effect));
+        shown = composer.pictureAt(MonitorId::Record, 10, QSize(320, 180));
+        QVERIFY2(isRed(shown.pixelColor(40, 40)), qPrintable(shown.pixelColor(40, 40).name()));
+        QVERIFY2(!isRed(shown.pixelColor(280, 150)), qPrintable(shown.pixelColor(280, 150).name()));
+        QVERIFY(timeline.changeRecordSequence(QStringLiteral("Position"), [](model::Sequence& s) {
+            model::Segment& t = s.track(QStringLiteral("V2"))->segments[0];
+            QJsonObject position = t.effect->parameters.value(QStringLiteral("Position (3D)")).toObject();
+            position.insert(QStringLiteral("X"), 960);
+            t.effect->parameters.insert(QStringLiteral("Position (3D)"), position);
+            return true;
+        }));
+        shown = composer.pictureAt(MonitorId::Record, 10, QSize(320, 180));
+        QVERIFY2(!isRed(shown.pixelColor(40, 40)), qPrintable(shown.pixelColor(40, 40).name()));
+        QVERIFY2(isRed(shown.pixelColor(200, 40)), qPrintable(shown.pixelColor(200, 40).name()));
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        QCOMPARE(model::segmentFor(record(), ref)->effect->name, QStringLiteral("Title"));
 
         // Wrong Format (p.376): media made at another raster.
         QVERIFY(timeline.changeRecordSequence(QStringLiteral("Raster"), [](model::Sequence& s) {

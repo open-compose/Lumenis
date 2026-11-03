@@ -3,6 +3,7 @@
 #include "lumenis/model/promote3d.h"
 
 #include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/title_clip.h"
 #include "lumenis/model/tracking.h"
 
 #include <QJsonObject>
@@ -43,13 +44,21 @@ constexpr Mapping kPip[] = {
 
 bool canPromoteTo3D(const Effect& effect) {
     // "You can promote the Stabilize effect to 3D" (p.277).
-    return (effect.category == QLatin1String("Blend") && effect.name == QLatin1String("Picture-in-Picture")) || isStabilizeEffect(effect);
+    return (effect.category == QLatin1String("Blend") && effect.name == QLatin1String("Picture-in-Picture")) || isStabilizeEffect(effect) ||
+           (isClassicTitleEffect(effect) && !is3DClassicTitle(effect));
 }
 
 std::optional<Effect> promoteTo3D(const Effect& effect) {
     if (!canPromoteTo3D(effect)) return std::nullopt;
     const bool stabilize = isStabilizeEffect(effect);
+    // A title's Scaling starts at 100 too (it fills the frame); the title and its media come along (p.371).
+    const bool title = isClassicTitleEffect(effect);
     Effect out{QStringLiteral("Blend"), QStringLiteral("3D Warp"), {}};
+    if (title) {
+        out.parameters.insert(kClassicTitleParameters, effect.parameters.value(kClassicTitleParameters));
+        const QString scroll = QStringLiteral("Rolling Title and Crawling Title Effect Parameters");
+        if (effect.parameters.contains(scroll)) out.parameters.insert(scroll, effect.parameters.value(scroll));
+    }
     for (const Mapping& m : kPip) {
         const QString cat = QLatin1String(m.category);
         const QString name = QLatin1String(m.name);
@@ -57,7 +66,7 @@ std::optional<Effect> promoteTo3D(const Effect& effect) {
         const QString name3 = QLatin1String(m.name3D);
         // Stabilize has no Foreground, and its Scaling starts at 100.
         if (stabilize && cat == QLatin1String("Foreground")) continue;
-        const double fallback = stabilize && cat == QLatin1String("Scaling") && m.fallback != 0.0 ? 100.0 : m.fallback;
+        const double fallback = (stabilize || title) && cat == QLatin1String("Scaling") && m.fallback != 0.0 ? 100.0 : m.fallback;
         const QJsonValue stored = effect.parameters.value(cat).toObject().value(name);
         QJsonObject group = out.parameters.value(cat3).toObject();
         if (stored.isBool()) {

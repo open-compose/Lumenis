@@ -10,8 +10,8 @@
 // Picture-in-Picture, and imported matte keys" (p.86). "You cannot demote a 3D effect to a 2D effect" (p.289).
 namespace lumenis::model {
 
-// Whether the 3D Promote button promotes `effect`. Ours, for now: Picture-in-Picture and Stabilize (p.277; titles
-// and imported matte keys come with them, 6.8 and Phase 9).
+// Whether the 3D Promote button promotes `effect`. Ours, for now: Picture-in-Picture, Stabilize (p.277) and classic
+// titles (p.371; imported matte keys come with Phase 9).
 bool canPromoteTo3D(const Effect& effect);
 // The 3D Warp effect (Blend) that looks as `effect` does: Position (Y turned up, p.577), Scaling (a
 // Picture-in-Picture's 50 until set made explicit), Crop (2D's distances from the edges as 3D's edge

@@ -468,6 +468,12 @@ Picture classicTitleLayer(const Composition& c, const model::Segment& segment, s
         fillPicture = imageEffectPicture(placed, fillPicture, time, span);
         mattePicture = imageEffectPicture(placed, mattePicture, time, span);
     }
+    if (is3DEffect(*segment.effect)) {
+        // A title promoted to 3D (FX Guide p.371): the keyed title, transparent around it, placed by the 3D Warp over
+        // the tracks below.
+        const Picture keyed = matteKeyPicture(*segment.effect, Picture(w, h), fillPicture, mattePicture, time, span);
+        return warp3dPicture(*segment.effect, keyed, below, time, span);
+    }
     return matteKeyPicture(*segment.effect, below, fillPicture, mattePicture, time, span);
 }
 

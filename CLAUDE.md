@@ -644,7 +644,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `askTitleMediaChoice`, `model::setTitleMedia`, the resolution and raster in `model::TitleMedia`, Wrong Format through
   `Composition::raster`, the console's HDTitleFilter `media::setHdTitleFilter`, Use Classic Character Mapping dimmed;
   test `tst_title_clips`), is done.
-  Next: 6.8e3b (titles promoted to 3D), the rest of 6.8 and Phase 6, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.8e3b, titles promoted to 3D (`model::canPromoteTo3D`/`promoteTo3D` for classic titles, `model::is3DClassicTitle`,
+  `warp3dPicture` in `classicTitleLayer`; test `tst_title_clips`), is done, so 6.8 is.
+  Next: 6.9 (intraframe effects and PlasmaWipe), 6.10 and 6.11, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

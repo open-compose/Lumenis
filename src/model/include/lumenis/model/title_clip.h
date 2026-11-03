@@ -29,8 +29,10 @@ namespace lumenis::model {
 // The effect's names: "Title Effects: Crawling Title and Rolling Title", "Title Effects: Title" (p.488-489).
 inline const QString kTitleEffectCategory = QStringLiteral("Title");
 QString classicTitleEffectName(ClassicMotion motion);
-// Whether an effect is a classic Title, Rolling Title or Crawling Title effect.
+// Whether an effect is a classic Title, Rolling Title or Crawling Title effect, or one promoted to 3D (a 3D Warp holding
+// the title, FX Guide p.371; is3DClassicTitle).
 bool isClassicTitleEffect(const Effect& effect);
+bool is3DClassicTitle(const Effect& effect);
 // The parameter category holding the classic title (ours): {"Title": the title's JSON, "Unrendered": true when fast
 // saved}.
 inline const QString kClassicTitleParameters = QStringLiteral("Title Tool");

@@ -356,3 +356,19 @@ Tests: `tst_classic_title`, `tst_title_tool`, `tst_title_clips`. Title Effect cl
   matte of rasters of 720 lines or more with `media::hdTitleFiltered` (a [1 2 1] / 4 vertical kernel).
 * Use Classic Character Mapping is listed dimmed (settings.json's `"guide": "fx"` marks its page as the FX Guide's).
 * Tests: `tst_title_clips` (`titleMedia`).
+
+## 6.8e3b: titles promoted to 3D
+
+### From the guide
+* "You can also promote a 2D title to 3D in the same way that you promote other effects from 2D to 3D" (FX p.371), with
+  the Effect Editor's 3D Promote button ("Promoting 2D Effects to 3D Effects", p.288).
+
+### Ours
+* `model::canPromoteTo3D` takes classic Title, Rolling Title and Crawling Title effects; `model::promoteTo3D` makes a 3D
+  Warp with Scaling, Position, Crop and Foreground mapped as for Picture-in-Picture (Scaling from 100) and the Title
+  Tool parameters (and a roll's scroll parameters) kept. `model::is3DClassicTitle` tells such an effect;
+  `isClassicTitleEffect` counts it, so Edit Title, Re-create Title Media and Promote Titles still apply, and
+  `reviseTitleSegment` keeps it 3D.
+* The compositor's `classicTitleLayer` keys the title over a transparent picture and places that with `warp3dPicture`
+  over the tracks below.
+* Tests: `tst_title_clips` (`titleMedia`: promotion, the moved title, undo).
