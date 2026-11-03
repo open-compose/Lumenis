@@ -271,6 +271,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Editing titles in (docs/spec/title-tool.md, 6.8e1): a roll's finish staying
   the roll's end whatever the source OUT, Place in Timeline's tracks (the
   sequence's video tracks and the next one).
+* Colour correction (docs/spec/color-correction.md, 6.10a1): the default Luma
+  Ranges curves (smooth thirds through the guide's 175 and 215 figures), the
+  curves' shares made to add up to one, the formulas for Contrast (about mid
+  grey, 100 a slope of 20), Gain/Gamma/Setup on the 16-235 range, the ChromaWheels'
+  Amount 100 as a quarter of the chroma range, Clip Low/High only once set.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

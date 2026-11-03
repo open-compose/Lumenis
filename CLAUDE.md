@@ -668,7 +668,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_intraframe`, `tst_intraframe_ui`, scenario `37-scratch-removal.json`), is done.
   6.9e, PlasmaWipe (docs/spec/plasma-wipe.md: `src/media/plasma_wipe.*` with our own generated gradients and the
   user's PlasmaWipes folders, `LUMENIS_PLASMAWIPES`, added to `EffectCatalog`; test `tst_plasma_wipe`), is done, so 6.9 is.
-  Next: 6.10 (colour correction) and 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.10 is in five parts (ROADMAP). 6.10a1, the HSL group's corrections (docs/spec/color-correction.md:
+  `model::ColorCorrection` with controls by path and Enable buttons, `model::lumaRangeWeights`,
+  `media::colorCorrectedPicture` for the Color Correction effect; test `tst_color_correction`), is done.
+  Next: 6.10a2 (Channels, Levels, Curves), 6.10a3 (Secondary), 6.10b-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

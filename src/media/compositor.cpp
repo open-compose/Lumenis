@@ -1,5 +1,6 @@
 #include "lumenis/media/compositor.h"
 #include "lumenis/media/plasma_wipe.h"
+#include "lumenis/media/color_correction.h"
 #include "lumenis/media/classic_title.h"
 #include "lumenis/media/titler.h"
 #include "lumenis/media/tracking.h"
@@ -727,6 +728,14 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             if (isPanAndZoom(e)) {
                 // Avid Pan & Zoom: the image over the placeholder segment (FX Guide p.239-241).
                 layer = panZoomPicture(e, layer, time, length, c.effectPreview);
+                layer.quantize(c.precision);
+                result = over(layer, result);
+                result.quantize(c.precision);
+                continue;
+            }
+            if (model::isColorCorrectionEffect(e)) {
+                // The Color Correction effect (FX Guide p.693): its correction on the segment over the tracks below.
+                layer = colorCorrectedPicture(model::colorCorrectionOf(e), layer);
                 layer.quantize(c.precision);
                 result = over(layer, result);
                 result.quantize(c.precision);

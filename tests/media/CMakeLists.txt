@@ -35,6 +35,7 @@ lumenis_add_test(tst_audio_project SOURCES tst_audio_project.cpp LIBS lumenis::m
 lumenis_add_test(tst_compositor SOURCES tst_compositor.cpp LIBS lumenis::media)
 lumenis_add_test(tst_warp3d SOURCES tst_warp3d.cpp LIBS lumenis::media)
 lumenis_add_test(tst_intraframe SOURCES tst_intraframe.cpp LIBS lumenis::media)
+lumenis_add_test(tst_color_correction SOURCES tst_color_correction.cpp LIBS lumenis::media)
 lumenis_add_test(tst_effect_handles SOURCES tst_effect_handles.cpp LIBS lumenis::media)
 lumenis_add_test(tst_pan_scan SOURCES tst_pan_scan.cpp LIBS lumenis::media)
 lumenis_add_test(tst_pan_zoom SOURCES tst_pan_zoom.cpp LIBS lumenis::media)

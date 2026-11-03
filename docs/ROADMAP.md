@@ -1138,8 +1138,24 @@ phase of their own. They are done in three steps:
     palette, Command Palette FX tab), the Frame Processing button; scenario `37-scratch-removal.json`.
   * 6.9e, PlasmaWipe effects (ch.16, p.442-455). Done (docs/spec/plasma-wipe.md: `src/media/plasma_wipe.*`, our own
     generated gradients and the user's PlasmaWipes folders in the Effect Palette; test `tst_plasma_wipe`), so 6.9 is.
-* 6.10, colour correction (ch.19-24, p.587-733): Color Correction mode, HSL and curves, safe
-  colours, and the Symphony option's spot colour.
+* 6.10, colour correction (ch.19-24, p.587-733), in five parts:
+  * 6.10a, the corrections and their pictures: the colour correction effect's groups in their order with their
+    enable buttons (p.598-605), in three parts: 6.10a1, the HSL group's Controls, Hue Offsets (ChromaWheels) and
+    Luma Ranges tabs (p.631-644), done (docs/spec/color-correction.md: `src/model/color_correction.*`,
+    `src/media/color_correction.*`, the Color Correction effect in the compositor; test `tst_color_correction`); 6.10a2, the Channels, Levels and Curves groups (p.644-667); 6.10a3, the Secondary
+    group's vectors (p.668-683).
+  * 6.10b, Color Correction mode: entering and leaving it, the three monitors with their Source menus, dual split
+    and buttons, Play Loop and Edit Review, the Color Correction Tool with its group and subdividing tabs and buttons,
+    and the Correction Mode settings (p.587-609).
+  * 6.10c, the Waveform and Vectorscope monitors (p.686-692), the Color Match control with NaturalMatch and custom
+    colours (p.624-631), and the automatic corrections (p.618-623).
+  * 6.10d, relationship corrections (p.596-598), correction templates, presets and buckets (p.610-615), keyframing
+    corrections (p.683-686), correcting a whole sequence (p.692), the Timeline's correction information (p.616), and
+    updating, merging, flattening and removing corrections (ch.21, p.700-705).
+  * 6.10e, the Color Correction effect and its AutoCorrect options (p.693-699), safe colours: the settings, warnings
+    and the Safe Color Limiter effect (ch.23, p.721-730), Spot Color Correction and the Paint Effect's Color Match mode
+    (ch.24, p.731-733). Avid Artist Color (ch.25) needs Avid's EuControl software: a control surface provider hook
+    only (EXTENSIONS.md), later.
 * 6.11, the OFX host in place of AVX (ch.6, p.157-164), with OCIO colour management.
 
 **Gates**
