@@ -96,3 +96,33 @@ Code: `src/model/intraframe.*` (the objects), `src/media/intraframe.cpp` (their 
   (`EffectEditor::setIntraframeSelection`, the object branch of `changeShown`); with none, the effect's own, which new
   objects take.
 * Tests: `tst_intraframe_ui`.
+
+## 6.9b2: reshaping, rotating and the Object menu
+
+### From the guide
+* Control points and direction handles (p.405); reshaping with the Reshape tool or a double-click (p.406, p.413-414);
+  the modifier clicks: Shift+click a handle keeps the opposite bar's length, Alt+click a point turns a straight-edge
+  join smooth and back, Alt+click a handle turns a smooth join into a corner and back (p.409-410). A Curve tool
+  object's opposite bar moves in unison without changing length (p.413).
+* Adding a control point by clicking the outline, "calculated so that the object does not change dramatically in
+  shape", in all keyframes; changes at a selected keyframe or a new one interpolate (p.410-411). Removing with Delete;
+  Go to Next/Previous Event moving clockwise and counterclockwise through points; moving one or several points
+  (Shift+click, lasso, Ctrl+A); nudging by one pixel with the arrow keys, Alt for up and down (p.411-412). Alt+click the
+  Reshape tool hides the direction handles (p.414).
+* Z-Rotation: the rotation handle and the + centre, which can be dragged (p.414-415).
+* The Object menu: Bring Forward, Send Backward, Bring to Front, Send to Back, Group, UnGroup, Lock and Unlock
+  (p.417-418); grouping groups and ungrouping them completely (p.417).
+
+### Ours
+* `IntraframeTool`'s Reshape and Z-Rotation (`src/ui/intraframe_reshape.cpp`) with the model's `editableShape`,
+  `insertControlPoint` (de Casteljau), `nearestSegment`, `removeControlPoints`, `toggleSmooth` (handles a third of the
+  way towards the neighbours), `toggleCorner`, `toggleFixedLength`, `setDirectionHandle` and `unplacedPoint`/
+  `unplacedVector` (src/model/intraframe.*). Points are handles "intraframe:point:i"; a selected point's bars
+  "intraframe:in:i"/"out:i".
+* Joins change in the shape being edited only; inserted and removed points change every shape. Nudging is one pixel of
+  a frame 1920 wide; the lasso for points and the Trim keys are not built.
+* Z-Rotation turns the object's Rotation by the angle swept about its centre (in pixels); the centre's drag sets Center
+  X/Y. The rotation handle is 8% of the width from the centre.
+* The Object menu is a menu button ("intraframeObjectMenu") beside the drawing tools. A click on a grouped object
+  selects its group; locked objects are not moved, scaled, reshaped or deleted.
+* Tests: `tst_intraframe` (`reshaping`), `tst_intraframe_ui` (`reshapeRotateGroup`).

@@ -336,4 +336,157 @@ int deleteIntraframeObjects(Effect& effect, const QStringList& ids) {
     return deleted;
 }
 
+QPointF unplacedPoint(const Effect& effect, const IntraframeObject& object, double t, const EffectSpan& span, double aspect, const QPointF& placed) {
+    const QList<ControlPoint> points = shapeAt(object, t);
+    const ObjectPlace place = objectPlaceAt(effect, object, t, span);
+    const QPointF center = place.center.value_or(shapeBounds(points).center());
+    const double a = aspect > 0.0 ? aspect : 16.0 / 9.0;
+    const double s = place.scale != 0.0 ? place.scale / 100.0 : 1.0;
+    const double r = -place.rotation * std::numbers::pi / 180.0;
+    const QPointF offset(place.x / 1920.0, place.y / 1920.0 * a);
+    const QPointF p = placed - offset - center;
+    const double dx = p.x(), dy = p.y() / a;
+    const double rx = (dx * std::cos(r) - dy * std::sin(r)) / s;
+    const double ry = (dx * std::sin(r) + dy * std::cos(r)) / s;
+    return QPointF(center.x() + rx, center.y() + ry * a);
+}
+
+QPointF unplacedVector(const Effect& effect, const IntraframeObject& object, double t, const EffectSpan& span, double aspect, const QPointF& placed) {
+    return unplacedPoint(effect, object, t, span, aspect, placed) - unplacedPoint(effect, object, t, span, aspect, QPointF());
+}
+
+int editableShape(IntraframeObject& object, double t, const EffectSpan& span) {
+    if (object.shapes.size() == 1) return 0;
+    const double half = span.halfFrame();
+    for (int i = 0; i < object.shapes.size(); ++i) {
+        if (std::abs(object.shapes.at(i).at - t) <= half) return i;
+    }
+    IntraframeShape s{t, shapeAt(object, t)};
+    object.shapes << s;
+    std::sort(object.shapes.begin(), object.shapes.end(), [](const IntraframeShape& x, const IntraframeShape& y) { return x.at < y.at; });
+    for (int i = 0; i < object.shapes.size(); ++i) {
+        if (object.shapes.at(i).at == t) return i;
+    }
+    return 0;
+}
+
+void insertControlPoint(IntraframeObject& object, int after, double fraction) {
+    const double f = std::clamp(fraction, 0.0, 1.0);
+    for (IntraframeShape& shape : object.shapes) {
+        QList<ControlPoint>& pts = shape.points;
+        const qsizetype n = pts.size();
+        if (after < 0 || after >= n || (!object.closed && after >= n - 1)) continue;
+        ControlPoint& a = pts[after];
+        ControlPoint& b = pts[(after + 1) % n];
+        ControlPoint mid;
+        if (a.join == JoinType::Straight && b.join == JoinType::Straight) {
+            mid.p = a.p + (b.p - a.p) * f;
+        } else {
+            // De Casteljau: the curve split at f keeps its shape.
+            const QPointF p0 = a.p, p1 = a.p + (a.join == JoinType::Straight ? QPointF() : a.out), p2 = b.p + (b.join == JoinType::Straight ? QPointF() : b.in),
+                          p3 = b.p;
+            const QPointF q0 = p0 + (p1 - p0) * f, q1 = p1 + (p2 - p1) * f, q2 = p2 + (p3 - p2) * f;
+            const QPointF r0 = q0 + (q1 - q0) * f, r1 = q1 + (q2 - q1) * f;
+            const QPointF s0 = r0 + (r1 - r0) * f;
+            mid = ControlPoint{s0, r0 - s0, r1 - s0, JoinType::Smooth, false};
+            if (a.join != JoinType::Straight) a.out = q0 - p0;
+            if (b.join != JoinType::Straight) b.in = q2 - p3;
+        }
+        pts.insert(after + 1, mid);
+    }
+}
+
+std::optional<std::pair<int, double>> nearestSegment(const IntraframeObject& object, double t, const QPointF& at, double reach) {
+    const QList<ControlPoint> pts = shapeAt(object, t);
+    const qsizetype n = pts.size();
+    const qsizetype segments = object.closed ? n : n - 1;
+    std::optional<std::pair<int, double>> best;
+    double bestDistance = reach;
+    for (qsizetype i = 0; i < segments; ++i) {
+        const ControlPoint& a = pts.at(i);
+        const ControlPoint& b = pts.at((i + 1) % n);
+        const QPointF p1 = a.p + (a.join == JoinType::Straight ? QPointF() : a.out), p2 = b.p + (b.join == JoinType::Straight ? QPointF() : b.in);
+        for (int k = 0; k <= 32; ++k) {
+            const double f = k / 32.0, g = 1.0 - f;
+            const QPointF p = a.p * (g * g * g) + p1 * (3 * g * g * f) + p2 * (3 * g * f * f) + b.p * (f * f * f);
+            const double d = std::hypot(p.x() - at.x(), p.y() - at.y());
+            if (d < bestDistance) {
+                bestDistance = d;
+                best = std::pair{static_cast<int>(i), f};
+            }
+        }
+    }
+    return best;
+}
+
+bool removeControlPoints(IntraframeObject& object, QList<int> indices) {
+    std::sort(indices.begin(), indices.end());
+    indices.erase(std::unique(indices.begin(), indices.end()), indices.end());
+    const qsizetype keep = object.closed ? 3 : 2;
+    for (const IntraframeShape& s : object.shapes) {
+        if (s.points.size() - indices.size() < keep) return false;
+    }
+    for (IntraframeShape& s : object.shapes) {
+        for (auto it = indices.crbegin(); it != indices.crend(); ++it) {
+            if (*it >= 0 && *it < s.points.size()) s.points.removeAt(*it);
+        }
+    }
+    return !indices.isEmpty();
+}
+
+void toggleSmooth(IntraframeObject& object, int shape, int point, bool closed) {
+    if (shape < 0 || shape >= object.shapes.size()) return;
+    QList<ControlPoint>& pts = object.shapes[shape].points;
+    if (point < 0 || point >= pts.size()) return;
+    ControlPoint& c = pts[point];
+    if (c.join != JoinType::Straight) {
+        c.join = JoinType::Straight;
+        c.in = c.out = QPointF();
+        return;
+    }
+    // Handles along the line through the neighbours, a third of the way to each (ours).
+    const qsizetype n = pts.size();
+    const QPointF prev = pts.at(closed ? (point + n - 1) % n : std::max(point - 1, 0)).p;
+    const QPointF next = pts.at(closed ? (point + 1) % n : std::min<qsizetype>(point + 1, n - 1)).p;
+    const QPointF tangent = (next - prev) / 2.0;
+    const double inLen = std::hypot(prev.x() - c.p.x(), prev.y() - c.p.y()) / 3.0;
+    const double outLen = std::hypot(next.x() - c.p.x(), next.y() - c.p.y()) / 3.0;
+    const double tl = std::hypot(tangent.x(), tangent.y());
+    const QPointF unit = tl > 0.0 ? tangent / tl : QPointF(1.0, 0.0);
+    c.join = JoinType::Smooth;
+    c.in = -unit * inLen;
+    c.out = unit * outLen;
+}
+
+void toggleCorner(IntraframeObject& object, int shape, int point) {
+    if (shape < 0 || shape >= object.shapes.size() || point < 0 || point >= object.shapes.at(shape).points.size()) return;
+    ControlPoint& c = object.shapes[shape].points[point];
+    if (c.join == JoinType::Smooth) {
+        c.join = JoinType::Corner;
+    } else if (c.join == JoinType::Corner) {
+        // Back in line: the in bar opposite the out bar, its length kept.
+        c.join = JoinType::Smooth;
+        const double l = std::hypot(c.in.x(), c.in.y());
+        const double ol = std::hypot(c.out.x(), c.out.y());
+        if (ol > 0.0) c.in = -c.out / ol * l;
+    }
+}
+
+void toggleFixedLength(IntraframeObject& object, int shape, int point) {
+    if (shape < 0 || shape >= object.shapes.size() || point < 0 || point >= object.shapes.at(shape).points.size()) return;
+    ControlPoint& c = object.shapes[shape].points[point];
+    c.fixedLength = !c.fixedLength;
+}
+
+void setDirectionHandle(ControlPoint& point, bool out, const QPointF& handle) {
+    QPointF& moved = out ? point.out : point.in;
+    QPointF& other = out ? point.in : point.out;
+    moved = handle;
+    if (point.join != JoinType::Smooth) return;
+    const double l = std::hypot(handle.x(), handle.y());
+    if (l <= 0.0) return;
+    const double otherLength = point.fixedLength ? std::hypot(other.x(), other.y()) : l;
+    other = -handle / l * otherLength;
+}
+
 } // namespace lumenis::model

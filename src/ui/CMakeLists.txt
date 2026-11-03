@@ -30,6 +30,7 @@ add_library(lumenis_ui STATIC
     effect_editor_titler.cpp
     titler_tool.cpp
     intraframe_tool.cpp
+    intraframe_reshape.cpp
     titler_panel.cpp
     title_tool.cpp
     tracking_window.cpp

@@ -1126,7 +1126,7 @@ phase of their own. They are done in three steps:
     scaling and deleting objects; Go to Next/Previous Event through objects; each object's parameters in the editor.
     Done. 6.9b2, the Z-Rotation and Reshape tools: rotating objects, control points and direction handles with the
     modifier keys, adding, removing, nudging and stepping through control points; the Object menu's layers, Group,
-    UnGroup, Lock and Unlock.
+    UnGroup, Lock and Unlock. Done.
   * 6.9c, the Brush Preview window and custom brush heads, brush templates in bins, the eyedropper, Export Matte
     PICT and the Previsualization Marker tool (p.396-399, p.412-413, p.418-419).
   * 6.9d, Scratch Removal: replacement material from nearby frames or fields, the Offset menu, frame and field

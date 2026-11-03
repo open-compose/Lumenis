@@ -298,6 +298,8 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     };
     static const DrawButton kDrawButtons[] = {
         {static_cast<int>(IntraframeTool::Tool::Selection), "intraframeSelection", "Sel", QT_TR_NOOP("Selection tool")},
+        {static_cast<int>(IntraframeTool::Tool::ZRotation), "intraframeZRotation", "Rz", QT_TR_NOOP("Z-Rotation button")},
+        {static_cast<int>(IntraframeTool::Tool::Reshape), "intraframeReshape", "Rs", QT_TR_NOOP("Reshape button")},
         {-1, "intraframeBringForward", "BF", QT_TR_NOOP("Bring Forward")},
         {-2, "intraframeSendBackward", "SB", QT_TR_NOOP("Send Backward")},
         {static_cast<int>(IntraframeTool::Tool::Rectangle), "intraframeRectangle", "Re", QT_TR_NOOP("Rectangle tool")},
@@ -317,7 +319,11 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
         if (d.tool >= 0) {
             b->setCheckable(true);
             const auto tool = static_cast<IntraframeTool::Tool>(d.tool);
-            connect(b, &QToolButton::clicked, this, [this, tool] { intraframe_->setTool(tool); });
+            connect(b, &QToolButton::clicked, this, [this, tool] {
+                // "To drag the control points only, Alt+click ... the Reshape tool to hide the direction handles" (p.414).
+                if (tool == IntraframeTool::Tool::Reshape) intraframe_->setHandlesHidden((QApplication::keyboardModifiers() & Qt::AltModifier) != 0);
+                intraframe_->setTool(tool);
+            });
             intraframeButtons_.insert(d.tool, b);
         } else {
             const bool forward = d.tool == -1;
@@ -330,6 +336,43 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
         }
         side->addWidget(b);
     }
+    // The Object menu (p.417-418: "select Object > Bring Forward ... Object > Group ... Object > Lock"). Ours: a menu
+    // button with the drawing tools, as Media Composer's Object menu has no place among our main menus.
+    objectMenu_ = new QToolButton(this);
+    objectMenu_->setObjectName(QStringLiteral("intraframeObjectMenu"));
+    objectMenu_->setText(tr("Obj"));
+    objectMenu_->setToolTip(tr("Object"));
+    objectMenu_->setAutoRaise(true);
+    objectMenu_->setFixedSize(26, 22);
+    objectMenu_->setPopupMode(QToolButton::InstantPopup);
+    objectMenu_->setVisible(false);
+    auto* objects = new QMenu(objectMenu_);
+    objects->setObjectName(QStringLiteral("intraframeObject"));
+    struct ObjectItem {
+        const char* name;
+        const char* text;
+    };
+    static const ObjectItem kObjectItems[] = {{"bringForward", QT_TR_NOOP("Bring Forward")}, {"sendBackward", QT_TR_NOOP("Send Backward")},
+                                              {"bringToFront", QT_TR_NOOP("Bring to Front")}, {"sendToBack", QT_TR_NOOP("Send to Back")},
+                                              {"group", QT_TR_NOOP("Group")}, {"ungroup", QT_TR_NOOP("UnGroup")},
+                                              {"lock", QT_TR_NOOP("Lock")}, {"unlock", QT_TR_NOOP("Unlock")}};
+    for (const ObjectItem& item : kObjectItems) {
+        QAction* a = objects->addAction(tr(item.text));
+        const QString name = QLatin1String(item.name);
+        a->setObjectName(QStringLiteral("intraframeObject:") + name);
+        connect(a, &QAction::triggered, this, [this, name] {
+            if (name == QLatin1String("bringForward")) intraframe_->bringForward(false);
+            else if (name == QLatin1String("sendBackward")) intraframe_->sendBackward(false);
+            else if (name == QLatin1String("bringToFront")) intraframe_->bringForward(true);
+            else if (name == QLatin1String("sendToBack")) intraframe_->sendBackward(true);
+            else if (name == QLatin1String("group")) intraframe_->group();
+            else if (name == QLatin1String("ungroup")) intraframe_->ungroup();
+            else if (name == QLatin1String("lock")) intraframe_->lock(true);
+            else if (name == QLatin1String("unlock")) intraframe_->lock(false);
+        });
+    }
+    objectMenu_->setMenu(objects);
+    side->addWidget(objectMenu_);
     side->addStretch(1);
 
     // The bottom row (p.84, 6-11): Render Effect, Outline/Path, the
@@ -463,7 +506,10 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     titler_ = new TitlerTool(*this);
     // The Intraframe drawing tools (FX Guide p.395-418).
     intraframe_ = new IntraframeTool(*this);
-    connect(intraframe_, &IntraframeTool::changed, this, [this] { syncIntraframeButtons(); });
+    connect(intraframe_, &IntraframeTool::changed, this, [this] {
+        syncIntraframeButtons();
+        syncPreview();
+    });
     // Handles dragged in the Effect Preview monitor (p.92, p.292).
     connect(&timeline_.composer(), &Composer::effectHandleDragged, this,
             [this](const QString& id, const QPointF& from, const QPointF& to, bool finished, bool shift) {
@@ -1697,6 +1743,7 @@ void EffectEditor::syncIntraframeButtons() {
         b->setVisible(on);
         b->setEnabled(on && intraframe_ && !intraframe_->selection().isEmpty());
     }
+    if (objectMenu_) objectMenu_->setVisible(on);
 }
 
 } // namespace lumenis::ui

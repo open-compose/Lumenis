@@ -9,7 +9,9 @@
 #include "lumenis/ui/intraframe_tool.h"
 #include "lumenis/ui/timeline.h"
 
+#include <QAction>
 #include <QComboBox>
+#include <QJsonObject>
 #include <QKeyEvent>
 #include <QSlider>
 #include <QTest>
@@ -204,6 +206,113 @@ private slots:
         settle();
         QCOMPARE(objects().size(), 4);
         QVERIFY(tool->selection().isEmpty());
+    }
+
+    void reshapeRotateGroup() {
+        // Reshape (p.406-412), Z-Rotation (p.414-415) and the Object menu (p.417-418).
+        model::Effect paint{QStringLiteral("Image"), QStringLiteral("Paint Effect"), {}};
+        model::addIntraframeObject(paint, model::IntraframeKind::Rectangle, model::rectangleShape(QRectF(0.2, 0.2, 0.2, 0.2)));
+        model::addIntraframeObject(paint, model::IntraframeKind::Oval, model::ovalShape(QRectF(0.6, 0.6, 0.2, 0.2)));
+        Composer composer;
+        Timeline timeline{composer};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(paint));
+        EffectEditor editor{timeline};
+        editor.resize(700, 900);
+        editor.show();
+        composer.moveTo(MonitorId::Record, 10);
+        timeline.setEffectMode(true);
+        settle();
+        auto objects = [&] {
+            const model::Segment s = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(0);
+            return model::intraframeObjects(*s.effect);
+        };
+        IntraframeTool* tool = editor.intraframeTool();
+        const QString box = objects().at(0).id;
+        // Double-clicking an object opens it in Reshape (p.406).
+        QVERIFY(tool->overlayPress(QPointF(0.3, 0.3), Qt::NoModifier, true));
+        tool->overlayRelease(QPointF(0.3, 0.3), Qt::NoModifier);
+        QCOMPARE(tool->tool(), Tool::Reshape);
+        QCOMPARE(tool->selection(), QStringList{box});
+        QVERIFY(composer.effectPreview().handles.size() >= 4);
+        // Drag a corner (p.411).
+        QVERIFY(tool->overlayPress(QPointF(0.4, 0.4), Qt::NoModifier, false));
+        tool->overlayMove(QPointF(0.45, 0.5), Qt::NoModifier);
+        tool->overlayRelease(QPointF(0.45, 0.5), Qt::NoModifier);
+        settle();
+        QVERIFY(std::hypot(objects().at(0).shapes.at(0).points.at(2).p.x() - 0.45, objects().at(0).shapes.at(0).points.at(2).p.y() - 0.5) < 1e-9);
+        QCOMPARE(tool->selectedPoints(), QList<int>{2});
+        // Nudge right one pixel (p.412) and step to the next point (p.411).
+        QKeyEvent right(QEvent::KeyPress, Qt::Key_Right, Qt::NoModifier);
+        QVERIFY(tool->overlayWantsKey(&right) && tool->overlayKey(&right));
+        settle();
+        QVERIFY(std::abs(objects().at(0).shapes.at(0).points.at(2).p.x() - (0.45 + 1.0 / 1920.0)) < 1e-9);
+        QVERIFY(editor.goToEvent(true));
+        QCOMPARE(tool->selectedPoints(), QList<int>{3});
+        // Alt+click a point: a smooth join with direction handles shown (p.409).
+        QVERIFY(tool->overlayPress(QPointF(0.2, 0.4), Qt::AltModifier, false));
+        tool->overlayRelease(QPointF(0.2, 0.4), Qt::AltModifier);
+        settle();
+        QCOMPARE(objects().at(0).shapes.at(0).points.at(3).join, model::JoinType::Smooth);
+        bool shownHandle = false;
+        for (const auto& h : composer.effectPreview().handles) shownHandle = shownHandle || h.id == QLatin1String("intraframe:out:3");
+        QVERIFY(shownHandle);
+        // Click on an edge adds a point (p.410); Delete removes it (p.411).
+        QVERIFY(tool->overlayPress(QPointF(0.3, 0.2), Qt::NoModifier, false));
+        tool->overlayRelease(QPointF(0.3, 0.2), Qt::NoModifier);
+        settle();
+        QCOMPARE(objects().at(0).shapes.at(0).points.size(), 5);
+        QKeyEvent del(QEvent::KeyPress, Qt::Key_Delete, Qt::NoModifier);
+        QVERIFY(tool->overlayKey(&del));
+        settle();
+        QCOMPARE(objects().at(0).shapes.at(0).points.size(), 4);
+        QCOMPARE(objects().size(), 2);
+
+        // Z-Rotation: drag the handle a quarter turn about the centre (p.415).
+        editor.findChild<QToolButton*>(QStringLiteral("intraframeZRotation"))->click();
+        QCOMPARE(tool->tool(), Tool::ZRotation);
+        Composer::EffectPreview shown = composer.effectPreview();
+        QCOMPARE(shown.handles.size(), 1);
+        const QPointF centre = *shown.handles.at(0).from;
+        const QPointF arm = shown.handles.at(0).at;
+        const double a = editor.previewAspect();
+        const QPointF quarter = centre + QPointF(-(arm.y() - centre.y()) / a, (arm.x() - centre.x()) * a);
+        QVERIFY(tool->overlayPress(arm, Qt::NoModifier, false));
+        tool->overlayMove(quarter, Qt::NoModifier);
+        tool->overlayRelease(quarter, Qt::NoModifier);
+        settle();
+        const double rotation = objects().at(0).parameters.value(model::kIntraframeObjectCategory).toObject().value(QStringLiteral("Rotation")).toDouble();
+        QVERIFY2(std::abs(rotation - 90.0) < 1e-6, qPrintable(QString::number(rotation)));
+
+        // The Object menu: Group selects the group as one, Lock keeps it from moving, UnGroup (p.417-418).
+        editor.findChild<QToolButton*>(QStringLiteral("intraframeSelection"))->click();
+        QVERIFY(editor.findChild<QToolButton*>(QStringLiteral("intraframeObjectMenu"))->isVisible());
+        tool->select({objects().at(0).id, objects().at(1).id});
+        editor.findChild<QAction*>(QStringLiteral("intraframeObject:group"))->trigger();
+        settle();
+        QVERIFY(!objects().at(0).group.isEmpty() && objects().at(0).group == objects().at(1).group);
+        tool->select({});
+        QVERIFY(tool->overlayPress(QPointF(0.7, 0.7), Qt::NoModifier, false));
+        tool->overlayRelease(QPointF(0.7, 0.7), Qt::NoModifier);
+        QCOMPARE(tool->selection().size(), 2);
+        editor.findChild<QAction*>(QStringLiteral("intraframeObject:lock"))->trigger();
+        settle();
+        QVERIFY(objects().at(0).locked && objects().at(1).locked);
+        const QJsonObject placeBefore = objects().at(1).parameters.value(model::kIntraframeObjectCategory).toObject();
+        QVERIFY(tool->overlayPress(QPointF(0.7, 0.7), Qt::NoModifier, false));
+        tool->overlayMove(QPointF(0.8, 0.8), Qt::NoModifier);
+        tool->overlayRelease(QPointF(0.8, 0.8), Qt::NoModifier);
+        settle();
+        QCOMPARE(objects().at(1).parameters.value(model::kIntraframeObjectCategory).toObject(), placeBefore);
+        editor.findChild<QAction*>(QStringLiteral("intraframeObject:unlock"))->trigger();
+        editor.findChild<QAction*>(QStringLiteral("intraframeObject:ungroup"))->trigger();
+        settle();
+        QVERIFY(!objects().at(0).locked && objects().at(0).group.isEmpty());
+        // Bring to Front from the menu.
+        tool->select({box});
+        editor.findChild<QAction*>(QStringLiteral("intraframeObject:bringToFront"))->trigger();
+        settle();
+        QCOMPARE(objects().constLast().id, box);
     }
 
     void blurTools() {

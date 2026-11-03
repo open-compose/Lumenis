@@ -5,6 +5,7 @@
 #include "lumenis/model/intraframe.h"
 
 #include <QJsonObject>
+#include <QPainterPath>
 #include <QTest>
 
 #include <cmath>
@@ -109,6 +110,62 @@ private slots:
         // 0.2 by 0.2 of a frame twice as wide as tall is 0.2 by 0.1 widths; turned, 0.1 by 0.2 widths: 0.1 of the width
         // by 0.4 of the height.
         QVERIFY(std::abs(b.width() - 0.1) < 1e-9 && std::abs(b.height() - 0.4) < 1e-9);
+    }
+
+    void reshaping() {
+        // Control points (p.405-411): a point added on a straight edge splits it; one added on a curve keeps its shape;
+        // removing keeps at least three; Alt+click joins; direction handles move in unison (p.409).
+        Effect paint{QStringLiteral("Image"), QStringLiteral("Paint Effect"), {}};
+        model::addIntraframeObject(paint, IntraframeKind::Rectangle, model::rectangleShape(QRectF(0.0, 0.0, 0.4, 0.4)));
+        model::IntraframeObject box = model::intraframeObjects(paint).at(0);
+        model::insertControlPoint(box, 0, 0.5);
+        QCOMPARE(box.shapes.at(0).points.size(), 5);
+        QCOMPARE(box.shapes.at(0).points.at(1).p, QPointF(0.2, 0.0));
+        const auto near1 = model::nearestSegment(box, 0.0, QPointF(0.4, 0.21), 0.02);
+        QVERIFY(near1 && near1->first == 2 && std::abs(near1->second - 0.5) < 0.05);
+        QVERIFY(model::removeControlPoints(box, {1}));
+        QVERIFY(!model::removeControlPoints(box, {0, 1}));
+        QCOMPARE(box.shapes.at(0).points.size(), 4);
+        model::toggleSmooth(box, 0, 0, true);
+        QCOMPARE(box.shapes.at(0).points.at(0).join, model::JoinType::Smooth);
+        QVERIFY(!box.shapes.at(0).points.at(0).out.isNull());
+        model::toggleCorner(box, 0, 0);
+        QCOMPARE(box.shapes.at(0).points.at(0).join, model::JoinType::Corner);
+        model::toggleCorner(box, 0, 0);
+        QCOMPARE(box.shapes.at(0).points.at(0).join, model::JoinType::Smooth);
+        model::toggleSmooth(box, 0, 0, true);
+        QCOMPARE(box.shapes.at(0).points.at(0).join, model::JoinType::Straight);
+        // Handles: smooth moves the other bar in unison with its length; fixedLength keeps the other length; corner
+        // leaves it.
+        model::ControlPoint c{QPointF(0.5, 0.5), QPointF(-0.1, 0.0), QPointF(0.1, 0.0), model::JoinType::Smooth, false};
+        model::setDirectionHandle(c, true, QPointF(0.0, 0.2));
+        QVERIFY(std::abs(c.in.x()) < 1e-12 && std::abs(c.in.y() + 0.2) < 1e-12);
+        c.fixedLength = true;
+        model::setDirectionHandle(c, true, QPointF(0.3, 0.0));
+        QVERIFY(std::abs(c.in.x() + 0.2) < 1e-12);
+        c.join = model::JoinType::Corner;
+        model::setDirectionHandle(c, false, QPointF(0.0, 0.1));
+        QVERIFY(std::abs(c.out.x() - 0.3) < 1e-12);
+        // A curve split at its middle passes through the same point.
+        model::IntraframeObject oval = box;
+        oval.shapes[0].points = model::ovalShape(QRectF(0.0, 0.0, 0.4, 0.4));
+        const QPainterPath before = intraframePath(oval.shapes.at(0).points, true, QSizeF(100, 100));
+        model::insertControlPoint(oval, 0, 0.5);
+        const QPainterPath after = intraframePath(oval.shapes.at(0).points, true, QSizeF(100, 100));
+        QVERIFY(std::abs(before.boundingRect().width() - after.boundingRect().width()) < 0.5);
+        // Editing a keyframed shape between keyframes adds a shape keyframe there (p.411).
+        model::IntraframeObject moving = model::intraframeObjects(paint).at(0);
+        moving.shapes << model::IntraframeShape{1.0, model::rectangleShape(QRectF(0.5, 0.0, 0.4, 0.4))};
+        const int shape = model::editableShape(moving, 0.5, EffectSpan(10));
+        QCOMPARE(moving.shapes.size(), 3);
+        QCOMPARE(moving.shapes.at(shape).at, 0.5);
+        // unplacedPoint undoes the place.
+        setParameter(paint, model::intraframeObjects(paint).at(0).id, model::kIntraframeObjectCategory, QStringLiteral("Rotation"), 30);
+        setParameter(paint, model::intraframeObjects(paint).at(0).id, model::kIntraframeObjectCategory, QStringLiteral("X"), 100);
+        const model::IntraframeObject turned = model::intraframeObjects(paint).at(0);
+        const auto placed = model::placedShapeAt(paint, turned, 0.0, EffectSpan(10), 16.0 / 9.0);
+        const QPointF back = model::unplacedPoint(paint, turned, 0.0, EffectSpan(10), 16.0 / 9.0, placed.at(2).p);
+        QVERIFY(std::hypot(back.x() - 0.4, back.y() - 0.4) < 1e-9);
     }
 
     void paintModes() {

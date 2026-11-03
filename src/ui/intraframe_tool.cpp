@@ -54,7 +54,9 @@ QList<model::ControlPoint> smoothCurve(const QList<QPointF>& points, bool closed
         const QPointF prev = kept.at(closed ? (i + n - 1) % n : std::max<qsizetype>(i - 1, 0));
         const QPointF next = kept.at(closed ? (i + 1) % n : std::min(i + 1, n - 1));
         const QPointF tangent = (next - prev) / 6.0;
-        out << model::ControlPoint{kept.at(i), -tangent, tangent, model::JoinType::Smooth, false};
+        // "When you drag one of the direction handles, the direction bar on the opposite side of the control point moves in
+        // unison but the length does not change in unison" (p.413): fixed length.
+        out << model::ControlPoint{kept.at(i), -tangent, tangent, model::JoinType::Smooth, true};
     }
     return out;
 }
@@ -63,12 +65,14 @@ IntraframeTool::IntraframeTool(EffectEditor& editor) : QObject(&editor), editor_
 
 void IntraframeTool::setTool(Tool tool) {
     if (tool != Tool::Polygon) finishPolygon();
+    if (tool != Tool::Reshape) points_.clear();
     tool_ = tool;
     emit changed();
 }
 
 void IntraframeTool::select(const QStringList& ids) {
     const bool same = ids == selected_;
+    if (!same) points_.clear();
     selected_ = ids;
     editor_.setIntraframeSelection(selected_);
     if (!same) emit changed();
@@ -231,6 +235,8 @@ bool IntraframeTool::removeSelected() {
 }
 
 bool IntraframeTool::selectAdjacent(bool next) {
+    // "Click the Go to Next Event button to move in a clockwise fashion to the next control point" (p.411).
+    if (tool_ == Tool::Reshape && !points_.isEmpty()) return selectAdjacentPoint(next);
     const auto e = effect();
     if (!e) return false;
     const QList<model::IntraframeObject> objects = model::intraframeObjects(*e);
@@ -272,6 +278,10 @@ void IntraframeTool::fillOverlay(Composer::EffectPreview& preview) const {
         const QRectF r = QRectF(from_, to_).normalized();
         preview.guides << QList<QPointF>{r.topLeft(), r.topRight(), r.bottomRight(), r.bottomLeft()};
     }
+    if (tool_ == Tool::Reshape || tool_ == Tool::ZRotation) {
+        fillReshapeOverlay(preview);
+        return;
+    }
     const QList<QPointF> corners = handlePoints();
     for (int i = 0; i < corners.size(); ++i) {
         preview.handles << Composer::EffectPreview::Handle{QStringLiteral("intraframe:scale:%1").arg(i), corners.at(i), std::nullopt};
@@ -303,6 +313,10 @@ bool IntraframeTool::overlayPress(const QPointF& at, Qt::KeyboardModifiers modif
         polygonHandle_ = true; // a drag gives it direction handles (p.401)
         editor_.previewIntraframe(*e);
         return true;
+    case Tool::Reshape:
+        return reshapePress(at, modifiers);
+    case Tool::ZRotation:
+        return rotatePress(at);
     case Tool::Selection:
         break;
     }
@@ -332,7 +346,22 @@ bool IntraframeTool::overlayPress(const QPointF& at, Qt::KeyboardModifiers modif
         select(ids);
         return true;
     }
-    if (!selected_.contains(hit)) select({hit});
+    // A group is selected as one (p.417): "you can manipulate the group as if it were a single object".
+    QStringList withGroup{hit};
+    for (const model::IntraframeObject& o : model::intraframeObjects(*e)) {
+        if (o.id == hit && !o.group.isEmpty()) {
+            for (const model::IntraframeObject& m : model::intraframeObjects(*e)) {
+                if (m.group == o.group && !withGroup.contains(m.id)) withGroup << m.id;
+            }
+        }
+    }
+    if (!selected_.contains(hit)) select(withGroup);
+    // "Click the Reshape tool, or double-click the object" (p.406).
+    if (doubleClick) {
+        select({hit});
+        setTool(Tool::Reshape);
+        return true;
+    }
     // "Click anywhere within the object's outline, and drag the object to a new location" (p.404).
     drag_ = Drag::Move;
     start_ = e;
@@ -383,6 +412,12 @@ void IntraframeTool::overlayMove(const QPointF& at, Qt::KeyboardModifiers modifi
         preview(e);
         return;
     }
+    case Drag::Points:
+    case Drag::Handle:
+    case Drag::Rotate:
+    case Drag::Center:
+        reshapeMove(at);
+        return;
     case Drag::None:
         break;
     }
@@ -440,10 +475,19 @@ void IntraframeTool::overlayRelease(const QPointF& at, Qt::KeyboardModifiers mod
         return;
     }
     case Drag::Move:
-    case Drag::Scale: {
+    case Drag::Scale:
+    case Drag::Points:
+    case Drag::Handle:
+    case Drag::Rotate:
+    case Drag::Center: {
         const std::optional<model::Effect> done = working_;
         start_.reset();
-        if (done) commit(drag == Drag::Move ? tr("Move") : tr("Scale"), *done);
+        handlePoint_ = -1;
+        QString name = tr("Reshape");
+        if (drag == Drag::Move) name = tr("Move");
+        else if (drag == Drag::Scale) name = tr("Scale");
+        else if (drag == Drag::Rotate || drag == Drag::Center) name = tr("Rotate");
+        if (done) commit(name, *done);
         return;
     }
     case Drag::None:
@@ -452,6 +496,11 @@ void IntraframeTool::overlayRelease(const QPointF& at, Qt::KeyboardModifiers mod
 }
 
 bool IntraframeTool::overlayWantsKey(const QKeyEvent* event) const {
+    if (tool_ == Tool::Reshape && !selected_.isEmpty()) {
+        // Nudging (p.412) and Ctrl+A for every control point (p.411).
+        if (event->key() == Qt::Key_Left || event->key() == Qt::Key_Right) return !points_.isEmpty();
+        if (event->key() == Qt::Key_A && (event->modifiers() & Qt::ControlModifier)) return true;
+    }
     if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) return !selected_.isEmpty();
     if (event->key() == Qt::Key_Escape || event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) return !polygon_.isEmpty();
     return false;
@@ -468,7 +517,52 @@ bool IntraframeTool::overlayKey(QKeyEvent* event) {
         finishPolygon();
         return true;
     }
+    if (tool_ == Tool::Reshape) {
+        // "To nudge selected control points to the left, press the Left Arrow key ... up, press the Alt key ... and the
+        // Left Arrow key ... down, ... the Alt key ... and the Right Arrow key" (p.412). One pixel of a frame 1920 wide.
+        const bool alt = (event->modifiers() & Qt::AltModifier) != 0;
+        const double px = 1.0 / 1920.0;
+        if (event->key() == Qt::Key_Left) return nudgePoints(alt ? QPointF(0.0, -px * aspect()) : QPointF(-px, 0.0));
+        if (event->key() == Qt::Key_Right) return nudgePoints(alt ? QPointF(0.0, px * aspect()) : QPointF(px, 0.0));
+        if (event->key() == Qt::Key_A) {
+            if (const auto o = reshaped()) {
+                points_.clear();
+                for (int i = 0; i < model::shapeAt(*o, editor_.positionTime()).size(); ++i) points_ << i;
+                editor_.refreshIntraframeOverlay();
+            }
+            return true;
+        }
+        if (!points_.isEmpty()) return removeSelectedPoints();
+    }
     return removeSelected();
+}
+
+bool IntraframeTool::group() {
+    auto e = editor_.intraframeEffect();
+    if (!e || selected_.size() < 2) return false;
+    model::groupIntraframeObjects(*e, selected_);
+    return commit(tr("Group"), *e);
+}
+
+bool IntraframeTool::ungroup() {
+    auto e = editor_.intraframeEffect();
+    if (!e || selected_.isEmpty()) return false;
+    const model::Effect before = *e;
+    model::ungroupIntraframeObjects(*e, selected_);
+    return e->parameters != before.parameters && commit(tr("UnGroup"), *e);
+}
+
+bool IntraframeTool::lock(bool locked) {
+    auto e = editor_.intraframeEffect();
+    if (!e || selected_.isEmpty()) return false;
+    const model::Effect before = *e;
+    model::lockIntraframeObjects(*e, selected_, locked);
+    return e->parameters != before.parameters && commit(locked ? tr("Lock") : tr("Unlock"), *e);
+}
+
+void IntraframeTool::setHandlesHidden(bool hidden) {
+    handlesHidden_ = hidden;
+    editor_.refreshIntraframeOverlay();
 }
 
 } // namespace lumenis::ui

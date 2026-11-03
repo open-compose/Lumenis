@@ -573,6 +573,7 @@ private:
     QHash<int, QToolButton*> intraframeButtons_;       // IntraframeTool::Tool -> its button
     QToolButton* bringForward_ = nullptr;
     QToolButton* sendBackward_ = nullptr;
+    QToolButton* objectMenu_ = nullptr;
     // Shows the drawing tool buttons for the shown effect and checks the active one.
     void syncIntraframeButtons();
     TitlerDashboard* titlerDashboard_ = nullptr;

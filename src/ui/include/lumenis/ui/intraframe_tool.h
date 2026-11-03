@@ -13,6 +13,7 @@
 #include <QPointF>
 #include <QStringList>
 
+#include <functional>
 #include <optional>
 
 namespace lumenis::ui {
@@ -24,7 +25,8 @@ class IntraframeTool : public QObject, public Composer::OverlayInput {
 
 public:
     // "Top to bottom: Rectangle, Oval, Polygon, Curve, and Brush tools" (p.396) and the Selection tool (p.394).
-    enum class Tool { Selection, Rectangle, Oval, Polygon, Curve, Brush };
+    // ... and (6.9b2) the Z-Rotation and Reshape tools (p.394, p.413-415).
+    enum class Tool { Selection, Rectangle, Oval, Polygon, Curve, Brush, ZRotation, Reshape };
 
     explicit IntraframeTool(EffectEditor& editor);
 
@@ -49,6 +51,16 @@ public:
     // "Click one of the following buttons: Go to Next Event, Go to Previous Event" (p.403): the next object in layer
     // order.
     bool selectAdjacent(bool next);
+    // The Object menu (p.417-418): Group, UnGroup, Lock and Unlock on the selection; one undo step each.
+    bool group();
+    bool ungroup();
+    bool lock(bool locked);
+
+    // Reshape (6.9b2): the selected object's control points selected (indices), and "To drag the control points only,
+    // Alt+click ... the Reshape tool to hide the direction handles" (p.414).
+    const QList<int>& selectedPoints() const { return points_; }
+    void setHandlesHidden(bool hidden);
+    bool handlesHidden() const { return handlesHidden_; }
 
     // The objects' outlines (selected ones and the one being drawn), the selection's handles.
     void fillOverlay(Composer::EffectPreview& preview) const;
@@ -64,7 +76,7 @@ signals:
     void changed(); // the tool or the selection
 
 private:
-    enum class Drag { None, Shape, Freehand, Move, Scale, Lasso };
+    enum class Drag { None, Shape, Freehand, Move, Scale, Lasso, Points, Handle, Rotate, Center };
 
     // The effect being worked on: a drag's preview, else the shown one.
     std::optional<model::Effect> effect() const;
@@ -81,6 +93,18 @@ private:
     // Adds an object of `kind` and selects it; the drawing tools then return to Selection, the Brush stays (p.396).
     void addObject(model::IntraframeKind kind, const QList<model::ControlPoint>& points, bool closed);
     void finishPolygon();
+    // Reshape and Z-Rotation (intraframe_reshape.cpp).
+    std::optional<model::IntraframeObject> reshaped() const; // the one selected object, unlocked
+    bool reshapePress(const QPointF& at, Qt::KeyboardModifiers modifiers);
+    bool rotatePress(const QPointF& at);
+    void reshapeMove(const QPointF& at);
+    void fillReshapeOverlay(Composer::EffectPreview& preview) const;
+    bool nudgePoints(const QPointF& by);
+    bool removeSelectedPoints();
+    bool selectAdjacentPoint(bool next);
+    // An edit of the selected object's editable shape (model::editableShape), as a preview or an undo step.
+    bool editShape(const QString& description, const std::function<void(model::IntraframeObject&, int shape)>& change, bool preview);
+    QPointF objectCentre(const model::Effect& e, const model::IntraframeObject& o) const;
     // The change while dragging, and its undo step when it ends.
     void preview(const model::Effect& e);
     bool commit(const QString& description, const model::Effect& e);
@@ -97,6 +121,11 @@ private:
     QList<QPointF> stroke_;
     QList<model::ControlPoint> polygon_;
     bool polygonHandle_ = false; // the last polygon point is being given direction handles (a drag)
+    QList<int> points_;          // Reshape: the selected control points
+    int handlePoint_ = -1;       // the point whose direction handle is dragged
+    bool handleOut_ = false;
+    bool handlesHidden_ = false;
+    double startRotation_ = 0.0;
 };
 
 // Freehand points as a smooth closed curve (the Curve tool, p.403): every few pixels' point kept, with smooth joins

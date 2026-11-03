@@ -271,6 +271,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Editing titles in (docs/spec/title-tool.md, 6.8e1): a roll's finish staying
   the roll's end whatever the source OUT, Place in Timeline's tracks (the
   sequence's video tracks and the next one).
+* Intraframe reshaping (docs/spec/intraframe.md, 6.9b2): the Object menu as a
+  button by the tools, new smooth handles a third of the way to the neighbours,
+  joins changed in the shape being edited, the Z-Rotation arm 8% of the width,
+  one-pixel nudges of a 1920-wide frame.
 * Intraframe tools (docs/spec/intraframe.md, 6.9b1): lettered tool buttons,
   wire frames for every object, Return and Escape for polygons, freehand points
   every 1.5% of the width, the lasso taking objects wholly inside it, moves and
@@ -817,6 +821,8 @@ The full inventory, with a page for every item, is
     *Save Title As* and *Export Title* (FX p.358–364).
   * The Windows menu offers *Title Tool* (FX p.327).
   * The Timeline's context menu offers *Promote Titles > Avid Titler+* (FX p.326).
+  * The Effect Editor's Object menu button for Intraframe effects: *Bring Forward*, *Send Backward*, *Bring to
+    Front*, *Send to Back*, *Group*, *UnGroup*, *Lock*, *Unlock* (FX p.417-418).
   * The Timeline's context menu offers *Edit Title* on a classic title, and the Effect Editor shows an Edit Title
     button for one (FX p.372).
   * The Title Tool's Edit, Object (with Soften Shadow, p.354), Alignment and Templates (p.360) menus (FX p.330, p.334, p.338) are in the

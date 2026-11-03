@@ -129,4 +129,34 @@ void lockIntraframeObjects(Effect& effect, const QStringList& ids, bool locked);
 // Deleting objects ("Press the Delete key", p.403); locked ones stay. The number deleted.
 int deleteIntraframeObjects(Effect& effect, const QStringList& ids);
 
+// ---- Reshaping (6.9b2; p.405-412)
+// The inverse of placedShapeAt's mapping for one point or one handle vector at `t`: where in the object's own (unplaced)
+// shape a placed point lies.
+QPointF unplacedPoint(const Effect& effect, const IntraframeObject& object, double t, const EffectSpan& span, double aspect, const QPointF& placed);
+QPointF unplacedVector(const Effect& effect, const IntraframeObject& object, double t, const EffectSpan& span, double aspect, const QPointF& placed);
+// The shape an edit at `t` changes: the shape keyframe at `t` (within half a frame), the only shape when there is one,
+// else a new shape keyframe at `t` holding the shape there ("If you change a control point at a selected keyframe or
+// add a keyframe to make changes, the changes are interpolated between the selected keyframe and adjacent keyframes",
+// p.411). Its index in `object.shapes`.
+int editableShape(IntraframeObject& object, double t, const EffectSpan& span);
+// "Click the selected object where you want to add a new control point. A new control point appears and is calculated so
+// that the object does not change dramatically in shape. The new control point appears as part of the object for all
+// keyframes" (p.410): the segment after control point `after` split at `fraction` along it (de Casteljau for curves), in
+// every shape.
+void insertControlPoint(IntraframeObject& object, int after, double fraction);
+// The segment nearest an unplaced point in the shape at `t` and how far along it (0 to 1); nothing beyond `reach`.
+std::optional<std::pair<int, double>> nearestSegment(const IntraframeObject& object, double t, const QPointF& at, double reach);
+// "Click the control point, and press the Delete key" (p.411): the points from every shape, keeping at least three of a
+// closed outline (two of a stroke). False when they cannot go.
+bool removeControlPoints(IntraframeObject& object, QList<int> indices);
+// The modifier clicks of p.409-410: Alt+click on a point turns a straight-edge join into a smooth one (handles a third
+// of the way towards its neighbours) and back; Alt+click on a handle turns a smooth join into a corner join and back;
+// Shift+click on a handle keeps the opposite bar's length (fixedLength) or not. In the shape `shape`.
+void toggleSmooth(IntraframeObject& object, int shape, int point, bool closed);
+void toggleCorner(IntraframeObject& object, int shape, int point);
+void toggleFixedLength(IntraframeObject& object, int shape, int point);
+// Dragging a direction handle to `handle` (relative to its point): a smooth join's opposite bar turns with it, and
+// changes length in unison unless fixedLength; a corner join's does not move (p.409). `out` names the handle dragged.
+void setDirectionHandle(ControlPoint& point, bool out, const QPointF& handle);
+
 } // namespace lumenis::model
