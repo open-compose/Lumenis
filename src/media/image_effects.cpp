@@ -1,4 +1,5 @@
 #include "effect_drawing.h"
+#include "lumenis/media/plasma_wipe.h"
 
 #include <algorithm>
 #include <cmath>
@@ -81,6 +82,13 @@ std::optional<double> filmMaskRatio(const model::Effect& e) {
 
 QJsonValue parameterDefault(const model::Effect& e, const QString& category, const QString& name) {
     if (e.category == QLatin1String("Illusion FX")) return detail::illusionDefault(e, category, name);
+    // PlasmaWipe defaults (ours; "Frame effects have different default values ... crisp edges", FX Guide p.453).
+    if (const PlasmaWipe* wipe = plasmaWipeOf(e)) {
+        if (category == QLatin1String("Border") && name == QLatin1String("Soft")) return wipe->frame ? 0 : 40;
+        if (category == QLatin1String("Border") && name == QLatin1String("Color")) return wipe->frame ? QStringLiteral("#808080") : QStringLiteral("#000000");
+        if (category == QLatin1String("Border") && name == QLatin1String("Blend Color")) return wipe->frame ? QStringLiteral("#ffffff") : QStringLiteral("#000000");
+        if (category == QLatin1String("Foreground") && name == QLatin1String("Level")) return wipe->frame ? 5 : 50;
+    }
     // Region Stabilize until set (ours): a quarter of the frame across, centred; Translational, the Model menu's
     // first entry (p.280).
     if (e.category == QLatin1String("Image") && e.name == QLatin1String("Region Stabilize")) {

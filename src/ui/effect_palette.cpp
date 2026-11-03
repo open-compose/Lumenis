@@ -1,5 +1,7 @@
 #include "lumenis/ui/effect_palette.h"
 
+#include "lumenis/media/plasma_wipe.h"
+
 #include "lumenis/media/audio_fx.h"
 #include "lumenis/ui/bin_dock.h"
 
@@ -74,6 +76,24 @@ const EffectCatalog& EffectCatalog::builtin() {
                 }
                 c.effects_ << info;
             }
+        }
+        // PlasmaWipe effects (FX Guide p.442-455, p.478): ours and the PlasmaWipes folders', each folder's category after
+        // the PlasmaWipe categories already listed. Frame effects are segment effects only (p.452-453).
+        qsizetype at = 0;
+        for (qsizetype i = 0; i < c.categories_.size(); ++i) {
+            if (c.categories_.at(i).startsWith(QLatin1String("PlasmaWipe "))) at = i + 1;
+        }
+        for (const media::PlasmaWipe& w : media::plasmaWipes()) {
+            if (!c.categories_.contains(w.category)) c.categories_.insert(at++, w.category);
+            EffectInfo info;
+            info.category = w.category;
+            info.name = w.name;
+            info.page = 478;
+            info.transition = !w.frame;
+            info.segment = true;
+            info.realTime = true;
+            info.parameters = {QStringLiteral("Acceleration"), QStringLiteral("Border"), QStringLiteral("Foreground"), QStringLiteral("Grid")};
+            c.effects_ << info;
         }
         return c;
     }();

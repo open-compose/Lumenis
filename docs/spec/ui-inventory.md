@@ -271,6 +271,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Editing titles in (docs/spec/title-tool.md, 6.8e1): a roll's finish staying
   the roll's end whatever the source OUT, Place in Timeline's tracks (the
   sequence's video tracks and the next one).
+* PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
+  "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
+  Width act on the gradient, the frame's colouring by its grey, the defaults
+  (Soft 40, Level 50 on segments; frames Soft 0, Level 5, grey and white), no
+  Chroma Key Profile category (p.478 lists it; nothing in ch.16 uses it).
 * Scratch Removal (docs/spec/intraframe.md, 6.9d): the Frame/Field default -1
   of p.547 (p.427's table says 0; both name the first frame From Start), the
   slider's -10 to +10 range with frames kept to ±5, the Scratch Removal button on

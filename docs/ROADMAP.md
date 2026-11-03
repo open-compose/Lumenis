@@ -1136,7 +1136,8 @@ phase of their own. They are done in three steps:
     processing, and the Scratch Removal button (p.419-429). Done: `media::scratchRemovalSource` with the segment's
     frames from the compositor (`IntraframeFrames`), `model::applyScratchRemoval` behind `fx.scratch_removal` (Tool
     palette, Command Palette FX tab), the Frame Processing button; scenario `37-scratch-removal.json`.
-  * 6.9e, PlasmaWipe effects (ch.16, p.442-455).
+  * 6.9e, PlasmaWipe effects (ch.16, p.442-455). Done (docs/spec/plasma-wipe.md: `src/media/plasma_wipe.*`, our own
+    generated gradients and the user's PlasmaWipes folders in the Effect Palette; test `tst_plasma_wipe`), so 6.9 is.
 * 6.10, colour correction (ch.19-24, p.587-733): Color Correction mode, HSL and curves, safe
   colours, and the Symphony option's spot colour.
 * 6.11, the OFX host in place of AVX (ch.6, p.157-164), with OCIO colour management.

@@ -20,6 +20,7 @@ add_library(lumenis_media STATIC
     color_effects.cpp
     intraframe.cpp
     pict.cpp
+    plasma_wipe.cpp
     key_effects.cpp
     burn_in.cpp
     illusion_common.h
@@ -42,6 +43,7 @@ add_library(lumenis_media STATIC
     include/lumenis/media/media.h
     include/lumenis/media/compositor.h
     include/lumenis/media/pict.h
+    include/lumenis/media/plasma_wipe.h
     include/lumenis/media/optical_flow.h
     include/lumenis/media/render.h
     include/lumenis/media/audio_fx.h

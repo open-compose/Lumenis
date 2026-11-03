@@ -1,4 +1,5 @@
 #include "lumenis/media/compositor.h"
+#include "lumenis/media/plasma_wipe.h"
 #include "lumenis/media/classic_title.h"
 #include "lumenis/media/titler.h"
 #include "lumenis/media/tracking.h"
@@ -340,6 +341,8 @@ Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture 
     if (isIllusionTransition(e)) {
         return illusionTransitionPicture(e, std::move(outgoing), std::move(incoming), progress, time, model::EffectSpan(t.duration, true));
     }
+    // PlasmaWipe: the gradient's threshold at the transition's progress (FX Guide p.442).
+    if (isPlasmaWipe(e)) return plasmaWipePicture(e, outgoing, incoming, progress, time, model::EffectSpan(t.duration, true));
     if (isWipe(e)) return wipePicture(e, std::move(outgoing), std::move(incoming), progress, time, model::EffectSpan(t.duration, true));
     const QString& name = e.name;
     if (name == QLatin1String("Dissolve")) return mix(outgoing, incoming, progress);
@@ -726,6 +729,12 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 layer = panZoomPicture(e, layer, time, length, c.effectPreview);
                 layer.quantize(c.precision);
                 result = over(layer, result);
+                result.quantize(c.precision);
+                continue;
+            }
+            if (isPlasmaWipe(e)) {
+                // A PlasmaWipe on a segment, "static wipes" of the segment over the tracks below (p.443).
+                result = plasmaWipeSegmentPicture(e, layer, result, time, length);
                 result.quantize(c.precision);
                 continue;
             }
