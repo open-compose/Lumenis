@@ -6,6 +6,7 @@
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/intraframe.h"
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
@@ -3163,6 +3164,7 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("edit.mark_markers"),
         QStringLiteral("fx.add_keyframe"),
         QStringLiteral("fx.fade_effect"),
+        QStringLiteral("fx.scratch_removal"),
         QStringLiteral("edit.paste_audio_keyframes"),
         QStringLiteral("play.audio_loop_play"),
     };
@@ -3282,6 +3284,8 @@ bool Timeline::perform(const QString& id) {
         loadClipboard(tr("Clipboard Contents.%1").arg(++clipboardCount_));
     } else if (id == QLatin1String("edit.replace_edit")) {
         replaceEdit();
+    } else if (id == QLatin1String("fx.scratch_removal")) {
+        return scratchRemoval();
     } else if (id == QLatin1String("edit.add_edit")) {
         // Alt: on every track with filler (p.640).
         addEdit(QApplication::keyboardModifiers() & Qt::AltModifier);
@@ -4305,6 +4309,28 @@ void Timeline::addEdit(bool fillerOnly) {
     seq.storeIn(after);
     after.modified = QDateTime::currentDateTimeUtc();
     commit(tr("Add Edit"), before, after);
+}
+
+bool Timeline::scratchRemoval() {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (showSource_ || !rec) return false;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    // "Ensure that the Record Track button for the track containing the flaw is the highest selected track button"
+    // (p.423).
+    QString track;
+    for (const model::Track& t : seq.tracks()) {
+        if (t.kind == model::TrackKind::Video && patch_.isRecordSelected(t.name()) && (track.isEmpty() || t.number > seq.track(track)->number))
+            track = t.name();
+    }
+    if (track.isEmpty()) return fail(tr("Select the video track with the flaw."));
+    const model::MonitorState& record = composer_.state(MonitorId::Record);
+    if (!model::applyScratchRemoval(seq, track, record.position(), record.in(), record.out())) {
+        return fail(tr("There is no segment there to remove a scratch from."));
+    }
+    if (!commitSequence(tr("Scratch Removal"), seq)) return false;
+    emit effectApplied();
+    return true;
 }
 
 void Timeline::removeMatchFrameEdits() {

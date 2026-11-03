@@ -176,6 +176,13 @@ void EffectEditor::setFilmProject(bool film) {
     syncIntraframeButtons();
 }
 
+void EffectEditor::setInterlacedProject(bool interlaced) {
+    if (interlaced == interlacedProject_) return;
+    interlacedProject_ = interlaced;
+    shownName_.clear(); // the controls are made again, with or without Frame Processing
+    refresh();
+}
+
 QImage EffectEditor::aniMatteImage(const QSize& size) const {
     if (!wholeIntraframe_ || !model::isAniMatte(*wholeIntraframe_) || size.isEmpty()) return {};
     // The foreground for Magic Mask's colours: ours, the Record monitor's picture as shown.

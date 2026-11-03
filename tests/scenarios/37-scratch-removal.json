@@ -1,0 +1,41 @@
+[
+  {
+    "name": "the Scratch Removal button makes a two-frame segment ending at the position with the Scratch Removal effect",
+    "guide": "FX Guide p.422-423",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"position": "record", "frame": 20},
+      {"command": "fx.scratch_removal"}
+    ],
+    "expect": {"V1": [["A", 0, 19], ["A", 19, 2], ["A", 21, 29]]}
+  },
+  {
+    "name": "with IN and OUT marked, the scratched frames and the clean frame before them",
+    "guide": "FX Guide p.426",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"mark": "record", "in": 10, "out": 14},
+      {"position": "record", "frame": 12},
+      {"command": "fx.scratch_removal"}
+    ],
+    "expect": {"V1": [["A", 0, 9], ["A", 9, 6], ["A", 15, 35]]}
+  },
+  {
+    "name": "pressed again, it nests over the first; undo takes that back (the effect itself is checked by tst_intraframe)",
+    "guide": "FX Guide p.423",
+    "clips": [{"name": "A"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 50]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"position": "record", "frame": 20},
+      {"command": "fx.scratch_removal"},
+      {"command": "fx.scratch_removal"},
+      {"command": "edit.undo"}
+    ],
+    "expect": {"V1": [["A", 0, 19], ["A", 19, 2], ["A", 21, 29]]}
+  }
+]

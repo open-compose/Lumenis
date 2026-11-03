@@ -291,7 +291,24 @@ std::vector<float> intraframeMask(const model::Effect& effect, const model::Intr
 // The effect on its segment's picture `layer` over `below` (the tracks below, or a transition's outgoing picture with
 // `layer` the incoming one): Paint's objects painted onto `layer` bottom layer first in their modes, Blur and Mosaic
 // within their objects, AniMatte keying `layer` in or out of its mattes over `below`.
-Picture intraframePicture(const model::Effect& effect, const Picture& layer, const Picture& below, double time, const model::EffectSpan& span);
+//
+// Scratch Removal (6.9d, p.419-429) takes its replacement material from `frames`, the segment's other frames: without
+// them (a transition, a test) only from this frame.
+struct IntraframeFrames {
+    std::int64_t offset = 0; // the frame shown, into the segment
+    std::int64_t length = 1; // the segment's frames
+    std::function<Picture(std::int64_t offset)> pictureAt; // the segment's own picture at a frame of it
+    bool interlaced = false; // two-field media: Frame Processing applies
+    bool topFieldFirst = true;
+};
+Picture intraframePicture(const model::Effect& effect, const Picture& layer, const Picture& below, double time, const model::EffectSpan& span,
+                          const IntraframeFrames* frames = nullptr);
+// Scratch Removal's replacement material for the frame shown (the picture whose pixels, Hor and Vert away, fill each
+// object): with Frame Processing (or single-field media) the whole frame the Frame/Field slider and Offset Fast Menu
+// name, "from Field 1 of the clean frame to Field 1 of the flawed frame and from Field 2 ... to Field 2"; without it
+// each field's lines from the field they name (p.419-421, p.427-428, p.546-547). `category` holds those parameters.
+Picture scratchRemovalSource(const model::Effect& effect, const QString& category, const Picture& layer, const IntraframeFrames* frames,
+                             double time, const model::EffectSpan& span);
 // Export Matte PICT (ROADMAP 6.9c2; FX Guide p.418): an AniMatte effect's matte at `time` as "a high-contrast matte with
 // transparent (black) and opaque (white) components" whose alpha channel is the same; `layer` (the foreground) gives
 // its size and the colours Magic Mask picks from.

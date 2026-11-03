@@ -358,9 +358,10 @@ ToolPalette::ToolPalette(QWidget* parent) : QWidget(parent) {
 }
 
 QStringList ToolPalette::defaultCommands() {
-    // Our choice: the guide shows no default Tool palette.
+    // Our choice, as the guide shows no default Tool palette, except that "The Scratch Removal button appears by
+    // default on the Tool palette" (FX Guide p.420, p.422).
     return {QStringLiteral("edit.mark_in"),         QStringLiteral("edit.mark_out"),
-            QStringLiteral("edit.mark_clip"),       QStringLiteral("edit.clear_both_marks"),
+            QStringLiteral("edit.mark_clip"),       QStringLiteral("fx.scratch_removal"),
             QStringLiteral("edit.splice_in"),       QStringLiteral("edit.overwrite"),
             QStringLiteral("edit.lift"),            QStringLiteral("edit.extract"),
             QStringLiteral("more.add_marker"),      QStringLiteral("other.match_frame"),

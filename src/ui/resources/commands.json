@@ -268,6 +268,7 @@
     {"id": "fx.step_in", "text": "Step In", "palette": "fx"},
     {"id": "fx.step_out", "text": "Step Out", "palette": "fx"},
     {"id": "fx.collapse", "text": "Collapse", "palette": "fx"},
+    {"id": "fx.scratch_removal", "text": "Scratch Removal", "palette": "fx"},
     {"id": "edit.source_record_mode", "text": "Source/Record Mode", "palette": "edit"},
     {"id": "edit.lift", "text": "Lift", "palette": "edit"},
     {"id": "edit.extract", "text": "Extract", "palette": "edit"},

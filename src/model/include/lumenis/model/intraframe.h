@@ -194,6 +194,28 @@ struct PrevisualizationEvent {
 };
 QList<PrevisualizationEvent> previsualizationEvents(const Effect& effect, const EffectSpan& span, double aspect);
 
+// Scratch Removal (ROADMAP 6.9d; p.419-429, p.546-547). The replacement material comes from a nearby frame or field of
+// the same segment: the Frame/Field slider counts from the Offset Fast Menu's zero point, Relative (the frame being
+// shown), From Start (the segment's first frame, the default) or From End (its last); Frame Processing (the default)
+// copies whole frames, so field 1 to field 1 and field 2 to field 2, while field processing takes one field.
+enum class ScratchOffset { Relative, FromStart, FromEnd };
+ScratchOffset scratchOffsetFrom(const QString& name);
+// The frame or field the material comes from: `amount` (kept within 5 frames or 10 fields, "You cannot access frames
+// more than 5 frames (or fields more than 10 fields) from the zero point") from the zero point, `current` being the
+// frame or field shown and `count` the segment's frames or fields; never outside the segment ("If you are positioned
+// six fields from the end of the segment, and you set the Field slider to 10 and the Offset to Relative, you reference
+// the last field of the segment", p.428).
+std::int64_t scratchSourceIndex(ScratchOffset offset, int amount, bool fields, std::int64_t current, std::int64_t count);
+// The frames the Scratch Removal button isolates (first and last): "a two-frame segment ending at the frame marked by
+// the position indicator" (p.422), or with IN and OUT marked and the position between them or on the frame just
+// before IN, "the scratched frames or fields and the clean frame or field immediately before them" (p.426).
+std::pair<std::int64_t, std::int64_t> scratchRemovalFrames(std::int64_t position, std::optional<std::int64_t> in,
+                                                           std::optional<std::int64_t> out);
+// The Scratch Removal button on `track`: add edits around those frames and the Scratch Removal effect on the segment
+// they make, auto-nested over an effect already there (p.422). False when the track has no segment there or is locked.
+bool applyScratchRemoval(Sequence& sequence, const QString& track, std::int64_t position, std::optional<std::int64_t> in,
+                         std::optional<std::int64_t> out);
+
 // Brush templates (p.399): "click the Brush Template icon, and then drag it to a bin. A brush template appears in the
 // bin, and the name of the template defaults to Brush." An Effect item holding the Brush category under "brush".
 BinItem brushTemplateItem(const QJsonObject& brush, const QString& name, const QDateTime& when);

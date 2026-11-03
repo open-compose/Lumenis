@@ -532,6 +532,45 @@ QList<PrevisualizationEvent> previsualizationEvents(const Effect& effect, const 
     return out;
 }
 
+// ---------------------------------------------------------------- Scratch Removal
+
+ScratchOffset scratchOffsetFrom(const QString& name) {
+    if (name == QLatin1String("Relative")) return ScratchOffset::Relative;
+    if (name == QLatin1String("From End")) return ScratchOffset::FromEnd;
+    return ScratchOffset::FromStart; // "From Start ... This is the default" (p.547)
+}
+
+std::int64_t scratchSourceIndex(ScratchOffset offset, int amount, bool fields, std::int64_t current, std::int64_t count) {
+    if (count <= 0) return 0;
+    const int reach = fields ? 10 : 5;
+    const std::int64_t zero = offset == ScratchOffset::Relative ? current : offset == ScratchOffset::FromEnd ? count - 1 : 0;
+    return std::clamp<std::int64_t>(zero + std::clamp(amount, -reach, reach), 0, count - 1);
+}
+
+std::pair<std::int64_t, std::int64_t> scratchRemovalFrames(std::int64_t position, std::optional<std::int64_t> in,
+                                                           std::optional<std::int64_t> out) {
+    if (in && out && *out >= *in && position >= *in - 1 && position <= *out) return {std::max<std::int64_t>(0, *in - 1), *out};
+    return {std::max<std::int64_t>(0, position - 1), std::max<std::int64_t>(position, 1)};
+}
+
+bool applyScratchRemoval(Sequence& sequence, const QString& track, std::int64_t position, std::optional<std::int64_t> in,
+                         std::optional<std::int64_t> out) {
+    const Track* t = sequence.track(track);
+    if (!t || t->locked || t->kind != TrackKind::Video) return false;
+    const auto [first, last] = scratchRemovalFrames(position, in, out);
+    const int i = t->segmentAt(first);
+    if (i < 0 || t->segments.at(i).isFiller()) return false;
+    Sequence changed = sequence;
+    changed.addEdit(track, first);
+    changed.addEdit(track, last + 1); // false at the track's end or an edit already there: nothing to add
+    const Track* ct = changed.track(track);
+    const int s = ct->segmentAt(first);
+    const bool nest = s >= 0 && ct->segments.at(s).effect.has_value();
+    if (!applySegmentEffect(changed, track, first, Effect{QStringLiteral("Image"), QStringLiteral("Scratch Removal"), {}}, nest)) return false;
+    sequence = changed;
+    return true;
+}
+
 // ---------------------------------------------------------------- brush heads
 
 QStringList brushShapes() {

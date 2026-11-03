@@ -29,7 +29,7 @@
     ]},
     {"name": "FX", "page": 97, "columns": [
       ["fx.motion_effect", "fx.remove_effect", "fx.add_keyframe", "fx.fade_effect", "fx.effect_mode"],
-      ["fx.step_in", "fx.step_out", "fx.collapse"]
+      ["fx.step_in", "fx.step_out", "fx.collapse", "fx.scratch_removal"]
     ]},
     {"name": "3D", "page": 96, "columns": []},
     {"name": "CC", "page": 96, "columns": []},

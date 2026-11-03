@@ -7,6 +7,7 @@
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/brush_preview.h"
+#include "lumenis/ui/command_palette.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/intraframe_tool.h"
@@ -483,6 +484,37 @@ private slots:
         QVERIFY(editor.exportMattePict(path, QSize(32, 18)));
         QCOMPARE(media::readPict(path), matte);
         QFile::remove(path);
+    }
+
+    void frameProcessing() {
+        // Scratch Removal's Frame Processing button: only with two-field media; off, the Frame/Field slider is labeled
+        // Field (p.421, p.547). The button is on the Tool palette by default (p.420).
+        QVERIFY(ToolPalette::defaultCommands().contains(QStringLiteral("fx.scratch_removal")));
+        Composer composer;
+        Timeline timeline{composer};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(model::Effect{QStringLiteral("Image"), QStringLiteral("Scratch Removal"), {}}));
+        EffectEditor editor{timeline};
+        editor.resize(700, 900);
+        editor.show();
+        composer.moveTo(MonitorId::Record, 10);
+        timeline.setEffectMode(true);
+        settle();
+        const QString cat = QStringLiteral("Scratch Removal Effect Scratch Parameters");
+        QVERIFY(!editor.findChild<QToolButton*>(QStringLiteral("param:") + cat + QStringLiteral("/Frame Processing")));
+        editor.setInterlacedProject(true);
+        settle();
+        auto* button = editor.findChild<QToolButton*>(QStringLiteral("param:") + cat + QStringLiteral("/Frame Processing"));
+        QVERIFY(button);
+        QVERIFY(button->isChecked());
+        auto* label = editor.findChild<QLabel*>(QStringLiteral("paramLabel:") + cat + QStringLiteral("/Frame/Field"));
+        QVERIFY(label);
+        QCOMPARE(label->text(), QStringLiteral("Frame"));
+        button->click();
+        settle();
+        const model::Effect e = *model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(0).effect;
+        QCOMPARE(e.parameters.value(cat).toObject().value(QStringLiteral("Frame Processing")).toBool(true), false);
+        QCOMPARE(label->text(), QStringLiteral("Field"));
     }
 
     void blurTools() {

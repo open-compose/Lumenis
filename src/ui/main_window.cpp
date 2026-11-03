@@ -5067,8 +5067,10 @@ void MainWindow::applySettings() {
     const Settings& s = *settings_;
     // The Render setting's Timewarps Render Using, shown by the Motion Effect Editor's Type (FX p.183).
     if (motionEditor_) motionEditor_->setRenderUsing(s.text(QStringLiteral("Render"), QStringLiteral("timewarpsRenderUsing")));
-    // The Paint Effect's Previsualization Marker tool is for 24-fps film projects (FX p.412).
+    // The Paint Effect's Previsualization Marker tool is for 24-fps film projects (FX p.412); Scratch Removal's Frame
+    // Processing button is for two-field media (FX p.547).
     if (project_) {
+        effectEditor_->setInterlacedProject(project_->settings.format.scan == ScanMode::Interlaced);
         effectEditor_->setFilmProject(!project_->settings.filmType.isEmpty() &&
                                       TimecodeFormat::forRate(project_->settings.format.editRate, false).nominalFps == 24);
     }

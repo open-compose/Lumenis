@@ -485,8 +485,9 @@
       {"name": "Vert", "kind": "slider", "label": "vertical"},
       {"name": "Amt", "kind": "slider", "label": "amount"},
       {"name": "Angle", "kind": "slider"},
-      {"name": "Frame/Field", "kind": "slider"},
-      {"name": "Offset Fast menu", "kind": "menu"}
+      {"name": "Frame/Field", "kind": "slider", "min": -10, "max": 10, "default": -1},
+      {"name": "Offset Fast menu", "kind": "menu", "default": "From Start", "options": ["Relative", "From Start", "From End"]},
+      {"name": "Frame Processing", "kind": "button", "label": "Frame Processing button", "default": true}
     ]},
     {"name": "Paint Effect Modes", "page": 537, "parameters": [
       {"name": "Enable Color Match", "kind": "button", "subcategory": "Color Match"},
@@ -515,9 +516,9 @@
       {"name": "Object Visible", "kind": "checkbox"},
       {"name": "Hor", "kind": "slider", "label": "horizontal", "default": 0},
       {"name": "Vert", "kind": "slider", "label": "vertical", "default": 0},
-      {"name": "Frame/Field", "kind": "slider", "label": "Frame/Field parameter slider", "default": -1},
+      {"name": "Frame/Field", "kind": "slider", "label": "Frame/Field parameter slider", "min": -10, "max": 10, "default": -1},
       {"name": "Offset Fast Menu", "kind": "menu", "label": "Offset Fast Menu button", "default": "From Start", "options": ["Relative", "From Start", "From End"]},
-      {"name": "Frame Processing", "kind": "button", "label": "Frame Processing button"}
+      {"name": "Frame Processing", "kind": "button", "label": "Frame Processing button", "default": true}
     ]},
     {"name": "Spot Color Correction Effect Color Match Parameters (Media Composer | Symphony Option Only)", "page": 547, "parameters": [
       {"name": "Color Match Input and Output color swatches", "kind": "color"},

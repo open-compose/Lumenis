@@ -1149,6 +1149,9 @@ private:
     void remove(bool extract);
     void replaceEdit();
     void addEdit(bool fillerOnly);
+    // The Scratch Removal button (FX Guide p.422, p.426): model::applyScratchRemoval on the highest selected video track
+    // at the position, with the Record monitor's marks; one undo step.
+    bool scratchRemoval();
     void topOrTail(bool top);
     void matchFrame();
     void reverseMatchFrame();

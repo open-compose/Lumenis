@@ -344,6 +344,93 @@ private slots:
         QCOMPARE(model::previsualizationEvents(paint, EffectSpan(10), 16.0 / 9.0).size(), 2);
     }
 
+    void scratchRemoval() {
+        // Scratch Removal's replacement material (p.419-428, p.546-547).
+        using model::ScratchOffset;
+        // The zero point and the slider; never outside the segment, nor beyond 5 frames or 10 fields.
+        QCOMPARE(model::scratchSourceIndex(ScratchOffset::FromStart, -1, false, 1, 2), 0);
+        QCOMPARE(model::scratchSourceIndex(ScratchOffset::FromStart, 0, false, 1, 2), 0);
+        QCOMPARE(model::scratchSourceIndex(ScratchOffset::Relative, 2, false, 3, 10), 5);
+        QCOMPARE(model::scratchSourceIndex(ScratchOffset::Relative, 9, false, 0, 20), 5);
+        QCOMPARE(model::scratchSourceIndex(ScratchOffset::FromEnd, -1, false, 0, 10), 8);
+        // "positioned six fields from the end ... Field slider to 10 and the Offset to Relative, you reference the last
+        // field" (p.428).
+        QCOMPARE(model::scratchSourceIndex(ScratchOffset::Relative, 10, true, 14, 20), 19);
+        QCOMPARE(model::scratchOffsetFrom(QStringLiteral("From End")), ScratchOffset::FromEnd);
+        QCOMPARE(model::scratchOffsetFrom(QString()), ScratchOffset::FromStart);
+        // The Scratch Removal button's frames (p.422, p.426).
+        QCOMPARE(model::scratchRemovalFrames(20, std::nullopt, std::nullopt), (std::pair<std::int64_t, std::int64_t>(19, 20)));
+        QCOMPARE(model::scratchRemovalFrames(12, 10, 14), (std::pair<std::int64_t, std::int64_t>(9, 14)));
+        QCOMPARE(model::scratchRemovalFrames(9, 10, 14), (std::pair<std::int64_t, std::int64_t>(9, 14)));
+        QCOMPARE(model::scratchRemovalFrames(30, 10, 14), (std::pair<std::int64_t, std::int64_t>(29, 30)));
+
+        // Frames of the segment, each a colour of its own: frame n is red n * 20.
+        auto frameColour = [](std::int64_t n) { return QColor(static_cast<int>(n) * 20, 0, 0); };
+        IntraframeFrames frames;
+        frames.offset = 3;
+        frames.length = 6;
+        frames.pictureAt = [&](std::int64_t n) { return Picture::solid(16, 8, frameColour(n)); };
+        const Picture shown = Picture::solid(16, 8, frameColour(3));
+        Effect scratch{QStringLiteral("Image"), QStringLiteral("Scratch Removal"), {}};
+        const QString cat = QStringLiteral("Scratch Removal Effect Scratch Parameters");
+        // The defaults, -1 From Start: the first frame.
+        QVERIFY(near(at(scratchRemovalSource(scratch, cat, shown, &frames, 0.5, EffectSpan(6)), 4, 4), frameColour(0)));
+        // Relative +2: two frames on.
+        scratch.parameters.insert(cat, QJsonObject{{QStringLiteral("Frame/Field"), 2}, {QStringLiteral("Offset Fast Menu"), QStringLiteral("Relative")}});
+        QVERIFY(near(at(scratchRemovalSource(scratch, cat, shown, &frames, 0.5, EffectSpan(6)), 4, 4), frameColour(5)));
+        // Without other frames: this one.
+        QVERIFY(near(at(scratchRemovalSource(scratch, cat, shown, nullptr, 0.5, EffectSpan(6)), 4, 4), frameColour(3)));
+
+        // Field processing on two-field media: Relative +1 takes field 2 of this frame for field 1 and field 1 of the next
+        // for field 2. Frames whose fields differ: even lines red n * 20, odd lines green n * 20.
+        frames.interlaced = true;
+        frames.pictureAt = [&](std::int64_t n) {
+            Picture p = Picture::solid(16, 8, frameColour(n));
+            const Picture odd = Picture::solid(16, 1, QColor(0, static_cast<int>(n) * 20, 0));
+            for (int y = 1; y < 8; y += 2) std::copy(odd.pixel(0, 0), odd.pixel(0, 0) + 16 * 4, p.pixel(0, y));
+            return p;
+        };
+        const Picture interlacedShown = frames.pictureAt(3);
+        scratch.parameters.insert(cat, QJsonObject{{QStringLiteral("Frame/Field"), 1}, {QStringLiteral("Offset Fast Menu"), QStringLiteral("Relative")},
+                                                   {QStringLiteral("Frame Processing"), false}});
+        Picture fields = scratchRemovalSource(scratch, cat, interlacedShown, &frames, 0.5, EffectSpan(6));
+        QVERIFY(near(at(fields, 4, 2), QColor(0, 60, 0)));  // field 1 from field 2 of frame 3
+        QVERIFY(near(at(fields, 4, 3), QColor(80, 0, 0)));  // field 2 from field 1 of frame 4
+        // Frame processing copies field to field.
+        scratch.parameters.insert(cat, QJsonObject{{QStringLiteral("Frame/Field"), 1}, {QStringLiteral("Offset Fast Menu"), QStringLiteral("Relative")}});
+        fields = scratchRemovalSource(scratch, cat, interlacedShown, &frames, 0.5, EffectSpan(6));
+        QVERIFY(near(at(fields, 4, 2), QColor(80, 0, 0)));
+        QVERIFY(near(at(fields, 4, 3), QColor(0, 80, 0)));
+
+        // In the picture: an object over the flaw shows the material, from the first frame by default.
+        frames.interlaced = false;
+        frames.pictureAt = [&](std::int64_t n) { return Picture::solid(16, 8, frameColour(n)); };
+        Effect fix{QStringLiteral("Image"), QStringLiteral("Scratch Removal"), {}};
+        model::addIntraframeObject(fix, IntraframeKind::Rectangle, model::rectangleShape(QRectF(0.25, 0.25, 0.5, 0.5)));
+        const Picture fixed = intraframePicture(fix, shown, Picture(16, 8), 0.5, EffectSpan(6), &frames);
+        QVERIFY(near(at(fixed, 8, 4), frameColour(0)));
+        QVERIFY(near(at(fixed, 1, 1), frameColour(3)));
+
+        // The Scratch Removal button on a sequence: a two-frame segment ending at the position, nested over an effect
+        // already there (p.422).
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        model::Segment a;
+        a.clipId = QStringLiteral("a");
+        a.sourceTrack = QStringLiteral("V1");
+        a.length = 50;
+        seq.splice(QStringLiteral("V1"), 0, {a});
+        QVERIFY(model::applyScratchRemoval(seq, QStringLiteral("V1"), 20, std::nullopt, std::nullopt));
+        const model::Track* v1 = seq.track(QStringLiteral("V1"));
+        QCOMPARE(v1->segments.size(), 3);
+        QCOMPARE(v1->segments.at(1).length, 2);
+        QCOMPARE(v1->segments.at(1).effect->name, QStringLiteral("Scratch Removal"));
+        QVERIFY(!v1->segments.at(1).hasNest());
+        QVERIFY(model::applyScratchRemoval(seq, QStringLiteral("V1"), 20, std::nullopt, std::nullopt));
+        QCOMPARE(seq.track(QStringLiteral("V1"))->segments.size(), 3);
+        QVERIFY(seq.track(QStringLiteral("V1"))->segments.at(1).hasNest());
+        QVERIFY(!model::applyScratchRemoval(seq, QStringLiteral("A1"), 20, std::nullopt, std::nullopt));
+    }
+
     void brushHeads() {
         // The Brush Shape buttons' heads and a custom head from the Brush Preview window (p.397-398), and brush
         // templates (p.399).

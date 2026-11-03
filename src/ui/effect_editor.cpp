@@ -872,6 +872,9 @@ void EffectEditor::rebuild(const model::Effect* effect) {
         // Timecode Burn-In's displays have controls of their own (burnInPanel()).
         if (category == QLatin1String("Timecode Burn-In Effect Parameters")) grid->addWidget(burnInPanel(box));
         else for (const EffectParameter& p : *params) {
+            // Scratch Removal's Frame Processing button "does not appear when you are working with single-field
+            // material" (FX p.547).
+            if (p.name == QLatin1String("Frame Processing") && !interlacedProject_) continue;
             auto* row = new QHBoxLayout;
             const QString k = key(category, p.name);
             const bool keyframed = p.keyframeable && (p.kind == QLatin1String("slider") || p.kind == QLatin1String("color"));
@@ -887,6 +890,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                 controls_.insert(k, c);
             } else {
                 auto* label = new QLabel(p.text, box);
+                label->setObjectName(QStringLiteral("paramLabel:") + k);
                 label->setMinimumWidth(64);
                 row->addWidget(label);
                 nameLabel = label;
@@ -1041,6 +1045,18 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     });
                     row->addWidget(more);
                     row->addStretch(1);
+                } else if (p.name == QLatin1String("Frame Processing") && p.kind == QLatin1String("button")) {
+                    // "click the Frame Processing button. If the Frame Processing button is selected, Media Composer uses
+                    // frame processing" (FX p.421).
+                    auto* press = new QToolButton(box);
+                    press->setObjectName(QStringLiteral("param:") + k);
+                    press->setText(tr("Frame Processing"));
+                    press->setCheckable(true);
+                    press->setChecked(true);
+                    connect(press, &QToolButton::toggled, this, [this, category, name = p.name](bool on) { setValue(category, name, on); });
+                    row->addWidget(press);
+                    row->addStretch(1);
+                    controls_.insert(k, press);
                 } else if (category == model::kBrushCategory && p.name == QLatin1String("Shape buttons")) {
                     // The Brush Shape buttons, the Brush Template icon and the Brush Preview window (p.397-399).
                     row->addWidget(brushPanel(box), 1);
@@ -1292,9 +1308,15 @@ void EffectEditor::syncValues(const model::Effect& effect) {
             c->setChecked(v.toBool());
         } else if (auto* m = qobject_cast<QComboBox*>(w)) {
             m->setCurrentText(v.toString());
-        } else if (auto* b = qobject_cast<QToolButton*>(w)) {
+        } else if (auto* b = qobject_cast<QToolButton*>(w); b && b->isCheckable()) {
+            b->setChecked(v.toBool());
+        } else if (auto* swatch = qobject_cast<QToolButton*>(w)) {
             const QColor color(v.toString());
-            if (color.isValid()) setSwatch(b, color);
+            if (color.isValid()) setSwatch(swatch, color);
+        }
+        // The Frame/Field slider "is labeled Frame" with frame processing, "Field" without (FX p.421).
+        if (name == QLatin1String("Frame Processing")) {
+            if (auto* l = findChild<QLabel*>(QStringLiteral("paramLabel:") + category + QStringLiteral("/Frame/Field"))) l->setText(v.toBool() ? tr("Frame") : tr("Field"));
         }
     }
     if (brushPreview_) brushPreview_->setBrush(effect.parameters.value(model::kBrushCategory).toObject());
@@ -1332,7 +1354,8 @@ QJsonValue EffectEditor::defaultValue(const model::Effect& effect, const QString
     // The effect's own default, as the compositor uses it, else the parameter's from
     // effect_parameters.json.
     const QJsonValue own = media::parameterDefault(effect, parameter.section(QLatin1Char('/'), 0, 0), parameter.section(QLatin1Char('/'), 1));
-    if (!own.isUndefined()) return own;
+    // A null default (none of the effect's own) falls back too.
+    if (!own.isUndefined() && !own.isNull()) return own;
     const EffectParameter* info = parameterInfo(parameter);
     return info ? info->defaultValue : QJsonValue();
 }

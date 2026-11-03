@@ -271,6 +271,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Editing titles in (docs/spec/title-tool.md, 6.8e1): a roll's finish staying
   the roll's end whatever the source OUT, Place in Timeline's tracks (the
   sequence's video tracks and the next one).
+* Scratch Removal (docs/spec/intraframe.md, 6.9d): the Frame/Field default -1
+  of p.547 (p.427's table says 0; both name the first frame From Start), the
+  slider's -10 to +10 range with frames kept to ±5, the Scratch Removal button on
+  the Tool palette in Clear Both Marks's place, isolating whole frames (no
+  field-accurate segments), the effect auto-nested over the segment's effect.
 * Previsualization Markers and Export Matte PICT (docs/spec/intraframe.md, 6.9c2):
   the marker's look (a disc 20 pixels across, a square in the Effect Preview),
   the tool returning to Selection, a message instead of the default Export
@@ -297,7 +302,7 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Outline mode two pixels wide, Unsharp Mask's Amt as a percentage, Emboss and
   Gradient as described there, AniMatte objects combined in layer order, Blur
   and Mosaic showing nothing without objects, Color Match unchanged until 6.10,
-  the Scratch Removal mode taking this frame until 6.9d.
+  the Scratch Removal mode taking its material as 6.9d describes.
 * Titles promoted to 3D (docs/spec/title-tool.md, 6.8e3b): a 3D Warp effect that
   keeps the title and its media, still revised as a title; Scaling starting at
   100; Rolling and Crawling titles promoted too.
@@ -789,7 +794,7 @@ Not yet built:
 * **Our choices, unverified.**
   * The Play, Trim, Smart Tools, Other and More tabs: which buttons, and
     in what order.
-  * The Tool palette's twelve default buttons.
+  * The Tool palette's twelve default buttons, except Scratch Removal, which the FX Guide puts there (p.420, p.422).
   * Its mapping is saved in the Tool Palette setting rather than in the
     Interface settings (p.97). This allows several named versions (p.80).
   * The Calculator's formats and keypad: the guide has no picture.

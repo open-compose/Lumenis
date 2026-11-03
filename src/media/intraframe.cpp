@@ -224,7 +224,7 @@ Picture paintMode(const model::Effect& oe, const QString& mode, const Picture& c
         // "Duplicates an area from a frame and applies it to another area of the frame ... An oval object in Clone mode
         // that has been moved from higher in the image, taking an area of the upper part of the image with it" (p.538):
         // the picture from where the object was drawn, before it was moved, and Hor/Vert away from there. Scratch
-        // Removal takes it from another frame too (6.9d); ours until then, this frame.
+        // Removal's `original` is the frame or fields it takes its material from (scratchRemovalSource).
         const bool scratch = mode == QLatin1String("Scratch Removal");
         // Scratch Removal's Hor and Vert: "the position of the replacement material relative to the shape ... The default
         // value is 0" (p.547).
@@ -484,7 +484,43 @@ QImage aniMatteImage(const model::Effect& effect, const Picture& layer, double t
     return image;
 }
 
-Picture intraframePicture(const model::Effect& effect, const Picture& layer, const Picture& below, double time, const model::EffectSpan& span) {
+Picture scratchRemovalSource(const model::Effect& oe, const QString& cat, const Picture& layer, const IntraframeFrames* frames, double time,
+                             const model::EffectSpan& span) {
+    if (!frames || !frames->pictureAt || frames->length <= 0) return layer;
+    // "The default value of -1 provides an instant correction when you are working with the normal two-frame effect
+    // created by the Scratch Removal button" (p.547); the Paint Effect's mode names its menu "Offset Fast menu" (p.537).
+    const int amount = static_cast<int>(std::lround(number(oe, cat, QStringLiteral("Frame/Field"), time, span, -1.0)));
+    const model::ScratchOffset offset =
+        model::scratchOffsetFrom(text(oe, cat, QStringLiteral("Offset Fast Menu"), text(oe, cat, QStringLiteral("Offset Fast menu"), QStringLiteral("From Start"))));
+    const int w = layer.width(), h = layer.height();
+    auto frameAt = [&](std::int64_t f) -> Picture {
+        if (f == frames->offset) return layer;
+        Picture p = frames->pictureAt(f);
+        return p.width() == w && p.height() == h ? p : layer;
+    };
+    // "Frame processing is the default processing method"; "The button does not appear when you are working with
+    // single-field material" (p.420, p.547).
+    if (!frames->interlaced || flagAt(oe, cat, QStringLiteral("Frame Processing"), time, true)) {
+        return frameAt(model::scratchSourceIndex(offset, amount, false, frames->offset, frames->length));
+    }
+    // Field processing: each field of this frame from the field the slider names, counted in fields from the segment's
+    // start (field 1 of frame n is field 2n).
+    Picture out = layer;
+    for (int f = 0; f < 2; ++f) {
+        const std::int64_t s = model::scratchSourceIndex(offset, amount, true, frames->offset * 2 + f, frames->length * 2);
+        const Picture source = frameAt(s / 2);
+        const int sourceParity = frames->topFieldFirst ? static_cast<int>(s % 2) : 1 - static_cast<int>(s % 2);
+        const int targetParity = frames->topFieldFirst ? f : 1 - f;
+        for (int y = targetParity; y < h; y += 2) {
+            const int sy = std::min(h - 1, y - targetParity + sourceParity);
+            std::copy(source.pixel(0, sy), source.pixel(0, sy) + static_cast<std::ptrdiff_t>(w) * 4, out.pixel(0, y));
+        }
+    }
+    return out;
+}
+
+Picture intraframePicture(const model::Effect& effect, const Picture& layer, const Picture& below, double time, const model::EffectSpan& span,
+                          const IntraframeFrames* frames) {
     const QList<model::IntraframeObject> objects = model::intraframeObjects(effect);
     const int w = layer.width(), h = layer.height();
     const std::size_t count = static_cast<std::size_t>(std::max(w, 0)) * static_cast<std::size_t>(std::max(h, 0));
@@ -543,7 +579,9 @@ Picture intraframePicture(const model::Effect& effect, const Picture& layer, con
                 }
                 modeEffect.parameters.insert(QStringLiteral("Paint Effect Mode Parameters"), paint);
             }
-            mod = paintMode(modeEffect, mode, cur, layer, bounds, place.x * unit, place.y * unit, time, span);
+            // Scratch Removal's material comes from the frame or fields its slider and menu name (6.9d).
+            const Picture original = mode == QLatin1String("Scratch Removal") ? scratchRemovalSource(oe, cat, layer, frames, time, span) : layer;
+            mod = paintMode(modeEffect, mode, cur, original, bounds, place.x * unit, place.y * unit, time, span);
         }
         for (std::size_t i = 0; i < count; ++i) {
             const float a = m[i];

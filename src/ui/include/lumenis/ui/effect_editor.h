@@ -368,6 +368,8 @@ public:
     // Effect Editor for the Paint Effect in any other project types" (p.412). Set by MainWindow from the project.
     void setFilmProject(bool film);
     bool filmProject() const { return filmProject_; }
+    // Two-field media: Scratch Removal's Frame Processing button shows (FX p.421, p.547). Set by MainWindow.
+    void setInterlacedProject(bool interlaced);
     // Export Matte PICT (p.418): the shown AniMatte effect's matte at the position, `size` large (media::aniMatteImage);
     // a null image when the editor shows no AniMatte effect. exportMattePict writes it as a PICT file.
     QImage aniMatteImage(const QSize& size) const;
@@ -605,6 +607,7 @@ private:
     QToolButton* objectMenu_ = nullptr;
     QPointer<BrushPreview> brushPreview_; // in the Brush category, rebuilt with the controls
     bool filmProject_ = false;
+    bool interlacedProject_ = false;
     // The Brush category's Shape buttons, Brush Template icon and Brush Preview window.
     QWidget* brushPanel(QWidget* parent);
     // Shows the drawing tool buttons for the shown effect and checks the active one.

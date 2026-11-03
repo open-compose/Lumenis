@@ -1133,7 +1133,9 @@ phase of their own. They are done in three steps:
     target `pict`), the markers and their optical events (`model::previsualizationEvents`). Importing the PICT back
     as a Matte Key clip goes with graphics import's alpha options (Phase 9), the optical list with film cut lists.
   * 6.9d, Scratch Removal: replacement material from nearby frames or fields, the Offset menu, frame and field
-    processing, and the Scratch Removal button (p.419-429).
+    processing, and the Scratch Removal button (p.419-429). Done: `media::scratchRemovalSource` with the segment's
+    frames from the compositor (`IntraframeFrames`), `model::applyScratchRemoval` behind `fx.scratch_removal` (Tool
+    palette, Command Palette FX tab), the Frame Processing button; scenario `37-scratch-removal.json`.
   * 6.9e, PlasmaWipe effects (ch.16, p.442-455).
 * 6.10, colour correction (ch.19-24, p.587-733): Color Correction mode, HSL and curves, safe
   colours, and the Symphony option's spot colour.

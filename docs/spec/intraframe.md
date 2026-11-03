@@ -193,3 +193,36 @@ Code: `src/model/intraframe.*` (the objects), `src/media/intraframe.cpp` (their 
   graphics import (Phase 9).
 * Tests: `tst_intraframe` (`pictFiles`, `exportedMatte`, `previsualizationMarkers`), `tst_intraframe_ui`
   (`markerAndMatte`).
+
+## 6.9d: Scratch Removal
+
+### From the guide
+* "You can replace a flaw with clean material from the same frame or field or from other nearby frames or fields"
+  (p.419); "You cannot access frames or fields outside the segment that contains the effect" (p.428).
+* Frame processing "copies replacement material from Field 1 of the clean frame to Field 1 of the flawed frame and from
+  Field 2 of the clean frame to Field 2"; field processing "copies replacement material from only one field to all
+  subsequent fields"; frame processing is the default (p.420). The Frame Processing button, in the Paint Effect's Mode
+  category or the Scratch Removal effect's Scratch category, labels the slider Frame (-5 to +5) or Field (-10 to +10),
+  and "does not appear when you are working with single-field material" (p.421, p.547).
+* The Hor and Vert sliders place the material relative to the shape; Frame/Field counts from the Offset Fast Menu's
+  zero point: Relative (the frame shown), From Start (the default) or From End; "You cannot access frames more than 5
+  frames (or fields more than 10 fields) from the zero point" (p.427-428, p.546-547).
+* The Scratch Removal button, on the Tool palette by default: "a two-frame segment ending at the frame marked by the
+  position indicator", on the highest selected track, auto-nesting over an effect already there (p.422-423); with IN
+  and OUT marked and the position between them or just before IN, "the scratched frames or fields and the clean frame
+  or field immediately before them" (p.426).
+
+### Ours
+* `media::scratchRemovalSource` gives the picture the Scratch Removal mode (Paint) or effect takes its material from;
+  the compositor hands the Intraframe effects the segment's own pictures at its other frames (`IntraframeFrames`).
+  `model::scratchSourceIndex` keeps the slider within 5 frames or 10 fields and the result within the segment. Fields
+  count from the segment's start (field 1 of frame n is field 2n, in the media's field order); a field's lines come
+  from the source field's lines.
+* The default Frame/Field is -1 (p.547; p.427's table says 0: From Start both take the first frame). The slider runs
+  -10 to +10 either way; with frame processing the value is kept to ±5.
+* `fx.scratch_removal` (`Timeline::scratchRemoval`, `model::applyScratchRemoval`) adds edits around whole frames (no
+  field-accurate segments) on the highest selected video track and applies the effect, auto-nested over one there; one
+  undo step. It is on the Tool palette in Clear Both Marks's place and on the Command Palette's FX tab.
+* The Frame Processing button shows when the project is interlaced (`EffectEditor::setInterlacedProject`); turning it
+  off labels the slider Field.
+* Tests: `tst_intraframe` (`scratchRemoval`), `tst_intraframe_ui` (`frameProcessing`), scenario `37-scratch-removal.json`.

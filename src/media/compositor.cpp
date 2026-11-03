@@ -730,8 +730,19 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 continue;
             }
             if (model::isIntraframeEffect(e)) {
-                // The Intraframe effects' objects on the segment over the tracks below (FX Guide ch.15; intraframe.cpp).
-                result = intraframePicture(e, layer, result, time, length);
+                // The Intraframe effects' objects on the segment over the tracks below (FX Guide ch.15; intraframe.cpp);
+                // Scratch Removal takes material from the segment's other frames, never outside it (p.428).
+                const model::Segment& seg = *tf->segment;
+                IntraframeFrames frames;
+                frames.offset = tf->offset;
+                frames.length = seg.length;
+                frames.pictureAt = [&](std::int64_t o) -> Picture {
+                    if (o < 0 || o >= seg.length) return Picture();
+                    return segmentPicture(c, &seg, segmentClipFrame(seg, o), nullptr, segmentBlend(seg, o), o);
+                };
+                frames.interlaced = c.interlaced;
+                frames.topFieldFirst = c.topFieldFirst ? c.topFieldFirst(seg) : true;
+                result = intraframePicture(e, layer, result, time, length, &frames);
                 result.quantize(c.precision);
                 continue;
             }
