@@ -369,6 +369,24 @@ struct Run {
             }
             return true;
         }
+        if (o.contains(QStringLiteral("correction"))) {
+            // Color Correction mode on the segment at the Record position (FX Guide p.589-597): {path: value} set on the
+            // current side's correction, {} removes the correction (the Remove Effect button, p.592).
+            timeline.setCorrectionMode(true);
+            const QJsonObject values = o.value(QStringLiteral("correction")).toObject();
+            bool ok = false;
+            if (values.isEmpty()) {
+                ok = timeline.removeCorrection();
+            } else {
+                model::ColorCorrection c = timeline.currentCorrection().value_or(model::ColorCorrection{});
+                for (auto it = values.begin(); it != values.end(); ++it) c.set(it.key(), it.value());
+                ok = timeline.setCurrentCorrection(c, QStringLiteral("Color Correction"));
+            }
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the correction was not refused") : timeline.lastMessage());
+            }
+            return true;
+        }
         if (o.contains(QStringLiteral("clip_note"))) {
             // Add Timeline Clip Note on the selected segments (p.483); "" deletes the note (p.484).
             const bool ok = timeline.setClipNote(timeline.selection(), o.value(QStringLiteral("clip_note")).toString());
@@ -906,6 +924,20 @@ private slots:
                 QJsonArray got;
                 for (const model::Segment& g : t->segments) {
                     if (!g.isFiller()) got.append(g.localColor);
+                }
+                QCOMPARE(got, it.value().toArray());
+            }
+        }
+        // Color Correction mode corrections: per track, whether each material segment has one.
+        const QJsonObject corrected = scenario.value(QStringLiteral("expect_corrected")).toObject();
+        if (!corrected.isEmpty()) {
+            const model::Sequence s = model::Sequence::fromItem(run.composer.state(MonitorId::Record).current()->item);
+            for (auto it = corrected.begin(); it != corrected.end(); ++it) {
+                const model::Track* t = s.track(it.key());
+                QVERIFY2(t, qPrintable(it.key()));
+                QJsonArray got;
+                for (const model::Segment& g : t->segments) {
+                    if (!g.isFiller()) got.append(g.hasCorrection());
                 }
                 QCOMPARE(got, it.value().toArray());
             }

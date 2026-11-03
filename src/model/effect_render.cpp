@@ -49,6 +49,8 @@ QJsonObject piece(const Segment& s, std::int64_t at, std::int64_t origin) {
         o.insert(QStringLiteral("in"), static_cast<qint64>(s.sourceIn));
     }
     if (s.effect) o.insert(QStringLiteral("effect"), s.effect->toJson());
+    // So is a Color Correction mode correction, applied before the effect (FX Guide p.597).
+    if (s.hasCorrection()) o.insert(QStringLiteral("correction"), segmentCorrection(s).toJson());
     // A nest is the effect's picture (6.6a): an edit inside it puts the render out of date.
     if (s.hasNest()) {
         o.insert(QStringLiteral("nest"), s.nest);

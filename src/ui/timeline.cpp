@@ -1,5 +1,7 @@
 #include "lumenis/ui/timeline.h"
 
+#include "lumenis/ui/correction_monitors.h"
+
 #include "lumenis/media/audio_fx.h"
 #include "lumenis/media/classic_title.h"
 #include "lumenis/media/link.h"
@@ -196,7 +198,7 @@ enum class Picture {
     FastMenu, Focus, SourceRecord, VideoQuality, ClientMonitor, StepIn, StepOut,
     ViewMenu, FindLeft, FindRight, ZoomOut, ZoomIn,
     SegmentSplice, SegmentOverwrite, Lift, Extract, CopyClipboard, AddEdit, Replace, Top, Tail, MatchFrame,
-    TrimMode, RippleTrim, OverwriteTrim, SourceRecordMode, EffectMode, Titler
+    TrimMode, RippleTrim, OverwriteTrim, SourceRecordMode, EffectMode, CorrectionMode, Titler
 };
 
 // The Video Quality Menu button's picture for each quality (p.404): green
@@ -364,6 +366,18 @@ QIcon picture(Picture which) {
         // A monitor with an effect's purple square (ours).
         p.drawRect(QRectF(5, 7, 22, 18));
         p.fillRect(QRectF(11, 11, 10, 10), QColor(0x8e, 0x5c, 0xd6));
+        break;
+    }
+    case Picture::CorrectionMode: {
+        // A monitor with three coloured dots (ours).
+        p.drawRect(QRectF(5, 7, 22, 18));
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(0xd0, 0x50, 0x50));
+        p.drawEllipse(QPointF(11, 16), 3, 3);
+        p.setBrush(QColor(0x50, 0xb0, 0x50));
+        p.drawEllipse(QPointF(16, 16), 3, 3);
+        p.setBrush(QColor(0x50, 0x70, 0xd0));
+        p.drawEllipse(QPointF(21, 16), 3, 3);
         break;
     }
     case Picture::Titler:
@@ -2313,6 +2327,8 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
     command("edit.source_record_mode", Picture::SourceRecordMode, tr("Source/Record Mode"), true)->setChecked(true);
     command("trim.trim_mode", Picture::TrimMode, tr("Trim Mode"), true);
     command("fx.effect_mode", Picture::EffectMode, tr("Effect Mode"), true);
+    // "Click the Color Correction Mode button, for example, in the Timeline palette" (FX Guide p.589).
+    command("cc.color_correction_mode", Picture::CorrectionMode, tr("Color Correction Mode"), true);
     top->addSpacing(8);
     command("edit.lift", Picture::Lift, tr("Lift"), false);
     command("edit.extract", Picture::Extract, tr("Extract"), false);
@@ -3141,6 +3157,9 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("smart.ripple_trim"),
         QStringLiteral("trim.trim_mode"),
         QStringLiteral("fx.effect_mode"),
+        QStringLiteral("cc.color_correction_mode"),
+        QStringLiteral("cc.previous_uncorrected_shot"),
+        QStringLiteral("cc.next_uncorrected_shot"),
         QStringLiteral("fx.step_in"),
         QStringLiteral("fx.step_out"),
         QStringLiteral("fx.collapse"),
@@ -3228,7 +3247,8 @@ bool Timeline::perform(const QString& id) {
         if (frames) fadeEffects(frames->first, frames->second);
         return true;
     } else if (id == QLatin1String("fx.remove_effect")) {
-        removeEffectAtPosition();
+        if (correctionMode_) removeCorrection();
+        else removeEffectAtPosition();
         return true;
     } else if (id == QLatin1String("tools.titler")) {
         applyTitler();
@@ -3355,6 +3375,10 @@ bool Timeline::perform(const QString& id) {
         stepOut();
     } else if (id == QLatin1String("fx.collapse")) {
         collapse();
+    } else if (id == QLatin1String("cc.color_correction_mode")) {
+        setCorrectionMode(!correctionMode_);
+    } else if (id == QLatin1String("cc.previous_uncorrected_shot") || id == QLatin1String("cc.next_uncorrected_shot")) {
+        goToUncorrectedShot(id == QLatin1String("cc.next_uncorrected_shot") ? 1 : -1);
     } else if (id == QLatin1String("fx.effect_mode")) {
         // A second click leaves it (ours; FX p.684 says only that it cannot close the Effect Editor in
         // Color Correction mode).
@@ -3367,6 +3391,7 @@ bool Timeline::perform(const QString& id) {
             // "To enter Source/Record mode from another mode" (p.457); it clears trim selections (p.652).
             exitTrimMode();
             setEffectMode(false);
+            setCorrectionMode(false);
             syncTrimDisplay();
         }
     } else if (id == QLatin1String("trim.trim_mode")) {
@@ -4750,10 +4775,127 @@ void Timeline::setEffectMode(bool on) {
     if (on) {
         composer_.stop();
         exitTrimMode();
+        setCorrectionMode(false);
     }
     effectMode_ = on;
     syncTrimDisplay();
     emit effectModeChanged(on);
+}
+
+void Timeline::setCorrectionMode(bool on) {
+    if (on == correctionMode_) {
+        syncTrimDisplay();
+        return;
+    }
+    if (on) {
+        composer_.stop();
+        exitTrimMode();
+        if (effectMode_) {
+            effectMode_ = false;
+            emit effectModeChanged(false);
+        }
+    }
+    correctionMode_ = on;
+    if (on) composer_.correctionMonitors()->setShotResolver([this](int step) { return correctionShot(step); });
+    composer_.setCorrectionMode(on);
+    syncTrimDisplay();
+    emit correctionModeChanged(on);
+}
+
+QString Timeline::correctionTrack() const {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return {};
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    QString best, top;
+    int bestNumber = -1, topNumber = -1;
+    const QStringList selected = patch_.selectedRecordTracks(seq);
+    for (const model::Track& t : seq.tracks()) {
+        if (t.kind != model::TrackKind::Video) continue;
+        if (t.number > topNumber) {
+            top = t.name();
+            topNumber = t.number;
+        }
+        if (selected.contains(t.name()) && t.number > bestNumber) {
+            best = t.name();
+            bestNumber = t.number;
+        }
+    }
+    return best.isEmpty() ? top : best;
+}
+
+std::optional<std::pair<std::int64_t, std::int64_t>> Timeline::correctionShot(int step) const {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(correctionTrack());
+    if (!t) return std::nullopt;
+    const auto start = model::correctionShotStart(*t, composer_.state(MonitorId::Record).position(), step);
+    if (!start) return std::nullopt;
+    std::int64_t at = 0;
+    const int i = t->segmentAt(*start, &at);
+    if (i < 0) return std::nullopt;
+    return std::pair{at, at + t->segments.at(i).length};
+}
+
+std::optional<model::ColorCorrection> Timeline::currentCorrection() const {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(correctionTrack());
+    if (!t) return std::nullopt;
+    const int i = t->segmentAt(composer_.state(MonitorId::Record).position());
+    if (i < 0 || t->segments.at(i).isFiller()) return std::nullopt;
+    model::Segment s = t->segments.at(i);
+    return model::correctionOf(s, correctionSide_);
+}
+
+bool Timeline::setCurrentCorrection(const model::ColorCorrection& correction, const QString& step) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return fail(tr("Load a sequence first."));
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    model::Track* t = seq.track(correctionTrack());
+    const int i = t ? t->segmentAt(composer_.state(MonitorId::Record).position()) : -1;
+    if (i < 0 || t->segments.at(i).isFiller()) return fail(tr("There is no segment to correct at the position."));
+    model::ColorCorrection& c = model::correctionOf(t->segments[i], correctionSide_);
+    if (c == correction) return false;
+    c = correction;
+    const QList<model::SegmentRef> keep = selection_;
+    const bool ok = commitSequence(step, seq);
+    selection_ = keep;
+    view_->update();
+    return ok;
+}
+
+bool Timeline::removeCorrection() {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return fail(tr("Load a sequence first."));
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    model::Track* t = seq.track(correctionTrack());
+    const int i = t ? t->segmentAt(composer_.state(MonitorId::Record).position()) : -1;
+    if (i < 0 || !t->segments.at(i).hasCorrection()) return fail(tr("There is no color correction on the current segment."));
+    t->segments[i].sourceCorrection = {};
+    t->segments[i].programCorrection = {};
+    const QList<model::SegmentRef> keep = selection_;
+    const bool ok = commitSequence(tr("Remove Color Correction"), seq);
+    selection_ = keep;
+    view_->update();
+    return ok;
+}
+
+bool Timeline::goToUncorrectedShot(int direction) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return fail(tr("Load a sequence first."));
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(correctionTrack());
+    const auto start = t ? model::uncorrectedShotStart(*t, composer_.state(MonitorId::Record).position(), direction) : std::nullopt;
+    if (!start) return fail(direction < 0 ? tr("There is no uncorrected shot before this one.") : tr("There is no uncorrected shot after this one."));
+    composer_.stop();
+    composer_.setActiveMonitor(MonitorId::Record);
+    composer_.moveTo(MonitorId::Record, *start);
+    return true;
 }
 
 void Timeline::exitTrimMode() {
@@ -4925,6 +5067,26 @@ bool Timeline::playTrimLoop() {
         composer_.stop();
         return true;
     }
+    if (correctionMode_) {
+        // "Media Composer plays the whole sequence in the active monitor, starting from the current position of the
+        // position indicator. Playback is not limited to the current segment" (FX Guide p.594); later passes from the
+        // start (ours).
+        if (composer_.isLooping()) {
+            composer_.stop();
+            return true;
+        }
+        if (!recordSequence()) return fail(tr("Load a sequence first."));
+        auto first = std::make_shared<bool>(true);
+        Composer::LoopResolver range = [this, first]() -> std::optional<Composer::LoopRange> {
+            const model::MonitorState& r = composer_.state(MonitorId::Record);
+            const std::int64_t last = std::max<std::int64_t>(r.duration() - 1, 0);
+            const std::int64_t start = *first ? std::min(r.position(), last) : 0;
+            *first = false;
+            return Composer::LoopRange{start, last};
+        };
+        composer_.playLoop(MonitorId::Record, std::move(range), 0);
+        return composer_.isLooping();
+    }
     if (!trimMode_ || rollers_.isEmpty()) {
         // From Source/Record mode: "The action takes you to the last trimmed transition" (p.656).
         if (!lastRollers_.isEmpty()) {
@@ -4954,6 +5116,19 @@ bool Timeline::editReview() {
     const model::LoadedClip* rec = recordSequence();
     if (!rec) return fail(tr("Load a sequence first."));
     const auto fps = static_cast<std::int64_t>(std::max(format_.nominalFps, 1));
+    if (correctionMode_) {
+        // "Media Composer plays part of the previous clip, all of the current clip, and part of the next clip. When
+        // playback is complete, the position indicator returns to its location", the parts being the Trim settings'
+        // Preroll and Postroll (FX Guide p.594).
+        const auto shot = correctionShot(0);
+        if (!shot) return fail(tr("There is no clip at the position on the correction track."));
+        const model::MonitorState& r = composer_.state(MonitorId::Record);
+        const std::int64_t last = std::max<std::int64_t>(r.duration() - 1, 0);
+        const std::int64_t start = std::clamp<std::int64_t>(shot->first - options_.trimPreroll * fps, 0, last);
+        const std::int64_t end = std::clamp<std::int64_t>(shot->second - 1 + options_.trimPostroll * fps, start, last);
+        composer_.playOnce(MonitorId::Record, start, end, r.position());
+        return true;
+    }
     std::optional<std::int64_t> cut;
     if (trimMode_ && !rollers_.isEmpty()) {
         // "Using the Edit Review command causes Media Composer to deselect trim rollers" (p.657).
@@ -5072,9 +5247,15 @@ void Timeline::syncTrimDisplay() {
         effectMode_ = false;
         emit effectModeChanged(false);
     }
+    if (trimMode_ && correctionMode_) {
+        correctionMode_ = false;
+        composer_.setCorrectionMode(false);
+        emit correctionModeChanged(false);
+    }
+    if (QToolButton* b = toolButton(QStringLiteral("cc.color_correction_mode"))) b->setChecked(correctionMode_);
     if (QToolButton* b = toolButton(QStringLiteral("trim.trim_mode"))) b->setChecked(trimMode_);
     if (QToolButton* b = toolButton(QStringLiteral("fx.effect_mode"))) b->setChecked(effectMode_);
-    if (QToolButton* b = toolButton(QStringLiteral("edit.source_record_mode"))) b->setChecked(!trimMode_ && !effectMode_);
+    if (QToolButton* b = toolButton(QStringLiteral("edit.source_record_mode"))) b->setChecked(!trimMode_ && !effectMode_ && !correctionMode_);
     view_->update();
     emit changed();
 }

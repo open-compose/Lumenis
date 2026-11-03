@@ -77,6 +77,11 @@ Each file is a JSON list of scenarios:
   * `{"punch_in": {"clip": name, "targets": [track or "" for New Track, ...],
     "punches": [[record frame, length, clip frame], ...]}}` edits in an Audio
     Punch-In take (p.749-751), an undo step per punch-in;
+  * `{"correction": {path: value, ...}}` enters Color Correction mode and sets
+    those controls (lumenis/model/color_correction.h) on the segment at the
+    Record position, one undo step; `{"correction": {}}` is the mode's Remove
+    Effect button (FX Guide p.592); `expect_corrected` gives each track's
+    material segments' "has a correction" in order;
   * `{"clip_note": text}` is Add Timeline Clip Note on the selected segments
     (p.483; "" deletes it, p.484); `expect_notes` gives each track's
     material segments' notes in order;

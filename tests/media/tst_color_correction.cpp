@@ -2,6 +2,7 @@
 // their Enable buttons and resets, the luminance ranges, and the HSL, Channels, Levels, Curves and Secondary groups' pictures.
 #include "lumenis/media/color_correction.h"
 #include "lumenis/model/color_correction.h"
+#include "lumenis/media/compositor.h"
 #include "lumenis/model/sequence.h"
 
 #include <QJsonArray>
@@ -412,6 +413,72 @@ private slots:
         after.softness = 0;
         QCOMPARE(model::vectorMembership(after, -150, 70), 0.0);
         QCOMPARE(ColorCorrection::fromJson(syringe.toJson()), syringe);
+    }
+
+    void segmentCorrections() {
+        // A segment's Source and Program sides (p.596-597), kept with the sequence.
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        model::Segment a;
+        a.clipId = QStringLiteral("a");
+        a.binId = QStringLiteral("bin");
+        a.name = QStringLiteral("a");
+        a.sourceTrack = QStringLiteral("V1");
+        a.length = 10;
+        model::Segment b = a;
+        b.clipId = QStringLiteral("b");
+        model::Segment c = a;
+        c.clipId = QStringLiteral("c");
+        seq.splice(QStringLiteral("V1"), 0, {a, model::Segment::filler(5), b, c});
+        model::Track* v1 = seq.track(QStringLiteral("V1"));
+        model::correctionOf(v1->segments[0], model::CorrectionSide::Source).set(QStringLiteral("hsl/controls/master/saturation"), 0);
+        model::correctionOf(v1->segments[3], model::CorrectionSide::Program).set(QStringLiteral("hsl/controls/master/gain"), 50);
+        QVERIFY(v1->segments.at(0).hasCorrection());
+        const model::Sequence back = model::Sequence::fromJson(seq.toJson());
+        QCOMPARE(back.track(QStringLiteral("V1"))->segments, seq.track(QStringLiteral("V1"))->segments);
+        // "a single adjustment using the merged values from the Source and Program sides" (p.597; ours: the Program
+        // side's set controls in place of the Source side's).
+        ColorCorrection source, program;
+        source.set(QStringLiteral("hsl/controls/master/gain"), 150);
+        source.set(QStringLiteral("hsl/controls/master/hue"), 20);
+        source.setEnabled(QStringLiteral("hsl/controls"), false);
+        program.set(QStringLiteral("hsl/controls/master/gain"), 80);
+        const ColorCorrection merged = model::mergedCorrection(source, program);
+        QCOMPARE(merged.number(QStringLiteral("hsl/controls/master/gain")), 80.0);
+        QCOMPARE(merged.number(QStringLiteral("hsl/controls/master/hue")), 20.0);
+        QVERIFY(merged.applies(QStringLiteral("hsl/controls/master/gain")));
+        QCOMPARE(model::mergedCorrection(source, ColorCorrection{}), source);
+        // The monitors' shots (p.590-591): filler is not a shot. a 0-10 | filler 10-15 | b 15-25 | c 25-35.
+        QCOMPARE(model::correctionShotStart(*v1, 17, 0), std::optional<std::int64_t>(15));
+        QCOMPARE(model::correctionShotStart(*v1, 17, -1), std::optional<std::int64_t>(0));
+        QCOMPARE(model::correctionShotStart(*v1, 17, 1), std::optional<std::int64_t>(25));
+        QCOMPARE(model::correctionShotStart(*v1, 3, 2), std::optional<std::int64_t>(25));
+        QCOMPARE(model::correctionShotStart(*v1, 3, -1), std::nullopt);
+        QCOMPARE(model::correctionShotStart(*v1, 12, 0), std::nullopt);
+        QCOMPARE(model::correctionShotStart(*v1, 12, -1), std::optional<std::int64_t>(0));
+        QCOMPARE(model::correctionShotStart(*v1, 12, 1), std::optional<std::int64_t>(15));
+        // Go to Previous/Next Uncorrected Shot (p.592): a and c are corrected.
+        QCOMPARE(model::uncorrectedShotStart(*v1, 2, 1), std::optional<std::int64_t>(15));
+        QCOMPARE(model::uncorrectedShotStart(*v1, 17, 1), std::nullopt);
+        QCOMPARE(model::uncorrectedShotStart(*v1, 30, -1), std::optional<std::int64_t>(15));
+        QCOMPARE(model::uncorrectedShotStart(*v1, 17, -1), std::nullopt);
+        // Pictures: the correction applies before effects, and not when corrections are left out (Dual Split).
+        media::Composition comp;
+        comp.sequence = &seq;
+        comp.tracks = {QStringLiteral("V1")};
+        comp.size = QSize(8, 6);
+        comp.precision = media::EffectPrecision::Bits32;
+        comp.source = [](const model::Segment&, std::int64_t, QSize size) -> std::optional<QImage> {
+            QImage image(size, QImage::Format_RGB32);
+            image.fill(QColor(230, 128, 26));
+            return image;
+        };
+        QColor px = media::composeImage(comp, 3).pixelColor(4, 3);
+        QVERIFY(std::abs(px.red() - px.blue()) <= 2); // desaturated
+        px = media::composeImage(comp, 17).pixelColor(4, 3);
+        QVERIFY(px.red() > px.blue() + 100);          // b: no correction
+        comp.corrections = false;
+        px = media::composeImage(comp, 3).pixelColor(4, 3);
+        QVERIFY(px.red() > px.blue() + 100);
     }
 };
 

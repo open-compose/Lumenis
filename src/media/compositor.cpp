@@ -257,8 +257,8 @@ std::optional<Picture> convertedPicture(const Composition& c, const model::Segme
     return Picture::fromImage(image, c.size.width(), c.size.height(), c.interpolation);
 }
 
-Picture segmentPicture(const Composition& c, const model::Segment* segment, std::int64_t frame, bool* missing, double blend = 0.0,
-                       std::int64_t offset = -1) {
+Picture uncorrectedSegmentPicture(const Composition& c, const model::Segment* segment, std::int64_t frame, bool* missing, double blend,
+                                  std::int64_t offset) {
     if (segment && segment->hasNest() && c.source) {
         // A nest (FX Guide p.219): its tracks composited at the segment's frame stand in for the clip.
         const model::Sequence nest = model::nestOf(*segment);
@@ -296,6 +296,15 @@ Picture segmentPicture(const Composition& c, const model::Segment* segment, std:
         }
     }
     return Picture::fromImage(*image, c.size.width(), c.size.height(), c.interpolation);
+}
+
+// A segment's picture with its Color Correction mode correction: "Media Composer processes relationship color
+// corrections before all other effects, with the exception of Timewarp effects" (FX Guide p.597).
+Picture segmentPicture(const Composition& c, const model::Segment* segment, std::int64_t frame, bool* missing, double blend = 0.0,
+                       std::int64_t offset = -1) {
+    Picture p = uncorrectedSegmentPicture(c, segment, frame, missing, blend, offset);
+    if (c.corrections && segment && segment->hasCorrection()) p = colorCorrectedPicture(model::segmentCorrection(*segment), p);
+    return p;
 }
 
 // The transitions of the dissolve family (FX Guide p.457, p.462) and the 2D transitions (wipes.cpp); any
@@ -836,6 +845,7 @@ QImage composeImage(const Composition& c, std::int64_t frame, bool* missing) {
         const auto tf = trackFrame(*c.sequence, *it, frame);
         if (!tf || (!tf->transition && tf->segment->isFiller() && !tf->segment->effect)) continue;
         if (tf->transition || tf->segment->effect || tf->segment->isFiller() || !c.source) break;
+        if (c.corrections && tf->segment->hasCorrection()) break; // its correction (p.597) is made by composeFrame
         const std::optional<QImage> image = c.source(*tf->segment, tf->frame, c.size);
         if (!image) {
             if (missing) *missing = true;

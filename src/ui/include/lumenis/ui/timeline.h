@@ -661,6 +661,29 @@ public:
     // Trim mode, slipping and the Source/Record Mode button leave it (Editing Guide p.457, p.652).
     bool isEffectMode() const { return effectMode_; }
     void setEffectMode(bool on);
+    // Color Correction mode (FX Guide p.589-594; docs/spec/color-correction.md, 6.10b1): the Color Correction Mode
+    // button turns the Composer's monitors into the mode's three (Composer::setCorrectionMode); "To exit Color
+    // Correction mode ... Click a mode button other than Color Correction" (p.589). It leaves Trim and Effect mode,
+    // and they leave it.
+    bool isCorrectionMode() const { return correctionMode_; }
+    void setCorrectionMode(bool on);
+    // The track the mode corrects (ours): the highest selected video track, else the highest video track.
+    QString correctionTrack() const;
+    // The shot `step` shots from the one at the position on that track, as its [start, end) frames (the monitors'
+    // Previous, Next and Second ones, p.591).
+    std::optional<std::pair<std::int64_t, std::int64_t>> correctionShot(int step) const;
+    // The side the mode works on: Source or Program Segment (p.597; the Correction Type button, 6.10b2).
+    model::CorrectionSide correctionSide() const { return correctionSide_; }
+    void setCorrectionSide(model::CorrectionSide side) { correctionSide_ = side; }
+    // That side's correction on the segment at the position on the correction track; nothing off a clip.
+    std::optional<model::ColorCorrection> currentCorrection() const;
+    // Sets it, as an undo step named `step`.
+    bool setCurrentCorrection(const model::ColorCorrection& correction, const QString& step);
+    // The Remove Effect button in the mode: "To remove the color correction on the current segment" (p.592), both
+    // sides of it (ours).
+    bool removeCorrection();
+    // "Go to Previous Uncorrected Shot or Go to Next Uncorrected Shot" on the correction track (p.592).
+    bool goToUncorrectedShot(int direction);
     // The rollers on the record sequence, empty when slipping.
     const QList<model::TrimRoller>& rollers() const { return rollers_; }
     model::TrimKind trimKind() const { return trimKind_; }
@@ -1097,6 +1120,7 @@ signals:
     void changed();
     // Effect mode was entered or left.
     void effectModeChanged(bool on);
+    void correctionModeChanged(bool on);
     // An effect was put on segments or transitions (Applying Effects opens Effect Editor, p.1220).
     void effectApplied();
     // The Stabilize effect was put on one segment, not nested: AutoStabilize runs (FX Guide p.276-277). `frame` is the
@@ -1300,6 +1324,8 @@ private:
     QList<model::SegmentRef> selection_;
     bool trimMode_ = false;
     bool effectMode_ = false;
+    bool correctionMode_ = false;
+    model::CorrectionSide correctionSide_ = model::CorrectionSide::Source;
     QList<model::TrimRoller> rollers_;
     QList<model::TrimRoller> lastRollers_;
     model::TrimKind trimKind_ = model::TrimKind::Ripple;

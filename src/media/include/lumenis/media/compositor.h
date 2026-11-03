@@ -246,6 +246,9 @@ struct Composition {
     // the monitored frame as if no effects are applied to it") segment effects are left out and
     // transitions show their cut; renders in date still play, being media.
     bool effects = true;
+    // Whether segments' Color Correction mode corrections (model::segmentCorrection) are applied, after a
+    // Timewarp and before every other effect (FX Guide p.597). Off for Dual Split's uncorrected half (p.592).
+    bool corrections = true;
     // How source frames and renders are resized to `size` (the Render setting).
     ImageInterpolation interpolation = ImageInterpolation::Advanced;
     // The project's scan, the formats a Timewarp has until its Source and Output are set (model::sourceFormat),

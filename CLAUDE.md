@@ -675,7 +675,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `model::levelsValue`, `colorCurve`/`curveValue`; groups applied in the tab order in `colorCorrectedPixel`), is done.
   6.10a3, the Secondary group's vectors ("secondary/vectors/<vector>/input|output/...", `model::vectorMembership`,
   `syringeVector`, `addToVector`/`subtractFromVector`, `media::wheelHueSaturation`), is done, so 6.10a is.
-  Next: 6.10b-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.10b is in four parts (ROADMAP). 6.10b1, Color Correction mode and its monitors (`Segment::sourceCorrection`/
+  `programCorrection` merged by `model::segmentCorrection` and applied in the compositor's `segmentPicture`;
+  `Timeline::setCorrectionMode`, `correctionShot`, `setCurrentCorrection`, `removeCorrection`, `goToUncorrectedShot`;
+  `Composer::setCorrectionMode`/`playOnce` and `src/ui/correction_monitors.*`; the `cc.*` commands on the Command
+  Palette's CC tab; tests `tst_correction_mode`, scenario `38-color-correction.json`), is done.
+  Next: 6.10b2-4, 6.10c-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

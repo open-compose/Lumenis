@@ -32,7 +32,10 @@
       ["fx.step_in", "fx.step_out", "fx.collapse", "fx.scratch_removal"]
     ]},
     {"name": "3D", "page": 96, "columns": []},
-    {"name": "CC", "page": 96, "columns": []},
+    {"name": "CC", "page": 96, "columns": [
+      ["cc.color_correction_mode", "cc.dual_split", "cc.previous_uncorrected_shot", "cc.next_uncorrected_shot",
+       "cc.reference_current"]
+    ]},
     {"name": "MCam", "page": 96, "columns": []},
     {"name": "Tracks", "page": 96, "columns": [
       ["timeline.enlarge_waveform", "timeline.reduce_waveform"]

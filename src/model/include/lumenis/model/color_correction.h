@@ -29,6 +29,7 @@
 #include <QStringList>
 
 #include <array>
+#include <cstdint>
 #include <optional>
 
 namespace lumenis::model {
@@ -156,6 +157,26 @@ QString syringeVector(ColorCorrection& c, const QList<QPointF>& samples);
 // colour or shrinks to leave it out.
 void addToVector(ColorCorrection& c, const QString& vector, QPointF sample);
 void subtractFromVector(ColorCorrection& c, const QString& vector, QPointF sample);
+
+// Color Correction mode's corrections on a segment (p.596-597): "Media Composer makes a single adjustment using the
+// merged values from the Source and Program sides". Ours: the Source side's controls with the Program side's set
+// controls in their place, and the buttons each side turned off (but those above a control the Program side set).
+struct Segment;
+struct Track;
+ColorCorrection mergedCorrection(const ColorCorrection& source, const ColorCorrection& program);
+ColorCorrection segmentCorrection(const Segment& segment);
+// Which side Color Correction mode works on: "Src (Source) Segment" or "Prog (Program) Segment" (p.597); the other
+// relationships come with 6.10d.
+enum class CorrectionSide { Source, Program };
+ColorCorrection& correctionOf(Segment& segment, CorrectionSide side);
+
+// The shots of Color Correction mode's monitors on a track (p.590-591): the start of the clip `step` shots from the
+// one at `frame` (0 itself, -1 "the segment immediately before", 2 "Second Next"); filler is not a shot (ours).
+// Nothing past either end of the track.
+std::optional<std::int64_t> correctionShotStart(const Track& track, std::int64_t frame, int step);
+// "Go to Previous Uncorrected Shot or Go to Next Uncorrected Shot": the start of the nearest clip before (direction
+// -1) or after (1) the one at `frame` that "does not already have a color correction applied" (p.592).
+std::optional<std::int64_t> uncorrectedShotStart(const Track& track, std::int64_t frame, int direction);
 
 // The Color Correction effect keeps its correction under this category (ours).
 inline const QString kColorCorrectionCategory = QStringLiteral("Color Correction");

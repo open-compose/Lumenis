@@ -26,6 +26,7 @@ class QPainter;
 namespace lumenis::ui {
 
 class Composer;
+class CorrectionMonitors;
 class MappableButton;
 
 // The monitors of the Composer window (guide p.378-381).
@@ -327,6 +328,16 @@ public:
     void setOverlayInput(OverlayInput* input) { overlayInput_ = input; }
     OverlayInput* overlayInput() const { return effect_.on ? overlayInput_ : nullptr; }
     const EffectPreview& effectPreview() const { return effect_; }
+
+    // Color Correction mode (FX Guide p.589-594): the three monitors of correction_monitors.h in place of the Source
+    // and Record monitors. The Timeline turns it on and off (Timeline::setCorrectionMode).
+    void setCorrectionMode(bool on);
+    bool isCorrectionMode() const { return correctionMode_; }
+    CorrectionMonitors* correctionMonitors() const { return correctionMonitors_; }
+    // While set, the picture resolver leaves segments' Color Correction mode corrections out (media::Composition::
+    // corrections): Dual Split's uncorrected part (p.592).
+    void setUncorrectedPictures(bool on) { uncorrected_ = on; }
+    bool uncorrectedPictures() const { return uncorrected_; }
     // The Effect Preview toolbar, and the effect's length and position boxes (for tests).
     QWidget* effectBar() const { return effectBar_; }
     QToolButton* effectLengthBox() const { return effectLength_; }
@@ -507,6 +518,10 @@ public:
     // play() plays the active monitor at `speed` (0 stops); stop() stops and clears Play In to Out.
     void play(int speed);
     void stop();
+    // Plays `monitor` from `start` to `end` (inclusive) once at normal speed; when it gets there (not when stopped
+    // first) the position goes to `returnTo`. Color Correction mode's Edit Review: "When playback is complete, the
+    // position indicator returns to its location in the current clip" (FX Guide p.594).
+    void playOnce(MonitorId monitor, std::int64_t start, std::int64_t end, std::optional<std::int64_t> returnTo);
     // Audio Loop Play (p.712): plays `monitor` from `start` to `end` (inclusive) at normal speed, over
     // and over, until stop(). Each pass restarts the sound (playStarted()). Playing at another speed
     // ends the loop.
@@ -678,6 +693,11 @@ private:
     QLabel* center_ = nullptr;
     QWidget* trimBar_ = nullptr;
     QWidget* effectBar_ = nullptr;
+    QWidget* monitorArea_ = nullptr; // the Source and Record columns and the middle panel
+    CorrectionMonitors* correctionMonitors_ = nullptr;
+    bool correctionMode_ = false;
+    bool uncorrected_ = false;
+    std::optional<std::int64_t> returnTo_; // playOnce()
     QToolButton* effectLength_ = nullptr;
     QToolButton* effectPosition_ = nullptr;
     EffectPreview effect_;

@@ -645,6 +645,75 @@ std::array<double, 3> lumaRangeWeights(const ColorCorrection& c, double brightne
     return w;
 }
 
+ColorCorrection mergedCorrection(const ColorCorrection& source, const ColorCorrection& program) {
+    if (program.isEmpty()) return source;
+    if (source.isEmpty()) return program;
+    ColorCorrection out = source;
+    for (auto it = program.values.constBegin(); it != program.values.constEnd(); ++it) {
+        out.values.insert(it.key(), it.value());
+        // A Source button above a control the Program side set does not stop it.
+        out.disabled.removeIf([&](const QString& d) { return under(it.key(), d); });
+    }
+    for (const QString& d : program.disabled) {
+        if (!out.disabled.contains(d)) out.disabled << d;
+    }
+    return out;
+}
+
+ColorCorrection segmentCorrection(const Segment& segment) {
+    return mergedCorrection(segment.sourceCorrection, segment.programCorrection);
+}
+
+ColorCorrection& correctionOf(Segment& segment, CorrectionSide side) {
+    return side == CorrectionSide::Source ? segment.sourceCorrection : segment.programCorrection;
+}
+
+namespace {
+
+// The track's clip segments as (start, index), in order.
+QList<std::pair<std::int64_t, qsizetype>> shotsOf(const Track& track) {
+    QList<std::pair<std::int64_t, qsizetype>> out;
+    std::int64_t at = 0;
+    for (qsizetype i = 0; i < track.segments.size(); ++i) {
+        if (!track.segments.at(i).isFiller()) out << std::pair{at, i};
+        at += track.segments.at(i).length;
+    }
+    return out;
+}
+
+// The shot at `frame`, or where it would fall between shots: the index of the last shot starting at or before it
+// (-1 before the first), and whether `frame` is inside that shot.
+std::pair<qsizetype, bool> shotAt(const Track& track, const QList<std::pair<std::int64_t, qsizetype>>& shots, std::int64_t frame) {
+    qsizetype k = -1;
+    for (qsizetype i = 0; i < shots.size(); ++i) {
+        if (shots.at(i).first <= frame) k = i;
+    }
+    const bool inside = k >= 0 && frame < shots.at(k).first + track.segments.at(shots.at(k).second).length;
+    return {k, inside};
+}
+
+} // namespace
+
+std::optional<std::int64_t> correctionShotStart(const Track& track, std::int64_t frame, int step) {
+    const auto shots = shotsOf(track);
+    const auto [k, inside] = shotAt(track, shots, frame);
+    if (!inside && step == 0) return std::nullopt;
+    // In filler, the shot before it counts as -1 and the one after as +1.
+    const qsizetype i = !inside && step < 0 ? k + step + 1 : k + step;
+    if (i < 0 || i >= shots.size()) return std::nullopt;
+    return shots.at(i).first;
+}
+
+std::optional<std::int64_t> uncorrectedShotStart(const Track& track, std::int64_t frame, int direction) {
+    const auto shots = shotsOf(track);
+    const auto [k, inside] = shotAt(track, shots, frame);
+    qsizetype i = direction < 0 ? k - (inside ? 1 : 0) : k + 1;
+    for (; i >= 0 && i < shots.size(); i += direction < 0 ? -1 : 1) {
+        if (!track.segments.at(shots.at(i).second).hasCorrection()) return shots.at(i).first;
+    }
+    return std::nullopt;
+}
+
 bool isColorCorrectionEffect(const Effect& effect) {
     return effect.category == QLatin1String("Image") && effect.name == QLatin1String("Color Correction");
 }

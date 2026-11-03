@@ -1,5 +1,7 @@
 #include "lumenis/ui/composer.h"
 
+#include "lumenis/ui/correction_monitors.h"
+
 #include "lumenis/core/timecode.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/titler.h"
@@ -1180,7 +1182,9 @@ Composer::Composer(QWidget* parent) : QWidget(parent) {
     auto* outer = new QVBoxLayout(this);
     outer->setContentsMargins(4, 4, 4, 4);
     outer->setSpacing(3);
-    auto* layout = new QHBoxLayout;
+    monitorArea_ = new QWidget(this);
+    monitorArea_->setObjectName(QStringLiteral("monitorArea"));
+    auto* layout = new QHBoxLayout(monitorArea_);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(6);
     layout->addWidget(sourceColumn, 1);
@@ -1221,7 +1225,12 @@ Composer::Composer(QWidget* parent) : QWidget(parent) {
     middle_->hide();
     layout->addWidget(middle_, 0, Qt::AlignBottom);
     layout->addWidget(recordColumn, 1);
-    outer->addLayout(layout, 1);
+    outer->addWidget(monitorArea_, 1);
+    // Color Correction mode's three monitors, in their place while the mode is on (FX Guide p.589).
+    correctionMonitors_ = new CorrectionMonitors(*this, this);
+    correctionMonitors_->hide();
+    connect(correctionMonitors_, &CorrectionMonitors::commandRequested, this, &Composer::commandRequested);
+    outer->addWidget(correctionMonitors_, 1);
 
     // The Trim buttons under the trim display (p.656).
     trimBar_ = new QWidget(this);
@@ -2175,6 +2184,7 @@ void Composer::stop() {
     if (speed_ == 0 && !timer_->isActive()) return;
     emit playbackDifficulties(active_, playRanges_);
     stopAt_.reset();
+    returnTo_.reset();
     speed_ = 0;
     slow_ = false;
     fraction_ = 0;
@@ -2182,6 +2192,26 @@ void Composer::stop() {
     timer_->stop();
     refresh();
     emit playStopped();
+}
+
+void Composer::playOnce(MonitorId monitor, std::int64_t start, std::int64_t end, std::optional<std::int64_t> returnTo) {
+    const model::MonitorState& s = state(monitor);
+    if (s.isEmpty() || end < start) return;
+    stop();
+    setActiveMonitor(monitor);
+    moveTo(monitor, start);
+    stopAt_ = end;
+    play(1);
+    returnTo_ = returnTo;
+}
+
+void Composer::setCorrectionMode(bool on) {
+    if (on == correctionMode_) return;
+    correctionMode_ = on;
+    monitorArea_->setVisible(!on);
+    correctionMonitors_->setVisible(on);
+    if (on) setActiveMonitor(MonitorId::Record);
+    refresh();
 }
 
 void Composer::playLoop(MonitorId monitor, std::int64_t start, std::int64_t end) {
@@ -2275,7 +2305,9 @@ void Composer::reachedEnd() {
         return;
     }
     if (!loop_) {
+        const std::optional<std::int64_t> back = returnTo_;
         stop();
+        if (back) moveTo(active_, *back);
         return;
     }
     // Trim mode's Play Loop: the Intermission holds the last frame before the next pass (p.1223).
@@ -2433,6 +2465,8 @@ bool Composer::handles(const QString& id) {
         QStringLiteral("edit.go_to_out_point"),
         QStringLiteral("other.gang"),
         QStringLiteral("composer.show_single_dual_monitor"),
+        QStringLiteral("cc.dual_split"),
+        QStringLiteral("cc.reference_current"),
     };
     return ids.contains(id);
 }
@@ -2455,6 +2489,14 @@ bool Composer::perform(const QString& id) {
         }
         return sign * kSpeeds[std::size(kSpeeds) - 1];
     };
+    if (id == QLatin1String("cc.dual_split") || id == QLatin1String("cc.reference_current")) {
+        // Color Correction mode's monitor commands (p.591-592), on its active monitor.
+        if (!correctionMode_) return true;
+        const int active = correctionMonitors_->activeMonitor();
+        if (id == QLatin1String("cc.dual_split")) correctionMonitors_->setDualSplit(active, !correctionMonitors_->dualSplit(active));
+        else correctionMonitors_->referenceCurrent();
+        return true;
+    }
     if (id == QLatin1String("composer.show_single_dual_monitor")) {
         setSingleMonitor(!single_);
     } else if (id == QLatin1String("other.gang")) {
@@ -2716,6 +2758,7 @@ std::optional<QColor> Composer::colorAtScreen(const QPoint& global) const {
 // bars, center duration) and emits changed(). Most setters end here, so changed() fires often:
 // listeners (the Timeline, digital audio scrub in MainWindow) must be cheap.
 void Composer::refresh() {
+    if (correctionMode_) correctionMonitors_->refresh();
     for (MonitorId m : {MonitorId::Source, MonitorId::Record}) {
         if (!columns_[m == MonitorId::Source ? 0 : 1]) continue;
         Column& c = column(m);

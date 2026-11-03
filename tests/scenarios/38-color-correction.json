@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Color Correction mode corrects the segment at the position as one undo step; an Add Edit keeps the correction on both halves; Remove Effect in the mode takes it off one; filler is refused",
+    "guide": "FX p.589-597",
+    "clips": [{"name": "A"}, {"name": "B"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 20]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"position": "record", "frame": 5},
+      {"correction": {"hsl/controls/master/saturation": 40}},
+      {"position": "record", "frame": 10},
+      {"command": "edit.add_edit"},
+      {"position": "record", "frame": 15},
+      {"correction": {}},
+      {"correction": {}, "refused": true},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"},
+      {"position": "record", "frame": 25},
+      {"correction": {"hsl/controls/master/gain": 120}},
+      {"command": "edit.undo"},
+      {"position": "record", "frame": 45},
+      {"correction": {"hsl/controls/master/gain": 120}, "refused": true}
+    ],
+    "expect": {"V1": [["A", 0, 10], ["A", 10, 10], ["B", 0, 20]]},
+    "expect_corrected": {"V1": [true, false, false]}
+  }
+]

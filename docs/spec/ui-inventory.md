@@ -287,6 +287,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   membership and Softness formulas, the output as added hue and saturation
   changes, the syringe's choice of the nearest predefined centre, Secondary
   after Curves.
+  6.10b1: merging the Source and Program sides (the Program side's set
+  controls win), the corrected track (highest selected video track),
+  filler not a shot, Remove Effect taking both sides, Reference Current's
+  monitor, Dual Split's starting box and handle corners, Play Loop's later
+  passes from the start, no position bars under the three monitors.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

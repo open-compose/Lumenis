@@ -71,6 +71,53 @@ ROADMAP 6.10. FX Guide (2025.12) ch.19-24, p.587-733. Code: `src/model/color_cor
   each colour's graph.
 * The Color Correction tool (6.10b) and the Secondary group (6.10a3) come later.
 
+## 6.10b1: Color Correction mode and its monitors
+
+Code: `Segment::sourceCorrection`/`programCorrection`, `model::segmentCorrection`, `correctionShotStart`,
+`uncorrectedShotStart` (`src/model/color_correction.*`); `Composition::corrections` and `segmentPicture` in
+`src/media/compositor.cpp`; `Timeline::setCorrectionMode` and the correction commands; `Composer::setCorrectionMode`,
+`playOnce` and `src/ui/correction_monitors.*`. Tests: `tst_color_correction` (segmentCorrections),
+`tst_correction_mode`, scenario `38-color-correction.json`.
+
+### From the guide
+* Relationship corrections have Source and Program sides; "You can make both a Source correction and a Program
+  correction on a segment", and then "Media Composer makes a single adjustment using the merged values from the Source
+  and Program sides" (p.596-597). "Src (Source) Segment: Corrects only the current segment"; "Prog (Program) Segment:
+  Corrects only the current segment" (p.597). "Media Composer processes relationship color corrections before all
+  other effects, with the exception of Timewarp effects" (p.597).
+* "To enter Color Correction mode ... Click the Color Correction Mode button, for example, in the Timeline palette. To
+  exit Color Correction mode ... Click a mode button other than Color Correction, for example, the Effect Mode button"
+  (p.589).
+* Three monitors; by default "the center monitor shows the frame at the current location of the position indicator,
+  while the left and right monitors show the last frame of the segment preceding the current segment, and the first
+  frame of the segment following the current segment" (p.590). Source menus: Empty, Entire Sequence, Reference, Current
+  (not offered when another monitor is Current), Previous, Next, Second Previous, Second Next, and the waveform and
+  vectorscope displays (p.591). Reference Current from the right-click menu; the reference shows in the right monitor
+  (p.591, p.594). Escape switches between the centre and right monitors (p.593).
+* Under each monitor: Dual Split, Go to Previous Uncorrected Shot, Go to Next Uncorrected Shot, Remove Effect (p.592).
+  Dual Split shows the uncorrected image on the left of a box with triangular handles (p.592).
+* Play Loop "plays the whole sequence in the active monitor, starting from the current position"; Edit Review plays
+  part of the previous clip, the current clip and part of the next by the Trim settings' Preroll and Postroll, then
+  returns (p.594).
+
+### Ours
+* Merging: the Source side with the Program side's set controls in their place, and the buttons each side turned off
+  (but those over a control the Program side set). A corrected segment's picture goes through `colorCorrectedPicture`
+  in `segmentPicture`, after its Timewarp and before its effect; renders include the correction in their key.
+* The track the mode corrects is the highest selected video track (else the highest video track); filler is not a
+  shot; the Go to buttons go to the first frame of the shot.
+* The mode's commands: `cc.color_correction_mode` on the Timeline's toolbar after Effect Mode and on the Command
+  Palette's CC tab with `cc.dual_split`, `cc.previous_uncorrected_shot`, `cc.next_uncorrected_shot` and
+  `cc.reference_current`. Trim mode, Effect mode and Source/Record mode leave it; the Effect Mode button's work inside
+  the mode (p.684) comes with 6.10d.
+* Remove Effect in the mode removes both sides of the current segment's correction.
+* Reference Current goes into the right monitor unless only the left one shows Reference; Escape switches the active
+  monitor between the centre and the right.
+* Dual Split's box starts as the left half of the picture; its handles are its top left and bottom right corners.
+* Play Loop's later passes start at the sequence's start. The monitors have no position bars of their own: the
+  Timeline's position indicator moves the Current monitor.
+* The Correction Type button and the tool come in 6.10b2; until then the mode works on the Source side.
+
 ## 6.10a3: the Secondary group
 
 ### From the guide

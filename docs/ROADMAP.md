@@ -1146,9 +1146,25 @@ phase of their own. They are done in three steps:
     `curveValue`; the groups applied in the tool's order); 6.10a3, the Secondary
     group's vectors (p.668-683), done (`model::secondaryVector`, `vectorMembership`, `syringeVector`,
     `addToVector`/`subtractFromVector`, `media::wheelHueSaturation`).
-  * 6.10b, Color Correction mode: entering and leaving it, the three monitors with their Source menus, dual split
-    and buttons, Play Loop and Edit Review, the Color Correction Tool with its group and subdividing tabs and buttons,
-    and the Correction Mode settings (p.587-609).
+  * 6.10b, Color Correction mode (p.587-609), in four parts (planned 2026-11-03 from p.587-609):
+    * 6.10b1, the mode and its monitors: Source and Program Segment corrections kept on segments and applied
+      before other effects but Timewarps (p.597); entering and leaving the mode (p.589); the three monitors with
+      their Source menus (Empty, Entire Sequence, Reference, Current, Previous, Next, Second Previous/Next, p.591;
+      the waveform and vectorscope entries wait for 6.10c), Reference Current and the Escape key (p.593-594), Dual
+      Split with its handles, Go to Previous/Next Uncorrected Shot and Remove Effect (p.592-593), Play Loop and
+      Edit Review in the mode (p.594). Done (docs/spec/color-correction.md: `Segment::sourceCorrection`/
+      `programCorrection`, `Timeline::setCorrectionMode`, `src/ui/correction_monitors.*`; tests `tst_correction_mode`,
+      scenario `38-color-correction.json`).
+    * 6.10b2, the Color Correction tool and the HSL group's panes: the Correction Type button (Source and Program
+      Segment and the effect; the other relationships with 6.10d), the group and subdividing tabs with their
+      Enable buttons, Alt+click resets and Page Up/Down (p.598-605), the Controls sliders, the ChromaWheels and the
+      Luma Ranges graphs (p.631-644).
+    * 6.10b3, the Channels, Levels, Curves and Secondary panes: Channel Blending and previews (p.645-647),
+      histograms and the Levels ChromaCurve (p.653-658), the Curves graphs with added and dragged points
+      (p.659-663), the vector wheels, Selected Vectors panel, sliders, Lock Vectors and the Color Selection buttons
+      (p.668-682).
+    * 6.10b4, the tool's buttons (p.605), the Correction Mode settings (Tabs, Units, Levels, Features, p.606-609),
+      the Command Palette's CC tab with its twelve Tab buttons (p.601-602), and Comments (p.609).
   * 6.10c, the Waveform and Vectorscope monitors (p.686-692), the Color Match control with NaturalMatch and custom
     colours (p.624-631), and the automatic corrections (p.618-623).
   * 6.10d, relationship corrections (p.596-598), correction templates, presets and buckets (p.610-615), keyframing

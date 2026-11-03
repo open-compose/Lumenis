@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/model/bin.h"
+#include "lumenis/model/color_correction.h"
 
 #include <QHash>
 #include <QJsonObject>
@@ -274,6 +275,13 @@ struct Segment {
     // an effect (a Submaster) can have them too. Empty: none.
     QJsonObject nest;
     std::int64_t nestIn = 0;
+    // Its Color Correction mode corrections (FX Guide p.596-597; lumenis/model/color_correction.h), on video
+    // segments: a Source and a Program side, merged into one adjustment (segmentCorrection) and applied before
+    // every effect but a Timewarp. Empty: none. Not effects: Remove Effect leaves them outside Color Correction
+    // mode.
+    ColorCorrection sourceCorrection;
+    ColorCorrection programCorrection;
+    bool hasCorrection() const { return !sourceCorrection.isEmpty() || !programCorrection.isEmpty(); }
 
     bool hasNest() const { return !nest.isEmpty(); }
     // Takes `by` frames off the segment's start (negative: puts them back) for what it shows: its clip's
