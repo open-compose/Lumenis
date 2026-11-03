@@ -1,5 +1,5 @@
-// Colour corrections (ROADMAP 6.10a1; FX Guide p.598-605, p.631-644; docs/spec/color-correction.md): the controls,
-// their Enable buttons and resets, the luminance ranges, and the HSL group's pictures.
+// Colour corrections (ROADMAP 6.10a; FX Guide p.598-605, p.631-667; docs/spec/color-correction.md): the controls,
+// their Enable buttons and resets, the luminance ranges, and the HSL, Channels, Levels and Curves groups' pictures.
 #include "lumenis/media/color_correction.h"
 #include "lumenis/model/color_correction.h"
 #include "lumenis/model/sequence.h"
@@ -155,6 +155,139 @@ private slots:
         const QColor px = corrected.toImage().pixelColor(1, 1);
         QVERIFY(px.blue() > px.red());
         QCOMPARE(px.alpha(), 255);
+    }
+
+    void channels() {
+        // The default row of each channel: itself at 100%, then 0% of itself twice and 0% Offset (p.645).
+        ColorCorrection c;
+        QCOMPARE(c.number(model::channelComponentPath(QStringLiteral("green"), 1, QStringLiteral("amount"))), 100.0);
+        QCOMPARE(c.number(model::channelComponentPath(QStringLiteral("green"), 2, QStringLiteral("amount"))), 0.0);
+        QCOMPARE(c.text(model::channelComponentPath(QStringLiteral("green"), 3, QStringLiteral("type"))), QStringLiteral("green"));
+        QCOMPARE(c.text(model::channelComponentPath(QStringLiteral("green"), 4, QStringLiteral("type"))), QStringLiteral("offset"));
+        QCOMPARE(model::colorControlRange(model::channelComponentPath(QStringLiteral("red"), 2, QStringLiteral("amount")))->first, -200.0);
+        // "You might redefine the green channel as 80% green and 20% red" (p.644).
+        c.set(model::channelComponentPath(QStringLiteral("green"), 1, QStringLiteral("amount")), 80);
+        c.set(model::channelComponentPath(QStringLiteral("green"), 2, QStringLiteral("type")), QStringLiteral("red"));
+        c.set(model::channelComponentPath(QStringLiteral("green"), 2, QStringLiteral("amount")), 20);
+        QVERIFY(c.adjusted(QStringLiteral("channels/green")) && !c.adjusted(QStringLiteral("channels/red")));
+        const std::array<double, 3> px{0.6, 1.0, 0.2};
+        auto out = media::colorCorrectedPixel(c, px);
+        QVERIFY(near(out[0], 0.6) && near(out[1], 0.8 + 0.12) && near(out[2], 0.2));
+        // "20% Green – is the same as –20% Green" (p.647).
+        ColorCorrection inverted, negative;
+        inverted.set(model::channelComponentPath(QStringLiteral("blue"), 2, QStringLiteral("type")), QStringLiteral("green"));
+        inverted.set(model::channelComponentPath(QStringLiteral("blue"), 2, QStringLiteral("amount")), 20);
+        inverted.set(model::channelComponentPath(QStringLiteral("blue"), 2, QStringLiteral("invert")), 1);
+        negative.set(model::channelComponentPath(QStringLiteral("blue"), 2, QStringLiteral("type")), QStringLiteral("green"));
+        negative.set(model::channelComponentPath(QStringLiteral("blue"), 2, QStringLiteral("amount")), -20);
+        QCOMPARE(media::colorCorrectedPixel(inverted, px), media::colorCorrectedPixel(negative, px));
+        QVERIFY(near(media::colorCorrectedPixel(negative, px)[2], 0.0));
+        // "redefine the red channel as 100% Cb" (p.647): neutral grey has no chroma, Cb at mid grey (ours).
+        ColorCorrection cb;
+        cb.set(model::channelComponentPath(QStringLiteral("red"), 1, QStringLiteral("type")), QStringLiteral("cb"));
+        QVERIFY(near(media::colorCorrectedPixel(cb, {0.3, 0.3, 0.3})[0], 0.5));
+        // Offset adds a constant.
+        ColorCorrection offset;
+        offset.set(model::channelComponentPath(QStringLiteral("red"), 4, QStringLiteral("amount")), 10);
+        QVERIFY(near(media::colorCorrectedPixel(offset, px)[0], 0.7));
+        // The group's button off: nothing.
+        c.setEnabled(QStringLiteral("channels"), false);
+        QCOMPARE(media::colorCorrectedPixel(c, px), px);
+    }
+
+    void levels() {
+        const ColorCorrection none;
+        QCOMPARE(model::levelsPoints(QStringLiteral("luma")).size(), 4); // black and white points only (p.657)
+        // Defaults 16, 128, 235 (p.649): the identity between them.
+        QVERIFY(near(model::levelsValue(none, QStringLiteral("master"), 100), 100, 1e-9));
+        // Input black point 60: "all values of 60 or less to the output value of 16 ... between 60 and 235 are now
+        // mapped to the full output range" (p.649-650).
+        ColorCorrection black;
+        black.set(QStringLiteral("levels/master/inBlack"), 60);
+        QCOMPARE(model::levelsValue(black, QStringLiteral("master"), 40), 16.0);
+        QVERIFY(near(model::levelsValue(black, QStringLiteral("master"), 235), 235));
+        QVERIFY(model::levelsValue(black, QStringLiteral("master"), 100) < 100); // darker below the gray point, which stays (p.650)
+        // Output black point 60: 16 becomes 60, the range shrinks.
+        ColorCorrection outBlack;
+        outBlack.set(QStringLiteral("levels/master/outBlack"), 60);
+        QCOMPARE(model::levelsValue(outBlack, QStringLiteral("master"), 16), 60.0);
+        QVERIFY(near(model::levelsValue(outBlack, QStringLiteral("master"), 128), 128, 1e-6)); // the gray points stay
+        // Input gray point 100 maps 100 to 128 and brightens; output gray 100 maps 128 to 100 and darkens (p.651-652).
+        ColorCorrection grayIn, grayOut;
+        grayIn.set(QStringLiteral("levels/master/inGray"), 100);
+        grayOut.set(QStringLiteral("levels/master/outGray"), 100);
+        QVERIFY(near(model::levelsValue(grayIn, QStringLiteral("master"), 100), 128, 1e-6));
+        QVERIFY(model::levelsValue(grayIn, QStringLiteral("master"), 180) > 180);
+        QVERIFY(near(model::levelsValue(grayOut, QStringLiteral("master"), 128), 100, 1e-6));
+        // "steeper near the black point and somewhat shallower near the white point" (p.656).
+        const double low = model::levelsValue(grayIn, QStringLiteral("master"), 30) - model::levelsValue(grayIn, QStringLiteral("master"), 20);
+        const double high = model::levelsValue(grayIn, QStringLiteral("master"), 230) - model::levelsValue(grayIn, QStringLiteral("master"), 220);
+        QVERIFY(low > high);
+        // A flat line at 128 makes "a uniform, mid-gray image" (p.655).
+        ColorCorrection flat;
+        for (const char* point : {"outBlack", "outGray", "outWhite"}) flat.set(QStringLiteral("levels/master/") + QLatin1String(point), 128);
+        auto out = media::colorCorrectedPixel(flat, {0.9, 0.2, 0.4});
+        for (double v : out) QVERIFY(near(v, (128.0 - 16) / 219.0));
+        // The Red tab acts on red only; Luma on Y' only, keeping the chroma's balance.
+        ColorCorrection red;
+        red.set(QStringLiteral("levels/red/outWhite"), 180);
+        out = media::colorCorrectedPixel(red, {1.0, 1.0, 1.0});
+        QVERIFY(near(out[0], (180.0 - 16) / 219.0) && near(out[1], 1.0) && near(out[2], 1.0));
+        ColorCorrection lumaTab;
+        lumaTab.set(QStringLiteral("levels/luma/outWhite"), 200);
+        out = media::colorCorrectedPixel(lumaTab, {1.0, 1.0, 1.0});
+        QVERIFY(near(out[0], (200.0 - 16) / 219.0) && near(out[0], out[2]));
+        // Composite: a saturated colour's swing brought within the white point keeps its hue (ours).
+        ColorCorrection composite;
+        composite.set(QStringLiteral("levels/composite/inWhite"), 255);
+        composite.set(QStringLiteral("levels/composite/outWhite"), 200);
+        const std::array<double, 3> yellow{0.95, 0.95, 0.1};
+        out = media::colorCorrectedPixel(composite, yellow);
+        QVERIFY(luma(out) < luma(yellow) && out[0] > out[2] + 0.3);
+    }
+
+    void curves() {
+        ColorCorrection c;
+        // The default curve, the 45 degree line from 0 to 255 (p.660).
+        QCOMPARE(model::colorCurve(c, QStringLiteral("red")), (QList<QPointF>{QPointF(0, 0), QPointF(255, 255)}));
+        QCOMPARE(model::curveValue(model::colorCurve(c, QStringLiteral("red")), 77.0), 77.0);
+        // "up to sixteen control points ... at least two" (p.662).
+        QList<QPointF> many;
+        for (int i = 0; i < 20; ++i) many << QPointF(i * 12, i * 12);
+        model::setColorCurve(c, QStringLiteral("blue"), many);
+        QCOMPARE(model::colorCurve(c, QStringLiteral("blue")).size(), model::kMaxCurvePoints);
+        model::setColorCurve(c, QStringLiteral("blue"), {QPointF(10, 10)});
+        QVERIFY(!c.values.contains(QStringLiteral("curves/blue")));
+        // A point through which the curve passes: "at 100 on the input (horizontal) axis and at 69 on the output" (p.663);
+        // no overshoot beyond the points' outputs.
+        model::setColorCurve(c, QStringLiteral("red"), {QPointF(0, 0), QPointF(100, 69), QPointF(255, 255)});
+        const QList<QPointF> red = model::colorCurve(c, QStringLiteral("red"));
+        QVERIFY(near(model::curveValue(red, 100), 69, 1e-9));
+        for (int x = 0; x <= 100; x += 5) QVERIFY(model::curveValue(red, x) <= 69.0 + 1e-9);
+        auto out = media::colorCorrectedPixel(c, {100 / 255.0, 100 / 255.0, 100 / 255.0});
+        QVERIFY(near(out[0], 69 / 255.0) && near(out[1], 100 / 255.0));
+        // Anchoring: close points keep the part of the curve between the first two still (p.663).
+        const QList<QPointF> anchored{QPointF(0, 0), QPointF(100, 100), QPointF(105, 105), QPointF(200, 240), QPointF(255, 255)};
+        for (int x = 0; x <= 100; x += 10) QVERIFY(near(model::curveValue(anchored, x), x, 1e-9));
+        // A flat line at 128 on every graph: "a uniform, midgray image" (p.660), through Master.
+        ColorCorrection flat;
+        model::setColorCurve(flat, QStringLiteral("master"), {QPointF(0, 128), QPointF(255, 128)});
+        for (double v : media::colorCorrectedPixel(flat, {0.1, 0.5, 0.9})) QVERIFY(near(v, 128 / 255.0));
+        // The Master sliders are the HSL group's (p.659): adjusting one turns on the HSL hierarchy and the Curves tab.
+        ColorCorrection sliders;
+        sliders.setEnabled(QStringLiteral("hsl"), false);
+        sliders.setEnabled(QStringLiteral("curves"), false);
+        sliders.set(QStringLiteral("curves/masterSaturation"), 0);
+        QCOMPARE(sliders.number(QStringLiteral("hsl/controls/master/saturation")), 0.0);
+        QVERIFY(sliders.enabled(QStringLiteral("hsl")) && sliders.enabled(QStringLiteral("curves")));
+        out = media::colorCorrectedPixel(sliders, {0.9, 0.5, 0.1});
+        QVERIFY(near(out[0], out[2]));
+        // Groups add up in order: a Channels change is seen by Curves.
+        ColorCorrection both;
+        both.set(model::channelComponentPath(QStringLiteral("red"), 1, QStringLiteral("amount")), 50);
+        model::setColorCurve(both, QStringLiteral("red"), {QPointF(0, 0), QPointF(127.5, 255), QPointF(255, 255)});
+        QVERIFY(near(media::colorCorrectedPixel(both, {1.0, 0.0, 0.0})[0], 1.0));
+        QCOMPARE(ColorCorrection::fromJson(both.toJson()), both);
     }
 };
 

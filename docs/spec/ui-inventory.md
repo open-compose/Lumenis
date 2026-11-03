@@ -276,6 +276,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   curves' shares made to add up to one, the formulas for Contrast (about mid
   grey, 100 a slope of 20), Gain/Gamma/Setup on the 16-235 range, the ChromaWheels'
   Amount 100 as a quarter of the chroma range, Clip Low/High only once set.
+  6.10a2: the groups applied one after another in the tab order (HSL,
+  Channels, Levels, Curves); the Channels tab's Cr and Cb centred on mid grey
+  and Offset 100% as full scale; the Levels gray point as a power curve, the
+  Levels tabs' order (Master, Red/Green/Blue, Luma, Composite) and Composite as
+  the levels on both ends of the composite swing; the Curves graphs as monotone
+  cubics, Master before the colour graphs.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

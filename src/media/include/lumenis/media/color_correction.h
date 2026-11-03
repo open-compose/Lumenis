@@ -2,7 +2,7 @@
 
 // Colour corrections' pictures (ROADMAP 6.10; FX Guide ch.20; docs/spec/color-correction.md): a correction
 // (lumenis/model/color_correction.h) applied to a picture. 6.10a1: the HSL group's Controls (per luminance range),
-// Hue Offsets ChromaWheels and Luma Ranges.
+// Hue Offsets ChromaWheels and Luma Ranges. 6.10a2: the Channels, Levels and Curves groups, after the HSL group on R'G'B'.
 //
 // Ours: pixels are taken to video levels in Y'CbCr (Rec. 709, Y' 16-235) where the guide's numbers are 8-bit, worked on
 // there and brought back. Each range's adjustments are made in turn, blended by the share of that range the pixel's

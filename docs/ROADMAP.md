@@ -1142,7 +1142,8 @@ phase of their own. They are done in three steps:
   * 6.10a, the corrections and their pictures: the colour correction effect's groups in their order with their
     enable buttons (p.598-605), in three parts: 6.10a1, the HSL group's Controls, Hue Offsets (ChromaWheels) and
     Luma Ranges tabs (p.631-644), done (docs/spec/color-correction.md: `src/model/color_correction.*`,
-    `src/media/color_correction.*`, the Color Correction effect in the compositor; test `tst_color_correction`); 6.10a2, the Channels, Levels and Curves groups (p.644-667); 6.10a3, the Secondary
+    `src/media/color_correction.*`, the Color Correction effect in the compositor; test `tst_color_correction`); 6.10a2, the Channels, Levels and Curves groups (p.644-667), done (the same files: `model::levelsValue`, `colorCurve`,
+    `curveValue`; the groups applied in the tool's order); 6.10a3, the Secondary
     group's vectors (p.668-683).
   * 6.10b, Color Correction mode: entering and leaving it, the three monitors with their Source menus, dual split
     and buttons, Play Loop and Edit Review, the Color Correction Tool with its group and subdividing tabs and buttons,
