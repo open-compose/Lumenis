@@ -4,6 +4,8 @@
 #include "lumenis/model/bin.h"
 #include "lumenis/model/intraframe.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/ui/bin_dock.h"
+#include "lumenis/ui/brush_preview.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/intraframe_tool.h"
@@ -13,11 +15,14 @@
 #include <QComboBox>
 #include <QJsonObject>
 #include <QKeyEvent>
+#include <QLabel>
+#include <QMimeData>
 #include <QSlider>
 #include <QTest>
 #include <QToolButton>
 
 #include <cmath>
+#include <memory>
 
 using namespace lumenis;
 using namespace lumenis::ui;
@@ -313,6 +318,106 @@ private slots:
         editor.findChild<QAction*>(QStringLiteral("intraframeObject:bringToFront"))->trigger();
         settle();
         QCOMPARE(objects().constLast().id, box);
+    }
+
+    void brushAndEyedropper() {
+        // The Brush category's Shape buttons, Brush Preview window, brush templates (p.397-399) and the eyedropper (p.89,
+        // p.397).
+        Composer composer;
+        Timeline timeline{composer};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.setPictureResolver([](MonitorId, std::int64_t, QSize size, bool*) {
+            QImage image(size, QImage::Format_RGB32);
+            image.fill(QColor(10, 200, 30));
+            return image;
+        });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(model::Effect{QStringLiteral("Image"), QStringLiteral("Paint Effect"), {}}));
+        composer.resize(800, 500);
+        composer.show();
+        EffectEditor editor{timeline};
+        editor.resize(700, 900);
+        editor.show();
+        composer.moveTo(MonitorId::Record, 10);
+        timeline.setEffectMode(true);
+        settle();
+        auto effect = [&] {
+            return *model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(0).effect;
+        };
+        auto brush = [&] { return effect().parameters.value(model::kBrushCategory).toObject(); };
+
+        // A Brush Shape button: the shape (and a custom head made from another goes).
+        auto* square = editor.findChild<QToolButton*>(QStringLiteral("brushShape:Square"));
+        QVERIFY(square);
+        square->click();
+        settle();
+        QCOMPARE(brush().value(QStringLiteral("Shape")).toString(), QStringLiteral("Square"));
+        BrushPreview* preview = editor.brushPreview();
+        QVERIFY(preview && preview->isVisible());
+        QCOMPARE(preview->head(), model::brushShapePoints(QStringLiteral("Square")));
+
+        // "click the brush head. Control points appear"; dragging one makes a custom head (p.398), one undo step.
+        QVERIFY(!preview->editing());
+        QTest::mouseClick(preview, Qt::LeftButton, {}, preview->rect().center());
+        QVERIFY(preview->editing());
+        const QPoint corner = preview->toWidget(model::brushShapePoints(QStringLiteral("Square")).at(0).p).toPoint();
+        QTest::mousePress(preview, Qt::LeftButton, {}, corner);
+        QCOMPARE(preview->selectedPoint(), 0);
+        QMouseEvent move(QEvent::MouseMove, QPointF(corner - QPoint(6, 6)), preview->mapToGlobal(QPointF(corner - QPoint(6, 6))), Qt::NoButton,
+                         Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(preview, &move);
+        QTest::mouseRelease(preview, Qt::LeftButton, {}, corner - QPoint(6, 6));
+        settle();
+        const QList<model::ControlPoint> custom = model::brushHeadPoints(brush());
+        QVERIFY(brush().contains(QStringLiteral("Head")));
+        QVERIFY(custom.at(0).p.x() < -0.5 && custom.at(0).p.y() < -0.5);
+        QCOMPARE(custom.at(1), model::brushShapePoints(QStringLiteral("Square")).at(1));
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        QVERIFY(!brush().contains(QStringLiteral("Head")));
+        QVERIFY(timeline.perform(QStringLiteral("edit.redo")));
+        settle();
+        QCOMPARE(preview->head(), custom);
+
+        // The Brush Template icon makes a template named Brush (p.399); dropped on the window, its parameters return.
+        QVERIFY(editor.findChild<QLabel*>(QStringLiteral("brushTemplate")));
+        std::unique_ptr<QMimeData> mime(editor.brushTemplateMime());
+        QVERIFY(mime && mime->hasFormat(brushTemplateMime()));
+        const auto saved = preview->droppedBrush(mime.get());
+        QVERIFY(saved);
+        const BinItem item = model::brushTemplateItem(*saved, QString(), QDateTime::currentDateTimeUtc());
+        QCOMPARE(item.name, QStringLiteral("Brush"));
+        QCOMPARE(model::brushTemplateOf(item), saved);
+        auto* circle = editor.findChild<QToolButton*>(QStringLiteral("brushShape:Circle"));
+        circle->click();
+        settle();
+        QVERIFY(!brush().contains(QStringLiteral("Head")));
+        QVERIFY(editor.applyBrushTemplate(*saved));
+        settle();
+        QCOMPARE(model::brushHeadPoints(brush()), custom);
+        // A bin item dropped: resolved through the Composer.
+        preview->setItemResolver([&](const QString&, const QString& id) { return id == item.id ? std::optional<BinItem>(item) : std::nullopt; });
+        QMimeData items;
+        items.setData(binItemsMime(), (QStringLiteral("bin\n") + item.id).toUtf8());
+        QCOMPARE(preview->droppedBrush(&items), saved);
+
+        // The eyedropper: Alt+click with the Brush tool over the Effect Preview (p.397), and a drag from a colour
+        // parameter's Color Preview window to the monitor (p.89).
+        editor.findChild<QToolButton*>(QStringLiteral("intraframeBrush"))->click();
+        QVERIFY(editor.intraframeTool()->overlayPress(QPointF(0.5, 0.5), Qt::AltModifier, false));
+        settle();
+        const QString colorCategory = QStringLiteral("Paint Effect Color Parameters");
+        QCOMPARE(effect().parameters.value(colorCategory).toObject().value(QStringLiteral("Color controls")).toString(), QStringLiteral("#0ac81e"));
+        QVERIFY(model::intraframeObjects(effect()).isEmpty()); // nothing painted
+        QWidget* monitor = composer.findChild<QWidget*>(QStringLiteral("recordMonitor"));
+        QVERIFY(monitor && monitor->isVisible());
+        composer.setPictureResolver([](MonitorId, std::int64_t, QSize size, bool*) {
+            QImage image(size, QImage::Format_RGB32);
+            image.fill(QColor(200, 20, 40));
+            return image;
+        });
+        QVERIFY(editor.pickColorAt(colorCategory, QStringLiteral("Color controls"), monitor->mapToGlobal(monitor->rect().center())));
+        settle();
+        QCOMPARE(effect().parameters.value(colorCategory).toObject().value(QStringLiteral("Color controls")).toString(), QStringLiteral("#c81428"));
+        QVERIFY(!editor.pickColorAt(colorCategory, QStringLiteral("Color controls"), editor.mapToGlobal(QPoint(5, 5))));
     }
 
     void blurTools() {

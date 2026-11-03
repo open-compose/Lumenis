@@ -297,8 +297,12 @@ bool IntraframeTool::overlayPress(const QPointF& at, Qt::KeyboardModifiers modif
     case Tool::Oval:
         drag_ = Drag::Shape;
         return true;
-    case Tool::Curve:
     case Tool::Brush:
+        // "Press and hold the Alt key ... The pointer becomes an eyedropper ... click it. The color you pick becomes the
+        // new default color" (p.397).
+        if (modifiers & Qt::AltModifier) return editor_.pickPaintColor(at);
+        [[fallthrough]];
+    case Tool::Curve:
         drag_ = Drag::Freehand;
         stroke_ = {at};
         return true;

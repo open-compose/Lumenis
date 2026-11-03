@@ -9,6 +9,7 @@ add_library(lumenis_ui STATIC
     bin_container.cpp
     bin_dialogs.cpp
     bin_dock.cpp
+    brush_preview.cpp
     platform_check.cpp
     bin_view.cpp
     clip_audio_dialogs.cpp
@@ -26,6 +27,7 @@ add_library(lumenis_ui STATIC
     effect_editor.cpp
     effect_editor_keyframes.cpp
     effect_editor_handles.cpp
+    effect_editor_brush.cpp
     effect_editor_tracking.cpp
     effect_editor_titler.cpp
     titler_tool.cpp
@@ -96,6 +98,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/tracking_window.h
     include/lumenis/ui/titler_tool.h
     include/lumenis/ui/intraframe_tool.h
+    include/lumenis/ui/brush_preview.h
     include/lumenis/ui/titler_panel.h
     include/lumenis/ui/title_tool.h
     include/lumenis/ui/effect_palette.h

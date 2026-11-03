@@ -2686,6 +2686,32 @@ MonitorPicture* Composer::picture(MonitorId monitor) const {
     return column(monitor).picture;
 }
 
+std::optional<QColor> Composer::colorAt(MonitorId monitor, const QPointF& fraction) const {
+    if (fraction.x() < 0.0 || fraction.y() < 0.0 || fraction.x() > 1.0 || fraction.y() > 1.0) return std::nullopt;
+    // The picture at a size of our own (480 wide, the project's aspect): enough for a pick, quick to make.
+    const Rational a = aspectRatio();
+    const double ratio = a.num() > 0 && a.den() > 0 ? static_cast<double>(a.num()) / static_cast<double>(a.den()) : 16.0 / 9.0;
+    const QSize size(480, std::max(1, static_cast<int>(std::lround(480 / ratio))));
+    const QImage image = picture(monitor, size);
+    if (image.isNull()) return std::nullopt;
+    const int x = std::clamp(static_cast<int>(fraction.x() * image.width()), 0, image.width() - 1);
+    const int y = std::clamp(static_cast<int>(fraction.y() * image.height()), 0, image.height() - 1);
+    return image.pixelColor(x, y);
+}
+
+std::optional<QColor> Composer::colorAtScreen(const QPoint& global) const {
+    for (MonitorId m : {MonitorId::Record, MonitorId::Source}) {
+        MonitorPicture* w = picture(m);
+        if (!w || !w->isVisible()) continue;
+        const QPoint local = w->mapFromGlobal(global);
+        if (!w->rect().contains(local)) continue;
+        const QRectF pic = w->pictureRect();
+        if (pic.width() <= 0.0 || pic.height() <= 0.0) return std::nullopt;
+        return colorAt(m, QPointF((local.x() - pic.left()) / pic.width(), (local.y() - pic.top()) / pic.height()));
+    }
+    return std::nullopt;
+}
+
 // Brings every widget up to date with the monitor states (clip names, tracking, Gang button, picture,
 // bars, center duration) and emits changed(). Most setters end here, so changed() fires often:
 // listeners (the Timeline, digital audio scrub in MainWindow) must be cheap.

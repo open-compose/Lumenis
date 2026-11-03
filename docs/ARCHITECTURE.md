@@ -134,7 +134,7 @@ headers in `include/lumenis/<library>/`.
   (docs/spec/title-tool.md) and saved as Title Effect clips (`src/model/title_clip.*`, fill and matte precomputes
   keyed by the compositor's `classicTitleLayer`), the Intraframe effects' objects in `src/model/intraframe.*` drawn by
   `src/media/intraframe.cpp` (Paint modes, Blur and Mosaic within objects, AniMatte mattes; docs/spec/intraframe.md) and
-  drawn and selected in the Effect Preview by `intraframe_tool.*` (reshaped and rotated in `intraframe_reshape.cpp`), and mixed rate clips' Motion Adapters in `src/model/motion_adapter.*`: the
+  drawn and selected in the Effect Preview by `intraframe_tool.*` (reshaped and rotated in `intraframe_reshape.cpp`; brushes in `brush_preview.*` and `effect_editor_brush.cpp`), and mixed rate clips' Motion Adapters in `src/model/motion_adapter.*`: the
   monitors load a clip at another rate as its adapted copy at the project's rate, the segments edited
   from it carry `Segment::adapter`, and `BinDocument` stores the clip itself back (docs/spec/motion-effects.md).
 * **Audio tools.** `audio_tools.*` (the Audio Mixer, docs/spec/audio-mixer.md, and the Audio Tool), `audio_groups.cpp` (the mixer's track sidebar and groups), `clip_audio_dialogs.*` (Apply Gain and Auto VO, with `src/model/clip_audio.*`, docs/spec/clip-audio.md), `multi_mix_dialog.*` (the Multi-Mix Tool, docs/spec/multi-mix.md),

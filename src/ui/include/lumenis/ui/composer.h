@@ -177,6 +177,10 @@ public:
     QImage picture(MonitorId monitor, QSize size, bool* offline = nullptr) const;
     // The same at another frame of the monitor's item.
     QImage pictureAt(MonitorId monitor, std::int64_t frame, QSize size, bool* offline = nullptr) const;
+    // The eyedropper (FX Guide p.89, p.397): the colour of a monitor's picture at a fraction of it, and of the picture
+    // under a point on the screen (either monitor); nothing outside a picture or when the monitor is empty.
+    std::optional<QColor> colorAt(MonitorId monitor, const QPointF& fraction) const;
+    std::optional<QColor> colorAtScreen(const QPoint& global) const;
     // Edit points of what a monitor shows (the Timeline knows a sequence's;
     // a clip has its start and end), for Go to Previous/Next Event and
     // Mark Clip.

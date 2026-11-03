@@ -271,6 +271,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Editing titles in (docs/spec/title-tool.md, 6.8e1): a roll's finish staying
   the roll's end whatever the source OUT, Place in Timeline's tracks (the
   sequence's video tracks and the next one).
+* Intraframe brushes (docs/spec/intraframe.md, 6.9c1): the Brush Shape buttons'
+  shapes (Circle, Oval, Ellipse, Square), the Brush Preview window's scale (Size
+  as a percentage of its width), the Brush Template icon's picture, a click on a
+  Color Preview window opening the colour dialog, picked colours as shown
+  (effects included), Alt+click picking in any Paint mode.
 * Intraframe reshaping (docs/spec/intraframe.md, 6.9b2): the Object menu as a
   button by the tools, new smooth handles a third of the way to the neighbours,
   joins changed in the shape being edited, the Z-Rotation arm 8% of the width,

@@ -264,6 +264,57 @@ private slots:
         QCOMPARE(at(shown, 54, 18).red(), 0);
     }
 
+    void brushHeads() {
+        // The Brush Shape buttons' heads and a custom head from the Brush Preview window (p.397-398), and brush
+        // templates (p.399).
+        QCOMPARE(model::brushShapes(), (QStringList{QStringLiteral("Circle"), QStringLiteral("Oval"), QStringLiteral("Ellipse"), QStringLiteral("Square")}));
+        QCOMPARE(model::brushHeadPoints({}), model::brushShapePoints(QStringLiteral("Circle")));
+        QCOMPARE(model::brushShapePoints(QStringLiteral("Square")).size(), 4);
+        QCOMPARE(model::brushShapePoints(QStringLiteral("Square")).at(0).join, model::JoinType::Straight);
+        QCOMPARE(model::brushShapePoints(QStringLiteral("Oval")).at(0).join, model::JoinType::Smooth);
+        QJsonObject brushCategory{{QStringLiteral("Size"), 600}};
+        // A flat head: a bar across, a tenth as high as it is wide.
+        const QList<model::ControlPoint> flat = model::rectangleShape(QRectF(-0.5, -0.05, 1.0, 0.1));
+        model::setBrushHead(brushCategory, flat);
+        QCOMPARE(model::brushHeadPoints(brushCategory), flat);
+        QJsonObject shaped = brushCategory;
+        model::setBrushShape(shaped, QStringLiteral("Oval"));
+        QVERIFY(!shaped.contains(QStringLiteral("Head")));
+        QCOMPARE(model::brushHeadPoints(shaped), model::brushShapePoints(QStringLiteral("Oval")));
+        QJsonObject cleared = brushCategory;
+        model::setBrushHead(cleared, {});
+        QVERIFY(!cleared.contains(QStringLiteral("Head")));
+
+        // One stamp in the middle, Size 600 (20 pixels of 64): the circle reaches below, the flat head only across.
+        const Picture black = Picture::solid(64, 36, Qt::black);
+        const Picture none(64, 36);
+        auto stamped = [&](const QJsonObject& b) {
+            Effect paint{QStringLiteral("Image"), QStringLiteral("Paint Effect"), {}};
+            paint.parameters.insert(QStringLiteral("Paint Effect Color Parameters"), QJsonObject{{QStringLiteral("Color controls"), QStringLiteral("#ffffff")}});
+            paint.parameters.insert(model::kBrushCategory, b);
+            model::addIntraframeObject(paint, IntraframeKind::Brush, model::polylineShape({QPointF(0.5, 0.5), QPointF(0.5001, 0.5)}));
+            return intraframePicture(paint, black, none, 0.0, EffectSpan(10));
+        };
+        const Picture round = stamped(QJsonObject{{QStringLiteral("Size"), 600}});
+        QCOMPARE(at(round, 32, 24).red(), 255);
+        const Picture bar = stamped(brushCategory);
+        QCOMPARE(at(bar, 32, 24).red(), 0);
+        QCOMPARE(at(bar, 40, 18).red(), 255);
+        // Spin 90 stands the bar up.
+        QJsonObject turned = brushCategory;
+        turned.insert(QStringLiteral("Spin"), 90);
+        const Picture upright = stamped(turned);
+        QCOMPARE(at(upright, 32, 24).red(), 255);
+        QCOMPARE(at(upright, 40, 18).red(), 0);
+
+        // A brush template: an Effect item named Brush by default.
+        const model::BinItem item = model::brushTemplateItem(brushCategory, QString(), QDateTime::currentDateTimeUtc());
+        QCOMPARE(item.kind, model::BinItemKind::Effect);
+        QCOMPARE(item.name, QStringLiteral("Brush"));
+        QCOMPARE(model::brushTemplateOf(item), std::optional<QJsonObject>(brushCategory));
+        QCOMPARE(model::brushTemplateOf(model::BinItem{}), std::nullopt);
+    }
+
     void blurWithinObjects() {
         // The Blur effect blurs only inside its objects (p.439-441); without objects nothing changes.
         Picture halves = Picture::solid(64, 36, QColor(0, 0, 255));

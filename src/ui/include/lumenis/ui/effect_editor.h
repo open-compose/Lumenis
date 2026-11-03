@@ -3,16 +3,19 @@
 #include "lumenis/media/effect_handles.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/effect_template.h"
+#include "lumenis/model/intraframe.h"
 #include "lumenis/model/nest.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/model/titler.h"
 #include "lumenis/model/tracking.h"
+#include "lumenis/ui/brush_preview.h"
 #include "lumenis/ui/composer.h"
 
 #include <QHash>
 #include <QImage>
 #include <QSet>
 #include <QJsonValue>
+#include <QPointer>
 #include <QWidget>
 
 #include <cmath>
@@ -343,6 +346,24 @@ public:
     // object ... and perform any of the following procedures", p.404); with none or several, the effect's own, which
     // new objects take.
     void setIntraframeSelection(const QStringList& ids);
+
+    // ---- Brushes and the eyedropper (ROADMAP 6.9c1; effect_editor_brush.cpp, brush_preview.h)
+    // The Brush category shown (the selected object's, or the effect's).
+    QJsonObject shownBrush() const;
+    // "click one of the Brush Shape buttons. The default shape of the brush head changes to your selection" (p.397).
+    bool setBrushShape(const QString& shape);
+    // A custom head from the Brush Preview window (p.398).
+    bool setBrushHead(const QList<model::ControlPoint>& head);
+    // A brush template dropped on the Brush Preview window: "The brush in the Brush Preview window assumes the same
+    // parameters as the brush template you saved to the bin" (p.399).
+    bool applyBrushTemplate(const QJsonObject& brush);
+    // The brush template the Brush Template icon drags to a bin (brushTemplateMime).
+    QMimeData* brushTemplateMime() const;
+    // The eyedropper (p.89, p.397): a colour parameter set to the colour under a point of the screen, or of the Record
+    // monitor's picture at a fraction; false where there is no picture.
+    bool pickColorAt(const QString& category, const QString& parameter, const QPoint& global);
+    bool pickPaintColor(const QPointF& fraction);
+    BrushPreview* brushPreview() const { return brushPreview_; }
     const QStringList& intraframeSelection() const { return intraframeSelection_; }
     // The Effect Preview picture's width over its height.
     double previewAspect() const;
@@ -574,6 +595,9 @@ private:
     QToolButton* bringForward_ = nullptr;
     QToolButton* sendBackward_ = nullptr;
     QToolButton* objectMenu_ = nullptr;
+    QPointer<BrushPreview> brushPreview_; // in the Brush category, rebuilt with the controls
+    // The Brush category's Shape buttons, Brush Template icon and Brush Preview window.
+    QWidget* brushPanel(QWidget* parent);
     // Shows the drawing tool buttons for the shown effect and checks the active one.
     void syncIntraframeButtons();
     TitlerDashboard* titlerDashboard_ = nullptr;

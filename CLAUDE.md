@@ -656,8 +656,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.9b2, Reshape, Z-Rotation and the Object menu (`src/ui/intraframe_reshape.cpp`; control point operations in
   `src/model/intraframe.*`; the Effect Editor's "intraframeObjectMenu"; tests `tst_intraframe`, `tst_intraframe_ui`), is
   done, so 6.9b is.
-  Next: 6.9c (Brush Preview, brush templates, eyedropper, Export Matte PICT, Previsualization Marker), 6.9d-e, 6.10 and
-  6.11, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.9c1, the Brush Shape buttons, Brush Preview window and custom heads (`src/ui/brush_preview.*`,
+  `effect_editor_brush.cpp`, `model::brushHeadPoints`), brush templates (`model::brushTemplateItem`,
+  `brushTemplateMime()`) and the eyedropper (`ColorSwatch` in `effect_editor.cpp`, `Composer::colorAt`; tests
+  `tst_intraframe`, `tst_intraframe_ui`), is done.
+  Next: 6.9c2 (Export Matte PICT, Previsualization Marker), 6.9d-e, 6.10 and 6.11, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

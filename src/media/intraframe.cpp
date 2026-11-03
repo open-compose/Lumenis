@@ -113,14 +113,11 @@ std::vector<float> drawnMask(int w, int h, bool antialias, Paint paint) {
     return m;
 }
 
-// The brush head (p.493, p.497): its outline in a unit box, by the Brush category's "Shape" (ours: Circle, Oval,
-// Ellipse, Square; a custom head is 6.9c's).
-QPainterPath brushHead(const QString& shape) {
-    QPainterPath head;
-    if (shape == QLatin1String("Square")) head.addRect(QRectF(-0.5, -0.5, 1.0, 1.0));
-    else if (shape == QLatin1String("Oval")) head.addEllipse(QRectF(-0.5, -0.25, 1.0, 0.5));
-    else if (shape == QLatin1String("Ellipse")) head.addEllipse(QRectF(-0.5, -0.15, 1.0, 0.3));
-    else head.addEllipse(QRectF(-0.5, -0.5, 1.0, 1.0));
+// The brush head (p.397-398, p.493): its outline in a unit box, the Brush category's custom head or its Shape's
+// (model::brushHeadPoints).
+QPainterPath brushHead(const QJsonObject& brush) {
+    QPainterPath head = intraframePath(model::brushHeadPoints(brush), true, QSizeF(1.0, 1.0));
+    head.setFillRule(Qt::WindingFill);
     return head;
 }
 
@@ -393,7 +390,7 @@ std::vector<float> intraframeMask(const model::Effect& effect, const model::Intr
         const double soft = std::clamp(number(oe, brush, QStringLiteral("Soft"), time, span, 0.0), 0.0, 100.0) / 100.0;
         const double spin = number(oe, brush, QStringLiteral("Spin"), time, span, 0.0);
         const double path = std::clamp(number(oe, brush, QStringLiteral("Path"), time, span, 100.0), 0.0, 100.0) / 100.0;
-        const QPainterPath head = brushHead(text(oe, brush, QStringLiteral("Shape"), QStringLiteral("Circle")));
+        const QPainterPath head = brushHead(oe.parameters.value(brush).toObject());
         QPolygonF line;
         for (const QPolygonF& poly : outline.toSubpathPolygons()) line << poly;
         const QList<QPointF> stamps = strokeStamps(line, std::max(1.0, size / 4.0), path);

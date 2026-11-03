@@ -1,4 +1,5 @@
 #include "lumenis/ui/bin_view.h"
+#include "lumenis/ui/brush_preview.h"
 
 #include "lumenis/media/classic_title.h"
 #include "lumenis/media/titler.h"
@@ -639,7 +640,7 @@ Qt::DropActions BinItemModel::supportedDropActions() const {
 QStringList BinItemModel::mimeTypes() const {
     // text/uri-list: files dragged in from the desktop (an .otio dropped into a bin, p.969).
     return {binItemsMime(), mediaFilesMime(), audioSuiteTemplateMime(), eqTemplateMime(), effectTemplateMime(),
-            QStringLiteral("text/uri-list")};
+            brushTemplateMime(), QStringLiteral("text/uri-list")};
 }
 
 namespace {
@@ -662,7 +663,7 @@ namespace {
 // or the data holds no template.
 bool hasTemplate(const QMimeData* data) {
     return data->hasFormat(audioSuiteTemplateMime()) || data->hasFormat(eqTemplateMime()) ||
-           data->hasFormat(effectTemplateMime());
+           data->hasFormat(effectTemplateMime()) || data->hasFormat(brushTemplateMime());
 }
 
 bool addTemplate(BinDocument& document, const QMimeData* data) {
@@ -673,6 +674,13 @@ bool addTemplate(BinDocument& document, const QMimeData* data) {
         const auto t = model::EffectTemplate::fromJson(o.value(QStringLiteral("template")).toObject());
         if (!t) return false;
         document.addItem(model::effectTemplateItem(*t, o.value(QStringLiteral("name")).toString(), now));
+        return true;
+    }
+    if (data->hasFormat(brushTemplateMime())) {
+        // The Effect Editor's Brush Template icon (FX Guide p.399): named Brush unless the drag says otherwise.
+        const QJsonObject o = QJsonDocument::fromJson(data->data(brushTemplateMime())).object();
+        if (!o.value(QStringLiteral("brush")).isObject()) return false;
+        document.addItem(model::brushTemplateItem(o.value(QStringLiteral("brush")).toObject(), o.value(QStringLiteral("name")).toString(), now));
         return true;
     }
     if (data->hasFormat(eqTemplateMime())) {

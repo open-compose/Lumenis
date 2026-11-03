@@ -1127,8 +1127,9 @@ phase of their own. They are done in three steps:
     Done. 6.9b2, the Z-Rotation and Reshape tools: rotating objects, control points and direction handles with the
     modifier keys, adding, removing, nudging and stepping through control points; the Object menu's layers, Group,
     UnGroup, Lock and Unlock. Done.
-  * 6.9c, the Brush Preview window and custom brush heads, brush templates in bins, the eyedropper, Export Matte
-    PICT and the Previsualization Marker tool (p.396-399, p.412-413, p.418-419).
+  * 6.9c, in two parts: 6.9c1, the Brush Shape buttons, the Brush Preview window and custom brush heads, brush
+    templates in bins and the eyedropper (p.88-89, p.396-399, p.493). Done. 6.9c2, Export Matte PICT and the
+    Previsualization Marker tool (p.412-413, p.418-419).
   * 6.9d, Scratch Removal: replacement material from nearby frames or fields, the Offset menu, frame and field
     processing, and the Scratch Removal button (p.419-429).
   * 6.9e, PlasmaWipe effects (ch.16, p.442-455).

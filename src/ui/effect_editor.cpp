@@ -4,6 +4,7 @@
 #include "lumenis/ui/titler_panel.h"
 #include "lumenis/ui/titler_tool.h"
 #include "lumenis/ui/intraframe_tool.h"
+#include "lumenis/ui/brush_preview.h"
 #include "lumenis/ui/tracking_window.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/model/pan_scan.h"
@@ -124,6 +125,43 @@ QColor defaultColor(const EffectParameter& p) {
     const QColor c(p.defaultValue.toString());
     return c.isValid() ? c : QColor(Qt::black);
 }
+
+// A colour parameter's Color Preview window (FX Guide p.88-89): a click opens the system's colour dialog (ours: the
+// Other Options button's dialog on the swatch itself); pressing it and dragging away makes the eyedropper, and
+// releasing over a monitor's picture picks the colour there.
+class ColorSwatch : public QToolButton {
+public:
+    ColorSwatch(QWidget* parent, std::function<void(const QPoint&)> pick) : QToolButton(parent), pick_(std::move(pick)) {}
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override {
+        press_ = event->position().toPoint();
+        picking_ = false;
+        QToolButton::mousePressEvent(event);
+    }
+    void mouseMoveEvent(QMouseEvent* event) override {
+        if (!picking_ && (event->buttons() & Qt::LeftButton) &&
+            (event->position().toPoint() - press_).manhattanLength() >= QApplication::startDragDistance()) {
+            // "Position the pointer over the Color Preview window to activate the eyedropper" (p.89).
+            picking_ = true;
+            setDown(false);
+            setCursor(Qt::CrossCursor);
+        }
+        if (!picking_) QToolButton::mouseMoveEvent(event);
+    }
+    void mouseReleaseEvent(QMouseEvent* event) override {
+        if (!picking_) return QToolButton::mouseReleaseEvent(event);
+        picking_ = false;
+        unsetCursor();
+        setDown(false);
+        if (pick_) pick_(event->globalPosition().toPoint());
+    }
+
+private:
+    std::function<void(const QPoint&)> pick_;
+    QPoint press_;
+    bool picking_ = false;
+};
 
 // Shows a colour on a parameter's swatch button and keeps it for the colour dialog.
 void setSwatch(QToolButton* swatch, const QColor& color) {
@@ -911,7 +949,9 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     controls_.insert(k, s);
                     valueLabels_.insert(k, value);
                 } else if (p.kind == QLatin1String("color")) {
-                    auto* swatch = new QToolButton(box);
+                    auto* swatch = new ColorSwatch(box, [this, category, name = p.name](const QPoint& global) {
+                        pickColorAt(category, name, global);
+                    });
                     swatch->setObjectName(QStringLiteral("param:") + k);
                     swatch->setFixedSize(18, 14);
                     setSwatch(swatch, defaultColor(p));
@@ -1000,6 +1040,9 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     });
                     row->addWidget(more);
                     row->addStretch(1);
+                } else if (category == model::kBrushCategory && p.name == QLatin1String("Shape buttons")) {
+                    // The Brush Shape buttons, the Brush Template icon and the Brush Preview window (p.397-399).
+                    row->addWidget(brushPanel(box), 1);
                 } else {
                     // Buttons and other controls need the Effect Preview
                     // monitor or tools that come later.
@@ -1253,6 +1296,7 @@ void EffectEditor::syncValues(const model::Effect& effect) {
             if (color.isValid()) setSwatch(b, color);
         }
     }
+    if (brushPreview_) brushPreview_->setBrush(effect.parameters.value(model::kBrushCategory).toObject());
     syncBurnIn(effect);
     syncing_ = false;
 }

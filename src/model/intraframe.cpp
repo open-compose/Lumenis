@@ -489,4 +489,56 @@ void setDirectionHandle(ControlPoint& point, bool out, const QPointF& handle) {
     other = -handle / l * otherLength;
 }
 
+// ---------------------------------------------------------------- brush heads
+
+QStringList brushShapes() {
+    return {QStringLiteral("Circle"), QStringLiteral("Oval"), QStringLiteral("Ellipse"), QStringLiteral("Square")};
+}
+
+QList<ControlPoint> brushShapePoints(const QString& shape) {
+    // The square's corners stay straight-edge joins: only its points move (p.398).
+    if (shape == QLatin1String("Square")) return rectangleShape(QRectF(-0.5, -0.5, 1.0, 1.0));
+    if (shape == QLatin1String("Oval")) return ovalShape(QRectF(-0.5, -0.25, 1.0, 0.5));
+    if (shape == QLatin1String("Ellipse")) return ovalShape(QRectF(-0.5, -0.15, 1.0, 0.3));
+    return ovalShape(QRectF(-0.5, -0.5, 1.0, 1.0));
+}
+
+QList<ControlPoint> brushHeadPoints(const QJsonObject& brush) {
+    QList<ControlPoint> head;
+    for (const QJsonValue v : brush.value(QStringLiteral("Head")).toArray()) head << ControlPoint::fromJson(v.toObject());
+    if (head.size() >= 3) return head;
+    return brushShapePoints(brush.value(QStringLiteral("Shape")).toString(QStringLiteral("Circle")));
+}
+
+void setBrushHead(QJsonObject& brush, const QList<ControlPoint>& head) {
+    if (head.isEmpty()) {
+        brush.remove(QStringLiteral("Head"));
+        return;
+    }
+    QJsonArray points;
+    for (const ControlPoint& c : head) points.append(c.toJson());
+    brush.insert(QStringLiteral("Head"), points);
+}
+
+void setBrushShape(QJsonObject& brush, const QString& shape) {
+    brush.insert(QStringLiteral("Shape"), shape);
+    brush.remove(QStringLiteral("Head"));
+}
+
+BinItem brushTemplateItem(const QJsonObject& brush, const QString& name, const QDateTime& when) {
+    BinItem item;
+    item.id = newItemId();
+    item.kind = BinItemKind::Effect;
+    item.name = name.isEmpty() ? QStringLiteral("Brush") : name;
+    item.created = when;
+    item.modified = when;
+    item.composition.insert(QStringLiteral("brush"), brush);
+    return item;
+}
+
+std::optional<QJsonObject> brushTemplateOf(const BinItem& item) {
+    if (item.kind != BinItemKind::Effect || !item.composition.value(QStringLiteral("brush")).isObject()) return std::nullopt;
+    return item.composition.value(QStringLiteral("brush")).toObject();
+}
+
 } // namespace lumenis::model

@@ -126,3 +126,36 @@ Code: `src/model/intraframe.*` (the objects), `src/media/intraframe.cpp` (their 
 * The Object menu is a menu button ("intraframeObjectMenu") beside the drawing tools. A click on a grouped object
   selects its group; locked objects are not moved, scaled, reshaped or deleted.
 * Tests: `tst_intraframe` (`reshaping`), `tst_intraframe_ui` (`reshapeRotateGroup`).
+
+## 6.9c1: brushes and the eyedropper
+
+### From the guide
+* "In the Brush parameter category of the Effect Editor, click one of the Brush Shape buttons. The default shape of the
+  brush head changes to your selection" (p.397). "The parameter sliders do not appear until you select the
+  corresponding drawing tool" (p.396).
+* A custom brush head: click a Brush Shape button as its basis, click the head in the Brush Preview window, drag its
+  control points; rounded shapes' points get direction bars and handles, "but you cannot use the modifier key
+  variations" (p.398). Spin turns the head, -360 to 360 (p.399).
+* Brush templates: "click the Brush Template icon, and then drag it to a bin ... the name of the template defaults to
+  Brush"; dragging the template to the Brush Preview window gives the brush its parameters (p.399).
+* The eyedropper: "Position the pointer over the Color Preview window to activate the eyedropper ... drag the
+  eyedropper to the Effect Preview monitor, and click on the color" (p.89); with the Brush tool in Solid mode, Alt
+  makes the pointer an eyedropper over the Effect Preview and the colour picked "becomes the new default color"
+  (p.397).
+
+### Ours
+* The Brush category keeps "Shape" (Circle, Oval, Ellipse, Square: `model::brushShapes`) and, for a custom head,
+  "Head": control points in a unit box (`model::brushHeadPoints`, `setBrushHead`, `setBrushShape`); a Shape button
+  drops the custom head. The renderer stamps the head the category gives (`brushHead` in `src/media/intraframe.cpp`).
+* The Effect Editor's Brush row (`effect_editor_brush.cpp`): the Shape buttons ("brushShape:<shape>"), the Brush
+  Template icon ("brushTemplate") and the Brush Preview window (`src/ui/brush_preview.*`), which shows the head with
+  Size as a percentage of its width (at least 8 pixels) turned by Spin. Its control points show after a click on the
+  head; each drag of a point or handle is one undo step ("Brush Head"). The square's corners are straight-edge joins.
+* A brush template is an Effect item holding the Brush category under "brush" (`model::brushTemplateItem`); it drags as
+  `brushTemplateMime()` and drops on the Brush Preview window from the icon or a bin ("Apply Brush Template").
+* The Color Preview window (`ColorSwatch` in `effect_editor.cpp`) opens the system colour dialog when clicked (ours:
+  the Other Options button's dialog), and is the eyedropper when dragged: releasing over either monitor's picture
+  picks its colour there (`Composer::colorAtScreen`, `colorAt`). The colour is the picture as shown, effects and all.
+* Alt+click with the Brush tool sets the Paint Effect's colour from the Effect Preview's picture and paints nothing; we
+  do not require the Solid mode.
+* Tests: `tst_intraframe` (`brushHeads`), `tst_intraframe_ui` (`brushAndEyedropper`).

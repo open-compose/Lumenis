@@ -1,8 +1,10 @@
 #pragma once
 
+#include "lumenis/model/bin.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
 
+#include <QDateTime>
 #include <QJsonObject>
 #include <QList>
 #include <QPointF>
@@ -158,5 +160,26 @@ void toggleFixedLength(IntraframeObject& object, int shape, int point);
 // Dragging a direction handle to `handle` (relative to its point): a smooth join's opposite bar turns with it, and
 // changes length in unison unless fixedLength; a corner join's does not move (p.409). `out` names the handle dragged.
 void setDirectionHandle(ControlPoint& point, bool out, const QPointF& handle);
+
+// Brush heads (ROADMAP 6.9c1; p.397-399, p.493). The Brush category's "Shape" names one of the Brush Shape buttons
+// (ours: Circle, Oval, Ellipse, Square); "Head", when there, is a custom head made in the Brush Preview window: its
+// control points in a unit box centred on 0 (x to the right, y down), closed.
+inline const QString kBrushCategory = QStringLiteral("Brush");
+// The shapes of the Brush Shape buttons, in their order.
+QStringList brushShapes();
+// A Brush Shape button's head as control points (rounded shapes as smooth Bézier joins, the square as corners).
+QList<ControlPoint> brushShapePoints(const QString& shape);
+// The head a Brush category gives: its custom "Head", else its Shape's.
+QList<ControlPoint> brushHeadPoints(const QJsonObject& brush);
+// The Brush category with a custom head; an empty list goes back to the Shape's.
+void setBrushHead(QJsonObject& brush, const QList<ControlPoint>& head);
+// "click a Brush Shape button": the shape, dropping a custom head (it was based on another shape).
+void setBrushShape(QJsonObject& brush, const QString& shape);
+
+// Brush templates (p.399): "click the Brush Template icon, and then drag it to a bin. A brush template appears in the
+// bin, and the name of the template defaults to Brush." An Effect item holding the Brush category under "brush".
+BinItem brushTemplateItem(const QJsonObject& brush, const QString& name, const QDateTime& when);
+// The Brush category a brush template holds; nothing for other items.
+std::optional<QJsonObject> brushTemplateOf(const BinItem& item);
 
 } // namespace lumenis::model
