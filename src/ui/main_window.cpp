@@ -2850,6 +2850,31 @@ QString MainWindow::openBinFile(const QString& path, QString* error) {
     return id;
 }
 
+bool MainWindow::exportMattePict(const QString& path) {
+    const QSize raster = project_ ? QSize(project_->settings.format.width, project_->settings.format.height) : QSize(1920, 1080);
+    if (effectEditor_->aniMatteImage(QSize(16, 9)).isNull()) {
+        // "You must click the Effect Editor before you select File > Export Matte PICT" (p.418). Ours: a message when the
+        // Effect Editor shows no AniMatte effect.
+        QMessageBox::information(this, tr("Export Matte PICT"),
+                                 tr("Show an AniMatte effect in the Effect Editor, in Effect mode, to export its matte."));
+        return false;
+    }
+    QString file = path;
+    if (file.isEmpty()) {
+        QSettings remembered;
+        const QString folder = remembered.value(QStringLiteral("exportMattePictFolder"), QDir::homePath()).toString();
+        file = QFileDialog::getSaveFileName(this, tr("Export PICT As"), QDir(folder).filePath(QStringLiteral("Matte.pct")),
+                                            tr("PICT files (*.pct *.pict)"));
+        if (file.isEmpty()) return false;
+        remembered.setValue(QStringLiteral("exportMattePictFolder"), QFileInfo(file).absolutePath());
+    }
+    if (!effectEditor_->exportMattePict(file, raster)) {
+        QMessageBox::warning(this, tr("Export Matte PICT"), tr("The PICT file could not be written:\n%1").arg(QDir::toNativeSeparators(file)));
+        return false;
+    }
+    return true;
+}
+
 // Steps: collect the selection and the clips its sequences use, make sure an Export setting exists,
 // ask for the file and setting (Export As dialog), then write the AAF with interop::aaf::exportItems,
 // or, when the Export setting's Export As is Media Composer Bin (ours, docs/spec/avb.md "Export"), a
@@ -5042,6 +5067,11 @@ void MainWindow::applySettings() {
     const Settings& s = *settings_;
     // The Render setting's Timewarps Render Using, shown by the Motion Effect Editor's Type (FX p.183).
     if (motionEditor_) motionEditor_->setRenderUsing(s.text(QStringLiteral("Render"), QStringLiteral("timewarpsRenderUsing")));
+    // The Paint Effect's Previsualization Marker tool is for 24-fps film projects (FX p.412).
+    if (project_) {
+        effectEditor_->setFilmProject(!project_->settings.filmType.isEmpty() &&
+                                      TimecodeFormat::forRate(project_->settings.format.editRate, false).nominalFps == 24);
+    }
     // Its Source and Output menus follow the project's format (FX p.183, p.205).
     if (motionEditor_ && project_) {
         motionEditor_->setProjectFormat(TimecodeFormat::forRate(project_->settings.format.editRate, false).nominalFps,
@@ -5426,6 +5456,7 @@ void MainWindow::installPanelHandlers() {
     handle("timeline.render.expertrender_in_out", [this] { expertRender(); });
     // File > Output > Export to File (p.868).
     handle("file.output.export_to_file", [this] { exportToFile(); });
+    handle("file.export_matte_pict", [this] { exportMattePict(); });
     handle("tools.background_queue_window", [this] { showTool(QStringLiteral("BackgroundQueue")); });
     handle("file.media.load_media_database", [this] { loadMediaDatabase(); });
     handle("file.media.refresh_media_directories", [this] { loadMediaDatabase(); });

@@ -4,6 +4,8 @@
 // download. Small inputs matter: libFuzzer mutates a 4 KB file far more usefully than a 500 KB one.
 #include "fuzz_targets.h"
 
+#include "lumenis/media/pict.h"
+
 #include "lumenis/interop/aaf.h"
 #include "lumenis/interop/aaf_export.h"
 #include "lumenis/interop/avb_export.h"
@@ -196,6 +198,15 @@ std::vector<Seed> seeds(const QString& target) {
         for (const model::BinItem& i : bin.items) {
             if (i.kind == model::BinItemKind::Sequence) add(QStringLiteral("tiny.xml"), interop::fcpxml::exportXml(i, options).json);
         }
+    } else if (target == QLatin1String("pict")) {
+        // A small matte as Export Matte PICT writes it: an opaque white square on transparent black.
+        QImage matte(12, 8, QImage::Format_ARGB32);
+        matte.fill(qRgba(0, 0, 0, 0));
+        for (int y = 2; y < 6; ++y) {
+            for (int x = 3; x < 9; ++x) matte.setPixel(x, y, qRgba(255, 255, 255, 255));
+        }
+        add(QStringLiteral("matte.pct"), media::pictData(matte));
+        add(QStringLiteral("opaque.pct"), media::pictData(matte, false));
     }
     return out;
 }

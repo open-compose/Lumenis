@@ -345,6 +345,7 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
         {static_cast<int>(IntraframeTool::Tool::Polygon), "intraframePolygon", "Po", QT_TR_NOOP("Polygon tool")},
         {static_cast<int>(IntraframeTool::Tool::Curve), "intraframeCurve", "Cu", QT_TR_NOOP("Curve tool")},
         {static_cast<int>(IntraframeTool::Tool::Brush), "intraframeBrush", "Br", QT_TR_NOOP("Brush tool")},
+        {static_cast<int>(IntraframeTool::Tool::Marker), "intraframeMarker", "Pv", QT_TR_NOOP("Previsualization Marker tool")},
     };
     for (const DrawButton& d : kDrawButtons) {
         auto* b = new QToolButton(this);
@@ -1779,7 +1780,10 @@ void EffectEditor::syncIntraframeButtons() {
     for (auto it = intraframeButtons_.cbegin(); it != intraframeButtons_.cend(); ++it) {
         const auto tool = static_cast<IntraframeTool::Tool>(it.key());
         const bool freehand = tool == IntraframeTool::Tool::Polygon || tool == IntraframeTool::Tool::Curve || tool == IntraframeTool::Tool::Brush;
-        it.value()->setVisible(on && !(shapesOnly && freehand));
+        // The Previsualization Marker tool: the Paint Effect in 24-fps film projects only (p.412).
+        const bool marker = tool == IntraframeTool::Tool::Marker;
+        const bool markerShown = on && filmProject_ && wholeIntraframe_->name == QLatin1String("Paint Effect");
+        it.value()->setVisible(marker ? markerShown : on && !(shapesOnly && freehand));
         it.value()->setChecked(on && intraframe_ && intraframe_->tool() == tool);
     }
     for (QToolButton* b : {bringForward_, sendBackward_}) {

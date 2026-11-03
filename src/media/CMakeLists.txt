@@ -19,6 +19,7 @@ add_library(lumenis_media STATIC
     image_effects.cpp
     color_effects.cpp
     intraframe.cpp
+    pict.cpp
     key_effects.cpp
     burn_in.cpp
     illusion_common.h
@@ -40,6 +41,7 @@ add_library(lumenis_media STATIC
     surround.cpp
     include/lumenis/media/media.h
     include/lumenis/media/compositor.h
+    include/lumenis/media/pict.h
     include/lumenis/media/optical_flow.h
     include/lumenis/media/render.h
     include/lumenis/media/audio_fx.h

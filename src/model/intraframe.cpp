@@ -489,6 +489,49 @@ void setDirectionHandle(ControlPoint& point, bool out, const QPointF& handle) {
     other = -handle / l * otherLength;
 }
 
+// ---------------------------------------------------------------- the Previsualization Marker
+
+QString addPrevisualizationMarker(Effect& effect, const QPointF& at) {
+    return addIntraframeObject(effect, IntraframeKind::Marker, polylineShape({at}));
+}
+
+QList<PrevisualizationEvent> previsualizationEvents(const Effect& effect, const EffectSpan& span, double aspect) {
+    QList<PrevisualizationEvent> out;
+    const QString colorCategory = QStringLiteral("Paint Effect Color Parameters");
+    for (const IntraframeObject& o : intraframeObjects(effect)) {
+        if (o.kind != IntraframeKind::Marker) continue;
+        const Effect oe = objectEffect(effect, o);
+        // The times its position changes at: X's and Y's keyframes and its shape's, in effect time.
+        QList<double> times;
+        for (const char* name : {"X", "Y"}) {
+            const ParameterKeyframes keys = keyframesOf(oe, kIntraframeObjectCategory, QLatin1String(name));
+            for (const EffectKeyframe& k : keys.keys) times << (keys.fixed ? span.timeOf(k.at) : k.at);
+        }
+        if (o.shapes.size() > 1) {
+            for (const IntraframeShape& sh : o.shapes) times << sh.at;
+        }
+        std::sort(times.begin(), times.end());
+        QList<double> distinct;
+        for (double t : times) {
+            if (distinct.isEmpty() || t - distinct.constLast() > span.halfFrame()) distinct << t;
+        }
+        if (distinct.isEmpty()) distinct << 0.0;
+        int n = 1;
+        for (double t : distinct) {
+            const QList<ControlPoint> placed = placedShapeAt(effect, o, t, span, aspect);
+            const std::optional<Rgb> c = colorAt(oe, colorCategory, QStringLiteral("Color controls"), t, span);
+            const Rgb rgb = c.value_or(Rgb{1.0, 1.0, 1.0});
+            auto byte = [](double v) { return static_cast<int>(std::lround(std::clamp(v, 0.0, 1.0) * 255.0)); };
+            const QString colour = QStringLiteral("#%1%2%3")
+                                       .arg(byte(rgb.red), 2, 16, QLatin1Char('0'))
+                                       .arg(byte(rgb.green), 2, 16, QLatin1Char('0'))
+                                       .arg(byte(rgb.blue), 2, 16, QLatin1Char('0'));
+            out << PrevisualizationEvent{o.id, n++, t, placed.isEmpty() ? QPointF() : placed.constFirst().p, colour};
+        }
+    }
+    return out;
+}
+
 // ---------------------------------------------------------------- brush heads
 
 QStringList brushShapes() {

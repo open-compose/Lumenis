@@ -102,7 +102,13 @@ QString IntraframeTool::objectAt(const QPointF& at) const {
     const double t = editor_.positionTime();
     // Topmost first.
     for (auto it = objects.crbegin(); it != objects.crend(); ++it) {
-        const QPainterPath path = media::intraframePath(model::placedShapeAt(*e, *it, t, editor_.span(), aspect()), it->closed, QSizeF(1.0, 1.0));
+        const QList<model::ControlPoint> placed = model::placedShapeAt(*e, *it, t, editor_.span(), aspect());
+        // "Click the marker to highlight it" (p.413): within reach of its point.
+        if (it->kind == model::IntraframeKind::Marker) {
+            if (!placed.isEmpty() && distance(at, placed.constFirst().p) <= kStrokeReach * 2.0) return it->id;
+            continue;
+        }
+        const QPainterPath path = media::intraframePath(placed, it->closed, QSizeF(1.0, 1.0));
         if (it->closed && path.contains(at)) return it->id;
         const QList<QPointF> line = polylineOf(path);
         for (qsizetype i = 1; i < line.size(); ++i) {
@@ -119,7 +125,11 @@ QRectF IntraframeTool::selectionBounds() const {
     const double t = editor_.positionTime();
     for (const model::IntraframeObject& o : model::intraframeObjects(*e)) {
         if (!selected_.contains(o.id)) continue;
-        const QRectF r = media::intraframePath(model::placedShapeAt(*e, o, t, editor_.span(), aspect()), o.closed, QSizeF(1.0, 1.0)).boundingRect();
+        const QList<model::ControlPoint> placed = model::placedShapeAt(*e, o, t, editor_.span(), aspect());
+        // A marker's bounds are its small square (fillOverlay), so that its handles do not all lie on its point.
+        const QRectF r = o.kind == model::IntraframeKind::Marker && !placed.isEmpty()
+                             ? QRectF(placed.constFirst().p - QPointF(0.008, 0.008 * aspect()), QSizeF(0.016, 0.016 * aspect()))
+                             : media::intraframePath(placed, o.closed, QSizeF(1.0, 1.0)).boundingRect();
         bounds = bounds.isNull() ? r : bounds.united(r);
     }
     return bounds;
@@ -257,7 +267,16 @@ void IntraframeTool::fillOverlay(Composer::EffectPreview& preview) const {
     const double t = editor_.positionTime();
     // Each object as a wire frame (ours: always, so that objects can be found; Outline/Path adds their paths).
     for (const model::IntraframeObject& o : model::intraframeObjects(*e)) {
-        const QList<QPointF> line = polylineOf(media::intraframePath(model::placedShapeAt(*e, o, t, editor_.span(), aspect()), o.closed, QSizeF(1.0, 1.0)));
+        const QList<model::ControlPoint> placed = model::placedShapeAt(*e, o, t, editor_.span(), aspect());
+        if (o.kind == model::IntraframeKind::Marker) {
+            // A marker as a small square about its point (ours).
+            if (placed.isEmpty()) continue;
+            const QPointF p = placed.constFirst().p;
+            const double dx = 0.008, dy = 0.008 * aspect();
+            preview.boxes << QList<QPointF>{p + QPointF(-dx, -dy), p + QPointF(dx, -dy), p + QPointF(dx, dy), p + QPointF(-dx, dy)};
+            continue;
+        }
+        const QList<QPointF> line = polylineOf(media::intraframePath(placed, o.closed, QSizeF(1.0, 1.0)));
         if (line.size() < 2) continue;
         if (o.closed) preview.boxes << line;
         else preview.lines << line;
@@ -297,6 +316,17 @@ bool IntraframeTool::overlayPress(const QPointF& at, Qt::KeyboardModifiers modif
     case Tool::Oval:
         drag_ = Drag::Shape;
         return true;
+    case Tool::Marker: {
+        // "Move the pointer to the location in the frame where you want to place the marker, and click the mouse. A
+        // marker appears in the frame" (p.412). Ours: the tool then returns to Selection, as the shape tools do.
+        auto effect = *e;
+        const QString id = model::addPrevisualizationMarker(effect, at);
+        if (commit(tr("Add Marker"), effect)) {
+            select({id});
+            setTool(Tool::Selection);
+        }
+        return true;
+    }
     case Tool::Brush:
         // "Press and hold the Alt key ... The pointer becomes an eyedropper ... click it. The color you pick becomes the
         // new default color" (p.397).

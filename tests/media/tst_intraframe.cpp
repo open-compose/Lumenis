@@ -1,9 +1,12 @@
 // The Intraframe effects' objects and pictures (ROADMAP 6.9a; FX Guide ch.15; docs/spec/intraframe.md): the model's
 // objects, shapes and places (model/intraframe.h) and the Paint, Blur, Mosaic and AniMatte pictures (intraframe.cpp).
 #include "lumenis/media/compositor.h"
+#include "lumenis/media/pict.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/intraframe.h"
 
+#include <QDir>
+#include <QFile>
 #include <QJsonObject>
 #include <QPainterPath>
 #include <QTest>
@@ -262,6 +265,83 @@ private slots:
         shown = intraframePicture(brush, black, none, 0.0, EffectSpan(10));
         QCOMPARE(at(shown, 10, 18).red(), 255);
         QCOMPARE(at(shown, 54, 18).red(), 0);
+    }
+
+    void pictFiles() {
+        // Export Matte PICT's file (p.418): a 32-bit PICT with alpha; our reader takes it back unchanged.
+        QImage image(80, 7, QImage::Format_ARGB32); // 320 row bytes: the packed rows' counts are words
+        for (int y = 0; y < image.height(); ++y) {
+            for (int x = 0; x < image.width(); ++x) image.setPixel(x, y, x < 40 ? qRgba(x * 3, y * 30, 200, 255) : qRgba(0, 0, 0, 0));
+        }
+        const QByteArray data = pictData(image);
+        QCOMPARE(data.size() > 512, true);
+        QCOMPARE(static_cast<unsigned char>(data.at(512 + 10)), static_cast<unsigned char>(0x00)); // VersionOp 0x0011
+        QCOMPARE(static_cast<unsigned char>(data.at(512 + 11)), static_cast<unsigned char>(0x11));
+        QCOMPARE(readPictData(data), image);
+        // Without the 512-byte file header too.
+        QCOMPARE(readPictData(data.mid(512)), image);
+        // A small one (byte counts) without alpha reads back opaque.
+        QImage small(6, 3, QImage::Format_ARGB32);
+        small.fill(qRgba(10, 20, 30, 40));
+        const QImage opaque = readPictData(pictData(small, false));
+        QCOMPARE(opaque.size(), small.size());
+        QCOMPARE(opaque.pixel(2, 1), qRgba(10, 20, 30, 255));
+        // Files.
+        const QString path = QDir::temp().filePath(QStringLiteral("tst_intraframe_matte.pct"));
+        QVERIFY(writePict(image, path));
+        QCOMPARE(readPict(path), image);
+        QFile::remove(path);
+        // Not PICT, or cut short: nothing.
+        QVERIFY(readPictData(QByteArray(600, 'x')).isNull());
+        QVERIFY(readPictData(data.left(data.size() / 2)).isNull());
+    }
+
+    void exportedMatte() {
+        // An AniMatte matte as Export Matte PICT writes it (p.418): white and opaque within Key In objects, black and
+        // transparent outside; Invert Key turns it over.
+        Effect matte{QStringLiteral("Key"), QStringLiteral("AniMatte"), {}};
+        model::addIntraframeObject(matte, IntraframeKind::Rectangle, model::rectangleShape(QRectF(0.25, 0.25, 0.5, 0.5)));
+        const Picture layer = Picture::solid(64, 36, QColor(30, 60, 90));
+        QImage image = aniMatteImage(matte, layer, 0.0, EffectSpan(10));
+        QCOMPARE(image.size(), QSize(64, 36));
+        QCOMPARE(image.pixel(32, 18), qRgba(255, 255, 255, 255));
+        QCOMPARE(image.pixel(2, 2), qRgba(0, 0, 0, 0));
+        matte.parameters.insert(QStringLiteral("Foreground"), QJsonObject{{QStringLiteral("Invert Key"), true}});
+        image = aniMatteImage(matte, layer, 0.0, EffectSpan(10));
+        QCOMPARE(image.pixel(32, 18), qRgba(0, 0, 0, 0));
+        QCOMPARE(image.pixel(2, 2), qRgba(255, 255, 255, 255));
+    }
+
+    void previsualizationMarkers() {
+        // The Previsualization Marker (p.412-413): a marker where it was clicked, in its colour; each keyframe of its
+        // position is an optical event.
+        Effect paint{QStringLiteral("Image"), QStringLiteral("Paint Effect"), {}};
+        paint.parameters.insert(QStringLiteral("Paint Effect Color Parameters"), QJsonObject{{QStringLiteral("Color controls"), QStringLiteral("#ff0000")}});
+        const QString marker = model::addPrevisualizationMarker(paint, QPointF(0.5, 0.5));
+        QCOMPARE(model::intraframeObjects(paint).at(0).kind, IntraframeKind::Marker);
+        const Picture black = Picture::solid(64, 36, Qt::black);
+        const Picture shown = intraframePicture(paint, black, Picture(64, 36), 0.0, EffectSpan(10));
+        QVERIFY(near(at(shown, 32, 18), QColor(255, 0, 0)));
+        QVERIFY(near(at(shown, 5, 5), QColor(0, 0, 0)));
+        QList<model::PrevisualizationEvent> events = model::previsualizationEvents(paint, EffectSpan(10), 16.0 / 9.0);
+        QCOMPARE(events.size(), 1);
+        QCOMPARE(events.at(0).marker, marker);
+        QCOMPARE(events.at(0).keyframe, 1);
+        QCOMPARE(events.at(0).position, QPointF(0.5, 0.5));
+        QCOMPARE(events.at(0).color, QStringLiteral("#ff0000"));
+        // Moved by keyframes of its shape: one event at each.
+        QList<model::IntraframeObject> objects = model::intraframeObjects(paint);
+        objects[0].shapes = {model::IntraframeShape{0.0, model::polylineShape({QPointF(0.2, 0.2)})},
+                             model::IntraframeShape{1.0, model::polylineShape({QPointF(0.8, 0.6)})}};
+        model::setIntraframeObjects(paint, objects);
+        events = model::previsualizationEvents(paint, EffectSpan(10), 16.0 / 9.0);
+        QCOMPARE(events.size(), 2);
+        QCOMPARE(events.at(1).keyframe, 2);
+        QCOMPARE(events.at(1).at, 1.0);
+        QCOMPARE(events.at(1).position, QPointF(0.8, 0.6));
+        // Other objects are not markers.
+        model::addIntraframeObject(paint, IntraframeKind::Rectangle, model::rectangleShape(QRectF(0.1, 0.1, 0.2, 0.2)));
+        QCOMPARE(model::previsualizationEvents(paint, EffectSpan(10), 16.0 / 9.0).size(), 2);
     }
 
     void brushHeads() {

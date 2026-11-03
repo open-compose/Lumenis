@@ -17,6 +17,7 @@ const std::vector<Target>& targets() {
         {"avb_rewrite", fuzzAvbRewrite},
         {"otio", fuzzOtio},
         {"fcpxml", fuzzFcpXml},
+        {"pict", fuzzPict},
     };
     return all;
 }

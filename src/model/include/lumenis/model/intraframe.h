@@ -176,6 +176,24 @@ void setBrushHead(QJsonObject& brush, const QList<ControlPoint>& head);
 // "click a Brush Shape button": the shape, dropping a custom head (it was based on another shape).
 void setBrushShape(QJsonObject& brush, const QString& shape);
 
+// The Previsualization Marker (ROADMAP 6.9c2; p.412-413): "a marker in a segment to represent an effect that will be
+// processed at an optical facility", 24-fps film projects only. A Marker object with one control point where it was
+// clicked; keyframes on its "Intraframe Object" X and Y move it, its Color category gives its colour.
+QString addPrevisualizationMarker(Effect& effect, const QPointF& at);
+// "When you create an optical list, each marker, along with its position in the segment on a keyframe-by-keyframe basis,
+// appears as an optical event": per marker (in layer order), its colour and its place at each keyframe of its position
+// (one event at the start without keyframes). Positions are fractions of the frame; the optical list itself (film cut
+// lists, Effect Grid coordinates) comes with the List Tool's film lists.
+struct PrevisualizationEvent {
+    QString marker;   // the object's id
+    int keyframe = 1; // numbered from 1 per marker
+    double at = 0.0;  // effect time
+    QPointF position;
+    QString color;    // "#rrggbb"
+    bool operator==(const PrevisualizationEvent&) const = default;
+};
+QList<PrevisualizationEvent> previsualizationEvents(const Effect& effect, const EffectSpan& span, double aspect);
+
 // Brush templates (p.399): "click the Brush Template icon, and then drag it to a bin. A brush template appears in the
 // bin, and the name of the template defaults to Brush." An Effect item holding the Brush category under "brush".
 BinItem brushTemplateItem(const QJsonObject& brush, const QString& name, const QDateTime& when);

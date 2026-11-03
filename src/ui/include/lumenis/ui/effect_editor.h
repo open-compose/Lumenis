@@ -364,6 +364,14 @@ public:
     bool pickColorAt(const QString& category, const QString& parameter, const QPoint& global);
     bool pickPaintColor(const QPointF& fraction);
     BrushPreview* brushPreview() const { return brushPreview_; }
+    // A 24-fps film project: the Paint Effect has the Previsualization Marker tool, which "does not appear in the
+    // Effect Editor for the Paint Effect in any other project types" (p.412). Set by MainWindow from the project.
+    void setFilmProject(bool film);
+    bool filmProject() const { return filmProject_; }
+    // Export Matte PICT (p.418): the shown AniMatte effect's matte at the position, `size` large (media::aniMatteImage);
+    // a null image when the editor shows no AniMatte effect. exportMattePict writes it as a PICT file.
+    QImage aniMatteImage(const QSize& size) const;
+    bool exportMattePict(const QString& path, const QSize& size) const;
     const QStringList& intraframeSelection() const { return intraframeSelection_; }
     // The Effect Preview picture's width over its height.
     double previewAspect() const;
@@ -596,6 +604,7 @@ private:
     QToolButton* sendBackward_ = nullptr;
     QToolButton* objectMenu_ = nullptr;
     QPointer<BrushPreview> brushPreview_; // in the Brush category, rebuilt with the controls
+    bool filmProject_ = false;
     // The Brush category's Shape buttons, Brush Template icon and Brush Preview window.
     QWidget* brushPanel(QWidget* parent);
     // Shows the drawing tool buttons for the shown effect and checks the active one.

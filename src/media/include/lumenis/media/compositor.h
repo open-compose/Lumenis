@@ -292,6 +292,10 @@ std::vector<float> intraframeMask(const model::Effect& effect, const model::Intr
 // `layer` the incoming one): Paint's objects painted onto `layer` bottom layer first in their modes, Blur and Mosaic
 // within their objects, AniMatte keying `layer` in or out of its mattes over `below`.
 Picture intraframePicture(const model::Effect& effect, const Picture& layer, const Picture& below, double time, const model::EffectSpan& span);
+// Export Matte PICT (ROADMAP 6.9c2; FX Guide p.418): an AniMatte effect's matte at `time` as "a high-contrast matte with
+// transparent (black) and opaque (white) components" whose alpha channel is the same; `layer` (the foreground) gives
+// its size and the colours Magic Mask picks from.
+QImage aniMatteImage(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
 
 // The sequence's picture at `frame`. Sets `missing` when a segment's media is offline.
 Picture composeFrame(const Composition& composition, std::int64_t frame, bool* missing = nullptr);

@@ -1,9 +1,11 @@
-// The Effect Editor's Brush category and the eyedropper (ROADMAP 6.9c1; FX Guide p.89, p.397-399, p.493;
-// docs/spec/intraframe.md): the Brush Shape buttons, the Brush Template icon dragged to a bin, the Brush Preview window
-// (brush_preview.h) and picking a colour parameter from a monitor's picture.
+// The Effect Editor's Brush category, the eyedropper and the AniMatte matte (ROADMAP 6.9c; FX Guide p.89, p.397-399,
+// p.412, p.418, p.493; docs/spec/intraframe.md): the Brush Shape buttons, the Brush Template icon dragged to a bin, the
+// Brush Preview window (brush_preview.h), picking a colour parameter from a monitor's picture, the film projects'
+// Previsualization Marker tool and Export Matte PICT.
 
 #include "lumenis/ui/effect_editor.h"
 
+#include "lumenis/media/pict.h"
 #include "lumenis/model/intraframe.h"
 #include "lumenis/ui/brush_preview.h"
 #include "lumenis/ui/timeline.h"
@@ -166,6 +168,26 @@ bool EffectEditor::pickPaintColor(const QPointF& fraction) {
     if (!colour) return false;
     setValue(QStringLiteral("Paint Effect Color Parameters"), QStringLiteral("Color controls"), colour->name());
     return true;
+}
+
+void EffectEditor::setFilmProject(bool film) {
+    if (film == filmProject_) return;
+    filmProject_ = film;
+    syncIntraframeButtons();
+}
+
+QImage EffectEditor::aniMatteImage(const QSize& size) const {
+    if (!wholeIntraframe_ || !model::isAniMatte(*wholeIntraframe_) || size.isEmpty()) return {};
+    // The foreground for Magic Mask's colours: ours, the Record monitor's picture as shown.
+    const QImage shown = timeline_.composer().picture(MonitorId::Record, size);
+    const media::Picture layer = shown.isNull() ? media::Picture(size.width(), size.height())
+                                                : media::Picture::fromImage(shown, size.width(), size.height());
+    return media::aniMatteImage(*wholeIntraframe_, layer, positionTime(), span_);
+}
+
+bool EffectEditor::exportMattePict(const QString& path, const QSize& size) const {
+    const QImage matte = aniMatteImage(size);
+    return !matte.isNull() && media::writePict(matte, path);
 }
 
 } // namespace lumenis::ui

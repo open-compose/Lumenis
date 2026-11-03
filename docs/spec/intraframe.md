@@ -159,3 +159,37 @@ Code: `src/model/intraframe.*` (the objects), `src/media/intraframe.cpp` (their 
 * Alt+click with the Brush tool sets the Paint Effect's colour from the Effect Preview's picture and paints nothing; we
   do not require the Solid mode.
 * Tests: `tst_intraframe` (`brushHeads`), `tst_intraframe_ui` (`brushAndEyedropper`).
+
+## 6.9c2: the Previsualization Marker and Export Matte PICT
+
+### From the guide
+* "The Previsualization Marker tool lets you place a marker in a segment to represent an effect that will be processed
+  at an optical facility. This tool is applicable to 24-fps film projects only and does not appear in the Effect Editor
+  for the Paint Effect in any other project types"; each marker, "along with its position in the segment on a
+  keyframe-by-keyframe basis, appears as an optical event"; the Color category sets its colour; "Move the pointer to the
+  location in the frame where you want to place the marker, and click"; keyframes move it; "Click the marker to
+  highlight it, and then press the Delete key" (p.412-413).
+* Export Matte PICT: "a high-contrast 32-bit PICT file that includes an alpha channel" of the AniMatte matte at the
+  position, "transparent (black) and opaque (white) components"; File > Export Matte PICT after clicking the Effect
+  Editor, the Export PICT As dialog (p.418). Importing it back as a Matte Key clip with the Alpha options (p.418-419).
+
+### Ours
+* The marker tool ("intraframeMarker", lettered "Pv") shows for the Paint Effect when `EffectEditor::setFilmProject`
+  says the project is a film project at 24 fps (MainWindow from the project's film type and rate). A click adds a
+  Marker object with one control point (`model::addPrevisualizationMarker`, "Add Marker") and returns to Selection.
+  It shows in the picture as a disc 20 pixels across (of a frame 1920 wide) in its Color category's colour, whatever
+  the mode, and in the Effect Preview as a small square; it is found within twice the stroke reach of its point.
+* `model::previsualizationEvents` lists each marker's colour and place at each keyframe of its X, Y or shape (one event
+  without keyframes): the data for the optical list, which comes with the List Tool's film lists (Phase 9) together
+  with Effect Grid coordinates.
+* `media::aniMatteImage` makes the matte (Key In and Key Out objects, Invert Key, Level) white or black with the same
+  alpha; Magic Mask's colours come from the Record monitor's picture. File > Export Matte PICT
+  (`MainWindow::exportMattePict`) writes it at the project's raster; without an AniMatte effect in the Effect Editor a
+  message says so, where Media Composer shows its default Export command instead.
+* PICT (`src/media/pict.*`): our own writer and reader from Apple's published format (Inside Macintosh: Imaging With
+  QuickDraw, appendix A): an extended version 2 picture with one DirectBitsRect of 32-bit pixels, the alpha, red,
+  green and blue planes of each row PackBits-compressed (packType 4); the reader also takes unpacked direct pixels and
+  refuses the rest. Fuzz target `pict`. Import of PICT files and Matte Key clips with the Alpha options comes with
+  graphics import (Phase 9).
+* Tests: `tst_intraframe` (`pictFiles`, `exportedMatte`, `previsualizationMarkers`), `tst_intraframe_ui`
+  (`markerAndMatte`).

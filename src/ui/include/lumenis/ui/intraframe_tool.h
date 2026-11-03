@@ -26,7 +26,8 @@ class IntraframeTool : public QObject, public Composer::OverlayInput {
 public:
     // "Top to bottom: Rectangle, Oval, Polygon, Curve, and Brush tools" (p.396) and the Selection tool (p.394).
     // ... and (6.9b2) the Z-Rotation and Reshape tools (p.394, p.413-415).
-    enum class Tool { Selection, Rectangle, Oval, Polygon, Curve, Brush, ZRotation, Reshape };
+    // ... and (6.9c2) a 24-fps film project's Previsualization Marker tool (p.412).
+    enum class Tool { Selection, Rectangle, Oval, Polygon, Curve, Brush, ZRotation, Reshape, Marker };
 
     explicit IntraframeTool(EffectEditor& editor);
 

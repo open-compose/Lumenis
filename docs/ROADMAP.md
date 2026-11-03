@@ -1129,7 +1129,9 @@ phase of their own. They are done in three steps:
     UnGroup, Lock and Unlock. Done.
   * 6.9c, in two parts: 6.9c1, the Brush Shape buttons, the Brush Preview window and custom brush heads, brush
     templates in bins and the eyedropper (p.88-89, p.396-399, p.493). Done. 6.9c2, Export Matte PICT and the
-    Previsualization Marker tool (p.412-413, p.418-419).
+    Previsualization Marker tool (p.412-413, p.418-419). Done: our own PICT writer and reader (`src/media/pict.*`, fuzz
+    target `pict`), the markers and their optical events (`model::previsualizationEvents`). Importing the PICT back
+    as a Matte Key clip goes with graphics import's alpha options (Phase 9), the optical list with film cut lists.
   * 6.9d, Scratch Removal: replacement material from nearby frames or fields, the Offset menu, frame and field
     processing, and the Scratch Removal button (p.419-429).
   * 6.9e, PlasmaWipe effects (ch.16, p.442-455).
@@ -1173,6 +1175,10 @@ decision, 2026-10-27):
   (p.288-292, p.645);
 * Batch Import and Batch Re-import (p.1098, p.230);
 * AutoSync (p.223);
+* importing graphics with the Alpha options Use Existing, Invert Existing and Ignore, making Matte Key clips (FX Guide
+  p.418-419, Editing Guide "Importing Media Files"), and reading PICT files there (`media::readPict`, 6.9c2);
+* film cut lists and optical lists in the List Tool, with Effect Grid coordinates and the Previsualization Markers'
+  events (FX Guide p.79, p.412; Editing Guide "Optical Lists");
 * importing from audio CDs, with the Import setting's Apply
   attenuation/gain effect on import and its CD only choice (p.1198);
 * anything else later found not to fit another area.

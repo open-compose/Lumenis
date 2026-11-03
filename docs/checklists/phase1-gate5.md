@@ -90,7 +90,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Settings |  | p.1136 | works | ☐ | | |
 | Open Settings File |  | p.1141 | *later* | ☐ | | |
 | Exit | Ctrl+Q | p.59 | works | ☐ | | |
-| Export Matte PICT |  | p.418 | *later* | ☐ | | |
+| Export Matte PICT |  | p.418 | works | ☐ | | |
 
 ## Edit menu
 
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 157 of them working with a project open; the
+* 211 menu commands, 158 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

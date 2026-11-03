@@ -1131,13 +1131,14 @@ install a runner. For a runner installed before that:
 ## Fuzzing
 
 Phase 3 gate 4 asks that fuzzing the bin and AAF parsers for 24 hours
-produces no crashes. `fuzz/` holds six libFuzzer targets (fuzz/README.md
+produces no crashes. `fuzz/` holds seven libFuzzer targets (fuzz/README.md
 says what each runs): `cfb` (the compound file container), `aaf` (AAF
 objects, the `--dump-aaf` dump and the import into bins), `avb` (bins, the
 `--dump-avb` dump and the import), `avb_rewrite` (the bin writer: what is
 read is written back and must read back the same), `otio`
 (OpenTimelineIO files, imported, exported and imported again) and `fcpxml`
-(FCP 7 XML, the same). A crash, a hang (an
+(FCP 7 XML, the same) and `pict` (PICT files as Export Matte PICT writes
+them, read, written and read again). A crash, a hang (an
 input taking over 10 s), an AddressSanitizer or UBSan report, or a failed
 round-trip check is a failure.
 

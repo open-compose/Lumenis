@@ -34,8 +34,11 @@ int fuzzOtio(const std::uint8_t* data, std::size_t size);
 // FCP 7 XML: fcpxml::importXml reads the bytes, and each sequence it makes is exported as FCP XML and
 // must import again (target_fcpxml.cpp).
 int fuzzFcpXml(const std::uint8_t* data, std::size_t size);
+// PICT: media::readPictData reads the bytes, and a picture that reads is written with media::pictData and must read
+// back the same (target_pict.cpp).
+int fuzzPict(const std::uint8_t* data, std::size_t size);
 
-// A target by its name ("cfb", "aaf", "avb", "avb_rewrite", "otio", "fcpxml"), as the directories in
+// A target by its name ("cfb", "aaf", "avb", "avb_rewrite", "otio", "fcpxml", "pict"), as the directories in
 // fuzz/regressions and the executables fuzz_<name> are named.
 struct Target {
     const char* name;

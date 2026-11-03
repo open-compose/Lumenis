@@ -1,6 +1,7 @@
 // The Intraframe drawing tools in the Effect Editor and Effect Preview (ROADMAP 6.9b1; FX Guide p.395-404, p.413-417;
 // docs/spec/intraframe.md): drawing each kind of object, the tool returning to Selection, selecting, lassoing, moving,
 // scaling, deleting, layers, and each object's own parameters in the editor.
+#include "lumenis/media/pict.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/intraframe.h"
 #include "lumenis/model/sequence.h"
@@ -13,6 +14,8 @@
 
 #include <QAction>
 #include <QComboBox>
+#include <QDir>
+#include <QFile>
 #include <QJsonObject>
 #include <QKeyEvent>
 #include <QLabel>
@@ -418,6 +421,68 @@ private slots:
         settle();
         QCOMPARE(effect().parameters.value(colorCategory).toObject().value(QStringLiteral("Color controls")).toString(), QStringLiteral("#c81428"));
         QVERIFY(!editor.pickColorAt(colorCategory, QStringLiteral("Color controls"), editor.mapToGlobal(QPoint(5, 5))));
+    }
+
+    void markerAndMatte() {
+        // The Previsualization Marker tool: only for the Paint Effect in 24-fps film projects (p.412); a click places a
+        // marker, which Delete removes (p.413). Export Matte PICT writes an AniMatte matte (p.418).
+        Composer composer;
+        Timeline timeline{composer};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(model::Effect{QStringLiteral("Image"), QStringLiteral("Paint Effect"), {}}));
+        EffectEditor editor{timeline};
+        editor.resize(700, 900);
+        editor.show();
+        composer.moveTo(MonitorId::Record, 10);
+        timeline.setEffectMode(true);
+        settle();
+        auto effect = [&] {
+            return *model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(0).effect;
+        };
+        auto* marker = editor.findChild<QToolButton*>(QStringLiteral("intraframeMarker"));
+        QVERIFY(marker);
+        QVERIFY(!marker->isVisible());
+        editor.setFilmProject(true);
+        QVERIFY(marker->isVisible());
+        marker->click();
+        IntraframeTool* tool = editor.intraframeTool();
+        QCOMPARE(tool->tool(), Tool::Marker);
+        QVERIFY(tool->overlayPress(QPointF(0.4, 0.3), Qt::NoModifier, false));
+        tool->overlayRelease(QPointF(0.4, 0.3), Qt::NoModifier);
+        settle();
+        QList<model::IntraframeObject> objects = model::intraframeObjects(effect());
+        QCOMPARE(objects.size(), 1);
+        QCOMPARE(objects.at(0).kind, model::IntraframeKind::Marker);
+        QCOMPARE(objects.at(0).shapes.at(0).points.at(0).p, QPointF(0.4, 0.3));
+        QCOMPARE(tool->tool(), Tool::Selection);
+        QCOMPARE(tool->selection(), QStringList{objects.at(0).id});
+        // Clicked again it is selected; Delete removes it.
+        tool->select({});
+        QVERIFY(tool->overlayPress(QPointF(0.405, 0.3), Qt::NoModifier, false));
+        tool->overlayRelease(QPointF(0.405, 0.3), Qt::NoModifier);
+        QCOMPARE(tool->selection(), QStringList{objects.at(0).id});
+        QVERIFY(tool->removeSelected());
+        settle();
+        QVERIFY(model::intraframeObjects(effect()).isEmpty());
+        // Not for AniMatte, even in a film project.
+        timeline.setEffectMode(false);
+        model::Effect animatte{QStringLiteral("Key"), QStringLiteral("AniMatte"), {}};
+        model::addIntraframeObject(animatte, model::IntraframeKind::Rectangle, model::rectangleShape(QRectF(0.0, 0.0, 0.5, 1.0)));
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(animatte));
+        composer.moveTo(MonitorId::Record, 10);
+        timeline.setEffectMode(true);
+        settle();
+        QVERIFY(!marker->isVisible());
+
+        // Export Matte PICT: the left half white and opaque.
+        const QImage matte = editor.aniMatteImage(QSize(32, 18));
+        QCOMPARE(matte.size(), QSize(32, 18));
+        QCOMPARE(matte.pixel(4, 9), qRgba(255, 255, 255, 255));
+        QCOMPARE(matte.pixel(28, 9), qRgba(0, 0, 0, 0));
+        const QString path = QDir::temp().filePath(QStringLiteral("tst_intraframe_ui_matte.pct"));
+        QVERIFY(editor.exportMattePict(path, QSize(32, 18)));
+        QCOMPARE(media::readPict(path), matte);
+        QFile::remove(path);
     }
 
     void blurTools() {

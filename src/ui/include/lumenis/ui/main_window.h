@@ -329,6 +329,9 @@ public:
     // chosen Export setting (p.1173-1177). The hook stands in for the
     // dialog (tests; true: Save).
     void exportToFile();
+    // File > Export Matte PICT (FX Guide p.418): the Effect Editor's AniMatte matte at the position, at the project's
+    // raster, through the Export PICT As dialog (`path` given: no dialog). False when nothing was written.
+    bool exportMattePict(const QString& path = QString());
     void setExportHook(std::function<bool(ExportAsDialog&)> hook) { exportHook_ = std::move(hook); }
     // Clip > Consolidate/Transcode on the active bin's selection
     // (p.350-356). The hooks stand in for the dialogs (tests): the first

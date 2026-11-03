@@ -382,7 +382,12 @@ std::vector<float> intraframeMask(const model::Effect& effect, const model::Intr
     const QPainterPath outline = intraframePath(points, object.closed, QSizeF(w, h));
     const QString mode = text(oe, cat, QStringLiteral("Fast menu"), QStringLiteral("Solid"));
     std::vector<float> m;
-    if (object.kind == model::IntraframeKind::Brush || !object.closed) {
+    if (object.kind == model::IntraframeKind::Marker) {
+        // A Previsualization Marker (p.412): ours, a disc 20 pixels across (of a frame 1920 wide) at its point.
+        const QPointF at = points.isEmpty() ? QPointF() : QPointF(points.constFirst().p.x() * w, points.constFirst().p.y() * h);
+        const double r = std::max(2.0, 10.0 * unit);
+        m = drawnMask(w, h, true, [&](QPainter& p) { p.drawEllipse(at, r, r); });
+    } else if (object.kind == model::IntraframeKind::Brush || !object.closed) {
         // A Brush stroke: the head stamped along the path, Size pixels (of a frame 1920 wide) large, turned by Spin,
         // softened by Soft, as far as Path (p.493).
         const QString brush = QStringLiteral("Brush");
@@ -441,6 +446,44 @@ std::vector<float> intraframeMask(const model::Effect& effect, const model::Intr
     return m;
 }
 
+// AniMatte's matte (p.548): objects combine in their layer order (ours): Key In adds to the foreground's area, Key Out
+// takes from it; with only Key Out objects the foreground shows everywhere else. Invert Key and Level apply.
+std::vector<float> aniMatteMatte(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span) {
+    const QList<model::IntraframeObject> objects = model::intraframeObjects(effect);
+    const int w = layer.width(), h = layer.height();
+    const std::size_t count = static_cast<std::size_t>(std::max(w, 0)) * static_cast<std::size_t>(std::max(h, 0));
+    const QString cat = modeCategory(effect);
+    bool anyKeyIn = false;
+    for (const model::IntraframeObject& o : objects) {
+        anyKeyIn = anyKeyIn || text(model::objectEffect(effect, o), cat, QStringLiteral("Fast menu"), QStringLiteral("Key In")) != QLatin1String("Key Out");
+    }
+    std::vector<float> matte(count, anyKeyIn || objects.isEmpty() ? 0.0f : 1.0f);
+    for (const model::IntraframeObject& o : objects) {
+        const std::vector<float> m = intraframeMask(effect, o, layer, time, span);
+        const bool keyOut = text(model::objectEffect(effect, o), cat, QStringLiteral("Fast menu"), QStringLiteral("Key In")) == QLatin1String("Key Out");
+        for (std::size_t i = 0; i < count; ++i) matte[i] = keyOut ? matte[i] * (1.0f - m[i]) : matte[i] + m[i] * (1.0f - matte[i]);
+    }
+    const QString fg = QStringLiteral("Foreground");
+    const float level = static_cast<float>(std::clamp(number(effect, fg, QStringLiteral("Level"), time, span, 100.0), 0.0, 100.0) / 100.0);
+    const bool invert = flagAt(effect, fg, QStringLiteral("Invert Key"), time, false);
+    for (float& v : matte) v = (invert ? 1.0f - v : v) * level;
+    return matte;
+}
+
+QImage aniMatteImage(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span) {
+    const std::vector<float> matte = aniMatteMatte(effect, layer, time, span);
+    QImage image(layer.width(), layer.height(), QImage::Format_ARGB32);
+    for (int y = 0; y < image.height(); ++y) {
+        auto* line = reinterpret_cast<QRgb*>(image.scanLine(y));
+        for (int x = 0; x < image.width(); ++x) {
+            // "a high-contrast matte with transparent (black) and opaque (white) components" (p.418), its alpha the same.
+            const int v = std::clamp(static_cast<int>(std::lround(matte[static_cast<std::size_t>(y) * static_cast<std::size_t>(image.width()) + static_cast<std::size_t>(x)] * 255.0f)), 0, 255);
+            line[x] = qRgba(v, v, v, v);
+        }
+    }
+    return image;
+}
+
 Picture intraframePicture(const model::Effect& effect, const Picture& layer, const Picture& below, double time, const model::EffectSpan& span) {
     const QList<model::IntraframeObject> objects = model::intraframeObjects(effect);
     const int w = layer.width(), h = layer.height();
@@ -450,28 +493,15 @@ Picture intraframePicture(const model::Effect& effect, const Picture& layer, con
         // while revealing the image on the lower track (background) outside"; Key Out the reverse. Objects combine in
         // their layer order (ours): Key In adds to the foreground's area, Key Out takes from it; with only Key Out objects
         // the foreground shows everywhere else.
-        const QString cat = modeCategory(effect);
-        bool anyKeyIn = false;
-        for (const model::IntraframeObject& o : objects) {
-            anyKeyIn = anyKeyIn || text(model::objectEffect(effect, o), cat, QStringLiteral("Fast menu"), QStringLiteral("Key In")) != QLatin1String("Key Out");
-        }
-        std::vector<float> matte(count, anyKeyIn || objects.isEmpty() ? 0.0f : 1.0f);
-        for (const model::IntraframeObject& o : objects) {
-            const std::vector<float> m = intraframeMask(effect, o, layer, time, span);
-            const bool keyOut = text(model::objectEffect(effect, o), cat, QStringLiteral("Fast menu"), QStringLiteral("Key In")) == QLatin1String("Key Out");
-            for (std::size_t i = 0; i < count; ++i) matte[i] = keyOut ? matte[i] * (1.0f - m[i]) : matte[i] + m[i] * (1.0f - matte[i]);
-        }
+        const std::vector<float> matte = aniMatteMatte(effect, layer, time, span);
         const QString fg = QStringLiteral("Foreground");
-        const float level = static_cast<float>(std::clamp(number(effect, fg, QStringLiteral("Level"), time, span, 100.0), 0.0, 100.0) / 100.0);
-        const bool invert = flagAt(effect, fg, QStringLiteral("Invert Key"), time, false);
         const bool swap = flagAt(effect, fg, QStringLiteral("Swap Sources"), time, false);
         const bool showAlpha = flagAt(effect, fg, QStringLiteral("Show Alpha"), time, false);
         const Picture& front = swap ? below : layer;
         const Picture& back = swap ? layer : below;
         Picture out(w, h);
         for (std::size_t i = 0; i < count; ++i) {
-            float a = invert ? 1.0f - matte[i] : matte[i];
-            a *= level;
+            const float a = matte[i];
             float* o = &out.data()[i * 4];
             if (showAlpha) {
                 o[0] = o[1] = o[2] = a;
@@ -496,8 +526,10 @@ Picture intraframePicture(const model::Effect& effect, const Picture& layer, con
         } else {
             const model::ObjectPlace place = model::objectPlaceAt(effect, o, time, span);
             const double unit = w / 1920.0;
+            // A Previsualization Marker shows as its colour (ours: Solid whatever the mode).
             const QString mode = effect.name == QLatin1String("Scratch Removal") ? QStringLiteral("Scratch Removal")
-                                                                                 : text(oe, cat, QStringLiteral("Fast menu"), QStringLiteral("Solid"));
+                                 : o.kind == model::IntraframeKind::Marker   ? QStringLiteral("Solid")
+                                                                             : text(oe, cat, QStringLiteral("Fast menu"), QStringLiteral("Solid"));
             const QList<model::ControlPoint> placed = model::placedShapeAt(effect, o, time, span, h > 0 ? static_cast<double>(w) / h : 16.0 / 9.0);
             const QRectF bounds = intraframePath(placed, o.closed, QSizeF(w, h)).boundingRect();
             model::Effect modeEffect = oe;

@@ -660,7 +660,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `effect_editor_brush.cpp`, `model::brushHeadPoints`), brush templates (`model::brushTemplateItem`,
   `brushTemplateMime()`) and the eyedropper (`ColorSwatch` in `effect_editor.cpp`, `Composer::colorAt`; tests
   `tst_intraframe`, `tst_intraframe_ui`), is done.
-  Next: 6.9c2 (Export Matte PICT, Previsualization Marker), 6.9d-e, 6.10 and 6.11, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.9c2, the Previsualization Marker (`model::addPrevisualizationMarker`/`previsualizationEvents`,
+  `EffectEditor::setFilmProject`) and Export Matte PICT (`media::aniMatteImage`, our PICT writer and reader
+  `src/media/pict.*` with fuzz target `pict`, `MainWindow::exportMattePict`), is done, so 6.9c is.
+  Next: 6.9d (Scratch Removal), 6.9e (PlasmaWipe), 6.10 and 6.11, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 
