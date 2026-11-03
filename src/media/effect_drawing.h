@@ -34,8 +34,11 @@ struct Border {
 
 // The Color Effect (color_effects.cpp).
 Picture colorEffectPicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
-// The Blur Effect and Mosaic Effect over the whole picture (color_effects.cpp).
+// The Blur Effect and Mosaic Effect over the whole picture (color_effects.cpp); intraframe.cpp keeps them to their
+// objects.
 Picture detailEffectPicture(const model::Effect& effect, const Picture& layer, double time, const model::EffectSpan& span);
+// A near-Gaussian blur (three box blurs) of radius rx pixels across and ry down.
+void blurPicture(Picture& picture, int rx, int ry);
 
 // The Key effects (key_effects.cpp): Luma Key and Chroma Key, the RGB Keyer and SpectraMatte, each
 // keying the segment's picture so what is below shows through.

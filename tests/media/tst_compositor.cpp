@@ -2,6 +2,7 @@
 // through, the dissolve family of transitions and Superimpose, the 2D transitions (wipes.cpp), effects
 // processing precision, and offline media. Clips are solid colours, one per clip id, so every pixel is known.
 #include "lumenis/media/compositor.h"
+#include "lumenis/model/intraframe.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/nest.h"
 #include "lumenis/model/sequence.h"
@@ -779,6 +780,37 @@ private slots:
         const Composition under = composition(seq, {QStringLiteral("V1"), QStringLiteral("V2")});
         QCOMPARE(composeImage(under, 12, nullptr).pixelColor(8, 4), QColor(0, 255, 0));
         QCOMPARE(composeImage(under, 12, nullptr).pixelColor(5, 4), QColor(255, 0, 0));
+    }
+
+    void intraframe() {
+        // An AniMatte segment on V2 keys its blue in inside an oval over V1's red (FX Guide p.548); a Paint Effect on V1
+        // paints its own picture (p.391); an AniMatte transition shows the incoming clip inside its matte.
+        Sequence seq = Sequence::withDefaultTracks();
+        seq.addTrack(TrackKind::Video);
+        seq.splice(QStringLiteral("V1"), 0, {clip(QStringLiteral("red"), 20)});
+        seq.splice(QStringLiteral("V2"), 0, {clip(QStringLiteral("blue"), 20)});
+        Effect matte{QStringLiteral("Key"), QStringLiteral("AniMatte"), {}};
+        model::addIntraframeObject(matte, model::IntraframeKind::Oval, model::ovalShape(QRectF(0.25, 0.25, 0.5, 0.5)));
+        seq.track(QStringLiteral("V2"))->segments[0].effect = matte;
+        const Composition c = composition(seq, {QStringLiteral("V1"), QStringLiteral("V2")});
+        const QImage keyed = composeImage(c, 5);
+        QVERIFY(near(centre(keyed), QColor(0, 0, 255)));
+        QVERIFY(near(keyed.pixelColor(1, 1), QColor(255, 0, 0)));
+        Effect paint{QStringLiteral("Image"), QStringLiteral("Paint Effect"), {}};
+        paint.parameters.insert(QStringLiteral("Paint Effect Color Parameters"), QJsonObject{{QStringLiteral("Color controls"), QStringLiteral("#ffffff")}});
+        model::addIntraframeObject(paint, model::IntraframeKind::Rectangle, model::rectangleShape(QRectF(0.0, 0.0, 0.25, 0.25)));
+        Sequence painted = Sequence::withDefaultTracks();
+        painted.splice(QStringLiteral("V1"), 0, {clip(QStringLiteral("red"), 20)});
+        painted.track(QStringLiteral("V1"))->segments[0].effect = paint;
+        const QImage p = composeImage(composition(painted, {QStringLiteral("V1")}), 5);
+        QVERIFY(near(p.pixelColor(1, 1), QColor(255, 255, 255)));
+        QVERIFY(near(centre(p), QColor(255, 0, 0)));
+        Transition wipe = transition(QStringLiteral("AniMatte"), 4);
+        wipe.effect.category = QStringLiteral("Key");
+        model::addIntraframeObject(wipe.effect, model::IntraframeKind::Rectangle, model::rectangleShape(QRectF(0.0, 0.0, 0.5, 1.0)));
+        const QImage cut = composeImage(composition(cutWith(wipe), {QStringLiteral("V1")}), 9);
+        QVERIFY(near(cut.pixelColor(2, 4), QColor(0, 0, 255)));
+        QVERIFY(near(cut.pixelColor(kSize.width() - 2, 4), QColor(255, 0, 0)));
     }
 
     void nests() {

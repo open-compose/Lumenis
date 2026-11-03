@@ -271,6 +271,15 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Editing titles in (docs/spec/title-tool.md, 6.8e1): a roll's finish staying
   the roll's end whatever the source OUT, Place in Timeline's tracks (the
   sequence's video tracks and the next one).
+* Intraframe objects (docs/spec/intraframe.md, 6.9a): shapes interpolated
+  linearly between keyframes, objects keeping their own parameters (copied from
+  the effect's when drawn), offsets in pixels of a frame 1920 wide, the brush
+  heads Circle, Oval, Ellipse and Square, Magic Mask's tolerance in steps of four,
+  Feathering's Bias as a remapping of the blurred edge, Amt in 8-bit steps, the
+  Outline mode two pixels wide, Unsharp Mask's Amt as a percentage, Emboss and
+  Gradient as described there, AniMatte objects combined in layer order, Blur
+  and Mosaic showing nothing without objects, Color Match unchanged until 6.10,
+  the Scratch Removal mode taking this frame until 6.9d.
 * Titles promoted to 3D (docs/spec/title-tool.md, 6.8e3b): a 3D Warp effect that
   keeps the title and its media, still revised as a title; Scaling starting at
   100; Rolling and Crawling titles promoted too.

@@ -2,7 +2,7 @@
 
 Pages are the FX Guide's. "Key effects combine two or more video streams, using components from one of
 the streams" (p.472). The reference says what each control does and its range, but gives no formulas;
-the mattes below are ours and say so. AniMatte (p.472) comes with the Intraframe tools (6.9).
+the mattes below are ours and say so. AniMatte (p.472) is an Intraframe effect (docs/spec/intraframe.md).
 
 Code: `detail::lumaChromaKeyPicture`, `rgbKeyerPicture`, `spectraMattePicture`
 (`src/media/key_effects.cpp`), reached through `media::imageEffectPicture`; Matte Key is

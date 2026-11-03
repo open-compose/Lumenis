@@ -58,6 +58,11 @@ void boxBlur(Picture& p, int r, bool horizontal) {
 
 } // namespace
 
+void blurPicture(Picture& picture, int rx, int ry) {
+    boxBlur(picture, rx, true);
+    boxBlur(picture, ry, false);
+}
+
 Picture colorEffectPicture(const model::Effect& e, const Picture& layer, double time, const model::EffectSpan& span) {
     const QString cat = QStringLiteral("Color Effect Parameters");
     auto num = [&](const char* name, double fallback) { return value(e, cat, QLatin1String(name), time, span, fallback); };

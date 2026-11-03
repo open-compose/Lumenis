@@ -18,6 +18,7 @@ add_library(lumenis_model STATIC
     nest.cpp
     effect_template.cpp
     promote3d.cpp
+    intraframe.cpp
     pan_scan.cpp
     tracking.cpp
     titler.cpp

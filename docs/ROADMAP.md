@@ -1114,7 +1114,23 @@ phase of their own. They are done in three steps:
       Unrendered Title Media, the troubleshooting options (HDTitleFilter, Use Classic Character Mapping,
       Wrong Format; p.374-377), done; 6.8e3b, promoting titles to 3D (p.371), moved here from 6.8e2,
       done. So 6.8e and 6.8 are done.
-* 6.9, intraframe effects (Paint, AniMatte, Blur, Scratch Removal; ch.15) and PlasmaWipe (ch.16).
+* 6.9, intraframe effects (Paint, AniMatte, Blur, Scratch Removal; ch.15) and PlasmaWipe (ch.16), in five parts
+  (docs/spec/intraframe.md):
+  * 6.9a, the objects and their pictures: rectangles, ovals, polygons, curves and Brush strokes as Bézier control
+    points with keyframed shapes and places, each with its own parameters; the Paint Effect's modes, Feathering with
+    Bias, Magic Mask, Brush Size/Soft/Spin/Path, Object Visible and opacity; the Blur and Mosaic effects within their
+    objects; AniMatte's Key In and Key Out on segments and transitions (p.391-399, p.416, p.439-441, p.493-497,
+    p.532-548). Done.
+  * 6.9b, the drawing tools in the Effect Editor and Effect Preview: Selection, Z-Rotation, Reshape, Bring
+    Forward/Send Backward, Rectangle, Oval, Polygon, Curve and Brush; selecting, moving, scaling and rotating objects;
+    control points and direction handles with the modifier keys; adding, removing, nudging and stepping through
+    control points; the Object menu's layers, Group, UnGroup, Lock and Unlock; each object's parameters in the
+    editor (p.395-418).
+  * 6.9c, the Brush Preview window and custom brush heads, brush templates in bins, the eyedropper, Export Matte
+    PICT and the Previsualization Marker tool (p.396-399, p.412-413, p.418-419).
+  * 6.9d, Scratch Removal: replacement material from nearby frames or fields, the Offset menu, frame and field
+    processing, and the Scratch Removal button (p.419-429).
+  * 6.9e, PlasmaWipe effects (ch.16, p.442-455).
 * 6.10, colour correction (ch.19-24, p.587-733): Color Correction mode, HSL and curves, safe
   colours, and the Symphony option's spot colour.
 * 6.11, the OFX host in place of AVX (ch.6, p.157-164), with OCIO colour management.

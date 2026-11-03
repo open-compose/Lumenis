@@ -2,11 +2,13 @@
 
 #include "lumenis/model/bin.h"
 #include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/intraframe.h"
 #include "lumenis/model/sequence.h"
 
 #include <QColor>
 #include <QImage>
 #include <QJsonValue>
+#include <QPainterPath>
 #include <QRectF>
 #include <QSize>
 #include <QSizeF>
@@ -275,6 +277,21 @@ QJsonValue burnInSetting(const model::Effect& effect, int display, const QString
 // The displays drawn over `layer` at `frame`.
 Picture burnInPicture(const model::Effect& effect, const Picture& layer, const Composition& composition,
                       const QString& track, std::int64_t frame);
+
+// The Intraframe effects (ROADMAP 6.9; FX Guide ch.15; docs/spec/intraframe.md, intraframe.cpp): the Paint Effect, Blur
+// Effect, Mosaic Effect, Scratch Removal and AniMatte with their objects (model/intraframe.h).
+// The outline of control points (fractions of the frame) in pixels of a frame `frame` large: lines between straight
+// joins, cubic Béziers through the direction handles otherwise.
+QPainterPath intraframePath(const QList<model::ControlPoint>& points, bool closed, const QSizeF& frame);
+// What of each pixel an object covers at `time` (0 to 1, row by row, `picture`'s size): its outline filled (or a Brush
+// stroke drawn with its head, as much of it as Path shows), limited by Magic Mask's colour in `picture`, feathered
+// (Hor, Vert, Bias), times its opacity; nothing while it is not visible.
+std::vector<float> intraframeMask(const model::Effect& effect, const model::IntraframeObject& object, const Picture& picture, double time,
+                                  const model::EffectSpan& span);
+// The effect on its segment's picture `layer` over `below` (the tracks below, or a transition's outgoing picture with
+// `layer` the incoming one): Paint's objects painted onto `layer` bottom layer first in their modes, Blur and Mosaic
+// within their objects, AniMatte keying `layer` in or out of its mattes over `below`.
+Picture intraframePicture(const model::Effect& effect, const Picture& layer, const Picture& below, double time, const model::EffectSpan& span);
 
 // The sequence's picture at `frame`. Sets `missing` when a segment's media is offline.
 Picture composeFrame(const Composition& composition, std::int64_t frame, bool* missing = nullptr);

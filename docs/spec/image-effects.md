@@ -89,9 +89,9 @@ shows `parameterDefault` and gangs Fixed Aspect (`EffectEditor::defaultValue`, `
   * Color Gain: Red, Green and Blue "0 to 200, where 100 leaves the color unchanged".
   The ChromaHueReverse console command (p.535) is not built.
 * Blur Effect and Mosaic Effect (p.468, p.532-536): Opac. is the strength (100 the most), Hor and Vert
-  the area's size. Ours, until Intraframe objects (6.9) choose an area: the whole picture, Hor and Vert
-  being the blur's radius (three box blurs) or the tiles' size, in pixels of a picture 1920 wide;
-  Feathering, Corner Tracking and the Blur/Mosaic Visible pops come with the objects.
+  the area's size. Ours: Hor and Vert are the blur's radius (three box blurs) or the tiles' size, in pixels
+  of a picture 1920 wide. In sequences they act within their Intraframe objects (6.9a,
+  docs/spec/intraframe.md); `imageEffectPicture` still gives the whole picture's.
 
 ## The 2D transitions' Scaling and Position
 

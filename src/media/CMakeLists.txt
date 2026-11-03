@@ -18,6 +18,7 @@ add_library(lumenis_media STATIC
     effect_drawing.h
     image_effects.cpp
     color_effects.cpp
+    intraframe.cpp
     key_effects.cpp
     burn_in.cpp
     illusion_common.h

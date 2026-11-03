@@ -319,6 +319,16 @@ Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture 
         // video. To apply the effect to the outgoing video, click the Swap Sources button" (p.294).
         return warp3dPicture(e, incoming, outgoing, time, model::EffectSpan(t.duration, true));
     }
+    if (model::isAniMatte(e)) {
+        // An AniMatte transition: "For single-track matte wipes, displays the incoming segment within the matte
+        // selection" (Key In; Key Out the outgoing, p.548), the mattes moving by their keyframes. Swap Sources was
+        // applied above.
+        model::Effect unswapped = e;
+        QJsonObject fg = unswapped.parameters.value(foreground).toObject();
+        fg.remove(QStringLiteral("Swap Sources"));
+        unswapped.parameters.insert(foreground, fg);
+        return intraframePicture(unswapped, incoming, outgoing, time, model::EffectSpan(t.duration, true));
+    }
     if (e.category == QLatin1String("Blend") && e.name == QLatin1String("Picture-in-Picture")) {
         // "On a transition, the incoming video appears inside the outgoing video" (p.458).
         return over(imageEffectPicture(e, incoming, time, model::EffectSpan(t.duration, true)), outgoing);
@@ -716,6 +726,12 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 layer = panZoomPicture(e, layer, time, length, c.effectPreview);
                 layer.quantize(c.precision);
                 result = over(layer, result);
+                result.quantize(c.precision);
+                continue;
+            }
+            if (model::isIntraframeEffect(e)) {
+                // The Intraframe effects' objects on the segment over the tracks below (FX Guide ch.15; intraframe.cpp).
+                result = intraframePicture(e, layer, result, time, length);
                 result.quantize(c.precision);
                 continue;
             }
