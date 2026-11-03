@@ -14,6 +14,7 @@
 
 #include "effect_drawing.h"
 
+#include <QFont>
 #include <QPainter>
 
 #include <algorithm>
@@ -386,6 +387,21 @@ Picture classicTitleLayer(const Composition& c, const model::Segment& segment, s
         return Picture::solid(w, h, Qt::black);
     };
     if (!title || media.isEmpty() || !c.source) return offline();
+    // "If you see an image in a monitor that says Wrong Format, the resolution of the Title effect is not compatible
+    // with the resolution of the video clips in the sequence" (p.376). Ours: title media made at a raster other than the
+    // project's.
+    if (c.raster.isValid() && media.raster.isValid() && media.raster != c.raster) {
+        QImage wrong(c.size, QImage::Format_RGB32);
+        wrong.fill(Qt::black);
+        QPainter p(&wrong);
+        p.setPen(Qt::white);
+        QFont font = p.font();
+        font.setPixelSize(std::max(8, h / 12));
+        p.setFont(font);
+        p.drawText(QRect(0, 0, w, h), Qt::AlignCenter, QStringLiteral("Wrong Format"));
+        p.end();
+        return Picture::fromImage(wrong, w, h, c.interpolation);
+    }
     const std::int64_t length = std::max<std::int64_t>(segment.length, 1);
     // The whole roll from where the segment starts in it, fitted to the segment (p.370).
     const double from = model::titleRollStart(*segment.effect);

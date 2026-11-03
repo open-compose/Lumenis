@@ -18,6 +18,7 @@
 #include "lumenis/model/sequence.h"
 
 #include <QDateTime>
+#include <QSize>
 #include <QString>
 
 #include <cstdint>
@@ -67,15 +68,24 @@ void reviseTitleSegment(Segment& segment, const BinItem& clip, const QString& bi
 std::int64_t titleClipLength(const Rational& rate);
 
 // The precomputes a Title Effect clip's segment plays: the fill and matte clips' ids and bin; empty for a fast-saved
-// title.
+// title. `resolution` (a media::Resolution id) is what they were made at, or were to be made at when fast saved ("The
+// default resolution is the resolution specified at the time you originally saved the titles with the Fast Save
+// option", FX Guide p.375); `raster` the frame size they were made at, for Wrong Format (p.376). Both are kept under
+// the Title Tool parameters ("Resolution", "Raster" as "WxH").
 struct TitleMedia {
     QString binId;
     QString fill;
     QString matte;
+    QString resolution;
+    QSize raster;
     bool isEmpty() const { return fill.isEmpty() || matte.isEmpty(); }
     bool operator==(const TitleMedia&) const = default;
 };
 TitleMedia titleMediaOf(const Segment& segment);
+// Re-create Title Media (FX Guide p.374): the segment's precomputes replaced by `media` (empty: unrendered), as long as
+// the segment; "The Re-create Title Media command removes any nested edits inside a title, and replaces them with the
+// new title's graphic and alpha tracks." The title, its roll start, source clip and the effect's own parameters stay.
+void setTitleMedia(Segment& segment, const TitleMedia& media);
 
 // The Title effect segment (filler with the effect and the nest of the precomputes) `length` frames long.
 Segment classicTitleSegment(const ClassicTitle& title, std::int64_t length, const TitleMedia& media);

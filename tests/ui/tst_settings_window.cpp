@@ -96,8 +96,9 @@ private slots:
                 for (const SettingOption& o : t.options) {
                     const QString where = k.kind + QLatin1Char('.') + o.key;
                     // Its setting's pages, or another chapter (Show Labels in
-                    // Tool Palette is on p.392).
-                    QVERIFY2((o.page >= k.page && o.page <= k.page + 10) || o.page == 392 || (o.page >= 89 && o.page <= 92),
+                    // Tool Palette is on p.392), or the FX Guide's (Use Classic
+                    // Character Mapping, FX p.377).
+                    QVERIFY2((o.page >= k.page && o.page <= k.page + 10) || o.page == 392 || (o.page >= 89 && o.page <= 92) || o.fxGuide,
                              qPrintable(where));
                     QVERIFY2(!keys.contains(where), qPrintable(where));
                     keys << where;

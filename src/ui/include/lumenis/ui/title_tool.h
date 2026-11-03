@@ -418,6 +418,15 @@ private:
 // chosen; `persist` tells whether Persist was selected.
 bool askNewTitle(QWidget* parent, bool* persist);
 
+// The Re-create Title Media and Create Unrendered Title Media dialog boxes (FX Guide p.374-375): "Select a drive on which
+// to store the re-created titles. Select a resolution": the drive's root and the media::Resolution id. Ours: no
+// multiformat check boxes (24p and 25p title formats).
+struct TitleMediaChoice {
+    QString drive;
+    QString resolution;
+};
+std::optional<TitleMediaChoice> askTitleMediaChoice(QWidget* parent, const QString& caption, const TitleMediaChoice& suggestion);
+
 // The Title Style Sheet dialog box (p.361-363): a sample window, the attributes' check boxes with Select All and Select
 // None, the Function Key and Style Name text boxes; Done keeps the changes, Close asks whether to save them. Revert
 // returns to `style`; Refresh is not needed (ours: the sample follows the boxes) and Convert to Marquee stays dimmed.

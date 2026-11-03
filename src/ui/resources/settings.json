@@ -400,6 +400,7 @@
             {"key": "toolTipDelay", "type": "int", "label": "Delay", "suffix": "seconds before showing", "min": 0, "max": 10, "default": 1, "page": 1200, "later": true},
             {"key": "launchLastProject", "type": "bool", "label": "Automatically Launch Last Project at Startup", "default": false, "page": 1200, "later": true},
             {"key": "toolPaletteLabels", "type": "bool", "label": "Show Labels in Tool Palette", "default": false, "page": 392},
+            {"key": "classicCharacterMapping", "type": "bool", "label": "Use Classic Character Mapping", "default": false, "page": 377, "guide": "fx", "later": true},
             {"key": "workspaceMove", "type": "choice", "style": "radio", "label": "When moving to a workspace", "default": "known", "page": 1200,
              "choices": [{"value": "known", "label": "Load the last known state"}, {"value": "saved", "label": "Load the last saved state"}]}
           ]

@@ -318,3 +318,41 @@ Tests: `tst_classic_title`, `tst_title_tool`, `tst_title_clips`. Title Effect cl
   precompute (named by the effect's "Fill" under the Title Tool parameters; `model::titleMediaOf`).
 * Tests: `tst_title_clips` (`editingTitles`: the source clip, Position, Edit Title from the menu and the button, the
   exit prompt, revising and undo, Save Title As, a replaced fill).
+
+## 6.8e3a: title media and troubleshooting
+
+### From the guide
+* Rendering titles (FX p.374): "Rolling and crawling titles are non-real-time effects. You must render them before
+  they will play back in real time", with the usual Render Effect.
+* Re-creating title media (p.374): "Regenerate title media that is offline ... Change the resolution of a title";
+  load the sequence, mark IN and OUT around the titles, select their record tracks, Clip > Re-create Title Media, a
+  drive and a resolution ("The default drive and resolution are defined in the Titles tab of the Media Creation dialog
+  box"). "The Re-create Title Media command removes any nested edits inside a title, and replaces them with the new
+  title's graphic and alpha tracks."
+* Creating media for unrendered titles in a bin (p.375): select them (Bin > Select > Unrendered Titles), Timeline >
+  Create Unrendered Title Media, a drive and a resolution ("The default resolution is the resolution specified at the
+  time you originally saved the titles with the Fast Save option"); "the title clip appears in the bin without the
+  (unrendered) label in the name field".
+* Wrong Format (p.376): "If you see an image in a monitor that says Wrong Format, the resolution of the Title effect is
+  not compatible with the resolution of the video clips in the sequence"; re-create the title at theirs.
+* HD title filtering (p.376): the console command HDTitleFilter toggles a filter, off by default, for titles and
+  graphics made afterwards, softening "sharp transitions between dark colors and light colors".
+* Classic character mapping (p.377): the Interface setting's General tab, "Use Classic Character Mapping".
+* Playback and underrun guidelines (p.375-376) are advice, not features.
+
+### Ours
+* Rendering: a title segment is a segment effect like any other (`model::renderTargets`); nothing was needed.
+* `model::TitleMedia` also keeps the resolution and raster the precomputes were made at ("Resolution" and "Raster" under
+  the Title Tool parameters; a fast save keeps its resolution). `model::setTitleMedia` gives a segment new precomputes
+  as long as itself, dropping nested edits, keeping the title, its roll start, its source clip and the effect's own
+  parameters.
+* `MainWindow::recreateTitleMedia` (Clip > Recreate Title Media) and `createUnrenderedTitleMedia` (Timeline > Create
+  Unrendered Title Media) ask through `askTitleMediaChoice` (drive and resolution; `setTitleMediaDialog` for tests) and
+  make media with `makeTitleMedia`. Without marks the whole sequence is looked at; the new precomputes go in the
+  sequence's bin; one undo step. Errors are shown without blocking (`notify`).
+* Wrong Format: the compositor's `classicTitleLayer` shows a black frame saying "Wrong Format" when the title's media
+  raster is not the project's (`Composition::raster`, set by `MainWindow::fillComposition`).
+* HDTitleFilter: `ConsoleWindow::run` toggles `media::setHdTitleFilter`; `renderClassicTitleMedia` then filters fill and
+  matte of rasters of 720 lines or more with `media::hdTitleFiltered` (a [1 2 1] / 4 vertical kernel).
+* Use Classic Character Mapping is listed dimmed (settings.json's `"guide": "fx"` marks its page as the FX Guide's).
+* Tests: `tst_title_clips` (`titleMedia`).

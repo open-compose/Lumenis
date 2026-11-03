@@ -7,6 +7,7 @@
 #include "lumenis/model/bin.h"
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/project_store.h"
+#include "lumenis/model/title_clip.h"
 #include "lumenis/ui/audio_punch_in.h"
 #include "lumenis/ui/audio_suite.h"
 #include "lumenis/ui/title_tool.h"
@@ -551,11 +552,29 @@ public:
     // `track` of the record sequence between its marks, one undo step; false without both marks. `bin` is the clip's
     // bin, kept as the segment's source for Edit Title.
     bool placeTitle(const model::BinItem& clip, const QString& bin, const QString& track);
+    // A title's fill and matte precomputes made in `doc` at the drive and resolution (empty: the Media Creation
+    // setting's Titles tab); nothing, with the reason, on failure.
+    std::optional<model::TitleMedia> makeTitleMedia(const model::ClassicTitle& title, const QString& name, BinDocument& doc,
+                                                    const QString& drive, const QString& resolution, QString* error);
+    std::optional<TitleMediaChoice> askTitleMedia(const QString& caption, const TitleMediaChoice& suggestion);
+    // A warning that does not block (object name "titleMediaMessage").
+    void notify(const QString& caption, const QString& text);
     // Revising a title in a sequence (FX Guide p.372-373): the Effect Editor's Edit Title button and the Timeline's
     // Edit Title open the record sequence's title segment at `segment` in the Title Tool; saving revises (Save Title)
     // or adds (Save Title As) the Title Effect clip and puts it in the segment's place, one undo step. False if the
     // segment is not a classic title.
     bool editTitleInSequence(const model::SegmentRef& segment);
+    // Clip > Re-create Title Media (FX Guide p.374): new precomputes, at the drive and resolution asked (the Media
+    // Creation setting's Titles tab first), for the titles on the selected record tracks between the marks (ours: the
+    // whole sequence without marks), put in the sequence's bin; one undo step. The number re-created.
+    int recreateTitleMedia();
+    // Timeline > Create Unrendered Title Media (p.375): media for the fast-saved Title Effect clips selected in the active
+    // bin, which lose "unrendered." from their names. The number made.
+    int createUnrenderedTitleMedia();
+    // For tests: what asks for the title media's drive and resolution (default: askTitleMediaChoice).
+    void setTitleMediaDialog(std::function<std::optional<TitleMediaChoice>(const QString&, const TitleMediaChoice&)> ask) {
+        titleMediaHook_ = std::move(ask);
+    }
     // Title styles (FX Guide p.361-364) kept as "Title Style" User settings, one a style, named as it; saving one of an
     // existing name replaces it.
     QList<model::ClassicTitleStyle> titleStyles() const;
@@ -608,6 +627,7 @@ private:
     std::optional<TitleTemplateEdit> templateEdit_;
     QPointer<TitleToolWindow> titleTool_;
     bool titleToolPersist_ = false; // the New Title dialog's Persist (p.327)
+    std::function<std::optional<TitleMediaChoice>(const QString&, const TitleMediaChoice&)> titleMediaHook_;
     std::function<bool(const QString&)> askTemplateSave_;
     // Saves an edited template (Save, or Save As a copy, which then is the one edited); false when it cannot.
     bool storeTitleTemplate(TitleTemplateEdit& edit, bool saveAs);

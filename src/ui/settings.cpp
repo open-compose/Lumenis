@@ -34,7 +34,7 @@ QString SettingKind::title() const {
 }
 
 // The document is {"settings": [{"kind", "scope", "page", "opens", "tabs": [{"name", "options":
-// [{"key", "type", "label", "suffix", "specialText", "resetButton", "style", "default", "min", "max", "page", "later",
+// [{"key", "type", "label", "suffix", "specialText", "resetButton", "style", "default", "min", "max", "page", "guide", "later",
 // "choices": [{"value", "label", "later"}]}]}]}]}.
 SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) {
     SettingsSchema schema;
@@ -69,6 +69,7 @@ SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) 
                 option.min = oo.value(QStringLiteral("min")).toInt();
                 option.max = oo.value(QStringLiteral("max")).toInt();
                 option.page = oo.value(QStringLiteral("page")).toInt();
+                option.fxGuide = oo.value(QStringLiteral("guide")).toString() == QLatin1String("fx");
                 option.later = oo.value(QStringLiteral("later")).toBool();
                 for (const QJsonValue& c : oo.value(QStringLiteral("choices")).toArray()) {
                     const QJsonObject co = c.toObject();

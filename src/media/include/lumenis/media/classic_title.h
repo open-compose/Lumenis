@@ -78,6 +78,14 @@ bool distributeClassicObjects(model::ClassicTitle& title, const QStringList& ids
 // over black (unpremultiplied, opaque), and the matte, its alpha as grey.
 QImage classicTitleFill(const model::ClassicTitle& title, const QSize& size, int page = 1);
 QImage classicTitleMatte(const model::ClassicTitle& title, const QSize& size, int page = 1);
+// "Using Filtering for HD Titles" (p.376): the console's HDTitleFilter toggles a filter for titles made from then on
+// ("The command does not affect media already created"); off at start. With it on, the precomputes of titles in an HD
+// raster (720 lines or more) are softened vertically ([1 2 1] / 4 over lines, ours), which keeps a downconverted SD
+// signal from overshooting.
+void setHdTitleFilter(bool on);
+bool hdTitleFilter();
+// The filter on one image.
+QImage hdTitleFiltered(const QImage& image);
 // Saving a title (p.357-358): its precomputes written as managed media in the creation's resolution on its video drive,
 // one frame per page at `rate`: RenderedEffect master clips "<name> Fill" and "<name> Matte" (ours). Nothing, with the
 // reason in `error`, on failure (the files made are removed).

@@ -138,16 +138,44 @@ TitleMedia titleMediaOf(const Segment& segment) {
         m.matte = matte->clipId;
         m.binId = matte->binId;
     }
+    if (segment.effect) {
+        const QJsonObject tool = segment.effect->parameters.value(kClassicTitleParameters).toObject();
+        m.resolution = tool.value(QStringLiteral("Resolution")).toString();
+        const QStringList raster = tool.value(QStringLiteral("Raster")).toString().split(QLatin1Char('x'));
+        if (raster.size() == 2) m.raster = QSize(raster.at(0).toInt(), raster.at(1).toInt());
+    }
     return m;
+}
+
+void setTitleMedia(Segment& segment, const TitleMedia& media) {
+    const auto title = segment.effect ? classicTitleOf(*segment.effect) : std::nullopt;
+    if (!title) return;
+    const Segment fresh = classicTitleSegment(*title, segment.length, media);
+    // The title's own parameters, with the new media's.
+    QJsonObject tool = segment.effect->parameters.value(kClassicTitleParameters).toObject();
+    const QJsonObject made = fresh.effect->parameters.value(kClassicTitleParameters).toObject();
+    for (const char* key : {"Unrendered", "Fill", "Resolution", "Raster"}) {
+        const QString k = QLatin1String(key);
+        if (made.contains(k)) tool.insert(k, made.value(k));
+        else tool.remove(k);
+    }
+    segment.effect->parameters.insert(kClassicTitleParameters, tool);
+    segment.nest = fresh.nest;
+    segment.nestIn = 0;
+    segment.render.reset();
 }
 
 Segment classicTitleSegment(const ClassicTitle& title, std::int64_t length, const TitleMedia& media) {
     Segment s = Segment::filler(length);
     s.effect = classicTitleEffect(title, media.isEmpty());
-    if (!media.isEmpty()) {
-        // The fill precompute by name, so that a fill track replaced in the nest (FX Guide p.373) is told from it.
+    {
         QJsonObject tool = s.effect->parameters.value(kClassicTitleParameters).toObject();
-        tool.insert(QStringLiteral("Fill"), media.fill);
+        // The fill precompute by name, so that a fill track replaced in the nest (FX Guide p.373) is told from it.
+        if (!media.isEmpty()) tool.insert(QStringLiteral("Fill"), media.fill);
+        if (!media.resolution.isEmpty()) tool.insert(QStringLiteral("Resolution"), media.resolution);
+        if (!media.isEmpty() && media.raster.isValid()) {
+            tool.insert(QStringLiteral("Raster"), QStringLiteral("%1x%2").arg(media.raster.width()).arg(media.raster.height()));
+        }
         s.effect->parameters.insert(kClassicTitleParameters, tool);
     }
     // The graphic (fill) and alpha (matte) tracks, filler for a fast-saved title.

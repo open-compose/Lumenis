@@ -1110,9 +1110,9 @@ phase of their own. They are done in three steps:
     * 6.8e2, revising a title in a sequence (the Effect Editor's Edit Title button, the Timeline's Edit
       Title), the Title effect's parameters (Foreground, Scaling, Position, Crop) and replacing a title's
       fill track (p.371-374). Done.
-    * 6.8e3, rendering titles, Clip > Recreate Title Media and Timeline > Create Unrendered Title Media,
-      the troubleshooting options (HDTitleFilter, Use Classic Character Mapping, Wrong Format;
-      p.374-377), and promoting titles to 3D (p.371), moved here from 6.8e2.
+    * 6.8e3, in two parts: 6.8e3a, rendering titles, Clip > Recreate Title Media and Timeline > Create
+      Unrendered Title Media, the troubleshooting options (HDTitleFilter, Use Classic Character Mapping,
+      Wrong Format; p.374-377), done; 6.8e3b, promoting titles to 3D (p.371), moved here from 6.8e2.
 * 6.9, intraframe effects (Paint, AniMatte, Blur, Scratch Removal; ch.15) and PlasmaWipe (ch.16).
 * 6.10, colour correction (ch.19-24, p.587-733): Color Correction mode, HSL and curves, safe
   colours, and the Symphony option's spot colour.

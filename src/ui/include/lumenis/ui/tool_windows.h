@@ -97,8 +97,8 @@ public:
 
     QPlainTextEdit* log() const { return log_; }
     QLineEdit* commandLine() const { return command_; }
-    // Runs a console command; its output goes to the log. The commands are help, clear, sysinfo
-    // and version; only the first word counts, ignoring case.
+    // Runs a console command; its output goes to the log. The commands are help, clear, sysinfo,
+    // version and HDTitleFilter (FX Guide p.376); only the first word counts, ignoring case.
     void run(const QString& command);
 
 private:

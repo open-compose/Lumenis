@@ -11,6 +11,7 @@
 #include <QPen>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <numbers>
 
@@ -478,17 +479,49 @@ QImage classicTitleMatte(const model::ClassicTitle& title, const QSize& size, in
     return matte;
 }
 
+namespace {
+std::atomic<bool> hdFilter{false};
+} // namespace
+
+void setHdTitleFilter(bool on) {
+    hdFilter = on;
+}
+
+bool hdTitleFilter() {
+    return hdFilter;
+}
+
+QImage hdTitleFiltered(const QImage& image) {
+    const QImage in = image.convertToFormat(QImage::Format_RGB32);
+    QImage out(in.size(), QImage::Format_RGB32);
+    const int h = in.height();
+    for (int y = 0; y < h; ++y) {
+        const auto* above = reinterpret_cast<const QRgb*>(in.constScanLine(std::max(0, y - 1)));
+        const auto* line = reinterpret_cast<const QRgb*>(in.constScanLine(y));
+        const auto* below = reinterpret_cast<const QRgb*>(in.constScanLine(std::min(h - 1, y + 1)));
+        auto* o = reinterpret_cast<QRgb*>(out.scanLine(y));
+        for (int x = 0; x < in.width(); ++x) {
+            auto mix = [&](int (*channel)(QRgb)) { return (channel(above[x]) + 2 * channel(line[x]) + channel(below[x]) + 2) / 4; };
+            o[x] = qRgb(mix(qRed), mix(qGreen), mix(qBlue));
+        }
+    }
+    return out;
+}
+
 std::optional<std::pair<model::BinItem, model::BinItem>> renderClassicTitleMedia(const model::ClassicTitle& title, const QString& name,
                                                                                  const Rational& rate, const MediaCreation& creation,
                                                                                  QString* error) {
     const int pages = title.motion == model::ClassicMotion::Still ? 1 : std::max(1, title.pages);
     const QSize size = creation.raster.isEmpty() ? QSize(1920, 1080) : creation.raster;
+    // HDTitleFilter (p.376), as it is when the media is made.
+    const bool filter = hdTitleFilter() && size.height() >= 720;
+    auto filtered = [filter](QImage image) { return filter ? hdTitleFiltered(image) : image; };
     auto fill = renderedVideoClip(name + QStringLiteral(" Fill"), rate, pages,
-                                  [&](std::int64_t f) { return classicTitleFill(title, size, static_cast<int>(f) + 1); }, creation,
+                                  [&](std::int64_t f) { return filtered(classicTitleFill(title, size, static_cast<int>(f) + 1)); }, creation,
                                   model::BinItemKind::RenderedEffect, error);
     if (!fill) return std::nullopt;
     auto matte = renderedVideoClip(name + QStringLiteral(" Matte"), rate, pages,
-                                   [&](std::int64_t f) { return classicTitleMatte(title, size, static_cast<int>(f) + 1); }, creation,
+                                   [&](std::int64_t f) { return filtered(classicTitleMatte(title, size, static_cast<int>(f) + 1)); }, creation,
                                    model::BinItemKind::RenderedEffect, error);
     if (!matte) {
         // Not half a title: the fill's file goes too.

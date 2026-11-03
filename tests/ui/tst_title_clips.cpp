@@ -23,6 +23,9 @@
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/timeline.h"
 #include "lumenis/ui/title_tool.h"
+#include "lumenis/ui/tool_windows.h"
+#include "lumenis/media/classic_title.h"
+#include "lumenis/model/effect_render.h"
 
 #include <QAction>
 #include <QApplication>
@@ -463,6 +466,166 @@ private slots:
         const auto dropped = timeline.droppedClip(mime);
         QVERIFY(dropped && dropped->second.kind == model::BinItemKind::Title);
         delete mime;
+        media::setExtraMediaDrives({});
+    }
+
+    // 6.8e3: rendering titles, Create Unrendered Title Media, Re-create Title Media, Wrong Format and HDTitleFilter
+    // (FX Guide p.373-376).
+    void titleMedia() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 320;
+        project.settings.format.height = 180;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        if (QWidget* editing = QApplication::focusWidget()) editing->clearFocus();
+        settle();
+        Composer& composer = window.composer();
+        Timeline& timeline = window.timeline();
+
+        // A fast-saved title keeps the resolution it was saved with (p.375).
+        model::ClassicTitle title;
+        model::ClassicObject box;
+        box.id = QStringLiteral("Box 1");
+        box.kind = model::ClassicKind::Box;
+        box.rect = QRectF(0, 0, 960, 540);
+        box.fill.color = QStringLiteral("#ff0000");
+        title.objects << box;
+        TitleToolWindow::SaveRequest request;
+        request.name = QStringLiteral("Card");
+        request.bin = binId;
+        request.drive = drive;
+        request.resolution = QStringLiteral("dnx_hq");
+        request.fastSave = true;
+        QString error;
+        const QString id = window.saveClassicTitle(title, request, QString(), &error);
+        QVERIFY2(!id.isEmpty(), qPrintable(error));
+        QVERIFY(model::isUnrenderedTitle(*bin->bin().item(id)));
+        QCOMPARE(model::titleMediaOf(*model::titleSegmentOf(*bin->bin().item(id))).resolution, QStringLiteral("dnx_hq"));
+
+        // Timeline > Create Unrendered Title Media on the selected titles (p.375): the saved resolution first, then
+        // media, and the name loses "unrendered.".
+        BinView* view = window.binContainer().viewFor(bin);
+        QVERIFY(view);
+        view->selectIds({id});
+        TitleMediaChoice suggested;
+        QString caption;
+        window.setTitleMediaDialog([&](const QString& c, const TitleMediaChoice& s) {
+            caption = c;
+            suggested = s;
+            return std::optional<TitleMediaChoice>(TitleMediaChoice{drive, s.resolution});
+        });
+        QVERIFY(commands.action(QStringLiteral("timeline.create_unrendered_title_media")) && commands.action(QStringLiteral("timeline.create_unrendered_title_media"))->isEnabled());
+        commands.action(QStringLiteral("timeline.create_unrendered_title_media"))->trigger();
+        QCOMPARE(caption, QStringLiteral("Create Unrendered Title Media"));
+        QCOMPARE(suggested.resolution, QStringLiteral("dnx_hq"));
+        const model::BinItem* rendered = bin->bin().item(id);
+        QVERIFY(rendered && !model::isUnrenderedTitle(*rendered));
+        QCOMPARE(rendered->name, QStringLiteral("Card"));
+        const auto segment = model::titleSegmentOf(*rendered);
+        QVERIFY(segment);
+        const model::TitleMedia first = model::titleMediaOf(*segment);
+        QVERIFY(!first.isEmpty());
+        QCOMPARE(first.raster, QSize(320, 180));
+
+        // The title over filler in a sequence.
+        model::BinItem sequenceItem = model::newSequence(bin->bin(), Rational(25), QDateTime::currentDateTimeUtc());
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        seq.ensureTrack(QStringLiteral("V2"));
+        seq.track(QStringLiteral("V1"))->segments = {model::Segment::filler(50)};
+        model::Segment placed = *segment;
+        placed.length = 50;
+        model::setTitleSource(*placed.effect, {binId, id});
+        seq.track(QStringLiteral("V2"))->segments = {placed};
+        seq.storeIn(sequenceItem);
+        bin->addItem(sequenceItem);
+        composer.load(MonitorId::Record, binId, sequenceItem);
+        settle();
+        auto record = [&] { return model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item); };
+        const model::SegmentRef ref{QStringLiteral("V2"), 0};
+        QImage shown = composer.pictureAt(MonitorId::Record, 10, QSize(320, 180));
+        QVERIFY2(isRed(shown.pixelColor(40, 40)), qPrintable(shown.pixelColor(40, 40).name()));
+        // Rendering titles (p.374): the title segment is an effect to render like any other.
+        QVERIFY(!model::renderTargets(record(), {QStringLiteral("V2")}, 0, 50).isEmpty());
+
+        // Wrong Format (p.376): media made at another raster.
+        QVERIFY(timeline.changeRecordSequence(QStringLiteral("Raster"), [](model::Sequence& s) {
+            model::Segment& t = s.track(QStringLiteral("V2"))->segments[0];
+            QJsonObject tool = t.effect->parameters.value(QStringLiteral("Title Tool")).toObject();
+            tool.insert(QStringLiteral("Raster"), QStringLiteral("640x360"));
+            t.effect->parameters.insert(QStringLiteral("Title Tool"), tool);
+            return true;
+        }));
+        QCOMPARE(model::titleMediaOf(*model::segmentFor(record(), ref)).raster, QSize(640, 360));
+        shown = composer.pictureAt(MonitorId::Record, 10, QSize(320, 180));
+        QVERIFY2(!isRed(shown.pixelColor(40, 40)), qPrintable(shown.pixelColor(40, 40).name()));
+        bool text = false;
+        for (int x = 100; x < 220 && !text; ++x) {
+            for (int y = 80; y < 100 && !text; ++y) text = shown.pixelColor(x, y).lightness() > 128;
+        }
+        QVERIFY(text);
+
+        // Clip > Re-create Title Media (p.374): new precomputes at the project's raster, nested edits gone; one undo.
+        QVERIFY(timeline.changeRecordSequence(QStringLiteral("Nested edit"), [](model::Sequence& s) {
+            model::Segment& t = s.track(QStringLiteral("V2"))->segments[0];
+            model::Sequence nest = model::nestOf(t);
+            nest.track(QStringLiteral("V1"))->segments = {model::Segment::filler(50)};
+            model::setNest(t, nest);
+            return true;
+        }));
+        QVERIFY(commands.action(QStringLiteral("clip.recreate_title_media")) && commands.action(QStringLiteral("clip.recreate_title_media"))->isEnabled());
+        commands.action(QStringLiteral("clip.recreate_title_media"))->trigger();
+        QCOMPARE(caption, QStringLiteral("Re-create Title Media"));
+        const auto recreated = model::segmentFor(record(), ref);
+        QVERIFY(recreated && recreated->effect && model::isClassicTitleEffect(*recreated->effect));
+        const model::TitleMedia again = model::titleMediaOf(*recreated);
+        QVERIFY(!again.isEmpty() && again.fill != first.fill);
+        QCOMPARE(again.raster, QSize(320, 180));
+        QCOMPARE(recreated->length, 50);
+        QCOMPARE(model::nestOf(*recreated).track(QStringLiteral("V1"))->segments.at(0).clipId, again.fill);
+        QCOMPARE(model::titleSourceOf(*recreated->effect).clip, id);
+        shown = composer.pictureAt(MonitorId::Record, 10, QSize(320, 180));
+        QVERIFY2(isRed(shown.pixelColor(40, 40)), qPrintable(shown.pixelColor(40, 40).name()));
+        QVERIFY(bin->bin().item(again.fill) && bin->bin().item(again.matte));
+        QVERIFY(timeline.perform(QStringLiteral("edit.undo")));
+        QCOMPARE(model::titleMediaOf(*model::segmentFor(record(), ref)).raster, QSize(640, 360));
+
+        // HDTitleFilter (p.376): a console toggle; the filter softens a sharp edge between lines.
+        ConsoleWindow console;
+        QVERIFY(!media::hdTitleFilter());
+        console.run(QStringLiteral("HDTitleFilter"));
+        QVERIFY(media::hdTitleFilter());
+        QImage edge(4, 4, QImage::Format_RGB32);
+        edge.fill(Qt::black);
+        for (int x = 0; x < 4; ++x) {
+            edge.setPixel(x, 2, qRgb(255, 255, 255));
+            edge.setPixel(x, 3, qRgb(255, 255, 255));
+        }
+        const QImage soft = media::hdTitleFiltered(edge);
+        QCOMPARE(qRed(soft.pixel(0, 0)), 0);
+        QCOMPARE(qRed(soft.pixel(0, 1)), 64);
+        QCOMPARE(qRed(soft.pixel(0, 2)), 191);
+        QCOMPARE(qRed(soft.pixel(0, 3)), 255);
+        console.run(QStringLiteral("hdtitlefilter"));
+        QVERIFY(!media::hdTitleFilter());
         media::setExtraMediaDrives({});
     }
 };

@@ -483,7 +483,7 @@ private slots:
         box.fill.color = QStringLiteral("#ff0000");
         title.objects << box;
         // The clip: kind Title, two minutes, the title kept for revising, its precomputes in the nest.
-        const model::TitleMedia media{QStringLiteral("bin"), QStringLiteral("fill"), QStringLiteral("matte")};
+        const model::TitleMedia media{QStringLiteral("bin"), QStringLiteral("fill"), QStringLiteral("matte"), QString(), QSize()};
         const BinItem clip = classicTitleClip(title, QStringLiteral("Lower Third"), Rational(25), media, QDateTime::currentDateTimeUtc());
         QCOMPARE(clip.kind, BinItemKind::Title);
         QCOMPARE(clip.durationFrames, 3000);

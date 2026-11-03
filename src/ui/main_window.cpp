@@ -3409,6 +3409,8 @@ void MainWindow::fillComposition(media::Composition& c, const model::LoadedClip&
     c.burnIn.clip = [this](const model::Segment& segment) { return composer_->resolve(segment.binId, segment.clipId); };
     // Timewarps' Source and Output formats (6.5d3a): the project's scan and the media's field order.
     c.interlaced = project_ && project_->settings.format.scan == ScanMode::Interlaced;
+    // Classic titles made at another raster show Wrong Format (FX Guide p.376).
+    if (project_) c.raster = QSize(project_->settings.format.width, project_->settings.format.height);
     c.topFieldFirst = [this](const model::Segment& segment) {
         const auto clip = composer_->resolve(segment.binId, segment.clipId);
         return !clip || clip->link.value(QStringLiteral("fieldOrder")).toString() != QLatin1String("bottom");
@@ -5360,6 +5362,9 @@ void MainWindow::installPanelHandlers() {
     handle("tools.title_tool_application", [this] { openTitleTool(); });
     // "Select Timeline > New > Title" also opens it (FX Guide p.343).
     handle("timeline.new.title", [this] { openTitleTool(); });
+    // Title media (FX Guide p.374-375).
+    handle("clip.recreate_title_media", [this] { recreateTitleMedia(); });
+    handle("timeline.create_unrendered_title_media", [this] { createUnrenderedTitleMedia(); });
     // Tools (ch.5).
     // Tools menu: each opens its panel through showTool().
     handle("tools.command_palette", [this] { showTool(QStringLiteral("CommandPalette")); });
@@ -5947,19 +5952,13 @@ QString MainWindow::saveClassicTitle(const model::ClassicTitle& title, const Tit
     // objects" (p.357).
     model::TitleMedia media;
     if (!request.fastSave) {
-        media::MediaCreation creation = mediaCreation(QStringLiteral("titles"));
-        if (!request.drive.isEmpty()) creation.videoDrive = request.drive;
-        if (const media::Resolution* r = media::findResolution(request.resolution)) creation.resolution = *r;
         QString why;
-        QApplication::setOverrideCursor(Qt::WaitCursor);
-        const auto clips = media::renderClassicTitleMedia(title, request.name, rate, creation, &why);
-        QApplication::restoreOverrideCursor();
-        if (!clips) return fail(why.isEmpty() ? tr("The title's media could not be made.") : why);
-        doc->addItem(clips->first);
-        doc->addItem(clips->second);
-        media.binId = doc->nodeId();
-        media.fill = clips->first.id;
-        media.matte = clips->second.id;
+        const auto made = makeTitleMedia(title, request.name, *doc, request.drive, request.resolution, &why);
+        if (!made) return fail(why.isEmpty() ? tr("The title's media could not be made.") : why);
+        media = *made;
+    } else {
+        // Kept for Create Unrendered Title Media's default (FX Guide p.375).
+        media.resolution = request.resolution.isEmpty() ? mediaCreation(QStringLiteral("titles")).resolution.id : request.resolution;
     }
     const model::BinItem* old = replaceId.isEmpty() ? nullptr : doc->bin().item(replaceId);
     model::BinItem item;
@@ -5988,6 +5987,158 @@ QString MainWindow::saveClassicTitle(const model::ClassicTitle& title, const Tit
     composer_->load(MonitorId::Source, doc->nodeId(), item);
     if (!request.placeTrack.isEmpty()) placeTitle(item, doc->nodeId(), request.placeTrack);
     return item.id;
+}
+
+std::optional<model::TitleMedia> MainWindow::makeTitleMedia(const model::ClassicTitle& title, const QString& name, BinDocument& doc,
+                                                            const QString& drive, const QString& resolution, QString* error) {
+    if (!project_) return std::nullopt;
+    media::MediaCreation creation = mediaCreation(QStringLiteral("titles"));
+    if (!drive.isEmpty()) creation.videoDrive = drive;
+    if (const media::Resolution* r = media::findResolution(resolution)) creation.resolution = *r;
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+    const auto clips = media::renderClassicTitleMedia(title, name, project_->settings.format.editRate, creation, error);
+    QApplication::restoreOverrideCursor();
+    if (!clips) return std::nullopt;
+    doc.addItem(clips->first);
+    doc.addItem(clips->second);
+    model::TitleMedia media;
+    media.binId = doc.nodeId();
+    media.fill = clips->first.id;
+    media.matte = clips->second.id;
+    media.resolution = creation.resolution.id;
+    media.raster = creation.raster;
+    return media;
+}
+
+void MainWindow::notify(const QString& caption, const QString& text) {
+    // Not modal, so that commands run from tests and scripts go on.
+    auto* box = new QMessageBox(QMessageBox::Warning, caption, text, QMessageBox::Ok, this);
+    box->setObjectName(QStringLiteral("titleMediaMessage"));
+    box->setAttribute(Qt::WA_DeleteOnClose);
+    box->open();
+}
+
+std::optional<TitleMediaChoice> MainWindow::askTitleMedia(const QString& caption, const TitleMediaChoice& suggestion) {
+    if (titleMediaHook_) return titleMediaHook_(caption, suggestion);
+    return askTitleMediaChoice(this, caption, suggestion);
+}
+
+int MainWindow::recreateTitleMedia() {
+    // "Load the sequence containing the titles into the Record monitor. Mark IN and OUT points in the sequence
+    // surrounding all the titles that you want to re-create. In the Track Selector panel, select the Record Track
+    // button for each track that contains titles you want to re-create" (FX Guide p.374). Ours: without marks, the
+    // whole sequence.
+    const model::MonitorState& rec = composer_->state(MonitorId::Record);
+    const model::LoadedClip* loaded = rec.current();
+    if (!loaded || loaded->item.kind != model::BinItemKind::Sequence || !project_) return 0;
+    BinDocument* doc = binContainer_->document(loaded->binId);
+    if (!doc) doc = binContainer_->activeDocument();
+    if (!doc || doc->isReadOnly()) return 0;
+    const model::Sequence seq = model::Sequence::fromItem(loaded->item);
+    const QStringList tracks = timeline_->patch().selectedRecordTracks(seq);
+    const bool marked = rec.in() || rec.out();
+    const std::int64_t from = marked ? rec.markedStart() : 0;
+    const std::int64_t to = marked ? rec.markedEnd() + 1 : std::numeric_limits<std::int64_t>::max();
+    struct Found {
+        QString track;
+        std::int64_t start;
+        model::ClassicTitle title;
+        QString name;
+    };
+    QList<Found> found;
+    for (const model::Track& t : seq.tracks()) {
+        if (t.kind != model::TrackKind::Video || !tracks.contains(t.name())) continue;
+        std::int64_t start = 0;
+        for (const model::Segment& s : t.segments) {
+            if (start < to && start + s.length > from && s.effect && model::isClassicTitleEffect(*s.effect)) {
+                if (const auto title = model::classicTitleOf(*s.effect)) {
+                    const model::TitleSource source = model::titleSourceOf(*s.effect);
+                    const auto clip = composer_->resolve(source.bin, source.clip);
+                    QString name = clip ? clip->name : tr("Title");
+                    if (name.startsWith(QLatin1String("unrendered."))) name = name.mid(11);
+                    found << Found{t.name(), start, *title, name};
+                }
+            }
+            start += s.length;
+        }
+    }
+    if (found.isEmpty()) {
+        notify(tr("Re-create Title Media"), tr("There are no titles on the selected tracks."));
+        return 0;
+    }
+    // "The default drive and resolution are defined in the Titles tab of the Media Creation dialog box" (p.374).
+    const media::MediaCreation creation = mediaCreation(QStringLiteral("titles"));
+    const auto choice = askTitleMedia(tr("Re-create Title Media"), TitleMediaChoice{creation.videoDrive, creation.resolution.id});
+    if (!choice) return 0;
+    QList<model::TitleMedia> made;
+    for (const Found& f : found) {
+        QString error;
+        const auto media = makeTitleMedia(f.title, f.name, *doc, choice->drive, choice->resolution, &error);
+        if (!media) {
+            notify(tr("Re-create Title Media"), error.isEmpty() ? tr("The title's media could not be made.") : error);
+            return 0;
+        }
+        made << *media;
+    }
+    int done = 0;
+    timeline_->changeRecordSequence(tr("Re-create Title Media"), [&](model::Sequence& s) {
+        for (qsizetype i = 0; i < found.size(); ++i) {
+            model::Track* track = s.track(found.at(i).track);
+            if (!track) continue;
+            std::int64_t start = 0;
+            for (model::Segment& seg : track->segments) {
+                if (start == found.at(i).start) {
+                    model::setTitleMedia(seg, made.at(i));
+                    ++done;
+                    break;
+                }
+                start += seg.length;
+            }
+        }
+        return done > 0;
+    });
+    return done;
+}
+
+int MainWindow::createUnrenderedTitleMedia() {
+    // "In the bin, select the titles for which you want to generate media ... Select Timeline > Create Unrendered Title
+    // Media" (FX Guide p.375).
+    BinDocument* doc = binContainer_->activeDocument();
+    BinView* view = doc ? binContainer_->viewFor(doc) : nullptr;
+    if (!doc || !view || doc->isReadOnly() || !project_) return 0;
+    QList<model::BinItem> titles;
+    for (const QString& id : view->selectedIds()) {
+        if (const model::BinItem* item = doc->bin().item(id); item && model::isUnrenderedTitle(*item)) titles << *item;
+    }
+    if (titles.isEmpty()) return 0;
+    // "The default resolution is the resolution specified at the time you originally saved the titles with the Fast
+    // Save option" (p.375).
+    const media::MediaCreation creation = mediaCreation(QStringLiteral("titles"));
+    TitleMediaChoice suggestion{creation.videoDrive, creation.resolution.id};
+    if (const auto segment = model::titleSegmentOf(titles.constFirst())) {
+        const QString saved = model::titleMediaOf(*segment).resolution;
+        if (!saved.isEmpty()) suggestion.resolution = saved;
+    }
+    const auto choice = askTitleMedia(tr("Create Unrendered Title Media"), suggestion);
+    if (!choice) return 0;
+    int done = 0;
+    for (model::BinItem item : titles) {
+        const auto title = model::classicTitleOf(item);
+        if (!title) continue;
+        const QString name = item.name.startsWith(QLatin1String("unrendered.")) ? item.name.mid(11) : item.name;
+        QString error;
+        const auto media = makeTitleMedia(*title, name, *doc, choice->drive, choice->resolution, &error);
+        if (!media) {
+            notify(tr("Create Unrendered Title Media"), error.isEmpty() ? tr("The title's media could not be made.") : error);
+            break;
+        }
+        // "The title clip appears in the bin without the (unrendered) label in the name field" (p.375).
+        model::reviseClassicTitleClip(item, *title, *media, QDateTime::currentDateTimeUtc());
+        item.name = name;
+        doc->replaceItem(item);
+        ++done;
+    }
+    return done;
 }
 
 bool MainWindow::placeTitle(const model::BinItem& clip, const QString& bin, const QString& track) {

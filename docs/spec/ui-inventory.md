@@ -271,6 +271,13 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Editing titles in (docs/spec/title-tool.md, 6.8e1): a roll's finish staying
   the roll's end whatever the source OUT, Place in Timeline's tracks (the
   sequence's video tracks and the next one).
+* Title media (docs/spec/title-tool.md, 6.8e3a): Re-create Title Media on the
+  whole sequence without marks, its precomputes in the sequence's bin, no
+  multiformat check boxes; Wrong Format for media made at another raster than
+  the project's (our resolutions are codecs, which play at any raster); the HD
+  title filter's [1 2 1] / 4 vertical kernel from 720 lines, off at start of
+  each session; Use Classic Character Mapping dimmed (titles keep Unicode
+  text, so there are no older mappings to return to).
 * Revising titles in sequences (docs/spec/title-tool.md, 6.8e2): no Marquee
   prompt, the Edit Title button above the parameter groups, Place in Timeline
   dimmed while revising, a segment whose clip's bin is closed saved as a new
@@ -757,7 +764,7 @@ Not yet built:
     Interface settings (p.97). This allows several named versions (p.80).
   * The Calculator's formats and keypad: the guide has no picture.
   * The Console's commands. The System ID is a hash of the operating
-    system's machine ID.
+    system's machine ID. HDTitleFilter is the FX Guide's (p.376).
   * Initials are at most three letters. Commands without a picture show
     their initials in the palettes.
   * Closing the Command Palette in Menu to Button mode returns to Button

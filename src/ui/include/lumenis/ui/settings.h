@@ -35,6 +35,7 @@ struct SettingOption {
     int min = 0; // int options' range; 0 when not given
     int max = 0;
     int page = 0; // the Editing Guide page that describes it; 0 when not given
+    bool fxGuide = false; // `page` is the FX Guide's ("guide": "fx")
     bool later = false; // shown, not available yet: value() returns the default
     QList<SettingChoice> choices;
 

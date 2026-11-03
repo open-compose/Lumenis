@@ -177,7 +177,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Modify > Modify Pulldown Phase |  | p.127 | *later* | ☐ | | |
 | Modify > Unlink Media |  | p.210 | works | ☐ | | |
 | Read Audio Timecode |  | p.668 | works | ☐ | | |
-| Recreate Title Media |  | p.475 | *later* | ☐ | | |
+| Recreate Title Media |  | p.475 | works | ☐ | | |
 | Refresh Sequence > Motion Adapters/Timewarps |  | p.545 | works | ☐ | | |
 | Relink > Linked Media |  | p.364 | works | ☐ | | |
 | Relink > Managed Media |  | p.361 | works | ☐ | | |
@@ -212,7 +212,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Restore Default Patch |  | p.630 | works | ☐ | | |
 | Show Sequence Map |  | p.606 | works | ☐ | | |
 | Split All Tracks |  | p.736 | works | ☐ | | |
-| Create Unrendered Title Media |  | p.375 | *later* | ☐ | | |
+| Create Unrendered Title Media |  | p.375 | works | ☐ | | |
 
 ## Composer menu
 
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 155 of them working with a project open; the
+* 211 menu commands, 157 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

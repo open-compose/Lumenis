@@ -257,6 +257,9 @@ struct Composition {
     // Scan effects pass the picture through unchanged; Avid Pan & Zoom's Display Source shows its whole image
     // (p.241).
     bool effectPreview = false;
+    // The project's raster. A classic title whose media was made at another shows "Wrong Format" (FX Guide p.376);
+    // empty: not checked.
+    QSize raster;
 };
 
 // Timecode Burn-In (ROADMAP 6.3d1; docs/spec/burn-in.md, burn_in.cpp). Its parameters live under

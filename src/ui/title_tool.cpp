@@ -2582,6 +2582,29 @@ std::optional<model::ClassicTitleStyle> titleStyleSheet(QWidget* parent, const m
     return result;
 }
 
+std::optional<TitleMediaChoice> askTitleMediaChoice(QWidget* parent, const QString& caption, const TitleMediaChoice& suggestion) {
+    QDialog box(parent);
+    box.setObjectName(QStringLiteral("titleMedia"));
+    box.setWindowTitle(caption);
+    auto* form = new QFormLayout(&box);
+    auto* drive = new QComboBox(&box);
+    drive->setObjectName(QStringLiteral("titleMedia:drive"));
+    for (const media::MediaDrive& d : media::mediaDrives()) drive->addItem(d.name.isEmpty() ? d.root : d.name, d.root);
+    drive->setCurrentIndex(std::max(0, drive->findData(suggestion.drive)));
+    form->addRow(QObject::tr("Drive:"), drive);
+    auto* resolution = new QComboBox(&box);
+    resolution->setObjectName(QStringLiteral("titleMedia:resolution"));
+    for (const media::Resolution& r : media::resolutions()) resolution->addItem(r.name, r.id);
+    resolution->setCurrentIndex(std::max(0, resolution->findData(suggestion.resolution)));
+    form->addRow(QObject::tr("Resolution:"), resolution);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &box);
+    form->addRow(buttons);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &box, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &box, &QDialog::reject);
+    if (box.exec() != QDialog::Accepted) return std::nullopt;
+    return TitleMediaChoice{drive->currentData().toString(), resolution->currentData().toString()};
+}
+
 bool askNewTitle(QWidget* parent, bool* persist) {
     QDialog box(parent);
     box.setObjectName(QStringLiteral("newTitle"));
