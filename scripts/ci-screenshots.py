@@ -21,27 +21,44 @@ GITHUB_RUN_ID and GITHUB_REF_NAME, as set in a GitHub Actions job.
 
 import argparse
 import base64
+import http.client
 import io
 import json
 import os
 import sys
 import tarfile
+import time
 import urllib.error
 import urllib.request
 import zipfile
 
 
-def api(method, path, body=None):
+def api(method, path, body=None, tries=4):
+    """One GitHub API call. A dropped connection, a body cut off part way
+    (http.client.IncompleteRead, seen on the WSL runner fetching a 4 MB
+    screenshot archive) or a 5xx answer is tried again, `tries` times in all,
+    2, 4, 8 ... seconds apart; other HTTP errors (404 for a missing branch,
+    422) go to the caller at once."""
     url = os.environ.get("GITHUB_API_URL", "https://api.github.com") + path
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(url, data=data, method=method)
-    req.add_header("Authorization", "Bearer " + os.environ["GITHUB_TOKEN"])
-    req.add_header("Accept", "application/vnd.github+json")
-    req.add_header("X-GitHub-Api-Version", "2022-11-28")
-    if data is not None:
-        req.add_header("Content-Type", "application/json")
-    with urllib.request.urlopen(req, timeout=120) as r:
-        return json.loads(r.read() or b"null")
+    for attempt in range(tries):
+        req = urllib.request.Request(url, data=data, method=method)
+        req.add_header("Authorization", "Bearer " + os.environ["GITHUB_TOKEN"])
+        req.add_header("Accept", "application/vnd.github+json")
+        req.add_header("X-GitHub-Api-Version", "2022-11-28")
+        if data is not None:
+            req.add_header("Content-Type", "application/json")
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                return json.loads(r.read() or b"null")
+        except urllib.error.HTTPError as e:
+            if e.code < 500 or attempt == tries - 1:
+                raise
+        except (http.client.HTTPException, urllib.error.URLError, OSError):
+            if attempt == tries - 1:
+                raise
+        print("ci-screenshots: %s %s failed, trying again" % (method, path), file=sys.stderr)
+        time.sleep(2 << attempt)
 
 
 def branch(name):

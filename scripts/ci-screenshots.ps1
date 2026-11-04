@@ -20,9 +20,21 @@ $headers = @{
     Accept                 = 'application/vnd.github+json'
     'X-GitHub-Api-Version' = '2022-11-28'
 }
+# One GitHub API call, tried four times in all, 2, 4 and 8 seconds apart, when the connection drops or GitHub answers
+# 5xx (ci-screenshots.py does the same); other HTTP errors (404, 422) go to the caller at once.
 function Invoke-Api([string]$Method, [string]$Url, $Body) {
     $json = $Body | ConvertTo-Json -Depth 5 -Compress
-    Invoke-RestMethod -Method $Method -Uri $Url -Headers $headers -Body $json -ContentType 'application/json'
+    for ($attempt = 0; ; $attempt++) {
+        try {
+            return Invoke-RestMethod -Method $Method -Uri $Url -Headers $headers -Body $json -ContentType 'application/json'
+        } catch {
+            $status = 0
+            if ($_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
+            if (($status -ne 0 -and $status -lt 500) -or $attempt -ge 3) { throw }
+            Write-Host "ci-screenshots: $Method $Url failed, trying again"
+            Start-Sleep -Seconds ([math]::Pow(2, $attempt + 1))
+        }
+    }
 }
 
 $zip = Join-Path $env:RUNNER_TEMP 'shots.zip'

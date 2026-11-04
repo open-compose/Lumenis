@@ -489,6 +489,15 @@ Keeping a copy is not a check of the build: if it fails, the step warns
 instead of failing the job. The warning prints the Controlled Folder Access
 setting, the folder's attributes and its permissions.
 
+### ui-consistency: "IncompleteRead" in "Fetch this run's screenshots"
+
+The WSL runner's download of another platform's screenshot archive (about
+4 MB from GitHub's API) was cut off part way, and the comparison job failed
+although every platform built and tested. `scripts/ci-screenshots.py` and
+`.ps1` now try each GitHub API call four times, 2, 4 and 8 seconds apart,
+when the connection drops or GitHub answers 5xx; a 404 or 422 still goes
+straight to the caller. A failure after that is a real outage: re-run the job.
+
 ### `tst_fcpxml` "corpus(): read 0, expected 5" or `tst_avb` "!original.isEmpty()"
 
 The interchange corpus was only partly downloaded: `interop_corpus_fetch`
