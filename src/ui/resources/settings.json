@@ -193,7 +193,7 @@
               "choices": [{"value": "none", "label": "None"}, {"value": "rgb", "label": "RGB"}, {"value": "name", "label": "Name"}, {"value": "nameRgb", "label": "Name and RGB"}]},
             {"key": "useMarks", "type": "bool", "label": "Use Marks for Segment Correction", "default": false, "page": 1166},
             {"key": "eyedropperAveraging", "type": "bool", "label": "Eyedropper 3 x 3 Averaging", "default": false, "page": 1166},
-            {"key": "showEyedropperInfo", "type": "bool", "label": "Show Eyedropper Info", "default": false, "page": 1166, "later": true},
+            {"key": "showEyedropperInfo", "type": "bool", "label": "Show Eyedropper Info", "default": true, "page": 1166},
             {"key": "eyedropperAnywhere", "type": "bool", "label": "Eyedropper Picks from Anywhere in Application", "default": false, "page": 1166, "later": true},
             {"key": "showBackgrounds", "type": "bool", "label": "Show ChromaWheel and ChromaCurve Graphs", "default": false, "page": 1166},
             {"key": "dualSplitDuringPlayback", "type": "bool", "label": "Dual-Split remains Active During Playback", "default": true, "page": 1166},

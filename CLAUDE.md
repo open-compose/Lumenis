@@ -702,7 +702,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `media::scopeImage`, the scope entries of `CorrectionSource`; tests `tst_scopes`, `tst_correction_mode`), is done.
   6.10c2, the automatic corrections and Remove Color Cast (`src/media/auto_correct.*`, `CorrectionTool::autoCorrect`/
   `startRemoveColorCast`, the CC tab's `cc.auto_*`; tests `tst_auto_correct`, `tst_correction_tool`), is done.
-  Next: 6.10c3, 6.10d-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.10c3a, the Color Match control (`src/media/color_match.*`, `ColorMatchControl` in `correction_color_match.cpp`,
+  Show Eyedropper Info on by default; tests `tst_color_match`, `tst_correction_tool`), is done.
+  Next: 6.10c3b (custom colours in bins), 6.10d-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

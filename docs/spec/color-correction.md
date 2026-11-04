@@ -263,7 +263,8 @@ and `Timeline::Options::correctionUseMarks`; units in `model::toCorrectionUnit`/
 * Eyedropper 3 x 3 Averaging applies to every colour the monitors sample (the Secondary tab's syringe and eyedroppers
   until Color Match comes with 6.10c). Dual-Split remains Active During Playback is on by default; off, the box is not
   drawn while the Composer plays. Use Marks needs both marks in the Record monitor.
-* Saved Color Labels, Show Eyedropper Info and Eyedropper Picks from Anywhere (Color Match and custom colours, 6.10c),
+* Saved Color Labels and Eyedropper Picks from Anywhere (custom colours, 6.10c3b; Show Eyedropper Info came with 6.10c3a,
+  on by default as p.631 has it),
   Waveform/Vectorscope Updates in Real-Time (6.10c), the AutoCorrect tab (6.10e; our defaults HSL Auto Balance, then
   Nothing) and the Preview tab are dimmed. The FX Guide gives Edit Review's preroll and postroll to the Trim settings
   (p.594), so the Preview tab's use is unknown.
@@ -374,6 +375,43 @@ Code: `src/media/auto_correct.*` (`media::autoCorrect`, `removeColorCast`); the 
   one sample.
 * The buttons are text buttons with the guide's names as tooltips; the CC tab's four commands are the Hue Offsets tab's
   and work in Color Correction mode.
+
+## 6.10c3a: the Color Match control
+
+Code: `src/media/color_match.*` (`media::matchColor`, `matchTypes`, `matchTypeText`, `naturalMatchColor`),
+`ColorMatchControl` and `CorrectionTool::colorMatch`/`matchColor` (`src/ui/correction_color_match.cpp`), the
+`ColorSelection::MatchColor` eyedropper, Show Eyedropper Info as `CorrectionTool::Options::eyedropperInfo`. Tests:
+`tst_color_match`, `tst_correction_tool` (`colorMatch`).
+
+### From the guide
+* "Each Color Correction group includes a Color Match control"; "Media Composer replaces the input color value with the
+  output color value and adjusts all the other color values in the image proportionally ... also automatically adjusts
+  the other controls in the group" (p.624).
+* Its parts: "input color swatch (top left), output color swatch (top right), Match Type button (center), Match Color
+  button (bottom)"; a swatch is picked by pressing on it and dragging the eyedropper into a monitor, released to
+  complete; double-clicking a swatch opens the Windows Color dialog or the Macintosh Colors panel; Match Color makes the
+  correction (p.625-626).
+* The Match Types: HSL Controls H+S+L, Hue, Saturation, Luminance, H+S, H+L, S+L; Hue Offsets Master, Highlights,
+  Midtones, Shadows; Channels and Curves Master, R+G+B, Red, Green, Blue, R+G, R+B, G+B; Levels Black, Gray and White
+  Point; Secondary Hue, Saturation, H+S (p.626-629).
+* NaturalMatch (Curves and Secondary) "adopts the new hue value, preserves the original luminance value, and adjusts the
+  saturation value in relation to the other values"; the match types then read "(Nat)" (p.627, p.629).
+* "By default, the color swatches in the Color Match control display the RGB values" (p.631); Show Eyedropper Info turns
+  them on and off (p.608).
+
+### Ours
+* Which controls a match changes: HSL Controls the range tab's Hue (by the hue between the colours), Saturation (by
+  their chroma) and Gain (by their brightness above black); Hue Offsets the chosen wheel by the chroma difference over
+  the range's share of the input's brightness (at least 0.2); Channels each channel's own component amount by the ratio
+  of the values (Master: the luma's); Levels the Master tab's input and output point; Curves a point on each curve
+  (Master: the master curve, by luma), as Remove Color Cast adds them; Secondary the selected vector's output hue and
+  saturation by their difference on the wheel.
+* NaturalMatch's target is the output's chroma direction at the input's luma, its chroma scaled by the input's
+  brightness over the output's (a quarter to four times).
+* The colours are picked like the Secondary eyedroppers: a press on a swatch arms the eyedropper and the colour under
+  it when the mouse is let go in a monitor fills the swatch (it does not follow the drag). The two swatches, Match Type
+  and NaturalMatch are kept per control for the session, not with the correction; the swatches' values are on the 8-bit
+  video scale ("R: 61 G: 62 B: 66").
 
 ## 6.10a3: the Secondary group
 

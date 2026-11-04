@@ -1173,9 +1173,11 @@ phase of their own. They are done in three steps:
     YC Waveform, YCbCr Histogram and YCbCr Parade, for the active monitor (p.686-692; the safe colour marks come with
     6.10e), done (`src/media/scopes.*`; tests `tst_scopes`, `tst_correction_mode`); 6.10c2, the automatic corrections: Auto Balance, Black, Contrast and White in the HSL group, Auto Balance and
     Contrast in the Curves tab, the Remove Color Cast buttons, and the CC tab's buttons (p.618-622), done
-    (`src/media/auto_correct.*`; tests `tst_auto_correct`, `tst_correction_tool`); 6.10c3, the Color
-    Match control in each group with its Match Types, NaturalMatch, custom colours in bins and the eyedropper options
-    (p.624-631, p.608).
+    (`src/media/auto_correct.*`; tests `tst_auto_correct`, `tst_correction_tool`); 6.10c3, in two parts:
+    6.10c3a, the Color Match control in each group with its Match Types, NaturalMatch and Show Eyedropper Info (p.624-629,
+    p.631, p.608), done (`src/media/color_match.*`, `ColorMatchControl`; tests `tst_color_match`, `tst_correction_tool`);
+    6.10c3b, custom colours in bins with Saved Color Labels and Eyedropper Picks from Anywhere in Application (p.630-631,
+    p.608).
   * 6.10d, relationship corrections (p.596-598), correction templates, presets and buckets (p.610-615), keyframing
     corrections (p.683-686), correcting a whole sequence (p.692), the Timeline's correction information (p.616), and
     updating, merging, flattening and removing corrections (ch.21, p.700-705).

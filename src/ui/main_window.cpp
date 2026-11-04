@@ -1681,7 +1681,8 @@ void MainWindow::createTools() {
     // The Color Selection buttons sample colours in the monitors (FX Guide p.678-679).
     connect(correctionTool_, &CorrectionTool::colorSelectionChanged, this, [this](CorrectionTool::ColorSelection s) {
         composer_->correctionMonitors()->setSampling(s == CorrectionTool::ColorSelection::None      ? CorrectionMonitors::Sampling::None
-                                                     : s == CorrectionTool::ColorSelection::Syringe || s == CorrectionTool::ColorSelection::RemoveColorCast
+                                                     : s == CorrectionTool::ColorSelection::Syringe || s == CorrectionTool::ColorSelection::RemoveColorCast ||
+                                                             s == CorrectionTool::ColorSelection::MatchColor
                                                          ? CorrectionMonitors::Sampling::Drag
                                                                                                     : CorrectionMonitors::Sampling::Click);
     });
@@ -5364,6 +5365,7 @@ void MainWindow::applySettings() {
                     : vectors == QLatin1String("enabled") ? CorrectionTool::Options::Vectors::Enabled
                                                           : CorrectionTool::Options::Vectors::Standard;
         c.backgrounds = s.flag(cc, QStringLiteral("showBackgrounds"));
+        c.eyedropperInfo = s.flag(cc, QStringLiteral("showEyedropperInfo"));
         if (correctionTool_) correctionTool_->setOptions(c);
         if (CorrectionMonitors* m = composer_->correctionMonitors()) {
             m->setEyedropperAveraging(s.flag(cc, QStringLiteral("eyedropperAveraging")));

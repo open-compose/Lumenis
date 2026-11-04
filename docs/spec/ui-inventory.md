@@ -326,6 +326,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   the linear Gain/Setup solve, a grey world per luma range, the Curves points),
   Remove Color Cast's share threshold and one sample per click, the buttons as
   text buttons.
+  6.10c3a: which controls each Color Match type changes, NaturalMatch's target
+  colour, swatches filled on release rather than during the drag, the control's
+  state kept for the session, the swatches' numbers on the video scale.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

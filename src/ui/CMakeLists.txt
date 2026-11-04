@@ -61,6 +61,7 @@ add_library(lumenis_ui STATIC
     shortcuts_window.cpp
     select_project_dialog.cpp
     correction_monitors.cpp
+    correction_color_match.cpp
     correction_tool.cpp
     correction_tool_panes.cpp
     correction_tool_secondary.cpp

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/media/auto_correct.h"
+#include "lumenis/media/color_match.h"
 #include "lumenis/model/color_correction.h"
 
 #include <QDoubleSpinBox>
@@ -24,6 +25,50 @@ class LumaRangesGraph;
 class ChromaCurveGraph;
 class Histogram;
 class VectorWheel;
+
+// The Color Match control of a Color Correction group (FX Guide p.624-631; 6.10c3a): "input color swatch (top left),
+// output color swatch (top right), Match Type button (center), Match Color button (bottom)" (p.625). Pressing a swatch
+// asks for an eyedropper colour (pickRequested; the tool samples the monitors); double-clicking opens the system colour
+// dialog (p.625-626). With Show Eyedropper Info the swatches show their RGB values (p.608, p.631).
+class ColorMatchControl : public QWidget {
+    Q_OBJECT
+
+public:
+    ColorMatchControl(media::MatchGroup group, QWidget* parent = nullptr);
+    media::MatchGroup group() const { return group_; }
+    QColor color(bool output) const { return output ? output_ : input_; }
+    void setColor(bool output, const QColor& color);
+    QString matchType() const { return type_; }
+    void setMatchType(const QString& type);
+    bool naturalMatch() const { return natural_; }
+    void setNaturalMatch(bool on);
+    void setShowInfo(bool on);
+    bool showInfo() const { return showInfo_; }
+    QToolButton* swatch(bool output) const { return output ? outSwatch_ : inSwatch_; }
+    QToolButton* typeButton() const { return typeButton_; }
+    QToolButton* matchButton() const { return matchButton_; }
+    // The swatch's text: its 8-bit RGB values on the video scale ("R: 61 G: 62 B: 66", p.630), or nothing.
+    QString infoText(bool output) const;
+
+signals:
+    void pickRequested(bool output);
+    void matchRequested();
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
+private:
+    void sync();
+    media::MatchGroup group_;
+    QColor input_, output_;
+    QString type_;
+    bool natural_ = false;
+    bool showInfo_ = true;
+    QToolButton* inSwatch_ = nullptr;
+    QToolButton* outSwatch_ = nullptr;
+    QToolButton* typeButton_ = nullptr;
+    QToolButton* matchButton_ = nullptr;
+};
 
 // An automatic correction or Remove Color Cast button of the tool (p.620-622): a small text button named `name`, with
 // the button's full name as its tool tip.
@@ -83,6 +128,9 @@ public:
         enum class Vectors { All, Standard, Custom, Enabled };
         Vectors vectors = Vectors::Standard;
         bool backgrounds = false;
+        // "the numerical RGB values appear on the color swatches in the Color Match controls" (p.608); "By default, the
+        // color swatches in the Color Match control display the RGB values" (p.631).
+        bool eyedropperInfo = true;
         bool operator==(const Options&) const = default;
     };
     const Options& options() const { return options_; }
@@ -151,8 +199,9 @@ public:
     void selectVector(const QString& vector);
     bool lockVectors() const { return lockVectors_; }
     void setLockVectors(bool on);
-    // RemoveColorCast is a Remove Color Cast button (6.10c2): the next colour sampled is made neutral.
-    enum class ColorSelection { None, Syringe, AddToSelection, SubtractFromSelection, RemoveColorCast };
+    // RemoveColorCast is a Remove Color Cast button (6.10c2): the next colour sampled is made neutral. MatchColor is a
+    // Color Match swatch's eyedropper (6.10c3a): the colour sampled fills the swatch.
+    enum class ColorSelection { None, Syringe, AddToSelection, SubtractFromSelection, RemoveColorCast, MatchColor };
     ColorSelection colorSelection() const { return colorSelection_; }
     void setColorSelection(ColorSelection selection);
     // Colours sampled in a monitor with the Color Selection button that is on: the syringe defines a vector from them
@@ -167,6 +216,11 @@ public:
     void autoCorrect(media::AutoCorrection kind, bool hueOffsets = true);
     void startRemoveColorCast(media::CastRemoval where);
     std::optional<media::CastRemoval> castRemoval() const { return castRemoval_; }
+    // The groups' Color Match controls by name: "controls", "hueOffsets", "channels", "levels", "curves", "secondary".
+    ColorMatchControl* colorMatch(const QString& name) const;
+    // The Match Color button (p.626): the control's input colour to its output by its Match Type, one undo step; the
+    // Controls tab's control works on the range tab shown, the Secondary one on the selected vector.
+    void matchColor(ColorMatchControl* control);
     // The Luma Ranges tab's preview (p.642-643).
     enum class LumaPreview { Input, ThreeTone, Output };
     LumaPreview lumaPreview() const { return lumaPreview_; }
@@ -238,6 +292,9 @@ private:
     Histogram* outHistogram_ = nullptr;
     bool lockVectors_ = false;
     std::optional<media::CastRemoval> castRemoval_;
+    ColorMatchControl* picking_ = nullptr; // the control whose swatch takes the next sample
+    bool pickingOutput_ = false;
+    ColorMatchControl* colorMatchFor(media::MatchGroup group, QWidget* parent);
     ColorSelection colorSelection_ = ColorSelection::None;
     VectorWheel* inputWheel_ = nullptr;
     VectorWheel* outputWheel_ = nullptr;

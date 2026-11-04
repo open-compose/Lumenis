@@ -227,10 +227,19 @@ CorrectionTool::CorrectionTool(Timeline& timeline, QWidget* parent) : QWidget(pa
     hslPages_->addWidget(lumaRangesPane());
     hslRow->addWidget(hslPages_, 1);
     groups_->addWidget(hsl);
-    groups_->addWidget(channelsPane());
-    groups_->addWidget(levelsPane());
-    groups_->addWidget(curvesPane());
-    groups_->addWidget(secondaryPane());
+    // Each group's Color Match control under its pane (p.624).
+    auto withMatch = [this](QWidget* pane, media::MatchGroup group) {
+        auto* box = new QWidget;
+        auto* v = new QVBoxLayout(box);
+        v->setContentsMargins(0, 0, 0, 0);
+        v->addWidget(pane, 1);
+        v->addWidget(colorMatchFor(group, box));
+        return box;
+    };
+    groups_->addWidget(withMatch(channelsPane(), media::MatchGroup::Channels));
+    groups_->addWidget(withMatch(levelsPane(), media::MatchGroup::Levels));
+    groups_->addWidget(withMatch(curvesPane(), media::MatchGroup::Curves));
+    groups_->addWidget(withMatch(secondaryPane(), media::MatchGroup::Secondary));
     outer->addWidget(groups_, 1);
     reload();
 }
@@ -374,6 +383,7 @@ QWidget* CorrectionTool::controlsPane() {
         controlPages_->addWidget(page);
     }
     v->addWidget(controlPages_);
+    v->addWidget(colorMatchFor(media::MatchGroup::HslControls, pane));
     return pane;
 }
 
@@ -451,6 +461,7 @@ QWidget* CorrectionTool::hueOffsetsPane() {
         const QString path = QStringLiteral("hsl/hueOffsets/") + QLatin1String(n);
         v->addWidget(sliderRow(pane, path, label(path)));
     }
+    v->addWidget(colorMatchFor(media::MatchGroup::HslHueOffsets, pane));
     v->addStretch(1);
     return pane;
 }
@@ -739,6 +750,7 @@ void CorrectionTool::setOptions(const Options& options) {
     for (const char* w : {"master", "highlights", "midtones", "shadows"}) {
         if (ChromaWheel* wheel = this->wheel(QLatin1String(w))) wheel->setBackground(options_.backgrounds);
     }
+    for (ColorMatchControl* m : findChildren<ColorMatchControl*>()) m->setShowInfo(options_.eyedropperInfo);
     sync();
     syncPanes();
 }

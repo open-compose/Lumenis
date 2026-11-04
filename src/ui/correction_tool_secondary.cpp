@@ -193,6 +193,7 @@ void CorrectionTool::setLockVectors(bool on) {
 void CorrectionTool::setColorSelection(ColorSelection selection) {
     colorSelection_ = selection;
     if (selection != ColorSelection::RemoveColorCast) castRemoval_.reset();
+    if (selection != ColorSelection::MatchColor) picking_ = nullptr;
     for (QToolButton* b : findChildren<QToolButton*>()) {
         if (b->objectName().startsWith(QLatin1String("removeCast:")))
             b->setChecked(castRemoval_ && b->objectName() == QStringLiteral("removeCast:%1").arg(static_cast<int>(*castRemoval_)));
@@ -226,6 +227,12 @@ void CorrectionTool::applySamples(const QList<QColor>& colors) {
     case ColorSelection::RemoveColorCast:
         // The colour under the eyedropper when the mouse is let go (p.622).
         if (castRemoval_ && media::removeColorCast(correction_, colors.constLast(), *castRemoval_)) commit(tr("Remove Color Cast"));
+        setColorSelection(ColorSelection::None);
+        break;
+    case ColorSelection::MatchColor:
+        // "Release the mouse button to complete the selection. The input color appears in the input color swatch"
+        // (p.625).
+        if (picking_) picking_->setColor(pickingOutput_, colors.constLast());
         setColorSelection(ColorSelection::None);
         break;
     case ColorSelection::None: break;

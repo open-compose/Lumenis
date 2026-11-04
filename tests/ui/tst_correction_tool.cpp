@@ -636,6 +636,40 @@ private slots:
         QVERIFY(!cast->isChecked());
         QCOMPARE(selection.count(), 2);
     }
+
+    void colorMatch() {
+        // Each group has a Color Match control (FX Guide p.624): pick the two colours with the eyedropper, choose a Match
+        // Type, click Match Color (p.625-626).
+        Rig r;
+        for (const char* name : {"controls", "hueOffsets", "channels", "levels", "curves", "secondary"}) QVERIFY2(r.tool.colorMatch(QLatin1String(name)), name);
+        r.tool.showGroup(QStringLiteral("curves"));
+        ColorMatchControl* m = r.tool.colorMatch(QStringLiteral("curves"));
+        QVERIFY(!m->matchButton()->isEnabled());
+        QTest::mouseClick(m->swatch(false), Qt::LeftButton);
+        QCOMPARE(r.tool.colorSelection(), CorrectionTool::ColorSelection::MatchColor);
+        r.tool.applySamples({QColor(100, 110, 150)});
+        QCOMPARE(m->color(false), QColor(100, 110, 150));
+        QCOMPARE(r.tool.colorSelection(), CorrectionTool::ColorSelection::None);
+        QTest::mouseClick(m->swatch(true), Qt::LeftButton);
+        r.tool.applySamples({QColor(160, 120, 90)});
+        QCOMPARE(m->color(true), QColor(160, 120, 90));
+        // The swatches show their RGB values by default (p.631), on the video scale.
+        QVERIFY(m->showInfo());
+        QCOMPARE(m->swatch(true)->text(), m->infoText(true));
+        QVERIFY(m->infoText(true).startsWith(QStringLiteral("R: ")));
+        // R+G+B with NaturalMatch, then Match Color: points on the colour curves.
+        m->setMatchType(QStringLiteral("rgb"));
+        m->setNaturalMatch(true);
+        QCOMPARE(m->typeButton()->text(), QStringLiteral("R+G+B (Nat)"));
+        QVERIFY(m->matchButton()->isEnabled());
+        m->matchButton()->click();
+        QCOMPARE(model::colorCurve(r.segment(0).sourceCorrection, QStringLiteral("red")).size(), 3);
+        // Show Eyedropper Info off hides the numbers.
+        CorrectionTool::Options o;
+        o.eyedropperInfo = false;
+        r.tool.setOptions(o);
+        QVERIFY(m->swatch(true)->text().isEmpty());
+    }
 };
 
 QTEST_MAIN(TestCorrectionTool)
