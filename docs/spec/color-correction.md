@@ -159,6 +159,38 @@ Code: `src/ui/correction_tool.*` (`CorrectionTool`, `ChromaWheel`, `LumaRangesGr
   shows each pixel white, grey or black by the range with the largest share.
 * The Channels, Levels, Curves and Sec tabs' panes come with 6.10b3.
 
+## 6.10b3a: the Channels, Levels and Curves panes
+
+Code: `src/ui/correction_tool_panes.cpp` (`CorrectionTool::channelsPane`/`levelsPane`/`curvesPane`, `ChromaCurveGraph`,
+`Histogram`), the channel previews in `CorrectionMonitors`, the histograms' pictures from `MainWindow`. Test:
+`tst_correction_tool`.
+
+### From the guide
+* Channels (p.645-647): the Preview pane's Red, Green, Blue and Master Input and Output ("Displays the uncorrected red
+  channel in monochrome"); the Channel Blending pane, each channel an Enable button, four text boxes (-200 to 200) and
+  Component Type buttons (Red, Green, Blue, Luma, Cr, Cb, Offset, and Invert, which puts "A minus sign (–) ... after
+  the component name").
+* Levels (p.649-658): the subdividing tabs Composite, Luma, Red, Green, Blue, Master; the Input histogram, the
+  ChromaCurve graph and the Output histogram, each histogram with Black, Gray and White sliders and text boxes; "The
+  Levels controls are dynamically linked to one another"; "The input histogram always shows the distribution of values
+  for the uncorrected image"; the graph's points dragged; Composite and Luma have only black and white points; a
+  background grid at the quartiles.
+* Curves (p.659-663): four ChromaCurve graphs (Red, Green, Blue, Master), each with an Enable button and Input and
+  Output text boxes; points added by clicking the curve, selected (a circle), dragged, typed and deleted with Delete,
+  two to sixteen; the Master Saturation, Gain, Gamma and Setup sliders.
+
+### Ours
+* Component Type buttons read "% Red" and so on, the amounts in text boxes before them; Invert is the last item of the
+  type menu and toggles.
+* A Levels point dragged on the graph sets its input and output together, one undo step; the graph shows
+  `model::levelsValue` and its points; a point stays between its neighbours. Histograms count the frame at the position
+  (160 by 90, from the Composer) on the 8-bit video scale: Master counts all three channels, Composite both ends of the
+  chroma's swing (as the Composite levels do). They are drawn in the text colour (the Color, Solid and Dynamic
+  Histograms options come with the Correction Mode settings, 6.10b4) and refresh when the correction or position does.
+* The Curves graphs draw `model::curveValue`, following a dragged point as it moves; no colour backgrounds yet (the
+  Show ChromaWheel and ChromaCurve Graphs option, 6.10b4).
+* The channel previews show the active monitor's channel as grey, uncorrected (Input) or corrected (Output).
+
 ## 6.10a3: the Secondary group
 
 ### From the guide

@@ -1655,6 +1655,22 @@ void MainWindow::createTools() {
                                                                             : CorrectionMonitors::Preview::Output;
         composer_->correctionMonitors()->setPreview(preview, [this] { return correctionTool_->correction(); });
     });
+    connect(correctionTool_, &CorrectionTool::channelPreviewChanged, this, [this](CorrectionTool::ChannelPreview p) {
+        using C = CorrectionTool::ChannelPreview;
+        using P = CorrectionMonitors::Preview;
+        const P preview = p == C::RedInput ? P::RedInput : p == C::GreenInput ? P::GreenInput : p == C::BlueInput ? P::BlueInput
+                        : p == C::RedOutput ? P::RedOutput : p == C::GreenOutput ? P::GreenOutput : p == C::BlueOutput ? P::BlueOutput
+                        : p == C::MasterInput ? P::Input : P::Output;
+        composer_->correctionMonitors()->setPreview(preview);
+    });
+    // The Levels histograms' pictures (FX Guide p.654): the frame at the position, small, without and with corrections.
+    correctionTool_->setPictureSource([this](bool corrected) {
+        const model::MonitorState& r = composer_->state(MonitorId::Record);
+        composer_->setUncorrectedPictures(!corrected);
+        const QImage image = composer_->pictureAt(MonitorId::Record, r.position(), QSize(160, 90));
+        composer_->setUncorrectedPictures(false);
+        return image;
+    });
     // The Motion Effect Editor (FX Guide p.178-189) and its toolbar (p.184).
     motionEditor_ = new MotionEffectEditor(*timeline_);
     panels_->addPanel(new Panel(QStringLiteral("MotionEffectEditor"), tr("Motion Effect Editor"), motionEditor_));

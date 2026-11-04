@@ -297,6 +297,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   only with something set under it, slider decimals, Shift's quarter-speed
   wheel drag and the pointer shapes, straight Luma Ranges curves, Three-tone
   by the largest share.
+  6.10b3a: the Component Type buttons' "% Name" labels and Invert as a
+  toggle in their menu, Levels points dragged as input and output together,
+  the histograms' 160-by-90 sample, Master counting all three channels and
+  Composite both ends of the chroma swing, Curves points kept between
+  neighbours.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

@@ -5,6 +5,7 @@
 #include <QWidget>
 
 #include <array>
+#include <functional>
 #include <optional>
 
 class QButtonGroup;
@@ -18,12 +19,15 @@ namespace lumenis::ui {
 class Timeline;
 class ChromaWheel;
 class LumaRangesGraph;
+class ChromaCurveGraph;
+class Histogram;
 
 // The Color Correction tool (FX Guide p.595-605, p.631-644; docs/spec/color-correction.md, 6.10b2): the Correction Type
 // button, the group tabs (HSL, Channels, Levels, Curves, Sec) and the HSL group's subdividing tabs, every one with its
 // Enable button, and the HSL group's panes: the Controls tab's sliders for the Master, Highlights, Midtones and Shadows
-// ranges, the Hue Offsets tab's ChromaWheels with Gain, Gamma and Setup, and the Luma Ranges graph. The other groups'
-// panes come in 6.10b3.
+// ranges, the Hue Offsets tab's ChromaWheels with Gain, Gamma and Setup, and the Luma Ranges graph. 6.10b3a adds the
+// Channels pane (p.645-647), the Levels pane with its subdividing tabs, histograms and ChromaCurve graph (p.648-659) and
+// the Curves pane (p.659-663) (correction_tool_panes.cpp); the Secondary pane comes in 6.10b3b.
 //
 // The tool shows the correction of the segment at the position on the Timeline's correction track (Timeline::
 // currentCorrection) and changes it through Timeline::setCurrentCorrection, an undo step each time a control is let go
@@ -58,6 +62,20 @@ public:
 
     // Sets a control and commits it as an undo step.
     void setControl(const QString& path, double value);
+    // The Levels group's subdividing tab: "composite", "luma", "red", "green", "blue", "master" (p.653).
+    QString levelsTab() const { return levelsTab_; }
+    void showLevelsTab(const QString& tab);
+    // The frame at the position without (false) or with (true) the corrections, for the histograms (p.654); MainWindow
+    // takes it from the Composer.
+    using PictureSource = std::function<QImage(bool corrected)>;
+    void setPictureSource(PictureSource source) { pictures_ = std::move(source); }
+    // The Channels tab's Preview pane (p.645-646): an input or output channel in monochrome, or the master image.
+    enum class ChannelPreview { RedInput, GreenInput, BlueInput, MasterInput, RedOutput, GreenOutput, BlueOutput, MasterOutput };
+    ChannelPreview channelPreview() const { return channelPreview_; }
+    void setChannelPreview(ChannelPreview preview);
+    ChromaCurveGraph* levelsGraph() const { return levelsGraph_; }
+    Histogram* histogram(bool output) const { return output ? outHistogram_ : inHistogram_; }
+    ChromaCurveGraph* curveGraph(const QString& graph) const;
     // The Luma Ranges tab's preview (p.642-643).
     enum class LumaPreview { Input, ThreeTone, Output };
     LumaPreview lumaPreview() const { return lumaPreview_; }
@@ -73,6 +91,7 @@ public:
 signals:
     // The Luma Ranges preview changed, for the monitors.
     void lumaPreviewChanged(LumaPreview preview);
+    void channelPreviewChanged(ChannelPreview preview);
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -83,6 +102,10 @@ private:
     QWidget* hueOffsetsPane();
     QWidget* lumaRangesPane();
     QWidget* sliderRow(QWidget* parent, const QString& path, const QString& label);
+    QWidget* channelsPane();
+    QWidget* levelsPane();
+    QWidget* curvesPane();
+    void syncPanes();
     void commit(const QString& step);
     void sync();
     void syncControls();
@@ -103,6 +126,80 @@ private:
     LumaRangesGraph* lumaGraph_ = nullptr;
     QDoubleSpinBox* lumaIn_ = nullptr;
     QDoubleSpinBox* lumaOut_ = nullptr;
+    QString levelsTab_ = QStringLiteral("master");
+    PictureSource pictures_;
+    ChannelPreview channelPreview_ = ChannelPreview::MasterOutput;
+    ChromaCurveGraph* levelsGraph_ = nullptr;
+    Histogram* inHistogram_ = nullptr;
+    Histogram* outHistogram_ = nullptr;
+};
+
+// A ChromaCurve graph (p.655-663): input 0-255 across, output up, the curve through its control points drawn from
+// `mapping`. In the Curves tab points are added by clicking the curve, dragged, typed and deleted (two to sixteen,
+// p.662-663); in the Levels tab its black, gray and white points are only dragged (p.656-657).
+class ChromaCurveGraph : public QWidget {
+    Q_OBJECT
+
+public:
+    explicit ChromaCurveGraph(bool editable, QWidget* parent = nullptr);
+    void setCurve(const QList<QPointF>& points, std::function<double(double)> mapping);
+    const QList<QPointF>& points() const { return points_; }
+    int selectedPoint() const { return selected_; }
+    void selectPoint(int index);
+    QPointF toWidget(const QPointF& value) const;
+    QPointF toValue(const QPointF& point) const;
+    QSize sizeHint() const override { return {130, 130}; }
+
+signals:
+    void curveChanged(const QList<QPointF>& points); // let go, or a point deleted: commit
+    void selectionChanged(int index);
+
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
+
+private:
+    bool editable_;
+    QList<QPointF> points_;
+    std::function<double(double)> mapping_;
+    int selected_ = -1;
+    bool dragging_ = false;
+};
+
+// A histogram (p.654-655): how many pixels have each value, 0-255 across, with a background grid at the quartiles, and
+// below it the triangular sliders of the black, gray and white points (p.656), dragged to set them.
+class Histogram : public QWidget {
+    Q_OBJECT
+
+public:
+    // What it counts: a colour channel on the 8-bit video scale, the three together (Master), Y' (Luma) or Y' and the
+    // chroma's swing together (Composite, ours).
+    enum class Channel { Red, Green, Blue, Master, Luma, Composite };
+    explicit Histogram(QWidget* parent = nullptr);
+    void setImage(const QImage& image, Channel channel);
+    const std::array<int, 256>& counts() const { return counts_; }
+    void setSliders(const QList<double>& values); // black, (gray,) white
+    const QList<double>& sliders() const { return sliders_; }
+    double sliderX(int index) const;
+    QSize sizeHint() const override { return {130, 80}; }
+
+signals:
+    void sliderMoved(int index, double value); // let go: commit
+
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+
+private:
+    std::array<int, 256> counts_{};
+    Channel channel_ = Channel::Master;
+    QList<double> sliders_;
+    int dragging_ = -1;
 };
 
 // A ChromaWheel (p.635-638): hue around the circumference with red near the top, as on a vectorscope, saturation (the

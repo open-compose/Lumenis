@@ -114,11 +114,17 @@ protected:
         const std::optional<std::int64_t> frame = owner_.frameOf(index_);
         if (!frame) return;
         Composer& composer = owner_.composer_;
-        const bool preview = owner_.active_ == index_ && owner_.preview_ != CorrectionMonitors::Preview::Output;
-        if (preview) composer.setUncorrectedPictures(true);
+        using P = CorrectionMonitors::Preview;
+        const P mode = owner_.active_ == index_ ? owner_.preview_ : P::Output;
+        const bool uncorrected = mode == P::Input || mode == P::ThreeTone || mode == P::RedInput || mode == P::GreenInput || mode == P::BlueInput;
+        if (uncorrected) composer.setUncorrectedPictures(true);
         QImage image = composer.pictureAt(MonitorId::Record, *frame, r.size());
-        if (preview) composer.setUncorrectedPictures(false);
-        if (preview && owner_.preview_ == CorrectionMonitors::Preview::ThreeTone && !image.isNull()) image = threeTone(image);
+        if (uncorrected) composer.setUncorrectedPictures(false);
+        if (mode == P::ThreeTone && !image.isNull()) image = threeTone(image);
+        const int channel = mode == P::RedInput || mode == P::RedOutput ? 0 : mode == P::GreenInput || mode == P::GreenOutput ? 1
+                          : mode == P::BlueInput || mode == P::BlueOutput                                         ? 2
+                                                                                                                  : -1;
+        if (channel >= 0 && !image.isNull()) image = monochrome(image, channel);
         if (!image.isNull()) p.drawImage(r, image);
         if (!owner_.dualSplit(index_)) return;
         // Dual Split: the box shows the frame without corrections.
@@ -156,6 +162,19 @@ protected:
                 // Rec. 709 luma on the 8-bit video scale.
                 const double l = 16.0 + 219.0 * (0.2126 * qRed(px) + 0.7152 * qGreen(px) + 0.0722 * qBlue(px)) / 255.0;
                 line[x] = tone[static_cast<std::size_t>(std::clamp(static_cast<int>(std::lround(l)), 0, 255))];
+            }
+        }
+        return out;
+    }
+
+    // One channel of the picture as grey: "Displays the uncorrected red channel in monochrome" (p.645).
+    static QImage monochrome(const QImage& image, int channel) {
+        QImage out = image.convertToFormat(QImage::Format_RGB32);
+        for (int y = 0; y < out.height(); ++y) {
+            auto* line = reinterpret_cast<QRgb*>(out.scanLine(y));
+            for (int x = 0; x < out.width(); ++x) {
+                const int v = channel == 0 ? qRed(line[x]) : channel == 1 ? qGreen(line[x]) : qBlue(line[x]);
+                line[x] = qRgb(v, v, v);
             }
         }
         return out;

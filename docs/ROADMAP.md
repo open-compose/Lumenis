@@ -1159,10 +1159,10 @@ phase of their own. They are done in three steps:
       Segment; the other relationships with 6.10d, the effect with 6.10e), the group and subdividing tabs with their
       Enable buttons, Alt+click resets and Page Up/Down (p.598-605), the Controls sliders, the ChromaWheels and the
       Luma Ranges graphs (p.631-644). Done (`src/ui/correction_tool.*`; test `tst_correction_tool`).
-    * 6.10b3, the Channels, Levels, Curves and Secondary panes: Channel Blending and previews (p.645-647),
-      histograms and the Levels ChromaCurve (p.653-658), the Curves graphs with added and dragged points
-      (p.659-663), the vector wheels, Selected Vectors panel, sliders, Lock Vectors and the Color Selection buttons
-      (p.668-682).
+    * 6.10b3, the Channels, Levels, Curves and Secondary panes, in two parts (planned 2026-11-04): 6.10b3a, Channel
+      Blending and previews (p.645-647), histograms and the Levels ChromaCurve (p.653-658), the Curves graphs with
+      added and dragged points (p.659-663), done (`src/ui/correction_tool_panes.cpp`); 6.10b3b, the vector wheels, Selected Vectors panel, sliders, Lock Vectors
+      and the Color Selection buttons (p.668-682).
     * 6.10b4, the tool's buttons (p.605), the Correction Mode settings (Tabs, Units, Levels, Features, p.606-609),
       the Command Palette's CC tab with its twelve Tab buttons (p.601-602), and Comments (p.609).
   * 6.10c, the Waveform and Vectorscope monitors (p.686-692), the Color Match control with NaturalMatch and custom

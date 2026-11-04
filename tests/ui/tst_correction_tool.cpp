@@ -11,6 +11,7 @@
 #include <QApplication>
 #include <QDoubleSpinBox>
 #include <QJsonArray>
+#include <QRadioButton>
 #include <QMenu>
 #include <QSignalSpy>
 #include <QTest>
@@ -206,6 +207,112 @@ private slots:
         r.composer.correctionMonitors()->setPreview(CorrectionMonitors::Preview::ThreeTone, [&] { return r.tool.correction(); });
         r.composer.show();
         r.composer.correctionMonitors()->pictureWidget(1)->repaint();
+    }
+
+    void channels() {
+        Rig r;
+        r.tool.showGroup(QStringLiteral("channels"));
+        // The default rows (p.645): the green channel is 100 % Green and an Offset last.
+        auto* type = r.tool.findChild<QToolButton*>(model::channelComponentPath(QStringLiteral("green"), 4, QStringLiteral("type")));
+        QVERIFY(type);
+        QCOMPARE(type->text(), QStringLiteral("% Offset"));
+        // "redefine the green channel as 80% green and 20% red" (p.644).
+        r.tool.findChild<QDoubleSpinBox*>(model::channelComponentPath(QStringLiteral("green"), 1, QStringLiteral("amount")))->setValue(80);
+        auto* second = r.tool.findChild<QToolButton*>(model::channelComponentPath(QStringLiteral("green"), 2, QStringLiteral("type")));
+        for (QAction* a : second->menu()->actions()) {
+            if (a->text() == QLatin1String("Red")) a->trigger();
+        }
+        r.tool.findChild<QDoubleSpinBox*>(model::channelComponentPath(QStringLiteral("green"), 2, QStringLiteral("amount")))->setValue(20);
+        const model::ColorCorrection c = r.segment(0).sourceCorrection;
+        QCOMPARE(c.number(model::channelComponentPath(QStringLiteral("green"), 1, QStringLiteral("amount"))), 80.0);
+        QCOMPARE(c.text(model::channelComponentPath(QStringLiteral("green"), 2, QStringLiteral("type"))), QStringLiteral("red"));
+        QVERIFY(r.tool.enableButton(QStringLiteral("channels/green"))->isChecked());
+        // Invert puts "A minus sign (–) ... after the component name" (p.647).
+        for (QAction* a : second->menu()->actions()) {
+            if (a->objectName() == QLatin1String("invert")) a->trigger();
+        }
+        QVERIFY(r.tool.findChild<QToolButton*>(model::channelComponentPath(QStringLiteral("green"), 2, QStringLiteral("type")))->text().endsWith(QChar(0x2013)));
+        // The Preview pane (p.645-646).
+        QSignalSpy preview(&r.tool, &CorrectionTool::channelPreviewChanged);
+        r.tool.findChild<QRadioButton*>(QStringLiteral("channelPreview:0"))->click();
+        QCOMPARE(preview.count(), 1);
+        QCOMPARE(r.tool.channelPreview(), CorrectionTool::ChannelPreview::RedInput);
+        r.composer.correctionMonitors()->setPreview(CorrectionMonitors::Preview::RedInput);
+        r.composer.show();
+        r.composer.correctionMonitors()->pictureWidget(1)->repaint();
+    }
+
+    void levels() {
+        Rig r;
+        // The histograms count the frame without and with corrections (p.654, p.657).
+        r.tool.setPictureSource([](bool corrected) {
+            QImage image(16, 9, QImage::Format_RGB32);
+            image.fill(corrected ? QColor(255, 255, 255) : QColor(0, 0, 0));
+            return image;
+        });
+        r.tool.showGroup(QStringLiteral("levels"));
+        QCOMPARE(r.tool.shownPath(), QStringLiteral("levels/master"));
+        QCOMPARE(r.tool.histogram(false)->counts()[16], 16 * 9 * 3);
+        QCOMPARE(r.tool.histogram(true)->counts()[235], 16 * 9 * 3);
+        // The Red tab's In Black Point text box (p.657).
+        r.tool.tabButton(QStringLiteral("levels/red"))->click();
+        QCOMPARE(r.tool.levelsTab(), QStringLiteral("red"));
+        r.tool.findChild<QDoubleSpinBox*>(QStringLiteral("levels:inBlack"))->setValue(60);
+        QCOMPARE(r.segment(0).sourceCorrection.number(QStringLiteral("levels/red/inBlack")), 60.0);
+        QVERIFY(r.tool.enableButton(QStringLiteral("levels/red"))->isChecked());
+        QCOMPARE(r.tool.histogram(false)->sliders(), (QList<double>{60, 128, 235}));
+        // The ChromaCurve graph's gray point dragged: its input and output together (p.657).
+        ChromaCurveGraph* g = r.tool.levelsGraph();
+        QCOMPARE(g->points().size(), 3);
+        QTest::mousePress(g, Qt::LeftButton, {}, g->toWidget(g->points().at(1)).toPoint());
+        QTest::mouseMove(g, g->toWidget(QPointF(100, 140)).toPoint());
+        QTest::mouseRelease(g, Qt::LeftButton, {}, g->toWidget(QPointF(100, 140)).toPoint());
+        const model::ColorCorrection c = r.segment(0).sourceCorrection;
+        QVERIFY(std::abs(c.number(QStringLiteral("levels/red/inGray")) - 100) < 3);
+        QVERIFY(std::abs(c.number(QStringLiteral("levels/red/outGray")) - 140) < 3);
+        // A histogram slider dragged and let go (p.656).
+        Histogram* out = r.tool.histogram(true);
+        const QPoint white(static_cast<int>(out->sliderX(2)), out->height() - 6);
+        QTest::mousePress(out, Qt::LeftButton, {}, white);
+        QTest::mouseMove(out, white - QPoint(out->width() / 4, 0));
+        QTest::mouseRelease(out, Qt::LeftButton, {}, white - QPoint(out->width() / 4, 0));
+        QVERIFY(r.segment(0).sourceCorrection.number(QStringLiteral("levels/red/outWhite")) < 235);
+        // "You can make only black point and white point adjustments in the Composite and Luma tabs" (p.657).
+        r.tool.tabButton(QStringLiteral("levels/luma"))->click();
+        QVERIFY(r.tool.findChild<QDoubleSpinBox*>(QStringLiteral("levels:inGray"))->isHidden());
+        QCOMPARE(r.tool.levelsGraph()->points().size(), 2);
+    }
+
+    void curves() {
+        Rig r;
+        r.tool.showGroup(QStringLiteral("curves"));
+        ChromaCurveGraph* g = r.tool.curveGraph(QStringLiteral("red"));
+        QVERIFY(g);
+        QCOMPARE(g->points().size(), 2); // the 45 degree line (p.660)
+        // "Click the curve line in the graph at the point where you want the new point to appear" (p.662), then drag.
+        QTest::mousePress(g, Qt::LeftButton, {}, g->toWidget(QPointF(100, 100)).toPoint());
+        QTest::mouseMove(g, g->toWidget(QPointF(100, 69)).toPoint());
+        QTest::mouseRelease(g, Qt::LeftButton, {}, g->toWidget(QPointF(100, 69)).toPoint());
+        QList<QPointF> curve = model::colorCurve(r.segment(0).sourceCorrection, QStringLiteral("red"));
+        QCOMPARE(curve.size(), 3);
+        QVERIFY(std::abs(curve.at(1).y() - 69) < 3);
+        QVERIFY(r.tool.enableButton(QStringLiteral("curves/red"))->isChecked());
+        // The Input and Output text boxes move the selected point (p.662-663).
+        r.tool.findChild<QDoubleSpinBox*>(QStringLiteral("curves/red:out"))->setValue(80);
+        curve = model::colorCurve(r.segment(0).sourceCorrection, QStringLiteral("red"));
+        QCOMPARE(curve.at(1).y(), 80.0);
+        // Delete removes it; two points always stay (p.663).
+        g = r.tool.curveGraph(QStringLiteral("red"));
+        g->selectPoint(1);
+        g->setFocus();
+        QTest::keyClick(g, Qt::Key_Delete);
+        QCOMPARE(model::colorCurve(r.segment(0).sourceCorrection, QStringLiteral("red")).size(), 2);
+        g->selectPoint(0);
+        QTest::keyClick(g, Qt::Key_Delete);
+        QCOMPARE(r.tool.curveGraph(QStringLiteral("red"))->points().size(), 2);
+        // Master Saturation is the HSL group's (p.659).
+        r.value(QStringLiteral("curves/masterSaturation"))->setValue(50);
+        QCOMPARE(r.segment(0).sourceCorrection.number(QStringLiteral("hsl/controls/master/saturation")), 50.0);
     }
 };
 

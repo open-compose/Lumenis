@@ -64,6 +64,10 @@ QString label(const QString& path) {
         {"clipHigh", QT_TRANSLATE_NOOP("CorrectionTool", "Clip High")},
         {"invertChroma", QT_TRANSLATE_NOOP("CorrectionTool", "Invert Chroma")},
         {"invertLuma", QT_TRANSLATE_NOOP("CorrectionTool", "Invert Luma")},
+        {"masterSaturation", QT_TRANSLATE_NOOP("CorrectionTool", "Master Saturation")},
+        {"masterGain", QT_TRANSLATE_NOOP("CorrectionTool", "Master Gain")},
+        {"masterGamma", QT_TRANSLATE_NOOP("CorrectionTool", "Master Gamma")},
+        {"masterSetup", QT_TRANSLATE_NOOP("CorrectionTool", "Master Setup")},
     };
     for (const auto& [key, text] : names) {
         if (name == QLatin1String(key)) return CorrectionTool::tr(text);
@@ -153,12 +157,13 @@ CorrectionTool::CorrectionTool(Timeline& timeline, QWidget* parent) : QWidget(pa
     hslPages_->addWidget(lumaRangesPane());
     hslRow->addWidget(hslPages_, 1);
     groups_->addWidget(hsl);
-    // The other groups' panes come in 6.10b3.
-    for (int i = 1; i < 5; ++i) {
-        auto* page = new QWidget(groups_);
-        page->setObjectName(QStringLiteral("pane:") + QLatin1String(kGroups[i]));
-        groups_->addWidget(page);
-    }
+    groups_->addWidget(channelsPane());
+    groups_->addWidget(levelsPane());
+    groups_->addWidget(curvesPane());
+    // The Secondary pane comes in 6.10b3b.
+    auto* secondary = new QWidget(groups_);
+    secondary->setObjectName(QStringLiteral("pane:secondary"));
+    groups_->addWidget(secondary);
     outer->addWidget(groups_, 1);
     reload();
 }
@@ -183,8 +188,12 @@ QWidget* CorrectionTool::tab(QWidget* parent, const QString& path, const QString
     connect(name, &QToolButton::clicked, this, [this, path] {
         const QStringList parts = path.split(QLatin1Char('/'));
         showGroup(parts.at(0));
-        if (parts.size() > 1) showHslTab(parts.at(1));
-        if (parts.size() > 2) showRangeTab(parts.at(2));
+        if (parts.at(0) == QLatin1String("levels")) {
+            if (parts.size() > 1) showLevelsTab(parts.at(1));
+        } else {
+            if (parts.size() > 1) showHslTab(parts.at(1));
+            if (parts.size() > 2) showRangeTab(parts.at(2));
+        }
     });
     h->addWidget(name, 1);
     return w;
@@ -443,8 +452,12 @@ void CorrectionTool::clickEnable(const QString& path, bool alt) {
         if (!displayed) {
             const QStringList parts = path.split(QLatin1Char('/'));
             showGroup(parts.at(0));
-            if (parts.size() > 1) showHslTab(parts.at(1));
-            if (parts.size() > 2) showRangeTab(parts.at(2));
+            if (parts.at(0) == QLatin1String("levels")) {
+                if (parts.size() > 1) showLevelsTab(parts.at(1));
+            } else {
+                if (parts.size() > 1) showHslTab(parts.at(1));
+                if (parts.size() > 2) showRangeTab(parts.at(2));
+            }
             sync();
             return;
         }
@@ -489,6 +502,7 @@ void CorrectionTool::showRangeTab(const QString& range) {
 }
 
 QString CorrectionTool::shownPath() const {
+    if (group_ == QLatin1String("levels")) return QStringLiteral("levels/") + levelsTab_;
     if (group_ != QLatin1String("hsl")) return group_;
     if (hslTab_ == QLatin1String("hueOffsets")) return QStringLiteral("hsl/hueOffsets");
     return QStringLiteral("hsl/") + hslTab_ + QLatin1Char('/') + range_;
@@ -594,6 +608,7 @@ void CorrectionTool::syncControls() {
     for (int r = 0; r < 3; ++r) curves[static_cast<std::size_t>(r)] = model::lumaRangeCurve(correction_, static_cast<model::LumaRange>(r));
     const int active = range_ == QLatin1String("shadows") ? 0 : range_ == QLatin1String("midtones") ? 1 : 2;
     lumaGraph_->setCurves(curves, active);
+    syncPanes();
 }
 
 // ---------------------------------------------------------------- ChromaWheel

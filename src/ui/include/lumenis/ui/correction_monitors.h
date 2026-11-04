@@ -80,7 +80,9 @@ public:
     // image", Three-tone the uncorrected image "using white, gray, and black to represent the highlights, midtones,
     // and shadows luminance ranges" of `ranges` (the correction whose Luma Ranges curves count), Output the corrected
     // image (the monitors' usual picture).
-    enum class Preview { Output, Input, ThreeTone };
+    // The Channels tab's previews (p.645-646) add one colour channel in monochrome, uncorrected (Input) or corrected
+    // (Output).
+    enum class Preview { Output, Input, ThreeTone, RedInput, GreenInput, BlueInput, RedOutput, GreenOutput, BlueOutput };
     void setPreview(Preview preview, std::function<model::ColorCorrection()> ranges = {});
     Preview preview() const { return preview_; }
 
