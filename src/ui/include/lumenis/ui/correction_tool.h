@@ -298,6 +298,9 @@ private:
     Timeline& timeline_;
     Options options_;
     CommentAsker askComment_;
+    // The shot and track the Correction Type button last followed (reload).
+    std::optional<std::pair<std::int64_t, std::int64_t>> shownShot_;
+    QString shownTrack_;
     bool hasComment_ = false;
     model::ColorCorrection correction_;
     bool hasSegment_ = false;

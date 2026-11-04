@@ -215,6 +215,10 @@ QJsonObject segmentToJson(const Segment& s) {
     if (!s.correctionComment.isEmpty()) o.insert(QStringLiteral("correctionComment"), s.correctionComment);
     if (!s.sourceCorrection.isEmpty()) o.insert(QStringLiteral("sourceCorrection"), s.sourceCorrection.toJson());
     if (!s.programCorrection.isEmpty()) o.insert(QStringLiteral("programCorrection"), s.programCorrection.toJson());
+    if (!s.sourceCorrection.isEmpty() && s.sourceRelationship != CorrectionRelationship::SourceSegment)
+        o.insert(QStringLiteral("sourceRelationship"), relationshipKey(s.sourceRelationship));
+    if (!s.programCorrection.isEmpty() && s.programRelationship != CorrectionRelationship::ProgramSegment)
+        o.insert(QStringLiteral("programRelationship"), relationshipKey(s.programRelationship));
     if (!s.surround.isEmpty()) {
         QJsonArray pans;
         for (const SurroundPan& p : s.surround) pans.append(surroundPanToJson(p));
@@ -255,6 +259,11 @@ Segment segmentFromJson(const QJsonObject& o) {
     if (!s.isFiller()) {
         s.sourceCorrection = ColorCorrection::fromJson(o.value(QStringLiteral("sourceCorrection")).toObject());
         s.programCorrection = ColorCorrection::fromJson(o.value(QStringLiteral("programCorrection")).toObject());
+        // A relationship of the other side, or an unknown one, is the side's segment relationship.
+        const auto source = relationshipFromKey(o.value(QStringLiteral("sourceRelationship")).toString());
+        if (source && sideOf(*source) == CorrectionSide::Source) s.sourceRelationship = *source;
+        const auto program = relationshipFromKey(o.value(QStringLiteral("programRelationship")).toString());
+        if (program && sideOf(*program) == CorrectionSide::Program) s.programRelationship = *program;
     }
     for (const QJsonValue& v : o.value(QStringLiteral("surround")).toArray()) {
         if (!s.isFiller() && s.surround.size() < 2) s.surround << surroundPanFromJson(v.toObject());
@@ -1226,6 +1235,7 @@ bool Sequence::isMatchFrame(const Segment& before, const Segment& after) {
     if (before.volumeKeys != after.volumeKeys || before.panKeys != after.panKeys) return false;
     if (before.eq != after.eq || before.localColor != after.localColor || before.surround != after.surround) return false;
     if (before.sourceCorrection != after.sourceCorrection || before.programCorrection != after.programCorrection) return false;
+    if (before.sourceRelationship != after.sourceRelationship || before.programRelationship != after.programRelationship) return false;
     if (before.correctionComment != after.correctionComment) return false;
     if (before.isFiller() || after.isFiller()) return before.isFiller() && after.isFiller() && after.addEdit;
     return before.clipId == after.clipId && before.binId == after.binId && before.sourceTrack == after.sourceTrack &&

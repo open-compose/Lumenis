@@ -168,10 +168,27 @@ struct Segment;
 struct Track;
 ColorCorrection mergedCorrection(const ColorCorrection& source, const ColorCorrection& program);
 ColorCorrection segmentCorrection(const Segment& segment);
-// Which side Color Correction mode works on: "Src (Source) Segment" or "Prog (Program) Segment" (p.597); the other
-// relationships come with 6.10d.
+// Which side Color Correction mode works on: the Source or the Program correction (p.596-597).
 enum class CorrectionSide { Source, Program };
 ColorCorrection& correctionOf(Segment& segment, CorrectionSide side);
+
+// "Options for Relationship Color Corrections" (p.597; lumenis/model/correction_relations.h, 6.10d1): which segments a
+// correction goes to, in the Correction Type menu's order. The first five are Source corrections, the last two Program
+// corrections.
+enum class CorrectionRelationship { SourceTape, SourceClipName, MasterClip, SubClip, SourceSegment, ProgramTrack, ProgramSegment };
+CorrectionSide sideOf(CorrectionRelationship r);
+// Whether it corrects only the current segment ("A dotted line indicates a correction that applies only to that
+// segment", p.616).
+bool isSegmentOnly(CorrectionRelationship r);
+// The menu's text ("Src Tape", "Prog Segment", ...), and the keys bins keep ("sourceTape", "sourceClipName",
+// "masterClip", "subClip", "sourceSegment", "programTrack", "programSegment"; nothing for any other key).
+QString relationshipText(CorrectionRelationship r);
+QString relationshipKey(CorrectionRelationship r);
+std::optional<CorrectionRelationship> relationshipFromKey(const QString& key);
+// The segment relationship of a side: Src Segment or Prog Segment.
+CorrectionRelationship segmentRelationship(CorrectionSide side);
+// The relationship a segment's correction on `side` was made with.
+CorrectionRelationship relationshipOf(const Segment& segment, CorrectionSide side);
 
 // The shots of Color Correction mode's monitors on a track (p.590-591): the start of the clip `step` shots from the
 // one at `frame` (0 itself, -1 "the segment immediately before", 2 "Second Next"); filler is not a shot (ours).

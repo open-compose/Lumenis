@@ -676,6 +676,61 @@ ColorCorrection& correctionOf(Segment& segment, CorrectionSide side) {
     return side == CorrectionSide::Source ? segment.sourceCorrection : segment.programCorrection;
 }
 
+CorrectionSide sideOf(CorrectionRelationship r) {
+    return r == CorrectionRelationship::ProgramTrack || r == CorrectionRelationship::ProgramSegment ? CorrectionSide::Program
+                                                                                                    : CorrectionSide::Source;
+}
+
+bool isSegmentOnly(CorrectionRelationship r) {
+    return r == CorrectionRelationship::SourceSegment || r == CorrectionRelationship::ProgramSegment;
+}
+
+namespace {
+struct RelationshipName {
+    CorrectionRelationship relationship;
+    const char* key;
+    const char* text;
+};
+constexpr RelationshipName kRelationships[] = {
+    {CorrectionRelationship::SourceTape, "sourceTape", "Src Tape"},
+    {CorrectionRelationship::SourceClipName, "sourceClipName", "Src Clip Name"},
+    {CorrectionRelationship::MasterClip, "masterClip", "Master Clip"},
+    {CorrectionRelationship::SubClip, "subClip", "Sub Clip"},
+    {CorrectionRelationship::SourceSegment, "sourceSegment", "Src Segment"},
+    {CorrectionRelationship::ProgramTrack, "programTrack", "Prog Track"},
+    {CorrectionRelationship::ProgramSegment, "programSegment", "Prog Segment"},
+};
+} // namespace
+
+QString relationshipText(CorrectionRelationship r) {
+    for (const RelationshipName& n : kRelationships) {
+        if (n.relationship == r) return QString::fromLatin1(n.text);
+    }
+    return {};
+}
+
+QString relationshipKey(CorrectionRelationship r) {
+    for (const RelationshipName& n : kRelationships) {
+        if (n.relationship == r) return QString::fromLatin1(n.key);
+    }
+    return {};
+}
+
+std::optional<CorrectionRelationship> relationshipFromKey(const QString& key) {
+    for (const RelationshipName& n : kRelationships) {
+        if (key == QLatin1String(n.key)) return n.relationship;
+    }
+    return std::nullopt;
+}
+
+CorrectionRelationship segmentRelationship(CorrectionSide side) {
+    return side == CorrectionSide::Source ? CorrectionRelationship::SourceSegment : CorrectionRelationship::ProgramSegment;
+}
+
+CorrectionRelationship relationshipOf(const Segment& segment, CorrectionSide side) {
+    return side == CorrectionSide::Source ? segment.sourceRelationship : segment.programRelationship;
+}
+
 namespace {
 
 // The track's clip segments as (start, index), in order.

@@ -281,6 +281,10 @@ struct Segment {
     // mode.
     ColorCorrection sourceCorrection;
     ColorCorrection programCorrection;
+    // The relationship each side's correction was made with (p.597; lumenis/model/correction_relations.h): Src Segment
+    // and Prog Segment unless set. Only meaningful while that side has a correction.
+    CorrectionRelationship sourceRelationship = CorrectionRelationship::SourceSegment;
+    CorrectionRelationship programRelationship = CorrectionRelationship::ProgramSegment;
     bool hasCorrection() const { return !sourceCorrection.isEmpty() || !programCorrection.isEmpty(); }
     // Color Correction mode's comment on the segment (FX Guide p.609-610), from the Color Correction tool's Comments
     // button; empty for none. Shown with Clip Text > Comments. Ours: kept on the segment for both sides, and on both

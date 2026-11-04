@@ -173,6 +173,8 @@ struct Run {
                 i.editRate = Rational(r.value(0).toLongLong(), r.size() > 1 ? r.value(1).toLongLong() : 1);
             }
             i.fields.insert(QStringLiteral("Tracks"), o.value(QStringLiteral("tracks")).toString(QStringLiteral("V1 A1-2")));
+            // The source tape (the Tape column), for the Src Tape relationship (FX Guide p.597).
+            if (o.contains(QStringLiteral("tape"))) i.fields.insert(QStringLiteral("Tape"), o.value(QStringLiteral("tape")).toString());
             // Multichannel groups, as the Track Formats column has them (p.671).
             if (o.contains(QStringLiteral("formats"))) i.fields.insert(QStringLiteral("Track Formats"), o.value(QStringLiteral("formats")).toString());
             // Apply Gain and Center Pan (p.216, p.714).
@@ -385,6 +387,15 @@ struct Run {
             if (ok == o.value(QStringLiteral("refused")).toBool()) {
                 return fail(ok ? QStringLiteral("the correction was not refused") : timeline.lastMessage());
             }
+            return true;
+        }
+        if (o.contains(QStringLiteral("correction_type"))) {
+            // The Correction Type button (FX Guide p.596-598): a relationship's key; on a segment corrected on that side
+            // it converts the correction.
+            timeline.setCorrectionMode(true);
+            const auto r = model::relationshipFromKey(o.value(QStringLiteral("correction_type")).toString());
+            if (!r) return fail(QStringLiteral("unknown correction type"));
+            timeline.setCorrectionRelationship(*r);
             return true;
         }
         if (o.contains(QStringLiteral("clip_note"))) {
@@ -938,6 +949,23 @@ private slots:
                 QJsonArray got;
                 for (const model::Segment& g : t->segments) {
                     if (!g.isFiller()) got.append(g.hasCorrection());
+                }
+                QCOMPARE(got, it.value().toArray());
+            }
+        }
+        // The relationships: per track, each material segment's Source and Program relationship keys, "" for a side
+        // without a correction ("sourceTape/", "/programTrack", "/").
+        const QJsonObject relations = scenario.value(QStringLiteral("expect_relationships")).toObject();
+        if (!relations.isEmpty()) {
+            const model::Sequence s = model::Sequence::fromItem(run.composer.state(MonitorId::Record).current()->item);
+            for (auto it = relations.begin(); it != relations.end(); ++it) {
+                const model::Track* t = s.track(it.key());
+                QVERIFY2(t, qPrintable(it.key()));
+                QJsonArray got;
+                for (const model::Segment& g : t->segments) {
+                    if (g.isFiller()) continue;
+                    got.append((g.sourceCorrection.isEmpty() ? QString() : model::relationshipKey(g.sourceRelationship)) + QLatin1Char('/') +
+                               (g.programCorrection.isEmpty() ? QString() : model::relationshipKey(g.programRelationship)));
                 }
                 QCOMPARE(got, it.value().toArray());
             }

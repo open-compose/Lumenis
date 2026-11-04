@@ -8,6 +8,7 @@
 #include "lumenis/model/effect_template.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/model/nest.h"
+#include "lumenis/model/correction_relations.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/effect_palette.h"
@@ -675,10 +676,24 @@ public:
     // The shot `step` shots from the one at the position on that track, as its [start, end) frames (the monitors'
     // Previous, Next and Second ones, p.591).
     std::optional<std::pair<std::int64_t, std::int64_t>> correctionShot(int step) const;
-    // The side the mode works on: Source or Program Segment (p.597; the Correction Type button, 6.10b2).
-    model::CorrectionSide correctionSide() const { return correctionSide_; }
-    void setCorrectionSide(model::CorrectionSide side) { correctionSide_ = side; }
+    // The Correction Type button's relationship (p.596-597; lumenis/model/correction_relations.h, 6.10d1) and the side
+    // it works on. Choosing a type of the side the current segment's correction is on converts that correction to it
+    // ("To convert a Source relationship correction to another Source relationship correction", p.598), an undo step;
+    // true when it did. setCorrectionSide picks that side's segment relationship.
+    model::CorrectionRelationship correctionRelationship() const { return correctionRelationship_; }
+    model::CorrectionSide correctionSide() const { return model::sideOf(correctionRelationship_); }
+    bool setCorrectionRelationship(model::CorrectionRelationship relationship);
+    void setCorrectionSide(model::CorrectionSide side) { correctionRelationship_ = model::segmentRelationship(side); }
+    // "When you move the position indicator to a segment that has color correction, the Correction Type button changes
+    // to indicate the type of correction that is applied to that segment" (p.596): the relationship of the current
+    // segment's correction, the selected side's if it has both; nothing for an uncorrected segment. followCorrectionType
+    // makes it the button's.
+    std::optional<model::CorrectionRelationship> segmentCorrectionType() const;
+    void followCorrectionType();
+    // The clip a segment of the Record monitor's sequence comes from, for the relationships' keys.
+    model::CorrectionClipLookup correctionClipLookup() const;
     // That side's correction on the segment at the position on the correction track; nothing off a clip. Setting it
+    // gives it to every segment related by the Correction Type's relationship (p.597).
     // with Use Marks for Segment Correction on and both marks in the Record monitor sets it on every clip of the track
     // the marks touch.
     std::optional<model::ColorCorrection> currentCorrection() const;
@@ -1085,6 +1100,7 @@ public:
         bool clipResolution = false;
         bool clipNotes = false; // Timeline Clip Notes (p.483)
         bool clipComments = false; // Comments: Color Correction comments (FX Guide p.610)
+        bool correctionLines = false; // Color Correction: the correction indicator lines (FX Guide p.616)
         // Title Text (FX Guide p.305): "enabled by default", a Titler+ segment's topmost text.
         bool titleText = true;
         // Show Adapters (p.599): "Temporal (motion) adapters appear with a T". Spatial (FrameFlex) and
@@ -1335,7 +1351,7 @@ private:
     bool trimMode_ = false;
     bool effectMode_ = false;
     bool correctionMode_ = false;
-    model::CorrectionSide correctionSide_ = model::CorrectionSide::Source;
+    model::CorrectionRelationship correctionRelationship_ = model::CorrectionRelationship::SourceSegment;
     QList<model::TrimRoller> rollers_;
     QList<model::TrimRoller> lastRollers_;
     model::TrimKind trimKind_ = model::TrimKind::Ripple;

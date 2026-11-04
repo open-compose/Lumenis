@@ -95,12 +95,13 @@ private slots:
         QCOMPARE(r.tool.group(), QStringLiteral("hsl"));
         QCOMPARE(r.tool.hslTab(), QStringLiteral("hueOffsets"));
         QVERIFY(r.tool.tabButton(QStringLiteral("hsl/hueOffsets"))->isChecked());
-        // The Correction Type button: Src Segment and Prog Segment work; the other relationships wait (p.597).
+        // The Correction Type button: the relationships (p.597); the Color Correction effect waits for 6.10e.
         QCOMPARE(r.tool.typeButton()->text(), QStringLiteral("Src Segment"));
         QAction* prog = nullptr;
         for (QAction* a : r.tool.typeButton()->menu()->actions()) {
             if (a->text() == QLatin1String("Prog Segment")) prog = a;
-            if (a->text() == QLatin1String("Src Tape")) QVERIFY(!a->isEnabled());
+            if (a->text() == QLatin1String("Src Tape")) QVERIFY(a->isEnabled());
+            if (a->text() == QLatin1String("Color Correction Effect")) QVERIFY(!a->isEnabled());
         }
         QVERIFY(prog);
         prog->trigger();
@@ -116,6 +117,62 @@ private slots:
         QTest::keyClick(&r.tool, Qt::Key_PageUp);
         QTest::keyClick(&r.tool, Qt::Key_PageUp);
         QCOMPARE(r.tool.group(), QStringLiteral("secondary"));
+    }
+
+    // The relationships (p.596-598, 6.10d1): Prog Track corrects the whole track; a type chosen for the other side stays
+    // while the position stays; moving to a corrected segment the button follows its type; a type of the correction's
+    // side converts it. The Timeline Fast menu's Color Correction shows the indicator lines (p.616).
+    void relationships() {
+        Rig r;
+        const auto choose = [&](const QString& key) {
+            QAction* a = r.tool.typeButton()->menu()->findChild<QAction*>(QStringLiteral("type:") + key);
+            if (!a) {
+                for (QAction* x : r.tool.typeButton()->menu()->actions()) {
+                    if (x->objectName() == QStringLiteral("type:") + key) a = x;
+                }
+            }
+            QVERIFY2(a, qPrintable(key));
+            a->trigger();
+        };
+        choose(QStringLiteral("programTrack"));
+        QCOMPARE(r.timeline.correctionRelationship(), model::CorrectionRelationship::ProgramTrack);
+        QCOMPARE(r.tool.typeButton()->text(), QStringLiteral("Prog Track"));
+        model::ColorCorrection c;
+        c.set(QStringLiteral("hsl/controls/master/gain"), 120);
+        QVERIFY(r.timeline.setCurrentCorrection(c, QStringLiteral("Color Correction")));
+        QCOMPARE(r.segment(0).programCorrection, c);
+        QCOMPARE(r.segment(1).programCorrection, c);
+        QCOMPARE(r.segment(1).programRelationship, model::CorrectionRelationship::ProgramTrack);
+        QVERIFY(r.segment(0).sourceCorrection.isEmpty());
+        // Src Segment on a segment with only a Program correction: nothing to convert, and the button keeps it.
+        choose(QStringLiteral("sourceSegment"));
+        r.tool.reload();
+        QCOMPARE(r.tool.typeButton()->text(), QStringLiteral("Src Segment"));
+        // The next segment has a Program correction: the button follows it there.
+        r.composer.moveTo(MonitorId::Record, 25);
+        r.tool.reload();
+        QCOMPARE(r.tool.typeButton()->text(), QStringLiteral("Prog Track"));
+        QCOMPARE(r.timeline.correctionSide(), model::CorrectionSide::Program);
+        // Prog Segment converts it (p.598): both segments keep the values, each as its own correction; one undo step.
+        choose(QStringLiteral("programSegment"));
+        QCOMPARE(r.segment(1).programRelationship, model::CorrectionRelationship::ProgramSegment);
+        QCOMPARE(r.segment(0).programRelationship, model::CorrectionRelationship::ProgramSegment);
+        QCOMPARE(r.segment(0).programCorrection, c);
+        QCOMPARE(r.tool.typeButton()->text(), QStringLiteral("Prog Segment"));
+        r.timeline.perform(QStringLiteral("edit.undo"));
+        QCOMPARE(r.segment(0).programRelationship, model::CorrectionRelationship::ProgramTrack);
+
+        // The indicator lines, kept with the Timeline's view (p.616).
+        QVERIFY(!r.timeline.display().correctionLines);
+        QAction* lines = nullptr;
+        for (QAction* a : r.timeline.fastMenu()->actions()) {
+            if (a->text() == QLatin1String("Color Correction")) lines = a;
+        }
+        QVERIFY(lines && lines->isEnabled() && lines->isCheckable());
+        lines->trigger();
+        QVERIFY(r.timeline.display().correctionLines);
+        QVERIFY(Timeline::displayToJson(r.timeline.display()).value(QStringLiteral("correctionLines")).toBool());
+        r.timeline.view()->grab(); // draws the lines
     }
 
     void slidersAndEnableButtons() {

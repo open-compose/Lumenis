@@ -675,6 +675,20 @@ void TimelineView::paintEvent(QPaintEvent*) {
                     if (t->kind == model::TrackKind::Audio && timeline_.showsWaveform(*t) && !fastScrubbing()) {
                         paintWaveform(p, box, *t, s, at);
                     }
+                    // Color Correction (Fast menu; FX Guide p.616): "A segment ... that has Source color correction is
+                    // marked with a green line at the bottom of the segment. A segment that has Program color correction
+                    // is marked with a blue line at the top ... A dotted line indicates a correction that applies only to
+                    // that segment ... A solid line indicates a correction that applies beyond the individual segment."
+                    if (timeline_.display().correctionLines && s.hasCorrection()) {
+                        const auto line = [&](double y, const QColor& color, model::CorrectionRelationship relationship) {
+                            QPen pen(color, 2);
+                            if (model::isSegmentOnly(relationship)) pen.setStyle(Qt::DotLine);
+                            p.setPen(pen);
+                            p.drawLine(QPointF(box.left() + 1, y), QPointF(box.right() - 1, y));
+                        };
+                        if (!s.sourceCorrection.isEmpty()) line(box.bottom() - 2, QColor(0x3c, 0xc0, 0x50), s.sourceRelationship);
+                        if (!s.programCorrection.isEmpty()) line(box.top() + 2, QColor(0x40, 0x80, 0xe8), s.programRelationship);
+                    }
                     // Clip Frames (Fast menu, p.592): the start frame of each
                     // segment on video tracks, at its left end.
                     QRectF textArea = box;
@@ -2821,7 +2835,6 @@ QMenu* Timeline::fastMenu() {
     m->clear();
     // clear() leaves the submenus of the last build: delete them, so they do not pile up.
     for (QMenu* sub : m->findChildren<QMenu*>(Qt::FindDirectChildrenOnly)) delete sub;
-    auto later = [m](const QString& text) { m->addAction(text)->setEnabled(false); };
     auto check = [this](QMenu* menu, const QString& text, bool on, std::function<void(bool)> apply) {
         QAction* a = menu->addAction(text);
         a->setCheckable(true);
@@ -2908,7 +2921,8 @@ QMenu* Timeline::fastMenu() {
                                          std::tuple{model::TrackKind::Data, tr("Data"), display_.dupeData}}) {
         check(dupeMenu, text, on, [this, k = kind](bool v) { setDupeDetection(k, v); });
     }
-    later(tr("Color Correction"));
+    // Color Correction (FX Guide p.616): the colour correction indicator lines.
+    check(m, tr("Color Correction"), display_.correctionLines, [this](bool v) { display_.correctionLines = v; });
     // Audio Data (p.677-680): the clip gain's line, and the Volume or Pan graph, one at a time.
     QMenu* audioData = m->addMenu(tr("Audio Data"));
     audioData->setObjectName(QStringLiteral("audioData"));
@@ -4848,7 +4862,48 @@ std::optional<model::ColorCorrection> Timeline::currentCorrection() const {
     const int i = t->segmentAt(composer_.state(MonitorId::Record).position());
     if (i < 0 || t->segments.at(i).isFiller()) return std::nullopt;
     model::Segment s = t->segments.at(i);
-    return model::correctionOf(s, correctionSide_);
+    return model::correctionOf(s, correctionSide());
+}
+
+model::CorrectionClipLookup Timeline::correctionClipLookup() const {
+    return [this](const model::Segment& s) { return s.isFiller() ? std::nullopt : composer_.resolveForSegment(s); };
+}
+
+std::optional<model::CorrectionRelationship> Timeline::segmentCorrectionType() const {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(correctionTrack());
+    const int i = t ? t->segmentAt(composer_.state(MonitorId::Record).position()) : -1;
+    if (i < 0 || t->segments.at(i).isFiller()) return std::nullopt;
+    const model::Segment& s = t->segments.at(i);
+    const model::CorrectionSide side = correctionSide();
+    const model::CorrectionSide other = side == model::CorrectionSide::Source ? model::CorrectionSide::Program : model::CorrectionSide::Source;
+    for (const model::CorrectionSide which : {side, other}) {
+        if (!(which == model::CorrectionSide::Source ? s.sourceCorrection : s.programCorrection).isEmpty())
+            return model::relationshipOf(s, which);
+    }
+    return std::nullopt;
+}
+
+void Timeline::followCorrectionType() {
+    if (const auto r = segmentCorrectionType()) correctionRelationship_ = *r;
+}
+
+bool Timeline::setCorrectionRelationship(model::CorrectionRelationship relationship) {
+    message_.clear();
+    correctionRelationship_ = relationship;
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence || rec->item.locked) return false;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(correctionTrack());
+    const int i = t ? t->segmentAt(composer_.state(MonitorId::Record).position()) : -1;
+    if (i < 0 || !model::convertRelationship(seq, correctionTrack(), i, relationship, correctionClipLookup())) return false;
+    const QList<model::SegmentRef> keep = selection_;
+    const bool ok = commitSequence(tr("Correction Type"), seq);
+    selection_ = keep;
+    view_->update();
+    return ok;
 }
 
 bool Timeline::setCurrentCorrection(const model::ColorCorrection& correction, const QString& step) {
@@ -4859,16 +4914,18 @@ bool Timeline::setCurrentCorrection(const model::ColorCorrection& correction, co
     model::Track* t = seq.track(correctionTrack());
     const int i = t ? t->segmentAt(composer_.state(MonitorId::Record).position()) : -1;
     if (i < 0 || t->segments.at(i).isFiller()) return fail(tr("There is no segment to correct at the position."));
-    model::ColorCorrection& c = model::correctionOf(t->segments[i], correctionSide_);
-    if (c == correction) return false;
-    c = correction;
+    if (!model::applyRelationshipCorrection(seq, correctionTrack(), i, correctionRelationship_, correction, correctionClipLookup()))
+        return false;
+    t = seq.track(correctionTrack());
     const model::MonitorState& r = composer_.state(MonitorId::Record);
-    if (options_.correctionUseMarks && r.in() && r.out()) {
-        // "If the IN and OUT points are in the middle of segments, Media Composer includes the whole segments" (p.608).
+    if (options_.correctionUseMarks && model::isSegmentOnly(correctionRelationship_) && r.in() && r.out()) {
+        // "You can also apply a Source Segment or a Program Segment correction to the material between marked IN and OUT
+        // points" (p.597). "If the IN and OUT points are in the middle of segments, Media Composer includes the whole
+        // segments" (p.608).
         std::int64_t at = 0;
         for (model::Segment& marked : t->segments) {
             const std::int64_t end = at + marked.length;
-            if (!marked.isFiller() && end > *r.in() && at <= *r.out()) model::correctionOf(marked, correctionSide_) = correction;
+            if (!marked.isFiller() && end > *r.in() && at <= *r.out()) model::correctionOf(marked, correctionSide()) = correction;
             at = end;
         }
     }
@@ -4916,6 +4973,8 @@ bool Timeline::removeCorrection() {
     if (i < 0 || !t->segments.at(i).hasCorrection()) return fail(tr("There is no color correction on the current segment."));
     t->segments[i].sourceCorrection = {};
     t->segments[i].programCorrection = {};
+    t->segments[i].sourceRelationship = model::CorrectionRelationship::SourceSegment;
+    t->segments[i].programRelationship = model::CorrectionRelationship::ProgramSegment;
     const QList<model::SegmentRef> keep = selection_;
     const bool ok = commitSequence(tr("Remove Color Correction"), seq);
     selection_ = keep;
@@ -7094,6 +7153,7 @@ QJsonObject Timeline::displayToJson(const Display& d) {
         {QStringLiteral("clipResolution"), d.clipResolution},
         {QStringLiteral("clipNotes"), d.clipNotes},
         {QStringLiteral("clipComments"), d.clipComments},
+        {QStringLiteral("correctionLines"), d.correctionLines},
         {QStringLiteral("titleText"), d.titleText},
         {QStringLiteral("motionAdapters"), d.motionAdapters},
         {QStringLiteral("clipFontFamily"), d.clipFontFamily},
@@ -7151,6 +7211,7 @@ Timeline::Display Timeline::displayFromJson(const QJsonObject& o) {
     flag("clipResolution", d.clipResolution);
     flag("clipNotes", d.clipNotes);
     flag("clipComments", d.clipComments);
+    flag("correctionLines", d.correctionLines);
     flag("titleText", d.titleText);
     flag("motionAdapters", d.motionAdapters);
     const QString sync = o.value(QStringLiteral("syncBreaks")).toString();

@@ -20,6 +20,7 @@ add_library(lumenis_model STATIC
     promote3d.cpp
     intraframe.cpp
     color_correction.cpp
+    correction_relations.cpp
     pan_scan.cpp
     tracking.cpp
     titler.cpp

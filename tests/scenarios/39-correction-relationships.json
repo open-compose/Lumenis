@@ -1,0 +1,25 @@
+[
+  {
+    "name": "Relationship corrections: Src Tape corrects every segment from the tape on any video track; converting to Src Clip Name moves it to the segments of that clip name, ignoring .new, and leaves the others Src Segment corrections; Prog Track corrects the whole track on the Program side",
+    "guide": "FX p.596-598",
+    "clips": [{"name": "A", "tape": "T1"}, {"name": "B", "tape": "T2"}, {"name": "C", "tape": "T1"}, {"name": "A.new.01", "tape": "T3"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20], ["A.new.01", 0, 20]], "V2": [["C", 0, 10]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"correction_type": "sourceTape"},
+      {"position": "record", "frame": 5},
+      {"correction": {"hsl/controls/master/gain": 120}},
+      {"correction_type": "sourceClipName"},
+      {"position": "record", "frame": 25},
+      {"correction_type": "programTrack"},
+      {"correction": {"hsl/controls/master/saturation": 80}},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"}
+    ],
+    "expect": {"V1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20], ["A.new.01", 0, 20]], "V2": [["C", 0, 10]]},
+    "expect_relationships": {
+      "V1": ["sourceClipName/programTrack", "/programTrack", "sourceSegment/programTrack", "sourceClipName/programTrack"],
+      "V2": ["sourceSegment/"]
+    }
+  }
+]

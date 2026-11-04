@@ -17,5 +17,7 @@ lumenis_add_test(tst_multichannel SOURCES tst_multichannel.cpp LIBS lumenis::mod
 lumenis_add_test(tst_automation SOURCES tst_automation.cpp LIBS lumenis::model)
 lumenis_add_test(tst_settings SOURCES tst_settings.cpp LIBS lumenis::model)
 lumenis_add_test(tst_calculator SOURCES tst_calculator.cpp LIBS lumenis::model)
+# Relationship colour corrections (FX Guide p.596-598).
+lumenis_add_test(tst_correction_relations SOURCES tst_correction_relations.cpp LIBS lumenis::model)
 
 lumenis_isolate_media_drives()

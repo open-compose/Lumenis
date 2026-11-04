@@ -332,6 +332,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   6.10c3b: custom colours as Effect items, the RGB and Name labels' form, the
   nearest CSS colour name, swatch-to-swatch drops, Picks from Anywhere taking
   the colour the window draws without averaging.
+  6.10d1: a copy of a relationship correction on each related segment (later
+  segments only through Update Correction), related segments on every video
+  track, the tape from the Tape source or column, a converted correction's left
+  out segments kept as segment corrections, Use Marks for the segment
+  relationships only, the button following a segment only when the position
+  moves, the indicator lines' width and colours.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults
@@ -1583,7 +1589,8 @@ These are recorded now so they are not entered from memory later.
     Notes (Add Timeline Clip Note, Tools > Timeline Clip Notes, p.483-486):
     docs/spec/clip-notes.md. Clip Text also has Title Text (FX Guide p.305)
     and Comments, the Color Correction comments (FX Guide p.610;
-    docs/spec/color-correction.md). Add Filler at Start, Find Black Hole/Flash
+    docs/spec/color-correction.md). Color Correction shows the correction
+    indicator lines (FX Guide p.616; docs/spec/color-correction.md, 6.10d1). Add Filler at Start, Find Black Hole/Flash
     Frame, Rename Track and Create Sequence Based on Selection:
     docs/spec/timeline-commands.md.
   * The scale bar zooms around the position indicator; zoomed in, the

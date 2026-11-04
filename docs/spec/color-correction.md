@@ -437,6 +437,45 @@ bins take the drop in `BinItemModel` and show the colour as the item's icon and 
 * Picks from Anywhere: a press on a swatch and a release anywhere over the application's windows takes the colour the
   window draws there (no 3 x 3 averaging); with it off, the eyedropper samples the monitors as before.
 
+## 6.10d1: relationship corrections
+
+Code: `src/model/correction_relations.*` (`CorrectionKeys`, `correctionKeysOf`, `relatedSegments`,
+`applyRelationshipCorrection`, `convertRelationship`), the relationship enum and names in `color_correction.h`,
+`Segment::sourceRelationship`/`programRelationship`, `Timeline::setCorrectionRelationship`/`followCorrectionType`, the
+Correction Type menu in `correction_tool.cpp`, the Fast menu's Color Correction and the indicator lines in
+`timeline.cpp`. Tests: `tst_correction_relations`, `tst_correction_tool` (`relationships`), scenario
+`39-correction-relationships.json`.
+
+### From the guide
+* The Correction Type menu: the relationships, then the Color Correction effect (p.596). "When you move the position
+  indicator to a segment that has color correction, the Correction Type button changes to indicate the type of
+  correction that is applied to that segment" (p.596).
+* "Options for Relationship Color Corrections" (p.597): Src Tape, Src Clip Name (ignoring ".new" and what follows),
+  Master Clip, Sub Clip, Src Segment, Prog Track ("the current segment and all other material on that segment's track"),
+  Prog Segment. Green for Source, blue for Program (p.597).
+* Converting a Source relationship to another Source one (or Program to Program): "Click the Correction Type button,
+  and choose a new type from the menu"; Source to Program only through a template (p.598).
+* The Timeline Fast menu's Color Correction: "A segment in the Timeline that has Source color correction is marked with a
+  green line at the bottom of the segment. A segment that has Program color correction is marked with a blue line at
+  the top ... A dotted line indicates a correction that applies only to that segment ... A solid line indicates a
+  correction that applies beyond the individual segment" (p.616).
+
+### Ours
+* Each segment keeps its own copy of a correction and the relationship it was made with ("sourceRelationship",
+  "programRelationship" in the sequence, kept only while that side has a correction). Making or changing a correction
+  with a relationship sets it on every related video segment there is then, on any video track for the Source
+  relationships and on the segment's track for Prog Track; filler is never related. Segments edited in later take it
+  with Update Correction (6.10d4). Remove Effect takes the correction off the current segment only.
+* The keys: a clip's tape is its Tape source's name, else its Tape column; a subclip is of its own MobID (Sub Clip) and
+  of its master clip's (Master Clip); a segment without a clip in the bins has only its name and MobID.
+* Converting gives the correction to the segments the new relationship reaches; the segments the old one reached (with
+  the same values and relationship) that the new one leaves out keep their values as Src or Prog Segment corrections.
+* Use Marks for Segment Correction applies to the segment relationships only (p.597 names Source and Program Segment).
+* The button follows a corrected segment's type when the position moves to another segment (the selected side's
+  correction first); a type chosen for the other side of the same segment stays until then.
+* The lines: two pixels, green (Source) at the foot of the segment and blue (Program) at its top; dotted for the segment
+  relationships. The setting is kept with the Timeline's view ("correctionLines").
+
 ## 6.10a3: the Secondary group
 
 ### From the guide

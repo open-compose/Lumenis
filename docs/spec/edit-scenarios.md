@@ -81,7 +81,12 @@ Each file is a JSON list of scenarios:
     those controls (lumenis/model/color_correction.h) on the segment at the
     Record position, one undo step; `{"correction": {}}` is the mode's Remove
     Effect button (FX Guide p.592); `expect_corrected` gives each track's
-    material segments' "has a correction" in order;
+    material segments' "has a correction" in order; `{"correction_type": key}`
+    is the Correction Type button (FX Guide p.596-598; keys as
+    `model::relationshipKey`, converting a corrected segment's correction), a
+    clip's `"tape"` its Tape column, and `expect_relationships` gives each
+    track's material segments' "source/program" relationship keys ("" for a
+    side without a correction);
   * `{"clip_note": text}` is Add Timeline Clip Note on the selected segments
     (p.483; "" deletes it, p.484); `expect_notes` gives each track's
     material segments' notes in order;

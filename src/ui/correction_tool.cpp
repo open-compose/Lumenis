@@ -151,22 +151,22 @@ CorrectionTool::CorrectionTool(Timeline& timeline, QWidget* parent) : QWidget(pa
     type_->setObjectName(QStringLiteral("correctionType"));
     type_->setPopupMode(QToolButton::InstantPopup);
     auto* types = new QMenu(type_);
-    // "Options for Relationship Color Corrections" (p.597) and the Color Correction effect (p.596). The relationships
-    // other than the segment ones come with 6.10d, the effect with 6.10e.
-    const std::pair<const char*, int> entries[] = {
-        {QT_TR_NOOP("Src Tape"), -1},      {QT_TR_NOOP("Src Clip Name"), -1}, {QT_TR_NOOP("Master Clip"), -1},
-        {QT_TR_NOOP("Sub Clip"), -1},      {QT_TR_NOOP("Src Segment"), 0},    {QT_TR_NOOP("Prog Track"), -1},
-        {QT_TR_NOOP("Prog Segment"), 1},   {QT_TR_NOOP("Color Correction Effect"), -1}};
-    for (const auto& [text, side] : entries) {
-        QAction* a = types->addAction(tr(text));
-        a->setEnabled(side >= 0);
-        a->setCheckable(side >= 0);
-        a->setData(side);
-        connect(a, &QAction::triggered, this, [this, s = side] {
-            timeline_.setCorrectionSide(s == 0 ? model::CorrectionSide::Source : model::CorrectionSide::Program);
+    // "Options for Relationship Color Corrections" (p.597) and the Color Correction effect (p.596; with 6.10e).
+    using model::CorrectionRelationship;
+    for (const CorrectionRelationship r : {CorrectionRelationship::SourceTape, CorrectionRelationship::SourceClipName,
+                                           CorrectionRelationship::MasterClip, CorrectionRelationship::SubClip,
+                                           CorrectionRelationship::SourceSegment, CorrectionRelationship::ProgramTrack,
+                                           CorrectionRelationship::ProgramSegment}) {
+        QAction* a = types->addAction(tr(qPrintable(model::relationshipText(r))));
+        a->setCheckable(true);
+        a->setData(static_cast<int>(r));
+        a->setObjectName(QStringLiteral("type:") + model::relationshipKey(r));
+        connect(a, &QAction::triggered, this, [this, r] {
+            timeline_.setCorrectionRelationship(r);
             reload();
         });
     }
+    types->addAction(tr("Color Correction Effect"))->setEnabled(false);
     type_->setMenu(types);
     top->addWidget(type_);
     for (int i = 0; i < 5; ++i) top->addWidget(tab(this, QLatin1String(kGroups[i]), tr(kGroupNames[i])));
@@ -536,6 +536,15 @@ QWidget* CorrectionTool::lumaRangesPane() {
 }
 
 void CorrectionTool::reload() {
+    // The button follows the type of a corrected segment the position moves to (p.596), not every reload: a type just
+    // chosen for the other side stays.
+    const auto shot = timeline_.correctionShot(0);
+    const QString track = timeline_.correctionTrack();
+    if (shot != shownShot_ || track != shownTrack_) {
+        shownShot_ = shot;
+        shownTrack_ = track;
+        timeline_.followCorrectionType();
+    }
     const std::optional<model::ColorCorrection> c = timeline_.currentCorrection();
     hasSegment_ = c.has_value();
     correction_ = c.value_or(model::ColorCorrection{});
@@ -789,8 +798,9 @@ void CorrectionTool::sync() {
     // The Correction Type button and the active tabs: "Green indicates Source corrections. Blue indicates Program
     // corrections" (p.597).
     const bool program = timeline_.correctionSide() == model::CorrectionSide::Program;
-    type_->setText(program ? tr("Prog Segment") : tr("Src Segment"));
-    for (QAction* a : type_->menu()->actions()) a->setChecked(a->data().toInt() == (program ? 1 : 0));
+    const model::CorrectionRelationship type = timeline_.correctionRelationship();
+    type_->setText(tr(qPrintable(model::relationshipText(type))));
+    for (QAction* a : type_->menu()->actions()) a->setChecked(a->isCheckable() && a->data().toInt() == static_cast<int>(type));
     const QColor tint = program ? QColor(0x3a, 0x6e, 0xc8) : QColor(0x3c, 0xa0, 0x50);
     QPalette pal = type_->palette();
     pal.setColor(QPalette::Button, tint);

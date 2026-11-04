@@ -1179,10 +1179,21 @@ phase of their own. They are done in three steps:
     6.10c3b, custom colours in bins with Saved Color Labels and Eyedropper Picks from Anywhere in Application (p.630-631,
     p.608), done (`src/media/custom_color.*`, `customColorMime()`; tests `tst_color_match`, `tst_correction_tool`). So 6.10c
     is done.
-  * 6.10d, relationship corrections (p.596-598), correction templates, presets and buckets (p.610-615), keyframing
-    corrections (p.683-686), correcting a whole sequence (p.692), the Timeline's correction information (p.616), and
-    updating, merging, flattening and removing corrections (ch.21, p.700-705).
-  * 6.10e, the Color Correction effect and its AutoCorrect options (p.693-699), safe colours: the settings, warnings
+  * 6.10d, in four parts (planned 2026-11-04 from p.596-598, p.610-616, p.683-686 and p.700-706): 6.10d1, the
+    relationship corrections: the Correction Type menu's Src Tape, Src Clip Name, Master Clip, Sub Clip and Prog Track
+    applying a correction to every related segment, the button following the segment's type, converting between
+    relationships of one side (p.596-598), and the Timeline Fast menu's Color Correction with its indicator lines
+    (p.616), done (`src/model/correction_relations.*`; tests `tst_correction_relations`, `tst_correction_tool`, scenario
+    `39-correction-relationships.json`); 6.10d2, Color Correction effect templates: the Color Correction Effect Template button and Save Correction,
+    the buckets C1-C8, applying by dropping on the monitor, a tab or a segment, by double-click and Enter, which
+    relationship each way uses, Color Correction Presets and the Effect Palette's automatic templates (p.610-615);
+    6.10d3, keyframing corrections: the parameters in the Effect Editor (the HSL Controls and Hue Offsets, the
+    Secondary sliders; the Curves and Levels as keyframe tracks only), the keyframe markers under the Current monitor
+    and keyframes added by adjusting (p.683-686); 6.10d4, Update, Merge, Flatten and Remove Correction from the tool's
+    shortcut menu with their dialogs (ch.21, p.700-706). Correcting a whole sequence (p.692) uses the Color Correction
+    effect and comes with 6.10e.
+  * 6.10e, the Color Correction effect and its AutoCorrect options (p.693-699), correcting a whole sequence on an
+    empty top track (p.692-693), safe colours: the settings, warnings
     and the Safe Color Limiter effect (ch.23, p.721-730), Spot Color Correction and the Paint Effect's Color Match mode
     (ch.24, p.731-733). Avid Artist Color (ch.25) needs Avid's EuControl software: a control surface provider hook
     only (EXTENSIONS.md), later.
