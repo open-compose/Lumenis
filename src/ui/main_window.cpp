@@ -1681,7 +1681,8 @@ void MainWindow::createTools() {
     // The Color Selection buttons sample colours in the monitors (FX Guide p.678-679).
     connect(correctionTool_, &CorrectionTool::colorSelectionChanged, this, [this](CorrectionTool::ColorSelection s) {
         composer_->correctionMonitors()->setSampling(s == CorrectionTool::ColorSelection::None      ? CorrectionMonitors::Sampling::None
-                                                     : s == CorrectionTool::ColorSelection::Syringe ? CorrectionMonitors::Sampling::Drag
+                                                     : s == CorrectionTool::ColorSelection::Syringe || s == CorrectionTool::ColorSelection::RemoveColorCast
+                                                         ? CorrectionMonitors::Sampling::Drag
                                                                                                     : CorrectionMonitors::Sampling::Click);
     });
     connect(composer_->correctionMonitors(), &CorrectionMonitors::colorsSampled, correctionTool_, &CorrectionTool::applySamples);
@@ -5448,6 +5449,14 @@ void MainWindow::installPanelHandlers() {
         commands_.setHandler(QStringLiteral("timeline.view.tv%1").arg(i + 1), [this, i] {
             const QString name = timelineViewButtons().value(i);
             if (!name.isEmpty()) chooseTimelineView(name);
+        });
+    }
+    // "The four automatic color correction commands ... are also available as buttons in the CC tab of the Command
+    // Palette" (FX Guide p.621): the Hue Offsets tab's, in Color Correction mode.
+    for (const auto& [id, kind] : {std::pair{"cc.auto_balance", media::AutoCorrection::HslBalance}, std::pair{"cc.auto_black", media::AutoCorrection::HslBlack},
+                                   std::pair{"cc.auto_contrast", media::AutoCorrection::HslContrast}, std::pair{"cc.auto_white", media::AutoCorrection::HslWhite}}) {
+        commands_.setHandler(QString::fromLatin1(id), [this, k = kind] {
+            if (timeline_->isCorrectionMode()) correctionTool_->autoCorrect(k);
         });
     }
     // The Command Palette's twelve Tab buttons (FX Guide p.601-602): one displays the Color Correction tool's tab it is

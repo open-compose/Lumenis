@@ -337,6 +337,44 @@ Code: `src/media/scopes.*` (`media::scopeImage`, `waveformRow`, `vectorscopePoin
 * A monitor showing a scope cannot be the active monitor; making the active monitor a scope moves the active monitor to
   the one at Current, else the first showing a frame. PAL is 25 and 50 fps projects.
 
+## 6.10c2: the automatic corrections
+
+Code: `src/media/auto_correct.*` (`media::autoCorrect`, `removeColorCast`); the buttons and `CorrectionTool::autoCorrect`,
+`startRemoveColorCast` (`ColorSelection::RemoveColorCast`) in `src/ui/correction_tool*.cpp`; the commands
+`cc.auto_balance`, `cc.auto_black`, `cc.auto_contrast`, `cc.auto_white`. Tests: `tst_auto_correct`, `tst_correction_tool`
+(`automaticCorrections`).
+
+### From the guide
+* Auto Black, Auto Contrast and Auto White in HSL > Controls > Master; Auto Balance, Auto Black, Auto Contrast and Auto
+  White in HSL > Hue Offsets; Auto Balance and Auto Contrast in the Curves tab (p.620). "Media Composer analyzes the
+  currently selected frame in the segment and adjusts the appropriate color correction controls" (p.621).
+* Hue Offsets: Auto Balance "Adjusts all three ChromaWheel controls"; Auto Black "Adjusts the Setup slider"; Auto
+  Contrast "Adjusts the Gain and Setup slider controls"; Auto White "Adjusts the Gain slider" (p.621). Curves: Auto
+  Balance adjusts the Red, Green and Blue curves, Auto Contrast the Master curve (p.621).
+* "The four automatic color correction commands described in this table are also available as buttons in the CC tab of
+  the Command Palette" (p.621).
+* "Automatic color corrections operate within normal limits for legal video levels" (p.619).
+* Remove Color Cast: a button below the Highlights, Midtones and Shadows ChromaWheels, each adjusting only its wheel, and
+  one in the Curves tab "adding a point to each of the Red, Green, and Blue curves", again for each new area, up to 16
+  points; click the button ("The button appears highlighted"), drag into the image and release over the area to make
+  neutral (p.621-622).
+
+### Ours
+* The frame measured is the uncorrected one at the position (96 by 54 pixels), through the side's correction. The tonal
+  range leaves out the darkest and brightest half percent; Black, Contrast and White solve the Master range's Gain and
+  Setup as the linear map y' - 16 = Gain/100 x (y - 16) + Setup for 16 and 235 (within the sliders' ranges: Gain up to
+  200%). From the Hue Offsets tab they set them through that tab's paths (p.603).
+* HSL Auto Balance: three passes moving each range's wheel so that the range's pixels, weighted by their share,
+  average to no chroma (a grey world per range); Amount at most 100.
+* Curves: measured before the Curves group (and Secondary); Auto Contrast's Master curve is the two points (darkest
+  luma, 0) and (brightest, 255); Auto Balance maps each channel's darkest and brightest to the luma's, with the ends kept.
+* Remove Color Cast takes the colour under the eyedropper when the mouse is let go; a wheel moves by the colour's chroma
+  over its brightness's share of the range (nothing below a share of 0.05); the Curves button follows each channel back
+  through its curve and adds (or moves, within 2) a point taking it to the colour's luma. The button turns off after
+  one sample.
+* The buttons are text buttons with the guide's names as tooltips; the CC tab's four commands are the Hue Offsets tab's
+  and work in Color Correction mode.
+
 ## 6.10a3: the Secondary group
 
 ### From the guide

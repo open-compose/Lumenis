@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lumenis/media/auto_correct.h"
 #include "lumenis/model/color_correction.h"
 
 #include <QDoubleSpinBox>
@@ -23,6 +24,10 @@ class LumaRangesGraph;
 class ChromaCurveGraph;
 class Histogram;
 class VectorWheel;
+
+// An automatic correction or Remove Color Cast button of the tool (p.620-622): a small text button named `name`, with
+// the button's full name as its tool tip.
+QToolButton* correctionActionButton(QWidget* parent, const QString& name, const QString& text, const QString& tip);
 
 // A value box of the Color Correction tool that keeps a value on the 8-bit scale and shows it on the Correction
 // setting's unit (model::toCorrectionUnit; FX Guide p.606): 10 Bit, 8 Bit, Percent, IRE or mVolts. Typed numbers are on
@@ -146,13 +151,22 @@ public:
     void selectVector(const QString& vector);
     bool lockVectors() const { return lockVectors_; }
     void setLockVectors(bool on);
-    enum class ColorSelection { None, Syringe, AddToSelection, SubtractFromSelection };
+    // RemoveColorCast is a Remove Color Cast button (6.10c2): the next colour sampled is made neutral.
+    enum class ColorSelection { None, Syringe, AddToSelection, SubtractFromSelection, RemoveColorCast };
     ColorSelection colorSelection() const { return colorSelection_; }
     void setColorSelection(ColorSelection selection);
     // Colours sampled in a monitor with the Color Selection button that is on: the syringe defines a vector from them
     // all (model::syringeVector), the eyedroppers add or subtract the first (p.678-679). One undo step.
     void applySamples(const QList<QColor>& colors);
     VectorWheel* vectorWheel(bool output) const { return output ? outputWheel_ : inputWheel_; }
+    // The automatic corrections (FX Guide p.618-622; media::autoCorrect): the Auto buttons of the Hue Offsets and
+    // Controls > Master tabs and the Curves tab, and the Command Palette's (p.621), measuring the uncorrected frame at the
+    // position through the correction; one undo step. A Remove Color Cast button "appears highlighted" and the monitors
+    // sample a colour: "Drag the pointer into the image ... release the mouse button" (p.622); applySamples makes it
+    // neutral (media::removeColorCast) and the button goes off.
+    void autoCorrect(media::AutoCorrection kind, bool hueOffsets = true);
+    void startRemoveColorCast(media::CastRemoval where);
+    std::optional<media::CastRemoval> castRemoval() const { return castRemoval_; }
     // The Luma Ranges tab's preview (p.642-643).
     enum class LumaPreview { Input, ThreeTone, Output };
     LumaPreview lumaPreview() const { return lumaPreview_; }
@@ -223,6 +237,7 @@ private:
     Histogram* inHistogram_ = nullptr;
     Histogram* outHistogram_ = nullptr;
     bool lockVectors_ = false;
+    std::optional<media::CastRemoval> castRemoval_;
     ColorSelection colorSelection_ = ColorSelection::None;
     VectorWheel* inputWheel_ = nullptr;
     VectorWheel* outputWheel_ = nullptr;

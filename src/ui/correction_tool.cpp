@@ -32,6 +32,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <tuple>
 
 namespace lumenis::ui {
 
@@ -126,6 +127,15 @@ QToolButton* enableButtonFor(QWidget* parent, const QString& path) {
 }
 
 } // namespace
+
+QToolButton* correctionActionButton(QWidget* parent, const QString& name, const QString& text, const QString& tip) {
+    auto* b = new QToolButton(parent);
+    b->setObjectName(name);
+    b->setText(text);
+    b->setToolTip(tip);
+    b->setAutoRaise(true);
+    return b;
+}
 
 CorrectionTool::CorrectionTool(Timeline& timeline, QWidget* parent) : QWidget(parent), timeline_(timeline) {
     setObjectName(QStringLiteral("correctionTool"));
@@ -346,6 +356,20 @@ QWidget* CorrectionTool::controlsPane() {
         names << QStringLiteral("gain") << QStringLiteral("gamma") << QStringLiteral("setup");
         if (master) names << QStringLiteral("clipLow") << QStringLiteral("clipHigh");
         for (const QString& n : names) rows->addWidget(sliderRow(page, base + n, label(base + n)));
+        if (master) {
+            // "Left to right: Auto Black button, Auto Contrast button, and Auto White button in the HSL > Controls > Master
+            // tab" (p.620).
+            auto* autos = new QHBoxLayout;
+            for (const auto& [kind, key, text, tip] : {std::tuple{media::AutoCorrection::HslBlack, "black", QT_TR_NOOP("Black"), QT_TR_NOOP("Auto Black")},
+                                                       std::tuple{media::AutoCorrection::HslContrast, "contrast", QT_TR_NOOP("Contrast"), QT_TR_NOOP("Auto Contrast")},
+                                                       std::tuple{media::AutoCorrection::HslWhite, "white", QT_TR_NOOP("White"), QT_TR_NOOP("Auto White")}}) {
+                QToolButton* b = correctionActionButton(page, QStringLiteral("auto:controls:") + QLatin1String(key), tr(text), tr(tip));
+                connect(b, &QToolButton::clicked, this, [this, k = kind] { autoCorrect(k, false); });
+                autos->addWidget(b);
+            }
+            autos->addStretch(1);
+            rows->addLayout(autos);
+        }
         rows->addStretch(1);
         controlPages_->addWidget(page);
     }
@@ -386,6 +410,16 @@ QWidget* CorrectionTool::hueOffsetsPane() {
         boxes->addWidget(hue);
         boxes->addWidget(amount);
         wheels->addLayout(boxes, 2, i);
+        if (i < 3) {
+            // "Remove Color Cast button below a ChromaWheel color wheel in the HSL > Hue Offsets tab" (p.621), for the
+            // Shadows, Midtones and Highlights wheels (p.622).
+            const auto where = i == 0 ? media::CastRemoval::Shadows : i == 1 ? media::CastRemoval::Midtones : media::CastRemoval::Highlights;
+            QToolButton* cast = correctionActionButton(pane, QStringLiteral("removeCast:%1").arg(static_cast<int>(where)), tr("Remove Cast"),
+                                                       tr("Remove Color Cast"));
+            cast->setCheckable(true);
+            connect(cast, &QToolButton::clicked, this, [this, where] { startRemoveColorCast(where); });
+            wheels->addWidget(cast, 3, i, Qt::AlignHCenter);
+        }
         connect(wheel, &ChromaWheel::moved, this, [hue, amount](double h, double a) {
             const QSignalBlocker b1(hue), b2(amount);
             hue->setValue(h);
@@ -400,6 +434,19 @@ QWidget* CorrectionTool::hueOffsetsPane() {
         connect(amount, &QDoubleSpinBox::valueChanged, this, [this, base](double x) { setControl(base + QStringLiteral("/amount"), x); });
     }
     v->addLayout(wheels);
+    // "Left to right: Auto Balance button, Auto Black button, Auto Contrast button, and Auto White button in the HSL > Hue
+    // Offsets tab" (p.620).
+    auto* autos = new QHBoxLayout;
+    for (const auto& [kind, key, text, tip] : {std::tuple{media::AutoCorrection::HslBalance, "balance", QT_TR_NOOP("Balance"), QT_TR_NOOP("Auto Balance")},
+                                               std::tuple{media::AutoCorrection::HslBlack, "black", QT_TR_NOOP("Black"), QT_TR_NOOP("Auto Black")},
+                                               std::tuple{media::AutoCorrection::HslContrast, "contrast", QT_TR_NOOP("Contrast"), QT_TR_NOOP("Auto Contrast")},
+                                               std::tuple{media::AutoCorrection::HslWhite, "white", QT_TR_NOOP("White"), QT_TR_NOOP("Auto White")}}) {
+        QToolButton* b = correctionActionButton(pane, QStringLiteral("auto:hueOffsets:") + QLatin1String(key), tr(text), tr(tip));
+        connect(b, &QToolButton::clicked, this, [this, k = kind] { autoCorrect(k); });
+        autos->addWidget(b);
+    }
+    autos->addStretch(1);
+    v->addLayout(autos);
     for (const char* n : {"gain", "gamma", "setup"}) {
         const QString path = QStringLiteral("hsl/hueOffsets/") + QLatin1String(n);
         v->addWidget(sliderRow(pane, path, label(path)));

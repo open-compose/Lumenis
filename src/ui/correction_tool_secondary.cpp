@@ -192,6 +192,11 @@ void CorrectionTool::setLockVectors(bool on) {
 
 void CorrectionTool::setColorSelection(ColorSelection selection) {
     colorSelection_ = selection;
+    if (selection != ColorSelection::RemoveColorCast) castRemoval_.reset();
+    for (QToolButton* b : findChildren<QToolButton*>()) {
+        if (b->objectName().startsWith(QLatin1String("removeCast:")))
+            b->setChecked(castRemoval_ && b->objectName() == QStringLiteral("removeCast:%1").arg(static_cast<int>(*castRemoval_)));
+    }
     for (QToolButton* b : findChildren<QToolButton*>()) {
         if (b->objectName().startsWith(QLatin1String("colorSelection:")))
             b->setChecked(b->objectName() == QStringLiteral("colorSelection:%1").arg(static_cast<int>(selection)));
@@ -218,8 +223,29 @@ void CorrectionTool::applySamples(const QList<QColor>& colors) {
         model::subtractFromVector(correction_, selectedVector(), samples.constFirst());
         commit(tr("Subtract from Selection"));
         break;
+    case ColorSelection::RemoveColorCast:
+        // The colour under the eyedropper when the mouse is let go (p.622).
+        if (castRemoval_ && media::removeColorCast(correction_, colors.constLast(), *castRemoval_)) commit(tr("Remove Color Cast"));
+        setColorSelection(ColorSelection::None);
+        break;
     case ColorSelection::None: break;
     }
+}
+
+void CorrectionTool::startRemoveColorCast(media::CastRemoval where) {
+    if (castRemoval_ == where) {
+        setColorSelection(ColorSelection::None);
+        return;
+    }
+    castRemoval_ = where;
+    setColorSelection(ColorSelection::RemoveColorCast);
+}
+
+void CorrectionTool::autoCorrect(media::AutoCorrection kind, bool hueOffsets) {
+    if (!hasSegment_ || !pictures_) return;
+    static const char* const names[] = {QT_TR_NOOP("Auto Balance"), QT_TR_NOOP("Auto Black"), QT_TR_NOOP("Auto Contrast"),
+                                        QT_TR_NOOP("Auto White"), QT_TR_NOOP("Auto Balance"), QT_TR_NOOP("Auto Contrast")};
+    if (media::autoCorrect(correction_, pictures_(false), kind, hueOffsets)) commit(tr(names[static_cast<int>(kind)]));
 }
 
 void CorrectionTool::syncSecondary() {

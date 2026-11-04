@@ -700,7 +700,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   buttons (`CorrectionTool::showPath`, kept as the Correction setting's tabButton1-12), is done, so 6.10b is.
   6.10c is in three parts (ROADMAP). 6.10c1, the Waveform and Vectorscope monitors (`src/media/scopes.*` with
   `media::scopeImage`, the scope entries of `CorrectionSource`; tests `tst_scopes`, `tst_correction_mode`), is done.
-  Next: 6.10c2-c3, 6.10d-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.10c2, the automatic corrections and Remove Color Cast (`src/media/auto_correct.*`, `CorrectionTool::autoCorrect`/
+  `startRemoveColorCast`, the CC tab's `cc.auto_*`; tests `tst_auto_correct`, `tst_correction_tool`), is done.
+  Next: 6.10c3, 6.10d-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

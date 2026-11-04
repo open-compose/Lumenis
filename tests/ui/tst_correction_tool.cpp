@@ -602,6 +602,40 @@ private slots:
         QVERIFY(!r.tool.showPath(QStringLiteral("nowhere")));
         QCOMPARE(r.tool.group(), QStringLiteral("secondary"));
     }
+
+    void automaticCorrections() {
+        // The Auto buttons measure the uncorrected frame at the position (FX Guide p.620-621).
+        Rig r;
+        r.tool.setPictureSource([](bool) {
+            QImage image(64, 16, QImage::Format_RGB32);
+            for (int x = 0; x < 64; ++x) {
+                for (int y = 0; y < 16; ++y) image.setPixelColor(x, y, QColor::fromRgbF(0.3f + 0.4f * static_cast<float>(x) / 63.0f, 0.3f + 0.4f * static_cast<float>(x) / 63.0f, 0.3f + 0.4f * static_cast<float>(x) / 63.0f));
+            }
+            return image;
+        });
+        r.tool.showGroup(QStringLiteral("hsl"));
+        r.tool.showHslTab(QStringLiteral("hueOffsets"));
+        r.tool.findChild<QToolButton*>(QStringLiteral("auto:hueOffsets:contrast"))->click();
+        QVERIFY(r.segment(0).sourceCorrection.number(QStringLiteral("hsl/controls/master/gain")) > 100);
+        QVERIFY(r.tool.enableButton(QStringLiteral("hsl/hueOffsets/gain"))->isChecked());
+        // The Curves tab's Auto Contrast sets the Master curve.
+        r.tool.showGroup(QStringLiteral("curves"));
+        r.tool.findChild<QToolButton*>(QStringLiteral("auto:curves:contrast"))->click();
+        QCOMPARE(model::colorCurve(r.segment(0).sourceCorrection, QStringLiteral("master")).size(), 2);
+        // Remove Color Cast: the button lights, a sample from the monitor makes that colour neutral, the button goes off
+        // (p.622).
+        r.tool.showGroup(QStringLiteral("hsl"));
+        QSignalSpy selection(&r.tool, &CorrectionTool::colorSelectionChanged);
+        QToolButton* cast = r.tool.findChild<QToolButton*>(QStringLiteral("removeCast:%1").arg(static_cast<int>(media::CastRemoval::Midtones)));
+        cast->click();
+        QVERIFY(cast->isChecked());
+        QCOMPARE(r.tool.colorSelection(), CorrectionTool::ColorSelection::RemoveColorCast);
+        r.tool.applySamples({QColor(120, 120, 150)});
+        QVERIFY(r.segment(0).sourceCorrection.number(QStringLiteral("hsl/hueOffsets/midtones/amount")) > 0);
+        QCOMPARE(r.tool.colorSelection(), CorrectionTool::ColorSelection::None);
+        QVERIFY(!cast->isChecked());
+        QCOMPARE(selection.count(), 2);
+    }
 };
 
 QTEST_MAIN(TestCorrectionTool)

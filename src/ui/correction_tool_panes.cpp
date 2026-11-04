@@ -299,6 +299,22 @@ QWidget* CorrectionTool::curvesPane() {
         }
         sliders->addWidget(row);
     }
+    // "Auto Balance button (center) and Auto Contrast button (right) in the Curves tab" (p.620), with the tab's Remove
+    // Color Cast button (p.622).
+    auto* buttons = new QHBoxLayout;
+    QToolButton* cast = correctionActionButton(pane, QStringLiteral("removeCast:%1").arg(static_cast<int>(media::CastRemoval::Curves)), tr("Remove Cast"),
+                                               tr("Remove Color Cast"));
+    cast->setCheckable(true);
+    connect(cast, &QToolButton::clicked, this, [this] { startRemoveColorCast(media::CastRemoval::Curves); });
+    buttons->addWidget(cast);
+    QToolButton* balance = correctionActionButton(pane, QStringLiteral("auto:curves:balance"), tr("Balance"), tr("Auto Balance"));
+    connect(balance, &QToolButton::clicked, this, [this] { autoCorrect(media::AutoCorrection::CurvesBalance); });
+    buttons->addWidget(balance);
+    QToolButton* contrast = correctionActionButton(pane, QStringLiteral("auto:curves:contrast"), tr("Contrast"), tr("Auto Contrast"));
+    connect(contrast, &QToolButton::clicked, this, [this] { autoCorrect(media::AutoCorrection::CurvesContrast); });
+    buttons->addWidget(contrast);
+    buttons->addStretch(1);
+    sliders->addLayout(buttons);
     sliders->addStretch(1);
     h->addLayout(sliders, 1);
     return pane;

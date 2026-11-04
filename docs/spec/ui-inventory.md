@@ -322,6 +322,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   waveforms as PQ code values, the YC Waveform's -20 to 120 IRE limits for its
   red edge, the vectorscope's scale, scope monitors never active, PAL for 25
   and 50 fps projects.
+  6.10c2: how the automatic corrections measure and solve (half-percent tails,
+  the linear Gain/Setup solve, a grey world per luma range, the Curves points),
+  Remove Color Cast's share threshold and one sample per click, the buttons as
+  text buttons.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

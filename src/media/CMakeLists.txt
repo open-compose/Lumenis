@@ -21,6 +21,7 @@ add_library(lumenis_media STATIC
     intraframe.cpp
     pict.cpp
     plasma_wipe.cpp
+    auto_correct.cpp
     color_correction.cpp
     scopes.cpp
     key_effects.cpp
@@ -46,6 +47,7 @@ add_library(lumenis_media STATIC
     include/lumenis/media/compositor.h
     include/lumenis/media/pict.h
     include/lumenis/media/plasma_wipe.h
+    include/lumenis/media/auto_correct.h
     include/lumenis/media/color_correction.h
     include/lumenis/media/scopes.h
     include/lumenis/media/optical_flow.h

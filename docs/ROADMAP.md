@@ -1172,7 +1172,8 @@ phase of their own. They are done in three steps:
     monitors: the Source menu's Quad Display, RGB Histogram, RGB Parade, Vectorscope, Y Waveform (and HDR 1000/10000),
     YC Waveform, YCbCr Histogram and YCbCr Parade, for the active monitor (p.686-692; the safe colour marks come with
     6.10e), done (`src/media/scopes.*`; tests `tst_scopes`, `tst_correction_mode`); 6.10c2, the automatic corrections: Auto Balance, Black, Contrast and White in the HSL group, Auto Balance and
-    Contrast in the Curves tab, the Remove Color Cast buttons, and the CC tab's buttons (p.618-622); 6.10c3, the Color
+    Contrast in the Curves tab, the Remove Color Cast buttons, and the CC tab's buttons (p.618-622), done
+    (`src/media/auto_correct.*`; tests `tst_auto_correct`, `tst_correction_tool`); 6.10c3, the Color
     Match control in each group with its Match Types, NaturalMatch, custom colours in bins and the eyedropper options
     (p.624-631, p.608).
   * 6.10d, relationship corrections (p.596-598), correction templates, presets and buckets (p.610-615), keyframing
