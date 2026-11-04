@@ -1663,6 +1663,13 @@ void MainWindow::createTools() {
                         : p == C::MasterInput ? P::Input : P::Output;
         composer_->correctionMonitors()->setPreview(preview);
     });
+    // The Color Selection buttons sample colours in the monitors (FX Guide p.678-679).
+    connect(correctionTool_, &CorrectionTool::colorSelectionChanged, this, [this](CorrectionTool::ColorSelection s) {
+        composer_->correctionMonitors()->setSampling(s == CorrectionTool::ColorSelection::None      ? CorrectionMonitors::Sampling::None
+                                                     : s == CorrectionTool::ColorSelection::Syringe ? CorrectionMonitors::Sampling::Drag
+                                                                                                    : CorrectionMonitors::Sampling::Click);
+    });
+    connect(composer_->correctionMonitors(), &CorrectionMonitors::colorsSampled, correctionTool_, &CorrectionTool::applySamples);
     // The Levels histograms' pictures (FX Guide p.654): the frame at the position, small, without and with corrections.
     correctionTool_->setPictureSource([this](bool corrected) {
         const model::MonitorState& r = composer_->state(MonitorId::Record);

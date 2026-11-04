@@ -1,6 +1,7 @@
 // The Color Correction tool (FX Guide p.595-605, p.631-644; docs/spec/color-correction.md, 6.10b2): the Correction Type
 // button, the tabs and their Enable buttons with Alt+click resets, Page Up/Down, the Controls sliders, the ChromaWheels,
 // the Hue Offsets tab's Gain/Gamma/Setup and the Luma Ranges graph.
+#include "lumenis/media/color_correction.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
@@ -11,6 +12,7 @@
 #include <QApplication>
 #include <QDoubleSpinBox>
 #include <QJsonArray>
+#include <QCheckBox>
 #include <QRadioButton>
 #include <QMenu>
 #include <QSignalSpy>
@@ -313,6 +315,84 @@ private slots:
         // Master Saturation is the HSL group's (p.659).
         r.value(QStringLiteral("curves/masterSaturation"))->setValue(50);
         QCOMPARE(r.segment(0).sourceCorrection.number(QStringLiteral("hsl/controls/master/saturation")), 50.0);
+    }
+
+    void secondary() {
+        Rig r;
+        r.tool.showGroup(QStringLiteral("secondary"));
+        // Green selected at first (p.674); a swatch click selects a vector.
+        QCOMPARE(r.tool.selectedVector(), QStringLiteral("green"));
+        r.tool.findChild<QToolButton*>(QStringLiteral("swatch:red"))->click();
+        QCOMPARE(r.tool.selectedVector(), QStringLiteral("red"));
+        QVERIFY(r.tool.findChild<QToolButton*>(QStringLiteral("swatch:red"))->isChecked());
+        // The Output Hue slider of the selected vector (p.680).
+        r.value(model::vectorPath(QStringLiteral("red"), QStringLiteral("output"), QStringLiteral("hue")))->setValue(60);
+        QCOMPARE(r.segment(0).sourceCorrection.number(model::vectorPath(QStringLiteral("red"), QStringLiteral("output"), QStringLiteral("hue"))), 60.0);
+        QVERIFY(r.tool.enableButton(QStringLiteral("secondary/vectors/red"))->isChecked());
+        // Lock Vectors carries input hue changes to the output (p.676).
+        r.tool.findChild<QCheckBox*>(QStringLiteral("lockVectors"))->click();
+        QVERIFY(r.tool.lockVectors());
+        r.value(model::vectorPath(QStringLiteral("red"), QStringLiteral("input"), QStringLiteral("hue")))->setValue(10);
+        QCOMPARE(r.segment(0).sourceCorrection.number(model::vectorPath(QStringLiteral("red"), QStringLiteral("output"), QStringLiteral("hue"))), 70.0);
+        // Standard vectors show Sat Min, custom ones Sat Width (p.676).
+        QVERIFY(r.tool.control(model::vectorPath(QStringLiteral("red"), QStringLiteral("input"), QStringLiteral("satMin"))));
+        QVERIFY(r.tool.control(model::vectorPath(QStringLiteral("3"), QStringLiteral("input"), QStringLiteral("satWidth"))));
+        QVERIFY(!r.tool.control(model::vectorPath(QStringLiteral("3"), QStringLiteral("input"), QStringLiteral("satMin"))));
+        // Dragging the selected centre point in the Input wheel (p.675).
+        VectorWheel* in = r.tool.vectorWheel(false);
+        const QPointF from = in->pointFor(10, 60);
+        const QPointF to = in->pointFor(30, 50);
+        QTest::mousePress(in, Qt::LeftButton, {}, from.toPoint());
+        QTest::mouseMove(in, to.toPoint());
+        QTest::mouseRelease(in, Qt::LeftButton, {}, to.toPoint());
+        const model::SecondaryVector v = model::secondaryVector(r.segment(0).sourceCorrection, QStringLiteral("red"));
+        QVERIFY2(std::abs(v.hue - 30) < 3 && std::abs(v.saturation - 50) < 3, qPrintable(QStringLiteral("%1 %2").arg(v.hue).arg(v.saturation)));
+        // Clicking another centre selects it.
+        QTest::mouseClick(in, Qt::LeftButton, {}, in->pointFor(-120, 60).toPoint());
+        QCOMPARE(r.tool.selectedVector(), QStringLiteral("blue"));
+        // Isolate and Invert Last Vector (p.673-674).
+        r.tool.findChild<QCheckBox*>(QStringLiteral("secondary/isolate"))->click();
+        QCOMPARE(r.segment(0).sourceCorrection.number(QStringLiteral("secondary/isolate")), 1.0);
+        // The syringe: samples from a monitor define a vector (p.678); the eyedroppers refine it (p.679).
+        QSignalSpy selection(&r.tool, &CorrectionTool::colorSelectionChanged);
+        r.tool.findChild<QToolButton*>(QStringLiteral("colorSelection:1"))->click();
+        QCOMPARE(r.tool.colorSelection(), CorrectionTool::ColorSelection::Syringe);
+        QCOMPARE(selection.count(), 1);
+        r.tool.applySamples({QColor(40, 180, 40), QColor(50, 190, 30), QColor(30, 170, 50)});
+        QCOMPARE(r.tool.selectedVector(), QStringLiteral("green"));
+        const model::SecondaryVector g = model::secondaryVector(r.segment(0).sourceCorrection, QStringLiteral("green"));
+        const QPointF sample = media::wheelHueSaturation({40 / 255.0, 180 / 255.0, 40 / 255.0});
+        QCOMPARE(model::vectorMembership(g, sample.x(), sample.y()), 1.0);
+        r.tool.findChild<QToolButton*>(QStringLiteral("colorSelection:2"))->click();
+        QCOMPARE(r.tool.colorSelection(), CorrectionTool::ColorSelection::AddToSelection);
+        r.tool.applySamples({QColor(150, 190, 30)});
+        const QPointF added = media::wheelHueSaturation({150 / 255.0, 190 / 255.0, 30 / 255.0});
+        QCOMPARE(model::vectorMembership(model::secondaryVector(r.segment(0).sourceCorrection, QStringLiteral("green")), added.x(), added.y()), 1.0);
+        // Clicking the button again turns it off (p.678).
+        r.tool.findChild<QToolButton*>(QStringLiteral("colorSelection:2"))->click();
+        QCOMPARE(r.tool.colorSelection(), CorrectionTool::ColorSelection::None);
+        // The monitors sample a drag over the picture.
+        r.composer.setPictureResolver([](MonitorId, std::int64_t, QSize size, bool*) {
+            QImage image(size, QImage::Format_RGB32);
+            image.fill(QColor(200, 40, 40));
+            return image;
+        });
+        CorrectionMonitors* m = r.composer.correctionMonitors();
+        r.composer.resize(900, 420);
+        r.composer.show();
+        m->setSampling(CorrectionMonitors::Sampling::Drag);
+        QSignalSpy sampled(m, &CorrectionMonitors::colorsSampled);
+        settle();
+        QWidget* picture = m->pictureWidget(1);
+        picture->repaint();
+        const QPoint c = picture->rect().center();
+        QTest::mousePress(picture, Qt::LeftButton, {}, c);
+        QTest::mouseMove(picture, c + QPoint(5, 0));
+        QTest::mouseRelease(picture, Qt::LeftButton, {}, c + QPoint(5, 0));
+        QCOMPARE(sampled.count(), 1);
+        const QList<QColor> colors = sampled.at(0).at(0).value<QList<QColor>>();
+        QVERIFY(colors.size() >= 2);
+        QCOMPARE(colors.at(0), QColor(200, 40, 40));
     }
 };
 

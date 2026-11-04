@@ -86,10 +86,18 @@ public:
     void setPreview(Preview preview, std::function<model::ColorCorrection()> ranges = {});
     Preview preview() const { return preview_; }
 
+    // The Secondary tab's Color Selection buttons (FX Guide p.678-679): while sampling, a drag over a monitor's
+    // picture samples "every color value that the tip of the syringe passes over" (Drag), or a click picks one colour
+    // (Click); colorsSampled() gives them when the mouse is let go.
+    enum class Sampling { None, Drag, Click };
+    void setSampling(Sampling sampling) { sampling_ = sampling; }
+    Sampling sampling() const { return sampling_; }
+
 signals:
     // The Go to Previous/Next Uncorrected Shot and Remove Effect buttons, for the Timeline.
     void commandRequested(const QString& commandId);
     void activeMonitorChanged(int monitor);
+    void colorsSampled(const QList<QColor>& colors);
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -111,6 +119,7 @@ private:
     std::optional<std::int64_t> reference_;
     ShotResolver shots_;
     Preview preview_ = Preview::Output;
+    Sampling sampling_ = Sampling::None;
     std::function<model::ColorCorrection()> ranges_;
 };
 

@@ -20,5 +20,8 @@ std::array<double, 3> colorCorrectedPixel(const model::ColorCorrection& correcti
 // A colour's place on the Secondary group's wheels: (hue in degrees, 0 red, green +120; saturation 0-100, 100 at a
 // chroma of half the full range, ours). For the syringe and eyedroppers (model::syringeVector).
 QPointF wheelHueSaturation(const std::array<double, 3>& rgb);
+// Back: the colour at a place on the wheels with luma `y` (0 to 1), clipped to the RGB cube; the Selected Vectors
+// panel's swatches (FX Guide p.674).
+std::array<double, 3> wheelColor(double hue, double saturation, double y = 0.5);
 
 } // namespace lumenis::media

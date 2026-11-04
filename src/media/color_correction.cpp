@@ -260,6 +260,10 @@ std::array<double, 3> secondaryPixel(const ColorCorrection& c, const std::array<
 
 } // namespace
 
+std::array<double, 3> wheelColor(double hue, double saturation, double y) {
+    return toRgb(fromWheel(16.0 + 219.0 * y, hue, saturation));
+}
+
 QPointF wheelHueSaturation(const std::array<double, 3>& rgb) {
     const auto [hue, saturation] = wheelPlace(toYcc(rgb));
     return {hue, saturation};

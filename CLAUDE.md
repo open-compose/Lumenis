@@ -80,6 +80,10 @@ Cutthulhu is a clean-room, cross-platform work-alike of Avid Media Composer
 - Everything the user can invoke is a command declared in
   `src/ui/resources/commands.json` and placed in `menus.json`.
   `tests/data/menu_inventory.json` is the spec the menu bar is tested against.
+- Tests never touch the computer's real drives: every ctest runs with
+  `LUMENIS_NO_SYSTEM_DRIVES=1` and its own drive folder `test-media/<test>`
+  (`lumenis_isolate_media_drives` in tests/CMakeLists.txt; a new tests/
+  subdirectory calls it last).
 - Qt 6.4's moc cannot parse GCC 13's C++20 headers when given compiler
   predefines. The top-level CMakeLists turns them off for Qt < 6.5.
 - The owner tests on real Mac and Windows machines and reports problems.
@@ -686,7 +690,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.10b3a, the Channels, Levels and Curves panes (`src/ui/correction_tool_panes.cpp`: Channel Blending and channel
   previews, the Levels subdividing tabs with `Histogram` and `ChromaCurveGraph`, the Curves graphs and Master sliders;
   test `tst_correction_tool`), is done.
-  Next: 6.10b3b (the Secondary pane), 6.10b4, 6.10c-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.10b3b, the Secondary pane (`src/ui/correction_tool_secondary.cpp`: the vector sliders per vector, `VectorWheel`,
+  the Selected Vectors panel, Lock Vectors, the Color Selection buttons sampling through `CorrectionMonitors::
+  setSampling`/`colorsSampled`; test `tst_correction_tool`), is done, so 6.10b3 is.
+  Next: 6.10b4, 6.10c-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

@@ -160,10 +160,7 @@ CorrectionTool::CorrectionTool(Timeline& timeline, QWidget* parent) : QWidget(pa
     groups_->addWidget(channelsPane());
     groups_->addWidget(levelsPane());
     groups_->addWidget(curvesPane());
-    // The Secondary pane comes in 6.10b3b.
-    auto* secondary = new QWidget(groups_);
-    secondary->setObjectName(QStringLiteral("pane:secondary"));
-    groups_->addWidget(secondary);
+    groups_->addWidget(secondaryPane());
     outer->addWidget(groups_, 1);
     reload();
 }
@@ -437,6 +434,13 @@ void CorrectionTool::commit(const QString& step) {
 void CorrectionTool::setControl(const QString& path, double value) {
     // The same value again, or the default typed into an unset control, changes nothing.
     if (correction_.number(path) == value) return;
+    // An input vector's hue or saturation with Lock Vectors on moves the output too (p.676).
+    if (lockVectors_ && path.startsWith(QLatin1String("secondary/vectors/")) && path.contains(QLatin1String("/input/")) &&
+        (path.endsWith(QLatin1String("/hue")) || path.endsWith(QLatin1String("/saturation")))) {
+        model::setVectorInput(correction_, path.section(QLatin1Char('/'), 2, 2), path.section(QLatin1Char('/'), -1), value, true);
+        commit(label(path));
+        return;
+    }
     correction_.set(path, value);
     commit(label(path));
 }

@@ -357,6 +357,7 @@ void CorrectionTool::syncPanes() {
             graph->setCurve(curve, [curve](double x) { return model::curveValue(curve, x); });
         }
     }
+    syncSecondary();
 }
 
 // ---------------------------------------------------------------- ChromaCurveGraph

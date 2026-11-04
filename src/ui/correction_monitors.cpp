@@ -125,6 +125,8 @@ protected:
                           : mode == P::BlueInput || mode == P::BlueOutput                                         ? 2
                                                                                                                   : -1;
         if (channel >= 0 && !image.isNull()) image = monochrome(image, channel);
+        shown_ = image;
+        shownRect_ = r;
         if (!image.isNull()) p.drawImage(r, image);
         if (!owner_.dualSplit(index_)) return;
         // Dual Split: the box shows the frame without corrections.
@@ -180,9 +182,23 @@ protected:
         return out;
     }
 
+    // The picture's colour under a point, as drawn.
+    std::optional<QColor> colorAt(const QPointF& point) const {
+        if (shown_.isNull() || !shownRect_.contains(point.toPoint())) return std::nullopt;
+        const int x = std::clamp(static_cast<int>((point.x() - shownRect_.left()) * shown_.width() / std::max(shownRect_.width(), 1)), 0, shown_.width() - 1);
+        const int y = std::clamp(static_cast<int>((point.y() - shownRect_.top()) * shown_.height() / std::max(shownRect_.height(), 1)), 0, shown_.height() - 1);
+        return shown_.pixelColor(x, y);
+    }
+
     void mousePressEvent(QMouseEvent* event) override {
         owner_.setActiveMonitor(index_);
         owner_.setFocus();
+        if (event->button() == Qt::LeftButton && owner_.sampling_ != CorrectionMonitors::Sampling::None) {
+            samples_.clear();
+            if (const auto c = colorAt(event->position())) samples_ << *c;
+            sampling_ = true;
+            return;
+        }
         if (event->button() != Qt::LeftButton || !owner_.dualSplit(index_)) return;
         const auto h = handles();
         for (int i = 0; i < 2; ++i) {
@@ -191,6 +207,12 @@ protected:
     }
 
     void mouseMoveEvent(QMouseEvent* event) override {
+        if (sampling_) {
+            if (owner_.sampling_ == CorrectionMonitors::Sampling::Drag) {
+                if (const auto c = colorAt(event->position())) samples_ << *c;
+            }
+            return;
+        }
         if (drag_ < 0) return;
         // "To resize the box that contains the split-screen image: Drag one of the box's triangular handles" (p.592).
         const QRect r = pictureRect();
@@ -202,7 +224,14 @@ protected:
         owner_.setSplitBox(index_, b);
     }
 
-    void mouseReleaseEvent(QMouseEvent*) override { drag_ = -1; }
+    void mouseReleaseEvent(QMouseEvent*) override {
+        drag_ = -1;
+        if (sampling_) {
+            sampling_ = false;
+            if (!samples_.isEmpty()) emit owner_.colorsSampled(samples_);
+            samples_.clear();
+        }
+    }
 
     void contextMenuEvent(QContextMenuEvent* event) override {
         // "To lock the current frame as a reference, right-click in the monitor window ... and select Reference
@@ -216,6 +245,10 @@ private:
     CorrectionMonitors& owner_;
     int index_;
     int drag_ = -1;
+    QImage shown_;
+    QRect shownRect_;
+    bool sampling_ = false;
+    QList<QColor> samples_;
 };
 
 CorrectionMonitors::CorrectionMonitors(Composer& composer, QWidget* parent) : QWidget(parent), composer_(composer) {

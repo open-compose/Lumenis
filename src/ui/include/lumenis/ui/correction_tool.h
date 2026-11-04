@@ -21,13 +21,15 @@ class ChromaWheel;
 class LumaRangesGraph;
 class ChromaCurveGraph;
 class Histogram;
+class VectorWheel;
 
 // The Color Correction tool (FX Guide p.595-605, p.631-644; docs/spec/color-correction.md, 6.10b2): the Correction Type
 // button, the group tabs (HSL, Channels, Levels, Curves, Sec) and the HSL group's subdividing tabs, every one with its
 // Enable button, and the HSL group's panes: the Controls tab's sliders for the Master, Highlights, Midtones and Shadows
 // ranges, the Hue Offsets tab's ChromaWheels with Gain, Gamma and Setup, and the Luma Ranges graph. 6.10b3a adds the
 // Channels pane (p.645-647), the Levels pane with its subdividing tabs, histograms and ChromaCurve graph (p.648-659) and
-// the Curves pane (p.659-663) (correction_tool_panes.cpp); the Secondary pane comes in 6.10b3b.
+// the Curves pane (p.659-663) (correction_tool_panes.cpp); 6.10b3b the Secondary pane (p.668-683,
+// correction_tool_secondary.cpp).
 //
 // The tool shows the correction of the segment at the position on the Timeline's correction track (Timeline::
 // currentCorrection) and changes it through Timeline::setCurrentCorrection, an undo step each time a control is let go
@@ -76,6 +78,20 @@ public:
     ChromaCurveGraph* levelsGraph() const { return levelsGraph_; }
     Histogram* histogram(bool output) const { return output ? outHistogram_ : inHistogram_; }
     ChromaCurveGraph* curveGraph(const QString& graph) const;
+    // The Secondary pane (p.668-683): the selected vector (kept in the correction for Isolate, "secondary/selected"),
+    // Lock Vectors (p.676) and the Color Selection buttons (p.678-679), which make a click or drag in a monitor
+    // sample colours for applySamples.
+    QString selectedVector() const;
+    void selectVector(const QString& vector);
+    bool lockVectors() const { return lockVectors_; }
+    void setLockVectors(bool on);
+    enum class ColorSelection { None, Syringe, AddToSelection, SubtractFromSelection };
+    ColorSelection colorSelection() const { return colorSelection_; }
+    void setColorSelection(ColorSelection selection);
+    // Colours sampled in a monitor with the Color Selection button that is on: the syringe defines a vector from them
+    // all (model::syringeVector), the eyedroppers add or subtract the first (p.678-679). One undo step.
+    void applySamples(const QList<QColor>& colors);
+    VectorWheel* vectorWheel(bool output) const { return output ? outputWheel_ : inputWheel_; }
     // The Luma Ranges tab's preview (p.642-643).
     enum class LumaPreview { Input, ThreeTone, Output };
     LumaPreview lumaPreview() const { return lumaPreview_; }
@@ -92,6 +108,7 @@ signals:
     // The Luma Ranges preview changed, for the monitors.
     void lumaPreviewChanged(LumaPreview preview);
     void channelPreviewChanged(ChannelPreview preview);
+    void colorSelectionChanged(ColorSelection selection);
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -105,7 +122,9 @@ private:
     QWidget* channelsPane();
     QWidget* levelsPane();
     QWidget* curvesPane();
+    QWidget* secondaryPane();
     void syncPanes();
+    void syncSecondary();
     void commit(const QString& step);
     void sync();
     void syncControls();
@@ -132,6 +151,49 @@ private:
     ChromaCurveGraph* levelsGraph_ = nullptr;
     Histogram* inHistogram_ = nullptr;
     Histogram* outHistogram_ = nullptr;
+    bool lockVectors_ = false;
+    ColorSelection colorSelection_ = ColorSelection::None;
+    VectorWheel* inputWheel_ = nullptr;
+    VectorWheel* outputWheel_ = nullptr;
+    QStackedWidget* inputPages_ = nullptr;
+    QStackedWidget* outputPages_ = nullptr;
+};
+
+// The Secondary tab's colour wheels (p.670-673, p.675, p.680): the Input wheel shows the vectors, "Standard vectors
+// always appear as wedges ... Custom vectors always appear as ellipses", with "Center points for standard vectors are
+// filled circles. Center points for custom vectors are crosshairs"; the Output wheel the selected vector's output.
+// Clicking a centre point selects its vector; dragging the selected one moves it.
+class VectorWheel : public QWidget {
+    Q_OBJECT
+
+public:
+    struct Shown {
+        QString name;
+        model::SecondaryVector vector;
+        bool selected = false;
+    };
+    explicit VectorWheel(bool output, QWidget* parent = nullptr);
+    void setVectors(const QList<Shown>& vectors);
+    QPointF pointFor(double hue, double saturation) const;
+    std::pair<double, double> placeAt(const QPointF& point) const;
+    QSize sizeHint() const override { return {150, 150}; }
+
+signals:
+    void vectorClicked(const QString& name);
+    void centreMoved(double hue, double saturation); // let go: commit
+
+protected:
+    void paintEvent(QPaintEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+
+private:
+    QPointF centreOf(const Shown& s) const;
+    bool output_;
+    QList<Shown> vectors_;
+    bool dragging_ = false;
+    QPointF dragged_;
 };
 
 // A ChromaCurve graph (p.655-663): input 0-255 across, output up, the curve through its control points drawn from

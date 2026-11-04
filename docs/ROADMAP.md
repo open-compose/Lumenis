@@ -1162,7 +1162,7 @@ phase of their own. They are done in three steps:
     * 6.10b3, the Channels, Levels, Curves and Secondary panes, in two parts (planned 2026-11-04): 6.10b3a, Channel
       Blending and previews (p.645-647), histograms and the Levels ChromaCurve (p.653-658), the Curves graphs with
       added and dragged points (p.659-663), done (`src/ui/correction_tool_panes.cpp`); 6.10b3b, the vector wheels, Selected Vectors panel, sliders, Lock Vectors
-      and the Color Selection buttons (p.668-682).
+      and the Color Selection buttons (p.668-682), done (`src/ui/correction_tool_secondary.cpp`).
     * 6.10b4, the tool's buttons (p.605), the Correction Mode settings (Tabs, Units, Levels, Features, p.606-609),
       the Command Palette's CC tab with its twelve Tab buttons (p.601-602), and Comments (p.609).
   * 6.10c, the Waveform and Vectorscope monitors (p.686-692), the Color Match control with NaturalMatch and custom

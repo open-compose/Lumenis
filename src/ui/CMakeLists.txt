@@ -63,6 +63,7 @@ add_library(lumenis_ui STATIC
     correction_monitors.cpp
     correction_tool.cpp
     correction_tool_panes.cpp
+    correction_tool_secondary.cpp
     sequence_map.cpp
     timecode_window.cpp
     source_browser.cpp

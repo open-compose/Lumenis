@@ -191,6 +191,34 @@ Code: `src/ui/correction_tool_panes.cpp` (`CorrectionTool::channelsPane`/`levels
   Show ChromaWheel and ChromaCurve Graphs option, 6.10b4).
 * The channel previews show the active monitor's channel as grey, uncorrected (Input) or corrected (Output).
 
+## 6.10b3b: the Secondary pane
+
+Code: `src/ui/correction_tool_secondary.cpp` (`CorrectionTool::secondaryPane`, `VectorWheel`), sampling in
+`CorrectionMonitors` (`setSampling`, `colorsSampled`), `media::wheelColor`. Test: `tst_correction_tool`.
+
+### From the guide
+* The tab's parts: Output Vector controls, Input Vector controls, Input and Output Vector colour wheels, the Selected
+  Vectors panel, the Color Match control, the Color Selection buttons and the buckets (p.669).
+* The wheels show each vector's boundary and centre point, wedges for standard vectors and ellipses for custom ones;
+  standard centres are filled circles, custom ones crosshairs (p.670); Show Standard is the default display (p.673).
+* The Selected Vectors panel: names, colour swatches that "update in real time", Enable buttons (Alt+click resets),
+  Invert Last Vector and Isolate; the selected vector's swatch has a white box (p.673-675). A vector is selected by
+  clicking its centre point or its swatch, or by the syringe (p.674).
+* Input sliders Hue, Saturation, Hue Width, Saturation Minimum (standard) or Saturation Width (custom) and Softness;
+  dragging the centre point in the Input wheel; Lock Vectors (p.675-677). Output Hue, Saturation and Luminance, and the
+  Output wheel (p.680-681).
+* The syringe samples "every color value that the tip of the syringe passes over"; Add to Selection and Subtract from
+  Selection click a colour; each stays on until clicked again or another is clicked (p.678-679).
+
+### Ours
+* The selected vector is kept in the correction ("secondary/selected"), so selecting one is an undo step.
+* The wheels show the standard vectors, the enabled custom ones and the selected one (the Secondary Vectors setting
+  comes with 6.10b4); a vector's boundary and centre are drawn in its own colour, the selected one thicker. Only the
+  selected vector's centre can be dragged; the Output wheel shows just the selected vector's output.
+* Swatches show the input centre's colour at mid luma (at least saturation 20, so pale vectors stay visible).
+* Sampling reads the picture as drawn in the monitor under the pointer (the Eyedropper 3 x 3 Averaging setting comes
+  with 6.10b4); the samples go to the tool when the mouse is let go, one undo step.
+
 ## 6.10a3: the Secondary group
 
 ### From the guide

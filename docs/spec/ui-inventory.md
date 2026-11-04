@@ -302,6 +302,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   the histograms' 160-by-90 sample, Master counting all three channels and
   Composite both ends of the chroma swing, Curves points kept between
   neighbours.
+  6.10b3b: the selected vector kept in the correction (selection as an undo
+  step), the vectors drawn in their own colours, only the selected centre
+  draggable, swatches at mid luma and at least saturation 20, samples taken
+  from the drawn picture and applied on release.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults
