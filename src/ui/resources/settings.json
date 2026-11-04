@@ -189,12 +189,12 @@
           "options": [
             {"key": "secondaryVectors", "type": "choice", "style": "menu", "label": "Secondary Vectors", "default": "standard", "page": 1165,
               "choices": [{"value": "all", "label": "Show All"}, {"value": "standard", "label": "Show Standard"}, {"value": "custom", "label": "Show Custom"}, {"value": "enabled", "label": "Show Enabled"}]},
-            {"key": "savedColorLabels", "type": "choice", "style": "menu", "label": "Saved Color Labels", "default": "nameRgb", "page": 1165, "later": true,
+            {"key": "savedColorLabels", "type": "choice", "style": "menu", "label": "Saved Color Labels", "default": "nameRgb", "page": 1165,
               "choices": [{"value": "none", "label": "None"}, {"value": "rgb", "label": "RGB"}, {"value": "name", "label": "Name"}, {"value": "nameRgb", "label": "Name and RGB"}]},
             {"key": "useMarks", "type": "bool", "label": "Use Marks for Segment Correction", "default": false, "page": 1166},
             {"key": "eyedropperAveraging", "type": "bool", "label": "Eyedropper 3 x 3 Averaging", "default": false, "page": 1166},
             {"key": "showEyedropperInfo", "type": "bool", "label": "Show Eyedropper Info", "default": true, "page": 1166},
-            {"key": "eyedropperAnywhere", "type": "bool", "label": "Eyedropper Picks from Anywhere in Application", "default": false, "page": 1166, "later": true},
+            {"key": "eyedropperAnywhere", "type": "bool", "label": "Eyedropper Picks from Anywhere in Application", "default": false, "page": 1166},
             {"key": "showBackgrounds", "type": "bool", "label": "Show ChromaWheel and ChromaCurve Graphs", "default": false, "page": 1166},
             {"key": "dualSplitDuringPlayback", "type": "bool", "label": "Dual-Split remains Active During Playback", "default": true, "page": 1166},
             {"key": "scopesRealTime", "type": "bool", "label": "Waveform/Vectorscope Updates in Real-Time", "default": true, "page": 1166, "later": true}

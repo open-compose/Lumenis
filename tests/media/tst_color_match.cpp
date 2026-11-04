@@ -2,6 +2,7 @@
 // colour comes out as the output colour, in the components the Match Type names.
 #include "lumenis/media/color_correction.h"
 #include "lumenis/media/color_match.h"
+#include "lumenis/media/custom_color.h"
 
 #include <QTest>
 
@@ -112,6 +113,24 @@ private slots:
         QVERIFY(!media::matchColor(none, kIn, kOut, m));
         m.type = QStringLiteral("white");
         QVERIFY(!media::matchColor(none, QColor(), kOut, m));
+    }
+
+    void customColors() {
+        // Saved Color Labels (FX Guide p.608): None, RGB (the 8-bit values), Name (the nearest HTML colour), both.
+        using media::SavedColorLabels;
+        const QColor red(255, 0, 0);
+        QCOMPARE(media::customColorName(red, SavedColorLabels::None), QString());
+        QCOMPARE(media::customColorName(red, SavedColorLabels::Rgb), QStringLiteral("R:235 G:16 B:16"));
+        QCOMPARE(media::customColorName(red, SavedColorLabels::Name), QStringLiteral("Red"));
+        QCOMPARE(media::customColorName(QColor(250, 128, 112), SavedColorLabels::NameAndRgb), QStringLiteral("Salmon R:231 G:126 B:112"));
+        QCOMPARE(media::nearestHtmlColorName(QColor(139, 69, 20)), QStringLiteral("Saddlebrown"));
+        QCOMPARE(media::savedColorLabelsFromKey(QStringLiteral("rgb")), SavedColorLabels::Rgb);
+        QCOMPARE(media::savedColorLabelsFromKey(QStringLiteral("anything")), SavedColorLabels::NameAndRgb); // the default
+        // The bin item keeps the colour.
+        const model::BinItem item = media::customColorItem(QColor(110, 70, 56), QStringLiteral("Skin"), QDateTime::currentDateTimeUtc());
+        QCOMPARE(item.name, QStringLiteral("Skin"));
+        QCOMPARE(media::customColorOf(item), std::optional<QColor>(QColor(110, 70, 56)));
+        QVERIFY(!media::customColorOf(model::BinItem{}));
     }
 };
 

@@ -750,7 +750,11 @@ void CorrectionTool::setOptions(const Options& options) {
     for (const char* w : {"master", "highlights", "midtones", "shadows"}) {
         if (ChromaWheel* wheel = this->wheel(QLatin1String(w))) wheel->setBackground(options_.backgrounds);
     }
-    for (ColorMatchControl* m : findChildren<ColorMatchControl*>()) m->setShowInfo(options_.eyedropperInfo);
+    for (ColorMatchControl* m : findChildren<ColorMatchControl*>()) {
+        m->setShowInfo(options_.eyedropperInfo);
+        m->setLabels(options_.savedColorLabels);
+        m->setPickAnywhere(options_.eyedropperAnywhere);
+    }
     sync();
     syncPanes();
 }

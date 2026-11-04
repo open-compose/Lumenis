@@ -1177,7 +1177,8 @@ phase of their own. They are done in three steps:
     6.10c3a, the Color Match control in each group with its Match Types, NaturalMatch and Show Eyedropper Info (p.624-629,
     p.631, p.608), done (`src/media/color_match.*`, `ColorMatchControl`; tests `tst_color_match`, `tst_correction_tool`);
     6.10c3b, custom colours in bins with Saved Color Labels and Eyedropper Picks from Anywhere in Application (p.630-631,
-    p.608).
+    p.608), done (`src/media/custom_color.*`, `customColorMime()`; tests `tst_color_match`, `tst_correction_tool`). So 6.10c
+    is done.
   * 6.10d, relationship corrections (p.596-598), correction templates, presets and buckets (p.610-615), keyframing
     corrections (p.683-686), correcting a whole sequence (p.692), the Timeline's correction information (p.616), and
     updating, merging, flattening and removing corrections (ch.21, p.700-705).

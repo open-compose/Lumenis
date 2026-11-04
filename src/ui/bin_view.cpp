@@ -1,6 +1,7 @@
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/brush_preview.h"
 
+#include "lumenis/media/custom_color.h"
 #include "lumenis/media/classic_title.h"
 #include "lumenis/media/titler.h"
 #include "lumenis/model/audio_eq.h"
@@ -586,6 +587,15 @@ QVariant BinItemModel::data(const QModelIndex& index, int role) const {
         if (role == Qt::DecorationRole) {
             // Show local media icons (p.1154): the icon in the colour the media calls for.
             const BinAppearance& look = BinAppearance::current();
+            // A custom colour shows as "a rectangular color swatch icon" (FX Guide p.630).
+            if (const auto custom = media::customColorOf(item)) {
+                QPixmap pm(16, 16);
+                pm.fill(*custom);
+                QPainter p(&pm);
+                p.setPen(QColor(20, 20, 20));
+                p.drawRect(0, 0, 15, 15);
+                return QIcon(pm);
+            }
             if (look.localMediaIcons && BinAppearance::mediaTint()) {
                 if (const QColor tint = BinAppearance::mediaTint()(item); tint.isValid()) return glyphIcon(iconFor(item.kind), tint);
             }
@@ -640,7 +650,7 @@ Qt::DropActions BinItemModel::supportedDropActions() const {
 QStringList BinItemModel::mimeTypes() const {
     // text/uri-list: files dragged in from the desktop (an .otio dropped into a bin, p.969).
     return {binItemsMime(), mediaFilesMime(), audioSuiteTemplateMime(), eqTemplateMime(), effectTemplateMime(),
-            brushTemplateMime(), QStringLiteral("text/uri-list")};
+            brushTemplateMime(), customColorMime(), QStringLiteral("text/uri-list")};
 }
 
 namespace {
@@ -663,7 +673,7 @@ namespace {
 // or the data holds no template.
 bool hasTemplate(const QMimeData* data) {
     return data->hasFormat(audioSuiteTemplateMime()) || data->hasFormat(eqTemplateMime()) ||
-           data->hasFormat(effectTemplateMime()) || data->hasFormat(brushTemplateMime());
+           data->hasFormat(effectTemplateMime()) || data->hasFormat(brushTemplateMime()) || data->hasFormat(customColorMime());
 }
 
 bool addTemplate(BinDocument& document, const QMimeData* data) {
@@ -674,6 +684,15 @@ bool addTemplate(BinDocument& document, const QMimeData* data) {
         const auto t = model::EffectTemplate::fromJson(o.value(QStringLiteral("template")).toObject());
         if (!t) return false;
         document.addItem(model::effectTemplateItem(*t, o.value(QStringLiteral("name")).toString(), now));
+        return true;
+    }
+    if (data->hasFormat(customColorMime())) {
+        // "The color appears in the bin as a rectangular color swatch icon. Media Composer assigns the color a name
+        // based on the current Saved Color Labels settings" (FX Guide p.630).
+        const QJsonObject o = QJsonDocument::fromJson(data->data(customColorMime())).object();
+        const QColor color = QColor::fromString(o.value(QStringLiteral("color")).toString());
+        if (!color.isValid()) return false;
+        document.addItem(media::customColorItem(color, o.value(QStringLiteral("name")).toString(), now));
         return true;
     }
     if (data->hasFormat(brushTemplateMime())) {
@@ -855,6 +874,11 @@ QImage BinFrameView::picture(const QString& id, QSize size) const {
     const model::BinItem* item = document_.bin().item(id);
     if (item) {
         if (const QImage title = titleTemplatePicture(*item, size); !title.isNull()) return title;
+        if (const auto custom = media::customColorOf(*item)) {
+            QImage swatch(size, QImage::Format_RGB32);
+            swatch.fill(*custom);
+            return swatch;
+        }
     }
     MediaFrames* frames = MediaFrames::instance();
     return item && frames ? frames->thumbnail(*item, 0, size) : QImage();

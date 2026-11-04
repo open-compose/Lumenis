@@ -4,10 +4,18 @@
 
 #include "lumenis/ui/correction_tool.h"
 
+#include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/timeline.h"
 
+#include <QApplication>
 #include <QColorDialog>
+#include <QDrag>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QEvent>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QMimeData>
 #include <QGridLayout>
 #include <QMenu>
 #include <QMouseEvent>
@@ -28,6 +36,7 @@ ColorMatchControl::ColorMatchControl(media::MatchGroup group, QWidget* parent) :
         b->setToolTip(tip);
         b->setMinimumSize(64, 30);
         b->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        b->setAcceptDrops(true);
         b->installEventFilter(this);
         return b;
     };
@@ -123,12 +132,103 @@ bool ColorMatchControl::eventFilter(QObject* watched, QEvent* event) {
             return true;
         }
         if (event->type() == QEvent::MouseButtonPress && static_cast<QMouseEvent*>(event)->button() == Qt::LeftButton) {
+            auto* press = static_cast<QMouseEvent*>(event);
+            pressAt_ = press->position().toPoint();
+            // Alt (Option) drags the colour out to a bin (p.630).
+            pressAlt_ = press->modifiers().testFlag(Qt::AltModifier);
+            if (pressAlt_) return true;
+            if (anywhere_) {
+                // Picks from anywhere: the colour where the mouse is let go.
+                tracking_ = true;
+                return true;
+            }
             // "The pointer changes to an eyedropper" (p.625): the next colour sampled in a monitor fills the swatch.
             emit pickRequested(output);
             return true;
         }
+        if (event->type() == QEvent::MouseMove && pressAlt_) {
+            auto* move = static_cast<QMouseEvent*>(event);
+            if ((move->position().toPoint() - pressAt_).manhattanLength() < QApplication::startDragDistance() || !color(output).isValid()) return true;
+            pressAlt_ = false;
+            // "While you drag, the pointer changes to a hand, and a rectangular outline appears" (p.630).
+            auto* drag = new QDrag(b);
+            drag->setMimeData(colorMime(output));
+            QPixmap pm(32, 20);
+            pm.fill(color(output));
+            drag->setPixmap(pm);
+            drag->exec(Qt::CopyAction);
+            return true;
+        }
+        if (event->type() == QEvent::MouseButtonRelease) {
+            pressAlt_ = false;
+            if (tracking_) {
+                tracking_ = false;
+                const QColor picked = colorAt(static_cast<QMouseEvent*>(event)->globalPosition().toPoint());
+                if (picked.isValid()) setColor(output, picked);
+            }
+            return true;
+        }
+        if (event->type() == QEvent::DragEnter) {
+            auto* enter = static_cast<QDragEnterEvent*>(event);
+            const QMimeData* dragged = enter->mimeData();
+            if (dragged->hasFormat(customColorMime()) || dragged->hasFormat(binItemsMime())) enter->acceptProposedAction();
+            return true;
+        }
+        if (event->type() == QEvent::Drop) {
+            auto* drop = static_cast<QDropEvent*>(event);
+            if (dropColor(output, drop->mimeData())) drop->acceptProposedAction();
+            return true;
+        }
     }
     return QWidget::eventFilter(watched, event);
+}
+
+QMimeData* ColorMatchControl::colorMime(bool output) const {
+    const QColor c = color(output);
+    auto* mime = new QMimeData;
+    QJsonObject o{{QStringLiteral("color"), c.name(QColor::HexRgb)}, {QStringLiteral("name"), media::customColorName(c, labels_)}};
+    mime->setData(customColorMime(), QJsonDocument(o).toJson(QJsonDocument::Compact));
+    return mime;
+}
+
+bool ColorMatchControl::dropColor(bool output, const QMimeData* dropped) {
+    const QMimeData* mime = dropped;
+    if (!mime) return false;
+    if (mime->hasFormat(customColorMime())) {
+        const QColor c = QColor::fromString(QJsonDocument::fromJson(mime->data(customColorMime())).object().value(QStringLiteral("color")).toString());
+        if (!c.isValid()) return false;
+        setColor(output, c);
+        return true;
+    }
+    // "Drag the color icon from the bin to the appropriate color swatch in the Color Match control" (p.631): the bin's
+    // node id, then one item id a line (binItemsMime); the first custom colour counts.
+    if (!mime->hasFormat(binItemsMime()) || !resolve_) return false;
+    const QStringList lines = QString::fromUtf8(mime->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    for (qsizetype i = 1; i < lines.size(); ++i) {
+        if (const auto item = resolve_(lines.at(0), lines.at(i))) {
+            if (const auto c = media::customColorOf(*item)) {
+                setColor(output, *c);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+QColor ColorMatchControl::colorAt(const QPoint& global) {
+    // The application's window under the point: the system's answer, else the last shown top-level window holding it
+    // (some platforms, the offscreen one among them, do not say).
+    QWidget* window = nullptr;
+    if (QWidget* under = QApplication::widgetAt(global)) window = under->window();
+    if (!window) {
+        for (QWidget* w : QApplication::topLevelWidgets()) {
+            if (w->isVisible() && QRect(w->mapToGlobal(QPoint(0, 0)), w->size()).contains(global)) window = w;
+        }
+    }
+    if (!window) return {};
+    // What the window draws there, as the eyedropper sees it.
+    const QImage shot = window->grab(QRect(window->mapFromGlobal(global), QSize(1, 1))).toImage();
+    return shot.isNull() ? QColor() : shot.pixelColor(0, 0);
 }
 
 // ---------------------------------------------------------------- the tool's side
@@ -143,7 +243,14 @@ ColorMatchControl* CorrectionTool::colorMatchFor(media::MatchGroup group, QWidge
         setColorSelection(ColorSelection::MatchColor);
     });
     connect(control, &ColorMatchControl::matchRequested, this, [this, control] { matchColor(control); });
+    control->setShowInfo(options_.eyedropperInfo);
+    control->setLabels(options_.savedColorLabels);
+    control->setPickAnywhere(options_.eyedropperAnywhere);
     return control;
+}
+
+void CorrectionTool::setItemResolver(ColorMatchControl::ItemResolver resolver) {
+    for (ColorMatchControl* m : findChildren<ColorMatchControl*>()) m->setItemResolver(resolver);
 }
 
 ColorMatchControl* CorrectionTool::colorMatch(const QString& name) const {

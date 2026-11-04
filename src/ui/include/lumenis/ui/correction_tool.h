@@ -2,6 +2,8 @@
 
 #include "lumenis/media/auto_correct.h"
 #include "lumenis/media/color_match.h"
+#include "lumenis/media/custom_color.h"
+#include "lumenis/model/bin.h"
 #include "lumenis/model/color_correction.h"
 
 #include <QDoubleSpinBox>
@@ -13,6 +15,7 @@
 #include <optional>
 
 class QButtonGroup;
+class QMimeData;
 class QLabel;
 class QStackedWidget;
 class QToolButton;
@@ -50,6 +53,23 @@ public:
     // The swatch's text: its 8-bit RGB values on the video scale ("R: 61 G: 62 B: 66", p.630), or nothing.
     QString infoText(bool output) const;
 
+    // Custom colours (p.630-631; 6.10c3b): "Alt+drag (Windows) or Option+drag (Macintosh) the swatch" into a bin saves
+    // its colour, named by the Saved Color Labels setting; a custom colour item dragged from a bin onto a swatch, or
+    // another swatch's colour, loads it. Bin items are looked up through the resolver.
+    void setLabels(media::SavedColorLabels labels) { labels_ = labels; }
+    using ItemResolver = std::function<std::optional<model::BinItem>(const QString& bin, const QString& id)>;
+    void setItemResolver(ItemResolver resolver) { resolve_ = std::move(resolver); }
+    // The drag a swatch starts (its colour and name), for the bin.
+    QMimeData* colorMime(bool output) const;
+    // Takes a dropped colour onto a swatch; false when the data holds none.
+    bool dropColor(bool output, const QMimeData* dropped);
+    // "Eyedropper Picks from Anywhere in Application" (p.608, p.625): pressing a swatch and letting go anywhere over the
+    // application picks the colour drawn there (pickAt), not only in the monitors.
+    void setPickAnywhere(bool on) { anywhere_ = on; }
+    bool pickAnywhere() const { return anywhere_; }
+    // The colour the application draws at a point on the screen; invalid outside its windows.
+    static QColor colorAt(const QPoint& global);
+
 signals:
     void pickRequested(bool output);
     void matchRequested();
@@ -64,6 +84,12 @@ private:
     QString type_;
     bool natural_ = false;
     bool showInfo_ = true;
+    bool anywhere_ = false;
+    media::SavedColorLabels labels_ = media::SavedColorLabels::NameAndRgb;
+    ItemResolver resolve_;
+    QPoint pressAt_;
+    bool pressAlt_ = false;
+    bool tracking_ = false;
     QToolButton* inSwatch_ = nullptr;
     QToolButton* outSwatch_ = nullptr;
     QToolButton* typeButton_ = nullptr;
@@ -131,6 +157,8 @@ public:
         // "the numerical RGB values appear on the color swatches in the Color Match controls" (p.608); "By default, the
         // color swatches in the Color Match control display the RGB values" (p.631).
         bool eyedropperInfo = true;
+        media::SavedColorLabels savedColorLabels = media::SavedColorLabels::NameAndRgb;
+        bool eyedropperAnywhere = false;
         bool operator==(const Options&) const = default;
     };
     const Options& options() const { return options_; }
@@ -221,6 +249,8 @@ public:
     // The Match Color button (p.626): the control's input colour to its output by its Match Type, one undo step; the
     // Controls tab's control works on the range tab shown, the Secondary one on the selected vector.
     void matchColor(ColorMatchControl* control);
+    // How the Color Match swatches find bin items dragged onto them (MainWindow: the Composer's resolver).
+    void setItemResolver(ColorMatchControl::ItemResolver resolver);
     // The Luma Ranges tab's preview (p.642-643).
     enum class LumaPreview { Input, ThreeTone, Output };
     LumaPreview lumaPreview() const { return lumaPreview_; }

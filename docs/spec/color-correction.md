@@ -263,8 +263,8 @@ and `Timeline::Options::correctionUseMarks`; units in `model::toCorrectionUnit`/
 * Eyedropper 3 x 3 Averaging applies to every colour the monitors sample (the Secondary tab's syringe and eyedroppers
   until Color Match comes with 6.10c). Dual-Split remains Active During Playback is on by default; off, the box is not
   drawn while the Composer plays. Use Marks needs both marks in the Record monitor.
-* Saved Color Labels and Eyedropper Picks from Anywhere (custom colours, 6.10c3b; Show Eyedropper Info came with 6.10c3a,
-  on by default as p.631 has it),
+* Saved Color Labels and Eyedropper Picks from Anywhere came with 6.10c3b, Show Eyedropper Info with 6.10c3a (on by
+  default as p.631 has it);
   Waveform/Vectorscope Updates in Real-Time (6.10c), the AutoCorrect tab (6.10e; our defaults HSL Auto Balance, then
   Nothing) and the Preview tab are dimmed. The FX Guide gives Edit Review's preroll and postroll to the Trim settings
   (p.594), so the Preview tab's use is unknown.
@@ -412,6 +412,30 @@ Code: `src/media/color_match.*` (`media::matchColor`, `matchTypes`, `matchTypeTe
   it when the mouse is let go in a monitor fills the swatch (it does not follow the drag). The two swatches, Match Type
   and NaturalMatch are kept per control for the session, not with the correction; the swatches' values are on the 8-bit
   video scale ("R: 61 G: 62 B: 66").
+
+## 6.10c3b: custom colours in bins
+
+Code: `src/media/custom_color.*` (`customColorItem`, `customColorOf`, `customColorName`, `nearestHtmlColorName`), the
+Color Match swatches' drags and drops (`ColorMatchControl::colorMime`, `dropColor`, `colorAt`) and `customColorMime()`;
+bins take the drop in `BinItemModel` and show the colour as the item's icon and frame. Tests: `tst_color_match`,
+`tst_correction_tool` (`customColors`).
+
+### From the guide
+* "In the Color Match control, Alt+drag (Windows) or Option+drag (Macintosh) the swatch that contains the color you want
+  to save to a bin ... The color appears in the bin as a rectangular color swatch icon. Media Composer assigns the color a
+  name based on the current Saved Color Labels settings"; renaming it in the bin; loading it by dragging the icon to a
+  swatch, or with the eyedropper from its swatch when Eyedropper Picks from Anywhere in Application is on (p.630-631).
+* Saved Color Labels: None, RGB (the 8-bit values), Name (the nearest standard HTML colour), Name and RGB, the default
+  (p.608). Eyedropper Picks from Anywhere: "the eyedropper can pick a color from anywhere in Media Composer's
+  interface, for example the swatch for a custom color in a bin" (p.608).
+
+### Ours
+* A custom colour is an Effect item holding "customColor" ("#rrggbb"); its Text view icon and Frame view picture are the
+  colour. RGB names are "R:61 G:62 B:66" on the video scale (as the swatches show them); Name is the nearest CSS/SVG
+  colour name in R'G'B' with its first letter capitalised ("Saddlebrown"); Name and RGB joins them with a space. Swatches
+  also take another swatch's colour.
+* Picks from Anywhere: a press on a swatch and a release anywhere over the application's windows takes the colour the
+  window draws there (no 3 x 3 averaging); with it off, the eyedropper samples the monitors as before.
 
 ## 6.10a3: the Secondary group
 

@@ -329,6 +329,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   6.10c3a: which controls each Color Match type changes, NaturalMatch's target
   colour, swatches filled on release rather than during the drag, the control's
   state kept for the session, the swatches' numbers on the video scale.
+  6.10c3b: custom colours as Effect items, the RGB and Name labels' form, the
+  nearest CSS colour name, swatch-to-swatch drops, Picks from Anywhere taking
+  the colour the window draws without averaging.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

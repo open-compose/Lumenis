@@ -49,6 +49,10 @@ QString audioSuiteTemplateMime() {
     return QStringLiteral("application/x-cutthulhu-audiosuite-template");
 }
 
+QString customColorMime() {
+    return QStringLiteral("application/x-cutthulhu-custom-color");
+}
+
 QString eqTemplateMime() {
     return QStringLiteral("application/x-cutthulhu-eq-template");
 }

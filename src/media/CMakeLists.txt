@@ -24,6 +24,7 @@ add_library(lumenis_media STATIC
     auto_correct.cpp
     color_correction.cpp
     color_match.cpp
+    custom_color.cpp
     scopes.cpp
     key_effects.cpp
     burn_in.cpp
@@ -51,6 +52,7 @@ add_library(lumenis_media STATIC
     include/lumenis/media/auto_correct.h
     include/lumenis/media/color_correction.h
     include/lumenis/media/color_match.h
+    include/lumenis/media/custom_color.h
     include/lumenis/media/scopes.h
     include/lumenis/media/optical_flow.h
     include/lumenis/media/render.h

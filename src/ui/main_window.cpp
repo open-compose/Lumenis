@@ -1688,6 +1688,7 @@ void MainWindow::createTools() {
     });
     connect(composer_->correctionMonitors(), &CorrectionMonitors::colorsSampled, correctionTool_, &CorrectionTool::applySamples);
     // The Levels histograms' pictures (FX Guide p.654): the frame at the position, small, without and with corrections.
+    correctionTool_->setItemResolver([this](const QString& bin, const QString& id) { return composer_->resolve(bin, id); });
     correctionTool_->setPictureSource([this](bool corrected) {
         const model::MonitorState& r = composer_->state(MonitorId::Record);
         composer_->setUncorrectedPictures(!corrected);
@@ -5366,6 +5367,8 @@ void MainWindow::applySettings() {
                                                           : CorrectionTool::Options::Vectors::Standard;
         c.backgrounds = s.flag(cc, QStringLiteral("showBackgrounds"));
         c.eyedropperInfo = s.flag(cc, QStringLiteral("showEyedropperInfo"));
+        c.savedColorLabels = media::savedColorLabelsFromKey(s.text(cc, QStringLiteral("savedColorLabels")));
+        c.eyedropperAnywhere = s.flag(cc, QStringLiteral("eyedropperAnywhere"));
         if (correctionTool_) correctionTool_->setOptions(c);
         if (CorrectionMonitors* m = composer_->correctionMonitors()) {
             m->setEyedropperAveraging(s.flag(cc, QStringLiteral("eyedropperAveraging")));

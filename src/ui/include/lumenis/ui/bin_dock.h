@@ -44,6 +44,9 @@ QString eqTemplateMime();
 // Timewarp icon (FX Guide p.53, p.182): {"name": the template's name, "template":
 // model::EffectTemplate::toJson}. A bin makes it an item; the Timeline applies it.
 QString effectTemplateMime();
+// A custom colour Alt+dragged from a Color Match swatch (FX Guide p.630): {"name": its Saved Color Labels name, "color":
+// "#rrggbb"}. A bin makes it a custom colour item; another swatch takes the colour.
+QString customColorMime();
 // Whether a drop of bin items into another bin copies them rather than moves
 // them: a copy drop action, or Alt (Windows) / Option (Mac) held (p.260), or
 // Ctrl (Windows) / Command (Mac) held (p.261). Qt reports Command as

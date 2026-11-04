@@ -2,8 +2,10 @@
 // button, the tabs and their Enable buttons with Alt+click resets, Page Up/Down, the Controls sliders, the ChromaWheels,
 // the Hue Offsets tab's Gain/Gamma/Setup and the Luma Ranges graph.
 #include "lumenis/media/color_correction.h"
+#include "lumenis/media/custom_color.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/correction_monitors.h"
 #include "lumenis/ui/correction_tool.h"
@@ -12,6 +14,9 @@
 #include <QApplication>
 #include <QDoubleSpinBox>
 #include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QMimeData>
 #include <QLineEdit>
 #include <QCheckBox>
 #include <QRadioButton>
@@ -19,6 +24,8 @@
 #include <QSignalSpy>
 #include <QTest>
 #include <QToolButton>
+
+#include <memory>
 
 using namespace lumenis;
 using namespace lumenis::ui;
@@ -669,6 +676,51 @@ private slots:
         o.eyedropperInfo = false;
         r.tool.setOptions(o);
         QVERIFY(m->swatch(true)->text().isEmpty());
+    }
+
+    void customColors() {
+        // A swatch's colour as a drag for a bin, named by Saved Color Labels (FX Guide p.630, p.608).
+        Rig r;
+        CorrectionTool::Options o;
+        o.savedColorLabels = media::SavedColorLabels::Name;
+        r.tool.setOptions(o);
+        ColorMatchControl* hsl = r.tool.colorMatch(QStringLiteral("controls"));
+        hsl->setColor(true, QColor(255, 0, 0));
+        std::unique_ptr<QMimeData> mime(hsl->colorMime(true));
+        const QJsonObject drag = QJsonDocument::fromJson(mime->data(customColorMime())).object();
+        QCOMPARE(drag.value(QStringLiteral("name")).toString(), QStringLiteral("Red"));
+        QCOMPARE(drag.value(QStringLiteral("color")).toString(), QStringLiteral("#ff0000"));
+        // Another swatch takes it.
+        ColorMatchControl* curves = r.tool.colorMatch(QStringLiteral("curves"));
+        QVERIFY(curves->dropColor(false, mime.get()));
+        QCOMPARE(curves->color(false), QColor(255, 0, 0));
+        // "Drag the color icon from the bin to the appropriate color swatch" (p.631): bin items by the resolver.
+        const model::BinItem saved = media::customColorItem(QColor(110, 70, 56), QStringLiteral("Skin"), QDateTime::currentDateTimeUtc());
+        r.tool.setItemResolver([saved](const QString& bin, const QString& id) -> std::optional<model::BinItem> {
+            if (bin == QLatin1String("bin1") && id == saved.id) return saved;
+            return std::nullopt;
+        });
+        QMimeData items;
+        items.setData(binItemsMime(), QStringLiteral("bin1\n%1\n").arg(saved.id).toUtf8());
+        QVERIFY(curves->dropColor(true, &items));
+        QCOMPARE(curves->color(true), QColor(110, 70, 56));
+        QMimeData other;
+        other.setData(binItemsMime(), QByteArrayLiteral("bin1\nnothing\n"));
+        QVERIFY(!curves->dropColor(true, &other));
+        // Eyedropper Picks from Anywhere: the colour the application draws where the mouse is let go (p.608).
+        o.eyedropperAnywhere = true;
+        r.tool.setOptions(o);
+        QVERIFY(curves->pickAnywhere());
+        QWidget patch;
+        patch.setAutoFillBackground(true);
+        QPalette pal = patch.palette();
+        pal.setColor(QPalette::Window, QColor(30, 160, 90));
+        patch.setPalette(pal);
+        patch.resize(60, 40);
+        patch.move(900, 500);
+        patch.show();
+        settle();
+        QCOMPARE(ColorMatchControl::colorAt(patch.mapToGlobal(QPoint(30, 20))), QColor(30, 160, 90));
     }
 };
 
