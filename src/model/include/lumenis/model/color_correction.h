@@ -54,6 +54,9 @@ struct ColorCorrection {
     QString text(const QString& path) const;
     // Whether any control at or under `path` counts.
     bool adjusted(const QString& path) const;
+    // Whether any control at or under `path` is set, whatever its buttons (an Enable button is lit when it is on and
+    // something under it is set; the Color Correction tool, 6.10b2).
+    bool hasValues(const QString& path) const;
     // Whether the control at `path` counts: its button and every button above it on, and it is set.
     bool applies(const QString& path) const;
     // Adjusting a control: its value, and its button and those above it on ("By enabling an individual slider in the HSL

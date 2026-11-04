@@ -698,6 +698,7 @@ private:
     CalculatorWindow* calculator_ = nullptr;
     EffectPalette* effectPalette_ = nullptr;
     EffectEditor* effectEditor_ = nullptr;
+    class CorrectionTool* correctionTool_ = nullptr;
     AudioMixer* audioMixer_ = nullptr;
     AudioEqTool* audioEq_ = nullptr;
     AudioPunchInTool* audioPunchIn_ = nullptr;

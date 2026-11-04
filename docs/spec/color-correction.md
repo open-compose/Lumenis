@@ -118,6 +118,47 @@ Code: `Segment::sourceCorrection`/`programCorrection`, `model::segmentCorrection
   Timeline's position indicator moves the Current monitor.
 * The Correction Type button and the tool come in 6.10b2; until then the mode works on the Source side.
 
+## 6.10b2: the Color Correction tool and the HSL group's panes
+
+Code: `src/ui/correction_tool.*` (`CorrectionTool`, `ChromaWheel`, `LumaRangesGraph`), the "ColorCorrection" panel in
+`MainWindow`, `CorrectionMonitors::setPreview`, `ColorCorrection::hasValues`. Test: `tst_correction_tool`.
+
+### From the guide
+* "The default display shows the controls in the Hue Offsets tab within the HSL ... tab" (p.595). The Correction
+  Type button, the group tabs and the subdividing tabs, the tool's buttons, the Color Match control and the buckets
+  (p.595-596). Source types and their tabs are green, Program blue, the Color Correction effect grey (p.597).
+* Group tabs HSL, Channels, Levels, Curves, Sec (p.599); the HSL group's subdividing tabs Controls, Hue Offsets, Luma
+  Ranges, with Master, Highlights, Midtones, Shadows below Controls (p.599, p.632) and Highlights, Midtones, Shadows
+  below Luma Ranges (p.642). Click a tab's name to show it, not its Enable button; Page Up and Page Down go between
+  group tabs (p.600).
+* Enable buttons (p.603-605): click to turn on or off; adjusting a control turns on its button and those above it;
+  "You cannot reset controls that are not currently displayed. If you Alt+click ... the Enable button for a tab whose
+  controls are not currently displayed, you display the controls but do not reset them. Alt+click ... the button
+  again to reset the controls" (p.603).
+* A control: "Enable button, text box, direction button, slider, direction button" (p.633); Invert Chroma, Invert
+  Luma, Clip Low and Clip High on the Master tab (p.633-634).
+* ChromaWheels in the order Shadows, Midtones, Highlights, Master, each with its own crosshair pointer, "with red near
+  the top"; drag the pointer, Shift for finer control; Hue and Amount text boxes; Gain, Gamma and Setup sliders on the
+  same tab (p.635-639).
+* The Luma Ranges graph shows all three curves, only the active one adjustable; click the curve to add a point, drag
+  it, type In and Out, Delete removes it; Input, Three-tone and Output previews (p.640-643).
+
+### Ours
+* The tool is a panel ("ColorCorrection") that opens when Color Correction mode starts and closes when it ends. Every
+  change is an undo step on the current segment's correction (`Timeline::setCurrentCorrection`), made when a slider,
+  wheel or curve point is let go of or a value is typed; the monitors show it then (no live preview while dragging).
+* The Correction Type menu lists every type of p.597 and the Color Correction effect; only Src Segment and Prog
+  Segment work (the other relationships with 6.10d, the effect with 6.10e).
+* An Enable button is lit when it is on and something under it is set; clicking a lit button turns it off, an unlit
+  one that was turned off on again. Alt+click resets a control's own button at once (it is on screen with it).
+* Slider text boxes show two decimals (Gamma three); the slider moves in hundredths.
+* The ChromaWheels are outlines (the coloured backgrounds come with the Correction Mode settings, 6.10b4); Shift moves
+  the pointer a quarter as far as the mouse; the pointers are a cross, a circled bar, a square and a diamond.
+* The Luma Ranges graph draws its curves as straight lines between points (as `lumaRangeWeights` reads them); a point
+  stays between its neighbours; a curve keeps at least two points. The previews act on the active monitor; Three-tone
+  shows each pixel white, grey or black by the range with the largest share.
+* The Channels, Levels, Curves and Sec tabs' panes come with 6.10b3.
+
 ## 6.10a3: the Secondary group
 
 ### From the guide

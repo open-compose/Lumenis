@@ -1,5 +1,7 @@
 #pragma once
 
+#include "lumenis/model/color_correction.h"
+
 #include <QPointF>
 #include <QRectF>
 #include <QWidget>
@@ -74,6 +76,14 @@ public:
     // Draws what changed: the position moved, a correction changed.
     void refresh();
 
+    // The Luma Ranges tab's preview in the active monitor (FX Guide p.642-643): Input "Displays the uncorrected
+    // image", Three-tone the uncorrected image "using white, gray, and black to represent the highlights, midtones,
+    // and shadows luminance ranges" of `ranges` (the correction whose Luma Ranges curves count), Output the corrected
+    // image (the monitors' usual picture).
+    enum class Preview { Output, Input, ThreeTone };
+    void setPreview(Preview preview, std::function<model::ColorCorrection()> ranges = {});
+    Preview preview() const { return preview_; }
+
 signals:
     // The Go to Previous/Next Uncorrected Shot and Remove Effect buttons, for the Timeline.
     void commandRequested(const QString& commandId);
@@ -98,6 +108,8 @@ private:
     int active_ = 1;
     std::optional<std::int64_t> reference_;
     ShotResolver shots_;
+    Preview preview_ = Preview::Output;
+    std::function<model::ColorCorrection()> ranges_;
 };
 
 } // namespace lumenis::ui

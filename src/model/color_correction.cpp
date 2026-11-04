@@ -163,6 +163,14 @@ bool ColorCorrection::adjusted(const QString& path) const {
     return false;
 }
 
+bool ColorCorrection::hasValues(const QString& path) const {
+    const QString p = canonical(path);
+    for (auto it = values.constBegin(); it != values.constEnd(); ++it) {
+        if (under(it.key(), p)) return true;
+    }
+    return false;
+}
+
 bool ColorCorrection::applies(const QString& path) const {
     const QString p = canonical(path);
     if (!values.contains(p)) return false;

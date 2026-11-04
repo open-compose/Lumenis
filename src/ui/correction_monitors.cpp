@@ -114,7 +114,11 @@ protected:
         const std::optional<std::int64_t> frame = owner_.frameOf(index_);
         if (!frame) return;
         Composer& composer = owner_.composer_;
-        const QImage image = composer.pictureAt(MonitorId::Record, *frame, r.size());
+        const bool preview = owner_.active_ == index_ && owner_.preview_ != CorrectionMonitors::Preview::Output;
+        if (preview) composer.setUncorrectedPictures(true);
+        QImage image = composer.pictureAt(MonitorId::Record, *frame, r.size());
+        if (preview) composer.setUncorrectedPictures(false);
+        if (preview && owner_.preview_ == CorrectionMonitors::Preview::ThreeTone && !image.isNull()) image = threeTone(image);
         if (!image.isNull()) p.drawImage(r, image);
         if (!owner_.dualSplit(index_)) return;
         // Dual Split: the box shows the frame without corrections.
@@ -133,6 +137,28 @@ protected:
         p.setBrush(palette().color(QPalette::BrightText));
         p.drawPolygon(QPolygonF{h[0], h[0] + QPointF(9, 0), h[0] + QPointF(0, 9)});
         p.drawPolygon(QPolygonF{h[1], h[1] - QPointF(9, 0), h[1] - QPointF(0, 9)});
+    }
+
+    // Each pixel white, grey or black by the luminance range it mostly belongs to (model::lumaRangeWeights).
+    QImage threeTone(const QImage& image) const {
+        const model::ColorCorrection c = owner_.ranges_ ? owner_.ranges_() : model::ColorCorrection{};
+        std::array<QRgb, 256> tone{};
+        for (int y = 0; y < 256; ++y) {
+            const auto w = model::lumaRangeWeights(c, y);
+            const int k = w[2] >= w[1] && w[2] >= w[0] ? 2 : w[1] >= w[0] ? 1 : 0;
+            tone[static_cast<std::size_t>(y)] = k == 2 ? qRgb(235, 235, 235) : k == 1 ? qRgb(128, 128, 128) : qRgb(16, 16, 16);
+        }
+        QImage out = image.convertToFormat(QImage::Format_RGB32);
+        for (int y = 0; y < out.height(); ++y) {
+            auto* line = reinterpret_cast<QRgb*>(out.scanLine(y));
+            for (int x = 0; x < out.width(); ++x) {
+                const QRgb px = line[x];
+                // Rec. 709 luma on the 8-bit video scale.
+                const double l = 16.0 + 219.0 * (0.2126 * qRed(px) + 0.7152 * qGreen(px) + 0.0722 * qBlue(px)) / 255.0;
+                line[x] = tone[static_cast<std::size_t>(std::clamp(static_cast<int>(std::lround(l)), 0, 255))];
+            }
+        }
+        return out;
     }
 
     void mousePressEvent(QMouseEvent* event) override {
@@ -333,6 +359,12 @@ QToolButton* CorrectionMonitors::sourceButton(int monitor) const {
 
 QToolButton* CorrectionMonitors::monitorButton(int monitor, const QString& commandId) const {
     return monitors_.at(static_cast<std::size_t>(monitor)).buttons->findChild<QToolButton*>(commandId);
+}
+
+void CorrectionMonitors::setPreview(Preview preview, std::function<model::ColorCorrection()> ranges) {
+    preview_ = preview;
+    ranges_ = std::move(ranges);
+    refresh();
 }
 
 void CorrectionMonitors::refresh() {

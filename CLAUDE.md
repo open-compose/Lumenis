@@ -680,7 +680,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `Timeline::setCorrectionMode`, `correctionShot`, `setCurrentCorrection`, `removeCorrection`, `goToUncorrectedShot`;
   `Composer::setCorrectionMode`/`playOnce` and `src/ui/correction_monitors.*`; the `cc.*` commands on the Command
   Palette's CC tab; tests `tst_correction_mode`, scenario `38-color-correction.json`), is done.
-  Next: 6.10b2-4, 6.10c-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.10b2, the Color Correction tool and the HSL group's panes (`src/ui/correction_tool.*`: `CorrectionTool` as the
+  "ColorCorrection" panel opened by the mode, its tabs and Enable buttons, `ChromaWheel`, `LumaRangesGraph`, the Luma
+  Ranges previews through `CorrectionMonitors::setPreview`; test `tst_correction_tool`), is done.
+  Next: 6.10b3-4, 6.10c-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

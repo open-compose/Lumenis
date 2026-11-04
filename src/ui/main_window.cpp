@@ -53,6 +53,8 @@
 #include "lumenis/ui/media_tool.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
+#include "lumenis/ui/correction_monitors.h"
+#include "lumenis/ui/correction_tool.h"
 #include "lumenis/ui/consolidate_dialog.h"
 #include "lumenis/ui/mixdown_dialog.h"
 #include "lumenis/ui/multi_mix_dialog.h"
@@ -1630,6 +1632,29 @@ void MainWindow::createTools() {
         settings_->setValue(kind, QStringLiteral("addKeyframeCommand"), QString::fromLatin1(modes[static_cast<int>(o.mode)]));
     });
     panels_->addPanel(new Panel(QStringLiteral("EffectEditor"), tr("Effect Editor"), effectEditor_));
+    // The Color Correction tool (FX Guide p.595-605): open while the Timeline is in Color Correction mode (ours: it
+    // closes when the mode ends), showing the correction at the position.
+    correctionTool_ = new CorrectionTool(*timeline_);
+    panels_->addPanel(new Panel(QStringLiteral("ColorCorrection"), tr("Color Correction"), correctionTool_));
+    connect(timeline_, &Timeline::correctionModeChanged, this, [this](bool on) {
+        if (on) {
+            correctionTool_->reload();
+            showTool(QStringLiteral("ColorCorrection"));
+        } else if (Panel* p = panels_->panel(QStringLiteral("ColorCorrection")); p && panels_->isOpen(p)) {
+            panels_->closePanel(p);
+        }
+    });
+    auto reloadCorrection = [this] {
+        if (timeline_->isCorrectionMode()) correctionTool_->reload();
+    };
+    connect(timeline_, &Timeline::changed, this, reloadCorrection);
+    connect(composer_, &Composer::changed, this, reloadCorrection);
+    connect(correctionTool_, &CorrectionTool::lumaPreviewChanged, this, [this](CorrectionTool::LumaPreview p) {
+        const auto preview = p == CorrectionTool::LumaPreview::Input       ? CorrectionMonitors::Preview::Input
+                             : p == CorrectionTool::LumaPreview::ThreeTone ? CorrectionMonitors::Preview::ThreeTone
+                                                                            : CorrectionMonitors::Preview::Output;
+        composer_->correctionMonitors()->setPreview(preview, [this] { return correctionTool_->correction(); });
+    });
     // The Motion Effect Editor (FX Guide p.178-189) and its toolbar (p.184).
     motionEditor_ = new MotionEffectEditor(*timeline_);
     panels_->addPanel(new Panel(QStringLiteral("MotionEffectEditor"), tr("Motion Effect Editor"), motionEditor_));
@@ -4978,6 +5003,7 @@ Panel* MainWindow::showTool(const QString& panelId) {
     if (panelId == QLatin1String("Keyboard")) size = QSize(720, 320);
     if (panelId == QLatin1String("EffectPalette")) size = QSize(480, 420);
     if (panelId == QLatin1String("EffectEditor")) size = QSize(340, 520);
+    if (panelId == QLatin1String("ColorCorrection")) size = QSize(760, 330);
     if (panelId == QLatin1String("MotionEffectEditor")) size = QSize(380, 560);
     if (panelId == QLatin1String("AudioMixer")) size = QSize(560, 440);
     if (panelId == QLatin1String("AudioEQ")) size = QSize(620, 300);

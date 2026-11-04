@@ -292,6 +292,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   filler not a shot, Remove Effect taking both sides, Reference Current's
   monitor, Dual Split's starting box and handle corners, Play Loop's later
   passes from the start, no position bars under the three monitors.
+  6.10b2: the tool as a panel that opens and closes with the mode, an undo
+  step per let-go (no live preview while dragging), an Enable button lit
+  only with something set under it, slider decimals, Shift's quarter-speed
+  wheel drag and the pointer shapes, straight Luma Ranges curves, Three-tone
+  by the largest share.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

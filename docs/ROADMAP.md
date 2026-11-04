@@ -1156,9 +1156,9 @@ phase of their own. They are done in three steps:
       `programCorrection`, `Timeline::setCorrectionMode`, `src/ui/correction_monitors.*`; tests `tst_correction_mode`,
       scenario `38-color-correction.json`).
     * 6.10b2, the Color Correction tool and the HSL group's panes: the Correction Type button (Source and Program
-      Segment and the effect; the other relationships with 6.10d), the group and subdividing tabs with their
+      Segment; the other relationships with 6.10d, the effect with 6.10e), the group and subdividing tabs with their
       Enable buttons, Alt+click resets and Page Up/Down (p.598-605), the Controls sliders, the ChromaWheels and the
-      Luma Ranges graphs (p.631-644).
+      Luma Ranges graphs (p.631-644). Done (`src/ui/correction_tool.*`; test `tst_correction_tool`).
     * 6.10b3, the Channels, Levels, Curves and Secondary panes: Channel Blending and previews (p.645-647),
       histograms and the Levels ChromaCurve (p.653-658), the Curves graphs with added and dragged points
       (p.659-663), the vector wheels, Selected Vectors panel, sliders, Lock Vectors and the Color Selection buttons
