@@ -20,14 +20,18 @@ endfunction()
 # real drive's Avid MediaFiles, and a test scanning it while another wrote there could read a file
 # half written (FFmpeg crashed probing one, tst_motion_adapter_ui under ctest -j8). Tests that set
 # their own drives (media::setExtraMediaDrives) still do.
-# Each tests/ subdirectory calls this last, on its own tests.
+# Each tests/ subdirectory calls this last, on its own tests. The folders are made when CMake runs
+# and again by the test_media_drives fixture before any test, so deleting build/<preset>/test-media
+# (to clear old test media) cannot leave a test without its drive.
 function(lumenis_isolate_media_drives)
     get_property(tests DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY TESTS)
     foreach(test IN LISTS tests)
         set(drive ${CMAKE_BINARY_DIR}/test-media/${test})
         file(MAKE_DIRECTORY ${drive})
+        set_property(GLOBAL APPEND PROPERTY LUMENIS_TEST_MEDIA_DRIVES ${drive})
         set_property(TEST ${test} APPEND PROPERTY ENVIRONMENT
             "LUMENIS_NO_SYSTEM_DRIVES=1" "LUMENIS_MEDIA_DRIVES=${drive}")
+        set_property(TEST ${test} APPEND PROPERTY FIXTURES_REQUIRED test_media_drives)
     endforeach()
 endfunction()
 
@@ -39,4 +43,10 @@ add_subdirectory(interop)
 add_subdirectory(media)
 add_subdirectory(ui)
 add_subdirectory(app)
+
+# Makes every test's drive folder (lumenis_isolate_media_drives); ctest runs it before the tests
+# that need it, also under -R.
+get_property(lumenis_test_drives GLOBAL PROPERTY LUMENIS_TEST_MEDIA_DRIVES)
+add_test(NAME test_media_drives COMMAND ${CMAKE_COMMAND} -E make_directory ${lumenis_test_drives})
+set_tests_properties(test_media_drives PROPERTIES FIXTURES_SETUP test_media_drives)
 

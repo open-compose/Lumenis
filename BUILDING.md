@@ -337,6 +337,8 @@ crash in FFmpeg reading a file another test was still writing (`tst_motion_adapt
 else is offered. Delete the `Avid MediaFiles` folders the tests left behind on a development machine or
 self-hosted runner, after checking they hold nothing of yours (their clips are named Take, Tone,
 Mixdown and the like).
+`build/<preset>/test-media` holds only test media and can be deleted between runs: the
+`test_media_drives` ctest fixture makes the folders again before the tests that use them.
 
 ### Audio Punch-In records silence
 

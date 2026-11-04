@@ -92,6 +92,14 @@ public:
     enum class Sampling { None, Drag, Click };
     void setSampling(Sampling sampling) { sampling_ = sampling; }
     Sampling sampling() const { return sampling_; }
+    // The Correction setting's Features (Editing Guide p.1166; FX Guide p.608): "Eyedropper 3 x 3 Averaging ...
+    // averaging the values of a 3 x 3 sample of pixels centered on the eyedropper's position" (ours: for every
+    // colour the monitors sample), and "Dual-Split remains Active During Playback" (the guide says no more; ours: off,
+    // the box is not drawn while the Composer plays).
+    void setEyedropperAveraging(bool on) { averaging_ = on; }
+    bool eyedropperAveraging() const { return averaging_; }
+    void setDualSplitDuringPlayback(bool on);
+    bool dualSplitDuringPlayback() const { return dualSplitPlayback_; }
 
 signals:
     // The Go to Previous/Next Uncorrected Shot and Remove Effect buttons, for the Timeline.
@@ -120,6 +128,8 @@ private:
     ShotResolver shots_;
     Preview preview_ = Preview::Output;
     Sampling sampling_ = Sampling::None;
+    bool averaging_ = false;
+    bool dualSplitPlayback_ = true;
     std::function<model::ColorCorrection()> ranges_;
 };
 

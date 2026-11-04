@@ -3,6 +3,7 @@
 
 #include "lumenis/ui/correction_tool.h"
 
+#include "lumenis/media/color_correction.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QApplication>
@@ -13,6 +14,7 @@
 #include <QJsonArray>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
@@ -224,7 +226,8 @@ QWidget* CorrectionTool::sliderRow(QWidget* parent, const QString& path, const Q
     }
     const auto range = model::colorControlRange(path).value_or(std::pair{0.0, 100.0});
     const bool fine = leaf == QLatin1String("gamma");
-    auto* value = new QDoubleSpinBox(row);
+    auto* value = new UnitSpinBox(row);
+    value->setProperty("unitPath", path);
     value->setObjectName(QStringLiteral("value"));
     value->setRange(range.first, range.second);
     value->setDecimals(fine ? 3 : 2);
@@ -369,7 +372,8 @@ QWidget* CorrectionTool::lumaRangesPane() {
         left->addWidget(b);
     }
     left->addStretch(1);
-    lumaIn_ = new QDoubleSpinBox(pane);
+    lumaIn_ = new UnitSpinBox(pane);
+    lumaIn_->setProperty("unitPath", QStringLiteral("luma"));
     lumaIn_->setObjectName(QStringLiteral("lumaIn"));
     lumaIn_->setRange(0, 255);
     lumaIn_->setKeyboardTracking(false);
@@ -479,6 +483,7 @@ bool CorrectionTool::enableLit(const QString& path) const {
 }
 
 void CorrectionTool::showGroup(const QString& group) {
+    if (!groupShown(group)) return;
     for (int i = 0; i < 5; ++i) {
         if (group == QLatin1String(kGroups[i])) {
             group_ = group;
@@ -541,14 +546,62 @@ void CorrectionTool::keyPressEvent(QKeyEvent* event) {
         for (int k = 0; k < 5; ++k) {
             if (group_ == QLatin1String(kGroups[k])) i = k;
         }
-        i = (i + (event->key() == Qt::Key_PageDown ? 1 : 4)) % 5;
+        // The tabs the Correction setting hides are passed over.
+        for (int step = 0; step < 5; ++step) {
+            i = (i + (event->key() == Qt::Key_PageDown ? 1 : 4)) % 5;
+            if (groupShown(QLatin1String(kGroups[i]))) break;
+        }
         showGroup(QLatin1String(kGroups[i]));
         return;
     }
     QWidget::keyPressEvent(event);
 }
 
+void CorrectionTool::setOptions(const Options& options) {
+    if (options == options_) return;
+    options_ = options;
+    if (!groupShown(group_)) {
+        for (const char* g : kGroups) {
+            if (groupShown(QLatin1String(g))) {
+                showGroup(QLatin1String(g));
+                break;
+            }
+        }
+    }
+    for (const char* w : {"master", "highlights", "midtones", "shadows"}) {
+        if (ChromaWheel* wheel = this->wheel(QLatin1String(w))) wheel->setBackground(options_.backgrounds);
+    }
+    sync();
+    syncPanes();
+}
+
+bool CorrectionTool::groupShown(const QString& group) const {
+    bool any = false;
+    for (int i = 0; i < 5; ++i) any = any || options_.groups.at(static_cast<std::size_t>(i));
+    for (int i = 0; i < 5; ++i) {
+        if (group == QLatin1String(kGroups[i])) return options_.groups.at(static_cast<std::size_t>(i)) || (!any && i == 0);
+    }
+    return false;
+}
+
+void CorrectionTool::applyUnits() {
+    for (UnitSpinBox* box : findChildren<UnitSpinBox*>()) {
+        QString path = box->property("unitPath").toString();
+        if (path.startsWith(QLatin1String("levels:"))) path = QStringLiteral("levels/") + levelsTab_ + QLatin1Char('/') + path.mid(7);
+        if (path == QLatin1String("luma")) {
+            box->setUnit(options_.units.luma);
+        } else if (const auto kind = model::controlUnitKind(path)) {
+            box->setUnit(options_.units.of(kind->first), kind->second);
+        } else {
+            box->setUnit(model::CorrectionUnit::EightBit);
+        }
+    }
+}
+
 void CorrectionTool::sync() {
+    for (int i = 0; i < 5; ++i) {
+        if (QToolButton* t = tabButton(QLatin1String(kGroups[i]))) t->parentWidget()->setVisible(groupShown(QLatin1String(kGroups[i])));
+    }
     // The Correction Type button and the active tabs: "Green indicates Source corrections. Blue indicates Program
     // corrections" (p.597).
     const bool program = timeline_.correctionSide() == model::CorrectionSide::Program;
@@ -644,6 +697,13 @@ std::pair<double, double> ChromaWheel::offsetAt(const QPointF& point) const {
     return {amount > 0.0 ? hue : hue_, amount};
 }
 
+void ChromaWheel::setBackground(bool on) {
+    if (on == background_) return;
+    background_ = on;
+    backgroundImage_ = {};
+    update();
+}
+
 void ChromaWheel::paintEvent(QPaintEvent*) {
     // "graphical outlines that resemble the design of a vectorscope monitor ... Axes indicate the offset in degrees from
     // the 0° point, which corresponds with red" (p.636).
@@ -655,6 +715,23 @@ void ChromaWheel::paintEvent(QPaintEvent*) {
     p.setPen(QPen(ink, 1));
     p.setBrush(palette().color(QPalette::Base));
     p.drawEllipse(c, r, r);
+    if (background_) {
+        // Each point in the colour the wheel's hue and amount name there (ours: media::wheelColor at mid luma).
+        if (backgroundImage_.size() != size()) {
+            backgroundImage_ = QImage(size(), QImage::Format_ARGB32_Premultiplied);
+            backgroundImage_.fill(Qt::transparent);
+            for (int y = 0; y < height(); ++y) {
+                for (int x = 0; x < width(); ++x) {
+                    const QPointF at(x + 0.5, y + 0.5);
+                    if (QLineF(at, c).length() > r) continue;
+                    const auto [hue, amount] = offsetAt(at);
+                    const auto rgb = media::wheelColor(hue, amount, 0.5);
+                    backgroundImage_.setPixelColor(x, y, QColor::fromRgbF(static_cast<float>(rgb[0]), static_cast<float>(rgb[1]), static_cast<float>(rgb[2])));
+                }
+            }
+        }
+        p.drawImage(0, 0, backgroundImage_);
+    }
     p.setPen(QPen(ink.darker(160), 1));
     for (int deg = 0; deg < 360; deg += 60) p.drawLine(c, pointFor(deg, 100));
     p.drawEllipse(c, r / 2, r / 2);
@@ -825,6 +902,37 @@ void LumaRangesGraph::keyPressEvent(QKeyEvent* event) {
         return;
     }
     QWidget::keyPressEvent(event);
+}
+
+// ---------------------------------------------------------------- UnitSpinBox
+
+void UnitSpinBox::setUnit(model::CorrectionUnit unit, bool difference) {
+    if (unit == unit_ && difference == difference_) return;
+    unit_ = unit;
+    difference_ = difference;
+    const QSignalBlocker block(this);
+    lineEdit()->setText(textFromValue(value()));
+}
+
+QString UnitSpinBox::textFromValue(double value) const {
+    const double shown = model::toCorrectionUnit(value, unit_, difference_);
+    // Whole numbers on the 8-bit and 10-bit scales when the box has no decimals; a decimal more on the others.
+    const int places = unit_ == model::CorrectionUnit::EightBit || unit_ == model::CorrectionUnit::TenBit ? decimals() : std::max(decimals(), 1);
+    return locale().toString(shown, 'f', places);
+}
+
+double UnitSpinBox::valueFromText(const QString& text) const {
+    bool ok = false;
+    const double shown = locale().toDouble(text.trimmed(), &ok);
+    return ok ? model::fromCorrectionUnit(shown, unit_, difference_) : value();
+}
+
+QValidator::State UnitSpinBox::validate(QString& text, int&) const {
+    const QString t = text.trimmed();
+    if (t.isEmpty() || t == QLatin1String("-") || t == QLatin1String("+") || t == locale().decimalPoint()) return QValidator::Intermediate;
+    bool ok = false;
+    locale().toDouble(t, &ok);
+    return ok ? QValidator::Acceptable : QValidator::Invalid;
 }
 
 } // namespace lumenis::ui

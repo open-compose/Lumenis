@@ -146,6 +146,81 @@
       ]
     },
     {
+      "kind": "Correction",
+      "scope": "user",
+      "page": 1164,
+      "tabs": [
+        {
+          "name": "Tabs",
+          "options": [
+            {"key": "tabHsl", "type": "bool", "label": "HSL", "default": true, "page": 1164},
+            {"key": "tabChannels", "type": "bool", "label": "Channels", "default": true, "page": 1164},
+            {"key": "tabLevels", "type": "bool", "label": "Levels", "default": true, "page": 1164},
+            {"key": "tabCurves", "type": "bool", "label": "Curves", "default": true, "page": 1164},
+            {"key": "tabSecondary", "type": "bool", "label": "Secondary", "default": true, "page": 1164}
+          ]
+        },
+        {
+          "name": "Units",
+          "options": [
+            {"key": "unitRgb", "type": "choice", "style": "menu", "label": "RGB", "default": "8bit", "page": 1164,
+              "choices": [{"value": "10bit", "label": "10 Bit"}, {"value": "8bit", "label": "8 Bit"}, {"value": "percent", "label": "Percent"}]},
+            {"key": "unitHue", "type": "choice", "style": "menu", "label": "Hue", "default": "degree", "page": 1165,
+              "choices": [{"value": "degree", "label": "Degree"}]},
+            {"key": "unitSaturation", "type": "choice", "style": "menu", "label": "Saturation/Gain", "default": "percent", "page": 1164,
+              "choices": [{"value": "percent", "label": "Percent"}]},
+            {"key": "unitLuma", "type": "choice", "style": "menu", "label": "Luma", "default": "8bit", "page": 1164,
+              "choices": [{"value": "10bit", "label": "10 Bit"}, {"value": "8bit", "label": "8 Bit"}, {"value": "percent", "label": "Percent"}, {"value": "ire", "label": "IRE"}, {"value": "mvolts", "label": "mVolts"}]},
+            {"key": "unitComposite", "type": "choice", "style": "menu", "label": "Composite", "default": "8bit", "page": 1164,
+              "choices": [{"value": "10bit", "label": "10 Bit"}, {"value": "8bit", "label": "8 Bit"}, {"value": "percent", "label": "Percent"}, {"value": "ire", "label": "IRE"}, {"value": "mvolts", "label": "mVolts"}]}
+          ]
+        },
+        {
+          "name": "Levels",
+          "options": [
+            {"key": "solidHistograms", "type": "bool", "label": "Solid Histograms", "default": true, "page": 1165},
+            {"key": "colorHistograms", "type": "bool", "label": "Color Histograms", "default": false, "page": 1165},
+            {"key": "dynamicHistograms", "type": "bool", "label": "Dynamic Histograms", "default": false, "page": 1165},
+            {"key": "fullRanges", "type": "bool", "label": "Use Full Ranges", "default": false, "page": 1165}
+          ]
+        },
+        {
+          "name": "Features",
+          "options": [
+            {"key": "secondaryVectors", "type": "choice", "style": "menu", "label": "Secondary Vectors", "default": "standard", "page": 1165,
+              "choices": [{"value": "all", "label": "Show All"}, {"value": "standard", "label": "Show Standard"}, {"value": "custom", "label": "Show Custom"}, {"value": "enabled", "label": "Show Enabled"}]},
+            {"key": "savedColorLabels", "type": "choice", "style": "menu", "label": "Saved Color Labels", "default": "nameRgb", "page": 1165, "later": true,
+              "choices": [{"value": "none", "label": "None"}, {"value": "rgb", "label": "RGB"}, {"value": "name", "label": "Name"}, {"value": "nameRgb", "label": "Name and RGB"}]},
+            {"key": "useMarks", "type": "bool", "label": "Use Marks for Segment Correction", "default": false, "page": 1166},
+            {"key": "eyedropperAveraging", "type": "bool", "label": "Eyedropper 3 x 3 Averaging", "default": false, "page": 1166},
+            {"key": "showEyedropperInfo", "type": "bool", "label": "Show Eyedropper Info", "default": false, "page": 1166, "later": true},
+            {"key": "eyedropperAnywhere", "type": "bool", "label": "Eyedropper Picks from Anywhere in Application", "default": false, "page": 1166, "later": true},
+            {"key": "showBackgrounds", "type": "bool", "label": "Show ChromaWheel and ChromaCurve Graphs", "default": false, "page": 1166},
+            {"key": "dualSplitDuringPlayback", "type": "bool", "label": "Dual-Split remains Active During Playback", "default": true, "page": 1166},
+            {"key": "scopesRealTime", "type": "bool", "label": "Waveform/Vectorscope Updates in Real-Time", "default": true, "page": 1166, "later": true}
+          ]
+        },
+        {
+          "name": "AutoCorrect",
+          "options": [
+            {"key": "autoCorrect1", "type": "choice", "style": "menu", "label": "First Correction", "default": "hslAutoBalance", "page": 1166, "later": true,
+              "choices": [{"value": "nothing", "label": "Nothing"}, {"value": "hslAutoBalance", "label": "HSL Auto Balance"}, {"value": "hslAutoBlack", "label": "HSL Auto Black"}, {"value": "hslAutoContrast", "label": "HSL Auto Contrast"}, {"value": "hslAutoWhite", "label": "HSL Auto White"}, {"value": "curvesAutoBalance", "label": "Curves Auto Balance"}, {"value": "curvesAutoContrast", "label": "Curves Auto Contrast"}]},
+            {"key": "autoCorrect2", "type": "choice", "style": "menu", "label": "Second Correction", "default": "nothing", "page": 1166, "later": true,
+              "choices": [{"value": "nothing", "label": "Nothing"}, {"value": "hslAutoBalance", "label": "HSL Auto Balance"}, {"value": "hslAutoBlack", "label": "HSL Auto Black"}, {"value": "hslAutoContrast", "label": "HSL Auto Contrast"}, {"value": "hslAutoWhite", "label": "HSL Auto White"}, {"value": "curvesAutoBalance", "label": "Curves Auto Balance"}, {"value": "curvesAutoContrast", "label": "Curves Auto Contrast"}]},
+            {"key": "autoCorrect3", "type": "choice", "style": "menu", "label": "Third Correction", "default": "nothing", "page": 1166, "later": true,
+              "choices": [{"value": "nothing", "label": "Nothing"}, {"value": "hslAutoBalance", "label": "HSL Auto Balance"}, {"value": "hslAutoBlack", "label": "HSL Auto Black"}, {"value": "hslAutoContrast", "label": "HSL Auto Contrast"}, {"value": "hslAutoWhite", "label": "HSL Auto White"}, {"value": "curvesAutoBalance", "label": "Curves Auto Balance"}, {"value": "curvesAutoContrast", "label": "Curves Auto Contrast"}]}
+          ]
+        },
+        {
+          "name": "Preview",
+          "options": [
+            {"key": "preroll", "type": "int", "label": "Pre-Roll", "suffix": "seconds", "min": 0, "max": 999, "default": 3, "page": 1167, "later": true},
+            {"key": "postroll", "type": "int", "label": "Post-Roll", "suffix": "seconds", "min": 0, "max": 999, "default": 3, "page": 1167, "later": true}
+          ]
+        }
+      ]
+    },
+    {
       "kind": "Effect Editor",
       "scope": "user",
       "page": 1171,

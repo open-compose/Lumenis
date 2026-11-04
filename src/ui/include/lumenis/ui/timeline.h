@@ -283,6 +283,9 @@ public:
         SmallTrim smallTrim = SmallTrim::Never;
         bool dualImagePlay = false; // Dual Image Play (p.659)
         bool syncRollers = false;   // Sync Rollers for Sync Locked Tracks (p.656)
+        // The Correction setting's Use Marks for Segment Correction (Editing Guide p.1166; FX Guide p.608): a Source or
+        // Program Segment correction goes "to all segments between marked IN and OUT points ... the whole segments".
+        bool correctionUseMarks = false;
         // Timeline settings, Edit tab (p.1220): Start Filler Duration (seconds, ours) and Find Flash
         // Frames Shorter Than (frames).
         int startFillerSeconds = 2;
@@ -675,7 +678,9 @@ public:
     // The side the mode works on: Source or Program Segment (p.597; the Correction Type button, 6.10b2).
     model::CorrectionSide correctionSide() const { return correctionSide_; }
     void setCorrectionSide(model::CorrectionSide side) { correctionSide_ = side; }
-    // That side's correction on the segment at the position on the correction track; nothing off a clip.
+    // That side's correction on the segment at the position on the correction track; nothing off a clip. Setting it
+    // with Use Marks for Segment Correction on and both marks in the Record monitor sets it on every clip of the track
+    // the marks touch.
     std::optional<model::ColorCorrection> currentCorrection() const;
     // Sets it, as an undo step named `step`.
     bool setCurrentCorrection(const model::ColorCorrection& correction, const QString& step);

@@ -306,6 +306,14 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   step), the vectors drawn in their own colours, only the selected centre
   draggable, swatches at mid luma and at least saturation 20, samples taken
   from the drawn picture and applied on release.
+  6.10b4a: the units' scales but 10 Bit (Percent of 0-255, IRE and mVolts from
+  reference black), which menus offer which units and which values each covers,
+  Solid Histograms on by default, Dynamic Histograms through the side's own
+  correction, Use Full Ranges widening only the axis, the colour backgrounds,
+  3 x 3 averaging for every sampled colour, Dual-Split during playback on by
+  default and what turning it off does, the AutoCorrect defaults, the Preview
+  tab's Pre-Roll and Post-Roll left unused (FX Guide p.594 gives Edit Review
+  the Trim settings').
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

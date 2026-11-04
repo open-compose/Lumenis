@@ -3,6 +3,7 @@
 
 #include "lumenis/ui/correction_tool.h"
 
+#include "lumenis/media/color_correction.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QApplication>
@@ -52,9 +53,11 @@ QString componentName(const QString& type) {
     return type;
 }
 
+// A value box; its unit follows the Correction setting by its name (CorrectionTool::applyUnits).
 QDoubleSpinBox* valueBox(QWidget* parent, const QString& name, double lo, double hi) {
-    auto* box = new QDoubleSpinBox(parent);
+    auto* box = new UnitSpinBox(parent);
     box->setObjectName(name);
+    box->setProperty("unitPath", name);
     box->setRange(lo, hi);
     box->setDecimals(0);
     box->setKeyboardTracking(false);
@@ -178,6 +181,16 @@ QWidget* CorrectionTool::levelsPane() {
             }
             if (index >= 0 && index < names.size()) setControl(QStringLiteral("levels/") + levelsTab_ + QLatin1Char('/') + names.at(index), value);
         });
+        connect(histogram, &Histogram::sliderDragged, this, [this, side](int index, double value) {
+            QStringList names;
+            for (const QString& p : model::levelsPoints(levelsTab_)) {
+                if (p.startsWith(side)) names << p;
+            }
+            if (index < 0 || index >= names.size()) return;
+            model::ColorCorrection tentative = correction_;
+            tentative.set(QStringLiteral("levels/") + levelsTab_ + QLatin1Char('/') + names.at(index), value);
+            dragHistogram(tentative);
+        });
         return std::pair{v, histogram};
     };
     auto [inColumn, inHistogram] = column(false);
@@ -200,6 +213,19 @@ QWidget* CorrectionTool::levelsPane() {
                 correction_.set(base + QStringLiteral("out") + kinds.at(i), points.at(i).y());
         }
         commit(tr("Levels"));
+    });
+    connect(levelsGraph_, &ChromaCurveGraph::curveDragged, this, [this](const QList<QPointF>& points) {
+        const QStringList names = model::levelsPoints(levelsTab_);
+        const bool gray = names.contains(QStringLiteral("inGray"));
+        const QStringList kinds = gray ? QStringList{QStringLiteral("Black"), QStringLiteral("Gray"), QStringLiteral("White")}
+                                       : QStringList{QStringLiteral("Black"), QStringLiteral("White")};
+        const QString base = QStringLiteral("levels/") + levelsTab_ + QLatin1Char('/');
+        model::ColorCorrection tentative = correction_;
+        for (qsizetype i = 0; i < points.size() && i < kinds.size(); ++i) {
+            tentative.set(base + QStringLiteral("in") + kinds.at(i), points.at(i).x());
+            tentative.set(base + QStringLiteral("out") + kinds.at(i), points.at(i).y());
+        }
+        dragHistogram(tentative);
     });
     h->addWidget(levelsGraph_, 1);
     auto [outColumn, outHistogram] = column(true);
@@ -339,13 +365,18 @@ void CorrectionTool::syncPanes() {
     levelsGraph_->setCurve(levels, [c, shownTab](double x) { return model::levelsValue(c, shownTab, x); });
     inHistogram_->setSliders(ins);
     outHistogram_->setSliders(outs);
+    applyUnits();
+    inHistogram_->setStyle(options_.solidHistograms, options_.colorHistograms, options_.fullRanges);
+    outHistogram_->setStyle(options_.solidHistograms, options_.colorHistograms, options_.fullRanges);
+    const Histogram::Channel channel = shownTab == QLatin1String("composite") ? Histogram::Channel::Composite
+                                       : shownTab == QLatin1String("luma")    ? Histogram::Channel::Luma
+                                       : shownTab == QLatin1String("red")     ? Histogram::Channel::Red
+                                       : shownTab == QLatin1String("green")   ? Histogram::Channel::Green
+                                       : shownTab == QLatin1String("blue")    ? Histogram::Channel::Blue
+                                                                              : Histogram::Channel::Master;
+    inHistogram_->setChannel(channel);
+    outHistogram_->setChannel(channel);
     if (group_ == QLatin1String("levels") && pictures_) {
-        const Histogram::Channel channel = shownTab == QLatin1String("composite") ? Histogram::Channel::Composite
-                                           : shownTab == QLatin1String("luma")    ? Histogram::Channel::Luma
-                                           : shownTab == QLatin1String("red")     ? Histogram::Channel::Red
-                                           : shownTab == QLatin1String("green")   ? Histogram::Channel::Green
-                                           : shownTab == QLatin1String("blue")    ? Histogram::Channel::Blue
-                                                                                  : Histogram::Channel::Master;
         // "The input histogram always shows the distribution of values for the uncorrected image" (p.657).
         inHistogram_->setImage(pictures_(false), channel);
         outHistogram_->setImage(pictures_(true), channel);
@@ -355,9 +386,25 @@ void CorrectionTool::syncPanes() {
         if (ChromaCurveGraph* graph = curveGraph(QLatin1String(g))) {
             const QList<QPointF> curve = model::colorCurve(c, QLatin1String(g));
             graph->setCurve(curve, [curve](double x) { return model::curveValue(curve, x); });
+            const QString name = QLatin1String(g);
+            graph->setBackground(!options_.backgrounds          ? QColor()
+                                 : name == QLatin1String("red")   ? QColor(Qt::red)
+                                 : name == QLatin1String("green") ? QColor(Qt::green)
+                                 : name == QLatin1String("blue")  ? QColor(Qt::blue)
+                                                                  : QColor(Qt::white));
         }
     }
     syncSecondary();
+}
+
+void CorrectionTool::dragHistogram(const model::ColorCorrection& tentative) {
+    // "When this option is deselected, histograms do not update until you release the controls you are adjusting"
+    // (p.607).
+    if (!options_.dynamicHistograms || !pictures_ || group_ != QLatin1String("levels")) return;
+    const QImage input = pictures_(false);
+    if (input.isNull()) return;
+    const media::Picture corrected = media::colorCorrectedPicture(tentative, media::Picture::fromImage(input, input.width(), input.height()));
+    outHistogram_->setImage(corrected.toImage(), outHistogram_->channel());
 }
 
 // ---------------------------------------------------------------- ChromaCurveGraph
@@ -396,6 +443,12 @@ void ChromaCurveGraph::paintEvent(QPaintEvent*) {
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing);
     p.fillRect(rect(), palette().color(QPalette::Base));
+    if (background_.isValid()) {
+        QLinearGradient ramp(toWidget(QPointF(0, 0)), toWidget(QPointF(255, 0)));
+        ramp.setColorAt(0, Qt::black);
+        ramp.setColorAt(1, background_);
+        p.fillRect(QRectF(toWidget(QPointF(0, 255)), toWidget(QPointF(255, 0))).normalized(), ramp);
+    }
     const QColor ink = palette().color(QPalette::WindowText);
     p.setPen(QPen(ink.darker(170), 1));
     for (int q = 0; q <= 4; ++q) {
@@ -458,6 +511,7 @@ void ChromaCurveGraph::mouseMoveEvent(QMouseEvent* event) {
         mapping_ = [now](double x) { return model::curveValue(now, x); };
     }
     emit selectionChanged(selected_);
+    emit curveDragged(points_);
     update();
 }
 
@@ -523,6 +577,31 @@ void Histogram::setImage(const QImage& image, Channel channel) {
     update();
 }
 
+void Histogram::setChannel(Channel channel) {
+    if (channel == channel_) return;
+    channel_ = channel;
+    update();
+}
+
+void Histogram::setStyle(bool solid, bool color, bool fullRange) {
+    if (solid == solid_ && color == color_ && fullRange == fullRange_) return;
+    solid_ = solid;
+    color_ = color;
+    fullRange_ = fullRange;
+    update();
+}
+
+std::pair<double, double> Histogram::axis() const {
+    const bool rgb = channel_ == Channel::Red || channel_ == Channel::Green || channel_ == Channel::Blue || channel_ == Channel::Master;
+    return fullRange_ && rgb ? std::pair{-128.0, 384.0} : std::pair{0.0, 255.0};
+}
+
+double Histogram::xFor(double value) const {
+    const QRectF r = QRectF(rect()).adjusted(5, 3, -5, -12);
+    const auto [lo, hi] = axis();
+    return r.left() + (value - lo) / (hi - lo) * r.width();
+}
+
 void Histogram::setSliders(const QList<double>& values) {
     if (dragging_ >= 0) return;
     sliders_ = values;
@@ -530,8 +609,7 @@ void Histogram::setSliders(const QList<double>& values) {
 }
 
 double Histogram::sliderX(int index) const {
-    const QRectF r = QRectF(rect()).adjusted(5, 3, -5, -12);
-    return r.left() + sliders_.value(index) / 255.0 * r.width();
+    return xFor(sliders_.value(index));
 }
 
 void Histogram::paintEvent(QPaintEvent*) {
@@ -548,12 +626,28 @@ void Histogram::paintEvent(QPaintEvent*) {
     }
     const int peak = std::max(1, *std::max_element(counts_.begin(), counts_.end()));
     // "histograms that represent a single color channel display in the color of that channel" with Color Histograms on
-    // (p.607, 6.10b4); the bars in the text colour until then.
-    p.setPen(QPen(ink, 1));
-    for (int v = 0; v < 256; ++v) {
-        const double h = r.height() * counts_[static_cast<std::size_t>(v)] / peak;
-        const double x = r.left() + r.width() * v / 255.0;
-        p.drawLine(QPointF(x, r.bottom()), QPointF(x, r.bottom() - h));
+    // (p.607); otherwise in the text colour.
+    QColor bars = ink;
+    if (color_) {
+        if (channel_ == Channel::Red) bars = QColor(220, 60, 60);
+        else if (channel_ == Channel::Green) bars = QColor(60, 200, 80);
+        else if (channel_ == Channel::Blue) bars = QColor(80, 120, 230);
+    }
+    // Solid Histograms: "display as solid forms. When this option is deselected, the histograms display as a line
+    // graph" (p.606-607).
+    QPainterPath outline;
+    outline.moveTo(xFor(0), r.bottom());
+    for (int v = 0; v < 256; ++v) outline.lineTo(xFor(v), r.bottom() - r.height() * counts_[static_cast<std::size_t>(v)] / peak);
+    if (solid_) {
+        outline.lineTo(xFor(255), r.bottom());
+        outline.closeSubpath();
+        p.setPen(Qt::NoPen);
+        p.setBrush(bars);
+        p.drawPath(outline);
+    } else {
+        p.setPen(QPen(bars, 1));
+        p.setBrush(Qt::NoBrush);
+        p.drawPath(outline);
     }
     // "Sliders below a histogram control: Black Point (left), Gray Point (center), and White Point (right)" (p.656).
     p.setBrush(palette().color(QPalette::BrightText));
@@ -573,7 +667,9 @@ void Histogram::mousePressEvent(QMouseEvent* event) {
 void Histogram::mouseMoveEvent(QMouseEvent* event) {
     if (dragging_ < 0) return;
     const QRectF r = QRectF(rect()).adjusted(5, 3, -5, -12);
-    sliders_[dragging_] = std::clamp((event->position().x() - r.left()) / r.width() * 255.0, 0.0, 255.0);
+    const auto [lo, hi] = axis();
+    sliders_[dragging_] = std::clamp(lo + (event->position().x() - r.left()) / r.width() * (hi - lo), 0.0, 255.0);
+    emit sliderDragged(dragging_, std::round(sliders_.value(dragging_)));
     update();
 }
 

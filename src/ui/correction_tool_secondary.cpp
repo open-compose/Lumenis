@@ -230,13 +230,22 @@ void CorrectionTool::syncSecondary() {
         inputPages_->setCurrentIndex(static_cast<int>(index));
         outputPages_->setCurrentIndex(static_cast<int>(index));
     }
-    // The wheels show the standard vectors and the enabled custom ones ("Show Standard ... This is the default
-    // setting", p.673; the Secondary Vectors setting comes with 6.10b4), and the selected one.
+    // The Input wheel shows the vectors the Correction setting's Secondary Vectors menu names (p.672-673): all twelve,
+    // the standard ones and the enabled custom ones ("This is the default setting"), the custom ones and the enabled
+    // standard ones, or only the enabled ones; and the selected one (ours).
     const QStringList enabled = model::enabledVectors(correction_);
     QList<VectorWheel::Shown> shown, output;
     for (const QString& v : vectors) {
         const model::SecondaryVector vector = model::secondaryVector(correction_, v);
-        if (vector.standard || enabled.contains(v) || v == selected) shown << VectorWheel::Shown{v, vector, v == selected};
+        const bool on = enabled.contains(v);
+        bool show = v == selected;
+        switch (options_.vectors) {
+        case Options::Vectors::All: show = true; break;
+        case Options::Vectors::Standard: show = show || vector.standard || on; break;
+        case Options::Vectors::Custom: show = show || !vector.standard || on; break;
+        case Options::Vectors::Enabled: show = show || on; break;
+        }
+        if (show) shown << VectorWheel::Shown{v, vector, v == selected};
         if (v == selected) output << VectorWheel::Shown{v, vector, true};
         if (auto* swatch = findChild<QToolButton*>(QStringLiteral("swatch:") + v)) {
             // "The color swatches for each vector ... update in real time to provide a visual indication of the defined

@@ -693,7 +693,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.10b3b, the Secondary pane (`src/ui/correction_tool_secondary.cpp`: the vector sliders per vector, `VectorWheel`,
   the Selected Vectors panel, Lock Vectors, the Color Selection buttons sampling through `CorrectionMonitors::
   setSampling`/`colorsSampled`; test `tst_correction_tool`), is done, so 6.10b3 is.
-  Next: 6.10b4, 6.10c-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.10b4a, the Correction setting (Tabs, Units with `UnitSpinBox` and `model::toCorrectionUnit`, the histogram options,
+  Secondary Vectors, backgrounds, 3 x 3 averaging, Dual-Split during playback, Use Marks; `CorrectionTool::Options`;
+  test `tst_correction_tool`), is done.
+  Next: 6.10b4b, 6.10c-e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

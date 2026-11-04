@@ -128,7 +128,7 @@ protected:
         shown_ = image;
         shownRect_ = r;
         if (!image.isNull()) p.drawImage(r, image);
-        if (!owner_.dualSplit(index_)) return;
+        if (!owner_.dualSplit(index_) || (composer.isPlaying() && !owner_.dualSplitPlayback_)) return;
         // Dual Split: the box shows the frame without corrections.
         const QRectF b = owner_.splitBox(index_);
         const QRect box(r.left() + static_cast<int>(std::lround(b.left() * r.width())), r.top() + static_cast<int>(std::lround(b.top() * r.height())),
@@ -187,7 +187,22 @@ protected:
         if (shown_.isNull() || !shownRect_.contains(point.toPoint())) return std::nullopt;
         const int x = std::clamp(static_cast<int>((point.x() - shownRect_.left()) * shown_.width() / std::max(shownRect_.width(), 1)), 0, shown_.width() - 1);
         const int y = std::clamp(static_cast<int>((point.y() - shownRect_.top()) * shown_.height() / std::max(shownRect_.height(), 1)), 0, shown_.height() - 1);
-        return shown_.pixelColor(x, y);
+        if (!owner_.averaging_) return shown_.pixelColor(x, y);
+        // The 3 x 3 pixels centred there (fewer at the picture's edges).
+        double r = 0, g = 0, b = 0;
+        int n = 0;
+        for (int dy = -1; dy <= 1; ++dy) {
+            for (int dx = -1; dx <= 1; ++dx) {
+                const int px = x + dx, py = y + dy;
+                if (px < 0 || py < 0 || px >= shown_.width() || py >= shown_.height()) continue;
+                const QColor c = shown_.pixelColor(px, py);
+                r += static_cast<double>(c.redF());
+                g += static_cast<double>(c.greenF());
+                b += static_cast<double>(c.blueF());
+                ++n;
+            }
+        }
+        return QColor::fromRgbF(static_cast<float>(r / n), static_cast<float>(g / n), static_cast<float>(b / n));
     }
 
     void mousePressEvent(QMouseEvent* event) override {
@@ -386,6 +401,12 @@ void CorrectionMonitors::referenceCurrent() {
 
 void CorrectionMonitors::switchCurrentAndReference() {
     setActiveMonitor(active_ == 2 ? 1 : 2);
+}
+
+void CorrectionMonitors::setDualSplitDuringPlayback(bool on) {
+    if (on == dualSplitPlayback_) return;
+    dualSplitPlayback_ = on;
+    refresh();
 }
 
 void CorrectionMonitors::setDualSplit(int monitor, bool on) {

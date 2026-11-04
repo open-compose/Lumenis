@@ -2,6 +2,8 @@
 
 #include "lumenis/model/color_correction.h"
 
+#include <QDoubleSpinBox>
+#include <QImage>
 #include <QWidget>
 
 #include <array>
@@ -9,7 +11,6 @@
 #include <optional>
 
 class QButtonGroup;
-class QDoubleSpinBox;
 class QLabel;
 class QStackedWidget;
 class QToolButton;
@@ -22,6 +23,27 @@ class LumaRangesGraph;
 class ChromaCurveGraph;
 class Histogram;
 class VectorWheel;
+
+// A value box of the Color Correction tool that keeps a value on the 8-bit scale and shows it on the Correction
+// setting's unit (model::toCorrectionUnit; FX Guide p.606): 10 Bit, 8 Bit, Percent, IRE or mVolts. Typed numbers are on
+// that unit too.
+class UnitSpinBox : public QDoubleSpinBox {
+    Q_OBJECT
+
+public:
+    using QDoubleSpinBox::QDoubleSpinBox;
+    void setUnit(model::CorrectionUnit unit, bool difference = false);
+    model::CorrectionUnit unit() const { return unit_; }
+
+protected:
+    QString textFromValue(double value) const override;
+    double valueFromText(const QString& text) const override;
+    QValidator::State validate(QString& text, int& pos) const override;
+
+private:
+    model::CorrectionUnit unit_ = model::CorrectionUnit::EightBit;
+    bool difference_ = false;
+};
 
 // The Color Correction tool (FX Guide p.595-605, p.631-644; docs/spec/color-correction.md, 6.10b2): the Correction Type
 // button, the group tabs (HSL, Channels, Levels, Curves, Sec) and the HSL group's subdividing tabs, every one with its
@@ -40,6 +62,28 @@ class CorrectionTool : public QWidget {
 
 public:
     explicit CorrectionTool(Timeline& timeline, QWidget* parent = nullptr);
+
+    // The Correction setting's options for the tool (FX Guide p.606-608; Editing Guide p.1164-1166; 6.10b4a). Tabs:
+    // "Define which group tabs appear in the Color Correction tool" (HSL, Channels, Levels, Curves, Secondary; ours: HSL
+    // stays when none is chosen). Units: the scales the boxes show. Levels: Solid, Color and Dynamic Histograms and Use
+    // Full Ranges. Features: which vectors the Secondary group's Input wheel shows, and the colour backgrounds of the Hue
+    // Offsets ChromaWheels and the Curves graphs. MainWindow applies them from the setting.
+    struct Options {
+        std::array<bool, 5> groups{true, true, true, true, true};
+        model::CorrectionUnits units;
+        bool solidHistograms = true;
+        bool colorHistograms = false;
+        bool dynamicHistograms = false;
+        bool fullRanges = false;
+        enum class Vectors { All, Standard, Custom, Enabled };
+        Vectors vectors = Vectors::Standard;
+        bool backgrounds = false;
+        bool operator==(const Options&) const = default;
+    };
+    const Options& options() const { return options_; }
+    void setOptions(const Options& options);
+    // Whether a group's tab is shown (the Tabs tab).
+    bool groupShown(const QString& group) const;
 
     // Reads the correction at the position again (the position moved, the sequence changed).
     void reload();
@@ -125,11 +169,16 @@ private:
     QWidget* secondaryPane();
     void syncPanes();
     void syncSecondary();
+    void applyUnits();
+    // Dynamic Histograms: the output histogram of the levels tab shown while a slider or point is dragged, from the
+    // uncorrected frame through `tentative` (ours: this side's correction only).
+    void dragHistogram(const model::ColorCorrection& tentative);
     void commit(const QString& step);
     void sync();
     void syncControls();
 
     Timeline& timeline_;
+    Options options_;
     model::ColorCorrection correction_;
     bool hasSegment_ = false;
     QString group_ = QStringLiteral("hsl");
@@ -174,6 +223,7 @@ public:
     };
     explicit VectorWheel(bool output, QWidget* parent = nullptr);
     void setVectors(const QList<Shown>& vectors);
+    const QList<Shown>& vectors() const { return vectors_; }
     QPointF pointFor(double hue, double saturation) const;
     std::pair<double, double> placeAt(const QPointF& point) const;
     QSize sizeHint() const override { return {150, 150}; }
@@ -205,6 +255,9 @@ class ChromaCurveGraph : public QWidget {
 public:
     explicit ChromaCurveGraph(bool editable, QWidget* parent = nullptr);
     void setCurve(const QList<QPointF>& points, std::function<double(double)> mapping);
+    // Show ChromaWheel and ChromaCurve Graphs (p.608): a colour background, the graph's channel from black at the left
+    // to full at the right (ours; grey for Master).
+    void setBackground(const QColor& color) { background_ = color; update(); }
     const QList<QPointF>& points() const { return points_; }
     int selectedPoint() const { return selected_; }
     void selectPoint(int index);
@@ -214,6 +267,7 @@ public:
 
 signals:
     void curveChanged(const QList<QPointF>& points); // let go, or a point deleted: commit
+    void curveDragged(const QList<QPointF>& points); // while dragging (Dynamic Histograms)
     void selectionChanged(int index);
 
 protected:
@@ -225,6 +279,7 @@ protected:
 
 private:
     bool editable_;
+    QColor background_;
     QList<QPointF> points_;
     std::function<double(double)> mapping_;
     int selected_ = -1;
@@ -242,14 +297,24 @@ public:
     enum class Channel { Red, Green, Blue, Master, Luma, Composite };
     explicit Histogram(QWidget* parent = nullptr);
     void setImage(const QImage& image, Channel channel);
+    Channel channel() const { return channel_; }
+    void setChannel(Channel channel); // what the axis and colours are for, before the counts come
     const std::array<int, 256>& counts() const { return counts_; }
     void setSliders(const QList<double>& values); // black, (gray,) white
     const QList<double>& sliders() const { return sliders_; }
     double sliderX(int index) const;
+    // The Correction setting's Levels tab (p.606-607): Solid (filled, else a line graph), Color (a single channel's in
+    // its colour) and Use Full Ranges, "the full 10-bit range of level values on the horizontal axis" for the Red,
+    // Green, Blue and Master histograms: 0 to 1024 in 10-bit units, -128 to 384 on the 8-bit scale.
+    void setStyle(bool solid, bool color, bool fullRange);
+    bool solid() const { return solid_; }
+    // The values across the horizontal axis, on the 8-bit scale.
+    std::pair<double, double> axis() const;
     QSize sizeHint() const override { return {130, 80}; }
 
 signals:
     void sliderMoved(int index, double value); // let go: commit
+    void sliderDragged(int index, double value); // while dragging (Dynamic Histograms)
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -258,8 +323,12 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
 
 private:
+    double xFor(double value) const;
     std::array<int, 256> counts_{};
     Channel channel_ = Channel::Master;
+    bool solid_ = true;
+    bool color_ = false;
+    bool fullRange_ = false;
     QList<double> sliders_;
     int dragging_ = -1;
 };
@@ -273,6 +342,10 @@ class ChromaWheel : public QWidget {
 public:
     ChromaWheel(int pointer, QWidget* parent = nullptr);
     void setOffset(double hue, double amount);
+    // Show ChromaWheel and ChromaCurve Graphs (p.608): the wheel filled with the hues around it (ours: through
+    // media::wheelColor, paler to the centre).
+    void setBackground(bool on);
+    bool background() const { return background_; }
     double hue() const { return hue_; }
     double amount() const { return amount_; }
     // Where a hue and amount fall in the widget, and back.
@@ -292,6 +365,8 @@ protected:
 
 private:
     int pointer_;
+    bool background_ = false;
+    QImage backgroundImage_;
     double hue_ = 0, amount_ = 0;
     bool dragging_ = false;
     QPointF last_;

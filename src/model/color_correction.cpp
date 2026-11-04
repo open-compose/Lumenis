@@ -735,4 +735,52 @@ void setColorCorrection(Effect& effect, const ColorCorrection& correction) {
     else effect.parameters.insert(kColorCorrectionCategory, correction.toJson());
 }
 
+// ---------------------------------------------------------------- units (FX Guide p.606)
+
+double toCorrectionUnit(double value, CorrectionUnit unit, bool difference) {
+    switch (unit) {
+    case CorrectionUnit::TenBit: return difference ? 2.0 * value : 2.0 * value + 256.0;
+    case CorrectionUnit::EightBit: return value;
+    case CorrectionUnit::Percent: return value * 100.0 / 255.0;
+    case CorrectionUnit::Ire: return (difference ? value : value - 16.0) * 100.0 / 219.0;
+    case CorrectionUnit::Millivolts: return (difference ? value : value - 16.0) * 700.0 / 219.0;
+    }
+    return value;
+}
+
+double fromCorrectionUnit(double shown, CorrectionUnit unit, bool difference) {
+    switch (unit) {
+    case CorrectionUnit::TenBit: return difference ? shown / 2.0 : (shown - 256.0) / 2.0;
+    case CorrectionUnit::EightBit: return shown;
+    case CorrectionUnit::Percent: return shown * 255.0 / 100.0;
+    case CorrectionUnit::Ire: return shown * 219.0 / 100.0 + (difference ? 0.0 : 16.0);
+    case CorrectionUnit::Millivolts: return shown * 219.0 / 700.0 + (difference ? 0.0 : 16.0);
+    }
+    return shown;
+}
+
+CorrectionUnit correctionUnitFromKey(const QString& key) {
+    if (key == QLatin1String("10bit")) return CorrectionUnit::TenBit;
+    if (key == QLatin1String("percent")) return CorrectionUnit::Percent;
+    if (key == QLatin1String("ire")) return CorrectionUnit::Ire;
+    if (key == QLatin1String("mvolts")) return CorrectionUnit::Millivolts;
+    return CorrectionUnit::EightBit;
+}
+
+std::optional<std::pair<UnitKind, bool>> controlUnitKind(const QString& path) {
+    if (path.startsWith(QLatin1String("levels/"))) {
+        const QString tab = path.section(QLatin1Char('/'), 1, 1);
+        if (tab == QLatin1String("composite")) return std::pair{UnitKind::Composite, false};
+        if (tab == QLatin1String("luma")) return std::pair{UnitKind::Luma, false};
+        return std::pair{UnitKind::Rgb, false};
+    }
+    if (path.startsWith(QLatin1String("curves/"))) return std::pair{UnitKind::Rgb, false};
+    if (path.startsWith(QLatin1String("hsl/"))) {
+        const QString name = leaf(path);
+        if (name == QLatin1String("setup")) return std::pair{UnitKind::Luma, true};
+        if (name == QLatin1String("clipLow") || name == QLatin1String("clipHigh")) return std::pair{UnitKind::Luma, false};
+    }
+    return std::nullopt;
+}
+
 } // namespace lumenis::model

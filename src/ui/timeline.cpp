@@ -4860,6 +4860,16 @@ bool Timeline::setCurrentCorrection(const model::ColorCorrection& correction, co
     model::ColorCorrection& c = model::correctionOf(t->segments[i], correctionSide_);
     if (c == correction) return false;
     c = correction;
+    const model::MonitorState& r = composer_.state(MonitorId::Record);
+    if (options_.correctionUseMarks && r.in() && r.out()) {
+        // "If the IN and OUT points are in the middle of segments, Media Composer includes the whole segments" (p.608).
+        std::int64_t at = 0;
+        for (model::Segment& marked : t->segments) {
+            const std::int64_t end = at + marked.length;
+            if (!marked.isFiller() && end > *r.in() && at <= *r.out()) model::correctionOf(marked, correctionSide_) = correction;
+            at = end;
+        }
+    }
     const QList<model::SegmentRef> keep = selection_;
     const bool ok = commitSequence(step, seq);
     selection_ = keep;

@@ -5324,6 +5324,32 @@ void MainWindow::applySettings() {
                                                     : Timeline::Options::SmallTrim::Never;
     o.dualImagePlay = s.flag(trim, QStringLiteral("dualImagePlay"));
     o.syncRollers = s.flag(trim, QStringLiteral("syncRollers"));
+    // The Correction setting (Editing Guide p.1164-1167; FX Guide p.606-609).
+    {
+        const QString cc = QStringLiteral("Correction");
+        CorrectionTool::Options c;
+        const char* const tabs[] = {"tabHsl", "tabChannels", "tabLevels", "tabCurves", "tabSecondary"};
+        for (int i = 0; i < 5; ++i) c.groups.at(static_cast<std::size_t>(i)) = s.flag(cc, QLatin1String(tabs[i]));
+        c.units.rgb = model::correctionUnitFromKey(s.text(cc, QStringLiteral("unitRgb")));
+        c.units.luma = model::correctionUnitFromKey(s.text(cc, QStringLiteral("unitLuma")));
+        c.units.composite = model::correctionUnitFromKey(s.text(cc, QStringLiteral("unitComposite")));
+        c.solidHistograms = s.flag(cc, QStringLiteral("solidHistograms"));
+        c.colorHistograms = s.flag(cc, QStringLiteral("colorHistograms"));
+        c.dynamicHistograms = s.flag(cc, QStringLiteral("dynamicHistograms"));
+        c.fullRanges = s.flag(cc, QStringLiteral("fullRanges"));
+        const QString vectors = s.text(cc, QStringLiteral("secondaryVectors"));
+        c.vectors = vectors == QLatin1String("all")       ? CorrectionTool::Options::Vectors::All
+                    : vectors == QLatin1String("custom")  ? CorrectionTool::Options::Vectors::Custom
+                    : vectors == QLatin1String("enabled") ? CorrectionTool::Options::Vectors::Enabled
+                                                          : CorrectionTool::Options::Vectors::Standard;
+        c.backgrounds = s.flag(cc, QStringLiteral("showBackgrounds"));
+        if (correctionTool_) correctionTool_->setOptions(c);
+        if (CorrectionMonitors* m = composer_->correctionMonitors()) {
+            m->setEyedropperAveraging(s.flag(cc, QStringLiteral("eyedropperAveraging")));
+            m->setDualSplitDuringPlayback(s.flag(cc, QStringLiteral("dualSplitDuringPlayback")));
+        }
+        o.correctionUseMarks = s.flag(cc, QStringLiteral("useMarks"));
+    }
     binContainer_->setDefaultSyncLocks(o.defaultSyncLocks);
     timeline_->setOptions(o);
 

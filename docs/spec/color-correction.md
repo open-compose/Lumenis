@@ -213,11 +213,60 @@ Code: `src/ui/correction_tool_secondary.cpp` (`CorrectionTool::secondaryPane`, `
 ### Ours
 * The selected vector is kept in the correction ("secondary/selected"), so selecting one is an undo step.
 * The wheels show the standard vectors, the enabled custom ones and the selected one (the Secondary Vectors setting
-  comes with 6.10b4); a vector's boundary and centre are drawn in its own colour, the selected one thicker. Only the
+  changes this, 6.10b4a); a vector's boundary and centre are drawn in its own colour, the selected one thicker. Only the
   selected vector's centre can be dragged; the Output wheel shows just the selected vector's output.
 * Swatches show the input centre's colour at mid luma (at least saturation 20, so pale vectors stay visible).
-* Sampling reads the picture as drawn in the monitor under the pointer (the Eyedropper 3 x 3 Averaging setting comes
-  with 6.10b4); the samples go to the tool when the mouse is let go, one undo step.
+* Sampling reads the picture as drawn in the monitor under the pointer (the Eyedropper 3 x 3 Averaging setting, 6.10b4a); the samples go to the tool when the mouse is let go, one undo step.
+
+## 6.10b4a: the Correction setting
+
+Code: the "Correction" User setting in `src/ui/resources/settings.json`, applied by `MainWindow::applySettings` to
+`CorrectionTool::Options` (`setOptions`), `CorrectionMonitors` (`setEyedropperAveraging`, `setDualSplitDuringPlayback`)
+and `Timeline::Options::correctionUseMarks`; units in `model::toCorrectionUnit`/`fromCorrectionUnit` and
+`UnitSpinBox`. Tests: `tst_correction_tool` (`settingOptions`, `useMarks`), `tst_settings_window`.
+
+### From the guide
+* The dialog opens from the tool's Correction Mode Settings button or File > Settings > User > Correction (FX Guide
+  p.606); its tabs and options are listed in the Editing Guide's Correction Settings (p.1164-1167) and the FX Guide
+  (p.606-609).
+* Tabs: "Define which group tabs appear in the Color Correction tool" (p.606).
+* Units: RGB, Hue, Saturation/Gain, Luma and Composite menus with 10 Bit (0 to 1024), 8 Bit (0 to 255), Percent, IRE,
+  mVolts and Degree "available in one or more of the menus"; the 10-bit values for reference black and white are 288
+  and 726, the 8-bit ones 16 and 235; the units "do not change the degree of precision" (p.606, p.609).
+* Levels: Solid Histograms (solid forms, else a line graph), Color Histograms (a single channel's histograms in its
+  colour), Dynamic Histograms (update while controls move, else when they are let go), Use Full Ranges (the Red,
+  Green, Blue and Master histograms over the full 10-bit range) (p.606-607).
+* Features: Secondary Vectors Show All, Show Standard (the default), Show Custom, Show Enabled (p.607, p.672-673);
+  Saved Color Labels (None, RGB, Name, Name and RGB, the default); Use Marks for Segment Correction (off by default:
+  every segment between the marks, whole); Eyedropper 3 x 3 Averaging; Show Eyedropper Info; Eyedropper Picks from
+  Anywhere in Application; Show ChromaWheel and ChromaCurve Graphs (colour backgrounds, off by default) (p.608).
+  The Editing Guide also lists Dual-Split remains Active During Playback and Waveform/Vectorscope Updates in Real-Time
+  without a description (p.1166).
+* AutoCorrect: the first, second and third automatic corrections when the effect is applied from the Effect Palette
+  (Nothing, HSL Auto Balance/Black/Contrast/White, Curves Auto Balance/Contrast) (p.608-609; Editing Guide p.1166-1167).
+* Preview: Pre-Roll and Post-Roll, 3 seconds by default (Editing Guide p.1167).
+
+### Ours
+* 10 Bit is 2v + 256 from the two reference points (so 0 to 1024 holds -128 to 384 on the 8-bit scale); Percent is
+  the share of 0-255; IRE puts 16 at 0 and 235 at 100, mVolts at 0 and 700. Changes (Setup) take the scale without the
+  offset. The menus: RGB 10 Bit, 8 Bit, Percent; Luma and Composite those and IRE, mVolts; Hue only Degree;
+  Saturation/Gain only Percent; 8 Bit by default. What each menu covers: the Levels tabs' points by tab (Composite,
+  Luma, the rest RGB), the Curves points RGB, the HSL Setup and Clip levels and the Luma Ranges graph's brightness Luma;
+  other values are shown as kept.
+* Tabs left out are passed over by Page Up/Down; with none chosen HSL stays.
+* Solid Histograms is on by default; Color Histograms colours the Red, Green and Blue tabs' histograms; Dynamic
+  Histograms recomputes the output histogram from the uncorrected frame through the side's own correction while a
+  slider or graph point is dragged; Use Full Ranges widens only the axis (our pictures hold 0-255).
+* The selected vector is always shown on the Input wheel.
+* The ChromaWheel backgrounds are `media::wheelColor` at mid luma; the Curves graphs' a ramp from black to the graph's
+  channel (white for Master).
+* Eyedropper 3 x 3 Averaging applies to every colour the monitors sample (the Secondary tab's syringe and eyedroppers
+  until Color Match comes with 6.10c). Dual-Split remains Active During Playback is on by default; off, the box is not
+  drawn while the Composer plays. Use Marks needs both marks in the Record monitor.
+* Saved Color Labels, Show Eyedropper Info and Eyedropper Picks from Anywhere (Color Match and custom colours, 6.10c),
+  Waveform/Vectorscope Updates in Real-Time (6.10c), the AutoCorrect tab (6.10e; our defaults HSL Auto Balance, then
+  Nothing) and the Preview tab are dimmed. The FX Guide gives Edit Review's preroll and postroll to the Trim settings
+  (p.594), so the Preview tab's use is unknown.
 
 ## 6.10a3: the Secondary group
 

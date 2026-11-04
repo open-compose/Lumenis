@@ -12,6 +12,7 @@
 #include <QApplication>
 #include <QDoubleSpinBox>
 #include <QJsonArray>
+#include <QLineEdit>
 #include <QCheckBox>
 #include <QRadioButton>
 #include <QMenu>
@@ -393,6 +394,162 @@ private slots:
         const QList<QColor> colors = sampled.at(0).at(0).value<QList<QColor>>();
         QVERIFY(colors.size() >= 2);
         QCOMPARE(colors.at(0), QColor(200, 40, 40));
+    }
+
+    void settingOptions() {
+        // The Correction setting (FX Guide p.606-608; Editing Guide p.1164-1166).
+        Rig r;
+        CorrectionTool::Options o;
+        // Tabs: a group left out is not shown, and Page Up/Down passes over it.
+        o.groups = {true, false, true, true, true};
+        r.tool.setOptions(o);
+        QVERIFY(r.tool.tabButton(QStringLiteral("channels"))->parentWidget()->isHidden());
+        r.tool.showGroup(QStringLiteral("channels"));
+        QCOMPARE(r.tool.group(), QStringLiteral("hsl"));
+        r.tool.setFocus();
+        QTest::keyClick(&r.tool, Qt::Key_PageDown);
+        QCOMPARE(r.tool.group(), QStringLiteral("levels"));
+        // With HSL left out, the tool moves to a group still shown.
+        o.groups = {false, true, true, true, true};
+        r.tool.setOptions(o);
+        r.tool.showGroup(QStringLiteral("hsl"));
+        QCOMPARE(r.tool.group(), QStringLiteral("levels"));
+        o.groups = {true, true, true, true, true};
+
+        // Units: 10 Bit puts reference black and white at 288 and 726 (p.606); typed numbers are on the unit too.
+        o.units.luma = model::CorrectionUnit::TenBit;
+        o.units.rgb = model::CorrectionUnit::Percent;
+        r.tool.setOptions(o);
+        r.tool.showGroup(QStringLiteral("hsl"));
+        r.tool.showHslTab(QStringLiteral("controls"));
+        r.tool.showRangeTab(QStringLiteral("master"));
+        QDoubleSpinBox* clip = r.value(QStringLiteral("hsl/controls/master/clipHigh"));
+        clip->setValue(235);
+        QCOMPARE(clip->text(), QStringLiteral("726.00"));
+        auto* edit = clip->findChild<QLineEdit*>();
+        edit->selectAll();
+        QTest::keyClicks(edit, QStringLiteral("288"));
+        QTest::keyClick(edit, Qt::Key_Return);
+        QCOMPARE(r.segment(0).sourceCorrection.number(QStringLiteral("hsl/controls/master/clipHigh")), 16.0);
+        // Setup is a change: twice as many 10-bit steps, no offset.
+        QDoubleSpinBox* setup = r.value(QStringLiteral("hsl/controls/master/setup"));
+        setup->setValue(10);
+        QCOMPARE(setup->text(), QStringLiteral("20.00"));
+        r.tool.showGroup(QStringLiteral("levels"));
+        r.tool.showLevelsTab(QStringLiteral("red"));
+        auto* inWhite = r.tool.findChild<QDoubleSpinBox*>(QStringLiteral("levels:inWhite"));
+        QCOMPARE(inWhite->text(), QStringLiteral("92.2")); // 235 of 255 as a percentage
+        r.tool.showLevelsTab(QStringLiteral("luma"));
+        QCOMPARE(inWhite->text(), QStringLiteral("726"));
+        QCOMPARE(model::fromCorrectionUnit(100, model::CorrectionUnit::Ire), 235.0);
+        QCOMPARE(model::toCorrectionUnit(16, model::CorrectionUnit::Millivolts), 0.0);
+
+        // Levels: histogram styles and Use Full Ranges' axis for the RGB and Master histograms (p.606-607).
+        o.solidHistograms = false;
+        o.colorHistograms = true;
+        o.fullRanges = true;
+        r.tool.setOptions(o);
+        r.tool.showLevelsTab(QStringLiteral("master"));
+        QVERIFY(!r.tool.histogram(false)->solid());
+        QCOMPARE(r.tool.histogram(false)->axis(), (std::pair{-128.0, 384.0}));
+        r.tool.showLevelsTab(QStringLiteral("luma"));
+        QCOMPARE(r.tool.histogram(false)->axis(), (std::pair{0.0, 255.0}));
+
+        // Dynamic Histograms: the output histogram follows a slider while it is dragged (p.607).
+        r.tool.setPictureSource([](bool) {
+            QImage image(8, 8, QImage::Format_RGB32);
+            image.fill(QColor(128, 128, 128));
+            return image;
+        });
+        r.tool.showLevelsTab(QStringLiteral("master"));
+        Histogram* out = r.tool.histogram(true);
+        auto peakAt = [out] { return static_cast<int>(std::max_element(out->counts().begin(), out->counts().end()) - out->counts().begin()); };
+        const int before = peakAt();
+        const QPoint white(static_cast<int>(out->sliderX(2)), out->height() - 6);
+        const QPoint dragged = white - QPoint(out->width() / 6, 0);
+        QTest::mousePress(out, Qt::LeftButton, {}, white);
+        QTest::mouseMove(out, dragged);
+        QCOMPARE(peakAt(), before); // off: nothing until it is let go
+        QTest::mouseRelease(out, Qt::LeftButton, {}, dragged);
+        o.dynamicHistograms = true;
+        r.tool.setOptions(o);
+        const int committed = peakAt();
+        const QPoint white2(static_cast<int>(out->sliderX(2)), out->height() - 6);
+        QTest::mousePress(out, Qt::LeftButton, {}, white2);
+        QTest::mouseMove(out, white2 + QPoint(out->width() / 8, 0));
+        QVERIFY2(peakAt() != committed, qPrintable(QStringLiteral("%1").arg(peakAt())));
+        QTest::mouseRelease(out, Qt::LeftButton, {}, white2 + QPoint(out->width() / 8, 0));
+
+        // Features: which vectors the Input wheel shows (p.672-673), Green selected.
+        r.tool.showGroup(QStringLiteral("secondary"));
+        auto shown = [&r] { return r.tool.vectorWheel(false)->vectors().size(); };
+        QCOMPARE(shown(), 6); // Show Standard, the default
+        o.vectors = CorrectionTool::Options::Vectors::All;
+        r.tool.setOptions(o);
+        QCOMPARE(shown(), 12);
+        o.vectors = CorrectionTool::Options::Vectors::Custom;
+        r.tool.setOptions(o);
+        QCOMPARE(shown(), 7); // the custom ones and the selected one
+        o.vectors = CorrectionTool::Options::Vectors::Enabled;
+        r.tool.setOptions(o);
+        QCOMPARE(shown(), 1);
+        // The colour backgrounds of the ChromaWheels (p.608).
+        o.backgrounds = true;
+        r.tool.setOptions(o);
+        QVERIFY(r.tool.wheel(QStringLiteral("master"))->background());
+
+        // Eyedropper 3 x 3 Averaging in the monitors: columns of black and white average to a grey.
+        r.composer.setPictureResolver([](MonitorId, std::int64_t, QSize size, bool*) {
+            QImage image(size, QImage::Format_RGB32);
+            for (int x = 0; x < size.width(); ++x) {
+                for (int y = 0; y < size.height(); ++y) image.setPixelColor(x, y, x % 2 ? Qt::white : Qt::black);
+            }
+            return image;
+        });
+        CorrectionMonitors* m = r.composer.correctionMonitors();
+        r.composer.resize(900, 420);
+        r.composer.show();
+        m->setSampling(CorrectionMonitors::Sampling::Click);
+        QSignalSpy sampled(m, &CorrectionMonitors::colorsSampled);
+        settle();
+        QWidget* picture = m->pictureWidget(1);
+        picture->repaint();
+        const QPoint c = picture->rect().center();
+        QTest::mouseClick(picture, Qt::LeftButton, {}, c);
+        m->setEyedropperAveraging(true);
+        QTest::mouseClick(picture, Qt::LeftButton, {}, c);
+        QCOMPARE(sampled.count(), 2);
+        const QColor plain = sampled.at(0).at(0).value<QList<QColor>>().at(0);
+        const QColor averaged = sampled.at(1).at(0).value<QList<QColor>>().at(0);
+        QVERIFY(plain == QColor(Qt::black) || plain == QColor(Qt::white));
+        QVERIFY2(averaged.red() > 40 && averaged.red() < 215, qPrintable(averaged.name()));
+    }
+
+    void useMarks() {
+        // Use Marks for Segment Correction (p.608): the correction goes to every whole segment the marks touch.
+        Rig r;
+        Timeline::Options o = r.timeline.options();
+        o.correctionUseMarks = true;
+        r.timeline.setOptions(o);
+        model::MonitorState& rec = r.composer.state(MonitorId::Record);
+        rec.setPosition(25);
+        rec.markOut();
+        rec.setPosition(10);
+        rec.markIn();
+        rec.setPosition(5);
+        model::ColorCorrection c;
+        c.set(QStringLiteral("hsl/controls/master/saturation"), 50);
+        QVERIFY(r.timeline.setCurrentCorrection(c, QStringLiteral("Test")));
+        QCOMPARE(r.segment(0).sourceCorrection, c);
+        QCOMPARE(r.segment(1).sourceCorrection, c);
+        // Off, only the current segment.
+        o.correctionUseMarks = false;
+        r.timeline.setOptions(o);
+        model::ColorCorrection d;
+        d.set(QStringLiteral("hsl/controls/master/saturation"), 70);
+        QVERIFY(r.timeline.setCurrentCorrection(d, QStringLiteral("Test")));
+        QCOMPARE(r.segment(0).sourceCorrection, d);
+        QCOMPARE(r.segment(1).sourceCorrection, c);
     }
 };
 

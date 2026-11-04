@@ -181,6 +181,33 @@ std::optional<std::int64_t> correctionShotStart(const Track& track, std::int64_t
 // -1) or after (1) the one at `frame` that "does not already have a color correction applied" (p.592).
 std::optional<std::int64_t> uncorrectedShotStart(const Track& track, std::int64_t frame, int direction);
 
+// The Correction setting's Units tab (FX Guide p.606; Editing Guide p.1164-1165): the scale the Color Correction tool
+// shows a value on. Values are kept on the 8-bit scale (0 to 255, reference black 16 and white 235); "10 Bit: Measures
+// the adjustment on a scale from 0 to 1024 ... the 10-bit RGB values for reference black and reference white are 288
+// and 726" (p.606), so 2v + 256. Ours: Percent is the share of the 8-bit scale, IRE puts reference black at 0 and white
+// at 100, mVolts at 0 and 700. "The 10-bit and 8-bit options ... do not change the degree of precision for the
+// correction" (p.606): only the numbers shown change.
+enum class CorrectionUnit { TenBit, EightBit, Percent, Ire, Millivolts };
+// The values each Units menu is for (ours: the Levels and Curves tabs' points by the tab's kind, the HSL group's Setup
+// and Clip levels and the Luma Ranges graph's brightness as Luma); Hue (Degree) and Saturation/Gain (Percent) have one
+// unit each and are shown as kept.
+enum class UnitKind { Rgb, Luma, Composite };
+struct CorrectionUnits {
+    CorrectionUnit rgb = CorrectionUnit::EightBit;
+    CorrectionUnit luma = CorrectionUnit::EightBit;
+    CorrectionUnit composite = CorrectionUnit::EightBit;
+    CorrectionUnit of(UnitKind kind) const { return kind == UnitKind::Rgb ? rgb : kind == UnitKind::Luma ? luma : composite; }
+    bool operator==(const CorrectionUnits&) const = default;
+};
+// An 8-bit value (or, with `difference`, a change of one, such as Setup) on `unit`'s scale, and back.
+double toCorrectionUnit(double value, CorrectionUnit unit, bool difference = false);
+double fromCorrectionUnit(double shown, CorrectionUnit unit, bool difference = false);
+// The Correction setting's keys: "10bit", "8bit", "percent", "ire", "mvolts"; 8 Bit for anything else.
+CorrectionUnit correctionUnitFromKey(const QString& key);
+// The kind and difference of the value at a control path, for the tool's boxes: levels points by their tab, Curves
+// points as RGB, Setup (a difference) and the Clip levels as Luma; nothing for values shown as kept.
+std::optional<std::pair<UnitKind, bool>> controlUnitKind(const QString& path);
+
 // The Color Correction effect keeps its correction under this category (ours).
 inline const QString kColorCorrectionCategory = QStringLiteral("Color Correction");
 bool isColorCorrectionEffect(const Effect& effect);
