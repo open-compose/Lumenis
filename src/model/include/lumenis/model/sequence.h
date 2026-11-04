@@ -282,6 +282,10 @@ struct Segment {
     ColorCorrection sourceCorrection;
     ColorCorrection programCorrection;
     bool hasCorrection() const { return !sourceCorrection.isEmpty() || !programCorrection.isEmpty(); }
+    // Color Correction mode's comment on the segment (FX Guide p.609-610), from the Color Correction tool's Comments
+    // button; empty for none. Shown with Clip Text > Comments. Ours: kept on the segment for both sides, and on both
+    // parts of a segment cut in two.
+    QString correctionComment;
 
     bool hasNest() const { return !nest.isEmpty(); }
     // Takes `by` frames off the segment's start (negative: puts them back) for what it shows: its clip's

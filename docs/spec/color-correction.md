@@ -268,6 +268,39 @@ and `Timeline::Options::correctionUseMarks`; units in `model::toCorrectionUnit`/
   Nothing) and the Preview tab are dimmed. The FX Guide gives Edit Review's preroll and postroll to the Trim settings
   (p.594), so the Preview tab's use is unknown.
 
+## 6.10b4b: the tool's buttons, Comments and the Tab buttons
+
+Code: `CorrectionTool::button`, `editComment`, `showPath` (`src/ui/correction_tool.cpp`); `Segment::correctionComment`,
+`Timeline::currentCorrectionComment`/`setCorrectionComment`, Clip Text > Comments (`Timeline::Display::clipComments`),
+the `cc.tab_1`-`cc.tab_12` commands and their handlers in `MainWindow`. Test:
+`tst_correction_tool` (`buttonsAndComments`).
+
+### From the guide
+* "Color Correction Tool buttons. Left to right: Effect Mode button, Color Correction Effect Template button,
+  Correction Mode Settings button, Safe Color Settings button, Comments button" on the right side of the tool (p.605).
+* "When you are in Color Correction mode, the Effect Mode button simply opens the Effect Editor. It does not display
+  the standard Effect Mode layout"; "you cannot close the Effect Editor by clicking the Effect Mode button again"; "To
+  enter the standard Effect Mode layout from Color Correction mode: Click the Effect Mode button" (p.684).
+* The Correction Mode Settings button opens the Correction setting (p.606).
+* Comments: "If the position indicator is on a segment that has a comment, the icon on the Comments button is
+  yellow"; the Comments dialog's text window, OK and Remove; Clip Text > Comments shows them in the Timeline
+  (p.609-610).
+* "The Command palette contains twelve Tab buttons"; clicking one in Active Palette mode displays its tab;
+  "Alt+click (Windows) or Option+click (Macintosh) the Tab button with which you want to associate the Color
+  Correction tab" (p.601-602).
+
+### Ours
+* The buttons' icons are our own drawings. The template button waits for 6.10d and Safe Color Settings for 6.10e,
+  dimmed until then.
+* The guide has the Effect Mode button leave Color Correction mode (p.589) and also "simply" open the Effect Editor
+  (p.684). Ours: the tool's own Effect Mode button opens the Effect Editor and, with the editor already open, enters
+  Effect mode; the Effect Mode button elsewhere (the Timeline's, the Command Palette's) enters Effect mode at once.
+* A comment is kept on the segment itself, for both Source and Program sides, and on both halves of a cut; an edit
+  between halves with different comments is not a match frame. The dialog's text is trimmed; Remove and an empty text
+  both take the comment off; each change is an undo step.
+* The Tab buttons are "Tab 1" to "Tab 12" on the CC tab, work only in Color Correction mode, and keep their tabs as
+  the Correction setting's `tabButton1`-`tabButton12`; a hidden group's tab is not displayed.
+
 ## 6.10a3: the Secondary group
 
 ### From the guide

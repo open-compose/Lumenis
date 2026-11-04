@@ -2879,6 +2879,8 @@ QMenu* Timeline::fastMenu() {
     check(clipTextMenu, tr("Clip Full Durations"), display_.clipFullDurations, [this](bool v) { display_.clipFullDurations = v; });
     check(clipTextMenu, tr("Clip Trans Duration"), display_.clipTransDuration, [this](bool v) { display_.clipTransDuration = v; });
     check(clipTextMenu, tr("Timeline Clip Notes"), display_.clipNotes, [this](bool v) { display_.clipNotes = v; });
+    // "To display comments in the Timeline: ... select Clip Text > Comments" (FX Guide p.610).
+    check(clipTextMenu, tr("Comments"), display_.clipComments, [this](bool v) { display_.clipComments = v; });
     check(clipTextMenu, tr("Title Text"), display_.titleText, [this](bool v) { display_.titleText = v; });
     check(clipTextMenu, tr("Source Names"), display_.sourceNames, [this](bool v) { display_.sourceNames = v; });
     check(clipTextMenu, tr("Media Full Names"), display_.mediaFullNames, [this](bool v) { display_.mediaFullNames = v; });
@@ -4872,6 +4874,33 @@ bool Timeline::setCurrentCorrection(const model::ColorCorrection& correction, co
     }
     const QList<model::SegmentRef> keep = selection_;
     const bool ok = commitSequence(step, seq);
+    selection_ = keep;
+    view_->update();
+    return ok;
+}
+
+std::optional<QString> Timeline::currentCorrectionComment() const {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(correctionTrack());
+    const int i = t ? t->segmentAt(composer_.state(MonitorId::Record).position()) : -1;
+    if (i < 0 || t->segments.at(i).isFiller()) return std::nullopt;
+    return t->segments.at(i).correctionComment;
+}
+
+bool Timeline::setCorrectionComment(const QString& comment) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return fail(tr("Load a sequence first."));
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    model::Track* t = seq.track(correctionTrack());
+    const int i = t ? t->segmentAt(composer_.state(MonitorId::Record).position()) : -1;
+    if (i < 0 || t->segments.at(i).isFiller()) return fail(tr("There is no segment at the position."));
+    if (t->segments.at(i).correctionComment == comment) return false;
+    t->segments[i].correctionComment = comment;
+    const QList<model::SegmentRef> keep = selection_;
+    const bool ok = commitSequence(comment.isEmpty() ? tr("Remove Comment") : tr("Comments"), seq);
     selection_ = keep;
     view_->update();
     return ok;
@@ -7064,6 +7093,7 @@ QJsonObject Timeline::displayToJson(const Display& d) {
         {QStringLiteral("mediaFullNames"), d.mediaFullNames},
         {QStringLiteral("clipResolution"), d.clipResolution},
         {QStringLiteral("clipNotes"), d.clipNotes},
+        {QStringLiteral("clipComments"), d.clipComments},
         {QStringLiteral("titleText"), d.titleText},
         {QStringLiteral("motionAdapters"), d.motionAdapters},
         {QStringLiteral("clipFontFamily"), d.clipFontFamily},
@@ -7120,6 +7150,7 @@ Timeline::Display Timeline::displayFromJson(const QJsonObject& o) {
     flag("mediaFullNames", d.mediaFullNames);
     flag("clipResolution", d.clipResolution);
     flag("clipNotes", d.clipNotes);
+    flag("clipComments", d.clipComments);
     flag("titleText", d.titleText);
     flag("motionAdapters", d.motionAdapters);
     const QString sync = o.value(QStringLiteral("syncBreaks")).toString();
@@ -7262,6 +7293,7 @@ QString Timeline::clipText(const model::Track& track, const model::Segment& s) c
     // "You must enable the Timeline Fast menu > Clip Text > Timeline Clip Notes to display the notes
     // in the Timeline" (p.483).
     if (d.clipNotes) parts << s.note;
+    if (d.clipComments) parts << s.correctionComment;
     // "A label called "Title Text" appears in the Timeline on segments created with Avid Titler+ ... based on their
     // topmost Titler+ text content" (FX Guide p.305).
     if (d.titleText && s.effect && model::isTitlerEffect(*s.effect)) parts << model::titleOf(*s.effect).topText();

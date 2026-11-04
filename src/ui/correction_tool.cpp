@@ -8,6 +8,8 @@
 
 #include <QApplication>
 #include <QButtonGroup>
+#include <QDialog>
+#include <QDialogButtonBox>
 #include <QDoubleSpinBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -19,6 +21,8 @@
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPlainTextEdit>
+#include <QPushButton>
 #include <QRadioButton>
 #include <QSlider>
 #include <QStackedWidget>
@@ -77,6 +81,40 @@ QString label(const QString& path) {
     return name;
 }
 
+// The tool buttons' icons (ours): a mode square with a star, a template sheet, a sliders panel, a gamut triangle and a
+// speech bubble, drawn in `ink` (the Comments bubble yellow when the segment has a comment, p.609).
+QIcon toolIcon(const QString& key, const QColor& ink) {
+    QPixmap pm(18, 18);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    p.setPen(QPen(ink, 1.3));
+    if (key == QLatin1String("effectMode")) {
+        p.drawRect(QRectF(2.5, 4.5, 13, 10));
+        p.drawLine(QPointF(9, 6.5), QPointF(9, 12.5));
+        p.drawLine(QPointF(6, 9.5), QPointF(12, 9.5));
+    } else if (key == QLatin1String("template")) {
+        p.drawRect(QRectF(4.5, 2.5, 9, 13));
+        for (double y : {6.0, 9.0, 12.0}) p.drawLine(QPointF(6.5, y), QPointF(11.5, y));
+    } else if (key == QLatin1String("settings")) {
+        for (double y : {5.0, 9.0, 13.0}) p.drawLine(QPointF(3, y), QPointF(15, y));
+        p.setBrush(ink);
+        p.drawEllipse(QPointF(6, 5), 1.6, 1.6);
+        p.drawEllipse(QPointF(12, 9), 1.6, 1.6);
+        p.drawEllipse(QPointF(8, 13), 1.6, 1.6);
+    } else if (key == QLatin1String("safeColors")) {
+        p.drawPolygon(QPolygonF{QPointF(9, 2.5), QPointF(15.5, 14.5), QPointF(2.5, 14.5)});
+    } else {
+        QPainterPath bubble;
+        bubble.addRoundedRect(QRectF(2.5, 3.5, 13, 9), 3, 3);
+        bubble.moveTo(6, 12.5);
+        bubble.lineTo(5, 16);
+        bubble.lineTo(9, 12.5);
+        p.drawPath(bubble);
+    }
+    return QIcon(pm);
+}
+
 // The small Enable button of a tab or control (p.603): lit when on.
 QToolButton* enableButtonFor(QWidget* parent, const QString& path) {
     auto* b = new QToolButton(parent);
@@ -123,6 +161,26 @@ CorrectionTool::CorrectionTool(Timeline& timeline, QWidget* parent) : QWidget(pa
     top->addWidget(type_);
     for (int i = 0; i < 5; ++i) top->addWidget(tab(this, QLatin1String(kGroups[i]), tr(kGroupNames[i])));
     top->addStretch(1);
+    // The tool buttons on the right (p.605), each with an icon of our own.
+    const std::pair<const char*, const char*> buttons[] = {
+        {"effectMode", QT_TR_NOOP("Effect Mode")},
+        {"template", QT_TR_NOOP("Color Correction Effect Template")},
+        {"settings", QT_TR_NOOP("Correction Mode Settings")},
+        {"safeColors", QT_TR_NOOP("Safe Color Settings")},
+        {"comments", QT_TR_NOOP("Comments")}};
+    for (const auto& [key, text] : buttons) {
+        auto* b = new QToolButton(this);
+        b->setObjectName(QStringLiteral("ccButton:") + QLatin1String(key));
+        b->setToolTip(tr(text));
+        b->setAutoRaise(true);
+        b->setIcon(toolIcon(QLatin1String(key), palette().color(QPalette::WindowText)));
+        top->addWidget(b);
+    }
+    button(QStringLiteral("template"))->setEnabled(false);   // 6.10d
+    button(QStringLiteral("safeColors"))->setEnabled(false); // 6.10e
+    connect(button(QStringLiteral("effectMode")), &QToolButton::clicked, this, &CorrectionTool::effectModeRequested);
+    connect(button(QStringLiteral("settings")), &QToolButton::clicked, this, &CorrectionTool::settingsRequested);
+    connect(button(QStringLiteral("comments")), &QToolButton::clicked, this, &CorrectionTool::editComment);
     outer->addLayout(top);
 
     groups_ = new QStackedWidget(this);
@@ -423,7 +481,70 @@ void CorrectionTool::reload() {
     const std::optional<model::ColorCorrection> c = timeline_.currentCorrection();
     hasSegment_ = c.has_value();
     correction_ = c.value_or(model::ColorCorrection{});
+    // The Comments button's icon is yellow on a segment with a comment (p.609).
+    const bool comment = !timeline_.currentCorrectionComment().value_or(QString()).isEmpty();
+    if (comment != hasComment_ || button(QStringLiteral("comments"))->icon().isNull()) {
+        hasComment_ = comment;
+        button(QStringLiteral("comments"))->setIcon(toolIcon(QStringLiteral("comments"), comment ? QColor(240, 200, 40) : palette().color(QPalette::WindowText)));
+    }
+    button(QStringLiteral("comments"))->setEnabled(hasSegment_);
     sync();
+}
+
+QToolButton* CorrectionTool::button(const QString& name) const {
+    return findChild<QToolButton*>(QStringLiteral("ccButton:") + name);
+}
+
+void CorrectionTool::editComment() {
+    const std::optional<QString> current = timeline_.currentCorrectionComment();
+    if (!current) return;
+    std::optional<QString> answer;
+    if (askComment_) {
+        answer = askComment_(*current);
+    } else {
+        // "The Comments dialog box opens": a text window, OK and Remove (p.609-610).
+        QDialog dialog(this);
+        dialog.setObjectName(QStringLiteral("correctionComments"));
+        dialog.setWindowTitle(tr("Comments"));
+        auto* text = new QPlainTextEdit(*current, &dialog);
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+        QPushButton* remove = buttons->addButton(tr("Remove"), QDialogButtonBox::DestructiveRole);
+        bool removed = false;
+        connect(remove, &QPushButton::clicked, &dialog, [&] {
+            removed = true;
+            dialog.accept();
+        });
+        connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        auto* v = new QVBoxLayout(&dialog);
+        v->addWidget(text);
+        v->addWidget(buttons);
+        if (dialog.exec() == QDialog::Accepted) answer = removed ? QString() : text->toPlainText();
+    }
+    if (!answer) return;
+    timeline_.setCorrectionComment(answer->trimmed());
+    reload();
+}
+
+bool CorrectionTool::showPath(const QString& path) {
+    const QStringList parts = path.split(QLatin1Char('/'));
+    if (parts.isEmpty() || !groupShown(parts.at(0))) return false;
+    if (parts.at(0) == QLatin1String("hsl")) {
+        if (parts.size() > 1) {
+            const QStringList tabs{QStringLiteral("controls"), QStringLiteral("hueOffsets"), QStringLiteral("lumaRanges")};
+            if (!tabs.contains(parts.at(1))) return false;
+        }
+        showGroup(QStringLiteral("hsl"));
+        if (parts.size() > 1) showHslTab(parts.at(1));
+        if (parts.size() > 2) showRangeTab(parts.at(2));
+    } else if (parts.at(0) == QLatin1String("levels")) {
+        if (parts.size() > 1 && !model::levelsTabs().contains(parts.at(1))) return false;
+        showGroup(QStringLiteral("levels"));
+        if (parts.size() > 1) showLevelsTab(parts.at(1));
+    } else {
+        showGroup(parts.at(0));
+    }
+    return group_ == parts.at(0);
 }
 
 void CorrectionTool::commit(const QString& step) {

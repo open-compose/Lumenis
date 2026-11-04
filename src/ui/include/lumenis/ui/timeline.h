@@ -687,6 +687,10 @@ public:
     // The Remove Effect button in the mode: "To remove the color correction on the current segment" (p.592), both
     // sides of it (ours).
     bool removeCorrection();
+    // The Color Correction tool's Comments (FX Guide p.609-610): the comment on the segment at the position on the
+    // correction track (empty for none; nothing off a clip), and setting it, an undo step; empty removes it.
+    std::optional<QString> currentCorrectionComment() const;
+    bool setCorrectionComment(const QString& comment);
     // "Go to Previous Uncorrected Shot or Go to Next Uncorrected Shot" on the correction track (p.592).
     bool goToUncorrectedShot(int direction);
     // The rollers on the record sequence, empty when slipping.
@@ -1080,6 +1084,7 @@ public:
         bool mediaFullNames = false;
         bool clipResolution = false;
         bool clipNotes = false; // Timeline Clip Notes (p.483)
+        bool clipComments = false; // Comments: Color Correction comments (FX Guide p.610)
         // Title Text (FX Guide p.305): "enabled by default", a Titler+ segment's topmost text.
         bool titleText = true;
         // Show Adapters (p.599): "Temporal (motion) adapters appear with a T". Spatial (FrameFlex) and

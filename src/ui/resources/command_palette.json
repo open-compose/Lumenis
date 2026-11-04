@@ -34,7 +34,9 @@
     {"name": "3D", "page": 96, "columns": []},
     {"name": "CC", "page": 96, "columns": [
       ["cc.color_correction_mode", "cc.dual_split", "cc.previous_uncorrected_shot", "cc.next_uncorrected_shot",
-       "cc.reference_current"]
+       "cc.reference_current"],
+      ["cc.tab_1", "cc.tab_2", "cc.tab_3", "cc.tab_4", "cc.tab_5", "cc.tab_6"],
+      ["cc.tab_7", "cc.tab_8", "cc.tab_9", "cc.tab_10", "cc.tab_11", "cc.tab_12"]
     ]},
     {"name": "MCam", "page": 96, "columns": []},
     {"name": "Tracks", "page": 96, "columns": [

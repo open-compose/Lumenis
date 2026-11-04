@@ -551,6 +551,57 @@ private slots:
         QCOMPARE(r.segment(0).sourceCorrection, d);
         QCOMPARE(r.segment(1).sourceCorrection, c);
     }
+
+    void buttonsAndComments() {
+        // The tool buttons (FX Guide p.605): the template and Safe Color buttons wait for 6.10d and 6.10e.
+        Rig r;
+        QVERIFY(!r.tool.button(QStringLiteral("template"))->isEnabled());
+        QVERIFY(!r.tool.button(QStringLiteral("safeColors"))->isEnabled());
+        QSignalSpy effect(&r.tool, &CorrectionTool::effectModeRequested);
+        QSignalSpy settings(&r.tool, &CorrectionTool::settingsRequested);
+        r.tool.button(QStringLiteral("effectMode"))->click();
+        r.tool.button(QStringLiteral("settings"))->click();
+        QCOMPARE(effect.count(), 1);
+        QCOMPARE(settings.count(), 1);
+
+        // Comments (p.609-610): OK keeps the text, the button turns yellow, Clip Text > Comments shows it.
+        QVERIFY(!r.tool.hasComment());
+        QString shown;
+        r.tool.setCommentAsker([&shown](const QString& current) -> std::optional<QString> {
+            shown = current;
+            return QStringLiteral("Warm the skin tones");
+        });
+        r.tool.button(QStringLiteral("comments"))->click();
+        QCOMPARE(r.segment(0).correctionComment, QStringLiteral("Warm the skin tones"));
+        QVERIFY(r.tool.hasComment());
+        QCOMPARE(r.segment(1).correctionComment, QString());
+        Timeline::Display d = r.timeline.display();
+        d.clipComments = true;
+        r.timeline.setDisplay(d);
+        const model::Sequence seq = model::Sequence::fromItem(r.composer.state(MonitorId::Record).current()->item);
+        QVERIFY(r.timeline.clipText(*seq.track(QStringLiteral("V1")), r.segment(0)).contains(QStringLiteral("Warm the skin tones")));
+        // The dialog shows the comment again; Remove takes it off; Cancel changes nothing.
+        r.tool.setCommentAsker([&shown](const QString& current) -> std::optional<QString> {
+            shown = current;
+            return QString();
+        });
+        r.tool.editComment();
+        QCOMPARE(shown, QStringLiteral("Warm the skin tones"));
+        QCOMPARE(r.segment(0).correctionComment, QString());
+        QVERIFY(!r.tool.hasComment());
+        r.tool.setCommentAsker([](const QString&) -> std::optional<QString> { return std::nullopt; });
+        r.tool.editComment();
+        QCOMPARE(r.segment(0).correctionComment, QString());
+
+        // The Tab buttons' paths (p.601).
+        QVERIFY(r.tool.showPath(QStringLiteral("hsl/lumaRanges/highlights")));
+        QCOMPARE(r.tool.shownPath(), QStringLiteral("hsl/lumaRanges/highlights"));
+        QVERIFY(r.tool.showPath(QStringLiteral("levels/red")));
+        QCOMPARE(r.tool.shownPath(), QStringLiteral("levels/red"));
+        QVERIFY(r.tool.showPath(QStringLiteral("secondary")));
+        QVERIFY(!r.tool.showPath(QStringLiteral("nowhere")));
+        QCOMPARE(r.tool.group(), QStringLiteral("secondary"));
+    }
 };
 
 QTEST_MAIN(TestCorrectionTool)

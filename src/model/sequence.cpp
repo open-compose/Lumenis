@@ -212,6 +212,7 @@ QJsonObject segmentToJson(const Segment& s) {
     o.insert(QStringLiteral("in"), static_cast<qint64>(s.sourceIn));
     if (!s.localColor.isEmpty()) o.insert(QStringLiteral("localColor"), s.localColor);
     if (!s.note.isEmpty()) o.insert(QStringLiteral("note"), s.note);
+    if (!s.correctionComment.isEmpty()) o.insert(QStringLiteral("correctionComment"), s.correctionComment);
     if (!s.sourceCorrection.isEmpty()) o.insert(QStringLiteral("sourceCorrection"), s.sourceCorrection.toJson());
     if (!s.programCorrection.isEmpty()) o.insert(QStringLiteral("programCorrection"), s.programCorrection.toJson());
     if (!s.surround.isEmpty()) {
@@ -250,6 +251,7 @@ Segment segmentFromJson(const QJsonObject& o) {
     s.nestIn = s.nest.isEmpty() ? 0 : o.value(QStringLiteral("nestIn")).toInteger();
     if (!s.isFiller()) s.localColor = o.value(QStringLiteral("localColor")).toString();
     if (!s.isFiller()) s.note = o.value(QStringLiteral("note")).toString();
+    if (!s.isFiller()) s.correctionComment = o.value(QStringLiteral("correctionComment")).toString();
     if (!s.isFiller()) {
         s.sourceCorrection = ColorCorrection::fromJson(o.value(QStringLiteral("sourceCorrection")).toObject());
         s.programCorrection = ColorCorrection::fromJson(o.value(QStringLiteral("programCorrection")).toObject());
@@ -1224,6 +1226,7 @@ bool Sequence::isMatchFrame(const Segment& before, const Segment& after) {
     if (before.volumeKeys != after.volumeKeys || before.panKeys != after.panKeys) return false;
     if (before.eq != after.eq || before.localColor != after.localColor || before.surround != after.surround) return false;
     if (before.sourceCorrection != after.sourceCorrection || before.programCorrection != after.programCorrection) return false;
+    if (before.correctionComment != after.correctionComment) return false;
     if (before.isFiller() || after.isFiller()) return before.isFiller() && after.isFiller() && after.addEdit;
     return before.clipId == after.clipId && before.binId == after.binId && before.sourceTrack == after.sourceTrack &&
            before.sourceIn + before.length == after.sourceIn;

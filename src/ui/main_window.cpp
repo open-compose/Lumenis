@@ -1644,6 +1644,21 @@ void MainWindow::createTools() {
             panels_->closePanel(p);
         }
     });
+    // The tool's Effect Mode button (FX Guide p.684): "the Effect Mode button simply opens the Effect Editor"; with the
+    // editor open it enters "the standard Effect Mode layout". The Effect Mode button elsewhere leaves Color
+    // Correction mode for Effect mode, as p.589 has it ("Click a mode button other than Color Correction").
+    connect(correctionTool_, &CorrectionTool::effectModeRequested, this, [this] {
+        if (Panel* p = panels_->panel(QStringLiteral("EffectEditor")); p && panels_->isOpen(p)) timeline_->perform(QStringLiteral("fx.effect_mode"));
+        else showTool(QStringLiteral("EffectEditor"));
+    });
+    // The Correction Mode Settings button opens the Correction setting (p.606).
+    connect(correctionTool_, &CorrectionTool::settingsRequested, this, [this] {
+        const int i = settings_->file(model::SettingsScope::User).activeIndex(QStringLiteral("Correction"));
+        if (SettingsWindow* w = showSettings(); w && i >= 0) {
+            w->showTab(SettingsWindow::Tab::User);
+            w->list(model::SettingsScope::User)->openEntry(i);
+        }
+    });
     auto reloadCorrection = [this] {
         if (timeline_->isCorrectionMode()) correctionTool_->reload();
     };
@@ -5428,6 +5443,23 @@ void MainWindow::installPanelHandlers() {
         commands_.setHandler(QStringLiteral("timeline.view.tv%1").arg(i + 1), [this, i] {
             const QString name = timelineViewButtons().value(i);
             if (!name.isEmpty()) chooseTimelineView(name);
+        });
+    }
+    // The Command Palette's twelve Tab buttons (FX Guide p.601-602): one displays the Color Correction tool's tab it is
+    // associated with; Alt+click (Option+click) with Active Palette associates the tab the tool shows. Kept as the
+    // Correction setting's tabButton1-12 (ours). In Color Correction mode only (p.601's steps start there).
+    for (int i = 1; i <= 12; ++i) {
+        commands_.setHandler(QStringLiteral("cc.tab_%1").arg(i), [this, i] {
+            if (!timeline_->isCorrectionMode()) return;
+            const QString key = QStringLiteral("tabButton%1").arg(i);
+            if (QApplication::keyboardModifiers().testFlag(Qt::AltModifier)) {
+                settings_->setValue(QStringLiteral("Correction"), key, correctionTool_->shownPath());
+                return;
+            }
+            const QString path = settings_->text(QStringLiteral("Correction"), key);
+            if (path.isEmpty()) return;
+            showTool(QStringLiteral("ColorCorrection"));
+            correctionTool_->showPath(path);
         });
     }
     // W1-W12 switch to their workspaces (p.90-91).

@@ -314,6 +314,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   default and what turning it off does, the AutoCorrect defaults, the Preview
   tab's Pre-Roll and Post-Roll left unused (FX Guide p.594 gives Edit Review
   the Trim settings').
+  6.10b4b: the tool buttons' icons, only the tool's Effect Mode button opening
+  the Effect Editor (p.684), the others leaving the mode (p.589), comments kept on the segment for both
+  sides (and on both halves of a cut), the Tab buttons' names (Tab 1-12), their
+  storage in the Correction setting and working only in the mode.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults
@@ -1563,7 +1567,9 @@ These are recorded now so they are not entered from memory later.
     the More tab's TV1-TV8: docs/spec/timeline-views.md. Sync Breaks, Dupe
     Detection and the Clip Text items: docs/spec/sync-dupes.md. Timeline Clip
     Notes (Add Timeline Clip Note, Tools > Timeline Clip Notes, p.483-486):
-    docs/spec/clip-notes.md. Add Filler at Start, Find Black Hole/Flash
+    docs/spec/clip-notes.md. Clip Text also has Title Text (FX Guide p.305)
+    and Comments, the Color Correction comments (FX Guide p.610;
+    docs/spec/color-correction.md). Add Filler at Start, Find Black Hole/Flash
     Frame, Rename Track and Create Sequence Based on Selection:
     docs/spec/timeline-commands.md.
   * The scale bar zooms around the position indicator; zoomed in, the

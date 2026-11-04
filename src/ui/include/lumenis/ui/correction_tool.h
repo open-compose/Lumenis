@@ -84,6 +84,23 @@ public:
     void setOptions(const Options& options);
     // Whether a group's tab is shown (the Tabs tab).
     bool groupShown(const QString& group) const;
+    // Shows the tab at a path as shownPath() gives it ("hsl/lumaRanges/highlights", "levels/red", "secondary"), for the
+    // Command Palette's Tab buttons (p.601); false for a path of no tab, or one the Tabs setting hides.
+    bool showPath(const QString& path);
+
+    // The buttons on the right (FX Guide p.605): "Effect Mode button, Color Correction Effect Template button,
+    // Correction Mode Settings button, Safe Color Settings button, Comments button", by the names "effectMode",
+    // "template", "settings", "safeColors" and "comments". The template button comes with 6.10d and the Safe Color
+    // Settings with 6.10e; they are dimmed until then.
+    QToolButton* button(const QString& name) const;
+    // The Comments button (p.609-610): "If the position indicator is on a segment that has a comment, the icon on the
+    // Comments button is yellow". Clicking it opens the Comments dialog for the comment at the position; OK keeps
+    // the text, Remove takes the comment off. Tests answer the dialog through the asker: nothing for Cancel, the text
+    // for OK, an empty text for Remove.
+    using CommentAsker = std::function<std::optional<QString>(const QString& current)>;
+    void setCommentAsker(CommentAsker asker) { askComment_ = std::move(asker); }
+    void editComment();
+    bool hasComment() const { return hasComment_; }
 
     // Reads the correction at the position again (the position moved, the sequence changed).
     void reload();
@@ -149,6 +166,9 @@ public:
     LumaRangesGraph* lumaGraph() const { return lumaGraph_; }
 
 signals:
+    // The Effect Mode and Correction Mode Settings buttons, for MainWindow (p.605-606).
+    void effectModeRequested();
+    void settingsRequested();
     // The Luma Ranges preview changed, for the monitors.
     void lumaPreviewChanged(LumaPreview preview);
     void channelPreviewChanged(ChannelPreview preview);
@@ -179,6 +199,8 @@ private:
 
     Timeline& timeline_;
     Options options_;
+    CommentAsker askComment_;
+    bool hasComment_ = false;
     model::ColorCorrection correction_;
     bool hasSegment_ = false;
     QString group_ = QStringLiteral("hsl");

@@ -1166,7 +1166,8 @@ phase of their own. They are done in three steps:
     * 6.10b4, in two parts (planned 2026-11-04): 6.10b4a, the Correction Mode settings (Tabs, Units, Levels,
       Features, p.606-609; Editing Guide p.1164-1167), done (the "Correction" User setting, `CorrectionTool::Options`,
       `UnitSpinBox`, `model::toCorrectionUnit`); 6.10b4b, the tool's buttons (p.605), the Command Palette's CC tab with
-      its twelve Tab buttons (p.601-602), and Comments (p.609-610).
+      its twelve Tab buttons (p.601-602), and Comments (p.609-610), done (`CorrectionTool::button`/`editComment`/
+      `showPath`, `Segment::correctionComment`, Clip Text > Comments, `cc.tab_1`-`cc.tab_12`). So 6.10b is done.
   * 6.10c, the Waveform and Vectorscope monitors (p.686-692), the Color Match control with NaturalMatch and custom
     colours (p.624-631), and the automatic corrections (p.618-623).
   * 6.10d, relationship corrections (p.596-598), correction templates, presets and buckets (p.610-615), keyframing
