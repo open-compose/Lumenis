@@ -327,6 +327,17 @@ CLAP plug-ins are loaded at start-up (docs/spec/clap-host.md):
   with `LUMENIS_NO_CLAP=1` set, which skips the scan. Then move the
   plug-in out of the CLAP folders.
 
+### Tests leave media in "Avid MediaFiles" on your drives, or crash probing it
+
+Before 2026-11-04 some tests made managed media on the computer's real drives (the top of a
+writable volume, or your home folder's `Avid MediaFiles/MXF/1`), and a test scanning a drive could
+crash in FFmpeg reading a file another test was still writing (`tst_motion_adapter_ui` under
+`ctest -j8`). Every test now runs with `LUMENIS_NO_SYSTEM_DRIVES=1` and a drive folder of its own in
+`build/<preset>/test-media/<test>` (tests/CMakeLists.txt); `tst_media_unmount` checks that nothing
+else is offered. Delete the `Avid MediaFiles` folders the tests left behind on a development machine or
+self-hosted runner, after checking they hold nothing of yours (their clips are named Take, Tone,
+Mixdown and the like).
+
 ### Audio Punch-In records silence
 
 Each system has to let Cutthulhu use the microphone (Tools > Audio

@@ -109,3 +109,5 @@ if(Python3_Interpreter_FOUND)
         FIXTURES_REQUIRED generated_scenarios TIMEOUT 600
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;LUMENIS_SCENARIOS=${CMAKE_CURRENT_BINARY_DIR}/generated-scenarios")
 endif()
+
+lumenis_isolate_media_drives()

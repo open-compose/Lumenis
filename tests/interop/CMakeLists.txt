@@ -166,3 +166,5 @@ if(Python3_Interpreter_FOUND)
         SKIP_RETURN_CODE 77 TIMEOUT 900 DEPENDS interop_corpus_fetch
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()
+
+lumenis_isolate_media_drives()

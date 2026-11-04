@@ -53,3 +53,5 @@ lumenis_add_test(tst_fields SOURCES tst_fields.cpp LIBS lumenis::media)
 lumenis_add_test(tst_fluid_fx SOURCES tst_fluid_fx.cpp LIBS lumenis::media)
 # Render Effect: precomputes and playing them (docs/spec/rendering.md).
 lumenis_add_test(tst_render SOURCES tst_render.cpp LIBS lumenis::media)
+
+lumenis_isolate_media_drives()

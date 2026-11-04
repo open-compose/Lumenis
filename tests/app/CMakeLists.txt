@@ -84,3 +84,5 @@ endif()
 add_test(NAME app_ffmpeg_provider COMMAND lumenis_app --list-providers)
 set_tests_properties(app_ffmpeg_provider PROPERTIES
     PASS_REGULAR_EXPRESSION "org\\.ffmpeg\\.libavcodec.*available.*FFmpeg [0-9n]")
+
+lumenis_isolate_media_drives()

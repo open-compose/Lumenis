@@ -38,6 +38,17 @@ class TestMediaUnmount : public QObject {
 private slots:
     void initTestCase() { applyTheme(*qApp); }
 
+    void testsUseTheirOwnDrive() {
+        // Under ctest every test has LUMENIS_NO_SYSTEM_DRIVES and a drive of its own (tests/CMakeLists.txt), so none
+        // writes to or scans a real volume (BUILDING.md, Troubleshooting).
+        if (qEnvironmentVariableIsEmpty("LUMENIS_NO_SYSTEM_DRIVES")) QSKIP("not run by ctest");
+        const QList<media::MediaDrive> drives = media::mediaDrives(QStringList{});
+        QVERIFY2(drives.isEmpty(), qPrintable(drives.isEmpty() ? QString() : drives.constFirst().root));
+        const QString own = qEnvironmentVariable("LUMENIS_MEDIA_DRIVES");
+        QVERIFY(own.contains(QStringLiteral("test-media")));
+        QCOMPARE(media::mediaDrives(QStringList{own}).size(), 1);
+    }
+
     void unmount() {
         QTemporaryDir dir;
         const QString a = dir.filePath("DriveA");

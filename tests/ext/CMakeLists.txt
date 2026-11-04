@@ -23,3 +23,5 @@ target_compile_definitions(tst_module_loader PRIVATE
     TEST_MODULE_GOOD_DIR="$<TARGET_FILE_DIR:test_module_good>"
     TEST_MODULE_BAD_ABI="$<TARGET_FILE:test_module_bad_abi>"
     TEST_MODULE_FAILS="$<TARGET_FILE:test_module_fails>")
+
+lumenis_isolate_media_drives()

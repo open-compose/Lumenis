@@ -51,7 +51,11 @@ struct MediaDrive {
 };
 // The writable volumes, the home folder when its volume's top is not
 // writable (macOS, Linux), and the `extra` folders. The drive with the most
-// space is shown in bold (p.135); see mostSpace().
+// space is shown in bold (p.135); see mostSpace(). With the environment
+// variable LUMENIS_NO_SYSTEM_DRIVES set (not "0"), only the `extra` folders:
+// the tests run so (tests/CMakeLists.txt), each with a drive folder of its
+// own, so that none writes to or scans a real volume's Avid MediaFiles while
+// another test writes there.
 QList<MediaDrive> mediaDrives(const QStringList& extra);
 // With the folders set here, and those in the environment variable
 // LUMENIS_MEDIA_DRIVES (separated as PATH is): for tests, and for media

@@ -857,7 +857,9 @@ QList<MediaDrive> mediaDrives(const QStringList& extra) {
     static const QStringList skippedRoots{QStringLiteral("/boot"), QStringLiteral("/snap"), QStringLiteral("/run"),
                                           QStringLiteral("/dev"), QStringLiteral("/sys"), QStringLiteral("/proc"),
                                           QStringLiteral("/System/Volumes")};
-    for (const QStorageInfo& v : QStorageInfo::mountedVolumes()) {
+    const QByteArray noSystem = qgetenv("LUMENIS_NO_SYSTEM_DRIVES");
+    const bool systemDrives = noSystem.isEmpty() || noSystem == "0";
+    for (const QStorageInfo& v : systemDrives ? QStorageInfo::mountedVolumes() : QList<QStorageInfo>{}) {
         if (!v.isValid() || !v.isReady() || v.isReadOnly()) continue;
         if (skippedTypes.contains(QString::fromUtf8(v.fileSystemType()))) continue;
         const QString root = v.rootPath();
@@ -872,7 +874,7 @@ QList<MediaDrive> mediaDrives(const QStringList& extra) {
     // Linux: their home folder stands for it.
     const QString home = QDir::homePath();
     const QStorageInfo homeVolume(home);
-    if (homeVolume.isValid() && !QFileInfo(homeVolume.rootPath()).isWritable()) {
+    if (systemDrives && homeVolume.isValid() && !QFileInfo(homeVolume.rootPath()).isWritable()) {
         add(home, QDir::toNativeSeparators(home), homeVolume.bytesAvailable());
     }
     for (const QString& folder : extra) {
