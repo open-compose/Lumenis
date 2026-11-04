@@ -343,6 +343,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   everything under it, a drop anywhere on the mode's monitors, the template's
   relationship winning over p.598's monitor drop, the bucket icon, Save
   Correction's bin.
+  6.10d2b: the Color Correction Presets themselves (Black and White, Brighten,
+  Darken, Desaturate, High and Low Contrast, Saturate) as templates, automatic
+  templates kept for the session, the same segment and side updating the
+  newest, the palette list's "N  name" text, Enter in the Effect Palette.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults
@@ -2024,7 +2028,7 @@ p.610–640, ch. 13 p.432–434).**
   Effects Reference (FX p.456–490). For each effect it records the page,
   where the effect can be applied (its "Apply to" row), whether it is real
   time, and its parameter categories. The guide's gaps:
-  * Color Correction Presets and S3D list no effects.
+  * S3D lists no effects; the Color Correction Presets are ours (FX Guide p.611; docs/spec/color-correction.md, 6.10d2b).
   * The PlasmaWipe presets are not named (FX p.478).
   * Only 4 of the 15 Squeeze effects are named (FX p.483–484, p.490).
   * Motion effects (Freeze Frame and others, FX p.476–477) are made from the

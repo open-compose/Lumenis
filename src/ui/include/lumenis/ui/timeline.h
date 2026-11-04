@@ -725,6 +725,22 @@ public:
     // The template a drag carries: the tool's template button or a bucket (correctionTemplateMime), or one template
     // item from a bin.
     std::optional<model::CorrectionTemplate> droppedCorrectionTemplate(const QMimeData* mime) const;
+    // Automatic effect templates (FX Guide p.612, 6.10d2b): "Media Composer saves the most recent color corrections you
+    // have made in a sequence (up to a limit of 16 corrections) and makes them available in the Effect Palette", newest
+    // first, each named by its segment's comment or else its clip name. "Automatic templates update when you make new
+    // adjustments on the same segment" (p.611); a correction on the segment's other side is another one (p.612). Kept for
+    // the session, by the sequence's item id.
+    static constexpr int kAutomaticCorrections = 16;
+    struct AutomaticCorrection {
+        QString name;
+        model::CorrectionTemplate correction;
+    };
+    QList<AutomaticCorrection> automaticCorrections(const QString& sequenceId) const;
+    QStringList correctedSequences() const;
+    // The Effect Palette lists them as a bin of templates (TemplateBin) with this id; the items' ids are their numbers
+    // from 1. automaticCorrection finds one by those ids; nothing for any other.
+    static QString automaticCorrectionBin(const QString& sequenceId);
+    std::optional<model::CorrectionTemplate> automaticCorrection(const QString& binId, const QString& itemId) const;
     // The Color Correction tool's Comments (FX Guide p.609-610): the comment on the segment at the position on the
     // correction track (empty for none; nothing off a clip), and setting it, an undo step; empty removes it.
     std::optional<QString> currentCorrectionComment() const;
@@ -1170,6 +1186,8 @@ signals:
     // Effect mode was entered or left.
     void effectModeChanged(bool on);
     void correctionModeChanged(bool on);
+    // The automatic correction templates changed (a correction was made in Color Correction mode).
+    void automaticCorrectionsChanged();
     // An effect was put on segments or transitions (Applying Effects opens Effect Editor, p.1220).
     void effectApplied();
     // The Stabilize effect was put on one segment, not nested: AutoStabilize runs (FX Guide p.276-277). `frame` is the
@@ -1375,6 +1393,16 @@ private:
     bool effectMode_ = false;
     bool correctionMode_ = false;
     model::CorrectionRelationship correctionRelationship_ = model::CorrectionRelationship::SourceSegment;
+    // The automatic templates by sequence id, newest first, with the segment and side each was made on.
+    struct AutomaticEntry {
+        QString track;
+        std::int64_t start = 0;
+        model::CorrectionSide side = model::CorrectionSide::Source;
+        AutomaticCorrection made;
+    };
+    QHash<QString, QList<AutomaticEntry>> automatic_;
+    // Takes the current segment's corrections as the newest automatic template, after a correction made on `side`.
+    void noteAutomaticCorrection(model::CorrectionSide side);
     QList<model::TrimRoller> rollers_;
     QList<model::TrimRoller> lastRollers_;
     model::TrimKind trimKind_ = model::TrimKind::Ripple;

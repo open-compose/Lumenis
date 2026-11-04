@@ -513,6 +513,30 @@ bin's double-click and Enter in `MainWindow`. Tests: `tst_correction_relations` 
 * The bucket icon is the template button's sheet drawn green; a bucket's drag carries its template, to a bin or a monitor.
 * Save Correction goes to the active bin, else the first open one.
 
+## 6.10d2b: Color Correction Presets and automatic templates
+
+Code: the presets in `resources/effects.json` (`EffectInfo::correctionPreset`), applied through
+`Timeline::applyEffectToSelection` and `droppedCorrectionTemplate`; `Timeline::automaticCorrections`,
+`automaticCorrectionBin`/`automaticCorrection` and `MainWindow::refreshTemplateBins`; Enter in `EffectList`. Tests:
+`tst_effects` (`catalog`, `palette`), `tst_correction_tool` (`automaticTemplatesAndPresets`).
+
+### From the guide
+* "A number of color correction presets are included in the effects library ... Select Tools > Effect Palette and choose
+  Color Correction Presets" (p.611). The guide does not name them.
+* Automatic templates: the 16 most recent corrections in a sequence, listed under each color-corrected sequence loaded in
+  the Record monitor "at the bottom of the scrollable list of effect categories", named by the comment or the clip name,
+  newest first and numbered from 1; applied by dragging, or "highlighting it in the Effect Palette and pressing Enter"
+  (p.612). They "update when you make new adjustments on the same segment"; a Program correction after a Source one makes
+  a second template with both (p.611-612).
+
+### Ours
+* Seven presets of our own, each a Source correction of the HSL Master controls: Black and White, Brighten, Darken,
+  Desaturate, High Contrast, Low Contrast, Saturate. They apply as templates do (the Correction Type's relationship; on
+  the current segment in the mode, on the selected segments outside it; dropped on a segment with their own).
+* The automatic templates live for the session, by sequence; a correction on the same segment and side as the newest
+  updates it, anything else is a new one. They show as a template bin named after the sequence, items "1  name", for the
+  sequences the Record monitor has loaded. Enter on any item in the Effect Palette's list acts as a double-click.
+
 ## 6.10a3: the Secondary group
 
 ### From the guide

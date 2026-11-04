@@ -714,8 +714,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   as Effect items, `correctionTemplateMime()`, `src/ui/timeline_correction.cpp`; the tool's template button and buckets
   C1-C8 with `cc.save_correction`/`cc.bucket_1`-`8`, drops on a tab, the monitors and Timeline segments, the bin's
   Enter/double-click; tests `tst_correction_relations`, `tst_correction_tool`, scenario `40-correction-templates.json`),
-  is done.
-  Next: 6.10d2b-d4, 6.10e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
+  is done. 6.10d2b, our Color Correction Presets (`EffectInfo::correctionPreset`) and the Effect Palette's automatic
+  templates (`Timeline::automaticCorrections`, listed by `MainWindow::refreshTemplateBins`), is done, so 6.10d2 is.
+  Next: 6.10d3-d4, 6.10e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

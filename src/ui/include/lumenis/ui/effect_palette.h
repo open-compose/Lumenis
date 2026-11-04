@@ -3,6 +3,7 @@
 #include "lumenis/model/sequence.h"
 
 #include <QIcon>
+#include <QJsonObject>
 #include <QListWidget>
 #include <QWidget>
 
@@ -26,6 +27,9 @@ struct EffectInfo {
     QStringList parameters;    // parameter categories (p.491)
     // An Audio Track Effect (p.792): the id of a media::audioEffects() effect; empty for video ones.
     QString audioEffect;
+    // A Color Correction Preset (FX Guide p.611): the Color Correction effect template it applies
+    // (model::CorrectionTemplate::toJson); empty for other effects. Ours: presets are templates, not effects.
+    QJsonObject correctionPreset;
 
     // The effect as the sequence stores it, without parameters.
     model::Effect effect() const { return model::Effect{category, name, {}}; }
@@ -98,9 +102,15 @@ class EffectList : public QListWidget {
 public:
     using QListWidget::QListWidget;
 
+signals:
+    // Enter or Return on the current item: "highlighting it in the Effect Palette and pressing Enter" (FX Guide p.612),
+    // as a double-click.
+    void enterPressed(QListWidgetItem* item);
+
 protected:
     // Drags the current item's effect (effectMime()) as a copy.
     void startDrag(Qt::DropActions actions) override;
+    void keyPressEvent(QKeyEvent* event) override;
 };
 
 // Tools > Effect Palette, Ctrl+8 (FX guide p.37-38): tabs for video

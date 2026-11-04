@@ -1,3 +1,4 @@
+#include "lumenis/model/correction_template.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/effect_keyframes.h"
@@ -140,6 +141,18 @@ private slots:
         QVERIFY(!effect("Blend", "Dissolve").segment);
         QVERIFY(effect("Image", "Flop").segment);
         QVERIFY(!effect("Illusion FX", "FluidBlur").realTime);
+        // The Color Correction Presets (FX Guide p.611, ours) are templates for segments.
+        int presets = 0;
+        for (const EffectInfo& e : c.all()) {
+            if (e.category != QLatin1String("Color Correction Presets")) {
+                QVERIFY2(e.correctionPreset.isEmpty(), qPrintable(e.name));
+                continue;
+            }
+            ++presets;
+            QVERIFY(e.segment);
+            QVERIFY2(!model::CorrectionTemplate::fromJson(e.correctionPreset).isEmpty(), qPrintable(e.name));
+        }
+        QVERIFY(presets >= 5);
         // Every parameter category an effect names is described.
         for (const EffectInfo& e : c.all()) {
             for (const QString& p : e.parameters) QVERIFY2(effectParameters(p), qPrintable(e.name + ": " + p));
@@ -169,6 +182,12 @@ private slots:
         QCOMPARE(palette.shownEffects(), (QStringList{"Dissolve", "Film Dissolve"}));
         palette.setCategory(QStringLiteral("Film"));
         QCOMPARE(palette.shownEffects(), QStringList{"Film Dissolve"});
+        // Enter on an effect applies it, as a double-click does (p.612).
+        QStringList activated;
+        connect(&palette, &EffectPalette::effectActivated, this, [&](const EffectInfo& e) { activated << e.name; });
+        palette.effectList()->setCurrentRow(0);
+        QTest::keyClick(palette.effectList(), Qt::Key_Return);
+        QCOMPARE(activated, QStringList{QStringLiteral("Film Dissolve")});
         // Audio effects come with plug-ins.
         palette.setQuickFind({});
         palette.setTab(3);

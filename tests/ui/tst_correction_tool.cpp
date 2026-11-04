@@ -9,6 +9,7 @@
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/correction_monitors.h"
 #include "lumenis/ui/correction_tool.h"
+#include "lumenis/ui/effect_palette.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QApplication>
@@ -275,6 +276,69 @@ private slots:
         QCOMPARE(r.segment(1).sourceCorrection.number(QStringLiteral("hsl/controls/master/saturation")), 50.0);
         r.timeline.setSelection({});
         QVERIFY(!r.timeline.applyCorrectionTemplateToSelection(source));
+    }
+
+    // The Effect Palette's automatic templates and Color Correction Presets (p.611-612, 6.10d2b).
+    void automaticTemplatesAndPresets() {
+        Rig r;
+        const QString seq = r.composer.state(MonitorId::Record).current()->item.id;
+        QSignalSpy changed(&r.timeline, &Timeline::automaticCorrectionsChanged);
+        model::ColorCorrection c;
+        c.set(QStringLiteral("hsl/controls/master/gain"), 110);
+        QVERIFY(r.timeline.setCurrentCorrection(c, QStringLiteral("Color Correction")));
+        QCOMPARE(changed.count(), 1);
+        QCOMPARE(r.timeline.correctedSequences(), QStringList{seq});
+        QCOMPARE(r.timeline.automaticCorrections(seq).size(), 1);
+        QCOMPARE(r.timeline.automaticCorrections(seq).first().name, QStringLiteral("A")); // the clip's name
+        // Another adjustment on the same segment and side updates it (p.611).
+        c.set(QStringLiteral("hsl/controls/master/gain"), 120);
+        QVERIFY(r.timeline.setCurrentCorrection(c, QStringLiteral("Color Correction")));
+        QCOMPARE(r.timeline.automaticCorrections(seq).size(), 1);
+        QCOMPARE(r.timeline.automaticCorrections(seq).first().correction.source.number(QStringLiteral("hsl/controls/master/gain")), 120.0);
+        // The other side is another template, with both sides in it (p.612); the newest is number 1.
+        r.timeline.setCorrectionSide(model::CorrectionSide::Program);
+        model::ColorCorrection p;
+        p.set(QStringLiteral("hsl/controls/master/saturation"), 70);
+        QVERIFY(r.timeline.setCurrentCorrection(p, QStringLiteral("Color Correction")));
+        QCOMPARE(r.timeline.automaticCorrections(seq).size(), 2);
+        QCOMPARE(r.timeline.automaticCorrections(seq).first().correction.program, p);
+        QCOMPARE(r.timeline.automaticCorrections(seq).first().correction.source, c);
+        // A comment names it (p.612).
+        r.timeline.setCorrectionSide(model::CorrectionSide::Source);
+        r.composer.moveTo(MonitorId::Record, 25);
+        QVERIFY(r.timeline.setCorrectionComment(QStringLiteral("sky")));
+        QVERIFY(r.timeline.setCurrentCorrection(c, QStringLiteral("Color Correction")));
+        QCOMPARE(r.timeline.automaticCorrections(seq).first().name, QStringLiteral("sky"));
+        // By the palette's ids: the bin and the number from 1; a drag of one carries it.
+        const QString bin = Timeline::automaticCorrectionBin(seq);
+        QCOMPARE(r.timeline.automaticCorrection(bin, QStringLiteral("2"))->program, p);
+        QVERIFY(!r.timeline.automaticCorrection(bin, QStringLiteral("9")));
+        QVERIFY(!r.timeline.automaticCorrection(QStringLiteral("bin"), QStringLiteral("1")));
+        QMimeData drag;
+        drag.setData(binItemsMime(), (bin + QStringLiteral("\n1")).toUtf8());
+        QCOMPARE(r.timeline.droppedCorrectionTemplate(&drag)->source, c);
+        // At most 16: the oldest goes (p.612). Alternate the segments so each is a new one.
+        for (int i = 0; i < 20; ++i) {
+            r.composer.moveTo(MonitorId::Record, i % 2 ? 25 : 5);
+            c.set(QStringLiteral("hsl/controls/master/gain"), 130 + i);
+            QVERIFY(r.timeline.setCurrentCorrection(c, QStringLiteral("Color Correction")));
+        }
+        QCOMPARE(r.timeline.automaticCorrections(seq).size(), Timeline::kAutomaticCorrections);
+        QCOMPARE(r.timeline.automaticCorrections(seq).first().correction.source.number(QStringLiteral("hsl/controls/master/gain")), 149.0);
+
+        // A Color Correction Preset dragged from the Effect Palette is a template (p.611); double-clicked with segments
+        // selected, it corrects them.
+        const EffectInfo* preset = EffectCatalog::builtin().find(QStringLiteral("Color Correction Presets"), QStringLiteral("Black and White"));
+        QVERIFY(preset);
+        std::unique_ptr<QMimeData> presetMime(effectMime(*preset));
+        const auto t = r.timeline.droppedCorrectionTemplate(presetMime.get());
+        QVERIFY(t);
+        QCOMPARE(t->source.number(QStringLiteral("hsl/controls/master/saturation")), 0.0);
+        r.timeline.setCorrectionMode(false);
+        r.timeline.setSelection({{QStringLiteral("V1"), 0}});
+        QVERIFY(r.timeline.applyEffectToSelection(*preset));
+        QCOMPARE(r.segment(0).sourceCorrection.number(QStringLiteral("hsl/controls/master/saturation")), 0.0);
+        QVERIFY(!r.segment(0).effect); // a correction, not an effect
     }
 
     void slidersAndEnableButtons() {

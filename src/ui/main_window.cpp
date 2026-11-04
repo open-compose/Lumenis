@@ -1555,9 +1555,28 @@ void MainWindow::createTools() {
     effectPalette_ = new EffectPalette;
     panels_->addPanel(new Panel(QStringLiteral("EffectPalette"), tr("Effect Palette"), effectPalette_));
     connect(effectPalette_, &EffectPalette::effectActivated, this,
-            [this](const EffectInfo& effect) { timeline_->applyEffectToSelection(effect); });
+            [this](const EffectInfo& effect) {
+                // A Color Correction Preset in Color Correction mode: on the current segment, as a template's Enter
+                // (FX Guide p.611, p.614).
+                if (!effect.correctionPreset.isEmpty() && timeline_->isCorrectionMode()) {
+                    timeline_->applyCorrectionTemplate(model::CorrectionTemplate::fromJson(effect.correctionPreset), false);
+                    correctionTool_->reload();
+                    return;
+                }
+                timeline_->applyEffectToSelection(effect);
+            });
     // The open bins' effect templates in the palette (FX Guide p.37-38, p.53); double-clicked, as an effect.
     connect(effectPalette_, &EffectPalette::templateActivated, this, [this](const QString& binId, const QString& itemId) {
+        // An automatic template: "highlighting it in the Effect Palette and pressing Enter" (FX Guide p.612).
+        if (const auto automatic = timeline_->automaticCorrection(binId, itemId)) {
+            if (timeline_->isCorrectionMode()) {
+                timeline_->applyCorrectionTemplate(*automatic, false);
+                correctionTool_->reload();
+            } else {
+                timeline_->applyCorrectionTemplateToSelection(*automatic);
+            }
+            return;
+        }
         const BinDocument* doc = binContainer_->document(binId);
         const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr;
         if (const auto t = item ? model::effectTemplateOf(*item) : std::nullopt) timeline_->applyTemplateToSelection(*t);
@@ -1572,6 +1591,7 @@ void MainWindow::createTools() {
         }
     });
     connect(binContainer_, &BinContainer::binItemsChanged, this, [this] { refreshTemplateBins(); });
+    connect(timeline_, &Timeline::automaticCorrectionsChanged, this, [this] { refreshTemplateBins(); });
     connect(binContainer_, &BinContainer::activeBinChanged, this, [this] { refreshTemplateBins(); });
     // Applying Effects opens Effect Editor (Timeline settings, p.1220).
     connect(timeline_, &Timeline::effectApplied, this, [this] {
@@ -2611,6 +2631,20 @@ void MainWindow::refreshTemplateBins() {
             if (model::correctionTemplateOf(item)) bin.templates << TemplateBin::Entry{item.id, item.name, false};
         }
         bins << bin;
+    }
+    // "The Effect Palette lists all color-corrected sequences that are loaded in the Record monitor at the bottom of the
+    // scrollable list", each with its most recent corrections, "numbered to indicate the order of their creation, with
+    // the most recently created template always numbered "1."" (FX Guide p.612).
+    if (timeline_) {
+        for (const QString& id : timeline_->correctedSequences()) {
+            const model::LoadedClip* loaded = composer_->state(MonitorId::Record).loaded(id);
+            if (!loaded) continue;
+            TemplateBin bin{Timeline::automaticCorrectionBin(id), loaded->item.name, {}};
+            const QList<Timeline::AutomaticCorrection> made = timeline_->automaticCorrections(id);
+            for (int i = 0; i < made.size(); ++i)
+                bin.templates << TemplateBin::Entry{QString::number(i + 1), QStringLiteral("%1  %2").arg(i + 1).arg(made.at(i).name), false};
+            bins << bin;
+        }
     }
     effectPalette_->setTemplateBins(bins);
 }

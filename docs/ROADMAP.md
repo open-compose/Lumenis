@@ -1189,7 +1189,8 @@ phase of their own. They are done in three steps:
     double-click and Enter, and which relationship each way uses (p.610-615), done (`src/model/correction_template.*`,
     `src/ui/timeline_correction.cpp`; tests `tst_correction_relations`, `tst_correction_tool`, scenario
     `40-correction-templates.json`); 6.10d2b, Color Correction Presets and the Effect Palette's automatic templates
-    (p.611-612);
+    (p.611-612), done (our presets in `resources/effects.json`, `Timeline::automaticCorrections`; tests `tst_effects`,
+    `tst_correction_tool`). So 6.10d2 is done;
     6.10d3, keyframing corrections: the parameters in the Effect Editor (the HSL Controls and Hue Offsets, the
     Secondary sliders; the Curves and Levels as keyframe tracks only), the keyframe markers under the Current monitor
     and keyframes added by adjusting (p.683-686); 6.10d4, Update, Merge, Flatten and Remove Correction from the tool's

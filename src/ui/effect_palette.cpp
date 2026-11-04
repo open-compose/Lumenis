@@ -15,6 +15,7 @@
 #include <QJsonObject>
 #include <QLineEdit>
 #include <QMenu>
+#include <QKeyEvent>
 #include <QMimeData>
 #include <QPainter>
 #include <QSplitter>
@@ -71,6 +72,7 @@ const EffectCatalog& EffectCatalog::builtin() {
                 info.transition = e.value(QStringLiteral("transition")).toBool();
                 info.segment = e.value(QStringLiteral("segment")).toBool();
                 info.realTime = e.value(QStringLiteral("realTime")).toBool(true);
+                info.correctionPreset = e.value(QStringLiteral("correction")).toObject();
                 for (const QJsonValue& p : e.value(QStringLiteral("parameters")).toArray()) {
                     info.parameters << p.toString();
                 }
@@ -184,6 +186,14 @@ QIcon effectIcon(bool transition, bool realTimeDot) {
 
 // ---------------------------------------------------------------- EffectList
 
+void EffectList::keyPressEvent(QKeyEvent* event) {
+    if ((event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) && currentItem()) {
+        emit enterPressed(currentItem());
+        return;
+    }
+    QListWidget::keyPressEvent(event);
+}
+
 // Each item's text is the effect's name and its Qt::UserRole its category, which find the effect.
 void EffectList::startDrag(Qt::DropActions) {
     QListWidgetItem* item = currentItem();
@@ -268,13 +278,15 @@ EffectPalette::EffectPalette(QWidget* parent) : QWidget(parent) {
     });
     connect(bins_, &QListWidget::currentRowChanged, this, [this] { fillEffects(); });
     connect(find_, &QLineEdit::textChanged, this, [this] { fillEffects(); });
-    connect(effects_, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
+    const auto activate = [this](QListWidgetItem* item) {
         if (const auto t = templateAt(effects_->row(item))) {
             emit templateActivated(t->first, t->second);
         } else if (const auto e = effectAt(effects_->row(item))) {
             emit effectActivated(*e);
         }
-    });
+    };
+    connect(effects_, &QListWidget::itemDoubleClicked, this, activate);
+    connect(effects_, &EffectList::enterPressed, this, activate);
     fillCategories();
 }
 

@@ -5,6 +5,7 @@
 #include "lumenis/model/correction_relations.h"
 #include "lumenis/model/correction_template.h"
 #include "lumenis/ui/bin_dock.h"
+#include "lumenis/ui/effect_palette.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QJsonDocument>
@@ -76,6 +77,7 @@ bool Timeline::applyCorrectionTemplate(const model::CorrectionTemplate& t, bool 
     const bool ok = commitSequence(tr("Apply Color Correction"), seq);
     selection_ = keep;
     view_->update();
+    if (ok) noteAutomaticCorrection(templateRelationships && t.source.isEmpty() ? model::CorrectionSide::Program : correctionSide());
     return ok;
 }
 
@@ -126,8 +128,61 @@ bool Timeline::applyCorrectionTemplateToSelection(const model::CorrectionTemplat
     return ok;
 }
 
+void Timeline::noteAutomaticCorrection(model::CorrectionSide side) {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return;
+    const auto t = currentCorrectionTemplate();
+    if (!t || t->isEmpty()) return;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* trk = seq.track(correctionTrack());
+    std::int64_t start = 0;
+    const int i = trk ? trk->segmentAt(composer_.state(MonitorId::Record).position(), &start) : -1;
+    if (i < 0) return;
+    // "Media Composer names each template using either the clip name of the segment ... or, if a comment is associated
+    // with that segment, the text of the comment" (p.612).
+    const QString comment = trk->segments.at(i).correctionComment;
+    const AutomaticCorrection made{comment.isEmpty() ? currentCorrectionName() : comment, *t};
+    QList<AutomaticEntry>& list = automatic_[rec->item.id];
+    if (!list.isEmpty() && list.first().track == correctionTrack() && list.first().start == start && list.first().side == side) {
+        list.first().made = made;
+    } else {
+        list.prepend(AutomaticEntry{correctionTrack(), start, side, made});
+        // "If the list already contains 16 templates, Media Composer removes the oldest template" (p.612).
+        while (list.size() > kAutomaticCorrections) list.removeLast();
+    }
+    emit automaticCorrectionsChanged();
+}
+
+QList<Timeline::AutomaticCorrection> Timeline::automaticCorrections(const QString& sequenceId) const {
+    QList<AutomaticCorrection> out;
+    for (const AutomaticEntry& e : automatic_.value(sequenceId)) out << e.made;
+    return out;
+}
+
+QStringList Timeline::correctedSequences() const {
+    QStringList out = automatic_.keys();
+    out.sort();
+    return out;
+}
+
+QString Timeline::automaticCorrectionBin(const QString& sequenceId) {
+    return QStringLiteral("automaticCorrections:") + sequenceId;
+}
+
+std::optional<model::CorrectionTemplate> Timeline::automaticCorrection(const QString& binId, const QString& itemId) const {
+    const QString prefix = automaticCorrectionBin({});
+    if (!binId.startsWith(prefix)) return std::nullopt;
+    const QList<AutomaticEntry> list = automatic_.value(binId.mid(prefix.size()));
+    bool ok = false;
+    const int n = itemId.toInt(&ok);
+    if (!ok || n < 1 || n > list.size()) return std::nullopt;
+    return list.at(n - 1).made.correction;
+}
+
 std::optional<model::CorrectionTemplate> Timeline::droppedCorrectionTemplate(const QMimeData* mime) const {
     if (!mime) return std::nullopt;
+    // A Color Correction Preset from the Effect Palette (p.611).
+    if (const auto e = effectFromMime(mime); e && !e->correctionPreset.isEmpty()) return model::CorrectionTemplate::fromJson(e->correctionPreset);
     if (mime->hasFormat(correctionTemplateMime())) {
         const QJsonObject o = QJsonDocument::fromJson(mime->data(correctionTemplateMime())).object();
         return model::CorrectionTemplate::fromJson(o.value(QStringLiteral("template")).toObject());
@@ -135,6 +190,7 @@ std::optional<model::CorrectionTemplate> Timeline::droppedCorrectionTemplate(con
     if (!mime->hasFormat(binItemsMime())) return std::nullopt;
     const QStringList lines = QString::fromUtf8(mime->data(binItemsMime())).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
     if (lines.size() != 2) return std::nullopt;
+    if (const auto automatic = automaticCorrection(lines.at(0), lines.at(1))) return automatic;
     const auto item = composer_.resolve(lines.at(0), lines.at(1));
     return item ? model::correctionTemplateOf(*item) : std::nullopt;
 }

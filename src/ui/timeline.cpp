@@ -4933,6 +4933,7 @@ bool Timeline::setCurrentCorrection(const model::ColorCorrection& correction, co
     const bool ok = commitSequence(step, seq);
     selection_ = keep;
     view_->update();
+    if (ok) noteAutomaticCorrection(correctionSide());
     return ok;
 }
 
@@ -5782,6 +5783,8 @@ bool Timeline::dropEffect(const QString& track, std::int64_t frame, const Effect
 bool Timeline::applyEffectToSelection(const EffectInfo& effect) {
     message_.clear();
     if (!recordSequence()) return false;
+    // A Color Correction Preset (FX Guide p.611) goes on as a Color Correction effect template (p.615).
+    if (!effect.correctionPreset.isEmpty()) return applyCorrectionTemplateToSelection(model::CorrectionTemplate::fromJson(effect.correctionPreset));
     if (!effect.audioEffect.isEmpty()) {
         // An Audio Track Effect double-clicked: the first empty insert of each selected audio track
         // (ours; the guide drags them, p.792).
