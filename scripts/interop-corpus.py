@@ -10,7 +10,8 @@ committed here: `fetch` downloads them into a cache folder.
 
     interop-corpus.py fetch [--dir DIR]
         Download the files (default DIR: $CUTTHULHU_INTEROP_CORPUS, else the
-        user's cache folder). Exits 77 when they cannot be downloaded.
+        user's cache folder), trying each one four times, and mark the folder
+        complete (.complete). Exits 77 when they cannot be downloaded.
     interop-corpus.py manifest [--dir DIR]
         Rewrite tests/data/interop_corpus.json: for each AAF file, how many
         storages and streams olefile (another compound file reader) finds,
@@ -103,6 +104,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 import tempfile
 import urllib.request
 
@@ -234,25 +236,49 @@ def sha256(path):
     return h.hexdigest()
 
 
+# Written into the corpus folder once every file is there and checked. The C++ tests read the
+# corpus only when it is (tests/interop/corpus.h): a download cut off part way leaves some folders
+# empty, and the tests then skip as they do without a network instead of failing on missing files.
+COMPLETE = ".complete"
+
+
+def download(url, tries=4):
+    """The file at `url`, tried `tries` times with 2, 4, 8 ... seconds between (a runner's network
+    can drop for a moment); raises the last OSError."""
+    for attempt in range(tries):
+        try:
+            with urllib.request.urlopen(url, timeout=60) as response:
+                return response.read()
+        except OSError:
+            if attempt == tries - 1:
+                raise
+            time.sleep(2 << attempt)
+
+
 def fetch(folder):
     fetched = 0
+    marker = os.path.join(folder, COMPLETE)
+    if os.path.exists(marker):
+        os.remove(marker)
     for name, url, digest in files():
         path = os.path.join(folder, name)
         if os.path.exists(path) and sha256(path) == digest:
             continue
-        os.makedirs(os.path.dirname(path), exist_ok=True)
         try:
-            with urllib.request.urlopen(url, timeout=60) as response:
-                data = response.read()
+            data = download(url)
         except OSError as e:
             print(f"interop-corpus: cannot download {url}: {e}", file=sys.stderr)
             return 77
         if hashlib.sha256(data).hexdigest() != digest:
             print(f"interop-corpus: {url} is not the file expected (SHA-256)", file=sys.stderr)
             return 1
-        with open(path, "wb") as f:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path + ".part", "wb") as f:
             f.write(data)
+        os.replace(path + ".part", path)
         fetched += 1
+    with open(marker, "w") as f:
+        f.write("every file of the corpus is here, checked by SHA-256\n")
     print(f"interop-corpus: {sum(1 for _ in files())} files in {folder} ({fetched} downloaded)")
     return 0
 

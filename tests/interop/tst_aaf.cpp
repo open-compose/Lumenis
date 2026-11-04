@@ -1,3 +1,4 @@
+#include "corpus.h"
 #include "lumenis/interop/aaf.h"
 #include "lumenis/interop/aaf_export.h"
 #include "lumenis/interop/aaf_import.h"
@@ -25,10 +26,7 @@ using namespace lumenis::interop;
 
 namespace {
 
-QString corpus() {
-    const QString folder = qEnvironmentVariable("CUTTHULHU_INTEROP_CORPUS");
-    return !folder.isEmpty() && QDir(folder).exists() ? folder : QString();
-}
+QString corpus() { return lumenis::test::interopCorpus(); }
 
 QString hexOf(const QByteArray& b) { return QString::fromLatin1(b.toHex()); }
 

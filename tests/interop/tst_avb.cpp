@@ -11,6 +11,7 @@
 // (src/interop/avb_export.*, docs/spec/avb.md, "Export"): exportsBin and
 // exportsNames write bins made in code and read them back.
 
+#include "corpus.h"
 #include "lumenis/core/timecode.h"
 #include "lumenis/interop/aaf.h"
 #include "lumenis/interop/avb.h"
@@ -41,10 +42,7 @@ using namespace lumenis::interop;
 
 namespace {
 
-QString corpus() {
-    const QString folder = qEnvironmentVariable("CUTTHULHU_INTEROP_CORPUS");
-    return !folder.isEmpty() && QDir(folder).exists() ? folder : QString();
-}
+QString corpus() { return lumenis::test::interopCorpus(); }
 
 QByteArray readAll(const QString& path) {
     QFile f(path);

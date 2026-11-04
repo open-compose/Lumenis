@@ -1,3 +1,4 @@
+#include "corpus.h"
 #include "lumenis/interop/edl.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
@@ -21,10 +22,7 @@ using namespace lumenis::interop;
 
 namespace {
 
-QString corpusFolder() {
-    const QString folder = qEnvironmentVariable("CUTTHULHU_INTEROP_CORPUS");
-    return !folder.isEmpty() && QDir(folder).exists() ? folder : QString();
-}
+QString corpusFolder() { return lumenis::test::interopCorpus(); }
 
 edl::ImportOptions at(const Rational& rate) {
     edl::ImportOptions o;

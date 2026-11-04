@@ -11,11 +11,28 @@ endforeach()
 
 # The interchange corpus (scripts/interop-corpus.py): AAF files and bins from
 # pyaaf2 and pyavb, downloaded at pinned commits. Without a network the
-# download is skipped, and so are the tests that read it.
+# download is skipped, and so are the tests that read it (they read the corpus
+# only once the fetch has marked it complete, tests/interop/corpus.h).
 if(DEFINED ENV{CUTTHULHU_INTEROP_CORPUS})
     set(LUMENIS_INTEROP_CORPUS_DEFAULT "$ENV{CUTTHULHU_INTEROP_CORPUS}")
 else()
-    set(LUMENIS_INTEROP_CORPUS_DEFAULT "${CMAKE_BINARY_DIR}/interop-corpus")
+    # The user's cache folder, as interop-corpus.py's own default: one download for every build folder,
+    # and kept when a self-hosted runner's checkout is cleaned (git clean -ffdx removes the build folder,
+    # and a download each run fails whenever the network drops; BUILDING.md "Troubleshooting").
+    if(WIN32 AND DEFINED ENV{LOCALAPPDATA})
+        file(TO_CMAKE_PATH "$ENV{LOCALAPPDATA}" _cache)
+    elseif(APPLE AND DEFINED ENV{HOME})
+        set(_cache "$ENV{HOME}/Library/Caches")
+    elseif(DEFINED ENV{XDG_CACHE_HOME})
+        set(_cache "$ENV{XDG_CACHE_HOME}")
+    elseif(DEFINED ENV{HOME})
+        set(_cache "$ENV{HOME}/.cache")
+    endif()
+    if(DEFINED _cache)
+        set(LUMENIS_INTEROP_CORPUS_DEFAULT "${_cache}/cutthulhu/interop-corpus")
+    else()
+        set(LUMENIS_INTEROP_CORPUS_DEFAULT "${CMAKE_BINARY_DIR}/interop-corpus")
+    endif()
 endif()
 set(LUMENIS_INTEROP_CORPUS "${LUMENIS_INTEROP_CORPUS_DEFAULT}" CACHE PATH "Where the interchange corpus is kept")
 set_tests_properties(tst_cfb tst_aaf tst_avb tst_edl tst_ale tst_otio tst_fcpxml PROPERTIES

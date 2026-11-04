@@ -1,3 +1,4 @@
+#include "corpus.h"
 #include "lumenis/interop/cfb.h"
 
 #include <QCryptographicHash>
@@ -293,8 +294,8 @@ void TestCfb::hugeStreamSize() {
 // olefile, another reader, found (tests/data/interop_corpus.json). Each file, copied entry by
 // entry through the Writer, reads back the same.
 void TestCfb::corpus() {
-    const QString folder = qEnvironmentVariable("CUTTHULHU_INTEROP_CORPUS");
-    if (folder.isEmpty() || !QDir(folder).exists()) QSKIP("no interchange corpus (scripts/interop-corpus.py fetch)");
+    const QString folder = lumenis::test::interopCorpus();
+    if (folder.isEmpty()) QSKIP("no interchange corpus (scripts/interop-corpus.py fetch)");
     QFile manifestFile(QStringLiteral(LUMENIS_TEST_DATA "/interop_corpus.json"));
     QVERIFY(manifestFile.open(QIODevice::ReadOnly));
     const QJsonObject manifest = QJsonDocument::fromJson(manifestFile.readAll()).object();

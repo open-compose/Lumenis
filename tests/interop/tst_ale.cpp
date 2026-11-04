@@ -1,3 +1,4 @@
+#include "corpus.h"
 #include "lumenis/interop/ale.h"
 #include "lumenis/model/structure.h"
 
@@ -17,10 +18,7 @@ using namespace lumenis::interop;
 
 namespace {
 
-QString corpusFolder() {
-    const QString folder = qEnvironmentVariable("CUTTHULHU_INTEROP_CORPUS");
-    return !folder.isEmpty() && QDir(folder).exists() ? folder : QString();
-}
+QString corpusFolder() { return lumenis::test::interopCorpus(); }
 
 // The bin's structure dump without MobIDs and sources (a log's clips are new clips each time).
 QJsonObject structure(const QList<model::BinItem>& items, const QStringList& custom) {

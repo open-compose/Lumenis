@@ -5,6 +5,7 @@
 // interchange corpus (scripts/interop-corpus.py), read without warnings they should not give.
 // scripts/otio-check.py (ctests otio_round_trip, otio_python) checks the corpus against
 // OpenTimelineIO's Python package.
+#include "corpus.h"
 #include "lumenis/interop/otio.h"
 
 #include "lumenis/model/marker.h"
@@ -315,7 +316,7 @@ void TestOtio::damaged() {
 }
 
 void TestOtio::corpus() {
-    const QString folder = qEnvironmentVariable("CUTTHULHU_INTEROP_CORPUS");
+    const QString folder = lumenis::test::interopCorpus();
     if (folder.isEmpty()) QSKIP("no interchange corpus (scripts/interop-corpus.py fetch)");
     const QDir dir(folder + QStringLiteral("/otio"));
     const QStringList files = dir.entryList({QStringLiteral("*.otio")}, QDir::Files);

@@ -489,6 +489,20 @@ Keeping a copy is not a check of the build: if it fails, the step warns
 instead of failing the job. The warning prints the Controlled Folder Access
 setting, the folder's attributes and its permissions.
 
+### `tst_fcpxml` "corpus(): read 0, expected 5" or `tst_avb` "!original.isEmpty()"
+
+The interchange corpus was only partly downloaded: `interop_corpus_fetch`
+shows "Skipped" because the network dropped while it ran (it happened on the
+Mac and WSL runners at once), and the tests then found empty folders. The
+corpus used to live in the build folder, which a self-hosted runner's
+checkout cleans every run, so it was downloaded every run. It is now kept in
+the user's cache folder (one download per machine), each file is tried four
+times, and `scripts/interop-corpus.py fetch` writes `.complete` only once
+every file is in; the tests read the corpus only then
+(`tests/interop/corpus.h`) and otherwise skip. If a build folder configured
+before this still names `build/<preset>/interop-corpus`, delete
+`LUMENIS_INTEROP_CORPUS` from its CMakeCache.txt or reconfigure it fresh.
+
 ### A test fails in CI but its report is missing
 
 ctest's capture of a test's output can come back without QTest's FAIL
@@ -1033,8 +1047,10 @@ install a runner. For a runner installed before that:
   the tool itself.
 * **The interchange corpus:** AAF files and bins from pyaaf2's and pyavb's
   test suites (MIT), made with Media Composer. ctest `interop_corpus_fetch`
-  downloads them at pinned commits, checked by SHA-256, into
-  `build/<preset>/interop-corpus`; set `CUTTHULHU_INTEROP_CORPUS` (or the
+  downloads them at pinned commits, checked by SHA-256, into the user's
+  cache folder (`~/.cache/cutthulhu/interop-corpus`, `~/Library/Caches/...`
+  on macOS, `%LOCALAPPDATA%\cutthulhu\interop-corpus` on Windows), shared by
+  every build folder; set `CUTTHULHU_INTEROP_CORPUS` (or the
   CMake variable `LUMENIS_INTEROP_CORPUS`) to keep them elsewhere. By hand:
   `python3 scripts/interop-corpus.py fetch`. Without a network the download
   and the tests that read the files are skipped.

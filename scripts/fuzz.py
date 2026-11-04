@@ -49,6 +49,15 @@ def default_corpus() -> Path:
     env = os.environ.get("CUTTHULHU_INTEROP_CORPUS")
     if env:
         return Path(env)
+    # The user's cache folder, where tests/interop/CMakeLists.txt keeps it, then older build folders.
+    if os.name == "nt" and os.environ.get("LOCALAPPDATA"):
+        cache = Path(os.environ["LOCALAPPDATA"])
+    elif sys.platform == "darwin":
+        cache = Path.home() / "Library" / "Caches"
+    else:
+        cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    if (cache / "cutthulhu" / "interop-corpus").is_dir():
+        return cache / "cutthulhu" / "interop-corpus"
     for build in ("ci", "clang", "asan", "debug", "release"):
         p = ROOT / "build" / build / "interop-corpus"
         if p.is_dir():

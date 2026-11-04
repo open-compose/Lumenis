@@ -5,6 +5,7 @@
 // damaged documents, and the FCP XML files of the interchange corpus (scripts/interop-corpus.py).
 // scripts/otio-check.py --format fcpxml (ctests fcpxml_round_trip, fcpxml_python) checks the corpus
 // against OpenTimelineIO's FCP adapter.
+#include "corpus.h"
 #include "lumenis/interop/fcp_xml.h"
 #include "lumenis/interop/otio.h"
 
@@ -78,9 +79,7 @@ const model::BinItem* sequenceOf(const QList<model::BinItem>& items) {
     return nullptr;
 }
 
-QString corpusDir() {
-    return qEnvironmentVariable("CUTTHULHU_INTEROP_CORPUS");
-}
+QString corpusDir() { return lumenis::test::interopCorpus(); }
 
 } // namespace
 
