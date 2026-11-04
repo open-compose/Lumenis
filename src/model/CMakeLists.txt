@@ -21,6 +21,7 @@ add_library(lumenis_model STATIC
     intraframe.cpp
     color_correction.cpp
     correction_relations.cpp
+    correction_template.cpp
     pan_scan.cpp
     tracking.cpp
     titler.cpp

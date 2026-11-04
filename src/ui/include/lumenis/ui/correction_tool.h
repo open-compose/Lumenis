@@ -5,9 +5,11 @@
 #include "lumenis/media/custom_color.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/color_correction.h"
+#include "lumenis/model/correction_template.h"
 
 #include <QDoubleSpinBox>
 #include <QImage>
+#include <QMimeData>
 #include <QWidget>
 
 #include <array>
@@ -251,6 +253,19 @@ public:
     void matchColor(ColorMatchControl* control);
     // How the Color Match swatches find bin items dragged onto them (MainWindow: the Composer's resolver).
     void setItemResolver(ColorMatchControl::ItemResolver resolver);
+    // Color Correction effect templates (FX Guide p.610-615; 6.10d2a). The eight buckets C1-C8 (p.613-614), kept for the
+    // session: clickBucket(n, false) applies bucket n (0-7) to the current segment with the Correction Type's
+    // relationship (p.614-615); with `alt` it saves the current segment's corrections there, or clears it on an
+    // uncorrected segment (p.614). False when nothing happened.
+    static constexpr int kBuckets = 8;
+    const std::optional<model::CorrectionTemplate>& bucket(int n) const { return buckets_.at(static_cast<std::size_t>(n)); }
+    bool clickBucket(int n, bool alt);
+    QToolButton* bucketButton(int n) const;
+    // What dragging the Color Correction Effect Template button carries: the current segment's corrections named by its
+    // clip (p.613; correctionTemplateMime). Null on a segment without a correction. The caller owns it.
+    QMimeData* templateMime() const;
+    // The CC tab's Save Correction (p.613): asks MainWindow to save the current segment's template to a bin.
+    bool saveCorrection();
     // The Luma Ranges tab's preview (p.642-643).
     enum class LumaPreview { Input, ThreeTone, Output };
     LumaPreview lumaPreview() const { return lumaPreview_; }
@@ -271,9 +286,14 @@ signals:
     void lumaPreviewChanged(LumaPreview preview);
     void channelPreviewChanged(ChannelPreview preview);
     void colorSelectionChanged(ColorSelection selection);
+    // Save Correction: the template and its name (the clip's), for the active bin (p.613).
+    void saveCorrectionRequested(const model::CorrectionTemplate& t, const QString& name);
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
+    // A template dropped "anywhere in the tab" applies to that tab's controls only (p.615).
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
     QWidget* tab(QWidget* parent, const QString& path, const QString& text);
@@ -302,6 +322,7 @@ private:
     std::optional<std::pair<std::int64_t, std::int64_t>> shownShot_;
     QString shownTrack_;
     bool hasComment_ = false;
+    std::array<std::optional<model::CorrectionTemplate>, kBuckets> buckets_{};
     model::ColorCorrection correction_;
     bool hasSegment_ = false;
     QString group_ = QStringLiteral("hsl");

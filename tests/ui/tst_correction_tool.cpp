@@ -13,6 +13,8 @@
 
 #include <QApplication>
 #include <QDoubleSpinBox>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -173,6 +175,106 @@ private slots:
         QVERIFY(r.timeline.display().correctionLines);
         QVERIFY(Timeline::displayToJson(r.timeline.display()).value(QStringLiteral("correctionLines")).toBool());
         r.timeline.view()->grab(); // draws the lines
+    }
+
+    // Color Correction effect templates (p.610-615, 6.10d2a): the template button's drag, the buckets, a drop on a tab,
+    // on a segment in the Timeline and on selected segments.
+    void templates() {
+        Rig r;
+        QVERIFY(!r.tool.button(QStringLiteral("template"))->isEnabled()); // nothing to save yet
+        QVERIFY(!r.tool.templateMime());
+        model::ColorCorrection c;
+        c.set(QStringLiteral("hsl/controls/master/gain"), 130);
+        c.set(QStringLiteral("channels/red/2/amount"), 90);
+        QVERIFY(r.timeline.setCurrentCorrection(c, QStringLiteral("Color Correction")));
+        r.tool.reload();
+        QVERIFY(r.tool.button(QStringLiteral("template"))->isEnabled());
+        std::unique_ptr<QMimeData> mime(r.tool.templateMime());
+        QVERIFY(mime && mime->hasFormat(correctionTemplateMime()));
+        const QJsonObject o = QJsonDocument::fromJson(mime->data(correctionTemplateMime())).object();
+        QCOMPARE(o.value(QStringLiteral("name")).toString(), QStringLiteral("A")); // the clip's name (p.613)
+        QCOMPARE(r.timeline.droppedCorrectionTemplate(mime.get())->source, c);
+        // Save Correction asks for a bin.
+        QSignalSpy saved(&r.tool, &CorrectionTool::saveCorrectionRequested);
+        QVERIFY(r.tool.saveCorrection());
+        QCOMPARE(saved.count(), 1);
+
+        // Buckets: empty ones say "C1"..."C8"; Alt+click saves, and the label gives way to the icon (p.613-614).
+        QCOMPARE(r.tool.bucketButton(0)->text(), QStringLiteral("C1"));
+        QVERIFY(!r.tool.clickBucket(0, false)); // empty: nothing to apply
+        QVERIFY(r.tool.clickBucket(0, true));
+        QVERIFY(r.tool.bucket(0));
+        QVERIFY(r.tool.bucketButton(0)->text().isEmpty());
+        // Clicked on the next segment: applied with the Correction Type's relationship (p.615).
+        r.composer.moveTo(MonitorId::Record, 25);
+        r.tool.reload();
+        QVERIFY(r.segment(1).sourceCorrection.isEmpty());
+        QVERIFY(r.tool.clickBucket(0, false));
+        QCOMPARE(r.segment(1).sourceCorrection, c);
+        // Alt+click on an uncorrected segment clears the bucket (p.614).
+        r.timeline.perform(QStringLiteral("edit.undo"));
+        r.tool.reload();
+        QVERIFY(r.segment(1).sourceCorrection.isEmpty());
+        QVERIFY(r.tool.clickBucket(0, true));
+        QVERIFY(!r.tool.bucket(0));
+        QCOMPARE(r.tool.bucketButton(0)->text(), QStringLiteral("C1"));
+        // The bucket button clicked with Alt, through the mouse.
+        r.composer.moveTo(MonitorId::Record, 5);
+        r.tool.reload();
+        QTest::mouseClick(r.tool.bucketButton(1), Qt::LeftButton, Qt::AltModifier);
+        QVERIFY(r.tool.bucket(1));
+        // A click without Alt (on an empty bucket, which does nothing) so the application's modifiers are not left at Alt.
+        QTest::mouseClick(r.tool.bucketButton(7), Qt::LeftButton);
+        QVERIFY(!r.tool.bucket(7));
+
+        // Dropped on the tool: only the shown tab's controls (p.615).
+        r.composer.moveTo(MonitorId::Record, 25);
+        r.tool.reload();
+        r.tool.tabButton(QStringLiteral("channels"))->click();
+        QCOMPARE(r.tool.shownPath(), QStringLiteral("channels"));
+        // Qt gives the drop to the widget that took the drag's enter.
+        QDragEnterEvent enter(QPoint(20, 60), Qt::CopyAction, mime.get(), Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&r.tool, &enter);
+        QVERIFY(enter.isAccepted());
+        QDropEvent drop(QPointF(20, 60), Qt::CopyAction, mime.get(), Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&r.tool, &drop);
+        QCOMPARE(r.segment(1).sourceCorrection.number(QStringLiteral("channels/red/2/amount")), 90.0);
+        QVERIFY(!r.segment(1).sourceCorrection.values.contains(QStringLiteral("hsl/controls/master/gain")));
+
+        // On the mode's monitors (p.614): through the hook MainWindow sets, with the template's relationships.
+        CorrectionMonitors* monitors = r.composer.correctionMonitors();
+        monitors->setTemplateDrop([&](const QMimeData* m, bool apply) {
+            const auto t = r.timeline.droppedCorrectionTemplate(m);
+            return t && (!apply || r.timeline.applyCorrectionTemplate(*t, true));
+        });
+        QVERIFY(monitors->acceptDrops());
+        QDragEnterEvent onMonitor(QPoint(10, 10), Qt::CopyAction, mime.get(), Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(monitors, &onMonitor);
+        QVERIFY(onMonitor.isAccepted());
+        QDropEvent dropped(QPointF(10, 10), Qt::CopyAction, mime.get(), Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(monitors, &dropped);
+        QCOMPARE(r.segment(1).sourceCorrection, c); // the whole template now
+        // On a segment in the Timeline: the template's relationships, and the side it lacks goes (p.614-615).
+        model::CorrectionTemplate program;
+        program.program = c;
+        program.programRelationship = model::CorrectionRelationship::ProgramTrack;
+        QVERIFY(r.timeline.dropCorrectionTemplate(QStringLiteral("V1"), 25, program));
+        QVERIFY(r.segment(1).sourceCorrection.isEmpty());
+        QCOMPARE(r.segment(1).programRelationship, model::CorrectionRelationship::ProgramTrack);
+        QCOMPARE(r.segment(0).programCorrection, c); // Prog Track reached A too
+        QVERIFY(!r.timeline.dropCorrectionTemplate(QStringLiteral("A1"), 25, program));
+
+        // Selected segments, outside the mode (p.615): each gets it with the Correction Type's relationship.
+        r.timeline.perform(QStringLiteral("edit.undo"));
+        r.timeline.setCorrectionMode(false);
+        r.timeline.setSelection({{QStringLiteral("V1"), 0}, {QStringLiteral("V1"), 20}});
+        model::CorrectionTemplate source;
+        source.source.set(QStringLiteral("hsl/controls/master/saturation"), 50);
+        QVERIFY(r.timeline.applyCorrectionTemplateToSelection(source));
+        QCOMPARE(r.segment(0).sourceCorrection.number(QStringLiteral("hsl/controls/master/saturation")), 50.0);
+        QCOMPARE(r.segment(1).sourceCorrection.number(QStringLiteral("hsl/controls/master/saturation")), 50.0);
+        r.timeline.setSelection({});
+        QVERIFY(!r.timeline.applyCorrectionTemplateToSelection(source));
     }
 
     void slidersAndEnableButtons() {

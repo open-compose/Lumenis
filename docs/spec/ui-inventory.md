@@ -338,6 +338,11 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   out segments kept as segment corrections, Use Marks for the segment
   relationships only, the button following a segment only when the position
   moves, the indicator lines' width and colours.
+  6.10d2a: templates as Effect items with both sides, the side a template lacks
+  removed by a monitor or Timeline drop, a tab drop changing the tab shown and
+  everything under it, a drop anywhere on the mode's monitors, the template's
+  relationship winning over p.598's monitor drop, the bucket icon, Save
+  Correction's bin.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

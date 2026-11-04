@@ -1,0 +1,28 @@
+[
+  {
+    "name": "Correction templates: a Src Tape correction saved as a template goes to another segment with the Correction Type's relationship from a bucket or Enter, and with its own relationship when dropped on a segment in the Timeline, which also takes off the side the template lacks",
+    "guide": "FX p.610-615",
+    "clips": [{"name": "A", "tape": "T1"}, {"name": "B", "tape": "T2"}, {"name": "C", "tape": "T2"}, {"name": "D", "tape": "T3"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20], ["D", 0, 20]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"correction_type": "sourceTape"},
+      {"position": "record", "frame": 5},
+      {"correction": {"hsl/controls/master/gain": 120}},
+      {"save_correction": "warm"},
+      {"correction_type": "programSegment"},
+      {"position": "record", "frame": 65},
+      {"correction": {"hsl/controls/master/saturation": 60}},
+      {"correction_type": "sourceSegment"},
+      {"position": "record", "frame": 25},
+      {"apply_correction": {"name": "warm", "relationships": "current"}},
+      {"apply_correction": {"name": "warm", "track": "V1", "frame": 65}},
+      {"command": "edit.undo"},
+      {"command": "edit.redo"},
+      {"position": "record", "frame": 45},
+      {"apply_correction": {"name": "warm", "track": "A1", "frame": 45}, "refused": true}
+    ],
+    "expect": {"V1": [["A", 0, 20], ["B", 0, 20], ["C", 0, 20], ["D", 0, 20]]},
+    "expect_relationships": {"V1": ["sourceTape/", "sourceSegment/", "/", "sourceTape/"]}
+  }
+]

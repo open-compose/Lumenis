@@ -476,6 +476,43 @@ Correction Type menu in `correction_tool.cpp`, the Fast menu's Color Correction 
 * The lines: two pixels, green (Source) at the foot of the segment and blue (Program) at its top; dotted for the segment
   relationships. The setting is kept with the Timeline's view ("correctionLines").
 
+## 6.10d2a: Color Correction effect templates
+
+Code: `src/model/correction_template.*` (`CorrectionTemplate`, `correctionTemplateItem`, `correctionTemplateOf`,
+`applyCorrectionGroup`), `correctionTemplateMime()`, the Timeline's `applyCorrectionTemplate`,
+`applyCorrectionTemplateGroup`, `dropCorrectionTemplate` and `applyCorrectionTemplateToSelection`
+(`src/ui/timeline_correction.cpp`), the tool's template button, buckets and tab drops (`CorrectionTool::clickBucket`,
+`templateMime`, `saveCorrection`), the monitors' `setTemplateDrop`, `cc.save_correction` and `cc.bucket_1`-`8`, and the
+bin's double-click and Enter in `MainWindow`. Tests: `tst_correction_relations` (`templates`, `group`),
+`tst_correction_tool` (`templates`), scenario `40-correction-templates.json`.
+
+### From the guide
+* The Color Correction Effect Template button dragged to a bin, or the CC tab's Save Correction; "By default, Media
+  Composer names the template using the clip name of the segment"; "Effect icons for open bins also display in the
+  Effect Palette" (p.612-613). Templates keep "both the values set for each control and the status of each Enable
+  button" and do not follow later changes (p.611).
+* Eight buckets C1-C8 below the Color Match control, kept for the session; Alt+click saves (overwriting), Alt+click on an
+  uncorrected segment clears; a Color Correction icon replaces the label; also CC tab buttons (p.613-614).
+* Applying all values: drag to the monitor with the current segment (or to the segment in the Timeline), Enter on a
+  selected template, a click on a bucket; one tab: drag "to the tab, and drop it anywhere in the tab"; selected segments:
+  double-click in editing or Effect mode (p.614-615). Applying overwrites the existing correction (p.615).
+* Relationships: a drop on a Timeline segment or the Current monitor uses the template's; a double-click, a tab drop or
+  a bucket uses the Correction Type menu's (p.615).
+
+### Ours
+* A template is an Effect item holding "colorCorrection": both sides with their relationships. Templates show in the
+  Effect Palette's bin lists; activated there they act as from the bin.
+* With the template's relationships each side the template has goes on with its relationship and the current segment
+  loses the side the template lacks. With the Correction Type's, the template's merged values replace the current side's
+  correction. Enter (and a double-click) in Color Correction mode applies to the current segment; outside it, to the
+  selected video segments.
+* A tab drop changes the controls and Enable buttons at and under the tab the tool shows. A drop anywhere on the mode's
+  monitors counts as one on the Current monitor; the duplicate Color Correction effect p.615 mentions waits for 6.10e.
+  p.598's Source-to-Program conversion through a monitor drop does not happen: the template's relationship wins
+  (p.615); a bucket or Enter does it.
+* The bucket icon is the template button's sheet drawn green; a bucket's drag carries its template, to a bin or a monitor.
+* Save Correction goes to the active bin, else the first open one.
+
 ## 6.10a3: the Secondary group
 
 ### From the guide

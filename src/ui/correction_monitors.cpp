@@ -7,6 +7,8 @@
 #include "lumenis/ui/composer.h"
 
 #include <QContextMenuEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QMenu>
@@ -503,6 +505,18 @@ void CorrectionMonitors::keyPressEvent(QKeyEvent* event) {
 void CorrectionMonitors::syncMenu(int monitor) {
     const Monitor& m = monitors_.at(static_cast<std::size_t>(monitor));
     m.menu->setText(correctionSourceText(m.source));
+}
+
+void CorrectionMonitors::dragEnterEvent(QDragEnterEvent* event) {
+    if (templateDrop_ && templateDrop_(event->mimeData(), false)) event->acceptProposedAction();
+}
+
+void CorrectionMonitors::dragMoveEvent(QDragMoveEvent* event) {
+    if (templateDrop_ && templateDrop_(event->mimeData(), false)) event->acceptProposedAction();
+}
+
+void CorrectionMonitors::dropEvent(QDropEvent* event) {
+    if (templateDrop_ && templateDrop_(event->mimeData(), true)) event->acceptProposedAction();
 }
 
 } // namespace lumenis::ui

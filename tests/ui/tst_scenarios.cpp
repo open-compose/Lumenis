@@ -96,6 +96,7 @@ struct Run {
     AudioSuiteTool suite{timeline};
     QHash<QString, BinItem> clips; // by name
     QHash<QString, BinItem> items; // by id: clips and the sequences stored
+    QHash<QString, model::CorrectionTemplate> correctionTemplates; // saved by name (FX Guide p.612-614)
     QString error;
 
     Run() {
@@ -386,6 +387,32 @@ struct Run {
             }
             if (ok == o.value(QStringLiteral("refused")).toBool()) {
                 return fail(ok ? QStringLiteral("the correction was not refused") : timeline.lastMessage());
+            }
+            return true;
+        }
+        if (o.contains(QStringLiteral("save_correction"))) {
+            // Save Correction (FX Guide p.613): the current segment's corrections as a template, by a name of the scenario's.
+            const auto t = timeline.currentCorrectionTemplate();
+            if (!t || t->isEmpty()) return fail(QStringLiteral("nothing to save as a correction template"));
+            correctionTemplates.insert(o.value(QStringLiteral("save_correction")).toString(), *t);
+            return true;
+        }
+        if (o.contains(QStringLiteral("apply_correction"))) {
+            // A saved template on the current segment (p.614-615): "template" relationships (a monitor drop) or "current"
+            // (a bucket or Enter); with "track" and "frame", dropped on that segment in the Timeline.
+            const QJsonObject a = o.value(QStringLiteral("apply_correction")).toObject();
+            const QString name = a.value(QStringLiteral("name")).toString();
+            if (!correctionTemplates.contains(name)) return fail(QStringLiteral("no such correction template"));
+            const model::CorrectionTemplate t = correctionTemplates.value(name);
+            bool ok = false;
+            if (a.contains(QStringLiteral("track"))) {
+                ok = timeline.dropCorrectionTemplate(a.value(QStringLiteral("track")).toString(), a.value(QStringLiteral("frame")).toInteger(), t);
+            } else {
+                timeline.setCorrectionMode(true);
+                ok = timeline.applyCorrectionTemplate(t, a.value(QStringLiteral("relationships")).toString() == QLatin1String("template"));
+            }
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the template was not refused") : timeline.lastMessage());
             }
             return true;
         }

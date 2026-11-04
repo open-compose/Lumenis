@@ -9,6 +9,7 @@
 #include "lumenis/model/marker.h"
 #include "lumenis/model/nest.h"
 #include "lumenis/model/correction_relations.h"
+#include "lumenis/model/correction_template.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/effect_palette.h"
@@ -702,6 +703,28 @@ public:
     // The Remove Effect button in the mode: "To remove the color correction on the current segment" (p.592), both
     // sides of it (ours).
     bool removeCorrection();
+    // Color Correction effect templates (FX Guide p.610-615; lumenis/model/correction_template.h, 6.10d2a). The
+    // current segment's corrections as a template (nothing off a clip; empty when it has none) and its clip name, which
+    // names a template saved from it (p.613).
+    std::optional<model::CorrectionTemplate> currentCorrectionTemplate() const;
+    QString currentCorrectionName() const;
+    // Applies a template to the current segment, an undo step: "you overwrite the existing correction" (p.615). With
+    // `templateRelationships` (a drop on the monitor, p.615) each side the template has goes with its own relationship
+    // and the current segment loses the side the template lacks; without (a bucket, the bin's Enter, p.614-615) its
+    // merged values replace the current side's correction with the Correction Type's relationship.
+    bool applyCorrectionTemplate(const model::CorrectionTemplate& t, bool templateRelationships);
+    // "To apply adjustment values from a Color Correction effect template selectively to a single tab" (p.615): the
+    // template's controls at and under `path` on the current side, with the Correction Type's relationship.
+    bool applyCorrectionTemplateGroup(const model::CorrectionTemplate& t, const QString& path);
+    // A template dropped "to the segment in the Timeline" (p.614): on the segment under `frame` on `track`, with the
+    // template's relationships (p.615).
+    bool dropCorrectionTemplate(const QString& track, std::int64_t frame, const model::CorrectionTemplate& t);
+    // "In editing or Effect mode, select the segment ... Double-click the Color Correction effect template icon" (p.615):
+    // on each selected video segment, with the Correction Type's relationship; one undo step.
+    bool applyCorrectionTemplateToSelection(const model::CorrectionTemplate& t);
+    // The template a drag carries: the tool's template button or a bucket (correctionTemplateMime), or one template
+    // item from a bin.
+    std::optional<model::CorrectionTemplate> droppedCorrectionTemplate(const QMimeData* mime) const;
     // The Color Correction tool's Comments (FX Guide p.609-610): the comment on the segment at the position on the
     // correction track (empty for none; nothing off a clip), and setting it, an undo step; empty removes it.
     std::optional<QString> currentCorrectionComment() const;

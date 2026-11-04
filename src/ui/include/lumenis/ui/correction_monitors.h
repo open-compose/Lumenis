@@ -3,6 +3,7 @@
 #include "lumenis/model/color_correction.h"
 
 #include <QPointF>
+#include <QMimeData>
 #include <QRectF>
 #include <QWidget>
 
@@ -126,6 +127,14 @@ public:
     void setPal(bool pal);
     bool isPal() const { return pal_; }
     bool dualSplitDuringPlayback() const { return dualSplitPlayback_; }
+    // A Color Correction effect template dropped "to the monitor containing the current segment" (FX Guide p.614): the
+    // hook says whether a drag carries one (`apply` false) and applies it (true), with the template's relationships
+    // (p.615). Ours: a drop anywhere on the mode's monitors. MainWindow passes the Timeline's.
+    using TemplateDrop = std::function<bool(const QMimeData* mime, bool apply)>;
+    void setTemplateDrop(TemplateDrop drop) {
+        templateDrop_ = std::move(drop);
+        setAcceptDrops(static_cast<bool>(templateDrop_));
+    }
 
 signals:
     // The Go to Previous/Next Uncorrected Shot and Remove Effect buttons, for the Timeline.
@@ -135,9 +144,13 @@ signals:
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
+    void dragEnterEvent(QDragEnterEvent* event) override;
+    void dragMoveEvent(QDragMoveEvent* event) override;
+    void dropEvent(QDropEvent* event) override;
 
 private:
     friend class CorrectionPicture;
+    TemplateDrop templateDrop_;
     struct Monitor {
         CorrectionSource source = CorrectionSource::Current;
         bool dualSplit = false;

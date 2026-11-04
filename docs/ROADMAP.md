@@ -1184,9 +1184,12 @@ phase of their own. They are done in three steps:
     applying a correction to every related segment, the button following the segment's type, converting between
     relationships of one side (p.596-598), and the Timeline Fast menu's Color Correction with its indicator lines
     (p.616), done (`src/model/correction_relations.*`; tests `tst_correction_relations`, `tst_correction_tool`, scenario
-    `39-correction-relationships.json`); 6.10d2, Color Correction effect templates: the Color Correction Effect Template button and Save Correction,
-    the buckets C1-C8, applying by dropping on the monitor, a tab or a segment, by double-click and Enter, which
-    relationship each way uses, Color Correction Presets and the Effect Palette's automatic templates (p.610-615);
+    `39-correction-relationships.json`); 6.10d2, Color Correction effect templates, in two parts (2026-11-04): 6.10d2a, the Color Correction Effect
+    Template button and Save Correction, the buckets C1-C8, applying by dropping on the monitor, a tab or a segment, by
+    double-click and Enter, and which relationship each way uses (p.610-615), done (`src/model/correction_template.*`,
+    `src/ui/timeline_correction.cpp`; tests `tst_correction_relations`, `tst_correction_tool`, scenario
+    `40-correction-templates.json`); 6.10d2b, Color Correction Presets and the Effect Palette's automatic templates
+    (p.611-612);
     6.10d3, keyframing corrections: the parameters in the Effect Editor (the HSL Controls and Hue Offsets, the
     Secondary sliders; the Curves and Levels as keyframe tracks only), the keyframe markers under the Current monitor
     and keyframes added by adjusting (p.683-686); 6.10d4, Update, Merge, Flatten and Remove Correction from the tool's

@@ -44,6 +44,9 @@ QString eqTemplateMime();
 // Timewarp icon (FX Guide p.53, p.182): {"name": the template's name, "template":
 // model::EffectTemplate::toJson}. A bin makes it an item; the Timeline applies it.
 QString effectTemplateMime();
+// A Color Correction effect template dragged from the Color Correction tool's template button or a bucket (FX Guide
+// p.612-614): JSON {"name", "template"} (model::CorrectionTemplate::toJson).
+QString correctionTemplateMime();
 // A custom colour Alt+dragged from a Color Match swatch (FX Guide p.630): {"name": its Saved Color Labels name, "color":
 // "#rrggbb"}. A bin makes it a custom colour item; another swatch takes the colour.
 QString customColorMime();

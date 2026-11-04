@@ -6,6 +6,7 @@
 #include "lumenis/media/titler.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
+#include "lumenis/model/correction_template.h"
 #include "lumenis/model/effect_template.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/title_clip.h"
@@ -650,7 +651,7 @@ Qt::DropActions BinItemModel::supportedDropActions() const {
 QStringList BinItemModel::mimeTypes() const {
     // text/uri-list: files dragged in from the desktop (an .otio dropped into a bin, p.969).
     return {binItemsMime(), mediaFilesMime(), audioSuiteTemplateMime(), eqTemplateMime(), effectTemplateMime(),
-            brushTemplateMime(), customColorMime(), QStringLiteral("text/uri-list")};
+            brushTemplateMime(), customColorMime(), correctionTemplateMime(), QStringLiteral("text/uri-list")};
 }
 
 namespace {
@@ -673,7 +674,8 @@ namespace {
 // or the data holds no template.
 bool hasTemplate(const QMimeData* data) {
     return data->hasFormat(audioSuiteTemplateMime()) || data->hasFormat(eqTemplateMime()) ||
-           data->hasFormat(effectTemplateMime()) || data->hasFormat(brushTemplateMime()) || data->hasFormat(customColorMime());
+           data->hasFormat(effectTemplateMime()) || data->hasFormat(brushTemplateMime()) || data->hasFormat(customColorMime()) ||
+           data->hasFormat(correctionTemplateMime());
 }
 
 bool addTemplate(BinDocument& document, const QMimeData* data) {
@@ -684,6 +686,15 @@ bool addTemplate(BinDocument& document, const QMimeData* data) {
         const auto t = model::EffectTemplate::fromJson(o.value(QStringLiteral("template")).toObject());
         if (!t) return false;
         document.addItem(model::effectTemplateItem(*t, o.value(QStringLiteral("name")).toString(), now));
+        return true;
+    }
+    if (data->hasFormat(correctionTemplateMime())) {
+        // "A new effect template appears in the bin, containing all the color correction adjustment values for the
+        // segment ... By default, Media Composer names the template using the clip name of the segment" (FX Guide p.613).
+        const QJsonObject o = QJsonDocument::fromJson(data->data(correctionTemplateMime())).object();
+        const model::CorrectionTemplate t = model::CorrectionTemplate::fromJson(o.value(QStringLiteral("template")).toObject());
+        if (t.isEmpty()) return false;
+        document.addItem(model::correctionTemplateItem(t, o.value(QStringLiteral("name")).toString(), now));
         return true;
     }
     if (data->hasFormat(customColorMime())) {

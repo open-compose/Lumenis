@@ -4,12 +4,17 @@
 #include "lumenis/ui/correction_tool.h"
 
 #include "lumenis/media/color_correction.h"
+#include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QApplication>
 #include <QButtonGroup>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QDrag>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QJsonDocument>
 #include <QDoubleSpinBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -37,6 +42,51 @@
 namespace lumenis::ui {
 
 namespace {
+
+// A tool button that starts a drag with what `mime` makes (nothing when it makes none): the template button and the
+// buckets (p.613-614). A click without a drag is a click.
+class DragButton : public QToolButton {
+public:
+    DragButton(QWidget* parent, std::function<QMimeData*()> mime) : QToolButton(parent), mime_(std::move(mime)) {}
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override {
+        if (event->button() == Qt::LeftButton) pressed_ = event->position().toPoint();
+        QToolButton::mousePressEvent(event);
+    }
+    void mouseMoveEvent(QMouseEvent* event) override {
+        if (pressed_ && (event->buttons() & Qt::LeftButton) &&
+            (event->position().toPoint() - *pressed_).manhattanLength() >= QApplication::startDragDistance()) {
+            pressed_.reset();
+            if (QMimeData* made = mime_()) {
+                setDown(false);
+                auto* drag = new QDrag(this);
+                drag->setMimeData(made);
+                drag->setPixmap(icon().pixmap(20, 20));
+                drag->exec(Qt::CopyAction);
+                return;
+            }
+        }
+        QToolButton::mouseMoveEvent(event);
+    }
+    void mouseReleaseEvent(QMouseEvent* event) override {
+        pressed_.reset();
+        QToolButton::mouseReleaseEvent(event);
+    }
+
+private:
+    std::function<QMimeData*()> mime_;
+    std::optional<QPoint> pressed_;
+};
+
+// A template as correctionTemplateMime() describes it.
+QMimeData* correctionTemplateMimeData(const model::CorrectionTemplate& t, const QString& name) {
+    auto* mime = new QMimeData;
+    QJsonObject o{{QStringLiteral("name"), name}, {QStringLiteral("template"), t.toJson()}};
+    mime->setData(correctionTemplateMime(), QJsonDocument(o).toJson(QJsonDocument::Compact));
+    return mime;
+}
+
 
 const char* const kGroups[] = {"hsl", "channels", "levels", "curves", "secondary"};
 const char* const kGroupNames[] = {QT_TRANSLATE_NOOP("CorrectionTool", "HSL"), QT_TRANSLATE_NOOP("CorrectionTool", "Channels"),
@@ -179,14 +229,16 @@ CorrectionTool::CorrectionTool(Timeline& timeline, QWidget* parent) : QWidget(pa
         {"safeColors", QT_TR_NOOP("Safe Color Settings")},
         {"comments", QT_TR_NOOP("Comments")}};
     for (const auto& [key, text] : buttons) {
-        auto* b = new QToolButton(this);
+        // The template button is dragged: "Click the Color Correction Effect Template button, press and hold the mouse
+        // button, and then drag the effect icon to a bin" (p.613).
+        auto* b = QLatin1String(key) == QLatin1String("template") ? new DragButton(this, [this] { return templateMime(); })
+                                                                   : new QToolButton(this);
         b->setObjectName(QStringLiteral("ccButton:") + QLatin1String(key));
         b->setToolTip(tr(text));
         b->setAutoRaise(true);
         b->setIcon(toolIcon(QLatin1String(key), palette().color(QPalette::WindowText)));
         top->addWidget(b);
     }
-    button(QStringLiteral("template"))->setEnabled(false);   // 6.10d
     button(QStringLiteral("safeColors"))->setEnabled(false); // 6.10e
     connect(button(QStringLiteral("effectMode")), &QToolButton::clicked, this, &CorrectionTool::effectModeRequested);
     connect(button(QStringLiteral("settings")), &QToolButton::clicked, this, &CorrectionTool::settingsRequested);
@@ -241,6 +293,81 @@ CorrectionTool::CorrectionTool(Timeline& timeline, QWidget* parent) : QWidget(pa
     groups_->addWidget(withMatch(curvesPane(), media::MatchGroup::Curves));
     groups_->addWidget(withMatch(secondaryPane(), media::MatchGroup::Secondary));
     outer->addWidget(groups_, 1);
+    // The Color Correction buckets C1-C8 (p.613), at the foot on the right, under the Color Match controls.
+    auto* bucketRow = new QHBoxLayout;
+    bucketRow->setSpacing(2);
+    bucketRow->addStretch(1);
+    for (int n = 0; n < kBuckets; ++n) {
+        auto* b = new DragButton(this, [this, n]() -> QMimeData* {
+            const auto& t = buckets_.at(static_cast<std::size_t>(n));
+            return t ? correctionTemplateMimeData(*t, QStringLiteral("C%1").arg(n + 1)) : nullptr;
+        });
+        b->setObjectName(QStringLiteral("bucket:%1").arg(n + 1));
+        b->setText(QStringLiteral("C%1").arg(n + 1));
+        b->setToolTip(tr("Click to apply; Alt+click to save the current correction, or to clear on an uncorrected segment"));
+        b->setFixedSize(30, 22);
+        connect(b, &QToolButton::clicked, this, [this, n] { clickBucket(n, QApplication::keyboardModifiers().testFlag(Qt::AltModifier)); });
+        bucketRow->addWidget(b);
+    }
+    outer->addLayout(bucketRow);
+    setAcceptDrops(true);
+    reload();
+}
+
+QToolButton* CorrectionTool::bucketButton(int n) const {
+    return findChild<QToolButton*>(QStringLiteral("bucket:%1").arg(n + 1));
+}
+
+bool CorrectionTool::clickBucket(int n, bool alt) {
+    if (n < 0 || n >= kBuckets) return false;
+    std::optional<model::CorrectionTemplate>& b = buckets_.at(static_cast<std::size_t>(n));
+    bool done = false;
+    if (alt) {
+        // "Alt+click ... the bucket in which you want to save the template ... you overwrite the previous template";
+        // "Move the position indicator to any uncorrected segment ... and then Alt+click ... the bucket" clears it (p.614).
+        const auto t = timeline_.currentCorrectionTemplate();
+        if (t && !t->isEmpty()) {
+            b = *t;
+            done = true;
+        } else if (t && b) {
+            b.reset();
+            done = true;
+        }
+    } else if (b) {
+        done = timeline_.applyCorrectionTemplate(*b, false);
+        reload();
+    }
+    // "a Color Correction icon replaces the "C" label on the bucket" (p.614); ours: a template sheet in the tool's colour.
+    if (QToolButton* button = bucketButton(n)) {
+        button->setIcon(b ? toolIcon(QStringLiteral("template"), QColor(0x3c, 0xa0, 0x50)) : QIcon());
+        button->setText(b ? QString() : QStringLiteral("C%1").arg(n + 1));
+        button->setToolButtonStyle(b ? Qt::ToolButtonIconOnly : Qt::ToolButtonTextOnly);
+    }
+    return done;
+}
+
+QMimeData* CorrectionTool::templateMime() const {
+    const auto t = timeline_.currentCorrectionTemplate();
+    if (!t || t->isEmpty()) return nullptr;
+    return correctionTemplateMimeData(*t, timeline_.currentCorrectionName());
+}
+
+bool CorrectionTool::saveCorrection() {
+    const auto t = timeline_.currentCorrectionTemplate();
+    if (!t || t->isEmpty()) return false;
+    emit saveCorrectionRequested(*t, timeline_.currentCorrectionName());
+    return true;
+}
+
+void CorrectionTool::dragEnterEvent(QDragEnterEvent* event) {
+    if (timeline_.droppedCorrectionTemplate(event->mimeData())) event->acceptProposedAction();
+}
+
+void CorrectionTool::dropEvent(QDropEvent* event) {
+    const auto t = timeline_.droppedCorrectionTemplate(event->mimeData());
+    if (!t) return;
+    // "drag it to the tab, and drop it anywhere in the tab. The controls in that tab update" (p.615).
+    if (timeline_.applyCorrectionTemplateGroup(*t, shownPath())) event->acceptProposedAction();
     reload();
 }
 
@@ -555,6 +682,8 @@ void CorrectionTool::reload() {
         button(QStringLiteral("comments"))->setIcon(toolIcon(QStringLiteral("comments"), comment ? QColor(240, 200, 40) : palette().color(QPalette::WindowText)));
     }
     button(QStringLiteral("comments"))->setEnabled(hasSegment_);
+    const auto t = timeline_.currentCorrectionTemplate();
+    button(QStringLiteral("template"))->setEnabled(t && !t->isEmpty());
     sync();
 }
 

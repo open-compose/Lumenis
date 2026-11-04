@@ -86,7 +86,11 @@ Each file is a JSON list of scenarios:
     `model::relationshipKey`, converting a corrected segment's correction), a
     clip's `"tape"` its Tape column, and `expect_relationships` gives each
     track's material segments' "source/program" relationship keys ("" for a
-    side without a correction);
+    side without a correction); `{"save_correction": name}` keeps the
+    current segment's corrections as a Color Correction effect template
+    (FX Guide p.613) and `{"apply_correction": {"name", "relationships":
+    "template"|"current"}}` applies it to the current segment, or with
+    `"track"` and `"frame"` to that segment in the Timeline (p.614-615);
   * `{"clip_note": text}` is Add Timeline Clip Note on the selected segments
     (p.483; "" deletes it, p.484); `expect_notes` gives each track's
     material segments' notes in order;

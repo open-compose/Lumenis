@@ -5489,7 +5489,8 @@ void Timeline::keyPressEvent(QKeyEvent* event) {
 // ---------------------------------------------------------------- effects
 
 void TimelineView::dragEnterEvent(QDragEnterEvent* event) {
-    if ((effectFromMime(event->mimeData()) || timeline_.droppedEq(event->mimeData()) || timeline_.droppedTemplate(event->mimeData())) &&
+    if ((effectFromMime(event->mimeData()) || timeline_.droppedEq(event->mimeData()) || timeline_.droppedTemplate(event->mimeData()) ||
+         timeline_.droppedCorrectionTemplate(event->mimeData())) &&
         !timeline_.showsSource()) {
         event->acceptProposedAction();
         return;
@@ -5528,8 +5529,8 @@ std::int64_t TimelineView::binDropFrame(int x) const {
 
 void TimelineView::dragMoveEvent(QDragMoveEvent* event) {
     const auto row = rowAt(event->position().toPoint());
-    // An effect template goes on a video track (FX Guide p.53).
-    if (timeline_.droppedTemplate(event->mimeData())) {
+    // An effect template, or a Color Correction effect template, goes on a video track (FX Guide p.53, p.614).
+    if (timeline_.droppedTemplate(event->mimeData()) || timeline_.droppedCorrectionTemplate(event->mimeData())) {
         if (row && row->exists && row->track.startsWith(QLatin1Char('V')) && !timeline_.showsSource()) {
             event->acceptProposedAction();
         } else {
@@ -5577,6 +5578,12 @@ void TimelineView::dropEvent(QDropEvent* event) {
     const auto row = rowAt(pos);
     binDrop_.reset();
     update();
+    // "drag it to the monitor containing the current segment or to the segment in the Timeline" (FX Guide p.614).
+    if (const auto c = timeline_.droppedCorrectionTemplate(event->mimeData())) {
+        if (row && row->exists && !timeline_.showsSource() && timeline_.dropCorrectionTemplate(row->track, frameAt(pos.x()), *c))
+            event->acceptProposedAction();
+        return;
+    }
     if (const auto t = timeline_.droppedTemplate(event->mimeData())) {
         if (!row || !row->exists || timeline_.showsSource()) return;
         std::optional<std::int64_t> cut;

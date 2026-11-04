@@ -1,7 +1,9 @@
 // Relationship colour corrections (FX Guide p.596-598; lumenis/model/correction_relations.h): the keys segments are
 // related by, the segments each relationship reaches, converting between relationships of a side, and the relationship
-// kept with the sequence.
+// kept with the sequence. Color Correction effect templates (p.610-615; lumenis/model/correction_template.h): what they
+// keep and one tab's values from them.
 #include "lumenis/model/correction_relations.h"
+#include "lumenis/model/correction_template.h"
 
 #include <QTest>
 
@@ -173,6 +175,59 @@ private slots:
         Segment other = s;
         other.sourceRelationship = CorrectionRelationship::SourceSegment;
         QVERIFY(!Sequence::isMatchFrame(s, other));
+    }
+
+    // A template keeps both sides with their relationships and Enable buttons (p.611, p.615), as a bin's Effect item.
+    void templates() {
+        Segment s = clip(QStringLiteral("a"), 10);
+        QVERIFY(correctionTemplateOf(s).isEmpty());
+        s.sourceCorrection = gain(110);
+        s.sourceCorrection.disabled << QStringLiteral("hsl/controls/master/gamma");
+        s.sourceRelationship = CorrectionRelationship::SourceTape;
+        s.programCorrection.set(QStringLiteral("channels/red/2/amount"), 90);
+        s.programRelationship = CorrectionRelationship::ProgramTrack;
+        const CorrectionTemplate t = correctionTemplateOf(s);
+        QCOMPARE(t.source, s.sourceCorrection);
+        QCOMPARE(t.programRelationship, CorrectionRelationship::ProgramTrack);
+        QCOMPARE(CorrectionTemplate::fromJson(t.toJson()), t);
+        const BinItem item = correctionTemplateItem(t, QStringLiteral("A"), QDateTime::currentDateTimeUtc());
+        QCOMPARE(item.kind, BinItemKind::Effect);
+        QCOMPARE(item.name, QStringLiteral("A"));
+        QCOMPARE(correctionTemplateOf(item), std::optional(t));
+        QVERIFY(!correctionTemplateOf(BinItem{}));
+        // Merged: the Program side's set controls over the Source side's.
+        QCOMPARE(t.merged().number(QStringLiteral("hsl/controls/master/gain")), 110.0);
+        QCOMPARE(t.merged().number(QStringLiteral("channels/red/2/amount")), 90.0);
+        // Fillers have no template; a side without a correction keeps its segment relationship.
+        Segment f = Segment::filler(5);
+        QVERIFY(correctionTemplateOf(f).isEmpty());
+        Segment one = clip(QStringLiteral("b"), 5);
+        one.programCorrection = gain(80);
+        one.sourceRelationship = CorrectionRelationship::MasterClip; // no Source correction: not kept
+        QCOMPARE(correctionTemplateOf(one).sourceRelationship, CorrectionRelationship::SourceSegment);
+    }
+
+    // One tab's controls and buttons from a template; the others stay (p.610, p.615).
+    void group() {
+        ColorCorrection target;
+        target.set(QStringLiteral("hsl/controls/master/gain"), 120);
+        target.set(QStringLiteral("hsl/controls/shadows/gain"), 80);
+        target.set(QStringLiteral("channels/red/2/amount"), 70);
+        target.disabled << QStringLiteral("hsl/controls/master");
+        ColorCorrection from;
+        from.set(QStringLiteral("hsl/controls/master/hue"), 30);
+        from.set(QStringLiteral("hsl/controls/masterly"), 1); // not under "hsl/controls/master"
+        from.set(QStringLiteral("channels/red/2/amount"), 50);
+        QVERIFY(applyCorrectionGroup(target, from, QStringLiteral("hsl/controls/master")));
+        QCOMPARE(target.number(QStringLiteral("hsl/controls/master/hue")), 30.0);
+        QVERIFY(!target.values.contains(QStringLiteral("hsl/controls/master/gain")));
+        QVERIFY(!target.values.contains(QStringLiteral("hsl/controls/masterly")));
+        QCOMPARE(target.number(QStringLiteral("hsl/controls/shadows/gain")), 80.0);
+        QCOMPARE(target.number(QStringLiteral("channels/red/2/amount")), 70.0);
+        QVERIFY(!target.disabled.contains(QStringLiteral("hsl/controls/master")));
+        QVERIFY(!applyCorrectionGroup(target, from, QStringLiteral("hsl/controls/master")));
+        QVERIFY(applyCorrectionGroup(target, from, QStringLiteral("channels")));
+        QCOMPARE(target.number(QStringLiteral("channels/red/2/amount")), 50.0);
     }
 };
 

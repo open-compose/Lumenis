@@ -61,6 +61,10 @@ QString effectTemplateMime() {
     return QStringLiteral("application/x-cutthulhu-effect-template");
 }
 
+QString correctionTemplateMime() {
+    return QStringLiteral("application/x-cutthulhu-correction-template");
+}
+
 bool isCopyDrop(Qt::DropAction action, Qt::KeyboardModifiers modifiers) {
     return action == Qt::CopyAction || (modifiers & (Qt::AltModifier | Qt::ControlModifier));
 }

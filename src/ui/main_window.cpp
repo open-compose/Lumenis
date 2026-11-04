@@ -25,6 +25,7 @@
 #include "lumenis/model/auto_sequence.h"
 #include "lumenis/model/bin_relations.h"
 #include "lumenis/model/clip_audio.h"
+#include "lumenis/model/correction_template.h"
 #include "lumenis/model/effect_template.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
@@ -873,6 +874,20 @@ void MainWindow::createPanels() {
         const BinDocument* doc = binContainer_->document(binId);
         // "Ctrl+double-click the Title Effect icon in the bin. The title opens in the Title tool" (p.359).
         if ((QApplication::keyboardModifiers() & Qt::ControlModifier) && reviseTitle(binId, itemId)) return;
+        // A Color Correction effect template: "Select the template in the bin ... and then press Enter" in Color
+        // Correction mode applies it to the current segment; double-clicked "In editing or Effect mode", to each selected
+        // segment (FX Guide p.614-615), both with the Correction Type's relationship (p.615).
+        if (const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr) {
+            if (const auto t = model::correctionTemplateOf(*item)) {
+                if (timeline_->isCorrectionMode()) {
+                    timeline_->applyCorrectionTemplate(*t, false);
+                    correctionTool_->reload();
+                } else {
+                    timeline_->applyCorrectionTemplateToSelection(*t);
+                }
+                return;
+            }
+        }
         if (const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr) {
             composer_->loadDefault(binId, *item);
             panels_->showPanel(panels_->panel(QStringLiteral("Composer")));
@@ -1546,6 +1561,15 @@ void MainWindow::createTools() {
         const BinDocument* doc = binContainer_->document(binId);
         const model::BinItem* item = doc ? doc->bin().item(itemId) : nullptr;
         if (const auto t = item ? model::effectTemplateOf(*item) : std::nullopt) timeline_->applyTemplateToSelection(*t);
+        // A Color Correction effect template: as from the bin (FX Guide p.614-615).
+        if (const auto c = item ? model::correctionTemplateOf(*item) : std::nullopt) {
+            if (timeline_->isCorrectionMode()) {
+                timeline_->applyCorrectionTemplate(*c, false);
+                correctionTool_->reload();
+            } else {
+                timeline_->applyCorrectionTemplateToSelection(*c);
+            }
+        }
     });
     connect(binContainer_, &BinContainer::binItemsChanged, this, [this] { refreshTemplateBins(); });
     connect(binContainer_, &BinContainer::activeBinChanged, this, [this] { refreshTemplateBins(); });
@@ -1689,6 +1713,25 @@ void MainWindow::createTools() {
     connect(composer_->correctionMonitors(), &CorrectionMonitors::colorsSampled, correctionTool_, &CorrectionTool::applySamples);
     // The Levels histograms' pictures (FX Guide p.654): the frame at the position, small, without and with corrections.
     correctionTool_->setItemResolver([this](const QString& bin, const QString& id) { return composer_->resolve(bin, id); });
+    // A template dropped on the mode's monitors: the template's relationships (FX Guide p.614-615).
+    composer_->correctionMonitors()->setTemplateDrop([this](const QMimeData* mime, bool apply) {
+        const auto t = timeline_->droppedCorrectionTemplate(mime);
+        if (!t || !apply) return t.has_value();
+        const bool ok = timeline_->applyCorrectionTemplate(*t, true);
+        correctionTool_->reload();
+        return ok;
+    });
+    // Save Correction: "A new effect template appears in the bin ... By default, Media Composer names the template using
+    // the clip name of the segment" (FX Guide p.613). The active bin, else the first open one.
+    connect(correctionTool_, &CorrectionTool::saveCorrectionRequested, this, [this](const model::CorrectionTemplate& t, const QString& name) {
+        BinDocument* doc = binContainer_->activeDocument();
+        if (!doc && !binContainer_->openDocuments().isEmpty()) doc = binContainer_->openDocuments().first();
+        if (!doc || doc->isReadOnly()) {
+            QMessageBox::information(this, tr("Save Correction"), tr("Open a bin to save the correction in."));
+            return;
+        }
+        doc->addItem(model::correctionTemplateItem(t, name, QDateTime::currentDateTimeUtc()));
+    });
     correctionTool_->setPictureSource([this](bool corrected) {
         const model::MonitorState& r = composer_->state(MonitorId::Record);
         composer_->setUncorrectedPictures(!corrected);
@@ -2564,6 +2607,8 @@ void MainWindow::refreshTemplateBins() {
         TemplateBin bin{doc->nodeId(), doc->bin().name, {}};
         for (const model::BinItem& item : doc->bin().items) {
             if (const auto t = model::effectTemplateOf(item)) bin.templates << TemplateBin::Entry{item.id, item.name, t->transition};
+            // "Effect icons for open bins also display in the Effect Palette" (FX Guide p.613).
+            if (model::correctionTemplateOf(item)) bin.templates << TemplateBin::Entry{item.id, item.name, false};
         }
         bins << bin;
     }
@@ -5479,6 +5524,17 @@ void MainWindow::installPanelHandlers() {
             if (path.isEmpty()) return;
             showTool(QStringLiteral("ColorCorrection"));
             correctionTool_->showPath(path);
+        });
+    }
+    // "With Active Palette selected in the Command palette, click the Save Correction button in the CC tab" (FX Guide
+    // p.613), and the buckets as buttons there: "You can map these buttons to any mappable key" (p.613). A bucket button
+    // with Alt saves to it, as Alt+click on the tool's bucket does (p.614). In Color Correction mode only.
+    commands_.setHandler(QStringLiteral("cc.save_correction"), [this] {
+        if (timeline_->isCorrectionMode()) correctionTool_->saveCorrection();
+    });
+    for (int i = 0; i < CorrectionTool::kBuckets; ++i) {
+        commands_.setHandler(QStringLiteral("cc.bucket_%1").arg(i + 1), [this, i] {
+            if (timeline_->isCorrectionMode()) correctionTool_->clickBucket(i, QApplication::keyboardModifiers().testFlag(Qt::AltModifier));
         });
     }
     // W1-W12 switch to their workspaces (p.90-91).
