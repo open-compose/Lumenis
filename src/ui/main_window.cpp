@@ -5137,6 +5137,11 @@ void MainWindow::applySettings() {
     // Processing button is for two-field media (FX p.547).
     if (project_) {
         effectEditor_->setInterlacedProject(project_->settings.format.scan == ScanMode::Interlaced);
+        // The YC Waveform's PAL or NTSC scale (FX Guide p.690): PAL for 25 and 50 fps projects (ours).
+        if (CorrectionMonitors* m = composer_->correctionMonitors()) {
+            const int fps = TimecodeFormat::forRate(project_->settings.format.editRate, false).nominalFps;
+            m->setPal(fps == 25 || fps == 50);
+        }
         effectEditor_->setFilmProject(!project_->settings.filmType.isEmpty() &&
                                       TimecodeFormat::forRate(project_->settings.format.editRate, false).nominalFps == 24);
     }

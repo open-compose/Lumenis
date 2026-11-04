@@ -301,6 +301,42 @@ the `cc.tab_1`-`cc.tab_12` commands and their handlers in `MainWindow`. Test:
 * The Tab buttons are "Tab 1" to "Tab 12" on the CC tab, work only in Color Correction mode, and keep their tabs as
   the Correction setting's `tabButton1`-`tabButton12`; a hidden group's tab is not displayed.
 
+## 6.10c1: the Waveform and Vectorscope monitors
+
+Code: `src/media/scopes.*` (`media::scopeImage`, `waveformRow`, `vectorscopePoint`, `pqCode`), the scope entries of
+`CorrectionSource` in `src/ui/correction_monitors.*` (`isScopeSource`, `CorrectionMonitors::setPal`). Tests: `tst_scopes`,
+`tst_correction_mode` (`scopes`).
+
+### From the guide
+* The Source menu's waveform and vectorscope commands "configure the monitor to graphically display color information
+  ... Media Composer displays the information for the currently active monitor" (p.591, p.686); to show one, activate a
+  monitor and choose the command in another (p.687).
+* Quad Display: "clockwise from the top left corner: YC Waveform, Vectorscope, RGB Histogram, RGB Parade" (p.687).
+* RGB Histogram: the darkest values on the left, the brightest on the right, the height the number of pixels (p.687-688).
+  RGB Parade: the R, G and B waveforms side by side (p.688).
+* Vectorscope: chroma without luma, the centre no chroma; "Small squares mark the location of standard color bar
+  vectors. Inner squares represent the proper values for 75% color bars, and outer squares represent 100% color bars"
+  (p.688-689).
+* Y Waveform: luma, a left scale of 8-bit levels (16 black, 235 white) and a right scale in percent; the range -8% to
+  108% (p.689). The HDR 1000 and HDR 10000 waveforms' scales in nits (p.689-690).
+* YC Waveform: Y in green and the chroma as a cyan envelope at Y+C and Y-C; an NTSC (7.5 IRE black, 100 IRE white) or PAL
+  (0 mV black, 700 mV white) scale on the left, percent on the right; "A red edge on the display indicates composite
+  video values above or below these limits" (p.690).
+* YCbCr Histogram: Y on the upper bar, then Cb and Cr; YCbCr Parade: Y in white, then Cb and Cr centred, "Positive Cb ...
+  blue hues, and negative Cb ... yellow hues. Positive Cr ... red hues, and negative Cr ... cyan hues" (p.690-691).
+* The safe colour limits' marks in the waveforms (p.688-690, p.726) come with 6.10e.
+
+### Ours
+* A scope measures a 320-by-180 copy of the active monitor's corrected frame, at most 240 rows; each cell lights by
+  1 - e^(-hits / n) with n about a tenth of a column's hits. The waveforms run from level -8 at the bottom to 263 at the
+  top; the graticule lines are at 16, 75, 126, 180 and 235 (0, 25, 50, 75 and 100%).
+* The HDR waveforms read Y' as a PQ (ST 2084) code value, the top of the scale the code of 1000 or 10000 nits, lines every
+  tenth of it.
+* The YC Waveform's red edge marks composite values outside -20 to 120 IRE (8-bit -28 to 279), top or bottom.
+* The vectorscope's circle is a chroma of 0.5 at 45% of the panel's smaller side; Cb to the right, Cr up.
+* A monitor showing a scope cannot be the active monitor; making the active monitor a scope moves the active monitor to
+  the one at Current, else the first showing a frame. PAL is 25 and 50 fps projects.
+
 ## 6.10a3: the Secondary group
 
 ### From the guide

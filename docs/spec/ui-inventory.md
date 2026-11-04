@@ -318,6 +318,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   the Effect Editor (p.684), the others leaving the mode (p.589), comments kept on the segment for both
   sides (and on both halves of a cut), the Tab buttons' names (Tab 1-12), their
   storage in the Correction setting and working only in the mode.
+  6.10c1: the scopes' sampling and brightness, their graticule lines, the HDR
+  waveforms as PQ code values, the YC Waveform's -20 to 120 IRE limits for its
+  red edge, the vectorscope's scale, scope monitors never active, PAL for 25
+  and 50 fps projects.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

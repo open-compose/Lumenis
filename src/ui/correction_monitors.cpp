@@ -3,6 +3,7 @@
 
 #include "lumenis/ui/correction_monitors.h"
 
+#include "lumenis/media/scopes.h"
 #include "lumenis/ui/composer.h"
 
 #include <QContextMenuEvent>
@@ -20,7 +21,14 @@
 
 namespace lumenis::ui {
 
+bool isScopeSource(CorrectionSource source) {
+    return static_cast<int>(source) >= static_cast<int>(CorrectionSource::QuadDisplay);
+}
+
 QString correctionSourceText(CorrectionSource source) {
+    if (isScopeSource(source)) {
+        return media::scopeName(static_cast<media::Scope>(static_cast<int>(source) - static_cast<int>(CorrectionSource::QuadDisplay)));
+    }
     switch (source) {
     case CorrectionSource::Empty: return CorrectionMonitors::tr("Empty");
     case CorrectionSource::EntireSequence: return CorrectionMonitors::tr("Entire Sequence");
@@ -30,15 +38,23 @@ QString correctionSourceText(CorrectionSource source) {
     case CorrectionSource::Next: return CorrectionMonitors::tr("Next");
     case CorrectionSource::SecondPrevious: return CorrectionMonitors::tr("Second Previous");
     case CorrectionSource::SecondNext: return CorrectionMonitors::tr("Second Next");
+    default: break;
     }
     return {};
 }
 
 namespace {
 
-constexpr CorrectionSource kSources[] = {CorrectionSource::Empty,          CorrectionSource::EntireSequence, CorrectionSource::Reference,
-                                         CorrectionSource::Current,        CorrectionSource::Previous,       CorrectionSource::Next,
-                                         CorrectionSource::SecondPrevious, CorrectionSource::SecondNext};
+constexpr CorrectionSource kSources[] = {
+    CorrectionSource::Empty,       CorrectionSource::EntireSequence,   CorrectionSource::Reference,         CorrectionSource::Current,
+    CorrectionSource::Previous,    CorrectionSource::Next,             CorrectionSource::SecondPrevious,    CorrectionSource::SecondNext,
+    CorrectionSource::QuadDisplay, CorrectionSource::RgbHistogram,     CorrectionSource::RgbParade,         CorrectionSource::Vectorscope,
+    CorrectionSource::YWaveform,   CorrectionSource::YWaveformHdr1000, CorrectionSource::YWaveformHdr10000, CorrectionSource::YcWaveform,
+    CorrectionSource::YcbcrHistogram, CorrectionSource::YcbcrParade};
+
+media::Scope scopeOf(CorrectionSource source) {
+    return static_cast<media::Scope>(static_cast<int>(source) - static_cast<int>(CorrectionSource::QuadDisplay));
+}
 
 // The monitor buttons' pictures (ours): Dual Split a picture half filled, the Go to buttons an arrow to a bar with a
 // slash for "uncorrected", Remove Effect a cross.
@@ -112,8 +128,18 @@ protected:
             p.drawRect(QRectF(r).adjusted(-1, -1, 1, 1));
         }
         const std::optional<std::int64_t> frame = owner_.frameOf(index_);
+        shown_ = {};
         if (!frame) return;
         Composer& composer = owner_.composer_;
+        const CorrectionSource source = owner_.source(index_);
+        if (isScopeSource(source)) {
+            // The active monitor's corrected frame (a small copy is enough to measure), as a waveform or vectorscope.
+            const QImage picture = composer.pictureAt(MonitorId::Record, *frame, QSize(320, 180));
+            const QRect area = rect().adjusted(2, 2, -2, -2);
+            p.fillRect(rect(), Qt::black);
+            p.drawImage(area, media::scopeImage(picture, scopeOf(source), area.size(), owner_.pal_));
+            return;
+        }
         using P = CorrectionMonitors::Preview;
         const P mode = owner_.active_ == index_ ? owner_.preview_ : P::Output;
         const bool uncorrected = mode == P::Input || mode == P::ThreeTone || mode == P::RedInput || mode == P::GreenInput || mode == P::BlueInput;
@@ -288,12 +314,14 @@ CorrectionMonitors::CorrectionMonitors(Composer& composer, QWidget* parent) : QW
         m.menu->setToolButtonStyle(Qt::ToolButtonTextOnly);
         auto* menu = new QMenu(m.menu);
         for (CorrectionSource s : kSources) {
+            if (s == CorrectionSource::QuadDisplay) menu->addSeparator();
             QAction* a = menu->addAction(correctionSourceText(s));
             a->setData(static_cast<int>(s));
             connect(a, &QAction::triggered, this, [this, i, s] { setSource(i, s); });
         }
         connect(menu, &QMenu::aboutToShow, this, [this, menu, i] {
             for (QAction* a : menu->actions()) {
+                if (a->isSeparator()) continue;
                 const auto s = static_cast<CorrectionSource>(a->data().toInt());
                 bool taken = false;
                 for (int k = 0; k < kMonitors; ++k) {
@@ -352,13 +380,26 @@ bool CorrectionMonitors::setSource(int monitor, CorrectionSource source) {
     }
     monitors_.at(static_cast<std::size_t>(monitor)).source = source;
     syncMenu(monitor);
-    monitors_.at(static_cast<std::size_t>(monitor)).picture->update();
+    if (isScopeSource(source) && monitor == active_) {
+        // The scope shows another monitor's frame: the one at Current, else the first that shows a frame.
+        int other = -1;
+        for (int k = 0; k < kMonitors; ++k) {
+            if (isScopeSource(this->source(k))) continue;
+            if (other < 0 || this->source(k) == CorrectionSource::Current) other = k;
+        }
+        if (other >= 0) {
+            active_ = other;
+            emit activeMonitorChanged(other);
+        }
+    }
+    for (const Monitor& m : monitors_) m.picture->update();
     return true;
 }
 
 std::optional<std::int64_t> CorrectionMonitors::frameOf(int monitor) const {
     const model::MonitorState& record = composer_.state(MonitorId::Record);
     if (record.isEmpty()) return std::nullopt;
+    if (isScopeSource(source(monitor))) return isScopeSource(source(active_)) ? std::nullopt : frameOf(active_);
     auto shot = [&](int step, bool last) -> std::optional<std::int64_t> {
         if (!shots_) return std::nullopt;
         const auto s = shots_(step);
@@ -376,12 +417,13 @@ std::optional<std::int64_t> CorrectionMonitors::frameOf(int monitor) const {
     case CorrectionSource::SecondPrevious: return shot(-2, true);
     case CorrectionSource::Next: return shot(1, false);
     case CorrectionSource::SecondNext: return shot(2, false);
+    default: break; // the scopes, above
     }
     return std::nullopt;
 }
 
 void CorrectionMonitors::setActiveMonitor(int monitor) {
-    if (monitor < 0 || monitor >= kMonitors || monitor == active_) return;
+    if (monitor < 0 || monitor >= kMonitors || monitor == active_ || isScopeSource(source(monitor))) return;
     active_ = monitor;
     for (const Monitor& m : monitors_) m.picture->update();
     emit activeMonitorChanged(monitor);
@@ -401,6 +443,12 @@ void CorrectionMonitors::referenceCurrent() {
 
 void CorrectionMonitors::switchCurrentAndReference() {
     setActiveMonitor(active_ == 2 ? 1 : 2);
+}
+
+void CorrectionMonitors::setPal(bool pal) {
+    if (pal == pal_) return;
+    pal_ = pal;
+    refresh();
 }
 
 void CorrectionMonitors::setDualSplitDuringPlayback(bool on) {

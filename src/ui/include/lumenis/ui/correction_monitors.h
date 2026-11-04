@@ -18,10 +18,31 @@ namespace lumenis::ui {
 
 class Composer;
 
-// What a Color Correction mode monitor shows, its Source menu (FX Guide p.591). The Waveform and Vectorscope
-// entries come with 6.10c.
-enum class CorrectionSource { Empty, EntireSequence, Reference, Current, Previous, Next, SecondPrevious, SecondNext };
+// What a Color Correction mode monitor shows, its Source menu (FX Guide p.591): a frame, or one of the waveform and
+// vectorscope displays of the active monitor's frame (p.686-691; lumenis/media/scopes.h, 6.10c1).
+enum class CorrectionSource {
+    Empty,
+    EntireSequence,
+    Reference,
+    Current,
+    Previous,
+    Next,
+    SecondPrevious,
+    SecondNext,
+    QuadDisplay,
+    RgbHistogram,
+    RgbParade,
+    Vectorscope,
+    YWaveform,
+    YWaveformHdr1000,
+    YWaveformHdr10000,
+    YcWaveform,
+    YcbcrHistogram,
+    YcbcrParade,
+};
 QString correctionSourceText(CorrectionSource source);
+// Whether a source is a waveform or vectorscope display.
+bool isScopeSource(CorrectionSource source);
 
 // Color Correction mode's monitor window (FX Guide p.589-594; docs/spec/color-correction.md, 6.10b1): three monitors
 // in place of the Source and Record monitors, by default "the last frame of the segment preceding the current segment",
@@ -47,10 +68,12 @@ public:
     CorrectionSource source(int monitor) const { return monitors_.at(static_cast<std::size_t>(monitor)).source; }
     bool setSource(int monitor, CorrectionSource source);
     // The sequence frame a monitor shows; nothing for Empty, a Reference before Reference Current, or a shot past the
-    // track's ends.
+    // track's ends. A waveform or vectorscope monitor gives the active monitor's frame, whose information it shows.
     std::optional<std::int64_t> frameOf(int monitor) const;
 
-    // The active monitor (p.590: "activating monitors ... are the same"); the centre one at first.
+    // The active monitor (p.590: "activating monitors ... are the same"); the centre one at first. A monitor showing a
+    // waveform or vectorscope is not made active: "Media Composer displays the information for the currently active
+    // monitor" (p.686).
     int activeMonitor() const { return active_; }
     void setActiveMonitor(int monitor);
 
@@ -99,6 +122,9 @@ public:
     void setEyedropperAveraging(bool on) { averaging_ = on; }
     bool eyedropperAveraging() const { return averaging_; }
     void setDualSplitDuringPlayback(bool on);
+    // The YC Waveform's scale: PAL (millivolts) or NTSC (IRE), by the project's format (p.690).
+    void setPal(bool pal);
+    bool isPal() const { return pal_; }
     bool dualSplitDuringPlayback() const { return dualSplitPlayback_; }
 
 signals:
@@ -130,6 +156,7 @@ private:
     Sampling sampling_ = Sampling::None;
     bool averaging_ = false;
     bool dualSplitPlayback_ = true;
+    bool pal_ = false;
     std::function<model::ColorCorrection()> ranges_;
 };
 

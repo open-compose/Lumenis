@@ -1168,8 +1168,13 @@ phase of their own. They are done in three steps:
       `UnitSpinBox`, `model::toCorrectionUnit`); 6.10b4b, the tool's buttons (p.605), the Command Palette's CC tab with
       its twelve Tab buttons (p.601-602), and Comments (p.609-610), done (`CorrectionTool::button`/`editComment`/
       `showPath`, `Segment::correctionComment`, Clip Text > Comments, `cc.tab_1`-`cc.tab_12`). So 6.10b is done.
-  * 6.10c, the Waveform and Vectorscope monitors (p.686-692), the Color Match control with NaturalMatch and custom
-    colours (p.624-631), and the automatic corrections (p.618-623).
+  * 6.10c, in three parts (planned 2026-11-04 from p.618-631 and p.686-692): 6.10c1, the Waveform and Vectorscope
+    monitors: the Source menu's Quad Display, RGB Histogram, RGB Parade, Vectorscope, Y Waveform (and HDR 1000/10000),
+    YC Waveform, YCbCr Histogram and YCbCr Parade, for the active monitor (p.686-692; the safe colour marks come with
+    6.10e), done (`src/media/scopes.*`; tests `tst_scopes`, `tst_correction_mode`); 6.10c2, the automatic corrections: Auto Balance, Black, Contrast and White in the HSL group, Auto Balance and
+    Contrast in the Curves tab, the Remove Color Cast buttons, and the CC tab's buttons (p.618-622); 6.10c3, the Color
+    Match control in each group with its Match Types, NaturalMatch, custom colours in bins and the eyedropper options
+    (p.624-631, p.608).
   * 6.10d, relationship corrections (p.596-598), correction templates, presets and buckets (p.610-615), keyframing
     corrections (p.683-686), correcting a whole sequence (p.692), the Timeline's correction information (p.616), and
     updating, merging, flattening and removing corrections (ch.21, p.700-705).

@@ -9,6 +9,7 @@
 
 #include <QApplication>
 #include <QSignalSpy>
+#include <QMenu>
 #include <QTest>
 #include <QToolButton>
 
@@ -206,6 +207,49 @@ private slots:
         for (int i = 0; i < 100 && r.composer.isPlaying(); ++i) r.composer.advance(100);
         QVERIFY(!r.composer.isPlaying());
         QCOMPARE(r.position(), 30);
+    }
+
+    void scopes() {
+        // The waveform and vectorscope commands in the Source menu (p.591, p.686-687): "Media Composer displays the
+        // information for the currently active monitor".
+        Rig r;
+        r.timeline.setCorrectionMode(true);
+        r.composer.setPictureResolver([](MonitorId, std::int64_t, QSize size, bool*) {
+            QImage image(size, QImage::Format_RGB32);
+            image.fill(Qt::red);
+            return image;
+        });
+        CorrectionMonitors* m = r.monitors();
+        QCOMPARE(m->activeMonitor(), 1);
+        QToolButton* menu = m->sourceButton(2);
+        QStringList entries;
+        for (QAction* a : menu->menu()->actions()) {
+            if (!a->isSeparator()) entries << a->text();
+        }
+        QCOMPARE(entries.mid(8), (QStringList{"Quad Display", "RGB Histogram", "RGB Parade", "Vectorscope", "Y Waveform", "Y Waveform HDR 1000",
+                                              "Y Waveform HDR 10000", "YC Waveform", "YCbCr Histogram", "YCbCr Parade"}));
+        QVERIFY(m->setSource(2, CorrectionSource::Vectorscope));
+        QCOMPARE(menu->text(), QStringLiteral("Vectorscope"));
+        QCOMPARE(m->frameOf(2), m->frameOf(1));
+        // A scope monitor is not made active; the frame it measures follows the active monitor.
+        m->setActiveMonitor(2);
+        QCOMPARE(m->activeMonitor(), 1);
+        m->setActiveMonitor(0);
+        QCOMPARE(m->frameOf(2), m->frameOf(0));
+        // Turning the active monitor into a scope makes another one active.
+        QVERIFY(m->setSource(0, CorrectionSource::YWaveform));
+        QCOMPARE(m->activeMonitor(), 1);
+        // The scope is drawn from the frame: red lies off the vectorscope's centre in green.
+        settle();
+        QWidget* picture = m->pictureWidget(2);
+        const QImage shot = picture->grab().toImage();
+        int green = 0;
+        for (int y = 0; y < shot.height(); ++y) {
+            for (int x = 0; x < shot.width(); ++x) green += qGreen(shot.pixel(x, y)) > 150 && qRed(shot.pixel(x, y)) < 100 ? 1 : 0;
+        }
+        QVERIFY(green > 0);
+        m->setPal(true);
+        QVERIFY(m->isPal());
     }
 };
 
