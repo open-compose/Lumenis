@@ -5,7 +5,9 @@
 // an AniMatte transition.
 #include "effect_drawing.h"
 
+#include "lumenis/media/color_correction.h"
 #include "lumenis/media/compositor.h"
+#include "lumenis/model/correction_shapes.h"
 #include "lumenis/model/intraframe.h"
 
 #include <QColor>
@@ -590,6 +592,46 @@ Picture intraframePicture(const model::Effect& effect, const Picture& layer, con
         }
     }
     return over(cur, below);
+}
+
+// ---------------------------------------------------------------- shape-based colour correction (p.697-699)
+
+std::vector<float> correctionShapesMask(const model::Effect& effect, int width, int height, double time, const model::EffectSpan& span) {
+    const std::size_t count = static_cast<std::size_t>(std::max(width, 0)) * static_cast<std::size_t>(std::max(height, 0));
+    std::vector<float> m(count, 0.0f);
+    if (count == 0) return m;
+    const Picture blank(width, height);
+    for (const model::IntraframeObject& shape : model::intraframeObjects(effect)) {
+        std::vector<float> one = intraframeMask(effect, shape, blank, time, span);
+        if (one.size() != count) continue;
+        // "Use the slider to add softness to the selected shape. Each shape can have a different softness" (p.699):
+        // ours, a blur of up to 100 pixels of a frame 1920 wide.
+        const int r = static_cast<int>(std::lround(model::shapeSoftness(shape) * width / 1920.0));
+        if (r > 0) {
+            blurMask(one, width, height, r, true);
+            blurMask(one, width, height, r, false);
+        }
+        for (std::size_t i = 0; i < count; ++i) m[i] = std::max(m[i], one[i]);
+    }
+    if (model::shapeOptionsOf(effect).invertAlpha) {
+        for (float& v : m) v = 1.0f - v;
+    }
+    return m;
+}
+
+Picture colorCorrectedShapesPicture(const model::Effect& effect, const Picture& layer, const model::ColorCorrection& base,
+                                    const model::ColorCorrection& shapes, double time, const model::EffectSpan& span) {
+    Picture out = colorCorrectedPicture(base, layer);
+    if (!model::hasCorrectionShapes(effect) || out.isNull()) return out;
+    // "Serial Mode - when selected, any changes you have made to the base will be included" (p.698).
+    const Picture shaped = colorCorrectedPicture(shapes, model::shapeOptionsOf(effect).serial ? out : layer);
+    const std::vector<float> m = correctionShapesMask(effect, out.width(), out.height(), time, span);
+    std::vector<float>& d = out.data();
+    const std::vector<float>& s = shaped.data();
+    for (std::size_t i = 0; i < m.size() && i * 4 + 3 < d.size() && i * 4 + 3 < s.size(); ++i) {
+        for (std::size_t c = 0; c < 4; ++c) d[i * 4 + c] += (s[i * 4 + c] - d[i * 4 + c]) * m[i];
+    }
+    return out;
 }
 
 } // namespace lumenis::media

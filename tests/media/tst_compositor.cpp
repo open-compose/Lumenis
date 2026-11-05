@@ -2,6 +2,7 @@
 // through, the dissolve family of transitions and Superimpose, the 2D transitions (wipes.cpp), effects
 // processing precision, and offline media. Clips are solid colours, one per clip id, so every pixel is known.
 #include "lumenis/model/correction_keyframes.h"
+#include "lumenis/model/correction_shapes.h"
 #include "lumenis/media/compositor.h"
 #include "lumenis/model/intraframe.h"
 #include "lumenis/model/effect_keyframes.h"
@@ -141,6 +142,58 @@ private slots:
         QVERIFY(std::abs(centre(composeImage(both, 0)).red() - under) <= 3); // Gain 100: unchanged
         QVERIFY2(centre(composeImage(both, 10)).red() < under - 20,
                  qPrintable(QStringLiteral("%1 %2").arg(centre(composeImage(both, 10)).red()).arg(under)));
+    }
+
+    // Shape-based correction (FX Guide p.697-699, 6.10e3): the shape layer's correction inside the shapes, the base
+    // one everywhere; Invert Alpha, Serial Mode and Softness.
+    void correctionShapes() {
+        Effect cc;
+        cc.category = QStringLiteral("Image");
+        cc.name = QStringLiteral("Color Correction");
+        ColorCorrection base;
+        base.set(QStringLiteral("hsl/controls/master/gain"), 80);
+        setColorCorrection(cc, base);
+        ColorCorrection shape;
+        shape.set(QStringLiteral("hsl/controls/master/gain"), 50);
+        setShapeCorrection(cc, shape);
+        QVERIFY(!hasCorrectionShapes(cc));
+        // The left half of the frame.
+        addIntraframeObject(cc, IntraframeKind::Rectangle, rectangleShape(QRectF(0.0, 0.0, 0.5, 1.0)));
+        QVERIFY(hasCorrectionShapes(cc));
+        const auto picture = [&](const Effect& e) {
+            Sequence seq = Sequence::withDefaultTracks();
+            Segment grey = clip(QStringLiteral("grey"), 10);
+            grey.effect = e;
+            seq.splice(QStringLiteral("V1"), 0, {grey});
+            return composeImage(composition(seq, {QStringLiteral("V1")}), 0);
+        };
+        const auto at = [](const QImage& img, double x) { return img.pixelColor(static_cast<int>(x * img.width()), img.height() / 2).red(); };
+        QImage img = picture(cc);
+        const int outside = at(img, 0.75), inside = at(img, 0.25);
+        QVERIFY2(inside < outside - 20, qPrintable(QStringLiteral("%1 %2").arg(inside).arg(outside)));
+        // Without Serial Mode the shape layer corrects the uncorrected picture: brighter inside than in series.
+        setShapeOptions(cc, {false, false});
+        QVERIFY(at(picture(cc), 0.25) > inside + 5);
+        // Invert Alpha: the shape layer outside the shape.
+        setShapeOptions(cc, {true, true});
+        img = picture(cc);
+        QVERIFY(std::abs(at(img, 0.25) - outside) <= 2);
+        QVERIFY(std::abs(at(img, 0.75) - inside) <= 2);
+        setShapeOptions(cc, {});
+        QCOMPARE(shapeOptionsOf(cc), CorrectionShapeOptions{});
+        QVERIFY(!cc.parameters.contains(kShapeOptionsCategory));
+        // Softness: the edge blends; far from it, the values stay.
+        QList<IntraframeObject> shapes = intraframeObjects(cc);
+        setShapeSoftness(shapes[0], 60);
+        QCOMPARE(shapeSoftness(shapes[0]), 60.0);
+        setIntraframeObjects(cc, shapes);
+        img = picture(cc);
+        const int edge = at(img, 0.5);
+        QVERIFY2(edge > inside + 5 && edge < outside - 5, qPrintable(QStringLiteral("%1 %2 %3").arg(inside).arg(edge).arg(outside)));
+        QVERIFY(std::abs(at(img, 0.05) - inside) <= 3);
+        // The mask, for Show Alpha (p.698).
+        const std::vector<float> m = correctionShapesMask(cc, 40, 20, 0.0, EffectSpan(10));
+        QVERIFY(m.at(10 * 40 + 1) > 0.9f && m.at(10 * 40 + 38) < 0.1f);
     }
 
     void trackFrames() {

@@ -9,6 +9,7 @@
 #include "lumenis/media/fluid_fx.h"
 #include "lumenis/media/optical_flow.h"
 #include "lumenis/model/correction_keyframes.h"
+#include "lumenis/model/correction_shapes.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/nest.h"
@@ -756,14 +757,17 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 // is not opaque material but simply a container for the Color Correction effect" (p.692).
                 const model::ColorCorrection own = model::colorCorrectionOf(e);
                 const model::EffectSpan span(std::max<std::int64_t>(length, 1));
-                const model::ColorCorrection at =
-                    own.keyframes.isEmpty() ? own : model::correctionAt(own, span.timeOf(static_cast<double>(tf->offset)), span);
+                const double t = span.timeOf(static_cast<double>(tf->offset));
+                const model::ColorCorrection at = own.keyframes.isEmpty() ? own : model::correctionAt(own, t, span);
+                // Shapes (p.697-699; 6.10e3): the shape layer's correction within them.
+                const model::ColorCorrection shapeOwn = model::shapeCorrectionOf(e);
+                const model::ColorCorrection shapeAt = shapeOwn.keyframes.isEmpty() ? shapeOwn : model::correctionAt(shapeOwn, t, span);
                 if (tf->segment->isFiller()) {
-                    result = colorCorrectedPicture(at, result);
+                    result = colorCorrectedShapesPicture(e, result, at, shapeAt, t, span);
                     result.quantize(c.precision);
                     continue;
                 }
-                layer = colorCorrectedPicture(at, layer);
+                layer = colorCorrectedShapesPicture(e, layer, at, shapeAt, t, span);
                 layer.quantize(c.precision);
                 result = over(layer, result);
                 result.quantize(c.precision);

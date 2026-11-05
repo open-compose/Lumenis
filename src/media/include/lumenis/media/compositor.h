@@ -291,6 +291,14 @@ QPainterPath intraframePath(const QList<model::ControlPoint>& points, bool close
 // (Hor, Vert, Bias), times its opacity; nothing while it is not visible.
 std::vector<float> intraframeMask(const model::Effect& effect, const model::IntraframeObject& object, const Picture& picture, double time,
                                   const model::EffectSpan& span);
+// Shape-based colour correction (FX Guide p.697-699; lumenis/model/correction_shapes.h, 6.10e3): `base` (the effect's
+// correction at the time) on `layer`; with shapes, `shapes` (the shape layer's correction) on that picture (Serial Mode)
+// or on `layer`, mixed in where the shapes cover (each softened by its Softness, the union inverted with Invert Alpha).
+Picture colorCorrectedShapesPicture(const model::Effect& effect, const Picture& layer, const model::ColorCorrection& base,
+                                    const model::ColorCorrection& shapes, double time, const model::EffectSpan& span);
+// The shapes' coverage at `time` (0 to 1, `width` x `height`, row by row), softened and inverted as the effect says:
+// what the Show Alpha display shows (p.698).
+std::vector<float> correctionShapesMask(const model::Effect& effect, int width, int height, double time, const model::EffectSpan& span);
 // The effect on its segment's picture `layer` over `below` (the tracks below, or a transition's outgoing picture with
 // `layer` the incoming one): Paint's objects painted onto `layer` bottom layer first in their modes, Blur and Mosaic
 // within their objects, AniMatte keying `layer` in or out of its mattes over `below`.

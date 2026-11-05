@@ -594,6 +594,29 @@ the Effect Editor's `refresh`/`rebuild`/`changeShown` in Color Correction mode a
 * The editor's groups have no Enable buttons yet (ours; the tool's stay); a value back at its default is left out as the
   tool leaves it. The Curves and Levels keyframe tracks came with 6.10d3c.
 
+## 6.10e3a: shapes on the Color Correction effect
+
+Code: `src/model/correction_shapes.*` (`shapeCorrectionOf`, `layerCorrectionOf`, `CorrectionShapeOptions`,
+`shapeSoftness`), `media::colorCorrectedShapesPicture` and `correctionShapesMask` in `src/media/intraframe.cpp`, the
+compositor's Color Correction effect. Test: `tst_compositor` (`correctionShapes`).
+
+### From the guide
+* "Select CC Effect ... Use the shape tools in the Color Correction tool to mark the area you want to color correct";
+  "Shapes - selects the shape layer that allows you to use the shape based tools to color correct portions of the
+  material"; "Base - sets the base layer"; "Serial Mode - when selected, any changes you have made to the base will be
+  included when you are performing a shaped based color correction"; "Invert Alpha - when selected displays the
+  inverted alpha"; "Softness - ... Each shape can have a different softness"; the picture shows the tools (select,
+  rectangle, oval, polygon, curve, brush), Serial Mode checked (p.697-699).
+
+### Ours
+* The shapes are the effect's Intraframe objects (their outlines, Brush strokes and placing as in 6.9), the shape
+  layer's correction its "Shape Correction" category (with keyframes as the base correction's), Serial Mode and Invert
+  Alpha its "Shape Options" (Serial on at first), each shape's Softness its own "Shape" category (0 to 100: a blur of
+  up to 100 pixels of a frame 1920 wide).
+* The picture: the base correction on the segment (or, on filler, on the tracks below); the shape correction on that
+  (Serial Mode) or on the uncorrected picture; the two mixed by the union of the shapes' softened coverage, inverted by
+  Invert Alpha, so that the shape layer corrects outside the shapes.
+
 ## 6.10e2: the Color Info tool
 
 Code: `src/ui/color_info.*` (`ColorInfoTool`, the "ColorInfo" panel), `MainWindow`'s sampler and `tools.color_info_tool`,

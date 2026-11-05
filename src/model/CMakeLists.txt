@@ -21,6 +21,7 @@ add_library(lumenis_model STATIC
     intraframe.cpp
     color_correction.cpp
     correction_relations.cpp
+    correction_shapes.cpp
     correction_manage.cpp
     correction_template.cpp
     correction_keyframes.cpp
