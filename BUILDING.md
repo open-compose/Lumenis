@@ -340,6 +340,15 @@ Mixdown and the like).
 `build/<preset>/test-media` holds only test media and can be deleted between runs: the
 `test_media_drives` ctest fixture makes the folders again before the tests that use them.
 
+### Esc (Toggle Source/Record) does nothing, or the Record monitor stays an Effect Preview
+
+Before 2026-11-05 the Toggle Source/Record command, on Esc and on the Command Palette's Edit tab, had
+no handler; only the Timeline toolbar's Toggle Source/Record in Timeline button worked. Both now show
+the Source monitor's clip in the Timeline (Editing Guide p.480, p.603); `tst_main_window` presses Esc
+to check it. Neither leaves Effect mode: after Tools > Titler+ or the Effect Editor, the Record monitor
+shows the Effect Preview, without markers under it, wherever the position is on an effect. Click
+Source/Record Mode (or Effect Mode again) in the Timeline toolbar to get the Record monitor back.
+
 ### Audio Punch-In records silence
 
 Each system has to let Cutthulhu use the microphone (Tools > Audio

@@ -4,6 +4,8 @@
 #include "lumenis/media/link.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/marker.h"
+#include "lumenis/ui/effect_editor.h"
+#include "lumenis/ui/titler_panel.h"
 #include "lumenis/model/project_bins.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_container.h"
@@ -344,12 +346,45 @@ private slots:
         settle();
         settle();
         QVERIFY(window.timeline().isEffectMode() && window.composer().effectPreview().on);
-        QAction* sourceRecord = commands.action(QStringLiteral("edit.source_record_mode"));
-        QVERIFY(sourceRecord && sourceRecord->isEnabled());
-        sourceRecord->trigger();
+        // "I open Titler+ and close it and the Effect Editor windows": the Dashboard and the Effect Editor panel close.
+        if (QWidget* dashboard = window.effectEditor().titlerDashboard()) dashboard->close();
+        // With the floating window's close button, as on Windows.
+        QWidget* editorWindow = window.effectEditor().window();
+        if (editorWindow != &window) editorWindow->close();
+        else window.panels().closePanel(window.panels().panel(QStringLiteral("EffectEditor")));
+        settle();
+        // The Timeline's own Source/Record Mode button, clicked.
+        auto* button = window.timeline().findChild<QToolButton*>(QStringLiteral("edit.source_record_mode"));
+        QVERIFY(button);
+        QTest::mouseClick(button, Qt::LeftButton);
         settle();
         QVERIFY(!window.composer().effectPreview().on);
         QCOMPARE(window.composer().shownMarkers(ui::MonitorId::Record).size(), 1);
+    }
+
+    // The Toggle Source/Record command (Esc on the default keyboard, the Command Palette's Edit tab)
+    // shows the source clip in the Timeline as the Timeline's button does (p.480, p.603). It did
+    // nothing before (owner's report, 2026-11-05).
+    void toggleSourceRecordCommandShowsTheSource() {
+        Project project;
+        ext::ProviderRegistry providers;
+        ui::CommandRegistry commands;
+        commands.loadBuiltin();
+        ui::MainWindow window(commands, providers);
+        window.setProject(project.entry);
+        QVERIFY(!window.timeline().showsSource());
+        auto* button = window.timeline().findChild<QToolButton*>(QStringLiteral("toggleSourceRecord"));
+        QVERIFY(button);
+        commands.action(QStringLiteral("edit.toggle_source_record"))->trigger();
+        QVERIFY(window.timeline().showsSource());
+        QVERIFY(button->isChecked());
+        commands.action(QStringLiteral("edit.toggle_source_record"))->trigger();
+        QVERIFY(!window.timeline().showsSource());
+        QVERIFY(!button->isChecked());
+        // Esc pressed in the Timeline goes through the editing keyboard to the same command.
+        QTest::keyClick(&window.timeline(), Qt::Key_Escape);
+        QVERIFY(window.timeline().showsSource());
+        window.clearProject();
     }
 
     // Playback hears a track only when it is not muted, and only soloed tracks once any is (p.698).

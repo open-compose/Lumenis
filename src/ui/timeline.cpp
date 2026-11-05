@@ -3181,6 +3181,7 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("fx.step_out"),
         QStringLiteral("fx.collapse"),
         QStringLiteral("edit.source_record_mode"),
+        QStringLiteral("edit.toggle_source_record"),
         QStringLiteral("trim.trim_backward_10_frames"),
         QStringLiteral("trim.trim_backward_1_frame"),
         QStringLiteral("trim.trim_forward_1_frame"),
@@ -3400,6 +3401,11 @@ bool Timeline::perform(const QString& id) {
         // A second click leaves it (ours; FX p.684 says only that it cannot close the Effect Editor in
         // Color Correction mode).
         setEffectMode(!effectMode_);
+    } else if (id == QLatin1String("edit.toggle_source_record")) {
+        // The keyboard's Esc and the Command Palette's button do what the Timeline toolbar's
+        // button does: the guide names that button both "Toggle Source/Record" (p.480) and
+        // "Toggle Source/Record in Timeline" (p.603). It leaves Effect mode as it is.
+        setShowSource(!showSource_);
     } else if (id == QLatin1String("edit.source_record_mode")) {
         // Alt: between the single Record monitor and the Source/Record monitors (p.381).
         if (QApplication::keyboardModifiers() & Qt::AltModifier) {
@@ -4795,6 +4801,13 @@ void Timeline::setEffectMode(bool on) {
         setCorrectionMode(false);
     }
     effectMode_ = on;
+    if (!on) {
+        // Leaving Effect mode gives the Record monitor back at once (its own position bar with the markers, its buttons
+        // and size), whether or not an Effect Editor is open to say so (the owner's report after Tools > Titler+ with
+        // the Effect Editor and Dashboard closed, ROADMAP 6.10f).
+        composer_.setEffectPreview({});
+        composer_.setOverlayInput(nullptr);
+    }
     syncTrimDisplay();
     emit effectModeChanged(on);
 }
@@ -4809,6 +4822,8 @@ void Timeline::setCorrectionMode(bool on) {
         exitTrimMode();
         if (effectMode_) {
             effectMode_ = false;
+            composer_.setEffectPreview({});
+            composer_.setOverlayInput(nullptr);
             emit effectModeChanged(false);
         }
     }

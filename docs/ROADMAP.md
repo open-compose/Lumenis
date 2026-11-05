@@ -1216,7 +1216,16 @@ phase of their own. They are done in three steps:
     their frame) until the program is restarted. First look: Titler+ puts the Timeline in Effect mode
     (`MainWindow::openTitleEditing`, ours), whose Effect Preview resizes the monitor and whose position bar draws only
     the effect and its keyframes (`PositionBar::paintEvent`); check how Effect mode is left after titling, and what the
-    guide shows under the Effect Preview (p.76-78) and on leaving Titler+.
+    guide shows under the Effect Preview (p.76-78) and on leaving Titler+. Found so far: Effect mode stays on after
+    Titler+ and its Effect Editor close, so the Record monitor shows the Effect Preview (and no markers) whenever the
+    position is on an effect; Source/Record Mode or Edit Mode gives the monitor back, as the owner confirmed. Toggle
+    Source/Record in Timeline only shows the source clip in the Timeline (Editing Guide p.603, "Click the Toggle
+    Source/Record in Timeline button"), so it leaves Effect mode on. The owner's Esc did nothing: the
+    `edit.toggle_source_record` command (Esc, the Command Palette) had no handler; it now toggles as the button does
+    (test `toggleSourceRecordCommandShowsTheSource`). Leaving Effect mode now always clears the Effect Preview and the overlay (`Timeline::setEffectMode`;
+    tests `leavingTitlerRestoresTheRecordMonitor`, `titlerAndBackToSourceRecord`). Still to decide: whether closing
+    Titler+ should leave Effect mode (the guide says the title is "directly viewed and manipulated in the Record
+    monitor", p.303).
 * 6.11, the OFX host in place of AVX (ch.6, p.157-164), with OCIO colour management.
 
 **Gates**
@@ -1261,6 +1270,12 @@ decision, 2026-10-27):
   events (FX Guide p.79, p.412; Editing Guide "Optical Lists");
 * importing from audio CDs, with the Import setting's Apply
   attenuation/gain effect on import and its CD only choice (p.1198);
+* a check for unconnected items (owner's request, 2026-11-05): commands with no handler, buttons, menu items and
+  keys that reach nothing, and places where the guides use slightly different names for one item (Esc's "Toggle
+  Source/Record" and the Timeline's "Toggle Source/Record in Timeline" button, p.480 and p.603, were one button but
+  only the button worked). Go through commands.json, menus.json, keyboard.json and command_palette.json against the
+  handlers, list the guides' names that differ for one item in docs/spec/ui-inventory.md, and add a test that fails
+  when a command reaches nothing unless it is listed as dimmed on purpose;
 * anything else later found not to fit another area.
 
 ### Phase 10 — Hardening

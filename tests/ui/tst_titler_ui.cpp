@@ -75,6 +75,22 @@ private slots:
         QVERIFY(timeline.perform(QStringLiteral("edit.source_record_mode")));
         QVERIFY(!timeline.isEffectMode());
         QVERIFY2(!composer.effectPreview().on, "the Effect Preview stays on after Source/Record Mode");
+        // Without an Effect Editor to turn it off (closed, or not told), leaving Effect mode still ends the Effect Preview.
+        Composer alone;
+        Timeline bare{alone};
+        alone.load(MonitorId::Record, QStringLiteral("bin"), sequence());
+        bare.setEffectMode(true);
+        Composer::EffectPreview stale;
+        stale.on = true;
+        stale.length = 50;
+        alone.setEffectPreview(stale);
+        QVERIFY(alone.effectPreview().on);
+        QVERIFY(bare.perform(QStringLiteral("edit.source_record_mode")));
+        QVERIFY(!alone.effectPreview().on);
+        bare.setEffectMode(true);
+        alone.setEffectPreview(stale);
+        bare.setCorrectionMode(true); // Color Correction mode leaves Effect mode too
+        QVERIFY(!alone.effectPreview().on);
     }
 
     void apply() {
