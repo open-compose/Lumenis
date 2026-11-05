@@ -941,6 +941,7 @@ void CorrectionTool::setOptions(const Options& options) {
         m->setShowInfo(options_.eyedropperInfo);
         m->setLabels(options_.savedColorLabels);
         m->setPickAnywhere(options_.eyedropperAnywhere);
+        m->setSafeColors(options_.safeColors);
     }
     sync();
     syncPanes();

@@ -5522,6 +5522,7 @@ void MainWindow::applySettings() {
         if (CorrectionMonitors* m = composer_->correctionMonitors()) {
             m->setEyedropperAveraging(s.flag(cc, QStringLiteral("eyedropperAveraging")));
             m->setDualSplitDuringPlayback(s.flag(cc, QStringLiteral("dualSplitDuringPlayback")));
+            m->setSafeColors(c.safeColors);
         }
         o.correctionUseMarks = s.flag(cc, QStringLiteral("useMarks"));
     }

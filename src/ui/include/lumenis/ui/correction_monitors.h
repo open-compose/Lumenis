@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/model/color_correction.h"
+#include "lumenis/model/safe_colors.h"
 #include "lumenis/ui/composer.h"
 
 #include <QPointF>
@@ -144,6 +145,17 @@ public:
     void setPal(bool pal);
     bool isPal() const { return pal_; }
     bool dualSplitDuringPlayback() const { return dualSplitPlayback_; }
+    // The Safe Colors project setting (FX Guide ch.23; 6.10e4b). While a limit type is set to Warn and a monitor's
+    // picture exceeds it, "an orange safe color warning triangle in the top left corner of the image, along with warning
+    // indicators for each of the safe color value types that are currently set to warn" (p.724): a column each,
+    // Composite (yellow) and Luminance (white) for the top Actions button, Red, Green and Blue for the bottom one, with a
+    // bar at the top for a level too high, at the bottom for one too low and in the centre for one within limits. The
+    // Y Waveform, YC Waveform and RGB Parade show legal and illegal levels in their colours (p.727,
+    // media::scopeImage). Ours: the indicators sit right of the triangle.
+    void setSafeColors(const model::SafeColorLimits& limits);
+    const model::SafeColorLimits& safeColors() const { return safeColors_; }
+    // The warned limits a monitor's picture exceeded when it was last drawn (none for a waveform or vectorscope).
+    model::SafeViolations safeWarnings(int monitor) const;
     // A Color Correction effect template dropped "to the monitor containing the current segment" (FX Guide p.614): the
     // hook says whether a drag carries one (`apply` false) and applies it (true), with the template's relationships
     // (p.615). Ours: a drop anywhere on the mode's monitors. MainWindow passes the Timeline's.
@@ -206,6 +218,7 @@ private:
     bool averaging_ = false;
     bool dualSplitPlayback_ = true;
     bool pal_ = false;
+    model::SafeColorLimits safeColors_;
     std::function<model::ColorCorrection()> ranges_;
 };
 

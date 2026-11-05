@@ -69,6 +69,28 @@ private slots:
         joined.add(black);
         QVERIFY(joined.compositeHigh && joined.compositeLow && joined.lumaLow);
     }
+
+    void picturesAndWarnings() {
+        // A picture's 0 and 255 stand for reference black and white (6.10e4b).
+        QCOMPARE(pictureLevel(0), 16);
+        QCOMPARE(pictureLevel(255), 235);
+        QCOMPARE(pictureLevel(128), 126);
+        // Only the types set to Warn count (p.724): the top Actions button for Composite and Luminance, the bottom one
+        // for RGB Gamut (p.722).
+        SafeViolations all;
+        all.compositeHigh = true;
+        all.lumaLow = true;
+        all.rgbHigh = {true, false, false};
+        SafeColorLimits l;
+        QVERIFY(!warnedViolations(all, l).any());
+        l.warnRgb = true;
+        SafeViolations w = warnedViolations(all, l);
+        QVERIFY(w.rgbHigh[0] && !w.compositeHigh && !w.lumaLow);
+        l.warnRgb = false;
+        l.warnCompositeLuma = true;
+        w = warnedViolations(all, l);
+        QVERIFY(w.compositeHigh && w.lumaLow && !w.rgbHigh[0]);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestSafeColors)

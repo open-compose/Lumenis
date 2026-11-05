@@ -5,6 +5,8 @@
 // frames are the Composer's pictures, full-range R'G'B' that stand for video levels (0-255 as 16-235, as the Levels
 // histograms read them); Y'CbCr is Rec. 709.
 
+#include "lumenis/model/safe_colors.h"
+
 #include <QImage>
 #include <QPointF>
 #include <QSize>
@@ -29,7 +31,15 @@ QString scopeName(Scope scope); // "Quad Display", "RGB Histogram", ...
 
 // The scope of `frame` at `size`, on black with its graticule and scale. `pal` chooses the YC Waveform's scale:
 // "NTSC black is 7.5 IRE ... NTSC white is 100 IRE. PAL black is 0 millivolts (mV), and PAL white is 700 mV" (p.690).
-QImage scopeImage(const QImage& frame, Scope scope, const QSize& size, bool pal = false);
+//
+// With `limits`, "The Y Waveform, YC Waveform, and RGB Parade displays incorporate any safe color limits you have set"
+// (p.727): legal luma green and illegal white; legal composite cyan and illegal yellow; each RGB Parade channel in its
+// colour when legal and white when not (6.10e4b). Ours: they follow the limits whatever their Actions.
+QImage scopeImage(const QImage& frame, Scope scope, const QSize& size, bool pal = false, const model::SafeColorLimits* limits = nullptr);
+
+// The safe colour limits a picture exceeds (FX Guide p.723-724; 6.10e4b), every pixel read as the video level it stands
+// for (model::pictureLevel), every limit type counted whatever its Action (model::warnedViolations keeps the warned ones).
+model::SafeViolations pictureViolations(const QImage& frame, const model::SafeColorLimits& limits);
 
 // Where the waveforms put a level, for the scale and tests: the row of an 8-bit video level (0 at the bottom edge,
 // 255 at the top, with a margin) in a picture `height` high.

@@ -65,8 +65,8 @@ struct SafeViolations {
     bool operator==(const SafeViolations&) const = default;
 };
 
-// A colour's levels (8-bit R, G, B as the pictures hold them): its Rec. 601 luma, and its composite signal's lowest and
-// highest excursions, as 8-bit video levels.
+// A colour's levels (8-bit video levels R, G, B, reference black 16 and white 235; pictureLevel gives them for a
+// picture's values): its Rec. 601 luma, and its composite signal's lowest and highest excursions, as 8-bit video levels.
 struct SafeLevels {
     double luma = 0.0;
     double compositeLow = 0.0;
@@ -75,5 +75,14 @@ struct SafeLevels {
 SafeLevels safeLevels(int r, int g, int b);
 // The limits a colour exceeds, every limit type counted whatever its Action.
 SafeViolations safeViolations(int r, int g, int b, const SafeColorLimits& limits);
+
+// The 8-bit video level a picture's 0-255 value stands for: 0 as reference black 16, 255 as reference white 235, as the
+// scopes, the Levels histograms and the Color Match control read the Composer's pictures (6.10c1; ours).
+int pictureLevel(int value);
+
+// Only the limit types whose Action is Warn: "The warning indicators do not appear unless color levels exceed at least
+// one of the limits currently set to Warn" (p.724); the top Actions button covers Composite and Luminance, the bottom
+// one RGB Gamut (p.722).
+SafeViolations warnedViolations(const SafeViolations& violations, const SafeColorLimits& limits);
 
 } // namespace lumenis::model

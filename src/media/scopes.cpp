@@ -29,6 +29,19 @@ double video(double v) {
     return 16.0 + 219.0 * v;
 }
 
+// The safe colour limits a sample (full-range 0-1) exceeds, read as the video levels it stands for; none without limits.
+model::SafeViolations violations(const std::array<double, 3>& c, const model::SafeColorLimits* limits) {
+    if (!limits) return {};
+    const auto level = [](double v) { return model::pictureLevel(static_cast<int>(std::lround(v * 255.0))); };
+    return model::safeViolations(level(c[0]), level(c[1]), level(c[2]), *limits);
+}
+
+// The legal and illegal trace colours of p.727's table.
+const QColor kLumaLegal(40, 220, 60);      // green
+const QColor kIllegal(235, 235, 235);       // white
+const QColor kCompositeLegal(30, 170, 190); // cyan
+const QColor kCompositeIllegal(230, 210, 40); // yellow
+
 // Counts in a grid of cells, one per pixel of a panel.
 class Plot {
 public:
@@ -129,16 +142,18 @@ void waveformScale(QPainter& p, const QRect& area) {
     }
 }
 
-// Y Waveform: luma by column.
-void yWaveform(QImage& image, const QRect& area, const Samples& s, const QColor& color) {
-    Plot plot(area);
+// Y Waveform: luma by column, legal luma green and illegal white (p.727).
+void yWaveform(QImage& image, const QRect& area, const Samples& s, const model::SafeColorLimits* limits) {
+    Plot plot(area), illegal(area);
     for (int y = 0; y < s.height; ++y) {
         for (int x = 0; x < s.width; ++x) {
             const auto& c = s.at(x, y);
-            plot.add((x + 0.5) / s.width, levelUp(video(kR * c[0] + kG * c[1] + kB * c[2])));
+            const model::SafeViolations v = violations(c, limits);
+            (v.lumaLow || v.lumaHigh ? illegal : plot).add((x + 0.5) / s.width, levelUp(video(kR * c[0] + kG * c[1] + kB * c[2])));
         }
     }
-    plot.draw(image, color, columnNorm(s, area));
+    plot.draw(image, kLumaLegal, columnNorm(s, area));
+    illegal.draw(image, kIllegal, columnNorm(s, area));
 }
 
 // The HDR waveforms (p.689-690): Y' as a PQ code value up to the code of 1000 or 10000 nits, with a scale in nits.
@@ -162,8 +177,9 @@ void hdrWaveform(QImage& image, const QRect& area, const Samples& s, double maxN
 }
 
 // YC Waveform (p.690): Y in green and the composite Y ± C in cyan, a red edge where the composite leaves its range.
-void ycWaveform(QImage& image, const QRect& area, const Samples& s, bool pal) {
-    Plot luma(area), chroma(area);
+// With limits, illegal luma white and illegal composite excursions yellow (p.727).
+void ycWaveform(QImage& image, const QRect& area, const Samples& s, bool pal, const model::SafeColorLimits* limits) {
+    Plot luma(area), chroma(area), lumaIllegal(area), chromaIllegal(area);
     bool over = false, under = false;
     for (int y = 0; y < s.height; ++y) {
         for (int x = 0; x < s.width; ++x) {
@@ -172,17 +188,20 @@ void ycWaveform(QImage& image, const QRect& area, const Samples& s, bool pal) {
             // The chroma's amplitude on the 8-bit scale (224 levels across Cb or Cr's range).
             const double amplitude = 224.0 * std::hypot(v.cb, v.cr);
             const double across = (x + 0.5) / s.width;
-            luma.add(across, levelUp(v.y));
-            chroma.add(across, levelUp(v.y + amplitude), 0.5f);
-            chroma.add(across, levelUp(v.y - amplitude), 0.5f);
+            const model::SafeViolations bad = violations(c, limits);
+            (bad.lumaLow || bad.lumaHigh ? lumaIllegal : luma).add(across, levelUp(v.y));
+            (bad.compositeHigh ? chromaIllegal : chroma).add(across, levelUp(v.y + amplitude), 0.5f);
+            (bad.compositeLow ? chromaIllegal : chroma).add(across, levelUp(v.y - amplitude), 0.5f);
             // Ours: the composite range of -20 to 120 IRE (8-bit -28 to 279).
             over = over || v.y + amplitude > 279.0;
             under = under || v.y - amplitude < -28.0;
         }
     }
     const double norm = columnNorm(s, area);
-    chroma.draw(image, QColor(30, 170, 190), norm);
-    luma.draw(image, QColor(40, 220, 60), norm);
+    chroma.draw(image, kCompositeLegal, norm);
+    chromaIllegal.draw(image, kCompositeIllegal, norm);
+    luma.draw(image, kLumaLegal, norm);
+    lumaIllegal.draw(image, kIllegal, norm);
     QPainter p(&image);
     setUp(p, area);
     if (pal) {
@@ -201,17 +220,20 @@ void ycWaveform(QImage& image, const QRect& area, const Samples& s, bool pal) {
 }
 
 // RGB and YCbCr Parade (p.688, p.691): three waveforms side by side.
-void parade(QImage& image, const QRect& area, const Samples& s, bool ycbcr) {
+// With limits, an RGB Parade channel's values past the RGB Gamut limits white (p.727).
+void parade(QImage& image, const QRect& area, const Samples& s, bool ycbcr, const model::SafeColorLimits* limits) {
     const int third = area.width() / 3;
     for (int k = 0; k < 3; ++k) {
         const QRect band(area.left() + k * third, area.top(), third - 2, area.height());
-        Plot plot(band), negative(band);
+        Plot plot(band), negative(band), illegal(band);
         for (int y = 0; y < s.height; ++y) {
             for (int x = 0; x < s.width; ++x) {
                 const auto& c = s.at(x, y);
                 const double across = (x + 0.5) / s.width;
                 if (!ycbcr) {
-                    plot.add(across, levelUp(video(c[static_cast<std::size_t>(k)])));
+                    const auto channel = static_cast<std::size_t>(k);
+                    const model::SafeViolations bad = violations(c, limits);
+                    (bad.rgbLow.at(channel) || bad.rgbHigh.at(channel) ? illegal : plot).add(across, levelUp(video(c[channel])));
                     continue;
                 }
                 const YCbCr v = videoYCbCr(c[0], c[1], c[2]);
@@ -227,6 +249,7 @@ void parade(QImage& image, const QRect& area, const Samples& s, bool ycbcr) {
         const double norm = columnNorm(s, band);
         if (!ycbcr) {
             plot.draw(image, k == 0 ? QColor(230, 50, 50) : k == 1 ? QColor(50, 210, 60) : QColor(70, 110, 240), norm);
+            illegal.draw(image, kIllegal, norm);
         } else if (k == 0) {
             plot.draw(image, QColor(230, 230, 230), norm);
         } else {
@@ -311,24 +334,24 @@ void vectorscope(QImage& image, const QRect& area, const Samples& s) {
     }
 }
 
-void draw(QImage& image, const QRect& area, const Samples& s, Scope scope, bool pal) {
+void draw(QImage& image, const QRect& area, const Samples& s, Scope scope, bool pal, const model::SafeColorLimits* limits) {
     switch (scope) {
     case Scope::QuadDisplay: {
         // "clockwise from the top left corner: YC Waveform, Vectorscope, RGB Histogram, RGB Parade" (p.687).
         const int w = area.width() / 2, h = area.height() / 2;
-        draw(image, QRect(area.left(), area.top(), w - 1, h - 1), s, Scope::YcWaveform, pal);
-        draw(image, QRect(area.left() + w + 1, area.top(), w - 1, h - 1), s, Scope::Vectorscope, pal);
-        draw(image, QRect(area.left() + w + 1, area.top() + h + 1, w - 1, h - 1), s, Scope::RgbHistogram, pal);
-        draw(image, QRect(area.left(), area.top() + h + 1, w - 1, h - 1), s, Scope::RgbParade, pal);
+        draw(image, QRect(area.left(), area.top(), w - 1, h - 1), s, Scope::YcWaveform, pal, limits);
+        draw(image, QRect(area.left() + w + 1, area.top(), w - 1, h - 1), s, Scope::Vectorscope, pal, limits);
+        draw(image, QRect(area.left() + w + 1, area.top() + h + 1, w - 1, h - 1), s, Scope::RgbHistogram, pal, limits);
+        draw(image, QRect(area.left(), area.top() + h + 1, w - 1, h - 1), s, Scope::RgbParade, pal, limits);
         break;
     }
     case Scope::RgbHistogram: histograms(image, area, s, false); break;
     case Scope::YcbcrHistogram: histograms(image, area, s, true); break;
-    case Scope::RgbParade: parade(image, area, s, false); break;
-    case Scope::YcbcrParade: parade(image, area, s, true); break;
+    case Scope::RgbParade: parade(image, area, s, false, limits); break;
+    case Scope::YcbcrParade: parade(image, area, s, true, nullptr); break;
     case Scope::Vectorscope: vectorscope(image, area, s); break;
     case Scope::YWaveform: {
-        yWaveform(image, area, s, QColor(40, 220, 60));
+        yWaveform(image, area, s, limits);
         QPainter p(&image);
         setUp(p, area);
         waveformScale(p, area);
@@ -336,7 +359,7 @@ void draw(QImage& image, const QRect& area, const Samples& s, Scope scope, bool 
     }
     case Scope::YWaveformHdr1000: hdrWaveform(image, area, s, 1000.0); break;
     case Scope::YWaveformHdr10000: hdrWaveform(image, area, s, 10000.0); break;
-    case Scope::YcWaveform: ycWaveform(image, area, s, pal); break;
+    case Scope::YcWaveform: ycWaveform(image, area, s, pal, limits); break;
     }
 }
 
@@ -381,13 +404,33 @@ double pqCode(double nits) {
     return std::pow((c1 + c2 * y) / (1.0 + c3 * y), m2);
 }
 
-QImage scopeImage(const QImage& frame, Scope scope, const QSize& size, bool pal) {
+QImage scopeImage(const QImage& frame, Scope scope, const QSize& size, bool pal, const model::SafeColorLimits* limits) {
     QImage image(size.expandedTo(QSize(1, 1)), QImage::Format_RGB32);
     image.fill(Qt::black);
     const Samples s = sample(frame, std::max(size.width(), 16));
     if (s.rgb.empty()) return image;
-    draw(image, image.rect().adjusted(2, 2, -2, -2), s, scope, pal);
+    draw(image, image.rect().adjusted(2, 2, -2, -2), s, scope, pal, limits);
     return image;
+}
+
+model::SafeViolations pictureViolations(const QImage& frame, const model::SafeColorLimits& limits) {
+    model::SafeViolations out;
+    if (frame.isNull()) return out;
+    const QImage image = frame.convertToFormat(QImage::Format_RGB32);
+    // Neighbouring pixels are often the same colour: each new colour is measured once while it lasts.
+    QRgb last = 0;
+    bool measured = false;
+    for (int y = 0; y < image.height(); ++y) {
+        const auto* line = reinterpret_cast<const QRgb*>(image.constScanLine(y));
+        for (int x = 0; x < image.width(); ++x) {
+            const QRgb px = line[x] & 0xffffff;
+            if (measured && px == last) continue;
+            last = px;
+            measured = true;
+            out.add(model::safeViolations(model::pictureLevel(qRed(px)), model::pictureLevel(qGreen(px)), model::pictureLevel(qBlue(px)), limits));
+        }
+    }
+    return out;
 }
 
 } // namespace lumenis::media

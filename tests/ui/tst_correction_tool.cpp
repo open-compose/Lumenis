@@ -1366,6 +1366,20 @@ private slots:
         QVERIFY(m->showInfo());
         QCOMPARE(m->swatch(true)->text(), m->infoText(true));
         QVERIFY(m->infoText(true).startsWith(QStringLiteral("R: ")));
+        // Past the RGB Gamut limits while they warn, "a warning triangle appears beside the color information" (p.724).
+        QVERIFY(!m->infoText(true).contains(QChar(0x26A0)));
+        model::SafeColorLimits limits;
+        limits.rgb = {16.0, 120.0, model::SafeUnit::Bit8};
+        m->setSafeColors(limits);
+        QVERIFY(!m->infoText(true).contains(QChar(0x26A0))); // Ignore
+        limits.warnRgb = true;
+        m->setSafeColors(limits);
+        // 160, 120, 90 stand for 153, 119 and 93: red past 120.
+        QCOMPARE(m->rgbWarnings(true), (std::array<bool, 3>{true, false, false}));
+        QCOMPARE(m->infoText(true), QStringLiteral("R: 153 \u26A0 G: 119 B: 93"));
+        QCOMPARE(m->swatch(true)->text(), m->infoText(true));
+        m->setSafeColors({});
+        QCOMPARE(m->infoText(true), QStringLiteral("R: 153 G: 119 B: 93"));
         // R+G+B with NaturalMatch, then Match Color: points on the colour curves.
         m->setMatchType(QStringLiteral("rgb"));
         m->setNaturalMatch(true);

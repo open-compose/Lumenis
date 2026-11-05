@@ -120,6 +120,62 @@ private slots:
         QVERIFY(qRed(grey.pixel(kArea.center().x(), kArea.top())) < 200);
     }
 
+    void safeColorLimits() {
+        // "The Y Waveform, YC Waveform, and RGB Parade displays incorporate any safe color limits you have set" (p.727):
+        // legal luma green, illegal white; legal composite cyan, illegal yellow; an illegal RGB channel white.
+        lumenis::model::SafeColorLimits tight;
+        tight.luma = {16.0, 200.0, lumenis::model::SafeUnit::Bit8};
+        tight.rgb = {16.0, 200.0, lumenis::model::SafeUnit::Bit8};
+        const auto whiteAt = [](const QImage& image, QPoint at) {
+            for (int dy = -2; dy <= 2; ++dy) {
+                for (int dx = -2; dx <= 2; ++dx) {
+                    const QPoint p = at + QPoint(dx, dy);
+                    if (!image.rect().contains(p)) continue;
+                    const QRgb c = image.pixel(p);
+                    if (qRed(c) > 150 && qGreen(c) > 150 && qBlue(c) > 150) return true;
+                }
+            }
+            return false;
+        };
+        // White (level 235) is past a luma limit of 200: white, not green; without limits, green.
+        const QImage y = scopeImage(solid(Qt::white), Scope::YWaveform, QSize(kW, kH), false, &tight);
+        QVERIFY(whiteAt(y, waveformPoint(0.5, 235)));
+        const QImage plain = scopeImage(solid(Qt::white), Scope::YWaveform, QSize(kW, kH));
+        QVERIFY(!whiteAt(plain, waveformPoint(0.5, 235)));
+        QVERIFY(greenNear(plain, waveformPoint(0.5, 235)) > 120);
+        // Red's red channel (235) is past an RGB limit of 200 in the RGB Parade's red band: white there.
+        const QImage parade = scopeImage(solid(Qt::red), Scope::RgbParade, QSize(kW, kH), false, &tight);
+        const int third = kArea.width() / 3;
+        const QPoint redTop(kArea.left() + third / 2, kArea.top() + static_cast<int>(std::lround(waveformRow(235, kArea.height()))));
+        QVERIFY(whiteAt(parade, redTop));
+        // A composite peak past the limits is yellow; the default 120 IRE lies above the display, which shows it as the red
+        // edge (p.690), so the limit is lowered to 90 IRE here: a pale yellow's peak (about 99 IRE) is drawn yellow.
+        lumenis::model::SafeColorLimits composite;
+        composite.composite = {0.0, 90.0, lumenis::model::SafeUnit::Ire};
+        const QImage yc = scopeImage(solid(QColor(220, 220, 120)), Scope::YcWaveform, QSize(kW, kH), false, &composite);
+        int yellow = 0;
+        for (int yy = kArea.top() + 4; yy < kArea.bottom(); ++yy) {
+            for (int x = kArea.left(); x < kArea.right(); ++x) {
+                const QRgb c = yc.pixel(x, yy);
+                yellow += qRed(c) > 150 && qGreen(c) > 150 && qBlue(c) < 90 ? 1 : 0;
+            }
+        }
+        QVERIFY(yellow > 0);
+    }
+
+    void pictureViolations() {
+        // Every pixel as the level it stands for (6.10e4b): white is 235, within the defaults; tightened, past them.
+        const lumenis::model::SafeColorLimits defaults;
+        QVERIFY(!lumenis::media::pictureViolations(solid(Qt::white), defaults).any());
+        lumenis::model::SafeColorLimits tight;
+        tight.rgb = {16.0, 200.0, lumenis::model::SafeUnit::Bit8};
+        const auto v = lumenis::media::pictureViolations(halves(Qt::black, Qt::red), tight);
+        QVERIFY(v.rgbHigh[0] && !v.rgbHigh[1] && !v.rgbLow[0]);
+        // Vivid blue's composite dips below 0 IRE ("those from vivid blue might be unacceptably low", p.727).
+        QVERIFY(lumenis::media::pictureViolations(solid(Qt::blue), defaults).compositeLow);
+        QVERIFY(!lumenis::media::pictureViolations(QImage(), defaults).any());
+    }
+
     void histogramsAndQuad() {
         // Histograms and Quad Display draw something in every part.
         for (Scope s : {Scope::RgbHistogram, Scope::YcbcrHistogram, Scope::YWaveformHdr1000, Scope::YWaveformHdr10000}) {

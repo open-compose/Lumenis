@@ -2,6 +2,7 @@
 
 #include "lumenis/model/safe_colors.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace lumenis::model {
@@ -125,6 +126,25 @@ SafeViolations safeViolations(int r, int g, int b, const SafeColorLimits& limits
     for (std::size_t c = 0; c < 3; ++c) {
         out.rgbLow[c] = rgb[c] < limits.rgb.low8() - e;
         out.rgbHigh[c] = rgb[c] > limits.rgb.high8() + e;
+    }
+    return out;
+}
+
+int pictureLevel(int value) {
+    return static_cast<int>(std::lround(kBlack + kRange * std::clamp(value, 0, 255) / 255.0));
+}
+
+SafeViolations warnedViolations(const SafeViolations& violations, const SafeColorLimits& limits) {
+    SafeViolations out;
+    if (limits.warnCompositeLuma) {
+        out.compositeLow = violations.compositeLow;
+        out.compositeHigh = violations.compositeHigh;
+        out.lumaLow = violations.lumaLow;
+        out.lumaHigh = violations.lumaHigh;
+    }
+    if (limits.warnRgb) {
+        out.rgbLow = violations.rgbLow;
+        out.rgbHigh = violations.rgbHigh;
     }
     return out;
 }

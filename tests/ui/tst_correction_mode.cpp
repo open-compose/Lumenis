@@ -253,6 +253,63 @@ private slots:
         QVERIFY(m->isPal());
     }
 
+    void safeColorWarnings() {
+        // "You see an orange safe color warning triangle in the top left corner of the image, along with warning
+        // indicators for each of the safe color value types that are currently set to warn" (FX Guide p.724; 6.10e4b).
+        Rig r;
+        r.timeline.setCorrectionMode(true);
+        r.composer.setPictureResolver([](MonitorId, std::int64_t, QSize size, bool*) {
+            QImage image(size, QImage::Format_RGB32);
+            image.fill(Qt::yellow);
+            return image;
+        });
+        CorrectionMonitors* m = r.monitors();
+        const auto shot = [&] {
+            m->pictureWidget(1)->repaint();
+            settle();
+            return m->pictureWidget(1)->grab().toImage();
+        };
+        const auto orange = [](const QImage& image) {
+            int n = 0;
+            for (int y = 0; y < image.height(); ++y) {
+                for (int x = 0; x < image.width(); ++x) {
+                    const QRgb c = image.pixel(x, y);
+                    n += qRed(c) > 230 && qGreen(c) > 110 && qGreen(c) < 170 && qBlue(c) < 40 ? 1 : 0;
+                }
+            }
+            return n;
+        };
+        // Ignore (the default): no warning, though yellow's composite level is past 120 IRE.
+        shot();
+        QVERIFY(!m->safeWarnings(1).any());
+        model::SafeColorLimits limits;
+        limits.warnCompositeLuma = true;
+        m->setSafeColors(limits);
+        const QImage warned = shot();
+        QVERIFY(m->safeWarnings(1).compositeHigh);
+        QVERIFY(!m->safeWarnings(1).lumaHigh);
+        QVERIFY(orange(warned) > 10);
+        // RGB Gamut not set to Warn: its limits do not count even when tightened.
+        limits.rgb = {16.0, 200.0, model::SafeUnit::Bit8};
+        m->setSafeColors(limits);
+        shot();
+        QVERIFY(!m->safeWarnings(1).rgbHigh[0]);
+        limits.warnRgb = true;
+        m->setSafeColors(limits);
+        shot();
+        QVERIFY(m->safeWarnings(1).rgbHigh[0] && m->safeWarnings(1).rgbHigh[1] && !m->safeWarnings(1).rgbHigh[2]);
+        // Within the limits: "the warning triangle and warning indicators no longer display".
+        r.composer.setPictureResolver([](MonitorId, std::int64_t, QSize size, bool*) {
+            QImage image(size, QImage::Format_RGB32);
+            image.fill(QColor(120, 120, 120));
+            return image;
+        });
+        r.composer.refreshDisplay();
+        const QImage clean = shot();
+        QVERIFY(!m->safeWarnings(1).any());
+        QCOMPARE(orange(clean), 0);
+    }
+
     // The keyframe markers in the position bar below the Current monitor (FX Guide p.686, 6.10d3c): click to select,
     // Ctrl-click to deselect, Alt-drag to move, Delete; an adjustment goes to the selected keyframe; a click elsewhere
     // moves the position within the segment.

@@ -98,7 +98,26 @@ QString ColorMatchControl::infoText(bool output) const {
     const QColor c = output ? output_ : input_;
     if (!showInfo_ || !c.isValid()) return {};
     auto level = [](float v) { return static_cast<int>(std::lround(16.0 + 219.0 * static_cast<double>(v))); };
-    return tr("R: %1 G: %2 B: %3").arg(level(c.redF())).arg(level(c.greenF())).arg(level(c.blueF()));
+    const std::array<bool, 3> warn = rgbWarnings(output);
+    auto value = [&](float v, std::size_t channel) {
+        return warn.at(channel) ? QStringLiteral("%1 \u26A0").arg(level(v)) : QString::number(level(v));
+    };
+    return tr("R: %1 G: %2 B: %3").arg(value(c.redF(), 0), value(c.greenF(), 1), value(c.blueF(), 2));
+}
+
+void ColorMatchControl::setSafeColors(const model::SafeColorLimits& limits) {
+    if (limits == safeColors_) return;
+    safeColors_ = limits;
+    sync();
+}
+
+std::array<bool, 3> ColorMatchControl::rgbWarnings(bool output) const {
+    const QColor c = output ? output_ : input_;
+    if (!c.isValid() || !safeColors_.warnRgb) return {false, false, false};
+    // "Warnings appear in the Color Match control for RGB Gamut limits only" (p.724).
+    const model::SafeViolations v =
+        model::safeViolations(model::pictureLevel(c.red()), model::pictureLevel(c.green()), model::pictureLevel(c.blue()), safeColors_);
+    return {v.rgbLow[0] || v.rgbHigh[0], v.rgbLow[1] || v.rgbHigh[1], v.rgbLow[2] || v.rgbHigh[2]};
 }
 
 void ColorMatchControl::sync() {

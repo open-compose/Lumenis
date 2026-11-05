@@ -60,8 +60,14 @@ public:
     QToolButton* swatch(bool output) const { return output ? outSwatch_ : inSwatch_; }
     QToolButton* typeButton() const { return typeButton_; }
     QToolButton* matchButton() const { return matchButton_; }
-    // The swatch's text: its 8-bit RGB values on the video scale ("R: 61 G: 62 B: 66", p.630), or nothing.
+    // The swatch's text: its 8-bit RGB values on the video scale ("R: 61 G: 62 B: 66", p.630), or nothing. A value past
+    // the RGB Gamut limits, while they are set to Warn, has a warning triangle after it: "a warning triangle appears
+    // beside the color information in the appropriate color swatch" (FX Guide p.724; 6.10e4b; ours: the character ⚠).
     QString infoText(bool output) const;
+    // The Safe Colors project setting, for those warnings.
+    void setSafeColors(const model::SafeColorLimits& limits);
+    // Which of a swatch's R, G and B exceed the RGB Gamut limits while they warn.
+    std::array<bool, 3> rgbWarnings(bool output) const;
 
     // Custom colours (p.630-631; 6.10c3b): "Alt+drag (Windows) or Option+drag (Macintosh) the swatch" into a bin saves
     // its colour, named by the Saved Color Labels setting; a custom colour item dragged from a bin onto a swatch, or
@@ -95,6 +101,7 @@ private:
     bool natural_ = false;
     bool showInfo_ = true;
     bool anywhere_ = false;
+    model::SafeColorLimits safeColors_;
     media::SavedColorLabels labels_ = media::SavedColorLabels::NameAndRgb;
     ItemResolver resolve_;
     QPoint pressAt_;

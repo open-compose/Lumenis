@@ -379,6 +379,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   6.10e4a: the Safe Colors dialog's layout (one row per value), units read as
   chosen (no conversion), IRE/percent without setup, Rec. 601 composite as luma
   plus and minus chroma, half a level of tolerance, the graph's span.
+  6.10e4b: pictures read as levels 16-235 for the warnings, the warning indicators'
+  size and place (right of the triangle), the swatches' ⚠ character, scopes
+  following the limits whatever the Actions.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

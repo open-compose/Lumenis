@@ -594,6 +594,43 @@ the Effect Editor's `refresh`/`rebuild`/`changeShown` in Color Correction mode a
 * The editor's groups have no Enable buttons yet (ours; the tool's stay); a value back at its default is left out as the
   tool leaves it. The Curves and Levels keyframe tracks came with 6.10d3c.
 
+## 6.10e4b: safe colour warnings
+
+Code: `model::pictureLevel` and `warnedViolations` (`src/model/safe_colors.*`); `media::pictureViolations` and the
+`limits` of `media::scopeImage` (`src/media/scopes.*`); `CorrectionMonitors::setSafeColors`/`safeWarnings` and the
+warning drawn in `correction_monitors.cpp`; `ColorMatchControl::setSafeColors`/`rgbWarnings` and its `infoText`.
+Tests: `tst_safe_colors` (`picturesAndWarnings`), `tst_scopes` (`safeColorLimits`, `pictureViolations`),
+`tst_correction_mode` (`safeColorWarnings`), `tst_correction_tool` (`colorMatch`).
+
+### From the guide
+* "Warnings appear in the monitors for all limit types — Composite, Luminance, and RGB Gamut. The warning indicators
+  do not appear unless color levels exceed at least one of the limits currently set to Warn. Warnings appear in the
+  Color Match control for RGB Gamut limits only" (FX p.724).
+* "You see an orange safe color warning triangle in the top left corner of the image, along with warning indicators
+  for each of the safe color value types that are currently set to warn. Warning color bars appear in one of three
+  places in a column: At the top (indicating a level that is too high), At the bottom (indicating a level that is too
+  low), In the center (indicating a level that is within limits)"; the picture shows five columns, Composite (yellow),
+  Luminance (white), Red, Green and Blue, and a column can have a bar at both ends; "Once all levels are within safe
+  limits, the warning triangle and warning indicators no longer display in the monitor" (FX p.724).
+* "If you use the eyedropper to select an input or output color that exceeds limits, a warning triangle appears beside
+  the color information in the appropriate color swatch" (FX p.724).
+* "The Y Waveform, YC Waveform, and RGB Parade displays incorporate any safe color limits you have set": Y Waveform
+  luma legal green, illegal white; YC Waveform composite legal cyan, illegal yellow, luma green and white, "Outside
+  display boundaries" red; RGB Parade each channel legal in its colour, illegal white (FX p.727).
+* The indicators are those "that can appear in the monitors in Color Correction mode" (FX p.729).
+
+### Ours
+* Pictures are read as the rest of the app reads them: a picture's 0-255 stands for the video levels 16-235
+  (`pictureLevel`). So with the default limits only composite warnings can appear (vivid yellow is past 120 IRE, vivid
+  blue below 0 IRE); RGB Gamut and Luminance warn once their limits are tightened.
+* The warnings are in Color Correction mode's monitors, drawn over the picture: the triangle, then one column 12 pixels
+  wide per warned type to its right (Composite and Luminance for the top Actions button, Red, Green and Blue for the
+  bottom one). Every pixel of the shown picture counts; for two-field media, both fields are in the picture.
+* In the Color Match swatches the triangle is the character ⚠ after the value ("R: 153 ⚠ G: 119 B: 93").
+* The scopes follow the limits whatever their Actions. Their legality uses the Rec. 601 levels of 6.10e4a while the
+  traces stay where 6.10c1 draws them (Rec. 709 luma). The default composite limit, 120 IRE, lies above the YC
+  Waveform's display, so its excursions there show as the red edge.
+
 ## 6.10e4a: the Safe Colors setting
 
 Code: `src/model/safe_colors.*` (`SafeColorLimits`, `SafeUnit`, `safeLevels`, `safeViolations`), the "Safe Colors" Project

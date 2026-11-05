@@ -3,6 +3,8 @@
 
 #include "lumenis/ui/correction_monitors.h"
 
+#include "lumenis/ui/safe_color_graph.h"
+
 #include "lumenis/media/scopes.h"
 #include "lumenis/ui/composer.h"
 
@@ -131,6 +133,7 @@ protected:
         }
         const std::optional<std::int64_t> frame = owner_.frameOf(index_);
         shown_ = {};
+        warnings_ = {};
         if (!frame) return;
         Composer& composer = owner_.composer_;
         const CorrectionSource source = owner_.source(index_);
@@ -139,7 +142,8 @@ protected:
             const QImage picture = composer.pictureAt(MonitorId::Record, *frame, QSize(320, 180));
             const QRect area = rect().adjusted(2, 2, -2, -2);
             p.fillRect(rect(), Qt::black);
-            p.drawImage(area, media::scopeImage(picture, scopeOf(source), area.size(), owner_.pal_));
+            p.drawImage(area, media::scopeImage(picture, scopeOf(source), area.size(), owner_.pal_, &owner_.safeColors_));
+            warnings_ = {};
             return;
         }
         using P = CorrectionMonitors::Preview;
@@ -156,8 +160,12 @@ protected:
         shown_ = image;
         shownRect_ = r;
         if (!image.isNull()) p.drawImage(r, image);
+        if (owner_.safeColors_.warns() && !image.isNull()) {
+            warnings_ = model::warnedViolations(media::pictureViolations(image, owner_.safeColors_), owner_.safeColors_);
+        }
         if (!owner_.dualSplit(index_) || (composer.isPlaying() && !owner_.dualSplitPlayback_)) {
             paintShapes(p);
+            paintSafeWarnings(p, r);
             return;
         }
         // Dual Split: the box shows the frame without corrections.
@@ -177,7 +185,58 @@ protected:
         p.drawPolygon(QPolygonF{h[0], h[0] + QPointF(9, 0), h[0] + QPointF(0, 9)});
         p.drawPolygon(QPolygonF{h[1], h[1] - QPointF(9, 0), h[1] - QPointF(0, 9)});
         paintShapes(p);
+        paintSafeWarnings(p, r);
     }
+
+public:
+    model::SafeViolations warnings_; // the warned limits the shown picture exceeds
+
+    // The safe colour warning (p.724): the orange triangle at the picture's top left and a column per warned value
+    // type. Ours: columns 12 pixels wide and 30 high, on dark grey, right of the triangle.
+    void paintSafeWarnings(QPainter& p, const QRect& r) const {
+        if (!warnings_.any()) return;
+        const model::SafeColorLimits& l = owner_.safeColors_;
+        p.save();
+        p.setRenderHint(QPainter::Antialiasing);
+        const QPointF at(r.left() + 6, r.top() + 6);
+        p.setPen(QPen(Qt::black, 1));
+        p.setBrush(QColor(255, 140, 0));
+        p.drawPolygon(QPolygonF{at + QPointF(8, 0), at + QPointF(16, 14), at + QPointF(0, 14)});
+        p.setPen(QPen(Qt::black, 2));
+        p.drawLine(at + QPointF(8, 4), at + QPointF(8, 9));
+        p.drawPoint(at + QPointF(8, 12));
+        p.setRenderHint(QPainter::Antialiasing, false);
+        // Bar index (SafeColorGraph::barColor), too low, too high.
+        struct Column {
+            int bar;
+            bool low, high;
+        };
+        QList<Column> columns;
+        if (l.warnCompositeLuma) {
+            columns << Column{0, warnings_.compositeLow, warnings_.compositeHigh} << Column{1, warnings_.lumaLow, warnings_.lumaHigh};
+        }
+        if (l.warnRgb) {
+            for (std::size_t c = 0; c < 3; ++c) columns << Column{2 + static_cast<int>(c), warnings_.rgbLow.at(c), warnings_.rgbHigh.at(c)};
+        }
+        const int w = 12, h = 30;
+        int x = r.left() + 28;
+        const int top = r.top() + 6;
+        for (const Column& c : columns) {
+            const QRect column(x, top, w, h);
+            p.fillRect(column, QColor(60, 60, 60));
+            p.setPen(QColor(70, 100, 100));
+            p.drawRect(column.adjusted(0, 0, -1, -1));
+            const QColor colour = SafeColorGraph::barColor(c.bar);
+            const auto bar = [&](int y) { p.fillRect(QRect(x + 2, y, w - 4, 5), colour); };
+            if (c.high) bar(top + 3);
+            if (c.low) bar(top + h - 8);
+            if (!c.high && !c.low) bar(top + (h - 5) / 2);
+            x += w + 2;
+        }
+        p.restore();
+    }
+
+protected:
 
     // Whether the shape tools work in this monitor: the Current one, with an input set.
     bool takesShapes() const { return owner_.overlayInput_ && owner_.source(index_) == CorrectionSource::Current; }
@@ -638,6 +697,20 @@ void CorrectionMonitors::referenceCurrent() {
 
 void CorrectionMonitors::switchCurrentAndReference() {
     setActiveMonitor(active_ == 2 ? 1 : 2);
+}
+
+void CorrectionMonitors::setSafeColors(const model::SafeColorLimits& limits) {
+    if (limits == safeColors_) return;
+    safeColors_ = limits;
+    for (const Monitor& m : monitors_) {
+        if (m.picture) m.picture->update();
+    }
+}
+
+model::SafeViolations CorrectionMonitors::safeWarnings(int monitor) const {
+    if (monitor < 0 || monitor >= kMonitors) return {};
+    const auto* picture = static_cast<const CorrectionPicture*>(monitors_.at(static_cast<std::size_t>(monitor)).picture);
+    return picture ? picture->warnings_ : model::SafeViolations{};
 }
 
 void CorrectionMonitors::setPal(bool pal) {
