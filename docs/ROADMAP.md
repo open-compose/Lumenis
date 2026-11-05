@@ -1205,11 +1205,18 @@ phase of their own. They are done in three steps:
     `correction_manage_dialog.*`, `Timeline::manageCorrections`; tests `tst_correction_manage`, `tst_correction_tool`,
     `tst_main_window`, scenario `41-update-correction.json`). So 6.10d is done. Correcting a whole sequence (p.692) uses the Color Correction
     effect and comes with 6.10e.
-  * 6.10e, the Color Correction effect and its AutoCorrect options (p.693-699), correcting a whole sequence on an
-    empty top track (p.692-693), safe colours: the settings, warnings
-    and the Safe Color Limiter effect (ch.23, p.721-730), Spot Color Correction and the Paint Effect's Color Match mode
-    (ch.24, p.731-733). Avid Artist Color (ch.25) needs Avid's EuControl software: a control surface provider hook
-    only (EXTENSIONS.md), later.
+  * 6.10e, in five parts (planned 2026-11-05 from p.692-699 and ch.23-24): 6.10e1, the Color Correction effect as a
+    correction: CC Effect in the Correction Type menu, the tool's adjustments going to the segment's effect (added at
+    the first one, without the AutoCorrect corrections), the relationship correction applied first and its result the
+    effect's input (p.693-694, p.696); the effect from the Effect Palette making the AutoCorrect tab's three corrections
+    (the Correction setting's First/Second/Third Correction, p.695-696, p.622); a whole sequence corrected on an empty
+    top track, filled with filler carrying the effect (p.692-693, p.695); 6.10e2, the Color Info tool (Tools > Color Info
+    Tool, its shortcut menu's options and the tool's Color Info button, p.696-697); 6.10e3, shape-based correction in the
+    CC Effect: Shapes and Base layers, Show Alpha, Serial Mode, Show Result, Invert Alpha, Softness and trackers on
+    shapes (p.697-699); 6.10e4, safe colours: the Safe Color settings and their graph, the warnings in the monitors and
+    the Color Match control, the waveform limits, and the Safe Color Limiter effect with its analysis display (ch.23,
+    p.721-730); 6.10e5, the Spot Color Correction effect and the Paint Effect's colour modes (ch.24, p.731-733). Avid
+    Artist Color (ch.25) needs Avid's EuControl software: a control surface provider hook only (EXTENSIONS.md), later.
   * 6.10f, after 6.10e (owner's report, 2026-11-05, Windows 11): Tools > Titler+ and Tools > Effect Editor open as very
     large windows where a panel of ordinary size (or a page of a paneled window) is expected. Find why their panels open
     at that size (size hints, floating geometry, the workspace they open in), fix the root cause for every tool panel,
