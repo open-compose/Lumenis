@@ -156,7 +156,10 @@ protected:
         shown_ = image;
         shownRect_ = r;
         if (!image.isNull()) p.drawImage(r, image);
-        if (!owner_.dualSplit(index_) || (composer.isPlaying() && !owner_.dualSplitPlayback_)) return;
+        if (!owner_.dualSplit(index_) || (composer.isPlaying() && !owner_.dualSplitPlayback_)) {
+            paintShapes(p);
+            return;
+        }
         // Dual Split: the box shows the frame without corrections.
         const QRectF b = owner_.splitBox(index_);
         const QRect box(r.left() + static_cast<int>(std::lround(b.left() * r.width())), r.top() + static_cast<int>(std::lround(b.top() * r.height())),
@@ -173,6 +176,65 @@ protected:
         p.setBrush(palette().color(QPalette::BrightText));
         p.drawPolygon(QPolygonF{h[0], h[0] + QPointF(9, 0), h[0] + QPointF(0, 9)});
         p.drawPolygon(QPolygonF{h[1], h[1] - QPointF(9, 0), h[1] - QPointF(0, 9)});
+        paintShapes(p);
+    }
+
+    // Whether the shape tools work in this monitor: the Current one, with an input set.
+    bool takesShapes() const { return owner_.overlayInput_ && owner_.source(index_) == CorrectionSource::Current; }
+
+    // A widget point as a fraction of the picture (outside it beyond 0 and 1), and back.
+    QPointF fraction(const QPointF& at) const {
+        const QRect r = pictureRect();
+        return QPointF((at.x() - r.left()) / std::max(r.width(), 1), (at.y() - r.top()) / std::max(r.height(), 1));
+    }
+    QPointF placed(const QPointF& f) const {
+        const QRect r = pictureRect();
+        return QPointF(r.left() + f.x() * r.width(), r.top() + f.y() * r.height());
+    }
+
+    // The shape tools' outlines, open lines, guides, anchors and handles, light lines on a dark edge as the Effect
+    // Preview draws them (ours).
+    void paintShapes(QPainter& p) const {
+        if (owner_.source(index_) != CorrectionSource::Current) return;
+        const Composer::EffectPreview& e = owner_.overlay_;
+        if (e.boxes.isEmpty() && e.lines.isEmpty() && e.guides.isEmpty() && e.handles.isEmpty() && e.anchors.isEmpty()) return;
+        p.save();
+        p.setRenderHint(QPainter::Antialiasing);
+        p.setBrush(Qt::NoBrush);
+        const QColor wire(235, 235, 235);
+        const auto twice = [&](const std::function<void()>& draw) {
+            p.setPen(QPen(QColor(0, 0, 0, 160), 3));
+            draw();
+            p.setPen(QPen(wire, 1));
+            draw();
+        };
+        const auto polygon = [&](const QList<QPointF>& points) {
+            QPolygonF out;
+            for (const QPointF& c : points) out << placed(c);
+            return out;
+        };
+        for (const QList<QPointF>& box : e.boxes) twice([&] { p.drawPolygon(polygon(box)); });
+        for (const QList<QPointF>& line : e.lines) twice([&] { p.drawPolyline(polygon(line)); });
+        for (const QList<QPointF>& guide : e.guides) {
+            p.setPen(QPen(wire, 1, Qt::DashLine));
+            p.drawPolygon(polygon(guide));
+        }
+        for (const QPointF& a : e.anchors) {
+            const QPointF at = placed(a);
+            twice([&] {
+                p.drawLine(at - QPointF(6, 0), at + QPointF(6, 0));
+                p.drawLine(at - QPointF(0, 6), at + QPointF(0, 6));
+            });
+        }
+        for (const Composer::EffectPreview::Handle& h : e.handles) {
+            const QPointF at = placed(h.at);
+            if (h.from) twice([&] { p.drawLine(placed(*h.from), at); });
+            p.setPen(QPen(Qt::black, 1));
+            p.setBrush(wire);
+            p.drawEllipse(at, 3.5, 3.5);
+            p.setBrush(Qt::NoBrush);
+        }
+        p.restore();
     }
 
     // Each pixel white, grey or black by the luminance range it mostly belongs to (model::lumaRangeWeights).
@@ -242,6 +304,13 @@ protected:
             sampling_ = true;
             return;
         }
+        if (event->button() == Qt::LeftButton && takesShapes()) {
+            // The shape tools (6.10e3b2) before Dual Split's handles.
+            if (owner_.overlayInput_->overlayPress(fraction(event->position()), event->modifiers(), false)) {
+                overlayDrag_ = true;
+                return;
+            }
+        }
         if (event->button() != Qt::LeftButton || !owner_.dualSplit(index_)) return;
         const auto h = handles();
         for (int i = 0; i < 2; ++i) {
@@ -249,7 +318,21 @@ protected:
         }
     }
 
+    void mouseDoubleClickEvent(QMouseEvent* event) override {
+        // A double-click ends a polygon (p.401).
+        if (event->button() == Qt::LeftButton && takesShapes() &&
+            owner_.overlayInput_->overlayPress(fraction(event->position()), event->modifiers(), true)) {
+            overlayDrag_ = true;
+            return;
+        }
+        QWidget::mouseDoubleClickEvent(event);
+    }
+
     void mouseMoveEvent(QMouseEvent* event) override {
+        if (overlayDrag_ && owner_.overlayInput_) {
+            owner_.overlayInput_->overlayMove(fraction(event->position()), event->modifiers());
+            return;
+        }
         if (sampling_) {
             if (owner_.sampling_ == CorrectionMonitors::Sampling::Drag) {
                 if (const auto c = colorAt(event->position())) samples_ << *c;
@@ -267,7 +350,12 @@ protected:
         owner_.setSplitBox(index_, b);
     }
 
-    void mouseReleaseEvent(QMouseEvent*) override {
+    void mouseReleaseEvent(QMouseEvent* event) override {
+        if (overlayDrag_) {
+            overlayDrag_ = false;
+            if (owner_.overlayInput_) owner_.overlayInput_->overlayRelease(fraction(event->position()), event->modifiers());
+            return;
+        }
         drag_ = -1;
         if (sampling_) {
             sampling_ = false;
@@ -288,6 +376,7 @@ private:
     CorrectionMonitors& owner_;
     int index_;
     int drag_ = -1;
+    bool overlayDrag_ = false; // a press the shape tools took
     QImage shown_;
     QRect shownRect_;
     bool sampling_ = false;
@@ -610,12 +699,22 @@ void CorrectionMonitors::keyPressEvent(QKeyEvent* event) {
         switchCurrentAndReference();
         return;
     }
+    // The shape tools' keys first (Delete removes the selected shapes, p.403).
+    if (overlayInput_ && overlayInput_->overlayWantsKey(event) && overlayInput_->overlayKey(event)) return;
     // "Delete selected keyframes" (p.686).
     if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
         emit keyframesDeleteRequested();
         return;
     }
     QWidget::keyPressEvent(event);
+}
+
+void CorrectionMonitors::setOverlay(const Composer::EffectPreview& overlay) {
+    if (overlay == overlay_) return;
+    overlay_ = overlay;
+    for (const Monitor& m : monitors_) {
+        if (m.source == CorrectionSource::Current) m.picture->update();
+    }
 }
 
 void CorrectionMonitors::syncMenu(int monitor) {

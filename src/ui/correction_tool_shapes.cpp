@@ -7,8 +7,10 @@
 
 #include "lumenis/ui/correction_tool.h"
 
+#include "lumenis/ui/correction_shape_host.h"
 #include "lumenis/ui/timeline.h"
 
+#include <QAbstractButton>
 #include <QButtonGroup>
 #include <QCheckBox>
 #include <QGridLayout>
@@ -92,7 +94,18 @@ QWidget* CorrectionTool::shapesPane() {
         tools->addWidget(b);
     }
     shapeTools_->button(0)->setChecked(true);
-    connect(shapeTools_, &QButtonGroup::idClicked, this, [this](int tool) { emit shapeToolChosen(tool); });
+    // The buttons' order is IntraframeTool::Tool's first six (Selection, Rectangle, Oval, Polygon, Curve, Brush).
+    shapeHost_ = new CorrectionShapeHost(timeline_, this);
+    connect(shapeTools_, &QButtonGroup::idClicked, this, [this](int tool) {
+        shapeHost_->tool()->setTool(static_cast<IntraframeTool::Tool>(tool));
+        emit shapeToolChosen(tool);
+    });
+    // The drawing tools return to Selection after a shape (p.396): the buttons follow the tool.
+    connect(shapeHost_->tool(), &IntraframeTool::changed, this, [this] {
+        const int tool = static_cast<int>(shapeHost_->tool()->tool());
+        if (QAbstractButton* b = shapeTools_->button(tool); b && !b->isChecked()) b->setChecked(true);
+    });
+    connect(shapeHost_, &CorrectionShapeHost::selectionChanged, this, &CorrectionTool::reload);
     tools->addStretch(1);
     row->addLayout(tools);
 
@@ -199,12 +212,18 @@ bool CorrectionTool::setShapeSoftness(double softness) {
 void CorrectionTool::syncShapes() {
     const bool onEffect = timeline_.correctionOnEffect();
     shapesPane_->setVisible(onEffect);
-    if (!onEffect) return;
+    if (!onEffect) {
+        shapeHost_->refresh();
+        return;
+    }
     const QSignalBlocker b1(shapesLayer_), b2(baseLayer_), b3(showAlpha_), b4(serialMode_), b5(showResult_), b6(invertAlpha_),
         b7(softnessSlider_), b8(softnessValue_);
     const bool shapes = timeline_.correctionLayer() == model::CorrectionLayer::Shapes;
     shapesLayer_->setChecked(shapes);
     baseLayer_->setChecked(!shapes);
+    // The shape tools work on the shape layer (ours: dimmed on Base, p.698).
+    for (QAbstractButton* b : shapeTools_->buttons()) b->setEnabled(shapes);
+    shapeHost_->refresh();
     showAlpha_->setChecked(timeline_.showShapeAlpha());
     showResult_->setChecked(timeline_.showShapeResult());
     const model::CorrectionShapeOptions o = timeline_.correctionShapeOptions();

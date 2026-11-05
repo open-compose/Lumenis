@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/model/color_correction.h"
+#include "lumenis/ui/composer.h"
 
 #include <QPointF>
 #include <QMimeData>
@@ -152,6 +153,15 @@ public:
         setAcceptDrops(static_cast<bool>(templateDrop_));
     }
 
+    // The Color Correction tool's shape tools (FX Guide p.698; 6.10e3b2, correction_shape_host.h): they draw in the
+    // monitor whose Source menu is Current, taking its mouse (points as fractions of the picture) and the keys they want
+    // before the monitors' own; `overlay` is what they draw over it (outlines, boxes, open lines, handles). The input
+    // must outlive its use or be cleared with setOverlayInput(nullptr).
+    void setOverlayInput(Composer::OverlayInput* input) { overlayInput_ = input; }
+    Composer::OverlayInput* overlayInput() const { return overlayInput_; }
+    void setOverlay(const Composer::EffectPreview& overlay);
+    const Composer::EffectPreview& overlay() const { return overlay_; }
+
 signals:
     // The Go to Previous/Next Uncorrected Shot and Remove Effect buttons, for the Timeline.
     void commandRequested(const QString& commandId);
@@ -174,6 +184,8 @@ private:
     friend class CorrectionKeyframeBar;
     KeyframeResolver keyframes_;
     TemplateDrop templateDrop_;
+    Composer::OverlayInput* overlayInput_ = nullptr;
+    Composer::EffectPreview overlay_;
     struct Monitor {
         CorrectionSource source = CorrectionSource::Current;
         bool dualSplit = false;

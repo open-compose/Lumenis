@@ -716,6 +716,11 @@ public:
     QStringList correctionShapes() const;
     const QStringList& correctionShapeSelection() const { return correctionShapeSelection_; }
     void setCorrectionShapeSelection(const QStringList& ids);
+    // The Color Correction effect on the correction track's segment at the position; nothing without one.
+    std::optional<model::Effect> correctionEffectAt() const;
+    // Replaces the shapes of that effect (made for them, as an adjustment makes it) as the undo step `step`; false
+    // without CC Effect chosen or when nothing changed (6.10e3b2, the shape tools).
+    bool setCorrectionShapeObjects(const QString& step, const QList<model::IntraframeObject>& objects);
     // "Softness - Use the slider to add softness to the selected shape. Each shape can have a different softness"
     // (p.699): the first selected shape's (nothing without a selected shape), and setting the selected shapes' (an undo
     // step).
@@ -1525,8 +1530,7 @@ private:
     // track filled first, as putEffectCorrection says) as the undo step `step`; `change` gets the effect and the
     // segment's start and length and says whether it changed it. An effect made for it is kept even unchanged.
     bool editCorrectionEffect(const QString& step, const std::function<bool(model::Effect&, std::int64_t start, std::int64_t length)>& change);
-    // The Color Correction effect on the correction track at the position.
-    std::optional<model::Effect> correctionEffectAt() const;
+
     // The Color Correction effect's correction on the segment at the position on the correction track (CC Effect):
     // empty for a segment without one, filler included; nothing without a sequence or a correction track.
     std::optional<model::ColorCorrection> effectCorrection(bool atPosition) const;

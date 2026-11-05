@@ -594,6 +594,28 @@ the Effect Editor's `refresh`/`rebuild`/`changeShown` in Color Correction mode a
 * The editor's groups have no Enable buttons yet (ours; the tool's stay); a value back at its default is left out as the
   tool leaves it. The Curves and Levels keyframe tracks came with 6.10d3c.
 
+## 6.10e3b2: drawing shapes in the Current monitor
+
+Code: `src/ui/correction_shape_host.*` (`CorrectionShapeHost`, an `IntraframeHost` like the Effect Editor), the
+Intraframe tool's `IntraframeHost` interface in `intraframe_tool.h`, `CorrectionMonitors::setOverlayInput`/`setOverlay`,
+`Timeline::correctionEffectAt` and `setCorrectionShapeObjects`, the panel's tool buttons in
+`src/ui/correction_tool_shapes.cpp`. Test: `tst_correction_tool` (`shapeDrawing`).
+
+### From the guide
+* "Use the shape tools in the Color Correction tool to mark the area you to want to color correct"; the picture shows
+  the selection, rectangle, oval, polygon, curve and brush tools (p.698). How each tool draws is the Paint Effect's
+  (p.395-404).
+
+### Ours
+* The tools are 6.9's Intraframe tools, drawing in the monitor whose Source menu is Current; they take its mouse and,
+  over the monitors, Delete for the selected shapes, Escape and Enter for a polygon. The other monitors keep their own
+  mouse use (Dual Split's handles, sampling).
+* They work only on the Shapes layer, and are dimmed on Base. The first shape on a segment without the Color Correction
+  effect adds the effect, as a first adjustment does. Each shape is an undo step. A new shape takes no corrections of
+  its own: the corrections and shape options stay the effect's.
+* Selecting a shape selects it for Softness. Outlines are drawn while a drag goes on; the picture changes when the
+  drag ends.
+
 ## 6.10e3b1: the Color Correction tool's shape panel
 
 Code: `src/ui/correction_tool_shapes.cpp` (`CorrectionTool::shapesPane`, `setShapeLayer`, `setShapeSoftness`), the

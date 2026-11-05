@@ -3,8 +3,10 @@
 // Drawing and selecting Intraframe objects in the Effect Preview (ROADMAP 6.9b1; FX Guide p.395-404, p.413-417;
 // docs/spec/intraframe.md): the Rectangle, Oval, Polygon, Curve and Brush tools and the Selection tool working on the
 // Record monitor through Composer::OverlayInput, the selection and its handles, moving, scaling, lassoing, deleting and
-// the layer buttons. The Effect Editor owns it and hands it the effect shown; changes go back through the editor as
-// previews while a drag goes on and as undo steps when it ends.
+// the layer buttons. Its host hands it the effect shown; changes go back through the host as previews while a drag
+// goes on and as undo steps when it ends. The Effect Editor is one host (the Paint, AniMatte, Blur, Mosaic and Scratch
+// Removal effects); the Color Correction tool's shape panel is another (the Color Correction effect's shapes in the
+// Current monitor, FX Guide p.698; correction_shape_host.h, 6.10e3b2).
 
 #include "lumenis/model/intraframe.h"
 #include "lumenis/ui/composer.h"
@@ -18,7 +20,27 @@
 
 namespace lumenis::ui {
 
-class EffectEditor;
+// What the tool works through. Points are fractions of the picture, times the effect's (model::EffectSpan).
+class IntraframeHost {
+public:
+    virtual ~IntraframeHost() = default;
+    // The effect with all its objects as stored; nothing when there is none to draw on.
+    virtual std::optional<model::Effect> intraframeEffect() const = 0;
+    // A drag's effect before its undo step (nothing ends it), and the whole effect replaced as one undo step.
+    virtual void previewIntraframe(const std::optional<model::Effect>& effect) = 0;
+    virtual bool changeIntraframe(const QString& description, const model::Effect& effect) = 0;
+    // The objects selected changed.
+    virtual void setIntraframeSelection(const QStringList& ids) = 0;
+    // Draw the tool's overlay (fillOverlay) again.
+    virtual void refreshIntraframeOverlay() = 0;
+    // The effect's time at the position, and how its frames map to time.
+    virtual double positionTime() const = 0;
+    virtual const model::EffectSpan& span() const = 0;
+    // The picture's width over its height.
+    virtual double previewAspect() const = 0;
+    // The Paint Effect's eyedropper (p.397) at a point of the picture; false when the host has none.
+    virtual bool pickPaintColor(const QPointF& fraction) = 0;
+};
 
 class IntraframeTool : public QObject, public Composer::OverlayInput {
     Q_OBJECT
@@ -29,7 +51,7 @@ public:
     // ... and (6.9c2) a 24-fps film project's Previsualization Marker tool (p.412).
     enum class Tool { Selection, Rectangle, Oval, Polygon, Curve, Brush, ZRotation, Reshape, Marker };
 
-    explicit IntraframeTool(EffectEditor& editor);
+    explicit IntraframeTool(IntraframeHost& host, QObject* parent = nullptr);
 
     Tool tool() const { return tool_; }
     // Choosing a tool ends a polygon being drawn (its points so far become the object when there are three).
@@ -110,7 +132,7 @@ private:
     void preview(const model::Effect& e);
     bool commit(const QString& description, const model::Effect& e);
 
-    EffectEditor& editor_;
+    IntraframeHost& editor_; // named for its first host, the Effect Editor
     Tool tool_ = Tool::Selection;
     QStringList selected_;
     Drag drag_ = Drag::None;

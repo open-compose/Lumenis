@@ -10,6 +10,7 @@
 #include "lumenis/model/tracking.h"
 #include "lumenis/ui/brush_preview.h"
 #include "lumenis/ui/composer.h"
+#include "lumenis/ui/intraframe_tool.h"
 
 #include <QHash>
 #include <QImage>
@@ -94,7 +95,7 @@ const QList<EffectParameter>* effectParameters(const QString& category);
 // A panel's contents ("EffectEditor"), made by MainWindow. It follows Timeline::changed and
 // Composer::changed, and makes every change through the Timeline (changeEffect, setTransitions).
 // An effect's parameter values live in model::Effect::parameters as {category: {parameter: value}}.
-class EffectEditor : public QWidget {
+class EffectEditor : public QWidget, public IntraframeHost {
     Q_OBJECT
 
 public:
@@ -186,8 +187,8 @@ public:
     QString activeParameter() const { return activeParameter_; }
     void setActiveParameter(const QString& parameter);
     // The shown effect's time at the Record monitor's position, and how its frames map to time.
-    double positionTime() const;
-    const model::EffectSpan& span() const { return span_; }
+    double positionTime() const override;
+    const model::EffectSpan& span() const override { return span_; }
 
     // The selection (p.111-112); the last one selected is the reference for Align and Slip (p.115).
     const QList<KeyframeId>& selectedKeyframes() const { return selection_; }
@@ -337,15 +338,15 @@ public:
     // The drawing tools in the Effect Preview, for an Intraframe effect at the outermost level.
     IntraframeTool* intraframeTool() const { return intraframe_; }
     // The shown Intraframe effect with all its objects as stored; nothing for other effects.
-    std::optional<model::Effect> intraframeEffect() const { return wholeIntraframe_; }
+    std::optional<model::Effect> intraframeEffect() const override { return wholeIntraframe_; }
     // The effect as a drag shows it in the Record monitor before its undo step (pictureOverride); nothing ends it.
-    void previewIntraframe(const std::optional<model::Effect>& effect);
+    void previewIntraframe(const std::optional<model::Effect>& effect) override;
     // The whole effect replaced by `effect` as one undo step.
-    bool changeIntraframe(const QString& description, const model::Effect& effect);
+    bool changeIntraframe(const QString& description, const model::Effect& effect) override;
     // The objects selected: with one, the editor's controls show and change that object's parameters ("Select the
     // object ... and perform any of the following procedures", p.404); with none or several, the effect's own, which
     // new objects take.
-    void setIntraframeSelection(const QStringList& ids);
+    void setIntraframeSelection(const QStringList& ids) override;
 
     // ---- Brushes and the eyedropper (ROADMAP 6.9c1; effect_editor_brush.cpp, brush_preview.h)
     // The Brush category shown (the selected object's, or the effect's).
@@ -362,7 +363,7 @@ public:
     // The eyedropper (p.89, p.397): a colour parameter set to the colour under a point of the screen, or of the Record
     // monitor's picture at a fraction; false where there is no picture.
     bool pickColorAt(const QString& category, const QString& parameter, const QPoint& global);
-    bool pickPaintColor(const QPointF& fraction);
+    bool pickPaintColor(const QPointF& fraction) override;
     BrushPreview* brushPreview() const { return brushPreview_; }
     // A 24-fps film project: the Paint Effect has the Previsualization Marker tool, which "does not appear in the
     // Effect Editor for the Paint Effect in any other project types" (p.412). Set by MainWindow from the project.
@@ -376,8 +377,8 @@ public:
     bool exportMattePict(const QString& path, const QSize& size) const;
     const QStringList& intraframeSelection() const { return intraframeSelection_; }
     // The Effect Preview picture's width over its height.
-    double previewAspect() const;
-    void refreshIntraframeOverlay() { syncPreview(); }
+    double previewAspect() const override;
+    void refreshIntraframeOverlay() override { syncPreview(); }
     // The shown effect as previewed, for the Record monitor's picture: its place and the effect, while a preview is
     // under way at the outermost level.
     std::optional<std::pair<model::EffectRef, model::Effect>> pictureOverride() const;

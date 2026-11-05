@@ -6,14 +6,17 @@
 #include "lumenis/model/bin.h"
 #include "lumenis/model/correction_effect.h"
 #include "lumenis/model/correction_keyframes.h"
+#include "lumenis/model/correction_shapes.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/correction_manage_dialog.h"
 #include "lumenis/ui/correction_monitors.h"
+#include "lumenis/ui/correction_shape_host.h"
 #include "lumenis/ui/correction_tool.h"
 #include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/effect_palette.h"
+#include "lumenis/ui/intraframe_tool.h"
 #include "lumenis/ui/timeline.h"
 
 #include <QApplication>
@@ -35,6 +38,7 @@
 #include <QTest>
 #include <QToolButton>
 
+#include <cmath>
 #include <memory>
 
 using namespace lumenis;
@@ -724,6 +728,73 @@ private slots:
         r.typeAction(QStringLiteral("sourceSegment"))->trigger();
         QVERIFY(panel->isHidden());
         QCOMPARE(r.timeline.correctionShapeView(), model::CorrectionShapeView::Result);
+    }
+
+    void shapeDrawing() {
+        // The shape tools draw on the Color Correction effect in the Current monitor (FX Guide p.698; 6.10e3b2).
+        Rig r;
+        CorrectionShapeHost* host = r.tool.shapeHost();
+        QVERIFY(host && !host->active());
+        r.typeAction(QStringLiteral("ccEffect"))->trigger();
+        QWidget* panel = r.tool.shapesPanel();
+        const auto button = [&](const QString& name) { return panel->findChild<QAbstractButton*>(name); };
+        // On the Base layer the tools are dimmed and draw nothing.
+        QVERIFY(!button(QStringLiteral("shapes:tool:rectangle"))->isEnabled());
+        QVERIFY(!host->active());
+        QVERIFY(host->overlay().boxes.isEmpty());
+        button(QStringLiteral("shapes:layerShapes"))->click();
+        QVERIFY(host->active());
+        QVERIFY(button(QStringLiteral("shapes:tool:rectangle"))->isEnabled());
+        button(QStringLiteral("shapes:tool:rectangle"))->click();
+        IntraframeTool* tool = host->tool();
+        QCOMPARE(tool->tool(), IntraframeTool::Tool::Rectangle);
+        // A drag draws a rectangle: the segment without the effect gets it, an undo step.
+        QVERIFY(tool->overlayPress(QPointF(0.2, 0.2), Qt::NoModifier, false));
+        tool->overlayMove(QPointF(0.5, 0.6), Qt::NoModifier);
+        tool->overlayRelease(QPointF(0.5, 0.6), Qt::NoModifier);
+        model::Segment a = r.segment(0);
+        QVERIFY(a.effect && model::isColorCorrectionEffect(*a.effect));
+        QList<model::IntraframeObject> shapes = model::intraframeObjects(*a.effect);
+        QCOMPARE(shapes.size(), 1);
+        QCOMPARE(shapes.at(0).kind, model::IntraframeKind::Rectangle);
+        QVERIFY(!shapes.at(0).parameters.contains(model::kColorCorrectionCategory));
+        const QRectF bounds = model::shapeBounds(shapes.at(0).shapes.at(0).points);
+        QVERIFY(std::abs(bounds.left() - 0.2) < 0.01 && std::abs(bounds.bottom() - 0.6) < 0.01);
+        // The tool returns to Selection with the new shape selected; Softness now works on it.
+        QCOMPARE(tool->tool(), IntraframeTool::Tool::Selection);
+        QVERIFY(button(QStringLiteral("shapes:tool:selection"))->isChecked());
+        QCOMPARE(r.timeline.correctionShapeSelection(), QStringList{shapes.at(0).id});
+        QVERIFY(panel->findChild<QSlider*>(QStringLiteral("shapes:softness"))->isEnabled());
+        QVERIFY(!host->overlay().boxes.isEmpty());
+        // The shape layer's correction then corrects inside it.
+        r.value(QStringLiteral("hsl/controls/master/gain"))->setValue(70);
+        QCOMPARE(model::shapeCorrectionOf(*r.segment(0).effect).number(QStringLiteral("hsl/controls/master/gain")), 70.0);
+
+        // Through the Current monitor: the mouse goes to the tool there.
+        CorrectionMonitors* monitors = r.composer.correctionMonitors();
+        QVERIFY(monitors);
+        monitors->setOverlayInput(tool);
+        r.composer.resize(1200, 700);
+        r.composer.show();
+        settle();
+        QWidget* current = monitors->pictureWidget(1);
+        QCOMPARE(monitors->source(1), CorrectionSource::Current);
+        button(QStringLiteral("shapes:tool:oval"))->click();
+        const QPoint centre = current->rect().center();
+        QTest::mousePress(current, Qt::LeftButton, Qt::NoModifier, centre - QPoint(20, 15));
+        QTest::mouseMove(current, centre + QPoint(20, 15));
+        QTest::mouseRelease(current, Qt::LeftButton, Qt::NoModifier, centre + QPoint(20, 15));
+        shapes = model::intraframeObjects(*r.segment(0).effect);
+        QCOMPARE(shapes.size(), 2);
+        QCOMPARE(shapes.at(1).kind, model::IntraframeKind::Oval);
+        // Delete over the monitors removes the selected shape.
+        monitors->setFocus();
+        QTest::keyClick(monitors, Qt::Key_Delete);
+        QCOMPARE(model::intraframeObjects(*r.segment(0).effect).size(), 1);
+        // Base again: the tool lets the selection go and draws nothing.
+        button(QStringLiteral("shapes:layerBase"))->click();
+        QVERIFY(host->overlay().boxes.isEmpty());
+        monitors->setOverlayInput(nullptr);
     }
 
     void slidersAndEnableButtons() {

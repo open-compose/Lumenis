@@ -5090,6 +5090,23 @@ std::optional<model::Effect> Timeline::correctionEffectAt() const {
     return *s.effect;
 }
 
+bool Timeline::setCorrectionShapeObjects(const QString& step, const QList<model::IntraframeObject>& objects) {
+    message_.clear();
+    if (!correctionOnEffect_) return false;
+    // A new shape takes the effect's own parameters (model::addIntraframeObject); the corrections and the shape
+    // options are the effect's, not each shape's, so they are left out.
+    QList<model::IntraframeObject> shapes = objects;
+    for (model::IntraframeObject& o : shapes) {
+        for (const QString& c : {model::kColorCorrectionCategory, model::kShapeCorrectionCategory, model::kShapeOptionsCategory})
+            o.parameters.remove(c);
+    }
+    return editCorrectionEffect(step, [&](model::Effect& e, std::int64_t, std::int64_t) {
+        if (model::intraframeObjects(e) == shapes) return false;
+        model::setIntraframeObjects(e, shapes);
+        return true;
+    });
+}
+
 model::CorrectionShapeOptions Timeline::correctionShapeOptions() const {
     const std::optional<model::Effect> e = correctionEffectAt();
     return e ? model::shapeOptionsOf(*e) : model::CorrectionShapeOptions{};

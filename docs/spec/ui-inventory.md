@@ -372,7 +372,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   6.10e3: the shape layer's storage, Softness as a blur of up to 100 pixels,
   Invert Alpha correcting outside the shapes; the panel's place left of the
   group panes, what the monitors show without Show Result (the layer worked on),
-  Show Alpha's grey picture, Softness dimmed without a selected shape, our icons.
+  Show Alpha's grey picture, Softness dimmed without a selected shape, our icons;
+  the shape tools only on the Shapes layer and only in the Current monitor.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

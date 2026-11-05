@@ -61,7 +61,7 @@ QList<model::ControlPoint> smoothCurve(const QList<QPointF>& points, bool closed
     return out;
 }
 
-IntraframeTool::IntraframeTool(EffectEditor& editor) : QObject(&editor), editor_(editor) {}
+IntraframeTool::IntraframeTool(IntraframeHost& host, QObject* parent) : QObject(parent), editor_(host) {}
 
 void IntraframeTool::setTool(Tool tool) {
     if (tool != Tool::Polygon) finishPolygon();

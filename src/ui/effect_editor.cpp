@@ -564,7 +564,7 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     // Titler+'s tools in the Record monitor (FX Guide p.303-319).
     titler_ = new TitlerTool(*this);
     // The Intraframe drawing tools (FX Guide p.395-418).
-    intraframe_ = new IntraframeTool(*this);
+    intraframe_ = new IntraframeTool(*this, this);
     connect(intraframe_, &IntraframeTool::changed, this, [this] {
         syncIntraframeButtons();
         syncPreview();

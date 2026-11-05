@@ -68,6 +68,7 @@ add_library(lumenis_ui STATIC
     correction_tool_panes.cpp
     correction_tool_secondary.cpp
     correction_tool_shapes.cpp
+    correction_shape_host.cpp
     sequence_map.cpp
     timecode_window.cpp
     source_browser.cpp
@@ -137,6 +138,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/correction_manage_dialog.h
     include/lumenis/ui/correction_monitors.h
     include/lumenis/ui/correction_tool.h
+    include/lumenis/ui/correction_shape_host.h
     include/lumenis/ui/sequence_map.h
     include/lumenis/ui/timecode_window.h
     include/lumenis/ui/source_browser.h

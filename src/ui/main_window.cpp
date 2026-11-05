@@ -56,6 +56,7 @@
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/correction_monitors.h"
+#include "lumenis/ui/correction_shape_host.h"
 #include "lumenis/ui/correction_tool.h"
 #include "lumenis/ui/consolidate_dialog.h"
 #include "lumenis/ui/mixdown_dialog.h"
@@ -1719,6 +1720,10 @@ void MainWindow::createTools() {
     connect(correctionTool_, &CorrectionTool::colorInfoRequested, this, [this] { showTool(QStringLiteral("ColorInfo")); });
     // The shape panel's layer, Show Alpha and Show Result change what the monitors show (FX Guide p.698).
     connect(correctionTool_, &CorrectionTool::shapeDisplayChanged, this, [this] { composer_->correctionMonitors()->refresh(); });
+    // The shape tools draw in the Current monitor (p.698; 6.10e3b2).
+    composer_->correctionMonitors()->setOverlayInput(correctionTool_->shapeHost()->tool());
+    connect(correctionTool_->shapeHost(), &CorrectionShapeHost::overlayChanged, this,
+            [this] { composer_->correctionMonitors()->setOverlay(correctionTool_->shapeHost()->overlay()); });
     connect(correctionTool_, &CorrectionTool::settingsRequested, this, [this] {
         const int i = settings_->file(model::SettingsScope::User).activeIndex(QStringLiteral("Correction"));
         if (SettingsWindow* w = showSettings(); w && i >= 0) {

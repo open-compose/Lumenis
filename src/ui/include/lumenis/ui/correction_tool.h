@@ -29,6 +29,8 @@ class QToolButton;
 
 namespace lumenis::ui {
 
+class CorrectionShapeHost;
+
 class Timeline;
 class ChromaWheel;
 class LumaRangesGraph;
@@ -286,6 +288,9 @@ public:
     // the tool works on (the Shapes and Base buttons, Timeline::setCorrectionLayer) and the selected shapes' Softness
     // (0 to 100, an undo step; false without a selected shape or a change).
     QWidget* shapesPanel() const { return shapesPane_; }
+    // The shape tools drawing on the Color Correction effect in the Current monitor (correction_shape_host.h,
+    // 6.10e3b2); MainWindow gives the monitors its tool as their overlay input.
+    CorrectionShapeHost* shapeHost() const { return shapeHost_; }
     void setShapeLayer(model::CorrectionLayer layer);
     bool setShapeSoftness(double softness);
     // "Right-click in the Color Correction tool, and select Update Correction" (FX Guide p.700): the tool's shortcut
@@ -357,6 +362,7 @@ private:
     QToolButton* type_ = nullptr;
     // The shape panel (correction_tool_shapes.cpp).
     QWidget* shapesPane_ = nullptr;
+    CorrectionShapeHost* shapeHost_ = nullptr;
     QButtonGroup* shapeTools_ = nullptr;
     QToolButton* shapesLayer_ = nullptr;
     QToolButton* baseLayer_ = nullptr;
