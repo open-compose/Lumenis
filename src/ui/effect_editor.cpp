@@ -109,7 +109,8 @@ const Catalog& catalog() {
             EffectParameter p;
             p.name = cp.name;
             p.text = cp.name;
-            p.kind = QStringLiteral("slider");
+            // Levels and Curves: a keyframe track only (p.685).
+            p.kind = cp.trackOnly ? QStringLiteral("track") : QStringLiteral("slider");
             p.min = cp.min;
             p.max = cp.max;
             p.decimals = cp.decimals;
@@ -546,6 +547,8 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     // The Effect Preview monitor's keyframes and buttons (FX Guide p.76-77, p.103-106): its Add Keyframe
     // button runs the default command without the menu; Alt+click deletes the selected keyframes.
     connect(&timeline_.composer(), &Composer::effectKeyframePressed, this, &EffectEditor::previewKeyframePressed);
+    // The keyframe markers below the Current Color Correction monitor select here too (FX Guide p.686).
+    connect(&timeline_, &Timeline::correctionKeyframesSelected, this, &EffectEditor::selectCorrectionKeyframes);
     connect(&timeline_.composer(), &Composer::effectCommandRequested, this, [this](const QString& id, bool alt) {
         if (id == QLatin1String("effect.add_keyframe")) {
             if (alt) deleteKeyframes(mode_);
@@ -813,6 +816,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     syncScrollBar();
     tracks_.clear();
     graphOpeners_.clear();
+    correctionEnables_.clear();
     openGraphs_.clear();
     selection_.clear();
     activeParameter_.clear();
@@ -934,7 +938,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
             if (p.name == QLatin1String("Frame Processing") && !interlacedProject_) continue;
             auto* row = new QHBoxLayout;
             const QString k = key(category, p.name);
-            const bool keyframed = p.keyframeable && (p.kind == QLatin1String("slider") || p.kind == QLatin1String("color"));
+            const bool keyframed = p.keyframeable && (p.kind == QLatin1String("slider") || p.kind == QLatin1String("color") || p.kind == QLatin1String("track"));
             QLabel* nameLabel = nullptr;
             if (p.kind == QLatin1String("checkbox")) {
                 auto* c = new QCheckBox(p.text, box);
@@ -990,6 +994,18 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                         row->addWidget(c);
                         row->addStretch(1);
                     }
+                } else if (p.kind == QLatin1String("track")) {
+                    // A Levels or Curves control in Color Correction mode (p.685): its Enable button where it has one
+                    // of its own, or on the first of the points that share a Levels tab's; no value to adjust here.
+                    const auto cp = model::correctionParameterOf(category, p.name);
+                    if (cp && !cp->enablePath.isEmpty() && !correctionEnables_.contains(cp->enablePath)) {
+                        auto* enable = new QCheckBox(tr("Enable"), box);
+                        enable->setObjectName(QStringLiteral("correctionEnable:") + cp->enablePath);
+                        connect(enable, &QCheckBox::toggled, this, [this, path = cp->enablePath](bool on) { setCorrectionEnabled(path, on); });
+                        correctionEnables_.insert(cp->enablePath, enable);
+                        row->addWidget(enable);
+                    }
+                    row->addStretch(1);
                 } else if (p.kind == QLatin1String("slider")) {
                     auto* s = new QSlider(Qt::Horizontal, box);
                     s->setObjectName(QStringLiteral("param:") + k);
@@ -1378,7 +1394,23 @@ void EffectEditor::syncValues(const model::Effect& effect) {
     }
     if (brushPreview_) brushPreview_->setBrush(effect.parameters.value(model::kBrushCategory).toObject());
     syncBurnIn(effect);
+    // The Levels and Curves Enable buttons follow the correction's, as the tool's (p.685: "ganged together").
+    if (correctionShown_ && !correctionEnables_.isEmpty()) {
+        const auto stored = timeline_.storedCorrection();
+        for (auto it = correctionEnables_.cbegin(); it != correctionEnables_.cend(); ++it) {
+            const QSignalBlocker block(it.value());
+            it.value()->setChecked(stored && stored->enabled(it.key()));
+        }
+    }
     syncing_ = false;
+}
+
+bool EffectEditor::setCorrectionEnabled(const QString& path, bool on) {
+    if (!correctionShown_ || syncing_) return false;
+    auto stored = timeline_.storedCorrection();
+    if (!stored) return false;
+    stored->setEnabled(path, on);
+    return timeline_.setStoredCorrection(*stored, tr("Enable"));
 }
 
 void EffectEditor::syncTransition() {

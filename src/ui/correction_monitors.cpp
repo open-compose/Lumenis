@@ -294,6 +294,107 @@ private:
     QList<QColor> samples_;
 };
 
+// The position bar below the Current monitor (FX Guide p.686): the current segment, its correction's keyframe markers
+// as the Effect Preview monitor's bar draws them (triangles, pink when selected) and the position indicator. "In
+// general, these keyframe markers behave like those you see in the position bar below the Effect Preview monitor": a
+// click selects one (Ctrl-click adds or takes it away), Alt-drag moves the selected ones, a click elsewhere moves the
+// position within the segment. "You cannot add keyframes manually in the Color Correction monitor".
+class CorrectionKeyframeBar : public QWidget {
+public:
+    CorrectionKeyframeBar(CorrectionMonitors& owner, QWidget* parent) : QWidget(parent), owner_(owner) {
+        setObjectName(QStringLiteral("ccKeyframeBar"));
+        setFixedHeight(14);
+        setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        setToolTip(CorrectionMonitors::tr("Click a keyframe marker to select it, Ctrl-click to add or remove one, Alt-drag to move "
+                                          "the selected ones"));
+    }
+
+    // The x of a frame into the segment, and back.
+    double xOf(double frame, std::int64_t length) const {
+        return length > 1 ? frame / static_cast<double>(length - 1) * (width() - 9) + 4.0 : 4.0;
+    }
+    double frameAt(double x, std::int64_t length) const {
+        if (length <= 1) return 0.0;
+        return std::clamp((x - 4.0) / std::max(width() - 9, 1) * static_cast<double>(length - 1), 0.0, static_cast<double>(length - 1));
+    }
+
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this);
+        p.fillRect(rect(), QColor(0x5a, 0x5a, 0x5a));
+        const auto m = owner_.keyframeMarkers();
+        if (!m) return;
+        p.setRenderHint(QPainter::Antialiasing);
+        const double shift = dragging_ ? frameAt(dragX_, m->length) - frameAt(pressX_, m->length) : 0.0;
+        for (int i = 0; i < m->frames.size(); ++i) {
+            const bool selected = i < m->selected.size() && m->selected.at(i);
+            const double f = selected ? std::clamp(m->frames.at(i) + shift, 0.0, static_cast<double>(m->length - 1)) : m->frames.at(i);
+            const double x = xOf(f, m->length);
+            p.setPen(Qt::NoPen);
+            p.setBrush(selected ? QColor(0xff, 0x8c, 0xc8) : QColor(0xc4, 0xc4, 0xc4));
+            p.drawPolygon(QPolygonF{QPointF(x - 4, 1), QPointF(x + 4, 1), QPointF(x, height() - 2)});
+        }
+        const std::int64_t position = owner_.composer_.state(MonitorId::Record).position() - m->start;
+        if (position >= 0 && position < m->length) p.fillRect(QRectF(xOf(static_cast<double>(position), m->length) - 1, 0, 2, height()), QColor(0x52, 0x8c, 0xff));
+    }
+
+    void mousePressEvent(QMouseEvent* event) override {
+        const auto m = owner_.keyframeMarkers();
+        if (!m || event->button() != Qt::LeftButton) return;
+        const double x = event->position().x();
+        for (int i = 0; i < m->frames.size(); ++i) {
+            if (std::abs(xOf(m->frames.at(i), m->length) - x) > 5.0) continue;
+            const bool selected = i < m->selected.size() && m->selected.at(i);
+            if (event->modifiers() & Qt::AltModifier) {
+                // Alt-drag moves the selection; a marker not in it becomes the selection first.
+                if (!selected) emit owner_.keyframePressed(m->frames.at(i), false);
+                dragging_ = true;
+                pressX_ = dragX_ = x;
+                return;
+            }
+            emit owner_.keyframePressed(m->frames.at(i), event->modifiers() & Qt::ControlModifier);
+            return;
+        }
+        scrubbing_ = true;
+        moveTo(x, *m);
+    }
+
+    void mouseMoveEvent(QMouseEvent* event) override {
+        const auto m = owner_.keyframeMarkers();
+        if (!m) return;
+        if (dragging_) {
+            dragX_ = event->position().x();
+            update();
+        } else if (scrubbing_) {
+            moveTo(event->position().x(), *m);
+        }
+    }
+
+    void mouseReleaseEvent(QMouseEvent* event) override {
+        const auto m = owner_.keyframeMarkers();
+        if (dragging_ && m) {
+            const double delta = std::round(frameAt(event->position().x(), m->length) - frameAt(pressX_, m->length));
+            dragging_ = false;
+            if (delta != 0.0) emit owner_.keyframesDragged(delta);
+            update();
+        }
+        dragging_ = false;
+        scrubbing_ = false;
+    }
+
+private:
+    void moveTo(double x, const CorrectionMonitors::KeyframeMarkers& m) {
+        owner_.composer_.stop();
+        owner_.composer_.moveTo(MonitorId::Record, m.start + static_cast<std::int64_t>(std::lround(frameAt(x, m.length))));
+    }
+
+    CorrectionMonitors& owner_;
+    bool dragging_ = false;
+    bool scrubbing_ = false;
+    double pressX_ = 0.0;
+    double dragX_ = 0.0;
+};
+
 CorrectionMonitors::CorrectionMonitors(Composer& composer, QWidget* parent) : QWidget(parent), composer_(composer) {
     setObjectName(QStringLiteral("correctionMonitors"));
     setFocusPolicy(Qt::StrongFocus);
@@ -336,6 +437,9 @@ CorrectionMonitors::CorrectionMonitors(Composer& composer, QWidget* parent) : QW
         v->addWidget(m.menu, 0, Qt::AlignLeft);
         m.picture = new CorrectionPicture(*this, i, column);
         v->addWidget(m.picture, 1);
+        m.bar = new CorrectionKeyframeBar(*this, column);
+        m.bar->setObjectName(QStringLiteral("ccKeyframeBar%1").arg(i));
+        v->addWidget(m.bar);
         // Under it: "Dual Split button, Go to Previous Uncorrected Shot button, Go to Next Uncorrected Shot button, and
         // Remove Effect button" (p.592).
         m.buttons = new QWidget(column);
@@ -491,12 +595,24 @@ void CorrectionMonitors::setPreview(Preview preview, std::function<model::ColorC
 }
 
 void CorrectionMonitors::refresh() {
-    for (const Monitor& m : monitors_) m.picture->update();
+    for (const Monitor& m : monitors_) {
+        m.picture->update();
+        m.bar->update();
+    }
+}
+
+QWidget* CorrectionMonitors::keyframeBar(int monitor) const {
+    return monitors_.at(static_cast<std::size_t>(monitor)).bar;
 }
 
 void CorrectionMonitors::keyPressEvent(QKeyEvent* event) {
     if (event->key() == Qt::Key_Escape && event->modifiers() == Qt::NoModifier) {
         switchCurrentAndReference();
+        return;
+    }
+    // "Delete selected keyframes" (p.686).
+    if (event->key() == Qt::Key_Delete || event->key() == Qt::Key_Backspace) {
+        emit keyframesDeleteRequested();
         return;
     }
     QWidget::keyPressEvent(event);
@@ -505,6 +621,8 @@ void CorrectionMonitors::keyPressEvent(QKeyEvent* event) {
 void CorrectionMonitors::syncMenu(int monitor) {
     const Monitor& m = monitors_.at(static_cast<std::size_t>(monitor));
     m.menu->setText(correctionSourceText(m.source));
+    // "Keyframe markers display in the position bar below the Current monitor" (p.686).
+    m.bar->setVisible(m.source == CorrectionSource::Current);
 }
 
 void CorrectionMonitors::dragEnterEvent(QDragEnterEvent* event) {

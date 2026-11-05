@@ -480,6 +480,20 @@ QJsonValue EffectEditor::valueAt(const model::Effect& effect, const QString& par
         const QColor d(info->defaultValue.toString());
         return d.isValid() ? d.name() : QStringLiteral("#000000");
     }
+    if (info && info->kind == QLatin1String("track")) {
+        // A Levels or Curves control holds the value of its keyframe at or before the time (model::correctionAt), else
+        // the first keyframe's, else the value set.
+        const model::ParameterKeyframes keys = model::keyframesOf(effect, category, name);
+        if (!keys.keys.isEmpty()) {
+            QJsonValue v = keys.keys.first().value;
+            for (const model::EffectKeyframe& k : keys.keys) {
+                if (model::keyframeTime(keys, k, span_) <= t + span_.halfFrame()) v = k.value;
+            }
+            return v;
+        }
+        const QJsonValue stored = effect.parameters.value(category).toObject().value(name);
+        return stored.isUndefined() ? defaultValue(effect, parameter) : stored;
+    }
     if (const auto v = model::numberAt(effect, category, name, t, span_)) return std::round(*v * 1000.0) / 1000.0;
     if (info && info->kind == QLatin1String("menu")) {
         // A menu kept at keyframes (Avid Pan & Zoom's Velocity, p.243): the entry of the keyframe at the
@@ -508,7 +522,7 @@ QStringList EffectEditor::keyframeableParameters() const {
         if (!params) continue;
         for (const EffectParameter& p : *params) {
             if (!p.keyframeable) continue;
-            if (p.kind != QLatin1String("slider") && p.kind != QLatin1String("color")) continue;
+            if (p.kind != QLatin1String("slider") && p.kind != QLatin1String("color") && p.kind != QLatin1String("track")) continue;
             out << category + QLatin1Char('/') + p.name;
         }
     }
@@ -690,6 +704,26 @@ void EffectEditor::syncPreview() {
         // The Intraframe objects' wire frames and the selection's handles (intraframe_tool.h).
         if (intraframe_ && wholeIntraframe_) intraframe_->fillOverlay(preview);
     }
+    // In Color Correction mode the markers below the Current monitor show the editor's selection, a marker selected when
+    // every keyframe at its frame is (FX Guide p.686, as p.103 for the Effect Preview's bar; 6.10d3c).
+    if (correctionShown_ && e) {
+        QList<std::pair<double, bool>> columns;
+        for (const QString& p : positionBarParameters()) {
+            const model::ParameterKeyframes keys = model::keyframesOf(*e, categoryOf(p), nameOf(p));
+            for (int i = 0; i < keys.keys.size(); ++i) {
+                const double f = span_.frameOf(model::keyframeTime(keys, keys.keys.at(i), span_));
+                const bool selected = selection_.contains(KeyframeId{p, i});
+                auto same = std::find_if(columns.begin(), columns.end(), [&](const auto& c) { return std::abs(c.first - f) < 0.5; });
+                if (same == columns.end()) columns.append({f, selected});
+                else same->second = same->second && selected;
+            }
+        }
+        QList<double> frames;
+        for (const auto& [f, selected] : columns) {
+            if (selected) frames << std::round(f * 1000.0) / 1000.0;
+        }
+        timeline_.setCorrectionKeyframeSelection(frames);
+    }
     timeline_.composer().setEffectPreview(preview);
     // A Titler+ title or Intraframe objects are edited in the Effect Preview (titler_tool.h, intraframe_tool.h).
     Composer::OverlayInput* input = nullptr;
@@ -699,6 +733,20 @@ void EffectEditor::syncPreview() {
     }
     timeline_.composer().setOverlayInput(input);
     if (titler_ && e && model::isTitlerEffect(*e)) titler_->notifyShown();
+}
+
+void EffectEditor::selectCorrectionKeyframes(const QList<double>& frames) {
+    const model::Effect* e = shownEffect();
+    if (!correctionShown_ || !e) return;
+    selection_.clear();
+    for (const QString& p : positionBarParameters()) {
+        const model::ParameterKeyframes keys = model::keyframesOf(*e, categoryOf(p), nameOf(p));
+        for (double f : frames) {
+            const int i = model::keyframeAt(keys, span_.timeOf(f), span_);
+            if (i >= 0 && !selection_.contains(KeyframeId{p, i})) selection_ << KeyframeId{p, i};
+        }
+    }
+    updateTracks();
 }
 
 void EffectEditor::previewKeyframePressed(double frame, bool extend) {

@@ -3355,6 +3355,9 @@ bool Timeline::perform(const QString& id) {
     } else if (id == QLatin1String("edit.delete")) {
         if (deleteHook_ && deleteHook_()) {
             // deleted by the hook's owner
+        } else if (correctionMode_ && !correctionKeyframeSelection().isEmpty()) {
+            // The selected keyframe markers below the Current Color Correction monitor (FX Guide p.686).
+            deleteCorrectionKeyframes();
         } else if (!keySelection_.isEmpty()) {
             const QList<model::KeyRef> keys = keySelection_;
             if (const model::LoadedClip* rec = recordSequence()) {
@@ -4828,7 +4831,19 @@ void Timeline::setCorrectionMode(bool on) {
         }
     }
     correctionMode_ = on;
-    if (on) composer_.correctionMonitors()->setShotResolver([this](int step) { return correctionShot(step); });
+    if (on) {
+        CorrectionMonitors* monitors = composer_.correctionMonitors();
+        monitors->setShotResolver([this](int step) { return correctionShot(step); });
+        // The keyframe markers below the Current monitor (FX Guide p.686).
+        monitors->setKeyframeResolver([this]() -> std::optional<CorrectionMonitors::KeyframeMarkers> {
+            const auto m = correctionKeyframeMarkers();
+            if (!m) return std::nullopt;
+            return CorrectionMonitors::KeyframeMarkers{m->start, m->length, m->frames, m->selected};
+        });
+        connect(monitors, &CorrectionMonitors::keyframePressed, this, &Timeline::selectCorrectionKeyframe, Qt::UniqueConnection);
+        connect(monitors, &CorrectionMonitors::keyframesDragged, this, &Timeline::moveCorrectionKeyframes, Qt::UniqueConnection);
+        connect(monitors, &CorrectionMonitors::keyframesDeleteRequested, this, &Timeline::deleteCorrectionKeyframes, Qt::UniqueConnection);
+    }
     composer_.setCorrectionMode(on);
     syncTrimDisplay();
     emit correctionModeChanged(on);
@@ -4964,7 +4979,8 @@ bool Timeline::putCorrection(const model::ColorCorrection& correction, const QSt
     const model::EffectSpan span(std::max<std::int64_t>(t->segments.at(i).length, 1));
     const model::ColorCorrection result = !atPosition || stored.keyframes.isEmpty()
                                               ? correction
-                                              : model::adjustedAt(stored, correction, span.timeOf(static_cast<double>(position - start)), span);
+                                              : model::adjustedAt(stored, correction, span.timeOf(static_cast<double>(position - start)), span,
+                                                                  correctionKeyframeSelection());
     if (!model::applyRelationshipCorrection(seq, correctionTrack(), i, correctionRelationship_, result, correctionClipLookup()))
         return false;
     t = seq.track(correctionTrack());
@@ -5032,6 +5048,94 @@ bool Timeline::removeCorrection() {
     selection_ = keep;
     view_->update();
     return ok;
+}
+
+// ---------------------------------------------------------------- correction keyframe markers (FX Guide p.686)
+
+std::optional<Timeline::CorrectionKeyframeMarkers> Timeline::correctionKeyframeMarkers() const {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(correctionTrack());
+    std::int64_t start = 0;
+    const int i = t ? t->segmentAt(composer_.state(MonitorId::Record).position(), &start) : -1;
+    if (i < 0 || t->segments.at(i).isFiller()) return std::nullopt;
+    model::Segment s = t->segments.at(i);
+    CorrectionKeyframeMarkers out;
+    out.start = start;
+    out.length = s.length;
+    const model::EffectSpan span(std::max<std::int64_t>(s.length, 1));
+    out.frames = model::correctionKeyframeFrames(model::correctionOf(s, correctionSide()), span);
+    const QList<double> selected = correctionKeyframeSelection();
+    for (double f : out.frames) {
+        out.selected << std::any_of(selected.cbegin(), selected.cend(), [f](double g) { return std::abs(f - g) < 0.5; });
+    }
+    return out;
+}
+
+QList<double> Timeline::correctionKeyframeSelection() const {
+    // Another segment, or the same place on another track, starts with nothing selected.
+    const auto shot = correctionShot(0);
+    if (!shot || !correctionKeyShot_ || correctionKeyShot_->first != correctionTrack() || correctionKeyShot_->second != shot->first) return {};
+    return correctionKeySelection_;
+}
+
+void Timeline::setCorrectionKeyframeSelection(const QList<double>& frames) {
+    const auto shot = correctionShot(0);
+    correctionKeySelection_ = shot ? frames : QList<double>();
+    correctionKeyShot_ = shot ? std::optional<std::pair<QString, std::int64_t>>(std::pair{correctionTrack(), shot->first}) : std::nullopt;
+    // Only the bar redraws: the Effect Editor gives its selection here while it updates.
+    if (composer_.correctionMonitors()) composer_.correctionMonitors()->refresh();
+}
+
+void Timeline::selectCorrectionKeyframe(double frame, bool extend) {
+    const auto markers = correctionKeyframeMarkers();
+    if (!markers) return;
+    QList<double> selected = correctionKeyframeSelection();
+    const auto at = std::find_if(selected.begin(), selected.end(), [frame](double g) { return std::abs(frame - g) < 0.5; });
+    if (!extend) {
+        selected = {frame};
+    } else if (at != selected.end()) {
+        selected.erase(at);
+    } else {
+        selected << frame;
+    }
+    setCorrectionKeyframeSelection(selected);
+    emit correctionKeyframesSelected(selected);
+}
+
+bool Timeline::deleteCorrectionKeyframes() {
+    const QList<double> selected = correctionKeyframeSelection();
+    auto stored = storedCorrection();
+    const auto shot = correctionShot(0);
+    if (selected.isEmpty() || !stored || !shot) return false;
+    const model::EffectSpan span(std::max<std::int64_t>(shot->second - shot->first, 1));
+    if (!model::removeCorrectionKeyframesAt(*stored, selected, span)) return false;
+    const bool ok = setStoredCorrection(*stored, tr("Delete Keyframes"));
+    if (ok) {
+        setCorrectionKeyframeSelection({});
+        emit correctionKeyframesSelected({});
+    }
+    return ok;
+}
+
+bool Timeline::moveCorrectionKeyframes(double delta) {
+    const QList<double> selected = correctionKeyframeSelection();
+    auto stored = storedCorrection();
+    const auto shot = correctionShot(0);
+    if (selected.isEmpty() || !stored || !shot || delta == 0.0) return false;
+    const std::int64_t length = std::max<std::int64_t>(shot->second - shot->first, 1);
+    const model::EffectSpan span(length);
+    if (!model::moveCorrectionKeyframes(*stored, selected, delta, span)) return false;
+    if (!setStoredCorrection(*stored, tr("Move Keyframes"))) return false;
+    // The selection goes with the keyframes, as far as the group could move (it stays within the segment).
+    const auto [lo, hi] = std::minmax_element(selected.cbegin(), selected.cend());
+    const double d = std::clamp(delta, -*lo, static_cast<double>(length - 1) - *hi);
+    QList<double> moved;
+    for (double f : selected) moved << f + d;
+    setCorrectionKeyframeSelection(moved);
+    emit correctionKeyframesSelected(moved);
+    return true;
 }
 
 bool Timeline::goToUncorrectedShot(int direction) {

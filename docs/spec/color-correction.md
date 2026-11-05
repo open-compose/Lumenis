@@ -559,8 +559,8 @@ Code: `src/model/correction_keyframes.*` (`correctionKeyframing`, `setCorrection
   Saturation are the Controls tab's), in the effect keyframes' form, Elastic over the segment. Numbers blend with the
   interpolation; Curves and Levels points hold (Shelf) from one keyframe to the next.
 * The tool shows the values at the position. A changed control that has keyframes gets one at the position (replacing
-  one within half a frame); a reset control loses its keyframes; any other change is a plain value. No keyframe is
-  selected in the Color Correction monitor yet (6.10d3c), so an adjustment never moves an existing keyframe elsewhere.
+  one within half a frame); a reset control loses its keyframes; any other change is a plain value. With keyframe
+  markers selected (6.10d3c) the change goes to the control's keyframes at those frames instead.
 * The Program side's keyframes override the Source side's for the same control; a control the Program side sets plainly
   stops following the Source side's keyframes.
 
@@ -592,7 +592,49 @@ the Effect Editor's `refresh`/`rebuild`/`changeShown` in Color Correction mode a
 * Every hue slider runs from -360 to 360 in the editor; the tool's value is the same angle in -180 to 180. Keyframes
   keep the editor's numbers.
 * The editor's groups have no Enable buttons yet (ours; the tool's stay); a value back at its default is left out as the
-  tool leaves it. The Curves and Levels keyframe tracks come with 6.10d3c.
+  tool leaves it. The Curves and Levels keyframe tracks came with 6.10d3c.
+
+## 6.10d3c: keyframe markers and the Curves and Levels tracks
+
+Code: `CorrectionMonitors::setKeyframeResolver`/`keyframeBar` and `CorrectionKeyframeBar` in
+`src/ui/correction_monitors.cpp`; `Timeline::correctionKeyframeMarkers`, `selectCorrectionKeyframe`,
+`setCorrectionKeyframeSelection`, `deleteCorrectionKeyframes`, `moveCorrectionKeyframes`; `model::adjustedAt`'s
+selection, `removeCorrectionKeyframesAt` and `moveCorrectionKeyframes` in `src/model/correction_keyframes.*`; the
+track-only parameters of `src/model/correction_effect.*` and the Effect Editor's "track" rows with
+`EffectEditor::setCorrectionEnabled` and `selectCorrectionKeyframes`. Tests: `tst_correction_keyframes`
+(`trackOnlyAsEffect`, `markers`), `tst_correction_mode` (`keyframeMarkers`), `tst_correction_tool`
+(`effectEditorCurvesAndLevels`).
+
+### From the guide
+* "Keyframe markers display in the position bar below the Current monitor in Color Correction mode. In general, these
+  keyframe markers behave like those you see in the position bar below the Effect Preview monitor": click to select,
+  "Delete selected keyframes", "Alt-drag (Windows) or Option+drag (Macintosh) keyframe markers to move them"; "You
+  cannot add keyframes manually in the Color Correction monitor" (p.686).
+* The steps: add a keyframe in the Effect Editor, adjust, "Ctrl-click ... the keyframe added in step 1 to deselect it",
+  move the position indicator in the bar, adjust again and "A new keyframe appears below the Current Color Correction
+  monitor at the location of the position indicator" (p.686).
+* Curves and Levels: "You can enable and disable these parameters in the Effect Editor. You can also keyframe these
+  parameters in their keyframe tracks. However ... you cannot open keyframe graphs or adjust the parameter values
+  directly in the Effect Editor" (p.685).
+
+### Ours
+* The bar spans the current segment on the correction track, under whichever monitor's Source menu is Current; its
+  markers are every keyframed control's keyframe frames, drawn as the Effect Preview bar's (pink when selected). A click
+  away from the markers moves the position within the segment.
+* The selection is the Timeline's, by frame, and belongs to the segment it was made in. The Effect Editor's selection
+  shows there (a marker is selected when every keyframe at its frame is) and the bar's selects every keyframe at those
+  frames in the editor. So a keyframe just added in the editor is selected, and the next adjustment changes it until it
+  is deselected, as the guide's steps go.
+* An adjustment with markers selected sets the changed control's keyframes at the selected frames; with none (or none of
+  the control's) it adds one at the position.
+* Alt-drag moves the selected markers' keyframes of every control together, each stopping a frame short of a keyframe
+  of its control that stays, all within the segment. Delete (over the monitors or in the Timeline in the mode) removes
+  every control's keyframes at the selected frames.
+* The Effect Editor shows "Levels Composite", "Levels Luma", "Levels Red", "Levels Green", "Levels Blue" and "Levels
+  Master" (each tab's points; Composite and Luma have no gray points) and "Curves" (Red, Green, Blue, Master) as rows
+  with a keyframe track and no slider or graph opener. A Levels tab has one Enable button, on its first row; each curve
+  has its own. A keyframe added on such a track takes the value the control holds there. The Curves tab's Master sliders
+  are the HSL Master controls and keyframe there, with graphs.
 
 ## 6.10a3: the Secondary group
 

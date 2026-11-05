@@ -113,7 +113,8 @@ ColorCorrection correctionAt(const ColorCorrection& c, double t, const EffectSpa
     return out;
 }
 
-ColorCorrection adjustedAt(const ColorCorrection& stored, const ColorCorrection& edited, double t, const EffectSpan& span) {
+ColorCorrection adjustedAt(const ColorCorrection& stored, const ColorCorrection& edited, double t, const EffectSpan& span,
+                           const QList<double>& selected) {
     const ColorCorrection now = correctionAt(stored, t, span);
     ColorCorrection out = stored;
     out.disabled = edited.disabled;
@@ -130,7 +131,14 @@ ColorCorrection adjustedAt(const ColorCorrection& stored, const ColorCorrection&
                 out.values.remove(k);
             } else {
                 const QStringList disabled = out.disabled;
-                setCorrectionKeyframe(out, k, t, span, edited.values.value(k));
+                // The selected keyframes of the control, if it has any, else a new one at the position.
+                const ParameterKeyframes own = correctionKeyframesOf(stored, k);
+                QList<double> at;
+                for (double f : selected) {
+                    if (keyframeAt(own, span.timeOf(f), span) >= 0) at << span.timeOf(f);
+                }
+                if (at.isEmpty()) at << t;
+                for (double when : at) setCorrectionKeyframe(out, k, when, span, edited.values.value(k));
                 out.disabled = disabled; // the tool's buttons, as edited
             }
         } else if (has) {
@@ -153,6 +161,40 @@ QList<double> correctionKeyframeFrames(const ColorCorrection& c, const EffectSpa
     }
     std::sort(out.begin(), out.end());
     return out;
+}
+
+bool removeCorrectionKeyframesAt(ColorCorrection& c, const QList<double>& frames, const EffectSpan& span) {
+    bool changed = false;
+    for (const QString& path : keyframedControls(c)) {
+        for (double f : frames) changed = removeCorrectionKeyframe(c, path, span.timeOf(f), span) || changed;
+    }
+    return changed;
+}
+
+bool moveCorrectionKeyframes(ColorCorrection& c, const QList<double>& frames, double delta, const EffectSpan& span) {
+    if (frames.isEmpty() || delta == 0.0) return false;
+    bool changed = false;
+    for (const QString& path : keyframedControls(c)) {
+        ParameterKeyframes keys = correctionKeyframesOf(c, path);
+        QList<int> moving;
+        for (double f : frames) {
+            const int i = keyframeAt(keys, span.timeOf(f), span);
+            if (i >= 0 && !moving.contains(i)) moving << i;
+        }
+        if (moving.isEmpty()) continue;
+        std::sort(moving.begin(), moving.end());
+        // Within the segment: the group stops at its first and last frames.
+        const double first = span.frameOf(keyframeTime(keys, keys.keys.at(moving.first()), span));
+        const double last = span.frameOf(keyframeTime(keys, keys.keys.at(moving.last()), span));
+        const double d = std::clamp(delta, -first, static_cast<double>(span.length - 1) - last);
+        if (d == 0.0) continue;
+        const int reference = moving.first();
+        if (alignKeyframes(keys, moving, reference, span.timeOf(first + d), span, false)) {
+            setCorrectionKeyframes(c, path, keys);
+            changed = true;
+        }
+    }
+    return changed;
 }
 
 } // namespace lumenis::model

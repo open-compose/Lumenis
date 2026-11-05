@@ -8,7 +8,10 @@
 // (correctionEffect) of category kCorrectionModeCategory, with one parameter category per tab: "HSL Master",
 // "HSL Highlights", "HSL Midtones", "HSL Shadows" (the Controls tab's ranges), "HSL Hue Offsets" (each ChromaWheel as
 // its Hue and Hue Amount) and "Secondary <Vector>" for each of the twelve vectors' sliders; its changes go back with
-// correctionFromEffect. The Curves and Levels tabs' keyframe tracks come with 6.10d3c.
+// correctionFromEffect. The Levels and Curves tabs come as "Levels <Tab>" and "Curves" (6.10d3c): "You can enable and
+// disable these parameters in the Effect Editor. You can also keyframe these parameters in their keyframe tracks.
+// However, because these parameters require specialized controls, you cannot open keyframe graphs or adjust the parameter
+// values directly in the Effect Editor" (p.685): they are track-only parameters with their Enable buttons.
 
 #include "lumenis/model/color_correction.h"
 #include "lumenis/model/sequence.h"
@@ -33,6 +36,11 @@ struct CorrectionParameter {
     double max = 100.0;
     double defaultValue = 0.0;
     int decimals = 0;
+    // A Levels or Curves control: a keyframe track and an Enable button, no slider or graph (p.685).
+    bool trackOnly = false;
+    // The Enable button the parameter's row has in the Effect Editor (track-only parameters): its path in the
+    // correction ("levels/composite", "curves/red"); empty for none.
+    QString enablePath;
 };
 // Every one, in the editor's order.
 const QList<CorrectionParameter>& correctionParameters();
@@ -49,7 +57,8 @@ double toolHue(double editorHue);
 // The correction as an effect: each parameter's value (only those the correction sets) and its keyframes.
 Effect correctionEffect(const ColorCorrection& correction);
 // `base` with the effect's parameters and keyframes in place of its own for every parameter correctionEffect gives; the
-// controls it does not show (Curves, Levels, Channels, Luma Ranges, the Enable buttons...) stay `base`'s. A value at
+// controls it does not show (Channels, Luma Ranges, the Enable buttons...) and the values of track-only parameters stay
+// `base`'s (their keyframes are the effect's). A value at
 // its default is left out as the tool leaves it; one set anew turns its Enable buttons on, as in the tool.
 ColorCorrection correctionFromEffect(const Effect& effect, const ColorCorrection& base);
 

@@ -403,6 +403,11 @@ private slots:
         editor.setActiveParameter(QStringLiteral("HSL Master/Gain"));
         QVERIFY(editor.addKeyframes(EffectEditor::KeyframeMode::ActiveParameter));
         QCOMPARE(model::correctionKeyframesOf(*r.timeline.storedCorrection(), QStringLiteral("hsl/controls/master/gain")).keys.size(), 1);
+        // The new keyframe is selected, so it would take the adjustment: "Ctrl-click ... the keyframe added in step 1 to
+        // deselect it" (p.686, step 3; 6.10d3c).
+        QCOMPARE(r.timeline.correctionKeyframeSelection(), (QList<double>{0}));
+        editor.deselectAllKeyframes({});
+        QVERIFY(r.timeline.correctionKeyframeSelection().isEmpty());
         r.composer.moveTo(MonitorId::Record, 15);
         r.tool.reload();
         r.value(QStringLiteral("hsl/controls/master/gain"))->setValue(80);
@@ -421,6 +426,54 @@ private slots:
         // Out of the mode the editor shows effects again.
         r.timeline.setCorrectionMode(false);
         QVERIFY(!editor.slider(QStringLiteral("HSL Master"), QStringLiteral("Gain")));
+    }
+
+    // Curves and Levels in the Effect Editor (p.685, 6.10d3c): Enable buttons and keyframe tracks, no sliders or graphs;
+    // the editor's keyframe selection and the markers below the Current monitor's are one (p.686).
+    void effectEditorCurvesAndLevels() {
+        Rig r; // A: frames 0-19, the position at 5
+        model::ColorCorrection c = *r.timeline.storedCorrection();
+        model::setColorCurve(c, QStringLiteral("red"), {QPointF(0, 0), QPointF(128, 90), QPointF(255, 255)});
+        QVERIFY(r.timeline.setStoredCorrection(c, QStringLiteral("Curves")));
+        EffectEditor editor(r.timeline);
+        editor.refresh();
+        QVERIFY(!editor.slider(QStringLiteral("Curves"), QStringLiteral("Red")));
+        QVERIFY(!editor.findChild<QToolButton*>(QStringLiteral("graphOpener:Curves/Red")));
+        QVERIFY(editor.findChild<QToolButton*>(QStringLiteral("graphOpener:HSL Master/Gain")));
+        QVERIFY(editor.keyframeableParameters().contains(QStringLiteral("Curves/Red")));
+        QVERIFY(editor.keyframeableParameters().contains(QStringLiteral("Levels Composite/Input White")));
+        // One Enable button for a Levels tab, one for each curve.
+        QCOMPARE(editor.findChildren<QCheckBox*>(QStringLiteral("correctionEnable:levels/composite")).size(), 1);
+        auto* enable = editor.findChild<QCheckBox*>(QStringLiteral("correctionEnable:curves/red"));
+        QVERIFY(enable);
+        QVERIFY(enable->isChecked());
+        enable->click();
+        QVERIFY(!r.timeline.storedCorrection()->enabled(QStringLiteral("curves/red")));
+        editor.refresh();
+        QVERIFY(!editor.findChild<QCheckBox*>(QStringLiteral("correctionEnable:curves/red"))->isChecked());
+        editor.findChild<QCheckBox*>(QStringLiteral("correctionEnable:curves/red"))->click();
+        QVERIFY(r.timeline.storedCorrection()->enabled(QStringLiteral("curves/red")));
+        // A keyframe on the curve's track keeps the curve as it is.
+        r.composer.moveTo(MonitorId::Record, 0);
+        editor.refresh();
+        editor.setActiveParameter(QStringLiteral("Curves/Red"));
+        QVERIFY(editor.addKeyframes(EffectEditor::KeyframeMode::ActiveParameter));
+        const model::ParameterKeyframes keys = model::correctionKeyframesOf(*r.timeline.storedCorrection(), QStringLiteral("curves/red"));
+        QCOMPARE(keys.keys.size(), 1);
+        QCOMPARE(keys.keys.first().value, c.values.value(QStringLiteral("curves/red")));
+        // And a gain keyframe at frame 10.
+        c = *r.timeline.storedCorrection();
+        model::setCorrectionKeyframe(c, QStringLiteral("hsl/controls/master/gain"), model::EffectSpan(20).timeOf(10), model::EffectSpan(20), 120);
+        QVERIFY(r.timeline.setStoredCorrection(c, QStringLiteral("Gain")));
+        editor.refresh();
+        QCOMPARE(r.timeline.correctionKeyframeMarkers()->frames, (QList<double>{0, 10}));
+        // The marker selects in the editor ...
+        r.timeline.selectCorrectionKeyframe(10, false);
+        QCOMPARE(editor.selectedKeyframes(), (QList<EffectEditor::KeyframeId>{{QStringLiteral("HSL Master/Gain"), 0}}));
+        // ... and the editor's selection shows on the markers.
+        editor.selectKeyframe({QStringLiteral("Curves/Red"), 0}, false);
+        QCOMPARE(r.timeline.correctionKeyframeSelection(), (QList<double>{0}));
+        QCOMPARE(r.timeline.correctionKeyframeMarkers()->selected, (QList<bool>{true, false}));
     }
 
     void slidersAndEnableButtons() {

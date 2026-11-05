@@ -703,8 +703,29 @@ public:
     // replacing it as a whole (the Effect Editor's changes, 6.10d3b), as setCurrentCorrection does otherwise.
     std::optional<model::ColorCorrection> storedCorrection() const;
     bool setStoredCorrection(const model::ColorCorrection& correction, const QString& step);
-    // Sets it, as an undo step named `step`.
+    // Sets it, as an undo step named `step`. A change to a keyframed control goes to its selected keyframes, else to a
+    // new keyframe at the position (model::adjustedAt).
     bool setCurrentCorrection(const model::ColorCorrection& correction, const QString& step);
+    // The keyframe markers below the Current Color Correction monitor (FX Guide p.686; 6.10d3c): the current segment's
+    // [start, start + length) frames in the sequence and its correction's keyframes, frames into it, with whether each
+    // is selected. Nothing off a clip.
+    struct CorrectionKeyframeMarkers {
+        std::int64_t start = 0;
+        std::int64_t length = 0;
+        QList<double> frames;
+        QList<bool> selected;
+    };
+    std::optional<CorrectionKeyframeMarkers> correctionKeyframeMarkers() const;
+    // "Click keyframe markers to select them" (p.686), Ctrl-click (`extend`) to add or take one away ("Ctrl-click ...
+    // the keyframe ... to deselect it"). Says correctionKeyframesSelected.
+    void selectCorrectionKeyframe(double frame, bool extend);
+    // The selected markers' frames; the Effect Editor gives its own selection's here (it does not signal).
+    QList<double> correctionKeyframeSelection() const;
+    void setCorrectionKeyframeSelection(const QList<double>& frames);
+    // "Delete selected keyframes" and "Alt-drag ... keyframe markers to move them" (p.686), undo steps; false when
+    // nothing changed.
+    bool deleteCorrectionKeyframes();
+    bool moveCorrectionKeyframes(double delta);
     // The Remove Effect button in the mode: "To remove the color correction on the current segment" (p.592), both
     // sides of it (ours).
     bool removeCorrection();
@@ -1182,6 +1203,8 @@ public:
     QMenu* undoRedoMenu();
 
 signals:
+    // The keyframe markers below the Current Color Correction monitor were clicked: the selected frames (6.10d3c).
+    void correctionKeyframesSelected(const QList<double>& frames);
     // "Right-click and select Edit Title" on a classic title (FX Guide p.372): the segment to revise in the Title Tool.
     void editTitleRequested(const model::SegmentRef& segment);
     // ExpertRender's highlighting was cancelled (a click in TC1, p.145).
@@ -1398,6 +1421,10 @@ private:
     bool effectMode_ = false;
     bool correctionMode_ = false;
     model::CorrectionRelationship correctionRelationship_ = model::CorrectionRelationship::SourceSegment;
+    // The selected correction keyframe markers (frames into the segment) and the segment they belong to (its first
+    // frame and track), so another segment starts with none.
+    QList<double> correctionKeySelection_;
+    std::optional<std::pair<QString, std::int64_t>> correctionKeyShot_;
     // The automatic templates by sequence id, newest first, with the segment and side each was made on.
     struct AutomaticEntry {
         QString track;

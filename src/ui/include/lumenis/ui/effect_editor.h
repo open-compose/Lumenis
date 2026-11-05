@@ -543,6 +543,8 @@ private:
     void rebuild(const model::Effect* effect);
     // Sets the controls to the values stored in `effect`, without storing them again.
     void syncValues(const model::Effect& effect);
+    // A Levels or Curves Enable button clicked in Color Correction mode: the correction's button (p.685).
+    bool setCorrectionEnabled(const QString& path, bool on);
     // Enables and fills the Transition alignment and duration.
     void syncTransition();
     // Stores a parameter's value in the shown effect, as an undoable "Modify Effect".
@@ -573,6 +575,9 @@ private:
     void syncPreview();
     // A keyframe indicator in the Effect Preview monitor's position bar was clicked (p.103).
     void previewKeyframePressed(double frame, bool extend);
+    // In Color Correction mode, the markers selected below the Current monitor (Timeline::correctionKeyframesSelected):
+    // every keyframe at those frames, frames into the segment.
+    void selectCorrectionKeyframes(const QList<double>& frames);
     // Pops up the Add Keyframe Mode menu (or with `remove` the Delete one) for the Add Keyframe button.
     void addKeyframeButton(bool remove);
 
@@ -584,6 +589,8 @@ private:
     // go to Timeline::setStoredCorrection.
     bool correctionShown_ = false;
     model::Effect correctionEffect_;
+    // The Levels and Curves rows' Enable buttons, by the correction path they turn on and off (6.10d3c).
+    QHash<QString, QCheckBox*> correctionEnables_;
     QString shownName_;           // "category/name" of the effect shown, to notice a replacement
     bool transitionOnly_ = false; // only the Transition parameters are shown (Trim mode)
     QWidget* body_ = nullptr;

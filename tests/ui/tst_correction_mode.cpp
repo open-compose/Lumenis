@@ -2,6 +2,7 @@
 // button and the other modes, the three monitors and their Source menus, Reference Current and Escape, Dual Split,
 // Go to Previous/Next Uncorrected Shot, Remove Effect, and Play Loop and Edit Review in the mode.
 #include "lumenis/model/bin.h"
+#include "lumenis/model/correction_keyframes.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/correction_monitors.h"
@@ -250,6 +251,76 @@ private slots:
         QVERIFY(green > 0);
         m->setPal(true);
         QVERIFY(m->isPal());
+    }
+
+    // The keyframe markers in the position bar below the Current monitor (FX Guide p.686, 6.10d3c): click to select,
+    // Ctrl-click to deselect, Alt-drag to move, Delete; an adjustment goes to the selected keyframe; a click elsewhere
+    // moves the position within the segment.
+    void keyframeMarkers() {
+        Rig rig;
+        rig.at(5);
+        rig.timeline.setCorrectionMode(true);
+        settle();
+        CorrectionMonitors* m = rig.monitors();
+        QWidget* bar = m->keyframeBar(1);
+        QVERIFY(bar->isVisible());
+        QVERIFY(!m->keyframeBar(0)->isVisible() && !m->keyframeBar(2)->isVisible());
+        const QString gain = QStringLiteral("hsl/controls/master/gain");
+        const model::EffectSpan span(20);
+        auto stored = rig.timeline.storedCorrection();
+        QVERIFY(stored);
+        model::setCorrectionKeyframe(*stored, gain, span.timeOf(0), span, 100);
+        model::setCorrectionKeyframe(*stored, gain, span.timeOf(10), span, 120);
+        QVERIFY(rig.timeline.setStoredCorrection(*stored, QStringLiteral("Keyframes")));
+        auto markers = rig.timeline.correctionKeyframeMarkers();
+        QVERIFY(markers);
+        QCOMPARE(markers->start, 0);
+        QCOMPARE(markers->frames, (QList<double>{0, 10}));
+        auto xOf = [&](double frame) { return QPoint(static_cast<int>(std::lround(frame / 19.0 * (bar->width() - 9) + 4.0)), 7); };
+        QSignalSpy selected(&rig.timeline, &Timeline::correctionKeyframesSelected);
+        QTest::mouseClick(bar, Qt::LeftButton, {}, xOf(10));
+        QCOMPARE(rig.timeline.correctionKeyframeSelection(), (QList<double>{10}));
+        QCOMPARE(selected.count(), 1);
+        QCOMPARE(rig.timeline.correctionKeyframeMarkers()->selected, (QList<bool>{false, true}));
+        QTest::mouseClick(bar, Qt::LeftButton, Qt::ControlModifier, xOf(10));
+        QVERIFY(rig.timeline.correctionKeyframeSelection().isEmpty());
+        // Alt-drag a marker not selected: it is selected and moves.
+        QTest::mousePress(bar, Qt::LeftButton, Qt::AltModifier, xOf(10));
+        QTest::mouseMove(bar, xOf(14));
+        QTest::mouseRelease(bar, Qt::LeftButton, Qt::AltModifier, xOf(14));
+        QCOMPARE(rig.timeline.correctionKeyframeMarkers()->frames, (QList<double>{0, 14}));
+        QCOMPARE(rig.timeline.correctionKeyframeSelection(), (QList<double>{14}));
+        QTest::mouseClick(bar, Qt::LeftButton, {}, xOf(14)); // a plain click puts the modifiers back
+        // Delete over the monitors.
+        QTest::keyClick(m, Qt::Key_Delete);
+        QCOMPARE(rig.timeline.correctionKeyframeMarkers()->frames, (QList<double>{0}));
+        QVERIFY(rig.timeline.correctionKeyframeSelection().isEmpty());
+        // With the first keyframe selected, an adjustment at frame 15 changes it rather than adding one.
+        QTest::mouseClick(bar, Qt::LeftButton, {}, xOf(0));
+        rig.at(15);
+        auto now = rig.timeline.currentCorrection();
+        now->set(gain, 150);
+        QVERIFY(rig.timeline.setCurrentCorrection(*now, QStringLiteral("Gain")));
+        QCOMPARE(rig.timeline.correctionKeyframeMarkers()->frames, (QList<double>{0}));
+        QCOMPARE(model::correctionKeyframesOf(rig.segment(0).sourceCorrection, gain).keys.first().value.toDouble(), 150.0);
+        // Deselected, it adds a keyframe at the position (p.686, steps 3-5).
+        QTest::mouseClick(bar, Qt::LeftButton, Qt::ControlModifier, xOf(0));
+        now = rig.timeline.currentCorrection();
+        now->set(gain, 90);
+        QVERIFY(rig.timeline.setCurrentCorrection(*now, QStringLiteral("Gain")));
+        QCOMPARE(rig.timeline.correctionKeyframeMarkers()->frames, (QList<double>{0, 15}));
+        // A click away from the markers moves the position within the segment.
+        QTest::mouseClick(bar, Qt::LeftButton, {}, xOf(6));
+        QCOMPARE(rig.position(), 6);
+        // Another segment starts with no selection.
+        QTest::mouseClick(bar, Qt::LeftButton, {}, xOf(15));
+        QCOMPARE(rig.timeline.correctionKeyframeSelection(), (QList<double>{15}));
+        rig.at(30);
+        QVERIFY(rig.timeline.correctionKeyframeSelection().isEmpty());
+        // A Source menu set to Current elsewhere takes the bar with it.
+        QVERIFY(m->setSource(1, CorrectionSource::Reference));
+        QVERIFY(m->setSource(2, CorrectionSource::Current));
+        QVERIFY(m->keyframeBar(2)->isVisible() && !m->keyframeBar(1)->isVisible());
     }
 };
 

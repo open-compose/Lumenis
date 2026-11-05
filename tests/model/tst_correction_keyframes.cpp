@@ -125,13 +125,21 @@ private slots:
         QCOMPARE(correctionParameterCategories().mid(0, 5),
                  (QStringList{QStringLiteral("HSL Master"), QStringLiteral("HSL Highlights"), QStringLiteral("HSL Midtones"), QStringLiteral("HSL Shadows"),
                               QStringLiteral("HSL Hue Offsets")}));
-        QCOMPARE(correctionParameterCategories().size(), 5 + 12);
+        // The Levels tabs and Curves as keyframe tracks (p.685, 6.10d3c), before the Secondary vectors.
+        QCOMPARE(correctionParameterCategories().size(), 5 + 6 + 1 + 12);
+        QCOMPARE(correctionParameterCategories().at(5), QStringLiteral("Levels Composite"));
+        QCOMPARE(correctionParameterCategories().at(11), QStringLiteral("Curves"));
         QCOMPARE(correctionParameterOf(QStringLiteral("HSL Master"), QStringLiteral("Gain"))->path, QStringLiteral("hsl/controls/master/gain"));
         QCOMPARE(correctionParameterAtPath(QStringLiteral("hsl/hueOffsets/gain"))->category, QStringLiteral("HSL Master")); // the same control
         QCOMPARE(correctionParameterOf(QStringLiteral("HSL Hue Offsets"), QStringLiteral("Shadows Hue"))->min, -360.0);
         QCOMPARE(correctionParameterOf(QStringLiteral("Secondary Yellow"), QStringLiteral("Output Luminance"))->path,
                  QStringLiteral("secondary/vectors/yellow/output/luminance"));
-        QVERIFY(!correctionParameterAtPath(QStringLiteral("curves/red")));
+        QVERIFY(correctionParameterAtPath(QStringLiteral("curves/red"))->trackOnly);
+        QCOMPARE(correctionParameterAtPath(QStringLiteral("curves/red"))->enablePath, QStringLiteral("curves/red"));
+        QCOMPARE(correctionParameterOf(QStringLiteral("Levels Luma"), QStringLiteral("Input White"))->enablePath, QStringLiteral("levels/luma"));
+        QVERIFY(!correctionParameterOf(QStringLiteral("Levels Luma"), QStringLiteral("Input Gray"))); // two-point tabs (p.657)
+        QVERIFY(!correctionParameterAtPath(QStringLiteral("hsl/controls/master/gain"))->trackOnly);
+        QVERIFY(!correctionParameterAtPath(QStringLiteral("channels/red/red")));
         QCOMPARE(toolHue(340), -20.0);
         QCOMPARE(toolHue(-190), 170.0);
         QCOMPARE(toolHue(90), 90.0);
@@ -164,6 +172,74 @@ private slots:
         shadows.insert(QStringLiteral("Gain"), 100);
         edited.parameters.insert(QStringLiteral("HSL Shadows"), shadows);
         QVERIFY(!correctionFromEffect(edited, c).values.contains(QStringLiteral("hsl/controls/shadows/gain")));
+    }
+
+    // Curves and Levels in the Effect Editor: their keyframe tracks change, their values stay the tool's (p.685).
+    void trackOnlyAsEffect() {
+        const EffectSpan span(11);
+        ColorCorrection c;
+        const QJsonArray bend{QJsonArray{0, 0}, QJsonArray{128, 100}, QJsonArray{255, 255}};
+        setCorrectionKeyframe(c, QStringLiteral("curves/red"), 0.0, span, bend);
+        setCorrectionKeyframe(c, QStringLiteral("levels/composite/inWhite"), 0.0, span, 200);
+        setCorrectionKeyframe(c, QStringLiteral("levels/composite/inWhite"), 1.0, span, 240);
+        Effect e = correctionEffect(c);
+        QCOMPARE(keyframesOf(e, QStringLiteral("Curves"), QStringLiteral("Red")).keys.size(), 1);
+        QCOMPARE(correctionFromEffect(e, c), c);
+        // A value the editor would set is not taken.
+        QJsonObject levels = e.parameters.value(QStringLiteral("Levels Composite")).toObject();
+        levels.insert(QStringLiteral("Input White"), 10);
+        e.parameters.insert(QStringLiteral("Levels Composite"), levels);
+        QCOMPARE(correctionFromEffect(e, c).values.value(QStringLiteral("levels/composite/inWhite")), c.values.value(QStringLiteral("levels/composite/inWhite")));
+        // A keyframe the track adds (with the held value) goes in, and they keep holding.
+        setKeyframe(e, QStringLiteral("Curves"), QStringLiteral("Red"), 0.5, span, bend);
+        ColorCorrection back = correctionFromEffect(e, c);
+        QCOMPARE(correctionKeyframesOf(back, QStringLiteral("curves/red")).keys.size(), 2);
+        QCOMPARE(correctionKeyframesOf(back, QStringLiteral("curves/red")).interpolation, Interpolation::Shelf);
+        // Removing the last keyframe leaves the curve.
+        setKeyframes(e, QStringLiteral("Curves"), QStringLiteral("Red"), {});
+        back = correctionFromEffect(e, c);
+        QVERIFY(!back.keyframes.contains(QStringLiteral("curves/red")));
+        QCOMPARE(back.values.value(QStringLiteral("curves/red")).toArray(), bend);
+    }
+
+    // The keyframe markers below the Current monitor (p.686, 6.10d3c): adjustments go to the selected keyframes, and
+    // the selected ones are deleted and moved.
+    void markers() {
+        const EffectSpan span(21);
+        const QString gain = QStringLiteral("hsl/controls/master/gain");
+        const QString hue = QStringLiteral("hsl/controls/master/hue");
+        ColorCorrection c;
+        setCorrectionKeyframe(c, gain, span.timeOf(0), span, 100);
+        setCorrectionKeyframe(c, gain, span.timeOf(10), span, 120);
+        setCorrectionKeyframe(c, hue, span.timeOf(10), span, 30);
+        QCOMPARE(correctionKeyframeFrames(c, span), (QList<double>{0, 10}));
+        // With the keyframe at frame 0 selected, an adjustment at frame 15 changes it: no new keyframe.
+        ColorCorrection edited = correctionAt(c, span.timeOf(15), span);
+        edited.set(gain, 150);
+        ColorCorrection out = adjustedAt(c, edited, span.timeOf(15), span, {0.0});
+        QCOMPARE(correctionKeyframesOf(out, gain).keys.size(), 2);
+        QCOMPARE(correctionAt(out, span.timeOf(0), span).number(gain), 150.0);
+        // Deselected (step 3), the same adjustment adds a keyframe at the position (step 5).
+        out = adjustedAt(c, edited, span.timeOf(15), span, {});
+        QCOMPARE(correctionKeyframeFrames(out, span), (QList<double>{0, 10, 15}));
+        // Delete: every control's keyframes at the selected frames.
+        ColorCorrection d = c;
+        QVERIFY(removeCorrectionKeyframesAt(d, {10.0}, span));
+        QCOMPARE(correctionKeyframeFrames(d, span), (QList<double>{0}));
+        QVERIFY(!d.keyframes.contains(hue));
+        QCOMPARE(d.number(hue), 30.0); // the last one's value stays
+        QVERIFY(!removeCorrectionKeyframesAt(d, {5.0}, span));
+        // Alt-drag: both controls' keyframes at frame 10 move to 14, the one at 0 stays.
+        ColorCorrection m = c;
+        QVERIFY(moveCorrectionKeyframes(m, {10.0}, 4.0, span));
+        QCOMPARE(correctionKeyframeFrames(m, span), (QList<double>{0, 14}));
+        QCOMPARE(correctionAt(m, span.timeOf(14), span).number(hue), 30.0);
+        // Not past the segment's end, and not onto a keyframe that stays (a frame short of it).
+        QVERIFY(moveCorrectionKeyframes(m, {14.0}, 50.0, span));
+        QCOMPARE(correctionKeyframeFrames(m, span), (QList<double>{0, 20}));
+        QVERIFY(moveCorrectionKeyframes(m, {20.0}, -30.0, span));
+        QCOMPARE(correctionKeyframeFrames(m, span), (QList<double>{0, 1}));
+        QVERIFY(!moveCorrectionKeyframes(m, {}, 3.0, span));
     }
 };
 

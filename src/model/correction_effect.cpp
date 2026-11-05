@@ -17,7 +17,10 @@ QString capitalised(const QString& s) {
 }
 
 CorrectionParameter make(const QString& category, const QString& name, const QString& path) {
-    CorrectionParameter p{category, name, path};
+    CorrectionParameter p;
+    p.category = category;
+    p.name = name;
+    p.path = path;
     if (const auto r = colorControlRange(path)) {
         p.min = r->first;
         p.max = r->second;
@@ -55,6 +58,28 @@ QList<CorrectionParameter> build() {
         out << make(QStringLiteral("HSL Hue Offsets"), w + QStringLiteral(" Hue"), QStringLiteral("hsl/hueOffsets/%1/hue").arg(QLatin1String(wheel)));
         out << make(QStringLiteral("HSL Hue Offsets"), w + QStringLiteral(" Hue Amount"), QStringLiteral("hsl/hueOffsets/%1/amount").arg(QLatin1String(wheel)));
     }
+    // The Levels and Curves tabs as keyframe tracks only (p.685), in the tool's tab order: each Levels tab's points
+    // (p.656-660) under that tab's Enable button, each Curves graph (p.661-663) under its own.
+    auto track = [](const QString& category, const QString& name, const QString& path, const QString& enable) {
+        CorrectionParameter p = make(category, name, path);
+        p.trackOnly = true;
+        p.enablePath = enable;
+        return p;
+    };
+    const std::pair<const char*, const char*> points[] = {{"inBlack", "Input Black"},   {"inGray", "Input Gray"},   {"inWhite", "Input White"},
+                                                          {"outBlack", "Output Black"}, {"outGray", "Output Gray"}, {"outWhite", "Output White"}};
+    for (const QString& tab : levelsTabs()) {
+        const QString enable = QStringLiteral("levels/") + tab;
+        const QStringList shown = levelsPoints(tab);
+        for (const auto& [key, text] : points) {
+            if (shown.contains(QLatin1String(key))) out << track(QStringLiteral("Levels ") + capitalised(tab), QLatin1String(text), enable + QLatin1Char('/') + QLatin1String(key), enable);
+        }
+    }
+    for (const QString& graph : curveGraphs()) {
+        const QString path = QStringLiteral("curves/") + graph;
+        out << track(QStringLiteral("Curves"), capitalised(graph), path, path);
+    }
+    // The Curves tab's Master sliders are the HSL Master controls (canonicalControlPath), shown there with graphs.
     // The Secondary tab's sliders, vector by vector (p.668-676).
     for (const QString& vector : secondaryVectors()) {
         const QString category = QStringLiteral("Secondary ") + (isStandardVector(vector) ? capitalised(vector) : QStringLiteral("Custom ") + vector);
@@ -133,6 +158,20 @@ ColorCorrection correctionFromEffect(const Effect& effect, const ColorCorrection
         ParameterKeyframes keys = keyframesOf(effect, p.category, p.name);
         // Hue keyframes beyond the tool's range turn round to it (p.685); the value between them is the editor's.
         const bool hue = p.path.endsWith(QLatin1String("/hue"));
+        if (p.trackOnly) {
+            // Only the track can change here (p.685): the values are the tool's.
+            if (correctionKeyframesOf(base, p.path) == keys) continue;
+            if (keys.keys.isEmpty()) {
+                // The last keyframe going leaves the control at the value it had there.
+                const ParameterKeyframes before = correctionKeyframesOf(base, p.path);
+                if (!before.keys.isEmpty() && !base.values.contains(p.path)) out.values.insert(p.path, before.keys.last().value);
+                out.keyframes.remove(p.path);
+            } else {
+                keys.interpolation = Interpolation::Shelf;
+                setCorrectionKeyframes(out, p.path, keys);
+            }
+            continue;
+        }
         if (keys.keys.isEmpty()) {
             out.keyframes.remove(p.path);
             if (v.isUndefined() || (v.isDouble() && v.toDouble() == p.defaultValue)) {

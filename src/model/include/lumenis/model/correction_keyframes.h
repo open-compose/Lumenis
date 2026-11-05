@@ -40,10 +40,23 @@ ColorCorrection correctionAt(const ColorCorrection& c, double t, const EffectSpa
 // A changed keyframed control gets a keyframe at `t` ("Make an adjustment to the appropriate parameter in the Color
 // Correction tool. A new keyframe appears ... at the location of the position indicator", p.686); a control the tool
 // reset loses its keyframes; any other change is a plain value, and the Enable buttons are the edited ones.
-ColorCorrection adjustedAt(const ColorCorrection& stored, const ColorCorrection& edited, double t, const EffectSpan& span);
+//
+// `selected` are the frames (into the segment) of selected keyframe markers (p.686): a changed control with a keyframe
+// at one of them changes those keyframes rather than getting a new one at `t`, which is why the guide's steps deselect
+// the first keyframe before moving on ("Ctrl-click ... the keyframe added in step 1 to deselect it").
+ColorCorrection adjustedAt(const ColorCorrection& stored, const ColorCorrection& edited, double t, const EffectSpan& span,
+                           const QList<double>& selected = {});
 
 // Every keyframe's frame into the segment (sorted, each once), for the keyframe markers below the Current monitor
 // (p.686).
 QList<double> correctionKeyframeFrames(const ColorCorrection& c, const EffectSpan& span);
+
+// The keyframe markers' Delete (p.686): every control's keyframes at the frames (into the segment); a control losing its
+// last keeps that value. True if any went.
+bool removeCorrectionKeyframesAt(ColorCorrection& c, const QList<double>& frames, const EffectSpan& span);
+// Alt-dragging keyframe markers (p.686): every control's keyframes at `frames` move by `delta` frames, together, as the
+// Effect Editor's Align Keyframes moves a group (each stops a frame short of a keyframe of its control that is not
+// moving, and stays within the segment). True if any moved.
+bool moveCorrectionKeyframes(ColorCorrection& c, const QList<double>& frames, double delta, const EffectSpan& span);
 
 } // namespace lumenis::model

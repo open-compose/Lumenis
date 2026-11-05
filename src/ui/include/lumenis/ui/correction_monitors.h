@@ -4,6 +4,7 @@
 
 #include <QPointF>
 #include <QMimeData>
+#include <QList>
 #include <QRectF>
 #include <QWidget>
 
@@ -63,6 +64,21 @@ public:
     explicit CorrectionMonitors(Composer& composer, QWidget* parent = nullptr);
 
     void setShotResolver(ShotResolver resolver) { shots_ = std::move(resolver); }
+
+    // The keyframe markers in the position bar below the Current monitor (FX Guide p.686; 6.10d3c): the current
+    // segment's frames in the sequence, its correction's keyframes as frames into it and which are selected. The
+    // Timeline gives them (Timeline::correctionKeyframeMarkers); without them the bar is the segment and the position.
+    struct KeyframeMarkers {
+        std::int64_t start = 0;
+        std::int64_t length = 0;
+        QList<double> frames;
+        QList<bool> selected;
+    };
+    using KeyframeResolver = std::function<std::optional<KeyframeMarkers>()>;
+    void setKeyframeResolver(KeyframeResolver resolver) { keyframes_ = std::move(resolver); }
+    std::optional<KeyframeMarkers> keyframeMarkers() const { return keyframes_ ? keyframes_() : std::nullopt; }
+    // The bar under a monitor; shown only under the one whose Source menu is Current.
+    QWidget* keyframeBar(int monitor) const;
 
     // The monitors' Source menus, 0 left to 2 right. "Current ... is not available in the Source menu if another
     // monitor is already set to Current" (p.591): setting it there is refused.
@@ -141,6 +157,11 @@ signals:
     void commandRequested(const QString& commandId);
     void activeMonitorChanged(int monitor);
     void colorsSampled(const QList<QColor>& colors);
+    // The keyframe markers (p.686): one clicked (`extend` with Ctrl, "Ctrl-click ... to deselect it"), the selected
+    // ones Alt-dragged `delta` frames, and the Delete key pressed over the monitors.
+    void keyframePressed(double frame, bool extend);
+    void keyframesDragged(double delta);
+    void keyframesDeleteRequested();
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -150,6 +171,8 @@ protected:
 
 private:
     friend class CorrectionPicture;
+    friend class CorrectionKeyframeBar;
+    KeyframeResolver keyframes_;
     TemplateDrop templateDrop_;
     struct Monitor {
         CorrectionSource source = CorrectionSource::Current;
@@ -158,6 +181,7 @@ private:
         QWidget* picture = nullptr;
         QToolButton* menu = nullptr;
         QWidget* buttons = nullptr;
+        QWidget* bar = nullptr;
     };
     void syncMenu(int monitor);
     Composer& composer_;
