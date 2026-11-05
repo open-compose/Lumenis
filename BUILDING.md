@@ -722,8 +722,13 @@ there again with the optimizer off (CI runs 317, 318 and 319). All the RGB Keyer
 are now in `src/media/key_mattes.cpp`, a translation unit of its own that includes no Qt or compositor headers
 and has no lambdas: widely included headers no longer rebuild it, and `key_effects.cpp` only reads the
 parameters and calls it, with no `#pragma optimize` left. Keep the Windows runner's Visual Studio Build Tools up to
-date (Visual Studio Installer > Update): an internal compiler error may be fixed in a later MSVC. When the error keeps coming back in one function after header changes, move that
-function's loops to a small file of their own rather than covering more lines. An internal compiler error is the
+date (Visual Studio Installer > Update): an internal compiler error may be fixed in a later MSVC. Updating 17.14.41
+to 17.14.44 did not help, because it kept the same compiler, cl 14.44.35207 (the job's log prints `VCToolsVersion`).
+CI run 320 then crashed at the function's last statement with a list in it, the post-key correction's names,
+which is now `rgbKeyCorrection`. Under MSVC, `src/media/CMakeLists.txt` compiles all of `key_effects.cpp` with
+`/Od /Ob0`, so the helpers it inlines are covered too. Its loops are in `key_mattes.cpp`, which keeps `/O2`. When the
+error keeps coming back in one function after header changes, move that function's loops to a small file of their
+own, and turn the optimizer off for the whole file rather than for one function. An internal compiler error is the
 compiler's fault, not the code's: GCC and Clang build the same file cleanly. Simplify the statement
 at or just before the line the error names, keep the same result (the tests check it), and leave a
 comment saying why, so nobody "tidies" it back. The self-hosted Windows job is the check: it is the

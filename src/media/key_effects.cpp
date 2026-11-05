@@ -188,10 +188,29 @@ Picture lumaChromaKeyPicture(const model::Effect& e, const Picture& layer, doubl
 
 // ---------------------------------------------------------------- RGB Keyer
 
-// MSVC 14.44 failed with an internal compiler error (C1001) in this function five times, each after a header change
-// (CI runs 219, 250, 317, 318, 319; BUILDING.md), the last three with its optimizer turned off here. It now has no
-// loops of its own: the matte is made and finished in key_mattes.cpp (rgbKeyMatte, finishMatte), and no pragma is
-// needed.
+// The RGB Keyer's post-key colour correction (Hue, Sat, Bright and Cont, p.551) from its parameters `params`, as the
+// Color Effect does it; `picture` unchanged when none is set. A function of its own for MSVC's sake (see below).
+namespace {
+Picture rgbKeyCorrection(const QJsonObject& params, const Picture& picture, double time, const model::EffectSpan& span) {
+    static const char* const kCorrections[] = {"Hue", "Sat", "Bright", "Cont"};
+    QJsonObject correction;
+    for (const char* name : kCorrections) {
+        const QString key = QString::fromLatin1(name);
+        if (params.contains(key)) correction.insert(key, params.value(key));
+    }
+    if (correction.isEmpty()) return picture;
+    QJsonObject parameters;
+    parameters.insert(QStringLiteral("Color Effect Parameters"), correction);
+    const model::Effect color{QStringLiteral("Image"), QStringLiteral("Color Effect"), parameters};
+    return colorEffectPicture(color, picture, time, span);
+}
+} // namespace
+
+// MSVC 14.44 failed with an internal compiler error (C1001) in this function six times, each after a header change
+// (CI runs 219, 250, 317, 318, 319, 320; BUILDING.md), the last three with its optimizer turned off here, and the
+// last at the post-key correction's list of names. It now has no loops or lists of its own: the matte is made and
+// finished in key_mattes.cpp (rgbKeyMatte, finishMatte), the correction in rgbKeyCorrection, and under MSVC the
+// whole file is compiled without optimization (src/media/CMakeLists.txt).
 Picture rgbKeyerPicture(const model::Effect& e, const Picture& layer, double time, const model::EffectSpan& span) {
     // "Replaces part of the video image with another video image based on color ... You can also perform
     // post-key color correction" (p.474). Gain "Adjusts the threshold of the key", Soft "Softens the edge",
@@ -220,16 +239,7 @@ Picture rgbKeyerPicture(const model::Effect& e, const Picture& layer, double tim
     rgbKeyMatte(work.data().data(), count, key.red, key.green, key.blue, threshold, soft, spill, spillChannel, matte);
     finishMatte(matte, layer.width(), layer.height(), flag(e, cat, QStringLiteral("Reverse")), blur, erode, level);
     // Post-key colour correction, as the Color Effect does it.
-    const QJsonObject params = e.parameters.value(cat).toObject();
-    QJsonObject correction;
-    const QStringList corrections = {QStringLiteral("Hue"), QStringLiteral("Sat"), QStringLiteral("Bright"), QStringLiteral("Cont")};
-    for (const QString& name : corrections) {
-        if (params.contains(name)) correction.insert(name, params.value(name));
-    }
-    if (!correction.isEmpty()) {
-        const model::Effect color{QStringLiteral("Image"), QStringLiteral("Color Effect"), QJsonObject{{QStringLiteral("Color Effect Parameters"), correction}}};
-        work = colorEffectPicture(color, work, time, span);
-    }
+    work = rgbKeyCorrection(e.parameters.value(cat).toObject(), work, time, span);
     return applyMatte(work, matte, flag(e, cat, QStringLiteral("Show Alpha")));
 }
 
