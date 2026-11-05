@@ -721,7 +721,8 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `tst_compositor`, `tst_correction_tool`), is done. 6.10d3b, the correction in the Effect Editor in Color Correction
   mode (`src/model/correction_effect.*`: generated categories HSL Master ... Secondary <vector>, -360 to 360 hues;
   `Timeline::setStoredCorrection`; tests `tst_correction_keyframes`, `tst_correction_tool`), is done.
-  Next: 6.10d3c, 6.10d4, 6.10e, 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
+  Next: 6.10d3c, 6.10d4, 6.10e, then 6.10f (the owner's report of Tools > Titler+ and Effect Editor opening as huge
+  windows on Windows 11; ROADMAP), 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

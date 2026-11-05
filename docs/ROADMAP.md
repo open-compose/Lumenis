@@ -1206,6 +1206,12 @@ phase of their own. They are done in three steps:
     and the Safe Color Limiter effect (ch.23, p.721-730), Spot Color Correction and the Paint Effect's Color Match mode
     (ch.24, p.731-733). Avid Artist Color (ch.25) needs Avid's EuControl software: a control surface provider hook
     only (EXTENSIONS.md), later.
+  * 6.10f, after 6.10e (owner's report, 2026-11-05, Windows 11): Tools > Titler+ and Tools > Effect Editor open as very
+    large windows where a panel of ordinary size (or a page of a paneled window) is expected. Find why their panels open
+    at that size (size hints, floating geometry, the workspace they open in), fix the root cause for every tool panel,
+    add a BUILDING.md troubleshooting entry and a check (a test of each tool panel's opening size), and check Mac and
+    Linux too. That Titler+ opens the Effect Editor with it is the guide's: "The Avid Titler+ Dashboard and the Effect
+    Editor open" (FX Guide p.303).
 * 6.11, the OFX host in place of AVX (ch.6, p.157-164), with OCIO colour management.
 
 **Gates**
