@@ -1239,10 +1239,33 @@ private slots:
     }
 
     void buttonsAndComments() {
-        // The tool buttons (FX Guide p.605): the template and Safe Color buttons wait for 6.10d and 6.10e.
+        // The tool buttons (FX Guide p.605): the template button needs a corrected segment.
         Rig r;
         QVERIFY(!r.tool.button(QStringLiteral("template"))->isEnabled());
-        QVERIFY(!r.tool.button(QStringLiteral("safeColors"))->isEnabled());
+        // The Safe Color Settings button opens the setting (p.725); its icon is orange while a limit type warns (p.722).
+        QToolButton* safe = r.tool.button(QStringLiteral("safeColors"));
+        QVERIFY(safe->isEnabled());
+        QSignalSpy safeRequested(&r.tool, &CorrectionTool::safeColorSettingsRequested);
+        safe->click();
+        QCOMPARE(safeRequested.count(), 1);
+        const auto orange = [&] {
+            const QImage icon = safe->icon().pixmap(18, 18).toImage();
+            for (int y = 0; y < icon.height(); ++y) {
+                for (int x = 0; x < icon.width(); ++x) {
+                    const QColor c = icon.pixelColor(x, y);
+                    if (c.alpha() > 200 && c.red() > 200 && c.green() > 100 && c.green() < 180 && c.blue() < 60) return true;
+                }
+            }
+            return false;
+        };
+        QVERIFY(!orange());
+        CorrectionTool::Options warn = r.tool.options();
+        warn.safeColors.warnCompositeLuma = true;
+        r.tool.setOptions(warn);
+        QVERIFY(orange());
+        warn.safeColors.warnCompositeLuma = false;
+        r.tool.setOptions(warn);
+        QVERIFY(!orange());
         QSignalSpy effect(&r.tool, &CorrectionTool::effectModeRequested);
         QSignalSpy settings(&r.tool, &CorrectionTool::settingsRequested);
         r.tool.button(QStringLiteral("effectMode"))->click();

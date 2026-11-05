@@ -8,6 +8,8 @@
 #include "lumenis/interop/avb_import.h"
 #include "lumenis/ui/main_window.h"
 
+#include "lumenis/model/safe_colors.h"
+
 #include "lumenis/media/audio_input.h"
 #include "lumenis/media/compositor.h"
 #include "lumenis/media/fields.h"
@@ -1724,6 +1726,14 @@ void MainWindow::createTools() {
     composer_->correctionMonitors()->setOverlayInput(correctionTool_->shapeHost()->tool());
     connect(correctionTool_->shapeHost(), &CorrectionShapeHost::overlayChanged, this,
             [this] { composer_->correctionMonitors()->setOverlay(correctionTool_->shapeHost()->overlay()); });
+    // "In the Color Correction tool, click the Safe Color Settings button" (FX Guide p.725): the Safe Colors setting.
+    connect(correctionTool_, &CorrectionTool::safeColorSettingsRequested, this, [this] {
+        const int i = settings_->file(model::SettingsScope::Project).activeIndex(QStringLiteral("Safe Colors"));
+        if (SettingsWindow* w = showSettings(); w && i >= 0) {
+            w->showTab(SettingsWindow::Tab::Project);
+            w->list(model::SettingsScope::Project)->openEntry(i);
+        }
+    });
     connect(correctionTool_, &CorrectionTool::settingsRequested, this, [this] {
         const int i = settings_->file(model::SettingsScope::User).activeIndex(QStringLiteral("Correction"));
         if (SettingsWindow* w = showSettings(); w && i >= 0) {
@@ -5506,6 +5516,8 @@ void MainWindow::applySettings() {
         c.eyedropperInfo = s.flag(cc, QStringLiteral("showEyedropperInfo"));
         c.savedColorLabels = media::savedColorLabelsFromKey(s.text(cc, QStringLiteral("savedColorLabels")));
         c.eyedropperAnywhere = s.flag(cc, QStringLiteral("eyedropperAnywhere"));
+        // The Safe Colors project setting (FX Guide ch.23; 6.10e4).
+        c.safeColors = safeColorLimits();
         if (correctionTool_) correctionTool_->setOptions(c);
         if (CorrectionMonitors* m = composer_->correctionMonitors()) {
             m->setEyedropperAveraging(s.flag(cc, QStringLiteral("eyedropperAveraging")));
@@ -6621,6 +6633,20 @@ void MainWindow::openTitleTool(bool ask) {
     tool->show();
     tool->raise();
     tool->activateWindow();
+}
+
+model::SafeColorLimits MainWindow::safeColorLimits() const {
+    QJsonObject values;
+    const SettingKind* kind = SettingsSchema::builtIn().find(QStringLiteral("Safe Colors"));
+    if (kind && settings_) {
+        for (const SettingTab& t : kind->tabs) {
+            for (const SettingOption& o : t.options) {
+                const QJsonValue v = settings_->value(kind->kind, o.key);
+                if (!v.isUndefined() && !v.isNull()) values.insert(o.key, v);
+            }
+        }
+    }
+    return model::SafeColorLimits::fromValues(values);
 }
 
 } // namespace lumenis::ui

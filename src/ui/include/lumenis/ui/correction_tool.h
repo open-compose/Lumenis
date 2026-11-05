@@ -7,6 +7,7 @@
 #include "lumenis/model/color_correction.h"
 #include "lumenis/model/correction_shapes.h"
 #include "lumenis/model/correction_template.h"
+#include "lumenis/model/safe_colors.h"
 
 #include <QDoubleSpinBox>
 #include <QImage>
@@ -168,6 +169,9 @@ public:
         bool eyedropperInfo = true;
         media::SavedColorLabels savedColorLabels = media::SavedColorLabels::NameAndRgb;
         bool eyedropperAnywhere = false;
+        // The Safe Colors project setting (FX Guide ch.23; 6.10e4): "If Warn is selected in one or more of the Actions
+        // menus, the icon on the Safe Color Settings button appears orange" (p.722).
+        model::SafeColorLimits safeColors;
         bool operator==(const Options&) const = default;
     };
     const Options& options() const { return options_; }
@@ -180,8 +184,8 @@ public:
 
     // The buttons on the right (FX Guide p.605): "Effect Mode button, Color Correction Effect Template button,
     // Correction Mode Settings button, Safe Color Settings button, Comments button", by the names "effectMode",
-    // "template", "settings", "safeColors" and "comments". The template button comes with 6.10d and the Safe Color
-    // Settings with 6.10e; they are dimmed until then.
+    // "template", "settings", "safeColors" and "comments". The Safe Color Settings button opens the Safe Colors setting
+    // (safeColorSettingsRequested) and is orange while it warns (Options::safeColors).
     QToolButton* button(const QString& name) const;
     // The Comments button (p.609-610): "If the position indicator is on a segment that has a comment, the icon on the
     // Comments button is yellow". Clicking it opens the Comments dialog for the comment at the position; OK keeps
@@ -303,6 +307,8 @@ signals:
     // The Effect Mode and Correction Mode Settings buttons, for MainWindow (p.605-606).
     void effectModeRequested();
     void settingsRequested();
+    // The Safe Color Settings button (p.725).
+    void safeColorSettingsRequested();
     // "You can also access the Color Info tool by clicking the Color Info button in the Color Correction Tool" (p.697).
     void colorInfoRequested();
     // The Luma Ranges preview changed, for the monitors.

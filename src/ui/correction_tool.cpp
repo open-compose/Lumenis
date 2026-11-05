@@ -277,7 +277,7 @@ CorrectionTool::CorrectionTool(Timeline& timeline, QWidget* parent) : QWidget(pa
         b->setIcon(toolIcon(QLatin1String(key), palette().color(QPalette::WindowText)));
         top->addWidget(b);
     }
-    button(QStringLiteral("safeColors"))->setEnabled(false); // 6.10e
+    connect(button(QStringLiteral("safeColors")), &QToolButton::clicked, this, &CorrectionTool::safeColorSettingsRequested);
     connect(button(QStringLiteral("effectMode")), &QToolButton::clicked, this, &CorrectionTool::effectModeRequested);
     connect(button(QStringLiteral("settings")), &QToolButton::clicked, this, &CorrectionTool::settingsRequested);
     connect(button(QStringLiteral("colorInfo")), &QToolButton::clicked, this, &CorrectionTool::colorInfoRequested);
@@ -922,6 +922,10 @@ void CorrectionTool::keyPressEvent(QKeyEvent* event) {
 void CorrectionTool::setOptions(const Options& options) {
     if (options == options_) return;
     options_ = options;
+    // "the icon on the Safe Color Settings button appears orange ... Otherwise, the icon ... appears black" (p.722;
+    // ours: the palette's text colour where Media Composer's is black).
+    button(QStringLiteral("safeColors"))
+        ->setIcon(toolIcon(QStringLiteral("safeColors"), options_.safeColors.warns() ? QColor(255, 140, 0) : palette().color(QPalette::WindowText)));
     if (!groupShown(group_)) {
         for (const char* g : kGroups) {
             if (groupShown(QLatin1String(g))) {

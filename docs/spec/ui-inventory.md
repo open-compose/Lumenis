@@ -376,6 +376,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   the shape tools only on the Shapes layer and only in the Current monitor; the
   Effect Editor's categories for the effect (Layers, Shapes, Shape Tracking, no
   Show Result/Show Alpha/layer menu there), New Tracker in the tracker menu.
+  6.10e4a: the Safe Colors dialog's layout (one row per value), units read as
+  chosen (no conversion), IRE/percent without setup, Rec. 601 composite as luma
+  plus and minus chroma, half a level of tolerance, the graph's span.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

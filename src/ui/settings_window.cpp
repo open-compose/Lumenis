@@ -1,5 +1,8 @@
 #include "lumenis/ui/settings_window.h"
 
+#include "lumenis/model/safe_colors.h"
+#include "lumenis/ui/safe_color_graph.h"
+
 #include "lumenis/core/branding.h"
 #include "lumenis/core/timecode.h"
 #include "lumenis/media/managed.h"
@@ -31,6 +34,7 @@
 #include <QRadioButton>
 #include <QRegularExpressionValidator>
 #include <QSpinBox>
+#include <QDoubleSpinBox>
 #include <QStandardItemModel>
 #include <QStyledItemDelegate>
 #include <QTabWidget>
@@ -116,6 +120,11 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                 auto* box = new QCheckBox(o.label);
                 box->setChecked(current.toBool());
                 editor = row = box;
+            } else if (o.type == QLatin1String("safeColorGraph")) {
+                // The Safe Colors settings' graph (FX Guide p.722-723), following the dialog's limits as they change.
+                auto* graph = new SafeColorGraph;
+                graph->setLimitsSource([this] { return model::SafeColorLimits::fromValues(values()); });
+                editor = row = graph;
             } else if (o.type == QLatin1String("choice") && o.style == QLatin1String("radio")) {
                 // Radio buttons in a box titled with the label; the QButtonGroup "<key>Group" ids
                 // are indices into o.choices, which values() reads back.
@@ -158,6 +167,13 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                         const int fallback = o.defaultValue.toInt();
                         QObject::connect(reset, &QToolButton::clicked, spin, [spin, fallback] { spin->setValue(fallback); });
                     }
+                } else if (o.type == QLatin1String("number")) {
+                    // A value with decimals (the Safe Colors limits, "0.00", "108.45", p.723).
+                    auto* spin = new QDoubleSpinBox(row);
+                    spin->setDecimals(o.decimals);
+                    spin->setRange(o.minNumber, o.maxNumber);
+                    spin->setValue(current.toDouble());
+                    editor = spin;
                 } else if (o.type == QLatin1String("choice")) {
                     auto* menu = new QComboBox(row);
                     for (const SettingChoice& c : o.choices) {
@@ -255,6 +271,15 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
     } else if (!kind.tabs.isEmpty()) {
         layout->addWidget(page(kind.tabs.constFirst()));
     }
+    // A graph redraws as the dialog's values change.
+    for (QWidget* w : std::as_const(editors_)) {
+        auto* graph = qobject_cast<SafeColorGraph*>(w);
+        if (!graph) continue;
+        for (QWidget* e : std::as_const(editors_)) {
+            if (auto* number = qobject_cast<QDoubleSpinBox*>(e)) connect(number, &QDoubleSpinBox::valueChanged, graph, qOverload<>(&QWidget::update));
+            if (auto* menu = qobject_cast<QComboBox*>(e)) connect(menu, &QComboBox::currentIndexChanged, graph, qOverload<>(&QWidget::update));
+        }
+    }
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     connect(buttons, &QDialogButtonBox::accepted, this, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, this, &QDialog::reject);
@@ -276,12 +301,14 @@ QJsonObject SettingsDialog::values() const {
     QJsonObject out = values_;
     for (const SettingTab& t : kind_.tabs) {
         for (const SettingOption& o : t.options) {
-            if (o.later || o.type == QLatin1String("info")) continue;
+            if (o.later || o.type == QLatin1String("info") || o.type == QLatin1String("safeColorGraph")) continue;
             QWidget* e = editors_.value(o.key);
             if (auto* box = qobject_cast<QCheckBox*>(e)) {
                 out.insert(o.key, box->isChecked());
             } else if (auto* spin = qobject_cast<QSpinBox*>(e)) {
                 out.insert(o.key, spin->value());
+            } else if (auto* number = qobject_cast<QDoubleSpinBox*>(e)) {
+                out.insert(o.key, number->value());
             } else if (auto* menu = qobject_cast<QComboBox*>(e)) {
                 out.insert(o.key, menu->currentData().toString());
             } else if (o.type == QLatin1String("color") && e) {

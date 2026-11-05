@@ -25,7 +25,7 @@ struct SettingChoice {
 // setting's values.
 struct SettingOption {
     QString key;  // the key in the setting's values
-    QString type; // bool, int, choice, drive, timecode, text, info
+    QString type; // bool, int, number, choice, drive, timecode, text, info, color, font, safeColorGraph
     QString label;
     QString suffix; // text after the control (a unit)
     QString specialText; // int options: shown for `min` instead of the number ("Recommended")
@@ -34,6 +34,10 @@ struct SettingOption {
     QJsonValue defaultValue; // also the type a stored value must have
     int min = 0; // int options' range; 0 when not given
     int max = 0;
+    // number options (a value with decimals, the Safe Colors limits): their range and decimals.
+    double minNumber = 0.0;
+    double maxNumber = 0.0;
+    int decimals = 2;
     int page = 0; // the Editing Guide page that describes it; 0 when not given
     bool fxGuide = false; // `page` is the FX Guide's ("guide": "fx")
     bool later = false; // shown, not available yet: value() returns the default

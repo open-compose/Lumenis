@@ -19,6 +19,7 @@ lumenis_add_test(tst_settings SOURCES tst_settings.cpp LIBS lumenis::model)
 lumenis_add_test(tst_calculator SOURCES tst_calculator.cpp LIBS lumenis::model)
 # Relationship colour corrections (FX Guide p.596-598).
 lumenis_add_test(tst_correction_relations SOURCES tst_correction_relations.cpp LIBS lumenis::model)
+lumenis_add_test(tst_safe_colors SOURCES tst_safe_colors.cpp LIBS lumenis::model)
 lumenis_add_test(tst_correction_manage SOURCES tst_correction_manage.cpp LIBS lumenis::model)
 # Keyframing colour corrections (FX Guide p.683-686).
 lumenis_add_test(tst_correction_keyframes SOURCES tst_correction_keyframes.cpp LIBS lumenis::model)

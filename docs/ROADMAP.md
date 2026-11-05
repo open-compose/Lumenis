@@ -1224,9 +1224,12 @@ phase of their own. They are done in three steps:
     selecting in the Current monitor, done (`src/ui/correction_shape_host.*`, the Intraframe tool's `IntraframeHost`,
     `CorrectionMonitors::setOverlayInput`; test `tst_correction_tool`); 6.10e3b3, the Color Correction effect in
     the Effect Editor and trackers on shapes (p.699), done (`EffectEditor::chooseShapeTracker`, `model::objectTracker`
-    in `placedShapeAt`; tests `tst_intraframe`, `tst_intraframe_ui`), so 6.10e3 is done; 6.10e4, safe colours: the Safe Color settings and their graph, the warnings in the monitors and
-    the Color Match control, the waveform limits, and the Safe Color Limiter effect with its analysis display (ch.23,
-    p.721-730); 6.10e5, the Spot Color Correction effect and the Paint Effect's colour modes (ch.24, p.731-733). Avid
+    in `placedShapeAt`; tests `tst_intraframe`, `tst_intraframe_ui`), so 6.10e3 is done; 6.10e4, safe colours (ch.23, p.721-730), in three parts:
+    6.10e4a, the Safe Colors project setting (limits with two decimals, units, Actions), its graph, the Color Correction
+    tool's Safe Color Settings button (orange with Warn) and the limit checks, done (`src/model/safe_colors.*`,
+    `src/ui/safe_color_graph.*`; tests `tst_safe_colors`, `tst_settings_window`); 6.10e4b, the warnings in the monitors
+    (triangle and indicator bars), the Color Match swatches (RGB Gamut) and the Y Waveform, YC Waveform and RGB Parade
+    colours; 6.10e4c, the Safe Color Limiter effect (p.471, p.545) and its Source monitor analysis display; 6.10e5, the Spot Color Correction effect and the Paint Effect's colour modes (ch.24, p.731-733). Avid
     Artist Color (ch.25) needs Avid's EuControl software: a control surface provider hook only (EXTENSIONS.md), later.
   * 6.10f, after 6.10e (owner's report, 2026-11-05, Windows 11): Tools > Titler+ and Tools > Effect Editor open as very
     large windows where a panel of ordinary size (or a page of a paneled window) is expected. Find why their panels open

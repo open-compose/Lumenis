@@ -594,6 +594,37 @@ the Effect Editor's `refresh`/`rebuild`/`changeShown` in Color Correction mode a
 * The editor's groups have no Enable buttons yet (ours; the tool's stay); a value back at its default is left out as the
   tool leaves it. The Curves and Levels keyframe tracks came with 6.10d3c.
 
+## 6.10e4a: the Safe Colors setting
+
+Code: `src/model/safe_colors.*` (`SafeColorLimits`, `SafeUnit`, `safeLevels`, `safeViolations`), the "Safe Colors" Project
+setting in `settings.json` with the settings' `number` and `safeColorGraph` option types, `src/ui/safe_color_graph.*`,
+`MainWindow::safeColorLimits`, the Color Correction tool's Safe Color Settings button (`CorrectionTool::Options::safeColors`,
+`safeColorSettingsRequested`). Tests: `tst_safe_colors`, `tst_settings_window` (`safeColorsDialog`).
+
+### From the guide
+* "Media Composer lets you set three different types of safe color limits — for the composite signal range, for the
+  luminance range, and for the RGB gamut"; Units: Composite IRE or mVolts, Luminance and RGB Gamut 8 Bit, %, IRE or
+  mVolts; "the 8-bit RGB values for reference black and reference white are 16 and 235"; Actions: "The top button
+  controls both the Composite and the Luminance limit types. The bottom button controls the RGB Gamut limit type",
+  Ignore ("This is the default setting") or Warn; "If Warn is selected in one or more of the Actions menus, the icon on
+  the Safe Color Settings button appears orange ... Otherwise, the icon ... appears black" (FX p.721-722; Editing Guide
+  p.1216-1217).
+* The graph: "colored bars that represent the current low and high levels for each limit type ... gray vertical lines
+  that represent the default high and low levels"; top to bottom Composite, Luminance, Red, Green and Blue; "Bars on the
+  left indicate the low limit, while bars on the right indicate the high limit"; the pictures' defaults: Composite 0.00
+  to 120.00 IRE, Luminance 10.00 to 108.45 IRE, RGB Gamut 16.00 to 235.00 8 Bit (FX p.722-723).
+* "To open the Safe Color Settings dialog box ... Select File > Settings, click the Project tab and double-click Safe
+  Colors. In the Color Correction tool, click the Safe Color Settings button" (FX p.725).
+
+### Ours
+* The dialog is the generic settings dialog, one row per value (Low, High, Units, then the two Actions), and the graph
+  below. Values are read in the units chosen beside them; changing the units does not convert the numbers.
+* IRE and percent put 0 at level 16 and 100 at 235 (no setup), millivolts 0 and 700; the composite signal's extremes
+  are Rec. 601 luma plus and minus the chroma's amplitude, so 100% yellow reaches about 133 IRE. Checks allow half an
+  8-bit level, so limits typed in other units do not catch their own edges.
+* The graph spans 8-bit levels -40 to 295; the button's icon is the palette's text colour where Media Composer's is
+  black.
+
 ## 6.10e3b3: the Color Correction effect in the Effect Editor, shapes on trackers
 
 Code: `EffectEditor::drawsObjects`, `chooseShapeTracker` and the "tracking:shape" menu (`effect_editor_tracking.cpp`);

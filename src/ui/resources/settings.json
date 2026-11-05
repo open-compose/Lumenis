@@ -571,6 +571,35 @@
       ]
     },
     {
+      "kind": "Safe Colors",
+      "scope": "project",
+      "page": 1216,
+      "tabs": [
+        {
+          "name": "",
+          "options": [
+            {"key": "compositeLow", "type": "number", "label": "Composite Low", "min": -1000, "max": 1000, "default": 0.0, "page": 1216},
+            {"key": "compositeHigh", "type": "number", "label": "Composite High", "min": -1000, "max": 1000, "default": 120.0, "page": 1216},
+            {"key": "compositeUnits", "type": "choice", "style": "menu", "label": "Composite Units", "default": "ire", "page": 1216,
+             "choices": [{"value": "ire", "label": "IRE"}, {"value": "mvolts", "label": "mVolts"}]},
+            {"key": "lumaLow", "type": "number", "label": "Luminance Low", "min": -1000, "max": 1000, "default": 10.0, "page": 1216},
+            {"key": "lumaHigh", "type": "number", "label": "Luminance High", "min": -1000, "max": 1000, "default": 108.45, "page": 1216},
+            {"key": "lumaUnits", "type": "choice", "style": "menu", "label": "Luminance Units", "default": "ire", "page": 1216,
+             "choices": [{"value": "bit8", "label": "8 Bit"}, {"value": "percent", "label": "%"}, {"value": "ire", "label": "IRE"}, {"value": "mvolts", "label": "mVolts"}]},
+            {"key": "rgbLow", "type": "number", "label": "RGB Gamut Low", "min": -1000, "max": 1000, "default": 16.0, "page": 1216},
+            {"key": "rgbHigh", "type": "number", "label": "RGB Gamut High", "min": -1000, "max": 1000, "default": 235.0, "page": 1216},
+            {"key": "rgbUnits", "type": "choice", "style": "menu", "label": "RGB Gamut Units", "default": "bit8", "page": 1216,
+             "choices": [{"value": "bit8", "label": "8 Bit"}, {"value": "percent", "label": "%"}, {"value": "ire", "label": "IRE"}, {"value": "mvolts", "label": "mVolts"}]},
+            {"key": "compositeLumaAction", "type": "choice", "style": "menu", "label": "Composite and Luminance Actions", "default": "ignore", "page": 1217,
+             "choices": [{"value": "ignore", "label": "Ignore"}, {"value": "warn", "label": "Warn"}]},
+            {"key": "rgbAction", "type": "choice", "style": "menu", "label": "RGB Gamut Actions", "default": "ignore", "page": 1217,
+             "choices": [{"value": "ignore", "label": "Ignore"}, {"value": "warn", "label": "Warn"}]},
+            {"key": "graph", "type": "safeColorGraph", "label": "", "page": 722, "guide": "fx"}
+          ]
+        }
+      ]
+    },
+    {
       "kind": "Render",
       "scope": "user",
       "page": 1214,

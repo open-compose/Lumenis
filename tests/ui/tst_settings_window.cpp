@@ -7,6 +7,7 @@
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/main_window.h"
+#include "lumenis/ui/safe_color_graph.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/settings_window.h"
 #include "lumenis/ui/theme.h"
@@ -17,6 +18,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDoubleSpinBox>
 #include <QFile>
 #include <QFormLayout>
 #include <QHelpEvent>
@@ -80,7 +82,7 @@ private slots:
         // choice's default is one of its choices (guide ch.33).
         const SettingsSchema& schema = SettingsSchema::builtIn();
         QCOMPARE(schema.kindNames(SettingsScope::Project),
-                 (QStringList{"Audio Project", "Audio Multi-Mix", "General", "Media Creation", "Bin Layout", "Video Display"}));
+                 (QStringList{"Audio Project", "Audio Multi-Mix", "General", "Media Creation", "Safe Colors", "Bin Layout", "Video Display"}));
         QCOMPARE(schema.kindNames(SettingsScope::User),
                  (QStringList{"Audio", "Bin", "Composer", "Correction", "Effect Editor", "Export", "Full Screen Playback", "Import", "Interface", "Keyboard", "Link",
                               "Render", "Timeline", "Timeline View", "Title Style", "Tool Palette", "Workspace View", "Trim"}));
@@ -102,7 +104,7 @@ private slots:
                              qPrintable(where));
                     QVERIFY2(!keys.contains(where), qPrintable(where));
                     keys << where;
-                    QVERIFY2(QStringList({"bool", "int", "choice", "timecode", "text", "info", "drive", "color", "font"}).contains(o.type),
+                    QVERIFY2(QStringList({"bool", "int", "number", "choice", "timecode", "text", "info", "drive", "color", "font", "safeColorGraph"}).contains(o.type),
                              qPrintable(where));
                     if (o.type == QLatin1String("choice")) {
                         bool found = false;
@@ -111,6 +113,9 @@ private slots:
                     }
                     if (o.type == QLatin1String("int")) {
                         QVERIFY2(o.defaultValue.toInt() >= o.min && o.defaultValue.toInt() <= o.max, qPrintable(where));
+                    }
+                    if (o.type == QLatin1String("number")) {
+                        QVERIFY2(o.defaultValue.toDouble() >= o.minNumber && o.defaultValue.toDouble() <= o.maxNumber, qPrintable(where));
                     }
                 }
             }
@@ -165,6 +170,33 @@ private slots:
         QCOMPARE(settings.text("Bin", "doubleClickLoads"), QStringLiteral("monitor"));
         QCOMPARE(settings.number("Bin", "autoSaveMinutes"), 15);
         QVERIFY(settings.value("Nope", "nothing").isNull());
+    }
+
+    void safeColorsDialog() {
+        // The Safe Colors setting (Editing Guide p.1216-1217; FX Guide p.721-725; 6.10e4a): limits with two decimals,
+        // the defaults of FX Guide p.723's picture, and the graph following the dialog.
+        SettingEntry entry{QStringLiteral("Safe Colors"), QString(), true, {}};
+        SettingsDialog dialog(kind("Safe Colors"), entry);
+        auto* high = qobject_cast<QDoubleSpinBox*>(dialog.editor("lumaHigh"));
+        QVERIFY(high);
+        QCOMPARE(high->decimals(), 2);
+        QCOMPARE(high->value(), 108.45);
+        auto* graph = qobject_cast<SafeColorGraph*>(dialog.editor("graph"));
+        QVERIFY(graph);
+        QCOMPARE(graph->limits(), model::SafeColorLimits{});
+        high->setValue(100.0);
+        auto* rgbAction = qobject_cast<QComboBox*>(dialog.editor("rgbAction"));
+        QVERIFY(rgbAction);
+        rgbAction->setCurrentIndex(rgbAction->findData(QStringLiteral("warn")));
+        QCOMPARE(graph->limits().luma.high, 100.0);
+        const model::SafeColorLimits chosen = model::SafeColorLimits::fromValues(dialog.values());
+        QVERIFY(chosen.warnRgb && !chosen.warnCompositeLuma);
+        QCOMPARE(chosen.luma.high, 100.0);
+        QVERIFY(!dialog.values().contains(QStringLiteral("graph")));
+        // The graph's bars: the left one to the low limit, the right one from the high limit.
+        QVERIFY(SafeColorGraph::xOf(16.0, 300) < SafeColorGraph::xOf(235.0, 300));
+        QCOMPARE(SafeColorGraph::xOf(-1000.0, 300), 0.0);
+        QCOMPARE(SafeColorGraph::xOf(1000.0, 300), 300.0);
     }
 
     void dialogShowsAndReturnsValues() {

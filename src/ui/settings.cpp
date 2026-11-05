@@ -68,6 +68,9 @@ SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) 
                 option.defaultValue = oo.value(QStringLiteral("default"));
                 option.min = oo.value(QStringLiteral("min")).toInt();
                 option.max = oo.value(QStringLiteral("max")).toInt();
+                option.minNumber = oo.value(QStringLiteral("min")).toDouble();
+                option.maxNumber = oo.value(QStringLiteral("max")).toDouble();
+                option.decimals = oo.value(QStringLiteral("decimals")).toInt(2);
                 option.page = oo.value(QStringLiteral("page")).toInt();
                 option.fxGuide = oo.value(QStringLiteral("guide")).toString() == QLatin1String("fx");
                 option.later = oo.value(QStringLiteral("later")).toBool();

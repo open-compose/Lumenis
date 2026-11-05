@@ -7,6 +7,7 @@
 #include "lumenis/model/bin.h"
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/project_store.h"
+#include "lumenis/model/safe_colors.h"
 #include "lumenis/model/title_clip.h"
 #include "lumenis/ui/audio_punch_in.h"
 #include "lumenis/ui/audio_suite.h"
@@ -618,6 +619,10 @@ signals:
 protected:
     void closeEvent(QCloseEvent* event) override;
     bool eventFilter(QObject* watched, QEvent* event) override;
+
+public:
+    // The Safe Colors project setting's limits and Actions (FX Guide ch.23; 6.10e4).
+    model::SafeColorLimits safeColorLimits() const;
 
 private:
     // The Titler+ template open in the Record monitor (editTitleTemplate): where it is, its sequence as edited, and
