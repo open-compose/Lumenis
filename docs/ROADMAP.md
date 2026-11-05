@@ -1211,7 +1211,12 @@ phase of their own. They are done in three steps:
     at that size (size hints, floating geometry, the workspace they open in), fix the root cause for every tool panel,
     add a BUILDING.md troubleshooting entry and a check (a test of each tool panel's opening size), and check Mac and
     Linux too. That Titler+ opens the Effect Editor with it is the guide's: "The Avid Titler+ Dashboard and the Effect
-    Editor open" (FX Guide p.303).
+    Editor open" (FX Guide p.303). Also reported: after Tools > Titler+ the Record monitor changes size, and the
+    Timeline's markers no longer show under the Record monitor (they stay in the Timeline and show in the picture at
+    their frame) until the program is restarted. First look: Titler+ puts the Timeline in Effect mode
+    (`MainWindow::openTitleEditing`, ours), whose Effect Preview resizes the monitor and whose position bar draws only
+    the effect and its keyframes (`PositionBar::paintEvent`); check how Effect mode is left after titling, and what the
+    guide shows under the Effect Preview (p.76-78) and on leaving Titler+.
 * 6.11, the OFX host in place of AVX (ch.6, p.157-164), with OCIO colour management.
 
 **Gates**
