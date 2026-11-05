@@ -8,6 +8,7 @@
 #include "lumenis/model/effect_template.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/model/nest.h"
+#include "lumenis/model/correction_manage.h"
 #include "lumenis/model/correction_relations.h"
 #include "lumenis/model/correction_template.h"
 #include "lumenis/model/sequence.h"
@@ -42,6 +43,7 @@ class QToolButton;
 namespace lumenis::ui {
 
 class ClipColorDialog;
+class CorrectionManageDialog;
 class SequenceMap;
 class SequenceMapWindow;
 class Timeline;
@@ -739,6 +741,24 @@ public:
     // and the current segment loses the side the template lacks; without (a bucket, the bin's Enter, p.614-615) its
     // merged values replace the current side's correction with the Correction Type's relationship.
     bool applyCorrectionTemplate(const model::CorrectionTemplate& t, bool templateRelationships);
+    // Managing colour-corrected sequences (FX Guide ch.21, p.700-706; lumenis/model/correction_manage.h, 6.10d4): the
+    // Color Correction tool's Update, Merge, Flatten and Remove Correction (commands cc.update_correction,
+    // cc.merge_correction, cc.flatten_correction, cc.remove_correction) open their dialog
+    // (CorrectionManageDialog), then run with its choices on the Record monitor's sequence, an undo step. With Create New
+    // Sequence the result is a new sequence instead (correctedSequenceCreated; MainWindow puts it in the sequence's bin
+    // as "<name>.Copy.NN" and loads it) and the loaded one stays as it was. False with a message when there is no
+    // sequence or nothing changes. "The Merge Correction command is unavailable ... until you load versions of a
+    // sequence in both the Source monitor and the Record monitor and enter Color Correction mode" (p.702):
+    // canMergeCorrections.
+    enum class CorrectionManagement { Update, Merge, Flatten, Remove };
+    bool manageCorrections(CorrectionManagement what, const QList<model::CorrectionRelationship>& relationships, bool newSequence,
+                           model::MergeConflict conflict = model::MergeConflict::PreferLatest);
+    bool canMergeCorrections() const;
+    QMap<model::CorrectionRelationship, int> correctionCounts() const;
+    // Shows a command's dialog and runs it (the commands above). Tests set the hook, which fills in the dialog and says
+    // whether it was accepted, in place of running it.
+    bool openCorrectionManagement(CorrectionManagement what);
+    void setCorrectionDialogHook(std::function<bool(CorrectionManageDialog&)> hook) { correctionDialogHook_ = std::move(hook); }
     // "To apply adjustment values from a Color Correction effect template selectively to a single tab" (p.615): the
     // template's controls at and under `path` on the current side, with the Correction Type's relationship.
     bool applyCorrectionTemplateGroup(const model::CorrectionTemplate& t, const QString& path);
@@ -1205,6 +1225,9 @@ public:
 signals:
     // The keyframe markers below the Current Color Correction monitor were clicked: the selected frames (6.10d3c).
     void correctionKeyframesSelected(const QList<double>& frames);
+    // Update/Merge/Flatten/Remove Correction with Create New Sequence: the sequence made (with the loaded sequence's id
+    // and name; the receiver gives it its own) for the bin `binId`.
+    void correctedSequenceCreated(const QString& binId, const model::BinItem& sequence);
     // "Right-click and select Edit Title" on a classic title (FX Guide p.372): the segment to revise in the Title Tool.
     void editTitleRequested(const model::SegmentRef& segment);
     // ExpertRender's highlighting was cancelled (a click in TC1, p.145).
@@ -1423,6 +1446,7 @@ private:
     model::CorrectionRelationship correctionRelationship_ = model::CorrectionRelationship::SourceSegment;
     // The selected correction keyframe markers (frames into the segment) and the segment they belong to (its first
     // frame and track), so another segment starts with none.
+    std::function<bool(CorrectionManageDialog&)> correctionDialogHook_;
     QList<double> correctionKeySelection_;
     std::optional<std::pair<QString, std::int64_t>> correctionKeyShot_;
     // The automatic templates by sequence id, newest first, with the segment and side each was made on.

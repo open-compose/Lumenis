@@ -1201,7 +1201,9 @@ phase of their own. They are done in three steps:
     delete, Alt-drag (p.686), and the Curves and Levels as keyframe tracks only (p.685), done (`CorrectionKeyframeBar` in
     `correction_monitors.cpp`, `Timeline::correctionKeyframeMarkers`; tests `tst_correction_keyframes`,
     `tst_correction_mode`, `tst_correction_tool`). So 6.10d3 is done; 6.10d4, Update, Merge, Flatten and Remove Correction from the tool's
-    shortcut menu with their dialogs (ch.21, p.700-706). Correcting a whole sequence (p.692) uses the Color Correction
+    shortcut menu with their dialogs (ch.21, p.700-706), done (`src/model/correction_manage.*`,
+    `correction_manage_dialog.*`, `Timeline::manageCorrections`; tests `tst_correction_manage`, `tst_correction_tool`,
+    `tst_main_window`, scenario `41-update-correction.json`). So 6.10d is done. Correcting a whole sequence (p.692) uses the Color Correction
     effect and comes with 6.10e.
   * 6.10e, the Color Correction effect and its AutoCorrect options (p.693-699), correcting a whole sequence on an
     empty top track (p.692-693), safe colours: the settings, warnings

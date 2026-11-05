@@ -594,6 +594,48 @@ the Effect Editor's `refresh`/`rebuild`/`changeShown` in Color Correction mode a
 * The editor's groups have no Enable buttons yet (ours; the tool's stay); a value back at its default is left out as the
   tool leaves it. The Curves and Levels keyframe tracks came with 6.10d3c.
 
+## 6.10d4: managing colour-corrected sequences
+
+Code: `src/model/correction_manage.*` (`correctionCounts`, `updateCorrections`, `mergeCorrections`, `flattenCorrections`,
+`removeCorrections`), `src/ui/correction_manage_dialog.*`, `CorrectionTool::shortcutMenu`, `Timeline::manageCorrections`/
+`openCorrectionManagement`/`canMergeCorrections` in `src/ui/timeline_correction.cpp`, the commands `cc.update_correction`,
+`cc.merge_correction`, `cc.flatten_correction`, `cc.remove_correction`, `MainWindow`'s `correctedSequenceCreated`.
+Tests: `tst_correction_manage`, `tst_correction_tool` (`managingCorrections`), `tst_main_window`
+(`correctionCopyGoesToTheBin`), scenario `41-update-correction.json`.
+
+### From the guide
+* Each command is on the Color Correction tool's shortcut menu ("Right-click in the Color Correction tool, and select
+  Update Correction", p.700) and opens a dialog of Source (Tape, Clip Name, Master Clip, Sub Clip, Segment) and Program
+  (Track, Segment) relationship boxes with Create New Sequence (pictures p.701, p.706).
+* Update: "Media Composer updates any color corrections based on Source Tape, Clip Name, Master Clip, or Sub Clip
+  relationships, or based on Program Track relationships" to "the appropriate new segments"; "By default, all available
+  relationships are selected" (p.700-701).
+* Merge: the Source monitor's and the Record monitor's versions; unavailable until both are loaded in Color Correction
+  mode; Segment relationships merge "using the Segment's source and timecode", the source segment "with the most
+  overlap" winning, tried first for segments without a correction, and "are not selected by default"; a segment
+  "will not change from Source Tape to a Source Segment"; "In case of conflict": Prefer Source Sequence, Prefer Record
+  Sequence, Prefer Latest (the default); without Create New Sequence the result is the Record monitor's sequence
+  (p.701-703). The example (p.703-704) is `mergeExample` in `tst_correction_manage`.
+* Flatten: "all the color corrections become segment-only relationships"; the dialog gives each relationship's number
+  of segments (p.704-705).
+* Remove: "removes color correction for all segments affected by the relationships you have selected" (p.705-706).
+* Create New Sequence: "a new sequence appears in the bin with the title [OldTitle].Copy 1"; without it, Edit > Undo
+  goes back (p.701, p.705, p.706).
+
+### Ours
+* The commands look at every video track. Update gives a segment without a correction on a side the correction of a
+  segment related to it by a selected relationship, the first of Tape, Clip Name, Master Clip and Sub Clip (Program:
+  Track) that has one; corrected segments are left as they are.
+* Merge puts both sequences' corrections per relationship key together (the conflict setting deciding between two for
+  one key) and gives them to the Record version's segments corrected with that relationship and to those without a
+  correction. Prefer Latest compares the two sequences' modified times. Overlap is the same source clip and track with
+  source frames in common; a Prog Segment correction also needs the same track.
+* Remove's Segment boxes start off as its picture shows (the text says "all"); Flatten's are dimmed, segment-only
+  already. Only Flatten and Remove show the counts, with each column's total.
+* Create New Sequence leaves the loaded sequence as it was and puts the result in its bin as "<name>.Copy.NN" (the
+  bin's numbering for copies), loaded in the Record monitor. Each command is one undo step otherwise.
+* The four commands are also on the Command Palette's CC tab.
+
 ## 6.10d3c: keyframe markers and the Curves and Levels tracks
 
 Code: `CorrectionMonitors::setKeyframeResolver`/`keyframeBar` and `CorrectionKeyframeBar` in

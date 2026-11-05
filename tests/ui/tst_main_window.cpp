@@ -12,6 +12,7 @@
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
+#include "lumenis/ui/correction_manage_dialog.h"
 #include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/menu_builder.h"
@@ -384,6 +385,57 @@ private slots:
         // Esc pressed in the Timeline goes through the editing keyboard to the same command.
         QTest::keyClick(&window.timeline(), Qt::Key_Escape);
         QVERIFY(window.timeline().showsSource());
+        window.clearProject();
+    }
+
+    // Create New Sequence in the Remove Color Correction dialog (FX Guide p.705-706): the new sequence goes into the
+    // sequence's bin as "<name>.Copy.NN" and into the Record monitor; the original keeps its corrections.
+    void correctionCopyGoesToTheBin() {
+        Project project;
+        ext::ProviderRegistry providers;
+        ui::CommandRegistry commands;
+        commands.loadBuiltin();
+        ui::MainWindow window(commands, providers);
+        window.setProject(project.entry);
+        ui::BinDocument* doc = window.binContainer().activeDocument();
+        QVERIFY(doc);
+        model::BinItem item;
+        item.id = model::newItemId();
+        item.name = QStringLiteral("Cut");
+        item.kind = model::BinItemKind::Sequence;
+        item.editRate = Rational(25);
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        model::Segment a;
+        a.clipId = QStringLiteral("a");
+        a.name = QStringLiteral("A");
+        a.sourceTrack = QStringLiteral("V1");
+        a.length = 20;
+        a.sourceCorrection.set(QStringLiteral("hsl/controls/master/gain"), 120);
+        seq.splice(QStringLiteral("V1"), 0, {a});
+        seq.storeIn(item);
+        doc->addItem(item);
+        window.composer().load(ui::MonitorId::Record, doc->nodeId(), item);
+        window.timeline().setCorrectionMode(true);
+        window.timeline().setCorrectionDialogHook([](ui::CorrectionManageDialog& d) {
+            d.setRelationship(model::CorrectionRelationship::SourceSegment, true);
+            d.setCreateNewSequence(true);
+            return true;
+        });
+        QVERIFY(window.timeline().openCorrectionManagement(ui::Timeline::CorrectionManagement::Remove));
+        const model::LoadedClip* rec = window.composer().state(ui::MonitorId::Record).current();
+        QVERIFY(rec);
+        QCOMPARE(rec->item.name, QStringLiteral("Cut.Copy.01"));
+        QVERIFY(rec->item.id != item.id);
+        QVERIFY(!model::Sequence::fromItem(rec->item).track(QStringLiteral("V1"))->segments.at(0).hasCorrection());
+        const auto inBin = [&](const QString& id) -> std::optional<model::BinItem> {
+            for (const model::BinItem& i : doc->bin().items) {
+                if (i.id == id) return i;
+            }
+            return std::nullopt;
+        };
+        QVERIFY(inBin(rec->item.id));
+        QVERIFY(model::Sequence::fromItem(*inBin(item.id)).track(QStringLiteral("V1"))->segments.at(0).hasCorrection());
+        window.timeline().setCorrectionMode(false);
         window.clearProject();
     }
 

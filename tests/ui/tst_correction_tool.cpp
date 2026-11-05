@@ -9,6 +9,7 @@
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/composer.h"
+#include "lumenis/ui/correction_manage_dialog.h"
 #include "lumenis/ui/correction_monitors.h"
 #include "lumenis/ui/correction_tool.h"
 #include "lumenis/ui/effect_editor.h"
@@ -25,6 +26,8 @@
 #include <QMimeData>
 #include <QLineEdit>
 #include <QCheckBox>
+#include <QComboBox>
+#include <QLabel>
 #include <QRadioButton>
 #include <QMenu>
 #include <QSignalSpy>
@@ -60,6 +63,15 @@ BinItem sequence() {
     seq.splice(QStringLiteral("V1"), 0, {a, b});
     seq.storeIn(s);
     return s;
+}
+
+// A relationship's box in a correction dialog; the test stops at once when it is missing.
+QCheckBox* checkBox(const CorrectionManageDialog& d, model::CorrectionRelationship r) {
+    QCheckBox* b = d.relationshipBox(r);
+    if (b) return b;
+    QTest::qFail("no box for the relationship", __FILE__, __LINE__);
+    static auto* none = new QCheckBox; // never freed: not after the application
+    return none;
 }
 
 void settle() {
@@ -474,6 +486,100 @@ private slots:
         editor.selectKeyframe({QStringLiteral("Curves/Red"), 0}, false);
         QCOMPARE(r.timeline.correctionKeyframeSelection(), (QList<double>{0}));
         QCOMPARE(r.timeline.correctionKeyframeMarkers()->selected, (QList<bool>{true, false}));
+    }
+
+    // The tool's shortcut menu: Update, Merge, Flatten and Remove Correction with their dialogs (p.700-706, 6.10d4).
+    void managingCorrections() {
+        Rig r; // A: frames 0-19, the position at 5
+        r.value(QStringLiteral("hsl/controls/master/gain"))->setValue(120);
+        QVERIFY(r.segment(0).hasCorrection());
+        std::unique_ptr<QMenu> menu(r.tool.shortcutMenu(&r.tool));
+        QStringList texts;
+        for (QAction* a : menu->actions()) texts << a->text();
+        QCOMPARE(texts, (QStringList{"Update Correction", "Merge Correction", "Flatten Correction", "Remove Correction"}));
+        // "unavailable ... until you load versions of a sequence in both the Source monitor and the Record monitor" (p.702).
+        QVERIFY(!menu->findChild<QAction*>(QStringLiteral("cc.merge_correction"))->isEnabled());
+        QVERIFY(!r.timeline.manageCorrections(Timeline::CorrectionManagement::Merge, model::sourceRelationships(), false));
+
+        // The dialogs as they open.
+        QStringList titles;
+        bool accept = false;
+        std::function<void(CorrectionManageDialog&)> fill = [](CorrectionManageDialog&) {};
+        r.timeline.setCorrectionDialogHook([&](CorrectionManageDialog& d) {
+            titles << d.windowTitle();
+            fill(d);
+            return accept;
+        });
+        fill = [](CorrectionManageDialog& d) {
+            // Update: every relationship but the dimmed Segment ones; no conflict menu; Create New Sequence off (p.701).
+            QVERIFY(!checkBox(d, model::CorrectionRelationship::SourceSegment)->isEnabled());
+            QVERIFY(!checkBox(d, model::CorrectionRelationship::ProgramSegment)->isEnabled());
+            QCOMPARE(d.relationships().size(), 5);
+            QVERIFY(!d.findChild<QComboBox*>(QStringLiteral("conflict")));
+            QVERIFY(!d.createNewSequence());
+        };
+        r.timeline.perform(QStringLiteral("cc.update_correction"));
+        fill = [](CorrectionManageDialog& d) {
+            // Remove: the counts, the Segment boxes on but unchecked (p.706).
+            QVERIFY(checkBox(d, model::CorrectionRelationship::SourceSegment)->isEnabled());
+            QVERIFY(!checkBox(d, model::CorrectionRelationship::SourceSegment)->isChecked());
+            QVERIFY(!d.relationships().contains(model::CorrectionRelationship::SourceSegment));
+            QVERIFY(d.findChild<QLabel*>() != nullptr);
+        };
+        r.timeline.perform(QStringLiteral("cc.remove_correction"));
+        QCOMPARE(titles, (QStringList{"Update Color Correction", "Remove Color Correction"}));
+        QVERIFY(r.segment(0).hasCorrection()); // cancelled
+        // Remove the Src Segment corrections: A's goes; undo brings it back.
+        accept = true;
+        fill = [](CorrectionManageDialog& d) { d.setRelationship(model::CorrectionRelationship::SourceSegment, true); };
+        QVERIFY(r.timeline.openCorrectionManagement(Timeline::CorrectionManagement::Remove));
+        QVERIFY(!r.segment(0).hasCorrection());
+        r.timeline.perform(QStringLiteral("edit.undo"));
+        QVERIFY(r.segment(0).hasCorrection());
+        // Nothing to flatten: A's is segment-only already.
+        fill = [](CorrectionManageDialog&) {};
+        QVERIFY(!r.timeline.openCorrectionManagement(Timeline::CorrectionManagement::Flatten));
+        // Create New Sequence: the result goes out as a new sequence; the loaded one stays.
+        QSignalSpy created(&r.timeline, &Timeline::correctedSequenceCreated);
+        fill = [](CorrectionManageDialog& d) {
+            d.setRelationship(model::CorrectionRelationship::SourceSegment, true);
+            d.setCreateNewSequence(true);
+        };
+        QVERIFY(r.timeline.openCorrectionManagement(Timeline::CorrectionManagement::Remove));
+        QCOMPARE(created.count(), 1);
+        QVERIFY(r.segment(0).hasCorrection());
+        const model::BinItem made = created.first().at(1).value<model::BinItem>();
+        QVERIFY(!model::Sequence::fromItem(made).track(QStringLiteral("V1"))->segments.at(0).hasCorrection());
+
+        // Merge: another version in the Source monitor, its A corrected otherwise, newer; Segment relationships chosen.
+        model::BinItem other = r.composer.state(MonitorId::Record).current()->item;
+        model::Sequence seq = model::Sequence::fromItem(other);
+        seq.track(QStringLiteral("V1"))->segments[0].sourceCorrection.set(QStringLiteral("hsl/controls/master/gain"), 150);
+        seq.track(QStringLiteral("V1"))->segments[1].sourceCorrection.set(QStringLiteral("hsl/controls/master/gain"), 90);
+        seq.storeIn(other);
+        other.id = model::newItemId();
+        other.modified = QDateTime::currentDateTimeUtc().addSecs(60);
+        r.composer.load(MonitorId::Source, QStringLiteral("bin"), other);
+        QVERIFY(r.timeline.canMergeCorrections());
+        menu.reset(r.tool.shortcutMenu(&r.tool));
+        QVERIFY(menu->findChild<QAction*>(QStringLiteral("cc.merge_correction"))->isEnabled());
+        fill = [](CorrectionManageDialog& d) {
+            // "Segment relationships are not selected by default"; Prefer Latest is (p.703).
+            QVERIFY(!checkBox(d, model::CorrectionRelationship::SourceSegment)->isChecked());
+            QCOMPARE(d.conflict(), model::MergeConflict::PreferLatest);
+            d.setRelationship(model::CorrectionRelationship::SourceSegment, true);
+        };
+        QVERIFY(r.timeline.openCorrectionManagement(Timeline::CorrectionManagement::Merge));
+        QCOMPARE(r.segment(0).sourceCorrection.number(QStringLiteral("hsl/controls/master/gain")), 150.0); // the Source version is newer
+        QCOMPARE(r.segment(1).sourceCorrection.number(QStringLiteral("hsl/controls/master/gain")), 90.0);  // B had none
+        r.timeline.perform(QStringLiteral("edit.undo"));
+        fill = [](CorrectionManageDialog& d) {
+            d.setRelationship(model::CorrectionRelationship::SourceSegment, true);
+            d.setConflict(model::MergeConflict::PreferRecord);
+        };
+        QVERIFY(r.timeline.openCorrectionManagement(Timeline::CorrectionManagement::Merge));
+        QCOMPARE(r.segment(0).sourceCorrection.number(QStringLiteral("hsl/controls/master/gain")), 120.0);
+        QCOMPARE(r.segment(1).sourceCorrection.number(QStringLiteral("hsl/controls/master/gain")), 90.0);
     }
 
     void slidersAndEnableButtons() {

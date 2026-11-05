@@ -425,6 +425,28 @@ struct Run {
             timeline.setCorrectionRelationship(*r);
             return true;
         }
+        if (o.contains(QStringLiteral("manage_correction"))) {
+            // The Color Correction tool's Update, Merge, Flatten and Remove Correction (FX Guide p.700-706): their dialogs'
+            // relationships (keys as model::relationshipKey) and Create New Sequence.
+            timeline.setCorrectionMode(true);
+            const QString what = o.value(QStringLiteral("manage_correction")).toString();
+            using M = Timeline::CorrectionManagement;
+            const M m = what == QLatin1String("update") ? M::Update
+                        : what == QLatin1String("merge") ? M::Merge
+                        : what == QLatin1String("flatten") ? M::Flatten
+                                                           : M::Remove;
+            QList<model::CorrectionRelationship> rs;
+            for (const QJsonValue& v : o.value(QStringLiteral("relationships")).toArray()) {
+                const auto r = model::relationshipFromKey(v.toString());
+                if (!r) return fail(QStringLiteral("unknown relationship"));
+                rs << *r;
+            }
+            const bool ok = timeline.manageCorrections(m, rs, o.value(QStringLiteral("new_sequence")).toBool());
+            if (ok == o.value(QStringLiteral("refused")).toBool()) {
+                return fail(ok ? QStringLiteral("the correction command was not refused") : timeline.lastMessage());
+            }
+            return true;
+        }
         if (o.contains(QStringLiteral("clip_note"))) {
             // Add Timeline Clip Note on the selected segments (p.483); "" deletes the note (p.484).
             const bool ok = timeline.setClipNote(timeline.selection(), o.value(QStringLiteral("clip_note")).toString());

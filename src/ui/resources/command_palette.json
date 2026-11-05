@@ -38,7 +38,8 @@
       ["cc.tab_1", "cc.tab_2", "cc.tab_3", "cc.tab_4", "cc.tab_5", "cc.tab_6"],
       ["cc.tab_7", "cc.tab_8", "cc.tab_9", "cc.tab_10", "cc.tab_11", "cc.tab_12"],
       ["cc.save_correction", "cc.bucket_1", "cc.bucket_2", "cc.bucket_3", "cc.bucket_4", "cc.bucket_5", "cc.bucket_6",
-       "cc.bucket_7", "cc.bucket_8"]
+       "cc.bucket_7", "cc.bucket_8"],
+      ["cc.update_correction", "cc.merge_correction", "cc.flatten_correction", "cc.remove_correction"]
     ]},
     {"name": "MCam", "page": 96, "columns": []},
     {"name": "Tracks", "page": 96, "columns": [

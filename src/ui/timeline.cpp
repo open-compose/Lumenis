@@ -3177,6 +3177,10 @@ bool Timeline::handles(const QString& id) {
         QStringLiteral("cc.color_correction_mode"),
         QStringLiteral("cc.previous_uncorrected_shot"),
         QStringLiteral("cc.next_uncorrected_shot"),
+        QStringLiteral("cc.update_correction"),
+        QStringLiteral("cc.merge_correction"),
+        QStringLiteral("cc.flatten_correction"),
+        QStringLiteral("cc.remove_correction"),
         QStringLiteral("fx.step_in"),
         QStringLiteral("fx.step_out"),
         QStringLiteral("fx.collapse"),
@@ -3398,6 +3402,15 @@ bool Timeline::perform(const QString& id) {
         collapse();
     } else if (id == QLatin1String("cc.color_correction_mode")) {
         setCorrectionMode(!correctionMode_);
+    } else if (id == QLatin1String("cc.update_correction")) {
+        // The Color Correction tool's shortcut menu (FX Guide p.700-706).
+        openCorrectionManagement(CorrectionManagement::Update);
+    } else if (id == QLatin1String("cc.merge_correction")) {
+        openCorrectionManagement(CorrectionManagement::Merge);
+    } else if (id == QLatin1String("cc.flatten_correction")) {
+        openCorrectionManagement(CorrectionManagement::Flatten);
+    } else if (id == QLatin1String("cc.remove_correction")) {
+        openCorrectionManagement(CorrectionManagement::Remove);
     } else if (id == QLatin1String("cc.previous_uncorrected_shot") || id == QLatin1String("cc.next_uncorrected_shot")) {
         goToUncorrectedShot(id == QLatin1String("cc.next_uncorrected_shot") ? 1 : -1);
     } else if (id == QLatin1String("fx.effect_mode")) {

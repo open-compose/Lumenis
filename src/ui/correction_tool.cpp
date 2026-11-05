@@ -22,6 +22,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QContextMenuEvent>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
@@ -185,6 +186,29 @@ QToolButton* correctionActionButton(QWidget* parent, const QString& name, const 
     b->setToolTip(tip);
     b->setAutoRaise(true);
     return b;
+}
+
+QMenu* CorrectionTool::shortcutMenu(QWidget* parent) {
+    auto* menu = new QMenu(parent);
+    const std::pair<const char*, const char*> items[] = {{"cc.update_correction", QT_TR_NOOP("Update Correction")},
+                                                         {"cc.merge_correction", QT_TR_NOOP("Merge Correction")},
+                                                         {"cc.flatten_correction", QT_TR_NOOP("Flatten Correction")},
+                                                         {"cc.remove_correction", QT_TR_NOOP("Remove Correction")}};
+    for (const auto& [id, text] : items) {
+        QAction* a = menu->addAction(tr(text));
+        const QString command = QString::fromLatin1(id);
+        a->setObjectName(command);
+        if (command == QLatin1String("cc.merge_correction")) a->setEnabled(timeline_.canMergeCorrections());
+        // Queued: the command's dialog opens after the menu has closed.
+        connect(a, &QAction::triggered, this, [this, command] { timeline_.perform(command); }, Qt::QueuedConnection);
+    }
+    return menu;
+}
+
+void CorrectionTool::contextMenuEvent(QContextMenuEvent* event) {
+    QMenu* menu = shortcutMenu(this);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    menu->popup(event->globalPos());
 }
 
 CorrectionTool::CorrectionTool(Timeline& timeline, QWidget* parent) : QWidget(parent), timeline_(timeline) {

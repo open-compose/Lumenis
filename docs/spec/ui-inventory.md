@@ -353,6 +353,17 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   6.10d3b: the Effect Editor's category and parameter names for a correction,
   every hue -360 to 360 there, the editor showing only the correction in the
   mode, no group Enable buttons in the editor.
+  6.10d3c: the bar's segment span and selection by frame, a selected keyframe
+  taking the tool's adjustments, one Enable button per Levels tab in the
+  editor, the Curves tab's Master sliders shown as HSL Master's.
+  6.10d4: Update and Merge giving segments the first relationship that has a
+  correction (Tape, Clip Name, Master Clip, Sub Clip; Track), Prefer Latest
+  by the sequences' modified times, overlap meaning the same source clip and
+  track with frames in common (Prog Segment on the same track), Remove's
+  Segment boxes off at first (its picture, p.706; the text says all), Flatten's
+  Segment boxes dimmed, counts shown only in Flatten and Remove, the copy named
+  "<name>.Copy.NN" and loaded in the Record monitor, the commands on the
+  Command Palette's CC tab too.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

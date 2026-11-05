@@ -91,6 +91,10 @@ Each file is a JSON list of scenarios:
     (FX Guide p.613) and `{"apply_correction": {"name", "relationships":
     "template"|"current"}}` applies it to the current segment, or with
     `"track"` and `"frame"` to that segment in the Timeline (p.614-615);
+    `{"manage_correction": "update"|"merge"|"flatten"|"remove",
+    "relationships": [key, ...], "new_sequence": b}` is the Color Correction
+    tool's Update, Merge, Flatten or Remove Correction with those boxes
+    checked (FX Guide p.700-706);
   * `{"clip_note": text}` is Add Timeline Clip Note on the selected segments
     (p.483; "" deletes it, p.484); `expect_notes` gives each track's
     material segments' notes in order;

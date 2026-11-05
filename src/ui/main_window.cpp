@@ -1834,6 +1834,16 @@ void MainWindow::createTools() {
         if (!doc || doc->isReadOnly()) return;
         doc->addItem(model::duplicateItem(doc->bin(), sequence, QDateTime::currentDateTimeUtc()));
     });
+    // Update/Merge/Flatten/Remove Correction with Create New Sequence (FX Guide p.701-706): "a new sequence appears in
+    // the bin with the title [OldTitle].Copy 1" (ours: the bin's .Copy.NN numbering); the merged one "appears in the
+    // Timeline" (p.703), and so does each of them (ours).
+    connect(timeline_, &Timeline::correctedSequenceCreated, this, [this](const QString& binId, const model::BinItem& sequence) {
+        BinDocument* doc = binContainer_->document(binId);
+        if (!doc || doc->isReadOnly()) return;
+        const model::BinItem item = model::duplicateItem(doc->bin(), sequence, QDateTime::currentDateTimeUtc());
+        doc->addItem(item);
+        composer_->load(MonitorId::Record, binId, item);
+    });
     // Create Sequence Based on Selection (p.614): "A Select a bin dialog box opens (if you have more
     // than one bin open) ... A new sequence is placed in the selected bin, highlighted and ready to be
     // renamed." Ours: the record sequence's bin is offered first; the name is "<sequence>.Copy.NN".

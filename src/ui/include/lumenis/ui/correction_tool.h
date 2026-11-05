@@ -20,6 +20,7 @@ class QButtonGroup;
 class QMimeData;
 class QLabel;
 class QStackedWidget;
+class QMenu;
 class QToolButton;
 
 namespace lumenis::ui {
@@ -277,6 +278,11 @@ public:
     QToolButton* tabButton(const QString& path) const;
     ChromaWheel* wheel(const QString& range) const;
     LumaRangesGraph* lumaGraph() const { return lumaGraph_; }
+    // "Right-click in the Color Correction tool, and select Update Correction" (FX Guide p.700): the tool's shortcut
+    // menu, Update, Merge, Flatten and Remove Correction (p.700-706, 6.10d4), each running its command through the
+    // Timeline; Merge is dimmed "until you load versions of a sequence in both the Source monitor and the Record
+    // monitor and enter Color Correction mode" (p.702). The caller owns the menu.
+    QMenu* shortcutMenu(QWidget* parent);
 
 signals:
     // The Effect Mode and Correction Mode Settings buttons, for MainWindow (p.605-606).
@@ -291,6 +297,7 @@ signals:
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
+    void contextMenuEvent(QContextMenuEvent* event) override;
     // A template dropped "anywhere in the tab" applies to that tab's controls only (p.615).
     void dragEnterEvent(QDragEnterEvent* event) override;
     void dropEvent(QDropEvent* event) override;

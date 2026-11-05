@@ -1,10 +1,14 @@
 // The Timeline's Color Correction effect templates (FX Guide p.610-615; docs/spec/color-correction.md, 6.10d2a):
 // templates from the current segment, and applying them to it, to one tab's controls, to a segment a template is
-// dropped on and to the selected segments. Declared in lumenis/ui/timeline.h.
+// dropped on and to the selected segments. Also Update, Merge, Flatten and Remove Correction (ch.21, p.700-706; 6.10d4).
+// Declared in lumenis/ui/timeline.h.
 
+#include "lumenis/model/correction_manage.h"
 #include "lumenis/model/correction_relations.h"
 #include "lumenis/model/correction_template.h"
 #include "lumenis/ui/bin_dock.h"
+#include "lumenis/ui/composer.h"
+#include "lumenis/ui/correction_manage_dialog.h"
 #include "lumenis/ui/effect_palette.h"
 #include "lumenis/ui/timeline.h"
 
@@ -193,6 +197,81 @@ std::optional<model::CorrectionTemplate> Timeline::droppedCorrectionTemplate(con
     if (const auto automatic = automaticCorrection(lines.at(0), lines.at(1))) return automatic;
     const auto item = composer_.resolve(lines.at(0), lines.at(1));
     return item ? model::correctionTemplateOf(*item) : std::nullopt;
+}
+
+// ---------------------------------------------------------------- managing corrected sequences (p.700-706)
+
+QMap<model::CorrectionRelationship, int> Timeline::correctionCounts() const {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return model::correctionCounts(model::Sequence());
+    return model::correctionCounts(model::Sequence::fromItem(rec->item));
+}
+
+bool Timeline::canMergeCorrections() const {
+    const model::LoadedClip* src = composer_.state(MonitorId::Source).current();
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    return correctionMode_ && src && rec && src->item.kind == model::BinItemKind::Sequence && rec->item.kind == model::BinItemKind::Sequence;
+}
+
+bool Timeline::manageCorrections(CorrectionManagement what, const QList<model::CorrectionRelationship>& relationships, bool newSequence,
+                                 model::MergeConflict conflict) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return fail(tr("Load a sequence first."));
+    if (what == CorrectionManagement::Merge && !canMergeCorrections())
+        return fail(tr("Load versions of the sequence in the Source and Record monitors and enter Color Correction mode to merge their corrections."));
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    int changed = 0;
+    QString step;
+    switch (what) {
+    case CorrectionManagement::Update:
+        changed = model::updateCorrections(seq, relationships, correctionClipLookup());
+        step = tr("Update Correction");
+        break;
+    case CorrectionManagement::Merge: {
+        const model::LoadedClip* src = composer_.state(MonitorId::Source).current();
+        const bool sourceLater = src->item.modified.isValid() && rec->item.modified.isValid() && src->item.modified > rec->item.modified;
+        changed = model::mergeCorrections(seq, model::Sequence::fromItem(src->item), relationships, conflict, sourceLater, correctionClipLookup());
+        step = tr("Merge Correction");
+        break;
+    }
+    case CorrectionManagement::Flatten:
+        changed = model::flattenCorrections(seq, relationships);
+        step = tr("Flatten Correction");
+        break;
+    case CorrectionManagement::Remove:
+        changed = model::removeCorrections(seq, relationships);
+        step = tr("Remove Correction");
+        break;
+    }
+    if (changed == 0) return fail(tr("No segments were changed."));
+    if (newSequence) {
+        // "a new sequence appears in the bin with the title [OldTitle].Copy 1" (p.701, p.705, p.706); ours: the copy
+        // takes the change and the loaded sequence stays (MainWindow names and loads the copy).
+        model::BinItem item = rec->item;
+        seq.storeIn(item);
+        emit correctedSequenceCreated(rec->binId, item);
+        return true;
+    }
+    const QList<model::SegmentRef> keep = selection_;
+    const bool ok = commitSequence(step, seq);
+    selection_ = keep;
+    view_->update();
+    return ok;
+}
+
+bool Timeline::openCorrectionManagement(CorrectionManagement what) {
+    using Kind = CorrectionManageDialog::Kind;
+    const Kind kind = what == CorrectionManagement::Update ? Kind::Update
+                      : what == CorrectionManagement::Merge ? Kind::Merge
+                      : what == CorrectionManagement::Flatten ? Kind::Flatten
+                                                              : Kind::Remove;
+    if (!recordSequence()) return fail(tr("Load a sequence first."));
+    if (what == CorrectionManagement::Merge && !canMergeCorrections()) return manageCorrections(what, {}, false);
+    CorrectionManageDialog dialog(kind, correctionCounts(), this);
+    const bool accepted = correctionDialogHook_ ? correctionDialogHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!accepted) return false;
+    return manageCorrections(what, dialog.relationships(), dialog.createNewSequence(), dialog.conflict());
 }
 
 } // namespace lumenis::ui

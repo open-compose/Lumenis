@@ -724,8 +724,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   keyframe markers below the Current monitor (`CorrectionKeyframeBar` in `correction_monitors.cpp`,
   `Timeline::correctionKeyframeMarkers` and its selection, which adjustments change through `model::adjustedAt`) and
   Curves and Levels as track-only rows in the Effect Editor (`CorrectionParameter::trackOnly`; tests
-  `tst_correction_keyframes`, `tst_correction_mode`, `tst_correction_tool`), is done, so 6.10d3 is.
-  Next: 6.10d4, 6.10e, then 6.10f (the owner's report of Tools > Titler+ and Effect Editor opening as huge
+  `tst_correction_keyframes`, `tst_correction_mode`, `tst_correction_tool`), is done, so 6.10d3 is. 6.10d4, Update,
+  Merge, Flatten and Remove Correction (`src/model/correction_manage.*`, `correction_manage_dialog.*`, the tool's
+  `shortcutMenu`, `Timeline::manageCorrections`, `cc.update_correction` ...; tests `tst_correction_manage`,
+  `tst_correction_tool`, `tst_main_window`, scenario `41-update-correction.json`), is done, so 6.10d is.
+  Next: 6.10e, then 6.10f (the owner's report of Tools > Titler+ and Effect Editor opening as huge
   windows on Windows 11; ROADMAP), 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).

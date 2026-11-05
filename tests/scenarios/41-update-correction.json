@@ -1,0 +1,20 @@
+[
+  {
+    "name": "Update Correction: a clip from a corrected tape edited in later takes the tape's correction; Flatten then makes the tape's corrections segment-only, and undo brings the relationship back",
+    "guide": "FX p.700-701, p.704-705",
+    "clips": [{"name": "A", "tape": "T1"}, {"name": "B", "tape": "T2"}, {"name": "C", "tape": "T1"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 20]]}},
+    "steps": [
+      {"record_tracks": ["V1"]},
+      {"correction_type": "sourceTape"},
+      {"position": "record", "frame": 5},
+      {"correction": {"hsl/controls/master/gain": 120}},
+      {"bin_edit": "splice", "clip": "C", "at": 40},
+      {"manage_correction": "update", "relationships": ["sourceClipName"], "refused": true},
+      {"manage_correction": "update", "relationships": ["sourceTape", "sourceClipName", "masterClip", "subClip", "programTrack"]},
+      {"manage_correction": "flatten", "relationships": ["sourceTape"]},
+      {"command": "edit.undo"}
+    ],
+    "expect_relationships": {"V1": ["sourceTape/", "/", "sourceTape/"]}
+  }
+]
