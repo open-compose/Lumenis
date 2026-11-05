@@ -27,6 +27,7 @@ add_library(lumenis_media STATIC
     custom_color.cpp
     scopes.cpp
     key_effects.cpp
+    key_mattes.cpp
     burn_in.cpp
     illusion_common.h
     illusion_fx.cpp

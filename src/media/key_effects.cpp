@@ -1,4 +1,5 @@
 #include "effect_drawing.h"
+#include "key_mattes.h"
 
 #include <algorithm>
 #include <cmath>
@@ -61,37 +62,7 @@ void colourOf(const float* px, double rgb[3]) {
     for (int k = 0; k < 3; ++k) rgb[k] = a > 0 ? static_cast<double>(px[k]) / a : 0.0;
 }
 
-// A matte blurred by a box of `radius` pixels, then kept as it is, or taken at its smaller (Erode) or
-// larger (Dilate) value against the original.
-enum class MatteBlur { Blur, Erode, Dilate };
-void blurMatte(std::vector<double>& matte, int width, int height, int radius, MatteBlur mode) {
-    if (radius <= 0 || width <= 0 || height <= 0) return;
-    const std::vector<double> original = matte;
-    std::vector<double> tmp(matte.size());
-    for (int pass = 0; pass < 2; ++pass) {
-        const bool horizontal = pass == 0;
-        const int n = horizontal ? width : height;
-        const int lines = horizontal ? height : width;
-        for (int l = 0; l < lines; ++l) {
-            auto idx = [&](int i) {
-                const int c = std::clamp(i, 0, n - 1);
-                return static_cast<std::size_t>(horizontal ? l * width + c : c * width + l);
-            };
-            double sum = 0;
-            for (int i = -radius; i <= radius; ++i) sum += matte[idx(i)];
-            for (int i = 0; i < n; ++i) {
-                tmp[idx(i)] = sum / (2.0 * radius + 1.0);
-                sum += matte[idx(i + radius + 1)] - matte[idx(i - radius)];
-            }
-        }
-        matte.swap(tmp);
-    }
-    if (mode == MatteBlur::Erode) {
-        for (std::size_t i = 0; i < matte.size(); ++i) matte[i] = std::min(matte[i], original[i]);
-    } else if (mode == MatteBlur::Dilate) {
-        for (std::size_t i = 0; i < matte.size(); ++i) matte[i] = std::max(matte[i], original[i]);
-    }
-}
+// blurMatte and the RGB Keyer's per-pixel matte are in key_mattes.cpp (MSVC; key_mattes.h).
 
 // Applies `matte` (the foreground's opacity, 0 to 1) to `picture`, or shows it as a grey picture
 // (Show Alpha: "Displays the grayscale alpha channel used to apply the key effect", p.495).
@@ -135,39 +106,6 @@ Picture finish(const model::Effect& e, const Picture& layer, std::vector<double>
     return imageEffectPicture(pip, keyed, time, span);
 }
 
-// One pixel of the RGB Keyer: its matte value, and its spill taken out (rgbKeyerPicture). A function
-// of its own, with the optimizer off for it under MSVC: MSVC 14.44 failed with an internal compiler
-// error (C1001) on this loop inside rgbKeyerPicture (BUILDING.md).
-#if defined(_MSC_VER) && !defined(__clang__)
-#pragma optimize("", off)
-#endif
-double rgbKeyPixel(float* px, const model::Rgb& key, double threshold, double soft, double spill, int spillChannel) {
-    // No local arrays: with the optimizer off, MSVC warns (C4748) about arrays it cannot guard.
-    const double alpha = static_cast<double>(px[3]);
-    double r = alpha > 0 ? static_cast<double>(px[0]) / alpha : 0.0;
-    double g = alpha > 0 ? static_cast<double>(px[1]) / alpha : 0.0;
-    double b = alpha > 0 ? static_cast<double>(px[2]) / alpha : 0.0;
-    const double dr = r - key.red;
-    const double dg = g - key.green;
-    const double db = b - key.blue;
-    const double d = std::sqrt((dr * dr + dg * dg + db * db) / 3.0);
-    if (spill > 0) {
-        double& strongest = spillChannel == 0 ? r : spillChannel == 1 ? g : b;
-        const double first = spillChannel == 0 ? g : r;
-        const double second = spillChannel == 2 ? g : b;
-        const double others = first > second ? first : second;
-        if (strongest > others) {
-            strongest -= (strongest - others) * spill;
-            px[0] = static_cast<float>(r * alpha);
-            px[1] = static_cast<float>(g * alpha);
-            px[2] = static_cast<float>(b * alpha);
-        }
-    }
-    return threshold <= 0.0 ? 1.0 : ramp(d, threshold, threshold + soft);
-}
-#if defined(_MSC_VER) && !defined(__clang__)
-#pragma optimize("", on)
-#endif
 
 } // namespace
 
@@ -250,9 +188,9 @@ Picture lumaChromaKeyPicture(const model::Effect& e, const Picture& layer, doubl
 
 // ---------------------------------------------------------------- RGB Keyer
 
-// The optimizer is off for this whole function under MSVC too: with only the pixel loop's body moved out
-// (rgbKeyPixel), MSVC 14.44 still failed with C1001 a few lines further on, at the matte blur (CI run 250;
-// BUILDING.md). The heavy work is in rgbKeyPixel and blurMatte, so little speed is lost.
+// MSVC 14.44 failed with an internal compiler error (C1001) in this function four times, each after a header
+// change (CI runs 219, 250, 317, 318; BUILDING.md), the last two with the optimizer already off here. Its loops are
+// now in key_mattes.cpp, a translation unit of its own; the optimizer stays off for this function under MSVC.
 #if defined(_MSC_VER) && !defined(__clang__)
 #pragma optimize("", off)
 #endif
@@ -279,16 +217,16 @@ Picture rgbKeyerPicture(const model::Effect& e, const Picture& layer, double tim
     if (key.green > key.red && key.green >= key.blue) spillChannel = 1;
     else if (key.blue > key.red && key.blue > key.green) spillChannel = 2;
     Picture work = layer;
-    std::vector<double> matte(static_cast<std::size_t>(layer.width()) * static_cast<std::size_t>(layer.height()), 1.0);
+    std::vector<double> matte;
+    const std::size_t count = static_cast<std::size_t>(layer.width()) * static_cast<std::size_t>(layer.height());
+    rgbKeyMatte(work.data().data(), count, key.red, key.green, key.blue, threshold, soft, spill, spillChannel, matte);
+    const bool reverse = flag(e, cat, QStringLiteral("Reverse"));
     for (std::size_t i = 0; i < matte.size(); ++i) {
-        matte[i] = rgbKeyPixel(&work.data()[i * 4], key, threshold, soft, spill, spillChannel);
-    }
-    if (flag(e, cat, QStringLiteral("Reverse"))) {
-        for (double& m : matte) m = 1.0 - m;
+        if (reverse) matte[i] = 1.0 - matte[i];
     }
     blurMatte(matte, layer.width(), layer.height(), blur, MatteBlur::Blur);
     if (erode > 0) blurMatte(matte, layer.width(), layer.height(), erode, MatteBlur::Erode);
-    for (double& m : matte) m *= level;
+    for (std::size_t i = 0; i < matte.size(); ++i) matte[i] *= level;
     // Post-key colour correction, as the Color Effect does it.
     const QJsonObject params = e.parameters.value(cat).toObject();
     QJsonObject correction;
