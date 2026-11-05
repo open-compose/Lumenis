@@ -1195,8 +1195,9 @@ phase of their own. They are done in three steps:
     them, p.685), played per frame, the tool following them and adjustments adding keyframes at the position (p.683,
     p.686), done (`src/model/correction_keyframes.*`, `Timeline::storedCorrection`; tests `tst_correction_keyframes`,
     `tst_compositor`, `tst_correction_tool`); 6.10d3b, the correction parameters in the Effect Editor (the HSL Controls
-    and Hue Offsets, the Secondary sliders, ganged with the tool; the Curves and Levels as keyframe tracks only), where
-    the first keyframes are added (p.683-686); 6.10d3c, a position bar under the Current monitor with the keyframe
+    and Hue Offsets, the Secondary sliders, ganged with the tool), where the first keyframes are added (p.683-686), done
+    (`src/model/correction_effect.*`, `Timeline::setStoredCorrection`; tests `tst_correction_keyframes`,
+    `tst_correction_tool`); 6.10d3c also takes the Curves and Levels as keyframe tracks only (p.685); 6.10d3c, a position bar under the Current monitor with the keyframe
     markers: select, delete, Alt-drag (p.686); 6.10d4, Update, Merge, Flatten and Remove Correction from the tool's
     shortcut menu with their dialogs (ch.21, p.700-706). Correcting a whole sequence (p.692) uses the Color Correction
     effect and comes with 6.10e.

@@ -1,5 +1,6 @@
 // Keyframing colour corrections (FX Guide p.683-686; lumenis/model/correction_keyframes.h): which controls take
 // keyframes, values between keyframes, held curves, adjustments that add keyframes, merged sides, JSON.
+#include "lumenis/model/correction_effect.h"
 #include "lumenis/model/correction_keyframes.h"
 
 #include <QJsonArray>
@@ -117,6 +118,52 @@ private slots:
         m = mergedCorrection(source, program);
         QVERIFY(!m.keyframes.contains(QStringLiteral("hsl/controls/master/gain")));
         QCOMPARE(correctionAt(m, 0.5, span).number(QStringLiteral("hsl/controls/master/gain")), 110.0);
+    }
+
+    // The correction as the Effect Editor's effect and back (p.685, 6.10d3b).
+    void asEffect() {
+        QCOMPARE(correctionParameterCategories().mid(0, 5),
+                 (QStringList{QStringLiteral("HSL Master"), QStringLiteral("HSL Highlights"), QStringLiteral("HSL Midtones"), QStringLiteral("HSL Shadows"),
+                              QStringLiteral("HSL Hue Offsets")}));
+        QCOMPARE(correctionParameterCategories().size(), 5 + 12);
+        QCOMPARE(correctionParameterOf(QStringLiteral("HSL Master"), QStringLiteral("Gain"))->path, QStringLiteral("hsl/controls/master/gain"));
+        QCOMPARE(correctionParameterAtPath(QStringLiteral("hsl/hueOffsets/gain"))->category, QStringLiteral("HSL Master")); // the same control
+        QCOMPARE(correctionParameterOf(QStringLiteral("HSL Hue Offsets"), QStringLiteral("Shadows Hue"))->min, -360.0);
+        QCOMPARE(correctionParameterOf(QStringLiteral("Secondary Yellow"), QStringLiteral("Output Luminance"))->path,
+                 QStringLiteral("secondary/vectors/yellow/output/luminance"));
+        QVERIFY(!correctionParameterAtPath(QStringLiteral("curves/red")));
+        QCOMPARE(toolHue(340), -20.0);
+        QCOMPARE(toolHue(-190), 170.0);
+        QCOMPARE(toolHue(90), 90.0);
+
+        const EffectSpan span(11);
+        ColorCorrection c;
+        c.set(QStringLiteral("hsl/controls/shadows/gain"), 120);
+        c.set(QStringLiteral("curves/red"), QJsonArray{QJsonArray{0, 0}, QJsonArray{255, 200}});
+        c.disabled << QStringLiteral("channels");
+        setCorrectionKeyframe(c, QStringLiteral("hsl/controls/master/hue"), 0.0, span, 10);
+        setCorrectionKeyframe(c, QStringLiteral("hsl/controls/master/hue"), 1.0, span, 40);
+        const Effect e = correctionEffect(c);
+        QVERIFY(isCorrectionModeEffect(e));
+        QCOMPARE(e.parameters.value(QStringLiteral("HSL Shadows")).toObject().value(QStringLiteral("Gain")).toDouble(), 120.0);
+        QCOMPARE(keyframesOf(e, QStringLiteral("HSL Master"), QStringLiteral("Hue")).keys.size(), 2);
+        // Back unchanged; what the editor does not show stays.
+        QCOMPARE(correctionFromEffect(e, c), c);
+        // An edited value and a new keyframe go into the correction.
+        Effect edited = e;
+        QJsonObject shadows = edited.parameters.value(QStringLiteral("HSL Shadows")).toObject();
+        shadows.insert(QStringLiteral("Gain"), 90);
+        edited.parameters.insert(QStringLiteral("HSL Shadows"), shadows);
+        setKeyframe(edited, QStringLiteral("HSL Master"), QStringLiteral("Saturation"), 0.5, span, 50);
+        const ColorCorrection back = correctionFromEffect(edited, c);
+        QCOMPARE(back.number(QStringLiteral("hsl/controls/shadows/gain")), 90.0);
+        QCOMPARE(correctionKeyframesOf(back, QStringLiteral("hsl/controls/master/saturation")).keys.size(), 1);
+        QCOMPARE(back.values.value(QStringLiteral("curves/red")), c.values.value(QStringLiteral("curves/red")));
+        QCOMPARE(back.disabled, c.disabled);
+        // A value back at its default is left out.
+        shadows.insert(QStringLiteral("Gain"), 100);
+        edited.parameters.insert(QStringLiteral("HSL Shadows"), shadows);
+        QVERIFY(!correctionFromEffect(edited, c).values.contains(QStringLiteral("hsl/controls/shadows/gain")));
     }
 };
 

@@ -4,12 +4,14 @@
 #include "lumenis/media/color_correction.h"
 #include "lumenis/media/custom_color.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/correction_effect.h"
 #include "lumenis/model/correction_keyframes.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/correction_monitors.h"
 #include "lumenis/ui/correction_tool.h"
+#include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/effect_palette.h"
 #include "lumenis/ui/timeline.h"
 
@@ -26,6 +28,7 @@
 #include <QRadioButton>
 #include <QMenu>
 #include <QSignalSpy>
+#include <QSlider>
 #include <QTest>
 #include <QToolButton>
 
@@ -370,6 +373,54 @@ private slots:
         r.composer.moveTo(MonitorId::Record, 19);
         QCOMPARE(r.timeline.currentCorrection()->number(QStringLiteral("hsl/controls/master/gain")), 138.0);
         QCOMPARE(r.timeline.currentCorrection()->number(QStringLiteral("hsl/controls/master/saturation")), 60.0);
+    }
+
+    // The correction in the Effect Editor (p.683-685, 6.10d3b): its sliders ganged with the tool's, keyframes added in the
+    // editor and then by adjusting in the tool, the editor's -360 to 360 hues.
+    void effectEditorCorrection() {
+        Rig r; // A: frames 0-19, the position at 5
+        EffectEditor editor(r.timeline);
+        editor.refresh();
+        QSlider* gain = editor.slider(QStringLiteral("HSL Master"), QStringLiteral("Gain"));
+        QVERIFY(gain);
+        QVERIFY(editor.slider(QStringLiteral("HSL Shadows"), QStringLiteral("Setup")));
+        QVERIFY(editor.slider(QStringLiteral("HSL Hue Offsets"), QStringLiteral("Midtones Hue Amount")));
+        QVERIFY(editor.slider(QStringLiteral("Secondary Red"), QStringLiteral("Output Hue")));
+        QVERIFY(editor.slider(QStringLiteral("Secondary Custom 1"), QStringLiteral("Input Saturation Width")));
+        // Not shown (p.685): Isolate, Invert Last Vector, the Luma Ranges and Channels tabs.
+        QVERIFY(!editor.slider(QStringLiteral("Secondary Red"), QStringLiteral("Isolate")));
+        // The editor's slider sets the tool's control, and back.
+        gain->setValue(130);
+        QCOMPARE(r.timeline.storedCorrection()->number(QStringLiteral("hsl/controls/master/gain")), 130.0);
+        r.tool.reload();
+        QCOMPARE(r.tool.correction().number(QStringLiteral("hsl/controls/master/gain")), 130.0);
+        r.value(QStringLiteral("hsl/controls/master/saturation"))->setValue(70);
+        editor.refresh();
+        QCOMPARE(editor.slider(QStringLiteral("HSL Master"), QStringLiteral("Saturation"))->value(), 70);
+        // A first keyframe in the editor at frame 0, then an adjustment in the tool at frame 15 adds another (p.686).
+        r.composer.moveTo(MonitorId::Record, 0);
+        editor.refresh();
+        editor.setActiveParameter(QStringLiteral("HSL Master/Gain"));
+        QVERIFY(editor.addKeyframes(EffectEditor::KeyframeMode::ActiveParameter));
+        QCOMPARE(model::correctionKeyframesOf(*r.timeline.storedCorrection(), QStringLiteral("hsl/controls/master/gain")).keys.size(), 1);
+        r.composer.moveTo(MonitorId::Record, 15);
+        r.tool.reload();
+        r.value(QStringLiteral("hsl/controls/master/gain"))->setValue(80);
+        const model::ColorCorrection stored = *r.timeline.storedCorrection();
+        QCOMPARE(model::correctionKeyframesOf(stored, QStringLiteral("hsl/controls/master/gain")).keys.size(), 2);
+        r.composer.moveTo(MonitorId::Record, 0);
+        QCOMPARE(r.timeline.currentCorrection()->number(QStringLiteral("hsl/controls/master/gain")), 130.0);
+        // The editor follows the keyframes as the position moves.
+        r.composer.moveTo(MonitorId::Record, 15);
+        editor.refresh();
+        QCOMPARE(editor.slider(QStringLiteral("HSL Master"), QStringLiteral("Gain"))->value(), 80);
+        // "a value of +340 in the Effect Editor displays as -20 in the Color Correction tool" (p.685).
+        editor.slider(QStringLiteral("HSL Master"), QStringLiteral("Hue"))->setValue(340);
+        QCOMPARE(r.timeline.storedCorrection()->number(QStringLiteral("hsl/controls/master/hue")), -20.0);
+        QCOMPARE(model::toolHue(-350), 10.0);
+        // Out of the mode the editor shows effects again.
+        r.timeline.setCorrectionMode(false);
+        QVERIFY(!editor.slider(QStringLiteral("HSL Master"), QStringLiteral("Gain")));
     }
 
     void slidersAndEnableButtons() {

@@ -699,8 +699,10 @@ public:
     // with Use Marks for Segment Correction on and both marks in the Record monitor it goes on every clip of the track
     // the marks touch.
     std::optional<model::ColorCorrection> currentCorrection() const;
-    // That side's correction as the segment keeps it, keyframes and all (currentCorrection is it at the position).
+    // That side's correction as the segment keeps it, keyframes and all (currentCorrection is it at the position), and
+    // replacing it as a whole (the Effect Editor's changes, 6.10d3b), as setCurrentCorrection does otherwise.
     std::optional<model::ColorCorrection> storedCorrection() const;
+    bool setStoredCorrection(const model::ColorCorrection& correction, const QString& step);
     // Sets it, as an undo step named `step`.
     bool setCurrentCorrection(const model::ColorCorrection& correction, const QString& step);
     // The Remove Effect button in the mode: "To remove the color correction on the current segment" (p.592), both
@@ -1406,6 +1408,8 @@ private:
     QHash<QString, QList<AutomaticEntry>> automatic_;
     // Takes the current segment's corrections as the newest automatic template, after a correction made on `side`.
     void noteAutomaticCorrection(model::CorrectionSide side);
+    // setCurrentCorrection (`atPosition`: the correction at the position, merged as keyframes) and setStoredCorrection.
+    bool putCorrection(const model::ColorCorrection& correction, const QString& step, bool atPosition);
     QList<model::TrimRoller> rollers_;
     QList<model::TrimRoller> lastRollers_;
     model::TrimKind trimKind_ = model::TrimKind::Ripple;

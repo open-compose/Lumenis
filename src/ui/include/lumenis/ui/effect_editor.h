@@ -580,6 +580,10 @@ private:
 
     Timeline& timeline_;
     std::optional<model::EffectRef> shown_;
+    // Color Correction mode shows the current correction as an effect (model::correctionEffect), kept here; its changes
+    // go to Timeline::setStoredCorrection.
+    bool correctionShown_ = false;
+    model::Effect correctionEffect_;
     QString shownName_;           // "category/name" of the effect shown, to notice a replacement
     bool transitionOnly_ = false; // only the Transition parameters are shown (Trim mode)
     QWidget* body_ = nullptr;

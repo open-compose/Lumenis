@@ -350,6 +350,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   6.10d3a: correction keyframes Elastic, Curves and Levels points held between
   keyframes, an adjustment keyframing only controls that already have keyframes,
   a reset dropping a control's keyframes, the Program side's keyframes winning.
+  6.10d3b: the Effect Editor's category and parameter names for a correction,
+  every hue -360 to 360 there, the editor showing only the correction in the
+  mode, no group Enable buttons in the editor.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

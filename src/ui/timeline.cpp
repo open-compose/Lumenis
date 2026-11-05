@@ -4925,7 +4925,15 @@ bool Timeline::setCorrectionRelationship(model::CorrectionRelationship relations
     return ok;
 }
 
+bool Timeline::setStoredCorrection(const model::ColorCorrection& correction, const QString& step) {
+    return putCorrection(correction, step, false);
+}
+
 bool Timeline::setCurrentCorrection(const model::ColorCorrection& correction, const QString& step) {
+    return putCorrection(correction, step, true);
+}
+
+bool Timeline::putCorrection(const model::ColorCorrection& correction, const QString& step, bool atPosition) {
     message_.clear();
     const model::LoadedClip* rec = recordSequence();
     if (!rec) return fail(tr("Load a sequence first."));
@@ -4939,8 +4947,9 @@ bool Timeline::setCurrentCorrection(const model::ColorCorrection& correction, co
     // there (FX Guide p.686).
     model::ColorCorrection stored = model::correctionOf(t->segments[i], correctionSide());
     const model::EffectSpan span(std::max<std::int64_t>(t->segments.at(i).length, 1));
-    const model::ColorCorrection result =
-        stored.keyframes.isEmpty() ? correction : model::adjustedAt(stored, correction, span.timeOf(static_cast<double>(position - start)), span);
+    const model::ColorCorrection result = !atPosition || stored.keyframes.isEmpty()
+                                              ? correction
+                                              : model::adjustedAt(stored, correction, span.timeOf(static_cast<double>(position - start)), span);
     if (!model::applyRelationshipCorrection(seq, correctionTrack(), i, correctionRelationship_, result, correctionClipLookup()))
         return false;
     t = seq.track(correctionTrack());

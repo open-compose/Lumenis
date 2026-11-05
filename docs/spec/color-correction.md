@@ -564,6 +564,36 @@ Code: `src/model/correction_keyframes.*` (`correctionKeyframing`, `setCorrection
 * The Program side's keyframes override the Source side's for the same control; a control the Program side sets plainly
   stops following the Source side's keyframes.
 
+## 6.10d3b: the correction in the Effect Editor
+
+Code: `src/model/correction_effect.*` (`correctionParameters`, `correctionEffect`, `correctionFromEffect`, `toolHue`),
+the Effect Editor's `refresh`/`rebuild`/`changeShown` in Color Correction mode and its generated parameter categories,
+`Timeline::setStoredCorrection`. Tests: `tst_correction_keyframes` (`asEffect`), `tst_correction_tool`
+(`effectEditorCorrection`).
+
+### From the guide
+* "Manipulate many color correction parameters in the Effect Editor using sliders or parameter Enable buttons"; "Add
+  and adjust keyframes for many color correction parameters in keyframe graphs"; "You can also adjust effects other than
+  color corrections in the Effect Editor while in Color Correction mode" (p.683).
+* The Secondary sliders "appear in the Effect Editor ... Controls and Enable buttons in the Effect Editor and in the Color
+  Correction tool are ganged together"; each ChromaWheel is "two sliders in the Effect Editor, one for the Hue and the
+  other for the Hue Amount"; Hue in the Effect Editor runs from -360 to +360, "+340 in the Effect Editor displays as -20
+  in the Color Correction tool" (p.685).
+* "Add a keyframe in the Effect Editor using normal advanced keyframe techniques" to start, then adjust in the tool
+  (p.686).
+
+### Ours
+* In Color Correction mode the Effect Editor shows the current correction (the side the Correction Type works on) in
+  place of the segment's effect: categories HSL Master, HSL Highlights, HSL Midtones, HSL Shadows (Hue, Saturation,
+  Brightness, Contrast, Gain, Gamma, Setup, and Clip Low and High for Master), HSL Hue Offsets (each wheel's Hue and Hue
+  Amount) and Secondary <vector> for the twelve vectors' input and output sliders. Other effects are shown out of the
+  mode; "adjusting effects other than color corrections ... in Color Correction mode" waits for the Color Correction
+  effect (6.10e) to decide which shows when.
+* Every hue slider runs from -360 to 360 in the editor; the tool's value is the same angle in -180 to 180. Keyframes
+  keep the editor's numbers.
+* The editor's groups have no Enable buttons yet (ours; the tool's stay); a value back at its default is left out as the
+  tool leaves it. The Curves and Levels keyframe tracks come with 6.10d3c.
+
 ## 6.10a3: the Secondary group
 
 ### From the guide

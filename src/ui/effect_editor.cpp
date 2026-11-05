@@ -7,6 +7,7 @@
 #include "lumenis/ui/brush_preview.h"
 #include "lumenis/ui/tracking_window.h"
 #include "lumenis/ui/bin_dock.h"
+#include "lumenis/model/correction_effect.h"
 #include "lumenis/model/pan_scan.h"
 #include "lumenis/model/promote3d.h"
 #include "lumenis/model/title_clip.h"
@@ -102,6 +103,18 @@ const Catalog& catalog() {
                 list << p;
             }
             c.insert(o.value(QStringLiteral("name")).toString(), list);
+        }
+        // A colour correction's sliders in Color Correction mode (FX Guide p.685; lumenis/model/correction_effect.h).
+        for (const model::CorrectionParameter& cp : model::correctionParameters()) {
+            EffectParameter p;
+            p.name = cp.name;
+            p.text = cp.name;
+            p.kind = QStringLiteral("slider");
+            p.min = cp.min;
+            p.max = cp.max;
+            p.decimals = cp.decimals;
+            p.defaultValue = cp.defaultValue;
+            c[cp.category] << p;
         }
         return c;
     }();
@@ -529,6 +542,7 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
 
     connect(&timeline_, &Timeline::changed, this, &EffectEditor::refresh);
     connect(&timeline_, &Timeline::effectModeChanged, this, &EffectEditor::refresh);
+    connect(&timeline_, &Timeline::correctionModeChanged, this, &EffectEditor::refresh);
     // The Effect Preview monitor's keyframes and buttons (FX Guide p.76-77, p.103-106): its Add Keyframe
     // button runs the default command without the menu; Alt+click deletes the selected keyframes.
     connect(&timeline_.composer(), &Composer::effectKeyframePressed, this, &EffectEditor::previewKeyframePressed);
@@ -606,7 +620,48 @@ void EffectEditor::refresh() {
     std::optional<model::EffectRef> ref = timeline_.currentEffect();
     const model::Effect* effect = nullptr;
     model::Sequence seq;
-    if (ref && rec) {
+    // In Color Correction mode the editor shows the current correction (FX Guide p.683-685; 6.10d3b).
+    correctionShown_ = false;
+    if (timeline_.isCorrectionMode()) {
+        ref.reset();
+        if (const auto stored = timeline_.storedCorrection(); stored && rec) {
+            seq = model::Sequence::fromItem(rec->item);
+            const QString track = timeline_.correctionTrack();
+            std::int64_t start = 0;
+            const model::Track* t = seq.track(track);
+            const int i = t ? t->segmentAt(timeline_.composer().state(MonitorId::Record).position(), &start) : -1;
+            if (i >= 0) {
+                correctionEffect_ = model::correctionEffect(*stored);
+                effect = &correctionEffect_;
+                ref = model::EffectRef{track, start, model::EffectTarget::Segment};
+                correctionShown_ = true;
+                current_ = *effect;
+                chain_.clear();
+                level_ = 0;
+                span_ = model::EffectSpan(std::max<std::int64_t>(t->segments.at(i).length, 1));
+                effectStart_ = start;
+                // The other side is another correction (p.596).
+                const QString name = effect->category + (timeline_.correctionSide() == model::CorrectionSide::Source ? QStringLiteral("/source")
+                                                                                                                     : QStringLiteral("/program"));
+                if (ref != shown_ || name != shownName_) {
+                    shown_ = ref;
+                    shownName_ = name;
+                    transitionOnly_ = false;
+                    preview_.reset();
+                    rebuild(&*current_);
+                } else {
+                    selection_.removeIf([&](const KeyframeId& id) {
+                        return id.index >= model::keyframesOf(*current_, id.parameter.section(QLatin1Char('/'), 0, 0),
+                                                              id.parameter.section(QLatin1Char('/'), 1))
+                                                .keys.size();
+                    });
+                    syncValues(*current_);
+                }
+                updateTracks();
+                return;
+            }
+        }
+    } else if (ref && rec) {
         seq = model::Sequence::fromItem(rec->item);
         effect = model::effectFor(seq, *ref);
     }
@@ -791,7 +846,9 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     }
 
     const EffectInfo* info = EffectCatalog::builtin().find(effect->category, effect->name);
-    const QStringList categories = info ? info->parameters : QStringList();
+    const QStringList categories = info                                  ? info->parameters
+                                   : model::isCorrectionModeEffect(*effect) ? model::correctionParameterCategories()
+                                                                          : QStringList();
     int at = 0;
     // A row of controls with its keyframe track at the right, behind a graph opener's place.
     auto withTrack = [this](QHBoxLayout* row, QWidget* rowParent, KeyframeTrack::Kind kind, const QString& which,
@@ -1653,6 +1710,14 @@ bool EffectEditor::promoteTo3D() {
 
 bool EffectEditor::changeShown(const QString& description, const std::function<void(model::Effect&)>& change) {
     if (!shown_) return false;
+    // A correction shown in Color Correction mode goes back to the segment's correction (6.10d3b).
+    if (correctionShown_ && current_) {
+        const auto stored = timeline_.storedCorrection();
+        if (!stored) return false;
+        model::Effect e = *current_;
+        change(e);
+        return timeline_.setStoredCorrection(model::correctionFromEffect(e, *stored), description);
+    }
     // Every change of the shown effect keeps a Stabilize effect's Auto-Zoom current (p.279).
     auto changed = [&](model::Effect& e) {
         const model::Effect before = e;

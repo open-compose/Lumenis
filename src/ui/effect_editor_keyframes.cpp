@@ -1,6 +1,7 @@
 #include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/titler_tool.h"
 #include "lumenis/ui/intraframe_tool.h"
+#include "lumenis/model/correction_effect.h"
 #include "lumenis/model/intraframe.h"
 
 #include "lumenis/ui/timeline.h"
@@ -500,8 +501,9 @@ QStringList EffectEditor::keyframeableParameters() const {
     QStringList out;
     if (!current_) return out;
     const EffectInfo* info = EffectCatalog::builtin().find(current_->category, current_->name);
-    if (!info) return out;
-    for (const QString& category : info->parameters) {
+    // A correction in Color Correction mode has its own categories (6.10d3b).
+    const QStringList categories = info ? info->parameters : model::isCorrectionModeEffect(*current_) ? model::correctionParameterCategories() : QStringList();
+    for (const QString& category : categories) {
         const QList<EffectParameter>* params = effectParameters(category);
         if (!params) continue;
         for (const EffectParameter& p : *params) {
