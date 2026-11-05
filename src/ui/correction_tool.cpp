@@ -240,7 +240,15 @@ CorrectionTool::CorrectionTool(Timeline& timeline, QWidget* parent) : QWidget(pa
             reload();
         });
     }
-    types->addAction(tr("Color Correction Effect"))->setEnabled(false);
+    // "Color Correction effect corrections: The last option" (p.596), CCEffect (p.696; 6.10e1).
+    QAction* effect = types->addAction(tr("CC Effect"));
+    effect->setCheckable(true);
+    effect->setData(-1);
+    effect->setObjectName(QStringLiteral("type:ccEffect"));
+    connect(effect, &QAction::triggered, this, [this] {
+        timeline_.setCorrectionOnEffect(true);
+        reload();
+    });
     type_->setMenu(types);
     top->addWidget(type_);
     for (int i = 0; i < 5; ++i) top->addWidget(tab(this, QLatin1String(kGroups[i]), tr(kGroupNames[i])));
@@ -951,10 +959,13 @@ void CorrectionTool::sync() {
     // The Correction Type button and the active tabs: "Green indicates Source corrections. Blue indicates Program
     // corrections" (p.597).
     const bool program = timeline_.correctionSide() == model::CorrectionSide::Program;
+    const bool onEffect = timeline_.correctionOnEffect();
     const model::CorrectionRelationship type = timeline_.correctionRelationship();
-    type_->setText(tr(qPrintable(model::relationshipText(type))));
-    for (QAction* a : type_->menu()->actions()) a->setChecked(a->isCheckable() && a->data().toInt() == static_cast<int>(type));
-    const QColor tint = program ? QColor(0x3a, 0x6e, 0xc8) : QColor(0x3c, 0xa0, 0x50);
+    type_->setText(onEffect ? tr("CC Effect") : tr(qPrintable(model::relationshipText(type))));
+    const int checked = onEffect ? -1 : static_cast<int>(type);
+    for (QAction* a : type_->menu()->actions()) a->setChecked(a->isCheckable() && a->data().toInt() == checked);
+    // "Gray indicates a Color Correction effect correction" (p.597).
+    const QColor tint = onEffect ? QColor(0x80, 0x80, 0x80) : program ? QColor(0x3a, 0x6e, 0xc8) : QColor(0x3c, 0xa0, 0x50);
     QPalette pal = type_->palette();
     pal.setColor(QPalette::Button, tint);
     type_->setPalette(pal);

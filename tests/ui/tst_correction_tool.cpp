@@ -99,6 +99,12 @@ struct Rig {
     model::Segment segment(int index) const {
         return model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(index);
     }
+    QAction* typeAction(const QString& key) const {
+        for (QAction* a : tool.typeButton()->menu()->actions()) {
+            if (a->objectName() == QStringLiteral("type:") + key) return a;
+        }
+        return nullptr;
+    }
     QDoubleSpinBox* value(const QString& path) const { return tool.control(path)->findChild<QDoubleSpinBox*>(QStringLiteral("value")); }
 };
 
@@ -580,6 +586,72 @@ private slots:
         QVERIFY(r.timeline.openCorrectionManagement(Timeline::CorrectionManagement::Merge));
         QCOMPARE(r.segment(0).sourceCorrection.number(QStringLiteral("hsl/controls/master/gain")), 120.0);
         QCOMPARE(r.segment(1).sourceCorrection.number(QStringLiteral("hsl/controls/master/gain")), 90.0);
+    }
+
+    // The Color Correction effect as a correction (p.692-696, 6.10e1): CC Effect in the Correction Type menu, the tool's
+    // adjustments on the segment's effect, an empty top track filled with filler carrying it, and the AutoCorrect
+    // corrections when it comes from the Effect Palette.
+    void correctionEffect() {
+        Rig r; // A: frames 0-19, B 20-39, the position at 5
+        QAction* ccEffect = r.typeAction(QStringLiteral("ccEffect"));
+        QVERIFY(ccEffect && ccEffect->isEnabled());
+        ccEffect->trigger();
+        QVERIFY(r.timeline.correctionOnEffect());
+        QCOMPARE(r.tool.typeButton()->text(), QStringLiteral("CC Effect"));
+        r.value(QStringLiteral("hsl/controls/master/gain"))->setValue(130);
+        model::Segment a = r.segment(0);
+        QVERIFY(a.effect && model::isColorCorrectionEffect(*a.effect));
+        QCOMPARE(model::colorCorrectionOf(*a.effect).number(QStringLiteral("hsl/controls/master/gain")), 130.0);
+        QVERIFY(a.sourceCorrection.isEmpty() && a.programCorrection.isEmpty());
+        // A relationship correction on the same segment is a second correction, applied first (p.597, p.693).
+        r.typeAction(QStringLiteral("sourceSegment"))->trigger();
+        QVERIFY(!r.timeline.correctionOnEffect());
+        r.value(QStringLiteral("hsl/controls/master/saturation"))->setValue(80);
+        a = r.segment(0);
+        QCOMPARE(a.sourceCorrection.number(QStringLiteral("hsl/controls/master/saturation")), 80.0);
+        QCOMPARE(model::colorCorrectionOf(*a.effect).number(QStringLiteral("hsl/controls/master/gain")), 130.0);
+        // Remove Effect with CC Effect takes only the effect.
+        r.timeline.setCorrectionOnEffect(true);
+        QVERIFY(r.timeline.removeCorrection());
+        QVERIFY(!r.segment(0).effect);
+        QVERIFY(r.segment(0).hasCorrection());
+        r.timeline.setCorrectionRelationship(model::CorrectionRelationship::SourceSegment);
+
+        // An empty track above the others: the correction goes on filler as long as the sequence (p.692-693).
+        model::BinItem item = r.composer.state(MonitorId::Record).current()->item;
+        model::Sequence seq = model::Sequence::fromItem(item);
+        const auto v2 = seq.addTrack(model::TrackKind::Video);
+        QVERIFY(v2);
+        seq.storeIn(item);
+        r.composer.load(MonitorId::Record, QStringLiteral("bin"), item);
+        r.composer.moveTo(MonitorId::Record, 25);
+        QCOMPARE(r.timeline.correctionTrack(), *v2);
+        r.tool.reload();
+        QVERIFY(r.timeline.correctionOnEffect()); // filler takes no relationship correction (p.695)
+        r.value(QStringLiteral("hsl/controls/master/gain"))->setValue(90);
+        const model::Sequence after = model::Sequence::fromItem(r.composer.state(MonitorId::Record).current()->item);
+        const model::Track* top = after.track(*v2);
+        QVERIFY(top);
+        QCOMPARE(top->segments.size(), 1);
+        QVERIFY(top->segments.at(0).isFiller());
+        QCOMPARE(top->segments.at(0).length, 40);
+        QCOMPARE(model::colorCorrectionOf(*top->segments.at(0).effect).number(QStringLiteral("hsl/controls/master/gain")), 90.0);
+
+        // From the Effect Palette: the AutoCorrect corrections (p.695), from the frame at the position in the segment.
+        QList<std::int64_t> frames;
+        r.timeline.setAutoCorrection([&](std::int64_t frame) {
+            frames << frame;
+            model::ColorCorrection c;
+            c.set(QStringLiteral("hsl/controls/master/gain"), 111);
+            return c;
+        });
+        const EffectInfo* cc = EffectCatalog::builtin().find(QStringLiteral("Image"), QStringLiteral("Color Correction"));
+        QVERIFY(cc);
+        QVERIFY(r.timeline.dropEffect(QStringLiteral("V1"), 30, *cc));
+        QCOMPARE(frames, (QList<std::int64_t>{25}));
+        QCOMPARE(model::colorCorrectionOf(*r.segment(1).effect).number(QStringLiteral("hsl/controls/master/gain")), 111.0);
+        QVERIFY(r.timeline.dropEffect(QStringLiteral("V1"), 3, *cc));
+        QCOMPARE(frames.last(), 0); // the position is not in A: its first frame
     }
 
     void slidersAndEnableButtons() {

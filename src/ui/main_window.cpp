@@ -1752,6 +1752,26 @@ void MainWindow::createTools() {
         }
         doc->addItem(model::correctionTemplateItem(t, name, QDateTime::currentDateTimeUtc()));
     });
+    // The Color Correction effect from the Effect Palette makes the AutoCorrect tab's corrections in turn (FX Guide
+    // p.695-696), each from the uncorrected frame as the tool's buttons are (6.10e1).
+    timeline_->setAutoCorrection([this](std::int64_t frame) {
+        model::ColorCorrection c;
+        static const std::pair<const char*, media::AutoCorrection> kinds[] = {
+            {"hslAutoBalance", media::AutoCorrection::HslBalance},       {"hslAutoBlack", media::AutoCorrection::HslBlack},
+            {"hslAutoContrast", media::AutoCorrection::HslContrast},     {"hslAutoWhite", media::AutoCorrection::HslWhite},
+            {"curvesAutoBalance", media::AutoCorrection::CurvesBalance}, {"curvesAutoContrast", media::AutoCorrection::CurvesContrast}};
+        composer_->setUncorrectedPictures(true);
+        const QImage image = composer_->pictureAt(MonitorId::Record, frame, QSize(160, 90));
+        composer_->setUncorrectedPictures(false);
+        if (image.isNull()) return c;
+        for (const char* key : {"autoCorrect1", "autoCorrect2", "autoCorrect3"}) {
+            const QString value = settings_->text(QStringLiteral("Correction"), QLatin1String(key));
+            for (const auto& [name, kind] : kinds) {
+                if (value == QLatin1String(name)) media::autoCorrect(c, image, kind, true);
+            }
+        }
+        return c;
+    });
     correctionTool_->setPictureSource([this](bool corrected) {
         const model::MonitorState& r = composer_->state(MonitorId::Record);
         composer_->setUncorrectedPictures(!corrected);

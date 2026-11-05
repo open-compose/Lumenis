@@ -686,7 +686,22 @@ public:
     model::CorrectionRelationship correctionRelationship() const { return correctionRelationship_; }
     model::CorrectionSide correctionSide() const { return model::sideOf(correctionRelationship_); }
     bool setCorrectionRelationship(model::CorrectionRelationship relationship);
-    void setCorrectionSide(model::CorrectionSide side) { correctionRelationship_ = model::segmentRelationship(side); }
+    void setCorrectionSide(model::CorrectionSide side) {
+        correctionOnEffect_ = false;
+        correctionRelationship_ = model::segmentRelationship(side);
+    }
+    // "Color Correction effect corrections: The last option lets you make a color correction using the Color Correction
+    // effect" (FX Guide p.596; 6.10e1): with CC Effect chosen in the Correction Type menu the tool's correction is the
+    // Color Correction effect's on the segment at the position (currentCorrection, setCurrentCorrection, storedCorrection
+    // ...), added at the first adjustment "without the automatic corrections set in the AutoCorrect tab" (p.696). On
+    // filler too, the only way to correct it (p.695); a correction track holding only filler, or nothing, is first filled
+    // with filler as long as the sequence ("Media Composer fills the entire length of the empty track with filler material
+    // and applies a Color Correction effect", p.692). Choosing a relationship turns it off.
+    bool correctionOnEffect() const { return correctionOnEffect_; }
+    void setCorrectionOnEffect(bool on) {
+        correctionOnEffect_ = on;
+        correctionEffectAuto_ = false;
+    }
     // "When you move the position indicator to a segment that has color correction, the Correction Type button changes
     // to indicate the type of correction that is applied to that segment" (p.596): the relationship of the current
     // segment's correction, the selected side's if it has both; nothing for an uncorrected segment. followCorrectionType
@@ -863,6 +878,14 @@ public:
     // An effect double-clicked in the Effect Palette (p.44): on the
     // selected segments, or on the transitions with trim rollers.
     bool applyEffectToSelection(const EffectInfo& effect);
+    // "When you apply the Color Correction effect from the Effect Palette, Media Composer makes the automatic color
+    // corrections set in the AutoCorrect tab" (FX Guide p.693, p.622-623, p.695; 6.10e1): the correction made for a
+    // segment from the frame of it at `frame` in the sequence (the position when it is in the segment, else its first
+    // frame; "Media Composer bases the color correction ... on its analysis of the single frame that is active",
+    // p.692). MainWindow gives the Correction setting's First, Second and Third Correction; without a hook the effect
+    // goes on empty.
+    using AutoCorrection = std::function<model::ColorCorrection(std::int64_t frame)>;
+    void setAutoCorrection(AutoCorrection hook) { autoCorrection_ = std::move(hook); }
     // Remove Effect (p.47): the effect the Effect Editor would show; without one, the Audio EQ
     // effects at the position on the selected audio tracks (p.741).
     bool removeEffectAtPosition();
@@ -1444,6 +1467,11 @@ private:
     bool effectMode_ = false;
     bool correctionMode_ = false;
     model::CorrectionRelationship correctionRelationship_ = model::CorrectionRelationship::SourceSegment;
+    bool correctionOnEffect_ = false;
+    bool correctionEffectAuto_ = false; // CC Effect chosen by followCorrectionType on filler
+    AutoCorrection autoCorrection_;
+    // Gives each Color Correction effect just applied to `refs` (segments by track and start) its AutoCorrect correction.
+    void autoCorrectEffects(model::Sequence& seq, const QList<model::SegmentRef>& refs);
     // The selected correction keyframe markers (frames into the segment) and the segment they belong to (its first
     // frame and track), so another segment starts with none.
     std::function<bool(CorrectionManageDialog&)> correctionDialogHook_;
@@ -1461,6 +1489,10 @@ private:
     void noteAutomaticCorrection(model::CorrectionSide side);
     // setCurrentCorrection (`atPosition`: the correction at the position, merged as keyframes) and setStoredCorrection.
     bool putCorrection(const model::ColorCorrection& correction, const QString& step, bool atPosition);
+    bool putEffectCorrection(const model::ColorCorrection& correction, const QString& step, bool atPosition);
+    // The Color Correction effect's correction on the segment at the position on the correction track (CC Effect):
+    // empty for a segment without one, filler included; nothing without a sequence or a correction track.
+    std::optional<model::ColorCorrection> effectCorrection(bool atPosition) const;
     QList<model::TrimRoller> rollers_;
     QList<model::TrimRoller> lastRollers_;
     model::TrimKind trimKind_ = model::TrimKind::Ripple;

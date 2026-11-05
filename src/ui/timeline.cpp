@@ -4898,6 +4898,7 @@ std::optional<std::pair<std::int64_t, std::int64_t>> Timeline::correctionShot(in
 }
 
 std::optional<model::ColorCorrection> Timeline::currentCorrection() const {
+    if (correctionOnEffect_) return effectCorrection(true);
     const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
     if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
     const model::Sequence seq = model::Sequence::fromItem(rec->item);
@@ -4917,6 +4918,7 @@ std::optional<model::ColorCorrection> Timeline::currentCorrection() const {
 }
 
 std::optional<model::ColorCorrection> Timeline::storedCorrection() const {
+    if (correctionOnEffect_) return effectCorrection(false);
     const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
     if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
     const model::Sequence seq = model::Sequence::fromItem(rec->item);
@@ -4949,11 +4951,41 @@ std::optional<model::CorrectionRelationship> Timeline::segmentCorrectionType() c
 }
 
 void Timeline::followCorrectionType() {
-    if (const auto r = segmentCorrectionType()) correctionRelationship_ = *r;
+    if (const auto r = segmentCorrectionType()) {
+        correctionRelationship_ = *r;
+        correctionOnEffect_ = false;
+        correctionEffectAuto_ = false;
+        return;
+    }
+    // "You cannot apply relationship color corrections to filler" (p.695): on filler, or an empty correction track, the
+    // tool works on the Color Correction effect (p.692); back on a clip it returns to the relationship it had (ours).
+    const model::LoadedClip* loaded = composer_.state(MonitorId::Record).current();
+    if (loaded && loaded->item.kind == model::BinItemKind::Sequence) {
+        const model::Sequence now = model::Sequence::fromItem(loaded->item);
+        const model::Track* track = now.track(correctionTrack());
+        const int at = track ? track->segmentAt(composer_.state(MonitorId::Record).position()) : -1;
+        const bool filler = track && (at < 0 || track->segments.at(at).isFiller());
+        if (filler && !correctionOnEffect_) {
+            correctionOnEffect_ = true;
+            correctionEffectAuto_ = true;
+        } else if (!filler && correctionEffectAuto_) {
+            correctionOnEffect_ = false;
+            correctionEffectAuto_ = false;
+        }
+    }
+    // "Gray indicates a Color Correction effect correction" (p.597): a segment corrected only by the effect shows CC
+    // Effect.
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(correctionTrack());
+    const int i = t ? t->segmentAt(composer_.state(MonitorId::Record).position()) : -1;
+    if (i >= 0 && t->segments.at(i).effect && model::isColorCorrectionEffect(*t->segments.at(i).effect)) correctionOnEffect_ = true;
 }
 
 bool Timeline::setCorrectionRelationship(model::CorrectionRelationship relationship) {
     message_.clear();
+    correctionOnEffect_ = false;
     correctionRelationship_ = relationship;
     const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
     if (!rec || rec->item.kind != model::BinItemKind::Sequence || rec->item.locked) return false;
@@ -4976,8 +5008,69 @@ bool Timeline::setCurrentCorrection(const model::ColorCorrection& correction, co
     return putCorrection(correction, step, true);
 }
 
+std::optional<model::ColorCorrection> Timeline::effectCorrection(bool atPosition) const {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(correctionTrack());
+    if (!t) return std::nullopt;
+    std::int64_t start = 0;
+    const std::int64_t position = composer_.state(MonitorId::Record).position();
+    const int i = t->segmentAt(position, &start);
+    if (i < 0) return model::ColorCorrection{}; // an empty track: the effect comes with the first adjustment
+    const model::Segment& s = t->segments.at(i);
+    if (!s.effect || !model::isColorCorrectionEffect(*s.effect)) return model::ColorCorrection{};
+    const model::ColorCorrection c = model::colorCorrectionOf(*s.effect);
+    if (!atPosition || c.keyframes.isEmpty()) return c;
+    const model::EffectSpan span(std::max<std::int64_t>(s.length, 1));
+    return model::correctionAt(c, span.timeOf(static_cast<double>(position - start)), span);
+}
+
+bool Timeline::putEffectCorrection(const model::ColorCorrection& correction, const QString& step, bool atPosition) {
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return fail(tr("Load a sequence first."));
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    model::Track* t = seq.track(correctionTrack());
+    if (!t) return fail(tr("There is no video track to correct."));
+    // An empty top track (only filler, or nothing) is filled with filler the sequence's length (p.692).
+    const bool empty = std::all_of(t->segments.cbegin(), t->segments.cend(), [](const model::Segment& g) { return g.isFiller() && !g.effect; });
+    if (empty) {
+        const std::int64_t length = std::max<std::int64_t>(seq.duration(), 1);
+        t->segments = {model::Segment::filler(length)};
+    }
+    std::int64_t start = 0;
+    const std::int64_t position = composer_.state(MonitorId::Record).position();
+    const int i = t->segmentAt(position, &start);
+    if (i < 0) return fail(tr("There is no segment to correct at the position."));
+    model::Segment& s = t->segments[i];
+    if (s.effect && !model::isColorCorrectionEffect(*s.effect))
+        return fail(tr("The segment has another effect. Nest the Color Correction effect on it from the Effect Palette."));
+    model::Effect e;
+    if (s.effect) {
+        e = *s.effect;
+    } else {
+        e.category = QStringLiteral("Image");
+        e.name = QStringLiteral("Color Correction");
+    }
+    const model::ColorCorrection stored = model::colorCorrectionOf(e);
+    const model::EffectSpan span(std::max<std::int64_t>(s.length, 1));
+    const model::ColorCorrection result = !atPosition || stored.keyframes.isEmpty()
+                                              ? correction
+                                              : model::adjustedAt(stored, correction, span.timeOf(static_cast<double>(position - start)), span,
+                                                                  correctionKeyframeSelection());
+    if (result == stored && s.effect) return false;
+    model::setColorCorrection(e, result);
+    s.effect = e;
+    const QList<model::SegmentRef> keep = selection_;
+    const bool ok = commitSequence(step, seq);
+    selection_ = keep;
+    view_->update();
+    return ok;
+}
+
 bool Timeline::putCorrection(const model::ColorCorrection& correction, const QString& step, bool atPosition) {
     message_.clear();
+    if (correctionOnEffect_) return putEffectCorrection(correction, step, atPosition);
     const model::LoadedClip* rec = recordSequence();
     if (!rec) return fail(tr("Load a sequence first."));
     model::Sequence seq = model::Sequence::fromItem(rec->item);
@@ -5051,6 +5144,15 @@ bool Timeline::removeCorrection() {
     model::Sequence seq = model::Sequence::fromItem(rec->item);
     model::Track* t = seq.track(correctionTrack());
     const int i = t ? t->segmentAt(composer_.state(MonitorId::Record).position()) : -1;
+    // With CC Effect, the segment's Color Correction effect goes (6.10e1).
+    if (correctionOnEffect_ && i >= 0 && t->segments.at(i).effect && model::isColorCorrectionEffect(*t->segments.at(i).effect)) {
+        t->segments[i].effect.reset();
+        const QList<model::SegmentRef> keep = selection_;
+        const bool ok = commitSequence(tr("Remove Color Correction"), seq);
+        selection_ = keep;
+        view_->update();
+        return ok;
+    }
     if (i < 0 || !t->segments.at(i).hasCorrection()) return fail(tr("There is no color correction on the current segment."));
     t->segments[i].sourceCorrection = {};
     t->segments[i].programCorrection = {};
@@ -5072,13 +5174,17 @@ std::optional<Timeline::CorrectionKeyframeMarkers> Timeline::correctionKeyframeM
     const model::Track* t = seq.track(correctionTrack());
     std::int64_t start = 0;
     const int i = t ? t->segmentAt(composer_.state(MonitorId::Record).position(), &start) : -1;
-    if (i < 0 || t->segments.at(i).isFiller()) return std::nullopt;
+    if (i < 0 || (t->segments.at(i).isFiller() && !correctionOnEffect_)) return std::nullopt;
     model::Segment s = t->segments.at(i);
     CorrectionKeyframeMarkers out;
     out.start = start;
     out.length = s.length;
     const model::EffectSpan span(std::max<std::int64_t>(s.length, 1));
-    out.frames = model::correctionKeyframeFrames(model::correctionOf(s, correctionSide()), span);
+    // With CC Effect, the effect's correction's keyframes (6.10e1).
+    const model::ColorCorrection shown = correctionOnEffect_ ? (s.effect && model::isColorCorrectionEffect(*s.effect) ? model::colorCorrectionOf(*s.effect)
+                                                                                                                      : model::ColorCorrection{})
+                                                             : model::correctionOf(s, correctionSide());
+    out.frames = model::correctionKeyframeFrames(shown, span);
     const QList<double> selected = correctionKeyframeSelection();
     for (double f : out.frames) {
         out.selected << std::any_of(selected.cbegin(), selected.cend(), [f](double g) { return std::abs(f - g) < 0.5; });
@@ -5911,6 +6017,21 @@ bool Timeline::addTransitions(model::Sequence& seq, const QList<model::TrimRolle
     return true;
 }
 
+void Timeline::autoCorrectEffects(model::Sequence& seq, const QList<model::SegmentRef>& refs) {
+    if (!autoCorrection_) return;
+    const std::int64_t position = composer_.state(MonitorId::Record).position();
+    for (const model::SegmentRef& ref : refs) {
+        model::Track* t = seq.track(ref.track);
+        std::int64_t start = 0;
+        const int i = t ? t->segmentAt(ref.start, &start) : -1;
+        if (i < 0) continue;
+        model::Segment& s = t->segments[i];
+        if (!s.effect || !model::isColorCorrectionEffect(*s.effect)) continue;
+        const std::int64_t frame = position >= start && position < start + s.length ? position : start;
+        model::setColorCorrection(*s.effect, autoCorrection_(frame));
+    }
+}
+
 bool Timeline::dropEffect(const QString& track, std::int64_t frame, const EffectInfo& effect,
                           std::optional<std::int64_t> cut) {
     message_.clear();
@@ -5939,6 +6060,7 @@ bool Timeline::dropEffect(const QString& track, std::int64_t frame, const Effect
             return fail(tr("There is no segment there."));
         }
         if (!nest && model::isStabilizeEffect(effect.effect())) stabilize = std::pair{track, start};
+        if (!nest && model::isColorCorrectionEffect(effect.effect())) autoCorrectEffects(seq, {{track, start}});
     } else {
         return fail(tr("This effect cannot be applied there."));
     }
@@ -5994,14 +6116,17 @@ bool Timeline::applyEffectToSelection(const EffectInfo& effect) {
     } else if (!selection_.isEmpty()) {
         int applied = 0;
         if (effect.segment) {
+            QList<model::SegmentRef> corrected;
             for (const model::SegmentRef& ref : selection_) {
                 // Alt+double-click nests it inside the segment's effect (FX Guide p.276).
                 const bool nest = QGuiApplication::keyboardModifiers().testFlag(Qt::AltModifier);
                 if (video(ref.track) && model::applySegmentEffect(seq, ref.track, ref.start, effect.effect(), nest)) {
                     ++applied;
                     if (!nest && model::isStabilizeEffect(effect.effect())) stabilize = std::pair{ref.track, ref.start};
+                    if (!nest && model::isColorCorrectionEffect(effect.effect())) corrected << ref;
                 }
             }
+            autoCorrectEffects(seq, corrected);
             if (applied != 1) stabilize.reset();
         } else {
             // A transition effect goes on the selected segments' head cuts.

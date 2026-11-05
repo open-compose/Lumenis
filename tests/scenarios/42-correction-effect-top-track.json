@@ -1,0 +1,17 @@
+[
+  {
+    "name": "A Color Correction effect on an empty top track: the first adjustment fills the track with filler the sequence's length carrying the effect; the clips below keep no relationship correction",
+    "guide": "FX p.692-693, p.695-696",
+    "clips": [{"name": "A", "tape": "T1"}, {"name": "B", "tape": "T2"}],
+    "sequence": {"tracks": {"V1": [["A", 0, 20], ["B", 0, 15]], "V2": []}},
+    "steps": [
+      {"record_tracks": ["V2"]},
+      {"correction_type": "ccEffect"},
+      {"position": "record", "frame": 5},
+      {"correction": {"hsl/controls/master/gain": 120}},
+      {"correction": {"hsl/controls/master/saturation": 80}}
+    ],
+    "expect": {"V1": [["A", 0, 20], ["B", 0, 15]], "V2": [["filler", 35, {"effect": "Color Correction"}]]},
+    "expect_corrected": {"V1": [false, false]}
+  }
+]

@@ -203,11 +203,11 @@
         {
           "name": "AutoCorrect",
           "options": [
-            {"key": "autoCorrect1", "type": "choice", "style": "menu", "label": "First Correction", "default": "hslAutoBalance", "page": 1166, "later": true,
+            {"key": "autoCorrect1", "type": "choice", "style": "menu", "label": "First Correction", "default": "hslAutoBalance", "page": 1166,
               "choices": [{"value": "nothing", "label": "Nothing"}, {"value": "hslAutoBalance", "label": "HSL Auto Balance"}, {"value": "hslAutoBlack", "label": "HSL Auto Black"}, {"value": "hslAutoContrast", "label": "HSL Auto Contrast"}, {"value": "hslAutoWhite", "label": "HSL Auto White"}, {"value": "curvesAutoBalance", "label": "Curves Auto Balance"}, {"value": "curvesAutoContrast", "label": "Curves Auto Contrast"}]},
-            {"key": "autoCorrect2", "type": "choice", "style": "menu", "label": "Second Correction", "default": "nothing", "page": 1166, "later": true,
+            {"key": "autoCorrect2", "type": "choice", "style": "menu", "label": "Second Correction", "default": "nothing", "page": 1166,
               "choices": [{"value": "nothing", "label": "Nothing"}, {"value": "hslAutoBalance", "label": "HSL Auto Balance"}, {"value": "hslAutoBlack", "label": "HSL Auto Black"}, {"value": "hslAutoContrast", "label": "HSL Auto Contrast"}, {"value": "hslAutoWhite", "label": "HSL Auto White"}, {"value": "curvesAutoBalance", "label": "Curves Auto Balance"}, {"value": "curvesAutoContrast", "label": "Curves Auto Contrast"}]},
-            {"key": "autoCorrect3", "type": "choice", "style": "menu", "label": "Third Correction", "default": "nothing", "page": 1166, "later": true,
+            {"key": "autoCorrect3", "type": "choice", "style": "menu", "label": "Third Correction", "default": "nothing", "page": 1166,
               "choices": [{"value": "nothing", "label": "Nothing"}, {"value": "hslAutoBalance", "label": "HSL Auto Balance"}, {"value": "hslAutoBlack", "label": "HSL Auto Black"}, {"value": "hslAutoContrast", "label": "HSL Auto Contrast"}, {"value": "hslAutoWhite", "label": "HSL Auto White"}, {"value": "curvesAutoBalance", "label": "Curves Auto Balance"}, {"value": "curvesAutoContrast", "label": "Curves Auto Contrast"}]}
           ]
         },

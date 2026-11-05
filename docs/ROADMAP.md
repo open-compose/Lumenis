@@ -1210,7 +1210,9 @@ phase of their own. They are done in three steps:
     the first one, without the AutoCorrect corrections), the relationship correction applied first and its result the
     effect's input (p.693-694, p.696); the effect from the Effect Palette making the AutoCorrect tab's three corrections
     (the Correction setting's First/Second/Third Correction, p.695-696, p.622); a whole sequence corrected on an empty
-    top track, filled with filler carrying the effect (p.692-693, p.695); 6.10e2, the Color Info tool (Tools > Color Info
+    top track, filled with filler carrying the effect (p.692-693, p.695), done (`Timeline::setCorrectionOnEffect`,
+    `putEffectCorrection`, `setAutoCorrection`; tests `tst_correction_tool`, `tst_compositor`, scenario
+    `42-correction-effect-top-track.json`); 6.10e2, the Color Info tool (Tools > Color Info
     Tool, its shortcut menu's options and the tool's Color Info button, p.696-697); 6.10e3, shape-based correction in the
     CC Effect: Shapes and Base layers, Show Alpha, Serial Mode, Show Result, Invert Alpha, Softness and trackers on
     shapes (p.697-699); 6.10e4, safe colours: the Safe Color settings and their graph, the warnings in the monitors and

@@ -594,6 +594,38 @@ the Effect Editor's `refresh`/`rebuild`/`changeShown` in Color Correction mode a
 * The editor's groups have no Enable buttons yet (ours; the tool's stay); a value back at its default is left out as the
   tool leaves it. The Curves and Levels keyframe tracks came with 6.10d3c.
 
+## 6.10e1: the Color Correction effect as a correction
+
+Code: `Timeline::correctionOnEffect`/`setCorrectionOnEffect`, `effectCorrection` and `putEffectCorrection` behind
+`currentCorrection`/`storedCorrection`/`setCurrentCorrection`, `followCorrectionType`, `removeCorrection`,
+`Timeline::setAutoCorrection` with `autoCorrectEffects` (MainWindow gives the Correction setting's AutoCorrect tab), the
+tool's "CC Effect" menu entry, the compositor's Color Correction effect on filler and with keyframes. Tests:
+`tst_correction_tool` (`correctionEffect`), `tst_compositor` (`correctionEffectOnFiller`), scenario
+`42-correction-effect-top-track.json`.
+
+### From the guide
+* The Correction Type menu's last option makes "a color correction using the Color Correction effect"; "Gray indicates
+  a Color Correction effect correction" (p.596-597); "Click the Correction Type button and select CCEffect ... Once you
+  make an adjustment, the Color Correction effect appears on the segment", without the AutoCorrect corrections (p.696).
+* "Media Composer processes the relationship correction first, and its result is the input to the color correction
+  effect" (p.597, p.693).
+* A whole sequence: a video track above the others, its Record Track button selected; "Once you make a color adjustment,
+  Media Composer fills the entire length of the empty track with filler material and applies a Color Correction
+  effect. The filler in this case is not opaque material but simply a container" (p.692-693); "You cannot apply
+  relationship color corrections to filler" (p.695).
+* From the Effect Palette, "Media Composer makes the automatic color corrections set in the AutoCorrect tab", up to
+  three: Nothing, HSL Auto Balance/Black/Contrast/White, Curves Auto Balance/Contrast (p.622-623, p.695-696).
+
+### Ours
+* With CC Effect the tool reads and writes the effect's correction on the segment at the position on the correction
+  track, its keyframes as a relationship correction's (6.10d3). The effect is added at the first adjustment; a segment
+  with another effect refuses (nest the Color Correction effect from the Effect Palette instead).
+* On filler, or an empty correction track, the tool turns to CC Effect by itself and back when the position returns to
+  a clip. A track holding only filler (or nothing) is filled with one filler segment the sequence's length.
+* Remove Effect with CC Effect removes only the effect; a segment corrected only by the effect shows CC Effect.
+* The AutoCorrect corrections are made from the uncorrected frame at the position when it is in the segment, else the
+  segment's first frame, in the order of the three menus.
+
 ## 6.10d4: managing colour-corrected sequences
 
 Code: `src/model/correction_manage.*` (`correctionCounts`, `updateCorrections`, `mergeCorrections`, `flattenCorrections`,

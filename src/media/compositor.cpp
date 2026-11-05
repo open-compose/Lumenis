@@ -751,8 +751,19 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 continue;
             }
             if (model::isColorCorrectionEffect(e)) {
-                // The Color Correction effect (FX Guide p.693): its correction on the segment over the tracks below.
-                layer = colorCorrectedPicture(model::colorCorrectionOf(e), layer);
+                // The Color Correction effect (FX Guide p.693): its correction (at the frame, with its keyframes, 6.10e1)
+                // on the segment over the tracks below. On filler it corrects the tracks below: "The filler in this case
+                // is not opaque material but simply a container for the Color Correction effect" (p.692).
+                const model::ColorCorrection own = model::colorCorrectionOf(e);
+                const model::EffectSpan span(std::max<std::int64_t>(length, 1));
+                const model::ColorCorrection at =
+                    own.keyframes.isEmpty() ? own : model::correctionAt(own, span.timeOf(static_cast<double>(tf->offset)), span);
+                if (tf->segment->isFiller()) {
+                    result = colorCorrectedPicture(at, result);
+                    result.quantize(c.precision);
+                    continue;
+                }
+                layer = colorCorrectedPicture(at, layer);
                 layer.quantize(c.precision);
                 result = over(layer, result);
                 result.quantize(c.precision);

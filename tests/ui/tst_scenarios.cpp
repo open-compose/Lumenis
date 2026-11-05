@@ -420,6 +420,11 @@ struct Run {
             // The Correction Type button (FX Guide p.596-598): a relationship's key; on a segment corrected on that side
             // it converts the correction.
             timeline.setCorrectionMode(true);
+            // "ccEffect": the Color Correction effect (FX Guide p.596, p.696).
+            if (o.value(QStringLiteral("correction_type")).toString() == QLatin1String("ccEffect")) {
+                timeline.setCorrectionOnEffect(true);
+                return true;
+            }
             const auto r = model::relationshipFromKey(o.value(QStringLiteral("correction_type")).toString());
             if (!r) return fail(QStringLiteral("unknown correction type"));
             timeline.setCorrectionRelationship(*r);

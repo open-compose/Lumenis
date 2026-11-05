@@ -364,6 +364,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Segment boxes dimmed, counts shown only in Flatten and Remove, the copy named
   "<name>.Copy.NN" and loaded in the Record monitor, the commands on the
   Command Palette's CC tab too.
+  6.10e1: the menu's "CC Effect" text, the tool turning to it on filler and back on
+  a clip, a segment with another effect refusing it, the AutoCorrect frame (the
+  position in the segment, else its first frame), the filler the sequence's length.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

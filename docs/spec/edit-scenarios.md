@@ -83,7 +83,8 @@ Each file is a JSON list of scenarios:
     Effect button (FX Guide p.592); `expect_corrected` gives each track's
     material segments' "has a correction" in order; `{"correction_type": key}`
     is the Correction Type button (FX Guide p.596-598; keys as
-    `model::relationshipKey`, converting a corrected segment's correction), a
+    `model::relationshipKey`, converting a corrected segment's correction;
+    `"ccEffect"` for the Color Correction effect, p.696), a
     clip's `"tape"` its Tape column, and `expect_relationships` gives each
     track's material segments' "source/program" relationship keys ("" for a
     side without a correction); `{"save_correction": name}` keeps the

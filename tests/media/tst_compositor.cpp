@@ -117,6 +117,32 @@ private slots:
         QVERIFY(std::abs(first - 128) <= 3); // Gain 100: unchanged
     }
 
+    // The Color Correction effect on filler on a top track corrects the tracks below; its keyframes play (FX Guide
+    // p.692, p.695; 6.10e1).
+    void correctionEffectOnFiller() {
+        Sequence seq = Sequence::withDefaultTracks();
+        seq.splice(QStringLiteral("V1"), 0, {clip(QStringLiteral("grey"), 11)});
+        const auto v2 = seq.addTrack(TrackKind::Video);
+        QVERIFY(v2);
+        Segment filler = Segment::filler(11);
+        Effect cc;
+        cc.category = QStringLiteral("Image");
+        cc.name = QStringLiteral("Color Correction");
+        ColorCorrection c;
+        const EffectSpan span(11);
+        setCorrectionKeyframe(c, QStringLiteral("hsl/controls/master/gain"), 0.0, span, 100);
+        setCorrectionKeyframe(c, QStringLiteral("hsl/controls/master/gain"), 1.0, span, 50);
+        setColorCorrection(cc, c);
+        filler.effect = cc;
+        seq.track(*v2)->segments = {filler};
+        const Composition plain = composition(seq, {QStringLiteral("V1")});
+        const Composition both = composition(seq, {QStringLiteral("V1"), *v2});
+        const int under = centre(composeImage(plain, 10)).red();
+        QVERIFY(std::abs(centre(composeImage(both, 0)).red() - under) <= 3); // Gain 100: unchanged
+        QVERIFY2(centre(composeImage(both, 10)).red() < under - 20,
+                 qPrintable(QStringLiteral("%1 %2").arg(centre(composeImage(both, 10)).red()).arg(under)));
+    }
+
     void trackFrames() {
         const Sequence seq = cutWith(transition(QStringLiteral("Dissolve"), 4));
         const auto before = trackFrame(seq, QStringLiteral("V1"), 7);
