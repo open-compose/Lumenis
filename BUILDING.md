@@ -315,6 +315,17 @@ python3 scripts/make-icons.py                                  # every platform'
 
 ## Troubleshooting
 
+### Packaging the AppImage fails with "curl: (22) ... error: 504"
+
+`packaging/linux/make-appimage.sh` downloads the pinned linuxdeploy tools
+from GitHub's release pages, and a busy server can answer 504. The tools
+are kept in a per-user cache, `~/.cache/cutthulhu/appimage-tools/<tags>`
+(or `$LUMENIS_APPIMAGE_TOOLS`), so they are downloaded once per version,
+not once per build folder. A download goes to a `.part` file first and is
+retried on server errors. If it still fails, run the script again later,
+or put `linuxdeploy` and `linuxdeploy-plugin-qt` (executable) into that
+folder yourself.
+
 ### A CLAP plug-in is missing, or Cutthulhu crashes at start-up
 
 CLAP plug-ins are loaded at start-up (docs/spec/clap-host.md):

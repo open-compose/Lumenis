@@ -3,24 +3,30 @@
 #
 #   packaging/linux/make-appimage.sh <build-dir>
 #
-# Downloads pinned linuxdeploy tools into <build-dir>/appimage-tools on first
-# use. Qt is taken from $QT_ROOT_DIR if set (qmake6 on PATH otherwise).
+# Downloads pinned linuxdeploy tools on first use into a per-user cache
+# ($LUMENIS_APPIMAGE_TOOLS, else ${XDG_CACHE_HOME:-~/.cache}/cutthulhu/
+# appimage-tools/<tags>), so fresh build folders and CI runs don't depend on
+# GitHub's release downloads each time (a 504 there once failed CI;
+# BUILDING.md). Qt is taken from $QT_ROOT_DIR if set (qmake6 on PATH otherwise).
 set -euo pipefail
 
 build_dir="$(cd "$1" && pwd)"
-tools="$build_dir/appimage-tools"
 appdir="$build_dir/AppDir"
 
 linuxdeploy_tag="1-alpha-20250213-2"
 qt_plugin_tag="1-alpha-20250213-1"
 arch="x86_64"
+tools="${LUMENIS_APPIMAGE_TOOLS:-${XDG_CACHE_HOME:-$HOME/.cache}/cutthulhu/appimage-tools/$linuxdeploy_tag-$qt_plugin_tag}"
 
 mkdir -p "$tools"
 fetch() {
     local url="$1" out="$2"
     if [[ ! -x "$out" ]]; then
-        curl -fsSL --retry 4 -o "$out" "$url"
-        chmod +x "$out"
+        # Into a temporary file first, so a broken download is never taken for
+        # the tool; retry server errors (5xx) too, with a growing delay.
+        curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 -o "$out.part" "$url"
+        chmod +x "$out.part"
+        mv -f "$out.part" "$out"
     fi
 }
 fetch "https://github.com/linuxdeploy/linuxdeploy/releases/download/$linuxdeploy_tag/linuxdeploy-$arch.AppImage" \
