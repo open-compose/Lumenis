@@ -718,10 +718,11 @@ function of its own, `rgbKeyPixel`, compiled with `#pragma optimize("", off)` un
 avoided it, until an unrelated header change made MSVC rebuild the file and crash a few lines further on,
 at the matte blur (CI run 250). All of `rgbKeyerPicture` was then compiled with the optimizer off under MSVC,
 and that held until two more header changes (`compositor.h` and the headers it includes) made MSVC crash
-there again with the optimizer off (CI runs 317 and 318). The RGB Keyer's loops, the matte blur among them,
+there again with the optimizer off (CI runs 317, 318 and 319). All the RGB Keyer's loops, the matte blur among them,
 are now in `src/media/key_mattes.cpp`, a translation unit of its own that includes no Qt or compositor headers
 and has no lambdas: widely included headers no longer rebuild it, and `key_effects.cpp` only reads the
-parameters and calls it. When the error keeps coming back in one function after header changes, move that
+parameters and calls it, with no `#pragma optimize` left. Keep the Windows runner's Visual Studio Build Tools up to
+date (Visual Studio Installer > Update): an internal compiler error may be fixed in a later MSVC. When the error keeps coming back in one function after header changes, move that
 function's loops to a small file of their own rather than covering more lines. An internal compiler error is the
 compiler's fault, not the code's: GCC and Clang build the same file cleanly. Simplify the statement
 at or just before the line the error names, keep the same result (the tests check it), and leave a

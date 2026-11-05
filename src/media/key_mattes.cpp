@@ -77,4 +77,13 @@ void rgbKeyMatte(float* pixels, std::size_t count, double keyRed, double keyGree
     }
 }
 
+void finishMatte(std::vector<double>& matte, int width, int height, bool reverse, int blur, int erode, double level) {
+    if (reverse) {
+        for (std::size_t i = 0; i < matte.size(); ++i) matte[i] = 1.0 - matte[i];
+    }
+    blurMatte(matte, width, height, blur, MatteBlur::Blur);
+    if (erode > 0) blurMatte(matte, width, height, erode, MatteBlur::Erode);
+    for (std::size_t i = 0; i < matte.size(); ++i) matte[i] *= level;
+}
+
 } // namespace lumenis::media::detail

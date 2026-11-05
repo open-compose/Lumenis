@@ -188,12 +188,10 @@ Picture lumaChromaKeyPicture(const model::Effect& e, const Picture& layer, doubl
 
 // ---------------------------------------------------------------- RGB Keyer
 
-// MSVC 14.44 failed with an internal compiler error (C1001) in this function four times, each after a header
-// change (CI runs 219, 250, 317, 318; BUILDING.md), the last two with the optimizer already off here. Its loops are
-// now in key_mattes.cpp, a translation unit of its own; the optimizer stays off for this function under MSVC.
-#if defined(_MSC_VER) && !defined(__clang__)
-#pragma optimize("", off)
-#endif
+// MSVC 14.44 failed with an internal compiler error (C1001) in this function five times, each after a header change
+// (CI runs 219, 250, 317, 318, 319; BUILDING.md), the last three with its optimizer turned off here. It now has no
+// loops of its own: the matte is made and finished in key_mattes.cpp (rgbKeyMatte, finishMatte), and no pragma is
+// needed.
 Picture rgbKeyerPicture(const model::Effect& e, const Picture& layer, double time, const model::EffectSpan& span) {
     // "Replaces part of the video image with another video image based on color ... You can also perform
     // post-key color correction" (p.474). Gain "Adjusts the threshold of the key", Soft "Softens the edge",
@@ -220,13 +218,7 @@ Picture rgbKeyerPicture(const model::Effect& e, const Picture& layer, double tim
     std::vector<double> matte;
     const std::size_t count = static_cast<std::size_t>(layer.width()) * static_cast<std::size_t>(layer.height());
     rgbKeyMatte(work.data().data(), count, key.red, key.green, key.blue, threshold, soft, spill, spillChannel, matte);
-    const bool reverse = flag(e, cat, QStringLiteral("Reverse"));
-    for (std::size_t i = 0; i < matte.size(); ++i) {
-        if (reverse) matte[i] = 1.0 - matte[i];
-    }
-    blurMatte(matte, layer.width(), layer.height(), blur, MatteBlur::Blur);
-    if (erode > 0) blurMatte(matte, layer.width(), layer.height(), erode, MatteBlur::Erode);
-    for (std::size_t i = 0; i < matte.size(); ++i) matte[i] *= level;
+    finishMatte(matte, layer.width(), layer.height(), flag(e, cat, QStringLiteral("Reverse")), blur, erode, level);
     // Post-key colour correction, as the Color Effect does it.
     const QJsonObject params = e.parameters.value(cat).toObject();
     QJsonObject correction;
@@ -240,9 +232,6 @@ Picture rgbKeyerPicture(const model::Effect& e, const Picture& layer, double tim
     }
     return applyMatte(work, matte, flag(e, cat, QStringLiteral("Show Alpha")));
 }
-#if defined(_MSC_VER) && !defined(__clang__)
-#pragma optimize("", on)
-#endif
 
 // ---------------------------------------------------------------- SpectraMatte
 

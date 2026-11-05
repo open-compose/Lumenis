@@ -2,7 +2,7 @@
 
 // The Key effects' matte arithmetic (key_effects.cpp; docs/spec/keys.md), in a translation unit of its own with no Qt
 // or compositor headers. Why: MSVC 14.44 failed with an internal compiler error (C1001) in key_effects.cpp's RGB Keyer
-// again and again, each time a widely included header changed (CI runs 219, 250, 317, 318; BUILDING.md), even with
+// again and again, each time a widely included header changed (CI runs 219, 250, 317, 318, 319; BUILDING.md), even with
 // the optimizer off there. The loops it crashed on now live here, written plainly (no lambdas), so key_effects.cpp
 // only reads the parameters and calls them.
 
@@ -22,5 +22,9 @@ void blurMatte(std::vector<double>& matte, int width, int height, int radius, Ma
 // in place. `matte` is resized to `count`.
 void rgbKeyMatte(float* pixels, std::size_t count, double keyRed, double keyGreen, double keyBlue, double threshold, double soft,
                  double spill, int spillChannel, std::vector<double>& matte);
+
+// The RGB Keyer's matte finished: inverted when `reverse` ("Inverts the key"), blurred by `blur` pixels, eroded by
+// `erode` pixels when positive, then scaled by `level` (p.550-551).
+void finishMatte(std::vector<double>& matte, int width, int height, bool reverse, int blur, int erode, double level);
 
 } // namespace lumenis::media::detail
