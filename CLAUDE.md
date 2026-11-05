@@ -731,8 +731,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.10e is in five parts (ROADMAP). 6.10e1, the Color Correction effect as a correction (CC Effect in the Correction
   Type menu: `Timeline::setCorrectionOnEffect`, `putEffectCorrection`; filler and empty top tracks; the AutoCorrect
   corrections through `Timeline::setAutoCorrection`; the effect on filler in the compositor; tests `tst_correction_tool`,
-  `tst_compositor`, scenario `42-correction-effect-top-track.json`), is done.
-  Next: 6.10e2-e5, then 6.10f (the owner's report of Tools > Titler+ and Effect Editor opening as huge
+  `tst_compositor`, scenario `42-correction-effect-top-track.json`), is done. 6.10e2, the Color Info tool
+  (`src/ui/color_info.*` as the "ColorInfo" panel, `tools.color_info_tool`, the Color Correction tool's Color Info
+  button, the Effect Editor's eyedropper opening it; test `tst_color_info`), is done.
+  Next: 6.10e3-e5, then 6.10f (the owner's report of Tools > Titler+ and Effect Editor opening as huge
   windows on Windows 11; ROADMAP), 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).

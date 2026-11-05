@@ -1213,7 +1213,8 @@ phase of their own. They are done in three steps:
     top track, filled with filler carrying the effect (p.692-693, p.695), done (`Timeline::setCorrectionOnEffect`,
     `putEffectCorrection`, `setAutoCorrection`; tests `tst_correction_tool`, `tst_compositor`, scenario
     `42-correction-effect-top-track.json`); 6.10e2, the Color Info tool (Tools > Color Info
-    Tool, its shortcut menu's options and the tool's Color Info button, p.696-697); 6.10e3, shape-based correction in the
+    Tool, its shortcut menu's options and the tool's Color Info button, p.696-697), done (`src/ui/color_info.*`; test
+    `tst_color_info`); 6.10e3, shape-based correction in the
     CC Effect: Shapes and Base layers, Show Alpha, Serial Mode, Show Result, Invert Alpha, Softness and trackers on
     shapes (p.697-699); 6.10e4, safe colours: the Safe Color settings and their graph, the warnings in the monitors and
     the Color Match control, the waveform limits, and the Safe Color Limiter effect with its analysis display (ch.23,

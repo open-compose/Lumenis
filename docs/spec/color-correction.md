@@ -594,6 +594,32 @@ the Effect Editor's `refresh`/`rebuild`/`changeShown` in Color Correction mode a
 * The editor's groups have no Enable buttons yet (ours; the tool's stay); a value back at its default is left out as the
   tool leaves it. The Curves and Levels keyframe tracks came with 6.10d3c.
 
+## 6.10e2: the Color Info tool
+
+Code: `src/ui/color_info.*` (`ColorInfoTool`, the "ColorInfo" panel), `MainWindow`'s sampler and `tools.color_info_tool`,
+the Color Correction tool's Color Info button (`CorrectionTool::colorInfoRequested`), the Effect Editor's
+`colorPickingStarted` with the Effect Editor setting's "Open the color info tool when picking color". Test:
+`tst_color_info`.
+
+### From the guide
+* "The Color Info tool allows you to see the RGB values for the pixels located under the pointer on the screen ...
+  without having to go to Color Correction Mode"; Tools > Color Info Tool; "Move your pointer"; its shortcut menu:
+  Active only for video monitors ("When deselected, moving the pointer anywhere on your screen will display color
+  information"), Show video color after apply Display Color Space ("before and after applying a Display Color Space
+  option (LUT)"), RGB 8 bit (0 to 255), RGB 10 bit (0 to 1024), RGB Percent ("can be lower than 0 or higher than 100"),
+  IRE, mVolts; "the Color Info button in the Color Correction Tool" (p.696-697, picture: Video and Video LUT columns).
+* The Effect Editor setting: "Allows you to enable/disable the Color Info Tool from automatically launching when you
+  access a color picker" (Editing Guide p.1172).
+
+### Ours
+* The tool reads the pointer ten times a second while it is shown: over the Source or Record monitor the colour of the
+  picture there (`Composer::colorAtScreen`), elsewhere (with Active only for video monitors off) the screen's pixel.
+* The Video LUT column shows the same values as Video until display colour spaces come (Phase 7); it hides when "Show
+  video color after applying Display Color Space" is off.
+* RGB 10 bit is the 8-bit value scaled to 0-1023; IRE and mVolts count from video black 16 (0 IRE, 0 mV) to white 235
+  (100 IRE, 700 mV); Percent is the share of 255.
+* The Effect Editor's eyedropper (a Color Preview window dragged) opens the tool when the setting is on, its default.
+
 ## 6.10e1: the Color Correction effect as a correction
 
 Code: `Timeline::correctionOnEffect`/`setCorrectionOnEffect`, `effectCorrection` and `putEffectCorrection` behind

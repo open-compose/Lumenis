@@ -46,6 +46,7 @@
 #include "lumenis/ui/audio_track_effect.h"
 #include "lumenis/ui/audio_tools.h"
 #include "lumenis/ui/background_queue.h"
+#include "lumenis/ui/color_info.h"
 #include "lumenis/ui/command_palette.h"
 #include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/effect_palette.h"
@@ -1551,6 +1552,19 @@ void MainWindow::createTools() {
     panels_->addPanel(new Panel(QStringLiteral("Calculator"), tr("Calculator"), calculator_));
     console_ = new ConsoleWindow;
     panels_->addPanel(new Panel(QStringLiteral("Console"), tr("Console"), console_));
+    // The Color Info tool (FX Guide p.696-697): the colour under the pointer, over the video monitors' pictures or, with
+    // "Active only for video monitors" off, anywhere on the screen.
+    colorInfo_ = new ColorInfoTool;
+    colorInfo_->setSampler([this](const QPoint& global, bool monitorsOnly) -> std::optional<QColor> {
+        if (const auto c = composer_ ? composer_->colorAtScreen(global) : std::nullopt) return c;
+        if (monitorsOnly) return std::nullopt;
+        QScreen* screen = QGuiApplication::screenAt(global);
+        if (!screen) return std::nullopt;
+        const QPoint at = global - screen->geometry().topLeft();
+        const QImage pixel = screen->grabWindow(0, at.x(), at.y(), 1, 1).toImage();
+        return pixel.isNull() ? std::nullopt : std::optional<QColor>(pixel.pixelColor(0, 0));
+    });
+    panels_->addPanel(new Panel(QStringLiteral("ColorInfo"), tr("Color Info"), colorInfo_));
     // Effects (FX guide p.37, p.83).
     effectPalette_ = new EffectPalette;
     panels_->addPanel(new Panel(QStringLiteral("EffectPalette"), tr("Effect Palette"), effectPalette_));
@@ -1608,6 +1622,10 @@ void MainWindow::createTools() {
             [this](const QString& binId, const QString& itemId) { editTitleTemplate(binId, itemId); });
     connect(effectEditor_, &EffectEditor::titleTemplateSaveRequested, this, [this](bool as) { saveTitleTemplate(as); });
     // Edit Title (FX Guide p.372): the Effect Editor's button and the Timeline's context menu.
+    // "Open the color info tool when picking color" (Effect Editor setting, Editing Guide p.1172).
+    connect(effectEditor_, &EffectEditor::colorPickingStarted, this, [this] {
+        if (settings_->flag(QStringLiteral("Effect Editor"), QStringLiteral("openColorInfoTool"))) showTool(QStringLiteral("ColorInfo"));
+    });
     connect(effectEditor_, &EffectEditor::editTitleRequested, this, [this](const model::SegmentRef& ref) { editTitleInSequence(ref); });
     connect(timeline_, &Timeline::editTitleRequested, this, [this](const model::SegmentRef& ref) { editTitleInSequence(ref); });
     connect(composer_, &Composer::changed, this, [this] { checkTitleTemplate(); });
@@ -1696,6 +1714,7 @@ void MainWindow::createTools() {
         else showTool(QStringLiteral("EffectEditor"));
     });
     // The Correction Mode Settings button opens the Correction setting (p.606).
+    connect(correctionTool_, &CorrectionTool::colorInfoRequested, this, [this] { showTool(QStringLiteral("ColorInfo")); });
     connect(correctionTool_, &CorrectionTool::settingsRequested, this, [this] {
         const int i = settings_->file(model::SettingsScope::User).activeIndex(QStringLiteral("Correction"));
         if (SettingsWindow* w = showSettings(); w && i >= 0) {
@@ -5649,6 +5668,7 @@ void MainWindow::installPanelHandlers() {
     // Tools menu: each opens its panel through showTool().
     handle("tools.command_palette", [this] { showTool(QStringLiteral("CommandPalette")); });
     handle("tools.calculator", [this] { showTool(QStringLiteral("Calculator")); });
+    handle("tools.color_info_tool", [this] { showTool(QStringLiteral("ColorInfo")); });
     handle("tools.console", [this] { showTool(QStringLiteral("Console")); });
     handle("tools.effect_palette", [this] { showTool(QStringLiteral("EffectPalette")); });
     handle("tools.effect_editor", [this] { showTool(QStringLiteral("EffectEditor")); });

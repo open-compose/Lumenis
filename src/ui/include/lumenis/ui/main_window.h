@@ -51,6 +51,7 @@ enum class MonitorId;
 class BackgroundQueue;
 class BackgroundQueueWindow;
 class CalculatorWindow;
+class ColorInfoTool;
 class ConsolidateDialog;
 class UnmountDialog;
 class SetFontDialog;
@@ -696,6 +697,7 @@ private:
     CommandPalette* commandPalette_ = nullptr;
     ToolPalette* toolPalette_ = nullptr;
     CalculatorWindow* calculator_ = nullptr;
+    ColorInfoTool* colorInfo_ = nullptr; // Tools > Color Info Tool (FX Guide p.696-697)
     EffectPalette* effectPalette_ = nullptr;
     EffectEditor* effectEditor_ = nullptr;
     class CorrectionTool* correctionTool_ = nullptr;

@@ -156,6 +156,11 @@ QIcon toolIcon(const QString& key, const QColor& ink) {
         p.drawEllipse(QPointF(8, 13), 1.6, 1.6);
     } else if (key == QLatin1String("safeColors")) {
         p.drawPolygon(QPolygonF{QPointF(9, 2.5), QPointF(15.5, 14.5), QPointF(2.5, 14.5)});
+    } else if (key == QLatin1String("colorInfo")) {
+        // Ours: three bars, red, green and blue, over a frame.
+        p.drawRect(QRectF(2.5, 2.5, 13, 13));
+        const QColor bars[] = {QColor(0xd0, 0x40, 0x40), QColor(0x40, 0xb0, 0x40), QColor(0x40, 0x60, 0xd0)};
+        for (int i = 0; i < 3; ++i) p.fillRect(QRectF(5 + i * 3.0, 6 + i * 2.0, 2, 8 - i * 2.0), bars[i]);
     } else {
         QPainterPath bubble;
         bubble.addRoundedRect(QRectF(2.5, 3.5, 13, 9), 3, 3);
@@ -259,6 +264,7 @@ CorrectionTool::CorrectionTool(Timeline& timeline, QWidget* parent) : QWidget(pa
         {"template", QT_TR_NOOP("Color Correction Effect Template")},
         {"settings", QT_TR_NOOP("Correction Mode Settings")},
         {"safeColors", QT_TR_NOOP("Safe Color Settings")},
+        {"colorInfo", QT_TR_NOOP("Color Info")},
         {"comments", QT_TR_NOOP("Comments")}};
     for (const auto& [key, text] : buttons) {
         // The template button is dragged: "Click the Color Correction Effect Template button, press and hold the mouse
@@ -274,6 +280,7 @@ CorrectionTool::CorrectionTool(Timeline& timeline, QWidget* parent) : QWidget(pa
     button(QStringLiteral("safeColors"))->setEnabled(false); // 6.10e
     connect(button(QStringLiteral("effectMode")), &QToolButton::clicked, this, &CorrectionTool::effectModeRequested);
     connect(button(QStringLiteral("settings")), &QToolButton::clicked, this, &CorrectionTool::settingsRequested);
+    connect(button(QStringLiteral("colorInfo")), &QToolButton::clicked, this, &CorrectionTool::colorInfoRequested);
     connect(button(QStringLiteral("comments")), &QToolButton::clicked, this, &CorrectionTool::editComment);
     outer->addLayout(top);
 

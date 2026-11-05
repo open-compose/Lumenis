@@ -288,6 +288,8 @@ signals:
     // The Effect Mode and Correction Mode Settings buttons, for MainWindow (p.605-606).
     void effectModeRequested();
     void settingsRequested();
+    // "You can also access the Color Info tool by clicking the Color Info button in the Color Correction Tool" (p.697).
+    void colorInfoRequested();
     // The Luma Ranges preview changed, for the monitors.
     void lumaPreviewChanged(LumaPreview preview);
     void channelPreviewChanged(ChannelPreview preview);

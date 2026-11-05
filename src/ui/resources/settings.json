@@ -239,7 +239,7 @@
              "choices": [{"value": "activeParameter", "label": "Add Keyframe To Active Parameter"}, {"value": "activeGroup", "label": "Add Keyframes To Active Group"},
                          {"value": "openGroups", "label": "Add Keyframes To Open Groups"}, {"value": "enabledGroups", "label": "Add Keyframes To Enabled Groups"},
                          {"value": "openGraphs", "label": "Add Keyframes To Open Graphs"}, {"value": "allParameters", "label": "Add Keyframes To All Parameters"}]},
-            {"key": "openColorInfoTool", "type": "bool", "label": "Open the color info tool when picking color", "default": true, "page": 1172, "later": true}
+            {"key": "openColorInfoTool", "type": "bool", "label": "Open the color info tool when picking color", "default": true, "page": 1172}
           ]
         }
       ]

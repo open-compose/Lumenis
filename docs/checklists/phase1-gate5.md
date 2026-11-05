@@ -259,7 +259,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Video Input Tool |  | p.161 | *later* | ☐ | | |
 | Video Output Tool |  | p.910 | *later* | ☐ | | |
 | Titler+ |  | p.303 | works | ☐ | | |
-| Color Info Tool |  | p.697 | *later* | ☐ | | |
+| Color Info Tool |  | p.697 | works | ☐ | | |
 | Effect Editor |  | p.54 | works | ☐ | | |
 | Title Tool Application |  | p.343 | works | ☐ | | |
 | Timeline | Ctrl+0 | p.766 | works | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 158 of them working with a project open; the
+* 211 menu commands, 159 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

@@ -145,7 +145,8 @@ QColor defaultColor(const EffectParameter& p) {
 // releasing over a monitor's picture picks the colour there.
 class ColorSwatch : public QToolButton {
 public:
-    ColorSwatch(QWidget* parent, std::function<void(const QPoint&)> pick) : QToolButton(parent), pick_(std::move(pick)) {}
+    ColorSwatch(QWidget* parent, std::function<void(const QPoint&)> pick, std::function<void()> started = {})
+        : QToolButton(parent), pick_(std::move(pick)), started_(std::move(started)) {}
 
 protected:
     void mousePressEvent(QMouseEvent* event) override {
@@ -160,6 +161,7 @@ protected:
             picking_ = true;
             setDown(false);
             setCursor(Qt::CrossCursor);
+            if (started_) started_();
         }
         if (!picking_) QToolButton::mouseMoveEvent(event);
     }
@@ -173,6 +175,7 @@ protected:
 
 private:
     std::function<void(const QPoint&)> pick_;
+    std::function<void()> started_;
     QPoint press_;
     bool picking_ = false;
 };
@@ -1027,9 +1030,10 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     controls_.insert(k, s);
                     valueLabels_.insert(k, value);
                 } else if (p.kind == QLatin1String("color")) {
-                    auto* swatch = new ColorSwatch(box, [this, category, name = p.name](const QPoint& global) {
-                        pickColorAt(category, name, global);
-                    });
+                    auto* swatch = new ColorSwatch(
+                        box, [this, category, name = p.name](const QPoint& global) { pickColorAt(category, name, global); },
+                        // "Open the color info tool when picking color" (Effect Editor setting, Editing Guide p.1172).
+                        [this] { emit colorPickingStarted(); });
                     swatch->setObjectName(QStringLiteral("param:") + k);
                     swatch->setFixedSize(18, 14);
                     setSwatch(swatch, defaultColor(p));

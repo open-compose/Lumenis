@@ -517,6 +517,8 @@ public:
     bool applyTemplateGroup(const QString& category, const model::EffectTemplate& t);
 
 signals:
+    // An eyedropper started picking a colour from a Color Preview window (FX Guide p.89), for the Color Info tool.
+    void colorPickingStarted();
     // The Effect Editor shortcut menu changed options().
     void optionsChanged();
     // The Render Effect button was clicked, with these keys held (FX Guide p.58, p.61).

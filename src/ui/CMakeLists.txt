@@ -39,6 +39,7 @@ add_library(lumenis_ui STATIC
     effect_palette.cpp
     capture.cpp
     command_registry.cpp
+    color_info.cpp
     command_palette.cpp
     full_screen.cpp
     keyboard_map.cpp
@@ -111,6 +112,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/effect_palette.h
     include/lumenis/ui/capture.h
     include/lumenis/ui/command_registry.h
+    include/lumenis/ui/color_info.h
     include/lumenis/ui/command_palette.h
     include/lumenis/ui/full_screen.h
     include/lumenis/ui/keyboard_map.h

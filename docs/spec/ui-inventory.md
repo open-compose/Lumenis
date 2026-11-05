@@ -367,6 +367,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   6.10e1: the menu's "CC Effect" text, the tool turning to it on filler and back on
   a clip, a segment with another effect refusing it, the AutoCorrect frame (the
   position in the segment, else its first frame), the filler the sequence's length.
+  6.10e2: the Color Info tool's sampling rate, its Video LUT column showing the
+  video values, the 10-bit, IRE and mV conversions, the Color Info button's icon.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults
