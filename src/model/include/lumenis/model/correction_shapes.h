@@ -11,8 +11,8 @@
 //
 // Ours: the base correction is the effect's "Color Correction" category (model::colorCorrectionOf); the shapes are
 // the effect's Intraframe objects (lumenis/model/intraframe.h, category "Intraframe"), each with its Softness under
-// its own "Shape" category; the shape layer's correction is the "Shape Correction" category, kept as the base one; Serial
-// Mode and Invert Alpha are the "Shape Options" category. The picture (media::colorCorrectedShapesPicture): the base
+// its own "Shapes" category; the shape layer's correction is the "Shape Correction" category, kept as the base one; Serial
+// Mode and Invert Alpha are the "Layers" category. The picture (media::colorCorrectedShapesPicture): the base
 // correction on the layer; the shape correction on that (Serial Mode) or on the layer; the two mixed by the shapes'
 // coverage, softened and inverted as set.
 
@@ -23,8 +23,10 @@
 namespace lumenis::model {
 
 inline const QString kShapeCorrectionCategory = QStringLiteral("Shape Correction");
-inline const QString kShapeOptionsCategory = QStringLiteral("Shape Options");
-inline const QString kShapeCategory = QStringLiteral("Shape");
+// The effect's Serial Mode and Invert Alpha, the Effect Editor's "Layers" category (p.699's picture).
+inline const QString kShapeOptionsCategory = QStringLiteral("Layers");
+// A shape's own settings (Softness), its "Shapes" category; its tracker is kObjectTrackingCategory (intraframe.h).
+inline const QString kShapeCategory = QStringLiteral("Shapes");
 
 // Which layer the Color Correction tool works on: "Shapes" or "Base" (p.698).
 enum class CorrectionLayer { Base, Shapes };
@@ -60,5 +62,15 @@ bool hasCorrectionShapes(const Effect& effect);
 // A shape's Softness: 0 to 100 (ours: the edge softened by up to 100 pixels of a frame 1920 wide), 0 at first.
 double shapeSoftness(const IntraframeObject& shape);
 void setShapeSoftness(IntraframeObject& shape, double softness);
+
+// The Effect Editor with one shape selected (FX Guide p.699; 6.10e3b3): the effect as that shape sees it, the
+// effect's own parameters with the shape's "Shapes" and "Shape Tracking" categories; and a change made to that view
+// kept, those two categories going to the shape and every other one to the effect.
+bool isShapeOwnCategory(const QString& category);
+// A new shape takes the effect's own parameters (model::addIntraframeObject); a shape keeps only its own categories,
+// its place ("Intraframe Object") and their keyframes, the corrections and options staying the effect's.
+void trimShapeParameters(QList<IntraframeObject>& shapes);
+Effect correctionShapeView(const Effect& effect, const IntraframeObject& shape);
+void keepCorrectionShapeChange(Effect& effect, const QString& shapeId, const Effect& changed);
 
 } // namespace lumenis::model

@@ -1,5 +1,7 @@
 #include "lumenis/ui/effect_editor.h"
 
+#include "lumenis/model/correction_shapes.h"
+
 #include "lumenis/ui/timeline.h"
 #include "lumenis/ui/titler_panel.h"
 #include "lumenis/ui/titler_tool.h"
@@ -716,7 +718,7 @@ void EffectEditor::refresh() {
         if (intraframe_) intraframe_->reset();
     }
     wholeIntraframe_.reset();
-    if (current_ && level_ == 0 && model::isIntraframeEffect(*current_)) {
+    if (current_ && level_ == 0 && drawsObjects(*current_)) {
         wholeIntraframe_ = current_;
         const QList<model::IntraframeObject> objects = model::intraframeObjects(*current_);
         intraframeSelection_.removeIf([&](const QString& id) {
@@ -725,7 +727,10 @@ void EffectEditor::refresh() {
         if (intraframe_) intraframe_->keepSelection(intraframeSelection_);
         if (intraframeSelection_.size() == 1) {
             for (const model::IntraframeObject& o : objects) {
-                if (o.id == intraframeSelection_.constFirst()) current_ = model::objectEffect(*current_, o);
+                if (o.id != intraframeSelection_.constFirst()) continue;
+                // A Color Correction effect's shape shows only its own Shapes and Shape Tracking with the effect's
+                // other categories (p.699); a Paint object has all its parameters.
+                current_ = model::isColorCorrectionEffect(*current_) ? model::correctionShapeView(*current_, o) : model::objectEffect(*current_, o);
             }
         }
     }
@@ -997,6 +1002,9 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                         row->addWidget(c);
                         row->addStretch(1);
                     }
+                } else if (category == model::kObjectTrackingCategory && p.name == QLatin1String("Tracker")) {
+                    // "Select the tracker from the list of created trackers" (p.699): the selected shape's tracker.
+                    row->addWidget(shapeTrackerControl(box), 1);
                 } else if (p.kind == QLatin1String("track")) {
                     // A Levels or Curves control in Color Correction mode (p.685): its Enable button where it has one
                     // of its own, or on the first of the points that share a Levels tab's; no value to adjust here.
@@ -1758,6 +1766,17 @@ bool EffectEditor::changeShown(const QString& description, const std::function<v
     auto changed = [&](model::Effect& e) {
         const model::Effect before = e;
         // With one Intraframe object selected, the change is that object's (6.9b).
+        if (level_ == 0 && model::isColorCorrectionEffect(e) && intraframeSelection_.size() == 1) {
+            // The Color Correction effect with one shape selected: its view of the effect, split back (6.10e3b3).
+            const QList<model::IntraframeObject> objects = model::intraframeObjects(e);
+            for (const model::IntraframeObject& o : objects) {
+                if (o.id != intraframeSelection_.constFirst()) continue;
+                model::Effect view = model::correctionShapeView(e, o);
+                change(view);
+                model::keepCorrectionShapeChange(e, o.id, view);
+                return;
+            }
+        }
         if (level_ == 0 && model::isIntraframeEffect(e) && intraframeSelection_.size() == 1) {
             QList<model::IntraframeObject> objects = model::intraframeObjects(e);
             for (model::IntraframeObject& o : objects) {
@@ -1881,7 +1900,14 @@ void EffectEditor::previewIntraframe(const std::optional<model::Effect>& effect)
 bool EffectEditor::changeIntraframe(const QString& description, const model::Effect& effect) {
     if (!shown_ || level_ != 0) return false;
     intraframePreview_.reset();
-    const bool done = timeline_.changeEffect(*shown_, description, [&](model::Effect& e, model::Transition*) { e = effect; });
+    model::Effect kept = effect;
+    // New Color Correction shapes take none of the effect's corrections (6.10e3b3).
+    if (model::isColorCorrectionEffect(kept)) {
+        QList<model::IntraframeObject> shapes = model::intraframeObjects(kept);
+        model::trimShapeParameters(shapes);
+        model::setIntraframeObjects(kept, shapes);
+    }
+    const bool done = timeline_.changeEffect(*shown_, description, [&](model::Effect& e, model::Transition*) { e = kept; });
     syncPreview();
     return done;
 }
@@ -1895,6 +1921,12 @@ void EffectEditor::setIntraframeSelection(const QStringList& ids) {
 double EffectEditor::previewAspect() const {
     const Rational a = timeline_.composer().aspectRatio();
     return a.num() > 0 && a.den() > 0 ? static_cast<double>(a.num()) / static_cast<double>(a.den()) : 16.0 / 9.0;
+}
+
+bool EffectEditor::drawsObjects(const model::Effect& effect) const {
+    // The Color Correction effect's shapes (p.699) outside Color Correction mode, where the editor shows the mode's
+    // correction instead.
+    return model::isIntraframeEffect(effect) || (!correctionShown_ && model::isColorCorrectionEffect(effect));
 }
 
 void EffectEditor::syncIntraframeButtons() {

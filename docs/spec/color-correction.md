@@ -594,6 +594,31 @@ the Effect Editor's `refresh`/`rebuild`/`changeShown` in Color Correction mode a
 * The editor's groups have no Enable buttons yet (ours; the tool's stay); a value back at its default is left out as the
   tool leaves it. The Curves and Levels keyframe tracks came with 6.10d3c.
 
+## 6.10e3b3: the Color Correction effect in the Effect Editor, shapes on trackers
+
+Code: `EffectEditor::drawsObjects`, `chooseShapeTracker` and the "tracking:shape" menu (`effect_editor_tracking.cpp`);
+`model::correctionShapeView`, `keepCorrectionShapeChange`, `trimShapeParameters` (`src/model/correction_shapes.*`);
+`model::objectTracker`/`setObjectTracker` and the tracker's movement in `model::placedShapeAt` (`src/model/intraframe.*`);
+the "Layers", "Shapes" and "Shape Tracking" categories in `effect_parameters.json`. Tests: `tst_intraframe`
+(`shapesFollowTrackers`), `tst_intraframe_ui` (`colorCorrectionShapes`).
+
+### From the guide
+* "You can also use the Effect Editor to make additional edits including Tracking"; the picture shows Color
+  Correction's categories HSL, Levels, Curves, Secondary, Shapes, Layers (Shape Layer menu, Serial Mode, Show Result,
+  Show Alpha, Invert Alpha) and Tracking (an enable button and a "No Tracker" menu), and the drawing tools on the right;
+  "a. Click on tracker to track the area. b. Select the shape you want to attach a tracker to. c. Select the tracker
+  from the list of created trackers"; "Different shapes can be connected to different trackers" (p.699).
+
+### Ours
+* Outside Color Correction mode the Effect Editor shows the Color Correction effect with the Intraframe drawing tools
+  and the categories Layers (Serial Mode, Invert Alpha), Shapes (Softness) and Shape Tracking (the tracker menu). The
+  corrections themselves are edited in the Color Correction tool, and in the editor in Color Correction mode (6.10d3b).
+  Show Result, Show Alpha and the layer are the tool's display choices, so the editor leaves them out.
+* With one shape selected, Shapes and Shape Tracking are that shape's; the other categories stay the effect's.
+* The tracker menu lists "No Tracker", the effect's trackers and, while there is room, "New Tracker". New Tracker makes
+  one (Point A ...) for the shape and opens the Tracking window to track it. The shape then moves by the tracked
+  point's movement from the tracker's reference frame, as Titler+ objects do (6.8c3).
+
 ## 6.10e3b2: drawing shapes in the Current monitor
 
 Code: `src/ui/correction_shape_host.*` (`CorrectionShapeHost`, an `IntraframeHost` like the Effect Editor), the
@@ -659,7 +684,7 @@ compositor's Color Correction effect. Test: `tst_compositor` (`correctionShapes`
 ### Ours
 * The shapes are the effect's Intraframe objects (their outlines, Brush strokes and placing as in 6.9), the shape
   layer's correction its "Shape Correction" category (with keyframes as the base correction's), Serial Mode and Invert
-  Alpha its "Shape Options" (Serial on at first), each shape's Softness its own "Shape" category (0 to 100: a blur of
+  Alpha its "Layers" (Serial on at first), each shape's Softness its own "Shapes" category (0 to 100: a blur of
   up to 100 pixels of a frame 1920 wide).
 * The picture: the base correction on the segment (or, on filler, on the tracks below); the shape correction on that
   (Serial Mode) or on the uncorrected picture; the two mixed by the union of the shapes' softened coverage, inverted by

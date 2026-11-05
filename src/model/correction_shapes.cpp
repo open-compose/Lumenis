@@ -3,6 +3,10 @@
 
 #include "lumenis/model/correction_shapes.h"
 
+#include "lumenis/model/effect_keyframes.h"
+
+#include <QJsonObject>
+
 #include <algorithm>
 
 namespace lumenis::model {
@@ -60,6 +64,58 @@ void setShapeSoftness(IntraframeObject& shape, double softness) {
     QJsonObject cat = shape.parameters.value(kShapeCategory).toObject();
     cat.insert(QStringLiteral("Softness"), std::clamp(softness, 0.0, 100.0));
     shape.parameters.insert(kShapeCategory, cat);
+}
+
+bool isShapeOwnCategory(const QString& category) {
+    return category == kShapeCategory || category == kObjectTrackingCategory;
+}
+
+void trimShapeParameters(QList<IntraframeObject>& shapes) {
+    for (IntraframeObject& o : shapes) {
+        QJsonObject kept;
+        for (auto it = o.parameters.constBegin(); it != o.parameters.constEnd(); ++it) {
+            if (isShapeOwnCategory(it.key()) || it.key() == kIntraframeObjectCategory) kept.insert(it.key(), it.value());
+        }
+        // Keyframes of those categories only (kKeyframesKey: {"<category>/<parameter>": [...]}).
+        QJsonObject keys;
+        const QJsonObject all = o.parameters.value(QLatin1String(kKeyframesKey)).toObject();
+        for (auto it = all.constBegin(); it != all.constEnd(); ++it) {
+            const QString category = it.key().section(QLatin1Char('/'), 0, 0);
+            if (isShapeOwnCategory(category) || category == kIntraframeObjectCategory) keys.insert(it.key(), it.value());
+        }
+        if (!keys.isEmpty()) kept.insert(QLatin1String(kKeyframesKey), keys);
+        o.parameters = kept;
+    }
+}
+
+Effect correctionShapeView(const Effect& effect, const IntraframeObject& shape) {
+    Effect view = effect;
+    for (const QString& c : {kShapeCategory, kObjectTrackingCategory}) {
+        if (shape.parameters.contains(c)) view.parameters.insert(c, shape.parameters.value(c));
+        else view.parameters.remove(c);
+    }
+    return view;
+}
+
+void keepCorrectionShapeChange(Effect& effect, const QString& shapeId, const Effect& changed) {
+    QList<IntraframeObject> shapes = intraframeObjects(effect);
+    const QJsonValue objects = effect.parameters.value(kIntraframeCategory);
+    for (IntraframeObject& o : shapes) {
+        if (o.id != shapeId) continue;
+        for (const QString& c : {kShapeCategory, kObjectTrackingCategory}) {
+            if (changed.parameters.contains(c)) o.parameters.insert(c, changed.parameters.value(c));
+            else o.parameters.remove(c);
+        }
+    }
+    // The rest is the effect's: what the view showed of the shape's own categories stays as the effect had it.
+    QJsonObject rest = changed.parameters;
+    for (const QString& c : {kShapeCategory, kObjectTrackingCategory}) {
+        if (effect.parameters.contains(c)) rest.insert(c, effect.parameters.value(c));
+        else rest.remove(c);
+    }
+    if (!objects.isUndefined()) rest.insert(kIntraframeCategory, objects);
+    effect.parameters = rest;
+    setIntraframeObjects(effect, shapes);
 }
 
 } // namespace lumenis::model

@@ -114,9 +114,15 @@ struct ObjectPlace {
     std::optional<QPointF> center;
 };
 ObjectPlace objectPlaceAt(const Effect& effect, const IntraframeObject& object, double t, const EffectSpan& span);
-// The control points at `t` placed (moved, rotated and scaled about the centre), still fractions of the frame, for a
-// frame of `aspect` (width over height). The outline they make is media::intraframePath.
+// The control points at `t` placed (moved, rotated and scaled about the centre, then moved with its tracker), still
+// fractions of the frame, for a frame of `aspect` (width over height). The outline they make is media::intraframePath.
 QList<ControlPoint> placedShapeAt(const Effect& effect, const IntraframeObject& object, double t, const EffectSpan& span, double aspect);
+// The tracker an object moves with (the name of one of the effect's trackers, lumenis/model/tracking.h), kept as its
+// "Shape Tracking" category's "Tracker"; empty: none. placedShapeAt adds that tracker's movement (FX Guide p.699: "Select
+// the shape you want to attach a tracker to"; 6.10e3b3).
+inline const QString kObjectTrackingCategory = QStringLiteral("Shape Tracking");
+QString objectTracker(const IntraframeObject& object);
+void setObjectTracker(IntraframeObject& object, const QString& tracker);
 // The bounds of control points (handles left out).
 QRectF shapeBounds(const QList<ControlPoint>& points);
 

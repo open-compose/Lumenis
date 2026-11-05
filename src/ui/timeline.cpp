@@ -5096,10 +5096,7 @@ bool Timeline::setCorrectionShapeObjects(const QString& step, const QList<model:
     // A new shape takes the effect's own parameters (model::addIntraframeObject); the corrections and the shape
     // options are the effect's, not each shape's, so they are left out.
     QList<model::IntraframeObject> shapes = objects;
-    for (model::IntraframeObject& o : shapes) {
-        for (const QString& c : {model::kColorCorrectionCategory, model::kShapeCorrectionCategory, model::kShapeOptionsCategory})
-            o.parameters.remove(c);
-    }
+    model::trimShapeParameters(shapes);
     return editCorrectionEffect(step, [&](model::Effect& e, std::int64_t, std::int64_t) {
         if (model::intraframeObjects(e) == shapes) return false;
         model::setIntraframeObjects(e, shapes);

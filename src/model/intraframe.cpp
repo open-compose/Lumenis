@@ -3,6 +3,8 @@
 // p.416-418. Drawing them is media's (intraframe.cpp there).
 #include "lumenis/model/intraframe.h"
 
+#include "lumenis/model/tracking.h"
+
 #include <QJsonArray>
 #include <QUuid>
 
@@ -269,12 +271,33 @@ QList<ControlPoint> placedShapeAt(const Effect& effect, const IntraframeObject& 
         const double dy = v.y() / a * s;
         return QPointF(dx * cs - dy * sn, (dx * sn + dy * cs) * a);
     };
+    // An object attached to one of the effect's trackers moves with it (the Color Correction effect's shapes, FX Guide
+    // p.699; 6.10e3b3): by the tracked pattern's movement from the tracker's reference frame, as Titler+ objects do.
+    QPointF tracked;
+    if (const QString name = objectTracker(object); !name.isEmpty()) {
+        const TrackingSetup setup = trackingOf(effect);
+        if (const Tracker* tracker = setup.tracker(name)) {
+            if (const auto moved = trackerMovement(*tracker, trackingFrame(t, span))) tracked = *moved;
+        }
+    }
     for (ControlPoint& c : points) {
-        c.p = mapPoint(c.p);
+        c.p = mapPoint(c.p) + tracked;
         c.in = mapVector(c.in);
         c.out = mapVector(c.out);
     }
     return points;
+}
+
+QString objectTracker(const IntraframeObject& object) {
+    return object.parameters.value(kObjectTrackingCategory).toObject().value(QStringLiteral("Tracker")).toString();
+}
+
+void setObjectTracker(IntraframeObject& object, const QString& tracker) {
+    QJsonObject cat = object.parameters.value(kObjectTrackingCategory).toObject();
+    if (tracker.isEmpty()) cat.remove(QStringLiteral("Tracker"));
+    else cat.insert(QStringLiteral("Tracker"), tracker);
+    if (cat.isEmpty()) object.parameters.remove(kObjectTrackingCategory);
+    else object.parameters.insert(kObjectTrackingCategory, cat);
 }
 
 bool reorderIntraframeObject(Effect& effect, const QString& id, IntraframeLayer to) {

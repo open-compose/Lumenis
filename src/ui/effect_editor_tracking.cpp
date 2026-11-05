@@ -226,11 +226,43 @@ QWidget* EffectEditor::trackingControls(model::TrackedParameter parameter, QWidg
     return box;
 }
 
+QWidget* EffectEditor::shapeTrackerControl(QWidget* parent) {
+    auto* menu = new QComboBox(parent);
+    menu->setObjectName(QStringLiteral("tracking:shape"));
+    connect(menu, &QComboBox::activated, this, [this, menu](int index) { chooseShapeTracker(menu->itemData(index).toString()); });
+    trackingControls_.insert(menu->objectName(), menu);
+    return menu;
+}
+
+bool EffectEditor::chooseShapeTracker(const QString& choice) {
+    QString tracker = choice;
+    if (choice == QLatin1String("new")) {
+        // "Click on tracker to track the area" (p.699; ours): a new tracker, then the Tracking window to track it.
+        const std::optional<model::Tracker> made = current_ ? model::newTracker(model::trackingOf(*current_)) : std::nullopt;
+        if (!made) return false;
+        tracker = made->name;
+        changeTracking(tr("New Tracker"), [&](model::TrackingSetup& setup) { setup.trackers << *made; });
+    }
+    setValue(model::kObjectTrackingCategory, QStringLiteral("Tracker"), tracker);
+    if (choice == QLatin1String("new")) showTrackingWindow();
+    return true;
+}
+
 void EffectEditor::syncTracking(const model::Effect& effect) {
     if (trackingControls_.isEmpty()) return;
     const model::TrackingSetup setup = model::trackingOf(effect);
     QStringList names{QString()};
     for (const model::Tracker& t : setup.trackers) names << t.name;
+    // The Color Correction effect's shape tracker (p.699): "No Tracker", the trackers, and a new one while there is room.
+    if (auto* shape = qobject_cast<QComboBox*>(trackingControls_.value(QStringLiteral("tracking:shape")))) {
+        const QSignalBlocker block(shape);
+        shape->clear();
+        shape->addItem(tr("No Tracker"), QString());
+        for (const model::Tracker& t : setup.trackers) shape->addItem(t.name, t.name);
+        if (setup.trackers.size() < model::kMaxTrackers) shape->addItem(tr("New Tracker"), QStringLiteral("new"));
+        const QString chosen = effect.parameters.value(model::kObjectTrackingCategory).toObject().value(QStringLiteral("Tracker")).toString();
+        shape->setCurrentIndex(std::max(0, shape->findData(chosen)));
+    }
     for (model::TrackedParameter p : {model::TrackedParameter::Position, model::TrackedParameter::Scaling, model::TrackedParameter::Rotation,
                                       model::TrackedParameter::Tracking}) {
         const QString key = model::trackedParameterKey(p);

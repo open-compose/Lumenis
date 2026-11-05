@@ -96,6 +96,16 @@
     {"name": "Tracking", "page": 499, "parameters": [
       {"name": "Tracker selectors", "kind": "other"}
     ]},
+    {"name": "Layers", "page": 699, "parameters": [
+      {"name": "Serial Mode", "kind": "checkbox", "keyframeable": false, "default": true},
+      {"name": "Invert Alpha", "kind": "checkbox", "keyframeable": false}
+    ]},
+    {"name": "Shapes", "page": 699, "parameters": [
+      {"name": "Softness", "kind": "slider", "keyframeable": false, "min": 0, "max": 100, "default": 0}
+    ]},
+    {"name": "Shape Tracking", "page": 699, "parameters": [
+      {"name": "Tracker", "kind": "other", "keyframeable": false}
+    ]},
     {"name": "Transition Parameters", "page": 500, "parameters": [
       {"name": "Transition Effect Alignment", "kind": "menu", "keyframeable": false, "options": ["Ending at Cut", "Centered on Cut", "Starting at Cut", "Custom Start"]},
       {"name": "Transition Effect Duration", "kind": "other", "keyframeable": false}

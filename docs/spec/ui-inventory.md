@@ -373,7 +373,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Invert Alpha correcting outside the shapes; the panel's place left of the
   group panes, what the monitors show without Show Result (the layer worked on),
   Show Alpha's grey picture, Softness dimmed without a selected shape, our icons;
-  the shape tools only on the Shapes layer and only in the Current monitor.
+  the shape tools only on the Shapes layer and only in the Current monitor; the
+  Effect Editor's categories for the effect (Layers, Shapes, Shape Tracking, no
+  Show Result/Show Alpha/layer menu there), New Tracker in the tracker menu.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

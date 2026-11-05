@@ -4,6 +4,8 @@
 #include "lumenis/media/pict.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/intraframe.h"
+#include "lumenis/model/correction_shapes.h"
+#include "lumenis/model/tracking.h"
 
 #include <QDir>
 #include <QFile>
@@ -47,6 +49,61 @@ class TestIntraframe : public QObject {
     Q_OBJECT
 
 private slots:
+    void shapesFollowTrackers() {
+        // A shape attached to a tracker moves with it (FX Guide p.699; 6.10e3b3): by the tracked point's movement from
+        // the tracker's reference frame.
+        Effect cc{QStringLiteral("Image"), QStringLiteral("Color Correction"), {}};
+        const QString id = model::addIntraframeObject(cc, IntraframeKind::Rectangle, model::rectangleShape(QRectF(0.2, 0.2, 0.2, 0.2)));
+        model::Tracker t;
+        t.name = QStringLiteral("Point A");
+        model::TrackerRegion r;
+        r.points = {model::TrackPoint{0, 0.5, 0.5}, model::TrackPoint{9, 0.6, 0.55}};
+        t.regions = {r};
+        model::TrackingSetup setup;
+        setup.trackers = {t};
+        model::setTracking(cc, setup);
+        const EffectSpan span(10);
+        const double last = span.timeOf(9.0);
+        QList<model::IntraframeObject> shapes = model::intraframeObjects(cc);
+        QCOMPARE(model::placedShapeAt(cc, shapes.at(0), last, span, 16.0 / 9.0).at(0).p, QPointF(0.2, 0.2));
+        model::setObjectTracker(shapes[0], QStringLiteral("Point A"));
+        model::setIntraframeObjects(cc, shapes);
+        const QPointF moved = model::placedShapeAt(cc, shapes.at(0), last, span, 16.0 / 9.0).at(0).p;
+        QVERIFY2(std::abs(moved.x() - 0.3) < 1e-9 && std::abs(moved.y() - 0.25) < 1e-9, qPrintable(QStringLiteral("%1 %2").arg(moved.x()).arg(moved.y())));
+        QCOMPARE(model::placedShapeAt(cc, shapes.at(0), 0.0, span, 16.0 / 9.0).at(0).p, QPointF(0.2, 0.2));
+        // A tracker the effect does not have leaves it in place; none detaches it.
+        model::setObjectTracker(shapes[0], QStringLiteral("Point B"));
+        QCOMPARE(model::placedShapeAt(cc, shapes.at(0), last, span, 16.0 / 9.0).at(0).p, QPointF(0.2, 0.2));
+        model::setObjectTracker(shapes[0], QString());
+        QVERIFY(!shapes.at(0).parameters.contains(model::kObjectTrackingCategory));
+
+        // The Effect Editor's view of a selected shape and keeping its changes (6.10e3b3).
+        shapes = model::intraframeObjects(cc);
+        model::setShapeSoftness(shapes[0], 20);
+        model::setIntraframeObjects(cc, shapes);
+        Effect view = model::correctionShapeView(cc, shapes.at(0));
+        QCOMPARE(view.parameters.value(model::kShapeCategory).toObject().value(QStringLiteral("Softness")).toDouble(), 20.0);
+        view.parameters.insert(model::kShapeCategory, QJsonObject{{QStringLiteral("Softness"), 40}});
+        view.parameters.insert(model::kShapeOptionsCategory, QJsonObject{{QStringLiteral("Invert Alpha"), true}});
+        model::keepCorrectionShapeChange(cc, id, view);
+        QCOMPARE(model::shapeSoftness(model::intraframeObjects(cc).at(0)), 40.0);
+        QVERIFY(model::shapeOptionsOf(cc).invertAlpha);
+        QVERIFY(!cc.parameters.contains(model::kShapeCategory));
+        QVERIFY(model::trackingOf(cc).tracker(QStringLiteral("Point A")));
+
+        // New shapes take the effect's parameters; trimming keeps only theirs.
+        model::ColorCorrection base;
+        base.set(QStringLiteral("hsl/controls/master/gain"), 80);
+        model::setColorCorrection(cc, base);
+        model::addIntraframeObject(cc, IntraframeKind::Oval, model::ovalShape(QRectF(0.5, 0.5, 0.2, 0.2)));
+        shapes = model::intraframeObjects(cc);
+        QVERIFY(shapes.at(1).parameters.contains(model::kColorCorrectionCategory));
+        model::trimShapeParameters(shapes);
+        QVERIFY(!shapes.at(1).parameters.contains(model::kColorCorrectionCategory));
+        QVERIFY(!shapes.at(1).parameters.contains(model::kShapeOptionsCategory));
+        QCOMPARE(model::shapeSoftness(shapes.at(0)), 40.0);
+    }
+
     void objects() {
         Effect paint{QStringLiteral("Image"), QStringLiteral("Paint Effect"), {}};
         QVERIFY(model::isIntraframeEffect(paint));

@@ -427,6 +427,10 @@ public:
     bool setStabilizeTracking(model::TrackedParameter parameter, bool on);
     // Changes the shown effect's trackers as one undo step; false when nothing changes.
     bool changeTracking(const QString& description, const std::function<void(model::TrackingSetup&)>& change);
+    // The Color Correction effect's Shape Tracking menu (FX Guide p.699; 6.10e3b3): the selected shape's tracker by
+    // name, none (empty), or "new": a new tracker made for it and the Tracking window opened to track it. One undo step
+    // for the tracker, one for the choice.
+    bool chooseShapeTracker(const QString& choice);
     bool renameTracker(const QString& from, const QString& to);
     bool deleteTracker(const QString& name);
     // The Tracking window (p.253-255), made when first asked for; the Tracking Tool button shows it.
@@ -626,6 +630,10 @@ private:
     QWidget* brushPanel(QWidget* parent);
     // Shows the drawing tool buttons for the shown effect and checks the active one.
     void syncIntraframeButtons();
+    // Whether the effect shown draws objects with the Intraframe tools: the Intraframe effects, and the Color
+    // Correction effect's shapes outside Color Correction mode (6.10e3b3).
+    bool drawsObjects(const model::Effect& effect) const;
+    QWidget* shapeTrackerControl(QWidget* parent);
     TitlerDashboard* titlerDashboard_ = nullptr;
     TitlerPanel* titlerPanel_ = nullptr;
     PointRange pointRange_ = PointRange::All; // "All ... This is the default option" (p.268)

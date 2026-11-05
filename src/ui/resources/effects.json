@@ -102,7 +102,7 @@
     {"name": "Image", "page": 468, "effects": [
       {"name": "Avid Pan & Zoom", "page": 468, "segment": true, "parameters": ["Avid Pan & Zoom Effect Parameters", "Grid"]},
       {"name": "Blur Effect", "page": 468, "segment": true, "parameters": ["Acceleration", "Corner Tracking", "Feathering", "Grid", "Blur Effect Blur Parameters"]},
-      {"name": "Color Correction", "page": 469, "segment": true, "parameters": ["Grid"]},
+      {"name": "Color Correction", "page": 469, "segment": true, "parameters": ["Grid", "Layers", "Shapes", "Shape Tracking"]},
       {"name": "Color Effect", "page": 469, "segment": true, "parameters": ["Color Effect Parameters", "Grid"]},
       {"name": "Field Swap", "page": 469, "segment": true},
       {"name": "Flip", "page": 469, "segment": true, "parameters": ["Grid"]},

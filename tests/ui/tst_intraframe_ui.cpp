@@ -3,8 +3,10 @@
 // scaling, deleting, layers, and each object's own parameters in the editor.
 #include "lumenis/media/pict.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/correction_shapes.h"
 #include "lumenis/model/intraframe.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/tracking.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/brush_preview.h"
 #include "lumenis/ui/command_palette.h"
@@ -12,8 +14,10 @@
 #include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/intraframe_tool.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/tracking_window.h"
 
 #include <QAction>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
 #include <QFile>
@@ -515,6 +519,76 @@ private slots:
         const model::Effect e = *model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(0).effect;
         QCOMPARE(e.parameters.value(cat).toObject().value(QStringLiteral("Frame Processing")).toBool(true), false);
         QCOMPARE(label->text(), QStringLiteral("Field"));
+    }
+
+    void colorCorrectionShapes() {
+        // The Color Correction effect in the Effect Editor (FX Guide p.699; 6.10e3b3): the drawing tools, Layers, a
+        // selected shape's Softness and its tracker.
+        Composer composer;
+        Timeline timeline{composer};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(model::Effect{QStringLiteral("Image"), QStringLiteral("Color Correction"), {}}));
+        EffectEditor editor{timeline};
+        editor.resize(700, 900);
+        editor.show();
+        composer.moveTo(MonitorId::Record, 10);
+        timeline.setEffectMode(true);
+        settle();
+        const auto effect = [&] {
+            const model::Sequence seq = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item);
+            return *seq.track(QStringLiteral("V1"))->segments.at(0).effect;
+        };
+        IntraframeTool* tool = editor.intraframeTool();
+        QVERIFY(editor.intraframeEffect());
+        auto* oval = editor.findChild<QToolButton*>(QStringLiteral("intraframeOval"));
+        QVERIFY(oval && oval->isVisible());
+        oval->click();
+        QVERIFY(tool->overlayPress(QPointF(0.2, 0.2), Qt::NoModifier, false));
+        tool->overlayMove(QPointF(0.4, 0.5), Qt::NoModifier);
+        tool->overlayRelease(QPointF(0.4, 0.5), Qt::NoModifier);
+        settle();
+        QList<model::IntraframeObject> shapes = model::intraframeObjects(effect());
+        QCOMPARE(shapes.size(), 1);
+        const QString id = shapes.at(0).id;
+        QCOMPARE(editor.intraframeSelection(), QStringList{id});
+        // A shape keeps only its own categories and its place.
+        for (const QString& c : shapes.at(0).parameters.keys())
+            QVERIFY2(model::isShapeOwnCategory(c) || c == model::kIntraframeObjectCategory, qPrintable(c));
+
+        // Layers is the effect's, also with a shape selected: Serial Mode on at first, Invert Alpha set on the effect.
+        auto* serial = editor.findChild<QCheckBox*>(QStringLiteral("param:Layers/Serial Mode"));
+        auto* invert = editor.findChild<QCheckBox*>(QStringLiteral("param:Layers/Invert Alpha"));
+        QVERIFY(serial && invert && serial->isChecked() && !invert->isChecked());
+        invert->click();
+        settle();
+        QVERIFY(model::shapeOptionsOf(effect()).invertAlpha);
+        QVERIFY(!model::intraframeObjects(effect()).at(0).parameters.contains(model::kShapeOptionsCategory));
+        // Softness is the selected shape's.
+        auto* softness = editor.findChild<QSlider*>(QStringLiteral("param:Shapes/Softness"));
+        QVERIFY(softness);
+        softness->setValue(30);
+        settle();
+        QCOMPARE(model::shapeSoftness(model::intraframeObjects(effect()).at(0)), 30.0);
+        QVERIFY(!effect().parameters.contains(model::kShapeCategory));
+
+        // "Select the tracker from the list of created trackers" (p.699): New Tracker makes Point A for the shape.
+        auto* trackers = editor.findChild<QComboBox*>(QStringLiteral("tracking:shape"));
+        QVERIFY(trackers);
+        QCOMPARE(trackers->currentText(), QStringLiteral("No Tracker"));
+        QVERIFY(trackers->findData(QStringLiteral("new")) >= 0);
+        QVERIFY(editor.chooseShapeTracker(QStringLiteral("new")));
+        settle();
+        const model::Effect tracked = effect();
+        QCOMPARE(model::trackingOf(tracked).trackers.size(), 1);
+        const QString name = model::trackingOf(tracked).trackers.at(0).name;
+        QCOMPARE(model::objectTracker(model::intraframeObjects(tracked).at(0)), name);
+        QCOMPARE(trackers->currentData().toString(), name);
+        editor.trackingWindow()->hide();
+        // No Tracker detaches it again.
+        QVERIFY(editor.chooseShapeTracker(QString()));
+        settle();
+        QVERIFY(model::objectTracker(model::intraframeObjects(effect()).at(0)).isEmpty());
+        QCOMPARE(model::trackingOf(effect()).trackers.size(), 1);
     }
 
     void blurTools() {
