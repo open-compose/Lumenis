@@ -10,6 +10,7 @@
 #include "lumenis/model/nest.h"
 #include "lumenis/model/correction_manage.h"
 #include "lumenis/model/correction_relations.h"
+#include "lumenis/model/correction_shapes.h"
 #include "lumenis/model/correction_template.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
@@ -702,6 +703,32 @@ public:
         correctionOnEffect_ = on;
         correctionEffectAuto_ = false;
     }
+    // The shape panel of the Color Correction tool (FX Guide p.698-699; lumenis/model/correction_shapes.h, 6.10e3b1),
+    // with CC Effect chosen. "Shapes - selects the shape layer ...; Base - sets the base layer": which of the effect's two
+    // corrections the tool works on (currentCorrection, setCurrentCorrection ... follow it); Base at first.
+    model::CorrectionLayer correctionLayer() const { return correctionLayer_; }
+    void setCorrectionLayer(model::CorrectionLayer layer) { correctionLayer_ = layer; }
+    // Serial Mode and Invert Alpha of the Color Correction effect at the position (the defaults without one); setting
+    // them is an undo step, adding the effect as an adjustment does (p.692). False when nothing changed.
+    model::CorrectionShapeOptions correctionShapeOptions() const;
+    bool setCorrectionShapeOptions(const model::CorrectionShapeOptions& options);
+    // The effect's shapes (Intraframe object ids) and the ones selected (the drawing tools select them, 6.10e3b2).
+    QStringList correctionShapes() const;
+    const QStringList& correctionShapeSelection() const { return correctionShapeSelection_; }
+    void setCorrectionShapeSelection(const QStringList& ids);
+    // "Softness - Use the slider to add softness to the selected shape. Each shape can have a different softness"
+    // (p.699): the first selected shape's (nothing without a selected shape), and setting the selected shapes' (an undo
+    // step).
+    std::optional<double> selectedShapeSoftness() const;
+    bool setSelectedShapeSoftness(double softness);
+    // "Show Alpha Icon - when selected displays the alpha"; "Show Result - when selected, shows the composite result of
+    // the base+ shape layer" (p.698): what the mode's monitors show (model::shapeViewFor), Result outside the mode or
+    // without CC Effect. Display only, not kept with the sequence.
+    bool showShapeAlpha() const { return showShapeAlpha_; }
+    void setShowShapeAlpha(bool on) { showShapeAlpha_ = on; }
+    bool showShapeResult() const { return showShapeResult_; }
+    void setShowShapeResult(bool on) { showShapeResult_ = on; }
+    model::CorrectionShapeView correctionShapeView() const;
     // "When you move the position indicator to a segment that has color correction, the Correction Type button changes
     // to indicate the type of correction that is applied to that segment" (p.596): the relationship of the current
     // segment's correction, the selected side's if it has both; nothing for an uncorrected segment. followCorrectionType
@@ -1469,6 +1496,10 @@ private:
     model::CorrectionRelationship correctionRelationship_ = model::CorrectionRelationship::SourceSegment;
     bool correctionOnEffect_ = false;
     bool correctionEffectAuto_ = false; // CC Effect chosen by followCorrectionType on filler
+    model::CorrectionLayer correctionLayer_ = model::CorrectionLayer::Base;
+    QStringList correctionShapeSelection_;
+    bool showShapeAlpha_ = false;
+    bool showShapeResult_ = false;
     AutoCorrection autoCorrection_;
     // Gives each Color Correction effect just applied to `refs` (segments by track and start) its AutoCorrect correction.
     void autoCorrectEffects(model::Sequence& seq, const QList<model::SegmentRef>& refs);
@@ -1490,6 +1521,12 @@ private:
     // setCurrentCorrection (`atPosition`: the correction at the position, merged as keyframes) and setStoredCorrection.
     bool putCorrection(const model::ColorCorrection& correction, const QString& step, bool atPosition);
     bool putEffectCorrection(const model::ColorCorrection& correction, const QString& step, bool atPosition);
+    // Changes the Color Correction effect on the correction track's segment at the position (made for it, and an empty
+    // track filled first, as putEffectCorrection says) as the undo step `step`; `change` gets the effect and the
+    // segment's start and length and says whether it changed it. An effect made for it is kept even unchanged.
+    bool editCorrectionEffect(const QString& step, const std::function<bool(model::Effect&, std::int64_t start, std::int64_t length)>& change);
+    // The Color Correction effect on the correction track at the position.
+    std::optional<model::Effect> correctionEffectAt() const;
     // The Color Correction effect's correction on the segment at the position on the correction track (CC Effect):
     // empty for a segment without one, filler included; nothing without a sequence or a correction track.
     std::optional<model::ColorCorrection> effectCorrection(bool atPosition) const;

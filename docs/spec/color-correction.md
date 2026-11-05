@@ -594,6 +594,32 @@ the Effect Editor's `refresh`/`rebuild`/`changeShown` in Color Correction mode a
 * The editor's groups have no Enable buttons yet (ours; the tool's stay); a value back at its default is left out as the
   tool leaves it. The Curves and Levels keyframe tracks came with 6.10d3c.
 
+## 6.10e3b1: the Color Correction tool's shape panel
+
+Code: `src/ui/correction_tool_shapes.cpp` (`CorrectionTool::shapesPane`, `setShapeLayer`, `setShapeSoftness`), the
+Timeline's `correctionLayer`, `setCorrectionShapeOptions`, `setSelectedShapeSoftness` and `correctionShapeView`
+(`editCorrectionEffect` making the effect as an adjustment does), `model::CorrectionShapeView`/`shapeViewFor` and the
+`view` of `media::colorCorrectedShapesPicture` through `Composition::shapeView`. Tests: `tst_correction_tool`
+(`shapePanel`), `tst_compositor` (`correctionShapeViews`).
+
+### From the guide
+* The picture (p.698): the shape tools in a column (selection, rectangle, oval, polygon, curve, brush), the Shapes and
+  Base buttons, the Show Alpha icon beside Shapes ("top right"), Serial Mode (checked), Show Result and Invert Alpha
+  boxes, and Softness with its box, arrows and slider; "Show Alpha Icon - when selected displays the alpha"; "Show
+  Result - when selected, shows the composite result of the base+ shape layer (the final result)"; "Softness - Use the
+  slider to add softness to the selected shape" (p.698-699).
+
+### Ours
+* The panel shows left of the group panes only while CC Effect is the Correction Type. Shapes and Base choose which of
+  the effect's corrections the tool's controls, keyframes, templates and automatic corrections work on; Base at first.
+* Without Show Result the monitors show the layer worked on: Base, the base correction alone; Shapes, the shaped
+  picture inside the shapes over the uncorrected picture. Show Alpha shows the shapes' softened, inverted coverage in
+  grey, white inside. These are display state for the session, not kept with the sequence; outside Color Correction
+  mode the effect always plays its result.
+* Serial Mode, Invert Alpha and Softness are undo steps on the effect at the position; a first change adds the effect as
+  an adjustment does. Softness is dimmed without a selected shape (the drawing tools select them, 6.10e3b2) and sets
+  every selected shape's.
+
 ## 6.10e3a: shapes on the Color Correction effect
 
 Code: `src/model/correction_shapes.*` (`shapeCorrectionOf`, `layerCorrectionOf`, `CorrectionShapeOptions`,

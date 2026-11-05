@@ -1218,8 +1218,11 @@ phase of their own. They are done in three steps:
     CC Effect: Shapes and Base layers, Show Alpha, Serial Mode, Show Result, Invert Alpha, Softness and trackers on
     shapes (p.697-699), in two parts: 6.10e3a, the shapes and the shape layer's correction on the effect and its
     picture, done (`src/model/correction_shapes.*`, `media::colorCorrectedShapesPicture`; test `tst_compositor`);
-    6.10e3b, the tool's shape panel (the shape tools, Shapes/Base, Show Alpha, Serial Mode, Show Result, Invert Alpha,
-    Softness), drawing in the Current monitor, and trackers on shapes; 6.10e4, safe colours: the Safe Color settings and their graph, the warnings in the monitors and
+    6.10e3b, in three parts: 6.10e3b1, the tool's shape panel (Shapes/Base, Show Alpha, Serial Mode, Show Result,
+    Invert Alpha, Softness), done (`src/ui/correction_tool_shapes.cpp`, `Timeline::setCorrectionLayer`,
+    `Composition::shapeView`; tests `tst_correction_tool`, `tst_compositor`); 6.10e3b2, the shape tools drawing and
+    selecting in the Current monitor (the Intraframe tool behind a host interface); 6.10e3b3, trackers on shapes in
+    the Effect Editor (p.699); 6.10e4, safe colours: the Safe Color settings and their graph, the warnings in the monitors and
     the Color Match control, the waveform limits, and the Safe Color Limiter effect with its analysis display (ch.23,
     p.721-730); 6.10e5, the Spot Color Correction effect and the Paint Effect's colour modes (ch.24, p.731-733). Avid
     Artist Color (ch.25) needs Avid's EuControl software: a control surface provider hook only (EXTENSIONS.md), later.

@@ -737,7 +737,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Correction effect (`src/model/correction_shapes.*`: Intraframe objects with Softness, the "Shape Correction" layer,
   Serial Mode and Invert Alpha; `media::colorCorrectedShapesPicture`/`correctionShapesMask`; test `tst_compositor`), is
   done.
-  Next: 6.10e3b (the tool's shape panel and drawing), 6.10e4, 6.10e5, then 6.10f (the owner's report of Tools > Titler+ and Effect Editor opening as huge
+  6.10e3b1, the Color Correction tool's shape panel (`src/ui/correction_tool_shapes.cpp`: Shapes/Base through
+  `Timeline::setCorrectionLayer`, Serial Mode, Invert Alpha and Softness as undo steps through
+  `Timeline::editCorrectionEffect`, Show Alpha and Show Result as `Composition::shapeView`; tests `tst_correction_tool`,
+  `tst_compositor`), is done.
+  Next: 6.10e3b2 (drawing shapes in the Current monitor), 6.10e3b3 (trackers on shapes), 6.10e4, 6.10e5, then 6.10f (the owner's report of Tools > Titler+ and Effect Editor opening as huge
   windows on Windows 11; ROADMAP), 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).

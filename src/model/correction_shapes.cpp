@@ -42,6 +42,12 @@ void setShapeOptions(Effect& effect, const CorrectionShapeOptions& options) {
                              QJsonObject{{QStringLiteral("Serial Mode"), options.serial}, {QStringLiteral("Invert Alpha"), options.invertAlpha}});
 }
 
+CorrectionShapeView shapeViewFor(CorrectionLayer layer, bool showAlpha, bool showResult) {
+    if (showAlpha) return CorrectionShapeView::Alpha;
+    if (showResult) return CorrectionShapeView::Result;
+    return layer == CorrectionLayer::Shapes ? CorrectionShapeView::Shapes : CorrectionShapeView::Base;
+}
+
 bool hasCorrectionShapes(const Effect& effect) {
     return !intraframeObjects(effect).isEmpty();
 }

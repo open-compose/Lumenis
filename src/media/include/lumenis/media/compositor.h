@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/model/bin.h"
+#include "lumenis/model/correction_shapes.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/intraframe.h"
 #include "lumenis/model/sequence.h"
@@ -249,6 +250,9 @@ struct Composition {
     // Whether segments' Color Correction mode corrections (model::segmentCorrection) are applied, after a
     // Timewarp and before every other effect (FX Guide p.597). Off for Dual Split's uncorrected half (p.592).
     bool corrections = true;
+    // What Color Correction effects with shapes show (FX Guide p.698; the shape panel's Show Alpha, Show Result and
+    // layer buttons in Color Correction mode); Result everywhere else.
+    model::CorrectionShapeView shapeView = model::CorrectionShapeView::Result;
     // How source frames and renders are resized to `size` (the Render setting).
     ImageInterpolation interpolation = ImageInterpolation::Advanced;
     // The project's scan, the formats a Timewarp has until its Source and Output are set (model::sourceFormat),
@@ -294,8 +298,11 @@ std::vector<float> intraframeMask(const model::Effect& effect, const model::Intr
 // Shape-based colour correction (FX Guide p.697-699; lumenis/model/correction_shapes.h, 6.10e3): `base` (the effect's
 // correction at the time) on `layer`; with shapes, `shapes` (the shape layer's correction) on that picture (Serial Mode)
 // or on `layer`, mixed in where the shapes cover (each softened by its Softness, the union inverted with Invert Alpha).
+// `view` is what Color Correction mode's monitors show (model::CorrectionShapeView): Result as above; Base the base
+// correction alone; Shapes the shaped picture inside the shapes over `layer` uncorrected; Alpha the coverage as grey.
 Picture colorCorrectedShapesPicture(const model::Effect& effect, const Picture& layer, const model::ColorCorrection& base,
-                                    const model::ColorCorrection& shapes, double time, const model::EffectSpan& span);
+                                    const model::ColorCorrection& shapes, double time, const model::EffectSpan& span,
+                                    model::CorrectionShapeView view = model::CorrectionShapeView::Result);
 // The shapes' coverage at `time` (0 to 1, `width` x `height`, row by row), softened and inverted as the effect says:
 // what the Show Alpha display shows (p.698).
 std::vector<float> correctionShapesMask(const model::Effect& effect, int width, int height, double time, const model::EffectSpan& span);

@@ -331,7 +331,13 @@ CorrectionTool::CorrectionTool(Timeline& timeline, QWidget* parent) : QWidget(pa
     groups_->addWidget(withMatch(levelsPane(), media::MatchGroup::Levels));
     groups_->addWidget(withMatch(curvesPane(), media::MatchGroup::Curves));
     groups_->addWidget(withMatch(secondaryPane(), media::MatchGroup::Secondary));
-    outer->addWidget(groups_, 1);
+    // The shape panel left of the groups, with CC Effect (p.698; 6.10e3b).
+    auto* middle = new QHBoxLayout;
+    middle->setSpacing(4);
+    shapesPane_ = shapesPane();
+    middle->addWidget(shapesPane_);
+    middle->addWidget(groups_, 1);
+    outer->addLayout(middle, 1);
     // The Color Correction buckets C1-C8 (p.613), at the foot on the right, under the Color Match controls.
     auto* bucketRow = new QHBoxLayout;
     bucketRow->setSpacing(2);
@@ -996,6 +1002,7 @@ void CorrectionTool::sync() {
             b->setChecked(enableLit(name.mid(7)));
         }
     }
+    syncShapes();
     syncControls();
 }
 

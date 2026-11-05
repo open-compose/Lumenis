@@ -5,6 +5,7 @@
 #include "lumenis/media/custom_color.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/color_correction.h"
+#include "lumenis/model/correction_shapes.h"
 #include "lumenis/model/correction_template.h"
 
 #include <QDoubleSpinBox>
@@ -17,6 +18,9 @@
 #include <optional>
 
 class QButtonGroup;
+class QCheckBox;
+class QSlider;
+class QSpinBox;
 class QMimeData;
 class QLabel;
 class QStackedWidget;
@@ -278,6 +282,12 @@ public:
     QToolButton* tabButton(const QString& path) const;
     ChromaWheel* wheel(const QString& range) const;
     LumaRangesGraph* lumaGraph() const { return lumaGraph_; }
+    // The shape panel (FX Guide p.698-699; correction_tool_shapes.cpp, 6.10e3b), shown with CC Effect chosen: the layer
+    // the tool works on (the Shapes and Base buttons, Timeline::setCorrectionLayer) and the selected shapes' Softness
+    // (0 to 100, an undo step; false without a selected shape or a change).
+    QWidget* shapesPanel() const { return shapesPane_; }
+    void setShapeLayer(model::CorrectionLayer layer);
+    bool setShapeSoftness(double softness);
     // "Right-click in the Color Correction tool, and select Update Correction" (FX Guide p.700): the tool's shortcut
     // menu, Update, Merge, Flatten and Remove Correction (p.700-706, 6.10d4), each running its command through the
     // Timeline; Merge is dimmed "until you load versions of a sequence in both the Source monitor and the Record
@@ -296,6 +306,10 @@ signals:
     void colorSelectionChanged(ColorSelection selection);
     // Save Correction: the template and its name (the clip's), for the active bin (p.613).
     void saveCorrectionRequested(const model::CorrectionTemplate& t, const QString& name);
+    // The shape panel: what the monitors show changed (the layer, Show Alpha, Show Result), and a shape tool was chosen
+    // (0 Selection, 1 Rectangle, 2 Oval, 3 Polygon, 4 Curve, 5 Brush; the order of IntraframeTool::Tool).
+    void shapeDisplayChanged();
+    void shapeToolChosen(int tool);
 
 protected:
     void keyPressEvent(QKeyEvent* event) override;
@@ -314,6 +328,8 @@ private:
     QWidget* levelsPane();
     QWidget* curvesPane();
     QWidget* secondaryPane();
+    QWidget* shapesPane();
+    void syncShapes();
     void syncPanes();
     void syncSecondary();
     void applyUnits();
@@ -339,6 +355,17 @@ private:
     QString range_ = QStringLiteral("master");
     LumaPreview lumaPreview_ = LumaPreview::Output;
     QToolButton* type_ = nullptr;
+    // The shape panel (correction_tool_shapes.cpp).
+    QWidget* shapesPane_ = nullptr;
+    QButtonGroup* shapeTools_ = nullptr;
+    QToolButton* shapesLayer_ = nullptr;
+    QToolButton* baseLayer_ = nullptr;
+    QToolButton* showAlpha_ = nullptr;
+    QCheckBox* serialMode_ = nullptr;
+    QCheckBox* showResult_ = nullptr;
+    QCheckBox* invertAlpha_ = nullptr;
+    QSlider* softnessSlider_ = nullptr;
+    QSpinBox* softnessValue_ = nullptr;
     QStackedWidget* groups_ = nullptr;
     QStackedWidget* hslPages_ = nullptr;
     QWidget* rangeColumn_ = nullptr;

@@ -196,6 +196,49 @@ private slots:
         QVERIFY(m.at(10 * 40 + 1) > 0.9f && m.at(10 * 40 + 38) < 0.1f);
     }
 
+    void correctionShapeViews() {
+        // What Color Correction mode shows by the shape panel's buttons (FX Guide p.698; 6.10e3b1).
+        QCOMPARE(shapeViewFor(CorrectionLayer::Base, true, true), CorrectionShapeView::Alpha);
+        QCOMPARE(shapeViewFor(CorrectionLayer::Shapes, false, true), CorrectionShapeView::Result);
+        QCOMPARE(shapeViewFor(CorrectionLayer::Shapes, false, false), CorrectionShapeView::Shapes);
+        QCOMPARE(shapeViewFor(CorrectionLayer::Base, false, false), CorrectionShapeView::Base);
+        Effect cc;
+        cc.category = QStringLiteral("Image");
+        cc.name = QStringLiteral("Color Correction");
+        ColorCorrection base;
+        base.set(QStringLiteral("hsl/controls/master/gain"), 80);
+        setColorCorrection(cc, base);
+        ColorCorrection shape;
+        shape.set(QStringLiteral("hsl/controls/master/gain"), 50);
+        setShapeCorrection(cc, shape);
+        addIntraframeObject(cc, IntraframeKind::Rectangle, rectangleShape(QRectF(0.0, 0.0, 0.5, 1.0)));
+        const auto picture = [&](CorrectionShapeView view, bool withEffect = true) {
+            Sequence seq = Sequence::withDefaultTracks();
+            Segment grey = clip(QStringLiteral("grey"), 10);
+            if (withEffect) grey.effect = cc;
+            seq.splice(QStringLiteral("V1"), 0, {grey});
+            Composition c = composition(seq, {QStringLiteral("V1")});
+            c.shapeView = view;
+            return composeImage(c, 0);
+        };
+        const auto at = [](const QImage& img, double x) { return img.pixelColor(static_cast<int>(x * img.width()), img.height() / 2).red(); };
+        const QImage result = picture(CorrectionShapeView::Result);
+        const int plain = at(picture(CorrectionShapeView::Result, false), 0.75);
+        // Base: the base correction everywhere, the shapes left out.
+        const QImage baseOnly = picture(CorrectionShapeView::Base);
+        QVERIFY(std::abs(at(baseOnly, 0.25) - at(baseOnly, 0.75)) <= 2);
+        QVERIFY(std::abs(at(baseOnly, 0.75) - at(result, 0.75)) <= 2);
+        // Shapes: inside the shapes as the result, outside uncorrected.
+        const QImage shapes = picture(CorrectionShapeView::Shapes);
+        QVERIFY(std::abs(at(shapes, 0.25) - at(result, 0.25)) <= 2);
+        QVERIFY(std::abs(at(shapes, 0.75) - plain) <= 2);
+        QVERIFY(plain > at(result, 0.75) + 5);
+        // Alpha: white inside, black outside.
+        const QImage alpha = picture(CorrectionShapeView::Alpha);
+        QVERIFY(at(alpha, 0.25) > 240);
+        QVERIFY(at(alpha, 0.75) < 15);
+    }
+
     void trackFrames() {
         const Sequence seq = cutWith(transition(QStringLiteral("Dissolve"), 4));
         const auto before = trackFrame(seq, QStringLiteral("V1"), 7);

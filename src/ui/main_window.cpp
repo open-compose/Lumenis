@@ -693,6 +693,8 @@ void MainWindow::createPanels() {
             c.effects = renderOnTheFly_ || composer_->isPlaying();
             // Dual Split's uncorrected part in Color Correction mode (FX Guide p.592).
             c.corrections = !composer_->uncorrectedPictures();
+            // The Color Correction tool's shape panel: Show Alpha, Show Result and the layer worked on (FX Guide p.698).
+            if (timeline_) c.shapeView = timeline_->correctionShapeView();
             // The Effect Preview shows Pan and Scan's original picture with its wire frame; "To see the results
             // of the Pan and Scan effect while in Effect mode, click the Play button" (FX Guide p.234).
             c.effectPreview = monitor == MonitorId::Record && composer_->effectPreview().on && !composer_->isPlaying();
@@ -1715,6 +1717,8 @@ void MainWindow::createTools() {
     });
     // The Correction Mode Settings button opens the Correction setting (p.606).
     connect(correctionTool_, &CorrectionTool::colorInfoRequested, this, [this] { showTool(QStringLiteral("ColorInfo")); });
+    // The shape panel's layer, Show Alpha and Show Result change what the monitors show (FX Guide p.698).
+    connect(correctionTool_, &CorrectionTool::shapeDisplayChanged, this, [this] { composer_->correctionMonitors()->refresh(); });
     connect(correctionTool_, &CorrectionTool::settingsRequested, this, [this] {
         const int i = settings_->file(model::SettingsScope::User).activeIndex(QStringLiteral("Correction"));
         if (SettingsWindow* w = showSettings(); w && i >= 0) {

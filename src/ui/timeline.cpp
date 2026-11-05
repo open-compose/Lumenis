@@ -5020,13 +5020,13 @@ std::optional<model::ColorCorrection> Timeline::effectCorrection(bool atPosition
     if (i < 0) return model::ColorCorrection{}; // an empty track: the effect comes with the first adjustment
     const model::Segment& s = t->segments.at(i);
     if (!s.effect || !model::isColorCorrectionEffect(*s.effect)) return model::ColorCorrection{};
-    const model::ColorCorrection c = model::colorCorrectionOf(*s.effect);
+    const model::ColorCorrection c = model::layerCorrectionOf(*s.effect, correctionLayer_);
     if (!atPosition || c.keyframes.isEmpty()) return c;
     const model::EffectSpan span(std::max<std::int64_t>(s.length, 1));
     return model::correctionAt(c, span.timeOf(static_cast<double>(position - start)), span);
 }
 
-bool Timeline::putEffectCorrection(const model::ColorCorrection& correction, const QString& step, bool atPosition) {
+bool Timeline::editCorrectionEffect(const QString& step, const std::function<bool(model::Effect&, std::int64_t start, std::int64_t length)>& change) {
     const model::LoadedClip* rec = recordSequence();
     if (!rec) return fail(tr("Load a sequence first."));
     model::Sequence seq = model::Sequence::fromItem(rec->item);
@@ -5052,20 +5052,100 @@ bool Timeline::putEffectCorrection(const model::ColorCorrection& correction, con
         e.category = QStringLiteral("Image");
         e.name = QStringLiteral("Color Correction");
     }
-    const model::ColorCorrection stored = model::colorCorrectionOf(e);
-    const model::EffectSpan span(std::max<std::int64_t>(s.length, 1));
-    const model::ColorCorrection result = !atPosition || stored.keyframes.isEmpty()
-                                              ? correction
-                                              : model::adjustedAt(stored, correction, span.timeOf(static_cast<double>(position - start)), span,
-                                                                  correctionKeyframeSelection());
-    if (result == stored && s.effect) return false;
-    model::setColorCorrection(e, result);
+    const bool had = s.effect.has_value();
+    if (!change(e, start, s.length) && had) return false;
     s.effect = e;
     const QList<model::SegmentRef> keep = selection_;
     const bool ok = commitSequence(step, seq);
     selection_ = keep;
     view_->update();
     return ok;
+}
+
+bool Timeline::putEffectCorrection(const model::ColorCorrection& correction, const QString& step, bool atPosition) {
+    const std::int64_t position = composer_.state(MonitorId::Record).position();
+    return editCorrectionEffect(step, [&](model::Effect& e, std::int64_t start, std::int64_t length) {
+        // The layer the shape panel's Shapes and Base buttons choose (p.698; 6.10e3b1).
+        const model::ColorCorrection stored = model::layerCorrectionOf(e, correctionLayer_);
+        const model::EffectSpan span(std::max<std::int64_t>(length, 1));
+        const model::ColorCorrection result = !atPosition || stored.keyframes.isEmpty()
+                                                  ? correction
+                                                  : model::adjustedAt(stored, correction, span.timeOf(static_cast<double>(position - start)), span,
+                                                                      correctionKeyframeSelection());
+        if (result == stored) return false;
+        model::setLayerCorrection(e, correctionLayer_, result);
+        return true;
+    });
+}
+
+std::optional<model::Effect> Timeline::correctionEffectAt() const {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(correctionTrack());
+    const int i = t ? t->segmentAt(composer_.state(MonitorId::Record).position()) : -1;
+    if (i < 0) return std::nullopt;
+    const model::Segment& s = t->segments.at(i);
+    if (!s.effect || !model::isColorCorrectionEffect(*s.effect)) return std::nullopt;
+    return *s.effect;
+}
+
+model::CorrectionShapeOptions Timeline::correctionShapeOptions() const {
+    const std::optional<model::Effect> e = correctionEffectAt();
+    return e ? model::shapeOptionsOf(*e) : model::CorrectionShapeOptions{};
+}
+
+bool Timeline::setCorrectionShapeOptions(const model::CorrectionShapeOptions& options) {
+    message_.clear();
+    if (!correctionOnEffect_) return false;
+    return editCorrectionEffect(tr("Shape Options"), [&](model::Effect& e, std::int64_t, std::int64_t) {
+        if (model::shapeOptionsOf(e) == options) return false;
+        model::setShapeOptions(e, options);
+        return true;
+    });
+}
+
+QStringList Timeline::correctionShapes() const {
+    QStringList out;
+    if (const std::optional<model::Effect> e = correctionEffectAt()) {
+        for (const model::IntraframeObject& o : model::intraframeObjects(*e)) out << o.id;
+    }
+    return out;
+}
+
+void Timeline::setCorrectionShapeSelection(const QStringList& ids) {
+    correctionShapeSelection_ = ids;
+}
+
+std::optional<double> Timeline::selectedShapeSoftness() const {
+    const std::optional<model::Effect> e = correctionEffectAt();
+    if (!e) return std::nullopt;
+    for (const model::IntraframeObject& o : model::intraframeObjects(*e)) {
+        if (correctionShapeSelection_.contains(o.id)) return model::shapeSoftness(o);
+    }
+    return std::nullopt;
+}
+
+bool Timeline::setSelectedShapeSoftness(double softness) {
+    message_.clear();
+    if (!correctionOnEffect_ || correctionShapeSelection_.isEmpty()) return false;
+    return editCorrectionEffect(tr("Softness"), [&](model::Effect& e, std::int64_t, std::int64_t) {
+        QList<model::IntraframeObject> objects = model::intraframeObjects(e);
+        bool changed = false;
+        // "Each shape can have a different softness" (p.699): the slider sets the selected shapes'.
+        for (model::IntraframeObject& o : objects) {
+            if (!correctionShapeSelection_.contains(o.id) || model::shapeSoftness(o) == std::clamp(softness, 0.0, 100.0)) continue;
+            model::setShapeSoftness(o, softness);
+            changed = true;
+        }
+        if (changed) model::setIntraframeObjects(e, objects);
+        return changed;
+    });
+}
+
+model::CorrectionShapeView Timeline::correctionShapeView() const {
+    if (!correctionMode_ || !correctionOnEffect_) return model::CorrectionShapeView::Result;
+    return model::shapeViewFor(correctionLayer_, showShapeAlpha_, showShapeResult_);
 }
 
 bool Timeline::putCorrection(const model::ColorCorrection& correction, const QString& step, bool atPosition) {

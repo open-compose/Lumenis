@@ -654,6 +654,78 @@ private slots:
         QCOMPARE(frames.last(), 0); // the position is not in A: its first frame
     }
 
+    void shapePanel() {
+        // The shape panel (FX Guide p.698-699; 6.10e3b1): shown with CC Effect only.
+        Rig r;
+        QWidget* panel = r.tool.shapesPanel();
+        QVERIFY(panel && panel->isHidden());
+        r.typeAction(QStringLiteral("ccEffect"))->trigger();
+        QVERIFY(!panel->isHidden());
+        const auto find = [&](const QString& name) { return panel->findChild<QAbstractButton*>(name); };
+        QAbstractButton* shapes = find(QStringLiteral("shapes:layerShapes"));
+        QAbstractButton* base = find(QStringLiteral("shapes:layerBase"));
+        QVERIFY(shapes && base && base->isChecked() && !shapes->isChecked());
+        for (const char* tool : {"selection", "rectangle", "oval", "polygon", "curve", "brush"})
+            QVERIFY(find(QStringLiteral("shapes:tool:") + QLatin1String(tool)));
+        // Base: the effect's base correction; Shapes: the shape layer's, each kept apart.
+        r.value(QStringLiteral("hsl/controls/master/gain"))->setValue(130);
+        shapes->click();
+        QCOMPARE(r.timeline.correctionLayer(), model::CorrectionLayer::Shapes);
+        QCOMPARE(r.value(QStringLiteral("hsl/controls/master/gain"))->value(), 100.0);
+        r.value(QStringLiteral("hsl/controls/master/gain"))->setValue(60);
+        model::Effect e = *r.segment(0).effect;
+        QCOMPARE(model::colorCorrectionOf(e).number(QStringLiteral("hsl/controls/master/gain")), 130.0);
+        QCOMPARE(model::shapeCorrectionOf(e).number(QStringLiteral("hsl/controls/master/gain")), 60.0);
+        base->click();
+        QCOMPARE(r.value(QStringLiteral("hsl/controls/master/gain"))->value(), 130.0);
+        // Serial Mode (on at first) and Invert Alpha are kept on the effect, undo steps.
+        auto* serial = panel->findChild<QCheckBox*>(QStringLiteral("shapes:serial"));
+        auto* invert = panel->findChild<QCheckBox*>(QStringLiteral("shapes:invertAlpha"));
+        QVERIFY(serial && invert && serial->isChecked() && !invert->isChecked());
+        serial->click();
+        invert->click();
+        e = *r.segment(0).effect;
+        QCOMPARE(model::shapeOptionsOf(e), (model::CorrectionShapeOptions{false, true}));
+        QVERIFY(!serial->isChecked() && invert->isChecked());
+        // Show Alpha and Show Result: what the monitors show, the layer's own picture without them.
+        auto* result = panel->findChild<QCheckBox*>(QStringLiteral("shapes:showResult"));
+        QVERIFY(result && !result->isChecked());
+        QCOMPARE(r.timeline.correctionShapeView(), model::CorrectionShapeView::Base);
+        result->click();
+        QCOMPARE(r.timeline.correctionShapeView(), model::CorrectionShapeView::Result);
+        find(QStringLiteral("shapes:showAlpha"))->click();
+        QCOMPARE(r.timeline.correctionShapeView(), model::CorrectionShapeView::Alpha);
+        find(QStringLiteral("shapes:showAlpha"))->click();
+        result->click();
+        shapes->click();
+        QCOMPARE(r.timeline.correctionShapeView(), model::CorrectionShapeView::Shapes);
+        // Softness: dimmed without a selected shape; then the selected shape's.
+        auto* softness = panel->findChild<QSlider*>(QStringLiteral("shapes:softness"));
+        QVERIFY(softness && !softness->isEnabled());
+        QVERIFY(!r.tool.setShapeSoftness(30));
+        model::BinItem item = r.composer.state(MonitorId::Record).current()->item;
+        model::Sequence seq = model::Sequence::fromItem(item);
+        model::Effect& onA = *seq.track(QStringLiteral("V1"))->segments[0].effect;
+        const QString id = model::addIntraframeObject(onA, model::IntraframeKind::Oval, model::ovalShape(QRectF(0.2, 0.2, 0.4, 0.4)));
+        seq.storeIn(item);
+        r.composer.load(MonitorId::Record, QStringLiteral("bin"), item);
+        r.composer.moveTo(MonitorId::Record, 5);
+        QCOMPARE(r.timeline.correctionShapes(), QStringList{id});
+        r.timeline.setCorrectionShapeSelection({id});
+        r.tool.reload();
+        QVERIFY(softness->isEnabled());
+        QCOMPARE(softness->value(), 0);
+        QVERIFY(r.tool.setShapeSoftness(40));
+        QCOMPARE(model::shapeSoftness(model::intraframeObjects(*r.segment(0).effect).at(0)), 40.0);
+        QCOMPARE(softness->value(), 40);
+        panel->findChild<QToolButton*>(QStringLiteral("shapes:softnessUp"))->click();
+        QCOMPARE(model::shapeSoftness(model::intraframeObjects(*r.segment(0).effect).at(0)), 41.0);
+        // A relationship type hides the panel; the display falls back to the result.
+        r.typeAction(QStringLiteral("sourceSegment"))->trigger();
+        QVERIFY(panel->isHidden());
+        QCOMPARE(r.timeline.correctionShapeView(), model::CorrectionShapeView::Result);
+    }
+
     void slidersAndEnableButtons() {
         Rig r;
         r.tool.showHslTab(QStringLiteral("controls"));

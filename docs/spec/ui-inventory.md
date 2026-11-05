@@ -369,6 +369,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   position in the segment, else its first frame), the filler the sequence's length.
   6.10e2: the Color Info tool's sampling rate, its Video LUT column showing the
   video values, the 10-bit, IRE and mV conversions, the Color Info button's icon.
+  6.10e3: the shape layer's storage, Softness as a blur of up to 100 pixels,
+  Invert Alpha correcting outside the shapes; the panel's place left of the
+  group panes, what the monitors show without Show Result (the layer worked on),
+  Show Alpha's grey picture, Softness dimmed without a selected shape, our icons.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

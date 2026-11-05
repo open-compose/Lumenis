@@ -45,6 +45,15 @@ struct CorrectionShapeOptions {
 CorrectionShapeOptions shapeOptionsOf(const Effect& effect);
 void setShapeOptions(Effect& effect, const CorrectionShapeOptions& options);
 
+// What Color Correction mode's monitors show of a Color Correction effect with shapes (p.698; 6.10e3b1), by the shape
+// panel's buttons: "Show Result - when selected, shows the composite result of the base+ shape layer (the final result)"
+// (Result, also outside Color Correction mode); "Show Alpha Icon - when selected displays the alpha" (Alpha: the shapes'
+// coverage in grey, white inside). Without Show Result the layer being worked on (ours): Base, the base correction
+// alone; Shapes, the shape layer's picture inside the shapes over the uncorrected picture.
+enum class CorrectionShapeView { Result, Base, Shapes, Alpha };
+// The view the buttons give: Show Alpha first, then Show Result, then the layer.
+CorrectionShapeView shapeViewFor(CorrectionLayer layer, bool showAlpha, bool showResult);
+
 // Whether the effect has shapes; the shape layer counts only then.
 bool hasCorrectionShapes(const Effect& effect);
 

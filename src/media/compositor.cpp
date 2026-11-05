@@ -763,11 +763,11 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 const model::ColorCorrection shapeOwn = model::shapeCorrectionOf(e);
                 const model::ColorCorrection shapeAt = shapeOwn.keyframes.isEmpty() ? shapeOwn : model::correctionAt(shapeOwn, t, span);
                 if (tf->segment->isFiller()) {
-                    result = colorCorrectedShapesPicture(e, result, at, shapeAt, t, span);
+                    result = colorCorrectedShapesPicture(e, result, at, shapeAt, t, span, c.shapeView);
                     result.quantize(c.precision);
                     continue;
                 }
-                layer = colorCorrectedShapesPicture(e, layer, at, shapeAt, t, span);
+                layer = colorCorrectedShapesPicture(e, layer, at, shapeAt, t, span, c.shapeView);
                 layer.quantize(c.precision);
                 result = over(layer, result);
                 result.quantize(c.precision);
