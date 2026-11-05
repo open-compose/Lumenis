@@ -204,13 +204,49 @@ Picture rgbKeyCorrection(const QJsonObject& params, const Picture& picture, doub
     const model::Effect color{QStringLiteral("Image"), QStringLiteral("Color Effect"), parameters};
     return colorEffectPicture(color, picture, time, span);
 }
+
+// The RGB Keyer's controls read from its parameters at `time`, for a picture `width` pixels wide.
+struct RgbKeyControls {
+    double keyRed = 0, keyGreen = 0, keyBlue = 1;
+    double threshold = 0, soft = 0, spill = 0, level = 1;
+    int spillChannel = 2; // the key colour's strongest channel: 0 red, 1 green, 2 blue
+    int blur = 0, erode = 0;
+    bool reverse = false, showAlpha = false;
+};
+
+// A control of `cat` from 0 to 100 (`fallback` when unset), as a fraction.
+double percentOf(const model::Effect& e, const QString& cat, const QString& name, double time, const model::EffectSpan& span, double fallback) {
+    return std::clamp(num(e, cat, name, time, span, fallback), 0.0, 100.0) / 100.0;
+}
+
+RgbKeyControls rgbKeyControls(const model::Effect& e, int width, double time, const model::EffectSpan& span) {
+    const QString cat = QStringLiteral("RGB Keyer Parameters");
+    RgbKeyControls c;
+    const model::Rgb key = colour(e, cat, QStringLiteral("Key Color"), time, span).value_or(model::Rgb{0, 0, 1});
+    c.keyRed = key.red;
+    c.keyGreen = key.green;
+    c.keyBlue = key.blue;
+    c.threshold = percentOf(e, cat, QStringLiteral("Gain"), time, span, 0.0);
+    c.soft = percentOf(e, cat, QStringLiteral("Soft"), time, span, 0.0) * 0.25;
+    c.spill = percentOf(e, cat, QStringLiteral("Spill"), time, span, 0.0);
+    c.level = percentOf(e, cat, QStringLiteral("Level"), time, span, 100.0);
+    const double unit = width / 1920.0;
+    c.blur = static_cast<int>(std::lround(percentOf(e, cat, QStringLiteral("Blur"), time, span, 0.0) * 10.0 * unit));
+    c.erode = static_cast<int>(std::lround(std::max(num(e, cat, QStringLiteral("Erode"), time, span, 0.0), 0.0) / 10.0 * unit));
+    c.spillChannel = 0;
+    if (key.green > key.red && key.green >= key.blue) c.spillChannel = 1;
+    else if (key.blue > key.red && key.blue > key.green) c.spillChannel = 2;
+    c.reverse = flag(e, cat, QStringLiteral("Reverse"));
+    c.showAlpha = flag(e, cat, QStringLiteral("Show Alpha"));
+    return c;
+}
+
 } // namespace
 
-// MSVC 14.44 failed with an internal compiler error (C1001) in this function six times, each after a header change
-// (CI runs 219, 250, 317, 318, 319, 320; BUILDING.md), the last three with its optimizer turned off here, and the
-// last at the post-key correction's list of names. It now has no loops or lists of its own: the matte is made and
-// finished in key_mattes.cpp (rgbKeyMatte, finishMatte), the correction in rgbKeyCorrection, and under MSVC the
-// whole file is compiled without optimization (src/media/CMakeLists.txt).
+// MSVC 14.44 (cl 14.44.35207) failed with an internal compiler error (C1001) in this function seven times, each after a
+// header change (CI runs 219, 250, 317-321; BUILDING.md), with the optimizer off for it, and at last for the whole file,
+// so in code generation. It is now a few calls: the controls are read by rgbKeyControls, the matte made and finished in
+// key_mattes.cpp (rgbKeyMatte, finishMatte), the correction made by rgbKeyCorrection.
 Picture rgbKeyerPicture(const model::Effect& e, const Picture& layer, double time, const model::EffectSpan& span) {
     // "Replaces part of the video image with another video image based on color ... You can also perform
     // post-key color correction" (p.474). Gain "Adjusts the threshold of the key", Soft "Softens the edge",
@@ -220,27 +256,14 @@ Picture rgbKeyerPicture(const model::Effect& e, const Picture& layer, double tim
     // matte"; then Hue, Sat, Bright and Cont (p.550-551). Ours: the distance in RGB from the key colour,
     // keyed under Gain/100 of the largest with Soft/100 of a quarter blended; Spill takes that much of
     // the key colour's own channel down to the others' level; Erode/10 pixels taken off the matte's edge.
-    const QString cat = QStringLiteral("RGB Keyer Parameters");
-    const model::Rgb key = colour(e, cat, QStringLiteral("Key Color"), time, span).value_or(model::Rgb{0, 0, 1});
-    const double threshold = std::clamp(num(e, cat, QStringLiteral("Gain"), time, span, 0.0), 0.0, 100.0) / 100.0;
-    const double soft = std::clamp(num(e, cat, QStringLiteral("Soft"), time, span, 0.0), 0.0, 100.0) / 100.0 * 0.25;
-    const double spill = std::clamp(num(e, cat, QStringLiteral("Spill"), time, span, 0.0), 0.0, 100.0) / 100.0;
-    const double level = std::clamp(num(e, cat, QStringLiteral("Level"), time, span, 100.0), 0.0, 100.0) / 100.0;
-    const double unit = layer.width() / 1920.0;
-    const int blur = static_cast<int>(std::lround(std::clamp(num(e, cat, QStringLiteral("Blur"), time, span, 0.0), 0.0, 100.0) / 10.0 * unit));
-    const int erode = static_cast<int>(std::lround(std::max(num(e, cat, QStringLiteral("Erode"), time, span, 0.0), 0.0) / 10.0 * unit));
-    // The key colour's strongest channel is the one spill shows in.
-    int spillChannel = 0;
-    if (key.green > key.red && key.green >= key.blue) spillChannel = 1;
-    else if (key.blue > key.red && key.blue > key.green) spillChannel = 2;
+    const RgbKeyControls c = rgbKeyControls(e, layer.width(), time, span);
     Picture work = layer;
     std::vector<double> matte;
     const std::size_t count = static_cast<std::size_t>(layer.width()) * static_cast<std::size_t>(layer.height());
-    rgbKeyMatte(work.data().data(), count, key.red, key.green, key.blue, threshold, soft, spill, spillChannel, matte);
-    finishMatte(matte, layer.width(), layer.height(), flag(e, cat, QStringLiteral("Reverse")), blur, erode, level);
-    // Post-key colour correction, as the Color Effect does it.
-    work = rgbKeyCorrection(e.parameters.value(cat).toObject(), work, time, span);
-    return applyMatte(work, matte, flag(e, cat, QStringLiteral("Show Alpha")));
+    rgbKeyMatte(work.data().data(), count, c.keyRed, c.keyGreen, c.keyBlue, c.threshold, c.soft, c.spill, c.spillChannel, matte);
+    finishMatte(matte, layer.width(), layer.height(), c.reverse, c.blur, c.erode, c.level);
+    work = rgbKeyCorrection(e.parameters.value(QStringLiteral("RGB Keyer Parameters")).toObject(), work, time, span);
+    return applyMatte(work, matte, c.showAlpha);
 }
 
 // ---------------------------------------------------------------- SpectraMatte

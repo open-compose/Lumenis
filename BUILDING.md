@@ -725,10 +725,12 @@ parameters and calls it, with no `#pragma optimize` left. Keep the Windows runne
 date (Visual Studio Installer > Update): an internal compiler error may be fixed in a later MSVC. Updating 17.14.41
 to 17.14.44 did not help, because it kept the same compiler, cl 14.44.35207 (the job's log prints `VCToolsVersion`).
 CI run 320 then crashed at the function's last statement with a list in it, the post-key correction's names,
-which is now `rgbKeyCorrection`. Under MSVC, `src/media/CMakeLists.txt` compiles all of `key_effects.cpp` with
-`/Od /Ob0`, so the helpers it inlines are covered too. Its loops are in `key_mattes.cpp`, which keeps `/O2`. When the
-error keeps coming back in one function after header changes, move that function's loops to a small file of their
-own, and turn the optimizer off for the whole file rather than for one function. An internal compiler error is the
+which is now `rgbKeyCorrection`. With all of `key_effects.cpp` at `/Od /Ob0`, run 321 still crashed, at the
+function's last line. So the crash is in code generation, not the optimizer. `rgbKeyerPicture` is now a few calls:
+`rgbKeyControls` reads its controls into a plain struct. Under MSVC, `src/media/CMakeLists.txt` compiles the file with
+`/Od /Ob0 /Z7` (debug information in the object file, not the shared PDB). Its loops are in `key_mattes.cpp`, which
+keeps `/O2`. When the error keeps coming back in one function, split that function into small ones, and move its loops
+to a file of their own. If it still comes back, try a newer compiler: Visual Studio 2026's cl 14.5x. An internal compiler error is the
 compiler's fault, not the code's: GCC and Clang build the same file cleanly. Simplify the statement
 at or just before the line the error names, keep the same result (the tests check it), and leave a
 comment saying why, so nobody "tidies" it back. The self-hosted Windows job is the check: it is the

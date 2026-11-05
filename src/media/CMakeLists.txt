@@ -80,9 +80,10 @@ target_link_libraries(lumenis_media
 target_compile_definitions(lumenis_media PRIVATE LUMENIS_PATENT_CODECS=$<BOOL:${LUMENIS_PATENT_CODECS}>)
 lumenis_set_warnings(lumenis_media)
 
-# MSVC 14.44 stops with an internal compiler error (C1001) in key_effects.cpp's RGB Keyer whenever a header change
-# rebuilds it (CI runs 219-320; BUILDING.md): the whole file, the helpers it inlines included, is compiled without
-# optimization there. Its loops are in key_mattes.cpp, which keeps /O2, so the cost is small.
+# MSVC 14.44 (cl 14.44.35207) stops with an internal compiler error (C1001) generating code for key_effects.cpp's RGB
+# Keyer (CI runs 219-321; BUILDING.md), with the optimizer off as well. The file is compiled without optimization and
+# with its debug information in the object file (/Z7) rather than the shared PDB (/Zi). Its loops are in
+# key_mattes.cpp, which keeps /O2, so the cost is small.
 if(MSVC)
-    set_source_files_properties(key_effects.cpp PROPERTIES COMPILE_OPTIONS "/Od;/Ob0")
+    set_source_files_properties(key_effects.cpp PROPERTIES COMPILE_OPTIONS "/Od;/Ob0;/Z7")
 endif()
