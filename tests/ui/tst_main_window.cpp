@@ -3,6 +3,7 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/link.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/marker.h"
 #include "lumenis/model/project_bins.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_container.h"
@@ -305,6 +306,50 @@ private slots:
         QVERIFY(ui::BinViewLibrary::legacy(old).isNull());
         ui::FavoriteBins::paths().clear();
         ui::BinViewLibrary::views().clear();
+    }
+
+    // The owner's report (ROADMAP 6.10f): Tools > Titler+, then Source/Record Mode, gives the Record monitor back its own
+    // position bar with the sequence's markers.
+    void titlerAndBackToSourceRecord() {
+        Project project;
+        ext::ProviderRegistry providers;
+        ui::CommandRegistry commands;
+        commands.loadBuiltin();
+        ui::MainWindow window(commands, providers);
+        window.setProject(project.entry);
+        window.show();
+        settle();
+        ui::BinDocument* doc = window.binContainer().activeDocument();
+        QVERIFY(doc);
+        model::BinItem item;
+        item.id = model::newItemId();
+        item.name = QStringLiteral("Cut");
+        item.kind = model::BinItemKind::Sequence;
+        item.editRate = Rational(25);
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        seq.splice(QStringLiteral("V1"), 0, {model::Segment::filler(50)});
+        seq.storeIn(item);
+        model::Marker marker;
+        marker.id = model::newItemId();
+        marker.color = QStringLiteral("Red");
+        marker.track = QStringLiteral("V1");
+        marker.frame = 30;
+        model::setMarkers(item, {marker});
+        doc->addItem(item);
+        window.composer().load(ui::MonitorId::Record, doc->nodeId(), item);
+        window.composer().moveTo(ui::MonitorId::Record, 10);
+        settle();
+        QCOMPARE(window.composer().shownMarkers(ui::MonitorId::Record).size(), 1);
+        commands.action(QStringLiteral("tools.titler"))->trigger();
+        settle();
+        settle();
+        QVERIFY(window.timeline().isEffectMode() && window.composer().effectPreview().on);
+        QAction* sourceRecord = commands.action(QStringLiteral("edit.source_record_mode"));
+        QVERIFY(sourceRecord && sourceRecord->isEnabled());
+        sourceRecord->trigger();
+        settle();
+        QVERIFY(!window.composer().effectPreview().on);
+        QCOMPARE(window.composer().shownMarkers(ui::MonitorId::Record).size(), 1);
     }
 
     // Playback hears a track only when it is not muted, and only soloed tracks once any is (p.698).

@@ -59,6 +59,24 @@ class TestTitlerUi : public QObject {
     Q_OBJECT
 
 private slots:
+    // The owner's report (ROADMAP 6.10f): after Tools > Titler+, Source/Record Mode gives the Record monitor back its
+    // own position bar (markers and all) and its size.
+    void leavingTitlerRestoresTheRecordMonitor() {
+        Composer composer;
+        Timeline timeline{composer};
+        EffectEditor editor{timeline};
+        timeline.setSequenceStore([](const QString&, const BinItem&, bool) { return true; });
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence());
+        composer.moveTo(MonitorId::Record, 10);
+        QVERIFY(timeline.perform(QStringLiteral("tools.titler")));
+        timeline.setEffectMode(true); // as MainWindow::openTitleEditing does
+        editor.refresh();
+        QVERIFY(composer.effectPreview().on);
+        QVERIFY(timeline.perform(QStringLiteral("edit.source_record_mode")));
+        QVERIFY(!timeline.isEffectMode());
+        QVERIFY2(!composer.effectPreview().on, "the Effect Preview stays on after Source/Record Mode");
+    }
+
     void apply() {
         Composer composer;
         Timeline timeline{composer};
