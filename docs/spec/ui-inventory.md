@@ -347,6 +347,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Darken, Desaturate, High and Low Contrast, Saturate) as templates, automatic
   templates kept for the session, the same segment and side updating the
   newest, the palette list's "N  name" text, Enter in the Effect Palette.
+  6.10d3a: correction keyframes Elastic, Curves and Levels points held between
+  keyframes, an adjustment keyframing only controls that already have keyframes,
+  a reset dropping a control's keyframes, the Program side's keyframes winning.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

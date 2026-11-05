@@ -537,6 +537,33 @@ Code: the presets in `resources/effects.json` (`EffectInfo::correctionPreset`), 
   updates it, anything else is a new one. They show as a template bin named after the sequence, items "1  name", for the
   sequences the Record monitor has loaded. Enter on any item in the Effect Palette's list acts as a double-click.
 
+## 6.10d3a: keyframes on corrections
+
+Code: `src/model/correction_keyframes.*` (`correctionKeyframing`, `setCorrectionKeyframe`, `correctionAt`,
+`adjustedAt`, `correctionKeyframeFrames`), `ColorCorrection::keyframes`, the compositor's `segmentPicture`, and
+`Timeline::currentCorrection`/`storedCorrection`/`setCurrentCorrection`. Tests: `tst_correction_keyframes`,
+`tst_compositor` (`keyframedCorrection`), `tst_correction_tool` (`keyframedCorrections`).
+
+### From the guide
+* "You can use the advanced keyframes interface in the Effect Editor to animate most color correction adjustments";
+  the parameter controls and graphs "update as you scrub to show the parameter values at each point in the clip"
+  (p.683).
+* Keyframeable (p.685): every HSL > Controls parameter, every Hue Offsets parameter (each ChromaWheel as Hue and Hue
+  Amount), the Secondary tab's sliders; the Curves and Levels tabs keyframe "in their keyframe tracks" without graphs;
+  Isolate, Invert Last Vector, the Luma Ranges and Channels tabs not at all.
+* "Make an adjustment to the appropriate parameter in the Color Correction tool. A new keyframe appears below the
+  Current Color Correction monitor at the location of the position indicator" (p.686).
+
+### Ours
+* A correction keeps its keyframes by control path (the Hue Offsets and Curves tabs' Master Gain, Gamma, Setup and
+  Saturation are the Controls tab's), in the effect keyframes' form, Elastic over the segment. Numbers blend with the
+  interpolation; Curves and Levels points hold (Shelf) from one keyframe to the next.
+* The tool shows the values at the position. A changed control that has keyframes gets one at the position (replacing
+  one within half a frame); a reset control loses its keyframes; any other change is a plain value. No keyframe is
+  selected in the Color Correction monitor yet (6.10d3c), so an adjustment never moves an existing keyframe elsewhere.
+* The Program side's keyframes override the Source side's for the same control; a control the Program side sets plainly
+  stops following the Source side's keyframes.
+
 ## 6.10a3: the Secondary group
 
 ### From the guide

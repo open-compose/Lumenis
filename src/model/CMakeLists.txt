@@ -22,6 +22,7 @@ add_library(lumenis_model STATIC
     color_correction.cpp
     correction_relations.cpp
     correction_template.cpp
+    correction_keyframes.cpp
     pan_scan.cpp
     tracking.cpp
     titler.cpp

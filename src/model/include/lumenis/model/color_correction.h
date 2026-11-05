@@ -36,14 +36,22 @@ namespace lumenis::model {
 
 struct Effect;
 
+// The path a control is kept under: the Hue Offsets tab's and the Curves tab's Master Gain, Gamma, Setup (and
+// Saturation) are the Controls tab's Master ones (p.603, p.659); any other path is itself.
+QString canonicalControlPath(const QString& path);
+
 // The luminance ranges, "highlights, midtones, and shadows" (p.631, p.635).
 enum class LumaRange { Shadows, Midtones, Highlights };
 
 struct ColorCorrection {
     QJsonObject values;    // control path -> value (a number, or an array of [in, out] points for a Luma Ranges curve)
     QStringList disabled;  // the Enable buttons that are off
+    // Keyframed controls (FX Guide p.683-686; lumenis/model/correction_keyframes.h, 6.10d3a): control path ->
+    // ParameterKeyframes::toJson(), Elastic over the segment unless made Fixed. A keyframed control's value at a time
+    // comes from its keyframes (correctionAt); its entry in `values` is not used then.
+    QJsonObject keyframes;
 
-    bool isEmpty() const { return values.isEmpty() && disabled.isEmpty(); }
+    bool isEmpty() const { return values.isEmpty() && disabled.isEmpty() && keyframes.isEmpty(); }
     QJsonObject toJson() const;
     static ColorCorrection fromJson(const QJsonObject& o);
     bool operator==(const ColorCorrection&) const = default;

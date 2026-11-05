@@ -693,11 +693,14 @@ public:
     void followCorrectionType();
     // The clip a segment of the Record monitor's sequence comes from, for the relationships' keys.
     model::CorrectionClipLookup correctionClipLookup() const;
-    // That side's correction on the segment at the position on the correction track; nothing off a clip. Setting it
-    // gives it to every segment related by the Correction Type's relationship (p.597).
-    // with Use Marks for Segment Correction on and both marks in the Record monitor sets it on every clip of the track
+    // That side's correction on the segment at the position on the correction track, as it is at the position (its
+    // keyframes' values there, 6.10d3a); nothing off a clip. Setting it gives it to every segment related by the
+    // Correction Type's relationship (p.597), the changes to keyframed controls as keyframes at the position (p.686);
+    // with Use Marks for Segment Correction on and both marks in the Record monitor it goes on every clip of the track
     // the marks touch.
     std::optional<model::ColorCorrection> currentCorrection() const;
+    // That side's correction as the segment keeps it, keyframes and all (currentCorrection is it at the position).
+    std::optional<model::ColorCorrection> storedCorrection() const;
     // Sets it, as an undo step named `step`.
     bool setCurrentCorrection(const model::ColorCorrection& correction, const QString& step);
     // The Remove Effect button in the mode: "To remove the color correction on the current segment" (p.592), both

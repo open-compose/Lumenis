@@ -1191,9 +1191,13 @@ phase of their own. They are done in three steps:
     `40-correction-templates.json`); 6.10d2b, Color Correction Presets and the Effect Palette's automatic templates
     (p.611-612), done (our presets in `resources/effects.json`, `Timeline::automaticCorrections`; tests `tst_effects`,
     `tst_correction_tool`). So 6.10d2 is done;
-    6.10d3, keyframing corrections: the parameters in the Effect Editor (the HSL Controls and Hue Offsets, the
-    Secondary sliders; the Curves and Levels as keyframe tracks only), the keyframe markers under the Current monitor
-    and keyframes added by adjusting (p.683-686); 6.10d4, Update, Merge, Flatten and Remove Correction from the tool's
+    6.10d3, keyframing corrections, in three parts (2026-11-05): 6.10d3a, keyframes on corrections (which controls take
+    them, p.685), played per frame, the tool following them and adjustments adding keyframes at the position (p.683,
+    p.686), done (`src/model/correction_keyframes.*`, `Timeline::storedCorrection`; tests `tst_correction_keyframes`,
+    `tst_compositor`, `tst_correction_tool`); 6.10d3b, the correction parameters in the Effect Editor (the HSL Controls
+    and Hue Offsets, the Secondary sliders, ganged with the tool; the Curves and Levels as keyframe tracks only), where
+    the first keyframes are added (p.683-686); 6.10d3c, a position bar under the Current monitor with the keyframe
+    markers: select, delete, Alt-drag (p.686); 6.10d4, Update, Merge, Flatten and Remove Correction from the tool's
     shortcut menu with their dialogs (ch.21, p.700-706). Correcting a whole sequence (p.692) uses the Color Correction
     effect and comes with 6.10e.
   * 6.10e, the Color Correction effect and its AutoCorrect options (p.693-699), correcting a whole sequence on an

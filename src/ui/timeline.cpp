@@ -5,6 +5,7 @@
 #include "lumenis/media/audio_fx.h"
 #include "lumenis/media/classic_title.h"
 #include "lumenis/media/link.h"
+#include "lumenis/model/correction_keyframes.h"
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/effect_keyframes.h"
@@ -4859,7 +4860,25 @@ std::optional<model::ColorCorrection> Timeline::currentCorrection() const {
     const model::Sequence seq = model::Sequence::fromItem(rec->item);
     const model::Track* t = seq.track(correctionTrack());
     if (!t) return std::nullopt;
-    const int i = t->segmentAt(composer_.state(MonitorId::Record).position());
+    std::int64_t start = 0;
+    const std::int64_t position = composer_.state(MonitorId::Record).position();
+    const int i = t->segmentAt(position, &start);
+    if (i < 0 || t->segments.at(i).isFiller()) return std::nullopt;
+    model::Segment s = t->segments.at(i);
+    // A keyframed correction as it is at the position (FX Guide p.686: "the parameter control moves over time in the
+    // Color Correction tool").
+    const model::ColorCorrection& c = model::correctionOf(s, correctionSide());
+    if (c.keyframes.isEmpty()) return c;
+    const model::EffectSpan span(std::max<std::int64_t>(s.length, 1));
+    return model::correctionAt(c, span.timeOf(static_cast<double>(position - start)), span);
+}
+
+std::optional<model::ColorCorrection> Timeline::storedCorrection() const {
+    const model::LoadedClip* rec = composer_.state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const model::Track* t = seq.track(correctionTrack());
+    const int i = t ? t->segmentAt(composer_.state(MonitorId::Record).position()) : -1;
     if (i < 0 || t->segments.at(i).isFiller()) return std::nullopt;
     model::Segment s = t->segments.at(i);
     return model::correctionOf(s, correctionSide());
@@ -4912,9 +4931,17 @@ bool Timeline::setCurrentCorrection(const model::ColorCorrection& correction, co
     if (!rec) return fail(tr("Load a sequence first."));
     model::Sequence seq = model::Sequence::fromItem(rec->item);
     model::Track* t = seq.track(correctionTrack());
-    const int i = t ? t->segmentAt(composer_.state(MonitorId::Record).position()) : -1;
+    std::int64_t start = 0;
+    const std::int64_t position = composer_.state(MonitorId::Record).position();
+    const int i = t ? t->segmentAt(position, &start) : -1;
     if (i < 0 || t->segments.at(i).isFiller()) return fail(tr("There is no segment to correct at the position."));
-    if (!model::applyRelationshipCorrection(seq, correctionTrack(), i, correctionRelationship_, correction, correctionClipLookup()))
+    // `correction` is the one at the position (currentCorrection); on a keyframed correction its changes become keyframes
+    // there (FX Guide p.686).
+    model::ColorCorrection stored = model::correctionOf(t->segments[i], correctionSide());
+    const model::EffectSpan span(std::max<std::int64_t>(t->segments.at(i).length, 1));
+    const model::ColorCorrection result =
+        stored.keyframes.isEmpty() ? correction : model::adjustedAt(stored, correction, span.timeOf(static_cast<double>(position - start)), span);
+    if (!model::applyRelationshipCorrection(seq, correctionTrack(), i, correctionRelationship_, result, correctionClipLookup()))
         return false;
     t = seq.track(correctionTrack());
     const model::MonitorState& r = composer_.state(MonitorId::Record);
@@ -4925,7 +4952,7 @@ bool Timeline::setCurrentCorrection(const model::ColorCorrection& correction, co
         std::int64_t at = 0;
         for (model::Segment& marked : t->segments) {
             const std::int64_t end = at + marked.length;
-            if (!marked.isFiller() && end > *r.in() && at <= *r.out()) model::correctionOf(marked, correctionSide()) = correction;
+            if (!marked.isFiller() && end > *r.in() && at <= *r.out()) model::correctionOf(marked, correctionSide()) = result;
             at = end;
         }
     }

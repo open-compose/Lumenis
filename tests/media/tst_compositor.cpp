@@ -1,6 +1,7 @@
 // The compositor (ROADMAP Phase 6.1; docs/spec/compositor.md): tracks bottom to top, filler showing
 // through, the dissolve family of transitions and Superimpose, the 2D transitions (wipes.cpp), effects
 // processing precision, and offline media. Clips are solid colours, one per clip id, so every pixel is known.
+#include "lumenis/model/correction_keyframes.h"
 #include "lumenis/media/compositor.h"
 #include "lumenis/model/intraframe.h"
 #include "lumenis/model/effect_keyframes.h"
@@ -98,6 +99,22 @@ private slots:
         QCOMPARE(centre(composeImage(c, 30)), QColor(0, 0, 0));
         // The same frames through the full composite.
         QCOMPARE(centre(composeFrame(c, 7).toImage()), QColor(0, 0, 255));
+    }
+
+    // A keyframed Color Correction mode correction plays its values at each frame of the segment (FX Guide p.683).
+    void keyframedCorrection() {
+        Sequence seq = Sequence::withDefaultTracks();
+        Segment grey = clip(QStringLiteral("grey"), 11);
+        const EffectSpan span(11);
+        setCorrectionKeyframe(grey.sourceCorrection, QStringLiteral("hsl/controls/master/gain"), 0.0, span, 100);
+        setCorrectionKeyframe(grey.sourceCorrection, QStringLiteral("hsl/controls/master/gain"), 1.0, span, 50);
+        seq.splice(QStringLiteral("V1"), 0, {grey});
+        const Composition c = composition(seq, {QStringLiteral("V1")});
+        const int first = centre(composeImage(c, 0)).red();
+        const int middle = centre(composeImage(c, 5)).red();
+        const int last = centre(composeImage(c, 10)).red();
+        QVERIFY2(first > middle && middle > last, qPrintable(QStringLiteral("%1 %2 %3").arg(first).arg(middle).arg(last)));
+        QVERIFY(std::abs(first - 128) <= 3); // Gain 100: unchanged
     }
 
     void trackFrames() {

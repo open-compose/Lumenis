@@ -8,6 +8,7 @@
 #include "lumenis/media/fields.h"
 #include "lumenis/media/fluid_fx.h"
 #include "lumenis/media/optical_flow.h"
+#include "lumenis/model/correction_keyframes.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/nest.h"
@@ -303,7 +304,14 @@ Picture uncorrectedSegmentPicture(const Composition& c, const model::Segment* se
 Picture segmentPicture(const Composition& c, const model::Segment* segment, std::int64_t frame, bool* missing, double blend = 0.0,
                        std::int64_t offset = -1) {
     Picture p = uncorrectedSegmentPicture(c, segment, frame, missing, blend, offset);
-    if (c.corrections && segment && segment->hasCorrection()) p = colorCorrectedPicture(model::segmentCorrection(*segment), p);
+    if (c.corrections && segment && segment->hasCorrection()) {
+        // Keyframed corrections (FX Guide p.683): their values at the frame into the segment (its first without one).
+        const model::ColorCorrection correction = model::segmentCorrection(*segment);
+        const model::EffectSpan span(std::max<std::int64_t>(segment->length, 1));
+        p = colorCorrectedPicture(correction.keyframes.isEmpty() ? correction
+                                                                 : model::correctionAt(correction, span.timeOf(static_cast<double>(std::max<std::int64_t>(offset, 0))), span),
+                                  p);
+    }
     return p;
 }
 

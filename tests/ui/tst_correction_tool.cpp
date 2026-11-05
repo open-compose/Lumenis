@@ -4,6 +4,7 @@
 #include "lumenis/media/color_correction.h"
 #include "lumenis/media/custom_color.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/correction_keyframes.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_dock.h"
 #include "lumenis/ui/composer.h"
@@ -339,6 +340,36 @@ private slots:
         QVERIFY(r.timeline.applyEffectToSelection(*preset));
         QCOMPARE(r.segment(0).sourceCorrection.number(QStringLiteral("hsl/controls/master/saturation")), 0.0);
         QVERIFY(!r.segment(0).effect); // a correction, not an effect
+    }
+
+    // Keyframed corrections (p.683-686, 6.10d3a): the tool shows the values at the position; adjusting a keyframed
+    // control there adds a keyframe; a plain control stays plain.
+    void keyframedCorrections() {
+        Rig r; // A: frames 0-19, the position at 5
+        model::ColorCorrection c;
+        const model::EffectSpan span(20);
+        model::setCorrectionKeyframe(c, QStringLiteral("hsl/controls/master/gain"), 0.0, span, 100);
+        model::setCorrectionKeyframe(c, QStringLiteral("hsl/controls/master/gain"), 1.0, span, 138);
+        QVERIFY(r.timeline.setCurrentCorrection(c, QStringLiteral("Color Correction")));
+        QCOMPARE(r.timeline.storedCorrection()->keyframes, c.keyframes);
+        r.composer.moveTo(MonitorId::Record, 19);
+        QCOMPARE(r.timeline.currentCorrection()->number(QStringLiteral("hsl/controls/master/gain")), 138.0);
+        r.composer.moveTo(MonitorId::Record, 0);
+        r.tool.reload();
+        QCOMPARE(r.tool.correction().number(QStringLiteral("hsl/controls/master/gain")), 100.0);
+        // At frame 10 the Gain slider is set to 90 and Saturation to 60.
+        r.composer.moveTo(MonitorId::Record, 10);
+        r.tool.reload();
+        QCOMPARE(r.tool.correction().number(QStringLiteral("hsl/controls/master/gain")), 120.0);
+        r.value(QStringLiteral("hsl/controls/master/gain"))->setValue(90);
+        r.value(QStringLiteral("hsl/controls/master/saturation"))->setValue(60);
+        const model::ColorCorrection stored = *r.timeline.storedCorrection();
+        QCOMPARE(model::correctionKeyframesOf(stored, QStringLiteral("hsl/controls/master/gain")).keys.size(), 3);
+        QVERIFY(!stored.keyframes.contains(QStringLiteral("hsl/controls/master/saturation")));
+        QCOMPARE(model::correctionKeyframeFrames(stored, span), (QList<double>{0.0, 10.0, 19.0}));
+        r.composer.moveTo(MonitorId::Record, 19);
+        QCOMPARE(r.timeline.currentCorrection()->number(QStringLiteral("hsl/controls/master/gain")), 138.0);
+        QCOMPARE(r.timeline.currentCorrection()->number(QStringLiteral("hsl/controls/master/saturation")), 60.0);
     }
 
     void slidersAndEnableButtons() {

@@ -125,10 +125,15 @@ QList<QPointF> pointsOf(const QJsonValue& value) {
 
 } // namespace
 
+QString canonicalControlPath(const QString& path) {
+    return canonical(path);
+}
+
 QJsonObject ColorCorrection::toJson() const {
     QJsonObject o;
     if (!values.isEmpty()) o.insert(QStringLiteral("values"), values);
     if (!disabled.isEmpty()) o.insert(QStringLiteral("disabled"), QJsonArray::fromStringList(disabled));
+    if (!keyframes.isEmpty()) o.insert(QStringLiteral("keyframes"), keyframes);
     return o;
 }
 
@@ -136,6 +141,7 @@ ColorCorrection ColorCorrection::fromJson(const QJsonObject& o) {
     ColorCorrection c;
     c.values = o.value(QStringLiteral("values")).toObject();
     for (const QJsonValue v : o.value(QStringLiteral("disabled")).toArray()) c.disabled << v.toString();
+    c.keyframes = o.value(QStringLiteral("keyframes")).toObject();
     return c;
 }
 
@@ -657,7 +663,11 @@ ColorCorrection mergedCorrection(const ColorCorrection& source, const ColorCorre
     if (program.isEmpty()) return source;
     if (source.isEmpty()) return program;
     ColorCorrection out = source;
+    // The Program side's keyframed controls are its own; a control it sets plainly no longer follows the Source side's
+    // keyframes.
+    for (auto it = program.keyframes.constBegin(); it != program.keyframes.constEnd(); ++it) out.keyframes.insert(it.key(), it.value());
     for (auto it = program.values.constBegin(); it != program.values.constEnd(); ++it) {
+        if (!program.keyframes.contains(it.key())) out.keyframes.remove(it.key());
         out.values.insert(it.key(), it.value());
         // A Source button above a control the Program side set does not stop it.
         out.disabled.removeIf([&](const QString& d) { return under(it.key(), d); });
