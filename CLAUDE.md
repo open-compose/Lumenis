@@ -801,7 +801,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `MainWindow::sendTo`/`makeNewSendTo` exporting through `writeExport` with `exportOverride_`, the Pro Tools options;
   test `tst_send_to`), is done. 7.1c3, the Simplified AAF and Export Media Difference (docs/spec/aaf.md: `src/model/
   simplify_export.*`, shipped setting versions `SettingKind::versions`, `MainWindow::setExcludeSequenceHook`), is done.
-  Next: 7.2, MXF OP1a, AS-11, XDCAM and AS-02. After Phase 7, before Phase 8: 7.6, the owner's report
+  7.2 is in four parts (ROADMAP). 7.2a, MXF OP1a, XDCAM MXF OP1a and MXF OP1a (legacy) through FFmpeg (docs/spec/
+  movie-export.md "MXF OP1a": `MovieContainer::Mxf`/`Xdcam`/`MxfLegacy`, the XDCAM and AVC Long-GOP entries of
+  `movieCompressions()`) and DPX's options (`media::setDpxHeaderInfo`), is done. Next: 7.2b, Export to Device > XDCAM and P2. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

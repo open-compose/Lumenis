@@ -14,6 +14,7 @@
 #include <QPainter>
 
 #include <algorithm>
+#include <cstring>
 #include <memory>
 
 extern "C" {
@@ -25,7 +26,8 @@ namespace lumenis::media {
 const QList<MovieCompression>& movieCompressions() {
     // Ours: the guide names the menus (Codec Family, Compression, Color Depth, p.895) and HEVC's Main and Main 10
     // (p.899), not the entries. DNxHR and ProRes go in MOV only; H.264, HEVC and AV1 in both.
-    static const QList<MovieCompression> all{
+    static const QList<MovieCompression> all{[] {
+    QList<MovieCompression> list{
         {QStringLiteral("dnxhr_lb"), QStringLiteral("Avid DNxHR"), QStringLiteral("Avid DNxHR LB"), QStringLiteral("dnxhd"),
          QStringLiteral("dnxhr_lb"), QStringLiteral("yuv422p"), 8},
         {QStringLiteral("dnxhr_sq"), QStringLiteral("Avid DNxHR"), QStringLiteral("Avid DNxHR SQ"), QStringLiteral("dnxhd"),
@@ -62,6 +64,47 @@ const QList<MovieCompression>& movieCompressions() {
         {QStringLiteral("uncompressed_10"), QStringLiteral("Uncompressed"), QStringLiteral("Uncompressed 10-bit 4:2:2"),
          QStringLiteral("v210"), QString(), QStringLiteral("yuv422p10le"), 10},
     };
+    // DNxHR and ProRes go in MXF OP1a too ("Avid DNx as MXF OP1a wrapped media", p.888; ProRes "in OP-Atom, MXF
+    // OP1a, and MOV containers", p.904).
+    for (MovieCompression& c : list) c.op1a = c.family == QLatin1String("Avid DNxHR") || c.family == QLatin1String("Apple ProRes");
+    auto mxfOnly = [&](const char* id, const char* family, const char* label, const char* encoder, const char* pixelFormat, int depth,
+                       int mbps, QSize raster, QList<QPair<QString, QString>> options, bool xdcam, bool legacy) {
+        MovieCompression c{QString::fromLatin1(id), QString::fromLatin1(family), QString::fromLatin1(label), QString::fromLatin1(encoder),
+                           QString(), QString::fromLatin1(pixelFormat), depth, false, false, false};
+        c.op1a = !legacy;
+        c.xdcam = xdcam;
+        c.legacy = legacy;
+        c.fixedMbps = mbps;
+        c.raster = raster;
+        c.options = std::move(options);
+        list << c;
+    };
+    // XDCAM HD (p.884: "For HD projects, select XDCAM-50, XDCAM-35, XDCAM-25, or XDCAM-17"): MPEG-2 long GOP, the
+    // 50 Mb/s one 4:2:2 at constant rate, the others 4:2:0, XDCAM-25 and -17 at 1440 x 1080 (Sony's formats; ours: a
+    // GOP of 12 with two B frames for each).
+    auto gop = [](const char* mbps, bool constant) {
+        QList<QPair<QString, QString>> o{{QStringLiteral("g"), QStringLiteral("12")}, {QStringLiteral("bf"), QStringLiteral("2")},
+                                         {QStringLiteral("intra_vlc"), QStringLiteral("1")},
+                                         {QStringLiteral("maxrate"), QString::fromLatin1(mbps) + QLatin1Char('M')},
+                                         {QStringLiteral("bufsize"), QStringLiteral("17825792")}};
+        if (constant) o << QPair<QString, QString>{QStringLiteral("minrate"), QString::fromLatin1(mbps) + QLatin1Char('M')};
+        return o;
+    };
+    mxfOnly("xdcam_50", "XDCAM HD", "XDCAM-50", "mpeg2video", "yuv422p", 8, 50, {}, gop("50", true), true, false);
+    mxfOnly("xdcam_35", "XDCAM HD", "XDCAM-35", "mpeg2video", "yuv420p", 8, 35, {}, gop("35", false), true, false);
+    mxfOnly("xdcam_25", "XDCAM HD", "XDCAM-25", "mpeg2video", "yuv420p", 8, 25, QSize(1440, 1080), gop("25", true), true, false);
+    mxfOnly("xdcam_17", "XDCAM HD", "XDCAM-17", "mpeg2video", "yuv420p", 8, 18, QSize(1440, 1080), gop("18", false), true, false);
+    // Panasonic AVC Long-GOP G6, G12, G25 and G50 (p.887-888): H.264 at 6, 12, 25 and 50 Mb/s (ours: G6 and G12 4:2:0
+    // 8-bit, G25 and G50 4:2:2 10-bit, as Panasonic's cameras record them; a GOP of 12).
+    const QList<QPair<QString, QString>> avc{{QStringLiteral("g"), QStringLiteral("12")}};
+    mxfOnly("avc_g6", "AVC Long-GOP", "AVC Long-GOP G6", "libx264", "yuv420p", 8, 6, {}, avc, false, false);
+    mxfOnly("avc_g12", "AVC Long-GOP", "AVC Long-GOP G12", "libx264", "yuv420p", 8, 12, {}, avc, false, false);
+    mxfOnly("avc_g25", "AVC Long-GOP", "AVC Long-GOP G25", "libx264", "yuv422p10le", 10, 25, {}, avc, false, false);
+    mxfOnly("avc_g50", "AVC Long-GOP", "AVC Long-GOP G50", "libx264", "yuv422p10le", 10, 50, {}, avc, false, false);
+    // JPEG 2000, FFmpeg's own encoder, in MXF OP1a (legacy) (p.1174).
+    mxfOnly("j2k", "JPEG 2000", "JPEG 2000", "jpeg2000", "yuv422p10le", 10, 0, {}, {}, false, true);
+    return list;
+}()};
     return all;
 }
 
@@ -78,7 +121,14 @@ bool movieCompressionAvailable(const MovieCompression& c) {
 }
 
 bool movieCompressionFits(const MovieCompression& c, MovieContainer container) {
-    return container == MovieContainer::Mov ? c.mov : c.mp4;
+    switch (container) {
+    case MovieContainer::Mov: return c.mov;
+    case MovieContainer::Mp4: return c.mp4;
+    case MovieContainer::Mxf: return c.op1a;
+    case MovieContainer::Xdcam: return c.xdcam;
+    case MovieContainer::MxfLegacy: return c.legacy;
+    }
+    return false;
 }
 
 QImage fitMoviePicture(const QImage& picture, QSize out, MovieScaling scaling) {
@@ -133,16 +183,21 @@ bool exportMovie(const QString& path, const MovieSource& source, const MovieExpo
     if ((!video && !audio) || source.frames <= 0) return fail(QObject::tr("There is nothing to export."));
 
     WriterSettings w;
-    w.format = o.container == MovieContainer::Mov ? QStringLiteral("mov") : QStringLiteral("mp4");
+    const bool mxf = o.container == MovieContainer::Mxf || o.container == MovieContainer::Xdcam || o.container == MovieContainer::MxfLegacy;
+    w.format = mxf ? QStringLiteral("mxf") : o.container == MovieContainer::Mov ? QStringLiteral("mov") : QStringLiteral("mp4");
     w.frameRate = source.frameRate;
     w.startTimecode = o.startTimecode;
     if (video) {
         const MovieCompression* c = findMovieCompression(o.compression);
         if (!c) return fail(QObject::tr("Unknown compression %1.").arg(o.compression));
-        if (!movieCompressionFits(*c, o.container))
+        if (!movieCompressionFits(*c, o.container)) {
+            if (mxf) return fail(QObject::tr("%1 cannot go in this kind of MXF file.").arg(c->label));
             return fail(QObject::tr("%1 cannot go in an MP4 file; choose MOV, or H.264, HEVC or AV1.").arg(c->label));
+        }
         if (!movieCompressionAvailable(*c)) return fail(QObject::tr("%1 is not available in this build.").arg(c->label));
         QSize size = o.size.isValid() && !o.size.isEmpty() ? o.size : source.raster;
+        // A resolution with a raster of its own (XDCAM-25 and -17) has it, the picture squeezed into it.
+        if (c->raster.isValid() && !c->raster.isEmpty()) size = c->raster;
         if (size.isEmpty()) return fail(QObject::tr("The picture has no size."));
         // Chroma subsampled formats need even sizes (ours: rounded up).
         size = QSize(size.width() + size.width() % 2, size.height() + size.height() % 2);
@@ -154,11 +209,14 @@ bool exportMovie(const QString& path, const MovieSource& source, const MovieExpo
         // JPEG is full range whatever the Color Levels.
         w.fullRange = o.fullRange || c->encoder == QLatin1String("mjpeg");
         if (c->bitRate && o.bitRateMbps > 0) w.bitRate = static_cast<std::int64_t>(o.bitRateMbps) * 1000000;
+        if (c->fixedMbps > 0) w.bitRate = static_cast<std::int64_t>(c->fixedMbps) * 1000000;
+        w.videoOptions << c->options;
     }
-    int rate = o.sampleRate == 44100 ? 44100 : 48000;
+    // MXF's sound is 48 kHz (ours: as our managed MXF media, docs/spec/audio-settings.md).
+    int rate = o.sampleRate == 44100 && !mxf ? 44100 : 48000;
     if (audio) {
         w.channels = o.audioChannels;
-        if (o.container == MovieContainer::Mp4 || o.aac) {
+        if (o.container == MovieContainer::Mp4 || (o.aac && !mxf)) {
             if (codecAllowed(QStringLiteral("aac"))) {
                 w.audioCodec = QStringLiteral("aac");
             } else if (avcodec_find_encoder_by_name("libopus")) {
@@ -242,9 +300,77 @@ QImage legalRangePicture(const QImage& picture) {
     return out;
 }
 
-QString numberedStillPath(const QString& path, std::int64_t number) {
+QString numberedStillPath(const QString& path, std::int64_t number, int digits) {
     const QFileInfo f(path);
-    return f.dir().filePath(QStringLiteral("%1.%2.%3").arg(f.completeBaseName()).arg(number, 7, 10, QLatin1Char('0')).arg(f.suffix()));
+    return f.dir().filePath(
+        QStringLiteral("%1.%2.%3").arg(f.completeBaseName()).arg(number, std::clamp(digits, 1, 9), 10, QLatin1Char('0')).arg(f.suffix()));
+}
+
+bool setDpxHeaderInfo(const QString& path, const QString& inputDevice, double frameRate, QString* error) {
+    auto fail = [&](const QString& text) {
+        if (error) *error = text;
+        return false;
+    };
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) return fail(QObject::tr("%1 cannot be read.").arg(path));
+    QByteArray data = file.readAll();
+    file.close();
+    if (data.size() < 1664) return fail(QObject::tr("%1 is not a DPX file.").arg(path));
+    const bool big = data.startsWith("SDPX");
+    if (!big && !data.startsWith("XPDS")) return fail(QObject::tr("%1 is not a DPX file.").arg(path));
+    auto u32 = [&](int at) {
+        quint32 v = 0;
+        for (int i = 0; i < 4; ++i) {
+            const quint32 b = static_cast<quint8>(data[at + i]);
+            v |= big ? b << (8 * (3 - i)) : b << (8 * i);
+        }
+        return v;
+    };
+    auto put32 = [&](int at, quint32 v) {
+        for (int i = 0; i < 4; ++i) data[at + i] = static_cast<char>(big ? (v >> (8 * (3 - i))) & 0xff : (v >> (8 * i)) & 0xff);
+    };
+    // The industry headers (film, 256 bytes, and television, 128 bytes) after the generic headers, when missing: the
+    // picture moves 384 bytes on, and the image offset, the file size, the industry header size and each image
+    // element's data offset follow it.
+    const quint32 imageOffset = u32(4);
+    if (frameRate > 0 && imageOffset < 2048) {
+        if (imageOffset != 1664) return fail(QObject::tr("%1 has a DPX header this export cannot extend.").arg(path));
+        data.insert(1664, QByteArray(384, '\0'));
+        put32(4, 2048);
+        put32(16, static_cast<quint32>(data.size()));
+        put32(28, 384);
+        // Image header: orientation (2), element count (2), pixels per line (4), lines (4), then 8 elements of 72
+        // bytes, each with its data offset 28 bytes in. The element count is a 16-bit field.
+        auto u16 = [&](int at) {
+            const quint32 a = static_cast<quint8>(data[at]), b = static_cast<quint8>(data[at + 1]);
+            return big ? (a << 8) | b : (b << 8) | a;
+        };
+        const quint32 count = std::min<quint32>(u16(770), 8);
+        for (quint32 e = 0; e < count; ++e) {
+            const int at = static_cast<int>(780 + e * 72 + 28);
+            const quint32 offset = u32(at);
+            if (offset >= 1664 && offset != 0xffffffffu) put32(at, offset + 384);
+        }
+        // Undefined film and television fields are all ones (SMPTE 268M); the frame rates are set below.
+        std::fill(data.begin() + 1664, data.begin() + 2048, static_cast<char>(0xff));
+        // Text fields of the film header are zeros, not ones.
+        std::fill(data.begin() + 1664, data.begin() + 1664 + 48, '\0');
+    }
+    if (!inputDevice.isEmpty()) {
+        QByteArray name = inputDevice.toLatin1().left(32);
+        name.append(QByteArray(32 - name.size(), '\0'));
+        data.replace(1556, 32, name);
+    }
+    if (frameRate > 0) {
+        float rate = static_cast<float>(frameRate);
+        quint32 bits = 0;
+        std::memcpy(&bits, &rate, sizeof bits);
+        put32(1724, bits); // film header: frame rate of original
+        put32(1940, bits); // television header: temporal sampling rate
+    }
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate) || file.write(data) != data.size())
+        return fail(QObject::tr("%1 cannot be written.").arg(path));
+    return true;
 }
 
 bool writeStill(const QString& path, const QImage& picture, const StillOptions& o, QString* error) {
@@ -305,6 +431,9 @@ bool writeStill(const QString& path, const QImage& picture, const StillOptions& 
         return fail(writer.lastError());
     }
     if (!writer.finish(&why)) return fail(why);
+    if (o.format == StillFormat::Dpx && (!o.dpxInputDevice.isEmpty() || o.dpxFrameRate > 0) &&
+        !setDpxHeaderInfo(path, o.dpxInputDevice, o.dpxFrameRate, &why))
+        return fail(why);
     return true;
 }
 

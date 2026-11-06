@@ -1329,6 +1329,16 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     `copyClipMedia`'s `exclude`; tests `tst_sequence`, `tst_managed_media aafExportMethods`), so 7.1c is but dragging. A Pro Tools Session (.ptx, p.872-878) needs Avid's
     unpublished format: a provider hook only (docs/EXTENSIONS.md).
 * 7.2, MXF OP1a and AS-11 (p.886-892), XDCAM (p.883), AS-02 export volumes (p.901-904); gate 1 with bmx's checkers.
+  In four parts (2026-11-06):
+  * 7.2a, MXF OP1a, XDCAM MXF OP1a and MXF OP1a (legacy) through FFmpeg's OP1a muxer: DNxHR, ProRes, XDCAM-50/35/25/17,
+    AVC Long-GOP G6-G50 and JPEG 2000 (p.886-890, p.1174), with DPX's options left from 7.1b (p.891). Done
+    (docs/spec/movie-export.md "MXF OP1a": `MovieContainer::Mxf`/`Xdcam`/`MxfLegacy`, `media::setDpxHeaderInfo`; tests
+    `tst_movie_export`, `tst_movie_export_ui`).
+  * 7.2b, Export to Device > XDCAM and P2 (p.883-884, p.895, p.1187): a disk or card as a folder with the devices' own
+    layout and naming (Cxxxx.MXF), the audio track rule.
+  * 7.2c, AS-11 (p.891-893): shims, descriptive metadata and segmentation from spanned markers.
+  * 7.2d, AS-02 export volumes (p.901-904): the Export Volume bin, Commit, the bundle (manifest, shim, media, extra).
+  AS-11 and AS-02 need DM and OP1b writing FFmpeg does not have; bmx (BSD) as an optional library is the candidate.
 * 7.3, output to devices (ch.26, p.909-938): the output device and sync source, the Video Output tool, audio output
   options, the Digital Cut tool, output and timecode formats; a device provider interface with a file "device" of our
   own for tests, AJA (NTV2, MIT) and Blackmagic (the driver the user installs) behind it. Gate 2 waits for hardware (M).

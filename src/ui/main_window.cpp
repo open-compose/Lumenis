@@ -3202,6 +3202,8 @@ QString MainWindow::exportSuffix(const QString& exportAs) const {
                : exportAs == QLatin1String("fcpxml") ? QStringLiteral("xml")
                : exportAs == QLatin1String("mp4")    ? QStringLiteral("mp4")
                : exportAs == QLatin1String("mov") || exportAs == QLatin1String("qtMovie") ? QStringLiteral("mov")
+               : exportAs == QLatin1String("op1a") || exportAs == QLatin1String("xdcam") || exportAs == QLatin1String("op1aLegacy")
+                   ? QStringLiteral("mxf")
                                                      : QStringLiteral("aaf");
 }
 
@@ -3214,6 +3216,8 @@ QString MainWindow::exportFilter(const QString& exportAs) {
                    ? tr("Images (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr)")
                : exportAs == QLatin1String("audio")  ? tr("Audio files (*.wav *.aif)")
                : exportAs == QLatin1String("mov") || exportAs == QLatin1String("qtMovie") ? tr("QuickTime movies (*.mov)")
+               : exportAs == QLatin1String("op1a") || exportAs == QLatin1String("xdcam") || exportAs == QLatin1String("op1aLegacy")
+                   ? tr("MXF files (*.mxf)")
                                                      : tr("AAF files (*.aaf)");
 }
 
@@ -3476,7 +3480,8 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
     // Exports rendered through the compositor and the mix (7.1a-b).
     const bool movie = format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie") ||
                        format == QLatin1String("audio") || format == QLatin1String("graphic") || format == QLatin1String("dpx") ||
-                       format == QLatin1String("openexr");
+                       format == QLatin1String("openexr") || format == QLatin1String("op1a") || format == QLatin1String("xdcam") ||
+                       format == QLatin1String("op1aLegacy");
     if (format != QLatin1String("aaf") && format != QLatin1String("avb") && format != QLatin1String("ale") &&
         format != QLatin1String("fcpxml") && !movie) {
         ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange, Media Composer bins, Final Cut Pro 7 XML, MOV, "
@@ -4178,10 +4183,34 @@ bool MainWindow::exportStills(const QString& path, const QString& format, const 
         std::int64_t frame = shown ? shown->position : start;
         if (flag("useMarks") && shown && shown->in) frame = *shown->in;
         frames << qMakePair(std::clamp(frame, start, end - 1), path);
-    } else if (end - start == 1) {
+    } else if (end - start == 1 && format != QLatin1String("dpx")) {
         frames << qMakePair(start, path);
+    } else if (format == QLatin1String("dpx")) {
+        // DPX's options (p.891): the files in a subfolder; numbered from the Start Frame, or by the frames' timecode
+        // counted in frames ("the sequence timecode is 02:00:10:00 would show the file name as name.173040.dpx"),
+        // with the Digits in File Name; one frame is numbered too (ours).
+        QString to = path;
+        const QString sub = text("dpxSubfolder").trimmed();
+        if (!sub.isEmpty()) {
+            const QDir folder(QFileInfo(path).absoluteDir().filePath(sub));
+            if (!QDir().mkpath(folder.absolutePath())) {
+                if (error) *error = tr("The folder %1 cannot be made.").arg(QDir::toNativeSeparators(folder.absolutePath()));
+                return false;
+            }
+            to = folder.filePath(QFileInfo(path).fileName());
+        }
+        const std::int64_t first = flag("dpxTimecodeFrames") ? model::startFrameOf(sequenceItem) + start
+                                                             : static_cast<std::int64_t>(exportSetting(QStringLiteral("dpxStartFrame")).toDouble());
+        const int digits = exportSetting(QStringLiteral("dpxDigits")).toInt();
+        for (std::int64_t f = start; f < end; ++f) frames << qMakePair(f, media::numberedStillPath(to, first + f - start, digits > 0 ? digits : 7));
     } else {
         for (std::int64_t f = start; f < end; ++f) frames << qMakePair(f, media::numberedStillPath(path, f - start));
+    }
+    if (format == QLatin1String("dpx")) {
+        o.legalRange = text("dpxLevels") == QLatin1String("video"); // "Enabling Video provides 64-940"
+        o.dpxInputDevice = text("dpxInputDevice").left(32);
+        const QString fps = text("dpxFps");
+        o.dpxFrameRate = fps.isEmpty() || fps == QLatin1String("sequence") ? sequenceItem.editRate.toDouble() : fps.toDouble();
     }
     for (qsizetype i = 0; i < frames.size(); ++i) {
         const QImage picture = source.picture(frames.at(i).first - start);
@@ -4246,26 +4275,38 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
         if (t.kind == model::TrackKind::Audio && (!t.inactive || flag("includeInactiveAudio"))) audio << t.name();
     }
     media::MovieExportOptions o;
-    o.container = format == QLatin1String("mp4") ? media::MovieContainer::Mp4 : media::MovieContainer::Mov;
-    const QString tracks = text("movieTracks");
-    const bool movie = format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie");
+    // MXF OP1a, XDCAM MXF OP1a and MXF OP1a (legacy) (7.2a, p.886-890): picture and sound always, with their own tab's
+    // Video Compression or Video Format, Audio Format and Bit Depth.
+    const bool mxf = format == QLatin1String("op1a") || format == QLatin1String("xdcam") || format == QLatin1String("op1aLegacy");
+    o.container = format == QLatin1String("mp4")          ? media::MovieContainer::Mp4
+                  : format == QLatin1String("op1a")       ? media::MovieContainer::Mxf
+                  : format == QLatin1String("xdcam")      ? media::MovieContainer::Xdcam
+                  : format == QLatin1String("op1aLegacy") ? media::MovieContainer::MxfLegacy
+                                                          : media::MovieContainer::Mov;
+    const QString tracks = mxf ? QStringLiteral("both") : text("movieTracks");
+    const bool movie = mxf || format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie");
     const bool sound = format == QLatin1String("audio");
     o.video = movie ? tracks != QLatin1String("audio") && !video.isEmpty() : !sound;
     o.audio = movie ? tracks != QLatin1String("video") && !audio.isEmpty() : sound;
     if (movie && !o.video && !o.audio) return fail(tr("There are no tracks to export."));
     if (sound && audio.isEmpty()) return fail(tr("There are no audio tracks to export."));
     if (!movie && !sound && video.isEmpty()) return fail(tr("There are no video tracks to export."));
-    o.compression = text("movieCompression");
+    o.compression = format == QLatin1String("op1a")         ? text("mxfCompression")
+                    : format == QLatin1String("xdcam")      ? text("xdcamFormat")
+                    : format == QLatin1String("op1aLegacy") ? QStringLiteral("j2k")
+                                                            : text("movieCompression");
     o.bitRateMbps = exportSetting(QStringLiteral("movieBitRate")).toInt();
-    const QString size = text("movieImageSize");
+    const QString size = mxf ? QStringLiteral("project") : text("movieImageSize");
     if (size != QLatin1String("project")) o.size = QSize(size.section(QLatin1Char('x'), 0, 0).toInt(), size.section(QLatin1Char('x'), 1, 1).toInt());
     const QString scaling = text("movieScaling");
     o.scaling = scaling == QLatin1String("stretch") ? media::MovieScaling::Stretch
                 : scaling == QLatin1String("crop")  ? media::MovieScaling::CenterCrop
                 : scaling == QLatin1String("keep")  ? media::MovieScaling::CenterKeepSize
                                                     : media::MovieScaling::Letterbox;
-    o.fullRange = text("movieColorLevels") == QLatin1String("full");
-    const QString layout = text("movieAudioFormat");
+    o.fullRange = !mxf && text("movieColorLevels") == QLatin1String("full");
+    // MXF's picture is the project's raster, squeezed into an XDCAM-25 or -17 raster (ours).
+    if (mxf) o.scaling = media::MovieScaling::Stretch;
+    const QString layout = mxf ? text("mxfAudioFormat") : text("movieAudioFormat");
     // The Audio export's Mono or Stereo (p.1185); a movie's Audio Format.
     const media::MixdownFormat mix = sound ? (text("audioFileChannels") == QLatin1String("mono") ? media::MixdownFormat::Mono
                                                                                                : media::MixdownFormat::Stereo)
@@ -4275,8 +4316,8 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
                                                                       : media::MixdownFormat::Stereo;
     o.audioChannels = media::mixdownChannels(mix);
     o.aac = text("movieAudioCodec") == QLatin1String("aac");
-    o.sampleRate = text("movieSampleRate").toInt();
-    o.bitDepth = text("movieBitDepth").toInt();
+    o.sampleRate = mxf ? 48000 : text("movieSampleRate").toInt();
+    o.bitDepth = (mxf ? text("mxfBitDepth") : text("movieBitDepth")).toInt();
     // The item's timecode is embedded (p.881).
     o.startTimecode = QString::fromStdString(Timecode(model::startFrameOf(sequenceItem) + start, model::timecodeFormatOf(sequenceItem)).toString());
 

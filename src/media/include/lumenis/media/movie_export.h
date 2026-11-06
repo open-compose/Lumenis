@@ -10,6 +10,7 @@
 
 #include <QImage>
 #include <QList>
+#include <QPair>
 #include <QSize>
 #include <QString>
 #include <QStringList>
@@ -20,7 +21,9 @@
 
 namespace lumenis::media {
 
-enum class MovieContainer { Mov, Mp4 };
+// MOV and MP4 (7.1a); MXF OP1a, XDCAM MXF OP1a and MXF OP1a (legacy) (7.2a, p.886-890, p.1174), all three written by
+// FFmpeg's OP1a muxer, which differ in the compressions they offer.
+enum class MovieContainer { Mov, Mp4, Mxf, Xdcam, MxfLegacy };
 
 // Source Scaling (p.895): how a frame is fitted to an output raster of another shape.
 enum class MovieScaling {
@@ -43,6 +46,12 @@ struct MovieCompression {
     int depth = 8;       // the Color Depth, bits
     bool mov = true, mp4 = false;
     bool bitRate = false; // takes the Bit Rate option
+    // MXF OP1a (7.2a): DNxHR, ProRes, the XDCAM HD and Panasonic AVC Long-GOP resolutions go in MXF OP1a; the XDCAM
+    // ones also in XDCAM MXF OP1a; JPEG 2000 only in MXF OP1a (legacy) ("available when exporting J2K", p.1174).
+    bool op1a = false, xdcam = false, legacy = false;
+    int fixedMbps = 0;   // a resolution's own bit rate, e.g. XDCAM-50's 50 Mb/s
+    QSize raster{};      // a resolution's own raster for a project of this height (XDCAM-25 and -17: 1440 x 1080)
+    QList<QPair<QString, QString>> options{}; // the encoder's options, e.g. MPEG-2's GOP
 };
 
 // Every compression we offer, in the menu's order.
@@ -65,7 +74,7 @@ struct MovieExportOptions {
     bool fullRange = false;   // Color Levels: RGB (full range) or 601/709 (legal range) (p.881)
     int audioChannels = 2;    // Audio Format: Mono 1, Stereo 2, 5.1 6, 7.1 8 (p.1180)
     bool aac = false;         // AAC rather than PCM (p.897); an MP4 is always AAC, or Opus without AAC (ours)
-    int sampleRate = 48000;   // 48 kHz or 44.1 kHz ("does not support sample rates higher than 48kHz", p.879)
+    int sampleRate = 48000;   // 48 kHz or 44.1 kHz ("does not support sample rates higher than 48kHz", p.879); MXF 48 kHz
     int bitDepth = 24;        // PCM's, 16 or 24
     QString startTimecode;    // embedded in the movie (p.881)
 };
@@ -101,6 +110,10 @@ struct StillOptions {
     bool legalRange = false;  // Color Levels "Keep as Legal Range": RGB squeezed into 16-235
     int depth = 8;            // PNG and TIFF 8 or 16; DPX 8, 10 or 16; OpenEXR 16 (half) or 32 (float)
     int quality = 90;         // JPEG's Quality, 1-100
+    // DPX's "Include in Header (Input Device)", at most 32 ASCII characters (field 38), and FPS, "a frame rate ...
+    // embed[ded] into the DPX header" (p.891); empty and 0 for none.
+    QString dpxInputDevice;
+    double dpxFrameRate = 0;
 };
 
 // The file name extension of a format: "png", "jpg", "tif", "bmp", "pct", "dpx", "exr".
@@ -109,8 +122,14 @@ QString stillSuffix(StillFormat format);
 QImage legalRangePicture(const QImage& picture);
 // Writes one still, fitted to the options' size. False with the reason in `error`; nothing is left on failure.
 bool writeStill(const QString& path, const QImage& picture, const StillOptions& options, QString* error = nullptr);
-// The file of image `number` in a sequence named after `path`: "<folder>/<name>.<number, 7 digits>.<suffix>" (ours).
-QString numberedStillPath(const QString& path, std::int64_t number);
+// The file of image `number` in a sequence named after `path`: "<folder>/<name>.<number>.<suffix>", the number with at
+// least `digits` digits ("Digits in File Name ... The default is 7 ... If the count reached 99 an additional digit is
+// added", p.891).
+QString numberedStillPath(const QString& path, std::int64_t number, int digits = 7);
+// Writes the input device (orientation header, offset 1556) and the frame rate (film header 1724, television header
+// 1940; SMPTE 268M) into a DPX file, adding the film and television headers when the file has none (FFmpeg writes a
+// 1664-byte header). False with the reason in `error`.
+bool setDpxHeaderInfo(const QString& path, const QString& inputDevice, double frameRate, QString* error = nullptr);
 
 // Export Settings: Audio (p.1185): WAVE or AIFF-C, mono or stereo, a sample rate and a bit depth.
 struct AudioFileOptions {

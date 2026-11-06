@@ -227,6 +227,14 @@ private slots:
         exportTo(dir.filePath(QStringLiteral("Cut.dpx")));
         for (int i = 0; i < 4; ++i) QVERIFY(QFileInfo::exists(dir.filePath(QStringLiteral("Cut.%1.dpx").arg(i, 7, 10, QLatin1Char('0')))));
         QCOMPARE(greyAt(dir.filePath(QStringLiteral("Cut.0000003.dpx")), 0), colourOf(5).red());
+        // In a subfolder, from Start Frame 20 with 3 digits (p.891).
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("dpxSubfolder"), QStringLiteral("Reel 1"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("dpxStartFrame"), 20);
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("dpxDigits"), 3);
+        exportTo(dir.filePath(QStringLiteral("Cut.dpx")));
+        QVERIFY(QFileInfo::exists(dir.filePath(QStringLiteral("Reel 1/Cut.020.dpx"))));
+        QCOMPARE(greyAt(dir.filePath(QStringLiteral("Reel 1/Cut.023.dpx")), 0), colourOf(5).red());
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("dpxSubfolder"), QString());
 
         // Audio: a WAVE file of the sequence's sound.
         settings.setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("audio"));
@@ -236,6 +244,19 @@ private slots:
         QVERIFY(info);
         QCOMPARE(info->audio().front()->channels, 2);
         QVERIFY(!info->firstVideo());
+
+        // XDCAM MXF OP1a (p.886-887, p.1174): the Video Format XDCAM-50, the sequence's four frames and its stereo mix.
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("xdcam"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("xdcamFormat"), QStringLiteral("xdcam_50"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("mxfBitDepth"), QStringLiteral("16"));
+        const QString mxf = dir.filePath(QStringLiteral("Cut.mxf"));
+        exportTo(mxf);
+        info = media::probe(mxf);
+        QVERIFY(info && info->firstVideo());
+        QCOMPARE(info->firstVideo()->codec, QStringLiteral("mpeg2video"));
+        QCOMPARE(info->firstVideo()->length, 4);
+        QCOMPARE(info->audio().front()->codec, QStringLiteral("pcm_s16le"));
+        QCOMPARE(info->audio().front()->channels, 2);
     }
 };
 

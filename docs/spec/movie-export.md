@@ -96,12 +96,45 @@ picture and sound as a movie (`MainWindow::exportStills`,
   * **Markers only**: the frames with the item's markers, named by their
     comments with **Use Comments** (p.1186), else by frame number; Topmost
     Image is how our pictures are made anyway (every track composed).
-* **DPX** (p.890): 8, 10 or 16 bit RGB; **OpenEXR** (p.900): 16 or 32 bit
-  floating point. Both write the range as an image sequence, one file for
-  one frame (ours). OpenEXR's values are the display-referred pictures, not
+* **DPX** (p.890-891): Color Depth RGB 8, 10 or 16 bit; **OpenEXR** (p.900):
+  16 or 32 bit floating point. Both write the range as an image sequence;
+  OpenEXR writes one frame as one file, DPX numbers it too (ours). DPX's
+  options (7.2a): Create subfolder name; Start Frame, or Convert Timecode
+  to Frames (the frame's timecode counted in frames); Digits in File Name
+  (1-9, more when the count needs them); Include in Header (Input Device),
+  at most 32 characters at offset 1556; FPS (the sequence's rate by
+  default, ours) in the film and television headers, which we add after
+  FFmpeg's 1664-byte header (`media::setDpxHeaderInfo`, SMPTE 268M
+  offsets); Levels Video (64-940) or Full Range (the default, ours). Set
+  to highest scaling quality later (we always scale smoothly). OpenEXR's values are the display-referred pictures, not
   converted to scene linear (ours; the custom Color Space, p.897, later).
 * **Audio** (Export Settings: Audio, p.1185): WAVE or AIFF-C, Mono or
   Stereo, 32, 44.1, 48, 88.2 or 96 kHz, 16 or 24 bit.
+
+## MXF OP1a (7.2a)
+
+Export As **MXF OP1a**, **XDCAM MXF OP1a** and **MXF OP1a (legacy)**
+(p.886-890, p.1174) write OP1a files through FFmpeg's `mxf` muxer
+(`MovieContainer::Mxf`, `Xdcam`, `MxfLegacy`), with the Export setting's
+"MXF OP1a" tab:
+
+* **Video Compression** (MXF OP1a): Avid DNxHR, Apple ProRes (p.888,
+  p.904), XDCAM-50/35/25/17 (p.884, p.887) and Panasonic AVC Long-GOP
+  G6/G12/G25/G50 (p.887-888). **Video Format** (XDCAM MXF OP1a): the XDCAM
+  ones only. MXF OP1a (legacy) is JPEG 2000 only ("available when exporting
+  J2K", p.1174).
+* Ours, where the guide names only the resolutions: XDCAM-50 is MPEG-2
+  4:2:2 at a constant 50 Mb/s, XDCAM-35 4:2:0 at up to 35 Mb/s, XDCAM-25
+  4:2:0 at 25 Mb/s and XDCAM-17 at up to 17.5 Mb/s, both at 1440 x 1080
+  with the picture squeezed in; a GOP of 12 with two B frames. AVC
+  Long-GOP G6 and G12 are H.264 4:2:0 8-bit, G25 and G50 4:2:2 10-bit, at
+  6, 12, 25 and 50 Mb/s, a GOP of 12. JPEG 2000 is FFmpeg's encoder, 4:2:2
+  10-bit.
+* **Audio Format** Mono, Stereo, 5.1 or 7.1 as one sound track of that many
+  channels (ours; "Up to 16 channels", p.888, later with more than the mix's
+  formats); **Audio Sample Rate** 48 kHz; **Bit Depth** 16 or 24.
+* The picture is the project's raster, legal range; the item's timecode is
+  embedded.
 
 ## Not yet
 
@@ -128,3 +161,8 @@ picture and sound as a movie (`MainWindow::exportStills`,
 * `tst_movie_export` (7.1b): every still format and depth read back, PICT,
   Crop/Pad, legal range, sequence names, WAVE 24-bit and AIFF-C 16-bit mono
   at 96 kHz.
+* 7.2a: `tst_movie_export mxfOp1a` (the OP1a label, XDCAM-25's raster and
+  timecode, DNxHR refused in XDCAM, JPEG 2000 in the legacy file, DNxHR in
+  OP1a), `stills` (Digits in File Name, the DPX header's input device and
+  frame rate read back); `tst_movie_export_ui` (XDCAM-50 from Export to
+  File, a DPX sequence in a subfolder from Start Frame 20 with 3 digits).

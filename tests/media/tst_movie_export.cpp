@@ -10,6 +10,7 @@
 #include <QtTest>
 
 #include <cmath>
+#include <cstring>
 
 using namespace lumenis;
 using namespace lumenis::media;
@@ -125,6 +126,79 @@ private slots:
         float peak = 0.0f;
         for (float x : samples) peak = std::max(peak, std::abs(x));
         QVERIFY2(std::abs(peak - 0.5f) < 0.01f, qPrintable(QString::number(static_cast<double>(peak))));
+    }
+
+    // MXF OP1a (7.2a, p.886-890): FFmpeg's OP1a muxer, the operational pattern label in the header partition, picture
+    // and 24-bit sound, the timecode; which compressions go in which MXF export; XDCAM-25's own raster.
+    void mxfOp1a() {
+        const MovieCompression* dnx = findMovieCompression(QStringLiteral("dnxhr_lb"));
+        const MovieCompression* xd = findMovieCompression(QStringLiteral("xdcam_25"));
+        const MovieCompression* j2k = findMovieCompression(QStringLiteral("j2k"));
+        QVERIFY(dnx && xd && j2k);
+        QVERIFY(movieCompressionFits(*dnx, MovieContainer::Mxf));
+        QVERIFY(!movieCompressionFits(*dnx, MovieContainer::Xdcam));
+        QVERIFY(movieCompressionFits(*xd, MovieContainer::Mxf) && movieCompressionFits(*xd, MovieContainer::Xdcam));
+        QVERIFY(!movieCompressionFits(*xd, MovieContainer::Mov));
+        QVERIFY(movieCompressionFits(*j2k, MovieContainer::MxfLegacy) && !movieCompressionFits(*j2k, MovieContainer::Mxf));
+        QTemporaryDir dir;
+        auto op1a = [](const QString& file) {
+            QFile f(file);
+            if (!f.open(QIODevice::ReadOnly)) return false;
+            // The OP1a label: 06.0E.2B.34.04.01.01.01.0D.01.02.01.01.01 (SMPTE 378M).
+            return f.read(65536).contains(QByteArray::fromHex("060e2b34040101010d0102010101"));
+        };
+        MovieExportOptions o;
+        o.container = MovieContainer::Xdcam;
+        o.compression = QStringLiteral("xdcam_25");
+        o.bitDepth = 24;
+        o.startTimecode = QStringLiteral("10:00:00:00");
+        QString error;
+        const QString xdcam = dir.filePath(QStringLiteral("xdcam.mxf"));
+        QVERIFY2(exportMovie(xdcam, source(), o, {}, &error), qPrintable(error));
+        auto info = probe(xdcam);
+        QVERIFY(info && info->firstVideo());
+        QCOMPARE(info->firstVideo()->codec, QStringLiteral("mpeg2video"));
+        QCOMPARE(info->firstVideo()->width, 1440);
+        QCOMPARE(info->firstVideo()->height, 1080);
+        QCOMPARE(info->startTimecode, QStringLiteral("10:00:00:00"));
+        QCOMPARE(info->audio().size(), std::size_t(1));
+        QCOMPARE(info->audio().front()->codec, QStringLiteral("pcm_s24le"));
+        QCOMPARE(info->audio().front()->sampleRate, 48000);
+        QVERIFY(op1a(xdcam));
+        // DNxHR does not go in an XDCAM file.
+        o.compression = QStringLiteral("dnxhr_lb");
+        QVERIFY(!exportMovie(dir.filePath(QStringLiteral("no.mxf")), source(), o, {}, &error));
+        QVERIFY(!QFileInfo::exists(dir.filePath(QStringLiteral("no.mxf"))));
+        // JPEG 2000 in MXF OP1a (legacy), 16-bit sound at 48 kHz whatever was asked.
+        o.container = MovieContainer::MxfLegacy;
+        o.compression = QStringLiteral("j2k");
+        o.bitDepth = 16;
+        o.sampleRate = 44100;
+        const QString legacy = dir.filePath(QStringLiteral("j2k.mxf"));
+        QVERIFY2(exportMovie(legacy, source(4), o, {}, &error), qPrintable(error));
+        info = probe(legacy);
+        QVERIFY(info && info->firstVideo());
+        QCOMPARE(info->firstVideo()->codec, QStringLiteral("jpeg2000"));
+        QCOMPARE(info->audio().front()->codec, QStringLiteral("pcm_s16le"));
+        QCOMPARE(info->audio().front()->sampleRate, 48000);
+        VideoReader reader;
+        QVERIFY(reader.open(legacy));
+        const QImage f = reader.frame(1);
+        QVERIFY(near(f.pixel(8, 18), qRgb(255, 0, 0)));
+        QVERIFY(near(f.pixel(56, 18), qRgb(0, 0, 255)));
+        // DNxHR in MXF OP1a where the build has it.
+        if (movieCompressionAvailable(*dnx)) {
+            o.container = MovieContainer::Mxf;
+            o.compression = QStringLiteral("dnxhr_lb");
+            MovieSource big = source(3);
+            big.raster = QSize(256, 144);
+            const QString dnxFile = dir.filePath(QStringLiteral("dnx.mxf"));
+            QVERIFY2(exportMovie(dnxFile, big, o, {}, &error), qPrintable(error));
+            info = probe(dnxFile);
+            QCOMPARE(info->firstVideo()->codec, QStringLiteral("dnxhd"));
+            QCOMPARE(info->firstVideo()->length, 3);
+            QVERIFY(op1a(dnxFile));
+        }
     }
 
     void sizesAndRates() {
@@ -247,6 +321,45 @@ private slots:
         white.fill(Qt::black);
         QCOMPARE(qRed(legalRangePicture(white).pixel(0, 0)), 16);
         QCOMPARE(numberedStillPath(QStringLiteral("/out/Cut.dpx"), 12), QStringLiteral("/out/Cut.0000012.dpx"));
+        // Digits in File Name: "a value of 2 would be name.01.dpx ... If the count reached 99 an additional digit is
+        // added, name.100.dpx" (p.891).
+        QCOMPARE(numberedStillPath(QStringLiteral("/out/name.dpx"), 1, 2), QStringLiteral("/out/name.01.dpx"));
+        QCOMPARE(numberedStillPath(QStringLiteral("/out/name.dpx"), 100, 2), QStringLiteral("/out/name.100.dpx"));
+
+        // DPX's Input Device (field 38) and FPS in the header (p.891): the film and television headers added after
+        // FFmpeg's 1664 bytes, the picture still read back.
+        for (int depth : {10, 16}) {
+            StillOptions dpx;
+            dpx.format = StillFormat::Dpx;
+            dpx.depth = depth;
+            dpx.dpxInputDevice = QStringLiteral("Cutthulhu Telecine");
+            dpx.dpxFrameRate = 23.976;
+            const QString file = dir.filePath(QStringLiteral("header%1.dpx").arg(depth));
+            QString error;
+            QVERIFY2(writeStill(file, picture, dpx, &error), qPrintable(error));
+            QFile f(file);
+            QVERIFY(f.open(QIODevice::ReadOnly));
+            const QByteArray data = f.readAll();
+            const bool big = data.startsWith("SDPX");
+            auto u32 = [&](int at) {
+                quint32 v = 0;
+                for (int i = 0; i < 4; ++i) {
+                    const quint32 b = static_cast<quint8>(data[at + i]);
+                    v |= big ? b << (8 * (3 - i)) : b << (8 * i);
+                }
+                return v;
+            };
+            QCOMPARE(u32(4), quint32(2048));
+            QCOMPARE(u32(16), static_cast<quint32>(data.size()));
+            QCOMPARE(data.mid(1556, 18), QByteArray("Cutthulhu Telecine"));
+            float rate = 0;
+            const quint32 bits = u32(1724);
+            std::memcpy(&rate, &bits, sizeof rate);
+            QVERIFY(std::abs(rate - 23.976f) < 0.001f);
+            VideoReader back;
+            QVERIFY2(back.open(file), qPrintable(file));
+            QVERIFY(near(back.frame(0).pixel(8, 18), qRgb(255, 0, 0), 30) && near(back.frame(0).pixel(56, 18), qRgb(0, 0, 255), 30));
+        }
     }
 
     void audioFiles() {

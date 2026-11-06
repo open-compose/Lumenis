@@ -261,9 +261,9 @@
                          {"value": "windowsMedia", "label": "Windows Media", "later": true}, {"value": "scc", "label": "SCC", "later": true},
                          {"value": "ttml", "label": "TTML", "later": true}, {"value": "audio", "label": "Audio"},
                          {"value": "graphic", "label": "Graphic"}, {"value": "ale", "label": "Avid Log Exchange"},
-                         {"value": "tabDelimited", "label": "Tab Delimited", "later": true}, {"value": "op1a", "label": "MXF OP1a", "later": true},
-                         {"value": "op1aLegacy", "label": "MXF OP1a (legacy)", "later": true}, {"value": "dpx", "label": "DPX"}, {"value": "openexr", "label": "OpenEXR"},
-                         {"value": "xdcam", "label": "XDCAM MXF OP1a", "later": true},
+                         {"value": "tabDelimited", "label": "Tab Delimited", "later": true}, {"value": "op1a", "label": "MXF OP1a"},
+                         {"value": "op1aLegacy", "label": "MXF OP1a (legacy)"}, {"value": "dpx", "label": "DPX"}, {"value": "openexr", "label": "OpenEXR"},
+                         {"value": "xdcam", "label": "XDCAM MXF OP1a"},
                          {"value": "avb", "label": "Media Composer Bin"}, {"value": "fcpxml", "label": "Final Cut Pro 7 XML"},
                          {"value": "mov", "label": "MOV"}, {"value": "mp4", "label": "MP4"}]},
             {"key": "useMarks", "type": "bool", "label": "Use Marks", "default": false, "page": 1175},
@@ -354,6 +354,22 @@
           ]
         },
         {
+          "name": "MXF OP1a",
+          "options": [
+            {"key": "mxfCompression", "type": "choice", "style": "menu", "label": "Video Compression", "default": "dnxhr_hq", "page": 889,
+             "choices": [{"value": "dnxhr_lb", "label": "Avid DNxHR LB"}, {"value": "dnxhr_sq", "label": "Avid DNxHR SQ"}, {"value": "dnxhr_hq", "label": "Avid DNxHR HQ"}, {"value": "dnxhr_hqx", "label": "Avid DNxHR HQX"}, {"value": "dnxhr_444", "label": "Avid DNxHR 444"}, {"value": "prores_proxy", "label": "Apple ProRes 422 Proxy"}, {"value": "prores_lt", "label": "Apple ProRes 422 LT"}, {"value": "prores_422", "label": "Apple ProRes 422"}, {"value": "prores_hq", "label": "Apple ProRes 422 HQ"}, {"value": "prores_4444", "label": "Apple ProRes 4444"}, {"value": "xdcam_50", "label": "XDCAM-50"}, {"value": "xdcam_35", "label": "XDCAM-35"}, {"value": "xdcam_25", "label": "XDCAM-25"}, {"value": "xdcam_17", "label": "XDCAM-17"}, {"value": "avc_g6", "label": "AVC Long-GOP G6"}, {"value": "avc_g12", "label": "AVC Long-GOP G12"}, {"value": "avc_g25", "label": "AVC Long-GOP G25"}, {"value": "avc_g50", "label": "AVC Long-GOP G50"}, {"value": "j2k", "label": "JPEG 2000"}]},
+            {"key": "xdcamFormat", "type": "choice", "style": "menu", "label": "Video Format", "default": "xdcam_50", "page": 1174,
+             "choices": [{"value": "xdcam_50", "label": "XDCAM-50"}, {"value": "xdcam_35", "label": "XDCAM-35"}, {"value": "xdcam_25", "label": "XDCAM-25"}, {"value": "xdcam_17", "label": "XDCAM-17"}]},
+            {"key": "mxfAudioFormat", "type": "choice", "style": "menu", "label": "Audio Format", "default": "stereo", "page": 889,
+             "choices": [{"value": "mono", "label": "Mono"}, {"value": "stereo", "label": "Stereo"}, {"value": "5.1", "label": "5.1"},
+                         {"value": "7.1", "label": "7.1"}]},
+            {"key": "mxfSampleRate", "type": "choice", "style": "menu", "label": "Audio Sample Rate", "default": "48000", "page": 889,
+             "choices": [{"value": "48000", "label": "48 kHz"}]},
+            {"key": "mxfBitDepth", "type": "choice", "style": "menu", "label": "Bit Depth", "default": "24", "page": 884,
+             "choices": [{"value": "16", "label": "16"}, {"value": "24", "label": "24"}]}
+          ]
+        },
+        {
           "name": "Graphic",
           "options": [
             {"key": "graphicFormat", "type": "choice", "style": "menu", "label": "Graphic Format", "default": "png", "page": 1186,
@@ -394,8 +410,20 @@
         {
           "name": "DPX and OpenEXR",
           "options": [
-            {"key": "dpxDepth", "type": "choice", "style": "menu", "label": "DPX Bit Depth", "default": "10", "page": 890,
-             "choices": [{"value": "8", "label": "8 bit"}, {"value": "10", "label": "10 bit"}, {"value": "16", "label": "16 bit"}]},
+            {"key": "dpxSubfolder", "type": "text", "label": "Create subfolder name", "default": "", "page": 891},
+            {"key": "dpxInputDevice", "type": "text", "label": "Include in Header (Input Device)", "default": "", "page": 891},
+            {"key": "dpxStartFrame", "type": "int", "label": "Start Frame", "default": 0, "min": 0, "max": 999999999, "page": 891},
+            {"key": "dpxTimecodeFrames", "type": "bool", "label": "Convert Timecode to Frames", "default": false, "page": 891},
+            {"key": "dpxDigits", "type": "int", "label": "Digits in File Name", "default": 7, "min": 1, "max": 9, "page": 891},
+            {"key": "dpxDepth", "type": "choice", "style": "menu", "label": "Color Depth", "default": "10", "page": 891,
+             "choices": [{"value": "8", "label": "RGB 8bit"}, {"value": "10", "label": "RGB 10bit"}, {"value": "16", "label": "RGB 16bit"}]},
+            {"key": "dpxFps", "type": "choice", "style": "menu", "label": "FPS", "default": "sequence", "page": 891,
+             "choices": [{"value": "sequence", "label": "Sequence"}, {"value": "23.976", "label": "23.976"}, {"value": "24", "label": "24"},
+                         {"value": "25", "label": "25"}, {"value": "29.97", "label": "29.97"}, {"value": "30", "label": "30"},
+                         {"value": "50", "label": "50"}, {"value": "59.94", "label": "59.94"}, {"value": "60", "label": "60"}]},
+            {"key": "dpxHighestQuality", "type": "bool", "label": "Set to highest scaling quality", "default": true, "page": 891, "later": true},
+            {"key": "dpxLevels", "type": "choice", "style": "radio", "label": "Levels", "default": "full", "page": 891,
+             "choices": [{"value": "video", "label": "Video"}, {"value": "full", "label": "Full Range"}]},
             {"key": "exrDepth", "type": "choice", "style": "menu", "label": "OpenEXR Color", "default": "16", "page": 900,
              "choices": [{"value": "16", "label": "16 bit floating point"}, {"value": "32", "label": "32 bit floating point"}]}
           ]
@@ -559,7 +587,7 @@
           "name": "Media Type",
           "options": [
             {"key": "videoWrapper", "type": "choice", "style": "radio", "label": "Video Wrapper Format", "default": "opatom", "page": 1209,
-             "choices": [{"value": "op1a", "label": "MXF OP1a", "later": true}, {"value": "opatom", "label": "Avid OP-Atom"}, {"value": "omf", "label": "OMF", "later": true}]},
+             "choices": [{"value": "op1a", "label": "MXF OP1a"}, {"value": "opatom", "label": "Avid OP-Atom"}, {"value": "omf", "label": "OMF", "later": true}]},
             {"key": "audioWrapper", "type": "choice", "style": "radio", "label": "Audio Wrapper Format", "default": "pcmOpatom", "page": 1209,
              "choices": [{"value": "pcmOp1a", "label": "PCM (MXF OP1a)", "later": true}, {"value": "pcmOpatom", "label": "PCM (Avid OP-Atom)"}, {"value": "wave", "label": "WAVE (OMF)", "later": true}, {"value": "aiff", "label": "AIFF-C (OMF)", "later": true}]}
           ]

@@ -420,7 +420,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   user's settings, what each Pro Tools option writes, consolidated media beside the AAF, the summary listing every
   option, no Disc/Sorenson/Avid DS templates, no drag export. 7.1c3 (docs/spec/aaf.md "Simplified AAF"): one mixdown
   clip per stretch of effects, named "<sequence> Effects Mixdown <n>", nests counted as effects, the Audio Tracks label,
-  the simplified sequence only in the AAF, excluded media left linked, the choice among the open bins' sequences.
+  the simplified sequence only in the AAF, excluded media left linked, the choice among the open bins' sequences. 7.2a
+  (docs/spec/movie-export.md "MXF OP1a"): the XDCAM and AVC Long-GOP encodings, JPEG 2000's 4:2:2 10-bit, MXF sound as
+  one track of the mix's channels at 48 kHz, DPX's Full Range and the sequence's FPS as defaults, one DPX frame numbered.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults
