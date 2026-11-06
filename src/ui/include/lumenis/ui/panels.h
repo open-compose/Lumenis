@@ -24,6 +24,15 @@ namespace lumenis::ui {
 
 class PanelGroup;
 class PanelManager;
+
+// `requested` made to fit the available area of the screen it is mostly on (the primary screen when it is on none):
+// no larger than that area and moved inside it. Every window the program opens on its own goes through it: floating
+// panels and tool windows such as the Titler+ Dashboard (owner's report, 2026-11-05: Tools > Titler+ opened a window
+// wider than a Windows 11 screen; BUILDING.md).
+QRect fitOnScreen(const QRect& requested);
+// A shown top-level window moved, and made smaller when it must, so that its frame (title bar and borders, known only
+// once it is shown) lies on its screen as fitOnScreen would place it.
+void keepOnScreen(QWidget* window);
 class DockHost;
 
 // Which side of a group or host a panel is docked on.

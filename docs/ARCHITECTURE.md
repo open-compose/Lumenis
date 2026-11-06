@@ -71,8 +71,10 @@ headers in `include/lumenis/<library>/`.
   Effect mode, docs/spec/effect-mode.md).
 * **Panels and workspaces.** Our own docking framework (`panels.*`,
   `panel_manager.cpp`), not QDockWidget, because Qt cannot draw vertical
-  title bars, green drop zones or Alt-drag tabbing. Workspaces:
-  `workspace*.*`. Colours and metrics: `theme.cpp`.
+  title bars, green drop zones or Alt-drag tabbing. Every window it (or a
+  tool such as the Titler+ Dashboard) opens is fitted to its screen
+  (`fitOnScreen`, `keepOnScreen`). Workspaces: `workspace*.*`. Colours and
+  metrics: `theme.cpp`.
 * **Media.** `src/media/media.*` (FFmpeg probe, readers, writer, MXF
   fix-ups), `link.*` (files linked as clips), `managed.*` (managed media in
   `Avid MediaFiles/MXF`, the media database), `consolidate.*`, `relink.*`,

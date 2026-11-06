@@ -1238,7 +1238,11 @@ phase of their own. They are done in three steps:
     is done; 6.10e5, the Spot Color Correction effect and the Paint Effect's colour modes (ch.24, p.731-733), done
     (`spotCorrected`/`colorMatched` in `src/media/intraframe.cpp`; test `tst_intraframe`), so 6.10e is. Avid
     Artist Color (ch.25) needs Avid's EuControl software: a control surface provider hook only (EXTENSIONS.md), later.
-  * 6.10f, after 6.10e (owner's report, 2026-11-05, Windows 11): Tools > Titler+ and Tools > Effect Editor open as very
+  * 6.10f, after 6.10e (owner's report, 2026-11-05, Windows 11), done for the window sizes: the large window was the
+    Titler+ Dashboard, 2700 pixels wide with its sections in one row; it now scrolls across and opens within the screen,
+    and every floating panel and tool window is fitted to its screen (`fitOnScreen`, `keepOnScreen`; test
+    `tst_main_window toolWindowsFitTheScreen`; BUILDING.md). The Effect Editor itself opened at its 340x520. The report:
+    Tools > Titler+ and Tools > Effect Editor open as very
     large windows where a panel of ordinary size (or a page of a paneled window) is expected. Find why their panels open
     at that size (size hints, floating geometry, the workspace they open in), fix the root cause for every tool panel,
     add a BUILDING.md troubleshooting entry and a check (a test of each tool panel's opening size), and check Mac and

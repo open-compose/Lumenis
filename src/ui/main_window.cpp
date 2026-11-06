@@ -5231,6 +5231,7 @@ Panel* MainWindow::showTool(const QString& panelId) {
     if (panelId == QLatin1String("SourceBrowser")) size = QSize(960, 600);
     if (panelId == QLatin1String("ListTool")) size = QSize(980, 560);
     const QPoint at = mapToGlobal(QPoint(80, 90));
+    // floatPanel keeps it on the screen and no larger than it (fitOnScreen).
     panels_->floatPanel(panel, QRect(at, size));
     panels_->activate(panel);
     return panel;
@@ -6205,7 +6206,9 @@ void MainWindow::openTitleEditing() {
     showTool(QStringLiteral("EffectEditor"));
     timeline_->setEffectMode(true);
     TitlerDashboard* dashboard = effectEditor_->titlerDashboard();
+    dashboard->placeNear(mapToGlobal(QPoint(80, 40)));
     dashboard->show();
+    keepOnScreen(dashboard);
     dashboard->raise();
 }
 

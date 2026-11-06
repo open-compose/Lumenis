@@ -39,6 +39,7 @@
 #include <QSignalSpy>
 #include <QSettings>
 #include <QTemporaryDir>
+#include <QScreen>
 #include <QTest>
 
 using namespace lumenis;
@@ -313,6 +314,65 @@ private slots:
 
     // The owner's report (ROADMAP 6.10f): Tools > Titler+, then Source/Record Mode, gives the Record monitor back its own
     // position bar with the sequence's markers.
+    // Every tool window opens on the screen and no larger than it, the Titler+ Dashboard included. Tools > Titler+
+    // opened a Dashboard 2700 pixels wide, wider than a Windows 11 screen (owner's report, 2026-11-05; BUILDING.md,
+    // fitOnScreen).
+    void toolWindowsFitTheScreen() {
+        Project project;
+        ext::ProviderRegistry providers;
+        ui::CommandRegistry commands;
+        commands.loadBuiltin();
+        ui::MainWindow window(commands, providers);
+        window.setProject(project.entry);
+        window.show();
+        settle();
+        const QRect area = QGuiApplication::primaryScreen()->availableGeometry();
+        const auto fits = [&](const QWidget* w) {
+            // A window whose contents cannot be smaller (its minimum) may be as large as they need; it is still placed
+            // with its top left on the screen.
+            const QSize max = area.size().expandedTo(w->minimumSizeHint());
+            return area.contains(w->frameGeometry().topLeft()) && w->width() <= max.width() && w->height() <= max.height();
+        };
+        for (ui::Panel* p : window.panels().panels()) {
+            if (window.panels().isOpen(p)) continue;
+            ui::Panel* shown = window.showTool(p->id());
+            settle();
+            if (!shown) continue;
+            QVERIFY2(fits(shown->window()), qPrintable(p->id() + QStringLiteral(" opens at ") + QString::number(shown->window()->width()) + QLatin1Char('x') +
+                                                       QString::number(shown->window()->height())));
+        }
+        for (ui::Panel* p : window.panels().panels()) {
+            if (window.panels().isFloating(p)) window.panels().closePanel(p);
+        }
+        settle();
+        // A window asked for off the screen and larger than it comes back inside it.
+        const QRect far = ui::fitOnScreen(QRect(area.right() + 500, area.bottom() + 500, area.width() * 2, 100));
+        QVERIFY(area.contains(far));
+        // Tools > Titler+ on a sequence: the Effect Editor and the Dashboard.
+        ui::BinDocument* doc = window.binContainer().activeDocument();
+        QVERIFY(doc);
+        model::BinItem item;
+        item.id = model::newItemId();
+        item.name = QStringLiteral("Cut");
+        item.kind = model::BinItemKind::Sequence;
+        item.editRate = Rational(25);
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        seq.splice(QStringLiteral("V1"), 0, {model::Segment::filler(50)});
+        seq.storeIn(item);
+        doc->addItem(item);
+        window.composer().load(ui::MonitorId::Record, doc->nodeId(), item);
+        window.composer().moveTo(ui::MonitorId::Record, 10);
+        settle();
+        commands.action(QStringLiteral("tools.titler"))->trigger();
+        settle();
+        QWidget* dashboard = window.effectEditor().titlerDashboard();
+        QVERIFY(dashboard && dashboard->isVisible());
+        QVERIFY2(area.contains(dashboard->frameGeometry()),
+                 qPrintable(QStringLiteral("Dashboard %1,%2 %3x%4").arg(dashboard->x()).arg(dashboard->y()).arg(dashboard->width()).arg(dashboard->height())));
+        QVERIFY(dashboard->minimumSizeHint().width() < 600);
+        QVERIFY(fits(window.effectEditor().window()));
+    }
+
     void titlerAndBackToSourceRecord() {
         Project project;
         ext::ProviderRegistry providers;

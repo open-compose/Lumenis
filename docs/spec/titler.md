@@ -100,7 +100,8 @@ From the guide (p.302, p.306-324):
 
 Ours:
 * One widget, `TitlerPanel`, across in the Dashboard (a tool window the Effect Editor keeps, shown when Titler+ is
-  applied) and down at the top of the Effect Editor, which adds the Title Text box (stored when it loses the focus).
+  applied; its row of sections scrolls across, and the window opens no wider than the screen, 6.10f) and down at the top
+  of the Effect Editor, which adds the Title Text box (stored when it loses the focus).
   Number fields store their value when it is entered (one undo step each); dragging the numbers is not ours yet.
 * The panel shows the first selected object and changes all the selected ones; during typing a change joins the text's
   undo step. The Font section is for text objects only; Transform and Style need a selection; Background and

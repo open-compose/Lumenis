@@ -2,6 +2,8 @@
 // docs/spec/titler.md). Each control reads the first selected object (or the title) and writes through TitlerTool.
 #include "lumenis/ui/titler_panel.h"
 
+#include "lumenis/ui/panels.h"
+
 #include "lumenis/ui/titler_tool.h"
 
 #include <QCheckBox>
@@ -19,9 +21,12 @@
 #include <QHBoxLayout>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QScrollBar>
 #include <QToolButton>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <functional>
 
 namespace lumenis::ui {
@@ -546,8 +551,16 @@ TitlerDashboard::TitlerDashboard(TitlerTool& tool, QWidget* parent) : QWidget(pa
     setWindowTitle(tr("Titler+"));
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
-    panel_ = new TitlerPanel(tool, true, this);
-    layout->addWidget(panel_);
+    auto* scroll = new QScrollArea(this);
+    scroll->setObjectName(QStringLiteral("titlerDashboardScroll"));
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidgetResizable(true);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    panel_ = new TitlerPanel(tool, true, scroll);
+    scroll->setWidget(panel_);
+    scroller_ = scroll;
+    layout->addWidget(scroll, 1);
     // "At the bottom left, you'll find options to: Save: Update the current template with new changes. Save As:
     // Create a duplicate with the new changes" (p.319-320).
     auto* buttons = new QHBoxLayout;
@@ -560,6 +573,17 @@ TitlerDashboard::TitlerDashboard(TitlerTool& tool, QWidget* parent) : QWidget(pa
     }
     buttons->addStretch(1);
     layout->addLayout(buttons);
+}
+
+void TitlerDashboard::placeNear(const QPoint& at) {
+    if (placed_) return;
+    placed_ = true;
+    // The controls' own size, with room for a horizontal scroll bar and the Save buttons below.
+    const auto* scroll = static_cast<QScrollArea*>(scroller_);
+    const QSize content = panel_->sizeHint();
+    const int bar = scroll->horizontalScrollBar()->sizeHint().height();
+    const int below = sizeHint().height() - scroll->sizeHint().height();
+    setGeometry(fitOnScreen(QRect(at, QSize(content.width(), content.height() + bar + std::max(below, 0)))));
 }
 
 } // namespace lumenis::ui

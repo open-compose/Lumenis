@@ -49,13 +49,18 @@ private:
     QString colorOf(const QString& which) const;
 };
 
-// The Dashboard (p.302): the panel across, as a window of its own that stays over the others.
+// The Dashboard (p.302): the panel across, as a window of its own that stays over the others. The panel's sections
+// in a row are wider than many screens (2700 pixels with the default font), so they scroll across inside the window:
+// it opened wider than a Windows 11 screen before (owner's report, 2026-11-05; BUILDING.md).
 class TitlerDashboard : public QWidget {
     Q_OBJECT
 
 public:
     explicit TitlerDashboard(TitlerTool& tool, QWidget* parent = nullptr);
     TitlerPanel* panel() const { return panel_; }
+    // Places the window the first time it opens, its top left near `at` (global): as wide as its controls, but no wider
+    // than the screen (fitOnScreen). Later openings keep where the user put it.
+    void placeNear(const QPoint& at);
 
 signals:
     // The Save or Save As button (p.319-320): the template being edited is updated, or a copy made.
@@ -63,6 +68,8 @@ signals:
 
 private:
     TitlerPanel* panel_;
+    QWidget* scroller_ = nullptr;
+    bool placed_ = false;
 };
 
 } // namespace lumenis::ui

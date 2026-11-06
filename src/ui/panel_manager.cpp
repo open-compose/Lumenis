@@ -244,19 +244,40 @@ void PanelManager::tab(Panel* panel, PanelGroup* target) {
 }
 
 // Shown only while the main window is visible; eventFilter() shows and hides them with it.
+QRect fitOnScreen(const QRect& requested) {
+    const QScreen* screen = QGuiApplication::screenAt(requested.center());
+    if (!screen) screen = QGuiApplication::primaryScreen();
+    if (!screen) return requested;
+    const QRect area = screen->availableGeometry();
+    QRect r(requested.topLeft(), requested.size().boundedTo(area.size()));
+    // Inside the area: off a screen that exists now (a saved layout from another monitor) it comes back, centred.
+    if (!area.intersects(requested)) r.moveCenter(area.center());
+    r.moveLeft(std::clamp(r.left(), area.left(), area.right() - r.width() + 1));
+    r.moveTop(std::clamp(r.top(), area.top(), area.bottom() - r.height() + 1));
+    return r;
+}
+
+void keepOnScreen(QWidget* window) {
+    if (!window || !window->isWindow() || !window->isVisible()) return;
+    const QRect frame = window->frameGeometry();
+    const QRect inside = window->geometry();
+    const QMargins margins(inside.left() - frame.left(), inside.top() - frame.top(), frame.right() - inside.right(),
+                           frame.bottom() - inside.bottom());
+    const QRect fitted = fitOnScreen(frame);
+    if (fitted != frame) window->setGeometry(fitted.marginsRemoved(margins));
+}
+
 FloatingWindow* PanelManager::newFloatingWindow(const QRect& requested) {
-    QRect geometry = requested;
-    // Keep it reachable: on a screen that exists now.
-    const QScreen* screen = QGuiApplication::screenAt(geometry.center());
-    if (!screen) {
-        screen = QGuiApplication::primaryScreen();
-        if (screen) geometry.moveCenter(screen->availableGeometry().center());
-    }
+    // Keep it reachable and no larger than the screen.
+    const QRect geometry = fitOnScreen(requested);
     auto* window = new FloatingWindow(*this, owner_);
     window->setGeometry(geometry);
     floating_ << window;
     connect(window, &QObject::destroyed, this, [this, window] { floating_.removeAll(window); });
-    if (owner_->isVisible()) window->show();
+    if (owner_->isVisible()) {
+        window->show();
+        keepOnScreen(window);
+    }
     emit floatingWindowCreated(window);
     return window;
 }

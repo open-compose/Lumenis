@@ -736,6 +736,18 @@ at or just before the line the error names, keep the same result (the tests chec
 comment saying why, so nobody "tidies" it back. The self-hosted Windows job is the check: it is the
 only MSVC build, so a change in `src/media` is not done until that job is green.
 
+### A tool window opens wider than the screen (Tools > Titler+ on Windows 11)
+
+The owner reported that Tools > Titler+ opened a very large window on Windows 11 (2026-11-05). It was the Titler+
+Dashboard, whose Font, Transform, Fill, Outline, Shadow and other sections sit in one row: 2700 pixels wide with the
+default font, more with Windows' display scaling. Qt never makes a window smaller than its contents' minimum, so the
+window took that width. The Dashboard now keeps its sections in a horizontal scroll area and opens at most as wide as
+the screen (`TitlerDashboard::placeNear`). Every window the program opens on its own goes through `fitOnScreen` and,
+once shown, `keepOnScreen` (frame included): floating panels from Tools, restored workspaces and the Dashboard.
+`tst_main_window toolWindowsFitTheScreen` opens every tool panel and Titler+ and fails if one opens off the screen or
+larger than it, unless the panel's own minimum needs more. A new panel or tool window with many controls in a row should
+scroll, or wrap, rather than set a minimum wider than a laptop screen.
+
 ### Packaging on Windows: "Invalid character escape '\U'"
 
 CPack stops in `app/cmake_install.cmake` with this error, naming an FFmpeg
