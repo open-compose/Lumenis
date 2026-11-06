@@ -786,6 +786,15 @@ once shown, `keepOnScreen` (frame included): floating panels from Tools, restore
 larger than it, unless the panel's own minimum needs more. A new panel or tool window with many controls in a row should
 scroll, or wrap, rather than set a minimum wider than a laptop screen.
 
+The window still opened as wide as a 1920-pixel screen, and neither it nor the Effect Editor looked like the FX Guide's
+pictures: text buttons side by side where the guide has two columns of tool icons, and nine sections in a row (the
+owner, 2026-11-06). The cause was the layout itself, not the window: every control the Effect Editor has was also on the
+Dashboard, each section a column of labelled rows. The Dashboard is now laid out as pictured on p.302 (docs/spec/titler.md,
+"Laid out as the guide pictures them"): about 900 pixels, the Effect Editor's extra controls kept off it. The test also
+checks that the Dashboard asks for at most 1100 pixels and that its tools are two columns of icons. To compare a window
+with the guide, `LUMENIS_SHOT_DIR=<folder> ctest -R tst_main_window` saves pictures of the Dashboard and the Effect
+Editor there.
+
 ### Packaging on Windows: "Invalid character escape '\U'"
 
 CPack stops in `app/cmake_install.cmake` with this error, naming an FFmpeg

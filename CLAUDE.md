@@ -821,7 +821,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   is done. 7.4b2, the Timeline Quick Find (docs/spec/timeline-find.md: `src/ui/timeline_find.cpp`, `Timeline::findNext`
   and `findOptionsMenu`; test `tst_timeline_find`), is done, so 7.4 is. 7.5, DCP export (docs/spec/dcp.md, ours: Export
   As DCP, `src/media/dcp.*` with asdcplib's asdcp-wrap found like bmxtranswrap, `LUMENIS_ASDCP_WRAP`; tests `tst_dcp`,
-  `tst_movie_export_ui exportDcp`), is done; next is 7.6, the Titler+ and Effect Editor layouts. After Phase 7, before Phase 8: 7.6, the owner's report
+  `tst_movie_export_ui exportDcp`), is done. 7.6, the Titler+ Dashboard and Effect Editor laid out as the FX Guide's
+  pictures (p.302, p.321; `TitlerPanel`, `GlyphIcon`s in theme.h; test `tst_main_window toolWindowsFitTheScreen`,
+  `LUMENIS_SHOT_DIR` for pictures), is done. Phase 7 is done but 7.3c (hardware modules); next is Phase 8. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

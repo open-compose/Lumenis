@@ -1,5 +1,6 @@
 #include "lumenis/ui/theme.h"
 
+#include <array>
 #include <QApplication>
 #include <QColor>
 #include <QFont>
@@ -450,6 +451,202 @@ QIcon glyphIcon(GlyphIcon which, QColor color) {
         p.drawRoundedRect(QRectF(7, 15, 18, 13), 2, 2);
         break;
     }
+    case GlyphIcon::TextTool: { // a serif T
+        p.drawRect(QRectF(6, 5, 20, 4));
+        p.drawRect(QRectF(14, 5, 4, 22));
+        p.drawRect(QRectF(11, 24, 10, 3));
+        break;
+    }
+    case GlyphIcon::SelectionTool: { // four arrows from the centre
+        p.setPen(stroke);
+        p.drawLine(QPointF(16, 5), QPointF(16, 27));
+        p.drawLine(QPointF(5, 16), QPointF(27, 16));
+        p.setPen(Qt::NoPen);
+        for (const auto& [x, y, dx, dy] : {std::array<double, 4>{16, 3, 0, 1}, {16, 29, 0, -1}, {3, 16, 1, 0}, {29, 16, -1, 0}}) {
+            QPainterPath a;
+            a.moveTo(x, y);
+            a.lineTo(x + dx * 6 + dy * 4, y + dy * 6 + dx * 4);
+            a.lineTo(x + dx * 6 - dy * 4, y + dy * 6 - dx * 4);
+            a.closeSubpath();
+            p.drawPath(a);
+        }
+        break;
+    }
+    case GlyphIcon::RectangleTool:
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(QRectF(6, 8, 20, 16));
+        break;
+    case GlyphIcon::EllipseTool:
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(QRectF(6, 7, 20, 18));
+        break;
+    case GlyphIcon::BringForward:
+    case GlyphIcon::SendBackward: { // two overlapping squares, the front one filled or outlined
+        const bool forward = which == GlyphIcon::BringForward;
+        p.setPen(QPen(color, 2.0));
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(QRectF(5, 5, 14, 14));
+        p.setBrush(forward ? QBrush(color) : QBrush(Qt::NoBrush));
+        p.drawRect(QRectF(13, 13, 14, 14));
+        if (!forward) {
+            p.setBrush(color);
+            p.drawRect(QRectF(5, 5, 8, 8));
+        }
+        break;
+    }
+    case GlyphIcon::Group:
+    case GlyphIcon::Ungroup: { // two squares, inside a dashed frame when grouped
+        p.drawRect(QRectF(8, 8, 8, 8));
+        p.drawRect(QRectF(17, 17, 8, 8));
+        QPen frame(color, 2.0, which == GlyphIcon::Group ? Qt::SolidLine : Qt::DashLine);
+        p.setPen(frame);
+        p.setBrush(Qt::NoBrush);
+        if (which == GlyphIcon::Group) p.drawRect(QRectF(4, 4, 25, 25));
+        else {
+            p.drawRect(QRectF(4, 4, 15, 15));
+            p.drawRect(QRectF(13, 13, 15, 15));
+        }
+        break;
+    }
+    case GlyphIcon::PreviousObject:
+    case GlyphIcon::NextObject: { // an arrow to a bar
+        const bool next = which == GlyphIcon::NextObject;
+        p.setPen(stroke);
+        p.drawLine(QPointF(next ? 25 : 7, 7), QPointF(next ? 25 : 7, 25));
+        p.drawLine(QPointF(next ? 5 : 27, 16), QPointF(next ? 21 : 11, 16));
+        p.drawPolyline(QPolygonF({QPointF(next ? 16 : 16, 11), QPointF(next ? 21 : 11, 16), QPointF(16, 21)}));
+        break;
+    }
+    case GlyphIcon::Grid:
+        p.setPen(QPen(color, 2.0));
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(QRectF(5, 5, 22, 22));
+        for (int i = 1; i < 3; ++i) {
+            p.drawLine(QPointF(5 + i * 22.0 / 3, 5), QPointF(5 + i * 22.0 / 3, 27));
+            p.drawLine(QPointF(5, 5 + i * 22.0 / 3), QPointF(27, 5 + i * 22.0 / 3));
+        }
+        break;
+    case GlyphIcon::AddKeyframe:
+    case GlyphIcon::DeleteKeyframe: { // a keyframe diamond with a plus or a minus
+        QPainterPath d;
+        d.moveTo(12, 6);
+        d.lineTo(20, 14);
+        d.lineTo(12, 22);
+        d.lineTo(4, 14);
+        d.closeSubpath();
+        p.drawPath(d);
+        p.drawRect(QRectF(19, 23, 10, 3));
+        if (which == GlyphIcon::AddKeyframe) p.drawRect(QRectF(22.5, 19.5, 3, 10));
+        break;
+    }
+    case GlyphIcon::Underline: // a U over a line
+        p.setPen(stroke);
+        p.setBrush(Qt::NoBrush);
+        p.drawPolyline(QPolygonF({QPointF(9, 5), QPointF(9, 16)}));
+        p.drawPolyline(QPolygonF({QPointF(23, 5), QPointF(23, 16)}));
+        p.drawArc(QRectF(9, 9, 14, 14), 180 * 16, 180 * 16);
+        p.drawLine(QPointF(7, 27), QPointF(25, 27));
+        break;
+    case GlyphIcon::JustifyLeft:
+    case GlyphIcon::JustifyCenter:
+    case GlyphIcon::JustifyRight: { // lines of text, short ones aligned
+        const double widths[] = {22, 14, 22, 14};
+        for (int i = 0; i < 4; ++i) {
+            const double w = widths[i];
+            const double x = which == GlyphIcon::JustifyLeft ? 5 : which == GlyphIcon::JustifyRight ? 27 - w : 16 - w / 2;
+            p.drawRect(QRectF(x, 6 + i * 6, w, 3));
+        }
+        break;
+    }
+    case GlyphIcon::AlignLeft:
+    case GlyphIcon::AlignHorizontalCenter:
+    case GlyphIcon::AlignRight:
+    case GlyphIcon::AlignTop:
+    case GlyphIcon::AlignVerticalCenter:
+    case GlyphIcon::AlignBottom: { // two bars against a line
+        const bool vertical = which == GlyphIcon::AlignTop || which == GlyphIcon::AlignVerticalCenter || which == GlyphIcon::AlignBottom;
+        const int place = (which == GlyphIcon::AlignLeft || which == GlyphIcon::AlignTop) ? 0
+                          : (which == GlyphIcon::AlignRight || which == GlyphIcon::AlignBottom) ? 2 : 1;
+        const double line = place == 0 ? 5 : place == 2 ? 27 : 16;
+        auto bar = [&](double along, double length) {
+            const double start = place == 0 ? 7 : place == 2 ? 25 - length : 16 - length / 2;
+            p.drawRect(vertical ? QRectF(along, start, 6, length) : QRectF(start, along, length, 6));
+        };
+        bar(7, 18);
+        bar(18, 11);
+        p.drawRect(vertical ? QRectF(4, line - 1, 24, 2) : QRectF(line - 1, 4, 2, 24));
+        break;
+    }
+    case GlyphIcon::AlignFrameHorizontal:
+    case GlyphIcon::AlignFrameVertical: { // a block centred in a frame
+        p.setPen(QPen(color, 2.0));
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(QRectF(4, 4, 24, 24));
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawRect(which == GlyphIcon::AlignFrameHorizontal ? QRectF(11, 9, 10, 14) : QRectF(9, 11, 14, 10));
+        break;
+    }
+    case GlyphIcon::Reduce:
+    case GlyphIcon::Enlarge: { // a frame with arrows in or out
+        p.setPen(QPen(color, 2.0));
+        p.setBrush(Qt::NoBrush);
+        const double s = which == GlyphIcon::Enlarge ? 22 : 12;
+        p.drawRect(QRectF(16 - s / 2, 16 - s / 2, s, s));
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawRect(QRectF(14, 14, 4, 4));
+        break;
+    }
+    case GlyphIcon::DualSplit:
+        p.setPen(QPen(color, 2.0));
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(QRectF(4, 7, 24, 18));
+        p.setPen(Qt::NoPen);
+        p.setBrush(color);
+        p.drawRect(QRectF(4, 7, 12, 18));
+        break;
+    case GlyphIcon::Play:
+    case GlyphIcon::PlayLoop: {
+        QPainterPath a;
+        a.moveTo(10, 7);
+        a.lineTo(24, 16);
+        a.lineTo(10, 25);
+        a.closeSubpath();
+        p.drawPath(a);
+        if (which == GlyphIcon::PlayLoop) {
+            p.setPen(QPen(color, 2.0));
+            p.setBrush(Qt::NoBrush);
+            p.drawArc(QRectF(3, 3, 26, 26), 30 * 16, 300 * 16);
+        }
+        break;
+    }
+    case GlyphIcon::HighQuality: { // the letters, drawn as strokes
+        p.setPen(stroke);
+        p.drawLine(QPointF(5, 9), QPointF(5, 23));
+        p.drawLine(QPointF(13, 9), QPointF(13, 23));
+        p.drawLine(QPointF(5, 16), QPointF(13, 16));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(QRectF(17, 9, 10, 14));
+        p.drawLine(QPointF(23, 20), QPointF(28, 25));
+        break;
+    }
+    case GlyphIcon::TrackingTool: // a target
+        p.setPen(QPen(color, 2.0));
+        p.setBrush(Qt::NoBrush);
+        p.drawEllipse(QRectF(6, 6, 20, 20));
+        p.drawLine(QPointF(16, 2), QPointF(16, 11));
+        p.drawLine(QPointF(16, 21), QPointF(16, 30));
+        p.drawLine(QPointF(2, 16), QPointF(11, 16));
+        p.drawLine(QPointF(21, 16), QPointF(30, 16));
+        break;
+    case GlyphIcon::Render: // a frame with a dot: an effect made into media
+        p.drawRoundedRect(QRectF(4, 8, 24, 16), 2, 2);
+        p.setBrush(QColor(20, 20, 20));
+        p.drawEllipse(QPointF(16, 16), 4, 4);
+        break;
     case GlyphIcon::MediaVolume: // a drive with a light
         p.drawRoundedRect(QRectF(4, 10, 24, 12), 3, 3);
         p.setBrush(QColor(20, 20, 20));

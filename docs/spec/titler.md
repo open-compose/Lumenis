@@ -103,6 +103,17 @@ Ours:
   applied; its row of sections scrolls across, and the window opens no wider than the screen, 6.10f) and down at the top
   of the Effect Editor, which adds the Title Text box (stored when it loses the focus).
   Number fields store their value when it is entered (one undo step each); dragging the numbers is not ours yet.
+* Laid out as the guide pictures them (7.6, the owner's report): the Dashboard (p.302) has two columns of tool icons on
+  the left (Text and Selection, Rectangle and Ellipse, Bring Forward and Send Backward, Group and Ungroup, Select
+  Previous and Next Object, Grid; ours: a last row with Add and Delete Keyframe), then the Font section (family, style
+  with the Underline button, Size with the three justification buttons, Kerning, Leading, Skew), the Transform section
+  (Opacity, Position X, Y, Scale X, Y with a lock for Scale Fixed Aspect, Rotation, four Align H. and four Align V.
+  buttons) and the Style rows Fill, Outline, Shadow and BG, each a toggle, a colour swatch, its opacity and its own
+  numbers. About 900 pixels wide. The Effect Editor (p.321) has the same icons in rows, then the categories Font,
+  Transform, Fill, Outline, Shadow, Background, Foreground, Roll / Crawl and Tracking under disclosure triangles (ours:
+  open at first), with the controls the Dashboard leaves out (vertical justification, orientation, anchor, gradient
+  corners, outline type and shape). The icons are our own drawings (`GlyphIcon` in theme.h); the shadow angle is a
+  number, not the pictured dial.
 * The panel shows the first selected object and changes all the selected ones; during typing a change joins the text's
   undo step. The Font section is for text objects only; Transform and Style need a selection; Background and
   Foreground are the title's.

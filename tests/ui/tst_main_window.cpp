@@ -371,6 +371,30 @@ private slots:
                  qPrintable(QStringLiteral("Dashboard %1,%2 %3x%4").arg(dashboard->x()).arg(dashboard->y()).arg(dashboard->width()).arg(dashboard->height())));
         QVERIFY(dashboard->minimumSizeHint().width() < 600);
         QVERIFY(fits(window.effectEditor().window()));
+        // 7.6 (the owner's report: a Dashboard as wide as a 1920-pixel screen, text buttons side by side): laid out as
+        // pictured on p.302, it asks for well under 1920 pixels, and its tools are two columns of icons.
+        ui::TitlerPanel* panel = window.effectEditor().titlerDashboard()->panel();
+        QVERIFY2(panel->sizeHint().width() <= 1100, qPrintable(QString::number(panel->sizeHint().width())));
+        const auto at = [&](const QString& name) { return panel->control(name)->mapTo(panel, QPoint(0, 0)); };
+        QCOMPARE(at(QStringLiteral("tool:text")).y(), at(QStringLiteral("tool:selection")).y());
+        QCOMPARE(at(QStringLiteral("tool:rectangle")).x(), at(QStringLiteral("tool:text")).x());
+        QVERIFY(at(QStringLiteral("tool:rectangle")).y() > at(QStringLiteral("tool:text")).y());
+        for (const QString& name : {QStringLiteral("tool:text"), QStringLiteral("forward"), QStringLiteral("grid"), QStringLiteral("justify:left")}) {
+            auto* b = qobject_cast<QToolButton*>(panel->control(name));
+            QVERIFY2(b && !b->icon().isNull() && b->text().isEmpty() && b->width() <= 32, qPrintable(name));
+        }
+        // The Effect Editor's side buttons are icons too (p.84-88).
+        auto* reduce = window.effectEditor().findChild<QToolButton*>(QStringLiteral("effectReduce"));
+        QVERIFY(reduce && !reduce->icon().isNull());
+        // LUMENIS_SHOT_DIR: pictures of both at the sizes they ask for, to compare with the FX Guide's (p.302, p.320).
+        if (const QString shots = qEnvironmentVariable("LUMENIS_SHOT_DIR"); !shots.isEmpty()) {
+            QWidget* controls = window.effectEditor().titlerDashboard()->panel();
+            controls->resize(controls->sizeHint());
+            controls->grab().save(QDir(shots).filePath(QStringLiteral("dashboard.png")));
+            QWidget* editor = &window.effectEditor();
+            editor->resize(editor->sizeHint().expandedTo(QSize(420, 760)));
+            editor->grab().save(QDir(shots).filePath(QStringLiteral("effect_editor.png")));
+        }
     }
 
     void titlerAndBackToSourceRecord() {

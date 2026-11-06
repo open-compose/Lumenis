@@ -438,6 +438,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   7.4b2 (docs/spec/timeline-find.md): what each Quick Find option searches, Enter finding to the right, the position
   kept without a match, options not kept. 7.5 (docs/spec/dcp.md): all of DCP export, which the guide only names
   (p.519): Export As DCP and its tab, the package folder named for the file, the rates, letterboxing, the 5.1 layout.
+  7.6 (docs/spec/titler.md): our icons for the Titler+ tools and the Effect Editor's side buttons, the Dashboard's keyframe
+  row, the Effect Editor's Titler+ categories open at first, the shadow angle as a number.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

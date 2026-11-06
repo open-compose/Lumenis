@@ -1,5 +1,6 @@
 #include "lumenis/ui/angle_dial.h"
 #include "lumenis/ui/effect_editor.h"
+#include "lumenis/ui/theme.h"
 
 #include "lumenis/model/subcap.h"
 
@@ -58,6 +59,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <optional>
 #include <cmath>
 
 // The Effect Editor (effect_editor.h). It builds its controls from resources/effect_parameters.json
@@ -276,10 +278,16 @@ QIcon graphIcon(const QColor& color) {
 }
 
 // A small disabled button for a feature that comes later, labelled with its name's first letters.
-QToolButton* offButton(const QString& name, const QString& tip, QWidget* parent) {
+// `glyph`: our own drawing for it (theme.h; 7.6, the pictures on p.84-88 show icons), else its first two letters.
+QToolButton* offButton(const QString& name, const QString& tip, QWidget* parent, std::optional<GlyphIcon> glyph = std::nullopt) {
     auto* b = new QToolButton(parent);
     b->setObjectName(name);
     b->setText(tip.left(2));
+    if (glyph) {
+        b->setIcon(glyphIcon(*glyph, parent->palette().color(QPalette::ButtonText)));
+        b->setIconSize(QSize(16, 16));
+        b->setAccessibleName(tip);
+    }
     b->setToolTip(tip + QStringLiteral(" (") + QObject::tr("not available yet") + QLatin1Char(')'));
     b->setEnabled(false);
     b->setAutoRaise(true);
@@ -325,19 +333,19 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     auto* side = new QVBoxLayout;
     side->setSpacing(2);
     side->addStretch(1);
-    side->addWidget(offButton(QStringLiteral("effectReduce"), tr("Reduce"), this));
-    side->addWidget(offButton(QStringLiteral("effectEnlarge"), tr("Enlarge"), this));
-    side->addWidget(offButton(QStringLiteral("effectDualSplit"), tr("Dual Split"), this));
-    side->addWidget(offButton(QStringLiteral("effectPlayLoop"), tr("Play Loop"), this));
-    side->addWidget(offButton(QStringLiteral("effectPlay"), tr("Play"), this));
-    side->addWidget(offButton(QStringLiteral("effectHQ"), tr("HQ"), this));
+    side->addWidget(offButton(QStringLiteral("effectReduce"), tr("Reduce"), this, GlyphIcon::Reduce));
+    side->addWidget(offButton(QStringLiteral("effectEnlarge"), tr("Enlarge"), this, GlyphIcon::Enlarge));
+    side->addWidget(offButton(QStringLiteral("effectDualSplit"), tr("Dual Split"), this, GlyphIcon::DualSplit));
+    side->addWidget(offButton(QStringLiteral("effectPlayLoop"), tr("Play Loop"), this, GlyphIcon::PlayLoop));
+    side->addWidget(offButton(QStringLiteral("effectPlay"), tr("Play"), this, GlyphIcon::Play));
+    side->addWidget(offButton(QStringLiteral("effectHQ"), tr("HQ"), this, GlyphIcon::HighQuality));
     // The Tracking Tool button (p.253): the Tracking window.
-    QToolButton* trackingTool = offButton(QStringLiteral("effectTracking"), tr("Tracking Tool"), this);
+    QToolButton* trackingTool = offButton(QStringLiteral("effectTracking"), tr("Tracking Tool"), this, GlyphIcon::TrackingTool);
     trackingTool->setToolTip(tr("Tracking Tool"));
     trackingTool->setEnabled(true);
     connect(trackingTool, &QToolButton::clicked, this, [this] { showTrackingWindow(); });
     side->addWidget(trackingTool);
-    side->addWidget(offButton(QStringLiteral("effectGrid"), tr("Grid"), this));
+    side->addWidget(offButton(QStringLiteral("effectGrid"), tr("Grid"), this, GlyphIcon::Grid));
     // The 3D effect handle buttons (p.292): checkable, one at a time, shown for 3D effects. Ours: lettered.
     struct HandleButton {
         media::HandleTool tool;
@@ -481,7 +489,7 @@ EffectEditor::EffectEditor(Timeline& timeline, QWidget* parent) : QWidget(parent
     bottom->setSpacing(2);
     // Render Effect (p.84; FX Guide p.58): renders the effect at the position, as Render at Position
     // does; MainWindow carries it out (Shift renders again, Alt skips the dialog).
-    QToolButton* render = offButton(QStringLiteral("effectRender"), tr("Render Effect"), this);
+    QToolButton* render = offButton(QStringLiteral("effectRender"), tr("Render Effect"), this, GlyphIcon::Render);
     render->setToolTip(tr("Render Effect"));
     render->setEnabled(true);
     connect(render, &QToolButton::clicked, this, [this] { emit renderRequested(QGuiApplication::keyboardModifiers()); });

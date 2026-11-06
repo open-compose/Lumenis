@@ -1386,6 +1386,10 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
   Guide's pictures. Titler+ in the guide has two columns of tool icons on the left; ours has text buttons, some side by
   side, which make it as wide as a 1920-pixel screen on Windows. Lay both out as the guide's figures show them (read
   the figures with `pdftoppm`), check their widths on a 1920 x 1080 screen in a test, and add a BUILDING.md entry.
+  Done (docs/spec/titler.md: `TitlerPanel` laid out as p.302 in the Dashboard and as p.321 in the Effect Editor, our own
+  icons as `GlyphIcon`s, the Effect Editor's side buttons as icons; test `tst_main_window toolWindowsFitTheScreen`,
+  pictures through `LUMENIS_SHOT_DIR`). Still different from the pictures: the Effect Editor's parameters are fields, not
+  the guide's sliders with numbers, and the keyframe area beside them is not shown for Titler+.
 
 **Gates**
 1. Exports validate against the relevant spec checkers (AS-11 DPP, DCP checker
