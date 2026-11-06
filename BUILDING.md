@@ -766,6 +766,14 @@ at or just before the line the error names, keep the same result (the tests chec
 comment saying why, so nobody "tidies" it back. The self-hosted Windows job is the check: it is the
 only MSVC build, so a change in `src/media` is not done until that job is green.
 
+### Windows: "fatal error C1128: number of sections exceeded object file format limit"
+
+MSVC's object files hold at most 65,279 sections unless the source is compiled with `/bigobj`; each inline
+function and lambda takes some. `src/ui/main_window.cpp` passed the limit with the SubCap effect's code (CI run
+343), while GCC and Clang, whose objects have no such limit, built it. `lumenis_set_warnings`
+(`cmake/CompilerWarnings.cmake`) now passes `/bigobj` to every target under MSVC, so a large file cannot hit it
+again. A new target must call `lumenis_set_warnings`, as every target in the tree does.
+
 ### A tool window opens wider than the screen (Tools > Titler+ on Windows 11)
 
 The owner reported that Tools > Titler+ opened a very large window on Windows 11 (2026-11-05). It was the Titler+
