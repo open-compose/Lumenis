@@ -11,6 +11,7 @@ commercial distribution.
 | [FFmpeg](https://ffmpeg.org) | 6.0 or later | LGPL-2.1-or-later (`packaging/licenses/FFmpeg-LGPL-2.1.txt`), linked dynamically | Reading and writing media (Phase 2) |
 | [CLAP](https://github.com/free-audio/clap) | 1.2.9 | MIT (`packaging/licenses/clap-LICENSE.txt`); headers built in from `third_party/clap` | Hosting CLAP audio plug-ins (Phase 5.5b) |
 | [OpenFX](https://github.com/AcademySoftwareFoundation/openfx) | 1.5.1 | BSD 3-Clause (`packaging/licenses/openfx-LICENSE.txt`); headers built in from `third_party/openfx` | Hosting OpenFX image effect plug-ins in place of AVX (Phase 6.11) |
+| [OpenColorIO](https://opencolorio.org) | 2.1 or later, optional | BSD 3-Clause (`packaging/licenses/OpenColorIO-LICENSE.txt`), linked dynamically when the build finds it | Colour conversions for OFX plug-ins (Phase 6.11c3) |
 | [miniaudio](https://miniaud.io) | 0.11.25 | Public domain (Unlicense) or MIT-0, at the user's choice (`packaging/licenses/miniaudio-LICENSE.txt`); built in from `third_party/miniaudio` | Sound output for playback (Phase 2.3) |
 
 Qt's source is available from https://download.qt.io. Because Qt is linked
@@ -27,6 +28,14 @@ use the platform's FFmpeg:
 Some of these are built with GPL parts. That is compatible with this
 project's GPL-3.0-or-later licence. Official releases will ship an LGPL-only
 FFmpeg without the codecs awaiting legal review (docs/EXTENSIONS.md).
+
+OpenColorIO is optional (`LUMENIS_OCIO`, `cmake/FindOpenColorIO.cmake`):
+a build uses the platform's library when it finds one (Ubuntu's
+`libopencolorio-dev`, Homebrew's `opencolorio`, vcpkg's `opencolorio`) and
+installs its licence with the application. Its own dependencies (yaml-cpp,
+pystring, expat, Imath, minizip-ng, all MIT, BSD or zlib licensed) come with
+the platform's library. Its source is available from
+https://github.com/AcademySoftwareFoundation/OpenColorIO.
 
 miniaudio is a single header kept unchanged in `third_party/miniaudio`
 (SHA-256 `ac7af4de748b7e26b777f37e01cee313a308a7296a3eb080e2906b320cc55c89`).

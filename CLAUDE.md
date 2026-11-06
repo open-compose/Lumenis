@@ -786,8 +786,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   (`angle_dial.*`) and push buttons (`ofxPushButton`, `EffectEditor::pressPluginButton`), is done. 6.11c2, overlays (V2
   interacts through our Draw suite, `ofxOverlayDraw`/`ofxOverlayPen`, `Composer::EffectPreview::pluginShapes`, the
   Effect Editor's `PluginOverlayInput` with Outline/Path) and the project's size as canonical coordinates
-  (`setOfxProjectSize`, render scale), is done.
-  Next: 6.11c3 (OCIO), then Phases 7 and 8. Phase 9 "Left over stuff"
+  (`setOfxProjectSize`, render scale), is done. 6.11c3, colour management (ofxColour.h through `src/media/ocio_colour.*`
+  with OpenColorIO where it is installed, optional: `cmake/FindOpenColorIO.cmake`, `LUMENIS_OCIO`; `setOfxColourSpace`
+  from `MainWindow`, `ofxNativeColourspace`, `ofxColourStyle`; without it plug-ins see the project's colour space;
+  `LUMENIS_NO_OCIO=1`; test `tst_ofx_host` with the halve plug-in), is done, so 6.11 and Phase 6's steps are.
+  Next: Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

@@ -11,9 +11,15 @@
 // sequence, render and end sequence actions. The plug-in reads its parameters through the parameter suite, which
 // answers from the effect's stored values and keyframes, and its clips' images, which are the pictures copied into
 // float RGBA buffers with their rows bottom to top (the standard's image layout).
+//
+// Colour management (6.11c3, "colour management" below): a plug-in that asks for it is told its clips' colour spaces;
+// with OpenColorIO (ocio_colour.h) its input images are converted into the ones it prefers and its output back.
 
 #include "lumenis/media/ofx_host.h"
 
+#include "ocio_colour.h"
+
+#include <ofxColour.h>
 #include <ofxCore.h>
 #include <ofxDrawSuite.h>
 #include <ofxInteract.h>
@@ -709,6 +715,9 @@ PropertySet& hostProperties() {
         h.setInt(kOfxParamHostPropMaxParameters, {-1});
         h.setInt(kOfxParamHostPropMaxPages, {0});
         h.setInt(kOfxParamHostPropPageRowColumnCount, {0, 0});
+        // Colour management (6.11c3): refreshed by setOfxOcioConfig.
+        h.setString(kOfxImageEffectPropColourManagementStyle, {ofxHostColourStyle().toStdString()});
+        h.setString(kOfxImageEffectPropColourManagementAvailableConfigs, {kOfxConfigIdentifier});
         return h;
     }();
     return p;
@@ -931,6 +940,8 @@ OfxPluginInfo describe(OfxPlugin* plugin, const QString& file) {
         info.inputs << clipInfo;
     }
     for (const auto& p : chosen.descriptor->params.params) info.params << paramInfo(*p);
+    info.colourStyle = chosen.descriptor->props.string(kOfxImageEffectPropColourManagementStyle);
+    info.colourConfigs = chosen.descriptor->props.strings(kOfxImageEffectPropColourManagementAvailableConfigs);
     described()[info.id] = Described{plugin, chosen.context, chosen.descriptor};
     return info;
 }
@@ -1168,6 +1179,17 @@ struct Interact {
     bool redraw = false; // the plug-in asked for a redraw (interactRedraw)
 };
 
+// How a render's images are colour managed (6.11c3, prepareColour): the style used, the colour space each clip is
+// told, and the conversions: the project's colour space in OpenColorIO's config, and per input clip the config's
+// colour space its image is converted into (none when empty); the output is converted from `outputFrom`.
+struct ColourPlan {
+    std::string style; // empty: no colour management
+    std::map<std::string, std::string> told;
+    QString project;
+    std::map<std::string, QString> convertTo;
+    QString outputFrom;
+};
+
 // A plug-in's one instance, made at its first render (kOfxActionCreateInstance).
 struct Instance : Effect {
     QString id;
@@ -1180,6 +1202,8 @@ struct Instance : Effect {
     bool reported = false;   // a render failure was reported once
     std::unique_ptr<Interact> overlay; // its overlay interact, made when first drawn (6.11c2)
     bool noOverlay = false;  // the plug-in has none we can draw (no V2 overlay, or creating it failed)
+    ColourPlan colour;       // the current or last render's (6.11c3)
+    bool colourReported = false; // a failed conversion was reported once
 };
 
 std::map<QString, std::unique_ptr<Instance>>& instances() {
@@ -1389,6 +1413,205 @@ OfxStatus paramGetKeyIndex(OfxParamHandle h, OfxTime time, int direction, int* i
 
 // ---------------------------------------------------------------- clips and images
 
+// ---------------------------------------------------------------- colour management (6.11c3; ofxColour.h)
+//
+// prepareColour runs before each render of a plug-in that asked for a colour management style. It tells the instance
+// the style and config, asks the plug-in for its clips' preferred colour spaces (the clip preferences action), picks
+// one per input clip, and asks which colour space its output will be in (kOfxImageEffectActionGetOutputColourspace).
+// Every picture is in the project's colour space (ofxNativeColourspace); only with OpenColorIO's config can the host
+// supply others, so without it each clip is told the project's (the standard lets the host "supply images in any
+// valid colourspace", and plug-ins "must check kOfxImageClipPropColourspace").
+
+QString gProjectColourSpace = QStringLiteral("YCbCr 709");
+
+int styleRank(const QString& style) {
+    if (style == QLatin1String(kOfxImageEffectColourManagementBasic)) return 1;
+    if (style == QLatin1String(kOfxImageEffectColourManagementCore)) return 2;
+    if (style == QLatin1String(kOfxImageEffectColourManagementFull)) return 3;
+    if (style == QLatin1String(kOfxImageEffectColourManagementOCIO)) return 4;
+    return 0;
+}
+
+const char* styleOfRank(int rank) {
+    switch (rank) {
+    case 1: return kOfxImageEffectColourManagementBasic;
+    case 2: return kOfxImageEffectColourManagementCore;
+    case 3: return kOfxImageEffectColourManagementFull;
+    case 4: return kOfxImageEffectColourManagementOCIO;
+    default: return kOfxImageEffectColourManagementNone;
+    }
+}
+
+// The basic colour space (the config header's generic names) that stands for native colour space `native`.
+std::string basicOf(const QString& native) {
+    if (native == QLatin1String(kOfxColourspaceRec2100PqDisplay) || native == QLatin1String(kOfxColourspaceRec2100HlgDisplay))
+        return kOfxColourspaceOfxDisplayHdr;
+    if (native == QLatin1String(kOfxColourspaceACES20651)) return kOfxColourspaceOfxSceneLinear;
+    return kOfxColourspaceOfxDisplaySdr;
+}
+
+const std::string kCrossReference = "OfxColourspace_"; // "OfxColourspace_<clip>": the same as that clip's
+
+// Whether `name` asks for data passed through unconverted (motion vectors, depth...).
+bool isRawColourspace(const std::string& name, bool convert) {
+    if (name == kOfxColourspaceOfxRaw || name == kOfxColourspaceRaw || name == kOfxColourspaceRoleData) return true;
+    return convert && detail::ocioIsData(detail::ocioColourSpace(QString::fromStdString(name)));
+}
+
+// OpenColorIO's colour space for a requested name: the basic scene ones through the config's roles, the rest by
+// name, alias or role. Empty when the config has none (the display basics match only the project's own, below).
+QString ocioTarget(const std::string& name) {
+    if (name == kOfxColourspaceOfxSceneLinear) return detail::ocioColourSpace(QStringLiteral("scene_linear"));
+    if (name == kOfxColourspaceOfxSceneLog) {
+        const QString log = detail::ocioColourSpace(QStringLiteral("compositing_log"));
+        return log.isEmpty() ? detail::ocioColourSpace(QStringLiteral("color_timing")) : log;
+    }
+    if (name == kOfxColourspaceOfxDisplaySdr || name == kOfxColourspaceOfxDisplayHdr) return {};
+    return detail::ocioColourSpace(QString::fromStdString(name));
+}
+
+// Converts an image's pixels between two of the config's colour spaces; nothing when either is empty. A failure is
+// reported once and leaves the pixels as they are.
+void convertColour(Instance& inst, std::vector<float>& rgba, const QString& from, const QString& to);
+
+void clearColour(Instance& inst) {
+    for (const char* name : {kOfxImageEffectPropColourManagementStyle, kOfxImageEffectPropColourManagementConfig, kOfxImageEffectPropOCIOConfig,
+                             kOfxImageEffectPropDisplayColourspace}) {
+        inst.props.props.erase(name);
+    }
+    for (const auto& c : inst.clips) {
+        c->props.props.erase(kOfxImageClipPropColourspace);
+        c->props.props.erase(kOfxImageClipPropPreferredColourspaces);
+    }
+    inst.colour = ColourPlan{};
+}
+
+// The clip preferences action's out arguments as the standard fills them before the call (ofxImageEffect.h).
+void clipPreferenceDefaults(PropertySet& out, const Instance& inst) {
+    for (const auto& c : inst.clips) {
+        out.setString("OfxImageClipPropComponents_" + c->name, {kOfxImageComponentRGBA});
+        out.setString("OfxImageClipPropDepth_" + c->name, {kOfxBitDepthFloat});
+        out.setDouble("OfxImageClipPropPAR_" + c->name, {1.0});
+        out.setString(std::string(kOfxImageClipPropPreferredColourspaces) + "_" + c->name, {});
+    }
+    out.setDouble(kOfxImageEffectPropFrameRate, {gFrameRate});
+    out.setString(kOfxImageClipPropFieldOrder, {kOfxImageFieldNone});
+    out.setString(kOfxImageEffectPropPreMultiplication, {kOfxImagePreMultiplied});
+    out.setInt(kOfxImageClipPropContinuousSamples, {0});
+    out.setInt(kOfxImageEffectFrameVarying, {0});
+}
+
+void prepareColour(Instance& inst, const OfxPluginInfo& info, const RenderContext& r) {
+    const QString style = ofxColourStyle(info);
+    if (styleRank(style) == 0) {
+        clearColour(inst);
+        return;
+    }
+    ColourPlan plan;
+    plan.style = style.toStdString();
+    const QString native = ofxNativeColourspace(gProjectColourSpace);
+    const bool convert = ofxColourConversion();
+    plan.project = convert ? detail::ocioColourSpace(native) : QString();
+    const bool canConvert = !plan.project.isEmpty();
+    // What a clip in the project's colour space is told: a basic name in the basic style, else the native one.
+    const std::string projectTold = styleRank(style) == 1 ? basicOf(native) : native.toStdString();
+    const auto isProject = [&](const std::string& n) { return n == native.toStdString() || n == basicOf(native) || n == projectTold; };
+
+    PropertySet& p = inst.props;
+    p.setString(kOfxImageEffectPropColourManagementStyle, {plan.style});
+    p.setString(kOfxImageEffectPropColourManagementConfig, {kOfxConfigIdentifier});
+    if (styleRank(style) == 4) {
+        p.setString(kOfxImageEffectPropOCIOConfig, {ofxOcioConfig().toStdString()});
+    } else {
+        p.props.erase(kOfxImageEffectPropOCIOConfig);
+    }
+    // The monitors show the project's colour space; a scene-referred project's through an sRGB display (ours).
+    p.setString(kOfxImageEffectPropDisplayColourspace,
+                {native.endsWith(QLatin1String("_display")) ? native.toStdString() : std::string(kOfxColourspaceSrgbDisplay)});
+
+    auto handleOf = reinterpret_cast<OfxImageEffectHandle>(&inst);
+    PropertySet prefsOut;
+    clipPreferenceDefaults(prefsOut, inst);
+    const bool askedPrefs = inst.plugin->mainEntry(kOfxImageEffectActionGetClipPreferences, handleOf, nullptr, handle(&prefsOut)) == kOfxStatOK;
+
+    std::string firstInput;
+    for (const auto& c : inst.clips) {
+        if (c->name == kOfxImageEffectOutputClipName) continue;
+        // Masks and unconnected clips have no colour space ("colour management is disabled").
+        if (c->props.integer(kOfxImageClipPropIsMask, 0) != 0 || !r.inputs.count(c->name)) {
+            c->props.props.erase(kOfxImageClipPropColourspace);
+            continue;
+        }
+        const QStringList prefs =
+            askedPrefs ? prefsOut.strings((std::string(kOfxImageClipPropPreferredColourspaces) + "_" + c->name).c_str()) : QStringList();
+        std::string told = projectTold;
+        QString target;
+        // The first preference we can supply.
+        for (const QString& q : prefs) {
+            const std::string n = q.toStdString();
+            if (n.rfind(kCrossReference, 0) == 0) {
+                const std::string ref = n.substr(kCrossReference.size());
+                if (!plan.told.count(ref)) continue;
+                told = plan.told[ref];
+                target = plan.convertTo[ref];
+                break;
+            }
+            if (isProject(n)) break;
+            if (isRawColourspace(n, convert)) {
+                told = n; // our pixels as they are
+                break;
+            }
+            if (!canConvert) continue;
+            const QString t = ocioTarget(n);
+            if (t.isEmpty()) continue;
+            if (t != plan.project) {
+                told = t.toStdString();
+                target = t;
+            }
+            break;
+        }
+        std::vector<std::string> list;
+        for (const QString& q : prefs) list.push_back(q.toStdString());
+        c->props.setString(kOfxImageClipPropPreferredColourspaces, list);
+        c->props.setString(kOfxImageClipPropColourspace, {told});
+        plan.told[c->name] = told;
+        plan.convertTo[c->name] = target;
+        if (firstInput.empty()) firstInput = c->name;
+    }
+
+    // The output: what the plug-in says, else the first input clip's colour space (kOfxStatReplyDefault).
+    PropertySet outIn, outOut;
+    outIn.setString(kOfxImageClipPropPreferredColourspaces, {projectTold});
+    outOut.setString(kOfxImageClipPropColourspace, {""});
+    std::string outTold;
+    if (inst.plugin->mainEntry(kOfxImageEffectActionGetOutputColourspace, handleOf, handle(&outIn), handle(&outOut)) == kOfxStatOK)
+        outTold = outOut.string(kOfxImageClipPropColourspace).toStdString();
+    if (outTold.empty()) outTold = firstInput.empty() ? projectTold : kCrossReference + firstInput;
+    QString from;
+    if (outTold.rfind(kCrossReference, 0) == 0) {
+        const std::string ref = outTold.substr(kCrossReference.size());
+        if (plan.convertTo.count(ref)) from = plan.convertTo[ref];
+    } else if (!isProject(outTold) && !isRawColourspace(outTold, convert) && canConvert) {
+        const QString t = ocioTarget(outTold);
+        if (t != plan.project) from = t;
+    }
+    for (const auto& c : inst.clips) {
+        if (c->name == kOfxImageEffectOutputClipName) c->props.setString(kOfxImageClipPropColourspace, {outTold});
+    }
+    plan.told[kOfxImageEffectOutputClipName] = outTold;
+    plan.outputFrom = from;
+    inst.colour = std::move(plan);
+}
+
+void convertColour(Instance& inst, std::vector<float>& rgba, const QString& from, const QString& to) {
+    if (from.isEmpty() || to.isEmpty() || from == to) return;
+    QString error;
+    if (detail::ocioConvert(rgba.data(), rgba.size() / 4, from, to, &error) || inst.colourReported) return;
+    inst.colourReported = true;
+    message(nullptr, kOfxMessageError, nullptr, "the colour conversion from %s to %s failed (%s)", from.toUtf8().constData(),
+            to.toUtf8().constData(), error.toUtf8().constData());
+}
+
 OfxStatus clipGetHandle(OfxImageEffectHandle e, const char* name, OfxImageClipHandle* handleOut, OfxPropertySetHandle* props) {
     if (!e || !name) return kOfxStatErrBadHandle;
     for (const auto& c : effect(e)->clips) {
@@ -1447,6 +1670,7 @@ OfxStatus clipGetImage(OfxImageClipHandle c, OfxTime time, const OfxRectD*, OfxP
             std::copy_n(picture.pixel(0, h - 1 - y), static_cast<std::size_t>(w) * 4, &image->data[static_cast<std::size_t>(y) * static_cast<std::size_t>(w) * 4]);
         }
     }
+    convertColour(*inst, image->data, inst->colour.project, inst->colour.convertTo[cl.name]);
     setImageProps(*image, cl.name, time, w, h, r.scaleX, r.scaleY);
     *imageOut = handle(&image->props);
     inst->images.push_back(std::move(image));
@@ -1564,6 +1788,7 @@ std::optional<Picture> render(const OfxPluginInfo& info, RenderContext& r) {
     inst->render = &r;
     setProjectProps(*inst, r);
     currentPlugin() = info.id;
+    prepareColour(*inst, info, r);
     auto handleOf = reinterpret_cast<OfxImageEffectHandle>(inst);
     const std::vector<double> renderScale{r.scaleX, r.scaleY};
     const std::vector<int> window{0, 0, r.width, r.height};
@@ -1608,6 +1833,7 @@ std::optional<Picture> render(const OfxPluginInfo& info, RenderContext& r) {
         inst->plugin->mainEntry(kOfxImageEffectActionEndSequenceRender, handleOf, handle(&seq), nullptr);
         inst->output = nullptr;
         if (succeeded(s)) {
+            convertColour(*inst, output.data, inst->colour.outputFrom, inst->colour.project);
             Picture out(r.width, r.height);
             for (int y = 0; y < r.height; ++y) {
                 std::copy_n(&output.data[static_cast<std::size_t>(y) * static_cast<std::size_t>(r.width) * 4], static_cast<std::size_t>(r.width) * 4,
@@ -2200,6 +2426,57 @@ void setOfxProjectSize(const QSize& size) {
 
 QSize ofxProjectSize() {
     return gProjectSize.isValid() && !gProjectSize.isEmpty() ? gProjectSize : QSize(1920, 1080);
+}
+
+void setOfxColourSpace(const QString& projectColorSpace) {
+    std::lock_guard lock(renderMutex());
+    gProjectColourSpace = projectColorSpace.isEmpty() ? QStringLiteral("YCbCr 709") : projectColorSpace;
+}
+
+QString ofxNativeColourspace(const QString& c) {
+    if (c.contains(QLatin1String("2084"))) return QString::fromLatin1(kOfxColourspaceRec2100PqDisplay);
+    if (c.contains(QLatin1String("HLG"))) return QString::fromLatin1(kOfxColourspaceRec2100HlgDisplay);
+    if (c.contains(QLatin1String("2020"))) return QString::fromLatin1(kOfxColourspaceRec1886Rec2020Display);
+    if (c.contains(QLatin1String("P3"))) return QString::fromLatin1(kOfxColourspaceP3DciDisplay);
+    if (c.startsWith(QLatin1String("ACES"))) return QString::fromLatin1(kOfxColourspaceACES20651);
+    return QString::fromLatin1(kOfxColourspaceRec1886Rec709Display); // 601's primaries are close to 709's (ours)
+}
+
+QString ofxHostColourStyle() {
+    return QString::fromLatin1(ofxColourConversion() ? kOfxImageEffectColourManagementOCIO : kOfxImageEffectColourManagementCore);
+}
+
+QString ofxColourStyle(const OfxPluginInfo& plugin) {
+    int rank = std::min(styleRank(plugin.colourStyle), styleRank(ofxHostColourStyle()));
+    // The native styles name colour spaces from a config both sides know; a plug-in that lists configs must list ours.
+    if (rank > 0 && rank < 4 && !plugin.colourConfigs.isEmpty() && !plugin.colourConfigs.contains(QLatin1String(kOfxConfigIdentifier))) rank = 0;
+    return QString::fromLatin1(styleOfRank(rank));
+}
+
+QString ofxOcioVersion() {
+    return detail::ocioVersion();
+}
+
+bool ofxColourConversion() {
+    return !detail::ocioConfig().isEmpty();
+}
+
+void setOfxOcioConfig(const QString& config) {
+    detail::setOcioConfig(config);
+    hostProperties().setString(kOfxImageEffectPropColourManagementStyle, {ofxHostColourStyle().toStdString()});
+}
+
+QString ofxOcioConfig() {
+    return detail::ocioConfig();
+}
+
+QMap<QString, QString> ofxClipColourspaces(const OfxPluginInfo& plugin) {
+    std::lock_guard lock(renderMutex());
+    QMap<QString, QString> out;
+    const auto it = instances().find(plugin.id);
+    if (it == instances().end()) return out;
+    for (const auto& [clipName, told] : it->second->colour.told) out.insert(QString::fromStdString(clipName), QString::fromStdString(told));
+    return out;
 }
 
 void setOfxFrameRate(double rate) {

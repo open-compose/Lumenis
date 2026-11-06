@@ -1289,7 +1289,10 @@ phase of their own. They are done in three steps:
     Preview (p.161-162). Done (`ofxOverlayDraw`/`ofxOverlayPen`, `Composer::EffectPreview::pluginShapes`,
     `PluginOverlayInput` and `EffectEditor::pluginPen`; the project's size and render scale through
     `setOfxProjectSize`; tests `tst_ofx_host`, `tst_ofx_palette`). 6.11c3, colour management with OCIO (the OFX 1.5 colour suite) where the library is installed,
-    else the plug-in sees the project's colour space only.
+    else the plug-in sees the project's colour space only. Done (docs/spec/ofx-host.md "Colour management": OpenColorIO
+    optional through `cmake/FindOpenColorIO.cmake` and `LUMENIS_OCIO`, `src/media/ocio_colour.*`; `setOfxColourSpace`,
+    `ofxNativeColourspace`, `ofxColourStyle`, the clip preferences and output colour space actions; test `tst_ofx_host`
+    with the halve plug-in), so 6.11c and 6.11 are.
 
 **Gates**
 1. Each effect's output matches the reference frames from Media Composer with

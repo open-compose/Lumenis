@@ -94,6 +94,13 @@ endif()
 # release builds turn this off until counsel signs off.
 option(LUMENIS_PATENT_CODECS "Allow the codecs that await legal review (DNxHD, ProRes, H.264, HEVC, AAC, ...)" ON)
 
+# OpenColorIO is optional (6.11c3): with it the OFX host converts images into the colour spaces plug-ins ask for;
+# without it plug-ins see the project's colour space only (docs/spec/ofx-host.md "Colour management").
+option(LUMENIS_OCIO "Use OpenColorIO for the OFX host's colour management when it is installed" ON)
+if(LUMENIS_OCIO)
+    find_package(OpenColorIO)
+endif()
+
 # Put every runtime artefact (executables, shared libraries, loadable
 # modules) in one directory so the app finds its modules in the build tree
 # exactly as it does after installation.

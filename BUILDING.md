@@ -15,9 +15,20 @@ namespaces, module ABI symbols) is not user-visible and does not change.
 | Qt | 6.8 LTS | 6.8 LTS | 6.8 LTS, or your distribution's Qt 6.4 or later |
 | Installer tools | (built in) | WiX Toolset 3.14 (installed by the bootstrap script) | dpkg-dev, rpm (optional), curl, file |
 | FFmpeg 6.0 or later | Homebrew `ffmpeg` | LGPL shared build from `scripts\get-ffmpeg.ps1` (set `FFMPEG_ROOT`) | `libavcodec-dev` and the other FFmpeg development packages |
+| OpenColorIO 2.1 or later (optional) | Homebrew `opencolorio` | vcpkg `opencolorio` (set `OpenColorIO_ROOT`) | `libopencolorio-dev` |
 
 Qt 6.8 LTS is the version release builds ship with. Qt 6.4 is the oldest
 version supported, because that is the system Qt on Ubuntu 24.04.
+
+OpenColorIO is optional. With it the OFX host converts images into the
+colour spaces plug-ins ask for (docs/spec/ofx-host.md "Colour management");
+without it they see the project's colour space only. The build uses it when
+it finds it (`cmake/FindOpenColorIO.cmake`; `-DLUMENIS_OCIO=OFF` leaves it
+out). The bootstrap scripts do not install it, so the packages CI builds
+have none; a package built with it must carry its library, which the
+packaging scripts do not check yet. `LUMENIS_NO_OCIO=1` turns conversion
+off at run time, and the `OCIO` environment variable picks a config
+(OpenColorIO 2.1 has no built-in one, so Ubuntu 24.04's needs it).
 
 FFmpeg reads and writes media. The bootstrap scripts install it.
 * **Development builds** use the platform's FFmpeg. They include the codecs

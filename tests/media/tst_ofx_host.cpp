@@ -2,7 +2,8 @@
 // (ofx_test_plugin.cpp, built as test-ofx/CutthulhuTest.ofx.bundle/Contents/<architecture>/CutthulhuTest.ofx): finding
 // bundles, describing the plug-ins through our suites, leaving out what does not fit with its reason, the messages
 // plug-ins send, and registering them; rendering (6.11b1) Filter, Generator and Transition plug-ins with the effect's
-// values and keyframes, alone and through the compositor; their Effect Editor controls; instances made and destroyed.
+// values and keyframes, alone and through the compositor; their Effect Editor controls; instances made and destroyed;
+// colour management (6.11c3) without OpenColorIO and, where the build has it, with a config of our own.
 #include "lumenis/media/compositor.h"
 #include "lumenis/media/ofx_host.h"
 #include "lumenis/model/effect_keyframes.h"
@@ -120,7 +121,7 @@ private slots:
         setOfxMessageHandler({});
         QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QLatin1Char('\n'))));
         // The plug-in of another API is skipped.
-        QCOMPARE(plugins.size(), 6);
+        QCOMPARE(plugins.size(), 7);
         QVERIFY(!byId(plugins, "org.cutthulhu.test.other"));
 
         const OfxPluginInfo* tint = byId(plugins, "org.cutthulhu.test.tint");
@@ -189,8 +190,8 @@ private slots:
         QVERIFY(messages.contains(QStringLiteral("org.cutthulhu.test.broken: error: no licence found")));
 
         // Registering keeps the usable ones findable by category and label.
-        QCOMPARE(registerOfxPlugins(plugins), 4);
-        QCOMPARE(ofxPlugins().size(), 6);
+        QCOMPARE(registerOfxPlugins(plugins), 5);
+        QCOMPARE(ofxPlugins().size(), 7);
         const OfxPluginInfo* found = ofxPluginFor(QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Tint"));
         QVERIFY(found);
         QCOMPARE(found->id, QStringLiteral("org.cutthulhu.test.tint"));
@@ -198,12 +199,12 @@ private slots:
     }
 
     void provider() {
-        // The host as an extension provider: our bundle's folder scanned gives its six image effect plug-ins.
+        // The host as an extension provider: our bundle's folder scanned gives its seven image effect plug-ins.
         OfxHostProvider p;
         QCOMPARE(p.info().id, std::string("org.openeffects.ofx-host"));
         QVERIFY(p.standard() == lumenis::ext::PluginStandard::OFX);
         const auto found = p.scan({std::filesystem::path(kFolder.toStdString())});
-        QCOMPARE(found.size(), std::size_t(6));
+        QCOMPARE(found.size(), std::size_t(7));
         QCOMPARE(found.front().id, std::string("org.cutthulhu.test.tint"));
         QCOMPARE(found.front().vendor, std::string("Cutthulhu Tests"));
         QCOMPARE(found.front().version, std::string("1.2"));
@@ -475,6 +476,111 @@ private slots:
         QVERIFY(isOfxEffect(renamed));
         QVERIFY(!isMissingOfxEffect(renamed));
         QVERIFY(!isMissingOfxEffect(model::Effect{QStringLiteral("Blend"), QStringLiteral("Dissolve"), {}}));
+    }
+
+    void colourWithoutConversion() {
+        // LUMENIS_NO_OCIO turns conversion off, as a build without OpenColorIO has it: the host offers Core.
+        qputenv("LUMENIS_NO_OCIO", "1");
+        setOfxOcioConfig(QString());
+        QVERIFY(!ofxColourConversion());
+        QCOMPARE(ofxHostColourStyle(), QStringLiteral("OfxImageEffectColourManagementCore"));
+        registerTestPlugins();
+        const OfxPluginInfo* halve = ofxPluginFor(QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Halve"));
+        QVERIFY(halve);
+        QCOMPARE(halve->colourStyle, QStringLiteral("OfxImageEffectColourManagementOCIO"));
+        QVERIFY(halve->colourConfigs.contains(QStringLiteral("ofx-native-v1.5_aces-v1.3_ocio-v2.3")));
+        QCOMPARE(halve->description, QStringLiteral("OfxImageEffectColourManagementCore")); // the host's, read while described
+        // The higher style both have; a plug-in asking for none gets none.
+        QCOMPARE(ofxColourStyle(*halve), QStringLiteral("OfxImageEffectColourManagementCore"));
+        const OfxPluginInfo* tint = ofxPluginFor(QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Tint"));
+        QCOMPARE(ofxColourStyle(*tint), QStringLiteral("OfxImageEffectColourManagementNone"));
+
+        // Its Source is in the project's colour space whatever it prefers, and the image is not converted.
+        setOfxColourSpace(QStringLiteral("RGB 709"));
+        const model::Effect e{QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Halve"), {}};
+        const model::EffectSpan span(10);
+        const Picture grey = Picture::solid(4, 4, QColor(128, 128, 128));
+        auto out = at(ofxSegmentPicture(e, grey, span.timeOf(0), span), 1, 1);
+        QVERIFY2(approx(out[0], 128 / 255.0 * 0.5) && approx(out[3], 1.0), qPrintable(QString::number(static_cast<double>(out[0]))));
+        QMap<QString, QString> spaces = ofxClipColourspaces(*halve);
+        QCOMPARE(spaces.value(QStringLiteral("Source")), QStringLiteral("rec1886_rec709_display"));
+        QCOMPARE(spaces.value(QStringLiteral("Output")), QStringLiteral("OfxColourspace_Source"));
+        setOfxColourSpace(QStringLiteral("YCbCr 2020 / HLG"));
+        ofxSegmentPicture(e, grey, span.timeOf(0), span);
+        QCOMPARE(ofxClipColourspaces(*halve).value(QStringLiteral("Source")), QStringLiteral("rec2100_hlg_display"));
+        // A plug-in without colour management is told nothing.
+        ofxSegmentPicture(model::Effect{QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Tint"), {}}, grey, span.timeOf(0), span);
+        QVERIFY(ofxClipColourspaces(*tint).isEmpty());
+
+        // The project's colour spaces as native ones.
+        QCOMPARE(ofxNativeColourspace(QStringLiteral("YCbCr 601")), QStringLiteral("rec1886_rec709_display"));
+        QCOMPARE(ofxNativeColourspace(QStringLiteral("YCbCr 709")), QStringLiteral("rec1886_rec709_display"));
+        QCOMPARE(ofxNativeColourspace(QStringLiteral("RGB 2020")), QStringLiteral("rec1886_rec2020_display"));
+        QCOMPARE(ofxNativeColourspace(QStringLiteral("YCbCr 2020 / SMPTE 2084")), QStringLiteral("rec2100_pq_display"));
+        QCOMPARE(ofxNativeColourspace(QStringLiteral("DCI-P3")), QStringLiteral("p3_dci_display"));
+        QCOMPARE(ofxNativeColourspace(QStringLiteral("ACES RGB")), QStringLiteral("ACES2065-1"));
+
+        qunsetenv("LUMENIS_NO_OCIO");
+        setOfxOcioConfig(QString());
+        setOfxColourSpace(QStringLiteral("YCbCr 709"));
+        closeOfxInstances();
+    }
+
+    void colourWithOpenColorIO() {
+        if (ofxOcioVersion().isEmpty()) QSKIP("this build has no OpenColorIO");
+        // Our own config: lin_rec709_srgb is the reference, rec1886_rec709_display a 2.4 gamma of it.
+        QTemporaryDir dir;
+        const QString config = dir.filePath(QStringLiteral("test.ocio"));
+        QFile f(config);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.write("ocio_profile_version: 2\n"
+                "roles:\n  default: lin_rec709_srgb\n  scene_linear: lin_rec709_srgb\n  data: Raw\n"
+                "file_rules:\n  - !<Rule> {name: Default, colorspace: default}\n"
+                "displays:\n  sRGB:\n    - !<View> {name: Raw, colorspace: Raw}\n"
+                "colorspaces:\n"
+                "  - !<ColorSpace>\n    name: lin_rec709_srgb\n"
+                "  - !<ColorSpace>\n    name: rec1886_rec709_display\n"
+                "    to_scene_reference: !<ExponentTransform> {value: [2.4, 2.4, 2.4, 1]}\n"
+                "  - !<ColorSpace>\n    name: Raw\n    isdata: true\n");
+        f.close();
+        setOfxOcioConfig(config);
+        QVERIFY(ofxColourConversion());
+        QCOMPARE(ofxOcioConfig(), config);
+        QCOMPARE(ofxHostColourStyle(), QStringLiteral("OfxImageEffectColourManagementOCIO"));
+        registerTestPlugins();
+        const OfxPluginInfo* halve = ofxPluginFor(QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Halve"));
+        QVERIFY(halve);
+        QCOMPARE(ofxColourStyle(*halve), QStringLiteral("OfxImageEffectColourManagementOCIO"));
+
+        // The Source in the linear space it prefers, halved there, and the output back in the project's.
+        setOfxColourSpace(QStringLiteral("RGB 709"));
+        closeOfxInstances();
+        const model::Effect e{QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Halve"), {}};
+        const model::EffectSpan span(10);
+        const Picture grey = Picture::solid(4, 4, QColor(128, 128, 128));
+        auto out = at(ofxSegmentPicture(e, grey, span.timeOf(0), span), 2, 3);
+        const double expected = 128 / 255.0 * std::pow(0.5, 1 / 2.4);
+        QVERIFY2(approx(out[0], expected) && approx(out[2], expected) && approx(out[3], 1.0),
+                 qPrintable(QStringLiteral("%1, not %2").arg(static_cast<double>(out[0])).arg(expected)));
+        QMap<QString, QString> spaces = ofxClipColourspaces(*halve);
+        QCOMPARE(spaces.value(QStringLiteral("Source")), QStringLiteral("lin_rec709_srgb"));
+        QCOMPARE(spaces.value(QStringLiteral("Output")), QStringLiteral("OfxColourspace_Source"));
+
+        // A project colour space the config does not know cannot be converted: the project's it is.
+        setOfxColourSpace(QStringLiteral("DCI-P3"));
+        out = at(ofxSegmentPicture(e, grey, span.timeOf(0), span), 0, 0);
+        QVERIFY(approx(out[0], 128 / 255.0 * 0.5));
+        QCOMPARE(ofxClipColourspaces(*halve).value(QStringLiteral("Source")), QStringLiteral("p3_dci_display"));
+
+        // A config that does not load leaves conversion off.
+        setOfxOcioConfig(dir.filePath(QStringLiteral("missing.ocio")));
+        QVERIFY(!ofxColourConversion());
+        QCOMPARE(ofxHostColourStyle(), QStringLiteral("OfxImageEffectColourManagementCore"));
+
+        setOfxOcioConfig(QString());
+        setOfxColourSpace(QStringLiteral("YCbCr 709"));
+        closeOfxInstances();
+        registerTestPlugins();
     }
 
     void instances() {

@@ -16,6 +16,10 @@ set(LUMENIS_LICENSE_FILES
     ${PROJECT_SOURCE_DIR}/packaging/licenses/miniaudio-LICENSE.txt
     ${PROJECT_SOURCE_DIR}/packaging/licenses/pyaaf2-LICENSE.txt
     ${PROJECT_SOURCE_DIR}/packaging/licenses/pyavb-LICENSE.txt)
+# OpenColorIO is linked only when the build found it (6.11c3, cmake/FindOpenColorIO.cmake).
+if(TARGET OpenColorIO::OpenColorIO)
+    list(APPEND LUMENIS_LICENSE_FILES ${PROJECT_SOURCE_DIR}/packaging/licenses/OpenColorIO-LICENSE.txt)
+endif()
 if(APPLE)
     install(FILES ${LUMENIS_LICENSE_FILES} DESTINATION .)
 else()

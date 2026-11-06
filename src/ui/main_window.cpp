@@ -5324,6 +5324,8 @@ void MainWindow::applySettings() {
         media::setOfxFrameRate(project_->settings.format.editRate.toDouble());
         // And its size, the canonical coordinates of their parameters and overlays (6.11c2).
         media::setOfxProjectSize(QSize(project_->settings.format.width, project_->settings.format.height));
+        // And its colour space, the one their clips' images are in unless OpenColorIO converts them (6.11c3).
+        media::setOfxColourSpace(project_->settings.colorSpace);
         effectEditor_->setInterlacedProject(project_->settings.format.scan == ScanMode::Interlaced);
         // The YC Waveform's PAL or NTSC scale (FX Guide p.690): PAL for 25 and 50 fps projects (ours).
         if (CorrectionMonitors* m = composer_->correctionMonitors()) {

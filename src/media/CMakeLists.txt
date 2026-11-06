@@ -37,6 +37,8 @@ add_library(lumenis_media STATIC
     audio_input.cpp
     clap_host.cpp
     ofx_host.cpp
+    ocio_colour.cpp
+    ocio_colour.h
     link.cpp
     ltc.cpp
     tone.cpp
@@ -80,6 +82,11 @@ target_link_libraries(lumenis_media
     PUBLIC lumenis::core lumenis::ext lumenis::model Qt6::Gui
     PRIVATE lumenis::miniaudio lumenis::clap lumenis::openfx FFmpeg::avformat FFmpeg::avcodec FFmpeg::swscale FFmpeg::swresample FFmpeg::avutil)
 target_compile_definitions(lumenis_media PRIVATE LUMENIS_PATENT_CODECS=$<BOOL:${LUMENIS_PATENT_CODECS}>)
+# The OFX host's colour conversions (ocio_colour.cpp) use OpenColorIO when it was found; ocio_colour.h is the same either way.
+if(TARGET OpenColorIO::OpenColorIO)
+    target_link_libraries(lumenis_media PRIVATE OpenColorIO::OpenColorIO)
+    target_compile_definitions(lumenis_media PRIVATE LUMENIS_HAVE_OCIO=1)
+endif()
 lumenis_set_warnings(lumenis_media)
 
 # MSVC 14.44 (cl 14.44.35207) stops with an internal compiler error (C1001) generating code for key_effects.cpp's RGB

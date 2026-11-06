@@ -405,6 +405,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   only during a push button's action.
   6.11c2: V2 overlays only (no OpenGL for V1), the standard overlay colours, stipples drawn dashed, the pixel scale,
   1920 x 1080 canonical until the project's size is set.
+  6.11c3 (colour management; the guide is silent on it): the project colour spaces' native names (601 as Rec.709,
+  ACES RGB as ACES2065-1), Core without OpenColorIO and OCIO with it, the automatic config ($OCIO, then the built-in
+  studio config), only colour-managed plug-ins asked for clip preferences, the project's colour space when a
+  preference cannot be supplied, sRGB as the display of a scene-referred project, no OCIO display or view.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

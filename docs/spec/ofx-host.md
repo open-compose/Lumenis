@@ -12,7 +12,7 @@ CLAP host (docs/spec/clap-host.md).
 6.11b2 handles missing plug-ins, templates of plug-in effects and
 `closeallofxplugins`. 6.11c1 adds plug-ins with several inputs, the
 Angle control and push buttons; 6.11c2 overlays and the project's size;
-6.11c3 OCIO.
+6.11c3 colour management, with OpenColorIO where it is installed.
 
 ## Finding plug-ins (`src/media/ofx_host.*`)
 
@@ -228,6 +228,72 @@ the bottom of the Effect Editor" (p.162).
   size render. Until set, a picture's own size (scale 1) and 1920 x 1080
   for overlays.
 
+## Colour management (6.11c3)
+
+The guide says nothing of colour management for plug-ins; this follows the
+OpenFX 1.5 colour management standard (`ofxColour.h`), with OpenColorIO
+(BSD 3-Clause) as an optional library (`cmake/FindOpenColorIO.cmake`,
+`LUMENIS_OCIO`; `src/media/ocio_colour.*` keeps its headers out of the
+host). All of it is ours.
+
+* **The project's colour space** (`setOfxColourSpace`, the project's Color
+  Space from `MainWindow`) is the one every picture is in. Its native OFX
+  name (`ofxNativeColourspace`, from the config header
+  `ofx-native-v1.5_aces-v1.3_ocio-v2.3.h`):
+
+  | Project | Native colour space |
+  |---|---|
+  | YCbCr 601, YCbCr 709, RGB 709 | `rec1886_rec709_display` (601's primaries are close to 709's) |
+  | YCbCr 2020, RGB 2020 | `rec1886_rec2020_display` |
+  | YCbCr 2020 / SMPTE 2084 | `rec2100_pq_display` |
+  | YCbCr 2020 / HLG | `rec2100_hlg_display` |
+  | DCI-P3 | `p3_dci_display` |
+  | ACES RGB | `ACES2065-1` |
+
+* **The style** (`kOfxImageEffectPropColourManagementStyle`): the host
+  offers OCIO when OpenColorIO has a config, else Core, with the native
+  config `ofx-native-v1.5_aces-v1.3_ocio-v2.3`. Each plug-in gets the higher
+  of the two styles both sides have (OCIO > Full > Core > Basic,
+  `ofxColourStyle`); a plug-in that lists native configs without ours, or
+  asks for none, gets none, and its clips are told nothing.
+* **The config:** `setOfxOcioConfig`'s file or `ocio://` URI, else the
+  `OCIO` environment variable's, else the ACES studio config built into
+  OpenColorIO 2.3 (2.2's older one otherwise; 2.1 has none).
+  `LUMENIS_NO_OCIO=1` turns conversion off. A config that does not load
+  leaves conversion off.
+* **Before each render** of a colour-managed plug-in the instance is told
+  the style, the native config, the OCIO config (in the OCIO style) and the
+  display colour space (the project's when it is a display one, else
+  `srgb_display`). The host then asks for the clips' preferences
+  (`kOfxImageEffectActionGetClipPreferences`, which other plug-ins are not
+  asked) and gives each connected input clip the first colour space in its
+  `OfxImageClipPropPreferredColourspaces_<clip>` it can supply:
+  * the project's, by its native or basic name;
+  * a raw or data colour space (`ofx_raw`, `Raw`, the `data` role): the
+    pixels as they are;
+  * another clip's (`OfxColourspace_<clip>`);
+  * with OpenColorIO, any colour space the config knows, by name, alias or
+    role (`ofx_scene_linear` through the `scene_linear` role,
+    `ofx_scene_log` through `compositing_log` or `color_timing`): the image
+    is converted into it from the project's.
+
+  Otherwise the project's. The clip is told which
+  (`kOfxImageClipPropColourspace`) and keeps its preferences
+  (`kOfxImageClipPropPreferredColourspaces`). Masks and unconnected clips
+  have none.
+* **The output:** the host asks for its colour space
+  (`kOfxImageEffectActionGetOutputColourspace`, preferring the project's);
+  a plug-in that does not answer has the first input's. With OpenColorIO
+  the output is converted back into the project's colour space.
+* **Conversions** are OpenColorIO's CPU processors, cached per pair. Colour
+  is unpremultiplied around them where alpha is between 0 and 1. A failed
+  conversion leaves the image as it is and is reported in the Console once
+  per instance. Without OpenColorIO, or when the config does not know the
+  project's colour space, nothing is converted.
+* **Not done:** OCIO displays and views (`kOfxImageEffectPropOCIODisplay`,
+  `View`; plug-ins have no viewport of their own here); a choice of
+  config or colour space in the user interface.
+
 ## Missing plug-ins, templates and closing (6.11b2)
 
 * **The tag:** a plug-in effect applied from the palette gets the
@@ -304,3 +370,12 @@ Questions are answered No during the scan.
   beyond a turn and the push button's values; `tst_ofx_palette` the
   dialog, applying with a number chosen or cancelled, the Angle control's
   drag and keys, and the button kept in the effect.
+* 6.11c3: the seventh plug-in, a Filter asking for OCIO colour management
+  that prefers `lin_rec709_srgb` and halves its picture. `tst_ofx_host`
+  checks, without conversion (`LUMENIS_NO_OCIO=1`), the Core style, the
+  project's colour space given and told, a plug-in without colour
+  management told nothing and the native names; and, where the build has
+  OpenColorIO, with a config of its own (a 2.4 gamma between
+  `rec1886_rec709_display` and `lin_rec709_srgb`), the OCIO style, the
+  conversion in and out, a project colour space the config lacks, and a
+  config that does not load.

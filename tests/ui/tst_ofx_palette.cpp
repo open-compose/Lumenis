@@ -66,7 +66,7 @@ private slots:
         QStringList errors;
         const auto plugins = media::scanOfxPlugins({QStringLiteral(LUMENIS_TEST_OFX)}, &errors);
         QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QLatin1Char('\n'))));
-        QCOMPARE(media::registerOfxPlugins(plugins), 4);
+        QCOMPARE(media::registerOfxPlugins(plugins), 5);
     }
 
     void catalog() {
@@ -89,7 +89,7 @@ private slots:
         QVERIFY(!c.find(QStringLiteral("OFX Plug-Ins"), QStringLiteral("Test Paint")));
         int fromPlugins = 0;
         for (const EffectInfo& e : c.all()) fromPlugins += e.ofxPlugin.isEmpty() ? 0 : 1;
-        QCOMPARE(fromPlugins, 4);
+        QCOMPARE(fromPlugins, 5);
         // Its parameters, a category of the Effect Editor's.
         QCOMPARE(tint->parameters, QStringList{QStringLiteral("Test Tint Plug-In Parameters")});
         const QList<EffectParameter>* params = effectParameters(QStringLiteral("Test Tint Plug-In Parameters"));
@@ -358,7 +358,7 @@ private slots:
         QVERIFY(list);
         QStringList names;
         for (int i = 0; i < list->count(); ++i) names << list->item(i)->text();
-        QCOMPARE(names, (QStringList{QStringLiteral("Test Tint"), QStringLiteral("Test Noise")}));
+        QCOMPARE(names, (QStringList{QStringLiteral("Test Tint"), QStringLiteral("Test Noise"), QStringLiteral("Test Halve")}));
     }
 };
 

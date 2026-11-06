@@ -90,7 +90,7 @@ an official build.
 | ScriptSync / PhraseFind equivalent | whisper.cpp (MIT) with Whisper models (MIT), plus our own transcript / phonetic index | Apple Speech framework, Windows speech | Commercial engines or cloud ASR |
 | Effect plug-ins | OpenFX host (BSD) | — | AVX bridge (Avid SDK) |
 | Audio plug-ins | CLAP host (MIT; built in since 5.5b); VST3 host (check the SDK licence when we start, since Steinberg has moved it to an open licence) | Audio Units (macOS) | AAX bridge (Avid SDK) |
-| Colour management | OpenColorIO (BSD), ACES | — | — |
+| Colour management | OpenColorIO (BSD), ACES; optional, for OFX plug-ins since 6.11c3 (docs/spec/ofx-host.md) | — | — |
 | Video I/O hardware | AJA NTV2 SDK (MIT) | Blackmagic Desktop Video driver (installed by the user) | Other vendors' SDKs |
 | Shared storage | Bin locking on any NAS/SAN | — | NEXIS client, MediaCentral |
 

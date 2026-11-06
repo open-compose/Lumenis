@@ -25,6 +25,7 @@
 #include <QSize>
 
 #include <QList>
+#include <QMap>
 #include <QString>
 #include <QStringList>
 #include <QVariant>
@@ -74,6 +75,10 @@ struct OfxPluginInfo {
     QList<OfxClipInfo> inputs; // the input clips (all but Output), in the order defined
     QList<OfxParamInfo> params;
     QString error;         // why it could not be described; empty when it could
+    // Colour management (6.11c3): the style it asked for (kOfxImageEffectPropColourManagementStyle, empty for none)
+    // and the native configs it knows (kOfxImageEffectPropColourManagementAvailableConfigs).
+    QString colourStyle;
+    QStringList colourConfigs;
     // Whether it can be an effect here (a Filter, Generator, Transition or General context, described), and if not why.
     bool usable() const;
     QString whyNot() const;
@@ -244,6 +249,36 @@ QSize ofxProjectSize();
 
 // The frame rate plug-ins are told (kOfxImageEffectPropFrameRate); the application sets the project's. 30 until set.
 void setOfxFrameRate(double rate);
+
+// ---------------------------------------------------------------- colour management (6.11c3)
+// The OFX 1.5 colour management (ofxColour.h; docs/spec/ofx-host.md "Colour management"). Plug-ins are told the
+// colour space of each clip's images. With OpenColorIO (optional; ofxColourConversion()) the host converts input
+// images into the colour space a plug-in prefers (kOfxImageClipPropPreferredColourspaces) and its output back into
+// the project's; without it every image is in the project's colour space and says so.
+
+// The project's colour space, one of colorSpacesFor()'s texts ("YCbCr 709" until set); the application sets it.
+void setOfxColourSpace(const QString& projectColorSpace);
+// The OFX native colour space (ofx-native-v1.5_aces-v1.3_ocio-v2.3.h) a project colour space's pictures are in
+// (ours): Rec.1886 Rec.709 for 601 and 709, Rec.1886 Rec.2020, Rec.2100 PQ or HLG, P3-DCI, ACES2065-1.
+QString ofxNativeColourspace(const QString& projectColorSpace);
+// The style the host offers (kOfxImageEffectPropColourManagementStyle): OCIO when OpenColorIO has a config, else Core.
+QString ofxHostColourStyle();
+// The style used with `plugin`: the higher of the two styles both sides have (OCIO > Full > Core > Basic), or
+// kOfxImageEffectColourManagementNone when the plug-in asks for none.
+QString ofxColourStyle(const OfxPluginInfo& plugin);
+// The version of OpenColorIO this build uses ("2.1.3"); empty in a build without it.
+QString ofxOcioVersion();
+// Whether images are converted: this build has OpenColorIO and it found a config (ofxOcioConfig()).
+bool ofxColourConversion();
+// OpenColorIO's config: a file or an ocio:// URI, empty for automatic (the OCIO environment variable's, else the
+// library's built-in ACES studio config). LUMENIS_NO_OCIO=1 turns conversion off. Instances made before keep their
+// properties until the next render.
+void setOfxOcioConfig(const QString& config);
+// The config in use, empty when there is none.
+QString ofxOcioConfig();
+// The colour space of each of `plugin`'s clips (Output included) at its last render, as the plug-in was told
+// (kOfxImageClipPropColourspace); empty when it was rendered without colour management or not at all.
+QMap<QString, QString> ofxClipColourspaces(const OfxPluginInfo& plugin);
 // Destroys every plug-in instance (kOfxActionDestroyInstance); the next render makes them again. Returns how many.
 int closeOfxInstances();
 

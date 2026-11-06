@@ -1,5 +1,5 @@
 // An OFX binary of our own for the OFX host's tests (tests/media/tst_ofx_host.cpp; docs/spec/ofx-host.md), built as
-// CutthulhuTest.ofx inside test-ofx/CutthulhuTest.ofx.bundle/Contents/<architecture>/. It offers six plug-ins:
+// CutthulhuTest.ofx inside test-ofx/CutthulhuTest.ofx.bundle/Contents/<architecture>/. It offers seven plug-ins:
 // - "org.cutthulhu.test.tint": a Filter in "Cutthulhu Tests/Colour" with Amount (double, 0-1, default 0.5), Channel (a
 //   choice of Red, Green, Blue), Invert (a boolean), Colour (RGB) and a secret one; its description names the host and
 //   the threads the multithread suite ran. It renders the source with the chosen channel set to Amount (times the
@@ -16,7 +16,12 @@
 //   its colours are inverted while Spin is 180 or more. 6.11c2: a Centre (Double2D in canonical coordinates, default
 //   960, 540), marked white in the picture at the render scale; and an overlay (V2, the Draw suite) drawing a yellow
 //   square of 40 units round the Centre with the text "centre", which a press within 30 units of it takes and drags.
+// - "org.cutthulhu.test.halve" (6.11c3): a Filter in "Cutthulhu Tests/Colour" asking for OCIO colour management. It
+//   prefers its Source in "lin_rec709_srgb", then the basic scene linear, says its output is in the Source's colour
+//   space ("OfxColourspace_Source"), and halves the colour of what it is given. Its description is the host's colour
+//   management style.
 // Plus one plug-in of another API, which the host skips.
+#include <ofxColour.h>
 #include <ofxCore.h>
 #include <ofxDrawSuite.h>
 #include <ofxInteract.h>
@@ -243,6 +248,37 @@ OfxStatus paintDescribe(OfxImageEffectHandle e) {
 
 // ---------------------------------------------------------------- rendering
 
+// ---------------------------------------------------------------- halve (6.11c3)
+
+OfxStatus halveDescribe(OfxImageEffectHandle e) {
+    OfxPropertySetHandle p = effectProps(e);
+    gProps->propSetString(p, kOfxPropLabel, 0, "Test Halve");
+    gProps->propSetString(p, kOfxImageEffectPluginPropGrouping, 0, "Cutthulhu Tests/Colour");
+    gProps->propSetString(p, kOfxImageEffectPropSupportedContexts, 0, kOfxImageEffectContextFilter);
+    gProps->propSetString(p, kOfxImageEffectPropSupportedPixelDepths, 0, kOfxBitDepthFloat);
+    gProps->propSetString(p, kOfxImageEffectPropColourManagementStyle, 0, kOfxImageEffectColourManagementOCIO);
+    gProps->propSetString(p, kOfxImageEffectPropColourManagementAvailableConfigs, 0, kOfxConfigIdentifier);
+    char* style = nullptr;
+    gProps->propGetString(gHost->host, kOfxImageEffectPropColourManagementStyle, 0, &style);
+    gProps->propSetString(p, kOfxPropPluginDescription, 0, style ? style : "none");
+    return kOfxStatOK;
+}
+
+OfxStatus halveDescribeInContext(OfxImageEffectHandle e) {
+    defineClip(e, kOfxImageEffectSimpleSourceClipName);
+    defineClip(e, kOfxImageEffectOutputClipName);
+    return kOfxStatOK;
+}
+
+OfxStatus halveClipPreferences(OfxPropertySetHandle out) {
+    const char* const prefs[] = {kOfxColourspaceLinRec709Srgb, kOfxColourspaceOfxSceneLinear};
+    return gProps->propSetStringN(out, "OfxImageClipPropPreferredColourspaces_Source", 2, prefs);
+}
+
+OfxStatus halveOutputColourspace(OfxPropertySetHandle out) {
+    return gProps->propSetString(out, kOfxImageClipPropColourspace, 0, "OfxColourspace_Source");
+}
+
 // An image the host gave: its pixels, bounds and row bytes.
 struct Pixels {
     OfxPropertySetHandle props = nullptr;
@@ -312,6 +348,23 @@ OfxStatus tintRender(OfxImageEffectHandle e, OfxPropertySetHandle in) {
             if (invert) {
                 for (int c = 0; c < 3; ++c) d[c] = s[3] - d[c];
             }
+        }
+    }
+    gEffects->clipReleaseImage(src.props);
+    gEffects->clipReleaseImage(dst.props);
+    return kOfxStatOK;
+}
+
+OfxStatus halveRender(OfxImageEffectHandle e, OfxPropertySetHandle in) {
+    const double t = timeOf(in);
+    Pixels src, dst;
+    if (!fetch(e, kOfxImageEffectSimpleSourceClipName, t, src) || !fetch(e, kOfxImageEffectOutputClipName, t, dst)) return kOfxStatFailed;
+    for (int y = dst.y1; y < dst.y2; ++y) {
+        for (int x = dst.x1; x < dst.x2; ++x) {
+            const float* s = src.at(x, y);
+            float* d = dst.at(x, y);
+            for (int c = 0; c < 3; ++c) d[c] = s[c] * 0.5f;
+            d[3] = s[3];
         }
     }
     gEffects->clipReleaseImage(src.props);
@@ -473,6 +526,7 @@ OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle
         case 2: return noiseDescribe(e);
         case 3: return brokenDescribe(e);
         case 5: return compositeDescribe(e);
+        case 6: return halveDescribe(e);
         default: return paintDescribe(e);
         }
     }
@@ -482,6 +536,7 @@ OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle
         case 1: return wipeDescribeInContext(e);
         case 2: return noiseDescribeInContext(e, in);
         case 5: return compositeDescribeInContext(e);
+        case 6: return halveDescribeInContext(e);
         default: return kOfxStatOK;
         }
     }
@@ -502,10 +557,13 @@ OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle
         case 1: return wipeRender(e, in);
         case 2: return noiseRender(e, in);
         case 5: return compositeRender(e, in);
+        case 6: return halveRender(e, in);
         default: return kOfxStatFailed;
         }
     }
     if (std::strcmp(action, kOfxActionInstanceChanged) == 0 && Kind == 5) return compositeInstanceChanged(e, in);
+    if (std::strcmp(action, kOfxImageEffectActionGetClipPreferences) == 0 && Kind == 6) return halveClipPreferences(out);
+    if (std::strcmp(action, kOfxImageEffectActionGetOutputColourspace) == 0 && Kind == 6) return halveOutputColourspace(out);
     return kOfxStatReplyDefault;
 }
 
@@ -517,6 +575,7 @@ OfxPlugin gPlugins[] = {
     {kOfxImageEffectPluginApi, kOfxImageEffectPluginApiVersion, "org.cutthulhu.test.paint", 1, 0, setHost, mainEntry<4>},
     {"SomeOtherApi", 1, "org.cutthulhu.test.other", 1, 0, setHost, mainEntry<4>},
     {kOfxImageEffectPluginApi, kOfxImageEffectPluginApiVersion, "org.cutthulhu.test.composite", 1, 0, setHost, mainEntry<5>},
+    {kOfxImageEffectPluginApi, kOfxImageEffectPluginApiVersion, "org.cutthulhu.test.halve", 1, 0, setHost, mainEntry<6>},
 };
 
 } // namespace
