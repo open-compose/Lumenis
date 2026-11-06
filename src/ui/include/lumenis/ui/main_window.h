@@ -331,6 +331,11 @@ public:
     // chosen Export setting (p.1173-1177). The hook stands in for the
     // dialog (tests; true: Save).
     void exportToFile();
+    // One sequence or clip as a MOV or MP4 movie (7.1a, docs/spec/movie-export.md) with the Export setting's options:
+    // the picture through the compositor, the sound through the mixdown's mix. `format` is the Export As value ("mov",
+    // "mp4", "qtMovie"). False with the reason in `error`.
+    bool exportMovieFile(const model::BinItem& item, const QString& binId, const QString& path, const QString& format,
+                         QString* error);
     // File > Export Matte PICT (FX Guide p.418): the Effect Editor's AniMatte matte at the position, at the project's
     // raster, through the Export PICT As dialog (`path` given: no dialog). False when nothing was written.
     bool exportMattePict(const QString& path = QString());

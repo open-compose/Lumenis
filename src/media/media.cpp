@@ -1356,6 +1356,9 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
         if (!codecAllowed(s.videoCodec)) return failed(QStringLiteral("%1 is not available in this build").arg(s.videoCodec));
         const AVCodec* codec = avcodec_find_encoder_by_name(s.videoCodec.toUtf8().constData());
         if (!codec) return failed(QStringLiteral("no encoder %1").arg(s.videoCodec));
+        // The codec, not only the encoder's name: libx264 is H.264 (docs/EXTENSIONS.md).
+        if (!codecAllowed(QString::fromUtf8(avcodec_get_name(codec->id))))
+            return failed(QStringLiteral("%1 is not available in this build").arg(s.videoCodec));
         // Set up and opened with `threads` (0: automatic). An encoder whose per-thread buffers do not fit in
         // the memory there is (DNx on a many-core machine running other jobs: "Cannot allocate memory") is
         // opened again with one thread (BUILDING.md, Troubleshooting).
@@ -1376,7 +1379,7 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
             d.venc->colorspace = d.rec709 ? AVCOL_SPC_BT709 : AVCOL_SPC_SMPTE170M;
             d.venc->color_primaries = d.rec709 ? AVCOL_PRI_BT709 : AVCOL_PRI_SMPTE170M;
             d.venc->color_trc = d.rec709 ? AVCOL_TRC_BT709 : AVCOL_TRC_SMPTE170M;
-            d.venc->color_range = AVCOL_RANGE_MPEG;
+            d.venc->color_range = s.fullRange ? AVCOL_RANGE_JPEG : AVCOL_RANGE_MPEG;
             if (s.bitRate > 0) d.venc->bit_rate = s.bitRate;
             d.venc->thread_count = threads;
             if (globalHeader) d.venc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
@@ -1402,6 +1405,8 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
         if (!codecAllowed(s.audioCodec)) return failed(QStringLiteral("%1 is not available in this build").arg(s.audioCodec));
         const AVCodec* codec = avcodec_find_encoder_by_name(s.audioCodec.toUtf8().constData());
         if (!codec) return failed(QStringLiteral("no encoder %1").arg(s.audioCodec));
+        if (!codecAllowed(QString::fromUtf8(avcodec_get_name(codec->id))))
+            return failed(QStringLiteral("%1 is not available in this build").arg(s.audioCodec));
         d.aenc = avcodec_alloc_context3(codec);
         d.aenc->sample_rate = s.sampleRate;
         av_channel_layout_default(&d.aenc->ch_layout, s.channels);
@@ -1458,8 +1463,9 @@ bool MediaWriter::writeVideo(const QImage& image) {
     if (!d.sws) return d.fail(QStringLiteral("cannot convert the picture"));
     const int space = d.rec709 ? SWS_CS_ITU709 : SWS_CS_SMPTE170M;
     // RGB is full range; Y'CbCr legal range.
-    sws_setColorspaceDetails(d.sws, sws_getCoefficients(SWS_CS_DEFAULT), 1, sws_getCoefficients(space),
-                             isRgbFormat(d.venc->pix_fmt) ? 1 : 0, 0, 1 << 16, 1 << 16);
+    const bool fullOut = isRgbFormat(d.venc->pix_fmt) || d.venc->color_range == AVCOL_RANGE_JPEG;
+    sws_setColorspaceDetails(d.sws, sws_getCoefficients(SWS_CS_DEFAULT), 1, sws_getCoefficients(space), fullOut ? 1 : 0, 0,
+                             1 << 16, 1 << 16);
     av_frame_make_writable(d.vframe);
     const std::uint8_t* src[4] = {rgba.constBits(), nullptr, nullptr, nullptr};
     const int srcStride[4] = {static_cast<int>(rgba.bytesPerLine()), 0, 0, 0};
@@ -1467,7 +1473,7 @@ bool MediaWriter::writeVideo(const QImage& image) {
     d.vframe->colorspace = d.venc->colorspace;
     d.vframe->color_primaries = d.venc->color_primaries;
     d.vframe->color_trc = d.venc->color_trc;
-    d.vframe->color_range = AVCOL_RANGE_MPEG;
+    d.vframe->color_range = d.venc->color_range;
     d.vframe->pts = d.vpts++;
     return d.encode(d.venc, d.vst, d.vframe);
 }

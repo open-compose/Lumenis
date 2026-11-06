@@ -409,6 +409,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   ACES RGB as ACES2065-1), Core without OpenColorIO and OCIO with it, the automatic config ($OCIO, then the built-in
   studio config), only colour-managed plug-ins asked for clip preferences, the project's colour space when a
   preference cannot be supplied, sRGB as the display of a scene-referred project, no OCIO display or view.
+* Movie export (docs/spec/movie-export.md, 7.1a): one Compression menu naming each family in place of the three
+  menus, its entries and encoders, the Bit Rate as one value, the Image Size presets, Center crop filling the raster,
+  even sizes, Opus in MP4s without AAC, a clip exported through an AutoSequence, the marks of the monitor showing the
+  item, all tracks for an item not in the Record monitor, several items written beside the first.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

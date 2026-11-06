@@ -193,6 +193,8 @@ struct WriterSettings {
     Rational frameRate{25, 1};
     QString pixelFormat; // empty: the codec's first
     std::int64_t bitRate = 0;
+    // Full range (0-255) rather than legal range Y'CbCr (Color Levels, Editing Guide p.881; movie export, 7.1a).
+    bool fullRange = false;
     // Audio; empty codec for none.
     QString audioCodec;  // "pcm_s16le", "pcm_s24le", ...
     int sampleRate = 48000;

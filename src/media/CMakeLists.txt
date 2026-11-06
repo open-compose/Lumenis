@@ -38,6 +38,7 @@ add_library(lumenis_media STATIC
     clap_host.cpp
     ofx_host.cpp
     ocio_colour.cpp
+    movie_export.cpp
     ocio_colour.h
     link.cpp
     ltc.cpp
@@ -65,6 +66,7 @@ add_library(lumenis_media STATIC
     include/lumenis/media/audio_input.h
     include/lumenis/media/clap_host.h
     include/lumenis/media/ofx_host.h
+    include/lumenis/media/movie_export.h
     include/lumenis/media/link.h
     include/lumenis/media/ltc.h
     include/lumenis/media/tone.h

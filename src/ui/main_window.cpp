@@ -40,6 +40,7 @@
 #include "lumenis/model/title_clip.h"
 #include "lumenis/model/titler.h"
 #include "lumenis/media/mixdown.h"
+#include "lumenis/media/movie_export.h"
 #include "lumenis/media/render.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/ui/bin_container.h"
@@ -3178,12 +3179,16 @@ void MainWindow::exportToFile() {
         return exportAs == QLatin1String("avb")      ? QStringLiteral("avb")
                : exportAs == QLatin1String("ale")    ? QStringLiteral("ale")
                : exportAs == QLatin1String("fcpxml") ? QStringLiteral("xml")
+               : exportAs == QLatin1String("mp4")    ? QStringLiteral("mp4")
+               : exportAs == QLatin1String("mov") || exportAs == QLatin1String("qtMovie") ? QStringLiteral("mov")
                                                      : QStringLiteral("aaf");
     };
     auto filterOf = [](const QString& exportAs) {
         return exportAs == QLatin1String("avb")      ? tr("Media Composer bins (*.avb)")
                : exportAs == QLatin1String("ale")    ? tr("Avid Log Exchange (*.ale)")
                : exportAs == QLatin1String("fcpxml") ? tr("Final Cut Pro 7 XML (*.xml)")
+               : exportAs == QLatin1String("mp4")    ? tr("MP4 movies (*.mp4)")
+               : exportAs == QLatin1String("mov") || exportAs == QLatin1String("qtMovie") ? tr("QuickTime movies (*.mov)")
                                                      : tr("AAF files (*.aaf)");
     };
     const QString exportAs = settings_->text(QStringLiteral("Export"), QStringLiteral("exportAs"));
@@ -3210,10 +3215,11 @@ void MainWindow::exportToFile() {
         settings_->commit(model::SettingsScope::User);
     }
     const QString format = settings_->text(QStringLiteral("Export"), QStringLiteral("exportAs"));
+    const bool movie = format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie");
     if (format != QLatin1String("aaf") && format != QLatin1String("avb") && format != QLatin1String("ale") &&
-        format != QLatin1String("fcpxml")) {
-        ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange, Media Composer bins and Final Cut Pro 7 XML "
-                                         "can be exported so far (Export As in the Export setting)."));
+        format != QLatin1String("fcpxml") && !movie) {
+        ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange, Media Composer bins, Final Cut Pro 7 XML, MOV "
+                                         "and MP4 can be exported so far (Export As in the Export setting)."));
         return;
     }
     const model::BinItem* firstSequence = nullptr;
@@ -3231,7 +3237,8 @@ void MainWindow::exportToFile() {
     if (QFileInfo(path).suffix().compare(suffix, Qt::CaseInsensitive) != 0) {
         const QString old = QFileInfo(path).suffix();
         if (old.compare(QLatin1String("aaf"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("avb"), Qt::CaseInsensitive) == 0 ||
-            old.compare(QLatin1String("ale"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("xml"), Qt::CaseInsensitive) == 0) {
+            old.compare(QLatin1String("ale"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("xml"), Qt::CaseInsensitive) == 0 ||
+            old.compare(QLatin1String("mov"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("mp4"), Qt::CaseInsensitive) == 0) {
             path.chop(old.size() + 1);
         }
         path += QLatin1Char('.') + suffix;
@@ -3244,6 +3251,28 @@ void MainWindow::exportToFile() {
     QString error;
     QStringList warnings;
     qsizetype count = selected.size();
+    if (movie) {
+        // Each sequence or clip selected as a movie (7.1a): the first at the path chosen, the others beside it
+        // under their own names (ours).
+        QApplication::restoreOverrideCursor();
+        count = 0;
+        for (int i = 0; i < selected.size(); ++i) {
+            QString to = path;
+            if (i > 0) {
+                QString name = selected.at(i).name;
+                name.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
+                to = QFileInfo(path).absoluteDir().filePath(name + QLatin1Char('.') + suffix);
+            }
+            QString why;
+            if (exportMovieFile(selected.at(i), doc.nodeId(), to, format, &why)) {
+                ++count;
+                ConsoleLog::instance().append(tr("Export to File: %1").arg(QDir::toNativeSeparators(to)));
+            } else {
+                ConsoleLog::instance().append(tr("Export to File: %1: %2").arg(selected.at(i).name, why));
+            }
+        }
+        return;
+    }
     if (format == QLatin1String("ale")) {
         // A shot log of the master clips and subclips selected (p.130, p.1174), with the bin's
         // columns.
@@ -3470,6 +3499,123 @@ QStringList MainWindow::importEdl() {
 
 // The bin's Text view columns and custom columns go out, so the log holds what the bin shows (p.129
 // step 1: "click the Text tab to display all clip information").
+bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binId, const QString& path, const QString& format,
+                                 QString* error) {
+    auto fail = [&](const QString& text) {
+        if (error) *error = text;
+        return false;
+    };
+    if (!project_) return fail(tr("Open a project first."));
+    // A sequence as it is; a clip through a sequence of its own (AutoSequence of the one clip).
+    model::BinItem sequenceItem;
+    model::Sequence seq;
+    if (item.kind == model::BinItemKind::Sequence) {
+        sequenceItem = item;
+        seq = model::Sequence::fromItem(item);
+    } else {
+        const model::AutoSequenceResult made = model::autoSequence({item}, binId, false);
+        if (!made.ok()) return fail(tr("Only sequences and clips can be exported as movies."));
+        seq = made.sequence;
+        sequenceItem = item;
+        sequenceItem.kind = model::BinItemKind::Sequence;
+        seq.storeIn(sequenceItem);
+    }
+    const Settings& s = *settings_;
+    auto flag = [&](const char* key) { return s.flag(QStringLiteral("Export"), QLatin1String(key)); };
+    auto text = [&](const char* key) { return s.text(QStringLiteral("Export"), QLatin1String(key)); };
+    // Use Marks: the marks of the monitor the item is shown in ("Mark IN and OUT points to export the marked range from
+    // a bin or a monitor. If you mark an IN point and no OUT point, Media Composer exports from the IN point to the end",
+    // p.868); the whole item otherwise.
+    std::int64_t start = 0;
+    std::int64_t end = seq.duration();
+    const model::LoadedClip* shown = nullptr;
+    for (MonitorId m : {MonitorId::Record, MonitorId::Source}) {
+        const model::LoadedClip* c = composer_->state(m).current();
+        if (c && c->item.id == item.id && !shown) shown = c;
+    }
+    const bool inRecord = shown && shown == composer_->state(MonitorId::Record).current();
+    if (flag("useMarks") && shown) {
+        if (shown->in) start = std::clamp<std::int64_t>(*shown->in, 0, end);
+        if (shown->out) end = std::clamp<std::int64_t>(*shown->out + 1, start, end);
+    }
+    if (end <= start) return fail(tr("There is nothing to export."));
+    // Use Selected Tracks: "the tracks that are enabled in the Timeline" (p.1175), for the sequence in the Record
+    // monitor; every track otherwise. Inactive audio tracks only with Include Inactive Audio Tracks.
+    QStringList selected;
+    if (flag("useSelectedTracks") && inRecord) selected = timeline_->patch().selectedRecordTracks(seq);
+    QStringList video, audio;
+    const QStringList shownVideo = inRecord ? shownVideoTracks(MonitorId::Record, seq) : QStringList();
+    for (const model::Track& t : seq.tracks()) {
+        if (!selected.isEmpty() && !selected.contains(t.name())) continue;
+        if (t.kind == model::TrackKind::Video && (!inRecord || shownVideo.contains(t.name()))) video << t.name();
+        if (t.kind == model::TrackKind::Audio && (!t.inactive || flag("includeInactiveAudio"))) audio << t.name();
+    }
+    media::MovieExportOptions o;
+    o.container = format == QLatin1String("mp4") ? media::MovieContainer::Mp4 : media::MovieContainer::Mov;
+    const QString tracks = text("movieTracks");
+    o.video = tracks != QLatin1String("audio") && !video.isEmpty();
+    o.audio = tracks != QLatin1String("video") && !audio.isEmpty();
+    if (!o.video && !o.audio) return fail(tr("There are no tracks to export."));
+    o.compression = text("movieCompression");
+    o.bitRateMbps = s.value(QStringLiteral("Export"), QStringLiteral("movieBitRate")).toInt();
+    const QString size = text("movieImageSize");
+    if (size != QLatin1String("project")) o.size = QSize(size.section(QLatin1Char('x'), 0, 0).toInt(), size.section(QLatin1Char('x'), 1, 1).toInt());
+    const QString scaling = text("movieScaling");
+    o.scaling = scaling == QLatin1String("stretch") ? media::MovieScaling::Stretch
+                : scaling == QLatin1String("crop")  ? media::MovieScaling::CenterCrop
+                : scaling == QLatin1String("keep")  ? media::MovieScaling::CenterKeepSize
+                                                    : media::MovieScaling::Letterbox;
+    o.fullRange = text("movieColorLevels") == QLatin1String("full");
+    const QString layout = text("movieAudioFormat");
+    const media::MixdownFormat mix = layout == QLatin1String("mono")  ? media::MixdownFormat::Mono
+                                     : layout == QLatin1String("5.1") ? media::MixdownFormat::Surround51
+                                     : layout == QLatin1String("7.1") ? media::MixdownFormat::Surround71
+                                                                      : media::MixdownFormat::Stereo;
+    o.audioChannels = media::mixdownChannels(mix);
+    o.aac = text("movieAudioCodec") == QLatin1String("aac");
+    o.sampleRate = text("movieSampleRate").toInt();
+    o.bitDepth = text("movieBitDepth").toInt();
+    // The item's timecode is embedded (p.881).
+    o.startTimecode = QString::fromStdString(Timecode(model::startFrameOf(sequenceItem) + start, model::timecodeFormatOf(sequenceItem)).toString());
+
+    // The picture through the compositor at the project's raster, as the Record monitor shows it.
+    media::Composition c;
+    c.sequence = &seq;
+    c.tracks = video;
+    c.size = QSize(project_->settings.format.width, project_->settings.format.height).expandedTo(media::kMinimumRaster);
+    model::LoadedClip loaded;
+    loaded.binId = binId;
+    loaded.item = sequenceItem;
+    if (shown) {
+        loaded.in = shown->in;
+        loaded.out = shown->out;
+    }
+    fillComposition(c, loaded);
+    // The sound through the mixdown's mix: "All current Pan and Level settings in the sequence are carried to the
+    // exported media" (p.863).
+    media::MixdownRequest request;
+    request.sequence = sequenceItem;
+    request.tracks = audio;
+    request.start = start;
+    request.end = end;
+    request.format = mix;
+    request.alternatingPan = s.text(QStringLiteral("Audio"), QStringLiteral("defaultPan")) != QLatin1String("centered");
+    request.clips = [this](const QString& bin, const QString& clipId) { return composer_->resolve(bin, clipId); };
+    std::optional<media::MixdownRenderer> renderer;
+    if (o.audio) renderer.emplace(request);
+    media::MovieSource source;
+    source.frames = end - start;
+    source.frameRate = sequenceItem.editRate;
+    source.raster = c.size;
+    source.picture = [&](std::int64_t f) { return media::composeImage(c, start + f); };
+    source.sound = [&](std::int64_t at, int count, std::vector<std::vector<float>>& out) { renderer->render(at, count, out); };
+    QProgressDialog progress(tr("Exporting %1...").arg(item.name), tr("Cancel"), 0, 1000, this);
+    progress.setObjectName(QStringLiteral("exportProgress"));
+    const bool ok = media::exportMovie(path, source, o, progressOn(progress), error);
+    progress.reset();
+    return ok;
+}
+
 void MainWindow::exportBin() {
     BinView* view = binContainer_->activeView();
     if (!view) {

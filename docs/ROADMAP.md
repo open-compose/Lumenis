@@ -1311,10 +1311,12 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
 * 7.1, exporting pictures and sound through FFmpeg (ch.25):
   * 7.1a, File > Output > Export to File for QuickTime Movie, MOV and MP4 (p.869-870, p.879-881, p.893-899): the
     Export setting's dialogs for them, the sequence's frames through the compositor and its sound through the mix,
-    Use Marks and Use Selected Tracks, export by dragging (p.868).
+    Use Marks and Use Selected Tracks. Done (docs/spec/movie-export.md: `src/media/movie_export.*`,
+    `MainWindow::exportMovieFile`, the Export setting's MOV and MP4 tab; tests `tst_movie_export`,
+    `tst_movie_export_ui`).
   * 7.1b, stills, audio and image sequences: Graphic (frames), Audio (WAV, AIFF), DPX (p.890) and OpenEXR (p.900),
     Export with Mask Margins (p.900), H.265 (p.898).
-  * 7.1c, the Send To templates (p.863-867), Export to Pro Tools (p.872-878), Copy All Media and Consolidate in AAF
+  * 7.1c, the Send To templates (p.863-867), export by dragging (p.868-869), Export to Pro Tools (p.872-878), Copy All Media and Consolidate in AAF
     export (p.870), Simplified AAF (p.884), Export Media Difference (p.885).
 * 7.2, MXF OP1a and AS-11 (p.886-892), XDCAM (p.883), AS-02 export volumes (p.901-904); gate 1 with bmx's checkers.
 * 7.3, output to devices (ch.26, p.909-938): the output device and sync source, the Video Output tool, audio output
