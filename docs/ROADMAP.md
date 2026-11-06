@@ -1349,6 +1349,18 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
 * 7.3, output to devices (ch.26, p.909-938): the output device and sync source, the Video Output tool, audio output
   options, the Digital Cut tool, output and timecode formats; a device provider interface with a file "device" of our
   own for tests, AJA (NTV2, MIT) and Blackmagic (the driver the user installs) behind it. Gate 2 waits for hardware (M).
+  In three parts (2026-11-06):
+  * 7.3a, decks and the Digital Cut tool (p.926-938): `ext::DeckProvider` with a tape kept in a folder of our own
+    (the "file device" for tests and for laying a cut onto a file), the Digital Cut tool with Remote and Local, the Deck
+    Selection menu, Entire Sequence, Safe Mode, Stop on Dropped Frames, Add Black at Tail, Insert/Assemble/Crash,
+    Sequence Time/Record Deck Time/Mark In Time, Custom Preroll and Frame Offset, the track buttons, Preview, Play and
+    Halt. Done (docs/spec/digital-cut.md: `ext::DeckProvider`, `media::FolderTapeDeckProvider`, `DigitalCutTool`,
+    `MainWindow::digitalCut`; test `tst_digital_cut`).
+  * 7.3b, the Video Output tool and audio output (p.910-924): video output devices (`ext::VideoOutputProvider`), Sync
+    Lock, the output signal, calibration with the factory presets and test patterns, Recording Bars and Tone, the audio
+    output options, Generate LTC On Playback.
+  * 7.3c, hardware modules: AJA NTV2 (MIT) and Blackmagic Desktop Video behind the 7.3a-b interfaces, built where their
+    SDKs are installed; gate 2 waits for hardware (M).
 * 7.4, captions: the SubCap effect (FX ch.14) with EBU N19 STL and Avid DS caption files, SRT, Scenarist SCC import
   (p.232) and caption data tracks, SCC and TTML export.
 * 7.5, DCP ("Output to DCP requirements for theatrical releases", p.519) through an open library, IMF export later.

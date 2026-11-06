@@ -808,7 +808,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `MainWindow::exportToDevice`; P2 through a module), is done. 7.2c, AS-11 through bmx's bmxtranswrap
   (docs/spec/as11.md: `src/media/as11.*`, `LUMENIS_BMXTRANSWRAP`, segments from spanned markers), is done. 7.2d, AS-02 Export
   Volumes (docs/spec/as02.md: `model::ExportVolume` kept in `Bin::exportVolume`, `ExportVolumeDialog`, the bin's volume
-  bar, `MainWindow::commitExportVolume`, `media::writeAs02`), is done, so 7.2 is. Next: 7.3, output to devices. After Phase 7, before Phase 8: 7.6, the owner's report
+  bar, `MainWindow::commitExportVolume`, `media::writeAs02`), is done, so 7.2 is. 7.3 is in three parts (ROADMAP). 7.3a, decks and the Digital Cut tool
+  (docs/spec/digital-cut.md: `ext::DeckProvider`, tapes kept in folders `media::FolderTapeDeckProvider` with
+  `LUMENIS_TAPE_DECKS`, `DigitalCutTool`, `MainWindow::digitalCut` through exportMovieFile's "sink"), is done. Next:
+  7.3b, the Video Output tool and audio output. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

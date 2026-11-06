@@ -26,6 +26,7 @@ enum class Category {
     VideoIoDevice,    // AJA, Blackmagic, ...
     SharedStorage,    // NAS bin locking, vendor storage clients
     ExportDevice,     // File > Output > Export to Device: XDCAM disks, P2 cards (export_device.h)
+    Deck,             // the Digital Cut tool's record decks (deck.h)
 };
 
 // Stable lower-case names ("open-source", "video-codec", ...) for logs and the About box.

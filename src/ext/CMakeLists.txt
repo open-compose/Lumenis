@@ -8,6 +8,7 @@ add_library(lumenis_ext STATIC
     include/lumenis/ext/transcription.h
     include/lumenis/ext/plugin_host.h
     include/lumenis/ext/export_device.h
+    include/lumenis/ext/deck.h
 )
 add_library(lumenis::ext ALIAS lumenis_ext)
 

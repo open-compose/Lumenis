@@ -4,6 +4,7 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/clap_host.h"
 #include "lumenis/media/ofx_host.h"
+#include "lumenis/media/tape_deck.h"
 #include "lumenis/media/xdcam_disk.h"
 
 #include <QCryptographicHash>
@@ -1929,6 +1930,8 @@ void registerProviders(ext::ProviderRegistry& registry) {
     registry.add(std::make_shared<OfxHostProvider>());
     // Export to Device > XDCAM onto disks seen as folders (docs/spec/export-device.md).
     registry.add(std::make_shared<XdcamDiskProvider>());
+    // The Digital Cut tool's tapes kept in folders (docs/spec/digital-cut.md).
+    registry.add(std::make_shared<FolderTapeDeckProvider>());
 }
 
 } // namespace lumenis::media

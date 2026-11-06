@@ -427,7 +427,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   the first clip's channels as the disk's track count, no built-in P2 device. 7.2c (docs/spec/as11.md): AMWA's
   shims as a menu in place of Avid's shim files, the DM fields offered, the rewrap through bmxtranswrap. 7.2d
   (docs/spec/as02.md): the volume's Video Compression, one bundle per sequence, any shim XML read for its three names,
-  Media Status as text.
+  Media Status as text. 7.3a (docs/spec/digital-cut.md): tapes kept in folders, Full Quality the only Output
+  Mode, Local mode as a crash record where the deck is, Preview as a cue and a report, frames made as fast as they can be,
+  the stereo mix onto the first two enabled tape tracks.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

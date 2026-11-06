@@ -46,6 +46,7 @@
 #include "lumenis/media/as11.h"
 #include "lumenis/media/movie_export.h"
 #include "lumenis/media/render.h"
+#include "lumenis/ext/deck.h"
 #include "lumenis/ext/export_device.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/ui/bin_container.h"
@@ -75,6 +76,7 @@
 #include "lumenis/ui/mixdown_dialog.h"
 #include "lumenis/ui/multi_mix_dialog.h"
 #include "lumenis/ui/export_dialog.h"
+#include "lumenis/ui/digital_cut_tool.h"
 #include "lumenis/ui/export_device_dialog.h"
 #include "lumenis/ui/export_volume_dialog.h"
 #include "lumenis/ui/send_to_dialog.h"
@@ -1915,6 +1917,15 @@ void MainWindow::createTools() {
     panels_->addPanel(new Panel(QStringLiteral("AudioEQ"), tr("Audio EQ"), audioEq_));
     // Audio Punch-In (p.747-753): the take becomes managed media in the chosen bin; the target tracks
     // are silent while it runs; monitoring plays the input through the output.
+    // File > Output > Digital Cut (7.3a; docs/spec/digital-cut.md).
+    digitalCut_ = new DigitalCutTool;
+    panels_->addPanel(new Panel(QStringLiteral("DigitalCut"), tr("Digital Cut"), digitalCut_));
+    connect(digitalCut_, &DigitalCutTool::previewRequested, this, [this] { digitalCut(true); });
+    connect(digitalCut_, &DigitalCutTool::playRequested, this, [this] { digitalCut(false); });
+    connect(digitalCut_, &DigitalCutTool::haltRequested, this, [this] { digitalCutHalted_ = true; });
+    connect(digitalCut_, &DigitalCutTool::checkDecksRequested, this, [this] {
+        digitalCut_->setDecks(providers_.usable<ext::DeckProvider>());
+    });
     audioPunchIn_ = new AudioPunchInTool(*timeline_);
     panels_->addPanel(new Panel(QStringLiteral("AudioPunchIn"), tr("Audio Punch-In"), audioPunchIn_));
     audioPunchIn_->setClipMaker([this](const AudioPunchInTool::Take& take, QString* error) { return punchInClip(take, error); });
@@ -3307,6 +3318,176 @@ int MainWindow::exportToDevice(const QString& kind) {
     return delivered;
 }
 
+// ---------------------------------------------------------------- Digital Cut (7.3a; docs/spec/digital-cut.md)
+
+void MainWindow::openDigitalCut() {
+    digitalCut_->setDecks(providers_.usable<ext::DeckProvider>());
+    QStringList tracks;
+    if (const auto* loaded = composer_->state(MonitorId::Record).current(); loaded && loaded->item.kind == model::BinItemKind::Sequence) {
+        const model::Sequence seq = model::Sequence::fromItem(loaded->item);
+        for (const model::Track& t : seq.tracks()) {
+            if (t.kind == model::TrackKind::Video || t.kind == model::TrackKind::Audio) tracks << t.name();
+        }
+    }
+    digitalCut_->setSequenceTracks(tracks);
+    digitalCut_->setStatus(tracks.isEmpty() ? tr("Load a sequence into the Record monitor.") : QString());
+    showTool(QStringLiteral("DigitalCut"));
+}
+
+std::int64_t MainWindow::digitalCut(bool preview) {
+    auto fail = [this](const QString& text) {
+        digitalCut_->setStatus(text);
+        ConsoleLog::instance().append(tr("Digital Cut: %1").arg(text));
+        return std::int64_t{-1};
+    };
+    // "Load a sequence into the Record monitor. (You cannot access digital cut options without a sequence loaded.)"
+    const model::LoadedClip* loaded = composer_->state(MonitorId::Record).current();
+    if (!loaded || loaded->item.kind != model::BinItemKind::Sequence) return fail(tr("Load a sequence into the Record monitor."));
+    const DigitalCutTool::Options o = digitalCut_->options();
+    const model::BinItem item = loaded->item;
+    const model::Sequence seq = model::Sequence::fromItem(item);
+    const TimecodeFormat format = model::timecodeFormatOf(item);
+    // The range: the whole sequence with Entire Sequence, else its marks (p.929).
+    std::int64_t start = 0;
+    std::int64_t end = seq.duration();
+    if (!o.entireSequence) {
+        if (loaded->in) start = std::clamp<std::int64_t>(*loaded->in, 0, end);
+        if (loaded->out) end = std::clamp<std::int64_t>(*loaded->out + 1, start, end);
+    }
+    std::int64_t black = 0;
+    if (o.addBlack && !o.blackDuration.isEmpty()) {
+        const auto tc = Timecode::parse(o.blackDuration.toStdString(), TimecodeFormat::forRate(item.editRate, false));
+        if (!tc) return fail(tr("Add Black at Tail needs a duration such as 00:00:05:00."));
+        black = tc->frameCount();
+    }
+    if (end <= start) return fail(tr("There is nothing to record."));
+
+    // The deck: Remote mode cues it; Local mode records where the deck is, as a crash record (ours: the folder deck
+    // has no buttons of its own to press).
+    std::shared_ptr<ext::DeckProvider> provider = digitalCut_->deckProvider();
+    std::unique_ptr<ext::DeckSession> session;
+    if (provider) {
+        std::string why;
+        session = provider->open(digitalCut_->deckId(), &why);
+        if (!session) return fail(QString::fromStdString(why));
+    } else if (!preview) {
+        return fail(tr("No Deck: configure a deck first (p.928)."));
+    }
+    ext::DeckRecording r;
+    r.mode = o.remote ? o.mode : ext::DeckRecordMode::Crash;
+    // Where on the tape (p.929-931): the sequence's own timecode, where the deck is, the Mark IN, or (crash record)
+    // ignoring time; then the Custom Frame Offset.
+    std::int64_t in = model::startFrameOf(item) + start;
+    if (!o.remote || o.start == DigitalCutTool::Start::RecordDeckTime || o.start == DigitalCutTool::Start::IgnoreTime) {
+        in = session ? session->position() : 0;
+    } else if (o.start == DigitalCutTool::Start::MarkInTime) {
+        const auto tc = Timecode::parse(o.markIn.toStdString(), format);
+        if (!tc) return fail(tr("The Mark IN time is not a timecode."));
+        in = tc->frameCount();
+    }
+    if (o.remote && o.customOffset) in += o.frameOffset;
+    r.in = std::max<std::int64_t>(0, in);
+    const QSize raster = QSize(project_->settings.format.width, project_->settings.format.height).expandedTo(media::kMinimumRaster);
+    r.width = raster.width();
+    r.height = raster.height();
+    r.rateNum = static_cast<int>(item.editRate.num());
+    r.rateDen = static_cast<int>(item.editRate.den());
+    const bool anyVideo = std::any_of(o.sequenceTracks.begin(), o.sequenceTracks.end(), [](const QString& t) { return t.startsWith(QLatin1Char('V')); });
+    const bool anyAudio = std::any_of(o.sequenceTracks.begin(), o.sequenceTracks.end(), [](const QString& t) { return t.startsWith(QLatin1Char('A')); });
+    // The Enable Track buttons in Remote mode; every track in Local mode. Our mix is stereo: the first two tape tracks
+    // enabled take it.
+    r.video = anyVideo && (!o.remote || o.tapeVideo);
+    r.audio.clear();
+    for (int t : o.remote ? o.tapeAudio : QList<int>{1, 2}) {
+        if (anyAudio && r.audio.size() < 2) r.audio.push_back(t);
+    }
+    r.channels = 2;
+    const QString range = tr("%1 to %2 on the tape")
+                              .arg(QString::fromStdString(Timecode(r.in, format).toString()),
+                                   QString::fromStdString(Timecode(r.in + (end - start) + black, format).toString()));
+    // "The Digital Cut tool goes through the motions of an insert edit and shows you how the tape will appear ... but
+    // does not actually change the master tape" (p.928): ours cues the deck and says what would be recorded.
+    if (preview) {
+        if (session && o.remote) session->cue(r.in);
+        digitalCut_->setStatus(tr("Preview: %1, %n frame(s).", "", static_cast<int>(end - start + black)).arg(range));
+        return 0;
+    }
+    if (!r.video && r.audio.empty()) return fail(tr("No tracks are enabled to record onto."));
+    std::string why;
+    if (!session->beginRecord(r, &why)) return fail(QString::fromStdString(why));
+
+    // The frames through the export's picture and sound (the "sink" format), each handed to the deck.
+    digitalCutHalted_ = false;
+    digitalCut_->setRunning(true);
+    digitalCut_->setStatus(tr("Recording %1").arg(range));
+    std::int64_t written = 0;
+    QString error;
+    movieSink_ = [&](const media::MovieSource& source, const media::MovieExportOptions&, const std::function<bool(double)>& progress,
+                     QString* sinkError) {
+        std::vector<std::vector<float>> planes;
+        auto sendFrame = [&](const QImage& picture, std::int64_t f, bool silent) {
+            QImage frame = media::fitMoviePicture(picture, raster, media::MovieScaling::Letterbox).convertToFormat(QImage::Format_RGBA8888);
+            const std::int64_t from = media::framesToSamples(f, item.editRate);
+            const int count = static_cast<int>(media::framesToSamples(f + 1, item.editRate) - from);
+            std::vector<float> interleaved(static_cast<std::size_t>(count) * 2, 0.0f);
+            if (!silent && source.sound) {
+                source.sound(from, count, planes);
+                for (int c = 0; c < 2 && c < static_cast<int>(planes.size()); ++c) {
+                    for (int i = 0; i < count && i < static_cast<int>(planes[static_cast<std::size_t>(c)].size()); ++i)
+                        interleaved[static_cast<std::size_t>(i * 2 + c)] = planes[static_cast<std::size_t>(c)][static_cast<std::size_t>(i)];
+                }
+            }
+            std::string frameError;
+            if (!session->writeFrame(frame.constBits(), static_cast<int>(frame.bytesPerLine()), interleaved.data(), count, &frameError)) {
+                if (sinkError) *sinkError = QString::fromStdString(frameError);
+                return false;
+            }
+            ++written;
+            return true;
+        };
+        const std::int64_t total = source.frames + black;
+        for (std::int64_t f = 0; f < total; ++f) {
+            QImage picture;
+            if (f < source.frames && source.picture) {
+                picture = source.picture(f);
+            } else {
+                picture = QImage(raster, QImage::Format_RGB32);
+                picture.fill(Qt::black); // Add Black at Tail
+            }
+            if (picture.isNull()) {
+                picture = QImage(raster, QImage::Format_RGB32);
+                picture.fill(Qt::black);
+            }
+            if (!sendFrame(picture, f, f >= source.frames)) return false;
+            // Halt Digital Cut, or the space bar (p.930), between frames.
+            if ((progress && !progress(static_cast<double>(f + 1) / static_cast<double>(total))) || digitalCutHalted_) {
+                if (sinkError) *sinkError = tr("Halted.");
+                return false;
+            }
+        }
+        return true;
+    };
+    QJsonArray tracks;
+    for (const QString& t : o.sequenceTracks) tracks << t;
+    exportOverride_ = {{QStringLiteral("useMarks"), !o.entireSequence},
+                       {QStringLiteral("useSelectedTracks"), false},
+                       {QStringLiteral("movieAudioFormat"), QStringLiteral("stereo")},
+                       {QStringLiteral("tracksOnly"), tracks}};
+    const bool ok = exportMovieFile(item, loaded->binId, QString(), QStringLiteral("sink"), &error);
+    exportOverride_ = {};
+    movieSink_ = {};
+    digitalCut_->setRunning(false);
+    if (!ok) {
+        // What was recorded so far stays on the tape.
+        session->halt();
+        return fail(tr("%1 (%n frame(s) recorded)", "", static_cast<int>(written)).arg(error));
+    }
+    if (!session->finish(&why)) return fail(QString::fromStdString(why));
+    digitalCut_->setStatus(tr("Recorded %1.").arg(range));
+    ConsoleLog::instance().append(tr("Digital Cut: %1 recorded %2").arg(item.name, range));
+    return written;
+}
+
 // ---------------------------------------------------------------- AS-02 Export Volumes (7.2d; docs/spec/as02.md)
 
 QString MainWindow::newVolumeForExport() {
@@ -4452,6 +4633,12 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
     // monitor; every track otherwise. Inactive audio tracks only with Include Inactive Audio Tracks.
     QStringList selected;
     if (flag("useSelectedTracks") && inRecord) selected = timeline_->patch().selectedRecordTracks(seq);
+    // The Digital Cut tool's Sequence Track buttons name the tracks themselves.
+    if (exportOverride_.contains(QStringLiteral("tracksOnly"))) {
+        selected.clear();
+        for (const QJsonValue& v : exportOverride_.value(QStringLiteral("tracksOnly")).toArray()) selected << v.toString();
+        if (selected.isEmpty()) return fail(tr("There are no tracks to export."));
+    }
     QStringList video, audio;
     const QStringList shownVideo = inRecord ? shownVideoTracks(MonitorId::Record, seq) : QStringList();
     for (const model::Track& t : seq.tracks()) {
@@ -4464,6 +4651,8 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
     // Video Compression or Video Format, Audio Format and Bit Depth.
     // AS-11 (7.2c) is an OP1a file of the MXF OP1a tab's compression, rewrapped by bmxtranswrap below.
     const bool as11 = format == QLatin1String("as11");
+    // "sink": the frames and sound handed to movieSink_ (the Digital Cut, 7.3a) rather than written to a file.
+    const bool sink = format == QLatin1String("sink");
     const bool mxf = format == QLatin1String("op1a") || format == QLatin1String("xdcam") || format == QLatin1String("op1aLegacy") || as11;
     o.container = format == QLatin1String("mp4")          ? media::MovieContainer::Mp4
                   : format == QLatin1String("op1a") || as11 ? media::MovieContainer::Mxf
@@ -4471,7 +4660,7 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
                   : format == QLatin1String("op1aLegacy") ? media::MovieContainer::MxfLegacy
                                                           : media::MovieContainer::Mov;
     const QString tracks = mxf ? QStringLiteral("both") : text("movieTracks");
-    const bool movie = mxf || format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie");
+    const bool movie = mxf || sink || format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie");
     const bool sound = format == QLatin1String("audio");
     o.video = movie ? tracks != QLatin1String("audio") && !video.isEmpty() : !sound;
     o.audio = movie ? tracks != QLatin1String("video") && !audio.isEmpty() : sound;
@@ -4580,6 +4769,8 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
             const QString op1a = scratch.filePath(QStringLiteral("programme.mxf"));
             ok = media::exportMovie(op1a, source, o, step, error) && media::writeAs11(op1a, path, a, error);
         }
+    } else if (sink) {
+        ok = movieSink_ && movieSink_(source, o, step, error);
     } else if (movie) {
         ok = media::exportMovie(path, source, o, step, error);
     } else if (sound) {
@@ -6919,6 +7110,7 @@ void MainWindow::installPanelHandlers() {
     handle("file.output.export_to_device.xdcam", [this] { exportToDevice(QStringLiteral("xdcam")); });
     handle("file.output.export_to_device.p2", [this] { exportToDevice(QStringLiteral("p2")); });
     handle("file.new.volume_for_export", [this] { newVolumeForExport(); });
+    handle("file.output.digital_cut", [this] { openDigitalCut(); });
     handle("file.export_matte_pict", [this] { exportMattePict(); });
     handle("tools.background_queue_window", [this] { showTool(QStringLiteral("BackgroundQueue")); });
     handle("file.media.load_media_database", [this] { loadMediaDatabase(); });

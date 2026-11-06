@@ -35,6 +35,7 @@ namespace lumenis::media {
 class AudioPlayer;
 struct Composition;
 struct MovieSource;
+struct MovieExportOptions;
 enum class EffectPrecision;
 struct AudioPiece;
 }
@@ -83,6 +84,7 @@ class AboutInfoDialog;
 class AudioEqTool;
 class ModifyDialog;
 class AudioPunchInTool;
+class DigitalCutTool;
 class AudioTrackEffectTool;
 class AudioMixer;
 class AudioTool;
@@ -382,6 +384,13 @@ public:
     // "p2". The hook stands in for the dialog (tests). Returns how many clips were delivered.
     int exportToDevice(const QString& kind);
     void setExportDeviceHook(std::function<bool(ExportDeviceDialog&)> hook) { exportDeviceHook_ = std::move(hook); }
+    // File > Output > Digital Cut (7.3a; docs/spec/digital-cut.md; p.926-938): openDigitalCut fills the tool with the
+    // decks and the Record monitor's sequence's tracks and shows it; digitalCut previews (cues the deck and says what
+    // would be recorded; 0) or records the sequence onto the chosen deck with the tool's options (the frames recorded,
+    // or -1 with the reason in the tool and the Console).
+    void openDigitalCut();
+    std::int64_t digitalCut(bool preview);
+    DigitalCutTool& digitalCutTool() { return *digitalCut_; }
     // AS-02 Export Volumes (7.2d; docs/spec/as02.md; p.901-904): File > New > Volume for Export makes an Export Volume
     // bin (its id; empty when cancelled); the bin's Properties button edits its volume; Commit writes its sequences not
     // yet committed as AS-02 bundles through bmxtranswrap and returns how many. The hook stands in for the dialog.
@@ -791,6 +800,10 @@ private:
     AudioMixer* audioMixer_ = nullptr;
     AudioEqTool* audioEq_ = nullptr;
     AudioPunchInTool* audioPunchIn_ = nullptr;
+    DigitalCutTool* digitalCut_ = nullptr;
+    bool digitalCutHalted_ = false;
+    // The Digital Cut's receiver of the export's frames and sound (exportMovieFile's "sink" format).
+    std::function<bool(const media::MovieSource&, const media::MovieExportOptions&, const std::function<bool(double)>&, QString*)> movieSink_;
     AudioTrackEffectTool* audioTrackEffect_ = nullptr;
     AudioSuiteTool* audioSuite_ = nullptr;
     AudioTool* audioTool_ = nullptr;
