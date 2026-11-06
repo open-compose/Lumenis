@@ -774,8 +774,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   OpenFX 1.5.1 headers in `third_party/openfx`, `src/media/ofx_host.*` with our suites, the bundle scan at start-up in
   `app/main.cpp` with `LUMENIS_NO_OFX=1`, the describe actions, plug-ins in the Effect Palette by vendor through
   `EffectInfo::ofxPlugin` with the plug-in icon, reasons in the Console; our test bundle `tests/media/ofx_test_plugin.cpp`;
-  tests `tst_ofx_host`, `tst_ofx_palette`), is done.
-  Next: 6.11b (rendering) and 6.11c, then Phases 7 and 8. Phase 9 "Left over stuff"
+  tests `tst_ofx_host`, `tst_ofx_palette`), is done. 6.11b1, rendering (`ofxSegmentPicture`/`ofxTransitionPicture`
+  from the compositor, one instance per plug-in with `closeOfxInstances`, values and keyframes through the parameter
+  suite, bottom-up float RGBA clip images; the parameters as Effect Editor controls through `ofxEditorParameters` under
+  "<label> Plug-In Parameters"; `setOfxFrameRate` from `MainWindow`), is done.
+  Next: 6.11b2 (missing plug-ins, templates, closeallofxplugins) and 6.11c, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

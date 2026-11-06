@@ -15,6 +15,7 @@
 #include "lumenis/model/title_clip.h"
 #include "lumenis/model/intraframe.h"
 
+#include "lumenis/media/ofx_host.h"
 #include "lumenis/media/compositor.h"
 
 #include <QApplication>
@@ -105,6 +106,26 @@ const Catalog& catalog() {
                 list << p;
             }
             c.insert(o.value(QStringLiteral("name")).toString(), list);
+        }
+        // OFX plug-ins' parameters (6.11b1; media/ofx_host.h), registered at start-up before the editor is first used.
+        for (const media::OfxPluginInfo& plugin : media::ofxPlugins()) {
+            if (!plugin.usable()) continue;
+            QList<EffectParameter>& list = c[media::ofxParameterCategory(plugin)];
+            list.clear();
+            for (const media::OfxEditorParameter& o : media::ofxEditorParameters(plugin)) {
+                EffectParameter p;
+                p.name = o.key;
+                p.text = o.text;
+                p.kind = o.kind;
+                p.subcategory = o.subcategory;
+                p.min = o.min;
+                p.max = o.max;
+                p.decimals = o.decimals;
+                p.defaultValue = o.defaultValue;
+                p.options = o.options;
+                p.keyframeable = o.keyframeable;
+                list << p;
+            }
         }
         // A colour correction's sliders in Color Correction mode (FX Guide p.685; lumenis/model/correction_effect.h).
         for (const model::CorrectionParameter& cp : model::correctionParameters()) {

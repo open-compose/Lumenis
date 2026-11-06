@@ -7,10 +7,19 @@
 // plug-in vendor)" (p.157).
 //
 // 6.11a: the host's core. Its property, parameter, image effect, memory, multithread and message suites answer the
-// describe actions (kOfxActionLoad, kOfxActionDescribe, kOfxImageEffectActionDescribeInContext); rendering comes in
-// 6.11b, so the instance-only calls (parameter values, clip images) answer kOfxStatErrUnsupported for now.
+// describe actions (kOfxActionLoad, kOfxActionDescribe, kOfxImageEffectActionDescribeInContext).
+//
+// 6.11b1: rendering. An effect of a registered plug-in (ofxPluginOf) is rendered by an instance of the plug-in in the
+// context it was described in: its parameters' values come from the effect's own (keyframed like ours), its input
+// clips are the segment's picture (Filter, General) or the transition's two (Transition), and the Output clip comes
+// back as a Picture. The plug-in's parameters are the Effect Editor's controls (ofxEditorParameters).
 
 #include "lumenis/ext/plugin_host.h"
+#include "lumenis/media/compositor.h"
+#include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/sequence.h"
+
+#include <QJsonValue>
 
 #include <QList>
 #include <QString>
@@ -84,6 +93,56 @@ const OfxPluginInfo* ofxPluginFor(const QString& category, const QString& label)
 // Messages plug-ins send through the message suite (kOfxMessageError ...), as "<plug-in>: <text>". The application
 // passes them to the Console; without a handler they go to qWarning.
 void setOfxMessageHandler(std::function<void(const QString&)> handler);
+
+// ---------------------------------------------------------------- effects and their parameters (6.11b1)
+
+// The registered usable plug-in an effect is of: its Effect Palette category and name (the label, or "<label>
+// (<identifier>)" for a second plug-in of that label); null for other effects.
+const OfxPluginInfo* ofxPluginOf(const model::Effect& effect);
+inline bool isOfxEffect(const model::Effect& effect) {
+    return ofxPluginOf(effect) != nullptr;
+}
+
+// The Effect Editor's parameter category of a plug-in's parameters: "<label> Plug-In Parameters" (ours).
+QString ofxParameterCategory(const OfxPluginInfo& plugin);
+
+// One control the Effect Editor shows for a plug-in parameter (its EffectParameter): the stored key in the effect's
+// parameters under ofxParameterCategory, the text beside it, and the control. Ours, as the standard leaves the host's
+// controls to it:
+// - Double and Integer: a slider over the display range (else the range, else 0 to 100), Double with 2 decimals (3
+//   when the range is at most 2 wide); 2D and 3D ones a slider each, "<name>.x", ".y", ".z", texts "<label> X" ...;
+// - Boolean: a checkbox; Choice: a menu of its options, stored as the option's text;
+// - RGB and RGBA: a colour ("#rrggbb"; RGBA's alpha stays its default);
+// - Group: the subcategory of the parameters in it (its label).
+// Secret parameters, the Transition context's own "Transition" (the transition's progress), and the types we do not
+// show yet (String, Custom, Push Button, Page, Parametric, Bytes, StrChoice) have no control; they keep their defaults.
+struct OfxEditorParameter {
+    QString key;
+    QString text;
+    QString kind; // "slider", "checkbox", "menu", "color"
+    QString subcategory;
+    double min = 0.0, max = 100.0;
+    int decimals = 0;
+    QJsonValue defaultValue;
+    QStringList options;
+    bool keyframeable = true; // kOfxParamPropAnimates (sliders and colours only)
+};
+QList<OfxEditorParameter> ofxEditorParameters(const OfxPluginInfo& plugin);
+// A plug-in effect's parameter default by its stored key; null when the key is not one of its controls.
+QJsonValue ofxParameterDefault(const model::Effect& effect, const QString& category, const QString& key);
+
+// A segment effect's picture: the plug-in rendered at `time` of the effect (model::EffectSpan's time) over `source`
+// (unused by a Generator). A plug-in that fails to render leaves `source` as it was and says why in its message
+// handler's output once ("Media Composer Cannot Render the Plug-In ... check the Console window", p.163).
+Picture ofxSegmentPicture(const model::Effect& effect, const Picture& source, double time, const model::EffectSpan& span);
+// A transition effect's picture between `from` (outgoing) and `to` (incoming), `progress` 0 to 1 as the plug-in's
+// Transition parameter.
+Picture ofxTransitionPicture(const model::Effect& effect, const Picture& from, const Picture& to, double progress, double time,
+                             const model::EffectSpan& span);
+// The frame rate plug-ins are told (kOfxImageEffectPropFrameRate); the application sets the project's. 30 until set.
+void setOfxFrameRate(double rate);
+// Destroys every plug-in instance (kOfxActionDestroyInstance); the next render makes them again. Returns how many.
+int closeOfxInstances();
 
 // The OFX host as an extension provider (lumenis/ext/plugin_host.h): its search paths and scan.
 class OfxHostProvider : public ext::PluginHostProvider {

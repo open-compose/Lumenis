@@ -2,9 +2,12 @@
 // CutthulhuTest.ofx inside test-ofx/CutthulhuTest.ofx.bundle/Contents/<architecture>/. It offers five plug-ins:
 // - "org.cutthulhu.test.tint": a Filter in "Cutthulhu Tests/Colour" with Amount (double, 0-1, default 0.5), Channel (a
 //   choice of Red, Green, Blue), Invert (a boolean), Colour (RGB) and a secret one; its description names the host and
-//   the threads the multithread suite ran;
-// - "org.cutthulhu.test.wipe": a Transition, no grouping;
-// - "org.cutthulhu.test.noise": a Generator and General plug-in, which also sends a message while described;
+//   the threads the multithread suite ran. It renders the source with the chosen channel set to Amount (times the
+//   alpha), then inverted if Invert is on; with Amount 0 and Invert off it is an identity of Source;
+// - "org.cutthulhu.test.wipe": a Transition, no grouping. It renders the incoming picture left of the Transition
+//   parameter's fraction of the width and the outgoing one right of it;
+// - "org.cutthulhu.test.noise": a Generator and General plug-in, which also sends a message while described. It
+//   renders its Fill colour (RGB, default 0.25, 0.5, 0.75) and a white bottom row, which shows the rows' order;
 // - "org.cutthulhu.test.broken": its describe action sends an error message and fails;
 // - "org.cutthulhu.test.paint": only the Paint context, which the host leaves out.
 // Plus one plug-in of another API, which the host skips.
@@ -15,6 +18,7 @@
 #include <ofxParam.h>
 #include <ofxProperty.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cstdio>
 #include <cstring>
@@ -29,6 +33,7 @@ const OfxMessageSuiteV1* gMessages = nullptr;
 const OfxMultiThreadSuiteV1* gThreads = nullptr;
 
 std::atomic<int> gThreadCalls{0};
+std::atomic<int> gLiveInstances{0};
 void countThread(unsigned int, unsigned int, void*) {
     ++gThreadCalls;
 }
@@ -164,6 +169,10 @@ OfxStatus noiseDescribeInContext(OfxImageEffectHandle e, OfxPropertySetHandle in
     OfxPropertySetHandle p = nullptr;
     gParams->paramDefine(params, kOfxParamTypeString, "context", &p);
     gProps->propSetString(p, kOfxParamPropDefault, 0, context ? context : "");
+    gParams->paramDefine(params, kOfxParamTypeRGB, "fill", &p);
+    gProps->propSetString(p, kOfxPropLabel, 0, "Fill");
+    const double fill[] = {0.25, 0.5, 0.75};
+    gProps->propSetDoubleN(p, kOfxParamPropDefault, 3, fill);
     return kOfxStatOK;
 }
 
@@ -179,8 +188,128 @@ OfxStatus paintDescribe(OfxImageEffectHandle e) {
     return kOfxStatOK;
 }
 
+// ---------------------------------------------------------------- rendering
+
+// An image the host gave: its pixels, bounds and row bytes.
+struct Pixels {
+    OfxPropertySetHandle props = nullptr;
+    char* data = nullptr;
+    int x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+    int rowBytes = 0;
+    float* at(int x, int y) const { return reinterpret_cast<float*>(data + static_cast<long>(y - y1) * rowBytes) + (x - x1) * 4; }
+};
+
+bool fetch(OfxImageEffectHandle e, const char* clipName, OfxTime time, Pixels& out) {
+    OfxImageClipHandle clip = nullptr;
+    if (gEffects->clipGetHandle(e, clipName, &clip, nullptr) != kOfxStatOK) return false;
+    if (gEffects->clipGetImage(clip, time, nullptr, &out.props) != kOfxStatOK) return false;
+    void* data = nullptr;
+    gProps->propGetPointer(out.props, kOfxImagePropData, 0, &data);
+    out.data = static_cast<char*>(data);
+    int b[4] = {};
+    gProps->propGetIntN(out.props, kOfxImagePropBounds, 4, b);
+    out.x1 = b[0];
+    out.y1 = b[1];
+    out.x2 = b[2];
+    out.y2 = b[3];
+    gProps->propGetInt(out.props, kOfxImagePropRowBytes, 0, &out.rowBytes);
+    return out.data != nullptr;
+}
+
+OfxParamHandle paramOf(OfxImageEffectHandle e, const char* name) {
+    OfxParamSetHandle params = nullptr;
+    gEffects->getParamSet(e, &params);
+    OfxParamHandle p = nullptr;
+    gParams->paramGetHandle(params, name, &p, nullptr);
+    return p;
+}
+
+double timeOf(OfxPropertySetHandle in) {
+    double t = 0;
+    gProps->propGetDouble(in, kOfxPropTime, 0, &t);
+    return t;
+}
+
+OfxStatus tintIsIdentity(OfxImageEffectHandle e, OfxPropertySetHandle in, OfxPropertySetHandle out) {
+    const double t = timeOf(in);
+    double amount = 1;
+    int invert = 1;
+    gParams->paramGetValueAtTime(paramOf(e, "amount"), t, &amount);
+    gParams->paramGetValueAtTime(paramOf(e, "invert"), t, &invert);
+    if (amount != 0.0 || invert) return kOfxStatReplyDefault;
+    gProps->propSetString(out, kOfxPropName, 0, kOfxImageEffectSimpleSourceClipName);
+    return kOfxStatOK;
+}
+
+OfxStatus tintRender(OfxImageEffectHandle e, OfxPropertySetHandle in) {
+    const double t = timeOf(in);
+    Pixels src, dst;
+    if (!fetch(e, kOfxImageEffectSimpleSourceClipName, t, src) || !fetch(e, kOfxImageEffectOutputClipName, t, dst)) return kOfxStatFailed;
+    double amount = 0;
+    int channel = 0, invert = 0;
+    gParams->paramGetValueAtTime(paramOf(e, "amount"), t, &amount);
+    gParams->paramGetValueAtTime(paramOf(e, "channel"), t, &channel);
+    gParams->paramGetValueAtTime(paramOf(e, "invert"), t, &invert);
+    for (int y = dst.y1; y < dst.y2; ++y) {
+        for (int x = dst.x1; x < dst.x2; ++x) {
+            const float* s = src.at(x, y);
+            float* d = dst.at(x, y);
+            std::copy(s, s + 4, d);
+            d[channel] = static_cast<float>(amount) * s[3];
+            if (invert) {
+                for (int c = 0; c < 3; ++c) d[c] = s[3] - d[c];
+            }
+        }
+    }
+    gEffects->clipReleaseImage(src.props);
+    gEffects->clipReleaseImage(dst.props);
+    return kOfxStatOK;
+}
+
+OfxStatus noiseRender(OfxImageEffectHandle e, OfxPropertySetHandle in) {
+    const double t = timeOf(in);
+    Pixels dst;
+    if (!fetch(e, kOfxImageEffectOutputClipName, t, dst)) return kOfxStatFailed;
+    double r = 0, g = 0, b = 0;
+    gParams->paramGetValueAtTime(paramOf(e, "fill"), t, &r, &g, &b);
+    for (int y = dst.y1; y < dst.y2; ++y) {
+        for (int x = dst.x1; x < dst.x2; ++x) {
+            float* d = dst.at(x, y);
+            const bool bottom = y == dst.y1;
+            d[0] = bottom ? 1.0f : static_cast<float>(r);
+            d[1] = bottom ? 1.0f : static_cast<float>(g);
+            d[2] = bottom ? 1.0f : static_cast<float>(b);
+            d[3] = 1.0f;
+        }
+    }
+    gEffects->clipReleaseImage(dst.props);
+    return kOfxStatOK;
+}
+
+OfxStatus wipeRender(OfxImageEffectHandle e, OfxPropertySetHandle in) {
+    const double t = timeOf(in);
+    Pixels from, to, dst;
+    if (!fetch(e, kOfxImageEffectTransitionSourceFromClipName, t, from) || !fetch(e, kOfxImageEffectTransitionSourceToClipName, t, to) ||
+        !fetch(e, kOfxImageEffectOutputClipName, t, dst)) {
+        return kOfxStatFailed;
+    }
+    double progress = 0;
+    gParams->paramGetValue(paramOf(e, kOfxImageEffectTransitionParamName), &progress);
+    const int edge = dst.x1 + static_cast<int>(progress * (dst.x2 - dst.x1));
+    for (int y = dst.y1; y < dst.y2; ++y) {
+        for (int x = dst.x1; x < dst.x2; ++x) {
+            const float* s = x < edge ? to.at(x, y) : from.at(x, y);
+            std::copy(s, s + 4, dst.at(x, y));
+        }
+    }
+    gEffects->clipReleaseImage(from.props);
+    gEffects->clipReleaseImage(to.props);
+    gEffects->clipReleaseImage(dst.props);
+    return kOfxStatOK;
+}
+
 template <int Kind>
-OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle in, OfxPropertySetHandle) {
+OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle in, OfxPropertySetHandle out) {
     auto* e = static_cast<OfxImageEffectHandle>(const_cast<void*>(handle));
     if (std::strcmp(action, kOfxActionLoad) == 0) return load();
     if (std::strcmp(action, kOfxActionDescribe) == 0) {
@@ -198,6 +327,25 @@ OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle
         case 1: return wipeDescribeInContext(e);
         case 2: return noiseDescribeInContext(e, in);
         default: return kOfxStatOK;
+        }
+    }
+    if (std::strcmp(action, kOfxActionCreateInstance) == 0) {
+        ++gLiveInstances;
+        return kOfxStatOK;
+    }
+    if (std::strcmp(action, kOfxActionDestroyInstance) == 0) {
+        --gLiveInstances;
+        return kOfxStatOK;
+    }
+    if (std::strcmp(action, kOfxImageEffectActionIsIdentity) == 0 && Kind == 0) {
+        return tintIsIdentity(e, in, out);
+    }
+    if (std::strcmp(action, kOfxImageEffectActionRender) == 0) {
+        switch (Kind) {
+        case 0: return tintRender(e, in);
+        case 1: return wipeRender(e, in);
+        case 2: return noiseRender(e, in);
+        default: return kOfxStatFailed;
         }
     }
     return kOfxStatReplyDefault;
@@ -220,4 +368,14 @@ OfxExport int OfxGetNumberOfPlugins(void) {
 
 OfxExport OfxPlugin* OfxGetPlugin(int nth) {
     return nth >= 0 && nth < OfxGetNumberOfPlugins() ? &gPlugins[nth] : nullptr;
+}
+
+// For the test: how many instances the host has made and not destroyed.
+#ifdef _WIN32
+#define CUTTHULHU_TEST_EXPORT extern "C" __declspec(dllexport)
+#else
+#define CUTTHULHU_TEST_EXPORT extern "C" __attribute__((visibility("default")))
+#endif
+CUTTHULHU_TEST_EXPORT int CutthulhuTestLiveInstances(void) {
+    return gLiveInstances.load();
 }

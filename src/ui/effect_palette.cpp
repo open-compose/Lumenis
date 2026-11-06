@@ -113,6 +113,8 @@ const EffectCatalog& EffectCatalog::builtin() {
             info.segment = p.segment();
             info.realTime = false;
             info.ofxPlugin = p.id;
+            // Its parameters, the Effect Editor's controls (6.11b1).
+            if (!media::ofxEditorParameters(p).isEmpty()) info.parameters = {media::ofxParameterCategory(p)};
             // Two plug-ins of one name in a category: the second is named by its identifier too.
             if (c.find(category, info.name)) info.name = QStringLiteral("%1 (%2)").arg(p.label, p.id);
             c.effects_ << info;

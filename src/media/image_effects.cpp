@@ -1,4 +1,5 @@
 #include "effect_drawing.h"
+#include "lumenis/media/ofx_host.h"
 #include "lumenis/media/plasma_wipe.h"
 
 #include <algorithm>
@@ -81,6 +82,8 @@ std::optional<double> filmMaskRatio(const model::Effect& e) {
 } // namespace
 
 QJsonValue parameterDefault(const model::Effect& e, const QString& category, const QString& name) {
+    // An OFX plug-in's parameters (ofx_host.h).
+    if (const QJsonValue v = ofxParameterDefault(e, category, name); !v.isUndefined() && !v.isNull()) return v;
     if (e.category == QLatin1String("Illusion FX")) return detail::illusionDefault(e, category, name);
     // PlasmaWipe defaults (ours; "Frame effects have different default values ... crisp edges", FX Guide p.453).
     if (const PlasmaWipe* wipe = plasmaWipeOf(e)) {

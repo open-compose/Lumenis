@@ -2,8 +2,15 @@
 //
 // The host gives plug-ins the suites of the OpenFX headers (third_party/openfx) as C function tables. Every handle a
 // plug-in sees is a pointer to one of the objects below: OfxPropertySetHandle a PropertySet, OfxImageEffectHandle an
-// Effect, OfxParamSetHandle an Effect's ParamSet, OfxParamHandle a Param. Plug-ins are called from one thread at a time
-// during the scan.
+// Effect (a descriptor, or an Instance), OfxParamSetHandle an Effect's ParamSet, OfxParamHandle a Param,
+// OfxImageClipHandle a Clip. Plug-ins are called from one thread at a time: during the scan, and during renders, which
+// one mutex keeps apart (renderMutex).
+//
+// Rendering (6.11b1, the second half of the file): each plug-in gets one Instance, made at its first render. A render
+// sets the instance's RenderContext (the effect, its span and the input pictures), then runs the isIdentity, begin
+// sequence, render and end sequence actions. The plug-in reads its parameters through the parameter suite, which
+// answers from the effect's stored values and keyframes, and its clips' images, which are the pictures copied into
+// float RGBA buffers with their rows bottom to top (the standard's image layout).
 
 #include "lumenis/media/ofx_host.h"
 
@@ -20,15 +27,20 @@
 #include <QDir>
 #include <QDirIterator>
 #include <QFileInfo>
+#include <QColor>
+#include <QJsonObject>
 #include <QLibrary>
+#include <QMap>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <variant>
@@ -305,14 +317,19 @@ const OfxPropertySuiteV1 kPropertySuite{propSetPointer, propSetString,  propSetD
 
 // ---------------------------------------------------------------- effects, clips and parameters
 
+struct Effect;
+
 struct Param {
     std::string type;
     std::string name;
     PropertySet props;
+    Effect* owner = nullptr; // its effect: a descriptor's, or an instance's
+    std::string text;        // a String parameter's value, kept while the plug-in reads it
 };
 
 struct ParamSet {
     PropertySet props;
+    Effect* owner = nullptr;
     std::vector<std::unique_ptr<Param>> params; // in the order defined
     Param* find(const std::string& name) {
         for (auto& p : params) {
@@ -325,13 +342,20 @@ struct ParamSet {
 struct Clip {
     std::string name;
     PropertySet props;
+    Effect* owner = nullptr;
 };
 
-// An effect descriptor: the describe action's, or one context's.
+struct Instance;
+
+// An effect descriptor (the describe action's, or one context's), or the effect part of an Instance.
 struct Effect {
     PropertySet props;
     ParamSet params;
     std::vector<std::unique_ptr<Clip>> clips;
+    Instance* instance = nullptr; // set for an Instance
+    Effect() { params.owner = this; }
+    Effect(const Effect&) = delete; // its parameters and clips point back to it
+    Effect& operator=(const Effect&) = delete;
 };
 
 Effect* effect(OfxImageEffectHandle h) {
@@ -392,6 +416,7 @@ OfxStatus paramDefine(OfxParamSetHandle paramSet, const char* type, const char* 
     p->type = type;
     p->name = name;
     defaultParamProps(p->props, p->type, p->name);
+    p->owner = ps->owner;
     if (props) *props = handle(&p->props);
     ps->params.push_back(std::move(p));
     return kOfxStatOK;
@@ -418,28 +443,22 @@ OfxStatus paramGetPropertySet(OfxParamHandle param, OfxPropertySetHandle* props)
     return kOfxStatOK;
 }
 
-// Values and keyframes belong to instances, which come with rendering (6.11b).
-OfxStatus paramUnsupported(OfxParamHandle, ...) {
-    return kOfxStatErrUnsupported;
-}
-OfxStatus paramAtTimeUnsupported(OfxParamHandle, OfxTime, ...) {
-    return kOfxStatErrUnsupported;
-}
-OfxStatus paramIntegralUnsupported(OfxParamHandle, OfxTime, OfxTime, ...) {
-    return kOfxStatErrUnsupported;
-}
-OfxStatus paramSetValueAtTimeUnsupported(OfxParamHandle, OfxTime, ...) {
-    return kOfxStatErrUnsupported;
-}
-OfxStatus paramGetNumKeys(OfxParamHandle, unsigned int* n) {
-    if (n) *n = 0;
+// Values and keyframes: for an instance's parameters during a render, from the effect (defined with the rendering below);
+// otherwise the defaults.
+OfxStatus paramGetValue(OfxParamHandle param, ...);
+OfxStatus paramGetValueAtTime(OfxParamHandle param, OfxTime time, ...);
+OfxStatus paramGetDerivative(OfxParamHandle param, OfxTime time, ...);
+OfxStatus paramGetIntegral(OfxParamHandle param, OfxTime time1, OfxTime time2, ...);
+OfxStatus paramGetNumKeys(OfxParamHandle param, unsigned int* n);
+OfxStatus paramGetKeyTime(OfxParamHandle param, unsigned int nthKey, OfxTime* time);
+OfxStatus paramGetKeyIndex(OfxParamHandle param, OfxTime time, int direction, int* index);
+// Setting values (plug-ins do so in their instance changed action, which we do not send) is left to the effect's
+// controls: accepted and not kept (ours).
+OfxStatus paramSetValue(OfxParamHandle, ...) {
     return kOfxStatOK;
 }
-OfxStatus paramGetKeyTime(OfxParamHandle, unsigned int, OfxTime*) {
-    return kOfxStatErrBadIndex;
-}
-OfxStatus paramGetKeyIndex(OfxParamHandle, OfxTime, int, int*) {
-    return kOfxStatFailed;
+OfxStatus paramSetValueAtTime(OfxParamHandle, OfxTime, ...) {
+    return kOfxStatOK;
 }
 OfxStatus paramDeleteKey(OfxParamHandle, OfxTime) {
     return kOfxStatErrUnsupported;
@@ -459,9 +478,9 @@ OfxStatus paramEditEnd(OfxParamSetHandle) {
 
 const OfxParameterSuiteV1 kParameterSuite{paramDefine,           paramGetHandle,
                                           paramSetGetPropertySet, paramGetPropertySet,
-                                          paramUnsupported,       paramAtTimeUnsupported,
-                                          paramAtTimeUnsupported, paramIntegralUnsupported,
-                                          paramUnsupported,       paramSetValueAtTimeUnsupported,
+                                          paramGetValue,          paramGetValueAtTime,
+                                          paramGetDerivative,     paramGetIntegral,
+                                          paramSetValue,          paramSetValueAtTime,
                                           paramGetNumKeys,        paramGetKeyTime,
                                           paramGetKeyIndex,       paramDeleteKey,
                                           paramDeleteAllKeys,     paramCopy,
@@ -492,27 +511,18 @@ OfxStatus clipDefine(OfxImageEffectHandle e, const char* name, OfxPropertySetHan
     c->props.setInt(kOfxImageEffectPropTemporalClipAccess, {0});
     c->props.setInt(kOfxImageEffectPropSupportsTiles, {1});
     c->props.setString(kOfxImageClipPropFieldExtraction, {kOfxImageFieldDoubled});
+    c->owner = effect(e);
     if (props) *props = handle(&c->props);
     effect(e)->clips.push_back(std::move(c));
     return kOfxStatOK;
 }
 
-// Clips, images and memory of instances come with rendering (6.11b).
-OfxStatus clipGetHandle(OfxImageEffectHandle, const char*, OfxImageClipHandle*, OfxPropertySetHandle*) {
-    return kOfxStatErrUnsupported;
-}
-OfxStatus clipGetPropertySet(OfxImageClipHandle, OfxPropertySetHandle*) {
-    return kOfxStatErrUnsupported;
-}
-OfxStatus clipGetImage(OfxImageClipHandle, OfxTime, const OfxRectD*, OfxPropertySetHandle*) {
-    return kOfxStatErrUnsupported;
-}
-OfxStatus clipReleaseImage(OfxPropertySetHandle) {
-    return kOfxStatErrUnsupported;
-}
-OfxStatus clipGetRegionOfDefinition(OfxImageClipHandle, OfxTime, OfxRectD*) {
-    return kOfxStatErrUnsupported;
-}
+// An instance's clips and their images (defined with the rendering below).
+OfxStatus clipGetHandle(OfxImageEffectHandle e, const char* name, OfxImageClipHandle* clip, OfxPropertySetHandle* props);
+OfxStatus clipGetPropertySet(OfxImageClipHandle clip, OfxPropertySetHandle* props);
+OfxStatus clipGetImage(OfxImageClipHandle clip, OfxTime time, const OfxRectD* region, OfxPropertySetHandle* image);
+OfxStatus clipReleaseImage(OfxPropertySetHandle image);
+OfxStatus clipGetRegionOfDefinition(OfxImageClipHandle clip, OfxTime time, OfxRectD* bounds);
 int abortEffect(OfxImageEffectHandle) {
     return 0;
 }
@@ -807,6 +817,23 @@ OfxParamInfo paramInfo(const Param& param) {
     return info;
 }
 
+// What rendering needs of a described plug-in: its entry points, the context it was described in and that context's
+// descriptor (whose clips and parameters an instance copies). Descriptors stay alive for as long as the program, even
+// when a later scan describes the plug-in again, since a plug-in may keep their handles.
+struct Described {
+    OfxPlugin* plugin = nullptr;
+    std::string context;
+    Effect* descriptor = nullptr;
+};
+std::map<QString, Described>& described() {
+    static std::map<QString, Described> d;
+    return d;
+}
+std::vector<std::unique_ptr<Effect>>& keptDescriptors() {
+    static std::vector<std::unique_ptr<Effect>> k;
+    return k;
+}
+
 // The loaded binaries and the plug-ins registered from them.
 std::vector<std::unique_ptr<QLibrary>>& libraries() {
     static std::vector<std::unique_ptr<QLibrary>> l;
@@ -853,7 +880,8 @@ OfxPluginInfo describe(OfxPlugin* plugin, const QString& file) {
     for (const char* context : {kOfxImageEffectContextFilter, kOfxImageEffectContextGenerator, kOfxImageEffectContextTransition,
                                 kOfxImageEffectContextGeneral}) {
         if (!info.contexts.contains(QLatin1String(context))) continue;
-        Effect inContext;
+        auto kept = std::make_unique<Effect>();
+        Effect& inContext = *kept;
         inContext.props = descriptor.props;
         PropertySet in;
         in.setString(kOfxImageEffectPropContext, {context});
@@ -867,6 +895,8 @@ OfxPluginInfo describe(OfxPlugin* plugin, const QString& file) {
         info.describedContext = QLatin1String(context);
         for (const auto& c : inContext.clips) info.clips << QString::fromStdString(c->name);
         for (const auto& p : inContext.params.params) info.params << paramInfo(*p);
+        described()[info.id] = Described{plugin, context, kept.get()};
+        keptDescriptors().push_back(std::move(kept));
         break;
     }
     return info;
@@ -1031,6 +1061,633 @@ std::vector<ext::PluginDescriptor> OfxHostProvider::scan(const std::vector<std::
         out.push_back(std::move(d));
     }
     return out;
+}
+
+// ================================================================ rendering (6.11b1)
+
+namespace {
+
+double gFrameRate = 30.0;
+
+// What one render gives the plug-in: the effect whose values its parameters take, the effect's span, the render's
+// frame, a transition's progress, and the pictures of its input clips by clip name.
+struct RenderContext {
+    const model::Effect* effect = nullptr;
+    const OfxPluginInfo* info = nullptr;
+    model::EffectSpan span;
+    double frame = 0.0;
+    double progress = -1.0; // a transition's; -1 for segments
+    int width = 0, height = 0;
+    std::map<std::string, const Picture*> inputs;
+};
+
+// An image the host gave the plug-in: its properties and its pixels, float RGBA with rows bottom to top.
+struct Image {
+    PropertySet props;
+    std::vector<float> data;
+};
+
+// A plug-in's one instance, made at its first render (kOfxActionCreateInstance).
+struct Instance : Effect {
+    QString id;
+    OfxPlugin* plugin = nullptr;
+    std::string context;
+    RenderContext* render = nullptr; // during a render
+    std::vector<std::unique_ptr<Image>> images; // given out and not yet released
+    Image* output = nullptr; // the Output clip's image during a render
+    bool failed = false;     // creating it failed: the effect passes its picture through
+    bool reported = false;   // a render failure was reported once
+};
+
+std::map<QString, std::unique_ptr<Instance>>& instances() {
+    static std::map<QString, std::unique_ptr<Instance>> i;
+    return i;
+}
+
+std::recursive_mutex& renderMutex() {
+    static std::recursive_mutex m;
+    return m;
+}
+
+Param* param(OfxParamHandle h) {
+    return reinterpret_cast<Param*>(h);
+}
+Clip* clip(OfxImageClipHandle h) {
+    return reinterpret_cast<Clip*>(h);
+}
+
+// The plug-in's parameter description by name.
+const OfxParamInfo* paramInfoOf(const OfxPluginInfo& plugin, const std::string& name) {
+    const QString n = QString::fromStdString(name);
+    for (const OfxParamInfo& p : plugin.params) {
+        if (p.name == n) return &p;
+    }
+    return nullptr;
+}
+
+// How many values a parameter type has.
+int dimensionOf(const std::string& type) {
+    if (type == kOfxParamTypeDouble2D || type == kOfxParamTypeInteger2D) return 2;
+    if (type == kOfxParamTypeDouble3D || type == kOfxParamTypeInteger3D || type == kOfxParamTypeRGB) return 3;
+    if (type == kOfxParamTypeRGBA) return 4;
+    return 1;
+}
+
+const char* const kAxes[] = {".x", ".y", ".z"};
+
+// A parameter's values at `frame` of the render: from the effect's stored values and keyframes, else the defaults.
+std::vector<double> valuesAt(const Param& p, const RenderContext* r, double frame) {
+    const int n = dimensionOf(p.type);
+    std::vector<double> out = p.props.numbers(kOfxParamPropDefault);
+    out.resize(static_cast<std::size_t>(n), 0.0);
+    if (!r || !r->effect || !r->info) return out;
+    // The Transition context's own parameter is the transition's progress.
+    if (r->progress >= 0.0 && p.name == kOfxImageEffectTransitionParamName) return {r->progress};
+    const OfxParamInfo* info = paramInfoOf(*r->info, p.name);
+    if (!info) return out;
+    const model::Effect& e = *r->effect;
+    const QString category = ofxParameterCategory(*r->info);
+    const QString key = info->name;
+    const double t = r->span.timeOf(frame);
+    if (p.type == kOfxParamTypeBoolean) {
+        const QJsonValue v = e.parameters.value(category).toObject().value(key);
+        if (v.isBool()) out[0] = v.toBool() ? 1.0 : 0.0;
+    } else if (p.type == kOfxParamTypeChoice) {
+        const QJsonValue v = e.parameters.value(category).toObject().value(key);
+        if (v.isString()) {
+            const qsizetype i = info->options.indexOf(v.toString());
+            if (i >= 0) out[0] = static_cast<double>(i);
+        }
+    } else if (p.type == kOfxParamTypeRGB || p.type == kOfxParamTypeRGBA) {
+        if (const auto rgb = model::colorAt(e, category, key, t, r->span)) {
+            out[0] = rgb->red;
+            out[1] = rgb->green;
+            out[2] = rgb->blue;
+        }
+    } else if (n == 1) {
+        if (const auto v = model::numberAt(e, category, key, t, r->span)) out[0] = *v;
+    } else {
+        for (int i = 0; i < n; ++i) {
+            if (const auto v = model::numberAt(e, category, key + QLatin1String(kAxes[i]), t, r->span)) out[static_cast<std::size_t>(i)] = *v;
+        }
+    }
+    if (p.type == kOfxParamTypeInteger || p.type == kOfxParamTypeInteger2D || p.type == kOfxParamTypeInteger3D) {
+        for (double& v : out) v = std::round(v);
+    }
+    return out;
+}
+
+const RenderContext* contextOf(const Param& p) {
+    return p.owner && p.owner->instance ? p.owner->instance->render : nullptr;
+}
+
+// Writes a parameter's values to the plug-in's pointers, as its type takes them (ofxParam.h's getValue).
+OfxStatus writeValues(Param& p, double frame, va_list ap) {
+    const std::string& type = p.type;
+    if (type == kOfxParamTypeString || type == kOfxParamTypeStrChoice || type == kOfxParamTypeCustom) {
+        // Ours: strings keep their defaults.
+        p.text = p.props.string(kOfxParamPropDefault).toStdString();
+        *va_arg(ap, const char**) = p.text.c_str();
+        return kOfxStatOK;
+    }
+    if (type == kOfxParamTypeGroup || type == kOfxParamTypePage || type == kOfxParamTypePushButton || type == kOfxParamTypeParametric ||
+        type == kOfxParamTypeBytes) {
+        return kOfxStatErrBadHandle;
+    }
+    const std::vector<double> v = valuesAt(p, contextOf(p), frame);
+    const bool integral = type == kOfxParamTypeInteger || type == kOfxParamTypeInteger2D || type == kOfxParamTypeInteger3D ||
+                          type == kOfxParamTypeBoolean || type == kOfxParamTypeChoice;
+    for (double x : v) {
+        if (integral) *va_arg(ap, int*) = static_cast<int>(x);
+        else *va_arg(ap, double*) = x;
+    }
+    return kOfxStatOK;
+}
+
+double renderFrame(const Param& p) {
+    const RenderContext* r = contextOf(p);
+    return r ? r->frame : 0.0;
+}
+
+} // namespace
+
+// The parameter suite's value calls (declared above, in the first anonymous namespace).
+namespace {
+
+OfxStatus paramGetValue(OfxParamHandle h, ...) {
+    if (!h) return kOfxStatErrBadHandle;
+    va_list ap;
+    va_start(ap, h);
+    const OfxStatus s = writeValues(*param(h), renderFrame(*param(h)), ap);
+    va_end(ap);
+    return s;
+}
+
+OfxStatus paramGetValueAtTime(OfxParamHandle h, OfxTime time, ...) {
+    if (!h) return kOfxStatErrBadHandle;
+    va_list ap;
+    va_start(ap, time);
+    const OfxStatus s = writeValues(*param(h), time, ap);
+    va_end(ap);
+    return s;
+}
+
+// The derivative and integral of a numeric parameter, worked out from its values a frame apart (ours).
+OfxStatus paramGetDerivative(OfxParamHandle h, OfxTime time, ...) {
+    if (!h) return kOfxStatErrBadHandle;
+    Param& p = *param(h);
+    const std::vector<double> a = valuesAt(p, contextOf(p), time - 0.5), b = valuesAt(p, contextOf(p), time + 0.5);
+    va_list ap;
+    va_start(ap, time);
+    for (std::size_t i = 0; i < a.size(); ++i) *va_arg(ap, double*) = b[i] - a[i];
+    va_end(ap);
+    return kOfxStatOK;
+}
+
+OfxStatus paramGetIntegral(OfxParamHandle h, OfxTime time1, OfxTime time2, ...) {
+    if (!h) return kOfxStatErrBadHandle;
+    Param& p = *param(h);
+    std::vector<double> sum(static_cast<std::size_t>(dimensionOf(p.type)), 0.0);
+    const int steps = std::clamp(static_cast<int>(std::abs(time2 - time1)) * 4, 1, 4096);
+    const double dt = (time2 - time1) / steps;
+    for (int i = 0; i < steps; ++i) {
+        const std::vector<double> v = valuesAt(p, contextOf(p), time1 + (i + 0.5) * dt);
+        for (std::size_t k = 0; k < sum.size(); ++k) sum[k] += v[k] * dt;
+    }
+    va_list ap;
+    va_start(ap, time2);
+    for (double x : sum) *va_arg(ap, double*) = x;
+    va_end(ap);
+    return kOfxStatOK;
+}
+
+// The keyframes of an instance's parameter during a render: those of its stored key in the effect (the first axis's
+// for a 2D or 3D one), at their frames.
+std::vector<double> keyFrames(const Param& p) {
+    const RenderContext* r = contextOf(p);
+    std::vector<double> out;
+    if (!r || !r->effect || !r->info) return out;
+    const OfxParamInfo* info = paramInfoOf(*r->info, p.name);
+    if (!info) return out;
+    const QString key = dimensionOf(p.type) > 1 && p.type != kOfxParamTypeRGB && p.type != kOfxParamTypeRGBA ? info->name + QLatin1String(".x") : info->name;
+    const model::ParameterKeyframes keys = model::keyframesOf(*r->effect, ofxParameterCategory(*r->info), key);
+    for (const model::EffectKeyframe& k : keys.keys) out.push_back(r->span.frameOf(model::keyframeTime(keys, k, r->span)));
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+OfxStatus paramGetNumKeys(OfxParamHandle h, unsigned int* n) {
+    if (!h || !n) return kOfxStatErrBadHandle;
+    *n = static_cast<unsigned int>(keyFrames(*param(h)).size());
+    return kOfxStatOK;
+}
+
+OfxStatus paramGetKeyTime(OfxParamHandle h, unsigned int nth, OfxTime* time) {
+    if (!h || !time) return kOfxStatErrBadHandle;
+    const std::vector<double> keys = keyFrames(*param(h));
+    if (nth >= keys.size()) return kOfxStatErrBadIndex;
+    *time = keys[nth];
+    return kOfxStatOK;
+}
+
+OfxStatus paramGetKeyIndex(OfxParamHandle h, OfxTime time, int direction, int* index) {
+    if (!h || !index) return kOfxStatErrBadHandle;
+    const std::vector<double> keys = keyFrames(*param(h));
+    for (std::size_t i = 0; i < keys.size(); ++i) {
+        const std::size_t k = direction < 0 ? keys.size() - 1 - i : i;
+        const bool hit = direction == 0 ? std::abs(keys[k] - time) < 1e-6 : direction < 0 ? keys[k] < time : keys[k] > time;
+        if (hit) {
+            *index = static_cast<int>(k);
+            return kOfxStatOK;
+        }
+    }
+    return kOfxStatFailed;
+}
+
+// ---------------------------------------------------------------- clips and images
+
+OfxStatus clipGetHandle(OfxImageEffectHandle e, const char* name, OfxImageClipHandle* handleOut, OfxPropertySetHandle* props) {
+    if (!e || !name) return kOfxStatErrBadHandle;
+    for (const auto& c : effect(e)->clips) {
+        if (c->name == name) {
+            if (handleOut) *handleOut = reinterpret_cast<OfxImageClipHandle>(c.get());
+            if (props) *props = handle(&c->props);
+            return kOfxStatOK;
+        }
+    }
+    return kOfxStatErrUnknown;
+}
+
+OfxStatus clipGetPropertySet(OfxImageClipHandle c, OfxPropertySetHandle* props) {
+    if (!c || !props) return kOfxStatErrBadHandle;
+    *props = handle(&clip(c)->props);
+    return kOfxStatOK;
+}
+
+void setImageProps(Image& image, const std::string& clipName, double frame, int width, int height) {
+    PropertySet& p = image.props;
+    p.setString(kOfxPropType, {kOfxTypeImage});
+    p.setString(kOfxImageEffectPropPixelDepth, {kOfxBitDepthFloat});
+    p.setString(kOfxImageEffectPropComponents, {kOfxImageComponentRGBA});
+    p.setString(kOfxImageEffectPropPreMultiplication, {kOfxImagePreMultiplied});
+    p.setDouble(kOfxImageEffectPropRenderScale, {1.0, 1.0});
+    p.setDouble(kOfxImagePropPixelAspectRatio, {1.0});
+    p.setPointer(kOfxImagePropData, {image.data.data()});
+    p.setInt(kOfxImagePropBounds, {0, 0, width, height});
+    p.setInt(kOfxImagePropRegionOfDefinition, {0, 0, width, height});
+    p.setInt(kOfxImagePropRowBytes, {width * 4 * static_cast<int>(sizeof(float))});
+    p.setString(kOfxImagePropField, {kOfxImageFieldNone});
+    p.setString(kOfxImagePropUniqueIdentifier, {clipName + ":" + std::to_string(frame)});
+}
+
+OfxStatus clipGetImage(OfxImageClipHandle c, OfxTime time, const OfxRectD*, OfxPropertySetHandle* imageOut) {
+    if (!c || !imageOut) return kOfxStatErrBadHandle;
+    Clip& cl = *clip(c);
+    Instance* inst = cl.owner ? cl.owner->instance : nullptr;
+    if (!inst || !inst->render) return kOfxStatFailed;
+    const RenderContext& r = *inst->render;
+    if (cl.name == kOfxImageEffectOutputClipName) {
+        if (!inst->output) return kOfxStatFailed;
+        *imageOut = handle(&inst->output->props);
+        return kOfxStatOK;
+    }
+    const auto it = r.inputs.find(cl.name);
+    if (it == r.inputs.end() || !it->second) return kOfxStatFailed; // not connected
+    // Ours: every time of an input clip is the render's picture (no temporal clip access).
+    const Picture& picture = *it->second;
+    auto image = std::make_unique<Image>();
+    const int w = r.width, h = r.height;
+    image->data.assign(static_cast<std::size_t>(w) * static_cast<std::size_t>(h) * 4, 0.0f);
+    if (picture.width() == w && picture.height() == h) {
+        for (int y = 0; y < h; ++y) {
+            // The standard's row 0 is the bottom of the picture.
+            std::copy_n(picture.pixel(0, h - 1 - y), static_cast<std::size_t>(w) * 4, &image->data[static_cast<std::size_t>(y) * static_cast<std::size_t>(w) * 4]);
+        }
+    }
+    setImageProps(*image, cl.name, time, w, h);
+    *imageOut = handle(&image->props);
+    inst->images.push_back(std::move(image));
+    return kOfxStatOK;
+}
+
+OfxStatus clipReleaseImage(OfxPropertySetHandle image) {
+    if (!image) return kOfxStatErrBadHandle;
+    for (auto& [id, inst] : instances()) {
+        auto& list = inst->images;
+        const auto it = std::find_if(list.begin(), list.end(), [&](const std::unique_ptr<Image>& i) { return handle(&i->props) == image; });
+        if (it != list.end()) {
+            list.erase(it);
+            return kOfxStatOK;
+        }
+        if (inst->output && handle(&inst->output->props) == image) return kOfxStatOK; // the host keeps the output
+    }
+    return kOfxStatErrBadHandle;
+}
+
+OfxStatus clipGetRegionOfDefinition(OfxImageClipHandle c, OfxTime, OfxRectD* bounds) {
+    if (!c || !bounds) return kOfxStatErrBadHandle;
+    Instance* inst = clip(c)->owner ? clip(c)->owner->instance : nullptr;
+    const int w = inst && inst->render ? inst->render->width : 0, h = inst && inst->render ? inst->render->height : 0;
+    *bounds = OfxRectD{0.0, 0.0, static_cast<double>(w), static_cast<double>(h)};
+    return kOfxStatOK;
+}
+
+// ---------------------------------------------------------------- instances and the render actions
+
+// The instance's properties a render changes: the project's size and rate, the effect's length.
+void setProjectProps(Instance& inst, const RenderContext& r) {
+    PropertySet& p = inst.props;
+    const double w = r.width, h = r.height;
+    p.setDouble(kOfxImageEffectPropProjectSize, {w, h});
+    p.setDouble(kOfxImageEffectPropProjectExtent, {w, h});
+    p.setDouble(kOfxImageEffectPropProjectOffset, {0.0, 0.0});
+    p.setDouble(kOfxImageEffectPropProjectPixelAspectRatio, {1.0});
+    p.setDouble(kOfxImageEffectInstancePropEffectDuration, {static_cast<double>(r.span.length)});
+    p.setDouble(kOfxImageEffectPropFrameRate, {gFrameRate});
+    for (const auto& c : inst.clips) {
+        PropertySet& cp = c->props;
+        const bool connected = c->name == kOfxImageEffectOutputClipName || r.inputs.count(c->name) > 0;
+        cp.setInt(kOfxImageClipPropConnected, {connected ? 1 : 0});
+        cp.setDouble(kOfxImageEffectPropFrameRate, {gFrameRate});
+        cp.setDouble(kOfxImageEffectPropFrameRange, {0.0, static_cast<double>(std::max<std::int64_t>(r.span.length - 1, 0))});
+        cp.setDouble(kOfxImageEffectPropUnmappedFrameRate, {gFrameRate});
+        cp.setDouble(kOfxImageEffectPropUnmappedFrameRange, {0.0, static_cast<double>(std::max<std::int64_t>(r.span.length - 1, 0))});
+    }
+}
+
+// The plug-in's instance, made when first asked for; null if it cannot be made.
+Instance* instanceFor(const OfxPluginInfo& info) {
+    auto& all = instances();
+    if (auto it = all.find(info.id); it != all.end()) return it->second->failed ? nullptr : it->second.get();
+    const auto d = described().find(info.id);
+    if (d == described().end() || !d->second.plugin || !d->second.descriptor) return nullptr;
+    auto inst = std::make_unique<Instance>();
+    inst->instance = inst.get();
+    inst->id = info.id;
+    inst->plugin = d->second.plugin;
+    inst->context = d->second.context;
+    const Effect& desc = *d->second.descriptor;
+    inst->props = desc.props;
+    inst->props.setString(kOfxPropType, {kOfxTypeImageEffectInstance});
+    inst->props.setString(kOfxImageEffectPropContext, {inst->context});
+    inst->props.setPointer(kOfxPropInstanceData, {nullptr});
+    inst->props.setInt(kOfxPropIsInteractive, {0});
+    inst->props.setInt(kOfxImageEffectInstancePropSequentialRender, {0});
+    inst->props.setInt(kOfxImageEffectPropSupportsTiles, {0});
+    for (const auto& c : desc.clips) {
+        auto copy = std::make_unique<Clip>();
+        copy->name = c->name;
+        copy->props = c->props;
+        copy->owner = inst.get();
+        PropertySet& cp = copy->props;
+        cp.setString(kOfxImageEffectPropPixelDepth, {kOfxBitDepthFloat});
+        cp.setString(kOfxImageEffectPropComponents, {kOfxImageComponentRGBA});
+        cp.setString(kOfxImageClipPropUnmappedPixelDepth, {kOfxBitDepthFloat});
+        cp.setString(kOfxImageClipPropUnmappedComponents, {kOfxImageComponentRGBA});
+        cp.setString(kOfxImageEffectPropPreMultiplication, {kOfxImagePreMultiplied});
+        cp.setDouble(kOfxImagePropPixelAspectRatio, {1.0});
+        cp.setString(kOfxImageClipPropFieldOrder, {kOfxImageFieldNone});
+        cp.setInt(kOfxImageClipPropContinuousSamples, {0});
+        inst->clips.push_back(std::move(copy));
+    }
+    for (const auto& p : desc.params.params) {
+        auto copy = std::make_unique<Param>();
+        copy->type = p->type;
+        copy->name = p->name;
+        copy->props = p->props;
+        copy->owner = inst.get();
+        inst->params.params.push_back(std::move(copy));
+    }
+    inst->params.props = desc.params.props;
+    currentPlugin() = info.id;
+    const OfxStatus s = inst->plugin->mainEntry(kOfxActionCreateInstance, reinterpret_cast<OfxImageEffectHandle>(inst.get()), nullptr, nullptr);
+    currentPlugin().clear();
+    Instance* out = inst.get();
+    if (!succeeded(s)) {
+        out->failed = true;
+        message(nullptr, kOfxMessageError, nullptr, "%s could not be started (%s)", info.id.toUtf8().constData(), statusText(s).toUtf8().constData());
+        out = nullptr;
+    }
+    all[info.id] = std::move(inst);
+    return out;
+}
+
+// Renders the plug-in's Output clip for `r`; nothing when it fails (said once in the message handler's output).
+std::optional<Picture> render(const OfxPluginInfo& info, RenderContext& r) {
+    std::lock_guard lock(renderMutex());
+    Instance* inst = instanceFor(info);
+    if (!inst || r.width <= 0 || r.height <= 0) return std::nullopt;
+    inst->render = &r;
+    setProjectProps(*inst, r);
+    currentPlugin() = info.id;
+    auto handleOf = reinterpret_cast<OfxImageEffectHandle>(inst);
+    const std::vector<double> renderScale{1.0, 1.0};
+    const std::vector<int> window{0, 0, r.width, r.height};
+
+    std::optional<Picture> result;
+    // An identity: the plug-in says a clip's picture is the output (kOfxImageEffectActionIsIdentity).
+    PropertySet identityIn, identityOut;
+    identityIn.setDouble(kOfxPropTime, {r.frame});
+    identityIn.setString(kOfxImageEffectPropFieldToRender, {kOfxImageFieldNone});
+    identityIn.setInt(kOfxImageEffectPropRenderWindow, window);
+    identityIn.setDouble(kOfxImageEffectPropRenderScale, renderScale);
+    identityOut.setString(kOfxPropName, {""});
+    identityOut.setDouble(kOfxPropTime, {r.frame});
+    if (inst->plugin->mainEntry(kOfxImageEffectActionIsIdentity, handleOf, handle(&identityIn), handle(&identityOut)) == kOfxStatOK) {
+        const std::string name = identityOut.string(kOfxPropName).toStdString();
+        if (const auto it = r.inputs.find(name); it != r.inputs.end() && it->second) result = *it->second;
+    }
+    if (!result) {
+        Image output;
+        output.data.assign(static_cast<std::size_t>(r.width) * static_cast<std::size_t>(r.height) * 4, 0.0f);
+        setImageProps(output, kOfxImageEffectOutputClipName, r.frame, r.width, r.height);
+        inst->output = &output;
+        PropertySet seq;
+        seq.setDouble(kOfxImageEffectPropFrameRange, {r.frame, r.frame});
+        seq.setDouble(kOfxImageEffectPropFrameStep, {1.0});
+        seq.setInt(kOfxPropIsInteractive, {0});
+        seq.setDouble(kOfxImageEffectPropRenderScale, renderScale);
+        seq.setInt(kOfxImageEffectPropSequentialRenderStatus, {0});
+        seq.setInt(kOfxImageEffectPropInteractiveRenderStatus, {0});
+        PropertySet in;
+        in.setDouble(kOfxPropTime, {r.frame});
+        in.setString(kOfxImageEffectPropFieldToRender, {kOfxImageFieldNone});
+        in.setInt(kOfxImageEffectPropRenderWindow, window);
+        in.setDouble(kOfxImageEffectPropRenderScale, renderScale);
+        in.setInt(kOfxImageEffectPropSequentialRenderStatus, {0});
+        in.setInt(kOfxImageEffectPropInteractiveRenderStatus, {0});
+        in.setInt(kOfxImageEffectPropRenderQualityDraft, {0});
+        const OfxStatus begin = inst->plugin->mainEntry(kOfxImageEffectActionBeginSequenceRender, handleOf, handle(&seq), nullptr);
+        const OfxStatus s = succeeded(begin) || begin == kOfxStatReplyDefault
+                                ? inst->plugin->mainEntry(kOfxImageEffectActionRender, handleOf, handle(&in), nullptr)
+                                : begin;
+        inst->plugin->mainEntry(kOfxImageEffectActionEndSequenceRender, handleOf, handle(&seq), nullptr);
+        inst->output = nullptr;
+        if (succeeded(s)) {
+            Picture out(r.width, r.height);
+            for (int y = 0; y < r.height; ++y) {
+                std::copy_n(&output.data[static_cast<std::size_t>(y) * static_cast<std::size_t>(r.width) * 4], static_cast<std::size_t>(r.width) * 4,
+                            out.pixel(0, r.height - 1 - y));
+            }
+            result = std::move(out);
+        } else if (!inst->reported) {
+            inst->reported = true;
+            message(nullptr, kOfxMessageError, nullptr, "the render failed (%s)", statusText(s).toUtf8().constData());
+        }
+    }
+    // Images the plug-in did not release go with the render.
+    inst->images.clear();
+    inst->render = nullptr;
+    currentPlugin().clear();
+    return result;
+}
+
+} // namespace
+
+const OfxPluginInfo* ofxPluginOf(const model::Effect& effect) {
+    for (const OfxPluginInfo& p : registered()) {
+        if (!p.usable() || p.category() != effect.category) continue;
+        if (effect.name == p.label || effect.name == QStringLiteral("%1 (%2)").arg(p.label, p.id)) return &p;
+    }
+    return nullptr;
+}
+
+QString ofxParameterCategory(const OfxPluginInfo& plugin) {
+    return plugin.label + QStringLiteral(" Plug-In Parameters");
+}
+
+QList<OfxEditorParameter> ofxEditorParameters(const OfxPluginInfo& plugin) {
+    QList<OfxEditorParameter> out;
+    // Groups' labels by name, for their parameters' subcategory.
+    QMap<QString, QString> groups;
+    for (const OfxParamInfo& p : plugin.params) {
+        if (p.type == QLatin1String(kOfxParamTypeGroup)) groups.insert(p.name, p.label);
+    }
+    const bool transition = plugin.describedContext == QLatin1String(kOfxImageEffectContextTransition);
+    for (const OfxParamInfo& p : plugin.params) {
+        if (p.secret) continue;
+        if (transition && p.name == QLatin1String(kOfxImageEffectTransitionParamName)) continue;
+        const std::string type = p.type.toStdString();
+        const int n = dimensionOf(type);
+        OfxEditorParameter e;
+        e.key = p.name;
+        e.text = p.label;
+        e.subcategory = groups.value(p.parent);
+        e.keyframeable = p.animates;
+        auto number = [&](int i) { return i < p.defaults.size() ? p.defaults.at(i).toDouble() : 0.0; };
+        if (type == kOfxParamTypeBoolean) {
+            e.kind = QStringLiteral("checkbox");
+            e.keyframeable = false;
+            e.defaultValue = number(0) != 0.0;
+            out << e;
+        } else if (type == kOfxParamTypeChoice) {
+            e.kind = QStringLiteral("menu");
+            e.keyframeable = false;
+            e.options = p.options;
+            const int i = static_cast<int>(number(0));
+            if (i >= 0 && i < p.options.size()) e.defaultValue = p.options.at(i);
+            if (!e.options.isEmpty()) out << e;
+        } else if (type == kOfxParamTypeRGB || type == kOfxParamTypeRGBA) {
+            e.kind = QStringLiteral("color");
+            e.defaultValue = QColor::fromRgbF(static_cast<float>(std::clamp(number(0), 0.0, 1.0)), static_cast<float>(std::clamp(number(1), 0.0, 1.0)),
+                                              static_cast<float>(std::clamp(number(2), 0.0, 1.0)))
+                                 .name();
+            out << e;
+        } else if (type == kOfxParamTypeDouble || type == kOfxParamTypeInteger || n > 1) {
+            if (type != kOfxParamTypeDouble && type != kOfxParamTypeInteger && type != kOfxParamTypeDouble2D && type != kOfxParamTypeInteger2D &&
+                type != kOfxParamTypeDouble3D && type != kOfxParamTypeInteger3D) {
+                continue;
+            }
+            e.kind = QStringLiteral("slider");
+            // The display range, else the range, else 0 to 100 (the 6.11a sentinels mean "no range").
+            auto usable = [](double lo, double hi) { return std::isfinite(lo) && std::isfinite(hi) && hi > lo && hi - lo < 1e9; };
+            if (p.hasRange && usable(p.displayMin, p.displayMax)) {
+                e.min = p.displayMin;
+                e.max = p.displayMax;
+            } else if (p.hasRange && usable(p.min, p.max)) {
+                e.min = p.min;
+                e.max = p.max;
+            }
+            const bool integral = type == kOfxParamTypeInteger || type == kOfxParamTypeInteger2D || type == kOfxParamTypeInteger3D;
+            e.decimals = integral ? 0 : e.max - e.min <= 2.0 ? 3 : 2;
+            for (int i = 0; i < n; ++i) {
+                OfxEditorParameter axis = e;
+                if (n > 1) {
+                    axis.key = p.name + QLatin1String(kAxes[i]);
+                    axis.text = p.label + QLatin1Char(' ') + QChar(QLatin1Char('X').unicode() + i);
+                }
+                axis.defaultValue = integral ? QJsonValue(static_cast<int>(std::lround(number(i)))) : QJsonValue(number(i));
+                out << axis;
+            }
+        }
+    }
+    return out;
+}
+
+QJsonValue ofxParameterDefault(const model::Effect& effect, const QString& category, const QString& key) {
+    const OfxPluginInfo* p = ofxPluginOf(effect);
+    if (!p || category != ofxParameterCategory(*p)) return {};
+    for (const OfxEditorParameter& e : ofxEditorParameters(*p)) {
+        if (e.key == key) return e.defaultValue;
+    }
+    return {};
+}
+
+Picture ofxSegmentPicture(const model::Effect& effect, const Picture& source, double time, const model::EffectSpan& span) {
+    const OfxPluginInfo* info = ofxPluginOf(effect);
+    if (!info) return source;
+    RenderContext r;
+    r.effect = &effect;
+    r.info = info;
+    r.span = span;
+    r.frame = span.frameOf(time);
+    r.width = source.width();
+    r.height = source.height();
+    // Filter and General plug-ins take the segment as their Source clip; a Generator has none.
+    if (info->clips.contains(QLatin1String(kOfxImageEffectSimpleSourceClipName))) r.inputs[kOfxImageEffectSimpleSourceClipName] = &source;
+    return render(*info, r).value_or(source);
+}
+
+Picture ofxTransitionPicture(const model::Effect& effect, const Picture& from, const Picture& to, double progress, double time,
+                             const model::EffectSpan& span) {
+    const OfxPluginInfo* info = ofxPluginOf(effect);
+    if (!info) return mix(from, to, progress);
+    RenderContext r;
+    r.effect = &effect;
+    r.info = info;
+    r.span = span;
+    r.frame = span.frameOf(time);
+    r.progress = std::clamp(progress, 0.0, 1.0);
+    r.width = from.width();
+    r.height = from.height();
+    if (info->describedContext == QLatin1String(kOfxImageEffectContextTransition)) {
+        r.inputs[kOfxImageEffectTransitionSourceFromClipName] = &from;
+        r.inputs[kOfxImageEffectTransitionSourceToClipName] = &to;
+    } else if (info->clips.contains(QLatin1String(kOfxImageEffectSimpleSourceClipName))) {
+        // Ours: a segment plug-in on a transition works on the incoming picture over the outgoing one.
+        r.inputs[kOfxImageEffectSimpleSourceClipName] = &to;
+        const auto out = render(*info, r);
+        return out ? over(*out, from) : mix(from, to, progress);
+    }
+    return render(*info, r).value_or(mix(from, to, progress));
+}
+
+void setOfxFrameRate(double rate) {
+    if (rate > 0.0) gFrameRate = rate;
+}
+
+int closeOfxInstances() {
+    std::lock_guard lock(renderMutex());
+    int closed = 0;
+    for (auto& [id, inst] : instances()) {
+        if (inst->failed) continue;
+        currentPlugin() = id;
+        inst->plugin->mainEntry(kOfxActionDestroyInstance, reinterpret_cast<OfxImageEffectHandle>(inst.get()), nullptr, nullptr);
+        ++closed;
+    }
+    currentPlugin().clear();
+    instances().clear();
+    return closed;
 }
 
 } // namespace lumenis::media

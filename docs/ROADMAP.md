@@ -1272,10 +1272,12 @@ phase of their own. They are done in three steps:
     Console's reasons when one does not load (p.163); our own test plug-in. Done (docs/spec/ofx-host.md:
     `src/media/ofx_host.*`, `OfxHostProvider`, `EffectInfo::ofxPlugin` and the plug-in icon; tests `tst_ofx_host`,
     `tst_ofx_palette` with `tests/media/ofx_test_plugin.cpp`).
-  * 6.11b, rendering: a plug-in's parameters as the Effect Editor's controls (double, integer, boolean, choice, colour,
-    2D), keyframed like ours ("AVX 2.0 plug-ins automatically use advanced keyframes", p.157); the Filter, Generator
-    and Transition contexts; images in and out at the project's size; a missing plug-in's effect blank in the Timeline
-    and named in the Console (p.163); effect templates of plug-in effects (p.157); the Console's
+  * 6.11b, in two parts (2026-11-06): 6.11b1, rendering: a plug-in's parameters as the Effect Editor's controls (double,
+    integer, boolean, choice, colour, 2D), keyframed like ours ("AVX 2.0 plug-ins automatically use advanced
+    keyframes", p.157); the Filter, Generator and Transition contexts; images in and out at the project's size. Done
+    (docs/spec/ofx-host.md: `ofxSegmentPicture`/`ofxTransitionPicture` from the compositor, `ofxEditorParameters`,
+    instances and `closeOfxInstances`; tests `tst_ofx_host`, `tst_ofx_palette`). 6.11b2: a missing plug-in's effect
+    blank in the Timeline and named in the Console (p.163); effect templates of plug-in effects (p.157); the Console's
     `closeallofxplugins` after `closeallavxplugins` (p.158).
   * 6.11c, the General context's several inputs with the Optional Inputs dialog (p.161), overlays through the Interact
     suite with Outline/Path (p.161-162), and colour management with OCIO (the OFX 1.5 colour suite) where the library

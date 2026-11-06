@@ -395,6 +395,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   plug-in with no grouping ("OFX Plug-Ins"), a second plug-in of the same label named
   with its identifier, plug-in effects without the green dot, the plug-in icon's drawing,
   the order of contexts a plug-in is described in (Filter, Generator, Transition, General).
+  6.11b1: the "<label> Plug-In Parameters" category, the controls chosen for each OFX parameter type (decimals,
+  ranges, 2D/3D as sliders per axis, RGBA without alpha), one instance per plug-in, renders one at a time, the
+  same frame for every time of an input clip, segment plug-ins on transitions working on the incoming picture.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

@@ -1,4 +1,5 @@
 #include "lumenis/media/compositor.h"
+#include "lumenis/media/ofx_host.h"
 #include "lumenis/media/plasma_wipe.h"
 #include "lumenis/media/color_correction.h"
 #include "lumenis/media/classic_title.h"
@@ -357,6 +358,7 @@ Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture 
         // Chroma Key on a transition (p.473). Ours: the incoming video keyed over the outgoing.
         return over(imageEffectPicture(e, incoming, time, model::EffectSpan(t.duration, true)), outgoing);
     }
+    if (isOfxEffect(e)) return ofxTransitionPicture(e, outgoing, incoming, progress, time, model::EffectSpan(t.duration, true));
     if (isIllusionTransition(e)) {
         return illusionTransitionPicture(e, std::move(outgoing), std::move(incoming), progress, time, model::EffectSpan(t.duration, true));
     }
@@ -793,6 +795,14 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 frames.interlaced = c.interlaced;
                 frames.topFieldFirst = c.topFieldFirst ? c.topFieldFirst(seg) : true;
                 result = intraframePicture(e, layer, result, time, length, &frames);
+                result.quantize(c.precision);
+                continue;
+            }
+            if (isOfxEffect(e)) {
+                // An OFX plug-in's effect (FX Guide p.157; ofx_host.h): the plug-in's Output clip from the segment.
+                layer = ofxSegmentPicture(e, layer, time, length);
+                layer.quantize(c.precision);
+                result = over(layer, result);
                 result.quantize(c.precision);
                 continue;
             }

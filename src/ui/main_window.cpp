@@ -9,6 +9,7 @@
 #include "lumenis/ui/main_window.h"
 
 #include "lumenis/model/safe_color_limiter.h"
+#include "lumenis/media/ofx_host.h"
 #include "lumenis/media/scopes.h"
 
 #include "lumenis/model/safe_colors.h"
@@ -5316,6 +5317,8 @@ void MainWindow::applySettings() {
     // The Paint Effect's Previsualization Marker tool is for 24-fps film projects (FX p.412); Scratch Removal's Frame
     // Processing button is for two-field media (FX p.547).
     if (project_) {
+        // OFX plug-ins are told the project's frame rate (kOfxImageEffectPropFrameRate).
+        media::setOfxFrameRate(project_->settings.format.editRate.toDouble());
         effectEditor_->setInterlacedProject(project_->settings.format.scan == ScanMode::Interlaced);
         // The YC Waveform's PAL or NTSC scale (FX Guide p.690): PAL for 25 and 50 fps projects (ours).
         if (CorrectionMonitors* m = composer_->correctionMonitors()) {
