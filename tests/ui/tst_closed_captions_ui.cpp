@@ -119,6 +119,22 @@ private slots:
         QVERIFY(cc.broken.isEmpty());
         window.timeline().repaint();
 
+        // "You can use the Timeline Quick Find text box to search for Closed Caption text" (p.985).
+        Timeline& timeline = window.timeline();
+        QVERIFY(timeline.findOptions().visibleText);
+        timeline.setFindText(QStringLiteral("ROW TWO"));
+        composer.state(MonitorId::Record).setPosition(0);
+        QVERIFY(timeline.findNext(true));
+        QCOMPARE(composer.state(MonitorId::Record).position(), cc.shown.last().start);
+        QVERIFY(!timeline.findNext(true));
+        timeline.setFindText(QStringLiteral("first"));
+        QVERIFY(timeline.findNext(false));
+        QCOMPARE(composer.state(MonitorId::Record).position(), cc.shown.first().start);
+        timeline.setFindOptions({false, false, false, false, false}); // None
+        composer.state(MonitorId::Record).setPosition(0);
+        QVERIFY(!timeline.findNext(true));
+        timeline.setFindOptions({});
+
         // A cut in the second caption's loading phase breaks it (p.984).
         const auto spans = model::captionLoadingSpans(model::clipCaptionData(clip));
         const auto& loading = *std::max_element(spans.begin() + 1, spans.end(), [](const auto& a, const auto& b) {

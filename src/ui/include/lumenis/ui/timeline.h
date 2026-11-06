@@ -274,6 +274,34 @@ public:
         QList<std::int64_t> broken;
     };
     const CaptionTrack& captionTrack() const;
+
+    // The Timeline Quick Find (7.4b2; docs/spec/timeline-find.md; Editing Guide p.645-646, p.985) in timeline_find.cpp:
+    // "search for Visible Timeline Text, Resolution, Clip Name, Timeline Clip Notes, Markers, All, or any combination".
+    struct FindOptions {
+        bool visibleText = true; // checked in the picture on p.646
+        bool resolution = false;
+        bool clipName = false;
+        bool clipNotes = false;
+        bool markers = false;
+        bool operator==(const FindOptions&) const = default;
+    };
+    const FindOptions& findOptions() const { return findOptions_; }
+    void setFindOptions(const FindOptions& options) { findOptions_ = options; }
+    void setFindText(const QString& text);
+    QString findText() const;
+    // A place the find can go to: a segment's start (or a caption's, or a marker's frame) and the text found there.
+    struct FindPlace {
+        std::int64_t frame = 0;
+        QString text;
+    };
+    // The places of the shown sequence for the options, in frame order.
+    QList<FindPlace> findPlaces() const;
+    // Find to the right (forward) or to the left: "The Timeline blue bar moves to the start of the next Timeline segment
+    // whose metadata contains a match for the search string" (p.646). False, with the position kept, when none does.
+    bool findNext(bool forward);
+    // The search field's drop-down menu (p.646): None, Visible Timeline Text, Resolution, Clip Name, Timeline Clip Notes,
+    // Markers and All, checkable; owned by the caller.
+    QMenu* findOptionsMenu(QWidget* parent);
     void setSequenceMaker(SequenceMaker maker) { maker_ = std::move(maker); }
     void setKeyResolver(Composer::KeyResolver resolver) { keys_ = std::move(resolver); }
 
@@ -1603,6 +1631,7 @@ private:
     std::function<bool()> deleteHook_;
     std::function<QByteArray(const model::Segment&)> captionClipData_;
     mutable CaptionTrack captionCache_;
+    FindOptions findOptions_;
     SequenceMaker maker_;
     Composer::KeyResolver keys_;
     InsufficientSource insufficient_;

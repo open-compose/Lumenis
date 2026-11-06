@@ -435,6 +435,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   beside the user settings, Synchronize "Sequence" until chosen. 7.4b1 (docs/spec/closed-captions.md): caption
   data kept in the bin item, colours and styles not kept, the 80% caption grid in the monitors, the D1 row's drawing,
   a broken caption as a cut through a sending span, SCC lines before the start left out, TTML layout and times.
+  7.4b2 (docs/spec/timeline-find.md): what each Quick Find option searches, Enter finding to the right, the position
+  kept without a match, options not kept.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

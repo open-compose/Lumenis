@@ -88,6 +88,7 @@ add_library(lumenis_ui STATIC
     timeline.cpp
     timeline_automation.cpp
     timeline_captions.cpp
+    timeline_find.cpp
     timeline_correction.cpp
     tool_windows.cpp
     workspace.cpp

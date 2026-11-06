@@ -2291,14 +2291,23 @@ Timeline::Timeline(Composer& composer, QWidget* parent) : QWidget(parent), compo
         std::unique_ptr<QMenu> menu(viewMenu(QApplication::keyboardModifiers() & Qt::AltModifier, viewButton));
         menu->exec(viewButton->mapToGlobal(QPoint(0, -menu->sizeHint().height())));
     });
+    // The Timeline Quick Find field with its drop-down menu, and the Find to the left and right buttons (p.645-646).
     search_ = new QLineEdit(toolbar_);
     search_->setObjectName(QStringLiteral("timelineSearch"));
-    search_->setFixedSize(110, kToolButtonHeight - 2);
-    search_->setEnabled(false);
-    search_->setToolTip(tr("Search in visible timeline text"));
+    search_->setFixedSize(150, kToolButtonHeight - 2);
+    search_->setPlaceholderText(tr("Quick Find"));
+    search_->setToolTip(tr("Timeline Quick Find"));
+    QAction* findMenu = search_->addAction(glyphIcon(GlyphIcon::Search), QLineEdit::LeadingPosition);
+    findMenu->setObjectName(QStringLiteral("timelineSearchOptions"));
+    findMenu->setToolTip(tr("Search options"));
+    connect(findMenu, &QAction::triggered, this, [this] {
+        std::unique_ptr<QMenu> menu(findOptionsMenu(search_));
+        menu->exec(search_->mapToGlobal(QPoint(0, -menu->sizeHint().height())));
+    });
+    connect(search_, &QLineEdit::returnPressed, this, [this] { findNext(true); });
     bar->addWidget(search_);
-    tool("findLeft", Picture::FindLeft, tr("Find to the left"), false);
-    tool("findRight", Picture::FindRight, tr("Find to the right"), false);
+    connect(tool("findLeft", Picture::FindLeft, tr("Find to the left"), true), &QToolButton::clicked, this, [this] { findNext(false); });
+    connect(tool("findRight", Picture::FindRight, tr("Find to the right"), true), &QToolButton::clicked, this, [this] { findNext(true); });
     QToolButton* zoomOut = tool("zoomOut", Picture::ZoomOut, tr("Zoom Out"), true);
     scaleBar_ = new QSlider(Qt::Horizontal, toolbar_);
     scaleBar_->setObjectName(QStringLiteral("scaleBar"));
