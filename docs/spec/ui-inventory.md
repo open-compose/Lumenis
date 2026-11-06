@@ -412,7 +412,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Movie export (docs/spec/movie-export.md, 7.1a): one Compression menu naming each family in place of the three
   menus, its entries and encoders, the Bit Rate as one value, the Image Size presets, Center crop filling the raster,
   even sizes, Opus in MP4s without AAC, a clip exported through an AutoSequence, the marks of the monitor showing the
-  item, all tracks for an item not in the Record monitor, several items written beside the first.
+  item, all tracks for an item not in the Record monitor, several items written beside the first. 7.1b: sequence file
+  names counted from 0 with 7 digits, DPX and OpenEXR always sequences, OpenEXR display-referred, "Scale from Legal to
+  Full Range" as the default Color Levels, a repeated marker comment named with its frame.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

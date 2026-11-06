@@ -1,6 +1,7 @@
 // Movie export (7.1a; lumenis/media/movie_export.h, docs/spec/movie-export.md): fitting frames to the output raster
 // by each Source Scaling, and MOV and MP4 files written and read back: their codecs, sizes, frame counts, sound,
 // timecode and colour range; compressions that do not fit the container or the build; a cancel removing the file.
+// 7.1b: stills in every Graphic format, DPX and OpenEXR read back, legal range, sequence file names, WAVE and AIFF-C.
 #include "lumenis/media/media.h"
 #include "lumenis/media/movie_export.h"
 
@@ -199,6 +200,82 @@ private slots:
         VideoReader reader;
         QVERIFY(reader.open(path));
         QVERIFY(near(reader.frame(0).pixel(8, 18), qRgb(255, 0, 0)));
+    }
+
+    void stills() {
+        QTemporaryDir dir;
+        const QImage picture = source().picture(0);
+        struct Case {
+            StillFormat format;
+            int depth;
+        };
+        for (const Case& c : {Case{StillFormat::Png, 8}, Case{StillFormat::Png, 16}, Case{StillFormat::Jpeg, 8}, Case{StillFormat::Tiff, 8},
+                              Case{StillFormat::Tiff, 16}, Case{StillFormat::Bmp, 8}, Case{StillFormat::Dpx, 10}, Case{StillFormat::Dpx, 16},
+                              Case{StillFormat::OpenExr, 16}, Case{StillFormat::OpenExr, 32}}) {
+            StillOptions o;
+            o.format = c.format;
+            o.depth = c.depth;
+            const QString path = dir.filePath(QStringLiteral("still%1.%2").arg(c.depth).arg(stillSuffix(c.format)));
+            QString error;
+            QVERIFY2(writeStill(path, picture, o, &error), qPrintable(path + QLatin1Char(' ') + error));
+            VideoReader reader;
+            QVERIFY2(reader.open(path), qPrintable(path));
+            const QImage back = reader.frame(0);
+            QCOMPARE(back.size(), QSize(64, 36));
+            QVERIFY2(near(back.pixel(8, 18), qRgb(255, 0, 0), 30) && near(back.pixel(56, 18), qRgb(0, 0, 255), 30), qPrintable(path));
+        }
+        // PICT through our own writer; its file starts after a 512-byte header.
+        StillOptions pict;
+        pict.format = StillFormat::Pict;
+        const QString pct = dir.filePath(QStringLiteral("still.pct"));
+        QVERIFY(writeStill(pct, picture, pict));
+        QVERIFY(QFileInfo(pct).size() > 512);
+        // Another size by Crop/Pad: the picture 1:1 centred on black.
+        StillOptions padded;
+        padded.size = QSize(100, 100);
+        padded.scaling = MovieScaling::CenterKeepSize;
+        const QString pad = dir.filePath(QStringLiteral("pad.png"));
+        QVERIFY(writeStill(pad, picture, padded));
+        VideoReader reader;
+        QVERIFY(reader.open(pad));
+        QCOMPARE(reader.frame(0).size(), QSize(100, 100));
+        QVERIFY(near(reader.frame(0).pixel(2, 2), qRgb(0, 0, 0)));
+        // Keep as Legal Range: white is 235.
+        QImage white(8, 8, QImage::Format_RGB32);
+        white.fill(Qt::white);
+        QCOMPARE(qRed(legalRangePicture(white).pixel(0, 0)), 235);
+        white.fill(Qt::black);
+        QCOMPARE(qRed(legalRangePicture(white).pixel(0, 0)), 16);
+        QCOMPARE(numberedStillPath(QStringLiteral("/out/Cut.dpx"), 12), QStringLiteral("/out/Cut.0000012.dpx"));
+    }
+
+    void audioFiles() {
+        QTemporaryDir dir;
+        AudioFileOptions o;
+        o.bitDepth = 24;
+        QString error;
+        const QString wav = dir.filePath(QStringLiteral("mix.wav"));
+        QVERIFY2(exportAudioFile(wav, source(25), o, {}, &error), qPrintable(error));
+        auto info = probe(wav);
+        QVERIFY(info);
+        QCOMPARE(info->audio().front()->codec, QStringLiteral("pcm_s24le"));
+        QCOMPARE(info->audio().front()->channels, 2);
+        QCOMPARE(info->audio().front()->sampleRate, 48000);
+        QVERIFY(!info->firstVideo());
+        AudioReader sound;
+        QVERIFY(sound.open(wav));
+        QCOMPARE(sound.samples(0, 48000).size(), std::size_t(48000 * 2));
+
+        o.aiff = true;
+        o.bitDepth = 16;
+        o.sampleRate = 96000;
+        o.channels = 1;
+        const QString aif = dir.filePath(QStringLiteral("mix.aif"));
+        QVERIFY2(exportAudioFile(aif, source(25), o, {}, &error), qPrintable(error));
+        info = probe(aif);
+        QCOMPARE(info->audio().front()->codec, QStringLiteral("pcm_s16be"));
+        QCOMPARE(info->audio().front()->channels, 1);
+        QCOMPARE(info->audio().front()->sampleRate, 96000);
     }
 
     void cancel() {

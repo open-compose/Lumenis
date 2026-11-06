@@ -1315,7 +1315,9 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     `MainWindow::exportMovieFile`, the Export setting's MOV and MP4 tab; tests `tst_movie_export`,
     `tst_movie_export_ui`).
   * 7.1b, stills, audio and image sequences: Graphic (frames), Audio (WAV, AIFF), DPX (p.890) and OpenEXR (p.900),
-    Export with Mask Margins (p.900), H.265 (p.898).
+    Export with Mask Margins (p.900), H.265 (p.898). Done (docs/spec/movie-export.md: `media::writeStill`,
+    `exportAudioFile`, `MainWindow::exportStills`, the Export setting's Graphic, Audio, DPX and OpenEXR tabs; H.265 came
+    with 7.1a; Mask Margins waits for the mask regions, p.550; tests `tst_movie_export`, `tst_movie_export_ui`).
   * 7.1c, the Send To templates (p.863-867), export by dragging (p.868-869), Export to Pro Tools (p.872-878), Copy All Media and Consolidate in AAF
     export (p.870), Simplified AAF (p.884), Export Media Difference (p.885).
 * 7.2, MXF OP1a and AS-11 (p.886-892), XDCAM (p.883), AS-02 export volumes (p.901-904); gate 1 with bmx's checkers.

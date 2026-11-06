@@ -4,9 +4,12 @@
 #include "lumenis/media/movie_export.h"
 
 #include "lumenis/media/media.h"
+#include "lumenis/media/pict.h"
 #include "lumenis/media/playback.h"
 
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QObject>
 #include <QPainter>
 
@@ -206,6 +209,146 @@ bool exportMovie(const QString& path, const MovieSource& source, const MovieExpo
     if (resampler) {
         const std::vector<float> rest = resampler->flush();
         const int n = static_cast<int>(rest.size() / static_cast<std::size_t>(o.audioChannels));
+        if (n > 0) writer.writeAudio(rest.data(), n);
+    }
+    if (!writer.finish(&why)) return fail(why);
+    return true;
+}
+
+// ---------------------------------------------------------------- stills and sound files (7.1b)
+
+QString stillSuffix(StillFormat format) {
+    switch (format) {
+    case StillFormat::Png: return QStringLiteral("png");
+    case StillFormat::Jpeg: return QStringLiteral("jpg");
+    case StillFormat::Tiff: return QStringLiteral("tif");
+    case StillFormat::Bmp: return QStringLiteral("bmp");
+    case StillFormat::Pict: return QStringLiteral("pct");
+    case StillFormat::Dpx: return QStringLiteral("dpx");
+    case StillFormat::OpenExr: return QStringLiteral("exr");
+    }
+    return QStringLiteral("png");
+}
+
+QImage legalRangePicture(const QImage& picture) {
+    QImage out = picture.convertToFormat(QImage::Format_RGB32);
+    for (int y = 0; y < out.height(); ++y) {
+        auto* line = reinterpret_cast<QRgb*>(out.scanLine(y));
+        for (int x = 0; x < out.width(); ++x) {
+            auto squeeze = [](int v) { return 16 + (v * 219 + 127) / 255; };
+            line[x] = qRgb(squeeze(qRed(line[x])), squeeze(qGreen(line[x])), squeeze(qBlue(line[x])));
+        }
+    }
+    return out;
+}
+
+QString numberedStillPath(const QString& path, std::int64_t number) {
+    const QFileInfo f(path);
+    return f.dir().filePath(QStringLiteral("%1.%2.%3").arg(f.completeBaseName()).arg(number, 7, 10, QLatin1Char('0')).arg(f.suffix()));
+}
+
+bool writeStill(const QString& path, const QImage& picture, const StillOptions& o, QString* error) {
+    auto fail = [&](const QString& text) {
+        if (error) *error = text;
+        QFile::remove(path);
+        return false;
+    };
+    if (picture.isNull()) return fail(QObject::tr("There is no picture to export."));
+    const QSize size = o.size.isValid() && !o.size.isEmpty() ? o.size : picture.size();
+    QImage frame = fitMoviePicture(picture, size, o.scaling);
+    if (o.legalRange) frame = legalRangePicture(frame);
+    if (o.format == StillFormat::Pict) {
+        // Our own PICT writer (src/media/pict.*).
+        if (!writePict(frame, path, false)) return fail(QObject::tr("The PICT file could not be written."));
+        return true;
+    }
+    WriterSettings w;
+    w.format = QStringLiteral("image2");
+    w.formatOptions = {{QStringLiteral("update"), QStringLiteral("1")}};
+    w.width = frame.width();
+    w.height = frame.height();
+    switch (o.format) {
+    case StillFormat::Png:
+        w.videoCodec = QStringLiteral("png");
+        w.pixelFormat = o.depth >= 16 ? QStringLiteral("rgb48be") : QStringLiteral("rgb24");
+        break;
+    case StillFormat::Jpeg:
+        w.videoCodec = QStringLiteral("mjpeg");
+        w.pixelFormat = QStringLiteral("yuv444p");
+        w.fullRange = true; // JPEG is full range
+        w.quality = std::clamp(31 - (std::clamp(o.quality, 1, 100) * 30) / 100, 1, 31);
+        break;
+    case StillFormat::Tiff:
+        w.videoCodec = QStringLiteral("tiff");
+        w.pixelFormat = o.depth >= 16 ? QStringLiteral("rgb48le") : QStringLiteral("rgb24");
+        break;
+    case StillFormat::Bmp:
+        w.videoCodec = QStringLiteral("bmp");
+        w.pixelFormat = QStringLiteral("bgr24");
+        break;
+    case StillFormat::Dpx:
+        w.videoCodec = QStringLiteral("dpx");
+        w.pixelFormat = o.depth >= 16 ? QStringLiteral("rgb48le") : o.depth >= 10 ? QStringLiteral("gbrp10le") : QStringLiteral("rgb24");
+        break;
+    case StillFormat::OpenExr:
+        w.videoCodec = QStringLiteral("exr");
+        w.pixelFormat = QStringLiteral("gbrpf32le");
+        w.videoOptions = {{QStringLiteral("format"), o.depth >= 32 ? QStringLiteral("float") : QStringLiteral("half")}};
+        break;
+    case StillFormat::Pict: break;
+    }
+    MediaWriter writer;
+    QString why;
+    if (!writer.open(path, w, &why)) return fail(why);
+    if (!writer.writeVideo(frame)) {
+        writer.finish();
+        return fail(writer.lastError());
+    }
+    if (!writer.finish(&why)) return fail(why);
+    return true;
+}
+
+bool exportAudioFile(const QString& path, const MovieSource& source, const AudioFileOptions& o,
+                     const std::function<bool(double)>& progress, QString* error) {
+    auto fail = [&](const QString& text) {
+        if (error) *error = text;
+        QFile::remove(path);
+        return false;
+    };
+    if (!source.sound || source.frames <= 0 || o.channels <= 0) return fail(QObject::tr("There is nothing to export."));
+    static const QList<int> rates{32000, 44100, 48000, 88200, 96000};
+    const int rate = rates.contains(o.sampleRate) ? o.sampleRate : 48000;
+    WriterSettings w;
+    w.format = o.aiff ? QStringLiteral("aiff") : QStringLiteral("wav");
+    w.audioCodec = o.aiff ? (o.bitDepth == 16 ? QStringLiteral("pcm_s16be") : QStringLiteral("pcm_s24be"))
+                          : (o.bitDepth == 16 ? QStringLiteral("pcm_s16le") : QStringLiteral("pcm_s24le"));
+    w.sampleRate = rate;
+    w.channels = o.channels;
+    MediaWriter writer;
+    QString why;
+    if (!writer.open(path, w, &why)) return fail(why);
+    std::unique_ptr<Resampler> resampler;
+    if (rate != 48000) resampler = std::make_unique<Resampler>(o.channels, 48000, rate);
+    std::vector<std::vector<float>> planes;
+    for (std::int64_t f = 0; f < source.frames; ++f) {
+        const std::int64_t from = sampleOf(f, source.frameRate);
+        const int count = static_cast<int>(sampleOf(f + 1, source.frameRate) - from);
+        source.sound(from, count, planes);
+        std::vector<float> samples = interleave(planes, o.channels, count);
+        if (resampler) samples = resampler->push(samples.data(), count);
+        const int n = static_cast<int>(samples.size() / static_cast<std::size_t>(o.channels));
+        if (n > 0 && !writer.writeAudio(samples.data(), n)) {
+            writer.finish();
+            return fail(writer.lastError());
+        }
+        if (progress && !progress(static_cast<double>(f + 1) / static_cast<double>(source.frames))) {
+            writer.finish();
+            return fail(QObject::tr("The export was cancelled."));
+        }
+    }
+    if (resampler) {
+        const std::vector<float> rest = resampler->flush();
+        const int n = static_cast<int>(rest.size() / static_cast<std::size_t>(o.channels));
         if (n > 0) writer.writeAudio(rest.data(), n);
     }
     if (!writer.finish(&why)) return fail(why);

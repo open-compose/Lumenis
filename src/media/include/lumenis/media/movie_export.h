@@ -2,7 +2,8 @@
 // Export to File with the Export setting's Export As MOV, MP4 or QuickTime Movie (Editing Guide p.879-881, p.893-899,
 // p.1179-1180). The caller (MainWindow::exportToFile) composes the frames (media::composeImage) and mixes the sound
 // (MixdownRenderer); this file fits each frame to the output raster, resamples the sound and writes both through
-// MediaWriter (FFmpeg).
+// MediaWriter (FFmpeg). 7.1b adds the Graphic, DPX and OpenEXR stills and image sequences (p.890, p.900,
+// p.1185-1187) and the Audio export's WAVE and AIFF-C files (p.1185).
 #pragma once
 
 #include "lumenis/core/rational.h"
@@ -87,5 +88,40 @@ QImage fitMoviePicture(const QImage& picture, QSize out, MovieScaling scaling);
 // and `error` says why.
 bool exportMovie(const QString& path, const MovieSource& source, const MovieExportOptions& options,
                  const std::function<bool(double)>& progress = {}, QString* error = nullptr);
+
+// ---------------------------------------------------------------- stills and sound files (7.1b)
+
+// The Graphic export's formats (p.1186-1187) and the DPX and OpenEXR exports (p.890, p.900).
+enum class StillFormat { Png, Jpeg, Tiff, Bmp, Pict, Dpx, OpenExr };
+
+struct StillOptions {
+    StillFormat format = StillFormat::Png;
+    QSize size;               // Width x Height; empty: the picture's
+    MovieScaling scaling = MovieScaling::Stretch; // Size to Fit (Stretch) or Crop/Pad (CenterKeepSize), p.1186
+    bool legalRange = false;  // Color Levels "Keep as Legal Range": RGB squeezed into 16-235
+    int depth = 8;            // PNG and TIFF 8 or 16; DPX 8, 10 or 16; OpenEXR 16 (half) or 32 (float)
+    int quality = 90;         // JPEG's Quality, 1-100
+};
+
+// The file name extension of a format: "png", "jpg", "tif", "bmp", "pct", "dpx", "exr".
+QString stillSuffix(StillFormat format);
+// RGB from 0-255 into the legal 16-235.
+QImage legalRangePicture(const QImage& picture);
+// Writes one still, fitted to the options' size. False with the reason in `error`; nothing is left on failure.
+bool writeStill(const QString& path, const QImage& picture, const StillOptions& options, QString* error = nullptr);
+// The file of image `number` in a sequence named after `path`: "<folder>/<name>.<number, 7 digits>.<suffix>" (ours).
+QString numberedStillPath(const QString& path, std::int64_t number);
+
+// Export Settings: Audio (p.1185): WAVE or AIFF-C, mono or stereo, a sample rate and a bit depth.
+struct AudioFileOptions {
+    bool aiff = false;
+    int channels = 2;       // the source's sound comes in this many channels
+    int sampleRate = 48000; // 32, 44.1, 48, 88.2 or 96 kHz; the source's 48 kHz is resampled
+    int bitDepth = 24;      // 16 or 24
+};
+
+// Writes `source`'s sound (its picture is not used) as one audio file. Same contract as exportMovie.
+bool exportAudioFile(const QString& path, const MovieSource& source, const AudioFileOptions& options,
+                     const std::function<bool(double)>& progress = {}, QString* error = nullptr);
 
 } // namespace lumenis::media

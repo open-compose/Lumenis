@@ -257,10 +257,10 @@
                          {"value": "aaf", "label": "AAF"}, {"value": "qtReference", "label": "QuickTime Reference", "later": true},
                          {"value": "qtMovie", "label": "QuickTime Movie"}, {"value": "avi", "label": "AVI", "later": true},
                          {"value": "windowsMedia", "label": "Windows Media", "later": true}, {"value": "scc", "label": "SCC", "later": true},
-                         {"value": "ttml", "label": "TTML", "later": true}, {"value": "audio", "label": "Audio", "later": true},
-                         {"value": "graphic", "label": "Graphic", "later": true}, {"value": "ale", "label": "Avid Log Exchange"},
+                         {"value": "ttml", "label": "TTML", "later": true}, {"value": "audio", "label": "Audio"},
+                         {"value": "graphic", "label": "Graphic"}, {"value": "ale", "label": "Avid Log Exchange"},
                          {"value": "tabDelimited", "label": "Tab Delimited", "later": true}, {"value": "op1a", "label": "MXF OP1a", "later": true},
-                         {"value": "op1aLegacy", "label": "MXF OP1a (legacy)", "later": true}, {"value": "dpx", "label": "DPX", "later": true},
+                         {"value": "op1aLegacy", "label": "MXF OP1a (legacy)", "later": true}, {"value": "dpx", "label": "DPX"}, {"value": "openexr", "label": "OpenEXR"},
                          {"value": "xdcam", "label": "XDCAM MXF OP1a", "later": true},
                          {"value": "avb", "label": "Media Composer Bin"}, {"value": "fcpxml", "label": "Final Cut Pro 7 XML"},
                          {"value": "mov", "label": "MOV"}, {"value": "mp4", "label": "MP4"}]},
@@ -328,6 +328,53 @@
              "choices": [{"value": "48000", "label": "48 kHz"}, {"value": "44100", "label": "44.1 kHz"}]},
             {"key": "movieBitDepth", "type": "choice", "style": "menu", "label": "Bit Depth", "default": "24", "page": 1178,
              "choices": [{"value": "16", "label": "16 bit"}, {"value": "24", "label": "24 bit"}]}
+          ]
+        },
+        {
+          "name": "Graphic",
+          "options": [
+            {"key": "graphicFormat", "type": "choice", "style": "menu", "label": "Graphic Format", "default": "png", "page": 1186,
+             "choices": [{"value": "bmp", "label": "BMP"}, {"value": "cineon", "label": "Cineon", "later": true},
+                         {"value": "jpeg", "label": "JPEG"}, {"value": "photoshop", "label": "Photoshop", "later": true},
+                         {"value": "pict", "label": "PICT"}, {"value": "png", "label": "PNG"}, {"value": "tiff", "label": "TIFF"}]},
+            {"key": "graphicSize", "type": "choice", "style": "menu", "label": "Width x Height", "default": "project", "page": 1186,
+             "choices": [{"value": "project", "label": "Project raster"}, {"value": "3840x2160", "label": "3840 x 2160"},
+                         {"value": "1920x1080", "label": "1920 x 1080"}, {"value": "1280x720", "label": "1280 x 720"},
+                         {"value": "720x576", "label": "720 x 576"}, {"value": "720x486", "label": "720 x 486"},
+                         {"value": "640x480", "label": "640 x 480"}, {"value": "320x240", "label": "320 x 240"}]},
+            {"key": "graphicFit", "type": "choice", "style": "radio", "label": "", "default": "fit", "page": 1186,
+             "choices": [{"value": "fit", "label": "Size to Fit"}, {"value": "pad", "label": "Crop/Pad"}]},
+            {"key": "graphicLevels", "type": "choice", "style": "menu", "label": "Color Levels", "default": "full", "page": 1186,
+             "choices": [{"value": "legal", "label": "Keep as Legal Range"}, {"value": "full", "label": "Scale from Legal to Full Range"}]},
+            {"key": "graphicDepth", "type": "choice", "style": "menu", "label": "Color Depth (PNG, TIFF)", "default": "8", "page": 1187,
+             "choices": [{"value": "8", "label": "8 bits"}, {"value": "16", "label": "16 bits"}]},
+            {"key": "graphicQuality", "type": "int", "label": "Quality (JPEG)", "default": 90, "min": 1, "max": 100, "page": 1187},
+            {"key": "sequentialFiles", "type": "bool", "label": "Sequential Files", "default": false, "page": 1186},
+            {"key": "markersOnly", "type": "bool", "label": "Markers only", "default": false, "page": 1186},
+            {"key": "useComments", "type": "bool", "label": "Use Comments", "default": false, "page": 1186}
+          ]
+        },
+        {
+          "name": "Audio",
+          "options": [
+            {"key": "audioFileFormat", "type": "choice", "style": "menu", "label": "Audio Format", "default": "wave", "page": 1185,
+             "choices": [{"value": "wave", "label": "WAVE"}, {"value": "aiff", "label": "AIFF-C"}]},
+            {"key": "audioFileChannels", "type": "choice", "style": "radio", "label": "", "default": "stereo", "page": 1185,
+             "choices": [{"value": "mono", "label": "Mono"}, {"value": "stereo", "label": "Stereo"}]},
+            {"key": "audioFileRate", "type": "choice", "style": "menu", "label": "Sample Rate", "default": "48000", "page": 1185,
+             "choices": [{"value": "32000", "label": "32 kHz"}, {"value": "44100", "label": "44.1 kHz"}, {"value": "48000", "label": "48 kHz"},
+                         {"value": "88200", "label": "88.2 kHz"}, {"value": "96000", "label": "96 kHz"}]},
+            {"key": "audioFileDepth", "type": "choice", "style": "menu", "label": "Bit Depth", "default": "24", "page": 1185,
+             "choices": [{"value": "16", "label": "16 bit"}, {"value": "24", "label": "24 bit"}]}
+          ]
+        },
+        {
+          "name": "DPX and OpenEXR",
+          "options": [
+            {"key": "dpxDepth", "type": "choice", "style": "menu", "label": "DPX Bit Depth", "default": "10", "page": 890,
+             "choices": [{"value": "8", "label": "8 bit"}, {"value": "10", "label": "10 bit"}, {"value": "16", "label": "16 bit"}]},
+            {"key": "exrDepth", "type": "choice", "style": "menu", "label": "OpenEXR Color", "default": "16", "page": 900,
+             "choices": [{"value": "16", "label": "16 bit floating point"}, {"value": "32", "label": "32 bit floating point"}]}
           ]
         }
       ]

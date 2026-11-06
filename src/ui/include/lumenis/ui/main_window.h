@@ -33,6 +33,7 @@ class QToolButton;
 namespace lumenis::media {
 class AudioPlayer;
 struct Composition;
+struct MovieSource;
 enum class EffectPrecision;
 struct AudioPiece;
 }
@@ -336,6 +337,11 @@ public:
     // "mp4", "qtMovie"). False with the reason in `error`.
     bool exportMovieFile(const model::BinItem& item, const QString& binId, const QString& path, const QString& format,
                          QString* error);
+    // The Graphic, DPX and OpenEXR exports' stills (7.1b) of `source` (frames `start` to `end` of the item): one frame,
+    // an image sequence, or the frames with markers, as the Export setting says.
+    bool exportStills(const QString& path, const QString& format, const model::BinItem& sequenceItem, const media::MovieSource& source,
+                      const model::LoadedClip* shown, std::int64_t start, std::int64_t end, const std::function<bool(double)>& progress,
+                      QString* error);
     // File > Export Matte PICT (FX Guide p.418): the Effect Editor's AniMatte matte at the position, at the project's
     // raster, through the Export PICT As dialog (`path` given: no dialog). False when nothing was written.
     bool exportMattePict(const QString& path = QString());

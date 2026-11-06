@@ -1384,6 +1384,13 @@ bool MediaWriter::open(const QString& path, const WriterSettings& s, QString* er
             d.venc->thread_count = threads;
             if (globalHeader) d.venc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
             if (!s.videoProfile.isEmpty()) av_opt_set(d.venc->priv_data, "profile", s.videoProfile.toUtf8().constData(), 0);
+            for (const auto& [key, value] : s.videoOptions) {
+                av_opt_set(d.venc->priv_data, key.toUtf8().constData(), value.toUtf8().constData(), 0);
+            }
+            if (s.quality > 0) {
+                d.venc->flags |= AV_CODEC_FLAG_QSCALE;
+                d.venc->global_quality = FF_QP2LAMBDA * s.quality;
+            }
             return avcodec_open2(d.venc, codec, nullptr);
         };
         int rc = openEncoder(0);
@@ -1474,6 +1481,8 @@ bool MediaWriter::writeVideo(const QImage& image) {
     d.vframe->color_primaries = d.venc->color_primaries;
     d.vframe->color_trc = d.venc->color_trc;
     d.vframe->color_range = d.venc->color_range;
+    // A fixed quality is read from each frame.
+    if (d.venc->flags & AV_CODEC_FLAG_QSCALE) d.vframe->quality = d.venc->global_quality;
     d.vframe->pts = d.vpts++;
     return d.encode(d.venc, d.vst, d.vframe);
 }

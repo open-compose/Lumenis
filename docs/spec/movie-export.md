@@ -1,4 +1,4 @@
-# Movie export: MOV and MP4 (Phase 7.1a)
+# Movie, still and audio export (Phase 7.1a-b)
 
 File > Output > Export to File writes the selected sequences and clips as
 movies when the Export setting's Export As is **MOV**, **MP4** or
@@ -77,6 +77,32 @@ in an MP4 is refused with the reason in the Console.
 rounded up to even numbers for the chroma subsampled formats (ours). A
 failure or a cancel in the progress dialog removes the file.
 
+## Stills, DPX, OpenEXR and audio files (7.1b)
+
+Export As **Graphic**, **DPX**, **OpenEXR** and **Audio** go through the same
+picture and sound as a movie (`MainWindow::exportStills`,
+`media::writeStill`, `media::exportAudioFile`).
+
+* **Graphic** (Export Settings: Graphic, p.1185-1187): BMP, JPEG (Quality),
+  PICT (our writer, `src/media/pict.*`), PNG and TIFF (8 or 16 bits);
+  Cineon and Photoshop later. Width x Height with Size to Fit (stretched)
+  or Crop/Pad (1:1 centred on black); Color Levels "Keep as Legal Range"
+  squeezes RGB into 16-235, "Scale from Legal to Full Range" keeps our
+  full-range pictures as they are.
+  * Without **Sequential Files** one frame: the IN with Use Marks, else
+    the position of the monitor showing the item (p.868).
+  * With it, every frame of the range as numbered files,
+    `<name>.<7 digits>.<suffix>` counted from 0 (ours).
+  * **Markers only**: the frames with the item's markers, named by their
+    comments with **Use Comments** (p.1186), else by frame number; Topmost
+    Image is how our pictures are made anyway (every track composed).
+* **DPX** (p.890): 8, 10 or 16 bit RGB; **OpenEXR** (p.900): 16 or 32 bit
+  floating point. Both write the range as an image sequence, one file for
+  one frame (ours). OpenEXR's values are the display-referred pictures, not
+  converted to scene linear (ours; the custom Color Space, p.897, later).
+* **Audio** (Export Settings: Audio, p.1185): WAVE or AIFF-C, Mono or
+  Stereo, 32, 44.1, 48, 88.2 or 96 kHz, 16 or 24 bit.
+
 ## Not yet
 
 * QuickTime Movie's Same as Source and QuickTime Reference (p.879-880),
@@ -84,6 +110,8 @@ failure or a cancel in the progress dialog removes the file.
 * MP4's Frame Rate (p.896), Direct Out, the custom Color Space (p.897),
   Tier (p.899), Enable Mask Regions and Render Unrendered Effects (p.1175).
 * Export by dragging to a folder (p.869): with the Send To templates in 7.1c.
+* Export with Mask Margins (p.900) and Enable Mask Regions: with the mask regions (p.550), which are not there yet.
+* File Field Order (p.1186), Cineon, Photoshop, PNG Interlaced, JPEG Progressive.
 
 ## Tests
 
@@ -94,4 +122,9 @@ failure or a cancel in the progress dialog removes the file.
   (or Opus), DNxHR refused in an MP4, full range, a cancel.
 * `tst_movie_export_ui`: a sequence exported from the bin, its frames and
   sound read back; Use Marks with the Record monitor's marks; a master clip
-  at its own timecode, video only; PNG refused in an MP4.
+  at its own timecode, video only; PNG refused in an MP4. 7.1b: a Graphic
+  still at the Record monitor's position, Markers only named by comments,
+  a DPX sequence, a WAVE file.
+* `tst_movie_export` (7.1b): every still format and depth read back, PICT,
+  Crop/Pad, legal range, sequence names, WAVE 24-bit and AIFF-C 16-bit mono
+  at 96 kHz.

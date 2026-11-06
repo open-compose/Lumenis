@@ -3175,7 +3175,21 @@ void MainWindow::exportToFile() {
         if (e.active) active = i;
     }
     // The file type of an Export As choice: its extension and its name in the save dialog.
-    auto suffixOf = [](const QString& exportAs) {
+    auto suffixOf = [this](const QString& exportAs) {
+        // A Graphic export's file is its Graphic Format's; an Audio export's WAVE or AIFF-C (7.1b).
+        if (exportAs == QLatin1String("graphic")) {
+            const QString g = settings_->text(QStringLiteral("Export"), QStringLiteral("graphicFormat"));
+            return media::stillSuffix(g == QLatin1String("jpeg")   ? media::StillFormat::Jpeg
+                                      : g == QLatin1String("tiff") ? media::StillFormat::Tiff
+                                      : g == QLatin1String("bmp")  ? media::StillFormat::Bmp
+                                      : g == QLatin1String("pict") ? media::StillFormat::Pict
+                                                                   : media::StillFormat::Png);
+        }
+        if (exportAs == QLatin1String("audio"))
+            return settings_->text(QStringLiteral("Export"), QStringLiteral("audioFileFormat")) == QLatin1String("aiff") ? QStringLiteral("aif")
+                                                                                                                         : QStringLiteral("wav");
+        if (exportAs == QLatin1String("dpx")) return QStringLiteral("dpx");
+        if (exportAs == QLatin1String("openexr")) return QStringLiteral("exr");
         return exportAs == QLatin1String("avb")      ? QStringLiteral("avb")
                : exportAs == QLatin1String("ale")    ? QStringLiteral("ale")
                : exportAs == QLatin1String("fcpxml") ? QStringLiteral("xml")
@@ -3188,6 +3202,9 @@ void MainWindow::exportToFile() {
                : exportAs == QLatin1String("ale")    ? tr("Avid Log Exchange (*.ale)")
                : exportAs == QLatin1String("fcpxml") ? tr("Final Cut Pro 7 XML (*.xml)")
                : exportAs == QLatin1String("mp4")    ? tr("MP4 movies (*.mp4)")
+               : exportAs == QLatin1String("graphic") || exportAs == QLatin1String("dpx") || exportAs == QLatin1String("openexr")
+                   ? tr("Images (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr)")
+               : exportAs == QLatin1String("audio")  ? tr("Audio files (*.wav *.aif)")
                : exportAs == QLatin1String("mov") || exportAs == QLatin1String("qtMovie") ? tr("QuickTime movies (*.mov)")
                                                      : tr("AAF files (*.aaf)");
     };
@@ -3215,11 +3232,14 @@ void MainWindow::exportToFile() {
         settings_->commit(model::SettingsScope::User);
     }
     const QString format = settings_->text(QStringLiteral("Export"), QStringLiteral("exportAs"));
-    const bool movie = format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie");
+    // Exports rendered through the compositor and the mix (7.1a-b).
+    const bool movie = format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie") ||
+                       format == QLatin1String("audio") || format == QLatin1String("graphic") || format == QLatin1String("dpx") ||
+                       format == QLatin1String("openexr");
     if (format != QLatin1String("aaf") && format != QLatin1String("avb") && format != QLatin1String("ale") &&
         format != QLatin1String("fcpxml") && !movie) {
-        ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange, Media Composer bins, Final Cut Pro 7 XML, MOV "
-                                         "and MP4 can be exported so far (Export As in the Export setting)."));
+        ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange, Media Composer bins, Final Cut Pro 7 XML, MOV, "
+                                         "MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting)."));
         return;
     }
     const model::BinItem* firstSequence = nullptr;
@@ -3238,7 +3258,10 @@ void MainWindow::exportToFile() {
         const QString old = QFileInfo(path).suffix();
         if (old.compare(QLatin1String("aaf"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("avb"), Qt::CaseInsensitive) == 0 ||
             old.compare(QLatin1String("ale"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("xml"), Qt::CaseInsensitive) == 0 ||
-            old.compare(QLatin1String("mov"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("mp4"), Qt::CaseInsensitive) == 0) {
+            QStringList{QStringLiteral("mov"), QStringLiteral("mp4"), QStringLiteral("wav"), QStringLiteral("aif"), QStringLiteral("png"),
+                        QStringLiteral("jpg"), QStringLiteral("tif"), QStringLiteral("bmp"), QStringLiteral("pct"), QStringLiteral("dpx"),
+                        QStringLiteral("exr")}
+                .contains(old.toLower())) {
             path.chop(old.size() + 1);
         }
         path += QLatin1Char('.') + suffix;
@@ -3499,6 +3522,78 @@ QStringList MainWindow::importEdl() {
 
 // The bin's Text view columns and custom columns go out, so the log holds what the bin shows (p.129
 // step 1: "click the Text tab to display all clip information").
+bool MainWindow::exportStills(const QString& path, const QString& format, const model::BinItem& sequenceItem,
+                              const media::MovieSource& source, const model::LoadedClip* shown, std::int64_t start, std::int64_t end,
+                              const std::function<bool(double)>& progress, QString* error) {
+    const Settings& s = *settings_;
+    auto text = [&](const char* key) { return s.text(QStringLiteral("Export"), QLatin1String(key)); };
+    auto flag = [&](const char* key) { return s.flag(QStringLiteral("Export"), QLatin1String(key)); };
+    media::StillOptions o;
+    const QString graphic = text("graphicFormat");
+    o.format = format == QLatin1String("dpx")       ? media::StillFormat::Dpx
+               : format == QLatin1String("openexr") ? media::StillFormat::OpenExr
+               : graphic == QLatin1String("jpeg")   ? media::StillFormat::Jpeg
+               : graphic == QLatin1String("tiff")   ? media::StillFormat::Tiff
+               : graphic == QLatin1String("bmp")    ? media::StillFormat::Bmp
+               : graphic == QLatin1String("pict")   ? media::StillFormat::Pict
+                                                    : media::StillFormat::Png;
+    const QString size = text("graphicSize");
+    if (format == QLatin1String("graphic") && size != QLatin1String("project"))
+        o.size = QSize(size.section(QLatin1Char('x'), 0, 0).toInt(), size.section(QLatin1Char('x'), 1, 1).toInt());
+    // "The Size to Fit suboption sizes to fit the specified width and height. The Crop/Pad suboption instructs Media
+    // Composer not to scale or resize the frames" (p.1186).
+    o.scaling = text("graphicFit") == QLatin1String("pad") ? media::MovieScaling::CenterKeepSize : media::MovieScaling::Stretch;
+    o.legalRange = format == QLatin1String("graphic") && text("graphicLevels") == QLatin1String("legal");
+    o.depth = format == QLatin1String("dpx")       ? text("dpxDepth").toInt()
+              : format == QLatin1String("openexr") ? text("exrDepth").toInt()
+                                                   : text("graphicDepth").toInt();
+    o.quality = s.value(QStringLiteral("Export"), QStringLiteral("graphicQuality")).toInt();
+
+    // Which frames, each with its file. A Graphic export without Sequential Files is one frame: "Mark an IN point to
+    // export the marked frame from a bin or a monitor, or move the position indicator to the frame you want to export"
+    // (p.868). Markers only: "images only for those frames that contain markers", named by their comments with Use
+    // Comments (p.1186). DPX and OpenEXR are image sequences of the range, or one file for one frame (ours).
+    QList<QPair<std::int64_t, QString>> frames;
+    const bool sequential = format != QLatin1String("graphic") || flag("sequentialFiles");
+    if (format == QLatin1String("graphic") && flag("markersOnly")) {
+        QSet<QString> names;
+        for (const model::Marker& m : model::markersOf(sequenceItem)) {
+            if (m.frame < start || m.frame >= end) continue;
+            QString to = media::numberedStillPath(path, m.frame);
+            if (flag("useComments") && !m.comment.trimmed().isEmpty()) {
+                QString name = m.comment.trimmed();
+                name.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
+                // The same comment twice gets the frame number (ours).
+                if (names.contains(name)) name += QStringLiteral(" %1").arg(m.frame);
+                names << name;
+                to = QFileInfo(path).absoluteDir().filePath(name + QLatin1Char('.') + media::stillSuffix(o.format));
+            }
+            frames << qMakePair(m.frame, to);
+        }
+        if (frames.isEmpty()) {
+            if (error) *error = tr("There are no markers to export.");
+            return false;
+        }
+    } else if (!sequential) {
+        std::int64_t frame = shown ? shown->position : start;
+        if (flag("useMarks") && shown && shown->in) frame = *shown->in;
+        frames << qMakePair(std::clamp(frame, start, end - 1), path);
+    } else if (end - start == 1) {
+        frames << qMakePair(start, path);
+    } else {
+        for (std::int64_t f = start; f < end; ++f) frames << qMakePair(f, media::numberedStillPath(path, f - start));
+    }
+    for (qsizetype i = 0; i < frames.size(); ++i) {
+        const QImage picture = source.picture(frames.at(i).first - start);
+        if (!media::writeStill(frames.at(i).second, picture, o, error)) return false;
+        if (progress && !progress(static_cast<double>(i + 1) / static_cast<double>(frames.size()))) {
+            if (error) *error = tr("The export was cancelled.");
+            return false;
+        }
+    }
+    return true;
+}
+
 bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binId, const QString& path, const QString& format,
                                  QString* error) {
     auto fail = [&](const QString& text) {
@@ -3553,9 +3648,13 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
     media::MovieExportOptions o;
     o.container = format == QLatin1String("mp4") ? media::MovieContainer::Mp4 : media::MovieContainer::Mov;
     const QString tracks = text("movieTracks");
-    o.video = tracks != QLatin1String("audio") && !video.isEmpty();
-    o.audio = tracks != QLatin1String("video") && !audio.isEmpty();
-    if (!o.video && !o.audio) return fail(tr("There are no tracks to export."));
+    const bool movie = format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie");
+    const bool sound = format == QLatin1String("audio");
+    o.video = movie ? tracks != QLatin1String("audio") && !video.isEmpty() : !sound;
+    o.audio = movie ? tracks != QLatin1String("video") && !audio.isEmpty() : sound;
+    if (movie && !o.video && !o.audio) return fail(tr("There are no tracks to export."));
+    if (sound && audio.isEmpty()) return fail(tr("There are no audio tracks to export."));
+    if (!movie && !sound && video.isEmpty()) return fail(tr("There are no video tracks to export."));
     o.compression = text("movieCompression");
     o.bitRateMbps = s.value(QStringLiteral("Export"), QStringLiteral("movieBitRate")).toInt();
     const QString size = text("movieImageSize");
@@ -3567,7 +3666,10 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
                                                     : media::MovieScaling::Letterbox;
     o.fullRange = text("movieColorLevels") == QLatin1String("full");
     const QString layout = text("movieAudioFormat");
-    const media::MixdownFormat mix = layout == QLatin1String("mono")  ? media::MixdownFormat::Mono
+    // The Audio export's Mono or Stereo (p.1185); a movie's Audio Format.
+    const media::MixdownFormat mix = sound ? (text("audioFileChannels") == QLatin1String("mono") ? media::MixdownFormat::Mono
+                                                                                               : media::MixdownFormat::Stereo)
+                                     : layout == QLatin1String("mono")  ? media::MixdownFormat::Mono
                                      : layout == QLatin1String("5.1") ? media::MixdownFormat::Surround51
                                      : layout == QLatin1String("7.1") ? media::MixdownFormat::Surround71
                                                                       : media::MixdownFormat::Stereo;
@@ -3611,7 +3713,21 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
     source.sound = [&](std::int64_t at, int count, std::vector<std::vector<float>>& out) { renderer->render(at, count, out); };
     QProgressDialog progress(tr("Exporting %1...").arg(item.name), tr("Cancel"), 0, 1000, this);
     progress.setObjectName(QStringLiteral("exportProgress"));
-    const bool ok = media::exportMovie(path, source, o, progressOn(progress), error);
+    const std::function<bool(double)> step = progressOn(progress);
+    bool ok = false;
+    if (movie) {
+        ok = media::exportMovie(path, source, o, step, error);
+    } else if (sound) {
+        // Export Settings: Audio (p.1185).
+        media::AudioFileOptions a;
+        a.aiff = text("audioFileFormat") == QLatin1String("aiff");
+        a.channels = o.audioChannels;
+        a.sampleRate = text("audioFileRate").toInt();
+        a.bitDepth = text("audioFileDepth").toInt();
+        ok = media::exportAudioFile(path, source, a, step, error);
+    } else {
+        ok = exportStills(path, format, sequenceItem, source, shown, start, end, step, error);
+    }
     progress.reset();
     return ok;
 }

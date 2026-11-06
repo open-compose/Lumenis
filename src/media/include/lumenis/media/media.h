@@ -195,6 +195,10 @@ struct WriterSettings {
     std::int64_t bitRate = 0;
     // Full range (0-255) rather than legal range Y'CbCr (Color Levels, Editing Guide p.881; movie export, 7.1a).
     bool fullRange = false;
+    // The video encoder's own options, e.g. OpenEXR's "format" ("half", "float"); and a fixed quality, FFmpeg's
+    // qscale (1 best to 31), 0 for none (JPEG stills' Quality, 7.1b).
+    QList<QPair<QString, QString>> videoOptions;
+    int quality = 0;
     // Audio; empty codec for none.
     QString audioCodec;  // "pcm_s16le", "pcm_s24le", ...
     int sampleRate = 48000;

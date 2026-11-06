@@ -1,8 +1,11 @@
 // File > Output > Export to File as MOV and MP4 (7.1a; docs/spec/movie-export.md, Editing Guide p.868-869, p.893-897):
 // a sequence from the Record monitor written as a movie with the Export setting's options, its picture and sound read
 // back; Use Marks and the sequence's timecode; a master clip exported through a sequence of its own; Video Only.
+// 7.1b: a Graphic still of the Record monitor's frame, the frames with markers named by their comments, a DPX image
+// sequence and a WAVE file.
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/media.h"
+#include "lumenis/model/marker.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
@@ -182,6 +185,57 @@ private slots:
         });
         commands.action(QStringLiteral("file.output.export_to_file"))->trigger();
         QVERIFY(!QFileInfo::exists(mp4));
+
+        auto exportTo = [&](const QString& to) {
+            window.setExportHook([to](ExportAsDialog& dialog) {
+                dialog.setPath(to);
+                return true;
+            });
+            commands.action(QStringLiteral("file.output.export_to_file"))->trigger();
+        };
+        // Graphic without Sequential Files: the frame at the Record monitor's position (p.868).
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("graphic"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("graphicFormat"), QStringLiteral("png"));
+        view->selectIds({sequenceId});
+        composer.state(MonitorId::Record).clearBoth();
+        composer.state(MonitorId::Record).setPosition(2);
+        const QString still = dir.filePath(QStringLiteral("Frame.png"));
+        exportTo(still);
+        QCOMPARE(greyAt(still, 0), colourOf(4).red());
+
+        // Markers only, named by their comments (p.1186): the clip's two markers.
+        model::BinItem marked2 = *bin->bin().item(clip.id);
+        model::Marker wide;
+        wide.frame = 2;
+        wide.comment = QStringLiteral("Wide");
+        model::Marker close;
+        close.frame = 6;
+        close.comment = QStringLiteral("Close");
+        model::setMarkers(marked2, {wide, close});
+        QVERIFY(bin->replaceItem(marked2));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("markersOnly"), true);
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("useComments"), true);
+        view->selectIds({clip.id});
+        exportTo(dir.filePath(QStringLiteral("Markers.png")));
+        QCOMPARE(greyAt(dir.filePath(QStringLiteral("Wide.png")), 0), colourOf(2).red());
+        QCOMPARE(greyAt(dir.filePath(QStringLiteral("Close.png")), 0), colourOf(6).red());
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("markersOnly"), false);
+
+        // DPX: the sequence's four frames as numbered files (ours).
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("dpx"));
+        view->selectIds({sequenceId});
+        exportTo(dir.filePath(QStringLiteral("Cut.dpx")));
+        for (int i = 0; i < 4; ++i) QVERIFY(QFileInfo::exists(dir.filePath(QStringLiteral("Cut.%1.dpx").arg(i, 7, 10, QLatin1Char('0')))));
+        QCOMPARE(greyAt(dir.filePath(QStringLiteral("Cut.0000003.dpx")), 0), colourOf(5).red());
+
+        // Audio: a WAVE file of the sequence's sound.
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("audio"));
+        const QString wav = dir.filePath(QStringLiteral("Cut.wav"));
+        exportTo(wav);
+        info = media::probe(wav);
+        QVERIFY(info);
+        QCOMPARE(info->audio().front()->channels, 2);
+        QVERIFY(!info->firstVideo());
     }
 };
 
