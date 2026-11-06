@@ -10,6 +10,7 @@
 #include <QFile>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QTimeZone>
 #include <QXmlStreamReader>
 
 using namespace lumenis;
@@ -81,7 +82,7 @@ private slots:
         c.reelId = QStringLiteral("44444444-4444-4444-4444-444444444444");
         c.options.title = QStringLiteral("Harbor & Sea");
         c.options.kind = QStringLiteral("trailer");
-        c.options.issueDate = QDateTime(QDate(2026, 11, 6), QTime(12, 0), Qt::UTC);
+        c.options.issueDate = QDateTime(QDate(2026, 11, 6), QTime(12, 0), QTimeZone::utc());
         c.frameRate = 24;
         c.container = QSize(1998, 1080);
         c.assets << DcpAsset{QStringLiteral("55555555-5555-5555-5555-555555555555"), QStringLiteral("picture.mxf"), QStringLiteral("picture"), 48, 1000, QByteArray(20, 'a')}
