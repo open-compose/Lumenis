@@ -1,6 +1,7 @@
 // Effect mode and the Effect Preview monitor (FX Guide p.48-50, p.75-82; docs/spec/effect-mode.md): the
 // mode buttons, the Record monitor as the Effect Preview with its position bar over the effect, its
 // length and position boxes, keyframes and toolbar, Reduce/Enlarge, and Delete in Effect mode.
+#include "lumenis/model/safe_color_limiter.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
@@ -88,6 +89,24 @@ class TestEffectMode : public QObject {
     Q_OBJECT
 
 private slots:
+    void safeColorLimiterSeed() {
+        // "When you first apply a Safe Color Limiter effect, its parameters default to the current limits in the Safe
+        // Color settings" (FX Guide p.728): the Timeline's seed (MainWindow gives it the setting).
+        Rig r;
+        model::SafeColorLimits set;
+        set.luma = {7.5, 100.0, model::SafeUnit::Ire};
+        r.timeline.setEffectSeed([set](model::Effect& e) {
+            if (model::isSafeColorLimiter(e)) model::seedSafeColorLimiter(e, set);
+        });
+        const EffectInfo* limiter = EffectCatalog::builtin().find(QStringLiteral("Image"), QStringLiteral("Safe Color Limiter"));
+        QVERIFY(limiter);
+        QVERIFY(r.timeline.dropEffect(QStringLiteral("V1"), 10, *limiter));
+        const model::Sequence s = model::Sequence::fromItem(r.composer.state(MonitorId::Record).current()->item);
+        const auto& effect = s.track(QStringLiteral("V1"))->segments.at(0).effect;
+        QVERIFY(effect && model::isSafeColorLimiter(*effect));
+        QCOMPARE(model::safeColorLimiting(*effect, 0.0, model::EffectSpan(10)).limits.luma, set.luma);
+    }
+
     void modeButtons() {
         Rig rig;
         QToolButton* sourceRecord = rig.timeline.toolButton(QStringLiteral("edit.source_record_mode"));

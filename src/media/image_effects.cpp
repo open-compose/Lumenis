@@ -214,6 +214,7 @@ Picture imageEffectPicture(const model::Effect& e, const Picture& layer, double 
 
     if (detail::isIllusionSegmentEffect(e)) return detail::illusionSegmentPicture(e, layer, time, span);
     if (e.name == QLatin1String("Color Effect")) return detail::colorEffectPicture(e, layer, time, span);
+    if (e.name == QLatin1String("Safe Color Limiter")) return detail::safeColorLimiterPicture(e, layer, time, span);
     if (e.name == QLatin1String("Luma Key") || e.name == QLatin1String("Chroma Key")) return detail::lumaChromaKeyPicture(e, layer, time, span);
     if (e.name == QLatin1String("RGB Keyer")) return detail::rgbKeyerPicture(e, layer, time, span);
     if (e.name == QLatin1String("SpectraMatte")) return detail::spectraMattePicture(e, layer, time, span);

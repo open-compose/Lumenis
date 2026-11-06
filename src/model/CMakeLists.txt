@@ -23,6 +23,7 @@ add_library(lumenis_model STATIC
     correction_relations.cpp
     correction_shapes.cpp
     safe_colors.cpp
+    safe_color_limiter.cpp
     correction_manage.cpp
     correction_template.cpp
     correction_keyframes.cpp

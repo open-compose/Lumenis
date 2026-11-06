@@ -1,6 +1,9 @@
 #include "effect_drawing.h"
 
+#include "lumenis/model/safe_color_limiter.h"
+
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <numbers>
 
@@ -61,6 +64,22 @@ void boxBlur(Picture& p, int r, bool horizontal) {
 void blurPicture(Picture& picture, int rx, int ry) {
     boxBlur(picture, rx, true);
     boxBlur(picture, ry, false);
+}
+
+Picture safeColorLimiterPicture(const model::Effect& e, const Picture& layer, double time, const model::EffectSpan& span) {
+    const model::SafeLimiting limiting = model::safeColorLimiting(e, time, span);
+    if (!limiting.compositeLuma && !limiting.rgb) return layer;
+    Picture out = layer;
+    std::vector<float>& data = out.data();
+    for (std::size_t i = 0; i + 3 < data.size(); i += 4) {
+        const float a = data[i + 3];
+        if (a <= 0.0f) continue;
+        std::array<double, 3> levels;
+        for (std::size_t k = 0; k < 3; ++k) levels[k] = 16.0 + 219.0 * static_cast<double>(data[i + k] / a);
+        const std::array<double, 3> limited = model::limitSafeLevels(levels, limiting);
+        for (std::size_t k = 0; k < 3; ++k) data[i + k] = static_cast<float>(std::clamp((limited[k] - 16.0) / 219.0, 0.0, 1.0)) * a;
+    }
+    return out;
 }
 
 Picture colorEffectPicture(const model::Effect& e, const Picture& layer, double time, const model::EffectSpan& span) {

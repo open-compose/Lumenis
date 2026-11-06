@@ -6126,6 +6126,12 @@ void Timeline::autoCorrectEffects(model::Sequence& seq, const QList<model::Segme
     }
 }
 
+model::Effect Timeline::seededEffect(const EffectInfo& effect) const {
+    model::Effect e = effect.effect();
+    if (effectSeed_) effectSeed_(e);
+    return e;
+}
+
 bool Timeline::dropEffect(const QString& track, std::int64_t frame, const EffectInfo& effect,
                           std::optional<std::int64_t> cut) {
     message_.clear();
@@ -6150,7 +6156,7 @@ bool Timeline::dropEffect(const QString& track, std::int64_t frame, const Effect
     } else if (effect.segment) {
         // Alt+drag nests it inside the segment's effect (FX Guide p.216).
         const bool nest = QGuiApplication::keyboardModifiers().testFlag(Qt::AltModifier);
-        if (i < 0 || !model::applySegmentEffect(seq, track, frame, effect.effect(), nest)) {
+        if (i < 0 || !model::applySegmentEffect(seq, track, frame, seededEffect(effect), nest)) {
             return fail(tr("There is no segment there."));
         }
         if (!nest && model::isStabilizeEffect(effect.effect())) stabilize = std::pair{track, start};
@@ -6214,7 +6220,7 @@ bool Timeline::applyEffectToSelection(const EffectInfo& effect) {
             for (const model::SegmentRef& ref : selection_) {
                 // Alt+double-click nests it inside the segment's effect (FX Guide p.276).
                 const bool nest = QGuiApplication::keyboardModifiers().testFlag(Qt::AltModifier);
-                if (video(ref.track) && model::applySegmentEffect(seq, ref.track, ref.start, effect.effect(), nest)) {
+                if (video(ref.track) && model::applySegmentEffect(seq, ref.track, ref.start, seededEffect(effect), nest)) {
                     ++applied;
                     if (!nest && model::isStabilizeEffect(effect.effect())) stabilize = std::pair{ref.track, ref.start};
                     if (!nest && model::isColorCorrectionEffect(effect.effect())) corrected << ref;

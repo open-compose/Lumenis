@@ -8,6 +8,8 @@
 #include "lumenis/interop/avb_import.h"
 #include "lumenis/ui/main_window.h"
 
+#include "lumenis/model/safe_color_limiter.h"
+
 #include "lumenis/model/safe_colors.h"
 
 #include "lumenis/media/audio_input.h"
@@ -1792,6 +1794,9 @@ void MainWindow::createTools() {
     });
     // The Color Correction effect from the Effect Palette makes the AutoCorrect tab's corrections in turn (FX Guide
     // p.695-696), each from the uncorrected frame as the tool's buttons are (6.10e1).
+    timeline_->setEffectSeed([this](model::Effect& effect) {
+        if (model::isSafeColorLimiter(effect)) model::seedSafeColorLimiter(effect, safeColorLimits());
+    });
     timeline_->setAutoCorrection([this](std::int64_t frame) {
         model::ColorCorrection c;
         static const std::pair<const char*, media::AutoCorrection> kinds[] = {

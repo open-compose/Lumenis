@@ -918,6 +918,12 @@ public:
     // goes on empty.
     using AutoCorrection = std::function<model::ColorCorrection(std::int64_t frame)>;
     void setAutoCorrection(AutoCorrection hook) { autoCorrection_ = std::move(hook); }
+    // What a segment effect from the Effect Palette starts with before it is applied (dropEffect,
+    // applyEffectToSelection): MainWindow gives the Safe Color Limiter the Safe Colors setting's limits, "When you
+    // first apply a Safe Color Limiter effect, its parameters default to the current limits in the Safe Color
+    // settings" (FX Guide p.728; 6.10e4c).
+    using EffectSeed = std::function<void(model::Effect&)>;
+    void setEffectSeed(EffectSeed seed) { effectSeed_ = std::move(seed); }
     // Remove Effect (p.47): the effect the Effect Editor would show; without one, the Audio EQ
     // effects at the position on the selected audio tracks (p.741).
     bool removeEffectAtPosition();
@@ -1506,6 +1512,9 @@ private:
     bool showShapeAlpha_ = false;
     bool showShapeResult_ = false;
     AutoCorrection autoCorrection_;
+    EffectSeed effectSeed_;
+    // The palette effect as it is applied: seeded (setEffectSeed).
+    model::Effect seededEffect(const EffectInfo& effect) const;
     // Gives each Color Correction effect just applied to `refs` (segments by track and start) its AutoCorrect correction.
     void autoCorrectEffects(model::Sequence& seq, const QList<model::SegmentRef>& refs);
     // The selected correction keyframe markers (frames into the segment) and the segment they belong to (its first

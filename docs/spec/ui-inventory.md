@@ -382,6 +382,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   6.10e4b: pictures read as levels 16-235 for the warnings, the warning indicators'
   size and place (right of the triangle), the swatches' ⚠ character, scopes
   following the limits whatever the Actions.
+  6.10e4c1: the Safe Color Limiter's limiting (Rec. 601 luma shift, chroma
+  scaled for the composite, RGB clamp, 422 Safe as repeated passes), both Enable
+  buttons on at first, the sliders' -300 to 1100 range, units not converted.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

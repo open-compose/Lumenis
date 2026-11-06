@@ -590,6 +590,21 @@ private slots:
         QCOMPARE(swapped.pixel(0, 0)[0], 0.0f);
     }
 
+    void safeColorLimiter() {
+        // The Safe Color Limiter (FX Guide p.471, p.545-546; 6.10e4c) on one pixel: RGB Gamut H 200 8 Bit brings white
+        // (level 235) down to 200, that is (200 - 16) / 219 of full; with the RGB Levels Enable button off, unchanged.
+        QJsonObject p{{QStringLiteral("RGB Gamut H"), 200.0}};
+        const auto apply = [](const QJsonObject& params, const QColor& in) {
+            const Effect e{QStringLiteral("Image"), QStringLiteral("Safe Color Limiter"), QJsonObject{{QStringLiteral("Safe Color Limiter Parameters"), params}}};
+            return imageEffectPicture(e, Picture::solid(1, 1, in), 0.0, EffectSpan(10)).pixel(0, 0)[0];
+        };
+        QVERIFY(std::abs(apply(p, Qt::white) - static_cast<float>((200.0 - 16.0) / 219.0)) < 0.005f);
+        p.insert(QStringLiteral("RGB Levels Parameters: Enable"), false);
+        QCOMPARE(apply(p, Qt::white), 1.0f);
+        // Grey within the defaults: unchanged.
+        QVERIFY(std::abs(apply({}, QColor(128, 128, 128)) - 128.0f / 255.0f) < 0.002f);
+    }
+
     void colorEffect() {
         // The Color Effect (FX Guide p.533-536) on one pixel.
         auto apply = [](const QColor& in, QJsonObject params) {

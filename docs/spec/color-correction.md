@@ -594,6 +594,39 @@ the Effect Editor's `refresh`/`rebuild`/`changeShown` in Color Correction mode a
 * The editor's groups have no Enable buttons yet (ours; the tool's stay); a value back at its default is left out as the
   tool leaves it. The Curves and Levels keyframe tracks came with 6.10d3c.
 
+## 6.10e4c1: the Safe Color Limiter effect
+
+Code: `src/model/safe_color_limiter.*` (`isSafeColorLimiter`, `safeColorLimiting`, `seedSafeColorLimiter`,
+`limitSafeLevels`, the units menus' text), `detail::safeColorLimiterPicture` in `src/media/color_effects.cpp`, the
+"Safe Color Limiter Parameters" category in `effect_parameters.json`, `Timeline::setEffectSeed` with MainWindow's seed.
+Tests: `tst_safe_colors` (`limiterParameters`, `limiting`), `tst_compositor` (`safeColorLimiter`), `tst_effect_mode`
+(`safeColorLimiterSeed`).
+
+### From the guide
+* "Lets you limit the color values of video material to a specific range, for example, to meet safe color standards
+  set by a broadcaster"; Image category, single-layer segments; parameter categories Safe Color Limiter Parameters and
+  Grid (FX p.471).
+* "When you first apply a Safe Color Limiter effect, its parameters default to the current limits in the Safe Color
+  settings"; "all limiting by the Safe Color Limiter effect is performed in the 601 color space"; applied to filler on
+  an empty top track it limits the whole sequence (FX p.728-729).
+* 422 Safe: off (the default) is fast, though "a small number of transient pixel values might exceed your safe color
+  ranges"; on, "every pixel in every frame is guaranteed to be within your safe color ranges". The Source Monitor
+  Analysis menu (Highlight Out of Range Colors, Source Monitoring – Off). Composite/Luma Levels: an Enable button,
+  Composite L/H, Composite units (IRE, mVolts), Luma L/H, Luminance units (8 Bit, %, IRE, mVolts); RGB Levels: an Enable
+  button, RGB Gamut L/H and RGB Gamut units; pixels past a limit "are modified so that" they are within it (FX
+  p.545-546).
+
+### Ours
+* The limiting, on 8-bit video levels (a picture's 0-1 as 16-235, as 6.10e4b reads it): luma moved into its limits
+  with every channel shifted alike (chroma kept); then luma moved inside the composite limits if it is outside them, and
+  the chroma scaled towards grey (luma kept) until luma plus and minus its amplitude fit; then R, G and B clamped to the
+  gamut. 422 Safe repeats the steps until nothing changes (16 passes at most); off, they run once, so the RGB clamp can
+  leave luma or the composite level slightly outside.
+* Both Enable buttons start on. The sliders run -300 to 1100 in any unit, with two decimals; changing a units menu
+  does not convert the numbers, as in the Safe Colors setting.
+* The palette's effect is seeded only when applied from the Effect Palette (a drop or a double-click); effect
+  templates keep the values they were saved with.
+
 ## 6.10e4b: safe colour warnings
 
 Code: `model::pictureLevel` and `warnedViolations` (`src/model/safe_colors.*`); `media::pictureViolations` and the

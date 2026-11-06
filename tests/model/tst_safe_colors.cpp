@@ -1,8 +1,10 @@
 // Safe colour limits (FX Guide ch.23; 6.10e4a): the setting's values, units, and which limits a colour exceeds.
 #include "lumenis/model/safe_colors.h"
+#include "lumenis/model/safe_color_limiter.h"
 
 #include <QTest>
 
+#include <array>
 #include <cmath>
 
 using namespace lumenis::model;
@@ -90,6 +92,85 @@ private slots:
         l.warnCompositeLuma = true;
         w = warnedViolations(all, l);
         QVERIFY(w.compositeHigh && w.lumaLow && !w.rgbHigh[0]);
+    }
+
+    void limiterParameters() {
+        // "When you first apply a Safe Color Limiter effect, its parameters default to the current limits in the Safe
+        // Color settings" (FX Guide p.728): seeded, read back as limits.
+        Effect e{QStringLiteral("Image"), QStringLiteral("Safe Color Limiter"), {}};
+        QVERIFY(isSafeColorLimiter(e));
+        // Unset: the json's defaults, the setting's own; both Enable buttons on, 422 Safe off, analysis on.
+        SafeLimiting d = safeColorLimiting(e, 0.0, EffectSpan(10));
+        QCOMPARE(d.limits.composite, SafeColorLimits{}.composite);
+        QVERIFY(d.compositeLuma && d.rgb && !d.exact && d.analysis);
+        SafeColorLimits set;
+        set.composite = {-20.0, 110.0, SafeUnit::Ire};
+        set.luma = {7.5, 100.0, SafeUnit::Ire};
+        set.rgb = {5.0, 95.0, SafeUnit::Percent};
+        seedSafeColorLimiter(e, set);
+        const SafeLimiting s = safeColorLimiting(e, 0.0, EffectSpan(10));
+        QCOMPARE(s.limits.composite, set.composite);
+        QCOMPARE(s.limits.luma, set.luma);
+        QCOMPARE(s.limits.rgb, set.rgb);
+        QCOMPARE(e.parameters.value(kSafeColorLimiterCategory).toObject().value(QStringLiteral("RGB Gamut units")).toString(), QStringLiteral("%"));
+        // The menus' units, both ways.
+        for (SafeUnit u : {SafeUnit::Bit8, SafeUnit::Percent, SafeUnit::Ire, SafeUnit::Millivolts}) QCOMPARE(safeUnitFromMenu(safeUnitMenuText(u)), u);
+        // The Enable buttons, 422 Safe and Source Monitoring – Off.
+        QJsonObject p = e.parameters.value(kSafeColorLimiterCategory).toObject();
+        p.insert(QStringLiteral("RGB Levels Parameters: Enable"), false);
+        p.insert(QStringLiteral("422 Safe"), true);
+        p.insert(QStringLiteral("Source Monitor Analysis"), QStringLiteral("Source Monitoring – Off"));
+        e.parameters.insert(kSafeColorLimiterCategory, p);
+        const SafeLimiting off = safeColorLimiting(e, 0.0, EffectSpan(10));
+        QVERIFY(off.compositeLuma && !off.rgb && off.exact && !off.analysis);
+    }
+
+    void limiting() {
+        // Within every limit: unchanged.
+        SafeLimiting l;
+        l.exact = true;
+        const std::array<double, 3> grey{126.0, 126.0, 126.0};
+        QCOMPARE(limitSafeLevels(grey, l), grey);
+        // RGB Gamut H 200: "any pixels with a higher red, green, or blue level are modified so that their red, green,
+        // and blue levels are no higher than" it (p.546).
+        l.limits.rgb = {16.0, 200.0, SafeUnit::Bit8};
+        const auto white = limitSafeLevels({235.0, 235.0, 235.0}, l);
+        for (double v : white) QVERIFY(v <= 200.0 + 1e-6);
+        // Luma H 90 IRE: white comes down to it, a grey stays grey.
+        SafeLimiting luma;
+        luma.limits.luma = {0.0, 90.0, SafeUnit::Ire};
+        luma.exact = true;
+        const auto down = limitSafeLevels({235.0, 235.0, 235.0}, luma);
+        QVERIFY(std::abs(down[0] - fromSafeUnit(90.0, SafeUnit::Ire)) < 0.05);
+        QVERIFY(std::abs(down[0] - down[2]) < 1e-6);
+        // Composite: vivid yellow (about 133 IRE) within the default 120 IRE, its hue kept (red equal to green, blue
+        // below them).
+        SafeLimiting composite;
+        composite.exact = true;
+        const auto yellow = limitSafeLevels({235.0, 235.0, 16.0}, composite);
+        QVERIFY(!safeViolations(static_cast<int>(std::floor(yellow[0])), static_cast<int>(std::floor(yellow[1])), static_cast<int>(std::lround(yellow[2])),
+                                composite.limits)
+                     .compositeHigh);
+        QVERIFY(std::abs(yellow[0] - yellow[1]) < 1e-6 && yellow[2] < yellow[0]);
+        // With Composite/Luma Levels off, nothing changes for yellow.
+        composite.compositeLuma = false;
+        QCOMPARE(limitSafeLevels({235.0, 235.0, 16.0}, composite), (std::array<double, 3>{235.0, 235.0, 16.0}));
+        // 422 Safe: every enabled limit holds for many colours; one pass may leave some just outside, never more.
+        SafeLimiting tight;
+        tight.limits.composite = {0.0, 100.0, SafeUnit::Ire};
+        tight.limits.luma = {5.0, 95.0, SafeUnit::Ire};
+        tight.limits.rgb = {20.0, 230.0, SafeUnit::Bit8};
+        tight.exact = true;
+        for (int r = 16; r <= 235; r += 31) {
+            for (int g = 16; g <= 235; g += 31) {
+                for (int b = 16; b <= 235; b += 31) {
+                    const auto c = limitSafeLevels({double(r), double(g), double(b)}, tight);
+                    for (double x : c) QVERIFY(x >= 20.0 - 1e-6 && x <= 230.0 + 1e-6);
+                    const double y = 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
+                    QVERIFY2(y >= fromSafeUnit(5.0, SafeUnit::Ire) - 0.6 && y <= fromSafeUnit(95.0, SafeUnit::Ire) + 0.6, qPrintable(QString::number(y)));
+                }
+            }
+        }
     }
 };
 

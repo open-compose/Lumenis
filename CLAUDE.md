@@ -757,7 +757,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   monitors through `CorrectionMonitors::setSafeColors`, the Color Match swatches' ⚠ through
   `ColorMatchControl::setSafeColors`; tests `tst_safe_colors`, `tst_scopes`, `tst_correction_mode`,
   `tst_correction_tool`), is done.
-  Next: 6.10e4c (Safe Color Limiter), 6.10e5, then 6.10f (the owner's report of Tools > Titler+ and Effect Editor opening as huge
+  6.10e4c1, the Safe Color Limiter effect (`src/model/safe_color_limiter.*`: its parameters, Rec. 601 limiting and 422
+  Safe; `detail::safeColorLimiterPicture`; seeded from the Safe Colors setting through `Timeline::setEffectSeed`; tests
+  `tst_safe_colors`, `tst_compositor`, `tst_effect_mode`), is done.
+  Next: 6.10e4c2 (the limiter's Source monitor analysis display), 6.10e5, then 6.10f (the owner's report of Tools > Titler+ and Effect Editor opening as huge
   windows on Windows 11; ROADMAP), 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
