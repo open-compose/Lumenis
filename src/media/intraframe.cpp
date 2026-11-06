@@ -6,6 +6,7 @@
 #include "effect_drawing.h"
 
 #include "lumenis/media/color_correction.h"
+#include "lumenis/media/color_match.h"
 #include "lumenis/media/compositor.h"
 #include "lumenis/model/correction_shapes.h"
 #include "lumenis/model/intraframe.h"
@@ -181,6 +182,32 @@ void setRgb(float* px, const std::array<double, 3>& rgb, double alpha) {
 
 // The Paint Effect's modes (p.537-544) applied to the whole picture `cur`; the caller keeps the result to the object's
 // coverage. `original` is the segment's own picture (Erase), `bounds` the object's outline bounds in pixels (Gradient).
+// Color Match within an object (FX Guide p.544, p.547-548): "replacing the Input color value with the Output color value
+// and adjusting all the other color values in the area proportionally". Ours: the Color Correction tool's Color Match
+// (media::matchColor) as R+G+B on the Curves group, NaturalMatch when its button is on; the picture unchanged until
+// both swatches have a colour.
+Picture colorMatched(const Picture& picture, const model::Effect& oe, const QString& cat, double time, const model::EffectSpan& span) {
+    const auto in = model::colorAt(oe, cat, QStringLiteral("Color Match Input"), time, span);
+    const auto out = model::colorAt(oe, cat, QStringLiteral("Color Match Output"), time, span);
+    if (!in || !out) return picture;
+    ColorMatch match;
+    match.group = MatchGroup::Curves;
+    match.type = QStringLiteral("rgb");
+    match.natural = oe.parameters.value(cat).toObject().value(QStringLiteral("Use NaturalMatch")).toBool();
+    model::ColorCorrection correction;
+    const auto colour = [](const model::Rgb& c) { return QColor::fromRgbF(static_cast<float>(c.red), static_cast<float>(c.green), static_cast<float>(c.blue)); };
+    if (!matchColor(correction, colour(*in), colour(*out), match)) return picture;
+    return colorCorrectedPicture(correction, picture);
+}
+
+// The Spot Color Correction effect's adjustment (FX Guide p.471, p.731-732): "all of the color adjustment parameter
+// categories available in the Color Effect, as well as the Color Match control", all applied together.
+const QString kSpotColorMatch = QStringLiteral("Spot Color Correction Effect Color Match Parameters (Media Composer | Symphony Option Only)");
+Picture spotCorrected(const model::Effect& oe, const Picture& picture, double time, const model::EffectSpan& span) {
+    const Picture adjusted = detail::colorEffectPicture(model::Effect{QStringLiteral("Image"), QStringLiteral("Color Effect"), oe.parameters}, picture, time, span);
+    return colorMatched(adjusted, oe, kSpotColorMatch, time, span);
+}
+
 Picture paintMode(const model::Effect& oe, const QString& mode, const Picture& cur, const Picture& original, const QRectF& bounds, double dx,
                   double dy, double time, const model::EffectSpan& span) {
     const int w = cur.width(), h = cur.height();
@@ -344,8 +371,13 @@ Picture paintMode(const model::Effect& oe, const QString& mode, const Picture& c
                mode == QLatin1String("Color Style") || mode == QLatin1String("Color Gain")) {
         // These take the Color Effect's categories (p.544, p.533-536).
         out = detail::colorEffectPicture(model::Effect{QStringLiteral("Image"), QStringLiteral("Color Effect"), oe.parameters}, cur, time, span);
+    } else if (mode == QLatin1String("Color Match")) {
+        // "Provides the same Color Match control that appears in the Color Correction tool ... Click the Enable Color
+        // Match button to activate the color match for the selected area" (p.544).
+        if (oe.parameters.value(QStringLiteral("Paint Effect Modes")).toObject().value(QStringLiteral("Enable Color Match")).toBool()) {
+            out = colorMatched(cur, oe, QStringLiteral("Paint Effect Modes"), time, span);
+        }
     }
-    // Color Match (p.544, p.624) comes with colour correction (6.10): ours until then, no change.
     return out;
 }
 
@@ -555,12 +587,17 @@ Picture intraframePicture(const model::Effect& effect, const Picture& layer, con
     // corresponding tools", p.393).
     Picture cur = layer;
     const QString cat = modeCategory(effect);
+    // Spot Color Correction "Lets you apply color adjustments to selected parts of images as well as to whole images"
+    // (p.471): without objects, to the whole picture.
+    if (effect.name == QLatin1String("Spot Color Correction") && objects.isEmpty()) return over(spotCorrected(effect, layer, time, span), below);
     for (const model::IntraframeObject& o : objects) {
         const model::Effect oe = model::objectEffect(effect, o);
         const std::vector<float> m = intraframeMask(effect, o, cur, time, span);
         Picture mod;
         if (effect.name == QLatin1String("Blur Effect") || effect.name == QLatin1String("Mosaic Effect")) {
             mod = detail::detailEffectPicture(oe, cur, time, span);
+        } else if (effect.name == QLatin1String("Spot Color Correction")) {
+            mod = spotCorrected(oe, cur, time, span);
         } else {
             const model::ObjectPlace place = model::objectPlaceAt(effect, o, time, span);
             const double unit = w / 1920.0;

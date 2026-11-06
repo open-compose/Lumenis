@@ -58,7 +58,8 @@ QStringList withGroups(const QList<IntraframeObject>& objects, const QStringList
 bool isIntraframeEffect(const Effect& effect) {
     if (effect.category == QLatin1String("Image")) {
         return effect.name == QLatin1String("Paint Effect") || effect.name == QLatin1String("Blur Effect") ||
-               effect.name == QLatin1String("Mosaic Effect") || effect.name == QLatin1String("Scratch Removal");
+               effect.name == QLatin1String("Mosaic Effect") || effect.name == QLatin1String("Scratch Removal") ||
+               effect.name == QLatin1String("Spot Color Correction");
     }
     return isAniMatte(effect);
 }

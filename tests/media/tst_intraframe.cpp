@@ -264,6 +264,55 @@ private slots:
         QVERIFY(near(at(intraframePicture(paint, grey, blue, 0.0, EffectSpan(10)), 50, 5), QColor(78, 78, 78)));
     }
 
+    void spotColorCorrection() {
+        // The Spot Color Correction effect (FX Guide p.471, p.731-733): the Color Effect's adjustments, all at once,
+        // within the drawn objects, or over the whole picture without them.
+        const Picture red = Picture::solid(64, 36, QColor(255, 0, 0));
+        const Picture black = Picture::solid(64, 36, QColor(0, 0, 0));
+        Effect spot{QStringLiteral("Image"), QStringLiteral("Spot Color Correction"), {}};
+        QVERIFY(model::isIntraframeEffect(spot));
+        spot.parameters.insert(QStringLiteral("Color Effect Parameters"), QJsonObject{{QStringLiteral("Sat"), -100}});
+        // No objects: the whole picture loses its colour.
+        Picture shown = intraframePicture(spot, red, black, 0.0, EffectSpan(10));
+        QVERIFY(at(shown, 50, 10).saturation() < 10);
+        // A rectangle over the left half: only there.
+        const QString box = model::addIntraframeObject(spot, IntraframeKind::Rectangle, model::rectangleShape(QRectF(0.0, 0.0, 0.5, 1.0)));
+        shown = intraframePicture(spot, red, black, 0.0, EffectSpan(10));
+        QVERIFY(at(shown, 10, 10).saturation() < 10);
+        QVERIFY(near(at(shown, 50, 10), QColor(255, 0, 0)));
+        // Several adjustments together: Sat -100 and Bright 50 make it a light grey.
+        setParameter(spot, box, QStringLiteral("Color Effect Parameters"), QStringLiteral("Bright"), 50);
+        const QColor both = at(intraframePicture(spot, red, black, 0.0, EffectSpan(10)), 10, 10);
+        QVERIFY(both.saturation() < 10 && both.red() > at(shown, 10, 10).red());
+        // Color Match: the Input colour replaced by the Output colour (p.547-548), here grey towards blue.
+        const Picture grey = Picture::solid(64, 36, QColor(128, 128, 128));
+        Effect match{QStringLiteral("Image"), QStringLiteral("Spot Color Correction"), {}};
+        const QString cat = QStringLiteral("Spot Color Correction Effect Color Match Parameters (Media Composer | Symphony Option Only)");
+        match.parameters.insert(cat, QJsonObject{{QStringLiteral("Color Match Input"), QStringLiteral("#808080")},
+                                                 {QStringLiteral("Color Match Output"), QStringLiteral("#4060c0")}});
+        const QColor matched = at(intraframePicture(match, grey, black, 0.0, EffectSpan(10)), 10, 10);
+        QVERIFY2(matched.blue() > matched.red() + 40, qPrintable(matched.name()));
+        // Without an Output colour, unchanged.
+        match.parameters.insert(cat, QJsonObject{{QStringLiteral("Color Match Input"), QStringLiteral("#808080")}});
+        QVERIFY(near(at(intraframePicture(match, grey, black, 0.0, EffectSpan(10)), 10, 10), QColor(128, 128, 128)));
+    }
+
+    void paintColorMatch() {
+        // The Paint Effect's Color Match mode (p.544): only with Enable Color Match on.
+        const Picture grey = Picture::solid(64, 36, QColor(128, 128, 128));
+        const Picture black = Picture::solid(64, 36, QColor(0, 0, 0));
+        Effect paint{QStringLiteral("Image"), QStringLiteral("Paint Effect"), {}};
+        const QString box = model::addIntraframeObject(paint, IntraframeKind::Rectangle, model::rectangleShape(QRectF(0.0, 0.0, 0.5, 1.0)));
+        setParameter(paint, box, QStringLiteral("Paint Effect Mode Parameters"), QStringLiteral("Fast menu"), QStringLiteral("Color Match"));
+        setParameter(paint, box, QStringLiteral("Paint Effect Modes"), QStringLiteral("Color Match Input"), QStringLiteral("#808080"));
+        setParameter(paint, box, QStringLiteral("Paint Effect Modes"), QStringLiteral("Color Match Output"), QStringLiteral("#4060c0"));
+        QVERIFY(near(at(intraframePicture(paint, grey, black, 0.0, EffectSpan(10)), 10, 10), QColor(128, 128, 128)));
+        setParameter(paint, box, QStringLiteral("Paint Effect Modes"), QStringLiteral("Enable Color Match"), true);
+        const Picture shown = intraframePicture(paint, grey, black, 0.0, EffectSpan(10));
+        QVERIFY(at(shown, 10, 10).blue() > at(shown, 10, 10).red() + 40);
+        QVERIFY(near(at(shown, 50, 10), QColor(128, 128, 128)));
+    }
+
     void cloneAndMagicMask() {
         // A picture red on top, green below; an oval drawn over the red half and moved down in Clone mode carries the
         // red with it (p.538).

@@ -763,7 +763,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.10e4c2, the limiter's analysis display in the Source monitor (`media::safeColorAnalysisImage`,
   `Composition::limitSafeColors`, `EffectEditor::safeColorAnalysis`, `Composer::setMonitorOverride`; tests `tst_scopes`,
   `tst_effect_mode`), is done, so 6.10e4 is.
-  Next: 6.10e5, then 6.10f (the owner's report of Tools > Titler+ and Effect Editor opening as huge
+  6.10e5, the Spot Color Correction effect and the Paint Effect's Color Match mode (Spot Color Correction among the
+  Intraframe effects, `spotCorrected`/`colorMatched` in `src/media/intraframe.cpp`, the Color Match Input/Output
+  swatches; test `tst_intraframe`), is done, so 6.10e is.
+  Next: 6.10f (the owner's report of Tools > Titler+ and Effect Editor opening as huge
   windows on Windows 11; ROADMAP), 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).

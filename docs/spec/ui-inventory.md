@@ -388,6 +388,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   6.10e4c2: the analysis display while the Effect Editor is visible (any mode),
   the Record frame without limiters, the background at a third, the order of
   highlight colours, shown in an empty Source monitor too.
+  6.10e5: Color Match as two swatch parameters, R+G+B curves matching, Spot Color
+  Correction's Color Match always on once both swatches are set; p.733's Luma
+  Adjust/Chroma Adjust kept as the reference's Color Adjust.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

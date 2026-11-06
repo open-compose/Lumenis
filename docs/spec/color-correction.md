@@ -594,6 +594,35 @@ the Effect Editor's `refresh`/`rebuild`/`changeShown` in Color Correction mode a
 * The editor's groups have no Enable buttons yet (ours; the tool's stay); a value back at its default is left out as the
   tool leaves it. The Curves and Levels keyframe tracks came with 6.10d3c.
 
+## 6.10e5: Spot Color Correction and the Paint Effect's Color Match
+
+Code: Spot Color Correction among the Intraframe effects (`model::isIntraframeEffect`), `spotCorrected` and
+`colorMatched` in `src/media/intraframe.cpp`, the Paint Effect's Color Match mode in `paintMode`, the Color Match
+swatches in `effect_parameters.json`. Tests: `tst_intraframe` (`spotColorCorrection`, `paintColorMatch`).
+
+### From the guide
+* "The Spot Color Correction effect lets you make precise color adjustments to a part of an image that you define
+  using the Intraframe drawing tools"; "Using the Spot Color Correction effect, you can enable several kinds of color
+  adjustments at the same time", where a Paint Effect object takes one mode (FX p.731-733).
+* "Lets you apply color adjustments to selected parts of images as well as to whole images ... includes all of the
+  color adjustment parameter categories available in the Color Effect, as well as the Color Match control" (FX p.471).
+* Color Match "lets you correct color in the area you have isolated using the drawing tools by replacing the Input
+  color value with the Output color value and adjusting all the other color values in the area proportionally"; the
+  Input (left) and Output (right) swatches; Use NaturalMatch "replaces color hue ... while retaining the saturation and
+  luminance characteristics" (FX p.547-548). The Paint Effect's Color Match mode: "Click the Enable Color Match button to
+  activate the color match for the selected area" (FX p.544).
+* The Paint Effect's colour adjustment modes, p.733: Luma Adjust, Luma Range, Luma Clip, Chroma Adjust, Color Style,
+  Color Gain, Color Match.
+
+### Ours
+* The guide's "Color Match Input and Output color swatches" are two colour parameters, Color Match Input and Color Match
+  Output, shown as the Effect Editor's swatches with their eyedropper (6.9c1).
+* Color Match is the Color Correction tool's (6.10c3a) as R+G+B on the Curves group, NaturalMatch when its button is on.
+  It does nothing until both swatches have a colour. Spot Color Correction has no Enable button for it (none in the
+  guide's list).
+* The Paint Effect's Fast menu keeps the reference's mode names (p.537-544). Its Color Adjust covers p.733's Luma
+  Adjust and Chroma Adjust, which the reference's list does not have.
+
 ## 6.10e4c2: the Safe Color Limiter's analysis display
 
 Code: `media::safeColorAnalysisImage` (`src/media/scopes.*`), `Composition::limitSafeColors`,

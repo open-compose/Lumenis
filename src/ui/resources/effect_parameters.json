@@ -500,8 +500,10 @@
       {"name": "Frame Processing", "kind": "button", "label": "Frame Processing button", "default": true}
     ]},
     {"name": "Paint Effect Modes", "page": 537, "parameters": [
-      {"name": "Enable Color Match", "kind": "button", "subcategory": "Color Match"},
-      {"name": "Use NaturalMatch", "kind": "button", "subcategory": "Color Match"}
+      {"name": "Color Match Input", "kind": "color", "label": "Color Match Input color swatch", "subcategory": "Color Match", "keyframeable": false},
+      {"name": "Color Match Output", "kind": "color", "label": "Color Match Output color swatch", "subcategory": "Color Match", "keyframeable": false},
+      {"name": "Enable Color Match", "kind": "button", "subcategory": "Color Match", "keyframeable": false},
+      {"name": "Use NaturalMatch", "kind": "button", "subcategory": "Color Match", "keyframeable": false}
     ]},
     {"name": "Paint Effect Color Parameters", "page": 544, "parameters": [
       {"name": "Color controls", "kind": "color", "keyframeable": false}
@@ -531,8 +533,9 @@
       {"name": "Frame Processing", "kind": "button", "label": "Frame Processing button", "default": true}
     ]},
     {"name": "Spot Color Correction Effect Color Match Parameters (Media Composer | Symphony Option Only)", "page": 547, "parameters": [
-      {"name": "Color Match Input and Output color swatches", "kind": "color"},
-      {"name": "Use NaturalMatch", "kind": "button"}
+      {"name": "Color Match Input", "kind": "color", "label": "Color Match Input color swatch", "keyframeable": false},
+      {"name": "Color Match Output", "kind": "color", "label": "Color Match Output color swatch", "keyframeable": false},
+      {"name": "Use NaturalMatch", "kind": "button", "keyframeable": false}
     ]},
     {"name": "Key Effects Key Parameters", "page": 548, "parameters": [
       {"name": "Color controls", "kind": "color", "keyframeable": false},
