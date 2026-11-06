@@ -271,7 +271,7 @@
                          {"value": "graphic", "label": "Graphic"}, {"value": "ale", "label": "Avid Log Exchange"},
                          {"value": "tabDelimited", "label": "Tab Delimited", "later": true}, {"value": "op1a", "label": "MXF OP1a"},
                          {"value": "op1aLegacy", "label": "MXF OP1a (legacy)"}, {"value": "dpx", "label": "DPX"}, {"value": "openexr", "label": "OpenEXR"},
-                         {"value": "xdcam", "label": "XDCAM MXF OP1a"}, {"value": "as11", "label": "AS-11"},
+                         {"value": "xdcam", "label": "XDCAM MXF OP1a"}, {"value": "as11", "label": "AS-11"}, {"value": "dcp", "label": "DCP"},
                          {"value": "avb", "label": "Media Composer Bin"}, {"value": "fcpxml", "label": "Final Cut Pro 7 XML"},
                          {"value": "mov", "label": "MOV"}, {"value": "mp4", "label": "MP4"}]},
             {"key": "useMarks", "type": "bool", "label": "Use Marks", "default": false, "page": 1175},
@@ -398,6 +398,20 @@
             {"key": "as11CompletionDate", "type": "text", "label": "Completion Date (UK DPP)", "default": "", "page": 893},
             {"key": "as11ContactEmail", "type": "text", "label": "Contact Email (UK DPP)", "default": "", "page": 893},
             {"key": "as11ContactTelephoneNumber", "type": "text", "label": "Contact Telephone Number (UK DPP)", "default": "", "page": 893}
+          ]
+        },
+        {
+          "name": "DCP",
+          "options": [
+            {"key": "dcpTitle", "type": "text", "label": "Title", "default": "", "page": 519},
+            {"key": "dcpKind", "type": "choice", "style": "menu", "label": "Content Kind", "default": "feature", "page": 519,
+             "choices": [{"value": "feature", "label": "Feature"}, {"value": "trailer", "label": "Trailer"}, {"value": "short", "label": "Short"}, {"value": "teaser", "label": "Teaser"}, {"value": "advertisement", "label": "Advertisement"}, {"value": "test", "label": "Test"}]},
+            {"key": "dcpContainer", "type": "choice", "style": "menu", "label": "Container", "default": "flat", "page": 519,
+             "choices": [{"value": "flat", "label": "Flat (1998 x 1080)"}, {"value": "scope", "label": "Scope (2048 x 858)"}, {"value": "full", "label": "Full (2048 x 1080)"}]},
+            {"key": "dcpFourK", "type": "bool", "label": "4K", "default": false, "page": 519},
+            {"key": "dcpSound", "type": "choice", "style": "menu", "label": "Sound", "default": "51", "page": 519,
+             "choices": [{"value": "51", "label": "5.1"}, {"value": "stereo", "label": "Stereo"}]},
+            {"key": "dcpIssuer", "type": "text", "label": "Issuer", "default": "", "page": 519}
           ]
         },
         {

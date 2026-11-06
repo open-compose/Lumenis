@@ -100,9 +100,11 @@ private slots:
                     // Its setting's pages, or another chapter (Show Labels in
                     // Tool Palette is on p.392), or the FX Guide's (Use Classic
                     // Character Mapping, FX p.377). The Export setting's MOV and MP4 options are described in the
-                    // Exporting chapter (p.879-900, 7.1a-b) and the Export Settings reference runs to p.1187.
+                    // Exporting chapter (p.879-900, 7.1a-b) and the Export Settings reference runs to p.1187. The DCP tab's
+                    // options are ours and cite the guide's only mention of DCP output (p.519, 7.5).
                     const bool exportChapter =
-                        k.kind == QLatin1String("Export") && ((o.page >= 879 && o.page <= 900) || (o.page >= 1173 && o.page <= 1187));
+                        k.kind == QLatin1String("Export") &&
+                        ((o.page >= 879 && o.page <= 900) || (o.page >= 1173 && o.page <= 1187) || (o.key.startsWith(QLatin1String("dcp")) && o.page == 519));
                     QVERIFY2((o.page >= k.page && o.page <= k.page + 10) || o.page == 392 || (o.page >= 89 && o.page <= 92) || o.fxGuide ||
                                  exportChapter,
                              qPrintable(where));

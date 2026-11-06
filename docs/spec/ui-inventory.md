@@ -436,7 +436,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   data kept in the bin item, colours and styles not kept, the 80% caption grid in the monitors, the D1 row's drawing,
   a broken caption as a cut through a sending span, SCC lines before the start left out, TTML layout and times.
   7.4b2 (docs/spec/timeline-find.md): what each Quick Find option searches, Enter finding to the right, the position
-  kept without a match, options not kept.
+  kept without a match, options not kept. 7.5 (docs/spec/dcp.md): all of DCP export, which the guide only names
+  (p.519): Export As DCP and its tab, the package folder named for the file, the rates, letterboxing, the 5.1 layout.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

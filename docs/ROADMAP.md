@@ -1379,6 +1379,9 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       Timeline Text (p.985). Done (docs/spec/timeline-find.md: `src/ui/timeline_find.cpp`; test `tst_timeline_find`),
       so 7.4 is.
 * 7.5, DCP ("Output to DCP requirements for theatrical releases", p.519) through an open library, IMF export later.
+  Done (docs/spec/dcp.md: Export As DCP with its tab, ours; `media::writeDcp` with JPEG 2000 frames from FFmpeg's
+  OpenJPEG, asdcplib's asdcp-wrap for the SMPTE MXF track files and our CPL, PKL and Asset Map; tests `tst_dcp`,
+  `tst_movie_export_ui exportDcp`). Validating with a DCP checker (gate 1) waits for asdcplib on a runner.
 * 7.6 (the owner's report, 2026-11-06, after 7.5): the Titler+ window and the Effect Editor do not look like the FX
   Guide's pictures. Titler+ in the guide has two columns of tool icons on the left; ours has text buttons, some side by
   side, which make it as wide as a 1920-pixel screen on Windows. Lay both out as the guide's figures show them (read

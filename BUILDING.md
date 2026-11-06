@@ -1073,6 +1073,12 @@ the build folder (`build/<preset>`) and configure again.
   `bmx/build/apps/bmxtranswrap/bmxtranswrap` onto PATH, beside the
   application, or name it in `LUMENIS_BMXTRANSWRAP`. Without it those
   exports say so in the Console; `tst_movie_export as11` skips its rewrap.
+* **DCP export** (7.5, docs/spec/dcp.md) runs asdcplib's `asdcp-wrap`
+  (https://github.com/cinecert/asdcplib, BSD licence; Ubuntu has no package).
+  Build it with its CMake files (`cmake -S asdcplib -B asdcplib/build`), then
+  copy `asdcp-wrap` onto PATH, beside the application, or name it in
+  `LUMENIS_ASDCP_WRAP`. Without it the export says so in the Console; the tests
+  use a stand-in script instead.
 * **Gates 3 and 4, playback:** on a reference machine with a sound card,
   `python3 scripts/measure-playback.py --app <cutthulhu> --seconds 600` (gate
   3) and `--seconds 3600` (gate 4). Each run is judged on the gates its

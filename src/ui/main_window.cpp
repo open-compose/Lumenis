@@ -47,6 +47,7 @@
 #include "lumenis/model/titler.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/media/as11.h"
+#include "lumenis/media/dcp.h"
 #include "lumenis/media/movie_export.h"
 #include "lumenis/media/render.h"
 #include "lumenis/ext/deck.h"
@@ -3253,6 +3254,7 @@ QString MainWindow::exportSuffix(const QString& exportAs) const {
         if (exportAs == QLatin1String("openexr")) return QStringLiteral("exr");
         return exportAs == QLatin1String("avb")      ? QStringLiteral("avb")
                : exportAs == QLatin1String("scc")    ? QStringLiteral("scc")
+               : exportAs == QLatin1String("dcp")    ? QStringLiteral("dcp")
                : exportAs == QLatin1String("ttml")   ? QStringLiteral("ttml")
                : exportAs == QLatin1String("ale")    ? QStringLiteral("ale")
                : exportAs == QLatin1String("fcpxml") ? QStringLiteral("xml")
@@ -3267,6 +3269,7 @@ QString MainWindow::exportSuffix(const QString& exportAs) const {
 QString MainWindow::exportFilter(const QString& exportAs) {
         return exportAs == QLatin1String("avb")      ? tr("Media Composer bins (*.avb)")
                : exportAs == QLatin1String("scc")    ? tr("Scenarist Closed Caption (*.scc)")
+               : exportAs == QLatin1String("dcp")    ? tr("Digital Cinema Package folder (*.dcp)")
                : exportAs == QLatin1String("ttml")   ? tr("Timed Text Markup Language (*.ttml)")
                : exportAs == QLatin1String("ale")    ? tr("Avid Log Exchange (*.ale)")
                : exportAs == QLatin1String("fcpxml") ? tr("Final Cut Pro 7 XML (*.xml)")
@@ -4061,7 +4064,7 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
     const bool movie = format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie") ||
                        format == QLatin1String("audio") || format == QLatin1String("graphic") || format == QLatin1String("dpx") ||
                        format == QLatin1String("openexr") || format == QLatin1String("op1a") || format == QLatin1String("xdcam") ||
-                       format == QLatin1String("op1aLegacy") || format == QLatin1String("as11");
+                       format == QLatin1String("op1aLegacy") || format == QLatin1String("as11") || format == QLatin1String("dcp");
     const bool captionText = format == QLatin1String("scc") || format == QLatin1String("ttml");
     if (format != QLatin1String("aaf") && format != QLatin1String("avb") && format != QLatin1String("ale") &&
         format != QLatin1String("fcpxml") && !movie && !captionText) {
@@ -4089,7 +4092,7 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
         const QString old = QFileInfo(path).suffix();
         if (old.compare(QLatin1String("aaf"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("avb"), Qt::CaseInsensitive) == 0 ||
             old.compare(QLatin1String("ale"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("xml"), Qt::CaseInsensitive) == 0 ||
-            old.compare(QLatin1String("scc"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("ttml"), Qt::CaseInsensitive) == 0 ||
+            old.compare(QLatin1String("scc"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("dcp"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("ttml"), Qt::CaseInsensitive) == 0 ||
             QStringList{QStringLiteral("mov"), QStringLiteral("mp4"), QStringLiteral("wav"), QStringLiteral("aif"), QStringLiteral("png"),
                         QStringLiteral("jpg"), QStringLiteral("tif"), QStringLiteral("bmp"), QStringLiteral("pct"), QStringLiteral("dpx"),
                         QStringLiteral("exr")}
@@ -4983,6 +4986,8 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
     // Video Compression or Video Format, Audio Format and Bit Depth.
     // AS-11 (7.2c) is an OP1a file of the MXF OP1a tab's compression, rewrapped by bmxtranswrap below.
     const bool as11 = format == QLatin1String("as11");
+    // DCP (7.5, docs/spec/dcp.md): the picture and the mix handed to media::writeDcp below.
+    const bool dcp = format == QLatin1String("dcp");
     // "sink": the frames and sound handed to movieSink_ (the Digital Cut, 7.3a) rather than written to a file.
     const bool sink = format == QLatin1String("sink");
     const bool mxf = format == QLatin1String("op1a") || format == QLatin1String("xdcam") || format == QLatin1String("op1aLegacy") || as11;
@@ -4992,7 +4997,7 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
                   : format == QLatin1String("op1aLegacy") ? media::MovieContainer::MxfLegacy
                                                           : media::MovieContainer::Mov;
     const QString tracks = mxf ? QStringLiteral("both") : text("movieTracks");
-    const bool movie = mxf || sink || format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie");
+    const bool movie = mxf || sink || dcp || format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie");
     const bool sound = format == QLatin1String("audio");
     o.video = movie ? tracks != QLatin1String("audio") && !video.isEmpty() : !sound;
     o.audio = movie ? tracks != QLatin1String("video") && !audio.isEmpty() : sound;
@@ -5101,6 +5106,18 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
             const QString op1a = scratch.filePath(QStringLiteral("programme.mxf"));
             ok = media::exportMovie(op1a, source, o, step, error) && media::writeAs11(op1a, path, a, error);
         }
+    } else if (dcp) {
+        // A package folder named for the file chosen (ours: the guide only names the output, p.519).
+        media::DcpOptions d;
+        d.title = text("dcpTitle").isEmpty() ? sequenceItem.name : text("dcpTitle");
+        d.kind = text("dcpKind");
+        d.container = text("dcpContainer");
+        d.fourK = flag("dcpFourK");
+        d.channels = text("dcpSound") == QLatin1String("stereo") ? 2 : 6;
+        if (!text("dcpIssuer").isEmpty()) d.issuer = text("dcpIssuer");
+        if (!o.audio) source.sound = {};
+        const QFileInfo chosen(path);
+        ok = media::writeDcp(chosen.absoluteDir().filePath(chosen.completeBaseName()), source, d, step, error);
     } else if (sink) {
         ok = movieSink_ && movieSink_(source, o, step, error);
     } else if (movie) {

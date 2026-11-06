@@ -78,6 +78,78 @@ class TestMovieExportUi : public QObject {
 private slots:
     void initTestCase() { applyTheme(*qApp); }
 
+    // DCP (7.5, docs/spec/dcp.md): Export As DCP writes a package folder named for the file chosen, through
+    // asdcp-wrap (a stand-in script here, POSIX shells only) and the DCP tab's choices.
+    void exportDcp() {
+#ifdef Q_OS_WIN
+        QSKIP("the stand-in asdcp-wrap is a POSIX shell script");
+#else
+        QTemporaryDir dir;
+        const QString movie = dir.filePath(QStringLiteral("A004.mov"));
+        QVERIFY(writeMovie(movie));
+        const QString stub = dir.filePath(QStringLiteral("asdcp-wrap"));
+        {
+            QFile f(stub);
+            QVERIFY(f.open(QIODevice::WriteOnly));
+            f.write("#!/bin/sh\nfor out; do :; done\necho \"$@\" > \"$out.args\"\necho MXF > \"$out\"\n");
+            f.close();
+            f.setPermissions(f.permissions() | QFileDevice::ExeOwner);
+        }
+        qputenv("LUMENIS_ASDCP_WRAP", stub.toLocal8Bit());
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Reel"));
+        project.settings.name = QStringLiteral("Reel");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        QCOMPARE(window.linkFiles(binId, {movie}).size(), 1);
+        Composer& composer = window.composer();
+        composer.loadDefault(bin->nodeId(), bin->bin().items.first());
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.splice_in")));
+        const QString sequenceId = composer.state(MonitorId::Record).current()->item.id;
+        window.binContainer().saveAll();
+        Settings& settings = window.settings();
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("dcp"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("dcpTitle"), QStringLiteral("Reel One"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("dcpContainer"), QStringLiteral("full"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("dcpSound"), QStringLiteral("stereo"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("useMarks"), false);
+        window.binContainer().viewFor(bin)->selectIds({sequenceId});
+        window.setExportHook([&](ExportAsDialog& dialog) {
+            dialog.setPath(dir.filePath(QStringLiteral("ReelOne.dcp")));
+            return true;
+        });
+        commands.action(QStringLiteral("file.output.export_to_file"))->trigger();
+        qunsetenv("LUMENIS_ASDCP_WRAP");
+        const QDir package(dir.filePath(QStringLiteral("ReelOne")));
+        QVERIFY(package.exists(QStringLiteral("ASSETMAP.xml")));
+        const QStringList cpls = package.entryList({QStringLiteral("cpl_*.xml")});
+        QCOMPARE(cpls.size(), 1);
+        QFile cpl(package.filePath(cpls.first()));
+        QVERIFY(cpl.open(QIODevice::ReadOnly));
+        const QByteArray xml = cpl.readAll();
+        QVERIFY(xml.contains("<ContentTitleText>Reel One</ContentTitleText>"));
+        QVERIFY(xml.contains("<EditRate>25 1</EditRate>"));
+        QVERIFY(xml.contains("<ScreenAspectRatio>2048 1080</ScreenAspectRatio>"));
+        QVERIFY(xml.contains("<IntrinsicDuration>10</IntrinsicDuration>"));
+        // Stereo: no 5.1 channel label for the sound.
+        QFile args(package.filePath(QStringLiteral("sound.mxf.args")));
+        QVERIFY(args.open(QIODevice::ReadOnly));
+        QVERIFY(!args.readAll().contains("5.1"));
+#endif
+    }
+
     void exportSequenceAndClip() {
         QTemporaryDir dir;
         const QString movie = dir.filePath(QStringLiteral("A003.mov"));

@@ -122,7 +122,7 @@ headers in `include/lumenis/<library>/`.
   and its dialogs `src/ui/subcap_dialogs.*` (docs/spec/subcap.md). Closed captions on D1 (SCC, CEA-608, TTML) are
   `src/model/closed_captions.*`, drawn in the Timeline by `src/ui/timeline_captions.cpp` and in the monitors by the
   Composer, imported through `src/ui/ancdata_import_dialog.*` (docs/spec/closed-captions.md). The Timeline Quick
-  Find is `src/ui/timeline_find.cpp` (docs/spec/timeline-find.md).
+  Find is `src/ui/timeline_find.cpp` (docs/spec/timeline-find.md). DCPs are `src/media/dcp.*` (docs/spec/dcp.md).
 * **Effects.** The Effect Palette's list is `src/ui/resources/effects.json`
   and the Effect Editor's parameters `effect_parameters.json`; UI in
   `effect_palette.*` and `effect_editor.*` (its keyframe tracks and graphs in
