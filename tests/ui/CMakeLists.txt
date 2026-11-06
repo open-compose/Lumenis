@@ -38,6 +38,10 @@ lumenis_add_test(tst_tracking_ui SOURCES tst_tracking_ui.cpp LIBS ${ui_test_libs
 lumenis_add_test(tst_titler_ui SOURCES tst_titler_ui.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_intraframe_ui SOURCES tst_intraframe_ui.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_plasma_wipe SOURCES tst_plasma_wipe.cpp LIBS ${ui_test_libs})
+# OFX plug-in effects in the Effect Palette, from the test bundle tests/media builds (cutthulhu_test_ofx).
+lumenis_add_test(tst_ofx_palette SOURCES tst_ofx_palette.cpp LIBS ${ui_test_libs})
+add_dependencies(tst_ofx_palette cutthulhu_test_ofx)
+target_compile_definitions(tst_ofx_palette PRIVATE LUMENIS_TEST_OFX="$<TARGET_FILE:cutthulhu_test_ofx>")
 lumenis_add_test(tst_titler_templates SOURCES tst_titler_templates.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_title_tool SOURCES tst_title_tool.cpp LIBS ${ui_test_libs})
 lumenis_add_test(tst_title_clips SOURCES tst_title_clips.cpp LIBS ${ui_test_libs})

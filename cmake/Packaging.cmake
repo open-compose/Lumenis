@@ -11,6 +11,7 @@ set(LUMENIS_LICENSE_FILES
     ${PROJECT_SOURCE_DIR}/THIRD-PARTY-NOTICES.md
     ${PROJECT_SOURCE_DIR}/src/ui/resources/fonts/Inter-LICENSE.txt
     ${PROJECT_SOURCE_DIR}/packaging/licenses/clap-LICENSE.txt
+    ${PROJECT_SOURCE_DIR}/packaging/licenses/openfx-LICENSE.txt
     ${PROJECT_SOURCE_DIR}/packaging/licenses/FFmpeg-LGPL-2.1.txt
     ${PROJECT_SOURCE_DIR}/packaging/licenses/miniaudio-LICENSE.txt
     ${PROJECT_SOURCE_DIR}/packaging/licenses/pyaaf2-LICENSE.txt

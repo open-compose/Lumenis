@@ -1262,7 +1262,24 @@ phase of their own. They are done in three steps:
     tests `leavingTitlerRestoresTheRecordMonitor`, `titlerAndBackToSourceRecord`). Still to decide: whether closing
     Titler+ should leave Effect mode (the guide says the title is "directly viewed and manipulated in the Record
     monitor", p.303).
-* 6.11, the OFX host in place of AVX (ch.6, p.157-164), with OCIO colour management.
+* 6.11, the OFX host in place of AVX (ch.6, p.157-164), with OCIO colour management, in three parts (planned
+  2026-11-06 from p.157-164; AVX needs Avid's SDK, so OpenFX, BSD-3, takes its place as EXTENSIONS.md says):
+  * 6.11a, the host's core: the OpenFX 1.5.1 headers in `third_party/openfx`; finding bundles in the standard OFX
+    folders and `OFX_PLUGIN_PATH` (and `LUMENIS_OFX_PATH` for tests; `LUMENIS_NO_OFX=1` skips the scan) at start-up
+    ("Do not add or remove plug-ins while Media Composer is running", p.158); loading them and the host's property,
+    parameter, image effect, memory, multithread and message suites; the describe actions; plug-in effects in the
+    Effect Palette "in their own category (usually the name of the plug-in vendor)" with a plug-in icon (p.157); the
+    Console's reasons when one does not load (p.163); our own test plug-in. Done (docs/spec/ofx-host.md:
+    `src/media/ofx_host.*`, `OfxHostProvider`, `EffectInfo::ofxPlugin` and the plug-in icon; tests `tst_ofx_host`,
+    `tst_ofx_palette` with `tests/media/ofx_test_plugin.cpp`).
+  * 6.11b, rendering: a plug-in's parameters as the Effect Editor's controls (double, integer, boolean, choice, colour,
+    2D), keyframed like ours ("AVX 2.0 plug-ins automatically use advanced keyframes", p.157); the Filter, Generator
+    and Transition contexts; images in and out at the project's size; a missing plug-in's effect blank in the Timeline
+    and named in the Console (p.163); effect templates of plug-in effects (p.157); the Console's
+    `closeallofxplugins` after `closeallavxplugins` (p.158).
+  * 6.11c, the General context's several inputs with the Optional Inputs dialog (p.161), overlays through the Interact
+    suite with Outline/Path (p.161-162), and colour management with OCIO (the OFX 1.5 colour suite) where the library
+    is installed, else the plug-in sees the project's colour space only.
 
 **Gates**
 1. Each effect's output matches the reference frames from Media Composer with

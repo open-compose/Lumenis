@@ -26,6 +26,7 @@
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/capture.h"
 #include "lumenis/media/clap_host.h"
+#include "lumenis/media/ofx_host.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/managed.h"
 #include "lumenis/media/media.h"
@@ -968,6 +969,26 @@ int main(int argc, char** argv) {
             if (!p.usable()) lumenis::ui::ConsoleLog::instance().append(QObject::tr("CLAP: %1 left out: %2.").arg(p.name, p.whyNot()));
         }
         for (const QString& e : errors) lumenis::ui::ConsoleLog::instance().append(QObject::tr("CLAP: %1").arg(e));
+    }
+
+    // OFX image effect plug-ins join the Effect Palette (FX Guide p.157; docs/spec/ofx-host.md), before the palette's
+    // catalog is first read. Why one did not load goes to the Console (p.163). LUMENIS_NO_OFX=1 skips the scan, for a
+    // plug-in that crashes on loading.
+    if (qEnvironmentVariableIntValue("LUMENIS_NO_OFX") == 0) {
+        lumenis::media::setOfxMessageHandler(
+            [](const QString& text) { lumenis::ui::ConsoleLog::instance().append(QObject::tr("OFX: %1").arg(text)); });
+        QStringList errors;
+        const auto plugins = lumenis::media::scanOfxPlugins(
+            lumenis::media::findOfxBundles(lumenis::media::ofxSearchPaths()), &errors);
+        const int added = lumenis::media::registerOfxPlugins(plugins);
+        if (!plugins.isEmpty()) {
+            lumenis::ui::ConsoleLog::instance().append(
+                QObject::tr("OFX: %1 plug-ins found, %2 added to the Effect Palette.").arg(plugins.size()).arg(added));
+        }
+        for (const auto& p : plugins) {
+            if (!p.usable()) lumenis::ui::ConsoleLog::instance().append(QObject::tr("OFX: %1 left out: %2.").arg(p.id, p.whyNot()));
+        }
+        for (const QString& e : errors) lumenis::ui::ConsoleLog::instance().append(QObject::tr("OFX: %1").arg(e));
     }
 
     lumenis::ui::CommandRegistry commands;

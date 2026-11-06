@@ -338,6 +338,21 @@ CLAP plug-ins are loaded at start-up (docs/spec/clap-host.md):
   with `LUMENIS_NO_CLAP=1` set, which skips the scan. Then move the
   plug-in out of the CLAP folders.
 
+OFX video effect plug-ins are loaded at start-up too (docs/spec/ofx-host.md):
+* **A plug-in effect is not in the Effect Palette.** Open Tools > Console. It
+  says how many OFX plug-ins were found and added, and for each one left out
+  why: its binary could not be loaded (often a supporting library it needs
+  is missing), its describe action failed, or it supports none of the
+  Filter, Generator, Transition and General contexts. Plug-ins are looked
+  for as `.ofx.bundle` folders in the OFX folder of your system
+  (`C:\Program Files\Common Files\OFX\Plugins`, `/Library/OFX/Plugins`,
+  `/usr/OFX/Plugins`) and in the folders listed in `OFX_PLUGIN_PATH`. The
+  bundle needs a binary for your platform (`Contents/Win64`,
+  `Contents/MacOS`, `Contents/Linux-x86-64`).
+* **Cutthulhu crashes at start-up after you installed a plug-in.** Start it
+  with `LUMENIS_NO_OFX=1` set, which skips the scan. Then move the bundle
+  out of the OFX folders.
+
 ### Tests leave media in "Avid MediaFiles" on your drives, or crash probing it
 
 Before 2026-11-04 some tests made managed media on the computer's real drives (the top of a

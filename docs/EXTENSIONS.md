@@ -43,6 +43,9 @@ handle all of these the same way.
     in (docs/spec/clap-host.md). Avid's own AudioSuite plug-ins (its AAX
     format) wait for the AAX bridge; the AudioSuite tool offers our own
     processes meanwhile.
+    Video plug-ins: the OpenFX host (`src/media/ofx_host.*`,
+    `org.openeffects.ofx-host`) is built in (docs/spec/ofx-host.md). Its
+    plug-ins join the Effect Palette in their vendor's category.
 
   Video I/O devices and shared storage are reserved as categories. They get
   interfaces in their phases.

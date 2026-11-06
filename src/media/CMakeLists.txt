@@ -36,6 +36,7 @@ add_library(lumenis_media STATIC
     audio_suite.cpp
     audio_input.cpp
     clap_host.cpp
+    ofx_host.cpp
     link.cpp
     ltc.cpp
     tone.cpp
@@ -61,6 +62,7 @@ add_library(lumenis_media STATIC
     include/lumenis/media/audio_suite.h
     include/lumenis/media/audio_input.h
     include/lumenis/media/clap_host.h
+    include/lumenis/media/ofx_host.h
     include/lumenis/media/link.h
     include/lumenis/media/ltc.h
     include/lumenis/media/tone.h
@@ -76,7 +78,7 @@ add_library(lumenis::media ALIAS lumenis_media)
 target_include_directories(lumenis_media PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(lumenis_media
     PUBLIC lumenis::core lumenis::ext lumenis::model Qt6::Gui
-    PRIVATE lumenis::miniaudio lumenis::clap FFmpeg::avformat FFmpeg::avcodec FFmpeg::swscale FFmpeg::swresample FFmpeg::avutil)
+    PRIVATE lumenis::miniaudio lumenis::clap lumenis::openfx FFmpeg::avformat FFmpeg::avcodec FFmpeg::swscale FFmpeg::swresample FFmpeg::avutil)
 target_compile_definitions(lumenis_media PRIVATE LUMENIS_PATENT_CODECS=$<BOOL:${LUMENIS_PATENT_CODECS}>)
 lumenis_set_warnings(lumenis_media)
 

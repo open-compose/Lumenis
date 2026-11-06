@@ -391,6 +391,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   6.10e5: Color Match as two swatch parameters, R+G+B curves matching, Spot Color
   Correction's Color Match always on once both swatches are set; p.733's Luma
   Adjust/Chroma Adjust kept as the reference's Color Adjust.
+* OFX plug-ins (docs/spec/ofx-host.md, 6.11a) in place of AVX: the category of a
+  plug-in with no grouping ("OFX Plug-Ins"), a second plug-in of the same label named
+  with its identifier, plug-in effects without the green dot, the plug-in icon's drawing,
+  the order of contexts a plug-in is described in (Filter, Generator, Transition, General).
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

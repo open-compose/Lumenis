@@ -1,5 +1,6 @@
 #include "lumenis/ui/effect_palette.h"
 
+#include "lumenis/media/ofx_host.h"
 #include "lumenis/media/plasma_wipe.h"
 
 #include "lumenis/media/audio_fx.h"
@@ -97,6 +98,25 @@ const EffectCatalog& EffectCatalog::builtin() {
             info.parameters = {QStringLiteral("Acceleration"), QStringLiteral("Border"), QStringLiteral("Foreground"), QStringLiteral("Grid")};
             c.effects_ << info;
         }
+        // OFX plug-in effects (FX Guide p.157; media/ofx_host.h), registered at start-up before the catalog is first read:
+        // each in its vendor's category, after ours. Filter, Generator and General plug-ins apply to segments, Transition
+        // ones to transitions. They are not real time (ours: a plug-in renders on the processor).
+        for (const media::OfxPluginInfo& p : media::ofxPlugins()) {
+            if (!p.usable()) continue;
+            const QString category = p.category();
+            if (!c.categories_.contains(category)) c.categories_ << category;
+            EffectInfo info;
+            info.category = category;
+            info.name = p.label;
+            info.page = 157;
+            info.transition = p.transition();
+            info.segment = p.segment();
+            info.realTime = false;
+            info.ofxPlugin = p.id;
+            // Two plug-ins of one name in a category: the second is named by its identifier too.
+            if (c.find(category, info.name)) info.name = QStringLiteral("%1 (%2)").arg(p.label, p.id);
+            c.effects_ << info;
+        }
         return c;
     }();
     return catalog;
@@ -159,7 +179,7 @@ std::optional<EffectInfo> effectFromMime(const QMimeData* mime) {
 }
 
 // A 26x18 pixmap: the optional green dot on the left, then a purple tile.
-QIcon effectIcon(bool transition, bool realTimeDot) {
+QIcon effectIcon(bool transition, bool realTimeDot, bool plugin) {
     QPixmap pm(26, 18);
     pm.fill(Qt::transparent);
     QPainter p(&pm);
@@ -180,6 +200,14 @@ QIcon effectIcon(bool transition, bool realTimeDot) {
     } else {
         // A picture within the frame.
         p.drawRect(tile.adjusted(4, 3, -4, -3));
+    }
+    if (plugin) {
+        // A plug at the tile's top right: a body and two prongs.
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(kRealTime).lighter(130));
+        p.drawRect(QRectF(18, 6, 5, 5));
+        p.drawRect(QRectF(19, 3, 1, 3));
+        p.drawRect(QRectF(21, 3, 1, 3));
     }
     return QIcon(pm);
 }
@@ -364,7 +392,7 @@ void EffectPalette::fillEffects() {
         list << e;
     }
     for (const EffectInfo& e : list) {
-        auto* item = new QListWidgetItem(effectIcon(e.transition && !e.segment, e.realTime), e.name, effects_);
+        auto* item = new QListWidgetItem(effectIcon(e.transition && !e.segment, e.realTime, !e.ofxPlugin.isEmpty()), e.name, effects_);
         item->setData(Qt::UserRole, e.category);
         item->setData(Qt::UserRole + 1, e.audioEffect);
         item->setToolTip(cat == kAll ? e.category + QStringLiteral(": ") + e.name : e.name);

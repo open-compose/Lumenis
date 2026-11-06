@@ -26,6 +26,30 @@ set_target_properties(cutthulhu_test_clap PROPERTIES
 lumenis_add_test(tst_clap_host SOURCES tst_clap_host.cpp LIBS lumenis::media)
 add_dependencies(tst_clap_host cutthulhu_test_clap)
 target_compile_definitions(tst_clap_host PRIVATE LUMENIS_TEST_CLAP="$<TARGET_FILE:cutthulhu_test_clap>")
+
+# The OFX host's tests load an OFX binary of our own (ofx_test_plugin.cpp), built inside a bundle as the standard lays
+# it out: test-ofx/CutthulhuTest.ofx.bundle/Contents/<architecture>/CutthulhuTest.ofx. The $<1:...> keeps
+# multi-configuration generators from adding a configuration folder.
+if(WIN32)
+    set(lumenis_ofx_arch Win64)
+elseif(APPLE)
+    set(lumenis_ofx_arch MacOS)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+    set(lumenis_ofx_arch Linux-aarch64)
+else()
+    set(lumenis_ofx_arch Linux-x86-64)
+endif()
+set(lumenis_ofx_dir ${CMAKE_BINARY_DIR}/test-ofx/CutthulhuTest.ofx.bundle/Contents/${lumenis_ofx_arch})
+add_library(cutthulhu_test_ofx MODULE ofx_test_plugin.cpp)
+target_link_libraries(cutthulhu_test_ofx PRIVATE lumenis::openfx)
+set_target_properties(cutthulhu_test_ofx PROPERTIES
+    PREFIX "" SUFFIX ".ofx" OUTPUT_NAME "CutthulhuTest"
+    LIBRARY_OUTPUT_DIRECTORY $<1:${lumenis_ofx_dir}>
+    RUNTIME_OUTPUT_DIRECTORY $<1:${lumenis_ofx_dir}>)
+lumenis_add_test(tst_ofx_host SOURCES tst_ofx_host.cpp LIBS lumenis::media)
+add_dependencies(tst_ofx_host cutthulhu_test_ofx)
+target_compile_definitions(tst_ofx_host PRIVATE LUMENIS_TEST_OFX="$<TARGET_FILE:cutthulhu_test_ofx>"
+    LUMENIS_TEST_OFX_FOLDER="${CMAKE_BINARY_DIR}/test-ofx")
 # Audio timecode (LTC) and Change Sample Rate (docs/spec/clip-audio.md).
 lumenis_add_test(tst_ltc SOURCES tst_ltc.cpp LIBS lumenis::media)
 lumenis_add_test(tst_tone SOURCES tst_tone.cpp LIBS lumenis::media)

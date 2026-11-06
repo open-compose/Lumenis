@@ -770,7 +770,12 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   pixels of sections in a row), now scrolling and fitted to the screen; every floating panel and tool window goes through
   `fitOnScreen`/`keepOnScreen` in `panel_manager.cpp` (test `tst_main_window toolWindowsFitTheScreen`, BUILDING.md).
   Whether closing Titler+ should leave Effect mode is still open (ROADMAP 6.10f).
-  Next: 6.11 (OFX host), then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.11, the OFX host in place of AVX, is in three parts (ROADMAP). 6.11a, the host's core (docs/spec/ofx-host.md: the
+  OpenFX 1.5.1 headers in `third_party/openfx`, `src/media/ofx_host.*` with our suites, the bundle scan at start-up in
+  `app/main.cpp` with `LUMENIS_NO_OFX=1`, the describe actions, plug-ins in the Effect Palette by vendor through
+  `EffectInfo::ofxPlugin` with the plug-in icon, reasons in the Console; our test bundle `tests/media/ofx_test_plugin.cpp`;
+  tests `tst_ofx_host`, `tst_ofx_palette`), is done.
+  Next: 6.11b (rendering) and 6.11c, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

@@ -30,6 +30,9 @@ struct EffectInfo {
     // A Color Correction Preset (FX Guide p.611): the Color Correction effect template it applies
     // (model::CorrectionTemplate::toJson); empty for other effects. Ours: presets are templates, not effects.
     QJsonObject correctionPreset;
+    // An OFX plug-in effect (FX Guide p.157; media/ofx_host.h): the plug-in's identifier; empty for ours. Its category is
+    // the plug-in's vendor, and it has the plug-in icon.
+    QString ofxPlugin;
 
     // The effect as the sequence stores it, without parameters.
     model::Effect effect() const { return model::Effect{category, name, {}}; }
@@ -76,8 +79,9 @@ QList<EffectInfo> audioTrackEffects();
 // not in the catalog.
 std::optional<EffectInfo> effectFromMime(const QMimeData* mime);
 // The effect's icon: ours, a tile split for transitions; with the green
-// real-time dot for the palette (p.36).
-QIcon effectIcon(bool transition, bool realTimeDot);
+// real-time dot for the palette (p.36). A plug-in effect's has a plug on the tile ("Individual effects each have a
+// plug-in icon", p.157; the drawing is ours).
+QIcon effectIcon(bool transition, bool realTimeDot, bool plugin = false);
 
 // The effect templates of one open bin, as the Effect Palette lists them: "If you save any effect templates to
 // a bin, and have that bin open, those templates also display in the Effect Palette" (FX Guide p.37).

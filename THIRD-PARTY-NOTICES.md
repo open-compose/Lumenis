@@ -10,6 +10,7 @@ commercial distribution.
 | [Inter](https://github.com/rsms/inter) | 4.1 | SIL Open Font License 1.1 (`src/ui/resources/fonts/Inter-LICENSE.txt`) | Interface font, embedded as a resource |
 | [FFmpeg](https://ffmpeg.org) | 6.0 or later | LGPL-2.1-or-later (`packaging/licenses/FFmpeg-LGPL-2.1.txt`), linked dynamically | Reading and writing media (Phase 2) |
 | [CLAP](https://github.com/free-audio/clap) | 1.2.9 | MIT (`packaging/licenses/clap-LICENSE.txt`); headers built in from `third_party/clap` | Hosting CLAP audio plug-ins (Phase 5.5b) |
+| [OpenFX](https://github.com/AcademySoftwareFoundation/openfx) | 1.5.1 | BSD 3-Clause (`packaging/licenses/openfx-LICENSE.txt`); headers built in from `third_party/openfx` | Hosting OpenFX image effect plug-ins in place of AVX (Phase 6.11) |
 | [miniaudio](https://miniaud.io) | 0.11.25 | Public domain (Unlicense) or MIT-0, at the user's choice (`packaging/licenses/miniaudio-LICENSE.txt`); built in from `third_party/miniaudio` | Sound output for playback (Phase 2.3) |
 
 Qt's source is available from https://download.qt.io. Because Qt is linked
@@ -36,6 +37,11 @@ CLAP's C headers are kept unchanged in `third_party/clap/include`, from the
 1.2.9 tag of https://github.com/free-audio/clap. They are header-only: no
 CLAP code is linked in, and plug-ins are loaded from the user's folders at
 run time.
+
+OpenFX's C headers are kept unchanged in `third_party/openfx/include`, from the
+OFX_Release_1.5.1 tag of https://github.com/AcademySoftwareFoundation/openfx.
+They are header-only: no OpenFX code is linked in, and plug-ins are loaded
+from the user's folders at run time.
 
 ## Prior art for interchange
 

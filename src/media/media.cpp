@@ -3,6 +3,7 @@
 #include "lumenis/ext/codec.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/clap_host.h"
+#include "lumenis/media/ofx_host.h"
 
 #include <QCryptographicHash>
 #include <QFile>
@@ -1908,6 +1909,8 @@ void registerProviders(ext::ProviderRegistry& registry) {
     registry.add(std::make_shared<FFmpegProvider>());
     // CLAP audio plug-ins (docs/spec/clap-host.md); the plug-ins themselves are scanned at start-up.
     registry.add(std::make_shared<ClapHostProvider>());
+    // OFX image effect plug-ins (docs/spec/ofx-host.md); scanned at start-up too.
+    registry.add(std::make_shared<OfxHostProvider>());
 }
 
 } // namespace lumenis::media

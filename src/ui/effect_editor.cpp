@@ -842,7 +842,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
     if (effect) {
         const EffectInfo* shownInfo = EffectCatalog::builtin().find(effect->category, effect->name);
         const bool transition = shown_ && shown_->target == model::EffectTarget::Transition;
-        titleIcon_->setPixmap(effectIcon(transition, shownInfo ? shownInfo->realTime : true).pixmap(26, 18));
+        titleIcon_->setPixmap(effectIcon(transition, shownInfo ? shownInfo->realTime : true, shownInfo && !shownInfo->ofxPlugin.isEmpty()).pixmap(26, 18));
     }
     // If the position is not on an effect, or its track is not selected,
     // the Effect Editor is blank (p.84).
@@ -900,7 +900,7 @@ void EffectEditor::rebuild(const model::Effect* effect) {
         b->setCheckable(true);
         b->setChecked(level == level_);
         const EffectInfo* nestedInfo = EffectCatalog::builtin().find(n.effect.category, n.effect.name);
-        b->setIcon(effectIcon(false, nestedInfo ? nestedInfo->realTime : true));
+        b->setIcon(effectIcon(false, nestedInfo ? nestedInfo->realTime : true, nestedInfo && !nestedInfo->ofxPlugin.isEmpty()));
         b->setIconSize(QSize(26, 18));
         b->setText((level == level_ ? QStringLiteral("\u25BE ") : QStringLiteral("\u25B8 ")) + n.effect.name);
         b->setToolTip(tr("Click to show its parameters; drag onto another nested effect to change their order"));

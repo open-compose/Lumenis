@@ -81,7 +81,8 @@ headers in `include/lumenis/<library>/`.
   `playback.*` (sound through miniaudio, the audio clock), `audio_input.*`
   (recording from an input), `audio_fx.*` (the audio effect interface and
   the built-in effects), `clap_host.*` (CLAP plug-ins as audio effects,
-  docs/spec/clap-host.md), `audio_suite.*` (AudioSuite processes and
+  docs/spec/clap-host.md), `ofx_host.*` (OFX image effect plug-ins in the
+  Effect Palette, docs/spec/ofx-host.md), `audio_suite.*` (AudioSuite processes and
   rendering, docs/spec/audiosuite.md), `compositor.*` (sequence frames
   from the video tracks with their effects, docs/spec/compositor.md), `wipes.cpp` (the 2D
   transitions, docs/spec/wipes.md), `image_effects.cpp` and `color_effects.cpp` (Picture-in-Picture,
