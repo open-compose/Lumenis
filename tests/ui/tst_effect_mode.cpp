@@ -107,6 +107,45 @@ private slots:
         QCOMPARE(model::safeColorLimiting(*effect, 0.0, model::EffectSpan(10)).limits.luma, set.luma);
     }
 
+    void safeColorLimiterAnalysis() {
+        // "By default, when the Effect Editor is open, the effect changes the display in the Source monitor to an
+        // analysis mode"; Source Monitoring – Off turns it off (FX Guide p.545, p.729).
+        Rig r;
+        const EffectInfo* limiter = EffectCatalog::builtin().find(QStringLiteral("Image"), QStringLiteral("Safe Color Limiter"));
+        QVERIFY(limiter && r.timeline.dropEffect(QStringLiteral("V1"), 10, *limiter));
+        r.at(10);
+        r.editor.refresh();
+        QCOMPARE(r.editor.effectName(), QStringLiteral("Safe Color Limiter"));
+        const auto analysis = r.editor.safeColorAnalysis();
+        QVERIFY(analysis && analysis->compositeLuma && analysis->rgb);
+        QCOMPARE(analysis->limits, model::SafeColorLimits{});
+        r.timeline.changeRecordSequence(QStringLiteral("Modify Effect"), [](model::Sequence& seq) {
+            model::Effect& e = *seq.track(QStringLiteral("V1"))->segments[0].effect;
+            QJsonObject p = e.parameters.value(model::kSafeColorLimiterCategory).toObject();
+            p.insert(QStringLiteral("Source Monitor Analysis"), QStringLiteral("Source Monitoring – Off"));
+            e.parameters.insert(model::kSafeColorLimiterCategory, p);
+            return true;
+        });
+        r.editor.refresh();
+        QVERIFY(!r.editor.safeColorAnalysis());
+        // On another effect, nothing.
+        r.at(70);
+        r.editor.refresh();
+        QVERIFY(!r.editor.safeColorAnalysis());
+        // The Composer's override fills a monitor, loaded or not, while it gives a picture.
+        QVERIFY(r.composer.state(MonitorId::Source).isEmpty());
+        r.composer.setMonitorOverride([](MonitorId m, QSize size) {
+            QImage image;
+            if (m == MonitorId::Source) {
+                image = QImage(size, QImage::Format_RGB32);
+                image.fill(Qt::yellow);
+            }
+            return image;
+        });
+        QCOMPARE(r.composer.pictureAt(MonitorId::Source, 0, QSize(8, 8)).pixel(1, 1), qRgb(255, 255, 0));
+        QCOMPARE(r.composer.overridePicture(MonitorId::Record, QSize(8, 8)), QImage());
+    }
+
     void modeButtons() {
         Rig rig;
         QToolButton* sourceRecord = rig.timeline.toolButton(QStringLiteral("edit.source_record_mode"));

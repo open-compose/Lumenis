@@ -594,6 +594,31 @@ the Effect Editor's `refresh`/`rebuild`/`changeShown` in Color Correction mode a
 * The editor's groups have no Enable buttons yet (ours; the tool's stay); a value back at its default is left out as the
   tool leaves it. The Curves and Levels keyframe tracks came with 6.10d3c.
 
+## 6.10e4c2: the Safe Color Limiter's analysis display
+
+Code: `media::safeColorAnalysisImage` (`src/media/scopes.*`), `Composition::limitSafeColors`,
+`EffectEditor::safeColorAnalysis`, `Composer::setMonitorOverride`/`overridePicture` and MainWindow's override. Tests:
+`tst_scopes` (`safeColorAnalysis`), `tst_effect_mode` (`safeColorLimiterAnalysis`).
+
+### From the guide
+* "By default, when the Effect Editor is open, the effect changes the display in the Source monitor to an analysis mode
+  that highlights pixels in the image that fall outside the current safe color limits" (FX p.729).
+* "The background layer is a copy of the image with luminance reduced ... The foreground layer highlights those pixels
+  in the image whose color values fall outside the limits currently being used by the effect"; Yellow composite, White
+  luminance, Red, Green and Blue RGB gamut; "If a pixel in the image falls outside current limits for multiple limit
+  types, the analysis display uses the color for only one of the types"; "When you adjust the limit parameters in the
+  Effect Editor, the analysis display updates" (FX p.729-730).
+* The Source Monitor Analysis menu: Highlight Out of Range Colors, or Source Monitoring – Off, where "the Source monitor
+  reverts to the normal display of Source footage" (FX p.545).
+
+### Ours
+* The display shows while the Effect Editor is visible and shows a Safe Color Limiter at the position, in or out of
+  Effect mode. It analyses the Record monitor's frame at the position, composed without any Safe Color Limiter and
+  without renders, with the shown limiter's limits and Enable buttons.
+* The background is the picture at a third of its levels. A pixel outside several limits takes the first of Composite,
+  Luminance, Red, Green, Blue. The guide's example only shows composite giving way to RGB.
+* The Source monitor shows the display even when nothing is loaded in it.
+
 ## 6.10e4c1: the Safe Color Limiter effect
 
 Code: `src/model/safe_color_limiter.*` (`isSafeColorLimiter`, `safeColorLimiting`, `seedSafeColorLimiter`,

@@ -803,7 +803,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                         layer = transformed(layer, *map);
                     }
                 }
-                layer = imageEffectPicture(e, layer, time, length);
+                if (c.limitSafeColors || e.name != QLatin1String("Safe Color Limiter")) layer = imageEffectPicture(e, layer, time, length);
                 layer.quantize(c.precision);
                 result = over(layer, result);
                 result.quantize(c.precision);

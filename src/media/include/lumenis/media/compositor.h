@@ -266,6 +266,9 @@ struct Composition {
     // Scan effects pass the picture through unchanged; Avid Pan & Zoom's Display Source shows its whole image
     // (p.241).
     bool effectPreview = false;
+    // Whether Safe Color Limiter effects limit. Off for the limiter's analysis display, which shows the picture the
+    // limiter is given (FX Guide p.729; 6.10e4c2).
+    bool limitSafeColors = true;
     // The project's raster. A classic title whose media was made at another shows "Wrong Format" (FX Guide p.376);
     // empty: not checked.
     QSize raster;

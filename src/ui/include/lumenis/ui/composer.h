@@ -153,6 +153,12 @@ public:
     // there. `offline` is set when the media cannot be read (p.347).
     using PictureResolver = std::function<QImage(MonitorId, std::int64_t frame, QSize size, bool* offline)>;
     void setPictureResolver(PictureResolver resolver) { pictures_ = std::move(resolver); }
+    // A picture shown in a monitor in place of its own, loaded or not, while the override gives one (a null image:
+    // the monitor's own): the Safe Color Limiter's analysis display in the Source monitor (FX Guide p.729; 6.10e4c2).
+    using MonitorOverride = std::function<QImage(MonitorId, QSize size)>;
+    void setMonitorOverride(MonitorOverride override) { override_ = std::move(override); }
+    // The override's picture for a monitor; null when there is none.
+    QImage overridePicture(MonitorId monitor, QSize size) const { return override_ ? override_(monitor, size) : QImage(); }
     // Phantom marks (Composer settings, p.501): the IN and OUT an edit would use where none is set,
     // drawn in blue in the position bars. The Timeline works them out.
     using PhantomResolver =
@@ -729,6 +735,7 @@ private:
     ItemResolver resolver_;
     MobResolver mobs_;
     PictureResolver pictures_;
+    MonitorOverride override_;
     PhantomResolver phantoms_;
     PlayClock playClock_;
     // The position play last started (or changed speed) from; the play clock counts from here.

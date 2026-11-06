@@ -385,6 +385,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   6.10e4c1: the Safe Color Limiter's limiting (Rec. 601 luma shift, chroma
   scaled for the composite, RGB clamp, 422 Safe as repeated passes), both Enable
   buttons on at first, the sliders' -300 to 1100 range, units not converted.
+  6.10e4c2: the analysis display while the Effect Editor is visible (any mode),
+  the Record frame without limiters, the background at a third, the order of
+  highlight colours, shown in an empty Source monitor too.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

@@ -433,4 +433,34 @@ model::SafeViolations pictureViolations(const QImage& frame, const model::SafeCo
     return out;
 }
 
+QImage safeColorAnalysisImage(const QImage& frame, const model::SafeColorLimits& limits, bool compositeLuma, bool rgb) {
+    if (frame.isNull()) return {};
+    QImage out = frame.convertToFormat(QImage::Format_RGB32);
+    for (int y = 0; y < out.height(); ++y) {
+        auto* line = reinterpret_cast<QRgb*>(out.scanLine(y));
+        for (int x = 0; x < out.width(); ++x) {
+            const QRgb px = line[x];
+            const model::SafeViolations v =
+                model::safeViolations(model::pictureLevel(qRed(px)), model::pictureLevel(qGreen(px)), model::pictureLevel(qBlue(px)), limits);
+            QRgb mark = 0;
+            bool marked = true;
+            if (compositeLuma && (v.compositeLow || v.compositeHigh)) {
+                mark = qRgb(240, 220, 40);
+            } else if (compositeLuma && (v.lumaLow || v.lumaHigh)) {
+                mark = qRgb(240, 240, 240);
+            } else if (rgb && (v.rgbLow[0] || v.rgbHigh[0])) {
+                mark = qRgb(230, 40, 40);
+            } else if (rgb && (v.rgbLow[1] || v.rgbHigh[1])) {
+                mark = qRgb(40, 200, 60);
+            } else if (rgb && (v.rgbLow[2] || v.rgbHigh[2])) {
+                mark = qRgb(50, 90, 240);
+            } else {
+                marked = false;
+            }
+            line[x] = marked ? mark : qRgb(qRed(px) / 3, qGreen(px) / 3, qBlue(px) / 3);
+        }
+    }
+    return out;
+}
+
 } // namespace lumenis::media

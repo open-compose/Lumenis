@@ -1233,7 +1233,9 @@ phase of their own. They are done in three steps:
     tests `tst_scopes`, `tst_correction_mode`, `tst_correction_tool`); 6.10e4c, in two parts: 6.10e4c1, the Safe Color
     Limiter effect (p.471, p.545-546, p.728), its limiting and its parameters seeded from the Safe Colors setting, done
     (`src/model/safe_color_limiter.*`, `Timeline::setEffectSeed`; tests `tst_safe_colors`, `tst_compositor`,
-    `tst_effect_mode`); 6.10e4c2, its Source monitor analysis display (p.729-730); 6.10e5, the Spot Color Correction effect and the Paint Effect's colour modes (ch.24, p.731-733). Avid
+    `tst_effect_mode`); 6.10e4c2, its Source monitor analysis display (p.729-730), done (`media::safeColorAnalysisImage`,
+    `Composer::setMonitorOverride`, `EffectEditor::safeColorAnalysis`; tests `tst_scopes`, `tst_effect_mode`), so 6.10e4
+    is done; 6.10e5, the Spot Color Correction effect and the Paint Effect's colour modes (ch.24, p.731-733). Avid
     Artist Color (ch.25) needs Avid's EuControl software: a control surface provider hook only (EXTENSIONS.md), later.
   * 6.10f, after 6.10e (owner's report, 2026-11-05, Windows 11): Tools > Titler+ and Tools > Effect Editor open as very
     large windows where a panel of ordinary size (or a page of a paneled window) is expected. Find why their panels open

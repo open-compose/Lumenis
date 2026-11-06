@@ -792,6 +792,14 @@ bool EffectEditor::isBlank() const {
     return !shown_ && !transitionOnly_;
 }
 
+std::optional<model::SafeLimiting> EffectEditor::safeColorAnalysis() const {
+    const model::Effect* e = shownEffect();
+    if (!e || !model::isSafeColorLimiter(*e)) return std::nullopt;
+    const model::SafeLimiting l = model::safeColorLimiting(*e, positionTime(), span_);
+    if (!l.analysis) return std::nullopt;
+    return l;
+}
+
 QString EffectEditor::effectName() const {
     return shown_ ? title_->text() : QString();
 }

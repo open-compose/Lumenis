@@ -727,6 +727,14 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
         return;
     }
     const model::MonitorState& s = composer_.state(monitor_);
+    if (s.isEmpty()) {
+        // An empty monitor can still show the override's picture (the Safe Color Limiter's analysis display).
+        const QImage shown = composer_.overridePicture(monitor_, pic.size());
+        if (!shown.isNull()) {
+            const QSize fit = shown.size().scaled(pic.size(), Qt::KeepAspectRatio);
+            p.drawImage(QRect(pic.left() + (pic.width() - fit.width()) / 2, pic.top() + (pic.height() - fit.height()) / 2, fit.width(), fit.height()), shown);
+        }
+    }
     if (!s.isEmpty()) {
         bool offline = false;
         // Draft Quality and Best Performance decode fewer pixels (p.403).
@@ -1739,6 +1747,10 @@ QImage Composer::picture(MonitorId monitor, QSize size, bool* offline) const {
 
 QImage Composer::pictureAt(MonitorId monitor, std::int64_t frame, QSize size, bool* offline) const {
     if (offline) *offline = false;
+    if (override_) {
+        QImage shown = override_(monitor, size);
+        if (!shown.isNull()) return shown;
+    }
     if (!pictures_ || state(monitor).isEmpty()) return {};
     return pictures_(monitor, frame, size, offline);
 }

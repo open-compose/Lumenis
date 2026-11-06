@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lumenis/model/safe_color_limiter.h"
 #include "lumenis/media/effect_handles.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/effect_template.h"
@@ -136,6 +137,9 @@ public:
     bool isBlank() const;
     // The shown effect's name; empty if none.
     QString effectName() const;
+    // The Safe Color Limiter shown, with its Source Monitor Analysis menu at Highlight Out of Range Colors: its limiting at
+    // the position, for the Source monitor's analysis display (FX Guide p.729-730; 6.10e4c2). Nothing otherwise.
+    std::optional<model::SafeLimiting> safeColorAnalysis() const;
     // The shown effect's parameter categories, in order.
     QStringList categories() const;
     // Whether a category's opener is open; false for one not shown.

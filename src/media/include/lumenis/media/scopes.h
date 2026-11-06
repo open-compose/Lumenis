@@ -41,6 +41,12 @@ QImage scopeImage(const QImage& frame, Scope scope, const QSize& size, bool pal 
 // for (model::pictureLevel), every limit type counted whatever its Action (model::warnedViolations keeps the warned ones).
 model::SafeViolations pictureViolations(const QImage& frame, const model::SafeColorLimits& limits);
 
+// The Safe Color Limiter's analysis display (FX Guide p.729-730; 6.10e4c2) of the picture it is given: "a copy of the
+// image with luminance reduced to allow the foreground information to stand out clearly", and over it the pixels
+// outside the enabled limits, Yellow composite, White luminance, Red, Green and Blue RGB gamut; a pixel outside several
+// shows "the color for only one of the types" (ours: in that order). Ours: the background at a third of its levels.
+QImage safeColorAnalysisImage(const QImage& frame, const model::SafeColorLimits& limits, bool compositeLuma, bool rgb);
+
 // Where the waveforms put a level, for the scale and tests: the row of an 8-bit video level (0 at the bottom edge,
 // 255 at the top, with a margin) in a picture `height` high.
 double waveformRow(double level, int height);

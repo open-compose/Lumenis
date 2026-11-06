@@ -176,6 +176,26 @@ private slots:
         QVERIFY(!lumenis::media::pictureViolations(QImage(), defaults).any());
     }
 
+    void safeColorAnalysis() {
+        // The Safe Color Limiter's analysis display (FX Guide p.729-730): the picture dimmed, pixels outside the limits
+        // Yellow (composite), White (luminance), Red, Green, Blue (RGB gamut); one colour per pixel.
+        const lumenis::model::SafeColorLimits defaults;
+        // Vivid yellow is past 120 IRE composite: yellow; grey is within: a third of its levels.
+        const QImage a = safeColorAnalysisImage(halves(Qt::yellow, QColor(120, 120, 120)), defaults, true, true);
+        QCOMPARE(a.pixel(5, 5), qRgb(240, 220, 40));
+        QCOMPARE(a.pixel(50, 5), qRgb(40, 40, 40));
+        // With the Composite/Luma Levels Enable button off, yellow is only dimmed.
+        QCOMPARE(safeColorAnalysisImage(solid(Qt::yellow), defaults, false, true).pixel(5, 5), qRgb(85, 85, 0));
+        // RGB: white past a gamut of 200 in every channel shows red, the first of them; luma past 90 IRE shows white
+        // first.
+        lumenis::model::SafeColorLimits tight;
+        tight.rgb = {16.0, 200.0, lumenis::model::SafeUnit::Bit8};
+        QCOMPARE(safeColorAnalysisImage(solid(Qt::white), tight, true, true).pixel(5, 5), qRgb(230, 40, 40));
+        tight.luma = {0.0, 90.0, lumenis::model::SafeUnit::Ire};
+        QCOMPARE(safeColorAnalysisImage(solid(Qt::white), tight, true, true).pixel(5, 5), qRgb(240, 240, 240));
+        QVERIFY(safeColorAnalysisImage(QImage(), defaults, true, true).isNull());
+    }
+
     void histogramsAndQuad() {
         // Histograms and Quad Display draw something in every part.
         for (Scope s : {Scope::RgbHistogram, Scope::YcbcrHistogram, Scope::YWaveformHdr1000, Scope::YWaveformHdr10000}) {

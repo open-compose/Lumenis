@@ -9,6 +9,7 @@
 #include "lumenis/ui/main_window.h"
 
 #include "lumenis/model/safe_color_limiter.h"
+#include "lumenis/media/scopes.h"
 
 #include "lumenis/model/safe_colors.h"
 
@@ -738,6 +739,29 @@ void MainWindow::createPanels() {
             }
         }
         return frames_->frame(item, frame, size);
+    });
+    // The Safe Color Limiter's analysis display (FX Guide p.729-730; 6.10e4c2): "By default, when the Effect Editor is
+    // open, the effect changes the display in the Source monitor to an analysis mode that highlights pixels in the image
+    // that fall outside the current safe color limits". The Record monitor's frame without its limiters is analysed
+    // with the shown limiter's limits.
+    composer_->setMonitorOverride([this](MonitorId monitor, QSize size) -> QImage {
+        if (monitor != MonitorId::Source || !effectEditor_ || !effectEditor_->isVisible()) return {};
+        const auto limiting = effectEditor_->safeColorAnalysis();
+        if (!limiting) return {};
+        const model::MonitorState& record = composer_->state(MonitorId::Record);
+        const model::LoadedClip* loaded = record.current();
+        if (!loaded || loaded->item.kind != model::BinItemKind::Sequence) return {};
+        model::Sequence seq = model::Sequence::fromItem(loaded->item);
+        media::Composition c;
+        c.sequence = &seq;
+        c.tracks = shownVideoTracks(MonitorId::Record, seq);
+        c.size = size;
+        fillComposition(c, *loaded);
+        // Computed, not played from the limiter's render, and without the limiting.
+        c.rendered = {};
+        c.limitSafeColors = false;
+        const QImage frame = media::composeImage(c, record.position());
+        return media::safeColorAnalysisImage(frame, limiting->limits, limiting->compositeLuma, limiting->rgb);
     });
     // Sound: at normal speed forward the monitor's audio plays, and its
     // progress paces the picture (A/V sync).
