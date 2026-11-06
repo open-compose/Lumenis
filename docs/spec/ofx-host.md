@@ -11,7 +11,8 @@ CLAP host (docs/spec/clap-host.md).
 6.11b1 renders them and shows their parameters in the Effect Editor.
 6.11b2 handles missing plug-ins, templates of plug-in effects and
 `closeallofxplugins`. 6.11c1 adds plug-ins with several inputs, the
-Angle control and push buttons; 6.11c2 overlays; 6.11c3 OCIO.
+Angle control and push buttons; 6.11c2 overlays and the project's size;
+6.11c3 OCIO.
 
 ## Finding plug-ins (`src/media/ofx_host.*`)
 
@@ -190,6 +191,43 @@ Inputs dialog box" (p.161).
   kept in the effect as edits of the Effect Editor's controls. Values set
   at other times are not kept.
 
+## Overlays and the project's size (6.11c2)
+
+"Some plug-in effects let you adjust an image by using controls that
+appear as overlays, such as handles and wire frames, in the Effect Preview
+monitor. You access these overlays by clicking the Outline/Path button at
+the bottom of the Effect Editor" (p.162).
+
+* **Which overlays:** a plug-in's V2 overlay interact
+  (`kOfxImageEffectPluginPropOverlayInteractV2`, OpenFX 1.5), which draws
+  through the Draw suite. V1 interacts draw with OpenGL, which the Effect
+  Preview does not give them, so they are not shown (ours). The host says
+  it supports overlays; the Interact suite's redraw and swap calls are
+  accepted.
+* **The interact** is described and made at its first use, with the
+  plug-in's instance (`kOfxPropEffectInstance`); `closeOfxInstances`
+  destroys it with the instance.
+* **Drawing:** while the Effect Editor's Outline/Path button is on (it is
+  enabled for a plug-in effect with an overlay) the Effect Preview shows
+  what the plug-in draws at the position (`ofxOverlayDraw`): lines, line
+  strips and loops, filled rectangles and polygons, ellipses and text, in
+  its colours and line widths, any stipple dashed (ours). The host's
+  standard colours (`getColour`) are ours: active yellow, selected white,
+  deselected grey, text white. The pixel scale is the project's width over
+  the Record monitor picture's.
+* **The pointer:** with Outline/Path on, presses, moves and releases in
+  the Effect Preview go to the plug-in (`ofxOverlayPen`, pen down, motion
+  and up with the position in canonical coordinates). A press the plug-in
+  takes keeps the following moves; the values it sets show at once and are
+  kept as one "Modify Effect" when the pointer is released, as handle
+  drags are. A press it does not take is the Effect Preview's.
+* **The project's size** (`setOfxProjectSize`, the project's format from
+  `MainWindow`) is the plug-ins' canonical coordinates: pictures of another
+  size render at the render scale picture / project, so a parameter in
+  canonical units means the same in a small monitor picture and in a full
+  size render. Until set, a picture's own size (scale 1) and 1920 x 1080
+  for overlays.
+
 ## Missing plug-ins, templates and closing (6.11b2)
 
 * **The tag:** a plug-in effect applied from the palette gets the
@@ -254,6 +292,11 @@ Questions are answered No during the scan.
   template of the effect, the blank Timeline icon of a missing plug-in, and
   the Console's closeallofxplugins. `tst_ofx_host`'s `missingPlugin` checks
   the pass-through and the "Can't find effect" message.
+* 6.11c2: the composite plug-in's Centre and its V2 overlay. `tst_ofx_host`
+  checks the shapes drawn, the pen taken or not and the values it sets,
+  and the render scale with a project size; `tst_ofx_palette` the overlay
+  with Outline/Path in the Effect Preview, a drag shown before release and
+  kept as one change after it, and Outline/Path off.
 * 6.11c1: the test bundle's sixth plug-in, a General compositing plug-in
   with an optional input, an optional mask, an angle and a push button.
   `tst_ofx_host` checks its inputs, rendering with one, two and three

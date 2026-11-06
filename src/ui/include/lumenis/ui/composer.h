@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/core/rational.h"
+#include "lumenis/media/ofx_host.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/model/monitor.h"
 #include "lumenis/model/sequence.h"
@@ -315,6 +316,8 @@ public:
         QList<QList<QPointF>> highlights;
         std::optional<std::pair<QPointF, QPointF>> caret;
         QList<QPointF> anchors;
+        // An OFX plug-in's overlay (FX Guide p.162; media/ofx_host.h, 6.11c2), shown with Outline/Path.
+        QList<media::OfxOverlayShape> pluginShapes;
         bool operator==(const EffectPreview&) const = default;
     };
     void setEffectPreview(const EffectPreview& preview);

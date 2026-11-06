@@ -330,9 +330,11 @@ private slots:
 
         // The Angle control and the push button among its controls.
         const QList<OfxEditorParameter> params = ofxEditorParameters(*c);
-        QCOMPARE(params.size(), 2);
+        QCOMPARE(params.size(), 4);
         QCOMPARE(params.at(0).kind, QStringLiteral("angle"));
         QCOMPARE(params.at(1).kind, QStringLiteral("button"));
+        QCOMPARE(params.at(2).key, QStringLiteral("centre.x"));
+        QCOMPARE(params.at(3).text, QStringLiteral("Centre Y"));
 
         // The inputs chosen, kept in its tag.
         model::Effect e{QStringLiteral("Cutthulhu Mixers"), QStringLiteral("Test Composite"), {}};
@@ -396,6 +398,59 @@ private slots:
         seq = model::Sequence::withDefaultTracks();
         seq.splice(QStringLiteral("V1"), 0, {grey});
         QCOMPARE(composeImage(composition(seq), 3).pixelColor(8, 4), QColor(0, 0, 255));
+    }
+
+    void overlays() {
+        // An overlay through the Draw suite (p.162): the composite plug-in's square round its Centre and its label, in
+        // fractions of the picture (the project 1920 x 1080 until set).
+        registerTestPlugins();
+        const OfxPluginInfo* c = ofxPluginFor(QStringLiteral("Cutthulhu Mixers"), QStringLiteral("Test Composite"));
+        model::Effect e{QStringLiteral("Cutthulhu Mixers"), QStringLiteral("Test Composite"), {}};
+        markOfxEffect(e, *c);
+        QVERIFY(ofxHasOverlay(e));
+        QVERIFY(!ofxHasOverlay(model::Effect{QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Tint"), {}}));
+        const model::EffectSpan span(10);
+        const QList<OfxOverlayShape> shapes = ofxOverlayDraw(e, 0.0, span, 1.0);
+        QCOMPARE(shapes.size(), 2);
+        QCOMPARE(shapes.at(0).kind, OfxOverlayShape::Kind::LineLoop);
+        QCOMPARE(shapes.at(0).colour, QColor(255, 255, 0));
+        QCOMPARE(shapes.at(0).width, 2.0);
+        QCOMPARE(shapes.at(0).points.size(), 4);
+        QVERIFY(std::abs(shapes.at(0).points.at(0).x() - 940.0 / 1920.0) < 1e-9);
+        QVERIFY(std::abs(shapes.at(0).points.at(0).y() - (1.0 - 520.0 / 1080.0)) < 1e-9); // y up, turned round
+        QCOMPARE(shapes.at(1).kind, OfxOverlayShape::Kind::Text);
+        QCOMPARE(shapes.at(1).text, QStringLiteral("centre"));
+        QCOMPARE(shapes.at(1).alignment, 32);
+
+        // The pointer: a press far from the Centre is not taken; near it, the drag moves the Centre.
+        QVERIFY(!ofxOverlayPen(e, OfxPen::Down, QPointF(0.9, 0.1), 0.0, span, 1.0).taken);
+        QVERIFY(ofxOverlayPen(e, OfxPen::Down, QPointF(0.5, 0.5), 0.0, span, 1.0).taken);
+        const OfxPenResult moved = ofxOverlayPen(e, OfxPen::Motion, QPointF(0.25, 0.25), 0.0, span, 1.0);
+        QVERIFY(moved.taken);
+        QCOMPARE(moved.values.value(QStringLiteral("centre.x")).toDouble(), 480.0);
+        QCOMPARE(moved.values.value(QStringLiteral("centre.y")).toDouble(), 810.0);
+        QVERIFY(ofxOverlayPen(e, OfxPen::Up, QPointF(0.25, 0.25), 0.0, span, 1.0).taken);
+        QVERIFY(!ofxOverlayPen(e, OfxPen::Motion, QPointF(0.3, 0.3), 0.0, span, 1.0).taken); // the drag is over
+        // The drawing follows the Centre stored.
+        e.parameters.insert(ofxParameterCategory(*c), QJsonObject{{QStringLiteral("centre.x"), 480.0}, {QStringLiteral("centre.y"), 810.0}});
+        QVERIFY(std::abs(ofxOverlayDraw(e, 0.0, span, 1.0).at(0).points.at(0).x() - 460.0 / 1920.0) < 1e-9);
+    }
+
+    void renderScale() {
+        // The project's size is the canonical coordinates: a picture half its size renders at scale 0.5, so the Centre
+        // (20, 10) of a 40 x 20 project marks the pixel (10, 5) from the bottom of a 20 x 10 picture.
+        registerTestPlugins();
+        const OfxPluginInfo* c = ofxPluginFor(QStringLiteral("Cutthulhu Mixers"), QStringLiteral("Test Composite"));
+        model::Effect e{QStringLiteral("Cutthulhu Mixers"), QStringLiteral("Test Composite"), {}};
+        markOfxEffect(e, *c);
+        e.parameters.insert(ofxParameterCategory(*c), QJsonObject{{QStringLiteral("centre.x"), 20.0}, {QStringLiteral("centre.y"), 10.0}});
+        setOfxProjectSize(QSize(40, 20));
+        QCOMPARE(ofxProjectSize(), QSize(40, 20));
+        const Picture out = ofxSegmentPicture(e, Picture::solid(20, 10, Qt::black), 0.0, model::EffectSpan(10));
+        setOfxProjectSize(QSize());
+        QCOMPARE(ofxProjectSize(), QSize(1920, 1080));
+        QVERIFY(approx(at(out, 10, 10 - 1 - 5)[0], 1.0));
+        QVERIFY(approx(at(out, 9, 10 - 1 - 5)[0], 0.0));
     }
 
     void missingPlugin() {

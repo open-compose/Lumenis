@@ -783,8 +783,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   6.11b is. 6.11c is in three parts (ROADMAP). 6.11c1, several inputs (General described too, `OfxPluginInfo::inputs`,
   the OFX Optional Inputs dialog `ofx_inputs_dialog.*` through `Timeline::setOptionalInputsChooser`, `ofxInputCount` in
   the tag, the inputs as the effect's nest tracks through the compositor's `nestTrackPicture`), the Angle control
-  (`angle_dial.*`) and push buttons (`ofxPushButton`, `EffectEditor::pressPluginButton`), is done.
-  Next: 6.11c2 (overlays) and 6.11c3 (OCIO), then Phases 7 and 8. Phase 9 "Left over stuff"
+  (`angle_dial.*`) and push buttons (`ofxPushButton`, `EffectEditor::pressPluginButton`), is done. 6.11c2, overlays (V2
+  interacts through our Draw suite, `ofxOverlayDraw`/`ofxOverlayPen`, `Composer::EffectPreview::pluginShapes`, the
+  Effect Editor's `PluginOverlayInput` with Outline/Path) and the project's size as canonical coordinates
+  (`setOfxProjectSize`, render scale), is done.
+  Next: 6.11c3 (OCIO), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

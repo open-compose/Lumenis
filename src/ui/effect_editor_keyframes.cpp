@@ -1,3 +1,4 @@
+#include "lumenis/media/ofx_host.h"
 #include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/titler_tool.h"
 #include "lumenis/ui/intraframe_tool.h"
@@ -730,6 +731,7 @@ void EffectEditor::syncPreview() {
     if (preview.on && e && level_ == 0) {
         if (model::isTitlerEffect(*e)) input = titler_;
         else if (wholeIntraframe_) input = intraframe_;
+        else if (outlineShown_ && media::ofxHasOverlay(*e)) input = pluginOverlay(); // an OFX plug-in's overlay (p.162)
     }
     timeline_.composer().setOverlayInput(input);
     if (titler_ && e && model::isTitlerEffect(*e)) titler_->notifyShown();

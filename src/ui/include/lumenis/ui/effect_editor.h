@@ -96,6 +96,23 @@ const QList<EffectParameter>* effectParameters(const QString& category);
 // A panel's contents ("EffectEditor"), made by MainWindow. It follows Timeline::changed and
 // Composer::changed, and makes every change through the Timeline (changeEffect, setTransitions).
 // An effect's parameter values live in model::Effect::parameters as {category: {parameter: value}}.
+class EffectEditor;
+
+// An OFX plug-in's overlay takes the Effect Preview's pointer while Outline/Path is on (FX Guide p.161-162; 6.11c2):
+// presses, moves and releases go to the plug-in through EffectEditor::pluginPen.
+class PluginOverlayInput : public Composer::OverlayInput {
+public:
+    explicit PluginOverlayInput(EffectEditor& editor) : editor_(editor) {}
+    bool overlayPress(const QPointF& at, Qt::KeyboardModifiers modifiers, bool doubleClick) override;
+    void overlayMove(const QPointF& at, Qt::KeyboardModifiers modifiers) override;
+    void overlayRelease(const QPointF& at, Qt::KeyboardModifiers modifiers) override;
+    bool overlayKey(QKeyEvent*) override { return false; }
+    bool overlayWantsKey(const QKeyEvent*) const override { return false; }
+
+private:
+    EffectEditor& editor_;
+};
+
 class EffectEditor : public QWidget, public IntraframeHost {
     Q_OBJECT
 
@@ -414,6 +431,12 @@ public:
     // Presses the shown OFX plug-in effect's push button `name` (p.161; media::ofxPushButton) and keeps the values the
     // plug-in set. False when the shown effect is not a plug-in's.
     bool pressPluginButton(const QString& name);
+    // The pointer in the Effect Preview for the shown OFX plug-in effect's overlay (6.11c2; media::ofxOverlayPen), at a
+    // fraction of the picture: true when the plug-in took it. Values it sets while the pointer is down show at once
+    // and are kept as one "Modify Effect" when it is released, as handle drags are.
+    bool pluginPen(media::OfxPen pen, const QPointF& at);
+    // Canonical units per screen pixel for the overlay: the project's width over the Record monitor picture's.
+    double overlayPixelScale() const;
 
     // ---- Motion tracking (p.248-275; docs/spec/tracking.md)
     // Where tracking's frames come from: the picture tracked at Record frame `frame` for the effect `effect`, the
@@ -724,6 +747,9 @@ private:
     std::int64_t effectStart_ = 0; // the Record frame of the shown effect's first frame
     std::optional<model::Effect> current_; // the shown effect as stored, from the last refresh()
     std::optional<model::Effect> preview_; // the shown effect with a drag not yet stored
+    std::unique_ptr<PluginOverlayInput> pluginOverlay_; // made on first use (pluginOverlay())
+    bool pluginDragging_ = false; // a press the plug-in's overlay took, until its release
+    PluginOverlayInput* pluginOverlay();
     QString applyTo_; // the track whose shortcut menu is open, which shows "Apply to ..."
 
     // Graph views.

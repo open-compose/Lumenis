@@ -262,6 +262,52 @@ private slots:
         QCOMPARE(editor.findChild<AngleDial*>(QStringLiteral("param:") + category + QStringLiteral("/spin"))->value(), 90.0);
     }
 
+    void overlay() {
+        // With Outline/Path the plug-in's overlay shows in the Effect Preview and takes its pointer (p.161-162); a drag
+        // is one "Modify Effect".
+        Composer composer;
+        Timeline timeline{composer};
+        EffectEditor editor{timeline};
+        timeline.setSequenceStore([](const QString&, const model::BinItem&, bool) { return true; });
+        timeline.setOptionalInputsChooser([](const media::OfxPluginInfo&) { return std::optional<int>(1); });
+        timeline.resize(900, 300);
+        timeline.show();
+        settle();
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence());
+        settle();
+        QVERIFY(timeline.dropEffect(QStringLiteral("V1"), 10, *EffectCatalog::builtin().find(QStringLiteral("Cutthulhu Mixers"), QStringLiteral("Test Composite"))));
+        composer.moveTo(MonitorId::Record, 10);
+        timeline.setEffectMode(true);
+        settle();
+        QVERIFY(editor.outlineButton()->isEnabled());
+        QVERIFY(composer.effectPreview().pluginShapes.isEmpty()); // until Outline/Path
+        editor.setOutlineShown(true);
+        settle();
+        QCOMPARE(composer.effectPreview().pluginShapes.size(), 2);
+        QVERIFY(composer.overlayInput());
+        // Dragging the Centre through the overlay input.
+        QVERIFY(composer.overlayInput()->overlayPress(QPointF(0.5, 0.5), {}, false));
+        composer.overlayInput()->overlayMove(QPointF(0.25, 0.25), {});
+        settle();
+        // Shown at once (the drawing follows), not yet stored.
+        QVERIFY2(std::abs(composer.effectPreview().pluginShapes.at(0).points.at(0).x() - 460.0 / 1920.0) < 1e-6, qPrintable(QString::number(composer.effectPreview().pluginShapes.at(0).points.at(0).x() * 1920.0)));
+        const QString category = QStringLiteral("Test Composite Plug-In Parameters");
+        auto stored = [&](const char* key) {
+            const model::Sequence seq = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item);
+            return seq.track(QStringLiteral("V1"))->segments.at(0).effect->parameters.value(category).toObject().value(QLatin1String(key));
+        };
+        QVERIFY(stored("centre.x").isUndefined());
+        composer.overlayInput()->overlayRelease(QPointF(0.25, 0.25), {});
+        settle();
+        QCOMPARE(stored("centre.x").toDouble(), 480.0);
+        QCOMPARE(stored("centre.y").toDouble(), 810.0);
+        // Outline/Path off: no overlay, and the pointer is the Effect Preview's again.
+        editor.setOutlineShown(false);
+        settle();
+        QVERIFY(composer.effectPreview().pluginShapes.isEmpty());
+        QVERIFY(!composer.overlayInput());
+    }
+
     void missingPluginIcon() {
         // The Timeline's effect icon: filled for a plug-in effect, blank (its outline only) when the plug-in is missing
         // (p.163). The tile's fill colour counts the filled pixels.

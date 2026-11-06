@@ -19,7 +19,10 @@
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/sequence.h"
 
+#include <QColor>
 #include <QJsonValue>
+#include <QPointF>
+#include <QSize>
 
 #include <QList>
 #include <QString>
@@ -193,6 +196,51 @@ Picture ofxTransitionPicture(const model::Effect& effect, const Picture& from, c
 // Editor", p.161). Returns the values the plug-in set meanwhile, by stored key under ofxParameterCategory, for the
 // Effect Editor to keep; empty when it set none or the effect is not a plug-in's.
 QJsonObject ofxPushButton(const model::Effect& effect, const QString& key, double time, const model::EffectSpan& span);
+
+// ---------------------------------------------------------------- overlays (6.11c2)
+// "Some plug-in effects let you adjust an image by using controls that appear as overlays, such as handles and wire
+// frames, in the Effect Preview monitor. You access these overlays by clicking the Outline/Path button" (FX Guide
+// p.162). A plug-in's overlay interact (kOfxImageEffectPluginPropOverlayInteractV2, OpenFX 1.5) draws through the
+// Draw suite, which the host records as shapes; its pen actions get the Effect Preview's pointer. Ours: only V2
+// interacts (V1 ones draw with OpenGL, which the Effect Preview does not give them).
+
+// One shape an overlay drew: its kind (kOfxDrawPrimitive..., or Text), colour, line width (0 a single pixel) and
+// dashes, and its points as fractions of the picture with (0, 0) its top left (the plug-in's canonical coordinates,
+// y up, turned round). Text has one point, the text and its kOfxDrawTextAlignment flags.
+struct OfxOverlayShape {
+    enum class Kind { Lines, LineStrip, LineLoop, Rectangle, Polygon, Ellipse, Text };
+    Kind kind = Kind::Lines;
+    QColor colour = Qt::white;
+    double width = 0.0;
+    bool dashed = false;
+    QList<QPointF> points;
+    QString text;
+    int alignment = 0;
+    bool operator==(const OfxOverlayShape&) const = default;
+};
+
+// Whether the effect's plug-in has an overlay we can draw.
+bool ofxHasOverlay(const model::Effect& effect);
+// The overlay at `time` of the effect; `pixelScale` is canonical units per screen pixel (kOfxInteractPropPixelScale).
+QList<OfxOverlayShape> ofxOverlayDraw(const model::Effect& effect, double time, const model::EffectSpan& span, double pixelScale);
+
+// The pointer in the Effect Preview at `at` (a fraction of the picture, as OfxOverlayShape's): pressed, moved or
+// released. `taken` when the plug-in used it (kOfxStatOK; then the Effect Preview leaves it alone); `values` the
+// parameter values it set meanwhile, for the Effect Editor to keep as edits of its controls (as ofxPushButton's).
+enum class OfxPen { Down, Motion, Up };
+struct OfxPenResult {
+    bool taken = false;
+    QJsonObject values;
+};
+OfxPenResult ofxOverlayPen(const model::Effect& effect, OfxPen pen, const QPointF& at, double time, const model::EffectSpan& span,
+                           double pixelScale);
+
+// The project's size in canonical coordinates (kOfxImageEffectPropProjectSize; the application sets the project's
+// format): pictures of other sizes render at the matching render scale, and overlays draw in it. Until set (or when
+// empty), a picture's own size, and 1920 x 1080 for overlays.
+void setOfxProjectSize(const QSize& size);
+// The size set, or 1920 x 1080.
+QSize ofxProjectSize();
 
 // The frame rate plug-ins are told (kOfxImageEffectPropFrameRate); the application sets the project's. 30 until set.
 void setOfxFrameRate(double rate);

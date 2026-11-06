@@ -701,7 +701,7 @@ void EffectEditor::refresh() {
     current_.reset();
     // A handle drag in the Effect Preview keeps its preview while the Composer redraws (its refresh says
     // changed() too); anything else previewed is dropped.
-    if (!handleStart_ && !(titler_ && titler_->busy())) preview_.reset();
+    if (!handleStart_ && !pluginDragging_ && !(titler_ && titler_->busy())) preview_.reset();
     chain_.clear();
     // Another effect opens at its outermost level.
     if (ref != shown_) level_ = 0;

@@ -13,9 +13,13 @@
 // - "org.cutthulhu.test.composite" (6.11c1): a General plug-in in "Cutthulhu Mixers" with Source, an optional Over and
 //   an optional Matte (a mask), a Spin angle (degrees) and a Square push button that sets Spin to 90. It renders
 //   Source, with Over shown through the Matte's red where both are connected, or Over over Source with Over alone;
-//   its colours are inverted while Spin is 180 or more.
+//   its colours are inverted while Spin is 180 or more. 6.11c2: a Centre (Double2D in canonical coordinates, default
+//   960, 540), marked white in the picture at the render scale; and an overlay (V2, the Draw suite) drawing a yellow
+//   square of 40 units round the Centre with the text "centre", which a press within 30 units of it takes and drags.
 // Plus one plug-in of another API, which the host skips.
 #include <ofxCore.h>
+#include <ofxDrawSuite.h>
+#include <ofxInteract.h>
 #include <ofxImageEffect.h>
 #include <ofxMessage.h>
 #include <ofxMultiThread.h>
@@ -24,6 +28,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdio>
 #include <cstring>
 
@@ -35,6 +40,8 @@ const OfxImageEffectSuiteV1* gEffects = nullptr;
 const OfxParameterSuiteV1* gParams = nullptr;
 const OfxMessageSuiteV1* gMessages = nullptr;
 const OfxMultiThreadSuiteV1* gThreads = nullptr;
+const OfxDrawSuiteV1* gDraw = nullptr;
+const OfxInteractSuiteV1* gInteract = nullptr;
 
 std::atomic<int> gThreadCalls{0};
 std::atomic<int> gLiveInstances{0};
@@ -53,6 +60,8 @@ OfxStatus load() {
     gParams = static_cast<const OfxParameterSuiteV1*>(gHost->fetchSuite(gHost->host, kOfxParameterSuite, 1));
     gMessages = static_cast<const OfxMessageSuiteV1*>(gHost->fetchSuite(gHost->host, kOfxMessageSuite, 1));
     gThreads = static_cast<const OfxMultiThreadSuiteV1*>(gHost->fetchSuite(gHost->host, kOfxMultiThreadSuite, 1));
+    gDraw = static_cast<const OfxDrawSuiteV1*>(gHost->fetchSuite(gHost->host, kOfxDrawSuite, 1));
+    gInteract = static_cast<const OfxInteractSuiteV1*>(gHost->fetchSuite(gHost->host, kOfxInteractSuite, 1));
     // A suite the host does not have answers null.
     if (gHost->fetchSuite(gHost->host, "OfxNoSuchSuite", 1)) return kOfxStatFailed;
     return gProps && gEffects && gParams && gMessages && gThreads ? kOfxStatOK : kOfxStatErrMissingHostFeature;
@@ -185,11 +194,14 @@ OfxStatus brokenDescribe(OfxImageEffectHandle) {
     return kOfxStatFailed;
 }
 
+OfxStatus compositeOverlay(const char* action, const void* handle, OfxPropertySetHandle in, OfxPropertySetHandle out);
+
 OfxStatus compositeDescribe(OfxImageEffectHandle e) {
     OfxPropertySetHandle p = effectProps(e);
     gProps->propSetString(p, kOfxPropLabel, 0, "Test Composite");
     gProps->propSetString(p, kOfxImageEffectPluginPropGrouping, 0, "Cutthulhu Mixers");
     gProps->propSetString(p, kOfxImageEffectPropSupportedContexts, 0, kOfxImageEffectContextGeneral);
+    gProps->propSetPointer(p, kOfxImageEffectPluginPropOverlayInteractV2, 0, reinterpret_cast<void*>(&compositeOverlay));
     return kOfxStatOK;
 }
 
@@ -211,6 +223,14 @@ OfxStatus compositeDescribeInContext(OfxImageEffectHandle e) {
     gProps->propSetString(p, kOfxParamPropDoubleType, 0, kOfxParamDoubleTypeAngle);
     gParams->paramDefine(params, kOfxParamTypePushButton, "square", &p);
     gProps->propSetString(p, kOfxPropLabel, 0, "Square");
+    gParams->paramDefine(params, kOfxParamTypeDouble2D, "centre", &p);
+    gProps->propSetString(p, kOfxPropLabel, 0, "Centre");
+    gProps->propSetString(p, kOfxParamPropDoubleType, 0, kOfxParamDoubleTypeXYAbsolute);
+    const double centre[] = {960.0, 540.0};
+    gProps->propSetDoubleN(p, kOfxParamPropDefault, 2, centre);
+    const double lo[] = {0.0, 0.0}, hi[] = {1920.0, 1080.0};
+    gProps->propSetDoubleN(p, kOfxParamPropDisplayMin, 2, lo);
+    gProps->propSetDoubleN(p, kOfxParamPropDisplayMax, 2, hi);
     return kOfxStatOK;
 }
 
@@ -378,6 +398,15 @@ OfxStatus compositeRender(OfxImageEffectHandle e, OfxPropertySetHandle in) {
             }
         }
     }
+    // The Centre, in canonical coordinates, marked at the render scale.
+    double cx = 0, cy = 0, scale[2] = {1, 1};
+    gParams->paramGetValueAtTime(paramOf(e, "centre"), t, &cx, &cy);
+    gProps->propGetDoubleN(in, kOfxImageEffectPropRenderScale, 2, scale);
+    const int px = static_cast<int>(cx * scale[0]), py = static_cast<int>(cy * scale[1]);
+    if (px >= dst.x1 && px < dst.x2 && py >= dst.y1 && py < dst.y2) {
+        float* d = dst.at(px, py);
+        d[0] = d[1] = d[2] = d[3] = 1.0f;
+    }
     for (Pixels* p : {&src, &dst}) gEffects->clipReleaseImage(p->props);
     if (hasOver) gEffects->clipReleaseImage(over.props);
     if (hasMatte) gEffects->clipReleaseImage(matte.props);
@@ -389,6 +418,47 @@ OfxStatus compositeInstanceChanged(OfxImageEffectHandle e, OfxPropertySetHandle 
     char* name = nullptr;
     gProps->propGetString(in, kOfxPropName, 0, &name);
     if (name && std::strcmp(name, "square") == 0) gParams->paramSetValue(paramOf(e, "spin"), 90.0);
+    return kOfxStatOK;
+}
+
+// The overlay: a square round the Centre, dragged by a press near it.
+bool gDragging = false;
+
+OfxStatus compositeOverlay(const char* action, const void* handle, OfxPropertySetHandle in, OfxPropertySetHandle) {
+    if (std::strcmp(action, kOfxActionDescribe) == 0 || std::strcmp(action, kOfxActionCreateInstance) == 0 ||
+        std::strcmp(action, kOfxActionDestroyInstance) == 0) {
+        return kOfxStatOK;
+    }
+    if (!in) return kOfxStatReplyDefault;
+    void* instance = nullptr;
+    gProps->propGetPointer(in, kOfxPropEffectInstance, 0, &instance);
+    auto* e = static_cast<OfxImageEffectHandle>(instance);
+    const double t = timeOf(in);
+    double cx = 0, cy = 0;
+    gParams->paramGetValueAtTime(paramOf(e, "centre"), t, &cx, &cy);
+    if (std::strcmp(action, kOfxInteractActionDraw) == 0) {
+        void* context = nullptr;
+        gProps->propGetPointer(in, kOfxInteractPropDrawContext, 0, &context);
+        auto* dc = static_cast<OfxDrawContextHandle>(context);
+        const OfxRGBAColourF yellow{1.0f, 1.0f, 0.0f, 1.0f};
+        gDraw->setColour(dc, &yellow);
+        gDraw->setLineWidth(dc, 2.0f);
+        const OfxPointD square[] = {{cx - 20, cy - 20}, {cx + 20, cy - 20}, {cx + 20, cy + 20}, {cx - 20, cy + 20}};
+        gDraw->draw(dc, kOfxDrawPrimitiveLineLoop, square, 4);
+        const OfxPointD at{cx, cy - 30};
+        gDraw->drawText(dc, "centre", &at, 32);
+        return kOfxStatOK;
+    }
+    double pen[2] = {0, 0};
+    gProps->propGetDoubleN(in, kOfxInteractPropPenPosition, 2, pen);
+    if (std::strcmp(action, kOfxInteractActionPenDown) == 0) {
+        gDragging = std::abs(pen[0] - cx) <= 30 && std::abs(pen[1] - cy) <= 30;
+        return gDragging ? kOfxStatOK : kOfxStatReplyDefault;
+    }
+    if (!gDragging) return kOfxStatReplyDefault;
+    gParams->paramSetValue(paramOf(e, "centre"), pen[0], pen[1]);
+    if (std::strcmp(action, kOfxInteractActionPenUp) == 0) gDragging = false;
+    gInteract->interactRedraw(static_cast<OfxInteractHandle>(const_cast<void*>(handle)));
     return kOfxStatOK;
 }
 

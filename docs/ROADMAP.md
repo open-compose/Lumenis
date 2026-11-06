@@ -1286,7 +1286,9 @@ phase of their own. They are done in three steps:
     `OfxPluginInfo::inputs`/`connectedInputs`, `ofxInputCount`, `ofxPushButton`, `nestTrackPicture` in the compositor,
     `OfxOptionalInputsDialog`, `AngleDial`, `Timeline::setOptionalInputsChooser`; tests `tst_ofx_host`,
     `tst_ofx_palette`). 6.11c2, overlays through the Interact suite and the Draw suite with Outline/Path in the Effect
-    Preview (p.161-162). 6.11c3, colour management with OCIO (the OFX 1.5 colour suite) where the library is installed,
+    Preview (p.161-162). Done (`ofxOverlayDraw`/`ofxOverlayPen`, `Composer::EffectPreview::pluginShapes`,
+    `PluginOverlayInput` and `EffectEditor::pluginPen`; the project's size and render scale through
+    `setOfxProjectSize`; tests `tst_ofx_host`, `tst_ofx_palette`). 6.11c3, colour management with OCIO (the OFX 1.5 colour suite) where the library is installed,
     else the plug-in sees the project's colour space only.
 
 **Gates**

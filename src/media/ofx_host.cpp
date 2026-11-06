@@ -15,6 +15,8 @@
 #include "lumenis/media/ofx_host.h"
 
 #include <ofxCore.h>
+#include <ofxDrawSuite.h>
+#include <ofxInteract.h>
 #include <ofxImageEffect.h>
 #include <ofxMemory.h>
 #include <ofxMessage.h>
@@ -31,6 +33,7 @@
 #include <QJsonObject>
 #include <QLibrary>
 #include <QMap>
+#include <QSize>
 
 #include <algorithm>
 #include <cmath>
@@ -684,7 +687,7 @@ PropertySet& hostProperties() {
         h.setInt(kOfxPropVersion, {0, 0, 0});
         h.setString(kOfxPropVersionLabel, {"0"});
         h.setInt(kOfxImageEffectHostPropIsBackground, {0});
-        h.setInt(kOfxImageEffectPropSupportsOverlays, {0});
+        h.setInt(kOfxImageEffectPropSupportsOverlays, {1}); // through the Draw suite (6.11c2)
         h.setInt(kOfxImageEffectPropSupportsMultiResolution, {0});
         h.setInt(kOfxImageEffectPropSupportsTiles, {0});
         h.setInt(kOfxImageEffectPropTemporalClipAccess, {0});
@@ -711,6 +714,10 @@ PropertySet& hostProperties() {
     return p;
 }
 
+// The Interact and Draw suites (6.11c2), defined with the overlays below.
+extern const OfxInteractSuiteV1 kInteractSuite;
+extern const OfxDrawSuiteV1 kDrawSuite;
+
 const void* fetchSuite(OfxPropertySetHandle, const char* name, int version) {
     if (!name) return nullptr;
     const std::string n(name);
@@ -721,6 +728,8 @@ const void* fetchSuite(OfxPropertySetHandle, const char* name, int version) {
     if (n == kOfxMemorySuite) return &kMemorySuite;
     if (n == kOfxMultiThreadSuite) return &kMultiThreadSuite;
     if (n == kOfxMessageSuite) return &kMessageSuite;
+    if (n == kOfxInteractSuite) return &kInteractSuite;
+    if (n == kOfxDrawSuite) return &kDrawSuite;
     return nullptr;
 }
 
@@ -1119,14 +1128,44 @@ struct RenderContext {
     model::EffectSpan span;
     double frame = 0.0;
     double progress = -1.0; // a transition's; -1 for segments
-    int width = 0, height = 0;
+    int width = 0, height = 0;        // the pictures, in pixels
+    double projectWidth = 0.0, projectHeight = 0.0; // the project in canonical coordinates (setOfxProjectSize)
+    double scaleX = 1.0, scaleY = 1.0; // the render scale: pixels per canonical unit
     std::map<std::string, const Picture*> inputs;
 };
+
+QSize gProjectSize;
+
+// The project's size in canonical coordinates and the render scale for `r`'s pictures (6.11c2): the project set by
+// setOfxProjectSize, else the pictures' own size (scale 1). A context without pictures (a push button, an overlay)
+// works at the project's size.
+void fitProject(RenderContext& r) {
+    if (gProjectSize.isValid() && !gProjectSize.isEmpty()) {
+        r.projectWidth = gProjectSize.width();
+        r.projectHeight = gProjectSize.height();
+    } else {
+        r.projectWidth = r.width > 0 ? r.width : 1920.0;
+        r.projectHeight = r.height > 0 ? r.height : 1080.0;
+    }
+    if (r.width <= 0 || r.height <= 0) {
+        r.width = static_cast<int>(r.projectWidth);
+        r.height = static_cast<int>(r.projectHeight);
+    }
+    r.scaleX = r.width / r.projectWidth;
+    r.scaleY = r.height / r.projectHeight;
+}
 
 // An image the host gave the plug-in: its properties and its pixels, float RGBA with rows bottom to top.
 struct Image {
     PropertySet props;
     std::vector<float> data;
+};
+
+// A plug-in's overlay interact (6.11c2; ofxInteract.h): its properties and the plug-in's entry point for it.
+struct Interact {
+    PropertySet props;
+    OfxPluginEntryPoint* entry = nullptr;
+    bool redraw = false; // the plug-in asked for a redraw (interactRedraw)
 };
 
 // A plug-in's one instance, made at its first render (kOfxActionCreateInstance).
@@ -1139,6 +1178,8 @@ struct Instance : Effect {
     Image* output = nullptr; // the Output clip's image during a render
     bool failed = false;     // creating it failed: the effect passes its picture through
     bool reported = false;   // a render failure was reported once
+    std::unique_ptr<Interact> overlay; // its overlay interact, made when first drawn (6.11c2)
+    bool noOverlay = false;  // the plug-in has none we can draw (no V2 overlay, or creating it failed)
 };
 
 std::map<QString, std::unique_ptr<Instance>>& instances() {
@@ -1366,13 +1407,13 @@ OfxStatus clipGetPropertySet(OfxImageClipHandle c, OfxPropertySetHandle* props) 
     return kOfxStatOK;
 }
 
-void setImageProps(Image& image, const std::string& clipName, double frame, int width, int height) {
+void setImageProps(Image& image, const std::string& clipName, double frame, int width, int height, double scaleX, double scaleY) {
     PropertySet& p = image.props;
     p.setString(kOfxPropType, {kOfxTypeImage});
     p.setString(kOfxImageEffectPropPixelDepth, {kOfxBitDepthFloat});
     p.setString(kOfxImageEffectPropComponents, {kOfxImageComponentRGBA});
     p.setString(kOfxImageEffectPropPreMultiplication, {kOfxImagePreMultiplied});
-    p.setDouble(kOfxImageEffectPropRenderScale, {1.0, 1.0});
+    p.setDouble(kOfxImageEffectPropRenderScale, {scaleX, scaleY});
     p.setDouble(kOfxImagePropPixelAspectRatio, {1.0});
     p.setPointer(kOfxImagePropData, {image.data.data()});
     p.setInt(kOfxImagePropBounds, {0, 0, width, height});
@@ -1406,7 +1447,7 @@ OfxStatus clipGetImage(OfxImageClipHandle c, OfxTime time, const OfxRectD*, OfxP
             std::copy_n(picture.pixel(0, h - 1 - y), static_cast<std::size_t>(w) * 4, &image->data[static_cast<std::size_t>(y) * static_cast<std::size_t>(w) * 4]);
         }
     }
-    setImageProps(*image, cl.name, time, w, h);
+    setImageProps(*image, cl.name, time, w, h, r.scaleX, r.scaleY);
     *imageOut = handle(&image->props);
     inst->images.push_back(std::move(image));
     return kOfxStatOK;
@@ -1429,8 +1470,9 @@ OfxStatus clipReleaseImage(OfxPropertySetHandle image) {
 OfxStatus clipGetRegionOfDefinition(OfxImageClipHandle c, OfxTime, OfxRectD* bounds) {
     if (!c || !bounds) return kOfxStatErrBadHandle;
     Instance* inst = clip(c)->owner ? clip(c)->owner->instance : nullptr;
-    const int w = inst && inst->render ? inst->render->width : 0, h = inst && inst->render ? inst->render->height : 0;
-    *bounds = OfxRectD{0.0, 0.0, static_cast<double>(w), static_cast<double>(h)};
+    // In canonical coordinates: the project.
+    const RenderContext* r = inst ? inst->render : nullptr;
+    *bounds = OfxRectD{0.0, 0.0, r ? r->projectWidth : 0.0, r ? r->projectHeight : 0.0};
     return kOfxStatOK;
 }
 
@@ -1439,7 +1481,7 @@ OfxStatus clipGetRegionOfDefinition(OfxImageClipHandle c, OfxTime, OfxRectD* bou
 // The instance's properties a render changes: the project's size and rate, the effect's length.
 void setProjectProps(Instance& inst, const RenderContext& r) {
     PropertySet& p = inst.props;
-    const double w = r.width, h = r.height;
+    const double w = r.projectWidth > 0.0 ? r.projectWidth : r.width, h = r.projectHeight > 0.0 ? r.projectHeight : r.height;
     p.setDouble(kOfxImageEffectPropProjectSize, {w, h});
     p.setDouble(kOfxImageEffectPropProjectExtent, {w, h});
     p.setDouble(kOfxImageEffectPropProjectOffset, {0.0, 0.0});
@@ -1523,7 +1565,7 @@ std::optional<Picture> render(const OfxPluginInfo& info, RenderContext& r) {
     setProjectProps(*inst, r);
     currentPlugin() = info.id;
     auto handleOf = reinterpret_cast<OfxImageEffectHandle>(inst);
-    const std::vector<double> renderScale{1.0, 1.0};
+    const std::vector<double> renderScale{r.scaleX, r.scaleY};
     const std::vector<int> window{0, 0, r.width, r.height};
 
     std::optional<Picture> result;
@@ -1542,7 +1584,7 @@ std::optional<Picture> render(const OfxPluginInfo& info, RenderContext& r) {
     if (!result) {
         Image output;
         output.data.assign(static_cast<std::size_t>(r.width) * static_cast<std::size_t>(r.height) * 4, 0.0f);
-        setImageProps(output, kOfxImageEffectOutputClipName, r.frame, r.width, r.height);
+        setImageProps(output, kOfxImageEffectOutputClipName, r.frame, r.width, r.height, r.scaleX, r.scaleY);
         inst->output = &output;
         PropertySet seq;
         seq.setDouble(kOfxImageEffectPropFrameRange, {r.frame, r.frame});
@@ -1656,6 +1698,34 @@ OfxStatus paramSetValueAtTime(OfxParamHandle h, OfxTime time, ...) {
     (*gSetValues)[p.name] = readValues(p, ap);
     va_end(ap);
     return kOfxStatOK;
+}
+
+// The values a plug-in set (gSetValues) as the Effect Editor's controls keep them (ofxEditorParameters), by stored key.
+QJsonObject keptValues(const OfxPluginInfo& plugin, const std::map<std::string, std::vector<double>>& set) {
+    const OfxPluginInfo* info = &plugin;
+    QJsonObject out;
+    for (const auto& [name, values] : set) {
+        const OfxParamInfo* p = paramInfoOf(*info, name);
+        if (!p || values.empty()) continue;
+        const std::string type = p->type.toStdString();
+        if (type == kOfxParamTypeBoolean) {
+            out.insert(p->name, values[0] != 0.0);
+        } else if (type == kOfxParamTypeChoice) {
+            const int i = static_cast<int>(values[0]);
+            if (i >= 0 && i < p->options.size()) out.insert(p->name, p->options.at(i));
+        } else if (type == kOfxParamTypeRGB || type == kOfxParamTypeRGBA) {
+            if (values.size() >= 3) {
+                out.insert(p->name, QColor::fromRgbF(static_cast<float>(std::clamp(values[0], 0.0, 1.0)), static_cast<float>(std::clamp(values[1], 0.0, 1.0)),
+                                                     static_cast<float>(std::clamp(values[2], 0.0, 1.0)))
+                                        .name());
+            }
+        } else if (values.size() == 1) {
+            out.insert(p->name, values[0]);
+        } else {
+            for (std::size_t i = 0; i < values.size() && i < 3; ++i) out.insert(p->name + QLatin1String(kAxes[i]), values[i]);
+        }
+    }
+    return out;
 }
 
 } // namespace
@@ -1795,6 +1865,7 @@ Picture ofxSegmentPicture(const model::Effect& effect, const Picture& source, do
     r.frame = span.frameOf(time);
     r.width = source.width();
     r.height = source.height();
+    fitProject(r);
     // Filter and General plug-ins take the segment as their first input (Source); a Generator has none. Further inputs
     // come from `more`, an empty picture where there is none.
     const QList<OfxClipInfo> connected = info->connectedInputs(ofxInputCount(effect));
@@ -1830,6 +1901,7 @@ Picture ofxTransitionPicture(const model::Effect& effect, const Picture& from, c
     r.progress = std::clamp(progress, 0.0, 1.0);
     r.width = from.width();
     r.height = from.height();
+    fitProject(r);
     if (info->describedContext == QLatin1String(kOfxImageEffectContextTransition)) {
         r.inputs[kOfxImageEffectTransitionSourceFromClipName] = &from;
         r.inputs[kOfxImageEffectTransitionSourceToClipName] = &to;
@@ -1853,6 +1925,7 @@ QJsonObject ofxPushButton(const model::Effect& effect, const QString& key, doubl
     r.info = info;
     r.span = span;
     r.frame = span.frameOf(time);
+    fitProject(r);
     inst->render = &r;
     std::map<std::string, std::vector<double>> set;
     gSetValues = &set;
@@ -1870,30 +1943,263 @@ QJsonObject ofxPushButton(const model::Effect& effect, const QString& key, doubl
     gSetValues = nullptr;
     inst->render = nullptr;
     currentPlugin().clear();
-    // The values as the Effect Editor's controls keep them (ofxEditorParameters).
-    QJsonObject out;
-    for (const auto& [name, values] : set) {
-        const OfxParamInfo* p = paramInfoOf(*info, name);
-        if (!p || values.empty()) continue;
-        const std::string type = p->type.toStdString();
-        if (type == kOfxParamTypeBoolean) {
-            out.insert(p->name, values[0] != 0.0);
-        } else if (type == kOfxParamTypeChoice) {
-            const int i = static_cast<int>(values[0]);
-            if (i >= 0 && i < p->options.size()) out.insert(p->name, p->options.at(i));
-        } else if (type == kOfxParamTypeRGB || type == kOfxParamTypeRGBA) {
-            if (values.size() >= 3) {
-                out.insert(p->name, QColor::fromRgbF(static_cast<float>(std::clamp(values[0], 0.0, 1.0)), static_cast<float>(std::clamp(values[1], 0.0, 1.0)),
-                                                     static_cast<float>(std::clamp(values[2], 0.0, 1.0)))
-                                        .name());
-            }
-        } else if (values.size() == 1) {
-            out.insert(p->name, values[0]);
-        } else {
-            for (std::size_t i = 0; i < values.size() && i < 3; ++i) out.insert(p->name + QLatin1String(kAxes[i]), values[i]);
-        }
+    return keptValues(*info, set);
+}
+
+// ---------------------------------------------------------------- overlays (6.11c2)
+
+namespace {
+
+// The shapes of one draw action, and the drawing state the plug-in sets.
+struct DrawContext {
+    QList<OfxOverlayShape>* shapes = nullptr;
+    double projectWidth = 1920.0, projectHeight = 1080.0;
+    QColor colour = Qt::white;
+    double width = 0.0;
+    bool dashed = false;
+};
+
+DrawContext* drawContext(OfxDrawContextHandle h) {
+    return reinterpret_cast<DrawContext*>(h);
+}
+
+QPointF fractionOf(const DrawContext& dc, const OfxPointD& p) {
+    return QPointF(p.x / dc.projectWidth, 1.0 - p.y / dc.projectHeight);
+}
+
+// The host's colours for the standard uses (ours).
+OfxStatus drawGetColour(OfxDrawContextHandle h, OfxStandardColour which, OfxRGBAColourF* colour) {
+    if (!h || !colour) return kOfxStatFailed;
+    QColor c;
+    switch (which) {
+    case kOfxStandardColourOverlayBackground: c = QColor(0, 0, 0); break;
+    case kOfxStandardColourOverlayActive: c = QColor(255, 210, 60); break;
+    case kOfxStandardColourOverlaySelected: c = QColor(255, 255, 255); break;
+    case kOfxStandardColourOverlayDeselected: c = QColor(160, 160, 160); break;
+    case kOfxStandardColourOverlayMarqueeFG: c = QColor(255, 255, 255); break;
+    case kOfxStandardColourOverlayMarqueeBG: c = QColor(0, 0, 0); break;
+    case kOfxStandardColourOverlayText: c = QColor(255, 255, 255); break;
+    default: return kOfxStatErrValue;
     }
+    *colour = OfxRGBAColourF{static_cast<float>(c.redF()), static_cast<float>(c.greenF()), static_cast<float>(c.blueF()), 1.0f};
+    return kOfxStatOK;
+}
+
+OfxStatus drawSetColour(OfxDrawContextHandle h, const OfxRGBAColourF* colour) {
+    if (!h || !colour) return kOfxStatFailed;
+    drawContext(h)->colour = QColor::fromRgbF(std::clamp(colour->r, 0.0f, 1.0f), std::clamp(colour->g, 0.0f, 1.0f), std::clamp(colour->b, 0.0f, 1.0f),
+                                              std::clamp(colour->a, 0.0f, 1.0f));
+    return kOfxStatOK;
+}
+
+OfxStatus drawSetLineWidth(OfxDrawContextHandle h, float width) {
+    if (!h) return kOfxStatFailed;
+    drawContext(h)->width = static_cast<double>(std::max(0.0f, width));
+    return kOfxStatOK;
+}
+
+OfxStatus drawSetLineStipple(OfxDrawContextHandle h, OfxDrawLineStipplePattern pattern) {
+    if (!h) return kOfxStatFailed;
+    // Ours: every pattern but solid is drawn dashed.
+    drawContext(h)->dashed = pattern != kOfxDrawLineStipplePatternSolid;
+    return kOfxStatOK;
+}
+
+OfxStatus drawPrimitive(OfxDrawContextHandle h, OfxDrawPrimitive primitive, const OfxPointD* points, int count) {
+    if (!h) return kOfxStatFailed;
+    DrawContext& dc = *drawContext(h);
+    if (!points || count < 1) return kOfxStatErrValue;
+    OfxOverlayShape s;
+    switch (primitive) {
+    case kOfxDrawPrimitiveLines: s.kind = OfxOverlayShape::Kind::Lines; break;
+    case kOfxDrawPrimitiveLineStrip: s.kind = OfxOverlayShape::Kind::LineStrip; break;
+    case kOfxDrawPrimitiveLineLoop: s.kind = OfxOverlayShape::Kind::LineLoop; break;
+    case kOfxDrawPrimitiveRectangle: s.kind = OfxOverlayShape::Kind::Rectangle; break;
+    case kOfxDrawPrimitivePolygon: s.kind = OfxOverlayShape::Kind::Polygon; break;
+    case kOfxDrawPrimitiveEllipse: s.kind = OfxOverlayShape::Kind::Ellipse; break;
+    default: return kOfxStatErrValue;
+    }
+    const bool twoCorners = s.kind == OfxOverlayShape::Kind::Rectangle || s.kind == OfxOverlayShape::Kind::Ellipse;
+    if ((twoCorners && count != 2) || (s.kind == OfxOverlayShape::Kind::Lines && count % 2 != 0)) return kOfxStatErrValue;
+    s.colour = dc.colour;
+    s.width = dc.width;
+    s.dashed = dc.dashed;
+    for (int i = 0; i < count; ++i) s.points << fractionOf(dc, points[i]);
+    if (dc.shapes) dc.shapes->append(s);
+    return kOfxStatOK;
+}
+
+OfxStatus drawText(OfxDrawContextHandle h, const char* text, const OfxPointD* pos, int alignment) {
+    if (!h) return kOfxStatFailed;
+    if (!text || !pos) return kOfxStatErrValue;
+    DrawContext& dc = *drawContext(h);
+    OfxOverlayShape s;
+    s.kind = OfxOverlayShape::Kind::Text;
+    s.colour = dc.colour;
+    s.points << fractionOf(dc, *pos);
+    s.text = QString::fromUtf8(text);
+    s.alignment = alignment;
+    if (dc.shapes) dc.shapes->append(s);
+    return kOfxStatOK;
+}
+
+Interact* interact(OfxInteractHandle h) {
+    return reinterpret_cast<Interact*>(h);
+}
+
+OfxStatus interactSwapBuffers(OfxInteractHandle h) {
+    return h ? kOfxStatOK : kOfxStatErrBadHandle;
+}
+
+OfxStatus interactRedraw(OfxInteractHandle h) {
+    if (!h) return kOfxStatErrBadHandle;
+    interact(h)->redraw = true;
+    return kOfxStatOK;
+}
+
+OfxStatus interactGetPropertySet(OfxInteractHandle h, OfxPropertySetHandle* props) {
+    if (!h || !props) return kOfxStatErrBadHandle;
+    *props = handle(&interact(h)->props);
+    return kOfxStatOK;
+}
+
+} // namespace
+
+namespace {
+
+const OfxInteractSuiteV1 kInteractSuite{interactSwapBuffers, interactRedraw, interactGetPropertySet};
+const OfxDrawSuiteV1 kDrawSuite{drawGetColour, drawSetColour, drawSetLineWidth, drawSetLineStipple, drawPrimitive, drawText};
+
+// The instance's overlay interact, described and made when first wanted; null when the plug-in has none we draw.
+Interact* overlayFor(Instance& inst) {
+    if (inst.overlay) return inst.overlay.get();
+    if (inst.noOverlay) return nullptr;
+    void* entry = nullptr;
+    if (const Property* p = inst.props.find(kOfxImageEffectPluginPropOverlayInteractV2);
+        p && p->type == Property::Type::Pointer && !p->pointers.empty()) {
+        entry = p->pointers.front();
+    }
+    if (!entry) {
+        inst.noOverlay = true;
+        return nullptr;
+    }
+    auto* main = reinterpret_cast<OfxPluginEntryPoint*>(entry);
+    // Its descriptor (kOfxActionDescribe), then its instance (kOfxActionCreateInstance).
+    Interact descriptor;
+    descriptor.entry = main;
+    descriptor.props.setInt(kOfxInteractPropHasAlpha, {1});
+    descriptor.props.setInt(kOfxInteractPropBitDepth, {8});
+    currentPlugin() = inst.id;
+    main(kOfxActionDescribe, reinterpret_cast<OfxInteractHandle>(&descriptor), nullptr, nullptr);
+    auto overlay = std::make_unique<Interact>();
+    overlay->entry = main;
+    overlay->props = descriptor.props;
+    overlay->props.setPointer(kOfxPropEffectInstance, {&inst});
+    overlay->props.setPointer(kOfxPropInstanceData, {nullptr});
+    overlay->props.setDouble(kOfxInteractPropPixelScale, {1.0, 1.0});
+    overlay->props.setDouble(kOfxInteractPropBackgroundColour, {0.0, 0.0, 0.0});
+    overlay->props.setDouble(kOfxInteractPropSuggestedColour, {1.0, 1.0, 0.0});
+    overlay->props.setString(kOfxInteractPropSlaveToParam, {});
+    const OfxStatus s = main(kOfxActionCreateInstance, reinterpret_cast<OfxInteractHandle>(overlay.get()), nullptr, nullptr);
+    currentPlugin().clear();
+    if (!succeeded(s)) {
+        inst.noOverlay = true;
+        return nullptr;
+    }
+    inst.overlay = std::move(overlay);
+    return inst.overlay.get();
+}
+
+// The arguments every interact action gets.
+void interactArgs(PropertySet& in, Instance& inst, const RenderContext& r, double pixelScale) {
+    in.setPointer(kOfxPropEffectInstance, {&inst});
+    in.setDouble(kOfxInteractPropPixelScale, {pixelScale, pixelScale});
+    in.setDouble(kOfxInteractPropBackgroundColour, {0.0, 0.0, 0.0});
+    in.setDouble(kOfxPropTime, {r.frame});
+    in.setDouble(kOfxImageEffectPropRenderScale, {1.0, 1.0});
+}
+
+} // namespace
+
+bool ofxHasOverlay(const model::Effect& effect) {
+    const OfxPluginInfo* info = ofxPluginOf(effect);
+    if (!info) return false;
+    std::lock_guard lock(renderMutex());
+    Instance* inst = instanceFor(*info);
+    return inst && overlayFor(*inst);
+}
+
+QList<OfxOverlayShape> ofxOverlayDraw(const model::Effect& effect, double time, const model::EffectSpan& span, double pixelScale) {
+    const OfxPluginInfo* info = ofxPluginOf(effect);
+    if (!info) return {};
+    std::lock_guard lock(renderMutex());
+    Instance* inst = instanceFor(*info);
+    Interact* overlay = inst ? overlayFor(*inst) : nullptr;
+    if (!overlay) return {};
+    RenderContext r;
+    r.effect = &effect;
+    r.info = info;
+    r.span = span;
+    r.frame = span.frameOf(time);
+    fitProject(r);
+    inst->render = &r;
+    QList<OfxOverlayShape> shapes;
+    DrawContext dc;
+    dc.shapes = &shapes;
+    dc.projectWidth = r.projectWidth;
+    dc.projectHeight = r.projectHeight;
+    PropertySet in;
+    interactArgs(in, *inst, r, pixelScale);
+    in.setPointer(kOfxInteractPropDrawContext, {&dc});
+    currentPlugin() = info->id;
+    overlay->entry(kOfxInteractActionDraw, reinterpret_cast<OfxInteractHandle>(overlay), handle(&in), nullptr);
+    currentPlugin().clear();
+    overlay->redraw = false;
+    inst->render = nullptr;
+    return shapes;
+}
+
+OfxPenResult ofxOverlayPen(const model::Effect& effect, OfxPen pen, const QPointF& at, double time, const model::EffectSpan& span,
+                           double pixelScale) {
+    OfxPenResult out;
+    const OfxPluginInfo* info = ofxPluginOf(effect);
+    if (!info) return out;
+    std::lock_guard lock(renderMutex());
+    Instance* inst = instanceFor(*info);
+    Interact* overlay = inst ? overlayFor(*inst) : nullptr;
+    if (!overlay) return out;
+    RenderContext r;
+    r.effect = &effect;
+    r.info = info;
+    r.span = span;
+    r.frame = span.frameOf(time);
+    fitProject(r);
+    inst->render = &r;
+    std::map<std::string, std::vector<double>> set;
+    gSetValues = &set;
+    PropertySet in;
+    interactArgs(in, *inst, r, pixelScale);
+    const double x = at.x() * r.projectWidth, y = (1.0 - at.y()) * r.projectHeight;
+    in.setDouble(kOfxInteractPropPenPosition, {x, y});
+    in.setInt(kOfxInteractPropPenViewportPosition, {static_cast<int>(std::lround(x / pixelScale)), static_cast<int>(std::lround((r.projectHeight - y) / pixelScale))});
+    in.setDouble(kOfxInteractPropPenPressure, {pen == OfxPen::Up ? 0.0 : 1.0});
+    const char* action = pen == OfxPen::Down ? kOfxInteractActionPenDown : pen == OfxPen::Motion ? kOfxInteractActionPenMotion : kOfxInteractActionPenUp;
+    currentPlugin() = info->id;
+    const OfxStatus s = overlay->entry(action, reinterpret_cast<OfxInteractHandle>(overlay), handle(&in), nullptr);
+    currentPlugin().clear();
+    gSetValues = nullptr;
+    inst->render = nullptr;
+    out.taken = s == kOfxStatOK;
+    out.values = keptValues(*info, set);
     return out;
+}
+
+void setOfxProjectSize(const QSize& size) {
+    gProjectSize = size;
+}
+
+QSize ofxProjectSize() {
+    return gProjectSize.isValid() && !gProjectSize.isEmpty() ? gProjectSize : QSize(1920, 1080);
 }
 
 void setOfxFrameRate(double rate) {
@@ -1906,6 +2212,10 @@ int closeOfxInstances() {
     for (auto& [id, inst] : instances()) {
         if (inst->failed) continue;
         currentPlugin() = id;
+        if (inst->overlay) {
+            inst->overlay->entry(kOfxActionDestroyInstance, reinterpret_cast<OfxInteractHandle>(inst->overlay.get()), nullptr, nullptr);
+            inst->overlay.reset();
+        }
         inst->plugin->mainEntry(kOfxActionDestroyInstance, reinterpret_cast<OfxImageEffectHandle>(inst.get()), nullptr, nullptr);
         ++closed;
     }

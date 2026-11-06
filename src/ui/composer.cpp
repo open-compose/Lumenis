@@ -925,6 +925,48 @@ void MonitorPicture::paintOverlay(QPainter& p) const {
             p.drawLine(at - QPointF(0, 6), at + QPointF(0, 6));
         }, wire);
     }
+    // An OFX plug-in's overlay, in the colours and widths it drew with (6.11c2).
+    for (const media::OfxOverlayShape& s : e.pluginShapes) {
+        p.save();
+        QPen pen(s.colour, s.width <= 0.0 ? 1.0 : s.width);
+        pen.setCosmetic(true);
+        if (s.dashed) pen.setStyle(Qt::DashLine);
+        p.setPen(pen);
+        p.setBrush(Qt::NoBrush);
+        QPolygonF points;
+        for (const QPointF& c : s.points) points << overlayPoint(c);
+        using Kind = media::OfxOverlayShape::Kind;
+        switch (s.kind) {
+        case Kind::Lines:
+            for (qsizetype i = 0; i + 1 < points.size(); i += 2) p.drawLine(points.at(i), points.at(i + 1));
+            break;
+        case Kind::LineStrip: p.drawPolyline(points); break;
+        case Kind::LineLoop: p.drawPolygon(points); break;
+        case Kind::Rectangle:
+            if (points.size() == 2) p.fillRect(QRectF(points.at(0), points.at(1)).normalized(), s.colour);
+            break;
+        case Kind::Polygon:
+            p.setBrush(s.colour);
+            p.drawPolygon(points);
+            break;
+        case Kind::Ellipse:
+            if (points.size() == 2) p.drawEllipse(QRectF(points.at(0), points.at(1)).normalized());
+            break;
+        case Kind::Text: {
+            if (points.isEmpty()) break;
+            // kOfxDrawTextAlignment: left 1, right 2, top 4, bottom 8, baseline 16, centre 32 (ofxDrawSuite.h).
+            const QSizeF size = p.fontMetrics().size(0, s.text);
+            QPointF at = points.first();
+            if (s.alignment & 2) at.rx() -= size.width();
+            else if (s.alignment & 32) at.rx() -= size.width() / 2;
+            if (s.alignment & 4) at.ry() += p.fontMetrics().ascent();
+            else if (s.alignment & 8) at.ry() -= p.fontMetrics().descent();
+            p.drawText(at, s.text);
+            break;
+        }
+        }
+        p.restore();
+    }
     if (e.caret) {
         const QPointF a = overlayPoint(e.caret->first), b = overlayPoint(e.caret->second);
         twice([&] { p.drawLine(a, b); }, wire);

@@ -5,6 +5,7 @@
 // step per drag). Also Pan and Scan's wire frame actions (6.7b1, p.235-236, p.564; docs/spec/pan-scan.md).
 #include "lumenis/ui/effect_editor.h"
 
+#include "lumenis/media/ofx_host.h"
 #include "lumenis/media/compositor.h"
 #include "lumenis/model/pan_scan.h"
 #include "lumenis/ui/timeline.h"
@@ -56,12 +57,18 @@ void EffectEditor::syncHandleButtons() {
         handleTool_ = media::HandleTool::None;
         for (QToolButton* b : std::as_const(handleButtons_)) b->setChecked(false);
     }
-    outline_->setEnabled(current_ && media::hasEffectOutline(*current_));
+    // An OFX plug-in's overlay shows with Outline/Path too (p.162).
+    outline_->setEnabled(current_ && (media::hasEffectOutline(*current_) || media::ofxHasOverlay(*current_)));
 }
 
 void EffectEditor::fillOverlay(const model::Effect& effect, Composer::EffectPreview& preview) const {
     if (model::isTitlerEffect(effect)) {
         if (titler_) titler_->fillOverlay(preview);
+        return;
+    }
+    if (media::isOfxEffect(effect)) {
+        // "You access these overlays by clicking the Outline/Path button at the bottom of the Effect Editor" (p.162).
+        if (outlineShown_) preview.pluginShapes = media::ofxOverlayDraw(effect, positionTime(), span_, overlayPixelScale());
         return;
     }
     fillTrackers(effect, preview);
@@ -238,6 +245,67 @@ bool EffectEditor::importImage(const QString& path) {
     edited.parameters.insert(QStringLiteral("Avid Pan & Zoom Effect Parameters"), group);
     const QJsonObject parameters = edited.parameters;
     return changeShown(tr("Import Image"), [&](model::Effect& e) { e.parameters = parameters; });
+}
+
+} // namespace lumenis::ui
+
+namespace lumenis::ui {
+
+// ---------------------------------------------------------------- OFX plug-in overlays (6.11c2)
+
+bool PluginOverlayInput::overlayPress(const QPointF& at, Qt::KeyboardModifiers, bool) {
+    return editor_.pluginPen(media::OfxPen::Down, at);
+}
+
+void PluginOverlayInput::overlayMove(const QPointF& at, Qt::KeyboardModifiers) {
+    editor_.pluginPen(media::OfxPen::Motion, at);
+}
+
+void PluginOverlayInput::overlayRelease(const QPointF& at, Qt::KeyboardModifiers) {
+    editor_.pluginPen(media::OfxPen::Up, at);
+}
+
+PluginOverlayInput* EffectEditor::pluginOverlay() {
+    if (!pluginOverlay_) pluginOverlay_ = std::make_unique<PluginOverlayInput>(*this);
+    return pluginOverlay_.get();
+}
+
+double EffectEditor::overlayPixelScale() const {
+    const MonitorPicture* picture = timeline_.composer().picture(MonitorId::Record);
+    const int shown = picture ? picture->pictureRect().width() : 0;
+    const QSize project = media::ofxProjectSize();
+    return shown > 0 ? project.width() / static_cast<double>(shown) : 1.0;
+}
+
+bool EffectEditor::pluginPen(media::OfxPen pen, const QPointF& at) {
+    const model::Effect* e = shownEffect();
+    if (!shown_ || !e || !current_) return false;
+    const media::OfxPluginInfo* plugin = media::ofxPluginOf(*e);
+    if (!plugin) return false;
+    const media::OfxPenResult result = media::ofxOverlayPen(*e, pen, at, positionTime(), span_, overlayPixelScale());
+    if (pen == media::OfxPen::Down) pluginDragging_ = result.taken;
+    if (pen == media::OfxPen::Up) pluginDragging_ = false;
+    model::Effect edited = *e;
+    const QString category = media::ofxParameterCategory(*plugin);
+    for (auto it = result.values.constBegin(); it != result.values.constEnd(); ++it) putValue(edited, category, it.key(), it.value());
+    if (pen != media::OfxPen::Up) {
+        // Shown while the pointer is down, stored when it is released.
+        if (!result.values.isEmpty()) {
+            preview_ = edited;
+            syncValues(edited);
+            syncPreview();
+        }
+        return result.taken;
+    }
+    preview_.reset();
+    if (edited.parameters == current_->parameters) {
+        syncValues(*current_);
+        syncPreview();
+        return result.taken;
+    }
+    const QJsonObject parameters = edited.parameters;
+    changeShown(tr("Modify Effect"), [&](model::Effect& stored) { stored.parameters = parameters; });
+    return result.taken;
 }
 
 } // namespace lumenis::ui

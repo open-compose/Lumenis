@@ -403,6 +403,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   6.11c1: General chosen when it has more inputs; the dialog's name "OFX Optional Inputs" and all inputs chosen at first;
   inputs as nest tracks V1, V2 ...; the Angle control's look (0° up, clockwise) and keys; values a plug-in sets kept
   only during a push button's action.
+  6.11c2: V2 overlays only (no OpenGL for V1), the standard overlay colours, stipples drawn dashed, the pixel scale,
+  1920 x 1080 canonical until the project's size is set.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults
