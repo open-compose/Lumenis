@@ -41,6 +41,10 @@ class QToolButton;
 // marker.h) and storing it back in its bin; TimelineView draws the tracks and turns mouse input
 // into calls on Timeline. MainWindow (main_window.cpp) creates the Timeline and wires its stores;
 // the Composer (composer.h) owns the monitors whose loaded items the Timeline shows and changes.
+namespace lumenis::media {
+struct OfxPluginInfo;
+}
+
 namespace lumenis::ui {
 
 class ClipColorDialog;
@@ -924,6 +928,11 @@ public:
     // settings" (FX Guide p.728; 6.10e4c).
     using EffectSeed = std::function<void(model::Effect&)>;
     void setEffectSeed(EffectSeed seed) { effectSeed_ = std::move(seed); }
+    // How many inputs an OFX plug-in with optional inputs is given when applied (FX Guide p.161: "the AVX Optional
+    // Inputs dialog box opens ... select the number of video inputs"): the application opens OfxOptionalInputsDialog;
+    // nothing cancels the apply. Without a chooser the plug-in's required inputs.
+    using OptionalInputsChooser = std::function<std::optional<int>(const media::OfxPluginInfo&)>;
+    void setOptionalInputsChooser(OptionalInputsChooser chooser) { optionalInputs_ = std::move(chooser); }
     // Remove Effect (p.47): the effect the Effect Editor would show; without one, the Audio EQ
     // effects at the position on the selected audio tracks (p.741).
     bool removeEffectAtPosition();
@@ -1513,6 +1522,11 @@ private:
     bool showShapeResult_ = false;
     AutoCorrection autoCorrection_;
     EffectSeed effectSeed_;
+    OptionalInputsChooser optionalInputs_;
+    // The palette effect as applied, with its inputs chosen (setOptionalInputsChooser); nothing when cancelled.
+    std::optional<model::Effect> effectWithInputs(const EffectInfo& effect) const;
+    // After an OFX effect with several inputs went on the segment at `frame`: its nest gets a video track per input.
+    void addPluginInputTracks(model::Sequence& seq, const QString& track, std::int64_t frame, const model::Effect& effect) const;
     // The palette effect as it is applied: seeded (setEffectSeed).
     model::Effect seededEffect(const EffectInfo& effect) const;
     // Gives each Color Correction effect just applied to `refs` (segments by track and start) its AutoCorrect correction.

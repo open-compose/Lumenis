@@ -455,12 +455,9 @@ OfxStatus paramGetKeyTime(OfxParamHandle param, unsigned int nthKey, OfxTime* ti
 OfxStatus paramGetKeyIndex(OfxParamHandle param, OfxTime time, int direction, int* index);
 // Setting values (plug-ins do so in their instance changed action, which we do not send) is left to the effect's
 // controls: accepted and not kept (ours).
-OfxStatus paramSetValue(OfxParamHandle, ...) {
-    return kOfxStatOK;
-}
-OfxStatus paramSetValueAtTime(OfxParamHandle, OfxTime, ...) {
-    return kOfxStatOK;
-}
+// During a push button's instance changed action (ofxPushButton) the values set are kept for the Effect Editor.
+OfxStatus paramSetValue(OfxParamHandle param, ...);
+OfxStatus paramSetValueAtTime(OfxParamHandle param, OfxTime time, ...);
 OfxStatus paramDeleteKey(OfxParamHandle, OfxTime) {
     return kOfxStatErrUnsupported;
 }
@@ -806,6 +803,7 @@ OfxParamInfo paramInfo(const Param& param) {
     info.options = p.strings(kOfxParamPropChoiceOption);
     info.animates = p.integer(kOfxParamPropAnimates, 1) != 0;
     info.secret = p.integer(kOfxParamPropSecret, 0) != 0;
+    info.doubleType = p.string(kOfxParamPropDoubleType);
     const std::vector<double> mins = p.numbers(kOfxParamPropMin), maxs = p.numbers(kOfxParamPropMax);
     const std::vector<double> dmins = p.numbers(kOfxParamPropDisplayMin), dmaxs = p.numbers(kOfxParamPropDisplayMax);
     if (!mins.empty() && !maxs.empty()) {
@@ -878,6 +876,14 @@ OfxPluginInfo describe(OfxPlugin* plugin, const QString& file) {
     info.grouping = descriptor.props.string(kOfxImageEffectPluginPropGrouping);
     info.description = descriptor.props.string(kOfxPropPluginDescription);
     info.contexts = descriptor.props.strings(kOfxImageEffectPropSupportedContexts);
+    // Each context we take is described; the first of them in the order Filter, Generator, Transition, General is used,
+    // or General when it has more inputs (a plug-in whose extra inputs are General's, p.161).
+    struct Candidate {
+        std::string context;
+        Effect* descriptor = nullptr;
+        int inputs = 0;
+    };
+    std::vector<Candidate> candidates;
     for (const char* context : {kOfxImageEffectContextFilter, kOfxImageEffectContextGenerator, kOfxImageEffectContextTransition,
                                 kOfxImageEffectContextGeneral}) {
         if (!info.contexts.contains(QLatin1String(context))) continue;
@@ -892,18 +898,53 @@ OfxPluginInfo describe(OfxPlugin* plugin, const QString& file) {
             info.error = QStringLiteral("its describe in context action failed for %1 (%2)").arg(QLatin1String(context), statusText(s));
             continue;
         }
-        info.error.clear();
-        info.describedContext = QLatin1String(context);
-        for (const auto& c : inContext.clips) info.clips << QString::fromStdString(c->name);
-        for (const auto& p : inContext.params.params) info.params << paramInfo(*p);
-        described()[info.id] = Described{plugin, context, kept.get()};
+        int inputs = 0;
+        for (const auto& c : inContext.clips) inputs += c->name == kOfxImageEffectOutputClipName ? 0 : 1;
+        candidates.push_back(Candidate{context, kept.get(), inputs});
         keptDescriptors().push_back(std::move(kept));
-        break;
     }
+    if (candidates.empty()) return info;
+    Candidate chosen = candidates.front();
+    for (const Candidate& c : candidates) {
+        if (c.context == kOfxImageEffectContextGeneral && c.inputs > chosen.inputs) chosen = c;
+    }
+    info.error.clear();
+    info.describedContext = QString::fromStdString(chosen.context);
+    for (const auto& c : chosen.descriptor->clips) {
+        info.clips << QString::fromStdString(c->name);
+        if (c->name == kOfxImageEffectOutputClipName) continue;
+        OfxClipInfo clipInfo;
+        clipInfo.name = QString::fromStdString(c->name);
+        clipInfo.label = c->props.string(kOfxPropLabel);
+        if (clipInfo.label.isEmpty()) clipInfo.label = clipInfo.name;
+        clipInfo.optional = c->props.integer(kOfxImageClipPropOptional, 0) != 0;
+        clipInfo.mask = c->props.integer(kOfxImageClipPropIsMask, 0) != 0;
+        info.inputs << clipInfo;
+    }
+    for (const auto& p : chosen.descriptor->params.params) info.params << paramInfo(*p);
+    described()[info.id] = Described{plugin, chosen.context, chosen.descriptor};
     return info;
 }
 
 } // namespace
+
+int OfxPluginInfo::requiredInputs() const {
+    return static_cast<int>(std::count_if(inputs.begin(), inputs.end(), [](const OfxClipInfo& c) { return !c.optional; }));
+}
+
+QList<OfxClipInfo> OfxPluginInfo::connectedInputs(int count) const {
+    int optionalLeft = std::clamp(count, requiredInputs(), maxInputs()) - requiredInputs();
+    QList<OfxClipInfo> out;
+    for (const OfxClipInfo& c : inputs) {
+        if (!c.optional) {
+            out << c;
+        } else if (optionalLeft > 0) {
+            out << c;
+            --optionalLeft;
+        }
+    }
+    return out;
+}
 
 bool OfxPluginInfo::usable() const {
     return error.isEmpty() && !describedContext.isEmpty();
@@ -1573,6 +1614,50 @@ void reportMissing(const model::Effect& effect) {
     else qWarning("OFX %s", qPrintable(text));
 }
 
+// Values plug-ins set during a push button's instance changed action (ofxPushButton), by parameter name; null
+// otherwise, when values set are not kept.
+std::map<std::string, std::vector<double>>* gSetValues = nullptr;
+
+// Reads the values of a parameter type from setValue's arguments (ofxParam.h).
+std::vector<double> readValues(const Param& p, va_list ap) {
+    std::vector<double> out;
+    const std::string& type = p.type;
+    const bool integral = type == kOfxParamTypeInteger || type == kOfxParamTypeInteger2D || type == kOfxParamTypeInteger3D ||
+                          type == kOfxParamTypeBoolean || type == kOfxParamTypeChoice;
+    const int n = dimensionOf(type);
+    for (int i = 0; i < n; ++i) out.push_back(integral ? static_cast<double>(va_arg(ap, int)) : va_arg(ap, double));
+    return out;
+}
+
+bool keepsValues(const Param& p) {
+    const std::string& t = p.type;
+    return gSetValues && t != kOfxParamTypeString && t != kOfxParamTypeStrChoice && t != kOfxParamTypeCustom && t != kOfxParamTypeGroup &&
+           t != kOfxParamTypePage && t != kOfxParamTypePushButton && t != kOfxParamTypeParametric && t != kOfxParamTypeBytes;
+}
+
+OfxStatus paramSetValue(OfxParamHandle h, ...) {
+    if (!h) return kOfxStatErrBadHandle;
+    Param& p = *param(h);
+    if (!keepsValues(p)) return kOfxStatOK; // ours: not kept outside a push button's action
+    va_list ap;
+    va_start(ap, h);
+    (*gSetValues)[p.name] = readValues(p, ap);
+    va_end(ap);
+    return kOfxStatOK;
+}
+
+OfxStatus paramSetValueAtTime(OfxParamHandle h, OfxTime time, ...) {
+    if (!h) return kOfxStatErrBadHandle;
+    Param& p = *param(h);
+    if (!keepsValues(p)) return kOfxStatOK;
+    va_list ap;
+    va_start(ap, time);
+    // Ours: a value set at a time is kept as the parameter's value (keyframes are the Effect Editor's).
+    (*gSetValues)[p.name] = readValues(p, ap);
+    va_end(ap);
+    return kOfxStatOK;
+}
+
 } // namespace
 
 const OfxPluginInfo* ofxPluginOf(const model::Effect& effect) {
@@ -1605,6 +1690,16 @@ QList<OfxEditorParameter> ofxEditorParameters(const OfxPluginInfo& plugin) {
     for (const OfxParamInfo& p : plugin.params) {
         if (p.secret) continue;
         if (transition && p.name == QLatin1String(kOfxImageEffectTransitionParamName)) continue;
+        if (p.type == QLatin1String(kOfxParamTypePushButton)) {
+            OfxEditorParameter b;
+            b.key = p.name;
+            b.text = p.label;
+            b.kind = QStringLiteral("button");
+            b.subcategory = groups.value(p.parent);
+            b.keyframeable = false;
+            out << b;
+            continue;
+        }
         const std::string type = p.type.toStdString();
         const int n = dimensionOf(type);
         OfxEditorParameter e;
@@ -1636,7 +1731,8 @@ QList<OfxEditorParameter> ofxEditorParameters(const OfxPluginInfo& plugin) {
                 type != kOfxParamTypeDouble3D && type != kOfxParamTypeInteger3D) {
                 continue;
             }
-            e.kind = QStringLiteral("slider");
+            e.kind = type == kOfxParamTypeDouble && p.doubleType == QLatin1String(kOfxParamDoubleTypeAngle) ? QStringLiteral("angle")
+                                                                                                                : QStringLiteral("slider");
             // The display range, else the range, else 0 to 100 (the 6.11a sentinels mean "no range").
             auto usable = [](double lo, double hi) { return std::isfinite(lo) && std::isfinite(hi) && hi > lo && hi - lo < 1e9; };
             if (p.hasRange && usable(p.displayMin, p.displayMax)) {
@@ -1671,7 +1767,22 @@ QJsonValue ofxParameterDefault(const model::Effect& effect, const QString& categ
     return {};
 }
 
-Picture ofxSegmentPicture(const model::Effect& effect, const Picture& source, double time, const model::EffectSpan& span) {
+int ofxInputCount(const model::Effect& effect) {
+    const OfxPluginInfo* p = ofxPluginOf(effect);
+    const int required = p ? p->requiredInputs() : 1;
+    const QJsonValue v = effect.parameters.value(kOfxPluginTag).toObject().value(QStringLiteral("inputs"));
+    const int chosen = v.isDouble() ? v.toInt() : required;
+    return p ? std::clamp(chosen, required, p->maxInputs()) : chosen;
+}
+
+void setOfxInputCount(model::Effect& effect, int count) {
+    QJsonObject tag = effect.parameters.value(kOfxPluginTag).toObject();
+    tag.insert(QStringLiteral("inputs"), count);
+    effect.parameters.insert(kOfxPluginTag, tag);
+}
+
+Picture ofxSegmentPicture(const model::Effect& effect, const Picture& source, double time, const model::EffectSpan& span,
+                          const QList<Picture>& more) {
     const OfxPluginInfo* info = ofxPluginOf(effect);
     if (!info) {
         if (isMissingOfxEffect(effect)) reportMissing(effect);
@@ -1684,8 +1795,22 @@ Picture ofxSegmentPicture(const model::Effect& effect, const Picture& source, do
     r.frame = span.frameOf(time);
     r.width = source.width();
     r.height = source.height();
-    // Filter and General plug-ins take the segment as their Source clip; a Generator has none.
-    if (info->clips.contains(QLatin1String(kOfxImageEffectSimpleSourceClipName))) r.inputs[kOfxImageEffectSimpleSourceClipName] = &source;
+    // Filter and General plug-ins take the segment as their first input (Source); a Generator has none. Further inputs
+    // come from `more`, an empty picture where there is none.
+    const QList<OfxClipInfo> connected = info->connectedInputs(ofxInputCount(effect));
+    std::vector<Picture> empties;
+    empties.reserve(static_cast<std::size_t>(connected.size()));
+    for (qsizetype i = 0; i < connected.size(); ++i) {
+        const std::string name = connected.at(i).name.toStdString();
+        if (i == 0) {
+            r.inputs[name] = &source;
+        } else if (i - 1 < more.size() && more.at(i - 1).width() == source.width() && more.at(i - 1).height() == source.height()) {
+            r.inputs[name] = &more.at(i - 1);
+        } else {
+            empties.emplace_back(source.width(), source.height());
+            r.inputs[name] = &empties.back();
+        }
+    }
     return render(*info, r).value_or(source);
 }
 
@@ -1715,6 +1840,60 @@ Picture ofxTransitionPicture(const model::Effect& effect, const Picture& from, c
         return out ? over(*out, from) : mix(from, to, progress);
     }
     return render(*info, r).value_or(mix(from, to, progress));
+}
+
+QJsonObject ofxPushButton(const model::Effect& effect, const QString& key, double time, const model::EffectSpan& span) {
+    const OfxPluginInfo* info = ofxPluginOf(effect);
+    if (!info) return {};
+    std::lock_guard lock(renderMutex());
+    Instance* inst = instanceFor(*info);
+    if (!inst) return {};
+    RenderContext r;
+    r.effect = &effect;
+    r.info = info;
+    r.span = span;
+    r.frame = span.frameOf(time);
+    inst->render = &r;
+    std::map<std::string, std::vector<double>> set;
+    gSetValues = &set;
+    currentPlugin() = info->id;
+    PropertySet in;
+    in.setString(kOfxPropType, {kOfxTypeParameter});
+    in.setString(kOfxPropName, {key.toStdString()});
+    in.setString(kOfxPropChangeReason, {kOfxChangeUserEdited});
+    in.setDouble(kOfxPropTime, {r.frame});
+    in.setDouble(kOfxImageEffectPropRenderScale, {1.0, 1.0});
+    auto* h = reinterpret_cast<OfxImageEffectHandle>(inst);
+    inst->plugin->mainEntry(kOfxActionBeginInstanceChanged, h, nullptr, nullptr);
+    inst->plugin->mainEntry(kOfxActionInstanceChanged, h, handle(&in), nullptr);
+    inst->plugin->mainEntry(kOfxActionEndInstanceChanged, h, nullptr, nullptr);
+    gSetValues = nullptr;
+    inst->render = nullptr;
+    currentPlugin().clear();
+    // The values as the Effect Editor's controls keep them (ofxEditorParameters).
+    QJsonObject out;
+    for (const auto& [name, values] : set) {
+        const OfxParamInfo* p = paramInfoOf(*info, name);
+        if (!p || values.empty()) continue;
+        const std::string type = p->type.toStdString();
+        if (type == kOfxParamTypeBoolean) {
+            out.insert(p->name, values[0] != 0.0);
+        } else if (type == kOfxParamTypeChoice) {
+            const int i = static_cast<int>(values[0]);
+            if (i >= 0 && i < p->options.size()) out.insert(p->name, p->options.at(i));
+        } else if (type == kOfxParamTypeRGB || type == kOfxParamTypeRGBA) {
+            if (values.size() >= 3) {
+                out.insert(p->name, QColor::fromRgbF(static_cast<float>(std::clamp(values[0], 0.0, 1.0)), static_cast<float>(std::clamp(values[1], 0.0, 1.0)),
+                                                     static_cast<float>(std::clamp(values[2], 0.0, 1.0)))
+                                        .name());
+            }
+        } else if (values.size() == 1) {
+            out.insert(p->name, values[0]);
+        } else {
+            for (std::size_t i = 0; i < values.size() && i < 3; ++i) out.insert(p->name + QLatin1String(kAxes[i]), values[i]);
+        }
+    }
+    return out;
 }
 
 void setOfxFrameRate(double rate) {

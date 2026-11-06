@@ -411,6 +411,9 @@ public:
     // an image file after you associate it with the effect ... The next time you open the effect a dialog box
     // opens asking you to locate the file" (p.239): a file dialog named "panZoomLocate", not modal.
     bool importImage(const QString& path);
+    // Presses the shown OFX plug-in effect's push button `name` (p.161; media::ofxPushButton) and keeps the values the
+    // plug-in set. False when the shown effect is not a plug-in's.
+    bool pressPluginButton(const QString& name);
 
     // ---- Motion tracking (p.248-275; docs/spec/tracking.md)
     // Where tracking's frames come from: the picture tracked at Record frame `frame` for the effect `effect`, the

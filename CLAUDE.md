@@ -780,8 +780,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   "<label> Plug-In Parameters"; `setOfxFrameRate` from `MainWindow`), is done. 6.11b2, missing plug-ins (the "OFX
   Plug-In" tag written by `Timeline::seededEffect` through `markOfxEffect`, `isMissingOfxEffect`, the blank Timeline icon,
   "Can't find effect" in the Console), templates of plug-in effects and the Console's `closeallofxplugins`, is done, so
-  6.11b is.
-  Next: 6.11c, then Phases 7 and 8. Phase 9 "Left over stuff"
+  6.11b is. 6.11c is in three parts (ROADMAP). 6.11c1, several inputs (General described too, `OfxPluginInfo::inputs`,
+  the OFX Optional Inputs dialog `ofx_inputs_dialog.*` through `Timeline::setOptionalInputsChooser`, `ofxInputCount` in
+  the tag, the inputs as the effect's nest tracks through the compositor's `nestTrackPicture`), the Angle control
+  (`angle_dial.*`) and push buttons (`ofxPushButton`, `EffectEditor::pressPluginButton`), is done.
+  Next: 6.11c2 (overlays) and 6.11c3 (OCIO), then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

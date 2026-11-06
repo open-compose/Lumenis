@@ -260,6 +260,18 @@ std::optional<Picture> convertedPicture(const Composition& c, const model::Segme
     return Picture::fromImage(image, c.size.width(), c.size.height(), c.interpolation);
 }
 
+// One of a segment's nest tracks (V`k`) alone at `offset` frames into the segment: an OFX plug-in's input of that
+// number (6.11c1; ofx_host.h). Transparent where the nest has no such track.
+Picture nestTrackPicture(const Composition& c, const model::Segment& segment, int k, std::int64_t offset) {
+    const model::Sequence nest = model::nestOf(segment);
+    const QString name = QStringLiteral("V%1").arg(k);
+    if (!nest.track(name)) return Picture(c.size.width(), c.size.height());
+    Composition inner = c;
+    inner.sequence = &nest;
+    inner.tracks = {name};
+    return composeFrame(inner, segment.nestIn + std::max<std::int64_t>(offset, 0), nullptr);
+}
+
 Picture uncorrectedSegmentPicture(const Composition& c, const model::Segment* segment, std::int64_t frame, bool* missing, double blend,
                                   std::int64_t offset) {
     if (segment && segment->hasNest() && c.source) {
@@ -799,8 +811,14 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 continue;
             }
             if (isOfxEffect(e) || isMissingOfxEffect(e)) {
-                // An OFX plug-in's effect (FX Guide p.157; ofx_host.h): the plug-in's Output clip from the segment.
-                layer = ofxSegmentPicture(e, layer, time, length);
+                // An OFX plug-in's effect (FX Guide p.157; ofx_host.h): the plug-in's Output clip from the segment. With
+                // several inputs (p.161), each is one of the segment's nest tracks, V1 the first.
+                QList<Picture> more;
+                if (const int inputs = ofxInputCount(e); inputs > 1 && tf->segment->hasNest()) {
+                    layer = nestTrackPicture(c, *tf->segment, 1, tf->offset);
+                    for (int k = 2; k <= inputs; ++k) more << nestTrackPicture(c, *tf->segment, k, tf->offset);
+                }
+                layer = ofxSegmentPicture(e, layer, time, length, more);
                 layer.quantize(c.precision);
                 result = over(layer, result);
                 result.quantize(c.precision);

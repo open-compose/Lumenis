@@ -9,7 +9,10 @@
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/timeline.h"
 #include "lumenis/ui/tool_windows.h"
+#include "lumenis/model/nest.h"
+#include "lumenis/ui/angle_dial.h"
 #include "lumenis/ui/effect_editor.h"
+#include "lumenis/ui/ofx_inputs_dialog.h"
 #include "lumenis/ui/effect_palette.h"
 
 #include <QApplication>
@@ -20,6 +23,9 @@
 #include <QSlider>
 #include <QListWidget>
 #include <QtTest>
+#include <cmath>
+#include <QMouseEvent>
+#include <QToolButton>
 
 using namespace lumenis;
 using namespace lumenis::ui;
@@ -60,7 +66,7 @@ private slots:
         QStringList errors;
         const auto plugins = media::scanOfxPlugins({QStringLiteral(LUMENIS_TEST_OFX)}, &errors);
         QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QLatin1Char('\n'))));
-        QCOMPARE(media::registerOfxPlugins(plugins), 3);
+        QCOMPARE(media::registerOfxPlugins(plugins), 4);
     }
 
     void catalog() {
@@ -83,7 +89,7 @@ private slots:
         QVERIFY(!c.find(QStringLiteral("OFX Plug-Ins"), QStringLiteral("Test Paint")));
         int fromPlugins = 0;
         for (const EffectInfo& e : c.all()) fromPlugins += e.ofxPlugin.isEmpty() ? 0 : 1;
-        QCOMPARE(fromPlugins, 3);
+        QCOMPARE(fromPlugins, 4);
         // Its parameters, a category of the Effect Editor's.
         QCOMPARE(tint->parameters, QStringList{QStringLiteral("Test Tint Plug-In Parameters")});
         const QList<EffectParameter>* params = effectParameters(QStringLiteral("Test Tint Plug-In Parameters"));
@@ -157,6 +163,105 @@ private slots:
         QCOMPARE(applied.parameters.value(category).toObject().value(QStringLiteral("channel")).toString(), QStringLiteral("Green"));
     }
 
+    void severalInputs() {
+        // The OFX Optional Inputs dialog (p.161): Number of Tracks from the required inputs to all of them.
+        const media::OfxPluginInfo* plugin = media::ofxPluginFor(QStringLiteral("Cutthulhu Mixers"), QStringLiteral("Test Composite"));
+        QVERIFY(plugin);
+        {
+            OfxOptionalInputsDialog dialog(*plugin);
+            QCOMPARE(dialog.windowTitle(), QStringLiteral("OFX Optional Inputs"));
+            QCOMPARE(dialog.numberOfTracks()->count(), 3);
+            QCOMPARE(dialog.count(), 3);
+            dialog.numberOfTracks()->setCurrentIndex(1);
+            QCOMPARE(dialog.count(), 2);
+        }
+        Composer composer;
+        Timeline timeline{composer};
+        EffectEditor editor{timeline};
+        timeline.setSequenceStore([](const QString&, const model::BinItem&, bool) { return true; });
+        std::optional<int> answer = std::nullopt;
+        int asked = 0;
+        timeline.setOptionalInputsChooser([&](const media::OfxPluginInfo& p) {
+            ++asked;
+            return p.id == QLatin1String("org.cutthulhu.test.composite") ? answer : std::optional<int>(1);
+        });
+        timeline.resize(900, 300);
+        timeline.show();
+        settle();
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence());
+        settle();
+        const EffectInfo* composite = EffectCatalog::builtin().find(QStringLiteral("Cutthulhu Mixers"), QStringLiteral("Test Composite"));
+        QVERIFY(composite);
+        auto segment = [&] {
+            return model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.at(0);
+        };
+        // Cancelled: nothing is applied.
+        QVERIFY(!timeline.dropEffect(QStringLiteral("V1"), 10, *composite));
+        QCOMPARE(asked, 1);
+        QVERIFY(!segment().effect);
+        // Three tracks: the effect keeps the number, and its nest has a video track for each input.
+        answer = 3;
+        QVERIFY(timeline.dropEffect(QStringLiteral("V1"), 10, *composite));
+        model::Segment s = segment();
+        QVERIFY(s.effect);
+        QCOMPARE(media::ofxInputCount(*s.effect), 3);
+        const model::Sequence nest = model::nestOf(s);
+        QVERIFY(nest.track(QStringLiteral("V1")) && nest.track(QStringLiteral("V2")) && nest.track(QStringLiteral("V3")));
+        // A plug-in without optional inputs does not ask.
+        const int before = asked;
+        QVERIFY(timeline.dropEffect(QStringLiteral("V1"), 10, *EffectCatalog::builtin().find(QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Tint"))));
+        QCOMPARE(asked, before);
+    }
+
+    void angleAndButton() {
+        // The Angle control (p.162) and a plug-in's push button (p.161) in the Effect Editor.
+        Composer composer;
+        Timeline timeline{composer};
+        EffectEditor editor{timeline};
+        timeline.setSequenceStore([](const QString&, const model::BinItem&, bool) { return true; });
+        timeline.setOptionalInputsChooser([](const media::OfxPluginInfo&) { return std::optional<int>(1); });
+        timeline.resize(900, 300);
+        timeline.show();
+        settle();
+        composer.load(MonitorId::Record, QStringLiteral("bin"), sequence());
+        settle();
+        QVERIFY(timeline.dropEffect(QStringLiteral("V1"), 10, *EffectCatalog::builtin().find(QStringLiteral("Cutthulhu Mixers"), QStringLiteral("Test Composite"))));
+        composer.moveTo(MonitorId::Record, 10);
+        settle();
+        const QString category = QStringLiteral("Test Composite Plug-In Parameters");
+        auto* dial = editor.findChild<AngleDial*>(QStringLiteral("param:") + category + QStringLiteral("/spin"));
+        QVERIFY(dial);
+        auto stored = [&] {
+            const model::Sequence seq = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item);
+            return seq.track(QStringLiteral("V1"))->segments.at(0).effect->parameters.value(category).toObject().value(QStringLiteral("spin"));
+        };
+        // Dragging once round and a quarter more: 450 degrees, kept when the drag ends.
+        dial->resize(40, 40);
+        const QPoint c(20, 20);
+        QTest::mousePress(dial, Qt::LeftButton, {}, c + QPoint(0, -15));
+        for (int step = 1; step <= 20; ++step) {
+            const double a = step * (450.0 / 20.0) * 3.14159265358979 / 180.0;
+            QMouseEvent move(QEvent::MouseMove, QPointF(c) + QPointF(15 * std::sin(a), -15 * std::cos(a)), dial->mapToGlobal(QPointF(c)),
+                             Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(dial, &move);
+        }
+        QTest::mouseRelease(dial, Qt::LeftButton, {}, c + QPoint(15, 0));
+        settle();
+        QVERIFY2(std::abs(stored().toDouble() - 450.0) < 1.0, qPrintable(QString::number(stored().toDouble())));
+        // A key: one degree less.
+        dial->setFocus();
+        QTest::keyClick(dial, Qt::Key_Down);
+        settle();
+        QVERIFY(std::abs(stored().toDouble() - 449.0) < 1.0);
+        // The plug-in's Square button sets Spin to 90; the editor shows and keeps it.
+        auto* square = editor.findChild<QToolButton*>(QStringLiteral("param:") + category + QStringLiteral("/square"));
+        QVERIFY(square);
+        square->click();
+        settle();
+        QCOMPARE(stored().toDouble(), 90.0);
+        QCOMPARE(editor.findChild<AngleDial*>(QStringLiteral("param:") + category + QStringLiteral("/spin"))->value(), 90.0);
+    }
+
     void missingPluginIcon() {
         // The Timeline's effect icon: filled for a plug-in effect, blank (its outline only) when the plug-in is missing
         // (p.163). The tile's fill colour counts the filled pixels.
@@ -189,6 +294,7 @@ private slots:
 
     void closeAllPlugins() {
         // The Console's closeallofxplugins (and Avid's closeallavxplugins, p.158) close the plug-in instances.
+        media::closeOfxInstances(); // what earlier tests opened
         model::Effect e{QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Tint"), {}};
         media::ofxSegmentPicture(e, media::Picture::solid(4, 4, Qt::white), 0.0, model::EffectSpan(10));
         ConsoleWindow console;

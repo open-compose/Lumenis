@@ -10,8 +10,8 @@ CLAP host (docs/spec/clap-host.md).
 6.11a finds and describes plug-ins and lists them in the Effect Palette.
 6.11b1 renders them and shows their parameters in the Effect Editor.
 6.11b2 handles missing plug-ins, templates of plug-in effects and
-`closeallofxplugins`; 6.11c the General context's several inputs,
-overlays and OCIO.
+`closeallofxplugins`. 6.11c1 adds plug-ins with several inputs, the
+Angle control and push buttons; 6.11c2 overlays; 6.11c3 OCIO.
 
 ## Finding plug-ins (`src/media/ofx_host.*`)
 
@@ -151,6 +151,45 @@ transitions). The effect's plug-in is found by its category and name
 * **Values the plug-in sets** (in actions we do not send yet) are accepted
   and not kept: the Effect Editor's controls own the values.
 
+## Several inputs, the Angle control and push buttons (6.11c1)
+
+"Some plug-in effects take an arbitrary number of tracks as input. Media
+Composer lets you select the number of video inputs from the AVX Optional
+Inputs dialog box" (p.161).
+
+* **Contexts:** every context we take is described; the first of Filter,
+  Generator, Transition and General is used, or General when it has more
+  input clips (ours). Its input clips are `OfxPluginInfo::inputs`, with
+  their labels and whether they are optional or masks.
+* **The dialog:** applying a plug-in that has optional inputs (from a drop
+  or the palette) opens the OFX Optional Inputs dialog (ours, after
+  Avid's name) with a Number of Tracks menu, from the required inputs to
+  all of them, all of them chosen at first (ours). Cancel applies nothing.
+  The number goes in the effect's tag as `inputs` (`ofxInputCount`).
+* **Which clips:** every required input, then the optional ones in their
+  order, as many as were chosen (`connectedInputs`); the others are not
+  connected.
+* **Inputs are nest tracks** (p.161 sends the reader to "Nesting
+  Effects"): the effect's segment gets a nest (as Step In makes one, the
+  segment's own picture on V1) with a video track per input. The first
+  input is V1 alone, the second V2 alone, and so on; edit material onto
+  them by stepping in or expanding the nest. An input whose track has
+  nothing at a frame is connected and empty. With one input the nest is
+  composited as usual and given as Source.
+* **The Angle control:** a Double of `kOfxParamDoubleTypeAngle` is a circle
+  the pointer drags around ("Values can be positive or negative and are not
+  limited to a single 360º rotation", p.162): `AngleDial`, 0° up and
+  clockwise, whole turns adding up, arrow keys a degree (Shift ten; ours).
+  It is kept when the drag ends, keyframed like a slider.
+* **Push buttons:** a Push Button parameter is a button in the Effect
+  Editor. Pressing it sends the instance `kOfxActionInstanceChanged` (with
+  begin and end) for that parameter, as a user's edit at the position's
+  time; plug-ins open their own dialogs there ("Custom dialog box only ...
+  clicking the Other Options button or another custom button", p.161).
+  The values the plug-in sets meanwhile come back (`ofxPushButton`) and are
+  kept in the effect as edits of the Effect Editor's controls. Values set
+  at other times are not kept.
+
 ## Missing plug-ins, templates and closing (6.11b2)
 
 * **The tag:** a plug-in effect applied from the palette gets the
@@ -215,3 +254,10 @@ Questions are answered No during the scan.
   template of the effect, the blank Timeline icon of a missing plug-in, and
   the Console's closeallofxplugins. `tst_ofx_host`'s `missingPlugin` checks
   the pass-through and the "Can't find effect" message.
+* 6.11c1: the test bundle's sixth plug-in, a General compositing plug-in
+  with an optional input, an optional mask, an angle and a push button.
+  `tst_ofx_host` checks its inputs, rendering with one, two and three
+  inputs alone and from nest tracks in the compositor, the angle's values
+  beyond a turn and the push button's values; `tst_ofx_palette` the
+  dialog, applying with a number chosen or cancelled, the Angle control's
+  drag and keys, and the button kept in the effect.

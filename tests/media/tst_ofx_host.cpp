@@ -6,6 +6,7 @@
 #include "lumenis/media/compositor.h"
 #include "lumenis/media/ofx_host.h"
 #include "lumenis/model/effect_keyframes.h"
+#include "lumenis/model/nest.h"
 #include "lumenis/model/sequence.h"
 
 #include <QDir>
@@ -119,7 +120,7 @@ private slots:
         setOfxMessageHandler({});
         QVERIFY2(errors.isEmpty(), qPrintable(errors.join(QLatin1Char('\n'))));
         // The plug-in of another API is skipped.
-        QCOMPARE(plugins.size(), 5);
+        QCOMPARE(plugins.size(), 6);
         QVERIFY(!byId(plugins, "org.cutthulhu.test.other"));
 
         const OfxPluginInfo* tint = byId(plugins, "org.cutthulhu.test.tint");
@@ -188,8 +189,8 @@ private slots:
         QVERIFY(messages.contains(QStringLiteral("org.cutthulhu.test.broken: error: no licence found")));
 
         // Registering keeps the usable ones findable by category and label.
-        QCOMPARE(registerOfxPlugins(plugins), 3);
-        QCOMPARE(ofxPlugins().size(), 5);
+        QCOMPARE(registerOfxPlugins(plugins), 4);
+        QCOMPARE(ofxPlugins().size(), 6);
         const OfxPluginInfo* found = ofxPluginFor(QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Tint"));
         QVERIFY(found);
         QCOMPARE(found->id, QStringLiteral("org.cutthulhu.test.tint"));
@@ -197,12 +198,12 @@ private slots:
     }
 
     void provider() {
-        // The host as an extension provider: our bundle's folder scanned gives its five image effect plug-ins.
+        // The host as an extension provider: our bundle's folder scanned gives its six image effect plug-ins.
         OfxHostProvider p;
         QCOMPARE(p.info().id, std::string("org.openeffects.ofx-host"));
         QVERIFY(p.standard() == lumenis::ext::PluginStandard::OFX);
         const auto found = p.scan({std::filesystem::path(kFolder.toStdString())});
-        QCOMPARE(found.size(), std::size_t(5));
+        QCOMPARE(found.size(), std::size_t(6));
         QCOMPARE(found.front().id, std::string("org.cutthulhu.test.tint"));
         QCOMPARE(found.front().vendor, std::string("Cutthulhu Tests"));
         QCOMPARE(found.front().version, std::string("1.2"));
@@ -307,6 +308,94 @@ private slots:
         image = composeImage(composition(cut), 9);
         QCOMPARE(image.pixelColor(1, 4), QColor(0, 0, 255));
         QCOMPARE(image.pixelColor(14, 4), QColor(255, 0, 0));
+    }
+
+    void severalInputs() {
+        // A General plug-in with optional inputs (p.161): described in General, its inputs and how many it can take.
+        registerTestPlugins();
+        const OfxPluginInfo* c = ofxPluginFor(QStringLiteral("Cutthulhu Mixers"), QStringLiteral("Test Composite"));
+        QVERIFY(c);
+        QCOMPARE(c->describedContext, QStringLiteral("OfxImageEffectContextGeneral"));
+        QCOMPARE(c->inputs.size(), 3);
+        QCOMPARE(c->inputs.at(1).label, QStringLiteral("Over Image"));
+        QVERIFY(c->inputs.at(1).optional && !c->inputs.at(0).optional);
+        QVERIFY(c->inputs.at(2).mask);
+        QCOMPARE(c->requiredInputs(), 1);
+        QCOMPARE(c->maxInputs(), 3);
+        QVERIFY(c->variableInputs());
+        QVERIFY(!ofxPluginFor(QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Tint"))->variableInputs());
+        QCOMPARE(c->connectedInputs(2).size(), 2);
+        QCOMPARE(c->connectedInputs(2).at(1).name, QStringLiteral("Over"));
+        QCOMPARE(c->connectedInputs(9).size(), 3);
+
+        // The Angle control and the push button among its controls.
+        const QList<OfxEditorParameter> params = ofxEditorParameters(*c);
+        QCOMPARE(params.size(), 2);
+        QCOMPARE(params.at(0).kind, QStringLiteral("angle"));
+        QCOMPARE(params.at(1).kind, QStringLiteral("button"));
+
+        // The inputs chosen, kept in its tag.
+        model::Effect e{QStringLiteral("Cutthulhu Mixers"), QStringLiteral("Test Composite"), {}};
+        markOfxEffect(e, *c);
+        QCOMPARE(ofxInputCount(e), 1);
+        setOfxInputCount(e, 3);
+        QCOMPARE(ofxInputCount(e), 3);
+
+        // Rendering with Over shown through the Matte's red.
+        const Picture red = Picture::solid(4, 2, QColor(255, 0, 0)), blue = Picture::solid(4, 2, QColor(0, 0, 255));
+        Picture matte(4, 2);
+        for (int x = 0; x < 2; ++x) {
+            for (int y = 0; y < 2; ++y) {
+                float* m = matte.pixel(x, y);
+                m[0] = m[3] = 1.0f;
+            }
+        }
+        const model::EffectSpan span(10);
+        Picture out = ofxSegmentPicture(e, red, 0.0, span, {blue, matte});
+        QVERIFY(approx(at(out, 0, 0)[2], 1.0) && approx(at(out, 0, 0)[0], 0.0)); // Over where the matte is
+        QVERIFY(approx(at(out, 3, 0)[0], 1.0));                                   // Source elsewhere
+        // Two inputs: Over over Source; an input without a picture is connected and empty.
+        setOfxInputCount(e, 2);
+        QVERIFY(approx(at(ofxSegmentPicture(e, red, 0.0, span, {blue}), 3, 1)[2], 1.0));
+        QVERIFY(approx(at(ofxSegmentPicture(e, red, 0.0, span, {}), 3, 1)[0], 1.0));
+
+        // The angle's value: inverted from 180 degrees; its keyframes through the parameter suite.
+        const QString category = ofxParameterCategory(*c);
+        e.parameters.insert(category, QJsonObject{{QStringLiteral("spin"), 200.0}});
+        QVERIFY(approx(at(ofxSegmentPicture(e, red, 0.0, span, {}), 0, 0)[0], 0.0));
+        // Angles go beyond a turn: -540 is less than 180.
+        e.parameters.insert(category, QJsonObject{{QStringLiteral("spin"), -540.0}});
+        QVERIFY(approx(at(ofxSegmentPicture(e, red, 0.0, span, {}), 0, 0)[0], 1.0));
+
+        // The push button: the plug-in sets Spin to 90, which comes back for the Effect Editor to keep.
+        const QJsonObject set = ofxPushButton(e, QStringLiteral("square"), 0.0, span);
+        QCOMPARE(set, (QJsonObject{{QStringLiteral("spin"), 90.0}}));
+        // Values set outside a button's action are not kept.
+        QVERIFY(ofxPushButton(model::Effect{QStringLiteral("Blend"), QStringLiteral("Dissolve"), {}}, QStringLiteral("x"), 0.0, span).isEmpty());
+    }
+
+    void severalInputsInTheCompositor() {
+        // The inputs are the nest's tracks (p.161: "see Nesting Effects"): V1 the segment's own, V2 the Over image.
+        registerTestPlugins();
+        const OfxPluginInfo* c = ofxPluginFor(QStringLiteral("Cutthulhu Mixers"), QStringLiteral("Test Composite"));
+        model::Effect e{QStringLiteral("Cutthulhu Mixers"), QStringLiteral("Test Composite"), {}};
+        markOfxEffect(e, *c);
+        setOfxInputCount(e, 2);
+        model::Segment grey = clip(QStringLiteral("grey"), 10);
+        grey.effect = e;
+        QVERIFY(model::ensureNest(grey));
+        model::Sequence nest = model::nestOf(grey);
+        static_cast<void>(nest.addTrack(model::TrackKind::Video));
+        nest.splice(QStringLiteral("V2"), 0, {clip(QStringLiteral("blue"), 10)});
+        model::setNest(grey, nest);
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        seq.splice(QStringLiteral("V1"), 0, {grey});
+        QCOMPARE(composeImage(composition(seq), 3).pixelColor(8, 4), QColor(0, 0, 255));
+        // One input: the nest composited as usual (V2 over V1), through the plug-in as its Source.
+        setOfxInputCount(grey.effect.value(), 1);
+        seq = model::Sequence::withDefaultTracks();
+        seq.splice(QStringLiteral("V1"), 0, {grey});
+        QCOMPARE(composeImage(composition(seq), 3).pixelColor(8, 4), QColor(0, 0, 255));
     }
 
     void missingPlugin() {

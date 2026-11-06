@@ -113,7 +113,8 @@ headers in `include/lumenis/<library>/`.
 * **Effects.** The Effect Palette's list is `src/ui/resources/effects.json`
   and the Effect Editor's parameters `effect_parameters.json`; UI in
   `effect_palette.*` and `effect_editor.*` (its keyframe tracks and graphs in
-  `effect_editor_keyframes.cpp`); the model keeps effects on
+  `effect_editor_keyframes.cpp`; OFX plug-ins' Angle control `angle_dial.*` and the OFX Optional Inputs dialog
+  `ofx_inputs_dialog.*`); the model keeps effects on
   segments (`model::Effect`, `model::Transition`), their parameters'
   keyframes in `src/model/effect_keyframes.*` (docs/spec/effect-keyframes.md), and their renders in
   `src/model/effect_render.*` with Render Effect and Clear Renders in `MainWindow::renderEffects` and

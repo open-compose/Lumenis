@@ -400,6 +400,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   same frame for every time of an input clip, segment plug-ins on transitions working on the incoming picture.
   6.11b2: the "OFX Plug-In" tag in the effect, the blank icon drawn as the tile's outline, a missing plug-in's
   transition dissolving, "Can't find effect: <label> (<id>)" once per plug-in, closeallofxplugins.
+  6.11c1: General chosen when it has more inputs; the dialog's name "OFX Optional Inputs" and all inputs chosen at first;
+  inputs as nest tracks V1, V2 ...; the Angle control's look (0° up, clockwise) and keys; values a plug-in sets kept
+  only during a push button's action.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

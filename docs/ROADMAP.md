@@ -1280,9 +1280,14 @@ phase of their own. They are done in three steps:
     blank in the Timeline and named in the Console (p.163); effect templates of plug-in effects (p.157); the Console's
     `closeallofxplugins` after `closeallavxplugins` (p.158). Done (the "OFX Plug-In" tag through `markOfxEffect`,
     `isMissingOfxEffect`; tests `tst_ofx_host`, `tst_ofx_palette`), so 6.11b is.
-  * 6.11c, the General context's several inputs with the Optional Inputs dialog (p.161), overlays through the Interact
-    suite with Outline/Path (p.161-162), and colour management with OCIO (the OFX 1.5 colour suite) where the library
-    is installed, else the plug-in sees the project's colour space only.
+  * 6.11c, in three parts (2026-11-06, from p.161-162): 6.11c1, the General context's several inputs with the
+    Optional Inputs dialog (p.161) and its inputs as the effect's nest tracks, the Angle control (p.162) and push
+    buttons telling the plug-in (its own dialogs, "Custom dialog box only", p.161). Done (docs/spec/ofx-host.md:
+    `OfxPluginInfo::inputs`/`connectedInputs`, `ofxInputCount`, `ofxPushButton`, `nestTrackPicture` in the compositor,
+    `OfxOptionalInputsDialog`, `AngleDial`, `Timeline::setOptionalInputsChooser`; tests `tst_ofx_host`,
+    `tst_ofx_palette`). 6.11c2, overlays through the Interact suite and the Draw suite with Outline/Path in the Effect
+    Preview (p.161-162). 6.11c3, colour management with OCIO (the OFX 1.5 colour suite) where the library is installed,
+    else the plug-in sees the project's colour space only.
 
 **Gates**
 1. Each effect's output matches the reference frames from Media Composer with

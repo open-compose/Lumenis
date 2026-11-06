@@ -45,6 +45,16 @@ struct OfxParamInfo {
     QStringList options; // a choice's
     bool animates = true; // kOfxParamPropAnimates
     bool secret = false;  // kOfxParamPropSecret: not shown
+    QString doubleType;   // kOfxParamPropDoubleType ("OfxParamDoubleTypeAngle" for an angle, 6.11c1)
+};
+
+// One input clip a plug-in described (6.11c1): its name ("Source", "SourceFrom", a General context's own), label,
+// and whether it may be left unconnected (kOfxImageClipPropOptional) or is a mask (kOfxImageClipPropIsMask).
+struct OfxClipInfo {
+    QString name;
+    QString label;
+    bool optional = false;
+    bool mask = false;
 };
 
 // One plug-in an OFX bundle offers.
@@ -58,6 +68,7 @@ struct OfxPluginInfo {
     QStringList contexts;  // kOfxImageEffectContext... it supports
     QString describedContext; // the context its clips and parameters below were described in
     QStringList clips;     // their names, Output included
+    QList<OfxClipInfo> inputs; // the input clips (all but Output), in the order defined
     QList<OfxParamInfo> params;
     QString error;         // why it could not be described; empty when it could
     // Whether it can be an effect here (a Filter, Generator, Transition or General context, described), and if not why.
@@ -68,6 +79,16 @@ struct OfxPluginInfo {
     // Segment effects: Filter, Generator and General plug-ins; transition effects: Transition ones.
     bool segment() const;
     bool transition() const;
+    // Several inputs (6.11c1; "Some plug-in effects take an arbitrary number of tracks as input", p.161): how many
+    // inputs must be connected and how many can be; a plug-in with optional inputs asks for its Number of Tracks when
+    // applied (the OFX Optional Inputs dialog).
+    int requiredInputs() const;
+    int maxInputs() const { return static_cast<int>(inputs.size()); }
+    bool variableInputs() const { return maxInputs() > requiredInputs(); }
+    // The inputs connected when `count` are chosen (clamped to the range above): every required one, then optional
+    // ones in their order, as they come in the inputs' order. The first is the segment's own picture (the nest's V1),
+    // the next the nest's V2 and so on.
+    QList<OfxClipInfo> connectedInputs(int count) const;
 };
 
 // Where OFX plug-ins are installed, as the OpenFX standard lists them ("C:\Program Files\Common Files\OFX\Plugins",
@@ -128,11 +149,14 @@ QString ofxParameterCategory(const OfxPluginInfo& plugin);
 // - RGB and RGBA: a colour ("#rrggbb"; RGBA's alpha stays its default);
 // - Group: the subcategory of the parameters in it (its label).
 // Secret parameters, the Transition context's own "Transition" (the transition's progress), and the types we do not
-// show yet (String, Custom, Push Button, Page, Parametric, Bytes, StrChoice) have no control; they keep their defaults.
+// show yet (String, Custom, Page, Parametric, Bytes, StrChoice) have no control; they keep their defaults.
+// 6.11c1: a Double of the angle type is an "angle" control ("The Angle control lets you alter an effect's angle or
+// direction value by dragging within a graphic representation of a circle. Values can be positive or negative and are
+// not limited to a single 360º rotation", p.162), in degrees; a Push Button is a "button" (ofxPushButton).
 struct OfxEditorParameter {
     QString key;
     QString text;
-    QString kind; // "slider", "checkbox", "menu", "color"
+    QString kind; // "slider", "checkbox", "menu", "color", "angle", "button"
     QString subcategory;
     double min = 0.0, max = 100.0;
     int decimals = 0;
@@ -144,10 +168,18 @@ QList<OfxEditorParameter> ofxEditorParameters(const OfxPluginInfo& plugin);
 // A plug-in effect's parameter default by its stored key; null when the key is not one of its controls.
 QJsonValue ofxParameterDefault(const model::Effect& effect, const QString& category, const QString& key);
 
+// How many inputs the effect's plug-in was given (6.11c1): the number chosen in the OFX Optional Inputs dialog, kept
+// in its tag as "inputs", else the plug-in's required inputs. setOfxInputCount keeps one.
+int ofxInputCount(const model::Effect& effect);
+void setOfxInputCount(model::Effect& effect, int count);
+
 // A segment effect's picture: the plug-in rendered at `time` of the effect (model::EffectSpan's time) over `source`
-// (unused by a Generator). A plug-in that fails to render leaves `source` as it was and says why in its message
-// handler's output once ("Media Composer Cannot Render the Plug-In ... check the Console window", p.163).
-Picture ofxSegmentPicture(const model::Effect& effect, const Picture& source, double time, const model::EffectSpan& span);
+// (unused by a Generator). With several inputs (ofxInputCount), `source` is the first and `more` the others, in the
+// order of OfxPluginInfo::connectedInputs (the nest's V2, V3 ...); an input without a picture there is connected and
+// empty. A plug-in that fails to render leaves `source` as it was and says why in its message handler's output once
+// ("Media Composer Cannot Render the Plug-In ... check the Console window", p.163).
+Picture ofxSegmentPicture(const model::Effect& effect, const Picture& source, double time, const model::EffectSpan& span,
+                          const QList<Picture>& more = {});
 // A transition effect's picture between `from` (outgoing) and `to` (incoming), `progress` 0 to 1 as the plug-in's
 // Transition parameter.
 Picture ofxTransitionPicture(const model::Effect& effect, const Picture& from, const Picture& to, double progress, double time,
@@ -155,6 +187,13 @@ Picture ofxTransitionPicture(const model::Effect& effect, const Picture& from, c
 // A missing plug-in's effect (isMissingOfxEffect) asked to render says "Can't find effect: <label> (<identifier>)"
 // in the message handler's output, once per plug-in ("look for the message 'Can't find effect.' The message identifies
 // the plug-in", p.163); the picture passes through.
+// Presses a plug-in effect's push button `key` (6.11c1): the instance is told (kOfxActionInstanceChanged, the user's
+// edit) at `time` of the effect, as plug-ins open their own dialogs or change values ("Custom dialog box only. You
+// typically access this dialog box by clicking the Other Options button or another custom button in the Effect
+// Editor", p.161). Returns the values the plug-in set meanwhile, by stored key under ofxParameterCategory, for the
+// Effect Editor to keep; empty when it set none or the effect is not a plug-in's.
+QJsonObject ofxPushButton(const model::Effect& effect, const QString& key, double time, const model::EffectSpan& span);
+
 // The frame rate plug-ins are told (kOfxImageEffectPropFrameRate); the application sets the project's. 30 until set.
 void setOfxFrameRate(double rate);
 // Destroys every plug-in instance (kOfxActionDestroyInstance); the next render makes them again. Returns how many.

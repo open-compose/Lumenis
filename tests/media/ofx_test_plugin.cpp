@@ -1,5 +1,5 @@
 // An OFX binary of our own for the OFX host's tests (tests/media/tst_ofx_host.cpp; docs/spec/ofx-host.md), built as
-// CutthulhuTest.ofx inside test-ofx/CutthulhuTest.ofx.bundle/Contents/<architecture>/. It offers five plug-ins:
+// CutthulhuTest.ofx inside test-ofx/CutthulhuTest.ofx.bundle/Contents/<architecture>/. It offers six plug-ins:
 // - "org.cutthulhu.test.tint": a Filter in "Cutthulhu Tests/Colour" with Amount (double, 0-1, default 0.5), Channel (a
 //   choice of Red, Green, Blue), Invert (a boolean), Colour (RGB) and a secret one; its description names the host and
 //   the threads the multithread suite ran. It renders the source with the chosen channel set to Amount (times the
@@ -9,7 +9,11 @@
 // - "org.cutthulhu.test.noise": a Generator and General plug-in, which also sends a message while described. It
 //   renders its Fill colour (RGB, default 0.25, 0.5, 0.75) and a white bottom row, which shows the rows' order;
 // - "org.cutthulhu.test.broken": its describe action sends an error message and fails;
-// - "org.cutthulhu.test.paint": only the Paint context, which the host leaves out.
+// - "org.cutthulhu.test.paint": only the Paint context, which the host leaves out;
+// - "org.cutthulhu.test.composite" (6.11c1): a General plug-in in "Cutthulhu Mixers" with Source, an optional Over and
+//   an optional Matte (a mask), a Spin angle (degrees) and a Square push button that sets Spin to 90. It renders
+//   Source, with Over shown through the Matte's red where both are connected, or Over over Source with Over alone;
+//   its colours are inverted while Spin is 180 or more.
 // Plus one plug-in of another API, which the host skips.
 #include <ofxCore.h>
 #include <ofxImageEffect.h>
@@ -181,6 +185,35 @@ OfxStatus brokenDescribe(OfxImageEffectHandle) {
     return kOfxStatFailed;
 }
 
+OfxStatus compositeDescribe(OfxImageEffectHandle e) {
+    OfxPropertySetHandle p = effectProps(e);
+    gProps->propSetString(p, kOfxPropLabel, 0, "Test Composite");
+    gProps->propSetString(p, kOfxImageEffectPluginPropGrouping, 0, "Cutthulhu Mixers");
+    gProps->propSetString(p, kOfxImageEffectPropSupportedContexts, 0, kOfxImageEffectContextGeneral);
+    return kOfxStatOK;
+}
+
+OfxStatus compositeDescribeInContext(OfxImageEffectHandle e) {
+    defineClip(e, kOfxImageEffectSimpleSourceClipName);
+    OfxPropertySetHandle c = nullptr;
+    gEffects->clipDefine(e, "Over", &c);
+    gProps->propSetInt(c, kOfxImageClipPropOptional, 0, 1);
+    gProps->propSetString(c, kOfxPropLabel, 0, "Over Image");
+    gEffects->clipDefine(e, "Matte", &c);
+    gProps->propSetInt(c, kOfxImageClipPropOptional, 0, 1);
+    gProps->propSetInt(c, kOfxImageClipPropIsMask, 0, 1);
+    defineClip(e, kOfxImageEffectOutputClipName);
+    OfxParamSetHandle params = nullptr;
+    gEffects->getParamSet(e, &params);
+    OfxPropertySetHandle p = nullptr;
+    gParams->paramDefine(params, kOfxParamTypeDouble, "spin", &p);
+    gProps->propSetString(p, kOfxPropLabel, 0, "Spin");
+    gProps->propSetString(p, kOfxParamPropDoubleType, 0, kOfxParamDoubleTypeAngle);
+    gParams->paramDefine(params, kOfxParamTypePushButton, "square", &p);
+    gProps->propSetString(p, kOfxPropLabel, 0, "Square");
+    return kOfxStatOK;
+}
+
 OfxStatus paintDescribe(OfxImageEffectHandle e) {
     OfxPropertySetHandle p = effectProps(e);
     gProps->propSetString(p, kOfxPropLabel, 0, "Test Paint");
@@ -308,6 +341,57 @@ OfxStatus wipeRender(OfxImageEffectHandle e, OfxPropertySetHandle in) {
     return kOfxStatOK;
 }
 
+// Whether a clip is connected (kOfxImageClipPropConnected).
+bool connected(OfxImageEffectHandle e, const char* name) {
+    OfxImageClipHandle clip = nullptr;
+    OfxPropertySetHandle props = nullptr;
+    if (gEffects->clipGetHandle(e, name, &clip, &props) != kOfxStatOK) return false;
+    int on = 0;
+    gProps->propGetInt(props, kOfxImageClipPropConnected, 0, &on);
+    return on != 0;
+}
+
+OfxStatus compositeRender(OfxImageEffectHandle e, OfxPropertySetHandle in) {
+    const double t = timeOf(in);
+    Pixels src, over, matte, dst;
+    if (!fetch(e, kOfxImageEffectSimpleSourceClipName, t, src) || !fetch(e, kOfxImageEffectOutputClipName, t, dst)) return kOfxStatFailed;
+    const bool hasOver = connected(e, "Over") && fetch(e, "Over", t, over);
+    const bool hasMatte = connected(e, "Matte") && fetch(e, "Matte", t, matte);
+    double spin = 0;
+    gParams->paramGetValueAtTime(paramOf(e, "spin"), t, &spin);
+    for (int y = dst.y1; y < dst.y2; ++y) {
+        for (int x = dst.x1; x < dst.x2; ++x) {
+            const float* s = src.at(x, y);
+            float* d = dst.at(x, y);
+            for (int c = 0; c < 4; ++c) {
+                if (hasOver && hasMatte) {
+                    const float m = matte.at(x, y)[0];
+                    d[c] = s[c] * (1.0f - m) + over.at(x, y)[c] * m;
+                } else if (hasOver) {
+                    d[c] = over.at(x, y)[c] + s[c] * (1.0f - over.at(x, y)[3]);
+                } else {
+                    d[c] = s[c];
+                }
+            }
+            if (spin >= 180.0) {
+                for (int c = 0; c < 3; ++c) d[c] = d[3] - d[c];
+            }
+        }
+    }
+    for (Pixels* p : {&src, &dst}) gEffects->clipReleaseImage(p->props);
+    if (hasOver) gEffects->clipReleaseImage(over.props);
+    if (hasMatte) gEffects->clipReleaseImage(matte.props);
+    return kOfxStatOK;
+}
+
+// The Square button sets Spin to 90 (as a plug-in's own dialog or button would set values).
+OfxStatus compositeInstanceChanged(OfxImageEffectHandle e, OfxPropertySetHandle in) {
+    char* name = nullptr;
+    gProps->propGetString(in, kOfxPropName, 0, &name);
+    if (name && std::strcmp(name, "square") == 0) gParams->paramSetValue(paramOf(e, "spin"), 90.0);
+    return kOfxStatOK;
+}
+
 template <int Kind>
 OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle in, OfxPropertySetHandle out) {
     auto* e = static_cast<OfxImageEffectHandle>(const_cast<void*>(handle));
@@ -318,6 +402,7 @@ OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle
         case 1: return wipeDescribe(e);
         case 2: return noiseDescribe(e);
         case 3: return brokenDescribe(e);
+        case 5: return compositeDescribe(e);
         default: return paintDescribe(e);
         }
     }
@@ -326,6 +411,7 @@ OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle
         case 0: return tintDescribeInContext(e);
         case 1: return wipeDescribeInContext(e);
         case 2: return noiseDescribeInContext(e, in);
+        case 5: return compositeDescribeInContext(e);
         default: return kOfxStatOK;
         }
     }
@@ -345,9 +431,11 @@ OfxStatus mainEntry(const char* action, const void* handle, OfxPropertySetHandle
         case 0: return tintRender(e, in);
         case 1: return wipeRender(e, in);
         case 2: return noiseRender(e, in);
+        case 5: return compositeRender(e, in);
         default: return kOfxStatFailed;
         }
     }
+    if (std::strcmp(action, kOfxActionInstanceChanged) == 0 && Kind == 5) return compositeInstanceChanged(e, in);
     return kOfxStatReplyDefault;
 }
 
@@ -358,6 +446,7 @@ OfxPlugin gPlugins[] = {
     {kOfxImageEffectPluginApi, kOfxImageEffectPluginApiVersion, "org.cutthulhu.test.broken", 1, 0, setHost, mainEntry<3>},
     {kOfxImageEffectPluginApi, kOfxImageEffectPluginApiVersion, "org.cutthulhu.test.paint", 1, 0, setHost, mainEntry<4>},
     {"SomeOtherApi", 1, "org.cutthulhu.test.other", 1, 0, setHost, mainEntry<4>},
+    {kOfxImageEffectPluginApi, kOfxImageEffectPluginApiVersion, "org.cutthulhu.test.composite", 1, 0, setHost, mainEntry<5>},
 };
 
 } // namespace

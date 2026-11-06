@@ -1,3 +1,4 @@
+#include "lumenis/ui/angle_dial.h"
 #include "lumenis/ui/effect_editor.h"
 
 #include "lumenis/model/correction_shapes.h"
@@ -975,7 +976,8 @@ void EffectEditor::rebuild(const model::Effect* effect) {
             if (p.name == QLatin1String("Frame Processing") && !interlacedProject_) continue;
             auto* row = new QHBoxLayout;
             const QString k = key(category, p.name);
-            const bool keyframed = p.keyframeable && (p.kind == QLatin1String("slider") || p.kind == QLatin1String("color") || p.kind == QLatin1String("track"));
+            const bool keyframed = p.keyframeable && (p.kind == QLatin1String("slider") || p.kind == QLatin1String("color") || p.kind == QLatin1String("track") ||
+                                                      p.kind == QLatin1String("angle"));
             QLabel* nameLabel = nullptr;
             if (p.kind == QLatin1String("checkbox")) {
                 auto* c = new QCheckBox(p.text, box);
@@ -1045,6 +1047,29 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                         correctionEnables_.insert(cp->enablePath, enable);
                         row->addWidget(enable);
                     }
+                    row->addStretch(1);
+                } else if (p.kind == QLatin1String("angle")) {
+                    // An OFX plug-in's Angle control (p.162; angle_dial.h): kept when a drag ends or a key changes it.
+                    auto* dial = new AngleDial(box);
+                    dial->setObjectName(QStringLiteral("param:") + k);
+                    dial->setValue(p.defaultValue.toDouble());
+                    auto* value = new QLabel(p.shown(p.defaultValue.toDouble()), box);
+                    value->setMinimumWidth(48);
+                    value->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+                    connect(dial, &AngleDial::valueChanged, this, [value, p](double v) { value->setText(p.shown(v)); });
+                    connect(dial, &AngleDial::editingFinished, this, [this, category, p](double v) { setValue(category, p.name, p.rounded(v)); });
+                    row->addWidget(dial);
+                    row->addWidget(value);
+                    row->addStretch(1);
+                    controls_.insert(k, dial);
+                    valueLabels_.insert(k, value);
+                } else if (p.kind == QLatin1String("button") && category.endsWith(QLatin1String(" Plug-In Parameters"))) {
+                    // An OFX plug-in's push button (p.161): the plug-in is told, and keeps what it sets (ofxPushButton).
+                    auto* press = new QToolButton(box);
+                    press->setObjectName(QStringLiteral("param:") + k);
+                    press->setText(p.text);
+                    connect(press, &QToolButton::clicked, this, [this, name = p.name] { pressPluginButton(name); });
+                    row->addWidget(press);
                     row->addStretch(1);
                 } else if (p.kind == QLatin1String("slider")) {
                     auto* s = new QSlider(Qt::Horizontal, box);
@@ -1418,6 +1443,10 @@ void EffectEditor::syncValues(const model::Effect& effect) {
             const EffectParameter* info = parameterInfo(it.key());
             s->setValue(info ? info->sliderPosition(v.toDouble()) : static_cast<int>(std::lround(v.toDouble())));
             if (QLabel* l = valueLabels_.value(it.key())) l->setText(info ? info->shown(v.toDouble()) : QString::number(s->value()));
+        } else if (auto* dial = qobject_cast<AngleDial*>(w)) {
+            dial->setValue(v.toDouble());
+            const EffectParameter* info = parameterInfo(it.key());
+            if (QLabel* l = valueLabels_.value(it.key())) l->setText(info ? info->shown(v.toDouble()) : QString::number(v.toDouble()));
         } else if (auto* c = qobject_cast<QCheckBox*>(w)) {
             c->setChecked(v.toBool());
         } else if (auto* m = qobject_cast<QComboBox*>(w)) {
@@ -1977,6 +2006,21 @@ void EffectEditor::syncIntraframeButtons() {
         b->setEnabled(on && intraframe_ && !intraframe_->selection().isEmpty());
     }
     if (objectMenu_) objectMenu_->setVisible(on);
+}
+
+} // namespace lumenis::ui
+
+namespace lumenis::ui {
+
+bool EffectEditor::pressPluginButton(const QString& name) {
+    if (!current_ || !shown_) return false;
+    const auto* plugin = media::ofxPluginOf(*current_);
+    if (!plugin) return false;
+    const QString category = media::ofxParameterCategory(*plugin);
+    const QJsonObject set = media::ofxPushButton(*current_, name, positionTime(), span_);
+    // What the plug-in set goes into the effect, as edits of the Effect Editor's own controls would.
+    for (auto it = set.constBegin(); it != set.constEnd(); ++it) setValue(category, it.key(), it.value());
+    return true;
 }
 
 } // namespace lumenis::ui

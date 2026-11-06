@@ -6,6 +6,7 @@
 #include "lumenis/interop/avb_export.h"
 #include "lumenis/interop/aaf_import.h"
 #include "lumenis/interop/avb_import.h"
+#include "lumenis/ui/ofx_inputs_dialog.h"
 #include "lumenis/ui/main_window.h"
 
 #include "lumenis/model/safe_color_limiter.h"
@@ -1819,6 +1820,8 @@ void MainWindow::createTools() {
     });
     // The Color Correction effect from the Effect Palette makes the AutoCorrect tab's corrections in turn (FX Guide
     // p.695-696), each from the uncorrected frame as the tool's buttons are (6.10e1).
+    // An OFX plug-in with optional inputs asks for its Number of Tracks when applied (FX Guide p.161).
+    timeline_->setOptionalInputsChooser([this](const media::OfxPluginInfo& plugin) { return OfxOptionalInputsDialog::ask(plugin, this); });
     timeline_->setEffectSeed([this](model::Effect& effect) {
         if (model::isSafeColorLimiter(effect)) model::seedSafeColorLimiter(effect, safeColorLimits());
     });

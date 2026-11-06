@@ -25,6 +25,8 @@ add_library(lumenis_ui STATIC
     interchange_dialogs.cpp
     list_tool.cpp
     effect_editor.cpp
+    angle_dial.cpp
+    ofx_inputs_dialog.cpp
     effect_editor_keyframes.cpp
     effect_editor_handles.cpp
     effect_editor_brush.cpp
@@ -106,6 +108,8 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/interchange_dialogs.h
     include/lumenis/ui/list_tool.h
     include/lumenis/ui/effect_editor.h
+    include/lumenis/ui/angle_dial.h
+    include/lumenis/ui/ofx_inputs_dialog.h
     include/lumenis/ui/tracking_window.h
     include/lumenis/ui/titler_tool.h
     include/lumenis/ui/intraframe_tool.h

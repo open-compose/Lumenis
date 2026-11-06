@@ -6156,6 +6156,33 @@ model::Effect Timeline::seededEffect(const EffectInfo& effect) const {
     return e;
 }
 
+std::optional<model::Effect> Timeline::effectWithInputs(const EffectInfo& effect) const {
+    model::Effect e = seededEffect(effect);
+    const media::OfxPluginInfo* plugin = media::ofxPluginOf(e);
+    if (!plugin || !plugin->variableInputs()) return e;
+    // "If the plug-in supports a variable number of input tracks, the AVX Optional Inputs dialog box opens" (p.161).
+    const std::optional<int> count = optionalInputs_ ? optionalInputs_(*plugin) : std::optional(plugin->requiredInputs());
+    if (!count) return std::nullopt;
+    media::setOfxInputCount(e, *count);
+    return e;
+}
+
+void Timeline::addPluginInputTracks(model::Sequence& seq, const QString& track, std::int64_t frame, const model::Effect& effect) const {
+    const int inputs = media::ofxInputCount(effect);
+    if (inputs <= 1 || !media::isOfxEffect(effect)) return;
+    model::Track* t = seq.track(track);
+    const int i = t ? t->segmentAt(frame) : -1;
+    if (i < 0) return;
+    // The inputs are the nest's video tracks, the segment's own picture on V1 (p.161: "see Nesting Effects").
+    model::Segment& s = t->segments[i];
+    model::ensureNest(s);
+    model::Sequence nest = model::nestOf(s);
+    int video = 0;
+    for (const model::Track& nt : nest.tracks()) video += nt.kind == model::TrackKind::Video ? 1 : 0;
+    for (; video < inputs; ++video) static_cast<void>(nest.addTrack(model::TrackKind::Video));
+    model::setNest(s, nest);
+}
+
 bool Timeline::dropEffect(const QString& track, std::int64_t frame, const EffectInfo& effect,
                           std::optional<std::int64_t> cut) {
     message_.clear();
@@ -6180,9 +6207,13 @@ bool Timeline::dropEffect(const QString& track, std::int64_t frame, const Effect
     } else if (effect.segment) {
         // Alt+drag nests it inside the segment's effect (FX Guide p.216).
         const bool nest = QGuiApplication::keyboardModifiers().testFlag(Qt::AltModifier);
-        if (i < 0 || !model::applySegmentEffect(seq, track, frame, seededEffect(effect), nest)) {
+        // A plug-in with optional inputs asks how many (p.161); cancelling applies nothing.
+        const std::optional<model::Effect> applied = i < 0 ? std::optional(seededEffect(effect)) : effectWithInputs(effect);
+        if (!applied) return false;
+        if (i < 0 || !model::applySegmentEffect(seq, track, frame, *applied, nest)) {
             return fail(tr("There is no segment there."));
         }
+        addPluginInputTracks(seq, track, frame, *applied);
         if (!nest && model::isStabilizeEffect(effect.effect())) stabilize = std::pair{track, start};
         if (!nest && model::isColorCorrectionEffect(effect.effect())) autoCorrectEffects(seq, {{track, start}});
     } else {
@@ -6241,10 +6272,14 @@ bool Timeline::applyEffectToSelection(const EffectInfo& effect) {
         int applied = 0;
         if (effect.segment) {
             QList<model::SegmentRef> corrected;
+            // Asked once for all the selected segments (p.161).
+            const std::optional<model::Effect> chosen = effectWithInputs(effect);
+            if (!chosen) return false;
             for (const model::SegmentRef& ref : selection_) {
                 // Alt+double-click nests it inside the segment's effect (FX Guide p.276).
                 const bool nest = QGuiApplication::keyboardModifiers().testFlag(Qt::AltModifier);
-                if (video(ref.track) && model::applySegmentEffect(seq, ref.track, ref.start, seededEffect(effect), nest)) {
+                if (video(ref.track) && model::applySegmentEffect(seq, ref.track, ref.start, *chosen, nest)) {
+                    addPluginInputTracks(seq, ref.track, ref.start, *chosen);
                     ++applied;
                     if (!nest && model::isStabilizeEffect(effect.effect())) stabilize = std::pair{ref.track, ref.start};
                     if (!nest && model::isColorCorrectionEffect(effect.effect())) corrected << ref;
