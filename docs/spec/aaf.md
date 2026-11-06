@@ -329,3 +329,34 @@ The menus and dialogs are in ui-inventory.md §18, from the Editing Guide.
   sequence, exported from the bin through the dialog, imported into
   another bin: the clip online, the sequence naming it; then exported with
   Include All Audio Tracks off, and no audio tracks come back.
+
+## Export Methods (7.1c1)
+
+The Export setting's Video Details and Audio Details tabs (p.870-872,
+p.1175-1177; `MainWindow::prepareAafMedia`) prepare the media before the AAF
+is written:
+
+* **Link to (Don't Export) Media:** the AAF names the media where it is.
+* **Copy All Media:** the clips' files of that kind (video tracks' with the
+  video method, audio tracks' with the audio method) are copied into the
+  Media Destinations folder, and the AAF names the copies
+  (`media::copyClipMedia`). A file several clips use is copied once; a name
+  taken in the folder gets " 2", " 3" ... (ours).
+* **Consolidate Media:** the parts of the clips the sequences use, with the
+  Handle Length (60 frames by default, p.1176), and selected master clips
+  whole, as new MXF media in the folder (`media::consolidate`, written under
+  `<folder>/Avid MediaFiles/MXF/1`). The new clips keep their old names in
+  the AAF (ours; Consolidate in a bin names them ".new"). Consolidate copies
+  DNx media as it is; other media stays linked, said in the Console. Either
+  tab choosing it consolidates the clips' video and audio together (ours).
+* **Video Mixdown** (video only): "replaces all of the video tracks with a
+  single video track named Video Mixdown" (p.872), a new clip "<sequence>
+  Video Mixdown" in the folder. Mixdown with Video Edits (a mixdown track
+  beside the edit tracks) later.
+* **Media Destinations:** Folder, with Use Same Folder as AAF File on by
+  default (p.871, p.1177); Media Drive later.
+
+Not yet: Embedded in AAF, Split Tracks to Mono and Remove Track Effects
+(our AAF export writes no track effects), Convert Audio Sample Rate, Bit
+Depth and File Format, Add Audio Mixdown Track, Render Video Effects.
+Test: `tst_managed_media aafExportMethods`.

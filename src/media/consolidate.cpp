@@ -5,6 +5,7 @@
 #include "lumenis/model/sequence.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QHash>
 #include <QObject>
@@ -231,6 +232,42 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
         }
     }
     return result;
+}
+
+CopiedMedia copyClipMedia(const QList<model::BinItem>& clips, const QString& folder, bool video, bool audio) {
+    CopiedMedia out;
+    QDir().mkpath(folder);
+    QHash<QString, QString> copied; // source file -> its copy
+    for (model::BinItem clip : clips) {
+        for (model::ClipSource& s : clip.sources) {
+            if (s.kind != model::ClipSource::Kind::File || s.path.isEmpty()) continue;
+            const bool isVideo = s.track.startsWith(QLatin1Char('V'));
+            if ((isVideo && !video) || (!isVideo && !audio)) continue;
+            const QString from = QFileInfo(s.path).absoluteFilePath();
+            if (const auto it = copied.constFind(from); it != copied.constEnd()) {
+                s.path = *it;
+                continue;
+            }
+            if (!QFileInfo::exists(from)) {
+                out.warnings << QObject::tr("%1: its media file %2 is offline").arg(clip.name, QDir::toNativeSeparators(from));
+                continue;
+            }
+            const QFileInfo f(from);
+            QString to = QDir(folder).filePath(f.fileName());
+            for (int n = 2; QFileInfo::exists(to); ++n) {
+                to = QDir(folder).filePath(QStringLiteral("%1 %2.%3").arg(f.completeBaseName()).arg(n).arg(f.suffix()));
+            }
+            if (!QFile::copy(from, to)) {
+                out.warnings << QObject::tr("%1: %2 could not be copied").arg(clip.name, QDir::toNativeSeparators(from));
+                continue;
+            }
+            copied.insert(from, to);
+            s.path = to;
+            ++out.files;
+        }
+        out.items << clip;
+    }
+    return out;
 }
 
 } // namespace lumenis::media

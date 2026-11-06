@@ -339,6 +339,11 @@ public:
                          QString* error);
     // The Graphic, DPX and OpenEXR exports' stills (7.1b) of `source` (frames `start` to `end` of the item): one frame,
     // an image sequence, or the frames with markers, as the Export setting says.
+    // AAF export's Export Methods (7.1c1, Editing Guide p.870-872, p.1175-1177): Copy All Media, Consolidate Media and
+    // Video Mixdown into the Media Destinations folder. `items` is what the AAF then holds: the sequences and the clips,
+    // naming the new media. False with the reason in `error`.
+    bool prepareAafMedia(const QList<model::BinItem>& selected, const QList<model::BinItem>& clips, const QString& binId,
+                         const QString& aafPath, QList<model::BinItem>& items, QStringList& warnings, QString* error);
     bool exportStills(const QString& path, const QString& format, const model::BinItem& sequenceItem, const media::MovieSource& source,
                       const model::LoadedClip* shown, std::int64_t start, std::int64_t end, const std::function<bool(double)>& progress,
                       QString* error);

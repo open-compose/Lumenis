@@ -3365,11 +3365,20 @@ void MainWindow::exportToFile() {
         interop::aaf::ExportOptions options;
         options.includeVideo = includeVideo;
         options.includeAudio = includeAudio;
-        const interop::aaf::ExportResult result = interop::aaf::exportItems(selected + clips, path, options);
-        written = result.ok;
-        error = result.error;
-        warnings = result.warnings;
-        count += clips.size();
+        // The Export Methods of the Video and Audio Details tabs (7.1c1): the media copied, consolidated or mixed
+        // down into the destination folder first, the AAF naming it.
+        QList<model::BinItem> items = selected + clips;
+        QString why;
+        if (!prepareAafMedia(selected, clips, doc.nodeId(), path, items, warnings, &why)) {
+            written = false;
+            error = why;
+        } else {
+            const interop::aaf::ExportResult result = interop::aaf::exportItems(items, path, options);
+            written = result.ok;
+            error = result.error;
+            warnings << result.warnings;
+            count = items.size();
+        }
     }
     QApplication::restoreOverrideCursor();
     if (!written) {
@@ -3522,6 +3531,174 @@ QStringList MainWindow::importEdl() {
 
 // The bin's Text view columns and custom columns go out, so the log holds what the bin shows (p.129
 // step 1: "click the Text tab to display all clip information").
+bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QList<model::BinItem>& clips, const QString& binId,
+                                 const QString& aafPath, QList<model::BinItem>& items, QStringList& warnings, QString* error) {
+    const Settings& s = *settings_;
+    auto text = [&](const char* key) { return s.text(QStringLiteral("Export"), QLatin1String(key)); };
+    const QString videoMethod = text("videoExportMethod");
+    const QString audioMethod = text("audioExportMethod");
+    items = selected + clips;
+    if (videoMethod == QLatin1String("link") && audioMethod == QLatin1String("link")) return true;
+    if (!project_) {
+        if (error) *error = tr("Open a project first.");
+        return false;
+    }
+    // Media Destinations, Folder: "If you select Folder and then check Use Same Folder as AAF File, Media Composer stores
+    // the media in the same folder as the exported AAF files" (p.871); otherwise the folder named (p.1177).
+    const QString chosen = text("mediaFolder");
+    const QString folder = s.flag(QStringLiteral("Export"), QStringLiteral("useAafFolder")) || chosen.isEmpty()
+                               ? QFileInfo(aafPath).absolutePath()
+                               : chosen;
+    if (!QDir().mkpath(folder)) {
+        if (error) *error = tr("The media folder %1 cannot be made.").arg(QDir::toNativeSeparators(folder));
+        return false;
+    }
+    media::MediaCreation creation = mediaCreation(QStringLiteral("transcode"));
+    creation.videoDrive = folder;
+    creation.audioDrive = folder;
+    creation.raster = QSize(project_->settings.format.width, project_->settings.format.height).expandedTo(media::kMinimumRaster);
+    QProgressDialog progress(tr("Preparing the media..."), tr("Cancel"), 0, 1000, this);
+    progress.setObjectName(QStringLiteral("exportProgress"));
+    creation.progress = progressOn(progress);
+    struct Done {
+        QProgressDialog& p;
+        ~Done() { p.reset(); }
+    } done{progress};
+
+    // Video Mixdown "Creates a new video mixdown track for the sequence"; without video edits it "replaces all of the
+    // video tracks with a single video track named Video Mixdown" (p.871-872, p.1176). Made first, from the sequences
+    // as they are, whose clips the bins hold.
+    QHash<QString, model::BinItem> mixdownOf; // sequence id -> its mixdown clip
+    if (videoMethod == QLatin1String("mixdown")) {
+        for (const model::BinItem& item : selected) {
+            if (item.kind != model::BinItemKind::Sequence) continue;
+            const model::Sequence seq = model::Sequence::fromItem(item);
+            QStringList video;
+            for (const model::Track& t : seq.tracks()) {
+                if (t.kind == model::TrackKind::Video) video << t.name();
+            }
+            if (video.isEmpty() || seq.duration() <= 0) continue;
+            media::Composition c;
+            c.sequence = &seq;
+            c.tracks = video;
+            c.size = creation.raster;
+            model::LoadedClip loaded;
+            loaded.binId = binId;
+            loaded.item = item;
+            fillComposition(c, loaded);
+            QString why;
+            const auto mix = media::renderedVideoClip(tr("%1 Video Mixdown").arg(item.name), item.editRate, seq.duration(),
+                                                      [&](std::int64_t f) { return media::composeImage(c, f); }, creation,
+                                                      model::BinItemKind::MasterClip, &why);
+            if (!mix) {
+                if (error) *error = tr("The video mixdown of %1 failed: %2").arg(item.name, why);
+                return false;
+            }
+            mixdownOf.insert(item.id, *mix);
+        }
+    }
+
+    // Consolidate Media: the parts of the clips the sequences use, with the Handle Length (p.1175-1176), and selected
+    // master clips whole, as new media in the folder. The new clips keep their old clips' names (ours).
+    QList<model::BinItem> sequences;
+    QList<model::BinItem> clipItems;
+    for (const model::BinItem& item : items) (item.kind == model::BinItemKind::Sequence ? sequences : clipItems) << item;
+    if (videoMethod == QLatin1String("consolidate") || audioMethod == QLatin1String("consolidate")) {
+        media::ConsolidateOptions co;
+        co.mode = media::ConsolidateOptions::Mode::Consolidate;
+        co.handles = s.value(QStringLiteral("Export"), videoMethod == QLatin1String("consolidate") ? QStringLiteral("videoHandles")
+                                                                                                    : QStringLiteral("audioHandles"))
+                         .toInt();
+        co.keepMastersLinked = true;
+        co.creation = creation;
+        const media::ConsolidateResult result =
+            media::consolidate(selected, binId, [this](const QString& bin, const QString& id) { return composer_->resolve(bin, id); }, {}, co);
+        if (!result.error.isEmpty()) {
+            if (error) *error = result.error;
+            return false;
+        }
+        warnings << result.skipped;
+        QHash<QString, model::BinItem> made;
+        for (model::BinItem m : result.added) made.insert(m.id, m);
+        // Sequences now naming the new clips; selected clips replaced by their copies.
+        for (const model::BinItem& changed : result.changed) {
+            for (model::BinItem& seq : sequences) {
+                if (seq.id == changed.id) seq = changed;
+            }
+        }
+        QList<model::BinItem> kept;
+        for (const model::BinItem& clip : clipItems) {
+            bool replaced = false;
+            for (model::BinItem m : result.added) {
+                if (!selected.isEmpty() && m.name.startsWith(clip.name + QStringLiteral(".new")) && m.sources.size() == clip.sources.size()) {
+                    const bool whole = std::any_of(selected.begin(), selected.end(), [&](const model::BinItem& i) { return i.id == clip.id; });
+                    if (!whole) continue;
+                    m.name = clip.name;
+                    kept << m;
+                    made.remove(m.id);
+                    replaced = true;
+                    break;
+                }
+            }
+            if (!replaced) kept << clip;
+        }
+        clipItems = kept;
+        // The new clips the sequences use, under their old names.
+        for (model::BinItem m : made) {
+            m.name = m.name.section(QStringLiteral(".new"), 0, 0);
+            clipItems << m;
+        }
+        // Clips no sequence uses any more (their parts were consolidated) are left out, unless selected.
+        QSet<QString> used;
+        for (const model::BinItem& seqItem : sequences) {
+            const model::Sequence seq = model::Sequence::fromItem(seqItem);
+            for (const model::Track& t : seq.tracks()) {
+                for (const model::Segment& seg : t.segments) {
+                    if (!seg.isFiller()) used << seg.clipId;
+                }
+            }
+        }
+        QList<model::BinItem> still;
+        for (const model::BinItem& clip : clipItems) {
+            const bool picked = std::any_of(selected.begin(), selected.end(), [&](const model::BinItem& i) { return i.id == clip.id; });
+            if (picked || used.contains(clip.id) || clip.name.isEmpty()) still << clip;
+            else if (std::none_of(clips.begin(), clips.end(), [&](const model::BinItem& c) { return c.id == clip.id; })) still << clip;
+        }
+        clipItems = still;
+    }
+
+    // The mixdowns take the place of the sequences' video tracks.
+    for (model::BinItem& seqItem : sequences) {
+        const auto it = mixdownOf.constFind(seqItem.id);
+        if (it == mixdownOf.constEnd()) continue;
+        model::Sequence seq = model::Sequence::fromItem(seqItem);
+        const model::Sequence original = seq;
+        for (const model::Track& t : original.tracks()) {
+            if (t.kind == model::TrackKind::Video) seq.removeTrack(t.name());
+        }
+        model::Track* v1 = seq.ensureTrack(QStringLiteral("V1"));
+        if (!v1) continue;
+        v1->customName = tr("Video Mixdown");
+        model::Segment segment;
+        segment.binId = binId;
+        segment.clipId = it->id;
+        segment.sourceMob = it->mobId;
+        segment.name = it->name;
+        segment.sourceTrack = QStringLiteral("V1");
+        segment.length = it->durationFrames;
+        v1->segments = {segment};
+        seq.storeIn(seqItem);
+        clipItems << *it;
+    }
+
+    // Copy All Media: the clips' files of each kind copied into the folder (p.1175).
+    const media::CopiedMedia copied =
+        media::copyClipMedia(clipItems, folder, videoMethod == QLatin1String("copy"), audioMethod == QLatin1String("copy"));
+    warnings << copied.warnings;
+    items = sequences + copied.items;
+    return true;
+}
+
 bool MainWindow::exportStills(const QString& path, const QString& format, const model::BinItem& sequenceItem,
                               const media::MovieSource& source, const model::LoadedClip* shown, std::int64_t start, std::int64_t end,
                               const std::function<bool(double)>& progress, QString* error) {

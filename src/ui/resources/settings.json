@@ -276,17 +276,31 @@
           "name": "Video Details",
           "options": [
             {"key": "videoExportMethod", "type": "choice", "style": "menu", "label": "Export Method", "default": "link", "page": 1175,
-             "choices": [{"value": "link", "label": "Link to (Don't Export) Media"}, {"value": "copy", "label": "Copy All Media", "later": true},
-                         {"value": "consolidate", "label": "Consolidate Media", "later": true}]}
+             "choices": [{"value": "link", "label": "Link to (Don't Export) Media"}, {"value": "copy", "label": "Copy All Media"},
+                         {"value": "consolidate", "label": "Consolidate Media"}, {"value": "mixdown", "label": "Video Mixdown"}]},
+            {"key": "videoHandles", "type": "int", "label": "Handle Length", "default": 60, "min": 0, "max": 9999, "suffix": "Frames", "page": 1176},
+            {"key": "videoMixdownEdits", "type": "choice", "style": "radio", "label": "", "default": "without", "page": 1176,
+             "choices": [{"value": "with", "label": "Mixdown with Video Edits", "later": true},
+                         {"value": "without", "label": "Mixdown without Video Edits"}]}
           ]
         },
         {
           "name": "Audio Details",
           "options": [
             {"key": "audioExportMethod", "type": "choice", "style": "menu", "label": "Export Method", "default": "link", "page": 1175,
-             "choices": [{"value": "link", "label": "Link to (Don't Export) Media"}, {"value": "copy", "label": "Copy All Media", "later": true},
-                         {"value": "consolidate", "label": "Consolidate Media", "later": true}]},
+             "choices": [{"value": "link", "label": "Link to (Don't Export) Media"}, {"value": "copy", "label": "Copy All Media"},
+                         {"value": "consolidate", "label": "Consolidate Media"}]},
+            {"key": "audioHandles", "type": "int", "label": "Handle Length", "default": 60, "min": 0, "max": 9999, "suffix": "Frames", "page": 1176},
             {"key": "splitToMono", "type": "bool", "label": "Split Tracks to Mono", "default": true, "page": 1176, "later": true}
+          ]
+        },
+        {
+          "name": "Media Destinations",
+          "options": [
+            {"key": "mediaDestination", "type": "choice", "style": "radio", "label": "", "default": "folder", "page": 1177,
+             "choices": [{"value": "drive", "label": "Media Drive", "later": true}, {"value": "folder", "label": "Folder"}]},
+            {"key": "useAafFolder", "type": "bool", "label": "Use Same Folder as AAF File", "default": true, "page": 1177},
+            {"key": "mediaFolder", "type": "text", "label": "Folder", "default": "", "page": 1177}
           ]
         },
         {

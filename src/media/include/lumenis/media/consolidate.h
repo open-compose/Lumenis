@@ -66,4 +66,15 @@ struct ConsolidateResult {
 ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QString& binId, const ClipLookup& clips,
                               const QStringList& taken, const ConsolidateOptions& options);
 
+// AAF export's Copy All Media (Editing Guide p.870, p.1175; 7.1c1): each clip's media files of the kinds chosen
+// (its video tracks' files with `video`, its audio tracks' with `audio`) are copied into `folder`, and the clip's file
+// sources then name the copies. A file used by several clips is copied once; names taken in the folder get " 2", " 3"
+// ... (ours). What could not be copied is said in `warnings` and the clip keeps its file there.
+struct CopiedMedia {
+    QList<model::BinItem> items; // the clips with their sources naming the copies
+    QStringList warnings;
+    int files = 0;               // files copied
+};
+CopiedMedia copyClipMedia(const QList<model::BinItem>& clips, const QString& folder, bool video, bool audio);
+
 } // namespace lumenis::media

@@ -414,7 +414,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   even sizes, Opus in MP4s without AAC, a clip exported through an AutoSequence, the marks of the monitor showing the
   item, all tracks for an item not in the Record monitor, several items written beside the first. 7.1b: sequence file
   names counted from 0 with 7 digits, DPX and OpenEXR always sequences, OpenEXR display-referred, "Scale from Legal to
-  Full Range" as the default Color Levels, a repeated marker comment named with its frame.
+  Full Range" as the default Color Levels, a repeated marker comment named with its frame. 7.1c1: copies named " 2"
+  when taken, consolidated media under `<folder>/Avid MediaFiles/MXF/1`, consolidated clips keeping their names in the
+  AAF, one consolidation for both tabs.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

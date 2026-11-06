@@ -1,4 +1,5 @@
 #include "lumenis/ext/provider.h"
+#include "lumenis/interop/aaf_import.h"
 #include "lumenis/media/consolidate.h"
 #include "lumenis/media/link.h"
 #include "lumenis/media/managed.h"
@@ -579,6 +580,125 @@ private slots:
         for (const model::BinItem& item : window.binContainer().document(third)->bin().items) {
             if (item.kind == model::BinItemKind::Sequence) QVERIFY(!model::Sequence::fromItem(item).track(QStringLiteral("A1")));
         }
+        media::setExtraMediaDrives({});
+    }
+
+    // AAF export's Export Methods (7.1c1, p.870-872, p.1175-1177): Copy All Media copies the clip's files next to the
+    // AAF and the AAF names the copies; Consolidate Media makes new media of the used part with its handles; Video
+    // Mixdown replaces the video tracks with one "Video Mixdown" track of a new clip.
+    void aafExportMethods() {
+        if (!media::patentCodecsAllowed()) QSKIP("DNxHR is left out of this build (docs/EXTENSIONS.md)");
+        QTemporaryDir dir;
+        const QString movie = dir.filePath(QStringLiteral("A004.mov"));
+        QVERIFY(writeMovie(movie, 10));
+        const QString drive = dir.filePath(QStringLiteral("Media"));
+        QVERIFY(QDir().mkpath(drive));
+        media::setExtraMediaDrives({drive});
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Harbor"));
+        project.settings.name = QStringLiteral("Harbor");
+        project.settings.format.editRate = Rational(25);
+        project.settings.format.width = 256;
+        project.settings.format.height = 144;
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        QCoreApplication::processEvents();
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("importVideoDrive"), drive);
+        window.settings().setValue(QStringLiteral("Media Creation"), QStringLiteral("transcodeVideoDrive"), drive);
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        QVERIFY(bin);
+        QCOMPARE(window.importFiles(binId, {movie}, QStringLiteral("dnx_lb")).size(), 1);
+        const model::BinItem clip = bin->bin().items.first();
+        Composer& composer = window.composer();
+        composer.loadDefault(bin->nodeId(), clip);
+        composer.state(MonitorId::Source).setPosition(2);
+        composer.state(MonitorId::Source).markIn();
+        composer.state(MonitorId::Source).setPosition(6);
+        composer.state(MonitorId::Source).markOut();
+        QVERIFY(window.timeline().perform(QStringLiteral("edit.splice_in")));
+        const QString sequenceId = composer.state(MonitorId::Record).current()->item.id;
+        const QString sequenceName = composer.state(MonitorId::Record).current()->item.name;
+        window.binContainer().saveAll();
+        BinView* view = window.binContainer().viewFor(bin);
+        view->selectIds({sequenceId});
+        Settings& settings = window.settings();
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("aaf"));
+        auto exportTo = [&](const QString& aaf) {
+            QDir().mkpath(QFileInfo(aaf).absolutePath());
+            window.setExportHook([aaf](ExportAsDialog& dialog) {
+                dialog.setPath(aaf);
+                return true;
+            });
+            commands.action(QStringLiteral("file.output.export_to_file"))->trigger();
+            return interop::aaf::importFile(aaf);
+        };
+        auto masterIn = [](const interop::aaf::ImportResult& r) -> const model::BinItem* {
+            for (const model::BinItem& i : r.items) {
+                if (i.kind == model::BinItemKind::MasterClip) return &i;
+            }
+            return nullptr;
+        };
+        auto filesUnder = [](const model::BinItem& item, const QString& folder) {
+            int n = 0;
+            for (const model::ClipSource& src : item.sources) {
+                if (src.kind != model::ClipSource::Kind::File) continue;
+                if (!QFileInfo(src.path).absoluteFilePath().startsWith(QDir(folder).absolutePath()) || !QFileInfo::exists(src.path)) return -1;
+                ++n;
+            }
+            return n;
+        };
+
+        // Copy All Media into the AAF's folder: the clip's video and audio files.
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("videoExportMethod"), QStringLiteral("copy"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("audioExportMethod"), QStringLiteral("copy"));
+        const QString copyFolder = dir.filePath(QStringLiteral("Copy"));
+        auto copied = exportTo(QDir(copyFolder).filePath(QStringLiteral("Cut.aaf")));
+        QVERIFY(copied);
+        const model::BinItem* m = masterIn(*copied);
+        QVERIFY(m);
+        QVERIFY2(filesUnder(*m, copyFolder) >= 2, "the clip's files are the copies");
+
+        // Consolidate Media with handles of 1: the five frames used and a frame either side.
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("videoExportMethod"), QStringLiteral("consolidate"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("audioExportMethod"), QStringLiteral("consolidate"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("videoHandles"), 1);
+        const QString consolidated = dir.filePath(QStringLiteral("Consolidated"));
+        auto made = exportTo(QDir(consolidated).filePath(QStringLiteral("Cut.aaf")));
+        QVERIFY(made);
+        m = masterIn(*made);
+        QVERIFY(m);
+        QCOMPARE(m->name, clip.name);
+        QCOMPARE(m->durationFrames, std::int64_t{7});
+        QVERIFY(filesUnder(*m, consolidated) >= 2);
+
+        // Video Mixdown: one video track, "Video Mixdown", of a new clip in the folder; the audio linked.
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("videoExportMethod"), QStringLiteral("mixdown"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("audioExportMethod"), QStringLiteral("link"));
+        const QString mixed = dir.filePath(QStringLiteral("Mixdown"));
+        auto mix = exportTo(QDir(mixed).filePath(QStringLiteral("Cut.aaf")));
+        QVERIFY(mix);
+        const model::BinItem* mixClip = nullptr;
+        const model::BinItem* seqItem = nullptr;
+        for (const model::BinItem& i : mix->items) {
+            if (i.name == sequenceName + QStringLiteral(" Video Mixdown")) mixClip = &i;
+            if (i.kind == model::BinItemKind::Sequence) seqItem = &i;
+        }
+        QVERIFY(mixClip && seqItem);
+        QVERIFY(filesUnder(*mixClip, mixed) >= 1);
+        const model::Sequence cut = model::Sequence::fromItem(*seqItem);
+        int videoTracks = 0;
+        for (const model::Track& t : cut.tracks()) videoTracks += t.kind == model::TrackKind::Video ? 1 : 0;
+        QCOMPARE(videoTracks, 1);
+        QCOMPARE(cut.track(QStringLiteral("V1"))->segments.first().length, std::int64_t{5});
+        QVERIFY(cut.track(QStringLiteral("A1")));
         media::setExtraMediaDrives({});
     }
 

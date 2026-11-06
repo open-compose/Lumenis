@@ -1318,8 +1318,12 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     Export with Mask Margins (p.900), H.265 (p.898). Done (docs/spec/movie-export.md: `media::writeStill`,
     `exportAudioFile`, `MainWindow::exportStills`, the Export setting's Graphic, Audio, DPX and OpenEXR tabs; H.265 came
     with 7.1a; Mask Margins waits for the mask regions, p.550; tests `tst_movie_export`, `tst_movie_export_ui`).
-  * 7.1c, the Send To templates (p.863-867), export by dragging (p.868-869), Export to Pro Tools (p.872-878), Copy All Media and Consolidate in AAF
-    export (p.870), Simplified AAF (p.884), Export Media Difference (p.885).
+  * 7.1c, in three parts (2026-11-06): 7.1c1, AAF export's Export Methods: Copy All Media, Consolidate Media and Video
+    Mixdown into the Media Destinations folder (p.870-872, p.1175-1177). Done (docs/spec/aaf.md "Export Methods":
+    `MainWindow::prepareAafMedia`, `media::copyClipMedia`; test `tst_managed_media aafExportMethods`). 7.1c2, the Send To
+    templates (p.863-867) with the Pro Tools options, Make New and .stt templates; export by dragging (p.868-869). 7.1c3,
+    Simplified AAF (p.884) and Export Media Difference (p.885). A Pro Tools Session (.ptx, p.872-878) needs Avid's
+    unpublished format: a provider hook only (docs/EXTENSIONS.md).
 * 7.2, MXF OP1a and AS-11 (p.886-892), XDCAM (p.883), AS-02 export volumes (p.901-904); gate 1 with bmx's checkers.
 * 7.3, output to devices (ch.26, p.909-938): the output device and sync source, the Video Output tool, audio output
   options, the Digital Cut tool, output and timecode formats; a device provider interface with a file "device" of our

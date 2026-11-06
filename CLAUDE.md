@@ -795,7 +795,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `MainWindow::exportMovieFile` composing frames and mixing sound, the Export setting's MOV and MP4 tab; `MediaWriter`
   checks the codec behind an encoder, `WriterSettings::fullRange`; tests `tst_movie_export`, `tst_movie_export_ui`),
   is done. 7.1b, Graphic, DPX, OpenEXR and Audio export (`media::writeStill`, `exportAudioFile`,
-  `MainWindow::exportStills`; `WriterSettings::videoOptions`/`quality`), is done. Next: 7.1c, Send To. After Phase 7, before Phase 8: 7.6, the owner's report
+  `MainWindow::exportStills`; `WriterSettings::videoOptions`/`quality`), is done. 7.1c1, AAF's Export Methods (Copy All
+  Media, Consolidate Media, Video Mixdown: `MainWindow::prepareAafMedia`, `media::copyClipMedia`; docs/spec/aaf.md), is
+  done. Next: 7.1c2, Send To templates. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"
