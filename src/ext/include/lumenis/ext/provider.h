@@ -23,7 +23,7 @@ enum class Category {
     Transcription,    // speech-to-text for ScriptSync/PhraseFind equivalents
     EffectPluginHost, // OFX, AVX
     AudioPluginHost,  // CLAP, VST3, AAX
-    VideoIoDevice,    // AJA, Blackmagic, ...
+    VideoIoDevice,    // AJA, Blackmagic, ...: the Video Output tool's hardware (video_output.h)
     SharedStorage,    // NAS bin locking, vendor storage clients
     ExportDevice,     // File > Output > Export to Device: XDCAM disks, P2 cards (export_device.h)
     Deck,             // the Digital Cut tool's record decks (deck.h)

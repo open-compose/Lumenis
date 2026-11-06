@@ -1358,7 +1358,9 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     `MainWindow::digitalCut`; test `tst_digital_cut`).
   * 7.3b, the Video Output tool and audio output (p.910-924): video output devices (`ext::VideoOutputProvider`), Sync
     Lock, the output signal, calibration with the factory presets and test patterns, Recording Bars and Tone, the audio
-    output options, Generate LTC On Playback.
+    output options, Generate LTC On Playback. Done but LTC and direct bars and tone (docs/spec/video-output.md:
+    `ext::VideoOutputProvider`, `VideoOutputTool`, `media::testPattern`, the project's Video Output setting, Output Gain;
+    test `tst_video_output`); LTC needs an LTC OUT connector, so it goes with 7.3c.
   * 7.3c, hardware modules: AJA NTV2 (MIT) and Blackmagic Desktop Video behind the 7.3a-b interfaces, built where their
     SDKs are installed; gate 2 waits for hardware (M).
 * 7.4, captions: the SubCap effect (FX ch.14) with EBU N19 STL and Avid DS caption files, SRT, Scenarist SCC import

@@ -26,6 +26,7 @@ add_library(lumenis_ui STATIC
     export_device_dialog.cpp
     export_volume_dialog.cpp
     digital_cut_tool.cpp
+    video_output_tool.cpp
     interchange_dialogs.cpp
     list_tool.cpp
     effect_editor.cpp
@@ -113,6 +114,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/export_device_dialog.h
     include/lumenis/ui/export_volume_dialog.h
     include/lumenis/ui/digital_cut_tool.h
+    include/lumenis/ui/video_output_tool.h
     include/lumenis/ui/interchange_dialogs.h
     include/lumenis/ui/list_tool.h
     include/lumenis/ui/effect_editor.h

@@ -48,6 +48,7 @@
 #include "lumenis/media/render.h"
 #include "lumenis/ext/deck.h"
 #include "lumenis/ext/export_device.h"
+#include "lumenis/ext/video_output.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
@@ -79,6 +80,7 @@
 #include "lumenis/ui/digital_cut_tool.h"
 #include "lumenis/ui/export_device_dialog.h"
 #include "lumenis/ui/export_volume_dialog.h"
+#include "lumenis/ui/video_output_tool.h"
 #include "lumenis/ui/send_to_dialog.h"
 #include "lumenis/ui/interchange_dialogs.h"
 #include "lumenis/ui/list_tool.h"
@@ -1353,6 +1355,8 @@ SettingsWindow* MainWindow::showSettings() {
             if (tool == QLatin1String("keyboard")) showTool(QStringLiteral("Keyboard"));
             // An Audio Multi-Mix setting opens the tool to change it, without Mix (p.734).
             if (tool == QLatin1String("multiMix")) multipleMixes(false);
+            // A Video Output setting opens the Video Output tool (7.3b).
+            if (tool == QLatin1String("videoOutputTool")) openVideoOutput();
             // A Bin Layout setting: opened (p.92).
             if (tool == QLatin1String("binLayout")) {
                 const model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
@@ -1917,6 +1921,11 @@ void MainWindow::createTools() {
     panels_->addPanel(new Panel(QStringLiteral("AudioEQ"), tr("Audio EQ"), audioEq_));
     // Audio Punch-In (p.747-753): the take becomes managed media in the chosen bin; the target tracks
     // are silent while it runs; monitoring plays the input through the output.
+    // Tools > Video Output Tool (7.3b; docs/spec/video-output.md): its values are the project's Video Output setting.
+    videoOutput_ = new VideoOutputTool;
+    panels_->addPanel(new Panel(QStringLiteral("VideoOutput"), tr("Video Output Tool"), videoOutput_));
+    connect(videoOutput_, &VideoOutputTool::valuesChanged, this, [this](const QJsonObject& values) { storeVideoOutput(values, QString()); });
+    connect(videoOutput_, &VideoOutputTool::saveAsRequested, this, [this](const QString& name) { storeVideoOutput(videoOutput_->values(), name); });
     // File > Output > Digital Cut (7.3a; docs/spec/digital-cut.md).
     digitalCut_ = new DigitalCutTool;
     panels_->addPanel(new Panel(QStringLiteral("DigitalCut"), tr("Digital Cut"), digitalCut_));
@@ -2287,8 +2296,9 @@ std::vector<media::AudioPiece> MainWindow::soundOf(const model::LoadedClip& load
             }
         }
     }
-    // The Audio Mixer's Master fader, a gain on the whole mix (`scale` for automated pieces).
-    const double master = audioMixer_ ? audioMixer_->masterGain() : 0.0;
+    // The Audio Mixer's Master fader, a gain on the whole mix (`scale` for automated pieces), and the Audio Project
+    // setting's Output Gain, "the volume of global audio output" (p.920, p.1150).
+    const double master = (audioMixer_ ? audioMixer_->masterGain() : 0.0) + outputGainDb();
     if (master != 0.0) {
         const float gain = master <= model::kGainOff ? 0.0f : static_cast<float>(std::pow(10.0, master / 20.0));
         for (media::AudioPiece& piece : pieces) {
@@ -3318,6 +3328,38 @@ int MainWindow::exportToDevice(const QString& kind) {
     return delivered;
 }
 
+// ---------------------------------------------------------------- Video Output tool (7.3b; docs/spec/video-output.md)
+
+void MainWindow::openVideoOutput() {
+    videoOutput_->setDevices(providers_.usable<ext::VideoOutputProvider>());
+    if (settings_->hasProject()) {
+        const model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
+        const int active = f.activeIndex(QStringLiteral("Video Output"));
+        if (active >= 0) videoOutput_->setValues(f.entries.at(active).values);
+    }
+    showTool(QStringLiteral("VideoOutput"));
+}
+
+void MainWindow::storeVideoOutput(const QJsonObject& values, const QString& name) {
+    if (!settings_->hasProject()) return;
+    model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
+    const QString kind = QStringLiteral("Video Output");
+    f.ensure({kind});
+    int index = f.activeIndex(kind);
+    // Settings > Save As: a version of that name, made active (p.915).
+    if (!name.isEmpty()) {
+        index = -1;
+        for (int i : f.versions(kind)) {
+            if (f.entries.at(i).name == name) index = i;
+        }
+        if (index < 0) index = f.add(model::SettingEntry{kind, name, false, {}});
+        f.setActive(index);
+    }
+    if (index < 0) return;
+    f.entries[index].values = values;
+    settings_->commit(model::SettingsScope::Project);
+}
+
 // ---------------------------------------------------------------- Digital Cut (7.3a; docs/spec/digital-cut.md)
 
 void MainWindow::openDigitalCut() {
@@ -3422,6 +3464,7 @@ std::int64_t MainWindow::digitalCut(bool preview) {
     digitalCut_->setStatus(tr("Recording %1").arg(range));
     std::int64_t written = 0;
     QString error;
+    const float outputGain = static_cast<float>(std::pow(10.0, outputGainDb() / 20.0));
     movieSink_ = [&](const media::MovieSource& source, const media::MovieExportOptions&, const std::function<bool(double)>& progress,
                      QString* sinkError) {
         std::vector<std::vector<float>> planes;
@@ -3432,6 +3475,12 @@ std::int64_t MainWindow::digitalCut(bool preview) {
             std::vector<float> interleaved(static_cast<std::size_t>(count) * 2, 0.0f);
             if (!silent && source.sound) {
                 source.sound(from, count, planes);
+                // Output Gain affects "both the speakers and record devices" (p.920).
+                if (outputGain != 1.0f) {
+                    for (auto& plane : planes) {
+                        for (float& x : plane) x *= outputGain;
+                    }
+                }
                 for (int c = 0; c < 2 && c < static_cast<int>(planes.size()); ++c) {
                     for (int i = 0; i < count && i < static_cast<int>(planes[static_cast<std::size_t>(c)].size()); ++i)
                         interleaved[static_cast<std::size_t>(i * 2 + c)] = planes[static_cast<std::size_t>(c)][static_cast<std::size_t>(i)];
@@ -5972,6 +6021,10 @@ void MainWindow::saveMultiMix(const QString& name, const media::MultiMix& mix) {
     settings_->commit(model::SettingsScope::Project);
 }
 
+double MainWindow::outputGainDb() const {
+    return settings_ && settings_->hasProject() ? settings_->value(QStringLiteral("Audio Project"), QStringLiteral("outputGain")).toDouble() : 0.0;
+}
+
 int MainWindow::projectSampleRate() const {
     const int rate = settings_ ? settings_->text(QStringLiteral("Audio Project"), QStringLiteral("sampleRate")).toInt() : 0;
     return rate == 44100 || rate == 96000 ? rate : 48000;
@@ -7111,6 +7164,7 @@ void MainWindow::installPanelHandlers() {
     handle("file.output.export_to_device.p2", [this] { exportToDevice(QStringLiteral("p2")); });
     handle("file.new.volume_for_export", [this] { newVolumeForExport(); });
     handle("file.output.digital_cut", [this] { openDigitalCut(); });
+    handle("tools.video_output_tool", [this] { openVideoOutput(); });
     handle("file.export_matte_pict", [this] { exportMattePict(); });
     handle("tools.background_queue_window", [this] { showTool(QStringLiteral("BackgroundQueue")); });
     handle("file.media.load_media_database", [this] { loadMediaDatabase(); });

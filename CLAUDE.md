@@ -810,8 +810,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Volumes (docs/spec/as02.md: `model::ExportVolume` kept in `Bin::exportVolume`, `ExportVolumeDialog`, the bin's volume
   bar, `MainWindow::commitExportVolume`, `media::writeAs02`), is done, so 7.2 is. 7.3 is in three parts (ROADMAP). 7.3a, decks and the Digital Cut tool
   (docs/spec/digital-cut.md: `ext::DeckProvider`, tapes kept in folders `media::FolderTapeDeckProvider` with
-  `LUMENIS_TAPE_DECKS`, `DigitalCutTool`, `MainWindow::digitalCut` through exportMovieFile's "sink"), is done. Next:
-  7.3b, the Video Output tool and audio output. After Phase 7, before Phase 8: 7.6, the owner's report
+  `LUMENIS_TAPE_DECKS`, `DigitalCutTool`, `MainWindow::digitalCut` through exportMovieFile's "sink"), is done. 7.3b, the Video Output tool (docs/spec/video-output.md: `ext::VideoOutputProvider`,
+  `VideoOutputTool` with the project's Video Output setting, `media::testPattern`) and Output Gain, is done. 7.3c, the
+  AJA and Blackmagic modules, needs their SDKs and hardware: next is 7.4, captions. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

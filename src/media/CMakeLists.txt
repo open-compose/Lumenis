@@ -42,6 +42,7 @@ add_library(lumenis_media STATIC
     xdcam_disk.cpp
     as11.cpp
     tape_deck.cpp
+    test_patterns.cpp
     ocio_colour.h
     link.cpp
     ltc.cpp
@@ -73,6 +74,7 @@ add_library(lumenis_media STATIC
     include/lumenis/media/xdcam_disk.h
     include/lumenis/media/as11.h
     include/lumenis/media/tape_deck.h
+    include/lumenis/media/test_patterns.h
     include/lumenis/media/link.h
     include/lumenis/media/ltc.h
     include/lumenis/media/tone.h

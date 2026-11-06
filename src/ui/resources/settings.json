@@ -22,6 +22,7 @@
         {
           "name": "Output",
           "options": [
+            {"key": "outputGain", "type": "number", "label": "Output Gain", "default": 0, "min": -30, "max": 12, "decimals": 1, "suffix": " dB", "page": 1150},
             {"key": "mixMode", "type": "choice", "style": "menu", "label": "Mix Mode Selection", "default": "stereo", "page": 1150,
              "choices": [{"value": "stereo", "label": "Stereo"},
                          {"value": "mono", "label": "Mono"},
@@ -36,6 +37,13 @@
           ]
         }
       ]
+    },
+    {
+      "kind": "Video Output",
+      "scope": "project",
+      "page": 1225,
+      "opens": "videoOutputTool",
+      "tabs": []
     },
     {
       "kind": "Audio Multi-Mix",

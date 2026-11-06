@@ -85,6 +85,7 @@ class AudioEqTool;
 class ModifyDialog;
 class AudioPunchInTool;
 class DigitalCutTool;
+class VideoOutputTool;
 class AudioTrackEffectTool;
 class AudioMixer;
 class AudioTool;
@@ -389,6 +390,14 @@ public:
     // would be recorded; 0) or records the sequence onto the chosen deck with the tool's options (the frames recorded,
     // or -1 with the reason in the tool and the Console).
     void openDigitalCut();
+    // Tools > Video Output Tool (7.3b; docs/spec/video-output.md): the tool with the video output hardware and the
+    // project's Video Output setting; storeVideoOutput keeps its values in the active version, or (with a name) in a
+    // version of that name made active.
+    void openVideoOutput();
+    void storeVideoOutput(const QJsonObject& values, const QString& name);
+    VideoOutputTool& videoOutputTool() { return *videoOutput_; }
+    // The Audio Project setting's Output Gain, dB (p.1150).
+    double outputGainDb() const;
     std::int64_t digitalCut(bool preview);
     DigitalCutTool& digitalCutTool() { return *digitalCut_; }
     // AS-02 Export Volumes (7.2d; docs/spec/as02.md; p.901-904): File > New > Volume for Export makes an Export Volume
@@ -801,6 +810,7 @@ private:
     AudioEqTool* audioEq_ = nullptr;
     AudioPunchInTool* audioPunchIn_ = nullptr;
     DigitalCutTool* digitalCut_ = nullptr;
+    VideoOutputTool* videoOutput_ = nullptr;
     bool digitalCutHalted_ = false;
     // The Digital Cut's receiver of the export's frames and sound (exportMovieFile's "sink" format).
     std::function<bool(const media::MovieSource&, const media::MovieExportOptions&, const std::function<bool(double)>&, QString*)> movieSink_;

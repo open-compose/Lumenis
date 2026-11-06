@@ -94,7 +94,7 @@ an official build.
 | Colour management | OpenColorIO (BSD), ACES; optional, for OFX plug-ins since 6.11c3 (docs/spec/ofx-host.md) | — | — |
 | Export to Device (XDCAM disks, P2 cards; p.883-884, p.901) | XDCAM disks seen as folders (`media::XdcamDiskProvider`, 7.2b) | A drive or deck the OS mounts | P2 cards and networked decks through `ext::ExportDeviceProvider` (lumenis/ext/export_device.h): the P2 clip metadata is Panasonic's, not published |
 | Record decks (Digital Cut, p.926-938) | Tapes kept in folders (`media::FolderTapeDeckProvider`, 7.3a) | — | RS-422 decks and decks behind AJA or Blackmagic hardware through `ext::DeckProvider` (lumenis/ext/deck.h) |
-| Video I/O hardware | AJA NTV2 SDK (MIT) | Blackmagic Desktop Video driver (installed by the user) | Other vendors' SDKs |
+| Video I/O hardware (the Video Output tool through `ext::VideoOutputProvider`, lumenis/ext/video_output.h) | AJA NTV2 SDK (MIT) | Blackmagic Desktop Video driver (installed by the user) | Other vendors' SDKs |
 | Shared storage | Bin locking on any NAS/SAN | — | NEXIS client, MediaCentral |
 
 FFmpeg rules:
