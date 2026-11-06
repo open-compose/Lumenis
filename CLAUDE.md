@@ -794,7 +794,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   (docs/spec/movie-export.md: `src/media/movie_export.*` with `media::exportMovie` and the compression table,
   `MainWindow::exportMovieFile` composing frames and mixing sound, the Export setting's MOV and MP4 tab; `MediaWriter`
   checks the codec behind an encoder, `WriterSettings::fullRange`; tests `tst_movie_export`, `tst_movie_export_ui`),
-  is done. Next: 7.1b, stills, audio and image sequences.
+  is done. Next: 7.1b, stills, audio and image sequences. After Phase 7, before Phase 8: 7.6, the owner's report
+  that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
+  tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).

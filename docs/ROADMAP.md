@@ -1325,6 +1325,10 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
 * 7.4, captions: the SubCap effect (FX ch.14) with EBU N19 STL and Avid DS caption files, SRT, Scenarist SCC import
   (p.232) and caption data tracks, SCC and TTML export.
 * 7.5, DCP ("Output to DCP requirements for theatrical releases", p.519) through an open library, IMF export later.
+* 7.6 (the owner's report, 2026-11-06, after 7.5): the Titler+ window and the Effect Editor do not look like the FX
+  Guide's pictures. Titler+ in the guide has two columns of tool icons on the left; ours has text buttons, some side by
+  side, which make it as wide as a 1920-pixel screen on Windows. Lay both out as the guide's figures show them (read
+  the figures with `pdftoppm`), check their widths on a 1920 x 1080 screen in a test, and add a BUILDING.md entry.
 
 **Gates**
 1. Exports validate against the relevant spec checkers (AS-11 DPP, DCP checker
