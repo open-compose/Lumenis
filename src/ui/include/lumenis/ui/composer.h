@@ -2,6 +2,7 @@
 
 #include "lumenis/core/rational.h"
 #include "lumenis/media/ofx_host.h"
+#include "lumenis/model/closed_captions.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/model/monitor.h"
 #include "lumenis/model/sequence.h"
@@ -109,6 +110,9 @@ private:
     QPointF overlayFraction(const QPointF& point) const;
     QString overlayHandleAt(const QPointF& point) const;
     void paintOverlay(QPainter& p) const;
+    // A closed caption over the picture (p.983): CEA-608's grid of 15 rows of 32 columns over the middle 80% of the
+    // picture (ours), each row's text on a black box.
+    void paintCaption(QPainter& p, const QRect& pic, const model::CaptionScreen& caption) const;
     QString handleDrag_;
     QPointF handleFrom_;
     bool overlayDrag_ = false; // a press the Composer's OverlayInput took
@@ -165,6 +169,14 @@ public:
     using PhantomResolver =
         std::function<std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>>(MonitorId)>;
     void setPhantomResolver(PhantomResolver resolver) { phantoms_ = std::move(resolver); }
+    // Closed captions (7.4b; Editing Guide p.983): "Right-click the monitor where you want to preview the Closed
+    // Captions, and select Show Captions." MainWindow gives the caption on a monitor's frame (the D1 data of a
+    // sequence or a caption clip's own); shownCaption() is the one drawn at the position while Show Captions is on.
+    using CaptionResolver = std::function<std::optional<model::CaptionScreen>(MonitorId, std::int64_t)>;
+    void setCaptionResolver(CaptionResolver resolver) { captions_ = std::move(resolver); }
+    bool showsCaptions(MonitorId monitor) const;
+    void setShowCaptions(MonitorId monitor, bool on);
+    std::optional<model::CaptionScreen> shownCaption(MonitorId monitor) const;
     std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>> phantomMarks(MonitorId monitor) const {
         return phantoms_ ? phantoms_(monitor) : std::pair<std::optional<std::int64_t>, std::optional<std::int64_t>>{};
     }
@@ -592,6 +604,8 @@ public:
     // contextMenu() makes a new right-click menu that deletes itself when closed.
     QMenu* clipNameMenu(MonitorId monitor);
     QMenu* contextMenu();
+    // The menu of a monitor's picture: contextMenu() with Show Captions for that monitor.
+    QMenu* contextMenu(MonitorId monitor);
 
 signals:
     // Anything shown changed: what is loaded, positions, marks.
@@ -740,6 +754,8 @@ private:
     PictureResolver pictures_;
     MonitorOverride override_;
     PhantomResolver phantoms_;
+    CaptionResolver captions_;
+    bool showCaptions_[2] = {false, false}; // Source, Record
     PlayClock playClock_;
     // The position play last started (or changed speed) from; the play clock counts from here.
     std::int64_t playStart_ = 0;

@@ -758,6 +758,8 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
             p.setPen(palette().color(QPalette::BrightText));
             p.drawText(pic, Qt::AlignCenter, tr("Media Offline"));
         }
+        // Closed captions over the picture (p.983).
+        if (const auto caption = composer_.shownCaption(monitor_)) paintCaption(p, pic, *caption);
         // The sawtooth marks on the IN and OUT frames (p.405-406).
         p.setPen(QPen(QColor(230, 230, 230), 2));
         auto saw = [&](int x, int dir) {
@@ -797,6 +799,28 @@ void MonitorPicture::paintEvent(QPaintEvent*) {
         p.setBrush(Qt::NoBrush); // an outline only, whatever was drawn before
         p.drawRect(rect().adjusted(0, 0, -1, -1));
     }
+}
+
+void MonitorPicture::paintCaption(QPainter& p, const QRect& pic, const model::CaptionScreen& caption) const {
+    const QRectF grid(pic.left() + pic.width() * 0.1, pic.top() + pic.height() * 0.1, pic.width() * 0.8, pic.height() * 0.8);
+    const double cell = grid.width() / 32.0;
+    const double rowHeight = grid.height() / 15.0;
+    p.save();
+    QFont f(QStringLiteral("monospace"));
+    f.setStyleHint(QFont::TypeWriter);
+    f.setPixelSize(std::max(6, static_cast<int>(rowHeight * 0.8)));
+    p.setFont(f);
+    for (const model::CaptionRow& r : caption.rows) {
+        const QRectF box(grid.left() + r.column * cell, grid.top() + (r.row - 1) * rowHeight,
+                         static_cast<double>(r.text.size()) * cell, rowHeight);
+        p.fillRect(box, Qt::black);
+        // White in the captions; the palette's bright text, as custom-painted text is.
+        p.setPen(palette().color(QPalette::BrightText));
+        for (qsizetype i = 0; i < r.text.size(); ++i) {
+            p.drawText(QRectF(box.left() + static_cast<double>(i) * cell, box.top(), cell, rowHeight), Qt::AlignCenter, QString(r.text.at(i)));
+        }
+    }
+    p.restore();
 }
 
 QPointF MonitorPicture::overlayPoint(const QPointF& fraction) const {
@@ -1160,7 +1184,7 @@ void MonitorPicture::mouseDoubleClickEvent(QMouseEvent* event) {
 
 void MonitorPicture::contextMenuEvent(QContextMenuEvent* event) {
     composer_.setActiveMonitor(monitor_);
-    composer_.contextMenu()->exec(event->globalPos());
+    composer_.contextMenu(monitor_)->exec(event->globalPos());
 }
 
 void MonitorPicture::dragEnterEvent(QDragEnterEvent* event) {
@@ -2760,6 +2784,32 @@ QMenu* Composer::contextMenu() {
     QAction* clipboard = menu->addAction(tr("Clipboard Contents"));
     connect(clipboard, &QAction::triggered, this, [this] { emit commandRequested(QStringLiteral("edit.clipboard_contents")); });
     return menu;
+}
+
+QMenu* Composer::contextMenu(MonitorId monitor) {
+    QMenu* menu = contextMenu();
+    // Show Captions (p.983), a choice of each monitor's.
+    QAction* captions = menu->addAction(tr("Show Captions"));
+    captions->setObjectName(QStringLiteral("showCaptions"));
+    captions->setCheckable(true);
+    captions->setChecked(showsCaptions(monitor));
+    connect(captions, &QAction::toggled, this, [this, monitor](bool on) { setShowCaptions(monitor, on); });
+    return menu;
+}
+
+bool Composer::showsCaptions(MonitorId monitor) const {
+    return showCaptions_[monitor == MonitorId::Record ? 1 : 0];
+}
+
+void Composer::setShowCaptions(MonitorId monitor, bool on) {
+    showCaptions_[monitor == MonitorId::Record ? 1 : 0] = on;
+    if (MonitorPicture* w = picture(monitor)) w->update();
+}
+
+std::optional<model::CaptionScreen> Composer::shownCaption(MonitorId monitor) const {
+    const model::MonitorState& s = state(monitor);
+    if (!showsCaptions(monitor) || !captions_ || s.isEmpty()) return std::nullopt;
+    return captions_(monitor, s.position());
 }
 
 QToolButton* Composer::button(MonitorId monitor, const QString& commandId) const {

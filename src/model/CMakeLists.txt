@@ -13,6 +13,7 @@ add_library(lumenis_model STATIC
     simplify_export.cpp
     export_volume.cpp
     subcap.cpp
+    closed_captions.cpp
     audio_eq.cpp
     audio_suite.cpp
     effect_render.cpp

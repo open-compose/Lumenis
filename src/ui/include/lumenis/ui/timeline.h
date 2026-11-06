@@ -12,6 +12,7 @@
 #include "lumenis/model/correction_relations.h"
 #include "lumenis/model/correction_shapes.h"
 #include "lumenis/model/correction_template.h"
+#include "lumenis/model/closed_captions.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/effect_palette.h"
@@ -158,6 +159,9 @@ private:
     void paintEffects(QPainter& p, const Row& r, const model::Track& t) const;
     // Audio Data over an audio row's segments (timeline_automation.cpp).
     void paintAudioData(QPainter& p, const Row& r, const model::Track& t) const;
+    // Closed captions over the D1 row (timeline_captions.cpp; Editing Guide p.984): the captions' text, the loading
+    // phases as black brackets, the playing phases as grey lines and orange triangles where a cut breaks one.
+    void paintCaptions(QPainter& p, const Row& r) const;
     void paintControls(QPainter& p, const Row& r, const model::Track& t) const;
     void paintHeads(QPainter& p);
     // A segment's waveform (p.677-680) in `box`: a band per channel of the track, in Display Channel
@@ -255,6 +259,21 @@ public:
     // Asked first when Delete (edit.delete) runs: true when it deleted something of its own (the Effect Editor's
     // selected tracking data points), so the Timeline does nothing more.
     void setDeleteHook(std::function<bool()> hook) { deleteHook_ = std::move(hook); }
+    // Closed captions on D1 (7.4b; docs/spec/closed-captions.md): MainWindow gives the caption data of a segment's
+    // clip (model::clipCaptionData of the clip it resolves).
+    void setCaptionClipData(std::function<QByteArray(const model::Segment&)> clipData) {
+        captionClipData_ = std::move(clipData);
+        captionCache_ = {};
+    }
+    const std::function<QByteArray(const model::Segment&)>& captionClipData() const { return captionClipData_; }
+    // The shown sequence's captions, decoded once for each change of its D1 data.
+    struct CaptionTrack {
+        QByteArray data;
+        QList<model::ShownCaption> shown;
+        QList<std::pair<std::int64_t, std::int64_t>> loading;
+        QList<std::int64_t> broken;
+    };
+    const CaptionTrack& captionTrack() const;
     void setSequenceMaker(SequenceMaker maker) { maker_ = std::move(maker); }
     void setKeyResolver(Composer::KeyResolver resolver) { keys_ = std::move(resolver); }
 
@@ -1582,6 +1601,8 @@ private:
     bool syncing_ = false;
     SequenceStore store_;
     std::function<bool()> deleteHook_;
+    std::function<QByteArray(const model::Segment&)> captionClipData_;
+    mutable CaptionTrack captionCache_;
     SequenceMaker maker_;
     Composer::KeyResolver keys_;
     InsufficientSource insufficient_;

@@ -1369,8 +1369,14 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     EBU N19), the Master Caption List, Global Properties with stylesheets and Synchronize. Done
     (docs/spec/subcap.md: `src/model/subcap.*`, `media::subcapPicture`, `src/ui/subcap_dialogs.*`,
     `MainWindow::subcapAction`; tests `tst_subcap`, `tst_subcap_ui`).
-  * 7.4b, closed captions: SCC import into caption data tracks, SCC and TTML export, the caption preview. "SRT" in the
-    Editing Guide is the streaming protocol, not SubRip subtitles.
+  * 7.4b, closed captions (p.232, p.973-985). "SRT" in the Editing Guide is the streaming protocol, not SubRip
+    subtitles. In two parts:
+    * 7.4b1, SCC import through the AncData Import dialog into D-track only clips, CEA-608 decoding, the D1 row's
+      loading and playing phases and broken captions, Show Captions in the monitors, SCC and TTML export. Done
+      (docs/spec/closed-captions.md: `src/model/closed_captions.*`, `MainWindow::importScc`, `Timeline::captionTrack`,
+      `Composer::shownCaption`; tests `tst_closed_captions`, `tst_closed_captions_ui`, fuzz target `scc`).
+    * 7.4b2, the Timeline Quick Find (p.645-646) with its search options, closed caption text among the Visible
+      Timeline Text (p.985).
 * 7.5, DCP ("Output to DCP requirements for theatrical releases", p.519) through an open library, IMF export later.
 * 7.6 (the owner's report, 2026-11-06, after 7.5): the Titler+ window and the Effect Editor do not look like the FX
   Guide's pictures. Titler+ in the guide has two columns of tool icons on the left; ours has text buttons, some side by

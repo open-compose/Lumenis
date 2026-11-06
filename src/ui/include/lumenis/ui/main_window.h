@@ -5,6 +5,7 @@
 #include "lumenis/media/managed.h"
 #include "lumenis/media/mixdown.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/closed_captions.h"
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/project_store.h"
 #include "lumenis/model/send_to.h"
@@ -61,6 +62,7 @@ class UnmountDialog;
 class SetFontDialog;
 class ShortcutsWindow;
 
+class AncDataImportDialog;
 class AudioMixdownDialog;
 class VideoMixdownDialog;
 class ClearRendersDialog;
@@ -318,6 +320,14 @@ public:
     // Shot logs (Avid Log Exchange, p.131-132) imported into a bin: a master clip for each logged
     // event. Returns the new items' ids; warnings go to the Console.
     QStringList importShotLogs(const QString& binId, const QStringList& paths);
+    // Scenarist Closed Caption files (7.4b; docs/spec/closed-captions.md; p.232): each through the AncData Import
+    // dialog box (the hook stands in for it in tests) into a D-track only master clip of its caption data.
+    QStringList importScc(const QString& binId, const QStringList& paths);
+    void setAncDataImportHook(std::function<bool(AncDataImportDialog&)> hook) { ancDataImportHook_ = std::move(hook); }
+    // The caption data of the clip a segment comes from (empty without one): what the Timeline and Show Captions read.
+    QByteArray captionClipData(const model::Segment& segment) const;
+    // The caption on a monitor's frame: the Record monitor's sequence's D1, or a caption clip's own data.
+    std::optional<model::CaptionScreen> captionOn(MonitorId monitor, std::int64_t frame) const;
     // OpenTimelineIO files imported into a bin (p.969): a sequence for each timeline and an offline
     // master clip for each piece of media it names, unless the bin has that clip already (Relink
     // brings the media online). Also what dropping .otio files into a bin does. Returns the new
@@ -950,6 +960,10 @@ private:
     std::function<bool(ExportCaptionsDialog&)> exportCaptionsHook_;
     std::function<bool(MasterCaptionListDialog&)> masterCaptionHook_;
     std::function<bool(SubcapPropertiesDialog&)> subcapPropertiesHook_;
+    std::function<bool(AncDataImportDialog&)> ancDataImportHook_;
+    // The last captions decoded for each monitor, by their data (Show Captions asks for every frame painted).
+    mutable QByteArray captionData_[2];
+    mutable QList<model::ShownCaption> captionShown_[2];
     // Send To's template values while it exports (7.1c2); empty otherwise.
     QJsonObject exportOverride_;
     std::function<bool(SendToDialog&)> sendToHook_;

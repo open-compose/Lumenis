@@ -119,7 +119,9 @@ headers in `include/lumenis/<library>/`.
   onto `ext::DeckProvider` decks (`src/ext/include/lumenis/ext/deck.h`, the folder tape `src/media/tape_deck.*`); the Video Output tool
   `src/ui/video_output_tool.*` drives `ext::VideoOutputProvider` hardware, with `src/media/test_patterns.*`. The SubCap
   effect's captions and caption files (Avid DS, EBU N19) are `src/model/subcap.*`, its picture `src/media/subcap.cpp`
-  and its dialogs `src/ui/subcap_dialogs.*` (docs/spec/subcap.md).
+  and its dialogs `src/ui/subcap_dialogs.*` (docs/spec/subcap.md). Closed captions on D1 (SCC, CEA-608, TTML) are
+  `src/model/closed_captions.*`, drawn in the Timeline by `src/ui/timeline_captions.cpp` and in the monitors by the
+  Composer, imported through `src/ui/ancdata_import_dialog.*` (docs/spec/closed-captions.md).
 * **Effects.** The Effect Palette's list is `src/ui/resources/effects.json`
   and the Effect Editor's parameters `effect_parameters.json`; UI in
   `effect_palette.*` and `effect_editor.*` (its keyframe tracks and graphs in

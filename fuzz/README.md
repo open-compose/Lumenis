@@ -15,11 +15,12 @@ hung. BUILDING.md, "Fuzzing", has the procedure and the record of runs.
 | `target_avb.cpp` | `avb`: `avb::File::load`, every object parsed, the `--dump-avb` dump, and `avb::importBin`. |
 | `target_avb_rewrite.cpp` | `avb_rewrite`: `avb::rewrite` of whatever was read; the result must load with the same objects and rewrite to itself, in both byte orders. |
 | `target_fcpxml.cpp` | `fcpxml`: `fcpxml::importXml`, then every sequence exported with `fcpxml::exportXml`, which must succeed, and the export imported again, which must read. |
+| `target_scc.cpp` | `scc`: `model::parseScc` (Scenarist Closed Caption imports, ROADMAP 7.4b), then the caption data is decoded, written again with `model::writeScc` and must read back the same. |
 | `target_pict.cpp` | `pict`: `media::readPictData` (Export Matte PICT's files, ROADMAP 6.9c2), then a picture that reads is written again with `media::pictData` and must read back the same. |
 | `target_otio.cpp` | `otio`: `otio::importJson`, then every sequence exported with `otio::exportJson`, which must succeed, and the export imported again, which must read. |
 | `seeds.cpp` | Small seeds made by our own writers (compound files, an AAF export and bins of a tiny bin), so no download is needed to start. |
 | `common.cpp` | The table of targets, `fuzzCheck` (a failed check aborts, which counts as a crash) and the Qt message filter. |
-| `libfuzzer_main.cpp` | libFuzzer's entry point, compiled once per target (`fuzz_cfb`, `fuzz_aaf`, `fuzz_avb`, `fuzz_avb_rewrite`, `fuzz_otio`, `fuzz_fcpxml`, `fuzz_pict`). |
+| `libfuzzer_main.cpp` | libFuzzer's entry point, compiled once per target (`fuzz_cfb`, `fuzz_aaf`, `fuzz_avb`, `fuzz_avb_rewrite`, `fuzz_otio`, `fuzz_fcpxml`, `fuzz_pict`, `fuzz_scc`). |
 | `replay_main.cpp` | `lumenis_fuzz_replay`: runs files through the targets with any compiler; ctest `fuzz_replay`. |
 | `regressions/<target>/` | Minimised inputs that crashed or hung a target before a fix. Each is also a unit test in `tests/interop/` (named below). |
 

@@ -9,6 +9,8 @@
 #include "lumenis/ui/ofx_inputs_dialog.h"
 #include "lumenis/ui/main_window.h"
 
+#include "lumenis/ui/ancdata_import_dialog.h"
+
 #include "lumenis/model/safe_color_limiter.h"
 #include "lumenis/media/ofx_host.h"
 #include "lumenis/media/scopes.h"
@@ -889,11 +891,17 @@ void MainWindow::createPanels() {
         QStringList media;
         QStringList timelines;
         QStringList fcp;
+        QStringList captions;
         for (const QString& p : paths) {
-            (interop::otio::isOtioFile(p) ? timelines : interop::fcpxml::isFcpXmlFile(p) ? fcp : media) << p;
+            (p.endsWith(QLatin1String(".scc"), Qt::CaseInsensitive) ? captions
+             : interop::otio::isOtioFile(p)                         ? timelines
+             : interop::fcpxml::isFcpXmlFile(p)                     ? fcp
+                                                                    : media)
+                << p;
         }
         importOtio(binId, timelines);
         importFcpXml(binId, fcp);
+        importScc(binId, captions);
         linkFiles(binId, media);
     });
     // Favorite Bins (p.293) and saved bin views (p.249) are User settings:
@@ -961,6 +969,9 @@ void MainWindow::createPanels() {
     });
     // The Timeline (ch. 19), showing the Record monitor's sequence.
     timeline_ = new Timeline(*composer_);
+    // Closed captions on D1 (7.4b): the Timeline's D-track and Show Captions read the clips' caption data.
+    timeline_->setCaptionClipData([this](const model::Segment& s) { return captionClipData(s); });
+    composer_->setCaptionResolver([this](MonitorId m, std::int64_t f) { return captionOn(m, f); });
     timeline_->setKeyResolver([this](const QKeySequence& key) { return keyboard_->commandFor(key); });
     // The View Menu (p.604).
     connect(timeline_, &Timeline::viewRequested, this, &MainWindow::chooseTimelineView);
@@ -3241,6 +3252,8 @@ QString MainWindow::exportSuffix(const QString& exportAs) const {
         if (exportAs == QLatin1String("dpx")) return QStringLiteral("dpx");
         if (exportAs == QLatin1String("openexr")) return QStringLiteral("exr");
         return exportAs == QLatin1String("avb")      ? QStringLiteral("avb")
+               : exportAs == QLatin1String("scc")    ? QStringLiteral("scc")
+               : exportAs == QLatin1String("ttml")   ? QStringLiteral("ttml")
                : exportAs == QLatin1String("ale")    ? QStringLiteral("ale")
                : exportAs == QLatin1String("fcpxml") ? QStringLiteral("xml")
                : exportAs == QLatin1String("mp4")    ? QStringLiteral("mp4")
@@ -3253,6 +3266,8 @@ QString MainWindow::exportSuffix(const QString& exportAs) const {
 
 QString MainWindow::exportFilter(const QString& exportAs) {
         return exportAs == QLatin1String("avb")      ? tr("Media Composer bins (*.avb)")
+               : exportAs == QLatin1String("scc")    ? tr("Scenarist Closed Caption (*.scc)")
+               : exportAs == QLatin1String("ttml")   ? tr("Timed Text Markup Language (*.ttml)")
                : exportAs == QLatin1String("ale")    ? tr("Avid Log Exchange (*.ale)")
                : exportAs == QLatin1String("fcpxml") ? tr("Final Cut Pro 7 XML (*.xml)")
                : exportAs == QLatin1String("mp4")    ? tr("MP4 movies (*.mp4)")
@@ -4047,8 +4062,9 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
                        format == QLatin1String("audio") || format == QLatin1String("graphic") || format == QLatin1String("dpx") ||
                        format == QLatin1String("openexr") || format == QLatin1String("op1a") || format == QLatin1String("xdcam") ||
                        format == QLatin1String("op1aLegacy") || format == QLatin1String("as11");
+    const bool captionText = format == QLatin1String("scc") || format == QLatin1String("ttml");
     if (format != QLatin1String("aaf") && format != QLatin1String("avb") && format != QLatin1String("ale") &&
-        format != QLatin1String("fcpxml") && !movie) {
+        format != QLatin1String("fcpxml") && !movie && !captionText) {
         ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange, Media Composer bins, Final Cut Pro 7 XML, MOV, "
                                          "MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting)."));
         return false;
@@ -4056,6 +4072,11 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
     const model::BinItem* firstSequence = nullptr;
     for (const model::BinItem& item : selected) {
         if (item.kind == model::BinItemKind::Sequence && !firstSequence) firstSequence = &item;
+    }
+    if (captionText && !firstSequence) {
+        // "Select the sequence containing the Closed Caption text" (p.985).
+        ConsoleLog::instance().append(tr("Export to File: closed caption text comes from a sequence: select one."));
+        return false;
     }
     if (format == QLatin1String("fcpxml") && !firstSequence) {
         ConsoleLog::instance().append(tr("Export to File: Final Cut Pro 7 XML holds a sequence: select one."));
@@ -4068,6 +4089,7 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
         const QString old = QFileInfo(path).suffix();
         if (old.compare(QLatin1String("aaf"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("avb"), Qt::CaseInsensitive) == 0 ||
             old.compare(QLatin1String("ale"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("xml"), Qt::CaseInsensitive) == 0 ||
+            old.compare(QLatin1String("scc"), Qt::CaseInsensitive) == 0 || old.compare(QLatin1String("ttml"), Qt::CaseInsensitive) == 0 ||
             QStringList{QStringLiteral("mov"), QStringLiteral("mp4"), QStringLiteral("wav"), QStringLiteral("aif"), QStringLiteral("png"),
                         QStringLiteral("jpg"), QStringLiteral("tif"), QStringLiteral("bmp"), QStringLiteral("pct"), QStringLiteral("dpx"),
                         QStringLiteral("exr")}
@@ -4106,7 +4128,25 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
         }
         return count > 0;
     }
-    if (format == QLatin1String("ale")) {
+    if (captionText) {
+        // "You can export the Closed Caption text as either TTML (Timed Text Markup Language), or SCC (Scenarist Closed
+        // Caption) format" (p.985): the first sequence's D1 data, SCC as its byte pairs at the sequence's timecode.
+        const model::Sequence sequence = model::Sequence::fromItem(*firstSequence);
+        const QByteArray captionBytes = model::sequenceCaptionData(sequence, [this](const model::Segment& s) { return captionClipData(s); });
+        count = 1;
+        if (captionBytes.isEmpty() || model::captionLoadingSpans(captionBytes).isEmpty()) {
+            error = tr("the sequence has no closed captions on D1");
+        } else {
+            const bool dropFrame = model::isDropFrame(*firstSequence);
+            const TimecodeFormat tcFormat = TimecodeFormat::forRate(firstSequence->editRate, dropFrame);
+            const QString text = format == QLatin1String("scc")
+                                     ? model::writeScc(captionBytes, model::startFrameOf(*firstSequence), tcFormat)
+                                     : model::writeTtml(model::decodeCaptions(captionBytes), firstSequence->editRate);
+            QSaveFile out(path);
+            written = out.open(QIODevice::WriteOnly) && out.write(text.toUtf8()) >= 0 && out.commit();
+            if (!written) error = tr("cannot write %1").arg(QDir::toNativeSeparators(path));
+        }
+    } else if (format == QLatin1String("ale")) {
         // A shot log of the master clips and subclips selected (p.130, p.1174), with the bin's
         // columns.
         interop::ale::ExportOptions options;
@@ -4275,6 +4315,99 @@ QStringList MainWindow::importShotLogs(const QString& binId, const QStringList& 
     if (display.customColumns != doc->bin().display.customColumns) doc->setDisplay(display);
     if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
     return ids;
+}
+
+// ---------------------------------------------------------------- Closed captions (7.4b; docs/spec/closed-captions.md)
+
+QStringList MainWindow::importScc(const QString& binId, const QStringList& paths) {
+    if (paths.isEmpty()) return {};
+    BinDocument* doc = binContainer_->document(binId);
+    if (!doc) doc = binContainer_->openBin(binId);
+    if (!doc) return {};
+    const Rational rate = project_ ? project_->settings.format.editRate : Rational(30000, 1001);
+    QStringList ids;
+    for (const QString& path : paths) {
+        auto say = [&](const QString& text) { ConsoleLog::instance().append(tr("Import: %1: %2").arg(QFileInfo(path).fileName(), text)); };
+        QFile f(path);
+        if (!f.open(QIODevice::ReadOnly)) {
+            say(tr("cannot be read"));
+            continue;
+        }
+        QString error;
+        const auto file = model::parseScc(QString::fromLatin1(f.readAll()), &error);
+        if (!file) {
+            say(error);
+            continue;
+        }
+        // "The AncData Import dialog box opens. The starting timecode and drop frame checkbox will be automatically
+        // populated with the applicable information from the selected .scc file" (p.232).
+        AncDataImportDialog dialog(QFileInfo(path).fileName(), file->startFrame(), file->dropFrame, this);
+        if (!(ancDataImportHook_ ? ancDataImportHook_(dialog) : dialog.exec() == QDialog::Accepted)) continue;
+        const auto start = dialog.startFrame();
+        if (!start) {
+            say(tr("the starting timecode is not timecode"));
+            continue;
+        }
+        // The file's lines are read in its own timecode; the dialog's start is in the drop frame mode chosen.
+        model::SccFile relabelled = *file;
+        if (dialog.dropFrame() != file->dropFrame) {
+            for (model::SccLine& line : relabelled.lines) {
+                const auto fields = Timecode(line.frame, TimecodeFormat{30, file->dropFrame}).fields();
+                line.frame = Timecode::fromFields(fields, TimecodeFormat{30, dialog.dropFrame()}).frameCount();
+            }
+            relabelled.dropFrame = dialog.dropFrame();
+        }
+        const QByteArray captionBytes = model::sccCaptionData(relabelled, *start, rate);
+        if (captionBytes.isEmpty()) {
+            say(tr("no caption data after the starting timecode"));
+            continue;
+        }
+        // "It is a D-track only clip that contains only the 608 compatibility bytes from EIA-708" (p.232).
+        model::BinItem item;
+        item.id = model::newItemId();
+        item.mobId = MobId::generate();
+        item.kind = model::BinItemKind::MasterClip;
+        item.name = QFileInfo(path).completeBaseName();
+        item.created = item.modified = QDateTime::currentDateTimeUtc();
+        item.editRate = rate;
+        model::setClipCaptionData(item, captionBytes);
+        const bool sameRate = rate.num() * 1001 == rate.den() * 30000;
+        const TimecodeFormat format = TimecodeFormat::forRate(rate, dialog.dropFrame() && sameRate);
+        const std::int64_t startAtRate =
+            sameRate ? *start : static_cast<std::int64_t>(std::llround(static_cast<double>(*start) * 1001.0 / 30000.0 * static_cast<double>(rate.num()) / static_cast<double>(rate.den())));
+        item.fields.insert(QStringLiteral("Tracks"), QStringLiteral("D1"));
+        item.fields.insert(QStringLiteral("Start"), QString::fromStdString(Timecode(startAtRate, format).toString()));
+        doc->addItem(item);
+        ids << item.id;
+        say(tr("%n caption(s)", "", static_cast<int>(model::decodeCaptions(captionBytes).size())));
+    }
+    if (BinView* view = binContainer_->viewFor(doc); view && !ids.isEmpty()) view->selectIds(ids);
+    return ids;
+}
+
+QByteArray MainWindow::captionClipData(const model::Segment& segment) const {
+    if (segment.isFiller()) return {};
+    const auto clip = composer_->resolveForSegment(segment);
+    return clip ? model::clipCaptionData(*clip) : QByteArray();
+}
+
+std::optional<model::CaptionScreen> MainWindow::captionOn(MonitorId monitor, std::int64_t frame) const {
+    const model::LoadedClip* loaded = composer_->state(monitor).current();
+    if (!loaded) return std::nullopt;
+    QByteArray bytes;
+    if (loaded->item.kind == model::BinItemKind::Sequence) {
+        bytes = model::sequenceCaptionData(model::Sequence::fromItem(loaded->item),
+                                          [this](const model::Segment& s) { return captionClipData(s); });
+    } else if (model::hasCaptionData(loaded->item)) {
+        bytes = model::clipCaptionData(loaded->item);
+    }
+    if (bytes.isEmpty()) return std::nullopt;
+    const int i = monitor == MonitorId::Record ? 1 : 0;
+    if (bytes != captionData_[i]) {
+        captionData_[i] = bytes;
+        captionShown_[i] = model::decodeCaptions(bytes);
+    }
+    return model::captionAt(captionShown_[i], frame);
 }
 
 // The steps of p.951: the file (the system's open dialog first, unless a hook answers), the Frame
@@ -5070,15 +5203,18 @@ QStringList MainWindow::importFiles(const QString& binId, const QStringList& all
     QStringList logs;
     QStringList timelines;
     QStringList fcp;
+    QStringList captions;
     for (const QString& p : allPaths) {
-        (p.endsWith(QLatin1String(".aaf"), Qt::CaseInsensitive) ? aaf
+        (p.endsWith(QLatin1String(".aaf"), Qt::CaseInsensitive)   ? aaf
+         : p.endsWith(QLatin1String(".scc"), Qt::CaseInsensitive) ? captions
          : interop::ale::isShotLog(p)                           ? logs
          : interop::otio::isOtioFile(p)                         ? timelines
          : interop::fcpxml::isFcpXmlFile(p)                     ? fcp
                                                                 : paths)
             << p;
     }
-    QStringList fromAaf = importAaf(binId, aaf) + importShotLogs(binId, logs) + importOtio(binId, timelines) + importFcpXml(binId, fcp);
+    QStringList fromAaf = importAaf(binId, aaf) + importShotLogs(binId, logs) + importOtio(binId, timelines) + importFcpXml(binId, fcp) +
+                          importScc(binId, captions);
     BinDocument* doc = binContainer_->document(binId);
     if (!doc) doc = binContainer_->openBin(binId);
     if (!doc || paths.isEmpty()) return fromAaf;

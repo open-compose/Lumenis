@@ -12,6 +12,7 @@
 #include "lumenis/interop/cfb.h"
 #include "lumenis/interop/fcp_xml.h"
 #include "lumenis/interop/otio.h"
+#include "lumenis/model/closed_captions.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/sequence.h"
 
@@ -207,6 +208,11 @@ std::vector<Seed> seeds(const QString& target) {
         }
         add(QStringLiteral("matte.pct"), media::pictData(matte));
         add(QStringLiteral("opaque.pct"), media::pictData(matte, false));
+    } else if (target == QLatin1String("scc")) {
+        // Two pop-on captions as our encoder sends them, and a roll-up line, at 01:00:00;00.
+        const QByteArray popOn = model::popOnCaptionData({{30, 60, QStringLiteral("Seed one")}, {70, 90, QStringLiteral("Two\nrows")}}, 100);
+        add(QStringLiteral("popon.scc"), model::writeScc(popOn, 107892, TimecodeFormat{30, true}).toLatin1());
+        add(QStringLiteral("rollup.scc"), QByteArrayLiteral("Scenarist_SCC V1.0\n\n00:00:01:00\t9425 9425 94ad 94ad 9470 9470 c1c2 4380\n"));
     }
     return out;
 }

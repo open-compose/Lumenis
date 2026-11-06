@@ -1,4 +1,5 @@
 add_library(lumenis_ui STATIC
+    ancdata_import_dialog.cpp
     audio_eq.cpp
     audio_suite.cpp
     audio_punch_in.cpp
@@ -86,6 +87,7 @@ add_library(lumenis_ui STATIC
     theme.cpp
     timeline.cpp
     timeline_automation.cpp
+    timeline_captions.cpp
     timeline_correction.cpp
     tool_windows.cpp
     workspace.cpp
@@ -117,6 +119,7 @@ add_library(lumenis_ui STATIC
     include/lumenis/ui/digital_cut_tool.h
     include/lumenis/ui/video_output_tool.h
     include/lumenis/ui/subcap_dialogs.h
+    include/lumenis/ui/ancdata_import_dialog.h
     include/lumenis/ui/interchange_dialogs.h
     include/lumenis/ui/list_tool.h
     include/lumenis/ui/effect_editor.h

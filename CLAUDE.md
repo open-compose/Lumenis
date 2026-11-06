@@ -814,8 +814,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `VideoOutputTool` with the project's Video Output setting, `media::testPattern`) and Output Gain, is done. 7.3c, the
   AJA and Blackmagic modules, needs their SDKs and hardware. 7.4a, the SubCap
   effect (docs/spec/subcap.md: `src/model/subcap.*` with Avid DS and EBU N19 files, `media::subcapPicture`,
-  `src/ui/subcap_dialogs.*`, `MainWindow::subcapAction`; tests `tst_subcap`, `tst_subcap_ui`), is done; next is 7.4b,
-  closed captions. After Phase 7, before Phase 8: 7.6, the owner's report
+  `src/ui/subcap_dialogs.*`, `MainWindow::subcapAction`; tests `tst_subcap`, `tst_subcap_ui`), is done. 7.4b1, closed
+  captions on D1 (docs/spec/closed-captions.md: `src/model/closed_captions.*` with SCC, CEA-608 decoding and TTML,
+  `MainWindow::importScc` with `AncDataImportDialog`, `Timeline::captionTrack`/`TimelineView::paintCaptions`, Show
+  Captions through `Composer::shownCaption`; tests `tst_closed_captions`, `tst_closed_captions_ui`, fuzz target `scc`),
+  is done; next is 7.4b2, the Timeline Quick Find. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

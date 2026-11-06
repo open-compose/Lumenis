@@ -37,8 +37,11 @@ int fuzzFcpXml(const std::uint8_t* data, std::size_t size);
 // PICT: media::readPictData reads the bytes, and a picture that reads is written with media::pictData and must read
 // back the same (target_pict.cpp).
 int fuzzPict(const std::uint8_t* data, std::size_t size);
+// SCC: model::parseScc reads the text, its caption data is decoded, written with model::writeScc and must read back
+// to the same data (target_scc.cpp).
+int fuzzScc(const std::uint8_t* data, std::size_t size);
 
-// A target by its name ("cfb", "aaf", "avb", "avb_rewrite", "otio", "fcpxml", "pict"), as the directories in
+// A target by its name ("cfb", "aaf", "avb", "avb_rewrite", "otio", "fcpxml", "pict", "scc"), as the directories in
 // fuzz/regressions and the executables fuzz_<name> are named.
 struct Target {
     const char* name;

@@ -432,7 +432,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   the stereo mix onto the first two enabled tape tracks. 7.3b (docs/spec/video-output.md): calibration sliders -100 to
   100 around 0, a lit preset clicked showing the manual level, 75% bars with 100% white, test patterns at 1920 x 1080. 7.4a (docs/spec/subcap.md): the SubCap picture's defaults, the frames
   between imported captions keeping the effect without text, one ASCII TTI block per caption, stylesheets as flat XML
-  beside the user settings, Synchronize "Sequence" until chosen.
+  beside the user settings, Synchronize "Sequence" until chosen. 7.4b1 (docs/spec/closed-captions.md): caption
+  data kept in the bin item, colours and styles not kept, the 80% caption grid in the monitors, the D1 row's drawing,
+  a broken caption as a cut through a sending span, SCC lines before the start left out, TTML layout and times.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

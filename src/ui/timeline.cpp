@@ -716,6 +716,10 @@ void TimelineView::paintEvent(QPaintEvent*) {
                             textArea.setLeft(frame.right() + 2);
                         }
                     }
+                    // A caption clip's name goes under its captions (the picture on p.984).
+                    if (t->kind == model::TrackKind::Data && r.height >= 30 && !timeline_.captionTrack().shown.isEmpty()) {
+                        textArea.setTop(box.top() + box.height() * 0.6);
+                    }
                     // Clip text (Fast menu, p.592).
                     const QString clipText = textArea.width() > 12 ? timeline_.clipText(*t, s) : QString();
                     if (!clipText.isEmpty()) {
@@ -732,6 +736,7 @@ void TimelineView::paintEvent(QPaintEvent*) {
                 at = end;
             }
             if (t->kind == model::TrackKind::Audio && !timeline_.showsSource()) paintAudioData(p, r, *t);
+            if (t->kind == model::TrackKind::Data && !fastScrubbing()) paintCaptions(p, r);
             // Dupe Detection's bars above the frames (p.641).
             for (const model::Dupe& dupe : dupeList) {
                 if (dupe.track != r.track) continue;

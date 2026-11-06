@@ -92,6 +92,7 @@ lumenis_add_test(tst_movie_export_ui SOURCES tst_movie_export_ui.cpp LIBS ${ui_t
 lumenis_add_test(tst_digital_cut SOURCES tst_digital_cut.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_video_output SOURCES tst_video_output.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_subcap_ui SOURCES tst_subcap_ui.cpp LIBS ${ui_test_libs} lumenis::media)
+lumenis_add_test(tst_closed_captions_ui SOURCES tst_closed_captions_ui.cpp LIBS ${ui_test_libs} lumenis::media)
 lumenis_add_test(tst_send_to SOURCES tst_send_to.cpp LIBS ${ui_test_libs} lumenis::media)
 # Render Effect and Clear Renders in the application (docs/spec/rendering.md).
 lumenis_add_test(tst_render_ui SOURCES tst_render_ui.cpp LIBS ${ui_test_libs} lumenis::media)
