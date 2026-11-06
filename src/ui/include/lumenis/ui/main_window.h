@@ -72,6 +72,7 @@ class RenderEffectDialog;
 class MultiMixDialog;
 class ExportAsDialog;
 class SendToDialog;
+class ExportDeviceDialog;
 class ProToolsOptionsDialog;
 class SettingsDialog;
 class ExportBinDialog;
@@ -374,6 +375,12 @@ public:
     // False with the reason in `error`.
     bool prepareAafMedia(const QList<model::BinItem>& selected, const QList<model::BinItem>& clips, const QString& binId,
                          const QString& aafPath, QList<model::BinItem>& items, QStringList& warnings, QString* error);
+    // File > Output > Export to Device > XDCAM or P2 (7.2b; docs/spec/export-device.md; p.883-884, p.901): the Record
+    // monitor's sequence, or else the bin's selected clips and sequences, as MXF OP1a clips on a disk or card of an
+    // export device (ext::ExportDeviceProvider, the built-in media::XdcamDiskProvider among them). `kind` "xdcam" or
+    // "p2". The hook stands in for the dialog (tests). Returns how many clips were delivered.
+    int exportToDevice(const QString& kind);
+    void setExportDeviceHook(std::function<bool(ExportDeviceDialog&)> hook) { exportDeviceHook_ = std::move(hook); }
     // Stands in for the Exclude Media Referenced from Sequence pulldown (p.886): it gets the sequences to choose from
     // and returns the chosen one's index, or -1 to cancel (tests).
     void setExcludeSequenceHook(std::function<int(const QList<model::BinItem>&)> hook) { excludeSequenceHook_ = std::move(hook); }
@@ -888,6 +895,7 @@ private:
     std::function<bool(MultiMixDialog&)> multiMixHook_;
     std::function<bool(ExportAsDialog&)> exportHook_;
     std::function<int(const QList<model::BinItem>&)> excludeSequenceHook_;
+    std::function<bool(ExportDeviceDialog&)> exportDeviceHook_;
     // Send To's template values while it exports (7.1c2); empty otherwise.
     QJsonObject exportOverride_;
     std::function<bool(SendToDialog&)> sendToHook_;

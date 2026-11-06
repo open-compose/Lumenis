@@ -72,8 +72,8 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Input > Import EDL |  | p.951 | works | ☐ | | |
 | Output > Export to File |  | p.129 | works | ☐ | | |
 | Output > Export Bin |  | p.130 | works | ☐ | | |
-| Output > Export to Device > P2 |  | p.901 | *later* | ☐ | | |
-| Output > Export to Device > XDCAM |  | p.883 | *later* | ☐ | | |
+| Output > Export to Device > P2 |  | p.901 | works | ☐ | | |
+| Output > Export to Device > XDCAM |  | p.883 | works | ☐ | | |
 | Output > Digital Cut |  | p.912 | *later* | ☐ | | |
 | Output > Insert Edit Export |  | p.506 | *later* | ☐ | | |
 | Output > Send To > Make New |  | p.866 | works | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 160 of them working with a project open; the
+* 211 menu commands, 162 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

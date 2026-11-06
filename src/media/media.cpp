@@ -4,6 +4,7 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/clap_host.h"
 #include "lumenis/media/ofx_host.h"
+#include "lumenis/media/xdcam_disk.h"
 
 #include <QCryptographicHash>
 #include <QFile>
@@ -1926,6 +1927,8 @@ void registerProviders(ext::ProviderRegistry& registry) {
     registry.add(std::make_shared<ClapHostProvider>());
     // OFX image effect plug-ins (docs/spec/ofx-host.md); scanned at start-up too.
     registry.add(std::make_shared<OfxHostProvider>());
+    // Export to Device > XDCAM onto disks seen as folders (docs/spec/export-device.md).
+    registry.add(std::make_shared<XdcamDiskProvider>());
 }
 
 } // namespace lumenis::media

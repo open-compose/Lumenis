@@ -113,7 +113,8 @@ headers in `include/lumenis/<library>/`.
   `interchange_dialogs.*` the Import EDL and Export Bin As dialogs. File > Output > Export to File runs through
   `MainWindow::writeExport` (movies, stills and sound in `src/media/movie_export.*`, docs/spec/movie-export.md; AAF's
   Export Methods in `MainWindow::prepareAafMedia`); Send To templates are `src/model/send_to.*` with
-  `src/ui/send_to_dialog.*` (docs/spec/send-to.md); the Simplified AAF's spans are `src/model/simplify_export.*`.
+  `src/ui/send_to_dialog.*` (docs/spec/send-to.md); the Simplified AAF's spans are `src/model/simplify_export.*`; Export to Device goes through `ext::ExportDeviceProvider`
+  (`src/ext/include/lumenis/ext/export_device.h`, `src/media/xdcam_disk.*`, `src/ui/export_device_dialog.*`).
 * **Effects.** The Effect Palette's list is `src/ui/resources/effects.json`
   and the Effect Editor's parameters `effect_parameters.json`; UI in
   `effect_palette.*` and `effect_editor.*` (its keyframe tracks and graphs in

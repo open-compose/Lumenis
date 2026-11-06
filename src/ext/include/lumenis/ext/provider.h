@@ -25,6 +25,7 @@ enum class Category {
     AudioPluginHost,  // CLAP, VST3, AAX
     VideoIoDevice,    // AJA, Blackmagic, ...
     SharedStorage,    // NAS bin locking, vendor storage clients
+    ExportDevice,     // File > Output > Export to Device: XDCAM disks, P2 cards (export_device.h)
 };
 
 // Stable lower-case names ("open-source", "video-codec", ...) for logs and the About box.

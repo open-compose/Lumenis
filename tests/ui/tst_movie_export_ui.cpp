@@ -2,14 +2,18 @@
 // a sequence from the Record monitor written as a movie with the Export setting's options, its picture and sound read
 // back; Use Marks and the sequence's timecode; a master clip exported through a sequence of its own; Video Only.
 // 7.1b: a Graphic still of the Record monitor's frame, the frames with markers named by their comments, a DPX image
-// sequence and a WAVE file.
+// sequence and a WAVE file. 7.2a-b: XDCAM MXF OP1a, DPX's options, and Export to Device > XDCAM onto a disk seen as
+// a folder.
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/media.h"
+#include "lumenis/media/movie_export.h"
+#include "lumenis/media/xdcam_disk.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
+#include "lumenis/ui/export_device_dialog.h"
 #include "lumenis/ui/export_dialog.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/settings.h"
@@ -257,6 +261,59 @@ private slots:
         QCOMPARE(info->firstVideo()->length, 4);
         QCOMPARE(info->audio().front()->codec, QStringLiteral("pcm_s16le"));
         QCOMPARE(info->audio().front()->channels, 2);
+
+        // Export to Device > P2 without a P2 device: the options dimmed, nothing exported (p.901).
+        bool dimmed = false;
+        window.setExportDeviceHook([&](ExportDeviceDialog& dialog) {
+            dimmed = !dialog.hasTargets();
+            return true;
+        });
+        QCOMPARE(window.exportToDevice(QStringLiteral("p2")), 0);
+        QVERIFY(dimmed);
+
+        // Export to Device > XDCAM (p.883-884): the Record monitor's sequence onto a disk seen as a folder, named
+        // C0001.MXF, then C0002.MXF; the Video Format chosen in the dialog.
+        providers.add(std::make_shared<media::XdcamDiskProvider>());
+        const QString disk = dir.filePath(QStringLiteral("XDCAM Disk"));
+        QVERIFY(QDir().mkpath(disk));
+        media::setXdcamDiskFolders({disk});
+        window.setExportDeviceHook([&](ExportDeviceDialog& dialog) {
+            return dialog.hasTargets() && dialog.chooseTarget(QDir::toNativeSeparators(QFileInfo(disk).absoluteFilePath())) &&
+                   dialog.chooseFormat(QStringLiteral("xdcam_35"));
+        });
+        QCOMPARE(window.exportToDevice(QStringLiteral("xdcam")), 1);
+        QCOMPARE(window.exportToDevice(QStringLiteral("xdcam")), 1);
+        info = media::probe(QDir(disk).filePath(QStringLiteral("Clip/C0002.MXF")));
+        QVERIFY(info && info->firstVideo());
+        QCOMPARE(info->firstVideo()->codec, QStringLiteral("mpeg2video"));
+        QCOMPARE(info->firstVideo()->length, 4);
+        QVERIFY(QFileInfo::exists(QDir(disk).filePath(QStringLiteral("Clip/C0001.MXF"))));
+        QCOMPARE(media::nextXdcamClipName(disk), QStringLiteral("C0003.MXF"));
+
+        // A disk whose clips have four audio tracks takes no two-track clip (p.884).
+        const QString other = dir.filePath(QStringLiteral("Other Disk"));
+        QVERIFY(QDir().mkpath(other + QStringLiteral("/Clip")));
+        media::MovieSource four;
+        four.frames = 2;
+        four.raster = QSize(256, 144);
+        four.picture = [](std::int64_t) {
+            QImage black(256, 144, QImage::Format_RGB32);
+            black.fill(Qt::black);
+            return black;
+        };
+        four.sound = [](std::int64_t, int count, std::vector<std::vector<float>>& planes) {
+            planes.assign(4, std::vector<float>(static_cast<std::size_t>(count), 0.0f));
+        };
+        media::MovieExportOptions o;
+        o.container = media::MovieContainer::Xdcam;
+        o.compression = QStringLiteral("xdcam_50");
+        o.audioChannels = 4;
+        QVERIFY(media::exportMovie(other + QStringLiteral("/Clip/C0009.MXF"), four, o));
+        media::setXdcamDiskFolders({other});
+        window.setExportDeviceHook([](ExportDeviceDialog& dialog) { return dialog.hasTargets() && dialog.target().audioChannels == 4; });
+        QCOMPARE(window.exportToDevice(QStringLiteral("xdcam")), 0);
+        QVERIFY(!QFileInfo::exists(other + QStringLiteral("/Clip/C0010.MXF")));
+        media::setXdcamDiskFolders({});
     }
 };
 

@@ -92,6 +92,7 @@ an official build.
 | Audio plug-ins | CLAP host (MIT; built in since 5.5b); VST3 host (check the SDK licence when we start, since Steinberg has moved it to an open licence) | Audio Units (macOS) | AAX bridge (Avid SDK) |
 | Pro Tools Session export (.ptx, Editing Guide p.872-878) | AAF for Pro Tools (p.871-872) | — | Avid's unpublished .ptx format, through a provider |
 | Colour management | OpenColorIO (BSD), ACES; optional, for OFX plug-ins since 6.11c3 (docs/spec/ofx-host.md) | — | — |
+| Export to Device (XDCAM disks, P2 cards; p.883-884, p.901) | XDCAM disks seen as folders (`media::XdcamDiskProvider`, 7.2b) | A drive or deck the OS mounts | P2 cards and networked decks through `ext::ExportDeviceProvider` (lumenis/ext/export_device.h): the P2 clip metadata is Panasonic's, not published |
 | Video I/O hardware | AJA NTV2 SDK (MIT) | Blackmagic Desktop Video driver (installed by the user) | Other vendors' SDKs |
 | Shared storage | Bin locking on any NAS/SAN | — | NEXIS client, MediaCentral |
 

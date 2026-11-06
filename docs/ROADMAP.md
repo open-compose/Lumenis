@@ -1335,7 +1335,9 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     (docs/spec/movie-export.md "MXF OP1a": `MovieContainer::Mxf`/`Xdcam`/`MxfLegacy`, `media::setDpxHeaderInfo`; tests
     `tst_movie_export`, `tst_movie_export_ui`).
   * 7.2b, Export to Device > XDCAM and P2 (p.883-884, p.895, p.1187): a disk or card as a folder with the devices' own
-    layout and naming (Cxxxx.MXF), the audio track rule.
+    layout and naming (Cxxxx.MXF), the audio track rule. Done for XDCAM (docs/spec/export-device.md:
+    `ext::ExportDeviceProvider`, `media::XdcamDiskProvider`, `ExportDeviceDialog`, `MainWindow::exportToDevice`; test
+    `tst_movie_export_ui`); P2 cards wait for a module, since Panasonic's clip metadata is not published.
   * 7.2c, AS-11 (p.891-893): shims, descriptive metadata and segmentation from spanned markers.
   * 7.2d, AS-02 export volumes (p.901-904): the Export Volume bin, Commit, the bundle (manifest, shim, media, extra).
   AS-11 and AS-02 need DM and OP1b writing FFmpeg does not have; bmx (BSD) as an optional library is the candidate.

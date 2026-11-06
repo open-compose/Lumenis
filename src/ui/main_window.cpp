@@ -44,6 +44,7 @@
 #include "lumenis/media/mixdown.h"
 #include "lumenis/media/movie_export.h"
 #include "lumenis/media/render.h"
+#include "lumenis/ext/export_device.h"
 #include "lumenis/ext/provider.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
@@ -72,6 +73,7 @@
 #include "lumenis/ui/mixdown_dialog.h"
 #include "lumenis/ui/multi_mix_dialog.h"
 #include "lumenis/ui/export_dialog.h"
+#include "lumenis/ui/export_device_dialog.h"
 #include "lumenis/ui/send_to_dialog.h"
 #include "lumenis/ui/interchange_dialogs.h"
 #include "lumenis/ui/list_tool.h"
@@ -132,6 +134,7 @@
 #include <QSettings>
 #include <QSignalBlocker>
 #include <QStandardPaths>
+#include <QTemporaryDir>
 #include <QStorageInfo>
 #include <QPixmap>
 #include <QProgressDialog>
@@ -3219,6 +3222,78 @@ QString MainWindow::exportFilter(const QString& exportAs) {
                : exportAs == QLatin1String("op1a") || exportAs == QLatin1String("xdcam") || exportAs == QLatin1String("op1aLegacy")
                    ? tr("MXF files (*.mxf)")
                                                      : tr("AAF files (*.aaf)");
+}
+
+// ---------------------------------------------------------------- Export to Device (7.2b; docs/spec/export-device.md)
+
+int MainWindow::exportToDevice(const QString& kind) {
+    const QString title = kind == QLatin1String("p2") ? tr("Export to Device > P2") : tr("Export to Device > XDCAM");
+    auto say = [&](const QString& text) { ConsoleLog::instance().append(tr("%1: %2").arg(title, text)); };
+    // "If you have a sequence loaded in the Record monitor, the sequence exports when you select Export to Device. You
+    // can also right-click the clip or sequence in a bin" (p.883): the Record monitor's sequence, else the selection.
+    QList<QPair<model::BinItem, QString>> items; // item, its bin
+    if (const auto* loaded = composer_->state(MonitorId::Record).current();
+        loaded && loaded->item.kind == model::BinItemKind::Sequence) {
+        items << qMakePair(loaded->item, loaded->binId);
+    } else if (BinView* view = binContainer_->activeView()) {
+        for (const model::BinItem& item : view->document().bin().items) {
+            if (view->selectedIds().contains(item.id) && (item.kind == model::BinItemKind::Sequence || item.kind == model::BinItemKind::MasterClip ||
+                                                          item.kind == model::BinItemKind::Subclip))
+                items << qMakePair(item, view->document().nodeId());
+        }
+    }
+    if (items.isEmpty()) {
+        say(tr("load a sequence in the Record monitor, or select clips or sequences in a bin."));
+        return 0;
+    }
+    ExportDeviceDialog dialog(kind, providers_.usable<ext::ExportDeviceProvider>(), exportFlag(QStringLiteral("useMarks")),
+                              exportFlag(QStringLiteral("useSelectedTracks")), this);
+    const bool ok = exportDeviceHook_ ? exportDeviceHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok || !dialog.hasTargets() || !dialog.device()) return 0;
+    const ext::ExportDeviceTarget target = dialog.target();
+    // Ours: the sound goes as the stereo mix, tracks 1 and 2 ("the system mixes down to audio tracks 1 and 2 during
+    // export", p.884); a disk whose clips have another number of tracks takes none.
+    constexpr int channels = 2;
+    if (target.audioChannels > 0 && target.audioChannels != channels) {
+        say(tr("the disk's clips have %1 audio tracks and this clip has %2; reformat the disk or export to another one "
+               "(p.884).").arg(target.audioChannels).arg(channels));
+        return 0;
+    }
+    const QString format = dialog.videoFormat();
+    const media::MovieCompression* compression = media::findMovieCompression(format);
+    if (!compression) {
+        say(tr("the device offers no video format this build can write."));
+        return 0;
+    }
+    QJsonObject values{{QStringLiteral("exportAs"), compression->xdcam ? QStringLiteral("xdcam") : QStringLiteral("op1a")},
+                       {QStringLiteral("xdcamFormat"), format},
+                       {QStringLiteral("mxfCompression"), format},
+                       {QStringLiteral("mxfAudioFormat"), QStringLiteral("stereo")},
+                       {QStringLiteral("mxfBitDepth"), QString::number(dialog.bitDepth())},
+                       {QStringLiteral("useMarks"), dialog.useMarks()},
+                       {QStringLiteral("useSelectedTracks"), dialog.useSelectedTracks()}};
+    int delivered = 0;
+    QTemporaryDir scratch;
+    for (int i = 0; i < items.size(); ++i) {
+        const QString file = scratch.filePath(QStringLiteral("clip%1.mxf").arg(i));
+        exportOverride_ = values;
+        QString why;
+        const bool written = exportMovieFile(items.at(i).first, items.at(i).second, file, values.value(QStringLiteral("exportAs")).toString(), &why);
+        exportOverride_ = {};
+        if (!written) {
+            say(tr("%1: %2").arg(items.at(i).first.name, why));
+            continue;
+        }
+        std::string name;
+        std::string error;
+        if (!dialog.device()->deliver(target.id, file.toStdString(), &name, &error)) {
+            say(tr("%1: %2").arg(items.at(i).first.name, QString::fromStdString(error)));
+            continue;
+        }
+        ++delivered;
+        say(tr("%1 is %2 on %3").arg(items.at(i).first.name, QString::fromStdString(name), QString::fromStdString(target.name)));
+    }
+    return delivered;
 }
 
 // ---------------------------------------------------------------- Send To (7.1c2; docs/spec/send-to.md)
@@ -6692,6 +6767,8 @@ void MainWindow::installPanelHandlers() {
     // File > Output > Export to File (p.868).
     handle("file.output.export_to_file", [this] { exportToFile(); });
     handle("file.output.send_to.make_new", [this] { makeNewSendTo(); });
+    handle("file.output.export_to_device.xdcam", [this] { exportToDevice(QStringLiteral("xdcam")); });
+    handle("file.output.export_to_device.p2", [this] { exportToDevice(QStringLiteral("p2")); });
     handle("file.export_matte_pict", [this] { exportMattePict(); });
     handle("tools.background_queue_window", [this] { showTool(QStringLiteral("BackgroundQueue")); });
     handle("file.media.load_media_database", [this] { loadMediaDatabase(); });
