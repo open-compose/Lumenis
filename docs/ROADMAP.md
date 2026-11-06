@@ -1306,6 +1306,24 @@ phase of their own. They are done in three steps:
 * Output to AJA/Blackmagic devices.
 * Captions (SCC, SRT, STL) and the SubCap effect (FX Guide ch.14, p.378-390); Titler+ is in Phase 6.8.
 
+**Steps** (planned 2026-11-06 from the Editing Guide's ch.25 "Exporting Frames, Clips, or Sequences", p.861-908, and
+ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
+* 7.1, exporting pictures and sound through FFmpeg (ch.25):
+  * 7.1a, File > Output > Export to File for QuickTime Movie, MOV and MP4 (p.869-870, p.879-881, p.893-899): the
+    Export setting's dialogs for them, the sequence's frames through the compositor and its sound through the mix,
+    Use Marks and Use Selected Tracks, export by dragging (p.868).
+  * 7.1b, stills, audio and image sequences: Graphic (frames), Audio (WAV, AIFF), DPX (p.890) and OpenEXR (p.900),
+    Export with Mask Margins (p.900), H.265 (p.898).
+  * 7.1c, the Send To templates (p.863-867), Export to Pro Tools (p.872-878), Copy All Media and Consolidate in AAF
+    export (p.870), Simplified AAF (p.884), Export Media Difference (p.885).
+* 7.2, MXF OP1a and AS-11 (p.886-892), XDCAM (p.883), AS-02 export volumes (p.901-904); gate 1 with bmx's checkers.
+* 7.3, output to devices (ch.26, p.909-938): the output device and sync source, the Video Output tool, audio output
+  options, the Digital Cut tool, output and timecode formats; a device provider interface with a file "device" of our
+  own for tests, AJA (NTV2, MIT) and Blackmagic (the driver the user installs) behind it. Gate 2 waits for hardware (M).
+* 7.4, captions: the SubCap effect (FX ch.14) with EBU N19 STL and Avid DS caption files, SRT, Scenarist SCC import
+  (p.232) and caption data tracks, SCC and TTML export.
+* 7.5, DCP ("Output to DCP requirements for theatrical releases", p.519) through an open library, IMF export later.
+
 **Gates**
 1. Exports validate against the relevant spec checkers (AS-11 DPP, DCP checker
    and others).

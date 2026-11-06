@@ -790,7 +790,8 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   with OpenColorIO where it is installed, optional: `cmake/FindOpenColorIO.cmake`, `LUMENIS_OCIO`; `setOfxColourSpace`
   from `MainWindow`, `ofxNativeColourspace`, `ofxColourStyle`; without it plug-ins see the project's colour space;
   `LUMENIS_NO_OCIO=1`; test `tst_ofx_host` with the halve plug-in), is done, so 6.11 and Phase 6's steps are.
-  Next: Phases 7 and 8. Phase 9 "Left over stuff"
+  Phase 7 (output and finishing) is planned in five steps (ROADMAP, 2026-11-06); next: 7.1a, QuickTime/MOV/MP4 export.
+  Then Phase 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 
