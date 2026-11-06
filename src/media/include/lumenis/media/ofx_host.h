@@ -96,12 +96,25 @@ void setOfxMessageHandler(std::function<void(const QString&)> handler);
 
 // ---------------------------------------------------------------- effects and their parameters (6.11b1)
 
-// The registered usable plug-in an effect is of: its Effect Palette category and name (the label, or "<label>
-// (<identifier>)" for a second plug-in of that label); null for other effects.
+// The registered usable plug-in an effect is of: the one its plug-in tag names (markOfxEffect), else the one with its
+// Effect Palette category and name (the label, or "<label> (<identifier>)" for a second plug-in of that label); null
+// for other effects, and for a tagged effect whose plug-in is missing.
 const OfxPluginInfo* ofxPluginOf(const model::Effect& effect);
 inline bool isOfxEffect(const model::Effect& effect) {
     return ofxPluginOf(effect) != nullptr;
 }
+
+// A plug-in effect's tag (6.11b2): the parameter category "OFX Plug-In" with the plug-in's "id", "label" and "version",
+// written when the effect is applied, so that a sequence still knows it is a plug-in effect, and which, where the
+// plug-in is not installed ("you must install matching AVX plug-ins to see the effects", p.157). Not shown in the
+// Effect Editor (it is not one of the effect's parameter categories).
+inline const QString kOfxPluginTag = QStringLiteral("OFX Plug-In");
+void markOfxEffect(model::Effect& effect, const OfxPluginInfo& plugin);
+// The tagged plug-in's identifier; empty for an effect without the tag.
+QString ofxTaggedPlugin(const model::Effect& effect);
+// A tagged effect whose plug-in is not registered: "If the effect icon in the Timeline is blank, Media Composer could
+// not find the plug-in" (p.163). Its pictures pass through unchanged.
+bool isMissingOfxEffect(const model::Effect& effect);
 
 // The Effect Editor's parameter category of a plug-in's parameters: "<label> Plug-In Parameters" (ours).
 QString ofxParameterCategory(const OfxPluginInfo& plugin);
@@ -139,6 +152,9 @@ Picture ofxSegmentPicture(const model::Effect& effect, const Picture& source, do
 // Transition parameter.
 Picture ofxTransitionPicture(const model::Effect& effect, const Picture& from, const Picture& to, double progress, double time,
                              const model::EffectSpan& span);
+// A missing plug-in's effect (isMissingOfxEffect) asked to render says "Can't find effect: <label> (<identifier>)"
+// in the message handler's output, once per plug-in ("look for the message 'Can't find effect.' The message identifies
+// the plug-in", p.163); the picture passes through.
 // The frame rate plug-ins are told (kOfxImageEffectPropFrameRate); the application sets the project's. 30 until set.
 void setOfxFrameRate(double rate);
 // Destroys every plug-in instance (kOfxActionDestroyInstance); the next render makes them again. Returns how many.

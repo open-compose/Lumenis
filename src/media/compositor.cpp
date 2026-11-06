@@ -358,7 +358,7 @@ Picture transitionPicture(const model::Transition& t, Picture outgoing, Picture 
         // Chroma Key on a transition (p.473). Ours: the incoming video keyed over the outgoing.
         return over(imageEffectPicture(e, incoming, time, model::EffectSpan(t.duration, true)), outgoing);
     }
-    if (isOfxEffect(e)) return ofxTransitionPicture(e, outgoing, incoming, progress, time, model::EffectSpan(t.duration, true));
+    if (isOfxEffect(e) || isMissingOfxEffect(e)) return ofxTransitionPicture(e, outgoing, incoming, progress, time, model::EffectSpan(t.duration, true));
     if (isIllusionTransition(e)) {
         return illusionTransitionPicture(e, std::move(outgoing), std::move(incoming), progress, time, model::EffectSpan(t.duration, true));
     }
@@ -798,7 +798,7 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
                 result.quantize(c.precision);
                 continue;
             }
-            if (isOfxEffect(e)) {
+            if (isOfxEffect(e) || isMissingOfxEffect(e)) {
                 // An OFX plug-in's effect (FX Guide p.157; ofx_host.h): the plug-in's Output clip from the segment.
                 layer = ofxSegmentPicture(e, layer, time, length);
                 layer.quantize(c.precision);

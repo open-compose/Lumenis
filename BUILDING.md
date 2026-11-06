@@ -349,6 +349,10 @@ OFX video effect plug-ins are loaded at start-up too (docs/spec/ofx-host.md):
   `/usr/OFX/Plugins`) and in the folders listed in `OFX_PLUGIN_PATH`. The
   bundle needs a binary for your platform (`Contents/Win64`,
   `Contents/MacOS`, `Contents/Linux-x86-64`).
+* **A plug-in effect's icon in the Timeline is blank.** The plug-in it was
+  made with is not installed here (a sequence from another system). Tools >
+  Console names it: "Can't find effect: <label> (<identifier>)". Install the
+  plug-in and restart Cutthulhu; the effect keeps its values meanwhile.
 * **Cutthulhu crashes at start-up after you installed a plug-in.** Start it
   with `LUMENIS_NO_OFX=1` set, which skips the scan. Then move the bundle
   out of the OFX folders.

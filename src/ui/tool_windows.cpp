@@ -1,6 +1,7 @@
 #include "lumenis/ui/tool_windows.h"
 
 #include "lumenis/core/branding.h"
+#include "lumenis/media/ofx_host.h"
 #include "lumenis/media/classic_title.h"
 #include "lumenis/ui/theme.h"
 
@@ -270,7 +271,7 @@ void ConsoleWindow::run(const QString& command) {
     log.append(QStringLiteral("> ") + command);
     const QString name = command.section(QLatin1Char(' '), 0, 0).toLower();
     if (name == QLatin1String("help")) {
-        log.append(tr("Commands: help, clear, sysinfo, version, HDTitleFilter."));
+        log.append(tr("Commands: help, clear, sysinfo, version, HDTitleFilter, closeallofxplugins."));
     } else if (name == QLatin1String("clear")) {
         log.clear();
     } else if (name == QLatin1String("sysinfo")) {
@@ -282,11 +283,11 @@ void ConsoleWindow::run(const QString& command) {
         // again" (FX Guide p.376).
         media::setHdTitleFilter(!media::hdTitleFilter());
         log.append(media::hdTitleFilter() ? tr("HD title filter on.") : tr("HD title filter off."));
-    } else if (name == QLatin1String("hdtitlefilter")) {
-        // "Enter HDTitleFilter. This command works as a toggle, so the filter remains on until you type the command
-        // again" (FX Guide p.376).
-        media::setHdTitleFilter(!media::hdTitleFilter());
-        log.append(media::hdTitleFilter() ? tr("HD title filter on.") : tr("HD title filter off."));
+    } else if (name == QLatin1String("closeallofxplugins") || name == QLatin1String("closeallavxplugins")) {
+        // "Type closeallavxplugins ... Media Composer closes all open AVX 1.x plug-ins. The AVX plug-ins automatically
+        // open again as needed" (FX Guide p.158); ours for OFX plug-ins, under either name.
+        const int closed = media::closeOfxInstances();
+        log.append(tr("Closed %n OFX plug-in instance(s).", nullptr, closed));
     } else {
         log.append(tr("Unknown command: %1. Type help for a list.").arg(name));
     }

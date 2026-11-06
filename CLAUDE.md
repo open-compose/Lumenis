@@ -777,8 +777,11 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   tests `tst_ofx_host`, `tst_ofx_palette`), is done. 6.11b1, rendering (`ofxSegmentPicture`/`ofxTransitionPicture`
   from the compositor, one instance per plug-in with `closeOfxInstances`, values and keyframes through the parameter
   suite, bottom-up float RGBA clip images; the parameters as Effect Editor controls through `ofxEditorParameters` under
-  "<label> Plug-In Parameters"; `setOfxFrameRate` from `MainWindow`), is done.
-  Next: 6.11b2 (missing plug-ins, templates, closeallofxplugins) and 6.11c, then Phases 7 and 8. Phase 9 "Left over stuff"
+  "<label> Plug-In Parameters"; `setOfxFrameRate` from `MainWindow`), is done. 6.11b2, missing plug-ins (the "OFX
+  Plug-In" tag written by `Timeline::seededEffect` through `markOfxEffect`, `isMissingOfxEffect`, the blank Timeline icon,
+  "Can't find effect" in the Console), templates of plug-in effects and the Console's `closeallofxplugins`, is done, so
+  6.11b is.
+  Next: 6.11c, then Phases 7 and 8. Phase 9 "Left over stuff"
   (printing, Batch Import, AutoSync ...) comes after Phase 8, just before
   Phase 10, hardening (owner's decision, 2026-10-27).
 

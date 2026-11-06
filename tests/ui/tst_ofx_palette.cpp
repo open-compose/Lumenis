@@ -4,13 +4,16 @@
 // Effect Editor's controls (6.11b1).
 #include "lumenis/media/ofx_host.h"
 #include "lumenis/model/bin.h"
+#include "lumenis/model/effect_template.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/timeline.h"
+#include "lumenis/ui/tool_windows.h"
 #include "lumenis/ui/effect_editor.h"
 #include "lumenis/ui/effect_palette.h"
 
 #include <QApplication>
+#include <QDateTime>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QJsonObject>
@@ -23,8 +26,8 @@ using namespace lumenis::ui;
 
 namespace {
 
-// A sequence of one clip, 100 frames on V1.
-model::BinItem sequence() {
+// A sequence of one clip, 100 frames on V1, with `effect` on it if given.
+model::BinItem sequence(std::optional<model::Effect> effect = std::nullopt) {
     model::BinItem s;
     s.id = model::newItemId();
     s.name = QStringLiteral("One");
@@ -36,6 +39,7 @@ model::BinItem sequence() {
     a.name = QStringLiteral("A");
     a.sourceTrack = QStringLiteral("V1");
     a.length = 100;
+    a.effect = effect;
     seq.splice(QStringLiteral("V1"), 0, {a});
     seq.storeIn(s);
     return s;
@@ -138,6 +142,60 @@ private slots:
         const model::Segment& s = seq.track(QStringLiteral("V1"))->segments.at(0);
         QVERIFY(s.effect);
         QCOMPARE(s.effect->parameters.value(category).toObject().value(QStringLiteral("channel")).toString(), QStringLiteral("Green"));
+        // Applied, it is tagged with its plug-in (6.11b2).
+        QCOMPARE(media::ofxTaggedPlugin(*s.effect), QStringLiteral("org.cutthulhu.test.tint"));
+        QCOMPARE(s.effect->parameters.value(media::kOfxPluginTag).toObject().value(QStringLiteral("version")).toString(), QStringLiteral("1.2"));
+
+        // An effect template of it (p.157) keeps the plug-in and its values.
+        const auto t = model::segmentTemplate(s, Rational(25), false);
+        QVERIFY(t);
+        const auto back = model::effectTemplateOf(model::effectTemplateItem(*t, QStringLiteral("Tint"), QDateTime::currentDateTime()));
+        QVERIFY(back);
+        const model::Effect applied = model::adaptedEffect(*back, Rational(25));
+        QVERIFY(media::isOfxEffect(applied));
+        QCOMPARE(media::ofxPluginOf(applied)->id, QStringLiteral("org.cutthulhu.test.tint"));
+        QCOMPARE(applied.parameters.value(category).toObject().value(QStringLiteral("channel")).toString(), QStringLiteral("Green"));
+    }
+
+    void missingPluginIcon() {
+        // The Timeline's effect icon: filled for a plug-in effect, blank (its outline only) when the plug-in is missing
+        // (p.163). The tile's fill colour counts the filled pixels.
+        auto filled = [](const model::Effect& e) {
+            Composer composer;
+            Timeline timeline{composer};
+            timeline.setSequenceStore([](const QString&, const model::BinItem&, bool) { return true; });
+            timeline.resize(900, 300);
+            timeline.show();
+            settle();
+            composer.load(MonitorId::Record, QStringLiteral("bin"), sequence(e));
+            settle();
+            const QImage image = timeline.view()->grab().toImage();
+            int n = 0;
+            for (int y = 0; y < image.height(); ++y) {
+                for (int x = 0; x < image.width(); ++x) n += image.pixel(x, y) == 0xff8f5fc8 ? 1 : 0;
+            }
+            return n;
+        };
+        model::Effect present{QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Tint"), {}};
+        media::markOfxEffect(present, *media::ofxPluginFor(QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Tint")));
+        QVERIFY(!media::isMissingOfxEffect(present));
+        QVERIFY(filled(present) > 10);
+        model::Effect missing{QStringLiteral("Other Vendor"), QStringLiteral("Glow"), {}};
+        missing.parameters.insert(media::kOfxPluginTag, QJsonObject{{QStringLiteral("id"), QStringLiteral("com.example.glow")},
+                                                                    {QStringLiteral("label"), QStringLiteral("Glow")}});
+        QVERIFY(media::isMissingOfxEffect(missing));
+        QCOMPARE(filled(missing), 0);
+    }
+
+    void closeAllPlugins() {
+        // The Console's closeallofxplugins (and Avid's closeallavxplugins, p.158) close the plug-in instances.
+        model::Effect e{QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Tint"), {}};
+        media::ofxSegmentPicture(e, media::Picture::solid(4, 4, Qt::white), 0.0, model::EffectSpan(10));
+        ConsoleWindow console;
+        console.run(QStringLiteral("closeallofxplugins"));
+        QVERIFY2(ConsoleLog::instance().lines().constLast().startsWith(QStringLiteral("Closed 1 OFX")), qPrintable(ConsoleLog::instance().lines().constLast()));
+        console.run(QStringLiteral("closeallavxplugins"));
+        QVERIFY(ConsoleLog::instance().lines().constLast().startsWith(QStringLiteral("Closed 0 OFX")));
     }
 
     void palette() {

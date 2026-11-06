@@ -38,6 +38,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <map>
+#include <set>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -1544,7 +1545,44 @@ std::optional<Picture> render(const OfxPluginInfo& info, RenderContext& r) {
 
 } // namespace
 
+void markOfxEffect(model::Effect& effect, const OfxPluginInfo& plugin) {
+    effect.parameters.insert(kOfxPluginTag, QJsonObject{{QStringLiteral("id"), plugin.id},
+                                                        {QStringLiteral("label"), plugin.label},
+                                                        {QStringLiteral("version"), QStringLiteral("%1.%2").arg(plugin.versionMajor).arg(plugin.versionMinor)}});
+}
+
+QString ofxTaggedPlugin(const model::Effect& effect) {
+    return effect.parameters.value(kOfxPluginTag).toObject().value(QStringLiteral("id")).toString();
+}
+
+bool isMissingOfxEffect(const model::Effect& effect) {
+    return !ofxTaggedPlugin(effect).isEmpty() && !ofxPluginOf(effect);
+}
+
+namespace {
+
+// Says once per plug-in that a tagged effect's plug-in cannot be found (p.163).
+void reportMissing(const model::Effect& effect) {
+    static std::set<QString> reported;
+    std::lock_guard lock(renderMutex());
+    const QString id = ofxTaggedPlugin(effect);
+    if (!reported.insert(id).second) return;
+    const QString label = effect.parameters.value(kOfxPluginTag).toObject().value(QStringLiteral("label")).toString();
+    const QString text = QStringLiteral("Can't find effect: %1 (%2)").arg(label.isEmpty() ? effect.name : label, id);
+    if (messageHandler()) messageHandler()(text);
+    else qWarning("OFX %s", qPrintable(text));
+}
+
+} // namespace
+
 const OfxPluginInfo* ofxPluginOf(const model::Effect& effect) {
+    // By the tag: the plug-in whatever its palette name; a tag no registered plug-in has is a missing plug-in.
+    if (const QString id = ofxTaggedPlugin(effect); !id.isEmpty()) {
+        for (const OfxPluginInfo& p : registered()) {
+            if (p.usable() && p.id == id) return &p;
+        }
+        return nullptr;
+    }
     for (const OfxPluginInfo& p : registered()) {
         if (!p.usable() || p.category() != effect.category) continue;
         if (effect.name == p.label || effect.name == QStringLiteral("%1 (%2)").arg(p.label, p.id)) return &p;
@@ -1635,7 +1673,10 @@ QJsonValue ofxParameterDefault(const model::Effect& effect, const QString& categ
 
 Picture ofxSegmentPicture(const model::Effect& effect, const Picture& source, double time, const model::EffectSpan& span) {
     const OfxPluginInfo* info = ofxPluginOf(effect);
-    if (!info) return source;
+    if (!info) {
+        if (isMissingOfxEffect(effect)) reportMissing(effect);
+        return source;
+    }
     RenderContext r;
     r.effect = &effect;
     r.info = info;
@@ -1651,7 +1692,11 @@ Picture ofxSegmentPicture(const model::Effect& effect, const Picture& source, do
 Picture ofxTransitionPicture(const model::Effect& effect, const Picture& from, const Picture& to, double progress, double time,
                              const model::EffectSpan& span) {
     const OfxPluginInfo* info = ofxPluginOf(effect);
-    if (!info) return mix(from, to, progress);
+    if (!info) {
+        // Ours: a missing plug-in's transition dissolves.
+        if (isMissingOfxEffect(effect)) reportMissing(effect);
+        return mix(from, to, progress);
+    }
     RenderContext r;
     r.effect = &effect;
     r.info = info;

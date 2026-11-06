@@ -1278,7 +1278,8 @@ phase of their own. They are done in three steps:
     (docs/spec/ofx-host.md: `ofxSegmentPicture`/`ofxTransitionPicture` from the compositor, `ofxEditorParameters`,
     instances and `closeOfxInstances`; tests `tst_ofx_host`, `tst_ofx_palette`). 6.11b2: a missing plug-in's effect
     blank in the Timeline and named in the Console (p.163); effect templates of plug-in effects (p.157); the Console's
-    `closeallofxplugins` after `closeallavxplugins` (p.158).
+    `closeallofxplugins` after `closeallavxplugins` (p.158). Done (the "OFX Plug-In" tag through `markOfxEffect`,
+    `isMissingOfxEffect`; tests `tst_ofx_host`, `tst_ofx_palette`), so 6.11b is.
   * 6.11c, the General context's several inputs with the Optional Inputs dialog (p.161), overlays through the Interact
     suite with Outline/Path (p.161-162), and colour management with OCIO (the OFX 1.5 colour suite) where the library
     is installed, else the plug-in sees the project's colour space only.

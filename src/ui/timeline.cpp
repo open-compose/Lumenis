@@ -2,6 +2,7 @@
 
 #include "lumenis/ui/correction_monitors.h"
 
+#include "lumenis/media/ofx_host.h"
 #include "lumenis/media/audio_fx.h"
 #include "lumenis/media/classic_title.h"
 #include "lumenis/media/link.h"
@@ -1423,6 +1424,14 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
     auto icon = [&](double centre, const model::Effect& e, bool transition, bool rendered, std::optional<bool> realTime = {}) {
         const EffectInfo* info = EffectCatalog::builtin().find(e.category, e.name);
         const QRectF box(centre - iconWidth / 2.0, r.top + (r.height - iconHeight) / 2.0, iconWidth, iconHeight);
+        // A plug-in effect whose plug-in is not installed: a blank icon ("If the effect icon in the Timeline is blank,
+        // Media Composer could not find the plug-in", FX Guide p.163), its outline only.
+        if (media::isMissingOfxEffect(e)) {
+            p.setPen(QPen(QColor(0xff4b2f72), 1));
+            p.setBrush(Qt::NoBrush);
+            p.drawRoundedRect(box, 2, 2);
+            return;
+        }
         p.setPen(QPen(QColor(0xff4b2f72), 1));
         p.setBrush(QColor(0xff8f5fc8));
         p.drawRoundedRect(box, 2, 2);
@@ -1431,6 +1440,15 @@ void TimelineView::paintEffects(QPainter& p, const Row& r, const model::Track& t
             p.drawPolygon(QPolygonF{box.topRight(), box.bottomRight(), box.bottomLeft() + QPointF(iconWidth / 4.0, 0)});
         } else {
             p.drawRect(box.adjusted(iconWidth / 4.0, iconHeight / 4.0, -iconWidth / 4.0, -iconHeight / 4.0));
+        }
+        if (info && !info->ofxPlugin.isEmpty()) {
+            // "AVX plug-ins have a plug-in icon in the Effect Palette and in the Timeline" (p.163): the palette's plug.
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(0xff3cc85a).lighter(130));
+            const QRectF plug(box.right() - box.width() * 0.4, box.top() + box.height() * 0.35, box.width() * 0.28, box.height() * 0.35);
+            p.drawRect(plug);
+            p.drawRect(QRectF(plug.left() + plug.width() * 0.15, box.top() + 1, 1, plug.top() - box.top() - 1));
+            p.drawRect(QRectF(plug.right() - plug.width() * 0.15 - 1, box.top() + 1, 1, plug.top() - box.top() - 1));
         }
         if (rendered) return;
         p.setPen(Qt::NoPen);
@@ -6128,6 +6146,12 @@ void Timeline::autoCorrectEffects(model::Sequence& seq, const QList<model::Segme
 
 model::Effect Timeline::seededEffect(const EffectInfo& effect) const {
     model::Effect e = effect.effect();
+    // A plug-in effect keeps which plug-in it is (6.11b2), so a sequence opened where it is missing still knows.
+    if (!effect.ofxPlugin.isEmpty()) {
+        for (const media::OfxPluginInfo& p : media::ofxPlugins()) {
+            if (p.id == effect.ofxPlugin) media::markOfxEffect(e, p);
+        }
+    }
     if (effectSeed_) effectSeed_(e);
     return e;
 }

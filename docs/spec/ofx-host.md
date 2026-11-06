@@ -9,8 +9,8 @@ CLAP host (docs/spec/clap-host.md).
 
 6.11a finds and describes plug-ins and lists them in the Effect Palette.
 6.11b1 renders them and shows their parameters in the Effect Editor.
-6.11b2 is a missing plug-in's blank effect, templates of plug-in effects
-and `closeallofxplugins`; 6.11c the General context's several inputs,
+6.11b2 handles missing plug-ins, templates of plug-in effects and
+`closeallofxplugins`; 6.11c the General context's several inputs,
 overlays and OCIO.
 
 ## Finding plug-ins (`src/media/ofx_host.*`)
@@ -151,6 +151,32 @@ transitions). The effect's plug-in is found by its category and name
 * **Values the plug-in sets** (in actions we do not send yet) are accepted
   and not kept: the Effect Editor's controls own the values.
 
+## Missing plug-ins, templates and closing (6.11b2)
+
+* **The tag:** a plug-in effect applied from the palette gets the
+  parameter category "OFX Plug-In" with the plug-in's `id`, `label` and
+  `version` (`markOfxEffect`, from `Timeline::seededEffect`; ours). It is
+  not one of the effect's parameter categories, so the Effect Editor does
+  not show it. A tagged effect is its plug-in's whatever its palette name
+  (`ofxPluginOf` looks for the tag first).
+* **A missing plug-in** ("If you are transferring a project that includes
+  sequences with AVX plug-in effects from another system, you must install
+  matching AVX plug-ins to see the effects", p.157): a tagged effect whose
+  plug-in is not registered (`isMissingOfxEffect`).
+  * Its icon in the Timeline is blank, the tile's outline only ("If the
+    effect icon in the Timeline is blank, Media Composer could not find
+    the plug-in", p.163). Installed plug-ins' icons have the palette's plug.
+  * Its picture passes through; a missing transition dissolves (ours).
+  * The Console says "Can't find effect: <label> (<id>)" the first time
+    one is drawn ("look for the message 'Can't find effect.' The message
+    identifies the plug-in", p.163).
+* **Effect templates** (p.157) keep the whole effect, the tag and the
+  values with it, so a template of a plug-in effect applies that plug-in.
+* **Closing plug-ins:** the Console's `closeallofxplugins` destroys every
+  plug-in instance (`closeOfxInstances`), as `closeallavxplugins` closes
+  AVX 1.x plug-ins ("The AVX plug-ins automatically open again as needed",
+  p.158); the Console also takes Avid's name for it.
+
 ## What is left out, and the Console
 
 Why a plug-in is left out goes to the Console (Tools > Console): "The
@@ -185,4 +211,7 @@ Questions are answered No during the scan.
   and instances made and destroyed (the plug-in counts them).
 * `tst_ofx_palette`: the same plug-ins in the Effect Palette's catalog and
   list, with the plug-in icon; the Effect Editor's controls for one dropped
-  on a segment, and a change kept in the effect.
+  on a segment, and a change kept in the effect. 6.11b2 adds: the tag, a
+  template of the effect, the blank Timeline icon of a missing plug-in, and
+  the Console's closeallofxplugins. `tst_ofx_host`'s `missingPlugin` checks
+  the pass-through and the "Can't find effect" message.

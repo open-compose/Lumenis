@@ -398,6 +398,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   6.11b1: the "<label> Plug-In Parameters" category, the controls chosen for each OFX parameter type (decimals,
   ranges, 2D/3D as sliders per axis, RGBA without alpha), one instance per plug-in, renders one at a time, the
   same frame for every time of an input clip, segment plug-ins on transitions working on the incoming picture.
+  6.11b2: the "OFX Plug-In" tag in the effect, the blank icon drawn as the tile's outline, a missing plug-in's
+  transition dissolving, "Can't find effect: <label> (<id>)" once per plug-in, closeallofxplugins.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults
@@ -931,7 +933,9 @@ Not yet built:
     Interface settings (p.97). This allows several named versions (p.80).
   * The Calculator's formats and keypad: the guide has no picture.
   * The Console's commands. The System ID is a hash of the operating
-    system's machine ID. HDTitleFilter is the FX Guide's (p.376).
+    system's machine ID. HDTitleFilter is the FX Guide's (p.376);
+    closeallofxplugins is ours after its closeallavxplugins (p.158), which
+    it also answers to.
   * Initials are at most three letters. Commands without a picture show
     their initials in the palettes.
   * Closing the Command Palette in Menu to Button mode returns to Button

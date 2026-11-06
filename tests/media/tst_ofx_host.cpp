@@ -309,6 +309,30 @@ private slots:
         QCOMPARE(image.pixelColor(14, 4), QColor(255, 0, 0));
     }
 
+    void missingPlugin() {
+        // A tagged effect whose plug-in is not installed passes its picture through, and says "Can't find effect" once
+        // (p.163).
+        registerTestPlugins();
+        model::Effect e{QStringLiteral("Other Vendor"), QStringLiteral("Glow"), {}};
+        e.parameters.insert(kOfxPluginTag, QJsonObject{{QStringLiteral("id"), QStringLiteral("com.example.glow")}, {QStringLiteral("label"), QStringLiteral("Glow")}});
+        QCOMPARE(ofxTaggedPlugin(e), QStringLiteral("com.example.glow"));
+        QVERIFY(isMissingOfxEffect(e));
+        QVERIFY(!isOfxEffect(e));
+        QStringList messages;
+        setOfxMessageHandler([&](const QString& m) { messages << m; });
+        const Picture source = Picture::solid(4, 4, QColor(10, 20, 30));
+        QCOMPARE(ofxSegmentPicture(e, source, 0.0, model::EffectSpan(5)).data(), source.data());
+        ofxSegmentPicture(e, source, 0.5, model::EffectSpan(5));
+        setOfxMessageHandler({});
+        QCOMPARE(messages, QStringList{QStringLiteral("Can't find effect: Glow (com.example.glow)")});
+        // Tagged with an installed plug-in, it is that plug-in's even under another name.
+        model::Effect renamed{QStringLiteral("Somewhere"), QStringLiteral("Else"), {}};
+        markOfxEffect(renamed, *ofxPluginFor(QStringLiteral("Cutthulhu Tests"), QStringLiteral("Test Tint")));
+        QVERIFY(isOfxEffect(renamed));
+        QVERIFY(!isMissingOfxEffect(renamed));
+        QVERIFY(!isMissingOfxEffect(model::Effect{QStringLiteral("Blend"), QStringLiteral("Dissolve"), {}}));
+    }
+
     void instances() {
         registerTestPlugins();
         QLibrary lib(kPlugin);
