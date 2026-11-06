@@ -9,6 +9,7 @@ add_library(lumenis_model STATIC
     clip_audio.cpp
     automation.cpp
     auto_sequence.cpp
+    send_to.cpp
     audio_eq.cpp
     audio_suite.cpp
     effect_render.cpp
@@ -55,6 +56,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/clip_audio.h
     include/lumenis/model/automation.h
     include/lumenis/model/auto_sequence.h
+    include/lumenis/model/send_to.h
     include/lumenis/model/audio_eq.h
     include/lumenis/model/audio_suite.h
     include/lumenis/model/effect_render.h

@@ -1321,7 +1321,9 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
   * 7.1c, in three parts (2026-11-06): 7.1c1, AAF export's Export Methods: Copy All Media, Consolidate Media and Video
     Mixdown into the Media Destinations folder (p.870-872, p.1175-1177). Done (docs/spec/aaf.md "Export Methods":
     `MainWindow::prepareAafMedia`, `media::copyClipMedia`; test `tst_managed_media aafExportMethods`). 7.1c2, the Send To
-    templates (p.863-867) with the Pro Tools options, Make New and .stt templates; export by dragging (p.868-869). 7.1c3,
+    templates (p.863-867) with the Pro Tools options, Make New and .stt templates; export by dragging (p.868-869). Done
+    but dragging (docs/spec/send-to.md: `src/model/send_to.*`, `send_to_dialog.*`, `MainWindow::sendTo`/`makeNewSendTo`,
+    `exportOverride_`; `writeExport` split out of Export to File; test `tst_send_to`); dragging needs file promises. 7.1c3,
     Simplified AAF (p.884) and Export Media Difference (p.885). A Pro Tools Session (.ptx, p.872-878) needs Avid's
     unpublished format: a provider hook only (docs/EXTENSIONS.md).
 * 7.2, MXF OP1a and AS-11 (p.886-892), XDCAM (p.883), AS-02 export volumes (p.901-904); gate 1 with bmx's checkers.

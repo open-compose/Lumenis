@@ -30,6 +30,7 @@
 #include "lumenis/model/audio_eq.h"
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/auto_sequence.h"
+#include "lumenis/model/send_to.h"
 #include "lumenis/model/bin_relations.h"
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/model/correction_template.h"
@@ -70,6 +71,7 @@
 #include "lumenis/ui/mixdown_dialog.h"
 #include "lumenis/ui/multi_mix_dialog.h"
 #include "lumenis/ui/export_dialog.h"
+#include "lumenis/ui/send_to_dialog.h"
 #include "lumenis/ui/interchange_dialogs.h"
 #include "lumenis/ui/list_tool.h"
 #include "lumenis/ui/keyboard_map.h"
@@ -301,6 +303,11 @@ MainWindow::MainWindow(CommandRegistry& commands, const ext::ProviderRegistry& p
     binContainer_->setLockUser(settings_->user());
     connect(settings_, &Settings::userChanged, this, [this] { binContainer_->setLockUser(settings_->user()); });
     syncWorkspaceUi();
+    // File > Output > Send To lists Pro Tools and the user's templates (7.1c2), read again each time it opens.
+    refreshSendToMenu();
+    if (auto* sendToMenu = menuBar()->findChild<QMenu*>(QStringLiteral("menu:file_output_send_to")))
+        connect(sendToMenu, &QMenu::aboutToShow, this, &MainWindow::refreshSendToMenu);
+    connect(settings_, &Settings::userChanged, this, &MainWindow::refreshSendToMenu);
 }
 
 MainWindow::~MainWindow() {
@@ -515,9 +522,14 @@ QString MainWindow::revealFile() {
         if (!file.isEmpty()) break;
     }
     if (file.isEmpty()) return {};
+    showInFileManager(file);
+    return file;
+}
+
+void MainWindow::showInFileManager(const QString& file) {
     if (revealHook_) {
         revealHook_(file);
-        return file;
+        return;
     }
     // "opens Windows Explorer or the folder (macOS), and highlights related media files" (p.360).
 #if defined(Q_OS_WIN)
@@ -527,7 +539,6 @@ QString MainWindow::revealFile() {
 #else
     QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(file).absolutePath()));
 #endif
-    return file;
 }
 
 int MainWindow::binSelect(const QString& what) {
@@ -3129,11 +3140,16 @@ bool MainWindow::exportMattePict(const QString& path) {
 // or, when the Export setting's Export As is Media Composer Bin (ours, docs/spec/avb.md "Export"), a
 // bin with interop::avb::exportBin. Results and warnings go to the Console. The last folder exported
 // to is remembered in QSettings.
-void MainWindow::exportToFile() {
+QJsonValue MainWindow::exportSetting(const QString& key) const {
+    if (exportOverride_.contains(key)) return exportOverride_.value(key);
+    return settings_->value(QStringLiteral("Export"), key);
+}
+
+std::optional<MainWindow::ExportSelection> MainWindow::exportSelection() {
     BinView* view = binContainer_->activeView();
     if (!view || view->selectedIds().isEmpty()) {
         ConsoleLog::instance().append(tr("Export to File: select the clips or sequences to export in a bin."));
-        return;
+        return std::nullopt;
     }
     const BinDocument& doc = view->document();
     QList<model::BinItem> selected;
@@ -3161,6 +3177,253 @@ void MainWindow::exportToFile() {
             }
         }
     }
+    return ExportSelection{selected, clips, binOf, &doc};
+}
+
+// The file type of an Export As choice: its extension and its name in the save dialog.
+QString MainWindow::exportSuffix(const QString& exportAs) const {
+        // A Graphic export's file is its Graphic Format's; an Audio export's WAVE or AIFF-C (7.1b).
+        if (exportAs == QLatin1String("graphic")) {
+            const QString g = exportValue(QStringLiteral("graphicFormat"));
+            return media::stillSuffix(g == QLatin1String("jpeg")   ? media::StillFormat::Jpeg
+                                      : g == QLatin1String("tiff") ? media::StillFormat::Tiff
+                                      : g == QLatin1String("bmp")  ? media::StillFormat::Bmp
+                                      : g == QLatin1String("pict") ? media::StillFormat::Pict
+                                                                   : media::StillFormat::Png);
+        }
+        if (exportAs == QLatin1String("audio"))
+            return exportValue(QStringLiteral("audioFileFormat")) == QLatin1String("aiff") ? QStringLiteral("aif")
+                                                                                                                         : QStringLiteral("wav");
+        if (exportAs == QLatin1String("dpx")) return QStringLiteral("dpx");
+        if (exportAs == QLatin1String("openexr")) return QStringLiteral("exr");
+        return exportAs == QLatin1String("avb")      ? QStringLiteral("avb")
+               : exportAs == QLatin1String("ale")    ? QStringLiteral("ale")
+               : exportAs == QLatin1String("fcpxml") ? QStringLiteral("xml")
+               : exportAs == QLatin1String("mp4")    ? QStringLiteral("mp4")
+               : exportAs == QLatin1String("mov") || exportAs == QLatin1String("qtMovie") ? QStringLiteral("mov")
+                                                     : QStringLiteral("aaf");
+}
+
+QString MainWindow::exportFilter(const QString& exportAs) {
+        return exportAs == QLatin1String("avb")      ? tr("Media Composer bins (*.avb)")
+               : exportAs == QLatin1String("ale")    ? tr("Avid Log Exchange (*.ale)")
+               : exportAs == QLatin1String("fcpxml") ? tr("Final Cut Pro 7 XML (*.xml)")
+               : exportAs == QLatin1String("mp4")    ? tr("MP4 movies (*.mp4)")
+               : exportAs == QLatin1String("graphic") || exportAs == QLatin1String("dpx") || exportAs == QLatin1String("openexr")
+                   ? tr("Images (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr)")
+               : exportAs == QLatin1String("audio")  ? tr("Audio files (*.wav *.aif)")
+               : exportAs == QLatin1String("mov") || exportAs == QLatin1String("qtMovie") ? tr("QuickTime movies (*.mov)")
+                                                     : tr("AAF files (*.aaf)");
+}
+
+// ---------------------------------------------------------------- Send To (7.1c2; docs/spec/send-to.md)
+
+QString MainWindow::sendToFolder() const {
+    // Ours: a Send_To_Templates folder beside the user's settings, as Title_Templates is (p.360).
+    const QString userSettings = settings_->path(model::SettingsScope::User);
+    return userSettings.isEmpty() ? QDir::home().filePath(QStringLiteral("Send_To_Templates"))
+                                  : QFileInfo(userSettings).dir().filePath(QStringLiteral("Send_To_Templates"));
+}
+
+QStringList MainWindow::exportSummary(const QJsonObject& values) const {
+    // Each option of the Export setting with its value, its choice's label for menus (ours: every option, the guide
+    // shows "all the settings that affect the current export", p.865).
+    QStringList lines;
+    const SettingKind* kind = SettingsSchema::builtIn().find(QStringLiteral("Export"));
+    if (!kind) return lines;
+    for (const SettingTab& tab : kind->tabs) {
+        for (const SettingOption& o : tab.options) {
+            if (o.later) continue;
+            const QJsonValue v = values.contains(o.key) ? values.value(o.key) : settings_->value(QStringLiteral("Export"), o.key);
+            QString shown = v.isBool() ? (v.toBool() ? tr("On") : tr("Off")) : v.isDouble() ? QString::number(v.toDouble()) : v.toString();
+            for (const SettingChoice& c : o.choices) {
+                if (c.value == v.toString()) shown = c.label;
+            }
+            const QString label = o.label.isEmpty() ? o.key : o.label;
+            lines << QStringLiteral("%1%2: %3").arg(tab.name.isEmpty() ? QString() : tab.name + QStringLiteral(" - "), label, shown);
+        }
+    }
+    return lines;
+}
+
+void MainWindow::refreshSendToMenu() {
+    auto* menu = menuBar()->findChild<QMenu*>(QStringLiteral("menu:file_output_send_to"));
+    if (!menu) return;
+    qDeleteAll(sendToActions_);
+    sendToActions_.clear();
+    QAction* first = menu->actions().value(0);
+    // "The following table describes the Send To templates that Avid supplies. If you create custom Send To templates,
+    // they also appear as Send To menu commands" (p.865): Pro Tools, then the user's templates.
+    auto add = [&](const QString& text, const std::function<void()>& run) {
+        auto* a = new QAction(text, menu);
+        a->setProperty(kDynamicMenuItem, true);
+        connect(a, &QAction::triggered, this, run);
+        menu->insertAction(first, a);
+        sendToActions_ << a;
+    };
+    add(tr("Pro Tools"), [this] {
+        model::SendToTemplate t;
+        t.name = tr("Pro Tools");
+        sendTo(t, true);
+    });
+    for (const model::SendToTemplate& t : model::loadSendToTemplates(sendToFolder())) {
+        add(t.name, [this, t] { sendTo(t, false); });
+    }
+    auto* separator = new QAction(menu);
+    separator->setSeparator(true);
+    separator->setProperty(kDynamicMenuItem, true);
+    menu->insertAction(first, separator);
+    sendToActions_ << separator;
+}
+
+bool MainWindow::saveSendToTemplateAs(const model::SendToTemplate& t) {
+    // "Rename the file. Make sure you leave the .stt extension. Click Save" (p.865).
+    const QString suggested = QDir(sendToFolder()).filePath((t.name.isEmpty() ? tr("Untitled") : t.name) + QStringLiteral(".stt"));
+    QDir().mkpath(sendToFolder());
+    const QString path = sendToSaveHook_ ? sendToSaveHook_(suggested)
+                                         : QFileDialog::getSaveFileName(this, tr("Save Send To Template"), suggested,
+                                                                        tr("Send To templates (*.stt)"));
+    if (path.isEmpty()) return false;
+    QString error;
+    if (!model::saveSendToTemplate(path, t, &error)) {
+        ConsoleLog::instance().append(tr("Send To: the template could not be saved: %1").arg(error));
+        return false;
+    }
+    refreshSendToMenu();
+    return true;
+}
+
+bool MainWindow::sendTo(model::SendToTemplate t, bool proTools) {
+    const std::optional<ExportSelection> picked = exportSelection();
+    if (!picked) return false;
+    QSettings remembered;
+    // "If you are sending to Avid Pro Tools, a template options dialog box opens" (p.863).
+    QString option;
+    if (proTools) {
+        ProToolsOptionsDialog choose(remembered.value(QStringLiteral("sendTo/proToolsOption")).toString(), this);
+        const bool chosen = proToolsHook_ ? proToolsHook_(choose) : choose.exec() == QDialog::Accepted;
+        if (!chosen || choose.option().isEmpty()) return false;
+        option = choose.option();
+        remembered.setValue(QStringLiteral("sendTo/proToolsOption"), option);
+        t.folder = remembered.value(QStringLiteral("sendTo/proToolsFolder")).toString();
+    }
+    // A template's folder is made when it is exported to; only a template without one takes the last export's.
+    if (t.folder.isEmpty()) {
+        t.folder = remembered.value(QStringLiteral("export/folder")).toString();
+        if (t.folder.isEmpty() || !QDir(t.folder).exists()) t.folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    }
+    if (t.exportValues.isEmpty()) t.exportValues = settings_->file(model::SettingsScope::User).activeValues(QStringLiteral("Export"));
+    // "The Filename text box displays the name of the sequence or clip you chose" (p.864).
+    QString name = picked->selected.first().name;
+    name.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
+    SendToDialog dialog(t, name, this);
+    auto exportsOf = [&](const model::SendToTemplate& now) {
+        return proTools ? model::proToolsExports(option, now.exportValues) : QList<QJsonObject>{now.exportValues};
+    };
+    auto summarize = [&] {
+        QStringList lines;
+        for (const QJsonObject& values : exportsOf(dialog.sendToTemplate())) {
+            if (!lines.isEmpty()) lines << QString();
+            lines << exportSummary(values);
+        }
+        dialog.setSummary(lines);
+    };
+    summarize();
+    connect(&dialog, &SendToDialog::optionsRequested, this, [&] {
+        // "If you need to make any Export settings changes, click the appropriate Options button, make the changes, and
+        // click Save" (p.865): the Export setting's dialog with the template's values; the template keeps them.
+        const SettingKind* kind = SettingsSchema::builtIn().find(QStringLiteral("Export"));
+        if (!kind) return;
+        model::SettingEntry entry;
+        entry.kind = QStringLiteral("Export");
+        entry.name = dialog.sendToTemplate().name;
+        entry.values = dialog.sendToTemplate().exportValues;
+        SettingsDialog options(*kind, entry, &dialog);
+        const bool kept = sendToOptionsHook_ ? sendToOptionsHook_(options) : options.exec() == QDialog::Accepted;
+        if (!kept) return;
+        QJsonObject values = dialog.sendToTemplate().exportValues;
+        const QJsonObject changed = options.values();
+        for (auto it = changed.begin(); it != changed.end(); ++it) values.insert(it.key(), it.value());
+        dialog.setExportValues(values);
+        summarize();
+    });
+    connect(&dialog, &SendToDialog::saveAsTemplateRequested, this, [&] { saveSendToTemplateAs(dialog.sendToTemplate()); });
+    const bool ok = sendToHook_ ? sendToHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok || dialog.fileName().isEmpty()) return false;
+    t = dialog.sendToTemplate();
+    QDir().mkpath(t.folder);
+
+    // The export, or a Pro Tools option's exports, each with the template's Export values in place of the setting's.
+    QStringList files;
+    bool all = true;
+    for (const QJsonObject& values : exportsOf(t)) {
+        exportOverride_ = values;
+        const QString path = QDir(t.folder).filePath(dialog.fileName() + QLatin1Char('.') + exportSuffix(exportValue(QStringLiteral("exportAs"))));
+        const bool written = writeExport(*picked, path);
+        exportOverride_ = {};
+        if (!written) {
+            all = false;
+            break;
+        }
+        files << path;
+    }
+    // "Whenever you return to a Send To dialog box, the destination folder that you set last appears" (p.865).
+    if (proTools) {
+        remembered.setValue(QStringLiteral("sendTo/proToolsFolder"), t.folder);
+    } else {
+        const QString file = QDir(sendToFolder()).filePath(t.name + QStringLiteral(".stt"));
+        if (QFileInfo::exists(file)) model::saveSendToTemplate(file, t);
+    }
+    if (!all) return false;
+    // Auto Launch with Auto Load Exported File(s), and Reveal file (p.865-866).
+    if (t.autoLaunch && !t.application.isEmpty()) {
+        const QStringList arguments = t.autoLoad ? files : QStringList();
+        if (launchHook_) {
+            launchHook_(t.application, arguments);
+        } else {
+            QProcess::startDetached(t.application, arguments);
+        }
+    }
+    if (t.reveal && !files.isEmpty()) showInFileManager(files.first());
+    return true;
+}
+
+void MainWindow::makeNewSendTo() {
+    // "Select File > Output > Send To > Make New ... The Send To dialog box opens with a default export template",
+    // OK, then "Name the new Send To (.stt) template" (p.866-867). The template takes the Export setting's values.
+    const std::optional<ExportSelection> picked = exportSelection();
+    model::SendToTemplate t;
+    t.name = tr("Untitled");
+    t.exportValues = settings_->file(model::SettingsScope::User).activeValues(QStringLiteral("Export"));
+    QSettings remembered;
+    t.folder = remembered.value(QStringLiteral("export/folder")).toString();
+    if (t.folder.isEmpty()) t.folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+    SendToDialog dialog(t, picked ? picked->selected.first().name : QString(), this);
+    dialog.setSummary(exportSummary(t.exportValues));
+    connect(&dialog, &SendToDialog::optionsRequested, this, [&] {
+        const SettingKind* kind = SettingsSchema::builtIn().find(QStringLiteral("Export"));
+        if (!kind) return;
+        model::SettingEntry entry;
+        entry.kind = QStringLiteral("Export");
+        entry.values = dialog.sendToTemplate().exportValues;
+        SettingsDialog options(*kind, entry, &dialog);
+        const bool kept = sendToOptionsHook_ ? sendToOptionsHook_(options) : options.exec() == QDialog::Accepted;
+        if (!kept) return;
+        QJsonObject values = dialog.sendToTemplate().exportValues;
+        const QJsonObject changed = options.values();
+        for (auto it = changed.begin(); it != changed.end(); ++it) values.insert(it.key(), it.value());
+        dialog.setExportValues(values);
+        dialog.setSummary(exportSummary(values));
+    });
+    const bool ok = sendToHook_ ? sendToHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok) return;
+    saveSendToTemplateAs(dialog.sendToTemplate());
+}
+
+void MainWindow::exportToFile() {
+    const std::optional<ExportSelection> picked = exportSelection();
+    if (!picked) return;
+    const QList<model::BinItem>& selected = picked->selected;
     model::SettingsFile& file = settings_->file(model::SettingsScope::User);
     if (file.versions(QStringLiteral("Export")).isEmpty()) {
         file.ensure({QStringLiteral("Export")});
@@ -3174,41 +3437,9 @@ void MainWindow::exportToFile() {
         names << (e.name.isEmpty() ? tr("Untitled") : e.name);
         if (e.active) active = i;
     }
-    // The file type of an Export As choice: its extension and its name in the save dialog.
-    auto suffixOf = [this](const QString& exportAs) {
-        // A Graphic export's file is its Graphic Format's; an Audio export's WAVE or AIFF-C (7.1b).
-        if (exportAs == QLatin1String("graphic")) {
-            const QString g = settings_->text(QStringLiteral("Export"), QStringLiteral("graphicFormat"));
-            return media::stillSuffix(g == QLatin1String("jpeg")   ? media::StillFormat::Jpeg
-                                      : g == QLatin1String("tiff") ? media::StillFormat::Tiff
-                                      : g == QLatin1String("bmp")  ? media::StillFormat::Bmp
-                                      : g == QLatin1String("pict") ? media::StillFormat::Pict
-                                                                   : media::StillFormat::Png);
-        }
-        if (exportAs == QLatin1String("audio"))
-            return settings_->text(QStringLiteral("Export"), QStringLiteral("audioFileFormat")) == QLatin1String("aiff") ? QStringLiteral("aif")
-                                                                                                                         : QStringLiteral("wav");
-        if (exportAs == QLatin1String("dpx")) return QStringLiteral("dpx");
-        if (exportAs == QLatin1String("openexr")) return QStringLiteral("exr");
-        return exportAs == QLatin1String("avb")      ? QStringLiteral("avb")
-               : exportAs == QLatin1String("ale")    ? QStringLiteral("ale")
-               : exportAs == QLatin1String("fcpxml") ? QStringLiteral("xml")
-               : exportAs == QLatin1String("mp4")    ? QStringLiteral("mp4")
-               : exportAs == QLatin1String("mov") || exportAs == QLatin1String("qtMovie") ? QStringLiteral("mov")
-                                                     : QStringLiteral("aaf");
-    };
-    auto filterOf = [](const QString& exportAs) {
-        return exportAs == QLatin1String("avb")      ? tr("Media Composer bins (*.avb)")
-               : exportAs == QLatin1String("ale")    ? tr("Avid Log Exchange (*.ale)")
-               : exportAs == QLatin1String("fcpxml") ? tr("Final Cut Pro 7 XML (*.xml)")
-               : exportAs == QLatin1String("mp4")    ? tr("MP4 movies (*.mp4)")
-               : exportAs == QLatin1String("graphic") || exportAs == QLatin1String("dpx") || exportAs == QLatin1String("openexr")
-                   ? tr("Images (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr)")
-               : exportAs == QLatin1String("audio")  ? tr("Audio files (*.wav *.aif)")
-               : exportAs == QLatin1String("mov") || exportAs == QLatin1String("qtMovie") ? tr("QuickTime movies (*.mov)")
-                                                     : tr("AAF files (*.aaf)");
-    };
-    const QString exportAs = settings_->text(QStringLiteral("Export"), QStringLiteral("exportAs"));
+    auto suffixOf = [this](const QString& exportAs) { return exportSuffix(exportAs); };
+    auto filterOf = [](const QString& exportAs) { return exportFilter(exportAs); };
+    const QString exportAs = exportValue(QStringLiteral("exportAs"));
     QSettings remembered;
     QString folder = remembered.value(QStringLiteral("export/folder")).toString();
     if (folder.isEmpty() || !QDir(folder).exists()) folder = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
@@ -3231,7 +3462,16 @@ void MainWindow::exportToFile() {
         file.setActive(versions.at(chosen));
         settings_->commit(model::SettingsScope::User);
     }
-    const QString format = settings_->text(QStringLiteral("Export"), QStringLiteral("exportAs"));
+    writeExport(*picked, dialog.path());
+}
+
+bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
+    const QList<model::BinItem>& selected = chosen.selected;
+    const QList<model::BinItem>& clips = chosen.clips;
+    const QHash<QString, QString>& binOf = chosen.binOf;
+    const BinDocument& doc = *chosen.doc;
+    auto suffixOf = [this](const QString& exportAs) { return exportSuffix(exportAs); };
+    const QString format = exportValue(QStringLiteral("exportAs"));
     // Exports rendered through the compositor and the mix (7.1a-b).
     const bool movie = format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie") ||
                        format == QLatin1String("audio") || format == QLatin1String("graphic") || format == QLatin1String("dpx") ||
@@ -3240,7 +3480,7 @@ void MainWindow::exportToFile() {
         format != QLatin1String("fcpxml") && !movie) {
         ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange, Media Composer bins, Final Cut Pro 7 XML, MOV, "
                                          "MP4, Audio, Graphic, DPX and OpenEXR can be exported so far (Export As in the Export setting)."));
-        return;
+        return false;
     }
     const model::BinItem* firstSequence = nullptr;
     for (const model::BinItem& item : selected) {
@@ -3248,11 +3488,10 @@ void MainWindow::exportToFile() {
     }
     if (format == QLatin1String("fcpxml") && !firstSequence) {
         ConsoleLog::instance().append(tr("Export to File: Final Cut Pro 7 XML holds a sequence: select one."));
-        return;
+        return false;
     }
     // The file name extension stays the format's (p.869), also when the setting was changed in the
     // dialog.
-    QString path = dialog.path();
     const QString suffix = suffixOf(format);
     if (QFileInfo(path).suffix().compare(suffix, Qt::CaseInsensitive) != 0) {
         const QString old = QFileInfo(path).suffix();
@@ -3266,9 +3505,9 @@ void MainWindow::exportToFile() {
         }
         path += QLatin1Char('.') + suffix;
     }
-    remembered.setValue(QStringLiteral("export/folder"), QFileInfo(path).absolutePath());
-    const bool includeVideo = settings_->flag(QStringLiteral("Export"), QStringLiteral("includeVideo"));
-    const bool includeAudio = settings_->flag(QStringLiteral("Export"), QStringLiteral("includeAudio"));
+    QSettings().setValue(QStringLiteral("export/folder"), QFileInfo(path).absolutePath());
+    const bool includeVideo = exportFlag(QStringLiteral("includeVideo"));
+    const bool includeAudio = exportFlag(QStringLiteral("includeAudio"));
     QApplication::setOverrideCursor(Qt::WaitCursor);
     bool written = false;
     QString error;
@@ -3294,7 +3533,7 @@ void MainWindow::exportToFile() {
                 ConsoleLog::instance().append(tr("Export to File: %1: %2").arg(selected.at(i).name, why));
             }
         }
-        return;
+        return count > 0;
     }
     if (format == QLatin1String("ale")) {
         // A shot log of the master clips and subclips selected (p.130, p.1174), with the bin's
@@ -3383,10 +3622,11 @@ void MainWindow::exportToFile() {
     QApplication::restoreOverrideCursor();
     if (!written) {
         ConsoleLog::instance().append(tr("Export to File: %1").arg(error));
-        return;
+        return false;
     }
     ConsoleLog::instance().append(tr("Export to File: %1: %n item(s)", "", static_cast<int>(count)).arg(QDir::toNativeSeparators(path)));
     for (const QString& w : warnings) ConsoleLog::instance().append(tr("Export to File: %1").arg(w));
+    return true;
 }
 
 // Each file is imported on its own, as importAaf() does with AAF files. The media a timeline names
@@ -3533,8 +3773,7 @@ QStringList MainWindow::importEdl() {
 // step 1: "click the Text tab to display all clip information").
 bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QList<model::BinItem>& clips, const QString& binId,
                                  const QString& aafPath, QList<model::BinItem>& items, QStringList& warnings, QString* error) {
-    const Settings& s = *settings_;
-    auto text = [&](const char* key) { return s.text(QStringLiteral("Export"), QLatin1String(key)); };
+    auto text = [&](const char* key) { return exportValue(QLatin1String(key)); };
     const QString videoMethod = text("videoExportMethod");
     const QString audioMethod = text("audioExportMethod");
     items = selected + clips;
@@ -3546,7 +3785,7 @@ bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QL
     // Media Destinations, Folder: "If you select Folder and then check Use Same Folder as AAF File, Media Composer stores
     // the media in the same folder as the exported AAF files" (p.871); otherwise the folder named (p.1177).
     const QString chosen = text("mediaFolder");
-    const QString folder = s.flag(QStringLiteral("Export"), QStringLiteral("useAafFolder")) || chosen.isEmpty()
+    const QString folder = exportFlag(QStringLiteral("useAafFolder")) || chosen.isEmpty()
                                ? QFileInfo(aafPath).absolutePath()
                                : chosen;
     if (!QDir().mkpath(folder)) {
@@ -3606,7 +3845,7 @@ bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QL
     if (videoMethod == QLatin1String("consolidate") || audioMethod == QLatin1String("consolidate")) {
         media::ConsolidateOptions co;
         co.mode = media::ConsolidateOptions::Mode::Consolidate;
-        co.handles = s.value(QStringLiteral("Export"), videoMethod == QLatin1String("consolidate") ? QStringLiteral("videoHandles")
+        co.handles = exportSetting(videoMethod == QLatin1String("consolidate") ? QStringLiteral("videoHandles")
                                                                                                     : QStringLiteral("audioHandles"))
                          .toInt();
         co.keepMastersLinked = true;
@@ -3702,9 +3941,8 @@ bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QL
 bool MainWindow::exportStills(const QString& path, const QString& format, const model::BinItem& sequenceItem,
                               const media::MovieSource& source, const model::LoadedClip* shown, std::int64_t start, std::int64_t end,
                               const std::function<bool(double)>& progress, QString* error) {
-    const Settings& s = *settings_;
-    auto text = [&](const char* key) { return s.text(QStringLiteral("Export"), QLatin1String(key)); };
-    auto flag = [&](const char* key) { return s.flag(QStringLiteral("Export"), QLatin1String(key)); };
+    auto text = [&](const char* key) { return exportValue(QLatin1String(key)); };
+    auto flag = [&](const char* key) { return exportFlag(QLatin1String(key)); };
     media::StillOptions o;
     const QString graphic = text("graphicFormat");
     o.format = format == QLatin1String("dpx")       ? media::StillFormat::Dpx
@@ -3724,7 +3962,7 @@ bool MainWindow::exportStills(const QString& path, const QString& format, const 
     o.depth = format == QLatin1String("dpx")       ? text("dpxDepth").toInt()
               : format == QLatin1String("openexr") ? text("exrDepth").toInt()
                                                    : text("graphicDepth").toInt();
-    o.quality = s.value(QStringLiteral("Export"), QStringLiteral("graphicQuality")).toInt();
+    o.quality = exportSetting(QStringLiteral("graphicQuality")).toInt();
 
     // Which frames, each with its file. A Graphic export without Sequential Files is one frame: "Mark an IN point to
     // export the marked frame from a bin or a monitor, or move the position indicator to the frame you want to export"
@@ -3793,8 +4031,8 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
         seq.storeIn(sequenceItem);
     }
     const Settings& s = *settings_;
-    auto flag = [&](const char* key) { return s.flag(QStringLiteral("Export"), QLatin1String(key)); };
-    auto text = [&](const char* key) { return s.text(QStringLiteral("Export"), QLatin1String(key)); };
+    auto flag = [&](const char* key) { return exportFlag(QLatin1String(key)); };
+    auto text = [&](const char* key) { return exportValue(QLatin1String(key)); };
     // Use Marks: the marks of the monitor the item is shown in ("Mark IN and OUT points to export the marked range from
     // a bin or a monitor. If you mark an IN point and no OUT point, Media Composer exports from the IN point to the end",
     // p.868); the whole item otherwise.
@@ -3833,7 +4071,7 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
     if (sound && audio.isEmpty()) return fail(tr("There are no audio tracks to export."));
     if (!movie && !sound && video.isEmpty()) return fail(tr("There are no video tracks to export."));
     o.compression = text("movieCompression");
-    o.bitRateMbps = s.value(QStringLiteral("Export"), QStringLiteral("movieBitRate")).toInt();
+    o.bitRateMbps = exportSetting(QStringLiteral("movieBitRate")).toInt();
     const QString size = text("movieImageSize");
     if (size != QLatin1String("project")) o.size = QSize(size.section(QLatin1Char('x'), 0, 0).toInt(), size.section(QLatin1Char('x'), 1, 1).toInt());
     const QString scaling = text("movieScaling");
@@ -6227,6 +6465,7 @@ void MainWindow::installPanelHandlers() {
     handle("timeline.render.expertrender_in_out", [this] { expertRender(); });
     // File > Output > Export to File (p.868).
     handle("file.output.export_to_file", [this] { exportToFile(); });
+    handle("file.output.send_to.make_new", [this] { makeNewSendTo(); });
     handle("file.export_matte_pict", [this] { exportMattePict(); });
     handle("tools.background_queue_window", [this] { showTool(QStringLiteral("BackgroundQueue")); });
     handle("file.media.load_media_database", [this] { loadMediaDatabase(); });

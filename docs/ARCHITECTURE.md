@@ -110,7 +110,10 @@ headers in `include/lumenis/<library>/`.
   decision lists (CMX 3600, File_129) and `ale.*` Avid Log Exchange shot logs; the text helpers they
   share are in `text_common.h`. `otio.*` reads and writes OpenTimelineIO's `.otio` JSON, and `fcp_xml.*` FCP 7 XML through it. The native model they read into and write from is
   described in docs/spec/native-model.md. In the UI, `list_tool.*` is Tools > List Tool and
-  `interchange_dialogs.*` the Import EDL and Export Bin As dialogs.
+  `interchange_dialogs.*` the Import EDL and Export Bin As dialogs. File > Output > Export to File runs through
+  `MainWindow::writeExport` (movies, stills and sound in `src/media/movie_export.*`, docs/spec/movie-export.md; AAF's
+  Export Methods in `MainWindow::prepareAafMedia`); Send To templates are `src/model/send_to.*` with
+  `src/ui/send_to_dialog.*` (docs/spec/send-to.md).
 * **Effects.** The Effect Palette's list is `src/ui/resources/effects.json`
   and the Effect Editor's parameters `effect_parameters.json`; UI in
   `effect_palette.*` and `effect_editor.*` (its keyframe tracks and graphs in

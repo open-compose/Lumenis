@@ -7,6 +7,7 @@
 #include "lumenis/model/bin.h"
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/project_store.h"
+#include "lumenis/model/send_to.h"
 #include "lumenis/model/safe_colors.h"
 #include "lumenis/model/title_clip.h"
 #include "lumenis/ui/audio_punch_in.h"
@@ -70,6 +71,9 @@ class MotionEffectEditor;
 class RenderEffectDialog;
 class MultiMixDialog;
 class ExportAsDialog;
+class SendToDialog;
+class ProToolsOptionsDialog;
+class SettingsDialog;
 class ExportBinDialog;
 class ImportEdlDialog;
 class ListTool;
@@ -184,6 +188,8 @@ public:
     // system's file browser (Explorer or the Finder select it; elsewhere its folder opens). Returns the
     // file, or empty when the clip has none that exists. The hook replaces the file browser in tests.
     QString revealFile();
+    // Shows `file` in the file manager (Explorer, the Finder, the folder elsewhere); the reveal hook in tests.
+    void showInFileManager(const QString& file);
     void setRevealHook(std::function<void(const QString& file)> hook) { revealHook_ = std::move(hook); }
     // The Find window, once Edit > Find has opened it (p.417, p.429).
     FindWindow* findWindow() const { return findWindow_; }
@@ -332,6 +338,30 @@ public:
     // chosen Export setting (p.1173-1177). The hook stands in for the
     // dialog (tests; true: Save).
     void exportToFile();
+    // What Export to File and Send To export (7.1c2): the items selected in the active bin, the clips their sequences
+    // use, and those clips' bins. Nothing (with the Console told) when nothing is selected.
+    struct ExportSelection {
+        QList<model::BinItem> selected;
+        QList<model::BinItem> clips;
+        QHash<QString, QString> binOf;
+        const BinDocument* doc = nullptr;
+    };
+    std::optional<ExportSelection> exportSelection();
+    // Writes `chosen` to `path` as the Export setting (or exportOverride_, Send To's template) says; the path's
+    // extension is made the format's. False, with the Console told, when nothing was written.
+    bool writeExport(const ExportSelection& chosen, QString path);
+    // An Export As choice's file extension ("aaf", "mov" ...) and its file dialog filter.
+    QString exportSuffix(const QString& exportAs) const;
+    // The Send To dialog's Export Setting Summary (p.865) of these Export values over the setting's.
+    QStringList exportSummary(const QJsonObject& values) const;
+    // Save As Template: the save dialog in the templates' folder; the menu then lists it.
+    bool saveSendToTemplateAs(const model::SendToTemplate& t);
+    static QString exportFilter(const QString& exportAs);
+    // The Export setting's value of `key`: Send To's template values when one is being exported (exportOverride_),
+    // else the active Export setting's.
+    QJsonValue exportSetting(const QString& key) const;
+    QString exportValue(const QString& key) const { return exportSetting(key).toString(); }
+    bool exportFlag(const QString& key) const { return exportSetting(key).toBool(); }
     // One sequence or clip as a MOV or MP4 movie (7.1a, docs/spec/movie-export.md) with the Export setting's options:
     // the picture through the compositor, the sound through the mixdown's mix. `format` is the Export As value ("mov",
     // "mp4", "qtMovie"). False with the reason in `error`.
@@ -351,6 +381,22 @@ public:
     // raster, through the Export PICT As dialog (`path` given: no dialog). False when nothing was written.
     bool exportMattePict(const QString& path = QString());
     void setExportHook(std::function<bool(ExportAsDialog&)> hook) { exportHook_ = std::move(hook); }
+    // File > Output > Send To (7.1c2; docs/spec/send-to.md, p.863-867). sendTo exports the active bin's selection with
+    // a template (`proTools`: the built-in Pro Tools template and its options); makeNewSendTo makes a template. The hooks
+    // stand in for the dialogs, the save dialog (it returns the path, empty to cancel) and Auto Launch (tests).
+    bool sendTo(model::SendToTemplate t, bool proTools);
+    void makeNewSendTo();
+    void refreshSendToMenu();
+    QString sendToFolder() const;
+    void setSendToHooks(std::function<bool(SendToDialog&)> dialog, std::function<bool(ProToolsOptionsDialog&)> proTools,
+                        std::function<QString(const QString&)> save, std::function<bool(SettingsDialog&)> options = {},
+                        std::function<void(const QString&, const QStringList&)> launch = {}) {
+        sendToHook_ = std::move(dialog);
+        proToolsHook_ = std::move(proTools);
+        sendToSaveHook_ = std::move(save);
+        sendToOptionsHook_ = std::move(options);
+        launchHook_ = std::move(launch);
+    }
     // Clip > Consolidate/Transcode on the active bin's selection
     // (p.350-356). The hooks stand in for the dialogs (tests): the first
     // answers Consolidate/Transcode (true: OK), the second Copying Media
@@ -836,6 +882,14 @@ private:
     ClipAudioHooks clipAudioHooks_;
     std::function<bool(MultiMixDialog&)> multiMixHook_;
     std::function<bool(ExportAsDialog&)> exportHook_;
+    // Send To's template values while it exports (7.1c2); empty otherwise.
+    QJsonObject exportOverride_;
+    std::function<bool(SendToDialog&)> sendToHook_;
+    std::function<bool(ProToolsOptionsDialog&)> proToolsHook_;
+    std::function<QString(const QString&)> sendToSaveHook_;
+    std::function<bool(SettingsDialog&)> sendToOptionsHook_;
+    std::function<void(const QString&, const QStringList&)> launchHook_;
+    QList<QAction*> sendToActions_;
     std::function<bool(ImportEdlDialog&)> importEdlHook_;
     std::function<bool(ExportBinDialog&)> exportBinHook_;
     std::function<bool(ManagedRelinkDialog&)> managedRelinkHook_;

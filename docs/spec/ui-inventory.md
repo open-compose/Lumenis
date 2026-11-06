@@ -416,7 +416,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   names counted from 0 with 7 digits, DPX and OpenEXR always sequences, OpenEXR display-referred, "Scale from Legal to
   Full Range" as the default Color Levels, a repeated marker comment named with its frame. 7.1c1: copies named " 2"
   when taken, consolidated media under `<folder>/Avid MediaFiles/MXF/1`, consolidated clips keeping their names in the
-  AAF, one consolidation for both tabs.
+  AAF, one consolidation for both tabs. 7.1c2 (docs/spec/send-to.md): .stt files as JSON in Send_To_Templates beside the
+  user's settings, what each Pro Tools option writes, consolidated media beside the AAF, the summary listing every
+  option, no Disc/Sorenson/Avid DS templates, no drag export.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults
