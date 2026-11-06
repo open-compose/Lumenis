@@ -86,6 +86,9 @@ class ModifyDialog;
 class AudioPunchInTool;
 class DigitalCutTool;
 class VideoOutputTool;
+class ExportCaptionsDialog;
+class MasterCaptionListDialog;
+class SubcapPropertiesDialog;
 class AudioTrackEffectTool;
 class AudioMixer;
 class AudioTool;
@@ -393,6 +396,21 @@ public:
     // Tools > Video Output Tool (7.3b; docs/spec/video-output.md): the tool with the video output hardware and the
     // project's Video Output setting; storeVideoOutput keeps its values in the active version, or (with a name) in a
     // version of that name made active.
+    // The SubCap effect's buttons (7.4a; docs/spec/subcap.md; FX Guide p.378-388): "import" (Import Caption Data into
+    // the SubCap segment under the position, subdividing it), "export" (Export Caption Data of the sequence's captions),
+    // "masterList" (Edit Master Caption List) and "globalProperties". The hooks stand in for the file dialogs (they
+    // return the path; `save` for Export) and the dialogs (tests).
+    bool subcapAction(const QString& action);
+    bool editSubcapGlobalProperties();
+    // Where the caption stylesheets are kept: "Caption Effect Stylesheets" beside the user's settings.
+    QString subcapStylesheetFolder() const;
+    void setSubcapHooks(std::function<QString(bool save)> file, std::function<bool(ExportCaptionsDialog&)> exportChoices,
+                        std::function<bool(MasterCaptionListDialog&)> masterList, std::function<bool(SubcapPropertiesDialog&)> properties = {}) {
+        subcapFileHook_ = std::move(file);
+        exportCaptionsHook_ = std::move(exportChoices);
+        masterCaptionHook_ = std::move(masterList);
+        subcapPropertiesHook_ = std::move(properties);
+    }
     void openVideoOutput();
     void storeVideoOutput(const QJsonObject& values, const QString& name);
     VideoOutputTool& videoOutputTool() { return *videoOutput_; }
@@ -928,6 +946,10 @@ private:
     std::function<int(const QList<model::BinItem>&)> excludeSequenceHook_;
     std::function<bool(ExportDeviceDialog&)> exportDeviceHook_;
     std::function<bool(ExportVolumeDialog&)> exportVolumeHook_;
+    std::function<QString(bool)> subcapFileHook_;
+    std::function<bool(ExportCaptionsDialog&)> exportCaptionsHook_;
+    std::function<bool(MasterCaptionListDialog&)> masterCaptionHook_;
+    std::function<bool(SubcapPropertiesDialog&)> subcapPropertiesHook_;
     // Send To's template values while it exports (7.1c2); empty otherwise.
     QJsonObject exportOverride_;
     std::function<bool(SendToDialog&)> sendToHook_;

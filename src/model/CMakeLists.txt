@@ -12,6 +12,7 @@ add_library(lumenis_model STATIC
     send_to.cpp
     simplify_export.cpp
     export_volume.cpp
+    subcap.cpp
     audio_eq.cpp
     audio_suite.cpp
     effect_render.cpp
@@ -61,6 +62,7 @@ add_library(lumenis_model STATIC
     include/lumenis/model/send_to.h
     include/lumenis/model/simplify_export.h
     include/lumenis/model/export_volume.h
+    include/lumenis/model/subcap.h
     include/lumenis/model/audio_eq.h
     include/lumenis/model/audio_suite.h
     include/lumenis/model/effect_render.h

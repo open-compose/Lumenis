@@ -288,6 +288,13 @@ QJsonValue burnInSetting(const model::Effect& effect, int display, const QString
 Picture burnInPicture(const model::Effect& effect, const Picture& layer, const Composition& composition,
                       const QString& track, std::int64_t frame);
 
+// The SubCap effect (ROADMAP 7.4a; docs/spec/subcap.md, subcap.cpp; FX Guide ch.14, p.501-504): the segment's caption
+// (model::captionText) drawn over `layer` with the Text Appearance and Box Appearance parameters; nothing with Bypass
+// Effect or without text. Positions and sizes are pixels of a 1920 x 1080 frame, scaled to the layer.
+Picture subcapPicture(const model::Effect& effect, const Picture& layer);
+// A SubCap parameter's value until set (ours, docs/spec/subcap.md); the Effect Editor shows the same.
+QJsonValue subcapDefault(const QString& name);
+
 // The Intraframe effects (ROADMAP 6.9; FX Guide ch.15; docs/spec/intraframe.md, intraframe.cpp): the Paint Effect, Blur
 // Effect, Mosaic Effect, Scratch Removal and AniMatte with their objects (model/intraframe.h).
 // The outline of control points (fractions of the frame) in pixels of a frame `frame` large: lines between straight

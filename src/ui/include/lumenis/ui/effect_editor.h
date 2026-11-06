@@ -552,6 +552,8 @@ public:
     bool applyTemplateGroup(const QString& category, const model::EffectTemplate& t);
 
 signals:
+    // A SubCap button (7.4a; FX Guide p.501-504): "import", "export", "masterList" or "globalProperties".
+    void subcapActionRequested(const QString& action);
     // An eyedropper started picking a colour from a Color Preview window (FX Guide p.89), for the Color Info tool.
     void colorPickingStarted();
     // The Effect Editor shortcut menu changed options().

@@ -430,7 +430,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   Media Status as text. 7.3a (docs/spec/digital-cut.md): tapes kept in folders, Full Quality the only Output
   Mode, Local mode as a crash record where the deck is, Preview as a cue and a report, frames made as fast as they can be,
   the stereo mix onto the first two enabled tape tracks. 7.3b (docs/spec/video-output.md): calibration sliders -100 to
-  100 around 0, a lit preset clicked showing the manual level, 75% bars with 100% white, test patterns at 1920 x 1080.
+  100 around 0, a lit preset clicked showing the manual level, 75% bars with 100% white, test patterns at 1920 x 1080. 7.4a (docs/spec/subcap.md): the SubCap picture's defaults, the frames
+  between imported captions keeping the effect without text, one ASCII TTI block per caption, stylesheets as flat XML
+  beside the user settings, Synchronize "Sequence" until chosen.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

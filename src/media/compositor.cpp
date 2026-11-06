@@ -1,4 +1,6 @@
 #include "lumenis/media/compositor.h"
+
+#include "lumenis/model/subcap.h"
 #include "lumenis/media/ofx_host.h"
 #include "lumenis/media/plasma_wipe.h"
 #include "lumenis/media/color_correction.h"
@@ -678,6 +680,14 @@ Picture composeFrame(const Composition& c, std::int64_t frame, bool* missing) {
             if (model::isTitlerEffect(e)) {
                 // Avid Titler+ (p.302-324): the title over the segment, filler's empty picture included.
                 layer = titlePicture(e, layer, time, model::EffectSpan(std::max<std::int64_t>(length, 1)));
+                layer.quantize(c.precision);
+                result = over(layer, result);
+                result.quantize(c.precision);
+                continue;
+            }
+            if (model::isSubCap(e)) {
+                // SubCap's caption over the segment's own picture, filler's empty picture included (subcap.cpp).
+                layer = subcapPicture(e, layer);
                 layer.quantize(c.precision);
                 result = over(layer, result);
                 result.quantize(c.precision);

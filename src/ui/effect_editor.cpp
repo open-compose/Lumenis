@@ -1,6 +1,8 @@
 #include "lumenis/ui/angle_dial.h"
 #include "lumenis/ui/effect_editor.h"
 
+#include "lumenis/model/subcap.h"
+
 #include "lumenis/model/correction_shapes.h"
 
 #include "lumenis/ui/timeline.h"
@@ -38,6 +40,7 @@
 #include <QJsonObject>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QFontComboBox>
 #include <QLineEdit>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -1196,6 +1199,49 @@ void EffectEditor::rebuild(const model::Effect* effect) {
                     row->addWidget(press);
                     row->addStretch(1);
                     controls_.insert(k, press);
+                } else if (category == QLatin1String(model::kSubCapCategory) &&
+                           (p.kind == QLatin1String("other") || p.kind == QLatin1String("button") || p.name == QLatin1String("Font Face"))) {
+                    // SubCap's controls (FX Guide p.501-504; docs/spec/subcap.md): the Font Face list, the thumbwheels
+                    // as number boxes, the Caption text box, and the buttons, which MainWindow carries out.
+                    if (p.kind == QLatin1String("button")) {
+                        auto* press = new QToolButton(box);
+                        press->setObjectName(QStringLiteral("param:") + k);
+                        press->setText(p.text);
+                        const QString action = p.name == QLatin1String("Import Caption Data")      ? QStringLiteral("import")
+                                               : p.name == QLatin1String("Export Caption Data")    ? QStringLiteral("export")
+                                               : p.name == QLatin1String("Edit Master Caption List") ? QStringLiteral("masterList")
+                                                                                                     : QStringLiteral("globalProperties");
+                        connect(press, &QToolButton::clicked, this, [this, action] { emit subcapActionRequested(action); });
+                        row->addWidget(press);
+                        row->addStretch(1);
+                    } else if (p.name == QLatin1String("Font Face")) {
+                        auto* fonts = new QFontComboBox(box);
+                        fonts->setObjectName(QStringLiteral("param:") + k);
+                        connect(fonts, &QFontComboBox::currentTextChanged, this,
+                                [this, category, name = p.name](const QString& t) { setValue(category, name, t); });
+                        row->addWidget(fonts, 1);
+                        controls_.insert(k, fonts);
+                    } else if (p.name == QLatin1String(model::kCaptionTextKey)) {
+                        // "You cannot enter line breaks (carriage returns) in the Effect Editor text box" (p.381): one
+                        // line; the Master Caption List takes rows.
+                        auto* edit = new QLineEdit(box);
+                        edit->setObjectName(QStringLiteral("param:") + k);
+                        connect(edit, &QLineEdit::editingFinished, this, [this, category, name = p.name, edit] {
+                            if (!syncing_) setValue(category, name, edit->text());
+                        });
+                        row->addWidget(edit, 1);
+                        controls_.insert(k, edit);
+                    } else {
+                        auto* number = new QSpinBox(box);
+                        number->setObjectName(QStringLiteral("param:") + k);
+                        number->setRange(static_cast<int>(p.min), static_cast<int>(p.max));
+                        connect(number, &QSpinBox::valueChanged, this, [this, category, name = p.name](int v) {
+                            if (!syncing_) setValue(category, name, v);
+                        });
+                        row->addWidget(number);
+                        row->addStretch(1);
+                        controls_.insert(k, number);
+                    }
                 } else if (category == model::kBrushCategory && p.name == QLatin1String("Shape buttons")) {
                     // The Brush Shape buttons, the Brush Template icon and the Brush Preview window (p.397-399).
                     row->addWidget(brushPanel(box), 1);
@@ -1451,6 +1497,10 @@ void EffectEditor::syncValues(const model::Effect& effect) {
             c->setChecked(v.toBool());
         } else if (auto* m = qobject_cast<QComboBox*>(w)) {
             m->setCurrentText(v.toString());
+        } else if (auto* number = qobject_cast<QSpinBox*>(w)) {
+            number->setValue(v.toInt());
+        } else if (auto* edit = qobject_cast<QLineEdit*>(w)) {
+            edit->setText(v.toString());
         } else if (auto* b = qobject_cast<QToolButton*>(w); b && b->isCheckable()) {
             b->setChecked(v.toBool());
         } else if (auto* swatch = qobject_cast<QToolButton*>(w)) {

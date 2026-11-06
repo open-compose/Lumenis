@@ -11,6 +11,7 @@
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/effect_keyframes.h"
 #include "lumenis/model/intraframe.h"
+#include "lumenis/model/subcap.h"
 #include "lumenis/model/effect_render.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/motion_effect.h"
@@ -7074,7 +7075,11 @@ bool Timeline::changeEffect(const model::EffectRef& ref, const QString& descript
         const model::Track* t = seq.track(ref.track);
         if (t && t->locked) return false;
         model::Transition* transition = model::transitionFor(seq, ref);
+        const model::Effect before = *e;
         change(*e, transition);
+        // A SubCap effect's change goes to the others on its track or in the sequence as its Synchronize tab says
+        // (FX Guide p.384-385).
+        if (model::isSubCap(*e) && ref.target == model::EffectTarget::Segment) model::synchronizeSubCap(seq, ref.track, ref.frame, before);
         seq.storeIn(item);
         return true;
     });

@@ -32,6 +32,7 @@
 #include "lumenis/model/auto_sequence.h"
 #include "lumenis/model/send_to.h"
 #include "lumenis/model/simplify_export.h"
+#include "lumenis/model/subcap.h"
 #include "lumenis/model/export_volume.h"
 #include "lumenis/model/bin_relations.h"
 #include "lumenis/model/clip_audio.h"
@@ -81,6 +82,7 @@
 #include "lumenis/ui/export_device_dialog.h"
 #include "lumenis/ui/export_volume_dialog.h"
 #include "lumenis/ui/video_output_tool.h"
+#include "lumenis/ui/subcap_dialogs.h"
 #include "lumenis/ui/send_to_dialog.h"
 #include "lumenis/ui/interchange_dialogs.h"
 #include "lumenis/ui/list_tool.h"
@@ -140,6 +142,7 @@
 #include <QSet>
 #include <QSettings>
 #include <QSignalBlocker>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QStorageInfo>
@@ -1691,6 +1694,7 @@ void MainWindow::createTools() {
         if (settings_->flag(QStringLiteral("Effect Editor"), QStringLiteral("openColorInfoTool"))) showTool(QStringLiteral("ColorInfo"));
     });
     connect(effectEditor_, &EffectEditor::editTitleRequested, this, [this](const model::SegmentRef& ref) { editTitleInSequence(ref); });
+    connect(effectEditor_, &EffectEditor::subcapActionRequested, this, [this](const QString& action) { subcapAction(action); });
     connect(timeline_, &Timeline::editTitleRequested, this, [this](const model::SegmentRef& ref) { editTitleInSequence(ref); });
     connect(composer_, &Composer::changed, this, [this] { checkTitleTemplate(); });
     // AutoStabilize "Opens the Effect Editor (if necessary) and the Tracking window", then tracks (FX Guide p.277).
@@ -1855,6 +1859,12 @@ void MainWindow::createTools() {
     timeline_->setOptionalInputsChooser([this](const media::OfxPluginInfo& plugin) { return OfxOptionalInputsDialog::ask(plugin, this); });
     timeline_->setEffectSeed([this](model::Effect& effect) {
         if (model::isSafeColorLimiter(effect)) model::seedSafeColorLimiter(effect, safeColorLimits());
+        // "Its values become the default settings for any new SubCap effect clip" (p.388; ours: at once).
+        if (model::isSubCap(effect)) {
+            const QString folder = subcapStylesheetFolder();
+            const QString name = defaultSubcapStylesheet(folder);
+            if (!name.isEmpty()) applySubcapStylesheet(QDir(folder).filePath(name + QStringLiteral(".xml")), effect);
+        }
     });
     timeline_->setAutoCorrection([this](std::int64_t frame) {
         model::ColorCorrection c;
@@ -3326,6 +3336,146 @@ int MainWindow::exportToDevice(const QString& kind) {
         say(tr("%1 is %2 on %3").arg(items.at(i).first.name, QString::fromStdString(name), QString::fromStdString(target.name)));
     }
     return delivered;
+}
+
+// ---------------------------------------------------------------- SubCap (7.4a; docs/spec/subcap.md)
+
+bool MainWindow::subcapAction(const QString& action) {
+    auto say = [](const QString& text) {
+        ConsoleLog::instance().append(tr("SubCap: %1").arg(text));
+        return false;
+    };
+    const model::LoadedClip* loaded = composer_->state(MonitorId::Record).current();
+    if (!loaded || loaded->item.kind != model::BinItemKind::Sequence) return say(tr("load a sequence into the Record monitor."));
+    const model::Sequence seq = model::Sequence::fromItem(loaded->item);
+    const TimecodeFormat format = model::timecodeFormatOf(loaded->item);
+    const std::int64_t startFrame = model::startFrameOf(loaded->item);
+    const auto effect = timeline_->currentEffect();
+    // Labels of one timecode format read as another's (a 25 fps .stl in a 24 fps project): the same hh:mm:ss:ff.
+    auto relabel = [](std::int64_t frames, const TimecodeFormat& from, const TimecodeFormat& to) {
+        const auto tc = Timecode::parse(Timecode(frames, from).toString(), to);
+        return tc ? tc->frameCount() : frames;
+    };
+    if (action == QLatin1String("import")) {
+        if (!effect || !model::subcapSegmentRange(seq, effect->track, effect->frame)) return say(tr("put the position on a SubCap effect first."));
+        const QString path = subcapFileHook_ ? subcapFileHook_(false)
+                                             : QFileDialog::getOpenFileName(this, tr("Select a file that contains caption data"), QString(),
+                                                                            tr("Caption files (*.stl *.txt);;EBU N19 (*.stl);;Avid DS (*.txt)"));
+        if (path.isEmpty()) return false;
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly)) return say(tr("%1 cannot be read.").arg(QDir::toNativeSeparators(path)));
+        const QByteArray bytes = file.readAll();
+        QString why;
+        std::optional<QList<model::Caption>> captions;
+        TimecodeFormat fileFormat = format;
+        if (path.endsWith(QLatin1String(".stl"), Qt::CaseInsensitive)) {
+            int fps = 25;
+            captions = model::parseStl(bytes, &fps, nullptr, &why);
+            fileFormat = TimecodeFormat::forRate(Rational(fps), false);
+        } else {
+            captions = model::parseDsCaptions(QString::fromUtf8(bytes), format, &why);
+        }
+        if (!captions) return say(why);
+        // The file's timecode as sequence frames.
+        for (model::Caption& c : *captions) {
+            c.start = relabel(c.start, fileFormat, format) - startFrame;
+            c.end = relabel(c.end, fileFormat, format) - startFrame;
+        }
+        // "The dialog box ... provides you with information about the timecode ranges of the file and the effect, and
+        // reports what the result of the import will be" (p.380): ours, in the Console.
+        const auto range = *model::subcapSegmentRange(seq, effect->track, effect->frame);
+        auto tc = [&](std::int64_t f) { return QString::fromStdString(Timecode(startFrame + f, format).toString()); };
+        if (!captions->isEmpty())
+            ConsoleLog::instance().append(tr("SubCap: the file's captions run from %1 to %2, the effect from %3 to %4.")
+                                              .arg(tc(captions->first().start), tc(captions->last().end), tc(range.first), tc(range.second)));
+        const bool ok = timeline_->changeRecordSequence(tr("Import Caption Data"), [&](model::Sequence& s) {
+            return model::importCaptions(s, effect->track, effect->frame, *captions, &why);
+        });
+        if (!ok) return say(why.isEmpty() ? tr("the captions could not be imported.") : why);
+        say(tr("%n caption(s) imported.", "", static_cast<int>(captions->size())));
+        return true;
+    }
+    if (action == QLatin1String("export")) {
+        QStringList tracks;
+        for (const model::Track& t : seq.tracks()) {
+            if (t.kind != model::TrackKind::Video) continue;
+            if (std::any_of(t.segments.begin(), t.segments.end(), [](const model::Segment& g) { return g.effect && model::isSubCap(*g.effect); }))
+                tracks << t.name();
+        }
+        if (tracks.isEmpty()) return say(tr("the sequence has no SubCap effects."));
+        ExportCaptionsDialog choose(tracks, this);
+        if (!(exportCaptionsHook_ ? exportCaptionsHook_(choose) : choose.exec() == QDialog::Accepted)) return false;
+        const QString path = subcapFileHook_ ? subcapFileHook_(true)
+                                             : QFileDialog::getSaveFileName(this, tr("Export caption data to the specified file"), QString(),
+                                                                            tr("EBU N19 (*.stl);;Avid DS (*.txt)"));
+        if (path.isEmpty()) return false;
+        QList<model::Caption> captions = model::sequenceCaptions(seq, choose.tracks(), choose.topWins());
+        QByteArray out;
+        if (path.endsWith(QLatin1String(".stl"), Qt::CaseInsensitive)) {
+            // EBU N19 is 25 or 30 frames a second: our labels at that rate.
+            const int fps = format.nominalFps % 30 == 0 ? 30 : 25;
+            const TimecodeFormat stlFormat = TimecodeFormat::forRate(Rational(fps), false);
+            for (model::Caption& c : captions) {
+                c.start = relabel(startFrame + c.start, format, stlFormat);
+                c.end = relabel(startFrame + c.end, format, stlFormat);
+            }
+            out = model::writeStl(captions, fps, model::subcapStlInfo(seq));
+        } else {
+            for (model::Caption& c : captions) {
+                c.start += startFrame;
+                c.end += startFrame;
+            }
+            out = model::writeDsCaptions(captions, format).toUtf8();
+        }
+        QSaveFile file(path);
+        if (!file.open(QIODevice::WriteOnly) || file.write(out) != out.size() || !file.commit())
+            return say(tr("%1 cannot be written.").arg(QDir::toNativeSeparators(path)));
+        say(tr("%n caption(s) exported to %1.", "", static_cast<int>(captions.size())).arg(QDir::toNativeSeparators(path)));
+        return true;
+    }
+    if (action == QLatin1String("masterList")) {
+        MasterCaptionListDialog dialog(subcapEntries(seq), format, startFrame, this);
+        if (!(masterCaptionHook_ ? masterCaptionHook_(dialog) : dialog.exec() == QDialog::Accepted)) return false;
+        const QList<MasterCaptionListDialog::Entry> edited = dialog.entries();
+        return timeline_->changeRecordSequence(tr("Edit Master Caption List"), [&](model::Sequence& s) {
+            for (const MasterCaptionListDialog::Entry& e : edited) {
+                model::Track* t = s.track(e.segment.track);
+                if (!t) continue;
+                std::int64_t start = 0;
+                const int i = t->segmentAt(e.segment.start, &start);
+                if (i < 0 || start != e.segment.start || !t->segments[i].effect) continue;
+                model::setCaptionText(*t->segments[i].effect, e.text);
+            }
+            return true;
+        });
+    }
+    if (action == QLatin1String("globalProperties")) return editSubcapGlobalProperties();
+    return false;
+}
+
+QString MainWindow::subcapStylesheetFolder() const {
+    // "Caption stylesheets are XML files and are stored in a folder called Caption Effect Stylesheets" (p.387); ours
+    // beside the user's settings, as Send_To_Templates.
+    const QString userSettings = settings_->path(model::SettingsScope::User);
+    return userSettings.isEmpty() ? QDir::home().filePath(QStringLiteral("Caption Effect Stylesheets"))
+                                  : QFileInfo(userSettings).absoluteDir().filePath(QStringLiteral("Caption Effect Stylesheets"));
+}
+
+bool MainWindow::editSubcapGlobalProperties() {
+    const auto ref = timeline_->currentEffect();
+    const model::LoadedClip* loaded = composer_->state(MonitorId::Record).current();
+    if (!ref || !loaded) return false;
+    const model::Sequence sequence = model::Sequence::fromItem(loaded->item); // effectFor points into it
+    const model::Effect* current = model::effectFor(sequence, *ref);
+    if (!current || !model::isSubCap(*current)) return false;
+    SubcapPropertiesDialog dialog(*current, subcapStylesheetFolder(), this);
+    if (!(subcapPropertiesHook_ ? subcapPropertiesHook_(dialog) : dialog.exec() == QDialog::Accepted)) return false;
+    const model::Effect edited = dialog.effect();
+    return timeline_->changeEffect(*ref, tr("Edit Global Properties"), [&](model::Effect& e, model::Transition*) {
+        const QString text = model::captionText(e);
+        e.parameters = edited.parameters;
+        model::setCaptionText(e, text);
+    });
 }
 
 // ---------------------------------------------------------------- Video Output tool (7.3b; docs/spec/video-output.md)

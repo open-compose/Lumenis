@@ -812,7 +812,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   (docs/spec/digital-cut.md: `ext::DeckProvider`, tapes kept in folders `media::FolderTapeDeckProvider` with
   `LUMENIS_TAPE_DECKS`, `DigitalCutTool`, `MainWindow::digitalCut` through exportMovieFile's "sink"), is done. 7.3b, the Video Output tool (docs/spec/video-output.md: `ext::VideoOutputProvider`,
   `VideoOutputTool` with the project's Video Output setting, `media::testPattern`) and Output Gain, is done. 7.3c, the
-  AJA and Blackmagic modules, needs their SDKs and hardware: next is 7.4, captions. After Phase 7, before Phase 8: 7.6, the owner's report
+  AJA and Blackmagic modules, needs their SDKs and hardware. 7.4a, the SubCap
+  effect (docs/spec/subcap.md: `src/model/subcap.*` with Avid DS and EBU N19 files, `media::subcapPicture`,
+  `src/ui/subcap_dialogs.*`, `MainWindow::subcapAction`; tests `tst_subcap`, `tst_subcap_ui`), is done; next is 7.4b,
+  closed captions. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"
