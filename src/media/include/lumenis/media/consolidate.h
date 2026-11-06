@@ -5,6 +5,7 @@
 #include "lumenis/model/bin.h"
 
 #include <QList>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 
@@ -69,12 +70,15 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
 // AAF export's Copy All Media (Editing Guide p.870, p.1175; 7.1c1): each clip's media files of the kinds chosen
 // (its video tracks' files with `video`, its audio tracks' with `audio`) are copied into `folder`, and the clip's file
 // sources then name the copies. A file used by several clips is copied once; names taken in the folder get " 2", " 3"
-// ... (ours). What could not be copied is said in `warnings` and the clip keeps its file there.
+// ... (ours). What could not be copied is said in `warnings` and the clip keeps its file there. Files in `exclude`
+// (absolute paths) are not copied and the clips keep naming them: Export Media Difference Between Sequences, "Media
+// Composer will export any clips that reference assets not included in the previous sequence" (p.885-886).
 struct CopiedMedia {
     QList<model::BinItem> items; // the clips with their sources naming the copies
     QStringList warnings;
     int files = 0;               // files copied
 };
-CopiedMedia copyClipMedia(const QList<model::BinItem>& clips, const QString& folder, bool video, bool audio);
+CopiedMedia copyClipMedia(const QList<model::BinItem>& clips, const QString& folder, bool video, bool audio,
+                          const QSet<QString>& exclude = {});
 
 } // namespace lumenis::media

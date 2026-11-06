@@ -234,7 +234,8 @@ ConsolidateResult consolidate(const QList<model::BinItem>& selection, const QStr
     return result;
 }
 
-CopiedMedia copyClipMedia(const QList<model::BinItem>& clips, const QString& folder, bool video, bool audio) {
+CopiedMedia copyClipMedia(const QList<model::BinItem>& clips, const QString& folder, bool video, bool audio,
+                          const QSet<QString>& exclude) {
     CopiedMedia out;
     QDir().mkpath(folder);
     QHash<QString, QString> copied; // source file -> its copy
@@ -244,6 +245,7 @@ CopiedMedia copyClipMedia(const QList<model::BinItem>& clips, const QString& fol
             const bool isVideo = s.track.startsWith(QLatin1Char('V'));
             if ((isVideo && !video) || (!isVideo && !audio)) continue;
             const QString from = QFileInfo(s.path).absoluteFilePath();
+            if (exclude.contains(from)) continue;
             if (const auto it = copied.constFind(from); it != copied.constEnd()) {
                 s.path = *it;
                 continue;

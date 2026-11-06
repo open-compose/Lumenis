@@ -723,6 +723,9 @@ SettingsWindow::SettingsWindow(Settings& settings, QWidget* parent) : QWidget(pa
             if (dialog.exec() == QDialog::Accepted) createUser(dialog.profileName());
         } else if (action == QLatin1String("update")) {
             settings_.file(SettingsScope::User).ensure(SettingsSchema::builtIn().kindNames(SettingsScope::User));
+            // "If the setting does not appear, click the User Profile Selection menu and select Update User Profiles"
+            // (p.884): shipped versions such as Link To Effects Mixdown come back too.
+            SettingsSchema::builtIn().addShippedVersions(settings_.file(SettingsScope::User), SettingsScope::User);
             settings_.commit(SettingsScope::User);
         } else if (action == QLatin1String("reveal")) {
             const QString folder = QDir(settings_.usersRoot()).filePath(settings_.user());

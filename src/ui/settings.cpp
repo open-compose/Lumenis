@@ -1,5 +1,7 @@
 #include "lumenis/ui/settings.h"
 
+#include <algorithm>
+
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
@@ -33,7 +35,7 @@ QString SettingKind::title() const {
     return QObject::tr("%1 Settings").arg(kind);
 }
 
-// The document is {"settings": [{"kind", "scope", "page", "opens", "tabs": [{"name", "options":
+// The document is {"settings": [{"kind", "scope", "page", "opens", "versions": [{"name", "values"}], "tabs": [{"name", "options":
 // [{"key", "type", "label", "suffix", "specialText", "resetButton", "style", "default", "min", "max", "page", "guide", "later",
 // "choices": [{"value", "label", "later"}]}]}]}]}.
 SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) {
@@ -52,6 +54,10 @@ SettingsSchema SettingsSchema::fromJson(const QByteArray& json, QString* error) 
         kind.scope = scope == QLatin1String("project") ? SettingsScope::Project : SettingsScope::User;
         kind.page = ko.value(QStringLiteral("page")).toInt();
         kind.opens = ko.value(QStringLiteral("opens")).toString();
+        for (const QJsonValue& v : ko.value(QStringLiteral("versions")).toArray()) {
+            kind.versions << model::SettingEntry{kind.kind, v.toObject().value(QStringLiteral("name")).toString(), false,
+                                                 v.toObject().value(QStringLiteral("values")).toObject()};
+        }
         for (const QJsonValue& t : ko.value(QStringLiteral("tabs")).toArray()) {
             SettingTab tab;
             tab.name = t.toObject().value(QStringLiteral("name")).toString();
@@ -108,6 +114,21 @@ const SettingKind* SettingsSchema::find(const QString& kind) const {
     return nullptr;
 }
 
+int SettingsSchema::addShippedVersions(model::SettingsFile& file, SettingsScope scope) const {
+    int added = 0;
+    for (const SettingKind& k : kinds_) {
+        if (k.scope != scope) continue;
+        for (const model::SettingEntry& v : k.versions) {
+            const QList<int> have = file.versions(v.kind);
+            const bool present = std::any_of(have.begin(), have.end(), [&](int i) { return file.entries.at(i).name == v.name; });
+            if (present) continue;
+            file.add(v);
+            ++added;
+        }
+    }
+    return added;
+}
+
 QStringList SettingsSchema::kindNames(SettingsScope scope) const {
     QStringList out;
     for (const SettingKind& k : kinds_) {
@@ -122,6 +143,8 @@ QStringList SettingsSchema::kindNames(SettingsScope scope) const {
 Settings::Settings(QObject* parent) : QObject(parent) {
     userFile_ = SettingsFile::seeded(SettingsSchema::builtIn().kindNames(SettingsScope::User));
     project_ = SettingsFile::seeded(SettingsSchema::builtIn().kindNames(SettingsScope::Project));
+    SettingsSchema::builtIn().addShippedVersions(userFile_, SettingsScope::User);
+    SettingsSchema::builtIn().addShippedVersions(project_, SettingsScope::Project);
 }
 
 SettingsFile Settings::load(const QString& path, SettingsScope scope) const {
@@ -133,7 +156,9 @@ SettingsFile Settings::load(const QString& path, SettingsScope scope) const {
             return *f;
         }
     }
-    return SettingsFile::seeded(kinds, &site_);
+    SettingsFile fresh = SettingsFile::seeded(kinds, &site_);
+    SettingsSchema::builtIn().addShippedVersions(fresh, scope);
+    return fresh;
 }
 
 void Settings::setSiteFolder(const QString& folder) {

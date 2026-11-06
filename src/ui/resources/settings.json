@@ -248,6 +248,8 @@
       "kind": "Export",
       "scope": "user",
       "page": 1173,
+      "versions": [{"name": "Link To Effects Mixdown",
+                    "values": {"exportAs": "aaf", "mixdownEffectsToV1": true, "flattenAudioEffects": true}}],
       "tabs": [
         {
           "name": "",
@@ -281,7 +283,9 @@
             {"key": "videoHandles", "type": "int", "label": "Handle Length", "default": 60, "min": 0, "max": 9999, "suffix": "Frames", "page": 1176},
             {"key": "videoMixdownEdits", "type": "choice", "style": "radio", "label": "", "default": "without", "page": 1176,
              "choices": [{"value": "with", "label": "Mixdown with Video Edits", "later": true},
-                         {"value": "without", "label": "Mixdown without Video Edits"}]}
+                         {"value": "without", "label": "Mixdown without Video Edits"}]},
+            {"key": "mixdownEffectsToV1", "type": "bool", "label": "Mixdown Video/Effects to V1", "default": false, "page": 885},
+            {"key": "videoExcludePrevious", "type": "bool", "label": "Ask to Exclude Media from a Previous Sequence", "default": false, "page": 886}
           ]
         },
         {
@@ -291,7 +295,12 @@
              "choices": [{"value": "link", "label": "Link to (Don't Export) Media"}, {"value": "copy", "label": "Copy All Media"},
                          {"value": "consolidate", "label": "Consolidate Media"}]},
             {"key": "audioHandles", "type": "int", "label": "Handle Length", "default": 60, "min": 0, "max": 9999, "suffix": "Frames", "page": 1176},
-            {"key": "splitToMono", "type": "bool", "label": "Split Tracks to Mono", "default": true, "page": 1176, "later": true}
+            {"key": "splitToMono", "type": "bool", "label": "Split Tracks to Mono", "default": true, "page": 1176, "later": true},
+            {"key": "flattenAudioEffects", "type": "bool", "label": "Flatten Audio Tracks that Contain Effects", "default": false, "page": 885},
+            {"key": "audioTrackCount", "type": "choice", "style": "menu", "label": "Audio Tracks", "default": "all", "page": 884,
+             "choices": [{"value": "all", "label": "All"}, {"value": "2", "label": "First 2"}, {"value": "4", "label": "First 4"},
+                         {"value": "8", "label": "First 8"}, {"value": "16", "label": "First 16"}]},
+            {"key": "audioExcludePrevious", "type": "bool", "label": "Ask to Exclude Media from a Previous Sequence", "default": false, "page": 886}
           ]
         },
         {

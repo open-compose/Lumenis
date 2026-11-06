@@ -418,7 +418,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   when taken, consolidated media under `<folder>/Avid MediaFiles/MXF/1`, consolidated clips keeping their names in the
   AAF, one consolidation for both tabs. 7.1c2 (docs/spec/send-to.md): .stt files as JSON in Send_To_Templates beside the
   user's settings, what each Pro Tools option writes, consolidated media beside the AAF, the summary listing every
-  option, no Disc/Sorenson/Avid DS templates, no drag export.
+  option, no Disc/Sorenson/Avid DS templates, no drag export. 7.1c3 (docs/spec/aaf.md "Simplified AAF"): one mixdown
+  clip per stretch of effects, named "<sequence> Effects Mixdown <n>", nests counted as effects, the Audio Tracks label,
+  the simplified sequence only in the AAF, excluded media left linked, the choice among the open bins' sequences.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

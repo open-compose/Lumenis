@@ -66,6 +66,9 @@ struct SettingKind {
     int page = 0; // the Editing Guide page; 0 when not given
     QString opens; // a tool opened instead of a dialog
     QList<SettingTab> tabs;
+    // Named versions shipped with the application, such as the Export setting's "Link To Effects Mixdown" (Editing
+    // Guide p.884). New settings files get them, and so does Update User Profiles (p.1144) when one is missing.
+    QList<model::SettingEntry> versions;
 
     // The option with this key on any tab, or nullptr.
     const SettingOption* option(const QString& key) const;
@@ -88,6 +91,9 @@ public:
     const SettingKind* find(const QString& kind) const;
     // The names of the kinds kept in a scope's file, in schema order.
     QStringList kindNames(model::SettingsScope scope) const;
+    // Adds to a scope's file each shipped version (SettingKind::versions) that has no version of its kind and name
+    // there, inactive. Returns how many were added.
+    int addShippedVersions(model::SettingsFile& file, model::SettingsScope scope) const;
 
 private:
     QList<SettingKind> kinds_;

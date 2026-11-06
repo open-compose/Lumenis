@@ -1324,7 +1324,9 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     templates (p.863-867) with the Pro Tools options, Make New and .stt templates; export by dragging (p.868-869). Done
     but dragging (docs/spec/send-to.md: `src/model/send_to.*`, `send_to_dialog.*`, `MainWindow::sendTo`/`makeNewSendTo`,
     `exportOverride_`; `writeExport` split out of Export to File; test `tst_send_to`); dragging needs file promises. 7.1c3,
-    Simplified AAF (p.884) and Export Media Difference (p.885). A Pro Tools Session (.ptx, p.872-878) needs Avid's
+    Simplified AAF (p.884) and Export Media Difference (p.885). Done (docs/spec/aaf.md "Simplified AAF":
+    `src/model/simplify_export.*`, the shipped Link To Effects Mixdown version through `SettingKind::versions`,
+    `copyClipMedia`'s `exclude`; tests `tst_sequence`, `tst_managed_media aafExportMethods`), so 7.1c is but dragging. A Pro Tools Session (.ptx, p.872-878) needs Avid's
     unpublished format: a provider hook only (docs/EXTENSIONS.md).
 * 7.2, MXF OP1a and AS-11 (p.886-892), XDCAM (p.883), AS-02 export volumes (p.901-904); gate 1 with bmx's checkers.
 * 7.3, output to devices (ch.26, p.909-938): the output device and sync source, the Video Output tool, audio output

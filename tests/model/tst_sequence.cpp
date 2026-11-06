@@ -1,5 +1,6 @@
 #include "lumenis/model/marker.h"
 #include "lumenis/model/sequence.h"
+#include "lumenis/model/simplify_export.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -697,6 +698,46 @@ private slots:
         QCOMPARE(removeEffect(s, "V1", 10, EffectTarget::Segment), QStringLiteral("Blur Effect"));
         QCOMPARE(layout(s, "V1"), QStringList({"-:100"}));
         QVERIFY(removeEffect(s, "V1", 10, EffectTarget::Segment).isEmpty());
+    }
+
+    // The Simplified AAF (Editing Guide p.884; 7.1c3): plain segments and filler stay references, transitions and
+    // effects become mixdown spans; a plain segment on top hides an effect below it.
+    void simplifiedAafSpans() {
+        Sequence s = Sequence::withDefaultTracks();
+        s.overwrite("V1", 0, {piece("a", 10, 50), piece("b", 4, 50)});
+        s.track("V1")->segments[1].transition = Transition{Effect{"Blend", "Dissolve", {}}, 10, TransitionAlignment::CenteredOnCut, 0};
+        QVERIFY(s.addTrack(TrackKind::Video));
+        Segment c = piece("c", 0, 10);
+        c.effect = Effect{"Image", "Flip-Flop", {}};
+        s.overwrite("V2", 70, {c});
+        s.overwrite("V2", 85, {piece("d", 0, 5)});
+        QStringList got;
+        for (const SimplifiedSpan& span : simplifiedVideo(s)) {
+            const QString kind = span.kind == SimplifiedSpan::Kind::Clip      ? span.segment.clipId + QStringLiteral("@%1").arg(span.segment.sourceIn)
+                                 : span.kind == SimplifiedSpan::Kind::Mixdown ? QStringLiteral("mix")
+                                                                              : QStringLiteral("-");
+            got << QStringLiteral("%1 %2-%3").arg(kind).arg(span.start).arg(span.end);
+        }
+        QCOMPARE(got, (QStringList{"a@10 0-45", "mix 45-55", "b@9 55-70", "mix 70-80", "b@34 80-85", "d@0 85-90", "b@44 90-100"}));
+        // Filler where every track is empty; one segment's neighbouring parts join.
+        Sequence t = Sequence::withDefaultTracks();
+        t.overwrite("V1", 10, {piece("a", 0, 5)});
+        const QList<SimplifiedSpan> spans = simplifiedVideo(t);
+        QCOMPARE(spans.size(), 2);
+        QCOMPARE(spans[0].kind, SimplifiedSpan::Kind::Filler);
+        QCOMPARE(spans[0].end, 10);
+        QCOMPARE(spans[1].segment.length, 5);
+
+        // "If an audio track contains at least one effect or gain change, the entire track is mixed down."
+        Track a1 = *t.track("A1");
+        a1.segments = {piece("a", 0, 5, "A1")};
+        QVERIFY(!audioTrackHasEffects(a1));
+        a1.segments[0].gain = -3.0;
+        QVERIFY(audioTrackHasEffects(a1));
+        a1.segments[0].gain = 0.0;
+        a1.inserts[2] = TrackInsert{QStringLiteral("eq"), QStringLiteral("EQ"), {}, false};
+        QVERIFY(audioTrackHasEffects(a1));
+        QVERIFY(!audioTrackHasEffects(*t.track("V1")));
     }
 
     void transitionAlignment() {

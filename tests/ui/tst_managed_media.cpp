@@ -699,6 +699,75 @@ private slots:
         QCOMPARE(videoTracks, 1);
         QCOMPARE(cut.track(QStringLiteral("V1"))->segments.first().length, std::int64_t{5});
         QVERIFY(cut.track(QStringLiteral("A1")));
+
+        // Export Media Difference Between Sequences (p.885-886): Copy All Media, excluding the media a copy of the
+        // sequence uses, copies nothing; the clip keeps its own files.
+        model::BinItem previous = model::duplicateItem(bin->bin(), composer.state(MonitorId::Record).current()->item,
+                                                       QDateTime::currentDateTimeUtc());
+        previous.name = QStringLiteral("Previous Cut");
+        bin->addItem(previous);
+        view->selectIds({sequenceId});
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("videoExportMethod"), QStringLiteral("copy"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("audioExportMethod"), QStringLiteral("copy"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("videoExcludePrevious"), true);
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("audioExcludePrevious"), true);
+        QStringList offered;
+        window.setExcludeSequenceHook([&](const QList<model::BinItem>& sequences) {
+            for (const model::BinItem& i : sequences) offered << i.name;
+            return static_cast<int>(offered.indexOf(QStringLiteral("Previous Cut")));
+        });
+        const QString difference = dir.filePath(QStringLiteral("Difference"));
+        auto diff = exportTo(QDir(difference).filePath(QStringLiteral("Cut.aaf")));
+        QVERIFY(diff);
+        QVERIFY(offered.contains(QStringLiteral("Previous Cut")));
+        QVERIFY(!offered.contains(sequenceName)); // not the one exported
+        m = masterIn(*diff);
+        QVERIFY(m);
+        QCOMPARE(filesUnder(*m, difference), -1); // still the original files
+        QVERIFY(QDir(difference).entryList(QDir::Files).filter(QStringLiteral(".mxf"), Qt::CaseInsensitive).isEmpty());
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("videoExcludePrevious"), false);
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("audioExcludePrevious"), false);
+
+        // The Simplified AAF (p.884-885): the shipped Link To Effects Mixdown version turns both on; an effect on V1
+        // becomes a mixdown clip and A1 with clip gain one mixed-down track, both new clips in the bin.
+        const SettingKind* exportKind = SettingsSchema::builtIn().find(QStringLiteral("Export"));
+        QVERIFY(exportKind && exportKind->versions.size() == 1);
+        QCOMPARE(exportKind->versions.first().name, QStringLiteral("Link To Effects Mixdown"));
+        model::SettingsFile fresh;
+        QCOMPARE(SettingsSchema::builtIn().addShippedVersions(fresh, model::SettingsScope::User), 1);
+        QCOMPARE(SettingsSchema::builtIn().addShippedVersions(fresh, model::SettingsScope::User), 0);
+        QVERIFY(window.timeline().changeRecordSequence(QStringLiteral("effects"), [](model::Sequence& seq) {
+            seq.track(QStringLiteral("V1"))->segments.first().effect = model::Effect{"Image", "Flip-Flop", {}};
+            seq.track(QStringLiteral("A1"))->segments.first().gain = -6.0;
+            return true;
+        }));
+        window.binContainer().saveAll();
+        view->selectIds({sequenceId});
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("videoExportMethod"), QStringLiteral("link"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("audioExportMethod"), QStringLiteral("link"));
+        for (const auto& [key, value] : exportKind->versions.first().values.toVariantMap().toStdMap())
+            settings.setValue(QStringLiteral("Export"), key, QJsonValue::fromVariant(value));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("audioTrackCount"), QStringLiteral("2"));
+        const int before = static_cast<int>(bin->bin().items.size());
+        const QString simple = dir.filePath(QStringLiteral("Simple"));
+        auto simplifiedAaf = exportTo(QDir(simple).filePath(QStringLiteral("Cut.aaf")));
+        QVERIFY(simplifiedAaf);
+        QCOMPARE(static_cast<int>(bin->bin().items.size()), before + 2);
+        const model::BinItem* flat = nullptr;
+        for (const model::BinItem& i : simplifiedAaf->items) {
+            if (i.kind == model::BinItemKind::Sequence) flat = &i;
+        }
+        QVERIFY(flat);
+        const model::Sequence simplifiedCut = model::Sequence::fromItem(*flat);
+        const model::Segment& v1 = simplifiedCut.track(QStringLiteral("V1"))->segments.first();
+        QCOMPARE(v1.name, sequenceName + QStringLiteral(" Effects Mixdown 1"));
+        QVERIFY(!v1.effect);
+        const model::Segment& a1 = simplifiedCut.track(QStringLiteral("A1"))->segments.first();
+        QCOMPARE(a1.name, sequenceName + QStringLiteral(" A1 Mixdown"));
+        QCOMPARE(a1.gain, 0.0);
+        int audioTracks = 0;
+        for (const model::Track& t : simplifiedCut.tracks()) audioTracks += t.kind == model::TrackKind::Audio ? 1 : 0;
+        QVERIFY(audioTracks <= 2);
         media::setExtraMediaDrives({});
     }
 

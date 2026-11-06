@@ -31,6 +31,7 @@
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/auto_sequence.h"
 #include "lumenis/model/send_to.h"
+#include "lumenis/model/simplify_export.h"
 #include "lumenis/model/bin_relations.h"
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/model/correction_template.h"
@@ -3776,8 +3777,16 @@ bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QL
     auto text = [&](const char* key) { return exportValue(QLatin1String(key)); };
     const QString videoMethod = text("videoExportMethod");
     const QString audioMethod = text("audioExportMethod");
+    // The Simplified AAF's options (7.1c3, p.884-885): with the Video Mixdown method the whole picture is one mixdown
+    // already, so Mixdown Video/Effects to V1 has nothing to do there.
+    const bool simplifyVideo = exportFlag(QStringLiteral("mixdownEffectsToV1")) && videoMethod != QLatin1String("mixdown");
+    const bool flattenAudio = exportFlag(QStringLiteral("flattenAudioEffects"));
+    const QString trackCount = text("audioTrackCount");
+    const int audioLimit = trackCount.isEmpty() || trackCount == QLatin1String("all") ? 0 : trackCount.toInt();
     items = selected + clips;
-    if (videoMethod == QLatin1String("link") && audioMethod == QLatin1String("link")) return true;
+    if (videoMethod == QLatin1String("link") && audioMethod == QLatin1String("link") && !simplifyVideo && !flattenAudio &&
+        audioLimit == 0)
+        return true;
     if (!project_) {
         if (error) *error = tr("Open a project first.");
         return false;
@@ -3837,11 +3846,135 @@ bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QL
         }
     }
 
+    // The Simplified AAF (p.884): "if a segment of the video is an existing master clip or filler, a reference to that
+    // segment is added to the new sequence. If the segment is a transition or effect, a video mixdown occurs which creates
+    // a new master clip" (model::simplifiedVideo); "Media Composer can limit the number of tracks included in the
+    // exported sequence to the first 2, 4, 8, or 16 tracks. If an audio track contains at least one effect or gain
+    // change, the entire track is mixed down to a new master clip." The new clips go into the sequence's bin ("added to
+    // the project bin") and the AAF; the bin's sequence stays as it was (ours: the simplified one is only exported).
+    QList<model::BinItem> simplified = selected;
+    QList<model::BinItem> madeClips; // the Simplified AAF's mixdown clips
+    if (simplifyVideo || flattenAudio || audioLimit > 0) {
+        BinDocument* doc = binContainer_ ? binContainer_->document(binId) : nullptr;
+        auto addClip = [&](const model::BinItem& clip) {
+            if (doc) doc->addItem(clip);
+            madeClips << clip;
+        };
+        for (model::BinItem& item : simplified) {
+            if (item.kind != model::BinItemKind::Sequence) continue;
+            const model::Sequence original = model::Sequence::fromItem(item);
+            model::Sequence seq = original;
+            if (simplifyVideo) {
+                QStringList video;
+                for (const model::Track& t : original.tracks()) {
+                    if (t.kind == model::TrackKind::Video) video << t.name();
+                }
+                if (!video.isEmpty()) {
+                    media::Composition c;
+                    c.sequence = &original;
+                    c.tracks = video;
+                    c.size = creation.raster;
+                    model::LoadedClip loaded;
+                    loaded.binId = binId;
+                    loaded.item = item;
+                    fillComposition(c, loaded);
+                    QList<model::Segment> v1;
+                    int part = 0;
+                    for (const model::SimplifiedSpan& span : model::simplifiedVideo(original)) {
+                        const std::int64_t length = span.end - span.start;
+                        if (span.kind == model::SimplifiedSpan::Kind::Clip) {
+                            v1 << span.segment;
+                            continue;
+                        }
+                        model::Segment segment;
+                        segment.length = length;
+                        if (span.kind == model::SimplifiedSpan::Kind::Mixdown) {
+                            QString why;
+                            const auto mix = media::renderedVideoClip(
+                                tr("%1 Effects Mixdown %2").arg(item.name).arg(++part), item.editRate, length,
+                                [&](std::int64_t f) { return media::composeImage(c, span.start + f); }, creation,
+                                model::BinItemKind::MasterClip, &why);
+                            if (!mix) {
+                                if (error) *error = tr("The video mixdown of %1 failed: %2").arg(item.name, why);
+                                return false;
+                            }
+                            addClip(*mix);
+                            segment.binId = binId;
+                            segment.clipId = mix->id;
+                            segment.sourceMob = mix->mobId;
+                            segment.name = mix->name;
+                            segment.sourceTrack = QStringLiteral("V1");
+                        }
+                        v1 << segment;
+                    }
+                    for (const QString& name : video) seq.removeTrack(name);
+                    if (model::Track* t = seq.ensureTrack(QStringLiteral("V1"))) t->segments = v1;
+                }
+            }
+            // The audio tracks in number order; past the limit they are left out.
+            QList<const model::Track*> audio;
+            for (const model::Track& t : original.tracks()) {
+                if (t.kind == model::TrackKind::Audio) audio << &t;
+            }
+            std::sort(audio.begin(), audio.end(), [](const model::Track* a, const model::Track* b) {
+                const auto ra = model::parseTrackName(a->name());
+                const auto rb = model::parseTrackName(b->name());
+                return (ra ? ra->number : 0) < (rb ? rb->number : 0);
+            });
+            for (int i = 0; i < audio.size(); ++i) {
+                const model::Track& t = *audio.at(i);
+                if (audioLimit > 0 && i >= audioLimit) {
+                    seq.removeTrack(t.name());
+                    continue;
+                }
+                if (!flattenAudio || !model::audioTrackHasEffects(t) || t.length() <= 0) continue;
+                media::MixdownRequest request;
+                request.sequence = item;
+                request.tracks = {t.name()};
+                request.start = 0;
+                request.end = t.length();
+                request.format = t.format == model::AudioFormat::Stereo       ? media::MixdownFormat::Stereo
+                                 : t.format == model::AudioFormat::Surround51 ? media::MixdownFormat::Surround51
+                                 : t.format == model::AudioFormat::Surround71 ? media::MixdownFormat::Surround71
+                                                                              : media::MixdownFormat::Mono;
+                request.alternatingPan =
+                    settings_->text(QStringLiteral("Audio"), QStringLiteral("defaultPan")) != QLatin1String("centered");
+                request.clips = [this](const QString& bin, const QString& id) { return composer_->resolve(bin, id); };
+                QString why;
+                const auto mix = media::mixdownClip(request, tr("%1 %2 Mixdown").arg(item.name, t.name()),
+                                                    QString::fromStdString(Timecode(model::startFrameOf(item), model::timecodeFormatOf(item)).toString()), creation, &why);
+                if (!mix) {
+                    if (error) *error = tr("The audio mixdown of %1 %2 failed: %3").arg(item.name, t.name(), why);
+                    return false;
+                }
+                addClip(*mix);
+                model::Track* flat = seq.track(t.name());
+                if (!flat) continue;
+                model::Segment segment;
+                segment.binId = binId;
+                segment.clipId = mix->id;
+                segment.sourceMob = mix->mobId;
+                segment.name = mix->name;
+                segment.sourceTrack = QStringLiteral("A1");
+                segment.length = t.length();
+                flat->segments = {segment};
+                flat->inserts = {};
+            }
+            seq.storeIn(item);
+        }
+        for (model::BinItem& it : items) {
+            for (const model::BinItem& changed : simplified) {
+                if (changed.id == it.id) it = changed;
+            }
+        }
+    }
+
     // Consolidate Media: the parts of the clips the sequences use, with the Handle Length (p.1175-1176), and selected
     // master clips whole, as new media in the folder. The new clips keep their old clips' names (ours).
     QList<model::BinItem> sequences;
     QList<model::BinItem> clipItems;
     for (const model::BinItem& item : items) (item.kind == model::BinItemKind::Sequence ? sequences : clipItems) << item;
+    clipItems << madeClips;
     if (videoMethod == QLatin1String("consolidate") || audioMethod == QLatin1String("consolidate")) {
         media::ConsolidateOptions co;
         co.mode = media::ConsolidateOptions::Mode::Consolidate;
@@ -3851,7 +3984,7 @@ bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QL
         co.keepMastersLinked = true;
         co.creation = creation;
         const media::ConsolidateResult result =
-            media::consolidate(selected, binId, [this](const QString& bin, const QString& id) { return composer_->resolve(bin, id); }, {}, co);
+            media::consolidate(simplified, binId, [this](const QString& bin, const QString& id) { return composer_->resolve(bin, id); }, {}, co);
         if (!result.error.isEmpty()) {
             if (error) *error = result.error;
             return false;
@@ -3930,9 +4063,61 @@ bool MainWindow::prepareAafMedia(const QList<model::BinItem>& selected, const QL
         clipItems << *it;
     }
 
+    // Export Media Difference Between Sequences (p.885-886): with Ask to Exclude Media from a Previous Sequence on a
+    // Copy All Media tab, "In the Exclude Media Referenced from Sequence pulldown, select the sequence you want to compare
+    // with the one you are exporting"; the files that sequence's clips use are not copied (their clips keep linking to
+    // them, ours). The choice is among the open bins' other sequences.
+    const bool excludeVideo = videoMethod == QLatin1String("copy") && exportFlag(QStringLiteral("videoExcludePrevious"));
+    const bool excludeAudio = audioMethod == QLatin1String("copy") && exportFlag(QStringLiteral("audioExcludePrevious"));
+    QSet<QString> exclude;
+    if (excludeVideo || excludeAudio) {
+        QList<model::BinItem> candidates;
+        QStringList candidateBins;
+        QStringList names;
+        for (BinDocument* d : binContainer_ ? binContainer_->openDocuments() : QList<BinDocument*>{}) {
+            for (const model::BinItem& i : d->bin().items) {
+                if (i.kind != model::BinItemKind::Sequence) continue;
+                if (std::any_of(selected.begin(), selected.end(), [&](const model::BinItem& s) { return s.id == i.id; })) continue;
+                candidates << i;
+                candidateBins << d->nodeId();
+                names << i.name;
+            }
+        }
+        if (candidates.isEmpty()) {
+            warnings << tr("There is no other sequence to exclude media from; all the media is copied.");
+        } else {
+            int index = -1;
+            if (excludeSequenceHook_) {
+                index = excludeSequenceHook_(candidates);
+            } else {
+                bool ok = false;
+                const QString name = QInputDialog::getItem(this, tr("Exclude Media Referenced from Sequence"),
+                                                           tr("Exclude Media Referenced from Sequence:"), names, 0, false, &ok);
+                if (ok) index = static_cast<int>(names.indexOf(name));
+            }
+            if (index < 0 || index >= candidates.size()) {
+                if (error) *error = tr("The export was cancelled.");
+                return false;
+            }
+            const model::Sequence previous = model::Sequence::fromItem(candidates.at(index));
+            for (const model::Track& t : previous.tracks()) {
+                for (const model::Segment& seg : t.segments) {
+                    if (seg.isFiller()) continue;
+                    const auto clip = composer_->resolve(seg.binId.isEmpty() ? candidateBins.at(index) : seg.binId, seg.clipId);
+                    if (!clip) continue;
+                    for (const model::ClipSource& src : clip->sources) {
+                        if (src.kind != model::ClipSource::Kind::File || src.path.isEmpty()) continue;
+                        const bool isVideo = src.track.startsWith(QLatin1Char('V'));
+                        if ((isVideo && excludeVideo) || (!isVideo && excludeAudio)) exclude << QFileInfo(src.path).absoluteFilePath();
+                    }
+                }
+            }
+        }
+    }
+
     // Copy All Media: the clips' files of each kind copied into the folder (p.1175).
-    const media::CopiedMedia copied =
-        media::copyClipMedia(clipItems, folder, videoMethod == QLatin1String("copy"), audioMethod == QLatin1String("copy"));
+    const media::CopiedMedia copied = media::copyClipMedia(clipItems, folder, videoMethod == QLatin1String("copy"),
+                                                           audioMethod == QLatin1String("copy"), exclude);
     warnings << copied.warnings;
     items = sequences + copied.items;
     return true;

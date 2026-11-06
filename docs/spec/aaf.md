@@ -360,3 +360,41 @@ Not yet: Embedded in AAF, Split Tracks to Mono and Remove Track Effects
 (our AAF export writes no track effects), Convert Audio Sample Rate, Bit
 Depth and File Format, Add Audio Mixdown Track, Render Video Effects.
 Test: `tst_managed_media aafExportMethods`.
+
+## Simplified AAF and Export Media Difference (7.1c3)
+
+**Simplified AAF** (p.884-885): the Export setting ships a version named
+"Link To Effects Mixdown" (`SettingKind::versions` in settings.json, added to
+new settings files and by Update User Profiles, p.884) with Export As AAF,
+Mixdown Video/Effects to V1 on the Video Details tab and Flatten Audio Tracks
+that Contain Effects on the Audio Details tab.
+
+* Mixdown Video/Effects to V1: the video tracks become one V1
+  (`model::simplifiedVideo`). Where the topmost non-filler segment is plain
+  and no transition runs, V1 references it ("if a segment of the video is an
+  existing master clip or filler, a reference to that segment is added");
+  where every track is filler, filler; elsewhere ("a transition or effect")
+  the compositor's picture becomes a new clip "<sequence> Effects Mixdown
+  <n>" in the Media Destinations folder (ours: one clip per stretch,
+  numbered). A nest counts as an effect.
+* Flatten Audio Tracks that Contain Effects: "If an audio track contains at
+  least one effect or gain change, the entire track is mixed down to a new
+  master clip" (`model::audioTrackHasEffects`: clip gain, volume automation,
+  EQ, AudioSuite or a track insert), "<sequence> <track> Mixdown" in the
+  track's own format; the track then holds that clip alone.
+* Audio Tracks: All, or the first 2, 4, 8 or 16 by number; the others are
+  left out of the AAF. Our label "Audio Tracks"; the guide names no label.
+* The new clips go into the sequence's bin ("added to the project bin");
+  the bin's sequence stays as it was and only the AAF holds the simplified
+  one (ours). Video Mixdown as the export method makes Mixdown Video/Effects
+  to V1 do nothing.
+
+**Export Media Difference Between Sequences** (p.885-886): with Copy All Media
+and Ask to Exclude Media from a Previous Sequence on its tab, the Exclude
+Media Referenced from Sequence choice lists the open bins' other sequences
+(`MainWindow::setExcludeSequenceHook` in tests); the files that sequence's
+clips use, of that tab's kind, are not copied (`copyClipMedia`'s `exclude`)
+and their clips keep linking to them (ours: the guide says only which clips
+are exported). Cancelling the choice cancels the export.
+
+Tests: `tst_sequence simplifiedAafSpans`, `tst_managed_media aafExportMethods`.
