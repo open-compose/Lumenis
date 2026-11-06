@@ -114,7 +114,8 @@ headers in `include/lumenis/<library>/`.
   `MainWindow::writeExport` (movies, stills and sound in `src/media/movie_export.*`, docs/spec/movie-export.md; AAF's
   Export Methods in `MainWindow::prepareAafMedia`); Send To templates are `src/model/send_to.*` with
   `src/ui/send_to_dialog.*` (docs/spec/send-to.md); the Simplified AAF's spans are `src/model/simplify_export.*`; Export to Device goes through `ext::ExportDeviceProvider`
-  (`src/ext/include/lumenis/ext/export_device.h`, `src/media/xdcam_disk.*`, `src/ui/export_device_dialog.*`).
+  (`src/ext/include/lumenis/ext/export_device.h`, `src/media/xdcam_disk.*`, `src/ui/export_device_dialog.*`); AS-11 and AS-02 are bmxtranswrap rewraps (`src/media/as11.*`), Export Volumes
+  `src/model/export_volume.*` and `src/ui/export_volume_dialog.*`.
 * **Effects.** The Effect Palette's list is `src/ui/resources/effects.json`
   and the Effect Editor's parameters `effect_parameters.json`; UI in
   `effect_palette.*` and `effect_editor.*` (its keyframe tracks and graphs in

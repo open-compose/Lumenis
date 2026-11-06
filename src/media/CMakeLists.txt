@@ -40,6 +40,7 @@ add_library(lumenis_media STATIC
     ocio_colour.cpp
     movie_export.cpp
     xdcam_disk.cpp
+    as11.cpp
     ocio_colour.h
     link.cpp
     ltc.cpp
@@ -69,6 +70,7 @@ add_library(lumenis_media STATIC
     include/lumenis/media/ofx_host.h
     include/lumenis/media/movie_export.h
     include/lumenis/media/xdcam_disk.h
+    include/lumenis/media/as11.h
     include/lumenis/media/link.h
     include/lumenis/media/ltc.h
     include/lumenis/media/tone.h

@@ -178,6 +178,9 @@ struct Bin {
     QString name;
     QList<BinItem> items;
     BinDisplay display;
+    // An Export Volume bin's volume (Phase 7.2d; lumenis/model/export_volume.h, docs/spec/as02.md); empty for an
+    // ordinary bin.
+    QJsonObject exportVolume;
 
     // The item with this BinItem::id, or null. The pointer is valid until `items` changes.
     const BinItem* item(const QString& id) const;

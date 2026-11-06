@@ -2,6 +2,7 @@
 // by each Source Scaling, and MOV and MP4 files written and read back: their codecs, sizes, frame counts, sound,
 // timecode and colour range; compressions that do not fit the container or the build; a cancel removing the file.
 // 7.1b: stills in every Graphic format, DPX and OpenEXR read back, legal range, sequence file names, WAVE and AIFF-C.
+#include "lumenis/media/as11.h"
 #include "lumenis/media/media.h"
 #include "lumenis/media/movie_export.h"
 
@@ -199,6 +200,52 @@ private slots:
             QCOMPARE(info->firstVideo()->length, 3);
             QVERIFY(op1a(dnxFile));
         }
+    }
+
+    // AS-11 (7.2c, p.891-893): the shims, bmxtranswrap's framework and segmentation files; the rewrap itself where
+    // bmxtranswrap is installed.
+    void as11() {
+        QVERIFY(findAs11Shim(QStringLiteral("as11-x8")));
+        QVERIFY(findAs11Shim(QStringLiteral("as11-x1"))->dpp);
+        QVERIFY(!findAs11Shim(QStringLiteral("as11-x8"))->dpp);
+        QCOMPARE(as11FrameworkText({{QStringLiteral("SeriesTitle"), QStringLiteral("Harbor")},
+                                    {QStringLiteral("Synopsis"), QString()},
+                                    {QStringLiteral("ProgrammeTitle"), QStringLiteral("Two\nlines")}}),
+                 QStringLiteral("SeriesTitle: Harbor\nProgrammeTitle: Two lines\n"));
+        // Two parts from 10:00:00:00 at 25 fps: frames 0-49 and 75-99 of the export.
+        const QString seg = as11SegmentationText({{0, 50}, {75, 25}}, 10 * 3600 * 25, Rational(25, 1), false);
+        QCOMPARE(seg, QStringLiteral("1/2\t10:00:00:00 00:00:02:00\n2/2\t10:00:03:00 00:00:01:00\n"));
+        // Without bmxtranswrap, or without segments, there is no AS-11 file.
+        QTemporaryDir dir;
+        As11Options o;
+        o.shim = QStringLiteral("as11-x8");
+        QString error;
+        qputenv("LUMENIS_BMXTRANSWRAP", dir.filePath(QStringLiteral("missing")).toLocal8Bit());
+        QVERIFY(bmxTranswrapPath().isEmpty());
+        QVERIFY(!writeAs11(dir.filePath(QStringLiteral("in.mxf")), dir.filePath(QStringLiteral("out.mxf")), o, &error));
+        QVERIFY(error.contains(QStringLiteral("bmxtranswrap")));
+        qunsetenv("LUMENIS_BMXTRANSWRAP");
+        if (bmxTranswrapPath().isEmpty()) QSKIP("bmx's bmxtranswrap is not installed (BUILDING.md, \"AS-11\")");
+        QVERIFY(!writeAs11(dir.filePath(QStringLiteral("in.mxf")), dir.filePath(QStringLiteral("out.mxf")), o, &error));
+        // XDCAM-50 at 1080 as AS-11 X8 with two segments.
+        MovieSource hd = source(6);
+        hd.raster = QSize(1920, 1080);
+        MovieExportOptions mxf;
+        mxf.container = MovieContainer::Mxf;
+        mxf.compression = QStringLiteral("xdcam_50");
+        mxf.startTimecode = QStringLiteral("10:00:00:00");
+        const QString op1a = dir.filePath(QStringLiteral("programme.mxf"));
+        QVERIFY2(exportMovie(op1a, hd, mxf, {}, &error), qPrintable(error));
+        o.core = {{QStringLiteral("SeriesTitle"), QStringLiteral("Harbor")}, {QStringLiteral("ProgrammeTitle"), QStringLiteral("Harbor 1")},
+                  {QStringLiteral("EpisodeTitleNumber"), QStringLiteral("1")}, {QStringLiteral("AudioTrackLayout"), QStringLiteral("0")},
+                  {QStringLiteral("PrimaryAudioLanguage"), QStringLiteral("eng")}, {QStringLiteral("ClosedCaptionsPresent"), QStringLiteral("false")}};
+        o.segments = {{0, 3}, {3, 3}};
+        o.startFrame = 10 * 3600 * 25;
+        const QString as11File = dir.filePath(QStringLiteral("as11.mxf"));
+        QVERIFY2(writeAs11(op1a, as11File, o, &error), qPrintable(error));
+        const auto info = probe(as11File);
+        QVERIFY(info && info->firstVideo());
+        QCOMPARE(info->firstVideo()->length, 6);
     }
 
     void sizesAndRates() {

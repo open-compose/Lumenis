@@ -3,11 +3,13 @@
 // back; Use Marks and the sequence's timecode; a master clip exported through a sequence of its own; Video Only.
 // 7.1b: a Graphic still of the Record monitor's frame, the frames with markers named by their comments, a DPX image
 // sequence and a WAVE file. 7.2a-b: XDCAM MXF OP1a, DPX's options, and Export to Device > XDCAM onto a disk seen as
-// a folder.
+// a folder; AS-11 without segments; an AS-02 Export Volume.
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/media.h"
+#include "lumenis/media/as11.h"
 #include "lumenis/media/movie_export.h"
 #include "lumenis/media/xdcam_disk.h"
+#include "lumenis/model/export_volume.h"
 #include "lumenis/model/marker.h"
 #include "lumenis/ui/bin_container.h"
 #include "lumenis/ui/bin_view.h"
@@ -15,6 +17,7 @@
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/export_device_dialog.h"
 #include "lumenis/ui/export_dialog.h"
+#include "lumenis/ui/export_volume_dialog.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/theme.h"
@@ -262,6 +265,14 @@ private slots:
         QCOMPARE(info->audio().front()->codec, QStringLiteral("pcm_s16le"));
         QCOMPARE(info->audio().front()->channels, 2);
 
+        // AS-11 (p.891-893) needs programme segments from spanned markers: none, no file.
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("exportAs"), QStringLiteral("as11"));
+        settings.setValue(QStringLiteral("Export"), QStringLiteral("mxfCompression"), QStringLiteral("xdcam_50"));
+        const QString as11 = dir.filePath(QStringLiteral("Programme.mxf"));
+        view->selectIds({sequenceId});
+        exportTo(as11);
+        QVERIFY(!QFileInfo::exists(as11));
+
         // Export to Device > P2 without a P2 device: the options dimmed, nothing exported (p.901).
         bool dimmed = false;
         window.setExportDeviceHook([&](ExportDeviceDialog& dialog) {
@@ -314,6 +325,49 @@ private slots:
         QCOMPARE(window.exportToDevice(QStringLiteral("xdcam")), 0);
         QVERIFY(!QFileInfo::exists(other + QStringLiteral("/Clip/C0010.MXF")));
         media::setXdcamDiskFolders({});
+
+        // File > New > Volume for Export (p.902-904): the Export Volume bin takes a copy of the sequence, Not Committed,
+        // and refuses the clip; Properties changes the compression; Commit writes the bundle where bmxtranswrap is.
+        window.setExportVolumeHook([&](ExportVolumeDialog& dialog) {
+            dialog.setPath(dir.filePath(QStringLiteral("Volumes")));
+            dialog.setName(QStringLiteral("Delivery"));
+            return true;
+        });
+        const QString volumeBin = window.newVolumeForExport();
+        QVERIFY(!volumeBin.isEmpty());
+        BinDocument* volumeDoc = window.binContainer().document(volumeBin);
+        QVERIFY(volumeDoc);
+        const auto volume = model::exportVolumeOf(volumeDoc->bin());
+        QVERIFY(volume);
+        QCOMPARE(volume->type, QStringLiteral("AS-02"));
+        QCOMPARE(volume->compression, QStringLiteral("j2k"));
+        QCOMPARE(QDir::cleanPath(volume->folder()), QDir::cleanPath(dir.filePath(QStringLiteral("Volumes/Delivery"))));
+        BinView* volumeView = window.binContainer().viewFor(volumeDoc);
+        QVERIFY(volumeView && volumeView->findChild<QWidget*>(QStringLiteral("exportVolumeBar")));
+        QVERIFY(volumeView->findChild<QWidget*>(QStringLiteral("exportVolumeBar"))->isVisibleTo(volumeView));
+        QVERIFY(!view->findChild<QWidget*>(QStringLiteral("exportVolumeBar"))->isVisibleTo(view));
+        const QStringList added = window.binContainer().transferItems(bin->nodeId(), {clip.id, sequenceId}, volumeBin, false);
+        QCOMPARE(added.size(), 1);
+        QVERIFY(bin->bin().item(sequenceId)); // a copy: the sequence stays
+        const model::BinItem* copied = volumeDoc->bin().item(added.first());
+        QVERIFY(copied && copied->kind == model::BinItemKind::Sequence);
+        QCOMPARE(copied->fields.value(model::kMediaStatusHeading), model::kNotCommitted);
+        const QString copiedName = copied->name;
+        window.setExportVolumeHook([](ExportVolumeDialog& dialog) {
+            dialog.setCompression(QStringLiteral("dnxhr_lb"));
+            return true;
+        });
+        QVERIFY(window.editExportVolume(volumeBin));
+        if (media::movieCompressionAvailable(*media::findMovieCompression(QStringLiteral("dnxhr_lb"))))
+            QCOMPARE(model::exportVolumeOf(volumeDoc->bin())->compression, QStringLiteral("dnxhr_lb"));
+        if (media::bmxTranswrapPath().isEmpty()) {
+            QCOMPARE(window.commitExportVolume(volumeBin), 0);
+            QCOMPARE(volumeDoc->bin().item(added.first())->fields.value(model::kMediaStatusHeading), model::kNotCommitted);
+        } else {
+            QCOMPARE(window.commitExportVolume(volumeBin), 1);
+            QCOMPARE(volumeDoc->bin().item(added.first())->fields.value(model::kMediaStatusHeading), model::kCommitted);
+            QVERIFY(QFileInfo(QDir(volume->folder()).filePath(copiedName)).isDir());
+        }
     }
 };
 

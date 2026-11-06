@@ -51,7 +51,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Command | Shortcut | Guide | Status | Found | Where | Notes |
 |---|---|---|---|---|---|---|
 | New > New Script |  | p.571 | *later* | ☐ | | |
-| New > Volume for Export |  | p.902 | *later* | ☐ | | |
+| New > Volume for Export |  | p.902 | works | ☐ | | |
 | Open Bin |  | p.296 | works | ☐ | | |
 | Open Selected Bins |  | p.295 | works | ☐ | | |
 | Open Selected Bins In One Window |  | p.295 | works | ☐ | | |
@@ -315,6 +315,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 162 of them working with a project open; the
+* 211 menu commands, 163 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

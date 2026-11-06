@@ -1060,6 +1060,11 @@ the build folder (`build/<preset>`) and configure again.
   ```
 
   Then link the files into Media Composer by hand.
+* **AS-11 and AS-02 export** (7.2c-d, docs/spec/as11.md, docs/spec/as02.md) run bmx's
+  `bmxtranswrap`, built with `mxf2raw` above: copy
+  `bmx/build/apps/bmxtranswrap/bmxtranswrap` onto PATH, beside the
+  application, or name it in `LUMENIS_BMXTRANSWRAP`. Without it those
+  exports say so in the Console; `tst_movie_export as11` skips its rewrap.
 * **Gates 3 and 4, playback:** on a reference machine with a sound card,
   `python3 scripts/measure-playback.py --app <cutthulhu> --seconds 600` (gate
   3) and `--seconds 3600` (gate 4). Each run is judged on the gates its

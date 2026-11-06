@@ -1,4 +1,5 @@
 #include "lumenis/ui/bin_view.h"
+
 #include "lumenis/ui/brush_preview.h"
 
 #include "lumenis/media/custom_color.h"
@@ -8,6 +9,7 @@
 #include "lumenis/model/audio_suite.h"
 #include "lumenis/model/correction_template.h"
 #include "lumenis/model/effect_template.h"
+#include "lumenis/model/export_volume.h"
 #include "lumenis/model/motion_adapter.h"
 #include "lumenis/model/title_clip.h"
 #include "lumenis/model/titler.h"
@@ -23,6 +25,7 @@
 #include <QButtonGroup>
 #include <QColorDialog>
 #include <QComboBox>
+#include <QDir>
 #include <QDrag>
 #include <QDropEvent>
 #include <QHBoxLayout>
@@ -383,6 +386,12 @@ bool BinDocument::setField(const QString& id, const QString& heading, const QStr
 
 void BinDocument::setDisplay(const model::BinDisplay& display) {
     bin_.display = display;
+    touch();
+    emit displayChanged();
+}
+
+void BinDocument::setExportVolume(const QJsonObject& volume) {
+    bin_.exportVolume = volume;
     touch();
     emit displayChanged();
 }
@@ -1469,10 +1478,35 @@ BinView::BinView(BinDocument& document, QMenu* fastMenu, QWidget* parent)
     status_->setFixedHeight(kRowHeight);
     status_->setContentsMargins(0, 0, 8, 0);
 
+    // An Export Volume bin's bar: "Left to right: Export Volume Type, Path to Asset folder, Properties button, Commit
+    // button" (p.903).
+    volumeBar_ = new QWidget(this);
+    volumeBar_->setObjectName(QStringLiteral("exportVolumeBar"));
+    auto* volume = new QHBoxLayout(volumeBar_);
+    volume->setContentsMargins(4, 2, 4, 2);
+    volumeType_ = new QLabel(volumeBar_);
+    volumeType_->setObjectName(QStringLiteral("exportVolumeType"));
+    volumePath_ = new QLabel(volumeBar_);
+    volumePath_->setObjectName(QStringLiteral("exportVolumePath"));
+    volumePath_->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    auto* properties = new QPushButton(tr("Properties"), volumeBar_);
+    properties->setObjectName(QStringLiteral("exportVolumeProperties"));
+    auto* commit = new QPushButton(tr("Commit"), volumeBar_);
+    commit->setObjectName(QStringLiteral("exportVolumeCommit"));
+    connect(properties, &QPushButton::clicked, this, &BinView::volumePropertiesClicked);
+    connect(commit, &QPushButton::clicked, this, &BinView::volumeCommitClicked);
+    volume->addWidget(volumeType_);
+    volume->addWidget(volumePath_, 1);
+    volume->addWidget(properties);
+    volume->addWidget(commit);
+    connect(&document_, &BinDocument::displayChanged, this, &BinView::updateVolumeBar);
+    updateVolumeBar();
+
     auto* layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
     layout->addLayout(top);
+    layout->addWidget(volumeBar_);
     layout->addWidget(stack_, 1);
     layout->addWidget(status_);
 
@@ -1598,6 +1632,14 @@ void BinView::updateViewMenu() {
 // Green: this user may change the bin; red: someone else holds it, or it is
 // protected; yellow: its holder has saved changes since it was read; blue:
 // its holder has let it go (p.301-303).
+void BinView::updateVolumeBar() {
+    const auto volume = model::exportVolumeOf(document_.bin());
+    volumeBar_->setVisible(volume.has_value());
+    if (!volume) return;
+    volumeType_->setText(volume->type);
+    volumePath_->setText(QDir::toNativeSeparators(volume->folder()));
+}
+
 void BinView::updateLockButton() {
     using State = BinDocument::LockState;
     const State state = document_.lockState();

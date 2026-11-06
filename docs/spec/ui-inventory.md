@@ -424,7 +424,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   (docs/spec/movie-export.md "MXF OP1a"): the XDCAM and AVC Long-GOP encodings, JPEG 2000's 4:2:2 10-bit, MXF sound as
   one track of the mix's channels at 48 kHz, DPX's Full Range and the sequence's FPS as defaults, one DPX frame numbered. 7.2b
   (docs/spec/export-device.md): XDCAM disks recognised by their Clip folder, clips numbered by us, the stereo mix only,
-  the first clip's channels as the disk's track count, no built-in P2 device.
+  the first clip's channels as the disk's track count, no built-in P2 device. 7.2c (docs/spec/as11.md): AMWA's
+  shims as a menu in place of Avid's shim files, the DM fields offered, the rewrap through bmxtranswrap. 7.2d
+  (docs/spec/as02.md): the volume's Video Compression, one bundle per sequence, any shim XML read for its three names,
+  Media Status as text.
 * PlasmaWipe (docs/spec/plasma-wipe.md, 6.9e): our own gradient effects in the
   "PlasmaWipe Basic ..." categories in place of Avid's 64 presets, how Soft and
   Width act on the gradient, the frame's colouring by its grey, the defaults

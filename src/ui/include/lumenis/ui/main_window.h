@@ -73,6 +73,7 @@ class MultiMixDialog;
 class ExportAsDialog;
 class SendToDialog;
 class ExportDeviceDialog;
+class ExportVolumeDialog;
 class ProToolsOptionsDialog;
 class SettingsDialog;
 class ExportBinDialog;
@@ -381,6 +382,13 @@ public:
     // "p2". The hook stands in for the dialog (tests). Returns how many clips were delivered.
     int exportToDevice(const QString& kind);
     void setExportDeviceHook(std::function<bool(ExportDeviceDialog&)> hook) { exportDeviceHook_ = std::move(hook); }
+    // AS-02 Export Volumes (7.2d; docs/spec/as02.md; p.901-904): File > New > Volume for Export makes an Export Volume
+    // bin (its id; empty when cancelled); the bin's Properties button edits its volume; Commit writes its sequences not
+    // yet committed as AS-02 bundles through bmxtranswrap and returns how many. The hook stands in for the dialog.
+    QString newVolumeForExport();
+    bool editExportVolume(const QString& binId);
+    int commitExportVolume(const QString& binId);
+    void setExportVolumeHook(std::function<bool(ExportVolumeDialog&)> hook) { exportVolumeHook_ = std::move(hook); }
     // Stands in for the Exclude Media Referenced from Sequence pulldown (p.886): it gets the sequences to choose from
     // and returns the chosen one's index, or -1 to cancel (tests).
     void setExcludeSequenceHook(std::function<int(const QList<model::BinItem>&)> hook) { excludeSequenceHook_ = std::move(hook); }
@@ -896,6 +904,7 @@ private:
     std::function<bool(ExportAsDialog&)> exportHook_;
     std::function<int(const QList<model::BinItem>&)> excludeSequenceHook_;
     std::function<bool(ExportDeviceDialog&)> exportDeviceHook_;
+    std::function<bool(ExportVolumeDialog&)> exportVolumeHook_;
     // Send To's template values while it exports (7.1c2); empty otherwise.
     QJsonObject exportOverride_;
     std::function<bool(SendToDialog&)> sendToHook_;

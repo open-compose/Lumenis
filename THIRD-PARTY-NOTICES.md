@@ -94,6 +94,14 @@ OpenTimelineIO. No code of it is copied. Its sample files are downloaded for
 testing (`scripts/interop-corpus.py`) and not distributed; the adapter itself
 is used only by the checks.
 
+## Tools run by the application
+
+[bmx](https://github.com/bbc/bmx) (BSD-3-Clause, Copyright British Broadcasting
+Corporation): its `bmxtranswrap` program rewraps our MXF OP1a as AS-11 and AS-02
+(docs/spec/as11.md). It is found on PATH, beside the application or through
+`LUMENIS_BMXTRANSWRAP`, and is not distributed yet; a package that ships it adds
+bmx's licence text with it (`cmake/Packaging.cmake`).
+
 ## Development tools
 
 [actionlint](https://github.com/rhysd/actionlint) (MIT, Copyright rhysd)

@@ -683,6 +683,7 @@ std::optional<Bin> BinFile::read(const QString& path, QString* error) {
     for (const QJsonValue& v : o.value(QStringLiteral("items")).toArray()) {
         if (auto item = itemFromJson(v.toObject())) bin.items.append(*item);
     }
+    bin.exportVolume = o.value(QStringLiteral("exportVolume")).toObject();
     const QJsonObject d = o.value(QStringLiteral("display")).toObject();
     const QString mode = d.value(QStringLiteral("mode")).toString();
     bin.display.mode = mode == QLatin1String("frame")    ? BinViewMode::Frame
@@ -771,13 +772,14 @@ bool BinFile::write(const QString& path, const Bin& bin, QString* error) {
         {QStringLiteral("fontFamily"), bin.display.fontFamily},
         {QStringLiteral("fontSize"), bin.display.fontSize},
     };
-    const QJsonObject o{
+    QJsonObject o{
         {QStringLiteral("format"), QLatin1String(kFileFormat)},
         {QStringLiteral("version"), kFileVersion},
         {QStringLiteral("name"), bin.name},
         {QStringLiteral("items"), items},
         {QStringLiteral("display"), display},
     };
+    if (!bin.exportVolume.isEmpty()) o.insert(QStringLiteral("exportVolume"), bin.exportVolume);
     QSaveFile f(path);
     if (!f.open(QIODevice::WriteOnly)) return fail(error, f.errorString());
     f.write(QJsonDocument(o).toJson());

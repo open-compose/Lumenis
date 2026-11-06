@@ -1338,9 +1338,14 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     layout and naming (Cxxxx.MXF), the audio track rule. Done for XDCAM (docs/spec/export-device.md:
     `ext::ExportDeviceProvider`, `media::XdcamDiskProvider`, `ExportDeviceDialog`, `MainWindow::exportToDevice`; test
     `tst_movie_export_ui`); P2 cards wait for a module, since Panasonic's clip metadata is not published.
-  * 7.2c, AS-11 (p.891-893): shims, descriptive metadata and segmentation from spanned markers.
+  * 7.2c, AS-11 (p.891-893): shims, descriptive metadata and segmentation from spanned markers. Done through bmx's
+    bmxtranswrap where it is installed (docs/spec/as11.md: `src/media/as11.*`, the Export setting's AS-11 tab; test
+    `tst_movie_export as11`).
   * 7.2d, AS-02 export volumes (p.901-904): the Export Volume bin, Commit, the bundle (manifest, shim, media, extra).
-  AS-11 and AS-02 need DM and OP1b writing FFmpeg does not have; bmx (BSD) as an optional library is the candidate.
+    Done (docs/spec/as02.md: `model::ExportVolume` in `Bin::exportVolume`, `ExportVolumeDialog`, the bin's volume bar,
+    `MainWindow::commitExportVolume` through `media::writeAs02`; test `tst_movie_export_ui`), so 7.2 is; one bundle per
+    sequence for now.
+  AS-11 and AS-02 need DM and OP1b writing FFmpeg does not have: bmx's bmxtranswrap (BSD) rewraps our OP1a.
 * 7.3, output to devices (ch.26, p.909-938): the output device and sync source, the Video Output tool, audio output
   options, the Digital Cut tool, output and timecode formats; a device provider interface with a file "device" of our
   own for tests, AJA (NTV2, MIT) and Blackmagic (the driver the user installs) behind it. Gate 2 waits for hardware (M).

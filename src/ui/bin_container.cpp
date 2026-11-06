@@ -3,6 +3,7 @@
 #include "lumenis/core/branding.h"
 #include "lumenis/model/bin.h"
 #include "lumenis/model/bin_lock.h"
+#include "lumenis/model/export_volume.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/ui/theme.h"
@@ -1069,6 +1070,8 @@ BinDocument* BinContainer::openBin(const QString& requested, bool takeLock) {
     connect(doc, &BinDocument::saved, this, [this, doc] { copyToAttic(doc); });
     connect(view, &BinView::deleteRequested, this, [this] { deleteSelection(); });
     connect(view, &BinView::lockButtonClicked, this, [this, doc](bool alt) { lockButtonClicked(doc, alt); });
+    connect(view, &BinView::volumePropertiesClicked, this, [this, doc] { emit exportVolumePropertiesRequested(doc->nodeId()); });
+    connect(view, &BinView::volumeCommitClicked, this, [this, doc] { emit exportVolumeCommitRequested(doc->nodeId()); });
     connect(doc, &BinDocument::lockChanged, this, [this, doc] {
         updateTab(doc);
         refreshTree();
@@ -1972,6 +1975,37 @@ QStringList BinContainer::transferItems(const QString& fromBin, const QStringLis
         return {};
     }
     const bool fromLocked = source->isReadOnly();
+    // An Export Volume (7.2d): "Select and drag the sequence(s) to the Export Volume. A copy of the sequence(s)
+    // appears"; "You can only drag sequences ... you will receive a message ... open the Console Tool to see the list of
+    // items that were not written" (p.903-904). The copies are Not Committed.
+    if (model::exportVolumeOf(target->bin())) {
+        QStringList refused;
+        QStringList added;
+        for (const QString& id : ids) {
+            const model::BinItem* item = source->bin().item(id);
+            if (!item) continue;
+            if (item->kind != model::BinItemKind::Sequence) {
+                refused << item->name;
+                continue;
+            }
+            model::BinItem copied = model::duplicateItem(target->bin(), *item, QDateTime::currentDateTimeUtc());
+            copied.name = item->name;
+            copied.fields.insert(model::kMediaStatusHeading, model::kNotCommitted);
+            target->addItem(copied);
+            added << copied.id;
+        }
+        if (!refused.isEmpty()) emit volumeRefused(target->nodeId(), refused);
+        if (!added.isEmpty()) {
+            model::BinDisplay shown = target->bin().display;
+            if (!shown.columns.contains(model::kMediaStatusHeading)) {
+                if (!shown.customColumns.contains(model::kMediaStatusHeading)) shown.customColumns << model::kMediaStatusHeading;
+                shown.columns << model::kMediaStatusHeading;
+                target->setDisplay(shown);
+            }
+        }
+        if (BinView* v = viewFor(target)) v->selectIds(added);
+        return added;
+    }
     // Custom columns come along, in the order they were made (p.260).
     model::BinDisplay display = target->bin().display;
     bool columnsAdded = false;

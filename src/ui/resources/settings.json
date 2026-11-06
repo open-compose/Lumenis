@@ -263,7 +263,7 @@
                          {"value": "graphic", "label": "Graphic"}, {"value": "ale", "label": "Avid Log Exchange"},
                          {"value": "tabDelimited", "label": "Tab Delimited", "later": true}, {"value": "op1a", "label": "MXF OP1a"},
                          {"value": "op1aLegacy", "label": "MXF OP1a (legacy)"}, {"value": "dpx", "label": "DPX"}, {"value": "openexr", "label": "OpenEXR"},
-                         {"value": "xdcam", "label": "XDCAM MXF OP1a"},
+                         {"value": "xdcam", "label": "XDCAM MXF OP1a"}, {"value": "as11", "label": "AS-11"},
                          {"value": "avb", "label": "Media Composer Bin"}, {"value": "fcpxml", "label": "Final Cut Pro 7 XML"},
                          {"value": "mov", "label": "MOV"}, {"value": "mp4", "label": "MP4"}]},
             {"key": "useMarks", "type": "bool", "label": "Use Marks", "default": false, "page": 1175},
@@ -367,6 +367,29 @@
              "choices": [{"value": "48000", "label": "48 kHz"}]},
             {"key": "mxfBitDepth", "type": "choice", "style": "menu", "label": "Bit Depth", "default": "24", "page": 884,
              "choices": [{"value": "16", "label": "16"}, {"value": "24", "label": "24"}]}
+          ]
+        },
+        {
+          "name": "AS-11",
+          "options": [
+            {"key": "as11Shim", "type": "choice", "style": "menu", "label": "Shim", "default": "as11-x8", "page": 892,
+             "choices": [{"value": "as11-x1", "label": "AMWA AS-11 X1"}, {"value": "as11-x2", "label": "AMWA AS-11 X2"}, {"value": "as11-x3", "label": "AMWA AS-11 X3"}, {"value": "as11-x4", "label": "AMWA AS-11 X4"}, {"value": "as11-x5", "label": "AMWA AS-11 X5"}, {"value": "as11-x6", "label": "AMWA AS-11 X6"}, {"value": "as11-x7", "label": "AMWA AS-11 X7"}, {"value": "as11-x8", "label": "AMWA AS-11 X8"}, {"value": "as11-x9", "label": "AMWA AS-11 X9"}]},
+            {"key": "as11SeriesTitle", "type": "text", "label": "Series Title", "default": "", "page": 893},
+            {"key": "as11ProgrammeTitle", "type": "text", "label": "Programme Title", "default": "", "page": 893},
+            {"key": "as11EpisodeTitleNumber", "type": "text", "label": "Episode Title Number", "default": "", "page": 893},
+            {"key": "as11ShimVersion", "type": "text", "label": "Shim Version", "default": "", "page": 893},
+            {"key": "as11AudioTrackLayout", "type": "int", "label": "Audio Track Layout", "default": 0, "min": 0, "max": 255, "page": 893},
+            {"key": "as11PrimaryAudioLanguage", "type": "text", "label": "Primary Audio Language", "default": "eng", "page": 893},
+            {"key": "as11ClosedCaptionsPresent", "type": "bool", "label": "Closed Captions Present", "default": false, "page": 893},
+            {"key": "as11ProductionNumber", "type": "text", "label": "Production Number (UK DPP)", "default": "", "page": 893},
+            {"key": "as11Synopsis", "type": "text", "label": "Synopsis (UK DPP)", "default": "", "page": 893},
+            {"key": "as11Originator", "type": "text", "label": "Originator (UK DPP)", "default": "", "page": 893},
+            {"key": "as11CopyrightYear", "type": "text", "label": "Copyright Year (UK DPP)", "default": "", "page": 893},
+            {"key": "as11Distributor", "type": "text", "label": "Distributor (UK DPP)", "default": "", "page": 893},
+            {"key": "as11PictureRatio", "type": "text", "label": "Picture Ratio (UK DPP)", "default": "16/9", "page": 893},
+            {"key": "as11CompletionDate", "type": "text", "label": "Completion Date (UK DPP)", "default": "", "page": 893},
+            {"key": "as11ContactEmail", "type": "text", "label": "Contact Email (UK DPP)", "default": "", "page": 893},
+            {"key": "as11ContactTelephoneNumber", "type": "text", "label": "Contact Telephone Number (UK DPP)", "default": "", "page": 893}
           ]
         },
         {

@@ -32,6 +32,7 @@
 #include "lumenis/model/auto_sequence.h"
 #include "lumenis/model/send_to.h"
 #include "lumenis/model/simplify_export.h"
+#include "lumenis/model/export_volume.h"
 #include "lumenis/model/bin_relations.h"
 #include "lumenis/model/clip_audio.h"
 #include "lumenis/model/correction_template.h"
@@ -42,6 +43,7 @@
 #include "lumenis/model/title_clip.h"
 #include "lumenis/model/titler.h"
 #include "lumenis/media/mixdown.h"
+#include "lumenis/media/as11.h"
 #include "lumenis/media/movie_export.h"
 #include "lumenis/media/render.h"
 #include "lumenis/ext/export_device.h"
@@ -74,6 +76,7 @@
 #include "lumenis/ui/multi_mix_dialog.h"
 #include "lumenis/ui/export_dialog.h"
 #include "lumenis/ui/export_device_dialog.h"
+#include "lumenis/ui/export_volume_dialog.h"
 #include "lumenis/ui/send_to_dialog.h"
 #include "lumenis/ui/interchange_dialogs.h"
 #include "lumenis/ui/list_tool.h"
@@ -896,6 +899,12 @@ void MainWindow::createPanels() {
     });
     // A change to a bin someone else holds, refused (p.304): said in the
     // Console, as it can come from any edit.
+    // Export Volume bins (7.2d): what they refused, and their Properties and Commit buttons.
+    connect(binContainer_, &BinContainer::volumeRefused, this, [](const QString&, const QStringList& names) {
+        ConsoleLog::instance().append(tr("Some assets that you selected could not be dragged to the Volume Bin: %1").arg(names.join(QStringLiteral(", "))));
+    });
+    connect(binContainer_, &BinContainer::exportVolumePropertiesRequested, this, [this](const QString& binId) { editExportVolume(binId); });
+    connect(binContainer_, &BinContainer::exportVolumeCommitRequested, this, [this](const QString& binId) { commitExportVolume(binId); });
     connect(binContainer_, &BinContainer::lockRefused, this, [this](const QString& binId) {
         if (!console_) return;
         const auto lock = binContainer_->lockOf(binId);
@@ -3205,7 +3214,8 @@ QString MainWindow::exportSuffix(const QString& exportAs) const {
                : exportAs == QLatin1String("fcpxml") ? QStringLiteral("xml")
                : exportAs == QLatin1String("mp4")    ? QStringLiteral("mp4")
                : exportAs == QLatin1String("mov") || exportAs == QLatin1String("qtMovie") ? QStringLiteral("mov")
-               : exportAs == QLatin1String("op1a") || exportAs == QLatin1String("xdcam") || exportAs == QLatin1String("op1aLegacy")
+               : exportAs == QLatin1String("op1a") || exportAs == QLatin1String("xdcam") || exportAs == QLatin1String("op1aLegacy") ||
+                       exportAs == QLatin1String("as11")
                    ? QStringLiteral("mxf")
                                                      : QStringLiteral("aaf");
 }
@@ -3219,7 +3229,8 @@ QString MainWindow::exportFilter(const QString& exportAs) {
                    ? tr("Images (*.png *.jpg *.tif *.bmp *.pct *.dpx *.exr)")
                : exportAs == QLatin1String("audio")  ? tr("Audio files (*.wav *.aif)")
                : exportAs == QLatin1String("mov") || exportAs == QLatin1String("qtMovie") ? tr("QuickTime movies (*.mov)")
-               : exportAs == QLatin1String("op1a") || exportAs == QLatin1String("xdcam") || exportAs == QLatin1String("op1aLegacy")
+               : exportAs == QLatin1String("op1a") || exportAs == QLatin1String("xdcam") || exportAs == QLatin1String("op1aLegacy") ||
+                       exportAs == QLatin1String("as11")
                    ? tr("MXF files (*.mxf)")
                                                      : tr("AAF files (*.aaf)");
 }
@@ -3294,6 +3305,105 @@ int MainWindow::exportToDevice(const QString& kind) {
         say(tr("%1 is %2 on %3").arg(items.at(i).first.name, QString::fromStdString(name), QString::fromStdString(target.name)));
     }
     return delivered;
+}
+
+// ---------------------------------------------------------------- AS-02 Export Volumes (7.2d; docs/spec/as02.md)
+
+QString MainWindow::newVolumeForExport() {
+    if (!project_) {
+        ConsoleLog::instance().append(tr("Volume for Export: open a project first."));
+        return {};
+    }
+    model::ExportVolume volume;
+    volume.path = project_->folder;
+    volume.name = tr("Export Volume");
+    ExportVolumeDialog dialog(volume, this);
+    const bool ok = exportVolumeHook_ ? exportVolumeHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok) return {};
+    volume = dialog.volume();
+    if (volume.name.isEmpty() || volume.path.isEmpty()) {
+        ConsoleLog::instance().append(tr("Volume for Export: the volume needs a name and a path."));
+        return {};
+    }
+    // "The Export Volume bin opens" (p.903): a bin of the volume's name, with its bar.
+    const QString binId = binContainer_->newBin();
+    binContainer_->renameNode(binId, volume.name);
+    BinDocument* doc = binContainer_->openBin(binId);
+    if (!doc) return {};
+    doc->setExportVolume(volume.toJson());
+    doc->save();
+    return binId;
+}
+
+bool MainWindow::editExportVolume(const QString& binId) {
+    BinDocument* doc = binContainer_->document(binId);
+    const auto volume = doc ? model::exportVolumeOf(doc->bin()) : std::nullopt;
+    if (!volume) return false;
+    ExportVolumeDialog dialog(*volume, this);
+    const bool ok = exportVolumeHook_ ? exportVolumeHook_(dialog) : dialog.exec() == QDialog::Accepted;
+    if (!ok) return false;
+    doc->setExportVolume(dialog.volume().toJson());
+    return true;
+}
+
+int MainWindow::commitExportVolume(const QString& binId) {
+    auto say = [](const QString& text) { ConsoleLog::instance().append(tr("Commit: %1").arg(text)); };
+    BinDocument* doc = binContainer_->document(binId);
+    const auto volume = doc ? model::exportVolumeOf(doc->bin()) : std::nullopt;
+    if (!volume) return 0;
+    if (media::bmxTranswrapPath().isEmpty()) {
+        say(tr("AS-02 needs bmx's bmxtranswrap, which was not found (BUILDING.md, \"AS-11 and AS-02\")."));
+        return 0;
+    }
+    // "Once you commit the assets, the sequence is flattened to the OP1b format, the video is encoded to the J2K codec
+    // and audio saved as PCM" (p.904): each sequence not yet committed is written as OP1a with the volume's
+    // compression and rewrapped as a bundle in the asset folder; "An AAF copy of the unflattened sequences(s)" goes in
+    // the bundle's extra folder.
+    QDir().mkpath(volume->folder());
+    const QJsonObject values{{QStringLiteral("exportAs"), QStringLiteral("op1a")},
+                             {QStringLiteral("mxfCompression"), volume->compression},
+                             {QStringLiteral("mxfAudioFormat"), QStringLiteral("stereo")},
+                             {QStringLiteral("mxfBitDepth"), QStringLiteral("24")},
+                             {QStringLiteral("useMarks"), false},
+                             {QStringLiteral("useSelectedTracks"), false}};
+    int committed = 0;
+    const QList<model::BinItem> items = doc->bin().items;
+    for (model::BinItem item : items) {
+        if (item.kind != model::BinItemKind::Sequence || item.fields.value(model::kMediaStatusHeading) == model::kCommitted) continue;
+        QString name = item.name;
+        name.replace(QRegularExpression(QStringLiteral("[\\\\/:*?\"<>|]")), QStringLiteral("_"));
+        const QString bundle = QDir(volume->folder()).filePath(name);
+        QTemporaryDir scratch;
+        const QString op1a = scratch.filePath(QStringLiteral("version.mxf"));
+        exportOverride_ = values;
+        QString why;
+        const bool written = exportMovieFile(item, binId, op1a, QStringLiteral("op1a"), &why);
+        exportOverride_ = {};
+        if (!written || !media::writeAs02(op1a, bundle, {volume->shimName, volume->shimId, volume->shimAnnotation}, &why)) {
+            say(tr("%1: %2").arg(item.name, why));
+            continue;
+        }
+        QList<model::BinItem> aafItems{item};
+        const model::Sequence seq = model::Sequence::fromItem(item);
+        QSet<QString> seen;
+        for (const model::Track& t : seq.tracks()) {
+            for (const model::Segment& seg : t.segments) {
+                if (seg.isFiller() || seen.contains(seg.clipId)) continue;
+                seen << seg.clipId;
+                if (const auto clip = composer_->resolve(seg.binId.isEmpty() ? binId : seg.binId, seg.clipId)) aafItems << *clip;
+            }
+        }
+        QDir(bundle).mkpath(QStringLiteral("extra"));
+        const interop::aaf::ExportResult aaf =
+            interop::aaf::exportItems(aafItems, QDir(bundle).filePath(QStringLiteral("extra/%1.aaf").arg(name)), {});
+        if (!aaf.ok) say(tr("%1: the AAF copy: %2").arg(item.name, aaf.error));
+        item.fields.insert(model::kMediaStatusHeading, model::kCommitted);
+        doc->replaceItem(item);
+        ++committed;
+        say(tr("%1 is in %2").arg(item.name, QDir::toNativeSeparators(bundle)));
+    }
+    doc->save();
+    return committed;
 }
 
 // ---------------------------------------------------------------- Send To (7.1c2; docs/spec/send-to.md)
@@ -3556,7 +3666,7 @@ bool MainWindow::writeExport(const ExportSelection& chosen, QString path) {
     const bool movie = format == QLatin1String("mov") || format == QLatin1String("mp4") || format == QLatin1String("qtMovie") ||
                        format == QLatin1String("audio") || format == QLatin1String("graphic") || format == QLatin1String("dpx") ||
                        format == QLatin1String("openexr") || format == QLatin1String("op1a") || format == QLatin1String("xdcam") ||
-                       format == QLatin1String("op1aLegacy");
+                       format == QLatin1String("op1aLegacy") || format == QLatin1String("as11");
     if (format != QLatin1String("aaf") && format != QLatin1String("avb") && format != QLatin1String("ale") &&
         format != QLatin1String("fcpxml") && !movie) {
         ConsoleLog::instance().append(tr("Export to File: only AAF, Avid Log Exchange, Media Composer bins, Final Cut Pro 7 XML, MOV, "
@@ -4352,9 +4462,11 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
     media::MovieExportOptions o;
     // MXF OP1a, XDCAM MXF OP1a and MXF OP1a (legacy) (7.2a, p.886-890): picture and sound always, with their own tab's
     // Video Compression or Video Format, Audio Format and Bit Depth.
-    const bool mxf = format == QLatin1String("op1a") || format == QLatin1String("xdcam") || format == QLatin1String("op1aLegacy");
+    // AS-11 (7.2c) is an OP1a file of the MXF OP1a tab's compression, rewrapped by bmxtranswrap below.
+    const bool as11 = format == QLatin1String("as11");
+    const bool mxf = format == QLatin1String("op1a") || format == QLatin1String("xdcam") || format == QLatin1String("op1aLegacy") || as11;
     o.container = format == QLatin1String("mp4")          ? media::MovieContainer::Mp4
-                  : format == QLatin1String("op1a")       ? media::MovieContainer::Mxf
+                  : format == QLatin1String("op1a") || as11 ? media::MovieContainer::Mxf
                   : format == QLatin1String("xdcam")      ? media::MovieContainer::Xdcam
                   : format == QLatin1String("op1aLegacy") ? media::MovieContainer::MxfLegacy
                                                           : media::MovieContainer::Mov;
@@ -4366,7 +4478,7 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
     if (movie && !o.video && !o.audio) return fail(tr("There are no tracks to export."));
     if (sound && audio.isEmpty()) return fail(tr("There are no audio tracks to export."));
     if (!movie && !sound && video.isEmpty()) return fail(tr("There are no video tracks to export."));
-    o.compression = format == QLatin1String("op1a")         ? text("mxfCompression")
+    o.compression = format == QLatin1String("op1a") || as11 ? text("mxfCompression")
                     : format == QLatin1String("xdcam")      ? text("xdcamFormat")
                     : format == QLatin1String("op1aLegacy") ? QStringLiteral("j2k")
                                                             : text("movieCompression");
@@ -4431,7 +4543,44 @@ bool MainWindow::exportMovieFile(const model::BinItem& item, const QString& binI
     progress.setObjectName(QStringLiteral("exportProgress"));
     const std::function<bool(double)> step = progressOn(progress);
     bool ok = false;
-    if (movie) {
+    if (as11) {
+        // AS-11 (p.891-893): the programme segments from the spanned markers within the exported range ("This
+        // specification requires program segment markers"), the descriptive metadata from the AS-11 tab.
+        media::As11Options a;
+        a.shim = text("as11Shim");
+        auto field = [&](const char* name, const char* key) { return qMakePair(QString::fromLatin1(name), text(key)); };
+        a.core = {field("SeriesTitle", "as11SeriesTitle"), field("ProgrammeTitle", "as11ProgrammeTitle"),
+                  field("EpisodeTitleNumber", "as11EpisodeTitleNumber"), field("ShimVersion", "as11ShimVersion"),
+                  qMakePair(QStringLiteral("AudioTrackLayout"), QString::number(exportSetting(QStringLiteral("as11AudioTrackLayout")).toInt())),
+                  field("PrimaryAudioLanguage", "as11PrimaryAudioLanguage"),
+                  qMakePair(QStringLiteral("ClosedCaptionsPresent"),
+                            exportFlag(QStringLiteral("as11ClosedCaptionsPresent")) ? QStringLiteral("true") : QStringLiteral("false"))};
+        a.dpp = {field("ProductionNumber", "as11ProductionNumber"), field("Synopsis", "as11Synopsis"), field("Originator", "as11Originator"),
+                 field("CopyrightYear", "as11CopyrightYear"), field("Distributor", "as11Distributor"), field("PictureRatio", "as11PictureRatio"),
+                 field("CompletionDate", "as11CompletionDate"), field("ContactEmail", "as11ContactEmail"),
+                 field("ContactTelephoneNumber", "as11ContactTelephoneNumber")};
+        QList<model::Marker> spans;
+        for (const model::Marker& m : model::markersOf(sequenceItem)) {
+            if (m.isSpanned() && m.end() > start && m.frame < end) spans << m;
+        }
+        std::sort(spans.begin(), spans.end(), [](const model::Marker& x, const model::Marker& y) { return x.frame < y.frame; });
+        for (const model::Marker& m : spans) {
+            const std::int64_t from = std::max(m.frame, start);
+            a.segments << media::As11Segment{from - start, std::min(m.end(), end) - from};
+        }
+        a.startFrame = model::startFrameOf(sequenceItem) + start;
+        a.rate = sequenceItem.editRate;
+        a.dropFrame = model::timecodeFormatOf(sequenceItem).dropFrame;
+        if (a.segments.isEmpty()) {
+            if (error) *error = tr("AS-11 needs programme segments: add spanned markers for them (p.414).");
+        } else if (media::bmxTranswrapPath().isEmpty()) {
+            if (error) *error = tr("AS-11 export needs bmx's bmxtranswrap, which was not found (BUILDING.md, \"AS-11\").");
+        } else {
+            QTemporaryDir scratch;
+            const QString op1a = scratch.filePath(QStringLiteral("programme.mxf"));
+            ok = media::exportMovie(op1a, source, o, step, error) && media::writeAs11(op1a, path, a, error);
+        }
+    } else if (movie) {
         ok = media::exportMovie(path, source, o, step, error);
     } else if (sound) {
         // Export Settings: Audio (p.1185).
@@ -6769,6 +6918,7 @@ void MainWindow::installPanelHandlers() {
     handle("file.output.send_to.make_new", [this] { makeNewSendTo(); });
     handle("file.output.export_to_device.xdcam", [this] { exportToDevice(QStringLiteral("xdcam")); });
     handle("file.output.export_to_device.p2", [this] { exportToDevice(QStringLiteral("p2")); });
+    handle("file.new.volume_for_export", [this] { newVolumeForExport(); });
     handle("file.export_matte_pict", [this] { exportMattePict(); });
     handle("tools.background_queue_window", [this] { showTool(QStringLiteral("BackgroundQueue")); });
     handle("file.media.load_media_database", [this] { loadMediaDatabase(); });

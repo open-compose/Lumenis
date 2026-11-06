@@ -70,6 +70,8 @@ public:
     // empty name or an unchanged value.
     bool setField(const QString& id, const QString& heading, const QString& value);
     void setDisplay(const model::BinDisplay& display);
+    // Makes the bin an Export Volume (7.2d; lumenis/model/export_volume.h) or, with an empty object, an ordinary bin.
+    void setExportVolume(const QJsonObject& volume);
 
     // Bin > Sort (p.247); remembered for Sort Again. `keys` in priority
     // order; an empty list does nothing.
@@ -479,6 +481,9 @@ signals:
     // The Bin Lock Status button was clicked, `alt` with Alt (Option) held
     // (p.302-303); BinContainer::lockButtonClicked() acts on it.
     void lockButtonClicked(bool alt);
+    // An Export Volume bin's Properties and Commit buttons (p.903).
+    void volumePropertiesClicked();
+    void volumeCommitClicked();
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -488,6 +493,8 @@ private:
     void updateStatus();
     // The Bin Lock Status button's colour and tooltip, from the document.
     void updateLockButton();
+    // Shows the Export Volume bar (type, asset folder, Properties, Commit) for a volume bin, hides it otherwise.
+    void updateVolumeBar();
     void headerClicked(int logical);
     void headerMenu(const QPoint& pos);
     void editHeading(const QString& heading);
@@ -508,6 +515,9 @@ private:
     QLineEdit* filter_ = nullptr;
     QLabel* status_ = nullptr;
     QToolButton* lockButton_ = nullptr;
+    QWidget* volumeBar_ = nullptr;
+    QLabel* volumeType_ = nullptr;
+    QLabel* volumePath_ = nullptr;
     QStringList selectedHeadings_;
     QStringList keepSelection_;
     QString quick_;

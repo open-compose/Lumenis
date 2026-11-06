@@ -448,6 +448,11 @@ signals:
     // A change to a bin someone else holds was refused (p.304); MainWindow
     // says so in the Console.
     void lockRefused(const QString& binId);
+    // An Export Volume bin (7.2d) took only the sequences dragged to it; `names` are the other items.
+    void volumeRefused(const QString& binId, const QStringList& names);
+    // An Export Volume bin's Properties and Commit buttons (p.903-904).
+    void exportVolumePropertiesRequested(const QString& binId);
+    void exportVolumeCommitRequested(const QString& binId);
     // The user's Favorite Bins list (FavoriteBins::paths()) or saved bin
     // views (BinViewLibrary) changed here; MainWindow stores them in the
     // User settings.
