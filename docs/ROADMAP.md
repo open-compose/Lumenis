@@ -1400,6 +1400,23 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
 * Multicam (group/multigroup), ScriptSync/PhraseFind equivalents, Dynamic Media
   Folders/background services, FrameFlex, stereoscopic, Symphony-level colour,
   and multi-user bin locking.
+* In steps (planned 2026-11-07, from the Editing Guide's chapters):
+  * 8.1, MultiCamera Editing (ch.32, p.1123-1136). 8.1a, group clips: Create Group by Source Timecode, Film, IN
+    points, OUT points or Auxiliary TC1-5 (p.1123-1125), Waveform Sync (p.1126), the group in the Source monitor with
+    its quad, nine- and sixteen-split displays (p.1126-1130). 8.1b, MultiCamera mode: switching angles while playing
+    (arrow keys, numeric keypad, mouse, p.1131), the linecut and Add Edit (p.1132), the Group menu and Multi-angle
+    View menus (p.1133-1134), Match Frame (p.1134), multigroups (p.1125). 8.1c, Change Source Track for groups
+    (2026.8 guide p.507), stereoscopic groups (p.1124) and Auto Cut from transcript speakers (after 8.2).
+  * 8.2, transcripts and PhraseFind (ch.14, p.436-453): speech to text through a provider (`ext::` hook; an open
+    engine such as whisper.cpp, MIT, as an optional module), the Transcript Tool, speaker IDs, the PhraseFind window,
+    exporting and sharing transcripts, SubCap files from transcripts, and the 2026.8 Transcript Tool items above.
+  * 8.3, ScriptSync (ch.18, p.566-590): the Script window, lined scripts, slates and takes, script marks, ScriptSync AI
+    marking from 8.2's word timings.
+  * 8.4, Dynamic Media Folders and the background services (p.371-377), on the Background Queue.
+  * 8.5, FrameFlex and colour adapters (p.527-545): Source Settings, reframing and panning, Reformat, LUTs and CLF
+    through OpenColorIO, CDLs, Remove Color Adapters, ACES projects (p.557).
+  * 8.6, MultiRez and Dynamic Relink (ch.31, p.1095-1110) and stereoscopic projects.
+  * 8.7, what is left of Symphony-level colour and multi-user work after 6.10 and 3.7.
 * From 2026.8:
   * the Transcript Tool's versions (Revert, Revert Transcript), Start New
     Line, Group Speaker Lines and New Line After (2026.8 guide p.446);
