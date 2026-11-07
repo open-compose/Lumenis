@@ -638,6 +638,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Transcript editing (docs/spec/transcripts.md): unchanged words found by the longest common sequence, new words beside
   a kept one sharing its time, Find and Replace's own punctuation, Identify Speaker naming a speaker heard on one line
   only, edits not undoable, Group Speaker Lines and New Line After not kept between sessions.
+* Manage Speaker Names (docs/spec/transcripts.md): the project's list in `Speakers.json`, Merge into the first selected
+  name and the lowest Speaker ID, "+" starting from "New Speaker", renaming to a name a transcript already has merging the
+  two, a cleared name kept in the list (dimmed) when it was listed, Clear and Delete for each selected name.
 
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical
@@ -3091,8 +3094,10 @@ Details: docs/spec/bin-locking.md.
 * Bin > Include Bin in Transcription, Exclude Bin from Transcription (p.447), also on a bin's right-click menu in the
   Sidebar; "Transcription On" or "Transcription Off" to the right of each bin.
 * File > Settings > Project > Transcript (p.447-450): Include all new bins in transcription, Pause background
-  transcription while editing, Language Hint, Subclips/Groups. Manage Speakers and Manage Transcripts later (8.2b,
-  8.2d).
+  transcription while editing, Language Hint, Subclips/Groups, Manage Speakers (p.445, 8.2b2b: the Manage Speaker Names
+  window). Manage Transcripts later (8.2d).
+* File > New Project's Language Hint under Transcription (p.448), dimmed when the Site settings have a Transcript
+  setting.
 * Tools > Transcript Tool (p.442), 8.2b1; its editing and speakers 8.2b2.
 * Later: PhraseFind AI in the Find window (8.2c), the bin's Transcript menu (8.2d), AutoCut
   (8.2e).

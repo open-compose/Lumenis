@@ -107,12 +107,14 @@ private slots:
                     const bool exportChapter =
                         k.kind == QLatin1String("Export") &&
                         ((o.page >= 879 && o.page <= 900) || (o.page >= 1173 && o.page <= 1187) || (o.key.startsWith(QLatin1String("dcp")) && o.page == 519));
+                    // Transcript's Manage Speakers is described with the Transcript Tool (p.445), in the same chapter.
+                    const bool transcriptChapter = k.kind == QLatin1String("Transcript") && o.page >= 436 && o.page <= 453;
                     QVERIFY2((o.page >= k.page && o.page <= k.page + 10) || o.page == 392 || (o.page >= 89 && o.page <= 92) || o.fxGuide ||
-                                 exportChapter,
+                                 exportChapter || transcriptChapter,
                              qPrintable(where));
                     QVERIFY2(!keys.contains(where), qPrintable(where));
                     keys << where;
-                    QVERIFY2(QStringList({"bool", "int", "number", "choice", "timecode", "text", "info", "drive", "color", "font", "safeColorGraph"}).contains(o.type),
+                    QVERIFY2(QStringList({"bool", "int", "number", "choice", "timecode", "text", "info", "drive", "color", "font", "safeColorGraph", "button"}).contains(o.type),
                              qPrintable(where));
                     if (o.type == QLatin1String("choice")) {
                         bool found = false;

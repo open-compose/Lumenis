@@ -11,6 +11,7 @@
 #include "lumenis/ui/settings.h"
 #include "lumenis/ui/tool_windows.h"
 #include "lumenis/ui/transcript_tool.h"
+#include "lumenis/ui/speaker_names_dialog.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/panels.h"
 #include "lumenis/model/group_clip.h"
@@ -23,6 +24,8 @@
 #include <QFontDialog>
 #include <QPlainTextEdit>
 #include <QTimer>
+
+#include <algorithm>
 
 namespace lumenis::ui {
 
@@ -319,6 +322,7 @@ void MainWindow::refreshTranscriptTool() {
         const TimecodeFormat format = TimecodeFormat::forRate(item.editRate, model::isDropFrame(item));
         const std::int64_t start = state.startFrame();
         transcriptTool_->setFrameRate(item.editRate.toDouble());
+        transcriptTool_->setKnownSpeakers(projectSpeakerNames());
         transcriptTool_->setTranscript(shown, [format, start](std::int64_t frame) {
             return QString::fromStdString(Timecode(start + frame, format).toString());
         });
@@ -338,6 +342,109 @@ bool MainWindow::editTranscript(const QString& mob, const std::function<bool(mod
     ++transcriptGeneration_;
     refreshTranscriptTool();
     return true;
+}
+
+namespace {
+
+// The MobIDs of the project's master clips with a transcript in the store ("all transcripts for this project", p.445).
+QStringList projectTranscriptMobs(const BinContainer& container, const model::TranscriptStore& store) {
+    QStringList out;
+    for (const auto& [binId, item] : projectClips(container, nullptr)) {
+        const QString mob = QString::fromStdString(model::mobIdOf(item).toString());
+        if (!out.contains(mob) && store.has(mob)) out << mob;
+    }
+    return out;
+}
+
+} // namespace
+
+QStringList MainWindow::projectSpeakerNames(QStringList* used) const {
+    QStringList names;
+    QStringList inTranscripts;
+    if (project_) {
+        names = model::ProjectSpeakers(project_->folder).names();
+        const model::TranscriptStore store;
+        for (const QString& mob : projectTranscriptMobs(*binContainer_, store)) {
+            if (const auto t = store.load(mob)) inTranscripts += model::speakerNames(*t);
+        }
+    }
+    inTranscripts.removeDuplicates();
+    inTranscripts.sort(Qt::CaseInsensitive);
+    names += inTranscripts;
+    names.removeDuplicates();
+    names.sort(Qt::CaseInsensitive);
+    if (used) *used = inTranscripts;
+    return names;
+}
+
+SpeakerNamesDialog* MainWindow::manageSpeakers() {
+    if (!project_) return nullptr;
+    // Over the Transcript setting's dialog, which is modal: a window of the modal one is not blocked by it.
+    QWidget* over = QApplication::activeModalWidget();
+    auto* dialog = new SpeakerNamesDialog(over ? over : this);
+    dialog->setAttribute(Qt::WA_DeleteOnClose);
+    auto refresh = [this, dialog] {
+        QStringList used;
+        const QStringList names = projectSpeakerNames(&used);
+        dialog->setNames(names, used);
+    };
+    connect(dialog, &SpeakerNamesDialog::changeRequested, this, [this, refresh](const SpeakerNameChange& change) {
+        applySpeakerNameChange(change);
+        refresh();
+    });
+    refresh();
+    dialog->open();
+    return dialog;
+}
+
+void MainWindow::applySpeakerNameChange(const SpeakerNameChange& change) {
+    if (!project_) return;
+    model::ProjectSpeakers list(project_->folder);
+    using Kind = SpeakerNameChange::Kind;
+    switch (change.kind) {
+    case Kind::Add: list.add(change.to); return; // only the list: no transcript has it yet
+    case Kind::Delete:
+        for (const QString& n : change.names) list.remove(n);
+        return;
+    case Kind::Rename:
+        if (!change.names.isEmpty()) list.rename(change.names.first(), change.to);
+        break;
+    case Kind::Merge:
+        // The merged names leave the list for the one they become (listed when any of them was).
+        if (std::any_of(change.names.cbegin(), change.names.cend(), [&](const QString& n) { return list.names().contains(n); })) {
+            for (const QString& n : change.names) {
+                if (n != change.to) list.remove(n);
+            }
+            list.add(change.to);
+        }
+        break;
+    case Kind::Clear: break; // "remove that name from all transcripts in this project"; the list keeps it (dimmed)
+    }
+    const model::TranscriptStore store;
+    bool changed = false;
+    for (const QString& mob : projectTranscriptMobs(*binContainer_, store)) {
+        auto t = store.load(mob);
+        if (!t) continue;
+        bool did = false;
+        switch (change.kind) {
+        case Kind::Rename: did = !change.names.isEmpty() && model::renameSpeakerName(*t, change.names.first(), change.to); break;
+        case Kind::Merge: did = model::mergeSpeakerNames(*t, change.names, change.to); break;
+        case Kind::Clear:
+            for (const QString& n : change.names) did = model::clearSpeakerName(*t, n) || did;
+            break;
+        default: break;
+        }
+        if (!did) continue;
+        if (store.save(*t)) {
+            changed = true;
+        } else if (console_) {
+            console_->log()->appendPlainText(tr("The transcript of \"%1\" could not be saved.").arg(t->clipName));
+        }
+    }
+    if (changed) {
+        ++transcriptGeneration_;
+        refreshTranscriptTool();
+    }
 }
 
 } // namespace lumenis::ui

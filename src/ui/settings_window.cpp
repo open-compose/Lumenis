@@ -151,7 +151,7 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                 row = new QWidget;
                 auto* h = new QHBoxLayout(row);
                 h->setContentsMargins(0, 0, 0, 0);
-                if (!o.label.isEmpty()) h->addWidget(new QLabel(o.label, row));
+                if (!o.label.isEmpty() && o.type != QLatin1String("button")) h->addWidget(new QLabel(o.label, row));
                 if (o.type == QLatin1String("int")) {
                     auto* spin = new QSpinBox(row);
                     spin->setRange(o.min, o.max);
@@ -237,6 +237,11 @@ SettingsDialog::SettingsDialog(const SettingKind& kind, const SettingEntry& entr
                     editor = menu;
                 } else if (o.type == QLatin1String("info")) {
                     editor = new QLabel(row);
+                } else if (o.type == QLatin1String("button")) {
+                    // A button opening a window of its own (Transcript's Manage Speakers, p.445): buttonClicked(key).
+                    auto* button = new QPushButton(o.label, row);
+                    connect(button, &QPushButton::clicked, this, [this, key = o.key] { emit buttonClicked(key); });
+                    editor = button;
                 } else {
                     auto* line = new QLineEdit(current.toString(), row);
                     if (o.type == QLatin1String("timecode")) {
@@ -301,7 +306,10 @@ QJsonObject SettingsDialog::values() const {
     QJsonObject out = values_;
     for (const SettingTab& t : kind_.tabs) {
         for (const SettingOption& o : t.options) {
-            if (o.later || o.type == QLatin1String("info") || o.type == QLatin1String("safeColorGraph")) continue;
+            if (o.later || o.type == QLatin1String("info") || o.type == QLatin1String("safeColorGraph") ||
+                o.type == QLatin1String("button")) {
+                continue;
+            }
             QWidget* e = editors_.value(o.key);
             if (auto* box = qobject_cast<QCheckBox*>(e)) {
                 out.insert(o.key, box->isChecked());
@@ -563,6 +571,8 @@ bool SettingsList::openEntry(int entry) {
     SettingsDialog dialog(*kind, e, this);
     dialog.setInfo(QStringLiteral("projectFormat"), projectFormat);
     if (projectEditRate) dialog.setEditRate(*projectEditRate);
+    // A setting's button opens its tool over the dialog (MainWindow, through toolRequested).
+    connect(&dialog, &SettingsDialog::buttonClicked, this, &SettingsList::toolRequested);
     if (dialogHook) dialogHook(dialog);
     if (dialog.exec() != QDialog::Accepted) return false;
     const QJsonObject values = dialog.values();

@@ -10,6 +10,8 @@
 #include "lumenis/ui/command_registry.h"
 #include "lumenis/ui/composer.h"
 #include "lumenis/ui/transcript_tool.h"
+#include "lumenis/ui/speaker_names_dialog.h"
+#include "lumenis/ui/settings_window.h"
 #include "lumenis/model/sequence.h"
 #include "lumenis/ui/main_window.h"
 #include "lumenis/ui/settings.h"
@@ -19,6 +21,8 @@
 #include <QMenu>
 #include <QDir>
 #include <QTemporaryDir>
+#include <QPushButton>
+#include <QSignalSpy>
 #include <QTest>
 #include <QRegularExpression>
 #include <QTextEdit>
@@ -266,6 +270,89 @@ private slots:
         QCoreApplication::processEvents();
         QCOMPARE(tool.transcript().lines.size(), qsizetype(1));
         QVERIFY(tool.transcript().notTranscribed.isEmpty());
+        qunsetenv("LUMENIS_TRANSCRIPTS");
+    }
+
+    // Manage Speaker Names (p.445): the project's names and those in its transcripts (dimmed when in no transcript), +,
+    // rename, Merge and Clear/Delete, through the Transcript setting's Manage Speakers button.
+    void manageSpeakerNames() {
+        QTemporaryDir dir;
+        qputenv("LUMENIS_TRANSCRIPTS", dir.filePath(QStringLiteral("Transcripts")).toLocal8Bit());
+        const QString a = dir.filePath(QStringLiteral("a.wav"));
+        const QString b = dir.filePath(QStringLiteral("b.wav"));
+        QVERIFY(writeTone(a, 1.0));
+        QVERIFY(writeTone(b, 1.0));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        BinContainer& bins = window.binContainer();
+        const QString bin = bins.newBin();
+        bins.openBin(bin);
+        const auto clips = window.linkFiles(bin, {a, b});
+        QCOMPARE(clips.size(), qsizetype(2));
+        const model::TranscriptStore store;
+        QStringList mobs;
+        for (const model::BinItem& c : bins.document(bin)->bin().items) {
+            model::Transcript t;
+            t.mob = QString::fromStdString(model::mobIdOf(c).toString());
+            t.clipName = c.name;
+            t.lines = {model::TranscriptLine{1, {{QStringLiteral("hi"), 0.1, 0.3}}}, model::TranscriptLine{2, {{QStringLiteral("yo"), 0.4, 0.6}}}};
+            t.speakers = {{1, mobs.isEmpty() ? QStringLiteral("Ann") : QStringLiteral("Anne")}, {2, QStringLiteral("Bob")}};
+            QVERIFY(store.save(t));
+            mobs << t.mob;
+        }
+        // The button in the Transcript setting's dialog asks for the window.
+        const SettingKind* kind = SettingsSchema::builtIn().find(QStringLiteral("Transcript"));
+        QVERIFY(kind);
+        SettingsDialog settingsDialog(*kind, model::SettingEntry{QStringLiteral("Transcript"), {}, true, {}});
+        auto* button = settingsDialog.findChild<QPushButton*>(QStringLiteral("manageSpeakers"));
+        QVERIFY(button);
+        QCOMPARE(button->text(), QStringLiteral("Manage Speakers"));
+        QSignalSpy clicked(&settingsDialog, &SettingsDialog::buttonClicked);
+        button->click();
+        QCOMPARE(clicked.count(), 1);
+        QCOMPARE(clicked.first().first().toString(), QStringLiteral("manageSpeakers"));
+        QVERIFY(!settingsDialog.values().contains(QStringLiteral("manageSpeakers")));
+
+        SpeakerNamesDialog* d = window.manageSpeakers();
+        QVERIFY(d);
+        QCOMPARE(d->names(), QStringList({"Ann", "Anne", "Bob"}));
+        QVERIFY(d->isUsed(QStringLiteral("Ann")));
+        // "+": names added in advance, dimmed until used; Delete removes them from the list.
+        d->add(QStringLiteral("Carol"));
+        QCOMPARE(d->names(), QStringList({"Ann", "Anne", "Bob", "Carol"}));
+        QVERIFY(!d->isUsed(QStringLiteral("Carol")));
+        QCOMPARE(model::ProjectSpeakers(project.folder).names(), QStringList{"Carol"});
+        QVERIFY(window.projectSpeakerNames().contains(QStringLiteral("Carol"))); // Identify Speaker offers it
+        d->select({QStringLiteral("Carol")});
+        QCOMPARE(d->clearButtonText(), QStringLiteral("Delete"));
+        d->select({QStringLiteral("Carol"), QStringLiteral("Bob")});
+        QCOMPARE(d->clearButtonText(), QStringLiteral("Clear"));
+        d->select({QStringLiteral("Carol")});
+        QVERIFY(d->clearSelected());
+        QCOMPARE(d->names(), QStringList({"Ann", "Anne", "Bob"}));
+        // Rename everywhere.
+        d->rename(QStringLiteral("Bob"), QStringLiteral("Robert"));
+        for (const QString& mob : mobs) QCOMPARE(store.load(mob)->speakerName(2), QStringLiteral("Robert"));
+        // Merge Ann and Anne into one name.
+        d->select({QStringLiteral("Ann"), QStringLiteral("Anne")});
+        QVERIFY(d->mergeSelected());
+        QCOMPARE(d->names(), QStringList({"Ann", "Robert"}));
+        for (const QString& mob : mobs) QCOMPARE(store.load(mob)->speakerName(1), QStringLiteral("Ann"));
+        // Clear: out of every transcript.
+        d->select({QStringLiteral("Robert")});
+        QVERIFY(d->clearSelected());
+        QCOMPARE(d->names(), QStringList({"Ann"}));
+        for (const QString& mob : mobs) QCOMPARE(store.load(mob)->speakerName(2), QStringLiteral("Speaker 2"));
+        d->accept();
         qunsetenv("LUMENIS_TRANSCRIPTS");
     }
 };

@@ -431,3 +431,99 @@ bool revertTranscript(Transcript& t) {
 }
 
 } // namespace lumenis::model
+
+namespace lumenis::model {
+
+QStringList speakerNames(const Transcript& t) {
+    QStringList out;
+    for (const QString& n : t.speakers) {
+        if (!n.isEmpty() && !out.contains(n)) out << n;
+    }
+    out.sort(Qt::CaseInsensitive);
+    return out;
+}
+
+bool mergeSpeakerNames(Transcript& t, const QStringList& names, const QString& into) {
+    const QString target = into.trimmed();
+    if (target.isEmpty()) return false;
+    QList<int> ids;
+    for (auto it = t.speakers.cbegin(); it != t.speakers.cend(); ++it) {
+        if (names.contains(it.value()) || it.value() == target) ids << it.key();
+    }
+    if (ids.isEmpty()) return false;
+    std::sort(ids.begin(), ids.end());
+    const bool alreadyOne = ids.size() == 1 && t.speakers.value(ids.first()) == target;
+    // A transcript with only the target name among `names` is left alone; so is one with none of them.
+    const bool hasAny = std::any_of(ids.cbegin(), ids.cend(), [&](int id) { return names.contains(t.speakers.value(id)); });
+    if (alreadyOne || !hasAny) return false;
+    keepOriginal(t);
+    const int id = ids.first();
+    for (TranscriptLine& l : t.lines) {
+        if (ids.contains(l.speaker)) l.speaker = id;
+    }
+    for (const int other : ids) t.speakers.remove(other);
+    t.speakers.insert(id, target);
+    return true;
+}
+
+bool renameSpeakerName(Transcript& t, const QString& from, const QString& to) {
+    const QString n = to.trimmed();
+    if (n.isEmpty() || from == n) return false;
+    return mergeSpeakerNames(t, {from}, n);
+}
+
+bool clearSpeakerName(Transcript& t, const QString& name) {
+    QList<int> ids;
+    for (auto it = t.speakers.cbegin(); it != t.speakers.cend(); ++it) {
+        if (it.value() == name) ids << it.key();
+    }
+    if (ids.isEmpty()) return false;
+    keepOriginal(t);
+    for (const int id : ids) t.speakers.remove(id);
+    return true;
+}
+
+ProjectSpeakers::ProjectSpeakers(QString projectFolder) : file_(QDir(projectFolder).filePath(QStringLiteral("Speakers.json"))) {
+    QFile f(file_);
+    if (!f.open(QIODevice::ReadOnly)) return;
+    for (const QJsonValue& v : QJsonDocument::fromJson(f.readAll()).object().value(QStringLiteral("names")).toArray()) {
+        const QString n = v.toString().trimmed();
+        if (!n.isEmpty() && !names_.contains(n)) names_ << n;
+    }
+    names_.sort(Qt::CaseInsensitive);
+}
+
+bool ProjectSpeakers::write() {
+    names_.sort(Qt::CaseInsensitive);
+    if (file_.isEmpty()) return true;
+    QSaveFile f(file_);
+    if (!f.open(QIODevice::WriteOnly)) return false;
+    f.write(QJsonDocument(QJsonObject{{QStringLiteral("names"), QJsonArray::fromStringList(names_)}}).toJson());
+    return f.commit();
+}
+
+bool ProjectSpeakers::add(const QString& name) { return addAll({name}); }
+
+bool ProjectSpeakers::addAll(const QStringList& names) {
+    bool changed = false;
+    for (const QString& name : names) {
+        const QString n = name.trimmed();
+        if (n.isEmpty() || names_.contains(n)) continue;
+        names_ << n;
+        changed = true;
+    }
+    return changed && write();
+}
+
+bool ProjectSpeakers::remove(const QString& name) { return names_.removeAll(name) > 0 && write(); }
+
+bool ProjectSpeakers::rename(const QString& from, const QString& to) {
+    const QString n = to.trimmed();
+    if (n.isEmpty() || from == n) return false;
+    // A name only in transcripts stays out of the list.
+    if (names_.removeAll(from) == 0) return false;
+    if (!names_.contains(n)) names_ << n;
+    return write();
+}
+
+} // namespace lumenis::model

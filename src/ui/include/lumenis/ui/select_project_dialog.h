@@ -154,6 +154,7 @@ private:
     QComboBox* colorSpace_ = nullptr;
     QComboBox* colorDepth_ = nullptr;
     QComboBox* stereoscopic_ = nullptr;
+    QComboBox* languageHint_ = nullptr; // the Transcript setting's Language Hint (p.448)
     QCheckBox* film_ = nullptr;
     QComboBox* filmType_ = nullptr;
     QLabel* formError_ = nullptr;

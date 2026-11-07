@@ -25,7 +25,7 @@ struct SettingChoice {
 // setting's values.
 struct SettingOption {
     QString key;  // the key in the setting's values
-    QString type; // bool, int, number, choice, drive, timecode, text, info, color, font, safeColorGraph
+    QString type; // bool, int, number, choice, drive, timecode, text, info, color, font, safeColorGraph, button (opens a window: SettingsDialog::buttonClicked)
     QString label;
     QString suffix; // text after the control (a unit)
     QString specialText; // int options: shown for `min` instead of the number ("Recommended")

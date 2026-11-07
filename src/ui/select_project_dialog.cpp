@@ -1,7 +1,9 @@
 #include "lumenis/ui/select_project_dialog.h"
 
 #include "lumenis/core/branding.h"
+#include "lumenis/ui/settings.h"
 #include "lumenis/ui/theme.h"
+#include "lumenis/model/settings.h"
 
 #include <QAction>
 #include <QButtonGroup>
@@ -11,6 +13,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QJsonObject>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QKeyEvent>
@@ -28,6 +31,8 @@
 #include <QToolButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
+
+#include <algorithm>
 
 // The Select Project window (SelectProjectDialog, select_project_dialog.h; spec in
 // docs/spec/ui-inventory.md §2). It has a sidebar (Select Project, What's New), the User Profile and
@@ -474,6 +479,31 @@ QWidget* SelectProjectDialog::buildNewProjectPage() {
     filmRow->addWidget(filmType_);
     filmRow->addStretch();
     f->addRow(tr("Film:"), filmRow);
+    // "In the submenu for Language Hint, beneath options for Transcription, select the appropriate language" (p.448): the
+    // new project's Transcript setting. "If Transcript settings have already been added to the Site settings for a
+    // particular workstation, these options will be grayed out."
+    languageHint_ = new QComboBox(settingsPanel_);
+    languageHint_->setObjectName(QStringLiteral("languageHint"));
+    if (const SettingKind* kind = SettingsSchema::builtIn().find(QStringLiteral("Transcript"))) {
+        for (const SettingTab& tab : kind->tabs) {
+            for (const SettingOption& o : tab.options) {
+                if (o.key != QLatin1String("languageHint")) continue;
+                for (const SettingChoice& c : o.choices) languageHint_->addItem(c.label, c.value);
+            }
+        }
+    }
+    if (!locations_.siteSettings.isEmpty()) {
+        const auto site = model::SettingsFile::read(QDir(locations_.siteSettings).filePath(model::SettingsFile::fileName()));
+        const bool siteTranscript = site && std::any_of(site->entries.cbegin(), site->entries.cend(), [](const model::SettingEntry& e) {
+            return e.kind == QLatin1String("Transcript");
+        });
+        if (siteTranscript) {
+            languageHint_->setEnabled(false);
+            languageHint_->setToolTip(tr("Set by the Site settings: new projects use them."));
+        }
+    }
+    f->addRow(new QLabel(tr("Transcription"), settingsPanel_));
+    f->addRow(tr("Language Hint:"), languageHint_);
     layout->addWidget(settingsPanel_);
     settingsPanel_->setVisible(false);
 
@@ -740,7 +770,15 @@ bool SelectProjectDialog::createProjectFromForm() {
     const model::ProjectSettings settings = settingsFromForm(&error);
     if (error.isEmpty()) {
         const model::ProjectStore store(currentFolder());
-        if (store.create(settings, &error)) {
+        if (const auto entry = store.create(settings, &error)) {
+            // The Language Hint goes into the new project's Transcript setting (p.448).
+            const QString hint = languageHint_->isEnabled() ? languageHint_->currentData().toString() : QString();
+            if (!hint.isEmpty()) {
+                model::SettingsFile file;
+                file.add(model::SettingEntry{QStringLiteral("Transcript"), QString(), true,
+                                             QJsonObject{{QStringLiteral("languageHint"), hint}}});
+                file.write(QDir(entry->folder).filePath(model::SettingsFile::fileName()));
+            }
             formError_->clear();
             name_->setText(tr("Untitled Project"));
             showPage(Page::Projects);

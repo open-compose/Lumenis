@@ -1,4 +1,5 @@
 #include "lumenis/model/project_store.h"
+#include "lumenis/model/settings.h"
 #include "lumenis/ui/select_project_dialog.h"
 
 #include <QCheckBox>
@@ -102,6 +103,36 @@ private slots:
         QCOMPARE(s.format.editRate, Rational(30000, 1001));
         QCOMPARE(s.colorSpace, QStringLiteral("RGB 709"));
         QCOMPARE(s.aspect, Rational(16, 9));
+    }
+
+    // The Language Hint "beneath options for Transcription" (p.448) becomes the new project's Transcript setting, and is
+    // dimmed when the Site settings have a Transcript setting.
+    void languageHintGoesIntoTheProject() {
+        Fixture fx;
+        {
+            SelectProjectDialog d(fx.locations);
+            d.showPage(SelectProjectDialog::Page::NewProject);
+            child<QLineEdit>(d, "projectName")->setText(QStringLiteral("Doc"));
+            auto* hint = child<QComboBox>(d, "languageHint");
+            QVERIFY(hint->isEnabled());
+            QCOMPARE(hint->itemText(0), QStringLiteral("Multilingual"));
+            hint->setCurrentIndex(hint->findData(QStringLiteral("fr")));
+            QVERIFY(d.createProjectFromForm());
+            const auto entries = model::ProjectStore(fx.locations.privateProjects).list();
+            QCOMPARE(entries.size(), 1);
+            const auto file = model::SettingsFile::read(QDir(entries.front().folder).filePath(model::SettingsFile::fileName()));
+            QVERIFY(file);
+            QCOMPARE(file->entries.size(), qsizetype(1));
+            QCOMPARE(file->entries.front().kind, QStringLiteral("Transcript"));
+            QCOMPARE(file->entries.front().values.value(QStringLiteral("languageHint")).toString(), QStringLiteral("fr"));
+        }
+        fx.locations.siteSettings = fx.dir.filePath("Site");
+        QDir().mkpath(fx.locations.siteSettings);
+        model::SettingsFile site;
+        site.add(model::SettingEntry{QStringLiteral("Transcript"), QString(), true, {}});
+        QVERIFY(site.write(QDir(fx.locations.siteSettings).filePath(model::SettingsFile::fileName())));
+        SelectProjectDialog d(fx.locations);
+        QVERIFY(!child<QComboBox>(d, "languageHint")->isEnabled());
     }
 
     void reportsInvalidInputAndStaysOnTheForm() {

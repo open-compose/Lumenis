@@ -111,6 +111,35 @@ bool startNewLine(Transcript& t, int line, int word);
 bool revertLine(Transcript& t, int line);
 bool revertTranscript(Transcript& t);
 
+// Manage Speaker Names (p.445) on one transcript, by name: "Double-click on a name to rename it"; "select them all and click
+// Merge to combine them into one name. Merging multiple speaker names creates a single Speaker ID" (ours: the lowest of
+// their IDs); Clear "will remove that name from all transcripts in this project" (the IDs show as "Speaker n" again).
+// Renaming to a name another speaker of the transcript has merges the two. Each returns false when `t` has no such name.
+QStringList speakerNames(const Transcript& t); // the names given, sorted
+bool renameSpeakerName(Transcript& t, const QString& from, const QString& to);
+bool mergeSpeakerNames(Transcript& t, const QStringList& names, const QString& into);
+bool clearSpeakerName(Transcript& t, const QString& name);
+
+// The project's list of speaker names (Manage Speaker Names, p.445): "Names for speakers can be added in advance using
+// this window ... select from a list of available names while working in your project". Kept in
+// "<project folder>/Speakers.json". The window lists these with the names in the project's transcripts.
+class ProjectSpeakers {
+public:
+    ProjectSpeakers() = default;
+    explicit ProjectSpeakers(QString projectFolder);
+    QStringList names() const { return names_; } // sorted, case-insensitively
+    // Each changes and writes the file; false when nothing changed or it cannot be written.
+    bool add(const QString& name);
+    bool remove(const QString& name);
+    bool rename(const QString& from, const QString& to); // false when `from` is not listed
+    bool addAll(const QStringList& names);
+
+private:
+    bool write();
+    QString file_;
+    QStringList names_;
+};
+
 // The store of transcripts: a folder of "<MobID>.json" files. Thread-safe as long as one clip is written by one thread.
 class TranscriptStore {
 public:

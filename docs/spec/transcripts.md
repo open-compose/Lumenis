@@ -58,11 +58,14 @@ File > Settings > Project > Transcript (p.447-450):
 * Include all new bins in transcription (on): off, a new bin starts excluded (`BinContainer::binCreated`).
 * Pause background transcription while editing (on).
 * Language Hint: Multilingual (the default) or a language. Ours lists whisper.cpp's well-supported languages; the guide
-  says "21 languages are supported" (p.441) without naming them. The New Project tab's Language Hint (p.448) comes
-  with 8.2b.
+  says "21 languages are supported" (p.441) without naming them. The New Project tab has it too, "beneath options for
+  Transcription" (p.448): the choice is written into the new project's Settings.json as its Transcript setting; "If
+  Transcript settings have already been added to the Site settings for a particular workstation, these options will be
+  grayed out" (`SelectProjectDialog`, 8.2b2b).
 * Subclips/Groups: Ask (the default), Use Master Clips Transcripts, Transcribe Subclip or Group (p.449-450); used from
   8.2b on.
-* Manage Speakers and Manage Transcripts come with 8.2b and 8.2d.
+* Manage Speakers (p.445, 8.2b2b), a "button" option (`SettingsDialog::buttonClicked`, `toolRequested`), opens Manage
+  Speaker Names. Manage Transcripts comes with 8.2d.
 
 ## The Transcript Tool (8.2b1)
 
@@ -118,8 +121,27 @@ Changes go into the clip's transcript in the store (`model::editWords` and frien
   tool's, not kept between sessions.
 * Start New Line splits a line before the word; Revert puts back the original lines in a line's time; Revert Transcript
   (fast menu) every shown clip's transcript (2026.8 guide p.447).
-* Still to come (8.2b2b): Manage Speaker Names (the Transcript setting's Manage Speakers, p.445) with the project's list
-  of names, and the New Project tab's Language Hint (p.448).
+
+## Manage Speaker Names (8.2b2b)
+
+The Transcript setting's Manage Speakers button opens it (p.445; `src/ui/speaker_names_dialog.*`,
+`MainWindow::manageSpeakers`):
+
+* "a list of all available speakers that have been added or edited in transcripts for your current project": the
+  project's own list (`model::ProjectSpeakers`, `<project>/Speakers.json`) with the names given in the transcripts of the
+  project's master clips. A name in no transcript is dimmed.
+* Double-click renames a name in every transcript of the project (`model::renameSpeakerName`; to a name a transcript
+  already has, the two speakers merge) and in the list.
+* "+" adds a name to the list, "added in advance ... to select from a list of available names" (ours: it starts as "New
+  Speaker", edited in place). Identify Speaker offers the list's names and the transcripts' (`MainWindow::projectSpeakerNames`
+  into `TranscriptTool::setKnownSpeakers`).
+* Merge, with several names selected, makes them "a single Speaker ID" in each transcript (`model::mergeSpeakerNames`;
+  ours: named as the first selected, the lowest of the IDs).
+* Clear/Delete: "Delete" for dimmed names removes them from the list; "Clear" for used names "will remove that name from
+  all transcripts in this project" (`model::clearSpeakerName`; the speakers show as "Speaker n" again). Ours: with a mix
+  selected the button reads Clear and each name gets its own; a cleared name that was in the list stays there, dimmed.
+* Every change applies at once (`MainWindow::applySpeakerNameChange`); Done closes the window. It is window modal over
+  the setting's dialog.
 
 ## Tests
 
@@ -128,6 +150,8 @@ Changes go into the clip's transcript in the store (`model::editWords` and frien
   a stand-in `whisper-cli` script (not on Windows).
 * `tst_transcript editing`, `groupedSpeakerLines`: timing kept through edits, Find and Replace, speakers, Start New
   Line, Revert; `tst_transcripts_ui transcriptTool` the same through the tool.
+* `tst_transcript speakerNames`: rename, merge and clear by name, the project's list; `tst_transcripts_ui
+  manageSpeakerNames` the window and the setting's button; `tst_select_project_dialog languageHintGoesIntoTheProject`.
 * `tst_transcript shownTranscripts`: what a clip, subclip, group and sequence show; `tst_transcripts_ui transcriptTool`:
   the tool in the application (sides, clicks, selections, search, a sequence, Transcribe).
 * `tst_transcripts_ui`: Include/Exclude Bin in Transcription with the Sidebar's status, queuing the included bins' clips

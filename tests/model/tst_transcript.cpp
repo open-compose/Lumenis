@@ -227,6 +227,49 @@ private slots:
         QCOMPARE(g.lines[0].words.size(), qsizetype(4));
         QCOMPARE(groupedLines(s, true, 0).lines.size(), qsizetype(3));
     }
+
+    // Manage Speaker Names (p.445): renaming, merging and clearing by name, and the project's list.
+    void speakerNames() {
+        Transcript t;
+        t.lines = {TranscriptLine{1, {{QStringLiteral("a"), 0, 1}}}, TranscriptLine{2, {{QStringLiteral("b"), 1, 2}}},
+                   TranscriptLine{3, {{QStringLiteral("c"), 2, 3}}}};
+        t.speakers = {{1, QStringLiteral("Ann")}, {2, QStringLiteral("Anne")}, {3, QStringLiteral("Bob")}};
+        QCOMPARE(lumenis::model::speakerNames(t), QStringList({"Ann", "Anne", "Bob"}));
+        QVERIFY(!renameSpeakerName(t, QStringLiteral("Zed"), QStringLiteral("Z")));
+        QVERIFY(renameSpeakerName(t, QStringLiteral("Bob"), QStringLiteral("Robert")));
+        QCOMPARE(t.speakerName(3), QStringLiteral("Robert"));
+        QVERIFY(t.edited());
+        // Merge: one Speaker ID, the lowest.
+        QVERIFY(mergeSpeakerNames(t, {QStringLiteral("Anne"), QStringLiteral("Ann")}, QStringLiteral("Anne")));
+        QCOMPARE(t.lines[0].speaker, 1);
+        QCOMPARE(t.lines[1].speaker, 1);
+        QCOMPARE(t.speakerName(1), QStringLiteral("Anne"));
+        QVERIFY(!t.speakers.contains(2));
+        QVERIFY(!mergeSpeakerNames(t, {QStringLiteral("Anne")}, QStringLiteral("Anne")));
+        // Renaming to a name another speaker has merges them.
+        QVERIFY(renameSpeakerName(t, QStringLiteral("Robert"), QStringLiteral("Anne")));
+        QCOMPARE(t.lines[2].speaker, 1);
+        QCOMPARE(t.speakers.size(), qsizetype(1));
+        QVERIFY(clearSpeakerName(t, QStringLiteral("Anne")));
+        QCOMPARE(t.speakerName(1), QStringLiteral("Speaker 1"));
+        QVERIFY(!clearSpeakerName(t, QStringLiteral("Anne")));
+
+        QTemporaryDir dir;
+        {
+            ProjectSpeakers list(dir.path());
+            QVERIFY(list.names().isEmpty());
+            QVERIFY(list.add(QStringLiteral("Zoe")));
+            QVERIFY(list.add(QStringLiteral("adam")));
+            QVERIFY(!list.add(QStringLiteral("Zoe")));
+            QVERIFY(list.rename(QStringLiteral("adam"), QStringLiteral("Adam")));
+            QVERIFY(!list.rename(QStringLiteral("Carl"), QStringLiteral("Carl Jr"))); // not listed
+        }
+        ProjectSpeakers again(dir.path());
+        QCOMPARE(again.names(), QStringList({"Adam", "Zoe"}));
+        QVERIFY(again.remove(QStringLiteral("Zoe")));
+        QVERIFY(!again.remove(QStringLiteral("Zoe")));
+        QCOMPARE(ProjectSpeakers(dir.path()).names(), QStringList({"Adam"}));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestTranscript)

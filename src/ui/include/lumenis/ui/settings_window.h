@@ -46,6 +46,10 @@ public:
     // The tabs, or nullptr when the setting has only one.
     QTabWidget* tabs() const { return tabs_; }
 
+signals:
+    // A "button" option was clicked (its key: Transcript's manageSpeakers, p.445).
+    void buttonClicked(const QString& key);
+
 private:
     const SettingKind& kind_;
     QJsonObject values_;

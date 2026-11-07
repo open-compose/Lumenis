@@ -63,6 +63,8 @@ class BackgroundQueueWindow;
 class CalculatorWindow;
 class ColorInfoTool;
 class TranscriptTool;
+class SpeakerNamesDialog;
+struct SpeakerNameChange;
 class ConsolidateDialog;
 class UnmountDialog;
 class SetFontDialog;
@@ -583,6 +585,14 @@ public:
     // nothing or cannot be saved.
     bool editTranscript(const QString& mob, const std::function<bool(model::Transcript&)>& edit);
     TranscriptTool& transcriptTool() const { return *transcriptTool_; }
+    // Manage Speaker Names (p.445, the Transcript setting's Manage Speakers): opens the window over the active one (window
+    // modal, without blocking) and returns it; nullptr without a project. Its changes apply at once to the project's
+    // speaker list (<project>/Speakers.json) and to the transcripts of the project's master clips.
+    SpeakerNamesDialog* manageSpeakers();
+    void applySpeakerNameChange(const SpeakerNameChange& change);
+    // The project's speaker names and those in its transcripts, and those in its transcripts only; the names Identify
+    // Speaker offers ("a list of previously identified speakers in this project", p.444).
+    QStringList projectSpeakerNames(QStringList* used = nullptr) const;
     bool chooseAngle(int angle);
     // Clip > MultiGroup (8.1b3; p.1125): the multigroup's id, nothing when none was made (the Group Clips hook
     // stands in for its dialog in tests).

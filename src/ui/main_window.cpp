@@ -1392,6 +1392,8 @@ SettingsWindow* MainWindow::showSettings() {
             if (tool == QLatin1String("multiMix")) multipleMixes(false);
             // A Video Output setting opens the Video Output tool (7.3b).
             if (tool == QLatin1String("videoOutputTool")) openVideoOutput();
+            // The Transcript setting's Manage Speakers button (p.445).
+            if (tool == QLatin1String("manageSpeakers")) manageSpeakers();
             // A Bin Layout setting: opened (p.92).
             if (tool == QLatin1String("binLayout")) {
                 const model::SettingsFile& f = settings_->file(model::SettingsScope::Project);
