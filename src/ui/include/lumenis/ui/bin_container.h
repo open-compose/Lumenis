@@ -437,6 +437,8 @@ signals:
     void itemActivated(const QString& binId, const QString& itemId);
     // A bin's Edit Template on a Titler+ template (FX Guide p.320).
     void editTemplateRequested(const QString& binId, const QString& itemId);
+    // BinView::commandRequested from any bin.
+    void commandRequested(const QString& commandId);
     // Media files dropped on a bin from the Source Browser, to link (p.317).
     void filesDropped(const QString& binId, const QStringList& paths);
     // A bin floated into a new Bin Container window.

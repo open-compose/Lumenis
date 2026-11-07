@@ -122,6 +122,11 @@ void storeGroup(BinItem& item, const GroupClip& group, std::int64_t duration);
 // same material. Returns how many segments changed.
 int refreshGroupEdits(Sequence& sequence, const GroupClipLookup& lookup);
 
+// Commit Multicam Edits (p.1135): each group segment of the sequence is replaced by "its selected clip", the angle it
+// shows at the same frames (its source frames moved by the angle's offset). Ours: a segment whose angle has no material
+// at its first frame stays a group segment. Returns how many segments were replaced.
+int commitMulticamEdits(Sequence& sequence, const GroupClipLookup& lookup);
+
 // The group segment MultiCamera mode works on at sequence frame `frame` (p.1129): on the first of `tracks` that has
 // one there (video tracks, the preferred one first), with the group frame it shows. Nothing when there is none.
 struct GroupSegmentAt {

@@ -476,6 +476,9 @@ signals:
     void itemActivated(const QString& itemId);
     // Edit Template on a Titler+ template (FX Guide p.320).
     void editTemplateRequested(const QString& itemId);
+    // A command of the application asked for from the right-click menu (Edit Group, Commit Multicam Edits, p.1125,
+    // p.1135), on the bin's selection.
+    void commandRequested(const QString& commandId);
     // saveViewAs() changed BinViewLibrary.
     void viewSaved();
     // The Bin Lock Status button was clicked, `alt` with Alt (Option) held

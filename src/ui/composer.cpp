@@ -479,6 +479,7 @@ struct Composer::Column {
     QMenu* trackingMenu2 = nullptr;
     QToolButton* fastMenu = nullptr;
     QLabel* gangIcon = nullptr;
+    QToolButton* groupIcon = nullptr; // the Group Menu icon, over the Source monitor (p.1133)
     MonitorPicture* picture = nullptr;
     PositionBar* bar = nullptr;
     QMenu* clipMenu = nullptr;
@@ -1508,7 +1509,19 @@ QWidget* Composer::buildColumn(MonitorId monitor) {
         c->gangIcon->setObjectName(QStringLiteral("gangIcon"));
         c->gangIcon->setPixmap(glyph(Glyph::Gang, QColor(kInfoText)).pixmap(QSize(16, 16)));
         c->gangIcon->setToolTip(tr("Ganged"));
+        c->groupIcon = new QToolButton(c->info2);
+        c->groupIcon->setObjectName(QStringLiteral("groupMenuIcon"));
+        c->groupIcon->setAutoRaise(true);
+        c->groupIcon->setFixedSize(kInfoHeight + 4, kInfoHeight);
+        c->groupIcon->setToolTip(tr("Group Menu"));
+        c->groupIcon->hide();
+        connect(c->groupIcon, &QToolButton::clicked, this, [this, c] {
+            QMenu* menu = groupMenu();
+            menu->setAttribute(Qt::WA_DeleteOnClose);
+            menu->popup(c->groupIcon->mapToGlobal(QPoint(0, c->groupIcon->height())));
+        });
         info2->addWidget(c->fastMenu);
+        info2->addWidget(c->groupIcon);
         info2->addWidget(c->gangIcon);
         info2->addStretch(3);
         info2->addWidget(c->tracking2, 3);
@@ -2826,6 +2839,7 @@ void Composer::setGroupSplit(int split) {
     // Pressing a split's button again goes back to Full-Monitor display (p.1128).
     groupSplit_ = split == groupSplit_ ? 1 : split;
     groupBank_ = 0;
+    splitCells_.clear();
     if (MonitorPicture* w = picture(MonitorId::Source)) w->update();
 }
 
@@ -2838,6 +2852,40 @@ void Composer::swapCamBank(int angles) {
     if (angles <= 0 || groupSplit_ <= 1) return;
     const int banks = std::max(1, (angles + groupSplit_ - 1) / groupSplit_);
     groupBank_ = (groupBank_ + 1) % banks;
+    splitCells_.clear();
+    if (MonitorPicture* w = picture(MonitorId::Source)) w->update();
+}
+
+void Composer::setAudioFollowVideo(bool on) {
+    audioFollowVideo_ = on;
+    refresh();
+}
+
+QMenu* Composer::groupMenu() {
+    auto* menu = new QMenu(this);
+    menu->setObjectName(QStringLiteral("groupMenu"));
+    if (const auto info = groupMenu_ ? groupMenu_() : std::nullopt) {
+        // Ours: one entry per angle, its picture (the guide's menu lists every clip's tracks for patching, 8.1c).
+        for (int i = 0; i < info->angles.size(); ++i) {
+            QAction* a = menu->addAction(info->angles[i]);
+            a->setCheckable(true);
+            a->setChecked(i == info->shown);
+            connect(a, &QAction::triggered, this, [this, i] {
+                if (chooseAngle_) chooseAngle_(i);
+            });
+        }
+        menu->addSeparator();
+    }
+    QAction* follow = menu->addAction(tr("Audio Follow Video"));
+    follow->setObjectName(QStringLiteral("audioFollowVideo"));
+    follow->setCheckable(true);
+    follow->setChecked(audioFollowVideo_);
+    connect(follow, &QAction::toggled, this, &Composer::setAudioFollowVideo);
+    return menu;
+}
+
+void Composer::setSplitCell(int place, int shows) {
+    splitCells_.insert(place, shows);
     if (MonitorPicture* w = picture(MonitorId::Source)) w->update();
 }
 
@@ -2926,6 +2974,11 @@ void Composer::refresh() {
         c.tracking->setText(trackingText(m));
         c.tracking2->setText(secondTrackingText(m));
         if (c.gangIcon) c.gangIcon->setVisible(ganged_);
+        if (c.groupIcon) {
+            c.groupIcon->setVisible(groupMenu_ && groupMenu_().has_value());
+            // "The Group Menu icon changes to green when you select the Audio Follow Video option" (p.1133).
+            c.groupIcon->setIcon(glyphIcon(GlyphIcon::Group, audioFollowVideo_ ? QColor(80, 200, 80) : QColor(kInfoText)));
+        }
         if (QToolButton* gang = c.buttons.value(QStringLiteral("other.gang"))) gang->setChecked(ganged_);
         // The playing monitor's Play button shows how it plays.
         QToolButton* playButton = c.buttons.value(QStringLiteral("play.play"));

@@ -158,6 +158,33 @@ the Group menu, multigroups and the rest follow in 8.1b and 8.1c (docs/ROADMAP.m
   * Show Track in Split View When Playing: V1 or the monitored track. Ours: the monitored track by
     default, and for stopped monitors too.
 
+## The Group menu, Multi-angle View menus, Match Frame and committing (8.1b2)
+
+* The Group Menu icon (p.1133) is in the second row of information over the Source monitor ("Select the
+  Second Row of Info option ... for the Group Menu icon to be displayed") while a group is shown there
+  (`Composer::setGroupMenu`).
+  * Ours: the menu lists each angle (its picture; choosing one switches to it) and Audio Follow Video.
+    The guide's menu also patches any clip's video or audio tracks to the sequence's tracks; that comes
+    with 8.1c.
+  * Audio Follow Video: "switch both audio and video for each camera angle ... switches audio in track
+    A1 only". The icon is green while it is on. Ours: the cut on A1 is an ordinary edit, not drawn as a
+    match frame edit.
+* The Multi-angle View menus (p.1134): Ctrl+click a place of the split display for a menu of the
+  group's clips and Sequence (`MainWindow::multiAngleMenu`, `Composer::setSplitCell`).
+  * The place then shows that clip, or the Record monitor's sequence: the linecut (p.1132).
+  * Choosing the split or the bank again clears the choices (ours).
+  * Holding Ctrl shows the clips' names in the split.
+* Match Frame (p.1134-1135, `Timeline::matchFrame`):
+  * From a group segment the group loads into the Source monitor with the segment's angle selected.
+  * From a group in the Source monitor the selected angle's clip loads at the same moment.
+* Commit Multicam Edits (p.1135), in the bin's right-click menu for sequences with group segments
+  (`MainWindow::commitMulticamEdits`, `model::commitMulticamEdits`):
+  * The sequence is duplicated and each group segment of the duplicate replaced by its angle's clip
+    at the same frames. "The original sequence is unaffected."
+  * Ours: a segment whose angle has no material at its first frame stays a group segment.
+* Edit Group is in the bin's right-click menu too ("right click and choose Edit Group", p.1125).
+* Still to come (8.1b3): MultiGroup (p.1125).
+
 ## Tests
 
 * `tst_group_clip`: grouping (by sound too), offsets, names, angle clips, edits, Edit/Update Group
@@ -166,4 +193,7 @@ the Group menu, multigroups and the rest follow in 8.1b and 8.1c (docs/ROADMAP.m
 * `tst_multicam_ui`: the dialog, grouping, the split views and switching in the application; Waveform
   Analysis, Edit/Update/Create Group, Refresh Sequence and Waveform Sync on movies with sound.
 * `tst_multicam_ui multiCameraMode`: the mode, the keypad, clicks, banks and live cuts.
-* Scenarios `43-group-clip.json`, `44-waveform-sync.json` and `45-multicam-cut.json`.
+* `tst_multicam_ui multiCameraMode` also covers Audio Follow Video, the Group and Multi-angle View
+  menus, Match Frame and Commit Multicam Edits.
+* Scenarios `43-group-clip.json`, `44-waveform-sync.json`, `45-multicam-cut.json` and
+  `46-audio-follow-video.json`.

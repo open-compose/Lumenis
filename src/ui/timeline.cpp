@@ -4467,6 +4467,25 @@ void Timeline::matchFrame() {
     const MonitorId monitor = composer_.activeMonitor();
     const model::MonitorState& s = composer_.state(monitor);
     const model::LoadedClip* loaded = s.current();
+    // "you can display the original clip when match framing from the source group" (p.1134): the selected angle's
+    // clip at the same moment.
+    if (loaded && model::isGroupClip(loaded->item)) {
+        const auto group = model::groupOf(loaded->item);
+        if (!group || group->angles.isEmpty()) return;
+        const model::GroupAngle& a = group->angles[group->selected];
+        const std::int64_t frame = s.position() + a.offset;
+        composer_.loadFromBin(MonitorId::Source, a.binId, {a.clipId});
+        model::MonitorState& source = composer_.state(MonitorId::Source);
+        if (!source.current() || source.current()->item.id != a.clipId) {
+            fail(tr("The clip %1 is not in an open bin.").arg(a.clip.name));
+            return;
+        }
+        source.clearBoth();
+        composer_.moveTo(MonitorId::Source, std::max<std::int64_t>(frame, 0));
+        source.markIn();
+        composer_.setActiveMonitor(MonitorId::Source);
+        return;
+    }
     if (!loaded || loaded->item.kind != model::BinItemKind::Sequence) {
         fail(tr("Match Frame needs a sequence in the monitor."));
         return;
@@ -4489,6 +4508,10 @@ void Timeline::matchFrame() {
     composer_.moveTo(MonitorId::Source, match->frame);
     if (!keepMarks) source.markIn();
     composer_.setActiveMonitor(MonitorId::Source);
+    // "display the matching clip within the group when match framing from the sequence" (p.1134): the group shows the
+    // segment's angle; "If the group contains more clips than are displayed ... Media Composer selects the clip but does
+    // not display it" (p.1135).
+    if (match->segment.groupAngle && groupSelection_) groupSelection_(match->segment.binId, match->segment.clipId, *match->segment.groupAngle);
 }
 
 // The Source monitor's frame found in the Record monitor's sequence, on the selected tracks of both
@@ -7339,6 +7362,8 @@ bool Timeline::stepGroupAngle(int step) {
     const int angle = model::stepAngle(*found->groupAngle, step, static_cast<int>(group->angles.size()));
     found->groupAngle = angle;
     found->name = group->angles[angle].clip.name;
+    // Audio Follow Video (p.1133): A1 too.
+    if (composer_.audioFollowVideo()) model::setGroupAngleAt(seq, QStringLiteral("A1"), pos, angle, false, *group);
     const QList<model::SegmentRef> keep = selection_;
     const bool ok = commitSequence(step < 0 ? tr("Previous In Group") : tr("Next In Group"), seq);
     selection_ = keep;
@@ -7371,6 +7396,8 @@ bool Timeline::setGroupAngle(int angle, bool cut) {
     const auto clip = composer_.resolve(at->segment.binId, at->segment.clipId);
     const auto group = clip ? model::groupOf(*clip) : std::nullopt;
     if (!group || !model::setGroupAngleAt(seq, at->track, pos, angle, cut, *group)) return false;
+    // "Audio Follow Video overrides the track selection beside the Timeline and switches audio in track A1 only" (p.1133).
+    if (composer_.audioFollowVideo()) model::setGroupAngleAt(seq, QStringLiteral("A1"), pos, angle, cut, *group);
     const QList<model::SegmentRef> keep = selection_;
     const bool ok = commitSequence(cut ? tr("MultiCam Cut") : tr("Switch Camera Angle"), seq);
     selection_ = keep;

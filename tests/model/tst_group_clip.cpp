@@ -328,6 +328,30 @@ private slots:
         // The audio stays as it was.
         QCOMPARE(s.track(QStringLiteral("A1"))->segments.size(), qsizetype(1));
     }
+
+    // Commit Multicam Edits (p.1135): group segments become their angles' clips at the same frames.
+    void commitsMulticamEdits() {
+        Bin bin;
+        GroupOptions options;
+        options.sync = GroupSync::SourceTimecode;
+        const BinItem a = clip(QStringLiteral("A"), 100, QStringLiteral("10:00:00:00"));
+        const BinItem b = clip(QStringLiteral("B"), 100, QStringLiteral("10:00:00:10")); // 10 frames later
+        BinItem group = *groupClips(bin, inBin({a, b}), options);
+        Sequence s = Sequence::withDefaultTracks();
+        TrackPatch p;
+        p.setSourceTracks(sourceTracksOf(group));
+        applyEdit(s, EditKind::Overwrite, EditPlan{20, 0, 30, {}}, QStringLiteral("bin"), group, p);
+        QVERIFY(setGroupAngleAt(s, QStringLiteral("V1"), 10, 1, true, *groupOf(group)));
+        const GroupClipLookup lookup = [&](const QString&, const QString&) -> std::optional<BinItem> { return group; };
+        QCOMPARE(commitMulticamEdits(s, lookup), 4); // V1 twice, A1, A2
+        const Track* v1 = s.track(QStringLiteral("V1"));
+        QCOMPARE(v1->segments[0].clipId, QStringLiteral("A"));
+        QCOMPARE(v1->segments[0].sourceIn, std::int64_t(20));
+        QCOMPARE(v1->segments[1].clipId, QStringLiteral("B"));
+        QCOMPARE(v1->segments[1].sourceIn, std::int64_t(20)); // group frame 30 is B's frame 20
+        QVERIFY(!v1->segments[1].groupAngle);
+        QCOMPARE(commitMulticamEdits(s, lookup), 0);
+    }
 };
 
 QTEST_GUILESS_MAIN(TestGroupClip)

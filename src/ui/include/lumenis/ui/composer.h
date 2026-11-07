@@ -207,6 +207,29 @@ public:
     }
     // A numeric keypad key (Qt::Key_0 ... Key_9, Key_Period), given first to the handler; true when it took it (the
     // MultiCam keys, p.1131-1132). The Composer and the Timeline both ask.
+    // The Group menu (8.1b2; p.1133-1134): "Click the Group Menu icon in the second row of information above the Source
+    // monitor". The icon shows while the provider gives the shown group's angle names and the one shown; choosing an
+    // angle calls the chooser. "Audio Follow Video" is the Composer's own choice: "switch both audio and video for
+    // each camera angle", the icon green while it is on.
+    struct GroupMenuInfo {
+        QStringList angles;
+        int shown = 0;
+    };
+    using GroupMenuProvider = std::function<std::optional<GroupMenuInfo>()>;
+    void setGroupMenu(GroupMenuProvider provider, std::function<void(int angle)> chooser) {
+        groupMenu_ = std::move(provider);
+        chooseAngle_ = std::move(chooser);
+        refresh();
+    }
+    bool audioFollowVideo() const { return audioFollowVideo_; }
+    void setAudioFollowVideo(bool on);
+    // The Group menu as the icon shows it (built afresh each time); for tests too.
+    QMenu* groupMenu();
+    // The Multi-angle View menus (p.1134): what each place of the split display shows in place of its angle in the
+    // bank: another angle, or kSplitSequence for the Record monitor's sequence. Cleared with the split or the bank.
+    static constexpr int kSplitSequence = -1;
+    const QHash<int, int>& splitCells() const { return splitCells_; }
+    void setSplitCell(int place, int shows);
     using KeypadHandler = std::function<bool(int key)>;
     void setKeypadHandler(KeypadHandler handler) { keypad_ = std::move(handler); }
     bool keypadPressed(int key) const { return keypad_ && keypad_(key); }
@@ -789,6 +812,10 @@ private:
     int groupSplit_ = 1; // 1, 4 or 9 (setGroupSplit)
     int groupBank_ = 0;
     bool multiCamera_ = false;
+    bool audioFollowVideo_ = false;
+    GroupMenuProvider groupMenu_;
+    std::function<void(int)> chooseAngle_;
+    QHash<int, int> splitCells_;
     PictureClickHandler pictureClick_;
     KeypadHandler keypad_;
     PlayClock playClock_;

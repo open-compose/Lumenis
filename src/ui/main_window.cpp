@@ -120,6 +120,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCursor>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QCryptographicHash>
@@ -2263,10 +2264,22 @@ QImage MainWindow::groupSplitImage(const model::BinItem& group, std::int64_t at,
     QPainter p(&out);
     const QSize cell(size.width() / side, size.height() / side);
     bool anyOffline = false;
+    // "Press the Ctrl key to activate the display of clip names in the multi-split displays" (p.1134).
+    const bool names = QGuiApplication::queryKeyboardModifiers() & Qt::ControlModifier;
     for (int k = 0; k < split; ++k) {
-        const int angle = composer_->groupBank() * split + k;
-        if (angle >= g->angles.size()) break;
         const QRect r((k % side) * cell.width(), (k / side) * cell.height(), cell.width(), cell.height());
+        // A Multi-angle View menu's choice for this place (p.1134): another angle, or the sequence itself.
+        const int angle = composer_->splitCells().value(k, composer_->groupBank() * split + k);
+        if (angle == Composer::kSplitSequence) {
+            const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+            if (rec) {
+                const QImage frame = composer_->pictureAt(MonitorId::Record, composer_->state(MonitorId::Record).position(), cell);
+                if (!frame.isNull()) p.drawImage(r, frame.scaled(cell, Qt::KeepAspectRatio));
+            }
+            continue;
+        }
+        if (angle < 0 || angle >= g->angles.size()) continue;
+
         const model::BinItem clip = model::groupAngleClip(group, angle, offsets);
         if (media::isLinked(clip)) {
             if (frames_->isOffline(clip)) {
@@ -2280,6 +2293,10 @@ QImage MainWindow::groupSplitImage(const model::BinItem& group, std::int64_t at,
         if (angle == shown) {
             p.setPen(QPen(QColor(255, 210, 0), 3));
             p.drawRect(r.adjusted(1, 1, -2, -2));
+        }
+        if (names) {
+            p.setPen(QColor(Qt::white));
+            p.drawText(r.adjusted(6, 4, -6, -4), Qt::AlignTop | Qt::AlignLeft, g->angles[angle].clip.name);
         }
     }
     if (anyOffline && offline) *offline = true;
@@ -2344,8 +2361,63 @@ bool MainWindow::splitClicked(MonitorId monitor, QPointF fraction, Qt::MouseButt
     const int side = composer_->groupSplit() == 9 ? 3 : 2;
     const int column = std::clamp(static_cast<int>(fraction.x() * side), 0, side - 1);
     const int row = std::clamp(static_cast<int>(fraction.y() * side), 0, side - 1);
-    chooseAngle(composer_->groupBank() * composer_->groupSplit() + row * side + column);
+    const int place = row * side + column;
+    // "Ctrl+click the multi-split display where you want to show the new clip" (p.1134).
+    if (QApplication::keyboardModifiers() & Qt::ControlModifier) {
+        if (QMenu* menu = multiAngleMenu(place)) {
+            menu->setAttribute(Qt::WA_DeleteOnClose);
+            menu->popup(QCursor::pos());
+        }
+        return true;
+    }
+    const int angle = composer_->splitCells().value(place, composer_->groupBank() * composer_->groupSplit() + place);
+    if (angle != Composer::kSplitSequence) chooseAngle(angle);
     return true;
+}
+
+// The Multi-angle View menu of a place in the split display (p.1134): "The clips in the group are listed", and "You can
+// also select Sequence from the Multi-angle View menus to display the entire sequence".
+QMenu* MainWindow::multiAngleMenu(int place) {
+    std::optional<model::GroupClip> group;
+    if (composer_->multiCameraMode()) {
+        const auto at = multiCamSegment();
+        const auto clip = at ? composer_->resolve(at->segment.binId, at->segment.clipId) : std::nullopt;
+        if (clip) group = model::groupOf(*clip);
+    } else if (const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current()) {
+        group = model::groupOf(loaded->item);
+    }
+    if (!group) return nullptr;
+    auto* menu = new QMenu(this);
+    menu->setObjectName(QStringLiteral("multiAngleViewMenu"));
+    for (int i = 0; i < group->angles.size(); ++i) {
+        connect(menu->addAction(group->angles[i].clip.name), &QAction::triggered, this, [this, place, i] { composer_->setSplitCell(place, i); });
+    }
+    menu->addSeparator();
+    QAction* sequence = menu->addAction(tr("Sequence"));
+    sequence->setEnabled(composer_->state(MonitorId::Record).current() != nullptr);
+    connect(sequence, &QAction::triggered, this, [this, place] { composer_->setSplitCell(place, Composer::kSplitSequence); });
+    return menu;
+}
+
+// Commit Multicam Edits (p.1135): "Media Composer duplicates the sequence, and then replaces each grouped clip in the
+// duplicate sequence with its selected clip. The original sequence is unaffected". The duplicates go into the same bin.
+QStringList MainWindow::commitMulticamEdits() {
+    QStringList made;
+    BinView* view = binContainer_->activeView();
+    if (!view || view->document().isReadOnly()) return made;
+    const model::GroupClipLookup lookup = [this](const QString& bin, const QString& clip) { return composer_->resolve(bin, clip); };
+    for (const QString& id : view->selectedIds()) {
+        const model::BinItem* found = view->document().bin().item(id);
+        if (!found || found->kind != model::BinItemKind::Sequence) continue;
+        model::Sequence seq = model::Sequence::fromItem(*found);
+        if (model::commitMulticamEdits(seq, lookup) == 0) continue;
+        model::BinItem copy = model::duplicateItem(view->document().bin(), *found, QDateTime::currentDateTimeUtc());
+        seq.storeIn(copy);
+        view->document().addItem(copy);
+        made << copy.id;
+    }
+    if (!made.isEmpty()) view->selectIds(made);
+    return made;
 }
 
 void MainWindow::swapBank() {
@@ -7901,6 +7973,41 @@ void MainWindow::installPanelHandlers() {
         return splitClicked(monitor, fraction, button);
     });
     composer_->setKeypadHandler([this](int key) { return multiCamKey(key); });
+    // The Group menu (p.1133): the shown group's angles.
+    composer_->setGroupMenu(
+        [this]() -> std::optional<Composer::GroupMenuInfo> {
+            std::optional<model::GroupClip> group;
+            int shown = 0;
+            if (composer_->multiCameraMode()) {
+                const auto at = multiCamSegment();
+                const auto clip = at ? composer_->resolve(at->segment.binId, at->segment.clipId) : std::nullopt;
+                if (clip) group = model::groupOf(*clip);
+                if (at) shown = at->segment.groupAngle.value_or(0);
+            } else if (const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current()) {
+                group = model::groupOf(loaded->item);
+                if (group) shown = group->selected;
+            }
+            if (!group) return std::nullopt;
+            Composer::GroupMenuInfo info;
+            for (const model::GroupAngle& a : group->angles) info.angles << a.clip.name;
+            info.shown = shown;
+            return info;
+        },
+        [this](int angle) { chooseAngle(angle); });
+    timeline_->setGroupSelectionHook([this](const QString& binId, const QString& groupId, int angle) {
+        BinDocument* doc = binContainer_->document(binId);
+        const model::BinItem* found = doc ? doc->bin().item(groupId) : nullptr;
+        auto group = found ? model::groupOf(*found) : std::nullopt;
+        if (!group || angle < 0 || angle >= group->angles.size()) return;
+        group->selected = angle;
+        model::BinItem item = *found;
+        model::setGroup(item, *group);
+        storeClip(binId, item);
+    });
+    handle("bin.commit_multicam_edits", [this] { commitMulticamEdits(); });
+    connect(binContainer_, &BinContainer::commandRequested, this, [this](const QString& id) {
+        if (QAction* a = commands_.action(id)) a->trigger();
+    });
     handle("clip.read_audio_timecode", [this] { readAudioTimecode(); });
     handle("clip.refresh_sequence.motion_adapters_timewarps", [this] { refreshMotionAdapters(); });
     handle("timeline.mixdown.audio.multiple_mixes", [this] { multipleMixes(); });

@@ -560,6 +560,10 @@ public:
     bool splitClicked(MonitorId monitor, QPointF fraction, Qt::MouseButton button);
     bool multiCamKey(int key);
     bool chooseAngle(int angle);
+    // The Multi-angle View menu of split display place `place` (p.1134); null when no group is shown.
+    QMenu* multiAngleMenu(int place);
+    // Commit Multicam Edits (p.1135) on the bin's selected sequences: the duplicates' ids.
+    QStringList commitMulticamEdits();
     // Read Audio Timecode (p.668-669): the selected master clips' and subclips' LTC on the chosen
     // track, into the chosen Auxiliary TC column (media::ltc::readClipTimecode); other items are
     // ignored with a message.

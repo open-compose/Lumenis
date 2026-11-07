@@ -1,5 +1,7 @@
 #include "lumenis/ui/bin_view.h"
 
+#include "lumenis/model/group_clip.h"
+
 #include "lumenis/ui/brush_preview.h"
 
 #include "lumenis/media/custom_color.h"
@@ -2232,6 +2234,33 @@ QMenu* BinView::contextMenu(const QPoint& viewportPos, QWidget* view) {
             const QString id = item->id;
             QAction* edit = menu->addAction(tr("Edit Template"), this, [this, id] { emit editTemplateRequested(id); });
             edit->setObjectName(QStringLiteral("editTemplate"));
+        }
+    }
+    // "Select the group clip in the bin, right click and choose Edit Group" (p.1125); "Right-click the sequence and select
+    // Commit Multicam Edits" (p.1135).
+    {
+        bool group = false;
+        bool multicam = false;
+        for (const QString& id : selectedIds()) {
+            const model::BinItem* item = document_.bin().item(id);
+            if (!item) continue;
+            group = group || model::isGroupClip(*item);
+            if (item->kind == model::BinItemKind::Sequence) {
+                const model::Sequence seq = model::Sequence::fromItem(*item);
+                for (const model::Track& t : seq.tracks()) {
+                    for (const model::Segment& seg : t.segments) multicam = multicam || seg.groupAngle.has_value();
+                }
+            }
+        }
+        if (group) {
+            QAction* edit = menu->addAction(tr("Edit Group"), this, [this] { emit commandRequested(QStringLiteral("clip.edit_group")); });
+            edit->setObjectName(QStringLiteral("editGroup"));
+        }
+        if (multicam) {
+            QAction* commit = menu->addAction(tr("Commit Multicam Edits"), this,
+                                              [this] { emit commandRequested(QStringLiteral("bin.commit_multicam_edits")); });
+            commit->setObjectName(QStringLiteral("commitMulticamEdits"));
+            commit->setEnabled(!document_.isReadOnly());
         }
     }
     colorMenu(menu, tr("Set Background Color"), true);

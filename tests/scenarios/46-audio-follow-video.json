@@ -1,0 +1,23 @@
+[
+  {
+    "name": "Audio Follow Video: a camera choice also switches A1 (only A1), cut at the same frame",
+    "guide": "p.1133",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "G", "group": ["A", "B"], "offsets": [0, 0]}],
+    "sequence": {"tracks": {"V1": [], "A1": [], "A2": []}},
+    "steps": [
+      {"load": "source", "clip": "G"},
+      {"mark": "source", "in": 0, "out": 39},
+      {"position": "record", "frame": 0},
+      {"command": "edit.splice_in"},
+      {"audio_follow_video": true},
+      {"position": "record", "frame": 10},
+      {"group_angle": 1, "cut": true},
+      {"position": "record", "frame": 30},
+      {"group_step": -1}
+    ],
+    "expect": {
+      "V1": [["A", 0, 10, {"angle": 0}], ["A", 10, 30, {"angle": 0}]],
+      "A1": [["A", 0, 10, {"angle": 0}], ["A", 10, 30, {"angle": 0}]],
+      "A2": [["A", 0, 40, {"angle": 0}]]}
+  }
+]

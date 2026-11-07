@@ -263,6 +263,9 @@ public:
     // Ours: with no segments selected, the hook is asked first with -1 (Up) or 1 (Down) and is true when it switched a
     // group's angle; MainWindow's switches it on the active monitor when that shows a group clip.
     void setGroupArrowHook(std::function<bool(int)> hook) { groupArrows_ = std::move(hook); }
+    // Match Frame from a group segment sets the group's selected angle (p.1134) through this: the group's bin and id,
+    // and the angle. MainWindow stores it in the bin.
+    void setGroupSelectionHook(std::function<void(const QString&, const QString&, int)> hook) { groupSelection_ = std::move(hook); }
     // Closed captions on D1 (7.4b; docs/spec/closed-captions.md): MainWindow gives the caption data of a segment's
     // clip (model::clipCaptionData of the clip it resolves).
     void setCaptionClipData(std::function<QByteArray(const model::Segment&)> clipData) {
@@ -1648,6 +1651,7 @@ private:
     SequenceStore store_;
     std::function<bool()> deleteHook_;
     std::function<bool(int)> groupArrows_;
+    std::function<void(const QString&, const QString&, int)> groupSelection_;
     SoundOffset soundOffset_;
     std::function<QByteArray(const model::Segment&)> captionClipData_;
     mutable CaptionTrack captionCache_;

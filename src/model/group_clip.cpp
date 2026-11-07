@@ -356,6 +356,33 @@ std::optional<std::pair<std::int64_t, std::int64_t>> groupAngleRange(const BinIt
     return std::pair<std::int64_t, std::int64_t>{o.value(QStringLiteral("from")).toInteger(), o.value(QStringLiteral("to")).toInteger()};
 }
 
+int commitMulticamEdits(Sequence& sequence, const GroupClipLookup& lookup) {
+    int replaced = 0;
+    QStringList names;
+    for (const Track& t : sequence.tracks()) names << t.name();
+    for (const QString& name : names) {
+        for (Segment& s : sequence.track(name)->segments) {
+            if (s.isFiller() || !s.groupAngle || !lookup) continue;
+            const auto clip = lookup(s.binId, s.clipId);
+            const auto g = clip ? groupOf(*clip) : std::nullopt;
+            if (!g || *s.groupAngle < 0 || *s.groupAngle >= g->angles.size()) continue;
+            const int k = *s.groupAngle;
+            const GroupAngle& a = g->angles[k];
+            const std::int64_t offset = k < s.groupOffsets.size() ? s.groupOffsets[k] : a.offset;
+            if (s.sourceIn + offset < 0) continue;
+            s.clipId = a.clipId;
+            s.binId = a.binId;
+            s.sourceMob = a.clip.mobId;
+            s.name = a.clip.name;
+            s.sourceIn += offset;
+            s.groupAngle.reset();
+            s.groupOffsets.clear();
+            ++replaced;
+        }
+    }
+    return replaced;
+}
+
 std::optional<GroupSegmentAt> groupSegmentAt(const Sequence& sequence, std::int64_t frame, const QStringList& tracks) {
     for (const QString& name : tracks) {
         const Track* t = sequence.track(name);

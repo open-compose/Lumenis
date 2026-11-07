@@ -620,6 +620,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
     (Quad or Nine Split) and Show Track in Split View When Playing (the monitored track, stopped too);
   * a choice in Quad or Nine Split Source view becoming the group's selected angle; stopped choices in
     MultiCamera mode switching the whole segment.
+  * the Group menu listing each angle's picture (patching comes later); Audio Follow Video's A1 cut not drawn as a
+    match frame edit; Multi-angle View choices cleared with the split or bank; committed segments kept as group
+    segments where their angle has no material.
 
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical

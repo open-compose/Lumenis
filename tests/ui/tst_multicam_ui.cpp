@@ -17,6 +17,7 @@
 #include "lumenis/ui/timeline.h"
 
 #include <QAction>
+#include <QMenu>
 #include <QComboBox>
 #include <QDir>
 #include <QRadioButton>
@@ -309,6 +310,54 @@ private slots:
         QCOMPARE(cut.track(QStringLiteral("V1"))->segments.size(), qsizetype(2));
         QCOMPARE(cut.track(QStringLiteral("V1"))->segments.at(0).length, std::int64_t(15));
         QCOMPARE(cut.track(QStringLiteral("V1"))->segments.at(1).groupAngle, std::optional<int>(1));
+        // Audio Follow Video: A1 switches with the picture (p.1133); the Group menu lists the angles.
+        QMenu* menu = composer.groupMenu();
+        QCOMPARE(menu->actions().size(), 4); // two angles, a separator, Audio Follow Video
+        QVERIFY(menu->actions().at(1)->isChecked()); // the segment at 15 shows B since the live cut
+        menu->findChild<QAction*>(QStringLiteral("audioFollowVideo"))->setChecked(true);
+        delete menu;
+        QVERIFY(composer.audioFollowVideo());
+        composer.moveTo(MonitorId::Record, 5);
+        QVERIFY(composer.keypadPressed(Qt::Key_8)); // upper right: B, on V1 and A1
+        model::Sequence afv = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item);
+        QCOMPARE(afv.track(QStringLiteral("V1"))->segments.at(0).groupAngle, std::optional<int>(1));
+        // (These movies have no sound, so the sequence has no A1; scenario 46-audio-follow-video.json covers A1.)
+        if (const model::Track* a1 = afv.track(QStringLiteral("A1")); a1 && !a1->segments.isEmpty()) {
+            QCOMPARE(a1->segments.at(0).groupAngle, std::optional<int>(1));
+        }
+        composer.setAudioFollowVideo(false);
+        // A Multi-angle View menu: the lower left shows B, then the sequence (p.1134).
+        QMenu* angles = window.multiAngleMenu(2);
+        QVERIFY(angles);
+        angles->actions().at(1)->trigger();
+        QCOMPARE(composer.splitCells().value(2), 1);
+        QVERIFY(near(colourAt(composer, MonitorId::Source, 0, quad, QPoint(32, 54)).green(), 45)); // B at frame 5
+        angles->actions().last()->trigger();
+        QCOMPARE(composer.splitCells().value(2), Composer::kSplitSequence);
+        delete angles;
+        // Match Frame from the group segment: the group in the Source monitor, the segment's angle selected (p.1134).
+        mode->setChecked(false);
+        composer.setActiveMonitor(MonitorId::Record);
+        composer.moveTo(MonitorId::Record, 5);
+        QVERIFY(window.timeline().perform(QStringLiteral("other.match_frame")));
+        QCOMPARE(composer.state(MonitorId::Source).current()->item.id, *groupId);
+        QCOMPARE(model::groupOf(*bin->bin().item(*groupId))->selected, 1);
+        // And from the group in the Source monitor: its selected clip (B) at the same frame.
+        QVERIFY(window.timeline().perform(QStringLiteral("other.match_frame")));
+        QCOMPARE(composer.state(MonitorId::Source).current()->item.id, ids[1]);
+        QCOMPARE(composer.state(MonitorId::Source).position(), std::int64_t(5));
+        // Commit Multicam Edits: a duplicate whose segments are the angles' clips (p.1135).
+        const QString cutId = composer.state(MonitorId::Record).current()->item.id;
+        view->selectIds({cutId});
+        const QStringList committed = window.commitMulticamEdits();
+        QCOMPARE(committed.size(), 1);
+        const model::Sequence plain = model::Sequence::fromItem(*bin->bin().item(committed.first()));
+        for (const model::Segment& seg : plain.track(QStringLiteral("V1"))->segments) {
+            QVERIFY(!seg.groupAngle);
+            QVERIFY(seg.clipId == ids[0] || seg.clipId == ids[1]);
+        }
+        QVERIFY(model::Sequence::fromItem(*bin->bin().item(cutId)).track(QStringLiteral("V1"))->segments.first().groupAngle);
+        mode->setChecked(true);
         // Leaving the mode.
         mode->setChecked(false);
         QVERIFY(!composer.multiCameraMode());
