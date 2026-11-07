@@ -760,6 +760,13 @@ void MainWindow::createPanels() {
         if (const model::LoadedClip* loaded = state.current()) {
             // A group clip in Quad Split or Nine Split Source view (p.1127-1128).
             if (monitor == MonitorId::Source && loaded->item.kind == model::BinItemKind::Group && composer_->groupSplit() > 1) {
+                if (model::isMultigroup(loaded->item)) {
+                    // A multigroup: the group under the position, split (p.1125).
+                    model::GroupSegmentAt seg;
+                    const auto group = sourceGroup(at, &seg);
+                    if (!group) return {};
+                    return groupSplitImage(*group, seg.groupFrame, size, offline, seg.segment.groupAngle, seg.segment.groupOffsets);
+                }
                 return groupSplitImage(loaded->item, at, size, offline);
             }
             if (auto field = motionFieldFrame(loaded->item, at, size)) return *field;
@@ -2225,6 +2232,8 @@ std::optional<std::pair<model::BinItem, std::int64_t>> MainWindow::frameAt(Monit
     if (!loaded || position < 0) return std::nullopt;
     model::BinItem item = loaded->item;
     std::int64_t frame = position;
+    // A multigroup shows as its sequence of groups (p.1125).
+    if (const auto seq = model::multigroupSequence(item)) item = *seq;
     if (item.kind == model::BinItemKind::Sequence) {
         const model::Sequence seq = model::Sequence::fromItem(item);
         QStringList video;
@@ -2351,7 +2360,7 @@ bool MainWindow::splitClicked(MonitorId monitor, QPointF fraction, Qt::MouseButt
     if (monitor != MonitorId::Source) return false;
     const bool multi = composer_->multiCameraMode();
     const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
-    if (!multi && !(loaded && model::isGroupClip(loaded->item) && composer_->groupSplit() > 1)) return false;
+    if (!multi && !(loaded && (model::isGroupClip(loaded->item) || model::isMultigroup(loaded->item)) && composer_->groupSplit() > 1)) return false;
     if (button == Qt::RightButton) {
         if (!multi) return false;
         swapBank();
@@ -2375,6 +2384,87 @@ bool MainWindow::splitClicked(MonitorId monitor, QPointF fraction, Qt::MouseButt
     return true;
 }
 
+// The group the Source monitor shows at its frame `at`: its group clip, or for a multigroup the group segment there on
+// V1 (with the segment in *segment). Nothing for other clips.
+std::optional<model::BinItem> MainWindow::sourceGroup(std::int64_t at, model::GroupSegmentAt* segment) const {
+    const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
+    if (!loaded) return std::nullopt;
+    if (model::isGroupClip(loaded->item)) return loaded->item;
+    const auto seq = model::multigroupSequence(loaded->item);
+    if (!seq) return std::nullopt;
+    const auto found = model::groupSegmentAt(model::Sequence::fromItem(*seq), at, {QStringLiteral("V1")});
+    if (!found) return std::nullopt;
+    if (segment) *segment = *found;
+    const auto clip = composer_->resolve(found->segment.binId, found->segment.clipId);
+    return clip && model::isGroupClip(*clip) ? clip : std::nullopt;
+}
+
+// An angle chosen for the Source monitor's multigroup: its group segment at the position (V1, and A1 with Audio Follow
+// Video) switches, kept in the multigroup in its bin (ours: the guide does not say how a multigroup's angles switch on
+// the source side).
+bool MainWindow::switchMultigroupAngle(int angle, bool step) {
+    const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
+    if (!loaded || !model::isMultigroup(loaded->item)) return false;
+    model::GroupSegmentAt at;
+    const auto group = sourceGroup(composer_->state(MonitorId::Source).position(), &at);
+    const auto g = group ? model::groupOf(*group) : std::nullopt;
+    if (!g || g->angles.isEmpty()) return false;
+    if (step) angle = model::stepAngle(at.segment.groupAngle.value_or(0), angle, static_cast<int>(g->angles.size()));
+    model::Sequence seq = model::Sequence::fromItem(*model::multigroupSequence(loaded->item));
+    const std::int64_t pos = composer_->state(MonitorId::Source).position();
+    if (!model::setGroupAngleAt(seq, QStringLiteral("V1"), pos, angle, false, *g)) return false;
+    if (composer_->audioFollowVideo()) model::setGroupAngleAt(seq, QStringLiteral("A1"), pos, angle, false, *g);
+    model::BinItem item = loaded->item;
+    model::setMultigroupSequence(item, seq);
+    storeClip(loaded->binId, item);
+    composer_->refreshDisplay();
+    return true;
+}
+
+// Clip > MultiGroup (p.1125): the bin's selected clips, with the Group Clips options (no Waveform Analysis); the groups and
+// the multigroup go into the bin, the multigroup selected.
+std::optional<QString> MainWindow::multiGroup() {
+    BinView* view = binContainer_->activeView();
+    if (!view || view->document().isReadOnly()) return std::nullopt;
+    const QString binId = view->document().nodeId();
+    QList<std::pair<QString, model::BinItem>> clips;
+    for (const model::BinItem& item : view->document().bin().items) {
+        if (view->selectedIds().contains(item.id)) clips.append({binId, item});
+    }
+    if (clips.isEmpty()) return std::nullopt;
+    model::GroupOptions options;
+    options.when = QDateTime::currentDateTimeUtc();
+    if (groupClipsHook_) {
+        const auto chosen = groupClipsHook_();
+        if (!chosen) return std::nullopt;
+        options.sync = chosen->first;
+        options.auxTc = chosen->second;
+    } else {
+        const int fps = project_ ? TimecodeFormat::forRate(project_->settings.format.editRate, false).nominalFps : 30;
+        GroupClipsDialog dialog(fps == 24 || fps == 25, this, true);
+        if (dialog.exec() != QDialog::Accepted) return std::nullopt;
+        options.sync = dialog.sync();
+        options.auxTc = dialog.auxTc();
+    }
+    options.marks = [this](const model::BinItem& clip, bool in) -> std::optional<std::int64_t> {
+        const model::LoadedClip* loaded = composer_->state(MonitorId::Source).loaded(clip.id);
+        if (!loaded) return std::nullopt;
+        return in ? loaded->in : loaded->out;
+    };
+    QString error;
+    const auto made = model::multiGroup(view->document().bin(), binId, clips, options, &error);
+    if (!made) {
+        ConsoleLog::instance().append(tr("MultiGroup: %1").arg(error));
+        if (!groupClipsHook_) QMessageBox::warning(this, tr("MultiGroup"), error);
+        return std::nullopt;
+    }
+    for (const model::BinItem& g : made->groups) view->document().addItem(g);
+    view->document().addItem(made->multigroup);
+    if (made->skipped > 0) ConsoleLog::instance().append(tr("MultiGroup: %n clip(s) with no other clip of the same take were left out.", "", made->skipped));
+    view->selectIds({made->multigroup.id});
+    return made->multigroup.id;
+}
+
 // The Multi-angle View menu of a place in the split display (p.1134): "The clips in the group are listed", and "You can
 // also select Sequence from the Multi-angle View menus to display the entire sequence".
 QMenu* MainWindow::multiAngleMenu(int place) {
@@ -2383,8 +2473,8 @@ QMenu* MainWindow::multiAngleMenu(int place) {
         const auto at = multiCamSegment();
         const auto clip = at ? composer_->resolve(at->segment.binId, at->segment.clipId) : std::nullopt;
         if (clip) group = model::groupOf(*clip);
-    } else if (const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current()) {
-        group = model::groupOf(loaded->item);
+    } else if (const auto shown = sourceGroup(composer_->state(MonitorId::Source).position())) {
+        group = model::groupOf(*shown);
     }
     if (!group) return nullptr;
     auto* menu = new QMenu(this);
@@ -2422,7 +2512,9 @@ QStringList MainWindow::commitMulticamEdits() {
 
 void MainWindow::swapBank() {
     if (!composer_->multiCameraMode()) {
-        composer_->swapCamBank();
+        const auto shown = sourceGroup(composer_->state(MonitorId::Source).position());
+        const auto g = shown ? model::groupOf(*shown) : std::nullopt;
+        composer_->swapCamBank(g ? static_cast<int>(g->angles.size()) : -1);
         return;
     }
     const auto at = multiCamSegment();
@@ -2434,6 +2526,7 @@ void MainWindow::swapBank() {
 bool MainWindow::chooseAngle(int angle) {
     if (composer_->multiCameraMode()) return timeline_ && timeline_->setGroupAngle(angle, composer_->isPlaying());
     const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
+    if (loaded && model::isMultigroup(loaded->item)) return switchMultigroupAngle(angle, false);
     auto group = loaded ? model::groupOf(loaded->item) : std::nullopt;
     if (!group || angle < 0 || angle >= group->angles.size() || group->selected == angle) return false;
     group->selected = angle;
@@ -2449,7 +2542,7 @@ bool MainWindow::chooseAngle(int angle) {
 bool MainWindow::multiCamKey(int key) {
     const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
     const bool split = composer_->groupSplit() > 1;
-    if (!composer_->multiCameraMode() && !(split && loaded && model::isGroupClip(loaded->item))) return false;
+    if (!composer_->multiCameraMode() && !(split && loaded && (model::isGroupClip(loaded->item) || model::isMultigroup(loaded->item)))) return false;
     if (key == Qt::Key_0 || key == Qt::Key_Period) {
         swapBank();
         return true;
@@ -2470,6 +2563,7 @@ bool MainWindow::stepInGroup(int step) {
     if (composer_->activeMonitor() == MonitorId::Record) return timeline_ && timeline_->stepGroupAngle(step);
     const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
     if (!loaded) return false;
+    if (model::isMultigroup(loaded->item)) return switchMultigroupAngle(step, true);
     auto group = model::groupOf(loaded->item);
     if (!group || group->angles.isEmpty()) return false;
     group->selected = model::stepAngle(group->selected, step, static_cast<int>(group->angles.size()));
@@ -7949,9 +8043,12 @@ void MainWindow::installPanelHandlers() {
     handle("clip.auto_vo", [this] { autoVo(); });
     // MultiCamera (8.1a; p.1123-1131).
     handle("clip.group_clips", [this] { groupClips(); });
+    handle("clip.multigroup", [this] { multiGroup(); });
     timeline_->setGroupArrowHook([this](int step) {
         const model::LoadedClip* source = composer_->state(MonitorId::Source).current();
-        if (composer_->activeMonitor() == MonitorId::Source && !(source && model::isGroupClip(source->item))) return false;
+        if (composer_->activeMonitor() == MonitorId::Source && !(source && (model::isGroupClip(source->item) || model::isMultigroup(source->item)))) {
+            return false;
+        }
         return stepInGroup(step);
     });
     handle("clip.edit_group", [this] { editGroup(); });
@@ -7983,9 +8080,14 @@ void MainWindow::installPanelHandlers() {
                 const auto clip = at ? composer_->resolve(at->segment.binId, at->segment.clipId) : std::nullopt;
                 if (clip) group = model::groupOf(*clip);
                 if (at) shown = at->segment.groupAngle.value_or(0);
-            } else if (const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current()) {
-                group = model::groupOf(loaded->item);
-                if (group) shown = group->selected;
+            } else {
+                model::GroupSegmentAt at;
+                const std::int64_t pos = composer_->state(MonitorId::Source).position();
+                if (const auto clip = sourceGroup(pos, &at)) {
+                    group = model::groupOf(*clip);
+                    if (group) shown = model::isMultigroup(composer_->state(MonitorId::Source).current()->item) ? at.segment.groupAngle.value_or(0)
+                                                                                                         : group->selected;
+                }
             }
             if (!group) return std::nullopt;
             Composer::GroupMenuInfo info;

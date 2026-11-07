@@ -365,6 +365,66 @@ private slots:
         QCOMPARE(composer.activeMonitor(), MonitorId::Source);
     }
 
+    // Clip > MultiGroup (p.1125): two cameras of one take make a group and a multigroup; the multigroup shows its group
+    // split in the Source monitor, switches angles there and edits into a sequence as group segments.
+    void multigroupInTheApplication() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString a = dir.filePath(QStringLiteral("cam-a.mov"));
+        const QString b = dir.filePath(QStringLiteral("cam-b.mov"));
+        QVERIFY(writeMovie(a, 40, false));
+        QVERIFY(writeMovie(b, 40, true));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        const QStringList ids = window.linkFiles(binId, {a, b});
+        QCOMPARE(ids.size(), 2);
+        window.binContainer().viewFor(bin)->selectIds(ids);
+        window.setGroupClipsHook([] { return std::optional<std::pair<model::GroupSync, int>>({model::GroupSync::SourceTimecode, 1}); });
+        const auto mgId = window.multiGroup();
+        QVERIFY(mgId);
+        const model::BinItem mg = *bin->bin().item(*mgId);
+        QVERIFY(model::isMultigroup(mg));
+        QCOMPARE(bin->bin().items.size(), qsizetype(4)); // two clips, the group, the multigroup
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, mg);
+        composer.setActiveMonitor(MonitorId::Source);
+        composer.moveTo(MonitorId::Source, 15);
+        // Full-Monitor display: A; Quad Split: A and B.
+        QVERIFY(near(colourAt(composer, MonitorId::Source, 15).red(), 75));
+        composer.setGroupSplit(4);
+        const QSize quad(128, 72);
+        QVERIFY(near(colourAt(composer, MonitorId::Source, 15, quad, QPoint(96, 18)).green(), 95));
+        // Next In Group switches the multigroup's group segment there.
+        commands.action(QStringLiteral("mcam.next_in_group"))->trigger();
+        settle();
+        const auto seq = model::multigroupSequence(*bin->bin().item(*mgId));
+        QCOMPARE(model::Sequence::fromItem(*seq).track(QStringLiteral("V1"))->segments.first().groupAngle, std::optional<int>(1));
+        composer.setGroupSplit(4); // back to Full-Monitor display
+        QVERIFY(near(colourAt(composer, MonitorId::Source, 15).green(), 95));
+        // Edited into a sequence: group segments.
+        composer.state(MonitorId::Source).clearBoth();
+        composer.moveTo(MonitorId::Source, 0);
+        commands.action(QStringLiteral("edit.splice_in"))->trigger();
+        settle();
+        const model::Sequence cut = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item);
+        QVERIFY(cut.track(QStringLiteral("V1")));
+        QCOMPARE(cut.track(QStringLiteral("V1"))->segments.first().groupAngle, std::optional<int>(1));
+    }
+
     // Waveform Analysis grouping, Edit Group, Update Group, Create Group, Refresh Sequence > Group Clips and Waveform
     // Sync (p.478, p.1124-1126) on two cameras whose sounds are the same, the second 10 frames later.
     void soundAndGroupEdits() {

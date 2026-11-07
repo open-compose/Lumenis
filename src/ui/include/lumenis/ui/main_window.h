@@ -560,6 +560,12 @@ public:
     bool splitClicked(MonitorId monitor, QPointF fraction, Qt::MouseButton button);
     bool multiCamKey(int key);
     bool chooseAngle(int angle);
+    // Clip > MultiGroup (8.1b3; p.1125): the multigroup's id, nothing when none was made (the Group Clips hook
+    // stands in for its dialog in tests).
+    std::optional<QString> multiGroup();
+    // The group the Source monitor shows at frame `at` (its group clip, or a multigroup's group segment there).
+    std::optional<model::BinItem> sourceGroup(std::int64_t at, model::GroupSegmentAt* segment = nullptr) const;
+    bool switchMultigroupAngle(int angle, bool step);
     // The Multi-angle View menu of split display place `place` (p.1134); null when no group is shown.
     QMenu* multiAngleMenu(int place);
     // Commit Multicam Edits (p.1135) on the bin's selected sequences: the duplicates' ids.

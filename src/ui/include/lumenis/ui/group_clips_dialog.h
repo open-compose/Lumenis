@@ -21,7 +21,8 @@ public:
     // `filmProject`: a 24p or 25p project, where INK Number and Auxiliary Ink appear and Film TC/Sound TC
     // could be chosen ("This option appears dimmed if you are not working in a 24p or 25p project").
     // Ours: Film TC/Sound TC and the ink options stay dimmed, not built yet.
-    explicit GroupClipsDialog(bool filmProject, QWidget* parent = nullptr);
+    // `multigroup`: the MultiGroup dialog (p.1125), the same options without Waveform Analysis.
+    explicit GroupClipsDialog(bool filmProject, QWidget* parent = nullptr, bool multigroup = false);
 
     model::GroupSync sync() const;
     int auxTc() const; // 1-5

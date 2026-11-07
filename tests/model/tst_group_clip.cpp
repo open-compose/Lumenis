@@ -352,6 +352,54 @@ private slots:
         QVERIFY(!v1->segments[1].groupAngle);
         QCOMPARE(commitMulticamEdits(s, lookup), 0);
     }
+
+    // MultiGroup (p.1125): takes by common timecode, a group for each, the multigroup strung from them.
+    void multiGroups() {
+        Bin bin;
+        QList<std::pair<QString, BinItem>> clips = inBin({
+            clip(QStringLiteral("CamB2"), 60, QStringLiteral("11:00:00:00")),
+            clip(QStringLiteral("CamA1"), 100, QStringLiteral("10:00:00:00")),
+            clip(QStringLiteral("Lone"), 30, QStringLiteral("12:00:00:00")),
+            clip(QStringLiteral("CamB1"), 100, QStringLiteral("10:00:00:10")),
+            clip(QStringLiteral("CamA2"), 50, QStringLiteral("11:00:00:00")),
+        });
+        GroupOptions options;
+        options.sync = GroupSync::SourceTimecode;
+        QString error;
+        const auto made = multiGroup(bin, QStringLiteral("bin"), clips, options, &error);
+        QVERIFY2(made, qPrintable(error));
+        QCOMPARE(made->groups.size(), qsizetype(2));
+        QCOMPARE(made->skipped, 1);
+        QCOMPARE(made->groups[0].name, QStringLiteral("CamA1.Grp.1"));
+        QCOMPARE(made->groups[1].name, QStringLiteral("CamA2.Grp.1"));
+        QCOMPARE(made->groups[0].durationFrames, std::int64_t(110));
+        const BinItem& mg = made->multigroup;
+        QVERIFY(isMultigroup(mg));
+        QVERIFY(!isGroupClip(mg));
+        QCOMPARE(mg.name, QStringLiteral("CamA1.MGrp.1"));
+        QCOMPARE(mg.durationFrames, std::int64_t(170));
+        const auto seqItem = multigroupSequence(mg);
+        QVERIFY(seqItem);
+        const Sequence seq = Sequence::fromItem(*seqItem);
+        const Track* v1 = seq.track(QStringLiteral("V1"));
+        QCOMPARE(v1->segments.size(), qsizetype(2));
+        QCOMPARE(v1->segments[0].clipId, made->groups[0].id);
+        QCOMPARE(v1->segments[1].clipId, made->groups[1].id);
+        QCOMPARE(v1->segments[1].groupAngle, std::optional<int>(0));
+        // Edited into a sequence it brings its group segments.
+        Sequence cut = Sequence::withDefaultTracks();
+        TrackPatch p;
+        p.setSourceTracks(sourceTracksOf(mg));
+        applyEdit(cut, EditKind::Overwrite, EditPlan{100, 0, 20, {}}, QStringLiteral("bin"), mg, p);
+        const Track* c1 = cut.track(QStringLiteral("V1"));
+        QCOMPARE(c1->segments.size(), qsizetype(2));
+        QCOMPARE(c1->segments[0].clipId, made->groups[0].id);
+        QCOMPARE(c1->segments[0].length, std::int64_t(10));
+        QCOMPARE(c1->segments[1].clipId, made->groups[1].id);
+        QVERIFY(c1->segments[1].groupAngle);
+        // Nothing to group.
+        QVERIFY(!multiGroup(bin, QStringLiteral("bin"), inBin({clip(QStringLiteral("Lone"), 30)}), options, &error));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestGroupClip)

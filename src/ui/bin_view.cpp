@@ -611,6 +611,17 @@ QVariant BinItemModel::data(const QModelIndex& index, int role) const {
             if (look.localMediaIcons && BinAppearance::mediaTint()) {
                 if (const QColor tint = BinAppearance::mediaTint()(item); tint.isValid()) return glyphIcon(iconFor(item.kind), tint);
             }
+            // "The multigroup clip has the same icon as the group clips, but the icon is preceded by a plus sign" (p.1125).
+            if (model::isMultigroup(item)) {
+                QPixmap pm(28, 16);
+                pm.fill(Qt::transparent);
+                QPainter p(&pm);
+                p.setPen(QPen(QApplication::palette().color(QPalette::WindowText), 2));
+                p.drawLine(2, 8, 10, 8);
+                p.drawLine(6, 4, 6, 12);
+                glyphIcon(iconFor(item.kind)).paint(&p, QRect(12, 0, 16, 16));
+                return QIcon(pm);
+            }
             return glyphIcon(iconFor(item.kind));
         }
         return {};

@@ -127,6 +127,26 @@ int refreshGroupEdits(Sequence& sequence, const GroupClipLookup& lookup);
 // at its first frame stays a group segment. Returns how many segments were replaced.
 int commitMulticamEdits(Sequence& sequence, const GroupClipLookup& lookup);
 
+// Clip > MultiGroup (p.1125): "Media Composer creates several group clips for each take in the bin, and then creates a
+// multigroup clip from the groups". Ours: the clips (sorted by name, as the guide's step 1 has the bin) fall into takes
+// where their source timecode spans overlap (Auxiliary TC with that option; "multigrouping is performed on the basis of
+// common source timecode", p.1123); each take of two or more clips becomes a group synced by `options`, and the
+// multigroup holds them end to end in timecode order. The multigroup is a Group item whose composition["multigroup"] is a
+// sequence of the groups' segments (isMultigroup, multigroupSequence); its name is the first clip's followed by ".MGrp.n"
+// (ours). Takes of one clip are left out, counted in *skipped. Nothing, with the reason, when no take has two clips.
+struct MultiGroupResult {
+    QList<BinItem> groups;
+    BinItem multigroup;
+    int skipped = 0;
+};
+std::optional<MultiGroupResult> multiGroup(const Bin& bin, const QString& binId, QList<std::pair<QString, BinItem>> clips,
+                                           const GroupOptions& options, QString* error = nullptr);
+bool isMultigroup(const BinItem& item);
+// A multigroup as a sequence item (same id, kind Sequence) to play and edit from; nothing for other items.
+std::optional<BinItem> multigroupSequence(const BinItem& item);
+// Stores a changed sequence (an angle switched in the Source monitor) back into a multigroup.
+void setMultigroupSequence(BinItem& item, const Sequence& sequence);
+
 // The group segment MultiCamera mode works on at sequence frame `frame` (p.1129): on the first of `tracks` that has
 // one there (video tracks, the preferred one first), with the group frame it shows. Nothing when there is none.
 struct GroupSegmentAt {

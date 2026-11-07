@@ -188,6 +188,8 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
     const Rational rate = item.editRate;
     // A group clip plays its selected angle (group_clip.h).
     if (item.kind == model::BinItemKind::Group) {
+        // A multigroup plays as its sequence of groups.
+        if (const auto seq = model::multigroupSequence(item)) return audioPieces(*seq, clips, monitored, alternatingPan);
         const model::BinItem angle = model::groupAngleClip(item, -1);
         return angle.kind == model::BinItemKind::Group ? out : audioPieces(angle, clips, monitored, alternatingPan);
     }

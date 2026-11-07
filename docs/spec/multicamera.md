@@ -1,8 +1,8 @@
-# MultiCamera editing: group clips (8.1a)
+# MultiCamera editing: group clips and multigroups (8.1a, 8.1b)
 
-Editing Guide ch.32, "MultiCamera Editing" (p.1123-1135). This page covers 8.1a: making group clips,
+Editing Guide ch.32, "MultiCamera Editing" (p.1123-1135). This page covers 8.1a and 8.1b: making group clips,
 showing them in the Source monitor, editing them into sequences and switching angles. MultiCamera mode,
-the Group menu, multigroups and the rest follow in 8.1b and 8.1c (docs/ROADMAP.md).
+the Group menu and multigroups are in 8.1b; the rest follows in 8.1c (docs/ROADMAP.md).
 
 ## Group clips
 
@@ -183,7 +183,24 @@ the Group menu, multigroups and the rest follow in 8.1b and 8.1c (docs/ROADMAP.m
     at the same frames. "The original sequence is unaffected."
   * Ours: a segment whose angle has no material at its first frame stays a group segment.
 * Edit Group is in the bin's right-click menu too ("right click and choose Edit Group", p.1125).
-* Still to come (8.1b3): MultiGroup (p.1125).
+
+## MultiGroup (p.1123, p.1125)
+
+* Clip > MultiGroup (`MainWindow::multiGroup`, `model::multiGroup`) opens the Group Clips dialog titled MultiGroup
+  (Waveform hidden) for the selected clips. "Sort the clips by name in the bin" (step 1): the clips are taken in
+  name order.
+* "Multigrouping is performed on the basis of common source timecode" (p.1123). Ours: the clips fall into takes
+  where their Start timecode spans overlap (Auxiliary TC with that option). Each take of two or more clips becomes a
+  group synced as the dialog says, named as Group Clips names it; takes of one clip are left out and counted in the
+  Console.
+* The multigroup clip "from the groups" is a Group item whose composition["multigroup"] is a sequence of the groups'
+  segments end to end in timecode order (`isMultigroup`, `multigroupSequence`, `setMultigroupSequence`). Ours: named
+  "<first clip>.MGrp.n". The groups and the multigroup go into the bin and the multigroup is selected.
+* The bin shows it with the group icon and "a plus sign" (p.1125), drawn in `bin_view.cpp`.
+* In the Source monitor it shows the split of the group segment under the position, and Previous/Next In Group,
+  the split clicks and the MultiCam keys switch that segment's angle (V1; A1 too with Audio Follow Video;
+  `MainWindow::sourceGroup`/`switchMultigroupAngle`).
+* Edited into a sequence (`applyEdit`) it brings its group segments, which then work like any group segment.
 
 ## Tests
 
@@ -192,6 +209,8 @@ the Group menu, multigroups and the rest follow in 8.1b and 8.1c (docs/ROADMAP.m
 * `tst_waveform_sync`: lags between sounds, at two rates, refusals, and linked files.
 * `tst_multicam_ui`: the dialog, grouping, the split views and switching in the application; Waveform
   Analysis, Edit/Update/Create Group, Refresh Sequence and Waveform Sync on movies with sound.
+* `tst_group_clip multiGroups` and `tst_multicam_ui multigroupInTheApplication`: takes, names, the multigroup's
+  sequence, the Source split and Next In Group on it, and edits from it.
 * `tst_multicam_ui multiCameraMode`: the mode, the keypad, clicks, banks and live cuts.
 * `tst_multicam_ui multiCameraMode` also covers Audio Follow Video, the Group and Multi-angle View
   menus, Match Frame and Commit Multicam Edits.

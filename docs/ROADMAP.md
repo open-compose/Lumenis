@@ -1410,7 +1410,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     parts. 8.1b1 (done): the mode, switching angles with the numeric keypad and mouse, live cuts while playing, banks
     (p.1129-1132), the Composer settings' MultiCam tab (p.1160-1161). 8.1b2 (done): the linecut in the split, the
     Group menu with Audio Follow Video and the Multi-angle View menus (p.1132-1134), Match Frame (p.1134), Commit
-    Multicam Edits (p.1135). 8.1b3: multigroups (p.1125). 8.1c, Change Source Track for groups
+    Multicam Edits (p.1135). 8.1b3 (done): multigroups (p.1125), so 8.1b is done. 8.1c, Change Source Track for groups
     (2026.8 guide p.507), stereoscopic groups (p.1124) and Auto Cut from transcript speakers (after 8.2).
   * 8.2, transcripts and PhraseFind (ch.14, p.436-453): speech to text through a provider (`ext::` hook; an open
     engine such as whisper.cpp, MIT, as an optional module), the Transcript Tool, speaker IDs, the PhraseFind window,

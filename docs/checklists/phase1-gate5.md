@@ -164,7 +164,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Decompose |  | p.185 | *later* | ☐ | | |
 | Extract DNxHD Data |  | p.975 | *later* | ☐ | | |
 | Group Clips | Ctrl+Shift+G | p.1124 | works | ☐ | | |
-| MultiGroup |  | p.1125 | *later* | ☐ | | |
+| MultiGroup |  | p.1125 | works | ☐ | | |
 | Edit Group |  | p.1125 | works | ☐ | | |
 | Lock Bin Selection |  | p.265 | works | ☐ | | |
 | Unlock Bin Selection |  | p.266 | works | ☐ | | |
@@ -317,6 +317,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 213 menu commands, 168 of them working with a project open; the
+* 213 menu commands, 169 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

@@ -13,8 +13,8 @@
 
 namespace lumenis::ui {
 
-GroupClipsDialog::GroupClipsDialog(bool filmProject, QWidget* parent) : QDialog(parent) {
-    setWindowTitle(tr("Group Clips"));
+GroupClipsDialog::GroupClipsDialog(bool filmProject, QWidget* parent, bool multigroup) : QDialog(parent) {
+    setWindowTitle(multigroup ? tr("MultiGroup") : tr("Group Clips"));
     setObjectName(QStringLiteral("groupClipsDialog"));
     auto* layout = new QVBoxLayout(this);
     options_ = new QButtonGroup(this);
@@ -43,6 +43,8 @@ GroupClipsDialog::GroupClipsDialog(bool filmProject, QWidget* parent) : QDialog(
         if (ink && !filmProject) b->setVisible(false);
         // Not built yet: film timecode and ink numbers (no film projects).
         if (ink || o.sync == model::GroupSync::FilmTc) b->setEnabled(false);
+        // The MultiGroup dialog has no Waveform Analysis (p.1125).
+        if (multigroup && o.sync == model::GroupSync::Waveform) b->setVisible(false);
         if (o.sync == model::GroupSync::AuxTimecode) {
             // "Select an Auxiliary TC, 1 through 5, from the menu."
             auto* row = new QHBoxLayout;

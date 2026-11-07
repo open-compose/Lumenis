@@ -66,17 +66,14 @@ std::optional<std::int64_t> syncPoint(const BinItem& clip, const GroupOptions& o
     case GroupSync::Inpoints:
     case GroupSync::Outpoints: {
         const bool in = options.sync == GroupSync::Inpoints;
-        std::optional<std::int64_t> mark = options.marks ? options.marks(clip, in) : std::nullopt;
-        if (!mark) {
-            // The bin's Mark IN / Mark OUT columns, as timecode of the clip.
-            const QString text = clip.fields.value(in ? QStringLiteral("Mark IN") : QStringLiteral("Mark OUT"));
-            if (const auto tc = timecodeFrames(text, clip.editRate)) mark = *tc - startFrameOf(clip);
+        if (options.marks) {
+            if (const auto mark = options.marks(clip, in)) return mark;
         }
-        if (!mark) {
-            *why = in ? QStringLiteral("\"%1\" has no IN point.").arg(clip.name) : QStringLiteral("\"%1\" has no OUT point.").arg(clip.name);
-            return std::nullopt;
-        }
-        return *mark;
+        // The bin's Mark IN / Mark OUT columns, as timecode of the clip.
+        const QString text = clip.fields.value(in ? QStringLiteral("Mark IN") : QStringLiteral("Mark OUT"));
+        if (const auto tc = timecodeFrames(text, clip.editRate)) return *tc - startFrameOf(clip);
+        *why = in ? QStringLiteral("\"%1\" has no IN point.").arg(clip.name) : QStringLiteral("\"%1\" has no OUT point.").arg(clip.name);
+        return std::nullopt;
     }
     case GroupSync::SourceTimecode:
         if (!timecodeFrames(clip.fields.value(QStringLiteral("Start")), clip.editRate)) {
@@ -354,6 +351,107 @@ std::optional<std::pair<std::int64_t, std::int64_t>> groupAngleRange(const BinIt
     if (!v.isObject()) return std::nullopt;
     const QJsonObject o = v.toObject();
     return std::pair<std::int64_t, std::int64_t>{o.value(QStringLiteral("from")).toInteger(), o.value(QStringLiteral("to")).toInteger()};
+}
+
+namespace {
+
+constexpr char kMultigroupKey[] = "multigroup";
+
+} // namespace
+
+bool isMultigroup(const BinItem& item) {
+    return item.kind == BinItemKind::Group && item.composition.contains(QLatin1String(kMultigroupKey));
+}
+
+std::optional<BinItem> multigroupSequence(const BinItem& item) {
+    if (!isMultigroup(item)) return std::nullopt;
+    BinItem out = item;
+    out.kind = BinItemKind::Sequence;
+    out.composition = item.composition.value(QLatin1String(kMultigroupKey)).toObject();
+    return out;
+}
+
+void setMultigroupSequence(BinItem& item, const Sequence& sequence) {
+    item.composition = QJsonObject{{QLatin1String(kMultigroupKey), sequence.toJson()}};
+    item.durationFrames = std::max<std::int64_t>(sequence.duration(), 1);
+}
+
+std::optional<MultiGroupResult> multiGroup(const Bin& bin, const QString& binId, QList<std::pair<QString, BinItem>> clips,
+                                           const GroupOptions& options, QString* error) {
+    const auto fail = [&](const QString& why) -> std::optional<MultiGroupResult> {
+        if (error) *error = why;
+        return std::nullopt;
+    };
+    // "Sort the clips by name in the bin" (p.1125, step 1).
+    std::stable_sort(clips.begin(), clips.end(), [](const auto& a, const auto& b) {
+        return QString::localeAwareCompare(a.second.name, b.second.name) < 0;
+    });
+    // Each clip's span on the common timecode.
+    GroupOptions timecode = options;
+    timecode.sync = options.sync == GroupSync::AuxTimecode ? GroupSync::AuxTimecode : GroupSync::SourceTimecode;
+    struct Span {
+        std::int64_t from;
+        std::int64_t to;
+        std::pair<QString, BinItem> clip;
+    };
+    QList<Span> spans;
+    QString why;
+    for (const auto& c : clips) {
+        if (!canBeGroupAngle(c.second)) continue;
+        const auto point = syncPoint(c.second, timecode, &why);
+        if (!point) return fail(why);
+        spans.append({-*point, c.second.durationFrames - *point, c});
+    }
+    std::stable_sort(spans.begin(), spans.end(), [](const Span& a, const Span& b) { return a.from < b.from; });
+    // Takes: runs of spans that overlap.
+    QList<QList<std::pair<QString, BinItem>>> takes;
+    std::int64_t end = std::numeric_limits<std::int64_t>::min();
+    for (const Span& sp : spans) {
+        if (takes.isEmpty() || sp.from >= end) takes.append(QList<std::pair<QString, BinItem>>());
+        takes.last().append(sp.clip);
+        end = std::max(end, sp.to);
+    }
+    MultiGroupResult result;
+    Bin names = bin; // names taken by the groups made so far
+    Sequence seq;
+    std::int64_t at = 0;
+    for (QList<std::pair<QString, BinItem>> take : takes) {
+        if (take.size() < 2) {
+            result.skipped += static_cast<int>(take.size());
+            continue;
+        }
+        // In the bin's (name) order within the take.
+        std::stable_sort(take.begin(), take.end(), [](const auto& a, const auto& b) {
+            return QString::localeAwareCompare(a.second.name, b.second.name) < 0;
+        });
+        auto group = groupClips(names, take, options, &why);
+        if (!group) return fail(why);
+        names.items << *group;
+        TrackPatch patch;
+        patch.setSourceTracks(sourceTracksOf(*group));
+        applyEdit(seq, EditKind::Overwrite, EditPlan{0, at, group->durationFrames, {}}, binId, *group, patch);
+        at += group->durationFrames;
+        result.groups << *group;
+    }
+    if (result.groups.isEmpty()) return fail(QStringLiteral("No take has two or more clips with common timecode."));
+    BinItem& mg = result.multigroup;
+    mg.id = newItemId();
+    mg.kind = BinItemKind::Group;
+    const QString base = groupOf(result.groups.first())->angles.first().clip.name;
+    for (int n = 1;; ++n) {
+        const QString candidate = QStringLiteral("%1.MGrp.%2").arg(base).arg(n);
+        if (std::none_of(names.items.cbegin(), names.items.cend(), [&](const BinItem& i) { return i.name == candidate; })) {
+            mg.name = candidate;
+            break;
+        }
+    }
+    mg.created = options.when.isValid() ? options.when : QDateTime::currentDateTimeUtc();
+    mg.modified = mg.created;
+    mg.editRate = result.groups.first().editRate;
+    mg.fields.insert(QStringLiteral("Tracks"), seq.trackNames().join(QLatin1Char(' ')));
+    mg.fields.insert(QStringLiteral("Start"), result.groups.first().fields.value(QStringLiteral("Start")));
+    setMultigroupSequence(mg, seq);
+    return result;
 }
 
 int commitMulticamEdits(Sequence& sequence, const GroupClipLookup& lookup) {

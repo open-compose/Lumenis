@@ -623,6 +623,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   * the Group menu listing each angle's picture (patching comes later); Audio Follow Video's A1 cut not drawn as a
     match frame edit; Multi-angle View choices cleared with the split or bank; committed segments kept as group
     segments where their angle has no material.
+  * MultiGroup (p.1125): takes as clips whose timecode spans overlap, takes of one clip left out, the groups strung end to
+    end in timecode order, the name "<first clip>.MGrp.n", Previous/Next In Group switching the multigroup's group
+    segment under the Source position (V1, and A1 with Audio Follow Video), the plus sign drawn before the group icon.
 
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical

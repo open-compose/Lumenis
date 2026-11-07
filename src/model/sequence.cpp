@@ -1021,8 +1021,11 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
     QStringList changed;
     if (!plan.ok()) return changed;
     const bool anyTracks = !sequence.tracks().isEmpty();
+    // A multigroup edits as the sequence of group segments it holds (group_clip.h, p.1125).
+    const auto multigroup = multigroupSequence(source);
     const std::optional<Sequence> nested =
-        source.kind == BinItemKind::Sequence || source.kind == BinItemKind::Title ? std::optional<Sequence>(Sequence::fromItem(source)) : std::nullopt;
+        multigroup ? std::optional<Sequence>(Sequence::fromItem(*multigroup))
+        : source.kind == BinItemKind::Sequence || source.kind == BinItemKind::Title ? std::optional<Sequence>(Sequence::fromItem(source)) : std::nullopt;
     for (const auto& [from, to] : patch.editPairs(sequence)) {
         const AudioFormat format = sourceFormat(source, from);
         if (const Track* existing = sequence.track(to); existing && (existing->locked || (existing->kind == TrackKind::Audio && existing->format != format))) {
