@@ -1088,7 +1088,11 @@ the build folder (`build/<preset>`) and configure again.
   Build it with its CMake files (`cmake -S asdcplib -B asdcplib/build`), then
   copy `asdcp-wrap` onto PATH, beside the application, or name it in
   `LUMENIS_ASDCP_WRAP`. Without it the export says so in the Console; the tests
-  use a stand-in script instead.
+  use a stand-in script instead. The picture also needs FFmpeg built with
+  OpenJPEG (`libopenjpeg`, the only encoder that writes X'Y'Z'): Ubuntu's and
+  the Windows FFmpeg have it, Homebrew's does not (`brew install openjpeg` and an
+  FFmpeg built `--enable-libopenjpeg`). Without it the export says so and
+  `tst_dcp writePackage` and `tst_movie_export_ui exportDcp` skip (CI run 347).
 * **Gates 3 and 4, playback:** on a reference machine with a sound card,
   `python3 scripts/measure-playback.py --app <cutthulhu> --seconds 600` (gate
   3) and `--seconds 3600` (gate 4). Each run is judged on the gates its

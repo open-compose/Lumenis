@@ -35,6 +35,9 @@ struct DcpOptions {
 QSize dcpContainerSize(const QString& container, bool fourK);
 // The DCP frame rate of an edit rate: 24, 25, 30, 48, 50 or 60 frames a second (23.976 plays at 24, 29.97 at 30).
 int dcpFrameRate(const Rational& editRate);
+// Whether FFmpeg has the OpenJPEG encoder (libopenjpeg), the only one that writes X'Y'Z' codestreams; FFmpeg's own
+// jpeg2000 encoder cannot. Builds without it (Homebrew's FFmpeg, for one) cannot export DCPs.
+bool dcpEncoderAvailable();
 // asdcp-wrap: LUMENIS_ASDCP_WRAP, else beside the application, else on PATH. Empty when not found.
 QString asdcpWrapPath();
 

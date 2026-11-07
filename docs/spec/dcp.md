@@ -21,7 +21,9 @@ standards (ST 429-2 to 429-9), and on the watch list.
   2000 codestream in 12-bit X'Y'Z' by FFmpeg's OpenJPEG encoder (FFmpeg's own RGB
   to X'Y'Z' conversion), with the DCI cinema profile (`cinema2k`/`cinema4k`) at 24
   and 48 frames a second. The DCP's rate is the nearest of 24, 25, 30, 48, 50 and
-  60 (`media::dcpFrameRate`): a 23.976 sequence plays at 24.
+  60 (`media::dcpFrameRate`): a 23.976 sequence plays at 24. It needs FFmpeg built with OpenJPEG
+  (`media::dcpEncoderAvailable`): FFmpeg's own JPEG 2000 encoder cannot write X'Y'Z', so without it the export
+  says so.
 * **Sound:** the mix as 24-bit 48 kHz WAVE in 6 channels (5.1: L, R, C, LFE, Ls,
   Rs) or 2; a stereo mix leaves C, LFE and the surrounds silent.
 * **Track files:** asdcplib's `asdcp-wrap` (BSD-3, run as a tool, not linked)

@@ -3,6 +3,10 @@
 
 #include "lumenis/media/media.h"
 
+extern "C" {
+#include <libavcodec/avcodec.h>
+}
+
 #include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDir>
@@ -65,6 +69,10 @@ int dcpFrameRate(const Rational& editRate) {
         if (std::abs(fps - r) < std::abs(fps - best)) best = r;
     }
     return best;
+}
+
+bool dcpEncoderAvailable() {
+    return avcodec_find_encoder_by_name("libopenjpeg") != nullptr;
 }
 
 QString asdcpWrapPath() {
@@ -213,6 +221,7 @@ bool writeDcp(const QString& folder, const MovieSource& source, const DcpOptions
     if (source.frames <= 0 || !source.picture) return fail(QObject::tr("There is nothing to export."));
     const QString tool = options.wrapTool.isEmpty() ? asdcpWrapPath() : options.wrapTool;
     if (tool.isEmpty()) return fail(QObject::tr("DCP export needs asdcplib's asdcp-wrap, which was not found (BUILDING.md, \"DCP\")."));
+    if (!dcpEncoderAvailable()) return fail(QObject::tr("DCP export needs FFmpeg with the OpenJPEG encoder (libopenjpeg), which this build lacks (BUILDING.md, \"DCP\")."));
     if (dir.exists()) {
         if (error) *error = QObject::tr("%1 already exists.").arg(QDir::toNativeSeparators(folder));
         return false;

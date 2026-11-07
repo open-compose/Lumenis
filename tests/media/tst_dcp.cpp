@@ -134,6 +134,7 @@ private slots:
 #ifdef Q_OS_WIN
         QSKIP("the stand-in asdcp-wrap is a POSIX shell script");
 #else
+        if (!dcpEncoderAvailable()) QSKIP("FFmpeg has no OpenJPEG encoder (BUILDING.md, \"DCP\")");
         QTemporaryDir dir;
         // A stand-in for asdcp-wrap: it keeps its arguments and inputs beside the output, and writes the output.
         const QString stub = dir.filePath(QStringLiteral("asdcp-wrap"));

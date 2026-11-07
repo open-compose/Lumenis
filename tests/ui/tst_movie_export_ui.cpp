@@ -7,6 +7,7 @@
 #include "lumenis/ext/provider.h"
 #include "lumenis/media/media.h"
 #include "lumenis/media/as11.h"
+#include "lumenis/media/dcp.h"
 #include "lumenis/media/movie_export.h"
 #include "lumenis/media/xdcam_disk.h"
 #include "lumenis/model/export_volume.h"
@@ -84,6 +85,7 @@ private slots:
 #ifdef Q_OS_WIN
         QSKIP("the stand-in asdcp-wrap is a POSIX shell script");
 #else
+        if (!media::dcpEncoderAvailable()) QSKIP("FFmpeg has no OpenJPEG encoder (BUILDING.md, \"DCP\")");
         QTemporaryDir dir;
         const QString movie = dir.filePath(QStringLiteral("A004.mov"));
         QVERIFY(writeMovie(movie));
