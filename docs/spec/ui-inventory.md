@@ -620,7 +620,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
     (Quad or Nine Split) and Show Track in Split View When Playing (the monitored track, stopped too);
   * a choice in Quad or Nine Split Source view becoming the group's selected angle; stopped choices in
     MultiCamera mode switching the whole segment.
-  * the Group menu listing each angle's picture (patching comes later); Audio Follow Video's A1 cut not drawn as a
+  * the Group menu's patching: unpatched audio tracks from the selected angle and V1 always from it, an audio choice in
+    MultiCamera mode switching the segment on the sequence track of the same name; Change Source Track on group
+    segments listing the shown angle's tracks, without More; Audio Follow Video's A1 cut not drawn as a
     match frame edit; Multi-angle View choices cleared with the split or bank; committed segments kept as group
     segments where their angle has no material.
   * MultiGroup (p.1125): takes as clips whose timecode spans overlap, takes of one clip left out, the groups strung end to
@@ -633,8 +635,8 @@ What 2026.8 changed, and where it is here:
 * Shared projects on third-party storage (2026.8 guide p.301; What's New
   2026.8 p.2): §20a; no new behaviour to build.
 * Change Source Track for subclips and group clips, with More (2026.8 guide
-  p.507; What's New 2026.8 p.7): §11, built for subclips; group clips wait
-  for multicamera editing.
+  p.507; What's New 2026.8 p.7): §11, built for subclips, and for group and
+  multigroup clips in 8.1c (docs/spec/multicamera.md).
 * Effects Processing gains 32-bit (FX p.151-152, 2026.8): §17's Media
   Creation setting lists it; rendering is later. The Editing Guide's
   settings table (2026.8 guide p.1212) still lists 8-bit, 16-bit and
@@ -1815,8 +1817,9 @@ p.610–640, ch. 13 p.432–434).**
   bin is not changed. **Ours:** after More the segment refers to the
   master clip, at the same frames. This is the owner's decision
   (2026-10-25), and it is on the watch list below: the guide does not say
-  what Media Composer does. Not yet built: group and multigroup
-  clips (multicamera editing), and source track names from the
+  what Media Composer does. Group and multigroup segments list the
+  tracks of the angle they show (docs/spec/multicamera.md). Not yet
+  built: source track names from the
   production metadata (p.595-596).
 * **Volume and pan automation** (p.714-723; docs/spec/automation.md).
   * Fast menu > Audio Data: Clip Volume, plus Volume or Pan.

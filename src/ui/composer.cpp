@@ -2864,23 +2864,28 @@ void Composer::setAudioFollowVideo(bool on) {
 QMenu* Composer::groupMenu() {
     auto* menu = new QMenu(this);
     menu->setObjectName(QStringLiteral("groupMenu"));
-    if (const auto info = groupMenu_ ? groupMenu_() : std::nullopt) {
-        // Ours: one entry per angle, its picture (the guide's menu lists every clip's tracks for patching, 8.1c).
-        for (int i = 0; i < info->angles.size(); ++i) {
-            QAction* a = menu->addAction(info->angles[i]);
-            a->setCheckable(true);
-            a->setChecked(i == info->shown);
-            connect(a, &QAction::triggered, this, [this, i] {
-                if (chooseAngle_) chooseAngle_(i);
-            });
-        }
-        menu->addSeparator();
-    }
+    // Audio Follow Video first, then each track's section, as the guide's picture shows (p.1133).
     QAction* follow = menu->addAction(tr("Audio Follow Video"));
     follow->setObjectName(QStringLiteral("audioFollowVideo"));
     follow->setCheckable(true);
     follow->setChecked(audioFollowVideo_);
     connect(follow, &QAction::toggled, this, &Composer::setAudioFollowVideo);
+    if (const auto info = groupMenu_ ? groupMenu_() : std::nullopt) {
+        for (const GroupMenuSection& section : info->sections) {
+            QAction* title = menu->addAction(QStringLiteral("=== %1 ===").arg(section.track));
+            title->setEnabled(false);
+            for (const int i : section.angles) {
+                if (i < 0 || i >= info->angles.size()) continue;
+                QAction* a = menu->addAction(info->angles[i]);
+                a->setObjectName(QStringLiteral("%1:%2").arg(section.track).arg(i));
+                a->setCheckable(true);
+                a->setChecked(i == section.shown);
+                connect(a, &QAction::triggered, this, [this, track = section.track, i] {
+                    if (chooseAngle_) chooseAngle_(track, i);
+                });
+            }
+        }
+    }
     return menu;
 }
 

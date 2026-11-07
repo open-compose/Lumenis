@@ -842,7 +842,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Commit Multicam Edits (`model::commitMulticamEdits`, the bin's right-click menu through `BinView::commandRequested`;
   scenario `46-audio-follow-video.json`), is done. 8.1b3, MultiGroup (`model::multiGroup`, multigroups as Group items
   holding a sequence of group segments, `multigroupSequence`; `MainWindow::multiGroup`/`sourceGroup`/
-  `switchMultigroupAngle`; the bin's plus icon; tests `tst_group_clip`, `tst_multicam_ui`), is done, so 8.1b is. After Phase 7, before Phase 8: 7.6, the owner's report
+  `switchMultigroupAngle`; the bin's plus icon; tests `tst_group_clip`, `tst_multicam_ui`), is done, so 8.1b is. 8.1c, the
+  Group menu's patching (`GroupClip::trackAngles`, `model::groupTrackAngle`/`anglesWithTrack`, `MainWindow::groupMenuInfo`/
+  `chooseGroupTrackAngle`, `Timeline::setGroupTrackAngle`) and Change Source Track on group segments, is done (scenario
+  `47-group-track-angles.json`); stereoscopic groups wait for 8.6, Auto Cut for 8.2. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

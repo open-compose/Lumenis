@@ -933,6 +933,9 @@ private:
                            const QList<std::int64_t>& offsets = {}) const;
     // MultiCamera mode (8.1b; p.1129-1132): the group segment it follows, the Source monitor's picture of it.
     std::optional<model::GroupSegmentAt> multiCamSegment() const;
+    // The Group menu (p.1133): its contents, and a choice of an angle for one of the group's tracks.
+    std::optional<Composer::GroupMenuInfo> groupMenuInfo() const;
+    bool chooseGroupTrackAngle(const QString& track, int angle);
     QImage multiCamPicture(QSize size, bool* offline) const;
     void swapBank();
     // An unrendered motion effect clip's frame `frame` made from its interlaced source clip's fields with the

@@ -353,6 +353,37 @@ private slots:
         QCOMPARE(commitMulticamEdits(s, lookup), 0);
     }
 
+    // The Group menu's patching (p.1133): an audio track from another angle, kept in the group, used by edits.
+    void patchesTracksFromOtherAngles() {
+        BinItem a = clip(QStringLiteral("A"), 50);
+        a.fields.insert(QStringLiteral("Tracks"), QStringLiteral("V1 A1"));
+        BinItem b = clip(QStringLiteral("B"), 50);
+        b.fields.insert(QStringLiteral("Tracks"), QStringLiteral("V1 A1-2"));
+        Bin bin;
+        GroupOptions options;
+        options.sync = GroupSync::SourceTimecode;
+        auto item = groupClips(bin, inBin({a, b}), options);
+        QVERIFY(item);
+        auto g = groupOf(*item);
+        QCOMPARE(anglesWithTrack(*g, QStringLiteral("A1")), (QList<int>{0, 1}));
+        QCOMPARE(anglesWithTrack(*g, QStringLiteral("A2")), (QList<int>{1}));
+        QCOMPARE(groupTrackAngle(*g, QStringLiteral("A2")), 0); // the selected angle until patched
+        g->trackAngles.insert(QStringLiteral("A2"), 1);
+        g->trackAngles.insert(QStringLiteral("V1"), 1); // V1 is always the selected angle
+        setGroup(*item, *g);
+        const auto back = groupOf(*item);
+        QCOMPARE(groupTrackAngle(*back, QStringLiteral("A2")), 1);
+        QCOMPARE(groupTrackAngle(*back, QStringLiteral("V1")), 0);
+        QCOMPARE(groupTrackAngle(*back, QStringLiteral("A1")), 0);
+        Sequence seq = Sequence::withDefaultTracks();
+        TrackPatch p;
+        p.setSourceTracks(sourceTracksOf(*item));
+        applyEdit(seq, EditKind::Overwrite, EditPlan{0, 0, 10, {}}, QStringLiteral("bin"), *item, p);
+        QCOMPARE(seq.track(QStringLiteral("A2"))->segments.first().groupAngle, std::optional<int>(1));
+        QCOMPARE(seq.track(QStringLiteral("A2"))->segments.first().name, QStringLiteral("B"));
+        QCOMPARE(seq.track(QStringLiteral("A1"))->segments.first().groupAngle, std::optional<int>(0));
+    }
+
     // MultiGroup (p.1125): takes by common timecode, a group for each, the multigroup strung from them.
     void multiGroups() {
         Bin bin;

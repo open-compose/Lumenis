@@ -589,6 +589,9 @@ public:
     // groupTracksAt() is the order the video tracks are searched for one: selected tracks first, each from the top.
     bool setGroupAngle(int angle, bool cut);
     QStringList groupTracksAt() const;
+    // The Group menu's patching in MultiCamera mode (p.1133): the group segment at the Record monitor's position on the
+    // sequence track `track` (an audio track) shows `angle`; an undo step, false when there is none or nothing changes.
+    bool setGroupTrackAngle(const QString& track, int angle);
     // Waveform Sync (p.1126) on the selected video and audio segments, an undo step; false (with a message) when it
     // cannot. MainWindow gives the offset between two clips' sounds (media::waveformOffset): frame f of the first
     // sounds with frame f + offset of the second.

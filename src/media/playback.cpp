@@ -190,8 +190,22 @@ std::vector<AudioPiece> audioPieces(const model::BinItem& item, const ClipLookup
     if (item.kind == model::BinItemKind::Group) {
         // A multigroup plays as its sequence of groups.
         if (const auto seq = model::multigroupSequence(item)) return audioPieces(*seq, clips, monitored, alternatingPan);
-        const model::BinItem angle = model::groupAngleClip(item, -1);
-        return angle.kind == model::BinItemKind::Group ? out : audioPieces(angle, clips, monitored, alternatingPan);
+        // Each audio track from its own angle (GroupClip::trackAngles, the Group menu's patching).
+        const auto group = model::groupOf(item);
+        if (!group || group->angles.isEmpty()) return out;
+        QList<int> angles{group->selected};
+        for (const int a : group->trackAngles) {
+            if (!angles.contains(a)) angles << a;
+        }
+        for (const int a : angles) {
+            const model::BinItem clip = model::groupAngleClip(item, a);
+            if (clip.kind == model::BinItemKind::Group) continue;
+            const auto onTrack = [&](const QString& track) {
+                return model::groupTrackAngle(*group, track) == a && (!monitored || monitored(track));
+            };
+            for (AudioPiece& p : audioPieces(clip, clips, onTrack, alternatingPan)) out.push_back(std::move(p));
+        }
+        return out;
     }
     if (item.kind != model::BinItemKind::Sequence) {
         const auto link = linkOf(item);

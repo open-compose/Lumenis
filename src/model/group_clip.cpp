@@ -114,6 +114,11 @@ std::optional<GroupClip> groupOf(const BinItem& item) {
         if (auto a = angleFromJson(v.toObject())) g.angles << *a;
     }
     g.selected = g.angles.isEmpty() ? 0 : std::clamp(o.value(QStringLiteral("selected")).toInt(), 0, static_cast<int>(g.angles.size()) - 1);
+    const QJsonObject tracks = o.value(QStringLiteral("trackAngles")).toObject();
+    for (auto it = tracks.begin(); it != tracks.end(); ++it) {
+        const int angle = it.value().toInt(-1);
+        if (angle >= 0 && angle < g.angles.size()) g.trackAngles.insert(it.key(), angle);
+    }
     return g;
 }
 
@@ -124,8 +129,30 @@ bool isGroupClip(const BinItem& item) {
 void setGroup(BinItem& item, const GroupClip& group) {
     QJsonArray angles;
     for (const GroupAngle& a : group.angles) angles.append(angleToJson(a));
-    item.composition.insert(QLatin1String(kGroupKey), QJsonObject{{QStringLiteral("angles"), angles},
-                                                                  {QStringLiteral("selected"), group.selected}});
+    QJsonObject o{{QStringLiteral("angles"), angles}, {QStringLiteral("selected"), group.selected}};
+    if (!group.trackAngles.isEmpty()) {
+        QJsonObject tracks;
+        for (auto it = group.trackAngles.cbegin(); it != group.trackAngles.cend(); ++it) tracks.insert(it.key(), it.value());
+        o.insert(QStringLiteral("trackAngles"), tracks);
+    }
+    item.composition.insert(QLatin1String(kGroupKey), o);
+}
+
+int groupTrackAngle(const GroupClip& group, const QString& track) {
+    const auto ref = parseTrackName(track);
+    if (ref && ref->kind == TrackKind::Audio) {
+        const int angle = group.trackAngles.value(track, -1);
+        if (angle >= 0 && angle < group.angles.size()) return angle;
+    }
+    return group.selected;
+}
+
+QList<int> anglesWithTrack(const GroupClip& group, const QString& track) {
+    QList<int> out;
+    for (int i = 0; i < group.angles.size(); ++i) {
+        if (sourceTracksOf(group.angles[i].clip).contains(track)) out << i;
+    }
+    return out;
 }
 
 bool canBeGroupAngle(const BinItem& item) {

@@ -2523,6 +2523,82 @@ void MainWindow::swapBank() {
     if (g) composer_->swapCamBank(static_cast<int>(g->angles.size()));
 }
 
+// The Group menu's contents (p.1133): in MultiCamera mode the group segment the mode works on in the sequence, each
+// section showing the angle of the group's segment at the position on the sequence track of that name; in the Source
+// monitor the group (its GroupClip::trackAngles) or, for a multigroup, its group segments there.
+std::optional<Composer::GroupMenuInfo> MainWindow::groupMenuInfo() const {
+    std::optional<model::GroupClip> group;
+    std::optional<model::Sequence> seq; // where the shown angles are segments
+    std::int64_t pos = 0;
+    QString clipId;
+    if (composer_->multiCameraMode()) {
+        const auto at = multiCamSegment();
+        const auto clip = at ? composer_->resolve(at->segment.binId, at->segment.clipId) : std::nullopt;
+        if (!clip) return std::nullopt;
+        group = model::groupOf(*clip);
+        seq = model::Sequence::fromItem(composer_->state(MonitorId::Record).current()->item);
+        pos = composer_->state(MonitorId::Record).position();
+        clipId = clip->id;
+    } else {
+        pos = composer_->state(MonitorId::Source).position();
+        const auto clip = sourceGroup(pos);
+        if (!clip) return std::nullopt;
+        group = model::groupOf(*clip);
+        if (const auto mg = model::multigroupSequence(composer_->state(MonitorId::Source).current()->item)) seq = model::Sequence::fromItem(*mg);
+        clipId = clip->id;
+    }
+    if (!group) return std::nullopt;
+    Composer::GroupMenuInfo info;
+    for (const model::GroupAngle& a : group->angles) info.angles << a.clip.name;
+    for (const QString& track : model::groupTracks(*group)) {
+        Composer::GroupMenuSection section;
+        section.track = track;
+        section.angles = model::anglesWithTrack(*group, track);
+        if (seq) {
+            // The picture's section follows the segment the mode or the multigroup shows (on V1 or another video track).
+            const QStringList on = track == QLatin1String("V1") && composer_->multiCameraMode() ? timeline_->groupTracksAt() : QStringList{track};
+            const auto at = model::groupSegmentAt(*seq, pos, on);
+            if (at && at->segment.clipId == clipId) section.shown = at->segment.groupAngle.value_or(-1);
+        } else {
+            section.shown = model::groupTrackAngle(*group, track);
+        }
+        info.sections << section;
+    }
+    return info;
+}
+
+// A Group menu choice (p.1133): V1's is the camera angle (chooseAngle); an audio track's patches that angle's track:
+// the group segment on that track switches (MultiCamera mode, a multigroup), or the group keeps it in
+// GroupClip::trackAngles for its next edits and its sound in the Source monitor.
+bool MainWindow::chooseGroupTrackAngle(const QString& track, int angle) {
+    const auto kind = model::parseTrackName(track);
+    if (!kind || kind->kind != model::TrackKind::Audio) return chooseAngle(angle);
+    if (composer_->multiCameraMode()) return timeline_ && timeline_->setGroupTrackAngle(track, angle);
+    const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
+    if (!loaded) return false;
+    if (model::isMultigroup(loaded->item)) {
+        const std::int64_t pos = composer_->state(MonitorId::Source).position();
+        model::Sequence seq = model::Sequence::fromItem(*model::multigroupSequence(loaded->item));
+        const auto at = model::groupSegmentAt(seq, pos, {track});
+        const auto clip = at ? composer_->resolve(at->segment.binId, at->segment.clipId) : std::nullopt;
+        const auto g = clip ? model::groupOf(*clip) : std::nullopt;
+        if (!g || !model::setGroupAngleAt(seq, track, pos, angle, false, *g)) return false;
+        model::BinItem item = loaded->item;
+        model::setMultigroupSequence(item, seq);
+        storeClip(loaded->binId, item);
+        composer_->refreshDisplay();
+        return true;
+    }
+    auto group = model::groupOf(loaded->item);
+    if (!group || angle < 0 || angle >= group->angles.size() || model::groupTrackAngle(*group, track) == angle) return false;
+    group->trackAngles.insert(track, angle);
+    model::BinItem item = loaded->item;
+    model::setGroup(item, *group);
+    storeClip(loaded->binId, item);
+    composer_->refreshDisplay();
+    return true;
+}
+
 bool MainWindow::chooseAngle(int angle) {
     if (composer_->multiCameraMode()) return timeline_ && timeline_->setGroupAngle(angle, composer_->isPlaying());
     const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
@@ -8071,31 +8147,9 @@ void MainWindow::installPanelHandlers() {
     });
     composer_->setKeypadHandler([this](int key) { return multiCamKey(key); });
     // The Group menu (p.1133): the shown group's angles.
-    composer_->setGroupMenu(
-        [this]() -> std::optional<Composer::GroupMenuInfo> {
-            std::optional<model::GroupClip> group;
-            int shown = 0;
-            if (composer_->multiCameraMode()) {
-                const auto at = multiCamSegment();
-                const auto clip = at ? composer_->resolve(at->segment.binId, at->segment.clipId) : std::nullopt;
-                if (clip) group = model::groupOf(*clip);
-                if (at) shown = at->segment.groupAngle.value_or(0);
-            } else {
-                model::GroupSegmentAt at;
-                const std::int64_t pos = composer_->state(MonitorId::Source).position();
-                if (const auto clip = sourceGroup(pos, &at)) {
-                    group = model::groupOf(*clip);
-                    if (group) shown = model::isMultigroup(composer_->state(MonitorId::Source).current()->item) ? at.segment.groupAngle.value_or(0)
-                                                                                                         : group->selected;
-                }
-            }
-            if (!group) return std::nullopt;
-            Composer::GroupMenuInfo info;
-            for (const model::GroupAngle& a : group->angles) info.angles << a.clip.name;
-            info.shown = shown;
-            return info;
-        },
-        [this](int angle) { chooseAngle(angle); });
+    // The Group menu (p.1133): the shown group's tracks, each with the angles that have it and the one it comes from.
+    composer_->setGroupMenu([this]() { return groupMenuInfo(); },
+                            [this](const QString& track, int angle) { chooseGroupTrackAngle(track, angle); });
     timeline_->setGroupSelectionHook([this](const QString& binId, const QString& groupId, int angle) {
         BinDocument* doc = binContainer_->document(binId);
         const model::BinItem* found = doc ? doc->bin().item(groupId) : nullptr;

@@ -312,8 +312,10 @@ private slots:
         QCOMPARE(cut.track(QStringLiteral("V1"))->segments.at(1).groupAngle, std::optional<int>(1));
         // Audio Follow Video: A1 switches with the picture (p.1133); the Group menu lists the angles.
         QMenu* menu = composer.groupMenu();
-        QCOMPARE(menu->actions().size(), 4); // two angles, a separator, Audio Follow Video
-        QVERIFY(menu->actions().at(1)->isChecked()); // the segment at 15 shows B since the live cut
+        QCOMPARE(menu->actions().size(), 4); // Audio Follow Video, "=== V1 ===", the two angles (no sound here)
+        QCOMPARE(menu->actions().at(1)->text(), QStringLiteral("=== V1 ==="));
+        QVERIFY(!menu->actions().at(1)->isEnabled());
+        QVERIFY(menu->findChild<QAction*>(QStringLiteral("V1:1"))->isChecked()); // the segment at 15 shows B since the live cut
         menu->findChild<QAction*>(QStringLiteral("audioFollowVideo"))->setChecked(true);
         delete menu;
         QVERIFY(composer.audioFollowVideo());
@@ -533,6 +535,23 @@ private slots:
         QVERIFY(v1->segments.at(0).isFiller());
         QCOMPARE(v1->segments.at(0).length, std::int64_t(10));
         QCOMPARE(v1->segments.at(1).clipId, ids[0]);
+
+        // The Group menu's patching (p.1133): a section per group track; A1 from angle B kept in the group, the next edit
+        // takes its A1 from B.
+        composer.loadDefault(binId, *bin->bin().item(*groupId));
+        composer.setActiveMonitor(MonitorId::Source);
+        QMenu* menu = composer.groupMenu();
+        QVERIFY(menu->findChild<QAction*>(QStringLiteral("V1:0")));
+        QAction* a1b = menu->findChild<QAction*>(QStringLiteral("A1:1"));
+        QVERIFY(a1b);
+        QVERIFY(!a1b->isChecked());
+        a1b->trigger();
+        delete menu;
+        QCOMPARE(model::groupTrackAngle(*model::groupOf(*bin->bin().item(*groupId)), QStringLiteral("A1")), 1);
+        menu = composer.groupMenu();
+        QVERIFY(menu->findChild<QAction*>(QStringLiteral("A1:1"))->isChecked());
+        QVERIFY(menu->findChild<QAction*>(QStringLiteral("V1:0"))->isChecked());
+        delete menu;
     }
 };
 

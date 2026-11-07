@@ -1054,8 +1054,10 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
             s.name = source.name;
             // A group clip's segments show its selected angle under the angle's name (p.1131).
             if (const auto group = groupOf(source); group && !group->angles.isEmpty()) {
-                s.groupAngle = group->selected;
-                s.name = group->angles[group->selected].clip.name;
+                // Each track from its own angle (the Group menu's patching, p.1133).
+                const int angle = groupTrackAngle(*group, from);
+                s.groupAngle = angle;
+                s.name = group->angles[angle].clip.name;
                 for (const GroupAngle& a : group->angles) s.groupOffsets << a.offset;
             }
             // A multichannel source track is named by its first channel (multichannel.h).

@@ -207,16 +207,24 @@ public:
     }
     // A numeric keypad key (Qt::Key_0 ... Key_9, Key_Period), given first to the handler; true when it took it (the
     // MultiCam keys, p.1131-1132). The Composer and the Timeline both ask.
-    // The Group menu (8.1b2; p.1133-1134): "Click the Group Menu icon in the second row of information above the Source
-    // monitor". The icon shows while the provider gives the shown group's angle names and the one shown; choosing an
-    // angle calls the chooser. "Audio Follow Video" is the Composer's own choice: "switch both audio and video for
-    // each camera angle", the icon green while it is on.
+    // The Group menu (8.1b2, 8.1c; p.1133-1134): "Click the Group Menu icon in the second row of information above the
+    // Source monitor". The icon shows while the provider gives the shown group: its angle names and, for each of its
+    // tracks (V1, A1 ...), the angles that have that track and the one it comes from, listed under "=== <track> ===" as
+    // the guide's picture shows; choosing one calls the chooser with the track and the angle ("Select video or audio
+    // channels from any clip in the group to patch"). "Audio Follow Video" is the Composer's own choice: "switch both
+    // audio and video for each camera angle", the icon green while it is on.
+    struct GroupMenuSection {
+        QString track;
+        QList<int> angles;
+        int shown = -1;
+    };
     struct GroupMenuInfo {
         QStringList angles;
-        int shown = 0;
+        QList<GroupMenuSection> sections;
     };
+    using GroupAngleChooser = std::function<void(const QString& track, int angle)>;
     using GroupMenuProvider = std::function<std::optional<GroupMenuInfo>()>;
-    void setGroupMenu(GroupMenuProvider provider, std::function<void(int angle)> chooser) {
+    void setGroupMenu(GroupMenuProvider provider, GroupAngleChooser chooser) {
         groupMenu_ = std::move(provider);
         chooseAngle_ = std::move(chooser);
         refresh();
@@ -814,7 +822,7 @@ private:
     bool multiCamera_ = false;
     bool audioFollowVideo_ = false;
     GroupMenuProvider groupMenu_;
-    std::function<void(int)> chooseAngle_;
+    GroupAngleChooser chooseAngle_;
     QHash<int, int> splitCells_;
     PictureClickHandler pictureClick_;
     KeypadHandler keypad_;

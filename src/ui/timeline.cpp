@@ -4806,7 +4806,11 @@ void Timeline::addChangeSourceTrack(QMenu* menu, const model::SegmentRef& ref) {
     const auto seg = model::segmentFor(model::Sequence::fromItem(rec->item), ref);
     const auto kind = model::parseTrackName(ref.track);
     if (!seg || seg->isFiller() || !kind || kind->kind != model::TrackKind::Audio) return;
-    const auto clip = composer_.resolve(seg->binId, seg->clipId);
+    auto clip = composer_.resolve(seg->binId, seg->clipId);
+    // A group or multigroup segment (2026.8 guide p.507): "the available audio channels from the source clip", the
+    // tracks of the angle it shows. The group itself is not changed.
+    const bool groupSegment = clip && seg->groupAngle && model::isGroupClip(*clip);
+    if (groupSegment) clip = model::groupAngleClip(*clip, *seg->groupAngle, seg->groupOffsets);
     auto audioOf = [](const model::BinItem& item) {
         QStringList audio;
         for (const QString& t : model::sourceTracksOf(item)) {
@@ -4829,7 +4833,8 @@ void Timeline::addChangeSourceTrack(QMenu* menu, const model::SegmentRef& ref) {
     // A subclip's master clip, by the MobID of its Clip source.
     std::optional<std::pair<QString, model::BinItem>> master;
     std::int64_t offset = 0;
-    if (clip && clip->kind == model::BinItemKind::Subclip) {
+    // (Not for a group segment: it stays a segment of its group.)
+    if (clip && !groupSegment && clip->kind == model::BinItemKind::Subclip) {
         for (const model::ClipSource& from : clip->sources) {
             if (from.kind != model::ClipSource::Kind::Clip) continue;
             master = composer_.resolveMob(from.mob);
@@ -4843,7 +4848,7 @@ void Timeline::addChangeSourceTrack(QMenu* menu, const model::SegmentRef& ref) {
             if (!own.contains(t)) more << t;
         }
     }
-    if (clip && clip->kind == model::BinItemKind::Subclip) {
+    if (clip && !groupSegment && clip->kind == model::BinItemKind::Subclip) {
         QMenu* m = change->addMenu(tr("More"));
         m->setObjectName(QStringLiteral("changeSourceTrackMore"));
         m->setEnabled(!more.isEmpty());
@@ -7400,6 +7405,23 @@ bool Timeline::setGroupAngle(int angle, bool cut) {
     if (composer_.audioFollowVideo()) model::setGroupAngleAt(seq, QStringLiteral("A1"), pos, angle, cut, *group);
     const QList<model::SegmentRef> keep = selection_;
     const bool ok = commitSequence(cut ? tr("MultiCam Cut") : tr("Switch Camera Angle"), seq);
+    selection_ = keep;
+    view_->update();
+    return ok;
+}
+
+bool Timeline::setGroupTrackAngle(const QString& track, int angle) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const std::int64_t pos = composer_.state(MonitorId::Record).position();
+    const auto at = model::groupSegmentAt(seq, pos, {track});
+    const auto clip = at ? composer_.resolve(at->segment.binId, at->segment.clipId) : std::nullopt;
+    const auto group = clip ? model::groupOf(*clip) : std::nullopt;
+    if (!group || !model::setGroupAngleAt(seq, track, pos, angle, false, *group)) return false;
+    const QList<model::SegmentRef> keep = selection_;
+    const bool ok = commitSequence(tr("Switch Camera Angle"), seq);
     selection_ = keep;
     view_->update();
     return ok;

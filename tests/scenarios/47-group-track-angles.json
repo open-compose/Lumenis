@@ -1,0 +1,23 @@
+[
+  {
+    "name": "Group menu patching: A2 comes from angle B; Change Source Track on its segment lists B's own tracks",
+    "guide": "p.1133; 2026.8 guide p.507",
+    "clips": [
+      {"name": "A", "tracks": "V1 A1"},
+      {"name": "B", "tracks": "V1 A1-2"},
+      {"name": "G", "group": ["A", "B"], "offsets": [0, 0], "trackAngles": {"A2": 1}}
+    ],
+    "sequence": {"tracks": {"V1": [], "A1": [], "A2": []}},
+    "steps": [
+      {"load": "source", "clip": "G"},
+      {"mark": "source", "in": 0, "out": 39},
+      {"position": "record", "frame": 0},
+      {"command": "edit.splice_in"},
+      {"source_track": ["A2", 0, "A1"]}
+    ],
+    "expect": {
+      "V1": [["A", 0, 40, {"angle": 0}]],
+      "A1": [["A", 0, 40, {"angle": 0}]],
+      "A2": [["B", 0, 40, "A1", {"angle": 1}]]}
+  }
+]

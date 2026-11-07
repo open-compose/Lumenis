@@ -199,7 +199,7 @@ struct Run {
                 model::reviseClassicTitleClip(i, t, {}, QDateTime::currentDateTimeUtc());
             }
             // "group": a group clip of the clips named, synced by "offsets" (group frame g is frame g + offset of each),
-            // showing angle "selected" (Editing Guide p.1124; group_clip.h).
+            // showing angle "selected" (Editing Guide p.1124; group_clip.h), its audio tracks patched by "trackAngles".
             if (o.contains(QStringLiteral("group"))) {
                 i.kind = BinItemKind::Group;
                 model::GroupClip g;
@@ -215,6 +215,9 @@ struct Run {
                     g.angles << a;
                 }
                 g.selected = o.value(QStringLiteral("selected")).toInt();
+                // "trackAngles": {track: angle}, the Group menu's patching (p.1133).
+                const QJsonObject patched = o.value(QStringLiteral("trackAngles")).toObject();
+                for (auto it = patched.begin(); it != patched.end(); ++it) g.trackAngles.insert(it.key(), it.value().toInt());
                 model::setGroup(i, g);
                 i.fields.insert(QStringLiteral("Tracks"), model::groupTracks(g).join(QLatin1Char(' ')));
             }

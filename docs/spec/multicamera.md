@@ -1,4 +1,4 @@
-# MultiCamera editing: group clips and multigroups (8.1a, 8.1b)
+# MultiCamera editing: group clips and multigroups (8.1a-8.1c)
 
 Editing Guide ch.32, "MultiCamera Editing" (p.1123-1135). This page covers 8.1a and 8.1b: making group clips,
 showing them in the Source monitor, editing them into sequences and switching angles. MultiCamera mode,
@@ -184,6 +184,27 @@ the Group menu and multigroups are in 8.1b; the rest follows in 8.1c (docs/ROADM
   * Ours: a segment whose angle has no material at its first frame stays a group segment.
 * Edit Group is in the bin's right-click menu too ("right click and choose Edit Group", p.1125).
 
+## The Group menu's patching and Change Source Track (8.1c)
+
+* The Group menu (p.1133, `Composer::groupMenu`, `MainWindow::groupMenuInfo`) is laid out as the guide's picture: Audio
+  Follow Video, then a section "=== V1 ===", "=== A1 ===" ... for each track of the group (`model::groupTracks`), each
+  listing the angles that have that track (`model::anglesWithTrack`), the one in use checked. "Select video or audio
+  channels from any clip in the group to patch the video or audio channels to the tracks available in the sequence."
+* V1's section chooses the camera angle, as the split display does. An audio track's choice
+  (`MainWindow::chooseGroupTrackAngle`):
+  * in the Source monitor, the group keeps it (`GroupClip::trackAngles`, `model::groupTrackAngle`): the next edits take
+    that track from that angle (`applyEdit`), and the Source monitor plays it from there (`media::audioPieces`);
+  * for a multigroup, its group segment on that track at the position switches;
+  * in MultiCamera mode, the group segment at the Record monitor's position on the sequence track of that name switches
+    (`Timeline::setGroupTrackAngle`), an undo step.
+  * Ours: tracks not patched come from the selected angle; V1 always does.
+* Change Source Track (2026.8 guide p.507): on a group or multigroup segment the menu lists "the available audio channels
+  from the source clip", the audio tracks of the angle the segment shows (`Timeline::addChangeSourceTrack`). "Changing the
+  source audio track does not modify the source clip": the group is unchanged. Ours: no More menu there, so the segment
+  stays a group segment.
+* Stereoscopic groups (p.1124) wait for stereoscopic clips (8.6). Auto Cut from transcript speakers (2026.8 guide p.451,
+  p.1134) waits for 8.2.
+
 ## MultiGroup (p.1123, p.1125)
 
 * Clip > MultiGroup (`MainWindow::multiGroup`, `model::multiGroup`) opens the Group Clips dialog titled MultiGroup
@@ -209,6 +230,8 @@ the Group menu and multigroups are in 8.1b; the rest follows in 8.1c (docs/ROADM
 * `tst_waveform_sync`: lags between sounds, at two rates, refusals, and linked files.
 * `tst_multicam_ui`: the dialog, grouping, the split views and switching in the application; Waveform
   Analysis, Edit/Update/Create Group, Refresh Sequence and Waveform Sync on movies with sound.
+* `tst_group_clip patchesTracksFromOtherAngles`, `tst_multicam_ui soundAndGroupEdits` (the Group menu's sections and
+  patching) and scenario `47-group-track-angles.json` (8.1c).
 * `tst_group_clip multiGroups` and `tst_multicam_ui multigroupInTheApplication`: takes, names, the multigroup's
   sequence, the Source split and Next In Group on it, and edits from it.
 * `tst_multicam_ui multiCameraMode`: the mode, the keypad, clicks, banks and live cuts.

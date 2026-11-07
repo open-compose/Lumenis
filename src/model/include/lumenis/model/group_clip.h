@@ -5,6 +5,7 @@
 
 #include <QDateTime>
 #include <QList>
+#include <QMap>
 #include <QString>
 
 #include <cstdint>
@@ -45,6 +46,10 @@ struct GroupClip {
     // The angle shown in the Source monitor and edited into sequences ("Whenever you switch camera
     // angles, you also switch the frame representing the group in the bin", p.1131).
     int selected = 0;
+    // The Group menu's patching (p.1133): "select video or audio channels from any of the clips in the group and patch
+    // to the tracks available in the sequence". An audio track of the group (A1, A2 ...) named here takes its sound from
+    // that angle's track of the same name instead of the selected angle's; V1 is always the selected angle.
+    QMap<QString, int> trackAngles;
 };
 
 // The group a Group item holds; nothing for other items.
@@ -52,6 +57,12 @@ std::optional<GroupClip> groupOf(const BinItem& item);
 bool isGroupClip(const BinItem& item);
 // Stores the group in the item.
 void setGroup(BinItem& item, const GroupClip& group);
+// The angle a track of the group comes from: GroupClip::trackAngles for an audio track that has one, else the selected
+// angle.
+int groupTrackAngle(const GroupClip& group, const QString& track);
+// The angles that have `track` among their source tracks (sourceTracksOf), in the group's order: the Group menu's entries
+// under that track (p.1133).
+QList<int> anglesWithTrack(const GroupClip& group, const QString& track);
 
 // Where each clip's sync point is, as a frame of the clip, for the IN or OUT point sync; nothing when
 // the clip has none (the Source monitor's marks, else the bin's Mark IN / Mark OUT columns).
