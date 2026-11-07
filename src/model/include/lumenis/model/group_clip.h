@@ -50,6 +50,9 @@ struct GroupClip {
     // to the tracks available in the sequence". An audio track of the group (A1, A2 ...) named here takes its sound from
     // that angle's track of the same name instead of the selected angle's; V1 is always the selected angle.
     QMap<QString, int> trackAngles;
+    // "Assign each identified speaker to a corresponding camera angle" (2026.8 guide p.451): the angle by speaker name
+    // (as the transcript shows it: "Ann", "Speaker 2"), for AutoCut (autoCut).
+    QMap<QString, int> speakerAngles;
 };
 
 // The group a Group item holds; nothing for other items.
@@ -178,6 +181,15 @@ bool setGroupAngleAt(Sequence& sequence, const QString& track, std::int64_t fram
 // left, 8 or 9: Upper right, 4 or 1: Lower left, 2, 3, 5, or 6: Lower right"; in Nine Split "each of the nine keys 1
 // through 9 maps to a position in the split display based on its location on the keypad". Nothing for other keys.
 std::optional<int> keypadSplitPosition(int digit, int split);
+
+// AutoCut (2026.8 guide p.451-452): "analyzes the transcript and applies camera switches based on the active speaker" on
+// the group segment on `track` starting at `segmentStart`. `lines` are the group's transcript lines as the group shows
+// them ({group frame of the first word, speaker name}, in time order). Each line inside the segment whose speaker has an
+// angle (GroupClip::speakerAngles) switches to it from its first word, through setGroupAngleAt with a cut; "If a speaker
+// is not assigned to a camera angle, no automatic switch is applied"; frames before the first switch keep their angle.
+// Returns how many switches were made (0 when the segment is not a group segment).
+int autoCut(Sequence& sequence, const QString& track, std::int64_t segmentStart, const GroupClip& group,
+            const QList<std::pair<std::int64_t, QString>>& lines);
 
 // The angle `step` places on from `angle` among `count`, wrapping round (Previous In Group and Next In
 // Group "cycle through all the clips", p.1131).

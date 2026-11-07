@@ -4718,6 +4718,21 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
         waveform->setEnabled(!showSource_ && pictureSelected && soundSelected && soundOffset_);
     }
     connect(waveform, &QAction::triggered, this, [this] { waveformSync(); });
+    // "In the Timeline, select a group clip segment using the Segment tool. Right-click the segment. Select AutoCut"
+    // (2026.8 guide p.451).
+    {
+        bool group = false;
+        if (const model::LoadedClip* rec = composer_.state(MonitorId::Record).current(); rec && !showSource_) {
+            const model::Sequence seq = model::Sequence::fromItem(rec->item);
+            for (const model::SegmentRef& ref : selection_) {
+                const auto s = model::segmentFor(seq, ref);
+                group = group || (s && s->groupAngle.has_value());
+            }
+        }
+        QAction* autoCut = run(menu, tr("AutoCut"), QStringLiteral("timeline.autocut"));
+        autoCut->setObjectName(QStringLiteral("timeline:autoCut"));
+        autoCut->setEnabled(group);
+    }
     // "Right-click inside a sequence and choose Transcript > Create SubCap" (p.452).
     QMenu* transcript = menu->addMenu(tr("Transcript"));
     transcript->setObjectName(QStringLiteral("timeline:transcript"));

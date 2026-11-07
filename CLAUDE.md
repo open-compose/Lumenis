@@ -845,7 +845,7 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `switchMultigroupAngle`; the bin's plus icon; tests `tst_group_clip`, `tst_multicam_ui`), is done, so 8.1b is. 8.1c, the
   Group menu's patching (`GroupClip::trackAngles`, `model::groupTrackAngle`/`anglesWithTrack`, `MainWindow::groupMenuInfo`/
   `chooseGroupTrackAngle`, `Timeline::setGroupTrackAngle`) and Change Source Track on group segments, is done (scenario
-  `47-group-track-angles.json`); stereoscopic groups wait for 8.6, Auto Cut for 8.2.
+  `47-group-track-angles.json`); stereoscopic groups wait for 8.6.
   8.2, transcripts and PhraseFind, is in five parts (ROADMAP). 8.2a, transcripts and the engine (docs/spec/transcripts.md:
   `src/model/transcript.*` with the `TranscriptStore` outside the project (`LUMENIS_TRANSCRIPTS`) and
   `TranscriptionBins` in it; `src/media/transcription.*` with `WhisperProvider` running whisper.cpp's `whisper-cli`
@@ -865,7 +865,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   Timeline's Transcript menus, `src/model/transcript_export.*` with the exported text as Avid DS captions, captions,
   `createSubCapTrack` and our `.cttr` shared file; `src/ui/transcript_dialogs.*` with the Transcribe window and Manage
   Transcripts; `MainWindow::exportTranscripts`/`shareTranscripts`/`deleteTranscripts`/`exportSubCap`/`createSubCap`/
-  `manageTranscripts`; tests `tst_transcript transcriptsOut`, `tst_transcripts_ui transcriptsOut`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
+  `manageTranscripts`; tests `tst_transcript transcriptsOut`, `tst_transcripts_ui transcriptsOut`), is done. 8.2e,
+  AutoCut (`GroupClip::speakerAngles` from the Transcript Tool's Assign to Camera Angle, `model::autoCut`, the Timeline's
+  AutoCut through `MainWindow::autoCut`; tests `tst_group_clip autoCutFromSpeakers`, `tst_transcripts_ui
+  autoCutFromTranscript`, scenario `48-autocut.json`), is done, so 8.2 is. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

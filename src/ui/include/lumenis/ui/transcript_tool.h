@@ -26,6 +26,7 @@
 #include "lumenis/model/transcript_view.h"
 
 #include <QFont>
+#include <QMap>
 #include <QStringList>
 #include <QWidget>
 
@@ -118,6 +119,12 @@ public:
     void setNewLineAfter(int seconds);
     // The names an Identify Speaker menu offers: the project's speakers (8.2b2b) and the shown transcripts'.
     void setKnownSpeakers(const QStringList& names) { knownSpeakers_ = names; }
+    // AutoCut's speakers (2026.8 guide p.451): with a group shown, its angles' names and the speakers already assigned;
+    // the speaker's right-click menu then offers "Assign to Camera Angle". Empty `angles`: no group.
+    void setCameraAngles(const QStringList& angles, const QMap<QString, int>& assigned) {
+        cameraAngles_ = angles;
+        speakerAngles_ = assigned;
+    }
     // The right-click menu at a document position; the caller owns it.
     QMenu* contextMenuAt(int position, QWidget* parent);
 
@@ -137,6 +144,8 @@ signals:
     void transcribeRequested(const QStringList& mobs);
     void fontRequested();
     void editRequested(const QString& mob, const lumenis::ui::TranscriptTool::TranscriptEdit& edit);
+    // Assign to Camera Angle: `angle` for the speaker named `speaker`, -1 for None.
+    void speakerAngleChosen(const QString& speaker, int angle);
     // The fast menu's Delete Transcript (2026.8 guide p.456): the shown transcripts, by MobID.
     void deleteRequested(const QStringList& mobs);
 
@@ -182,6 +191,8 @@ private:
     model::ShownTranscript display_;
     QList<SpeakerSpan> speakerSpans_;
     QStringList knownSpeakers_;
+    QStringList cameraAngles_;
+    QMap<QString, int> speakerAngles_;
     QLineEdit* editor_ = nullptr;
     double fps_ = 25.0;
     bool groupSpeakers_ = false;

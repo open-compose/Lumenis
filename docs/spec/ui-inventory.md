@@ -638,6 +638,8 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * Transcript editing (docs/spec/transcripts.md): unchanged words found by the longest common sequence, new words beside
   a kept one sharing its time, Find and Replace's own punctuation, Identify Speaker naming a speaker heard on one line
   only, edits not undoable, Group Speaker Lines and New Line After not kept between sessions.
+* AutoCut (docs/spec/transcripts.md): Assign to Camera Angle on the speaker's right-click menu, kept in the group by
+  speaker name; the group's shown transcript; only video tracks switched.
 * Transcripts out (docs/spec/transcripts.md): the exported .txt as an Avid DS caption file with the speaker as its first
   row, several items into a folder, two rows to a caption under the character limit (32 offered), Create SubCap on a new
   top track, the shared file as our JSON `.cttr`, Manage Transcripts listing the current project's clips with Export.
@@ -3110,8 +3112,8 @@ Details: docs/spec/bin-locking.md.
 * The bin's right-click Transcript menu: Export Transcript, Share Transcripts, Delete Transcript, Export SubCap
   (p.450-453, 2026.8 guide p.456); the Timeline's Transcript > Create SubCap (p.452); Script > Manage Transcripts and
   the Transcript setting's Manage Transcripts button (2026.8 guide p.455), 8.2d.
-* Later: AutoCut
-  (8.2e).
+* The Timeline's right-click AutoCut on a group segment and the Transcript Tool's Assign to Camera Angle (2026.8 guide
+  p.451-452), 8.2e.
 
 ## 21. Still to document
 * Menu order and separators, confirmed against a licensed seat.

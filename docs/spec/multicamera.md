@@ -202,8 +202,8 @@ the Group menu and multigroups are in 8.1b; the rest follows in 8.1c (docs/ROADM
   from the source clip", the audio tracks of the angle the segment shows (`Timeline::addChangeSourceTrack`). "Changing the
   source audio track does not modify the source clip": the group is unchanged. Ours: no More menu there, so the segment
   stays a group segment.
-* Stereoscopic groups (p.1124) wait for stereoscopic clips (8.6). Auto Cut from transcript speakers (2026.8 guide p.451,
-  p.1134) waits for 8.2.
+* Stereoscopic groups (p.1124) wait for stereoscopic clips (8.6). AutoCut from transcript speakers is in
+  docs/spec/transcripts.md, "AutoCut" (8.2e).
 
 ## MultiGroup (p.1123, p.1125)
 

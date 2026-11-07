@@ -706,6 +706,21 @@ QMenu* TranscriptTool::contextMenuAt(int position, QWidget* parent) {
         }
         correct->addSeparator();
         correct->addAction(tr("Add New Speaker"), this, [this, line] { correctSpeaker(line, 0); });
+        // "Assign each identified speaker to a corresponding camera angle" (2026.8 guide p.451). Ours: on the speaker's
+        // menu, with a group shown.
+        if (!cameraAngles_.isEmpty()) {
+            QMenu* assign = menu->addMenu(tr("Assign to Camera Angle"));
+            assign->setObjectName(QStringLiteral("assignCameraAngle"));
+            const QString speaker = l.speaker;
+            const int current = speakerAngles_.value(speaker, -1);
+            for (int a = -1; a < cameraAngles_.size(); ++a) {
+                QAction* action = assign->addAction(a < 0 ? tr("None") : cameraAngles_[a]);
+                action->setCheckable(true);
+                action->setChecked(a == current);
+                connect(action, &QAction::triggered, this, [this, speaker, a] { emit speakerAngleChosen(speaker, a); });
+                if (a < 0) assign->addSeparator();
+            }
+        }
         return menu;
     }
     // "The right-click menu now displays only Edit Text and Copy when text is selected" (p.446).

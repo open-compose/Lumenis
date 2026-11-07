@@ -1411,9 +1411,9 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     (p.1129-1132), the Composer settings' MultiCam tab (p.1160-1161). 8.1b2 (done): the linecut in the split, the
     Group menu with Audio Follow Video and the Multi-angle View menus (p.1132-1134), Match Frame (p.1134), Commit
     Multicam Edits (p.1135). 8.1b3 (done): multigroups (p.1125), so 8.1b is done. 8.1c (done): the Group menu's patching of any angle's tracks (p.1133) and Change Source Track for group and multigroup
-    clips (2026.8 guide p.507). Left: stereoscopic groups (p.1124) with stereoscopic projects in 8.6, and Auto Cut from
-    transcript speakers after 8.2.
-  * 8.2, transcripts and PhraseFind (ch.14, p.436-453; 2026.8 guide p.446-447, p.451-452), in five parts (planned
+    clips (2026.8 guide p.507). Left: stereoscopic groups (p.1124) with stereoscopic projects in 8.6 (AutoCut from
+    transcript speakers came with 8.2e).
+  * 8.2 (done), transcripts and PhraseFind (ch.14, p.436-453; 2026.8 guide p.446-447, p.451-452), in five parts (planned
     2026-11-07):
     * 8.2a (done, docs/spec/transcripts.md), transcripts and the engine: transcripts of master clips (words with times, lines with Speaker IDs, the
       original kept beside edits) in the project's transcript store, keyed by the clip's MobID; speech to text through
@@ -1439,7 +1439,7 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       Share Transcripts, Delete Transcript, Create SubCap and Export SubCap with the Transcribe window's tracks, Use
       Marks and Limit characters per caption), Manage Transcripts (delete, import). Shared transcript files are ours
       (Avid's .avt is undocumented); peer-to-peer sharing over NEXIS waits for 8.7.
-    * 8.2e, AutoCut from transcript speakers (2026.8 guide p.451-452): speakers assigned to a group's angles, AutoCut
+    * 8.2e (done), AutoCut from transcript speakers (2026.8 guide p.451-452): speakers assigned to a group's angles, AutoCut
       on a group segment.
   * 8.3, ScriptSync (ch.18, p.566-590): the Script window, lined scripts, slates and takes, script marks, ScriptSync AI
     marking from 8.2's word timings.

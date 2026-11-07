@@ -218,6 +218,9 @@ struct Run {
                 // "trackAngles": {track: angle}, the Group menu's patching (p.1133).
                 const QJsonObject patched = o.value(QStringLiteral("trackAngles")).toObject();
                 for (auto it = patched.begin(); it != patched.end(); ++it) g.trackAngles.insert(it.key(), it.value().toInt());
+                // "speakerAngles": {speaker: angle}, the speakers assigned to camera angles for AutoCut (2026.8 guide p.451).
+                const QJsonObject speakers = o.value(QStringLiteral("speakerAngles")).toObject();
+                for (auto it = speakers.begin(); it != speakers.end(); ++it) g.speakerAngles.insert(it.key(), it.value().toInt());
                 model::setGroup(i, g);
                 i.fields.insert(QStringLiteral("Tracks"), model::groupTracks(g).join(QLatin1Char(' ')));
             }
@@ -621,6 +624,23 @@ struct Run {
             if (ok == o.value(QStringLiteral("refused")).toBool()) {
                 return fail(ok ? QStringLiteral("the subdivision was not refused") : QStringLiteral("nothing was subdivided"));
             }
+            return true;
+        }
+        if (o.contains(QStringLiteral("autocut"))) {
+            // {"autocut": [track, start, group clip], "lines": [[group frame, speaker] ...]}: AutoCut on the group segment
+            // there with the group's transcript lines (2026.8 guide p.451-452; MainWindow::autoCut reads them from the
+            // transcript store).
+            const QJsonArray a = o.value(QStringLiteral("autocut")).toArray();
+            const auto group = model::groupOf(clips.value(a.at(2).toString()));
+            if (!group) return fail(QStringLiteral("no group clip %1").arg(a.at(2).toString()));
+            QList<std::pair<std::int64_t, QString>> lines;
+            for (const QJsonValue& v : o.value(QStringLiteral("lines")).toArray()) lines.append({v.toArray().at(0).toInteger(), v.toArray().at(1).toString()});
+            int switches = 0;
+            timeline.changeRecordSequence(QStringLiteral("AutoCut"), [&](model::Sequence& s) {
+                switches = model::autoCut(s, a.at(0).toString(), a.at(1).toInteger(), *group, lines);
+                return switches > 0;
+            });
+            if (switches != o.value(QStringLiteral("switches")).toInt()) return fail(QStringLiteral("%1 switches").arg(switches));
             return true;
         }
         if (o.contains(QStringLiteral("nested_move"))) {

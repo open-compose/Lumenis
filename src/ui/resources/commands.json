@@ -280,6 +280,7 @@
     {"id": "bin.delete_transcript", "text": "Delete Transcript"},
     {"id": "bin.export_subcap", "text": "Export SubCap"},
     {"id": "timeline.create_subcap", "text": "Create SubCap"},
+    {"id": "timeline.autocut", "text": "AutoCut"},
     {"id": "composer.multicamera_mode", "text": "MultiCamera Mode"},
     {"id": "composer.create_group", "text": "Create Group"},
     {"id": "mcam.quad_split", "text": "Quad Split", "palette": "mcam"},

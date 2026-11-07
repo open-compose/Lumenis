@@ -354,6 +354,49 @@ private slots:
     }
 
     // The Group menu's patching (p.1133): an audio track from another angle, kept in the group, used by edits.
+    // AutoCut (2026.8 guide p.451-452): the speakers' angles kept in the group; switches cut the segment at the lines
+    // inside it, only for speakers with an angle.
+    void autoCutFromSpeakers() {
+        GroupClip g;
+        for (const QString& name : {QStringLiteral("A"), QStringLiteral("B")}) {
+            GroupAngle a;
+            a.clip.id = name;
+            a.clip.name = name;
+            g.angles << a;
+        }
+        g.speakerAngles = {{QStringLiteral("Ann"), 0}, {QStringLiteral("Bob"), 1}, {QStringLiteral("Lost"), 7}};
+        BinItem item;
+        item.kind = BinItemKind::Group;
+        setGroup(item, g);
+        const auto back = groupOf(item);
+        QVERIFY(back);
+        QCOMPARE(back->speakerAngles.size(), qsizetype(2)); // an angle out of the group's range is dropped
+        QCOMPARE(back->speakerAngles.value(QStringLiteral("Bob")), 1);
+        Sequence seq = Sequence::withDefaultTracks();
+        Segment lead;
+        lead.length = 20;
+        Segment s;
+        s.clipId = QStringLiteral("G");
+        s.binId = QStringLiteral("bin");
+        s.name = QStringLiteral("A");
+        s.sourceIn = 100; // group frames 100..199 from sequence frame 20
+        s.length = 100;
+        s.groupAngle = 0;
+        seq.track(QStringLiteral("V1"))->segments = {lead, s};
+        const QList<std::pair<std::int64_t, QString>> lines{
+            {90, QStringLiteral("Bob")}, {120, QStringLiteral("Bob")}, {150, QStringLiteral("Carl")}, {160, QStringLiteral("Ann")}, {250, QStringLiteral("Bob")}};
+        QCOMPARE(autoCut(seq, QStringLiteral("V1"), 0, *back, lines), 0); // filler: not a group segment
+        QCOMPARE(autoCut(seq, QStringLiteral("V1"), 20, *back, lines), 2);
+        const Track* v1 = seq.track(QStringLiteral("V1"));
+        QCOMPARE(v1->segments.size(), qsizetype(4));
+        QCOMPARE(v1->segments[1].length, std::int64_t(20)); // 20..40 angle A
+        QCOMPARE(*v1->segments[2].groupAngle, 1);           // Bob from 40
+        QCOMPARE(v1->segments[2].name, QStringLiteral("B"));
+        QCOMPARE(v1->segments[2].length, std::int64_t(40)); // Carl (no angle) switches nothing
+        QCOMPARE(*v1->segments[3].groupAngle, 0);           // Ann from 80
+        QCOMPARE(v1->segments[3].length, std::int64_t(40));
+    }
+
     void patchesTracksFromOtherAngles() {
         BinItem a = clip(QStringLiteral("A"), 50);
         a.fields.insert(QStringLiteral("Tracks"), QStringLiteral("V1 A1"));

@@ -268,6 +268,8 @@ void MainWindow::setUpTranscriptTool() {
         }
     });
     // Edits from the tool (p.444-446): applied to the clip's transcript in the store, the tool shown again.
+    connect(transcriptTool_, &TranscriptTool::speakerAngleChosen, this,
+            [this](const QString& speaker, int angle) { assignSpeakerAngle(speaker, angle); });
     connect(transcriptTool_, &TranscriptTool::deleteRequested, this, [this](const QStringList& mobs) { deleteTranscripts(mobs); });
     connect(transcriptTool_, &TranscriptTool::editRequested, this,
             [this](const QString& mob, const TranscriptTool::TranscriptEdit& edit) { editTranscript(mob, edit); });
@@ -323,6 +325,13 @@ void MainWindow::refreshTranscriptTool() {
         const std::int64_t start = state.startFrame();
         transcriptTool_->setFrameRate(item.editRate.toDouble());
         transcriptTool_->setKnownSpeakers(projectSpeakerNames());
+        // A group in the Source monitor: its angles for Assign to Camera Angle (2026.8 guide p.451).
+        const auto group = transcriptSourceSide_ && !model::isMultigroup(item) ? model::groupOf(item) : std::nullopt;
+        QStringList angles;
+        if (group) {
+            for (const model::GroupAngle& a : group->angles) angles << a.clip.name;
+        }
+        transcriptTool_->setCameraAngles(angles, group ? group->speakerAngles : QMap<QString, int>());
         transcriptTool_->setTranscript(shown, [format, start](std::int64_t frame) {
             return QString::fromStdString(Timecode(start + frame, format).toString());
         });
@@ -813,6 +822,66 @@ ManageTranscriptsDialog* MainWindow::manageTranscripts() {
     refresh();
     dialog->open();
     return dialog;
+}
+
+// ---------------------------------------------------------------- AutoCut (8.2e)
+
+bool MainWindow::assignSpeakerAngle(const QString& speaker, int angle) {
+    const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
+    auto group = loaded && !model::isMultigroup(loaded->item) ? model::groupOf(loaded->item) : std::nullopt;
+    if (!group || speaker.isEmpty() || angle >= group->angles.size()) return false;
+    if (angle < 0) {
+        if (!group->speakerAngles.remove(speaker)) return false;
+    } else {
+        if (group->speakerAngles.value(speaker, -1) == angle) return false;
+        group->speakerAngles.insert(speaker, angle);
+    }
+    model::BinItem item = loaded->item;
+    model::setGroup(item, *group);
+    storeClip(loaded->binId, item);
+    ++transcriptGeneration_;
+    refreshTranscriptTool();
+    return true;
+}
+
+// "Media Composer analyzes the transcript and applies camera switches based on the active speaker ... AutoCut applies
+// only to the selected group clip segment" (2026.8 guide p.451-452). The camera switches go on the video tracks' group
+// segments; the group's transcript is the one it shows (its selected angle's master clip, model::shownTranscript).
+int MainWindow::autoCut() {
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return 0;
+    const model::Sequence before = model::Sequence::fromItem(rec->item);
+    struct Job {
+        model::SegmentRef ref;
+        model::GroupClip group;
+        QList<std::pair<std::int64_t, QString>> lines;
+    };
+    QList<Job> jobs;
+    for (const model::SegmentRef& ref : timeline_->selection()) {
+        const auto kind = model::parseTrackName(ref.track);
+        if (!kind || kind->kind != model::TrackKind::Video) continue;
+        const auto s = model::segmentFor(before, ref);
+        if (!s || !s->groupAngle) continue;
+        const auto clip = composer_->resolve(s->binId, s->clipId);
+        const auto group = clip ? model::groupOf(*clip) : std::nullopt;
+        if (!group) continue;
+        Job job{ref, *group, {}};
+        for (const model::ShownLine& line : shownTranscriptOf(*clip, {}).lines) {
+            if (!line.words.isEmpty()) job.lines.append({line.words.first().frame, line.speaker});
+        }
+        jobs << job;
+    }
+    if (jobs.isEmpty()) {
+        ConsoleLog::instance().append(tr("AutoCut: select a group clip segment with the Segment tool."));
+        return 0;
+    }
+    int switches = 0;
+    timeline_->changeRecordSequence(tr("AutoCut"), [&](model::Sequence& s) {
+        for (const Job& job : jobs) switches += model::autoCut(s, job.ref.track, job.ref.start, job.group, job.lines);
+        return switches > 0;
+    });
+    if (switches == 0) ConsoleLog::instance().append(tr("AutoCut: no speaker with a camera angle speaks in the selected segments."));
+    return switches;
 }
 
 } // namespace lumenis::ui

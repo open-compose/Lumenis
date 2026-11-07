@@ -206,6 +206,24 @@ The Find window's PhraseFind AI button on the Clips and Sequences tab (p.436-441
   ones, Import reads a shared transcripts file, Export shares them all (p.451: "transcripts for an entire project can be
   exported using the Manage Transcripts window"), Done closes it.
 
+## AutoCut (8.2e)
+
+"Creating a Multicamera Edit Using Transcript Data" (2026.8 guide p.451-452):
+
+* "Assign each identified speaker to a corresponding camera angle": the guide says it is done in the Transcript Tool
+  without saying how. Ours: with a group in the Source monitor, a speaker's right-click menu has Assign to Camera Angle,
+  listing None and the group's angles (`TranscriptTool::setCameraAngles`, `speakerAngleChosen`,
+  `MainWindow::assignSpeakerAngle`). The assignment is kept in the group, by speaker name as the transcript shows it
+  (`GroupClip::speakerAngles`).
+* "Select a group clip segment using the Segment tool. Right-click the segment. Select AutoCut": the Timeline's
+  right-click AutoCut (`timeline.autocut`), enabled with a group segment selected. `model::autoCut` switches the
+  segment's angle at the first word of each line inside it whose speaker has an angle (`setGroupAngleAt` with a cut),
+  as one undo step for every selected segment (`MainWindow::autoCut`). "AutoCut applies only to the selected group clip
+  segment"; "If a speaker is not assigned to a camera angle, no automatic switch is applied": frames before the first
+  switch, and a line of an unassigned speaker, keep the angle they have.
+* Ours: the transcript is the one the group shows (its selected angle's master clip, as the Transcript Tool's); only the
+  video tracks' group segments are switched, the sound staying as patched.
+
 ## Tests
 
 * `tst_transcript`: lines from engine words, JSON round trips, the store, the bins' status.
@@ -213,6 +231,8 @@ The Find window's PhraseFind AI button on the Clips and Sequences tab (p.436-441
   a stand-in `whisper-cli` script (not on Windows).
 * `tst_transcript editing`, `groupedSpeakerLines`: timing kept through edits, Find and Replace, speakers, Start New
   Line, Revert; `tst_transcripts_ui transcriptTool` the same through the tool.
+* `tst_group_clip autoCutFromSpeakers` and scenario `48-autocut.json`: the speakers' angles kept in the group, the
+  switches; `tst_transcripts_ui autoCutFromTranscript` Assign to Camera Angle and the Timeline's AutoCut.
 * `tst_transcript transcriptsOut`: the exported text read back as captions, captions with a limit and marks, Create
   SubCap's track, the shared file; `tst_transcripts_ui transcriptsOut` the bin's Transcript menu, Export Transcript,
   Share and Import with the Language Hint check, Delete, Export SubCap and Create SubCap on a sequence, Manage

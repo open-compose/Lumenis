@@ -119,6 +119,11 @@ std::optional<GroupClip> groupOf(const BinItem& item) {
         const int angle = it.value().toInt(-1);
         if (angle >= 0 && angle < g.angles.size()) g.trackAngles.insert(it.key(), angle);
     }
+    const QJsonObject speakers = o.value(QStringLiteral("speakerAngles")).toObject();
+    for (auto it = speakers.begin(); it != speakers.end(); ++it) {
+        const int angle = it.value().toInt(-1);
+        if (angle >= 0 && angle < g.angles.size()) g.speakerAngles.insert(it.key(), angle);
+    }
     return g;
 }
 
@@ -134,6 +139,11 @@ void setGroup(BinItem& item, const GroupClip& group) {
         QJsonObject tracks;
         for (auto it = group.trackAngles.cbegin(); it != group.trackAngles.cend(); ++it) tracks.insert(it.key(), it.value());
         o.insert(QStringLiteral("trackAngles"), tracks);
+    }
+    if (!group.speakerAngles.isEmpty()) {
+        QJsonObject speakers;
+        for (auto it = group.speakerAngles.cbegin(); it != group.speakerAngles.cend(); ++it) speakers.insert(it.key(), it.value());
+        o.insert(QStringLiteral("speakerAngles"), speakers);
     }
     item.composition.insert(QLatin1String(kGroupKey), o);
 }
@@ -559,6 +569,26 @@ std::optional<int> keypadSplitPosition(int digit, int split) {
     case 1: return 2;
     default: return 3; // 2, 3, 5, 6
     }
+}
+
+int autoCut(Sequence& sequence, const QString& track, std::int64_t segmentStart, const GroupClip& group,
+            const QList<std::pair<std::int64_t, QString>>& lines) {
+    const Track* t = sequence.track(track);
+    if (!t) return 0;
+    std::int64_t start = 0;
+    const int i = t->segmentAt(segmentStart, &start);
+    if (i < 0 || start != segmentStart || !t->segments[i].groupAngle) return 0;
+    const std::int64_t sourceIn = t->segments[i].sourceIn;
+    const std::int64_t length = t->segments[i].length;
+    int switches = 0;
+    for (const auto& [groupFrame, speaker] : lines) {
+        const auto angle = group.speakerAngles.constFind(speaker);
+        if (angle == group.speakerAngles.cend()) continue;
+        const std::int64_t at = segmentStart + groupFrame - sourceIn;
+        if (at < segmentStart || at >= segmentStart + length) continue;
+        if (setGroupAngleAt(sequence, track, at, *angle, true, group)) ++switches;
+    }
+    return switches;
 }
 
 int stepAngle(int angle, int step, int count) {

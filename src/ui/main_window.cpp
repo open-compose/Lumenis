@@ -8178,6 +8178,7 @@ void MainWindow::installPanelHandlers() {
     handle("bin.delete_transcript", [this] { deleteTranscripts(); });
     handle("bin.export_subcap", [this] { exportSubCap(); });
     handle("timeline.create_subcap", [this] { createSubCap(); });
+    handle("timeline.autocut", [this] { autoCut(); });
     handle("script.manage_transcripts", [this] { manageTranscripts(); });
     connect(binContainer_, &BinContainer::commandRequested, this, [this](const QString& id) {
         if (QAction* a = commands_.action(id)) a->trigger();

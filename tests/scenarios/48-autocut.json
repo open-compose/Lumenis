@@ -1,0 +1,22 @@
+[
+  {
+    "name": "AutoCut: camera switches at the lines of speakers with an angle; a speaker without one switches nothing",
+    "guide": "2026.8 guide p.451-452",
+    "clips": [
+      {"name": "A", "tracks": "V1 A1"},
+      {"name": "B", "tracks": "V1 A1"},
+      {"name": "G", "group": ["A", "B"], "offsets": [0, 0], "speakerAngles": {"Ann": 0, "Bob": 1}}
+    ],
+    "sequence": {"tracks": {"V1": [], "A1": []}},
+    "steps": [
+      {"load": "source", "clip": "G"},
+      {"mark": "source", "in": 0, "out": 99},
+      {"position": "record", "frame": 0},
+      {"command": "edit.splice_in"},
+      {"autocut": ["V1", 0, "G"], "lines": [[10, "Ann"], [30, "Bob"], [50, "Speaker 3"], [70, "Ann"], [120, "Bob"]], "switches": 2}
+    ],
+    "expect": {
+      "V1": [["A", 0, 30, {"angle": 0}], ["B", 30, 40, {"angle": 1}], ["A", 70, 30, {"angle": 0}]],
+      "A1": [["A", 0, 100, {"angle": 0}]]}
+  }
+]

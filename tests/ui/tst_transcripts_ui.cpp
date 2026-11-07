@@ -15,6 +15,8 @@
 #include "lumenis/ui/transcript_dialogs.h"
 #include "lumenis/ui/bin_view.h"
 #include "lumenis/model/subcap.h"
+#include "lumenis/model/group_clip.h"
+#include "lumenis/ui/timeline.h"
 #include "lumenis/model/monitor.h"
 #include "lumenis/ui/settings_window.h"
 #include "lumenis/model/sequence.h"
@@ -557,6 +559,99 @@ private slots:
         QVERIFY(!store.has(t.mob));
         QVERIFY(manage->entries().isEmpty());
         manage->accept();
+        qunsetenv("LUMENIS_TRANSCRIPTS");
+    }
+
+    // AutoCut (2026.8 guide p.451-452): a speaker assigned to a camera angle from the Transcript Tool, kept in the group;
+    // the group segment's right-click AutoCut switches angles at that speaker's lines.
+    void autoCutFromTranscript() {
+        QTemporaryDir dir;
+        qputenv("LUMENIS_TRANSCRIPTS", dir.filePath(QStringLiteral("Transcripts")).toLocal8Bit());
+        const QString a = dir.filePath(QStringLiteral("wide.wav"));
+        const QString b = dir.filePath(QStringLiteral("close.wav"));
+        QVERIFY(writeTone(a, 4.0));
+        QVERIFY(writeTone(b, 4.0));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        BinContainer& bins = window.binContainer();
+        const QString binId = bins.newBin();
+        BinDocument* bin = bins.openBin(binId);
+        QCOMPARE(window.linkFiles(binId, {a, b}).size(), qsizetype(2));
+        const model::BinItem wide = bin->bin().items.at(0);
+        const model::BinItem close = bin->bin().items.at(1);
+        // The wide angle's transcript: Speaker 1 at 1 s, Speaker 2 at 2 s, Speaker 1 at 3 s.
+        model::Transcript t;
+        t.mob = QString::fromStdString(model::mobIdOf(wide).toString());
+        t.lines = {model::TranscriptLine{1, {{QStringLiteral("One."), 1.0, 1.5}}}, model::TranscriptLine{2, {{QStringLiteral("Two."), 2.0, 2.5}}},
+                   model::TranscriptLine{1, {{QStringLiteral("Three."), 3.0, 3.5}}}};
+        QVERIFY(model::TranscriptStore().save(t));
+        model::GroupClip g;
+        for (const model::BinItem& c : {wide, close}) {
+            model::GroupAngle angle;
+            angle.binId = binId;
+            angle.clipId = c.id;
+            angle.clip = c;
+            g.angles << angle;
+        }
+        model::BinItem group;
+        group.id = model::newItemId();
+        group.name = QStringLiteral("Scene");
+        group.kind = model::BinItemKind::Group;
+        group.editRate = Rational(25);
+        model::storeGroup(group, g, 100);
+        bin->addItem(group);
+        // The Transcript Tool on the group in the Source monitor: Assign to Camera Angle on the speaker's menu.
+        commands.action(QStringLiteral("tools.transcript_tool"))->trigger();
+        window.composer().load(MonitorId::Source, binId, group);
+        QCoreApplication::processEvents();
+        TranscriptTool& tool = window.transcriptTool();
+        tool.setShowTimecode(false);
+        QCOMPARE(tool.transcript().lines.size(), qsizetype(3));
+        std::unique_ptr<QMenu> menu(tool.contextMenuAt(0, nullptr));
+        auto* assign = menu->findChild<QMenu*>(QStringLiteral("assignCameraAngle"));
+        QVERIFY(assign);
+        QCOMPARE(assign->actions().last()->text(), close.name);
+        QVERIFY(window.assignSpeakerAngle(QStringLiteral("Speaker 2"), 1));
+        QCOMPARE(model::groupOf(*bin->bin().item(group.id))->speakerAngles.value(QStringLiteral("Speaker 2")), 1);
+        QVERIFY(window.assignSpeakerAngle(QStringLiteral("Speaker 1"), 0));
+        // The group in a sequence, its segment selected: AutoCut.
+        model::BinItem seqItem;
+        seqItem.id = model::newItemId();
+        seqItem.name = QStringLiteral("Cut");
+        seqItem.kind = model::BinItemKind::Sequence;
+        seqItem.editRate = Rational(25);
+        model::Sequence seq = model::Sequence::withDefaultTracks();
+        model::Segment seg;
+        seg.clipId = group.id;
+        seg.binId = binId;
+        seg.name = wide.name;
+        seg.length = 100;
+        seg.groupAngle = 0;
+        seq.track(QStringLiteral("V1"))->segments = {seg};
+        seq.storeIn(seqItem);
+        bin->addItem(seqItem);
+        window.composer().load(MonitorId::Record, binId, seqItem);
+        window.timeline().setSelection({{QStringLiteral("V1"), 0}});
+        std::unique_ptr<QMenu> timelineMenu(window.timeline().contextMenu({}, model::SegmentRef{QStringLiteral("V1"), 0}));
+        auto* autoCut = timelineMenu->findChild<QAction*>(QStringLiteral("timeline:autoCut"));
+        QVERIFY(autoCut && autoCut->isEnabled());
+        autoCut->trigger();
+        const model::Sequence after = model::Sequence::fromItem(window.composer().state(MonitorId::Record).current()->item);
+        const model::Track* v1 = after.track(QStringLiteral("V1"));
+        QCOMPARE(v1->segments.size(), qsizetype(3)); // Speaker 2 from 2 s, Speaker 1 again from 3 s
+        QCOMPARE(v1->segments[0].length, std::int64_t(50));
+        QCOMPARE(*v1->segments[1].groupAngle, 1);
+        QCOMPARE(*v1->segments[2].groupAngle, 0);
         qunsetenv("LUMENIS_TRANSCRIPTS");
     }
 };

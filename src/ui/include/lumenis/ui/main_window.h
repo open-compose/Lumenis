@@ -612,6 +612,12 @@ public:
     // Manage Transcripts (2026.8 guide p.455-456; Script > Manage Transcripts, the Find window's Settings, the Transcript
     // setting's button): opened window modal without blocking, returned; nullptr without a project.
     ManageTranscriptsDialog* manageTranscripts();
+    // AutoCut (8.2e; 2026.8 guide p.451-452). assignSpeakerAngle: the Source monitor's group gives the speaker named
+    // `speaker` the angle `angle` (-1: none), kept in the group (GroupClip::speakerAngles). autoCut: the camera switches
+    // on the selected group segments of the Record monitor's sequence from the groups' transcripts, one undo step;
+    // returns how many switches were made.
+    bool assignSpeakerAngle(const QString& speaker, int angle);
+    int autoCut();
     // Imports a shared transcripts file into the store; the count, or -1 with `error` (Language Hints that differ: "need
     // to match when exporting and importing", p.451).
     int importSharedTranscripts(const QString& path, QString* error = nullptr);
