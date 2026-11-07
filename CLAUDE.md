@@ -833,7 +833,10 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   `Timeline::waveformSync`; `model::groupEditSequence`/`groupFromSequence`/`refreshGroupEdits` with
   `Segment::groupOffsets` and `Sequence::editedGroup`; `MainWindow::editGroup`/`updateGroup`/`createGroupFromSequence`/
   `refreshGroupEdits`; tests `tst_waveform_sync`, `tst_group_clip`, `tst_multicam_ui`, scenario
-  `44-waveform-sync.json`), is done, so 8.1a is. After Phase 7, before Phase 8: 7.6, the owner's report
+  `44-waveform-sync.json`), is done, so 8.1a is. 8.1b1, MultiCamera mode (`Composer::setMultiCameraMode`,
+  `MainWindow::multiCamPicture`/`splitClicked`/`multiCamKey` through the Composer's picture click and keypad handlers,
+  `model::groupSegmentAt`/`setGroupAngleAt`/`keypadSplitPosition`, `Timeline::setGroupAngle` cutting while playing; the
+  Composer settings' MultiCam tab; tests `tst_group_clip`, `tst_multicam_ui`, scenario `45-multicam-cut.json`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

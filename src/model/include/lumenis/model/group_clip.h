@@ -122,6 +122,27 @@ void storeGroup(BinItem& item, const GroupClip& group, std::int64_t duration);
 // same material. Returns how many segments changed.
 int refreshGroupEdits(Sequence& sequence, const GroupClipLookup& lookup);
 
+// The group segment MultiCamera mode works on at sequence frame `frame` (p.1129): on the first of `tracks` that has
+// one there (video tracks, the preferred one first), with the group frame it shows. Nothing when there is none.
+struct GroupSegmentAt {
+    QString track;
+    std::int64_t start = 0; // the segment's first sequence frame
+    Segment segment;
+    std::int64_t groupFrame = 0; // the group frame shown at `frame`
+};
+std::optional<GroupSegmentAt> groupSegmentAt(const Sequence& sequence, std::int64_t frame, const QStringList& tracks);
+
+// "Click a camera angle in the split display during playback to switch to that camera angle" and the MultiCam keys
+// (p.1129, p.1131): the group segment on `track` at `frame` shows angle `angle` (named for it). With `cut` (while
+// playing) the segment is first cut at `frame` (an Add Edit) so that only what follows changes. False when there is
+// no group segment there, the angle is out of the group's range or it already shows it.
+bool setGroupAngleAt(Sequence& sequence, const QString& track, std::int64_t frame, int angle, bool cut, const GroupClip& group);
+
+// The split display position a numeric keypad key chooses (p.1131-1132), 0 for the upper left: in Quad Split "7: Upper
+// left, 8 or 9: Upper right, 4 or 1: Lower left, 2, 3, 5, or 6: Lower right"; in Nine Split "each of the nine keys 1
+// through 9 maps to a position in the split display based on its location on the keypad". Nothing for other keys.
+std::optional<int> keypadSplitPosition(int digit, int split);
+
 // The angle `step` places on from `angle` among `count`, wrapping round (Previous In Group and Next In
 // Group "cycle through all the clips", p.1131).
 int stepAngle(int angle, int step, int count);

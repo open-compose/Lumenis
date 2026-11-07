@@ -782,6 +782,12 @@ struct Run {
             if (ok == o.value(QStringLiteral("refused")).toBool()) return fail(QStringLiteral("waveform_sync: %1").arg(timeline.lastMessage()));
             return true;
         }
+        // MultiCamera mode's camera choice (p.1129-1131): angle n at the Record monitor's position, cut there with "cut".
+        if (o.contains(QStringLiteral("group_angle"))) {
+            const bool ok = timeline.setGroupAngle(o.value(QStringLiteral("group_angle")).toInt(), o.value(QStringLiteral("cut")).toBool());
+            if (ok == o.value(QStringLiteral("refused")).toBool()) return fail(QStringLiteral("group_angle: %1").arg(timeline.lastMessage()));
+            return true;
+        }
         // Previous In Group (-1) or Next In Group (1) on the Record monitor's group segment (p.1131).
         if (o.contains(QStringLiteral("group_step"))) {
             const bool ok = timeline.stepGroupAngle(o.value(QStringLiteral("group_step")).toInt());

@@ -294,6 +294,7 @@
       "items": [
         "composer.full_screen_playback",
         "composer.load_filler",
+        "composer.multicamera_mode",
         "composer.remote_play",
         "composer.show_single_dual_monitor",
         "composer.sync_point_overwrite",

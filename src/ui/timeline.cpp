@@ -5909,6 +5909,8 @@ bool Timeline::deleteMarker(MonitorId monitor, const QString& id) {
 }
 
 void Timeline::keyPressEvent(QKeyEvent* event) {
+    // The MultiCam keys on the numeric keypad (p.1131), as in the Composer.
+    if ((event->modifiers() & Qt::KeypadModifier) && composer_.keypadPressed(event->key())) return;
     // Escape leaves Trim mode and slip (p.664).
     if (event->key() == Qt::Key_Escape && trimMode_) {
         exitTrimMode();
@@ -7339,6 +7341,38 @@ bool Timeline::stepGroupAngle(int step) {
     found->name = group->angles[angle].clip.name;
     const QList<model::SegmentRef> keep = selection_;
     const bool ok = commitSequence(step < 0 ? tr("Previous In Group") : tr("Next In Group"), seq);
+    selection_ = keep;
+    view_->update();
+    return ok;
+}
+
+QStringList Timeline::groupTracksAt() const {
+    const model::Sequence seq = recordSequenceOf(composer_);
+    // The highest selected video tracks first, then the other video tracks from the top (as stepGroupAngle).
+    QStringList selected;
+    QStringList others;
+    for (const model::Track& t : seq.tracks()) {
+        if (t.kind != model::TrackKind::Video) continue;
+        (patch_.isRecordSelected(t.name()) ? selected : others).prepend(t.name());
+    }
+    return selected + others;
+}
+
+// MultiCamera mode's camera choice (p.1129, p.1131): the group segment at the Record monitor's position shows `angle`;
+// while playing it is cut there first, so the choice is "recorded as cuts in the Timeline". An undo step.
+bool Timeline::setGroupAngle(int angle, bool cut) {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec) return false;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const std::int64_t pos = composer_.state(MonitorId::Record).position();
+    const auto at = model::groupSegmentAt(seq, pos, groupTracksAt());
+    if (!at) return fail(tr("There is no group clip under the position indicator."));
+    const auto clip = composer_.resolve(at->segment.binId, at->segment.clipId);
+    const auto group = clip ? model::groupOf(*clip) : std::nullopt;
+    if (!group || !model::setGroupAngleAt(seq, at->track, pos, angle, cut, *group)) return false;
+    const QList<model::SegmentRef> keep = selection_;
+    const bool ok = commitSequence(cut ? tr("MultiCam Cut") : tr("Switch Camera Angle"), seq);
     selection_ = keep;
     view_->update();
     return ok;

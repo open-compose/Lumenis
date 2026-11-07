@@ -714,6 +714,8 @@ void MainWindow::createPanels() {
     // The monitors show the frames of linked clips; a sequence shows its top
     // video track's (p.432-434 orders the tracks the same way).
     composer_->setPictureResolver([this](MonitorId monitor, std::int64_t at, QSize size, bool* offline) -> QImage {
+        // MultiCamera mode: the Source monitor shows the sequence's group (p.1129).
+        if (monitor == MonitorId::Source && composer_->multiCameraMode()) return multiCamPicture(size, offline);
         const model::MonitorState& state = composer_->state(monitor);
         // A sequence: its video tracks composited with their effects (Phase 6.1, media::composeImage).
         // A Title Effect clip (6.8d4a) is composited as its one-segment sequence: the title over black.
@@ -2249,9 +2251,11 @@ std::optional<std::pair<model::BinItem, std::int64_t>> MainWindow::frameAt(Monit
 
 // The angles of the shown bank in rows of two or three, the selected one outlined (ours: the guide's pictures show
 // the split without saying how the selected angle is marked). Angles past the group's last are black.
-QImage MainWindow::groupSplitImage(const model::BinItem& group, std::int64_t at, QSize size, bool* offline) const {
+QImage MainWindow::groupSplitImage(const model::BinItem& group, std::int64_t at, QSize size, bool* offline, std::optional<int> selected,
+                                   const QList<std::int64_t>& offsets) const {
     const auto g = model::groupOf(group);
     if (!g || size.isEmpty()) return {};
+    const int shown = selected.value_or(g->selected);
     const int split = composer_->groupSplit();
     const int side = split == 9 ? 3 : 2;
     QImage out(size, QImage::Format_RGB32);
@@ -2263,7 +2267,7 @@ QImage MainWindow::groupSplitImage(const model::BinItem& group, std::int64_t at,
         const int angle = composer_->groupBank() * split + k;
         if (angle >= g->angles.size()) break;
         const QRect r((k % side) * cell.width(), (k / side) * cell.height(), cell.width(), cell.height());
-        const model::BinItem clip = model::groupAngleClip(group, angle);
+        const model::BinItem clip = model::groupAngleClip(group, angle, offsets);
         if (media::isLinked(clip)) {
             if (frames_->isOffline(clip)) {
                 anyOffline = true;
@@ -2273,13 +2277,117 @@ QImage MainWindow::groupSplitImage(const model::BinItem& group, std::int64_t at,
                             frame);
             }
         }
-        if (angle == g->selected) {
+        if (angle == shown) {
             p.setPen(QPen(QColor(255, 210, 0), 3));
             p.drawRect(r.adjusted(1, 1, -2, -2));
         }
     }
     if (anyOffline && offline) *offline = true;
     return out;
+}
+
+// MultiCamera mode's Source monitor (p.1129): the group segment at the Record monitor's position, its angles split
+// (the angle it shows outlined) as the Composer's split says; while playing with Split Mode Play set to Fullscreen,
+// "the active camera angle, which displays in full-monitor size" (p.1160-1161). Black where there is no group segment.
+std::optional<model::GroupSegmentAt> MainWindow::multiCamSegment() const {
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence || !timeline_) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    QStringList tracks = timeline_->groupTracksAt();
+    // Show Track in Split View When Playing: V1, or the monitored track (ours, the default) first.
+    if (settings_->text(QStringLiteral("Composer"), QStringLiteral("splitTrack")) == QLatin1String("v1")) {
+        tracks.removeAll(QStringLiteral("V1"));
+        tracks.prepend(QStringLiteral("V1"));
+    } else {
+        const QStringList shown = shownVideoTracks(MonitorId::Record, seq);
+        if (!shown.isEmpty()) {
+            tracks.removeAll(shown.last());
+            tracks.prepend(shown.last());
+        }
+    }
+    return model::groupSegmentAt(seq, composer_->state(MonitorId::Record).position(), tracks);
+}
+
+QImage MainWindow::multiCamPicture(QSize size, bool* offline) const {
+    const auto at = multiCamSegment();
+    if (!at) return {};
+    const auto group = composer_->resolve(at->segment.binId, at->segment.clipId);
+    if (!group || !model::isGroupClip(*group)) return {};
+    const bool full = composer_->groupSplit() <= 1 ||
+                      (composer_->isPlaying() && settings_->text(QStringLiteral("Composer"), QStringLiteral("splitModePlay")) == QLatin1String("fullscreen"));
+    if (full) {
+        const model::BinItem clip = model::groupAngleClip(*group, at->segment.groupAngle.value_or(-1), at->segment.groupOffsets);
+        if (!media::isLinked(clip)) return {};
+        if (frames_->isOffline(clip)) {
+            if (offline) *offline = true;
+            return {};
+        }
+        return frames_->frame(clip, at->groupFrame, size);
+    }
+    return groupSplitImage(*group, at->groupFrame, size, offline, at->segment.groupAngle, at->segment.groupOffsets);
+}
+
+// A click in a split display (p.1131): "Click a camera angle in the split display during playback to switch to that
+// camera angle"; the right button swaps banks (p.1132). In MultiCamera mode the angle goes to the sequence's group
+// segment (cut there while playing); in Quad or Nine Split Source view it becomes the group's selected angle (ours).
+bool MainWindow::splitClicked(MonitorId monitor, QPointF fraction, Qt::MouseButton button) {
+    if (monitor != MonitorId::Source) return false;
+    const bool multi = composer_->multiCameraMode();
+    const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
+    if (!multi && !(loaded && model::isGroupClip(loaded->item) && composer_->groupSplit() > 1)) return false;
+    if (button == Qt::RightButton) {
+        if (!multi) return false;
+        swapBank();
+        return true;
+    }
+    if (button != Qt::LeftButton || composer_->groupSplit() <= 1) return false;
+    const int side = composer_->groupSplit() == 9 ? 3 : 2;
+    const int column = std::clamp(static_cast<int>(fraction.x() * side), 0, side - 1);
+    const int row = std::clamp(static_cast<int>(fraction.y() * side), 0, side - 1);
+    chooseAngle(composer_->groupBank() * composer_->groupSplit() + row * side + column);
+    return true;
+}
+
+void MainWindow::swapBank() {
+    if (!composer_->multiCameraMode()) {
+        composer_->swapCamBank();
+        return;
+    }
+    const auto at = multiCamSegment();
+    const auto group = at ? composer_->resolve(at->segment.binId, at->segment.clipId) : std::nullopt;
+    const auto g = group ? model::groupOf(*group) : std::nullopt;
+    if (g) composer_->swapCamBank(static_cast<int>(g->angles.size()));
+}
+
+bool MainWindow::chooseAngle(int angle) {
+    if (composer_->multiCameraMode()) return timeline_ && timeline_->setGroupAngle(angle, composer_->isPlaying());
+    const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
+    auto group = loaded ? model::groupOf(loaded->item) : std::nullopt;
+    if (!group || angle < 0 || angle >= group->angles.size() || group->selected == angle) return false;
+    group->selected = angle;
+    model::BinItem item = loaded->item;
+    model::setGroup(item, *group);
+    storeClip(loaded->binId, item);
+    composer_->refreshDisplay();
+    return true;
+}
+
+// The numeric keypad (p.1131-1132): 1-9 choose the angle at that place in the split display; 0 and . swap banks. Only
+// while a split display of a group is shown (MultiCamera mode, or Quad or Nine Split Source view).
+bool MainWindow::multiCamKey(int key) {
+    const model::LoadedClip* loaded = composer_->state(MonitorId::Source).current();
+    const bool split = composer_->groupSplit() > 1;
+    if (!composer_->multiCameraMode() && !(split && loaded && model::isGroupClip(loaded->item))) return false;
+    if (key == Qt::Key_0 || key == Qt::Key_Period) {
+        swapBank();
+        return true;
+    }
+    if (key < Qt::Key_1 || key > Qt::Key_9) return false;
+    const int splitCount = split ? composer_->groupSplit() : 4;
+    const auto place = model::keypadSplitPosition(key - Qt::Key_0, splitCount);
+    if (!place) return false;
+    chooseAngle(composer_->groupBank() * splitCount + *place);
+    return true;
 }
 
 // Previous In Group and Next In Group (p.1131): "The angle selection switches in either the Source monitor (source
@@ -7783,7 +7891,16 @@ void MainWindow::installPanelHandlers() {
     handle("mcam.next_in_group", [this] { stepInGroup(1); });
     handle("mcam.quad_split", [this] { composer_->setGroupSplit(4); });
     handle("mcam.nine_split", [this] { composer_->setGroupSplit(9); });
-    handle("mcam.swap_cam_bank", [this] { composer_->swapCamBank(); });
+    handle("mcam.swap_cam_bank", [this] { swapBank(); });
+    // Composer > MultiCamera Mode (p.1129), on and off.
+    if (QAction* mode = commands_.action(QStringLiteral("composer.multicamera_mode"))) {
+        mode->setCheckable(true);
+        connect(mode, &QAction::toggled, this, [this](bool on) { composer_->setMultiCameraMode(on); });
+    }
+    composer_->setPictureClickHandler([this](MonitorId monitor, QPointF fraction, Qt::MouseButton button) {
+        return splitClicked(monitor, fraction, button);
+    });
+    composer_->setKeypadHandler([this](int key) { return multiCamKey(key); });
     handle("clip.read_audio_timecode", [this] { readAudioTimecode(); });
     handle("clip.refresh_sequence.motion_adapters_timewarps", [this] { refreshMotionAdapters(); });
     handle("timeline.mixdown.audio.multiple_mixes", [this] { multipleMixes(); });

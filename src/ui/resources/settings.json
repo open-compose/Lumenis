@@ -150,6 +150,17 @@
             {"key": "stopAtMarkers", "type": "bool", "label": "Stop at Markers", "default": false, "page": 1160},
             {"key": "ignoreTrackSelectors", "type": "bool", "label": "Ignore Track Selectors", "default": false, "page": 1160}
           ]
+        },
+        {
+          "name": "MultiCam",
+          "options": [
+            {"key": "splitModePlay", "type": "choice", "label": "Split Mode Play", "default": "split", "page": 1160,
+             "choices": [{"value": "split", "label": "Quad or Nine Split"}, {"value": "fullscreen", "label": "Fullscreen"}]},
+            {"key": "clientMonitor", "type": "choice", "label": "MultiCam Mode Client Monitor", "default": "off", "page": 1161, "later": true,
+             "choices": [{"value": "off", "label": "Off"}, {"value": "split", "label": "Quad or Nine Split"}, {"value": "linecut", "label": "Linecut"}]},
+            {"key": "splitTrack", "type": "choice", "label": "Show Track in Split View When Playing", "default": "monitored", "page": 1161,
+             "choices": [{"value": "v1", "label": "V1"}, {"value": "monitored", "label": "Monitored track"}]}
+          ]
         }
       ]
     },

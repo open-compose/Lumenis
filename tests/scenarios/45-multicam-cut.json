@@ -1,0 +1,25 @@
+[
+  {
+    "name": "MultiCamera mode: live cuts while playing cut the group segment at the position; a choice when stopped switches the whole segment",
+    "guide": "p.1129, p.1131",
+    "clips": [{"name": "A"}, {"name": "B"}, {"name": "C"}, {"name": "G", "group": ["A", "B", "C"], "offsets": [0, 0, 0]}],
+    "sequence": {"tracks": {"V1": [], "A1": [], "A2": []}},
+    "steps": [
+      {"load": "source", "clip": "G"},
+      {"mark": "source", "in": 0, "out": 59},
+      {"position": "record", "frame": 0},
+      {"command": "edit.splice_in"},
+      {"position": "record", "frame": 20},
+      {"group_angle": 1, "cut": true},
+      {"position": "record", "frame": 40},
+      {"group_angle": 2, "cut": true},
+      {"position": "record", "frame": 45},
+      {"group_angle": 0},
+      {"group_angle": 0, "refused": true}
+    ],
+    "expect": {
+      "V1": [["A", 0, 20, {"angle": 0}], ["B", 20, 20, {"angle": 1}], ["A", 40, 20, {"angle": 0}]],
+      "A1": [["A", 0, 60, {"angle": 0}]],
+      "A2": [["A", 0, 60, {"angle": 0}]]}
+  }
+]

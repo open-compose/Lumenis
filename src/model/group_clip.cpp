@@ -356,6 +356,59 @@ std::optional<std::pair<std::int64_t, std::int64_t>> groupAngleRange(const BinIt
     return std::pair<std::int64_t, std::int64_t>{o.value(QStringLiteral("from")).toInteger(), o.value(QStringLiteral("to")).toInteger()};
 }
 
+std::optional<GroupSegmentAt> groupSegmentAt(const Sequence& sequence, std::int64_t frame, const QStringList& tracks) {
+    for (const QString& name : tracks) {
+        const Track* t = sequence.track(name);
+        if (!t) continue;
+        std::int64_t start = 0;
+        const int i = t->segmentAt(frame, &start);
+        if (i < 0 || !t->segments[i].groupAngle) continue;
+        GroupSegmentAt at;
+        at.track = name;
+        at.start = start;
+        at.segment = t->segments[i];
+        at.groupFrame = at.segment.sourceIn + (frame - start);
+        return at;
+    }
+    return std::nullopt;
+}
+
+bool setGroupAngleAt(Sequence& sequence, const QString& track, std::int64_t frame, int angle, bool cut, const GroupClip& group) {
+    if (angle < 0 || angle >= group.angles.size()) return false;
+    Track* t = sequence.track(track);
+    if (!t) return false;
+    std::int64_t start = 0;
+    int i = t->segmentAt(frame, &start);
+    if (i < 0 || !t->segments[i].groupAngle || *t->segments[i].groupAngle == angle) return false;
+    if (cut && frame > start) {
+        if (!sequence.addEdit(track, frame)) return false;
+        t = sequence.track(track);
+        i = t->segmentAt(frame, &start);
+        if (i < 0) return false;
+    }
+    Segment& s = t->segments[i];
+    s.groupAngle = angle;
+    s.name = group.angles[angle].clip.name;
+    return true;
+}
+
+std::optional<int> keypadSplitPosition(int digit, int split) {
+    if (digit < 1 || digit > 9) return std::nullopt;
+    if (split == 9) {
+        // 7 8 9 on the top row, 1 2 3 on the bottom.
+        const int row = 2 - (digit - 1) / 3;
+        return row * 3 + (digit - 1) % 3;
+    }
+    switch (digit) {
+    case 7: return 0;
+    case 8:
+    case 9: return 1;
+    case 4:
+    case 1: return 2;
+    default: return 3; // 2, 3, 5, 6
+    }
+}
+
 int stepAngle(int angle, int step, int count) {
     if (count <= 0) return 0;
     return ((angle + step) % count + count) % count;

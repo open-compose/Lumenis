@@ -1060,6 +1060,11 @@ void MonitorPicture::paintOverlay(QPainter& p) const {
 }
 
 void MonitorPicture::mousePressEvent(QMouseEvent* event) {
+    // MainWindow's split displays (p.1131-1132) come first.
+    if (const QPointF f = overlayFraction(event->position());
+        f.x() >= 0.0 && f.x() <= 1.0 && f.y() >= 0.0 && f.y() <= 1.0 && composer_.pictureClicked(monitor_, f, event->button())) {
+        return;
+    }
     if (monitor_ == MonitorId::Record && composer_.effectPreview().on && (event->modifiers() & Qt::ControlModifier)) {
         // Ctrl+Alt: "The pointer changes to a hand. Drag the hand ... to reposition the image" (p.82);
         // Ctrl alone: "Ctrl+click ... in the Effect Preview monitor to enlarge the image" (p.77).
@@ -1184,6 +1189,8 @@ void MonitorPicture::mouseDoubleClickEvent(QMouseEvent* event) {
 }
 
 void MonitorPicture::contextMenuEvent(QContextMenuEvent* event) {
+    // In MultiCamera mode the right button on the Source monitor swaps camera banks instead (p.1132).
+    if (monitor_ == MonitorId::Source && composer_.multiCameraMode()) return;
     composer_.setActiveMonitor(monitor_);
     composer_.contextMenu(monitor_)->exec(event->globalPos());
 }
@@ -1898,8 +1905,9 @@ void Composer::clear() {
 }
 
 void Composer::setActiveMonitor(MonitorId monitor) {
-    // A single monitor is always the Record monitor (p.381).
-    if (single_) monitor = MonitorId::Record;
+    // A single monitor is always the Record monitor (p.381); so it is in MultiCamera mode, whose "Source monitor
+    // controls are disabled" (p.1129).
+    if (single_ || multiCamera_) monitor = MonitorId::Record;
     if (active_ == monitor) return;
     active_ = monitor;
     refresh();
@@ -2697,6 +2705,7 @@ bool Composer::event(QEvent* event) {
 
 void Composer::keyPressEvent(QKeyEvent* event) {
     if (OverlayInput* input = overlayInput(); input && input->overlayKey(event)) return;
+    if ((event->modifiers() & Qt::KeypadModifier) && keypadPressed(event->key())) return;
     if (event->isAutoRepeat() && event->key() == Qt::Key_K) return;
     if (event->key() == Qt::Key_K) kHeld_ = true;
     // Holding K and tapping J or L steps one frame; holding both plays slowly (p.401): the key's
@@ -2820,13 +2829,27 @@ void Composer::setGroupSplit(int split) {
     if (MonitorPicture* w = picture(MonitorId::Source)) w->update();
 }
 
-void Composer::swapCamBank() {
-    const model::LoadedClip* loaded = state(MonitorId::Source).current();
-    const auto group = loaded ? model::groupOf(loaded->item) : std::nullopt;
-    if (!group || groupSplit_ <= 1) return;
-    const int banks = std::max(1, static_cast<int>((group->angles.size() + groupSplit_ - 1) / groupSplit_));
+void Composer::swapCamBank(int angles) {
+    if (angles < 0) {
+        const model::LoadedClip* loaded = state(MonitorId::Source).current();
+        const auto group = loaded ? model::groupOf(loaded->item) : std::nullopt;
+        angles = group ? static_cast<int>(group->angles.size()) : 0;
+    }
+    if (angles <= 0 || groupSplit_ <= 1) return;
+    const int banks = std::max(1, (angles + groupSplit_ - 1) / groupSplit_);
     groupBank_ = (groupBank_ + 1) % banks;
     if (MonitorPicture* w = picture(MonitorId::Source)) w->update();
+}
+
+void Composer::setMultiCameraMode(bool on) {
+    if (multiCamera_ == on) return;
+    multiCamera_ = on;
+    if (on) {
+        if (groupSplit_ <= 1) groupSplit_ = 4;
+        groupBank_ = 0;
+        active_ = MonitorId::Record;
+    }
+    refresh();
 }
 
 bool Composer::showsCaptions(MonitorId monitor) const {

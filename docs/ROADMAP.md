@@ -1406,9 +1406,11 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     the group in the Source monitor full size and in Quad and Nine Split views with Swap Cam Bank (p.1126-1129),
     groups edited into sequences with "(G)", Previous In Group and Next In Group in both monitors (p.1131). 8.1a2 (done):
     Waveform Sync and Waveform Analysis grouping (p.1124, p.1126), Edit Group, Update Group, Create Group from a
-    sequence and Refresh Sequence > Group Clips (p.478, p.1125-1126). So 8.1a is done. 8.1b, MultiCamera mode: switching angles while playing
-    (arrow keys, numeric keypad, mouse, p.1131), the linecut and Add Edit (p.1132), the Group menu and Multi-angle
-    View menus (p.1133-1134), Match Frame (p.1134), multigroups (p.1125). 8.1c, Change Source Track for groups
+    sequence and Refresh Sequence > Group Clips (p.478, p.1125-1126). So 8.1a is done. 8.1b, MultiCamera mode, in two
+    parts. 8.1b1 (done): the mode, switching angles with the numeric keypad and mouse, live cuts while playing, banks
+    (p.1129-1132), the Composer settings' MultiCam tab (p.1160-1161). 8.1b2: the linecut and Add Edit (p.1132), the
+    Group menu with Audio Follow Video and the Multi-angle View menus (p.1133-1134), Match Frame (p.1134), Commit
+    Multicam Edits (p.1135), multigroups (p.1125). 8.1c, Change Source Track for groups
     (2026.8 guide p.507), stereoscopic groups (p.1124) and Auto Cut from transcript speakers (after 8.2).
   * 8.2, transcripts and PhraseFind (ch.14, p.436-453): speech to text through a provider (`ext::` hook; an open
     engine such as whisper.cpp, MIT, as an optional module), the Transcript Tool, speaker IDs, the PhraseFind window,

@@ -127,6 +127,37 @@ the Group menu, multigroups and the rest follow in 8.1b and 8.1c (docs/ROADMAP.m
   * It works on the bin's selected sequences when a bin is active, else on the Record monitor's
     sequence, as Motion Adapters/Timewarps does.
 
+## MultiCamera mode (8.1b1)
+
+* Composer > MultiCamera Mode (p.1129) turns it on and off (`Composer::setMultiCameraMode`).
+  * "it gangs all clips in the group clip displayed in the Source monitor with the sequence displayed in
+    the Record monitor": the Source monitor shows the group segment at the Record monitor's position,
+    its angles split, the shown angle outlined (`MainWindow::multiCamPicture`).
+  * "The Source monitor controls are disabled": the Record monitor stays the active one.
+  * Entered from Full-Monitor display it shows the Quad Split (ours). Quad Split and Nine Split
+    still switch the split, and pressing one again shows the shown angle alone ("switch between
+    singular and multi-angle playback without exiting MultiCamera mode", p.1130).
+  * The group segment is looked for on the video track the Composer setting says (below), then on the
+    selected video tracks and the others from the top (`Timeline::groupTracksAt`).
+* Choosing an angle (p.1131-1132), in MultiCamera mode or in Quad or Nine Split Source view:
+  * "Click a camera angle in the split display during playback to switch to that camera angle."
+  * The numeric keypad: in Quad Split "7: Upper left; 8 or 9: Upper right; 4 or 1: Lower left; 2, 3, 5,
+    or 6: Lower right"; in Nine Split the keys by their place on the keypad
+    (`model::keypadSplitPosition`).
+  * "To switch camera banks in Quad Split display ... Click the right mouse button. Press either the 0
+    (zero) key or the . (period) key on the numeric keypad."
+  * In MultiCamera mode the choice goes to the sequence (`Timeline::setGroupAngle`, an undo step):
+    while playing the segment is cut at the position first, so "The camera angles you selected ... are
+    recorded as cuts in the Timeline" (p.1129); when stopped the whole segment switches. Only picture
+    switches (Audio Follow Video is 8.1b2).
+  * In Quad or Nine Split Source view the choice becomes the group's selected angle (ours).
+* The Composer settings' MultiCam tab (p.1160-1161):
+  * Split Mode Play: Quad or Nine Split, or Fullscreen ("the active camera angle, which displays in
+    full-monitor size" while playing). Ours: Quad or Nine Split by default.
+  * MultiCam Mode Client Monitor: dimmed, there is no client monitor yet (7.3c).
+  * Show Track in Split View When Playing: V1 or the monitored track. Ours: the monitored track by
+    default, and for stopped monitors too.
+
 ## Tests
 
 * `tst_group_clip`: grouping (by sound too), offsets, names, angle clips, edits, Edit/Update Group
@@ -134,4 +165,5 @@ the Group menu, multigroups and the rest follow in 8.1b and 8.1c (docs/ROADMAP.m
 * `tst_waveform_sync`: lags between sounds, at two rates, refusals, and linked files.
 * `tst_multicam_ui`: the dialog, grouping, the split views and switching in the application; Waveform
   Analysis, Edit/Update/Create Group, Refresh Sequence and Waveform Sync on movies with sound.
-* Scenarios `43-group-clip.json` and `44-waveform-sync.json`.
+* `tst_multicam_ui multiCameraMode`: the mode, the keypad, clicks, banks and live cuts.
+* Scenarios `43-group-clip.json`, `44-waveform-sync.json` and `45-multicam-cut.json`.

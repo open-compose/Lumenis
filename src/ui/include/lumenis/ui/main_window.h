@@ -555,6 +555,11 @@ public:
     void setUpdateGroupHook(std::function<int()> hook) { updateGroupHook_ = std::move(hook); }
     // Previous In Group (-1) and Next In Group (1) on the active monitor (p.1131); false when nothing changed.
     bool stepInGroup(int step);
+    // Choosing an angle in a split display: by place (a click at `fraction` of the Source monitor's picture, or a
+    // numeric keypad key) or by number; false when nothing changed (8.1b; p.1131-1132).
+    bool splitClicked(MonitorId monitor, QPointF fraction, Qt::MouseButton button);
+    bool multiCamKey(int key);
+    bool chooseAngle(int angle);
     // Read Audio Timecode (p.668-669): the selected master clips' and subclips' LTC on the chosen
     // track, into the chosen Auxiliary TC column (media::ltc::readClipTimecode); other items are
     // ignored with a message.
@@ -913,7 +918,13 @@ private:
     // (model::motionEffectOf); nothing for other clips.
     std::optional<std::pair<model::BinItem, std::int64_t>> followMotion(const model::BinItem& clip, std::int64_t frame) const;
     // The Source monitor's Quad Split or Nine Split picture of a group clip at group frame `at` (p.1127-1128).
-    QImage groupSplitImage(const model::BinItem& group, std::int64_t at, QSize size, bool* offline) const;
+    // `selected` is the angle outlined (the group's own when unset); `offsets` stand in for the group's (a segment's).
+    QImage groupSplitImage(const model::BinItem& group, std::int64_t at, QSize size, bool* offline, std::optional<int> selected = {},
+                           const QList<std::int64_t>& offsets = {}) const;
+    // MultiCamera mode (8.1b; p.1129-1132): the group segment it follows, the Source monitor's picture of it.
+    std::optional<model::GroupSegmentAt> multiCamSegment() const;
+    QImage multiCamPicture(QSize size, bool* offline) const;
+    void swapBank();
     // An unrendered motion effect clip's frame `frame` made from its interlaced source clip's fields with the
     // clip's Render 2-Field Motion Effect Using choice (FX Guide p.563, 6.5d3a); nothing for other clips and
     // for progressive sources, which followMotion() shows.

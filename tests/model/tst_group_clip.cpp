@@ -285,6 +285,49 @@ private slots:
         QCOMPARE(after.sourceIn + after.groupOffsets[0], std::int64_t(10));
         QCOMPARE(refreshGroupEdits(s, lookup), 0);
     }
+
+    // MultiCamera mode's cuts (p.1129-1132): the keypad's places, the group segment at a frame, and choosing an angle
+    // with and without a cut.
+    void multiCameraCuts() {
+        QCOMPARE(keypadSplitPosition(7, 4), std::optional<int>(0));
+        QCOMPARE(keypadSplitPosition(9, 4), std::optional<int>(1));
+        QCOMPARE(keypadSplitPosition(1, 4), std::optional<int>(2));
+        QCOMPARE(keypadSplitPosition(5, 4), std::optional<int>(3));
+        QCOMPARE(keypadSplitPosition(7, 9), std::optional<int>(0));
+        QCOMPARE(keypadSplitPosition(5, 9), std::optional<int>(4));
+        QCOMPARE(keypadSplitPosition(3, 9), std::optional<int>(8));
+        QVERIFY(!keypadSplitPosition(0, 4));
+        Bin bin;
+        GroupOptions options;
+        options.sync = GroupSync::SourceTimecode;
+        const BinItem group = *groupClips(bin, inBin({clip(QStringLiteral("A"), 100), clip(QStringLiteral("B"), 100)}), options);
+        Sequence s = Sequence::withDefaultTracks();
+        TrackPatch p;
+        p.setSourceTracks(sourceTracksOf(group));
+        applyEdit(s, EditKind::Overwrite, EditPlan{10, 0, 40, {}}, QStringLiteral("bin"), group, p);
+        const auto at = groupSegmentAt(s, 15, {QStringLiteral("V2"), QStringLiteral("V1")});
+        QVERIFY(at);
+        QCOMPARE(at->track, QStringLiteral("V1"));
+        QCOMPARE(at->groupFrame, std::int64_t(25));
+        QVERIFY(!groupSegmentAt(s, 50, {QStringLiteral("V1")}));
+        const GroupClip g = *groupOf(group);
+        // Stopped: the whole segment switches.
+        QVERIFY(setGroupAngleAt(s, QStringLiteral("V1"), 15, 1, false, g));
+        QCOMPARE(s.track(QStringLiteral("V1"))->segments.size(), qsizetype(1));
+        QCOMPARE(s.track(QStringLiteral("V1"))->segments.first().name, QStringLiteral("B"));
+        QVERIFY(!setGroupAngleAt(s, QStringLiteral("V1"), 15, 1, false, g)); // already B
+        QVERIFY(!setGroupAngleAt(s, QStringLiteral("V1"), 15, 5, false, g)); // no such angle
+        // Playing: cut at 20, only what follows changes.
+        QVERIFY(setGroupAngleAt(s, QStringLiteral("V1"), 20, 0, true, g));
+        const Track* v1 = s.track(QStringLiteral("V1"));
+        QCOMPARE(v1->segments.size(), qsizetype(2));
+        QCOMPARE(v1->segments[0].groupAngle, std::optional<int>(1));
+        QCOMPARE(v1->segments[0].length, std::int64_t(20));
+        QCOMPARE(v1->segments[1].groupAngle, std::optional<int>(0));
+        QCOMPARE(v1->segments[1].sourceIn, std::int64_t(30));
+        // The audio stays as it was.
+        QCOMPARE(s.track(QStringLiteral("A1"))->segments.size(), qsizetype(1));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestGroupClip)

@@ -581,6 +581,11 @@ public:
     // Previous In Group (-1) and Next In Group (1) on the group segment at the Record monitor's position (p.1131), an
     // undo step; false (with a message) when there is none.
     bool stepGroupAngle(int step);
+    // MultiCamera mode (p.1129-1132): the group segment at the Record monitor's position shows `angle`, cut there
+    // first when `cut` (while playing); an undo step, false (with a message) when there is no group segment there.
+    // groupTracksAt() is the order the video tracks are searched for one: selected tracks first, each from the top.
+    bool setGroupAngle(int angle, bool cut);
+    QStringList groupTracksAt() const;
     // Waveform Sync (p.1126) on the selected video and audio segments, an undo step; false (with a message) when it
     // cannot. MainWindow gives the offset between two clips' sounds (media::waveformOffset): frame f of the first
     // sounds with frame f + offset of the second.

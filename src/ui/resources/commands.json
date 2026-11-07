@@ -271,6 +271,7 @@
     {"id": "fx.collapse", "text": "Collapse", "palette": "fx"},
     {"id": "fx.scratch_removal", "text": "Scratch Removal", "palette": "fx"},
     {"id": "composer.update_group", "text": "Update Group"},
+    {"id": "composer.multicamera_mode", "text": "MultiCamera Mode"},
     {"id": "composer.create_group", "text": "Create Group"},
     {"id": "mcam.quad_split", "text": "Quad Split", "palette": "mcam"},
     {"id": "mcam.nine_split", "text": "Nine Split", "palette": "mcam"},

@@ -237,6 +237,85 @@ private slots:
         QCOMPARE(model::groupOf(*bin->bin().item(*groupId))->selected, 0);
     }
 
+    // MultiCamera mode (p.1129-1132): the Source monitor's split follows the Record monitor's group segment, the
+    // keypad and clicks choose its angle, live cuts while playing, and the Source monitor stays inactive.
+    void multiCameraMode() {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString a = dir.filePath(QStringLiteral("cam-a.mov"));
+        const QString b = dir.filePath(QStringLiteral("cam-b.mov"));
+        QVERIFY(writeMovie(a, 40, false));
+        QVERIFY(writeMovie(b, 40, true));
+        ext::ProviderRegistry providers;
+        CommandRegistry commands;
+        commands.loadBuiltin();
+        MainWindow window(commands, providers);
+        window.resize(1200, 760);
+        window.show();
+        window.settings().setUser(dir.filePath(QStringLiteral("Users")), QStringLiteral("ed"));
+        model::ProjectEntry project;
+        project.folder = dir.filePath(QStringLiteral("Film"));
+        project.settings.name = QStringLiteral("Film");
+        project.settings.format.editRate = Rational(25);
+        QDir().mkpath(project.folder);
+        window.setProject(project);
+        settle();
+        const QString binId = window.binContainer().newBin();
+        BinDocument* bin = window.binContainer().openBin(binId);
+        const QStringList ids = window.linkFiles(binId, {a, b});
+        QCOMPARE(ids.size(), 2);
+        BinView* view = window.binContainer().viewFor(bin);
+        view->selectIds(ids);
+        // Synced by timecode: both start together.
+        window.setGroupClipsHook([] { return std::optional<std::pair<model::GroupSync, int>>({model::GroupSync::SourceTimecode, 1}); });
+        const auto groupId = window.groupClips();
+        QVERIFY(groupId);
+        Composer& composer = window.composer();
+        composer.loadDefault(binId, *bin->bin().item(*groupId));
+        composer.setActiveMonitor(MonitorId::Source);
+        commands.action(QStringLiteral("edit.splice_in"))->trigger();
+        settle();
+        QVERIFY(composer.state(MonitorId::Record).current());
+
+        QAction* mode = commands.action(QStringLiteral("composer.multicamera_mode"));
+        QVERIFY(mode && mode->isCheckable());
+        mode->setChecked(true);
+        QVERIFY(composer.multiCameraMode());
+        QCOMPARE(composer.groupSplit(), 4);
+        QCOMPARE(composer.activeMonitor(), MonitorId::Record);
+        composer.setActiveMonitor(MonitorId::Source);
+        QCOMPARE(composer.activeMonitor(), MonitorId::Record);
+        // The Source monitor shows the sequence's group at the Record monitor's position: A and B at frame 15.
+        composer.moveTo(MonitorId::Record, 15);
+        const QSize quad(128, 72);
+        QVERIFY(near(colourAt(composer, MonitorId::Source, 0, quad, QPoint(32, 18)).red(), 75));
+        QVERIFY(near(colourAt(composer, MonitorId::Source, 0, quad, QPoint(96, 18)).green(), 95));
+        const auto angle = [&] {
+            return model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item).track(QStringLiteral("V1"))->segments.first().groupAngle;
+        };
+        QCOMPARE(angle(), std::optional<int>(0));
+        // Keypad 9 (upper right): B; a click on the upper left: A again.
+        QVERIFY(composer.keypadPressed(Qt::Key_9));
+        QCOMPARE(angle(), std::optional<int>(1));
+        QVERIFY(near(colourAt(composer, MonitorId::Record, 15).green(), 95));
+        QVERIFY(composer.pictureClicked(MonitorId::Source, QPointF(0.2, 0.2), Qt::LeftButton));
+        QCOMPARE(angle(), std::optional<int>(0));
+        // The right button swaps banks (one bank of four here: it stays).
+        QVERIFY(composer.pictureClicked(MonitorId::Source, QPointF(0.5, 0.5), Qt::RightButton));
+        QCOMPARE(composer.groupBank(), 0);
+        // A live cut: the angle changes from the position on.
+        QVERIFY(window.timeline().setGroupAngle(1, true));
+        const model::Sequence cut = model::Sequence::fromItem(composer.state(MonitorId::Record).current()->item);
+        QCOMPARE(cut.track(QStringLiteral("V1"))->segments.size(), qsizetype(2));
+        QCOMPARE(cut.track(QStringLiteral("V1"))->segments.at(0).length, std::int64_t(15));
+        QCOMPARE(cut.track(QStringLiteral("V1"))->segments.at(1).groupAngle, std::optional<int>(1));
+        // Leaving the mode.
+        mode->setChecked(false);
+        QVERIFY(!composer.multiCameraMode());
+        composer.setActiveMonitor(MonitorId::Source);
+        QCOMPARE(composer.activeMonitor(), MonitorId::Source);
+    }
+
     // Waveform Analysis grouping, Edit Group, Update Group, Create Group, Refresh Sequence > Group Clips and Waveform
     // Sync (p.478, p.1124-1126) on two cameras whose sounds are the same, the second 10 frames later.
     void soundAndGroupEdits() {

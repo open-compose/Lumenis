@@ -188,7 +188,28 @@ public:
     int groupSplit() const { return groupSplit_; }
     void setGroupSplit(int split);
     int groupBank() const { return groupBank_; }
-    void swapCamBank();
+    // `angles`: how many angles the shown group has (MultiCamera mode's group in the sequence); -1 for the Source
+    // monitor's group clip.
+    void swapCamBank(int angles = -1);
+    // Composer > MultiCamera Mode (8.1b; p.1129-1130): the Source monitor's split display follows the group segment
+    // at the Record monitor's position ("it gangs all clips in the group clip displayed in the Source monitor with the
+    // sequence displayed in the Record monitor"), drawn by MainWindow, and "The Source monitor controls are disabled":
+    // the Record monitor stays the active one. Entering it from Full-Monitor display shows the Quad Split (ours).
+    bool multiCameraMode() const { return multiCamera_; }
+    void setMultiCameraMode(bool on);
+    // A click in a monitor's picture at `fraction` of it (0-1), before the Composer's own handling; true when the
+    // handler took it (MainWindow: choosing an angle in a split display, or swapping banks with the right button,
+    // p.1131-1132).
+    using PictureClickHandler = std::function<bool(MonitorId, QPointF fraction, Qt::MouseButton button)>;
+    void setPictureClickHandler(PictureClickHandler handler) { pictureClick_ = std::move(handler); }
+    bool pictureClicked(MonitorId monitor, QPointF fraction, Qt::MouseButton button) const {
+        return pictureClick_ && pictureClick_(monitor, fraction, button);
+    }
+    // A numeric keypad key (Qt::Key_0 ... Key_9, Key_Period), given first to the handler; true when it took it (the
+    // MultiCam keys, p.1131-1132). The Composer and the Timeline both ask.
+    using KeypadHandler = std::function<bool(int key)>;
+    void setKeypadHandler(KeypadHandler handler) { keypad_ = std::move(handler); }
+    bool keypadPressed(int key) const { return keypad_ && keypad_(key); }
     // Repaints the monitors and position bars, after a setting they show changed.
     void refreshDisplay() { refresh(); }
     // Puts a clip that is in no bin (loaded from the Source Browser) into
@@ -767,6 +788,9 @@ private:
     bool showCaptions_[2] = {false, false}; // Source, Record
     int groupSplit_ = 1; // 1, 4 or 9 (setGroupSplit)
     int groupBank_ = 0;
+    bool multiCamera_ = false;
+    PictureClickHandler pictureClick_;
+    KeypadHandler keypad_;
     PlayClock playClock_;
     // The position play last started (or changed speed) from; the play clock counts from here.
     std::int64_t playStart_ = 0;

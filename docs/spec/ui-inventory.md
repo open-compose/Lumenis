@@ -616,6 +616,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   * Edit Group's sequence kept in the group's bin as "<group>.Edit", and the order of a group's angles
     made from a sequence;
   * segments keeping their angle offsets until Refresh Sequence > Group Clips.
+  * MultiCamera mode entered from Full-Monitor display showing the Quad Split; the defaults of Split Mode Play
+    (Quad or Nine Split) and Show Track in Split View When Playing (the monitored track, stopped too);
+  * a choice in Quad or Nine Split Source view becoming the group's selected angle; stopped choices in
+    MultiCamera mode switching the whole segment.
 
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical
