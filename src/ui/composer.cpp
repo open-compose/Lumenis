@@ -2795,6 +2795,20 @@ QMenu* Composer::contextMenu(MonitorId monitor) {
     captions->setCheckable(true);
     captions->setChecked(showsCaptions(monitor));
     connect(captions, &QAction::toggled, this, [this, monitor](bool on) { setShowCaptions(monitor, on); });
+    if (monitor == MonitorId::Record) {
+        // "right click in the Record Monitor and select Update Group"; "Right click in the Record Monitor and choose
+        // Create Group" (p.1126).
+        const model::LoadedClip* rec = state(MonitorId::Record).current();
+        const bool sequence = rec && rec->item.kind == model::BinItemKind::Sequence;
+        QAction* update = menu->addAction(tr("Update Group"));
+        update->setObjectName(QStringLiteral("updateGroup"));
+        update->setEnabled(sequence && model::Sequence::fromItem(rec->item).editedGroup().size() == 2);
+        connect(update, &QAction::triggered, this, [this] { emit commandRequested(QStringLiteral("composer.update_group")); });
+        QAction* create = menu->addAction(tr("Create Group"));
+        create->setObjectName(QStringLiteral("createGroup"));
+        create->setEnabled(sequence);
+        connect(create, &QAction::triggered, this, [this] { emit commandRequested(QStringLiteral("composer.create_group")); });
+    }
     return menu;
 }
 

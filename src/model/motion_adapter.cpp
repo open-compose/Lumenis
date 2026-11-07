@@ -218,7 +218,7 @@ bool isAdapted(const BinItem& item) {
 BinItem clipForSegment(const BinItem& clip, const Segment& segment) {
     // A group clip's segment plays its angle (group_clip.h).
     if (clip.kind == BinItemKind::Group) {
-        const BinItem angle = groupAngleClip(clip, segment.groupAngle.value_or(-1));
+        const BinItem angle = groupAngleClip(clip, segment.groupAngle.value_or(-1), segment.groupOffsets);
         return segment.adapter ? adaptedClip(angle, *segment.adapter) : angle;
     }
     return segment.adapter ? adaptedClip(clip, *segment.adapter) : clip;

@@ -134,7 +134,7 @@ private slots:
         other.editRate = Rational(30);
         options.sync = GroupSync::SourceTimecode;
         QVERIFY(!groupClips(bin, inBin({a, other}), options, &error));
-        // Not built: waveform analysis.
+        // Waveform analysis without the sound's sync points.
         options.sync = GroupSync::Waveform;
         QVERIFY(!groupClips(bin, inBin({a, clip(QStringLiteral("B"), 10)}), options, &error));
     }
@@ -194,6 +194,96 @@ private slots:
         QVERIFY(again);
         QCOMPARE(groupOf(*again)->selected, 1);
         QCOMPARE(groupOf(*again)->angles[1].clip.name, QStringLiteral("B"));
+    }
+
+    // Waveform Analysis takes each clip's sync point from the sound (MainWindow's media::waveformOffset).
+    void groupsByWaveform() {
+        Bin bin;
+        GroupOptions options;
+        options.sync = GroupSync::Waveform;
+        options.waveform = [](const BinItem& c) -> std::optional<std::int64_t> {
+            if (c.id == QLatin1String("A")) return 0;
+            if (c.id == QLatin1String("B")) return 15; // B's frame 15 sounds with A's frame 0
+            return std::nullopt;
+        };
+        const auto group = groupClips(bin, inBin({clip(QStringLiteral("A"), 100), clip(QStringLiteral("B"), 100)}), options);
+        QVERIFY(group);
+        QCOMPARE(groupOf(*group)->angles[0].offset, std::int64_t(-15));
+        QCOMPARE(groupOf(*group)->angles[1].offset, std::int64_t(0));
+        QString error;
+        QVERIFY(!groupClips(bin, inBin({clip(QStringLiteral("A"), 100), clip(QStringLiteral("C"), 100)}), options, &error));
+        QVERIFY(error.contains(QLatin1String("sound")));
+    }
+
+    // Edit Group lays the angles out on their own tracks; Update Group reads them back, moved where the editor put
+    // them, never shorter; a group of a plain sequence (Create Group).
+    void editsAndUpdatesGroups() {
+        Bin bin;
+        GroupOptions options;
+        options.sync = GroupSync::SourceTimecode;
+        const BinItem a = clip(QStringLiteral("A"), 100, QStringLiteral("10:00:00:00"));
+        const BinItem b = clip(QStringLiteral("B"), 100, QStringLiteral("10:00:02:00"));
+        const BinItem c = clip(QStringLiteral("C"), 40, QStringLiteral("10:00:01:00"), QStringLiteral("A1-2")); // sound only
+        const BinItem group = *groupClips(bin, inBin({a, b, c}), options);
+        Sequence seq = groupEditSequence(QStringLiteral("bin"), group);
+        QCOMPARE(seq.editedGroup(), (QStringList{"bin", group.id}));
+        QVERIFY(seq.track(QStringLiteral("V1")) && seq.track(QStringLiteral("V2")));
+        QVERIFY(!seq.track(QStringLiteral("V3"))); // C has no picture
+        QCOMPARE(seq.track(QStringLiteral("V1"))->segments.size(), qsizetype(1));
+        QCOMPARE(seq.track(QStringLiteral("V2"))->segments.at(0).length, std::int64_t(50)); // B 50 frames later: filler
+        QCOMPARE(seq.track(QStringLiteral("V2"))->segments.at(1).clipId, QStringLiteral("B"));
+        QCOMPARE(seq.track(QStringLiteral("A2"))->segments.last().clipId, QStringLiteral("B"));
+        // Back again: the same offsets for the clips that are in the group's time.
+        const GroupClipLookup lookup = [&](const QString&, const QString& id) -> std::optional<BinItem> {
+            for (const BinItem* i : {&a, &b, &c}) {
+                if (i->id == id) return *i;
+            }
+            return std::nullopt;
+        };
+        auto back = groupFromSequence(seq, Rational(25), lookup, group.durationFrames);
+        QVERIFY(back);
+        QCOMPARE(back->first.angles[0].offset, std::int64_t(0));
+        QCOMPARE(back->first.angles[1].offset, std::int64_t(-50));
+        QCOMPARE(back->second, group.durationFrames);
+        // The editor slides B 5 frames later: its offset follows.
+        Track* v2 = seq.track(QStringLiteral("V2"));
+        v2->segments[0].length += 5;
+        back = groupFromSequence(seq, Rational(25), lookup, group.durationFrames);
+        QCOMPARE(back->first.angles[1].offset, std::int64_t(-55));
+        QCOMPARE(back->second, std::int64_t(155));
+        // A sequence of one clip is no group.
+        Sequence one;
+        one.ensureTrack(QStringLiteral("V1"))->segments = seq.track(QStringLiteral("V1"))->segments;
+        QString error;
+        QVERIFY(!groupFromSequence(one, Rational(25), lookup, 0, &error));
+        QVERIFY(!error.isEmpty());
+    }
+
+    // Refresh Sequence > Group Clips: the shown angle keeps its material; the segment takes the new offsets.
+    void refreshesGroupEdits() {
+        Bin bin;
+        GroupOptions options;
+        options.sync = GroupSync::SourceTimecode;
+        BinItem group = *groupClips(bin, inBin({clip(QStringLiteral("A"), 100), clip(QStringLiteral("B"), 100)}), options);
+        Sequence s = Sequence::withDefaultTracks();
+        TrackPatch p;
+        p.setSourceTracks(sourceTracksOf(group));
+        applyEdit(s, EditKind::Overwrite, EditPlan{10, 0, 20, {}}, QStringLiteral("bin"), group, p);
+        QCOMPARE(s.track(QStringLiteral("V1"))->segments.first().groupOffsets, (QList<std::int64_t>{0, 0}));
+        // The group changes: A now 8 frames later than before.
+        auto g = *groupOf(group);
+        g.angles[0].offset = -8;
+        setGroup(group, g);
+        // Until refreshed the segment plays A by its own offsets.
+        const Segment before = s.track(QStringLiteral("V1"))->segments.first();
+        QCOMPARE(groupAngleClip(group, 0, before.groupOffsets).link.value(QStringLiteral("first")).toInteger(), qint64(0));
+        const GroupClipLookup lookup = [&](const QString&, const QString&) -> std::optional<BinItem> { return group; };
+        QCOMPARE(refreshGroupEdits(s, lookup), 3); // V1, A1, A2
+        const Segment after = s.track(QStringLiteral("V1"))->segments.first();
+        QCOMPARE(after.groupOffsets, (QList<std::int64_t>{-8, 0}));
+        // The same clip frames: sourceIn + offset stays 10.
+        QCOMPARE(after.sourceIn + after.groupOffsets[0], std::int64_t(10));
+        QCOMPARE(refreshGroupEdits(s, lookup), 0);
     }
 };
 

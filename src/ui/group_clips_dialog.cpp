@@ -41,8 +41,8 @@ GroupClipsDialog::GroupClipsDialog(bool filmProject, QWidget* parent) : QDialog(
         const bool ink = o.sync == model::GroupSync::Ink || o.sync == model::GroupSync::AuxInk;
         // "This option appears only with 24p and 25p projects" (the ink options).
         if (ink && !filmProject) b->setVisible(false);
-        // Not built yet: film timecode and ink numbers (no film projects) and waveform analysis (8.1a2).
-        if (ink || o.sync == model::GroupSync::FilmTc || o.sync == model::GroupSync::Waveform) b->setEnabled(false);
+        // Not built yet: film timecode and ink numbers (no film projects).
+        if (ink || o.sync == model::GroupSync::FilmTc) b->setEnabled(false);
         if (o.sync == model::GroupSync::AuxTimecode) {
             // "Select an Auxiliary TC, 1 through 5, from the menu."
             auto* row = new QHBoxLayout;

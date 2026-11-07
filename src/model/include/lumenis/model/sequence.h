@@ -269,6 +269,10 @@ struct Segment {
     // On a segment edited from a group clip (lumenis/model/group_clip.h): the camera angle it shows, an
     // index into the group's angles. Previous In Group and Next In Group change it (Editing Guide p.1131).
     std::optional<int> groupAngle;
+    // The group's angle offsets (GroupAngle::offset) as the segment knows them: its angles play by these until Clip >
+    // Refresh Sequence > Group Clips (p.478, p.1126) takes in the group's current ones (refreshGroupEdits). Empty for
+    // segments from no group, and for angles past its end the group's own.
+    QList<std::int64_t> groupOffsets;
     // Its Motion Adapter, on video and audio segments from a mixed rate clip. None for a clip at the
     // sequence's rate, and for segments edited before adapters (6.5d2), which count the clip's own
     // frames. Not an effect: Remove Effect leaves it (p.469).
@@ -420,6 +424,10 @@ public:
     // Audio Mixdown's surround formats hold (lumenis/media/surround.h). Mono is taken as Stereo.
     AudioFormat mixFormat() const { return mixFormat_; }
     void setMixFormat(AudioFormat format);
+    // A sequence made by Edit Group (p.1125; lumenis/model/group_clip.h): the bin and id of the group clip it edits, for
+    // Update Group. Kept as "editsGroup": [bin, id]; empty for other sequences.
+    const QStringList& editedGroup() const { return editedGroup_; }
+    void setEditedGroup(const QString& binId, const QString& groupId) { editedGroup_ = {binId, groupId}; }
 
     // Timeline > New > Video Track, Audio Track, Data Track (p.625): the next
     // free number, or nothing past the limit (one data track).
@@ -514,6 +522,7 @@ private:
     QList<Track> tracks_;
     bool timecode_ = true;
     AudioFormat mixFormat_ = AudioFormat::Stereo;
+    QStringList editedGroup_;
 };
 
 // The tracks a monitor's clip offers on the source side of the Track

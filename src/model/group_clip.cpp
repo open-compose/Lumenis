@@ -2,7 +2,6 @@
 // a group from synced clips, keeping it in the Group item's composition and playing an angle of it.
 #include "lumenis/model/group_clip.h"
 
-#include "lumenis/model/sequence.h"
 
 #include <QJsonArray>
 #include <QJsonObject>
@@ -94,10 +93,15 @@ std::optional<std::int64_t> syncPoint(const BinItem& clip, const GroupOptions& o
         }
         return -*tc;
     }
+    case GroupSync::Waveform:
+        if (options.waveform) {
+            if (const auto point = options.waveform(clip)) return *point;
+        }
+        *why = QStringLiteral("\"%1\" could not be synced by its sound.").arg(clip.name);
+        return std::nullopt;
     case GroupSync::FilmTc:
     case GroupSync::Ink:
-    case GroupSync::AuxInk:
-    case GroupSync::Waveform: break;
+    case GroupSync::AuxInk: break;
     }
     *why = QStringLiteral("Grouping by this option is not available.");
     return std::nullopt;
@@ -202,22 +206,138 @@ std::optional<BinItem> groupClips(const Bin& bin, const QList<std::pair<QString,
     item.created = options.when.isValid() ? options.when : QDateTime::currentDateTimeUtc();
     item.modified = item.created;
     item.editRate = rate;
-    item.durationFrames = std::max<std::int64_t>(latest - earliest, 1);
-    item.fields.insert(QStringLiteral("Tracks"), groupTracks(group).join(QLatin1Char(' ')));
-    // Its timecode is the first clip's at the group's first frame (ours).
-    const TimecodeFormat format = timecodeFormatOf(first);
-    const std::int64_t start = startFrameOf(first) + group.angles.first().offset;
-    item.fields.insert(QStringLiteral("Start"), QString::fromStdString(Timecode(start, format).toString()));
-    item.fields.insert(QStringLiteral("End"), QString::fromStdString(Timecode(start + item.durationFrames, format).toString()));
-    setGroup(item, group);
+    storeGroup(item, group, latest - earliest);
     return item;
 }
 
-BinItem groupAngleClip(const BinItem& group, int angle) {
+void storeGroup(BinItem& item, const GroupClip& group, std::int64_t duration) {
+    item.durationFrames = std::max<std::int64_t>(duration, 1);
+    item.fields.insert(QStringLiteral("Tracks"), groupTracks(group).join(QLatin1Char(' ')));
+    // Its timecode is the first clip's at the group's first frame (ours).
+    if (!group.angles.isEmpty()) {
+        const BinItem& first = group.angles.first().clip;
+        const TimecodeFormat format = timecodeFormatOf(first);
+        const std::int64_t start = startFrameOf(first) + group.angles.first().offset;
+        item.fields.insert(QStringLiteral("Start"), QString::fromStdString(Timecode(start, format).toString()));
+        item.fields.insert(QStringLiteral("End"), QString::fromStdString(Timecode(start + item.durationFrames, format).toString()));
+    }
+    setGroup(item, group);
+}
+
+namespace {
+
+// The first track of `kind` a clip offers (its V1 or A1); empty when it has none.
+QString firstTrack(const BinItem& clip, TrackKind kind) {
+    for (const QString& t : sourceTracksOf(clip)) {
+        if (const auto ref = parseTrackName(t); ref && ref->kind == kind) return t;
+    }
+    return {};
+}
+
+} // namespace
+
+Sequence groupEditSequence(const QString& binId, const BinItem& group) {
+    Sequence seq;
+    const auto g = groupOf(group);
+    if (!g) return seq;
+    int video = 0;
+    int audio = 0;
+    for (const GroupAngle& a : g->angles) {
+        // Where the angle has material within the group: group frames [from, to).
+        const std::int64_t from = std::max<std::int64_t>(0, -a.offset);
+        const std::int64_t to = std::min(group.durationFrames, a.clip.durationFrames - a.offset);
+        if (to <= from) continue;
+        for (const TrackKind kind : {TrackKind::Video, TrackKind::Audio}) {
+            const QString source = firstTrack(a.clip, kind);
+            if (source.isEmpty()) continue;
+            const QString name = trackName(kind, kind == TrackKind::Video ? ++video : ++audio);
+            Track* t = seq.ensureTrack(name);
+            if (!t) continue;
+            Segment s;
+            s.clipId = a.clipId;
+            s.binId = a.binId.isEmpty() ? binId : a.binId;
+            s.sourceMob = a.clip.mobId;
+            s.name = a.clip.name;
+            s.sourceTrack = source;
+            s.sourceIn = from + a.offset;
+            s.length = to - from;
+            t->segments.clear();
+            if (from > 0) t->segments << Segment::filler(from);
+            t->segments << s;
+        }
+    }
+    seq.setEditedGroup(binId, group.id);
+    return seq;
+}
+
+std::optional<std::pair<GroupClip, std::int64_t>> groupFromSequence(const Sequence& sequence, const Rational& rate,
+                                                                   const GroupClipLookup& lookup, std::int64_t atLeast,
+                                                                   QString* error) {
+    const auto fail = [&](const QString& why) -> std::optional<std::pair<GroupClip, std::int64_t>> {
+        if (error) *error = why;
+        return std::nullopt;
+    };
+    GroupClip group;
+    QStringList seen;
+    std::int64_t end = 0;
+    for (const TrackKind kind : {TrackKind::Video, TrackKind::Audio}) {
+        for (const Track& t : sequence.tracks()) {
+            if (t.kind != kind) continue;
+            std::int64_t at = 0;
+            for (const Segment& s : t.segments) {
+                const std::int64_t start = at;
+                at += s.length;
+                if (s.isFiller()) continue;
+                end = std::max(end, at);
+                if (seen.contains(s.clipId)) continue;
+                const auto clip = lookup ? lookup(s.binId, s.clipId) : std::nullopt;
+                if (!clip || !canBeGroupAngle(*clip)) continue;
+                if (!(clip->editRate == rate)) return fail(QStringLiteral("\"%1\" is at another frame rate than the sequence.").arg(clip->name));
+                seen << s.clipId;
+                GroupAngle a;
+                a.binId = s.binId;
+                a.clipId = s.clipId;
+                a.clip = *clip;
+                // The segment shows clip frame sourceIn at sequence frame start.
+                a.offset = s.sourceIn - start;
+                group.angles << a;
+            }
+        }
+    }
+    if (group.angles.size() < 2) return fail(QStringLiteral("A group needs two or more clips in the sequence."));
+    return std::pair{group, std::max(end, atLeast)};
+}
+
+int refreshGroupEdits(Sequence& sequence, const GroupClipLookup& lookup) {
+    int changed = 0;
+    QStringList names;
+    for (const Track& t : sequence.tracks()) names << t.name();
+    for (const QString& name : names) {
+        Track* t = sequence.track(name);
+        for (Segment& s : t->segments) {
+            if (s.isFiller() || !s.groupAngle || !lookup) continue;
+            const auto clip = lookup(s.binId, s.clipId);
+            const auto g = clip ? groupOf(*clip) : std::nullopt;
+            if (!g || g->angles.isEmpty()) continue;
+            QList<std::int64_t> current;
+            for (const GroupAngle& a : g->angles) current << a.offset;
+            if (current == s.groupOffsets) continue;
+            const int k = std::clamp(*s.groupAngle, 0, static_cast<int>(g->angles.size()) - 1);
+            // The shown angle keeps showing the same material.
+            if (k < s.groupOffsets.size()) s.sourceIn += s.groupOffsets[k] - current[k];
+            s.groupOffsets = current;
+            ++changed;
+        }
+    }
+    return changed;
+}
+
+BinItem groupAngleClip(const BinItem& group, int angle, const QList<std::int64_t>& offsets) {
     const auto g = groupOf(group);
     if (!g || g->angles.isEmpty()) return group;
     if (angle < 0 || angle >= g->angles.size()) angle = g->selected;
-    const GroupAngle& a = g->angles[angle];
+    GroupAngle a = g->angles[angle];
+    if (angle < offsets.size()) a.offset = offsets[angle];
     BinItem out = a.clip;
     out.durationFrames = group.durationFrames;
     if (!out.link.isEmpty()) {

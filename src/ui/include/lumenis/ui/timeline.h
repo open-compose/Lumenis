@@ -581,6 +581,12 @@ public:
     // Previous In Group (-1) and Next In Group (1) on the group segment at the Record monitor's position (p.1131), an
     // undo step; false (with a message) when there is none.
     bool stepGroupAngle(int step);
+    // Waveform Sync (p.1126) on the selected video and audio segments, an undo step; false (with a message) when it
+    // cannot. MainWindow gives the offset between two clips' sounds (media::waveformOffset): frame f of the first
+    // sounds with frame f + offset of the second.
+    bool waveformSync();
+    using SoundOffset = std::function<std::optional<std::int64_t>(const model::BinItem&, const model::BinItem&, QString*)>;
+    void setSoundOffset(SoundOffset offset) { soundOffset_ = std::move(offset); }
     // Right-click > Add Timeline Clip Note: "The Timeline Clip Note dialog box opens. Type your notes
     // in the text box, and click OK" (p.483). On the selected segments, else on `segment`. The dialog
     // starts with the first one's note; tests answer it through setNoteAsk (nothing: Cancel).
@@ -1637,6 +1643,7 @@ private:
     SequenceStore store_;
     std::function<bool()> deleteHook_;
     std::function<bool(int)> groupArrows_;
+    SoundOffset soundOffset_;
     std::function<QByteArray(const model::Segment&)> captionClipData_;
     mutable CaptionTrack captionCache_;
     FindOptions findOptions_;

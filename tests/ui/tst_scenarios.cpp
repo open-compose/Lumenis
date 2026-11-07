@@ -99,6 +99,7 @@ struct Run {
     QHash<QString, BinItem> items; // by id: clips and the sequences stored
     QHash<QString, model::CorrectionTemplate> correctionTemplates; // saved by name (FX Guide p.612-614)
     QString error;
+    QHash<QString, std::int64_t> sounds; // clip id -> "sound"
 
     Run() {
         composer.setItemResolver([this](const QString&, const QString& id) -> std::optional<BinItem> {
@@ -217,9 +218,16 @@ struct Run {
                 model::setGroup(i, g);
                 i.fields.insert(QStringLiteral("Tracks"), model::groupTracks(g).join(QLatin1Char(' ')));
             }
+            // "sound": where the clip's sound is, in frames, for Waveform Sync (the offset between two clips is the
+            // difference; MainWindow measures it from the media, media::waveformOffset).
+            if (o.contains(QStringLiteral("sound"))) sounds.insert(i.id, o.value(QStringLiteral("sound")).toInteger());
             clips.insert(i.name, i);
             items.insert(i.id, i);
         }
+        timeline.setSoundOffset([this](const BinItem& a, const BinItem& b, QString*) -> std::optional<std::int64_t> {
+            if (!sounds.contains(a.id) || !sounds.contains(b.id)) return std::nullopt;
+            return sounds.value(b.id) - sounds.value(a.id);
+        });
         const QJsonObject seq = scenario.value(QStringLiteral("sequence")).toObject();
         if (seq.isEmpty()) return true;
         BinItem s;
@@ -761,6 +769,17 @@ struct Run {
                 return fail(ok ? QStringLiteral("the trim was not refused")
                                : QStringLiteral("the trim was refused: %1").arg(timeline.lastMessage()));
             }
+            return true;
+        }
+        // Waveform Sync (p.1126) on the segments listed as [track, start].
+        if (o.contains(QStringLiteral("waveform_sync"))) {
+            QList<model::SegmentRef> refs;
+            for (const QJsonValue& v : o.value(QStringLiteral("waveform_sync")).toArray()) {
+                refs.append({v.toArray().at(0).toString(), v.toArray().at(1).toInteger()});
+            }
+            timeline.setSelection(refs);
+            const bool ok = timeline.waveformSync();
+            if (ok == o.value(QStringLiteral("refused")).toBool()) return fail(QStringLiteral("waveform_sync: %1").arg(timeline.lastMessage()));
             return true;
         }
         // Previous In Group (-1) or Next In Group (1) on the Record monitor's group segment (p.1131).

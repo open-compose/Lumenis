@@ -545,6 +545,14 @@ public:
     // dialog in tests: the option and Auxiliary TC chosen, or nothing for Cancel.
     std::optional<QString> groupClips();
     void setGroupClipsHook(std::function<std::optional<std::pair<model::GroupSync, int>>()> hook) { groupClipsHook_ = std::move(hook); }
+    // Clip > Edit Group, Update Group, Create Group and Refresh Sequence > Group Clips (8.1a2; p.478, p.1125-1126): the
+    // new sequence's or group's id, nothing when none was made; the segments refreshed. The hook stands in for Update
+    // Group's question in tests: 0 to update the group, 1 to create a new one, -1 to cancel.
+    std::optional<QString> editGroup();
+    std::optional<QString> updateGroup();
+    std::optional<QString> createGroupFromSequence();
+    int refreshGroupEdits();
+    void setUpdateGroupHook(std::function<int()> hook) { updateGroupHook_ = std::move(hook); }
     // Previous In Group (-1) and Next In Group (1) on the active monitor (p.1131); false when nothing changed.
     bool stepInGroup(int step);
     // Read Audio Timecode (p.668-669): the selected master clips' and subclips' LTC on the chosen
@@ -960,6 +968,7 @@ private:
     QList<QAction*> binLayoutActions_;
     std::function<bool(ModifyDialog&)> modifyHook_;
     std::function<std::optional<std::pair<model::GroupSync, int>>()> groupClipsHook_;
+    std::function<int()> updateGroupHook_;
     ClipAudioHooks clipAudioHooks_;
     std::function<bool(MultiMixDialog&)> multiMixHook_;
     std::function<bool(ExportAsDialog&)> exportHook_;

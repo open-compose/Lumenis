@@ -4680,7 +4680,66 @@ QMenu* Timeline::contextMenu(const QString& track, const std::optional<model::Se
         titler->setEnabled(any && !showSource_);
     }
     connect(titler, &QAction::triggered, this, [this, segment] { promoteTitles(segment); });
+    // "Select the video clip to which you want to sync. Select the audio clips that you want to sync with. Right-click
+    // and select Waveform Sync" (p.1126).
+    QAction* waveform = menu->addAction(tr("Waveform Sync"));
+    waveform->setObjectName(QStringLiteral("timeline:waveformSync"));
+    {
+        bool pictureSelected = false;
+        bool soundSelected = false;
+        for (const model::SegmentRef& ref : selection_) {
+            const auto kind = model::parseTrackName(ref.track);
+            pictureSelected = pictureSelected || (kind && kind->kind == model::TrackKind::Video);
+            soundSelected = soundSelected || (kind && kind->kind == model::TrackKind::Audio);
+        }
+        waveform->setEnabled(!showSource_ && pictureSelected && soundSelected && soundOffset_);
+    }
+    connect(waveform, &QAction::triggered, this, [this] { waveformSync(); });
     return menu;
+}
+
+// Waveform Sync (p.1126): "Selected video must reference clips that have audio (e.g. camera sound) in order to sync
+// your video clips ... The video is now positioned in relation to the selected audio." Each selected video segment is
+// moved (Lift/Overwrite, ours) so that its clip's sound lines up with the first selected audio segment's.
+bool Timeline::waveformSync() {
+    message_.clear();
+    const model::LoadedClip* rec = recordSequence();
+    if (!rec || !soundOffset_) return false;
+    model::Sequence seq = model::Sequence::fromItem(rec->item);
+    std::optional<std::pair<model::SegmentRef, model::Segment>> sound;
+    QList<std::pair<model::SegmentRef, model::Segment>> pictures;
+    for (const model::SegmentRef& ref : selection_) {
+        const auto kind = model::parseTrackName(ref.track);
+        const auto seg = model::segmentFor(seq, ref);
+        if (!kind || !seg || seg->isFiller()) continue;
+        if (kind->kind == model::TrackKind::Audio && (!sound || ref.start < sound->first.start)) sound = std::pair{ref, *seg};
+        if (kind->kind == model::TrackKind::Video) pictures.append({ref, *seg});
+    }
+    if (!sound || pictures.isEmpty()) return fail(tr("Select a video clip and the audio clips to sync it with."));
+    const auto audioClip = composer_.resolve(sound->second.binId, sound->second.clipId);
+    if (!audioClip) return fail(tr("The audio clip cannot be found."));
+    QList<model::SegmentRef> moved;
+    for (const auto& [ref, seg] : pictures) {
+        const auto clip = composer_.resolve(seg.binId, seg.clipId);
+        if (!clip) return fail(tr("The video clip cannot be found."));
+        QString why;
+        const auto offset = soundOffset_(*clip, *audioClip, &why);
+        if (!offset) return fail(why.isEmpty() ? tr("The clips' sounds do not match.") : why);
+        // The video clip's frame f sounds with the audio clip's frame f + offset; the audio segment shows its frame
+        // sourceIn at its start, so the video clip's frame sourceIn - offset belongs there.
+        const std::int64_t target = sound->first.start + seg.sourceIn - (sound->second.sourceIn - *offset);
+        if (target < 0) return fail(tr("The video would start before the sequence."));
+        QString error;
+        const QList<model::SegmentRef> now =
+            model::moveSegments(seq, {ref}, target - ref.start, 0, model::EditKind::Overwrite, false, &error);
+        if (now.isEmpty()) return fail(error);
+        moved << now;
+    }
+    const bool ok = commitSequence(tr("Waveform Sync"), seq);
+    selection_ = moved;
+    if (sound) selection_ << sound->first;
+    view_->update();
+    return ok;
 }
 
 int Timeline::promoteTitles(const std::optional<model::SegmentRef>& clicked) {

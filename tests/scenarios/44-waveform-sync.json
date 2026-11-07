@@ -1,0 +1,15 @@
+[
+  {
+    "name": "Waveform Sync moves the selected video segment to where its clip's sound matches the selected audio's",
+    "guide": "p.1126",
+    "clips": [{"name": "CAM", "sound": 0}, {"name": "REC", "sound": 30, "tracks": "A1-2"}],
+    "sequence": {"tracks": {"V1": [["CAM", 0, 40]], "A1": [["filler", 5], ["REC", 20, 50]], "A2": []}},
+    "steps": [
+      {"waveform_sync": [["V1", 0], ["A1", 5]]},
+      {"waveform_sync": [["A1", 5]], "refused": true}
+    ],
+    "expect": {
+      "V1": [["filler", 15], ["CAM", 0, 40]],
+      "A1": [["filler", 5], ["REC", 20, 50]]}
+  }
+]

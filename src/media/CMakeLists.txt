@@ -50,6 +50,7 @@ add_library(lumenis_media STATIC
     ltc.cpp
     tone.cpp
     waveform.cpp
+    waveform_sync.cpp
     playback.cpp
     managed.cpp
     consolidate.cpp
@@ -81,6 +82,7 @@ add_library(lumenis_media STATIC
     include/lumenis/media/ltc.h
     include/lumenis/media/tone.h
     include/lumenis/media/waveform.h
+    include/lumenis/media/waveform_sync.h
     include/lumenis/media/playback.h
     include/lumenis/media/managed.h
     include/lumenis/media/consolidate.h

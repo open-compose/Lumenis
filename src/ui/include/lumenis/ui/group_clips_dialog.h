@@ -20,7 +20,7 @@ class GroupClipsDialog : public QDialog {
 public:
     // `filmProject`: a 24p or 25p project, where INK Number and Auxiliary Ink appear and Film TC/Sound TC
     // could be chosen ("This option appears dimmed if you are not working in a 24p or 25p project").
-    // Ours: Film TC/Sound TC, the ink options and Waveform Analysis stay dimmed, not built yet.
+    // Ours: Film TC/Sound TC and the ink options stay dimmed, not built yet.
     explicit GroupClipsDialog(bool filmProject, QWidget* parent = nullptr);
 
     model::GroupSync sync() const;

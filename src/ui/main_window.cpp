@@ -51,6 +51,7 @@
 #include "lumenis/media/dcp.h"
 #include "lumenis/media/movie_export.h"
 #include "lumenis/media/render.h"
+#include "lumenis/media/waveform_sync.h"
 #include "lumenis/ext/deck.h"
 #include "lumenis/ext/export_device.h"
 #include "lumenis/ext/video_output.h"
@@ -2325,6 +2326,12 @@ std::optional<QString> MainWindow::groupClips() {
         options.sync = dialog.sync();
         options.auxTc = dialog.auxTc();
     }
+    // Waveform Analysis: each clip's frame that sounds with the first clip's frame 0.
+    const model::BinItem first = clips.first().second;
+    options.waveform = [first](const model::BinItem& clip) -> std::optional<std::int64_t> {
+        if (clip.id == first.id) return 0;
+        return media::waveformOffset(first, clip);
+    };
     options.marks = [this](const model::BinItem& clip, bool in) -> std::optional<std::int64_t> {
         const model::LoadedClip* loaded = composer_->state(MonitorId::Source).loaded(clip.id);
         if (!loaded) return std::nullopt;
@@ -2340,6 +2347,153 @@ std::optional<QString> MainWindow::groupClips() {
     view->document().addItem(*group);
     view->selectIds({group->id});
     return group->id;
+}
+
+// Clip > Edit Group (p.1125): the selected group clip's clips as a sequence in the group's bin, named "<group>.Edit"
+// (ours), in the Record monitor. "Edits are not actually made to the group clip until you specifically choose to
+// update the group."
+std::optional<QString> MainWindow::editGroup() {
+    BinView* view = binContainer_->activeView();
+    if (!view || view->document().isReadOnly()) return std::nullopt;
+    const model::BinItem* group = nullptr;
+    for (const QString& id : view->selectedIds()) {
+        if (const model::BinItem* found = view->document().bin().item(id); found && model::isGroupClip(*found)) group = found;
+    }
+    if (!group) return std::nullopt;
+    const QString binId = view->document().nodeId();
+    const model::Sequence seq = model::groupEditSequence(binId, *group);
+    model::BinItem item =
+        model::newSequence(view->document().bin(), group->editRate, QDateTime::currentDateTimeUtc(), group->fields.value(QStringLiteral("Start")));
+    QStringList names;
+    for (const model::BinItem& i : view->document().bin().items) names << i.name;
+    item.name = group->name + QStringLiteral(".Edit");
+    for (int n = 2; names.contains(item.name); ++n) item.name = QStringLiteral("%1.Edit.%2").arg(group->name).arg(n);
+    seq.storeIn(item);
+    view->document().addItem(item);
+    composer_->load(MonitorId::Record, binId, item);
+    return item.id;
+}
+
+namespace {
+
+// A segment's clip as the monitors find it, for model::groupFromSequence and refreshGroupEdits.
+model::GroupClipLookup lookupOf(const Composer* composer) {
+    return [composer](const QString& bin, const QString& clip) { return composer->resolve(bin, clip); };
+}
+
+} // namespace
+
+// Update Group (p.1126): "right click in the Record Monitor and select Update Group. A dialog asks if you want to update
+// the group clip or create a new one." The Record monitor's sequence must come from Edit Group. Updating keeps the
+// group's name and selected angle (as far as it still has it) and its length at least ("You cannot make the group clip
+// shorter"); a new group goes into the same bin.
+std::optional<QString> MainWindow::updateGroup() {
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
+    const model::Sequence seq = model::Sequence::fromItem(rec->item);
+    const QStringList edited = seq.editedGroup();
+    BinDocument* doc = edited.size() == 2 ? binContainer_->document(edited[0]) : nullptr;
+    const model::BinItem* group = doc ? doc->bin().item(edited[1]) : nullptr;
+    if (!group || !model::isGroupClip(*group)) {
+        ConsoleLog::instance().append(tr("Update Group: the sequence in the Record monitor was not made by Edit Group."));
+        return std::nullopt;
+    }
+    int choice = 0;
+    if (updateGroupHook_) {
+        choice = updateGroupHook_();
+    } else {
+        QMessageBox box(QMessageBox::Question, tr("Update Group"), tr("Update the group clip \"%1\" or create a new one?").arg(group->name),
+                        QMessageBox::Cancel, this);
+        QPushButton* update = box.addButton(tr("Update"), QMessageBox::AcceptRole);
+        QPushButton* create = box.addButton(tr("Create New"), QMessageBox::AcceptRole);
+        box.exec();
+        choice = box.clickedButton() == update ? 0 : box.clickedButton() == create ? 1 : -1;
+    }
+    if (choice < 0 || doc->isReadOnly()) return std::nullopt;
+    QString error;
+    const auto made = model::groupFromSequence(seq, group->editRate, lookupOf(composer_), choice == 0 ? group->durationFrames : 0, &error);
+    if (!made) {
+        ConsoleLog::instance().append(tr("Update Group: %1").arg(error));
+        return std::nullopt;
+    }
+    model::GroupClip angles = made->first;
+    if (choice == 0) {
+        model::BinItem item = *group;
+        // The selected angle stays the same clip where the group still has it.
+        const QString selected = model::groupOf(item)->angles.value(model::groupOf(item)->selected).clipId;
+        angles.selected = 0;
+        for (int i = 0; i < angles.angles.size(); ++i) {
+            if (angles.angles[i].clipId == selected) angles.selected = i;
+        }
+        model::storeGroup(item, angles, made->second);
+        item.modified = QDateTime::currentDateTimeUtc();
+        storeClip(doc->nodeId(), item);
+        return item.id;
+    }
+    model::BinItem item;
+    item.id = model::newItemId();
+    item.kind = model::BinItemKind::Group;
+    item.name = model::groupName(doc->bin(), angles.angles.first().clip.name);
+    item.created = item.modified = QDateTime::currentDateTimeUtc();
+    item.editRate = group->editRate;
+    model::storeGroup(item, angles, made->second);
+    doc->addItem(item);
+    return item.id;
+}
+
+// Create Group (p.1126): "Load the sequence in the Timeline. Right click in the Record Monitor and choose Create Group.
+// A group is created and added to your bin" (the sequence's bin).
+std::optional<QString> MainWindow::createGroupFromSequence() {
+    const model::LoadedClip* rec = composer_->state(MonitorId::Record).current();
+    if (!rec || rec->item.kind != model::BinItemKind::Sequence) return std::nullopt;
+    BinDocument* doc = binContainer_->document(rec->binId);
+    if (!doc || doc->isReadOnly()) return std::nullopt;
+    QString error;
+    const auto made = model::groupFromSequence(model::Sequence::fromItem(rec->item), rec->item.editRate, lookupOf(composer_), 0, &error);
+    if (!made) {
+        ConsoleLog::instance().append(tr("Create Group: %1").arg(error));
+        if (!updateGroupHook_) QMessageBox::warning(this, tr("Create Group"), error);
+        return std::nullopt;
+    }
+    model::BinItem item;
+    item.id = model::newItemId();
+    item.kind = model::BinItemKind::Group;
+    item.name = model::groupName(doc->bin(), made->first.angles.first().clip.name);
+    item.created = item.modified = QDateTime::currentDateTimeUtc();
+    item.editRate = rec->item.editRate;
+    model::storeGroup(item, made->first, made->second);
+    doc->addItem(item);
+    return item.id;
+}
+
+// Clip > Refresh Sequence > Group Clips (p.478), on the bin's selected sequences when a bin is active, else on the
+// Record monitor's sequence as an undo step, as Motion Adapters/Timewarps does.
+int MainWindow::refreshGroupEdits() {
+    const model::GroupClipLookup lookup = lookupOf(composer_);
+    int changed = 0;
+    BinView* view = binContainer_->activeView();
+    const QWidget* focus = QApplication::focusWidget();
+    if (view && focus && (view == focus || view->isAncestorOf(focus))) {
+        for (const QString& id : view->selectedIds()) {
+            const model::BinItem* found = view->document().bin().item(id);
+            if (!found || found->kind != model::BinItemKind::Sequence) continue;
+            model::BinItem item = *found;
+            model::Sequence seq = model::Sequence::fromItem(item);
+            const int n = model::refreshGroupEdits(seq, lookup);
+            if (n == 0) continue;
+            seq.storeIn(item);
+            item.modified = QDateTime::currentDateTimeUtc();
+            storeClip(view->document().nodeId(), item);
+            changed += n;
+        }
+        return changed;
+    }
+    if (!composer_->state(MonitorId::Record).current()) return 0;
+    timeline_->changeRecordSequence(tr("Refresh Sequence"), [&](model::Sequence& seq) {
+        changed = model::refreshGroupEdits(seq, lookup);
+        return changed > 0;
+    });
+    return changed;
 }
 
 std::optional<std::pair<model::BinItem, std::int64_t>> MainWindow::followMotion(const model::BinItem& clip,
@@ -7620,6 +7774,11 @@ void MainWindow::installPanelHandlers() {
         if (composer_->activeMonitor() == MonitorId::Source && !(source && model::isGroupClip(source->item))) return false;
         return stepInGroup(step);
     });
+    handle("clip.edit_group", [this] { editGroup(); });
+    handle("composer.update_group", [this] { updateGroup(); });
+    handle("composer.create_group", [this] { createGroupFromSequence(); });
+    handle("clip.refresh_sequence.group_clips", [this] { refreshGroupEdits(); });
+    timeline_->setSoundOffset([](const model::BinItem& a, const model::BinItem& b, QString* why) { return media::waveformOffset(a, b, why); });
     handle("mcam.previous_in_group", [this] { stepInGroup(-1); });
     handle("mcam.next_in_group", [this] { stepInGroup(1); });
     handle("mcam.quad_split", [this] { composer_->setGroupSplit(4); });

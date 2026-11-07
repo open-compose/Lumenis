@@ -56,6 +56,8 @@ target_compile_definitions(tst_ofx_host PRIVATE LUMENIS_TEST_OFX="$<TARGET_FILE:
 lumenis_add_test(tst_ltc SOURCES tst_ltc.cpp LIBS lumenis::media)
 lumenis_add_test(tst_tone SOURCES tst_tone.cpp LIBS lumenis::media)
 lumenis_add_test(tst_waveform SOURCES tst_waveform.cpp LIBS lumenis::media)
+# Syncing clips by their sound (Editing Guide p.1124, p.1126).
+lumenis_add_test(tst_waveform_sync SOURCES tst_waveform_sync.cpp LIBS lumenis::media)
 lumenis_add_test(tst_audio_project SOURCES tst_audio_project.cpp LIBS lumenis::media)
 # The compositor: tracks, the dissolve family, Superimpose and precision (docs/spec/compositor.md).
 lumenis_add_test(tst_compositor SOURCES tst_compositor.cpp LIBS lumenis::media)

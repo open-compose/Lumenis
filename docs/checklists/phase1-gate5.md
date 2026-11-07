@@ -165,7 +165,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Extract DNxHD Data |  | p.975 | *later* | ☐ | | |
 | Group Clips | Ctrl+Shift+G | p.1124 | works | ☐ | | |
 | MultiGroup |  | p.1125 | *later* | ☐ | | |
-| Edit Group |  | p.1125 | *later* | ☐ | | |
+| Edit Group |  | p.1125 | works | ☐ | | |
 | Lock Bin Selection |  | p.265 | works | ☐ | | |
 | Unlock Bin Selection |  | p.266 | works | ☐ | | |
 | Lock Project Bin |  | p.302 | works | ☐ | | |
@@ -179,6 +179,7 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 | Read Audio Timecode |  | p.668 | works | ☐ | | |
 | Recreate Title Media |  | p.475 | works | ☐ | | |
 | Refresh Sequence > Motion Adapters/Timewarps |  | p.545 | works | ☐ | | |
+| Refresh Sequence > Group Clips |  | p.478 | works | ☐ | | |
 | Relink > Linked Media |  | p.364 | works | ☐ | | |
 | Relink > Managed Media |  | p.361 | works | ☐ | | |
 | Split All Tracks |  | p.637 | works | ☐ | | |
@@ -315,6 +316,6 @@ Editor: ______  Date: ______  Platform: ______  Build: ______
 ## Summary
 
 * 19 windows.
-* 211 menu commands, 166 of them working with a project open; the
+* 212 menu commands, 168 of them working with a project open; the
   rest come in later phases.
 * Found: ____ of ____.

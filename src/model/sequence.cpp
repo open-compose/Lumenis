@@ -215,6 +215,11 @@ QJsonObject segmentToJson(const Segment& s) {
     if (!s.localColor.isEmpty()) o.insert(QStringLiteral("localColor"), s.localColor);
     if (!s.note.isEmpty()) o.insert(QStringLiteral("note"), s.note);
     if (s.groupAngle) o.insert(QStringLiteral("groupAngle"), *s.groupAngle);
+    if (!s.groupOffsets.isEmpty()) {
+        QJsonArray offsets;
+        for (const std::int64_t v : s.groupOffsets) offsets.append(static_cast<qint64>(v));
+        o.insert(QStringLiteral("groupOffsets"), offsets);
+    }
     if (!s.correctionComment.isEmpty()) o.insert(QStringLiteral("correctionComment"), s.correctionComment);
     if (!s.sourceCorrection.isEmpty()) o.insert(QStringLiteral("sourceCorrection"), s.sourceCorrection.toJson());
     if (!s.programCorrection.isEmpty()) o.insert(QStringLiteral("programCorrection"), s.programCorrection.toJson());
@@ -259,6 +264,9 @@ Segment segmentFromJson(const QJsonObject& o) {
     if (!s.isFiller()) s.localColor = o.value(QStringLiteral("localColor")).toString();
     if (!s.isFiller()) s.note = o.value(QStringLiteral("note")).toString();
     if (!s.isFiller() && o.contains(QStringLiteral("groupAngle"))) s.groupAngle = o.value(QStringLiteral("groupAngle")).toInt();
+    if (!s.isFiller()) {
+        for (const QJsonValue& v : o.value(QStringLiteral("groupOffsets")).toArray()) s.groupOffsets << v.toInteger();
+    }
     if (!s.isFiller()) s.correctionComment = o.value(QStringLiteral("correctionComment")).toString();
     if (!s.isFiller()) {
         s.sourceCorrection = ColorCorrection::fromJson(o.value(QStringLiteral("sourceCorrection")).toObject());
@@ -477,6 +485,7 @@ QJsonObject Sequence::toJson() const {
         tracks.append(o);
     }
     QJsonObject out{{QStringLiteral("tracks"), tracks}, {QStringLiteral("timecode"), timecode_}};
+    if (editedGroup_.size() == 2) out.insert(QStringLiteral("editsGroup"), QJsonArray::fromStringList(editedGroup_));
     if (mixFormat_ != AudioFormat::Stereo) {
         for (const auto& [format, text] : kFormats) {
             if (format == mixFormat_) out.insert(QStringLiteral("mix"), QString::fromLatin1(text));
@@ -488,6 +497,9 @@ QJsonObject Sequence::toJson() const {
 Sequence Sequence::fromJson(const QJsonObject& o) {
     Sequence s;
     s.timecode_ = o.value(QStringLiteral("timecode")).toBool(true);
+    if (const QJsonArray g = o.value(QStringLiteral("editsGroup")).toArray(); g.size() == 2) {
+        s.editedGroup_ = {g.at(0).toString(), g.at(1).toString()};
+    }
     const QString mix = o.value(QStringLiteral("mix")).toString();
     for (const auto& [f, text] : kFormats) {
         if (mix == QLatin1String(text)) s.setMixFormat(f);
@@ -1041,6 +1053,7 @@ QStringList applyEdit(Sequence& sequence, EditKind kind, const EditPlan& plan, c
             if (const auto group = groupOf(source); group && !group->angles.isEmpty()) {
                 s.groupAngle = group->selected;
                 s.name = group->angles[group->selected].clip.name;
+                for (const GroupAngle& a : group->angles) s.groupOffsets << a.offset;
             }
             // A multichannel source track is named by its first channel (multichannel.h).
             s.sourceTrack = sourceChannel(source, from);

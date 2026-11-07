@@ -610,6 +610,12 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   * the yellow outline on the selected angle in the split views;
   * which Record monitor segment Previous/Next In Group switches, and only its picture;
   * the Up and Down Arrow keys switching angles only with no segments selected.
+  * syncing by sound: loudness envelopes cross-correlated, a correlation of at least 0.2, the first 20
+    minutes of A1;
+  * Waveform Sync moving the video with Lift/Overwrite against the earliest selected audio segment;
+  * Edit Group's sequence kept in the group's bin as "<group>.Edit", and the order of a group's angles
+    made from a sequence;
+  * segments keeping their angle offsets until Refresh Sequence > Group Clips.
 
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "lumenis/model/bin.h"
+#include "lumenis/model/sequence.h"
 
 #include <QDateTime>
 #include <QList>
@@ -23,9 +24,10 @@
 // Source monitor full size or split (p.1126-1129).
 namespace lumenis::model {
 
-// What the clips are synced by (the Group Clips dialog, p.1124). FilmTc, Ink, AuxInk and Waveform are
-// listed for the dialog only: groupClips() refuses them (film projects and waveform analysis are not
-// built yet; docs/spec/multicamera.md).
+// What the clips are synced by (the Group Clips dialog, p.1124). FilmTc, Ink and AuxInk are listed for the dialog
+// only: groupClips() refuses them (film projects are not built yet; docs/spec/multicamera.md). Waveform ("Media
+// Composer performs an analysis of the waveforms of the selected clips") takes each clip's sync point from
+// GroupOptions::waveform.
 enum class GroupSync { FilmTc, Inpoints, Outpoints, SourceTimecode, AuxTimecode, Ink, AuxInk, Waveform };
 
 // One camera angle: the clip it shows and where.
@@ -55,10 +57,15 @@ void setGroup(BinItem& item, const GroupClip& group);
 // the clip has none (the Source monitor's marks, else the bin's Mark IN / Mark OUT columns).
 using GroupMarks = std::function<std::optional<std::int64_t>(const BinItem& clip, bool in)>;
 
+// The GroupSync::Waveform sync point of a clip (GroupOptions::waveform): the frame of the clip whose sound is the
+// first clip's frame 0, worked out by MainWindow from the clips' audio (lumenis/media/waveform_sync.h).
+using GroupWaveformPoint = std::function<std::optional<std::int64_t>(const BinItem& clip)>;
+
 struct GroupOptions {
     GroupSync sync = GroupSync::Inpoints;
     int auxTc = 1; // Auxiliary TC1-5 for AuxTimecode
     GroupMarks marks;
+    GroupWaveformPoint waveform; // for GroupSync::Waveform
     QDateTime when;
 };
 
@@ -84,10 +91,36 @@ QStringList groupTracks(const GroupClip& group);
 // returned clip is group frame g, as long as the group. Frames where the angle has no material are
 // black and silent (groupAngleRange). The clip's own id is kept. An index out of range gives the
 // selected angle; a group without angles gives the item itself.
-BinItem groupAngleClip(const BinItem& group, int angle);
+// `offsets`, when it has the angle, gives its offset in place of the group's (a segment's Segment::groupOffsets).
+BinItem groupAngleClip(const BinItem& group, int angle, const QList<std::int64_t>& offsets = {});
 // The frames [first, second) of an angle clip made by groupAngleClip() that have material; nothing for
 // other clips.
 std::optional<std::pair<std::int64_t, std::int64_t>> groupAngleRange(const BinItem& clip);
+
+// A segment's clip, by its bin and id; nothing when it cannot be found.
+using GroupClipLookup = std::function<std::optional<BinItem>(const QString& binId, const QString& clipId)>;
+
+// Edit Group (p.1125): a sequence of the group's clips where the group has them, each angle with picture on a video
+// track of its own (V1 for the first such angle) and "One representative audio track from each clip" (its A1) on an
+// audio track of its own, in the angles' order. Tagged as editing the group (Sequence::editedGroup).
+Sequence groupEditSequence(const QString& binId, const BinItem& group);
+// Update Group and Create Group (p.1126): the clips of a sequence's tracks as a group's angles, in the order their
+// first segments appear on the video tracks (V1 first) and then on the audio tracks, each placed where its first
+// segment is. "Currently, you must have one audio track from a clip to include any audio from that clip in the
+// group" (ours: an angle is any clip the sequence shows; sound comes with it). Segments of group clips are left out.
+// The group lasts as long as the sequence, never less than `atLeast` ("You cannot make the group clip shorter when
+// editing the group clip"). Nothing, with the reason, when fewer than two clips are found or they are at another rate
+// than the sequence.
+std::optional<std::pair<GroupClip, std::int64_t>> groupFromSequence(const Sequence& sequence, const Rational& rate,
+                                                                   const GroupClipLookup& lookup, std::int64_t atLeast = 0,
+                                                                   QString* error = nullptr);
+// A group item made from or updated with `group` and `duration`: its tracks, Start and End columns, and the angles.
+void storeGroup(BinItem& item, const GroupClip& group, std::int64_t duration);
+// Clip > Refresh Sequence > Group Clips (p.478: "Refreshes the sequence to include updates applied to group clips";
+// p.1126: "will not change selected shots, only the relationship between the selected shot and the other clips in the
+// group"): each group segment takes its group's current offsets, its source frames moved so its shown angle shows the
+// same material. Returns how many segments changed.
+int refreshGroupEdits(Sequence& sequence, const GroupClipLookup& lookup);
 
 // The angle `step` places on from `angle` among `count`, wrapping round (Previous In Group and Next In
 // Group "cycle through all the clips", p.1131).
