@@ -4,11 +4,17 @@
 #include "lumenis/ui/theme.h"
 
 #include <QAction>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
 #include <QHBoxLayout>
+#include <QInputDialog>
+#include <QMouseEvent>
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenu>
+#include <QPointer>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QTextBlock>
@@ -60,6 +66,8 @@ TranscriptTool::TranscriptTool(QWidget* parent) : QWidget(parent) {
     view_->setAcceptRichText(false);
     view_->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
     view_->viewport()->installEventFilter(this);
+    view_->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(view_, &QWidget::customContextMenuRequested, this, &TranscriptTool::showContextMenu);
     view_->installEventFilter(this);
     connect(view_, &QTextEdit::selectionChanged, this, &TranscriptTool::selectionChanged);
     layout->addWidget(view_, 1);
@@ -144,6 +152,8 @@ void TranscriptTool::setTranscript(const model::ShownTranscript& shown, Timecode
 // One block per line: "[timecode] Speaker: words", the words' places noted for clicks and highlights.
 void TranscriptTool::rebuild() {
     updating_ = true;
+    display_ = model::groupedLines(shown_, groupSpeakers_, static_cast<std::int64_t>(newLineAfter_ * fps_));
+    speakerSpans_.clear();
     spans_.clear();
     matches_.clear();
     playhead_.reset();
@@ -158,11 +168,19 @@ void TranscriptTool::rebuild() {
     dim.setForeground(palette().color(QPalette::PlaceholderText));
     QTextCharFormat speaker;
     speaker.setFontWeight(QFont::Bold);
-    for (int l = 0; l < shown_.lines.size(); ++l) {
-        const model::ShownLine& line = shown_.lines[l];
+    for (int l = 0; l < display_.lines.size(); ++l) {
+        const model::ShownLine& line = display_.lines[l];
         if (l > 0) cursor.insertBlock();
         if (showTimecode_ && timecode_) cursor.insertText(timecode_(line.frame) + QStringLiteral("  "), dim);
-        if (showSpeakers_) cursor.insertText(line.speaker + QStringLiteral(": "), speaker);
+        if (showSpeakers_) {
+            SpeakerSpan sp;
+            sp.line = l;
+            sp.start = cursor.position();
+            cursor.insertText(line.speaker, speaker);
+            sp.end = cursor.position();
+            speakerSpans_ << sp;
+            cursor.insertText(QStringLiteral(": "), speaker);
+        }
         for (int w = 0; w < line.words.size(); ++w) {
             if (w > 0) cursor.insertText(QStringLiteral(" "), plain);
             WordSpan span;
@@ -245,7 +263,7 @@ void TranscriptTool::setTextFont(const QFont& font) {
 
 void TranscriptTool::setPosition(std::int64_t frame) {
     if (!ganged_) return;
-    const auto word = model::wordAt(shown_, frame);
+    const auto word = model::wordAt(display_, frame);
     if (word == playhead_) return;
     playhead_ = word;
     refreshHighlights();
@@ -261,7 +279,7 @@ void TranscriptTool::setMarks(std::optional<std::int64_t> in, std::optional<std:
     int last = -1;
     if (in && out) {
         for (int i = 0; i < spans_.size(); ++i) {
-            const model::ShownWord& w = shown_.lines[spans_[i].line].words[spans_[i].word];
+            const model::ShownWord& w = display_.lines[spans_[i].line].words[spans_[i].word];
             if (w.frame >= *in && w.frame <= *out) {
                 if (first < 0) first = i;
                 last = i;
@@ -327,8 +345,8 @@ void TranscriptTool::selectionChanged() {
         }
     }
     if (first < 0) return;
-    const model::ShownWord& a = shown_.lines[spans_[first].line].words[spans_[first].word];
-    const model::ShownWord& b = shown_.lines[spans_[last].line].words[spans_[last].word];
+    const model::ShownWord& a = display_.lines[spans_[first].line].words[spans_[first].word];
+    const model::ShownWord& b = display_.lines[spans_[last].line].words[spans_[last].word];
     in_ = a.frame;
     out_ = std::max(a.frame, b.endFrame - 1);
     emit marksChosen(*in_, *out_);
@@ -345,15 +363,46 @@ void TranscriptTool::selectWords(int line, int from, int to) {
 }
 
 void TranscriptTool::clickWord(int line, int word) {
-    if (line < 0 || line >= shown_.lines.size() || word < 0 || word >= shown_.lines[line].words.size()) return;
+    if (line < 0 || line >= display_.lines.size() || word < 0 || word >= display_.lines[line].words.size()) return;
     playhead_ = std::pair{line, word};
     refreshHighlights();
-    if (ganged_) emit positionChosen(shown_.lines[line].words[word].frame);
+    if (ganged_) emit positionChosen(display_.lines[line].words[word].frame);
 }
 
 // A click without a drag on a word moves the playhead there; Shift+Left/Right move the selection's end word by word
 // ("Precise word selection is possible by holding down Shift and using the arrow keys", p.442).
 bool TranscriptTool::eventFilter(QObject* watched, QEvent* event) {
+    if (watched == view_->viewport() && event->type() == QEvent::MouseButtonDblClick) {
+        // "Double-click a word to edit it in place"; "double-click on the speaker name" to rename it (p.445).
+        const int pos = view_->cursorForPosition(static_cast<QMouseEvent*>(event)->pos()).position();
+        if (const auto sp = speakerAt(pos)) {
+            const int line = speakerSpans_[*sp].line;
+            beginEdit(speakerSpans_[*sp].start, speakerSpans_[*sp].end, display_.lines[line].speaker,
+                      [this, line](const QString& text) { renameSpeaker(line, text); });
+            return true;
+        }
+        if (const auto w = spanAt(pos)) {
+            const QTextCursor c = view_->textCursor();
+            int first = *w;
+            int last = *w;
+            if (c.hasSelection()) {
+                for (int i = 0; i < spans_.size(); ++i) {
+                    if (spans_[i].end > c.selectionStart() && spans_[i].start < c.selectionEnd() && spans_[i].line == spans_[*w].line) {
+                        first = std::min(first, i);
+                        last = std::max(last, i);
+                    }
+                }
+            }
+            QStringList text;
+            for (int i = first; i <= last; ++i) text << display_.lines[spans_[i].line].words[spans_[i].word].text;
+            const int line = spans_[first].line;
+            const int from = spans_[first].word;
+            const int to = spans_[last].word + 1;
+            beginEdit(spans_[first].start, spans_[last].end, text.join(QLatin1Char(' ')),
+                      [this, line, from, to](const QString& t) { editWords(line, from, to, t); });
+            return true;
+        }
+    }
     if (watched == view_->viewport() && event->type() == QEvent::MouseButtonRelease) {
         const QTextCursor c = view_->textCursor();
         if (!c.hasSelection()) {
@@ -390,7 +439,7 @@ int TranscriptTool::search(const QString& text) {
             bool match = true;
             for (int k = 0; k < wanted.size() && match; ++k) {
                 const WordSpan& s = spans_[i + k];
-                match = bare(shown_.lines[s.line].words[s.word].text) == wanted[k];
+                match = bare(display_.lines[s.line].words[s.word].text) == wanted[k];
             }
             if (match) matches_ << std::pair{i, static_cast<int>(wanted.size())};
         }
@@ -437,6 +486,32 @@ QMenu* TranscriptTool::fastMenu(QWidget* parent) {
     toggle(tr("Show Timecode"), showTimecode_, [this](bool on) { setShowTimecode(on); });
     toggle(tr("Show Speaker ID"), showSpeakers_, [this](bool on) { setShowSpeakers(on); });
     toggle(tr("Show Not Transcribed"), showNotTranscribed_, [this](bool on) { setShowNotTranscribed(on); });
+    // 2026.8 guide p.446-447.
+    toggle(tr("Group Speaker Lines"), groupSpeakers_, [this](bool on) { setGroupSpeakers(on); });
+    menu->addAction(tr("New Line After (%1 seconds)...").arg(newLineAfter_), this, [this] {
+        bool ok = false;
+        const int seconds = QInputDialog::getInt(this, tr("New Line After"), tr("Seconds:"), newLineAfter_, 1, 3600, 1, &ok);
+        if (ok) setNewLineAfter(seconds);
+    });
+    menu->addSeparator();
+    // "A Find and Replace feature is available in the Transcript Tool fast menu" (p.446).
+    menu->addAction(tr("Find and Replace..."), this, [this] {
+        QDialog dialog(this);
+        dialog.setWindowTitle(tr("Find and Replace"));
+        auto* form = new QFormLayout(&dialog);
+        auto* find = new QLineEdit(search_->text(), &dialog);
+        auto* replace = new QLineEdit(&dialog);
+        form->addRow(tr("Find:"), find);
+        form->addRow(tr("Replace with:"), replace);
+        auto* buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &dialog);
+        buttons->addButton(tr("Replace All"), QDialogButtonBox::AcceptRole);
+        connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+        connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+        form->addRow(buttons);
+        if (dialog.exec() == QDialog::Accepted) replaceAll(find->text(), replace->text());
+    });
+    QAction* revert = menu->addAction(tr("Revert Transcript"), this, [this] { revertTranscript(); });
+    revert->setEnabled(!display_.lines.isEmpty());
     menu->addSeparator();
     menu->addAction(tr("Set Font..."), this, [this] { emit fontRequested(); });
     // "Transcribe Remaining Clips, if transcripts are missing for some clips in groups, multigroups, or sequences, which
@@ -448,6 +523,219 @@ QMenu* TranscriptTool::fastMenu(QWidget* parent) {
 
 QString TranscriptTool::plainText() const {
     return view_->toPlainText();
+}
+
+} // namespace lumenis::ui
+
+namespace lumenis::ui {
+
+void TranscriptTool::setFrameRate(double fps) {
+    if (fps > 0) fps_ = fps;
+}
+
+void TranscriptTool::setGroupSpeakers(bool on) {
+    groupSpeakers_ = on;
+    rebuild();
+}
+
+void TranscriptTool::setNewLineAfter(int seconds) {
+    newLineAfter_ = std::max(1, seconds);
+    rebuild();
+}
+
+std::optional<int> TranscriptTool::speakerAt(int position) const {
+    for (int i = 0; i < speakerSpans_.size(); ++i) {
+        if (position >= speakerSpans_[i].start && position < speakerSpans_[i].end) return i;
+    }
+    return std::nullopt;
+}
+
+void TranscriptTool::editWords(int line, int from, int to, const QString& text) {
+    if (line < 0 || line >= display_.lines.size()) return;
+    const QList<model::ShownWord>& words = display_.lines[line].words;
+    from = std::clamp(from, 0, static_cast<int>(words.size()));
+    to = std::clamp(to, from, static_cast<int>(words.size()));
+    if (from == to) return;
+    // "Only one sentence can be edited at a time to maintain timing accuracy" (p.446): the words of the first word's
+    // transcript line.
+    const model::ShownWord& first = words[from];
+    int last = first.word;
+    for (int i = from + 1; i < to; ++i) {
+        if (words[i].mob != first.mob || words[i].line != first.line) break;
+        last = words[i].word;
+    }
+    const int tline = first.line;
+    const int a = first.word;
+    const int b = last + 1;
+    emit editRequested(first.mob, [tline, a, b, text](model::Transcript& t) { return model::editWords(t, tline, a, b, text); });
+}
+
+bool TranscriptTool::editSelection(const QString& text) {
+    const QTextCursor c = view_->textCursor();
+    if (!c.hasSelection()) return false;
+    int first = -1;
+    int last = -1;
+    for (int i = 0; i < spans_.size(); ++i) {
+        if (spans_[i].end > c.selectionStart() && spans_[i].start < c.selectionEnd()) {
+            if (first < 0) first = i;
+            if (spans_[i].line == spans_[first].line) last = i;
+        }
+    }
+    if (first < 0) return false;
+    editWords(spans_[first].line, spans_[first].word, spans_[last].word + 1, text);
+    return true;
+}
+
+void TranscriptTool::renameSpeaker(int line, const QString& name) {
+    if (line < 0 || line >= display_.lines.size()) return;
+    const model::ShownLine& l = display_.lines[line];
+    const int id = l.speakerId;
+    emit editRequested(l.mob, [id, name](model::Transcript& t) { return model::renameSpeaker(t, id, name); });
+}
+
+void TranscriptTool::identifySpeaker(int line, const QString& name) {
+    if (line < 0 || line >= display_.lines.size()) return;
+    const model::ShownLine& l = display_.lines[line];
+    const int tline = l.line;
+    emit editRequested(l.mob, [tline, name](model::Transcript& t) { return model::identifySpeaker(t, tline, name); });
+}
+
+void TranscriptTool::correctSpeaker(int line, int speaker) {
+    if (line < 0 || line >= display_.lines.size()) return;
+    const model::ShownLine& l = display_.lines[line];
+    const int tline = l.line;
+    emit editRequested(l.mob, [tline, speaker](model::Transcript& t) { return model::correctSpeaker(t, tline, speaker); });
+}
+
+void TranscriptTool::startNewLine(int line, int word) {
+    if (line < 0 || line >= display_.lines.size() || word <= 0 || word >= display_.lines[line].words.size()) return;
+    const model::ShownWord& w = display_.lines[line].words[word];
+    // A paragraph of several lines (Group Speaker Lines) splits where its line splits.
+    const int tline = w.line;
+    const int at = w.word;
+    emit editRequested(w.mob, [tline, at](model::Transcript& t) { return model::startNewLine(t, tline, at); });
+}
+
+void TranscriptTool::revertLine(int line) {
+    if (line < 0 || line >= display_.lines.size() || display_.lines[line].words.isEmpty()) return;
+    const model::ShownWord& w = display_.lines[line].words.first();
+    const int tline = w.line;
+    emit editRequested(w.mob, [tline](model::Transcript& t) { return model::revertLine(t, tline); });
+}
+
+void TranscriptTool::revertTranscript() {
+    for (const QString& mob : display_.speakers.keys()) {
+        emit editRequested(mob, [](model::Transcript& t) { return model::revertTranscript(t); });
+    }
+}
+
+void TranscriptTool::replaceAll(const QString& find, const QString& replace) {
+    for (const QString& mob : display_.speakers.keys()) {
+        emit editRequested(mob, [find, replace](model::Transcript& t) { return model::replaceWords(t, find, replace) > 0; });
+    }
+}
+
+void TranscriptTool::beginEdit(int start, int end, const QString& text, std::function<void(const QString&)> done) {
+    delete editor_;
+    QTextCursor c(view_->document());
+    c.setPosition(start);
+    const QRect from = view_->cursorRect(c);
+    c.setPosition(end);
+    const QRect to = view_->cursorRect(c);
+    editor_ = new QLineEdit(text, view_->viewport());
+    editor_->setObjectName(QStringLiteral("transcriptEditor"));
+    const int width = std::max(120, (to.top() == from.top() ? to.right() - from.left() : 240) + 40);
+    editor_->setGeometry(from.left(), from.top() - 2, width, from.height() + 6);
+    editor_->selectAll();
+    QPointer<QLineEdit> editor = editor_;
+    connect(editor_, &QLineEdit::returnPressed, this, [this, editor, done] {
+        if (!editor) return;
+        const QString value = editor->text();
+        editor->deleteLater();
+        editor_ = nullptr;
+        done(value);
+    });
+    connect(editor_, &QLineEdit::editingFinished, this, [this, editor] {
+        if (editor && !editor->hasFocus()) {
+            editor->deleteLater();
+            if (editor_ == editor) editor_ = nullptr;
+        }
+    });
+    editor_->show();
+    editor_->setFocus();
+}
+
+QMenu* TranscriptTool::contextMenuAt(int position, QWidget* parent) {
+    auto* menu = new QMenu(parent);
+    menu->setObjectName(QStringLiteral("transcriptContextMenu"));
+    // On a speaker's name: "Identify Speaker" and "Correct Speaker ID" (p.445).
+    if (const auto sp = speakerAt(position)) {
+        const int line = speakerSpans_[*sp].line;
+        const model::ShownLine& l = display_.lines[line];
+        QMenu* identify = menu->addMenu(tr("Identify Speaker"));
+        identify->setObjectName(QStringLiteral("identifySpeaker"));
+        QStringList names = knownSpeakers_;
+        for (const auto& list : display_.speakers) {
+            for (const auto& [id, name] : list) {
+                if (!names.contains(name) && !name.startsWith(QStringLiteral("Speaker "))) names << name;
+            }
+        }
+        names.sort(Qt::CaseInsensitive);
+        for (const QString& name : names) {
+            connect(identify->addAction(name), &QAction::triggered, this, [this, line, name] { identifySpeaker(line, name); });
+        }
+        if (!names.isEmpty()) identify->addSeparator();
+        identify->addAction(tr("Clear Name"), this, [this, line] { renameSpeaker(line, QString()); });
+        identify->addAction(tr("Rename..."), this, [this, sp = *sp, line] {
+            beginEdit(speakerSpans_[sp].start, speakerSpans_[sp].end, display_.lines[line].speaker,
+                      [this, line](const QString& text) { renameSpeaker(line, text); });
+        });
+        QMenu* correct = menu->addMenu(tr("Correct Speaker ID"));
+        correct->setObjectName(QStringLiteral("correctSpeaker"));
+        for (const auto& speaker : display_.speakers.value(l.mob)) {
+            const int id = speaker.first;
+            QAction* a = correct->addAction(speaker.second);
+            a->setCheckable(true);
+            a->setChecked(id == l.speakerId);
+            connect(a, &QAction::triggered, this, [this, line, id] { correctSpeaker(line, id); });
+        }
+        correct->addSeparator();
+        correct->addAction(tr("Add New Speaker"), this, [this, line] { correctSpeaker(line, 0); });
+        return menu;
+    }
+    // "The right-click menu now displays only Edit Text and Copy when text is selected" (p.446).
+    if (view_->textCursor().hasSelection()) {
+        menu->addAction(tr("Edit Text"), this, [this] {
+            const QTextCursor c = view_->textCursor();
+            beginEdit(c.selectionStart(), c.selectionEnd(), c.selectedText(), [this](const QString& text) { editSelection(text); });
+        });
+        menu->addAction(tr("Copy"), view_, &QTextEdit::copy);
+        return menu;
+    }
+    if (const auto w = spanAt(position)) {
+        const int line = spans_[*w].line;
+        const int word = spans_[*w].word;
+        menu->addAction(tr("Edit Text"), this, [this, w = *w, line, word] {
+            beginEdit(spans_[w].start, spans_[w].end, display_.lines[line].words[word].text,
+                      [this, line, word](const QString& text) { editWords(line, word, word + 1, text); });
+        });
+        // 2026.8 guide p.447.
+        QAction* split = menu->addAction(tr("Start New Line"), this, [this, line, word] { startNewLine(line, word); });
+        split->setEnabled(word > 0);
+        menu->addAction(tr("Revert"), this, [this, line] { revertLine(line); });
+    }
+    return menu;
+}
+
+void TranscriptTool::showContextMenu(const QPoint& pos) {
+    const int position = view_->cursorForPosition(pos).position();
+    QMenu* menu = contextMenuAt(position, this);
+    menu->setAttribute(Qt::WA_DeleteOnClose);
+    if (menu->isEmpty()) {
+        delete menu;
+        return;
+    }
+    menu->popup(view_->viewport()->mapToGlobal(pos));
 }
 
 } // namespace lumenis::ui

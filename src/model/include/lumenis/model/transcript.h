@@ -80,6 +80,37 @@ struct EngineWord {
 // tinydiarize marks turns, not voices). Empty words are left out.
 QList<TranscriptLine> transcriptLines(const QList<EngineWord>& words, double pause = 2.0, double longest = 30.0);
 
+// Editing transcripts (Editing Guide p.445-446; 2026.8 guide p.446-447). Each function changes `t` and returns false (with
+// `t` unchanged) when there is nothing to do. The first change keeps the lines as transcribed in Transcript::original.
+
+// Replaces the words [from, to) of line `line` with the words of `text`, keeping word timing (p.446): "Single word edits:
+// The original word's timing is preserved. Multiple words in one word's space: Timings split averaging across the new
+// words. Multiple word edits: ... compares the original and edited text to align unchanged words, then adjusts timings
+// for the words between them". Ours: unchanged words are found by the longest common sequence of words (ignoring case
+// and punctuation); the words between two kept ones share their time evenly. "Only one sentence can be edited at a
+// time": one line. An empty `text` removes the words (the line too when none are left).
+bool editWords(Transcript& t, int line, int from, int to, const QString& text);
+// Find and Replace (p.446): every place the words of `find` follow one another in a line, ignoring case and punctuation,
+// becomes `replace`. Returns how many were replaced.
+int replaceWords(Transcript& t, const QString& find, const QString& replace);
+
+// Speaker IDs (p.444-445). renameSpeaker: "All instance of that speaker name in the transcript are immediately renamed";
+// an empty name clears it ("Clear Name"). identifySpeaker: the line's speaker becomes the one named `name` (a new ID when
+// no speaker has that name), "Identify Speaker". correctSpeaker: "Correct Speaker ID" for one line: the speaker `speaker`,
+// or with 0 "Add New Speaker", a new ID "that can be identified in this one instance".
+bool renameSpeaker(Transcript& t, int speaker, const QString& name);
+bool identifySpeaker(Transcript& t, int line, const QString& name);
+bool correctSpeaker(Transcript& t, int line, int speaker);
+// The speaker IDs in use, ascending.
+QList<int> speakerIds(const Transcript& t);
+
+// Start New Line (2026.8 guide p.447): the line splits before word `word` (1 or more), both halves keeping the speaker.
+bool startNewLine(Transcript& t, int line, int word);
+// Revert (2026.8 guide p.447): the original lines in the time of line `line` take its place; Revert Transcript: every line
+// as transcribed. "Reverting restores the original transcript content".
+bool revertLine(Transcript& t, int line);
+bool revertTranscript(Transcript& t);
+
 // The store of transcripts: a folder of "<MobID>.json" files. Thread-safe as long as one clip is written by one thread.
 class TranscriptStore {
 public:

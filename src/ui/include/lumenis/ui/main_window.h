@@ -579,6 +579,9 @@ public:
     // "Transcribe" and Transcribe Remaining Clips (p.443): the project's master clips with these MobIDs, transcribed at
     // once (High priority on the Background Queue, ahead of background transcription). Returns how many were queued.
     int transcribeNow(const QStringList& mobs);
+    // A change to a clip's transcript in the store (the Transcript Tool's edits, p.444-446); false when it changes
+    // nothing or cannot be saved.
+    bool editTranscript(const QString& mob, const std::function<bool(model::Transcript&)>& edit);
     TranscriptTool& transcriptTool() const { return *transcriptTool_; }
     bool chooseAngle(int angle);
     // Clip > MultiGroup (8.1b3; p.1125): the multigroup's id, nothing when none was made (the Group Clips hook

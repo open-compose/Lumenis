@@ -6,9 +6,12 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSaveFile>
+#include <QRegularExpression>
 #include <QStandardPaths>
 
 #include <algorithm>
+#include <utility>
+#include <vector>
 
 namespace lumenis::model {
 
@@ -201,6 +204,230 @@ bool TranscriptionBins::setIncluded(const QString& binId, bool included) {
     if (!f.open(QIODevice::WriteOnly)) return false;
     f.write(QJsonDocument(QJsonObject{{QStringLiteral("excluded"), QJsonArray::fromStringList(ids)}}).toJson());
     return f.commit();
+}
+
+} // namespace lumenis::model
+
+namespace lumenis::model {
+
+namespace {
+
+QString bareWord(const QString& word) {
+    QString out;
+    for (const QChar c : word.toLower()) {
+        if (c.isLetterOrNumber()) out += c;
+    }
+    return out;
+}
+
+QStringList wordsOf(const QString& text) {
+    return text.split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
+}
+
+// Keeps the transcribed lines before the first change.
+void keepOriginal(Transcript& t) {
+    if (t.original.isEmpty()) t.original = t.lines;
+}
+
+// Spreads [start, end) evenly over `words`.
+void spread(QList<TranscriptWord>& words, double start, double end) {
+    if (words.isEmpty()) return;
+    const double step = std::max(0.0, end - start) / static_cast<double>(words.size());
+    for (int i = 0; i < words.size(); ++i) {
+        words[i].start = start + step * i;
+        words[i].end = start + step * (i + 1);
+    }
+}
+
+} // namespace
+
+bool editWords(Transcript& t, int line, int from, int to, const QString& text) {
+    if (line < 0 || line >= t.lines.size()) return false;
+    // Read through a const reference: a writable one taken before keepOriginal() would write into the shared copy too.
+    const QList<TranscriptWord>& current = std::as_const(t.lines)[line].words;
+    from = std::clamp(from, 0, static_cast<int>(current.size()));
+    to = std::clamp(to, from, static_cast<int>(current.size()));
+    if (from == to) return false;
+    const QList<TranscriptWord> old = current.mid(from, to - from);
+    const QStringList typed = wordsOf(text);
+    QStringList oldText;
+    for (const TranscriptWord& w : old) oldText << w.text;
+    if (typed == oldText) return false;
+    keepOriginal(t);
+    QList<TranscriptWord> made;
+    for (const QString& w : typed) made << TranscriptWord{w, 0.0, 0.0};
+    // Align unchanged words: the longest common sequence of bare words.
+    const auto n = old.size();
+    const auto m = made.size();
+    std::vector<std::vector<int>> lcs(static_cast<std::size_t>(n + 1), std::vector<int>(static_cast<std::size_t>(m + 1), 0));
+    for (qsizetype i = n - 1; i >= 0; --i) {
+        for (qsizetype j = m - 1; j >= 0; --j) {
+            const auto ui = static_cast<std::size_t>(i);
+            const auto uj = static_cast<std::size_t>(j);
+            lcs[ui][uj] = bareWord(old[i].text) == bareWord(made[j].text) && !bareWord(made[j].text).isEmpty()
+                              ? lcs[ui + 1][uj + 1] + 1
+                              : std::max(lcs[ui + 1][uj], lcs[ui][uj + 1]);
+        }
+    }
+    QList<std::pair<qsizetype, qsizetype>> kept; // {old index, new index}
+    for (qsizetype i = 0, j = 0; i < n && j < m;) {
+        const auto ui = static_cast<std::size_t>(i);
+        const auto uj = static_cast<std::size_t>(j);
+        if (bareWord(old[i].text) == bareWord(made[j].text) && !bareWord(made[j].text).isEmpty()) {
+            kept.append({i, j});
+            ++i;
+            ++j;
+        } else if (lcs[ui + 1][uj] >= lcs[ui][uj + 1]) {
+            ++i;
+        } else {
+            ++j;
+        }
+    }
+    // Kept words keep their times. The new words between two kept ones share the time of the old words between them;
+    // with no old words there, they share the time of the kept word before them (or after them, at the start): "Multiple
+    // words in one word's space: Timings split averaging across the new words".
+    kept.prepend({-1, -1});
+    kept.append({n, m});
+    for (qsizetype k = 1; k + 1 < kept.size(); ++k) {
+        const auto [oi, nj] = kept[k];
+        made[nj] = TranscriptWord{made[nj].text, old[oi].start, old[oi].end};
+    }
+    auto spreadNew = [&](qsizetype first, qsizetype last, double start, double end) { // made[first, last)
+        QList<TranscriptWord> part = made.mid(first, last - first);
+        spread(part, start, end);
+        for (qsizetype x = 0; x < part.size(); ++x) made[first + x] = part[x];
+    };
+    for (qsizetype k = 0; k + 1 < kept.size(); ++k) {
+        const auto [oi, nj] = kept[k];
+        const auto [oe, ne] = kept[k + 1];
+        if (ne - nj <= 1) continue; // no new words between
+        if (oe - oi > 1) {
+            spreadNew(nj + 1, ne, old[oi + 1].start, old[oe - 1].end);
+        } else if (oi >= 0) {
+            spreadNew(nj, ne, old[oi].start, old[oi].end);
+        } else if (oe < n) {
+            spreadNew(0, ne + 1, old[oe].start, old[oe].end);
+        }
+    }
+    QList<TranscriptWord>& words = t.lines[line].words; // after keepOriginal(): detached from the original
+    words.remove(from, to - from);
+    for (qsizetype i = 0; i < made.size(); ++i) words.insert(from + i, made[i]);
+    if (words.isEmpty()) t.lines.removeAt(line);
+    return true;
+}
+
+int replaceWords(Transcript& t, const QString& find, const QString& replace) {
+    QStringList wanted;
+    for (const QString& w : wordsOf(find)) {
+        if (!bareWord(w).isEmpty()) wanted << bareWord(w);
+    }
+    if (wanted.isEmpty()) return 0;
+    int count = 0;
+    for (int l = 0; l < t.lines.size(); ++l) {
+        for (int w = 0; w + wanted.size() <= t.lines[l].words.size(); ++w) {
+            bool match = true;
+            for (int k = 0; k < wanted.size() && match; ++k) match = bareWord(t.lines[l].words[w + k].text) == wanted[k];
+            if (!match) continue;
+            const int before = static_cast<int>(t.lines.size());
+            if (editWords(t, l, w, w + static_cast<int>(wanted.size()), replace)) ++count;
+            if (t.lines.size() < before) {
+                --l; // the line went
+                break;
+            }
+            w += std::max(0, static_cast<int>(wordsOf(replace).size()) - 1);
+        }
+    }
+    return count;
+}
+
+QList<int> speakerIds(const Transcript& t) {
+    QList<int> ids;
+    for (const TranscriptLine& l : t.lines) {
+        if (!ids.contains(l.speaker)) ids << l.speaker;
+    }
+    std::sort(ids.begin(), ids.end());
+    return ids;
+}
+
+bool renameSpeaker(Transcript& t, int speaker, const QString& name) {
+    const QString n = name.trimmed();
+    if (t.speakers.value(speaker) == n) return false;
+    keepOriginal(t);
+    if (n.isEmpty()) t.speakers.remove(speaker);
+    else t.speakers.insert(speaker, n);
+    return true;
+}
+
+bool identifySpeaker(Transcript& t, int line, const QString& name) {
+    const QString n = name.trimmed();
+    if (line < 0 || line >= t.lines.size() || n.isEmpty()) return false;
+    int id = 0;
+    for (auto it = t.speakers.cbegin(); it != t.speakers.cend(); ++it) {
+        if (it.value() == n) id = it.key();
+    }
+    if (id == 0) {
+        // A speaker heard only on this line takes the name; otherwise the line gets a new ID with it.
+        const int current = t.lines[line].speaker;
+        const bool alone = std::count_if(t.lines.cbegin(), t.lines.cend(), [&](const TranscriptLine& l) { return l.speaker == current; }) == 1;
+        if (alone && !t.speakers.contains(current)) return renameSpeaker(t, current, n);
+        const QList<int> ids = speakerIds(t);
+        id = std::max(ids.isEmpty() ? 0 : ids.last(), t.speakers.isEmpty() ? 0 : t.speakers.lastKey()) + 1;
+        keepOriginal(t);
+        t.speakers.insert(id, n);
+    }
+    if (t.lines[line].speaker == id) return false;
+    keepOriginal(t);
+    t.lines[line].speaker = id;
+    return true;
+}
+
+bool correctSpeaker(Transcript& t, int line, int speaker) {
+    if (line < 0 || line >= t.lines.size()) return false;
+    if (speaker <= 0) {
+        const QList<int> ids = speakerIds(t);
+        speaker = std::max(ids.isEmpty() ? 0 : ids.last(), t.speakers.isEmpty() ? 0 : t.speakers.lastKey()) + 1;
+    }
+    if (t.lines[line].speaker == speaker) return false;
+    keepOriginal(t);
+    t.lines[line].speaker = speaker;
+    return true;
+}
+
+bool startNewLine(Transcript& t, int line, int word) {
+    if (line < 0 || line >= t.lines.size() || word <= 0 || word >= t.lines[line].words.size()) return false;
+    keepOriginal(t);
+    TranscriptLine second{t.lines[line].speaker, t.lines[line].words.mid(word)};
+    t.lines[line].words = t.lines[line].words.mid(0, word);
+    t.lines.insert(line + 1, second);
+    return true;
+}
+
+bool revertLine(Transcript& t, int line) {
+    if (line < 0 || line >= t.lines.size() || t.original.isEmpty()) return false;
+    const double start = t.lines[line].start();
+    const double end = t.lines[line].end();
+    QList<TranscriptLine> back;
+    for (const TranscriptLine& o : t.original) {
+        if (o.end() > start && o.start() < end) back << o;
+    }
+    if (back.isEmpty() || (back.size() == 1 && back.first() == t.lines[line])) return false;
+    // The edited lines in the same time go too, so nothing is shown twice.
+    QList<TranscriptLine> out;
+    for (int i = 0; i < t.lines.size(); ++i) {
+        const TranscriptLine& l = t.lines[i];
+        const bool overlaps = i == line || (l.end() > back.first().start() && l.start() < back.last().end());
+        if (!overlaps) out << l;
+        if (i == line) out += back;
+    }
+    t.lines = out;
+    return true;
+}
+
+bool revertTranscript(Transcript& t) {
+    if (t.original.isEmpty()) return false;
+    t.lines = t.original;
+    t.original.clear();
+    return true;
 }
 
 } // namespace lumenis::model

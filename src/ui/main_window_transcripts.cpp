@@ -253,6 +253,9 @@ void MainWindow::setUpTranscriptTool() {
                                                            : tr("No transcription engine: whisper.cpp's whisper-cli was not found."));
         }
     });
+    // Edits from the tool (p.444-446): applied to the clip's transcript in the store, the tool shown again.
+    connect(transcriptTool_, &TranscriptTool::editRequested, this,
+            [this](const QString& mob, const TranscriptTool::TranscriptEdit& edit) { editTranscript(mob, edit); });
     // "Choosing the Set Font option in the fast menu opens a window to select a Font Family and Size" (p.443).
     connect(transcriptTool_, &TranscriptTool::fontRequested, this, [this] {
         bool ok = false;
@@ -315,12 +318,26 @@ void MainWindow::refreshTranscriptTool() {
         }
         const TimecodeFormat format = TimecodeFormat::forRate(item.editRate, model::isDropFrame(item));
         const std::int64_t start = state.startFrame();
+        transcriptTool_->setFrameRate(item.editRate.toDouble());
         transcriptTool_->setTranscript(shown, [format, start](std::int64_t frame) {
             return QString::fromStdString(Timecode(start + frame, format).toString());
         });
     }
     transcriptTool_->setPosition(state.position());
     transcriptTool_->setMarks(state.in(), state.out());
+}
+
+bool MainWindow::editTranscript(const QString& mob, const std::function<bool(model::Transcript&)>& edit) {
+    const model::TranscriptStore store;
+    auto t = store.load(mob);
+    if (!t || !edit || !edit(*t)) return false;
+    if (!store.save(*t)) {
+        if (console_) console_->log()->appendPlainText(tr("The transcript of \"%1\" could not be saved.").arg(t->clipName));
+        return false;
+    }
+    ++transcriptGeneration_;
+    refreshTranscriptTool();
+    return true;
 }
 
 } // namespace lumenis::ui

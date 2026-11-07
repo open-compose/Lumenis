@@ -15,7 +15,14 @@
 //   selected") and, for sequences and groups, the audio track button (p.449).
 //
 // The text is plain ("uses plain text formatting for consistent pasting across applications", p.442): Ctrl+C copies it.
+//
+// Editing (8.2b2; p.444-446, 2026.8 guide p.446-447): double-click a word (or the selected words) to edit it in place,
+// or right-click > Edit Text; double-click a speaker's name to rename it, right-click it for Identify Speaker and
+// Correct Speaker ID; right-click a word for Start New Line and Revert; the fast menu's Find and Replace, Group Speaker
+// Lines, New Line After and Revert Transcript. Every change goes out as editRequested() with the clip's MobID and a
+// function on its model::Transcript (lumenis/model/transcript.h), which MainWindow applies to the store.
 
+#include "lumenis/model/transcript.h"
 #include "lumenis/model/transcript_view.h"
 
 #include <QFont>
@@ -39,6 +46,9 @@ class TranscriptTool : public QWidget {
     Q_OBJECT
 
 public:
+    // A change to one clip's transcript; false when it changes nothing.
+    using TranscriptEdit = std::function<bool(model::Transcript&)>;
+
     explicit TranscriptTool(QWidget* parent = nullptr);
 
     // What to show; `timecode` writes a frame as the monitor's timecode (Show Timecode). Keeps the scroll position when
@@ -46,6 +56,10 @@ public:
     using TimecodeText = std::function<QString(std::int64_t frame)>;
     void setTranscript(const model::ShownTranscript& shown, TimecodeText timecode = {});
     const model::ShownTranscript& transcript() const { return shown_; }
+    // The lines as shown: grouped by speaker when Group Speaker Lines is on. Line and word indices below are these.
+    const model::ShownTranscript& displayed() const { return display_; }
+    // Frames per second, for New Line After.
+    void setFrameRate(double fps);
     // Nothing loaded on the shown side.
     void clear(const QString& message);
 
@@ -82,6 +96,31 @@ public:
     // Clicks a word: emits positionChosen() with its frame.
     void clickWord(int line, int word);
 
+    // Editing (8.2b2). Each emits editRequested() for the clips concerned.
+    // Edit Text on the words [from, to) of a shown line (they must come from one transcript line; the rest is ignored).
+    void editWords(int line, int from, int to, const QString& text);
+    // Edit Text on the selection; false without one.
+    bool editSelection(const QString& text);
+    void renameSpeaker(int line, const QString& name);
+    void identifySpeaker(int line, const QString& name);
+    // Correct Speaker ID: `speaker` of the line's transcript, or 0 for Add New Speaker.
+    void correctSpeaker(int line, int speaker);
+    // Start New Line before word `word` of a shown line; Revert the line; Revert Transcript for every shown clip.
+    void startNewLine(int line, int word);
+    void revertLine(int line);
+    void revertTranscript();
+    // Find and Replace (p.446) in every shown clip's transcript.
+    void replaceAll(const QString& find, const QString& replace);
+    // Group Speaker Lines and New Line After (2026.8 guide p.446; 30 seconds by default).
+    bool groupSpeakers() const { return groupSpeakers_; }
+    void setGroupSpeakers(bool on);
+    int newLineAfter() const { return newLineAfter_; }
+    void setNewLineAfter(int seconds);
+    // The names an Identify Speaker menu offers: the project's speakers (8.2b2b) and the shown transcripts'.
+    void setKnownSpeakers(const QStringList& names) { knownSpeakers_ = names; }
+    // The right-click menu at a document position; the caller owns it.
+    QMenu* contextMenuAt(int position, QWidget* parent);
+
     // The fast menu; the caller owns it.
     QMenu* fastMenu(QWidget* parent);
     QTextEdit* view() const { return view_; }
@@ -97,8 +136,14 @@ signals:
     // The Transcribe button and Transcribe Remaining Clips: the master clips to transcribe now, by MobID.
     void transcribeRequested(const QStringList& mobs);
     void fontRequested();
+    void editRequested(const QString& mob, const lumenis::ui::TranscriptTool::TranscriptEdit& edit);
 
 private:
+    struct SpeakerSpan {
+        int line = 0;
+        int start = 0;
+        int end = 0;
+    };
     struct WordSpan {
         int line = 0;
         int word = 0;
@@ -110,6 +155,10 @@ private:
     void refreshBanner();
     void refreshSideButton();
     std::optional<int> spanAt(int position) const;
+    std::optional<int> speakerAt(int position) const;
+    // An in-place line edit over the document range [start, end), calling `done` with its text on Enter.
+    void beginEdit(int start, int end, const QString& text, std::function<void(const QString&)> done);
+    void showContextMenu(const QPoint& pos);
     int spanIndex(int line, int word) const;
     void selectionChanged();
     bool eventFilter(QObject* watched, QEvent* event) override;
@@ -128,6 +177,13 @@ private:
     QToolButton* tracks_ = nullptr;
 
     model::ShownTranscript shown_;
+    model::ShownTranscript display_;
+    QList<SpeakerSpan> speakerSpans_;
+    QStringList knownSpeakers_;
+    QLineEdit* editor_ = nullptr;
+    double fps_ = 25.0;
+    bool groupSpeakers_ = false;
+    int newLineAfter_ = 30;
     TimecodeText timecode_;
     QList<WordSpan> spans_;
     std::optional<std::pair<int, int>> playhead_;

@@ -1424,7 +1424,9 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
       transcription, Language Hint (also on the New Project tab, p.448), Subclips/Groups (p.449-450), Manage Speakers.
     * 8.2b, the Transcript Tool (p.442-450), in two parts: 8.2b1 (done) the tool itself (what is shown for clips, subclips,
       groups and sequences, the playhead word, clicks and selections, Shift+arrows, search, the fast menu's display
-      items, Transcribe, the Source/Record and track buttons); 8.2b2 the rest: ganged to the Source or Record monitor, the playhead word, clicks and
+      items, Transcribe, the Source/Record and track buttons); 8.2b2a (done) editing text, Speaker IDs, Find and Replace,
+      Group Speaker Lines, New Line After, Start New Line, Revert; 8.2b2b Manage Speaker Names and the New Project tab's
+      Language Hint. In full: ganged to the Source or Record monitor, the playhead word, clicks and
       selections setting the position and marks, Shift+arrows, edits with V and B, copy, the fast menu (Timecode,
       Speaker ID, Show Not Transcribed, Set Font, Transcribe Remaining Clips), search, the Source/Record button, the
       audio track button for sequences and groups; Speaker IDs (rename, Identify Speaker, Correct Speaker ID, Manage

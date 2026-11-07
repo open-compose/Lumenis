@@ -853,7 +853,9 @@ Phase 5 (audio) has started. 5.1, Audio Mixdown (docs/spec/audio-mixdown.md:
   idle; Include/Exclude Bin in Transcription and the Sidebar's Transcription column; the Transcript Project setting; tests
   `tst_transcript`, `tst_transcription`, `tst_transcripts_ui`), is done. 8.2b1, the Transcript Tool (`src/ui/transcript_tool.*`
   as the "Transcript" panel, `model::shownTranscript` in `src/model/transcript_view.*`, `MainWindow::refreshTranscriptTool`/
-  `transcribeNow`; tests `tst_transcript`, `tst_transcripts_ui`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
+  `transcribeNow`; tests `tst_transcript`, `tst_transcripts_ui`), is done. 8.2b2a, editing transcripts (`model::editWords`/
+  `replaceWords`/`renameSpeaker`/`identifySpeaker`/`correctSpeaker`/`startNewLine`/`revertLine`/`revertTranscript`,
+  `model::groupedLines`, the tool's in-place editor and right-click menus, `MainWindow::editTranscript`), is done. After Phase 7, before Phase 8: 7.6, the owner's report
   that the Titler+ window and the Effect Editor do not look like the FX Guide's pictures (Titler+'s two columns of
   tool icons on the left, ours text buttons side by side and the window as wide as a 1920-pixel screen; ROADMAP).
   Then Phase 8. Phase 9 "Left over stuff"

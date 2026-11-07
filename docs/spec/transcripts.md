@@ -92,14 +92,42 @@ Tools > Transcript Tool (p.442; command `tools.transcript_tool`) opens it as the
   "Clip not transcribed" with a Transcribe button; transcribing from the tool runs the clips at High priority on the
   Background Queue, ahead of background transcription (`MainWindow::transcribeNow`). Ours: Transcribe also works for
   clips in excluded bins.
-* Still to come (8.2b2): editing text, Speaker IDs, Find and Replace, the 2026.8 items, the New Project tab's Language
-  Hint, editing with V and B from the tool's marks (they work through the monitors already).
+* Editing with V and B from the tool's marks works through the monitors.
+
+## Editing transcripts (8.2b2a)
+
+Changes go into the clip's transcript in the store (`model::editWords` and friends in `transcript.h`, through
+`TranscriptTool::editRequested` and `MainWindow::editTranscript`). The first change keeps the transcribed lines
+(`Transcript::original`, 2026.8 guide p.447). Ours: transcript changes are not undo steps; Revert is the way back.
+
+* Text (p.445-446): double-click a word, or the selected words, to edit them in place; right-click > Edit Text. "Only
+  one sentence can be edited at a time": one transcript line. "How Timing is Preserved": a single word keeps its timing;
+  several words in one word's space share it evenly; otherwise unchanged words are found (ours: the longest common
+  sequence of words, ignoring case and punctuation) and keep their times, the words between two of them sharing the time
+  of the old words between (or, with none, of the kept word before). Removing every word of a line removes it.
+* "The right-click menu now displays only Edit Text and Copy when text is selected" (p.446); on a word without a
+  selection: Edit Text, Start New Line, Revert (2026.8 guide p.447).
+* Find and Replace (fast menu, p.446): every place the found words follow one another in a line, ignoring case and
+  punctuation, in every shown clip's transcript. Ours: the replacement's own punctuation is used.
+* Speaker IDs (p.444-445): double-click a speaker's name to rename it ("All instance of that speaker name in the
+  transcript are immediately renamed"). Right-click it: Identify Speaker (the names known, Clear Name, Rename) and
+  Correct Speaker ID (the transcript's speakers, Add New Speaker "in this one instance"). Ours: Identify Speaker with a
+  new name names the line's speaker when it speaks only there, else gives the line a new Speaker ID with that name.
+* Improving Transcript Readability (2026.8 guide p.446): Group Speaker Lines shows consecutive lines of one speaker as a
+  paragraph, broken again after New Line After seconds (30 by default; `model::groupedLines`). Ours: both are the
+  tool's, not kept between sessions.
+* Start New Line splits a line before the word; Revert puts back the original lines in a line's time; Revert Transcript
+  (fast menu) every shown clip's transcript (2026.8 guide p.447).
+* Still to come (8.2b2b): Manage Speaker Names (the Transcript setting's Manage Speakers, p.445) with the project's list
+  of names, and the New Project tab's Language Hint (p.448).
 
 ## Tests
 
 * `tst_transcript`: lines from engine words, JSON round trips, the store, the bins' status.
 * `tst_transcription`: whisper-cli's JSON, a linked clip transcribed through a stand-in engine, `WhisperProvider` running
   a stand-in `whisper-cli` script (not on Windows).
+* `tst_transcript editing`, `groupedSpeakerLines`: timing kept through edits, Find and Replace, speakers, Start New
+  Line, Revert; `tst_transcripts_ui transcriptTool` the same through the tool.
 * `tst_transcript shownTranscripts`: what a clip, subclip, group and sequence show; `tst_transcripts_ui transcriptTool`:
   the tool in the application (sides, clicks, selections, search, a sequence, Transcribe).
 * `tst_transcripts_ui`: Include/Exclude Bin in Transcription with the Sidebar's status, queuing the included bins' clips

@@ -34,6 +34,16 @@ public:
             return;
         }
         const Transcript& tr = **t;
+        if (!out.speakers.contains(mob)) {
+            QList<std::pair<int, QString>> speakers;
+            QList<int> ids = speakerIds(tr);
+            for (auto it = tr.speakers.cbegin(); it != tr.speakers.cend(); ++it) {
+                if (!ids.contains(it.key())) ids << it.key();
+            }
+            std::sort(ids.begin(), ids.end());
+            for (const int id : ids) speakers.append({id, tr.speakerName(id)});
+            out.speakers.insert(mob, speakers);
+        }
         for (int l = 0; l < tr.lines.size(); ++l) {
             const TranscriptLine& line = tr.lines[l];
             for (int w = 0; w < line.words.size(); ++w) {
@@ -160,6 +170,25 @@ ShownTranscript shownTranscript(const Sequence& sequence, const QStringList& tra
         }
     }
     return c.finish();
+}
+
+ShownTranscript groupedLines(const ShownTranscript& shown, bool groupSpeakers, std::int64_t newLineAfter) {
+    if (!groupSpeakers) return shown;
+    ShownTranscript out = shown;
+    out.lines.clear();
+    for (const ShownLine& l : shown.lines) {
+        if (!out.lines.isEmpty()) {
+            ShownLine& last = out.lines.last();
+            const bool sameSpeaker = last.speaker == l.speaker;
+            const bool fits = newLineAfter <= 0 || l.words.isEmpty() || l.words.last().endFrame - last.frame <= newLineAfter;
+            if (sameSpeaker && fits) {
+                last.words += l.words;
+                continue;
+            }
+        }
+        out.lines << l;
+    }
+    return out;
 }
 
 std::optional<std::pair<int, int>> wordAt(const ShownTranscript& shown, std::int64_t frame) {

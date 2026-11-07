@@ -635,6 +635,9 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
 * The Transcript Tool (docs/spec/transcripts.md): the side following the last load, search ignoring punctuation and
   going round, Transcribe at High priority and for excluded bins too, the timecode, speaker and words on one line, a clip
   on two tracks shown once.
+* Transcript editing (docs/spec/transcripts.md): unchanged words found by the longest common sequence, new words beside
+  a kept one sharing its time, Find and Replace's own punctuation, Identify Speaker naming a speaker heard on one line
+  only, edits not undoable, Group Speaker Lines and New Line After not kept between sessions.
 
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical

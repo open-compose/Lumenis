@@ -144,6 +144,89 @@ private slots:
         s = shownTranscript(seq, {QStringLiteral("A3")}, transcriptFor, lookup);
         QVERIFY(s.lines.isEmpty());
     }
+
+    // Editing with word timing kept (p.446), Find and Replace, Speaker IDs (p.445), Start New Line and Revert (2026.8 guide
+    // p.447).
+    void editing() {
+        Transcript t;
+        t.mob = QStringLiteral("m");
+        t.lines = {TranscriptLine{1, {{QStringLiteral("the"), 0.0, 1.0}, {QStringLiteral("quick"), 1.0, 2.0},
+                                      {QStringLiteral("brwn"), 2.0, 3.0}, {QStringLiteral("fox"), 3.0, 4.0}}},
+                   TranscriptLine{2, {{QStringLiteral("jumps."), 5.0, 6.0}}}};
+        const QList<TranscriptLine> before = t.lines;
+        // A single word: its timing kept.
+        QVERIFY(editWords(t, 0, 2, 3, QStringLiteral("brown")));
+        QCOMPARE(t.lines[0].words[2], (TranscriptWord{QStringLiteral("brown"), 2.0, 3.0}));
+        QCOMPARE(t.original, before); // the transcribed lines kept
+        QVERIFY(!editWords(t, 0, 2, 3, QStringLiteral("brown"))); // no change
+        // Several words in one word's space: its time split evenly.
+        QVERIFY(editWords(t, 0, 3, 4, QStringLiteral("red fox")));
+        QCOMPARE(t.lines[0].words[3], (TranscriptWord{QStringLiteral("red"), 3.0, 3.5}));
+        QCOMPARE(t.lines[0].words[4], (TranscriptWord{QStringLiteral("fox"), 3.5, 4.0}));
+        // Several words: unchanged ones keep their times, the new ones between share the time between.
+        QVERIFY(editWords(t, 0, 0, 5, QStringLiteral("The very quick brown fox")));
+        QCOMPARE(t.lines[0].words.size(), qsizetype(5));
+        QCOMPARE(t.lines[0].words[0].start, 0.0); // "The" matches "the" (case ignored)
+        QCOMPARE(t.lines[0].words[2], (TranscriptWord{QStringLiteral("quick"), 1.0, 2.0}));
+        QCOMPARE(t.lines[0].words[1].start, 0.5); // "very" shares "The"'s time: nothing was between the and quick
+        QCOMPARE(t.lines[0].words[3], (TranscriptWord{QStringLiteral("brown"), 2.0, 3.0}));
+        // Find and Replace.
+        QCOMPARE(replaceWords(t, QStringLiteral("quick brown"), QStringLiteral("slow")), 1);
+        QCOMPARE(t.lines[0].text(), QStringLiteral("The very slow fox"));
+        QCOMPARE(t.lines[0].words[2].start, 1.0);
+        QCOMPARE(t.lines[0].words[2].end, 3.0);
+        // Speaker IDs.
+        QVERIFY(renameSpeaker(t, 2, QStringLiteral("Ann")));
+        QCOMPARE(t.speakerName(2), QStringLiteral("Ann"));
+        QVERIFY(identifySpeaker(t, 0, QStringLiteral("Ann")));
+        QCOMPARE(t.lines[0].speaker, 2);
+        QVERIFY(correctSpeaker(t, 0, 0)); // Add New Speaker
+        QCOMPARE(t.lines[0].speaker, 3);
+        QCOMPARE(t.speakerName(3), QStringLiteral("Speaker 3"));
+        QVERIFY(identifySpeaker(t, 0, QStringLiteral("Bob"))); // alone and unnamed: the ID takes the name
+        QCOMPARE(t.lines[0].speaker, 3);
+        QCOMPARE(t.speakerName(3), QStringLiteral("Bob"));
+        QVERIFY(renameSpeaker(t, 3, QString())); // Clear Name
+        QCOMPARE(t.speakerName(3), QStringLiteral("Speaker 3"));
+        // Start New Line.
+        QVERIFY(startNewLine(t, 0, 2));
+        QCOMPARE(t.lines.size(), qsizetype(3));
+        QCOMPARE(t.lines[1].text(), QStringLiteral("slow fox"));
+        QCOMPARE(t.lines[1].speaker, t.lines[0].speaker);
+        QVERIFY(!startNewLine(t, 0, 0));
+        // Revert a line: the original lines in its time.
+        QVERIFY(revertLine(t, 1));
+        QCOMPARE(t.lines.size(), qsizetype(2));
+        QCOMPARE(t.lines[0].text(), QStringLiteral("the quick brwn fox"));
+        // Revert Transcript.
+        QVERIFY(editWords(t, 1, 0, 1, QStringLiteral("leaps.")));
+        QVERIFY(revertTranscript(t));
+        QCOMPARE(t.lines, before);
+        QVERIFY(!t.edited());
+        QVERIFY(!revertTranscript(t));
+        // Removing every word of a line removes it.
+        QVERIFY(editWords(t, 1, 0, 1, QString()));
+        QCOMPARE(t.lines.size(), qsizetype(1));
+    }
+
+    // Group Speaker Lines and New Line After (2026.8 guide p.446).
+    void groupedSpeakerLines() {
+        ShownTranscript s;
+        auto line = [](const QString& speaker, std::int64_t frame, int words) {
+            ShownLine l;
+            l.speaker = speaker;
+            l.frame = frame;
+            for (int i = 0; i < words; ++i) l.words << ShownWord{QStringLiteral("w"), frame + i * 10, frame + i * 10 + 10, {}, 0, i};
+            return l;
+        };
+        s.lines = {line(QStringLiteral("A"), 0, 2), line(QStringLiteral("A"), 30, 2), line(QStringLiteral("B"), 60, 1),
+                   line(QStringLiteral("A"), 80, 1), line(QStringLiteral("A"), 500, 1)};
+        QCOMPARE(groupedLines(s, false, 750).lines.size(), qsizetype(5));
+        const ShownTranscript g = groupedLines(s, true, 300);
+        QCOMPARE(g.lines.size(), qsizetype(4)); // A A | B | A | A (past 300 frames)
+        QCOMPARE(g.lines[0].words.size(), qsizetype(4));
+        QCOMPARE(groupedLines(s, true, 0).lines.size(), qsizetype(3));
+    }
 };
 
 QTEST_GUILESS_MAIN(TestTranscript)

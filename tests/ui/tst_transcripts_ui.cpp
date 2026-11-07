@@ -16,6 +16,7 @@
 #include "lumenis/ui/theme.h"
 
 #include <QAction>
+#include <QMenu>
 #include <QDir>
 #include <QTemporaryDir>
 #include <QTest>
@@ -200,6 +201,36 @@ private slots:
         QCOMPARE(composer.state(MonitorId::Source).position(), std::int64_t(10));
         QVERIFY(tool.next());
         QCOMPARE(composer.state(MonitorId::Source).position(), std::int64_t(50));
+        // Editing (p.445-446; 2026.8 guide p.446-447): text, a speaker's name, Correct Speaker ID with Group Speaker Lines,
+        // the right-click menus, Revert Transcript.
+        tool.editWords(0, 1, 2, QStringLiteral("afternoon,"));
+        QVERIFY(tool.plainText().contains(QStringLiteral("Good afternoon, everyone.")));
+        QCOMPARE(model::TranscriptStore().load(t.mob)->lines[0].words[1].start, 0.4); // timing kept
+        tool.renameSpeaker(1, QStringLiteral("Ann"));
+        QVERIFY(tool.plainText().contains(QStringLiteral("Ann: Morning!")));
+        const int speakerPos = static_cast<int>(tool.plainText().indexOf(QStringLiteral("Ann")));
+        QMenu* menu = tool.contextMenuAt(speakerPos + 1, &tool);
+        QVERIFY(menu->findChild<QMenu*>(QStringLiteral("identifySpeaker")));
+        QVERIFY(menu->findChild<QMenu*>(QStringLiteral("correctSpeaker")));
+        delete menu;
+        menu = tool.contextMenuAt(static_cast<int>(tool.plainText().indexOf(QStringLiteral("everyone"))) + 2, &tool);
+        QStringList items;
+        for (QAction* a : menu->actions()) items << a->text();
+        QCOMPARE(items, (QStringList{QStringLiteral("Edit Text"), QStringLiteral("Start New Line"), QStringLiteral("Revert")}));
+        delete menu;
+        tool.correctSpeaker(1, 1); // Morning! is Speaker 1's too
+        tool.setGroupSpeakers(true);
+        QCOMPARE(tool.displayed().lines.size(), qsizetype(1));
+        tool.setGroupSpeakers(false);
+        QCOMPARE(tool.displayed().lines.size(), qsizetype(2));
+        tool.startNewLine(0, 2);
+        QCOMPARE(tool.displayed().lines.size(), qsizetype(3));
+        tool.revertTranscript();
+        QVERIFY(tool.plainText().contains(QStringLiteral("Good morning, everyone.")));
+        QVERIFY(!model::TranscriptStore().load(t.mob)->edited());
+        tool.replaceAll(QStringLiteral("everyone"), QStringLiteral("all"));
+        QVERIFY(tool.plainText().contains(QStringLiteral("Good morning, all")));
+        tool.revertTranscript();
         // A sequence in the Record monitor: the Record side, with the track button.
         model::BinItem seqItem;
         seqItem.id = model::newItemId();

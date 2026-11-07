@@ -5,6 +5,7 @@
 #include "lumenis/model/transcript.h"
 
 #include <QList>
+#include <QMap>
 #include <QString>
 #include <QStringList>
 
@@ -49,6 +50,8 @@ struct ShownTranscript {
     QStringList tracks;
     // The tracks there are to choose from.
     QStringList availableTracks;
+    // Each shown transcript's speakers, {Speaker ID, name as shown}, by MobID (Correct Speaker ID, p.445).
+    QMap<QString, QList<std::pair<int, QString>>> speakers;
 };
 
 // A master clip's transcript by its MobID; nothing when it has none.
@@ -66,6 +69,12 @@ ShownTranscript shownTranscript(const Sequence& sequence, const QStringList& tra
 // The master clip a clip's transcript comes from and the frame of the master clip at the clip's frame 0: itself for a
 // master clip, its Clip source for a subclip. Nothing for other items.
 std::optional<std::pair<QString, std::int64_t>> transcriptSource(const BinItem& clip);
+
+// Improving Transcript Readability (2026.8 guide p.446): with `groupSpeakers` ("Group Speaker Lines") consecutive lines
+// of one speaker are shown as one paragraph, broken again once a paragraph lasts `newLineAfter` frames ("New Line After",
+// 30 seconds by default); without it the lines are as transcribed. A merged paragraph keeps its first line's mob and
+// line; its words keep their own.
+ShownTranscript groupedLines(const ShownTranscript& shown, bool groupSpeakers, std::int64_t newLineAfter);
 
 // The index of the word at `frame` (the last one starting at or before it) as {line, word}; nothing before the first.
 std::optional<std::pair<int, int>> wordAt(const ShownTranscript& shown, std::int64_t frame);
