@@ -230,7 +230,7 @@ int BinTreeModel::rowCount(const QModelIndex& parent) const {
 }
 
 int BinTreeModel::columnCount(const QModelIndex&) const {
-    return 2;
+    return 3;
 }
 
 // A depth-first search of the whole tree; the lists are short.
@@ -270,6 +270,12 @@ QVariant BinTreeModel::data(const QModelIndex& index, int role) const {
         kind = n->kind;
         // Bins from other projects, and Other Bins, are in italic (p.294, p.296).
         italic = n->external || n->kind == Kind::OtherBins;
+    }
+    if (index.column() == kTranscriptionColumn) {
+        if (role != Qt::DisplayRole || kind != Kind::Bin || FavoriteBins::isFavoriteId(id)) return {};
+        const auto on = container_.transcriptionStatus(id);
+        if (!on) return {};
+        return *on ? tr("Transcription On") : tr("Transcription Off");
     }
     if (index.column() == kSizeColumn) {
         if (role == Qt::TextAlignmentRole) return QVariant(Qt::AlignRight | Qt::AlignVCenter);
@@ -324,6 +330,7 @@ bool BinTreeModel::setData(const QModelIndex& index, const QVariant& value, int 
 
 QVariant BinTreeModel::headerData(int section, Qt::Orientation orientation, int role) const {
     if (orientation != Qt::Horizontal || role != Qt::DisplayRole) return {};
+    if (section == kTranscriptionColumn) return tr("Transcription");
     return section == kNameColumn ? tr("Name") : tr("Size");
 }
 
@@ -451,6 +458,7 @@ BinSidebar::BinSidebar(BinContainer& container, QWidget* parent) : QWidget(paren
     tree_->header()->setSectionResizeMode(BinTreeModel::kNameColumn, QHeaderView::Stretch);
     tree_->header()->setSectionResizeMode(BinTreeModel::kSizeColumn, QHeaderView::Fixed);
     tree_->header()->resizeSection(BinTreeModel::kSizeColumn, 52);
+    tree_->header()->setSectionResizeMode(BinTreeModel::kTranscriptionColumn, QHeaderView::ResizeToContents);
     // Delete and Backspace delete the selected entries, unless a name is being
     // typed.
     tree->onDelete = [this] {
@@ -1351,6 +1359,7 @@ QString BinContainer::newBin(const QString& parentFolder) {
         model::saveToAttic(root, projectName_, bins_->node(id)->name, bins_->binPath(id), atticLimits_);
     }
     saveTree();
+    emit binCreated(id);
     refreshTree();
     sidebar_->expand(parentFolder);
     // "A new (empty) bin opens ... with a default name highlighted" (p.295).
@@ -1558,6 +1567,16 @@ QMenu* BinContainer::sidebarMenu(QMenu* menu, const QString& id, BinSidebar* sid
                             [this, ids] { lockProjectBins(ids, model::BinLockKind::Protected); });
             menu->addAction(tr("Unlock Project Bin"), this, [this, ids] { unlockProjectBins(ids); });
         }
+        // "right-click on a bin and choose Include Bin in Transcription or Exclude Bin from Transcription" (p.447): the
+        // Bin menu's commands, on the Sidebar's selection.
+        if (n->kind == model::BinNode::Kind::Bin && !bins_->isInTrash(id) && transcriptionStatus_) {
+            if (!sidebar->selectedNodes().contains(id)) sidebar->tree()->setCurrentIndex(sidebar->model()->indexOf(id));
+            menu->addSeparator();
+            menu->addAction(tr("Include Bin in Transcription"), this,
+                            [this] { emit commandRequested(QStringLiteral("bin.include_in_transcription")); });
+            menu->addAction(tr("Exclude Bin from Transcription"), this,
+                            [this] { emit commandRequested(QStringLiteral("bin.exclude_from_transcription")); });
+        }
     }
     if (id.isEmpty()) {
         menu->addSeparator();
@@ -1645,6 +1664,18 @@ void BinContainer::readLock(const QString& id) {
 
 std::optional<model::BinLockHolder> BinContainer::lockOf(const QString& id) const {
     return locks_.value(canonicalBin(id));
+}
+
+void BinContainer::setTranscriptionStatus(TranscriptionStatus status) {
+    transcriptionStatus_ = std::move(status);
+    refreshTree();
+}
+
+std::optional<bool> BinContainer::transcriptionStatus(const QString& id) const {
+    if (!transcriptionStatus_ || !bins_) return std::nullopt;
+    const model::BinNode* n = bins_->node(id);
+    if (!n || n->kind != model::BinNode::Kind::Bin) return std::nullopt;
+    return transcriptionStatus_(id);
 }
 
 bool BinContainer::isLockedByOther(const QString& id) const {

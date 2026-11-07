@@ -69,6 +69,8 @@
     {"id": "bin.choose_columns", "text": "Choose Columns"},
     {"id": "bin.hide_column", "text": "Hide Column"},
     {"id": "bin.go_to_capture_mode", "text": "Go To Capture Mode"},
+    {"id": "bin.include_in_transcription", "text": "Include Bin in Transcription"},
+    {"id": "bin.exclude_from_transcription", "text": "Exclude Bin from Transcription"},
     {"id": "bin.select.media_relatives", "text": "Media Relatives"},
     {"id": "bin.select.offline_items", "text": "Offline Items"},
     {"id": "bin.select.reverse", "text": "Reverse"},

@@ -27,6 +27,8 @@ struct TranscribedWord {
     double startSeconds = 0.0;
     double endSeconds = 0.0;
     float confidence = 0.0f;
+    // The speaker changes after this word (an engine that marks speaker turns, such as whisper.cpp's tinydiarize).
+    bool speakerTurnAfter = false;
 };
 
 // The language detected or used, and the words in time order.

@@ -82,7 +82,7 @@ private slots:
         // choice's default is one of its choices (guide ch.33).
         const SettingsSchema& schema = SettingsSchema::builtIn();
         QCOMPARE(schema.kindNames(SettingsScope::Project),
-                 (QStringList{"Audio Project", "Video Output", "Audio Multi-Mix", "General", "Media Creation", "Safe Colors", "Bin Layout", "Video Display"}));
+                 (QStringList{"Audio Project", "Video Output", "Audio Multi-Mix", "General", "Media Creation", "Safe Colors", "Bin Layout", "Transcript", "Video Display"}));
         QCOMPARE(schema.kindNames(SettingsScope::User),
                  (QStringList{"Audio", "Bin", "Composer", "Correction", "Effect Editor", "Export", "Full Screen Playback", "Import", "Interface", "Keyboard", "Link",
                               "Render", "Timeline", "Timeline View", "Title Style", "Tool Palette", "Workspace View", "Trim"}));
@@ -90,8 +90,10 @@ private slots:
         for (const SettingKind& k : schema.kinds()) {
             // Bin layouts are Project settings the Settings chapter does not
             // list; the Bin Layout menu's pages describe them (p.92). Title
-            // styles are the FX Guide's (p.364).
-            QVERIFY2(k.page >= 1136 || k.kind == QLatin1String("Bin Layout") || k.kind == QLatin1String("Title Style"), qPrintable(k.kind));
+            // styles are the FX Guide's (p.364); the Transcript setting is in the PhraseFind AI chapter (p.447).
+            QVERIFY2(k.page >= 1136 || k.kind == QLatin1String("Bin Layout") || k.kind == QLatin1String("Title Style") ||
+                         k.kind == QLatin1String("Transcript"),
+                     qPrintable(k.kind));
             // Without tabs a setting opens a tool instead (the Tool Palette).
             QVERIFY2(!k.tabs.isEmpty() || !k.opens.isEmpty(), qPrintable(k.kind));
             for (const SettingTab& t : k.tabs) {

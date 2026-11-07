@@ -45,6 +45,7 @@ add_library(lumenis_media STATIC
     tape_deck.cpp
     test_patterns.cpp
     subcap.cpp
+    transcription.cpp
     ocio_colour.h
     link.cpp
     ltc.cpp

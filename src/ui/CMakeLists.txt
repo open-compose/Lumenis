@@ -60,6 +60,7 @@ add_library(lumenis_ui STATIC
     media_frames.cpp
     media_tool.cpp
     main_window.cpp
+    main_window_transcripts.cpp
     menu_builder.cpp
     panel_manager.cpp
     panels.cpp

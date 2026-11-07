@@ -1083,6 +1083,15 @@ the build folder (`build/<preset>`) and configure again.
   `bmx/build/apps/bmxtranswrap/bmxtranswrap` onto PATH, beside the
   application, or name it in `LUMENIS_BMXTRANSWRAP`. Without it those
   exports say so in the Console; `tst_movie_export as11` skips its rewrap.
+* **Transcripts** (8.2, docs/spec/transcripts.md) run whisper.cpp's `whisper-cli`
+  (https://github.com/ggml-org/whisper.cpp, MIT; Homebrew's `whisper-cpp`, or built with
+  its CMake files) with a ggml model file from the same project (`ggml-base.bin`; a
+  `*-tdrz.bin` model also marks speaker turns). Put `whisper-cli` on PATH, beside the
+  application, or name it in `LUMENIS_WHISPER`; put the model in the user's application
+  data folder as `Whisper/ggml-base.bin`, or name it in `LUMENIS_WHISPER_MODEL`. Without
+  them nothing is transcribed; the tests use a stand-in
+  engine and a stand-in script. Transcripts are kept in the application data folder's
+  `Transcripts` (`LUMENIS_TRANSCRIPTS`; every ctest has its own).
 * **DCP export** (7.5, docs/spec/dcp.md) runs asdcplib's `asdcp-wrap`
   (https://github.com/cinecert/asdcplib, BSD licence; Ubuntu has no package).
   Build it with its CMake files (`cmake -S asdcplib -B asdcplib/build`), then

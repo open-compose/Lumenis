@@ -102,6 +102,12 @@ Corporation): its `bmxtranswrap` program rewraps our MXF OP1a as AS-11 and AS-02
 `LUMENIS_BMXTRANSWRAP`, and is not distributed yet; a package that ships it adds
 bmx's licence text with it (`cmake/Packaging.cmake`).
 
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp) (MIT, Copyright The ggml
+authors): its `whisper-cli` program and a ggml Whisper model (MIT, OpenAI) turn clips'
+speech into transcripts (docs/spec/transcripts.md). It is found on PATH, beside the
+application or through `LUMENIS_WHISPER`, and is not distributed yet; a package that
+ships it adds its licence text with it.
+
 [asdcplib](https://github.com/cinecert/asdcplib) (BSD-3-Clause, Copyright John
 Hurst and CineCert): its `asdcp-wrap` program wraps our JPEG 2000 frames and WAVE
 sound as the SMPTE MXF track files of a DCP (docs/spec/dcp.md). It is found on

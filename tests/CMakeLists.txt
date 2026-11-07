@@ -30,7 +30,9 @@ function(lumenis_isolate_media_drives)
         file(MAKE_DIRECTORY ${drive})
         set_property(GLOBAL APPEND PROPERTY LUMENIS_TEST_MEDIA_DRIVES ${drive})
         set_property(TEST ${test} APPEND PROPERTY ENVIRONMENT
-            "LUMENIS_NO_SYSTEM_DRIVES=1" "LUMENIS_MEDIA_DRIVES=${drive}")
+            "LUMENIS_NO_SYSTEM_DRIVES=1" "LUMENIS_MEDIA_DRIVES=${drive}"
+            # Transcripts (lumenis/model/transcript.h) in the test's folder, never the user's.
+            "LUMENIS_TRANSCRIPTS=${drive}/Transcripts")
         set_property(TEST ${test} APPEND PROPERTY FIXTURES_REQUIRED test_media_drives)
     endforeach()
 endfunction()

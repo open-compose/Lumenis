@@ -163,6 +163,12 @@ headers in `include/lumenis/<library>/`.
   Set Multichannel Audio, docs/spec/multichannel.md) and
   `mixdown_dialog.*`; the sound is `src/media/playback.*` and recording
   `src/media/audio_input.*`.
+* **Multicamera and transcripts.** Group clips and multigroups are `src/model/group_clip.*`
+  with `group_clips_dialog.*` and MainWindow's MultiCamera handlers (docs/spec/multicamera.md);
+  syncing by sound is `src/media/waveform_sync.*`. Transcripts are `src/model/transcript.*` (the
+  store and which bins are transcribed), made by `src/media/transcription.*` through an
+  `ext::TranscriptionProvider` (whisper.cpp's `whisper-cli` built in) and queued by
+  `main_window_transcripts.cpp` (docs/spec/transcripts.md).
 
 ## Data flow
 

@@ -86,6 +86,9 @@ public:
     static constexpr int kIdRole = Qt::UserRole + 1;
     static constexpr int kNameColumn = 0;
     static constexpr int kSizeColumn = 1;
+    // "Transcription On" or "Transcription Off" to the right of a bin (Editing Guide p.447), while the container has a
+    // transcription status (BinContainer::setTranscriptionStatus).
+    static constexpr int kTranscriptionColumn = 2;
 
     explicit BinTreeModel(BinContainer& container, QObject* parent = nullptr);
 
@@ -413,6 +416,11 @@ public:
     std::optional<model::BinLockHolder> lockOf(const QString& id) const;
     // Bins locked by another user are in bold in the Bin Container (p.301).
     bool isLockedByOther(const QString& id) const;
+    // Whether a bin is included in transcription (p.446-447), as MainWindow's model::TranscriptionBins says; without a
+    // status (no project) the Sidebar's Transcription column is empty. refreshTree() after the status changes.
+    using TranscriptionStatus = std::function<bool(const QString& binId)>;
+    void setTranscriptionStatus(TranscriptionStatus status);
+    std::optional<bool> transcriptionStatus(const QString& id) const;
     // Reads the locks and files again: of the open bins (their buttons) and
     // of the Sidebar's bins, and the bin list when someone else changed it.
     // A timer does it every two seconds while the project is shared.
@@ -439,6 +447,8 @@ signals:
     void editTemplateRequested(const QString& binId, const QString& itemId);
     // BinView::commandRequested from any bin.
     void commandRequested(const QString& commandId);
+    // A new bin was made in the project (newBin()), before it opens.
+    void binCreated(const QString& id);
     // Media files dropped on a bin from the Source Browser, to link (p.317).
     void filesDropped(const QString& binId, const QStringList& paths);
     // A bin floated into a new Bin Container window.
@@ -509,6 +519,7 @@ private:
     QSplitter* split_ = nullptr;
     BinSidebar* sidebar_ = nullptr;
     QList<BinSidebar*> sidebars_;
+    TranscriptionStatus transcriptionStatus_;
     BinDockArea* area_ = nullptr;
     QList<FloatingBinContainer*> floating_;
     BinView* active_ = nullptr;

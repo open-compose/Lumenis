@@ -12,6 +12,7 @@
 #include "lumenis/model/send_to.h"
 #include "lumenis/model/safe_colors.h"
 #include "lumenis/model/title_clip.h"
+#include "lumenis/model/transcript.h"
 #include "lumenis/ui/audio_punch_in.h"
 #include "lumenis/ui/audio_suite.h"
 #include "lumenis/ui/title_tool.h"
@@ -24,12 +25,14 @@
 #include <QMap>
 #include <QMainWindow>
 #include <QPointer>
+#include <QSet>
 
 #include <functional>
 #include <memory>
 #include <optional>
 
 class QAction;
+class QTimer;
 class QMessageBox;
 class QToolButton;
 
@@ -48,6 +51,7 @@ struct LoadedClip;
 
 namespace lumenis::ext {
 class ProviderRegistry;
+class TranscriptionProvider;
 }
 
 namespace lumenis::ui {
@@ -559,6 +563,18 @@ public:
     // numeric keypad key) or by number; false when nothing changed (8.1b; p.1131-1132).
     bool splitClicked(MonitorId monitor, QPointF fraction, Qt::MouseButton button);
     bool multiCamKey(int key);
+    // Transcripts (8.2a; Editing Guide p.442-450). The engine: `provider` (tests) in place of the best usable
+    // ext::TranscriptionProvider in the registry (whisper.cpp's when installed); none means no transcription.
+    void setTranscriber(std::shared_ptr<ext::TranscriptionProvider> provider);
+    std::shared_ptr<ext::TranscriptionProvider> transcriber() const;
+    // "By default, Media Composer will create a transcription for all media in a project" (p.446): queues a Background
+    // Queue job for each master clip with sound in the bins included in transcription that has no transcript yet and is
+    // not being transcribed. Returns how many were queued (0 without a project or an engine).
+    int queueTranscriptions();
+    // Include/Exclude Bin in Transcription (p.447) on the Sidebar's selected bins, else the active bin; included bins'
+    // clips are queued.
+    void setBinsTranscribed(bool included);
+    bool isBinTranscribed(const QString& binId) const;
     bool chooseAngle(int angle);
     // Clip > MultiGroup (8.1b3; p.1125): the multigroup's id, nothing when none was made (the Group Clips hook
     // stands in for its dialog in tests).
@@ -933,6 +949,19 @@ private:
                            const QList<std::int64_t>& offsets = {}) const;
     // MultiCamera mode (8.1b; p.1129-1132): the group segment it follows, the Source monitor's picture of it.
     std::optional<model::GroupSegmentAt> multiCamSegment() const;
+
+    // Transcription (8.2a; docs/spec/transcripts.md, main_window_transcripts.cpp). Which bins are transcribed, kept in
+    // the project folder; the clips being transcribed by their MobIDs; the time of the last key or click, for "Pause
+    // background transcription while editing" (p.447).
+    std::optional<model::TranscriptionBins> transcriptionBins_;
+    std::shared_ptr<ext::TranscriptionProvider> transcriber_;
+    QSet<QString> transcribing_;
+    QTimer* transcriptionTimer_ = nullptr;
+    QObject* activityWatcher_ = nullptr;
+    // Sets up (project open) or clears (closed) transcription: the Sidebar's status, the timer.
+    void setUpTranscription(bool projectOpen);
+    // The timer's tick: queues transcriptions once the user has been idle ten seconds (or always, with the pause off).
+    void transcriptionTick();
     // The Group menu (p.1133): its contents, and a choice of an angle for one of the group's tracks.
     std::optional<Composer::GroupMenuInfo> groupMenuInfo() const;
     bool chooseGroupTrackAngle(const QString& track, int angle);

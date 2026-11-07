@@ -628,6 +628,10 @@ FX Guide, What's New, ReadMe) and against a seat when there is one:
   * MultiGroup (p.1125): takes as clips whose timecode spans overlap, takes of one clip left out, the groups strung end to
     end in timecode order, the name "<first clip>.MGrp.n", Previous/Next In Group switching the multigroup's group
     segment under the Source position (V1, and A1 with Audio Follow Video), the plus sign drawn before the group icon.
+* Transcripts (docs/spec/transcripts.md): the store outside the project, one file per clip by MobID; lines ending at
+  speaker turns, 2-second pauses and 30-second sentences; Speaker IDs alternating at turns; the Language Hint's
+  languages; background transcription starting new clips after ten idle seconds and finishing a running one; the
+  Sidebar's Transcription column; audio-only master clips transcribed too.
 
 What 2026.8 changed, and where it is here:
 * The Bin Column Selection dialog's Search field, keyboard and vertical
@@ -3075,6 +3079,16 @@ Details: docs/spec/bin-locking.md.
   duplicated; it cannot be moved, renamed or deleted. **Ours**: changes to
   its items are refused (the Console says so), rather than made and then
   not saved.
+
+## 20e. Transcripts (ch.14, p.436-453; docs/spec/transcripts.md)
+
+* Bin > Include Bin in Transcription, Exclude Bin from Transcription (p.447), also on a bin's right-click menu in the
+  Sidebar; "Transcription On" or "Transcription Off" to the right of each bin.
+* File > Settings > Project > Transcript (p.447-450): Include all new bins in transcription, Pause background
+  transcription while editing, Language Hint, Subclips/Groups. Manage Speakers and Manage Transcripts later (8.2b,
+  8.2d).
+* Later: the Transcript Tool (8.2b), PhraseFind AI in the Find window (8.2c), the bin's Transcript menu (8.2d), AutoCut
+  (8.2e).
 
 ## 21. Still to document
 * Menu order and separators, confirmed against a licensed seat.

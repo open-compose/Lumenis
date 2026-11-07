@@ -132,6 +132,8 @@
         "bin.choose_columns",
         "bin.hide_column",
         "bin.go_to_capture_mode",
+        "bin.include_in_transcription",
+        "bin.exclude_from_transcription",
         {
           "id": "bin_select",
           "title": "Select",

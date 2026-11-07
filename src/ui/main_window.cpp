@@ -1088,6 +1088,7 @@ void MainWindow::setProject(const model::ProjectEntry& project) {
     timeline_->history().clear();
     projectOpened_ = QDateTime::currentDateTimeUtc();
     installProjectHandlers(true);
+    setUpTranscription(true);
     // The media database, read as the project opens (ROADMAP 2.4).
     loadMediaDatabase();
 }
@@ -1167,6 +1168,7 @@ void MainWindow::clearProject() {
     if (siteSettingsWindow_) siteSettingsWindow_->hide();
     settings_->setProject({});
     installProjectHandlers(false);
+    setUpTranscription(false);
 }
 
 bool MainWindow::editFromBin(bool splice) {
@@ -8165,6 +8167,9 @@ void MainWindow::installPanelHandlers() {
         if (QAction* a = commands_.action(id)) a->trigger();
     });
     handle("clip.read_audio_timecode", [this] { readAudioTimecode(); });
+    // Include/Exclude Bin in Transcription (p.447), from the Bin menu and the Sidebar's right-click menu.
+    handle("bin.include_in_transcription", [this] { setBinsTranscribed(true); });
+    handle("bin.exclude_from_transcription", [this] { setBinsTranscribed(false); });
     handle("clip.refresh_sequence.motion_adapters_timewarps", [this] { refreshMotionAdapters(); });
     handle("timeline.mixdown.audio.multiple_mixes", [this] { multipleMixes(); });
     handle("clip.audio.change_sample_rate", [this] { changeSampleRate(); });

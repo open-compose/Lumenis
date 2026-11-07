@@ -1413,9 +1413,30 @@ ch.26 "Generating Output", p.909-985, and the FX Guide's ch.14, p.378-390):
     Multicam Edits (p.1135). 8.1b3 (done): multigroups (p.1125), so 8.1b is done. 8.1c (done): the Group menu's patching of any angle's tracks (p.1133) and Change Source Track for group and multigroup
     clips (2026.8 guide p.507). Left: stereoscopic groups (p.1124) with stereoscopic projects in 8.6, and Auto Cut from
     transcript speakers after 8.2.
-  * 8.2, transcripts and PhraseFind (ch.14, p.436-453): speech to text through a provider (`ext::` hook; an open
-    engine such as whisper.cpp, MIT, as an optional module), the Transcript Tool, speaker IDs, the PhraseFind window,
-    exporting and sharing transcripts, SubCap files from transcripts, and the 2026.8 Transcript Tool items above.
+  * 8.2, transcripts and PhraseFind (ch.14, p.436-453; 2026.8 guide p.446-447, p.451-452), in five parts (planned
+    2026-11-07):
+    * 8.2a (done, docs/spec/transcripts.md), transcripts and the engine: transcripts of master clips (words with times, lines with Speaker IDs, the
+      original kept beside edits) in the project's transcript store, keyed by the clip's MobID; speech to text through
+      `ext::TranscriptionProvider`, built in as whisper.cpp's `whisper-cli` found like bmxtranswrap
+      (`LUMENIS_WHISPER`, its model file), speaker turns from its tinydiarize option; background transcription on the
+      Background Queue with Include/Exclude Bin in Transcription and "Transcription On/Off" in the sidebar (p.446-447),
+      pausing while editing (p.447); the Transcript Project setting: Include all new bins, Pause background
+      transcription, Language Hint (also on the New Project tab, p.448), Subclips/Groups (p.449-450), Manage Speakers.
+    * 8.2b, the Transcript Tool (p.442-450): ganged to the Source or Record monitor, the playhead word, clicks and
+      selections setting the position and marks, Shift+arrows, edits with V and B, copy, the fast menu (Timecode,
+      Speaker ID, Show Not Transcribed, Set Font, Transcribe Remaining Clips), search, the Source/Record button, the
+      audio track button for sequences and groups; Speaker IDs (rename, Identify Speaker, Correct Speaker ID, Manage
+      Speaker Names); editing text with word timing kept (p.445-446), Find and Replace; 2026.8's Group Speaker Lines,
+      New Line After, Start New Line, Revert and Revert Transcript (2026.8 guide p.446-447).
+    * 8.2c, PhraseFind AI in the Find window (p.436-441): the index of the project's transcripts, the PhraseFind AI
+      button, Score and Transcription columns, the index status, Load into monitor with the mark IN before the
+      dialogue, the Search Settings (indexing on/off, Manage Transcripts).
+    * 8.2d, transcripts out (p.450-453; 2026.8 guide p.455-456): the bin's Transcript menu (Export Transcript as .txt,
+      Share Transcripts, Delete Transcript, Create SubCap and Export SubCap with the Transcribe window's tracks, Use
+      Marks and Limit characters per caption), Manage Transcripts (delete, import). Shared transcript files are ours
+      (Avid's .avt is undocumented); peer-to-peer sharing over NEXIS waits for 8.7.
+    * 8.2e, AutoCut from transcript speakers (2026.8 guide p.451-452): speakers assigned to a group's angles, AutoCut
+      on a group segment.
   * 8.3, ScriptSync (ch.18, p.566-590): the Script window, lined scripts, slates and takes, script marks, ScriptSync AI
     marking from 8.2's word timings.
   * 8.4, Dynamic Media Folders and the background services (p.371-377), on the Background Queue.
