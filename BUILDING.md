@@ -791,7 +791,8 @@ pictures: text buttons side by side where the guide has two columns of tool icon
 owner, 2026-11-06). The cause was the layout itself, not the window: every control the Effect Editor has was also on the
 Dashboard, each section a column of labelled rows. The Dashboard is now laid out as pictured on p.302 (docs/spec/titler.md,
 "Laid out as the guide pictures them"): about 900 pixels, the Effect Editor's extra controls kept off it. The test also
-checks that the Dashboard asks for at most 1100 pixels and that its tools are two columns of icons. To compare a window
+checks that the Dashboard asks for at most 1280 pixels (890 on Linux; the Font Family box is sized for 16
+characters, not the longest installed font name, which widened it on Windows) and that its tools are two columns of icons. To compare a window
 with the guide, `LUMENIS_SHOT_DIR=<folder> ctest -R tst_main_window` saves pictures of the Dashboard and the Effect
 Editor there.
 

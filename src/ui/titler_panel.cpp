@@ -286,6 +286,10 @@ TitlerPanel::TitlerPanel(TitlerTool& tool, bool across, QWidget* parent) : QWidg
     auto* family = new QFontComboBox(this);
     named(family, QStringLiteral("family"));
     family->setToolTip(tr("Font Family"));
+    // Sized for about 16 characters, not the longest installed font's name (which made the Dashboard wider on Windows,
+    // where many fonts are installed; CI run 347).
+    family->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
+    family->setMinimumContentsLength(16);
     connect(family, &QFontComboBox::currentFontChanged, this, [this](const QFont& f) {
         if (!syncing_) tool_.modifySelected(tr("Font Family"), [&](TitleObject& o) { o.font.family = f.family(); });
     });

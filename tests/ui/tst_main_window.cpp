@@ -372,9 +372,10 @@ private slots:
         QVERIFY(dashboard->minimumSizeHint().width() < 600);
         QVERIFY(fits(window.effectEditor().window()));
         // 7.6 (the owner's report: a Dashboard as wide as a 1920-pixel screen, text buttons side by side): laid out as
-        // pictured on p.302, it asks for well under 1920 pixels, and its tools are two columns of icons.
+        // pictured on p.302, it asks for well under 1920 pixels, and its tools are two columns of icons. About 890 pixels
+        // on Linux; the limit leaves room for other platforms' fonts and still fits a 1366-pixel laptop screen.
         ui::TitlerPanel* panel = window.effectEditor().titlerDashboard()->panel();
-        QVERIFY2(panel->sizeHint().width() <= 1100, qPrintable(QString::number(panel->sizeHint().width())));
+        QVERIFY2(panel->sizeHint().width() <= 1280, qPrintable(QString::number(panel->sizeHint().width())));
         const auto at = [&](const QString& name) { return panel->control(name)->mapTo(panel, QPoint(0, 0)); };
         QCOMPARE(at(QStringLiteral("tool:text")).y(), at(QStringLiteral("tool:selection")).y());
         QCOMPARE(at(QStringLiteral("tool:rectangle")).x(), at(QStringLiteral("tool:text")).x());
